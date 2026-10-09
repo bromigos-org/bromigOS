@@ -1,0 +1,25 @@
+# __TITLE__: a memory store for VECTOR (made by `bromigos ext new vector-memory`;
+# docs/extensions.md). With [memory] backend = "auto" (vector.toml's default) VECTOR
+# uses the first store a plugin registers: installing this makes it his memory. Set
+# backend = "local" to keep his own while you build it, or "__IDENT__" to choose it.
+[extension]
+name = "__NAME__"
+version = "0.1.0"
+description = "A VECTOR memory store: notes in a JSON-lines file, recalled by shared words."
+authors = []
+licence = "MIT"
+tags = ["vector", "memory"]
+
+[requires]
+bromigos = ">=1.0, <2"
+
+[[provides]]
+kind = "vector-memory"
+path = "memory.py"
+name = "__IDENT__"
+
+[permissions]
+network = "none"
+filesystem = ["~/.local/state/bromigos-ext/__NAME__/"]
+vector = "read"
+code = true

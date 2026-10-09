@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+"""A stand-in timedatectl (tests, offscreen renders): timedated as fixtures/timedatectl.json
+says; set-timezone and set-ntp change it."""
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
+import fixture as F  # noqa: E402
+
+a = sys.argv[1:]
+F.log("timedatectl", a)
+st = F.load("timedatectl")
+cmd = a[0] if a else "status"
+if cmd == "show":
+    for k, v in st.items():
+        if k != "zones":
+            print(f"{k}={v}")
+elif cmd == "list-timezones":
+    print("\n".join(st["zones"]))
+elif cmd == "set-timezone":
+    if a[1] not in st["zones"]:
+        F.die(f"Failed to set time zone: Invalid or not installed time zone '{a[1]}'")
+    st["Timezone"] = a[1]
+elif cmd == "set-ntp":
+    st["NTP"] = "yes" if a[1] in ("true", "yes", "1", "on") else "no"
+    st["NTPSynchronized"] = st["NTP"]
+else:
+    F.die(f"timedatectl stand-in: {cmd} isn't pretended")
+F.save("timedatectl", st)

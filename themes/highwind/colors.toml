@@ -1,0 +1,71 @@
+# Highwind's colours (docs/theming.md, "colors.toml"): a kite-lantern's gold on dusk
+# indigo, high sky cyan, a storm light for an alarm.
+
+# ---- surfaces, darkest first
+background = "#0a0d1a"     # dusk, from above the clouds
+void = "#05070f"
+panel = "#141a2e"
+selection = "#243052"
+
+# ---- ink
+primary = "#f5c76a"        # the kite-lantern
+soft = "#f8e6bf"
+dim = "#8a7540"
+text = "#e4e9f7"
+muted = "#8c94b3"
+faint = "#525a78"
+
+# ---- signals
+warn = "#ff9f5a"           # a storm coming up the cloud deck
+danger = "#ff6670"
+warn_surface = "#3a2a10"
+danger_surface = "#2a0d12"
+danger_text = "#ffd9dc"
+
+[colors]
+cyan = "#8ad8ff"           # high sky
+gold = "#ffe29c"
+white = "#f6f9ff"
+rust = "#4a1a20"
+
+[holo]
+line = "cyan"
+glow = "primary"
+label = "text"
+highlight = "white"
+
+[widgets]
+frame = "dim"
+header = "primary"
+value = "soft"
+graph = "cyan"
+track = "selection"
+
+[terminal]
+foreground = "text"
+background = "background"
+color0 = "background"
+color1 = "danger"
+color2 = "primary"
+color3 = "warn"
+color4 = "#7eaaff"
+color5 = "#c99cff"
+color6 = "cyan"
+color7 = "#c3cbe0"
+color8 = "faint"
+color9 = "#ff9aa0"
+color10 = "soft"
+color11 = "gold"
+color12 = "#a9c8ff"
+color13 = "#e0c5ff"
+color14 = "#b3e6ff"
+color15 = "#f4f7ff"
+
+[qt]
+view = "#0d1020"
+view_alt = "#111528"
+header = "#0f1324"
+window_alt = "#1a2138"
+button = "#223050"
+neutral_on_selection = "#4a3a10"
+negative_on_selection = "rust"

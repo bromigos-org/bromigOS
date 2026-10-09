@@ -1,0 +1,11 @@
+# Tidewell: the sea at night (docs/theming.md; the world is live/world.toml).
+name = "Tidewell"
+description = "The sea at night, split at the waterline: Greywater Light above, the Choir below."
+mode = "dark"
+canon = """
+Greywater Light stands on its rock at the edge of the Tidewell. Maren keeps the lamp; \
+below the waterline the Choir, the great glowing swimmers, do the work of the deep and \
+rise to the surface when they need her."""
+
+[intercept]                  # the unlock/login intercept (the live layer): its static on the captured screen
+static = "swell"       # the picture heaves on a rolling swell, a bright crest running through it; "scanlines" is the Wick's tearing

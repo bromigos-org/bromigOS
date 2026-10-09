@@ -1,0 +1,107 @@
+# The docs follow the code: the generated sections (the manual's commands and keys, the
+# package tables) are current, the manual builds, and every relative link and anchor in the
+# Markdown and the built manual resolves. Two jobs: the command reference needs a cargo
+# build, the rest is light. tools/docs/generate.py and check-links.sh; run
+# them locally the same way. Publishing the manual is manual.yml's.
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**.md"
+      - "core/**"
+      - "bin/**"
+      - "desktop/bin/**"
+      - "desktop/hypr/**"
+      - "homelab/bin/**"
+      - "live/bin/**"
+      - "apps/bin/**"
+      - "widgets/bromigos-widgets"
+      - "widgets/keybinds*"
+      - "packaging/*/PKGBUILD"
+      - "manual/**"
+      - "tools/docs/**"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "**.md"
+      - "core/**"
+      - "bin/**"
+      - "desktop/bin/**"
+      - "desktop/hypr/**"
+      - "homelab/bin/**"
+      - "live/bin/**"
+      - "apps/bin/**"
+      - "widgets/bromigos-widgets"
+      - "widgets/keybinds*"
+      - "packaging/*/PKGBUILD"
+      - "manual/**"
+      - "tools/docs/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  commands:
+    name: The command reference is current
+    # A cargo build: the package builder (the small runners' container jobs get 512 MiB),
+    # with a cargo cache of its own on the node, so after the first run only what changed
+    # compiles.
+    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_PACKAGES || 'ubuntu-latest' }}
+    container:
+      image: archlinux:base-devel
+      volumes: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_PACKAGES && fromJSON('["/ci-cache:/ci-cache"]') || fromJSON('[]') }}
+    timeout-minutes: 30
+    steps:
+      - name: tools
+        run: pacman -Syu --noconfirm --needed git rust python >/dev/null
+      - uses: actions/checkout@v5
+      - name: cargo cache (GitHub's runners; the homelab's node keeps its own)
+        if: github.event_name == 'pull_request'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: docs-cargo-${{ hashFiles('core/Cargo.lock') }}
+          restore-keys: docs-cargo-
+      - name: the bromigos command
+        env:
+          CARGO_BUILD_JOBS: "4"
+          CARGO_PROFILE_DEV_DEBUG: "0"
+          CARGO_INCREMENTAL: "0"
+        run: |
+          if [[ -d /ci-cache ]]; then              # not the package build's cache: its files are the builder's
+            export CARGO_HOME=/ci-cache/cargo-docs/home CARGO_TARGET_DIR=/ci-cache/cargo-docs/target
+            mkdir -p "$CARGO_HOME" "$CARGO_TARGET_DIR"
+            [[ $(du -sm "$CARGO_TARGET_DIR" | cut -f1) -lt 4096 ]] || rm -rf "${CARGO_TARGET_DIR:?}"/*
+          else
+            export CARGO_TARGET_DIR="$PWD/core/target"
+          fi
+          cargo build --locked -p bromigos --manifest-path core/Cargo.toml
+          install -Dm0755 "$CARGO_TARGET_DIR/debug/bromigos" "$RUNNER_TEMP/bromigos"
+      - name: generated commands are current
+        run: python3 tools/docs/generate.py --check --bromigos "$RUNNER_TEMP/bromigos" commands
+
+  docs:
+    name: Keys and packages, manual, links
+    # light: the small amd64 runners when the variable names them
+    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    container: archlinux:base
+    timeout-minutes: 15
+    steps:
+      - name: tools
+        run: pacman -Syu --noconfirm --needed git lua python mdbook lychee >/dev/null
+      - uses: actions/checkout@v5
+      - name: generated keys and packages are current
+        run: python3 tools/docs/generate.py --check keys packages
+      - name: the manual builds
+        run: mdbook build manual -d "$RUNNER_TEMP/book"
+      - name: links and anchors
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tools/docs/check-links.sh "$RUNNER_TEMP/book"

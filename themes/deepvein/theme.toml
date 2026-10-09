@@ -1,0 +1,9 @@
+# Deepvein: the crystal caverns' colours (docs/theming.md). Colours only; its world is still to be painted.
+name = "Deepvein"
+description = "Amethyst on cavern black: the crystals that sing back."
+mode = "dark"
+canon = """
+Deepvein's caverns are lined with crystal that rings when anything moves, and Ora Slate \
+keeps the post in the resonance chamber where the ringing comes together into something \
+like a chord. These are its colours: amethyst lit from inside, the teal of a crystal \
+answering a note, and a fracture's red when one is about to split."""

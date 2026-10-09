@@ -1,0 +1,8 @@
+
+bromigOS live medium. The desktop is on tty1 (it signs in by itself).
+
+  bromigos-iso-install          install bromigOS to a disk (guided; Super+Return opens a terminal)
+  bromigos-iso-install --help   the unattended form (a config and credentials file)
+
+Arch's own tools are here too: archinstall, arch-install-scripts, the rescue tools.
+

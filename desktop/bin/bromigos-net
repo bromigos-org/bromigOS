@@ -1,0 +1,339 @@
+#!/usr/bin/env python3
+# bromigos:summary=The network: Wi-Fi (on, off, scan, connect, forget), wired, VPNs, through NetworkManager
+# bromigos:args=[status] | wifi on|off | scan | connect SSID [--password-stdin] [--hidden] [--device DEV] | disconnect DEVICE | forget NAME|UUID | up NAME|UUID | down NAME|UUID | autoconnect NAME|UUID on|off | panel on|off  [--json]
+# bromigos:examples=bromigos net; bromigos net wifi off; echo 'secret' | bromigos net connect HomeNet --password-stdin; bromigos net up work-vpn
+"""bromigos-net (`bromigos net`): the network, through NetworkManager (`nmcli -t`). Settings ›
+Network drives it.
+
+  bromigos net [status]                 NetworkManager's state, the devices, the Wi-Fi in reach,
+                                        the saved connections, the VPNs, what's connected
+  bromigos net wifi on|off              the Wi-Fi radio
+  bromigos net scan                     look for Wi-Fi networks again
+  bromigos net connect SSID [--password-stdin] [--hidden] [--device DEV]
+                                        join a network: a saved one connects as it is; a new
+                                        secured one reads its password from stdin (never from
+                                        the command line); --hidden for one that doesn't announce
+                                        itself
+  bromigos net disconnect DEVICE        take a device off its network (wlan0, enp5s0)
+  bromigos net forget NAME|UUID         delete a saved connection (its password with it)
+  bromigos net up|down NAME|UUID        bring a connection up or down (a VPN, a wired profile)
+  bromigos net autoconnect NAME|UUID on|off
+  bromigos net panel on|off             the CONNECTIONS panel on the desktop (bromigos panels)
+"""
+import json
+import os
+import shutil
+import sys
+import tempfile
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+VPN_TYPES = ("vpn", "wireguard")
+WIFI_TYPES = ("802-11-wireless", "wifi")
+WIRED_TYPES = ("802-3-ethernet", "ethernet")
+
+
+def split_t(line):
+    """One line of `nmcli -t`: its fields, ':' separated, '\\:' and '\\\\' unescaped."""
+    out, cur, esc = [], [], False
+    for c in line:
+        if esc:
+            cur.append(c)
+            esc = False
+        elif c == "\\":
+            esc = True
+        elif c == ":":
+            out.append("".join(cur))
+            cur = []
+        else:
+            cur.append(c)
+    out.append("".join(cur))
+    return out
+
+
+def nmcli(*args, timeout=15, input=None):
+    """nmcli's stdout; Fail with what it said (NetworkManager not running included)."""
+    rc, out, err = C.run(["nmcli", *args], timeout=timeout, input=input)
+    if rc == 127:
+        raise Fail("nmcli isn't installed (pacman -S networkmanager)")
+    if rc != 0:
+        msg = (err or out).strip()
+        if "NetworkManager is not running" in msg or rc == 8:
+            raise Fail("NetworkManager isn't running (systemctl enable --now NetworkManager)")
+        msg = msg.splitlines()[-1] if msg else f"exit {rc}"
+        raise Fail(msg.removeprefix("Error: "))
+    return out
+
+
+def rows(*args, timeout=15):
+    return [split_t(x) for x in nmcli("-t", *args, timeout=timeout).splitlines() if x.strip()]
+
+
+def _yes(v):
+    return str(v).strip().lower() in ("yes", "on", "enabled", "true", "*")
+
+
+def details(dev):
+    """A device's addresses: IPv4 (with its prefix), the gateway, DNS, the hardware address."""
+    d = {"ip4": [], "gateway": "", "dns": [], "hwaddr": ""}
+    try:
+        lines = nmcli("-t", "-f", "IP4.ADDRESS,IP4.GATEWAY,IP4.DNS,GENERAL.HWADDR", "device", "show", dev).splitlines()
+    except Fail:
+        return d
+    for line in lines:
+        k, _, v = line.partition(":")
+        v = split_t(v)
+        v = ":".join(v)
+        if not v or v == "--":
+            continue
+        if k.startswith("IP4.ADDRESS"):
+            d["ip4"].append(v)
+        elif k == "IP4.GATEWAY":
+            d["gateway"] = v
+        elif k.startswith("IP4.DNS"):
+            d["dns"].append(v)
+        elif k == "GENERAL.HWADDR":
+            d["hwaddr"] = v
+    return d
+
+
+def _ssid_of(uuid):
+    try:
+        return split_t(nmcli("-t", "-g", "802-11-wireless.ssid", "connection", "show", uuid).strip())[0]
+    except Fail:
+        return ""
+
+
+def _panel():
+    if not shutil.which("bromigos"):
+        return None
+    d = C.bromigos("panels", "status", "--json", timeout=8)
+    if not d or d.get("ok") is False:
+        return None
+    p = next((x for x in d.get("panels") or [] if x.get("name") == "connections"), None)
+    return None if p is None else bool(p.get("visible"))
+
+
+def status(_args=None, light=False):
+    gen = rows("-f", "RUNNING,STATE,CONNECTIVITY,WIFI-HW,WIFI", "general", "status")
+    g = gen[0] if gen else []
+    g += [""] * (5 - len(g))
+    devices = []
+    for f in rows("-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"):
+        f += [""] * (4 - len(f))
+        if f[1] in ("loopback", "wifi-p2p", "bridge", "tun", "wireguard") or not f[0]:
+            continue
+        dev = {"name": f[0], "type": f[1], "state": f[2], "connection": f[3] if f[3] != "--" else ""}
+        if dev["state"].startswith("connected") and not light:
+            dev.update(details(f[0]))
+        devices.append(dev)
+    conns = []
+    for f in rows("-f", "NAME,UUID,TYPE,AUTOCONNECT,ACTIVE,DEVICE", "connection", "show"):
+        f += [""] * (6 - len(f))
+        if f[2] in ("loopback", "bridge", "tun"):
+            continue
+        c = {"name": f[0], "uuid": f[1], "type": f[2], "autoconnect": _yes(f[3]), "active": _yes(f[4]),
+             "device": "" if f[5] in ("--", "") else f[5]}
+        if c["type"] in WIFI_TYPES:
+            c["ssid"] = _ssid_of(c["uuid"]) or c["name"]
+        conns.append(c)
+    saved = {c["ssid"] for c in conns if c.get("ssid")}
+    wifi = []
+    wifi_on = _yes(g[4])
+    if wifi_on and any(d["type"] == "wifi" for d in devices):
+        seen = {}
+        for f in rows("-f", "IN-USE,SSID,BSSID,SIGNAL,SECURITY,CHAN,DEVICE", "device", "wifi", "list", "--rescan", "no"):
+            f += [""] * (7 - len(f))
+            ssid = f[1]
+            if not ssid:
+                continue            # a hidden network: joined by name (connect --hidden)
+            sec = "" if f[4] in ("", "--") else f[4]
+            n = {"ssid": ssid, "bssid": f[2], "signal": int(f[3]) if f[3].isdigit() else 0, "security": sec,
+                 "secured": bool(sec), "enterprise": "802.1X" in sec, "channel": f[5], "device": f[6],
+                 "in_use": f[0].strip() == "*", "saved": ssid in saved}
+            old = seen.get(ssid)
+            # one row per network: the access point in use, else the strongest
+            if old is None or (n["in_use"] and not old["in_use"]) or (n["signal"] > old["signal"] and not old["in_use"]):
+                seen[ssid] = n
+        wifi = sorted(seen.values(), key=lambda n: (not n["in_use"], -n["signal"], n["ssid"].lower()))
+    doc = {"running": _yes(g[0]) or g[0] == "running", "state": g[1], "connectivity": g[2],
+           "wifi": {"hardware": g[3] != "missing" and g[3] != "disabled", "enabled": wifi_on,
+                    "devices": [d["name"] for d in devices if d["type"] == "wifi"], "networks": wifi},
+           "devices": devices,
+           "wired": [d for d in devices if d["type"] == "ethernet"],
+           "connections": conns,
+           "saved_wifi": [c for c in conns if c["type"] in WIFI_TYPES],
+           "vpns": [c for c in conns if c["type"] in VPN_TYPES],
+           "editor": bool(shutil.which("nm-connection-editor"))}
+    if not light:
+        doc["panel"] = _panel()
+    return doc
+
+
+def _conn(name):
+    """A saved connection by UUID, name or (Wi-Fi) SSID."""
+    cs = status(light=True)["connections"]
+    for key in ("uuid", "name", "ssid"):
+        c = next((c for c in cs if c.get(key) == name), None)
+        if c:
+            return c
+    raise Fail(f"no saved connection {name!r} (bromigos net lists them)")
+
+
+def wifi(args):
+    if len(args) != 1:
+        raise Fail("bromigos net wifi on|off")
+    on = C.on_off(args[0])
+    nmcli("radio", "wifi", "on" if on else "off")
+    return dict(status(), said=f"Wi-Fi {'on' if on else 'off'}")
+
+
+def scan(_args):
+    try:
+        nmcli("device", "wifi", "rescan", timeout=30)
+    except Fail as e:
+        if "not allowed" not in str(e).lower():       # NetworkManager just scanned: the list is fresh
+            raise
+    return dict(status(), said="Scanned for Wi-Fi networks")
+
+
+def _key_mgmt(sec):
+    s = sec.upper()
+    if "802.1X" in s:
+        raise Fail("an enterprise (802.1X) network needs its account set up in nm-connection-editor")
+    if "WEP" in s:
+        raise Fail("a WEP network is set up in nm-connection-editor (WEP isn't secure)")
+    if "WPA3" in s and "WPA2" not in s and "WPA1" not in s:
+        return "sae"
+    return "wpa-psk"
+
+
+def connect(args):
+    password = None
+    if C.flag(args, "--password-stdin", takes=False):
+        password = sys.stdin.read().rstrip("\n")
+        if not password:
+            raise Fail("no password on stdin")
+    hidden = bool(C.flag(args, "--hidden", takes=False))
+    device = C.flag(args, "--device")
+    if len(args) != 1:
+        raise Fail("bromigos net connect SSID [--password-stdin] [--hidden] [--device DEV]")
+    ssid = args[0]
+    st = status(light=True)
+    if not st["wifi"]["enabled"]:
+        raise Fail("Wi-Fi is off (bromigos net wifi on)")
+    device = device or (st["wifi"]["devices"] or [None])[0]
+    if not device:
+        raise Fail("no Wi-Fi device")
+    saved = next((c for c in st["saved_wifi"] if c.get("ssid") == ssid), None)
+    if saved and password is None:
+        nmcli("connection", "up", "uuid", saved["uuid"], timeout=60)
+        return dict(status(), said=f"Connected to {ssid}")
+    net = next((n for n in st["wifi"]["networks"] if n["ssid"] == ssid), None)
+    if net is None and not hidden:
+        raise Fail(f"no network {ssid!r} in reach (bromigos net scan; --hidden for one that hides)")
+    sec = net["security"] if net else ("WPA2" if password else "")
+    if not sec and password is None:
+        nmcli("device", "wifi", "connect", ssid, "ifname", device, *(["hidden", "yes"] if hidden else []), timeout=60)
+        return dict(status(), said=f"Connected to {ssid}")
+    if password is None:
+        raise Fail(f"{ssid} is secured: its password on stdin (--password-stdin)")
+    km = _key_mgmt(sec)
+    if saved:
+        # a saved network with a new password: the profile is kept, the secret replaced at activation
+        uuid, new = saved["uuid"], False
+    else:
+        name = ssid
+        taken = {c["name"] for c in st["connections"]}
+        n = 2
+        while name in taken:
+            name, n = f"{ssid} {n}", n + 1
+        out = nmcli("connection", "add", "type", "wifi", "con-name", name, "ifname", device, "ssid", ssid,
+                    "wifi-sec.key-mgmt", km, *(["802-11-wireless.hidden", "yes"] if hidden else []))
+        uuid = next((w.strip("()") for w in out.split() if w.count("-") == 4 and len(w.strip("()")) == 36), name)
+        new = True
+    # the password goes to nmcli in a file only this user can read, deleted after: never argv
+    d = tempfile.mkdtemp(prefix="bromigos-net-")
+    pw = os.path.join(d, "passwd")
+    try:
+        fd = os.open(pw, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(f"802-11-wireless-security.psk:{password}\n")
+        try:
+            nmcli("connection", "up", "uuid", uuid, "passwd-file", pw, timeout=90)
+        except Fail as e:
+            if new:
+                C.run(["nmcli", "connection", "delete", "uuid", uuid])      # a wrong password leaves nothing behind
+            raise Fail(f"couldn't join {ssid}: {e}")
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    return dict(status(), said=f"Connected to {ssid}")
+
+
+def disconnect(args):
+    if len(args) != 1:
+        raise Fail("bromigos net disconnect DEVICE")
+    st = status(light=True)
+    dev = next((d for d in st["devices"] if args[0] in (d["name"], d["connection"])), None)
+    if dev is None:
+        raise Fail(f"no device {args[0]!r}")
+    nmcli("device", "disconnect", dev["name"])
+    return dict(status(), said=f"{dev['name']} disconnected" + (f" from {dev['connection']}" if dev["connection"] else ""))
+
+
+def forget(args):
+    if len(args) != 1:
+        raise Fail("bromigos net forget NAME|UUID")
+    c = _conn(args[0])
+    nmcli("connection", "delete", "uuid", c["uuid"])
+    return dict(status(), said=f"Forgot {c['name']}")
+
+
+def up(args):
+    if len(args) != 1:
+        raise Fail("bromigos net up NAME|UUID")
+    c = _conn(args[0])
+    nmcli("connection", "up", "uuid", c["uuid"], timeout=90)
+    return dict(status(), said=f"{c['name']}: up")
+
+
+def down(args):
+    if len(args) != 1:
+        raise Fail("bromigos net down NAME|UUID")
+    c = _conn(args[0])
+    if not c["active"]:
+        return dict(status(), said=f"{c['name']} wasn't up")
+    nmcli("connection", "down", "uuid", c["uuid"], timeout=30)
+    return dict(status(), said=f"{c['name']}: down")
+
+
+def autoconnect(args):
+    if len(args) != 2:
+        raise Fail("bromigos net autoconnect NAME|UUID on|off")
+    c, on = _conn(args[0]), C.on_off(args[1])
+    nmcli("connection", "modify", "uuid", c["uuid"], "connection.autoconnect", "yes" if on else "no")
+    return dict(status(), said=f"{c['name']}: {'joins by itself' if on else 'joins only when asked'}")
+
+
+def panel(args):
+    if len(args) != 1:
+        raise Fail("bromigos net panel on|off")
+    on = C.on_off(args[0])
+    rc, out, err = C.run(["bromigos", "panels", "show" if on else "hide", "connections", "--json"], timeout=15)
+    try:
+        d = json.loads(out) if out.strip() else None
+    except ValueError:
+        d = None
+    if d is None or d.get("ok") is False:
+        raise Fail("the CONNECTIONS panel can't be set here: " + ((d or {}).get("error") or err.strip()
+                                                                    or "bromigos panels isn't installed"))
+    return dict(status(), said=f"The CONNECTIONS panel: {'shown' if on else 'hidden'}")
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "wifi": wifi, "scan": scan, "connect": connect, "disconnect": disconnect,
+                     "forget": forget, "up": up, "down": down, "autoconnect": autoconnect, "panel": panel}, USAGE))

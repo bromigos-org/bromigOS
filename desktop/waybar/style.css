@@ -1,0 +1,210 @@
+/* bromigOS's bar style (package bromigos-desktop): /usr/share/bromigos/default/waybar/style.css.
+   Don't edit; updates replace it. Your ~/.config/waybar/style.css imports the theme's
+   waybar.css first (its colour names and the icons, drawn in the theme's colours), then
+   this, then adds your own rules.
+   1px rules, square corners, wide-tracked uppercase labels, glow only on live values.
+   No scanlines: text stays crisp. The colours are the active theme's roles (void, panel,
+   primary, soft, dim, warn, danger, muted, cyan, gold, …). */
+
+* {
+  font-family: "Geist Mono", "MesloLGM Nerd Font Propo", monospace;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  border-radius: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+window#waybar {
+  background-color: alpha(@panel, 0.90);
+  border-bottom: 1px solid alpha(@dim, 0.55);
+  color: @soft;
+}
+
+tooltip {
+  background-color: @void;
+  border: 1px solid @dim;
+  border-radius: 0;
+}
+tooltip label {
+  color: @soft;
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
+/* every module: a cell separated by a 1px vertical rule */
+#cpu, #memory, #custom-gpu, #temperature, #custom-storage, #network,
+#power-profiles-daemon, #battery, #pulseaudio, #tray, #clock, #mpris, #window {
+  padding: 0 12px;
+  color: @soft;
+  letter-spacing: 0.06em;
+  border-left: 1px solid alpha(@dim, 0.35);
+}
+
+#custom-launcher {
+  min-width: 34px;
+  padding: 0 4px;
+  background-size: 24px 24px;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-right: 1px solid alpha(@dim, 0.55);
+}
+#custom-launcher:hover {
+  background-color: alpha(@primary, 0.12);
+}
+
+#workspaces {
+  padding: 0 6px;
+}
+#workspaces button {
+  padding: 0 9px;
+  color: @muted;
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  font-weight: 600;
+}
+#workspaces button.empty {
+  color: alpha(@muted, 0.55);
+}
+#workspaces button.active {
+  color: @primary;
+  border-bottom: 2px solid @primary;
+  text-shadow: 0 0 8px alpha(@primary, 0.6);
+  background-color: alpha(@primary, 0.08);
+}
+#workspaces button.urgent {
+  color: @void;
+  background-color: @warn;
+}
+#workspaces button:hover {
+  background: alpha(@primary, 0.12);
+  color: @soft;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+#window {
+  color: @muted;
+  border-left: 1px solid alpha(@dim, 0.35);
+}
+window#waybar.empty #window {
+  border: none;
+  padding: 0;
+}
+
+#mpris {
+  color: @primary;
+  border-right: 1px solid alpha(@dim, 0.35);
+}
+#mpris.paused {
+  color: @muted;
+}
+
+#cpu.warning, #memory.warning, #custom-gpu.warning, #custom-storage.warning {
+  color: @warn;
+}
+#cpu.critical, #memory.critical, #custom-gpu.critical, #custom-storage.critical,
+#temperature.critical {
+  color: @danger;
+}
+
+#network.disconnected, #network.linked {
+  color: @warn;
+}
+#pulseaudio.muted {
+  color: @warn;
+}
+
+/* a laptop's: the battery's charge (amber, then red, as it runs down) and the power profile */
+#battery.charging, #battery.plugged {
+  color: @primary;
+}
+#battery.warning:not(.charging) {
+  color: @warn;
+}
+#battery.critical:not(.charging) {
+  color: @danger;
+}
+#power-profiles-daemon.performance {
+  color: @warn;
+}
+#power-profiles-daemon.power-saver {
+  color: @muted;
+}
+
+#clock {
+  color: @primary;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 8px alpha(@primary, 0.45);
+  padding-right: 14px;
+}
+
+#tray > .passive {
+  -gtk-icon-effect: dim;
+}
+#tray > .needs-attention {
+  -gtk-icon-effect: highlight;
+  background-color: alpha(@warn, 0.25);
+}
+
+/* ---- icons: 16px, 1px-stroke set (bromigOS theme/icons), drawn in the theme in force by `bromigos theme set` ----------
+   Each module draws its icon as a background at the left of the cell; the warning
+   and critical classes swap to the amber/danger variant so icon and value match. The
+   images themselves are set by the theme's waybar.css (it sits beside them). */
+#cpu, #memory, #custom-gpu, #temperature, #custom-storage, #network,
+#power-profiles-daemon, #battery, #pulseaudio, #mpris, #clock, #custom-vector, #custom-idle {
+  padding-left: 34px;
+  background-size: 16px 16px;
+  background-position: 12px center;
+  background-repeat: no-repeat;
+}
+#temperature.warning  { color: @warn; }
+
+/* VECTOR pip (bromigos-holo): the iris in the state's colour; hidden while the daemon is off */
+#custom-vector             { color: @primary;
+                            font-weight: 700; letter-spacing: 0.08em; }
+#custom-vector.minimized   { color: @muted; }
+#custom-vector.thinking,
+#custom-vector.listening   { color: @warn; }
+#custom-vector.speaking    { color: @primary;
+                            text-shadow: 0 0 8px alpha(@primary, 0.6); }
+#custom-vector.error       { color: @danger; }
+#custom-vector.unread      { text-shadow: 0 0 8px alpha(@warn, 0.6); }
+/* the speaking voice tints the pip; a mood overrides it */
+#custom-vector.voice-robot     { color: @cyan; }
+#custom-vector.voice-scientist { color: @warn; }
+#custom-vector.voice-floor     { color: @gold; }
+#custom-vector.voice-notify    { color: @soft; }
+#custom-vector.conversation   { color: @danger; }
+#custom-vector.mood-excited    { text-shadow: 0 0 10px alpha(@primary, 0.8); }
+#custom-vector.mood-concerned  { color: @warn; }
+#custom-vector.mood-alarmed    { color: @danger;
+                                 text-shadow: 0 0 8px alpha(@danger, 0.7); }
+
+/* VECTOR's emergency switch: a dim power mark while he's on; red, and impossible to miss, while
+   the operator has switched him off */
+#custom-vector-switch      { color: @muted; padding: 0 8px; border-left: 1px solid alpha(@dim, 0.35); }
+#custom-vector-switch:hover { color: @danger; background-color: alpha(@danger, 0.10); }
+#custom-vector-switch.off  { color: @danger; font-weight: 700; letter-spacing: 0.08em;
+                             background-color: alpha(@danger, 0.22);
+                             text-shadow: 0 0 8px alpha(@danger, 0.6); }
+#custom-vector-switch.off:hover { background-color: alpha(@danger, 0.32); }
+
+/* idle (bromigos idle): the eye dim while the timers run as set; lit when nothing locks
+   (screensaver only, presentation); the cup, amber, while staying awake */
+#custom-idle               { color: @muted; font-weight: 700; letter-spacing: 0.08em;
+                             border-left: 1px solid alpha(@dim, 0.35); padding-right: 6px; }
+#custom-idle.normal        { padding-left: 28px; padding-right: 0; }
+#custom-idle.saver,
+#custom-idle.nothing       { color: @primary; }
+#custom-idle.awake         { color: @warn; text-shadow: 0 0 8px alpha(@warn, 0.5); }
+#custom-idle:hover         { background-color: alpha(@primary, 0.10); }
+
+/* the Settings gear (bromigos settings, SUPER+,) */
+#custom-settings           { min-width: 30px; padding: 0 2px; background-size: 16px 16px;
+                             background-position: center; background-repeat: no-repeat;
+                             border-left: 1px solid alpha(@dim, 0.35); }
+#custom-settings:hover     { background-color: alpha(@primary, 0.12); }

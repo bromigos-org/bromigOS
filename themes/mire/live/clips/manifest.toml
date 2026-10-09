@@ -1,0 +1,74 @@
+# Sleeper piece patches: rect = [x, y, w, h] on the 2560x1440 plate; mask = the feathered edge (white = use the clip).
+# Loops are seamless (idle, turn); clips play once: rise ends on the resting pose, submerge starts on it.
+
+[clips."live/loops/sleeper-head-idle.mp4"]
+rect = [0, 900, 960, 540]
+mask = "live/loops/sleeper-head-idle-mask.png"
+loop = true
+
+[clips."live/loops/sleeper-head-turn.mp4"]
+rect = [0, 900, 960, 540]
+mask = "live/loops/sleeper-head-turn-mask.png"
+loop = true
+
+[clips."live/clips/sleeper-head-rise.mp4"]
+rect = [0, 900, 960, 540]
+mask = "live/clips/sleeper-head-rise-mask.png"
+loop = false
+
+[clips."live/clips/sleeper-head-submerge.mp4"]
+rect = [0, 900, 960, 540]
+mask = "live/clips/sleeper-head-submerge-mask.png"
+loop = false
+
+[clips."live/loops/sleeper-hand-idle.mp4"]
+rect = [490, 1035, 640, 360]
+mask = "live/loops/sleeper-hand-idle-mask.png"
+loop = true
+
+[clips."live/loops/sleeper-hand-turn.mp4"]
+rect = [490, 1035, 640, 360]
+mask = "live/loops/sleeper-hand-turn-mask.png"
+loop = true
+
+[clips."live/clips/sleeper-hand-rise.mp4"]
+rect = [490, 1035, 640, 360]
+mask = "live/clips/sleeper-hand-rise-mask.png"
+loop = false
+
+[clips."live/clips/sleeper-hand-submerge.mp4"]
+rect = [490, 1035, 640, 360]
+mask = "live/clips/sleeper-hand-submerge-mask.png"
+loop = false
+
+# The Sleeper pieces at rest, as cut-outs: rect = where each sits on the 2560x1440 plate (not baked into any layer or the backdrop).
+# lights = the emissive mask (same size as the sprite, white where its eye or joint light is).
+
+[pieces.head]
+sprite = "live/actors/sleeper-piece-head.webp"
+lights = "live/actors/sleeper-piece-head-lights.webp"
+light_color = "amber"
+rect = [63, 1112, 479, 192]
+
+[pieces.hand]
+sprite = "live/actors/sleeper-piece-hand.webp"
+lights = "live/actors/sleeper-piece-hand-lights.webp"
+light_color = "green"
+rect = [622, 1142, 375, 146]
+
+[pieces.shoulder]
+sprite = "live/actors/sleeper-piece-shoulder.webp"
+lights = "live/actors/sleeper-piece-shoulder-lights.webp"
+light_color = "green"
+rect = [930, 1092, 438, 151]
+
+[pieces.crown]
+sprite = "live/actors/sleeper-piece-crown.webp"
+lights = "live/actors/sleeper-piece-crown-lights.webp"
+light_color = "green"
+rect = [1012, 1298, 275, 96]
+
+# Other placement notes
+[notes]
+water_line = 935          # the far shore meets the water (plate y)
+hollis_rect = [1415, 675, 185, 225]   # where Hollis and his chair sat on the porch in the comp

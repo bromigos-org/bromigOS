@@ -1,0 +1,11 @@
+# gtklock: the bromigOS lock screen (`bromigos lock-run` runs it; hyprlock is the fallback).
+# Made from /usr/share/bromigos/default/gtklock/config.ini.in by bromigOS; yours to edit.
+# The burn-in's ring turns in CSS (style.css), inside gtklock itself: nothing drives it
+# from outside (signalling hyprlock for that crashed it, 2026-10-07).
+[main]
+style=@CONFIG@/gtklock/style.css
+layout=@CONFIG@/gtklock/layout.ui
+background=@STATE@/bromigos/wallpaper/lock.jpg
+time-format=%H:%M
+date-format=%A %d %B %Y
+idle-hide=false

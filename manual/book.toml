@@ -1,0 +1,21 @@
+# The bromigOS manual (end users). Built by .github/workflows/manual.yml with mdBook and
+# published next to the packages (docs/update.md, "The manual"); `mdbook serve manual`
+# previews it. Contributors' docs are docs/, the agents' are agents/skills/.
+[book]
+title = "The bromigOS Manual"
+authors = ["Bromigos"]
+language = "en"
+src = "src"
+
+[build]
+create-missing = false
+
+[output.html]
+additional-css = ["manual.css"]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/bromigos-org/bromigOS"
+no-section-label = true
+
+[output.html.search]
+limit-results = 20

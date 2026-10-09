@@ -1,0 +1,141 @@
+{
+ "file": "~/.config/bromigos/targets.toml",
+ "order": [
+  "homelab",
+  "local",
+  "cloud"
+ ],
+ "yours": false,
+ "services": {
+  "image.generate": [
+   [
+    "homelab",
+    true,
+    "comfyui:lab (qwen-image-2.1)",
+    "answers"
+   ],
+   [
+    "local",
+    false,
+    "comfyui:local (qwen-image-2.1)",
+    "doesn't answer (ComfyUI: connection refused)"
+   ],
+   [
+    "cloud",
+    false,
+    "nolgia (gpt-image-2.5-flare)",
+    "not signed in (nolgia auth login)"
+   ]
+  ],
+  "image.edit": [
+   [
+    "homelab",
+    true,
+    "comfyui:lab (qwen-image-edit)",
+    "answers"
+   ],
+   [
+    "local",
+    false,
+    "comfyui:local (qwen-image-edit)",
+    "doesn't answer (ComfyUI: connection refused)"
+   ],
+   [
+    "cloud",
+    false,
+    "nolgia (gpt-image-2.5-flare)",
+    "not signed in (nolgia auth login)"
+   ]
+  ],
+  "image.cutout": [
+   [
+    "homelab",
+    true,
+    "comfyui:lab (birefnet)",
+    "answers"
+   ],
+   [
+    "local",
+    true,
+    "rembg (birefnet-general)",
+    "answers"
+   ]
+  ],
+  "video.loop": [
+   [
+    "homelab",
+    true,
+    "comfyui:lab (wan-2.2-ti2v-5b)",
+    "answers"
+   ],
+   [
+    "cloud",
+    false,
+    "nolgia (seedance-1-5-pro)",
+    "not signed in (nolgia auth login)"
+   ]
+  ],
+  "model3d.generate": [
+   [
+    "homelab",
+    false,
+    "comfyui:lab (hunyuan3d-2.1)",
+    "the workflow's model isn't on the lab"
+   ],
+   [
+    "cloud",
+    false,
+    "nolgia (hunyuan3d-v3)",
+    "not signed in (nolgia auth login)"
+   ]
+  ],
+  "voice.tts": [
+   [
+    "homelab",
+    true,
+    "voice server (qwen3-tts)",
+    "answers"
+   ],
+   [
+    "local",
+    true,
+    "kokoro",
+    "answers"
+   ]
+  ],
+  "voice.stt": [
+   [
+    "homelab",
+    false,
+    "voice server (whisper)",
+    "doesn't answer (connection refused)"
+   ],
+   [
+    "local",
+    true,
+    "local",
+    "answers"
+   ]
+  ],
+  "llm": [
+   [
+    "homelab",
+    true,
+    "litellm (qwen3-32b)",
+    "answers"
+   ],
+   [
+    "local",
+    false,
+    "openai",
+    "doesn't answer (error sending request)"
+   ],
+   [
+    "cloud",
+    false,
+    "openai-compatible",
+    "no key (api_key_file)"
+   ]
+  ]
+ }
+}

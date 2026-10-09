@@ -1,0 +1,567 @@
+#!/usr/bin/env python3
+# bromigos:summary=Displays: each output's resolution, refresh rate, scale, position, orientation and the primary, applied with a 15-second check that reverts by itself
+# bromigos:args=[status] | apply [--output NAME [--mode WxH@HZ] [--scale S] [--position XxY] [--transform 0-7] [--off|--on]]… [--primary NAME] [--confirm SECONDS] | keep | revert | reset [--confirm SECONDS]  [--json]
+# bromigos:examples=bromigos display; bromigos display apply --output DP-1 --mode 2560x1440@144 --scale 1.25; bromigos display keep; bromigos display revert
+"""bromigos-display (`bromigos display`): the monitors, through Hyprland. Settings › Displays
+drives it. A change is written as the marked block `bromigos setup monitors` keeps in your
+~/.config/hypr/hyprland.lua (`bromigos.monitors = {…}`, before the defaults load; either
+replaces the other's), and the primary in ~/.config/bromigos/monitors.toml; Hyprland takes
+it the safe way (auto-reload held, the file verified, one reload, the outputs checked) and
+anything wrong puts every file back.
+
+A change is a trial: unless `keep` comes within the confirm time (15 s), a watchdog of its
+own (a process apart from the one that asked) puts the old block back, the same safe way,
+so a mode the screen can't show undoes itself. An apply during a trial changes the trial
+and keeps its starting point: revert goes back to before the first.
+
+  bromigos display [status]          every output: its mode, the modes it offers, scale (and the
+                                     suggested one), position, orientation, primary, the pinned block
+  bromigos display apply --output NAME [--mode WxH@HZ] [--scale S] [--position XxY]
+                         [--transform 0-7] [--off|--on] … [--primary NAME] [--confirm SECONDS]
+                                     outputs not named keep what they have now (all are pinned);
+                                     --confirm 0: no trial
+  bromigos display keep              ends the trial: the change stays
+  bromigos display revert            ends the trial: the old settings back now
+  bromigos display reset             the block removed: every output at its preferred mode,
+                                     scale from its density, placed automatically (a trial too)
+
+Without a running Hyprland the status says so (running: false, the pinned block only) and
+a change is refused: `bromigos setup monitors` writes them for the next start.
+"""
+import json
+import math
+import os
+import re
+import secrets
+import subprocess
+import sys
+import time
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+import bromigos_hypr as H  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 2)[2]
+BLOCK_BEGIN = "-- >>> bromigos setup monitors"
+BLOCK_END = "-- <<< bromigos setup monitors"
+STEPS = [1.0, 1.25, 1.5, 1.75, 2.0]
+TRANSFORMS = {0: "normal", 1: "90°", 2: "180°", 3: "270°", 4: "flipped", 5: "flipped 90°", 6: "flipped 180°",
+              7: "flipped 270°"}
+CONFIRM = 15
+
+
+def lua_path():
+    return os.path.join(C.CONFIG, "hypr", "hyprland.lua")
+
+
+def toml_path():
+    return os.path.join(C.CONFIG, "bromigos", "monitors.toml")
+
+
+def state_dir():
+    return os.path.join(C.STATE, "bromigos", "display")
+
+
+def pending_path():
+    return os.path.join(state_dir(), "pending.json")
+
+
+# ------------------------------------------------------------------ reading
+def trim(f):
+    s = f"{float(f):.2f}"
+    return s.rstrip("0").rstrip(".")
+
+
+def auto_scale(width, height, phys_w):
+    """The scale from pixel density (~110 ppi at 1x), in steps of .25: what the defaults
+    give an output they don't pin (setup.rs auto_scale, hyprland.lua B.auto_scale)."""
+    if phys_w > 0 and width > 0:
+        want = (width / (phys_w / 25.4)) / 110
+    else:
+        want = 1.5 if height >= 2000 else 1.0
+    return min(STEPS, key=lambda s: abs(s - want))
+
+
+def parse_mode(text):
+    """(w, h, hz or None) from "2560x1440@143.97Hz", "2560x1440@144" or "1920x1080"."""
+    m = re.fullmatch(r"\s*(\d{2,5})x(\d{2,5})(?:@(\d+(?:\.\d+)?)(?:Hz)?)?\s*", str(text or ""))
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)), (float(m.group(3)) if m.group(3) else None)
+
+
+def mode_text(w, h, hz):
+    return f"{w}x{h}@{trim(hz)}" if hz else f"{w}x{h}"
+
+
+_ENV = []
+
+
+def session_env():
+    """The live Hyprland session's environment, asked once (bromigos session)."""
+    if not _ENV:
+        _ENV.append(H.session_env())
+    return _ENV[0]
+
+
+def hyprctl_json(*args):
+    rc, out, err = C.run(["hyprctl", *args, "-j"], timeout=10, env=session_env())
+    if rc != 0:
+        return None, (err or out).strip() or f"hyprctl exit {rc}"
+    try:
+        return json.loads(out), None
+    except ValueError:
+        return None, (out.strip() or err.strip())[:200]
+
+
+def read_block(text):
+    """The pinned outputs in the block (setup.rs's format), or None without one."""
+    if not text:
+        return None
+    b = text.find(BLOCK_BEGIN)
+    e = text.find(BLOCK_END, b + 1) if b >= 0 else -1
+    if b < 0 or e < 0:
+        return None
+    out = []
+    for line in text[b:e].splitlines():
+        code = line.split("--", 1)[0]
+        if "output" not in code or "{" not in code:
+            continue
+        ent = {}
+        for k, v in re.findall(r"(\w+)\s*=\s*(\"[^\"]*\"|[^,}\s]+)", code):
+            v = v.strip()
+            if v.startswith('"'):
+                ent[k] = v[1:-1]
+            elif v in ("true", "false"):
+                ent[k] = v == "true"
+            else:
+                try:
+                    ent[k] = float(v) if "." in v else int(v)
+                except ValueError:
+                    ent[k] = v
+        if ent.get("output"):
+            out.append(ent)
+    return out
+
+
+def primary_now():
+    try:
+        return str(C.read_toml(toml_path()).get("primary", "") or "")
+    except Fail:
+        return ""
+
+
+def _output(m, primary, pinned):
+    modes = []
+    for t in m.get("availableModes") or []:
+        p = parse_mode(t)
+        if p:
+            modes.append({"width": p[0], "height": p[1], "refresh": p[2] or 0.0, "mode": mode_text(*p)})
+    w, h, hz = int(m.get("width") or 0), int(m.get("height") or 0), float(m.get("refreshRate") or 0)
+    scale = float(m.get("scale") or 1)
+    tr = int(m.get("transform") or 0)
+    lw, lh = (h, w) if tr % 2 else (w, h)
+    pw, ph = int(m.get("physicalWidth") or 0), int(m.get("physicalHeight") or 0)
+    inches = round(math.hypot(pw, ph) / 25.4, 1) if pw and ph else None
+    pin = next((p for p in pinned or [] if p.get("output") == m.get("name")), None)
+    return {
+        "name": m.get("name"), "description": m.get("description") or "", "make": m.get("make") or "",
+        "model": m.get("model") or "", "width": w, "height": h, "refresh": round(hz, 3),
+        "mode": mode_text(w, h, hz), "modes": modes, "scale": round(scale, 4),
+        "suggested_scale": auto_scale(w, h, pw), "x": int(m.get("x") or 0), "y": int(m.get("y") or 0),
+        "transform": tr, "orientation": TRANSFORMS.get(tr, str(tr)), "enabled": not m.get("disabled", False),
+        "focused": bool(m.get("focused")), "primary": m.get("name") == primary,
+        "physical": {"width_mm": pw, "height_mm": ph, "inches": inches},
+        "logical": {"width": round(lw / scale) if scale else lw, "height": round(lh / scale) if scale else lh},
+        "pinned": pin,
+    }
+
+
+def trial():
+    try:
+        with open(pending_path()) as f:
+            p = json.load(f)
+    except (OSError, ValueError):
+        return {"pending": False}
+    left = max(0, int(round(p.get("deadline", 0) - time.time())))
+    return {"pending": True, "remaining": left, "token": p.get("token"), "said": p.get("said", "")}
+
+
+def status(_args=None):
+    lua = C.read_file(lua_path())
+    pinned = read_block(lua)
+    primary = primary_now()
+    doc = {"file": lua_path(), "primary_file": toml_path(), "pinned": pinned or [], "block": pinned is not None,
+           "trial": trial()}
+    mons, err = hyprctl_json("monitors", "all")
+    if not isinstance(mons, list):
+        doc.update(running=False, outputs=[], primary=primary,
+                   error=f"Hyprland isn't running here ({err or 'no answer'}): the pinned block is shown; "
+                         "`bromigos setup monitors` writes it for the next start")
+        return doc
+    outs = [_output(m, primary, pinned) for m in mons]
+    enabled = [o for o in outs if o["enabled"]]
+    if not any(o["primary"] for o in outs) and enabled:
+        # the primary's rule (lib/bromigos_monitors.py): recorded, else the focused, else the first
+        first = next((o for o in enabled if o["focused"]), enabled[0])
+        first["primary"] = True
+        doc["primary_from"] = "focused" if first["focused"] else "first"
+    else:
+        doc["primary_from"] = "monitors.toml"
+    doc.update(running=True, outputs=outs, primary=next((o["name"] for o in outs if o["primary"]), primary))
+    return doc
+
+
+# ------------------------------------------------------------------ writing
+def block_text(entries, stamp=None):
+    stamp = stamp or time.strftime("%Y-%m-%d %H:%M")
+    s = (f"{BLOCK_BEGIN} ({stamp}): this machine's outputs (Settings › Displays). Run\n"
+         "-- `bromigos setup monitors` or `bromigos display` to change them, or edit here; an output\n"
+         "-- not listed still lights up on its own.\n"
+         "bromigos.monitors = {\n")
+    for e in entries:
+        if e.get("disabled"):
+            line = f'    {{ output = "{e["output"]}", disabled = true }},'
+        else:
+            line = (f'    {{ output = "{e["output"]}", mode = "{e["mode"]}", position = "{e["position"]}", '
+                    f'scale = {trim(e["scale"])}' + (f', transform = {e["transform"]}' if e.get("transform") else "")
+                    + " },")
+        if e.get("describe"):
+            line += f"  -- {e['describe']}"
+        s += line + "\n"
+    return s + "}\n" + BLOCK_END + "\n"
+
+
+def with_block(lua, block):
+    """The text with the block replaced, else put in just before the line that loads the
+    defaults (setup.rs with_monitors_block); block None removes it."""
+    b = lua.find(BLOCK_BEGIN)
+    e = lua.find(BLOCK_END, b + 1) if b >= 0 else -1
+    if b >= 0 and e > b:
+        nl = lua.find("\n", e)
+        end = nl + 1 if nl >= 0 else len(lua)
+        if block is None:
+            rest = lua[end:]
+            if lua[:b].endswith("\n") and rest.startswith("\n"):
+                rest = rest[1:]
+            return lua[:b] + rest
+        return lua[:b] + block + lua[end:]
+    if block is None:
+        return lua
+    off = 0
+    for line in lua.splitlines(keepends=True):
+        if line.lstrip().startswith("dofile(") and "/default/hypr/hyprland.lua" in line:
+            return lua[:off] + block + "\n" + lua[off:]
+        off += len(line)
+    raise Fail(f"{lua_path()} doesn't load bromigOS's defaults (no dofile(\".../default/hypr/hyprland.lua\") "
+               "line): set bromigos.monitors there yourself")
+
+
+def _describe(o):
+    name = f"{o['make']} {o['model']}".strip()
+    p = o["physical"]
+    size = f"{p['inches']:.0f}\" ({p['width_mm']}x{p['height_mm']} mm)" if p.get("inches") else ""
+    return ", ".join(x for x in (name, size) if x)
+
+
+def parse_groups(args):
+    """[(name, {mode, scale, position, transform, on})], primary, confirm from apply's args."""
+    groups, cur, primary, confirm = [], None, None, CONFIRM
+    i = 0
+    while i < len(args):
+        a = args[i]
+
+        def val():
+            if i + 1 >= len(args):
+                raise Fail(f"{a} needs a value")
+            return args[i + 1]
+        if a == "--output":
+            cur = (val(), {})
+            groups.append(cur)
+            i += 2
+            continue
+        if a == "--primary":
+            primary = val()
+            i += 2
+            continue
+        if a == "--confirm":
+            try:
+                confirm = int(val())
+            except ValueError:
+                raise Fail("--confirm: whole seconds")
+            if not 0 <= confirm <= 600:
+                raise Fail("--confirm: 0 to 600 seconds")
+            i += 2
+            continue
+        if cur is None:
+            raise Fail(f"{a}: name the output first (--output NAME)")
+        o = cur[1]
+        if a in ("--off", "--on"):
+            o["on"] = a == "--on"
+            i += 1
+        elif a in ("--mode", "--scale", "--position", "--transform"):
+            o[a[2:]] = val()
+            i += 2
+        else:
+            raise Fail(f"unknown option {a}\n{USAGE}")
+    return groups, primary, confirm
+
+
+def plan(st, groups, primary):
+    """The block's entries for every output: what it has now, the asked changes on top."""
+    outs = {o["name"]: o for o in st["outputs"]}
+    want = {o["name"]: {"output": o["name"], "mode": o["mode"], "position": f"{o['x']}x{o['y']}",
+                        "scale": o["scale"], "transform": o["transform"], "disabled": not o["enabled"],
+                        "describe": _describe(o)} for o in st["outputs"]}
+    said = {}
+    for name, opts in groups:
+        if name not in outs:
+            raise Fail(f"no output {name!r} here ({', '.join(outs) or 'none'})")
+        o, w = outs[name], want[name]
+        if "mode" in opts:
+            p = parse_mode(opts["mode"])
+            if not p:
+                raise Fail(f"{name}: mode {opts['mode']!r} isn't WxH or WxH@HZ")
+            if o["modes"]:
+                fits = [m for m in o["modes"] if (m["width"], m["height"]) == p[:2]
+                        and (p[2] is None or abs(m["refresh"] - p[2]) < 0.6)]
+                if not fits:
+                    have = ", ".join(sorted({m["mode"] for m in o["modes"]}))
+                    raise Fail(f"{name} doesn't offer {opts['mode']} (it offers: {have})")
+                best = max(fits, key=lambda m: m["refresh"])
+                w["mode"] = mode_text(best["width"], best["height"], best["refresh"])
+            else:
+                w["mode"] = mode_text(*p)
+            said.setdefault(name, []).append(w["mode"])
+        if "scale" in opts:
+            try:
+                s = float(opts["scale"])
+            except ValueError:
+                raise Fail(f"{name}: scale {opts['scale']!r} isn't a number")
+            if not 0.5 <= s <= 4:
+                raise Fail(f"{name}: scale {trim(s)} is out of range (0.5 to 4)")
+            w["scale"] = s
+            said.setdefault(name, []).append(f"{trim(s)}x")
+        if "position" in opts:
+            m = re.fullmatch(r"(-?\d{1,6})x(-?\d{1,6})", opts["position"].strip())
+            if not m:
+                raise Fail(f"{name}: position {opts['position']!r} isn't XxY")
+            w["position"] = f"{int(m.group(1))}x{int(m.group(2))}"
+            said.setdefault(name, []).append("placed at " + w['position'].replace('x', ', ', 1))
+        if "transform" in opts:
+            try:
+                t = int(opts["transform"])
+            except ValueError:
+                t = -1
+            if t not in TRANSFORMS:
+                raise Fail(f"{name}: transform is 0 to 7 (0 normal, 1 90°, 2 180°, 3 270°)")
+            w["transform"] = t
+            said.setdefault(name, []).append(TRANSFORMS[t])
+        if "on" in opts:
+            w["disabled"] = not opts["on"]
+            said.setdefault(name, []).append("on" if opts["on"] else "off")
+    if not any(not w["disabled"] for w in want.values()):
+        raise Fail("that would turn every display off: one stays on")
+    if primary is not None:
+        if primary not in outs:
+            raise Fail(f"no output {primary!r} here ({', '.join(outs)})")
+        if want[primary]["disabled"]:
+            raise Fail(f"{primary} is off: the primary must be on")
+        said.setdefault("primary", []).append(primary)
+    return [want[n] for n in outs], [f"{n}: {', '.join(w)}" if n != "primary" else f"primary {w[0]}"
+                                     for n, w in said.items()]
+
+
+def _matches(entries):
+    """A check for bromigos_hypr.save: None when Hyprland runs the entries, else what differs."""
+    def check():
+        mons, err = hyprctl_json("monitors", "all")
+        if not isinstance(mons, list):
+            return f"hyprctl monitors: {err}"
+        live = {m.get("name"): m for m in mons}
+        for e in entries:
+            m = live.get(e["output"])
+            if m is None:
+                return f"{e['output']} is gone"
+            if e.get("disabled"):
+                if not m.get("disabled"):
+                    return f"{e['output']} is still on"
+                continue
+            if m.get("disabled"):
+                return f"{e['output']} stayed off"
+            w, h, hz = parse_mode(e["mode"])
+            if (int(m.get("width", 0)), int(m.get("height", 0))) != (w, h):
+                return f"{e['output']} runs {m.get('width')}x{m.get('height')}, not {w}x{h}"
+            if hz and abs(float(m.get("refreshRate") or 0) - hz) > 1.0:
+                return f"{e['output']} runs at {trim(m.get('refreshRate') or 0)} Hz, not {trim(hz)}"
+            if abs(float(m.get("scale") or 1) - float(e["scale"])) > 0.01:
+                return (f"Hyprland runs {e['output']} at {trim(m.get('scale') or 1)}x, not {trim(e['scale'])}x "
+                        "(a scale has to divide the resolution evenly)")
+            x, y = (int(v) for v in e["position"].split("x"))
+            if abs(int(m.get("x", 0)) - x) > 2 or abs(int(m.get("y", 0)) - y) > 2:
+                return f"{e['output']} is at {m.get('x')}x{m.get('y')}, not {e['position']}"
+            if int(m.get("transform") or 0) != int(e.get("transform") or 0):
+                return f"{e['output']} has orientation {m.get('transform')}, not {e.get('transform')}"
+        return None
+    return check
+
+
+def _toml_text(primary):
+    return (f"# bromigos setup monitors / Settings › Displays: the output bromigOS's own surfaces go on\n"
+            f"primary = {json.dumps(primary)}\n")
+
+
+def _save(lua_text, toml_text, entries):
+    files = {lua_path(): lua_text}
+    if toml_text is not False:
+        files[toml_path()] = toml_text
+    ok, detail = H.save(files, lua=lua_path(), hypr=H.Hyprctl(env=session_env()),
+                        check=_matches(entries) if entries else None, wait=3.0)
+    if not ok:
+        raise Fail(f"not changed: {detail}")
+    return detail
+
+
+def _start_trial(old_block, old_toml, confirm, said):
+    os.makedirs(state_dir(), exist_ok=True)
+    prev = trial()
+    if prev["pending"]:
+        # an apply during a trial: the same starting point, a new deadline and token
+        with open(pending_path()) as f:
+            p = json.load(f)
+        old_block, old_toml = p["old_block"], p["old_toml"]
+    token = secrets.token_hex(8)
+    C.write_file(pending_path(), json.dumps({"token": token, "deadline": time.time() + confirm, "confirm": confirm,
+                                             "old_block": old_block, "old_toml": old_toml, "said": said}), mode=0o600)
+    subprocess.Popen([sys.executable, os.path.realpath(__file__), "_watchdog", token], stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+                     cwd="/")
+    return token
+
+
+def _old_state():
+    lua = C.read_file(lua_path())
+    if lua is None:
+        raise Fail(f"{lua_path()}: no such file (bromigos update seeds it)")
+    b = lua.find(BLOCK_BEGIN)
+    e = lua.find(BLOCK_END, b + 1) if b >= 0 else -1
+    old_block = None
+    if b >= 0 and e > b:
+        nl = lua.find("\n", e)
+        old_block = lua[b:(nl + 1 if nl >= 0 else len(lua))]
+    return lua, old_block, C.read_file(toml_path())
+
+
+def _need_hyprland(st):
+    if not st.get("running"):
+        raise Fail("Hyprland isn't running here, so a change can't be checked: `bromigos setup monitors` "
+                   "writes the outputs for its next start")
+
+
+def apply(args):
+    groups, primary, confirm = parse_groups(args)
+    if not groups and primary is None:
+        raise Fail("nothing to change: --output NAME with --mode, --scale, --position, --transform, --off or "
+                   "--on, or --primary NAME")
+    st = status()
+    _need_hyprland(st)
+    entries, said = plan(st, groups, primary)
+    lua, old_block, old_toml = _old_state()
+    text = with_block(lua, block_text(entries))
+    new_primary = primary if primary is not None else None
+    if new_primary is None:
+        cur = st.get("primary")
+        if cur and any(e["output"] == cur and e["disabled"] for e in entries):
+            new_primary = next(e["output"] for e in entries if not e["disabled"])   # the primary went off
+    toml_text = _toml_text(new_primary) if new_primary else False
+    _save(text, toml_text, entries)
+    words = "; ".join(said) or "the displays"
+    if confirm:
+        _start_trial(old_block, old_toml, confirm, words)
+    return dict(status(), said=f"Displays: {words}" + (f" (keep them within {confirm} s)" if confirm else ""))
+
+
+def reset(args):
+    confirm = CONFIRM
+    if "--confirm" in args:
+        confirm = int(C.flag(args, "--confirm", CONFIRM))
+    st = status()
+    _need_hyprland(st)
+    lua, old_block, old_toml = _old_state()
+    if old_block is None:
+        return dict(st, said="Displays: nothing pinned (every output already follows bromigOS's defaults)")
+    _save(with_block(lua, None), False, None)
+    if confirm:
+        _start_trial(old_block, old_toml, confirm, "back to the defaults")
+    return dict(status(), said="Displays: back to the defaults" + (f" (keep them within {confirm} s)" if confirm else ""))
+
+
+def keep(_args):
+    t = trial()
+    if not t["pending"]:
+        return dict(status(), said="Nothing to keep: no change is waiting")
+    C.write_file(pending_path(), None)
+    return dict(status(), said="Display settings kept")
+
+
+def _revert(p):
+    lua = C.read_file(lua_path()) or ""
+    text = with_block(lua, p["old_block"]) if p["old_block"] is not None else with_block(lua, None)
+    entries = read_block(p["old_block"]) if p["old_block"] else None
+    # read_block's entries as the check wants them (mode, position, scale)
+    ents = []
+    for e in entries or []:
+        if e.get("disabled"):
+            ents.append({"output": e["output"], "disabled": True})
+        elif e.get("mode") and e.get("position"):
+            ents.append({"output": e["output"], "mode": e["mode"], "position": e["position"],
+                         "scale": e.get("scale", 1), "transform": e.get("transform", 0)})
+    files_toml = p["old_toml"] if p["old_toml"] != C.read_file(toml_path()) else False
+    _save(text, files_toml, ents or None)
+
+
+def revert(_args):
+    try:
+        with open(pending_path()) as f:
+            p = json.load(f)
+    except (OSError, ValueError):
+        return dict(status(), said="Nothing to revert: no change is waiting")
+    C.write_file(pending_path(), None)
+    _revert(p)
+    return dict(status(), said="Display settings reverted")
+
+
+def watchdog(args):
+    """Waits out the trial; reverts unless it was kept (or replaced by a newer one)."""
+    token = args[0] if args else ""
+    log = os.path.join(state_dir(), "watchdog.log")
+    while True:
+        try:
+            with open(pending_path()) as f:
+                p = json.load(f)
+        except (OSError, ValueError):
+            return {"said": "kept"}
+        if p.get("token") != token:
+            return {"said": "replaced by a newer trial"}
+        left = p.get("deadline", 0) - time.time()
+        if left <= 0:
+            break
+        time.sleep(min(left, 0.5))
+    C.write_file(pending_path(), None)
+    try:
+        _revert(p)
+        msg = "reverted: not kept in time"
+    except Fail as e:
+        msg = f"couldn't revert: {e}"
+    with open(log, "a") as f:
+        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {p.get('said', '')}: {msg}\n")
+    C.run(["notify-send", "-a", "bromigos", "-u", "normal", "Displays", f"The display settings were {msg} "
+           "(Settings › Displays)"], timeout=5)
+    return {"said": msg}
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "apply": apply, "keep": keep, "revert": revert, "reset": reset,
+                     "_watchdog": watchdog}, USAGE))

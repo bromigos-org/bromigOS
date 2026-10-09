@@ -1,0 +1,18 @@
+#!/bin/sh
+# bromigos:summary=Remove an installed extension: its links and its checkout (bromigos ext remove)
+# bromigos:args=NAME
+# bromigos:examples=bromigos remove extension hello-deck ; bromigos ext list
+# bromigos:menu=REMOVE:Extension…
+# bromigos:prompt=EXTENSION NAME
+#
+# The menu's REMOVE › Extension… (Super+Space; docs/menu.md). With no name it lists what's
+# installed and asks which.
+set -eu
+if [ "$#" -eq 0 ]; then
+    bromigos ext list
+    printf 'Remove which extension? ' >&2
+    read -r name
+    [ -n "$name" ] || exit 0
+    set -- "$name"
+fi
+exec bromigos ext remove "$@"

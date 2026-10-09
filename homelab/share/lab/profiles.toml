@@ -1,0 +1,323 @@
+# The lab's service catalog and its presets: what `bromigos lab provision` (Phase 3) can set
+# up on a user's own box, and how each is sized. docs/lab-provision.md has the design.
+#
+# Installed as /usr/share/bromigos/homelab/lab/profiles.toml (bromigos-homelab). Extensions
+# add entries with the same schema (a homelab-adapter extension's lab/catalog/*.toml); the
+# first entry of a name wins, so an extension adds services and never replaces one.
+#
+# [service.<id>]       one service the picker can tick
+#   title, summary     its name and one line (the picker's row and hover hint)
+#   group              core | ai | games | media | home | advanced | network (where it's listed)
+#   kind               compose (a container on a Linux box) | host (installed on the host) |
+#                      helm (on a Kubernetes target; compose elsewhere) | cluster (Kubernetes itself)
+#   needs              { cpu = cores, ram_gib, disk_gib, vram_gib, gpu = "none"|"nvidia"|"amd"|"any" }
+#                      the least it runs with; vram_gib with gpu = "none" means "a GPU helps"
+#   ports              [ports it listens on]; only the reverse proxy is published (safety defaults)
+#   provides           roles it fills (another service's depends names a role or a service)
+#   depends            [roles or services it needs]; the picker ticks one for you and says why
+#   conflicts          [services that can't run beside it in the same role]
+#   default            true: ticked for everyone (Core); unticking says what's lost
+#   models             { from = "catalog", capabilities = [...] }: its model set comes from the
+#                      model catalog (models.toml, docs/lab-models.md), picked by VRAM tier
+#   exposes            the web UI behind the reverse proxy (a subdomain), if any
+#   gpu_driver         true: it needs the NVIDIA container toolkit (or ROCm), installed with a dry run first
+#
+# [preset.<id>]        a named selection over the catalog; picking it ticks its services, then
+#                      anything can be added or removed (presets and Custom are the same screen)
+#
+# [sizing]             the rules the inventory applies (VRAM tiers: cpu, 8, 12, 16, 24, 32, 48, 80 GB)
+
+format = 1
+
+# ------------------------------------------------------------------ Core (always offered, ticked)
+[service.caddy]
+title = "Caddy"
+summary = "the reverse proxy: automatic HTTPS for every web UI, the only thing exposed"
+group = "core"
+kind = "compose"
+needs = { cpu = 1, ram_gib = 0.25, disk_gib = 1 }
+ports = [80, 443]
+provides = ["reverse-proxy"]
+default = true
+
+[service.netdata]
+title = "Netdata"
+summary = "live metrics for the box and its containers, no setup (the desktop reads it)"
+group = "core"
+kind = "compose"
+needs = { cpu = 1, ram_gib = 0.5, disk_gib = 2 }
+ports = [19999]
+provides = ["metrics", "host-monitor"]
+exposes = "netdata"
+default = true
+
+[service.restic]
+title = "Backups (restic)"
+summary = "nightly, encrypted, deduplicated backups of the lab's data to a NAS or a cloud bucket"
+group = "core"
+kind = "compose"
+needs = { cpu = 1, ram_gib = 0.5, disk_gib = 1 }
+ports = []
+provides = ["backups"]
+default = true
+untick_warning = "Without backups, a dead disk loses the lab's data, models' settings and your services' state."
+
+[service.homepage]
+title = "Homepage"
+summary = "one page with every service's link and status"
+group = "core"
+kind = "compose"
+needs = { cpu = 1, ram_gib = 0.25, disk_gib = 1 }
+ports = [3000]
+provides = ["dashboard"]
+exposes = "home"
+default = true
+
+# ------------------------------------------------------------------ AI
+[service.ollama]
+title = "Ollama"
+summary = "run open LLMs on CPU or any GPU, pulled by name; the simple LLM server"
+group = "ai"
+kind = "compose"
+needs = { cpu = 4, ram_gib = 8, disk_gib = 30, vram_gib = 8, gpu = "none" }
+ports = [11434]
+provides = ["llm-server"]
+conflicts = ["vllm"]
+models = { from = "catalog", capabilities = ["llm", "code", "embed", "vision"] }
+
+[service.vllm]
+title = "vLLM"
+summary = "fast LLM serving on NVIDIA with 24 GB or more: batching, long contexts, many users"
+group = "ai"
+kind = "compose"
+needs = { cpu = 8, ram_gib = 32, disk_gib = 80, vram_gib = 24, gpu = "nvidia" }
+ports = [8000]
+provides = ["llm-server"]
+conflicts = ["ollama"]
+gpu_driver = true
+models = { from = "catalog", capabilities = ["llm", "code", "embed", "vision"] }
+
+[service.litellm]
+title = "LiteLLM"
+summary = "one OpenAI-compatible gateway with keys in front of your LLM servers (VECTOR's brain uses it)"
+group = "ai"
+kind = "compose"
+needs = { cpu = 2, ram_gib = 1, disk_gib = 2 }
+ports = [4000]
+provides = ["llm-gateway"]
+depends = ["llm-server"]
+
+[service.comfyui]
+title = "ComfyUI"
+summary = "images, edits, cutouts and 3D on your GPU (bromigos art and lab jobs run here)"
+group = "ai"
+kind = "compose"
+needs = { cpu = 4, ram_gib = 16, disk_gib = 60, vram_gib = 12, gpu = "nvidia" }
+ports = [8188]
+provides = ["media-server"]
+gpu_driver = true
+exposes = "comfyui"
+models = { from = "catalog", capabilities = ["image", "image-edit", "cutout", "upscale", "3d", "video"] }
+
+[service.voice]
+title = "Voice"
+summary = "speech for VECTOR and voice jobs: Qwen3-TTS on a GPU, Kokoro on CPU"
+group = "ai"
+kind = "compose"
+needs = { cpu = 2, ram_gib = 4, disk_gib = 10, vram_gib = 6, gpu = "none" }
+ports = [7860]
+provides = ["tts"]
+models = { from = "catalog", capabilities = ["tts"] }
+notes = "With a GPU of 8 GB or more: Qwen3-TTS (voice cloning, streamed); without: Kokoro on the CPU."
+
+[service.whisper]
+title = "Whisper"
+summary = "speech to text for VECTOR's hearing and transcription jobs (served with the voice service)"
+group = "ai"
+kind = "compose"
+needs = { cpu = 2, ram_gib = 2, disk_gib = 4, vram_gib = 2, gpu = "none" }
+ports = []
+provides = ["stt"]
+depends = ["voice"]
+models = { from = "catalog", capabilities = ["stt"] }
+
+[service.open-webui]
+title = "Open WebUI"
+summary = "a chat UI for your models, in the browser"
+group = "ai"
+kind = "compose"
+needs = { cpu = 1, ram_gib = 1, disk_gib = 4 }
+ports = [8080]
+provides = ["chat-ui"]
+depends = ["llm-server"]
+exposes = "chat"
+
+[service.searxng]
+title = "SearXNG"
+summary = "private web search for VECTOR and Open WebUI"
+group = "ai"
+kind = "compose"
+needs = { cpu = 1, ram_gib = 0.5, disk_gib = 1 }
+ports = [8888]
+provides = ["web-search"]
+exposes = "search"
+
+# ------------------------------------------------------------------ Game servers
+[service.pelican-panel]
+title = "Pelican panel"
+summary = "manage game servers from the browser"
+group = "games"
+kind = "compose"
+needs = { cpu = 1, ram_gib = 1, disk_gib = 4 }
+ports = [8090]
+provides = ["game-panel"]
+depends = ["pelican-wings"]
+exposes = "games"
+
+[service.pelican-wings]
+title = "Pelican Wings"
+summary = "runs the game servers the panel manages (Minecraft Paper by default)"
+group = "games"
+kind = "compose"
+needs = { cpu = 4, ram_gib = 8, disk_gib = 30 }
+ports = [8080, 2022, 25565]
+provides = ["game-node"]
+notes = "The default template is Minecraft Paper on 25565; the panel adds others."
+
+# ------------------------------------------------------------------ Media
+[service.jellyfin]
+title = "Jellyfin"
+summary = "your films, shows and music, streamed to any screen (GPU transcoding when there is one)"
+group = "media"
+kind = "compose"
+needs = { cpu = 4, ram_gib = 4, disk_gib = 20, gpu = "none" }
+ports = [8096]
+provides = ["media-library"]
+exposes = "media"
+
+[service.arr]
+title = "The arr apps"
+summary = "Sonarr, Radarr, Prowlarr and Bazarr: your library, organised and complete"
+group = "media"
+kind = "compose"
+needs = { cpu = 2, ram_gib = 3, disk_gib = 10 }
+ports = [8989, 7878, 9696, 6767]
+provides = ["library-manager"]
+depends = ["jellyfin"]
+
+# ------------------------------------------------------------------ Home
+[service.home-assistant]
+title = "Home Assistant"
+summary = "your home's devices, automations and energy, local"
+group = "home"
+kind = "compose"
+needs = { cpu = 2, ram_gib = 2, disk_gib = 10 }
+ports = [8123]
+provides = ["home-automation"]
+exposes = "home-assistant"
+
+# ------------------------------------------------------------------ Advanced
+[service.prometheus]
+title = "Prometheus"
+summary = "metrics and alerts for everything (the lab console's richest source)"
+group = "advanced"
+kind = "helm"
+needs = { cpu = 2, ram_gib = 4, disk_gib = 50 }
+ports = [9090]
+provides = ["metrics", "alerts"]
+
+[service.grafana]
+title = "Grafana"
+summary = "dashboards over Prometheus and Loki"
+group = "advanced"
+kind = "helm"
+needs = { cpu = 1, ram_gib = 1, disk_gib = 2 }
+ports = [3001]
+depends = ["prometheus"]
+exposes = "grafana"
+
+[service.loki]
+title = "Loki"
+summary = "every container's logs, searchable (lab logs reads it)"
+group = "advanced"
+kind = "helm"
+needs = { cpu = 2, ram_gib = 2, disk_gib = 50 }
+ports = [3100]
+provides = ["logs"]
+
+[service.vault]
+title = "Vault"
+summary = "the lab's secrets, with expiry the doctor can watch (generated secrets go here when present)"
+group = "advanced"
+kind = "helm"
+needs = { cpu = 1, ram_gib = 1, disk_gib = 2 }
+ports = [8200]
+provides = ["secrets"]
+
+[service.kubernetes]
+title = "Kubernetes (k3s) with Argo CD"
+summary = "run the lab as a cluster, deployed from your lab repo by Argo CD (GitOps)"
+group = "advanced"
+kind = "cluster"
+needs = { cpu = 4, ram_gib = 8, disk_gib = 40 }
+ports = [6443]
+provides = ["cluster", "gitops"]
+notes = "With it, the other services install as Helm charts that Argo CD syncs from the lab repo."
+
+# ------------------------------------------------------------------ Network (opt-in)
+[service.cloudflare-tunnel]
+title = "Cloudflare tunnel"
+summary = "reach chosen web UIs from outside without opening a port (opt-in: nothing is public otherwise)"
+group = "network"
+kind = "compose"
+needs = { cpu = 1, ram_gib = 0.25, disk_gib = 1 }
+ports = []
+provides = ["public-access"]
+depends = ["reverse-proxy"]
+
+# ------------------------------------------------------------------ presets
+[preset.core]
+title = "Core"
+summary = "HTTPS, live metrics, backups and a start page: every lab has these"
+services = ["caddy", "netdata", "restic", "homepage"]
+
+[preset.ai]
+title = "AI"
+summary = "local LLMs behind LiteLLM, ComfyUI with models for your VRAM, voice and hearing, chat and search"
+services = ["ollama", "litellm", "comfyui", "voice", "whisper", "open-webui", "searxng"]
+choose = { "llm-server" = ["vllm when an NVIDIA GPU has 24 GB or more", "ollama otherwise"] }
+
+[preset.games]
+title = "Game server"
+summary = "Pelican's panel and Wings, with Minecraft Paper ready"
+services = ["pelican-panel", "pelican-wings"]
+
+[preset.media]
+title = "Media"
+summary = "Jellyfin and the arr apps"
+services = ["jellyfin", "arr"]
+
+[preset.home]
+title = "Home"
+summary = "Home Assistant"
+services = ["home-assistant"]
+
+[preset.advanced]
+title = "Advanced"
+summary = "Prometheus, Grafana and Loki; Vault; Kubernetes with Argo CD"
+services = ["prometheus", "grafana", "loki", "vault", "kubernetes"]
+
+# ------------------------------------------------------------------ sizing
+[sizing]
+vram_tiers = ["cpu", 8, 12, 16, 24, 32, 48, 80]
+# headroom kept on the box beyond the services' needs: the OS, page cache, a build
+ram_headroom_gib = 4
+disk_headroom_pct = 15
+# a GPU's VRAM beyond what resident models hold, kept for jobs (ComfyUI) and the voice's work
+vram_job_headroom_gib = 2
+# vLLM only with an NVIDIA GPU of at least this much VRAM; Ollama otherwise
+vllm_min_vram_gib = 24
+# the voice service: Qwen3-TTS on a GPU with this much VRAM free, else Kokoro on the CPU
+voice_gpu_min_vram_gib = 8
+# GPU drivers: only on these distributions, and always as a dry run first
+gpu_driver_distros = ["debian", "ubuntu", "fedora", "arch"]

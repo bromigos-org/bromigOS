@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bromigos</title>
+<link rel="icon" type="image/png" href="emblem-48.png" onerror="this.href='icon-48.png'">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main>
+  <header class="top">
+    <img class="emblem" src="emblem-theme.svg" alt="" width="64" height="64"
+         onerror="this.onerror=null; this.src='emblem.svg'"
+         title="The emblem: the burn-in, or the post's own mark under a world theme">
+    <div class="clock" title="Local time on this machine">
+      <div id="time">--:--:--</div>
+      <div id="date" class="date">&nbsp;</div>
+    </div>
+  </header>
+
+  <form id="search" class="search" role="search" autocomplete="off">
+    <input id="q" name="q" type="search" placeholder="Search" autofocus
+           title="Type and press Enter to search. Press / anywhere to come back here."
+           aria-label="Search">
+    <select id="engine" aria-label="Search engine"
+            title="Search engine. Defaults to this browser's engine; your choice is remembered.">
+      <option value="google">Google</option>
+      <option value="ddg">DuckDuckGo</option>
+    </select>
+  </form>
+
+  <div class="grid">
+    <section class="panel" id="switchboard">
+      <h2 title="Your homelab's services and your own links (startpage.toml), the same set as the desktop SWITCHBOARD panel">
+        SWITCHBOARD <span class="meta" id="sw-meta"></span></h2>
+      <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section class="panel" id="lab">
+      <h2 title="Lab status (bromigos-homelab, or endpoints.lab in the private overlay), read on this machine every minute">
+        <a id="lab-link" href="#" title="Open the lab's homepage">LAB</a>
+        <span class="meta" id="lab-meta"></span></h2>
+      <dl class="readouts" id="readouts"></dl>
+    </section>
+
+    <section class="panel wide" id="notes">
+      <h2 title="The latest lines of FIELD NOTES (~/.local/share/bromigos/notes.md). Read-only here; write in the desktop panel (ALT N) or quick note (ALT SHIFT N).">
+        FIELD NOTES <span class="meta" id="notes-meta"></span></h2>
+      <ol class="notes" id="notes-list"></ol>
+    </section>
+  </div>
+
+  <footer id="foot" title="The page reads a snapshot written by bromigos-startpage.timer; it reloads it every 30 seconds"></footer>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

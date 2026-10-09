@@ -1,0 +1,51 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# The lab model catalog (docs/lab-models.md): for every AI capability, the best open models a
+# GPU can run, by VRAM, with their licences. Data only, so it updates with `bromigos update`
+# without a code release: the weekly refresh (.github/workflows/lab-catalog.yml) merges a
+# metadata pull request, and this package's version moves with every commit to the file.
+#   /usr/share/bromigos/homelab/lab/models.toml   read by bromigos_homelab.catalog (bromigos-homelab):
+#                                         bromigos lab models recommend|plan|upgrades, Settings › Lab
+# The same file is also published signed next to the repository (<server>/lab/models.toml and
+# .sig, packaging/ci/publish.sh), which `bromigos lab models refresh` fetches on demand.
+
+pkgname=bromigos-lab-catalog
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='bromigOS lab model catalog: the best open models per AI capability and GPU size, with licences'
+arch=('any')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+makedepends=('git' 'python')
+options=('!debug')
+
+_root="${startdir%/packaging/*}"
+_paths=(homelab/share/lab/models.toml packaging/bromigos-lab-catalog)
+
+# <workspace version>.r<commits touching the package>.g<last such commit> (as bromigos-core)
+# The commits that touched _paths before the history restarted at v0.1.2 (they're in
+# bromigos-org/bromigOS-archive): the count goes on from them, so no version sorts below one
+# published before the restart (packaging/README.md, Versions).
+_archived=5
+
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+check() {
+  cd "$_root/homelab"
+  # the data parses and is consistent (the same check `bromigos lab models check` runs)
+  BROMIGOS_HOMELAB_CONFIG=/nonexistent PYTHONPATH=lib \
+    python -m bromigos_homelab.catalog check --catalog share/lab/models.toml
+}
+
+package() {
+  install -Dm0644 "$_root/homelab/share/lab/models.toml" "$pkgdir/usr/share/bromigos/homelab/lab/models.toml"
+  install -Dm0644 -t "$pkgdir/usr/share/doc/$pkgname/" "$_root/docs/lab-models.md"
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+}

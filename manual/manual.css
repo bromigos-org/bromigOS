@@ -1,0 +1,14 @@
+/* The manual's few additions to mdBook's look (book.toml: additional-css). */
+
+/* A key combination, such as Super+Shift+K, never breaks across lines. */
+.keys {
+    white-space: nowrap;
+}
+
+/* Screenshots fit the page, with a thin frame so dark pictures stand apart. */
+.content img {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--table-border-color);
+    border-radius: 4px;
+}

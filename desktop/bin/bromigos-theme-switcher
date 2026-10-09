@@ -1,0 +1,655 @@
+#!/usr/bin/env python3
+# bromigos:summary=Pick a theme from previews of the desktop wearing it (SUPER+CTRL+SHIFT+SPACE)
+# bromigos:args=[--list [--json]] [--render [NAME…]] [--screenshot OUT.png --size WxH [--select NAME] [--filter TEXT]]
+# bromigos:examples=bromigos theme switcher; bromigos theme switcher --list; bromigos theme previews
+"""bromigos-theme-switcher: every theme as a preview of the desktop wearing it (its world
+or the den, the bar, a terminal and a panel in its colours), in a grid sized to the
+monitor it opens on. Arrows move, Enter applies (`bromigos theme set`), typing filters,
+Esc closes. Themes from the extension catalogs come after the installed ones; choosing
+one installs it first (in a terminal).
+
+  bromigos theme switcher                      the window
+  bromigos theme switcher --list [--json]      the themes, their previews and whether each is current
+  bromigos theme switcher --render [NAME…]     draw missing or stale previews (bromigos theme previews), no window
+  bromigos theme switcher --screenshot OUT.png --size WxH [--select NAME] [--filter TEXT] [--backdrop IMG]
+                                               draw the window as it opens on a WxH monitor to a PNG and
+                                               exit (needs a Wayland display: the tests use a headless one)
+
+The previews are drawn offscreen and cached (bromigos theme previews; docs/theming.md,
+"The previews"); one that is missing or out of date shows a placeholder in the theme's
+colours while it is drawn in the background, and the card fills in when it's ready.
+"""
+import json
+import os
+import subprocess
+import sys
+import threading
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+for _p in (os.path.join(HERE, "..", "lib"), os.path.join(HERE, "..", "..", "lib"), "/usr/lib/bromigos/lib"):
+    if os.path.isdir(_p) and _p not in sys.path:
+        sys.path.append(_p)
+
+import bromigos_hypr as H  # noqa: E402
+import bromigos_previews as PV  # noqa: E402
+# the cards and the themes behind them, shared with Settings › Theme
+from bromigos_themecards import (WICK, CardKit, Entry, PreviewWatch, card_css, catalog,  # noqa: E402,F401
+                                 installed, kind_of, render_background, rgba, theme_colors)
+
+APP_ID = "org.bromigos.ThemeSwitcher"
+KEYS = "←↑→↓ choose · Enter apply · type to filter · Esc close"
+
+
+# ------------------------------------------------------------------ the monitor and the grid
+def focused_monitor():
+    """(width, height, name) of the monitor Hyprland has focused, in logical px, or None."""
+    try:
+        r = subprocess.run(["hyprctl", "monitors", "-j"], capture_output=True, text=True, timeout=3,
+                           env=H.session_env())
+        mons = json.loads(r.stdout or "[]")
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    for m in sorted(mons, key=lambda m: not m.get("focused")):
+        w, h, s = m.get("width", 0), m.get("height", 0), m.get("scale", 1) or 1
+        if m.get("transform", 0) % 2:
+            w, h = h, w
+        if w and h:
+            return round(w / s), round(h / s), m.get("name")
+    return None
+
+
+class Grid:
+    """Sizes from the monitor: margins round the panel, columns from the width (cards
+    neither cramped nor huge), cards at 16:9 like the previews. With `n` cards, more
+    columns (smaller cards, never under a sixth of the width or 300 px) when that lets
+    every card show without scrolling."""
+    GAP = 16
+    PAD = 20
+    SCROLLBAR = 14
+    CAPTION = 54
+    HEADER = 64
+    FOOTER = 40
+
+    def __init__(self, mw, mh, n=0):
+        self.mw, self.mh, self.n = mw, mh, n
+        self.margin = max(16, min(80, round(min(mw, mh) * 0.05)))
+        self.w = mw - 2 * self.margin
+        self.h = mh - 2 * self.margin
+        self.inner = inner = self.w - 2 * self.PAD - self.SCROLLBAR
+        self.view_h = self.h - self.HEADER - self.FOOTER - 2 * self.PAD
+        target = max(300, min(520, inner * 0.21))
+        cols = max(1, min(6, int((inner + self.GAP) // (target + self.GAP))))
+        while n and cols < 6 and self.height(cols, n) > self.view_h \
+                and self.width(cols + 1) >= max(300, inner / 6.5):
+            cols += 1
+        self.cols = cols
+        self.card_w = self.width(cols)
+        self.card_h = round(self.card_w * 9 / 16)
+        self.rows_visible = max(1.0, (self.view_h + self.GAP) / (self.card_h + self.CAPTION + self.GAP))
+        self.font = 12 if mw < 1500 else 13 if mw < 2200 else 14
+
+    def width(self, cols):
+        return int((self.inner - self.GAP * (cols - 1)) // cols)
+
+    def height(self, cols, n):
+        rows = -(-n // cols)
+        return rows * (round(self.width(cols) * 9 / 16) + self.CAPTION + self.GAP) - self.GAP
+
+
+# ------------------------------------------------------------------ the window
+def load_gtk():
+    """GTK 4 (and gtk4-layer-shell when there is one: it has to load before libwayland)."""
+    from ctypes import CDLL
+    try:
+        CDLL("libgtk4-layer-shell.so")
+    except OSError:
+        pass
+    import gi
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Gdk", "4.0")
+    try:
+        gi.require_version("Gtk4LayerShell", "1.0")
+        from gi.repository import Gtk4LayerShell as LS
+    except (ValueError, ImportError):
+        LS = None
+    from gi.repository import Gdk, Gio, GLib, Gtk, Pango
+    return Gtk, Gdk, Gio, GLib, Pango, LS
+
+
+def palette():
+    try:
+        import bromigos_theme as T
+        got = T.colors()
+    except Exception:
+        got = H.palette()
+    out = dict(WICK)
+    out.update({k: v for k, v in (got or {}).items() if isinstance(v, str) and v.startswith("#")})
+    return out
+
+
+def css(c, g):
+    a = rgba
+    return f"""
+window.bromigos-switcher, window.bromigos-switcher.background {{ background: transparent; }}
+* {{ font-family: "Geist Mono", "MesloLGM Nerd Font Propo", monospace; font-size: {g.font}px; }}
+.scrim {{ background-color: {a(c['void'], .66)}; }}
+.panel {{ background-color: {a(c['panel'], .97)}; border: 1px solid {a(c['dim'], .7)};
+  box-shadow: 0 0 28px {a(c['primary'], .14)}, 0 12px 48px {a(c['void'], .7)}; }}
+.head {{ border-bottom: 1px solid {a(c['dim'], .45)}; padding: 0 {g.PAD}px; min-height: {g.HEADER - 1}px; }}
+.title {{ color: {c['primary']}; font-weight: 700; letter-spacing: 0.18em; font-size: {g.font + 2}px; }}
+.count {{ color: {c['muted']}; letter-spacing: 0.06em; }}
+entry.filter, .filter {{ background-color: {a(c['void'], .8)}; color: {c['text']}; border: 1px solid {a(c['dim'], .7)};
+  border-radius: 0; min-height: 30px; box-shadow: none; caret-color: {c['primary']}; }}
+.filter:focus-within {{ border-color: {c['primary']}; }}
+.filter image {{ color: {c['muted']}; }}
+scrolledwindow, viewport, flowbox {{ background: transparent; }}
+scrollbar {{ background: transparent; border: none; }}
+scrollbar slider {{ background-color: {a(c['dim'], .7)}; border-radius: 0; min-width: 4px; }}
+scrollbar slider:hover {{ background-color: {c['primary']}; }}
+.foot {{ border-top: 1px solid {a(c['dim'], .45)}; padding: 0 {g.PAD}px; min-height: {g.FOOTER - 1}px; }}
+.keys {{ color: {c['muted']}; letter-spacing: 0.04em; }}
+.hint {{ color: {c['soft']}; }}
+.status {{ color: {c['warn']}; letter-spacing: 0.04em; }}
+.empty {{ color: {c['muted']}; letter-spacing: 0.08em; }}
+tooltip {{ background-color: {c['void']}; border: 1px solid {c['dim']}; border-radius: 0; }}
+tooltip label {{ color: {c['soft']}; }}
+""" + card_css(c, g.font)
+
+
+class Switcher:
+    def __init__(self, Gtk, Gdk, Gio, GLib, Pango, LS, app, monitor, entries, shot=None):
+        self.Gtk, self.Gdk, self.Gio, self.GLib, self.Pango, self.LS = Gtk, Gdk, Gio, GLib, Pango, LS
+        self.app, self.entries, self.shot = app, entries, shot
+        self.monitor = monitor
+        self.g = Grid(monitor[0], monitor[1], len(entries))
+        self.colors = palette()
+        self.cards = {}
+        self.kit = CardKit(Gtk, Pango, still=bool(shot))
+        self.sel_name = None
+        self.pending = {e.name for e in entries if not e.catalog and not e.fresh}
+        self.closing = False
+
+        win = Gtk.ApplicationWindow(application=app, title="Themes")
+        win.add_css_class("bromigos-switcher")
+        self.win = win
+        prov = Gtk.CssProvider()
+        prov.load_from_string(css(self.colors, self.g))
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), prov,
+                                                  Gtk.STYLE_PROVIDER_PRIORITY_USER)
+        self.layer = bool(LS and not shot and LS.is_supported())
+        if self.layer:
+            LS.init_for_window(win)
+            LS.set_namespace(win, "bromigos-theme-switcher")
+            LS.set_layer(win, LS.Layer.OVERLAY)
+            for edge in (LS.Edge.TOP, LS.Edge.BOTTOM, LS.Edge.LEFT, LS.Edge.RIGHT):
+                LS.set_anchor(win, edge, True)
+            LS.set_exclusive_zone(win, -1)
+            LS.set_keyboard_mode(win, LS.KeyboardMode.EXCLUSIVE)
+            if monitor[2]:
+                for i in range(Gdk.Display.get_default().get_monitors().get_n_items()):
+                    m = Gdk.Display.get_default().get_monitors().get_item(i)
+                    if m.get_connector() == monitor[2]:
+                        LS.set_monitor(win, m)
+        else:
+            win.set_default_size(monitor[0], monitor[1])
+            win.set_decorated(False)
+
+        over = Gtk.Overlay()
+        if shot and shot.get("backdrop"):
+            bd = Gtk.Picture.new_for_filename(shot["backdrop"])
+            bd.set_content_fit(Gtk.ContentFit.COVER)
+            bd.set_can_shrink(True)
+            over.set_child(bd)
+            scrim = Gtk.Box()
+            scrim.add_css_class("scrim")
+            over.add_overlay(scrim)
+        else:
+            scrim = Gtk.Box()
+            scrim.add_css_class("scrim")
+            over.set_child(scrim)
+        scrim.set_tooltip_text("Click outside the panel, or press Esc, to close the switcher")
+        click = Gtk.GestureClick()
+        click.connect("released", lambda *_: self.close())
+        scrim.add_controller(click)
+        self.panel = self._panel()
+        self.over = over
+        over.add_overlay(self.panel)
+        win.set_child(over)
+
+        keys = Gtk.EventControllerKey()
+        keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        keys.connect("key-pressed", self._key)
+        win.add_controller(keys)
+        self.search.set_key_capture_widget(win)
+        if not shot:
+            self._watch()
+            if self.pending:
+                render_background(sorted(self.pending))
+            threading.Thread(target=self._load_catalog, daemon=True).start()
+
+    # ---------------------------------------------------------------- building
+    def _panel(self):
+        Gtk, g = self.Gtk, self.g
+        panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        panel.add_css_class("panel")
+        panel.set_size_request(g.w, -1)
+        panel.set_halign(Gtk.Align.CENTER)
+        panel.set_valign(Gtk.Align.CENTER)
+        # stop clicks on the panel from reaching the scrim's close
+        panel.add_controller(Gtk.GestureClick())
+
+        head = Gtk.Box(spacing=14)
+        head.add_css_class("head")
+        head.set_tooltip_text("Themes: the installed ones, then the catalog's. Type to filter, Esc to close")
+        title = Gtk.Label(label="THEMES")
+        title.add_css_class("title")
+        title.set_tooltip_text("The theme switcher (SUPER+CTRL+SHIFT+SPACE): every theme as a preview of your "
+                               "desktop wearing it. `bromigos theme previews` draws the previews.")
+        head.append(title)
+        self.count = Gtk.Label()
+        self.count.add_css_class("count")
+        head.append(self.count)
+        spacer = Gtk.Box(hexpand=True)
+        head.append(spacer)
+        self.search = Gtk.SearchEntry(placeholder_text="type to filter")
+        self.search.add_css_class("filter")
+        self.search.set_size_request(min(360, max(200, g.w // 4)), -1)
+        self.search.set_valign(self.Gtk.Align.CENTER)
+        self.search.set_tooltip_text("Type anywhere to filter the themes by name, description or kind "
+                                     "(world, colour, catalog); Enter applies the one selected")
+        self.search.connect("search-changed", lambda *_: self._refilter())
+        self.search.connect("activate", lambda *_: self._activate_selected())
+        self.search.connect("stop-search", lambda *_: self.close())
+        head.append(self.search)
+        panel.append(head)
+
+        self.scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        est = min(g.view_h, g.height(g.cols, len(self.entries)))
+        self.scroll.set_min_content_height(est)
+        self.scroll.set_max_content_height(est)
+        self.scroll.set_margin_top(g.PAD)
+        self.scroll.set_margin_bottom(g.PAD)
+        self.scroll.set_margin_start(g.PAD)
+        self.scroll.set_margin_end(g.PAD - g.SCROLLBAR + 6)
+        self.flow = Gtk.FlowBox(homogeneous=True, column_spacing=g.GAP, row_spacing=g.GAP,
+                                selection_mode=Gtk.SelectionMode.SINGLE, activate_on_single_click=True)
+        self.flow.set_min_children_per_line(g.cols)
+        self.flow.set_max_children_per_line(g.cols)
+        self.flow.set_valign(Gtk.Align.START)
+        self.flow.set_halign(Gtk.Align.START)
+        self.flow.set_filter_func(self._filter)
+        self.flow.connect("child-activated", lambda _f, child: self.apply(child.entry))
+        self.flow.connect("selected-children-changed", self._selection_changed)
+        for e in self.entries:
+            self._add_card(e)
+        self.empty = Gtk.Label(label="NO THEME MATCHES")
+        self.empty.add_css_class("empty")
+        self.empty.set_tooltip_text("Nothing matches the filter: Backspace to widen it, Esc to close")
+        stack = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        stack.append(self.flow)
+        stack.append(self.empty)
+        self.empty.set_visible(False)
+        self.scroll.set_child(stack)
+        self.scroll.set_tooltip_text("Every theme as a preview of your desktop wearing it; scroll, or move "
+                                     "with the arrows, when there are more than fit")
+        panel.append(self.scroll)
+
+        foot = Gtk.Box(spacing=18)
+        foot.add_css_class("foot")
+        foot.set_tooltip_text("What the selected theme is and what Enter does; the keys")
+        self.hint = Gtk.Label(xalign=0, hexpand=True, ellipsize=self.Pango.EllipsizeMode.END)
+        self.hint.add_css_class("hint")
+        self.hint.set_tooltip_text("The selected theme, and what Enter does with it")
+        foot.append(self.hint)
+        self.status = Gtk.Label()
+        self.status.add_css_class("status")
+        self.status.set_tooltip_text("Previews still being drawn, offscreen, in the background "
+                                     "(bromigos theme previews); each card fills in when its preview is ready")
+        foot.append(self.status)
+        keys = Gtk.Label(label=KEYS)
+        keys.add_css_class("keys")
+        keys.set_tooltip_text("Arrow keys move the selection, Enter applies the theme selected, letters filter, "
+                              "Esc closes; a click on a card applies it")
+        foot.append(keys)
+        panel.append(foot)
+        self._update_count()
+        return panel
+
+    def _add_card(self, e):
+        child = self.kit.card(e, self.g.card_w, self.g.card_h, pending=e.name in self.pending,
+                              on_hover=self._show_hint, on_leave=lambda: self._show_hint(self._selected_entry()))
+        self.flow.append(child)
+        self.cards[e.name] = child
+        return child
+
+    # ---------------------------------------------------------------- filtering, selection
+    def _query(self):
+        return self.search.get_text().strip().lower()
+
+    def _filter(self, child):
+        q = self._query()
+        if not q:
+            return True
+        hay = child.entry.haystack()
+        return all(w in hay for w in q.split())
+
+    def _visible(self):
+        out, i = [], 0
+        while True:
+            c = self.flow.get_child_at_index(i)
+            if c is None:
+                return out
+            if c.get_child_visible() and self._filter(c):
+                out.append(c)
+            i += 1
+
+    def _refilter(self):
+        self.flow.invalidate_filter()
+        vis = self._visible()
+        self.empty.set_visible(not vis)
+        if vis and self.cards.get(self.sel_name) not in vis:
+            self.select(vis[0].entry.name, focus=False)
+        elif not vis:
+            self.flow.unselect_all()
+            self._show_hint(None)
+        self._update_count()
+
+    def _update_count(self):
+        n_inst = sum(1 for e in self.entries if not e.catalog)
+        n_cat = sum(1 for e in self.entries if e.catalog)
+        q = self._query() if hasattr(self, "search") else ""
+        shown = len(self._visible()) if q else None
+        parts = [f"{n_inst} installed"] + ([f"{n_cat} in the catalog"] if n_cat else [])
+        if shown is not None:
+            parts.append(f"{shown} shown")
+        self.count.set_label(" · ".join(parts))
+        self.count.set_tooltip_text("Installed themes come first, then the ones the extension catalogs offer")
+        n = len(self.pending)
+        self.status.set_label(f"drawing {n} preview{'s' if n != 1 else ''}…" if n else "")
+        self.status.set_visible(bool(n))
+
+    def _selected_entry(self):
+        c = self.cards.get(self.sel_name)
+        return c.entry if c is not None and c in self._visible() else None
+
+    def _selection_changed(self, flow):
+        sel = flow.get_selected_children()
+        if sel and sel[0].entry.name != self.sel_name:      # a click, or the grid's own keys
+            self.sel_name = sel[0].entry.name
+        self._show_hint(self._selected_entry())
+
+    def _show_hint(self, e):
+        if e is None:
+            self.hint.set_label("")
+            return
+        first = e.hint().split("\n")
+        action = first[-1] if len(first) > 2 else ""
+        self.hint.set_label(f"{e.display.upper()}  ·  {e.tagline()}  ·  {action}".strip(" ·"))
+
+    def select(self, name, focus=True):
+        """Select a card (if the filter shows it), keep it in view, say what it is."""
+        c = self.cards.get(name)
+        if c is None or c not in self._visible():
+            return
+        self.sel_name = name
+        self.flow.select_child(c)
+        if focus:
+            c.grab_focus()
+        vp = self.scroll.get_child()
+        if hasattr(vp, "scroll_to"):              # keep it in view (GTK 4.12)
+            vp.scroll_to(c, None)
+        self._show_hint(c.entry)
+
+    def _move(self, dx, dy):
+        vis = self._visible()
+        if not vis:
+            return
+        cur = self.cards.get(self.sel_name)
+        i = vis.index(cur) if cur in vis else 0
+        cols = self.g.cols
+        j = i + dx + dy * cols
+        j = max(0, min(len(vis) - 1, j))
+        self.select(vis[j].entry.name)
+
+    def _activate_selected(self):
+        e = self._selected_entry()
+        if e is None:
+            vis = self._visible()
+            e = vis[0].entry if vis else None
+        if e:
+            self.apply(e)
+
+    def _key(self, _ctl, keyval, _code, state):
+        Gdk = self.Gdk
+        name = Gdk.keyval_name(keyval) or ""
+        if name == "Escape":
+            self.close()
+            return True
+        moves = {"Left": (-1, 0), "Right": (1, 0), "Up": (0, -1), "Down": (0, 1),
+                 "Page_Up": (0, -max(1, int(self.g.rows_visible))), "Page_Down": (0, max(1, int(self.g.rows_visible)))}
+        if name in moves:
+            self._move(*moves[name])
+            return True
+        if name in ("Home", "End") and not self.search.has_focus():
+            vis = self._visible()
+            if vis:
+                self.select((vis[0] if name == "Home" else vis[-1]).entry.name)
+            return True
+        if name in ("Return", "KP_Enter"):
+            self._activate_selected()
+            return True
+        return False
+
+    # ---------------------------------------------------------------- previews arriving
+    def _watch(self):
+        self.watch = PreviewWatch(self.Gio, self.GLib, self.entries, self.pending,
+                                  on_ready=lambda e: self.kit.refresh(self.cards[e.name]),
+                                  on_failed=lambda e: self.kit.refresh(self.cards[e.name]),
+                                  on_change=self._update_count)
+
+    def _load_catalog(self):
+        have = {e.name for e in self.entries}
+        extra = catalog(have)
+        if extra:
+            self.GLib.idle_add(self._add_catalog, extra)
+
+    def _add_catalog(self, extra):
+        for e in extra:
+            self.entries.append(e)
+            self._add_card(e)
+        self.relayout()
+        self._refilter()
+        return False
+
+    def relayout(self):
+        """Columns and card sizes again for the cards there are now (the catalog's arrive
+        after the window opens), then the grid's height to what they need."""
+        g = Grid(self.monitor[0], self.monitor[1], len(self.entries))
+        if (g.cols, g.card_w) != (self.g.cols, self.g.card_w):
+            self.g = g
+            self.flow.set_min_children_per_line(g.cols)
+            self.flow.set_max_children_per_line(g.cols)
+            for c in self.cards.values():
+                self.kit.resize(c, g.card_w, g.card_h)
+        self.fit()
+
+    def fit(self):
+        """The grid as tall as its cards (no taller than the monitor allows): a few themes
+        make a short panel, many scroll."""
+        nat = self.flow.measure(self.Gtk.Orientation.VERTICAL, self.g.inner)[1]
+        h = max(self.g.card_h + self.g.CAPTION, min(self.g.view_h, nat))
+        self.scroll.set_min_content_height(h)
+        self.scroll.set_max_content_height(h)
+        return False
+
+    # ---------------------------------------------------------------- applying
+    def close(self):
+        self.closing = True
+        if getattr(self, "watch", None):
+            self.watch.stop()
+        self.win.close()
+
+    def apply(self, e):
+        if self.shot or self.closing:
+            return
+        self.closing = True
+        self.win.set_visible(False)
+        self.app.chosen = e
+        self.win.close()
+
+
+def unexplained(root, stop):
+    """Widgets under `root` with no hover hint of their own or from a parent below `stop`
+    (GTK shows the nearest one up the tree): every part of the window explains itself."""
+    out = []
+
+    def walk(w):
+        c = w.get_first_child()
+        if c is None and w.get_visible():
+            x, ok = w, False
+            while x is not None and x is not stop:
+                if x.get_tooltip_text():
+                    ok = True
+                    break
+                x = x.get_parent()
+            if not ok:
+                out.append(f"{type(w).__name__}({','.join(w.get_css_classes())})")
+        while c is not None:
+            walk(c)
+            c = c.get_next_sibling()
+    walk(root)
+    return out
+
+
+def apply_entry(e):
+    """After the window is gone: install a catalog theme (in a terminal), then set it."""
+    if e.catalog:
+        r = subprocess.run(H.terminal_run(e.install, hold=False, title="theme install"), env=H.session_env())
+        if r.returncode != 0 or not PV.layers(e.name):
+            H.notify("THEME", f"{e.display}: not installed", urgency="critical")
+            return 1
+    r = subprocess.run(["bromigos", "theme", "set", e.name], capture_output=True, text=True)
+    ok = r.returncode == 0
+    H.notify("THEME", e.display if ok else (r.stderr.strip()[:120] or "theme set failed"),
+             urgency="low" if ok else "critical")
+    return r.returncode
+
+
+# ------------------------------------------------------------------ running it
+def run_window(shot=None):
+    Gtk, Gdk, Gio, GLib, Pango, LS = load_gtk()
+    if shot:
+        os.environ.setdefault("GSK_RENDERER", "cairo")
+    flags = Gio.ApplicationFlags.NON_UNIQUE if shot else Gio.ApplicationFlags.DEFAULT_FLAGS
+    app = Gtk.Application(application_id=APP_ID, flags=flags)
+    app.chosen = None
+    state = {}
+
+    def activate(a):
+        if state.get("sw"):                       # SUPER+CTRL+SHIFT+SPACE again: close it
+            state["sw"].close()
+            return
+        entries = installed()
+        if not entries:
+            H.notify("THEMES", "no themes found")
+            return
+        if shot:
+            mon = (shot["w"], shot["h"], None)
+            if shot.get("catalog"):
+                entries += catalog({e.name for e in entries})
+        else:
+            mon = focused_monitor()
+            if not mon:
+                d = Gdk.Display.get_default()
+                g = d.get_monitors().get_item(0).get_geometry() if d.get_monitors().get_n_items() else None
+                mon = (g.width, g.height, None) if g else (1920, 1080, None)
+        sw = Switcher(Gtk, Gdk, Gio, GLib, Pango, LS, a, mon, entries, shot)
+        state["sw"] = sw
+        sw.win.present()
+        cur = next((e for e in entries if e.current), entries[0])
+        first = shot.get("select") if shot and shot.get("select") else cur.name
+        GLib.idle_add(lambda: (sw.fit(), sw.select(first), False)[2])
+        if shot and shot.get("filter"):
+            GLib.idle_add(lambda: (sw.search.set_text(shot["filter"]), sw._refilter(), False)[2])
+        # once laid out: the selection in view (the filter's first match when it hid it)
+        GLib.timeout_add(250, lambda: (sw._refilter(), sw.select(sw.sel_name or first, focus=False), False)[2])
+        if shot:
+            GLib.timeout_add(700, snap, sw, 0)
+
+    def snap(sw, n):
+        win = sw.win
+        w, h = win.get_width(), win.get_height()
+        if (w, h) != (shot["w"], shot["h"]) and n < 40:
+            GLib.timeout_add(150, snap, sw, n + 1)
+            return False
+        paintable = Gtk.WidgetPaintable.new(win)
+        snapshot = Gtk.Snapshot()
+        paintable.snapshot(snapshot, w, h)
+        node = snapshot.to_node()
+        ok = False
+        if node is not None:
+            tex = win.get_renderer().render_texture(node, None)
+            ok = tex.save_to_png(shot["out"])
+        missing = unexplained(sw.panel, sw.over)
+        print(f"{'rendered' if ok else 'FAILED'} {shot['out']} ({w}x{h}, {sw.g.cols} columns, "
+              f"cards {sw.g.card_w}x{sw.g.card_h}, {len(sw._visible())} shown)")
+        if missing:
+            print(f"no hover hint: {', '.join(missing)}")
+        state["ok"] = ok and not missing
+        app.quit()
+        return False
+
+    app.connect("activate", activate)
+    app.run([sys.argv[0]])
+    if shot:
+        return 0 if state.get("ok") else 1
+    if app.chosen is not None:
+        return apply_entry(app.chosen)
+    return 0
+
+
+def arg(a, flag, default=None):
+    return a[a.index(flag) + 1] if flag in a and a.index(flag) + 1 < len(a) else default
+
+
+def main():
+    a = sys.argv[1:]
+    if any(x in ("-h", "--help", "help") for x in a):
+        print(__doc__)
+        return 0
+    if a and a[0] == "--render":                 # kept for scripts: the previews, no window
+        names = a[1:] or [t["name"] for t in PV.themes().get("themes", []) if not t.get("error")]
+        failed = 0
+        for m in PV.render(names):
+            if m.get("error"):
+                failed += 1
+                print(f"{m['name']}: FAILED {m['error']}")
+            elif m.get("held"):
+                print(f"{m['name']}: held back: {m['held']}")
+            else:
+                print(f"{m['name']}: {m['path']}")
+        return 1 if failed else 0
+    if a and a[0] == "--list":
+        es = installed()
+        es += catalog({e.name for e in es})
+        if "--json" in a:
+            print(json.dumps({"schema": 1, "cache": PV.CACHE, "themes": [
+                {"name": e.name, "display_name": e.display, "kind": e.kind, "current": e.current,
+                 "catalog": e.catalog, "preview": e.preview, "fresh": e.fresh, "stamp": e.stamp} for e in es]}))
+        else:
+            for e in es:
+                tag = "*" if e.current else ("+" if e.catalog else " ")
+                state = "" if e.fresh else ("  (stale: drawing)" if e.preview else "  (none yet)")
+                print(f"{tag} {e.name:<12} {e.display:<14} {e.preview or '-'}{state}")
+        return 0
+    if a and a[0] == "--screenshot":
+        size = arg(a, "--size", "1920x1080")
+        w, h = (int(x) for x in size.lower().split("x"))
+        shot = {"out": a[1], "w": w, "h": h, "select": arg(a, "--select"), "filter": arg(a, "--filter"),
+                "backdrop": arg(a, "--backdrop"), "catalog": "--catalog" in a}
+        return run_window(shot)
+    return run_window()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

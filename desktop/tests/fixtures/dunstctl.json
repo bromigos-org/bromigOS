@@ -1,0 +1,159 @@
+{
+ "running": true,
+ "paused": false,
+ "waiting": 0,
+ "displayed": 1,
+ "reloads": 0,
+ "history": [
+  {
+   "appname": {
+    "type": "s",
+    "data": "Spotify"
+   },
+   "summary": {
+    "type": "s",
+    "data": "Now playing: So What"
+   },
+   "body": {
+    "type": "s",
+    "data": ""
+   },
+   "id": {
+    "type": "i",
+    "data": 31
+   },
+   "timestamp": {
+    "type": "x",
+    "data": 9300000000
+   },
+   "urgency": {
+    "type": "s",
+    "data": "NORMAL"
+   },
+   "category": {
+    "type": "s",
+    "data": ""
+   }
+  },
+  {
+   "appname": {
+    "type": "s",
+    "data": "Firefox"
+   },
+   "summary": {
+    "type": "s",
+    "data": "Download finished"
+   },
+   "body": {
+    "type": "s",
+    "data": ""
+   },
+   "id": {
+    "type": "i",
+    "data": 30
+   },
+   "timestamp": {
+    "type": "x",
+    "data": 9200000000
+   },
+   "urgency": {
+    "type": "s",
+    "data": "NORMAL"
+   },
+   "category": {
+    "type": "s",
+    "data": ""
+   }
+  },
+  {
+   "appname": {
+    "type": "s",
+    "data": "discord"
+   },
+   "summary": {
+    "type": "s",
+    "data": "3 new messages"
+   },
+   "body": {
+    "type": "s",
+    "data": ""
+   },
+   "id": {
+    "type": "i",
+    "data": 29
+   },
+   "timestamp": {
+    "type": "x",
+    "data": 9100000000
+   },
+   "urgency": {
+    "type": "s",
+    "data": "NORMAL"
+   },
+   "category": {
+    "type": "s",
+    "data": ""
+   }
+  },
+  {
+   "appname": {
+    "type": "s",
+    "data": "SCREENSHOT"
+   },
+   "summary": {
+    "type": "s",
+    "data": "Saved to ~/Pictures"
+   },
+   "body": {
+    "type": "s",
+    "data": ""
+   },
+   "id": {
+    "type": "i",
+    "data": 28
+   },
+   "timestamp": {
+    "type": "x",
+    "data": 9000000000
+   },
+   "urgency": {
+    "type": "s",
+    "data": "NORMAL"
+   },
+   "category": {
+    "type": "s",
+    "data": ""
+   }
+  },
+  {
+   "appname": {
+    "type": "s",
+    "data": "Spotify"
+   },
+   "summary": {
+    "type": "s",
+    "data": "Now playing: Freddie Freeloader"
+   },
+   "body": {
+    "type": "s",
+    "data": ""
+   },
+   "id": {
+    "type": "i",
+    "data": 27
+   },
+   "timestamp": {
+    "type": "x",
+    "data": 8900000000
+   },
+   "urgency": {
+    "type": "s",
+    "data": "NORMAL"
+   },
+   "category": {
+    "type": "s",
+    "data": ""
+   }
+  }
+ ]
+}

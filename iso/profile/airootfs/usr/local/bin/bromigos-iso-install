@@ -1,0 +1,273 @@
+#!/usr/bin/env bash
+# Install bromigOS from the live medium (docs/iso.md): a few questions, then archinstall
+# builds the Arch system (btrfs on LUKS2, GRUB with snapper's snapshots in its menu) and
+# bromigOS's own installer runs in it, all from the medium's offline repository.
+#
+#   bromigos-iso-install                      guided: the disk, your user and password, the
+#                                             hostname, the disk's passphrase (encrypted by
+#                                             default), keyboard, timezone, locale
+#   bromigos-iso-install --config C --creds K unattended: archinstall's config and credentials
+#                                             (answers.py writes them: /usr/local/lib/bromigos-iso)
+#   options  --no-encrypt    a plain btrfs root, no LUKS (guided; the default encrypts)
+#            --menu          after the questions, archinstall's menu, prefilled, to change
+#                            anything there before it installs
+#            --repo URL      the package repository the installed system updates from
+#                            (default: the medium's, /etc/bromigos-iso/repo.url)
+#            --channel NAME  stable (default: the medium's), rc or edge: which of the
+#                            repository's channels the installed system follows
+#            --ca FILE       that repository's TLS CA, if it has its own
+#            --with PKG      optional bromigOS pieces (bromigos-homelab, herdr; repeatable)
+#            --ssh-key FILE  authorize this public key for the new user and enable sshd
+#            --no-reboot     stay here when it's done
+#            --dry-run       say what it would do
+set -euo pipefail
+
+lib=/usr/local/lib/bromigos-iso
+repo_dir=/var/lib/bromigos/repo
+target=/mnt                      # where archinstall mounts the new system (4.x; older: /mnt/archinstall)
+log=/var/log/bromigos-iso-install.log
+
+config='' creds='' repo='' ca='' channel='' sshkey='' reboot=1 dry=0 encrypt=1 menu=0 extras=()
+disk='' user='' password='' hostname='' passphrase='' keymap='' timezone='' locale=''   # the questions' answers
+while (($#)); do
+    case $1 in
+        --config) config=$2; shift 2 ;;
+        --creds) creds=$2; shift 2 ;;
+        --no-encrypt) encrypt=0; shift ;;
+        --menu) menu=1; shift ;;
+        --repo) repo=$2; shift 2 ;;
+        --channel) channel=$2; shift 2 ;;
+        --ca) ca=$2; shift 2 ;;
+        --with) extras+=("$2"); shift 2 ;;
+        --ssh-key) sshkey=$2; shift 2 ;;
+        --no-reboot) reboot=0; shift ;;
+        --dry-run) dry=1; shift ;;
+        -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "bromigos-iso-install: unknown option $1" >&2; exit 2 ;;
+    esac
+done
+[[ $EUID -eq 0 ]] || { echo "bromigos-iso-install: run it with sudo" >&2; exit 2; }
+[[ -z $config || -n $creds ]] || { echo "bromigos-iso-install: --config needs --creds" >&2; exit 2; }
+[[ -n $repo ]] || repo=$(cat /etc/bromigos-iso/repo.url 2>/dev/null || true)
+[[ -n $repo ]] || repo="https://pkgs.example.invalid"        # no repository known: updates wait for one
+[[ -n $channel ]] || channel=$(cat /etc/bromigos-iso/channel 2>/dev/null || echo stable)
+case $channel in edge) sub='' ;; stable|rc) sub="/$channel" ;; *) echo "bromigos-iso-install: --channel is stable, rc or edge" >&2; exit 2 ;; esac
+[[ -n $ca || ! -f /etc/bromigos-iso/repo-ca.crt ]] || ca=/etc/bromigos-iso/repo-ca.crt
+[[ -d $repo_dir/bromigos ]] || { echo "bromigos-iso-install: no offline repository at $repo_dir" >&2; exit 1; }
+
+say() { printf '%s\n' "$*" | tee -a "$log"; }
+run() { say "+ $*"; (( dry )) || "$@"; }
+in_target() { run arch-chroot "$target" "$@"; }
+
+say "== bromigos-iso-install $(date -Is)"
+
+# ── 0. the questions (guided) ───────────────────────────────────────────────────────────
+# shellcheck disable=SC2034  # ref is a nameref: the caller's variable
+ask() {   # ask VAR "prompt" [default]
+    local -n ref=$1; local prompt=$2 def=${3:-} v
+    if [[ -n $def ]]; then read -r -p "$prompt [$def]: " v; ref=${v:-$def}; else while :; do read -r -p "$prompt: " v; [[ -n $v ]] && { ref=$v; break; }; done; fi
+}
+# shellcheck disable=SC2034  # ref is a nameref: the caller's variable
+ask_secret() {   # ask_secret VAR "prompt": twice, hidden
+    local -n ref=$1; local a b
+    while :; do
+        read -r -s -p "$2: " a; echo; read -r -s -p "$2 (again): " b; echo
+        [[ -n $a && $a == "$b" ]] && { ref=$a; return; }
+        echo "they differ, or it's empty; once more"
+    done
+}
+if [[ -z $config ]]; then
+    echo
+    echo "bromigOS: the install. The disk is wiped, made btrfs on LUKS2 (a passphrase at boot),"
+    echo "GRUB boots it with snapper's snapshots in its menu. Ctrl+C leaves at any question."
+    echo
+    echo "Disks:"
+    lsblk -dno NAME,SIZE,MODEL,TYPE | awk '$NF=="disk" && $1 !~ /^(loop|sr|zram)/ { printf "  /dev/%-10s %8s  %s\n", $1, $2, $3 }'
+    ask disk "Install to (the whole disk)"
+    [[ -b $disk ]] || { echo "bromigos-iso-install: $disk isn't a block device" >&2; exit 2; }
+    ask user "Your user name"
+    ask_secret password "Its password"
+    ask hostname "Hostname" bromigos
+    if (( encrypt )); then
+        read -r -p "Encrypt the disk? (typed at every boot; it can't be recovered) [Y/n]: " yn; [[ ${yn,,} == n* ]] && encrypt=0
+    fi
+    passphrase=''
+    if (( encrypt )); then
+        read -r -p "A passphrase of its own for the disk, or Enter to use the password: " -s pp; echo
+        if [[ -n $pp ]]; then read -r -s -p "The passphrase (again): " pp2; echo; [[ $pp == "$pp2" ]] || { echo "they differ" >&2; exit 2; }; passphrase=$pp; fi
+    fi
+    ask keymap "Keyboard layout" us
+    ask timezone "Timezone" "$(timedatectl show -p Timezone --value 2>/dev/null || echo UTC)"
+    ask locale "Locale" en_US
+    echo
+    echo "  disk $disk  user $user  host $hostname  encrypted: $([[ $encrypt == 1 ]] && echo yes || echo no)  keymap $keymap  tz $timezone  locale $locale"
+    read -r -p "Go ahead and wipe $disk? [y/N]: " yn; [[ ${yn,,} == y* ]] || { echo "nothing done"; exit 0; }
+    answers=$(mktemp -d)
+    args=(--disk "$disk" --user "$user" --password "$password" --hostname "$hostname" --keymap "$keymap" --timezone "$timezone" --locale "$locale" --out "$answers")
+    (( encrypt )) || args+=(--no-encrypt)
+    [[ -n $passphrase ]] && args+=(--passphrase "$passphrase")
+    [[ -n $sshkey ]] && args+=(--ssh)
+    python3 "$lib/answers.py" "${args[@]}" >/dev/null
+    config=$answers/config.json; creds=$answers/creds.json
+    unset password passphrase pp pp2
+fi
+
+# ── 0b. the hardware: what this machine's GPU and kind need (`bromigos hw`, read here: the
+# live system's /sys is the machine's), added to archinstall's packages and services so they
+# come from the medium too; `bromigos install`'s hardware step writes the rest in step 2
+if hwjson=$(bromigos hw detect --json 2>/dev/null) && [[ -n $hwjson ]]; then
+    hwconfig=$(mktemp --suffix=.json)
+    if line=$(python3 "$lib/hardware.py" "$config" "$hwconfig" <<<"$hwjson"); then
+        say "hardware: $line"
+        config=$hwconfig
+    else
+        say "hardware: couldn't read bromigos hw's plan; the GPU's drivers wait for \`bromigos hw setup\` after the install"
+    fi
+fi
+
+# ── 1. archinstall: the Arch system ─────────────────────────────────────────────────────
+args=(--config "$config" --creds "$creds" --offline --skip-ntp --skip-wkd --skip-version-check --skip-wifi-check)
+(( menu )) || args+=(--silent)
+say "archinstall ${args[*]}"
+if (( ! dry )); then
+    archinstall "${args[@]}"
+    [[ -d $target/etc/pacman.d ]] || target=/mnt/archinstall
+    [[ -d $target/etc/pacman.d ]] || { say "archinstall didn't leave a system at /mnt (nor /mnt/archinstall)"; exit 1; }
+    say "the new system is at $target"
+fi
+
+# ── 1b. snapper's configuration for /home ───────────────────────────────────────────────
+# archinstall doesn't make snapper's configurations here (4.5 reads a config file's subvolume
+# names as strings, so it never finds `@` on `/`). /home's is the installer's (the user's files,
+# snapshotted by the timer); /'s is `bromigos rollback setup`'s, in step 3, with the snapshots in
+# GRUB's menu. wheel (the user) may list them.
+if (( ! dry )) && [[ $(findmnt -no FSTYPE "$target") == btrfs ]]; then
+    configs=$(arch-chroot "$target" snapper --no-dbus list-configs 2>/dev/null || true)
+    if ! grep -q '^home ' <<<"$configs"; then
+        in_target snapper --no-dbus -c home create-config /home
+        in_target snapper --no-dbus -c home set-config ALLOW_GROUPS=wheel SYNC_ACL=yes
+    fi
+fi
+
+# ── 2. bromigOS in the new system ───────────────────────────────────────────────────────
+user=''
+if (( ! dry )); then
+    user=$(awk -F: '$3 >= 1000 && $3 < 60000 && $7 !~ /nologin|false/ { print $1; exit }' "$target/etc/passwd")
+    [[ -n $user ]] || { say "no user in the new system (archinstall's user step)"; exit 1; }
+fi
+say "the new system's user: ${user:-<dry run>}"
+
+# the medium's repository, visible inside the chroot at the same path (file:// URLs)
+run mkdir -p "$target$repo_dir"
+run mount --bind "$repo_dir" "$target$repo_dir"
+cleanup() { umount "$target$repo_dir" 2>/dev/null || true; }
+trap cleanup EXIT
+
+# pacman: Arch's mirrors (the geo mirror first, the stock list after it, for the first
+# `pacman -Syu` once there's a network) and bromigOS's repository at its real URL; the
+# offline copy served the install and isn't carried over
+if (( ! dry )); then
+    mirrorlist=$(ls "$repo_dir"/core/os/x86_64/pacman-mirrorlist-*.pkg.tar.zst 2>/dev/null | head -1)
+    {
+        echo '## Arch Linux repository mirrorlist (bromigOS: the geo mirror first; `reflector` picks closer ones)'
+        echo 'Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch'
+        [[ -n $mirrorlist ]] && tar -xOf "$mirrorlist" etc/pacman.d/mirrorlist | grep -v '^Server = file://' || true
+    } > "$target/etc/pacman.d/mirrorlist"
+    python3 - "$target/etc/pacman.conf" "$repo" "$sub" <<'PY'
+import sys
+path, repo, sub = sys.argv[1:4]
+out, skip = [], False
+for line in open(path).read().split("\n"):
+    if line.startswith("["):                          # every [bromigos] section goes (the medium's)
+        skip = line.strip() == "[bromigos]"
+    if skip or line.replace(" ", "").startswith("Server=file:///var/lib/bromigos/repo"):
+        continue                                      # and the offline copy's servers in core/extra
+    out.append(line)
+s = "\n".join(out).rstrip("\n") + f"\n\n[bromigos]\nSigLevel = Required DatabaseOptional\nServer = {repo}/$repo{sub}/$arch\n"
+open(path, "w").write(s)
+PY
+    if [[ -n $ca ]]; then
+        install -Dm0644 "$ca" "$target/etc/ca-certificates/trust-source/anchors/bromigos-repo-ca.crt"
+        in_target update-ca-trust
+    fi
+fi
+
+# bromigOS's installer, as the new user (sudo without a password for its commands only;
+# the file goes when they're done). The packages are installed by archinstall from
+# the offline copy, so this is the thin configs, the desktop settings and the theme.
+if (( ! dry )); then
+    printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$user" > "$target/etc/sudoers.d/90-bromigos-iso-install"
+    chmod 440 "$target/etc/sudoers.d/90-bromigos-iso-install"
+fi
+with=(); for e in "${extras[@]}"; do with+=(--with "$e"); done
+in_target sudo -u "${user:-user}" -H bromigos install --yes --no-services --no-setup "${with[@]}"
+# the first-run answers a fresh install can give here: the outputs as they are now (the
+# machine's own: /sys is the target's), the Wick, VECTOR's brain and voice off (bromigos
+# setup, any time, for a brain, a voice, a homelab)
+in_target sudo -u "${user:-user}" -H bromigos setup --monitors auto --theme wick --vector none --voice off --create none
+
+# ── 3. the splash, the snapshots in GRUB's menu, SSH ───────────────────────────────────
+if (( ! dry )); then
+    # the plymouth hook, right after udev (or systemd) and before encrypt, which asks for the
+    # passphrase through Plymouth when it runs; in every file that sets HOOKS (archinstall
+    # 4.5 writes /etc/mkinitcpio.conf's; a drop-in in mkinitcpio.conf.d would override it)
+    for conf in "$target/etc/mkinitcpio.conf" "$target"/etc/mkinitcpio.conf.d/*.conf; do
+        [[ -f $conf ]] && grep -qE '^HOOKS=' "$conf" || continue
+        grep -qE '^HOOKS=.*\bplymouth\b' "$conf" || sed -i -E 's/^(HOOKS=\([^)]*\b(udev|systemd)\b)/\1 plymouth/' "$conf"
+    done
+    # `splash quiet` on the kernel line: GRUB's default (archinstall's choice here), or
+    # systemd-boot's entries if a config chose that
+    if [[ -f $target/etc/default/grub ]]; then
+        for w in splash quiet; do
+            grep -qE "^GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*\b$w\b" "$target/etc/default/grub" && continue
+            sed -i -E "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"([^\"]*)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\1 $w\"/" "$target/etc/default/grub"
+        done
+        sed -i -E 's/^(GRUB_CMDLINE_LINUX_DEFAULT=")\s+/\1/' "$target/etc/default/grub"
+        in_target grub-mkconfig -o /boot/grub/grub.cfg
+    fi
+    for f in "$target"/boot/loader/entries/*.conf; do
+        [[ -f $f ]] && grep -q '^options' "$f" && ! grep -q 'splash' "$f" && sed -i 's/^options .*/& splash quiet/' "$f"
+    done
+fi
+in_target plymouth-set-default-theme bromigos
+# the snapshots and the boot menu: `bromigos rollback setup`, as on any machine (`bromigos
+# install` skipped its rollback step under --no-services). It sees the chroot (its root mount
+# isn't PID 1's) and runs snapper with --no-dbus (the bus arch-chroot binds in is the live
+# system's): snapper's root configuration (@.snapshots comes off
+# /.snapshots while snapper makes it, then goes back on), wheel allowed to list it (`bromigos
+# update` records each update for --rollback as the user), grub-btrfs-overlayfs last in HOOKS
+# (a snapshot booted from GRUB's menu is read-only; the hook lays a writable overlay on it)
+# and the initramfs made again. snap-pac, grub-btrfs and its daemon are archinstall's.
+in_target sudo -u "${user:-user}" -H bromigos rollback setup --yes
+# the initramfs with the splash theme: setup made it again when it added the hook; if it had
+# nothing to add, now
+if (( ! dry )) && ! lsinitcpio "$target/boot/initramfs-linux.img" 2>/dev/null | grep -q 'usr/share/plymouth/themes/bromigos/'; then
+    in_target mkinitcpio -P
+fi
+in_target sudo -u "${user:-user}" -H bromigos rollback status
+
+run rm -f "$target/etc/sudoers.d/90-bromigos-iso-install"
+
+if [[ -n $sshkey ]]; then
+    if (( ! dry )); then
+        home=$(awk -F: -v u="$user" '$1 == u { print $6 }' "$target/etc/passwd")
+        install -d -m 700 "$target$home/.ssh"
+        install -m 600 "$sshkey" "$target$home/.ssh/authorized_keys"
+        in_target chown -R "$user:$user" "$home/.ssh"
+    fi
+    in_target systemctl enable sshd.service
+fi
+
+# the sync databases are the offline copy's, newer than the repositories' own: the first
+# `pacman -Sy` would keep them (it asks "modified since?", the server says no) and check
+# the server's signature against the wrong file. Dated 1970, they're all fetched afresh.
+run touch -d @0 "$target"/var/lib/pacman/sync/*.db
+# everything on the disk before anyone pulls the plug (the reboot unmounts; --no-reboot
+# leaves /mnt mounted, for a look round)
+run sync
+say "== bromigOS is installed. Sign in at the Bromigos login screen after the reboot."
+if (( reboot && ! dry )); then
+    cleanup; trap - EXIT
+    sleep 3
+    systemctl reboot
+fi

@@ -1,0 +1,167 @@
+# Themes and worlds
+
+A theme changes the look of the whole desktop at once: the colours of every app, the
+bar's icons, the wallpaper, the lock screen and the [boot menu](boot-menu.md). Some themes
+are [worlds](glossary.md#world): instead of a still wallpaper, they bring a living scene
+that reacts to what your machine is doing.
+
+## Change the theme
+
+1. Press <kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>. The theme
+   switcher opens, with a picture of your desktop wearing each theme.
+2. Choose a theme with the arrow keys or the mouse. To narrow the list, type part of a
+   name, or `world` or `colour`.
+3. Press <kbd>Enter</kbd>, or click the theme. The desktop changes colour within a second.
+   A few apps change the next time you open them.
+
+![The theme switcher: a preview of the desktop in each theme, with Mire chosen](images/theme-switcher.webp)
+
+Press <kbd>Esc</kbd> to close the switcher without changing anything. Hover over a card to
+read what the theme is.
+
+You can also choose a theme in **Settings › Theme**, or in the menu under **STYLE**. Or
+from a terminal:
+
+```bash
+bromigos theme             # list the themes; the one in use is marked
+bromigos theme set mire    # switch to Mire
+bromigos theme set wick    # back to the default
+```
+
+The switcher draws its pictures in the background after an update, or when you add a
+theme. A card that's still being drawn shows the theme's colours and the word DRAWING.
+To draw any missing pictures now, run `bromigos theme previews`.
+
+A few things keep the Wick's look in every theme: the login screen and the splash screen
+while the computer starts.
+
+## The themes
+
+bromigOS comes with nine themes.
+
+![All nine themes, as the theme switcher previews them: Wick, Mire, Tidewell, Cinder, Deepvein, Highwind, Lowtown, Rime and Sunder](images/themes-grid.webp)
+
+| Theme | Kind | Look |
+|---|---|---|
+| Wick | the default | Phosphor green on black, with the [den](glossary.md#den) behind your windows. |
+| Mire | world | A night bayou: black water, moss, fireflies and a lantern on a stilt shack. |
+| Tidewell | world | The sea at night, split at the waterline: a lighthouse above, glowing creatures below. |
+| Rime | colour | Ice blue on a blizzard night. |
+| Sunder | colour | Sun-gold on scorched metal. |
+| Cinder | colour | Ember orange on soot. |
+| Lowtown | colour | Neon on wet asphalt. |
+| Highwind | colour | Lantern gold on a dusk sky. |
+| Deepvein | colour | Amethyst on cavern black. |
+
+A colour theme shows the den in its own colours.
+
+![The desktop in Cinder, a colour theme: the den, the bar, the panels and the terminal in ember orange](images/theme-cinder.webp)
+
+## The worlds
+
+In a world, everything that moves shows something real. Nothing moves just for
+decoration. If bromigOS can't read something, such as a homelab you haven't connected,
+the part of the scene it drives isn't drawn.
+
+Each world has a [keeper](glossary.md#keeper), a figure who works while you work and
+dozes when you leave the computer.
+
+### Mire
+
+A night bayou.
+
+![The desktop in Mire: Hollis on the porch, a Sleeper in the water, rain and fireflies, behind the panels and a terminal](images/world-mire.webp)
+
+| You see | It shows |
+|---|---|
+| Hollis rocking on the porch | You're working. He dozes when you're idle. |
+| The Sleepers, old machines half-sunk in the water | Your [coding agents](glossary.md#coding-agent). One surfaces for each agent. Its eyes glow while it works, and it rises and signals when it needs you. |
+| Rain | Your agents and your homelab's AI models at work. A downpour when the processor is busy. |
+| Fireflies and passing ships | Your network traffic. |
+| The heron taking off | A notification. |
+
+### Tidewell
+
+The sea at night, under a lighthouse called Greywater Light.
+
+![The desktop in Tidewell: the lighthouse and trawlers above the waterline, the Choir below, behind the panels and a terminal](images/world-tidewell.webp)
+
+| You see | It shows |
+|---|---|
+| The Choir, great glowing creatures | Your coding agents. |
+| Small fish, the lampfry, drifting | You're working. |
+| Trawlers coming and going | Your network traffic, in and out. |
+| The lighthouse beam and the reef on the rock | Your homelab's health. |
+| A storm | A machine or service in your homelab is down. |
+
+Craft cross the sky now and then in both worlds.
+
+### Make it calmer
+
+Both worlds can move less, or hold still like a photograph. See
+[Accessibility](accessibility.md).
+
+## Turn parts of the background on and off
+
+The background is made of many small animations: rain, stars, passing ships, the flash on
+an urgent notification, and more. Each one has a switch.
+
+- In the menu, open **TOGGLE**. Each animation is listed with its state.
+- Or in **Settings › Live layer & holograms**.
+- Or from a terminal:
+
+  ```bash
+  bromigos anim                 # every animation, and whether it's on
+  bromigos anim off ships       # turn one off
+  bromigos anim on all          # turn them all on
+  bromigos anim reset           # back to the defaults
+  ```
+
+To turn the whole background off, press <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>.
+
+## Theme sounds
+
+Themes have sounds: short cues, the world's own sounds, and spoken
+[codec calls](glossary.md#codec-call) for important events.
+
+- To mute the theme's sounds and VECTOR's voice together, press
+  <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>. Press it again to hear them.
+- To mute only the theme's sounds, turn off **Theme sounds** in **Settings › Theme**.
+- `bromigos anim off sounds` also turns the theme's sounds off.
+
+## The den wallpaper
+
+The Wick's background is the den. bromigOS ships one den picture.
+<kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>Space</kbd> steps through den pictures, so it only
+changes something when you've added den pictures of your own to `~/.config/wallpaper`. A
+world brings its own painting, so the key does nothing there.
+
+## Get more themes
+
+Themes that other people share are [extensions](extensions.md).
+
+- The theme switcher lists the catalog's themes after yours. Choose one to install it and
+  switch to it.
+- Or open **Settings › Theme** and search the catalog under **Get more themes**, or paste
+  a theme's git address.
+- Or from a terminal:
+
+  ```bash
+  bromigos theme install https://github.com/someone/their-theme
+  bromigos theme remove their-theme
+  ```
+
+`bromigos ext update --all` keeps installed themes up to date.
+
+## Make your own theme
+
+1. Run `bromigos theme new dusk --from wick`. This makes a folder called `dusk` with a
+   copy of the Wick to change.
+2. Edit its `colors.toml`.
+3. Install it with `bromigos ext install --copy ./dusk`, then switch with
+   `bromigos theme set dusk`.
+
+A theme can also be a plain folder in `~/.config/bromigos/themes/`, with a `colors.toml`
+in it. The full format, and how to make a world, are in the developer docs:
+[theming.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/theming.md) and
+[worlds.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/worlds.md).

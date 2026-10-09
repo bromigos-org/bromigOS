@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+# bromigos:summary=Remember floating windows' positions per workspace and app, and put them back
+# bromigos:args=[run | list | clear [CLASS…] | forget WORKSPACE CLASS]
+# bromigos:examples=bromigos windows list; bromigos windows clear pavucontrol; bromigos windows clear
+"""Per-workspace window positions (the idea is Omarchy 4's; docs/desktop.md, "Floating
+windows put back where they were").
+
+Opt-in, in ~/.config/bromigos/windows.toml:
+
+    remember = ["org.pulseaudio.pavucontrol", "nm-connection-editor"]   # app classes
+    all = false                      # true: every floating window, whatever its class
+
+`bromigos windows` (the daemon, started at login by the desktop defaults) listens to
+Hyprland's events. When a remembered floating window closes, its last place and size
+are saved for that workspace and class (~/.local/state/bromigos/windows.json); when one
+opens on that workspace again, it's moved and sized to match. Tiled windows are left to
+the layout. Nothing is saved for a class that isn't listed.
+
+    bromigos windows list                what's remembered
+    bromigos windows clear [CLASS…]      forget everything, or these classes
+    bromigos windows forget WS CLASS     forget one entry
+"""
+import json
+import os
+import socket
+import subprocess
+import sys
+import threading
+import time
+import tomllib
+
+HOME = os.path.expanduser("~")
+CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "bromigos", "windows.toml")
+STATE = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local/state"), "bromigos", "windows.json")
+DISPATCH = os.environ.get("BROMIGOS_DISPATCH", "bromigos-dispatch")
+
+
+def log(*a):
+    print("bromigos-windows:", *a, file=sys.stderr, flush=True)
+
+
+def load_config():
+    try:
+        with open(CONFIG, "rb") as f:
+            c = tomllib.load(f)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as e:
+        log("windows.toml:", e)
+        return None
+    return {"remember": set(c.get("remember") or []), "all": bool(c.get("all", False))}
+
+
+def load_state():
+    try:
+        with open(STATE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(st):
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    tmp = STATE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(st, f, indent=1, sort_keys=True)
+    os.replace(tmp, STATE)
+
+
+def key(ws, cls):
+    return f"{ws}/{cls}"
+
+
+# ------------------------------------------------------------------ the daemon
+class Daemon:
+    """Tracks remembered floating windows through Hyprland's event socket."""
+
+    def __init__(self, cfg, clients=None, dispatch=None):
+        self.cfg = cfg
+        self.state = load_state()
+        self.seen = {}                        # address -> {"ws", "class", "x", "y", "w", "h"}
+        self.clients = clients or self._clients
+        self.dispatch = dispatch or self._dispatch
+        self.lock = threading.Lock()
+
+    def wants(self, cls):
+        return self.cfg["all"] or cls in self.cfg["remember"]
+
+    @staticmethod
+    def _clients():
+        try:
+            out = subprocess.run(["hyprctl", "clients", "-j"], capture_output=True, text=True, timeout=5).stdout
+            return json.loads(out or "[]")
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return []
+
+    @staticmethod
+    def _dispatch(lua, old):
+        subprocess.run([DISPATCH, lua, *old], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+
+    def place(self, addr, g):
+        """Move and size a window: the Lua dispatchers, with the old forms as the fallback."""
+        a = f"address:{addr}"
+        self.dispatch(f'hl.dsp.window.move({{ x = {int(g["x"])}, y = {int(g["y"])}, relative = false, window = "{a}" }})',
+                      ["movewindowpixel", f"exact {int(g['x'])} {int(g['y'])},{a}"])
+        self.dispatch(f'hl.dsp.window.resize({{ x = {int(g["w"])}, y = {int(g["h"])}, window = "{a}" }})',
+                      ["resizewindowpixel", f"exact {int(g['w'])} {int(g['h'])},{a}"])
+
+    def refresh(self):
+        """Note where every remembered floating window is now."""
+        for c in self.clients():
+            cls = c.get("class") or ""
+            if not c.get("floating") or not self.wants(cls):
+                continue
+            ws = c.get("workspace", {}).get("name") or str(c.get("workspace", {}).get("id", ""))
+            x, y = c.get("at", [0, 0])
+            w, h = c.get("size", [0, 0])
+            if w > 0 and h > 0:
+                self.seen[c["address"]] = {"ws": ws, "class": cls, "x": x, "y": y, "w": w, "h": h}
+
+    def opened(self, addr, ws, cls):
+        if not self.wants(cls):
+            return
+        # a just-mapped window may still be settling: look again shortly
+        time.sleep(0.15)
+        for c in self.clients():
+            if c.get("address") == addr:
+                if not c.get("floating"):
+                    return
+                g = self.state.get(key(ws, cls))
+                if g:
+                    self.place(addr, g)
+                    self.seen[addr] = {"ws": ws, "class": cls, **g}
+                else:
+                    self.refresh()
+                return
+
+    def closed(self, addr):
+        g = self.seen.pop(addr, None)
+        if not g:
+            return
+        with self.lock:
+            self.state[key(g["ws"], g["class"])] = {"x": g["x"], "y": g["y"], "w": g["w"], "h": g["h"],
+                                                     "saved": time.strftime("%Y-%m-%dT%H:%M:%S")}
+            save_state(self.state)
+
+    def event(self, line):
+        name, _, args = line.partition(">>")
+        if name == "openwindow":
+            p = args.split(",", 3)
+            if len(p) >= 3:
+                threading.Thread(target=self.opened, args=(p[0], p[1], p[2]), daemon=True).start()
+        elif name == "closewindow":
+            self.closed(args.strip())
+        elif name in ("movewindow", "movewindowv2", "changefloatingmode", "windowtitle", "fullscreen"):
+            self.refresh()
+
+    def run(self):
+        sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+        run = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+        if not sig:
+            log("no Hyprland session (HYPRLAND_INSTANCE_SIGNATURE)")
+            return 1
+        path = os.path.join(run, "hypr", sig, ".socket2.sock")
+        s = socket.socket(socket.AF_UNIX)
+        s.connect(path)
+        self.refresh()
+        log("watching", "every floating window" if self.cfg["all"] else ", ".join(sorted(self.cfg["remember"])))
+        buf = b""
+        while True:
+            data = s.recv(4096)
+            if not data:
+                return 0
+            buf += data
+            while b"\n" in buf:
+                line, buf = buf.split(b"\n", 1)
+                try:
+                    self.event(line.decode(errors="replace"))
+                except Exception as e:                    # noqa: BLE001  (one bad event never stops the watch)
+                    log("event:", e)
+
+
+# ------------------------------------------------------------------ the commands
+def cmd_list():
+    st = load_state()
+    if not st:
+        print("nothing remembered")
+        return 0
+    for k, g in sorted(st.items()):
+        ws, cls = k.split("/", 1)
+        print(f"workspace {ws:<6} {cls:<32} at {g['x']},{g['y']}  {g['w']}x{g['h']}  ({g.get('saved', '')})")
+    return 0
+
+
+def cmd_clear(classes):
+    st = load_state()
+    before = len(st)
+    st = {k: g for k, g in st.items() if classes and k.split("/", 1)[1] not in classes}
+    save_state(st)
+    print(f"forgot {before - len(st)}")
+    return 0
+
+
+def cmd_forget(ws, cls):
+    st = load_state()
+    gone = st.pop(key(ws, cls), None)
+    save_state(st)
+    print("forgot" if gone else "nothing remembered for that")
+    return 0
+
+
+def main(argv):
+    verb = argv[0] if argv else "run"
+    if verb in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return 0
+    if verb == "list":
+        return cmd_list()
+    if verb == "clear":
+        return cmd_clear(set(argv[1:]))
+    if verb == "forget":
+        if len(argv) != 3:
+            print("bromigos windows forget WORKSPACE CLASS", file=sys.stderr)
+            return 2
+        return cmd_forget(argv[1], argv[2])
+    if verb == "run":
+        cfg = load_config()
+        if not cfg or (not cfg["all"] and not cfg["remember"]):
+            log("nothing to remember (no", CONFIG + "): not running")
+            return 0
+        return Daemon(cfg).run()
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

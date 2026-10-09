@@ -1,0 +1,13 @@
+{
+  // Your bar: Settings' choices (first), bromigOS's (second) and the theme's markup colours
+  // (third), merged under this file: what you set here wins, object by object. Among the
+  // includes the earliest wins, so the clock Settings › Date & time keeps in the first one
+  // (bromigos clock) beats bromigOS's default; until you change it there, it isn't there.
+  "include": [
+    "~/.config/bromigos/waybar/settings.jsonc",
+    "/usr/share/bromigos/default/waybar/config.jsonc",
+    "~/.local/state/bromigos/theme/current/waybar-markup.jsonc"
+  ]
+  // , "output": ["DP-1"]
+  // , "temperature": { "hwmon-path-abs": "/sys/devices/…/hwmon", "input-filename": "temp1_input" }
+}

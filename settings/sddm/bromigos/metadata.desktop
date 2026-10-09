@@ -1,0 +1,12 @@
+[SddmGreeterTheme]
+Name=Bromigos
+Description=The Bromigos login: the den behind the burn-in, a terminal-style sign-in, phosphor on void. Matches the hyprlock lock screen.
+Author=Bromigos
+License=All rights reserved (Bromigos brand assets); Geist Mono under the SIL OFL (fonts/OFL.txt)
+Type=sddm-theme
+Version=1.0
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=bromigos
+Theme-API=2.0
+QtVersion=6

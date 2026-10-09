@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# theme-set hook (bromigos-desktop): the on-screen display (swayosd) takes the theme's colours.
+# swayosd-server reads its style at start, so it's started again with the newly rendered
+# ~/.local/state/bromigos/theme/current/swayosd.css (the defaults' hyprland.lua starts it at login).
+set -eu
+command -v swayosd-server >/dev/null 2>&1 || exit 0
+state=${XDG_STATE_HOME:-$HOME/.local/state}
+style=$state/bromigos/theme/current/swayosd.css
+[ -f "$style" ] || exit 0
+pkill -x -u "$(id -u)" swayosd-server 2>/dev/null || true
+setsid -f swayosd-server --style "$style" >/dev/null 2>&1 </dev/null

@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+# bromigos:summary=The private overlay: encrypted values in your dotfiles, decrypted at login
+# bromigos:args=decrypt|edit|status|seed-profile
+"""bromigos-private (`bromigos private …`, package bromigos-core): a user's private desktop
+values, kept encrypted (sops + age) in their dotfiles, which may be public.
+
+    bromigos-private decrypt   private.sops.yaml -> ~/.config/bromigos/private/ (run at login)
+    bromigos-private edit      sops edit the file, then decrypt
+    bromigos-private status    what's there (key names only, never values)
+    bromigos-private seed-profile   write ~/.config/bromigos/profile.toml from `operator:`
+                                    when there is no profile yet (decrypt runs it too)
+
+The source of truth is ~/.config/bromigos/private.sops.yaml, encrypted with sops to the
+age recipient pinned in the repo's .sops.yaml; the private key is
+~/.config/sops/age/keys.txt (0600, never committed; a backup is in Vault). decrypt writes,
+each 0600 in ~/.config/bromigos/private/ (gitignored):
+  config.json   the whole file as JSON; code reads it through lib/bromigos_private.py
+  env           its `env:` section as KEY=value lines (~ expanded) for zsh and systemd
+  NOTES.md      its `docs:` section, the private runbook notes
+Without the age key (a fresh clone) decrypt does nothing and exits 0: every component
+falls back to its public default.
+The user's profile (~/.config/bromigos/profile.toml: who they are and what VECTOR calls
+them; `bromigos profile`) is gitignored, so after a rebuild decrypt seeds it from the
+overlay's operator: section (name, full_name, aliases, address, pronouns). It only ever
+creates the file: an existing profile is the user's and is never overwritten. bromigos-private.service runs decrypt at login, and
+bromigos-private.path runs it again whenever the encrypted file changes (a git pull).
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+HOME = os.path.expanduser("~")
+BASE = os.path.join(HOME, ".config/bromigos")
+SRC = os.path.join(BASE, "private.sops.yaml")
+OUT = os.path.join(BASE, "private")
+KEYS = os.environ.get("SOPS_AGE_KEY_FILE") or os.path.join(HOME, ".config/sops/age/keys.txt")
+
+
+def sops():
+    p = shutil.which("sops") or os.path.join(HOME, ".local/bin/sops")
+    if not os.path.exists(p):
+        sys.exit("bromigos-private: sops is not installed (pacman -S sops age)")
+    return p
+
+
+def write(path, text):
+    tmp = path + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+
+
+CONFIG_HOME = os.environ.get("XDG_CONFIG_HOME", "")
+CONFIG_HOME = CONFIG_HOME if os.path.isabs(CONFIG_HOME) else os.path.join(HOME, ".config")
+PROFILE = os.path.join(CONFIG_HOME, "bromigos/profile.toml")
+# the same header bromigos-core writes for a new profile (core/crates/bromigos-core/src/profile.rs)
+PROFILE_HEADER = """# Your bromigOS profile: who you are and what VECTOR calls you.
+# Yours to edit, by hand, with `bromigos profile …`, or by telling VECTOR ("call me …").
+# Updates never touch it.
+#
+#   name       what you're usually called
+#   full_name  your full name
+#   aliases    other names you go by (handles, callsigns)
+#   address    forms of address, most preferred first; VECTOR mostly uses the first
+#   pronouns   e.g. "he/him", "she/her", "they/them"
+
+[you]
+"""
+
+
+def _profile_value(v):
+    """A profile value as bromigos accepts it (one line, <= 80 chars), or None."""
+    if not isinstance(v, str):
+        return None
+    v = v.strip()
+    if not v or len(v) > 80 or any(ord(c) < 32 or ord(c) == 127 for c in v):
+        return None
+    return v
+
+
+def seed_profile(data, quiet=False):
+    """Creates the profile from data["operator"] when there is none. Never overwrites."""
+    op = data.get("operator") if isinstance(data, dict) else None
+    if not isinstance(op, dict) or os.path.lexists(PROFILE):
+        return 0
+    lines = []
+    for key in ("name", "full_name"):
+        v = _profile_value(op.get(key))
+        if v:
+            lines.append(f"{key} = {json.dumps(v, ensure_ascii=False)}")
+    for key in ("aliases", "address"):
+        vals = [x for x in map(_profile_value, op.get(key) or []) if x] if isinstance(op.get(key), list) else []
+        if vals:
+            lines.append(f"{key} = [{', '.join(json.dumps(x, ensure_ascii=False) for x in vals)}]")
+    v = _profile_value(op.get("pronouns"))
+    if v:
+        lines.append(f"pronouns = {json.dumps(v, ensure_ascii=False)}")
+    if not lines:
+        return 0
+    os.makedirs(os.path.dirname(PROFILE), exist_ok=True)
+    try:
+        fd = os.open(PROFILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    except FileExistsError:                      # created meanwhile: it's the user's
+        return 0
+    with os.fdopen(fd, "w") as f:
+        f.write(PROFILE_HEADER + "\n".join(lines) + "\n")
+    if not quiet:
+        print(f"bromigos-private: seeded {PROFILE} from the overlay ({len(lines)} fields)")
+    return 0
+
+
+def decrypt(quiet=False):
+    if not os.path.exists(KEYS):
+        if not quiet:
+            print(f"bromigos-private: no age key at {KEYS}; using public defaults")
+        return 0
+    if not os.path.exists(SRC):
+        print(f"bromigos-private: {SRC} missing", file=sys.stderr)
+        return 1
+    env = dict(os.environ, SOPS_AGE_KEY_FILE=KEYS)
+    r = subprocess.run([sops(), "decrypt", "--output-type", "json", SRC], capture_output=True, text=True, env=env)
+    if r.returncode != 0:
+        print("bromigos-private: decrypt failed:", r.stderr.strip()[:300], file=sys.stderr)
+        return 1
+    data = json.loads(r.stdout)
+    os.makedirs(OUT, mode=0o700, exist_ok=True)
+    os.chmod(OUT, 0o700)
+    write(os.path.join(OUT, "config.json"), json.dumps(data, indent=1) + "\n")
+    lines = []
+    for k, v in (data.get("env") or {}).items():
+        v = str(v)
+        if v.startswith("~/"):
+            v = os.path.join(HOME, v[2:])
+        lines.append(f"{k}={v}")
+    write(os.path.join(OUT, "env"), "\n".join(lines) + ("\n" if lines else ""))
+    docs = data.get("docs") or ""
+    if isinstance(docs, dict):
+        docs = "\n\n".join(f"## {k}\n\n{v}" for k, v in docs.items())
+    write(os.path.join(OUT, "NOTES.md"), "# Private notes (decrypted; do not commit)\n\n" + docs)
+    try:
+        seed_profile(data, quiet)
+    except OSError as e:
+        print(f"bromigos-private: profile not seeded: {e}", file=sys.stderr)
+    if not quiet:
+        print(f"bromigos-private: decrypted {len(data)} sections to {OUT}/ (config.json, env, NOTES.md)")
+    return 0
+
+
+def edit():
+    env = dict(os.environ, SOPS_AGE_KEY_FILE=KEYS)
+    r = subprocess.run([sops(), "edit", SRC], env=env)
+    if r.returncode not in (0, 200):                 # 200: saved with no changes
+        return r.returncode
+    return decrypt()
+
+
+def status():
+    print("encrypted file:", SRC, "(present)" if os.path.exists(SRC) else "(MISSING)")
+    print("age key:       ", KEYS, "(present)" if os.path.exists(KEYS) else "(absent: public defaults)")
+    cfg = os.path.join(OUT, "config.json")
+    try:
+        with open(cfg) as f:
+            d = json.load(f)
+        print("decrypted:     ", cfg)
+        for k, v in d.items():
+            n = len(v) if isinstance(v, (dict, list)) else 1
+            print(f"  {k:<10} {n} entr{'y' if n == 1 else 'ies'}")
+    except OSError:
+        print("decrypted:      none yet (run: bromigos-private decrypt)")
+    print("profile:       ", PROFILE, "(present)" if os.path.exists(PROFILE) else "(none: decrypt seeds it)")
+    return 0
+
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
+    if cmd == "decrypt":
+        return decrypt(quiet="--quiet" in sys.argv)
+    if cmd == "edit":
+        return edit()
+    if cmd == "status":
+        return status()
+    if cmd == "seed-profile":
+        try:
+            with open(os.path.join(OUT, "config.json")) as f:
+                return seed_profile(json.load(f), quiet="--quiet" in sys.argv)
+        except (OSError, ValueError):
+            print("bromigos-private: no decrypted overlay (run: bromigos-private decrypt)", file=sys.stderr)
+            return 1
+    print(__doc__)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

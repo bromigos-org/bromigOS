@@ -1,0 +1,51 @@
+# What each lab job kind takes on its GPU and how long it runs, measured on a real lab: the
+# shared table the jobs that build the job kinds record into, and that `bromigos lab`'s queue
+# reads (bromigos_homelab.jobs: an entry here sets its kind's vram_mib and note).
+# docs/homelab.md, "Job kinds", has the contract.
+#
+# Installed as /usr/share/bromigos/homelab/lab/jobs.toml (bromigos-homelab).
+#
+# [kind.<id>]
+#   vram_mib   the peak VRAM the job adds on its GPU over what that GPU holds at rest (MiB);
+#              the queue gates a heavy job on it, and on the most it has seen (vram.json)
+#   seconds    a typical job's time on that GPU, start to file (for a progress estimate)
+#   workflow   the bromigos art workflow it ran (core/crates/bromigos-art/workflows/)
+#   measured   when, and on what
+#   note       how it was measured, in plain words (the kind's hover hint)
+format = 1
+
+[kind.video]
+vram_mib = 17800
+seconds = 146
+workflow = "wan2.2-ti2v-5b"
+measured = "2026-10-09, the RTX 5090 (32 GiB; the voice and embeddings servers resident, 13.9 GiB at rest)"
+note = """Wan 2.2 TI2V-5B, a 5 s loop at the 720p tier (768x1152 and 1280x704): ComfyUI peaked at 16.2-18.2 GiB \
+(17.4 GiB over its idle 0.8), the card at 29.3-31.3 of 31.8 GiB; 131-135 s in ComfyUI (20 steps at 5.7 s, the \
+decode 16 s), 145-146 s from upload to the matted loop. ComfyUI loads the model dynamically and takes what's free, \
+so a busier card runs it slower rather than failing."""
+
+[kind.cutout]
+vram_mib = 1100
+seconds = 2
+workflow = "lucida"
+measured = "2026-10-09, the RTX 5090 (32 GiB; the voice and embeddings servers resident)"
+note = """Lucida (the native background-removal nodes), a 1536 px concept: the card lost at most 1.0 GiB \
+of free VRAM; 2 s from upload to the PNG, the model loaded cold (it runs at 1024 px)."""
+
+[kind.3d]
+vram_mib = 12800
+seconds = 57
+workflow = "pixal3d"
+measured = "2026-10-09, the RTX 5090 (32 GiB; the voice and embeddings servers resident)"
+note = """Pixal3D int8, shape only, a 1536 px concept: the card lost 10.2 to 12.5 GiB of free VRAM; 35 to 57 s \
+from upload to the levelled GLB with the models loaded cold (three samplers, the decode, the remesh and the \
+decimation to 500k faces)."""
+
+[kind.upscale]
+vram_mib = 8900
+seconds = 16
+workflow = "seedvr2-7b"
+measured = "2026-10-09, the RTX 5090 (32 GiB; the voice and embeddings servers resident)"
+note = """SeedVR2 7B int8: an image at 2x lost the card 8.5 to 8.7 GiB of free VRAM (640 px to 1280 px in 12 s, \
+2048x1024 to 4096x2048 in 16 s; the VAE works in tiles). A clip (seedvr2-7b-video) uses the same model with its \
+chunks sized to what's free: a 5 s 200x298 loop took 39 s at 2x and 116 s at 4x."""

@@ -1,0 +1,21 @@
+{
+ "running": true,
+ "active": "balanced",
+ "profiles": [
+  {
+   "name": "performance",
+   "driver": "amd_pstate",
+   "degraded": "no"
+  },
+  {
+   "name": "balanced",
+   "driver": "amd_pstate",
+   "degraded": "no"
+  },
+  {
+   "name": "power-saver",
+   "driver": "amd_pstate",
+   "degraded": "no"
+  }
+ ]
+}

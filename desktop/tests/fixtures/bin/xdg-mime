@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""A stand-in xdg-mime (tests, offscreen renders): `query default MIME` and `default APP MIME…`
+over fixtures/xdg-mime.json (desktop/tests/fixtures/fixture.py)."""
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
+import fixture as F  # noqa: E402
+
+a = sys.argv[1:]
+F.log("xdg-mime", a)
+st = F.load("xdg-mime")
+if a[:2] == ["query", "default"] and len(a) == 3:
+    v = st["defaults"].get(a[2])
+    if v:
+        print(v)
+    sys.exit(0)
+if a[:1] == ["default"] and len(a) >= 3:
+    for m in a[2:]:
+        st["defaults"][m] = a[1]
+    F.save("xdg-mime", st)
+    sys.exit(0)
+F.die(f"xdg-mime stand-in: {' '.join(a)} isn't pretended")

@@ -1,0 +1,174 @@
+/* bromigOS's launcher theme (package bromigos-desktop): /usr/share/bromigos/default/rofi/bromigos.rasi.
+   Bromigos launcher: panel background, 1px phosphor rules, square corners,
+   the burn-in in the header, a "> " prompt with a blinking block cursor.
+   Labels name real things only: the mode tabs and the live match count. */
+/* Colours: the active bromigOS theme, rendered by `bromigos theme set`. */
+@import "~/.local/state/bromigos/theme/current/rofi.rasi"
+
+* {
+    font: "Geist Mono Medium 13";
+    background-color: transparent;
+    text-color: @soft;
+    border-color: @dim;
+    border-radius: 0;
+    spacing: 0;
+}
+
+window {
+    width: 780px;
+    location: center;
+    anchor: center;
+    background-color: @panel;
+    border: 1px;
+    border-color: @dim;
+    padding: 0;
+}
+
+mainbox {
+    children: [ box-header, listview, box-footer ];
+    spacing: 0;
+}
+
+box-header {
+    orientation: horizontal;
+    expand: false;
+    children: [ icon-emblem, box-headerbody ];
+    padding: 18px 20px 14px 18px;
+    spacing: 18px;
+    border: 0 0 1px 0;
+    border-color: @dim;
+}
+
+icon-emblem {
+    expand: false;
+    size: 88px;
+    filename: "~/.local/state/bromigos/emblem/emblem-256.png";   /* the theme's emblem (hooks/theme-set.d/emblem) */
+    vertical-align: 0.5;
+}
+
+box-headerbody {
+    orientation: vertical;
+    vertical-align: 0.5;
+    children: [ mode-switcher, inputbar ];
+    spacing: 14px;
+    expand: true;
+}
+
+mode-switcher {
+    spacing: 0;
+    expand: false;
+}
+button {
+    padding: 4px 14px;
+    text-color: @muted;
+    font: "Geist Mono SemiBold 11";
+    border: 0 0 2px 0;
+    border-color: transparent;
+    horizontal-align: 0.5;
+}
+button selected {
+    text-color: @primary;
+    border-color: @primary;
+    background-color: @selected-tab-background;
+}
+
+inputbar {
+    children: [ textbox-prompt, entry, num-filtered-rows, textbox-num-sep, num-rows ];
+    spacing: 0;
+    padding: 8px 10px;
+    background-color: @input-background;
+    border: 1px;
+    border-color: @input-border;
+}
+textbox-prompt {
+    str: "> ";
+    expand: false;
+    text-color: @primary;
+    font: "Geist Mono Bold 16";
+}
+entry {
+    text-color: @soft;
+    font: "Geist Mono Medium 16";
+    placeholder: "";
+    cursor: text;
+    cursor-width: 10px;
+    cursor-color: @primary;
+    blink: true;
+}
+num-filtered-rows, textbox-num-sep, num-rows {
+    text-color: @muted;
+    font: "Geist Mono 11";
+    vertical-align: 0.5;
+    expand: false;
+}
+textbox-num-sep {
+    str: "/";
+}
+
+listview {
+    lines: 9;
+    columns: 1;
+    fixed-height: true;
+    scrollbar: false;
+    padding: 8px 10px;
+    spacing: 2px;
+}
+
+element {
+    padding: 7px 12px;
+    spacing: 14px;
+    border: 0 0 0 2px;
+    border-color: transparent;
+}
+element normal.normal, element alternate.normal {
+    background-color: transparent;
+    text-color: @muted;
+}
+/* Selection is a HUD bar, not a solid fill: dark guard green with a phosphor edge, so
+   the matched letters (bright phosphor, below) stay readable on every row. */
+element selected.normal {
+    background-color: @selected-background;
+    border-color: @primary;
+    text-color: @soft;
+}
+element normal.urgent, element alternate.urgent {
+    text-color: @warn;
+}
+element selected.urgent {
+    background-color: @selected-urgent-background;
+    border-color: @warn;
+    text-color: @warn;
+}
+element normal.active, element alternate.active {
+    text-color: @primary;
+}
+element-icon {
+    size: 24px;
+    vertical-align: 0.5;
+}
+element-text {
+    vertical-align: 0.5;
+    text-color: inherit;
+    highlight: @match-highlight;     /* matched letters: bold primary on every row */
+}
+
+box-footer {
+    orientation: horizontal;
+    children: [ message ];
+    expand: false;
+}
+message {
+    padding: 8px 20px;
+    border: 1px 0 0 0;
+    border-color: @dim;
+}
+textbox {
+    text-color: @muted;
+    font: "Geist Mono 11";
+}
+error-message {
+    background-color: @panel;
+    border: 1px;
+    border-color: @danger;
+    padding: 12px;
+}

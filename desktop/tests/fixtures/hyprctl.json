@@ -1,0 +1,106 @@
+{
+ "running": true,
+ "monitors": [
+  {
+   "id": 0,
+   "name": "DP-1",
+   "description": "LG Electronics LG ULTRAGEAR 105NTKFGW123",
+   "make": "LG Electronics",
+   "model": "LG ULTRAGEAR",
+   "serial": "105NTKFGW123",
+   "width": 2560,
+   "height": 1440,
+   "physicalWidth": 597,
+   "physicalHeight": 336,
+   "refreshRate": 143.97,
+   "x": 0,
+   "y": 0,
+   "activeWorkspace": {
+    "id": 1,
+    "name": "1"
+   },
+   "specialWorkspace": {
+    "id": 0,
+    "name": ""
+   },
+   "reserved": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "scale": 1.0,
+   "transform": 0,
+   "focused": true,
+   "dpmsStatus": true,
+   "vrr": false,
+   "solitary": "0x0",
+   "activelyTearing": false,
+   "disabled": false,
+   "currentFormat": "XRGB8888",
+   "mirrorOf": "none",
+   "availableModes": [
+    "2560x1440@143.97Hz",
+    "2560x1440@120.00Hz",
+    "2560x1440@59.95Hz",
+    "1920x1080@143.86Hz",
+    "1920x1080@60.00Hz",
+    "1280x720@60.00Hz"
+   ],
+   "preferred": "2560x1440@143.97Hz"
+  },
+  {
+   "id": 1,
+   "name": "HDMI-A-1",
+   "description": "Dell Inc. DELL P2419H 7NK8JR2",
+   "make": "Dell Inc.",
+   "model": "DELL P2419H",
+   "serial": "7NK8JR2",
+   "width": 1920,
+   "height": 1080,
+   "physicalWidth": 527,
+   "physicalHeight": 296,
+   "refreshRate": 60.0,
+   "x": 2560,
+   "y": 0,
+   "activeWorkspace": {
+    "id": 2,
+    "name": "2"
+   },
+   "specialWorkspace": {
+    "id": 0,
+    "name": ""
+   },
+   "reserved": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "scale": 1.0,
+   "transform": 0,
+   "focused": false,
+   "dpmsStatus": true,
+   "vrr": false,
+   "solitary": "0x0",
+   "activelyTearing": false,
+   "disabled": false,
+   "currentFormat": "XRGB8888",
+   "mirrorOf": "none",
+   "availableModes": [
+    "1920x1080@60.00Hz",
+    "1920x1080@50.00Hz",
+    "1680x1050@59.95Hz",
+    "1280x1024@60.02Hz",
+    "1280x720@60.00Hz"
+   ],
+   "preferred": "1920x1080@60.00Hz"
+  }
+ ],
+ "options": {
+  "misc:disable_autoreload": false
+ },
+ "configerrors": [
+  ""
+ ]
+}

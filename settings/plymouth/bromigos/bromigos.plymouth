@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Bromigos
+Description=The burn-in on black: the Wick's ring turning round the flame while the system boots
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/bromigos
+ScriptFile=/usr/share/plymouth/themes/bromigos/bromigos.script

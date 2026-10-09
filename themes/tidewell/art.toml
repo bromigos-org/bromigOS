@@ -1,0 +1,548 @@
+# Tidewell's art: every asset, how it is made, and (in art.log.jsonl) the job
+# that made it. `bromigos art status|plan|run` (docs/art.md). Outputs under art/
+# are working sources, kept out of git and out of the package.
+format = 1
+
+[defaults]
+aura = false
+
+[[assets]]
+id = "comp-seedream"
+kind = "image"
+model = "seedream-4.5"
+aspect = "16:9"
+quality = "2k"
+out = "art/comps/tidewell-comp-seedream.jpg"
+prompt = '''
+Split-level view of the ocean at night, half above and half below the waterline, which runs horizontally across the middle of the frame. Above the water, the focal point filling the center: Greywater Light, a storm-weathered old lighthouse built on top of a rusted offshore sea platform, seen up close: a glowing lamp room with a gallery rail around it, a lit window in the tower, a small keeper's cottage with a warm lit window on the platform deck, steel stairs and railings, hanging buoy lamps, rusted steel legs plunging into the sea, a small round blank metal plate on the lamp housing. A tiny silhouetted figure of the keeper stands at the gallery rail, no face visible. Around it the open dark sea with heavy swells, a distant horizon and a brooding cloudy night sky with faint moonlight breaking through. Below the waterline: the rusted platform legs, crusted with barnacles and kelp, descend into murky dark blue-green water that falls away into a black abyss, lit only by faint scattered bioluminescent specks. Cold, lonely, vast mood. Palette: blue-black, cold sea green, warm amber window and lamp light, faint cyan-green bioluminescence. Painterly cinematic sci-fi concept art, matte painting illustration, highly detailed, gritty weathered textures, low-key night lighting with deep near-black shadows, subtle film grain, wide 16:9 establishing shot. No text, no letters, no logos, no watermark, no signature.'''
+
+[[assets]]
+id = "comp-v2-seedream"
+kind = "image"
+model = "seedream-4.5"
+aspect = "16:9"
+quality = "2k"
+out = "art/comps/tidewell-comp-v2-seedream.jpg"
+prompt = '''
+Split-level half-underwater view at night, the waterline running horizontally across the frame just below the middle. Above the water, the focal point filling the center of the frame: Greywater Light, a tall storm-weathered old lighthouse tower standing on a rusted offshore sea platform, seen up close so it reads as a home: the glowing lamp room at the top with a gallery rail around it, a lit window halfway up the tower, a small keeper's cottage with a warm lit window and a chimney on the platform deck, steel stairs, railings, ropes, crates and hanging buoy lamps, a small round blank metal plate on the lamp housing. A tiny silhouetted figure of the keeper stands at the gallery rail, no face visible. Behind it the open dark sea with heavy swells, a distant horizon and a brooding cloudy night sky with faint moonlight breaking through. Below the waterline, the same four rusted platform legs continue straight down, crusted with barnacles and kelp, into murky dark water that fades quickly into a pitch-black abyss, lit only by faint scattered bioluminescent specks. The underwater half is mostly very dark. Cold, lonely, vast mood. Palette: blue-black, cold sea green, warm amber window and lamp light, faint cyan bioluminescence. Gritty realistic painterly cinematic sci-fi concept art, matte painting, highly detailed weathered textures, low-key lighting, subtle film grain, wide 16:9. No text, no letters, no logos, no watermark.'''
+
+[[assets]]
+id = "comp-v3-flare"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/den-empty.jpg"]
+aspect = "16:9"
+render_quality = "high"
+out = "art/comps/tidewell-comp-v3-flare-a.png"
+prompt = '''
+The attached reference image is ONLY a style reference: match its rendering quality, painterly-cinematic brushwork, gritty detail, lighting craft and subtle film grain. Do not copy its content, its composition or its green colour grade. Paint this new scene:
+Night ocean seen in a split half-underwater cross-section view, the waterline running perfectly horizontally across the frame very high up, at about one fifth of the image height from the top. Above the waterline, only a thin strip: a dark cloudy night sky with a pale moon glow, the dark sea surface and a distant horizon. In the upper right corner, small in the frame: a lonely old lighthouse standing on a narrow jagged sliver of black rock, the only land in sight, its lamp room glowing warm amber and one tiny lit cottage window at its foot, a tiny dark silhouette in the lamp room. Below the waterline, filling most of the image, the underwater world is the focus: the rock sliver's base descending steeply as an underwater cliff on the right; rocky shelves and tall swaying kelp forests in the mid-ground; schools of small silver fish catching faint moonlight; a few translucent jellyfish; the dark hull of a small fishing trawler breaking the surface on the left, seen from below, with its net hanging down into the water; pale shafts of moonlight filtering down from the surface. Toward the bottom the water falls away into a deep, dark, open abyss, lit only by faint scattered cyan bioluminescent specks, with empty open space in the deep. Cold, lonely, vast, quiet mood. Palette: blue-black, slate, cold sea green, warm amber lamp light as the only warm colour, faint cyan bioluminescence. Gritty realistic painterly cinematic sci-fi concept art, matte painting, not cartoon, not anime, highly detailed weathered textures, low-key lighting, deep near-black shadows, subtle film grain, wide 16:9. No text, no letters, no logos, no watermark.'''
+
+[[assets]]
+id = "actors-clean"
+kind = "edit"
+model = "gpt-image-2.5-flare"
+input = "@comp-v3-flare"
+mask = "art/plates/mask-tidewell-actors.png"
+aspect = "16:9"
+render_quality = "high"
+out = "art/plates/tidewell-actors-clean.png"
+prompt = '''
+Edit this painting. Inside the edited areas only: remove the fishing trawler at the surface, its hanging net, and the jellyfish completely. Paint what was behind them: the night sea surface and horizon under the cloudy sky, and the dark blue-green underwater water with soft moonlight rays and the drifting schools of small silver fish continuing naturally. Match the surrounding painting exactly in lighting, colour, texture and painterly rendering. No boats, no nets, no jellyfish, no text.'''
+
+[[assets]]
+id = "maren-writing"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/lighthouse-crop.png"]
+aspect = "1:1"
+render_quality = "high"
+out = "art/actors/maren-writing.png"
+prompt = '''
+Using the reference image (a crop of the painted scene) for the lighthouse's lamp room, the lighting and the painterly rendering: paint a close view of the keeper inside the lighthouse lamp room at night, shown as a soft dark silhouette with warm amber rim light from the great lamp lens beside her, no facial detail, only a dark profile shape: a woman in a heavy knit sweater, hair tied back. Gritty realistic painterly cinematic concept art matching the reference, not cartoon. Isolated: the figure and her small desk and stool only, on a plain flat uniform mid-grey background, no room walls, no window frame. Full figure in frame with margin. No text, no logo. Pose: working. She sits at a small wooden desk writing in a thick open logbook with a pencil, a pair of old headphones around her neck, a small desk lamp glowing amber.'''
+
+[[assets]]
+id = "maren-asleep"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/lighthouse-crop.png"]
+aspect = "1:1"
+render_quality = "high"
+out = "art/actors/maren-asleep.png"
+prompt = '''
+Using the reference image (a crop of the painted scene) for the lighthouse's lamp room, the lighting and the painterly rendering: paint a close view of the keeper inside the lighthouse lamp room at night, shown as a soft dark silhouette with warm amber rim light from the great lamp lens beside her, no facial detail, only a dark profile shape: a woman in a heavy knit sweater, hair tied back. Gritty realistic painterly cinematic concept art matching the reference, not cartoon. Isolated: the figure and her small desk and stool only, on a plain flat uniform mid-grey background, no room walls, no window frame. Full figure in frame with margin. No text, no logo. Pose: asleep. She is asleep at the same small wooden desk, her head resting on her folded arms on the open logbook, the small desk lamp glowing amber.'''
+
+[[assets]]
+id = "jellyfish"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/tidewell-under-crop.png"]
+aspect = "2:3"
+render_quality = "high"
+out = "art/actors/jellyfish.png"
+prompt = '''
+Using the reference image only for its painterly rendering and underwater palette: paint a single deep-sea jellyfish, a translucent domed bell with faint pale-cyan bioluminescent rim lights and glowing inner ribs, long trailing ribbon arms and fine thread-like tentacles drifting below it, softly glowing. Whole jellyfish inside the frame with margin, centred. Isolated on a pure black background with nothing else, no water particles, no other creatures. Gritty realistic painterly cinematic sci-fi concept art matching the reference's rendering, not cartoon, not anime, highly detailed. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "trawler"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/trawler-crop.png"]
+aspect = "2:3"
+render_quality = "high"
+out = "art/actors/trawler.png"
+prompt = '''
+Using the reference image (a crop of the painted ocean scene with a fishing trawler and its net) for the boat design, lighting and painterly rendering: paint the same small weathered night fishing trawler alone, in side view facing right, shown as a split cross-section at the waterline: the upper half above the water with its wheelhouse, mast, rigging, warm amber window light and small red and green running lights; below the waterline the dark rusted hull and keel tinted deep blue-green as if seen through sea water, and its fishing net hanging down from the stern into the depths, a few small silver fish caught in the net. The waterline is a straight horizontal line across the hull, but there is no water drawn around the boat. Whole boat and net inside the frame with margin. Isolated on a plain flat uniform mid-grey background. Gritty realistic painterly cinematic sci-fi concept art matching the reference's rendering, not cartoon, not anime, highly detailed. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "choir"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/tidewell-under-crop.png"]
+aspect = "21:9"
+render_quality = "high"
+out = "art/actors/choir.png"
+prompt = '''
+Using the reference image only for its painterly rendering, lighting and underwater palette: paint a single colossal deep-sea leviathan of wholly original design, one of the Choir, swimming slowly from right to left in side view. A long, sinuous, ray-and-eel-like body with broad translucent veil-fins along its flanks, a blunt armoured head with a small dark deep-set eye, long trailing filament-tendrils from its jaw and tail, and rows of soft cyan bioluminescent light organs and glowing veins pulsing along its body and fin edges. Dark slate-blue skin with pale scars, mostly in shadow, lit only by its own cyan glow. It is not a whale, not a dragon, not any known film creature. Whole body inside the frame with margin. Isolated on a pure black background with nothing else, no water surface, no particles, no other creatures. Gritty realistic painterly cinematic sci-fi concept art matching the reference's rendering, not cartoon, not anime, highly detailed. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "jellyfish-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "@jellyfish"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "9:16"
+audio = false
+out = "art/clips/jellyfish-raw.mp4"
+prompt = '''
+The jellyfish pulses gently in place against the pure black background: its bell contracts and relaxes in a slow rhythm, its trailing ribbon arms and tentacles flow and drift, its faint cyan bioluminescence brightens with each pulse. It stays centred in the same position and size. Static camera, pure black background, nothing else appears. Seamless loop.'''
+
+[[assets]]
+id = "backdrop-raw"
+kind = "video"
+model = "minimax-h3"
+start = "art/plates/tidewell-actors-clean-merged.png"
+loop = true
+duration = 5
+resolution = "2k"
+aspect = "16:9"
+out = "art/loops/tidewell-backdrop-raw.mp4"
+prompt = '''
+Locked-off static camera: no camera movement, no zoom, no pan, no cut. Subtle living ambient motion only, the painting comes gently alive: the kelp fronds sway slowly in the current, the moonlight rays shimmer and drift gently through the water, the schools of small silver fish drift slowly and glint, tiny particles float in the water, the faint bioluminescent specks in the deep pulse softly, the sea surface swells gently with small waves, the clouds drift very slowly, the lighthouse lamp glows steadily. Nothing new enters the frame: no creatures, no boats, no people. Keep the painterly style and exact composition. Seamless loop.'''
+
+[[assets]]
+id = "choir-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "@choir"
+loop = true
+duration = 5
+resolution = "1080p"
+aspect = "21:9"
+audio = false
+out = "art/clips/choir-raw.mp4"
+prompt = '''
+The deep-sea leviathan swims in place against the pure black background: its long body undulates slowly, its veil-fins ripple, its trailing tendrils flow, and its cyan light organs pulse in a slow travelling wave along its flanks. It stays centred in the same position and the same size. Static camera, pure black background, nothing else appears. Seamless loop.'''
+
+# ---------------------------------------------------------------- craft overhead: the flybys
+# (Pip Arro's Petrel and the Drift long-hauler come from Mire's sheet; these are Tidewell's own)
+[[assets]]
+id = "ships-sheet"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/tidewell-sky-crop.png", "art/refs/mire-ships-ref.png"]
+aspect = "3:2"
+render_quality = "high"
+out = "art/actors/ships-sheet.png"
+note = "Tidewell's craft overhead: a rig-hopper and a trawler's fish-spotter"
+prompt = '''
+Reference image 1 (a painted night sea with a lighthouse and a trawler) is ONLY a style, palette and lighting reference. Reference image 2 (a sheet of three craft on grey) is ONLY a rendering reference: match its painterly-cinematic rendering, gritty weathered detail and level of finish exactly, so the new craft belong in the same universe. Do not copy any of its craft.
+Paint a sprite sheet of two different flying craft of wholly original design from an ocean colony of rusted sea platforms, each one complete, separate, not overlapping, with generous empty margin around it, both flying toward the RIGHT, seen in clean side profile from slightly below as if passing overhead, lit by cool moonlight from above with soft silver rim light on their top edges and their own small lights:
+LEFT, larger: a rig-hopper, the heavy-lift cargo craft that runs supplies between sea platforms: a squat, boxy, salt-stained fuselage in faded rust-orange and white workboat paint with weathered stencil-free panels, a small lit cab window glowing warm, two big rotors on short tilted pylons above it drawn as faint translucent motion-blurred discs, landing skids, and a dented steel shipping container slung beneath it on four taut cables, a red beacon lamp on top and a downward work floodlight under the nose.
+RIGHT, smaller: a trawler's fish-spotter, a light two-seat autogyro that trawler crews fly to find shoals: an open-frame tubular fuselage with a small glazed bubble cab, a single big two-blade overhead rotor drawn as a faint translucent motion-blurred disc, a pusher propeller at the back drawn as a faint blurred disc, a pair of inflatable float pontoons, a long whip aerial, a search lamp under the cab, faded sea-green and cream paint, rust and salt crust.
+Isolated on a plain flat uniform mid-grey background, no sea, no sky, no clouds, no ground, no shadow. Gritty realistic painterly cinematic sci-fi concept art, not cartoon, not anime, not toy-like, highly detailed. Nothing resembling any known film or game vehicle. No text, no letters, no numbers, no logos, no insignia, no watermark.'''
+
+[[assets]]
+id = "ships-cut"
+kind = "cutout"
+model = "remove-background"
+input = "@ships-sheet"
+out = "art/actors/ships-cut.png"
+
+# ---------------------------------------------------------------- the trawler's net trails behind it
+# The first trawler hung its net forward, under the bow. The hull is repainted without it;
+# the engine tows the same painted net (cut from trawler.png, mirrored) from the stern, so it
+# trails behind whichever way the boat runs and sways on its cable.
+[[assets]]
+id = "trawler-hull"
+kind = "edit"
+model = "gpt-image-2.5-flare"
+input = "@trawler"
+mask = "art/masks/mask-trawler-net.png"
+aspect = "2:3"
+render_quality = "high"
+out = "art/actors/trawler-hull.png"
+prompt = '''
+Edit this painting of a fishing trawler. Inside the edited areas only: remove the fishing net, its chains and its floats completely. Paint the trawler's stern below the waterline clean and whole: the dark rusted hull plating tinted deep blue-green as if seen through sea water, continuing the hull exactly, with its rudder and propeller; and everywhere else the same plain flat uniform mid-grey background. Match the existing painting exactly in rendering, lighting, colour and texture. No net, no chains, no ropes, no fish, no water, no text.'''
+
+[[assets]]
+id = "trawler-hull-cut"
+kind = "cutout"
+model = "remove-background"
+input = "@trawler-hull"
+out = "art/actors/trawler-hull-cut.png"
+
+# ---------------------------------------------------------------- silver fish: the school and the fills
+# (retired 2026-10-08: the operator found them disorienting; Tidewell's own sea life below
+# replaced them. Kept as the record of what was made.)
+[[assets]]
+id = "fish-sheet"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/fish-school-crop.png"]
+aspect = "3:2"
+render_quality = "high"
+out = "art/actors/fish-sheet.png"
+prompt = '''
+The reference image is a crop of a painted night underwater scene with a school of small silver fish: match those fish exactly in species, shape, colour and painterly rendering.
+Paint a sprite sheet of the same small silver schooling fish (a herring-like fish: slim, a dark blue-grey back, bright mirror-silver flanks and belly, a forked tail), each fish alone with generous empty margin, in a neat grid of 3 columns and 2 rows, every fish in clean side view facing RIGHT, all exactly the same size and lit the same way, by cool moonlight from above with a bright silver glint along the flank:
+TOP ROW, one and the same fish in three swimming poses of a single tail beat: the body straight; the body gently flexed with the tail swept up; the body gently flexed with the tail swept down.
+BOTTOM ROW, the same fish turning: angled slightly toward the viewer showing more silver flank; angled slightly away showing more dark back; and darting, the body in a tight S-curve.
+Isolated on a plain flat uniform mid-grey background, no water, no bubbles, no other fish. Gritty realistic painterly cinematic concept art matching the reference, not cartoon, highly detailed. No text, no letters, no watermark.'''
+
+[[assets]]
+id = "fish-cut"
+kind = "cutout"
+model = "remove-background"
+input = "@fish-sheet"
+out = "art/actors/fish-cut.png"
+
+# ---- the post's emblem (Greywater Light's mark; docs/theming.md, "The emblem"). Concepts
+# only: the shipped emblem/ kit is vector, built by bromigos-emblem from emblem/emblem.toml.
+[[assets]]
+id = "emblem-concept-a"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/wick-emblem.png", "art/refs/tidewell-comp.png"]
+aspect = "1:1"
+render_quality = "high"
+out = "art/emblem/tidewell-emblem-concept-a.png"
+prompt = '''
+Image 1 is the network's emblem, "the burn-in": a thin double ring with a motto in wide-tracked uppercase monospace running clockwise in the band, an eleven-tick tuning-dial gap at twelve o'clock, and at the centre one solid black flame (one main tongue, two small side tongues, leaning slightly right) outlined by a thin hairline, with a relay mast cut through it in negative space. Image 2 is only a palette and mood reference for the world.
+Design a sibling emblem in exactly the same flat vector graphic style, same ring geometry and proportions, for Tidewell, an ocean world whose post is a small lighthouse on a black rock, where the flame is painted on a bell buoy, and where vast glowing leviathans called the Choir sing in the deep. Ring lines and ring text in sea cyan #3fd8e8 on deep navy-black #02070d. The motto in the ring band reads exactly: THE DEEP SINGS FIRST · SOMEONE WRITES IT DOWN ·  The tuning gap at twelve o'clock is eleven thin vertical bars of varying heights like a sound-wave trace of a whale song, the centre bar tallest. Centre sigil: the black flame with its relay-mast cut-out, standing above a swell drawn as two smooth wave lines in deep teal #2a7488 crossing its base; under the swell, the long curved back of a leviathan drawn as an arc of small glowing cyan dots, like bioluminescence. Flat vector emblem, crisp clean shapes, no gradients except a faint glow, perfectly centred, symmetrical ring, plain dark background, no extra text.'''
+
+[[assets]]
+id = "emblem-concept-b"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/wick-emblem.png", "art/refs/tidewell-comp.png"]
+aspect = "1:1"
+render_quality = "high"
+out = "art/emblem/tidewell-emblem-concept-b.png"
+prompt = '''
+Image 1 is the network's emblem, "the burn-in": a thin double ring with a motto in wide-tracked uppercase monospace running clockwise in the band, an eleven-tick tuning-dial gap at twelve o'clock, and at the centre one solid black flame (one main tongue, two small side tongues, leaning slightly right) outlined by a thin hairline, with a relay mast cut through it in negative space. Image 2 is only a palette and mood reference for the world.
+Design a sibling emblem in exactly the same flat vector graphic style, same ring geometry and proportions, for Tidewell's post: a bell buoy riding the swell off a black rock, with the black flame painted on it. Ring lines and ring text in sea cyan #3fd8e8 on deep navy-black #02070d. The motto in the ring band reads exactly: THE DEEP SINGS FIRST · SOMEONE WRITES IT DOWN ·  The tuning gap at twelve o'clock is eleven thin vertical bars of varying heights like a sound-wave trace, the centre bar tallest. Centre sigil: a bell buoy in silhouette, an open lattice tower with a small bell hanging inside and a warm white lamp #f0b850 on top, standing on a round float riding two smooth wave lines in deep teal #2a7488; the float carries the black flame with the relay-mast cut-out painted large on it, outlined by a thin cyan hairline. Flat vector emblem, crisp clean shapes, no gradients except a faint glow, perfectly centred, symmetrical ring, plain dark background, no extra text.'''
+
+# ---------------------------------------------------------------- no painted fish; Tidewell's own sea life
+# The silver fish painted into the plate are painted out (a masked edit of the layers'
+# composite; theme/tools/plate-patch.py writes the result back into 20-water-far and
+# 30-kelp-mid inside the mask only). The school and the fills are now the deep's own
+# creatures, made like the Choir: a still on black, then a seamless loop, drawn additive.
+[[assets]]
+id = "fish-clean"
+kind = "edit"
+model = "gpt-image-2.5-flare"
+input = "art/plates/tidewell-layers-comp.png"
+mask = "art/masks/mask-tidewell-fish.png"
+aspect = "16:9"
+render_quality = "high"
+out = "art/plates/tidewell-fish-clean.png"
+prompt = '''
+Edit this painting. Inside the edited areas only: remove every small silver fish and every school of fish completely. Paint what is behind them: the open dark blue-green night water with the soft pale moonlight rays slanting down from the surface, faint drifting particles, and, where the areas cover rock, the same dark rocky shelves, crevices and kelp, continuing the surrounding painting naturally. Match the surrounding painting exactly in lighting, colour, value, texture and painterly rendering, with no seams. No fish, no creatures, no new objects, no text.'''
+
+[[assets]]
+id = "lampfry"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/tidewell-under-crop.png", "art/actors/choir.png"]
+aspect = "16:9"
+render_quality = "high"
+out = "art/actors/lampfry.png"
+prompt = '''
+Image 1 is a crop of the painted night underwater scene and image 2 is one of the Choir, the great glowing leviathans of this sea: use them only for the painterly rendering, the lighting craft and the bioluminescent style; do not paint a leviathan.
+Paint a loose drifting swarm of lampfry, small creatures of wholly original alien design: about forty to sixty of them, each the length of a finger, a translucent teardrop body with a glowing warm pale-gold core like a tiny lamp, a soft halo of light around it, a fringe of fine feathery frills along its sides tipped with faint cyan, and two long hair-thin trailing threads. They drift together in a slow, loose, spiralling cloud, wider than tall, denser and brighter in the middle and thinning to scattered single lights at the edges, some nearer and larger, some farther and smaller and dimmer, all facing different ways. Their own light is the only light. Isolated on a pure black background with nothing else: no water surface, no particles, no other creatures. Gritty realistic painterly cinematic sci-fi concept art, not cartoon, not anime, highly detailed. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "veilwing"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/tidewell-under-crop.png", "art/actors/choir.png"]
+aspect = "16:9"
+render_quality = "high"
+out = "art/actors/veilwing.png"
+prompt = '''
+Image 1 is a crop of the painted night underwater scene and image 2 is one of the Choir, the great glowing leviathans of this sea: use them only for the painterly rendering, the lighting craft and the bioluminescent style; do not paint a leviathan.
+Paint a single veilwing, a gliding deep-sea creature of wholly original alien design, seen from the side and slightly below, gliding toward the left with its wings spread wide mid-stroke: a sleek, slender, eel-like body with a small rounded head, two small glowing pale eyes and two fine feeler-horns, and from its flanks two broad, thin, translucent wing-membranes like veils of glass silk, much wider than the body is long, curving up and back, their trailing edges frilled and rippling. The membranes glow softly from within with pale seafoam-green bioluminescence, brightest along their luminous rims and along fine radiating veins, fading to clear near the body; a row of small bright green-white light organs runs down its back; one long whip-thin tail trails behind with a glowing tip. Graceful, calm, alive. It is not a manta ray, not a leaf, not a bird, not a bat, not any known film creature. Its own light is the only light. Whole creature inside the frame with margin, centred. Isolated on a pure black background with nothing else: no water surface, no particles, no other creatures. Gritty realistic painterly cinematic sci-fi concept art, not cartoon, not anime, highly detailed. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "burr"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/tidewell-under-crop.png", "art/actors/choir.png"]
+aspect = "1:1"
+render_quality = "high"
+out = "art/actors/burr.png"
+prompt = '''
+Image 1 is a crop of the painted night underwater scene and image 2 is one of the Choir, the great glowing leviathans of this sea: use them only for the painterly rendering, the lighting craft and the bioluminescent style; do not paint a leviathan.
+Paint a single burr, a drifting deep-sea creature of wholly original alien design that trawler crews call bad luck: a dark, roughly round body the size of a man's head, bristling with long thin needle spines of uneven lengths radiating in every direction, a few spines bent or broken, and deep inside between the spines a dull ember-red light that smoulders like a coal, with small red glowing tips on some of the spines and faint red veins running out along them. Sinister, quiet, slowly turning. It is not a sea urchin, not a pufferfish, not any known film creature. Its own red light is the only light; its dark body is seen mostly by that light. Whole creature inside the frame with generous margin, centred. Isolated on a pure black background with nothing else: no water surface, no particles, no other creatures. Gritty realistic painterly cinematic sci-fi concept art, not cartoon, not anime, highly detailed. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "lampfry-raw"
+kind = "video"
+model = "seedance-2.5"
+start = "@lampfry"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "16:9"
+audio = false
+out = "art/clips/lampfry-raw.mp4"
+prompt = '''
+The swarm of small glowing creatures drifts in place against the pure black background: each one swims gently and slowly, turning a little, its feathery frills rippling and its hair-thin threads trailing; the whole loose cloud swirls very slowly around its centre and breathes softly in and out, but stays centred at the same size; their warm lamps pulse softly, each out of step with the others. Calm, slow, smooth, organic motion. Static camera, pure black background, nothing else appears. Seamless loop.'''
+
+[[assets]]
+id = "veilwing-raw"
+kind = "video"
+model = "seedance-2.5"
+start = "@veilwing"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "16:9"
+audio = false
+out = "art/clips/veilwing-raw.mp4"
+prompt = '''
+The glowing winged creature glides in place against the pure black background, facing left: its two broad translucent wings rise and fall in one slow, smooth, graceful stroke like a ray swimming, their frilled trailing edges rippling in a wave from front to back, its long whip tail flowing gently behind, the row of light organs on its back pulsing in a slow travelling wave, the glow in its wing veins brightening on the down-stroke. It stays centred in the same position and size. Static camera, pure black background, nothing else appears. Seamless loop.'''
+
+[[assets]]
+id = "burr-raw"
+kind = "video"
+model = "seedance-2.5"
+start = "@burr"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "1:1"
+audio = false
+out = "art/clips/burr-raw.mp4"
+prompt = '''
+The dark spined creature hangs in place against the pure black background and turns very slowly on its axis; its long needle spines sway slightly and a few flex and twitch; the dull ember-red light deep inside smoulders and pulses slowly like a breath, brightening and dimming, and the red glow runs out along the veins to the spine tips and back. Sinister, quiet, slow, smooth motion. It stays centred in the same position and size. Static camera, pure black background, nothing else appears. Seamless loop.'''
+
+# ---------------------------------------------------------------- linebloom: the reef on the Sliver's flank
+# (LORE.md, Tidewell: glass-stalked polyps along the relay's old sea cable down the Sliver's
+# flank; its light is the line's.) Painted on black like the Choir, then a seamless loop of
+# it breathing; theme/tools/glow-loop.py makes live/loops/linebloom.mp4, drawn additive over
+# the cliff (its dark parts leave the real rock showing) and tinted by the lab's health.
+[[assets]]
+id = "linebloom"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/tidewell-cliff-crop.png", "art/actors/choir.png"]
+aspect = "9:16"
+render_quality = "high"
+out = "art/actors/linebloom.png"
+prompt = '''
+Image 1 is a crop of the painted night undersea cliff this will grow on and image 2 is one of the Choir, the glowing leviathans of this sea: use them only for the painterly rendering, the lighting craft and the bioluminescent style; do not paint the cliff or a leviathan.
+Paint a long run of linebloom, an alien reef of wholly original design, growing along an old armoured sea cable that runs the full height of the frame from the top edge to the bottom edge, winding gently and leaning slightly from upper right to lower left. Dense clusters of slender translucent glass-like stalks of different lengths grow from the cable, each ending in a small soft bulb that glows a calm pale cyan, with fine feathery fronds between them. The reef is densest and brightest along the cable, with a few side runs spreading sideways as if following cracks in rock, thinning to scattered single glowing buds at its edges. The cable itself is seen only where the reef's light catches its crusted surface. Its own cyan light is the only light. Isolated on a pure black background with nothing else: no rock, no water, no particles, no creatures. Gritty realistic painterly cinematic sci-fi concept art, not cartoon, not anime, highly detailed. It is not earth coral, not anemones, not mushrooms, not crystals, not fairy lights. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "linebloom-raw"
+kind = "video"
+model = "seedance-2.5"
+start = "@linebloom"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "9:16"
+audio = false
+out = "art/clips/linebloom-raw.mp4"
+prompt = '''
+The glowing reef along the cable breathes against the pure black background: the small cyan bulbs at the tips of its glass stalks brighten and dim softly and slowly, each out of step with its neighbours, and the fine fronds and slender stalks sway gently in a slow underwater current. The cable and the camera stay completely still; the reef stays in place; nothing else appears. Calm, slow, smooth, organic motion. Seamless loop.'''
+
+[[assets]]
+id = "linebloom-colour"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/actors/linebloom.png", "art/refs/tidewell-cliff-crop.png"]
+aspect = "9:16"
+render_quality = "high"
+out = "art/actors/linebloom-colour.png"
+prompt = '''
+Image 1 is the linebloom, an alien reef growing along an old armoured sea cable, and image 2 is the painted night undersea cliff it grows on: keep image 1's composition, its cable's path, the reef's shape, density and scale, its painterly rendering and its black background exactly; use image 2 only for the painterly craft. Repaint the reef as a living multicoloured colony instead of one cyan: its small glowing bulbs and their soft halos in many bioluminescent colours mixed naturally through it the way a real reef's colours are, in clusters, patches and gradients, never stripes or bands: deep violets and soft purples, magentas and warm pinks, glowing oranges and coral reds, a few warm golds, with cyan and teal still among them; the fine feathery fronds and translucent glass stalks take the colour of the bulbs near them. The light is calm and rich, not neon, with darker gaps between the clusters so the colony reads as many organisms. The cable is seen only where the reef's light catches its crusted surface. Its own light is the only light. Isolated on a pure black background with nothing else: no rock, no water, no particles, no creatures. Gritty realistic painterly cinematic sci-fi concept art, not cartoon, not anime, highly detailed. It is not earth coral, not anemones, not mushrooms, not crystals, not fairy lights, not a rainbow. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "linebloom-colour-raw"
+kind = "video"
+model = "seedance-2.5"
+start = "@linebloom-colour"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "9:16"
+audio = false
+out = "art/clips/linebloom-colour-raw.mp4"
+prompt = '''
+The glowing multicoloured reef along the cable breathes against the pure black background: its small violet, pink, orange, gold and cyan bulbs at the tips of the glass stalks brighten and dim softly and slowly, each out of step with its neighbours, each keeping its own colour, and the fine fronds and slender stalks sway gently in a slow underwater current. The cable and the camera stay completely still; the reef stays in place; nothing else appears. Calm, slow, smooth, organic motion. Seamless loop.'''
+
+[[assets]]
+id = "jelly-pink"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/actors/jellyfish.png"]
+aspect = "2:3"
+render_quality = "high"
+out = "art/actors/jelly-pink.png"
+prompt = '''
+Repaint the jellyfish in the image as the same individual: keep its exact shape, silhouette, pose, bell, ribs, ribbon arms and every tentacle where they are, the same painterly rendering and the same pure black background. Change only its colours. Its primary colour is a warm rose-pink glow: the bell, its rim lights, the inner ribs and most of the ribbon arms and tentacles glow rose-pink. It is clearly two-toned, with a bold contrasting second colour, bright cyan, that covers about a quarter to a third of its glowing parts: two or three of the thick, frilly oral arms (the big ribbon tentacles) glow bright cyan along their whole length, the bell's rim carries a distinct bright cyan glowing band, and a scatter of bright cyan glowing spots dot the dome. Everything else (most of the dome, the ribs, the other oral arms and the fine tentacles) stays the primary colour, which still dominates. The two colours must read clearly apart at a glance even when the creature is small. Bioluminescent, translucent, softly glowing. Nothing else in the image: pure black background, no particles, no other creatures. Gritty realistic painterly cinematic sci-fi concept art, not cartoon. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "jelly-pink-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "@jelly-pink"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "9:16"
+audio = false
+out = "art/clips/jelly-pink-raw.mp4"
+prompt = '''
+The jellyfish pulses gently in place against its bright cyan oral arms swaying among the others, its glow brightening softly with each pulse. Its colours stay exactly as they are. It stays centred in the same position and size. Static camera, pure black background, nothing else appears. Seamless loop.'''
+
+[[assets]]
+id = "jelly-orange"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/actors/jellyfish.png"]
+aspect = "2:3"
+render_quality = "high"
+out = "art/actors/jelly-orange.png"
+prompt = '''
+Repaint the jellyfish in the image as the same individual: keep its exact shape, silhouette, pose, bell, ribs, ribbon arms and every tentacle where they are, the same painterly rendering and the same pure black background. Change only its colours. Its primary colour is a warm ember-orange glow: the bell, its rim lights, the inner ribs and most of the ribbon arms and tentacles glow ember-orange. It is clearly two-toned, with a bold contrasting second colour, vivid violet, that covers about a quarter to a third of its glowing parts: two or three of the thick, frilly oral arms (the big ribbon tentacles) glow vivid violet along their whole length, the bell's rim carries a distinct vivid violet glowing band, and a scatter of vivid violet glowing spots dot the dome. Everything else (most of the dome, the ribs, the other oral arms and the fine tentacles) stays the primary colour, which still dominates. The two colours must read clearly apart at a glance even when the creature is small. Bioluminescent, translucent, softly glowing. Nothing else in the image: pure black background, no particles, no other creatures. Gritty realistic painterly cinematic sci-fi concept art, not cartoon. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "jelly-orange-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "@jelly-orange"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "9:16"
+audio = false
+out = "art/clips/jelly-orange-raw.mp4"
+prompt = '''
+The jellyfish pulses gently in place against its vivid violet oral arms swaying among the others, its glow brightening softly with each pulse. Its colours stay exactly as they are. It stays centred in the same position and size. Static camera, pure black background, nothing else appears. Seamless loop.'''
+
+[[assets]]
+id = "jelly-violet"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/actors/jellyfish.png"]
+aspect = "2:3"
+render_quality = "high"
+out = "art/actors/jelly-violet.png"
+prompt = '''
+Repaint the jellyfish in the image as the same individual: keep its exact shape, silhouette, pose, bell, ribs, ribbon arms and every tentacle where they are, the same painterly rendering and the same pure black background. Change only its colours. Its primary colour is a deep violet glow: the bell, its rim lights, the inner ribs and most of the ribbon arms and tentacles glow violet. It is clearly two-toned, with a bold contrasting second colour, warm gold, that covers about a quarter to a third of its glowing parts: two or three of the thick, frilly oral arms (the big ribbon tentacles) glow warm gold along their whole length, the bell's rim carries a distinct warm gold glowing band, and a scatter of warm gold glowing spots dot the dome. Everything else (most of the dome, the ribs, the other oral arms and the fine tentacles) stays the primary colour, which still dominates. The two colours must read clearly apart at a glance even when the creature is small. Bioluminescent, translucent, softly glowing. Nothing else in the image: pure black background, no particles, no other creatures. Gritty realistic painterly cinematic sci-fi concept art, not cartoon. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "jelly-violet-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "@jelly-violet"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "9:16"
+audio = false
+out = "art/clips/jelly-violet-raw.mp4"
+prompt = '''
+The jellyfish pulses gently in place against its warm gold oral arms swaying among the others, its glow brightening softly with each pulse. Its colours stay exactly as they are. It stays centred in the same position and size. Static camera, pure black background, nothing else appears. Seamless loop.'''
+
+[[assets]]
+id = "jelly-mint"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/actors/jellyfish.png"]
+aspect = "2:3"
+render_quality = "high"
+out = "art/actors/jelly-mint.png"
+prompt = '''
+Repaint the jellyfish in the image as the same individual: keep its exact shape, silhouette, pose, bell, ribs, ribbon arms and every tentacle where they are, the same painterly rendering and the same pure black background. Change only its colours. Its primary colour is a soft mint-green glow: the bell, its rim lights, the inner ribs and most of the ribbon arms and tentacles glow mint green. It is clearly two-toned, with a bold contrasting second colour, hot magenta, that covers about a quarter to a third of its glowing parts: two or three of the thick, frilly oral arms (the big ribbon tentacles) glow hot magenta along their whole length, the bell's rim carries a distinct hot magenta glowing band, and a scatter of hot magenta glowing spots dot the dome. Everything else (most of the dome, the ribs, the other oral arms and the fine tentacles) stays the primary colour, which still dominates. The two colours must read clearly apart at a glance even when the creature is small. Bioluminescent, translucent, softly glowing. Nothing else in the image: pure black background, no particles, no other creatures. Gritty realistic painterly cinematic sci-fi concept art, not cartoon. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "jelly-mint-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "@jelly-mint"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "9:16"
+audio = false
+out = "art/clips/jelly-mint-raw.mp4"
+prompt = '''
+The jellyfish pulses gently in place against its hot magenta oral arms swaying among the others, its glow brightening softly with each pulse. Its colours stay exactly as they are. It stays centred in the same position and size. Static camera, pure black background, nothing else appears. Seamless loop.'''
+
+[[assets]]
+id = "jelly-blue"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/actors/jellyfish.png"]
+aspect = "2:3"
+render_quality = "high"
+out = "art/actors/jelly-blue.png"
+prompt = '''
+Repaint the jellyfish in the image as the same individual: keep its exact shape, silhouette, pose, bell, ribs, ribbon arms and every tentacle where they are, the same painterly rendering and the same pure black background. Change only its colours. Its primary colour is a deep sapphire-blue glow: the bell, its rim lights, the inner ribs and most of the ribbon arms and tentacles glow sapphire blue. It is clearly two-toned, with a bold contrasting second colour, bright orange, that covers about a quarter to a third of its glowing parts: two or three of the thick, frilly oral arms (the big ribbon tentacles) glow bright orange along their whole length, the bell's rim carries a distinct bright orange glowing band, and a scatter of bright orange glowing spots dot the dome. Everything else (most of the dome, the ribs, the other oral arms and the fine tentacles) stays the primary colour, which still dominates. The two colours must read clearly apart at a glance even when the creature is small. Bioluminescent, translucent, softly glowing. Nothing else in the image: pure black background, no particles, no other creatures. Gritty realistic painterly cinematic sci-fi concept art, not cartoon. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "jelly-blue-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "@jelly-blue"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "9:16"
+audio = false
+out = "art/clips/jelly-blue-raw.mp4"
+prompt = '''
+The jellyfish pulses gently in place against its bright orange oral arms swaying among the others, its glow brightening softly with each pulse. Its colours stay exactly as they are. It stays centred in the same position and size. Static camera, pure black background, nothing else appears. Seamless loop.'''
+
+[[assets]]
+id = "jelly-pink-centre"
+kind = "edit"
+model = "gpt-image-2.5-flare"
+input = "@jelly-pink"
+mask = "art/masks/jelly-pink-centre-mask.png"
+aspect = "2:3"
+render_quality = "high"
+out = "art/actors/jelly-pink-centre.png"
+prompt = '''
+The same rose-pink jellyfish, the same individual: keep the bell, its cyan rim band, its cyan spots, its ribs and the painterly rendering exactly as they are. Under the bell, rearrange only the colours of the arms: the two thick, frilly cyan oral arms now hang straight down the very centre, from the middle of the bell down the creature's centre line, side by side, glowing bright cyan along their whole length. Every other ribbon arm and every fine tentacle around them, on both sides, glows rose-pink, so the cyan pair is framed by rose on the left and the right. The arm that hung down the right side is rose-pink now. The two colours read clearly apart at a glance even when the creature is small. Bioluminescent, translucent, softly glowing. Pure black background, nothing else. Gritty realistic painterly cinematic sci-fi concept art, not cartoon. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "jelly-pink-centre-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "@jelly-pink-centre"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "9:16"
+audio = false
+out = "art/clips/jelly-pink-centre-raw.mp4"
+prompt = '''
+The jellyfish pulses gently in place, its two bright cyan oral arms hanging down the centre and swaying softly among the rose-pink arms around them, its glow brightening softly with each pulse. Its colours and where they are stay exactly as they are: the cyan arms stay in the centre. It stays centred in the same position and size. Static camera, pure black background, nothing else appears. Seamless loop.'''

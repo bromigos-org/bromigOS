@@ -1,0 +1,123 @@
+# Prepare a release (docs/release.md): the version, the user notes drafted by the homelab's
+# model, the technical changelog, and the release PRs (bromigOS's, and VECTOR's side in
+# bromigos-org/vector). Merging the bromigOS PR is what tags and publishes (release.yml).
+# Nothing here tags, publishes or changes a channel. The work is tools/release/prepare.sh.
+#
+# A dry run (the default) drafts everything on release-dryrun/ branches, which release.yml
+# ignores, opens the PRs as drafts, and puts the notes in the run's summary.
+name: release-prepare
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "patch, minor, major (from the last stable release), or an exact X.Y.Z"
+        type: string
+        default: patch
+      kind:
+        description: "rc: a release candidate for the rc channel; stable: straight to stable"
+        type: choice
+        options: [rc, stable]
+        default: rc
+      dry_run:
+        description: "Dry run: draft PRs on release-dryrun/ branches that nothing tags"
+        type: boolean
+        default: true
+
+# one release at a time, prepared, cut or promoted
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  issues: read
+
+jobs:
+  prepare:
+    name: Notes, changelog, version, the release PRs
+    # light work and the homelab's model (its address is the variable LITELLM_BASE_URL)
+    runs-on: ${{ vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    container: archlinux:base
+    timeout-minutes: 90
+    env:
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      HAVE_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' && '1' || '' }}
+      HAVE_MODEL: ${{ secrets.LITELLM_API_KEY != '' && vars.LITELLM_BASE_URL != '' && '1' || '' }}
+      HAVE_PATTERNS: ${{ secrets.PRIVACY_PATTERNS != '' && '1' || '' }}
+    steps:
+      - name: tools
+        run: pacman -Syu --noconfirm --needed git git-cliff python github-cli mdbook >/dev/null
+
+      # RELEASE_TOKEN (fine-grained, bromigOS and vector) pushes the release branches and
+      # opens the PRs, so the PRs run the repositories' CI.
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+      - name: VECTOR's repository
+        if: env.HAVE_RELEASE_TOKEN
+        uses: actions/checkout@v5
+        with:
+          repository: bromigos-org/vector
+          ref: main
+          fetch-depth: 0
+          path: .release/vector
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: What this run has
+        shell: bash
+        run: |
+          missing=()
+          [[ $HAVE_RELEASE_TOKEN ]] || missing+=("secret RELEASE_TOKEN: VECTOR's repository, the release branches and PRs")
+          [[ $HAVE_MODEL ]] || missing+=("secret LITELLM_API_KEY and variable LITELLM_BASE_URL: the model that drafts the notes")
+          [[ $HAVE_PATTERNS ]] || missing+=("secret PRIVACY_PATTERNS: the lab's own names, for the privacy check")
+          for m in "${missing[@]}"; do
+            if [[ $DRY_RUN ]]; then echo "::warning::dry run without the $m (docs/release.md, \"What CI needs\")"
+            else echo "::error::missing the $m (docs/release.md, \"What CI needs\")"; fi
+          done
+          [[ $DRY_RUN || ${#missing[@]} -eq 0 ]]
+
+      - name: Prepare
+        shell: bash
+        env:
+          BUMP: ${{ inputs.version }}
+          KIND: ${{ inputs.kind }}
+          GH_TOKEN: ${{ github.token }}
+          VECTOR_GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          LITELLM_BASE_URL: ${{ vars.LITELLM_BASE_URL }}
+          LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+          PRIVACY_PATTERNS: ${{ secrets.PRIVACY_PATTERNS }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          git config --global --add safe.directory '*'
+          git config --global user.name "bromigOS release"
+          git config --global user.email "packages@bromigos.org"
+          # the PRs are opened with RELEASE_TOKEN (Actions may not open them here)
+          [[ $HAVE_RELEASE_TOKEN ]] && export PUSH=1 GH_TOKEN=$RELEASE_TOKEN VECTOR_DIR=.release/vector
+          OUT=$RUNNER_TEMP/out tools/release/prepare.sh
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          [[ -f $RUNNER_TEMP/out/result.env ]] && . "$RUNNER_TEMP/out/result.env"
+          {
+            echo "## ${DRY_RUN:+Dry run: }release ${TAG:-}"
+            echo
+            if [[ -n ${PR_LINKS// /} ]]; then echo "PRs: $PR_LINKS"
+            else echo "No PRs (no RELEASE_TOKEN): the PR's text is below, the commit in the artifact."; fi
+            echo
+            [[ -f $RUNNER_TEMP/out/pr-body.md ]] && cat "$RUNNER_TEMP/out/pr-body.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+          git format-patch -1 --stdout HEAD > "$RUNNER_TEMP/out/bromigOS-release.patch" 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/out/book"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release-prepare${{ env.DRY_RUN && '-dryrun' || '' }}
+          path: ${{ runner.temp }}/out/
+          if-no-files-found: ignore

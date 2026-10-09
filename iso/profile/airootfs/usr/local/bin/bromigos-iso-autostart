@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# The live session's autostart (the live user's Hyprland runs it at login; docs/boot.md):
+# booted from the boot menu's "Install bromigOS" channel (`bromigos.install` on the kernel's
+# command line), the installer opens in a terminal, ready for its questions; when it's done
+# (or left), the terminal stays, so its last words can be read. Any other boot: nothing.
+set -u
+grep -qw 'bromigos.install' /proc/cmdline || exit 0
+sleep 2                                # the desktop first: the bar, the widgets, the den
+exec kitty --class bromigos-iso-install --title "Install bromigOS" --hold \
+    sudo /usr/local/bin/bromigos-iso-install

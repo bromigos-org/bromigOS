@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Mind
+GenericName=Memory Hologram
+Comment=VECTOR's memory as a hologram: what he knows and how it links (Esc closes)
+Icon=bromigos-mind
+TryExec=bromigos-live
+Exec=bromigos-live open mind
+Terminal=false
+Categories=Utility;
+Keywords=mind;memory;vector;knowledge;graph;gnosis;notes;hologram;deck;
+StartupNotify=false
+X-Bromigos-Menu=holo/mind

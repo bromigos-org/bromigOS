@@ -1,0 +1,98 @@
+# Bromigos notifications: panel background, 1px phosphor rule, square corners.
+# Title line = the sending app in uppercase, wide-tracked; then summary, then body.
+# Critical = danger red. Notices that arrive without their own icon (system and
+# script notices) carry the emblem's dial (the theme's: a world's post has its own) as a
+# small "transmission" mark.
+# bromigOS's notifications (package bromigos-desktop): /usr/share/bromigos/default/dunst/dunstrc.
+# Don't edit; updates replace it. ~/.config/dunst/dunstrc links here, and drop-ins in
+# ~/.config/dunst/dunstrc.d/ override it key by key: 90-bromigos-theme.conf links to the
+# colours (and the formats, which carry colours) `bromigos theme set` renders; put your
+# own in 99-mine.conf.
+[global]
+    monitor = 0
+    follow = mouse
+    origin = top-right
+    offset = (16, 16)
+    width = (300, 440)
+    height = (0, 300)
+    notification_limit = 6
+    gap_size = 6
+    padding = 12
+    horizontal_padding = 14
+    text_icon_padding = 14
+    frame_width = 1
+    separator_color = frame
+    separator_height = 1
+    corner_radius = 0
+    transparency = 0
+    sort = yes
+    idle_threshold = 120
+    indicate_hidden = yes
+    stack_duplicates = true
+    hide_duplicate_count = false
+    show_indicators = yes
+
+    progress_bar = true
+    progress_bar_height = 6
+    progress_bar_frame_width = 1
+    progress_bar_min_width = 150
+    progress_bar_max_width = 412
+    progress_bar_corner_radius = 0
+
+    font = Geist Mono 11
+    line_height = 2
+    markup = full
+    alignment = left
+    vertical_alignment = top
+    show_age_threshold = 60
+    word_wrap = yes
+    ellipsize = middle
+    ignore_newline = no
+
+    icon_position = left
+    min_icon_size = 32
+    max_icon_size = 48
+    icon_corner_radius = 0
+    default_icon = ~/.local/state/bromigos/emblem/emblem-small-64.png
+    enable_recursive_icon_lookup = true
+
+    sticky_history = yes
+    history_length = 20
+    dmenu = /usr/bin/rofi -dmenu -p dunst
+    browser = /usr/bin/xdg-open
+    always_run_script = true
+    title = Dunst
+    class = Dunst
+    ignore_dbusclose = false
+    force_xwayland = false
+    force_xinerama = false
+    layer = overlay
+
+    mouse_left_click = close_current
+    mouse_middle_click = do_action, close_current
+    mouse_right_click = close_all
+
+[experimental]
+    per_monitor_dpi = false
+
+[urgency_low]
+    timeout = 5
+
+[urgency_normal]
+    timeout = 8
+
+[urgency_critical]
+    timeout = 0
+
+# ---- BROMIGOS: capture notifications (~/.config/bromigos/bin/bromigos-shot, bromigos-rec)
+# A finished screenshot shows its own thumbnail; a recording in progress is amber
+# and stays until it stops (then it is replaced by the "saved" notification).
+[bromigos_capture_done]
+    category = "capture.done"
+    min_icon_size = 96
+    max_icon_size = 128
+    timeout = 7
+[bromigos_capture_live]
+    category = "capture.live"
+    timeout = 0
+# ---- END BROMIGOS: capture notifications

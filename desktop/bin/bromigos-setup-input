@@ -1,0 +1,379 @@
+#!/usr/bin/env python3
+# bromigos:summary=Keyboard layout, key repeat, the mouse and the touchpad, written to your hyprland.lua (a marked block)
+# bromigos:args=[--set KEY VALUE …] [--unset KEY …] [--reset] [--show] [--layouts] [--json]
+# bromigos:examples=bromigos setup input; bromigos setup input --set kb_layout us --set repeat_rate 50; bromigos setup input --json
+"""bromigos-setup-input: the input settings bromigOS's defaults read, chosen in a menu
+(or --set), kept in ~/.config/bromigos/input.toml and written as a marked block in
+your ~/.config/hypr/hyprland.lua (bromigos.config.input), then one safe reload.
+Settings › Keyboard & input drives it with --json.
+
+  (no arguments)              the menu (rofi)
+  --set KEY VALUE …           set them (repeatable), write the block, reload Hyprland
+  --unset KEY …               back to bromigOS's default for those
+  --reset                     every one back to the defaults: input.toml and the block removed
+  --show                      yours, as KEY = VALUE
+  --json                      the settings in force, yours, the defaults and every field
+                              (with --set/--unset/--reset: after the change)
+  --layouts [--json]          the keyboard layouts and their variants (xkb's evdev.lst), the
+                              layout switch keys and the Caps Lock options
+
+  keyboard   kb_layout, kb_variant, kb_options (xkb names: us, de, dvorak, caps:escape …),
+             repeat_rate (per second), repeat_delay (ms), numlock_by_default
+  mouse      sensitivity (-1.0 .. 1.0), accel_profile (adaptive, flat), mouse_natural_scroll,
+             left_handed, scroll_factor, follow_mouse (1: focus follows the pointer, 2: a
+             click focuses, 0: the pointer never moves focus)
+  touchpad   tap_to_click, natural_scroll, disable_while_typing, clickfinger_behavior (true:
+             the click by finger count, false: by where you press), middle_button_emulation,
+             drag_lock, touchpad_scroll_factor
+"""
+import json
+import os
+import re
+import sys
+import tomllib
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_hypr as H  # noqa: E402
+
+CONF = os.path.join(H.CONFIG, "bromigos/input.toml")
+BLOCK = "setup input"
+XKB_RULES = os.environ.get("BROMIGOS_XKB_RULES") or "/usr/share/X11/xkb/rules/evdev.lst"
+PROC = os.environ.get("BROMIGOS_PROC") or "/proc"
+
+# key, label, default (as text), kind, section, the Hyprland option it sets, range or choices
+FIELDS = [
+    ("kb_layout", "Keyboard layout", "us", "layout", "keyboard", "input.kb_layout", None),
+    ("kb_variant", "Keyboard variant", "", "text", "keyboard", "input.kb_variant", None),
+    ("kb_options", "Keyboard options", "", "text", "keyboard", "input.kb_options", None),
+    ("repeat_rate", "Key repeat rate (per second)", "50", "int", "keyboard", "input.repeat_rate", (1, 200)),
+    ("repeat_delay", "Key repeat delay (ms)", "240", "int", "keyboard", "input.repeat_delay", (100, 2000)),
+    ("numlock_by_default", "Num Lock on at start", "false", "bool", "keyboard", "input.numlock_by_default", None),
+    ("sensitivity", "Pointer sensitivity (-1.0 .. 1.0)", "1.0", "float", "mouse", "input.sensitivity", (-1.0, 1.0)),
+    ("accel_profile", "Pointer acceleration", "adaptive", "choice", "mouse", "input.accel_profile", ["adaptive", "flat"]),
+    ("mouse_natural_scroll", "Mouse: natural scroll", "false", "bool", "mouse", "input.natural_scroll", None),
+    ("left_handed", "Left-handed buttons", "false", "bool", "mouse", "input.left_handed", None),
+    ("scroll_factor", "Mouse: scroll speed", "1.0", "float", "mouse", "input.scroll_factor", (0.1, 5.0)),
+    ("follow_mouse", "Focus follows the pointer (0, 1, 2)", "1", "intchoice", "mouse", "input.follow_mouse", ["0", "1", "2"]),
+    ("natural_scroll", "Touchpad: natural scroll", "true", "bool", "touchpad", "input.touchpad.natural_scroll", None),
+    ("tap_to_click", "Touchpad: tap to click", "true", "bool", "touchpad", "input.touchpad.tap_to_click", None),
+    ("disable_while_typing", "Touchpad: off while typing", "true", "bool", "touchpad",
+     "input.touchpad.disable_while_typing", None),
+    ("clickfinger_behavior", "Touchpad: click by finger count", "true", "bool", "touchpad",
+     "input.touchpad.clickfinger_behavior", None),
+    ("middle_button_emulation", "Touchpad: both buttons = middle", "false", "bool", "touchpad",
+     "input.touchpad.middle_button_emulation", None),
+    ("drag_lock", "Touchpad: drag lock", "false", "bool", "touchpad", "input.touchpad.drag_lock", None),
+    ("touchpad_scroll_factor", "Touchpad: scroll speed", "1.0", "float", "touchpad", "input.touchpad.scroll_factor",
+     (0.1, 5.0)),
+]
+FIELD = {f[0]: f for f in FIELDS}
+NUMERIC = ("int", "float", "bool", "intchoice")
+# the layout switch keys and the Caps Lock behaviours the page offers (xkb options)
+SWITCH_KEYS = ["grp:alt_shift_toggle", "grp:ctrl_shift_toggle", "grp:alt_space_toggle", "grp:caps_toggle",
+               "grp:win_space_toggle"]
+CAPS = ["caps:escape", "caps:escape_shifted_capslock", "ctrl:nocaps", "caps:swapescape", "caps:none"]
+
+
+def load():
+    try:
+        with open(CONF, "rb") as f:
+            return {k: str(v).lower() if isinstance(v, bool) else str(v) for k, v in tomllib.load(f).items()}
+    except FileNotFoundError:
+        return {}
+
+
+def save(values):
+    os.makedirs(os.path.dirname(CONF), exist_ok=True)
+    lines = ["# Input settings (bromigos setup input): rendered into hyprland.lua's marked block.\n"]
+    for k, _, _, kind, *_ in FIELDS:
+        if k in values and values[k] != "":
+            v = values[k]
+            lit = v if kind in NUMERIC else json.dumps(v)
+            lines.append(f"{k} = {lit}\n")
+    tmp = CONF + ".tmp"
+    with open(tmp, "w") as f:
+        f.writelines(lines)
+    os.replace(tmp, CONF)
+
+
+def lua_block(values):
+    lines = ["-- Your input settings (bromigos setup input): layout, repeat, pointer, touchpad.",
+             "bromigos.config = bromigos.config or {}",
+             "bromigos.config.input = bromigos.config.input or {}"]
+    if any(FIELD[k][4] == "touchpad" for k in values if k in FIELD):
+        lines.append("bromigos.config.input.touchpad = bromigos.config.input.touchpad or {}")
+    for k, _, _, kind, _, target, _ in FIELDS:
+        if k not in values or values[k] == "":
+            continue
+        v = values[k]
+        lit = v if kind in NUMERIC else json.dumps(v)
+        lines.append(f"bromigos.config.{target} = {lit}")
+    return "\n".join(lines)
+
+
+def check(k, v, kind, rng=None):
+    v = v.strip()
+    if kind == "int":
+        if not re.fullmatch(r"\d{1,4}", v):
+            return None, "a whole number"
+        if rng and not rng[0] <= int(v) <= rng[1]:
+            return None, f"{rng[0]} to {rng[1]}"
+    elif kind == "float":
+        if not re.fullmatch(r"-?\d+(\.\d+)?", v):
+            return None, "a number"
+        if rng and not rng[0] <= float(v) <= rng[1]:
+            return None, f"{rng[0]} to {rng[1]}"
+    elif kind == "bool":
+        if v.lower() not in ("true", "false", "on", "off", "yes", "no"):
+            return None, "true or false"
+        v = "true" if v.lower() in ("true", "on", "yes") else "false"
+    elif kind in ("choice", "intchoice"):
+        if v not in (rng or []):
+            return None, "one of " + ", ".join(rng or [])
+    elif kind in ("layout", "text"):
+        if not re.fullmatch(r"[A-Za-z0-9_:,+-]{0,80}", v):
+            return None, "letters, digits and : , + - _ only"
+    return v, None
+
+
+def _typed(v, kind):
+    if v is None or v == "":
+        return "" if kind not in NUMERIC else None
+    if kind == "bool":
+        return v == "true"
+    if kind in ("int", "intchoice"):
+        return int(v)
+    if kind == "float":
+        return float(v)
+    return v
+
+
+def rules():
+    """xkb's evdev.lst: {section: [(code, description)]} (layout, variant, option)."""
+    out = {}
+    try:
+        with open(XKB_RULES) as f:
+            sec = None
+            for line in f:
+                if line.startswith("! "):
+                    sec = line[2:].strip()
+                    out[sec] = []
+                    continue
+                if sec and line.strip():
+                    code, _, name = line.strip().partition(" ")
+                    out[sec].append((code, name.strip()))
+    except OSError:
+        pass
+    return out
+
+
+def layouts():
+    return rules().get("layout", [])
+
+
+def layouts_doc():
+    r = rules()
+    variants = {}
+    for code, desc in r.get("variant", []):
+        lay, _, name = desc.partition(":")
+        variants.setdefault(lay.strip(), []).append({"code": code, "name": name.strip()})
+    opts = dict(r.get("option", []))
+    return {"layouts": [{"code": c, "name": n, "variants": variants.get(c, [])} for c, n in r.get("layout", [])],
+            "switch_keys": [{"code": c, "name": opts.get(c, c)} for c in SWITCH_KEYS if c in opts or not opts],
+            "caps": [{"code": c, "name": opts.get(c, c)} for c in CAPS if c in opts or not opts],
+            "file": XKB_RULES}
+
+
+def touchpads():
+    """Touchpads in /proc/bus/input/devices, by `bromigos hw`'s rule (udev's input_id): an
+    absolute X axis, a finger tool, no pen, not a touchscreen."""
+    def bit(hexwords, n):
+        words = hexwords.split()
+        i = len(words) - 1 - n // 64
+        return 0 <= i < len(words) and bool(int(words[i], 16) >> (n % 64) & 1)
+    out = []
+    try:
+        with open(os.path.join(PROC, "bus", "input", "devices")) as f:
+            text = f.read()
+    except OSError:
+        return out
+    for block in text.split("\n\n"):
+        name, key, absb, prop = "", "", "", ""
+        for ln in block.splitlines():
+            if ln.startswith("N: Name="):
+                name = ln[8:].strip().strip('"')
+            elif ln.startswith("B: KEY="):
+                key = ln[7:]
+            elif ln.startswith("B: ABS="):
+                absb = ln[7:]
+            elif ln.startswith("B: PROP="):
+                prop = ln[8:]
+        if key and absb and bit(key, 0x145) and not bit(key, 0x140) and bit(absb, 0) \
+                and not (prop and bit(prop, 1)) and name not in out:
+            out.append(name)
+    return out
+
+
+def doc(values=None):
+    values = load() if values is None else values
+    defaults = {k: _typed(d, kind) for k, _, d, kind, *_ in FIELDS}
+    yours = {k: _typed(values[k], FIELD[k][3]) for k in values if k in FIELD}
+    return {"schema": 1, "ok": True, "file": CONF, "lua": H.HYPRLAND_LUA, "block": BLOCK,
+            "values": dict(defaults, **yours), "yours": yours, "defaults": defaults,
+            "fields": [{"key": k, "label": label, "kind": kind, "section": sec, "target": target,
+                        "default": defaults[k], **({"range": list(x)} if isinstance(x, tuple) else {}),
+                        **({"choices": x} if isinstance(x, list) else {})}
+                       for k, label, _, kind, sec, target, x in FIELDS],
+            "touchpads": touchpads()}
+
+
+def write_and_apply(values):
+    """input.toml and the block, the safe way; on any failure both are as they were."""
+    old_toml = H.read_file(CONF)
+    if values:
+        save(values)
+        ok, detail = H.update_block(BLOCK, lua_block(values), before_dofile=True)
+    else:
+        try:
+            os.unlink(CONF)
+        except FileNotFoundError:
+            pass
+        old = H.read_lua()
+        ok, detail = H.save({H.HYPRLAND_LUA: H.without_block(old, BLOCK)})
+    if not ok:
+        H.write_file(CONF, old_toml)
+    return ok, detail
+
+
+def menu():
+    values = load()
+    while True:
+        rows = []
+        for k, label, default, *_ in FIELDS:
+            cur = values.get(k, "")
+            rows.append(f"{label:<36} {cur or ('(' + default + ')' if default else '(unset)')}")
+        rows.append("APPLY")
+        choice = H.dmenu(rows, prompt="", theme_str=H.title_theme("INPUT", width=720, lines=len(rows)),
+                         mesg="Enter on a setting to change it; APPLY writes them to hyprland.lua and reloads")
+        if choice is None:
+            return 0
+        if choice == "APPLY":
+            ok, detail = write_and_apply(values)
+            H.notify("INPUT", "applied" if ok else f"not applied: {detail[:120]}", urgency="low" if ok else "critical")
+            return 0 if ok else 1
+        i = rows.index(choice)
+        k, label, default, kind, _, _, extra = FIELDS[i]
+        if kind == "layout":
+            lrows = [f"{code:<8} {name}" for code, name in layouts()]
+            pick = H.dmenu(lrows, prompt="", theme_str=H.title_theme("KEYBOARD LAYOUT", width=620, lines=12), allow_custom=True)
+            if pick is None:
+                continue
+            v = pick.split()[0]
+        elif kind in ("bool", "choice", "intchoice"):
+            opts = ["true", "false"] if kind == "bool" else list(extra)
+            pick = H.dmenu(opts, prompt="", theme_str=H.title_theme(label.upper(), width=420, lines=len(opts)))
+            if pick is None:
+                continue
+            v = pick
+        else:
+            pick = H.dmenu([], prompt="", theme_str=H.title_theme(label.upper(), width=520, lines=1), allow_custom=True,
+                           mesg=f"now: {values.get(k) or default or 'unset'}  (type the value, Enter; empty clears it)")
+            if pick is None:
+                continue
+            v = pick
+        v, err = check(k, v, kind, extra)
+        if err:
+            H.notify("INPUT", f"{label}: {err}", urgency="critical")
+            continue
+        if v == "":
+            values.pop(k, None)
+        else:
+            values[k] = v
+
+
+def _out(d, as_json, text=None):
+    if as_json:
+        print(json.dumps(d))
+    elif text:
+        print(text)
+    return 0 if d.get("ok", True) else 1
+
+
+def main():
+    a = sys.argv[1:]
+    as_json = "--json" in a
+    a = [x for x in a if x != "--json"]
+    if a and a[0] in ("-h", "--help", "help"):
+        print(__doc__)
+        return 0
+    if a and a[0] == "--show":
+        for k, v in load().items():
+            print(f"{k} = {v}")
+        return 0
+    if a and a[0] == "--layouts":
+        d = layouts_doc()
+        if as_json:
+            print(json.dumps(dict({"schema": 1, "ok": True}, **d)))
+        else:
+            for lay in d["layouts"]:
+                print(f"{lay['code']:<8} {lay['name']}" + (f"  ({len(lay['variants'])} variants)" if lay["variants"] else ""))
+        return 0
+    if not a:
+        if as_json:
+            return _out(doc(), True)
+        return menu()
+    values = load()
+    changed, i = [], 0
+    while i < len(a):
+        if a[i] == "--set" and i + 2 < len(a):
+            k, v = a[i + 1], a[i + 2]
+            f = FIELD.get(k)
+            if not f:
+                return _fail(f"unknown setting {k}; one of " + ", ".join(FIELD), as_json)
+            v, err = check(k, v, f[3], f[6])
+            if err:
+                return _fail(f"{k}: {err}", as_json)
+            if v == "":
+                values.pop(k, None)
+            else:
+                values[k] = v
+            changed.append((k, v))
+            i += 3
+        elif a[i] == "--unset" and i + 1 < len(a):
+            if a[i + 1] not in FIELD:
+                return _fail(f"unknown setting {a[i + 1]}", as_json)
+            values.pop(a[i + 1], None)
+            changed.append((a[i + 1], None))
+            i += 2
+        elif a[i] == "--reset":
+            values = {}
+            changed.append(("*", None))
+            i += 1
+        else:
+            return _fail("usage: bromigos setup input [--set KEY VALUE …] [--unset KEY …] [--reset] [--json]", as_json)
+    ok, detail = write_and_apply(values)
+    if not ok:
+        return _fail(f"not applied: {detail}", as_json)
+    if ("*", None) in changed:
+        said = "Keyboard, mouse and touchpad: bromigOS's defaults"
+    elif len(changed) == 1:
+        k, v = changed[0]
+        label = re.sub(r"\s*\(.*\)$", "", FIELD[k][1])
+        said = f"{label}: {v if v is not None else 'the default'}"
+    else:
+        said = f"{len(changed)} input settings saved"
+    d = dict(doc(), said=said, applied={"ok": ok, "detail": detail})
+    return _out(d, as_json, "applied" if ok else f"not applied: {detail}")
+
+
+def _fail(msg, as_json):
+    if as_json:
+        print(json.dumps({"schema": 1, "ok": False, "error": msg}))
+    else:
+        print(msg, file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

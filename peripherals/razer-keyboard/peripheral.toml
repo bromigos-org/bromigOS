@@ -1,0 +1,112 @@
+# A Razer keyboard with openrazer (docs/peripherals.md): its macro keys, its command dial as
+# VECTOR's voice dial, and lighting that follows VECTOR's voice and mood. Off until you turn
+# it on: `bromigos peripheral enable razer-keyboard` (or `bromigos setup peripherals`).
+# Change a key in ~/.config/bromigos/peripherals.toml, not here:
+#   [razer-keyboard.keys]
+#   side1 = "bromigos-live timeline"      # a command; "" leaves the key unbound
+format = 1
+name = "Razer keyboard"
+description = "Macro keys, the command dial as VECTOR's voice dial, lighting that follows VECTOR's voice and mood (openrazer)"
+kind = "keyboard"
+
+[match]
+usb_vendor = "1532"                       # Razer
+# openrazer's keyboard driver claims it (its mice are razermouse's: not this module)
+hid_drivers = ["razerkbd"]
+# before openrazer is installed, a Razer device with one of these in its name
+name_hints = ["BlackWidow", "Huntsman", "Ornata", "Cynosa", "DeathStalker", "Turret",
+              "Tartarus", "Orbweaver", "Anansi", "Lycosa", "Nostromo", "Blade"]
+
+[needs]
+# the kernel driver (macro keys in driver mode, the lighting), its daemon and Python client,
+# and python-evdev for the dial
+packages = ["openrazer-driver-dkms", "openrazer-daemon", "python-openrazer", "python-evdev"]
+groups = ["openrazer"]                    # the daemon's devices and the dial's event node
+user_services = ["openrazer-daemon.service"]
+
+[keymap]
+# its F13-F24 stay F13-F24 (xkeyboard-config's option): the default layout reads them as
+# XF86Tools, XF86Launch5-9 and XF86AudioMicMute (side button 3)
+options = ["fkeys:basic_13-24"]
+# the microphone's mute key ignores this keyboard: side button 3 can arrive as it
+exclusive = ["XF86AudioMicMute"]
+
+# With openrazer in driver mode M1-M5 send F13-F17, the side buttons F18-F20 and a press of
+# the dial F24; bound by keycode (evdev code + 8) and only on this keyboard. A keyboard
+# without some of these keys just never sends them.
+[[keys]]
+id = "m1"
+code = 191
+label = "M1"
+press = "{holo} vector"
+hint = "VECTOR: show or hide him"
+needs = "vector"
+
+[[keys]]
+id = "m2"
+code = 192
+label = "M2"
+press = "{holo} ptt on"
+release = "{holo} ptt off"
+hint = "hold to talk to VECTOR"
+needs = "vector"
+
+[[keys]]
+id = "m3"
+code = 193
+label = "M3"
+press = "{holo} vector-show >/dev/null 2>&1; exec {holo} conversation"
+hint = "VECTOR up, hands-free conversation on or off"
+needs = "vector"
+
+[[keys]]
+id = "m4"
+code = 194
+label = "M4"
+press = "bromigos-live holodeck"
+hint = "the holo deck"
+
+[[keys]]
+id = "m5"
+code = 195
+label = "M5"
+press = "bromigos-shot region"
+hint = "screenshot a region"
+
+[[keys]]
+id = "side1"
+code = 196
+label = "side 1"
+press = "bromigos-menu"
+hint = "the desktop menu"
+
+[[keys]]
+id = "side2"
+code = 197
+label = "side 2"
+press = "bromigos-live timeline"
+hint = "the timeline"
+
+[[keys]]
+id = "side3"
+code = 198
+label = "side 3"
+press = "bromigos-rec region"
+hint = "start or stop recording a region"
+
+[[keys]]
+id = "dial"
+code = 202
+label = "dial press"
+press = "bromigos mute"
+hint = "mute the desktop (the theme's sounds and VECTOR) or unmute it"
+
+[dial]
+turn = "vector-voice"                     # VECTOR's voice: auto, then each of his voices
+roller = "volume"                         # the volume roller shares the dial's interface
+hint = "turn: VECTOR's voice (auto, then each voice, named in a notification); the roller: volume"
+
+[rgb]
+backend = "openrazer"
+follow = "vector"
+hint = "the voice speaking's colour; amber when he's concerned, red breathing when alarmed; the theme's primary at rest"

@@ -1,0 +1,177 @@
+{
+ "list": {
+  "broken": [],
+  "config": "~/.config/bromigos/peripherals.toml",
+  "config_error": null,
+  "modules": [
+   {
+    "description": "Macro keys, the command dial as VECTOR's voice dial, lighting that follows VECTOR's voice and mood (openrazer)",
+    "dial": {
+     "hint": "turn: VECTOR's voice (auto, then each voice, named in a notification); the roller: volume",
+     "roller": "volume",
+     "turn": "vector-voice"
+    },
+    "dir": "/usr/share/bromigos/peripherals/razer-keyboard",
+    "enabled": false,
+    "found": [
+     {
+      "dial": "/dev/input/event25",
+      "driver": "razerkbd",
+      "how": "driver",
+      "hypr_names": [
+       "razer-razer-blackwidow-v4-pro",
+       "razer-razer-blackwidow-v4-pro-1"
+      ],
+      "keyboards": [
+       "/dev/input/event13",
+       "/dev/input/event22",
+       "/dev/input/event25",
+       "/dev/input/event9"
+      ],
+      "name": "Razer Razer BlackWidow V4 Pro",
+      "usb": "1532:028d"
+     }
+    ],
+    "id": "razer-keyboard",
+    "keys": [
+     {
+      "code": 191,
+      "hint": "VECTOR: show or hide him",
+      "id": "m1",
+      "label": "M1",
+      "needs": "vector",
+      "press": "{holo} vector",
+      "release": null
+     },
+     {
+      "code": 192,
+      "hint": "hold to talk to VECTOR",
+      "id": "m2",
+      "label": "M2",
+      "needs": "vector",
+      "press": "{holo} ptt on",
+      "release": "{holo} ptt off"
+     },
+     {
+      "code": 193,
+      "hint": "VECTOR up, hands-free conversation on or off",
+      "id": "m3",
+      "label": "M3",
+      "needs": "vector",
+      "press": "{holo} vector-show >/dev/null 2>&1; exec {holo} conversation",
+      "release": null
+     },
+     {
+      "code": 194,
+      "hint": "the holo deck",
+      "id": "m4",
+      "label": "M4",
+      "needs": null,
+      "press": "bromigos-live holodeck",
+      "release": null
+     },
+     {
+      "code": 195,
+      "hint": "screenshot a region",
+      "id": "m5",
+      "label": "M5",
+      "needs": null,
+      "press": "bromigos-shot region",
+      "release": null
+     },
+     {
+      "code": 196,
+      "hint": "the desktop menu",
+      "id": "side1",
+      "label": "side 1",
+      "needs": null,
+      "press": "bromigos-menu",
+      "release": null
+     },
+     {
+      "code": 197,
+      "hint": "the timeline",
+      "id": "side2",
+      "label": "side 2",
+      "needs": null,
+      "press": "bromigos-live timeline",
+      "release": null
+     },
+     {
+      "code": 198,
+      "hint": "start or stop recording a region",
+      "id": "side3",
+      "label": "side 3",
+      "needs": null,
+      "press": "bromigos-rec region",
+      "release": null
+     },
+     {
+      "code": 202,
+      "hint": "mute the desktop (the theme's sounds and VECTOR) or unmute it",
+      "id": "dial",
+      "label": "dial press",
+      "needs": null,
+      "press": "bromigos mute",
+      "release": null
+     }
+    ],
+    "kind": "keyboard",
+    "name": "Razer keyboard",
+    "needs": {
+     "groups": [
+      {
+       "member": true,
+       "name": "openrazer"
+      }
+     ],
+     "packages": [
+      {
+       "installed": true,
+       "name": "openrazer-driver-dkms"
+      },
+      {
+       "installed": true,
+       "name": "openrazer-daemon"
+      },
+      {
+       "installed": true,
+       "name": "python-openrazer"
+      },
+      {
+       "installed": true,
+       "name": "python-evdev"
+      }
+     ],
+     "user_services": [
+      {
+       "enabled": false,
+       "name": "openrazer-daemon.service"
+      }
+     ]
+    },
+    "rgb": {
+     "backend": "openrazer",
+     "follow": "vector",
+     "hint": "the voice speaking's colour; amber when he's concerned, red breathing when alarmed; the theme's primary at rest"
+    },
+    "source": "system"
+   }
+  ],
+  "schema": 1
+ },
+ "status": {
+  "config": "~/.config/bromigos/peripherals.toml",
+  "daemon": {
+   "active": "unknown",
+   "enabled": "unknown",
+   "unit": "bromigos-peripherals.service"
+  },
+  "hypr": "~/.local/state/bromigos/peripherals/hypr.lua",
+  "hypr_current": true,
+  "modules": [],
+  "ok": true,
+  "problems": [],
+  "schema": 1
+ }
+}

@@ -1,0 +1,40 @@
+[workspace]
+resolver = "3"
+members = ["crates/bromigos-core", "crates/bromigos-art", "crates/bromigos"]
+
+[workspace.package]
+version = "0.1.2"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bromigos-org/bromigOS"
+
+[workspace.dependencies]
+bromigos-core = { path = "crates/bromigos-core" }
+bromigos-art = { path = "crates/bromigos-art" }
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+libc = "0.2"
+minijinja = "2"
+# colour spaces (OKLCH) and WCAG 2.1 contrast for the high-contrast palettes (accessibility.rs)
+palette = { version = "0.7", default-features = false, features = ["std"] }
+ratatui = "0.30"
+nolgia = { version = "0.1", default-features = false, features = ["native-tls"] }
+# the homelab ComfyUI backend of bromigos-art: the same reqwest and TLS stack nolgia uses
+reqwest = { version = "0.13", default-features = false, features = ["json", "multipart", "native-tls"] }
+clap = { version = "4.6", features = ["derive"] }
+rustix = { version = "1.1", features = ["process", "fs"] }
+serde = { version = "1", features = ["derive"] }
+semver = "1.0"
+serde_json = "1"
+sha2 = "0.11"
+thiserror = "2"
+toml = "1.1"
+toml_edit = "0.25"
+tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+wiremock = "0.6"
+
+[profile.release]
+lto = true
+strip = true

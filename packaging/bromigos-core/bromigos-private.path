@@ -1,0 +1,11 @@
+# Decrypts the private overlay again whenever the encrypted file changes (a git pull of
+# your dotfiles, or bromigos private edit). Enabled with bromigos-private.service.
+[Unit]
+Description=bromigOS private overlay: decrypt again when it changes
+
+[Path]
+PathChanged=%h/.config/bromigos/private.sops.yaml
+Unit=bromigos-private.service
+
+[Install]
+WantedBy=default.target

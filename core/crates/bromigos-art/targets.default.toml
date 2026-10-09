@@ -1,0 +1,35 @@
+# Where bromigOS's AI work runs: the packaged default
+# (/usr/share/bromigos/default/targets.toml; docs/targets.md).
+#
+# Yours is ~/.config/bromigos/targets.toml (`bromigos target`, `bromigos setup targets`),
+# merged over this key by key. Three targets:
+#
+#   homelab   your lab's services, named once in homelab.toml ([[source]] entries)
+#   local     this machine: a ComfyUI, an Ollama, VECTOR's own voice
+#   cloud     hosted services that cost money: nolgia (credits), a cloud LLM endpoint
+#
+# Each service (image.generate, image.edit, image.cutout, video.loop, model3d.generate,
+# voice.tts, voice.stt, llm) tries the targets in `order`, skipping one that doesn't have
+# it or doesn't answer. [service."<name>"] order = [...] overrides it for one service.
+# Endpoints may be references: "@homelab:<source>", "@private:dotted.key", "@env:NAME",
+# "@file:~/path", "@vault:kv/path#field".
+format = 1
+
+[targets]
+order = ["homelab", "local", "cloud"]
+
+[targets.homelab]
+comfyui = "@homelab:comfyui"        # image, edit, cutout, 3D (a homelab.toml comfyui source)
+voice = "@homelab:voice"            # VECTOR's voice and hearing (a bromigos-voice source)
+llm = "@homelab:litellm"            # VECTOR's brain (an OpenAI-compatible server; /v1 is added when the URL has no path)
+llm_key_file = "~/.local/share/bromigos/litellm-key"
+
+[targets.local]
+comfyui = "http://127.0.0.1:8188"   # a ComfyUI on this machine, when one runs
+voice = "builtin"                   # VECTOR's own voice server: builtin (the cast voice on the GPU, then Kokoro), kokoro, or off
+llm = "http://localhost:11434/v1"   # Ollama
+
+[targets.cloud]
+nolgia = true                       # nolgia's hosted models: they cost credits
+# llm = "https://…/v1"              # a hosted OpenAI-compatible endpoint
+# llm_key_file = "~/.config/…"

@@ -1,0 +1,22 @@
+# __TITLE__: a shader layer over the background (made by `bromigos ext new live-layer`;
+# docs/extensions.md, and the contract in the live layer's live/plugins.py).
+[extension]
+name = "__NAME__"
+version = "0.1.0"
+description = "A slow scan line over the background that quickens with the CPU."
+authors = []
+licence = "MIT"
+tags = ["layer", "background"]
+
+[requires]
+bromigos = ">=1.0, <2"
+
+[[provides]]
+kind = "live-layer"
+path = "layer.frag"             # layer.json beside it: on/off, opacity, blend, GPU budget
+name = "__NAME__"
+
+# A shader runs on the GPU with real readings (load, network, health) and nothing
+# else: no files, no network. It isn't "code" in the permission sense, but like every
+# part that isn't a theme it's shown and asked about before it installs.
+[permissions]

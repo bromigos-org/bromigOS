@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- gtklock layout: gtklock's own widget ids (window-box, clock-label, date-label,
+     body-revealer, body-grid, input-field, message-*, warning/error-label, unlock-button)
+     kept as in its built-in gtklock.ui; the burn-in and the captions added. The emblem is the
+     current theme's (~/.local/state/bromigos/emblem: a world's post has its own mark; the
+     link falls back to the brand kit), kept by the theme-set hook
+     /usr/share/bromigos/hooks/theme-set.d/emblem (package bromigos-desktop). -->
+<interface>
+  <object class="GtkBox" id="window-box">
+    <property name="name">window-box</property>
+    <property name="halign">center</property>
+    <property name="valign">center</property>
+    <property name="orientation">vertical</property>
+    <property name="spacing">0</property>
+    <child>
+      <object class="GtkOverlay" id="emblem">
+        <property name="name">emblem</property>
+        <property name="halign">center</property>
+        <child>
+          <object class="GtkImage" id="emblem-flame">
+            <property name="name">emblem-flame</property>
+            <property name="file">@STATE@/bromigos/emblem/lock/flame.png</property>
+          </object>
+        </child>
+        <child type="overlay">
+          <object class="GtkImage" id="emblem-ring">
+            <property name="name">emblem-ring</property>
+            <property name="file">@STATE@/bromigos/emblem/lock/ring.png</property>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="caption">
+        <property name="name">caption</property>
+        <property name="label">TRANSMISSION INTERCEPTED</property>
+        <property name="halign">center</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox" id="info-box">
+        <property name="name">info-box</property>
+        <property name="halign">center</property>
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkBox" id="time-box">
+            <property name="name">time-box</property>
+            <property name="halign">center</property>
+            <property name="orientation">vertical</property>
+            <child>
+              <object class="GtkLabel" id="clock-label">
+                <property name="name">clock-label</property>
+                <property name="halign">center</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="date-label">
+                <property name="name">date-label</property>
+                <property name="halign">center</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkRevealer" id="body-revealer">
+        <property name="transition-type">none</property>
+        <property name="reveal-child">1</property>
+        <child>
+          <object class="GtkGrid" id="body-grid">
+            <property name="halign">center</property>
+            <property name="row-spacing">6</property>
+            <property name="column-spacing">0</property>
+            <child>
+              <object class="GtkLabel" id="input-label">
+                <property name="name">input-label</property>
+                <property name="label">&gt;</property>
+              </object>
+              <packing><property name="left-attach">0</property><property name="top-attach">0</property></packing>
+            </child>
+            <child>
+              <object class="GtkEntry" id="input-field">
+                <property name="name">input-field</property>
+                <property name="width-request">480</property>
+                <property name="visibility">0</property>
+                <property name="caps-lock-warning">0</property>
+                <property name="input-purpose">password</property>
+                <property name="placeholder-text">PASSPHRASE</property>
+                <signal name="activate" handler="window_pw_check"/>
+              </object>
+              <packing><property name="left-attach">1</property><property name="top-attach">0</property><property name="width">2</property></packing>
+            </child>
+            <child>
+              <object class="GtkRevealer" id="message-revealer">
+                <property name="transition-type">none</property>
+                <property name="no-show-all">1</property>
+                <child>
+                  <object class="GtkScrolledWindow" id="message-scrolled-window">
+                    <property name="hscrollbar-policy">never</property>
+                    <property name="max-content-height">256</property>
+                    <property name="propagate-natural-height">1</property>
+                    <child>
+                      <object class="GtkViewport">
+                        <child>
+                          <object class="GtkBox" id="message-box">
+                            <property name="orientation">vertical</property>
+                            <property name="homogeneous">1</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+              <packing><property name="left-attach">1</property><property name="top-attach">1</property><property name="width">2</property></packing>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="halign">center</property>
+                <property name="spacing">12</property>
+                <child>
+                  <object class="GtkLabel" id="warning-label">
+                    <property name="name">warning-label</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="error-label">
+                    <property name="name">error-label</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="unlock-button">
+                    <property name="name">unlock-button</property>
+                    <property name="label">UNLOCK</property>
+                    <property name="no-show-all">1</property>
+                    <signal name="clicked" handler="window_pw_check"/>
+                  </object>
+                </child>
+              </object>
+              <packing><property name="left-attach">1</property><property name="top-attach">2</property><property name="width">2</property></packing>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="signoff">
+        <property name="name">signoff</property>
+        <property name="label">STILL LIT.</property>
+        <property name="halign">center</property>
+      </object>
+    </child>
+  </object>
+</interface>

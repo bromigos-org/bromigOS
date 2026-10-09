@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# __TITLE__: a theme-set hook (made by `bromigos ext new hook`; docs/theming.md "Hooks").
+# `bromigos theme set` runs it after rendering, with the theme's name as $1 and
+# BROMIGOS_THEME / BROMIGOS_THEME_DIR (the rendered theme: palette.json and every app's
+# file) in its environment. Keep it quick: theme set waits for it.
+set -euo pipefail
+out="${XDG_STATE_HOME:-$HOME/.local/state}/bromigos-ext/__NAME__"
+mkdir -p "$out"
+accent="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["colors"]["primary"])' \
+          "${BROMIGOS_THEME_DIR}/palette.json" 2>/dev/null || echo unknown)"
+printf '%s %s\n' "${1:-${BROMIGOS_THEME:-unknown}}" "$accent" > "$out/theme.txt"

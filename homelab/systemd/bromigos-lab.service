@@ -1,0 +1,22 @@
+# The lab job queue (bromigos-homelab; docs/lab.md, "Jobs"): runs what
+# `bromigos lab run` queues, one heavy GPU job at a time, when the lab's GPU has the VRAM
+# and the voice service keeps its share. State: ~/.local/state/bromigos/lab/.
+# `bromigos lab run` starts it when it isn't running; enable it to keep it up:
+#   systemctl --user enable --now bromigos-lab.service
+[Unit]
+Description=bromigOS lab job queue (bromigos lab jobs)
+Documentation=file:///usr/share/doc/bromigos-homelab/homelab.md
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/bromigos/bin/bromigos-lab serve
+Restart=on-failure
+RestartSec=5
+# a job's own processes (bromigos art make, the bake) end with it
+KillMode=mixed
+TimeoutStopSec=30
+Nice=5
+
+[Install]
+WantedBy=default.target

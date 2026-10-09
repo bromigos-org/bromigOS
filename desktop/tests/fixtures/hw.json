@@ -1,0 +1,36 @@
+{
+ "detection": {
+  "gpus": [
+   {
+    "boot_vga": true,
+    "card": "card1",
+    "driver": "amdgpu",
+    "family": "RDNA 3",
+    "id": "1002:747e",
+    "name": "Navi 32 [Radeon RX 7800 XT]",
+    "panel": false,
+    "vendor": "AMD",
+    "stack": "mesa"
+   }
+  ],
+  "hibernation": false,
+  "hybrid": null,
+  "kernels": [
+   "linux"
+  ],
+  "machine": {
+   "backlight": [],
+   "batteries": [],
+   "chassis_type": 3,
+   "kbd_backlight": [],
+   "kind": "desktop",
+   "laptop": false,
+   "lid": false,
+   "product": "B650 AORUS ELITE",
+   "touchpads": [],
+   "vendor": "Gigabyte Technology",
+   "virt": null
+  }
+ },
+ "plan": {}
+}

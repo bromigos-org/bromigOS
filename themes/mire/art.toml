@@ -1,0 +1,416 @@
+# Mire's art: every asset, how it is made, and (in art.log.jsonl) the job
+# that made it. `bromigos art status|plan|run` (docs/art.md). Outputs under art/
+# are working sources, kept out of git and out of the package.
+format = 1
+
+[defaults]
+aura = false
+
+[[assets]]
+id = "comp-seedream"
+kind = "image"
+model = "seedream-4.5"
+aspect = "16:9"
+quality = "2k"
+out = "art/comps/mire-comp-seedream.jpg"
+prompt = '''
+Night bayou swamp. Focal point, center-right: a weathered wooden stilt shack standing over black mirror-still water, rusted corrugated tin roof, a front porch with a hanging oil lantern glowing warm amber, an old rocking chair, clutter of crates, nets, buckets and junk, and a tall improvised radio mast of welded pipe and antenna wires rising from the roof with a small round blank metal plate bolted to it. The keeper, an old fisherman in a wide-brimmed hat, sits on the porch edge holding a long fishing rod, seen from behind as a dark silhouette against the lantern glow, no face visible. A flat-bottomed wooden skiff is tied to the stilts. Huge twisted cypress trees with long hanging moss frame the scene, lily pads, low mist drifting on the water, scattered green fireflies. In the left background, half-sunk in the swamp, the colossal moss-covered head of a long-dead war machine of original design: a blocky riveted armored dome with heavy jaw plates and a single dark round optic, cracked plating, vines and moss, tilted and partly submerged. Clear reflections in the still black water. Humid, eerie, lived-in mood. Palette: green-black night, warm amber lantern light, faint phosphor-green glow of fireflies and mist. Painterly cinematic sci-fi concept art, matte painting illustration, highly detailed, gritty weathered textures, low-key night lighting with deep near-black shadows, subtle film grain, wide 16:9 establishing shot. No text, no letters, no logos, no watermark, no signature.'''
+
+[[assets]]
+id = "comp-v2-seedream"
+kind = "image"
+model = "seedream-4.5"
+aspect = "16:9"
+quality = "2k"
+out = "art/comps/mire-comp-v2-seedream.jpg"
+prompt = '''
+Night bayou swamp. Focal point, center-right: a weathered wooden stilt shack standing over black mirror-still water, rusted corrugated tin roof, a front porch with a hanging oil lantern glowing warm amber, an old rocking chair, clutter of crates, nets, buckets and junk, and a tall improvised radio mast of welded pipe and antenna wires rising from the roof with a small round blank metal plate bolted to it. The keeper, an old fisherman in a wide-brimmed hat, sits on the porch edge holding a long fishing rod, seen from behind as a dark silhouette against the lantern glow, no face visible. A flat-bottomed wooden skiff is tied to the stilts. Huge twisted cypress trees with long hanging moss frame the scene, lily pads, low mist drifting on the water, scattered tiny green firefly points of light. In the left background, half-sunk in the swamp, the colossal moss-covered head of a long-dead war machine of original design: an angular riveted armored head shaped like a heavy welded helmet with a narrow visor slit and one dark round optic lens, no mouth, no teeth, no face, cracked plating, vines and moss, tilted and partly submerged. Clear reflections in the still black water. Humid, eerie, lived-in mood. Palette: green-black night, warm amber lantern light, faint phosphor-green glow of fireflies and mist. Gritty realistic painterly cinematic sci-fi concept art, not cartoon, not anime, matte painting illustration, highly detailed, gritty weathered textures, low-key night lighting with deep near-black shadows, subtle film grain, wide 16:9 establishing shot. No text, no letters, no logos, no watermark, no signature.'''
+
+[[assets]]
+id = "sleeper-seedream"
+kind = "image"
+model = "seedream-4.5"
+aspect = "2:3"
+quality = "2k"
+out = "art/actors/sleeper-seedream.jpg"
+prompt = '''
+A single dormant humanoid exo-frame walker of original design, mid-stride in a slow heavy wading walk, legs fully visible: a tall hunched bipedal armored frame, rounded weathered hull plates overgrown with thick hanging swamp moss, vines and small ferns, rust streaks, exposed pistons at the knees, long drooping arms, a small head with one glowing warm amber eye-lamp. Full body in frame, side three-quarter view, centered with margin. Painterly cinematic sci-fi concept art, detailed gritty textures, dim night rim lighting. Isolated on a plain flat uniform light grey background, no shadow, no ground, no water surface, no text, no logo.'''
+
+[[assets]]
+id = "hollis-seedream"
+kind = "image"
+model = "seedream-4.5"
+aspect = "1:1"
+quality = "2k"
+out = "art/actors/hollis-seedream.jpg"
+prompt = '''
+A single old swamp fisherman, the keeper of a bayou shack, sitting on a small wooden stool, seen from behind at a three-quarter angle so his face is not visible: wide-brimmed battered hat, worn canvas jacket, rolled trousers, rubber boots, slightly hunched shoulders, both hands holding a long bamboo fishing rod angled up and away to the left, the fishing line hanging down. Mostly dark silhouette with warm amber lantern rim light along his back, hat and shoulders. Full figure including the stool and the whole rod in frame, centered with margin. Painterly cinematic concept art, gritty textures, night lighting. Isolated on a plain flat uniform light grey background, no shadow, no ground, no text, no logo.'''
+
+[[assets]]
+id = "comp-v3-flare"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/den-empty.jpg"]
+aspect = "16:9"
+render_quality = "high"
+out = "art/comps/mire-comp-v3-flare-a.png"
+prompt = '''
+The attached reference image is ONLY a style reference: match its rendering quality, painterly-cinematic brushwork, gritty detail, lighting craft and subtle film grain. Do not copy its content, its composition or its exact colour grade. Paint this new scene:
+Night bayou swamp, wide 16:9. Layout: huge twisted cypress trees with long hanging moss frame the left and right edges of the frame. Center-right, the focal point: a weathered wooden stilt shack standing over black mirror-still water, rusted corrugated tin roof, a front porch with a hanging oil lantern glowing warm amber, crates, nets, buckets and junk piled on the porch, and a tall improvised radio mast of welded pipe with a yagi antenna rising from the roof, with a small round blank dark metal plate bolted to the mast. On the porch, the old keeper sits in a wooden rocking chair near the porch edge, fishing with a long bamboo rod angled out over the water, seen from behind as a dark silhouette in a wide-brimmed hat against the lantern glow, no face visible. A flat-bottomed wooden skiff is tied to the stilts below the porch. Left-center, in the mid-background, half-sunk and tilted in the swamp: the colossal moss-covered head of a long-dead war machine of original design, an angular riveted armored helmet-like head with a narrow horizontal visor slit glowing faint green and one dark round optic lens, cracked plating, vines and moss, no mouth, no teeth. Lily pads, low mist drifting on the water, a few tiny green firefly points of light, clear dark reflections of the shack and the head in the still water. Humid, eerie, lived-in mood. Palette: green-black night close to phosphor greens, the warm amber lantern as the one warm light. Gritty realistic painterly cinematic sci-fi concept art, matte painting, not cartoon, not anime, highly detailed weathered textures, low-key lighting, deep near-black shadows. No text, no letters, no logos, no watermark.'''
+
+[[assets]]
+id = "comp-v4-flare"
+kind = "edit"
+model = "gpt-image-2.5-flare"
+input = "@comp-v3-flare"
+mask = "art/masks/mire-edit-mask.png"
+aspect = "16:9"
+render_quality = "high"
+out = "art/comps/mire-comp-v4-flare-a.png"
+prompt = '''
+Edit this painting. Keep the entire image exactly as it is: the stilt shack, the old keeper in his rocking chair fishing, the lantern, the boat, the cypress trees and hanging moss, the mirror-still black water, the mist, the lily pads, the colours, the lighting and the painterly rendering. Change ONLY these things:
+1. Replace the giant robot head on the left with the wreck of a crashed military gunship-dropship of wholly original design: a chunky, boxy, utilitarian armoured hull with heavy riveted plating, stubby angular wing stubs and a squat ventral engine pod, nose-down and half-sunk at a steep angle in the swamp, its flat armoured cockpit canopy cracked and fogged, heavily overgrown with moss, vines and long hanging moss, rust streaks and scorched paint, and a faint sickly green glow deep inside one exposed engine housing. It is not a robot, not a creature and has no face; it does not resemble any known film or game spaceship.
+2. Scatter old battlefield wreckage in the water around the left and middle of the swamp, half-swallowed by lily pads and mist: a torn-off engine nacelle lying on its side, a single wing fin jutting up out of the water, bent hull plates, a rusted gun turret, and the faint silhouette of a second, smaller wreck far back in the mist.
+Reflect the new wreckage in the still water. Same night palette of green-black with the warm amber lantern as the only warm light. No text, no letters, no logos, no insignia.'''
+
+[[assets]]
+id = "comp-v5-flare"
+kind = "edit"
+model = "gpt-image-2.5-flare"
+input = "art/comps/mire-comp-v4-merged.png"
+mask = "art/masks/mire-edit-mask.png"
+aspect = "16:9"
+render_quality = "high"
+out = "art/comps/mire-comp-v5-flare-a.png"
+prompt = '''
+Edit this painting. Keep everything exactly as it is outside the edited area: the stilt shack, the keeper in his rocking chair, the lantern, the boat, the right cypress tree, the mirror-still black water, the mist, the lily pads, the colours, the lighting and the painterly rendering. In the edited area on the left, change ONLY these things:
+1. The crashed gunship-dropship must be much SMALLER and sunk much DEEPER: a mid-ground wreck, not a towering one. Roughly two thirds of its hull is underwater and hidden below the black water; only the upper hull, the cracked fogged cockpit canopy and part of one stubby wing break the surface, tilted at an angle, as if it slowly sank into the swamp over many years. Its top should sit well below the height of the far tree line. Keep its chunky, boxy, utilitarian original design, heavy riveted armour plates, rust, moss, vines and long hanging moss.
+2. Keep the scattered battlefield wreckage in the water around it: the torn-off engine nacelle on its side with a faint green glow inside, the wing fin jutting up, the rusted gun turret and the bent hull plates, half-swallowed by lily pads and mist, with reflections in the still water.
+3. Where the gunship used to tower, show the far swamp: distant cypress tree silhouettes with hanging moss fading into mist.
+4. Add a subtle, natural starfield in the open night sky above the far tree line: many faint small stars, dimmed by the humid haze, not a bright space backdrop.
+Same night palette of green-black with the warm amber lantern as the only warm light. No text, no letters, no logos, no insignia.'''
+
+[[assets]]
+id = "porch-clean"
+kind = "edit"
+model = "gpt-image-2.5-flare"
+input = "art/comps/mire-comp-v5-merged.png"
+mask = "art/plates/mask-mire-hollis.png"
+aspect = "16:9"
+render_quality = "high"
+out = "art/plates/mire-porch-clean.png"
+prompt = '''
+Edit this painting. Inside the edited area only: remove the old man, his wooden rocking chair, his fishing rod and his fishing line completely. Paint what was behind them: the empty weathered porch planks lit by the warm lantern, the porch post, the shack's plank wall and the dark mirror-still swamp water with soft mist. Match the surrounding painting exactly in perspective, texture, lighting, colour and painterly rendering. No people, no chair, no text.'''
+
+[[assets]]
+id = "hollis-catch"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/hollis-crop.png"]
+aspect = "1:1"
+render_quality = "high"
+out = "art/actors/hollis-catch.png"
+prompt = '''
+Using the reference image (a crop of the painted scene) for the character, his clothes, his wooden rocking chair, the lighting and the painterly rendering: paint the same old swamp fisherman alone, in his same wooden rocking chair, seen from behind and slightly to his left exactly as in the reference, so his face is never visible: wide-brimmed battered hat, worn dark work coat, boots. Warm amber lantern rim light from the upper right, deep shadow elsewhere. Full figure with the whole rocking chair, including the rockers, inside the frame with margin. Isolated on a plain flat uniform mid-grey background, no floor, no porch, no shadow on the background, no lantern in frame, no water. Gritty realistic painterly cinematic concept art matching the reference, not cartoon. No text, no logo. Pose: landing a catch. He leans forward out of the chair, both hands hauling the bamboo rod up and back so it bends, a small silver fish dangling and flipping on the end of the line at the left.'''
+
+[[assets]]
+id = "hollis-dozing"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/hollis-crop.png"]
+aspect = "1:1"
+render_quality = "high"
+out = "art/actors/hollis-dozing.png"
+prompt = '''
+Using the reference image (a crop of the painted scene) for the character, his clothes, his wooden rocking chair, the lighting and the painterly rendering: paint the same old swamp fisherman alone, in his same wooden rocking chair, seen from behind and slightly to his left exactly as in the reference, so his face is never visible: wide-brimmed battered hat, worn dark work coat, boots. Warm amber lantern rim light from the upper right, deep shadow elsewhere. Full figure with the whole rocking chair, including the rockers, inside the frame with margin. Isolated on a plain flat uniform mid-grey background, no floor, no porch, no shadow on the background, no lantern in frame, no water. Gritty realistic painterly cinematic concept art matching the reference, not cartoon. No text, no logo. Pose: dozing. He is slumped back in the rocking chair asleep, his head tipped forward so the hat brim covers his face, hands folded loosely on his belly, the bamboo fishing rod propped against the arm of the chair, its tip angled out to the left.'''
+
+[[assets]]
+id = "hollis-fishing"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/hollis-crop.png"]
+aspect = "1:1"
+render_quality = "high"
+out = "art/actors/hollis-fishing.png"
+prompt = '''
+Using the reference image (a crop of the painted scene) for the character, his clothes, his wooden rocking chair, the lighting and the painterly rendering: paint the same old swamp fisherman alone, in his same wooden rocking chair, seen from behind and slightly to his left exactly as in the reference, so his face is never visible: wide-brimmed battered hat, worn dark work coat, boots. Warm amber lantern rim light from the upper right, deep shadow elsewhere. Full figure with the whole rocking chair, including the rockers, inside the frame with margin. Isolated on a plain flat uniform mid-grey background, no floor, no porch, no shadow on the background, no lantern in frame, no water. Gritty realistic painterly cinematic concept art matching the reference, not cartoon. No text, no logo. Pose: working the line. He leans slightly forward, both hands on a long thin bamboo fishing rod angled out and up to the left, the thin fishing line hanging straight down from the rod tip.'''
+
+[[assets]]
+id = "comp-v6-flare"
+kind = "edit"
+model = "gpt-image-2.5-flare"
+input = "art/comps/mire-comp-v5-merged.png"
+mask = "art/masks/mire-v6-mask.png"
+aspect = "16:9"
+render_quality = "high"
+out = "art/comps/mire-comp-v6-flare-a.png"
+prompt = '''
+Edit this painting. Keep everything outside the edited area exactly as it is. In the edited area, the dark foreground swamp water at the bottom left and bottom centre, add the remains of several ancient dormant war-golems lying almost completely submerged beneath the black still water, only small pieces barely breaking the surface, subtle and half-hidden:
+- the top of one massive heavy-browed golem head just breaking the surface, made of weathered stone-like armour plates and riveted metal, covered in moss, its two deep-set eye-lights glowing soft amber right at the waterline, with lily pads resting on its brow;
+- a huge mossy stone-and-metal hand and forearm rising a little out of the water, fingers half-curled, with a small glowing green seam light at the wrist joint;
+- a broad rounded shoulder plate jutting just above the water, crusted with moss and lichen, a thin green seam light glowing in a crack;
+- the barely visible crown of another, smaller blocky head under a cluster of lily pads, two faint green eye-lights glimmering beneath the surface.
+Each piece is a different design and size: ancient, hulking, blocky, heavy-browed golems, not round robots, no mouths, no faces with teeth. Three or four small dark swamp frogs sit on the stone pieces and on the lily pads around them. Lily pads, floating duckweed, faint mist and soft reflections of the glowing eye-lights in the still black water. Same night palette and lighting as the rest of the painting, same painterly-cinematic rendering. No text, no logos.'''
+
+[[assets]]
+id = "comp-v6b-flare"
+kind = "edit"
+model = "gpt-image-2.5-flare"
+input = "art/comps/mire-comp-v5-merged.png"
+mask = "art/masks/mire-v6b-mask.png"
+aspect = "16:9"
+render_quality = "high"
+out = "art/comps/mire-comp-v6b-flare-a.png"
+prompt = '''
+Edit this painting. Keep everything outside the edited area exactly as it is. In the edited area, the dark foreground swamp water at the bottom left and bottom centre, add the remains of several ancient dormant war-golems lying almost completely submerged, LOW and SMALL in the frame, no piece rising more than a hand's breadth above the water, beneath the black still water, only small pieces barely breaking the surface, subtle and half-hidden:
+- the top of one massive heavy-browed golem head just breaking the surface, made of weathered stone-like armour plates and riveted metal, covered in moss, its two deep-set eye-lights glowing soft amber right at the waterline, with lily pads resting on its brow;
+- a huge mossy stone-and-metal hand and forearm rising a little out of the water, fingers half-curled, with a small glowing green seam light at the wrist joint;
+- a broad rounded shoulder plate jutting just above the water, crusted with moss and lichen, a thin green seam light glowing in a crack;
+- the barely visible crown of another, smaller blocky head under a cluster of lily pads, two faint green eye-lights glimmering beneath the surface.
+Keep any existing wreckage plates that are already visible. Each piece is a different design and size: ancient, hulking, blocky, heavy-browed golems, not round robots, no mouths, no faces with teeth. Three or four small dark swamp frogs sit on the stone pieces and on the lily pads around them. Lily pads, floating duckweed, faint mist and soft reflections of the glowing eye-lights in the still black water. Same night palette and lighting as the rest of the painting, same painterly-cinematic rendering. No text, no logos.'''
+
+[[assets]]
+id = "heron-flying"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/mire-left-crop.png"]
+aspect = "3:2"
+render_quality = "high"
+out = "art/actors/heron-flying.png"
+prompt = '''
+Using the reference image (the painted swamp scene) for the lighting, palette and painterly rendering: paint a single tall grey swamp heron at night, dark slate-grey plumage, long neck and dagger bill, subtle warm amber rim light from the right and cool green ambient light from the left. Whole bird inside the frame with margin. Isolated on a plain flat uniform mid-grey background, no water, no reeds, no ground, no shadow. Gritty realistic painterly cinematic sci-fi concept art matching the reference's rendering, not cartoon, not anime, highly detailed. No text, no logo, no watermark. Pose: in flight, lifting off, broad wings fully spread mid-downstroke, neck folded, long legs trailing, seen from the side facing left.'''
+
+[[assets]]
+id = "heron-standing"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/mire-left-crop.png"]
+aspect = "2:3"
+render_quality = "high"
+out = "art/actors/heron-standing.png"
+prompt = '''
+Using the reference image (the painted swamp scene) for the lighting, palette and painterly rendering: paint a single tall grey swamp heron at night, dark slate-grey plumage, long neck and dagger bill, subtle warm amber rim light from the right and cool green ambient light from the left. Whole bird inside the frame with margin. Isolated on a plain flat uniform mid-grey background, no water, no reeds, no ground, no shadow. Gritty realistic painterly cinematic sci-fi concept art matching the reference's rendering, not cartoon, not anime, highly detailed. No text, no logo, no watermark. Pose: standing still on one leg, neck folded in an S-curve, seen in side view facing left.'''
+
+[[assets]]
+id = "frogs"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/frogs-crop.png"]
+aspect = "3:1"
+render_quality = "high"
+out = "art/actors/frogs.png"
+prompt = '''
+Using the reference image (a crop of the painted swamp with small frogs on mossy stone and lily pads) for the frogs' look, lighting and painterly rendering: paint three separate small dark green-brown swamp frogs in a row, well apart from each other, all in side view facing left, the same frog species: left, sitting still; middle, sitting with its throat sac puffed out while croaking; right, mid-hop with its legs stretched out behind it. Subtle amber rim light. Isolated on a plain flat uniform mid-grey background, no lily pads, no water, no ground, no shadow. Gritty realistic painterly cinematic sci-fi concept art matching the reference's rendering, not cartoon, not anime, highly detailed. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "sleeper-facing"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/sleeper-phase1.jpg"]
+aspect = "2:3"
+render_quality = "high"
+out = "art/actors/sleeper-facing.png"
+prompt = '''
+Using the reference image for the machine's design, moss, rust and rendering: paint the same moss-covered dormant exo-frame walker, now turned to face the viewer directly, standing still and upright, head raised, its single eye-lamp flaring bright amber with a soft halo of light, long drooping arms at its sides, moss and vines hanging from its hull. Full body inside the frame with margin. Night lighting, painterly-cinematic like the reference but darker and moodier. Isolated on a plain flat uniform mid-grey background, no ground, no water, no shadow. Gritty realistic painterly cinematic sci-fi concept art matching the reference's rendering, not cartoon, not anime, highly detailed. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "boot"
+note = "The catch on a losing fill (live/world.toml, event fill_loss). The first asset made by bromigos art run."
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/mire-left-crop.png"]
+aspect = "1:1"
+render_quality = "high"
+out = "art/actors/boot.png"
+prompt = '''
+Using the reference image (the painted swamp scene) for the lighting, palette and painterly rendering: paint a single old waterlogged leather work boot, just reeled up out of black swamp water on a fishing line: cracked dark leather, a frayed lace, a strand of green pond weed and moss hanging from the sole, water dripping from the toe, hooked by the heel on a thin fishing line with a small rusty hook, the line running straight up out of the frame. Subtle warm amber rim light from the right and cool green ambient light from the left. The whole boot inside the frame with margin. Isolated on a plain flat uniform mid-grey background, no water, no ground, no shadow. Gritty realistic painterly cinematic sci-fi concept art matching the reference's rendering, not cartoon, not anime, highly detailed. No text, no logo, no watermark.'''
+
+[[assets]]
+id = "head-idle-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "art/clips/head-rest.png"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "16:9"
+audio = false
+out = "art/clips/head-idle-raw.mp4"
+prompt = '''
+Locked-off static camera, no camera movement, no zoom, no cut. Keep the painterly style, lighting and everything else in the frame exactly as it is; only the described motion happens. The half-submerged ancient stone golem head rests in the black swamp water: gentle water lapping around it, it bobs very slightly, the lily pads on its brow sway a little, its two amber eye-lights glow steadily with a faint slow pulse, a frog on its brow breathes. Seamless loop.'''
+
+[[assets]]
+id = "head-submerge-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "art/clips/head-rest.png"
+end = "art/clips/head-empty.png"
+duration = 5
+resolution = "720p"
+aspect = "16:9"
+audio = false
+out = "art/clips/head-submerge-raw.mp4"
+prompt = '''
+Locked-off static camera, no camera movement, no zoom, no cut. Keep the painterly style, lighting and everything else in the frame exactly as it is; only the described motion happens. The half-submerged ancient mossy stone golem head slowly sinks below the black water, its amber eyes dimming as they go under, ripples spreading outward, a few bubbles rising after it, then the water goes still and the lily pads drift back over the spot.'''
+
+[[assets]]
+id = "head-rise-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "art/clips/head-empty.png"
+end = "art/clips/head-rest.png"
+duration = 5
+resolution = "720p"
+aspect = "16:9"
+audio = false
+out = "art/clips/head-rise-raw.mp4"
+prompt = '''
+Locked-off static camera, no camera movement, no zoom, no cut. Keep the painterly style, lighting and everything else in the frame exactly as it is; only the described motion happens. The water is still at first. Bubbles rise to the surface, then the water swells, and an ancient mossy stone golem head slowly rises and breaks the surface, water and weeds streaming off its moss and brow, lily pads settling on top of it; its two eyes are dark under the water and light up amber as they clear the surface. It comes to rest half-submerged.'''
+
+[[assets]]
+id = "head-turn-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "art/clips/head-rest.png"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "16:9"
+audio = false
+out = "art/clips/head-turn-raw.mp4"
+prompt = '''
+Locked-off static camera, no camera movement, no zoom, no cut. Keep the painterly style, lighting and everything else in the frame exactly as it is; only the described motion happens. The half-submerged ancient stone golem head slowly turns toward the camera, water streaming off its mossy brow, its two amber eye-lights flare bright and flash twice, ripples spread out around it; then it slowly turns back to its resting position and its eyes settle to a steady glow. Seamless loop.'''
+
+[[assets]]
+id = "backdrop-raw"
+kind = "video"
+model = "minimax-h3"
+start = "art/plates/mire-v6-porch-clean.png"
+loop = true
+duration = 5
+resolution = "2k"
+aspect = "16:9"
+out = "art/loops/mire-backdrop-raw.mp4"
+prompt = '''
+Locked-off static camera: no camera movement, no zoom, no pan, no cut. Subtle living ambient motion only, the painting comes gently alive: low mist drifts slowly across the black water, the long hanging moss sways gently in a faint breeze, soft ripples move across the still water and the reflections shimmer, the porch lantern flame flickers softly, the faint green glow inside the wrecked engine pulses slowly, the stars twinkle faintly. The half-submerged stone golem pieces in the foreground stay still while the water laps gently around them and the lily pads bob slightly; their eye-lights stay steady. Nothing new enters the frame: no people, no animals, no creatures. Keep the painterly style and exact composition. Seamless loop.'''
+
+[[assets]]
+id = "hand-idle-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "art/clips/hand-rest.png"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "16:9"
+audio = false
+out = "art/clips/hand-idle-raw.mp4"
+prompt = '''
+Locked-off static camera, no camera movement, no zoom, no cut. Keep the painterly style, lighting and everything else in the frame exactly as it is; only the described motion happens. The huge half-submerged mossy stone-and-metal golem hand rests in the black swamp water: gentle water lapping around its fingers, it shifts very slightly, the moss sways, the small green seam light at its wrist glows with a slow faint pulse, the frog on it breathes. Seamless loop.'''
+
+[[assets]]
+id = "hand-turn-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "art/clips/hand-rest.png"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "16:9"
+audio = false
+out = "art/clips/hand-turn-raw.mp4"
+prompt = '''
+Locked-off static camera, no camera movement, no zoom, no cut. Keep the painterly style, lighting and everything else in the frame exactly as it is; only the described motion happens. The huge half-submerged mossy stone-and-metal golem hand slowly lifts a little out of the water and its fingers curl and open toward the camera as if beckoning, water streaming off the moss, the green seam light at its wrist flares bright and flashes twice, ripples spread; then it settles back into the water in its resting position and the light dims to a steady glow. Seamless loop.'''
+
+[[assets]]
+id = "hand-rise-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "art/clips/hand-empty.png"
+end = "art/clips/hand-rest.png"
+duration = 5
+resolution = "720p"
+aspect = "16:9"
+audio = false
+out = "art/clips/hand-rise-raw.mp4"
+prompt = '''
+Locked-off static camera, no camera movement, no zoom, no cut. Keep the painterly style, lighting and everything else in the frame exactly as it is; only the described motion happens. The water is still at first. Bubbles rise, the water swells, and a huge mossy stone-and-metal golem hand slowly rises and breaks the surface, fingers half-curled, water and weeds streaming off it; the small green seam light at its wrist is dark under water and lights up as it clears the surface. It comes to rest half-submerged.'''
+
+[[assets]]
+id = "hand-submerge-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "art/clips/hand-rest.png"
+end = "art/clips/hand-empty.png"
+duration = 5
+resolution = "720p"
+aspect = "16:9"
+audio = false
+out = "art/clips/hand-submerge-raw.mp4"
+prompt = '''
+Locked-off static camera, no camera movement, no zoom, no cut. Keep the painterly style, lighting and everything else in the frame exactly as it is; only the described motion happens. The huge half-submerged mossy stone-and-metal golem hand slowly sinks below the black water, its fingers closing, the green seam light at its wrist dimming as it goes under, ripples spreading outward, a few bubbles rising after it, then the water goes still.'''
+
+[[assets]]
+id = "hollis-loop-raw"
+kind = "video"
+model = "seedance-1-5-pro"
+start = "@hollis-fishing"
+loop = true
+duration = 5
+resolution = "720p"
+aspect = "1:1"
+audio = false
+out = "art/clips/hollis-raw.mp4"
+prompt = '''
+Static camera, plain flat mid-grey background stays unchanged. The old fisherman in his wooden rocking chair rocks slowly back and forth, gently working his fishing line: he lifts the bamboo rod a little and lowers it again, the line swaying. He stays seen from behind, his face never visible. Seamless loop.'''
+
+# ---------------------------------------------------------------- craft overhead: the flybys
+[[assets]]
+id = "ships-sheet"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/mire-sky-wrecks-crop.png"]
+aspect = "3:2"
+render_quality = "high"
+out = "art/actors/ships-sheet.png"
+note = "the craft that cross Mire's sky: a Drift long-hauler, Pip Arro's Petrel, a Picket"
+prompt = '''
+The attached reference image is ONLY a style and lighting reference (the painted night swamp, its starry green-black sky and the crashed war gunships in it): match its painterly-cinematic rendering, gritty weathered detail, low-key night light with a faint green cast, and make the third craft belong to the same war as those wrecks. Do not paint the swamp, trees, water or sky.
+Paint a sprite sheet of three different flying craft of wholly original design, each one complete, separate, not overlapping, with generous empty margin around it, all flying toward the RIGHT, seen in clean side profile from slightly below, as if passing overhead at night, lit only by dim starlight from above with soft cool rim light on their top edges and their own small lights:
+TOP ROW, spanning the full width: a Drift long-hauler, a very long, slow, patched-together bulk freighter of the frontier: a blunt boxy command block at the front with a few lit amber windows, a long spine of strapped cargo containers, tanks and girders, mismatched repaired hull panels, rows of tiny lit portholes, and at the back a cluster of four big round engine bells with a faint blue-white glow inside. Long and thin, at least six times as long as it is tall.
+BOTTOM LEFT: a small, fast, battered single-pilot courier aircraft: a slim teardrop fuselage with a bubble cockpit glowing warm amber from inside (a pilot's silhouette), short swept wings each carrying a ducted-fan engine nacelle, a small cargo pod clamped under the belly, faded orange and cream paint with hand-painted repair patches and scuffs, a long thin ribbon pennant streaming from the tail fin, tiny red and green navigation lamp housings at the wingtips.
+BOTTOM RIGHT: a derelict war-era sentry drone still flying its old patrol, unmanned: a lean, angular, armoured flying-wing body in scorched olive-drab military paint, chipped and rust-streaked, with a stubby armoured sensor head carrying one round optic glowing dim amber, two small engine pods under the wing with a faint sickly green glow, a bent whip antenna, missing panels, and a few strands of hanging swamp moss caught on a broken weapon hardpoint underneath.
+Isolated on a plain flat uniform mid-grey background, no ground, no clouds, no stars, no shadow, no motion blur. Gritty realistic painterly cinematic sci-fi concept art, not cartoon, not anime, not toy-like, highly detailed. Nothing resembling any known film or game spaceship. No text, no letters, no numbers, no logos, no insignia, no watermark.'''
+
+[[assets]]
+id = "ships-cut"
+kind = "cutout"
+model = "remove-background"
+input = "@ships-sheet"
+out = "art/actors/ships-cut.png"
+
+# ---- the post's emblem (Mire's mark; docs/theming.md, "The emblem"). Concepts only: the
+# shipped emblem/ kit is vector, built by bromigos-emblem from emblem/emblem.toml.
+[[assets]]
+id = "emblem-concept-a"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/wick-emblem.png", "art/refs/mire-comp.png"]
+aspect = "1:1"
+render_quality = "high"
+out = "art/emblem/mire-emblem-concept-a.png"
+prompt = '''
+Image 1 is the network's emblem, "the burn-in": a thin double ring with a motto in wide-tracked uppercase monospace running clockwise in the band, an eleven-tick tuning-dial gap at twelve o'clock, and at the centre one solid black flame (one main tongue, two small side tongues, leaning slightly right) outlined by a thin hairline, with a relay mast cut through it in negative space. Image 2 is only a palette and mood reference for the world.
+Design a sibling emblem in exactly the same flat vector graphic style, same ring geometry and proportions, for Mire, a night bayou outpost where the flame is scorched into a relay housing just above the flood line. Ring lines and ring text in firefly yellow-green #b8e05a on near-black #05090a. The motto in the ring band reads exactly: NOTHING HERE IS FORGOTTEN · ONLY SLEEPING ·  The tuning gap at twelve o'clock is drawn as eleven thin reeds, the centre one a taller cattail. Centre sigil: the same black flame with the mast cut-out standing on a flood line, its base meeting still water drawn as three thin horizontal ripple lines in moss green #5d7a4b, with the flame's broken reflection below the waterline as short black dashes, and two small round eye-lamps glowing cyan #58e0e8 low in the water to the lower left, watching. Flat vector emblem, crisp clean shapes, no gradients except a faint glow, perfectly centred, symmetrical ring, plain near-black background, no extra text.'''
+
+[[assets]]
+id = "emblem-concept-b"
+kind = "image"
+model = "gpt-image-2.5-flare"
+inputs = ["art/refs/wick-emblem.png", "art/refs/mire-comp.png"]
+aspect = "1:1"
+render_quality = "high"
+out = "art/emblem/mire-emblem-concept-b.png"
+prompt = '''
+Image 1 is the network's emblem, "the burn-in": a thin double ring with a motto in wide-tracked uppercase monospace running clockwise in the band, an eleven-tick tuning-dial gap at twelve o'clock, and at the centre one solid black flame (one main tongue, two small side tongues, leaning slightly right) outlined by a thin hairline, with a relay mast cut through it in negative space. Image 2 is only a palette and mood reference for the world.
+Design a sibling emblem in exactly the same flat vector graphic style, same ring geometry and proportions, for Mire, a night bayou post: a stilt shack with a porch lantern, a keeper who remembers how to fix everything, war machines asleep standing in the water. Ring lines and ring text in firefly yellow-green #b8e05a on near-black #05090a. The motto in the ring band reads exactly: NOTHING HERE IS FORGOTTEN · ONLY SLEEPING ·  The tuning gap at twelve o'clock is eleven thin vertical reeds, the centre one a taller cattail. Centre sigil: the black flame with its relay-mast cut-out, rising from a single round lily pad that floats on a flat waterline; below the waterline the flame's reflection is a thin moss-green #5d7a4b outline only; one small warm amber #e8a040 lantern spark hangs at the tip of the mast cut-out; three tiny firefly dots in yellow-green drift around the flame. Flat vector emblem, crisp clean shapes, no gradients except a faint glow, perfectly centred, symmetrical ring, plain near-black background, no extra text.'''

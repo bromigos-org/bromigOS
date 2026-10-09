@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+# bromigos:summary=The live layer's settings beyond the animation switches: the world, the screensaver's content, the sounds' volume, the codec's calls
+# bromigos:args=[get [KEY…]] | set KEY VALUE | reset [KEY…] | keys  [--json]
+# bromigos:examples=bromigos scene; bromigos scene set sounds.volume 0.2; bromigos scene set world.enabled off
+"""bromigos-scene (`bromigos scene`): the live layer's settings that aren't
+on/off animations (those are `bromigos anim`). Each one is written into the user's
+~/.config/bromigos/live/overrides.toml, the same file `bromigos anim` keeps, merged over
+the live layer's config; the live layer reads it again by itself. Only the keys listed
+by `keys` can be set, each checked for its type and range.
+
+  bromigos scene [get [KEY…]]   each key's value in force, its default, and whether it's yours
+  bromigos scene set KEY VALUE  e.g. sounds.volume 0.2, world.enabled off, general.fps 24
+  bromigos scene reset [KEY…]   back to the default (every key: all of these)
+  bromigos scene keys           the keys, what each does, its type and range
+"""
+import os
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+# key: (type, (lo, hi) or choices, what it does)
+KEYS = {
+    "world.enabled": ("bool", None, "the theme's world drawn instead of the den (off: always the den)"),
+    "world.ambient_sounds": ("bool", None, "the world's creature sounds, by your activity"),
+    "sounds.enabled": ("bool", None, "the desktop's sound cues (the terminal's blip, the notification chirp)"),
+    "sounds.volume": ("float", (0.0, 1.0), "how loud the sound cues are, 0 to 1"),
+    "screensaver.enabled": ("bool", None, "the screensaver (the idle policy's timer runs it)"),
+    "space.planet": ("bool", None, "the screensaver's gas giant (its terminator is the local time of day)"),
+    "space.station": ("bool", None, "the screensaver's relay station (its spokes are the lab's services)"),
+    "space.stars": ("bool", None, "the parallax star layers"),
+    "space.traffic": ("bool", None, "ships and debris (density follows network traffic)"),
+    "codec.enabled": ("bool", None, "important events as a short voiced transmission"),
+    "codec.on_critical": ("bool", None, "a codec call for critical notifications"),
+    "codec.on_lab_alert": ("bool", None, "a codec call when the lab's alerts go up or a node leaves"),
+    "codec.max_per_hour": ("int", (0, 60), "at most this many codec calls an hour"),
+    "holodeck.enabled": ("bool", None, "the holo deck (SUPER+H)"),
+    "general.fps": ("int", (5, 60), "frames a second with the desktop visible"),
+    "general.fps_covered": ("int", (1, 60), "frames a second with windows over it"),
+    "general.monitor": ("str", None, "the output it draws on (\"\": the primary)"),
+    "general.allow_software": ("bool", None, "full motion on a software renderer (no GPU, or a VM without 3D)"),
+}
+USAGE = __doc__.split("\n\n", 1)[1]
+
+
+def _xdg(var, default):
+    v = os.environ.get(var) or ""
+    return v if os.path.isabs(v) else os.path.join(os.path.expanduser("~"), default)
+
+
+def paths():
+    config = _xdg("XDG_CONFIG_HOME", ".config")
+    share = os.environ.get("BROMIGOS_SHARE_DIR") or "/usr/share/bromigos"
+    return {
+        "default": os.path.join(share, "live", "config.toml"),
+        "user": os.environ.get("BROMIGOS_LIVE_CONFIG") or os.path.join(config, "bromigos-live", "config.toml"),
+        "overrides": os.path.join(config, "bromigos", "live", "overrides.toml"),
+        "legacy": os.path.join(_xdg("XDG_STATE_HOME", ".local/state"), "bromigos-live", "overrides.toml"),
+    }
+
+
+def _get(doc, key):
+    sec, k = key.split(".", 1)
+    v = (doc.get(sec) or {}).get(k)
+    return v
+
+
+def layers():
+    p = paths()
+    default = C.read_toml(p["default"]) if os.path.exists(p["default"]) else {}
+    base = C.read_toml(p["user"]) if os.path.exists(p["user"]) else default
+    over_path = p["overrides"] if os.path.exists(p["overrides"]) or not os.path.exists(p["legacy"]) else p["legacy"]
+    over = C.read_toml(over_path)
+    return default, base, over, p
+
+
+FALLBACK = {"world.enabled": True, "world.ambient_sounds": True, "sounds.enabled": True, "sounds.volume": 0.3,
+            "screensaver.enabled": True, "space.planet": True, "space.station": True, "space.stars": True,
+            "space.traffic": True, "codec.enabled": True, "codec.on_critical": True, "codec.on_lab_alert": True,
+            "codec.max_per_hour": 8, "holodeck.enabled": True, "general.fps": 30, "general.fps_covered": 20,
+            "general.monitor": "", "general.allow_software": False}
+
+
+def status(args):
+    default, base, over, p = layers()
+    keys = args or list(KEYS)
+    out = []
+    for k in keys:
+        if k not in KEYS:
+            raise Fail(f"unknown key {k} (bromigos scene keys)")
+        kind, rng, what = KEYS[k]
+        d = _get(base, k)
+        d = FALLBACK[k] if d is None else d
+        o = _get(over, k)
+        out.append({"key": k, "value": d if o is None else o, "default": d, "yours": o is not None,
+                    "type": kind, "range": list(rng) if rng else None, "what": what})
+    return {"settings": out, "values": {s["key"]: s["value"] for s in out}, "file": p["overrides"],
+            "base": p["user"] if os.path.exists(p["user"]) else p["default"]}
+
+
+def check(key, raw):
+    if key not in KEYS:
+        raise Fail(f"unknown key {key} (bromigos scene keys)")
+    kind, rng, _ = KEYS[key]
+    if kind == "bool":
+        return C.on_off(raw)
+    if kind in ("int", "float"):
+        try:
+            v = int(raw) if kind == "int" else float(raw)
+        except ValueError:
+            raise Fail(f"{key}: a {'whole ' if kind == 'int' else ''}number")
+        if rng and not (rng[0] <= v <= rng[1]):
+            raise Fail(f"{key}: {rng[0]} to {rng[1]}")
+        return v
+    if len(raw) > 64 or any(c in raw for c in "\"\\\n"):
+        raise Fail(f"{key}: a short name")
+    return raw
+
+
+def _write(fn):
+    p = paths()
+    path = p["overrides"]
+    text = C.read_file(path)
+    if text is None:
+        text = C.read_file(p["legacy"]) or "# Your live layer switches (bromigos anim, bromigos scene), merged over its config.\n"
+    C.write_file(path, fn(text))
+
+
+def set_(args):
+    if len(args) != 2:
+        raise Fail("bromigos scene set KEY VALUE")
+    key, raw = args
+    v = check(key, raw)
+    sec, k = key.split(".", 1)
+    _write(lambda t: C.toml_set(t, sec, k, v))
+    return dict(status([]), said=f"{key} = {C.toml_value(v)}")
+
+
+def reset(args):
+    keys = args or list(KEYS)
+    for key in keys:
+        if key not in KEYS:
+            raise Fail(f"unknown key {key}")
+
+    def drop(t):
+        for key in keys:
+            sec, k = key.split(".", 1)
+            t = C.toml_unset(t, sec, k)
+        return t
+    if os.path.exists(paths()["overrides"]) or os.path.exists(paths()["legacy"]):
+        _write(drop)
+    return dict(status([]), said="back to the defaults: " + (", ".join(args) if args else "every scene key"))
+
+
+def keys(_args):
+    return {"keys": [{"key": k, "type": t, "range": list(r) if r else None, "what": w} for k, (t, r, w) in KEYS.items()]}
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "get": status, "set": set_, "reset": reset, "keys": keys}, USAGE))

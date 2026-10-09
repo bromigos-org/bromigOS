@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Extensions
+GenericName=Extension Catalog
+Comment=The extension catalog and what's installed (themes, decks, panels, VECTOR tools): install, update, turn off or remove
+Icon=bromigos-extensions
+TryExec=bromigos-extensions
+Exec=bromigos-extensions
+Terminal=false
+Categories=Settings;PackageManager;
+Keywords=extensions;extension;plugins;addons;add-ons;catalog;store;install;themes;decks;widgets;
+StartupNotify=false
+X-Bromigos-Menu=install/extensions
+X-Bromigos-Menu-Label=Extension catalog…

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Lab Console
+GenericName=Homelab Console
+Comment=Your homelab in a terminal: status, GPUs and models, jobs on the lab, the doctor
+Icon=bromigos-labconsole
+TryExec=/usr/lib/bromigos/bin/bromigos-lab
+Exec=bromigos terminal --title "bromigos lab" -- bromigos lab
+Terminal=false
+Categories=System;Monitor;
+Keywords=lab;homelab;lab console;console;status;gpu;gpus;models;jobs;doctor;servers;
+StartupNotify=false
+X-Bromigos-Menu=placed/bromigos-lab

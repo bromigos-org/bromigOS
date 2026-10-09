@@ -1,0 +1,14 @@
+# bromigOS: after a transaction that changed bromigOS's packages, say how to finish it.
+# `bromigos update` runs pacman itself and then this is just a reminder of the steps it's
+# about to do; after a bare `pacman -Syu` it's the cue to run them (migrations, the theme,
+# and restarting whatever still runs the old code).
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = bromigos-*
+
+[Action]
+Description = bromigOS packages changed...
+When = PostTransaction
+Exec = /usr/bin/echo "bromigOS: finish with 'bromigos update' (it runs migrations and restarts what still runs the old code; when it started this transaction it does that next)"

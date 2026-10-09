@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/bromigos-org/bromigOS/blob/main/SECURITY.md
+    about: Please report security problems privately, as SECURITY.md describes. Never in a public issue.
+  - name: Ask a question
+    url: https://discord.gg/8bjGcFvGZU
+    about: Questions and help with your setup go to the Bromigos Discord.

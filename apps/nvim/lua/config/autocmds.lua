@@ -1,0 +1,1 @@
+-- Autocommands over LazyVim's. None yet: the theme re-applies itself (colors/bromigos.lua).

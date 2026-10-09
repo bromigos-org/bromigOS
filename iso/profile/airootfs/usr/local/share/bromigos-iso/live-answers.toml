@@ -1,0 +1,23 @@
+# bromigos setup's answers for the live medium's user (customize_airootfs.sh runs them at
+# build, in the image's chroot). Monitors are skipped: the build machine's outputs aren't the
+# live machine's, and bromigOS's defaults light every output as it is. VECTOR has no brain
+# on a medium without a network (he says so when asked), and no voice environment (it needs
+# a download): the hologram and the desk are there, the brain comes with `bromigos setup vector`.
+[monitors]
+mode = "skip"
+
+[theme]
+name = "wick"
+
+[vector]
+backend = "none"
+
+[voice]
+tier = "off"
+
+[create.providers]
+"image.generate" = ["none"]
+"image.edit" = ["none"]
+"image.cutout" = ["none"]
+"video.loop" = ["none"]
+"model3d.generate" = ["none"]

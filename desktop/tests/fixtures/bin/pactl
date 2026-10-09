@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""A stand-in pactl (tests, offscreen renders): PipeWire's pulse server as fixtures/pactl.json
+says, changed by the set-* commands it's asked (desktop/tests/fixtures/fixture.py)."""
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
+import fixture as F  # noqa: E402
+
+a = sys.argv[1:]
+F.log("pactl", a)
+fmt_json = False
+if a and a[0].startswith("--format"):
+    fmt_json = a[0].endswith("json") or (len(a) > 1 and a[1] == "json")
+    a = a[2:] if a[0] == "--format" else a[1:]
+st = F.load("pactl")
+
+
+def vol(p):
+    v = int(65536 * p / 100)
+    return {c: {"value": v, "value_percent": f"{p}%", "db": "0.00 dB"} for c in ("front-left", "front-right")}
+
+
+def pct(raw, cur):
+    raw = raw.rstrip("%")
+    if raw[0] in "+-":
+        return max(0, cur + int(raw))
+    return int(raw)
+
+
+def cur_pct(o):
+    return int(next(iter(o["volume"].values()))["value_percent"].rstrip("%"))
+
+
+def find(kind, name):
+    for o in st[kind]:
+        if o.get("name") == name or str(o["index"]) == name:
+            return o
+    F.die(f"Failure: No such entity")
+
+
+if not a:
+    F.die("pactl: no command")
+cmd = a[0]
+if cmd == "info":
+    print(json.dumps(st["info"]) if fmt_json else "\n".join(f"{k}: {v}" for k, v in st["info"].items()))
+elif cmd == "list":
+    what = a[-1].replace("-", "_")
+    print(json.dumps(st.get(what, [])))
+elif cmd in ("set-default-sink", "set-default-source"):
+    kind = "sinks" if cmd.endswith("sink") else "sources"
+    o = find(kind, a[1])
+    st["info"]["default_sink_name" if kind == "sinks" else "default_source_name"] = o["name"]
+    if kind == "sinks":
+        for si in st["sink_inputs"]:
+            si["sink"] = o["index"]
+elif cmd in ("set-sink-volume", "set-source-volume", "set-sink-input-volume"):
+    kind = {"set-sink-volume": "sinks", "set-source-volume": "sources", "set-sink-input-volume": "sink_inputs"}[cmd]
+    o = find(kind, a[1])
+    o["volume"] = vol(pct(a[2], cur_pct(o)))
+elif cmd in ("set-sink-mute", "set-source-mute", "set-sink-input-mute"):
+    kind = {"set-sink-mute": "sinks", "set-source-mute": "sources", "set-sink-input-mute": "sink_inputs"}[cmd]
+    o = find(kind, a[1])
+    o["mute"] = (not o["mute"]) if a[2] == "toggle" else a[2] in ("1", "true", "yes", "on")
+elif cmd in ("set-sink-port", "set-source-port"):
+    o = find("sinks" if "sink" in cmd else "sources", a[1])
+    if a[2] not in [p["name"] for p in o["ports"]]:
+        F.die("Failure: No such entity")
+    o["active_port"] = a[2]
+elif cmd == "move-sink-input":
+    o = find("sink_inputs", a[1])
+    o["sink"] = find("sinks", a[2])["index"]
+else:
+    F.die(f"pactl stand-in: {cmd} isn't pretended")
+F.save("pactl", st)

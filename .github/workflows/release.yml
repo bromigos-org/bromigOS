@@ -1,0 +1,113 @@
+# Cut a prepared release (docs/release.md): when a release PR (branch release/vX.Y.Z[-rcN],
+# opened by release-prepare.yml) is merged: the guards, VECTOR's release commit onto its main
+# and tagged, bromigOS's tagged (each tag publishes the rc or stable channel through
+# packages.yml), the packages' checksums, both GitHub Releases. By hand: a re-run for a
+# merged release, or a dry run of any release commit (REF: a release-dryrun/ branch), which
+# only checks and says what it would do. The work is tools/release/cut.sh.
+name: release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release, as its release commit names it (e.g. v0.1.2-rc1)"
+        type: string
+        required: true
+      ref:
+        description: "The release commit's branch (e.g. release-dryrun/v0.1.2); empty: main's"
+        type: string
+        default: ""
+      dry_run:
+        description: "Only check and say what it would do: no tag, no publish, no GitHub Release"
+        type: boolean
+        default: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    name: Tag, publish, GitHub Releases
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/v') &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    # It reads the channel's database from the packages' bucket, so a homelab runner, but not
+    # the packages one: Cut waits for packages.yml's tag runs, which need that runner, and
+    # holding it would deadlock (2026-10-09: v0.1.2-rc1 waited 2 h on itself).
+    runs-on: ${{ vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    container: archlinux:base
+    timeout-minutes: 180
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '' }}
+      HAVE_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' && '1' || '' }}
+    steps:
+      - name: tools
+        run: pacman -Syu --noconfirm --needed git python github-cli rclone >/dev/null
+
+      # RELEASE_TOKEN pushes the tags, so packages.yml runs for them (a tag pushed with the
+      # workflow's own token starts no workflow), and writes VECTOR's repository.
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+      - name: VECTOR's repository
+        if: env.HAVE_RELEASE_TOKEN
+        uses: actions/checkout@v5
+        with:
+          repository: bromigos-org/vector
+          ref: main
+          fetch-depth: 0
+          path: .release/vector
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Cut
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGED_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          TAG: ${{ inputs.tag }}
+          REF: ${{ inputs.ref }}
+          GH_TOKEN: ${{ github.token }}
+          VECTOR_GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          PRIVACY_PATTERNS: ${{ secrets.PRIVACY_PATTERNS }}
+          PKGS_S3_ENDPOINT: ${{ secrets.PKGS_S3_ENDPOINT }}
+          PKGS_S3_BUCKET: ${{ secrets.PKGS_S3_BUCKET }}
+          PKGS_S3_ACCESS_KEY_ID: ${{ secrets.PKGS_S3_ACCESS_KEY_ID }}
+          PKGS_S3_SECRET_ACCESS_KEY: ${{ secrets.PKGS_S3_SECRET_ACCESS_KEY }}
+          PKGS_GPG_PRIVATE_KEY: ${{ secrets.PKGS_GPG_PRIVATE_KEY }}
+          PKGS_GPG_PASSPHRASE: ${{ secrets.PKGS_GPG_PASSPHRASE }}
+        run: |
+          git config --global --add safe.directory '*'
+          git config --global user.name "bromigOS release"
+          git config --global user.email "packages@bromigos.org"
+          [[ $HAVE_RELEASE_TOKEN ]] && export VECTOR_DIR=.release/vector
+          OUT=$RUNNER_TEMP/out tools/release/cut.sh
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          [[ -f $RUNNER_TEMP/out/result.env ]] && . "$RUNNER_TEMP/out/result.env"
+          {
+            echo "## ${DRY_RUN:+Dry run: }release ${TAG:-}"
+            echo
+            [[ -f $RUNNER_TEMP/out/body.md ]] && { echo "### The GitHub Release"; echo; cat "$RUNNER_TEMP/out/body.md"; }
+            [[ -f $RUNNER_TEMP/out/SHA256SUMS ]] && { echo; echo "### SHA256SUMS (${CHANNEL:-})"; echo; echo '```'; cat "$RUNNER_TEMP/out/SHA256SUMS"; echo '```'; }
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release${{ env.DRY_RUN && '-dryrun' || '' }}
+          path: ${{ runner.temp }}/out/
+          if-no-files-found: ignore

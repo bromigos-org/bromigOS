@@ -1,0 +1,10 @@
+{
+  "/api/v1/info": {"version": "v2.5.1", "mirrored_hosts": ["nas"], "cores_total": 8, "ram_total": 33554432000,
+                   "os_name": "Arch Linux"},
+  "system.cpu": {"labels": ["time", "guest_nice", "guest", "steal", "softirq", "irq", "user", "system", "nice", "iowait", "idle"],
+                 "data": [[1791500000, 0, 0, 0, 0.5, 0.1, 12.4, 3.2, 0, 0.8, 83.0]]},
+  "system.ram": {"labels": ["time", "free", "used", "cached", "buffers"],
+                 "data": [[1791500000, 8192.0, 12288.0, 10240.0, 1280.0]]},
+  "system.load": {"labels": ["time", "load1", "load5", "load15"], "data": [[1791500000, 0.82, 0.74, 0.69]]},
+  "disk_space./": {"labels": ["time", "avail", "used", "reserved for root"], "data": [[1791500000, 600.0, 350.0, 50.0]]}
+}

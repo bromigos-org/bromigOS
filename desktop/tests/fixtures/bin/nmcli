@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""A stand-in nmcli (tests, offscreen renders): a NetworkManager as fixtures/nmcli.json says, with
+a Wi-Fi card, an ethernet port, saved networks and two VPNs; the verbs change it. A new
+secured network joins only with the password fixtures' "passwords" holds for it, handed over
+in a passwd-file (desktop/tests/fixtures/fixture.py)."""
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
+import fixture as F  # noqa: E402
+
+argv = sys.argv[1:]
+F.log("nmcli", argv)
+st = F.load("nmcli")
+terse, fields, getv = False, None, None
+a = []
+i = 0
+while i < len(argv):
+    x = argv[i]
+    if x in ("-t", "--terse"):
+        terse = True
+    elif x in ("-f", "--fields"):
+        fields = argv[i + 1].split(",")
+        i += 1
+    elif x in ("-g", "--get-values"):
+        getv = argv[i + 1].split(",")
+        terse = True
+        i += 1
+    elif x in ("-e", "--escape"):
+        i += 1
+    else:
+        a.append(x)
+    i += 1
+
+
+def esc(v):
+    return str(v).replace("\\", "\\\\").replace(":", "\\:")
+
+
+def emit(rows):
+    for r in rows:
+        print(":".join(esc(v) for v in r))
+
+
+def yn(b):
+    return "yes" if b else "no"
+
+
+def fail(msg, code=10):
+    F.die(f"Error: {msg}", code)
+
+
+if not st.get("running", True):
+    fail("NetworkManager is not running.", 8)
+
+
+def conn(uuid_or_name):
+    for c in st["connections"]:
+        if uuid_or_name in (c["uuid"], c["name"]):
+            return c
+    fail(f"unknown connection '{uuid_or_name}'.")
+
+
+def active_on(dev):
+    return next((c for c in st["connections"] if c.get("active_on") == dev), None)
+
+
+def dev_state(d):
+    if d["type"] == "wifi" and not st["wifi"]:
+        return "unavailable"
+    if d["type"] == "wireguard":
+        return "connected" if active_on(d["name"]) else "unmanaged"
+    return "connected" if active_on(d["name"]) else "disconnected"
+
+
+def save():
+    F.save("nmcli", st)
+
+
+def take(words, key):
+    return words[words.index(key) + 1] if key in words else None
+
+
+def activate(c, dev=None):
+    if c["type"] in ("802-11-wireless",):
+        if not st["wifi"]:
+            fail("Connection activation failed: No suitable device found for this connection (device wlan0 not available).", 4)
+        if not any(ap["ssid"] == c.get("ssid") for ap in st["aps"]) and not c.get("hidden"):
+            fail("Connection activation failed: The Wi-Fi network could not be found.", 4)
+        for o in st["connections"]:
+            if o.get("active_on") == "wlan0":
+                o["active_on"] = ""
+        dev = "wlan0"
+        c.setdefault("ip4", "192.0.2.77/24")
+        c.setdefault("gateway", "192.0.2.1")
+        c.setdefault("dns", ["192.0.2.1"])
+    elif c["type"] == "wireguard":
+        dev = "wg0"
+        c.setdefault("ip4", "10.9.0.2/32")
+    elif c["type"] == "vpn":
+        dev = "wlan0"
+    else:
+        dev = dev or "enp5s0"
+    c["active_on"] = dev
+
+
+cmd = a[:2]
+if a[:2] == ["general", "status"] or a[:1] == ["general"]:
+    w = "enabled" if st["wifi"] else "disabled"
+    state = "connected" if any(c.get("active_on") and c["type"] != "loopback" for c in st["connections"]) else "disconnected"
+    vals = {"RUNNING": "running", "STATE": state, "CONNECTIVITY": st["connectivity"] if state == "connected" else "none",
+            "WIFI-HW": st["wifi_hw"], "WIFI": w, "NETWORKING": "enabled"}
+    emit([[vals.get(f, "") for f in (fields or ["RUNNING", "STATE", "CONNECTIVITY", "WIFI-HW", "WIFI"])]])
+elif a[:2] == ["device", "status"] or a == ["device"]:
+    out = []
+    for d in st["devices"]:
+        c = active_on(d["name"])
+        vals = {"DEVICE": d["name"], "TYPE": d["type"], "STATE": dev_state(d), "CONNECTION": c["name"] if c else ""}
+        out.append([vals[f] for f in fields or ["DEVICE", "TYPE", "STATE", "CONNECTION"]])
+    emit(out)
+elif a[:2] == ["device", "show"]:
+    d = next((d for d in st["devices"] if d["name"] == a[2]), None)
+    if d is None:
+        fail(f"Device '{a[2]}' not found.")
+    c = active_on(d["name"])
+    for f in fields or ["GENERAL.HWADDR", "IP4.ADDRESS", "IP4.GATEWAY", "IP4.DNS"]:
+        if f == "GENERAL.HWADDR":
+            print(f"GENERAL.HWADDR:{esc(d['hwaddr'])}")
+        elif c and f == "IP4.ADDRESS" and c.get("ip4"):
+            print(f"IP4.ADDRESS[1]:{esc(c['ip4'])}")
+        elif c and f == "IP4.GATEWAY":
+            print(f"IP4.GATEWAY:{esc(c.get('gateway') or '--')}")
+        elif c and f == "IP4.DNS":
+            for n, s in enumerate(c.get("dns") or [], 1):
+                print(f"IP4.DNS[{n}]:{esc(s)}")
+elif a[:3] == ["device", "wifi", "list"]:
+    if not st["wifi"]:
+        sys.exit(0)
+    cur = active_on("wlan0")
+    out = []
+    used = False
+    for ap in sorted(st["aps"], key=lambda p: -p["signal"]):
+        in_use = bool(cur) and cur.get("ssid") == ap["ssid"] and not used
+        used = used or in_use
+        vals = {"IN-USE": "*" if in_use else "", "SSID": ap["ssid"], "BSSID": ap["bssid"], "SIGNAL": str(ap["signal"]),
+                "SECURITY": ap["security"], "CHAN": str(ap["chan"]), "DEVICE": "wlan0"}
+        out.append([vals[f] for f in fields])
+    emit(out)
+elif a[:3] == ["device", "wifi", "rescan"]:
+    if not st["wifi"]:
+        fail("Scanning not allowed while unavailable.")
+elif a[:3] == ["device", "wifi", "connect"]:
+    ssid = a[3]
+    ap = next((p for p in st["aps"] if p["ssid"] == ssid), None)
+    if ap is None and take(a, "hidden") != "yes":
+        fail(f"No network with SSID '{ssid}' found.")
+    if ap and ap["security"] and "password" not in a:
+        fail("Connection activation failed: Secrets were required, but not provided.", 4)
+    c = {"name": ssid, "uuid": f"6f1c3e7a-1b2d-4c5e-9f00-0a1b2c3d4e{st['next_uuid']:02d}", "type": "802-11-wireless",
+         "ssid": ssid, "psk": "", "autoconnect": True, "active_on": ""}
+    st["next_uuid"] += 1
+    st["connections"].append(c)
+    activate(c)
+    save()
+    print(f"Device 'wlan0' successfully activated with '{c['uuid']}'.")
+elif a[:2] == ["device", "disconnect"]:
+    c = active_on(a[2])
+    if c:
+        c["active_on"] = ""
+    save()
+    print(f"Device '{a[2]}' successfully disconnected.")
+elif a[:2] == ["radio", "wifi"]:
+    if len(a) > 2:
+        st["wifi"] = a[2] == "on"
+        if not st["wifi"]:
+            for c in st["connections"]:
+                if c.get("active_on") == "wlan0" and c["type"] == "802-11-wireless":
+                    c["active_on"] = ""
+        save()
+    else:
+        print("enabled" if st["wifi"] else "disabled")
+elif a[:2] in (["connection", "show"], ["con", "show"], ["c", "s"]) or a == ["connection"]:
+    if getv:
+        c = conn(a[3] if a[2:3] == ["uuid"] else a[2])
+        vals = {"802-11-wireless.ssid": c.get("ssid", ""), "connection.id": c["name"], "connection.uuid": c["uuid"]}
+        print(":".join(esc(vals.get(f, "")) for f in getv))
+    else:
+        emit([[{"NAME": c["name"], "UUID": c["uuid"], "TYPE": c["type"], "AUTOCONNECT": yn(c["autoconnect"]),
+                "ACTIVE": yn(bool(c.get("active_on"))), "DEVICE": c.get("active_on") or ""}[f] for f in fields]
+              for c in st["connections"]])
+elif a[:2] == ["connection", "up"]:
+    key = a[3] if a[2] == "uuid" else a[2]
+    c = conn(key)
+    pf = take(a, "passwd-file")
+    if pf:
+        with open(pf) as f:
+            line = f.read().strip()
+        k, _, v = line.partition(":")
+        if k != "802-11-wireless-security.psk":
+            fail("invalid passwd-file")
+        ap = next((p for p in st["aps"] if p["ssid"] == c.get("ssid")), None)
+        if ap and st["passwords"].get(c["ssid"]) not in (None, v):
+            fail("Connection activation failed: Secrets were required, but not provided.", 4)
+        c["psk"] = v
+    elif c["type"] == "802-11-wireless":
+        ap = next((p for p in st["aps"] if p["ssid"] == c.get("ssid")), None)
+        if ap and ap["security"] and not c.get("psk"):
+            fail("Connection activation failed: Secrets were required, but not provided.", 4)
+    activate(c)
+    save()
+    print(f"Connection successfully activated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/{st['next_uuid']})")
+elif a[:2] == ["connection", "down"]:
+    c = conn(a[3] if a[2] == "uuid" else a[2])
+    if not c.get("active_on"):
+        fail(f"'{c['name']}' is not an active connection.")
+    c["active_on"] = ""
+    save()
+    print(f"Connection '{c['name']}' successfully deactivated.")
+elif a[:2] == ["connection", "delete"]:
+    c = conn(a[3] if a[2] == "uuid" else a[2])
+    st["connections"].remove(c)
+    save()
+    print(f"Connection '{c['name']}' ({c['uuid']}) successfully deleted.")
+elif a[:2] == ["connection", "modify"]:
+    c = conn(a[3] if a[2] == "uuid" else a[2])
+    rest = a[4:] if a[2] == "uuid" else a[3:]
+    for k, v in zip(rest[::2], rest[1::2]):
+        if k == "connection.autoconnect":
+            c["autoconnect"] = v in ("yes", "true", "on")
+    save()
+elif a[:2] == ["connection", "add"]:
+    if "password" in a or "802-11-wireless-security.psk" in a or "wifi-sec.psk" in a:
+        fail("the stand-in refuses a password on the command line")
+    c = {"name": take(a, "con-name"), "uuid": f"6f1c3e7a-1b2d-4c5e-9f00-0a1b2c3d4e{st['next_uuid']:02d}",
+         "type": "802-11-wireless", "ssid": take(a, "ssid"), "psk": "", "autoconnect": True, "active_on": "",
+         "key_mgmt": take(a, "wifi-sec.key-mgmt"), "hidden": take(a, "802-11-wireless.hidden") == "yes"}
+    st["next_uuid"] += 1
+    st["connections"].append(c)
+    save()
+    print(f"Connection '{c['name']}' ({c['uuid']}) successfully added.")
+else:
+    fail(f"the nmcli stand-in doesn't pretend {' '.join(a)!r}", 2)

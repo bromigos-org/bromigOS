@@ -1,0 +1,4 @@
+/* Your lock screen's style: the theme's colours (relative to this file), bromigOS's style,
+   then your own rules below. */
+@import url("../../.local/state/bromigos/theme/current/gtklock.css");
+@import url("/usr/share/bromigos/default/gtklock/style.css");

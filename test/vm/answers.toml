@@ -1,0 +1,20 @@
+# bromigos setup's answers for the fresh-machine test (unattended; docs/install.md has the schema)
+[monitors]
+mode = "auto"
+
+[theme]
+name = "wick"
+
+[vector]
+backend = "none"
+
+[voice]
+tier = "off"
+
+# no GPU and no ComfyUI in the VM: every capability off
+[create.providers]
+"image.generate" = ["none"]
+"image.edit" = ["none"]
+"image.cutout" = ["none"]
+"video.loop" = ["none"]
+"model3d.generate" = ["none"]

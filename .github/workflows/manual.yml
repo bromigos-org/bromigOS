@@ -1,0 +1,38 @@
+# The end-user manual (manual/, mdBook): built on every change and published next to the
+# packages at <repo>/bromigos/manual/ (docs/update.md "The manual"; homelab
+# helm/bromigos-pkgs serves the bucket's bromigos/ at https://<host>/bromigos/). Pull
+# requests only build. Each machine also has its own copy: the bromigos-manual package.
+name: manual
+
+on:
+  push:
+    branches: [main]
+    paths: ["manual/**", ".github/workflows/manual.yml"]
+  pull_request:
+    paths: ["manual/**", ".github/workflows/manual.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  manual:
+    name: Build and publish
+    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_PACKAGES || 'ubuntu-latest' }}
+    container:
+      image: archlinux:base-devel
+    timeout-minutes: 15
+    steps:
+      - name: mdBook and rclone
+        run: pacman -Syu --noconfirm --needed git mdbook rclone >/dev/null
+      - uses: actions/checkout@v5
+      - name: Build
+        run: manual/publish.sh --build-only "$RUNNER_TEMP/book" && ls "$RUNNER_TEMP/book" | head
+      - name: Publish
+        if: github.event_name != 'pull_request'
+        env:
+          PKGS_S3_ENDPOINT: ${{ secrets.PKGS_S3_ENDPOINT }}
+          PKGS_S3_BUCKET: ${{ secrets.PKGS_S3_BUCKET }}
+          PKGS_S3_ACCESS_KEY_ID: ${{ secrets.PKGS_S3_ACCESS_KEY_ID }}
+          PKGS_S3_SECRET_ACCESS_KEY: ${{ secrets.PKGS_S3_SECRET_ACCESS_KEY }}
+        run: manual/publish.sh

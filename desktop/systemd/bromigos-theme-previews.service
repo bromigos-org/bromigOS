@@ -1,0 +1,13 @@
+# The theme switcher's previews (bromigos theme previews): each theme drawn offscreen as a
+# miniature screenshot of the desktop wearing it, the missing and out-of-date ones only.
+# Started by the package hook after an update changes a theme, a template or the bar
+# (bromigos-theme-previews.hook), and by hand: systemctl --user start bromigos-theme-previews.
+[Unit]
+Description=bromigOS theme switcher previews (drawn offscreen)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bromigos-theme-previews --quiet
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=30min

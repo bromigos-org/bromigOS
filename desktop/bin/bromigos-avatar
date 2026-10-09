@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+# bromigos:summary=Your picture (~/.face, which the login screen shows), and whether your profile may be shared (dotfiles, the private overlay)
+# bromigos:args=[status] | set FILE | clear  [--json]
+# bromigos:examples=bromigos avatar; bromigos avatar set ~/Pictures/me.png; bromigos avatar clear
+"""bromigos-avatar (`bromigos avatar`): your picture, and where your profile lives.
+
+  bromigos avatar [status]    the picture, and whether profile.toml may be shared: a link
+                              into a git repository (your dotfiles, which may be public), and
+                              whether the private overlay holds your private fields
+  bromigos avatar set FILE    FILE cropped square from its centre, 256 px, as ~/.face (PNG); the
+                              login screen's ~/.face.icon links to it. The old one is kept as
+                              ~/.face.previous (set it back: bromigos avatar set ~/.face.previous)
+  bromigos avatar clear       no picture (the old one kept as ~/.face.previous)
+
+Your name, aliases and what VECTOR calls you are `bromigos profile` (profile.toml).
+"""
+import os
+import shutil
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+HOME = os.path.expanduser("~")
+FACE = os.path.join(HOME, ".face")
+ICON = os.path.join(HOME, ".face.icon")
+PREVIOUS = os.path.join(HOME, ".face.previous")
+SIZE = 256
+
+
+def _repo_of(path):
+    """The git work tree `path` (resolved) sits in, or None."""
+    d = os.path.dirname(os.path.realpath(path))
+    while d and d != "/":
+        if os.path.exists(os.path.join(d, ".git")):
+            return d
+        d = os.path.dirname(d)
+    return None
+
+
+def _remote(repo):
+    rc, out, _ = C.run(["git", "-C", repo, "remote", "get-url", "origin"], timeout=5)
+    return out.strip() if rc == 0 and out.strip() else None
+
+
+def sharing():
+    """Where profile.toml lives and who might see it."""
+    cfg = os.path.join(C.CONFIG, "bromigos")
+    prof = os.path.join(cfg, "profile.toml")
+    real = os.path.realpath(prof)
+    linked = os.path.islink(prof) or os.path.islink(cfg)
+    repo = _repo_of(prof) if os.path.exists(prof) else (_repo_of(os.path.join(cfg, "x")) if os.path.isdir(cfg) else None)
+    dot = os.path.join(HOME, ".dotfiles")
+    in_dot = real.startswith(os.path.realpath(dot) + "/") if os.path.isdir(dot) else False
+    ignored = None
+    if repo:
+        rc, _, _ = C.run(["git", "-C", repo, "check-ignore", "-q", real], timeout=5)
+        ignored = rc == 0
+    src = os.path.join(cfg, "private.sops.yaml")
+    dec = os.path.join(cfg, "private", "config.json")
+    operator = False
+    try:
+        import json
+        with open(dec) as f:
+            operator = bool((json.load(f) or {}).get("operator"))
+    except (OSError, ValueError):
+        pass
+    warn = None
+    if repo and not ignored:
+        warn = (f"profile.toml is in the git repository {repo}" + (f" ({_remote(repo)})" if _remote(repo) else "")
+                + ": whatever you write in it is shared if that repository is pushed or public")
+    elif repo and ignored:
+        warn = None
+    return {"profile": prof, "exists": os.path.exists(prof), "real_path": real if real != prof else None,
+            "linked": linked, "repo": repo, "remote": _remote(repo) if repo else None, "ignored": ignored,
+            "in_dotfiles": in_dot, "warning": warn,
+            "overlay": {"encrypted": os.path.exists(src), "decrypted": os.path.exists(dec), "operator": operator,
+                        "file": src}}
+
+
+def status(_args=None):
+    face = os.path.exists(FACE)
+    size = None
+    if face:
+        try:
+            from PIL import Image
+            with Image.open(FACE) as im:
+                size = list(im.size)
+        except Exception:
+            size = None
+    return {"face": FACE if face else None, "size": size, "icon": ICON if os.path.lexists(ICON) else None,
+            "icon_links_face": os.path.islink(ICON) and os.path.realpath(ICON) == os.path.realpath(FACE),
+            "previous": PREVIOUS if os.path.exists(PREVIOUS) else None,
+            "repo": _repo_of(FACE) if face else None, "sharing": sharing()}
+
+
+def _keep_previous():
+    if os.path.exists(FACE) and not os.path.islink(FACE):
+        shutil.copyfile(FACE, PREVIOUS)
+
+
+def set_(args):
+    if len(args) != 1:
+        raise Fail("bromigos avatar set FILE")
+    src = os.path.abspath(os.path.expanduser(args[0]))
+    if not os.path.isfile(src):
+        raise Fail(f"no file {src}")
+    try:
+        from PIL import Image, ImageOps
+    except ImportError:
+        raise Fail("python-pillow isn't installed (pacman -S python-pillow)")
+    try:
+        with Image.open(src) as im:
+            im = ImageOps.exif_transpose(im).convert("RGBA")
+            side = min(im.size)
+            left, top = (im.width - side) // 2, (im.height - side) // 2
+            im = im.crop((left, top, left + side, top + side)).resize((SIZE, SIZE), Image.LANCZOS)
+            tmp = FACE + ".bromigos.tmp"
+            im.save(tmp, "PNG")
+    except (OSError, ValueError) as e:
+        raise Fail(f"{src} isn't a picture this can read ({e})")
+    if os.path.realpath(src) != os.path.realpath(PREVIOUS):
+        _keep_previous()
+    if os.path.islink(FACE):
+        os.unlink(FACE)
+    os.replace(tmp, FACE)
+    os.chmod(FACE, 0o644)
+    if os.path.lexists(ICON) and not os.path.islink(ICON):
+        os.replace(ICON, ICON + ".previous")
+    if not os.path.lexists(ICON):
+        os.symlink(".face", ICON)
+    return dict(status(), said="Picture set")
+
+
+def clear(_args):
+    if not os.path.exists(FACE):
+        return dict(status(), said="No picture to clear")
+    _keep_previous()
+    os.unlink(FACE)
+    if os.path.islink(ICON):
+        os.unlink(ICON)
+    return dict(status(), said="Picture cleared (kept as ~/.face.previous)")
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "set": set_, "clear": clear}, USAGE))

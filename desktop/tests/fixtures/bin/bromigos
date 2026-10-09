@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""A stand-in `bromigos` for the tests and offscreen renders. `bromigos CMD …` runs, in order:
+fixtures/builtins/CMD.py's run(args, json, fixture) (a built-in pretended, its state in the
+fixtures: mute, anim, …); bromigos-CMD from PATH (the commands under test reaching each
+other, as the real router does); the real CLI at $BROMIGOS_REAL (a render's other
+built-ins); else it fails. `--version` answers."""
+import importlib.util
+import os
+import shutil
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+import fixture as F  # noqa: E402
+
+argv = sys.argv[1:]
+F.log("bromigos", argv)
+js = "--json" in argv
+a = [x for x in argv if x != "--json"]
+if not a:
+    sys.exit("bromigos stand-in: no command")
+if a[0] == "--version":
+    print("bromigos 0.1.0")
+    sys.exit(0)
+mod = os.path.join(HERE, "..", "builtins", a[0] + ".py")
+if os.path.exists(mod):
+    spec = importlib.util.spec_from_file_location("stand_in_" + a[0].replace("-", "_"), mod)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    sys.exit(m.run(a[1:], js, F) or 0)
+exe = (shutil.which(f"bromigos-{a[0]}-{a[1]}") if len(a) > 1 else None)
+if exe:
+    os.execv(exe, [exe] + a[2:] + (["--json"] if js else []))
+exe = shutil.which(f"bromigos-{a[0]}")
+if exe:
+    os.execv(exe, [exe] + a[1:] + (["--json"] if js else []))
+real = os.environ.get("BROMIGOS_REAL")
+if real and os.access(real, os.X_OK):
+    os.execv(real, [real] + argv)
+sys.exit(f"bromigos stand-in: {a[0]} isn't pretended (fixtures/builtins/{a[0]}.py) and no $BROMIGOS_REAL")

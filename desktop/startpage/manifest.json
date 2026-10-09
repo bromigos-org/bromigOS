@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Bromigos start page",
+  "description": "Opens the local Bromigos start page in new tabs: search, switchboard, Lab status, field notes, clock.",
+  "version": "1.0",
+  "chrome_url_overrides": { "newtab": "index.html" },
+  "icons": { "48": "icon-48.png", "128": "icon-128.png" },
+  "browser_specific_settings": { "gecko": { "id": "startpage@bromigos.org" } }
+}

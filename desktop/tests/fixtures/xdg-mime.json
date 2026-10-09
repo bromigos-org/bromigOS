@@ -1,0 +1,7 @@
+{
+ "defaults": {
+  "x-scheme-handler/https": "firefox.desktop", "x-scheme-handler/http": "firefox.desktop", "text/html": "firefox.desktop",
+  "inode/directory": "pcmanfm.desktop", "text/plain": "nvim.desktop", "image/png": "imv.desktop",
+  "video/mp4": "mpv.desktop", "audio/mpeg": "mpv.desktop", "application/pdf": "org.pwmt.zathura.desktop"
+ }
+}

@@ -1,0 +1,35 @@
+{
+  "_comment": "Hologram models (VECTOR's format: vector's tools/holo/collection.py and assets/holo/README.md). Boxes are [x0,x1, y0,y1, z0,z1] in fractions of the normalised bounding box (y up, front +z); a face goes to the first part whose box holds its centroid, else to the part with rest=true. bind names the live reading a part shows (VECTOR's holo/bind.py), empty for a part that only shapes the model. Sources are in src/; the baked NAME.holo.npz sit next to this file. Rebake: ~/.local/share/bromigos/venv/bin/python <vector>/tools/holo/bake.py --root THIS_DIR --preview",
+  "models": {
+  "sleeper": {
+   "title": "THE SLEEPER",
+   "subtitle": "Mire \u00b7 a Ledger Wars exo-frame",
+   "faces": 40000,
+   "max_edges": 16000,
+   "edge_deg": 22,
+   "source": "src/sleeper.glb",
+   "parts": [
+    {"id": "dome", "label": "DOME AND EYE-LAMP", "bind": "", "hint": "The armoured dome and its one eye-lamp. For no reason anyone can give, the lamp comes up and the Sleeper wades off across the bayou with nobody aboard, on an errand that ended decades ago", "boxes": [[0.33, 0.67, 0.72, 1.0, 0, 1]], "explode": [0, 1, 0.2], "distance": 0.3},
+    {"id": "arm_l", "label": "LEFT ARM", "bind": "", "hint": "A long arm, the hand hanging past the knee: the war made frames that learned their pilots so well the pilot became optional", "boxes": [[0, 0.33, 0.7, 0.96, 0, 1], [0, 0.25, 0.12, 0.7, 0, 1]], "explode": [-1, 0.1, 0], "distance": 0.26},
+    {"id": "arm_r", "label": "RIGHT ARM", "bind": "", "hint": "Moss grows thick on the shoulders and herons nest in the hatches; Hollis tells it the news as it wades past his porch", "boxes": [[0.67, 1, 0.7, 0.96, 0, 1], [0.75, 1, 0.12, 0.7, 0, 1]], "explode": [1, 0.1, 0], "distance": 0.26},
+    {"id": "legs", "label": "LEGS", "bind": "", "hint": "Knee drums and heavy shins: it stands in the black water like a tree for years at a time", "boxes": [[0.2, 0.8, 0, 0.45, 0, 1]], "explode": [0, -1, 0], "distance": 0.22},
+    {"id": "hull", "label": "HULL", "bind": "", "hint": "The hull and waist: no pilot aboard, no war to go back to. The weapons the war left alive, self-aware and unemployed", "rest": true, "explode": [0, 0, -1], "distance": 0.14}
+   ]
+  },
+  "stilt-shack": {
+   "title": "THE STILT SHACK",
+   "subtitle": "Mire \u00b7 Hollis Crane's post",
+   "faces": 40000,
+   "max_edges": 16000,
+   "source": "src/stilt-shack.glb",
+   "parts": [
+    {"id": "mast", "label": "RELAY MAST", "bind": "wick.beam", "hint": "The radio mast, taller than the cypresses: the relay is bolted to it and the black flame scorched into its housing just above the flood line. Lit while every channel on the network answers", "boxes": [[0.3, 0.68, 0.615, 1.0, 0.0, 0.65]], "explode": [0, 1, 0], "distance": 0.3},
+    {"id": "boat", "label": "ROWBOAT", "bind": "", "hint": "The flat-bottomed boat tied at the pilings: Hollis rows the drawings nobody else remembers out to the Petrel", "boxes": [[0.25, 0.7, 0.0, 0.13, 0.74, 1.0]], "explode": [0, -0.2, 1], "distance": 0.3},
+    {"id": "porch", "label": "PORCH", "bind": "", "hint": "The porch: a lantern, a rocking chair and the ladder down to the water. Hollis fishes here and tells the Sleepers the news as they wade past", "boxes": [[0.0, 1.0, 0.13, 0.46, 0.56, 0.9], [0.25, 0.5, 0.0, 0.3, 0.6, 0.9]], "explode": [0, 0.1, 1], "distance": 0.26},
+    {"id": "roof", "label": "TIN ROOF", "bind": "", "hint": "Corrugated tin over the cabin, patched more times than anyone counted", "boxes": [[0.0, 1.0, 0.44, 0.615, 0.0, 0.8]], "explode": [0, 1, -0.2], "distance": 0.2},
+    {"id": "stilts", "label": "STILTS", "bind": "", "hint": "Timber pilings over the drowned front: the black water rose over the trenches and gun pits, and the shack stands above the flood line", "boxes": [[0.0, 1.0, 0.0, 0.235, 0.0, 1.0]], "explode": [0, -1, 0], "distance": 0.22},
+    {"id": "cabin", "label": "CABIN", "bind": "", "hint": "The keeper's cabin at the edge of the old front: Relay Corps kit, fishing tackle, and drawings for parts no one else remembers how to make", "rest": true, "explode": [0, 0, -1], "distance": 0.14}
+   ]
+  }
+  }
+}

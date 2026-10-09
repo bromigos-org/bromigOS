@@ -1,0 +1,16 @@
+{
+  "_comment": "Hologram models. Boxes are [x0,x1, y0,y1, z0,z1] in fractions of the normalised bounding box (y up, front +z); a face goes to the first part whose box holds its centroid, else to the part with rest=true. bind names the live reading a part shows (VECTOR's holo/bind.py); requires names a capability the model needs to mean anything (it is hidden without it). Sources are in src/; the baked NAME.holo.npz sit next to this file. Rebake: ~/.local/share/bromigos/venv/bin/python /usr/lib/bromigos/vector/tools/holo/bake.py --root THIS_DIR --preview",
+  "models": {
+    "rack": {
+      "requires": "homelab", "title": "THE RACK", "subtitle": "the homelab", "source": "src/server-rack.glb", "faces": 40000, "max_edges": 16000,
+      "parts": [
+        {"id": "switch", "label": "SWITCH", "bind": "rack.switch", "hint": "Patch panel and switch: gateway, clients, ingress requests", "boxes": [[0.1, 0.9, 0.86, 0.99, 0.0, 1.0]], "explode": [0, 0.5, 1], "distance": 0.3},
+        {"id": "nodes", "label": "NODES", "bind": "rack.nodes", "hint": "Cluster nodes: ready of total, busiest node", "boxes": [[0.1, 0.9, 0.56, 0.84, 0.0, 1.0]], "explode": [0, 0.15, 1], "distance": 0.34},
+        {"id": "gpu", "label": "GPU SERVER", "bind": "rack.gpu", "hint": "GPU server: model serving load, VRAM, temperature, power", "boxes": [[0.1, 0.9, 0.4, 0.56, 0.0, 1.0]], "explode": [0, 0, 1], "distance": 0.42},
+        {"id": "storage", "label": "STORAGE", "bind": "rack.storage", "hint": "Storage: NAS pool and the fullest node disk", "boxes": [[0.1, 0.9, 0.24, 0.4, 0.0, 1.0]], "explode": [0, -0.1, 1], "distance": 0.36},
+        {"id": "ups", "label": "POWER", "bind": "rack.power", "hint": "UPS shelf: PoE and GPU power draw", "boxes": [[0.1, 0.9, 0.07, 0.24, 0.0, 1.0]], "explode": [0, -0.4, 1], "distance": 0.3},
+        {"id": "frame", "label": "FRAME", "bind": "rack.frame", "hint": "The cabinet: Argo CD apps healthy and alerts firing", "rest": true, "explode": [0, 0, -1], "distance": 0.14}
+      ]
+    }
+  }
+}

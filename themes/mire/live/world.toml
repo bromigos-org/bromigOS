@@ -1,0 +1,459 @@
+# Mire, a night bayou: the world the live layer draws for this theme.
+# Format: docs/theming.md ("`live/world.toml`"). Paths are relative to the theme directory;
+# positions and sizes are plate pixels (2560x1440, origin top left). Every moving thing
+# is a real signal; the comments say which.
+format = 1
+name = "Mire"
+
+[camera]
+parallax = "cursor"          # the layers sway with the pointer while you work; still when idle
+sway = [10, 4]               # small: the layers are cut from one painting
+
+[clock]                      # dusk, night and dawn follow the real local clock
+dawn = [5.5, 7.5]
+dusk = [18.0, 20.5]
+night = [0.85, 0.9, 0.95]    # the art is painted at night
+day = [1.1, 1.12, 1.05]
+dawn_tint = [1.1, 0.92, 0.92]
+dusk_tint = [1.15, 0.88, 0.72]
+twilight = [1.0, 0.5, 0.32]
+day_lift = [0.05, 0.06, 0.05]
+
+[water]
+layer = "water"
+mode = "mirror"
+line = 935                   # where the far shore meets the water
+reflect = 0.3                # the art paints its own reflections; the live mirror adds the moving things
+ripple = 0.7
+tint = [0.02, 0.05, 0.04]
+
+[[layers]]
+id = "sky"
+file = "backgrounds/layers/00-sky.webp"
+depth = 0
+parallax = 0.03
+sky = true
+
+[[layers]]
+id = "far"                   # the far cypress tree line in the mist
+file = "backgrounds/layers/10-far.webp"
+depth = 10
+parallax = 0.12
+
+[[layers]]
+id = "mid"                   # the sunk gunship, its nacelle, the turret and plates
+file = "backgrounds/layers/20-mid.webp"
+depth = 20
+parallax = 0.3
+
+[[layers]]
+id = "water"                 # clean water and lily pads
+file = "backgrounds/layers/30-water.webp"
+depth = 30
+parallax = 0.45
+water = true
+
+[[layers]]
+id = "near"                  # the shack, the mast, the boat
+file = "backgrounds/layers/40-near.webp"
+depth = 40
+parallax = 0.6
+
+[[layers]]
+id = "fore"                  # the great cypress on the right and its moss
+file = "backgrounds/layers/50-fore.webp"
+depth = 50
+parallax = 1.0
+
+# A living backdrop is also in the theme (live/loops/backdrop.mp4, 1280x720): to use it in
+# place of the plates, add a layer with video = "live/loops/backdrop.mp4" and drop the others.
+
+# ---------------------------------------------------------------- effects
+[[effects]]
+type = "moon"                # the real moon: phase and place from the local clock
+window = [150, 40, 1400, 300]
+radius = 24
+
+[[effects]]
+type = "stars"               # faint, twinkling through the canopy gaps; brightest in deep night, gone by day
+brightness = 0.35
+density = 0.25
+cell = 26
+horizon = 935
+fade = 420
+
+[[effects]]
+type = "mist"                # CPU, low: the mist thickens first
+signal = "cpu"
+band = [760, 1020]
+base = 0.15
+gain = 0.5
+full = 0.35
+color = [0.4, 0.52, 0.44]
+
+[[effects]]
+type = "rain"                # the swamp's weather is the work going on: a drizzle while agents
+onset = 8                    # work (more of them, harder), heavier while the homelab's local
+tail = 18                    # models generate, a downpour when this machine's CPU runs high;
+mix = [                      # all quiet, it eases off over a minute to mist and fireflies
+  { signal = "agents_working", from = 0.5, full = 5, floor = 0.2, max = 0.45 },   # 1 agent: drizzle
+  { signal = "models", from = 0.03, full = 0.8, floor = 0.12, max = 0.7 },        # LiteLLM traffic
+  { signal = "cpu", from = 0.35, full = 0.85, max = 1.0 },                        # the downpour
+]
+
+[[effects]]
+type = "lightning"           # CPU near the top: thunder flashes
+signal = "cpu"
+above = 0.88
+every = [5, 14]
+zone = [200, 1500]
+ground = 930
+
+[[effects]]
+type = "fireflies"           # live particles: this machine's network throughput is their number and brightness
+signal = "net"               # a handful when idle, hundreds in a big download (smoothed over 3 s)
+zone = [0, 560, 2300, 1400]  # x0, highest flight, x1, nearest water: over the water, the wrecks, the porch
+base = 6
+gain = 380
+max = 420
+curve = 1.4
+smooth = 3.0
+rain_hides = 0.8             # they go to ground as the rain comes on and come back as it clears
+speed = 16
+reflect = 0.4
+near_depth = 46
+far_depth = 25
+color = [0.78, 1.0, 0.36]
+color2 = [1.0, 0.86, 0.36]
+
+[[effects]]
+type = "line"                # Hollis's line on a paper fill: it goes taut (his loop paints the slack one)
+tip = [1402, 726]
+float = [1350, 965]
+slack = false
+depth = 41
+color = [0.8, 0.78, 0.68]
+
+[[effects]]
+type = "beacon"              # the relay mast's light: the lab all green
+signal = "lab_green"
+requires = "lab"             # no lab data: not drawn
+at = [1693, 74]
+depth = 40.5
+color = [1.0, 0.28, 0.22]
+period = 2.4
+radius = 6
+
+[[effects]]
+type = "spray"               # splashes: the catch leaving the water
+
+[loops."live/loops/hollis-working.mp4"]
+alpha = "stacked"            # colour on top, its alpha as grey below
+scale = 0.5                  # kept on the GPU near the size it is drawn (204x221)
+
+# ---------------------------------------------------------------- the keeper
+[[actors]]
+id = "hollis"
+kind = "keeper"              # mirrors you: works the line and rocks while you work, hat down when idle, dozing when locked
+sprite = "live/loops/hollis-working.mp4"
+at = [1459, 914]
+height = 221
+depth = 41
+parallax = 0.6
+lamp = { at = [1588, 632], color = [1.0, 0.68, 0.32], radius = 34, depth = 41.5 }
+events = { fill_win = { sprite = "live/actors/hollis-catch.webp", rect = [1334, 667, 250, 247], after = 1.0, seconds = 3.6 } }
+[actors.states]
+working = { motion = "still", rect = [1390, 676, 204, 221], lamp = 1.0 }                              # his rocking loop
+dozing = { motion = "still", sprite = "live/actors/hollis-dozing.webp", rect = [1334, 693, 250, 221], lamp = 0.8 }
+asleep = { motion = "still", sprite = "live/actors/hollis-dozing.webp", rect = [1334, 693, 250, 221], lamp = 0.25 }
+
+# ---------------------------------------------------------------- the Sleepers: herdr agents
+# The first two agents (oldest first) are the head and the hand: patches of the scene with
+# rise, idle, turn and submerge clips. The next two are the shoulder and the crown: cut-outs
+# that slide up out of the water and back. Further agents wade among the wrecks.
+[[actors]]
+id = "pieces"
+kind = "agents"
+take = [0, 2]
+sprite = "live/loops/sleeper-head-idle.mp4"
+height = 540
+depth = 44
+parallax = 0.45
+rise_hold = 3.0              # the rise clip runs 5 s: the eyes boot as it ends
+rise_seconds = 1.8
+eye_v = 0.5
+signal_color = [1.0, 0.62, 0.18]
+error_color = [1.0, 0.33, 0.28]
+signal_radius = 1.4
+spill = 0.08
+emissive_gain = 0.7
+[[actors.slots]]
+at = [330, 1280]
+patch = "live/loops/sleeper-head-idle.mp4"
+sprite = "live/loops/sleeper-head-idle.mp4"
+rise_clip = "live/clips/sleeper-head-rise.mp4"
+submerge_clip = "live/clips/sleeper-head-submerge.mp4"
+states = { needs_you = { sprite = "live/loops/sleeper-head-turn.mp4" } }
+emissive = "live/actors/sleeper-piece-head-lights.webp"
+emissive_rect = [63, 1112, 479, 192]
+light_color = [1.0, 0.62, 0.2]
+lights = [{ at = [0.421, 0.699], radius = 8, color = [1.0, 0.62, 0.2] }, { at = [0.288, 0.709], radius = 7, color = [1.0, 0.62, 0.2] }]
+[[actors.slots]]
+at = [810, 1260]
+patch = "live/loops/sleeper-hand-idle.mp4"
+sprite = "live/loops/sleeper-hand-idle.mp4"
+rise_clip = "live/clips/sleeper-hand-rise.mp4"
+submerge_clip = "live/clips/sleeper-hand-submerge.mp4"
+states = { needs_you = { sprite = "live/loops/sleeper-hand-turn.mp4" } }
+emissive = "live/actors/sleeper-piece-hand-lights.webp"
+emissive_rect = [622, 1142, 375, 146]
+light_color = [0.45, 1.0, 0.5]
+lights = [{ at = [0.634, 0.567], radius = 7, color = [0.45, 1.0, 0.5] }]
+[actors.states]
+working = { motion = "still", light = 1.0, pulse = 0.2 }                            # risen; a slow working pulse
+needs_you = { motion = "still", turn_clip = true, signal = true, light = 1.0 }      # the turn loop, the eyes double-flash
+finished = { motion = "still", light = 0.0 }                                        # the submerge clip, held
+gone = { motion = "still", light = 0.0, fade = 4 }
+
+[[actors]]
+id = "pieces-cut"
+kind = "agents"
+take = [2, 4]
+sprite = "live/actors/sleeper-piece-shoulder.webp"
+height = 151
+depth = 44.5
+parallax = 0.45
+wade = 0.02                  # they slide down behind the waterline
+reflect = 0.3
+eye_v = 0.5
+signal_color = [1.0, 0.62, 0.18]
+error_color = [1.0, 0.33, 0.28]
+signal_radius = 1.4
+spill = 0.08
+emissive_gain = 0.7
+[[actors.slots]]
+at = [1149, 1240]
+height = 151
+sprite = "live/actors/sleeper-piece-shoulder.webp"
+emissive = "live/actors/sleeper-piece-shoulder-lights.webp"
+light_color = [0.45, 1.0, 0.5]
+lights = [{ at = [0.476, 0.513], radius = 7, color = [0.45, 1.0, 0.5] }]
+[[actors.slots]]
+at = [1150, 1392]
+height = 96
+sprite = "live/actors/sleeper-piece-crown.webp"
+emissive = "live/actors/sleeper-piece-crown-lights.webp"
+light_color = [0.45, 1.0, 0.5]
+lights = [{ at = [0.677, 0.946], radius = 6, color = [0.45, 1.0, 0.5] }]
+[actors.states]
+working = { motion = "hold", amp = 0.5, light = 1.0, pulse = 0.2 }
+needs_you = { motion = "hold", sink = -0.12, turn = true, signal = true, light = 1.0 }   # rises a little, the light double-flashes
+finished = { motion = "settle", sink = 1.1, light = 0.0 }                              # slides under: rings, the last bubbles
+gone = { motion = "settle", sink = 1.1, light = 0.0, fade = 6 }
+
+[[actors]]
+id = "waders"
+kind = "agents"              # further agents: Sleepers wading among the wrecks
+take = [4, 12]
+sprite = "live/actors/sleeper.webp"
+front_sprite = "live/actors/sleeper-facing.webp"
+height = 190
+depth = 31
+parallax = 0.45
+wade = 0.32
+reflect = 0.5
+zones = [[180, 950, 620, 985], [700, 945, 1120, 975]]   # among the wrecks
+max = 8
+lights = [{ at = [0.923, 0.234], front_at = [0.501, 0.191], radius = 7, color = [1.0, 0.6, 0.2], spill = 0.1 }]
+light_color = [1.0, 0.6, 0.2]
+eye_v = 0.23
+signal_color = [1.0, 0.62, 0.18]
+error_color = [1.0, 0.33, 0.28]
+[actors.states]
+working = { motion = "wander", speed = 7, bob = 1.6, light = 1.0, pulse = 0.2 }
+needs_you = { motion = "hold", sink = -0.08, turn = true, signal = true, light = 1.0 }
+finished = { motion = "settle", sink = 0.75, light = 0.0 }
+gone = { motion = "settle", sink = 0.75, light = 0.0, fade = 6 }
+
+# ---------------------------------------------------------------- herons: notifications
+[[actors]]
+id = "herons"
+kind = "event"
+sprite = "live/actors/heron-flying.webp"
+faces = "left"
+height = 110
+depth = 25
+from = [[0, 880, 420, 930], [420, 870, 900, 910]]   # the reeds and the far shore
+[[actors.on]]
+event = "notify"             # a heron lifts from the reeds and away
+motion = "rise"
+to = [[-260, 140], [1400, -200], [-200, 420]]
+seconds = 7
+[[actors.on]]
+event = "critical"           # a critical one flies at the glass
+motion = "approach"
+depth = 60
+to = [1280, 1700]
+seconds = 4.5
+grow = 6.0
+light = { at = [0.2, 0.25], radius = 5, color = [1.0, 0.32, 0.28] }
+
+# ---------------------------------------------------------------- the catch: paper fills (the live layer's [fills] feed)
+[[actors]]
+id = "catch"
+kind = "event"
+sprite = "live/actors/boot.webp"
+height = 46
+depth = 42
+[[actors.on]]
+event = "fill_loss"          # a boot comes up the line (a win is Hollis's catch, above)
+motion = "reel"
+seconds = 3.4
+wriggle = 1.2
+
+# ---------------------------------------------------------------- lab trouble
+[[actors]]
+id = "lurker"
+kind = "signal"
+signal = "health"            # 0 nothing; 1 two eyes by the stilts; 2 a long shape too
+requires = "lab"
+sprite = "live/actors/lurker"
+at = [1290, 968]
+height = 70
+depth = 31
+parallax = 0.45
+wade = 0.3
+reflect = 0.4
+lights = [{ at = [0.3, 0.64], radius = 4, color = [0.95, 0.72, 0.28] }, { at = [0.39, 0.64], radius = 4, color = [0.95, 0.72, 0.28] }]
+[actors.states]
+"0" = { hidden = true, light = 0.0 }
+"1" = { frame = 0, motion = "hold", amp = 1.0, light = 1.0 }
+"2" = { frame = 1, motion = "drift", amp = 40, rate = 0.03, light = 1.0, height = 90, color = [1.0, 0.35, 0.28] }
+
+# ---------------------------------------------------------------- VECTOR
+[[actors]]
+id = "drone"
+kind = "signal"
+signal = "vector"            # the drone by the porch lantern: off, idle, thinking, speaking, listening, error
+sprite = "live/actors/drone"
+at = [1640, 610]
+height = 26
+depth = 42
+parallax = 0.6
+lights = [{ at = [0.5, 0.62], radius = 4, color = [0.55, 1.0, 0.62] }]
+[actors.states]
+off = { hidden = true, light = 0.0 }
+idle = { motion = "hover", amp = 3, light = 0.45 }
+thinking = { motion = "circle", amp = 26, rate = 0.22, light = 0.9, color = [1.0, 0.76, 0.3] }
+speaking = { motion = "hold", turn = true, light = 1.0, pulse = 2.2 }       # turns to you when he speaks
+listening = { motion = "hold", turn = true, light = 1.0, color = [0.5, 0.9, 1.0] }
+error = { motion = "hover", amp = 2, light = 0.8, color = [1.0, 0.35, 0.3], flicker = true }
+
+# ---------------------------------------------------------------- craft overhead: the network
+# Now and then a craft crosses the sky behind the far tree line: Drift long-haulers, Pip
+# Arro's Petrel on a parts run, a Picket still flying its patrol. The busier this machine's
+# network, the sooner the next one (`gain`). Off with `bromigos anim off ships`.
+[[actors]]
+id = "flybys"
+kind = "flyby"
+switch = "ships"
+signal = "net"
+every = [180, 480]           # seconds between passes on a quiet network
+gain = 2.0                   # at full traffic time runs 3x faster toward the next
+first = [40, 120]
+max = 1
+depth = 5                    # behind the far tree line and the shack
+haze = [0.05, 0.09, 0.07, 0.45]   # the night air: colour and how much of it a farthest craft wears
+rim = [0.55, 0.72, 0.6, 0.55]     # starlight catching their top edges
+[[actors.craft]]
+id = "longhauler"            # a Drift long-hauler: high, far and slow
+sprite = "live/actors/craft-longhauler.webp"
+weight = 1
+distance = [0.45, 1.0]
+height = [150, 92]           # near .. far
+speed = [34, 20]
+y = [105, 215]
+bob = 1.0
+bank = 0.3
+climb = 12
+haze = 0.3
+bright = 0.85
+lights = [
+  { at = [0.025, 0.27], color = [0.6, 0.8, 1.0], radius = 6, gain = 0.6 },     # the engine bells
+  { at = [0.02, 0.51], color = [0.6, 0.8, 1.0], radius = 6, gain = 0.6 },
+  { at = [0.05, 0.51], color = [0.6, 0.8, 1.0], radius = 6, gain = 0.6 },
+  { at = [0.025, 0.78], color = [0.6, 0.8, 1.0], radius = 6, gain = 0.6 },
+  { at = [0.97, 0.42], color = [1.0, 0.72, 0.35], radius = 3, gain = 0.5 },    # the bridge
+  { at = [0.834, 0.03], color = [1.0, 1.0, 1.0], radius = 3, blink = "strobe", period = 2.2 },
+  { at = [0.935, 0.3], color = [1.0, 0.25, 0.2], radius = 3.5, blink = 2.6 },
+]
+trails = [{ at = [0.0, 0.52], color = [0.55, 0.75, 1.0], radius = 9, life = 7, every = 0.3, gain = 0.07, spread = 3, sink = 2 }]
+[[actors.craft]]
+id = "petrel"                # Pip Arro's courier, in on a parts run
+sprite = "live/actors/craft-petrel.webp"
+weight = 3
+distance = [0.0, 0.85]
+height = [72, 34]
+speed = [240, 120]
+y = [110, 360]
+bob = 4
+bank = 3.0
+climb = 70
+haze = 0.1
+bright = 0.95
+lights = [
+  { at = [0.888, 0.203], color = [1.0, 0.2, 0.18], radius = 3.5, gain = 0.9 },  # wingtips
+  { at = [0.086, 0.776], color = [0.25, 1.0, 0.4], radius = 3.5, gain = 0.9 },
+  { at = [0.71, 0.42], color = [1.0, 0.7, 0.35], radius = 3, gain = 0.4 },     # the lit cockpit
+  { at = [0.235, 0.03], color = [1.0, 1.0, 1.0], radius = 3, blink = "strobe", period = 1.3 },
+]
+trails = [{ at = [0.235, 0.82], color = [0.8, 0.82, 0.85], radius = 3, life = 2.2, every = 0.08, gain = 0.06 }]
+[[actors.craft]]
+id = "picket"                # a Ledger Wars sentry drone, still flying its patrol
+sprite = "live/actors/craft-picket.webp"
+weight = 2
+distance = [0.1, 0.9]
+height = [62, 30]
+speed = [110, 60]
+y = [170, 420]               # low: it skims the treetops, in and out behind them
+bob = 6
+bank = 4.0
+climb = 30
+haze = 0.15
+bright = 0.9
+lights = [
+  { at = [0.749, 0.537], color = [1.0, 0.6, 0.2], radius = 4.5, gain = 1.0 },   # its optic
+  { at = [0.271, 0.526], color = [0.45, 1.0, 0.4], radius = 4, gain = 0.8 },    # the engine pods
+  { at = [0.456, 0.691], color = [0.45, 1.0, 0.4], radius = 4, gain = 0.8 },
+]
+trails = [
+  { at = [0.25, 0.53], color = [0.4, 1.0, 0.45], radius = 3.5, life = 2.6, every = 0.1, gain = 0.1 },
+  { at = [0.43, 0.70], color = [0.4, 1.0, 0.45], radius = 3.5, life = 2.6, every = 0.1, gain = 0.1 },
+]
+
+# ---------------------------------------------------------------- frogs: your activity
+[[actors]]
+id = "frogs"
+kind = "crowd"               # your activity: croaking and hopping while you work, sitting still when idle or locked
+sprite = "live/actors/frog-sit.webp"
+poses = { sit = "live/actors/frog-sit.webp", croak = "live/actors/frog-croak.webp", hop = "live/actors/frog-hop.webp" }
+faces = "left"
+height = 34
+depth = 47
+parallax = 0.45
+spots = [[1200, 1398], [1940, 1330], [2040, 1322], [1060, 1322], [880, 1330]]   # the lily pads
+sound = "live/sounds/frog.wav"
+[actors.states]
+working = { motion = "croak", rate = 0.09, hop_every = 14, hop_height = 40 }
+dozing = { motion = "still" }
+asleep = { motion = "still" }
+
+# ---------------------------------------------------------------- sound and the roll call
+[sounds]                     # crickets: often while you work, rarer when idle, none when locked
+ambient = [
+  { file = "live/sounds/cricket.wav", every = [9, 24], gain = 0.35 },
+]                            # the frogs' croaks come from the frogs themselves
+
+[rollcall]                   # at login: the Sleepers' eyes light one by one, Hollis's lantern flares
+sequence = "lights"
+sound = ""                   # reserved: a short cue per world

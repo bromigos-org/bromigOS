@@ -1,0 +1,70 @@
+# The installer's smoke test, on every change to it: shellcheck, then install.sh --dry-run
+# (downloaded, and piped into bash with a terminal and without one)
+# as a regular user in a fresh Arch container against a stand-in repository served from
+# the checkout (the real public key at /bromigos/bromigos.asc), so the key fetch, the
+# pinned fingerprint and the pacman.conf section are exercised without the network or the
+# real repository. The full install is the VM test (test/vm/arch-vm.sh, docs/install.md),
+# run by hand: it needs KVM and ~10 minutes, more than the shared runners should give it.
+name: install-smoke
+
+on:
+  push:
+    branches: [main]
+    paths: ["install.sh", "test/vm/**", "packaging/keys/**", ".github/workflows/install-smoke.yml"]
+  pull_request:
+    paths: ["install.sh", "test/vm/**", "packaging/keys/**", ".github/workflows/install-smoke.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    # A small job: the light amd64 runners (homelab-amd64, two at a time) when the variable
+    # names them, never the single package builder.
+    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    container: archlinux:base
+    timeout-minutes: 15
+    steps:
+      - name: tools
+        run: pacman -Syu --noconfirm --needed git shellcheck python sudo gnupg >/dev/null
+      - uses: actions/checkout@v5
+      - name: shellcheck
+        run: shellcheck install.sh test/vm/arch-vm.sh test/vm/checks.sh
+      - name: a stand-in repository
+        run: |
+          mkdir -p /srv/repo/bromigos
+          cp packaging/keys/bromigos.asc /srv/repo/bromigos/
+          (cd /srv/repo && python -m http.server 8000 >/dev/null 2>&1 &)
+          sleep 1
+      - name: install.sh --dry-run, as a regular user
+        run: |
+          pacman-key --init >/dev/null 2>&1
+          useradd -m tester
+          echo 'tester ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/tester
+          cp install.sh /home/tester/
+          out=$(sudo -u tester bash /home/tester/install.sh --repo http://127.0.0.1:8000 --dry-run 2>&1)
+          echo "$out"
+          grep -q 'would add to /etc/pacman.conf' <<<"$out"
+          grep -q 'would run: sudo pacman-key --lsign-key 393E7D54F7DE58FE75B97214947C9D6193D3DD8B' <<<"$out"
+          grep -q 'would run: sudo pacman -Syu --needed bromigos-keyring bromigos-core' <<<"$out"
+          ! grep -q '^\[bromigos\]' /etc/pacman.conf   # a dry run changes nothing
+      - name: piped (curl … | bash), with a terminal and without one
+        run: |
+          # the whole script is read before it runs, so nothing it starts reads the rest of it
+          out=$(script -qec "cat install.sh | sudo -u tester bash -s -- --repo http://127.0.0.1:8000 --dry-run" /dev/null 2>&1)
+          echo "$out"
+          grep -q 'would run: sudo pacman -Syu --needed bromigos-keyring bromigos-core' <<<"$out"
+          out=$(cat install.sh | sudo -u tester bash -s -- --repo http://127.0.0.1:8000 --dry-run 2>&1)
+          grep -q 'would run: sudo pacman -Syu --needed bromigos-keyring bromigos-core' <<<"$out"
+          # no terminal to ask on: a real install stops at once, unless --yes
+          if out=$(cat install.sh | sudo -u tester bash -s -- --repo http://127.0.0.1:8000 2>&1); then exit 1; fi
+          echo "$out"
+          grep -q 'no terminal to ask on' <<<"$out"
+          ! grep -q '^\[bromigos\]' /etc/pacman.conf
+      - name: a wrong key is refused
+        run: |
+          gpg --batch --quiet --passphrase '' --quick-gen-key 'not bromigos <x@y>' default default never
+          gpg --armor --export > /srv/repo/bromigos/bromigos.asc
+          cp install.sh /tmp/i.sh
+          if sudo -u tester bash /tmp/i.sh --repo http://127.0.0.1:8000 --dry-run; then exit 1; fi

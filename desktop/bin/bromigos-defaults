@@ -1,0 +1,362 @@
+#!/usr/bin/env python3
+# bromigos:summary=Default apps: the browser, file manager, editor, viewers and players (xdg-mime), the terminal and file manager bromigOS's keys start, your web apps
+# bromigos:args=[status] | set KIND APP | terminal APP|COMMAND | files APP|COMMAND | apps [KIND] | webapp-add NAME URL | webapp-catalog NAME | webapp-remove NAME | reset  [--json]
+# bromigos:examples=bromigos defaults; bromigos defaults set browser firefox.desktop; bromigos defaults terminal foot.desktop; bromigos defaults apps editor
+"""bromigos-defaults (`bromigos defaults`): which app opens what. The kinds are each a set of
+file and link types (MIME), set with xdg-mime so every app that asks the desktop opens
+the same one; the terminal and the file manager bromigOS's own keys start (SUPER+RETURN,
+SUPER+E …) are `bromigos.apps` in your hyprland.lua, kept in a marked block (`--
+>>> bromigos defaults`) and taken by Hyprland the safe way. Settings › Default apps drives
+it.
+
+  bromigos defaults [status]             each kind's app, the apps that can be it, the terminal,
+                                         the file manager's key, your web apps
+  bromigos defaults set KIND APP         KIND: browser, files, editor, images, video, music,
+                                         pdf, mail; APP a desktop entry (firefox.desktop)
+  bromigos defaults terminal APP|COMMAND the terminal bromigOS's keys and menus start ($TERMINAL
+                                         in the session too; xdg-terminals.list)
+  bromigos defaults files APP|COMMAND    the file manager its key starts
+  bromigos defaults apps [KIND]          the installed apps (that can be KIND)
+  bromigos defaults webapp-add NAME URL | webapp-catalog NAME | webapp-remove NAME
+                                         your web apps (bromigos webapp)
+  bromigos defaults reset                the terminal and the file manager back to bromigOS's
+                                         (kitty, pcmanfm): the block removed
+"""
+import os
+import re
+import shlex
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+BLOCK = "defaults"
+# kind: (its name, the types it opens: the first is the one asked, the rest are set with it)
+KINDS = {
+    "browser": ("Web browser", ["x-scheme-handler/https", "x-scheme-handler/http", "text/html"]),
+    "files": ("File manager", ["inode/directory"]),
+    "editor": ("Text editor", ["text/plain"]),
+    "images": ("Image viewer", ["image/png", "image/jpeg", "image/gif", "image/webp"]),
+    "video": ("Video player", ["video/mp4", "video/x-matroska", "video/webm"]),
+    "music": ("Music player", ["audio/mpeg", "audio/flac", "audio/ogg"]),
+    "pdf": ("PDF viewer", ["application/pdf"]),
+    "mail": ("Email", ["x-scheme-handler/mailto"]),
+}
+DEFAULT_APPS = {"terminal": "kitty", "files": "pcmanfm"}
+
+
+# ------------------------------------------------------------------ desktop entries
+def data_dirs():
+    out = [C.DATA]
+    out += [d for d in (os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(":") if d]
+    return out
+
+
+def read_entry(path):
+    """[Desktop Entry]'s keys (no locale variants), or None."""
+    keys, inside = {}, False
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("["):
+                    if inside:
+                        break
+                    inside = line == "[Desktop Entry]"
+                    continue
+                if inside and "=" in line and not line.startswith("#"):
+                    k, _, v = line.partition("=")
+                    k = k.strip()
+                    if "[" not in k:
+                        keys[k] = v.strip()
+    except OSError:
+        return None
+    return keys if keys.get("Type", "Application") == "Application" else None
+
+
+def apps():
+    """Every installed app: {id: {id, name, icon, exec, command, categories, mime, hidden}};
+    the user's entries shadow the system's (the desktop entry spec's ids)."""
+    out = {}
+    for d in reversed(data_dirs()):
+        base = os.path.join(d, "applications")
+        for root, _dirs, files in os.walk(base):
+            for f in files:
+                if not f.endswith(".desktop"):
+                    continue
+                path = os.path.join(root, f)
+                did = os.path.relpath(path, base).replace("/", "-")
+                e = read_entry(path)
+                if e is None:
+                    out.pop(did, None)
+                    continue
+                if e.get("Hidden", "").lower() == "true":
+                    out.pop(did, None)
+                    continue
+                exe = e.get("Exec", "")
+                out[did] = {"id": did, "name": e.get("Name") or did[:-8], "icon": e.get("Icon", ""),
+                            "exec": exe, "command": command_of(exe),
+                            "categories": [c for c in e.get("Categories", "").split(";") if c],
+                            "mime": [m for m in e.get("MimeType", "").split(";") if m],
+                            "hidden": e.get("NoDisplay", "").lower() == "true", "path": path}
+    return out
+
+
+def command_of(exe):
+    """An Exec line's program and its fixed arguments (field codes like %U dropped)."""
+    try:
+        words = shlex.split(exe)
+    except ValueError:
+        words = exe.split()
+    return " ".join(shlex.quote(w) for w in words if not re.fullmatch(r"%[fFuUdDnNickvm]", w))
+
+
+# ------------------------------------------------------------------ xdg-mime
+def query(mime):
+    rc, out, _ = C.run(["xdg-mime", "query", "default", mime])
+    return out.strip() if rc == 0 and out.strip() else None
+
+
+def kind_doc(kind, everything):
+    title, types = KINDS[kind]
+    cands = sorted((a for a in everything.values() if any(t in a["mime"] for t in types)),
+                   key=lambda a: (a["hidden"], a["name"].lower()))
+    cur = query(types[0])
+    return {"kind": kind, "title": title, "types": types, "default": cur,
+            "default_name": everything.get(cur, {}).get("name") if cur else None,
+            "candidates": [{"id": a["id"], "name": a["name"], "icon": a["icon"], "hidden": a["hidden"]}
+                           for a in cands]}
+
+
+# ------------------------------------------------------------------ the terminal, the file manager
+def lua_path():
+    return os.path.join(C.CONFIG, "hypr", "hyprland.lua")
+
+
+def _block_value(lua, key):
+    b = lua.find("-- >>> bromigos defaults")
+    e = lua.find("-- <<< bromigos defaults", b) if b >= 0 else -1
+    if b >= 0 and e > b:
+        m = re.search(r"bromigos\.apps\." + key + r"\s*=\s*\"([^\"]*)\"", lua[b:e])
+        if m:
+            return m.group(1), "block"
+    # a value of the user's own: apps = { terminal = "…" } in the bromigos table (uncommented)
+    head = lua.split("dofile(", 1)[0]
+    for line in head.splitlines():
+        code = line.split("--", 1)[0]
+        m = re.search(key + r"\s*=\s*\"([^\"]+)\"", code)
+        if m and "apps" in code:
+            return m.group(1), "yours"
+    return None, None
+
+
+def bound_apps():
+    lua = C.read_file(lua_path()) or ""
+    out = {}
+    for k in ("terminal", "files"):
+        v, where = _block_value(lua, k)
+        out[k] = {"command": v or DEFAULT_APPS[k], "from": where or "bromigOS"}
+    return out
+
+
+def terminals_list():
+    p = os.path.join(C.CONFIG, "xdg-terminals.list")
+    text = C.read_file(p) or ""
+    return [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.startswith("#")], p
+
+
+def status(_args=None):
+    everything = apps()
+    bound = bound_apps()
+    terms = sorted((a for a in everything.values() if "TerminalEmulator" in a["categories"]),
+                   key=lambda a: a["name"].lower())
+    tl, tl_path = terminals_list()
+    by_cmd = {a["command"].split()[0] if a["command"] else "": a for a in everything.values()}
+    term_cmd = bound["terminal"]["command"]
+    files_cmd = bound["files"]["command"]
+    doc = {
+        "kinds": [kind_doc(k, everything) for k in KINDS],
+        "terminal": {"command": term_cmd, "from": bound["terminal"]["from"],
+                     "app": (by_cmd.get(term_cmd.split()[0]) or {}).get("id") if term_cmd else None,
+                     "env": os.environ.get("TERMINAL") or None, "xdg_terminals": tl, "xdg_terminals_file": tl_path,
+                     "candidates": [{"id": a["id"], "name": a["name"], "icon": a["icon"], "command": a["command"]}
+                                    for a in terms]},
+        "files_key": {"command": files_cmd, "from": bound["files"]["from"],
+                      "app": (by_cmd.get(files_cmd.split()[0]) or {}).get("id") if files_cmd else None},
+        "file": lua_path(),
+        "webapps": webapps(),
+    }
+    return doc
+
+
+def webapps():
+    d = C.bromigos("webapp", "list", "--json")
+    cat = C.bromigos("webapp", "catalog", "--json")
+    mine = d if isinstance(d, list) else []
+    names = {w.get("name") for w in mine}
+    return {"yours": [{"name": w.get("name"), "title": w.get("title") or w.get("name"), "url": w.get("url"),
+                       "hotkey": w.get("hotkey") or None} for w in mine],
+            "catalog": [dict(c, added=c.get("name") in names) for c in (cat if isinstance(cat, list) else [])],
+            "available": d is not None}
+
+
+# ------------------------------------------------------------------ changes
+def _app(raw, everything=None):
+    everything = everything or apps()
+    did = raw if raw.endswith(".desktop") else raw + ".desktop"
+    a = everything.get(did)
+    if a is None:
+        raise Fail(f"no app {raw!r} (bromigos defaults apps lists them)")
+    return a
+
+
+def set_kind(args):
+    if len(args) != 2:
+        raise Fail("bromigos defaults set KIND APP")
+    kind, raw = args
+    if kind not in KINDS:
+        raise Fail(f"{kind!r}: one of {', '.join(KINDS)}")
+    C.need("xdg-mime", "xdg-utils")
+    a = _app(raw)
+    title, types = KINDS[kind]
+    C.must(["xdg-mime", "default", a["id"], *types], what="xdg-mime")
+    doc = status()
+    if kind == "files" and a["command"]:
+        _write_block(files=a["command"].split()[0])
+        doc = status()
+    return dict(doc, said=f"{title}: {a['name']}")
+
+
+def _write_block(terminal=None, files=None, remove=False):
+    """The marked block, written the safe way (bromigos_hypr.save: verify, one reload)."""
+    import bromigos_hypr as H
+    lua = C.read_file(lua_path())
+    if lua is None:
+        raise Fail(f"{lua_path()}: none (bromigos update seeds it)")
+    cur = bound_apps()
+    t = terminal if terminal is not None else (cur["terminal"]["command"] if cur["terminal"]["from"] == "block" else None)
+    f = files if files is not None else (cur["files"]["command"] if cur["files"]["from"] == "block" else None)
+    if remove or (t is None and f is None):
+        new = H.without_block(lua, BLOCK)
+    else:
+        body = ["-- Your default apps (Settings › Default apps, bromigos defaults): what bromigOS's keys start.",
+                "bromigos.apps = bromigos.apps or {}"]
+        if t:
+            body += [f"bromigos.apps.terminal = {_lua_str(t)}", f"hl.env(\"TERMINAL\", {_lua_str(t)})"]
+        if f:
+            body.append(f"bromigos.apps.files = {_lua_str(f)}")
+        try:
+            new = H.with_block(lua, BLOCK, "\n".join(body), before_dofile=True)
+        except ValueError as e:
+            raise Fail(str(e))
+    ok, detail = H.save({lua_path(): new}, lua=lua_path())
+    if not ok:
+        raise Fail(f"Hyprland didn't take it: {detail}")
+    return detail
+
+
+def _lua_str(s):
+    if not re.fullmatch(r"[A-Za-z0-9_./ +:=,@%-]{1,200}", s):
+        raise Fail(f"{s!r}: a command of letters, digits and . / - _ + : = , @ % only")
+    return '"' + s + '"'
+
+
+def _command(raw):
+    if raw.endswith(".desktop") or (raw + ".desktop") in apps():
+        a = _app(raw)
+        if not a["command"]:
+            raise Fail(f"{a['name']} has no command to run")
+        return a["command"], a
+    _lua_str(raw)                          # only a plain command line goes into hyprland.lua
+    try:
+        prog = shlex.split(raw)[0]
+    except (ValueError, IndexError):
+        raise Fail(f"{raw!r}: not a command")
+    if not C.have(prog):
+        raise Fail(f"{raw!r}: no such program")
+    return raw, None
+
+
+def terminal(args):
+    if len(args) != 1:
+        raise Fail("bromigos defaults terminal APP|COMMAND")
+    cmd, a = _command(args[0])
+    detail = _write_block(terminal=cmd)
+    if a is not None:
+        tl, p = terminals_list()
+        C.write_file(p, "# your terminal first (bromigos defaults terminal; xdg-terminal-exec reads it)\n" +
+                     "\n".join([a["id"]] + [x for x in tl if x != a["id"]]) + "\n")
+    return dict(status(), said=f"Terminal: {a['name'] if a else cmd}", detail=detail)
+
+
+def files(args):
+    if len(args) != 1:
+        raise Fail("bromigos defaults files APP|COMMAND")
+    cmd, a = _command(args[0])
+    detail = _write_block(files=cmd)
+    return dict(status(), said=f"File manager key: {a['name'] if a else cmd}", detail=detail)
+
+
+def list_apps(args):
+    everything = apps()
+    if args:
+        kind = args[0]
+        if kind == "terminal":
+            sel = [a for a in everything.values() if "TerminalEmulator" in a["categories"]]
+        elif kind in KINDS:
+            sel = [a for a in everything.values() if any(t in a["mime"] for t in KINDS[kind][1])]
+        else:
+            raise Fail(f"{kind!r}: terminal or one of {', '.join(KINDS)}")
+    else:
+        sel = [a for a in everything.values() if not a["hidden"]]
+    return {"apps": [{k: a[k] for k in ("id", "name", "icon", "command", "categories", "hidden")}
+                     for a in sorted(sel, key=lambda a: a["name"].lower())]}
+
+
+def _webapp(*argv):
+    rc, out, err = C.run(["bromigos", "webapp", *argv], timeout=60)
+    if rc != 0:
+        raise Fail((err or out).strip().splitlines()[-1] if (err or out).strip() else f"bromigos webapp: exit {rc}")
+    return out.strip()
+
+
+def webapp_add(args):
+    if len(args) != 2:
+        raise Fail("bromigos defaults webapp-add NAME URL")
+    name, url = args
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", name):
+        raise Fail(f"{name!r}: a short name: lowercase letters, digits, -")
+    if not re.fullmatch(r"https?://\S{3,500}", url):
+        raise Fail(f"{url!r}: an http(s) address")
+    said = _webapp("add", name, url)
+    return dict(status(), said=said.splitlines()[0] if said else f"Web app {name} added")
+
+
+def webapp_catalog(args):
+    if len(args) != 1:
+        raise Fail("bromigos defaults webapp-catalog NAME")
+    said = _webapp("add", "--from-catalog", args[0])
+    return dict(status(), said=said.splitlines()[0] if said else f"Web app {args[0]} added")
+
+
+def webapp_remove(args):
+    if len(args) != 1:
+        raise Fail("bromigos defaults webapp-remove NAME")
+    said = _webapp("remove", args[0])
+    return dict(status(), said=said.splitlines()[0] if said else f"Web app {args[0]} removed")
+
+
+def reset(_args):
+    lua = C.read_file(lua_path()) or ""
+    if "-- >>> bromigos defaults" in lua:
+        _write_block(remove=True)
+    return dict(status(), said="The terminal and the file manager's key: bromigOS's (kitty, pcmanfm)")
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "set": set_kind, "terminal": terminal, "files": files, "apps": list_apps,
+                     "webapp-add": webapp_add, "webapp-catalog": webapp_catalog, "webapp-remove": webapp_remove,
+                     "reset": reset}, USAGE))

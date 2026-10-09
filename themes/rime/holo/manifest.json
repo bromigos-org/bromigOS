@@ -1,0 +1,18 @@
+{
+  "_comment": "Hologram models (VECTOR's format: vector's tools/holo/collection.py and assets/holo/README.md). Boxes are [x0,x1, y0,y1, z0,z1] in fractions of the normalised bounding box (y up, front +z); a face goes to the first part whose box holds its centroid, else to the part with rest=true. bind names the live reading a part shows (VECTOR's holo/bind.py), empty for a part that only shapes the model. Sources are in src/; the baked NAME.holo.npz sit next to this file. Rebake: ~/.local/share/bromigos/venv/bin/python <vector>/tools/holo/bake.py --root THIS_DIR --preview",
+  "models": {
+  "station-nine": {
+   "title": "STATION NINE",
+   "subtitle": "Rime \u00b7 Juno Varga's post",
+   "faces": 40000,
+   "max_edges": 16000,
+   "source": "src/station-nine.glb",
+   "parts": [
+    {"id": "mast", "label": "ANTENNA MAST", "bind": "", "hint": "The whip mast behind the dish: when anyone on any band calls out and nobody else hears, Juno is the first to answer", "boxes": [[0.3, 0.65, 0.3, 1.0, 0.0, 0.27]], "explode": [0, 0.4, -1], "distance": 0.26},
+    {"id": "dish", "label": "LONG-RANGE DISH", "bind": "wick.beam", "hint": "The long-range dish Juno kept turning through ten years of unanswered calls into the blizzards. Lit while every channel on the network answers", "boxes": [[0.2, 0.8, 0.6, 1.0, 0.25, 0.75]], "explode": [0, 1, 0.2], "distance": 0.3},
+    {"id": "hut", "label": "RELAY HUT", "bind": "", "hint": "The relay hut, half-buried now. The flame is cut into its steel door: frost fills it white every night, and every morning it is scraped black again", "boxes": [[0.22, 0.78, 0.17, 0.62, 0.15, 0.85]], "explode": [0, 0.2, 1], "distance": 0.2},
+    {"id": "glacier", "label": "GLACIER", "bind": "", "hint": "The glacier of a mining moon switched off in the Switch-Off. Ice-foxes den in the lee of the hut, and under the ice something colossal moves: the crews call them Frostbacks", "rest": true, "explode": [0, -1, 0], "distance": 0.16}
+   ]
+  }
+  }
+}

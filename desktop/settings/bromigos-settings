@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+# bromigos:summary=Settings: displays, sound, network, power, input, the desktop, VECTOR, updates, your account (SUPER+,)
+# bromigos:args=[PAGE[#SETTING]] | --list [--json] | --search WORDS [--json] | --render OUT.png [--page PAGE] [--size WxH] [--search WORDS] [--advanced] | --audit [--page PAGE]
+# bromigos:examples=bromigos settings; bromigos settings sound; bromigos settings --search wifi; bromigos settings --list
+"""bromigos-settings: the Settings window (GTK4 + libadwaita, in the theme's colours).
+
+  bromigos settings [PAGE[#SETTING]]  open it (on PAGE, e.g. displays, sound, network, or on one
+                                      setting: sound#output); a second call raises it
+  bromigos settings --list            the page registry: each page, its group, order and file,
+                                      and any page file skipped (--json: as JSON)
+  bromigos settings --search WORDS    the search across all settings, printed (--json: as JSON)
+  bromigos settings --render OUT.png [--page PAGE] [--size 1120x780] [--search WORDS] [--advanced]
+                                      draw a page to a PNG and exit (needs a Wayland display:
+                                      the tests use a headless compositor)
+  bromigos settings --audit [--page PAGE]
+                                      build a page and print what it lacks (controls without a
+                                      hover hint, settings the search lists but no row has)
+
+Pages: /usr/lib/bromigos/settings/pages/, extensions' and ~/.config/bromigos/plugins/settings/
+(docs/settings.md).
+"""
+import json
+import os
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, HERE)
+sys.path.insert(1, "/usr/lib/bromigos/lib")
+
+if any(a in ("-h", "--help", "help") for a in sys.argv[1:]):
+    sys.exit(__doc__)
+
+if "--list" in sys.argv:
+    from bromigos_settings.registry import discover, page_dirs
+    pages, problems = discover()
+    if "--json" in sys.argv:
+        print(json.dumps({"schema": 1, "dirs": page_dirs(),
+                          "pages": [{"id": p.id, "title": p.title, "group": p.group_id, "order": p.order,
+                                     "icon": p.icon, "summary": p.summary, "source": p.source,
+                                     "entries": [e.key for e in p.entries],
+                                     "sections": [{"id": s.id, "title": s.title, "source": s.source}
+                                                  for s in p.sections]} for p in pages],
+                          "problems": [{"file": f, "message": m} for f, m in problems]}))
+    else:
+        group = None
+        for p in pages:
+            if p.group_id != group:
+                group = p.group_id
+                print(group.upper())
+            print(f"{p.order:>6}  {p.id:<16} {p.title:<22} {len(p.entries):>3} settings  {p.source}")
+            for s in p.sections:
+                print(f"{'':>8}+ {s.id:<14} {s.title:<22} {s.source}")
+        for f, m in problems:
+            print(f"skipped {f}: {m}")
+    sys.exit(0)
+
+if "--search" in sys.argv and "--render" not in sys.argv:
+    from bromigos_settings.registry import discover
+    from bromigos_settings.search import Index
+    q = " ".join(a for a in sys.argv[sys.argv.index("--search") + 1:] if a != "--json")
+    res = Index(discover()[0]).search(q)
+    if "--json" in sys.argv:
+        print(json.dumps({"schema": 1, "query": q, "results": [
+            {"page": r.page, "key": r.key, "title": r.title, "where": r.where, "kind": r.kind,
+             "score": round(r.score, 2)} for r in res]}))
+    else:
+        for r in res:
+            print(f"{r.title:<34} {r.where}   (bromigos settings {r.page}{'#' + r.key if r.key else ''})")
+    sys.exit(0)
+
+from bromigos_settings.app import main  # noqa: E402
+
+sys.exit(main(sys.argv))

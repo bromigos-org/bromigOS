@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Drift Map
+GenericName=Star Chart
+Comment=The lore's catalog as a star chart to fly through (SUPER+M; Esc closes)
+Icon=bromigos-driftmap
+TryExec=bromigos-live
+Exec=bromigos-live open driftmap
+Terminal=false
+Categories=Utility;
+Keywords=drift;drift map;map;star chart;stars;lore;catalog;galaxy;hologram;deck;
+StartupNotify=false
+X-Bromigos-Menu=holo/driftmap

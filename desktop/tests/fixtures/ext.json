@@ -1,0 +1,240 @@
+{
+ "list": {
+  "extensions": [
+   {
+    "commit": "4f1c2ab",
+    "enabled": true,
+    "kinds": [
+     "theme"
+    ],
+    "name": "teal-glass",
+    "source": "https://github.com/bromigos-org/extensions@main",
+    "status": "ok",
+    "version": "1.2.0"
+   },
+   {
+    "commit": "9d02e11",
+    "enabled": true,
+    "kinds": [
+     "live-deck"
+    ],
+    "name": "hello-deck",
+    "source": "https://github.com/bromigos-org/extensions@main",
+    "status": "ok",
+    "version": "0.3.1"
+   },
+   {
+    "commit": null,
+    "enabled": false,
+    "kinds": [
+     "widget"
+    ],
+    "name": "cpu-heat",
+    "source": "~/src/cpu-heat [copied]",
+    "status": "disabled",
+    "version": "0.1.0"
+   }
+  ],
+  "unmanaged_themes": [
+   "my-old-theme"
+  ]
+ },
+ "search": {
+  "catalogs": [
+   "https://github.com/bromigos-org/extensions.git"
+  ],
+  "errors": [],
+  "results": [
+   {
+    "authors": [],
+    "bundled": false,
+    "catalog": "https://github.com/bromigos-org/extensions.git",
+    "description": "A full-screen hologram of this machine's load average: the live-deck starter.",
+    "display_name": "Hello Deck",
+    "install": [
+     "bromigos",
+     "ext",
+     "install",
+     "hello-deck"
+    ],
+    "installed": true,
+    "kinds": [
+     "live-deck"
+    ],
+    "name": "hello-deck",
+    "path": "examples/hello-deck",
+    "preview": null,
+    "tags": [
+     "example",
+     "deck",
+     "hologram"
+    ],
+    "url": "https://github.com/bromigos-org/extensions"
+   },
+   {
+    "authors": [],
+    "bundled": false,
+    "catalog": "https://github.com/bromigos-org/extensions.git",
+    "description": "A desktop widget with the load average on seven-segment digits: the widget starter.",
+    "display_name": "Load Panel",
+    "install": [
+     "bromigos",
+     "ext",
+     "install",
+     "load-panel"
+    ],
+    "installed": false,
+    "kinds": [
+     "widget"
+    ],
+    "name": "load-panel",
+    "path": "examples/load-panel",
+    "preview": null,
+    "tags": [
+     "example",
+     "widget",
+     "system"
+    ],
+    "url": "https://github.com/bromigos-org/extensions"
+   },
+   {
+    "authors": [],
+    "bundled": true,
+    "catalog": "https://github.com/bromigos-org/extensions.git",
+    "description": "A night bayou: black mirror water, moss, fireflies and a lantern on a stilt shack.",
+    "display_name": "Mire",
+    "install": [
+     "bromigos",
+     "ext",
+     "install",
+     "mire"
+    ],
+    "installed": true,
+    "kinds": [
+     "theme"
+    ],
+    "name": "mire",
+    "path": "themes/mire",
+    "preview": null,
+    "tags": [
+     "world",
+     "painted",
+     "dark"
+    ],
+    "url": "https://github.com/bromigos-org/bromigOS"
+   },
+   {
+    "authors": [],
+    "bundled": false,
+    "catalog": "https://github.com/bromigos-org/extensions.git",
+    "description": "Teal glass on deep slate: a colour theme, the theme starter as it comes.",
+    "display_name": "Teal Glass",
+    "install": [
+     "bromigos",
+     "ext",
+     "install",
+     "teal-glass"
+    ],
+    "installed": true,
+    "kinds": [
+     "theme"
+    ],
+    "name": "teal-glass",
+    "path": "examples/teal-glass",
+    "preview": null,
+    "tags": [
+     "example",
+     "colours",
+     "dark"
+    ],
+    "url": "https://github.com/bromigos-org/extensions"
+   },
+   {
+    "authors": [],
+    "bundled": false,
+    "catalog": "https://github.com/bromigos-org/extensions.git",
+    "description": "A homelab adapter that reports this machine as a host (CPU, memory, disk, load).",
+    "display_name": "This Host",
+    "install": [
+     "bromigos",
+     "ext",
+     "install",
+     "this-host"
+    ],
+    "installed": false,
+    "kinds": [
+     "homelab-adapter"
+    ],
+    "name": "this-host",
+    "path": "examples/this-host",
+    "tags": [
+     "example",
+     "homelab",
+     "adapter"
+    ],
+    "url": "https://github.com/bromigos-org/extensions",
+    "preview": null
+   },
+   {
+    "authors": [],
+    "bundled": true,
+    "catalog": "https://github.com/bromigos-org/extensions.git",
+    "description": "The sea at night, split at the waterline: Greywater Light above, the Choir below.",
+    "display_name": "Tidewell",
+    "install": [
+     "bromigos",
+     "ext",
+     "install",
+     "tidewell"
+    ],
+    "installed": true,
+    "kinds": [
+     "theme"
+    ],
+    "name": "tidewell",
+    "path": "themes/tidewell",
+    "preview": null,
+    "tags": [
+     "world",
+     "painted",
+     "dark"
+    ],
+    "url": "https://github.com/bromigos-org/bromigOS"
+   },
+   {
+    "authors": [],
+    "bundled": false,
+    "catalog": "https://github.com/bromigos-org/extensions.git",
+    "description": "A VECTOR tool: how long this machine has been up, and its load (read level).",
+    "display_name": "Uptime Tool",
+    "install": [
+     "bromigos",
+     "ext",
+     "install",
+     "uptime-tool"
+    ],
+    "installed": false,
+    "kinds": [
+     "vector-tool"
+    ],
+    "name": "uptime-tool",
+    "path": "examples/uptime-tool",
+    "tags": [
+     "example",
+     "vector",
+     "tool"
+    ],
+    "url": "https://github.com/bromigos-org/extensions",
+    "preview": null
+   }
+  ],
+  "schema": 1
+ },
+ "updates": {
+  "hello-deck": {
+   "op": "update",
+   "detail": "hello-deck 0.3.1 \u2192 0.4.0: 3 files changed, no new permissions",
+   "version": "0.4.0"
+  }
+ }
+}

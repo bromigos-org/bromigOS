@@ -1,0 +1,19 @@
+{
+  "_comment": "Hologram models (VECTOR's format: vector's tools/holo/collection.py and assets/holo/README.md). Boxes are [x0,x1, y0,y1, z0,z1] in fractions of the normalised bounding box (y up, front +z); a face goes to the first part whose box holds its centroid, else to the part with rest=true. bind names the live reading a part shows (VECTOR's holo/bind.py), empty for a part that only shapes the model. Sources are in src/; the baked NAME.holo.npz sit next to this file. Rebake: ~/.local/share/bromigos/venv/bin/python <vector>/tools/holo/bake.py --root THIS_DIR --preview",
+  "models": {
+  "the-spine": {
+   "title": "THE SPINE",
+   "subtitle": "Sunder \u00b7 Tamsin Rook's post",
+   "faces": 40000,
+   "max_edges": 16000,
+   "source": "src/the-spine.glb",
+   "parts": [
+    {"id": "relay", "label": "RELAY", "bind": "wick.beam", "hint": "The relay welded to the fallen cruiser's spine. Lit while every channel on the network answers", "boxes": [[0.55, 0.9, 0.72, 1.0, 0.25, 0.75]], "explode": [0.3, 1, 0], "distance": 0.3},
+    {"id": "dune", "label": "DUNE", "bind": "", "hint": "Sunder's dunes under two suns, the white one and the small red one the clans call the Debtor. Sand-skiffs sail them by day; armoured caravans cross them by night", "boxes": [[0.0, 1.0, 0.0, 0.12, 0.0, 1.0]], "explode": [0, -1, 0], "distance": 0.16},
+    {"id": "keel", "label": "KEEL", "bind": "", "hint": "The keel plating, where the flame is welded in bead. Caravan drivers touch it for luck on the way past", "boxes": [[0.52, 0.8, 0.3, 0.72, 0.28, 0.8]], "explode": [1, 0.2, 0.3], "distance": 0.22},
+    {"id": "ribs", "label": "RIBS", "bind": "", "hint": "A dreadnought's ribs: the cartels parked them in orbit, nobody paid for station-keeping, and they came down one by one", "boxes": [[0.0, 0.55, 0.12, 1.0, 0.0, 1.0]], "explode": [-1, 0.2, 0], "distance": 0.24},
+    {"id": "wreck", "label": "HULL PLATES", "bind": "", "hint": "Torn hull plate the clans strip plate by plate. When a post needs a part, Tamsin Rook knows which wreck has it; scrap lizards sun on the hot metal", "rest": true, "explode": [0, 0, 1], "distance": 0.14}
+   ]
+  }
+  }
+}

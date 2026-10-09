@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "opacity": 0.35,
+  "blend": "add",
+  "budget_ms": 0.5,
+  "title": "__UPPER__",
+  "hint": "A scan line that sweeps up the background, faster as the CPU works; amber when something runs hot, red when something is down."
+}

@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# bromigos:summary=Run a command in your terminal ($TERMINAL, else kitty); --hold keeps the window after it ends
+# bromigos:args=[--hold] [--title TITLE] [--] COMMAND [ARG…]
+# bromigos:examples=bromigos terminal --hold -- bromigos update
+# bromigos:hidden=true
+#
+# What a launcher entry runs when its program needs a terminal (Update bromigOS, the lab
+# console; docs/menu.md, "In the app launcher"): the terminal the menu opens
+# (desktop/lib/bromigos_hypr.py, terminal_run): $TERMINAL, else kitty. --hold keeps the
+# window open after the command ends, so what it said last can be read: kitty's own
+# --hold, any other terminal a line asking for Enter.
+set -euo pipefail
+usage() { echo "usage: bromigos terminal [--hold] [--title TITLE] [--] COMMAND [ARG…]"; }
+hold=0 title=''
+while (($#)); do
+  case $1 in
+    --hold) hold=1; shift ;;
+    --title) title=${2:?--title needs a value}; shift 2 ;;
+    --) shift; break ;;
+    -h|--help) usage; echo "Runs COMMAND in \$TERMINAL (else kitty); --hold keeps the window after it ends."; exit 0 ;;
+    -*) echo "bromigos terminal: unknown option $1" >&2; usage >&2; exit 2 ;;
+    *) break ;;
+  esac
+done
+(($#)) || { usage >&2; exit 2; }
+[[ -n $title ]] || title="${1##*/}${2:+ $2}"
+read -ra term <<<"${TERMINAL:-kitty}"
+((${#term[@]})) || term=(kitty)
+if [[ ${term[0]##*/} == kitty ]]; then
+  args=(--title "$title")
+  ((hold)) && args=(--hold "${args[@]}")
+  exec "${term[@]}" "${args[@]}" -e "$@"
+fi
+if ((hold)); then
+  # shellcheck disable=SC2016  # expanded by the inner shell
+  exec "${term[@]}" -e sh -c '"$@"; s=$?; printf "\n[%s ended (%s): Enter closes this window]" "$1" "$s"; read -r _' sh "$@"
+fi
+exec "${term[@]}" -e "$@"

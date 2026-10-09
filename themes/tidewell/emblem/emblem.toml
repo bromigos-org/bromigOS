@@ -1,0 +1,14 @@
+# Tidewell's mark: the burn-in as Greywater Light carries it (platform agents/LORE.md,
+# "Tidewell"; docs/theming.md, "Build the emblem kit"). bromigos-emblem build --theme
+# themes/tidewell draws the kit beside this file from it. Colours may name a role in
+# ../colors.toml.
+motto = "THE DEEP SINGS FIRST · SOMEONE WRITES IT DOWN ·"
+gap = "song"             # the tuning gap: a stretch of the Choir's song as Maren logs it
+sigil = "swell"          # the flame riding the swell, one of the Choir passing under it
+
+[colors]
+ring = "primary"         # the Choir's glow
+hairline = "dim"
+water = "dim"
+choir = "primary"
+flame = "#000000"

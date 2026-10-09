@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Holo Deck
+GenericName=System Hologram
+Comment=This machine as a hologram: its arc rings, the cluster constellation, the machine itself (SUPER+H; Esc closes)
+Icon=bromigos-holodeck
+TryExec=bromigos-live
+Exec=bromigos-live open holodeck
+Terminal=false
+Categories=System;Monitor;
+Keywords=holo;holo deck;hologram;deck;system;monitor;machine;status;
+StartupNotify=false
+X-Bromigos-Menu=holo/holodeck

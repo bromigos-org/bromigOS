@@ -1,0 +1,622 @@
+"""`bromigos lab` with no arguments: the live terminal dashboard (Textual).
+
+Four tabs read the same data as the commands: STATUS (every card `bromigos lab status` has),
+MODELS (`lab models`), JOBS (`lab jobs`, with a log, cancel, retry and a new-job form) and
+DOCTOR (`lab doctor`, each finding's fix). Everything has a hover hint: a card says what it
+shows, a row what it is (the table's tooltip follows the row under the pointer), a key in
+the footer what it does. Reads run in worker threads: the screen never waits on the lab.
+
+The colours are the theme's (bromigos_theme's palette.json), so the dashboard follows
+`bromigos theme set` like the rest of the desktop.
+"""
+import os
+import time
+
+from textual import on, work
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.screen import ModalScreen
+from textual.theme import Theme
+from textual.widgets import (Button, DataTable, Footer, Input, Label, RichLog, Select, Static, TabbedContent,
+                             TabPane)
+
+MARK = {"ok": "●", "warn": "▲", "crit": "✖", "unreachable": "?", "empty": "·", "unknown": "·", "fail": "✖",
+        "skip": "·"}
+STYLE = {"ok": "$success", "warn": "$warning", "crit": "$error", "unreachable": "$error", "fail": "$error"}
+
+
+class Live:
+    """Where the dashboard's data comes from (a test passes a fixture with the same methods)."""
+
+    def status(self):
+        from . import console
+        return console.status()
+
+    def inventory(self):
+        from . import labmodels
+        return labmodels.inventory()
+
+    def jobs(self):
+        from . import jobqueue
+        return {"jobs": jobqueue.list_jobs(limit=40), "service": jobqueue.service_state()}
+
+    def job_log(self, jid):
+        from . import jobqueue
+        return jobqueue.read_log(jid)
+
+    def doctor(self):
+        from . import doctor
+        return doctor.run()
+
+    def kinds(self):
+        from . import jobs
+        return [k.describe() for k in jobs.kinds()] + [dict(p.describe(), preset=True) for p in jobs.presets()]
+
+    def submit(self, kind, preset, prompt, text):
+        from . import jobqueue
+        j = jobqueue.submit(kind, preset, prompt or None, (), text or None, by="you")
+        jobqueue.ensure_service()
+        return j
+
+    def cancel(self, jid):
+        from . import jobqueue
+        return jobqueue.cancel(jid)
+
+    def retry(self, jid):
+        from . import jobqueue
+        j = jobqueue.retry(jid)
+        jobqueue.ensure_service()
+        return j
+
+    def now(self):
+        return time.time()
+
+
+def bromigos_theme():
+    """A Textual theme from the desktop theme's palette (the Wick's without one)."""
+    try:
+        import bromigos_theme as T
+        h = T.hex
+        return Theme(name="bromigos", primary=h("primary"), secondary=h("soft"), accent=h("cyan"),
+                     warning=h("warn"), error=h("danger"), success=h("primary"), foreground=h("text"),
+                     background=h("background"), surface=h("panel"), panel=h("selection"), dark=True)
+    except Exception:
+        return Theme(name="bromigos", primary="#39ff14", secondary="#9cff8a", accent="#3fe0c5", warning="#d4af37",
+                     error="#ff766f", success="#39ff14", foreground="#c4f5bb", background="#000500",
+                     surface="#001300", panel="#003b00", dark=True)
+
+
+def cell(v):
+    if v is None:
+        return "-"
+    if isinstance(v, bool):
+        return "yes" if v else "no"
+    if isinstance(v, float):
+        return f"{v:.1f}" if abs(v) < 1000 else f"{v:.0f}"
+    if isinstance(v, (list, tuple)):
+        return ", ".join(str(x) for x in v)
+    if isinstance(v, dict):
+        return ", ".join(f"{k} {x}" for k, x in list(v.items())[:4])
+    return str(v)
+
+
+def marked(state, text=""):
+    m = MARK.get(state, "·")
+    style = {"ok": "green", "warn": "yellow", "crit": "red", "unreachable": "red", "fail": "red"}.get(state, "dim")
+    from rich.text import Text
+    return Text(f"{m} {text}".rstrip(), style=style)
+
+
+# Vim keys beside the arrows everywhere (hidden from the footer; ? and the manual list them)
+VIM = [
+    Binding("j", "cursor_down", "Down", show=False),
+    Binding("k", "cursor_up", "Up", show=False),
+    Binding("g", "scroll_top", "First", show=False),
+    Binding("G", "scroll_bottom", "Last", show=False),
+    Binding("ctrl+d", "page_down", "Page down", show=False),
+    Binding("ctrl+u", "page_up", "Page up", show=False),
+    Binding("h,left", "app.pane(-1)", "Cards", show=False),
+    Binding("l,right", "app.pane(1)", "Detail", show=False),
+]
+
+
+class HintTable(DataTable):
+    """A table whose hover hint is the hint of the row under the pointer. Moves with the arrows
+    and with Vim's keys: j/k, g/G, Ctrl+D/U; h/l (or left/right) between the STATUS panes."""
+
+    BINDINGS = VIM
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.hints = []           # one per row
+        self.base_hint = ""
+
+    def watch_hover_coordinate(self, old, new):
+        super().watch_hover_coordinate(old, new)
+        r = new.row if new is not None else -1
+        self.tooltip = (self.hints[r] if 0 <= r < len(self.hints) and self.hints[r] else self.base_hint) or None
+
+    def fill(self, columns, rows, hints, base_hint=""):
+        """Replace everything, keeping the cursor's row where it can."""
+        keep = self.cursor_row
+        self.clear(columns=True)
+        self.add_columns(*columns)
+        for r in rows:
+            self.add_row(*r)
+        self.hints = list(hints)
+        self.base_hint = base_hint
+        self.tooltip = base_hint or None
+        if rows:
+            self.move_cursor(row=min(keep, len(rows) - 1))
+
+
+class CardButton(Static):
+    """One card in the STATUS list: its mark, title and summary. Click to see it in full.
+    Up/down or j/k move between cards (and show each one), g/G go to the first and last,
+    right or l moves into the card's detail table."""
+
+    can_focus = True
+    BINDINGS = [
+        Binding("down,j", "app.card_step(1)", "Next card", show=False),
+        Binding("up,k", "app.card_step(-1)", "Previous card", show=False),
+        Binding("g,home", "app.card_step(-999)", "First card", show=False),
+        Binding("G,end", "app.card_step(999)", "Last card", show=False),
+        Binding("right,l", "app.pane(1)", "Detail", show=False),
+    ]
+
+    def __init__(self, card, **kw):
+        super().__init__(**kw)
+        self.card = card
+        self.update_card(card)
+
+    def update_card(self, card):
+        self.card = card
+        st = card["state"]
+        from rich.text import Text
+        t = Text()
+        t.append(f"{MARK.get(st, '·')} ", style={"ok": "green", "warn": "yellow", "crit": "red",
+                                                "unreachable": "red"}.get(st, "dim"))
+        t.append(card["title"].upper(), style="bold")
+        t.append(f"\n  {card.get('summary') or ''}", style="dim" if st in ("ok", "empty") else "")
+        self.update(t)
+        self.tooltip = f"{card['title']}: {card.get('hint') or ''}\nClick (or Enter) to see every item."
+        self.set_class(st in ("warn",), "-warn")
+        self.set_class(st in ("crit", "unreachable"), "-crit")
+
+    def on_click(self):
+        self.app.show_card(self.card["id"])
+
+    def key_enter(self):
+        self.app.show_card(self.card["id"])
+
+
+class RunJob(ModalScreen):
+    """The new-job form: a kind (or preset), its prompt or text. Homelab only: the cloud is
+    the command line's --cloud, never a default here."""
+
+    BINDINGS = [Binding("escape", "dismiss(None)", "Cancel", tooltip="Close the form without queuing anything")]
+
+    def __init__(self, choices):
+        super().__init__()
+        self.choices = choices
+
+    def compose(self):
+        opts = [(f"{c['title']}" + ("  (preset)" if c.get("preset") else ""), ("p:" if c.get("preset") else "k:") + c["id"])
+                for c in self.choices if c.get("available")]
+        with Vertical(id="runbox"):
+            yield Label("NEW LAB JOB", classes="title")
+            s = Select(opts, prompt="What to make", id="kind")
+            s.tooltip = "The kind of job (or a preset of one). Only what this lab can run is listed."
+            yield s
+            i = Input(placeholder="prompt (an image, a hologram's subject) or the text to speak", id="prompt")
+            i.tooltip = "What to make: the prompt for an image or a hologram, the words for a voice line"
+            yield i
+            yield Label("Runs on the lab, for no credits. Results: ~/Pictures/bromigos/lab/<kind>/", classes="dim")
+            with Horizontal():
+                b = Button("Queue it", variant="primary", id="go")
+                b.tooltip = "Add the job to the lab's queue (bromigos lab run)"
+                yield b
+                b = Button("Cancel", id="no")
+                b.tooltip = "Close without queuing anything"
+                yield b
+
+    @on(Button.Pressed, "#no")
+    def no(self):
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#go")
+    def go(self):
+        v = self.query_one("#kind", Select).value
+        if not isinstance(v, str):
+            self.notify("Pick what to make first", severity="warning")
+            return
+        self.dismiss((v, self.query_one("#prompt", Input).value.strip()))
+
+
+class LabApp(App):
+    TITLE = "LAB"
+    CSS = """
+    Screen { background: $background; }
+    #top { height: 1; padding: 0 1; background: $panel; color: $foreground; }
+    #cards { width: 46; border-right: solid $panel; }
+    CardButton { padding: 0 1; margin: 0 0 1 0; height: auto; border-left: tall $success; }
+    CardButton:focus { background: $panel; }
+    CardButton.-warn { border-left: tall $warning; }
+    CardButton.-crit { border-left: tall $error; }
+    #detail-title { padding: 0 1; text-style: bold; color: $primary; }
+    #detail-hint, .dim { padding: 0 1; color: $text-muted; }
+    #hint { height: 3; padding: 0 1; color: $text-muted; border-top: solid $panel; }
+    HintTable { height: 1fr; }
+    #gpus { height: auto; max-height: 14; }
+    #joblog { height: 12; border-top: solid $panel; }
+    #runbox { width: 76; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
+    RunJob { align: center middle; }
+    .title { text-style: bold; color: $primary; }
+    Select, Input { margin: 1 0 0 0; }
+    #runbox Horizontal { height: auto; margin-top: 1; }
+    """
+    BINDINGS = [
+        Binding("q", "quit", "Quit", tooltip="Leave the dashboard"),
+        Binding("r", "refresh", "Refresh", tooltip="Read the lab again now (it refreshes every 15 s by itself)"),
+        Binding("1", "tab('status')", "Status", tooltip="Every card: nodes, GPUs, services, apps, storage, alerts, jobs"),
+        Binding("2", "tab('models')", "Models", tooltip="What's installed and loaded where, with VRAM"),
+        Binding("3", "tab('jobs')", "Jobs", tooltip="The lab job queue: progress, logs, cancel, retry"),
+        Binding("4", "tab('doctor')", "Doctor", tooltip="Checks with fixes in plain words"),
+        Binding("n", "new_job", "New job", tooltip="Queue a job on the lab (image, hologram, voice line…)"),
+        Binding("c", "cancel_job", "Cancel job", tooltip="Cancel the job under the cursor (Jobs tab)"),
+        Binding("R", "retry_job", "Retry", tooltip="Queue the job under the cursor again (Jobs tab)"),
+        Binding("d", "doctor", "Run doctor", tooltip="Run every check now (Doctor tab)"),
+        Binding("],L", "tab_step(1)", "Next tab", show=False),
+        Binding("[,H", "tab_step(-1)", "Previous tab", show=False),
+    ]
+    TABS = ("status", "models", "jobs", "doctor")
+    MAIN = {"models": "#modeltable", "jobs": "#jobtable", "doctor": "#findings"}
+
+    def __init__(self, source=None, clock=None, interval=15.0):
+        super().__init__()
+        self.src = source or Live()
+        self.clock = clock or time.time
+        self.interval = interval
+        self.doc = None
+        self.inv = None
+        self.jobsdoc = None
+        self.doctor_doc = None
+        self.current = None
+        self.loaded_at = None
+
+    # ------------------------------------------------------------------ layout
+    def compose(self) -> ComposeResult:
+        yield Static("LAB · reading the lab…", id="top")
+        with TabbedContent(initial="status", id="tabs"):
+            with TabPane("STATUS", id="status"):
+                with Horizontal():
+                    yield VerticalScroll(id="cards")
+                    with Vertical():
+                        yield Static("", id="detail-title")
+                        yield Static("", id="detail-hint")
+                        yield HintTable(id="detail", cursor_type="row", zebra_stripes=True)
+            with TabPane("MODELS", id="models"):
+                with Vertical():
+                    yield Static("GPUS", classes="title")
+                    yield HintTable(id="gpus", cursor_type="row")
+                    yield Static("MODELS", classes="title")
+                    yield HintTable(id="modeltable", cursor_type="row", zebra_stripes=True)
+            with TabPane("JOBS", id="jobs"):
+                with Vertical():
+                    yield Static("", id="jobsum", classes="dim")
+                    yield HintTable(id="jobtable", cursor_type="row", zebra_stripes=True)
+                    yield RichLog(id="joblog", wrap=True, markup=False)
+            with TabPane("DOCTOR", id="doctor"):
+                with Vertical():
+                    yield Static("Press d to run the checks.", id="docsum", classes="dim")
+                    yield HintTable(id="findings", cursor_type="row", zebra_stripes=True)
+                    yield Static("", id="fix")
+        yield Static("", id="hint")
+        yield Footer()
+
+    def on_mount(self):
+        self.register_theme(bromigos_theme())
+        self.theme = "bromigos"
+        for tid, hint in (("status", "Every part of the lab, one card each"), ("models", "Installed and loaded models"),
+                          ("jobs", "The lab job queue"), ("doctor", "Checks with fixes")):
+            try:
+                self.query_one(f"#tabs Tab#--content-tab-{tid}").tooltip = hint
+            except Exception:
+                pass
+        self.load_status()
+        self.load_jobs()
+        self.set_interval(self.interval, self.load_status)
+        self.set_interval(2.0, self.load_jobs)
+
+    # ------------------------------------------------------------------ data (worker threads)
+    @work(thread=True, exclusive=True, group="status")
+    def load_status(self):
+        doc = self.src.status()
+        self.call_from_thread(self.show_status, doc)
+
+    @work(thread=True, exclusive=True, group="models")
+    def load_models(self):
+        inv = self.src.inventory()
+        self.call_from_thread(self.show_models, inv)
+
+    @work(thread=True, exclusive=True, group="jobs")
+    def load_jobs(self):
+        d = self.src.jobs()
+        self.call_from_thread(self.show_jobs, d)
+
+    @work(thread=True, exclusive=True, group="doctor")
+    def load_doctor(self):
+        d = self.src.doctor()
+        self.call_from_thread(self.show_doctor, d)
+
+    # ------------------------------------------------------------------ STATUS
+    def show_status(self, doc):
+        self.doc = doc
+        self.loaded_at = self.clock()
+        st = doc.get("state", "empty")
+        when = time.strftime("%H:%M:%S", time.localtime(doc.get("generatedAt") or self.clock()))
+        bad = [c for c in doc.get("cards", []) if c["state"] in ("warn", "crit", "unreachable")]
+        words = {"ok": "all well", "warn": f"{len(bad)} to look at", "crit": f"{len(bad)} need attention",
+                 "unreachable": "something doesn't answer", "empty": "nothing connected"}.get(st, st)
+        top = self.query_one("#top", Static)
+        top.update(marked(st, f"LAB · {words} · read at {when}" + (f" in {doc['seconds']} s" if doc.get("seconds") else "")))
+        top.tooltip = "The whole lab's state: the worst of its cards. r reads it again."
+        box = self.query_one("#cards", VerticalScroll)
+        have = {w.card["id"]: w for w in box.query(CardButton)}
+        if not doc.get("configured", True) and not doc.get("cards"):
+            box.remove_children()
+            box.mount(Static("No homelab connected.\n\nbromigos lab connect\nfinds your services and writes "
+                             "homelab.toml.", classes="dim"))
+            return
+        ids = [c["id"] for c in doc["cards"]]
+        for cid, w in have.items():
+            if cid not in ids:
+                w.remove()
+        for c in doc["cards"]:
+            if c["id"] in have:
+                have[c["id"]].update_card(c)
+            else:
+                box.mount(CardButton(c, id=f"card-{c['id']}"))
+        if self.current not in ids and ids:
+            pick = next((c["id"] for c in doc["cards"] if c["state"] in ("crit", "unreachable", "warn")), ids[0])
+            self.current = pick
+        self.show_card(self.current, focus=False)
+
+    def show_card(self, cid, focus=True):
+        if not self.doc:
+            return
+        c = next((x for x in self.doc["cards"] if x["id"] == cid), None)
+        if not c:
+            return
+        self.current = cid
+        self.query_one("#detail-title", Static).update(marked(c["state"], f"{c['title'].upper()} · {c.get('summary') or ''}"))
+        self.query_one("#detail-hint", Static).update(c.get("hint") or "")
+        cols = [k for k in (c.get("columns") or []) if k != "state"]
+        rows, hints = [], []
+        for it in c.get("items", []):
+            rows.append([marked(it.get("state", "unknown"))] + [cell(it.get(k)) for k in cols])
+            hints.append(it.get("hint") or ", ".join(f"{k}: {cell(it.get(k))}" for k in cols[:6]))
+        for s, e in (c.get("errors") or {}).items():
+            rows.append([marked("crit")] + [s] + [e] + [""] * max(0, len(cols) - 2))
+            hints.append(f"{s} didn't answer: {e}")
+        t = self.query_one("#detail", HintTable)
+        t.fill([""] + [k.replace("_", " ") for k in cols] if cols else ["", "source", "error"], rows, hints,
+               c.get("hint") or "")
+        if focus:
+            t.focus()
+        self.query_one("#hint", Static).update(c.get("hint") or "")
+
+    # ------------------------------------------------------------------ MODELS
+    def show_models(self, inv):
+        self.inv = inv
+        g = self.query_one("#gpus", HintTable)
+        rows, hints = [], []
+        for x in inv.get("gpus", []):
+            vram = (f"{(x.get('vram_used') or 0) / 2**30:.1f} / {x['vram_total'] / 2**30:.1f} GiB"
+                    if x.get("vram_total") else "unified memory")
+            holds = ", ".join(x.get("holds") or []) or "-"
+            if x.get("group"):
+                holds += f" ({x['group']}, tensor parallel)"
+            rows.append([x.get("name"), x.get("host") or "-", vram, cell(x.get("util_pct")), cell(x.get("temp_c")),
+                         cell(x.get("power_w")), holds])
+            hints.append(f"{x.get('name')} on {x.get('host')}: {vram}; held by {', '.join(x.get('holds') or []) or 'nothing'}")
+        g.fill(["GPU", "host", "VRAM", "busy %", "°C", "W", "holds"], rows, hints,
+               "Each GPU, its VRAM, and the pods or servers holding it")
+        t = self.query_one("#modeltable", HintTable)
+        rows, hints = [], []
+        for s in inv.get("servers", []):
+            for m in s.get("models", []):
+                if m.get("folder") and not m.get("loaded"):
+                    continue                       # model files on disk: the command's --all lists them
+                st = m.get("state") or ("loaded" if m.get("loaded") else "installed" if m.get("loaded") is False
+                                        else "on disk")
+                rows.append([marked("ok" if m.get("loaded") else "unknown"), m.get("name"), s["kind"], s["source"], st,
+                             f"{m['vram'] / 2**30:.1f} GiB" if m.get("vram") else "-", " / ".join(m.get("can") or []) or "-"])
+                hints.append(f"{m.get('name')} on {s['source']} ({s['kind']}): {st}. {m.get('note') or ''}".strip())
+        t.fill(["", "model", "server", "source", "state", "VRAM", "can"], rows, hints,
+               "What each server has: bromigos lab models load|unload NAME changes what's loaded")
+
+    # ------------------------------------------------------------------ JOBS
+    def show_jobs(self, d):
+        self.jobsdoc = d
+        js = d.get("jobs", [])
+        run = sum(1 for j in js if j["state"] == "running")
+        q = sum(1 for j in js if j["state"] in ("queued", "waiting"))
+        self.query_one("#jobsum", Static).update(
+            f"{run} running · {q} queued · the queue's service is {d.get('service', '?')} · n: a new job")
+        t = self.query_one("#jobtable", HintTable)
+        st = {"succeeded": "ok", "failed": "crit", "waiting": "warn", "running": "ok"}
+        rows, hints = [], []
+        for j in js:
+            detail = j.get("why") if j["state"] in ("waiting", "failed", "cancelled") else (
+                f"{int((j.get('progress') or 0) * 100)}% {j.get('progress_text') or ''}" if j["state"] == "running" else
+                ", ".join(os.path.basename(o) for o in (j.get("outputs") or [])[:2]) or (j.get("prompt") or j.get("text") or ""))
+            rows.append([marked(st.get(j["state"], "unknown")), j["id"], j.get("preset") or j["kind"], j["state"],
+                         (detail or "")[:80]])
+            hints.append(f"{j['id']}: {j['state']}. " + (j.get("why") or "") +
+                         (f" Results: {', '.join(j.get('outputs') or [])}" if j.get("outputs") else "") +
+                         " (c cancels, R retries)")
+        t.fill(["", "job", "what", "state", "detail"], rows, hints, "The lab's jobs, newest first")
+        self._show_log()
+
+    @on(DataTable.RowHighlighted, "#jobtable")
+    def _job_row(self, _ev):
+        self._show_log()
+
+    def _selected_job(self):
+        js = (self.jobsdoc or {}).get("jobs", [])
+        r = self.query_one("#jobtable", HintTable).cursor_row
+        return js[r] if 0 <= r < len(js) else None
+
+    def _show_log(self):
+        j = self._selected_job()
+        log = self.query_one("#joblog", RichLog)
+        text = self.src.job_log(j["id"]) if j else ""
+        if getattr(log, "_shown", None) != (j and j["id"], len(text)):
+            log.clear()
+            log.write(text or "(select a job to see its log)")
+            log._shown = (j and j["id"], len(text))
+
+    # ------------------------------------------------------------------ DOCTOR
+    def show_doctor(self, d):
+        self.doctor_doc = d
+        s = d.get("summary", {})
+        self.query_one("#docsum", Static).update(
+            f"{s.get('ok', 0)} ok · {s.get('warn', 0)} to look at · {s.get('fail', 0)} failing · {s.get('skip', 0)} "
+            f"skipped · read in {d.get('seconds', '?')} s (d: again)")
+        t = self.query_one("#findings", HintTable)
+        rows = [[marked({"ok": "ok", "warn": "warn", "fail": "fail"}.get(f["status"], "skip")), f["title"],
+                 f.get("detail") or ""] for f in d.get("findings", [])]
+        hints = [(f.get("fix") or f.get("detail") or "") for f in d.get("findings", [])]
+        t.fill(["", "check", "what it found"], rows, hints, "Each finding; its fix shows below and on hover")
+        self._show_fix()
+
+    @on(DataTable.RowHighlighted, "#findings")
+    def _finding_row(self, _ev):
+        self._show_fix()
+
+    def _show_fix(self):
+        fs = (self.doctor_doc or {}).get("findings", [])
+        r = self.query_one("#findings", HintTable).cursor_row
+        f = fs[r] if 0 <= r < len(fs) else None
+        self.query_one("#fix", Static).update(f"FIX: {f['fix']}" if f and f.get("fix") else "")
+
+    # ------------------------------------------------------------------ actions
+    @on(TabbedContent.TabActivated)
+    def _tab(self, ev):
+        tid = ev.pane.id if ev.pane else None
+        if tid:
+            self.call_after_refresh(self._focus_main, tid)
+        if tid == "models" and self.inv is None:
+            self.load_models()
+        if tid == "doctor" and self.doctor_doc is None:
+            self.load_doctor()
+
+    @on(DataTable.RowHighlighted, "#detail")
+    def _item_row(self, ev):
+        t = self.query_one("#detail", HintTable)
+        r = t.cursor_row
+        if 0 <= r < len(t.hints):
+            self.query_one("#hint", Static).update(t.hints[r])
+
+    def action_tab(self, tid):
+        if self.query_one("#tabs", TabbedContent).active != tid:
+            self.set_focus(None)              # a focused card on the old tab would pull it back
+        self.query_one("#tabs", TabbedContent).active = tid
+        self.call_after_refresh(self._focus_main, tid)
+
+    def action_tab_step(self, step):
+        cur = self.query_one("#tabs", TabbedContent).active
+        i = self.TABS.index(cur) if cur in self.TABS else 0
+        self.action_tab(self.TABS[(i + step) % len(self.TABS)])
+
+    def _focus_main(self, tid):
+        """Put the keyboard where the tab's keys act: the current card, or the tab's table.
+        Only for the tab still showing: focusing a widget on a hidden tab would switch to it."""
+        if self.query_one("#tabs", TabbedContent).active != tid:
+            return
+        try:
+            if tid == "status":
+                w = self.query_one(f"#card-{self.current}", CardButton) if self.current else None
+                (w or self.query_one("#cards").query(CardButton).first()).focus()
+            else:
+                self.query_one(self.MAIN[tid], HintTable).focus()
+        except Exception:
+            pass
+
+    def action_card_step(self, step):
+        cards = list(self.query_one("#cards", VerticalScroll).query(CardButton))
+        if not cards:
+            return
+        try:
+            i = next(n for n, w in enumerate(cards) if w.has_focus)
+        except StopIteration:
+            i = next((n for n, w in enumerate(cards) if w.card["id"] == self.current), 0)
+        w = cards[max(0, min(len(cards) - 1, i + step))]
+        w.focus()
+        w.scroll_visible()
+        self.show_card(w.card["id"], focus=False)
+
+    def action_pane(self, step):
+        """STATUS: left/h to the card list, right/l to the card's detail table."""
+        if self.query_one("#tabs", TabbedContent).active != "status":
+            return
+        if step > 0:
+            self.query_one("#detail", HintTable).focus()
+        else:
+            self._focus_main("status")
+
+    def action_refresh(self):
+        self.load_status()
+        self.load_jobs()
+        tab = self.query_one("#tabs", TabbedContent).active
+        if tab == "models":
+            self.load_models()
+        if tab == "doctor":
+            self.load_doctor()
+
+    def action_doctor(self):
+        self.action_tab("doctor")
+        self.query_one("#docsum", Static).update("running the checks…")
+        self.load_doctor()
+
+    def action_new_job(self):
+        self.push_screen(RunJob(self.src.kinds()), self._queued)
+
+    def _queued(self, choice):
+        if not choice:
+            return
+        v, prompt = choice
+        kind, preset = (None, v[2:]) if v.startswith("p:") else (v[2:], None)
+        try:
+            text = prompt if (kind == "voice" or preset == "voice-line") else None
+            j = self.src.submit(kind, preset, None if text else prompt, text)
+        except ValueError as e:
+            self.notify(str(e), severity="error", timeout=8)
+            return
+        self.notify(f"queued {j['id']}")
+        self.action_tab("jobs")
+        self.load_jobs()
+
+    def action_cancel_job(self):
+        j = self._selected_job()
+        if j and self.query_one("#tabs", TabbedContent).active == "jobs":
+            self.src.cancel(j["id"])
+            self.notify(f"cancelling {j['id']}")
+            self.load_jobs()
+
+    def action_retry_job(self):
+        j = self._selected_job()
+        if j and self.query_one("#tabs", TabbedContent).active == "jobs":
+            try:
+                n = self.src.retry(j["id"])
+                self.notify(f"queued {n['id']}")
+            except ValueError as e:
+                self.notify(str(e), severity="warning")
+            self.load_jobs()
+
+
+def main():
+    LabApp().run()
+    return 0

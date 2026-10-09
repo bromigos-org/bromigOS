@@ -1,0 +1,13 @@
+# bromigOS (bromigos-settings): the boot menu's packaged theme in /boot kept current when
+# this package brings new renders of it (docs/boot.md). Only where the theme is on and is
+# the package's; a theme rendered from your own colours waits for `bromigos update`.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = bromigos-settings
+
+[Action]
+Description = Updating the bromigOS boot menu's theme...
+When = PostTransaction
+Exec = /usr/lib/bromigos/boot/bromigos-boot-theme refresh

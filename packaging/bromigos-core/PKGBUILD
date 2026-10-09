@@ -1,0 +1,159 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# The bromigos CLI and core library: the Rust workspace in core/ (with `bromigos update`'s
+# migrations, migrations/, to /usr/share/bromigos/migrations, a pacman hook that says to
+# run it after a bare `pacman -Syu`, and the two that hold Hyprland's auto-reload while a
+# transaction replaces the desktop's config), plus the
+# themes and templates its `theme` command renders (themes/, theme/templates/ to
+# /usr/share/bromigos/; the renderer and the templates version together), and the shared
+# Python libs the live layer, the widgets and VECTOR read (lib/ to /usr/lib/bromigos/lib), the
+# private overlay's login units (bromigos-private.service and .path), and the
+# release notes (the manual's What's new, for `bromigos whats-new`). Rust
+# package conventions from the Arch wiki (Rust package guidelines): fetch
+# with the lockfile, build and test offline (--frozen), stable toolchain.
+
+pkgname=bromigos-core
+pkgver=0.1.0.r112.g9709a13
+pkgrel=1
+pkgdesc='bromigos: one command for the bromigOS desktop'
+arch=('x86_64')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+depends=('gcc-libs' 'glibc' 'openssl' 'git')   # git: bromigos ext (extensions are checkouts)
+makedepends=('cargo' 'git' 'python')
+checkdepends=('desktop-file-utils')
+optdepends=('python: bromigos private, secrets and emblem'
+            'sops: the private overlay (bromigos private)'
+            'age: the private overlay key (bromigos private)'
+            'inkscape: emblem text as outlines (bromigos emblem build)'
+            'librsvg: emblem PNGs and the banner braille (bromigos emblem build)'
+            'python-gobject: emblem PNGs (bromigos emblem build)'
+            'python-cairo: emblem PNGs (bromigos emblem build)'
+            'python-pillow: the banner braille (bromigos emblem build)'
+            'python-numpy: a world loop from a raw clip (bromigos art make video.loop --alpha)'
+            'ffmpeg: a world loop from a raw clip (bromigos art make video.loop --alpha)')
+# The release profile already strips (core/Cargo.toml); no -debug package.
+options=('!debug')
+
+# Built in-tree from the checkout this PKGBUILD lives in; cargo's output
+# goes to $srcdir, so the source tree is only read.
+_root="${startdir%/packaging/*}"
+_paths=(core bin themes theme lib migrations manual/src/whats-new.md packaging/bromigos-core LICENSE-MIT LICENSE-APACHE)
+
+# <workspace version>.r<commits touching the package>.g<last such commit>,
+# e.g. 0.1.0.r12.g1a2b3c4: rises with every change, and with a version bump
+# in core/Cargo.toml.
+# The commits that touched _paths before the history restarted at v0.1.2 (they're in
+# bromigos-org/bromigOS-archive): the count goes on from them, so no version sorts below one
+# published before the restart (packaging/README.md, Versions).
+_archived=143
+
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+prepare() {
+  cd "$_root/core"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+# cargo's target directory: $srcdir/target, or a persistent one CI names
+# (BROMIGOS_CARGO_TARGET_DIR: the runners' node cache, packaging/ci/prepare-container.sh)
+# so a rebuild compiles only what changed.
+_target() { printf '%s' "${BROMIGOS_CARGO_TARGET_DIR:-$srcdir/target}"; }
+
+build() {
+  cd "$_root/core"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR="$(_target)"
+  cargo build --frozen --release --all-features
+}
+
+check() {
+  cd "$_root/core"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR="$(_target)"
+  cargo test --frozen --all-features
+  # the app launcher's entries (core/applications): desktop-file-validate, the keys every
+  # entry needs, their icons (tools/launcher/check.py; CI's launcher.yml runs all of it)
+  python "$_root/tools/launcher/check.py" --static --only core
+}
+
+package() {
+  install -Dm0755 -t "$pkgdir/usr/bin/" "$(_target)/release/bromigos"
+  # themes/<name>/…, theme/templates/*.tpl and theme/icons/*.svg, as read-only defaults; not the
+  # art pipeline's recipe, log and local sources (art.toml, art.log.jsonl, art/). A hologram
+  # collection (themes/<name>/holo/, theme/holo/) ships as VECTOR's and the homelab's do: the
+  # manifest, the baked models and the README; its sources (src/, concepts/, previews/,
+  # generations.jsonl) stay in the repo
+  local f
+  while IFS= read -r -d '' f; do
+    install -Dm0644 "$_root/$f" "$pkgdir/usr/share/bromigos/$f"
+  done < <(cd "$_root" && find themes theme/templates theme/icons theme/holo -type f \
+    -not -path 'themes/*/art/*' -not -path 'themes/*/art.toml' \
+    -not -path 'themes/*/art.log.jsonl' \
+    -not \( -path '*/holo/*' -not -path '*/holo/manifest.json' -not -path '*/holo/*.holo.npz' \
+    -not -path '*/holo/README.md' \) -print0)
+  # bromigos_theme (the palette in force), bromigos_private (the private overlay's reader),
+  # bromigos_emblem + emblem_braille (a theme's emblem kit)
+  install -Dm0644 -t "$pkgdir/usr/lib/bromigos/lib/" "$_root"/lib/*.py
+  # `bromigos private|secrets|emblem …`: the CLI routes to bromigos-<group> here
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-private \
+    "$_root"/bin/bromigos-secrets "$_root"/bin/bromigos-emblem
+  # the private overlay decrypted at login, and again when it changes: on for every user
+  # (shipped default.target.wants links, as pipewire ships its own), doing nothing for one
+  # without the encrypted file or the age key
+  local u
+  for u in bromigos-private.service bromigos-private.path; do
+    install -Dm0644 "$startdir/$u" "$pkgdir/usr/lib/systemd/user/$u"
+    install -d "$pkgdir/usr/lib/systemd/user/default.target.wants"
+    ln -s "../$u" "$pkgdir/usr/lib/systemd/user/default.target.wants/$u"
+  done
+  # the menu's INSTALL › Extension… and REMOVE › Extension… (`bromigos ext`, docs/extensions.md)
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-install-extension \
+    "$_root"/bin/bromigos-remove-extension
+  # `bromigos terminal`: a command in the user's terminal (the launcher's terminal entries)
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-terminal
+  # the app launcher's entries (docs/menu.md, "In the app launcher")
+  install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_root"/core/applications/*.desktop
+  # bromigOS's app icons in the hicolor theme every icon theme inherits (theme/app-icons, drawn
+  # by theme/tools/build-app-icons.py: a glyph in the burn-in's ring at 16, 24, 32 and scalable)
+  local size
+  for size in 16x16 24x24 32x32 scalable; do
+    install -Dm0644 -t "$pkgdir/usr/share/icons/hicolor/$size/apps/" "$_root"/theme/app-icons/$size/apps/*.svg
+  done
+  # the canonical burn-in every emblem kit is drawn from
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/emblem/" "$_root"/theme/emblem/identity.json \
+    "$_root"/theme/emblem/flame.svg
+  python -m compileall -q -o 0 -o 1 -s "$pkgdir" -p / "$pkgdir/usr/lib/bromigos/lib" >/dev/null
+  # the release notes, the manual's What's new page: `bromigos whats-new` reads them offline,
+  # and `bromigos update` says when a new release came (docs/release.md)
+  install -Dm0644 "$_root/manual/src/whats-new.md" "$pkgdir/usr/share/bromigos/whats-new.md"
+  # migrations: run once per user, in name order, by `bromigos update` (core/README.md)
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/migrations/" "$_root"/migrations/*.sh
+  # create.toml's packaged default and the ComfyUI workflows `bromigos art` runs
+  # (built into the binary too; a file of the same name here or in the user's
+  # ~/.config/bromigos/create/workflows wins: docs/art.md)
+  install -Dm0644 "$_root/core/crates/bromigos-art/create.default.toml" "$pkgdir/usr/share/bromigos/default/create.toml"
+  install -Dm0644 "$_root/core/crates/bromigos-art/targets.default.toml" "$pkgdir/usr/share/bromigos/default/targets.toml"
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/art/workflows/" "$_root"/core/crates/bromigos-art/workflows/*.json
+  # the world-loop post step `bromigos art make video.loop --alpha` runs (docs/art.md)
+  install -Dm0755 "$_root/theme/tools/glow-loop.py" "$pkgdir/usr/share/bromigos/tools/glow-loop.py"
+  # the idle policy's packaged defaults and the hypridle template `bromigos idle` renders
+  # (built into the binary too; these win: docs/idle.md)
+  install -Dm0644 "$_root/core/crates/bromigos-core/idle/idle.toml" "$pkgdir/usr/share/bromigos/default/idle.toml"
+  install -Dm0644 "$_root/core/crates/bromigos-core/idle/hypridle.conf.tpl" "$pkgdir/usr/share/bromigos/idle/hypridle.conf.tpl"
+  install -Dm0644 "$startdir/bromigos-update.hook" "$pkgdir/usr/share/libalpm/hooks/bromigos-update.hook"
+  # Hyprland's auto-reload held off while a transaction replaces the desktop's default
+  # config, then one verified reload (bromigos session hold|release; docs/update.md)
+  install -Dm0644 -t "$pkgdir/usr/share/libalpm/hooks/" \
+    "$startdir/bromigos-hypr-hold.hook" "$startdir/bromigos-hypr-release.hook"
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" \
+    "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+}

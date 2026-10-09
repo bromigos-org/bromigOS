@@ -1,0 +1,55 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# The bromigOS package-signing key, in pacman's keyring, the way
+# archlinux-keyring does it: /usr/share/pacman/keyrings/bromigos.gpg (the
+# public key) and bromigos-trusted (its fingerprint, marked trusted), which
+# `pacman-key --populate bromigos` (bromigos-keyring.install) imports and
+# locally signs. Built from the key in this repository, packaging/keys/.
+
+pkgname=bromigos-keyring
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='bromigOS package-signing key for pacman'
+arch=('any')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+makedepends=('git' 'gnupg')
+options=('!debug')
+install=$pkgname.install
+
+# Built in-tree from the checkout this PKGBUILD lives in.
+_root="${startdir%/packaging/*}"
+_paths=(packaging/keys packaging/bromigos-keyring)
+
+# The commits that touched _paths before the history restarted at v0.1.2 (they're in
+# bromigos-org/bromigOS-archive): the count goes on from them, so no version sorts below one
+# published before the restart (packaging/README.md, Versions).
+_archived=1
+
+pkgver() {
+  cd "$_root"
+  printf '0.0.0.r%s.g%s' \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+build() {
+  local tmp
+  tmp=$(mktemp -d)
+  # A throwaway keyring, to read the fingerprint and export the binary key.
+  GNUPGHOME="$tmp" gpg --batch --quiet --import "$_root/packaging/keys/bromigos.asc"
+  GNUPGHOME="$tmp" gpg --batch --with-colons --list-keys \
+    | awk -F: '/^pub:/ { p = 1; next } /^fpr:/ && p { print $10 ":4:"; p = 0 }' \
+    > "$srcdir/bromigos-trusted"
+  GNUPGHOME="$tmp" gpg --batch --export > "$srcdir/bromigos.gpg"
+  gpgconf --homedir "$tmp" --kill all 2>/dev/null || true
+  rm -rf "$tmp"
+  [[ -s "$srcdir/bromigos-trusted" ]]
+}
+
+package() {
+  install -Dm644 -t "$pkgdir/usr/share/pacman/keyrings/" \
+    "$srcdir/bromigos.gpg" "$srcdir/bromigos-trusted"
+  install -Dm644 -t "$pkgdir/usr/share/licenses/$pkgname/" \
+    "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+}

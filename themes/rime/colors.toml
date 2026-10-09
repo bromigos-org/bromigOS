@@ -1,0 +1,71 @@
+# Rime's colours (docs/theming.md, "colors.toml"): ice over a night sky, the aurora's
+# green-cyan, the crawlers' floodlights for a warning.
+
+# ---- surfaces, darkest first
+background = "#050a12"     # the night over the glacier
+void = "#02050a"
+panel = "#0b1422"
+selection = "#14263a"
+
+# ---- ink
+primary = "#9fe3ff"        # floodlight on ice
+soft = "#d6f1ff"
+dim = "#3f7fa6"
+text = "#cfe6f5"
+muted = "#7a94a8"
+faint = "#4a5c6b"
+
+# ---- signals
+warn = "#ffd27a"           # a crawler's floodlight, amber in the snow
+danger = "#ff6b7a"
+warn_surface = "#3a2e10"
+danger_surface = "#2a0a10"
+danger_text = "#ffd9dd"
+
+[colors]
+cyan = "#7ff5e8"           # the aurora
+gold = "#ffe0a3"
+white = "#f2fbff"
+rust = "#4a1420"
+
+[holo]
+line = "primary"
+glow = "cyan"
+label = "text"
+highlight = "white"
+
+[widgets]
+frame = "dim"
+header = "primary"
+value = "soft"
+graph = "primary"
+track = "selection"
+
+[terminal]
+foreground = "text"
+background = "background"
+color0 = "background"
+color1 = "danger"
+color2 = "primary"
+color3 = "warn"
+color4 = "#6fb3ff"
+color5 = "#c89bff"         # the aurora's violet edge
+color6 = "cyan"
+color7 = "#b8cfe0"
+color8 = "faint"
+color9 = "#ff8f9a"
+color10 = "soft"
+color11 = "gold"
+color12 = "#9fd0ff"
+color13 = "#dcc0ff"
+color14 = "#a8fff2"
+color15 = "#ecf7ff"
+
+[qt]
+view = "#070d18"
+view_alt = "#0a1322"
+header = "#091120"
+window_alt = "#0e1a2c"
+button = "#152539"
+neutral_on_selection = "#4a3a10"
+negative_on_selection = "rust"

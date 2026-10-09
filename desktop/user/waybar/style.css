@@ -1,0 +1,4 @@
+/* Your bar's style: the theme's colours and icons (relative to this file), bromigOS's
+   style, then your own rules below. */
+@import url("../../.local/state/bromigos/theme/current/waybar.css");
+@import url("/usr/share/bromigos/default/waybar/style.css");

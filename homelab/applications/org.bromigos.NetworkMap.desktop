@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Network Map
+GenericName=Network Hologram
+Comment=The network's hosts and links as a hologram, from your homelab's sources (Esc closes)
+Icon=bromigos-netmap
+TryExec=bromigos-live
+Exec=bromigos-live open netmap
+Terminal=false
+Categories=Network;
+Keywords=network;network map;netmap;lan;hosts;topology;hologram;deck;
+StartupNotify=false
+X-Bromigos-Menu=holo/netmap

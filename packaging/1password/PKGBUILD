@@ -1,0 +1,45 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# 1Password's desktop app, from its official Linux tarball, built into bromigOS's own
+# signed repository so an install never needs an AUR helper (the AUR's recipe, adapted:
+# the biometrics PolicyKit policy is not generated at build time from the build host's
+# users; the tarball keeps install_biometrics_policy.sh for a user to run with sudo).
+# Pinned by checksum. The tarball's upstream signature (1Password's key
+# 3FEF9748469ADBE15DA7CA80AC2D62742012EA22) was verified when this version was pinned;
+# the build's keyring holds only bromigOS's key, so the pin is the checksum.
+
+pkgname=1password
+_tarver=8.12.40
+pkgver=${_tarver//-/_}
+pkgrel=1
+pkgdesc='Password manager and secure wallet'
+arch=('x86_64')
+url='https://1password.com'
+license=('LicenseRef-1Password-Proprietary')
+depends=('gtk3' 'nss' 'hicolor-icon-theme' 'xdg-utils' 'polkit')
+install=1password.install
+options=('!strip' '!debug')
+_tar="1password-${_tarver}.x64.tar.gz"
+source=("https://downloads.1password.com/linux/tar/stable/x86_64/${_tar}")
+sha256sums=('0ae9645d31be78a8fb57d15f49e5fa4f0b67a0b3608797a410e8fd36f0206266')
+
+package() {
+  cd "1password-${_tarver}.x64"
+  local r
+  for r in 32x32 64x64 256x256 512x512; do
+    install -Dm0644 "resources/icons/hicolor/$r/apps/1password.png" \
+      "$pkgdir/usr/share/icons/hicolor/$r/apps/1password.png"
+  done
+  install -Dm0644 resources/com.onepassword.OnePassword.desktop -t "$pkgdir/usr/share/applications/"
+  install -Dm0644 resources/custom_allowed_browsers -t "$pkgdir/usr/share/doc/1password/examples/"
+  cd "$srcdir"
+  install -dm0755 "$pkgdir/opt"
+  mv "1password-${_tarver}.x64" "$pkgdir/opt/1Password"
+  rm -r "$pkgdir/opt/1Password/resources/icons"
+  rm "$pkgdir/opt/1Password/resources/com.onepassword.OnePassword.desktop" \
+     "$pkgdir/opt/1Password/resources/custom_allowed_browsers"
+  install -dm0755 "$pkgdir/usr/bin"
+  ln -s /opt/1Password/1password "$pkgdir/usr/bin/1password"
+  # chrome-sandbox needs the setuid bit (electron/electron#17972)
+  chmod 4755 "$pkgdir/opt/1Password/chrome-sandbox"
+}

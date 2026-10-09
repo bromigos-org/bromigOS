@@ -1,0 +1,8 @@
+# bromigOS's mise defaults (package bromigos-apps). `bromigos apps setup` copies this to
+# ~/.config/mise/config.toml once (mise has no include); after that it's yours. Add the
+# runtimes you want under [tools] (mise.jdx.dev): node = "lts", python = "3.13", …
+[settings]
+experimental = false
+not_found_auto_install = true
+
+[tools]

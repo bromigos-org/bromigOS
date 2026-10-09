@@ -1,0 +1,21 @@
+# __TITLE__: a bromigOS theme (made by `bromigos ext new theme`).
+# The manifest: docs/extensions.md. The theme itself: docs/theming.md.
+[extension]
+name = "__NAME__"
+version = "0.1.0"
+description = "A bromigOS theme."
+authors = []
+licence = "MIT"
+# homepage = "https://github.com/you/__NAME__"
+tags = ["theme"]
+
+[requires]
+bromigos = ">=1.0, <2"          # the extension API it was written for
+
+[[provides]]
+kind = "theme"
+path = "."                      # the theme is this folder (colors.toml, theme.toml, …)
+
+# A theme is data: no network, no files outside it, no code. It installs without a
+# question. (Add a hook part and it runs code: then it asks.)
+[permissions]

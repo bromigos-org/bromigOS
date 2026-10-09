@@ -1,0 +1,15 @@
+# The private overlay, decrypted when your session starts (bromigos private; bin/bromigos-private).
+# Enabled for every user by bromigos-core (default.target.wants); turn it off with
+# systemctl --user mask bromigos-private.service bromigos-private.path.
+[Unit]
+Description=bromigOS private overlay: decrypt your private values
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/manual/src/glossary.md#private-overlay
+# Nothing to do without the encrypted file; without the age key, decrypt does nothing
+ConditionPathExists=%h/.config/bromigos/private.sops.yaml
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/bin/bromigos-private decrypt --quiet
+
+[Install]
+WantedBy=default.target

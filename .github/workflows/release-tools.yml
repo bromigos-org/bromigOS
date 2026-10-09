@@ -1,0 +1,41 @@
+# The release tool's tests (tools/release/test_release.py: versions, the files a release
+# writes, the GitHub Release text, the privacy rules, the checksums, git-cliff's groups),
+# shellcheck on its scripts, and the release workflows parsed. docs/release.md.
+name: release-tools
+
+on:
+  push:
+    branches: [main]
+    paths: ["tools/release/**", ".github/workflows/release*.yml", "packaging/ci/publish.sh"]
+  pull_request:
+    paths: ["tools/release/**", ".github/workflows/release*.yml", "packaging/ci/publish.sh"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    container: archlinux:base
+    timeout-minutes: 10
+    steps:
+      - name: tools
+        run: pacman -Syu --noconfirm --needed git git-cliff python python-yaml shellcheck >/dev/null
+      - uses: actions/checkout@v5
+      - name: tests
+        run: |
+          git config --global --add safe.directory '*'
+          git config --global user.name ci && git config --global user.email ci@localhost
+          python3 -m unittest discover -s tools/release -v
+      - name: shellcheck
+        run: shellcheck -S warning tools/release/checksums.sh packaging/ci/publish.sh
+      - name: the workflows parse
+        run: |
+          python3 - <<'EOF'
+          import glob, yaml
+          for f in sorted(glob.glob(".github/workflows/release*.yml")):
+              w = yaml.safe_load(open(f))
+              assert w.get("jobs"), f
+              print("ok", f)
+          EOF

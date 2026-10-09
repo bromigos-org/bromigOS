@@ -1,0 +1,71 @@
+# Lowtown's colours (docs/theming.md, "colors.toml"): neon doubled in wet asphalt,
+# sodium yellow for a warning, a full-house red for an alarm.
+
+# ---- surfaces, darkest first
+background = "#070709"     # wet asphalt
+void = "#030304"
+panel = "#12121a"
+selection = "#22223a"
+
+# ---- ink
+primary = "#ff5fa8"        # the Low Note's sign
+soft = "#ffc2e0"
+dim = "#8a3a6a"
+text = "#e6e1ef"
+muted = "#8c86a0"
+faint = "#534f66"
+
+# ---- signals
+warn = "#ffd84a"           # sodium lamps in the rain
+danger = "#ff5252"
+warn_surface = "#3a3010"
+danger_surface = "#2a0a12"
+danger_text = "#ffd6de"
+
+[colors]
+cyan = "#4fe3ff"           # the other sign, across the street
+gold = "#ffe066"
+white = "#f5f0ff"
+rust = "#4a1030"
+
+[holo]
+line = "cyan"
+glow = "primary"
+label = "text"
+highlight = "white"
+
+[widgets]
+frame = "dim"
+header = "primary"
+value = "soft"
+graph = "cyan"
+track = "selection"
+
+[terminal]
+foreground = "text"
+background = "background"
+color0 = "background"
+color1 = "danger"
+color2 = "primary"
+color3 = "warn"
+color4 = "#6a9cff"
+color5 = "#c77dff"
+color6 = "cyan"
+color7 = "#b9b4c8"
+color8 = "faint"
+color9 = "#ff8080"
+color10 = "soft"
+color11 = "gold"
+color12 = "#9ec0ff"
+color13 = "#deb3ff"
+color14 = "#93f0ff"
+color15 = "#f8f4ff"
+
+[qt]
+view = "#0a0a0e"
+view_alt = "#0f0f15"
+header = "#0d0d12"
+window_alt = "#17172a"
+button = "#1e1e34"
+neutral_on_selection = "#4a3a10"
+negative_on_selection = "rust"

@@ -1,0 +1,9 @@
+#!/bin/sh
+# A stand-in Hyprland (tests, offscreen renders): --verify-config says "config ok" (or fails
+# when BROMIGOS_FIXTURE_VERIFY_FAIL is set); nothing else runs.
+if [ "$1" = "--verify-config" ]; then
+    if [ -n "$BROMIGOS_FIXTURE_VERIFY_FAIL" ]; then echo "error: injected by the test"; exit 1; fi
+    echo "config ok"; exit 0
+fi
+echo "Hyprland stand-in: only --verify-config" >&2
+exit 1

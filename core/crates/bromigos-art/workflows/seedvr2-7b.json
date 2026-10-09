@@ -1,0 +1,33 @@
+{
+  "_comment": "Image upscaling and restoration on the user's ComfyUI with SeedVR2 7B (ByteDance; one-step diffusion restoration), ComfyUI's native nodes (0.38+), as Comfy-Org's template does it (utility_seedvr2_7b_int8_upscale_image): the image, its alpha kept, is resized by the factor with Lanczos, encoded with the tiled VAE (512 px tiles, 128 overlap), restored in one euler step, decoded tiled, and its colours matched back to the resized original in CIELAB. The factor is extra.scale (1 to 4, default 2), lowered so the output stays within upscale.max_megapixels (comfy.rs, upscale_factor). A clip goes to seedvr2-7b-video. Weights: diffusion_models/seedvr2_7b_int8_convrot.safetensors and vae/seedvr2_ema_vae_fp16.safetensors (Comfy-Org/SeedVR2), fetched by helm/comfyui in the homelab repo.",
+  "_meta": {
+    "capabilities": ["image.upscale"],
+    "catalog": "seedvr2-7b/native-int8",
+    "output": "png",
+    "license": "Apache-2.0 (SeedVR2)",
+    "vram_gib": 8.9,
+    "vram_note": "ComfyUI's peak on the 5090 (32 GiB, the voice and embeddings servers resident: 13.9 GiB at rest), 640 px to 1280 px and 2048x1024 to 4096x2048 alike (the VAE works in tiles), measured 2026-10-09",
+    "seconds": 16,
+    "seconds_note": "2048x1024 to 4096x2048 (8.4 MP) on the 5090, the models loaded cold; 640 to 1280 px: 12 s",
+    "fill": "bind",
+    "upscale": {"scale": 2, "max_scale": 4, "max_megapixels": 8.4},
+    "requires": [
+      {"folder": "diffusion_models", "file": "seedvr2_7b_int8_convrot.safetensors"},
+      {"folder": "vae", "file": "seedvr2_ema_vae_fp16.safetensors"}
+    ],
+    "nodes": ["SeedVR2Preprocess", "SeedVR2Conditioning", "SeedVR2PostProcessing", "ResizeImageMaskNode", "VAEEncodeTiled", "VAEDecodeTiled"],
+    "bind": {"image": ["1", "image"], "seed": ["9", "seed"], "scale": ["3", "resize_type.multiplier"], "prefix": ["12", "filename_prefix"]}
+  },
+  "1": {"class_type": "LoadImage", "inputs": {"image": ""}},
+  "2": {"class_type": "JoinImageWithAlpha", "inputs": {"image": ["1", 0], "alpha": ["1", 1]}},
+  "3": {"class_type": "ResizeImageMaskNode", "inputs": {"input": ["2", 0], "resize_type": "scale by multiplier", "resize_type.multiplier": 2.0, "scale_method": "lanczos"}},
+  "4": {"class_type": "SeedVR2Preprocess", "inputs": {"resized_images": ["3", 0]}},
+  "5": {"class_type": "VAELoader", "inputs": {"vae_name": "seedvr2_ema_vae_fp16.safetensors"}},
+  "6": {"class_type": "VAEEncodeTiled", "inputs": {"pixels": ["4", 0], "vae": ["5", 0], "tile_size": 512, "overlap": 128, "temporal_size": 4096, "temporal_overlap": 8}},
+  "7": {"class_type": "UNETLoader", "inputs": {"unet_name": "seedvr2_7b_int8_convrot.safetensors", "weight_dtype": "default"}},
+  "8": {"class_type": "SeedVR2Conditioning", "inputs": {"model": ["7", 0], "vae_conditioning": ["6", 0]}},
+  "9": {"class_type": "KSampler", "inputs": {"model": ["7", 0], "seed": 0, "steps": 1, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "positive": ["8", 0], "negative": ["8", 1], "latent_image": ["6", 0], "denoise": 1.0}},
+  "10": {"class_type": "VAEDecodeTiled", "inputs": {"samples": ["9", 0], "vae": ["5", 0], "tile_size": 512, "overlap": 128, "temporal_size": 4096, "temporal_overlap": 8}},
+  "11": {"class_type": "SeedVR2PostProcessing", "inputs": {"images": ["10", 0], "original_resized_images": ["3", 0], "color_correction_method": "lab"}},
+  "12": {"class_type": "SaveImage", "inputs": {"images": ["11", 0], "filename_prefix": "bromigos-art"}}
+}

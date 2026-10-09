@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""A stand-in rfkill (tests, offscreen renders): the Bluetooth radio's blocks from
+fixtures/bluetoothctl.json; `unblock bluetooth` lifts a soft block."""
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
+import fixture as F  # noqa: E402
+
+a = sys.argv[1:]
+F.log("rfkill", a)
+st = F.load("bluetoothctl")
+rk = st["rfkill"]
+if a[:1] == ["unblock"]:
+    rk["soft"] = False
+    F.save("bluetoothctl", st)
+elif a[:1] == ["block"]:
+    rk["soft"] = True
+    F.save("bluetoothctl", st)
+else:
+    devs = [{"id": 0, "type": "wlan", "device": "phy0", "soft": "unblocked", "hard": "unblocked"}]
+    if st.get("adapter") is not None or rk["soft"] or rk["hard"]:
+        devs.append({"id": 1, "type": "bluetooth", "device": "hci0", "soft": "blocked" if rk["soft"] else "unblocked",
+                     "hard": "blocked" if rk["hard"] else "unblocked"})
+    print(json.dumps({"rfkilldevices": devs}, indent=3))

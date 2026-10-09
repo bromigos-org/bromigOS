@@ -1,0 +1,8 @@
+# The Wick: bromigOS's first theme and the default (docs/theming.md).
+name = "Wick"
+description = "Phosphor green on void: the burn-in look of the Wick's console."
+mode = "dark"
+canon = """
+The Wick is a decommissioned relay station, the den where bromigOS runs on the \
+console. Its screens are old phosphor CRTs: green on near-black, amber for a \
+warning, red for an alarm, and nothing else."""

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Alacritty
+Exec=alacritty
+Icon=Alacritty
+Categories=System;TerminalEmulator;

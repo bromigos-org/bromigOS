@@ -1,0 +1,9 @@
+# Cinder: the foundry world's colours (docs/theming.md). Colours only; its world is still to be painted.
+name = "Cinder"
+description = "Ember orange on soot: the foundries that never went out."
+mode = "dark"
+canon = """
+Cinder's foundries were never switched off, because nobody could find the switch. The \
+forge-golems still pour, and Brask runs the post from a dead crane's cab above the \
+floor. These are the colours of the pour: ember and molten yellow on soot, quench-water \
+blue, and the alarm red of a crucible that's about to go."""

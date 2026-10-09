@@ -1,0 +1,12 @@
+#!/bin/sh
+# bromigOS's pacman hook (bromigos-theme-previews.hook; /usr/lib/bromigos/desktop/theme-previews-hook): a theme, a template or the bar
+# changed, so each signed-in user's theme switcher previews that are now out of date are
+# drawn again: their bromigos-theme-previews user service, started without waiting
+# (offscreen, niced, in the background). Users not signed in get theirs at their next
+# `bromigos update` or when they open the switcher. Never fails the transaction.
+command -v loginctl >/dev/null 2>&1 || exit 0
+loginctl list-users --no-legend 2>/dev/null | while read -r _uid name _rest; do
+    [ -n "$name" ] || continue
+    systemctl --user --machine="$name@" start --no-block bromigos-theme-previews.service >/dev/null 2>&1 || true
+done
+exit 0

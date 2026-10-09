@@ -1,0 +1,75 @@
+# Tidewell's colours (docs/theming.md, "colors.toml"): deep water, the Choir's cyan,
+# the lamp's warm white.
+
+# ---- surfaces, darkest first
+background = "#02070d"     # the deep
+void = "background"
+panel = "#08131d"
+selection = "#12283a"
+
+# ---- ink
+primary = "#3fd8e8"        # live values, active borders: the Choir's glow
+soft = "#a6e6f0"
+dim = "#2a7488"
+text = "#c6dce6"
+muted = "#7890a0"
+faint = "#465868"
+
+# ---- signals
+warn = "#f0b850"           # the lamp
+danger = "#ff6b6b"
+warn_surface = "#3a2c0c"
+danger_surface = "#1c0608"
+danger_text = "#ffd9d9"
+
+[colors]
+cyan = "#3fd8e8"
+gold = "#f0d070"
+white = "#eef6ff"
+rust = "#4a1416"
+
+[holo]
+line = "primary"
+glow = "primary"
+label = "text"
+highlight = "white"
+
+[widgets]
+frame = "dim"
+header = "primary"
+value = "soft"
+graph = "primary"
+track = "selection"
+
+[terminal]
+foreground = "text"
+background = "background"
+color0 = "background"
+color1 = "danger"
+color2 = "#6ad89a"
+color3 = "warn"
+color4 = "#4a90d8"
+color5 = "#a07ad8"
+color6 = "cyan"
+color7 = "#b0c4d0"
+color8 = "faint"
+color9 = "#ff9a9a"
+color10 = "#9af0c0"
+color11 = "gold"
+color12 = "#8cc4f5"
+color13 = "#d0a8f0"
+color14 = "soft"
+color15 = "#e6f2fa"
+
+[qt]
+view = "#030a12"
+view_alt = "#050e18"
+header = "#040c15"
+window_alt = "#0a1622"
+button = "#10243a"
+neutral_on_selection = "#4a3a10"
+negative_on_selection = "rust"
+
+[intercept]                  # the unlock/login intercept (the live layer)
+static = "primary"           # the colour the static grades the captured screen to
+needle = "soft"          # the needle that sweeps the emblem's dial as it draws

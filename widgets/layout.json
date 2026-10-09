@@ -1,0 +1,24 @@
+{
+  "_comment": "bromigOS's default panel layout (/usr/share/bromigos/widgets/layout.json). Copy it to ~/.config/bromigos/widgets/layout.json to change it: positions in px from the top-left of the usable area (below the bar) on `monitor`, then `bromigos-widgets reload`. visible=false starts a panel hidden (toggle it with its keybind). Plugin panels (docs/plugins.md) find free space unless placed here.",
+  "monitor": "",
+  "panels": [
+    { "name": "system",      "x": 28,  "y": 16,  "width": 470, "height": 470 },
+    { "name": "network",     "x": 28,  "y": 502, "width": 470, "height": 262,
+      "_ping": "Hosts for the latency radar. host omitted = the default gateway.",
+      "ping": [
+        { "label": "GATEWAY" },
+        { "label": "WAN", "host": "1.1.1.1" }
+      ] },
+    { "name": "storage",     "x": 28,  "y": 780, "width": 470, "height": 214 },
+    { "name": "shortcuts",   "x": 28,  "y": 1010, "width": 470, "height": 384 },
+    { "name": "workbench",   "x": 514, "y": 16,  "width": 470, "height": 300,
+      "_workbench": "Recent git repos + zoxide's most-visited folders; projects/folders = how many rows of each.",
+      "projects": 5, "folders": 3 },
+    { "name": "notes",       "x": 514, "y": 332, "width": 470, "height": 268 },
+    { "name": "weather",     "x": 514, "y": 616, "width": 470, "height": 300, "visible": false,
+      "_weather": "Open-Meteo. Set lat/lon or place (and units = imperial) here or in ~/.config/bromigos/weather.toml; visible: true to show it.",
+      "place": "" },
+    { "name": "connections", "x": 514, "y": 932, "width": 470, "height": 262, "visible": false,
+      "_connections": "NetworkManager: connections, Wi-Fi in reach, VPNs. visible: true to show it." }
+  ]
+}

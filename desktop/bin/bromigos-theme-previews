@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+# bromigos:summary=Draw the theme switcher's previews: each theme as a miniature screenshot of the desktop wearing it
+# bromigos:args=[NAME…] [--force] [--list] [--json] [--quiet] | [NAME | --dir DIR [--name NAME]] [--size WxH] [--panels LIST | --scene FILE] --out FILE
+# bromigos:examples=bromigos theme previews; bromigos theme previews mire --force; bromigos theme previews --list; bromigos theme previews wick --size 2560x1440 --panels system,network,weather,lab --out wick.png
+"""bromigos-theme-previews: the theme switcher's pictures. Each theme is drawn offscreen as
+a miniature screenshot of bromigOS wearing it: the live layer's own frame (a world's scene
+with its creatures, or the den), the bar, a terminal and the SYSTEM and NETWORK panels in
+its colours, with demo readings. Nothing opens a window or touches the running desktop:
+every piece runs in a throwaway home (docs/theming.md, "The previews"). After a graphics
+driver update, until the computer restarts, nothing is drawn (the GPU can't be used); when
+the GPU fails mid-run, the run gives up after that one failure, and the next run tries again.
+
+  bromigos theme previews [NAME…]         draw the missing or out-of-date previews (all themes, or NAME…)
+  bromigos theme previews --force [NAME…] draw them again even when current
+  bromigos theme previews --list [--json] each theme, its stamp, its preview and whether it's current
+  bromigos theme previews --dir DIR [--name NAME] [--out FILE]
+                                          a theme that isn't installed (a `bromigos theme new` folder,
+                                          a catalog entry): cached like the others, and copied to FILE
+                                          (a catalog's preview image)
+  bromigos theme previews NAME --size WxH --out FILE.png   (or --dir DIR instead of NAME)
+                                          one theme's desktop at WxH, full size, to FILE only (.png,
+                                          .webp or .jpg): pictures for elsewhere (the website); the
+                                          cache isn't touched
+      --panels LIST                       with --out: these panels (system,network,storage,
+                                          workbench,notes,shortcuts,weather,connections,lab)
+                                          in their default places, instead of SYSTEM and NETWORK
+      --scene FILE                        with --out: a JSON file of what the picture shows: the
+                                          panels and where ("panels": layout.json's entries), the
+                                          terminal ("terminal": false, or its "at", "script",
+                                          "font_size"), FIELD NOTES' text (docs/theming.md)
+
+Where kwin_wayland, Hyprland and grim are, the picture is the real desktop: a Hyprland
+running bromigOS's own config inside a headless kwin, with the real waybar, panels and
+kitty, captured by grim inside it (BROMIGOS_PREVIEWS_NESTED=0 turns that off). Elsewhere
+it's composed from the same pieces drawn one by one (kitty and the bar's GTK in a headless
+weston).
+
+They're cached in ~/.cache/bromigos/theme-previews/NAME-STAMP.jpg; the stamp is a hash of
+everything the picture shows (the theme's files, the templates, the bar's style, the live
+layer's drawing code), so an updated theme or live layer gets a new one. `bromigos update`, `bromigos ext install`/`update` and
+`bromigos theme new` start this in the background; the switcher does too for any it
+finds missing. A theme takes 10 to 20 seconds (a world the longest).
+"""
+import json
+import os
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+for _p in (os.path.join(HERE, "..", "lib"), "/usr/lib/bromigos/lib"):
+    if os.path.isdir(_p) and _p not in sys.path:
+        sys.path.append(_p)
+
+import bromigos_previews as PV  # noqa: E402
+
+
+def arg(a, flag):
+    if flag in a:
+        i = a.index(flag)
+        if i + 1 < len(a):
+            v = a[i + 1]
+            del a[i:i + 2]
+            return v
+        sys.exit(f"bromigos theme previews: {flag} needs a value")
+    return None
+
+
+def main():
+    a = sys.argv[1:]
+    if any(x in ("-h", "--help", "help") for x in a):
+        print(__doc__)
+        return 0
+    as_json = "--json" in a
+    quiet = "--quiet" in a
+    force = "--force" in a
+    stale_only = "--stale" in a                  # the default; kept for the unit and the hook
+    listing = "--list" in a
+    for f in ("--json", "--quiet", "--force", "--stale", "--list"):
+        while f in a:
+            a.remove(f)
+    d, out, name, size = arg(a, "--dir"), arg(a, "--out"), arg(a, "--name"), arg(a, "--size")
+    scene_file, panel_list = arg(a, "--scene"), arg(a, "--panels")
+    scene = None
+    if scene_file or panel_list:
+        if not out:
+            sys.exit("bromigos theme previews: --panels and --scene need --out FILE")
+        if scene_file and panel_list:
+            sys.exit("bromigos theme previews: --panels or --scene, not both")
+        try:
+            scene = PV.load_scene(os.path.abspath(scene_file) if scene_file
+                                  else {"panels": [p.strip() for p in panel_list.split(",") if p.strip()]})
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            sys.exit(f"bromigos theme previews: the scene: {e}")
+        if not d and len(a) != 1:
+            sys.exit("bromigos theme previews: a scene draws one theme: NAME or --dir DIR")
+    if size:
+        try:
+            size = tuple(int(x) for x in size.lower().split("x"))
+            assert len(size) == 2 and min(size) >= 320
+        except (ValueError, AssertionError):
+            sys.exit("bromigos theme previews: --size WxH, e.g. 2560x1440")
+        if not out:
+            sys.exit("bromigos theme previews: --size needs --out FILE")
+        if not d and len(a) != 1:
+            sys.exit("bromigos theme previews: --size draws one theme: NAME or --dir DIR")
+    del stale_only
+    unknown = [x for x in a if x.startswith("-")]
+    if unknown:
+        sys.exit(f"bromigos theme previews: unknown option {unknown[0]} (--help)")
+    if listing:
+        doc = PV.themes()
+        rows = []
+        for t in doc.get("themes", []):
+            if t.get("error"):
+                continue
+            st = PV.stamp(t["name"])
+            p, fresh = PV.current(t["name"], st)
+            rows.append({"name": t["name"], "stamp": st, "preview": p, "current": fresh})
+        if as_json:
+            print(json.dumps({"schema": 1, "cache": PV.CACHE, "renderer": PV.RENDERER, "themes": rows}))
+        else:
+            for r in rows:
+                state = "current" if r["current"] else ("stale" if r["preview"] else "missing")
+                print(f"{r['name']:<14} {r['stamp']}  {state:<8} {r['preview'] or '-'}")
+        return 0
+    if d:
+        d = os.path.realpath(d)
+        if not os.path.exists(os.path.join(d, "colors.toml")):
+            sys.exit(f"bromigos theme previews: {d} has no colors.toml (not a theme directory)")
+        name = name or _dir_name(d)
+        results = PV.render([name], force=force, dirs=[d], out=out and os.path.abspath(out),
+                            progress=None if quiet or as_json else _progress, size=size, scene=scene)
+    else:
+        names = a or [t["name"] for t in PV.themes().get("themes", []) if not t.get("error")]
+        if not names:
+            sys.exit("bromigos theme previews: no themes (bromigos theme list)")
+        results = PV.render(names, force=force, progress=None if quiet or as_json else _progress, size=size,
+                            out=out and os.path.abspath(out), scene=scene)
+    failed = [r for r in results if r.get("error")]
+    if as_json:
+        print(json.dumps({"schema": 1, "cache": PV.CACHE, "results": results}))
+    elif not quiet:
+        for r in results:
+            if r.get("error"):
+                print(f"  {r['name']:<14} FAILED: {r['error']} (log: {r.get('log')})")
+            elif r.get("held"):
+                print(f"  {r['name']:<14} held back: {r['held']}")
+            elif r.get("skipped"):
+                print(f"  {r['name']:<14} current   {r['path']}")
+            else:
+                note = f"  ({'; '.join(r['notes'])})" if r.get("notes") else ""
+                print(f"  {r['name']:<14} drawn     {r.get('copied_to') or r['path']}  {r['seconds']} s, "
+                      f"{r.get('desktop')}{note}")
+    return 1 if failed else 0
+
+
+def _dir_name(d):
+    """A theme directory's name: its bromigos-ext.toml's, else the folder's."""
+    import tomllib
+    try:
+        with open(os.path.join(d, "bromigos-ext.toml"), "rb") as f:
+            n = tomllib.load(f).get("name")
+            if isinstance(n, str) and n:
+                return n
+    except (OSError, ValueError):
+        pass
+    return os.path.basename(d.rstrip("/"))
+
+
+def _progress(name, what):
+    if what == "rendering":
+        print(f"  {name:<14} drawing…", flush=True)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

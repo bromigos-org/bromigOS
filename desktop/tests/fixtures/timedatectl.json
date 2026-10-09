@@ -1,0 +1,27 @@
+{
+ "Timezone": "America/Los_Angeles",
+ "LocalRTC": "no",
+ "CanNTP": "yes",
+ "NTP": "yes",
+ "NTPSynchronized": "yes",
+ "TimeUSec": "Fri 2026-10-09 09:41:00 PDT",
+ "RTCTimeUSec": "Fri 2026-10-09 16:41:00 UTC",
+ "zones": [
+  "Africa/Cairo",
+  "Africa/Lagos",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/New_York",
+  "America/Sao_Paulo",
+  "Asia/Kolkata",
+  "Asia/Seoul",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "Europe/Berlin",
+  "Europe/Lisbon",
+  "Europe/London",
+  "Pacific/Auckland",
+  "UTC"
+ ]
+}

@@ -1,0 +1,33 @@
+{
+  "_comment": "Hologram models (VECTOR's format: vector's tools/holo/collection.py and assets/holo/README.md). Boxes are [x0,x1, y0,y1, z0,z1] in fractions of the normalised bounding box (y up, front +z); a face goes to the first part whose box holds its centroid, else to the part with rest=true. bind names the live reading a part shows (VECTOR's holo/bind.py), empty for a part that only shapes the model. Sources are in src/; the baked NAME.holo.npz sit next to this file. Rebake: ~/.local/share/bromigos/venv/bin/python <vector>/tools/holo/bake.py --root THIS_DIR --preview",
+  "models": {
+  "unlisted-relay": {
+   "title": "AN UNLISTED RELAY",
+   "subtitle": "the network's repeaters",
+   "faces": 40000,
+   "max_edges": 16000,
+   "source": "src/unlisted-relay.glb",
+   "parts": [
+    {"id": "beacon", "label": "BEACON", "bind": "", "hint": "The beacon lamp at the top: a relay no buyer wanted, relit by hand and carrying anyone's traffic for nothing", "boxes": [[0.0, 1.0, 0.92, 1.0, 0.0, 1.0]], "explode": [0, 1, 0], "distance": 0.26},
+    {"id": "antennae", "label": "CROSSBARS", "bind": "", "hint": "Three crossbars of whips on the old analog bands, the only place the Echo lives", "boxes": [[0.0, 1.0, 0.66, 0.92, 0.0, 1.0]], "explode": [0, 0.6, 0], "distance": 0.2},
+    {"id": "housing", "label": "RELAY HOUSING", "bind": "wick.beam", "hint": "The relay housing, with the black flame in its green ring burned into it: listed on no sector's tariff schedule, dark on every ledger. Lit while every channel on the network answers", "boxes": [[0.28, 0.75, 0.22, 0.36, 0.55, 1.0]], "explode": [0, 0, 1], "distance": 0.3},
+    {"id": "dishes", "label": "DISHES", "bind": "", "hint": "Salvaged dishes pointed at the next relay down the line: every codec call on the 140 band crosses at least one", "boxes": [[0.0, 0.3, 0.3, 0.66, 0.0, 1.0], [0.68, 1.0, 0.3, 0.66, 0.0, 1.0]], "explode": [-1, 0.2, 0], "distance": 0.24},
+    {"id": "power", "label": "POWER", "bind": "", "hint": "A battery box and a tilted solar panel: no one pays this relay's power bill", "boxes": [[0.25, 0.75, 0.0, 0.14, 0.62, 1.0]], "explode": [0, -0.4, 1], "distance": 0.24},
+    {"id": "mast", "label": "MAST", "bind": "", "hint": "A dead mast from the Switch-Off, when relays went to auction and the ones that found no buyer went dark", "rest": true, "explode": [0, -1, 0], "distance": 0.12}
+   ]
+  },
+  "long-hauler": {
+   "title": "THE LONG-HAULER",
+   "subtitle": "a Drift bulk freighter",
+   "faces": 40000,
+   "max_edges": 16000,
+   "source": "src/long-hauler.glb",
+   "parts": [
+    {"id": "bridge", "label": "COMMAND BLOCK", "bind": "", "hint": "The blunt command block: a long-hauler crosses the sky far up and slowly, on its way somewhere that pays", "boxes": [[0.0, 0.26, 0.0, 1.0, 0.0, 1.0]], "explode": [-1, 0.2, 0], "distance": 0.26},
+    {"id": "engines", "label": "ENGINE BELLS", "bind": "", "hint": "A cluster of engine bells: slow ships, long hauls, the way the Drift was settled", "boxes": [[0.82, 1.0, 0.0, 1.0, 0.0, 1.0]], "explode": [1, 0, 0], "distance": 0.26},
+    {"id": "cargo", "label": "CONTAINERS", "bind": "", "hint": "Strapped containers on the spine: nothing in the Drift is new; everything is repaired, repainted and resold", "boxes": [[0.26, 0.82, 0.52, 1.0, 0.0, 1.0]], "explode": [0, 1, 0], "distance": 0.22},
+    {"id": "tanks", "label": "TANKS", "bind": "", "hint": "Bulk tanks slung under the spine: fuel and water for posts no sector will serve", "rest": true, "explode": [0, -1, 0], "distance": 0.18}
+   ]
+  }
+  }
+}

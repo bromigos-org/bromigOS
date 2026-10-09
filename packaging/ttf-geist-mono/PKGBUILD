@@ -1,0 +1,26 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# Geist Mono, the bromigOS UI font (the bar, the widgets, the live layer's text, VECTOR,
+# the lock and login screens). Not in Arch's repositories (only the Nerd-patched
+# otf-geist-mono-nerd, a different family name); the AUR has it, and bromigOS builds it
+# into its own signed repository so an install never needs an AUR helper. Upstream:
+# vercel/geist-font, SIL Open Font License 1.1. The release zip is pinned by checksum
+# (upstream doesn't sign its releases).
+
+pkgname=ttf-geist-mono
+pkgver=1.7.2
+pkgrel=1
+pkgdesc='Geist Mono, a monospaced typeface by Vercel'
+arch=('any')
+url='https://github.com/vercel/geist-font'
+license=('OFL-1.1')
+depends=('fontconfig')
+options=('!debug')
+source=("geist-font-v${pkgver}.zip::https://github.com/vercel/geist-font/releases/download/v${pkgver}/geist-font-v${pkgver}.zip")
+sha256sums=('7fc800d2ac6b92844895196e5041aca55d814c15db70c44f79b3b83ab82b04e2')
+
+package() {
+  cd geist-font
+  install -Dm644 -t "$pkgdir/usr/share/fonts/TTF/" GeistMono/ttf/GeistMono-*.ttf
+  install -Dm644 OFL.txt "$pkgdir/usr/share/licenses/$pkgname/OFL.txt"
+}

@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Theme Switcher
+GenericName=Appearance
+Comment=Every theme as the desktop wearing it: pick one to put it on (SUPER+CTRL+SHIFT+SPACE)
+Icon=bromigos-theme
+TryExec=bromigos-theme-switcher
+Exec=bromigos-theme-switcher
+Terminal=false
+Categories=Settings;DesktopSettings;GTK;
+Keywords=theme;themes;colors;colours;wallpaper;look;appearance;style;world;skin;dark;light;
+StartupNotify=false
+StartupWMClass=org.bromigos.ThemeSwitcher
+X-Bromigos-Menu=style/switcher

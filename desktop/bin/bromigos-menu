@@ -1,0 +1,531 @@
+#!/usr/bin/env python3
+# bromigos:summary=The desktop menu (SUPER+SPACE): launch, install, setup, style, update, toggles, VECTOR, holograms
+# bromigos:args=[--filter TEXT | --dump | --json]
+# bromigos:examples=bromigos menu; bromigos menu --dump
+"""bromigos-menu: one menu for the desktop, on SUPER+SPACE (rofi, script mode).
+
+The top level lists the groups, then every item as "GROUP › item", so typing finds
+anything at once (nested search); choosing a group narrows to it (‹ BACK returns).
+Items come from what is installed: the apps (desktop entries; bromigOS's own say which
+item they are, X-Bromigos-Menu, so none is listed twice), bromigOS's commands
+(`bromigos commands --json`: a new command shows up here on its own), the themes,
+the animation switches, VECTOR's verbs, the holograms. After Omarchy's menu, adapted.
+
+  bromigos-menu            open it
+  bromigos-menu --filter TEXT   open it with TEXT already typed (its matches listed)
+  bromigos-menu --dump     print the tree (what the menu would show), no window
+  bromigos-menu --json     the same as JSON
+  bromigos-menu --run ID   run one item by its id (what a chosen row does)
+"""
+import html
+import json
+import os
+import re
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+import bromigos_hypr as H  # noqa: E402
+
+SELF = os.path.realpath(__file__)
+MUTED = "alpha='55%'"
+
+
+# ------------------------------------------------------------------------- items
+class Item:
+    __slots__ = ("id", "group", "label", "hint", "icon", "action", "stay", "place")
+
+    def __init__(self, id, group, label, hint="", icon=None, action=None, stay=False, place=None):
+        self.id, self.group, self.label, self.hint, self.icon = id, group, label, hint, icon
+        self.action = action          # (kind, payload): run | term | hold | view | prompt
+        self.stay = stay              # after running, show the group again (toggles)
+        self.place = place            # a desktop entry's X-Bromigos-Menu (merge_entries)
+
+
+GROUPS = [
+    ("launch", "LAUNCH", "", "apps"),
+    ("style", "STYLE", "", "theme, wallpaper"),
+    ("toggle", "TOGGLE", "", "animations, sound, panels, motion, contrast"),
+    ("vector", "VECTOR", "", "the line, his voice"),
+    ("holo", "HOLOGRAMS", "", "the decks"),
+    ("setup", "SETUP", "", "settings, monitors, accessibility, keys, input, homelab, AI"),
+    ("install", "INSTALL", "", "packages, web apps, themes"),
+    ("remove", "REMOVE", "", "packages, web apps, themes"),
+    ("update", "UPDATE", "", "bromigos update"),
+    ("commands", "COMMANDS", "", "every bromigos command"),
+    ("about", "ABOUT", "", "versions"),
+]
+
+
+def _json(cmd, default):
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+        return json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else default
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return default
+
+
+def _which(name):
+    from shutil import which
+    return which(name) is not None
+
+
+def apps():
+    out = []
+    try:
+        from gi.repository import Gio            # Gio alone: no GTK needed to read entries
+        for a in sorted(Gio.AppInfo.get_all(), key=lambda a: (a.get_name() or "").lower()):
+            if not a.should_show():
+                continue
+            f = a.get_filename() if hasattr(a, "get_filename") else None
+            if not f:
+                continue
+            icon = a.get_icon().to_string() if a.get_icon() else None
+            desc = a.get_description() or ""
+            place = None
+            if hasattr(a, "get_string"):            # bromigOS's own entries say which item they are
+                place = a.get_string("X-Bromigos-Menu")
+                label = a.get_string("X-Bromigos-Menu-Label")
+                place = (place.strip(), label.strip() if label else None) if place else None
+            out.append(Item("launch/" + os.path.basename(f), "launch", a.get_name(), desc, icon,
+                            ("run", ["gio", "launch", f]), place=place))
+    except Exception:
+        pass
+    return out
+
+
+def style():
+    items = [Item("style/switcher", "style", "Theme…", "pick a theme from previews (SUPER+CTRL+SHIFT+SPACE)", None,
+                  ("run", ["bromigos-theme-switcher"])),
+             Item("style/wallpaper-next", "style", "Next wallpaper", "SUPER+CTRL+SPACE", None, ("run", ["bromigos-wallpaper", "next"]))]
+    d = _json(["bromigos", "theme", "list", "--json"], {})
+    for t in d.get("themes", []):
+        cur = " (current)" if t["name"] == d.get("current") else ""
+        items.append(Item("style/theme/" + t["name"], "style", f"Theme: {t.get('display_name') or t['name']}{cur}",
+                          t.get("description", ""), None, ("run", ["bromigos", "theme", "set", t["name"]])))
+    return items
+
+
+def toggles():
+    items = [Item("toggle/mute", "toggle", "Mute all sound", "theme sounds and VECTOR (SUPER+SHIFT+M)", None, ("run", ["bromigos", "mute"]), stay=True),
+             Item("toggle/live", "toggle", "Live layer on/off", "the animated background", None, ("run", ["bromigos-live", "toggle"]), stay=True),
+             Item("toggle/widgets", "toggle", "Desktop panels", "all of them (SUPER+W)", None, ("run", ["bromigos-widgets", "toggle", "all"]), stay=True),
+             Item("toggle/screensaver", "toggle", "Screensaver", "now", None, ("run", ["bromigos-live", "screensaver"]))]
+    items += power_profiles()
+    # accessibility (bromigos accessibility; docs/accessibility.md): the setting now, and the
+    # row switches it
+    acc = _json(["bromigos", "accessibility", "--json"], {}).get("accessibility") or {}
+    if acc:
+        motion, contrast = acc.get("motion", "full"), acc.get("contrast", "normal")
+        for level, label, hint in (
+                ("reduced", "Reduced motion", "calmer and slower: no parallax, flicker, flashes or static; windows fade"),
+                ("still", "Still background", "the live background holds a still frame; no window animations")):
+            on = motion == level
+            items.append(Item("toggle/motion-" + level, "toggle", f"{label}: {'ON' if on else 'off'}", hint, None,
+                              ("run", ["bromigos", "accessibility", "motion", "full" if on else level]), stay=True))
+        on = contrast == "high"
+        items.append(Item("toggle/contrast", "toggle", f"High contrast: {'ON' if on else 'off'}",
+                          "every colour raised to WCAG AAA (text 7:1), panels opaque", None,
+                          ("run", ["bromigos", "accessibility", "contrast", "normal" if on else "high"]), stay=True))
+    # the idle policy (bromigos idle; docs/idle.md): the lock on idle and stay awake, with their state
+    idle = _json(["bromigos", "idle", "status", "--json"], {})
+    if idle:
+        lock = (idle.get("policy") or {}).get("lock") or {}
+        on = lock.get("enabled")
+        items.append(Item("toggle/idle-lock", "toggle", f"Lock on idle: {'ON' if on else 'off'}",
+                          (f"locks after {lock.get('minutes')} min without input" if on else
+                           "nothing locks on idle (SUPER+L still locks)") + " · Settings › Idle & lock",
+                          None, ("run", ["bromigos", "idle", "set", "lock", "off" if on else "on"]), stay=True))
+        aw = idle.get("stay_awake") or {}
+        if aw.get("on"):
+            left = aw.get("remaining_s")
+            hint = "until you stop it" if left is None else f"{max(1, (int(left) + 59) // 60)} min left"
+            items.append(Item("toggle/stay-awake", "toggle", "Stay awake: ON", hint + " · choose to stop", None,
+                              ("run", ["bromigos", "idle", "stay-awake", "off"]), stay=True))
+        else:
+            items.append(Item("toggle/stay-awake", "toggle", "Stay awake: off",
+                              "nothing idles for an hour (the bar's eye: middle-click for until you stop it)", None,
+                              ("run", ["bromigos", "idle", "stay-awake", "1h"]), stay=True))
+    for a in _json(["bromigos", "anim", "--json"], {}).get("animations", []):
+        on = a.get("on")
+        verb = "off" if on else "on"
+        items.append(Item("toggle/anim/" + a["name"], "toggle", f"{a['name']}: {'ON' if on else 'off'}", a.get("description", ""),
+                          None, ("run", ["bromigos", "anim", verb, a["name"]]), stay=True))
+    return items
+
+
+PROFILE_HINTS = {"power-saver": "slower, cooler, the battery lasts longer", "balanced": "the default",
+                 "performance": "faster, warmer, the battery goes quicker"}
+
+
+def power_profiles():
+    """The power profiles power-profiles-daemon offers here (a laptop's: `bromigos hw setup`
+    installs it), the one in force marked; choosing one switches to it."""
+    if not _which("powerprofilesctl"):
+        return []
+    try:
+        out = subprocess.run(["powerprofilesctl", "list"], capture_output=True, text=True, timeout=4).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    items = []
+    for line in out.splitlines():
+        m = re.match(r"^(\*?)\s*([a-z-]+):$", line)
+        if not m:
+            continue
+        now, prof = m.group(1) == "*", m.group(2)
+        items.append(Item("toggle/power/" + prof, "toggle", f"Power profile: {prof}{' (now)' if now else ''}",
+                          PROFILE_HINTS.get(prof, "power-profiles-daemon"), None, ("run", ["powerprofilesctl", "set", prof]),
+                          stay=True))
+    return items
+
+
+def vector():
+    if not _which("bromigos-holo"):
+        return []
+    v = [("vector", "Show VECTOR", "the line (SUPER+E)"), ("conversation", "Conversation mode", "hands-free (SUPER+SHIFT+E)"),
+         ("gallery", "Hologram gallery", "his 3D models (SUPER+O)"), ("history", "History", "past conversations"),
+         ("mute", "Mute his voice", "VECTOR only")]
+    return [Item("vector/" + k, "vector", l, h, None, ("run", ["bromigos-holo", k])) for k, l, h in v]
+
+
+# without the live layer's catalog (bromigos-live decks), bromigOS's own decks
+DECKS = [("holodeck", "Holo deck", "this machine"), ("driftmap", "Drift map", "the star chart"),
+         ("timeline", "Timeline", "the last 72 h"), ("swarm", "Swarm", "repos and agents")]
+
+
+def holos():
+    """Every deck there is, the homelab's and a plugin's too, in their own words."""
+    if not _which("bromigos-live"):
+        return []
+    cat = _json(["bromigos-live", "decks", "--json"], {}).get("decks") or \
+        [{"kind": k, "label": label, "hint": h} for k, label, h in DECKS]
+    return [Item("holo/" + d["kind"], "holo", d["label"], d.get("hint") or "", None, ("run", ["bromigos-live", d["kind"]]))
+            for d in cat if d.get("kind")]
+
+
+def setup():
+    s = [("monitors", "Monitors", "layout, scale, primary", "term"), ("hardware", "Hardware", "GPU drivers, laptop power (bromigos hw)", "term"),
+         ("accessibility", "Accessibility", "reduced motion, a still background, high contrast", "term"),
+         ("keybindings", "Keybindings", "see and run them; edit yours", "run"),
+         ("input", "Input", "keyboard layout, repeat, touchpad", "run"), ("config", "Config files", "open yours in the editor", "run"),
+         ("theme", "Theme", "the first-run picker", "term"), ("vector", "VECTOR's brain", "local, lab or a server", "term"),
+         ("voice", "Voice", "GPU, CPU or off", "term"), ("homelab", "Homelab", "connect your lab", "term"),
+         ("create", "Creation tools", "where art is made", "term"), ("targets", "Where AI runs", "homelab, local, cloud", "term"),
+         ("peripherals", "Peripherals", "a keyboard's macro keys, dial and lighting (Razer)", "term")]
+    # the Settings window first (bromigos settings: idle and lock, the theme, shortcuts, …)
+    out = [Item("setup/settings", "setup", "Settings…", "idle and lock, theme, shortcuts, updates (SUPER+,)", None,
+                ("run", ["bromigos-settings"]))]
+    for k, l, h, kind in s:
+        if kind == "run":
+            out.append(Item("setup/" + k, "setup", l, h, None, ("run", ["bromigos-setup-" + k])))
+        else:
+            out.append(Item("setup/" + k, "setup", l, h, None, ("hold", ["bromigos", "setup", k])))
+    # the shortcut picker: pick what to bind, press its keys (bromigos keys; docs/desktop.md)
+    at = next((i + 1 for i, it in enumerate(out) if it.id == "setup/keybindings"), len(out))
+    out.insert(at, Item("setup/shortcuts", "setup", "Shortcuts…", "press the keys to rebind one; yours, reset",
+                        None, ("run", ["bromigos-keys"])))
+    return out
+
+
+def install():
+    items = [Item("install/package", "install", "Package…", "pacman", None, ("prompt", "install-package")),
+             Item("install/webapp", "install", "Web app…", "a site as its own window", None, ("prompt", "webapp-name")),
+             Item("install/theme", "install", "Theme from a git URL…", "into ~/.config/bromigos/themes", None, ("prompt", "install-theme"))]
+    for w in _json(["bromigos-webapp", "catalog", "--json"], []):
+        items.append(Item("install/catalog/" + w["name"], "install", f"Web app: {w['title']}", w["url"], None,
+                          ("hold", ["bromigos-webapp", "add", "--from-catalog", w["name"]])))
+    return items
+
+
+def remove():
+    items = [Item("remove/package", "remove", "Package…", "pacman -Rs", None, ("prompt", "remove-package"))]
+    for w in _json(["bromigos-webapp", "list", "--json"], []):
+        items.append(Item("remove/webapp/" + w["name"], "remove", f"Web app: {w.get('title') or w['name']}", w.get("url", ""), None,
+                          ("hold", ["bromigos-webapp", "remove", w["name"]])))
+    d = _json(["bromigos", "theme", "list", "--json"], {})
+    for t in d.get("themes", []):
+        if "user" in t.get("sources", []):
+            items.append(Item("remove/theme/" + t["name"], "remove", f"Theme: {t.get('display_name') or t['name']}", "yours", None,
+                              ("hold", ["bromigos", "theme", "remove", t["name"]])))
+    return items
+
+
+def update():
+    return [Item("update/run", "update", "Update bromigOS", "packages, migrations, restarts", None, ("hold", ["bromigos", "update"])),
+            Item("update/check", "update", "What would an update do", "bromigos update --check", None, ("hold", ["bromigos", "update", "--check"])),
+            Item("update/restart", "update", "Restart what runs old code", "bromigos restart", None, ("hold", ["bromigos", "restart"]))]
+
+
+def _headers(path):
+    """The `# bromigos:key=value` header of an executable (the keys the router doesn't
+    carry: menu, prompt), from its first lines."""
+    out = {}
+    try:
+        with open(path, errors="replace") as f:
+            for _ in range(30):
+                line = f.readline()
+                if not line:
+                    break
+                if line.startswith("# bromigos:"):
+                    k, _, v = line[11:].strip().partition("=")
+                    out[k.strip()] = v.strip()
+    except OSError:
+        pass
+    return out
+
+
+GROUP_KEYS = {l: g for g, l, *_ in GROUPS}
+
+
+def placed():
+    """Commands that ask for a place in the menu: `# bromigos:menu=INSTALL:Extension…`
+    (the group's label, then the row's), optionally `# bromigos:prompt=GIT URL` to ask for
+    one argument first. Grouped by menu group."""
+    out = {}
+    for c in _json(["bromigos", "commands", "--json"], {}).get("commands", []):
+        if c.get("hidden") or not c.get("path"):
+            continue
+        h = _headers(c["path"])
+        if "menu" not in h:
+            continue
+        group_label, _, label = h["menu"].partition(":")
+        g = GROUP_KEYS.get(group_label.strip().upper())
+        if not g or not label.strip():
+            continue
+        route = (c.get("route") or c.get("command")).split()
+        key = "placed/" + "-".join(route)
+        if h.get("prompt"):
+            PROMPTS[key] = (h["prompt"].strip().upper(), (lambda r: (lambda s: ("hold", r + s.split())))(route))
+            action = ("prompt", key)
+        else:
+            action = ("hold", route)
+        out.setdefault(g, []).append(Item(key, g, label.strip(), c.get("summary") or "", None, action))
+    return out
+
+
+def commands():
+    d = _json(["bromigos", "commands", "--json"], {})
+    out = []
+    for b in d.get("builtins", []):
+        out.append(Item("commands/" + b["name"], "commands", "bromigos " + b["name"], b.get("summary") or "", None,
+                        ("hold", ["bromigos", b["name"], "--help"])))
+    for c in d.get("commands", []):
+        if c.get("hidden"):
+            continue
+        route = c.get("route") or c.get("command")
+        out.append(Item("commands/" + route.replace(" ", "-"), "commands", route, c.get("summary") or "", None, ("hold", route.split())))
+    return out
+
+
+def about():
+    try:
+        v = subprocess.run(["pacman", "-Q"], capture_output=True, text=True).stdout
+        lines = [l for l in v.splitlines() if l.startswith("bromigos")]
+    except OSError:
+        lines = []
+    return [Item("about/" + l.split()[0], "about", l.split()[0], l.split()[1] if len(l.split()) > 1 else "", None, None) for l in lines] or \
+        [Item("about/none", "about", "bromigOS", "not installed from packages", None, None)]
+
+
+BUILDERS = {"launch": apps, "style": style, "toggle": toggles, "vector": vector, "holo": holos, "setup": setup,
+            "install": install, "remove": remove, "update": update, "commands": commands, "about": about}
+
+
+def merge_entries(t):
+    """bromigOS's own desktop entries (what the app launcher lists: docs/menu.md, "In the app
+    launcher") say which menu item they are, `X-Bromigos-Menu=<id>`, so nothing is listed
+    twice: the item keeps its place and label and takes the entry's icon, and the entry
+    isn't listed again under LAUNCH. An id the menu doesn't have yet (an entry for something
+    the menu has no row for: the extension catalog, a new deck) puts the entry in that id's
+    group under that id, with its Name or `X-Bromigos-Menu-Label`. `X-Bromigos-Menu=-`
+    keeps an entry out of the menu altogether (the menu's own)."""
+    index = {it.id: it for items in t.values() for it in items}
+    keep = []
+    for it in t["launch"]:
+        if not it.place:
+            keep.append(it)
+            continue
+        where, label = it.place
+        if where == "-":
+            continue
+        have = index.get(where)
+        if have is not None and have is not it:
+            have.icon = have.icon or it.icon
+            continue
+        g = where.split("/", 1)[0]
+        if g in t and g != "launch" and "/" in where:
+            moved = Item(where, g, label or it.label, it.hint, it.icon, it.action)
+            t[g].append(moved)
+            index[where] = moved
+            continue
+        keep.append(it)                            # a group the menu doesn't know: an app like any
+    t["launch"] = keep
+    return t
+
+
+def tree():
+    t = {g: BUILDERS[g]() for g, *_ in GROUPS}
+    for g, items in placed().items():          # commands that place themselves (bromigos:menu=)
+        t[g] = t[g] + items
+    return merge_entries(t)
+
+
+# ------------------------------------------------------------------------ actions
+PROMPTS = {
+    "install-package": ("PACKAGE TO INSTALL", lambda s: ("hold", ["sudo", "pacman", "-S", *s.split()])),
+    "remove-package": ("PACKAGE TO REMOVE", lambda s: ("hold", ["sudo", "pacman", "-Rs", *s.split()])),
+    "install-theme": ("THEME GIT URL", lambda s: ("hold", ["bromigos", "theme", "install", s.strip()])),
+    "webapp-name": ("WEB APP NAME (e.g. gmail)", None),
+    "webapp-url": ("WEB APP URL", None),
+}
+
+
+def perform(action, env):
+    kind, payload = action
+    if kind == "run":
+        H.spawn(payload, env)
+    elif kind in ("term", "hold"):
+        H.spawn(H.terminal_run(payload, hold=(kind == "hold"), title=" ".join(payload[:2])), env)
+
+
+# --------------------------------------------------------------------------- rofi
+def opt(k, v):
+    sys.stdout.write(f"\0{k}\x1f{v}\n")
+
+
+def row(text, info, icon=None, meta=None):
+    extra = f"\x1finfo\x1f{info}"
+    if icon:
+        extra = f"\0icon\x1f{icon}" + extra
+    else:
+        extra = "\0" + extra[1:]
+    if meta:
+        extra += f"\x1fmeta\x1f{meta}"
+    sys.stdout.write(text + extra + "\n")
+
+
+def esc(s):
+    return html.escape(s or "", quote=False)
+
+
+def group_row(key, label, hint):
+    row(f"<b>{esc(label)}</b>  <span {MUTED}>{esc(hint)}</span>", "group:" + key, meta=label.lower())
+
+
+def item_row(it, with_group):
+    prefix = f"<span {MUTED}>{esc(dict((g, l) for g, l, *_ in GROUPS)[it.group])} › </span>" if with_group else ""
+    hint = f"  <span {MUTED}>{esc(it.hint)}</span>" if it.hint else ""
+    row(prefix + esc(it.label) + hint, "item:" + it.id, it.icon, meta=it.group)
+
+
+def show_top(t):
+    opt("prompt", "")
+    opt("markup-rows", "true")
+    opt("no-custom", "true")
+    opt("data", "top")
+    for g, label, _, hint in GROUPS:
+        group_row(g, label, hint)
+    for g, *_ in GROUPS:
+        for it in t[g]:
+            item_row(it, True)
+
+
+def show_group(t, g):
+    label = dict((k, l) for k, l, *_ in GROUPS)[g]
+    opt("prompt", "")
+    opt("markup-rows", "true")
+    opt("no-custom", "true")
+    opt("data", "group:" + g)
+    opt("message", label)
+    row(f"<span {MUTED}>‹ BACK</span>", "back")
+    for it in t[g]:
+        item_row(it, False)
+
+
+def show_prompt(key, stash=""):
+    title, _ = PROMPTS[key]
+    opt("prompt", "")
+    opt("markup-rows", "true")
+    opt("no-custom", "false")
+    opt("data", f"prompt:{key}:{stash}")
+    opt("message", title + "  (type it, Enter)")
+    row(f"<span {MUTED}>‹ BACK</span>", "back")
+
+
+def find(t, id):
+    for items in t.values():
+        for it in items:
+            if it.id == id:
+                return it
+    return None
+
+
+def rofi_mode(argv):
+    retv = int(os.environ.get("ROFI_RETV", "0") or 0)
+    info = os.environ.get("ROFI_INFO", "")
+    data = os.environ.get("ROFI_DATA", "top")
+    env = H.session_env()
+    t = tree()
+    if retv == 0:
+        return show_top(t)
+    if retv == 2 and data.startswith("prompt:"):          # a typed answer
+        _, key, stash = data.split(":", 2)
+        text = (argv[0] if argv else "").strip()
+        if not text:
+            return show_prompt(key, stash)
+        if key == "webapp-name":
+            return show_prompt("webapp-url", text)
+        if key == "webapp-url":
+            return perform(("hold", ["bromigos-webapp", "add", stash, text]), env)
+        _, make = PROMPTS[key]
+        return perform(make(text), env)
+    if info == "back":
+        return show_top(t)
+    if info.startswith("group:"):
+        return show_group(t, info[6:])
+    if info.startswith("item:"):
+        it = find(t, info[5:])
+        if it is None or it.action is None:
+            return show_group(t, it.group) if it else show_top(t)
+        if it.action[0] == "prompt":
+            return show_prompt(it.action[1])
+        perform(it.action, env)
+        if it.stay:
+            return show_group(tree(), it.group)
+        return None
+    return show_top(t)
+
+
+def main():
+    a = sys.argv[1:]
+    if a and a[0] == "--rofi":
+        return rofi_mode(a[1:])
+    if a and a[0] in ("--dump", "--json"):
+        t = tree()
+        if a[0] == "--json":
+            print(json.dumps({g: [{"id": i.id, "label": i.label, "hint": i.hint, "icon": i.icon, "action": i.action} for i in items] for g, items in t.items()}, indent=1))
+        else:
+            for g, label, _, hint in GROUPS:
+                print(f"{label}  ({hint})")
+                for it in t[g]:
+                    print(f"  {it.label:<34} {it.hint}")
+        return 0
+    if a and a[0] == "--run" and len(a) > 1:
+        # a shortcut runs one item: its own group is enough to find it (quicker than the tree)
+        g = a[1].split("/", 1)[0]
+        it = find({g: BUILDERS[g]()}, a[1]) if g in BUILDERS else None
+        it = it or find(tree(), a[1])
+        if it is None or it.action is None:
+            sys.exit(f"no such item: {a[1]}")
+        perform(it.action, H.session_env())
+        return 0
+    theme = H.title_theme("BROMIGOS", width=820, lines=12) + "element-icon { size: 1.4em; }\n"
+    cmd = ["rofi", "-show", "menu", "-modes", f"menu:{SELF} --rofi", "-show-icons", "-i", "-theme-str", theme]
+    if a[:1] == ["--filter"] and len(a) > 1:
+        cmd += ["-filter", a[1]]
+    subprocess.run(cmd, env=H.session_env())
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main() or 0)

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# theme-set hook (bromigos-desktop): the emblem in force. `bromigos theme set NAME` runs the
+# packaged hooks in /usr/share/bromigos/hooks/theme-set.d and the user's own in
+# ~/.config/bromigos/hooks/theme-set.d (a user hook of the same name replaces this one).
+#
+# Keeps one link, ~/.local/state/bromigos/emblem, on the current theme's emblem kit
+# (theme/current/emblem: a world's post has its own mark, the Wick's is the burn-in), or on
+# the packaged Wick kit when the theme has none. Every kit has the same file names
+# (emblem-*.svg/png, lock/ring.png, lock/flame.png), so the configs that name a file
+# (gtklock's layout, hyprlock, rofi, dunst) read it through this link.
+set -eu
+state=${XDG_STATE_HOME:-$HOME/.local/state}/bromigos
+mkdir -p "$state"
+if [ -f "$state/theme/current/emblem/emblem-ring.svg" ] && [ -f "$state/theme/current/emblem/lock/ring.png" ]; then
+    target=theme/current/emblem
+else
+    target=${BROMIGOS_SHARE_DIR:-/usr/share/bromigos}/themes/wick/emblem
+fi
+ln -sfn "$target" "$state/emblem.tmp"
+mv -Tf "$state/emblem.tmp" "$state/emblem"

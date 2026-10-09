@@ -1,0 +1,22 @@
+{
+  "void": "#000500",
+  "panel": "#001300",
+  "guard": "#003b00",
+  "phosphor": "#39ff14",
+  "phosphor-soft": "#9cff8a",
+  "phosphor-dim": "#159b09",
+  "amber": "#d4af37",
+  "danger": "#ff766f",
+  "rust": "#4a0e0e",
+  "static": "#7e927e",
+  "line": "rgba(21, 155, 9, 0.45)",
+  "glow": "0 0 14px rgba(57, 255, 20, 0.35)",
+  "font-mono": "Geist Mono",
+  "terminal": {
+    "foreground": "#c4f5bb", "background": "#000500",
+    "black": "#000500", "red": "#ff766f", "green": "#39ff14", "yellow": "#d4af37",
+    "blue": "#5aa9e6", "magenta": "#c97bdb", "cyan": "#3fe0c5", "white": "#b4c8b4",
+    "bright_black": "#4e6b4e", "bright_red": "#ff9d97", "bright_green": "#9cff8a", "bright_yellow": "#f0d36a",
+    "bright_blue": "#8ccaf5", "bright_magenta": "#e3a8ef", "bright_cyan": "#8af5e2", "bright_white": "#e6f5e6"
+  }
+}

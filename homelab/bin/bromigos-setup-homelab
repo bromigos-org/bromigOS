@@ -1,0 +1,339 @@
+#!/usr/bin/env python3
+# bromigos:summary=Find the homelab's services and write ~/.config/bromigos/homelab.toml (re-runnable)
+"""bromigos setup homelab: connect your homelab to the desktop (docs/homelab.md).
+
+    bromigos setup homelab                       ask for hosts/URLs, probe them, show what was found, write
+    bromigos setup homelab --hosts nas,gpu-box   probe these hosts' well-known ports
+    bromigos setup homelab --url http://h:9090   probe exact URLs (repeatable)
+    bromigos setup homelab --yes                 non-interactive: probe, then write without asking
+    bromigos setup homelab --print               show the [[source]]s it would add, write nothing
+    bromigos setup homelab --json                the findings as JSON
+
+What it looks for, on this machine: the Docker socket, the herdr CLI, a logged-in gh (your
+orgs from ~/github.com). Kubernetes only as you name it (--kube-context / --kubeconfig, or
+pick from your contexts when asked): it never adopts kubectl's current context by itself. On each host: every adapter's well-known
+ports (Prometheus 9090, VictoriaMetrics 8428, Alertmanager 9093, LiteLLM 4000, Ollama 11434,
+OpenAI-compatible 8000, Vault 8200, Argo CD 443/8080, Docker 2375, and any third-party
+adapter's), over http and https, each confirmed by the adapter's own probe (a real API
+answer, not just an open port).
+
+With a metrics source or the kubernetes source (found, or already in homelab.toml) it also
+detects what runs there by its metrics and its pods: DCGM, UniFi Poller, the *arr exporters,
+Pelican, vLLM, Traefik, cert-manager, Loki, Alloy, a DDNS updater, the NAS, ARC runners,
+backups (each adapter's detect()). --ingress probes the cluster's ingress hosts too (their
+names are written into the file: see --print first). --no-detect skips both.
+
+Re-runnable: it only adds sources whose type and endpoint aren't in homelab.toml already, by
+appending [[source]] blocks; your edits, references and panels are never rewritten. It never
+writes a secret: a service that needs one gets an auth_ref line to fill in, commented out.
+"""
+import argparse
+import json
+import os
+import re
+import shutil
+import socket
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+for p in ("/usr/lib/bromigos/lib", os.path.join(os.path.dirname(HERE), "lib"),
+          os.path.join(os.path.dirname(os.path.dirname(HERE)), "lib")):
+    if os.path.isdir(p) and p not in sys.path:
+        sys.path.append(p)
+
+import bromigos_homelab as H  # noqa: E402
+from bromigos_homelab import config, registry  # noqa: E402
+
+NEEDS_AUTH = {"argocd": "an Argo CD account token", "litellm": "a LiteLLM key (only for its model list)",
+              "gnosis": "the gate's read token", "arr": "its API key (Settings > General)",
+              "pelican": "a client API key (Account > API Credentials)",
+              "s3": "a read-only key's secret, with access_key = its id (bucket sizes; health needs none)"}
+
+
+def port_open(host, port, timeout=0.6):
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def probe(type_, url):
+    cls = registry.ADAPTERS[type_]
+    a = cls({"type": type_, "name": type_, "endpoint": url, "tls_verify": False})
+    try:
+        return bool(a.probe())
+    except Exception:
+        return False
+
+
+def kube_find(context, kubeconfig):
+    """A kubernetes source only for a context or kubeconfig the user named: setup never picks
+    a cluster by itself (kubectl's current context may be someone's production)."""
+    if not shutil.which("kubectl") or not (context or kubeconfig):
+        return []
+    src = {"type": "kubernetes"}
+    if kubeconfig:
+        src["kubeconfig"] = kubeconfig
+    if context:
+        src["context"] = context
+    src["_note"] = "read-only rights are enough: the desktop only gets, lists and reads logs"
+    return [src, {"type": "argocd", "_note": "deployments through Argo's metrics or Application objects"}]
+
+
+def ask_kube():
+    if not shutil.which("kubectl"):
+        return ""
+    p = subprocess.run(["kubectl", "config", "get-contexts", "-o", "name"], capture_output=True, text=True, timeout=5)
+    ctxs = [c for c in p.stdout.split() if c]
+    if not ctxs:
+        return ""
+    print("kubectl contexts:")
+    for i, c in enumerate(ctxs, 1):
+        print(f"  {i}. {c}")
+    ans = input("Which one is your homelab? (number or name; Enter for none): ").strip()
+    if ans.isdigit() and 1 <= int(ans) <= len(ctxs):
+        return ctxs[int(ans) - 1]
+    return ans if ans in ctxs else ""
+
+
+def local_finds():
+    found = []
+    if os.path.exists("/var/run/docker.sock") and probe("docker", "unix:///var/run/docker.sock"):
+        found.append({"type": "docker", "endpoint": "unix:///var/run/docker.sock"})
+    if registry.ADAPTERS["herdr"]({"type": "herdr"}).configured():
+        found.append({"type": "herdr"})
+    if shutil.which("gh"):
+        ok = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, timeout=8).returncode == 0
+        base = os.path.expanduser("~/github.com")
+        orgs = sorted(d for d in os.listdir(base) if os.path.isdir(os.path.join(base, d))) if os.path.isdir(base) else []
+        if ok and orgs:
+            found.append({"type": "github", "orgs": orgs})
+    return found
+
+
+def host_finds(host):
+    found = []
+    for type_, cls in sorted(registry.ADAPTERS.items()):
+        for port in cls.default_ports:
+            if not port_open(host, port):
+                continue
+            for scheme in (("https", "http") if port == 443 else ("http", "https")):
+                url = f"{scheme}://{host}" + ("" if (scheme, port) in (("https", 443), ("http", 80)) else f":{port}")
+                if probe(type_, url):
+                    found.append({"type": type_, "endpoint": url})
+                    break
+            else:
+                continue
+            break
+    return found
+
+
+def url_finds(url):
+    for type_ in sorted(registry.ADAPTERS):
+        if registry.ADAPTERS[type_].local and type_ not in ("docker", "argocd"):
+            continue
+        if probe(type_, url.rstrip("/")):
+            return [{"type": type_, "endpoint": url.rstrip("/")}]
+    return []
+
+
+def _instance(src):
+    cls = registry.ADAPTERS.get(src["type"])
+    try:
+        return cls(dict(src, name=src.get("name") or src["type"])) if cls else None
+    except Exception:
+        return None
+
+
+def discovery(found):
+    """A Discovery over the metrics and kubernetes sources found now, else configured already."""
+    from bromigos_homelab.adapters.labcommon import Discovery
+    resolved = list(found) + config.sources()
+    m = next((_instance(s) for s in resolved if s.get("type") in ("prometheus", "victoriametrics") and s.get("endpoint")), None)
+    k = next((_instance(s) for s in resolved if s.get("type") == "kubernetes"), None)
+    return Discovery(m, k)
+
+
+def detect_finds(found):
+    """Sources the lab adapters recognise from the metrics and the cluster (their detect())."""
+    d = discovery(found)
+    if not (d.metrics or d.kube):
+        return []
+    out = []
+    for type_, cls in sorted(registry.ADAPTERS.items()):
+        fn = getattr(cls, "detect", None)
+        if not callable(fn):
+            continue
+        try:
+            out += [dict(x, type=x.get("type") or type_) for x in fn(d) or []]
+        except Exception:
+            continue
+    return out
+
+
+def ingress_hosts(found):
+    """Hosts the cluster's Ingresses and Traefik IngressRoutes answer for."""
+    d = discovery(found)
+    hosts = set()
+    for o in d.objects("ingresses.networking.k8s.io"):
+        hosts |= {r.get("host") for r in (o.get("spec") or {}).get("rules") or [] if r.get("host")}
+    for o in d.objects("ingressroutes.traefik.io"):
+        for r in (o.get("spec") or {}).get("routes") or []:
+            hosts |= set(re.findall(r"Host\(\s*`([^`]+)`", r.get("match") or ""))
+    return sorted(h for h in hosts if "*" not in h)
+
+
+def ingress_finds(found):
+    """Probe each ingress host with the adapters its name suggests (sonarr.lab: arr; s3.lab: s3)."""
+    out = []
+    for host in ingress_hosts(found):
+        label = host.split(".", 1)[0].replace("-", "").lower()
+        for type_, cls in sorted(registry.ADAPTERS.items()):
+            hints = tuple(getattr(cls, "hints", ())) + (type_.replace("-", ""),)
+            if cls.probe is registry.Adapter.probe or not any(h and h in label for h in hints):
+                continue
+            for scheme in ("https", "http"):
+                if probe(type_, f"{scheme}://{host}"):
+                    out.append({"type": type_, "endpoint": f"{scheme}://{host}"})
+                    break
+    return out
+
+
+def merge_ingress(found, probed):
+    """Ingress finds of a type already detected without an endpoint: the endpoint joins that source
+    when the adapter does more with one (ingress_merge, e.g. Traefik's API), else it's left out
+    (the metrics already cover it: the *arr apps, Pelican)."""
+    out = list(found)
+    for p in probed:
+        same = [s for s in out if s["type"] == p["type"]]
+        if not same:
+            out.append(p)
+            continue
+        bare = next((s for s in same if not s.get("endpoint")), None)
+        if bare is not None and getattr(registry.ADAPTERS.get(p["type"]), "ingress_merge", False):
+            bare["endpoint"] = p["endpoint"]
+            bare.pop("_note", None)
+    return out
+
+
+def drop_superseded(found):
+    """An endpoint two adapters recognise keeps the more specific (vLLM over plain OpenAI)."""
+    by_ep = {}
+    for s in found:
+        by_ep.setdefault(str(s.get("endpoint") or ""), set()).add(s["type"])
+    out = []
+    for s in found:
+        ep = str(s.get("endpoint") or "")
+        over = [t for t in by_ep.get(ep, ()) if ep and s["type"] in getattr(registry.ADAPTERS.get(t), "supersedes", ())]
+        if not over:
+            out.append(s)
+    return out
+
+
+def existing():
+    """(type, endpoint) pairs and names already in the user's homelab.toml."""
+    have, names = set(), set()
+    for s in config.load()["sources"]:
+        have.add((s.get("type"), str(s.get("endpoint") or "")))
+        ep = config.resolve(s.get("endpoint") or "")     # a reference counts as what it points at
+        if isinstance(ep, str) and ep:
+            have.add((s.get("type"), ep.rstrip("/")))
+            host = ep.split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+            have |= {(s.get("type"), f"{sch}://{host}") for sch in ("http", "https")}
+        names.add(s.get("name") or s.get("type"))
+    return have, names
+
+
+def block(src, names):
+    name = src["type"]
+    n = 2
+    while name in names:
+        name = f"{src['type']}-{n}"
+        n += 1
+    names.add(name)
+    lines = ["", "[[source]]", f'name = "{name}"', f'type = "{src["type"]}"']
+    for k, v in src.items():
+        if k in ("type",) or k.startswith("_"):
+            continue
+        lines.append(f"{k} = {json.dumps(v)}")
+    if src["type"] in NEEDS_AUTH:
+        lines.append(f'# auth_ref = "@file:~/.local/share/bromigos/{name}-token"   # {NEEDS_AUTH[src["type"]]} (never the value itself)')
+    if src.get("_note"):
+        lines.append(f"# {src['_note']}")
+    if str(src.get("endpoint", "")).startswith("https://"):
+        lines.append('# tls_ca = "~/path/to/your-ca.crt"   # if it uses an internal CA')
+    return "\n".join(lines) + "\n"
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="bromigos setup homelab", description=__doc__.split("\n\n")[0])
+    ap.add_argument("--hosts", default="", help="comma-separated hosts to probe")
+    ap.add_argument("--url", action="append", default=[], help="an exact URL to identify (repeatable)")
+    ap.add_argument("--yes", "-y", action="store_true", help="non-interactive: write without asking")
+    ap.add_argument("--print", dest="dry", action="store_true", help="show what would be added, write nothing")
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--no-local", action="store_true", help="skip this machine's Docker/herdr/gh")
+    ap.add_argument("--kube-context", default="", help="the kubectl context of your homelab cluster")
+    ap.add_argument("--kubeconfig", default="", help="a (read-only) kubeconfig for your homelab cluster")
+    ap.add_argument("--no-detect", action="store_true", help="don't detect services from the metrics and the cluster")
+    ap.add_argument("--ingress", action="store_true", help="also probe the cluster's ingress hosts (writes their names)")
+    a = ap.parse_args()
+    registry.instances()                         # registers bromigOS's adapters and any plugin ones
+    interactive = sys.stdin.isatty() and not (a.yes or a.dry or a.json)
+    hosts = [h.strip() for h in a.hosts.split(",") if h.strip()]
+    urls = list(a.url)
+    if interactive and not hosts and not urls:
+        ans = input("Hosts or URLs in your homelab to check (space-separated; Enter for just this machine): ").strip()
+        for t in ans.split():
+            (urls if "://" in t else hosts).append(t)
+    found = [] if a.no_local else local_finds()
+    kctx = a.kube_context or (ask_kube() if interactive and not a.kubeconfig else "")
+    found += kube_find(kctx, a.kubeconfig)
+    for h in hosts:
+        found += host_finds(h)
+    for u in urls:
+        found += url_finds(u)
+    if not a.no_detect:
+        found += detect_finds(found)
+        if a.ingress:
+            found = merge_ingress(found, ingress_finds(found))
+    found = drop_superseded(found)
+    have, names = existing()
+    new, seen = [], set()
+    for s in found:
+        key = (s["type"], str(s.get("endpoint") or ""))
+        if key in have or key in seen:
+            continue
+        seen.add(key)
+        new.append(s)
+    if a.json:
+        print(json.dumps({"config": config.USER, "found": found, "new": new}, indent=2))
+        return 0
+    if not new:
+        print(f"Nothing new to add to {config.USER}." + ("" if found else " Nothing found; try --hosts or --url."))
+        return 0
+    text = "".join(block(s, names) for s in new)
+    print(f"Found {len(new)} new source(s):")
+    for s in new:
+        print(f"  {s['type']:<16} {s.get('endpoint') or s.get('context') or ', '.join(s.get('orgs', [])) or 'this machine'}")
+    if a.dry:
+        print(text)
+        return 0
+    if interactive and input(f"Add them to {config.USER}? [Y/n] ").strip().lower() not in ("", "y", "yes"):
+        print("Nothing written.")
+        return 1
+    os.makedirs(os.path.dirname(config.USER), exist_ok=True)
+    fresh = not os.path.exists(config.USER)
+    with open(config.USER, "a") as f:
+        if fresh:
+            f.write("# Your homelab for the bromigOS desktop (docs/homelab.md). Written by `bromigos setup homelab`;\n"
+                    "# yours to edit. Re-running it only adds sources it hasn't seen.\n")
+        f.write(text)
+    print(f"Wrote {config.USER}. Check it with: bromigos homelab status")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,71 @@
+# Sunder's colours (docs/theming.md, "colors.toml"): the white sun on hull plate, sand,
+# a heliograph's flash, and the red sun for an alarm.
+
+# ---- surfaces, darkest first
+background = "#0b0806"     # a wreck's hold, out of the sun
+void = "#060403"
+panel = "#1a1410"
+selection = "#2e2418"
+
+# ---- ink
+primary = "#ffb347"        # the white sun off hull plate
+soft = "#f5deb3"           # sand
+dim = "#8a6a3a"
+text = "#e9dcc7"
+muted = "#9a8a76"
+faint = "#5c5046"
+
+# ---- signals
+warn = "#ff8c3a"           # the Debtor rising
+danger = "#ff4d4d"
+warn_surface = "#3d2410"
+danger_surface = "#2a0a0a"
+danger_text = "#ffd6d6"
+
+[colors]
+cyan = "#7fd3c8"           # a heliograph flash across the dunes
+gold = "#ffd978"
+white = "#fff3e0"
+rust = "#5a1a12"
+
+[holo]
+line = "primary"
+glow = "gold"
+label = "text"
+highlight = "white"
+
+[widgets]
+frame = "dim"
+header = "primary"
+value = "soft"
+graph = "primary"
+track = "selection"
+
+[terminal]
+foreground = "text"
+background = "background"
+color0 = "background"
+color1 = "danger"
+color2 = "primary"
+color3 = "warn"
+color4 = "#6aa7d8"
+color5 = "#d08ac0"
+color6 = "cyan"
+color7 = "#c9b8a0"
+color8 = "faint"
+color9 = "#ff7a7a"
+color10 = "soft"
+color11 = "gold"
+color12 = "#9cc4e8"
+color13 = "#e3aad6"
+color14 = "#a8e8dd"
+color15 = "#fff8ee"
+
+[qt]
+view = "#0e0a08"
+view_alt = "#140e0a"
+header = "#120d09"
+window_alt = "#1f1812"
+button = "#2a2016"
+neutral_on_selection = "#4a3410"
+negative_on_selection = "rust"

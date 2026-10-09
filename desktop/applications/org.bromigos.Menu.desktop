@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=bromigOS Menu
+GenericName=Desktop Menu
+Comment=Launch, install, set up, style, update and toggle anything from one searchable menu (SUPER+SPACE)
+Icon=bromigos-menu
+TryExec=bromigos-menu
+Exec=bromigos-menu
+Terminal=false
+Categories=Utility;
+Keywords=menu;bromigos;launcher;start;everything;commands;
+StartupNotify=false
+X-Bromigos-Menu=-

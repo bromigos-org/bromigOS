@@ -1,0 +1,34 @@
+{
+  "_comment": "Hologram models (VECTOR's format: vector's tools/holo/collection.py and assets/holo/README.md). Boxes are [x0,x1, y0,y1, z0,z1] in fractions of the normalised bounding box (y up, front +z); a face goes to the first part whose box holds its centroid, else to the part with rest=true. bind names the live reading a part shows (VECTOR's holo/bind.py), empty for a part that only shapes the model. Sources are in src/; the baked NAME.holo.npz sit next to this file. Rebake: ~/.local/share/bromigos/venv/bin/python <vector>/tools/holo/bake.py --root THIS_DIR --preview",
+  "models": {
+  "choir": {
+   "title": "THE CHOIR",
+   "subtitle": "Tidewell \u00b7 the deep's leviathans",
+   "faces": 40000,
+   "max_edges": 16000,
+   "edge_deg": 24,
+   "source": "src/choir.glb",
+   "parts": [
+    {"id": "head", "label": "HEAD AND BARBELS", "bind": "", "hint": "The blunt head and its fringe of barbels. The Choir's songs travel on the old analog bands; every trawler radio on Tidewell hears them as long tones under the static", "boxes": [[0.0, 0.22, 0.0, 1.0, 0.0, 1.0]], "explode": [-1, 0.4, 0], "distance": 0.28},
+    {"id": "tail", "label": "TAIL FAN", "bind": "", "hint": "The fan tail: sailors swear they sometimes hear a phrase on the radio seconds before it comes up through the hull", "boxes": [[0.7, 1.0, 0.0, 1.0, 0.0, 1.0]], "explode": [1, -0.4, 0], "distance": 0.26},
+    {"id": "fin_l", "label": "FINS", "bind": "", "hint": "Wide veined fins: seen from the surface, the Choir is only slow light moving under the swell", "boxes": [[0.18, 0.72, 0.0, 1.0, 0.0, 0.42]], "explode": [0, 0.1, -1], "distance": 0.24},
+    {"id": "fin_r", "label": "FINS", "bind": "", "hint": "Nobody hunts the Choir. Ask a trawler crew why and every crew gives the same answer: they're listening", "boxes": [[0.18, 0.72, 0.0, 1.0, 0.58, 1.0]], "explode": [0, 0.1, 1], "distance": 0.24},
+    {"id": "body", "label": "LIGHT ORGANS", "bind": "", "hint": "The row of light organs along the flank, in the Choir's cyan. Maren Holt logs every song: time, bearing, depth and the shape of every phrase", "rest": true, "explode": [0, 1, 0], "distance": 0.12}
+   ]
+  },
+  "greywater-light": {
+   "title": "GREYWATER LIGHT",
+   "subtitle": "Tidewell \u00b7 Maren Holt's post",
+   "faces": 40000,
+   "max_edges": 16000,
+   "source": "src/greywater-light.glb",
+   "parts": [
+    {"id": "buoy", "label": "BELL BUOY", "bind": "", "hint": "The bell buoy riding off the rock's lee: the black flame is painted on it, riding the swell", "boxes": [[0.62, 0.92, 0.0, 0.3, 0.82, 1.0]], "explode": [0.4, 0.1, 1], "distance": 0.3},
+    {"id": "lamp", "label": "LAMP ROOM", "bind": "wick.beam", "hint": "The lamp room: the colony's weather and distress beacon went dark in the Switch-Off and came back with a relay in it. Lit while every channel on the network answers", "boxes": [[0.3, 0.7, 0.62, 1.0, 0.0, 0.6]], "explode": [0, 1, 0], "distance": 0.32},
+    {"id": "cottage", "label": "KEEPER'S COTTAGE", "bind": "", "hint": "Where Maren logs the Choir's songs: time, bearing, depth and the shape of every phrase. The best record of the Echo anyone in the network keeps", "boxes": [[0.55, 0.78, 0.2, 0.45, 0.26, 0.6]], "explode": [1, 0.2, 0.3], "distance": 0.26},
+    {"id": "tower", "label": "TOWER", "bind": "", "hint": "The tower: small, older than the platforms, and nobody agrees who built it", "boxes": [[0.36, 0.6, 0.24, 0.62, 0.12, 0.44]], "explode": [0, 0.6, -0.4], "distance": 0.18},
+    {"id": "sliver", "label": "THE SLIVER", "bind": "", "hint": "A knife of black rock a few hundred metres from the oldest platform: the only land on Tidewell anyone has charted. Below it the kelp shelves fall into the deep, where the Choir sings", "rest": true, "explode": [0, -1, 0], "distance": 0.16}
+   ]
+  }
+  }
+}

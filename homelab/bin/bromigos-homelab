@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+# bromigos:summary=The homelab connection: status (what provides what, what's unreachable), adapters, check <capability>
+"""bromigos homelab: what the desktop can see of your homelab (docs/homelab.md).
+
+    bromigos homelab                 status: sources, the capabilities they provide, errors
+    bromigos homelab status [--json] the same; --json for scripts
+    bromigos homelab adapters        every adapter type and what it provides (yours included)
+    bromigos homelab check [CAP]     ask every capability (or one) now: items, unreachable sources
+    bromigos homelab snapshot        the lab snapshot as JSON
+Set up with `bromigos setup homelab`.
+"""
+import json
+import os
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+for p in ("/usr/lib/bromigos/lib", os.path.join(os.path.dirname(HERE), "lib"),
+          os.path.join(os.path.dirname(os.path.dirname(HERE)), "lib")):
+    if os.path.isdir(p) and p not in sys.path:
+        sys.path.append(p)
+
+import bromigos_homelab as H  # noqa: E402
+
+
+def status(as_json=False):
+    st = H.status()
+    if as_json:
+        print(json.dumps(st, indent=2))
+        return 0
+    print(f"config: {H.config.USER}" + ("" if os.path.exists(H.config.USER) else "  (none yet: bromigos setup homelab)"))
+    if not st["sources"]:
+        print("no sources: the desktop has no lab (its LAB panel, decks and VECTOR's lab tools stay hidden)")
+    for s in st["sources"]:
+        print(f"  {s['name']:<16} {s['type']:<16} {', '.join(s['provides']) or '-':<34} {s.get('endpoint', '')}")
+    print("capabilities:")
+    for c, srcs in st["capabilities"].items():
+        print(f"  {c:<12} {', '.join(srcs) if srcs else '(none)'}")
+    for e in st["errors"]:
+        print("error:", e)
+    return 0
+
+
+def adapters():
+    H.registry.instances()
+    for t, cls in sorted(H.registry.ADAPTERS.items()):
+        ports = ", ".join(map(str, cls.default_ports)) or ("local" if cls.local else "-")
+        print(f"  {t:<16} {', '.join(cls.provides):<34} ports: {ports}")
+    return 0
+
+
+def check(cap=None):
+    caps = [cap] if cap else list(H.CAPABILITIES[1:])        # metrics needs a query: skipped here
+    bad = 0
+    for c in caps:
+        if c == "metrics":
+            r = H.metrics("up")
+        else:
+            r = getattr(H, c)()
+        if not r["sources"]:
+            print(f"  {c:<12} (no source)")
+            continue
+        print(f"  {c:<12} {len(r['items']):>4} items from {', '.join(r['sources'])}")
+        for s, e in r["errors"].items():
+            bad += 1
+            print(f"  {'':<12} {s}: {e}")
+    return 1 if bad else 0
+
+
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    if cmd in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return 0
+    if cmd == "status":
+        return status("--json" in argv)
+    if cmd == "adapters":
+        return adapters()
+    if cmd == "check":
+        return check(argv[1] if len(argv) > 1 else None)
+    if cmd == "snapshot":
+        print(json.dumps(H.snapshot(), indent=1, default=str))
+        return 0
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

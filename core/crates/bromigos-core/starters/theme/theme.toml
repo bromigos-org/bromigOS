@@ -1,0 +1,4 @@
+# __TITLE__ (docs/theming.md, "theme.toml").
+name = "__TITLE__"
+description = "Teal glass on deep slate: a starter theme to make your own."
+mode = "dark"

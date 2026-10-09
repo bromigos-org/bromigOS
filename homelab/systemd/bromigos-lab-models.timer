@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the lab model catalog weekly (bromigos-lab-models.service)
+
+[Timer]
+OnCalendar=weekly
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

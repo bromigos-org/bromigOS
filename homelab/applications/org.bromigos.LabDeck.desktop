@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Lab Deck
+GenericName=Homelab Hologram
+Comment=Your homelab as a hologram: the rack, its GPUs and the jobs on them (SUPER+SHIFT+H; Esc closes)
+Icon=bromigos-labdeck
+TryExec=bromigos-live
+Exec=bromigos-live open lab
+Terminal=false
+Categories=System;Monitor;
+Keywords=lab;homelab;lab deck;deck;hologram;rack;servers;gpu;cluster;
+StartupNotify=false
+X-Bromigos-Menu=holo/lab

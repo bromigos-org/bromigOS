@@ -1,0 +1,2 @@
+/* Your launcher: bromigOS's settings and theme, then yours below. */
+@import "/usr/share/bromigos/default/rofi/config.rasi"

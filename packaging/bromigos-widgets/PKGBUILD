@@ -1,0 +1,71 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# The desktop widgets: SYSTEM, NETWORK, STORAGE, WORKBENCH, FIELD NOTES, SHORTCUTS as
+# layer-shell panels (widgets/, Python). The code goes to /usr/lib/bromigos/widgets, the
+# default layout to /usr/share/bromigos/widgets/layout.json (the user's
+# ~/.config/bromigos/widgets/layout.json replaces it); more panels are plugins
+# (docs/plugins.md).
+
+pkgname=bromigos-widgets
+pkgver=0.1.0.r20.g1772056
+pkgrel=1
+pkgdesc='bromigOS desktop widgets: system, network, storage, workbench, notes and shortcuts panels'
+arch=('any')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+depends=('bromigos-core' 'python' 'python-gobject' 'gtk3' 'gtk-layer-shell' 'python-cairo'
+         'python-psutil' 'pango' 'hyprland')
+optdepends=('git: recent repos on WORKBENCH'
+            'zoxide: most-visited folders on WORKBENCH'
+            'nvidia-utils: GPU readings on NVIDIA'
+            'iputils: the latency radar'
+            'lua: SHORTCUTS from a Lua Hyprland config when Hyprland is not running')
+makedepends=('git' 'python')
+checkdepends=('desktop-file-utils')
+options=('!debug')
+
+_root="${startdir%/packaging/*}"
+_paths=(widgets packaging/bromigos-widgets LICENSE-MIT LICENSE-APACHE)
+
+# <workspace version>.r<commits touching the package>.g<last such commit> (as bromigos-core)
+# The commits that touched _paths before the history restarted at v0.1.2 (they're in
+# bromigos-org/bromigOS-archive): the count goes on from them, so no version sorts below one
+# published before the restart (packaging/README.md, Versions).
+_archived=24
+
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+check() {
+  cd "$_root/widgets"
+  python -m py_compile bromigos-widgets *.py
+  # the app launcher's entries (widgets/applications): desktop-file-validate, the keys every
+  # entry needs, their icons (tools/launcher/check.py; CI's launcher.yml runs all of it)
+  python "$_root/tools/launcher/check.py" --static --only widgets
+}
+
+package() {
+  local lib="$pkgdir/usr/lib/bromigos/widgets" f
+  for f in demo.py demo_lab.py draw.py keybinds.py panels.py plugins.py sources.py keybinds-dump.lua; do
+    install -Dm0644 "$_root/widgets/$f" "$lib/$f"
+  done
+  install -Dm0755 "$_root/widgets/bromigos-widgets" "$lib/bromigos-widgets"
+  install -d "$lib/plugins"
+  if compgen -G "$_root/widgets/plugins/*.py" >/dev/null; then
+    install -Dm0644 -t "$lib/plugins/" "$_root"/widgets/plugins/*.py
+  fi
+  install -d "$pkgdir/usr/bin"
+  ln -s /usr/lib/bromigos/widgets/bromigos-widgets "$pkgdir/usr/bin/bromigos-widgets"
+  install -Dm0644 "$_root/widgets/layout.json" "$pkgdir/usr/share/bromigos/widgets/layout.json"
+  # the app launcher's entries (docs/menu.md, "In the app launcher")
+  install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_root"/widgets/applications/*.desktop
+  install -Dm0644 -t "$pkgdir/usr/share/doc/$pkgname/" "$_root/widgets/README.md"
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+  python -m compileall -q -o 0 -o 1 -s "$pkgdir" -p / "$lib" >/dev/null
+}

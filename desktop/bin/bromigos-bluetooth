@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+# bromigos:summary=Bluetooth: the adapter (on, off, visible), paired devices, pairing new ones, through bluez
+# bromigos:args=[status] | power on|off | discoverable on|off | scan [SECONDS] | pair MAC | connect MAC | disconnect MAC | trust MAC on|off | remove MAC  [--json]
+# bromigos:examples=bromigos bluetooth; bromigos bluetooth power on; bromigos bluetooth scan; bromigos bluetooth pair AC:80:0A:00:00:01
+"""bromigos-bluetooth (`bromigos bluetooth`): Bluetooth, through bluez (`bluetoothctl`, one
+command at a time). Settings › Bluetooth drives it.
+
+  bromigos bluetooth [status]          the adapter (powered, visible, blocked) and the devices it
+                                       knows: paired, connected, trusted, battery
+  bromigos bluetooth power on|off      the adapter (a soft block from rfkill is lifted first)
+  bromigos bluetooth discoverable on|off   whether other devices can find this one
+  bromigos bluetooth scan [SECONDS]    look for devices nearby (8 s), and list them
+  bromigos bluetooth pair MAC          pair a device, then trust it (so it reconnects by itself);
+                                       one that asks for a PIN or a passkey is paired in
+                                       bluetoothctl itself (it says so)
+  bromigos bluetooth connect|disconnect MAC
+  bromigos bluetooth trust MAC on|off  a trusted device connects without asking
+  bromigos bluetooth remove MAC        forget a device (unpairs it)
+"""
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+MAC = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+DEV = re.compile(r"^Device ([0-9A-Fa-f:]{17}) ?(.*)$")
+KIND = {"audio-headset": "headset", "audio-headphones": "headphones", "audio-card": "speaker",
+        "input-keyboard": "keyboard", "input-mouse": "mouse", "input-gaming": "game controller",
+        "input-tablet": "tablet", "phone": "phone", "computer": "computer", "camera-photo": "camera",
+        "printer": "printer", "modem": "modem", "network-wireless": "network"}
+AGENT = re.compile(r"passkey|pin code|request pin|confirm passkey|authorize|AuthenticationFailed|"
+                   r"AuthenticationCanceled|AuthenticationRejected", re.I)
+
+
+def btctl(*args, timeout=15):
+    """bluetoothctl's stdout (colour codes stripped); Fail when it isn't there."""
+    rc, out, err = C.run(["bluetoothctl", *args], timeout=timeout)
+    if rc == 127:
+        raise Fail("bluetoothctl isn't installed (pacman -S bluez-utils)")
+    if rc == 124:
+        raise Fail("bluetoothd didn't answer: is the Bluetooth service running? (systemctl enable --now bluetooth)")
+    out = re.sub(r"\x1b\[[0-9;]*[A-Za-z]|\x01|\x02", "", out)
+    if "org.bluez" in out and "not available" in out.lower() or "Waiting to connect to bluetoothd" in out:
+        raise Fail("bluetoothd isn't running (systemctl enable --now bluetooth)")
+    return rc, out, re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", err)
+
+
+def props(text):
+    """The `Key: value` lines of `show` or `info`; repeated keys (UUID) collected in lists."""
+    d = {}
+    for line in text.splitlines():
+        line = line.strip()
+        k, sep, v = line.partition(": ")
+        if not sep:
+            continue
+        if k in d:
+            d[k] = (d[k] if isinstance(d[k], list) else [d[k]]) + [v]
+        else:
+            d[k] = v
+    return d
+
+
+def _yes(v):
+    return str(v).strip().lower() == "yes"
+
+
+def rfkill():
+    """(soft, hard) block of the Bluetooth radio, or (False, False) when rfkill can't say."""
+    rc, out, _ = C.run(["rfkill", "--json", "--output", "ID,TYPE,DEVICE,SOFT,HARD"], timeout=5)
+    if rc != 0:
+        return False, False
+    try:
+        devs = [d for d in json.loads(out).get("rfkilldevices", []) if d.get("type") == "bluetooth"]
+    except ValueError:
+        return False, False
+    return (any(d.get("soft") == "blocked" for d in devs), any(d.get("hard") == "blocked" for d in devs))
+
+
+def _devices(word=None):
+    _, out, _ = btctl("devices", *([word] if word else []))
+    found = []
+    for line in out.splitlines():
+        m = DEV.match(line.strip())
+        if m:
+            found.append((m.group(1).upper(), m.group(2)))
+    return found
+
+
+def _battery(v):
+    m = re.search(r"\((\d+)\)", v or "")
+    return int(m.group(1)) if m else None
+
+
+def device(mac, name=""):
+    _, out, _ = btctl("info", mac)
+    p = props(out)
+    icon = p.get("Icon", "")
+    return {"mac": mac, "name": p.get("Alias") or p.get("Name") or name or mac, "icon": icon,
+            "kind": KIND.get(icon, icon.split("-")[-1] if icon else "device"),
+            "paired": _yes(p.get("Paired")), "connected": _yes(p.get("Connected")),
+            "trusted": _yes(p.get("Trusted")), "blocked": _yes(p.get("Blocked")),
+            "battery": _battery(p.get("Battery Percentage"))}
+
+
+def status(_args=None):
+    rc, out, err = btctl("show", timeout=8)
+    soft, hard = rfkill()
+    if "No default controller" in out + err or (rc != 0 and not out.strip()):
+        return {"adapter": None, "powered": False, "blocked": soft or hard, "hard_blocked": hard,
+                "devices": [], "paired": [], "nearby": []}
+    p = props(out)
+    first = out.strip().splitlines()[0] if out.strip() else ""
+    adapter = {"mac": first.split()[1] if first.startswith("Controller ") else "", "name": p.get("Name", ""),
+               "alias": p.get("Alias", "")}
+    devs = [device(mac, name) for mac, name in _devices()]
+    devs.sort(key=lambda d: (not d["connected"], not d["paired"], d["name"].lower()))
+    return {"adapter": adapter, "powered": _yes(p.get("Powered")), "discoverable": _yes(p.get("Discoverable")),
+            "pairable": _yes(p.get("Pairable")), "discovering": _yes(p.get("Discovering")),
+            "blocked": soft or hard, "hard_blocked": hard, "devices": devs,
+            "paired": [d for d in devs if d["paired"]], "nearby": [d for d in devs if not d["paired"]]}
+
+
+def _need_adapter(powered=True):
+    st = status()
+    if st["adapter"] is None:
+        raise Fail("no Bluetooth adapter" + (" (the radio is blocked: rfkill)" if st["blocked"] else ""))
+    if powered and not st["powered"]:
+        raise Fail("Bluetooth is off (bromigos bluetooth power on)")
+    return st
+
+
+def _mac(args, usage):
+    if len(args) < 1 or not MAC.match(args[0]):
+        raise Fail(usage)
+    return args[0].upper()
+
+
+def _ok(out, *words):
+    return any(w.lower() in out.lower() for w in words)
+
+
+def power(args):
+    if len(args) != 1:
+        raise Fail("bromigos bluetooth power on|off")
+    on = C.on_off(args[0])
+    soft, hard = rfkill()
+    if on and hard:
+        raise Fail("Bluetooth is switched off by a hardware switch or key")
+    if on and soft:
+        rc, _, err = C.run(["rfkill", "unblock", "bluetooth"], timeout=5)
+        if rc:
+            raise Fail(f"rfkill unblock bluetooth: {err.strip() or 'failed'}")
+    _need_adapter(powered=False)
+    rc, out, err = btctl("power", "on" if on else "off")
+    if not _ok(out, "succeeded"):
+        raise Fail(f"bluetoothctl power {'on' if on else 'off'}: {(err or out).strip().splitlines()[-1] if (err or out).strip() else 'failed'}")
+    return dict(status(), said=f"Bluetooth {'on' if on else 'off'}")
+
+
+def discoverable(args):
+    if len(args) != 1:
+        raise Fail("bromigos bluetooth discoverable on|off")
+    on = C.on_off(args[0])
+    _need_adapter()
+    rc, out, err = btctl("discoverable", "on" if on else "off")
+    if not _ok(out, "succeeded"):
+        raise Fail(f"bluetoothctl discoverable: {(err or out).strip() or 'failed'}")
+    return dict(status(), said="Visible to devices nearby" if on else "Hidden from devices nearby")
+
+
+def scan(args):
+    secs = 8
+    if args:
+        try:
+            secs = int(args[0])
+        except ValueError:
+            raise Fail("bromigos bluetooth scan [SECONDS]")
+        if not 1 <= secs <= 60:
+            raise Fail("1 to 60 seconds")
+    _need_adapter()
+    btctl("--timeout", str(secs), "scan", "on", timeout=secs + 10)
+    st = status()
+    return dict(st, said=f"Found {len(st['nearby'])} device{'s' if len(st['nearby']) != 1 else ''} nearby")
+
+
+def _known(mac):
+    st = _need_adapter()
+    d = next((d for d in st["devices"] if d["mac"] == mac), None)
+    if d is None:
+        raise Fail(f"no device {mac} (bromigos bluetooth scan finds devices nearby)")
+    return st, d
+
+
+def pair(args):
+    mac = _mac(args, "bromigos bluetooth pair MAC")
+    _, d = _known(mac)
+    if d["paired"]:
+        return dict(status(), said=f"{d['name']} was paired already")
+    rc, out, err = btctl("--timeout", "25", "pair", mac, timeout=40)
+    text = out + err
+    if not _ok(text, "Pairing successful"):
+        if AGENT.search(text):
+            return dict(status(), ok=False, needs_agent=True,
+                        error=f"{d['name']} asks for a PIN or a passkey: pair it in bluetoothctl "
+                              f"(type: pair {mac}, then the code it shows or asks for)")
+        last = [x for x in text.strip().splitlines() if x.strip()]
+        raise Fail(f"couldn't pair {d['name']}: {last[-1] if last else 'no answer'}")
+    btctl("trust", mac)
+    btctl("connect", mac, timeout=25)
+    return dict(status(), said=f"Paired with {d['name']}")
+
+
+def connect(args):
+    mac = _mac(args, "bromigos bluetooth connect MAC")
+    _, d = _known(mac)
+    rc, out, err = btctl("connect", mac, timeout=25)
+    if not _ok(out, "Connection successful"):
+        last = [x for x in (out + err).strip().splitlines() if x.strip()]
+        raise Fail(f"couldn't connect {d['name']}: {last[-1] if last else 'no answer'}")
+    return dict(status(), said=f"{d['name']} connected")
+
+
+def disconnect(args):
+    mac = _mac(args, "bromigos bluetooth disconnect MAC")
+    _, d = _known(mac)
+    btctl("disconnect", mac, timeout=15)
+    return dict(status(), said=f"{d['name']} disconnected")
+
+
+def trust(args):
+    mac = _mac(args, "bromigos bluetooth trust MAC on|off")
+    if len(args) != 2:
+        raise Fail("bromigos bluetooth trust MAC on|off")
+    on = C.on_off(args[1])
+    _, d = _known(mac)
+    rc, out, err = btctl("trust" if on else "untrust", mac)
+    if not _ok(out, "succeeded"):
+        raise Fail(f"bluetoothctl {'trust' if on else 'untrust'}: {(err or out).strip() or 'failed'}")
+    return dict(status(), said=f"{d['name']}: {'trusted' if on else 'asks before connecting'}")
+
+
+def remove(args):
+    mac = _mac(args, "bromigos bluetooth remove MAC")
+    _, d = _known(mac)
+    rc, out, err = btctl("remove", mac)
+    if not _ok(out, "Device has been removed", "removed"):
+        raise Fail(f"bluetoothctl remove: {(err or out).strip() or 'failed'}")
+    return dict(status(), said=f"Forgot {d['name']}")
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "power": power, "discoverable": discoverable, "scan": scan, "pair": pair,
+                     "connect": connect, "disconnect": disconnect, "trust": trust, "remove": remove}, USAGE))

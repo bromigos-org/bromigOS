@@ -1,0 +1,185 @@
+{
+  // bromigOS's bar (package bromigos-desktop): /usr/share/bromigos/default/waybar/config.jsonc.
+  // Don't edit; updates replace it. Your ~/.config/waybar/config includes it (and the
+  // theme's markup colours, ~/.local/state/bromigos/theme/current/waybar-markup.jsonc)
+  // and sets only what's yours: waybar merges includes under the file that names them,
+  // object by object, and your keys win.
+  // Every module is a real reading or an action; hover any of them for what it is.
+  "layer": "bottom",
+  "position": "top",
+  "height": 34,
+  "spacing": 0,
+  "modules-left": ["custom/launcher", "ext/workspaces", "hyprland/window"],
+  "modules-center": ["mpris"],
+  "modules-right": ["custom/idle", "custom/vector-switch", "custom/vector", "cpu", "memory", "custom/gpu", "temperature", "custom/storage",
+                    "network", "power-profiles-daemon", "battery", "pulseaudio", "tray", "custom/settings", "clock"],
+
+  "custom/launcher": {
+    "format": " ",
+    "tooltip-format": "Launcher: apps (click) · run a command (right-click) · power menu (middle-click)",
+    "on-click": "rofi -show drun",
+    "on-click-right": "rofi -show run",
+    "on-click-middle": "/usr/lib/bromigos/desktop/rofi/power-menu"
+  },
+
+  // ext/workspaces (the Wayland ext-workspace protocol), not hyprland/workspaces: a click
+  // there sends Hyprland "dispatch workspace N", which the Lua config (0.56) reads as Lua
+  // and rejects, so clicking a workspace did nothing. The protocol switches it directly.
+  "ext/workspaces": {
+    "format": "{name}",
+    "on-click": "activate",
+    "sort-by-name": true,
+    "tooltip": true
+  },
+
+  "hyprland/window": {
+    "format": "{title}",
+    "max-length": 48,
+    "separate-outputs": true,
+    "rewrite": { "": "" },
+    "tooltip": true
+  },
+
+  "mpris": {
+    "format-stopped": "",
+    "max-length": 70,
+    "interval": 1,
+    "tooltip-format": "{player}: {status}\n{artist} — {album}\n{title}\nclick: play/pause · right-click: next · scroll: seek",
+    "on-click-right": "playerctl next",
+    "on-scroll-up": "playerctl position 5+",
+    "on-scroll-down": "playerctl position 5-"
+  },
+
+  "cpu": {
+    "interval": 2,
+    "format": "{usage:>2}%",
+    "tooltip": true,
+    "states": { "warning": 70, "critical": 90 },
+    "on-click": "kitty -e btop"
+  },
+
+  "memory": {
+    "interval": 4,
+    "format": "{percentage:>2}%",
+    "tooltip-format": "RAM {used:0.1f} / {total:0.1f} GiB used, {avail:0.1f} GiB available\nswap {swapUsed:0.1f} / {swapTotal:0.1f} GiB\namber 75% · red 90% · click: btop",
+    "states": { "warning": 75, "critical": 90 },
+    "on-click": "kitty -e btop"
+  },
+
+  "custom/vector": {
+    "exec": "/usr/lib/bromigos/desktop/waybar/vector.py",
+    "return-type": "json",
+    "interval": 30,
+    "signal": 9,
+    "on-click": "bromigos vector vector",
+    "on-click-right": "bromigos vector voice cycle",
+    "on-click-middle": "bromigos vector mute"
+  },
+
+  // VECTOR's emergency switch (bromigos vector off|on): a click switches him off at once;
+  // while he's off it reads VECTOR OFF in red, and a click asks YES before switching him on
+  "custom/vector-switch": {
+    "exec": "/usr/lib/bromigos/desktop/waybar/vector-switch.py",
+    "return-type": "json",
+    "interval": 10,
+    "signal": 9,
+    "on-click": "bromigos vector switch toggle --from=bar"
+  },
+
+  // the idle policy (bromigos idle): a cup while staying awake, an eye when nothing locks
+  "custom/idle": {
+    "exec": "/usr/lib/bromigos/desktop/waybar/idle.py",
+    "return-type": "json",
+    "interval": 30,
+    "signal": 10,
+    "on-click": "bromigos idle stay-awake toggle 1h",
+    "on-click-middle": "bromigos idle stay-awake until-off",
+    "on-click-right": "bromigos settings idle"
+  },
+
+  "custom/settings": {
+    "format": " ",
+    "tooltip-format": "Settings: idle and lock, the theme, shortcuts, updates (SUPER+,)\nclick: open · right-click: Idle & lock",
+    "on-click": "bromigos settings",
+    "on-click-right": "bromigos settings idle"
+  },
+
+  "custom/gpu": {
+    "exec": "/usr/lib/bromigos/desktop/waybar/gpu.py",
+    "return-type": "json",
+    "restart-interval": 10,
+    "on-click": "kitty -e btop"
+  },
+
+  "temperature": {
+    "interval": 4,
+    "warning-threshold": 80,
+    "critical-threshold": 90,
+    "format": "{temperatureC}°",
+    "tooltip-format": "CPU {temperatureC} °C\namber 80 °C · red 90 °C"
+  },
+
+  "custom/storage": {
+    "exec": "/usr/lib/bromigos/desktop/waybar/storage.py",
+    "return-type": "json",
+    "interval": 60,
+    "on-click": "xdg-open ~"
+  },
+
+  "network": {
+    "interval": 2,
+    "format-linked": "{ifname} NO ADDRESS",
+    "format-disconnected": "DISCONNECTED",
+    "tooltip-format-wifi": "{ifname} · {essid} · {signalStrength}% ({signaldBm} dBm)\naddress {ipaddr}/{cidr} via {gwaddr}\nclick: copy the address",
+    "tooltip-format-ethernet": "{ifname}\naddress {ipaddr}/{cidr} via {gwaddr}\nclick: copy the address",
+    "tooltip-format-disconnected": "No network link",
+    "on-click": "/usr/lib/bromigos/desktop/waybar/copy-ip",
+    "on-click-right": "kitty -e nmtui"
+  },
+
+  // A laptop's: the power profile (shown while power-profiles-daemon runs; `bromigos hw
+  // setup` installs it on laptops) and the battery (shown only where there is one).
+  "power-profiles-daemon": {
+    "format": "{icon}",
+    "format-icons": { "default": "OTHER", "power-saver": "SAVER", "balanced": "BALANCED", "performance": "PERFORMANCE" },
+    "tooltip-format": "Power profile: {profile} (driver: {driver})\nclick: the next one, power-saver › balanced › performance"
+  },
+
+  "battery": {
+    "interval": 30,
+    "states": { "warning": 25, "critical": 10 },
+    "format": "{capacity:>2}%",
+    "format-charging": "{capacity:>2}% +",
+    "format-plugged": "{capacity:>2}% =",
+    "format-full": "FULL",
+    "format-time": "{H} h {M} min",
+    "tooltip-format": "Battery {capacity}%: health {health}%, {cycles} charge cycles\namber 25% · red 10% · + charging · = plugged in, not charging",
+    "tooltip-format-discharging": "Battery {capacity}%, about {time} left at {power:0.1f} W\nhealth {health}% · amber 25% · red 10%",
+    "tooltip-format-charging": "Charging: {capacity}%, full in about {time} ({power:0.1f} W)\nhealth {health}%"
+  },
+
+  "pulseaudio": {
+    "scroll-step": 5,
+    "format": "{volume:>2}%",
+    "format-muted": "MUTED",
+    "format-bluetooth": "{volume:>2}% BT",
+    "tooltip-format": "{desc}: {volume}%\nclick: mixer · right-click: mute · scroll: ±5%",
+    "on-click": "pavucontrol",
+    "on-click-right": "pactl set-sink-mute @DEFAULT_SINK@ toggle"
+  },
+
+  "tray": { "icon-size": 16, "spacing": 8 },
+
+  "clock": {
+    "interval": 1,
+    "format": "{:%H:%M:%S}",
+    "format-alt": "{:%a %d %b %H:%M}",
+    "tooltip-format": "<tt>{calendar}</tt>",
+    "calendar": {
+      "mode": "month",
+      "weeks-pos": "left",
+      "on-scroll": 1
+    },
+    "actions": { "on-click-right": "mode", "on-scroll-up": "shift_up", "on-scroll-down": "shift_down" }
+  }
+}

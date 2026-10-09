@@ -1,0 +1,9 @@
+# Sunder: the salvage desert's colours (docs/theming.md). Colours only; its world is still to be painted.
+name = "Sunder"
+description = "Sun-gold on scorched hull plate, the Debtor's red behind it."
+mode = "dark"
+canon = """
+Sunder has two suns, the white one and the small red one the clans call the Debtor. The \
+cartels' dreadnoughts came down over the dunes one by one when nobody paid to keep them \
+up, and the clans live inside the wrecks now, flashing heliographs between them by day. \
+Tamsin Rook keeps the Spine. These are hot metal and sand, with the Debtor for an alarm."""

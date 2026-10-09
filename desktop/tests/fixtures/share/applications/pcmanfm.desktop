@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=PCManFM
+Exec=pcmanfm %U
+Icon=system-file-manager
+Categories=System;FileTools;FileManager;
+MimeType=inode/directory;

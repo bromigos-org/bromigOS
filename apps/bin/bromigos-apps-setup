@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# bromigos:summary=Seed the app bundle's user configs (neovim, tmux, lazygit, mise, Chromium) where you have none
+# bromigos:args=[--check]
+# bromigos:examples=bromigos apps setup; bromigos apps setup --check
+#
+# bromigos-apps ships its configs as read-only defaults in /usr/share/bromigos/default/apps/
+# (docs/apps.md). This puts the user's side in place, once, and only where there's nothing
+# yet: a file that exists (or a link) is yours and is reported, never replaced.
+#
+#   neovim    ~/.config/nvim/init.lua          thin: puts the defaults on the runtime path
+#   tmux      ~/.config/tmux/tmux.conf         thin: sources the defaults
+#   lazygit   ~/.config/lazygit/config.yml     a copy (lazygit can't include a file)
+#   mise      ~/.config/mise/config.toml       a copy (mise can't include a file)
+#   Chromium  ~/.config/chromium-flags.conf    a copy
+#
+# `bromigos update` runs this through a migration when the package is installed; run it
+# yourself after installing bromigos-apps later (`bromigos apps setup`). --check only reports.
+set -eu
+defaults=${BROMIGOS_SHARE_DIR:-/usr/share/bromigos}/default/apps
+cfg=${XDG_CONFIG_HOME:-$HOME/.config}
+check=0
+[ "${1:-}" = "--check" ] && check=1
+[ -d "$defaults" ] || { echo "bromigos-apps isn't installed ($defaults)"; exit 75; }
+
+seed() { # seed <source under defaults> <destination under ~/.config>
+    local src="$defaults/$1" dst="$cfg/$2"
+    if [ -e "$dst" ] || [ -L "$dst" ]; then
+        if grep -qs "/usr/share/bromigos/default/apps" "$dst"; then
+            echo "kept $dst (uses the defaults)"
+        else
+            echo "kept $dst (yours)"
+        fi
+        return
+    fi
+    if [ "$check" = 1 ]; then
+        echo "would seed $dst"
+        return
+    fi
+    mkdir -p "${dst%/*}"
+    cp -- "$src" "$dst"
+    echo "seeded $dst"
+}
+
+seed user/nvim/init.lua nvim/init.lua
+seed user/tmux/tmux.conf tmux/tmux.conf
+seed lazygit/config.yml lazygit/config.yml
+seed mise/config.toml mise/config.toml
+seed chromium/chromium-flags.conf chromium-flags.conf
+exit 0

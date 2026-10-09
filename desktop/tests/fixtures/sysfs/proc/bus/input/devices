@@ -1,0 +1,28 @@
+I: Bus=0019 Vendor=0000 Product=0005 Version=0000
+N: Name="Lid Switch"
+P: Phys=PNP0C0D/button/input0
+S: Sysfs=/devices/LNXSYSTM:00/LNXSYBUS:00/PNP0C0D:00/input/input0
+H: Handlers=event0
+B: PROP=0
+B: EV=21
+B: SW=1
+
+I: Bus=0011 Vendor=0001 Product=0001 Version=ab83
+N: Name="AT Translated Set 2 keyboard"
+P: Phys=isa0060/serio0/input0
+H: Handlers=sysrq kbd event3 leds
+B: PROP=0
+B: EV=120013
+B: KEY=402000000 3803078f800d001 feffffdfffefffff fffffffffffffffe
+B: MSC=10
+B: LED=7
+
+I: Bus=0018 Vendor=06cb Product=ce67 Version=0100
+N: Name="SYNA8017:00 06CB:CE67 Touchpad"
+P: Phys=i2c-SYNA8017:00
+H: Handlers=mouse1 event9
+B: PROP=5
+B: EV=1b
+B: KEY=e520 10000 0 0 0 0
+B: ABS=2e0800000000003
+B: MSC=20

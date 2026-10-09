@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+# bromigos:summary=The desktop panels: which are on, where they sit, the monitor, the weather's place (your layout.json and weather.toml)
+# bromigos:args=[status] | show|hide NAME | move NAME X Y | size NAME W H | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
+# bromigos:examples=bromigos panels; bromigos panels show weather; bromigos panels weather place "San Diego"; bromigos panels hide connections
+"""bromigos-panels (`bromigos panels`): the desktop panels' layout (bromigos-widgets). The
+panels read your ~/.config/bromigos/widgets/layout.json, else bromigOS's
+(/usr/share/bromigos/widgets/layout.json); a change here copies bromigOS's the first time,
+keeps every key it doesn't know, and tells running panels to read it again (`bromigos-widgets
+reload`). The weather's place is ~/.config/bromigos/weather.toml. Settings › Widgets drives it.
+
+  bromigos panels [status]           each panel: on or off, where, its size; the monitor; the weather
+  bromigos panels show|hide NAME     a panel on or off at login (and now, when the panels run)
+  bromigos panels move NAME X Y      its place, px from the top left of the usable area
+  bromigos panels size NAME W H
+  bromigos panels monitor NAME|""    the output they go on ("": the primary)
+  bromigos panels weather place PLACE | coords LAT LON | units metric|imperial | name TEXT | clear
+  bromigos panels reset              bromigOS's layout and no weather.toml
+"""
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+# what each panel shows (docs/widgets.md), and the key that shows or hides it
+ABOUT = {
+    "system": ("System", "CPU, threads, the load waterfall, memory, VRAM, GPU, uptime", "SUPER + S"),
+    "network": ("Network", "the interface, traffic scope, the latency radar (ping hosts)", "SUPER + N"),
+    "storage": ("Storage", "the mounted filesystems", "SUPER + D"),
+    "shortcuts": ("Shortcuts", "every keybind, from Hyprland", "SUPER + K"),
+    "workbench": ("Workbench", "recent repos and most-visited folders", "SUPER + B"),
+    "notes": ("Field notes", "your notes (ALT + N to type in them)", "SUPER + F"),
+    "weather": ("Weather", "the forecast for your place (Open-Meteo)", None),
+    "connections": ("Connections", "NetworkManager: what's connected, Wi-Fi in reach, VPNs", None),
+    "lab": ("Lab", "the homelab at a glance (bromigos-homelab)", None),
+}
+
+
+def user_layout():
+    return os.path.join(C.CONFIG, "bromigos", "widgets", "layout.json")
+
+
+def default_layout():
+    return os.path.join(os.environ.get("BROMIGOS_SHARE_DIR") or "/usr/share/bromigos", "widgets", "layout.json")
+
+
+def weather_file():
+    return os.path.join(C.CONFIG, "bromigos", "weather.toml")
+
+
+def load():
+    """(layout, its path, whether it's yours)."""
+    for path, mine in ((user_layout(), True), (default_layout(), False)):
+        if os.path.isfile(path):
+            try:
+                with open(path) as f:
+                    d = json.load(f)
+            except (OSError, ValueError) as e:
+                raise Fail(f"{path}: {e}")
+            if not isinstance(d, dict) or not isinstance(d.get("panels"), list):
+                raise Fail(f"{path}: no \"panels\" list")
+            return d, path, mine
+    return {"monitor": "", "panels": []}, None, False
+
+
+def running():
+    return os.path.exists(os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "bromigos-widgets.sock"))
+
+
+def health():
+    try:
+        with open(os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "bromigos-widgets-health.json")) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def weather():
+    w = C.read_toml(weather_file())
+    return {"place": w.get("place"), "lat": w.get("lat"), "lon": w.get("lon"), "units": w.get("units", "metric"),
+            "name": w.get("name"), "file": weather_file(), "exists": os.path.exists(weather_file())}
+
+
+def status(_args=None):
+    d, path, mine = load()
+    panels = []
+    for p in d["panels"]:
+        if not isinstance(p, dict) or not p.get("name"):
+            continue
+        title, what, key = ABOUT.get(p["name"], (p["name"].replace("-", " ").title(), "", None))
+        panels.append({"name": p["name"], "title": title, "what": what, "key": key,
+                       "visible": bool(p.get("visible", True)),
+                       "x": p.get("x"), "y": p.get("y"), "width": p.get("width"), "height": p.get("height")})
+    w = weather()
+    wp = next((p for p in d["panels"] if isinstance(p, dict) and p.get("name") == "weather"), {})
+    if not w["exists"] and (wp.get("place") or wp.get("lat") is not None):
+        w.update({k: wp.get(k) for k in ("place", "lat", "lon", "name") if wp.get(k) not in (None, "")},
+                 units=wp.get("units", "metric"), source="layout.json")
+    return {"panels": panels, "monitor": d.get("monitor") or "", "file": path, "yours": mine,
+            "user_file": user_layout(), "default_file": default_layout(), "weather": w, "running": running()}
+
+
+# ------------------------------------------------------------------ changes
+def _save(d, said):
+    C.write_file(user_layout(), json.dumps(d, indent=2) + "\n")
+    return _tell(said)
+
+
+def _tell(said):
+    if running():
+        rc, _, err = C.run(["bromigos-widgets", "reload"], timeout=5)
+        note = "the panels read it again" if rc == 0 else f"the panels didn't hear it: {err.strip()}"
+    else:
+        note = "the panels take it when they next start"
+    return dict(status(), said=said, note=note)
+
+
+def _panel(d, name):
+    p = next((p for p in d["panels"] if isinstance(p, dict) and p.get("name") == name), None)
+    if p is None:
+        have = ", ".join(p.get("name") for p in d["panels"] if isinstance(p, dict))
+        raise Fail(f"no panel {name!r} (there are: {have})")
+    return p
+
+
+def _num(raw, what, lo=-10000, hi=20000):
+    try:
+        v = int(raw)
+    except ValueError:
+        raise Fail(f"{what}: a whole number of px")
+    if not lo <= v <= hi:
+        raise Fail(f"{what}: {lo} to {hi}")
+    return v
+
+
+def show(on):
+    def fn(args):
+        if len(args) != 1:
+            raise Fail(f"bromigos panels {'show' if on else 'hide'} NAME")
+        d, _, _ = load()
+        p = _panel(d, args[0])
+        p["visible"] = on
+        title = ABOUT.get(p["name"], (p["name"],))[0]
+        return _save(d, f"{title} panel: {'on' if on else 'off'}")
+    return fn
+
+
+def move(args):
+    if len(args) != 3:
+        raise Fail("bromigos panels move NAME X Y")
+    d, _, _ = load()
+    p = _panel(d, args[0])
+    p["x"], p["y"] = _num(args[1], "x"), _num(args[2], "y")
+    return _save(d, f"{p['name']} at {p['x']},{p['y']}")
+
+
+def size(args):
+    if len(args) != 3:
+        raise Fail("bromigos panels size NAME W H")
+    d, _, _ = load()
+    p = _panel(d, args[0])
+    p["width"], p["height"] = _num(args[1], "width", 120, 4000), _num(args[2], "height", 80, 4000)
+    return _save(d, f"{p['name']}: {p['width']}×{p['height']}")
+
+
+def monitor(args):
+    if len(args) != 1 or not re.fullmatch(r"[\w.\-]{0,40}", args[0]):
+        raise Fail('bromigos panels monitor NAME|""')
+    d, _, _ = load()
+    d["monitor"] = args[0]
+    return _save(d, f"Panels on {args[0] or 'the primary output'}")
+
+
+def weather_cmd(args):
+    if not args:
+        return status()
+    verb, rest = args[0], args[1:]
+    w = C.read_toml(weather_file())
+    if verb == "place":
+        place = " ".join(rest).strip()
+        if not place or len(place) > 80 or "\n" in place:
+            raise Fail("bromigos panels weather place PLACE (a city or town)")
+        w["place"] = place
+        w.pop("lat", None)
+        w.pop("lon", None)
+        said = f"Weather for {place}"
+    elif verb == "coords":
+        if len(rest) != 2:
+            raise Fail("bromigos panels weather coords LAT LON")
+        try:
+            lat, lon = float(rest[0]), float(rest[1])
+        except ValueError:
+            raise Fail("LAT and LON: numbers")
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            raise Fail("LAT -90 to 90, LON -180 to 180")
+        w["lat"], w["lon"] = lat, lon
+        w.pop("place", None)
+        said = f"Weather at {lat:g}, {lon:g}"
+    elif verb == "units":
+        if rest not in (["metric"], ["imperial"]):
+            raise Fail("bromigos panels weather units metric|imperial")
+        w["units"] = rest[0]
+        said = "Weather in " + ("°C and km/h" if rest[0] == "metric" else "°F and mph")
+    elif verb == "name":
+        name = " ".join(rest).strip()
+        if len(name) > 40 or "\n" in name:
+            raise Fail("a short label")
+        if name:
+            w["name"] = name
+        else:
+            w.pop("name", None)
+        said = f"Weather labelled {name}" if name else "Weather labelled by its place"
+    elif verb == "clear":
+        C.write_file(weather_file(), None)
+        return _tell("No weather place: the panel fetches nothing")
+    else:
+        raise Fail("bromigos panels weather place|coords|units|name|clear")
+    C.write_toml(weather_file(), w, header="# The weather panel's place (bromigos panels weather; docs/widgets.md)")
+    return _tell(said)
+
+
+def reset(_args):
+    C.write_file(user_layout(), None)
+    C.write_file(weather_file(), None)
+    return _tell("The panels: bromigOS's layout, no weather place")
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "show": show(True), "hide": show(False), "move": move, "size": size,
+                     "monitor": monitor, "weather": weather_cmd, "reset": reset}, USAGE))

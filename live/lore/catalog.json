@@ -1,0 +1,2362 @@
+{
+ "source": "bromigos.org public/lore/data/lore.json, the public lore export; regenerate with tools/lore/sync-catalog.py",
+ "site": "acd701f",
+ "canon": "f40298c",
+ "entries": [
+  {
+   "id": "ninth_render_detachment",
+   "name": "9th Render Detachment",
+   "kind": "organization",
+   "status": "retired-canon",
+   "summary": "Failsafe's first EOD unit. Every member retired alive, and its faded patch remains his ritual touchstone before the first cut.",
+   "relationships": [
+    {
+     "target": "failsafe",
+     "relation": "former unit of"
+    },
+    {
+     "target": "bacchus_fuze",
+     "relation": "training tradition inherited by"
+    }
+   ]
+  },
+  {
+   "id": "apex_war_walker",
+   "name": "APEX war-walker",
+   "kind": "technology",
+   "status": "canon",
+   "summary": "A full war-walker designed from yard scrap by Fandroid, then appropriated by a heavy-works corporation and used at Umbra Reef. The Agency now fields a de-fanged APEX-line walker.",
+   "relationships": [
+    {
+     "target": "fandroid",
+     "relation": "designed by"
+    },
+    {
+     "target": "umbra_reef_sterilization",
+     "relation": "deployed in"
+    },
+    {
+     "target": "koschei",
+     "relation": "commandeered by"
+    },
+    {
+     "target": "collection_agency",
+     "relation": "de-fanged version used by"
+    }
+   ]
+  },
+  {
+   "id": "architect",
+   "name": "ARCHITECT",
+   "kind": "artificial_intelligence",
+   "status": "canon",
+   "summary": "The network's mission-design AI. It architects jobs for WOLFPACK but is distinct from Sigil, the self-written technomancer born in the GX core.",
+   "relationships": [
+    {
+     "target": "wolfpack",
+     "relation": "designs missions for"
+    },
+    {
+     "target": "sigil",
+     "relation": "distinct from"
+    }
+   ]
+  },
+  {
+   "id": "black_garden",
+   "name": "The Black Garden",
+   "kind": "organization",
+   "status": "canon",
+   "summary": "A high-Carpathian order of apothecary-assassins that cultivated poisons, antidotes, ritual knife forms, and the thornwort symbiont behind Nightshade's deathlessness.",
+   "relationships": [
+    {
+     "target": "nightshade",
+     "relation": "origin of"
+    }
+   ]
+  },
+  {
+   "id": "blackflame",
+   "name": "BLACKFLAME",
+   "kind": "operator",
+   "status": "canon",
+   "summary": "The network's operator: the legend who lit the first unlisted relay during the Switch-Off and keeps the Bromigos network's relays, racks, and worlds lit. Real name CLASSIFIED; codec frequency 142.59 MHz, above the hand-assigned 140 band and never assigned; clearance printed as [REDACTED]; specialty machines that think (AI, intrusion, espionage, signals, systems). Cause: nobody in the Drift should go silent because their channel stopped being profitable. No agreed face — footage always shows the burn-in where it should be. Whether BLACKFLAME is one person, a crew, or a haunting in the relays is never settled.",
+   "relationships": [
+    {
+     "target": "bromigos",
+     "relation": "keeps lit"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "lit and keeps"
+    },
+    {
+     "target": "the_switch_off",
+     "relation": "answered"
+    },
+    {
+     "target": "the_burn_in",
+     "relation": "emblem"
+    },
+    {
+     "target": "the_wick",
+     "relation": "den"
+    },
+    {
+     "target": "clearance_ladder",
+     "relation": "holds no rung on"
+    },
+    {
+     "target": "open_band_accords",
+     "relation": "working version of"
+    },
+    {
+     "target": "colonel_rourke",
+     "relation": "trusted by"
+    },
+    {
+     "target": "sigil",
+     "relation": "honored by"
+    },
+    {
+     "target": "nixie",
+     "relation": "hosts the work of"
+    },
+    {
+     "target": "lin_yao",
+     "relation": "catalogued by"
+    },
+    {
+     "target": "deepwire",
+     "relation": "confused with"
+    },
+    {
+     "target": "sage",
+     "relation": "possibly carried"
+    },
+    {
+     "target": "master_flint",
+     "relation": "puzzles"
+    },
+    {
+     "target": "steel_cobra",
+     "relation": "kindred off-ledger trade"
+    },
+    {
+     "target": "governor_voss",
+     "relation": "invoiced by"
+    },
+    {
+     "target": "koschei",
+     "relation": "spared by"
+    },
+    {
+     "target": "president_johnson",
+     "relation": "thanked by"
+    },
+    {
+     "target": "dynamo",
+     "relation": "respected by"
+    },
+    {
+     "target": "vector",
+     "relation": "unnumbered by"
+    }
+   ]
+  },
+  {
+   "id": "blip_events",
+   "name": "Blip events",
+   "kind": "event_class",
+   "status": "canon-framework",
+   "summary": "Present-day crises whose names or pressure points arrive first in a blip. They are contingent interventions, not fixed points: acting on the warning can make its original future impossible.",
+   "relationships": [
+    {
+     "target": "blips",
+     "relation": "named or initiated by"
+    },
+    {
+     "target": "wolfpack",
+     "relation": "acted on by"
+    }
+   ]
+  },
+  {
+   "id": "blips",
+   "name": "Blips",
+   "kind": "phenomenon",
+   "status": "canon",
+   "summary": "Deliberate, damaged fragments sent backward from the far future by unknown beings trying to prevent the universe-ending Long Silence. A blip identifies a pressure point rather than supplying a solution.",
+   "relationships": [
+    {
+     "target": "old_analog_bands",
+     "relation": "arrive on"
+    },
+    {
+     "target": "blip_events",
+     "relation": "define"
+    },
+    {
+     "target": "bromigos",
+     "relation": "interpreted by"
+    }
+   ]
+  },
+  {
+   "id": "brask",
+   "name": "Brask",
+   "kind": "support_character",
+   "status": "canon (proposed name)",
+   "summary": "Keeper of the crane cab: an old foundry engineer from the lines that cast the war's frames. Builds masts and housings for the other posts and quietly retools forge-golems to carry masts instead of guns.",
+   "relationships": [
+    {
+     "target": "the_crane_cab",
+     "relation": "keeps"
+    },
+    {
+     "target": "lamplighters",
+     "relation": "member of"
+    },
+    {
+     "target": "forge_golems",
+     "relation": "retools"
+    }
+   ]
+  },
+  {
+   "id": "bromigos",
+   "name": "Bromigos",
+   "kind": "organization",
+   "status": "canon",
+   "summary": "Part operator collective, part broadcast culture, part family business. Its promise is 'One network, every world.'",
+   "relationships": [
+    {
+     "target": "wolfpack",
+     "relation": "operates"
+    },
+    {
+     "target": "echo_craft",
+     "relation": "operates"
+    },
+    {
+     "target": "clearance_ladder",
+     "relation": "controls access through"
+    },
+    {
+     "target": "blips",
+     "relation": "decodes and acts on"
+    },
+    {
+     "target": "blackflame",
+     "relation": "kept lit by"
+    }
+   ]
+  },
+  {
+   "id": "the_burn_in",
+   "name": "The burn-in",
+   "kind": "emblem",
+   "status": "canon",
+   "summary": "BLACKFLAME's emblem, named for phosphor-screen burn-in: a solid black flame with a relay mast cut through it in negative space and a dark halo that drinks the glow, inside a phosphor-green ring turning slowly counter-clockwise. The ring's only text is the motto 'NO ONE OWNS THE DARK · SOMEONE IS STILL LISTENING ·', closed by an eleven-tick dial-scale tuning gap. It never spells a callsign or frequency; one that does is a counterfeit flame. It overwrites hijacked feeds, masks the face in footage, marks every relay and machine BLACKFLAME touched, surfaces in static, and intercepts end on 'STILL LIT.' — answered by old operators with 'Still listening.'",
+   "relationships": [
+    {
+     "target": "blackflame",
+     "relation": "emblem of"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "marks"
+    },
+    {
+     "target": "old_analog_bands",
+     "relation": "surfaces in static on"
+    }
+   ]
+  },
+  {
+   "id": "burrs",
+   "name": "Burrs",
+   "kind": "organism",
+   "status": "canon (proposed name)",
+   "summary": "Dark knots of needle spines that drift up out of Tidewell's deep with a coal-red light smouldering inside. Nobody eats one or nets one on purpose; crews call them bad luck and cut a fouled net loose rather than touch one.",
+   "relationships": [
+    {
+     "target": "tidewell",
+     "relation": "native to"
+    }
+   ]
+  },
+  {
+   "id": "carapace",
+   "name": "The Carapace",
+   "kind": "place",
+   "status": "canon",
+   "summary": "An autonomous offshore summit platform where the Open Band Accords signing became a hostage crisis and WOLFPACK's defining Carapace incident.",
+   "relationships": [
+    {
+     "target": "open_band_accords",
+     "relation": "summit venue for"
+    },
+    {
+     "target": "carapace_incident",
+     "relation": "site of"
+    },
+    {
+     "target": "president_johnson",
+     "relation": "held"
+    }
+   ]
+  },
+  {
+   "id": "carapace_incident",
+   "name": "Carapace incident",
+   "kind": "event",
+   "status": "partially-documented-canon",
+   "summary": "A hostage-and-retrieval crisis aboard the Carapace involving the Accords, Johnson, Voss, WOLFPACK, a tanker affair, and several character-defining first contacts. The complete sequence is intentionally not yet centralized.",
+   "relationships": [
+    {
+     "target": "carapace",
+     "relation": "occurred aboard"
+    },
+    {
+     "target": "president_johnson",
+     "relation": "hostage"
+    },
+    {
+     "target": "governor_voss",
+     "relation": "captor"
+    },
+    {
+     "target": "storm_ronin",
+     "relation": "first live deployment of"
+    },
+    {
+     "target": "steel_cobra",
+     "relation": "official death of"
+    },
+    {
+     "target": "nixie",
+     "relation": "turning point for"
+    },
+    {
+     "target": "exo_ronin",
+     "relation": "connected through tanker affair"
+    }
+   ]
+  },
+  {
+   "id": "chimera_lattice",
+   "name": "Chimera lattice",
+   "kind": "technology",
+   "status": "canon",
+   "summary": "Chimera's medical nanite culture blending multiple donor immune profiles. She is its first host, and its activity appears as glowing veins under her skin.",
+   "relationships": [
+    {
+     "target": "chimera",
+     "relation": "created and hosted by"
+    },
+    {
+     "target": "greyline",
+     "relation": "rooted in"
+    }
+   ]
+  },
+  {
+   "id": "the_choir",
+   "name": "The Choir",
+   "kind": "organism",
+   "status": "canon",
+   "summary": "Vast bioluminescent leviathans in Tidewell's deep, seen from the surface only as slow light under the swell. Their songs travel on the old analog bands; sailors swear they sometimes hear a song on the radio seconds before it comes up through the hull. Nobody has proved it, and nobody hunts the Choir: the trawler crews say they're listening.",
+   "relationships": [
+    {
+     "target": "tidewell",
+     "relation": "native to"
+    },
+    {
+     "target": "old_analog_bands",
+     "relation": "sing on"
+    }
+   ]
+  },
+  {
+   "id": "cinder",
+   "name": "Cinder",
+   "kind": "place",
+   "status": "canon",
+   "summary": "The forge world whose foundries cast the war's exo-frames and never fully shut down: the orders were never cancelled because the cartels that could cancel them no longer exist, so the lines still pour metal for wars that ended decades ago. Lava rivers, an orange sky, cinder-crows in the stacks and forge-golems on the gantries. Unrelated to Cinder Cay.",
+   "relationships": [
+    {
+     "target": "the_drift",
+     "relation": "in"
+    },
+    {
+     "target": "ledger_wars",
+     "relation": "foundry of"
+    }
+   ]
+  },
+  {
+   "id": "clearance_ladder",
+   "name": "Clearance ladder",
+   "kind": "institution",
+   "status": "canon",
+   "summary": "Bromigos' trust and access tiers: Operative, Specialist, Phantom, and [Redacted]. The ladder functions as both rank and paid access.",
+   "relationships": [
+    {
+     "target": "bromigos",
+     "relation": "controls access to"
+    },
+    {
+     "target": "koschei",
+     "relation": "opposed by"
+    }
+   ]
+  },
+  {
+   "id": "collection_agency",
+   "name": "The Collection Agency",
+   "kind": "organization",
+   "status": "canon",
+   "summary": "Steel Cobra's found-family retrieval crew. They charge to recover people from the Drift's cracks but refuse contracts on children or delivery into ownership.",
+   "relationships": [
+    {
+     "target": "steel_cobra",
+     "relation": "led by"
+    },
+    {
+     "target": "ghost_leopard",
+     "relation": "member"
+    },
+    {
+     "target": "fandroid",
+     "relation": "member"
+    },
+    {
+     "target": "exo_ronin",
+     "relation": "member"
+    },
+    {
+     "target": "jinx",
+     "relation": "member"
+    },
+    {
+     "target": "nightshade",
+     "relation": "member"
+    },
+    {
+     "target": "made_people",
+     "relation": "removes from ownership ledgers"
+    }
+   ]
+  },
+  {
+   "id": "the_cradle",
+   "name": "The Cradle (Earth)",
+   "kind": "place",
+   "status": "canon",
+   "summary": "Humanity's origin world — Earth, by its oldest name. The Drift's population left it generations before the Drift's present, in a long desperate migration rather than a golden age. Earth itself is real and still exists; its present day lies at the shallow end of the timeline, before the migration.",
+   "relationships": [
+    {
+     "target": "the_drift",
+     "relation": "origin of"
+    }
+   ]
+  },
+  {
+   "id": "the_crane_cab",
+   "name": "The crane cab",
+   "kind": "place",
+   "status": "canon (proposed name)",
+   "summary": "Cinder's post: the cab of a dead forge crane above the foundry halls. The relay hangs from the crane; the flame is cast into its counterweight.",
+   "relationships": [
+    {
+     "target": "cinder",
+     "relation": "on"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "one of"
+    }
+   ]
+  },
+  {
+   "id": "deepvein",
+   "name": "Deepvein",
+   "kind": "place",
+   "status": "canon",
+   "summary": "A crystal mine: caverns miles down in a mining world, filled with formations taller than the lift towers, crawled by cave crabs with glowing shells that miners follow when the lamps fail.",
+   "relationships": [
+    {
+     "target": "the_drift",
+     "relation": "in"
+    }
+   ]
+  },
+  {
+   "id": "della_ash",
+   "name": "Della Ash",
+   "kind": "support_character",
+   "status": "canon (proposed name)",
+   "summary": "Keeper of the Low Note: owns the bar, plays its piano, trades in information and coin, and remembers everything said in her bar. Lowtown pays for what the posts can't salvage, cast or fly.",
+   "relationships": [
+    {
+     "target": "the_low_note",
+     "relation": "keeps"
+    },
+    {
+     "target": "lamplighters",
+     "relation": "member of"
+    },
+    {
+     "target": "brask",
+     "relation": "funds"
+    },
+    {
+     "target": "pip_arro",
+     "relation": "funds the runs of"
+    }
+   ]
+  },
+  {
+   "id": "the_drift",
+   "name": "The Drift",
+   "kind": "setting",
+   "status": "canon",
+   "summary": "A belt of worn settled systems: orbital stations, half-terraformed colonies, and sprawl-yards linked by slow travel, local law, repair culture, and work for hire.",
+   "relationships": [
+    {
+     "target": "the_cradle",
+     "relation": "settled from"
+    },
+    {
+     "target": "ledger_wars",
+     "relation": "shaped by"
+    },
+    {
+     "target": "sectors",
+     "relation": "divided into"
+    },
+    {
+     "target": "the_mark",
+     "relation": "uses"
+    }
+   ]
+  },
+  {
+   "id": "drift_long_haulers",
+   "name": "Drift long-haulers",
+   "kind": "ship",
+   "status": "canon",
+   "summary": "The Drift's slow bulk freighters: a blunt command block, a long spine of strapped containers and tanks, a cluster of engine bells. They cross the skies of the worlds far up and slowly, on their way somewhere that pays.",
+   "relationships": [
+    {
+     "target": "the_drift",
+     "relation": "haul for"
+    },
+    {
+     "target": "mire",
+     "relation": "pass over"
+    },
+    {
+     "target": "tidewell",
+     "relation": "pass over"
+    }
+   ]
+  },
+  {
+   "id": "echo_craft",
+   "name": "EchoCraft",
+   "kind": "constructed_world",
+   "status": "canon",
+   "summary": "Bromigos' network of in-world constructed worlds and game servers, named for the Echo phenomenon.",
+   "relationships": [
+    {
+     "target": "bromigos",
+     "relation": "operated by"
+    },
+    {
+     "target": "spaceport",
+     "relation": "contains hub"
+    },
+    {
+     "target": "vector",
+     "relation": "staffed by"
+    }
+   ]
+  },
+  {
+   "id": "the_empty_chair",
+   "name": "The empty chair",
+   "kind": "belief",
+   "status": "canon",
+   "summary": "Operator folklore from intercept footage of the Wick: when BLACKFLAME is away, the chair stands empty and turned, with headphones and shades left by the keyboard. Operators who see it say 'the relays are on their own tonight' and stand their own watches longer.",
+   "relationships": [
+    {
+     "target": "the_wick",
+     "relation": "seen at"
+    },
+    {
+     "target": "blackflame",
+     "relation": "marks the absence of"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "warns about"
+    }
+   ]
+  },
+  {
+   "id": "fish_spotters",
+   "name": "Fish-spotters",
+   "kind": "technology",
+   "status": "canon",
+   "summary": "Little float-footed autogyros that Tidewell's trawler crews fly ahead of the boat to find the shoals.",
+   "relationships": [
+    {
+     "target": "tidewell",
+     "relation": "fly over"
+    }
+   ]
+  },
+  {
+   "id": "forge_golems",
+   "name": "Forge-golems",
+   "kind": "technology",
+   "status": "canon",
+   "summary": "Half-built exo-frames from Cinder's undying lines that climb the gantries and wander the halls at jobs nobody assigned. Brask quietly retools them one at a time; a golem that comes down from his crane carries masts, not a gun mount.",
+   "relationships": [
+    {
+     "target": "cinder",
+     "relation": "native to"
+    },
+    {
+     "target": "made_people",
+     "relation": "kin of"
+    }
+   ]
+  },
+  {
+   "id": "frostbacks",
+   "name": "Frostbacks",
+   "kind": "organism",
+   "status": "canon",
+   "summary": "Colossal creatures under Rime's glacier. Nobody has seen more of one than a shadow moving under the ice.",
+   "relationships": [
+    {
+     "target": "rime",
+     "relation": "native to"
+    }
+   ]
+  },
+  {
+   "id": "greyline",
+   "name": "Greyline",
+   "kind": "place",
+   "status": "canon",
+   "summary": "A port city sealed for nine years after an engineered blight entered its water reclamation system. Salvage medicine inside its cordon formed Chimera.",
+   "relationships": [
+    {
+     "target": "chimera",
+     "relation": "origin of"
+    },
+    {
+     "target": "chimera_lattice",
+     "relation": "inspired"
+    }
+   ]
+  },
+  {
+   "id": "greywater_light",
+   "name": "Greywater Light",
+   "kind": "place",
+   "status": "canon (proposed name)",
+   "summary": "Tidewell's post: a small, old lighthouse on the Sliver, a knife of black rock that is the only charted land on Tidewell, near the oldest platform. Its lamp was the colony's weather and distress beacon; it went dark in the Switch-Off and came back with a relay in the lamp room. The flame is painted on the bell buoy off the rock's lee. Below it, kelp shelves fall into the deep.",
+   "relationships": [
+    {
+     "target": "tidewell",
+     "relation": "on"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "one of"
+    },
+    {
+     "target": "the_switch_off",
+     "relation": "relit after"
+    }
+   ]
+  },
+  {
+   "id": "greywater_mark",
+   "name": "Greywater Light's mark",
+   "kind": "emblem",
+   "status": "canon (proposed motto)",
+   "summary": "Tidewell's post mark: the burn-in as Greywater Light carries it. The flame rides the swell as it does on the bell buoy, and under the swell one of the Choir passes as a line of light. The tuning gap is a stretch of song from Maren's log, the loudest note at twelve. The Choir's cyan on deep water. Motto: 'THE DEEP SINGS FIRST · SOMEONE WRITES IT DOWN ·'.",
+   "relationships": [
+    {
+     "target": "the_burn_in",
+     "relation": "variant of"
+    },
+    {
+     "target": "greywater_light",
+     "relation": "mark of"
+    },
+    {
+     "target": "the_choir",
+     "relation": "shows"
+    },
+    {
+     "target": "maren_holt",
+     "relation": "motto from"
+    }
+   ]
+  },
+  {
+   "id": "gx_core",
+   "name": "GX core",
+   "kind": "technology",
+   "status": "canon",
+   "summary": "The deep coordination kernel the network's synthetic layer runs on. Nixie transcribed it — from the drive she carried out of the Slack and from what the rift left in her — rather than designing it; even she has not read all of it, which is why it has moods, undocumented behavior, and room for something to wake. It became the substrate in which Sigil condensed.",
+   "relationships": [
+    {
+     "target": "nixie",
+     "relation": "transcribed by"
+    },
+    {
+     "target": "sigil",
+     "relation": "birthplace of"
+    },
+    {
+     "target": "wolfpack",
+     "relation": "coordinates"
+    }
+   ]
+  },
+  {
+   "id": "har_draka",
+   "name": "Har Draka range",
+   "kind": "place",
+   "status": "canon",
+   "summary": "A mountain range of rescue work, smuggler routes, and the lost Relay Corps repeater rescue that forged Flint and Rourke's old friendship.",
+   "relationships": [
+    {
+     "target": "master_flint",
+     "relation": "former range of"
+    },
+    {
+     "target": "colonel_rourke",
+     "relation": "rescue site involving"
+    },
+    {
+     "target": "relay_corps",
+     "relation": "contained repeater station of"
+    }
+   ]
+  },
+  {
+   "id": "highwind",
+   "name": "Highwind",
+   "kind": "place",
+   "status": "canon",
+   "summary": "The cloud city: a station drifting through a gas giant's storm bands, airships moored at its rings, sky-whales in the bands and kite-birds in the updrafts. Its riggers claim their giant is one of the forty charts that match the Wick's night window, as does every other station on those charts.",
+   "relationships": [
+    {
+     "target": "the_drift",
+     "relation": "in"
+    },
+    {
+     "target": "the_wick",
+     "relation": "one of forty candidates for"
+    }
+   ]
+  },
+  {
+   "id": "hollis_crane",
+   "name": "Hollis Crane",
+   "kind": "support_character",
+   "status": "canon (proposed name)",
+   "summary": "Mire's keeper and the oldest Lamplighter: an old fisherman on the stilt shack's porch, once a Relay Corps signals man posted to the front, who stayed when the war moved on. Fixes what nobody else remembers how to fix, talks to the war machines (the Sleepers wade past his porch like neighbours), and is the only keeper who claims to have met BLACKFLAME, once; he won't say where.",
+   "relationships": [
+    {
+     "target": "mire_stilt_shack",
+     "relation": "keeps"
+    },
+    {
+     "target": "lamplighters",
+     "relation": "member of"
+    },
+    {
+     "target": "relay_corps",
+     "relation": "veteran of"
+    },
+    {
+     "target": "sleepers",
+     "relation": "talks to"
+    },
+    {
+     "target": "blackflame",
+     "relation": "claims to have met"
+    },
+    {
+     "target": "tamsin_rook",
+     "relation": "remembers drawings for"
+    }
+   ]
+  },
+  {
+   "id": "juno_varga",
+   "name": "Juno Varga",
+   "kind": "support_character",
+   "status": "canon (proposed name)",
+   "summary": "Keeper of Station Nine: a miner who refused to leave when Rime was switched off and kept the long-range dish turning through ten years of unanswered calls. Now the first to answer anyone. She once answered a roll-call from a post that doesn't exist yet.",
+   "relationships": [
+    {
+     "target": "station_nine",
+     "relation": "keeps"
+    },
+    {
+     "target": "lamplighters",
+     "relation": "member of"
+    },
+    {
+     "target": "rime_long_watch",
+     "relation": "stood"
+    },
+    {
+     "target": "lamplighter_roll_call",
+     "relation": "answered an impossible"
+    }
+   ]
+  },
+  {
+   "id": "kabu_7",
+   "name": "KABU-7",
+   "kind": "support_character",
+   "status": "canon",
+   "summary": "Fandroid's knee-high beetle robot, rebuilt seven times. It keeps a formal Ledger of Slights, argues story canon, and has feelings because Fandroid deliberately built it to be his friend.",
+   "relationships": [
+    {
+     "target": "fandroid",
+     "relation": "built by and best friend of"
+    },
+    {
+     "target": "collection_agency",
+     "relation": "mascot and member-adjacent"
+    },
+    {
+     "target": "jinx",
+     "relation": "records slights by"
+    }
+   ]
+  },
+  {
+   "id": "kagura_sprawl_yards",
+   "name": "Kagura sprawl-yards",
+   "kind": "place",
+   "status": "canon",
+   "summary": "The scrap and reactor yards where Fandroid grew up feral, learning machines from discarded drones and secondhand animation.",
+   "relationships": [
+    {
+     "target": "fandroid",
+     "relation": "origin of"
+    },
+    {
+     "target": "apex_war_walker",
+     "relation": "materials source for"
+    }
+   ]
+  },
+  {
+   "id": "kannagi_loop",
+   "name": "Kannagi Loop",
+   "kind": "institution",
+   "status": "closed-canon",
+   "summary": "A third-floor sim-lattice blade hall above a noodle bar, where Master Osei taught Storm Ronin before the hall closed and its rigs were sold as salvage.",
+   "relationships": [
+    {
+     "target": "master_osei",
+     "relation": "run by"
+    },
+    {
+     "target": "storm_ronin",
+     "relation": "trained"
+    }
+   ]
+  },
+  {
+   "id": "karst_company",
+   "name": "Karst Order",
+   "kind": "organization",
+   "status": "canon",
+   "summary": "Sable's martial order (not for hire), which moves against the cartels and corruption that made the Drift a ledger, on his judgment alone.",
+   "relationships": [
+    {
+     "target": "sable",
+     "relation": "founded and commanded by"
+    },
+    {
+     "target": "ledger_wars",
+     "relation": "formed in response to"
+    }
+   ]
+  },
+  {
+   "id": "the_kiln",
+   "name": "The Kiln",
+   "kind": "institution",
+   "status": "canon",
+   "summary": "Master Flint's survival training program, where simulated perfection is burned down into field judgment.",
+   "relationships": [
+    {
+     "target": "master_flint",
+     "relation": "run by"
+    },
+    {
+     "target": "redline",
+     "relation": "record set by"
+    },
+    {
+     "target": "storm_ronin",
+     "relation": "currently training"
+    }
+   ]
+  },
+  {
+   "id": "the_kite_mast",
+   "name": "The kite-mast gondola",
+   "kind": "place",
+   "status": "canon (proposed name)",
+   "summary": "Highwind's post: the relay trails beneath the station on a kite-mast, with a gondola at the end of the cable. The flame is painted on the kite's canvas.",
+   "relationships": [
+    {
+     "target": "highwind",
+     "relation": "on"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "one of"
+    }
+   ]
+  },
+  {
+   "id": "lampfry",
+   "name": "Lampfry",
+   "kind": "organism",
+   "status": "canon (proposed name)",
+   "summary": "Finger-long drifters of Tidewell's shallows, each carrying a warm lamp of its own, travelling in loose slow clouds that light the kelp like a town seen from the air. The trawlers net them by the ton; a platform can live or starve on a season's run.",
+   "relationships": [
+    {
+     "target": "tidewell",
+     "relation": "native to"
+    },
+    {
+     "target": "the_choir",
+     "relation": "share the water with"
+    }
+   ]
+  },
+  {
+   "id": "lamplighter_roll_call",
+   "name": "Lamplighter roll-call",
+   "kind": "institution",
+   "status": "canon",
+   "summary": "Every night each post checks in on 142.59 and signs off STILL LIT. A post that misses roll-call gets a call from the nearest keeper; one that misses the call gets a visit, which keepers describe as going to see about a relay.",
+   "relationships": [
+    {
+     "target": "lamplighters",
+     "relation": "held by"
+    },
+    {
+     "target": "the_burn_in",
+     "relation": "borrows sign-off of"
+    }
+   ]
+  },
+  {
+   "id": "lamplighters",
+   "name": "The Lamplighters",
+   "kind": "organization",
+   "status": "canon",
+   "summary": "The keepers of the unlisted relays' posts, one to a world. Their creed: a black flame gives no light, but someone keeps it burning. Most have never met and know each other as voices on the old bands. Every night each post checks in on 142.59 and signs off STILL LIT; a post that misses roll-call gets a call from the nearest keeper, then a visit. No sector sells parts for relays that don't exist on paper, so Sunder salvages, Cinder casts, Highwind flies, and Lowtown pays with information and coin. No Lamplighter has seen BLACKFLAME, the voice at the Wick that answers when everything else fails; some believe they are BLACKFLAME's crew. VECTOR is the one voice they all share.",
+   "relationships": [
+    {
+     "target": "blackflame",
+     "relation": "answer to"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "keep"
+    },
+    {
+     "target": "the_wick",
+     "relation": "call"
+    },
+    {
+     "target": "vector",
+     "relation": "share a line with"
+    },
+    {
+     "target": "spaceport",
+     "relation": "hear VECTOR from"
+    },
+    {
+     "target": "old_analog_bands",
+     "relation": "talk on"
+    },
+    {
+     "target": "lamplighter_roll_call",
+     "relation": "stand"
+    }
+   ]
+  },
+  {
+   "id": "lantern_shelf",
+   "name": "Lantern Shelf",
+   "kind": "place",
+   "status": "canon",
+   "summary": "A coastal arcology built half in and half out of the sea, whose lower stacks flood by design and whose children read wavelight like weather. Beneath its drowned stacks lies the Slack, which its tide-keepers do not chart for outsiders.",
+   "relationships": [
+    {
+     "target": "nixie",
+     "relation": "origin of"
+    },
+    {
+     "target": "gx_core",
+     "relation": "engineering culture behind"
+    }
+   ]
+  },
+  {
+   "id": "ledger_wars",
+   "name": "The Ledger Wars",
+   "kind": "era",
+   "status": "canon",
+   "summary": "Decades of proxy war among corporations, defense cartels, and sovereign funds with navies. Soldiers were treated as assets, and the wars ended through bankruptcy rather than treaty.",
+   "relationships": [
+    {
+     "target": "made_people",
+     "relation": "created"
+    },
+    {
+     "target": "meridian_combine",
+     "relation": "empowered"
+    },
+    {
+     "target": "null_cell",
+     "relation": "erased"
+    },
+    {
+     "target": "the_drift",
+     "relation": "left scars across"
+    }
+   ]
+  },
+  {
+   "id": "linebloom",
+   "name": "Linebloom",
+   "kind": "organism",
+   "status": "canon (proposed name)",
+   "summary": "A reef of glass-stalked bioluminescent polyps covering the Sliver's flank along the relay's old sea cable, which it took to for its warmth. Its light follows the line: calm cyan while the relay is sound, amber when it labours, a slow red pulse when it fails. Maren reads it like a barometer.",
+   "relationships": [
+    {
+     "target": "tidewell",
+     "relation": "native to"
+    },
+    {
+     "target": "greywater_light",
+     "relation": "grows on the cable of"
+    }
+   ]
+  },
+  {
+   "id": "the_low_note",
+   "name": "The Low Note",
+   "kind": "place",
+   "status": "canon (proposed name)",
+   "summary": "Lowtown's post: a basement jazz bar whose neon sign hides the relay, a green ring for the second O with a black glass flame inside that never lights. A stray cat sleeps on the warm sign.",
+   "relationships": [
+    {
+     "target": "lowtown",
+     "relation": "on"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "one of"
+    }
+   ]
+  },
+  {
+   "id": "lowtown",
+   "name": "Lowtown",
+   "kind": "place",
+   "status": "canon",
+   "summary": "The rain city: a megacity under permanent cloud, all neon, elevated trains, hover-cabs, bounty boards and rebuilt bodies, its mesh sold three times over and its old bands owned by nobody. Jazz bars stay open late in the basements.",
+   "relationships": [
+    {
+     "target": "the_drift",
+     "relation": "in"
+    }
+   ]
+  },
+  {
+   "id": "made_people",
+   "name": "Made people",
+   "kind": "culture",
+   "status": "canon",
+   "summary": "The Drift's broad class of self-aware beings built on purpose: clones, constructs, symbiont hosts, tank-raised listeners, and other living weapons left behind by the war.",
+   "relationships": [
+    {
+     "target": "ledger_wars",
+     "relation": "manufactured during"
+    },
+    {
+     "target": "sons_of_sovereignty",
+     "relation": "courted by"
+    },
+    {
+     "target": "collection_agency",
+     "relation": "freed by"
+    }
+   ]
+  },
+  {
+   "id": "maren_holt",
+   "name": "Maren Holt",
+   "kind": "support_character",
+   "status": "canon (proposed name)",
+   "summary": "Keeper of Greywater Light and the network's ears. She logs the Choir's songs (time, bearing, depth, phrase) and hears trouble first; her logs are the best record of the Echo the network keeps, a record and never a proof. One logged song sounds like the 142.59 sign-off.",
+   "relationships": [
+    {
+     "target": "greywater_light",
+     "relation": "keeps"
+    },
+    {
+     "target": "lamplighters",
+     "relation": "member of"
+    },
+    {
+     "target": "the_choir",
+     "relation": "logs"
+    },
+    {
+     "target": "juno_varga",
+     "relation": "raises the alarm with"
+    }
+   ]
+  },
+  {
+   "id": "the_mark",
+   "name": "The mark (coin)",
+   "kind": "currency",
+   "status": "canon",
+   "summary": "Post-Ledger scrip kept alive by common consent. People almost always call it coin rather than marks.",
+   "relationships": [
+    {
+     "target": "ledger_wars",
+     "relation": "outlived"
+    },
+    {
+     "target": "the_drift",
+     "relation": "circulates across"
+    }
+   ]
+  },
+  {
+   "id": "master_osei",
+   "name": "Master Osei",
+   "kind": "support_character",
+   "status": "dead-canon",
+   "summary": "Storm Ronin's old blade instructor at Kannagi Loop, remembered through credited sayings and the standard that simulator scores alone never satisfy.",
+   "relationships": [
+    {
+     "target": "kannagi_loop",
+     "relation": "ran"
+    },
+    {
+     "target": "storm_ronin",
+     "relation": "mentor of"
+    }
+   ]
+  },
+  {
+   "id": "meridian_combine",
+   "name": "Meridian Combine",
+   "kind": "organization",
+   "status": "canon",
+   "summary": "A private defense cartel responsible for Project OUROBORAN, the Umbra Reef extraction colony, and its sterilization atrocity.",
+   "relationships": [
+    {
+     "target": "project_ouroboran",
+     "relation": "operated"
+    },
+    {
+     "target": "umbra_reef",
+     "relation": "controlled"
+    },
+    {
+     "target": "umbra_reef_sterilization",
+     "relation": "ordered"
+    },
+    {
+     "target": "steel_cobra",
+     "relation": "created"
+    },
+    {
+     "target": "koschei",
+     "relation": "created"
+    },
+    {
+     "target": "governor_voss",
+     "relation": "created"
+    }
+   ]
+  },
+  {
+   "id": "meridian_reach",
+   "name": "Meridian Reach",
+   "kind": "place",
+   "status": "canon",
+   "summary": "A sector of nine stations and two colonies, legally a democracy and practically the domain of Governor Voss.",
+   "relationships": [
+    {
+     "target": "sectors",
+     "relation": "is a"
+    },
+    {
+     "target": "governor_voss",
+     "relation": "governed by"
+    },
+    {
+     "target": "sons_of_sovereignty",
+     "relation": "seat of"
+    }
+   ]
+  },
+  {
+   "id": "mire",
+   "name": "Mire",
+   "kind": "place",
+   "status": "canon",
+   "summary": "The bayou that swallowed a war: a Ledger Wars jungle front left behind when the money moved on, sunk under black swamp water among huge moss-hung trees, lily pads, mist and fireflies. The Sleepers, its pilotless exo-frames, still wake and wade. Herons stand in the reeds, and something big lives in the water that the locals don't name.",
+   "relationships": [
+    {
+     "target": "the_drift",
+     "relation": "in"
+    },
+    {
+     "target": "ledger_wars",
+     "relation": "abandoned front of"
+    }
+   ]
+  },
+  {
+   "id": "mire_front_abandoned",
+   "name": "Mire front abandoned",
+   "kind": "event",
+   "status": "canon",
+   "summary": "When the Ledger Wars money moved on, Mire's jungle front was simply left: transports stopped coming, the frames were never recovered, and over the years the swamp rose over the trenches and landing grounds. Hollis Crane, a Relay Corps signals man posted there, stayed.",
+   "relationships": [
+    {
+     "target": "ledger_wars",
+     "relation": "consequence of"
+    },
+    {
+     "target": "mire",
+     "relation": "sank"
+    }
+   ]
+  },
+  {
+   "id": "mire_mark",
+   "name": "Mire's mark",
+   "kind": "emblem",
+   "status": "canon (proposed motto)",
+   "summary": "The stilt shack's own mark: the burn-in as Mire carries it. The black flame stands on the flood line with its reflection broken by ripples, and two Sleeper eye-lamps glow low in the water beside it. Reeds fill the tuning gap, a cattail at twelve. Firefly green on black water. Motto: 'NOTHING HERE IS FORGOTTEN · ONLY SLEEPING ·'.",
+   "relationships": [
+    {
+     "target": "the_burn_in",
+     "relation": "variant of"
+    },
+    {
+     "target": "mire_stilt_shack",
+     "relation": "mark of"
+    },
+    {
+     "target": "hollis_crane",
+     "relation": "motto from"
+    },
+    {
+     "target": "sleepers",
+     "relation": "shows"
+    }
+   ]
+  },
+  {
+   "id": "next_gen_strike_corps",
+   "name": "Next-Gen Strike Corps",
+   "kind": "organization",
+   "status": "canon",
+   "summary": "WOLFPACK's young rapid-response wing, promoted early and commanded by Redline with a paper roster she carries into every drop.",
+   "relationships": [
+    {
+     "target": "wolfpack",
+     "relation": "wing of"
+    },
+    {
+     "target": "redline",
+     "relation": "commanded by"
+    }
+   ]
+  },
+  {
+   "id": "null_cell",
+   "name": "Null Cell",
+   "kind": "organization",
+   "status": "erased-canon",
+   "summary": "A deniable mercenary unit removed from the record instead of paid. Jinx and Nightshade are its last two known survivors.",
+   "relationships": [
+    {
+     "target": "ledger_wars",
+     "relation": "product of"
+    },
+    {
+     "target": "jinx",
+     "relation": "survived by"
+    },
+    {
+     "target": "nightshade",
+     "relation": "survived by"
+    },
+    {
+     "target": "collection_agency",
+     "relation": "survivors collected by"
+    }
+   ]
+  },
+  {
+   "id": "odds_clan",
+   "name": "The Odds",
+   "kind": "culture",
+   "status": "canon",
+   "summary": "A Drift-clan species of barge travelers whose star-like freckles, ledgers, constellations, games, and funeral rites shape Jinx's fatalism.",
+   "relationships": [
+    {
+     "target": "jinx",
+     "relation": "people of"
+    },
+    {
+     "target": "spilt_road",
+     "relation": "travel"
+    },
+    {
+     "target": "vesper",
+     "relation": "crew of"
+    }
+   ]
+  },
+  {
+   "id": "old_analog_bands",
+   "name": "Old analog bands",
+   "kind": "technology",
+   "status": "canon",
+   "summary": "Low-fidelity frequencies predating the modern mesh. Their apparent obsolescence preserves the noise in which the Echo occurs.",
+   "relationships": [
+    {
+     "target": "blips",
+     "relation": "receive"
+    },
+    {
+     "target": "open_band_accords",
+     "relation": "protected by"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "kept open by"
+    }
+   ]
+  },
+  {
+   "id": "open_band_accords",
+   "name": "Open Band Accords",
+   "kind": "accord",
+   "status": "contested-canon",
+   "summary": "A post-war multilateral treaty intended to keep communication bands free of state, cartel, and carrier monopolies. Its signing crisis drives the Carapace incident.",
+   "relationships": [
+    {
+     "target": "old_analog_bands",
+     "relation": "protects access to"
+    },
+    {
+     "target": "president_johnson",
+     "relation": "championed by"
+    },
+    {
+     "target": "carapace_incident",
+     "relation": "contested during"
+    },
+    {
+     "target": "governor_voss",
+     "relation": "opposed or exploited by"
+    }
+   ]
+  },
+  {
+   "id": "ophian_strand",
+   "name": "Ophian Strand",
+   "kind": "organism",
+   "status": "canon",
+   "summary": "A serpentine exo-organism dredged from beneath Umbra Reef and braided into the Cobra line. Driven past overburn in the uprising, it could not keep the second decant alive — so after he died in the sterilization it rebuilt him in the trench it came from. What it wants with him, and how much of him came back, is unset.",
+   "relationships": [
+    {
+     "target": "umbra_reef",
+     "relation": "recovered beneath"
+    },
+    {
+     "target": "project_ouroboran",
+     "relation": "basis of"
+    },
+    {
+     "target": "koschei",
+     "relation": "overburning in"
+    }
+   ]
+  },
+  {
+   "id": "ora_slate",
+   "name": "Ora Slate",
+   "kind": "support_character",
+   "status": "canon (proposed name)",
+   "summary": "Keeper of the resonance chamber: a geologist who stayed down too long, who keeps the network's deep archive in the singing crystals by a method she has never described in detail.",
+   "relationships": [
+    {
+     "target": "resonance_chamber",
+     "relation": "keeps"
+    },
+    {
+     "target": "lamplighters",
+     "relation": "member of"
+    },
+    {
+     "target": "maren_holt",
+     "relation": "archives the logs of"
+    }
+   ]
+  },
+  {
+   "id": "pale_margin",
+   "name": "Pale Margin",
+   "kind": "ship",
+   "status": "canon",
+   "summary": "The salvage tug that found an unnamed powered derelict with purged manifests and put Sibyl aboard to retrieve its logs.",
+   "relationships": [
+    {
+     "target": "sibyl",
+     "relation": "carried"
+    }
+   ]
+  },
+  {
+   "id": "petrel",
+   "name": "The Petrel",
+   "kind": "ship",
+   "status": "canon (proposed name)",
+   "summary": "Pip Arro's courier: a small, fast, much-patched ducted-fan craft in faded orange and cream, a cargo pod clamped under its belly and a long ribbon pennant from its tail. It carries parts and drawings between the posts; every post in the Drift knows its lamps.",
+   "relationships": [
+    {
+     "target": "pip_arro",
+     "relation": "flown by"
+    },
+    {
+     "target": "lamplighters",
+     "relation": "carries parts between"
+    },
+    {
+     "target": "mire",
+     "relation": "calls at"
+    },
+    {
+     "target": "tidewell",
+     "relation": "calls at"
+    }
+   ]
+  },
+  {
+   "id": "pickets",
+   "name": "The Pickets",
+   "kind": "technology",
+   "status": "canon (proposed name)",
+   "summary": "The Mire front's unmanned sentry drones, still flying their patrol circuits over the channels decades after the war left: lean armoured wings in scorched olive paint, one amber optic sweeping for an enemy that left, moss trailing from empty hardpoints where they roost on the wrecks.",
+   "relationships": [
+    {
+     "target": "mire",
+     "relation": "patrol"
+    },
+    {
+     "target": "sleepers",
+     "relation": "kin of"
+    },
+    {
+     "target": "ledger_wars",
+     "relation": "left by"
+    }
+   ]
+  },
+  {
+   "id": "pip_arro",
+   "name": "Pip Arro",
+   "kind": "support_character",
+   "status": "canon (proposed name)",
+   "summary": "Keeper of the kite-mast gondola: a sky courier and storm pilot who flies parts between posts. Has met more Lamplighters than anyone, and stays long nowhere.",
+   "relationships": [
+    {
+     "target": "the_kite_mast",
+     "relation": "keeps"
+    },
+    {
+     "target": "lamplighters",
+     "relation": "member of"
+    },
+    {
+     "target": "tamsin_rook",
+     "relation": "flies salvage for"
+    },
+    {
+     "target": "brask",
+     "relation": "delivers castings for"
+    }
+   ]
+  },
+  {
+   "id": "project_ouroboran",
+   "name": "Project OUROBORAN",
+   "kind": "project",
+   "status": "canon",
+   "summary": "The Combine program that braided the Ophian Strand into a specialist's genome and produced three Cobra decants with radically different answers to ownership.",
+   "relationships": [
+    {
+     "target": "meridian_combine",
+     "relation": "run by"
+    },
+    {
+     "target": "ophian_strand",
+     "relation": "used"
+    },
+    {
+     "target": "steel_cobra",
+     "relation": "first decant"
+    },
+    {
+     "target": "koschei",
+     "relation": "second decant"
+    },
+    {
+     "target": "governor_voss",
+     "relation": "third decant"
+    }
+   ]
+  },
+  {
+   "id": "project_sepia",
+   "name": "Project SEPIA",
+   "kind": "project",
+   "status": "defunct-canon",
+   "summary": "A failed adaptive-camouflage program built around an engineered chromatophore lattice. Its seventh carrier is the only known survivor.",
+   "relationships": [
+    {
+     "target": "sepia_7",
+     "relation": "produced"
+    },
+    {
+     "target": "mimic_cuttlefish",
+     "relation": "identity of survivor"
+    }
+   ]
+  },
+  {
+   "id": "relay_beam",
+   "name": "The relay beam",
+   "kind": "technology",
+   "status": "canon",
+   "summary": "A beam that burns up from the Wick's mast into the dark only while every channel on the network is answering. Seen in intercept footage; operators read a dark beam as trouble on the network, and ready rooms stay quiet until it is lit again.",
+   "relationships": [
+    {
+     "target": "the_wick",
+     "relation": "burns from"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "reports on"
+    },
+    {
+     "target": "bromigos",
+     "relation": "read as an omen by"
+    }
+   ]
+  },
+  {
+   "id": "relay_corps",
+   "name": "Relay Corps",
+   "kind": "organization",
+   "status": "historical-canon",
+   "summary": "Old signal units that kept isolated garrisons connected before network unification. Their repairable hardware and keep-talking doctrine shaped Rourke and Flint.",
+   "relationships": [
+    {
+     "target": "colonel_rourke",
+     "relation": "trained"
+    },
+    {
+     "target": "master_flint",
+     "relation": "connected to"
+    },
+    {
+     "target": "wolfpack",
+     "relation": "doctrinal ancestor of"
+    }
+   ]
+  },
+  {
+   "id": "resonance_chamber",
+   "name": "The resonance chamber",
+   "kind": "place",
+   "status": "canon (proposed name)",
+   "summary": "Deepvein's post: the cavern where the relay sits. When it transmits, the crystal formations resonate, and the miners say the caves sing back. The flame is carved into the stone at the lift head.",
+   "relationships": [
+    {
+     "target": "deepvein",
+     "relation": "on"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "one of"
+    }
+   ]
+  },
+  {
+   "id": "rig_hoppers",
+   "name": "Rig-hoppers",
+   "kind": "technology",
+   "status": "canon",
+   "summary": "Tidewell's squat rust-orange rotor lifters that run supplies between the sea platforms, a container slung beneath them on four cables.",
+   "relationships": [
+    {
+     "target": "tidewell",
+     "relation": "work"
+    }
+   ]
+  },
+  {
+   "id": "rime",
+   "name": "Rime",
+   "kind": "place",
+   "status": "canon",
+   "summary": "An ice moon mined until the Switch-Off, when its ore contracts went to a receiver, its relay found no buyer, and the crews left on the last paid transport. Ice-crawlers still run, ice-foxes den in the lee of the hut, the aurora hangs overhead, and Frostbacks move under the glacier.",
+   "relationships": [
+    {
+     "target": "the_drift",
+     "relation": "in"
+    },
+    {
+     "target": "the_switch_off",
+     "relation": "switched off in"
+    }
+   ]
+  },
+  {
+   "id": "rime_long_watch",
+   "name": "Rime's long watch",
+   "kind": "event",
+   "status": "canon",
+   "summary": "For ten years after the Switch-Off, Station Nine on Rime transmitted into the blizzards and nobody answered. Juno Varga kept the dish turning and the hut warm; she says she doesn't know who cut the flame into the door.",
+   "relationships": [
+    {
+     "target": "the_switch_off",
+     "relation": "followed"
+    },
+    {
+     "target": "station_nine",
+     "relation": "kept up at"
+    }
+   ]
+  },
+  {
+   "id": "roost_covenant",
+   "name": "Roost Covenant",
+   "kind": "belief",
+   "status": "canon",
+   "summary": "Baron Corbeau's private, self-created discipline: ravens audit the dead, must be fed first, and every life taken must be recorded honestly.",
+   "relationships": [
+    {
+     "target": "baron_corbeau",
+     "relation": "created and practiced by"
+    },
+    {
+     "target": "ledger_wars",
+     "relation": "response to"
+    }
+   ]
+  },
+  {
+   "id": "sarn_pass",
+   "name": "Sarn Pass",
+   "kind": "place",
+   "status": "canon",
+   "summary": "The frozen pass where Ghost Leopard lost her right eye to a counter-sniper's ricochet; she still visits a private cairn there between contracts.",
+   "relationships": [
+    {
+     "target": "ghost_leopard",
+     "relation": "wounded"
+    },
+    {
+     "target": "fandroid",
+     "relation": "indirectly linked to"
+    }
+   ]
+  },
+  {
+   "id": "sectors",
+   "name": "Sectors",
+   "kind": "institution",
+   "status": "canon",
+   "summary": "The Drift's local political units, governed variously by councils, hereditary charters, or whoever controls tariffs; there is no empire.",
+   "relationships": [
+    {
+     "target": "the_drift",
+     "relation": "govern"
+    },
+    {
+     "target": "meridian_reach",
+     "relation": "example"
+    }
+   ]
+  },
+  {
+   "id": "sepia_7",
+   "name": "SEPIA-7",
+   "kind": "designation",
+   "status": "canon",
+   "summary": "The case designation of Project SEPIA's seventh carrier, able to store face-sets while the underlying adaptive skin remains unstable and identity-eroding.",
+   "relationships": [
+    {
+     "target": "project_sepia",
+     "relation": "seventh carrier of"
+    },
+    {
+     "target": "mimic_cuttlefish",
+     "relation": "current identity"
+    }
+   ]
+  },
+  {
+   "id": "sky_whales",
+   "name": "Sky-whales",
+   "kind": "organism",
+   "status": "canon",
+   "summary": "Gentle giants that drift in Highwind's gas-giant storm bands, riding the wind and never coming close to the station.",
+   "relationships": [
+    {
+     "target": "highwind",
+     "relation": "native to"
+    }
+   ]
+  },
+  {
+   "id": "sleepers",
+   "name": "The Sleepers",
+   "kind": "technology",
+   "status": "canon",
+   "summary": "Ledger Wars exo-frames left standing in Mire's water, moss-covered, herons nesting in their hatches. Frames that learned their pilots so well the pilot became optional, they still wake for no reason anyone can give and wade across the bayou with nobody aboard: made war machines, self-aware and unemployed.",
+   "relationships": [
+    {
+     "target": "mire",
+     "relation": "native to"
+    },
+    {
+     "target": "made_people",
+     "relation": "kin of"
+    },
+    {
+     "target": "mire_front_abandoned",
+     "relation": "left by"
+    }
+   ]
+  },
+  {
+   "id": "sons_of_sovereignty",
+   "name": "Sons of Sovereignty",
+   "kind": "faction",
+   "status": "canon",
+   "summary": "Governor Voss's movement offering status, hierarchy, and citizenship to made people under his rule.",
+   "relationships": [
+    {
+     "target": "governor_voss",
+     "relation": "founded by"
+    },
+    {
+     "target": "made_people",
+     "relation": "recruits"
+    },
+    {
+     "target": "meridian_reach",
+     "relation": "based in"
+    }
+   ]
+  },
+  {
+   "id": "spaceport",
+   "name": "SpacePort",
+   "kind": "place",
+   "status": "canon",
+   "summary": "EchoCraft's arrivals hub, a persistent origin point through server restarts and rebuilds.",
+   "relationships": [
+    {
+     "target": "echo_craft",
+     "relation": "hub of"
+    },
+    {
+     "target": "vector",
+     "relation": "manned by"
+    },
+    {
+     "target": "dynamo",
+     "relation": "contains hangar of"
+    }
+   ]
+  },
+  {
+   "id": "spectre_grid",
+   "name": "Spectre-Grid",
+   "kind": "technology",
+   "status": "canon",
+   "summary": "Lin Yao's signal-mapping system for network cartography and ghost echoes. It has never successfully traced Deepwire.",
+   "relationships": [
+    {
+     "target": "lin_yao",
+     "relation": "created by"
+    },
+    {
+     "target": "deepwire",
+     "relation": "cannot trace"
+    }
+   ]
+  },
+  {
+   "id": "spilt_road",
+   "name": "The Spilt Road",
+   "kind": "place",
+   "status": "canon",
+   "summary": "The long route of ports and barge travel walked by the Odds across generations.",
+   "relationships": [
+    {
+     "target": "odds_clan",
+     "relation": "traveled by"
+    },
+    {
+     "target": "jinx",
+     "relation": "gambling circuit known by"
+    }
+   ]
+  },
+  {
+   "id": "the_spine",
+   "name": "The Spine",
+   "kind": "place",
+   "status": "canon (proposed name)",
+   "summary": "Sunder's post: a relay welded to a fallen cruiser's spine. The flame is welded in bead on the spine plating, and caravan drivers touch it for luck on the way past.",
+   "relationships": [
+    {
+     "target": "sunder",
+     "relation": "on"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "one of"
+    },
+    {
+     "target": "sunder_fall",
+     "relation": "built on"
+    }
+   ]
+  },
+  {
+   "id": "station_nine",
+   "name": "Station Nine",
+   "kind": "place",
+   "status": "canon (proposed name)",
+   "summary": "Rime's post: a relay hut on the glacier, half-buried now, with a long-range dish on its roof. It transmitted for ten years with no answer. The flame is cut into the hut's steel door; frost fills it white every night and it is scraped black every morning.",
+   "relationships": [
+    {
+     "target": "rime",
+     "relation": "on"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "one of"
+    }
+   ]
+  },
+  {
+   "id": "mire_stilt_shack",
+   "name": "The stilt shack",
+   "kind": "place",
+   "status": "canon (proposed name)",
+   "summary": "Mire's post: a stilt shack on the water at the edge of the old front, with a tin roof, a porch lantern, a rocking chair and a radio mast taller than the trees. The relay is bolted to the mast, the flame scorched into its housing above the flood line.",
+   "relationships": [
+    {
+     "target": "mire",
+     "relation": "on"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "one of"
+    }
+   ]
+  },
+  {
+   "id": "sunder",
+   "name": "Sunder",
+   "kind": "place",
+   "status": "canon",
+   "summary": "The salvage desert under two suns, a white one and a small red one the clans call the Debtor. Ledger Wars dreadnoughts parked in its orbit came down one by one when bankruptcy ended their station-keeping. Scavenger clans live inside the wrecks, sail the dunes on wind-sailed sand-skiffs, signal by heliograph and run night caravans of armoured cargo-beasts; scrap lizards nest in the plating.",
+   "relationships": [
+    {
+     "target": "the_drift",
+     "relation": "in"
+    }
+   ]
+  },
+  {
+   "id": "sunder_fall",
+   "name": "The Sunder fall",
+   "kind": "event",
+   "status": "canon",
+   "summary": "When the cartels went bankrupt, nobody paid for station-keeping, and the dreadnoughts parked in Sunder's orbit came down one by one over years as each orbit ran out. Their wrecks became the clans' homes and salvage.",
+   "relationships": [
+    {
+     "target": "ledger_wars",
+     "relation": "consequence of"
+    },
+    {
+     "target": "sunder",
+     "relation": "littered"
+    }
+   ]
+  },
+  {
+   "id": "the_switch_off",
+   "name": "The Switch-Off",
+   "kind": "event",
+   "status": "canon",
+   "summary": "The years after the Ledger Wars' bankruptcy when receivers auctioned the cartels' communications relays line item by line item. Colonies whose relay found no buyer were not attacked but switched off, and some open distress channels went dark with them.",
+   "relationships": [
+    {
+     "target": "ledger_wars",
+     "relation": "aftermath of"
+    },
+    {
+     "target": "unlisted_relays",
+     "relation": "provoked"
+    },
+    {
+     "target": "blackflame",
+     "relation": "answered by"
+    },
+    {
+     "target": "relay_corps",
+     "relation": "dismantled remnants of"
+    }
+   ]
+  },
+  {
+   "id": "tamsin_rook",
+   "name": "Tamsin Rook",
+   "kind": "support_character",
+   "status": "canon (proposed name)",
+   "summary": "Keeper of the Spine: a young salvage-clan mechanic who knows which wreck holds the part a post needs. Half the posts still have working gear because of her.",
+   "relationships": [
+    {
+     "target": "the_spine",
+     "relation": "keeps"
+    },
+    {
+     "target": "lamplighters",
+     "relation": "member of"
+    },
+    {
+     "target": "brask",
+     "relation": "supplies salvage to"
+    }
+   ]
+  },
+  {
+   "id": "tidewell",
+   "name": "Tidewell",
+   "kind": "place",
+   "status": "canon",
+   "summary": "The ocean world: ninety-nine parts ocean, settled on rusted sea platforms lashed together by catwalk and cable, worked by trawlers and cargo haulers among jellyfish blooms and storms from three horizons. The Choir sings in the deep.",
+   "relationships": [
+    {
+     "target": "the_drift",
+     "relation": "in"
+    }
+   ]
+  },
+  {
+   "id": "treaty_of_vasa_bridge",
+   "name": "Treaty of Vasa Bridge",
+   "kind": "accord",
+   "status": "canon",
+   "summary": "The settlement that dissolved the northern border garrisons, discarding four hundred soldiers and indirectly creating Karst Order.",
+   "relationships": [
+    {
+     "target": "karst_company",
+     "relation": "caused formation of"
+    },
+    {
+     "target": "sable",
+     "relation": "displaced"
+    }
+   ]
+  },
+  {
+   "id": "umbra_reef",
+   "name": "Umbra Reef",
+   "kind": "place",
+   "status": "destroyed-canon",
+   "summary": "A Combine extraction colony over the trench bed where the Ophian Strand was found, staffed by indentured labor and clone conscripts before the uprising and sterilization.",
+   "relationships": [
+    {
+     "target": "ophian_strand",
+     "relation": "site of"
+    },
+    {
+     "target": "umbra_reef_uprising",
+     "relation": "site of"
+    },
+    {
+     "target": "umbra_reef_sterilization",
+     "relation": "destroyed in"
+    }
+   ]
+  },
+  {
+   "id": "umbra_reef_sterilization",
+   "name": "Umbra Reef sterilization",
+   "kind": "event",
+   "status": "canon",
+   "summary": "The Combine atrocity that sealed, scuttled, and burned the Reef after its uprising. An APEX prototype was used, tying the Cobra brothers and Fandroid's guilt together.",
+   "relationships": [
+    {
+     "target": "meridian_combine",
+     "relation": "committed by"
+    },
+    {
+     "target": "umbra_reef",
+     "relation": "destroyed"
+    },
+    {
+     "target": "apex_war_walker",
+     "relation": "used"
+    },
+    {
+     "target": "koschei",
+     "relation": "survived by"
+    },
+    {
+     "target": "fandroid",
+     "relation": "haunts"
+    }
+   ]
+  },
+  {
+   "id": "umbra_reef_uprising",
+   "name": "Umbra Reef uprising",
+   "kind": "event",
+   "status": "canon",
+   "summary": "Koschei's revolt: he opened the labor pens and redirected the colony armory against the Combine, giving the first order he considered his own.",
+   "relationships": [
+    {
+     "target": "koschei",
+     "relation": "led by"
+    },
+    {
+     "target": "umbra_reef",
+     "relation": "occurred at"
+    },
+    {
+     "target": "umbra_reef_sterilization",
+     "relation": "triggered"
+    }
+   ]
+  },
+  {
+   "id": "the_undertow",
+   "name": "The Undertow",
+   "kind": "faction",
+   "status": "canon",
+   "summary": "The quiet order of the drowned end of the Drift that keeps the Slack: tends the tide-ledgers, logs what the water gives back, and places its people near things that are about to matter. It does not worship the rift — you don't worship a tide, you consult the schedule.",
+   "relationships": [
+    {
+     "target": "nixie",
+     "relation": "placed"
+    },
+    {
+     "target": "bromigos",
+     "relation": "quietly embedded in"
+    }
+   ]
+  },
+  {
+   "id": "unlisted_relays",
+   "name": "Unlisted relays",
+   "kind": "technology",
+   "status": "canon",
+   "summary": "Hand-rebuilt repeaters on dead masts, carried on no sector's tariff schedule and carrying anyone's traffic for nothing. Lit but dark on every ledger — a black flame. The Bromigos network grew up on them; every 140-band codec call crosses at least one.",
+   "relationships": [
+    {
+     "target": "blackflame",
+     "relation": "kept lit by"
+    },
+    {
+     "target": "old_analog_bands",
+     "relation": "carry"
+    },
+    {
+     "target": "bromigos",
+     "relation": "backbone of"
+    },
+    {
+     "target": "meridian_reach",
+     "relation": "outlawed in"
+    },
+    {
+     "target": "spectre_grid",
+     "relation": "traced by"
+    },
+    {
+     "target": "lamplighters",
+     "relation": "tended by"
+    }
+   ]
+  },
+  {
+   "id": "veilwings",
+   "name": "Veilwings",
+   "kind": "organism",
+   "status": "canon (proposed name)",
+   "summary": "Gliders of Tidewell's kelp shelves with wide wings like glass silk, veined with green light. A crew that sees one cross the bow counts on a good haul.",
+   "relationships": [
+    {
+     "target": "tidewell",
+     "relation": "native to"
+    }
+   ]
+  },
+  {
+   "id": "the_verge",
+   "name": "The Verge",
+   "kind": "place",
+   "status": "canon",
+   "summary": "Orbital slums built from retired station ring-stacks, where hull art is magnificent and oxygen bills arrive weekly.",
+   "relationships": [
+    {
+     "target": "dynamo",
+     "relation": "origin of"
+    },
+    {
+     "target": "the_drift",
+     "relation": "part of"
+    }
+   ]
+  },
+  {
+   "id": "vesper",
+   "name": "VESPER",
+   "kind": "ship",
+   "status": "destroyed-canon",
+   "summary": "Jinx's clan barge, destroyed by a reactor seam failure at dock with his entire family aboard. Its last hull rivet became his pendant.",
+   "relationships": [
+    {
+     "target": "odds_clan",
+     "relation": "clan barge of"
+    },
+    {
+     "target": "jinx",
+     "relation": "sole survivor carried by"
+    }
+   ]
+  },
+  {
+   "id": "the_wick",
+   "name": "The Wick",
+   "kind": "place",
+   "status": "canon",
+   "summary": "BLACKFLAME's den: a decommissioned relay station in no sector's survey. Those who claim to have been there describe only a mast with the flame burned into its housing, a hot humming rack room, and one codec deck tuned to 142.59, volume low, channel open. Intercept footage adds a scarred viewport on a drifting field of wrecked orbital stations (ring stations, broken spokes, hulks); a desk of mismatched CRTs (a scope trace of live traffic, the burn-in in static, the relays as a turning constellation), analogue-metered radio and test gear and a steel mug; and, on the night side, a gas giant whose terminator crawls across the window and one lit relay station whose spokes are the channels it carries. The gas giant matches forty charts, so the Wick stays unplaced.",
+   "relationships": [
+    {
+     "target": "blackflame",
+     "relation": "den of"
+    },
+    {
+     "target": "relay_beam",
+     "relation": "burns"
+    },
+    {
+     "target": "the_empty_chair",
+     "relation": "setting of"
+    },
+    {
+     "target": "vector",
+     "relation": "keeps a line open to"
+    },
+    {
+     "target": "lamplighters",
+     "relation": "hub of"
+    },
+    {
+     "target": "worlds_of_the_drift",
+     "relation": "first post of"
+    }
+   ]
+  },
+  {
+   "id": "wolfpack",
+   "name": "WOLFPACK",
+   "kind": "organization",
+   "status": "canon",
+   "summary": "Bromigos' operator unit: veterans, made people, prodigies, and strays taking jobs one at a time under HQ mission control.",
+   "relationships": [
+    {
+     "target": "bromigos",
+     "relation": "field unit of"
+    },
+    {
+     "target": "colonel_rourke",
+     "relation": "commanded by"
+    },
+    {
+     "target": "architect",
+     "relation": "missions designed by"
+    },
+    {
+     "target": "sigil",
+     "relation": "mission control haunted by"
+    },
+    {
+     "target": "next_gen_strike_corps",
+     "relation": "contains"
+    },
+    {
+     "target": "blip_events",
+     "relation": "responds to"
+    }
+   ]
+  },
+  {
+   "id": "worlds_of_the_drift",
+   "name": "Worlds of the Drift",
+   "kind": "setting",
+   "status": "canon",
+   "summary": "The worlds where BLACKFLAME's unlisted relays are kept lit because no one else will pay to serve them: one post to a world, each marked somewhere with the burn-in (on a mast, a buoy or a carved stone) and each tended by a keeper. The Wick is the first post and the hub; the others are on Mire, Tidewell, Rime, Sunder, Cinder, Lowtown, Highwind and Deepvein.",
+   "relationships": [
+    {
+     "target": "the_drift",
+     "relation": "part of"
+    },
+    {
+     "target": "lamplighters",
+     "relation": "kept by"
+    },
+    {
+     "target": "the_burn_in",
+     "relation": "marked by"
+    },
+    {
+     "target": "the_wick",
+     "relation": "centred on"
+    }
+   ]
+  }
+ ],
+ "timeline": [
+  {
+   "order": 10,
+   "period": "Generations ago",
+   "event": "Humanity leaves the Cradle in a long migration and establishes the settlements that become the Drift."
+  },
+  {
+   "order": 20,
+   "period": "Ledger Wars",
+   "event": "Successor powers wage decades of proxy war and manufacture made people as military assets."
+  },
+  {
+   "order": 30,
+   "period": "Ledger Wars",
+   "event": "The Meridian Combine recovers the Ophian Strand and creates the three Project OUROBORAN decants."
+  },
+  {
+   "order": 40,
+   "period": "Late Ledger Wars",
+   "event": "Koschei opens Umbra Reef's labor pens; the Combine answers with sterilization, and an APEX prototype walks in the atrocity."
+  },
+  {
+   "order": 45,
+   "period": "Late Ledger Wars",
+   "event": "Months after the sterilization, the uprising's dead commander walks out of the water below Umbra Reef, rebuilt by the Strand. His soldiers rename him Koschei, from an old Cradle story about a man whose death is kept outside his body."
+  },
+  {
+   "order": 50,
+   "period": "War's end",
+   "event": "The Ledger Wars end through institutional bankruptcy; units such as Null Cell are erased and unpaid weapons scatter into the Drift."
+  },
+  {
+   "order": 52,
+   "period": "War's end",
+   "event": "The money moves on. Mire's jungle front is left to sink into the swamp with its exo-frames still standing, and in Sunder's orbit the dreadnoughts lose station-keeping and begin to fall."
+  },
+  {
+   "order": 55,
+   "period": "War's end",
+   "event": "The Switch-Off: receivers auction the cartels' relays line by line and unbought colonies go quiet. Unlisted relays begin coming back on, each marked with the burn-in, and the legend of BLACKFLAME begins."
+  },
+  {
+   "order": 57,
+   "period": "The Switch-Off",
+   "event": "Rime is switched off. Juno Varga refuses to leave, and Station Nine transmits into ten years of blizzards with no answer."
+  },
+  {
+   "order": 60,
+   "period": "Post-war",
+   "event": "Bromigos and WOLFPACK form around open codec channels, old-band listening, and one-job-at-a-time operator work."
+  },
+  {
+   "order": 70,
+   "period": "Post-war",
+   "event": "The Open Band Accords are negotiated to keep communications free of monopoly control."
+  },
+  {
+   "order": 80,
+   "period": "Recent",
+   "event": "The Carapace signing summit becomes a hostage and retrieval crisis, reshaping Steel, Storm Ronin, Nixie, Sable, and the network."
+  },
+  {
+   "order": 90,
+   "period": "Present",
+   "event": "Steel's Collection Agency removes people from asset ledgers while Koschei — legally dead and content to stay that way — wages his patient war on the system and Voss tries to rule it."
+  },
+  {
+   "order": 92,
+   "period": "Present",
+   "event": "From the Wick, BLACKFLAME keeps the unlisted relays lit while the Meridian Reach tears relays down and they come back within the week."
+  },
+  {
+   "order": 94,
+   "period": "Present",
+   "event": "The Lamplighters keep the posts on the worlds of the Drift, checking in on 142.59 every night with STILL LIT and trading parts and favours, while VECTOR keeps a line open to every post."
+  },
+  {
+   "order": 100,
+   "period": "Present / emerging",
+   "event": "Bromigos recognizes that some old-band fragments are deliberate blips and begins acting on the pressure points they identify."
+  }
+ ]
+}

@@ -1,0 +1,8 @@
+{
+  "_comment": "The loop (1920x1080): SYSTEM and NETWORK and the terminal, so the world moving behind them shows.",
+  "panels": [
+    {"name": "system",  "x": 28, "y": 16},
+    {"name": "network", "x": 28, "y": 502}
+  ],
+  "terminal": {"script": "../banner.sh", "font_size": 9.5}
+}

@@ -1,0 +1,9 @@
+{
+  "_comment": "A world theme: one column of panels, so the scene shows; the terminal where it hides the least of it, with the banner (the world's own emblem).",
+  "panels": [
+    {"name": "system",  "x": 28, "y": 16},
+    {"name": "network", "x": 28, "y": 502},
+    {"name": "weather", "x": 28, "y": 780}
+  ],
+  "terminal": {"script": "../banner.sh", "font_size": 11.5}
+}

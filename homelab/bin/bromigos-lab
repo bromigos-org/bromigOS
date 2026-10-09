@@ -1,0 +1,439 @@
+#!/usr/bin/env python3
+# bromigos:summary=Your homelab's console: status, GPUs and models, GPU jobs on the lab, doctor (no arguments: the live dashboard)
+# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | connect … | target …]
+# bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor
+# bromigos:menu=LAUNCH:Lab console
+"""bromigos lab: the homelab's console (docs/homelab.md, "The lab console"; the manual's Lab chapter).
+
+  bromigos lab                      the live dashboard (a terminal UI; Ctrl+Q quits)
+  bromigos lab status [--json] [--card ID]
+                                    nodes, GPUs, services, models, GitOps apps, storage, alerts,
+                                    jobs: one card per thing your lab has
+  bromigos lab models [--json]      what's installed and loaded where, with VRAM
+  bromigos lab models load NAME     load a model (Ollama); ComfyUI loads what a job needs
+  bromigos lab models unload NAME   unload one (an Ollama model; `comfyui`: what ComfyUI holds)
+  bromigos lab models add|remove|replace
+                                    Phase 2: changes the lab, through your homelab repo
+  bromigos lab models recommend|plan|upgrades …
+                                    the model catalog: the best open models for your GPUs
+                                    (docs/lab-models.md)
+  bromigos lab run KIND [PRESET] [options]
+                                    queue a job on the lab's GPUs; KIND: image, image-edit,
+                                    cutout, 3d, hologram, voice, transcribe, upscale, batch-llm, video
+      --prompt TEXT  --input FILE (repeat)  --text TEXT  --mask FILE  --aspect W:H
+      --voice ID  --model NAME  --name NAME  --language CODE  --scale N (upscale)
+      --cloud        allow paid providers for this job (never without it)
+      --wait         stay until it finishes; --json prints the job
+  bromigos lab run --kinds | --presets [--json]
+                                    what can run here, and why not when it can't
+  bromigos lab jobs [list] [--all] [--json]
+  bromigos lab jobs watch [ID]      follow the queue (or one job) until it settles
+  bromigos lab jobs logs ID | cancel ID | retry ID
+  bromigos lab doctor [--json] [--check ID]
+                                    checks with fixes in plain words: DNS, TLS, GPUs, disks
+                                    and NAS, backups, GitOps drift, expiring tokens, targets
+  bromigos lab connect [ARGS]       = bromigos setup homelab [ARGS]: find services, write homelab.toml
+  bromigos lab target [ARGS]        = bromigos target [ARGS]: where AI runs
+  bromigos lab deploy|restart|logs|backups|power|provision
+                                    Phase 2 and 3 (docs/PLAN.md): not built yet
+  bromigos lab serve                the job queue's service (bromigos-lab.service runs it)
+
+Results land in ~/Pictures/bromigos/lab/<kind>/. Jobs run on the lab only: none uses paid
+credits unless you pass --cloud.
+"""
+import argparse
+import json
+import os
+import shutil
+import sys
+import time
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+# this file's own tree first (/usr/lib/bromigos/lib when installed; homelab/lib and lib/ in a checkout)
+for p in reversed((os.path.join(os.path.dirname(HERE), "lib"), os.path.join(os.path.dirname(os.path.dirname(HERE)), "lib"),
+                   "/usr/lib/bromigos/lib")):
+    if os.path.isdir(p) and p not in sys.path:
+        sys.path.insert(0, p)
+
+from bromigos_homelab import jobqueue as Q  # noqa: E402
+from bromigos_homelab import jobs as J  # noqa: E402
+
+CATALOG_VERBS = ("recommend", "plan", "pick", "tiers", "upgrades", "refresh", "check")   # catalog.main (docs/lab-models.md)
+COLOR = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+MARK = {"ok": ("●", "32"), "warn": ("▲", "33"), "crit": ("✖", "31"), "unreachable": ("?", "31"), "empty": ("·", "2"),
+        "unknown": ("·", "2"), "fail": ("✖", "31"), "skip": ("·", "2")}
+PHASE2 = {
+    "deploy": "lab deploy changes the lab through your homelab repo (write, commit, push; Argo syncs). Phase 2.",
+    "restart": "lab restart (a Kubernetes rollout, through the repo or the API) is Phase 2.",
+    "logs": "lab logs (an app's logs from Loki or the cluster) is Phase 2. Until then: kubectl logs, or the "
+            "Workloads card's hint.",
+    "backups": "lab backups (list, run, restore) is Phase 2. The doctor already checks backup age.",
+    "power": "lab power (Wake-on-LAN, GPU power limits) is Phase 2.",
+    "provision": "lab provision (a new GPU box: profiles, inventory, plan, apply) is Phase 3 "
+                 "(docs/lab-provision.md).",
+    "update": "lab update (image versions in your lab repo) comes with provisioning, Phase 3.",
+}
+
+
+def c(text, code):
+    return f"\033[{code}m{text}\033[0m" if COLOR else text
+
+
+def mark(state):
+    m, code = MARK.get(state, ("·", "2"))
+    return c(m, code)
+
+
+def dump(doc):
+    print(json.dumps(doc, indent=1, default=str))
+
+
+def _cell(v):
+    if v is None:
+        return "-"
+    if isinstance(v, bool):
+        return "yes" if v else "no"
+    if isinstance(v, float):
+        return f"{v:.1f}" if abs(v) < 1000 else f"{v:.0f}"
+    if isinstance(v, (list, tuple)):
+        return ", ".join(str(x) for x in v)
+    return str(v)
+
+
+# ------------------------------------------------------------------ status
+def cmd_status(a):
+    from bromigos_homelab import console
+    doc = console.status(only={a.card} if a.card else None)
+    if a.json:
+        dump(doc)
+        return 0
+    if not doc.get("configured"):
+        print("No homelab connected: bromigos lab connect (it finds your services and writes homelab.toml).")
+        return 0
+    for cd in doc["cards"]:
+        print(f"{mark(cd['state'])} {c(cd['title'].upper(), '1')}  {cd.get('summary') or ''}")
+        if a.card or cd["state"] in ("warn", "crit", "unreachable"):
+            items = [i for i in cd["items"] if a.card or i.get("state") in ("warn", "crit")][:12 if not a.card else None]
+            cols = [k for k in cd.get("columns") or [] if k not in ("state",)][:None if a.card else 6]
+            for i in items:
+                print("   " + mark(i.get("state")) + " " + "  ".join(_cell(i.get(k))[:40] for k in cols))
+            for s, e in (cd.get("errors") or {}).items():
+                print(f"   {mark('crit')} {s}: {e}")
+    print(c(f"({doc['seconds']} s · bromigos lab status --card ID for one card in full · --json)", "2"))
+    return 0 if doc["state"] in ("ok", "empty") else 1
+
+
+# ------------------------------------------------------------------ models
+def cmd_models(a):
+    from bromigos_homelab import labmodels as M
+    verb = a.verb or "list"
+    if verb in ("add", "remove", "replace"):
+        print(f"lab models {verb} changes the lab: it goes through your homelab repo (the model set in its "
+              "ComfyUI or vLLM values, committed and pushed; Argo syncs it). That's Phase 2, not built yet "
+              "(docs/PLAN.md). Until then, edit the repo and push.", file=sys.stderr)
+        return 3
+    if verb in CATALOG_VERBS:
+        try:
+            from bromigos_homelab import catalog
+        except ImportError:
+            print("The model catalog isn't installed yet (it comes with bromigos-homelab: "
+                  "homelab/share/lab/models.toml, docs/lab-models.md).", file=sys.stderr)
+            return 3
+        return catalog.main([verb] + list(a.rest))
+    if verb in ("load", "unload"):
+        if not a.name:
+            print(f"bromigos lab models {verb} NAME (bromigos lab models lists them)", file=sys.stderr)
+            return 2
+        try:
+            msg = (M.load if verb == "load" else M.unload)(a.name, a.source)
+        except M.Refused as e:
+            print(str(e), file=sys.stderr)
+            return 3
+        except Exception as e:
+            print(f"{verb} failed: {e}", file=sys.stderr)
+            return 1
+        print(json.dumps({"ok": True, "message": msg}) if a.json else msg)
+        return 0
+    inv = M.inventory()
+    if a.json:
+        dump(inv)
+        return 0
+    if inv["gpus"]:
+        print(c("GPUS", "1"))
+        for g in inv["gpus"]:
+            v = (f"{(g.get('vram_used') or 0) / 2**30:.1f} / {g['vram_total'] / 2**30:.1f} GiB"
+                 if g.get("vram_total") else "unified memory")
+            print(f"  {g['name']:<14} {g.get('host') or '':<18} {v:<20} holds: {', '.join(g.get('holds') or []) or '-'}")
+    for s in inv["servers"]:
+        print(c(f"{s['kind'].upper()} · {s['source']}", "1") + f"  {s.get('detail') or ''}")
+        rows = s["models"] if a.all else [m for m in s["models"] if m.get("loaded") or not m.get("folder")]
+        hidden_n = len(s["models"]) - len(rows)
+        for m in rows:
+            st = m.get("state") or ("loaded" if m.get("loaded") else "installed" if m.get("loaded") is False
+                                    else "on disk")
+            vr = f"{m['vram'] / 2**30:.1f} GiB" if m.get("vram") else ""
+            can = f"  ({' / '.join(m['can'])})" if m.get("can") else ""
+            print(f"  {mark('ok' if m.get('loaded') else 'unknown')} {m['name'][:56]:<56} {st:<9} {vr:>9}{can}")
+        if hidden_n:
+            print(c(f"  … and {hidden_n} model files on disk (--all lists them)", "2"))
+    for s, e in inv["errors"].items():
+        print(f"{mark('crit')} {s}: {e}")
+    return 0
+
+
+# ------------------------------------------------------------------ run
+def cmd_run(a):
+    if a.kinds or a.presets:
+        if a.kinds:
+            ks = [k.describe() for k in J.kinds()]
+            if a.json:
+                dump(ks)
+                return 0
+            for k in ks:
+                v = f"{k['vram_mib'] / 1024:.1f} GiB" if k["vram_mib"] else "-"
+                print(f"{mark('ok' if k['available'] else 'skip')} {k['id']:<11} {k['summary'][:60]:<60} VRAM {v:>8}"
+                      + ("" if k["available"] else c(f"\n      not here: {k['why']}", "2")))
+        else:
+            ps = [p.describe() for p in J.presets()]
+            if a.json:
+                dump(ps)
+                return 0
+            for p in ps:
+                print(f"{mark('ok' if p['available'] else 'skip')} {p['id']:<15} {p['kind']:<9} {p['summary'][:60]}"
+                      + ("" if p["available"] else c(f"\n      not yet: {p['why']}", "2")))
+        return 0
+    if not a.kind:
+        print("bromigos lab run KIND [PRESET] …   (bromigos lab run --kinds lists them)", file=sys.stderr)
+        return 2
+    kind, preset = a.kind, a.preset
+    J.kinds()
+    if kind in J.PRESETS and kind not in J.KINDS:            # `lab run hologram` is a kind and a preset
+        kind, preset = None, kind
+    opts = {k: getattr(a, k) for k in ("voice", "model", "aspect", "mask", "name", "language") if getattr(a, k)}
+    if a.scale is not None:
+        opts["options"] = {"scale": a.scale}
+    try:
+        j = Q.submit(kind, preset, a.prompt, a.input or (), a.text, a.cloud, by=os.environ.get("BROMIGOS_LAB_BY", "you"),
+                     **opts)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 3
+    started = Q.ensure_service()
+    if not a.json:
+        print(f"queued {j['id']} ({j.get('preset') or j['kind']})" + (" · cloud allowed" if a.cloud else "")
+              + (f" · started {started}" if started else ""))
+        if Q.service_state() != "running":
+            print("the queue's service isn't running: systemctl --user start bromigos-lab.service "
+                  "(or bromigos lab serve)", file=sys.stderr)
+    if a.wait:
+        j = _watch(j["id"], quiet=a.json)
+    if a.json:
+        dump(Q.get(j["id"]))
+    return 0 if not a.wait or j["state"] == "succeeded" else 1
+
+
+# ------------------------------------------------------------------ jobs
+def _line(j):
+    age = time.time() - (j.get("created") or time.time())
+    when = f"{int(age // 60)}m" if age < 3600 else f"{int(age // 3600)}h" if age < 86400 else f"{int(age // 86400)}d"
+    st = {"succeeded": "ok", "failed": "crit", "waiting": "warn", "running": "ok", "queued": "unknown",
+          "cancelled": "unknown"}[j["state"]]
+    what = j.get("preset") or j["kind"]
+    detail = j.get("why") if j["state"] in ("waiting", "failed", "cancelled") else (
+        f"{int((j.get('progress') or 0) * 100)}% {j.get('progress_text') or ''}" if j["state"] == "running" else
+        ", ".join(os.path.basename(o) for o in (j.get("outputs") or [])[:2]) or (j.get("prompt") or j.get("text") or ""))
+    return f"{mark(st)} {j['id']:<28} {what:<14} {j['state']:<10} {when:>4}  {(detail or '')[:70]}"
+
+
+def _watch(jid=None, quiet=False):
+    seen = {}
+    while True:
+        js = [Q.get(jid)] if jid else Q.list_jobs(limit=15, states=("queued", "waiting", "running"))
+        for j in js:
+            key = (j["state"], j.get("why"), j.get("progress_text"))
+            if seen.get(j["id"]) != key and not quiet:
+                print(time.strftime("%H:%M:%S"), _line(j), flush=True)
+            seen[j["id"]] = key
+        if jid and js[0]["state"] in Q.DONE:
+            return js[0]
+        if not jid and not js:
+            if not quiet:
+                print("the queue is empty")
+            return None
+        time.sleep(1.0)
+
+
+def cmd_jobs(a):
+    verb = a.verb or "list"
+    try:
+        if verb == "list":
+            js = Q.list_jobs(limit=None if a.all else 20)
+            if a.json:
+                dump({"jobs": js, "service": Q.service_state()})
+                return 0
+            if not js:
+                print("no jobs yet: bromigos lab run KIND …")
+            for j in js:
+                print(_line(j))
+            print(c(f"service: {Q.service_state()} · results in {Q.out_root()}", "2"))
+            return 0
+        if verb == "watch":
+            j = _watch(a.id and Q.find(a.id)["id"])
+            return 0 if not j or j["state"] == "succeeded" else 1
+        if not a.id:
+            print(f"bromigos lab jobs {verb} ID", file=sys.stderr)
+            return 2
+        if verb == "logs":
+            j = Q.find(a.id)
+            if a.json:
+                dump({"job": j, "log": Q.read_log(j["id"])})
+            else:
+                print(_line(j))
+                sys.stdout.write(Q.read_log(j["id"]))
+            return 0
+        if verb == "cancel":
+            j = Q.cancel(a.id)
+            print(json.dumps(j) if a.json else f"{j['id']}: " + ("cancelled" if j["state"] == "cancelled" else
+                                                                 "cancelling" if j.get("cancel") else j["state"]))
+            return 0
+        if verb == "retry":
+            j = Q.retry(a.id, by=os.environ.get("BROMIGOS_LAB_BY", "you"))
+            Q.ensure_service()
+            print(json.dumps(j) if a.json else f"queued {j['id']} (a retry of {a.id})")
+            return 0
+    except (KeyError, ValueError) as e:
+        print(str(e).strip("'\""), file=sys.stderr)
+        return 3
+    print(f"bromigos lab jobs list|watch|logs|cancel|retry (not {verb})", file=sys.stderr)
+    return 2
+
+
+# ------------------------------------------------------------------ doctor
+def cmd_doctor(a):
+    from bromigos_homelab import doctor
+    doc = doctor.run(only={a.check} if a.check else None)
+    if a.json:
+        dump(doc)
+        return 0
+    if not doc.get("configured"):
+        print("No homelab connected: bromigos lab connect.")
+        return 0
+    last = None
+    for f in doc["findings"]:
+        if f["status"] == "ok" and not a.all:
+            continue
+        if f["check"] != last:
+            last = f["check"]
+        print(f"{mark(f['status'])} {f['title']}: {f['detail']}")
+        if f.get("fix"):
+            print(c(f"    → {f['fix']}", "2"))
+    s = doc["summary"]
+    print(f"{s['ok']} ok · {s['warn']} to look at · {s['fail']} failing · {s['skip']} skipped"
+          + ("" if a.all else c("  (--all shows the ok ones)", "2")))
+    return 1 if s["fail"] else 0
+
+
+# ------------------------------------------------------------------ the front door's aliases
+def _exec(argv):
+    exe = shutil.which(argv[0]) or argv[0]
+    try:
+        os.execv(exe, argv)
+    except OSError as e:
+        print(f"{argv[0]}: {e}", file=sys.stderr)
+        return 127
+
+
+def connect(rest):
+    exe = shutil.which("bromigos-setup-homelab") or "/usr/lib/bromigos/bin/bromigos-setup-homelab"
+    if not os.path.exists(exe):
+        exe = os.path.join(HERE, "bromigos-setup-homelab")
+    return _exec([exe] + rest)
+
+
+def target(rest):
+    return _exec([os.environ.get("BROMIGOS_BIN") or shutil.which("bromigos") or "/usr/bin/bromigos", "target"] + rest)
+
+
+def tui():
+    try:
+        from bromigos_homelab import tui as T
+    except ImportError as e:
+        if "textual" in str(e):
+            print("The dashboard needs Textual: sudo pacman -S python-textual. Meanwhile:\n", file=sys.stderr)
+            return cmd_status(argparse.Namespace(json=False, card=None))
+        raise
+    return T.main()
+
+
+def main(argv):
+    if not argv:
+        if sys.stdout.isatty() and sys.stdin.isatty():
+            return tui()
+        return cmd_status(argparse.Namespace(json=False, card=None))
+    cmd, rest = argv[0], argv[1:]
+    if cmd in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return 0
+    if cmd == "connect":
+        return connect(rest)
+    if cmd == "target":
+        return target(rest)
+    if cmd in PHASE2:
+        print(PHASE2[cmd], file=sys.stderr)
+        return 3
+    if cmd == "serve":
+        return Q.Service().serve()
+    if cmd in ("dashboard", "tui"):
+        return tui()
+    p = argparse.ArgumentParser(prog=f"bromigos lab {cmd}")
+    p.add_argument("--json", action="store_true")
+    if cmd == "status":
+        p.add_argument("--card")
+        return cmd_status(p.parse_args(rest))
+    if cmd == "models":
+        p.add_argument("verb", nargs="?")
+        p.add_argument("name", nargs="?")
+        p.add_argument("--source", help="the server, when a name is on several")
+        p.add_argument("--all", action="store_true", help="every model file on disk")
+        if rest and rest[0] in CATALOG_VERBS:                   # the model catalog (catalog.py, docs/lab-models.md)
+            return cmd_models(argparse.Namespace(verb=rest[0], rest=rest[1:], json="--json" in rest))
+        a = p.parse_args(rest)
+        a.rest = []
+        return cmd_models(a)
+    if cmd == "run":
+        p.add_argument("kind", nargs="?")
+        p.add_argument("preset", nargs="?")
+        p.add_argument("--prompt")
+        p.add_argument("--input", action="append")
+        p.add_argument("--text")
+        for o in ("voice", "model", "aspect", "mask", "name", "language"):
+            p.add_argument("--" + o)
+        p.add_argument("--scale", type=float, help="upscale: the factor (2 by default)")
+        p.add_argument("--cloud", action="store_true", help="allow paid providers for this job")
+        p.add_argument("--wait", action="store_true")
+        p.add_argument("--kinds", action="store_true")
+        p.add_argument("--presets", action="store_true")
+        return cmd_run(p.parse_args(rest))
+    if cmd == "jobs":
+        p.add_argument("verb", nargs="?")
+        p.add_argument("id", nargs="?")
+        p.add_argument("--all", action="store_true")
+        a = p.parse_args(rest)
+        if a.verb and a.verb not in ("list", "watch", "logs", "cancel", "retry") and not a.id:
+            a.verb, a.id = "logs", a.verb                          # `lab jobs ID`
+        return cmd_jobs(a)
+    if cmd == "doctor":
+        p.add_argument("--check")
+        p.add_argument("--all", action="store_true")
+        return cmd_doctor(p.parse_args(rest))
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except KeyboardInterrupt:
+        sys.exit(130)
+    except BrokenPipeError:
+        sys.exit(0)

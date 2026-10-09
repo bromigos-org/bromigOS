@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Swarm
+GenericName=Repository Hologram
+Comment=Your repositories and agents as a fleet of starships (SUPER+SHIFT+S; Esc closes)
+Icon=bromigos-swarm
+TryExec=bromigos-live
+Exec=bromigos-live open swarm
+Terminal=false
+Categories=Development;
+Keywords=swarm;repos;repositories;git;agents;fleet;ships;starships;hologram;deck;
+StartupNotify=false
+X-Bromigos-Menu=holo/swarm

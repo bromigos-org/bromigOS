@@ -1,0 +1,29 @@
+/* bromigOS's launcher settings (package bromigos-desktop): /usr/share/bromigos/default/rofi/config.rasi.
+   Don't edit; updates replace it. Your ~/.config/rofi/config.rasi imports it
+   (@import "/usr/share/bromigos/default/rofi/config.rasi") and sets your own after. */
+configuration {
+    show-icons: true;
+    terminal: "kitty";
+    click-to-exit: true;
+    steal-focus: true;
+    display-drun: "APPS";
+    display-run: "RUN";
+    display-window: "WINDOWS";
+    modes: "drun,run,window";
+    drun-display-format: "{name}";
+    kb-remove-to-eol: "";
+    kb-accept-entry: "Control+m,Return,KP_Enter";
+    kb-row-up: "Up,Control+p,Control+k";
+    kb-row-down: "Down,Control+n,Control+j";
+    me-select-entry: "MouseDPrimary";
+    me-accept-entry: "MousePrimary";
+    timeout {
+        action: "kb-cancel";
+        delay:  10;
+    }
+    filebrowser {
+        directories-first: true;
+        sorting-method:    "name";
+    }
+}
+@theme "/usr/share/bromigos/default/rofi/bromigos.rasi"

@@ -1,0 +1,38 @@
+{
+ "installed": {
+  "bromigos": "0.1.0.r640.g42db24c-1",
+  "bromigos-core": "0.1.0.r312.g42db24c-1",
+  "bromigos-desktop": "0.1.0.r120.g42db24c-1",
+  "bromigos-live": "0.1.0.r88.gcda67e8-1",
+  "bromigos-widgets": "0.1.0.r41.gcda67e8-1",
+  "bromigos-settings": "0.1.0.r19.g69a57d1-1",
+  "bromigos-vector": "0.1.0.r33.gc5f67cb-1",
+  "bromigos-homelab": "0.1.0.r77.g6e49feb-1",
+  "hyprland": "0.56.2-1",
+  "gtk4": "1:4.24.1-1",
+  "libadwaita": "1:1.10.0-1",
+  "pipewire": "1:1.6.9-1",
+  "wireplumber": "0.5.18-1",
+  "networkmanager": "1.56.0-1",
+  "linux": "7.2.9.arch1-1",
+  "python": "3.14.1-1"
+ },
+ "licenses": {
+  "bromigos": "MIT OR Apache-2.0",
+  "bromigos-core": "MIT OR Apache-2.0",
+  "bromigos-desktop": "MIT OR Apache-2.0",
+  "bromigos-live": "MIT OR Apache-2.0",
+  "bromigos-widgets": "MIT OR Apache-2.0",
+  "bromigos-settings": "MIT OR Apache-2.0",
+  "bromigos-vector": "MIT OR Apache-2.0",
+  "bromigos-homelab": "MIT OR Apache-2.0",
+  "hyprland": "BSD-3-Clause",
+  "gtk4": "LGPL-2.1-or-later",
+  "libadwaita": "LGPL-2.1-or-later",
+  "pipewire": "MIT",
+  "wireplumber": "MIT",
+  "networkmanager": "GPL-2.0-or-later AND LGPL-2.1-or-later",
+  "linux": "GPL-2.0-only",
+  "python": "PSF-2.0"
+ }
+}

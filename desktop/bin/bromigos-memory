@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+# bromigos:summary=VECTOR's memory and conversation history: what's kept, export it, clear it (recoverably), undo the clear
+# bromigos:args=[status] | export DIR | clear history|memory|all --yes | undo  [--json]
+# bromigos:examples=bromigos memory; bromigos memory export ~/Documents; bromigos memory clear history --yes; bromigos memory undo
+"""bromigos-memory (`bromigos memory`): what VECTOR keeps, as Settings › VECTOR shows it.
+Never touches his code or his protected files; only the two things he remembers:
+
+  his conversation history   ~/.local/state/bromigos/vector-chat.log (one JSON line per
+                             message, appended), and vector-sessions.json (their titles)
+  his long-term memory       ~/.local/share/bromigos/vector-memory.sqlite (the local store),
+                             or his space in the homelab's Gnosis (homelab.toml's gnosis
+                             source with both tokens: the store in force with [memory]
+                             backend = "auto" or "gnosis"), or another plugin's store, which
+                             only that plugin can clear
+
+  bromigos memory [status]           sizes, counts, the first and last conversation
+  bromigos memory export DIR         DIR/bromigos-vector-<stamp>/: the log, the titles and the
+                                     notes as JSON (only you can read it)
+  bromigos memory clear history|memory|all --yes
+                                     the history moved to ~/.local/state/bromigos/vector-archive/
+                                     <stamp>/; the notes copied there, then deleted in one
+                                     transaction (a running VECTOR keeps working); in Gnosis,
+                                     listed and archived first, then deleted one by one (a
+                                     running VECTOR's copy of the list forgets them at its next
+                                     refresh, within ten minutes)
+  bromigos memory undo               the last clear put back: the history moved back (what he
+                                     wrote since kept after it), the notes inserted again (in
+                                     Gnosis, filed again as they were written)
+"""
+import json
+import os
+import shutil
+import sqlite3
+import sys
+import time
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 2)[2]
+HOME = os.path.expanduser("~")
+# VECTOR's own paths (holo/vector/{brain,history,memory}.py): under ~, not XDG
+STATE = os.path.join(HOME, ".local/state/bromigos")
+LOG = os.path.join(STATE, "vector-chat.log")
+TITLES = os.path.join(STATE, "vector-sessions.json")
+DB = os.path.join(HOME, ".local/share/bromigos/vector-memory.sqlite")
+MIRROR = os.path.join(HOME, ".cache/bromigos/vector-memory.json")     # homelab_gnosis.py's list of his Gnosis notes
+ARCHIVE = os.path.join(STATE, "vector-archive")
+GAP = 600                     # a new conversation after 10 minutes' quiet (history.py)
+
+
+def _vector_toml():
+    """vector.toml as VECTOR resolves it (holo/paths.py conf()): the user's, the old
+    dotfiles place, the machine's, the package's."""
+    for p in (os.path.join(C.CONFIG, "bromigos/vector/vector.toml"), os.path.join(C.CONFIG, "bromigos/holo/vector.toml"),
+              "/etc/bromigos/vector/vector.toml", "/usr/lib/bromigos/vector/vector.toml"):
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def backend():
+    p = _vector_toml()
+    try:
+        b = str((C.read_toml(p).get("memory") or {}).get("backend", "auto")) if p else "auto"
+    except Fail:
+        b = "auto"
+    return b, p
+
+
+def gnosis():
+    """homelab.toml's gnosis source when VECTOR's notes live there (bromigos-homelab, both
+    tokens resolve: homelab_gnosis.py registers his store on the same terms), else None."""
+    # installed: /usr/lib/bromigos/lib (on the path already); a checkout's own first
+    lib = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "homelab", "lib")
+    if os.path.isdir(os.path.join(lib, "bromigos_homelab")) and lib not in sys.path:
+        sys.path.insert(0, lib)
+    try:
+        import bromigos_homelab as HL
+        src = HL.source_of("gnosis")
+    except Exception:
+        return None
+    return src if src is not None and hasattr(src, "vector_ready") and src.vector_ready() else None
+
+
+def _mirror_count():
+    try:
+        with open(MIRROR) as f:
+            return len(json.load(f))
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def _ts(s):
+    try:
+        return time.mktime(time.strptime(s[:19], "%Y-%m-%dT%H:%M:%S"))
+    except (TypeError, ValueError):
+        return None
+
+
+def history():
+    """The chat log's size, messages, conversations, first and last."""
+    out = {"file": LOG, "titles": TITLES, "exists": os.path.exists(LOG), "bytes": 0, "messages": 0,
+           "conversations": 0, "first": None, "last": None}
+    if not out["exists"]:
+        return out
+    out["bytes"] = os.path.getsize(LOG)
+    last_t, convs = None, 0
+    with open(LOG, errors="replace") as f:
+        for line in f:
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            t = _ts(d.get("t"))
+            if t is None:
+                continue
+            if d.get("role") == "session_start" or last_t is None or t - last_t > GAP:
+                convs += 1
+            last_t = t
+            if d.get("role") in ("user", "vector", "pilot"):
+                out["messages"] += 1
+                out["first"] = out["first"] or d["t"]
+                out["last"] = d["t"]
+    out["conversations"] = convs
+    return out
+
+
+def _ro(path):
+    return sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
+
+
+def memory():
+    b, conf = backend()
+    g = gnosis() if b in ("auto", "gnosis") else None
+    # where his notes are: local, gnosis (in force), or plugin:<name> (a store only it can clear)
+    store = "gnosis" if g is not None else "local" if b in ("auto", "local") else f"plugin:{b}"
+    out = {"backend": b, "store": store, "config": conf, "file": DB, "local": store == "local",
+           "exists": os.path.exists(DB), "notes": None, "bytes": os.path.getsize(DB) if os.path.exists(DB) else 0}
+    if store == "gnosis":
+        # counted from VECTOR's own copy of the list (no network for a status)
+        out.update(notes=_mirror_count(), source=g.name,
+                   note=f"in your homelab's Gnosis (homelab.toml's {g.name}); clearing clears it there too")
+        return out
+    if b == "gnosis":
+        out["note"] = ("backend gnosis, but homelab.toml has no gnosis source whose two tokens resolve, "
+                       "so there's no Gnosis to clear or export")
+    elif b not in ("auto", "local"):
+        out["note"] = f"kept by the {b} plugin's store, which bromigos memory can't reach: clear or export it there"
+    elif b == "auto":
+        out["note"] = "auto: your homelab's Gnosis when homelab.toml has it, else this machine's"
+    if out["exists"]:
+        try:
+            with _ro(DB) as db:
+                out["notes"] = db.execute("SELECT count(*) FROM notes").fetchone()[0]
+                row = db.execute("SELECT min(created), max(created) FROM notes").fetchone()
+                out["first"] = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(row[0])) if row[0] else None
+                out["last"] = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(row[1])) if row[1] else None
+        except sqlite3.Error as e:
+            out["error"] = f"{DB}: {e}"
+    return out
+
+
+def archives():
+    try:
+        names = sorted(n for n in os.listdir(ARCHIVE) if os.path.isdir(os.path.join(ARCHIVE, n)))
+    except FileNotFoundError:
+        return []
+    out = []
+    for n in names:
+        try:
+            with open(os.path.join(ARCHIVE, n, "cleared.json")) as f:
+                d = json.load(f)
+        except (OSError, ValueError):
+            continue
+        out.append({"stamp": n, "what": d.get("what"), "at": d.get("at"), "undone": bool(d.get("undone"))})
+    return out
+
+
+def status(_args=None):
+    arch = archives()
+    last = next((a for a in reversed(arch) if not a["undone"]), None)
+    return {"history": history(), "memory": memory(), "archive": ARCHIVE, "archives": arch,
+            "can_undo": last is not None, "last_clear": last}
+
+
+def _notes(path):
+    with _ro(path) as db:
+        rows = db.execute("SELECT id, content, kind, created FROM notes ORDER BY id").fetchall()
+    return [{"id": i, "content": c, "kind": k, "created": cr} for i, c, k, cr in rows]
+
+
+def _private_dir(path):
+    os.makedirs(path, mode=0o700, exist_ok=False)
+    os.chmod(path, 0o700)
+
+
+def _copy(src, dst):
+    shutil.copyfile(src, dst)
+    os.chmod(dst, 0o600)
+
+
+def export(args):
+    if len(args) != 1:
+        raise Fail("bromigos memory export DIR")
+    base = os.path.abspath(os.path.expanduser(args[0]))
+    if not os.path.isdir(base):
+        raise Fail(f"{base} isn't a folder")
+    out = os.path.join(base, "bromigos-vector-" + time.strftime("%Y%m%d-%H%M%S"))
+    _private_dir(out)
+    files = []
+    for src in (LOG, TITLES):
+        if os.path.exists(src):
+            _copy(src, os.path.join(out, os.path.basename(src)))
+            files.append(os.path.basename(src))
+    m = memory()
+    notes = _notes(DB) if m["exists"] else None
+    if m["store"] == "gnosis":
+        try:
+            notes = (notes or []) + [dict(n, store="gnosis") for n in gnosis().vector_notes()]
+        except Exception as e:
+            shutil.rmtree(out, ignore_errors=True)
+            raise Fail(f"VECTOR's memory is in your homelab's Gnosis, which didn't answer ({e}); nothing exported")
+    if notes is not None:
+        p = os.path.join(out, "vector-memory.json")
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump({"backend": m["backend"], "store": m["store"], "notes": notes}, f, indent=1)
+        files.append("vector-memory.json")
+    if not files:
+        os.rmdir(out)
+        raise Fail("nothing to export: no history and no local memory yet")
+    return dict(status(), said=f"Exported to {out}", folder=out, files=files)
+
+
+def _forget_notes(db):
+    """Every note gone, and the full-text index with them (an external-content table)."""
+    db.execute("DELETE FROM notes")
+    db.execute("INSERT INTO notes_fts(notes_fts) VALUES ('delete-all')")
+
+
+def clear(args):
+    yes = C.flag(args, "--yes", False, takes=False)
+    what = args[0] if args else None
+    if what not in ("history", "memory", "all"):
+        raise Fail("bromigos memory clear history|memory|all --yes")
+    if not yes:
+        raise Fail(f"clearing VECTOR's {what} needs --yes (it's archived, and `bromigos memory undo` brings it back)")
+    m = memory() if what in ("memory", "all") else None
+    g, gnotes = None, []
+    if m and m["store"] == "gnosis":
+        g = gnosis()                      # his notes listed before anything changes: unreachable, nothing does
+        try:
+            gnotes = g.vector_notes()
+        except Exception as e:
+            raise Fail(f"VECTOR's memory is in your homelab's Gnosis, which didn't answer ({e}); nothing was cleared")
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    dest = os.path.join(ARCHIVE, stamp)
+    n = 1
+    while os.path.exists(dest):
+        n += 1
+        dest = os.path.join(ARCHIVE, f"{stamp}-{n}")
+    os.makedirs(ARCHIVE, mode=0o700, exist_ok=True)
+    _private_dir(dest)
+    record = {"what": what, "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "history": [], "notes": 0, "gnosis": []}
+    if what in ("history", "all"):
+        for src in (LOG, TITLES):
+            if os.path.exists(src):
+                os.replace(src, os.path.join(dest, os.path.basename(src)))   # the log is opened per line: safe
+                record["history"].append(os.path.basename(src))
+    if what in ("memory", "all"):
+        if m["store"] not in ("local", "gnosis"):
+            record["memory_note"] = m.get("note")
+        if m["exists"] and m["store"] in ("local", "gnosis"):   # with Gnosis: those left from before it
+            src = sqlite3.connect(DB, timeout=10)
+            try:
+                dst = sqlite3.connect(os.path.join(dest, "vector-memory.sqlite"))
+                with dst:
+                    src.backup(dst)
+                dst.close()
+                os.chmod(os.path.join(dest, "vector-memory.sqlite"), 0o600)
+                with src:
+                    record["notes"] = src.execute("SELECT count(*) FROM notes").fetchone()[0]
+                    _forget_notes(src)
+            finally:
+                src.close()
+        if gnotes:
+            # every note archived before the first goes: an interruption loses nothing
+            fd = os.open(os.path.join(dest, "gnosis-notes.json"), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w") as f:
+                json.dump({"source": g.name, "notes": gnotes}, f, indent=1)
+            for n in gnotes:
+                try:
+                    g.vector_forget(n["id"])
+                except Exception as e:
+                    record["gnosis_error"] = f"Gnosis stopped answering after {len(record['gnosis'])} notes ({e})"
+                    break
+                record["gnosis"].append(n["id"])
+            if os.path.exists(MIRROR):    # VECTOR's copy of the list, kept with the archive
+                os.replace(MIRROR, os.path.join(dest, "gnosis-mirror.json"))
+    if not record["history"] and not record["notes"] and not record["gnosis"]:
+        shutil.rmtree(dest, ignore_errors=True)
+        raise Fail(record.get("gnosis_error") or "nothing to clear" +
+                   (f" ({record['memory_note']})" if record.get("memory_note") else ""))
+    with open(os.path.join(dest, "cleared.json"), "w") as f:
+        json.dump(record, f, indent=1)
+    n = record["notes"] + len(record["gnosis"])
+    where = (f"{record['notes']} here, {len(record['gnosis'])} in Gnosis" if record["notes"] and record["gnosis"]
+             else f"{n} in Gnosis" if record["gnosis"] else f"{n}")
+    said = {"history": "History cleared", "memory": f"Memory cleared ({where} notes)",
+            "all": f"History and memory cleared ({where} notes)"}[what]
+    if record.get("gnosis_error"):
+        said += f"; {record['gnosis_error']}: run it again for the rest"
+    return dict(status(), said=said + " (archived: Undo brings it back)", archived=dest)
+
+
+def undo(_args):
+    arch = [a for a in archives() if not a["undone"]]
+    if not arch:
+        raise Fail("no clear to undo")
+    a = arch[-1]
+    dest = os.path.join(ARCHIVE, a["stamp"])
+    with open(os.path.join(dest, "cleared.json")) as f:
+        record = json.load(f)
+    for name in record.get("history") or []:
+        src, to = os.path.join(dest, name), os.path.join(STATE, name)
+        if not os.path.exists(src):
+            continue
+        if name == os.path.basename(LOG) and os.path.exists(to):
+            # what he wrote since the clear goes after the history that comes back
+            with open(src, "a") as out, open(to) as since:
+                shutil.copyfileobj(since, out)
+        elif name == os.path.basename(TITLES) and os.path.exists(to):
+            with open(src) as f:
+                titles = json.load(f)
+            with open(to) as f:
+                titles.update(json.load(f))
+            with open(src, "w") as f:
+                json.dump(titles, f)
+        os.replace(src, to)
+    restored = 0
+    saved = os.path.join(dest, "vector-memory.sqlite")
+    if record.get("notes") and os.path.exists(saved):
+        notes = []
+        with _ro(saved) as old:
+            notes = old.execute("SELECT id, content, kind, created, emb FROM notes ORDER BY id").fetchall()
+        db = sqlite3.connect(DB, timeout=10)
+        try:
+            with db:
+                for _id, content, kind, created, emb in notes:
+                    cur = db.execute("INSERT INTO notes (content, kind, created, emb) VALUES (?, ?, ?, ?)",
+                                     (content, kind, created, emb))
+                    db.execute("INSERT INTO notes_fts (rowid, content) VALUES (?, ?)", (cur.lastrowid, content))
+                    restored += 1
+        finally:
+            db.close()
+    refiled, left = 0, None
+    gone = set(record.get("gnosis") or [])
+    if gone:
+        with open(os.path.join(dest, "gnosis-notes.json")) as f:
+            archived = [n for n in json.load(f)["notes"] if n["id"] in gone]
+        g = gnosis()
+        if g is None:
+            left = "Gnosis isn't set up here now: its notes stay in the archive"
+        else:
+            for n in archived:
+                try:
+                    g.vector_file(n["content"], n.get("kind") or "note")
+                except Exception as e:
+                    left = f"Gnosis stopped answering after {refiled} notes ({e})"
+                    break
+                refiled += 1
+            record["gnosis"] = [n["id"] for n in archived[refiled:]]    # an undo again files the rest
+    bits = (["history"] if record.get("history") else []) + ([f"{restored} notes"] if restored else []) + \
+        ([f"{refiled} notes in Gnosis"] if refiled else [])
+    if left is None:
+        record["undone"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    else:                                 # what came back stays back: an undo again only files the rest
+        record["history"], record["notes"] = [], 0
+    with open(os.path.join(dest, "cleared.json"), "w") as f:
+        json.dump(record, f, indent=1)
+    said = "Back: " + (" and ".join(bits) or "nothing was left to restore")
+    if left:
+        if refiled == 0 and not bits:
+            raise Fail(left)
+        said += f"; {left}. Run bromigos memory undo again for the rest"
+    return dict(status(), said=said)
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "export": export, "clear": clear, "undo": undo}, USAGE))

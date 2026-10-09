@@ -1,0 +1,21 @@
+{
+  "_comment": "Hologram models (VECTOR's format: vector's tools/holo/collection.py and assets/holo/README.md). Boxes are [x0,x1, y0,y1, z0,z1] in fractions of the normalised bounding box (y up, front +z); a face goes to the first part whose box holds its centroid, else to the part with rest=true. bind names the live reading a part shows (VECTOR's holo/bind.py), empty for a part that only shapes the model. Sources are in src/; the baked NAME.holo.npz sit next to this file. Rebake: ~/.local/share/bromigos/venv/bin/python <vector>/tools/holo/bake.py --root THIS_DIR --preview",
+  "models": {
+  "low-note": {
+   "title": "THE LOW NOTE",
+   "subtitle": "Lowtown \u00b7 Della Ash's post",
+   "faces": 40000,
+   "max_edges": 16000,
+   "rot_y": 90,
+   "source": "src/low-note.glb",
+   "parts": [
+    {"id": "sign", "label": "NEON SIGN", "bind": "wick.beam", "hint": "The bar's sign hides the relay: a green ring where the second O should be, with a black glass flame inside it that never lights. A stray cat sleeps on it where the neon is warm. Lit while every channel on the network answers", "boxes": [[0.8, 1.0, 0.55, 0.93, 0.24, 0.47]], "explode": [0.4, 0.3, 1], "distance": 0.3},
+    {"id": "lamp", "label": "STREET LAMP", "bind": "", "hint": "Sodium light in the rain: it rains in Lowtown every day, and the neon never goes off", "boxes": [[0.0, 1.0, 0.08, 0.7, 0.0, 0.16]], "explode": [1, 0, 0.3], "distance": 0.24},
+    {"id": "stairs", "label": "STAIRWELL", "bind": "", "hint": "The stairs down to the Low Note, a basement jazz bar under the overpass. Della Ash plays its piano and hears everything said in her bar", "boxes": [[0.0, 1.0, 0.08, 0.5, 0.4, 0.67]], "explode": [0, -0.2, 1], "distance": 0.24},
+    {"id": "overpass", "label": "OVERPASS", "bind": "", "hint": "The elevated railway: trains run over the streets while hover-cabs weave between the towers", "boxes": [[0.0, 1.0, 0.86, 1.0, 0.0, 1.0], [0.0, 1.0, 0.08, 0.86, 0.68, 0.92], [0.08, 0.3, 0.08, 0.86, 0.1, 0.45]], "explode": [0, 1, 0], "distance": 0.26},
+    {"id": "pavement", "label": "PAVEMENT", "bind": "", "hint": "Wet asphalt with the signs doubled in the puddles. In Lowtown, what you know is worth more than what you own", "boxes": [[0.0, 1.0, 0.0, 0.08, 0.0, 1.0]], "explode": [0, -1, 0], "distance": 0.16},
+    {"id": "facade", "label": "FACADE", "bind": "", "hint": "Brick and fire escapes over the bar: the city's mesh has been sold three times over, but nobody bothers to own the old bands", "rest": true, "explode": [0, 0, -1], "distance": 0.14}
+   ]
+  }
+  }
+}

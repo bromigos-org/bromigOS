@@ -1,0 +1,15 @@
+# bromigOS: after the transaction (every package's files in place), each running Hyprland's
+# config is verified (Hyprland --verify-config, as its user), reloaded once when it
+# verifies, and auto-reload is put back as it was before bromigos-hypr-hold.hook. A config
+# that doesn't verify isn't reloaded: Hyprland keeps running what it ran, and this says why.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Path
+Target = usr/share/bromigos/default/hypr/*
+
+[Action]
+Description = Reloading Hyprland's config once, verified...
+When = PostTransaction
+Exec = /usr/bin/bromigos session release --pacman

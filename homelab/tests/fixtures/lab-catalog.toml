@@ -1,0 +1,564 @@
+# A small, made-up lab model catalog for the planner's tests (tests/test_lab_catalog.py).
+# The numbers are round on purpose: the tests check the logic, not the research.
+format = 1
+version = 1
+researched = "2026-10-01"
+
+[licence.apache-2]
+name = "Apache 2.0"
+commercial = "yes"
+permissive = true
+
+[licence.research]
+name = "Research licence"
+commercial = "no"
+
+[licence.regional]
+name = "Regional community licence"
+commercial = "conditional"
+conditions = "under 100M monthly users"
+territory = ["EU", "UK", "KR"]
+
+[capability.llm]
+title = "LLM"
+residency = "always"
+unit = "tok/s"
+scale = "bandwidth"
+[capability.code]
+title = "Code"
+residency = "always"
+unit = "tok/s"
+[capability.embed]
+title = "Embeddings"
+residency = "always"
+unit = "k tok/s"
+[capability.tts]
+title = "TTS"
+residency = "always"
+unit = "x realtime"
+scale = "compute"
+[capability.stt]
+title = "STT"
+residency = "always"
+unit = "x realtime"
+scale = "compute"
+[capability.image]
+title = "Image"
+unit = "s/image"
+better = "lower"
+scale = "compute"
+[capability.image-edit]
+title = "Image edit"
+unit = "s/image"
+better = "lower"
+scale = "compute"
+[capability.video]
+title = "Video"
+unit = "min/clip"
+better = "lower"
+scale = "compute"
+[capability.3d]
+title = "3D"
+unit = "s/mesh"
+better = "lower"
+scale = "compute"
+[capability.cutout]
+title = "Cutout"
+unit = "s/image"
+better = "lower"
+scale = "compute"
+[capability.upscale]
+title = "Upscale"
+unit = "s/image"
+better = "lower"
+scale = "compute"
+[capability.ocr]
+title = "OCR"
+unit = "s/page"
+better = "lower"
+scale = "compute"
+[capability.vision]
+title = "Vision"
+residency = "always"
+unit = "tok/s"
+
+[gpu."RTX 4090"]
+vram_gib = 23.99
+arch = "ada"
+bandwidth = 1008
+compute = 165
+[gpu."RTX 5090"]
+vram_gib = 31.84
+arch = "blackwell"
+bandwidth = 1792
+compute = 209
+[gpu."RTX 5070"]
+vram_gib = 11.94
+arch = "blackwell"
+bandwidth = 672
+compute = 62
+[gpu."RTX 3060"]
+vram_gib = 11.76
+arch = "ampere"
+bandwidth = 360
+compute = 25
+[gpu.GB10]
+vram_gib = 119.0
+arch = "blackwell"
+bandwidth = 273
+compute = 62
+unified = true
+usable = 0.8
+match = ["gb10 shared", "dgx spark"]
+[gpu."RX 7900 XTX"]
+vendor = "amd"
+vram_gib = 23.98
+arch = "rdna3"
+bandwidth = 960
+compute = 123
+[gpu."H100"]
+vram_gib = 79.6
+arch = "hopper"
+bandwidth = 3350
+compute = 989
+
+# ---------------------------------------------------------------- LLMs
+[[model]]
+id = "dense-70b"
+name = "Dense 70B"
+family = "dense"
+capabilities = ["llm"]
+licence = "apache-2"
+quality = 90
+params_b = 70
+active_b = 70
+kv_kib_per_token = 320
+cite = ["fixture"]
+  [[model.variant]]
+  id = "awq"
+  runtime = "vllm"
+  quant = "AWQ"
+  weights_gib = 36
+  vram_gib = 44
+  speed = 30
+  speed_ref = "RTX 4090"
+  split = [2, 4]
+  [[model.variant]]
+  id = "q4"
+  runtime = "llama.cpp"
+  quant = "Q4_K_M"
+  weights_gib = 40
+  vram_gib = 44
+  speed = 22
+  speed_ref = "RTX 4090"
+  vendors = ["nvidia", "amd", "apple"]
+
+[[model]]
+id = "moe-30b"
+name = "MoE 30B-A3B"
+family = "moe"
+released = "2026-05"
+capabilities = ["llm", "vision"]
+licence = "apache-2"
+quality = { llm = 82, vision = 75 }
+params_b = 30
+active_b = 3
+kv_kib_per_token = 96
+cite = ["fixture"]
+  [[model.variant]]
+  id = "fp8"
+  runtime = "vllm"
+  quant = "FP8"
+  weights_gib = 30
+  vram_gib = 33
+  speed = 140
+  speed_ref = "RTX 5090"
+  [[model.variant]]
+  id = "nvfp4"
+  runtime = "vllm"
+  quant = "NVFP4"
+  weights_gib = 17
+  vram_gib = 20
+  speed = 190
+  speed_ref = "RTX 5090"
+  arch = ["blackwell"]
+  match = ["*moe-30b*nvfp4*"]
+  [[model.variant]]
+  id = "q4"
+  runtime = "llama.cpp"
+  quant = "Q4_K_M"
+  weights_gib = 18
+  vram_gib = 20
+  speed = 150
+  speed_ref = "RTX 5090"
+  vendors = ["nvidia", "amd", "apple"]
+  match = ["*moe-30b*q4*"]
+
+[[model]]
+id = "moe-30b-v2"
+name = "MoE 30B-A3B v2"
+family = "moe"
+released = "2026-09"
+capabilities = ["llm", "vision"]
+licence = "apache-2"
+quality = { llm = 86, vision = 78 }
+params_b = 30
+active_b = 3
+kv_kib_per_token = 96
+cite = ["fixture"]
+  [[model.variant]]
+  id = "nvfp4"
+  runtime = "vllm"
+  quant = "NVFP4"
+  weights_gib = 17
+  vram_gib = 20
+  speed = 190
+  speed_ref = "RTX 5090"
+  arch = ["blackwell"]
+
+[[model]]
+id = "small-8b"
+name = "Small 8B"
+family = "small"
+capabilities = ["llm"]
+licence = "apache-2"
+quality = 70
+params_b = 8
+active_b = 8
+kv_kib_per_token = 128
+cite = ["fixture"]
+  [[model.variant]]
+  id = "q4"
+  runtime = "llama.cpp"
+  quant = "Q4_K_M"
+  weights_gib = 5
+  vram_gib = 6.5
+  speed = 120
+  speed_ref = "RTX 4090"
+  vendors = ["nvidia", "amd", "apple"]
+  [[model.variant]]
+  id = "cpu"
+  runtime = "llama.cpp"
+  quant = "Q4_K_M"
+  weights_gib = 5
+  vram_gib = 0
+  ram_gib = 8
+  speed = 8
+  speed_ref = "cpu"
+  vendors = ["cpu"]
+
+# ---------------------------------------------------------------- voice, embeddings
+[[model]]
+id = "tts-big"
+name = "TTS 1.7B"
+family = "tts"
+released = "2026-01"
+capabilities = ["tts"]
+licence = "apache-2"
+quality = 88
+cite = ["fixture"]
+  [[model.variant]]
+  id = "bf16"
+  runtime = "voice"
+  quant = "BF16"
+  vram_gib = 5
+  speed = 3
+  speed_ref = "RTX 4090"
+  match = ["Org/TTS-1.7B*"]
+
+[[model]]
+id = "tts-small"
+name = "TTS 0.6B"
+family = "tts"
+capabilities = ["tts"]
+licence = "apache-2"
+quality = 80
+cite = ["fixture"]
+  [[model.variant]]
+  id = "bf16"
+  runtime = "voice"
+  quant = "BF16"
+  vram_gib = 2.5
+  speed = 5
+  speed_ref = "RTX 4090"
+  [[model.variant]]
+  id = "cpu"
+  runtime = "voice"
+  quant = "FP32"
+  vram_gib = 0
+  ram_gib = 2
+  speed = 1.2
+  speed_ref = "cpu"
+  vendors = ["cpu"]
+
+[[model]]
+id = "stt"
+name = "STT turbo"
+family = "stt"
+capabilities = ["stt"]
+licence = "apache-2"
+quality = 85
+cite = ["fixture"]
+  [[model.variant]]
+  id = "fp16"
+  runtime = "voice"
+  quant = "FP16"
+  vram_gib = 2
+  speed = 60
+  speed_ref = "RTX 4090"
+  match = ["large-v3-turbo"]
+  [[model.variant]]
+  id = "cpu"
+  runtime = "voice"
+  quant = "INT8"
+  vram_gib = 0
+  ram_gib = 2
+  speed = 4
+  speed_ref = "cpu"
+  vendors = ["cpu"]
+
+[[model]]
+id = "embed"
+name = "Embed 0.6B"
+capabilities = ["embed"]
+licence = "apache-2"
+quality = 80
+cite = ["fixture"]
+  [[model.variant]]
+  id = "bf16"
+  runtime = "vllm"
+  quant = "BF16"
+  vram_gib = 1.5
+  speed = 20
+  speed_ref = "RTX 4090"
+  [[model.variant]]
+  id = "cpu"
+  runtime = "onnx"
+  quant = "FP32"
+  vram_gib = 0
+  ram_gib = 2
+  speed = 1
+  speed_ref = "cpu"
+  vendors = ["cpu"]
+
+# ---------------------------------------------------------------- image, video, 3D
+[[model]]
+id = "img-a"
+name = "Image A"
+family = "img-a"
+released = "2026-03"
+capabilities = ["image", "image-edit"]
+licence = "research"
+quality = 85
+cite = ["fixture"]
+  [[model.variant]]
+  id = "int8"
+  runtime = "comfyui"
+  quant = "INT8"
+  quality_delta = 0
+  vram_gib = 17
+  speed = 20
+  speed_ref = "RTX 5090"
+  workflow = "img-a"
+  match = ["diffusion_models/img_a_int8*"]
+
+[[model]]
+id = "img-a2"
+name = "Image A 2"
+family = "img-a"
+released = "2026-08"
+capabilities = ["image", "image-edit"]
+licence = "research"
+quality = 89
+cite = ["fixture"]
+  [[model.variant]]
+  id = "int8"
+  runtime = "comfyui"
+  quant = "INT8"
+  quality_delta = 0
+  vram_gib = 18
+  speed = 20
+  speed_ref = "RTX 5090"
+
+[[model]]
+id = "img-b"
+name = "Image B"
+family = "img-b"
+capabilities = ["image"]
+licence = "apache-2"
+quality = 80
+cite = ["fixture"]
+  [[model.variant]]
+  id = "fp8"
+  runtime = "comfyui"
+  quant = "FP8"
+  quality_delta = 0
+  vram_gib = 12
+  speed = 10
+  speed_ref = "RTX 5090"
+  [[model.variant]]
+  id = "q4"
+  runtime = "comfyui"
+  quant = "Q4_K_M"
+  vram_gib = 7
+  speed = 14
+  speed_ref = "RTX 5090"
+  vendors = ["nvidia", "amd"]
+
+[[model]]
+id = "img-fancy"
+name = "Image Fancy"
+capabilities = ["image"]
+licence = "apache-2"
+quality = 99
+cite = ["fixture"]
+  [[model.variant]]
+  id = "bf16"
+  runtime = "diffusers"
+  quant = "BF16"
+  vram_gib = 10
+  speed = 10
+  speed_ref = "RTX 5090"
+  stack = "needs support: no ComfyUI workflow yet"
+
+[[model]]
+id = "vid-14b"
+name = "Video 14B"
+family = "vid"
+capabilities = ["video"]
+licence = "apache-2"
+quality = 85
+cite = ["fixture"]
+  [[model.variant]]
+  id = "fp8"
+  runtime = "comfyui"
+  quant = "FP8"
+  quality_delta = 0
+  vram_gib = 22
+  ram_gib = 32
+  speed = 6
+  speed_ref = "RTX 5090"
+  [[model.variant]]
+  id = "q4-offload"
+  runtime = "comfyui"
+  quant = "Q4_K_M"
+  vram_gib = 10
+  ram_gib = 40
+  speed = 14
+  speed_ref = "RTX 5090"
+  offload = true
+
+[[model]]
+id = "vid-5b"
+name = "Video 5B"
+family = "vid"
+capabilities = ["video"]
+licence = "apache-2"
+quality = 72
+cite = ["fixture"]
+  [[model.variant]]
+  id = "fp16"
+  runtime = "comfyui"
+  quant = "FP16"
+  vram_gib = 11
+  speed = 1.5
+  speed_ref = "RTX 5090"
+  fast = true
+  match = ["diffusion_models/vid_5b*"]
+
+[[model]]
+id = "mesh"
+name = "Mesh 2"
+family = "mesh"
+capabilities = ["3d"]
+licence = "regional"
+quality = 85
+cite = ["fixture"]
+  [[model.variant]]
+  id = "fp16"
+  runtime = "comfyui"
+  quant = "FP16"
+  vram_gib = 8
+  speed = 25
+  speed_ref = "RTX 5090"
+
+[[model]]
+id = "mesh-mit"
+name = "Mesh MIT"
+capabilities = ["3d"]
+licence = "apache-2"
+quality = 78
+cite = ["fixture"]
+  [[model.variant]]
+  id = "fp16"
+  runtime = "comfyui"
+  quant = "FP16"
+  vram_gib = 14
+  speed = 40
+  speed_ref = "RTX 5090"
+
+[[model]]
+id = "cut"
+name = "Cutout"
+capabilities = ["cutout"]
+licence = "apache-2"
+quality = 85
+cite = ["fixture"]
+  [[model.variant]]
+  id = "fp16"
+  runtime = "comfyui"
+  quant = "FP16"
+  vram_gib = 2
+  speed = 5
+  speed_ref = "RTX 5090"
+  vendors = ["nvidia", "amd", "cpu"]
+
+[[model]]
+id = "up"
+name = "Upscaler"
+capabilities = ["upscale"]
+licence = "apache-2"
+quality = 70
+cite = ["fixture"]
+  [[model.variant]]
+  id = "fp16"
+  runtime = "comfyui"
+  quant = "FP16"
+  vram_gib = 1
+  speed = 3
+  speed_ref = "RTX 5090"
+
+[[model]]
+id = "ocr"
+name = "OCR VLM"
+capabilities = ["ocr"]
+licence = "apache-2"
+quality = 80
+cite = ["fixture"]
+  [[model.variant]]
+  id = "bf16"
+  runtime = "vllm"
+  quant = "BF16"
+  vram_gib = 4
+  speed = 1
+  speed_ref = "RTX 4090"
+
+[[model]]
+id = "code-x"
+name = "Coder X"
+capabilities = ["code"]
+licence = "apache-2"
+quality = 80
+params_b = 30
+active_b = 3
+kv_kib_per_token = 96
+cite = ["fixture"]
+  [[model.variant]]
+  id = "q4"
+  runtime = "llama.cpp"
+  quant = "Q4_K_M"
+  weights_gib = 18
+  vram_gib = 20
+  speed = 150
+  speed_ref = "RTX 5090"
+  vendors = ["nvidia", "amd", "apple"]

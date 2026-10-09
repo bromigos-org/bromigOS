@@ -1,0 +1,2520 @@
+{
+ "http": {
+  "comfyui": {
+   "/models": [
+    "checkpoints",
+    "configs",
+    "loras",
+    "vae",
+    "text_encoders",
+    "diffusion_models",
+    "clip_vision",
+    "style_models",
+    "embeddings",
+    "diffusers",
+    "vae_approx",
+    "controlnet",
+    "gligen",
+    "upscale_models",
+    "latent_upscale_models",
+    "custom_nodes",
+    "datasets",
+    "hypernetworks",
+    "photomaker",
+    "classifiers",
+    "model_patches",
+    "audio_encoders",
+    "background_removal",
+    "frame_interpolation",
+    "geometry_estimation",
+    "optical_flow",
+    "detection",
+    "ultralytics_bbox",
+    "ultralytics_segm",
+    "ultralytics",
+    "mmdets_bbox",
+    "mmdets_segm",
+    "mmdets",
+    "sams",
+    "onnx",
+    "instantid",
+    "pulid",
+    "layer_model",
+    "rembg",
+    "ipadapter",
+    "dynamicrafter_models",
+    "mediapipe",
+    "inpaint",
+    "prompt_generator",
+    "t5",
+    "llm",
+    "animatediff_models",
+    "animatediff_motion_lora",
+    "animatediff_video_formats",
+    "kjnodes_fonts",
+    "seedvr2",
+    "LLM",
+    "lbw_models",
+    "inspire_prompts",
+    "unet_gguf",
+    "clip_gguf",
+    "insightface",
+    "facexlib",
+    "clip",
+    "rmbg",
+    "luts",
+    "VHS_video_formats"
+   ],
+   "/models/audio_encoders": [],
+   "/models/background_removal": [],
+   "/models/checkpoints": [
+    "hunyuan_3d_v2.1.safetensors"
+   ],
+   "/models/clip": [
+    "minimax_music3_text_encoder_pruned_int8_convrot.safetensors",
+    "mistral_3_small_flux2_fp4_mixed.safetensors",
+    "qwen3vl_8b_int8_convrot.safetensors",
+    "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+   ],
+   "/models/clip_gguf": [
+    "qwen3vl_32b_minimax_h3-Q4_K_M.gguf"
+   ],
+   "/models/clip_vision": [],
+   "/models/controlnet": [],
+   "/models/diffusion_models": [
+    "minimax_music3_dit_int8_convrot.safetensors",
+    "qwen_image_2.1_int8_convrot.safetensors",
+    "wan2.2_ti2v_5B_fp16.safetensors"
+   ],
+   "/models/loras": [
+    "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors"
+   ],
+   "/models/rmbg": [
+    "BiRefNet/BiRefNet-general.safetensors",
+    "BiRefNet/BiRefNet_config.py",
+    "BiRefNet/birefnet.py",
+    "BiRefNet/config.json"
+   ],
+   "/models/text_encoders": [
+    "minimax_music3_text_encoder_pruned_int8_convrot.safetensors",
+    "mistral_3_small_flux2_fp4_mixed.safetensors",
+    "qwen3vl_8b_int8_convrot.safetensors",
+    "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+   ],
+   "/models/unet_gguf": [
+    "MiniMax-H3-FL2VA-Pruned-Q4_K_M.gguf",
+    "MiniMax-H3-Ref2VA-Pruned-Q4_K_M.gguf",
+    "flux2-dev-Q5_K_S.gguf"
+   ],
+   "/models/upscale_models": [],
+   "/models/vae": [
+    "flux2-vae.safetensors",
+    "minimax_h3_audio_vae_fp32.safetensors",
+    "minimax_h3_video_vae_fp16.safetensors",
+    "minimax_music3_dav.safetensors",
+    "qwen_image_2.1_vae_bf16.safetensors",
+    "wan2.2_vae.safetensors"
+   ],
+   "/queue": {
+    "queue_pending": [],
+    "queue_running": []
+   },
+   "/system_stats": {
+    "devices": [
+     {
+      "index": 0,
+      "name": "cuda:0 NVIDIA GeForce RTX 5090 : cudaMallocAsync",
+      "torch_vram_free": 45959356,
+      "torch_vram_total": 67108864,
+      "type": "cuda",
+      "vram_free": 18694686908,
+      "vram_total": 33662173184
+     }
+    ],
+    "system": {
+     "argv": [
+      "./ComfyUI/main.py",
+      "--listen",
+      "--port",
+      "8188",
+      "--enable-manager",
+      "--enable-manager-legacy-ui",
+      "--listen",
+      "0.0.0.0",
+      "--port",
+      "8188",
+      "--use-pytorch-cross-attention"
+     ],
+     "comfy_package_versions": [
+      {
+       "installed": "1.53.6",
+       "name": "comfyui-frontend-package",
+       "required": "1.53.6"
+      },
+      {
+       "installed": "0.11.70",
+       "name": "comfyui-workflow-templates",
+       "required": "0.11.70"
+      },
+      {
+       "installed": "0.5.12",
+       "name": "comfyui-embedded-docs",
+       "required": "0.5.12"
+      },
+      {
+       "installed": "0.2.36",
+       "name": "comfy-kitchen",
+       "required": "0.2.36"
+      },
+      {
+       "installed": "0.5.5",
+       "name": "comfy-aimdo",
+       "required": "0.5.5"
+      }
+     ],
+     "comfyui_version": "0.38.0",
+     "deploy_environment": "local-git",
+     "embedded_python": false,
+     "installed_templates_version": "0.11.70",
+     "os": "linux",
+     "python_version": "3.13.15 (main, Aug 10 2026, 00:00:00) [GCC 14.3.1 20251022 (Red Hat 14.3.1-4)]",
+     "pytorch_version": "2.11.0+cu130",
+     "ram_free": 8933470208,
+     "ram_total": 42949672960,
+     "required_frontend_version": "1.53.6",
+     "required_templates_version": "0.11.70"
+    }
+   }
+  },
+  "litellm": {
+   "/v1/models": {
+    "__error__": "HTTPError: HTTP Error 401: Unauthorized"
+   }
+  },
+  "prometheus": {
+   "/api/v1/alerts": {
+    "data": {
+     "alerts": [
+      {
+       "activeAt": "2026-10-09T08:19:02.330854581Z",
+       "annotations": {
+        "description": "Based on recent sampling, the PersistentVolume claimed by sabnzbd-config in Namespace arr-stack  is expected to fill up within four days. Currently 15% is available.",
+        "runbook_url": "https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepersistentvolumefillingup",
+        "summary": "PersistentVolume is filling up."
+       },
+       "labels": {
+        "alertname": "KubePersistentVolumeFillingUp",
+        "endpoint": "https-metrics",
+        "instance": "192.0.2.11:10250",
+        "job": "kubelet",
+        "metrics_path": "/metrics",
+        "namespace": "arr-stack",
+        "node": "gpu-node",
+        "persistentvolumeclaim": "sabnzbd-config",
+        "service": "kube-prometheus-stack-kubelet",
+        "severity": "warning"
+       },
+       "state": "pending",
+       "value": "1.4998076877393746e-01"
+      },
+      {
+       "activeAt": "2026-10-09T08:19:32.330854581Z",
+       "annotations": {
+        "description": "Based on recent sampling, the PersistentVolume claimed by qbittorrent-config in Namespace arr-stack  is expected to fill up within four days. Currently 14.93% is available.",
+        "runbook_url": "https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepersistentvolumefillingup",
+        "summary": "PersistentVolume is filling up."
+       },
+       "labels": {
+        "alertname": "KubePersistentVolumeFillingUp",
+        "endpoint": "https-metrics",
+        "instance": "192.0.2.11:10250",
+        "job": "kubelet",
+        "metrics_path": "/metrics",
+        "namespace": "arr-stack",
+        "node": "gpu-node",
+        "persistentvolumeclaim": "qbittorrent-config",
+        "service": "kube-prometheus-stack-kubelet",
+        "severity": "warning"
+       },
+       "state": "pending",
+       "value": "1.4928440426860176e-01"
+      },
+      {
+       "activeAt": "2026-10-09T08:19:32.330854581Z",
+       "annotations": {
+        "description": "Based on recent sampling, the PersistentVolume claimed by unpackerr-config in Namespace arr-stack  is expected to fill up within four days. Currently 14.93% is available.",
+        "runbook_url": "https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepersistentvolumefillingup",
+        "summary": "PersistentVolume is filling up."
+       },
+       "labels": {
+        "alertname": "KubePersistentVolumeFillingUp",
+        "endpoint": "https-metrics",
+        "instance": "192.0.2.11:10250",
+        "job": "kubelet",
+        "metrics_path": "/metrics",
+        "namespace": "arr-stack",
+        "node": "gpu-node",
+        "persistentvolumeclaim": "unpackerr-config",
+        "service": "kube-prometheus-stack-kubelet",
+        "severity": "warning"
+       },
+       "state": "pending",
+       "value": "1.4928478593194192e-01"
+      },
+      {
+       "activeAt": "2026-10-09T07:03:56.618017145Z",
+       "annotations": {
+        "description": "This is an alert meant to ensure that the entire alerting pipeline is functional.\nThis alert is always firing, therefore it should always be firing in Alertmanager\nand always fire against a receiver. There are integrations with various notification\nmechanisms that send a notification when this alert is not firing. For example the\n\"DeadMansSnitch\" integration in PagerDuty.\n",
+        "runbook_url": "https://runbooks.prometheus-operator.dev/runbooks/general/watchdog",
+        "summary": "An alert that should always be firing to certify that Alertmanager is working properly."
+       },
+       "labels": {
+        "alertname": "Watchdog",
+        "severity": "none"
+       },
+       "state": "firing",
+       "value": "1e+00"
+      }
+     ]
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=100%2A%281-avg+by+%28instance%29%28rate%28node_cpu_seconds_total%7Bmode%3D%22idle%22%7D%5B5m%5D%29%29%29": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "instance": "192.0.2.12:9101"
+       },
+       "value": [
+        1791534017.964,
+        "1.362962962973302"
+       ]
+      },
+      {
+       "metric": {
+        "instance": "192.0.2.13:9100"
+       },
+       "value": [
+        1791534017.964,
+        "1.8950000000056866"
+       ]
+      },
+      {
+       "metric": {
+        "instance": "192.0.2.14:9100"
+       },
+       "value": [
+        1791534017.964,
+        "21.846296296301905"
+       ]
+      },
+      {
+       "metric": {
+        "instance": "192.0.2.15:9100"
+       },
+       "value": [
+        1791534017.964,
+        "1.25740740740784"
+       ]
+      },
+      {
+       "metric": {
+        "instance": "192.0.2.16:9100"
+       },
+       "value": [
+        1791534017.964,
+        "1.2885185185134262"
+       ]
+      },
+      {
+       "metric": {
+        "instance": "192.0.2.17:9100"
+       },
+       "value": [
+        1791534017.964,
+        "17.008333333338932"
+       ]
+      },
+      {
+       "metric": {
+        "instance": "192.0.2.11:9100"
+       },
+       "value": [
+        1791534017.964,
+        "26.21759259256241"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=100%2A%281-node_filesystem_avail_bytes%7Bfstype%3D~%22nfs.%2A%7Ccifs%7Csmb.%2A%22%7D%2Fnode_filesystem_size_bytes%7Bfstype%3D~%22nfs.%2A%7Ccifs%7Csmb.%2A%22%7D%29": {
+    "data": {
+     "result": [],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=100%2A%281-node_filesystem_avail_bytes%7Bmountpoint%3D%22%2F%22%7D%2Fnode_filesystem_size_bytes%7Bmountpoint%3D%22%2F%22%7D%29": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "device": "/dev/vda1",
+        "fstype": "ext4",
+        "host": "wings-node",
+        "instance": "192.0.2.12:9101",
+        "job": "wings-node-exporter",
+        "mountpoint": "/"
+       },
+       "value": [
+        1791534018.013,
+        "2.803943865093539"
+       ]
+      },
+      {
+       "metric": {
+        "container": "node-exporter",
+        "device": "/dev/nvme0n1p2",
+        "endpoint": "http-metrics",
+        "fstype": "ext4",
+        "instance": "192.0.2.13:9100",
+        "job": "node-exporter",
+        "mountpoint": "/",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-4brzl",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534018.013,
+        "29.38725166204431"
+       ]
+      },
+      {
+       "metric": {
+        "container": "node-exporter",
+        "device": "/dev/vda1",
+        "endpoint": "http-metrics",
+        "fstype": "ext4",
+        "instance": "192.0.2.14:9100",
+        "job": "node-exporter",
+        "mountpoint": "/",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-xk8ww",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534018.013,
+        "61.40765467943273"
+       ]
+      },
+      {
+       "metric": {
+        "container": "node-exporter",
+        "device": "/dev/nvme0n1p2",
+        "endpoint": "http-metrics",
+        "fstype": "ext4",
+        "instance": "192.0.2.15:9100",
+        "job": "node-exporter",
+        "mountpoint": "/",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-vsd7n",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534018.013,
+        "10.193767686461841"
+       ]
+      },
+      {
+       "metric": {
+        "container": "node-exporter",
+        "device": "/dev/nvme0n1p2",
+        "endpoint": "http-metrics",
+        "fstype": "ext4",
+        "instance": "192.0.2.16:9100",
+        "job": "node-exporter",
+        "mountpoint": "/",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-gm8v4",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534018.013,
+        "11.146268074484366"
+       ]
+      },
+      {
+       "metric": {
+        "container": "node-exporter",
+        "device": "/dev/vda1",
+        "endpoint": "http-metrics",
+        "fstype": "ext4",
+        "instance": "192.0.2.17:9100",
+        "job": "node-exporter",
+        "mountpoint": "/",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-z2gdn",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534018.013,
+        "58.00995723448502"
+       ]
+      },
+      {
+       "metric": {
+        "container": "node-exporter",
+        "device": "/dev/vda1",
+        "endpoint": "http-metrics",
+        "fstype": "ext4",
+        "instance": "192.0.2.11:9100",
+        "job": "node-exporter",
+        "mountpoint": "/",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-bnpvt",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534018.013,
+        "85.07125819070914"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=100%2A%281-node_memory_MemAvailable_bytes%2Fnode_memory_MemTotal_bytes%29": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "host": "wings-node",
+        "instance": "192.0.2.12:9101",
+        "job": "wings-node-exporter"
+       },
+       "value": [
+        1791534017.988,
+        "30.12869681578948"
+       ]
+      },
+      {
+       "metric": {
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.13:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-4brzl",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534017.988,
+        "88.37506644264779"
+       ]
+      },
+      {
+       "metric": {
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.14:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-xk8ww",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534017.988,
+        "53.790791050967826"
+       ]
+      },
+      {
+       "metric": {
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.15:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-vsd7n",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534017.988,
+        "91.57228048694739"
+       ]
+      },
+      {
+       "metric": {
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.16:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-gm8v4",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534017.988,
+        "94.44840703719272"
+       ]
+      },
+      {
+       "metric": {
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.17:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-z2gdn",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534017.988,
+        "37.39578145440705"
+       ]
+      },
+      {
+       "metric": {
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.11:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-bnpvt",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534017.988,
+        "82.34992334130816"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=DCGM_FI_DEV_FB_FREE": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.173.02",
+        "UUID": "GPU-26229d4d-ccd1-f706-ddd8-ab7ba41f0415",
+        "__name__": "DCGM_FI_DEV_FB_FREE",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "voice",
+        "exported_namespace": "voice",
+        "exported_pod": "voice-67f8b4fb4c-n2rbv",
+        "gpu": "0",
+        "hostname": "gpu-node",
+        "instance": "192.0.2.10:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GeForce RTX 5090",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "00000000:01:00.0",
+        "pod": "nvidia-dcgm-exporter-phl6s",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.436,
+        "17784"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=DCGM_FI_DEV_FB_USED": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.173.02",
+        "UUID": "GPU-26229d4d-ccd1-f706-ddd8-ab7ba41f0415",
+        "__name__": "DCGM_FI_DEV_FB_USED",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "voice",
+        "exported_namespace": "voice",
+        "exported_pod": "voice-67f8b4fb4c-n2rbv",
+        "gpu": "0",
+        "hostname": "gpu-node",
+        "instance": "192.0.2.10:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GeForce RTX 5090",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "00000000:01:00.0",
+        "pod": "nvidia-dcgm-exporter-phl6s",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.406,
+        "14317"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=DCGM_FI_DEV_GPU_TEMP": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.178.04",
+        "UUID": "GPU-d76fbbe1-aed5-27fe-661a-d6b3554af0df",
+        "__name__": "DCGM_FI_DEV_GPU_TEMP",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "unlimited-ocr",
+        "exported_namespace": "unlimited-ocr",
+        "exported_pod": "unlimited-ocr-65b9dcdb88-sv5j7",
+        "gpu": "0",
+        "hostname": "spark-3",
+        "instance": "192.0.2.19:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GB10",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "0000000F:01:00.0",
+        "pod": "nvidia-dcgm-exporter-rxjbq",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.527,
+        "44"
+       ]
+      },
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.178.04",
+        "UUID": "GPU-4f1ffc1c-f198-0143-8f81-65708eb369a9",
+        "__name__": "DCGM_FI_DEV_GPU_TEMP",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "vllm",
+        "exported_namespace": "vllm",
+        "exported_pod": "vllm-qwen-head-74786996d8-m5sb7",
+        "gpu": "0",
+        "hostname": "spark-1",
+        "instance": "192.0.2.20:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GB10",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "0000000F:01:00.0",
+        "pod": "nvidia-dcgm-exporter-kmtvm",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.527,
+        "43"
+       ]
+      },
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.178.04",
+        "UUID": "GPU-c7ab7fa0-b858-9929-1313-60d0b6a5b8e4",
+        "__name__": "DCGM_FI_DEV_GPU_TEMP",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "vllm",
+        "exported_namespace": "vllm",
+        "exported_pod": "vllm-qwen-worker-75bb954846-lkkc8",
+        "gpu": "0",
+        "hostname": "spark-2",
+        "instance": "192.0.2.21:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GB10",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "0000000F:01:00.0",
+        "pod": "nvidia-dcgm-exporter-5zstm",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.527,
+        "44"
+       ]
+      },
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.173.02",
+        "UUID": "GPU-26229d4d-ccd1-f706-ddd8-ab7ba41f0415",
+        "__name__": "DCGM_FI_DEV_GPU_TEMP",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "voice",
+        "exported_namespace": "voice",
+        "exported_pod": "voice-67f8b4fb4c-n2rbv",
+        "gpu": "0",
+        "hostname": "gpu-node",
+        "instance": "192.0.2.10:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GeForce RTX 5090",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "00000000:01:00.0",
+        "pod": "nvidia-dcgm-exporter-phl6s",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.527,
+        "49"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=DCGM_FI_DEV_GPU_UTIL": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.178.04",
+        "UUID": "GPU-d76fbbe1-aed5-27fe-661a-d6b3554af0df",
+        "__name__": "DCGM_FI_DEV_GPU_UTIL",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "unlimited-ocr",
+        "exported_namespace": "unlimited-ocr",
+        "exported_pod": "unlimited-ocr-65b9dcdb88-sv5j7",
+        "gpu": "0",
+        "hostname": "spark-3",
+        "instance": "192.0.2.19:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GB10",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "0000000F:01:00.0",
+        "pod": "nvidia-dcgm-exporter-rxjbq",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.508,
+        "0"
+       ]
+      },
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.178.04",
+        "UUID": "GPU-4f1ffc1c-f198-0143-8f81-65708eb369a9",
+        "__name__": "DCGM_FI_DEV_GPU_UTIL",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "vllm",
+        "exported_namespace": "vllm",
+        "exported_pod": "vllm-qwen-head-74786996d8-m5sb7",
+        "gpu": "0",
+        "hostname": "spark-1",
+        "instance": "192.0.2.20:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GB10",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "0000000F:01:00.0",
+        "pod": "nvidia-dcgm-exporter-kmtvm",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.508,
+        "0"
+       ]
+      },
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.178.04",
+        "UUID": "GPU-c7ab7fa0-b858-9929-1313-60d0b6a5b8e4",
+        "__name__": "DCGM_FI_DEV_GPU_UTIL",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "vllm",
+        "exported_namespace": "vllm",
+        "exported_pod": "vllm-qwen-worker-75bb954846-lkkc8",
+        "gpu": "0",
+        "hostname": "spark-2",
+        "instance": "192.0.2.21:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GB10",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "0000000F:01:00.0",
+        "pod": "nvidia-dcgm-exporter-5zstm",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.508,
+        "0"
+       ]
+      },
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.173.02",
+        "UUID": "GPU-26229d4d-ccd1-f706-ddd8-ab7ba41f0415",
+        "__name__": "DCGM_FI_DEV_GPU_UTIL",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "voice",
+        "exported_namespace": "voice",
+        "exported_pod": "voice-67f8b4fb4c-n2rbv",
+        "gpu": "0",
+        "hostname": "gpu-node",
+        "instance": "192.0.2.10:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GeForce RTX 5090",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "00000000:01:00.0",
+        "pod": "nvidia-dcgm-exporter-phl6s",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.508,
+        "0"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=DCGM_FI_DEV_POWER_USAGE": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.178.04",
+        "UUID": "GPU-d76fbbe1-aed5-27fe-661a-d6b3554af0df",
+        "__name__": "DCGM_FI_DEV_POWER_USAGE",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "unlimited-ocr",
+        "exported_namespace": "unlimited-ocr",
+        "exported_pod": "unlimited-ocr-65b9dcdb88-sv5j7",
+        "gpu": "0",
+        "hostname": "spark-3",
+        "instance": "192.0.2.19:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GB10",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "0000000F:01:00.0",
+        "pod": "nvidia-dcgm-exporter-rxjbq",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.548,
+        "11.67"
+       ]
+      },
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.178.04",
+        "UUID": "GPU-4f1ffc1c-f198-0143-8f81-65708eb369a9",
+        "__name__": "DCGM_FI_DEV_POWER_USAGE",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "vllm",
+        "exported_namespace": "vllm",
+        "exported_pod": "vllm-qwen-head-74786996d8-m5sb7",
+        "gpu": "0",
+        "hostname": "spark-1",
+        "instance": "192.0.2.20:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GB10",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "0000000F:01:00.0",
+        "pod": "nvidia-dcgm-exporter-kmtvm",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.548,
+        "9.987"
+       ]
+      },
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.178.04",
+        "UUID": "GPU-c7ab7fa0-b858-9929-1313-60d0b6a5b8e4",
+        "__name__": "DCGM_FI_DEV_POWER_USAGE",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "vllm",
+        "exported_namespace": "vllm",
+        "exported_pod": "vllm-qwen-worker-75bb954846-lkkc8",
+        "gpu": "0",
+        "hostname": "spark-2",
+        "instance": "192.0.2.21:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GB10",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "0000000F:01:00.0",
+        "pod": "nvidia-dcgm-exporter-5zstm",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.548,
+        "12.641"
+       ]
+      },
+      {
+       "metric": {
+        "DCGM_FI_DRIVER_VERSION": "580.173.02",
+        "UUID": "GPU-26229d4d-ccd1-f706-ddd8-ab7ba41f0415",
+        "__name__": "DCGM_FI_DEV_POWER_USAGE",
+        "container": "nvidia-dcgm-exporter",
+        "device": "nvidia0",
+        "endpoint": "gpu-metrics",
+        "exported_container": "voice",
+        "exported_namespace": "voice",
+        "exported_pod": "voice-67f8b4fb4c-n2rbv",
+        "gpu": "0",
+        "hostname": "gpu-node",
+        "instance": "192.0.2.10:9400",
+        "job": "nvidia-dcgm-exporter",
+        "modelName": "NVIDIA GeForce RTX 5090",
+        "namespace": "gpu-operator",
+        "pci_bus_id": "00000000:01:00.0",
+        "pod": "nvidia-dcgm-exporter-phl6s",
+        "service": "nvidia-dcgm-exporter"
+       },
+       "value": [
+        1791534020.548,
+        "76.82"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=argocd_app_info": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "arc-runners",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "arc-runners",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "arc-systems",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "arc-controller",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "argocd",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "argocd-image-updater",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://argoproj.github.io/argo-helm",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "argocd",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "homelab-apps",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "arr-stack",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "arr-stack",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "cert-manager",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "cert-manager",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://charts.jetstack.io",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "cloudflare-ddns",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "cloudflare-ddns",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "comfyui",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "comfyui",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "dozzle",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "dozzle",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "dragonfly",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "dragonfly",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "external-secrets",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "external-secrets",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://charts.external-secrets.io",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "gpu-operator",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "nvidia-gpu-operator",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://helm.ngc.nvidia.com/nvidia",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "homepage",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "homepage",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "litellm",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "litellm",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "monitoring",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "alloy",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://grafana.github.io/helm-charts",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "monitoring",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "kube-prometheus-stack",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://prometheus-community.github.io/helm-charts",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "monitoring",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "loki",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://grafana.github.io/helm-charts",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "neo4j",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "neo4j",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "nfs-provisioner",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "nfs-provisioner",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "open-webui",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "open-webui",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "pelican",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "pelican",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "pelican",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "pelican-exporter",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "rustfs",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "rustfs",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/rustfs/rustfs",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "searxng",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "searxng",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "traefik",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "traefik",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://traefik.github.io/charts",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "unlimited-ocr",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "unlimited-ocr",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "unpoller",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "unpoller",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "vault",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "vault",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "vllm",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "nas-volumes",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "vllm",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "vllm-qwen",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "vector",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "vector",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "external-secrets",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "external-secrets-config",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "rustfs",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "bromigos-pkgs",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "argocd_app_info",
+        "autosync_enabled": "true",
+        "container": "application-controller",
+        "dest_namespace": "voice",
+        "dest_server": "https://kubernetes.default.svc",
+        "endpoint": "metrics",
+        "exported_namespace": "argocd",
+        "health_status": "Healthy",
+        "instance": "192.0.2.18:8082",
+        "job": "argocd-application-controller",
+        "name": "voice",
+        "namespace": "argocd",
+        "pod": "argocd-application-controller-0",
+        "project": "homelab",
+        "repo": "https://github.com/bromigos-org/homelab",
+        "sync_status": "Synced"
+       },
+       "value": [
+        1791534019.222,
+        "1"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=count+by+%28instance%29%28node_cpu_seconds_total%7Bmode%3D%22idle%22%7D%29": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "instance": "192.0.2.12:9101"
+       },
+       "value": [
+        1791534018.073,
+        "10"
+       ]
+      },
+      {
+       "metric": {
+        "instance": "192.0.2.13:9100"
+       },
+       "value": [
+        1791534018.073,
+        "20"
+       ]
+      },
+      {
+       "metric": {
+        "instance": "192.0.2.14:9100"
+       },
+       "value": [
+        1791534018.073,
+        "8"
+       ]
+      },
+      {
+       "metric": {
+        "instance": "192.0.2.15:9100"
+       },
+       "value": [
+        1791534018.073,
+        "20"
+       ]
+      },
+      {
+       "metric": {
+        "instance": "192.0.2.16:9100"
+       },
+       "value": [
+        1791534018.073,
+        "20"
+       ]
+      },
+      {
+       "metric": {
+        "instance": "192.0.2.17:9100"
+       },
+       "value": [
+        1791534018.073,
+        "4"
+       ]
+      },
+      {
+       "metric": {
+        "instance": "192.0.2.11:9100"
+       },
+       "value": [
+        1791534018.073,
+        "8"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=min+by+%28model_group%29%28litellm_deployment_state%29": {
+    "data": {
+     "result": [
+      {
+       "metric": {},
+       "value": [
+        1791534020.358,
+        "0"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=node_load1": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "__name__": "node_load1",
+        "host": "wings-node",
+        "instance": "192.0.2.12:9101",
+        "job": "wings-node-exporter"
+       },
+       "value": [
+        1791534018.047,
+        "0.21"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "node_load1",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.13:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-4brzl",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534018.047,
+        "1.36"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "node_load1",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.14:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-xk8ww",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534018.047,
+        "0.63"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "node_load1",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.15:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-vsd7n",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534018.047,
+        "0.31"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "node_load1",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.16:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-gm8v4",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534018.047,
+        "0.04"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "node_load1",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.17:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-z2gdn",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534018.047,
+        "0.86"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "node_load1",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.11:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-bnpvt",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534018.047,
+        "0.68"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=node_uname_info": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "__name__": "node_uname_info",
+        "domainname": "(none)",
+        "host": "wings-node",
+        "instance": "192.0.2.12:9101",
+        "job": "wings-node-exporter",
+        "machine": "x86_64",
+        "nodename": "nas",
+        "release": "7.0.0-34-generic",
+        "sysname": "Linux",
+        "version": "#34-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:29:37 UTC 2026"
+       },
+       "value": [
+        1791534017.918,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "node_uname_info",
+        "container": "node-exporter",
+        "domainname": "(none)",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.13:9100",
+        "job": "node-exporter",
+        "machine": "aarch64",
+        "namespace": "monitoring",
+        "nodename": "spark-3",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-4brzl",
+        "release": "7.0.0-1019-nvidia",
+        "service": "kube-prometheus-stack-prometheus-node-exporter",
+        "sysname": "Linux",
+        "version": "#19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2"
+       },
+       "value": [
+        1791534017.918,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "node_uname_info",
+        "container": "node-exporter",
+        "domainname": "(none)",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.14:9100",
+        "job": "node-exporter",
+        "machine": "x86_64",
+        "namespace": "monitoring",
+        "nodename": "node-b",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-xk8ww",
+        "release": "7.0.0-34-generic",
+        "service": "kube-prometheus-stack-prometheus-node-exporter",
+        "sysname": "Linux",
+        "version": "#34-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:29:37 UTC 2026"
+       },
+       "value": [
+        1791534017.918,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "node_uname_info",
+        "container": "node-exporter",
+        "domainname": "(none)",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.15:9100",
+        "job": "node-exporter",
+        "machine": "aarch64",
+        "namespace": "monitoring",
+        "nodename": "spark-2",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-vsd7n",
+        "release": "7.0.0-1019-nvidia",
+        "service": "kube-prometheus-stack-prometheus-node-exporter",
+        "sysname": "Linux",
+        "version": "#19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2"
+       },
+       "value": [
+        1791534017.918,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "node_uname_info",
+        "container": "node-exporter",
+        "domainname": "(none)",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.16:9100",
+        "job": "node-exporter",
+        "machine": "aarch64",
+        "namespace": "monitoring",
+        "nodename": "spark-1",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-gm8v4",
+        "release": "7.0.0-1019-nvidia",
+        "service": "kube-prometheus-stack-prometheus-node-exporter",
+        "sysname": "Linux",
+        "version": "#19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2"
+       },
+       "value": [
+        1791534017.918,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "node_uname_info",
+        "container": "node-exporter",
+        "domainname": "(none)",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.17:9100",
+        "job": "node-exporter",
+        "machine": "x86_64",
+        "namespace": "monitoring",
+        "nodename": "node-a",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-z2gdn",
+        "release": "7.0.0-34-generic",
+        "service": "kube-prometheus-stack-prometheus-node-exporter",
+        "sysname": "Linux",
+        "version": "#34-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:29:37 UTC 2026"
+       },
+       "value": [
+        1791534017.918,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "node_uname_info",
+        "container": "node-exporter",
+        "domainname": "(none)",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.11:9100",
+        "job": "node-exporter",
+        "machine": "x86_64",
+        "namespace": "monitoring",
+        "nodename": "gpu-node",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-bnpvt",
+        "release": "7.0.0-30-generic",
+        "service": "kube-prometheus-stack-prometheus-node-exporter",
+        "sysname": "Linux",
+        "version": "#30-Ubuntu SMP PREEMPT_DYNAMIC Fri Jul 31 18:22:54 UTC 2026"
+       },
+       "value": [
+        1791534017.918,
+        "1"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=sum+by+%28model_group%29%28rate%28litellm_deployment_total_requests_total%5B1m%5D%29%29%2A60": {
+    "data": {
+     "result": [
+      {
+       "metric": {},
+       "value": [
+        1791534020.158,
+        "0"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=sum+by+%28model_group%29%28rate%28litellm_output_tokens_metric_total%5B1m%5D%29%29": {
+    "data": {
+     "result": [
+      {
+       "metric": {},
+       "value": [
+        1791534020.27,
+        "0"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=up": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "kube-state-metrics",
+        "endpoint": "http",
+        "instance": "192.0.2.22:8080",
+        "job": "kube-state-metrics",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-kube-state-metrics-7bf6cdf4f9-9dhsq",
+        "service": "kube-prometheus-stack-kube-state-metrics"
+       },
+       "value": [
+        1791534019.663,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.13:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-4brzl",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534019.663,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.14:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-xk8ww",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534019.663,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.15:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-vsd7n",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534019.663,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.16:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-gm8v4",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534019.663,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.17:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-z2gdn",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534019.663,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.11:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-bnpvt",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534019.663,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "litellm",
+        "endpoint": "http",
+        "instance": "192.0.2.23:4000",
+        "job": "litellm",
+        "namespace": "litellm",
+        "pod": "litellm-8888c88ff-rnpsc",
+        "service": "litellm"
+       },
+       "value": [
+        1791534019.663,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "litellm",
+        "endpoint": "http",
+        "instance": "192.0.2.24:4000",
+        "job": "litellm",
+        "namespace": "litellm",
+        "pod": "litellm-8888c88ff-4qlbv",
+        "service": "litellm"
+       },
+       "value": [
+        1791534019.663,
+        "1"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   },
+   "/api/v1/query?query=up%7Bjob%3D~%22.%2Anode.%2A%22%7D": {
+    "data": {
+     "result": [
+      {
+       "metric": {
+        "__name__": "up",
+        "host": "wings-node",
+        "instance": "192.0.2.12:9101",
+        "job": "wings-node-exporter"
+       },
+       "value": [
+        1791534017.946,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.13:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-4brzl",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534017.946,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.14:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-xk8ww",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534017.946,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.15:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-vsd7n",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534017.946,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.16:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-gm8v4",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534017.946,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.17:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-z2gdn",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534017.946,
+        "1"
+       ]
+      },
+      {
+       "metric": {
+        "__name__": "up",
+        "container": "node-exporter",
+        "endpoint": "http-metrics",
+        "instance": "192.0.2.11:9100",
+        "job": "node-exporter",
+        "namespace": "monitoring",
+        "pod": "kube-prometheus-stack-prometheus-node-exporter-bnpvt",
+        "service": "kube-prometheus-stack-prometheus-node-exporter"
+       },
+       "value": [
+        1791534017.946,
+        "1"
+       ]
+      }
+     ],
+     "resultType": "vector"
+    },
+    "status": "success"
+   }
+  },
+  "vault": {
+   "/v1/sys/health?standbyok=true&perfstandbyok=true&sealedcode=200&uninitcode=200": {
+    "clock_skew_ms": 0,
+    "cluster_id": "946d62a4-730f-b43e-c834-800259b23d14",
+    "cluster_name": "vault-cluster-49132366",
+    "echo_duration_ms": 2,
+    "enterprise": false,
+    "initialized": true,
+    "performance_standby": false,
+    "replication_dr_mode": "disabled",
+    "replication_performance_mode": "disabled",
+    "replication_primary_canary_age_ms": 0,
+    "sealed": false,
+    "server_time_utc": 1791534019,
+    "standby": false,
+    "version": "1.18.1"
+   }
+  },
+  "voice": {
+   "/health": {
+    "ok": true,
+    "sample_rate": 24000,
+    "stt": true,
+    "stt_model": "large-v3-turbo",
+    "tts": true,
+    "tts_model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+    "voices": 6
+   }
+  }
+ },
+ "kubectl": {
+  "get nodes -o json": "{\"apiVersion\": \"v1\", \"items\": [{\"metadata\": {\"name\": \"spark-1\", \"labels\": {}}, \"status\": {\"conditions\": [{\"lastHeartbeatTime\": \"2026-10-09T08:20:08Z\", \"lastTransitionTime\": \"2026-10-02T00:39:28Z\", \"message\": \"kubelet has sufficient memory available\", \"reason\": \"KubeletHasSufficientMemory\", \"status\": \"False\", \"type\": \"MemoryPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:20:08Z\", \"lastTransitionTime\": \"2026-10-02T00:39:28Z\", \"message\": \"kubelet has no disk pressure\", \"reason\": \"KubeletHasNoDiskPressure\", \"status\": \"False\", \"type\": \"DiskPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:20:08Z\", \"lastTransitionTime\": \"2026-10-02T00:39:28Z\", \"message\": \"kubelet has sufficient PID available\", \"reason\": \"KubeletHasSufficientPID\", \"status\": \"False\", \"type\": \"PIDPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:20:08Z\", \"lastTransitionTime\": \"2026-10-02T00:39:28Z\", \"message\": \"kubelet is posting ready status\", \"reason\": \"KubeletReady\", \"status\": \"True\", \"type\": \"Ready\"}], \"capacity\": {\"cpu\": \"20\", \"ephemeral-storage\": \"3937374564Ki\", \"hugepages-1Gi\": \"0\", \"hugepages-2Mi\": \"0\", \"hugepages-32Mi\": \"0\", \"hugepages-64Ki\": \"0\", \"memory\": \"127598836Ki\", \"nvidia.com/gpu\": \"4\", \"pods\": \"110\"}}}, {\"metadata\": {\"name\": \"node-a\", \"labels\": {}}, \"status\": {\"conditions\": [{\"lastHeartbeatTime\": \"2026-10-09T08:15:17Z\", \"lastTransitionTime\": \"2026-05-11T16:21:12Z\", \"message\": \"kubelet has sufficient memory available\", \"reason\": \"KubeletHasSufficientMemory\", \"status\": \"False\", \"type\": \"MemoryPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:15:17Z\", \"lastTransitionTime\": \"2026-09-29T22:40:28Z\", \"message\": \"kubelet has no disk pressure\", \"reason\": \"KubeletHasNoDiskPressure\", \"status\": \"False\", \"type\": \"DiskPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:15:17Z\", \"lastTransitionTime\": \"2026-05-11T16:21:12Z\", \"message\": \"kubelet has sufficient PID available\", \"reason\": \"KubeletHasSufficientPID\", \"status\": \"False\", \"type\": \"PIDPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:15:17Z\", \"lastTransitionTime\": \"2026-05-11T16:21:12Z\", \"message\": \"kubelet is posting ready status\", \"reason\": \"KubeletReady\", \"status\": \"True\", \"type\": \"Ready\"}], \"capacity\": {\"cpu\": \"4\", \"ephemeral-storage\": \"100503408Ki\", \"hugepages-1Gi\": \"0\", \"hugepages-2Mi\": \"0\", \"memory\": \"16352176Ki\", \"pods\": \"110\"}}}, {\"metadata\": {\"name\": \"gpu-node\", \"labels\": {}}, \"status\": {\"conditions\": [{\"lastHeartbeatTime\": \"2026-10-09T08:17:22Z\", \"lastTransitionTime\": \"2026-08-31T16:31:54Z\", \"message\": \"kubelet has sufficient memory available\", \"reason\": \"KubeletHasSufficientMemory\", \"status\": \"False\", \"type\": \"MemoryPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:17:22Z\", \"lastTransitionTime\": \"2026-08-31T16:31:54Z\", \"message\": \"kubelet has no disk pressure\", \"reason\": \"KubeletHasNoDiskPressure\", \"status\": \"False\", \"type\": \"DiskPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:17:22Z\", \"lastTransitionTime\": \"2026-08-31T16:31:54Z\", \"message\": \"kubelet has sufficient PID available\", \"reason\": \"KubeletHasSufficientPID\", \"status\": \"False\", \"type\": \"PIDPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:17:22Z\", \"lastTransitionTime\": \"2026-08-31T16:31:54Z\", \"message\": \"kubelet is posting ready status\", \"reason\": \"KubeletReady\", \"status\": \"True\", \"type\": \"Ready\"}], \"capacity\": {\"cpu\": \"8\", \"ephemeral-storage\": \"303932780Ki\", \"hugepages-1Gi\": \"0\", \"hugepages-2Mi\": \"0\", \"memory\": \"49306868Ki\", \"nvidia.com/gpu\": \"4\", \"pods\": \"110\"}}}, {\"metadata\": {\"name\": \"node-b\", \"labels\": {}}, \"status\": {\"conditions\": [{\"lastHeartbeatTime\": \"2026-10-09T08:19:58Z\", \"lastTransitionTime\": \"2026-09-26T08:19:24Z\", \"message\": \"kubelet has sufficient memory available\", \"reason\": \"KubeletHasSufficientMemory\", \"status\": \"False\", \"type\": \"MemoryPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:19:58Z\", \"lastTransitionTime\": \"2026-09-26T08:19:24Z\", \"message\": \"kubelet has no disk pressure\", \"reason\": \"KubeletHasNoDiskPressure\", \"status\": \"False\", \"type\": \"DiskPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:19:58Z\", \"lastTransitionTime\": \"2026-09-26T08:19:24Z\", \"message\": \"kubelet has sufficient PID available\", \"reason\": \"KubeletHasSufficientPID\", \"status\": \"False\", \"type\": \"PIDPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:19:58Z\", \"lastTransitionTime\": \"2026-09-26T08:19:24Z\", \"message\": \"kubelet is posting ready status\", \"reason\": \"KubeletReady\", \"status\": \"True\", \"type\": \"Ready\"}], \"capacity\": {\"cpu\": \"8\", \"ephemeral-storage\": \"303932780Ki\", \"hugepages-1Gi\": \"0\", \"hugepages-2Mi\": \"0\", \"memory\": \"32841272Ki\", \"pods\": \"110\"}}}, {\"metadata\": {\"name\": \"spark-2\", \"labels\": {}}, \"status\": {\"conditions\": [{\"lastHeartbeatTime\": \"2026-10-09T08:19:36Z\", \"lastTransitionTime\": \"2026-10-04T14:24:54Z\", \"message\": \"kubelet has sufficient memory available\", \"reason\": \"KubeletHasSufficientMemory\", \"status\": \"False\", \"type\": \"MemoryPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:19:36Z\", \"lastTransitionTime\": \"2026-10-04T14:24:54Z\", \"message\": \"kubelet has no disk pressure\", \"reason\": \"KubeletHasNoDiskPressure\", \"status\": \"False\", \"type\": \"DiskPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:19:36Z\", \"lastTransitionTime\": \"2026-10-04T14:24:54Z\", \"message\": \"kubelet has sufficient PID available\", \"reason\": \"KubeletHasSufficientPID\", \"status\": \"False\", \"type\": \"PIDPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:19:36Z\", \"lastTransitionTime\": \"2026-10-04T14:24:54Z\", \"message\": \"kubelet is posting ready status\", \"reason\": \"KubeletReady\", \"status\": \"True\", \"type\": \"Ready\"}], \"capacity\": {\"cpu\": \"20\", \"ephemeral-storage\": \"3937374564Ki\", \"hugepages-1Gi\": \"0\", \"hugepages-2Mi\": \"0\", \"hugepages-32Mi\": \"0\", \"hugepages-64Ki\": \"0\", \"memory\": \"127598836Ki\", \"nvidia.com/gpu\": \"4\", \"pods\": \"110\"}}}, {\"metadata\": {\"name\": \"spark-3\", \"labels\": {}}, \"status\": {\"conditions\": [{\"lastHeartbeatTime\": \"2026-10-09T08:16:12Z\", \"lastTransitionTime\": \"2026-09-27T18:39:36Z\", \"message\": \"kubelet has sufficient memory available\", \"reason\": \"KubeletHasSufficientMemory\", \"status\": \"False\", \"type\": \"MemoryPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:16:12Z\", \"lastTransitionTime\": \"2026-09-27T18:39:36Z\", \"message\": \"kubelet has no disk pressure\", \"reason\": \"KubeletHasNoDiskPressure\", \"status\": \"False\", \"type\": \"DiskPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:16:12Z\", \"lastTransitionTime\": \"2026-09-27T18:39:36Z\", \"message\": \"kubelet has sufficient PID available\", \"reason\": \"KubeletHasSufficientPID\", \"status\": \"False\", \"type\": \"PIDPressure\"}, {\"lastHeartbeatTime\": \"2026-10-09T08:16:12Z\", \"lastTransitionTime\": \"2026-09-27T18:39:37Z\", \"message\": \"kubelet is posting ready status\", \"reason\": \"KubeletReady\", \"status\": \"True\", \"type\": \"Ready\"}], \"capacity\": {\"cpu\": \"20\", \"ephemeral-storage\": \"3937374564Ki\", \"hugepages-1Gi\": \"0\", \"hugepages-2Mi\": \"0\", \"hugepages-32Mi\": \"0\", \"hugepages-64Ki\": \"0\", \"memory\": \"127598768Ki\", \"nvidia.com/gpu\": \"4\", \"pods\": \"110\"}}}], \"kind\": \"List\", \"metadata\": {\"resourceVersion\": \"\"}}",
+  "get pods -A -o json": "{\"apiVersion\": \"v1\", \"items\": [{\"metadata\": {\"name\": \"argocd-application-controller-0\", \"namespace\": \"argocd\"}, \"spec\": {\"nodeName\": \"node-a\", \"containers\": [{\"image\": \"quay.io/argoproj/argocd:v3.4.2\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 2, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"argocd-applicationset-controller-7d9747fcf4-8f5gl\", \"namespace\": \"argocd\"}, \"spec\": {\"nodeName\": \"node-a\", \"containers\": [{\"image\": \"quay.io/argoproj/argocd:v3.4.2\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 2, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"argocd-image-updater-controller-85966b5759-rnpjs\", \"namespace\": \"argocd\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"quay.io/argoprojlabs/argocd-image-updater:v1.2.1\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 4, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"argocd-notifications-controller-6467778656-dl744\", \"namespace\": \"argocd\"}, \"spec\": {\"nodeName\": \"node-a\", \"containers\": [{\"image\": \"quay.io/argoproj/argocd:v3.4.2\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 2, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"argocd-redis-6446d7b54d-kwjqr\", \"namespace\": \"argocd\"}, \"spec\": {\"nodeName\": \"node-a\", \"containers\": [{\"image\": \"ecr-public.aws.com/docker/library/redis:8.2.3-alpine\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 2, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"argocd-repo-server-86cb47d66d-mqj5m\", \"namespace\": \"argocd\"}, \"spec\": {\"nodeName\": \"node-a\", \"containers\": [{\"image\": \"quay.io/argoproj/argocd:v3.4.2\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 2, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"argocd-server-667d8977dc-vdr6r\", \"namespace\": \"argocd\"}, \"spec\": {\"nodeName\": \"node-a\", \"containers\": [{\"image\": \"quay.io/argoproj/argocd:v3.4.2\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 2, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"comfyui-6594b5cb6f-v5tg4\", \"namespace\": \"comfyui\"}, \"spec\": {\"nodeName\": \"gpu-node\", \"containers\": [{\"image\": \"yanwk/comfyui-boot:cu130-megapak-pt211-20260930\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}, {\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"litellm-8888c88ff-4qlbv\", \"namespace\": \"litellm\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"ghcr.io/berriai/litellm-database:main-stable@sha256:f227f1cd77f7a7dbd5264e137a926f2670332f19938ff6c58c2dab90b2375dee\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"litellm-8888c88ff-rnpsc\", \"namespace\": \"litellm\"}, \"spec\": {\"nodeName\": \"spark-3\", \"containers\": [{\"image\": \"ghcr.io/berriai/litellm-database:main-stable@sha256:f227f1cd77f7a7dbd5264e137a926f2670332f19938ff6c58c2dab90b2375dee\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"litellm-postgres-7fb8486449-jgfqz\", \"namespace\": \"litellm\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"postgres:16-alpine\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"litellm-postgres-backup-29854725-q58q9\", \"namespace\": \"litellm\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"rclone/rclone:1.75.1\"}]}, \"status\": {\"phase\": \"Succeeded\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"terminated\": {\"reason\": \"Completed\"}}}]}}, {\"metadata\": {\"name\": \"litellm-postgres-backup-29856165-jhfrb\", \"namespace\": \"litellm\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"rclone/rclone:1.75.1\"}]}, \"status\": {\"phase\": \"Succeeded\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"terminated\": {\"reason\": \"Completed\"}}}]}}, {\"metadata\": {\"name\": \"litellm-postgres-backup-29857605-j6nhb\", \"namespace\": \"litellm\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"rclone/rclone:1.75.1\"}]}, \"status\": {\"phase\": \"Succeeded\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"terminated\": {\"reason\": \"Completed\"}}}]}}, {\"metadata\": {\"name\": \"litellm-redis-7f6cdf86d-xqxjz\", \"namespace\": \"litellm\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"alertmanager-kube-prometheus-stack-alertmanager-0\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"quay.io/prometheus/alertmanager:v0.34.1\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}, {\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"alloy-6f878bcd-9qzwf\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"spark-3\", \"containers\": [{\"image\": \"docker.io/grafana/alloy:v1.20.1\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}, {\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"kube-prometheus-stack-grafana-78df9d4f4b-82z9h\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"quay.io/kiwigrid/k8s-sidecar:2.14.1\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}, {\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}, {\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"kube-prometheus-stack-kube-state-metrics-7bf6cdf4f9-9dhsq\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 9, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"kube-prometheus-stack-operator-586b66c78-6tgj7\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"quay.io/prometheus-operator/prometheus-operator:v0.94.1\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"kube-prometheus-stack-prometheus-node-exporter-4brzl\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"spark-3\", \"containers\": [{\"image\": \"quay.io/prometheus/node-exporter:v1.12.1-distroless\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"kube-prometheus-stack-prometheus-node-exporter-bnpvt\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"gpu-node\", \"containers\": [{\"image\": \"quay.io/prometheus/node-exporter:v1.12.1-distroless\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"kube-prometheus-stack-prometheus-node-exporter-gm8v4\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"spark-1\", \"containers\": [{\"image\": \"quay.io/prometheus/node-exporter:v1.12.1-distroless\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"kube-prometheus-stack-prometheus-node-exporter-vsd7n\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"spark-2\", \"containers\": [{\"image\": \"quay.io/prometheus/node-exporter:v1.12.1-distroless\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"kube-prometheus-stack-prometheus-node-exporter-xk8ww\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"quay.io/prometheus/node-exporter:v1.12.1-distroless\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"kube-prometheus-stack-prometheus-node-exporter-z2gdn\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"node-a\", \"containers\": [{\"image\": \"quay.io/prometheus/node-exporter:v1.12.1-distroless\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 1, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"loki-0\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"docker.io/grafana/loki:3.6.11\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 1, \"state\": {\"running\": {\"reason\": null}}}, {\"restartCount\": 1, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"loki-canary-2bwcz\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"node-a\", \"containers\": [{\"image\": \"docker.io/grafana/loki-canary:3.6.12\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 2, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"loki-canary-cmpgq\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"spark-3\", \"containers\": [{\"image\": \"docker.io/grafana/loki-canary:3.6.12\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"loki-canary-gk6lc\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"docker.io/grafana/loki-canary:3.6.12\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 2, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"loki-canary-rj9fj\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"gpu-node\", \"containers\": [{\"image\": \"docker.io/grafana/loki-canary:3.6.12\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 2, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"loki-chunks-cache-0\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"gpu-node\", \"containers\": [{\"image\": \"memcached:1.6.39-alpine\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}, {\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"loki-results-cache-0\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"gpu-node\", \"containers\": [{\"image\": \"memcached:1.6.39-alpine\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}, {\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"prometheus-kube-prometheus-stack-prometheus-0\", \"namespace\": \"monitoring\"}, \"spec\": {\"nodeName\": \"node-b\", \"containers\": [{\"image\": \"quay.io/prometheus/prometheus:v3.15.0-distroless\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"running\": {\"reason\": null}}}, {\"restartCount\": 4, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"rustfs-786cbfb77c-5cccw\", \"namespace\": \"rustfs\"}, \"spec\": {\"nodeName\": \"node-a\", \"containers\": [{\"image\": \"rustfs/rustfs:latest\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 31, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"vault-0\", \"namespace\": \"vault\"}, \"spec\": {\"nodeName\": \"node-a\", \"containers\": [{\"image\": \"hashicorp/vault:1.18.1\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 2, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"vault-agent-injector-5bd7ccc8b5-mnlkt\", \"namespace\": \"vault\"}, \"spec\": {\"nodeName\": \"node-a\", \"containers\": [{\"image\": \"hashicorp/vault-k8s:1.5.0\"}]}, \"status\": {\"phase\": \"Running\", \"containerStatuses\": [{\"restartCount\": 2, \"state\": {\"running\": {\"reason\": null}}}]}}, {\"metadata\": {\"name\": \"vault-snapshot-29855670-gtssz\", \"namespace\": \"vault\"}, \"spec\": {\"nodeName\": \"spark-3\", \"containers\": [{\"image\": \"hashicorp/vault:1.18.1\"}]}, \"status\": {\"phase\": \"Succeeded\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"terminated\": {\"reason\": \"Completed\"}}}]}}, {\"metadata\": {\"name\": \"vault-snapshot-29857110-6sb8s\", \"namespace\": \"vault\"}, \"spec\": {\"nodeName\": \"spark-3\", \"containers\": [{\"image\": \"hashicorp/vault:1.18.1\"}]}, \"status\": {\"phase\": \"Succeeded\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"terminated\": {\"reason\": \"Completed\"}}}]}}, {\"metadata\": {\"name\": \"vault-snapshot-29858550-92qvv\", \"namespace\": \"vault\"}, \"spec\": {\"nodeName\": \"spark-3\", \"containers\": [{\"image\": \"hashicorp/vault:1.18.1\"}]}, \"status\": {\"phase\": \"Succeeded\", \"containerStatuses\": [{\"restartCount\": 0, \"state\": {\"terminated\": {\"reason\": \"Completed\"}}}]}}], \"kind\": \"List\", \"metadata\": {\"resourceVersion\": \"\"}}"
+ }
+}

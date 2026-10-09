@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Key List
+GenericName=Keyboard Shortcut List
+Comment=Every key the desktop binds, described and searchable; Enter runs the chosen one
+Icon=bromigos-keylist
+TryExec=bromigos-setup-keybindings
+Exec=bromigos-setup-keybindings
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=keys;key list;keybindings;keybinds;shortcuts;hotkeys;cheat sheet;cheatsheet;help;
+StartupNotify=false
+X-Bromigos-Menu=setup/keybindings

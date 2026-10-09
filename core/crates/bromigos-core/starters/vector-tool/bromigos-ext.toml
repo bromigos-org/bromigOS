@@ -1,0 +1,22 @@
+# __TITLE__: tools for VECTOR (made by `bromigos ext new vector-tool`; docs/extensions.md).
+[extension]
+name = "__NAME__"
+version = "0.1.0"
+description = "A VECTOR tool: how long this machine has been up, and its load."
+authors = []
+licence = "MIT"
+tags = ["vector", "tool"]
+
+[requires]
+bromigos = ">=1.0, <2"
+
+[[provides]]
+kind = "vector-tool"
+path = "tool.py"
+name = "__IDENT__"              # the module's name in VECTOR's plugin folder
+
+[permissions]
+network = "none"
+filesystem = ["/proc/uptime"]   # what it reads outside its folder
+vector = "read"                 # "read": looks things up; "desktop": changes this desktop
+code = true

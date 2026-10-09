@@ -1,0 +1,58 @@
+{
+  "_comment": "Wan 2.2 I2V-A14B on the user's ComfyUI (API format): a video from a start frame and, natively, an end frame (WanFirstLastFrameToVideo), for video.loop. Two 14B experts: the high-noise one samples the first half of the steps, the low-noise one the rest. Wiring and values are Comfy-Org's video_wan2_2_14B_flf2v template (20 steps, cfg 3.5, euler/simple, shift 8, the switch at step 10, 16 fps). bromigos-art fills it through _meta.video and _meta.bind like wan2.2-ti2v-5b. NOT on the lab yet and not measured: its two fp8 experts are 28.6 GB, more than the 5090 node's disk has free (docs/art.md, \"Video loops\"); `bromigos target probe video.loop` says what's missing.",
+  "_meta": {
+    "capabilities": ["video.loop"],
+    "catalog": "wan2.2-i2v-a14b/fp8",
+    "features": ["i2v", "flf2v"],
+    "output": "mp4",
+    "license": "Apache-2.0 (Wan 2.2)",
+    "fill": "video",
+    "requires": [
+      {"folder": "diffusion_models", "file": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"},
+      {"folder": "diffusion_models", "file": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"},
+      {"folder": "text_encoders", "file": "umt5_xxl_fp8_e4m3fn_scaled.safetensors"},
+      {"folder": "vae", "file": "wan_2.1_vae.safetensors"}
+    ],
+    "nodes": ["WanFirstLastFrameToVideo", "KSamplerAdvanced", "CreateVideo", "SaveVideo"],
+    "video": {
+      "fps": 16,
+      "frame_step": 4,
+      "max_frames": 121,
+      "grid": 16,
+      "sizes": {"720p": 921600, "480p": 399360},
+      "resolution": "480p",
+      "end_frame": "native"
+    },
+    "bind": {
+      "image": ["9", "image"],
+      "start_input": ["10", "start_image"],
+      "end_input": ["10", "end_image"],
+      "prompt": ["6", "text"],
+      "negative": ["7", "text"],
+      "seed": [["11", "noise_seed"], ["12", "noise_seed"]],
+      "cfg": [["11", "cfg"], ["12", "cfg"]],
+      "width": ["10", "width"],
+      "height": ["10", "height"],
+      "length": ["10", "length"],
+      "fps": ["14", "fps"],
+      "prefix": ["15", "filename_prefix"],
+      "frames": ["13", 0],
+      "frames_input": ["14", "images"]
+    }
+  },
+  "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors", "weight_dtype": "default"}},
+  "2": {"class_type": "UNETLoader", "inputs": {"unet_name": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors", "weight_dtype": "default"}},
+  "3": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["1", 0], "shift": 8.0}},
+  "4": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["2", 0], "shift": 8.0}},
+  "5": {"class_type": "CLIPLoader", "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default"}},
+  "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "", "clip": ["5", 0]}},
+  "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "oversaturated, overexposed, static, blurry details, subtitles, text, watermark, painting, still image, overall gray, worst quality, low quality, JPEG artifacts, ugly, deformed, disfigured, malformed limbs, motionless frame, cluttered background, camera movement, zoom, pan, cut", "clip": ["5", 0]}},
+  "8": {"class_type": "VAELoader", "inputs": {"vae_name": "wan_2.1_vae.safetensors"}},
+  "9": {"class_type": "LoadImage", "inputs": {"image": ""}},
+  "10": {"class_type": "WanFirstLastFrameToVideo", "inputs": {"positive": ["6", 0], "negative": ["7", 0], "vae": ["8", 0], "width": 832, "height": 480, "length": 81, "batch_size": 1, "start_image": ["9", 0]}},
+  "11": {"class_type": "KSamplerAdvanced", "inputs": {"model": ["3", 0], "add_noise": "enable", "noise_seed": 0, "steps": 20, "cfg": 3.5, "sampler_name": "euler", "scheduler": "simple", "positive": ["10", 0], "negative": ["10", 1], "latent_image": ["10", 2], "start_at_step": 0, "end_at_step": 10, "return_with_leftover_noise": "enable"}},
+  "12": {"class_type": "KSamplerAdvanced", "inputs": {"model": ["4", 0], "add_noise": "disable", "noise_seed": 0, "steps": 20, "cfg": 3.5, "sampler_name": "euler", "scheduler": "simple", "positive": ["10", 0], "negative": ["10", 1], "latent_image": ["11", 0], "start_at_step": 10, "end_at_step": 10000, "return_with_leftover_noise": "disable"}},
+  "13": {"class_type": "VAEDecode", "inputs": {"samples": ["12", 0], "vae": ["8", 0]}},
+  "14": {"class_type": "CreateVideo", "inputs": {"images": ["13", 0], "fps": 16.0}},
+  "15": {"class_type": "SaveVideo", "inputs": {"video": ["14", 0], "filename_prefix": "bromigos-art", "format": "mp4", "codec": "h264"}}
+}

@@ -1,0 +1,23 @@
+# tmux colours: theme "{{ theme }}" ({{ meta.name }}), written by `bromigos theme set`. Don't edit;
+# tmux.conf sources this file (bromigos-apps' default does), and the theme-set hook
+# re-sources it in a running server.
+set -g status-style "bg={{ panel }},fg={{ soft }}"
+set -g status-left-style "fg={{ primary }},bold"
+set -g status-right-style "fg={{ muted }}"
+set -g window-status-style "fg={{ muted }}"
+set -g window-status-current-style "bg={{ selection }},fg={{ primary }},bold"
+set -g window-status-activity-style "fg={{ warn }}"
+set -g window-status-bell-style "fg={{ danger }},bold"
+set -g window-status-last-style "fg={{ soft }}"
+set -g pane-border-style "fg={{ selection }}"
+set -g pane-active-border-style "fg={{ primary }}"
+set -g message-style "bg={{ panel }},fg={{ primary }}"
+set -g message-command-style "bg={{ panel }},fg={{ warn }}"
+set -g mode-style "bg={{ selection }},fg={{ primary }}"
+set -g copy-mode-match-style "bg={{ warn }},fg={{ background }}"
+set -g copy-mode-current-match-style "bg={{ primary }},fg={{ background }}"
+set -g clock-mode-colour "{{ primary }}"
+set -g display-panes-colour "{{ dim }}"
+set -g display-panes-active-colour "{{ primary }}"
+set -g popup-border-style "fg={{ dim }}"
+set -g popup-style "bg={{ background }},fg={{ text }}"

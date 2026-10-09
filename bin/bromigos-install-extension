@@ -1,0 +1,15 @@
+#!/bin/sh
+# bromigos:summary=Install an extension from a git URL, a folder or a catalog name (bromigos ext install)
+# bromigos:args=SOURCE[@tag|@branch]
+# bromigos:examples=bromigos install extension https://github.com/you/thing@v1.0 ; bromigos install extension hello-deck
+# bromigos:menu=INSTALL:Extension…
+# bromigos:prompt=GIT URL, FOLDER OR CATALOG NAME
+#
+# The menu's INSTALL › Extension… (Super+Space; docs/menu.md): it runs in a terminal, so an
+# extension that runs code shows its permissions and asks there (docs/extensions.md).
+set -eu
+if [ "$#" -eq 0 ]; then
+    echo "usage: bromigos install extension SOURCE[@tag|@branch]   (bromigos ext search lists the catalog)" >&2
+    exit 2
+fi
+exec bromigos ext install "$@"

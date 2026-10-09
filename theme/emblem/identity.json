@@ -1,0 +1,8 @@
+{
+  "_comment": "The burn-in (canon: platform/agents/LORE.md, 'The burn-in'). ring_text is the motto ONLY: never the callsign or frequency. After editing run ~/.config/bromigos/bin/bromigos-emblem build",
+  "ring_text": "NO ONE OWNS THE DARK · SOMEONE IS STILL LISTENING ·",
+  "caption": "TRANSMISSION INTERCEPTED",
+  "signoff": "STILL LIT.",
+  "ring_font": "Geist Mono",
+  "ring_seconds_per_turn": 24
+}

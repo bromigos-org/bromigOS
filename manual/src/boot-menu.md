@@ -1,0 +1,101 @@
+# The boot menu
+
+The boot menu is the list you see for a few seconds when the computer starts, before
+bromigOS loads. It lets you start bromigOS normally, or start it as it was before an
+update. bromigOS dresses it in your theme.
+
+The menu shows your theme's lock-screen picture with the [burn-in](glossary.md#burn-in)
+in the middle, a signal meter that fills while it counts down, and the list of things you
+can start. If you press nothing, the first entry starts.
+
+The first entry, **bromigOS Linux**, starts bromigOS. **Advanced options for bromigOS
+Linux** lists each installed kernel on its own, for when you need to choose one.
+
+## Use the boot menu
+
+| Key | What it does |
+|---|---|
+| <kbd>↑</kbd> <kbd>↓</kbd> | Choose an entry. |
+| <kbd>Enter</kbd> | Start it. |
+| <kbd>E</kbd> | Change the entry's start-up commands, for this start only. |
+| <kbd>C</kbd> | Open GRUB's command line. |
+
+## Start an older version after a bad update
+
+On a btrfs system, bromigOS takes a [snapshot](glossary.md#snapshot) before and after
+every update. If an update stops the computer from starting:
+
+1. In the boot menu, choose **Roll back to a snapshot**.
+2. Choose the snapshot from before the update. They're listed newest first, with the date
+   and time, such as `10/09 00:28 · before bromigos update`.
+3. Choose **Boot it: linux**. bromigOS starts as it was then.
+
+![The snapshots in the boot menu, newest first: after and before an update](images/boot-menu-snapshots.webp)
+
+A system started this way is temporary. Any changes you make last only until you restart.
+
+To keep it, open a terminal (<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd>) and run:
+
+```bash
+bromigos update --rollback
+```
+
+It shows which snapshot you started and what it will do, and asks first. Then restart, and
+choose the first entry, **bromigOS Linux**. From now on the computer starts as it was in
+that snapshot. Your home folder isn't touched.
+
+If the update changed the kernel, the snapshot may stop at a black screen that says
+"You are in emergency mode" and asks for the root password. Type it. On a computer
+installed from the bromigOS USB stick, it's your own password. Then run these two
+commands, with your user name in place of `<you>`:
+
+```bash
+su - <you>
+bromigos update --rollback
+```
+
+It puts the snapshot's kernel back too.
+
+See [Updating and rolling back](update-and-rollback.md#if-the-computer-wont-start) for
+more.
+
+## Theme the boot menu, or turn it off
+
+When you change your theme, the boot menu follows. If `sudo` needs your password, the
+change waits until your next `bromigos update`, and a notification tells you so. The
+themes that come with bromigOS are drawn already. Your own themes, and high contrast, are
+drawn on your machine.
+
+```bash
+bromigos boot theme           # is it on, which theme, and is it up to date
+bromigos boot theme apply     # put the current theme in the boot menu now
+bromigos boot theme off       # GRUB's plain menu, and it stays plain
+bromigos boot theme on        # the themed menu again
+```
+
+With the theme off, the entries take GRUB's own names, such as **Arch Linux**, because
+bromigOS is based on Arch Linux.
+
+The themed menu is for GRUB, the boot loader bromigOS installs. If your computer starts
+with another boot loader, such as systemd-boot or Limine, bromigOS leaves its menu alone.
+
+Before it changes anything, bromigOS keeps a copy of your GRUB settings as
+`/etc/default/grub.bromigos-bak`. It checks the new menu before it replaces the old one.
+
+## The install stick
+
+The bromigOS USB stick has a boot menu of its own, in the same style. Its entries:
+
+![The install stick's boot menu: try it live, install, safe graphics, the memory test and more](images/boot-menu-stick.webp)
+
+| Entry | What it does |
+|---|---|
+| Start bromigOS (try it live) | Start the full desktop from the stick. Nothing is installed. |
+| Install bromigOS | Start the desktop with the installer already open. See [Install](install.md#install-from-the-usb-stick). |
+| Start with safe graphics (nomodeset) | Use this if the screen stays black with the first entry. |
+| Memory test (Memtest86+) | Test the computer's memory. |
+| Boot from disk | Start whatever is installed on the disk instead. |
+| Start with the screen reader (speech) | Start with spoken output. Press <kbd>S</kbd> in the menu to choose it. |
+
+UEFI computers also get entries for the UEFI shell and the firmware settings. Older BIOS
+computers get a hardware information tool. Both have **Shut down** and **Restart**.

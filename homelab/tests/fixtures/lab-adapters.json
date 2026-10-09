@@ -1,0 +1,116 @@
+{
+  "_about": "Recorded shapes of the lab adapters' sources, sanitised: generic names, documentation addresses (192.0.2.0/24, 203.0.113.0/24), example.net.",
+  "dcgm": {
+    "DCGM_FI_DEV_GPU_UTIL": [
+      {"labels": {"UUID": "GPU-aaaa", "gpu": "0", "Hostname": "gpu-node", "modelName": "NVIDIA GeForce RTX 5090", "DCGM_FI_DRIVER_VERSION": "580.1", "exported_namespace": "imagegen", "exported_pod": "imagegen-6594b5cb6f-v5tg4"}, "value": 37.0},
+      {"labels": {"UUID": "GPU-bbbb", "gpu": "0", "Hostname": "spark-1", "modelName": "NVIDIA GB10", "exported_namespace": "llm", "exported_pod": "llm-head-74786996d8-m5sb7"}, "value": 93.0}
+    ],
+    "DCGM_FI_DEV_FB_USED": [
+      {"labels": {"UUID": "GPU-aaaa", "gpu": "0", "Hostname": "gpu-node", "modelName": "NVIDIA GeForce RTX 5090"}, "value": 31000.0}
+    ],
+    "DCGM_FI_DEV_FB_FREE": [
+      {"labels": {"UUID": "GPU-aaaa", "gpu": "0", "Hostname": "gpu-node", "modelName": "NVIDIA GeForce RTX 5090"}, "value": 500.0}
+    ],
+    "DCGM_FI_DEV_GPU_TEMP": [
+      {"labels": {"UUID": "GPU-aaaa", "gpu": "0", "Hostname": "gpu-node", "modelName": "NVIDIA GeForce RTX 5090"}, "value": 91.0},
+      {"labels": {"UUID": "GPU-bbbb", "gpu": "0", "Hostname": "spark-1", "modelName": "NVIDIA GB10"}, "value": 45.0}
+    ],
+    "DCGM_FI_DEV_POWER_USAGE": [
+      {"labels": {"UUID": "GPU-aaaa", "gpu": "0", "Hostname": "gpu-node", "modelName": "NVIDIA GeForce RTX 5090"}, "value": 64.9}
+    ],
+    "limits": [
+      {"labels": {"namespace": "voice", "pod": "voice-7d9f8c6b5d-x2x9q", "node": "gpu-node", "resource": "nvidia_com_gpu"}, "value": 1.0},
+      {"labels": {"namespace": "imagegen", "pod": "imagegen-6594b5cb6f-v5tg4", "node": "gpu-node", "resource": "nvidia_com_gpu"}, "value": 1.0}
+    ]
+  },
+  "loki": {
+    "errors": {"status": "success", "data": {"resultType": "vector", "result": [
+      {"metric": {"namespace": "media"}, "value": [1791540000, "39"]},
+      {"metric": {"namespace": "gateway"}, "value": [1791540000, "600"]},
+      {"metric": {"namespace": "monitoring"}, "value": [1791540000, "4"]}
+    ]}},
+    "range": {"status": "success", "data": {"resultType": "streams", "result": [
+      {"stream": {"namespace": "media", "pod": "tv-0"}, "values": [["1791540002000000000", "level=error msg=\"import failed\""], ["1791540001000000000", "ERROR disk full"]]},
+      {"stream": {"namespace": "media", "pod": "movies-0"}, "values": [["1791540003000000000", "Traceback (most recent call last):"]]}
+    ]}},
+    "buildinfo": {"version": "3.6.0", "revision": "abc"}
+  },
+  "traefik": {
+    "routers": [
+      {"entryPoints": ["web"], "service": "media-tv-0123456789abcdef0123", "rule": "Host(`tv.example.net`)", "status": "enabled", "name": "media-tv-0123456789abcdef0123@kubernetescrd", "provider": "kubernetescrd"},
+      {"entryPoints": ["web"], "service": "media-tv-0123456789abcdef0123", "rule": "Host(`tv.example.net`) && PathPrefix(`/api`)", "status": "enabled", "name": "media-tv-fedcba9876543210fedc@kubernetescrd", "provider": "kubernetescrd"},
+      {"entryPoints": ["web", "websecure"], "service": "chat-chat-1111111111aaaaaaaaaa", "rule": "Host(`chat.example.net`)", "status": "enabled", "tls": {}, "name": "chat-chat-1111111111aaaaaaaaaa@kubernetescrd", "provider": "kubernetescrd"},
+      {"entryPoints": ["metrics", "web"], "service": "monitoring-grafana-80", "rule": "Host(\"grafana.example.net\") && PathPrefix(\"/\")", "status": "enabled", "name": "monitoring-grafana-grafana-example-net@kubernetes", "provider": "kubernetes"},
+      {"entryPoints": ["web"], "service": "broken-svc", "rule": "Host(`broken.example.net`)", "status": "disabled", "error": ["the service \"broken-svc\" does not exist"], "name": "broken-broken-2222222222bbbbbbbbbb@kubernetescrd", "provider": "kubernetescrd"},
+      {"entryPoints": ["traefik"], "service": "api@internal", "rule": "PathPrefix(`/api`)", "status": "enabled", "name": "api@internal", "provider": "internal"}
+    ],
+    "services": [
+      {"name": "media-tv-0123456789abcdef0123@kubernetescrd", "provider": "kubernetescrd", "status": "enabled", "type": "loadbalancer", "serverStatus": {"http://10.42.0.10:8989": "UP"}, "loadBalancer": {"servers": [{"url": "http://10.42.0.10:8989"}]}},
+      {"name": "chat-chat-1111111111aaaaaaaaaa@kubernetescrd", "provider": "kubernetescrd", "status": "enabled", "type": "loadbalancer", "serverStatus": {"http://10.42.0.11:8080": "DOWN"}, "loadBalancer": {"servers": [{"url": "http://10.42.0.11:8080"}]}},
+      {"name": "monitoring-grafana-80@kubernetes", "provider": "kubernetes", "status": "enabled", "type": "loadbalancer", "loadBalancer": {"servers": [{"url": "http://10.42.0.12:3000"}]}},
+      {"name": "api@internal", "provider": "internal", "status": "enabled"}
+    ]
+  },
+  "certificates": {"items": [
+    {"metadata": {"name": "lab-ca", "namespace": "cert-manager"}, "spec": {"issuerRef": {"name": "selfsigned"}}, "status": {"notAfter": "2036-08-25T19:50:27Z", "conditions": [{"type": "Ready", "status": "True"}]}},
+    {"metadata": {"name": "wildcard", "namespace": "ingress"}, "spec": {"dnsNames": ["example.net", "*.example.net"], "issuerRef": {"name": "letsencrypt"}}, "status": {"notAfter": "2026-10-19T00:00:00Z", "conditions": [{"type": "Ready", "status": "True"}]}},
+    {"metadata": {"name": "game-node", "namespace": "games"}, "spec": {"dnsNames": ["node1.example.net"], "issuerRef": {"name": "letsencrypt"}}, "status": {"notAfter": "2026-10-12T00:00:00Z", "conditions": [{"type": "Ready", "status": "False"}]}}
+  ]},
+  "ddns_logs": {
+    "plain": "WAN IP: 203.0.113.7\nok       *.example.net          A 203.0.113.7 proxied=True\nupdated  vpn.example.net        A 203.0.113.7 proxied=False\ndone: 2 record(s), 1 change(s), 0 failure(s)\n",
+    "emoji": "🌟 Detected the IPv4 address 203.0.113.9\n🤷 The A records of \"home.example.net\" are already up to date (203.0.113.9)\n😡 Failed to update A records of \"shop.example.net\" to 203.0.113.9: token lacks permission\n"
+  },
+  "pods": {
+    "app_ok": [
+      {"metadata": {"name": "web-0", "namespace": "web"}, "status": {"phase": "Running", "containerStatuses": [{"ready": true, "restartCount": 2, "state": {"running": {}}}]}},
+      {"metadata": {"name": "web-backup-29857590-j892z", "namespace": "web", "ownerReferences": [{"kind": "Job"}]}, "status": {"phase": "Succeeded", "containerStatuses": [{"ready": false, "restartCount": 0}]}}
+    ],
+    "app_crash": [
+      {"metadata": {"name": "db-0", "namespace": "db"}, "status": {"phase": "Running", "containerStatuses": [{"ready": false, "restartCount": 31, "state": {"waiting": {"reason": "CrashLoopBackOff"}}}]}}
+    ],
+    "gpu_pods": [
+      {"metadata": {"name": "voice-7d9f8c6b5d-x2x9q", "namespace": "voice"}, "spec": {"nodeName": "gpu-node", "containers": [{"resources": {"limits": {"nvidia.com/gpu": "1"}}}]}, "status": {"phase": "Running"}},
+      {"metadata": {"name": "cpu-only-0", "namespace": "web"}, "spec": {"nodeName": "gpu-node", "containers": [{"resources": {}}]}, "status": {"phase": "Running"}}
+    ],
+    "listeners": [
+      {"metadata": {"name": "pool-amd64-abc-listener", "namespace": "arc-systems", "labels": {"actions.github.com/scale-set-name": "pool-amd64", "actions.github.com/organization": "example-org", "app.kubernetes.io/component": "runner-scale-set-listener"}}, "status": {"phase": "Running", "containerStatuses": [{"ready": true, "restartCount": 0}]}},
+      {"metadata": {"name": "pool-arm64-def-listener", "namespace": "arc-systems", "labels": {"actions.github.com/scale-set-name": "pool-arm64", "actions.github.com/organization": "example-org", "app.kubernetes.io/component": "runner-scale-set-listener"}}, "status": {"phase": "Pending", "containerStatuses": [{"ready": false, "restartCount": 0}]}}
+    ],
+    "runners": [
+      {"metadata": {"name": "pool-amd64-ltp7l-runner-kp9z9", "namespace": "runners", "labels": {"actions.github.com/scale-set-name": "pool-amd64", "app.kubernetes.io/component": "runner"}}, "status": {"phase": "Running", "containerStatuses": [{"ready": true, "restartCount": 0}]}}
+    ]
+  },
+  "arc_log": "{\"time\":\"2026-10-09T08:07:35Z\",\"level\":\"INFO\",\"msg\":\"Getting next message\",\"lastMessageID\":1}\n{\"time\":\"2026-10-09T08:07:35Z\",\"level\":\"INFO\",\"msg\":\"Calculated target runner count\",\"component\":\"worker\",\"assigned job\":3,\"decision\":1,\"min\":0,\"max\":1,\"currentRunnerCount\":1}\n",
+  "arc_log_old": "2026-01-01T00:00:00Z\tINFO\tauto_scaler\tCurrent runner scale set statistics.\n{\"level\":\"info\",\"msg\":\"Current runner scale set statistics.\",\"statistics\":{\"totalAvailableJobs\":0,\"totalAcquiredJobs\":2,\"totalAssignedJobs\":2,\"totalRunningJobs\":1,\"totalRegisteredRunners\":2,\"totalBusyRunners\":1,\"totalIdleRunners\":1}}\n",
+  "argo": {
+    "app": {"metadata": {"name": "apps-root", "namespace": "argocd"}, "spec": {"destination": {"namespace": "argocd"}},
+      "status": {"sync": {"status": "OutOfSync", "revision": "f38a93f27567e5caa253bc8b4f30f312a990884b"}, "health": {"status": "Healthy"},
+        "operationState": {"phase": "Succeeded", "message": "successfully synced (all tasks run)"},
+        "resources": [{"kind": "Application", "name": "gpu-operator", "status": "OutOfSync"}, {"kind": "Application", "name": "web", "status": "Synced"}]}},
+    "degraded": {"metadata": {"name": "batch", "namespace": "argocd"}, "spec": {"destination": {"namespace": "batch"}},
+      "status": {"sync": {"status": "Synced", "revisions": ["v1.2.0", "0123456789abcdef"]}, "health": {"status": "Degraded"},
+        "conditions": [{"type": "SyncError", "message": "one or more objects failed to apply"}],
+        "operationState": {"phase": "Failed", "message": "Job batch-weekly failed: BackoffLimitExceeded"},
+        "resources": [{"kind": "Job", "name": "batch-weekly", "status": "Synced", "health": {"status": "Degraded", "message": "Job has reached the specified backoff limit"}}]}},
+    "events": [
+      {"involvedObject": {"name": "apps-root"}, "reason": "ResourceUpdated", "message": "Updated sync status: Synced -> OutOfSync", "lastTimestamp": "2026-10-09T07:50:49Z", "count": 1},
+      {"involvedObject": {"name": "apps-root"}, "reason": "ResourceUpdated", "message": "Updated sync status: OutOfSync -> Synced", "lastTimestamp": "2026-10-09T07:54:03Z", "count": 1},
+      {"involvedObject": {"name": "apps-root"}, "reason": "ResourceUpdated", "message": "Updated sync status: Synced -> OutOfSync", "lastTimestamp": "2026-10-09T07:54:49Z", "count": 2},
+      {"involvedObject": {"name": "apps-root"}, "reason": "ResourceUpdated", "message": "Updated sync status: Synced -> OutOfSync", "lastTimestamp": "2026-10-09T05:00:00Z", "count": 1},
+      {"involvedObject": {"name": "web"}, "reason": "ResourceUpdated", "message": "Updated health status: Healthy -> Progressing", "lastTimestamp": "2026-10-09T07:55:00Z", "count": 1}
+    ]
+  },
+  "arr_api": {
+    "/api/v3/system/status": {"appName": "Sonarr", "version": "4.0.15"},
+    "/api/v3/health": [{"type": "warning", "message": "Indexers unavailable due to failures for more than 6 hours"}],
+    "/api/v3/queue/status": {"totalCount": 4, "errors": true, "warnings": false},
+    "/api/v3/diskspace": [{"path": "/tv", "freeSpace": 21474836480, "totalSpace": 4000000000000}, {"path": "/config", "freeSpace": 90000000000, "totalSpace": 100000000000}],
+    "/api/v3/wanted/missing?pageSize=1": {"totalRecords": 21}
+  },
+  "pelican_api": {
+    "servers": [{"object": "server", "attributes": {"name": "survival", "identifier": "ecc038e9", "uuid": "ecc038e9-0000", "egg": {"name": "Paper"}}},
+                {"object": "server", "attributes": {"name": "creative", "identifier": "7121e86f", "uuid": "7121e86f-0000"}}],
+    "resources": {"ecc038e9": {"current_state": "running", "resources": {"memory_bytes": 1212424192, "cpu_absolute": 1.0, "disk_bytes": 1, "uptime": 3600000}},
+                  "7121e86f": {"current_state": "offline", "resources": {}}}
+  }
+}

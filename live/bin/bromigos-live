@@ -1,0 +1,252 @@
+#!/usr/bin/env bash
+# bromigos:summary=The animated live layer: start/stop, decks, toggles
+# bromigos:args=start|stop|restart|status|open <deck>|<deck> …
+# bromigos-live — the animated, data-reactive live layer.
+#
+#   bromigos-live start [--login]  start the daemon (supervised; no-op if running)
+#   bromigos-live stop | restart
+#   bromigos-live toggle           background layer on/off
+#   bromigos-live mute             sounds on/off (works without the daemon)
+#   bromigos-live holodeck | driftmap | timeline [open|close]   a deck: toggle, or open/close
+#   bromigos-live <kind>           any other deck (a plugin's too): toggle it; `decks` lists them
+#   bromigos-live open <deck>|screensaver   open it (never a toggle), starting the daemon if it isn't
+#                                  running: what the app launcher's entries run (docs/menu.md)
+#   bromigos-live radial | intercept | screensaver | screensaver-off
+#   bromigos-live scan             run a scanner pass now (hardware schematic)
+#   bromigos-live scan-pin         pin / unpin the schematic (stays up, live values)
+#   bromigos-live scan-hold on|off hold-to-scan (bound to press / release)
+#   bromigos-live codec "text" [FLOOR|LAB|DECK|PRIORITY]   a codec call (rate-limited)
+#   bromigos-live codec-quiet      codec calls without voice (toggle)
+#   bromigos-live job -- cmd ...   run cmd; a long run ends with a codec call
+#   bromigos-live mind|ops|swarm|netmap [verb args]   VECTOR's holograms (see the hologram-build skill)
+#   bromigos-live lab [open|close|focus <card or node>|clear]   the Lab deck (bromigos-homelab); bare: toggle
+#   bromigos-live deck <kind> [verb args]     any deck, a plugin folder's too (docs/plugins.md)
+#   bromigos-live decks [--json]   every deck there is, its label, and the Tab cycle
+#   bromigos-live plugin <name> [verb args]   a hot-loaded deck plugin (<plugins>/decks/<name>.py)
+#   bromigos-live world [verb …]   the theme's world: state, event notify|critical|fill win|lab_alert,
+#                                  set <signal> <value> (hold one, to try it), clear, rollcall
+#   bromigos-live ctl <cmd>        raw control command (burst, transmission, reload, state, theme, activity idle|active)
+#   bromigos-live status
+set -u
+HERE="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+RUN="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+SOCK="$RUN/bromigos-live.sock"
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/bromigos-live"
+LOG="$STATE/live.log"
+PIDF="$RUN/bromigos-live.pid"          # the supervisor: PID START (live/instance.py)
+CTL_LOCK="$RUN/bromigos-live.ctl"      # start, stop and restart one at a time
+PY=/usr/bin/python3
+mkdir -p "$STATE"
+
+ctl() {
+    "$PY" - "$SOCK" "$*" <<'EOF'
+import socket, sys
+s = socket.socket(socket.AF_UNIX)
+s.settimeout(4)
+try:
+    s.connect(sys.argv[1])
+except OSError:
+    sys.exit(3)
+s.sendall(sys.argv[2].encode())
+chunks = []
+while True:                      # the daemon closes after its reply; status replies exceed one recv
+    try:
+        b = s.recv(65536)
+    except socket.timeout:
+        break
+    if not b:
+        break
+    chunks.append(b)
+print(b"".join(chunks).decode(errors="replace"))
+EOF
+}
+
+# The running instance, exactly (live/instance.py): the daemon holds
+# $RUN/bromigos-live.lock with its PID and start time; the supervisor's are in $PIDF.
+# Every signal goes to those PIDs, checked against their start times; never a pattern.
+inst() { (cd "$HERE" && "$PY" -m live.instance "$@"); }
+inst_decks() { (cd "$HERE" && "$PY" -m live.decks "$@"); }
+running() { inst pid >/dev/null; }
+# The Hyprland session the running daemon was started for (its environment at start).
+daemon_sig() { inst session; }
+# The live session's environment: bromigOS's core (`bromigos session`), else the dotfiles' script.
+if [ -x /usr/bin/bromigos ]; then SESSION_ENV=(/usr/bin/bromigos session)
+else SESSION_ENV=("$HOME/.config/bromigos/bin/bromigos-session-env"); fi
+
+supervise() {
+    # Restart on crash, but give up after 4 crashes inside 2 minutes: no crash loops.
+    local first="--login"; [ "${1:-}" = "--login" ] || first=""
+    local fails=() now
+    while :; do
+        # every (re)start goes to the session that is actually alive: its instance AND its
+        # Wayland socket (a restart after a re-login used to keep the dead session's
+        # WAYLAND_DISPLAY and draw nowhere). bromigos-session-env reads hypr/*/hyprland.lock.
+        if [ -x "${SESSION_ENV[0]}" ] && live_env=$("${SESSION_ENV[@]}" 2>/dev/null); then
+            eval "$(printf '%s\n' "$live_env" | sed 's/^/export /')"
+        elif ! HYPRLAND_INSTANCE_SIGNATURE="${HYPRLAND_INSTANCE_SIGNATURE:-}" /usr/bin/hyprctl version >/dev/null 2>&1; then
+            for s in $(ls -t "$RUN/hypr" 2>/dev/null); do
+                if HYPRLAND_INSTANCE_SIGNATURE="$s" /usr/bin/hyprctl version >/dev/null 2>&1; then
+                    HYPRLAND_INSTANCE_SIGNATURE="$s"; break
+                fi
+            done
+            export HYPRLAND_INSTANCE_SIGNATURE
+        fi
+        cd "$HERE" && "$PY" -m live.app $first >>"$LOG" 2>&1
+        rc=$?
+        first=""
+        [ $rc -eq 0 ] && break                       # clean quit (stop)
+        [ -f "$STATE/stopping" ] && break
+        if [ $rc -eq 4 ]; then                       # another daemon holds the lock: it's up already
+            echo "$(date -Is) another daemon holds the lock; supervisor $BASHPID leaving" >>"$LOG"
+            break
+        fi
+        # rc 3: the daemon waited ~60 s for a display and found none. With no Wayland
+        # socket left the session is over: stop rather than loop.
+        if [ $rc -eq 3 ] && ! compgen -G "$RUN/wayland-*" >/dev/null; then
+            echo "$(date -Is) no Wayland session; supervisor stopping" >>"$LOG"
+            break
+        fi
+        now=$(date +%s)
+        fails+=("$now")
+        local recent=()
+        for t in "${fails[@]}"; do [ $((now - t)) -lt 120 ] && recent+=("$t"); done
+        fails=("${recent[@]}")
+        echo "$(date -Is) daemon exited rc=$rc (${#fails[@]} recent)" >>"$LOG"
+        if [ ${#fails[@]} -ge 4 ]; then
+            echo "$(date -Is) giving up: crash loop" >>"$LOG"
+            notify-send -a bromigos-live -u low "LIVE LAYER OFFLINE" "Crashed 4x in 2 min. Log: $LOG" 2>/dev/null
+            break
+        fi
+        sleep 2
+    done
+    # the PID file only while it's ours (a newer supervisor's stays)
+    [ "$(cut -d' ' -f1 "$PIDF" 2>/dev/null)" = "$BASHPID" ] && rm -f "$PIDF"
+}
+
+do_stop() {
+    touch "$STATE/stopping"
+    inst stop
+}
+
+do_start() {
+    if running; then
+        # running, but for another (dead) session, e.g. a re-login: move it to this one
+        if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && [ "$(daemon_sig)" != "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
+            echo "running for another session; moving it to this one"
+            do_stop >/dev/null || return 1
+        else
+            echo "already running"; return 0
+        fi
+    fi
+    rm -f "$STATE/stopping"
+    # keep the log small
+    [ -f "$LOG" ] && [ "$(stat -c %s "$LOG")" -gt 1000000 ] && mv "$LOG" "$LOG.1"
+    # the supervisor doesn't keep the control lock (fd 9)
+    ( supervise "${1:-}" ) </dev/null >/dev/null 2>&1 9>&- &
+    inst started $!
+    disown
+}
+
+# start, stop and restart wait for each other: a restart's start never sees the old daemon
+ctl_lock() { exec 9>"$CTL_LOCK" && flock -w 30 9; }
+
+case "${1:-start}" in
+    start) ctl_lock; do_start "${2:-}" ;;
+    stop) ctl_lock; do_stop ;;
+    restart) ctl_lock; do_stop; do_start ;;
+    mute)
+        # the theme's sounds (cues and codec calls). The state is one file the daemon reads
+        # before every sound, so it needs no daemon. Bare: toggle with a notice (old form);
+        # on|off|toggle|status: quiet and explicit (bromigos mute: the whole desktop)
+        verb=${2:-}
+        case "$verb" in ""|on|off|toggle|status) ;; *) echo "bromigos-live mute [on|off|toggle|status]"; exit 2 ;; esac
+        mkdir -p "$STATE"
+        case "${verb:-toggle}" in
+            toggle) [ -f "$STATE/muted" ] && verb=off || verb=on ;;
+            *) verb=${verb} ;;
+        esac
+        case "$verb" in
+            on) touch "$STATE/muted" ;;
+            off) rm -f "$STATE/muted" ;;
+        esac
+        [ -f "$STATE/muted" ] && out=muted || out=unmuted
+        [ -z "${2:-}" ] && notify-send -a bromigos-live -u low -t 1200 "SOUND ${out^^}" 2>/dev/null
+        echo "$out"
+        ;;
+    holodeck|driftmap|timeline)
+        # no argument toggles (the keys); "open" / "close" are explicit (VECTOR's tour)
+        ctl "$1${2:+ $2}" || { echo "not running (bromigos-live start)"; exit 1; } ;;
+    open)
+        # the app launcher's entries (desktop entries; docs/menu.md, "In the app launcher"):
+        # open a deck or the screensaver, never toggle it shut, starting the daemon when it
+        # isn't running (stopped, or crashed out)
+        kind=${2:-}
+        [ -n "$kind" ] || { echo "usage: bromigos-live open <deck>|screensaver"; exit 2; }
+        if ! ctl ping >/dev/null 2>&1; then
+            ( ctl_lock && do_start ) >/dev/null
+            for _ in $(seq 1 100); do ctl ping >/dev/null 2>&1 && break; sleep 0.2; done
+        fi
+        case "$kind" in
+            holodeck|driftmap|timeline|screensaver|radial|intercept) out=$(ctl "$kind open") ;;
+            *) out=$(ctl "deck $kind open") ;;
+        esac || {
+            notify-send -a bromigos-live -u low "LIVE LAYER" "Couldn't start it to open $kind. Log: $LOG" 2>/dev/null
+            echo "not running (bromigos-live start; $LOG)"; exit 1; }
+        echo "$out"
+        case "$out" in
+            decks:*|"unknown command"|"screensaver disabled")
+                notify-send -a bromigos-live -u low "LIVE LAYER" "$kind: $out" 2>/dev/null; exit 1 ;;
+        esac ;;
+    toggle|radial|intercept|screensaver|screensaver-off)
+        ctl "$1" || { [ "$1" = screensaver-off ] || echo "not running (bromigos-live start)"; exit 1; } ;;
+    scan|scan-pin) ctl "$1" ;;
+    plugin)
+        # a deck plugin (plugins/<name>.py): bromigos-live plugin <name> [verb args]
+        shift; ctl "plugin $*" ;;
+    lab)
+        # the Lab deck (bromigos-homelab's homelab console): bare toggles (SUPER+SHIFT+H), else a verb
+        shift
+        if [ $# -eq 0 ]; then
+            st=$(ctl state) || { echo "not running (bromigos-live start)"; exit 1; }
+            case "$st" in *"'lab'"*) set -- close ;; *) set -- open ;; esac
+        fi
+        ctl "deck lab $*" || { echo "not running (bromigos-live start)"; exit 1; } ;;
+    mind|ops|swarm|netmap)
+        # open a hologram, or drive it: bromigos-live mind focus kb-sync, netmap trace nas, ...
+        kind="$1"; shift; ctl "deck $kind $*" ;;
+    deck) shift; ctl "deck $*" || { echo "not running (bromigos-live start)"; exit 1; } ;;
+    decks) shift; inst_decks "$@" ;;
+    codec) shift; text="${1:-}"; ch="${2:-DECK}"; ctl "codec $ch|$text" ;;
+    codec-quiet)
+        out=$(ctl codec-quiet 2>/dev/null) || out="not running"
+        notify-send -a bromigos-live -u low -t 1400 "CODEC" "$out" 2>/dev/null; echo "$out" ;;
+    job)
+        # run a command; if it took long enough, the deck calls in when it ends
+        shift; [ "${1:-}" = "--" ] && shift
+        [ $# -gt 0 ] || { echo "usage: bromigos-live job -- cmd [args]"; exit 2; }
+        min=$("$PY" -c 'import tomllib,os,sys
+try: print(int(tomllib.load(open(next(p for p in (os.environ.get("BROMIGOS_LIVE_CONFIG",""), os.path.expanduser("~/.config/bromigos-live/config.toml"), "/usr/share/bromigos/live/config.toml") if os.path.isfile(p)),"rb")).get("codec",{}).get("job_min_seconds",60)))
+except Exception: print(60)')
+        t0=$(date +%s); "$@"; rc=$?; dur=$(( $(date +%s) - t0 ))
+        if [ "$dur" -ge "$min" ]; then
+            name=$(basename -- "$1"); m=$((dur / 60)); sec=$((dur % 60))
+            if [ $rc -eq 0 ]; then how="clean"; else how="with exit code $rc"; fi
+            ctl "codec DECK|Deck here. $name finished $how after $m minutes $sec seconds." >/dev/null 2>&1 || true
+        fi
+        exit $rc ;;
+    scan-hold) ctl "scan-hold ${2:-on}" ;;
+    ctl) shift; ctl "$*" ;;
+    world) shift; ctl "world $*" || { echo "not running (bromigos-live start)"; exit 1; } ;;
+    status)
+        if running; then echo "daemon up (daemon $(inst daemon), supervisor $(inst supervisor))"; ctl state; else echo "stopped"; fi
+        [ -f "$STATE/muted" ] && echo "sounds: muted" || echo "sounds: on"
+        ;;
+    *)
+        # any other deck by its kind (a plugin's: decks.py): toggled, or a verb for it
+        if [[ $1 =~ ^[a-z][a-z0-9_]*$ ]] && inst_decks --json | grep -q "\"kind\": \"$1\""; then
+            kind=$1; shift
+            out=$(ctl "deck $kind ${*:-toggle}") || { echo "not running (bromigos-live start)"; exit 1; }
+            echo "$out"; exit 0
+        fi
+        sed -n '4,/^set -u$/{/^set -u$/!p}' "$0"; exit 2 ;;
+esac

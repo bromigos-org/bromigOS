@@ -1,0 +1,3 @@
+#!/bin/sh
+# a stand-in paplay: plays nothing (desktop/tests/fixtures)
+exit 0

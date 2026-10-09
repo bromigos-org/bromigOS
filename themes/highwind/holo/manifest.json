@@ -1,0 +1,20 @@
+{
+  "_comment": "Hologram models (VECTOR's format: vector's tools/holo/collection.py and assets/holo/README.md). Boxes are [x0,x1, y0,y1, z0,z1] in fractions of the normalised bounding box (y up, front +z); a face goes to the first part whose box holds its centroid, else to the part with rest=true. bind names the live reading a part shows (VECTOR's holo/bind.py), empty for a part that only shapes the model. Sources are in src/; the baked NAME.holo.npz sit next to this file. Rebake: ~/.local/share/bromigos/venv/bin/python <vector>/tools/holo/bake.py --root THIS_DIR --preview",
+  "models": {
+  "petrel": {
+   "title": "THE PETREL",
+   "subtitle": "Highwind \u00b7 Pip Arro's courier",
+   "faces": 40000,
+   "max_edges": 16000,
+   "edge_deg": 18,
+   "source": "src/petrel.glb",
+   "parts": [
+    {"id": "tail", "label": "TAIL AND PENNANT", "bind": "", "hint": "The tall fin and its long ribbon pennant: every post in the Drift knows the Petrel by its lamps", "boxes": [[0.3, 0.7, 0.3, 1.0, 0.0, 0.42], [0.0, 1.0, 0.5, 1.0, 0.0, 0.36]], "explode": [0, 0.5, -1], "distance": 0.28},
+    {"id": "fans", "label": "DUCTED FANS", "bind": "", "hint": "Two ducted fans under the wings: Pip flies storm bands, cloud decks and dust skies between Sunder, Cinder and every other post", "boxes": [[0.12, 0.36, 0.18, 0.66, 0.4, 0.8], [0.64, 0.88, 0.18, 0.66, 0.4, 0.8]], "explode": [0, -0.6, 0.4], "distance": 0.26},
+    {"id": "pod", "label": "CARGO POD", "bind": "", "hint": "The cargo pod clamped under the belly: Tamsin Rook's salvage, Brask's castings and Hollis Crane's drawings, flown from post to post", "boxes": [[0.36, 0.64, 0.0, 0.3, 0.45, 0.85]], "explode": [0, -1, 0], "distance": 0.26},
+    {"id": "wings", "label": "WINGS", "bind": "", "hint": "Straight, much-patched wings in faded orange and cream", "boxes": [[0.0, 0.4, 0.45, 0.7, 0.36, 0.8], [0.6, 1.0, 0.45, 0.7, 0.36, 0.8]], "explode": [0, 0.6, 0], "distance": 0.18},
+    {"id": "fuselage", "label": "COCKPIT", "bind": "", "hint": "A small, fast courier with a bubble canopy. Of all the Lamplighters, Pip has met the most of them, and never stayed long anywhere", "rest": true, "explode": [0, 0, 1], "distance": 0.16}
+   ]
+  }
+  }
+}

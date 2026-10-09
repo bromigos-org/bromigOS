@@ -1,0 +1,18 @@
+name: An idea
+description: Suggest a change or something new for bromigOS.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you want to do
+      description: The task, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How bromigOS could help. A sketch or an example from another app helps too.
+    validations:
+      required: true

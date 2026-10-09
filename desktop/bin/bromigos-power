@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+# bromigos:summary=Power: the power profile, batteries, what closing the lid does, suspend
+# bromigos:args=[status] | profile NAME | lid ACTION [--on-power ACTION] [--docked ACTION] [--print] | suspend  [--json]
+# bromigos:examples=bromigos power; bromigos power profile power-saver; bromigos power lid lock --on-power ignore
+"""bromigos-power (`bromigos power`): the machine's power. Settings › Power drives it.
+
+  bromigos power [status]       the power profile (power-profiles-daemon), each battery's
+                                charge, state, time left and health, the charger, the lid
+                                and what logind does when it closes, the idle suspend timer
+                                (bromigos idle), whether hibernation is set up
+  bromigos power profile NAME   power-saver, balanced or performance (what the daemon offers)
+  bromigos power lid ACTION [--on-power ACTION] [--docked ACTION] [--print]
+                                what closing the lid does: suspend, lock, ignore, poweroff or
+                                hibernate (on battery; on power and docked when given: docked
+                                means an external display is connected). logind's setting, in
+                                /etc/systemd/logind.conf.d/50-bromigos-lid.conf: it asks for
+                                your password (pkexec), then logind reloads it. --print shows
+                                the file without writing it
+  bromigos power suspend        suspend now (systemctl suspend; Settings asks first)
+
+The suspend timer is the idle policy's (bromigos idle set suspend.minutes …, Settings ›
+Idle & lock); this command only reads it.
+"""
+import glob
+import os
+import re
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+SYS = os.environ.get("BROMIGOS_SYSFS") or "/sys"
+PROC = os.environ.get("BROMIGOS_PROC") or "/proc"
+ETC = os.environ.get("BROMIGOS_ETC") or "/etc"
+USRLIB = os.environ.get("BROMIGOS_USRLIB") or "/usr/lib"
+LID_ACTIONS = ["suspend", "lock", "ignore", "poweroff", "hibernate"]
+LID_KEYS = {"on_battery": "HandleLidSwitch", "on_power": "HandleLidSwitchExternalPower",
+            "docked": "HandleLidSwitchDocked"}
+DROPIN = "50-bromigos-lid.conf"
+
+
+def _read(*parts):
+    t = C.read_file(os.path.join(*parts))
+    return t.strip() if t is not None else None
+
+
+def _num(*parts):
+    v = _read(*parts)
+    try:
+        return int(v) if v is not None else None
+    except ValueError:
+        return None
+
+
+# ---------------------------------------------------------------- profiles
+def profiles():
+    if not C.have("powerprofilesctl"):
+        return {"available": False, "why": "power-profiles-daemon isn't installed (bromigos hw setup installs it on laptops)"}
+    rc, out, err = C.run(["powerprofilesctl", "list"])
+    if rc != 0:
+        return {"available": False, "why": "power-profiles-daemon isn't running ("
+                + ((err or out).strip().splitlines() or ["no answer"])[-1][:120] + ")"}
+    ps, cur = [], None
+    for line in out.splitlines():
+        m = re.match(r"^([* ])\s*([\w-]+):\s*$", line)
+        if m:
+            cur = {"name": m.group(2), "active": m.group(1) == "*", "degraded": None, "driver": None}
+            ps.append(cur)
+        elif cur and ":" in line:
+            k, _, v = line.strip().partition(":")
+            v = v.strip()
+            if k == "Degraded" and v not in ("", "no"):
+                cur["degraded"] = v
+            elif k in ("Driver", "CpuDriver", "PlatformDriver") and not cur["driver"]:
+                cur["driver"] = v
+    active = next((p["name"] for p in ps if p["active"]), None)
+    return {"available": True, "active": active, "list": ps}
+
+
+# ---------------------------------------------------------------- batteries, the charger
+def supplies():
+    bats, devices, ac = [], [], {"present": False, "online": None}
+    for d in sorted(glob.glob(os.path.join(SYS, "class", "power_supply", "*"))):
+        name = os.path.basename(d)
+        kind = _read(d, "type")
+        if kind == "Mains":
+            ac = {"present": True, "online": _read(d, "online") == "1", "name": name}
+            continue
+        if kind != "Battery":
+            continue
+        model = " ".join(x for x in (_read(d, "manufacturer"), _read(d, "model_name")) if x) or name
+        cap = _num(d, "capacity")
+        if _read(d, "scope") == "Device":                  # a mouse's, a headset's
+            devices.append({"name": name, "model": model, "capacity": cap,
+                            "level": _read(d, "capacity_level")})
+            continue
+        status = _read(d, "status") or "Unknown"
+        now = _num(d, "energy_now") or _num(d, "charge_now")
+        full = _num(d, "energy_full") or _num(d, "charge_full")
+        design = _num(d, "energy_full_design") or _num(d, "charge_full_design")
+        rate = _num(d, "power_now") or _num(d, "current_now")
+        if cap is None and now and full:
+            cap = round(100 * now / full)
+        left = None
+        if rate and now is not None and full:
+            if status == "Discharging":
+                left = round(60 * now / rate)
+            elif status == "Charging":
+                left = round(60 * max(full - now, 0) / rate)
+        bats.append({"name": name, "model": model, "status": status, "capacity": cap,
+                     "charging": status == "Charging", "time_left_min": left,
+                     "health": round(100 * full / design) if full and design else None,
+                     "cycles": _num(d, "cycle_count"), "technology": _read(d, "technology")})
+    return bats, devices, ac
+
+
+# ---------------------------------------------------------------- the lid and logind
+def lid_present():
+    states = glob.glob(os.path.join(PROC, "acpi", "button", "lid", "*", "state"))
+    if states:
+        st = (C.read_file(states[0]) or "").split()
+        return True, (st[-1] if st else None)
+    for n in glob.glob(os.path.join(SYS, "class", "input", "input*", "name")):
+        if (C.read_file(n) or "").strip() == "Lid Switch":
+            return True, None
+    return False, None
+
+
+def logind_files():
+    """logind.conf, then its drop-ins in name order (the /etc one of a name wins)."""
+    main = os.path.join(ETC, "systemd", "logind.conf")
+    if not os.path.exists(main):
+        main = os.path.join(USRLIB, "systemd", "logind.conf")
+    drops = {}
+    for d in (os.path.join(USRLIB, "systemd", "logind.conf.d"), os.path.join(ETC, "systemd", "logind.conf.d")):
+        for f in glob.glob(os.path.join(d, "*.conf")):
+            drops[os.path.basename(f)] = f
+    return [main] + [drops[k] for k in sorted(drops)]
+
+
+def _login_keys(text):
+    out, sec = {}, None
+    for line in (text or "").splitlines():
+        s = line.strip()
+        if not s or s[0] in "#;":
+            continue
+        if s.startswith("["):
+            sec = s.strip("[]")
+            continue
+        if sec == "Login" and "=" in s:
+            k, _, v = s.partition("=")
+            out[k.strip()] = v.strip()
+    return out
+
+
+def lid_policy():
+    keys, read = {}, []
+    for f in logind_files():
+        text = C.read_file(f)
+        if text is not None:
+            read.append(f)
+            keys.update(_login_keys(text))
+    bat = keys.get("HandleLidSwitch") or "suspend"
+    return {"on_battery": bat, "on_power": keys.get("HandleLidSwitchExternalPower") or bat,
+            "docked": keys.get("HandleLidSwitchDocked") or "ignore", "read": read}
+
+
+def dropin_path():
+    return os.path.join(ETC, "systemd", "logind.conf.d", DROPIN)
+
+
+# ---------------------------------------------------------------- status
+def hibernation():
+    cmdline = C.read_file(os.path.join(PROC, "cmdline")) or ""
+    can = "disk" in (C.read_file(os.path.join(SYS, "power", "state")) or "")
+    resume = any(w.startswith("resume=") for w in cmdline.split())
+    if not can:
+        return {"possible": False, "why": "the kernel offers no hibernation here"}
+    if not resume:
+        return {"possible": False, "why": "no resume= on the kernel's command line: hibernation isn't set up"}
+    return {"possible": True, "why": "a resume device is set"}
+
+
+def idle_suspend():
+    d = C.bromigos("idle", "status", "--json", timeout=8)
+    s = ((d or {}).get("policy") or {}).get("suspend")
+    return {"enabled": bool(s.get("enabled")), "minutes": s.get("minutes")} if isinstance(s, dict) else None
+
+
+def status(_args=None):
+    bats, devices, ac = supplies()
+    present, state = lid_present()
+    lid = {"present": present, "state": state, "file": dropin_path(), "yours": os.path.exists(dropin_path()),
+           "actions": LID_ACTIONS}
+    if present:
+        lid.update(lid_policy())
+    return {"profiles": profiles(), "batteries": bats, "devices": devices, "ac": ac, "lid": lid,
+            "laptop": bool(bats) or present, "suspend": idle_suspend(), "hibernation": hibernation()}
+
+
+# ---------------------------------------------------------------- changes
+def profile(args):
+    if len(args) != 1:
+        raise Fail("bromigos power profile NAME")
+    p = profiles()
+    if not p["available"]:
+        raise Fail(p["why"])
+    names = [x["name"] for x in p["list"]]
+    if args[0] not in names:
+        raise Fail(f"{args[0]!r}: one of {', '.join(names)}")
+    C.must(["powerprofilesctl", "set", args[0]], what="powerprofilesctl set")
+    return dict(status(), said=f"Power profile: {args[0]}")
+
+
+def _check_action(a, what):
+    if a not in LID_ACTIONS:
+        raise Fail(f"{what}: {a!r} isn't one of {', '.join(LID_ACTIONS)}")
+    if a == "hibernate" and not hibernation()["possible"]:
+        raise Fail(f"{what}: hibernation isn't set up here ({hibernation()['why']})")
+    return a
+
+
+def lid_text(bat, power, docked):
+    keys = {"HandleLidSwitch": bat, "HandleLidSwitchExternalPower": power, "HandleLidSwitchDocked": docked}
+    lines = ["# What closing the lid does (bromigos power lid; Settings › Power). logind reads it;",
+             "# `bromigos power lid` writes it whole, so change it there.", "[Login]"]
+    lines += [f"{k}={v}" for k, v in keys.items() if v]
+    return "\n".join(lines) + "\n"
+
+
+def lid(args):
+    args = list(args)
+    show = C.flag(args, "--print", takes=False)
+    power = C.flag(args, "--on-power")
+    docked = C.flag(args, "--docked")
+    if len(args) != 1:
+        raise Fail("bromigos power lid ACTION [--on-power ACTION] [--docked ACTION] [--print]")
+    bat = _check_action(args[0], "on battery")
+    mine = _login_keys(C.read_file(dropin_path()))
+    power = _check_action(power, "on power") if power else mine.get("HandleLidSwitchExternalPower")
+    docked = _check_action(docked, "docked") if docked else mine.get("HandleLidSwitchDocked")
+    text = lid_text(bat, power, docked)
+    if show:
+        return {"file": dropin_path(), "text": text, "said": text.rstrip()}
+    d = os.path.dirname(dropin_path())
+    writable = os.access(d, os.W_OK) or (not os.path.exists(d) and os.access(os.path.dirname(d), os.W_OK))
+    if os.geteuid() == 0 or writable:
+        C.write_file(dropin_path(), text, mode=0o644)
+        if os.geteuid() == 0 and ETC == "/etc":
+            rc, _, err = C.run(["systemctl", "reload", "systemd-logind"], timeout=20)
+            note = "logind read it again" if rc == 0 else f"logind takes it at the next boot ({err.strip()[:80]})"
+        else:
+            note = "logind reads it when it next starts"
+        doc = status()
+        doc.update(said=f"Closing the lid: {bat}" + (f", on power: {power}" if power else "")
+                   + (f", docked: {docked}" if docked else ""), note=note)
+        return doc
+    # not root: the same command through pkexec (the session's polkit agent asks for the password)
+    argv = ["pkexec", os.path.realpath(sys.argv[0]), "lid", bat] + (["--on-power", power] if power else []) \
+        + (["--docked", docked] if docked else []) + ["--json"]
+    rc, out, err = C.run(argv, timeout=180)
+    if rc in (126, 127):
+        raise Fail("not changed: the password prompt was dismissed or refused")
+    try:
+        import json
+        child = json.loads(out)
+    except ValueError:
+        raise Fail(f"pkexec: {(err or out).strip()[:160] or 'no answer'}")
+    if not child.get("ok", False):
+        raise Fail(child.get("error") or "not changed")
+    return dict(status(), said=child.get("said", "Done"), note=child.get("note"))
+
+
+def suspend(_args):
+    C.must(["systemctl", "suspend"], what="systemctl suspend")
+    return {"said": "Suspending"}
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "profile": profile, "lid": lid, "suspend": suspend}, USAGE))

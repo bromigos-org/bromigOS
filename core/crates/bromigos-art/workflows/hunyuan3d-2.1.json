@@ -1,0 +1,21 @@
+{
+  "_comment": "Image-to-3D on the user's ComfyUI with Hunyuan3D 2.1 (shape), ComfyUI's native nodes: a GLB mesh from one concept image (best on a clean or transparent background: run image.cutout first). Shape only, no texture: VECTOR's hologram bake keeps geometry and feature edges. Weights: checkpoints/hunyuan_3d_v2.1.safetensors (Comfy-Org repackaged). Sampling follows Comfy-Org's template: 30 steps, cfg 5, euler/normal, shift 1.0.",
+  "_meta": {
+    "capabilities": ["model3d.generate"],
+    "output": "glb",
+    "license": "Tencent Hunyuan Community License (not licensed in the EU, UK or South Korea)",
+    "fill": "bind",
+    "requires": [{"folder": "checkpoints", "file": "hunyuan_3d_v2.1.safetensors"}],
+    "bind": {"image": ["2", "image"], "seed": ["7", "seed"], "prefix": ["10", "filename_prefix"]}
+  },
+  "1": {"class_type": "ImageOnlyCheckpointLoader", "inputs": {"ckpt_name": "hunyuan_3d_v2.1.safetensors"}},
+  "2": {"class_type": "LoadImage", "inputs": {"image": ""}},
+  "3": {"class_type": "CLIPVisionEncode", "inputs": {"clip_vision": ["1", 1], "image": ["2", 0], "crop": "none"}},
+  "4": {"class_type": "Hunyuan3Dv2Conditioning", "inputs": {"clip_vision_output": ["3", 0]}},
+  "5": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": 1.0}},
+  "6": {"class_type": "EmptyLatentHunyuan3Dv2", "inputs": {"resolution": 4096, "batch_size": 1}},
+  "7": {"class_type": "KSampler", "inputs": {"model": ["5", 0], "seed": 0, "steps": 30, "cfg": 5.0, "sampler_name": "euler", "scheduler": "normal", "positive": ["4", 0], "negative": ["4", 1], "latent_image": ["6", 0], "denoise": 1.0}},
+  "8": {"class_type": "VAEDecodeHunyuan3D", "inputs": {"samples": ["7", 0], "vae": ["1", 2], "num_chunks": 8000, "octree_resolution": 256}},
+  "9": {"class_type": "VoxelToMesh", "inputs": {"voxel": ["8", 0], "algorithm": "surface net", "threshold": 0.6}},
+  "10": {"class_type": "SaveGLB", "inputs": {"mesh": ["9", 0], "filename_prefix": "bromigos-art"}}
+}

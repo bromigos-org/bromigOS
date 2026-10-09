@@ -1,0 +1,37 @@
+{
+  "_comment": "Clip upscaling and restoration on the user's ComfyUI with SeedVR2 7B, ComfyUI's native nodes (0.38+), as Comfy-Org's video template does it (utility_seedvr2_3b_int8_upscale_video, with the 7B): the clip's frames are resized by the factor with Lanczos, encoded with the tiled VAE (512 px tiles, 128 overlap; 64 frames at a time, 8 shared), split into temporal chunks sized to the free VRAM (2 latent frames shared and crossfaded; unload_first asks an idle ComfyUI to unload its models before the job, since the chunking measures the card before SeedVR2 loads and a SeedVR2 left resident by the last job dropped it to one frame a chunk), restored in one euler step each, merged, decoded tiled and colour-matched to the resized frames in CIELAB; the clip keeps its frame rate and its audio. The factor is extra.scale, a whole number (2 to 4, default 2: H.264 wants even frame sizes), lowered so a frame stays within upscale.max_megapixels and the whole clip within upscale.max_megapixel_frames: ComfyUI holds every frame several times over in memory (about 66 bytes a pixel-frame on the lab), and 317 megapixel-frames (a 113-frame 1280x548 loop at 2x) ran its 40 GiB out (2026-10-09). 120 keeps a job under about 8 GiB of the server's memory: a 5 s, 24 fps loop up to about 1 MP a frame after upscaling. A longer or larger clip is refused with what to do (trim or split it). Weights as seedvr2-7b.",
+  "_meta": {
+    "capabilities": ["video.upscale"],
+    "catalog": "seedvr2-7b/native-int8",
+    "output": "mp4",
+    "license": "Apache-2.0 (SeedVR2)",
+    "vram_gib": 8.9,
+    "vram_note": "as seedvr2-7b (the same model; the temporal chunks are sized to the VRAM that's free), measured on the 5090 2026-10-09",
+    "seconds": 39,
+    "seconds_note": "a 5 s, 200x298 loop (120 frames) to 400x596 on the 5090; 116 s to 800x1192 (4x, 114 megapixel-frames, 8.0 GiB of the server's memory)",
+    "fill": "bind",
+    "unload_first": true,
+    "upscale": {"scale": 2, "max_scale": 4, "max_megapixels": 8.4, "max_megapixel_frames": 120},
+    "requires": [
+      {"folder": "diffusion_models", "file": "seedvr2_7b_int8_convrot.safetensors"},
+      {"folder": "vae", "file": "seedvr2_ema_vae_fp16.safetensors"}
+    ],
+    "nodes": ["LoadVideo", "GetVideoComponents", "SeedVR2Preprocess", "SeedVR2TemporalChunk", "SeedVR2Conditioning", "SeedVR2TemporalMerge", "SeedVR2PostProcessing", "ResizeImageMaskNode", "VAEEncodeTiled", "VAEDecodeTiled", "CreateVideo", "SaveVideo"],
+    "bind": {"image": ["1", "file"], "seed": ["10", "seed"], "scale": ["3", "resize_type.multiplier"], "prefix": ["15", "filename_prefix"]}
+  },
+  "1": {"class_type": "LoadVideo", "inputs": {"file": ""}},
+  "2": {"class_type": "GetVideoComponents", "inputs": {"video": ["1", 0]}},
+  "3": {"class_type": "ResizeImageMaskNode", "inputs": {"input": ["2", 0], "resize_type": "scale by multiplier", "resize_type.multiplier": 2.0, "scale_method": "lanczos"}},
+  "4": {"class_type": "SeedVR2Preprocess", "inputs": {"resized_images": ["3", 0]}},
+  "5": {"class_type": "VAELoader", "inputs": {"vae_name": "seedvr2_ema_vae_fp16.safetensors"}},
+  "6": {"class_type": "VAEEncodeTiled", "inputs": {"pixels": ["4", 0], "vae": ["5", 0], "tile_size": 512, "overlap": 128, "temporal_size": 64, "temporal_overlap": 8}},
+  "7": {"class_type": "UNETLoader", "inputs": {"unet_name": "seedvr2_7b_int8_convrot.safetensors", "weight_dtype": "default"}},
+  "8": {"class_type": "SeedVR2TemporalChunk", "inputs": {"latent": ["6", 0], "temporal_overlap": 2, "chunking_mode": "auto"}},
+  "9": {"class_type": "SeedVR2Conditioning", "inputs": {"model": ["7", 0], "vae_conditioning": ["8", 0]}},
+  "10": {"class_type": "KSampler", "inputs": {"model": ["7", 0], "seed": 0, "steps": 1, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "positive": ["9", 0], "negative": ["9", 1], "latent_image": ["8", 0], "denoise": 1.0}},
+  "11": {"class_type": "SeedVR2TemporalMerge", "inputs": {"latents": ["10", 0], "temporal_overlap": ["8", 1]}},
+  "12": {"class_type": "VAEDecodeTiled", "inputs": {"samples": ["11", 0], "vae": ["5", 0], "tile_size": 512, "overlap": 128, "temporal_size": 64, "temporal_overlap": 8}},
+  "13": {"class_type": "SeedVR2PostProcessing", "inputs": {"images": ["12", 0], "original_resized_images": ["3", 0], "color_correction_method": "lab"}},
+  "14": {"class_type": "CreateVideo", "inputs": {"images": ["13", 0], "audio": ["2", 1], "fps": ["2", 2]}},
+  "15": {"class_type": "SaveVideo", "inputs": {"video": ["14", 0], "filename_prefix": "bromigos-art", "format": "mp4", "format.codec": "h264"}}
+}

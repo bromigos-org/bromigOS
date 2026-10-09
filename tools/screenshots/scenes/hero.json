@@ -1,0 +1,13 @@
+{
+  "_comment": "The README's hero: the panels in two columns as a user arranges them on a 2560x1440 screen, the terminal at the bottom right with the banner.",
+  "panels": [
+    {"name": "system",    "x": 28,  "y": 16},
+    {"name": "network",   "x": 28,  "y": 502},
+    {"name": "weather",   "x": 28,  "y": 780},
+    {"name": "storage",   "x": 28,  "y": 1096},
+    {"name": "lab",       "x": 514, "y": 16, "width": 470, "height": 640},
+    {"name": "workbench", "x": 514, "y": 672},
+    {"name": "notes",     "x": 514, "y": 988}
+  ],
+  "terminal": {"at": [1520, 836, 1012, 576], "script": "../banner.sh", "font_size": 11.5}
+}

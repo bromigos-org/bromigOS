@@ -1,0 +1,14 @@
+{
+  "_comment": "Background removal on the user's ComfyUI: the subject on a transparent background (PNG with alpha), through the ComfyUI-RMBG node (BiRefNetRMBG). Weights: models/RMBG/BiRefNet/ (helm/comfyui in the homelab repo fetches them). Works on glow art on black too; see docs/art.md.",
+  "_meta": {
+    "capabilities": ["image.cutout"],
+    "output": "png",
+    "license": "MIT (BiRefNet)",
+    "fill": "bind",
+    "requires": [{"folder": "RMBG", "file": "BiRefNet/BiRefNet-general.safetensors"}],
+    "bind": {"image": ["1", "image"], "prefix": ["3", "filename_prefix"]}
+  },
+  "1": {"class_type": "LoadImage", "inputs": {"image": ""}},
+  "2": {"class_type": "BiRefNetRMBG", "inputs": {"image": ["1", 0], "model": "BiRefNet-general", "sensitivity": 1.0, "mask_blur": 0, "mask_offset": 0, "invert_output": false, "refine_foreground": true, "background": "Alpha", "background_color": "#000000"}},
+  "3": {"class_type": "SaveImage", "inputs": {"images": ["2", 0], "filename_prefix": "bromigos-art"}}
+}

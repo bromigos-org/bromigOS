@@ -1,0 +1,81 @@
+# The Wick's colours (docs/theming.md, "colors.toml").
+#
+# A value is "#rrggbb", or the name of another colour in this file: a top-level
+# role, a [colors] name, or "table.key". Templates use them as {{ primary }},
+# {{ terminal.color4 }}, {{ widgets.frame }}. The lore names the Wick's palette
+# went by (phosphor, amber, static, guard) are in the comments.
+
+# ---- surfaces, darkest first
+background = "#000500"     # desktop, terminal and lock-screen background (void)
+void = "background"        # the deepest black: tooltips, input wells, shadows
+panel = "#001300"          # bars, launcher, notifications, widget plates
+selection = "#003b00"      # the selected row, inactive borders (guard)
+
+# ---- ink
+primary = "#39ff14"        # live values, active borders, the cursor (phosphor)
+soft = "#9cff8a"           # body text on panels (phosphor-soft)
+dim = "#159b09"            # rules, frames, quiet labels (phosphor-dim)
+text = "#c4f5bb"           # terminal and long-form text
+muted = "#7e927e"          # inactive labels (static)
+faint = "#4e6b4e"          # disabled text, the terminal's bright black
+
+# ---- signals
+warn = "#d4af37"           # warnings, urgent workspaces, recording (amber)
+danger = "#ff766f"         # errors, critical values, alarms
+warn_surface = "#4a3a0a"   # behind an urgent selected row
+danger_surface = "#1a0503" # behind a critical notification
+danger_text = "#ffd9d6"    # text on danger_surface
+
+# Named hues the roles and tables point at. Like the roles, each becomes a
+# top-level name in templates ({{ cyan }}), so a name can't be both.
+[colors]
+cyan = "#3fe0c5"           # links, URLs, the robot voice
+gold = "#f0d36a"           # the floor voice, bright yellow
+white = "#e8ffe0"          # hologram highlights
+rust = "#4a0e0e"           # danger, darkened
+
+# Holograms and the deck (holo/). Reserved: the live layer doesn't read these yet.
+[holo]
+line = "primary"
+glow = "primary"
+label = "text"
+highlight = "white"
+
+# Desktop widgets (widgets/). Reserved: the widgets don't read these yet.
+[widgets]
+frame = "dim"
+header = "primary"
+value = "soft"
+graph = "primary"
+track = "selection"
+
+# The terminal's 16 colours: kitty.conf.
+[terminal]
+foreground = "text"
+background = "background"
+color0 = "background"
+color1 = "danger"
+color2 = "primary"
+color3 = "warn"
+color4 = "#5aa9e6"
+color5 = "#c97bdb"
+color6 = "cyan"
+color7 = "#b4c8b4"
+color8 = "faint"
+color9 = "#ff9d97"
+color10 = "soft"
+color11 = "gold"
+color12 = "#8ccaf5"
+color13 = "#e3a8ef"
+color14 = "#8af5e2"
+color15 = "#e6f5e6"
+
+# Extra surfaces for the KDE/Qt colour scheme: kde.colors.
+[qt]
+view = "#000900"                  # list and text views
+view_alt = "#001000"              # alternate rows
+header = "#000d00"                # header bars, complementary areas
+window_alt = "#001a00"
+button = "#002800"
+neutral_on_selection = "#4a3c00"
+negative_on_selection = "rust"

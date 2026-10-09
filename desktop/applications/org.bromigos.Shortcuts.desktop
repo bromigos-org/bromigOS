@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Shortcuts
+GenericName=Keyboard Shortcuts
+Comment=Rebind a key by pressing it: pick a default, a menu item, an app or a command, then press its new keys
+Icon=bromigos-shortcuts
+TryExec=bromigos-keys
+Exec=bromigos-keys
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=shortcuts;keyboard shortcuts;keybindings;keybinds;hotkeys;keys;bind;rebind;remap;keyboard;
+StartupNotify=false
+X-Bromigos-Menu=setup/shortcuts

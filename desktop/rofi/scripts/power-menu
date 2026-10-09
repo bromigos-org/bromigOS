@@ -1,0 +1,31 @@
+#!/bin/sh
+# Power menu (Alt+Shift+E): lock, suspend, logout, reboot, shutdown.
+# Reboot and shutdown ask once more before acting.
+# one property per line: rofi reads two quoted values on one line as a single string;
+# the title expands (rofi's default): a fixed-height one is drawn under the input
+theme='
+window { width: 420px; }
+box-header { children: [ icon-emblem, box-headerbody ]; }
+box-headerbody { children: [ textbox-title, inputbar ]; }
+textbox-title {
+  str: "POWER";
+  text-color: @primary;
+  font: "Geist Mono Bold 12";
+}
+icon-emblem { size: 64px; }
+listview { lines: 5; }
+inputbar { children: [ textbox-prompt, entry ]; }
+'
+choice=$(printf '%s\n' "LOCK" "SUSPEND" "LOGOUT" "REBOOT" "SHUTDOWN" |
+  rofi -dmenu -i -no-custom -p "" -theme-str "$theme" \
+       -mesg "$(uptime -p | sed 's/^up /UP /' | tr '[:lower:]' '[:upper:]')")
+confirm() {
+  [ "$(printf 'NO\nYES\n' | rofi -dmenu -i -no-custom -p "" -theme-str "$theme" -mesg "$1?")" = "YES" ]
+}
+case "$choice" in
+  LOCK)     loginctl lock-session ;;
+  SUSPEND)  systemctl suspend ;;
+  LOGOUT)   confirm "LOG OUT OF HYPRLAND" && /usr/lib/bromigos/bin/bromigos-dispatch 'hl.dsp.exit()' exit ;;
+  REBOOT)   confirm "REBOOT" && systemctl reboot ;;
+  SHUTDOWN) confirm "POWER OFF" && systemctl poweroff ;;
+esac

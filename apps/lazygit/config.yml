@@ -1,0 +1,25 @@
+# bromigOS's lazygit defaults (package bromigos-apps). lazygit has no include, so
+# `bromigos apps setup` copies this to ~/.config/lazygit/config.yml once; after that the
+# copy is yours. Colours are the terminal's ANSI names, so lazygit follows the theme
+# through the terminal palette.
+gui:
+  nerdFontsVersion: ""          # the desktop's font is Geist Mono, not a Nerd Font
+  showIcons: false
+  theme:
+    activeBorderColor: [green, bold]
+    inactiveBorderColor: [default]
+    searchingActiveBorderColor: [yellow, bold]
+    optionsTextColor: [blue]
+    selectedLineBgColor: [reverse]
+    cherryPickedCommitBgColor: [cyan]
+    cherryPickedCommitFgColor: [blue]
+    unstagedChangesColor: [red]
+    defaultFgColor: [default]
+  showRandomTip: false
+  showCommandLog: false
+git:
+  paging:
+    colorArg: always
+  autoFetch: true
+update:
+  method: never                 # updates come with `bromigos update`

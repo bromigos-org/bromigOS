@@ -1,0 +1,13 @@
+# Mire's mark: the burn-in as Hollis Crane's post carries it (platform agents/LORE.md,
+# "Mire"; docs/theming.md, "Build the emblem kit"). bromigos-emblem build --theme
+# themes/mire draws the kit beside this file from it. Colours may name a role in ../colors.toml.
+motto = "NOTHING HERE IS FORGOTTEN · ONLY SLEEPING ·"
+gap = "reeds"            # the tuning gap: eleven reeds, the centre one a cattail
+sigil = "flood"          # the flame above the flood line, its broken reflection, two eye-lamps
+
+[colors]
+ring = "primary"         # firefly light
+hairline = "dim"         # moss
+water = "dim"
+eyes = "cyan"            # the Sleepers' eye-lamps
+flame = "#000000"        # the flame gives no light, at every post

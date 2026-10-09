@@ -1,0 +1,86 @@
+# Promote a release candidate to stable (docs/release.md): vX.Y.Z tagged on the very commits
+# vX.Y.Z-rcN tagged, in bromigOS and vector. packages.yml publishes stable from the tag by
+# copying the rc channel's signed files (packaging/ci/publish.sh, PKGS_REUSE): nothing is
+# rebuilt. The GitHub Releases reuse the candidate's notes; nothing is committed, so the
+# notes on machines are the candidate's. The work is tools/release/promote.sh.
+name: release-promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      rc:
+        description: "The release candidate to promote (e.g. v0.1.2-rc2); empty: the newest"
+        type: string
+        default: ""
+      dry_run:
+        description: "Only check and say what it would do: no tag, no publish, no GitHub Release"
+        type: boolean
+        default: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  promote:
+    name: rc to stable
+    # a homelab runner for the bucket, but not the packages one it waits for (see release.yml)
+    runs-on: ${{ vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    container: archlinux:base
+    timeout-minutes: 180
+    env:
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      HAVE_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' && '1' || '' }}
+    steps:
+      - name: tools
+        run: pacman -Syu --noconfirm --needed git python github-cli rclone >/dev/null
+
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+      - name: VECTOR's repository
+        if: env.HAVE_RELEASE_TOKEN
+        uses: actions/checkout@v5
+        with:
+          repository: bromigos-org/vector
+          ref: main
+          fetch-depth: 0
+          path: .release/vector
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Promote
+        shell: bash
+        env:
+          RC: ${{ inputs.rc }}
+          GH_TOKEN: ${{ github.token }}
+          VECTOR_GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          PRIVACY_PATTERNS: ${{ secrets.PRIVACY_PATTERNS }}
+          PKGS_S3_ENDPOINT: ${{ secrets.PKGS_S3_ENDPOINT }}
+          PKGS_S3_BUCKET: ${{ secrets.PKGS_S3_BUCKET }}
+          PKGS_S3_ACCESS_KEY_ID: ${{ secrets.PKGS_S3_ACCESS_KEY_ID }}
+          PKGS_S3_SECRET_ACCESS_KEY: ${{ secrets.PKGS_S3_SECRET_ACCESS_KEY }}
+          PKGS_GPG_PRIVATE_KEY: ${{ secrets.PKGS_GPG_PRIVATE_KEY }}
+          PKGS_GPG_PASSPHRASE: ${{ secrets.PKGS_GPG_PASSPHRASE }}
+        run: |
+          git config --global --add safe.directory '*'
+          git config --global user.name "bromigOS release"
+          git config --global user.email "packages@bromigos.org"
+          [[ $HAVE_RELEASE_TOKEN ]] && export VECTOR_DIR=.release/vector
+          OUT=$RUNNER_TEMP/out tools/release/promote.sh
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          [[ -f $RUNNER_TEMP/out/result.env ]] && . "$RUNNER_TEMP/out/result.env"
+          {
+            echo "## ${DRY_RUN:+Dry run: }promote ${RC:-} to ${TAG:-}"
+            echo
+            [[ -f $RUNNER_TEMP/out/body.md ]] && cat "$RUNNER_TEMP/out/body.md"
+          } >> "$GITHUB_STEP_SUMMARY"

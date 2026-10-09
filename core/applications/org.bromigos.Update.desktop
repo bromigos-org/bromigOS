@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Update bromigOS
+GenericName=System Update
+Comment=Upgrade the packages, run the migrations and restart what runs old code, in a terminal (it asks for your password)
+Icon=bromigos-update
+TryExec=bromigos
+Exec=bromigos terminal --hold --title "bromigos update" -- bromigos update
+Terminal=false
+Categories=Settings;PackageManager;
+Keywords=update;upgrade;updates;pacman;packages;system update;bromigos;
+StartupNotify=false
+X-Bromigos-Menu=update/run

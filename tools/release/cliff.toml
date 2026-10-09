@@ -1,0 +1,63 @@
+# git-cliff's configuration for the technical changelog (CHANGELOG.md) of bromigOS and of
+# VECTOR (bromigos-org/vector, rendered with this same file). tools/release/release.py runs
+# it; docs/release.md says how a release uses it.
+#
+# The commits aren't Conventional Commits: bromigOS's subjects start with the areas they
+# touch ("desktop: …", "live, homelab: …", "lab catalog: …"), VECTOR's with what changed
+# ("Added: …", "Fixed: …"). The parsers below group each by its first area or verb; the
+# body template is one release, and release.py stitches the releases into the file
+# (CLIFF_SPLIT set: each release starts with a line release.py splits the history on).
+
+[changelog]
+header = ""
+body = """
+{% if get_env(name="CLIFF_SPLIT", default="") != "" %}@@release {{ version | default(value="unreleased") }}
+{% endif -%}
+{% for group, commits in commits | group_by(attribute="group") -%}
+### {{ group | striptags | trim }}
+
+{% for commit in commits -%}
+{% set subject = commit.message | split(pat="\n") | first | trim -%}
+- {% if subject is matching("^(Added|Fixed|Changed|Removed|Moved|Imported|Updated): ") %}{{ subject | replace_regex(from="^[A-Za-z]+: ", to="") | upper_first }}{% else %}{{ subject }}{% endif %} ([{{ commit.id | truncate(length=7, end="") }}]({{ get_env(name="CLIFF_REPO_URL", default="https://github.com/bromigos-org/bromigOS") }}/commit/{{ commit.id }}))
+{% endfor %}
+{% endfor -%}
+"""
+footer = ""
+trim = true
+# no authors, no e-mail addresses: the log names changes, not people
+postprocessors = []
+
+[git]
+conventional_commits = false
+filter_unconventional = false
+split_commits = false
+# stable tags bound the releases; an rc's commits belong to the release it leads to
+tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+(-rc[0-9]+)?$"
+ignore_tags = "-rc[0-9]+$"
+topo_order = false
+sort_commits = "oldest"
+filter_commits = false
+commit_parsers = [
+  # merges of release branches and the release commits themselves
+  { message = "^Merge (pull request|branch)", skip = true },
+  { message = "^release: ", skip = true },
+  # VECTOR's subjects: what changed
+  { message = "^Added:", group = "<!-- 00 -->Added" },
+  { message = "^(Changed|Moved|Removed|Imported|Updated):", group = "<!-- 01 -->Changed" },
+  { message = "^Fixed:", group = "<!-- 02 -->Fixed" },
+  # bromigOS's subjects: the first area they name (tests and tools first, since
+  # "desktop/tests:" names the desktop too)
+  { message = "^(test/|tools/|[a-z0-9/._-]*/tests?[/.:]|[a-z0-9/._-]*/test\\.sh)", group = "<!-- 30 -->Tests and tools" },
+  { message = "^(iso|settings/grub|boot menus?|boot|plymouth)\\b", group = "<!-- 13 -->Boot and the ISO" },
+  { message = "^(core|cli|update|setup|install|migrations|target|channel)\\b", group = "<!-- 10 -->Core (the bromigos command)" },
+  { message = "^(desktop|peripherals|settings|menu|wallpaper)\\b", group = "<!-- 11 -->Desktop" },
+  { message = "^live\\b", group = "<!-- 12 -->Live layer" },
+  { message = "^widgets\\b", group = "<!-- 14 -->Widgets" },
+  { message = "^(themes?|art)\\b", group = "<!-- 15 -->Themes and art" },
+  { message = "^(homelab|lab catalog|lab|video loops on the lab)\\b", group = "<!-- 16 -->Homelab" },
+  { message = "^apps\\b", group = "<!-- 17 -->Apps" },
+  { message = "^(holo|tools/holo|voice|vector)\\b", group = "<!-- 18 -->VECTOR" },
+  { message = "^docs\\b", group = "<!-- 40 -->Docs" },
+  { message = "^(packaging|ci)\\b", group = "<!-- 41 -->Packaging and CI" },
+  { message = ".*", group = "<!-- 50 -->Other" },
+]

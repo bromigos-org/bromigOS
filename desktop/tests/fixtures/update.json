@@ -1,0 +1,29 @@
+{
+ "channel": "edge",
+ "migrations": [
+  "20261009210000-idle-policy"
+ ],
+ "packages": [
+  {
+   "name": "bromigos-desktop",
+   "from": "0.1.0.r120.g42db24c-1",
+   "to": "0.1.0.r126.gb005a2b-1"
+  },
+  {
+   "name": "mesa",
+   "from": "1:26.2.1-1",
+   "to": "1:26.2.2-1"
+  }
+ ],
+ "restarts": [
+  {
+   "need": "reload",
+   "pids": [
+    2903
+   ],
+   "what": "dunst",
+   "why": "its default config (bromigos-desktop 0.1.0.r120) is newer"
+  }
+ ],
+ "rollbacks": []
+}

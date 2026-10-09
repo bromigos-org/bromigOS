@@ -1,0 +1,71 @@
+# Cinder's colours (docs/theming.md, "colors.toml"): ember on soot, molten yellow for a
+# warning, quench-blue for the cool things, crucible red for an alarm.
+
+# ---- surfaces, darkest first
+background = "#090606"     # soot
+void = "#050303"
+panel = "#171010"
+selection = "#2b1a16"
+
+# ---- ink
+primary = "#ff7a2a"        # ember
+soft = "#ffc8a0"
+dim = "#8a3f1e"
+text = "#f0dcd0"
+muted = "#9a8078"
+faint = "#5a4a44"
+
+# ---- signals
+warn = "#ffcf5a"           # molten
+danger = "#ff3b3b"         # a crucible about to go
+warn_surface = "#3d2a0a"
+danger_surface = "#2b0808"
+danger_text = "#ffd8d8"
+
+[colors]
+cyan = "#6fd3ff"           # quench water
+gold = "#ffd36a"
+white = "#fff0e6"
+rust = "#5a1a0e"
+
+[holo]
+line = "primary"
+glow = "warn"
+label = "text"
+highlight = "white"
+
+[widgets]
+frame = "dim"
+header = "primary"
+value = "soft"
+graph = "primary"
+track = "selection"
+
+[terminal]
+foreground = "text"
+background = "background"
+color0 = "background"
+color1 = "danger"
+color2 = "primary"
+color3 = "warn"
+color4 = "#6fa8ff"
+color5 = "#d78bd6"
+color6 = "cyan"
+color7 = "#c8b4ac"
+color8 = "faint"
+color9 = "#ff7b7b"
+color10 = "soft"
+color11 = "gold"
+color12 = "#9fc6ff"
+color13 = "#e8b0e6"
+color14 = "#a0e4ff"
+color15 = "#fff4ee"
+
+[qt]
+view = "#0c0808"
+view_alt = "#120c0c"
+header = "#100a0a"
+window_alt = "#1d1414"
+button = "#281a18"
+neutral_on_selection = "#4a3010"
+negative_on_selection = "rust"

@@ -1,0 +1,4 @@
+# The Wick's mark is the burn-in itself (platform agents/LORE.md, "The burn-in"): no
+# overrides. bromigos-emblem build --theme themes/wick draws the canonical kit here, the
+# same files as the dotfiles' brand/, so every theme has an emblem/ and switching back to
+# the Wick puts the burn-in back exactly. docs/theming.md, "Build the emblem kit".

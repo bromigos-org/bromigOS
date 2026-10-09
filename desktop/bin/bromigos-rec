@@ -1,0 +1,56 @@
+#!/bin/sh
+# bromigos:summary=Start/stop a screen recording to ~/Videos/recordings
+# bromigos:args=[region|screen]
+# bromigos-rec [region|screen]  -- press again to stop.
+# Screen recording with wf-recorder to ~/Videos/recordings. While recording, an
+# amber notification stays up (click it to stop); on stop it is replaced by a
+# "saved" notification (click to open the folder).
+set -u
+DIR="$HOME/Videos/recordings"
+STATE="${XDG_RUNTIME_DIR:-/tmp}/bromigos-rec"
+SOUND_DIR=/usr/lib/bromigos/live/sounds   # bromigos-live
+MUTED="${XDG_STATE_HOME:-$HOME/.local/state}/bromigos-live/muted"
+HYPRCTL=/usr/bin/hyprctl
+
+cue() {
+    [ -r "$SOUND_DIR/$1" ] && [ ! -e "$MUTED" ] && command -v pw-play >/dev/null &&
+        pw-play --volume=0.30 --media-role=Notification "$SOUND_DIR/$1" >/dev/null 2>&1 &
+}
+
+if [ -f "$STATE/pid" ] && kill -0 "$(cat "$STATE/pid")" 2>/dev/null; then
+    kill -INT "$(cat "$STATE/pid")"
+    exit 0
+fi
+
+mkdir -p "$DIR" "$STATE"
+f="$DIR/recording-$(date +%Y%m%d-%H%M%S).mp4"
+case "${1:-region}" in
+    region) g=$(slurp -d -b '#00050066' -c '#d4af37' -s '#d4af3714' -w 1) || exit 0
+            set -- -g "$g" ;;
+    screen) set -- -o "$($HYPRCTL monitors -j | jq -r '.[] | select(.focused) | .name')" ;;
+    *) echo "usage: bromigos-rec [region|screen]" >&2; exit 2 ;;
+esac
+
+wf-recorder "$@" -f "$f" >"$STATE/log" 2>&1 &
+pid=$!
+echo "$pid" > "$STATE/pid"
+cue sweep.wav
+start=$(date +%s)
+id=$(dunstify -p -a RECORDING -h string:category:capture.live -t 0 \
+    "Recording" "$(printf '%s\n%s' "$(basename "$f")" "Click here or press ALT SHIFT R to stop")")
+# Clicking the live notification stops the recording.
+( act=$(dunstify -r "$id" -a RECORDING -h string:category:capture.live -t 0 -A default,stop \
+      "Recording" "$(printf '%s\n%s' "$(basename "$f")" "Click here or press ALT SHIFT R to stop")")
+  [ "$act" = default ] && kill -INT "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+wait "$pid" 2>/dev/null || while kill -0 "$pid" 2>/dev/null; do sleep 0.3; done
+rm -f "$STATE/pid"
+secs=$(( $(date +%s) - start ))
+cue blip.wav
+if [ -s "$f" ]; then
+    mb=$(du -m "$f" | cut -f1)
+    act=$(dunstify -r "$id" -a RECORDING -h string:category:capture.saved -A default,open \
+        "Recording saved" "$(printf '%s\n%s' "$(basename "$f")" "$((secs / 60))m $((secs % 60))s · ${mb} MB · click to open the folder")")
+    [ "$act" = default ] && xdg-open "$DIR"
+else
+    dunstify -r "$id" -a RECORDING -u critical "Recording failed" "$(tail -n 3 "$STATE/log")"
+fi

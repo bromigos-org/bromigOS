@@ -1,0 +1,16 @@
+{
+  "/api2/json/version": {"data": {"version": "9.1.2", "release": "9.1", "repoid": "8f1a2b3c"}},
+  "/api2/json/nodes": {"data": [
+    {"node": "pve", "status": "online", "cpu": 0.0623, "maxcpu": 32, "mem": 117440512000,
+     "maxmem": 134217728000, "disk": 412316860416, "maxdisk": 1996099534848, "uptime": 1209600,
+     "type": "node", "id": "node/pve", "level": ""}
+  ]},
+  "/api2/json/cluster/resources?type=vm": {"data": [
+    {"id": "qemu/100", "type": "qemu", "vmid": 100, "name": "vm-alpha", "node": "pve", "status": "running",
+     "cpu": 0.141, "maxcpu": 4, "mem": 6012954214, "maxmem": 17179869184, "uptime": 1209000, "template": 0},
+    {"id": "qemu/101", "type": "qemu", "vmid": 101, "name": "vm-beta", "node": "pve", "status": "running",
+     "cpu": 0.153, "maxcpu": 8, "mem": 11711934464, "maxmem": 51539607552, "uptime": 1209000, "template": 0},
+    {"id": "lxc/200", "type": "lxc", "vmid": 200, "name": "pihole", "node": "pve", "status": "stopped",
+     "cpu": 0, "maxcpu": 1, "mem": 0, "maxmem": 536870912, "pool": "net", "template": 0}
+  ]}
+}

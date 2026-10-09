@@ -1,0 +1,14 @@
+[Unit]
+Description=bromigOS peripheral modules: a keyboard's dial as VECTOR's voice dial, lighting that follows him
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/docs/peripherals.md
+# openrazer's daemon is the lighting's backend (a module's needs start it; ordering only)
+After=openrazer-daemon.service
+
+[Service]
+ExecStart=/usr/lib/bromigos/desktop/bin/bromigos-peripherals
+# it exits 0 when no module is on: stopped, not restarted
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

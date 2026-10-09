@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+# bromigos:summary=Web apps: a site as its own frameless window, in the launcher, with a hotkey
+# bromigos:args=add NAME URL [--icon FILE|URL] [--hotkey "SUPER + SHIFT + X"] | add --from-catalog NAME | remove NAME | list | launch NAME | catalog
+# bromigos:examples=bromigos webapp add gmail https://mail.google.com --hotkey "SUPER + SHIFT + G"; bromigos webapp list
+"""bromigos-webapp: web apps the Omarchy way, adapted.
+
+A web app is a site opened in its own frameless window (Chromium's --app; Firefox and
+LibreWolf open a new window), with a desktop entry so it shows in the launcher and the
+menu, and an optional hotkey kept in a marked block of your ~/.config/hypr/hyprland.lua.
+Yours are in ~/.config/bromigos/webapps.toml; `catalog` lists a few ready to add.
+"""
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tomllib
+import urllib.parse
+import urllib.request
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+import bromigos_hypr as H  # noqa: E402
+
+CONF = os.path.join(H.CONFIG, "bromigos/webapps.toml")
+APPS = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "applications")
+ICONS = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "bromigos/webapps")
+BLOCK = "webapps"
+
+CATALOG = [
+    {"name": "chatgpt", "title": "ChatGPT", "url": "https://chatgpt.com"},
+    {"name": "youtube", "title": "YouTube", "url": "https://youtube.com"},
+    {"name": "github", "title": "GitHub", "url": "https://github.com"},
+    {"name": "gmail", "title": "Gmail", "url": "https://mail.google.com"},
+    {"name": "calendar", "title": "Google Calendar", "url": "https://calendar.google.com"},
+    {"name": "maps", "title": "Google Maps", "url": "https://maps.google.com"},
+    {"name": "messages", "title": "Google Messages", "url": "https://messages.google.com/web"},
+    {"name": "photos", "title": "Google Photos", "url": "https://photos.google.com"},
+]
+
+CHROMIUM = ["google-chrome-stable", "google-chrome", "chromium", "brave", "vivaldi-stable", "microsoft-edge-stable"]
+FIREFOX = ["librewolf", "firefox", "zen-browser"]
+
+
+def browser():
+    """(command, kind): the first browser found, Chromium-family first (they have --app)."""
+    for b in CHROMIUM:
+        if shutil.which(b):
+            return b, "chromium"
+    for b in FIREFOX:
+        if shutil.which(b):
+            return b, "firefox"
+    return None, None
+
+
+def load():
+    try:
+        with open(CONF, "rb") as f:
+            return tomllib.load(f).get("app", [])
+    except FileNotFoundError:
+        return []
+
+
+def save(apps):
+    os.makedirs(os.path.dirname(CONF), exist_ok=True)
+    lines = ["# Your web apps (bromigos webapp add/remove); each has a desktop entry and may have a hotkey.\n"]
+    for a in apps:
+        lines.append("\n[[app]]\n")
+        for k in ("name", "title", "url", "icon", "hotkey"):
+            if a.get(k):
+                lines.append(f'{k} = {json.dumps(a[k])}\n')
+    tmp = CONF + ".tmp"
+    with open(tmp, "w") as f:
+        f.writelines(lines)
+    os.replace(tmp, CONF)
+
+
+def valid_name(name):
+    return bool(re.fullmatch(r"[a-z0-9][a-z0-9-]{0,40}", name))
+
+
+def fetch_icon(url, name):
+    """The site's icon into ICONS/<name>.png (or .ico); None when it can't be had."""
+    os.makedirs(ICONS, exist_ok=True)
+    u = urllib.parse.urlparse(url)
+    for cand in (f"{u.scheme}://{u.netloc}/apple-touch-icon.png", f"{u.scheme}://{u.netloc}/favicon.ico"):
+        try:
+            req = urllib.request.Request(cand, headers={"User-Agent": "bromigos-webapp"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                data = r.read()
+            if len(data) < 64:
+                continue
+            ext = ".png" if cand.endswith(".png") else ".ico"
+            path = os.path.join(ICONS, name + ext)
+            with open(path, "wb") as f:
+                f.write(data)
+            return path
+        except Exception:
+            continue
+    return None
+
+
+def desktop_entry(a):
+    b, kind = browser()
+    path = os.path.join(APPS, f"bromigos-webapp-{a['name']}.desktop")
+    os.makedirs(APPS, exist_ok=True)
+    icon = a.get("icon") or "web-browser"
+    with open(path, "w") as f:
+        f.write("[Desktop Entry]\nType=Application\n"
+                f"Name={a.get('title') or a['name']}\nComment=Web app ({a['url']})\n"
+                f"Exec=bromigos-webapp launch {a['name']}\nIcon={icon}\nTerminal=false\n"
+                f"Categories=Network;WebBrowser;\nStartupWMClass=bromigos-webapp-{a['name']}\n")
+    return path
+
+
+def launch_argv(a):
+    b, kind = browser()
+    if not b:
+        sys.exit("no browser found (install chromium, google-chrome, librewolf or firefox)")
+    if kind == "chromium":
+        return [b, f"--app={a['url']}", f"--class=bromigos-webapp-{a['name']}", f"--name=bromigos-webapp-{a['name']}"]
+    return [b, "--new-window", a["url"]]
+
+
+def hotkeys_block(apps):
+    lines = ["-- Your web apps' hotkeys (bromigos webapp add --hotkey …); run it again to change them.",
+             "do", '    local K = require("bromigos.keys")']
+    for a in apps:
+        if a.get("hotkey"):
+            lines.append(f'    K.exec({json.dumps(a["hotkey"])}, {json.dumps("bromigos-webapp launch " + a["name"])})')
+    lines.append("end")
+    return "\n".join(lines)
+
+
+def write_hotkeys(apps):
+    if not any(a.get("hotkey") for a in apps):
+        lua = H.read_lua()
+        new = H.without_block(lua, BLOCK)
+        if new != lua:
+            return H.save({H.HYPRLAND_LUA: new})
+        return True, "no hotkeys"
+    return H.update_block(BLOCK, hotkeys_block(apps), before_dofile=False)
+
+
+def cmd_add(args):
+    from_catalog = None
+    icon = hotkey = None
+    rest = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--from-catalog":
+            from_catalog = args[i + 1]; i += 2
+        elif args[i] == "--icon":
+            icon = args[i + 1]; i += 2
+        elif args[i] == "--hotkey":
+            hotkey = args[i + 1]; i += 2
+        else:
+            rest.append(args[i]); i += 1
+    if from_catalog:
+        c = next((c for c in CATALOG if c["name"] == from_catalog), None)
+        if not c:
+            sys.exit(f"not in the catalog: {from_catalog} (bromigos webapp catalog)")
+        name, url, title = c["name"], c["url"], c["title"]
+    else:
+        if len(rest) < 2:
+            sys.exit("usage: bromigos webapp add NAME URL [--icon FILE|URL] [--hotkey KEYS]")
+        name, url = rest[0], rest[1]
+        title = " ".join(rest[2:]) or name.replace("-", " ").title()
+    if not valid_name(name):
+        sys.exit("the name is a-z, 0-9 and dashes (it names the window and the desktop entry)")
+    if not re.match(r"https?://", url):
+        sys.exit("the URL starts with http:// or https://")
+    if hotkey and not re.fullmatch(r"[A-Za-z0-9_+: ]{1,40}", hotkey):
+        sys.exit('a hotkey looks like "SUPER + SHIFT + G"')
+    apps = [a for a in load() if a["name"] != name]
+    if icon and re.match(r"https?://", icon):
+        os.makedirs(ICONS, exist_ok=True)
+        try:
+            path = os.path.join(ICONS, name + os.path.splitext(urllib.parse.urlparse(icon).path)[1] or ".png")
+            urllib.request.urlretrieve(icon, path)
+            icon = path
+        except Exception:
+            icon = None
+    if not icon:
+        icon = fetch_icon(url, name)
+    a = {"name": name, "title": title, "url": url}
+    if icon:
+        a["icon"] = icon
+    if hotkey:
+        a["hotkey"] = hotkey
+    apps.append(a)
+    apps.sort(key=lambda x: x["name"])
+    save(apps)
+    desktop_entry(a)
+    subprocess.run(["update-desktop-database", APPS], check=False, capture_output=True)
+    print(f"added {name}: {url}" + (f", hotkey {hotkey}" if hotkey else ""))
+    if hotkey:
+        ok, detail = write_hotkeys(apps)
+        print("hotkey " + ("bound" if ok else f"not bound: {detail}"))
+    return 0
+
+
+def cmd_remove(args):
+    if not args:
+        sys.exit("usage: bromigos webapp remove NAME")
+    name = args[0]
+    apps = load()
+    if not any(a["name"] == name for a in apps):
+        sys.exit(f"no web app named {name}")
+    had_hotkey = any(a.get("hotkey") for a in apps if a["name"] == name)
+    apps = [a for a in apps if a["name"] != name]
+    save(apps)
+    for p in (os.path.join(APPS, f"bromigos-webapp-{name}.desktop"), os.path.join(ICONS, name + ".png"), os.path.join(ICONS, name + ".ico")):
+        try:
+            os.unlink(p)
+        except FileNotFoundError:
+            pass
+    subprocess.run(["update-desktop-database", APPS], check=False, capture_output=True)
+    print(f"removed {name}")
+    if had_hotkey:
+        ok, detail = write_hotkeys(apps)
+        print("hotkey " + ("unbound" if ok else f"still bound: {detail}"))
+    return 0
+
+
+def cmd_list(args):
+    apps = load()
+    if "--json" in args:
+        print(json.dumps(apps))
+        return 0
+    if not apps:
+        print("no web apps yet (bromigos webapp add NAME URL, or bromigos webapp catalog)")
+    for a in apps:
+        print(f"{a['name']:<14} {a['url']}" + (f"  [{a['hotkey']}]" if a.get("hotkey") else ""))
+    return 0
+
+
+def cmd_launch(args):
+    if not args:
+        sys.exit("usage: bromigos webapp launch NAME")
+    a = next((a for a in load() if a["name"] == args[0]), None)
+    if not a:
+        sys.exit(f"no web app named {args[0]}")
+    H.spawn(launch_argv(a))
+    return 0
+
+
+def cmd_catalog(args):
+    if "--json" in args:
+        print(json.dumps(CATALOG))
+        return 0
+    for c in CATALOG:
+        print(f"{c['name']:<10} {c['title']:<16} {c['url']}")
+    return 0
+
+
+def main():
+    a = sys.argv[1:]
+    verbs = {"add": cmd_add, "remove": cmd_remove, "list": cmd_list, "launch": cmd_launch, "catalog": cmd_catalog}
+    if not a or a[0] not in verbs:
+        print(__doc__.strip())
+        print("\nverbs: add, remove, list, launch, catalog")
+        return 2
+    return verbs[a[0]](a[1:])
+
+
+if __name__ == "__main__":
+    sys.exit(main())

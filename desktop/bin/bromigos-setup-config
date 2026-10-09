@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+# bromigos:summary=Open one of your config files in the editor (Hyprland reloads safely after)
+# bromigos:args=[NAME]
+# bromigos:examples=bromigos setup config; bromigos setup config hyprland
+"""bromigos-setup-config: your thin config files (the ones over bromigOS's defaults),
+picked from a menu and opened in $EDITOR in the terminal. A Hyprland file is verified and
+reloaded once the editor closes (auto-reload stays off while you type)."""
+import os
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+import bromigos_hypr as H  # noqa: E402
+
+C = H.CONFIG
+FILES = [
+    ("hyprland", "Hyprland: your binds, monitors, apps", f"{C}/hypr/hyprland.lua", True),
+    ("idle", "Idle and lock timing (Settings › Idle & lock)", f"{C}/bromigos/idle.toml", False),
+    ("hypridle", "Idle: listeners of your own (hypridle)", f"{C}/hypr/hypridle.conf", False),
+    ("waybar", "The bar's modules", f"{C}/waybar/config", False),
+    ("waybar-style", "The bar's style", f"{C}/waybar/style.css", False),
+    ("rofi", "The launcher", f"{C}/rofi/config.rasi", False),
+    ("dunst", "Notifications", f"{C}/dunst/dunstrc", False),
+    ("gtklock", "The lock screen's style", f"{C}/gtklock/style.css", False),
+    ("live", "The live layer (animations, worlds)", f"{C}/bromigos-live/config.toml", False),
+    ("widgets", "The desktop panels' layout", f"{C}/bromigos/widgets/layout.json", False),
+    ("targets", "Where AI runs", f"{C}/bromigos/targets.toml", False),
+    ("create", "Creation tools", f"{C}/bromigos/create.toml", False),
+    ("homelab", "Your homelab", f"{C}/bromigos/homelab.toml", False),
+    ("vector", "VECTOR's settings", f"{C}/bromigos/vector/vector.toml", False),
+    ("input", "Input (bromigos setup input)", f"{C}/bromigos/input.toml", False),
+    ("webapps", "Web apps", f"{C}/bromigos/webapps.toml", False),
+]
+
+
+def edit(key):
+    f = next((f for f in FILES if f[0] == key), None)
+    if not f:
+        sys.exit(f"no config named {key}; one of " + ", ".join(f[0] for f in FILES))
+    _, label, path, is_hypr = f
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "nvim"
+    env = H.session_env()
+    if is_hypr and "HYPRLAND_INSTANCE_SIGNATURE" in env:
+        H.hyprctl("eval", "hl.config({ misc = { disable_autoreload = true } })", env=env)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    subprocess.run(H.terminal_run(["sh", "-c", f'exec {editor} "$1"', "sh", path], title=label), env=env)
+    if key in ("idle", "hypridle"):
+        # the idle policy: rendered again and hypridle restarted (docs/idle.md)
+        r = subprocess.run(["bromigos", "idle", "apply"], capture_output=True, text=True, env=env)
+        lines = (r.stdout or r.stderr).strip().splitlines()
+        H.notify("IDLE", lines[0][:200] if lines else "applied", urgency="low" if r.returncode == 0 else "critical")
+        return r.returncode
+    if is_hypr and "HYPRLAND_INSTANCE_SIGNATURE" in env:
+        ok, detail = H.apply(path)
+        H.notify("HYPRLAND", "reloaded" if ok else detail[:160], urgency="low" if ok else "critical")
+        return 0 if ok else 1
+    return 0
+
+
+def main():
+    a = sys.argv[1:]
+    if a:
+        return edit(a[0])
+    rows = [f"{label:<40} {path.replace(H.HOME, '~')}" for _, label, path, _ in FILES]
+    choice = H.dmenu(rows, prompt="", theme_str=H.title_theme("CONFIG FILES", width=860, lines=len(rows)))
+    if choice is None:
+        return 0
+    return edit(FILES[rows.index(choice)][0])
+
+
+if __name__ == "__main__":
+    sys.exit(main())

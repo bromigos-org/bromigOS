@@ -1,0 +1,71 @@
+# Deepvein's colours (docs/theming.md, "colors.toml"): amethyst lit from inside, a
+# resonating crystal's teal, a fracture's red for an alarm.
+
+# ---- surfaces, darkest first
+background = "#06040c"     # the cavern
+void = "#030207"
+panel = "#120c1e"
+selection = "#261a3a"
+
+# ---- ink
+primary = "#b388ff"        # amethyst, lit from inside
+soft = "#dcc8ff"
+dim = "#5e3f9c"
+text = "#e6ddf5"
+muted = "#8f84a8"
+faint = "#574c70"
+
+# ---- signals
+warn = "#f0c060"           # a crystal warming before it rings
+danger = "#ff5c7a"         # a fracture
+warn_surface = "#3a2c10"
+danger_surface = "#2a0a18"
+danger_text = "#ffd6e1"
+
+[colors]
+cyan = "#6ff0d8"           # a crystal answering a note
+gold = "#ffd98a"
+white = "#f6efff"
+rust = "#3e1030"
+
+[holo]
+line = "primary"
+glow = "cyan"
+label = "text"
+highlight = "white"
+
+[widgets]
+frame = "dim"
+header = "primary"
+value = "soft"
+graph = "primary"
+track = "selection"
+
+[terminal]
+foreground = "text"
+background = "background"
+color0 = "background"
+color1 = "danger"
+color2 = "primary"
+color3 = "warn"
+color4 = "#7a9cff"
+color5 = "#e08cff"
+color6 = "cyan"
+color7 = "#c6bcd8"
+color8 = "faint"
+color9 = "#ff8aa0"
+color10 = "soft"
+color11 = "gold"
+color12 = "#a8bfff"
+color13 = "#efb8ff"
+color14 = "#a6f7e8"
+color15 = "#faf5ff"
+
+[qt]
+view = "#090610"
+view_alt = "#0e0a18"
+header = "#0c0814"
+window_alt = "#181028"
+button = "#221638"
+neutral_on_selection = "#4a3a10"
+negative_on_selection = "rust"

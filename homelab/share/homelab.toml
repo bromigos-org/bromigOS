@@ -1,0 +1,95 @@
+# bromigOS homelab integrations (package bromigos-homelab; docs/homelab.md).
+#
+# This is the packaged default, /usr/share/bromigos/default/homelab.toml: no sources, so
+# nothing is on. Yours is ~/.config/bromigos/homelab.toml: run `bromigos setup homelab` to
+# detect your services and write it, or add sources by hand. Your [[source]]s and
+# [[panel]]s add to these (same name: yours wins); tables merge key by key. More panels can
+# go in ~/.config/bromigos/homelab/panels/*.toml.
+#
+# A source is one service. Its adapter (type) decides what it can provide:
+#
+#   type             provides                         endpoint
+#   prometheus       metrics, hosts, alerts           http://host:9090
+#   victoriametrics  metrics, hosts, alerts           http://host:8428
+#   alertmanager     alerts                           http://host:9093
+#   kubernetes       workloads (pods), hosts (nodes)  — kubeconfig = "…" or context = "…" (read-only)
+#   docker           workloads (containers), hosts    unix:///var/run/docker.sock (default) or http://host:2375
+#   argocd           deployments                      https://argocd.host (with auth_ref), else its
+#                                                     metrics or a kubernetes source
+#   flux             deployments                      — (through a kubernetes source)
+#   litellm          models                           http://host:4000 (auth_ref: a key for /v1/models)
+#   ollama           models                           http://host:11434
+#   openai           models (vLLM, llama.cpp, …)      http://host:8000
+#   vault            secrets (status only)            https://host:8200
+#   herdr            agents                           — (the herdr CLI on this machine)
+#   github           ci                               — (your `gh` login); orgs = […], repos = […]
+#   lab              snapshot, hosts                  a Lab API serving GET /api/status
+#
+# provides = [...] narrows (or names) what a source answers for; enabled = false turns it off.
+#
+# Strings may be references, so this file can be public:
+#   "@private:endpoints.prometheus"  the private overlay (bromigos-private)
+#   "@env:NAME"   "@file:~/token"   "@vault:kv/path#field"
+# Secrets only ever go in auth_ref, as a reference, never as the value.
+#
+# The lab's name, as the desktop shows it (the relay map, the timeline, the radial menu):
+#   name = "LAB"                    (top of the file, before any table; a reference works:
+#                                    name = "@private:homelab.name")
+#
+# Example:
+#   [[source]]
+#   type = "prometheus"
+#   endpoint = "http://prometheus.lab:9090"
+#
+#   [[source]]
+#   type = "ollama"
+#   endpoint = "http://gpu-box:11434"
+#
+#   [[source]]
+#   type = "kubernetes"
+#   kubeconfig = "~/.kube/viewer.yaml"
+
+[tls]
+ca_file = ""             # a CA bundle for internal TLS (a source's tls_ca wins)
+
+[models]
+rpm_full = 30            # requests/min that read as full rain in the worlds
+tps_full = 40            # or output tokens/s
+
+[constellation]          # the lab's nodes as the holo deck draws them (none: laid out by itself)
+hub = ""                 # the node in the middle, linked to the others (default: the first)
+ai = []                  # two nodes whose link carries the models' requests/min (none: no such link)
+positions = []           # [{node = "…", at = [x, y, z]}, …] on the unit sphere, in drawing order (none: automatic)
+# node names are hostnames: keep them out of a public file with references, e.g.
+#   hub = "@private:homelab.constellation.hub"   positions = "@private:homelab.constellation.positions"
+# and in the overlay give positions as that list: sops encrypts values, not a table's keys
+
+[services]
+domain = ""              # a service named in a note links to https://<service>.<domain>
+include = []             # job names shown as the drift map's relays ([] = all)
+exclude = []
+
+[relays]
+hosts = []               # more relays to ping: [{ name = "NAS", host = "nas.lab" }]
+
+[netmap]                 # the Netmap deck (UniFi Poller metrics)
+gateway = {}             # { model = "UDM-Pro", ip = "…" }
+switch = {}
+ap = {}
+roles = []
+aliases = []
+show_prefixes = []
+show_hosts = []
+
+# Panels with no code (docs/homelab.md, "Panels without code"): a [[panel]] is a desktop widget built
+# from a capability. kind = gauge | sparkline | stat | status | table.
+#
+#   [[panel]]
+#   name = "gpu"
+#   title = "GPU"
+#   kind = "gauge"
+#   metric = "avg(DCGM_FI_DEV_GPU_UTIL)"     # through the metrics capability
+#   unit = "%"
+#   max = 100
+#   warn = 70
+#   crit = 90

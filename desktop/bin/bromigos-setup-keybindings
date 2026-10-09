@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+# bromigos:summary=Every keybind, described, in a menu that runs the chosen one; EDIT opens yours (safe reload after)
+# bromigos:args=[--list|--edit]
+# bromigos:examples=bromigos setup keybindings; bromigos setup keybindings --list
+"""bromigos-setup-keybindings: the live keybind list (bromigOS's defaults, the live layer's,
+VECTOR's and yours), each described, searchable; Enter runs it. CHANGE A SHORTCUT opens
+the shortcut picker (bromigos keys: pick one, press its new keys). EDIT opens your
+~/.config/hypr/hyprland.lua in $EDITOR in the terminal (your binds go after the defaults;
+`bromigos.unbind` frees a default key), with Hyprland's auto-reload off while you type,
+then one verified reload. The same list is the SHORTCUTS panel's (SUPER+K)."""
+import os
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+import bromigos_hypr as H  # noqa: E402
+
+for p in ("/usr/lib/bromigos/widgets", os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "..", "widgets")):
+    if os.path.isdir(p):
+        sys.path.insert(0, p)
+try:
+    import keybinds
+except ImportError:
+    keybinds = None
+
+EDIT = "EDIT YOUR KEYBINDS"
+CHANGE = "CHANGE A SHORTCUT (press its new keys)"
+
+
+def rows():
+    if keybinds is None:
+        return [], []
+    out, acts = [], []
+    for sec, keys, desc, action in keybinds.shortcuts():
+        combo = " + ".join(keys)
+        out.append(f"{sec:<14} {combo:<26} {desc}")
+        acts.append(action)
+    return out, acts
+
+
+def edit():
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "nvim"
+    env = H.session_env()
+    live = "HYPRLAND_INSTANCE_SIGNATURE" in env
+    if live:
+        H.hyprctl("eval", "hl.config({ misc = { disable_autoreload = true } })", env=env)
+    subprocess.run(H.terminal_run(["sh", "-c", f'exec {editor} "$1"', "sh", H.HYPRLAND_LUA], title="keybinds"), env=env)
+    if not live:
+        return 0
+    ok, detail = H.apply()
+    H.notify("KEYBINDS", "reloaded" if ok else detail[:160], urgency="low" if ok else "critical")
+    return 0 if ok else 1
+
+
+def main():
+    a = sys.argv[1:]
+    lines, acts = rows()
+    if a and a[0] == "--list":
+        print("\n".join(lines))
+        return 0
+    if a and a[0] == "--edit":
+        return edit()
+    choice = H.dmenu([CHANGE, EDIT] + lines, prompt="", theme_str=H.title_theme("KEYBINDS", width=960, lines=16),
+                     mesg="Enter runs the bind; CHANGE picks one and takes its new keys; EDIT opens your hyprland.lua")
+    if choice is None:
+        return 0
+    if choice == CHANGE:
+        H.spawn(["bromigos-keys"])
+        return 0
+    if choice == EDIT:
+        return edit()
+    i = lines.index(choice)
+    if acts[i] is None:
+        H.notify("KEYBINDS", "that one is press-and-hold, or a mouse bind: use the keys", urgency="low")
+        return 0
+    keybinds.run(acts[i])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

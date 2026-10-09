@@ -1,0 +1,17 @@
+# bromigOS: Hyprland reloads its config by itself when one of its files changes, and pacman
+# replaces bromigos-desktop's defaults one file at a time: a reload in between reads a
+# half-written set (a Lua error there leaves no binds: Hyprland's emergency mode). Before
+# the first file, auto-reload goes off in every running Hyprland, every user's;
+# bromigos-hypr-release.hook verifies the config, reloads once and puts it back after the
+# last (docs/update.md, "Hyprland during a package transaction").
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Path
+Target = usr/share/bromigos/default/hypr/*
+
+[Action]
+Description = Holding Hyprland's config reloads while its files change...
+When = PreTransaction
+Exec = /usr/bin/bromigos session hold --pacman

@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+# bromigos:hidden=true
+"""grub-btrfs's snapshot list, titled like bromigOS's rollback list (docs/boot.md).
+
+grub-btrfs writes GRUB's snapshot submenu (grub-btrfs.cfg) with one entry per snapshot,
+titled with its columns in a row: `|2026-10-09 00:28:15|@.snapshots/151/snapshot|pre|bromigos
+update|`. Before it keeps a new list it runs its syntax check, `$GRUB_BTRFS_SCRIPT_CHECK FILE`,
+which bromigOS's boot theme points here (/etc/default/grub's bromigOS block). This rewrites
+the titles in FILE, then runs grub-script-check on it and exits with its answer, so grub-btrfs
+keeps the list only when GRUB can read it:
+
+  10/09 00:28 · before bromigos update      a pre snapshot (snapper's description)
+  10/09 00:31 · after bromigos update       its post snapshot
+  10/09 00:00 · timeline                    a single one (snapper's timeline, a boot)
+
+Each gets a class for the theme's icon (snapshot-pre, snapshot-post, snapshot), and the
+kernels inside one read "Boot it: linux". Anything it doesn't recognise (a title format of
+the user's own, a description with a | in it) is left as grub-btrfs wrote it; if anything
+goes wrong the file is left alone.
+"""
+
+import os
+import re
+import sys
+
+CHECK = "/usr/bin/grub-script-check"
+COLUMNS = {"date", "snapshot", "type", "description"}
+LONGEST = 48
+
+OUTER = re.compile(r"^submenu '\|(?P<cols>.*)\|' \{$")
+INNER = re.compile(r"^(?P<ind>\s+)submenu '\|(?P<cols>.*)\|' \{ echo \}$")
+KERNEL = re.compile(r"^(?P<ind>\s+)menuentry '\s*(?P<what>[^']*)' (?P<rest>--class snapshots .*)$")
+HEADER = re.compile(r"^menuentry '\|(?P<cols>.*)\|' \{ echo \}$")
+
+
+def columns(header_line):
+    """The column order grub-btrfs used (its header row: | Date | Snapshot | Type | ...)."""
+    m = HEADER.match(header_line)
+    if not m:
+        return None
+    names = [c.strip().lower() for c in m.group("cols").split("|")]
+    return names if names and all(n in COLUMNS for n in names) else None
+
+
+def fields(cols, order):
+    parts = [p.strip() for p in cols.split("|")]
+    if len(parts) != len(order):
+        return None
+    return dict(zip(order, parts))
+
+
+def short_date(d):
+    m = re.match(r"^\d{4}-(\d\d)-(\d\d) (\d\d):(\d\d)", d or "")
+    return f"{m.group(1)}/{m.group(2)} {m.group(3)}:{m.group(4)}" if m else (d or "")
+
+
+def number(path):
+    m = re.search(r"(\d+)/snapshot$", path or "")
+    return m.group(1) if m else None
+
+
+def clip(s, n=LONGEST):
+    s = " ".join(s.split())
+    return s if len(s) <= n else s[: n - 1].rstrip() + "…"
+
+
+def what(f):
+    kind = (f.get("type") or "").lower()
+    desc = f.get("description") or ""
+    if desc in ("", "N/A"):
+        n = number(f.get("snapshot"))
+        desc = f"snapshot {n}" if n else "snapshot"
+    if kind == "pre":
+        return "before " + clip(desc)
+    if kind == "post":
+        return "after " + clip(desc)
+    return clip(desc)
+
+
+def klass(f):
+    kind = (f.get("type") or "").lower()
+    return {"pre": "snapshot-pre", "post": "snapshot-post"}.get(kind, "snapshot")
+
+
+def kernel_title(text):
+    """'vmlinuz-linux & initramfs-linux-fallback.img & intel-ucode.img' ->
+    'Boot it: linux (fallback initramfs, intel-ucode)': grub-btrfs makes an entry per kernel,
+    initramfs and microcode, so each says which."""
+    parts = [p.strip().strip('"') for p in text.split("&")]
+    kernel = parts[0] if parts else text
+    name = re.sub(r"^(vmlinuz|vmlinux|kernel)-", "", kernel)
+    notes = []
+    if len(parts) > 1 and "fallback" in parts[1]:
+        notes.append("fallback initramfs")
+    if len(parts) > 2:
+        notes.append(re.sub(r"\.img$", "", parts[2]))
+    return f"Boot it: {name}" + (f" ({', '.join(notes)})" if notes else "")
+
+
+def rewrite(text):
+    lines = text.split("\n")
+    order = None
+    for line in lines:
+        order = columns(line)
+        if order:
+            break
+    if not order:
+        return text
+    out = []
+    current = None
+    for line in lines:
+        if HEADER.match(line):
+            out.append("menuentry 'ROLL BACK · boot the system as it was, newest first' --class info { echo }")
+            continue
+        m = OUTER.match(line)
+        if m:
+            f = fields(m.group("cols"), order)
+            current = f
+            if f:
+                title = f"{short_date(f.get('date'))} · {what(f)}".replace("'", "")
+                line = f"submenu '{title}' --class {klass(f)} --class snapshots {{"
+            out.append(line)
+            continue
+        m = INNER.match(line)
+        if m and current:
+            n = number(current.get("snapshot"))
+            label = " · ".join(x for x in (f"snapshot {n}" if n else "", short_date(current.get("date")), what(current)) if x)
+            line = f"{m.group('ind')}submenu '{label.replace(chr(39), '')}' --class info {{ echo }}"
+            out.append(line)
+            continue
+        m = KERNEL.match(line)
+        if m:
+            line = f"{m.group('ind')}menuentry '{kernel_title(m.group('what'))}' {m.group('rest')}"
+        out.append(line)
+    return "\n".join(out)
+
+
+def main(argv):
+    if len(argv) != 2:
+        print("usage: grub-btrfs-titles FILE (grub-btrfs runs it as its GRUB_BTRFS_SCRIPT_CHECK)", file=sys.stderr)
+        return 2
+    path = argv[1]
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        new = rewrite(text)
+        if new != text:
+            tmp = path + ".bromigos"
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(new)
+            os.replace(tmp, path)
+    except Exception as e:      # the titles are a nicety: never stand between grub-btrfs and its list
+        print(f"grub-btrfs-titles: left as grub-btrfs wrote it ({e})", file=sys.stderr)
+    check = os.environ.get("BROMIGOS_GRUB_SCRIPT_CHECK", CHECK)
+    os.execv(check, [check, path])
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

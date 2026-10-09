@@ -1,0 +1,81 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# The live layer: the animated, data-reactive desktop background and its decks (live/,
+# Python). The engine draws each theme's world (themes/ in bromigos-core), so the two
+# version together. The code goes to /usr/lib/bromigos/live, the default config to
+# /usr/share/bromigos/live/config.toml (the user's ~/.config/bromigos-live/config.toml is
+# merged over it key by key) and the Drift map's public lore catalog beside it
+# (live/lore/catalog.json); personal decks and shader layers are plugins (docs/plugins.md).
+
+pkgname=bromigos-live
+pkgver=0.1.0.r27.g1772056
+pkgrel=1
+pkgdesc='bromigOS live layer: the animated, data-reactive background, its worlds and decks'
+arch=('any')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+depends=('bromigos-core' 'python' 'python-gobject' 'gtk3' 'gtk-layer-shell' 'librsvg'
+         'python-cairo' 'python-opengl' 'python-numpy' 'python-pillow' 'python-psutil'
+         'ffmpeg' 'hyprland')
+optdepends=('pipewire-audio: sound cues (pw-play)'
+            'libnotify: notices from the supervisor'
+            'git: the Swarm deck and the timeline'
+            'github-cli: CI in the Swarm deck'
+            'nvidia-utils: GPU readings on NVIDIA'
+            'grim: the intercept freezes the screen it tears'
+            'iputils: latency readings')
+makedepends=('git' 'python')
+# the tests check() runs: a pixbuf's rows at any width (tests/test_pixbuf.py)
+checkdepends=('python-numpy' 'python-gobject' 'gdk-pixbuf2' 'desktop-file-utils')
+options=('!debug')
+
+_root="${startdir%/packaging/*}"
+_paths=(live packaging/bromigos-live LICENSE-MIT LICENSE-APACHE)
+
+# <workspace version>.r<commits touching the package>.g<last such commit> (as bromigos-core)
+# The commits that touched _paths before the history restarted at v0.1.2 (they're in
+# bromigos-org/bromigOS-archive): the count goes on from them, so no version sorts below one
+# published before the restart (packaging/README.md, Versions).
+_archived=41
+
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+check() {
+  cd "$_root/live"
+  python -m compileall -q live tools >/dev/null
+  # the reduced-motion logic, a pixbuf's rows at any width, one daemon stopped exactly
+  # (bin/bromigos-live against a stand-in; no GPU needed;
+  # tests/offscreen_motion.py and offscreen_sizes.py render, by hand)
+  python -m unittest discover -s tests -q
+  # the app launcher's entries (live/applications): desktop-file-validate, the keys every
+  # entry needs, their icons (tools/launcher/check.py; CI's launcher.yml runs all of it)
+  python "$_root/tools/launcher/check.py" --static --only live
+}
+
+package() {
+  local lib="$pkgdir/usr/lib/bromigos/live" f
+  while IFS= read -r -d '' f; do
+    install -Dm0644 "$_root/live/$f" "$lib/$f"
+  done < <(cd "$_root/live" && find live shaders sounds models tools -type f \
+    -not -path '*/__pycache__/*' -print0)
+  install -Dm0755 "$_root/live/bin/bromigos-live" "$lib/bin/bromigos-live"
+  chmod 0755 "$lib/tools/offscreen.py" "$lib/tools/lock-emblem.py" "$lib/tools/make-starship.py"
+  install -d "$pkgdir/usr/bin"
+  ln -s /usr/lib/bromigos/live/bin/bromigos-live "$pkgdir/usr/bin/bromigos-live"
+  install -Dm0644 "$_root/live/config.toml" "$pkgdir/usr/share/bromigos/live/config.toml"
+  # the Drift map's default: bromigos.org's public lore export (tools/lore/sync-catalog.py)
+  install -Dm0644 "$_root/live/lore/catalog.json" "$pkgdir/usr/share/bromigos/live/lore/catalog.json"
+  # the app launcher's entries (docs/menu.md, "In the app launcher")
+  install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_root"/live/applications/*.desktop
+  install -Dm0644 -t "$pkgdir/usr/share/doc/$pkgname/" "$_root/live/README.md" "$_root/live/docs/ELEMENTS.md"
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+  # bytecode now: /usr/lib is read-only to the user, so Python could never cache it
+  python -m compileall -q -o 0 -o 1 -s "$pkgdir" -p / "$lib/live" "$lib/tools" >/dev/null
+}

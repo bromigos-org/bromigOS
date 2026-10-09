@@ -1,0 +1,58 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# The bromigOS manual (manual/, mdBook), built as HTML and installed on every machine, so
+# Settings (F1, each page's manual link) and Settings › About open the manual that matches
+# the machine's own packages, offline too. CI also publishes the same book beside the
+# packages (manual/publish.sh), built from main.
+#
+#   /usr/share/doc/bromigos/manual/   the built book (index.html, a page per chapter, its
+#                                     search index and pictures)
+
+pkgname=bromigos-manual
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='bromigOS manual: how to use the desktop, as HTML, for reading offline'
+arch=('any')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+makedepends=('git' 'mdbook')
+options=('!debug' '!strip')
+
+_root="${startdir%/packaging/*}"
+_paths=(manual packaging/bromigos-manual LICENSE-MIT LICENSE-APACHE)
+
+# The commits that touched _paths before the history restarted at v0.1.2 (they're in
+# bromigos-org/bromigOS-archive): the count goes on from them, so no version sorts below one
+# published before the restart (packaging/README.md, Versions).
+_archived=68
+
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+build() {
+  # into $srcdir: the checkout is only read
+  mdbook build "$_root/manual" -d "$srcdir/book"
+}
+
+check() {
+  # the pages Settings and About open: the book's start, and the pages its F1 points at
+  local p
+  for p in index.html settings.html keys.html; do
+    test -s "$srcdir/book/$p" || { echo "the manual has no $p" >&2; return 1; }
+  done
+  # its search, offline: mdBook names the index searchindex-<hash>.js
+  compgen -G "$srcdir/book/searchindex*.js" >/dev/null || { echo "the manual has no search index" >&2; return 1; }
+}
+
+package() {
+  install -d "$pkgdir/usr/share/doc/bromigos"
+  cp -r --no-preserve=ownership "$srcdir/book" "$pkgdir/usr/share/doc/bromigos/manual"
+  find "$pkgdir/usr/share/doc/bromigos/manual" -type d -exec chmod 0755 {} + -o -type f -exec chmod 0644 {} +
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+}

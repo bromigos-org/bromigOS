@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""A stand-in bluetoothctl (tests, offscreen renders): bluez as fixtures/bluetoothctl.json says, one
+adapter, three paired devices and two more found by a scan (one pairs as "just works", one
+asks for a passkey); the verbs change it (desktop/tests/fixtures/fixture.py)."""
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
+import fixture as F  # noqa: E402
+
+argv = sys.argv[1:]
+F.log("bluetoothctl", argv)
+st = F.load("bluetoothctl")
+a = list(argv)
+if a[:1] == ["--timeout"]:
+    a = a[2:]
+if not st.get("running", True):
+    print("Waiting to connect to bluetoothd...")
+    sys.exit(0)
+
+
+def yn(b):
+    return "yes" if b else "no"
+
+
+def save():
+    F.save("bluetoothctl", st)
+
+
+ad = st.get("adapter")
+known = [d for d in st["devices"] if d.get("known", True)]
+
+
+def find(mac):
+    return next((d for d in st["devices"] if d["mac"].upper() == mac.upper() and d.get("known", True)), None)
+
+
+if not a:
+    sys.exit(0)
+cmd = a[0]
+if ad is None and cmd not in ("devices",):
+    print("No default controller available")
+    sys.exit(1)
+if cmd == "show":
+    print(f"Controller {ad['mac']} (public)")
+    for k, v in (("Manufacturer", "0x000a (10)"), ("Version", "0x09 (9)"), ("Name", ad["name"]), ("Alias", ad["alias"]),
+                 ("Class", "0x006c0104 (7078148)"), ("Powered", yn(ad["powered"] and not st["rfkill"]["soft"])),
+                 ("PowerState", "on" if ad["powered"] else "off"), ("Discoverable", yn(ad["discoverable"])),
+                 ("DiscoverableTimeout", "0x000000b4 (180)"), ("Pairable", yn(ad["pairable"])),
+                 ("UUID", "Audio Source              (0000110a-0000-1000-8000-00805f9b34fb)"),
+                 ("UUID", "PnP Information           (00001200-0000-1000-8000-00805f9b34fb)"),
+                 ("Discovering", "no")):
+        print(f"\t{k}: {v}")
+elif cmd == "devices":
+    for d in known:
+        if a[1:] == ["Paired"] and not d["paired"]:
+            continue
+        print(f"Device {d['mac']} {d['name']}")
+elif cmd == "info":
+    d = find(a[1])
+    if d is None:
+        print(f"Device {a[1]} not available")
+        sys.exit(1)
+    print(f"Device {d['mac']} (public)")
+    for k, v in (("Name", d["name"]), ("Alias", d["name"]), ("Class", "0x00240404 (2360324)"), ("Icon", d["icon"]),
+                 ("Paired", yn(d["paired"])), ("Bonded", yn(d["paired"])), ("Trusted", yn(d["trusted"])),
+                 ("Blocked", "no"), ("Connected", yn(d["connected"])), ("LegacyPairing", "no"),
+                 ("UUID", "Audio Sink                (0000110b-0000-1000-8000-00805f9b34fb)")):
+        print(f"\t{k}: {v}")
+    if d.get("battery") is not None:
+        print(f"\tBattery Percentage: 0x{d['battery']:02x} ({d['battery']})")
+elif cmd == "power":
+    if not ad["powered"] and st["rfkill"]["soft"] and a[1] == "on":
+        print("Failed to set power on: org.bluez.Error.Blocked")
+        sys.exit(1)
+    ad["powered"] = a[1] == "on"
+    if not ad["powered"]:
+        for d in st["devices"]:
+            d["connected"] = False
+    save()
+    print(f"Changing power {a[1]} succeeded")
+elif cmd == "discoverable":
+    ad["discoverable"] = a[1] == "on"
+    save()
+    print(f"Changing discoverable {a[1]} succeeded")
+elif cmd == "scan":
+    print("Discovery started")
+    for n in st.get("nearby", []):
+        if not find(n["mac"]):
+            st["devices"].append({"mac": n["mac"], "name": n["name"], "icon": n["icon"], "paired": False, "connected": False,
+                                  "trusted": False, "battery": None, "known": True, "pairing": n["pairing"]})
+            print(f"[NEW] Device {n['mac']} {n['name']}")
+    save()
+    print("Discovery stopped")
+elif cmd == "pair":
+    d = find(a[1])
+    if d is None:
+        print(f"Device {a[1]} not available")
+        sys.exit(1)
+    print(f"Attempting to pair with {d['mac']}")
+    if d.get("pairing") == "passkey":
+        print("Request passkey")
+        print("Failed to pair: org.bluez.Error.AuthenticationCanceled")
+        sys.exit(1)
+    d["paired"] = True
+    save()
+    print("[CHG] Device {} Paired: yes".format(d["mac"]))
+    print("Pairing successful")
+elif cmd in ("trust", "untrust"):
+    d = find(a[1])
+    d["trusted"] = cmd == "trust"
+    save()
+    print(f"Changing {d['mac']} trust succeeded" if cmd == "trust" else f"Changing {d['mac']} untrust succeeded")
+elif cmd == "connect":
+    d = find(a[1])
+    if not ad["powered"] or d is None or not d["paired"]:
+        print(f"Failed to connect: org.bluez.Error.Failed br-connection-profile-unavailable")
+        sys.exit(1)
+    d["connected"] = True
+    save()
+    print(f"Attempting to connect to {d['mac']}")
+    print("Connection successful")
+elif cmd == "disconnect":
+    d = find(a[1])
+    d["connected"] = False
+    save()
+    print(f"Attempting to disconnect from {d['mac']}")
+    print("Successful disconnected")
+elif cmd == "remove":
+    d = find(a[1])
+    if d is None:
+        print(f"Device {a[1]} not available")
+        sys.exit(1)
+    st["devices"].remove(d)
+    save()
+    print("Device has been removed")
+else:
+    print(f"Invalid command in menu main: {cmd}")
+    sys.exit(1)

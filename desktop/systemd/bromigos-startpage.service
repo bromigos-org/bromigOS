@@ -1,0 +1,9 @@
+[Unit]
+Description=bromigOS start page: its folder and data (lab status, switchboard, field notes)
+After=bromigos-private.service
+Documentation=file:///usr/share/doc/bromigos/desktop.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/desktop/startpage/snapshot.py
+Nice=10

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Screensaver
+GenericName=Screensaver
+Comment=Start the screensaver now; a key or the mouse ends it
+Icon=bromigos-screensaver
+TryExec=bromigos-live
+Exec=bromigos-live open screensaver
+Terminal=false
+Categories=System;
+Keywords=screensaver;screen saver;idle;blank;away;
+StartupNotify=false
+X-Bromigos-Menu=toggle/screensaver

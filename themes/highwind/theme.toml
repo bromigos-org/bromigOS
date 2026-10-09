@@ -1,0 +1,9 @@
+# Highwind: the cloud station's colours (docs/theming.md). Colours only; its world is still to be painted.
+name = "Highwind"
+description = "Kite-lantern gold on a dusk sky, sky-whales below."
+mode = "dark"
+canon = """
+Highwind is a station on a kite-mast above the cloud deck, where Pip Arro keeps the post \
+and the Petrel. Sky-whales pass under it at dusk. These are its colours: the lantern on \
+the mast, the last gold on the clouds, the indigo coming up behind them, and the red \
+of a storm light."""

@@ -1,0 +1,23 @@
+{
+  "_comment": "Background removal on the user's ComfyUI with Lucida (a BiRefNet_HR fine-tune; in its author's 203-image benchmark the strongest open model overall, and on glow/VFX, illustration, text and camouflage), ComfyUI's native nodes (0.38+): the subject on a transparent background (PNG with alpha). RemoveBackground's mask is the foreground and ComfyUI's alpha masks are inverted, so it is inverted before JoinImageWithAlpha, as in Comfy-Org's Remove Background template. Weights: background_removal/lucida_v7.safetensors, the author's current release (egeorcun/lucida model.safetensors, v7; Comfy-Org/BiRefNet's lucida.safetensors is an earlier one), fetched by helm/comfyui in the homelab repo. Works on glow art on black too; see docs/art.md.",
+  "_meta": {
+    "capabilities": ["image.cutout"],
+    "catalog": "lucida/native-fp16",
+    "output": "png",
+    "license": "MIT (Lucida)",
+    "vram_gib": 1.4,
+    "vram_note": "ComfyUI's peak on the 5090 for a 1536 px image (the model runs at 1024 px; the card lost 1.0 GiB of free VRAM), measured 2026-10-09",
+    "seconds": 2,
+    "seconds_note": "a 1536 px image on the 5090, the model loaded cold",
+    "fill": "bind",
+    "requires": [{"folder": "background_removal", "file": "lucida_v7.safetensors"}],
+    "nodes": ["LoadBackgroundRemovalModel", "RemoveBackground", "InvertMask", "JoinImageWithAlpha"],
+    "bind": {"image": ["1", "image"], "prefix": ["6", "filename_prefix"]}
+  },
+  "1": {"class_type": "LoadImage", "inputs": {"image": ""}},
+  "2": {"class_type": "LoadBackgroundRemovalModel", "inputs": {"bg_removal_name": "lucida_v7.safetensors"}},
+  "3": {"class_type": "RemoveBackground", "inputs": {"bg_removal_model": ["2", 0], "image": ["1", 0]}},
+  "4": {"class_type": "InvertMask", "inputs": {"mask": ["3", 0]}},
+  "5": {"class_type": "JoinImageWithAlpha", "inputs": {"image": ["1", 0], "alpha": ["4", 0]}},
+  "6": {"class_type": "SaveImage", "inputs": {"images": ["5", 0], "filename_prefix": "bromigos-art"}}
+}

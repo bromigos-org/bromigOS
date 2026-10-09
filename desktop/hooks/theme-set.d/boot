@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# theme-set hook (bromigos-desktop): the boot menu follows the theme (docs/boot.md). Where
+# bromigOS's GRUB theme is on, /boot gets the new theme's (bromigos boot theme apply) when
+# sudo needn't ask for a password; when it would, the next `bromigos update` does it, and
+# a notification says so. In the background: a theme of your own is rendered first, and
+# `bromigos theme set` doesn't wait for that.
+set -u
+command -v bromigos >/dev/null 2>&1 || exit 0
+setsid -f bash -c '
+    out=$(bromigos boot theme apply --no-prompt 2>&1) || {
+        notify-send -a bromigos -u normal "BOOT MENU" "${out##*boot menu: }" 2>/dev/null; exit 1; }
+    case $out in
+        *"next bromigos update"*) notify-send -a bromigos -u low "BOOT MENU" "${out#boot menu: }" 2>/dev/null ;;
+    esac
+' >/dev/null 2>&1 </dev/null
+exit 0

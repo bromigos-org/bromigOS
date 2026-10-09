@@ -1,0 +1,17 @@
+# The code behind VECTOR's limits: the operator reviews and merges every change to it.
+# Made from LIMITS in bromigos-org/vector holo/vector/devflow.py: bromigos-holo work codeowners
+# bromigOS. VECTOR's merge tool refuses a pull request that touches these paths.
+
+/desktop/waybar/scripts/vector-switch.py @blackflame007
+/desktop/hypr/bromigos/vector.lua @blackflame007
+/desktop/settings/pages/vector.py @blackflame007
+/desktop/tests/test_vector_guard.py @blackflame007
+/live/live/plugins.py @blackflame007
+/widgets/plugins.py @blackflame007
+/homelab/vector/ @blackflame007
+/homelab/lib/ @blackflame007
+/tools/release/privacy_guard.py @blackflame007
+/packaging/ci/ @blackflame007
+/.github/ @blackflame007
+/CODEOWNERS @blackflame007
+/docs/CODEOWNERS @blackflame007

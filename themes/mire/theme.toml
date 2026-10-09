@@ -1,0 +1,11 @@
+# Mire: a night bayou (docs/theming.md; the world is live/world.toml).
+name = "Mire"
+description = "A night bayou: black mirror water, moss, fireflies and a lantern on a stilt shack."
+mode = "dark"
+canon = """
+The Mire is a drowned bayou where old war-frames sleep in the shallows. Hollis keeps \
+the relay on his stilt shack and fishes from the porch; the frames wake when there \
+is work and wade to it with their eye-lamps lit."""
+
+[intercept]                  # the unlock/login intercept (the live layer): its static on the captured screen
+static = "ripple"      # rings spreading from the middle, as if a Sleeper broke the surface; "scanlines" is the Wick's tearing

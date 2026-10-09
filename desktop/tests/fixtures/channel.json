@@ -1,0 +1,6 @@
+{
+ "base": "https://packages.example.org",
+ "channel": "edge",
+ "conf": "/etc/pacman.conf",
+ "server": "https://packages.example.org/$repo/$arch"
+}

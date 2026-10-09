@@ -1,0 +1,44 @@
+{
+ "mute": {
+  "theme": false,
+  "vector": false
+ },
+ "anim": {
+  "den": true,
+  "streaks": true,
+  "rows": true,
+  "rain": true,
+  "bursts": true,
+  "pulses": true,
+  "sweep": true,
+  "stars": true,
+  "ships": true,
+  "beam": true,
+  "tint": true,
+  "intercept": true,
+  "flash": true,
+  "wipe": true,
+  "codec": true,
+  "screensaver": true,
+  "sounds": true
+ },
+ "anim_desc": {
+  "den": "the den's own screens made live (scope, burn-in monitor, meters, relay map)",
+  "streaks": "the left side's drifting glitch streaks",
+  "rows": "the floor grid's rows scrolling toward you",
+  "rain": "glyph rain (density and speed follow CPU load)",
+  "bursts": "rain columns flaring on notifications, alerts and fills",
+  "pulses": "traffic pulses running the floor grid (follow network)",
+  "sweep": "the X-ray scanner pass over this machine's schematic",
+  "stars": "parallax star layers",
+  "ships": "ships and debris (density follows network traffic)",
+  "beam": "the station's beam while every lab node and service is up",
+  "tint": "amber/red lab-health tint on space and rain",
+  "intercept": "the burn-in sequence at login and unlock",
+  "flash": "the flash on critical notifications",
+  "wipe": "the wipe when switching workspaces",
+  "codec": "voiced codec calls for important events",
+  "screensaver": "the idle screensaver",
+  "sounds": "the live layer's sound cues"
+ }
+}

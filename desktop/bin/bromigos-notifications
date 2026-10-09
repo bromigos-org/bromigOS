@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+# bromigos:summary=Notifications (dunst): do not disturb, where they appear, how long they stay, each app's rule
+# bromigos:args=[status] | dnd on|off|toggle | position CORNER | offset X Y | timeout low|normal|critical SECONDS | app NAME show|quiet|hide | clear-history | test | reset  [--json]
+# bromigos:examples=bromigos notifications dnd on; bromigos notifications position bottom-right; bromigos notifications timeout normal 12; bromigos notifications app Spotify quiet
+"""bromigos-notifications (`bromigos notifications`): the desktop's notifications, shown by
+dunst. Settings › Notifications drives it.
+
+  bromigos notifications [status]          do not disturb, what's waiting, where they appear,
+                                           how long they stay, the apps seen and their rules
+  bromigos notifications dnd on|off|toggle do not disturb: nothing shows (they wait, and show
+                                           when it's off again; critical ones too)
+  bromigos notifications position CORNER   top-right, top-left, top-center, bottom-right,
+                                           bottom-left or bottom-center
+  bromigos notifications offset X Y        the gap from the screen's edge, in pixels
+  bromigos notifications timeout low|normal|critical SECONDS
+                                           how long each urgency stays (0: until dismissed)
+  bromigos notifications app NAME show|quiet|hide
+                                           an app's rule: quiet = low urgency (shorter, no
+                                           alert colour), hide = straight to the history
+  bromigos notifications clear-history     forget the history (SUPER+…'s list of past ones)
+  bromigos notifications test              send a sample notification
+  bromigos notifications reset             bromigOS's defaults (the file below removed)
+
+What Settings changes is kept in ~/.config/dunst/dunstrc.d/80-settings.conf, written whole
+on every change, over bromigOS's dunstrc and under your own 99-mine.conf (which still wins);
+then `dunstctl reload`.
+"""
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+POSITIONS = ["top-right", "top-left", "top-center", "bottom-right", "bottom-left", "bottom-center"]
+URGENCIES = ["low", "normal", "critical"]
+RULES = {"show": "shown as it asks", "quiet": "low urgency: shorter, no alert colour",
+         "hide": "not shown: straight to the history"}
+# bromigOS's dunstrc (desktop/dunst/dunstrc)
+DEFAULTS = {"position": "top-right", "offset": [16, 16], "timeout": {"low": 5, "normal": 8, "critical": 0}}
+HEADER = """# Notifications as Settings › Notifications set them (bromigos notifications). Written
+# whole on every change: don't edit it (your 99-mine.conf in this folder still wins).
+"""
+
+
+def path():
+    return os.path.join(C.CONFIG, "dunst", "dunstrc.d", "80-settings.conf")
+
+
+def dunstctl(*args, check=True):
+    rc, out, err = C.run(["dunstctl", *args])
+    if rc != 0 and check:
+        raise Fail(f"dunstctl {args[0]}: {(err or out).strip() or 'dunst is not running'}")
+    return out.strip() if rc == 0 else None
+
+
+# ---------------------------------------------------------------- the drop-in
+def load():
+    """What 80-settings.conf holds: {position, offset, timeout{}, apps{name: rule}}."""
+    d = {"position": None, "offset": None, "timeout": {}, "apps": {}}
+    text = C.read_file(path())
+    if not text:
+        return d
+    sec, app = None, None
+    for line in text.splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        m = re.fullmatch(r"\[([^\]]+)\]", s)
+        if m:
+            sec, app = m.group(1), None
+            continue
+        k, _, v = s.partition("=")
+        k, v = k.strip(), v.strip().strip('"')
+        if sec == "global" and k == "origin":
+            d["position"] = v
+        elif sec == "global" and k == "offset":
+            nums = [int(x) for x in re.findall(r"-?\d+", v)][:2]
+            d["offset"] = nums if len(nums) == 2 else None
+        elif sec and sec.startswith("urgency_") and k == "timeout":
+            try:
+                d["timeout"][sec[8:]] = int(v)
+            except ValueError:
+                pass
+        elif sec and sec.startswith("bromigos_app_"):
+            if k == "appname":
+                app = v
+                d["apps"].setdefault(app, "show")
+            elif k == "skip_display" and app:
+                d["apps"][app] = "hide"
+            elif k == "urgency" and app and d["apps"].get(app) != "hide":
+                d["apps"][app] = "quiet"
+    return d
+
+
+def _slug(name):
+    return re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_").lower() or "app"
+
+
+def _glob_safe(name):
+    # dunst matches appname as a glob: the characters that would be patterns match themselves only as "?"
+    return re.sub(r"[\[\]*?\"\\]", "?", name)
+
+
+def save(d):
+    """80-settings.conf from `d`, whole; removed when it would say nothing."""
+    out = [HEADER]
+    g = []
+    if d.get("position"):
+        g.append(f"    origin = {d['position']}")
+    if d.get("offset"):
+        g.append(f"    offset = ({d['offset'][0]}, {d['offset'][1]})")
+    if g:
+        out.append("[global]\n" + "\n".join(g) + "\n")
+    for u in URGENCIES:
+        if u in d.get("timeout", {}):
+            out.append(f"[urgency_{u}]\n    timeout = {int(d['timeout'][u])}\n")
+    seen = set()
+    for name, rule in sorted(d.get("apps", {}).items()):
+        if rule == "show":
+            continue
+        slug = _slug(name)
+        while slug in seen:
+            slug += "_"
+        seen.add(slug)
+        body = f'    appname = "{_glob_safe(name)}"\n'
+        body += "    skip_display = true\n" if rule == "hide" else "    urgency = low\n"
+        out.append(f"[bromigos_app_{slug}]\n{body}")
+    C.write_file(path(), "\n".join(out) if len(out) > 1 else None)
+
+
+def apply(d, said):
+    save(d)
+    reloaded = dunstctl("reload", check=False) is not None
+    doc = status([])
+    doc["said"] = said
+    if not reloaded:
+        doc["note"] = "dunst isn't running: it reads this when it starts"
+    return doc
+
+
+# ---------------------------------------------------------------- reads
+def _history():
+    out = dunstctl("history", check=False)
+    try:
+        data = (json.loads(out).get("data") or [[]])[0] if out else []
+    except ValueError:
+        data = []
+    apps = {}
+    for n in data:
+        name = (n.get("appname") or {}).get("data") or ""
+        if not name:
+            continue
+        ts = (n.get("timestamp") or {}).get("data") or 0
+        a = apps.setdefault(name, {"name": name, "count": 0, "last": ts,
+                                   "last_summary": (n.get("summary") or {}).get("data") or ""})
+        a["count"] += 1
+        if ts >= a["last"]:
+            a["last"], a["last_summary"] = ts, (n.get("summary") or {}).get("data") or a["last_summary"]
+    return list(apps.values())
+
+
+def status(_args):
+    d = load()
+    p = dunstctl("is-paused", check=False) if C.have("dunstctl") else None
+    running, paused = p is not None, p == "true"
+    counts = {}
+    if running:
+        for k in ("waiting", "displayed", "history"):
+            v = dunstctl("count", k, check=False)
+            counts[k] = int(v) if v and v.isdigit() else None
+    seen = _history() if running else []
+    names = {a["name"] for a in seen}
+    for name in d["apps"]:
+        if name not in names:
+            seen.append({"name": name, "count": 0, "last": 0, "last_summary": ""})
+    for a in seen:
+        a["rule"] = d["apps"].get(a["name"], "show")
+    seen.sort(key=lambda a: (-a["last"], a["name"].lower()))
+    timeouts = dict(DEFAULTS["timeout"], **d["timeout"])
+    return {"running": running, "dnd": paused, "counts": counts,
+            "position": d["position"] or DEFAULTS["position"], "offset": d["offset"] or DEFAULTS["offset"],
+            "timeout": timeouts, "defaults": DEFAULTS, "apps": seen, "rules": RULES, "positions": POSITIONS,
+            "file": path(), "yours": {k: v for k, v in d.items() if v}}
+
+
+# ---------------------------------------------------------------- changes
+def dnd(args):
+    verb = (args or ["toggle"])[0]
+    if verb not in ("on", "off", "toggle"):
+        raise Fail("bromigos notifications dnd on|off|toggle")
+    C.need("dunstctl", "dunst")
+    dunstctl("set-paused", {"on": "true", "off": "false"}.get(verb, "toggle"))
+    doc = status([])
+    doc["said"] = "Do not disturb: " + ("on" if doc["dnd"] else "off")
+    return doc
+
+
+def position(args):
+    if len(args) != 1 or args[0] not in POSITIONS:
+        raise Fail("bromigos notifications position " + "|".join(POSITIONS))
+    d = load()
+    d["position"] = None if args[0] == DEFAULTS["position"] else args[0]
+    return apply(d, f"Notifications appear {args[0].replace('-', ' ')}")
+
+
+def offset(args):
+    try:
+        x, y = (int(a) for a in args)
+    except ValueError:
+        raise Fail("bromigos notifications offset X Y (pixels, 0 to 400)")
+    if not (0 <= x <= 400 and 0 <= y <= 400):
+        raise Fail("the offset: 0 to 400 pixels")
+    d = load()
+    d["offset"] = None if [x, y] == DEFAULTS["offset"] else [x, y]
+    return apply(d, f"Notifications {x}, {y} px from the edge")
+
+
+def timeout(args):
+    if len(args) != 2 or args[0] not in URGENCIES:
+        raise Fail("bromigos notifications timeout low|normal|critical SECONDS")
+    try:
+        s = int(args[1])
+    except ValueError:
+        raise Fail(f"{args[1]!r}: seconds, 0 (until dismissed) to 600")
+    if not 0 <= s <= 600:
+        raise Fail("seconds: 0 (until dismissed) to 600")
+    d = load()
+    if s == DEFAULTS["timeout"][args[0]]:
+        d["timeout"].pop(args[0], None)
+    else:
+        d["timeout"][args[0]] = s
+    return apply(d, f"{args[0].title()} notifications stay " + (f"{s} s" if s else "until dismissed"))
+
+
+def app(args):
+    if len(args) != 2 or args[1] not in RULES:
+        raise Fail("bromigos notifications app NAME show|quiet|hide")
+    name, rule = args[0].strip(), args[1]
+    if not name or len(name) > 80 or "\n" in name:
+        raise Fail("an app's name, as its notifications give it")
+    d = load()
+    if rule == "show":
+        d["apps"].pop(name, None)
+    else:
+        d["apps"][name] = rule
+    return apply(d, f"{name}: {rule}")
+
+
+def clear_history(_args):
+    C.need("dunstctl", "dunst")
+    dunstctl("history-clear")
+    return dict(status([]), said="The history is cleared")
+
+
+def test(_args):
+    C.need("notify-send", "libnotify")
+    C.must(["notify-send", "-a", "Settings", "-u", "normal", "A test notification",
+            "Where and how long it stays is what Settings › Notifications says."], what="notify-send")
+    return dict(status([]), said="Sent a test notification")
+
+
+def reset(_args):
+    C.write_file(path(), None)
+    reloaded = dunstctl("reload", check=False) is not None
+    doc = dict(status([]), said="Notifications: back to bromigOS's defaults")
+    if not reloaded:
+        doc["note"] = "dunst isn't running: it reads this when it starts"
+    return doc
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "dnd": dnd, "position": position, "offset": offset, "timeout": timeout,
+                     "app": app, "clear-history": clear_history, "test": test, "reset": reset}, USAGE))

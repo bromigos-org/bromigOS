@@ -1,0 +1,132 @@
+{
+  "_comment": "Qwen-Image 2.1 on the homelab ComfyUI (API format). bromigos-art fills the prompt, size, seed and reference images by node id and, for an edit, takes the latent from the encoder (sized to the input) instead of node 6; a masked edit adds an ImageCompositeMasked after node 8. Files are the ones helm/comfyui in the homelab repo fetches. Sampling follows Comfy-Org's template: 25 steps, cfg 1, euler/simple.",
+  "_meta": {
+    "capabilities": [
+      "image.generate",
+      "image.edit"
+    ],
+    "output": "png",
+    "license": "Qwen Research License (non-commercial: research or evaluation only)",
+    "fill": "qwen-image",
+    "requires": [
+      {
+        "folder": "diffusion_models",
+        "file": "qwen_image_2.1_int8_convrot.safetensors"
+      },
+      {
+        "folder": "text_encoders",
+        "file": "qwen3vl_8b_int8_convrot.safetensors"
+      },
+      {
+        "folder": "vae",
+        "file": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    ]
+  },
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "QwenImage21Cache",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "device": "auto",
+      "dtype": "default"
+    }
+  },
+  "3": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    }
+  },
+  "4": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    }
+  },
+  "5": {
+    "class_type": "TextEncodeQwenImage21",
+    "inputs": {
+      "clip": [
+        "3",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ],
+      "prompt": "",
+      "negative_prompt": "",
+      "resolution": 1536
+    }
+  },
+  "6": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1536,
+      "height": 1536,
+      "batch_size": 1
+    }
+  },
+  "7": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "positive": [
+        "5",
+        0
+      ],
+      "negative": [
+        "5",
+        1
+      ],
+      "latent_image": [
+        "6",
+        0
+      ],
+      "seed": 0,
+      "steps": 25,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "7",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "filename_prefix": "bromigos-art"
+    }
+  }
+}

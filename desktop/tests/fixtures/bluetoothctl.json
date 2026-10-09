@@ -1,0 +1,18 @@
+{
+ "running": true,
+ "adapter": {"mac": "00:1A:7D:DA:71:13", "name": "workstation", "alias": "workstation", "powered": true,
+             "discoverable": false, "pairable": true},
+ "rfkill": {"soft": false, "hard": false},
+ "devices": [
+  {"mac": "AC:80:0A:00:00:01", "name": "WH-1000XM5", "icon": "audio-headset", "paired": true, "connected": true,
+   "trusted": true, "battery": 70, "known": true},
+  {"mac": "E4:17:D8:2A:11:9C", "name": "MX Master 3S", "icon": "input-mouse", "paired": true, "connected": false,
+   "trusted": true, "battery": 35, "known": true},
+  {"mac": "C8:3F:26:7B:0E:45", "name": "Xbox Wireless Controller", "icon": "input-gaming", "paired": true,
+   "connected": false, "trusted": false, "battery": null, "known": true}
+ ],
+ "nearby": [
+  {"mac": "F0:5C:77:A1:B2:C3", "name": "JBL Flip 6", "icon": "audio-card", "pairing": "just-works"},
+  {"mac": "48:A4:72:0D:E5:66", "name": "Pixel 9", "icon": "phone", "pairing": "passkey"}
+ ]
+}

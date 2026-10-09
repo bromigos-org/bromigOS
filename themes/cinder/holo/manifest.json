@@ -1,0 +1,19 @@
+{
+  "_comment": "Hologram models (VECTOR's format: vector's tools/holo/collection.py and assets/holo/README.md). Boxes are [x0,x1, y0,y1, z0,z1] in fractions of the normalised bounding box (y up, front +z); a face goes to the first part whose box holds its centroid, else to the part with rest=true. bind names the live reading a part shows (VECTOR's holo/bind.py), empty for a part that only shapes the model. Sources are in src/; the baked NAME.holo.npz sit next to this file. Rebake: ~/.local/share/bromigos/venv/bin/python <vector>/tools/holo/bake.py --root THIS_DIR --preview",
+  "models": {
+  "crane-cab": {
+   "title": "THE CRANE CAB",
+   "subtitle": "Cinder \u00b7 Brask's post",
+   "faces": 40000,
+   "max_edges": 16000,
+   "source": "src/crane-cab.glb",
+   "parts": [
+    {"id": "relay", "label": "RELAY", "bind": "wick.beam", "hint": "The relay hangs from the dead crane's jib over the foundry floor. Lit while every channel on the network answers", "boxes": [[0.3, 0.75, 0.0, 0.78, 0.82, 1.0]], "explode": [0, -0.3, 1], "distance": 0.3},
+    {"id": "jib", "label": "JIB", "bind": "", "hint": "The jib over lines that still pour metal for wars that ended decades ago: nobody left could cancel the orders", "boxes": [[0.3, 0.75, 0.74, 0.93, 0.42, 1.0]], "explode": [0, 0.3, 1], "distance": 0.24},
+    {"id": "cab", "label": "CAB", "bind": "", "hint": "Brask's post: the cab and machinery deck of a dead forge crane. The black flame is cast into its counterweight. He builds masts and housings for the other posts up here", "boxes": [[0.0, 1.0, 0.73, 1.0, 0.0, 0.42]], "explode": [0, 1, -0.3], "distance": 0.28},
+    {"id": "tower", "label": "TOWER", "bind": "", "hint": "The lattice tower the forge-golems climb. One that comes down from Brask's crane doesn't carry a gun mount any more: it carries masts", "boxes": [[0.0, 1.0, 0.1, 0.73, 0.0, 0.6]], "explode": [-1, 0, 0], "distance": 0.14},
+    {"id": "pedestal", "label": "PEDESTAL", "bind": "", "hint": "Riveted footings on the foundry floor, between the lava rivers, under a sky lit orange at all hours", "rest": true, "explode": [0, -1, 0], "distance": 0.16}
+   ]
+  }
+  }
+}

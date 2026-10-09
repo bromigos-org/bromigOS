@@ -1,0 +1,622 @@
+#!/usr/bin/env python3
+# bromigos:summary=Your shortcuts without editing Lua: press a key for a default, a menu item, an app, a web app or a command; list, unbind, reset
+# bromigos:args=[bind [KEYS] [--default KEYS | --from KEYS | --menu ID | --webapp NAME | --exec CMD [--what TEXT]] [--swap | --replace] [--yes] | list [--all] [--json] | check KEYS [--json] | unbind KEYS [--yes] | reset [KEYS] [--yes] | undo]
+# bromigos:examples=bromigos keys; bromigos keys bind --default "SUPER + SPACE"; bromigos keys bind "SUPER + M" --default "SUPER + SPACE" --swap; bromigos keys bind "SUPER + ALT + G" --webapp gmail; bromigos keys list; bromigos keys reset
+"""bromigos-keys: your shortcuts, rebound by pressing the keys (SETUP › Shortcuts… in the menu).
+
+  bromigos keys                  the picker: your shortcuts, bromigOS's defaults, every menu
+                                 item and app, your web apps, a command of your own; choose
+                                 one, press the new keys, answer a clash if there is one
+  bromigos keys bind [KEYS] [WHAT] [--swap|--replace] [--yes]
+                                 bind KEYS (or the keys you press) to WHAT (or what you pick):
+      --default KEYS             a bromigOS default, by its own keys (also when moved or off)
+      --from KEYS                whatever is on KEYS now (a default, a shortcut, a web app's)
+      --menu ID                  a menu item (bromigos menu --json lists the ids; apps are
+                                 launch/<desktop file>)
+      --webapp NAME              a web app (its key, as `bromigos webapp add --hotkey` keeps it)
+      --exec CMD [--what TEXT]   a command of your own
+      --swap                     KEYS is taken: its holder gets WHAT's old key
+      --replace                  KEYS is taken: its holder loses it (a default is turned off)
+      --yes                      bind it although it takes the menu's or the terminal's last
+                                 key, or a key you type with
+  bromigos keys list [--all] [--json]
+                                 your shortcuts, and the defaults you turned off (--all:
+                                 every key, where it comes from, whether it can be moved)
+  bromigos keys check KEYS       what KEYS does now, and where that comes from
+  bromigos keys unbind KEYS      take KEYS off (your shortcut goes; a default is turned off)
+  bromigos keys reset [KEYS]     every default back (or the one on KEYS), your shortcuts gone
+  bromigos keys undo             put back what the last change replaced (again: redo)
+
+bind, unbind, reset and undo take --json: the outcome as one document ({"ok", "notes",
+"detail"}; refused: {"ok": false, "error", and "confirm": true when --yes would do it, or
+"taken" when the keys are someone else's}).
+
+Keys look like the SHORTCUTS panel's: "SUPER + SHIFT + W". Saving goes the safe way:
+Hyprland's auto-reload off, the files written whole, the config verified, one reload, the
+binds checked live; anything wrong and every file goes back. Yours are kept in
+~/.config/bromigos/keys.toml and written into marked blocks of ~/.config/hypr/hyprland.lua.
+"""
+import html
+import json
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+
+SELF = os.path.realpath(__file__)
+for _p in ("/usr/lib/bromigos/lib", os.path.join(os.path.dirname(SELF), "..", "lib")):
+    if os.path.isdir(_p) and _p not in sys.path:
+        sys.path.insert(0, _p)
+import bromigos_hypr as H  # noqa: E402
+import bromigos_keys as BK  # noqa: E402
+
+MUTED = "alpha='55%'"
+JSON = False        # --json on bind, unbind, reset, undo: the outcome as one document
+
+
+def die(msg, code=1, **extra):
+    if JSON:
+        print(json.dumps({"schema": 1, "ok": False, "error": msg, **extra}, ensure_ascii=False))
+    else:
+        print(f"bromigos keys: {msg}", file=sys.stderr)
+    return code
+
+
+# ------------------------------------------------------------------ rofi
+def esc(s):
+    return html.escape(s or "", quote=False)
+
+
+def rofi(rows, title, mesg=None, lines=14, width=900, custom=False):
+    """rofi -dmenu with markup rows: the chosen row's index, the typed text (custom), or None."""
+    theme = H.title_theme(title, width=width, lines=min(lines, max(1, len(rows)) if rows else 1))
+    cmd = ["rofi", "-dmenu", "-i", "-markup-rows", "-p", "", "-theme-str", theme,
+           "-format", "s" if custom else "i"]
+    if not custom:
+        cmd.append("-no-custom")
+    if mesg:
+        cmd += ["-mesg", mesg]
+    try:
+        r = subprocess.run(cmd, input="\n".join(rows) + ("\n" if rows else ""), capture_output=True,
+                           text=True, env=H.session_env())
+    except OSError:
+        return None
+    out = r.stdout.rstrip("\n")
+    if r.returncode != 0 or out == "":
+        return None
+    if custom:
+        return out
+    try:
+        return int(out)
+    except ValueError:
+        return None
+
+
+def row(group, label, hint=""):
+    g = f"<span {MUTED}>{esc(group)} › </span>" if group else ""
+    h = f"  <span {MUTED}>{esc(hint)}</span>" if hint else ""
+    return g + esc(label) + h
+
+
+def ask(title, mesg, options):
+    """options: [(key, label, hint)] -> the key chosen, or None."""
+    i = rofi([row("", label, hint) for _, label, hint in options], title, mesg=mesg, lines=len(options), width=820)
+    return None if i is None or i >= len(options) else options[i][0]
+
+
+def tell(title, mesg):
+    rofi([row("", "OK")], title, mesg=mesg, lines=1, width=820)
+
+
+def notify(body, ok=True):
+    H.notify("SHORTCUTS", body, urgency="low" if ok else "critical", ms=4000 if ok else 9000)
+
+
+# ------------------------------------------------------------------ what can be bound
+def menu_tree():
+    exe = shutil.which("bromigos-menu") or os.path.join(os.path.dirname(SELF), "bromigos-menu")
+    try:
+        r = subprocess.run([exe, "--json"], capture_output=True, text=True, timeout=30)
+        return json.loads(r.stdout) if r.returncode == 0 else {}
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return {}
+
+
+MENU_GROUPS = [("launch", "LAUNCH"), ("style", "STYLE"), ("toggle", "TOGGLE"), ("vector", "VECTOR"),
+               ("holo", "HOLOGRAMS"), ("setup", "SETUP"), ("install", "INSTALL"), ("remove", "REMOVE"),
+               ("update", "UPDATE"), ("commands", "COMMANDS")]
+
+
+def menu_target(item, group):
+    """A Target for a menu item (None: it asks for text first, or does nothing)."""
+    act = item.get("action")
+    if not act or act[0] not in ("run", "term", "hold") or act[1][-1:] == ["--help"]:
+        return None                             # asks for text first, does nothing, or only shows help
+    if act[0] == "run":
+        cmd = shlex.join(act[1])
+    else:
+        cmd = "bromigos-menu --run " + shlex.quote(item["id"])
+    label = item["label"].replace(" (current)", "")
+    kind = "app" if group == "launch" else "menu"
+    return BK.Target(kind, label, [{"exec": cmd}], ref=item["id"])
+
+
+def candidates(state, tree=None):
+    """[(row markup, Target or a special key)] for the picker, in order."""
+    plan = BK.Plan(state)
+    out = []
+    rows, off = BK.listing(state)
+    for r in rows:
+        hint = r["display"] + (f"  (from {BK.Combo.parse(r['from']).display()})" if r.get("from") else "")
+        try:
+            t = BK.yours_target(state, r["keys"])
+        except BK.Refused:
+            continue
+        out.append((row("YOURS", r["what"], hint), ("yours", t, r)))
+    for o in off:
+        try:
+            t = BK.default_target(state, o["keys"])
+        except BK.Refused:
+            continue
+        out.append((row("OFF", o["what"], f"was {o['display']}"), ("off", t, o)))
+    moved = {b.origin for b in state.record.binds if b.kind == "default"}
+    for keys, group in state.default_groups():
+        if keys in moved or keys in state.record.unbind or plan.off(keys):
+            continue
+        acts = BK.actions_of(group)
+        if not acts:
+            continue
+        what, sec = BK.describe(acts)
+        c = group[0].combo()
+        t = BK.Target("default", what, acts, origin=keys)
+        out.append((row("DEFAULT", what, c.display() if c else keys), t))
+    tree = menu_tree() if tree is None else tree
+    for g, label in MENU_GROUPS:
+        for item in tree.get(g, []):
+            if g == "launch" and "bromigos-webapp-" in item.get("id", ""):
+                continue                        # a web app: under WEB APP, with its own key
+            t = menu_target(item, g)
+            if t is not None:
+                out.append((row(label, t.what, item.get("hint") or ""), t))
+    for w in state.webapps:
+        t = BK.Target.webapp(w["name"], w.get("title"))
+        cur = plan.current(t)
+        out.append((row("WEB APP", w.get("title") or w["name"], cur.display() if cur else "no key yet"), t))
+    out.append((row("COMMAND", "A command of your own…", "type it, then press its keys"), "command"))
+    return out
+
+
+# ------------------------------------------------------------------ capture
+def capture(what, current=None):
+    """The keys pressed in the capture window: a Combo, or None (cancelled). Raises RuntimeError."""
+    argv = [sys.executable, SELF, "capture", "--for", what]
+    if current:
+        argv += ["--current", current]
+    r = subprocess.run(argv, capture_output=True, text=True, env=H.session_env())
+    if r.returncode == 1:
+        return None
+    if r.returncode != 0:
+        lines = (r.stderr or "").strip().splitlines()
+        raise RuntimeError(lines[-1] if lines else "the capture window failed")
+    d = json.loads(r.stdout)
+    return BK.Combo.parse(d["keys"], keycode=d.get("keycode") or 0)
+
+
+def cmd_capture(args):
+    what, current, seconds = "a shortcut", None, 30
+    i = 0
+    while i < len(args):
+        if args[i] == "--for" and i + 1 < len(args):
+            what = args[i + 1]; i += 2
+        elif args[i] == "--current" and i + 1 < len(args):
+            current = args[i + 1]; i += 2
+        elif args[i] == "--seconds" and i + 1 < len(args):
+            seconds = int(args[i + 1]); i += 2
+        else:
+            return die(f"capture: unknown argument {args[i]}", 2)
+    import bromigos_keycapture as C
+    try:
+        got = C.run(what, current, limit=seconds)
+    except RuntimeError as e:
+        return die(str(e), 2)
+    if got is None:
+        return 1
+    print(json.dumps(got))
+    return 0
+
+
+# ------------------------------------------------------------------ binding
+def save(plan, quiet=False):
+    """Commit a plan; print and notify the outcome. Returns an exit code."""
+    if not plan.changed():
+        if JSON:
+            print(json.dumps({"schema": 1, "ok": True, "notes": plan.notes, "detail": "nothing to change"},
+                             ensure_ascii=False))
+        else:
+            for n in plan.notes:
+                print(n)
+        return 0
+    try:
+        with BK.locked(plan.state.paths):
+            ok, msg = BK.commit(plan)
+    except BK.Refused as e:
+        ok, msg = False, str(e)
+    if ok:
+        BK.save_undo(plan.state, "; ".join(plan.notes))
+    if JSON:
+        print(json.dumps({"schema": 1, "ok": ok, "notes": plan.notes if ok else [], "detail": msg},
+                         ensure_ascii=False))
+    else:
+        for n in (plan.notes if ok else []):
+            print(n)
+        print(msg if ok else f"not saved: {msg}", file=sys.stdout if ok else sys.stderr)
+    if not quiet:
+        body = "; ".join(plan.notes) if ok else msg
+        notify(body[:300], ok)
+    return 0 if ok else 1
+
+
+def bind(target, combo=None, resolution=None, confirm=False, interactive=True):
+    """Bind `target`: to `combo`, or to the keys pressed in the capture window. With
+    `interactive`, a clash or a lockout is asked in rofi; without, it's printed."""
+    paths, hypr = BK.Paths(), BK.Hypr()
+    while True:
+        state = BK.State.read(paths, hypr)
+        if state.error:
+            msg = f"your hyprland.lua stops with an error, so it can't be changed safely: {state.error[:200]}"
+            if interactive:
+                tell("SHORTCUTS", msg)
+            return die(msg)
+        plan = BK.Plan(state)
+        if combo is None:
+            cur = plan.current(target)
+            try:
+                combo = capture(target.what, cur.display() if cur else None)
+            except RuntimeError as e:
+                notify(f"Couldn't listen for keys: {e}", ok=False)
+                return die(f"couldn't listen for keys: {e}")
+            if combo is None:
+                return die("cancelled", cancelled=True) if JSON else 1
+        try:
+            plan.bind(target, combo, resolution, confirm)
+        except BK.Clash as c:
+            if not interactive:
+                if JSON:
+                    return die(str(c), taken=[{"source": o.source, "keys": o.keys, "what": o.what} for o in c.owners],
+                               can_swap=c.can_swap)
+                print(f"{c.combo.display()} is taken: " + "; ".join(o.says() for o in c.owners), file=sys.stderr)
+                print("  --swap gives it " + (f"{target.what}'s key ({c.target_keys.display()})" if c.can_swap
+                                              else "nothing: there's no old key to swap with") +
+                      "; --replace takes it away", file=sys.stderr)
+                return 1
+            o = c.owners[0]
+            opts = []
+            if c.can_swap:
+                opts.append(("swap", f"Swap: {o.what} moves to {c.target_keys.display()}", ""))
+            opts.append(("replace", f"Replace: {c.combo.display()} does {target.what} now",
+                         "a bromigOS default is turned off" if o.source == "default" else f"{o.what} loses it"))
+            opts += [("again", "Pick another key", "press again"), ("cancel", "Cancel", "nothing changes")]
+            pick = ask("TAKEN", f"{c.combo.display()} is taken: {'; '.join(x.says() for x in c.owners)}", opts)
+            if pick in ("swap", "replace"):
+                resolution = pick
+                continue
+            if pick == "again":
+                combo, resolution, confirm = None, None, False
+                continue
+            return 1
+        except BK.Lockout as lo:
+            if not interactive:
+                if JSON:
+                    return die("; ".join(lo.reasons), confirm=True)
+                print("not bound: " + "; ".join(lo.reasons) + " (--yes binds it anyway)", file=sys.stderr)
+                return 1
+            pick = ask("ARE YOU SURE", "; ".join(lo.reasons),
+                       [("yes", "Bind it anyway", "you can put it back: bromigos keys reset"),
+                        ("again", "Pick another key", "press again"), ("cancel", "Cancel", "nothing changes")])
+            if pick == "yes":
+                confirm = True
+                continue
+            if pick == "again":
+                combo, resolution, confirm = None, None, False
+                continue
+            return 1
+        except BK.Refused as e:
+            if not interactive:
+                return die(str(e))
+            pick = ask("CAN'T BIND THAT", str(e), [("again", "Pick another key", "press again"),
+                                                   ("edit", "Edit hyprland.lua", "bromigos setup config hyprland"),
+                                                   ("cancel", "Cancel", "nothing changes")])
+            if pick == "again":
+                combo, resolution, confirm = None, None, False
+                continue
+            if pick == "edit":
+                H.spawn([shutil.which("bromigos-setup-config") or "bromigos-setup-config", "hyprland"])
+            return 1
+        return save(plan, quiet=not interactive)
+
+
+def resolve_target(state, args):
+    """The Target named by bind's flags, or None when none is given. Raises Refused."""
+    def val(flag):
+        i = args.index(flag)
+        if i + 1 >= len(args):
+            raise BK.Refused(f"{flag} needs a value")
+        return args[i + 1]
+    if "--default" in args:
+        return BK.default_target(state, val("--default"))
+    if "--from" in args:
+        keys = val("--from")
+        c = BK.Combo.parse(keys)
+        try:
+            return BK.yours_target(state, keys)
+        except BK.Refused:
+            pass
+        k, group = state.default_group(keys)
+        if group and k not in state.record.unbind:
+            return BK.default_target(state, k)
+        owners = BK.Plan(state).owners(c)
+        if owners:
+            raise BK.Refused(f"{c.display()} is {owners[0].says()}: that can't be moved from here")
+        raise BK.Refused(f"nothing is bound to {c.display()}")
+    if "--menu" in args:
+        want = val("--menu")
+        tree = menu_tree()
+        for g, _ in MENU_GROUPS:
+            for item in tree.get(g, []):
+                if item.get("id") == want:
+                    t = menu_target(item, g)
+                    if t is None:
+                        raise BK.Refused(f"menu item {want} asks for text first; it can't have a key")
+                    return t
+        raise BK.Refused(f"no menu item {want} (bromigos menu --json lists them)")
+    if "--webapp" in args:
+        name = val("--webapp")
+        w = next((w for w in state.webapps if w["name"] == name), None)
+        if w is None:
+            raise BK.Refused(f"no web app named {name} (bromigos webapp list)")
+        return BK.Target.webapp(name, w.get("title"))
+    if "--exec" in args:
+        cmd = val("--exec")
+        return BK.Target.command(cmd, val("--what") if "--what" in args else None)
+    return None
+
+
+def positional(args, flags_with_values):
+    out, i = [], 0
+    while i < len(args):
+        if args[i] in flags_with_values:
+            i += 2
+        elif args[i].startswith("--"):
+            i += 1
+        else:
+            out.append(args[i])
+            i += 1
+    return out
+
+
+VALUED = ("--default", "--from", "--menu", "--webapp", "--exec", "--what")
+
+
+def cmd_bind(args):
+    resolution = "swap" if "--swap" in args else ("replace" if "--replace" in args else None)
+    confirm = "--yes" in args
+    pos = positional(args, VALUED)
+    try:
+        combo = BK.Combo.parse(pos[0]) if pos else None
+        state = BK.State.read(BK.Paths(), BK.Hypr())
+        target = resolve_target(state, args)
+    except (BK.BadKeys, BK.Refused) as e:
+        return die(str(e))
+    if target is None:
+        return picker(manage=False, combo=combo)
+    return bind(target, combo, resolution, confirm, interactive=combo is None)
+
+
+# ------------------------------------------------------------------ the picker
+def picker(manage=True, combo=None):
+    try:
+        state = BK.State.read(BK.Paths(), BK.Hypr())
+    except BK.Refused as e:
+        tell("SHORTCUTS", str(e))
+        return die(str(e))
+    items = candidates(state)
+    rows = [r for r, _ in items]
+    extra = []
+    if manage and (not state.record.empty() or any(w.get("hotkey") for w in state.webapps)):
+        extra.append((row("", "Reset every shortcut to bromigOS's defaults", "yours go, every default comes back"),
+                      "reset"))
+    rows = [r for r, _ in extra] + rows
+    picks = [k for _, k in extra] + [k for _, k in items]
+    i = rofi(rows, "SHORTCUTS", mesg="Pick what to bind, then press its new keys. "
+             "Type to search: a default, a menu item, an app, a web app, a command.", lines=16)
+    if i is None or i >= len(picks):
+        return 1
+    pick = picks[i]
+    if pick == "reset":
+        ok = ask("RESET", "Every bromigOS default goes back on its key and your shortcuts are removed.",
+                 [("yes", "Reset them", ""), ("no", "Cancel", "nothing changes")])
+        return do_reset(None, interactive=True) if ok == "yes" else 1
+    if pick == "command":
+        cmd = rofi([], "YOUR COMMAND", mesg="The command to run (as a shell runs it: ~ and $HOME expand)",
+                   custom=True)
+        if not cmd or not cmd.strip():
+            return 1
+        return bind(BK.Target.command(cmd.strip()), combo)
+    if isinstance(pick, tuple):
+        kind, target, r = pick
+        if kind == "yours":
+            opts = [("change", "Change the key…", f"now {r['display']}")]
+            if r.get("from"):
+                opts.append(("home", f"Put it back on {BK.Combo.parse(r['from']).display()}", "where bromigOS has it"))
+            opts += [("remove", "Remove it", "the key is free again" if not r.get("from") else "it has no key then"),
+                     ("back", "Cancel", "")]
+            what = ask(r["what"].upper()[:40], f"{r['display']}: {r['what']}", opts)
+            if what == "change":
+                return bind(target, combo)
+            if what == "home":
+                return do_reset(r["from"], interactive=True)
+            if what == "remove":
+                return do_unbind(r["keys"], interactive=True)
+            return 1
+        if kind == "off":
+            what = ask(r["what"].upper()[:40], f"{r['what']} is off (it was {r['display']})",
+                       [("home", f"Put it back on {r['display']}", "where bromigOS has it"),
+                        ("change", "Give it another key…", "press it"), ("back", "Cancel", "")])
+            if what == "home":
+                return do_reset(r["keys"], interactive=True)
+            if what == "change":
+                return bind(target, combo)
+            return 1
+    return bind(pick, combo)
+
+
+# ------------------------------------------------------------------ the rest
+def do_unbind(keys, confirm=False, interactive=False):
+    try:
+        state = BK.State.read(BK.Paths(), BK.Hypr())
+        plan = BK.Plan(state)
+        plan.unbind(BK.Combo.parse(keys), confirm)
+    except BK.Lockout as lo:
+        if interactive:
+            if ask("ARE YOU SURE", "; ".join(lo.reasons), [("yes", "Unbind it anyway", ""),
+                                                            ("no", "Cancel", "")]) == "yes":
+                return do_unbind(keys, True, interactive)
+            return 1
+        return die("; ".join(lo.reasons) + ("" if JSON else " (--yes unbinds it anyway)"), confirm=True)
+    except (BK.BadKeys, BK.Refused) as e:
+        if interactive:
+            tell("SHORTCUTS", str(e))
+        return die(str(e))
+    return save(plan, quiet=not interactive)
+
+
+def do_reset(keys, interactive=False):
+    try:
+        state = BK.State.read(BK.Paths(), BK.Hypr())
+        plan = BK.Plan(state)
+        plan.reset(keys)
+    except (BK.BadKeys, BK.Refused) as e:
+        if interactive:
+            tell("SHORTCUTS", str(e))
+        return die(str(e))
+    return save(plan, quiet=not interactive)
+
+
+def cmd_unbind(args):
+    pos = positional(args, ())
+    if not pos:
+        return die("usage: bromigos keys unbind KEYS [--yes]", 2)
+    return do_unbind(pos[0], "--yes" in args)
+
+
+def cmd_reset(args):
+    pos = positional(args, ())
+    if not pos and "--yes" not in args:
+        if not sys.stdin.isatty():
+            return die("resetting every shortcut needs --yes when there's no one to ask", 2)
+        try:
+            a = input("Put every bromigOS default back and remove your shortcuts? [y/N] ")
+        except EOFError:
+            a = ""
+        if a.strip().lower() not in ("y", "yes"):
+            return 1
+    return do_reset(pos[0] if pos else None)
+
+
+def cmd_list(args):
+    try:
+        state = BK.State.read(BK.Paths(), None, live=False)
+    except BK.Refused as e:
+        return die(str(e))
+    rows, off = BK.listing(state)
+    every = BK.everything(state) if "--all" in args else None
+    if "--json" in args:
+        doc = {"schema": 1, "binds": rows, "off": off}
+        if every is not None:
+            doc["all"] = every
+        print(json.dumps(doc, ensure_ascii=False))
+        return 0
+    if every is not None:
+        sec = None
+        for r in every:
+            if r["section"] != sec:
+                sec = r["section"]
+                print(sec)
+            tag = {"yours": "  (yours)", "webapp": "  (a web app's)", "config": "  (in your hyprland.lua)"}.get(r["source"], "")
+            print(f"  {r['display']:<26} {r['what']}{tag}")
+        if off:
+            print("OFF (bromigOS defaults turned off)")
+            for o in off:
+                print(f"  {o['display']:<26} {o['what']}")
+        return 0
+    if not rows and not off:
+        print("no shortcuts of your own; every bromigOS default is on its key (bromigos keys to bind one)")
+        return 0
+    if rows:
+        print("YOURS")
+        for r in rows:
+            extra = ""
+            if r.get("from"):
+                extra = f"  (from {BK.Combo.parse(r['from']).display()})"
+            if r["source"] == "webapp":
+                extra = "  (a web app's key)"
+            if r.get("stale"):
+                extra += "  [the default changed since: bromigos keys bind it again to update]"
+            print(f"  {r['display']:<26} {r['what']}{extra}")
+    if off:
+        print("OFF (bromigOS defaults turned off)")
+        for o in off:
+            print(f"  {o['display']:<26} {o['what']}")
+    return 0
+
+
+def cmd_check(args):
+    pos = positional(args, ())
+    if not pos:
+        return die("usage: bromigos keys check KEYS [--json]", 2)
+    try:
+        c = BK.Combo.parse(pos[0])
+        state = BK.State.read(BK.Paths(), BK.Hypr())
+    except (BK.BadKeys, BK.Refused) as e:
+        return die(str(e))
+    owners = BK.Plan(state).owners(c)
+    if "--json" in args:
+        print(json.dumps({"schema": 1, "keys": str(c), "display": c.display(),
+                          "owners": [{"source": o.source, "keys": o.keys, "what": o.what, "movable": o.movable}
+                                     for o in owners]}, ensure_ascii=False))
+        return 0
+    if not owners:
+        print(f"{c.display()}: free")
+    for o in owners:
+        print(f"{c.display()}: {o.says()}")
+    return 0
+
+
+def cmd_undo(args):
+    try:
+        plan = BK.undo_plan(BK.State.read(BK.Paths(), BK.Hypr()))
+    except BK.Refused as e:
+        return die(str(e))
+    return save(plan, quiet=True)
+
+
+def main():
+    global JSON
+    a = sys.argv[1:]
+    if not a:
+        return picker(manage=True)
+    verbs = {"bind": cmd_bind, "list": cmd_list, "check": cmd_check, "unbind": cmd_unbind,
+             "reset": cmd_reset, "undo": cmd_undo, "capture": cmd_capture}
+    JSON = a[0] in ("bind", "unbind", "reset", "undo") and "--json" in a
+    if a[0] in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return 0
+    if a[0] not in verbs:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    return verbs[a[0]](a[1:])
+
+
+if __name__ == "__main__":
+    sys.exit(main() or 0)

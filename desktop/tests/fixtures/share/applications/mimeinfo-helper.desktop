@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=A hidden helper
+Exec=helper %f
+NoDisplay=true
+MimeType=text/plain;

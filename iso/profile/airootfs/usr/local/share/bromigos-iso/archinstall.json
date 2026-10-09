@@ -1,0 +1,91 @@
+{
+  "_comment": "bromigOS's archinstall configuration: what the live medium's installer (bromigos-iso-install) builds the install from (answers.py adds the disk, the user and the choices made at the prompt). The disk is btrfs (snapper's subvolumes) on LUKS2 by default (--no-encrypt leaves the LUKS out); GRUB boots it, BIOS or UEFI, with snapper's snapshots in its menu (grub-btrfs; snapper's configurations are bromigos-iso-install's, archinstall 4.5 can't make them on this layout). docs/iso.md, docs/iso-encryption.md. The packages come from the medium's offline repository: no network needed.",
+  "version": "4.5",
+  "script": "guided",
+  "archinstall-language": "English",
+  "bootloader": "Grub",
+  "kernels": [
+    "linux"
+  ],
+  "hostname": "bromigos",
+  "timezone": "UTC",
+  "ntp": true,
+  "offline": true,
+  "no_pkg_lookups": true,
+  "locale_config": {
+    "kb_layout": "us",
+    "sys_enc": "UTF-8",
+    "sys_lang": "en_US"
+  },
+  "mirror_config": {
+    "custom_servers": [
+      {
+        "url": "file:///var/lib/bromigos/repo/$repo/os/$arch"
+      }
+    ],
+    "mirror_regions": {},
+    "optional_repositories": [],
+    "_why": "no custom_repositories: the medium's own /etc/pacman.conf already has [bromigos] (the offline copy), and pacstrap reads that file; a second section would be a duplicate. The installed system gets [bromigos] at the real repository from bromigos-iso-install."
+  },
+  "network_config": {
+    "type": "nm"
+  },
+  "audio_config": {
+    "audio": "pipewire"
+  },
+  "profile_config": null,
+  "packages": [
+    "amd-ucode",
+    "base-devel",
+    "bluez",
+    "bluez-utils",
+    "brightnessctl",
+    "bromigos",
+    "bromigos-keyring",
+    "btop",
+    "btrfs-progs",
+    "cryptsetup",
+    "efibootmgr",
+    "git",
+    "grub",
+    "grub-btrfs",
+    "inotify-tools",
+    "intel-ucode",
+    "libva-mesa-driver",
+    "linux-firmware",
+    "mesa",
+    "nano",
+    "networkmanager",
+    "openssh",
+    "pavucontrol",
+    "pcmanfm",
+    "plymouth",
+    "snap-pac",
+    "snapper",
+    "sof-firmware",
+    "sudo",
+    "swappy",
+    "vim",
+    "vulkan-intel",
+    "vulkan-nouveau",
+    "vulkan-radeon",
+    "wf-recorder",
+    "zoxide"
+  ],
+  "pacman_config": {
+    "color": true,
+    "parallel_downloads": 5
+  },
+  "swap": {
+    "enabled": true,
+    "algorithm": "zstd"
+  },
+  "services": [
+    "NetworkManager",
+    "sddm",
+    "bluetooth",
+    "snapper-timeline.timer",
+    "snapper-cleanup.timer",
+    "grub-btrfsd"
+  ]
+}

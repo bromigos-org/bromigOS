@@ -1,0 +1,46 @@
+# bromigOS creation providers: the packaged default
+# (/usr/share/bromigos/default/create.toml; docs/art.md, "Creation providers").
+#
+# Yours is ~/.config/bromigos/create.toml, merged over this key by key. No capability
+# here lists providers: each follows targets.toml (docs/targets.md; `bromigos target`
+# shows and switches it): the homelab's ComfyUI, this machine's, then nolgia. Pin one
+# with a `providers` list, e.g. providers = ["comfyui:local", "none"], and add other
+# ComfyUIs as [comfyui.<name>] endpoint = "...". Endpoints may be references: "@env:NAME",
+# "@private:dotted.key", "@file:~/path", "@vault:kv/path#field", "@homelab:<source>".
+format = 1
+
+[nolgia]
+enabled = true
+
+[image.generate]
+comfyui = "qwen-image-2.1"
+nolgia = "gpt-image-2.5-flare"
+
+[image.edit]
+comfyui = "qwen-image-2.1"
+nolgia = "gpt-image-2.5-flare"
+
+[image.cutout]
+# Lucida where a ComfyUI has it (the native background-removal nodes), else BiRefNet
+# through the ComfyUI-RMBG node
+comfyui = ["lucida", "birefnet"]
+nolgia = "remove-background"
+
+[image.upscale]
+# SeedVR2 7B: images (and clips, below); a ComfyUI's only, no cloud model
+comfyui = "seedvr2-7b"
+
+[video.loop]
+# Wan 2.2 in preference order: the A14B where a ComfyUI has it, else TI2V-5B (both end a
+# loop on its start frame; docs/art.md, "Video loops on a ComfyUI")
+comfyui = ["wan2.2-i2v-a14b", "wan2.2-ti2v-5b"]
+nolgia = "seedance-2.5"
+
+[video.upscale]
+comfyui = "seedvr2-7b-video"
+
+[model3d.generate]
+# Pixal3D where a ComfyUI has it (geometry that follows the concept's view), else
+# Hunyuan3D 2.1; both shape only
+comfyui = ["pixal3d", "hunyuan3d-2.1"]
+nolgia = "trellis"

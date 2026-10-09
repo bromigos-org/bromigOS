@@ -1,0 +1,71 @@
+# __TITLE__'s colours (docs/theming.md, "colors.toml"). Every app's colours come from
+# these roles; a value is "#rrggbb" or another role's name.
+
+# ---- surfaces, darkest first
+background = "#070b0d"
+void = "#030506"
+panel = "#0f171a"
+selection = "#16303a"
+
+# ---- ink
+primary = "#3fd6c8"        # the accent: lines, the bar, focus
+soft = "#a6efe6"
+dim = "#1f6f6a"
+text = "#d8eeec"
+muted = "#7f9c9a"
+faint = "#46595a"
+
+# ---- signals
+warn = "#ffcf5a"
+danger = "#ff5a6a"
+warn_surface = "#3a2e0b"
+danger_surface = "#2b0a10"
+danger_text = "#ffd8dc"
+
+[colors]
+cyan = "#6fd3ff"
+gold = "#ffd36a"
+white = "#effffd"
+rust = "#5a1a22"
+
+[holo]
+line = "primary"
+glow = "soft"
+label = "text"
+highlight = "white"
+
+[widgets]
+frame = "dim"
+header = "primary"
+value = "soft"
+graph = "primary"
+track = "selection"
+
+[terminal]
+foreground = "text"
+background = "background"
+color0 = "background"
+color1 = "danger"
+color2 = "primary"
+color3 = "warn"
+color4 = "#6fa8ff"
+color5 = "#d78bd6"
+color6 = "cyan"
+color7 = "#b8cccb"
+color8 = "faint"
+color9 = "#ff8a96"
+color10 = "soft"
+color11 = "gold"
+color12 = "#9fc6ff"
+color13 = "#e8b0e6"
+color14 = "#a0e4ff"
+color15 = "#f4fffe"
+
+[qt]
+view = "#0a1012"
+view_alt = "#0e1618"
+header = "#0c1315"
+window_alt = "#121c1f"
+button = "#16262a"
+neutral_on_selection = "#3a2e0b"
+negative_on_selection = "#5a1a22"

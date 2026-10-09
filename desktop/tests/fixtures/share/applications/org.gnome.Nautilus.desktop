@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Files
+Exec=nautilus --new-window %U
+Icon=org.gnome.Nautilus
+Categories=GNOME;GTK;Utility;Core;FileManager;
+MimeType=inode/directory;application/x-7z-compressed;

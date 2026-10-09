@@ -1,0 +1,152 @@
+"""The lab console's cards for the lab adapters' capabilities (console.register_card): titles,
+columns, a hover hint for the card and for each item, a one-line summary. Without the console
+(console.py) nothing registers. bromigOS's own cards (cards.py) register first, so theirs win
+an id they share. gpus and storage are cards.py's."""
+GIB = 1024 ** 3
+
+
+def _n(v, unit="", d=0):
+    return "?" if v is None else f"{v:.{d}f}{unit}"
+
+
+def _bits(bps):
+    if bps is None:
+        return "?"
+    for u, s in ((1e9, "Gb/s"), (1e6, "Mb/s"), (1e3, "kb/s")):
+        if bps >= u:
+            return f"{bps / u:.1f} {s}"
+    return f"{bps:.0f} b/s"
+
+
+def _count(items, pred):
+    return sum(1 for i in items if pred(i))
+
+
+def _backup_state(r):
+    age, limit = r.get("age_h"), r.get("max_age_hours") or 30
+    if r.get("ok") is False or age is None:
+        return "crit"
+    return "crit" if age > 2 * limit else "warn" if age > limit else "ok"
+
+
+CARDS = [
+    dict(id="apps", title="Apps", order=35, columns=("name", "kind", "up", "version", "detail"),
+         hint="The lab's apps (web UIs, search, databases, the log stack, OCR, GPU apps): whether each answers, "
+              "its version, and its pods. Grey: not deployed.",
+         item_hint=lambda r: f"{r['name']} ({r.get('kind')}): " + ("up" if r.get("up") else "not deployed"
+                                                                    if r.get("up") is None else "DOWN") +
+         (f", {r['version']}" if r.get("version") else "") + (f" · {r['detail']}" if r.get("detail") else "") +
+         (f" · open {r['link']}" if r.get("link") else ""),
+         summary=lambda items: f"{_count(items, lambda i: i.get('up'))} of "
+                               f"{_count(items, lambda i: i.get('up') is not None)} up" +
+         (f" · {_count(items, lambda i: i.get('up') is None)} not deployed"
+          if _count(items, lambda i: i.get("up") is None) else "")),
+    dict(id="logs", title="Logs", order=105, columns=("name", "errors", "window_min"),
+         hint="Error lines each app logged lately (Loki), noisiest first. Amber and red from the source's "
+              "warn_errors and crit_errors. bromigos lab logs <app> reads them.",
+         item_hint=lambda r: f"{r['name']}: {r['errors']} error lines in the last {r.get('window_min')} min"
+                             " · bromigos lab logs " + r["name"] + (f" · or {r['link']}" if r.get("link") else ""),
+         summary=lambda items: f"{sum(i['errors'] for i in items)} error lines" +
+         (f" · noisiest {items[0]['name']} ({items[0]['errors']})" if items else "")),
+    dict(id="routes", title="Routes", order=110, columns=("name", "host", "up", "entrypoints", "rps"),
+         hint="Every ingress route (Traefik) and whether a backend answers behind it; requests a second when "
+              "Traefik's metrics are there. Red: no healthy backend, or Traefik rejected the route.",
+         item_hint=lambda r: f"{r['host'] or r['name']} → {r.get('service')}: " +
+         ("answers" if r.get("up") else "NO BACKEND" if r.get("up") is False else "declared") +
+         f" ({', '.join(r.get('entrypoints') or [])})" + (f" · {r['rps']:.2f} req/s" if r.get("rps") else ""),
+         summary=lambda items: f"{len(items)} routes" + (
+             f" · {_count(items, lambda i: i.get('up') is False)} without a backend"
+             if _count(items, lambda i: i.get("up") is False) else " · all answer")),
+    dict(id="certs", title="Certificates", order=115, columns=("name", "namespace", "not_after", "days_left", "issuer"),
+         hint="TLS certificates (cert-manager) and when each expires. Amber under 21 days, red under 7 or not ready.",
+         item_hint=lambda r: f"{r['name']} ({', '.join(r.get('dns_names') or []) or '-'}): expires "
+                             f"{(r.get('not_after') or '?')[:10]}, in {r.get('days_left')} days · issuer {r.get('issuer')}",
+         summary=lambda items: (lambda s: f"soonest: {s['name']} in {s['days_left']} days" if s else "-")(
+             min((i for i in items if i.get("days_left") is not None), key=lambda i: i["days_left"], default=None))),
+    dict(id="ddns", title="Dynamic DNS", order=120, columns=("name", "type", "match", "proxied", "updated"),
+         hint="DNS records a dynamic-DNS updater keeps pointed at this network's public address, and whether "
+              "they match it now. Red: a record points elsewhere or the updater fails.",
+         item_hint=lambda r: f"{r['name']} ({r.get('type')}): " + ("matches the public address" if r.get("match")
+                                                                  else "DOES NOT match" if r.get("match") is False
+                                                                  else "unknown") +
+         (" · proxied (DNS answers the proxy's address)" if r.get("proxied") else "") +
+         f" · updated {r.get('updated') or '?'}",
+         summary=lambda items: f"{_count(items, lambda i: i.get('match'))} of {len(items)} records match"),
+    dict(id="network", title="Network", order=125, columns=("name", "kind", "model", "up", "clients", "rx_bps", "tx_bps"),
+         hint="The network's devices and WAN links (UniFi, through UniFi Poller): up, clients, and the gateway's "
+              "WAN throughput now.",
+         item_hint=lambda r: f"{r['name']} ({r['kind']}{', ' + r['model'] if r.get('model') else ''}): " +
+         ("up" if r.get("up") else "DOWN") + (f" · {r['clients']} clients" if r.get("clients") is not None else "") +
+         (f" · down {_bits(r.get('rx_bps'))}, up {_bits(r.get('tx_bps'))}" if r.get("rx_bps") is not None else "") +
+         (f" · {r['role']}" if r.get("role") else ""),
+         summary=lambda items: (lambda site, gw: f"{_count(items, lambda i: i['kind'] not in ('wan', 'site') and i.get('up'))}"
+                                f" devices up · {site.get('clients', '?')} clients · WAN down "
+                                f"{_bits(gw.get('rx_bps'))}, up {_bits(gw.get('tx_bps'))}")(
+             next((i for i in items if i["kind"] == "site"), {}),
+             next((i for i in items if i["kind"] == "gateway"), {}))),
+    dict(id="games", title="Game servers", order=130, columns=("name", "game", "status", "players", "players_max"),
+         hint="Game servers (Pelican): running or not, and who's playing. Starting and stopping them comes later.",
+         item_hint=lambda r: f"{r['name']} ({r.get('game')}): {r['status']} · {r.get('players') or 0} of "
+                             f"{r.get('players_max') or '?'} players · up {_n((r.get('uptime_s') or 0) / 3600, ' h')}",
+         summary=lambda items: f"{_count(items, lambda i: i.get('status') == 'running')} of {len(items)} running · "
+                               f"{sum(i.get('players') or 0 for i in items)} playing"),
+    dict(id="library", title="Media library", order=135, columns=("name", "kind", "up", "queue", "missing", "disk_free"),
+         hint="The media apps (Sonarr, Radarr, Lidarr, Prowlarr, Bazarr) and servers (Jellyfin, Plex): up, the "
+              "download queue, what's missing, the library disk's free space. Read-only.",
+         item_hint=lambda r: f"{r['name']} ({r.get('kind')}): " + ("up" if r.get("up") else "DOWN") +
+         (f" · {r['queue']} in the queue" if r.get("queue") is not None else "") +
+         (f" ({r['queue_errors']} with errors)" if r.get("queue_errors") else "") +
+         (f" · {r['missing']} missing" if r.get("missing") is not None else "") +
+         (f" · {r['disk_free'] / GIB:.0f} GiB free" if r.get("disk_free") is not None else "") +
+         (f" · {r['version']}" if r.get("version") else ""),
+         summary=lambda items: f"{_count(items, lambda i: i.get('up'))} of {len(items)} up · "
+                               f"{sum(i.get('queue') or 0 for i in items)} downloading"),
+    dict(id="runners", title="CI runners", order=140, columns=("name", "online", "runners", "busy", "queued", "max"),
+         hint="Self-hosted GitHub Actions runner pools (Actions Runner Controller): online, runners up, jobs "
+              "waiting. Amber: jobs queue on a full pool.",
+         item_hint=lambda r: f"{r['name']} ({r.get('org')}): " + ("online" if r.get("online") else "LISTENER DOWN") +
+         f" · {r.get('runners')} running of max {r.get('max') if r.get('max') is not None else '?'} · "
+         f"{r.get('queued')} queued",
+         summary=lambda items: f"{_count(items, lambda i: i.get('online'))} pools online · "
+                               f"{sum(i.get('runners') or 0 for i in items)} running · "
+                               f"{sum(i.get('queued') or 0 for i in items)} queued"),
+    dict(id="packages", title="Packages", order=145, columns=("name", "latest", "built", "age_h", "packages"),
+         hint="The package repository's channels (edge, rc, stable): the newest build in each and how old it is.",
+         item_hint=lambda r: f"{r['name']}: " + (f"{r['latest']}, built {r['built']} ({_n(r.get('age_h'), ' h')} ago), "
+                                                 f"{r['packages']} packages" if r.get("latest") else "not published"),
+         summary=lambda items: " · ".join(f"{i['name']} {_n(i.get('age_h'), ' h')}" for i in items if i.get("built"))
+         or "nothing published"),
+    dict(id="backups", title="Backups", order=150, columns=("name", "kind", "last_success", "age_h", "max_age_hours"),
+         state=_backup_state,
+         hint="Each backup target (backup jobs, NAS snapshots, Velero, a backup server) and when it last succeeded. "
+              "Amber past its expected interval, red at twice it or when its last run failed. The doctor says "
+              "what nothing backs up.",
+         item_hint=lambda r: f"{r['name']} ({r['kind']}): last good {r.get('last_success') or 'never'} "
+                             f"({_n(r.get('age_h'), ' h')} ago; expected within {r.get('max_age_hours')} h)" +
+         ("" if r.get("ok") is not False else " · its last run FAILED") +
+         (" · leaves the lab" if r.get("offsite") else ""),
+         summary=lambda items: f"{len(items)} targets · oldest " + (lambda o: f"{o['name']} {_n(o['age_h'], ' h')}" if o
+                                                                    else "-")(
+             max((i for i in items if i.get("age_h") is not None), key=lambda i: i["age_h"] / (i.get("max_age_hours") or 30),
+                 default=None))),
+    dict(id="ocr", title="OCR", order=155, columns=("name", "up", "model", "via", "detail"),
+         hint="OCR models the `ocr` job kind sends pages to (bromigos lab run ocr --input FILE).",
+         item_hint=lambda r: f"{r['name']}: " + ("up" if r.get("up") else "down") + f" · model {r.get('model')} "
+                             f"via {r.get('via')}" + (f" · {r['detail']}" if r.get("detail") else "")),
+]
+
+
+def register():
+    try:
+        from .. import console
+    except ImportError:
+        return
+    try:
+        from .. import cards  # noqa: F401  (bromigOS's own register first)
+    except ImportError:
+        pass
+    for c in CARDS:
+        console.register_card(**c)
+
+
+register()

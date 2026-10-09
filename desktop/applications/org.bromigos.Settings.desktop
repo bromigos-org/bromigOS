@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=bromigOS Settings
+GenericName=Settings
+Comment=Idle and lock, the theme, shortcuts, accessibility, where AI runs and updates, in one window (SUPER+,)
+Icon=bromigos-settings
+TryExec=bromigos-settings
+Exec=bromigos-settings
+Terminal=false
+Categories=Settings;DesktopSettings;GTK;
+Keywords=settings;preferences;control panel;configuration;system settings;options;idle;lock;accessibility;bromigos;
+StartupNotify=true
+StartupWMClass=org.bromigos.Settings
+X-Bromigos-Menu=setup/settings

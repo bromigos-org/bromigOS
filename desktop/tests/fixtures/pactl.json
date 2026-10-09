@@ -1,0 +1,238 @@
+{
+ "info": {
+  "server_name": "PulseAudio (on PipeWire 1.6.9)",
+  "server_version": "15.0.0",
+  "default_sink_name": "alsa_output.pci-0000_0c_00.4.analog-stereo",
+  "default_source_name": "alsa_input.usb-Blue_Microphones_Yeti-00.analog-stereo"
+ },
+ "sinks": [
+  {
+   "index": 51,
+   "state": "RUNNING",
+   "name": "alsa_output.pci-0000_0c_00.4.analog-stereo",
+   "description": "Built-in Audio Analog Stereo",
+   "mute": false,
+   "volume": {
+    "front-left": {
+     "value": 40632,
+     "value_percent": "62%",
+     "db": "0.00 dB"
+    },
+    "front-right": {
+     "value": 40632,
+     "value_percent": "62%",
+     "db": "0.00 dB"
+    }
+   },
+   "properties": {
+    "device.bus": "pci",
+    "media.class": "Audio/Sink",
+    "device.icon_name": "audio-card-analog-pci"
+   },
+   "ports": [
+    {
+     "name": "analog-output-lineout",
+     "description": "Line Out",
+     "availability": "available"
+    },
+    {
+     "name": "analog-output-headphones",
+     "description": "Headphones",
+     "availability": "not available"
+    }
+   ],
+   "active_port": "analog-output-lineout"
+  },
+  {
+   "index": 58,
+   "state": "SUSPENDED",
+   "name": "alsa_output.pci-0000_01_00.1.hdmi-stereo",
+   "description": "GB205 High Definition Audio (DisplayPort)",
+   "mute": false,
+   "volume": {
+    "front-left": {
+     "value": 65536,
+     "value_percent": "100%",
+     "db": "0.00 dB"
+    },
+    "front-right": {
+     "value": 65536,
+     "value_percent": "100%",
+     "db": "0.00 dB"
+    }
+   },
+   "properties": {
+    "device.bus": "pci",
+    "media.class": "Audio/Sink"
+   },
+   "ports": [
+    {
+     "name": "hdmi-output-0",
+     "description": "DisplayPort",
+     "availability": "available"
+    }
+   ],
+   "active_port": "hdmi-output-0"
+  },
+  {
+   "index": 73,
+   "state": "IDLE",
+   "name": "bluez_output.AC_80_0A_00_00_01.1",
+   "description": "WH-1000XM5",
+   "mute": false,
+   "volume": {
+    "front-left": {
+     "value": 29491,
+     "value_percent": "45%",
+     "db": "0.00 dB"
+    },
+    "front-right": {
+     "value": 29491,
+     "value_percent": "45%",
+     "db": "0.00 dB"
+    }
+   },
+   "properties": {
+    "device.bus": "bluetooth",
+    "device.form_factor": "headphone",
+    "media.class": "Audio/Sink"
+   },
+   "ports": [],
+   "active_port": null
+  }
+ ],
+ "sources": [
+  {
+   "index": 52,
+   "state": "SUSPENDED",
+   "name": "alsa_output.pci-0000_0c_00.4.analog-stereo.monitor",
+   "description": "Monitor of Built-in Audio",
+   "mute": false,
+   "volume": {
+    "front-left": {
+     "value": 65536,
+     "value_percent": "100%",
+     "db": "0.00 dB"
+    },
+    "front-right": {
+     "value": 65536,
+     "value_percent": "100%",
+     "db": "0.00 dB"
+    }
+   },
+   "monitor_source_of_sink": "alsa_output.pci-0000_0c_00.4.analog-stereo",
+   "properties": {
+    "device.class": "monitor"
+   },
+   "ports": [],
+   "active_port": null
+  },
+  {
+   "index": 64,
+   "state": "RUNNING",
+   "name": "alsa_input.usb-Blue_Microphones_Yeti-00.analog-stereo",
+   "description": "Yeti Stereo Microphone",
+   "mute": false,
+   "volume": {
+    "front-left": {
+     "value": 52428,
+     "value_percent": "80%",
+     "db": "0.00 dB"
+    },
+    "front-right": {
+     "value": 52428,
+     "value_percent": "80%",
+     "db": "0.00 dB"
+    }
+   },
+   "properties": {
+    "device.bus": "usb",
+    "device.form_factor": "microphone",
+    "media.class": "Audio/Source"
+   },
+   "ports": [
+    {
+     "name": "analog-input-mic",
+     "description": "Microphone",
+     "availability": "available"
+    }
+   ],
+   "active_port": "analog-input-mic"
+  },
+  {
+   "index": 66,
+   "state": "SUSPENDED",
+   "name": "alsa_input.pci-0000_0c_00.4.analog-stereo",
+   "description": "Built-in Audio Analog Stereo",
+   "mute": true,
+   "volume": {
+    "front-left": {
+     "value": 26214,
+     "value_percent": "40%",
+     "db": "0.00 dB"
+    },
+    "front-right": {
+     "value": 26214,
+     "value_percent": "40%",
+     "db": "0.00 dB"
+    }
+   },
+   "properties": {
+    "device.bus": "pci",
+    "media.class": "Audio/Source"
+   },
+   "ports": [],
+   "active_port": null
+  }
+ ],
+ "sink_inputs": [
+  {
+   "index": 91,
+   "sink": 51,
+   "mute": false,
+   "corked": false,
+   "volume": {
+    "front-left": {
+     "value": 65536,
+     "value_percent": "100%",
+     "db": "0.00 dB"
+    },
+    "front-right": {
+     "value": 65536,
+     "value_percent": "100%",
+     "db": "0.00 dB"
+    }
+   },
+   "properties": {
+    "application.name": "Firefox",
+    "media.name": "Lofi radio",
+    "application.process.binary": "firefox",
+    "application.icon_name": "firefox"
+   }
+  },
+  {
+   "index": 97,
+   "sink": 51,
+   "mute": false,
+   "corked": false,
+   "volume": {
+    "front-left": {
+     "value": 45875,
+     "value_percent": "70%",
+     "db": "0.00 dB"
+    },
+    "front-right": {
+     "value": 45875,
+     "value_percent": "70%",
+     "db": "0.00 dB"
+    }
+   },
+   "properties": {
+    "application.name": "Spotify",
+    "media.name": "Kind of Blue",
+    "application.process.binary": "spotify",
+    "application.icon_name": "spotify-client"
+   }
+  }
+ ]
+}

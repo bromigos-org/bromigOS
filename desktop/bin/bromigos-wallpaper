@@ -1,0 +1,276 @@
+#!/usr/bin/env bash
+# bromigos:summary=Switch the den wallpaper and its lock-screen twin
+# bromigos:args=den|empty|masked|v1|next|previous|list [--json]|apply|outputs|status
+# bromigos-wallpaper — switch the Wick's den wallpaper (and its lock-screen twin).
+#
+#   bromigos-wallpaper empty   the Wick, chair empty, headphones on the desk (bromigOS's den)
+#   bromigos-wallpaper den     the den with its operator at the desk (a user's own art)
+#   bromigos-wallpaper masked  the operator at the desk, the burn-in over their face (own art)
+#   bromigos-wallpaper v1      the original den plate (own art)
+#   bromigos-wallpaper apply   (re)apply the saved choice: session start, every theme switch
+#   bromigos-wallpaper outputs swaybg on every output again (a monitor plugged in)
+#   bromigos-wallpaper status  print the active variant
+#   bromigos-wallpaper previous the variant before (next: after; SUPER+CTRL+SPACE)
+#   bromigos-wallpaper list [--json]  the installed variants, the chosen one marked
+#
+# bromigOS ships the empty den (/usr/share/bromigos/wallpaper, package bromigos-desktop);
+# the other variants are a user's own art in ~/.config/wallpaper, which is searched first.
+# The default is "den" where the user has it, else "empty".
+#
+# The choice is local state: symlinks in ~/.local/state/bromigos/wallpaper/ (+ a 'variant'
+# file): den.jpg, the plate the live layer draws (and recolours itself); wall.jpg, what
+# swaybg shows under it; lock.jpg, gtklock's and hyprlock's background. Under a world theme
+# all three come from the world's painting instead; under a colour theme wall.jpg and
+# lock.jpg are the den recoloured in its colours (below).
+#
+# Every den variant is composited onto the v1 plate, so the live layer's den overlays fit
+# them all; it gates them on a sha1 allowlist (its config.toml [background.den_plates]).
+set -euo pipefail
+
+WP_DIRS=("$HOME/.config/wallpaper" "${BROMIGOS_SHARE_DIR:-/usr/share/bromigos}/wallpaper")
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/bromigos/wallpaper"
+LIVE_BIN=/usr/bin/bromigos-live
+[ -x "$LIVE_BIN" ] || LIVE_BIN="$HOME/.config/bromigos-live/bin/bromigos-live"
+mkdir -p "$STATE"
+
+files_for() {
+    case "$1" in
+        den|operator) echo "bromigos-den-operator-2560x1440.jpg bromigos-lock-operator-2560x1440.jpg" ;;
+        empty)        echo "bromigos-den-empty-2560x1440.jpg bromigos-lock-empty-2560x1440.jpg" ;;
+        masked)       echo "bromigos-den-masked-2560x1440.jpg bromigos-lock-masked-2560x1440.jpg" ;;
+        v1)           echo "bromigos-den-2560x1440-v1.jpg bromigos-lock-2560x1440-v1.jpg" ;;
+        *) return 1 ;;
+    esac
+}
+
+# the first of WP_DIRS holding FILE, or nothing
+find_wp() {
+    local d
+    for d in "${WP_DIRS[@]}"; do [ -f "$d/$1" ] && { echo "$d/$1"; return 0; }; done
+    return 1
+}
+
+current() {
+    local v
+    v=$(cat "$STATE/variant" 2>/dev/null || true)
+    [ -n "$v" ] && { echo "$v"; return; }
+    if find_wp bromigos-den-operator-2560x1440.jpg >/dev/null; then echo den; else echo empty; fi
+}
+
+# This session's swaybg processes: the user's whose WAYLAND_DISPLAY and XDG_RUNTIME_DIR are
+# ours (without a WAYLAND_DISPLAY here, the runtime directory alone). Another session's,
+# or a nested test desktop's, are never touched.
+session_swaybg() {
+    local p env
+    for p in $(pgrep -x -u "$(id -u)" swaybg 2>/dev/null); do
+        env=$(tr '\0' '\n' <"/proc/$p/environ" 2>/dev/null) || continue
+        grep -qxF "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" <<<"$env" || continue
+        if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+            grep -qxF "WAYLAND_DISPLAY=$WAYLAND_DISPLAY" <<<"$env" || continue
+        fi
+        echo "$p"
+    done
+}
+
+restart_swaybg() {
+    local img="$1" old outputs p
+    # links from before wall.jpg (an older bromigos-wallpaper): made from the saved choice
+    [ -e "$img" ] || set_variant "$(current)"
+    # one at a time: login's apply and Hyprland's monitor.added (outputs) run together
+    exec 9>"$STATE/.swaybg.lock"
+    flock -w 10 9 || true
+    old=$(session_swaybg)
+    # this session's outputs (Hyprland's list), else the running swaybg's, else every output
+    outputs=$(hyprctl monitors 2>/dev/null | awk '/^Monitor / { print $2 }' || true)
+    [ -n "$outputs" ] || outputs=$(for p in $old; do
+        tr '\0' ' ' <"/proc/$p/cmdline" 2>/dev/null | grep -o -- '-o [^ ]*' | awk '{print $2}' || true
+    done | sort -u)
+    [ -n "$outputs" ] || outputs='*'
+    if command -v swaybg >/dev/null && ! pgrep -x hyprpaper >/dev/null; then
+        while read -r o; do        # (not `for o in $outputs`: '*' would glob)
+            [ -n "$o" ] && setsid -f swaybg -o "$o" -m fill -i "$img" >/dev/null 2>&1 9>&-   # not the lock
+        done <<<"$outputs"
+        sleep 0.6
+        [ -n "$old" ] && kill $old 2>/dev/null || true
+    fi
+    if pgrep -x hyprpaper >/dev/null; then
+        hyprctl hyprpaper reload ",$img" >/dev/null 2>&1 || true
+    fi
+}
+
+# A world theme (bromigos theme set mire|tidewell|…) brings its own painting: the wallpaper
+# under the live layer and the lock screen's background are made from it, the lock one
+# darkened and softened like the den's. The den variants are the Wick's; the choice is kept
+# for when the Wick is back.
+THEME="${XDG_STATE_HOME:-$HOME/.local/state}/bromigos/theme/current"
+
+world_images() {
+    # prints "den lock" for the current world theme, rendering them when missing or stale.
+    # The painting is its layers stacked (backgrounds/layers/*.webp, in name order: what the
+    # live layer draws, kept current by every repaint); comp.webp only when there are none.
+    local bg="$THEME/backgrounds" name out newest
+    [ -d "$bg/layers" ] || [ -f "$bg/comp.webp" ] || return 1
+    name=$(cat "$THEME/name" 2>/dev/null || echo world)
+    out="$STATE/world"
+    mkdir -p "$out"
+    newest=$(ls -t "$bg"/layers/*.webp "$bg"/comp.webp 2>/dev/null | head -1)
+    if [ ! -f "$out/$name-lock.jpg" ] || [ "$newest" -nt "$out/$name-lock.jpg" ]; then
+        python3 - "$bg" "$out/$name-den.jpg" "$out/$name-lock.jpg" <<'PY' || return 1
+import glob, os, sys
+from PIL import Image, ImageEnhance, ImageFilter
+bg, den, lock = sys.argv[1:4]
+layers = sorted(glob.glob(os.path.join(bg, "layers", "*.webp")))
+if layers:
+    im = Image.new("RGBA", (2560, 1440), (0, 0, 0, 255))
+    for f in layers:
+        im.alpha_composite(Image.open(f).convert("RGBA").resize((2560, 1440), Image.LANCZOS))
+    im = im.convert("RGB")
+else:
+    im = Image.open(os.path.join(bg, "comp.webp")).convert("RGB").resize((2560, 1440), Image.LANCZOS)
+im.save(den + ".tmp.jpg", quality=92)
+soft = im.filter(ImageFilter.GaussianBlur(6))
+ImageEnhance.Brightness(soft).enhance(0.4).save(lock + ".tmp.jpg", quality=92)
+os.replace(den + ".tmp.jpg", den)
+os.replace(lock + ".tmp.jpg", lock)
+PY
+    fi
+    echo "$out/$name-den.jpg $out/$name-lock.jpg"
+}
+
+colour_images() {  # DEN LOCK: prints "wall lock" for a colour theme, recoloured (none: the Wick)
+    # The den is painted in the Wick's green; a colour theme gets it gradient-mapped to its
+    # own colours (lib/bromigos_retint.py, as the live layer does its plate), rendered once
+    # per variant and palette into $STATE/colour/.
+    local den="$1" lock="$2" pal="$THEME/palette.json" out sig wall lk lib
+    [ -f "$pal" ] || return 1
+    for lib in /usr/lib/bromigos/lib "$(dirname "$(readlink -f "$0")")/../../lib"; do
+        [ -f "$lib/bromigos_retint.py" ] && break
+    done
+    [ -f "$lib/bromigos_retint.py" ] || return 1
+    sig=$(PYTHONPATH="$lib" python3 -c 'import bromigos_retint as R, sys; p = R.palette(); print("" if R.is_wick(p) else p["theme"] + "-" + R.signature(p))') || return 1
+    [ -n "$sig" ] || return 1
+    out="$STATE/colour"
+    mkdir -p "$out"
+    wall="$out/$sig-$(basename "$den")" lk="$out/$sig-$(basename "$lock")"
+    if [ ! -f "$wall" ] || [ "$den" -nt "$wall" ] || [ ! -f "$lk" ] || [ "$lock" -nt "$lk" ]; then
+        PYTHONPATH="$lib" python3 - "$den" "$wall" "$lock" "$lk" <<'PY' || return 1
+import os, sys
+import bromigos_retint as R
+pal = R.palette()
+for src, dst in ((sys.argv[1], sys.argv[2]), (sys.argv[3], sys.argv[4])):
+    R.retint_file(src, dst + ".tmp.jpg", pal)
+    os.replace(dst + ".tmp.jpg", dst)
+PY
+        # the palette's older renders go
+        find "$out" -maxdepth 1 -name '*.jpg' ! -name "$sig-*" -delete 2>/dev/null || true
+    fi
+    echo "$wall $lk"
+}
+
+set_variant() {
+    local name="$1" den lock d l wd wl
+    read -r den lock < <(files_for "$name") || { echo "unknown variant: $name" >&2; exit 2; }
+    d=$(find_wp "$den") || { echo "$name: no $den in ${WP_DIRS[*]}" >&2; exit 1; }
+    l=$(find_wp "$lock") || l=$(find_wp bromigos-lock-empty-2560x1440.jpg) || l="$d"
+    echo "$name" >"$STATE/variant"
+    if read -r wd wl < <(world_images); then
+        ln -sfn "$wd" "$STATE/den.jpg"
+        ln -sfn "$wd" "$STATE/wall.jpg"
+        ln -sfn "$wl" "$STATE/lock.jpg"
+        return
+    fi
+    ln -sfn "$d" "$STATE/den.jpg"
+    if read -r cw cl < <(colour_images "$d" "$l"); then
+        ln -sfn "$cw" "$STATE/wall.jpg"
+        ln -sfn "$cl" "$STATE/lock.jpg"
+        return
+    fi
+    ln -sfn "$d" "$STATE/wall.jpg"
+    ln -sfn "$l" "$STATE/lock.jpg"
+}
+
+case "${1:-status}" in
+    den|operator|empty|masked|v1)
+        name="$1"; [ "$name" = operator ] && name=den
+        set_variant "$name"
+        restart_swaybg "$STATE/wall.jpg"
+        [ -x "$LIVE_BIN" ] && "$LIVE_BIN" ctl reload >/dev/null 2>&1 || true
+        notify-send -a bromigos -u low "WALLPAPER" "den: $name" 2>/dev/null || true
+        echo "den -> $(readlink "$STATE/den.jpg")"
+        ;;
+    apply)
+        # session start, and every theme switch (hooks/theme-set.d/wallpaper): recreate the
+        # links from the saved choice and the theme in force, then start swaybg. swaybg and
+        # the live layer share the background layer and the surface mapped last is drawn on
+        # top: a swaybg restarted after the live layer covered the animation with a still. So
+        # the live layer is remapped after it (ctl reload), and nothing restarts when the
+        # picture didn't change.
+        before=$(readlink "$STATE/wall.jpg" 2>/dev/null || true)
+        set_variant "$(current)"
+        if [ "$before" != "$(readlink "$STATE/wall.jpg")" ] || [ -z "$(session_swaybg)" ]; then
+            restart_swaybg "$STATE/wall.jpg"
+            [ -x "$LIVE_BIN" ] && "$LIVE_BIN" ctl reload >/dev/null 2>&1 || true
+        fi
+        ;;
+    outputs)
+        # a monitor came or went (Hyprland's monitor.added): swaybg on every output again,
+        # then the live layer remapped over it (the surface mapped last is drawn on top)
+        restart_swaybg "$STATE/wall.jpg"
+        [ -x "$LIVE_BIN" ] && "$LIVE_BIN" ctl reload >/dev/null 2>&1 || true
+        ;;
+    next|previous)
+        # the next (or previous) installed den variant (SUPER+CTRL+SPACE: next); under a
+        # world theme the world's painting is the wallpaper, so there's nothing to rotate
+        if world_images >/dev/null 2>&1; then
+            notify-send -a bromigos -u low "WALLPAPER" "this theme's painting is the wallpaper" 2>/dev/null || true
+            echo "a world theme: its painting is the wallpaper"; exit 0
+        fi
+        have=()
+        for v in empty den masked v1; do
+            read -r den _ < <(files_for "$v")
+            find_wp "$den" >/dev/null && have+=("$v")
+        done
+        [ ${#have[@]} -gt 0 ] || { echo "no den variants installed" >&2; exit 1; }
+        step=1; [ "$1" = previous ] && step=$(( ${#have[@]} - 1 ))
+        cur=$(current); nxt=${have[0]}
+        for i in "${!have[@]}"; do
+            if [ "${have[$i]}" = "$cur" ]; then nxt=${have[$(( (i + step) % ${#have[@]} ))]}; fi
+        done
+        exec "$0" "$nxt"
+        ;;
+    list)
+        # the installed den variants and the one chosen (Settings › Theme reads --json);
+        # "world": the theme in force brings its own painting, so the choice waits
+        world=false
+        world_images >/dev/null 2>&1 && world=true
+        cur=$(current)
+        if [ "${2:-}" = --json ]; then
+            items=""
+            for v in empty den masked v1; do
+                read -r den _ < <(files_for "$v")
+                p=$(find_wp "$den") || continue
+                items+="${items:+,}{\"name\":\"$v\",\"path\":\"$p\",\"current\":$([ "$v" = "$cur" ] && echo true || echo false)}"
+            done
+            printf '{"schema":1,"current":"%s","world":%s,"variants":[%s]}\n' "$cur" "$world" "$items"
+        else
+            for v in empty den masked v1; do
+                read -r den _ < <(files_for "$v")
+                find_wp "$den" >/dev/null && printf '%s %s\n' "$([ "$v" = "$cur" ] && echo '*' || echo ' ')" "$v"
+            done
+            $world && echo "(a world theme is in force: its painting is the wallpaper)"
+        fi
+        ;;
+    status)
+        printf 'current: %s  (%s)\n' "$(current)" "$(readlink "$STATE/den.jpg" 2>/dev/null || echo "not set: default den")"
+        printf 'wall:    %s\n' "$(readlink "$STATE/wall.jpg" 2>/dev/null || echo "the den")"
+        printf 'lock:    %s\n\n' "$(readlink "$STATE/lock.jpg" 2>/dev/null || echo "default")"
+        printf 'choices (installed ones):\n'
+        for v in empty den masked v1; do
+            read -r den _ < <(files_for "$v")
+            find_wp "$den" >/dev/null && printf '  %s\n' "$v"
+        done
+        printf '\nusage: bromigos-wallpaper [empty|den|masked|v1|next|previous|list|apply|status]\n'
+        ;;
+    -h|--help|help) sed -n '4,12p' "$0" | sed 's/^# \{0,1\}//' ;;
+    *) echo "usage: bromigos-wallpaper [den|empty|masked|v1|next|previous|list [--json]|apply|status]" >&2; exit 2 ;;
+esac

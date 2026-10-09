@@ -1,0 +1,285 @@
+#!/usr/bin/env python3
+# bromigos:summary=Sound: the output and input device, their volumes, each app's volume, the theme's sounds and the desktop's mute
+# bromigos:args=[status] | output|input DEVICE | volume output|input|DEVICE PERCENT | mute output|input on|off|toggle | app-volume ID PERCENT | app-mute ID on|off | app-output ID DEVICE | port output|input DEVICE PORT | all-mute on|off|toggle | sounds on|off | sounds-volume PERCENT | test [DEVICE]  [--json]
+# bromigos:examples=bromigos sound; bromigos sound volume output 40; bromigos sound output alsa_output.usb-headset; bromigos sound app-volume 79 50
+"""bromigos-sound (`bromigos sound`): the desktop's sound, through PipeWire's PulseAudio
+server (`pactl`; wpctl's devices are the same nodes). Settings › Sound drives it.
+
+  bromigos sound [status]                  the devices, the defaults, volumes, the apps playing
+  bromigos sound output|input DEVICE       make DEVICE the default (playing apps follow it)
+  bromigos sound volume output|input|DEVICE PERCENT   0 to 150
+  bromigos sound mute output|input|DEVICE on|off|toggle
+  bromigos sound port output|input DEVICE PORT        e.g. headphones or speakers on one card
+  bromigos sound app-volume ID PERCENT     one app's stream (its id from status)
+  bromigos sound app-mute ID on|off
+  bromigos sound app-output ID DEVICE      move one app to another output
+  bromigos sound all-mute on|off|toggle    the desktop's one mute: the theme's sounds and
+                                           VECTOR's voice (bromigos mute; SUPER+SHIFT+M)
+  bromigos sound sounds on|off             the theme's sound cues (bromigos anim sounds)
+  bromigos sound sounds-volume PERCENT     how loud they are (bromigos scene sounds.volume)
+  bromigos sound test [DEVICE]             a short cue on the default output, or DEVICE
+"""
+import json
+import os
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+MAX = 150
+CUE = [os.path.join(os.environ.get("BROMIGOS_SHARE_DIR") or "/usr/share/bromigos", "live", "sounds", "chirp.wav"),
+       "/usr/lib/bromigos/live/sounds/chirp.wav", "/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga"]
+
+
+def pactl(*args):
+    return C.must(["pactl", *args], what="pactl")
+
+
+def pjson(*args):
+    out = C.must(["pactl", "--format=json", *args], what="pactl")
+    try:
+        return json.loads(out) if out.strip() else []
+    except ValueError:
+        raise Fail("pactl's answer isn't JSON (pactl 16 or newer, PipeWire's pulse server)")
+
+
+def _percent(vol):
+    vals = []
+    for ch in (vol or {}).values():
+        p = str(ch.get("value_percent", "")).rstrip("%")
+        try:
+            vals.append(int(p))
+        except ValueError:
+            pass
+    return round(sum(vals) / len(vals)) if vals else 0
+
+
+def _kind(dev, out):
+    pr = dev.get("properties") or {}
+    bus = pr.get("device.bus", "")
+    ff = pr.get("device.form_factor", "")
+    port = (dev.get("active_port") or "").lower()
+    if bus == "bluetooth":
+        return "bluetooth"
+    if ff in ("headphone", "headset") or "headphone" in port or "headset" in port:
+        return "headphones"
+    if "hdmi" in port or "hdmi" in dev.get("name", "").lower() or "displayport" in port:
+        return "display"
+    if bus == "usb":
+        return "usb"
+    if ff == "microphone" or (not out and "mic" in port):
+        return "microphone"
+    if pr.get("factory.name", "").startswith("support.null-audio-sink") or "virtual" in pr.get("media.class", "").lower():
+        return "virtual"
+    return "speakers" if out else "microphone"
+
+
+def _device(d, default, out):
+    return {"name": d["name"], "description": d.get("description") or d["name"], "index": d.get("index"),
+            "volume": _percent(d.get("volume")), "muted": bool(d.get("mute")), "default": d["name"] == default,
+            "state": (d.get("state") or "").lower(), "kind": _kind(d, out),
+            "ports": [{"name": p.get("name"), "description": p.get("description") or p.get("name"),
+                       "available": p.get("availability") != "not available"} for p in d.get("ports") or []],
+            "active_port": d.get("active_port")}
+
+
+def _sounds():
+    anim = C.bromigos("anim", "--json") or {}
+    on = next((a.get("on") for a in anim.get("animations") or [] if a.get("name") == "sounds"), None)
+    lc = (C.bromigos("scene", "get", "sounds.volume", "--json") or {}).get("values") or {}
+    vol = lc.get("sounds.volume")
+    return {"enabled": on, "volume": None if vol is None else round(float(vol) * 100)}
+
+
+def status(_args=None, light=False):
+    C.need("pactl", "libpulse")
+    info = pjson("info")
+    if not isinstance(info, dict):
+        raise Fail("pactl info: no answer from the sound server")
+    dsink, dsrc = info.get("default_sink_name"), info.get("default_source_name")
+    sinks = pjson("list", "sinks")
+    sources = [s for s in pjson("list", "sources")
+               if not s.get("monitor_source_of_sink") and not s.get("name", "").endswith(".monitor")
+               and (s.get("properties") or {}).get("device.class") != "monitor"]
+    by_index = {s.get("index"): s["name"] for s in sinks}
+    apps = []
+    for si in pjson("list", "sink-inputs"):
+        pr = si.get("properties") or {}
+        if pr.get("media.role") == "event" and pr.get("application.id") == "org.PulseAudio.pavucontrol":
+            continue
+        apps.append({"id": si.get("index"), "app": pr.get("application.name") or pr.get("node.name") or "app",
+                     "title": pr.get("media.name") or "", "binary": pr.get("application.process.binary") or "",
+                     "icon": pr.get("application.icon_name") or "", "volume": _percent(si.get("volume")),
+                     "muted": bool(si.get("mute")), "output": by_index.get(si.get("sink"), str(si.get("sink"))),
+                     "corked": bool(si.get("corked"))})
+    doc = {"server": info.get("server_name", ""),
+           "output": {"default": dsink, "devices": [_device(s, dsink, True) for s in sinks]},
+           "input": {"default": dsrc, "devices": [_device(s, dsrc, False) for s in sources]},
+           "apps": apps}
+    if not light:
+        doc["mute"] = C.bromigos("mute", "status", "--json") or {}
+        doc["sounds"] = _sounds()
+    return doc
+
+
+def _which(kind, name):
+    """(pactl's word, device name): output|input -> the default, else a device by name."""
+    st = status(light=True)
+    if kind in ("output", "input"):
+        name = name or st[kind]["default"]
+        if not name:
+            raise Fail(f"no default {kind} device")
+        return ("sink" if kind == "output" else "source"), name
+    for word, side in (("sink", "output"), ("source", "input")):
+        if any(d["name"] == kind for d in st[side]["devices"]):
+            return word, kind
+    raise Fail(f"no device {kind!r} (bromigos sound lists them)")
+
+
+def _find(side, name):
+    st = status(light=True)
+    dev = next((d for d in st[side]["devices"] if d["name"] == name or d["description"] == name), None)
+    if dev is None:
+        have = ", ".join(d["name"] for d in st[side]["devices"]) or "none"
+        raise Fail(f"no {side} device {name!r} (there are: {have})")
+    return dev
+
+
+def _pct(raw):
+    try:
+        v = int(round(float(str(raw).rstrip("%"))))
+    except ValueError:
+        raise Fail(f"{raw!r}: a percentage, 0 to {MAX}")
+    if not 0 <= v <= MAX:
+        raise Fail(f"{v}: 0 to {MAX}")
+    return v
+
+
+def set_default(side):
+    def fn(args):
+        if len(args) != 1:
+            raise Fail(f"bromigos sound {side} DEVICE")
+        dev = _find(side, args[0])
+        pactl("set-default-sink" if side == "output" else "set-default-source", dev["name"])
+        return dict(status(), said=f"{side.title()}: {dev['description']}", previous=None)
+    return fn
+
+
+def volume(args):
+    if len(args) != 2:
+        raise Fail("bromigos sound volume output|input|DEVICE PERCENT")
+    word, name = _which(args[0], None)
+    v = _pct(args[1])
+    pactl(f"set-{word}-volume", name, f"{v}%")
+    return dict(status(), said=f"{'Output' if word == 'sink' else 'Input'} volume {v}%")
+
+
+def mute(args):
+    if len(args) != 2:
+        raise Fail("bromigos sound mute output|input|DEVICE on|off|toggle")
+    word, name = _which(args[0], None)
+    state = "toggle" if args[1] == "toggle" else ("1" if C.on_off(args[1]) else "0")
+    pactl(f"set-{word}-mute", name, state)
+    st = status()
+    side = "output" if word == "sink" else "input"
+    dev = next((d for d in st[side]["devices"] if d["name"] == name), {})
+    return dict(st, said=f"{side.title()} {'muted' if dev.get('muted') else 'on'}")
+
+
+def port(args):
+    if len(args) != 3:
+        raise Fail("bromigos sound port output|input DEVICE PORT")
+    side, name, p = args
+    if side not in ("output", "input"):
+        raise Fail("output or input")
+    dev = _find(side, name)
+    if p not in [x["name"] for x in dev["ports"]]:
+        raise Fail(f"{dev['description']} has no port {p!r}")
+    pactl("set-sink-port" if side == "output" else "set-source-port", dev["name"], p)
+    return dict(status(), said=f"{dev['description']}: {p}")
+
+
+def _app(raw):
+    st = status(light=True)
+    app = next((a for a in st["apps"] if str(a["id"]) == str(raw)), None)
+    if app is None:
+        raise Fail(f"no app playing with id {raw} (bromigos sound lists them)")
+    return app
+
+
+def app_volume(args):
+    if len(args) != 2:
+        raise Fail("bromigos sound app-volume ID PERCENT")
+    app, v = _app(args[0]), _pct(args[1])
+    pactl("set-sink-input-volume", str(app["id"]), f"{v}%")
+    return dict(status(), said=f"{app['app']}: {v}%")
+
+
+def app_mute(args):
+    if len(args) != 2:
+        raise Fail("bromigos sound app-mute ID on|off")
+    app, on = _app(args[0]), C.on_off(args[1])
+    pactl("set-sink-input-mute", str(app["id"]), "1" if on else "0")
+    return dict(status(), said=f"{app['app']}: {'muted' if on else 'unmuted'}")
+
+
+def app_output(args):
+    if len(args) != 2:
+        raise Fail("bromigos sound app-output ID DEVICE")
+    app, dev = _app(args[0]), _find("output", args[1])
+    pactl("move-sink-input", str(app["id"]), dev["name"])
+    return dict(status(), said=f"{app['app']} plays on {dev['description']}")
+
+
+def all_mute(args):
+    verb = (args or ["toggle"])[0]
+    if verb not in ("on", "off", "toggle"):
+        raise Fail("bromigos sound all-mute on|off|toggle")
+    d = C.bromigos("mute", verb, "--json")
+    if d is None:
+        raise Fail("bromigos mute didn't answer")
+    return dict(status(), said="Everything muted" if d.get("muted") else "Unmuted")
+
+
+def sounds(args):
+    if len(args) != 1:
+        raise Fail("bromigos sound sounds on|off")
+    on = C.on_off(args[0])
+    rc, _, err = C.run(["bromigos", "anim", "on" if on else "off", "sounds"])
+    if rc:
+        raise Fail(f"bromigos anim: {err.strip()}")
+    return dict(status(), said=f"The theme's sounds: {'on' if on else 'off'}")
+
+
+def sounds_volume(args):
+    if len(args) != 1:
+        raise Fail("bromigos sound sounds-volume PERCENT")
+    v = _pct(args[0])
+    if v > 100:
+        raise Fail("the theme's sounds: 0 to 100")
+    rc, _, err = C.run(["bromigos", "scene", "set", "sounds.volume", f"{v / 100:.2f}"])
+    if rc:
+        raise Fail(f"bromigos scene: {err.strip()}")
+    return dict(status(), said=f"The theme's sounds at {v}%")
+
+
+def test(args):
+    C.need("pactl", "libpulse")
+    cue = next((p for p in CUE if os.path.exists(p)), None)
+    if cue is None:
+        raise Fail("no sound to play (the live layer's sounds aren't installed)")
+    argv = ["paplay"] + ([f"--device={_find('output', args[0])['name']}"] if args else []) + [cue]
+    rc, _, err = C.run(argv, timeout=10)
+    if rc:
+        raise Fail(f"paplay: {err.strip()}")
+    return {"said": "Played a cue", "file": cue}
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "output": set_default("output"), "input": set_default("input"),
+                     "volume": volume, "mute": mute, "port": port, "app-volume": app_volume,
+                     "app-mute": app_mute, "app-output": app_output, "all-mute": all_mute,
+                     "sounds": sounds, "sounds-volume": sounds_volume, "test": test}, USAGE))

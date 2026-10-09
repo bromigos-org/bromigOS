@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+# bromigos:summary=Date and time: the time zone, network time, and the bar's clock (24 or 12 hour, seconds, the date)
+# bromigos:args=[status] | timezone ZONE | ntp on|off | format 24|12 | seconds on|off | date on|off | hook | zones | reset  [--json]
+# bromigos:examples=bromigos clock; bromigos clock timezone Europe/Lisbon; bromigos clock format 12; bromigos clock date on
+"""bromigos-clock (`bromigos clock`): the machine's time (systemd's timedated, through
+timedatectl: the time zone and network time) and the bar's clock. Settings › Date & time
+drives it.
+
+  bromigos clock [status]        the time zone, network time and whether it's in step, the
+                                 bar's clock and whether your bar reads Settings' file
+  bromigos clock timezone ZONE   e.g. America/Los_Angeles (`zones` lists them); timedated
+                                 may ask for your password
+  bromigos clock ntp on|off      set the time from the network
+  bromigos clock format 24|12    the bar's clock: 13:05 or 01:05 PM
+  bromigos clock seconds on|off  the bar's clock with seconds
+  bromigos clock date on|off     the date beside the time on the bar
+  bromigos clock hook            add Settings' file to your bar's config (first among its
+                                 includes), when it isn't there
+  bromigos clock zones           every time zone
+  bromigos clock reset           the bar's clock as bromigOS has it (24-hour, seconds, no date)
+
+The bar's clock is kept in ~/.config/bromigos/waybar/settings.jsonc, which your
+~/.config/waybar/config includes first: waybar merges its includes and the earliest one
+wins, so this file's clock is the one shown over bromigOS's default config.jsonc. Each
+change rewrites the file and tells waybar to read its config again (SIGUSR2).
+"""
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+INCLUDE = "~/.config/bromigos/waybar/settings.jsonc"
+DEFAULT = {"format": "24", "seconds": True, "date": False}      # bromigOS's bar: {:%H:%M:%S}
+HEADER = ("// The bar's clock as Settings › Date & time set it (bromigos clock). Written whole on\n"
+          "// every change; your ~/.config/waybar/config includes it first, so it wins over the default.\n")
+
+
+def settings_path():
+    return os.path.join(C.CONFIG, "bromigos", "waybar", "settings.jsonc")
+
+
+def waybar_config():
+    return os.path.join(C.CONFIG, "waybar", "config")
+
+
+def _jsonc(text):
+    """JSON with // comments and trailing commas (waybar's config)."""
+    out, i, n, s = [], 0, len(text), False
+    while i < n:
+        c = text[i]
+        if s:
+            out.append(c)
+            if c == "\\" and i + 1 < n:
+                out.append(text[i + 1])
+                i += 1
+            elif c == '"':
+                s = False
+        elif c == '"':
+            s = True
+            out.append(c)
+        elif text.startswith("//", i):
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        elif text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            continue
+        else:
+            out.append(c)
+        i += 1
+    return json.loads(re.sub(r",(\s*[}\]])", r"\1", "".join(out)))
+
+
+# ---------------------------------------------------------------- the bar's clock
+def formats(fmt, seconds, date):
+    t = ("%I:%M" if fmt == "12" else "%H:%M") + (":%S" if seconds else "") + (" %p" if fmt == "12" else "")
+    main = "{:" + ("%a %d %b  " if date else "") + t + "}"
+    alt = "{:%A %d %B %Y  " + ("%I:%M %p" if fmt == "12" else "%H:%M") + "}"
+    return main, alt
+
+
+def bar():
+    """The bar's clock in force: Settings' file, else bromigOS's default."""
+    p = settings_path()
+    text = C.read_file(p)
+    cur = dict(DEFAULT)
+    if text:
+        try:
+            f = (_jsonc(text).get("clock") or {}).get("format") or ""
+        except ValueError:
+            f = ""
+        if f:
+            cur = {"format": "12" if "%I" in f or "%l" in f else "24", "seconds": "%S" in f,
+                   "date": "%a" in f or "%d" in f}
+    main, alt = formats(cur["format"], cur["seconds"], cur["date"])
+    return dict(cur, format_string=main, format_alt=alt, file=p, exists=text is not None, **hook_state())
+
+
+def write_bar(cur):
+    main, alt = formats(cur["format"], cur["seconds"], cur["date"])
+    C.write_file(settings_path(), HEADER + json.dumps({"clock": {"format": main, "format-alt": alt}}, indent=2) + "\n")
+
+
+def reload_waybar():
+    """waybar reads its config again (SIGUSR2), only this user's."""
+    rc, _, _ = C.run(["pkill", "-USR2", "-x", "-U", str(os.getuid()), "waybar"])
+    return rc == 0
+
+
+# ---------------------------------------------------------------- the include in the user's bar config
+def _include_span(text):
+    """(start, end) of the include array's brackets, or None."""
+    m = re.search(r'"include"\s*:\s*\[', text)
+    if not m:
+        return None
+    end = text.find("]", m.end())
+    return (m.end() - 1, end) if end > 0 else None
+
+
+def _entries(text, span):
+    body = "\n".join(ln for ln in text[span[0] + 1:span[1]].splitlines() if not ln.strip().startswith("//"))
+    return re.findall(r'"([^"]*)"', body)
+
+
+def _ours(entry):
+    return entry in (INCLUDE, settings_path()) or os.path.expanduser(entry) == settings_path()
+
+
+def hook_state():
+    p = waybar_config()
+    text = C.read_file(p)
+    line = f'"{INCLUDE}",'
+    if text is None:
+        return {"hooked": False, "hook": "no-config", "config": p, "line": line}
+    span = _include_span(text)
+    if span is None:
+        return {"hooked": False, "hook": "no-include", "config": p, "line": line}
+    ents = _entries(text, span)
+    mine = [i for i, e in enumerate(ents) if _ours(e)]
+    if not mine:
+        return {"hooked": False, "hook": "missing", "config": p, "line": line}
+    default = [i for i, e in enumerate(ents) if e.endswith("/waybar/config.jsonc")]
+    if default and mine[0] > default[0]:
+        return {"hooked": False, "hook": "after", "config": p, "line": line}
+    return {"hooked": True, "hook": "ok", "config": p, "line": line}
+
+
+def hook(_args=None):
+    st = hook_state()
+    if st["hooked"]:
+        return dict(status(), said="Your bar already reads Settings' clock")
+    if st["hook"] in ("no-config", "no-include"):
+        raise Fail(f"{st['config']} has no \"include\" list to add it to: add {st['line']} as the first "
+                   "include of your bar's config yourself")
+    p = st["config"]
+    text = C.read_file(p)
+    span = _include_span(text)
+    if st["hook"] == "after":                    # take our line out, to put it first
+        inner = text[span[0] + 1:span[1]]
+        inner = re.sub(r'[ \t]*"' + re.escape(INCLUDE) + r'"\s*,?[ \t]*\n?', "", inner, count=1)
+        text = text[:span[0] + 1] + inner + text[span[1]:]
+        span = _include_span(text)
+    after = text[span[0] + 1:]
+    m = re.match(r"([ \t]*\n)([ \t]*)", after)
+    if m:                                        # one entry a line: ours first, indented the same
+        at = span[0] + 1 + len(m.group(1))
+        text = text[:at] + f'{m.group(2)}"{INCLUDE}",\n' + text[at:]
+    else:
+        text = text[:span[0] + 1] + f'"{INCLUDE}", ' + text[span[0] + 1:]
+    C.write_file(p, text)
+    if not os.path.exists(settings_path()):
+        write_bar(dict(DEFAULT))
+    reload_waybar()
+    return dict(status(), said="Your bar now reads Settings' clock")
+
+
+# ---------------------------------------------------------------- timedated
+def timedated():
+    rc, out, err = C.run(["timedatectl", "show"])
+    if rc != 0:
+        return {"available": False, "error": (err or out).strip() or "timedatectl didn't answer"}
+    kv = dict(ln.split("=", 1) for ln in out.splitlines() if "=" in ln)
+    yes = lambda k: kv.get(k) == "yes"  # noqa: E731
+    return {"available": True, "timezone": kv.get("Timezone", ""), "ntp": yes("NTP"), "synced": yes("NTPSynchronized"),
+            "can_ntp": yes("CanNTP"), "local_rtc": yes("LocalRTC"), "now": kv.get("TimeUSec", "")}
+
+
+def status(_args=None):
+    return dict(timedated(), bar=bar())
+
+
+def zones(_args=None):
+    C.need("timedatectl", "systemd")
+    return {"zones": [z for z in C.must(["timedatectl", "list-timezones"], what="timedatectl").split() if z]}
+
+
+def timezone(args):
+    if len(args) != 1:
+        raise Fail("bromigos clock timezone ZONE (bromigos clock zones lists them)")
+    z = args[0]
+    if z not in zones()["zones"]:
+        raise Fail(f"{z!r} isn't a time zone (bromigos clock zones lists them)")
+    C.must(["timedatectl", "set-timezone", z], timeout=60, what="timedatectl set-timezone")
+    return dict(status(), said=f"Time zone: {z}")
+
+
+def ntp(args):
+    if len(args) != 1:
+        raise Fail("bromigos clock ntp on|off")
+    on = C.on_off(args[0])
+    C.must(["timedatectl", "set-ntp", "true" if on else "false"], timeout=60, what="timedatectl set-ntp")
+    return dict(status(), said="Network time: " + ("on" if on else "off"))
+
+
+def _bar_change(key, value, said):
+    cur = {k: v for k, v in bar().items() if k in DEFAULT}
+    cur[key] = value
+    write_bar(cur)
+    reloaded = reload_waybar()
+    doc = dict(status(), said=said)
+    if not doc["bar"]["hooked"]:
+        doc["note"] = "your bar doesn't read Settings' file yet: bromigos clock hook"
+    elif not reloaded:
+        doc["note"] = "waybar isn't running: it reads it when it starts"
+    return doc
+
+
+def fmt(args):
+    if args not in (["24"], ["12"]):
+        raise Fail("bromigos clock format 24|12")
+    return _bar_change("format", args[0], f"The bar's clock: {args[0]}-hour")
+
+
+def seconds(args):
+    if len(args) != 1:
+        raise Fail("bromigos clock seconds on|off")
+    on = C.on_off(args[0])
+    return _bar_change("seconds", on, "The bar's clock " + ("with" if on else "without") + " seconds")
+
+
+def date(args):
+    if len(args) != 1:
+        raise Fail("bromigos clock date on|off")
+    on = C.on_off(args[0])
+    return _bar_change("date", on, "The bar shows the date" if on else "The bar shows the time only")
+
+
+def reset(_args):
+    if os.path.exists(settings_path()):
+        write_bar(dict(DEFAULT))
+        reload_waybar()
+    return dict(status(), said="The bar's clock: bromigOS's (24-hour, seconds, no date)")
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "timezone": timezone, "ntp": ntp, "format": fmt, "seconds": seconds,
+                     "date": date, "hook": hook, "zones": zones, "reset": reset}, USAGE))

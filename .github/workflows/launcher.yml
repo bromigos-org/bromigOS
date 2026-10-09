@@ -1,0 +1,62 @@
+# The app launcher's entries (docs/menu.md, "In the app launcher"): every bromigOS window in
+# Alt+P (rofi drun) and any launcher that reads desktop entries. tools/launcher/check.py:
+# desktop-file-validate on every entry, the keys each needs and its icons, each Exec run from
+# this checkout against stand-ins (it must run the right command), the menu listing nothing
+# twice, and what a launcher lists. Each package's check() runs the static part as it builds.
+name: launcher
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "*/applications/**"
+      - "theme/app-icons/**"
+      - "theme/tools/build-app-icons.py"
+      - "tools/launcher/**"
+      - "bin/**"
+      - "desktop/bin/**"
+      - "desktop/lib/**"
+      - "desktop/rofi/scripts/**"
+      - "desktop/settings/bromigos-settings"
+      - "live/bin/**"
+      - "live/live/decks.py"
+      - "widgets/bromigos-widgets"
+      - "homelab/bin/**"
+      - "packaging/*/PKGBUILD"
+      - ".github/workflows/launcher.yml"
+  pull_request:
+    paths:
+      - "*/applications/**"
+      - "theme/app-icons/**"
+      - "theme/tools/build-app-icons.py"
+      - "tools/launcher/**"
+      - "bin/**"
+      - "desktop/bin/**"
+      - "desktop/lib/**"
+      - "desktop/rofi/scripts/**"
+      - "desktop/settings/bromigos-settings"
+      - "live/bin/**"
+      - "live/live/decks.py"
+      - "widgets/bromigos-widgets"
+      - "homelab/bin/**"
+      - "packaging/*/PKGBUILD"
+      - ".github/workflows/launcher.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  entries:
+    name: Launcher entries
+    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    container: archlinux:base
+    timeout-minutes: 15
+    steps:
+      - name: tools
+        run: >-
+          pacman -Syu --noconfirm --needed git python python-gobject desktop-file-utils lua
+          procps-ng >/dev/null
+      - uses: actions/checkout@v5
+      - name: entries, their commands, the menu, the listing
+        run: python3 tools/launcher/check.py

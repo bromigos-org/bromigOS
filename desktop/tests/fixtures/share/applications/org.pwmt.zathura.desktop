@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Zathura
+Exec=zathura %U
+Icon=org.pwmt.zathura
+Categories=Office;Viewer;
+MimeType=application/pdf;

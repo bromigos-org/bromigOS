@@ -1,0 +1,19 @@
+{
+  "_comment": "Hologram models (VECTOR's format: vector's tools/holo/collection.py and assets/holo/README.md). Boxes are [x0,x1, y0,y1, z0,z1] in fractions of the normalised bounding box (y up, front +z); a face goes to the first part whose box holds its centroid, else to the part with rest=true. bind names the live reading a part shows (VECTOR's holo/bind.py), empty for a part that only shapes the model. Sources are in src/; the baked NAME.holo.npz sit next to this file. Rebake: ~/.local/share/bromigos/venv/bin/python <vector>/tools/holo/bake.py --root THIS_DIR --preview",
+  "models": {
+  "resonance-chamber": {
+   "title": "THE RESONANCE CHAMBER",
+   "subtitle": "Deepvein \u00b7 Ora Slate's post",
+   "faces": 40000,
+   "max_edges": 16000,
+   "source": "src/resonance-chamber.glb",
+   "parts": [
+    {"id": "relay", "label": "RELAY", "bind": "wick.beam", "hint": "The relay among the crystals: when it transmits, the formations resonate and the miners say the caves sing back. Lit while every channel on the network answers", "boxes": [[0.28, 0.45, 0.09, 0.46, 0.62, 0.92]], "explode": [-0.4, 0.2, 1], "distance": 0.3},
+    {"id": "headframe", "label": "LIFT HEAD", "bind": "", "hint": "The lift head miles above, the only way down. The flame is carved into the stone where the cage lands", "boxes": [[0.46, 0.68, 0.09, 0.46, 0.62, 0.92]], "explode": [0.5, 0.2, 1], "distance": 0.3},
+    {"id": "crown", "label": "GREAT CRYSTAL", "bind": "", "hint": "Taller than the lift towers: Ora Slate keeps the network's deep archive in the singing crystals, and has never described how", "boxes": [[0.44, 0.66, 0.42, 1.0, 0.1, 0.55]], "explode": [0, 1, 0], "distance": 0.28},
+    {"id": "crystals", "label": "SINGING CRYSTALS", "bind": "", "hint": "Amethyst lit from inside, ringing when anything moves; teal when a crystal answers a note", "boxes": [[0.0, 1.0, 0.11, 1.0, 0.0, 1.0]], "explode": [0, 0.3, -1], "distance": 0.16},
+    {"id": "floor", "label": "CAVERN FLOOR", "bind": "", "hint": "The cavern floor, miles down. Cave crabs with glowing shells crawl the walls, and miners follow them when the lamps fail", "rest": true, "explode": [0, -1, 0], "distance": 0.14}
+   ]
+  }
+  }
+}

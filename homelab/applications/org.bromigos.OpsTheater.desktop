@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Ops Theater
+GenericName=Deployment Hologram
+Comment=Pushes, CI, deploys and pods as a live hologram, from your homelab's sources (Esc closes)
+Icon=bromigos-ops
+TryExec=bromigos-live
+Exec=bromigos-live open ops
+Terminal=false
+Categories=Development;
+Keywords=ops;operations;ci;deploy;deployments;pods;argo;pipelines;git;hologram;deck;
+StartupNotify=false
+X-Bromigos-Menu=holo/ops

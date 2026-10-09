@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=btop++
+Exec=btop
+Terminal=true
+Icon=btop
+Categories=System;Monitor;

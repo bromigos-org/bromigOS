@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""A stand-in notify-send: the notification goes into the stand-in dunst's history."""
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
+import fixture as F  # noqa: E402
+
+a = sys.argv[1:]
+F.log("notify-send", a)
+app, urg, rest, i = "notify-send", "NORMAL", [], 0
+while i < len(a):
+    if a[i] in ("-a", "--app-name"):
+        app, i = a[i + 1], i + 2
+    elif a[i] in ("-u", "--urgency"):
+        urg, i = a[i + 1].upper(), i + 2
+    elif a[i] in ("-t", "-i", "-c", "-h", "--expire-time", "--icon", "--category", "--hint"):
+        i += 2
+    else:
+        rest.append(a[i])
+        i += 1
+st = F.load("dunstctl")
+st["history"].insert(0, {"appname": {"type": "s", "data": app}, "summary": {"type": "s", "data": rest[0] if rest else ""},
+                         "id": {"type": "i", "data": 100 + len(st["history"])}, "timestamp": {"type": "x", "data": 9999999999},
+                         "urgency": {"type": "s", "data": urg}})
+F.save("dunstctl", st)

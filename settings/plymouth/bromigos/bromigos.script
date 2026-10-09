@@ -1,0 +1,96 @@
+# The Bromigos boot splash (package bromigos-settings; plymouth's script module).
+#
+# The burn-in on black, the way the lock screen shows it: the ring (the motto and the
+# tuning marks) turning slowly round the still flame, a thin phosphor line below it that
+# fills with the boot, and plymouth's messages and password prompt (an encrypted disk) in
+# the same light. The ring and the flame are the lock screen's layers, from the emblem kit
+# (themes/wick/emblem/lock/{ring,flame}.png).
+
+Window.SetBackgroundTopColor(0.000, 0.008, 0.000);     # the void, #000200
+Window.SetBackgroundBottomColor(0.000, 0.008, 0.000);
+
+screen_w = Window.GetWidth();
+screen_h = Window.GetHeight();
+cx = Window.GetX() + screen_w / 2;
+cy = Window.GetY() + screen_h / 2;
+
+# the emblem: a third of the screen's short side
+size = Math.Min(screen_w, screen_h) * 0.34;
+ring_src = Image("ring.png");
+flame_src = Image("flame.png");
+scale = size / ring_src.GetWidth();
+ring_img = ring_src.Scale(ring_src.GetWidth() * scale, ring_src.GetHeight() * scale);
+flame_img = flame_src.Scale(flame_src.GetWidth() * scale, flame_src.GetHeight() * scale);
+
+flame = Sprite(flame_img);
+flame.SetX(cx - flame_img.GetWidth() / 2);
+flame.SetY(cy - flame_img.GetHeight() / 2);
+flame.SetZ(10);
+
+ring = Sprite(ring_img);
+ring.SetX(cx - ring_img.GetWidth() / 2);
+ring.SetY(cy - ring_img.GetHeight() / 2);
+ring.SetZ(9);
+
+# the ring turns: one revolution a minute (the lock screen's 36 s is for a waiting eye;
+# a boot is short), in steps, like a tuning dial
+angle = 0;
+fun refresh_callback () {
+    angle += (2 * Math.Pi) / (60 * 50);           # 50 refreshes a second
+    turned = ring_img.Rotate(angle);
+    ring.SetImage(turned);
+    ring.SetX(cx - turned.GetWidth() / 2);
+    ring.SetY(cy - turned.GetHeight() / 2);
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# the line under it: the boot's progress, phosphor on the guard green
+line_w = size * 1.1;
+line_y = cy + size / 2 + size * 0.14;
+track = Sprite(Image.Text("", 0, 0, 0));
+track_img = Image("line-track.png").Scale(line_w, 2);
+track.SetImage(track_img);
+track.SetX(cx - line_w / 2); track.SetY(line_y); track.SetZ(5);
+fill_img = Image("line-fill.png");
+fill = Sprite();
+fill.SetX(cx - line_w / 2); fill.SetY(line_y - 1); fill.SetZ(6);
+fun progress_callback (duration, progress) {
+    w = Math.Int(line_w * progress);
+    if (w > 0) fill.SetImage(fill_img.Scale(w, 4));
+}
+Plymouth.SetBootProgressFunction(progress_callback);
+
+# messages (fsck, a failing unit) and the password prompt, under the line
+phosphor = [0.22, 1.0, 0.08];
+message = Sprite();
+message.SetZ(20);
+fun show_message (text) {
+    img = Image.Text(text, phosphor[0], phosphor[1], phosphor[2]);
+    message.SetImage(img);
+    message.SetX(cx - img.GetWidth() / 2);
+    message.SetY(line_y + size * 0.12);
+}
+fun message_callback (text) { show_message(text); }
+Plymouth.SetMessageFunction(message_callback);
+Plymouth.SetDisplayMessageFunction(message_callback);
+
+prompt = Sprite(); prompt.SetZ(20);
+dots = Sprite(); dots.SetZ(20);
+fun password_callback (text, bullets) {
+    img = Image.Text("PASSPHRASE", phosphor[0] * 0.6, phosphor[1] * 0.6, phosphor[2] * 0.6);
+    prompt.SetImage(img);
+    prompt.SetX(cx - img.GetWidth() / 2);
+    prompt.SetY(line_y + size * 0.12);
+    s = "";
+    for (i = 0; i < bullets; i++) s += "•";
+    d = Image.Text(s, phosphor[0], phosphor[1], phosphor[2]);
+    dots.SetImage(d);
+    dots.SetX(cx - d.GetWidth() / 2);
+    dots.SetY(line_y + size * 0.12 + img.GetHeight() + 6);
+}
+Plymouth.SetDisplayPasswordFunction(password_callback);
+fun normal_callback () { prompt.SetImage(Image.Text("", 0, 0, 0)); dots.SetImage(Image.Text("", 0, 0, 0)); }
+Plymouth.SetDisplayNormalFunction(normal_callback);
+
+fun quit_callback () { }
+Plymouth.SetQuitFunction(quit_callback);

@@ -1,0 +1,35 @@
+/* Bromigos colours for libadwaita apps (zenity, GNOME dialogs). libadwaita
+   ignores GTK themes but honours named colours from ~/.config/gtk-4.0/gtk.css,
+   which imports this file. */
+@define-color accent_color #39ff14;
+@define-color accent_bg_color #1f7a12;
+@define-color accent_fg_color #e6f5e6;
+@define-color window_bg_color #001300;
+@define-color window_fg_color #c4f5bb;
+@define-color view_bg_color #000a00;
+@define-color view_fg_color #c4f5bb;
+@define-color headerbar_bg_color #001a00;
+@define-color headerbar_fg_color #c4f5bb;
+@define-color headerbar_border_color #159b09;
+@define-color headerbar_backdrop_color #000e00;
+@define-color sidebar_bg_color #000e00;
+@define-color sidebar_fg_color #c4f5bb;
+@define-color sidebar_backdrop_color #000a00;
+@define-color secondary_sidebar_bg_color #000a00;
+@define-color secondary_sidebar_fg_color #c4f5bb;
+@define-color card_bg_color rgba(57, 255, 20, 0.05);
+@define-color card_fg_color #c4f5bb;
+@define-color dialog_bg_color #001300;
+@define-color dialog_fg_color #c4f5bb;
+@define-color popover_bg_color #001a00;
+@define-color popover_fg_color #c4f5bb;
+@define-color thumbnail_bg_color #001a00;
+@define-color thumbnail_fg_color #c4f5bb;
+@define-color warning_bg_color #a8871f;
+@define-color warning_color #d4af37;
+@define-color success_bg_color #1f7a12;
+@define-color success_color #39ff14;
+@define-color destructive_bg_color #b3302a;
+@define-color destructive_color #ff766f;
+@define-color error_bg_color #b3302a;
+@define-color error_color #ff766f;

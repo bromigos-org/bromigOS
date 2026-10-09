@@ -1,0 +1,185 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# The desktop itself: bromigOS's default configs for Hyprland, the bar (waybar), the
+# launcher (rofi), notifications (dunst), the lock screen (gtklock, hyprlock as its
+# fallback), the idle policy (hypridle) and the shell (desktop/, to
+# /usr/share/bromigos/default/), the small tools they call (bromigos-shot, bromigos-rec,
+# bromigos-banner, bromigos-dispatch, the bar's readings, the power menu), and the thin
+# files a user's ~/.config starts from (desktop/user/, which `bromigos update`'s migrations
+# put in place only where the user has none). Defaults are read-only and replaced by
+# updates; what's in ~/.config is the user's (docs/desktop.md). The optional peripheral
+# modules too (peripherals/: a Razer keyboard's macro keys, dial and lighting; off until a
+# user turns one on, docs/peripherals.md). Also the meta-package: it pulls in the live
+# layer, the widgets and the apps the defaults run.
+
+pkgname=bromigos-desktop
+pkgver=0.1.0.r66.g9709a13
+pkgrel=1
+pkgdesc='bromigOS desktop: default configs for Hyprland, waybar, rofi, dunst, gtklock and hypridle, and their tools'
+arch=('any')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+# bromigos-homelab: the LAB panel and the homelab decks live there (inert with no sources)
+depends=('bromigos-core' 'bromigos-live' 'bromigos-widgets' 'bromigos-settings' 'bromigos-homelab'
+         'hyprland' 'waybar' 'rofi' 'dunst' 'gtklock' 'hypridle' 'hyprlock' 'swaybg'
+         'zsh' 'python' 'libnotify' 'wl-clipboard' 'grim' 'slurp' 'playerctl' 'kitty'
+         # the session's plumbing: screen sharing and file pickers, password prompts,
+         # sound (the bar's volume: pactl; capture sounds: pw-play), the network (nmtui)
+         'xdg-desktop-portal-hyprland' 'xdg-desktop-portal-gtk' 'hyprpolkitagent'
+         'pipewire' 'pipewire-pulse' 'pipewire-audio' 'wireplumber' 'libpulse'
+         'networkmanager' 'xdg-utils'
+         # the menu (apps via Gio), the theme switcher's previews, web apps' desktop entries,
+         # the on-screen display for volume, brightness and mute
+         'python-gobject' 'python-pillow' 'desktop-file-utils' 'swayosd'
+         # the theme switcher's previews are drawn offscreen: the bar (GTK 3) and the terminal
+         # in a headless compositor of their own
+         'weston' 'gtk3'
+         # Settings (bromigos settings): GTK4 and libadwaita
+         'gtk4' 'libadwaita'
+         # the shortcut picker (bromigos keys): reading the user's hyprland.lua without
+         # Hyprland, the "press the new shortcut" window, key names
+         'lua' 'gtk4-layer-shell' 'libxkbcommon')
+optdepends=('git: bromigos theme install <url>'
+            'swappy: annotate a screenshot from its notification'
+            'wf-recorder: screen recording (bromigos-rec)'
+            'brightnessctl: the brightness keys'
+            'pavucontrol: the bar volume click'
+            'bluez-utils: Settings › Bluetooth (bluetoothctl)'
+            'nm-connection-editor: Settings › Network › More settings (802.1X, WEP, proxies)'
+            'btop: the bar CPU/memory click'
+            'pcmanfm: the default file manager bind'
+            'zoxide: frecent folders (z) and WORKBENCH'
+            'iproute2: the bar address copy'
+            'python-evdev: the dial of a peripheral module (bromigos peripheral enable installs it)'
+            'python-openrazer: the lighting of a Razer keyboard (bromigos peripheral enable installs it)')
+makedepends=('git' 'python' 'lua' 'zsh' 'python-pillow')
+checkdepends=('desktop-file-utils')
+options=('!debug')
+
+_root="${startdir%/packaging/*}"
+# the small commands Settings drives (bromigos sound, …; desktop/bin/bromigos-<name>), installed
+# to /usr/lib/bromigos/bin where `bromigos <name>` finds them (docs/settings.md)
+_settings_cmds=(sound scene display net bluetooth power clock notifications defaults startup panels memory about avatar)
+_paths=(desktop peripherals packaging/bromigos-desktop LICENSE-MIT LICENSE-APACHE)
+
+# <workspace version>.r<commits touching the package>.g<last such commit> (as bromigos-core)
+# The commits that touched _paths before the history restarted at v0.1.2 (they're in
+# bromigos-org/bromigOS-archive): the count goes on from them, so no version sorts below one
+# published before the restart (packaging/README.md, Versions).
+_archived=107
+
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+check() {
+  cd "$_root/desktop"
+  python -m py_compile waybar/scripts/*.py
+  local f
+  for f in hypr/hyprland.lua hypr/bromigos/*.lua user/hypr/hyprland.lua; do
+    luac -p "$f" 2>/dev/null || lua -e "assert(loadfile('$f'))"
+  done
+  python -m py_compile bin/bromigos-menu bin/bromigos-webapp bin/bromigos-theme-switcher \
+    bin/bromigos-theme-previews lib/bromigos_previews.py lib/bromigos_themecards.py \
+    bin/bromigos-setup-keybindings bin/bromigos-setup-input bin/bromigos-setup-config lib/bromigos_hypr.py
+  sh -n systemd/theme-previews-hook
+  sh -n rofi/scripts/power-menu rofi/scripts/quick-note waybar/scripts/copy-ip bin/bromigos-dispatch
+  bash -n bin/bromigos-shot bin/bromigos-rec bin/bromigos-wallpaper hooks/theme-set.d/*
+  python -m py_compile bin/bromigos-windows
+  python -m py_compile settings/bromigos-settings settings/bromigos_settings/*.py settings/pages/*.py waybar/scripts/idle.py bin/bromigos-peripherals lib/bromigos_peripherals.py
+  python -m py_compile bin/bromigos-keys lib/bromigos_keys.py lib/bromigos_keycapture.py lib/bromigos_cli.py lib/bromigos_extlist.py
+  local c
+  for c in "${_settings_cmds[@]}"; do python -m py_compile "bin/bromigos-$c"; done
+  luac -p lib/bromigos_keys_eval.lua 2>/dev/null || lua -e "assert(loadfile('lib/bromigos_keys_eval.lua'))"
+  luac -p hypr/bromigos/peripherals.lua 2>/dev/null || lua -e "assert(loadfile('hypr/bromigos/peripherals.lua'))"
+  # the peripheral modules: the dial, the lighting, the Hyprland loader; the shortcut
+  # picker: blocks, clashes, the safe save and its restore, the capture window (tests/)
+  PYTHONPATH=lib python -m unittest discover -s tests
+  zsh -n bin/bromigos-banner zsh/bromigos.zsh
+  python -m py_compile bin/bromigos-extensions
+  # the app launcher's entries (desktop/applications): desktop-file-validate, the keys every
+  # entry needs, their icons (tools/launcher/check.py; CI's launcher.yml runs all of it)
+  python "$_root/tools/launcher/check.py" --static --only desktop
+}
+
+package() {
+  local share="$pkgdir/usr/share/bromigos/default" lib="$pkgdir/usr/lib/bromigos" f
+  cd "$_root/desktop"
+  # the defaults: read-only, replaced by updates
+  while IFS= read -r -d '' f; do
+    install -Dm0644 "$f" "$share/$f"
+  done < <(find hypr waybar/config.jsonc waybar/style.css rofi/config.rasi rofi/bromigos.rasi \
+             dunst gtklock zsh user -type f -print0)
+  # the tools the defaults call
+  install -Dm0755 -t "$lib/desktop/waybar/" waybar/scripts/gpu.py waybar/scripts/storage.py \
+    waybar/scripts/vector.py waybar/scripts/vector-switch.py waybar/scripts/copy-ip waybar/scripts/idle.py
+  install -Dm0755 -t "$lib/desktop/rofi/" rofi/scripts/power-menu rofi/scripts/quick-note
+  install -Dm0755 -t "$lib/desktop/bin/" bin/bromigos-shot bin/bromigos-rec bin/bromigos-banner \
+    bin/bromigos-wallpaper bin/bromigos-menu bin/bromigos-webapp bin/bromigos-theme-switcher \
+    bin/bromigos-theme-previews bin/bromigos-extensions \
+    bin/bromigos-setup-keybindings bin/bromigos-setup-input bin/bromigos-setup-config
+  # shared by the menu and the setup tools (rofi, the user's hyprland.lua, the safe reload)
+  install -Dm0644 lib/bromigos_hypr.py "$lib/lib/bromigos_hypr.py"
+  # the theme switcher's previews (bromigos theme previews; docs/theming.md, "The previews"):
+  # the renderer, its user service and the pacman hook that starts it after an update
+  install -Dm0644 lib/bromigos_previews.py "$lib/lib/bromigos_previews.py"
+  # the theme cards, shared by the switcher and Settings › Theme
+  install -Dm0644 lib/bromigos_themecards.py "$lib/lib/bromigos_themecards.py"
+  install -Dm0644 systemd/bromigos-theme-previews.service "$pkgdir/usr/lib/systemd/user/bromigos-theme-previews.service"
+  install -Dm0755 systemd/theme-previews-hook "$lib/desktop/theme-previews-hook"
+  install -Dm0644 "$startdir/bromigos-theme-previews.hook" "$pkgdir/usr/share/libalpm/hooks/bromigos-theme-previews.hook"
+  # the shortcut picker (bromigos keys; docs/desktop.md, "Shortcuts you set by pressing the
+  # keys"): the command, its logic, the capture window and the config reader it runs with lua
+  install -Dm0755 bin/bromigos-keys "$lib/desktop/bin/bromigos-keys"
+  install -Dm0644 -t "$lib/lib/" lib/bromigos_keys.py lib/bromigos_keycapture.py lib/bromigos_keys_eval.lua
+  # the peripheral modules (bromigos peripheral; docs/peripherals.md): each module's manifest,
+  # the daemon that runs their dials and lighting, and its user unit (enabled per user by
+  # `bromigos peripheral enable`; the Hyprland loader is hypr/bromigos/peripherals.lua above)
+  local m
+  for m in "$_root"/peripherals/*/peripheral.toml; do
+    install -Dm0644 "$m" "$pkgdir/usr/share/bromigos/peripherals/$(basename "$(dirname "$m")")/peripheral.toml"
+  done
+  install -Dm0644 lib/bromigos_peripherals.py "$lib/lib/bromigos_peripherals.py"
+  install -Dm0755 bin/bromigos-peripherals "$lib/desktop/bin/bromigos-peripherals"
+  install -Dm0644 systemd/bromigos-peripherals.service "$pkgdir/usr/lib/systemd/user/bromigos-peripherals.service"
+  # the theme-set hooks `bromigos theme set` runs (a user hook of the same name replaces one)
+  install -Dm0755 -t "$pkgdir/usr/share/bromigos/hooks/theme-set.d/" hooks/theme-set.d/*
+  # the Wick's den: bromigOS's own, chair empty (a user's other variants: ~/.config/wallpaper)
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/wallpaper/" wallpaper/*.jpg
+  # the start page: the page (copied into each user's ~/.local/share/bromigos/startpage by
+  # its snapshot, with the theme's colours and emblem) and the snapshot's user timer
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/startpage/" startpage/index.html startpage/app.js \
+    startpage/style.css startpage/emblem.svg startpage/icon-48.png startpage/icon-128.png startpage/manifest.json
+  install -Dm0755 startpage/snapshot.py "$lib/desktop/startpage/snapshot.py"
+  install -Dm0644 -t "$pkgdir/usr/lib/systemd/user/" systemd/bromigos-startpage.service systemd/bromigos-startpage.timer
+  install -Dm0755 bin/bromigos-dispatch "$lib/bin/bromigos-dispatch"
+  # floating windows put back where they were (bromigos windows …; docs/desktop.md,
+  # "Floating windows put back where they were")
+  install -Dm0755 bin/bromigos-windows "$lib/desktop/bin/bromigos-windows"
+  install -d "$pkgdir/usr/bin"
+  for f in bromigos-shot bromigos-rec bromigos-banner bromigos-wallpaper bromigos-menu bromigos-webapp bromigos-keys \
+           bromigos-theme-switcher bromigos-theme-previews bromigos-setup-keybindings bromigos-setup-input \
+           bromigos-setup-config bromigos-extensions; do
+    ln -s "/usr/lib/bromigos/desktop/bin/$f" "$pkgdir/usr/bin/$f"
+  done
+  ln -s /usr/lib/bromigos/desktop/bin/bromigos-windows "$pkgdir/usr/bin/bromigos-windows"
+  # Settings (bromigos settings, SUPER+,; docs/settings.md): the app, and the page folder any
+  # package may add a page to
+  install -Dm0755 settings/bromigos-settings "$lib/settings/bromigos-settings"
+  install -Dm0644 -t "$lib/settings/bromigos_settings/" settings/bromigos_settings/*.py
+  install -Dm0644 -t "$lib/settings/pages/" settings/pages/*.py
+  install -Dm0644 -t "$lib/lib/" lib/bromigos_cli.py lib/bromigos_extlist.py
+  for f in "${_settings_cmds[@]}"; do
+    install -Dm0755 "bin/bromigos-$f" "$lib/bin/bromigos-$f"
+  done
+  ln -s /usr/lib/bromigos/settings/bromigos-settings "$pkgdir/usr/bin/bromigos-settings"
+  python -m compileall -q -o 0 -o 1 -s "$pkgdir" -p / "$lib/settings" >/dev/null
+  # the app launcher's entries (docs/menu.md, "In the app launcher")
+  install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_root"/desktop/applications/*.desktop
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+}

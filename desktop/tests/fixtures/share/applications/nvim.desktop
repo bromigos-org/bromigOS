@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Neovim
+Exec=nvim %F
+Terminal=true
+Icon=nvim
+Categories=Utility;TextEditor;
+MimeType=text/plain;text/x-python;

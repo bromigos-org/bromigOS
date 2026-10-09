@@ -1,0 +1,9 @@
+# Rime: the ice moon's colours (docs/theming.md). Colours only; its world is still to be painted.
+name = "Rime"
+description = "Ice-blue on a blizzard night: Station Nine's dish, lit by the aurora."
+mode = "dark"
+canon = """
+Rime was switched off with the Switch-Off. Juno Varga kept Station Nine's dish turning \
+through ten years of unanswered calls, the flame on its door frosting white every night \
+and scraped black every morning. These are the glacier's colours: floodlight on ice, \
+the aurora over it, and under it, a shadow passing."""

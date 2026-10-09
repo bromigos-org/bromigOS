@@ -1,0 +1,21 @@
+{
+ "bootloader": "grub",
+ "grub_installed": true,
+ "on": true,
+ "applied": {
+  "enabled": true,
+  "opted_out": false,
+  "theme": "wick",
+  "source": "package",
+  "digest": "a1b2",
+  "at": "2026-10-08T20:00:00-07:00"
+ },
+ "want": {
+  "kind": "package",
+  "theme": "wick",
+  "digest": "a1b2"
+ },
+ "current": true,
+ "helper": true,
+ "note": null
+}

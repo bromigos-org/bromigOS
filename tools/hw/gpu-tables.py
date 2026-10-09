@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""The GPU tables `bromigos hw` decides drivers by, made from their makers' own lists so
+nothing is guessed by hand: core/crates/bromigos-core/data/gpu-ids.tsv.
+
+  tools/hw/gpu-tables.py                  rewrite the table
+  tools/hw/gpu-tables.py --check          rewrite nothing; exit 1 when it's stale
+
+  --nvidia FILE|URL   NVIDIA's "Supported NVIDIA GPU Products" appendix (supportedchips.html)
+                      of the driver Arch ships (default: nvidia-utils' own copy,
+                      /usr/share/doc/nvidia/html/supportedchips.html, else
+                      download.nvidia.com's README for --nvidia-version)
+  --mesa TAG          the Mesa release whose Intel tables to read (default: mesa-26.2.4,
+                      Arch's at the time of writing)
+
+What goes in, one line per PCI device:
+
+  10de 2f04 nvidia-open      in NVIDIA's "current" table: every one is Turing or newer, and
+                             the open kernel modules (nvidia-open) drive them
+  10de 1b80 nvidia-580xx     in its 580.xx legacy table (Maxwell, Pascal, Volta)
+  10de 0fc6 nvidia-470xx     in its 470.xx legacy table (Kepler)
+  10de 06c0 nvidia-old       any older legacy table (390.xx and before): nouveau only
+  8086 0166 intel-crocus     Mesa's crocus driver (Gen4 to Gen7.5: libva-intel-driver)
+  8086 2582 intel-i915       Mesa's i915 driver (Gen3: no VA-API, no Vulkan)
+
+Anything not listed is decided by vendor (bromigos-core's hw.rs): an NVIDIA device newer
+than the table is taken as current, an Intel one as Gen8 or newer (iris, intel-media-driver).
+"""
+
+import argparse
+import html.parser
+import re
+import sys
+import urllib.request
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+OUT = REPO / "core/crates/bromigos-core/data/gpu-ids.tsv"
+NVIDIA_LOCAL = Path("/usr/share/doc/nvidia/html/supportedchips.html")
+MESA_RAW = "https://gitlab.freedesktop.org/mesa/mesa/-/raw/{tag}/include/pci_ids/{name}"
+
+
+def fetch(src):
+    if re.match(r"https?://", src):
+        with urllib.request.urlopen(src, timeout=60) as r:
+            return r.read().decode("utf-8", "replace")
+    return Path(src).read_text(encoding="utf-8", errors="replace")
+
+
+class Chips(html.parser.HTMLParser):
+    """The appendix: an <a name="Current"> or <a name="legacy_580.xx"> before each table,
+    then rows whose second cell is the device ID (and maybe a subsystem: "1E30 1028 129E")."""
+
+    def __init__(self):
+        super().__init__()
+        self.section = None
+        self.rows = []            # (section, devid)
+        self.cells = None
+        self.cell = None
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "a" and a.get("name"):
+            n = a["name"]
+            if n == "Current" or n.startswith("legacy_"):
+                self.section = n
+            elif n == "subsys":
+                self.section = None
+        elif tag == "tr" and self.section:
+            self.cells = []
+        elif tag == "td" and self.cells is not None:
+            self.cell = ""
+
+    def handle_data(self, data):
+        if self.cell is not None:
+            self.cell += data
+
+    def handle_endtag(self, tag):
+        if tag == "td" and self.cells is not None and self.cell is not None:
+            self.cells.append(self.cell.strip())
+            self.cell = None
+        elif tag == "tr" and self.cells is not None:
+            if len(self.cells) >= 2:
+                m = re.match(r"^([0-9A-Fa-f]{4})\b", self.cells[1])
+                if m:
+                    self.rows.append((self.section, m.group(1).lower()))
+            self.cells = None
+
+
+def nvidia_kind(section):
+    if section == "Current":
+        return "nvidia-open"
+    branch = section.removeprefix("legacy_")
+    if branch == "580.xx":
+        return "nvidia-580xx"
+    if branch == "470.xx":
+        return "nvidia-470xx"
+    return "nvidia-old"
+
+
+# newest first: a device in two tables is driven by the newer branch
+RANK = ["nvidia-open", "nvidia-580xx", "nvidia-470xx", "nvidia-old"]
+
+
+def nvidia(src):
+    p = Chips()
+    p.feed(fetch(src))
+    if not p.rows:
+        sys.exit(f"gpu-tables: no device rows in {src}")
+    out = {}
+    for section, devid in p.rows:
+        k = nvidia_kind(section)
+        if devid not in out or RANK.index(k) < RANK.index(out[devid]):
+            out[devid] = k
+    version = re.search(r"(\d{3}\.\d+\.\d+)", fetch(src)[:4000])
+    return out, version.group(1) if version else "?"
+
+
+def mesa(tag, name, kind):
+    text = fetch(MESA_RAW.format(tag=tag, name=name))
+    ids = re.findall(r"CHIPSET\(0x([0-9a-fA-F]{4})", text)
+    if not ids:
+        sys.exit(f"gpu-tables: no CHIPSET lines in Mesa's {name} ({tag})")
+    return {i.lower(): kind for i in ids}
+
+
+def render(nv, nv_version, intel, mesa_tag, nv_src):
+    lines = [
+        "# GPU device IDs -> the stack that drives them, for `bromigos hw` (hw.rs). Generated by",
+        "# tools/hw/gpu-tables.py; don't edit by hand. Sources: NVIDIA's supported-chips appendix",
+        f"# of driver {nv_version} ({nv_src}), Mesa {mesa_tag}'s include/pci_ids",
+        "# (crocus_pci_ids.h, i915_pci_ids.h). Not listed: by vendor (an NVIDIA device newer than",
+        "# the table: nvidia-open; Intel: Gen8 or newer, iris).",
+    ]
+    for devid in sorted(nv):
+        lines.append(f"10de {devid} {nv[devid]}")
+    for devid in sorted(intel):
+        lines.append(f"8086 {devid} {intel[devid]}")
+    return "\n".join(lines) + "\n"
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--nvidia", default=None)
+    ap.add_argument("--nvidia-version", default="615.71.09")
+    ap.add_argument("--mesa", default="mesa-26.2.4")
+    ap.add_argument("--check", action="store_true")
+    a = ap.parse_args()
+    src = a.nvidia or (str(NVIDIA_LOCAL) if NVIDIA_LOCAL.exists() else
+                       f"https://download.nvidia.com/XFree86/Linux-x86_64/{a.nvidia_version}/README/supportedchips.html")
+    nv, nv_version = nvidia(src)
+    intel = mesa(a.mesa, "i915_pci_ids.h", "intel-i915")
+    intel.update(mesa(a.mesa, "crocus_pci_ids.h", "intel-crocus"))
+    shown = "nvidia-utils' supportedchips.html" if src == str(NVIDIA_LOCAL) else src
+    text = render(nv, nv_version, intel, a.mesa, shown)
+    if a.check:
+        old = OUT.read_text() if OUT.exists() else ""
+        if old != text:
+            print(f"stale: {OUT.relative_to(REPO)} (run tools/hw/gpu-tables.py)")
+            return 1
+        return 0
+    OUT.write_text(text)
+    counts = {}
+    for k in list(nv.values()) + list(intel.values()):
+        counts[k] = counts.get(k, 0) + 1
+    print(f"{OUT.relative_to(REPO)}: " + ", ".join(f"{k} {n}" for k, n in sorted(counts.items())))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

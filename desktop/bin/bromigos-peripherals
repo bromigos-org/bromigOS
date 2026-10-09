@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+# bromigos:summary=The peripheral modules' dials and lighting (daemon; bromigos-peripherals.service)
+# bromigos:hidden=true
+"""The running half of the peripheral modules (docs/peripherals.md): each enabled module's
+dial (a keyboard's command dial steps VECTOR's voice, its roller the volume) and the
+lighting that follows VECTOR's voice and mood. Run by bromigos-peripherals.service, which
+`bromigos peripheral enable` starts; it asks `bromigos peripheral status --json` what is on.
+
+- A dial's event node is grabbed (python-evdev), so its turns don't also scroll windows
+  sideways; the roller on the same interface is handled here for the same reason. Reading
+  the node needs the module's group (openrazer's udev rules own Razer's nodes).
+- The lighting goes through openrazer's daemon (openrazer.client, D-Bus), written only
+  when the target changes.
+- Every 10 s it asks again: a dial plugged in starts, one unplugged waits; a keyboard of a
+  kind not seen before gets its keys (`bromigos peripheral refresh`, a verified reload).
+Nothing enabled: it exits (the unit stays stopped until the next enable).
+"""
+import os
+import sys
+import threading
+import time
+
+sys.path[:0] = [d for d in ("/usr/lib/bromigos/lib", os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+                if os.path.isdir(d)]
+import bromigos_peripherals as P  # noqa: E402
+
+BROMIGOS = os.environ.get("BROMIGOS_BIN") or "bromigos"
+POLL = 10.0
+
+
+def log(msg):
+    print(f"bromigos-peripherals: {msg}", flush=True)
+
+
+def run(argv):
+    import subprocess
+    try:
+        subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log(f"{argv[0]}: {e}")
+
+
+class DialThread(threading.Thread):
+    """Reads one dial's event node until told to stop; reopens it after an unplug."""
+
+    def __init__(self, module, node, roller):
+        super().__init__(daemon=True, name=f"dial {node}")
+        self.module, self.node = module, node
+        self.dial = P.Dial(run, roller=roller)
+        self.stop = threading.Event()
+
+    def run(self):
+        import evdev
+        said = False
+        while not self.stop.is_set():
+            try:
+                dev = evdev.InputDevice(self.node)
+            except OSError as e:
+                if not said:
+                    log(f"{self.module}: waiting for the dial at {self.node} ({e.strerror})")
+                    said = True
+                self.stop.wait(2)
+                continue
+            said = False
+            try:
+                dev.grab()
+                log(f"{self.module}: dial on {self.node} ({dev.name})")
+                for ev in dev.read_loop():
+                    if self.stop.is_set():
+                        break
+                    did = self.dial.event(ev.type, ev.code, ev.value)
+                    if did:
+                        log(f"{self.module}: {did}")
+            except OSError as e:
+                log(f"{self.module}: {self.node}: {e}")
+                self.stop.wait(2)
+            finally:
+                try:
+                    dev.ungrab()
+                except OSError:
+                    pass
+                dev.close()
+
+
+def lighting_for(backend, pids, follow="vector"):
+    if backend != "openrazer":
+        log(f"no lighting backend {backend!r}")
+        return None
+    try:
+        from openrazer.client import DeviceManager
+    except ImportError:
+        log("lighting: python-openrazer isn't installed")
+        return None
+    import bromigos_theme as T
+
+    def devices():
+        return DeviceManager().devices
+    def colour(role):
+        T.version()                      # a theme switch rewrites palette.json: read it again
+        return T.hex(role)
+    return P.Lighting(devices, colour, pids=pids, follow=follow)
+
+
+def main():
+    dials, light, light_key, tried = {}, None, None, None
+    while True:
+        doc = P.status(BROMIGOS)
+        if doc is not None and not doc.get("modules"):
+            log("no peripheral module is on")
+            for t in dials.values():
+                t.stop.set()
+            return 0
+        if doc is not None:
+            want_dials, want_light = P.plan(doc)
+            for key in [k for k in dials if k not in {(m, n) for m, n, _ in want_dials}]:
+                dials.pop(key).stop.set()
+            for module, node, roller in want_dials:
+                if (module, node) not in dials or not dials[(module, node)].is_alive():
+                    log(f"{module}: the dial at {node}" + (" and its volume roller" if roller else ""))
+                    t = DialThread(module, node, roller)
+                    t.start()
+                    dials[(module, node)] = t
+            key = (want_light[0], tuple(sorted(want_light[1] or ())), want_light[2]) if want_light else None
+            if key != light_key:
+                light_key = key
+                light = lighting_for(*want_light) if want_light else None
+                log(f"lighting: {want_light[0]}, " + ("every device" if want_light[1] is None else "the module's devices")
+                    + f", following {want_light[2]}" if want_light else "lighting: off")
+            # a keyboard of a kind not seen before: its keys (once per new set of names)
+            names = P.hypr_names(doc)
+            if not doc.get("hypr_current") and names != tried:
+                tried = names
+                run([BROMIGOS, "peripheral", "refresh"])
+                log("new devices: keys written again (bromigos peripheral refresh)")
+        deadline = time.monotonic() + POLL
+        while time.monotonic() < deadline:
+            if light is not None:
+                light.tick()
+            time.sleep(0.25)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

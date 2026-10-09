@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=mpv Media Player
+Exec=mpv --player-operation-mode=pseudo-gui -- %U
+Icon=mpv
+Categories=AudioVideo;Audio;Video;Player;
+MimeType=video/mp4;video/x-matroska;video/webm;audio/mpeg;audio/flac;audio/ogg;

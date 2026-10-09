@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Timeline
+GenericName=History Hologram
+Comment=The last 72 hours of this machine as a 3D ribbon to scrub through (SUPER+T; Esc closes)
+Icon=bromigos-timeline
+TryExec=bromigos-live
+Exec=bromigos-live open timeline
+Terminal=false
+Categories=System;Monitor;
+Keywords=timeline;history;graph;load;72h;past;hologram;deck;
+StartupNotify=false
+X-Bromigos-Menu=holo/timeline

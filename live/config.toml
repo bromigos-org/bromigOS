@@ -1,0 +1,184 @@
+# bromigos-live: the animated, data-reactive live layer.
+#
+# The single switchboard for every toggle. The daemon watches this file and
+# reloads on save; no restart needed. Rule of the house: everything that moves
+# is driven by a real reading or a real event, except the emblem and ambience.
+#
+# This is bromigOS's default (/usr/share/bromigos/live/config.toml). Your own
+# ~/.config/bromigos-live/config.toml is merged over it key by key, so it needs only what
+# you change; the animation switches (`bromigos anim …`) go in
+# ~/.config/bromigos/live/overrides.toml, merged over both. Paths that don't exist on this
+# machine (the den art, a lore catalog of your own, the lab's token) just leave that
+# feature off.
+#
+#   bromigos-live {start|stop|restart|toggle|mute|radial|ctl <cmd>}
+
+[general]
+monitor = ""               # the output to draw on, e.g. "DP-1" ("": the first Hyprland lists)
+fps = 30                 # desktop visible (empty workspace)
+fps_covered = 20       # windows tiled over it, only the gaps show
+# how much it moves (docs/accessibility.md): `bromigos accessibility motion` (the user's
+# ~/.config/bromigos/accessibility.toml) wins over this
+motion = "full"          # "full" | "reduced" (calm and slower: no parallax, flicker or flashes) | "still" (a still frame)
+reduced_motion = false   # the older switch: true means at least "reduced"
+# On a software renderer (Mesa's llvmpipe: no GPU, as after a graphics driver update until the
+# computer restarts, or a VM without 3D), the background holds a still frame and the decks run
+# at 10 fps (live/software.py). true: full motion anyway, on the CPU.
+allow_software = false
+
+# DATA vs DECORATION — what each moving layer means:
+#   data (real readings/events): rain density+speed (CPU) and bursts (notifications,
+#     lab alerts, paper fills), floor pulses (network throughput), den scope
+#     (network), den meters (CPU/GPU), relay map, scanner schematic values, ship
+#     density (network), relay beam (lab all green), health tint, rings,
+#     constellation, hologram.
+#   decoration (fixed calm pace, tied to nothing): [loops] streaks, floor-row
+#     scroll and mug steam, stars, the emblem's rotation, the scanner sweep itself.
+#   worlds ([world]; a theme's live/world.toml): every effect and actor names its signal
+#     there; docs/ELEMENTS.md "Worlds" lists them.
+
+[background]
+enabled = true           # the live background layer (SUPER+SHIFT+B toggles at runtime)
+# The den wallpaper, drawn as the base plate. The current choice is local state
+# kept by bromigos-wallpaper (never a tracked file); bromigOS's own den (chair empty,
+# package bromigos-desktop) is the fallback when nothing has been chosen yet.
+underlay = "~/.local/state/bromigos/wallpaper/den.jpg"
+underlay_fallback = "/usr/share/bromigos/wallpaper/bromigos-den-empty-2560x1440.jpg"
+underlay_brightness = 1.0
+den = true               # make the den's own screens live: scope, burn-in monitor, meters, relay map
+# The clean v1 plate every variant is composited onto: the source for removing
+# baked steam before it is redrawn live. Optional (a user's own art, set in their
+# config.toml): without it the baked steam stays and the rest of the den is drawn the same.
+den_plate = ""
+glow = 0.85              # bloom on vector lines (no scanlines, no vignette, no CRT pass)
+
+# Approved den images (sha1 -> variant). All share the v1 plate, so the fitted
+# overlays (den screens, floor lanes, loops) switch on only for these; any other
+# image gets the generic layers alone. Re-fit and add a line for a new variant.
+[background.den_plates]
+"ca67fdd84abec3580141b5569dd00dfdcf58eccd" = "den"
+"05c5e22f69049d5ae5e4f19a044f4ddee9c429fd" = "empty"
+"fbe4eb7d666f6a8068d7fce7d7d18d3f663b6b54" = "masked"
+"2c5d34445075bde7f434a022ce6390f9e9a58b22" = "v1"
+
+[loops]                  # DECORATION: seamless loops over the clean plate (baked versions removed)
+streaks = true           # the left side's glitch streaks, re-drawn drifting/stretching/fading
+streak_period = 10       # seconds per loop
+rows = true              # the floor grid's rows scroll toward you, one cell per loop
+row_period = 12          # seconds per cell (constant, tied to no metric)
+row_amp = 1.0
+steam = ["den", "empty", "masked", "v1"]   # variants whose mug steams (baked wisps are masked)
+steam_period = 7         # seconds per loop
+steam_intensity = 0.55
+
+[rain]                   # "Drift script" glyph rain: density and speed track CPU load
+enabled = true
+region = [0, 30, 2390, 600]   # x, y, w, h in px; falls only on dark pixels (deep space)
+brightness = 0.55
+bursts = true            # columns flare on notifications, cluster alerts, paper fills
+
+[floor]                  # throughput pulses running the den's floor grid
+enabled = true
+horizon_y = 926          # fitted to the wallpaper's own grid
+vanish_x = 690
+lane_slope = 0.98
+lane_offset = 0.71
+max_x = 1000
+draw_grid = false        # true when there is no underlay grid to ride on
+
+[sweep]                  # the X-ray scanner pass that reveals this machine's schematic
+enabled = true
+interval = 60            # seconds between periodic passes (on demand: 'bromigos-live scan', SUPER+X pins, hold SUPER+Z)
+duration = 5.5           # the beam's crossing time; what it reveals fades in about half a second
+
+[space]                  # the Drift: behind the art in the background, full vista in the screensaver
+stars = true             # parallax star layers
+traffic = true           # ship lanes + debris; density follows this machine's network throughput
+relay_beam = true        # beam from the station while every lab node is Ready and every service is up
+health_tint = true       # space + rain shift amber (hot / lab link stale) or red (node or service down)
+planet = true            # screensaver gas giant; its terminator is the local time of day
+station = true           # screensaver Drift relay station; spokes are the lab's services, lit = up
+
+[world]                  # a theme's world (bromigos theme set mire|tidewell): drawn instead of the den
+enabled = true           # false = always the den, whatever the theme
+dir = ""                 # "" = the current theme (~/.local/state/bromigos/theme/current); or a theme directory
+idle_after = 90          # seconds without input before the keeper and the creatures doze (DATA: your activity)
+ambient_sounds = true    # the world's creature sounds, by your activity (mute and sounds.volume apply)
+
+[holodeck]               # SUPER+H: arc rings, the cluster constellation, the machine hologram
+enabled = true
+
+[driftmap]               # SUPER+M: the lore as a star chart; relays = the lab's live services
+# "": the public lore catalog that ships with bromigos-live
+# (/usr/share/bromigos/live/lore/catalog.json); or a path to another catalog of the same shape
+catalog = ""
+
+[cluster]                # the lab snapshot comes from bromigos-homelab (homelab.toml, docs/homelab.md)
+poll_seconds = 25
+ca_file = "~/.config/homelab/homelab-ca.crt"   # internal TLS (the [fills] feed's console)
+
+[fills]                  # a trade tape's paper fills -> rain bursts, the worlds' catches, FLOOR codec calls
+endpoint = ""            # the tape's console: a name in the private overlay's endpoints ("" = off)
+console = ""             # ... or its base URL
+url = "/api/trades?limit=1"   # the tape: a path on the console, or a whole URL; JSON {total, trades: [...]}
+poll_seconds = 30
+
+[decks]                  # Tab moves through these decks in turn (a kind not installed is passed over)
+cycle = ["holodeck", "lab", "timeline", "mind", "ops", "swarm", "netmap"]   # a plugin's deck joins by its kind
+
+[events]
+intercept_on_login = true
+intercept_on_unlock = true
+lock_emblem = false         # NEVER true: its SIGUSR2 frame flips crash hyprlock (live/lockemblem.py)
+critical_flash = true
+workspace_wipe = true
+
+[codec]                  # important real events as a short voiced transmission (bottom right)
+enabled = true
+voice = "pilot"          # VECTOR's voice (his speech server + his voice.json); "breeze" to skip it
+pilot_holo = ""          # VECTOR's tree; "" = the installed one (/usr/lib/bromigos/vector) or the dotfiles' copy
+tts_url = ""             # fallback: the lab's Breeze TTS, default voice (nothing cloned); "" = private endpoints.tts
+tts_instruction = "A calm, low radio operator voice; short, clear, unhurried."
+voice_gain = 1.6         # x sounds.volume; SUPER+SHIFT+M mutes all, SUPER+SHIFT+C = quiet (no voice)
+min_gap = 120            # seconds between calls
+max_per_hour = 8
+dedupe = 1800            # the same message at most once per this many seconds
+on_critical = true       # critical notifications
+on_lab_alert = true      # the lab: alerts firing went up / a node left Ready
+on_fill = true           # paper fills ([fills]), only notable ones:
+fill_min_realized = 5.0  #   |realized| >= this (USD) ...
+fill_min_notional = 250.0 #  ... or notional >= this
+job_min_seconds = 60     # 'bromigos-live job -- cmd' calls in when cmd ran at least this long
+scale = 1.0
+
+[screensaver]
+enabled = true           # the idle policy's screensaver timer runs it (8 min; docs/idle.md, bromigos idle)
+
+[sounds]
+enabled = true
+volume = 0.30            # 0..1, keep it low
+terminal = "blip.wav"
+notify = "chirp.wav"
+critical = "alert.wav"
+hiss = "hiss.wav"
+sweep = "sweep.wav"
+signoff = "signoff.wav"
+terminal_classes = ["kitty", "Alacritty", "foot", "org.wezfurlong.wezterm"]
+# No chirp for notifications from tools that play their own cue. Also honoured:
+# a category hint starting "capture." or the hint x-bromigos-sound:none.
+quiet_apps = ["SCREENSHOT", "RECORDING"]
+
+[radial]                 # SUPER+A: holographic quick-launch ring (rofi stays the full launcher)
+browser = "xdg-open"
+# endpoint = a name in the private overlay's endpoints (skipped when it isn't set);
+# stat = the reading shown under it: lab (no name: the lab's, homelab.toml's `name`), fills,
+# argo, grafana, litellm, terminal (else the one its name is)
+items = [
+  { stat = "lab",       sub = "LAB",             endpoint = "lab" },
+  { name = "ARGO",      sub = "FLEET SYNC",      endpoint = "argocd" },
+  { name = "GRAFANA",   sub = "TELEMETRY",       endpoint = "grafana" },
+  { name = "LITELLM",   sub = "MODEL GATEWAY",   endpoint = "litellm" },
+  { name = "TERMINAL",  sub = "KITTY",           cmd = "kitty" },
+  { name = "BROWSER",   sub = "WEB",             cmd = "xdg-open about:blank" },
+  { name = "NOTES",     sub = "FIELD NOTES",     cmd = "bromigos-widgets notes" },
+]

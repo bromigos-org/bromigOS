@@ -1,0 +1,422 @@
+#!/usr/bin/env python3
+# bromigos:summary=What starts at login: bromigOS's own, yours (a marked block in your hyprland.lua), and the floating windows put back where they were
+# bromigos:args=[status] | add COMMAND… [--name NAME] | add --app APP | remove N|COMMAND | windows remember|forget-class CLASS | windows all on|off | windows clear [CLASS…] | windows restart | reset  [--json]
+# bromigos:examples=bromigos startup; bromigos startup add --app org.keepassxc.KeePassXC.desktop; bromigos startup add syncthing --name Syncthing; bromigos startup windows remember pavucontrol
+"""bromigos-startup (`bromigos startup`): what starts when you log in. bromigOS's own (the
+bar, the panels, the live layer, the idle policy …) is read from the defaults Hyprland runs
+and can't be changed here; yours are `bromigos.autostart` in a marked block of your
+hyprland.lua (`-- >>> bromigos startup`), run after bromigOS's own, taken by Hyprland the
+safe way. bromigOS doesn't run the XDG autostart folders (~/.config/autostart): what's
+there is listed so you can add one as yours. Floating windows put back where they were
+(`bromigos windows`) are windows.toml. Settings › Startup drives it.
+
+  bromigos startup [status]                 bromigOS's, yours, the XDG autostart entries, windows
+  bromigos startup add COMMAND… [--name N]  a command of yours at login
+  bromigos startup add --app APP            an installed app (its desktop entry, gtk-launch)
+  bromigos startup remove N|COMMAND         one of yours (N from status, 1 first)
+  bromigos startup windows remember CLASS   put this app's floating windows back where they were
+  bromigos startup windows forget-class CLASS
+  bromigos startup windows all on|off       every floating window, whatever its app
+  bromigos startup windows clear [CLASS…]   forget where they were (bromigos windows clear)
+  bromigos startup windows restart          bromigos-windows again, reading windows.toml
+  bromigos startup reset                    none of yours, no windows remembered
+"""
+import json
+import os
+import re
+import shlex
+import signal
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+BLOCK = "startup"
+WINDOWS = os.path.join(C.CONFIG, "bromigos", "windows.toml")
+WSTATE = os.path.join(C.STATE, "bromigos", "windows.json")
+
+
+def lua_path():
+    return os.path.join(C.CONFIG, "hypr", "hyprland.lua")
+
+
+def defaults_dir():
+    return os.path.join(os.environ.get("BROMIGOS_SHARE_DIR") or "/usr/share/bromigos", "default", "hypr")
+
+
+# ------------------------------------------------------------------ bromigOS's own
+_STR = re.compile(r'"((?:[^"\\]|\\.)*)"')
+
+
+def _eval(expr, consts):
+    """A Lua string expression of literals and known locals joined with `..`, else None."""
+    out = []
+    for part in expr.split(".."):
+        p = part.strip()
+        m = _STR.fullmatch(p)
+        if m:
+            out.append(m.group(1))
+        elif p in consts:
+            out.append(consts[p])
+        elif re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", p):
+            out.append("…")
+        else:
+            return None
+    s = "".join(out)
+    return s if s.strip("… ") else None
+
+
+def own(dirpath=None):
+    """The commands the defaults run at login (their hyprland.start handlers), each with
+    the comment above it."""
+    d = dirpath or defaults_dir()
+    out = []
+    for rel in ("hyprland.lua", "bromigos/live.lua", "bromigos/vector.lua"):
+        text = C.read_file(os.path.join(d, rel))
+        if not text:
+            continue
+        consts = {m.group(1): m.group(2) for m in re.finditer(r'^local\s+(\w+)\s*=\s*"([^"]*)"\s*$', text, re.M)}
+        lines = text.splitlines()
+        inside, comment, cond, prev_comment = False, [], None, False
+        for line in lines:
+            s = line.strip()
+            if not inside:
+                inside = bool(re.match(r'hl\.on\("hyprland\.start"', s))
+                continue
+            if re.match(r"^end\)", line):
+                inside = False
+                continue
+            if s.startswith("--"):
+                if not prev_comment:
+                    comment = []            # a new comment: it describes what follows it
+                comment.append(s.lstrip("- ").strip())
+                prev_comment = True
+                continue
+            prev_comment = False
+            m = re.match(r"if\s+(.*)\s+then$", s)
+            if m:
+                cond = m.group(1)
+                continue
+            if s == "end":
+                cond = None
+                continue
+            m = re.match(r"hl\.exec_cmd\((.*)\)\s*$", s)
+            if m:
+                cmd = _eval(m.group(1), consts)
+                if cmd:
+                    what = " ".join(comment).strip()
+                    out.append({"command": cmd, "what": what or _guess(cmd), "file": rel,
+                                "when": _when(cond)})
+                comment = []
+    return out
+
+
+def _guess(cmd):
+    w = cmd.split()[0].rsplit("/", 1)[-1]
+    if w == "hyprctl" and "setcursor" in cmd:
+        return "the cursor theme"
+    return {"waybar": "the bar", "dunst": "notifications", "bromigos-widgets": "the desktop panels",
+            "bromigos-windows": "floating windows put back where they were",
+            "bromigos-live": "the live layer: the animated background, the decks, the screensaver",
+            "bromigos-holo": "VECTOR"}.get(w, "")
+
+
+def _when(cond):
+    if not cond:
+        return None
+    if "polkit" in cond:
+        return "unless bromigos.polkit = false"
+    if "osd" in cond:
+        return "when swayosd is installed"
+    return cond
+
+
+# ------------------------------------------------------------------ yours
+_INSERT = re.compile(r'^table\.insert\(bromigos\.autostart,\s*"((?:[^"\\]|\\.)*)"\)\s*(?:--\s*(.*))?$')
+
+
+def yours():
+    lua = C.read_file(lua_path()) or ""
+    out = []
+    b = lua.find("-- >>> bromigos startup")
+    e = lua.find("-- <<< bromigos startup", b) if b >= 0 else -1
+    if b >= 0 and e > b:
+        for line in lua[b:e].splitlines():
+            m = _INSERT.match(line.strip())
+            if m:
+                cmd = m.group(1).replace('\\"', '"').replace("\\\\", "\\")
+                out.append({"command": cmd, "name": (m.group(2) or "").strip() or cmd, "from": "block"})
+    # autostart = { … } in your own bromigos table (uncommented): yours, edited there
+    head = lua.split("dofile(", 1)[0]
+    for line in head.splitlines():
+        code = line.split("--", 1)[0]
+        m = re.search(r"autostart\s*=\s*\{(.*)\}", code)
+        if m:
+            for s in _STR.findall(m.group(1)):
+                out.append({"command": s, "name": s, "from": "hyprland.lua"})
+    return out
+
+
+def _lua_str(s):
+    if "\n" in s or len(s) > 300:
+        raise Fail("one line, at most 300 characters")
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def write_yours(items):
+    import bromigos_hypr as H
+    lua = C.read_file(lua_path())
+    if lua is None:
+        raise Fail(f"{lua_path()}: none (bromigos update seeds it)")
+    mine = [i for i in items if i["from"] == "block"]
+    if not mine:
+        new = H.without_block(lua, BLOCK)
+    else:
+        body = ["-- Started at login after bromigOS's own (Settings › Startup, bromigos startup).",
+                "bromigos.autostart = bromigos.autostart or {}"]
+        for i in mine:
+            name = re.sub(r"[\r\n]", " ", i.get("name") or "")
+            body.append(f"table.insert(bromigos.autostart, {_lua_str(i['command'])})"
+                        + (f"  -- {name}" if name and name != i["command"] else ""))
+        try:
+            new = H.with_block(lua, BLOCK, "\n".join(body), before_dofile=True)
+        except ValueError as e:
+            raise Fail(str(e))
+    ok, detail = H.save({lua_path(): new}, lua=lua_path())
+    if not ok:
+        raise Fail(f"Hyprland didn't take it: {detail}")
+    return detail
+
+
+# ------------------------------------------------------------------ XDG autostart
+def xdg_autostart():
+    dirs = [C.CONFIG] + [d for d in (os.environ.get("XDG_CONFIG_DIRS") or "/etc/xdg").split(":") if d]
+    seen, out = set(), []
+    for d in dirs:
+        base = os.path.join(d, "autostart")
+        try:
+            names = sorted(os.listdir(base))
+        except OSError:
+            continue
+        for f in names:
+            if not f.endswith(".desktop") or f in seen:
+                continue
+            seen.add(f)
+            keys = _entry(os.path.join(base, f))
+            if not keys or keys.get("Hidden", "").lower() == "true":
+                continue
+            only = keys.get("OnlyShowIn", "")
+            out.append({"id": f, "name": keys.get("Name") or f[:-8], "exec": keys.get("Exec", ""),
+                        "command": _command_of(keys.get("Exec", "")), "file": os.path.join(base, f),
+                        "only_in": [x for x in only.split(";") if x]})
+    return out
+
+
+def _entry(path):
+    keys, inside = {}, False
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("["):
+                    if inside:
+                        break
+                    inside = line == "[Desktop Entry]"
+                elif inside and "=" in line and not line.startswith("#"):
+                    k, _, v = line.partition("=")
+                    if "[" not in k:
+                        keys[k.strip()] = v.strip()
+    except OSError:
+        return None
+    return keys
+
+
+def _command_of(exe):
+    try:
+        words = shlex.split(exe)
+    except ValueError:
+        words = exe.split()
+    return " ".join(shlex.quote(w) for w in words if not re.fullmatch(r"%[fFuUdDnNickvm]", w))
+
+
+def app_entry(did):
+    did = did if did.endswith(".desktop") else did + ".desktop"
+    dirs = [C.DATA] + [d for d in (os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(":") if d]
+    for d in dirs:
+        p = os.path.join(d, "applications", *did[:-8].split("-")) + ".desktop"
+        for cand in (os.path.join(d, "applications", did), p):
+            if os.path.isfile(cand):
+                return did, _entry(cand) or {}
+    raise Fail(f"no app {did!r} (bromigos defaults apps lists them)")
+
+
+# ------------------------------------------------------------------ windows
+def windows_cfg():
+    d = C.read_toml(WINDOWS)
+    return {"remember": [str(x) for x in d.get("remember") or []], "all": bool(d.get("all", False)),
+            "exists": os.path.exists(WINDOWS)}
+
+
+def windows_daemons():
+    """PIDs of this user's bromigos-windows daemons (by their command line, exactly)."""
+    pids, me = [], os.getuid()
+    for p in os.listdir("/proc"):
+        if not p.isdigit():
+            continue
+        try:
+            if os.stat(f"/proc/{p}").st_uid != me:
+                continue
+            with open(f"/proc/{p}/cmdline", "rb") as f:
+                argv = [a.decode(errors="replace") for a in f.read().split(b"\0") if a]
+        except OSError:
+            continue
+        prog = next((a for a in argv[:2] if a.rsplit("/", 1)[-1] == "bromigos-windows"), None)
+        rest = argv[argv.index(prog) + 1:] if prog else []
+        if prog and (not rest or rest[0] == "run"):
+            pids.append(int(p))
+    return pids
+
+
+def windows_doc():
+    cfg = windows_cfg()
+    try:
+        with open(WSTATE) as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        st = {}
+    places = []
+    for k, g in sorted(st.items()):
+        ws, _, cls = k.partition("/")
+        places.append({"workspace": ws, "class": cls, "x": g.get("x"), "y": g.get("y"), "w": g.get("w"),
+                       "h": g.get("h"), "saved": g.get("saved")})
+    return dict(cfg, file=WINDOWS, state=WSTATE, remembered=places, running=bool(windows_daemons()))
+
+
+def _write_windows(cfg):
+    if not cfg["remember"] and not cfg["all"]:
+        C.write_file(WINDOWS, None)
+        return
+    C.write_toml(WINDOWS, {"remember": cfg["remember"], "all": cfg["all"]},
+                 header="# Floating windows put back where they were (bromigos windows; Settings › Startup).")
+
+
+def status(_args=None):
+    return {"own": own(), "yours": yours(), "xdg_autostart": xdg_autostart(), "xdg_autostart_run": False,
+            "windows": windows_doc(), "file": lua_path(), "defaults": defaults_dir()}
+
+
+# ------------------------------------------------------------------ changes
+def add(args):
+    name = C.flag(args, "--name")
+    app = C.flag(args, "--app")
+    items = yours()
+    if app:
+        did, e = app_entry(app)
+        cmd, name = f"gtk-launch {did}", name or e.get("Name") or did
+    else:
+        if not args:
+            raise Fail("bromigos startup add COMMAND… | add --app APP")
+        cmd = " ".join(args).strip()
+        try:
+            prog = shlex.split(cmd)[0]
+        except (ValueError, IndexError):
+            raise Fail(f"{cmd!r}: not a command line")
+        if not C.have(prog) and not os.path.isfile(os.path.expanduser(prog)):
+            raise Fail(f"{prog!r}: no such program")
+    if any(i["command"] == cmd for i in items):
+        raise Fail(f"{cmd!r} starts at login already")
+    items.append({"command": cmd, "name": name or cmd, "from": "block"})
+    detail = write_yours(items)
+    return dict(status(), said=f"{name or cmd} starts at login", detail=detail)
+
+
+def remove(args):
+    if len(args) != 1:
+        raise Fail("bromigos startup remove N|COMMAND")
+    items = yours()
+    mine = [i for i in items if i["from"] == "block"]
+    raw = args[0]
+    hit = None
+    if raw.isdigit() and 1 <= int(raw) <= len(mine):
+        hit = mine[int(raw) - 1]
+    else:
+        hit = next((i for i in mine if i["command"] == raw or i["name"] == raw), None)
+    if hit is None:
+        other = next((i for i in items if i["command"] == raw), None)
+        if other:
+            raise Fail(f"{raw!r} is in your own bromigos table in hyprland.lua: remove it there")
+        raise Fail(f"{raw!r} isn't one of yours (bromigos startup lists them)")
+    items.remove(hit)
+    detail = write_yours(items)
+    return dict(status(), said=f"{hit['name']} no longer starts at login", detail=detail, removed=hit)
+
+
+_CLASS = re.compile(r"[\w.\-+ :]{1,120}")
+
+
+def windows(args):
+    if not args:
+        return windows_doc()
+    verb, rest = args[0], args[1:]
+    cfg = windows_cfg()
+    if verb in ("remember", "forget-class"):
+        if len(rest) != 1 or not _CLASS.fullmatch(rest[0]):
+            raise Fail(f"bromigos startup windows {verb} CLASS (an app's class: hyprctl clients shows it)")
+        cls = rest[0]
+        if verb == "remember":
+            if cls not in cfg["remember"]:
+                cfg["remember"].append(cls)
+            said = f"{cls}: its floating windows go back where they were"
+        else:
+            if cls not in cfg["remember"]:
+                raise Fail(f"{cls!r} isn't remembered")
+            cfg["remember"].remove(cls)
+            said = f"{cls}: not remembered"
+        _write_windows(cfg)
+    elif verb == "all":
+        if len(rest) != 1:
+            raise Fail("bromigos startup windows all on|off")
+        cfg["all"] = C.on_off(rest[0])
+        _write_windows(cfg)
+        said = "Every floating window remembered" if cfg["all"] else "Only the apps listed are remembered"
+    elif verb == "clear":
+        rc, out, err = C.run(["bromigos", "windows", "clear", *rest])
+        if rc:
+            raise Fail(f"bromigos windows clear: {(err or out).strip()}")
+        said = out.strip().capitalize() or "Forgotten"
+    elif verb == "restart":
+        for pid in windows_daemons():
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+        cfg = windows_cfg()
+        if cfg["remember"] or cfg["all"]:
+            import bromigos_hypr as H
+            H.spawn(["bromigos-windows"])
+            said = "bromigos-windows started again with windows.toml"
+        else:
+            said = "bromigos-windows stopped: nothing to remember"
+        return dict(status(), said=said)
+    else:
+        raise Fail(f"unknown: windows {verb} (remember, forget-class, all, clear, restart)")
+    doc = status()
+    if verb != "clear" and doc["windows"]["running"]:
+        said += " (bromigos-windows reads it again when restarted: windows restart)"
+    elif verb != "clear":
+        said += " (from the next login, or windows restart)"
+    return dict(doc, said=said)
+
+
+def reset(_args):
+    if any(i["from"] == "block" for i in yours()):
+        write_yours([])
+    _write_windows({"remember": [], "all": False})
+    return dict(status(), said="Nothing of yours starts at login; no windows remembered")
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "add": add, "remove": remove, "windows": windows, "reset": reset}, USAGE))

@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""A stand-in hyprctl (tests, offscreen renders): a Hyprland with two monitors as
+fixtures/hyprctl.json says. It answers as a running Hyprland with HYPRLAND_INSTANCE_SIGNATURE
+set, or in a fixtures run ($BROMIGOS_FIXTURE_STATE: an offscreen render) unless
+$BROMIGOS_FIXTURE_NO_HYPRLAND is set; else it says Hyprland isn't running. `reload` reads the `bromigos setup monitors` block from $XDG_CONFIG_HOME/hypr/
+hyprland.lua, as the real config would apply it: each pinned output gets its mode, place,
+scale and orientation (or is off); one not pinned, its preferred mode, the scale its
+density gives, placed to the right. eval of hl.config({ misc = { disable_autoreload = … } })
+is honoured; everything else is recorded (fixture.py's log) and answered "ok"."""
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
+import fixture as F  # noqa: E402
+
+a = [x for x in sys.argv[1:]]
+F.log("hyprctl", a)
+js = "-j" in a or "--json" in a
+a = [x for x in a if x not in ("-j", "--json")]
+if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") and (
+        not os.environ.get("BROMIGOS_FIXTURE_STATE") or os.environ.get("BROMIGOS_FIXTURE_NO_HYPRLAND")):
+    print("HYPRLAND_INSTANCE_SIGNATURE not set! (is hyprland running?)")
+    sys.exit(1)
+st = F.load("hyprctl")
+cmd = a[0] if a else ""
+
+
+def mode(text):
+    m = re.fullmatch(r"(\d+)x(\d+)(?:@([\d.]+)(?:Hz)?)?", text or "")
+    return (int(m.group(1)), int(m.group(2)), float(m.group(3)) if m.group(3) else None) if m else None
+
+
+def auto_scale(m):
+    pw, w, h = m["physicalWidth"], m["width"], m["height"]
+    want = (w / (pw / 25.4)) / 110 if pw and w else (1.5 if h >= 2000 else 1.0)
+    return min([1.0, 1.25, 1.5, 1.75, 2.0], key=lambda s: abs(s - want))
+
+
+def read_block():
+    home = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.environ.get("HOME", ""), ".config")
+    try:
+        text = open(os.path.join(home, "hypr", "hyprland.lua")).read()
+    except OSError:
+        return []
+    b, e = text.find("-- >>> bromigos setup monitors"), text.find("-- <<< bromigos setup monitors")
+    if b < 0 or e < b:
+        return []
+    out = []
+    for line in text[b:e].splitlines():
+        code = line.split("--", 1)[0]
+        ent = dict((k, v.strip('"')) for k, v in re.findall(r"(\w+)\s*=\s*(\"[^\"]*\"|[^,}\s]+)", code))
+        if ent.get("output"):
+            out.append(ent)
+    return out
+
+
+def reload():
+    pinned = {e["output"]: e for e in read_block()}
+    x = 0
+    for m in st["monitors"]:
+        e = pinned.get(m["name"])
+        if e and e.get("disabled") == "true":
+            m["disabled"] = True
+            continue
+        m["disabled"] = False
+        md = mode(e.get("mode")) if e else None
+        if md is None:
+            md = mode(m["preferred"].replace("Hz", ""))
+        w, h, hz = md
+        cands = [b for b in (mode(t.replace("Hz", "")) for t in m["availableModes"]) if b[:2] == (w, h)]
+        if not cands:
+            continue                                   # a mode it doesn't offer: Hyprland keeps the old one
+        hz = (min(cands, key=lambda b: abs(b[2] - hz)) if hz else max(cands, key=lambda b: b[2]))[2]
+        m["width"], m["height"], m["refreshRate"] = w, h, hz
+        m["scale"] = float(e["scale"]) if e and e.get("scale") else auto_scale(m)
+        if os.environ.get("BROMIGOS_FIXTURE_ROUND_SCALE"):      # a Hyprland that fixes a scale to fit
+            m["scale"] = round(round(m["scale"] * 3) / 3, 6)
+        m["transform"] = int(e.get("transform", 0)) if e else 0
+        if e and e.get("position") and "x" in e["position"]:
+            m["x"], m["y"] = (int(v) for v in e["position"].split("x"))
+        else:
+            m["x"], m["y"] = x, 0
+        lw = (m["height"] if m["transform"] % 2 else m["width"]) / m["scale"]
+        x = max(x, m["x"] + round(lw))
+
+
+if cmd == "monitors":
+    mons = [{k: v for k, v in m.items() if k != "preferred"} for m in st["monitors"]
+            if "all" in a or not m["disabled"]]
+    print(json.dumps(mons) if js else "\n".join(f"Monitor {m['name']}" for m in mons))
+elif cmd == "version":
+    print(json.dumps({"branch": "v0.56.2", "tag": "v0.56.2"}) if js else "Hyprland 0.56.2 (stand-in)")
+elif cmd == "getoption":
+    v = st["options"].get(a[1] if len(a) > 1 else "", None)
+    print(json.dumps({"option": a[1], "bool": v} if isinstance(v, bool) else {"option": a[1], "int": v or 0}))
+elif cmd == "configerrors":
+    print(json.dumps(st.get("configerrors", [""])) if js else "")
+elif cmd == "eval":
+    code = " ".join(a[1:])
+    m = re.search(r"disable_autoreload\s*=\s*(true|false)", code)
+    if m:
+        st["options"]["misc:disable_autoreload"] = m.group(1) == "true"
+    print("ok")
+elif cmd == "reload":
+    reload()
+    print("ok")
+elif cmd in ("keyword", "dispatch", "notify", "setcursor", "output"):
+    print("ok")
+else:
+    print(f"hyprctl stand-in: {cmd} isn't pretended", file=sys.stderr)
+    sys.exit(1)
+F.save("hyprctl", st)

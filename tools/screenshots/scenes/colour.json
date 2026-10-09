@@ -1,0 +1,11 @@
+{
+  "_comment": "A colour theme over the den: the panels in its colours, the terminal's demo session with the palette.",
+  "panels": [
+    {"name": "system",  "x": 28,  "y": 16},
+    {"name": "network", "x": 28,  "y": 502},
+    {"name": "weather", "x": 28,  "y": 780},
+    {"name": "storage", "x": 28,  "y": 1096},
+    {"name": "lab",     "x": 514, "y": 16, "width": 470, "height": 640}
+  ],
+  "terminal": {"at": [1520, 836, 1012, 576], "font_size": 11.5}
+}

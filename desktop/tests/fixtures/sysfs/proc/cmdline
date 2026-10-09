@@ -1,0 +1,1 @@
+BOOT_IMAGE=/vmlinuz-linux root=UUID=0000 rw resume=UUID=1111 quiet

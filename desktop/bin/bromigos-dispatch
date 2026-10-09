@@ -1,0 +1,23 @@
+#!/bin/sh
+# bromigos:summary=Run one Hyprland dispatcher from a script (Lua or old config form)
+# bromigos:args='<lua dispatcher>' [old form…]
+# bromigos:hidden=true
+# Run one Hyprland dispatcher from a script, whichever config format Hyprland runs.
+#
+#   bromigos-dispatch '<Lua dispatcher>' [old dispatcher and its args]
+#   bromigos-dispatch 'hl.dsp.dpms({ action = "on" })' dpms on
+#
+# With hyprland.lua, `hyprctl dispatch` takes Lua (hl.dsp.*); the old `dispatch dpms on`
+# form is an error there. The old form is only tried when Hyprland is on the old
+# hyprland.conf (the rollback), which answers the Lua form "Invalid dispatcher".
+# Exit 0 when Hyprland says ok; otherwise its answer goes to stderr.
+[ $# -ge 1 ] || { sed -n '2,10p' "$0" >&2; exit 2; }
+lua=$1
+shift
+out=$(/usr/bin/hyprctl dispatch "$lua" 2>&1)
+if [ "$out" = "Invalid dispatcher" ] && [ $# -gt 0 ]; then
+    out=$(/usr/bin/hyprctl dispatch "$@" 2>&1)
+fi
+[ "$out" = ok ] && exit 0
+printf '%s\n' "$out" >&2
+exit 1

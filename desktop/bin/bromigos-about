@@ -1,0 +1,189 @@
+#!/usr/bin/env python3
+# bromigos:summary=About this machine and bromigOS: the version and channel, the packages, the hardware, the licences, the last update
+# bromigos:args=[status] | text | last-update  [--json]
+# bromigos:examples=bromigos about; bromigos about text; bromigos about --json
+"""bromigos-about (`bromigos about`): what Settings › About shows, read from the machine.
+
+  bromigos about [status]   the version and channel, bromigOS's packages and the main
+                            components', the kernel, the hardware (CPU, memory, GPUs, the
+                            machine, the root disk), the licences, the last full update,
+                            where the manual is
+  bromigos about text       the same as plain lines, to paste into a bug report
+  bromigos about last-update  only when the last full update was (quick)
+
+The packages and their licences come from pacman; the GPUs and the machine from
+`bromigos hw`; the last update from pacman's log ($BROMIGOS_PACMAN_LOG for tests).
+"""
+import os
+import re
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+REPO = "https://github.com/bromigos-org/bromigOS"
+COMPONENTS = ["hyprland", "gtk4", "libadwaita", "pipewire", "wireplumber", "networkmanager", "linux"]
+# The terms of what ships beside the code (docs/ASSETS.md is the full table).
+TERMS = [
+    {"what": "bromigOS's code (the core, the desktop, the widgets, the live layer, VECTOR)",
+     "licence": "MIT OR Apache-2.0"},
+    {"what": "The Bromigos brand: the palette, the emblem, the logos and the lore",
+     "licence": "Bromigos's own, under its own licence (not the code's)"},
+    {"what": "The worlds' art, loops and sounds", "licence": "original to bromigOS; see docs/ASSETS.md for each"},
+    {"what": "Geist and Geist Mono", "licence": "SIL Open Font License 1.1"},
+    {"what": "The icons and cursor (from Breeze)", "licence": "LGPL, recoloured"},
+    {"what": "Lab-made 3D models (Qwen-Image, Hunyuan3D)",
+     "licence": "their models' licences (research; territory limits), see docs/ASSETS.md"},
+]
+
+
+def _pacman_log():
+    return os.environ.get("BROMIGOS_PACMAN_LOG") or "/var/log/pacman.log"
+
+
+def last_update():
+    """The last full system upgrade in pacman's log: when, and how many packages it changed."""
+    path = _pacman_log()
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - 4 * 1024 * 1024))
+            text = f.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    lines = text.splitlines()
+    start = None
+    for i in range(len(lines) - 1, -1, -1):
+        if "[PACMAN] starting full system upgrade" in lines[i]:
+            start = i
+            break
+    if start is None:
+        return None
+    m = re.match(r"\[([^\]]+)\]", lines[start])
+    changed = 0
+    for line in lines[start + 1:]:
+        if "starting full system upgrade" in line or "[PACMAN] Running" in line:
+            break
+        if "[ALPM] transaction completed" in line:
+            break
+        if re.search(r"\[ALPM\] (upgraded|installed|downgraded) ", line):
+            changed += 1
+    return {"at": m.group(1) if m else None, "packages": changed, "log": path}
+
+
+def packages():
+    rc, out, _ = C.run(["pacman", "-Q"], timeout=20)
+    if rc == 127:
+        return None
+    have = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) == 2:
+            have[parts[0]] = parts[1]
+    names = sorted(n for n in have if n == "bromigos" or n.startswith("bromigos-")) + [n for n in COMPONENTS if n in have]
+    lic = {}
+    if names:
+        rc, info, _ = C.run(["pacman", "-Qi", *names], timeout=20)
+        name = None
+        for line in info.splitlines():
+            k, _, v = line.partition(":")
+            k, v = k.strip(), v.strip()
+            if k == "Name":
+                name = v
+            elif k == "Licenses" and name:
+                lic[name] = v
+    return [{"name": n, "version": have[n], "licence": lic.get(n), "bromigos": n.startswith("bromigos")} for n in names]
+
+
+def _cpu():
+    model, n = None, 0
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.startswith("processor"):
+                    n += 1
+                elif line.startswith("model name") and model is None:
+                    model = line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return {"model": model, "threads": n or os.cpu_count()}
+
+
+def _memory():
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
+
+
+def hardware():
+    hw = (C.bromigos("hw", "--json", timeout=30) or {}).get("detection") or {}
+    m = hw.get("machine") or {}
+    try:
+        st = os.statvfs("/")
+        disk = {"size": st.f_frsize * st.f_blocks, "free": st.f_frsize * st.f_bavail}
+    except OSError:
+        disk = None
+    return {"cpu": _cpu(), "memory": _memory(), "disk": disk,
+            "gpus": [{"name": g.get("name"), "vendor": g.get("vendor"), "driver": g.get("driver"),
+                      "family": g.get("family")} for g in hw.get("gpus") or []],
+            "machine": {"kind": m.get("kind"), "vendor": m.get("vendor"), "product": m.get("product"),
+                        "laptop": m.get("laptop"), "virt": m.get("virt")}}
+
+
+def licences(pkgs):
+    here = os.path.dirname(os.path.realpath(__file__))
+    files = [p for p in ("/usr/share/licenses/bromigos-core/LICENSE-MIT", "/usr/share/licenses/bromigos-core/LICENSE-APACHE",
+                         os.path.join(here, "..", "..", "LICENSE-MIT"), os.path.join(here, "..", "..", "LICENSE-APACHE"))
+             if os.path.exists(p)]
+    return {"bromigos": "MIT OR Apache-2.0", "files": [os.path.normpath(p) for p in files][:2], "terms": TERMS,
+            "packages": [{"name": p["name"], "licence": p["licence"]} for p in pkgs or [] if p.get("licence")]}
+
+
+def status(_args=None):
+    rc, out, _ = C.run(["bromigos", "--version"], timeout=10)
+    version = out.strip().split()[-1] if rc == 0 and out.strip() else None
+    ch = (C.bromigos("channel", "--json", timeout=10) or {}).get("channel") or {}
+    base = ch.get("base")
+    pkgs = packages()
+    u = os.uname()
+    return {"version": version, "channel": ch.get("channel"), "server": ch.get("server"), "host": u.nodename,
+            "kernel": u.release, "arch": u.machine, "packages": pkgs, "hardware": hardware(),
+            "licences": licences(pkgs), "last_update": last_update(),
+            "links": {"manual": C.manual_url(base), "manual_online": C.manual_online(base),
+                      "manual_installed": C.manual_dir() is not None,
+                      "repository": REPO, "docs": REPO + "/tree/main/docs"}}
+
+
+def _gib(b):
+    return f"{b / 2**30:.1f} GiB" if b else "?"
+
+
+def text(_args=None):
+    d = status()
+    h = d["hardware"]
+    lines = [f"bromigOS {d['version'] or '?'} ({d['channel'] or 'no channel'})", f"kernel {d['kernel']} {d['arch']}",
+             f"CPU {h['cpu']['model'] or '?'} ({h['cpu']['threads']} threads)", f"memory {_gib(h['memory'])}"]
+    for g in h["gpus"]:
+        lines.append(f"GPU {g['name']} ({g['driver']})")
+    m = h["machine"]
+    lines.append(f"machine {m.get('vendor') or '?'} {m.get('product') or ''} ({m.get('kind') or '?'})".strip())
+    if h["disk"]:
+        lines.append(f"disk / {_gib(h['disk']['size'])}, {_gib(h['disk']['free'])} free")
+    for p in d["packages"] or []:
+        lines.append(f"{p['name']} {p['version']}")
+    if d["last_update"]:
+        lines.append(f"last update {d['last_update']['at']} ({d['last_update']['packages']} packages)")
+    return dict(d, said="\n".join(lines), text="\n".join(lines))
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "text": text,
+                     "last-update": lambda _a: {"last_update": last_update()}}, USAGE))

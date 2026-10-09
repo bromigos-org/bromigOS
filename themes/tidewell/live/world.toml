@@ -1,0 +1,533 @@
+# Tidewell, the sea at night seen from just under the surface: the waterline high (a
+# fifth of the way down), a thin strip of sky with Greywater Light small on its rock in
+# the corner, and below it the water column to the abyss, the stage for the actors.
+# Format: docs/theming.md ("`live/world.toml`"). Paths are relative to the theme directory;
+# positions and sizes are plate pixels (2560x1440, origin top left). Every moving thing
+# is a real signal; the comments say which.
+format = 1
+name = "Tidewell"
+
+[camera]
+parallax = "cursor"
+sway = [10, 4]
+
+[clock]                      # dusk, night and dawn follow the real local clock
+dawn = [5.5, 7.5]
+dusk = [18.0, 20.5]
+night = [0.88, 0.92, 1.0]    # the art is painted at night
+day = [1.1, 1.14, 1.15]
+dawn_tint = [1.1, 0.95, 0.95]
+dusk_tint = [1.15, 0.9, 0.78]
+twilight = [1.0, 0.55, 0.38]
+day_lift = [0.04, 0.06, 0.08]
+
+[water]
+layer = "water-far"
+mode = "split"               # the surface is a moving line; the deep is below it
+line = 246
+tide = "moon"                # the tide follows the moon, computed locally (no network)
+tide_range = 5
+fog = [0.01, 0.04, 0.06]
+fog_distance = 520
+fog_actors = 0.35
+
+[[layers]]
+id = "sky"                   # the night sky and its painted moon
+file = "backgrounds/layers/00-sky.webp"
+depth = 0
+parallax = 0.02
+sky = true
+
+[[layers]]
+id = "surface"               # the sea band, Greywater Light and its islet
+file = "backgrounds/layers/10-surface.webp"
+depth = 10
+parallax = 0.05
+
+[[layers]]
+id = "water-far"             # the open water and the abyss
+file = "backgrounds/layers/20-water-far.webp"
+depth = 20
+parallax = 0.12
+water = true
+
+[[layers]]
+id = "kelp-mid"              # the kelp, the shelves and the cliff, swaying with the swell (CPU)
+file = "backgrounds/layers/30-kelp-mid.webp"
+depth = 30
+parallax = 0.3
+fog = 0.25
+sway = { signal = "cpu", min = 1.5, max = 6, top = 280, bottom = 1440 }
+
+[[layers]]
+id = "water-near"            # the bright underside of the surface
+file = "backgrounds/layers/40-water-near.webp"
+depth = 40
+parallax = 0.12
+
+# (No living backdrop: the one made from the first plate still had the painted fish, which
+# are gone from the layers now; the lampfry are the water's life instead.)
+
+# ---------------------------------------------------------------- effects
+# (no moon effect: the sky is painted with its moon)
+
+[[effects]]
+type = "swell"               # CPU: the swell at the surface, the caustics under it
+signal = "cpu"
+min = 1
+max = 9
+wavelength = 380
+caustics = 0.25
+
+[[effects]]
+type = "rays"                # the light shafts from the surface move with the swell and flicker with the storm
+gain = 0.08
+base = 0.4
+slant = 0.18
+reach = 640
+
+[[effects]]
+type = "beam"                # Greywater Light sweeping the surface: colour = lab health, turn = ingress rate
+signal = "health"
+requires = "lab"             # no lab data: the lamp is dark
+rate_signal = "ingress"
+rate = 0.35
+rate_gain = 0.12
+at = [2216, 40]
+depth = 10
+reach = 2800
+colors = [[1.0, 0.95, 0.8], [1.0, 0.72, 0.25], [1.0, 0.3, 0.25]]
+
+[[effects]]
+type = "rain"                # a storm on the surface strip when something in the lab is down
+signal = "storm"
+from = 0.0
+full = 0.6
+
+[[effects]]
+type = "lightning"           # ... its lightning, flickering down through the water
+signal = "storm"
+above = 0.5
+every = [4, 11]
+zone = [200, 2000]
+ground = 246
+
+[[effects]]
+type = "spray"               # a Choir breach
+
+# ---------------------------------------------------------------- the keeper
+[[actors]]
+id = "maren"
+kind = "keeper"              # a tiny figure in the lamp room: writing at her desk while you work,
+sprite = "live/actors/maren-writing.webp"   # sitting back when idle, asleep on the logbook when locked
+at = [2216, 52]
+height = 14
+depth = 11
+parallax = 0.05
+lamp = { at = [2218, 42], color = [1.0, 0.78, 0.45], radius = 7, depth = 10.5 }
+[actors.states]
+working = { motion = "bob", amp = 0.25, rate = 0.5, lamp = 1.0 }
+dozing = { motion = "still", lamp = 0.75 }
+asleep = { motion = "still", sprite = "live/actors/maren-asleep.webp", lamp = 0.1 }
+
+# ---------------------------------------------------------------- linebloom: the lab's health
+# (LORE.md, Tidewell: the reef along the relay's old sea cable down the Sliver's flank; its
+# light is the line's.) A seamless loop of it breathing on black, drawn additive along the
+# cliff's edge: only its light shows, so the painted rock stays the rock. Calm cyan while
+# every lab node and service is up, amber on warnings, a slow red pulse on an alert. Its
+# light spills on the rock around it. Behind every creature, in front of the cliff.
+[[actors]]
+id = "linebloom"
+kind = "signal"
+signal = "health"
+sprite = "live/loops/linebloom.mp4"
+blend = "add"
+at = [2150, 1440]            # the loop's bottom centre: the reef runs from under the surface
+height = 1150                # at the cliff's top edge down its face to the bottom of the frame
+depth = 30.5
+fog = true
+lights = [{ at = [0.67, 0.06], radius = 34, gain = 0.35 }, { at = [0.56, 0.3], radius = 40, gain = 0.35 },
+          { at = [0.44, 0.55], radius = 40, gain = 0.35 }, { at = [0.31, 0.8], radius = 40, gain = 0.3 }]
+[actors.states]
+"0" = { motion = "still", bright = 1.1, breathe = [0.04, 0.05], light = 0.6, color = [0.78, 0.5, 0.95] }   # its own colours, calm: violet, pink, orange, gold, cyan
+"1" = { motion = "still", bright = 0.85, breathe = [0.18, 0.12], light = 1.0, color = [1.0, 0.55, 0.15], tint = [1.0, 0.55, 0.12, 0.92] }   # the whole reef amber
+"2" = { motion = "still", bright = 1.0, breathe = [0.5, 0.3], light = 1.2, color = [1.0, 0.25, 0.2], tint = [1.0, 0.22, 0.16, 0.95] }   # a red pulse
+
+# ---------------------------------------------------------------- the Choir: herdr agents
+[[actors]]
+id = "choir"
+kind = "agents"              # one per herdr agent, the Swarm deck's data
+sprite = "live/loops/choir.mp4"
+blend = "add"                # glowing creatures on black
+faces = "left"
+height = 150
+depth = 35
+# The open water, left to right up to the Sliver's flank: two near bands (in front of the
+# kelp and the shelves) and a far one (5th number: its depth, behind the kelp, between the
+# open water and the kelp layer, smaller and hazier), out past the kelp to the pocket of open
+# water under the cliff. A Choir keeps its band for life, so nothing pops through the kelp;
+# it never stops behind the kelp column (hidden_x) and crosses it quickly.
+zones = [[120, 640, 1900, 1050], [300, 1000, 1650, 1260], [520, 430, 1990, 540, 25]]
+hidden_x = [[1430, 1745]]
+max = 8
+lights = [{ at = [0.1, 0.5], radius = 6, color = [0.3, 0.9, 1.0] }, { at = [0.3, 0.5], radius = 5, color = [0.3, 0.9, 1.0] }]
+signal_color = [1.0, 0.85, 0.5]
+error_color = [1.0, 0.36, 0.3]
+signal_radius = 2.2
+[actors.states]
+working = { motion = "wander", speed = 16, bob = 6, light = 0.6, pulse = 0.25, bright = 1.8 }   # gliding, a cyan glow (bright: its membranes are dim art; deep water adds nothing under it)
+needs_you = { motion = "breach", turn = true, signal = true, hold = 1.15, every = [45, 90], leap = 2.2, leap_height = 1.45, light = 1.0, bright = 2.2 }   # waits glowing just under the surface; breaches on arrival, then now and then
+finished = { motion = "dive", speed = 30, light = 0.15, trail = [0.3, 0.9, 1.0], bright = 0.7 }     # dives, leaving a trail
+gone = { motion = "dive", speed = 45, light = 0.0, fade = 8 }
+
+# ---------------------------------------------------------------- trawlers at the surface: the network
+[[actors]]
+id = "inbound"
+kind = "traffic"             # download: trawlers coming in, left to right (the waterline row 356 sits on 246)
+signal = "net_rx"
+sprite = "live/actors/trawler.webp"
+height = 300
+depth = 21
+fog = true
+lanes = 3
+band = [441, 443]
+speed = [16, 28]
+dir = 1
+base = 0.08
+gain = 0.92
+span = [-300, 2860]
+lights = [{ at = [0.35, 0.05], radius = 3, color = [1.0, 0.95, 0.85] }, { at = [0.8, 0.25], radius = 2.5, color = [0.3, 1.0, 0.45] }]
+tow = { sprite = "live/actors/trawl-net.webp", at = [0.117, 0.35], pivot = [0.896, 0.0], height = 0.65, sway = 2.5, rate = 0.12 }   # the net, trailing aft
+
+[[actors]]
+id = "outbound"
+kind = "traffic"             # upload: trawlers heading out, right to left, farther off
+signal = "net_tx"
+sprite = "live/actors/trawler.webp"
+height = 230
+depth = 20.5
+fog = true
+lanes = 3
+band = [395, 397]
+speed = [12, 22]
+dir = -1
+base = 0.08
+gain = 0.92
+span = [-300, 2860]
+lights = [{ at = [0.35, 0.05], radius = 3, color = [1.0, 0.95, 0.85] }, { at = [0.2, 0.25], radius = 2.5, color = [1.0, 0.3, 0.25] }]
+tow = { sprite = "live/actors/trawl-net.webp", at = [0.117, 0.35], pivot = [0.896, 0.0], height = 0.65, sway = 2.5, rate = 0.12 }   # the net, trailing aft
+
+# ---------------------------------------------------------------- jellyfish: notifications
+[[actors]]
+id = "jellies"
+kind = "event"
+sprite = "live/loops/jellyfish.mp4"
+blend = "add"
+height = 130
+depth = 33
+from = [[150, 1150, 1900, 1380], [560, 860, 1400, 1000, 25]]   # anywhere across the open water, some far off
+[[actors.on]]
+event = "notify"             # a bloom rises through the water column
+motion = "drift_up"
+count = 5
+stagger = 0.4
+rise_to = 380
+seconds = 15
+light = { at = [0.5, 0.2], radius = 7, color = [0.4, 0.95, 1.0] }
+[[actors.on]]
+event = "critical"           # red when it is critical
+motion = "drift_up"
+count = 7
+stagger = 0.3
+rise_to = 350
+seconds = 15
+tint = [1.0, 0.25, 0.22, 0.7]
+light = { at = [0.5, 0.2], radius = 8, color = [1.0, 0.3, 0.25] }
+
+# ---------------------------------------------------------------- jellyfish that live here
+# A few residents, always in the water: drifting slowly round their spots by pulses, bobbing,
+# tilting toward where they're going (motion "roam"). Their own sizes and colours; two far
+# off (3rd number: depth 25, behind the kelp, smaller and hazier), one in the pocket of open
+# water under the Sliver's flank. Purely ambient, so they read as the sea's life; the blooms
+# above are the notifications.
+[[actors]]
+id = "drifters"
+kind = "crowd"
+sprite = "live/loops/jelly-pink.mp4"
+# each its own two-tone colour, painted in (a primary, and a contrasting accent on the bell's
+# rim, spots on the dome and two or three of the thick oral arms), dealt in turn: rose with
+# cyan, orange with violet, violet with gold, mint with magenta, sapphire with orange; their
+# bell lights in the primary
+sprites = ["live/loops/jelly-pink.mp4", "live/loops/jelly-orange.mp4", "live/loops/jelly-violet.mp4",
+           "live/loops/jelly-mint.mp4", "live/loops/jelly-blue.mp4"]
+light_colors = [[1.0, 0.42, 0.6], [1.0, 0.55, 0.2], [0.6, 0.4, 1.0], [0.45, 1.0, 0.7], [0.3, 0.55, 1.0]]
+blend = "add"
+height = 125                 # big enough that the accent reads; the far two are drawn smaller
+depth = 33
+spots = [[300, 1180], [1000, 1290], [1650, 1160], [1150, 470, 25], [1880, 500, 25]]
+sizes = [0.85, 1.1]
+hidden_x = [[1430, 1745]]
+lights = [{ at = [0.5, 0.22], radius = 5, color = [0.4, 0.95, 1.0] }]
+[actors.states]
+working = { motion = "roam", range = [220, 130], top = 300, speed = 9, rate = 0.33, bob = 4, light = 0.45 }
+dozing = { motion = "roam", range = [160, 100], top = 300, speed = 5, rate = 0.22, bob = 3, light = 0.35 }
+asleep = { motion = "roam", range = [160, 100], top = 300, speed = 5, rate = 0.22, bob = 3, light = 0.35 }
+
+# ---------------------------------------------------------------- paper fills ([fills]): veilwings for a good haul, burrs for bad luck
+# (LORE.md, Tidewell: "a crew that sees one cross the bow counts on a good haul"; burrs
+# drift up out of the deep and are bad luck.) Glowing creatures on black, drawn additive,
+# each a seamless loop gliding through the water column, easing in and out of the dark.
+[[actors]]
+id = "veilwings"
+kind = "event"
+sprite = "live/loops/veilwing.mp4"
+blend = "add"
+faces = "left"               # the loop's creature glides left: flipped to face its way
+height = 190
+depth = 32.5
+fog = true
+from = [[-380, 1080, -320, 1250]]                   # in from the left, low in the dark water ...
+to = [[1500, 960], [1750, 1030], [1300, 900], [1880, 760]]   # ... under the lampfry, out across the shelves
+[[actors.on]]
+event = "fill_win"           # a pair, green, each on its own line
+motion = "glide"
+count = 2
+distinct = true
+stagger = 1.2
+seconds = 12
+fade_in = 1.6
+fade_out = 3.0
+arc = 80
+bank = 0.5
+scale = [0.75, 1.0]
+bright = 2.4                 # glow art on black: its dim membranes need the gain to read in the water
+light = { at = [0.3, 0.45], radius = 7, color = [0.4, 1.0, 0.6] }
+[[actors.on]]
+event = "fill_open"          # an opening fill: one, smaller, farther off, paler
+motion = "glide"
+count = 1
+seconds = 11
+fade_in = 1.6
+fade_out = 3.0
+arc = 60
+bank = 0.5
+scale = [0.55, 0.7]
+bright = 2.2
+tint = [0.7, 0.9, 1.0, 0.35]
+
+[[actors]]
+id = "burrs"
+kind = "event"
+sprite = "live/loops/burr.mp4"   # a dark body that hides the water behind it (stacked alpha, below)
+height = 300                 # the frame: the body is about 40% of it, the rest the spines' reach
+depth = 33                   # no fog: its black reads as black, an omen against the lit water
+from = [[250, 1400, 1750, 1470]]                    # up out of the deep ...
+to = [[280, 1110], [880, 1090], [560, 1150], [1080, 1120], [1400, 1110], [1680, 1080]]   # ... a little way, turning slowly
+[[actors.on]]
+event = "fill_loss"          # bad luck: two, coal-red, each rising to its own place
+motion = "glide"
+count = 2
+distinct = true
+under = 140
+stagger = 1.6
+seconds = 13
+fade_in = 2.4
+fade_out = 3.2
+arc = 25
+bank = 0.0
+spin = 0.12
+bob = 3
+scale = [0.8, 1.05]
+light = { at = [0.5, 0.48], radius = 6, color = [1.0, 0.32, 0.22] }
+
+[loops."live/loops/burr.mp4"]
+alpha = "stacked"            # colour on top, its matte below (theme/tools/glow-loop.py --stacked --fill)
+
+# ---------------------------------------------------------------- your activity: lampfry, seabirds
+# The lampfry: a loose drift of them in the open water under the rays while you work, dim and
+# nearly still when idle, gone when the screen locks (LORE.md: the trawlers net them). Three
+# separate shoals, each its own part of the one loop (live/loops/lampfry-*.mp4: lampfry.mp4 cut in
+# three, slowed 1.6x with motion interpolation, each with a soft oval -mask.png so the fry thin
+# out at its edge), each drifting on its own.
+[[actors]]
+id = "lampfry-west"
+kind = "crowd"               # the western shoal, higher
+sprite = "live/loops/lampfry-west.mp4"
+blend = "add"
+height = 320
+depth = 32
+spots = [[360, 860]]
+# no fog: each one is a lamp; the warm tint keeps that lamplight gold under the night's blue grade
+[actors.states]
+working = { motion = "hover", amp = 55, pace = 0.13, light = 1.0, bright = 1.25, tint = [1.0, 0.78, 0.42, 0.3] }
+dozing = { motion = "hover", amp = 20, pace = 0.05, bright = 0.5, tint = [1.0, 0.78, 0.42, 0.3] }
+asleep = { hidden = true }
+
+[[actors]]
+id = "lampfry-core"
+kind = "crowd"               # the densest, in the middle
+sprite = "live/loops/lampfry-core.mp4"
+blend = "add"
+height = 330
+depth = 32
+spots = [[880, 1020]]
+# no fog: each one is a lamp; the warm tint keeps that lamplight gold under the night's blue grade
+[actors.states]
+working = { motion = "hover", amp = 55, pace = 0.13, light = 1.0, bright = 1.25, tint = [1.0, 0.78, 0.42, 0.3] }
+dozing = { motion = "hover", amp = 20, pace = 0.05, bright = 0.5, tint = [1.0, 0.78, 0.42, 0.3] }
+asleep = { hidden = true }
+
+[[actors]]
+id = "lampfry-east"
+kind = "crowd"               # the eastern shoal
+sprite = "live/loops/lampfry-east.mp4"
+blend = "add"
+height = 310
+depth = 32
+spots = [[1330, 780]]
+# no fog: each one is a lamp; the warm tint keeps that lamplight gold under the night's blue grade
+[actors.states]
+working = { motion = "hover", amp = 55, pace = 0.13, light = 1.0, bright = 1.25, tint = [1.0, 0.78, 0.42, 0.3] }
+dozing = { motion = "hover", amp = 20, pace = 0.05, bright = 0.5, tint = [1.0, 0.78, 0.42, 0.3] }
+asleep = { hidden = true }
+
+[[actors]]
+id = "seabirds"
+kind = "crowd"               # wheeling round the light while you work, on the islet when idle, gone when locked
+sprite = "live/actors/seabird"
+height = 8
+depth = 11
+around = [2216, 70]
+spots = [[2150, 232], [2280, 226], [2380, 232], [2460, 238]]
+frames = { working = [0, 1], dozing = [1] }
+[actors.states]
+working = { motion = "circle", radius = 110, rate = 0.05, fps = 3 }
+dozing = { motion = "still" }
+asleep = { hidden = true }
+
+# ---------------------------------------------------------------- VECTOR
+[[actors]]
+id = "drone"
+kind = "signal"
+signal = "vector"            # the lamp-drone circling the gallery rail: off, idle, thinking, speaking, listening, error
+sprite = "live/actors/drone"
+at = [2216, 62]
+height = 9
+depth = 11.5
+lights = [{ at = [0.5, 0.62], radius = 3, color = [1.0, 0.88, 0.6] }]
+[actors.states]
+off = { hidden = true, light = 0.0 }
+idle = { motion = "circle", amp = 30, rate = 0.04, light = 0.5 }
+thinking = { motion = "circle", amp = 30, rate = 0.15, light = 0.9, color = [1.0, 0.76, 0.3] }
+speaking = { motion = "hold", turn = true, light = 1.0, pulse = 2.2 }
+listening = { motion = "hold", turn = true, light = 1.0, color = [0.5, 0.9, 1.0] }
+error = { motion = "hover", amp = 2, light = 0.8, color = [1.0, 0.35, 0.3], flicker = true }
+
+[rollcall]                   # at login: the Choir's lights wake one by one, the lamp room flares
+sequence = "lights"
+sound = ""
+
+# ---------------------------------------------------------------- craft overhead: the network
+# Now and then a craft crosses the strip of sky: rig-hoppers running supplies between the
+# platforms, a trawler's fish-spotter out looking for shoals, Pip Arro's Petrel in on a
+# parts run, a Drift long-hauler far up. Behind Greywater Light and the lit clouds, always
+# above the trawlers' masts. The busier this machine's network, the sooner the next one.
+# Off with `bromigos anim off ships`.
+[[actors]]
+id = "flybys"
+kind = "flyby"
+switch = "ships"
+signal = "net"
+every = [180, 480]
+gain = 2.0
+first = [40, 120]
+max = 1
+depth = 5                    # between the sky and the sea band: always behind the lighthouse and its rock,
+                             # so every craft is sized and hazed as farther off than Greywater Light
+sky = [6, 128]               # every craft wholly inside: on screen, and above the trawlers' masts (y 141)
+haze = [0.04, 0.07, 0.11, 0.5]
+rim = [0.62, 0.74, 0.92, 0.6]     # moonlight on their top edges
+clouds = 0.85                # the lit clouds in the sky layer pass in front of them ...
+cloud_luma = [0.17, 0.32, 0.62, 0.85]   # ... but the moon's disc doesn't
+[[actors.craft]]
+id = "righopper"             # supplies between the platforms, a container slung under it
+sprite = "live/actors/craft-righopper.webp"
+weight = 3
+distance = [0.2, 0.9]
+height = [96, 50]
+speed = [70, 40]
+y = [50, 82]
+bob = 2.5
+bank = 1.5
+climb = 10
+haze = 0.2
+bright = 0.95
+lights = [
+  { at = [0.595, 0.23], color = [1.0, 0.22, 0.18], radius = 3.5, blink = 1.8 },  # the beacon
+  { at = [0.83, 0.385], color = [1.0, 0.75, 0.4], radius = 2.5, gain = 0.5 },    # the lit cab
+  { at = [0.84, 0.56], color = [0.95, 0.95, 0.9], radius = 4, gain = 0.6 },      # the work floodlight
+  { at = [0.07, 0.35], color = [1.0, 1.0, 1.0], radius = 2.5, blink = "strobe", period = 1.9 },
+]
+[[actors.craft]]
+id = "spotter"               # a trawler's fish-spotter autogyro, its search lamp on the water
+sprite = "live/actors/craft-spotter.webp"
+faces = "left"
+weight = 2
+distance = [0.2, 0.9]
+height = [56, 28]
+speed = [90, 50]
+y = [48, 96]
+bob = 3
+bank = 3.0
+climb = 16
+haze = 0.1
+bright = 0.95
+lights = [
+  { at = [0.185, 0.69], color = [0.95, 0.97, 1.0], radius = 3.5, gain = 0.7 },   # the search lamp
+  { at = [0.27, 0.52], color = [1.0, 0.75, 0.4], radius = 2, gain = 0.4 },       # the cab
+  { at = [0.078, 0.81], color = [0.25, 1.0, 0.4], radius = 2.5, gain = 0.8 },
+  { at = [0.74, 0.03], color = [1.0, 0.25, 0.2], radius = 2.5, blink = 1.4 },     # the aerial's tip
+]
+[[actors.craft]]
+id = "petrel"                # Pip Arro's courier, in on a parts run
+sprite = "live/actors/craft-petrel.webp"
+weight = 2
+distance = [0.15, 0.9]
+height = [46, 22]
+speed = [170, 90]
+y = [40, 105]
+bob = 3
+bank = 3.0
+climb = 30
+haze = 0.1
+bright = 0.95
+lights = [
+  { at = [0.888, 0.203], color = [1.0, 0.2, 0.18], radius = 2.5, gain = 0.9 },
+  { at = [0.086, 0.776], color = [0.25, 1.0, 0.4], radius = 2.5, gain = 0.9 },
+  { at = [0.71, 0.42], color = [1.0, 0.7, 0.35], radius = 2, gain = 0.4 },
+  { at = [0.235, 0.03], color = [1.0, 1.0, 1.0], radius = 2, blink = "strobe", period = 1.3 },
+]
+trails = [{ at = [0.235, 0.82], color = [0.8, 0.84, 0.9], radius = 2, life = 2.0, every = 0.08, gain = 0.06 }]
+[[actors.craft]]
+id = "longhauler"            # a Drift long-hauler, high, far and slow
+sprite = "live/actors/craft-longhauler.webp"
+weight = 1
+distance = [0.4, 1.0]
+height = [64, 40]
+speed = [26, 16]
+y = [36, 72]
+bob = 0.8
+bank = 0.3
+climb = 8
+haze = 0.3
+bright = 0.85
+lights = [
+  { at = [0.025, 0.27], color = [0.6, 0.8, 1.0], radius = 3.5, gain = 0.6 },
+  { at = [0.02, 0.51], color = [0.6, 0.8, 1.0], radius = 3.5, gain = 0.6 },
+  { at = [0.05, 0.51], color = [0.6, 0.8, 1.0], radius = 3.5, gain = 0.6 },
+  { at = [0.025, 0.78], color = [0.6, 0.8, 1.0], radius = 3.5, gain = 0.6 },
+  { at = [0.97, 0.42], color = [1.0, 0.72, 0.35], radius = 2, gain = 0.5 },
+  { at = [0.834, 0.03], color = [1.0, 1.0, 1.0], radius = 2, blink = "strobe", period = 2.2 },
+  { at = [0.935, 0.3], color = [1.0, 0.25, 0.2], radius = 2.5, blink = 2.6 },
+]
+trails = [{ at = [0.0, 0.52], color = [0.55, 0.75, 1.0], radius = 5, life = 7, every = 0.3, gain = 0.07, spread = 3, sink = 1 }]

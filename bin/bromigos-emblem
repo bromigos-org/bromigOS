@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+# bromigos:summary=Build a theme's emblem kit (SVGs, PNGs, banner braille, lock layers)
+# bromigos:args=build --theme DIR
+"""bromigos-emblem (`bromigos emblem build --theme DIR`, package bromigos-core): draw a
+theme's emblem kit from DIR/emblem/emblem.toml into DIR/emblem/: the burn-in (the
+canonical identity and flame in /usr/share/bromigos/emblem) with that theme's motto,
+colours, tuning gap and the sigil's surroundings. A theme without overrides (the Wick)
+gets the canonical burn-in.
+
+Outputs in DIR/emblem/ (the live layer, the lock screen, the bar and the banner read them):
+  emblem.svg            the single source asset, text as outlines
+  emblem-ring.svg       ring only (lines, motto band, tuning gap) - rotate this
+  emblem-flame.svg      halo + flame only - this holds still
+  emblem-small.svg      < 64 px variant: dial scale all round, no text
+  emblem-{512,1024,2048}.png, emblem-void-{1024,2048}.png, emblem-glow-1024.png,
+  emblem-small-{32,48,64,128}.png, emblem-256.png (launcher header)
+  emblem.braille        the shell banner's emblem (24-bit colour braille)
+  lock/ring.png, lock/flame.png   gtklock's two still layers (it turns the ring in CSS)
+
+Needs inkscape (text to outlines), librsvg (rsvg-convert, Rsvg), python-cairo,
+python-gobject, python-pillow, and bromigos-live (the lock layers).
+"""
+import os
+import shutil
+import subprocess
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))   # a checkout, or /usr/lib/bromigos
+LIB = next(d for d in (os.path.join(ROOT, "lib"), "/usr/lib/bromigos/lib")
+           if os.path.isfile(os.path.join(d, "bromigos_emblem.py")))
+sys.path.insert(0, LIB)
+import bromigos_emblem as E  # noqa: E402
+# the live layer's lock-layer tool: a checkout's live/tools, else the package's
+LOCK_TOOL = next((p for p in (os.path.join(ROOT, "live", "tools", "lock-emblem.py"),
+                              "/usr/lib/bromigos/live/tools/lock-emblem.py") if os.path.isfile(p)), None)
+
+CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "bromigos")
+
+
+def outline(svg_text, out):
+    """Write svg_text to out with every <text> converted to paths (portable master)."""
+    tmp = os.path.join(CACHE, "_emblem-text.svg")
+    with open(tmp, "w") as f:
+        f.write(svg_text)
+    if shutil.which("inkscape"):
+        subprocess.run(["inkscape", tmp, "--export-text-to-path", "--export-plain-svg",
+                        f"--export-filename={out}"], check=True, capture_output=True)
+    else:
+        shutil.copy(tmp, out)
+
+
+def main(theme):
+    os.makedirs(CACHE, exist_ok=True)
+    spec = E.post_spec(theme)
+    if spec is None:
+        sys.exit(f"no {os.path.join(theme, 'emblem', 'emblem.toml')}")
+    b = os.path.join(theme, "emblem")
+    st = E.style(spec)
+    outline(E.svg(spec=spec), os.path.join(b, "emblem.svg"))
+    outline(E.svg(parts=("ring",), spec=spec), os.path.join(b, "emblem-ring.svg"))
+    outline(E.svg(parts=("halo", "flame"), spec=spec), os.path.join(b, "emblem-flame.svg"))
+    outline(E.svg(small=True, spec=spec), os.path.join(b, "emblem-small.svg"))
+    for s in (512, 1024, 2048):
+        E.render_png(E.svg(spec=spec), os.path.join(b, f"emblem-{s}.png"), s)
+    for s in (1024, 2048):
+        E.render_png(E.svg(background=st["void"], glow=True, spec=spec), os.path.join(b, f"emblem-void-{s}.png"), s)
+    for s in (32, 48, 64, 128):
+        E.render_png(E.svg(small=True, spec=spec), os.path.join(b, f"emblem-small-{s}.png"), s)
+    # Launcher header and notification icon sizes (text readable from 160 px up).
+    E.render_png(E.svg(spec=spec), os.path.join(b, "emblem-256.png"), 256)
+    # Lock screen hero: static, tuning gap at 12 o'clock (hyprlock cannot rotate an image smoothly).
+    E.render_png(E.svg(glow=True, spec=spec), os.path.join(b, "emblem-glow-1024.png"), 1024)
+    if True:
+        # the shell banner, in the post's own colours
+        # (the burn-in's own palette when the post keeps the burn-in's colours, as the Wick does)
+        cmd = [sys.executable, os.path.join(LIB, "emblem_braille.py"),
+               "--svg", os.path.join(b, "emblem-small.svg"), "--out", os.path.join(b, "emblem.braille")]
+        if set(spec.get("colors", {})) - {"void"}:
+            cmd += ["--palette", ",".join(dict.fromkeys(
+                c for c in (st["ring"], st.get("water", st["hairline"]),
+                            st.get("eyes") or st.get("choir") or st["ring"])))]
+        subprocess.run(cmd, check=True)
+        # gtklock's two still layers (it turns the ring in CSS), drawn by the live layer
+        if LOCK_TOOL is None:
+            sys.exit("the lock layers need bromigos-live (live/tools/lock-emblem.py)")
+        subprocess.run([sys.executable, LOCK_TOOL, "--layers", os.path.join(b, "lock"), "--kit", b], check=True)
+    print("emblem kit ->", b)
+
+
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    if a[:1] == ["emblem"]:                       # `bromigos emblem build …` passes its group
+        a = a[1:]
+    if len(a) != 3 or a[0] != "build" or a[1] != "--theme":
+        sys.exit(__doc__)
+    main(os.path.abspath(a[2]))

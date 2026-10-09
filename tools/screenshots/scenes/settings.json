@@ -1,0 +1,11 @@
+{
+  "_comment": "Under Settings (a floating window, centred): the panels on the left, no terminal.",
+  "panels": [
+    {"name": "system",  "x": 28, "y": 16},
+    {"name": "network", "x": 28, "y": 502},
+    {"name": "weather", "x": 28, "y": 780},
+    {"name": "storage", "x": 28, "y": 1096}
+  ],
+  "terminal": false,
+  "hyprland": "\nhl.window_rule({ match = { class = \"org.bromigos.Settings\" }, float = true })\nhl.window_rule({ match = { class = \"org.bromigos.Settings\" }, size = \"1560 1040\" })\nhl.window_rule({ match = { class = \"org.bromigos.Settings\" }, move = \"760 240\" })\n"
+}

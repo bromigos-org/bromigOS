@@ -1,0 +1,28 @@
+# bromigOS's idle policy, the packaged defaults (bromigos-core):
+# /usr/share/bromigos/default/idle.toml. Don't edit; updates replace it.
+# Yours is ~/.config/bromigos/idle.toml: any key there wins over the one here. Settings ›
+# Idle & lock and `bromigos idle set|preset` write it; `bromigos idle` renders the
+# hypridle config from the two (docs/idle.md).
+
+[screensaver]   # the live layer's scene, full screen; any input ends it
+enabled = true
+minutes = 8
+
+[lock]          # the lock screen (gtklock; hyprlock if it fails)
+enabled = true
+minutes = 10
+
+[displays]      # the screens go dark (DPMS); any input wakes them
+enabled = true
+minutes = 15
+
+[suspend]       # the machine sleeps (systemctl suspend)
+enabled = false
+minutes = 60
+
+[sleep]
+lock_before = true   # lock whenever the machine goes to sleep: a suspend, the lid, the power menu
+
+[activity]      # the worlds' keeper and creatures doze without input, and wake on the next
+enabled = true
+seconds = 90

@@ -1,0 +1,24 @@
+{
+ "rollbacks": [
+  {
+   "pre": 412,
+   "post": 413,
+   "at": "2026-10-08T21:14:03-07:00",
+   "what": "pacman -Syu: 23 packages"
+  }
+ ],
+ "snapshots": {
+  "boot_menu": true,
+  "boot_overlay": true,
+  "boot_separate": true,
+  "bootloader": "grub",
+  "btrfs": true,
+  "config": true,
+  "fs": "btrfs",
+  "offline": false,
+  "overlay_fixable": false,
+  "readable": true,
+  "snap_pac": true,
+  "snapper": true
+ }
+}

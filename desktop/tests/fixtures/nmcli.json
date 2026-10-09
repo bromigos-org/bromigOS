@@ -1,0 +1,36 @@
+{
+ "running": true,
+ "wifi_hw": "enabled",
+ "wifi": true,
+ "connectivity": "full",
+ "devices": [
+  {"name": "wlan0", "type": "wifi", "hwaddr": "3C:9C:0F:12:34:56"},
+  {"name": "enp5s0", "type": "ethernet", "hwaddr": "A8:A1:59:0B:22:01"},
+  {"name": "lo", "type": "loopback", "hwaddr": "00:00:00:00:00:00"},
+  {"name": "wg0", "type": "wireguard", "hwaddr": ""}
+ ],
+ "connections": [
+  {"name": "Greywater Light", "uuid": "6f1c3e7a-1b2d-4c5e-9f00-0a1b2c3d4e01", "type": "802-11-wireless",
+   "ssid": "Greywater Light", "psk": "lighthouse", "autoconnect": true, "active_on": "wlan0",
+   "ip4": "192.0.2.41/24", "gateway": "192.0.2.1", "dns": ["192.0.2.1", "1.1.1.1"]},
+  {"name": "Low Note Cafe", "uuid": "6f1c3e7a-1b2d-4c5e-9f00-0a1b2c3d4e02", "type": "802-11-wireless",
+   "ssid": "Low Note Cafe", "psk": "", "autoconnect": false, "active_on": ""},
+  {"name": "Wired connection 1", "uuid": "6f1c3e7a-1b2d-4c5e-9f00-0a1b2c3d4e03", "type": "802-3-ethernet",
+   "autoconnect": true, "active_on": "enp5s0", "ip4": "198.51.100.12/24", "gateway": "198.51.100.1", "dns": ["198.51.100.1"]},
+  {"name": "office", "uuid": "6f1c3e7a-1b2d-4c5e-9f00-0a1b2c3d4e04", "type": "vpn", "autoconnect": false, "active_on": ""},
+  {"name": "wg-station-nine", "uuid": "6f1c3e7a-1b2d-4c5e-9f00-0a1b2c3d4e05", "type": "wireguard", "autoconnect": false,
+   "active_on": ""},
+  {"name": "lo", "uuid": "6f1c3e7a-1b2d-4c5e-9f00-0a1b2c3d4e06", "type": "loopback", "autoconnect": true, "active_on": "lo"}
+ ],
+ "aps": [
+  {"ssid": "Greywater Light", "bssid": "A0:63:91:5E:11:20", "signal": 82, "security": "WPA2", "chan": 36},
+  {"ssid": "Greywater Light", "bssid": "A0:63:91:5E:11:21", "signal": 54, "security": "WPA2", "chan": 6},
+  {"ssid": "Low Note Cafe", "bssid": "F4:92:BF:00:7A:10", "signal": 61, "security": "", "chan": 11},
+  {"ssid": "Station:Nine", "bssid": "D8:07:B6:42:90:0C", "signal": 47, "security": "WPA2 WPA3", "chan": 149},
+  {"ssid": "Debtor's Wake", "bssid": "70:4F:57:12:00:EE", "signal": 23, "security": "WPA3", "chan": 1},
+  {"ssid": "Kite Works", "bssid": "70:4F:57:12:00:EF", "signal": 30, "security": "WPA2 802.1X", "chan": 44},
+  {"ssid": "", "bssid": "70:4F:57:12:00:F0", "signal": 15, "security": "WPA2", "chan": 44}
+ ],
+ "passwords": {"Station:Nine": "aurora-dish", "Debtor's Wake": "red-sky"},
+ "next_uuid": 7
+}

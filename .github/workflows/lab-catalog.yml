@@ -1,0 +1,121 @@
+# The lab model catalog's weekly refresh (docs/lab-models.md, "Staying current").
+#
+# Reads Hugging Face through huggingface_hub (anonymously; HF_TOKEN only raises rate limits)
+# for metadata of the catalog's models (parameter counts, licences, dates), new quantisations of
+# its picks by the usual publishers, newer members of its families and new trending models per
+# capability, each with whether bromigOS's runtimes can run it. It writes metadata and
+# `[[pending]]` review entries into homelab/share/lab/models.toml and opens a pull request with
+# the evidence report. Picks and rankings never change here.
+#
+# The proposal never changes picks, so after the catalog tests pass on it this workflow merges
+# it itself (the repository is private: no branch-protection auto-merge), then dispatches the
+# packages workflow (a merge made with GITHUB_TOKEN triggers no workflow on its own), which
+# publishes bromigos-lab-catalog and the signed models.toml. Pending review entries are listed
+# in the pull request and by `bromigos lab models refresh`. Where the organisation doesn't let
+# Actions open pull requests (Settings › Actions › General: "Allow GitHub Actions to create and
+# approve pull requests"), the tested change is committed to main and the report filed as an
+# issue labelled lab-catalog instead.
+name: lab-catalog
+
+on:
+  schedule:
+    - cron: "17 13 * * 1"          # Mondays 13:17 UTC (06:17 Pacific)
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "How far back new models count (days)"
+        default: "60"
+      merge:
+        description: "Merge the proposal when its tests pass"
+        type: boolean
+        default: true
+
+concurrency:
+  group: lab-catalog
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+jobs:
+  refresh:
+    name: Refresh the lab model catalog
+    runs-on: ${{ vars.CI_RUNNER_PACKAGES || 'ubuntu-latest' }}
+    container:
+      image: archlinux:base
+    timeout-minutes: 45
+    steps:
+      - name: Tools
+        run: pacman -Syu --noconfirm --needed git github-cli python python-huggingface-hub python-tomlkit >/dev/null
+
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Propose
+        id: propose
+        env:
+          # optional: higher rate limits; never printed (the library sends it as a header)
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          BROMIGOS_HOMELAB_CONFIG: /nonexistent
+          PYTHONPATH: homelab/lib
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python -m bromigos_homelab.catalog_refresh propose \
+            --catalog homelab/share/lab/models.toml --report /tmp/report.md \
+            --since "${{ inputs.since || '60' }}" > /tmp/propose.json
+          cat /tmp/propose.json
+          echo "changed=$(python -c 'import json;print(str(json.load(open("/tmp/propose.json"))["changed"]).lower())')" >> "$GITHUB_OUTPUT"
+          echo "review=$(python -c 'import json;print(str(json.load(open("/tmp/propose.json"))["review"]).lower())')" >> "$GITHUB_OUTPUT"
+
+      - name: Test the proposal
+        if: steps.propose.outputs.changed == 'true'
+        env:
+          BROMIGOS_HOMELAB_CONFIG: /nonexistent
+          BROMIGOS_LAB_BENCH_LEDGER: /nonexistent
+          BROMIGOS_LAB_SETTINGS: /nonexistent
+          PYTHONPATH: lib
+        working-directory: homelab
+        run: |
+          python -m bromigos_homelab.catalog check --catalog share/lab/models.toml
+          python -m unittest tests.test_lab_catalog
+
+      - name: Pull request, or a commit and an issue
+        if: steps.propose.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE: ${{ (github.event_name == 'schedule' || inputs.merge) && 'yes' || 'no' }}
+        run: |
+          day=$(date -u +%Y-%m-%d)
+          branch="lab-catalog/refresh-$day"
+          git config user.name "bromigOS lab catalog"
+          git config user.email "packages@bromigos.org"
+          gh label create lab-catalog --color 5319e7 --description "Lab model catalog refresh" 2>/dev/null || true
+          gh label create pending-review --color fbca04 --description "Catalog candidates to research" 2>/dev/null || true
+          labels="lab-catalog"
+          if [ "${{ steps.propose.outputs.review }}" = "true" ]; then labels="$labels,pending-review"; fi
+          git switch -c "$branch"
+          git add homelab/share/lab/models.toml
+          git commit -q -m "lab catalog: weekly refresh $day (metadata and pending review entries)" \
+            -m "Proposed by .github/workflows/lab-catalog.yml; picks and rankings unchanged."
+          git push -q -f origin "$branch"
+          if url=$(gh pr create --base main --head "$branch" --title "Lab catalog: weekly refresh $day" \
+                     --body-file /tmp/report.md --label "$labels" 2>/tmp/pr.err); then
+            echo "pull request: $url"
+            if [ "$MERGE" = yes ]; then gh pr merge "$url" --squash --delete-branch; fi
+          else
+            # the organisation doesn't let Actions open pull requests: the same change, tested,
+            # straight to main (a refresh never changes picks), and the report as an issue
+            echo "no pull request ($(tail -1 /tmp/pr.err)); committing to main and filing the report as an issue"
+            if [ "$MERGE" = yes ]; then
+              git fetch -q origin main
+              git rebase -q origin/main
+              git push -q origin "HEAD:main"
+            fi
+            git push -q origin --delete "$branch" || true
+            gh issue create --title "Lab catalog: weekly refresh $day" --body-file /tmp/report.md --label "$labels"
+          fi
+          if [ "$MERGE" = yes ]; then gh workflow run packages.yml -f only=bromigos-lab-catalog; fi

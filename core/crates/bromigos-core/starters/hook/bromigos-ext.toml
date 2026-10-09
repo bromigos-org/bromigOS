@@ -1,0 +1,22 @@
+# __TITLE__: a theme-set hook (made by `bromigos ext new hook`; docs/extensions.md,
+# docs/theming.md "Hooks"). It runs after every `bromigos theme set`.
+[extension]
+name = "__NAME__"
+version = "0.1.0"
+description = "A theme-set hook: writes the theme's name and accent where a script can read them."
+authors = []
+licence = "MIT"
+tags = ["hook", "theme"]
+
+[requires]
+bromigos = ">=1.0, <2"
+
+[[provides]]
+kind = "hook"
+path = "theme-set"
+event = "theme-set"
+
+[permissions]
+network = "none"
+filesystem = ["~/.local/state/bromigos-ext/__NAME__/"]
+code = true

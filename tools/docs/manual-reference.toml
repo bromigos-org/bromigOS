@@ -1,0 +1,260 @@
+# The manual's Keys and Commands pages, in plain words (tools/docs/generate.py reads this).
+#
+# The code says WHICH keys and commands exist; this file says how the manual groups them by
+# task and explains each one to someone who just installed bromigOS. The generator matches
+# each row to the code:
+#
+#   keys      `match` is the SHORTCUTS panel's description of the bind (widgets/keybinds.py:
+#             EXEC and DISPATCH), without any "(also …)" it adds for a second key.
+#   commands  `route` is the command after `bromigos` ("theme", "setup input").
+#
+# A key or command the code has and this file doesn't is still listed, under "Other keys" or
+# "Other commands", with the code's own description; a row here that the code no longer has
+# is left out. So adding a key or a command never breaks the docs check, but it reads best
+# with a row here. British spelling; one short sentence or two per row.
+
+# ------------------------------------------------------------------ keys
+
+[[keys]]
+title = "Open things"
+intro = "The keys you'll use most. Learn the first one and you can find everything else."
+rows = [
+  { match = "Desktop menu: launch, install, setup, style, update, toggles (typing searches everything)", text = "Open the [menu](menu.md). Type to find any app or command, or to open Settings." },
+  { match = "Launcher", text = "Open the app launcher." },
+  { match = "Terminal", text = "Open a terminal." },
+  { match = "Files", text = "Open the file manager." },
+  { match = "Window switcher", text = "Pick an open window from a list and switch to it." },
+  { match = "Settings: idle and lock, theme, shortcuts, updates", text = "Open [Settings](settings.md)." },
+  { match = "Theme switcher (previews)", text = "Open the [theme switcher](themes-and-worlds.md), with a preview of each theme." },
+  { match = "Next wallpaper", text = "Show the next den wallpaper. This only changes something when you have more than one." },
+  { match = "Radial quick-launch", text = "Open the quick-launch ring: a terminal, a browser, and the FIELD NOTES panel, ready to type in." },
+]
+
+[[keys]]
+title = "Talk to VECTOR"
+intro = "These need [VECTOR](vector.md), which a full install includes."
+rows = [
+  { match = "VECTOR: show / minimize", text = "Show VECTOR and type to him. Press again to put him away." },
+  { match = "VECTOR: conversation mode on/off (hands-free)", text = "Turn conversation mode on or off. In conversation mode you speak and he answers, hands-free." },
+  { match = "VECTOR: hold to talk", text = "Hold to talk to VECTOR. He listens while you hold the keys." },
+  { match = "VECTOR: chat box shown/hidden (or click him; folded away until you point at him)", text = "Keep VECTOR's chat box open, or let it fold away again. Clicking him does the same." },
+  { match = "VECTOR: voice on/off", text = "Mute or unmute VECTOR's voice." },
+  { match = "VECTOR: cycle voices (auto, then each voice)", text = "Change VECTOR's voice." },
+  { match = "VECTOR: emergency switch (off at once; on asks first)", text = "VECTOR's [emergency switch](vector.md#the-emergency-switch). Press it to stop his commands, his answer and his speech at once. Press it again, and choose YES, to switch him back on." },
+]
+
+[[keys]]
+title = "Windows"
+intro = "Window keys use **Alt**, as do everyday keys such as the launcher, the terminal and screenshots, unless you chose another main key ([Your own shortcuts](shortcuts.md#use-super-for-the-window-keys)). Windows tile: the first window takes the large space on the left, and each new one goes to the top of the stack on the right."
+rows = [
+  { match = "Close window", text = "Close the window." },
+  { match = "Maximize", text = "Make the window fill the screen, keeping the bar. Press again to undo." },
+  { match = "Fullscreen", text = "Make the window fullscreen, over the bar. Press again to undo." },
+  { match = "Float / tile window", text = "Let the window float freely, or put it back in the tiles." },
+  { match = "Swap with master", text = "Swap the window with the large one on the left." },
+  { match = "Next window", text = "Move to the next window." },
+  { match = "Previous window", text = "Move to the previous window." },
+  { match = "Focus left", text = "Move to the window on the left." },
+  { match = "Focus right", text = "Move to the window on the right." },
+  { match = "Move window left", text = "Move the window left." },
+  { match = "Move window right", text = "Move the window right." },
+  { match = "Move window up", text = "Move the window up." },
+  { match = "Move window down", text = "Move the window down." },
+  { match = "Move split left", text = "Move the edge between the large window and the stack to the left." },
+  { match = "Move split right", text = "Move the edge between the large window and the stack to the right." },
+  { match = "Move window", text = "Hold, then drag a window with the left mouse button to move it." },
+  { match = "Resize window", text = "Hold, then drag a window with the right mouse button to resize it." },
+  { match = "Show / hide bar", text = "Hide the bar, or show it again." },
+]
+
+[[keys]]
+title = "Workspaces"
+intro = "A workspace is a separate screenful of windows. There are ten, on the number keys."
+rows = [
+  { match = "Go to workspace", text = "Go to workspace 1 to 10. The 0 key is workspace 10." },
+  { match = "Move window to workspace", text = "Send the window to another workspace. You stay where you are." },
+  { match = "Scratchpad", text = "Show or hide the scratchpad, a hidden workspace that opens over the one you're on." },
+  { match = "Send window to scratchpad", text = "Put the window on the scratchpad." },
+]
+
+[[keys]]
+title = "Panels and notes"
+intro = "The [panels](panels.md) are the readouts on the desktop, under your windows."
+rows = [
+  { match = "All desktop panels", text = "Show or hide all the panels." },
+  { match = "System panel", text = "Show or hide the SYSTEM panel: processor, memory, graphics card." },
+  { match = "Network panel", text = "Show or hide the NETWORK panel." },
+  { match = "Storage panel", text = "Show or hide the STORAGE panel: how full your disks are." },
+  { match = "Workbench panel", text = "Show or hide the WORKBENCH panel: the folders and projects you use most." },
+  { match = "Notes panel", text = "Show or hide the FIELD NOTES panel." },
+  { match = "This shortcuts panel", text = "Show or hide the SHORTCUTS panel, which lists every key. It's on at login, under your windows." },
+  { match = "Search shortcuts (Enter runs)", text = "Search the keys by name. Press Enter to run the one you pick." },
+  { match = "Type in field notes", text = "Type in the FIELD NOTES panel. Press Esc when you're done." },
+  { match = "Quick note from anywhere", text = "Add one line to your field notes without leaving what you're doing." },
+]
+
+[[keys]]
+title = "Holograms"
+intro = "[Holograms](holograms.md) open over your windows. Each key opens one, and the same key closes it. Esc closes any of them."
+rows = [
+  { match = "Holo deck (this machine)", text = "The holo deck: this machine's readings and its 3D model." },
+  { match = "Lab deck: the homelab console (the rack, GPUs, jobs)", text = "The lab deck: [your homelab](homelab.md) as a server rack, lit by its readings." },
+  { match = "3D model gallery", text = "The hologram gallery: every 3D model, VECTOR's and each world's." },
+  { match = "Timeline (scrub the last 72 h)", text = "The timeline: the last 72 hours of readings, to scroll back through." },
+  { match = "Drift map (lore star chart)", text = "The Drift map: a star chart of the bromigOS story's places." },
+  { match = "Swarm: repos and agent starships", text = "The Swarm: your code repositories as planets, and your coding agents as ships." },
+]
+
+[[keys]]
+title = "The background and sound"
+intro = "The [live layer](glossary.md#live-layer) draws the animated background."
+rows = [
+  { match = "Live background on/off", text = "Turn the animated background off, or on again." },
+  { match = "Mute everything: the theme's sounds and VECTOR's voice", text = "Mute or unmute the desktop's own sound: the theme's sounds and VECTOR's voice. Your apps keep their sound." },
+  { match = "Live layer sounds on/off", text = "Turn the theme's sounds off, or on again." },
+  { match = "Codec calls: voice on/off", text = "Turn the spoken part of [codec calls](glossary.md#codec-call) off, or on again. The calls still show." },
+  { match = "Scanner: pin hardware schematic", text = "Pin a drawing of this machine's hardware to the background, with live readings. Press again to remove it." },
+  { match = "Scanner: hold to scan", text = "Hold to show the hardware drawing. Let go to hide it." },
+]
+
+[[keys]]
+title = "Screenshots and recording"
+intro = "Screenshots are saved to `~/Pictures/screenshots` and copied to the clipboard. Recordings go to `~/Videos/recordings`."
+rows = [
+  { match = "Screenshot a region", text = "Drag out an area and take a screenshot of it." },
+  { match = "Screenshot the screen", text = "Take a screenshot of the monitor you're on." },
+  { match = "Record a region (again to stop)", text = "Drag out an area and start recording it. Press again to stop." },
+]
+
+[[keys]]
+title = "Volume, brightness and media"
+intro = "Your keyboard's own media keys. Each change shows on screen for a moment."
+rows = [
+  { match = "Volume up", text = "Turn the volume up." },
+  { match = "Volume down", text = "Turn the volume down." },
+  { match = "Mute", text = "Mute or unmute the speakers." },
+  { match = "Mic mute", text = "Mute or unmute the microphone." },
+  { match = "Brightness up", text = "Make the screen brighter." },
+  { match = "Brightness down", text = "Make the screen dimmer." },
+  { match = "Play / pause", text = "Play or pause music and video." },
+  { match = "Previous track", text = "Go to the previous track." },
+  { match = "Next track", text = "Go to the next track." },
+]
+
+[[keys]]
+title = "Lock, sleep and quit"
+rows = [
+  { match = "Lock", text = "Lock the screen. Your password opens it again." },
+  { match = "Power menu", text = "Open the power menu: lock, suspend, log out, restart or shut down." },
+  { match = "Suspend", text = "Put the machine to sleep. This key runs `sudo`, so it only works if sudo doesn't ask for your password. Suspend in the power menu always works." },
+  { match = "Quit Hyprland", text = "Log out at once. Save your work first: open windows close without asking." },
+]
+
+# ------------------------------------------------------------------ commands
+
+[[commands]]
+title = "Set up and change settings"
+rows = [
+  { route = "settings", text = "Open [Settings](settings.md). `bromigos settings sound` opens one page; `--search wifi` finds a setting." },
+  { route = "setup", text = "Ask the [first-run questions](first-run.md) again, all of them or one section: `bromigos setup voice`." },
+  { route = "setup input", text = "Set the keyboard layout, key repeat, the mouse and the touchpad." },
+  { route = "setup keybindings", text = "List every key in a menu, and run the one you pick." },
+  { route = "setup config", text = "Open one of your config files in your editor. When you close the Hyprland file, it's checked and reloaded safely." },
+  { route = "keys", text = "Make [your own shortcuts](shortcuts.md): press new keys for anything." },
+  { route = "display", text = "Change your monitors' resolution, refresh rate, scale and layout." },
+  { route = "sound", text = "Choose speakers and microphone, and set volumes." },
+  { route = "net", text = "Turn Wi-Fi on or off, join a network, or connect a VPN." },
+  { route = "bluetooth", text = "Turn Bluetooth on or off, and pair or connect devices." },
+  { route = "power", text = "Choose a power profile, see batteries, and set what closing the lid does." },
+  { route = "clock", text = "Set the time zone and how the bar's clock looks." },
+  { route = "notifications", text = "Turn on do not disturb, and choose where notifications appear and how long they stay." },
+  { route = "defaults", text = "Choose the apps that open links, files, pictures and the rest." },
+  { route = "startup", text = "Choose what starts when you log in." },
+  { route = "idle", text = "Choose what happens when you leave the computer: the [screensaver, the lock and sleep](idle.md)." },
+  { route = "lock", text = "Lock the screen now." },
+  { route = "windows", text = "See or forget where your floating windows go back to." },
+  { route = "profile", text = "Set your name, and what VECTOR calls you." },
+  { route = "avatar", text = "Set your picture, saved as `~/.face`. Settings › Account shows it." },
+  { route = "private", text = "Edit the private overlay: settings you keep encrypted in your dotfiles. Needs the `sops` and `age` packages." },
+  { route = "hw", text = "See what [hardware](hardware.md) bromigOS found, and set up its drivers: `bromigos hw setup`." },
+  { route = "peripheral", text = "Turn on extra features for a [keyboard](peripherals.md), such as a Razer keyboard's macro keys." },
+]
+
+[[commands]]
+title = "Change the look"
+rows = [
+  { route = "theme", text = "List the [themes](themes-and-worlds.md), or switch: `bromigos theme set mire`." },
+  { route = "theme switcher", text = "Open the theme switcher, with a preview of each theme." },
+  { route = "theme previews", text = "Draw the theme switcher's previews again." },
+  { route = "wallpaper", text = "Switch between the den wallpapers you have." },
+  { route = "accessibility", text = "Reduce motion or raise contrast. See [Accessibility](accessibility.md)." },
+  { route = "anim", text = "List the background's animations, and turn each one on or off." },
+  { route = "scene", text = "Change the background's other settings: the world, the screensaver, the sound volume." },
+  { route = "live", text = "Turn the animated background on or off, or open a [hologram](holograms.md): `bromigos live timeline`." },
+  { route = "panels", text = "Show, hide or move the desktop [panels](panels.md), and set the weather's place." },
+  { route = "widgets", text = "Show or hide one panel or all of them." },
+  { route = "mute", text = "Mute or unmute the theme's sounds and VECTOR's voice together." },
+  { route = "boot", text = "Turn the themed [boot menu](boot-menu.md) on or off." },
+  { route = "emblem", text = "Draw a theme's emblem pictures. For people making themes." },
+]
+
+[[commands]]
+title = "VECTOR and AI"
+rows = [
+  { route = "vector", text = "Talk to [VECTOR](vector.md) and control him: `bromigos vector ask \"…\"`, `bromigos vector status`, and his emergency switch, `bromigos vector off` and `on`." },
+  { route = "memory", text = "See, export or clear what VECTOR remembers." },
+  { route = "target", text = "Choose [where AI work runs](where-ai-runs.md): your homelab, this machine or the cloud." },
+  { route = "art", text = "Make a world's artwork, on your homelab's ComfyUI or through nolgia, which costs money. `plan` prices it first. For people making worlds." },
+]
+
+[[commands]]
+title = "Your homelab"
+rows = [
+  { route = "setup homelab", text = "Find [your homelab](homelab.md)'s services and connect them." },
+  { route = "homelab", text = "See what's connected from your homelab, and what doesn't answer." },
+  { route = "lab", text = "Open [the lab console](lab.md): your homelab's status, its GPUs, and jobs to run on them." },
+]
+
+[[commands]]
+title = "Apps, extensions and the menu"
+rows = [
+  { route = "menu", text = "Open the [menu](menu.md). `--dump` prints everything in it." },
+  { route = "webapp", text = "Keep a website as an app of its own: [web apps](webapps.md)." },
+  { route = "apps setup", text = "Put the [app bundle](apps.md)'s settings in place." },
+  { route = "ext", text = "Find, install, update and remove [extensions](extensions.md)." },
+  { route = "extensions", text = "Open the extensions window: what you have, and what you can add." },
+  { route = "install extension", text = "Install an extension. The same as `bromigos ext install`." },
+  { route = "remove extension", text = "Remove an extension. The same as `bromigos ext remove`." },
+  { route = "commands", text = "List every `bromigos` command on this machine, your own included." },
+]
+
+[[commands]]
+title = "Install, update and recover"
+rows = [
+  { route = "install", text = "[Install](install.md) bromigOS on an Arch Linux system. `install.sh` runs this for you." },
+  { route = "update", text = "[Update](update-and-rollback.md) everything. `--check` says what it would do; `--rollback` undoes the last update." },
+  { route = "whats-new", text = "Read [what's new](whats-new.md) in this release, offline. `--all` shows every release." },
+  { route = "channel", text = "See or change the [update channel](update-and-rollback.md#channels) you follow." },
+  { route = "rollback", text = "See whether updates can be undone on this machine, and set that up." },
+  { route = "aur", text = "See which [AUR](apps.md#install-an-app-from-the-aur) packages have updates waiting. `bromigos aur off` leaves the AUR out of updates and removes bromigOS's paru; `on` brings it back." },
+  { route = "restart", text = "Restart the parts of the desktop that still run old code after an update." },
+  { route = "status", text = "Check that the background, VECTOR and the session are running." },
+  { route = "about", text = "Show the version, the update channel, this machine's hardware and bromigOS's packages." },
+]
+
+[[commands]]
+title = "Screenshots and recordings"
+rows = [
+  { route = "shot", text = "Take a screenshot: `bromigos shot region` or `bromigos shot screen`." },
+  { route = "rec", text = "Start or stop a screen recording." },
+]
+
+[[commands]]
+title = "Used by the desktop itself"
+intro = "The desktop runs these for you. You don't need them day to day."
+rows = [
+  { route = "session", text = "Connects programs to the running desktop session." },
+  { route = "lock-run", text = "Starts the lock screen, and keeps the screen locked if the lock screen crashes." },
+  { route = "banner", text = "Prints the login banner in a terminal." },
+  { route = "secrets", text = "Refreshes the desktop's secret files from Vault, if you keep secrets there." },
+]

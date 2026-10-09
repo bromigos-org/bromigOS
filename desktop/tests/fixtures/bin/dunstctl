@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+"""A stand-in dunstctl (tests, offscreen renders): dunst as fixtures/dunstctl.json says
+(paused or not, what's waiting, the history), changed by what it's asked; `reload` counts."""
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
+import fixture as F  # noqa: E402
+
+a = sys.argv[1:]
+F.log("dunstctl", a)
+st = F.load("dunstctl")
+if not st.get("running", True):
+    F.die("Failed to contact dunst: is it running?")
+cmd = a[0] if a else ""
+if cmd == "is-paused":
+    print("true" if st["paused"] else "false")
+elif cmd == "set-paused":
+    st["paused"] = (not st["paused"]) if a[1] == "toggle" else a[1] == "true"
+elif cmd == "count":
+    print({"waiting": st["waiting"], "displayed": st["displayed"], "history": len(st["history"])}[a[1]])
+elif cmd == "history":
+    print(json.dumps({"type": "aa{sv}", "data": [st["history"]]}))
+elif cmd == "history-clear":
+    st["history"] = []
+elif cmd == "reload":
+    st["reloads"] = st.get("reloads", 0) + 1
+else:
+    F.die(f"dunstctl stand-in: {cmd} isn't pretended")
+F.save("dunstctl", st)

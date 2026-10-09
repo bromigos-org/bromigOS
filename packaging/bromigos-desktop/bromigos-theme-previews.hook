@@ -1,0 +1,16 @@
+# bromigOS: a theme, a template, the bar's style or the preview renderer changed, so the
+# theme switcher's previews that are now out of date are drawn again, offscreen and in the
+# background, for each signed-in user (docs/theming.md, "The previews").
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/share/bromigos/themes/*
+Target = usr/share/bromigos/theme/templates/*
+Target = usr/share/bromigos/default/waybar/*
+Target = usr/lib/bromigos/lib/bromigos_previews.py
+
+[Action]
+Description = Drawing the theme switcher's previews again (in the background)...
+When = PostTransaction
+Exec = /usr/lib/bromigos/desktop/theme-previews-hook

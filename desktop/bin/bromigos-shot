@@ -1,0 +1,48 @@
+#!/bin/sh
+# bromigos:summary=Screenshot to ~/Pictures/screenshots and the clipboard
+# bromigos:args=[region|screen]
+# bromigos-shot [region|screen]
+# Screenshot: saved to ~/Pictures/screenshots, copied to the clipboard, a short
+# Bromigos cue (the live layer's blip, honouring its mute), and a notification
+# with the shot as its icon. Click the notification to annotate it in swappy.
+set -u
+DIR="$HOME/Pictures/screenshots"
+SOUND=/usr/lib/bromigos/live/sounds/blip.wav   # bromigos-live
+MUTED="${XDG_STATE_HOME:-$HOME/.local/state}/bromigos-live/muted"
+HYPRCTL=/usr/bin/hyprctl
+mkdir -p "$DIR"
+f="$DIR/screenshot-$(date +%Y%m%d-%H%M%S).png"
+
+case "${1:-region}" in
+    region)
+        # the selection in the theme's colours (palette.json from `bromigos theme set`)
+        pal="${XDG_STATE_HOME:-$HOME/.local/state}/bromigos/theme/current/palette.json"
+        P=$(jq -r '.colors.primary // empty' "$pal" 2>/dev/null); P=${P:-#39ff14}
+        V=$(jq -r '.colors.void // empty' "$pal" 2>/dev/null); V=${V:-#000500}
+        g=$(slurp -d -b "${V}66" -c "$P" -s "${P}14" -w 1) || exit 0
+        grim -g "$g" "$f" ;;
+    screen)
+        mon=$($HYPRCTL monitors -j | jq -r '.[] | select(.focused) | .name')
+        grim -o "$mon" "$f" ;;
+    *) echo "usage: bromigos-shot [region|screen]" >&2; exit 2 ;;
+esac
+[ -s "$f" ] || exit 1
+
+wl-copy --type image/png < "$f"
+if [ -r "$SOUND" ] && [ ! -e "$MUTED" ] && command -v pw-play >/dev/null; then
+    pw-play --volume=0.30 --media-role=Notification "$SOUND" >/dev/null 2>&1 &
+fi
+
+size=$(magick identify -format '%wx%h' "$f" 2>/dev/null || echo "")
+bytes=$(stat -c %s "$f")
+if [ "$bytes" -ge 1048576 ]; then weight="$(( bytes / 1048576 )).$(( bytes % 1048576 * 10 / 1048576 )) MB"
+else weight="$(( bytes / 1024 )) KB"; fi
+(
+    act=$(dunstify -a SCREENSHOT -h string:category:capture.done -I "$f" \
+        -A default,annotate -A open,"open folder" \
+        "Saved and copied" "$(printf '%s\n%s' "$(basename "$f")" "$size · $weight · click to annotate")")
+    case "$act" in
+        default) swappy -f "$f" ;;
+        open) xdg-open "$DIR" ;;
+    esac
+) >/dev/null 2>&1 &

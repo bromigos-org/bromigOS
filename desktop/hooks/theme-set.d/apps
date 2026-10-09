@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# theme-set hook (bromigos-desktop): the apps the theme reaches past the desktop pick the
+# new colours up. `bromigos theme set` renders btop.theme, tmux.conf, nvim.lua,
+# chromium.theme and userChrome.css into the current theme (docs/theming.md, "Templates");
+# this makes the running apps read them. Every step is skipped where its app isn't there.
+#
+#   btop      ~/.config/btop/themes/bromigos.theme -> the rendered theme (btop.conf:
+#             color_theme = "bromigos"; btop reads it when it starts)
+#   tmux      a running server re-sources the rendered colours
+#   neovim    nothing to do: bromigos-apps' colors/bromigos.lua watches the file
+#   Chromium  a running Chromium/Chrome takes the frame colour (--set-theme-color,
+#             the way Omarchy's theme switch does it); when none runs, the next
+#             `bromigos theme set` with it open will
+#   LibreWolf a profile that has a chrome/ folder gets chrome/userChrome.css linked to
+#   Firefox   the rendered one (only where that file is absent or already our link);
+#             it's read when the browser starts
+set -eu
+name=${1:-${BROMIGOS_THEME:-wick}}
+dir=${BROMIGOS_THEME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/bromigos/theme/current}
+cfg=${XDG_CONFIG_HOME:-$HOME/.config}
+
+# btop
+if [ -f "$dir/btop.theme" ]; then
+    mkdir -p "$cfg/btop/themes"
+    ln -sfn "$dir/btop.theme" "$cfg/btop/themes/bromigos.theme"
+fi
+
+# tmux: only a server that's already running (never start one)
+if [ -f "$dir/tmux.conf" ] && command -v tmux >/dev/null && tmux list-sessions >/dev/null 2>&1; then
+    tmux source-file "$dir/tmux.conf" 2>/dev/null || true
+    tmux refresh-client -S 2>/dev/null || true
+fi
+
+# Chromium / Chrome: the frame colour, for a browser that's running
+if [ -f "$dir/chromium.theme" ]; then
+    color=$(tr -d '[:space:]' <"$dir/chromium.theme")
+    for b in chromium google-chrome-stable google-chrome brave; do
+        command -v "$b" >/dev/null || continue
+        pgrep -x "${b%%-*}" >/dev/null 2>&1 || pgrep -x "$b" >/dev/null 2>&1 || continue
+        "$b" --no-startup-window --set-theme-color="$color" >/dev/null 2>&1 &
+        disown || true
+        break
+    done
+fi
+
+# LibreWolf / Firefox: link userChrome.css into profiles that opted in (a chrome/ folder)
+if [ -f "$dir/userChrome.css" ]; then
+    for root in "$HOME/.librewolf" "$HOME/.mozilla/firefox" "$cfg/librewolf"; do
+        [ -d "$root" ] || continue
+        for prof in "$root"/*/; do
+            [ -f "$prof/prefs.js" ] && [ -d "$prof/chrome" ] || continue
+            target="$prof/chrome/userChrome.css"
+            if [ ! -e "$target" ] || { [ -L "$target" ] && case "$(readlink "$target")" in */bromigos/theme/current/userChrome.css) true ;; *) false ;; esac; }; then
+                ln -sfn "$dir/userChrome.css" "$target"
+            fi
+        done
+    done
+fi
+exit 0

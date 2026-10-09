@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Thunderbird
+Exec=thunderbird %u
+Icon=thunderbird
+Categories=Network;Email;
+MimeType=x-scheme-handler/mailto;message/rfc822;

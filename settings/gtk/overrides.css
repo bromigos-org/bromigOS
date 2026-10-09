@@ -1,0 +1,23 @@
+/* Bromigos house touches on top of the generated theme (GTK3 and GTK4 alike,
+   so only selectors both understand). Readability first: body text stays at
+   the theme's light green on near-black; phosphor marks state, not prose. */
+
+/* A phosphor rule under title bars, like the desktop panels. */
+headerbar, .titlebar { border-bottom: 1px solid #159b09; box-shadow: none; }
+
+/* Live readouts in full phosphor: volume meters (pavucontrol), progress, sliders. */
+levelbar trough block.filled { background-color: #39ff14; border-color: #39ff14; }
+levelbar trough block.filled.low { background-color: #d4af37; border-color: #d4af37; }
+progressbar trough progress { background-color: #39ff14; border-color: #39ff14; }
+scale trough highlight { background-color: #39ff14; border-color: #39ff14; }
+
+/* Switches read as on at a glance. */
+switch:checked { background-color: #159b09; border-color: #39ff14; }
+
+/* Tooltips match the desktop hover hints. */
+tooltip.background { background-color: #001300; border: 1px solid #159b09; border-radius: 0; }
+tooltip label { color: #c4f5bb; }
+
+/* Links: cyan from the terminal palette, so they stand out from green text. */
+link, *:link, button.link > label { color: #3fe0c5; }
+*:visited { color: #8af5e2; }

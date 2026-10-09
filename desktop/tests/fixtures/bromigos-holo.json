@@ -1,0 +1,8 @@
+{
+ "running": false,
+ "muted": false,
+ "voice_mode": "auto",
+ "conversation": false,
+ "shell": "on",
+ "model": "qwen3-32b"
+}

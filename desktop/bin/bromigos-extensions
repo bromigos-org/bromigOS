@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+# bromigos:summary=Extensions in a window: what's installed and the catalog, with previews; pick one to install, update, turn off or remove
+# bromigos:args=[--list [--json]]
+# bromigos:examples=bromigos extensions; bromigos extensions --list
+"""bromigos-extensions: the extensions window (the app launcher's Extensions entry, the
+menu's INSTALL › Extension catalog…; docs/extensions.md).
+
+One searchable list (rofi, in the theme's colours): the extensions installed, with their
+state, then the catalogs' extensions that aren't, each with its preview. Choosing one offers
+what can be done with it, and each choice runs `bromigos ext …` in a terminal that stays
+open: an extension that runs code shows its permissions and asks there, an update shows what
+changed first, and you read the outcome.
+
+  bromigos extensions            the window
+  bromigos extensions --list     its rows, as text (--json: as JSON), no window
+"""
+import json
+import os
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+for _p in (os.path.join(HERE, "..", "lib"), "/usr/lib/bromigos/lib"):
+    if os.path.isfile(os.path.join(_p, "bromigos_hypr.py")):
+        sys.path.insert(0, _p)
+        break
+import bromigos_hypr as H  # noqa: E402
+from bromigos_extlist import fetch  # noqa: E402
+
+BACK = "‹ BACK"
+
+
+def _json(argv, default):
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+        return json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else default
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return default
+
+
+def rows():
+    """[{name, title, what, state, installed, icon, actions}] installed first, then the catalog
+    (bromigos_extlist: Settings › Extensions shows the same list)."""
+    return fetch(_json)
+
+
+def esc(s):
+    import html
+    return html.escape(s or "", quote=False)
+
+
+def pick(lines, mesg, icons=False):
+    """rofi -dmenu over `lines` (markup); the chosen index, or None."""
+    theme = H.title_theme("EXTENSIONS", width=900, lines=10)
+    if icons:
+        theme += "element-icon { size: 3.2em; }\n"
+    cmd = ["rofi", "-dmenu", "-i", "-no-custom", "-markup-rows", "-format", "i", "-p", "", "-mesg", mesg,
+           "-theme-str", theme] + (["-show-icons"] if icons else [])
+    r = subprocess.run(cmd, input="\n".join(lines) + "\n", capture_output=True, text=True, env=H.session_env())
+    if r.returncode != 0 or not r.stdout.strip():
+        return None
+    return int(r.stdout.strip())
+
+
+def main():
+    a = sys.argv[1:]
+    if any(x in ("-h", "--help", "help") for x in a):
+        print(__doc__.strip())
+        return 0
+    items, errors = rows()
+    if a and a[0] == "--list":
+        if "--json" in a:
+            print(json.dumps({"extensions": items, "errors": errors}, indent=1))
+        else:
+            for it in items:
+                print(f"{it['name']:<22} {it['state']:<40} {it['what']}")
+        return 0
+    muted = "alpha='55%'"
+    while True:
+        lines = []
+        for it in items:
+            row = (f"<b>{esc(it['title'])}</b>  <span {muted}>{esc(it['state'])}</span>  "
+                   f"<span {muted}>{esc(it['what'])}</span>")
+            lines.append(row + (f"\0icon\x1f{it['icon']}" if it.get("icon") and os.path.isfile(it["icon"]) else ""))
+        n_in = sum(1 for it in items if it["installed"])
+        mesg = (f"{n_in} installed · {len(items) - n_in} in the catalog · Enter: what you can do with it"
+                + (f" · catalog unreachable: {errors[0]}" if errors else ""))
+        i = pick(lines, mesg, icons=True)
+        if i is None or i >= len(items):
+            return 0
+        it = items[i]
+        if not it["actions"]:
+            H.notify("EXTENSIONS", f"{it['title']} ships with bromigOS: nothing to install")
+            continue
+        labels = [f"<span {muted}>{BACK}</span>"] + [esc(l) for l, _ in it["actions"]]
+        j = pick(labels, f"{it['title']}: {it['what']}")
+        if j is None:
+            return 0
+        if j == 0:
+            continue
+        _, verb = it["actions"][j - 1]
+        cmd = ["bromigos", "ext", *verb]
+        H.spawn(H.terminal_run(cmd, hold=True, title=" ".join(cmd[:4])))
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,9 @@
+# Lowtown: the rain city's colours (docs/theming.md). Colours only; its world is still to be painted.
+name = "Lowtown"
+description = "Neon on wet asphalt: the Low Note after midnight."
+mode = "dark"
+canon = """
+It rains in Lowtown the way it breathes. Della Ash keeps the post at the Low Note, a bar \
+under the overpass where the bands come to play and the Lamplighters' roll-call sits \
+between sets. These are its colours: magenta and cyan signs doubled in the puddles, sodium \
+yellow in the rain, and the red of a sign that says the place is full."""

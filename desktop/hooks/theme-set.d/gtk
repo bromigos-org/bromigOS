@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# theme-set hook (bromigos-desktop): GTK apps in the theme's colours.
+#
+# The Wick's GTK theme is "Bromigos" (package bromigos-settings, /usr/share/themes, or a
+# user's own copy in ~/.local/share/themes); any other theme gets "Bromigos-NAME", built
+# from its palette into ~/.themes by /usr/lib/bromigos/gtk/build-gtk-theme.py --current
+# (half a second). Switching the gtk-theme setting is what restyles running GTK apps.
+# libadwaita apps take named colours from ~/.config/gtk-4.0/gtk.css; its import is
+# pointed at the theme's libadwaita.css (they pick it up when they next start). Leaves
+# gtk-theme alone when a non-Bromigos GTK theme is in use.
+set -eu
+name=${1:-${BROMIGOS_THEME:-wick}}
+if [ "$name" = wick ]; then
+    gtk=Bromigos
+    adw=
+    for d in "$HOME/.local/share/themes/Bromigos" /usr/share/themes/Bromigos; do
+        [ -f "$d/gtk-4.0/libadwaita.css" ] && { adw=$d/gtk-4.0/libadwaita.css; break; }
+    done
+else
+    python3 /usr/lib/bromigos/gtk/build-gtk-theme.py --current >/dev/null
+    gtk=Bromigos-$name
+    adw=$HOME/.themes/Bromigos-$name/gtk-4.0/libadwaita.css
+fi
+css=$HOME/.config/gtk-4.0/gtk.css
+if [ -n "$adw" ] && [ -f "$css" ] && [ ! -L "$css" ] && grep -q 'libadwaita.css' "$css"; then
+    sed -i "s|@import url(\"[^\"]*libadwaita.css\");|@import url(\"file://$adw\");|" "$css"
+fi
+command -v gsettings >/dev/null || exit 0
+now=$(gsettings get org.gnome.desktop.interface gtk-theme | tr -d "'")
+case $now in
+    Bromigos | Bromigos-*) [ "$now" = "$gtk" ] || gsettings set org.gnome.desktop.interface gtk-theme "$gtk" ;;
+esac

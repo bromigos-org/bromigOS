@@ -1,0 +1,605 @@
+#!/usr/bin/python3 -I
+# bromigos:hidden=true
+"""The boot menu's root helper (docs/boot.md): puts a boot theme in /boot and turns GRUB's
+theme on or off. `bromigos boot theme` runs it with sudo (so do `bromigos update`, the
+migration and the installer); the pacman hook runs it as root.
+
+  bromigos-boot-theme on  (--theme NAME | --from DIR) [--auto]
+                          the theme into /boot/grub/themes/bromigos, bromigOS's block into
+                          /etc/default/grub (GRUB_THEME, GRUB_GFXMODE=auto,
+                          GRUB_TERMINAL_OUTPUT=gfxterm, the entries named bromigOS, grub-btrfs's
+                          titles), then grub.cfg made again. --auto: not when the machine was
+                          opted out (`off`)
+  bromigos-boot-theme apply (--theme NAME | --from DIR)
+                          only the theme's files (switching themes: grub.cfg stays as it is)
+  bromigos-boot-theme off the block out, grub.cfg made again, the theme gone from /boot; the
+                          machine stays opted out until `on`
+  bromigos-boot-theme refresh   (the pacman hook, and a migration) a packaged theme in /boot
+                          made current again, and a block an older bromigos-settings wrote
+                          brought up to date
+  bromigos-boot-theme status [--json]
+
+NAME is a theme pre-rendered by bromigos-settings (/usr/share/bromigos/boot/grub/themes/NAME).
+DIR is one the user rendered (build-grub-theme.py --current: a theme of their own, or high
+contrast): only its pictures are taken, each checked (a PNG, of a sane size, a plain file
+of theirs, no links), and theme.txt is written here from its manifest's colours, the fonts
+from the package. Nothing is written to /boot unless GRUB boots this machine, and grub.cfg
+is only replaced by one grub-mkconfig made and grub-script-check passed; if that fails,
+/etc/default/grub goes back as it was (a copy of it before the change is kept as
+/etc/default/grub.bromigos-bak, the grub.cfg before as grub.cfg.bromigos-bak).
+"""
+
+import argparse
+import datetime
+import fcntl
+import importlib.util
+import json
+import os
+import re
+import shutil
+import stat
+import struct
+import subprocess
+import sys
+
+ROOT = os.environ.get("BROMIGOS_BOOT_ROOT", "/")
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def at(path):
+    return os.path.join(ROOT, path.lstrip("/"))
+
+
+GRUB_DIR = "/boot/grub"
+GRUB_CFG = "/boot/grub/grub.cfg"
+THEMES = "/boot/grub/themes"
+THEME = "/boot/grub/themes/bromigos"
+THEME_TXT = "/boot/grub/themes/bromigos/theme.txt"
+DEFAULT = "/etc/default/grub"
+STATE = "/var/lib/bromigos/boot/state.json"
+PACKAGED = "/usr/share/bromigos/boot/grub/themes"
+FONTS = "/usr/share/bromigos/boot/grub/fonts"
+TITLES = "/usr/lib/bromigos/boot/grub-btrfs-titles"
+LOADER_INFO = "/sys/firmware/efi/efivars/LoaderInfo-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
+MKCONFIG = os.environ.get("BROMIGOS_GRUB_MKCONFIG", "grub-mkconfig")
+SCRIPT_CHECK = os.environ.get("BROMIGOS_GRUB_SCRIPT_CHECK", "grub-script-check")
+
+BEGIN = "# >>> bromigOS boot menu (bromigos boot theme; `bromigos boot theme off` takes it out)"
+END = "# <<< bromigOS boot menu"
+# GRUB_GFXMODE: UEFI's auto is the screen's own mode; a BIOS's VBE without the screen's EDID
+# makes auto 640x480, so there 1024x768, else 800x600, comes first.
+# GRUB_DISTRIBUTOR: 10_linux names the system's entries "$GRUB_DISTRIBUTOR Linux" (and
+# classes them by it, the theme's emblem icon), so they read bromigOS while
+# bromigos-settings is installed. The file's own value (Arch's "Arch") is untouched above
+# the block and is what's left when the block goes (`off`); /etc/os-release stays Arch's.
+BLOCK = f"""{BEGIN}
+if [ -f {THEME_TXT} ]; then
+    GRUB_THEME={THEME_TXT}
+    if [ -d /sys/firmware/efi ]; then
+        GRUB_GFXMODE=auto
+    else
+        GRUB_GFXMODE=1024x768,800x600,auto
+    fi
+    GRUB_TERMINAL_OUTPUT=gfxterm
+fi
+if [ -x {TITLES} ]; then
+    GRUB_DISTRIBUTOR="bromigOS"
+    GRUB_BTRFS_SCRIPT_CHECK=../lib/bromigos/boot/grub-btrfs-titles
+    GRUB_BTRFS_SUBMENUNAME="Roll back to a snapshot' --class rollback --id 'bromigos-rollback"
+fi
+{END}
+"""
+
+# what a user's render may hold: pictures only (theme.txt is written here, the fonts come
+# from the package), each at most this big
+PICTURES = re.compile(r"^(background|meter_(mask|plate)|select_(nw|n|ne|w|c|e|sw|s|se)|scroll_(frame|thumb)_(nw|n|ne|w|c|e|sw|s|se)"
+                      r"|terminal_(nw|n|ne|w|c|e|sw|s|se))\.png$")
+ICON = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}\.png$")
+MAX_PICTURE = 16 << 20
+MAX_SMALL = 1 << 20
+MAX_TOTAL = 40 << 20
+NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+HEX = re.compile(r"^#[0-9a-f]{6}$")
+
+
+class Refused(Exception):
+    """Can't do it: exit 3."""
+
+
+class NotGrub(Refused):
+    """GRUB doesn't boot this machine: nothing to do here, exit 4."""
+
+
+def say(msg):
+    print(f"bromigos-boot-theme: {msg}")
+
+
+def generator():
+    """build-grub-theme.py, beside this file: theme_txt() and the fonts' names."""
+    spec = importlib.util.spec_from_file_location("bromigos_build_grub_theme", os.path.join(HERE, "build-grub-theme.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# ------------------------------------------------------------------ state
+
+def load_state():
+    try:
+        with open(at(STATE)) as f:
+            st = json.load(f)
+        return st if isinstance(st, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(**kv):
+    st = load_state()
+    st.update(kv)
+    st["schema"] = 1
+    st["at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+    path = at(STATE)
+    os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(st, f, indent=1, sort_keys=True)
+        f.write("\n")
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+    return st
+
+
+def digest(manifest):
+    """What identifies a theme's pictures and colours: the generator's own rule (its
+    manifest_digest), so `bromigos boot theme` can compare it with the theme wanted."""
+    return generator().manifest_digest(manifest)
+
+
+# ------------------------------------------------------------------ is it GRUB?
+
+def loader_name():
+    try:
+        with open(at(LOADER_INFO), "rb") as f:
+            raw = f.read()[4:]
+        return raw.decode("utf-16-le", "replace").rstrip("\0").strip()
+    except OSError:
+        return None
+
+
+def chrooted():
+    """In an install chroot (the ISO's installer): / isn't PID 1's root, and the firmware's
+    variables are the live medium's, not this system's."""
+    try:
+        a, b = os.stat("/proc/1/root/"), os.stat("/")
+        return (a.st_dev, a.st_ino) != (b.st_dev, b.st_ino)
+    except OSError:
+        return False
+
+
+def check_grub():
+    """GRUB boots this machine: its grub.cfg is in /boot, and the firmware (when it says, and
+    it's this system's firmware: not in an install chroot) names GRUB as what booted it."""
+    if not os.path.isfile(at(GRUB_CFG)):
+        raise NotGrub(f"no {GRUB_CFG}: GRUB isn't this machine's boot loader (systemd-boot and limine keep their own menus)")
+    if not os.path.isfile(at(DEFAULT)):
+        raise Refused(f"no {DEFAULT}: grub-mkconfig has nothing to read")
+    name = None if ROOT == "/" and chrooted() else loader_name()
+    if name and "grub" not in name.lower():
+        raise NotGrub(f"this machine booted {name}, not GRUB: its boot menu is left alone")
+
+
+# ------------------------------------------------------------------ the theme's files
+
+def png_ok(head, size):
+    if size > (MAX_PICTURE if size > MAX_SMALL else MAX_SMALL):
+        return False
+    if len(head) < 33 or head[:8] != b"\x89PNG\r\n\x1a\n" or head[12:16] != b"IHDR":
+        return False
+    w, h, depth, ctype, _comp, _filt, interlace = struct.unpack(">IIBBBBB", head[16:29])
+    return 0 < w <= 8192 and 0 < h <= 8192 and depth == 8 and ctype in (0, 2, 3, 4, 6) and interlace == 0
+
+
+def read_picture(dfd, name, uid):
+    """A user's picture, read through no link, owned by them (or root), a PNG of sane size."""
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise Refused(f"{name}: not a plain file")
+        if st.st_uid not in (0, uid):
+            raise Refused(f"{name}: not yours")
+        if st.st_size > MAX_PICTURE:
+            raise Refused(f"{name}: too big")
+        with os.fdopen(os.dup(fd), "rb") as f:
+            data = f.read(MAX_PICTURE + 1)
+    finally:
+        os.close(fd)
+    if not png_ok(data[:33], len(data)):
+        raise Refused(f"{name}: not a picture GRUB can show (8-bit PNG, at most 8192 px, not interlaced)")
+    return data
+
+
+def from_user(src):
+    """A user's render: {relative path: bytes}, theme.txt written here from its colours."""
+    uid = int(os.environ.get("SUDO_UID", os.getuid()))
+    dfd = os.open(src, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    files, total = {}, 0
+    try:
+        st = os.fstat(dfd)
+        if st.st_uid not in (0, uid):
+            raise Refused(f"{src}: not yours")
+        mfd = os.open("manifest.json", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dfd)
+        with os.fdopen(mfd) as f:
+            manifest = json.loads(f.read(1 << 20))
+        colors = manifest.get("colors") or {}
+        if not isinstance(colors, dict) or not all(isinstance(v, str) and HEX.match(v) for v in colors.values()):
+            raise Refused("manifest.json: the colours aren't #rrggbb")
+        plate = manifest.get("plate", "")
+        if not (isinstance(plate, str) and HEX.match(plate)):
+            raise Refused("manifest.json: the meter's plate colour isn't #rrggbb")
+        for name in sorted(os.listdir(dfd)):
+            if name in ("manifest.json", "theme.txt") or name.endswith(".pf2"):
+                continue
+            if name == "icons":
+                ifd = os.open("icons", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dfd)
+                try:
+                    for icon in sorted(os.listdir(ifd)):
+                        if not ICON.match(icon):
+                            raise Refused(f"icons/{icon}: not an icon's name")
+                        files[f"icons/{icon}"] = read_picture(ifd, icon, uid)
+                        total += len(files[f"icons/{icon}"])
+                finally:
+                    os.close(ifd)
+                continue
+            if not PICTURES.match(name):
+                raise Refused(f"{name}: not part of a boot theme")
+            files[name] = read_picture(dfd, name, uid)
+            total += len(files[name])
+            if total > MAX_TOTAL:
+                raise Refused("the theme is too big")
+    finally:
+        os.close(dfd)
+    if "background.png" not in files:
+        raise Refused("no background.png")
+    gen = generator()
+    pal = gen.Palette(colors, re.sub(r"[^A-Za-z0-9 _-]", "", str(manifest.get("name", "")))[:40] or "theme")
+    files["theme.txt"] = gen.theme_txt(pal, gen.HEADING_INSTALLED, False, gen.hexrgb(plate)).encode()
+    clean = {"schema": 1, "generator": manifest.get("generator"), "theme": str(manifest.get("theme", ""))[:64],
+             "name": pal.name, "variant": "installed", "colors": colors, "plate": plate, "files": manifest.get("files")}
+    files["manifest.json"] = (json.dumps(clean, indent=1) + "\n").encode()
+    return files, clean
+
+
+def from_package(name):
+    if not NAME.match(name or ""):
+        raise Refused(f"{name!r} isn't a theme's name")
+    d = at(os.path.join(PACKAGED, name))
+    if not os.path.isfile(os.path.join(d, "theme.txt")):
+        raise Refused(f"no boot theme {name} in {PACKAGED} (bromigos-settings makes one per shipped theme)")
+    files = {}
+    for root, _, names in os.walk(d):
+        for n in names:
+            path = os.path.join(root, n)
+            with open(path, "rb") as f:
+                files[os.path.relpath(path, d)] = f.read()
+    manifest = json.loads(files.get("manifest.json", b"{}"))
+    return files, manifest
+
+
+def fonts():
+    d = at(FONTS)
+    found = {n: open(os.path.join(d, n), "rb").read() for n in sorted(os.listdir(d)) if n.endswith(".pf2")} \
+        if os.path.isdir(d) else {}
+    if not found:
+        raise Refused(f"no fonts in {FONTS} (bromigos-settings)")
+    return found
+
+
+def write_theme(files):
+    """The theme into /boot/grub/themes/bromigos: written beside it, then swapped in."""
+    themes = at(THEMES)
+    os.makedirs(themes, exist_ok=True)
+    new, old, cur = os.path.join(themes, ".bromigos.new"), os.path.join(themes, ".bromigos.old"), at(THEME)
+    for d in (new, old):
+        if os.path.isdir(d):
+            shutil.rmtree(d)
+    os.makedirs(os.path.join(new, "icons"))
+    for rel, data in files.items():
+        path = os.path.join(new, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+    if os.path.isdir(cur):
+        os.rename(cur, old)
+    os.rename(new, cur)
+    if os.path.isdir(old):
+        shutil.rmtree(old)
+    try:
+        fd = os.open(themes, os.O_RDONLY | os.O_DIRECTORY)
+        os.fsync(fd)
+        os.close(fd)
+    except OSError:
+        pass
+
+
+def fonts_in_theme():
+    d = at(THEME)
+    return sorted(n for n in os.listdir(d) if n.endswith(".pf2")) if os.path.isdir(d) else []
+
+
+def install_theme(theme, src):
+    if src:
+        files, manifest = from_user(src)
+        source = "user"
+    else:
+        files, manifest = from_package(theme)
+        source = "package"
+    for name, data in fonts().items():
+        files[name] = data
+    before = fonts_in_theme()
+    write_theme(files)
+    name = manifest.get("theme") or theme or "?"
+    return {"theme": name, "source": source, "digest": digest(manifest)}, before != fonts_in_theme()
+
+
+# ------------------------------------------------------------------ /etc/default/grub, grub.cfg
+
+def strip_block(text):
+    out, inside = [], False
+    for line in text.split("\n"):
+        if line.strip() == BEGIN:
+            inside = True
+            continue
+        if inside:
+            if line.strip() == END:
+                inside = False
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def with_block(text):
+    base = strip_block(text).rstrip("\n")
+    return base + "\n\n" + BLOCK
+
+
+def has_block(text):
+    return BEGIN in text
+
+
+def write_default(text):
+    path = at(DEFAULT)
+    st = os.stat(path)
+    tmp = path + ".bromigos-tmp"
+    with open(tmp, "w") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+    os.chmod(tmp, stat.S_IMODE(st.st_mode))
+    try:
+        os.chown(tmp, st.st_uid, st.st_gid)
+    except PermissionError:
+        pass
+    os.replace(tmp, path)
+
+
+def mkconfig():
+    """grub.cfg made again, replaced only by a file grub-mkconfig made and grub-script-check
+    passed; the one before kept as grub.cfg.bromigos-bak."""
+    cfg = at(GRUB_CFG)
+    new = cfg + ".bromigos-new"
+    if os.path.exists(new):
+        os.unlink(new)
+    r = subprocess.run([MKCONFIG, "-o", new], capture_output=True, text=True)
+    if r.returncode != 0 or not os.path.isfile(new):
+        tail = (r.stderr or r.stdout).strip().split("\n")[-3:]
+        if os.path.exists(new):
+            os.unlink(new)
+        raise Refused(f"grub-mkconfig failed ({' / '.join(tail)})")
+    r = subprocess.run([SCRIPT_CHECK, new], capture_output=True, text=True)
+    if r.returncode != 0:
+        os.unlink(new)
+        raise Refused(f"grub-script-check refused the new grub.cfg ({(r.stderr or r.stdout).strip()})")
+    shutil.copy2(cfg, cfg + ".bromigos-bak")
+    # on the disk before it replaces the old one (a power cut leaves one or the other)
+    fd = os.open(new, os.O_RDONLY)
+    os.fsync(fd)
+    os.close(fd)
+    os.replace(new, cfg)
+    os.sync()
+
+
+def grub_cfg_themed():
+    try:
+        with open(at(GRUB_CFG), errors="replace") as f:
+            return "themes/bromigos/theme.txt" in f.read()
+    except OSError:
+        return False
+
+
+def set_block(on, force=False):
+    """Puts the block in (or takes it out), then grub.cfg again; on any failure the file goes
+    back as it was. Returns whether anything changed."""
+    path = at(DEFAULT)
+    with open(path) as f:
+        before = f.read()
+    after = with_block(before) if on else strip_block(before).rstrip("\n") + "\n"
+    if after == before and grub_cfg_themed() == on and not force:
+        return False
+    shutil.copy2(path, path + ".bromigos-bak")
+    if after != before:
+        write_default(after)
+    try:
+        mkconfig()
+    except Exception:
+        write_default(before)
+        raise
+    return True
+
+
+# ------------------------------------------------------------------ the verbs
+
+def terminal_note(text):
+    m = re.search(r"^\s*GRUB_TERMINAL=[\"']?([^\"'\n]+)", strip_block(text), re.M)
+    if m and "gfxterm" not in m.group(1):
+        return f"/etc/default/grub sets GRUB_TERMINAL={m.group(1)}, which keeps GRUB in text: the theme shows once that line goes"
+    return None
+
+
+def cmd_on(args):
+    st = load_state()
+    if args.auto and st.get("opted_out"):
+        say("this machine was turned off (bromigos boot theme off); left as it is: bromigos boot theme on turns it back on")
+        return 0
+    check_grub()
+    applied, _ = install_theme(args.theme, args.from_dir)
+    changed = set_block(True)
+    save_state(enabled=True, opted_out=False, **applied)
+    say(f"on: {applied['theme']} ({'the package' if applied['source'] == 'package' else 'yours'}) in {THEME}"
+        + ("; grub.cfg made again" if changed else ""))
+    note = terminal_note(default_text())
+    if note:
+        say(note)
+    return 0
+
+
+def default_text():
+    try:
+        with open(at(DEFAULT)) as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def outdated_block(text):
+    """The block a former bromigos-settings wrote (its lines changed since)."""
+    return has_block(text) and BLOCK not in text
+
+
+def cmd_apply(args):
+    st = load_state()
+    if not has_block(default_text()):
+        say("the boot theme is off here (bromigos boot theme on): nothing applied")
+        return 0
+    check_grub()
+    applied, fonts_changed = install_theme(args.theme, args.from_dir)
+    mkconfig_done = (fonts_changed or not grub_cfg_themed() or outdated_block(default_text())) \
+        and set_block(True, force=True)
+    save_state(enabled=True, opted_out=st.get("opted_out", False), **applied)
+    say(f"applied: {applied['theme']}" + ("; grub.cfg made again" if mkconfig_done else ""))
+    return 0
+
+
+def cmd_off(args):
+    path = at(DEFAULT)
+    if os.path.isfile(at(GRUB_CFG)) and os.path.isfile(path):
+        changed = set_block(False)
+    else:
+        changed = False
+    if os.path.isdir(at(THEME)):
+        shutil.rmtree(at(THEME))
+    save_state(enabled=False, opted_out=True)
+    say("off: GRUB's own menu" + ("; grub.cfg made again" if changed else "") +
+        " (bromigos boot theme on turns it back on)")
+    return 0
+
+
+def cmd_refresh(args):
+    """After bromigos-settings changed (its pacman hook; a migration asks too): the packaged
+    theme in /boot made current again, and the block brought up to date when an older
+    bromigos-settings wrote it, whichever theme is in /boot (a theme rendered from the
+    user's colours waits for `bromigos update`; its block doesn't)."""
+    st = load_state()
+    if not has_block(default_text()) or not st.get("enabled"):
+        return 0
+    try:
+        check_grub()
+    except Refused as e:
+        say(f"refresh skipped: {e}")
+        return 0
+    block_done = False
+    if st.get("source") == "package":
+        name = st.get("theme") or "wick"
+        try:
+            _, manifest = from_package(name)
+        except Refused as e:
+            say(f"the theme in /boot is left as it is: {e}")
+        else:
+            if digest(manifest) != st.get("digest"):
+                applied, fonts_changed = install_theme(name, None)
+                if fonts_changed or outdated_block(default_text()):
+                    set_block(True, force=True)
+                    block_done = True
+                save_state(**applied)
+                say(f"the boot menu's {applied['theme']} theme updated in {THEME}")
+    if not block_done and outdated_block(default_text()):
+        set_block(True, force=True)
+        say("bromigOS's block in /etc/default/grub brought up to date; grub.cfg made again")
+    return 0
+
+
+def cmd_status(args):
+    st = load_state()
+    text = default_text()
+    doc = {
+        "grub": os.path.isfile(at(GRUB_CFG)),
+        "loader": loader_name(),
+        "block": has_block(text),
+        # the block an older bromigos-settings wrote (refresh brings it up to date)
+        "block_outdated": outdated_block(text),
+        "grub_cfg_themed": grub_cfg_themed(),
+        "theme_in_boot": os.path.isfile(at(THEME_TXT)),
+        "state": st,
+        "note": terminal_note(text),
+    }
+    if args.json:
+        print(json.dumps(doc, indent=1, sort_keys=True))
+    else:
+        for k, v in doc.items():
+            print(f"{k}: {v}")
+    return 0
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="bromigos-boot-theme", description=__doc__.split("\n")[0])
+    sub = ap.add_subparsers(dest="verb", required=True)
+    for verb in ("on", "apply"):
+        p = sub.add_parser(verb)
+        g = p.add_mutually_exclusive_group(required=True)
+        g.add_argument("--theme")
+        g.add_argument("--from", dest="from_dir")
+        if verb == "on":
+            p.add_argument("--auto", action="store_true")
+    sub.add_parser("off")
+    sub.add_parser("refresh")
+    p = sub.add_parser("status")
+    p.add_argument("--json", action="store_true")
+    args = ap.parse_args(argv)
+    if args.verb != "status" and ROOT == "/" and os.geteuid() != 0:
+        print("bromigos-boot-theme: run it as root (bromigos boot theme does, with sudo)", file=sys.stderr)
+        return 2
+    if args.verb != "status":
+        # one at a time (setup and the theme-set hook may ask together)
+        os.makedirs(os.path.dirname(at(STATE)), mode=0o755, exist_ok=True)
+        lock = open(at(STATE) + ".lock", "w")
+        fcntl.flock(lock, fcntl.LOCK_EX)
+    try:
+        rc = {"on": cmd_on, "apply": cmd_apply, "off": cmd_off, "refresh": cmd_refresh, "status": cmd_status}[args.verb](args)
+        if args.verb != "status":
+            os.sync()          # /boot's FAT keeps nothing in memory a power cut could lose
+        return rc
+    except NotGrub as e:
+        print(f"bromigos-boot-theme: {e}", file=sys.stderr)
+        return 4
+    except Refused as e:
+        print(f"bromigos-boot-theme: {e}", file=sys.stderr)
+        return 3
+    except OSError as e:      # a link where a file should be (O_NOFOLLOW), a file gone, a full /boot
+        print(f"bromigos-boot-theme: {e}", file=sys.stderr)
+        return 3
+
+
+if __name__ == "__main__":
+    sys.exit(main())

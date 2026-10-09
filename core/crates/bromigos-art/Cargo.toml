@@ -1,0 +1,23 @@
+[package]
+name = "bromigos-art"
+description = "bromigOS art pipeline: a world's art.toml, planned, priced and generated through the nolgia SDK or a homelab ComfyUI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+chrono.workspace = true
+nolgia.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true
+wiremock.workspace = true

@@ -1,0 +1,126 @@
+# The ISO profile's checks, on every change to it (docs/iso.md): shellcheck on its
+# scripts, the profile's files against profiledef.sh, archinstall's config as archinstall
+# itself parses it, and the package list resolved against Arch's repositories (and
+# bromigOS's, where the runner reaches it). The image itself is built and booted by hand
+# (iso/build.sh, iso/test.sh): mkarchiso needs a privileged container and ~20 GB, and the
+# boot test KVM, more than the shared runners should give it.
+name: iso-check
+
+on:
+  push:
+    branches: [main]
+    paths: ["iso/**", "settings/plymouth/**", "settings/grub/**", ".github/workflows/iso-check.yml"]
+  pull_request:
+    paths: ["iso/**", "settings/plymouth/**", "settings/grub/**", ".github/workflows/iso-check.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    container: archlinux:base
+    timeout-minutes: 20
+    steps:
+      - name: tools
+        run: pacman -Syu --noconfirm --needed git shellcheck python python-pillow archinstall archiso grub >/dev/null
+      - uses: actions/checkout@v5
+      - name: shellcheck
+        run: |
+          shellcheck -S warning iso/build.sh iso/build-in-container.sh iso/test.sh iso/test/live-checks.sh \
+            iso/profile/profiledef.sh iso/profile/airootfs/root/customize_airootfs.sh \
+            iso/profile/airootfs/usr/local/bin/bromigos-iso-install \
+            iso/profile/airootfs/usr/local/bin/bromigos-iso-autostart
+      - name: the profile's files are where profiledef.sh says
+        shell: bash
+        run: |
+          set -e
+          cd iso/profile
+          declare -A file_permissions      # as mkarchiso declares it before sourcing
+          # shellcheck disable=SC1091
+          source profiledef.sh
+          for p in "${!file_permissions[@]}"; do
+            # releng's own files are copied by build.sh; ours must be in the overlay
+            case $p in /usr/local/bin/choose-mirror|/usr/local/bin/livecd-sound|/etc/shadow|/root) continue ;; esac
+            test -e "airootfs$p" || { echo "profiledef.sh names $p but airootfs$p isn't here"; exit 1; }
+          done
+          test -n "$kernel_params_x86_64"
+          bash -n airootfs/root/customize_airootfs.sh
+          # the boot menus (docs/boot.md): GRUB on UEFI, syslinux on BIOS, both bromigOS's
+          [[ " ${bootmodes[*]} " == *" uefi.grub "* && " ${bootmodes[*]} " == *" bios.syslinux "* ]]
+      - name: the boot menus parse, and their pictures render
+        shell: bash
+        run: |
+          set -e
+          for f in iso/profile/grub/*.cfg; do
+            sed 's/%[A-Z_]*%/x/g' "$f" > /tmp/menu.cfg && grub-script-check /tmp/menu.cfg && echo "grub-script-check: $f ok"
+          done
+          for l in Start Install "safe graphics" "Memory test" "Boot from disk" "speech" "Shut down" Restart; do
+            grep -qE "^ *menuentry .*$l" iso/profile/grub/grub.cfg && grep -qiE "^MENU LABEL .*$l" iso/profile/syslinux/archiso_*.cfg \
+              || { echo "no '$l' entry"; exit 1; }
+          done
+          grep -q 'bromigos.install' iso/profile/grub/grub.cfg iso/profile/syslinux/archiso_sys-linux.cfg
+          # the fonts the theme needs: Geist Mono, as ttf-geist-mono ships it
+          curl -fsSL -o /tmp/geist.zip https://github.com/vercel/geist-font/releases/download/v1.7.2/geist-font-v1.7.2.zip
+          echo "7fc800d2ac6b92844895196e5041aca55d814c15db70c44f79b3b83ab82b04e2  /tmp/geist.zip" | sha256sum -c
+          pacman -S --noconfirm --needed unzip >/dev/null && unzip -q -o /tmp/geist.zip -d /tmp/geist
+          python settings/grub/build-grub-theme.py --theme-dir themes/wick --medium \
+            --font-dir /tmp/geist/geist-font/GeistMono/ttf --out /tmp/medium
+          python iso/syslinux-theme.py --font-dir /tmp/geist/geist-font/GeistMono/ttf --out /tmp/syslinux
+          test -s /tmp/medium/background.png -a -s /tmp/syslinux/splash.png -a "$(stat -c %s /tmp/syslinux/bromigos.psf)" = 4100
+      - name: archinstall parses its config
+        run: |
+          python - <<'EOF'
+          import json
+          from archinstall.lib.models.mirrors import MirrorConfiguration
+          cfg = json.load(open("iso/profile/airootfs/usr/local/share/bromigos-iso/archinstall.json"))
+          mc = MirrorConfiguration.parse_args(cfg["mirror_config"])
+          assert not mc.custom_repositories, "the medium's pacman.conf has [bromigos]; a second section breaks pacstrap"
+          assert mc.custom_servers and mc.custom_servers[0].url.startswith("file:///var/lib/bromigos/repo/")
+          assert "bromigos" in cfg["packages"] and "bromigos-keyring" in cfg["packages"]
+          assert cfg["offline"] and cfg["bootloader"] == "Grub"
+          assert {"grub", "grub-btrfs", "inotify-tools", "snapper", "snap-pac", "cryptsetup", "plymouth"} <= set(cfg["packages"])
+          assert "grub-btrfsd" in cfg["services"]
+          print("archinstall config ok:", len(cfg["packages"]), "packages,", len(cfg["services"]), "services")
+          EOF
+          a=iso/profile/airootfs/usr/local/lib/bromigos-iso/answers.py
+          python "$a" --template iso/profile/airootfs/usr/local/share/bromigos-iso/archinstall.json --disk /dev/vda --firmware bios --user t --password t --root-gib 30 --out /tmp/a >/dev/null
+          python "$a" --template iso/profile/airootfs/usr/local/share/bromigos-iso/archinstall.json --disk /dev/vda --firmware uefi --user t --password t --no-encrypt --root-gib 30 --out /tmp/b >/dev/null
+          python - <<'EOF'
+          import json
+          from archinstall.lib.models.device import DiskLayoutConfiguration
+          for f, enc in (("/tmp/a/config.json", True), ("/tmp/b/config.json", False)):
+              cfg = json.load(open(f))
+              assert ("disk_encryption" in cfg["disk_config"]) == enc, f
+              assert "disk_encryption" not in cfg and "btrfs_options" not in cfg["disk_config"], f
+              parts = cfg["disk_config"]["device_modifications"][0]["partitions"]
+              assert all(p["fs_type"] for p in parts), f      # archinstall 4.5 partitions nothing without one
+              root = parts[-1]
+              assert {v["name"] for v in root["btrfs"]} == {"@", "@home", "@log", "@pkg", "@.snapshots"}, f
+          print("answers ok: encrypted and plain layouts parse")
+          EOF
+          # the hardware packages and services `bromigos hw` plans, merged into the config
+          printf '%s' '{"detection":{"machine":{"kind":"laptop"},"gpus":[{"vendor":"NVIDIA","name":"TU117M"}]},"plan":{"want":{"packages":["nvidia-open","nvidia-utils","lib32-nvidia-utils","power-profiles-daemon"],"services":["power-profiles-daemon.service"]}}}' \
+            | python iso/profile/airootfs/usr/local/lib/bromigos-iso/hardware.py /tmp/a/config.json /tmp/a/hw.json
+          python -c 'import json; c = json.load(open("/tmp/a/hw.json")); assert {"nvidia-open", "nvidia-utils", "power-profiles-daemon", "bromigos"} <= set(c["packages"]) and "lib32-nvidia-utils" not in c["packages"]; assert "power-profiles-daemon" in c["services"] and "grub-btrfsd" in c["services"]; print("hardware merge ok")'
+      - name: the package list resolves
+        shell: bash
+        env:
+          # the lab's repository only off pull requests: GitHub's runners can't reach it, and
+          # a pull request's job never gets a secret
+          ISO_REPO: ${{ github.event_name != 'pull_request' && vars.ISO_REPO_URL || '' }}
+          ISO_REPO_CA: ${{ github.event_name != 'pull_request' && secrets.ISO_REPO_CA || '' }}
+        run: |
+          set -e
+          if [[ -n "$ISO_REPO" ]]; then
+            if [[ -n "$ISO_REPO_CA" ]]; then printf '%s\n' "$ISO_REPO_CA" > /etc/ca-certificates/trust-source/anchors/repo.crt; update-ca-trust; fi
+            printf '\n[bromigos]\nSigLevel = Never\nServer = %s/$repo/$arch\n' "$ISO_REPO" >> /etc/pacman.conf
+            exclude='^$'
+          else
+            echo "ISO_REPO_URL isn't set: resolving Arch's packages only"
+            exclude='^(bromigos|herdr)'
+          fi
+          pacman -Sy >/dev/null
+          mkdir -p /tmp/root/var/lib/pacman && pacman -r /tmp/root -Sy >/dev/null
+          grep -vE '^\s*(#|$)' iso/profile/packages.x86_64 | grep -vE "$exclude" | xargs pacman -r /tmp/root -Sp --print-format '%r %n' | awk '{print $1}' | sort | uniq -c

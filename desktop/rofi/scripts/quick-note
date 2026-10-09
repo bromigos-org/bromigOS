@@ -1,0 +1,24 @@
+#!/bin/sh
+# Quick note (Alt+Shift+N): append one timestamped line to FIELD NOTES.
+notes="$HOME/.local/share/bromigos/notes.md"
+mkdir -p "$(dirname "$notes")"
+# one property per line: rofi reads two quoted values on one line as a single string;
+# the title expands (rofi's default): a fixed-height one is drawn under the input
+theme='
+window { width: 640px; }
+box-header { children: [ icon-emblem, box-headerbody ]; }
+box-headerbody { children: [ textbox-title, inputbar ]; }
+textbox-title {
+  str: "FIELD NOTE";
+  text-color: @primary;
+  font: "Geist Mono Bold 12";
+}
+icon-emblem { size: 56px; }
+listview { lines: 0; }
+inputbar { children: [ textbox-prompt, entry ]; }
+'
+lines=$(grep -c . "$notes" 2>/dev/null || echo 0)
+note=$(rofi -dmenu -p "" -theme-str "$theme" -mesg "APPENDS TO $(echo "$notes" | sed "s|$HOME|~|") · $lines LINES" < /dev/null)
+[ -n "$note" ] || exit 0
+printf -- '- %s  %s\n' "$(date '+%Y-%m-%d %H:%M')" "$note" >> "$notes"
+notify-send -a "FIELD NOTES" "Note saved" "$note"

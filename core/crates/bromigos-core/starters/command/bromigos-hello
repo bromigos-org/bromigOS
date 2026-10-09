@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# bromigos:summary=__TITLE__: says hello with the theme in force (a starter command)
+# bromigos:args=[NAME]
+# bromigos:examples=bromigos __GROUP__ … ; bromigos commands
+# bromigos:menu=COMMANDS:__TITLE__
+#
+# Made by `bromigos ext new command` (docs/extensions.md). Rename the file
+# bromigos-<group>-<name> to choose how it's typed; `# bromigos:menu=GROUP:Label` places
+# it in the menu (Super+Space), `# bromigos:prompt=WHAT` asks for one argument first.
+set -euo pipefail
+who="${1:-$(id -un)}"
+theme="$(bromigos theme current 2>/dev/null || echo unknown)"
+echo "Hello, ${who}. The theme in force is ${theme}."

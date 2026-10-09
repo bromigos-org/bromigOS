@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+<defs>
+<radialGradient id="disc" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="#0e2a0c"/><stop offset="1" stop-color="#040904"/></radialGradient>
+<filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="0.32"/></filter>
+</defs>
+<circle cx="128.0" cy="128.0" r="127.5" fill="url(#disc)"/>
+<g fill="none" stroke="#39ff14" color="#39ff14" stroke-linecap="square" stroke-linejoin="miter">
+<circle cx="128.0" cy="128.0" r="122.0" stroke-width="11.0"/>
+<rect x="123.6" y="6.0" width="8.8" height="29.700000000000003" fill="#39ff14" stroke="none"/>
+<path d="M154.167 30.345 L156.302 22.376 M178.550 40.445 L182.675 33.300 M199.488 56.512 L205.322 50.678 M215.555 77.450 L222.700 73.325 M225.655 101.833 L233.624 99.698 M225.655 154.167 L233.624 156.302 M215.555 178.550 L222.700 182.675 M199.488 199.488 L205.322 205.322 M178.550 215.555 L182.675 222.700 M154.167 225.655 L156.302 233.624 M101.833 225.655 L99.698 233.624 M77.450 215.555 L73.325 222.700 M56.512 199.488 L50.678 205.322 M40.445 178.550 L33.300 182.675 M30.345 154.167 L22.376 156.302 M30.345 101.833 L22.376 99.698 M40.445 77.450 L33.300 73.325 M56.512 56.512 L50.678 50.678 M77.450 40.445 L73.325 33.300 M101.833 30.345 L99.698 22.376" stroke-width="3.96" opacity="0.5" stroke-linecap="butt"/>
+</g>
+<g transform="translate(63.000 63.000) scale(13.0)" fill="none" stroke="#39ff14" color="#39ff14" stroke-width="0.95" stroke-linecap="square" stroke-linejoin="miter" opacity="0.55" filter="url(#glow)"><path d="M0.900 7.600 L9.100 7.600"/><path d="M0.900 5.900 L2.700 4.300 L4.300 5.300 L6.100 2.600 L7.700 4.000 L9.100 3.100"/><path d="M6.100 1.100 L6.100 9.000" stroke-width="0.7"/><path d="M5.000 9.600 L7.200 9.600 L6.100 8.300 Z" fill="currentColor" stroke="none"/></g>
+<g transform="translate(63.000 63.000) scale(13.0)" fill="none" stroke="#39ff14" color="#39ff14" stroke-width="0.95" stroke-linecap="square" stroke-linejoin="miter"><path d="M0.900 7.600 L9.100 7.600"/><path d="M0.900 5.900 L2.700 4.300 L4.300 5.300 L6.100 2.600 L7.700 4.000 L9.100 3.100"/><path d="M6.100 1.100 L6.100 9.000" stroke-width="0.7"/><path d="M5.000 9.600 L7.200 9.600 L6.100 8.300 Z" fill="currentColor" stroke="none"/></g>
+</svg>

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Desktop Panels
+GenericName=Desktop Widgets
+Comment=Show the desktop's panels: system, network, storage, workbench, notes and shortcuts (SUPER+W hides them)
+Icon=bromigos-panels
+TryExec=bromigos-widgets
+Exec=bromigos-widgets show all
+Terminal=false
+Categories=System;Monitor;
+Keywords=panels;widgets;desktop;system;network;storage;monitor;dashboard;
+StartupNotify=false
+X-Bromigos-Menu=toggle/widgets

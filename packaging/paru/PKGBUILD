@@ -1,0 +1,66 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# paru, the AUR helper: it builds packages from the AUR (the Arch User Repository, recipes
+# that Arch users share) as the user, and installs them with `sudo pacman`. `bromigos
+# install` installs it unless told not to (`bromigos setup aur`, `bromigos aur off`), and
+# `bromigos update` updates AUR packages with it inside the update's snapshot pair
+# (docs/aur.md). bromigOS itself never depends on the AUR: this is built here, from the
+# tagged upstream source pinned by checksum, so installing it needs no AUR helper.
+#
+# Adapted from the AUR's paru PKGBUILD (2.1.0-2, Morgan <morganamilo@archlinux.org>): its
+# prepare() moves the alpm crates up to builds that work with pacman 7.1's libalpm with a
+# `cargo update`, which takes whatever is newest; here they're pinned to the versions that
+# gave (alpm 4.0.4, alpm-sys 4.0.5; crates.io's checksums go into Cargo.lock). Same
+# pkgver-pkgrel as the AUR's, so a paru built from the AUR's recipe is the same version and
+# pacman leaves it as it is. One dependency more than the AUR's: base-devel, which the AUR
+# takes for granted and a bromigOS machine may not have. No provides, conflicts or
+# replaces: paru-bin and paru-git (which provide and conflict with paru) stay where they're
+# installed. GPL-3.0-or-later: unmodified upstream source, linked below; the license file
+# ships with the package.
+
+pkgname=paru
+pkgver=2.1.0
+pkgrel=2
+pkgdesc='Feature packed AUR helper'
+arch=('x86_64')
+url='https://github.com/Morganamilo/paru'
+license=('GPL-3.0-or-later')
+# base-devel: makepkg's tools (fakeroot, debugedit, a compiler), which every AUR build needs;
+# the AUR assumes it's installed, bromigOS installs it with paru
+depends=('git' 'pacman' 'libalpm.so>=14' 'base-devel')
+makedepends=('cargo')
+optdepends=('bat: colored pkgbuild printing'
+            'devtools: build in chroot and downloading pkgbuilds')
+backup=('etc/paru.conf')
+options=('!debug')
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Morganamilo/paru/archive/v${pkgver}.tar.gz")
+sha256sums=('eea4dbb524db765d5316f540f9ee670c0bf81aae4827b5417eebb4c9b5651727')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  export CARGO_HOME="$srcdir/cargo-home" RUSTUP_TOOLCHAIN=stable
+  cargo update --precise 4.0.4 alpm
+  cargo update --precise 4.0.5 alpm-sys
+  cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  export CARGO_HOME="$srcdir/cargo-home" RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+  ./scripts/mkmo locale/
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/release/paru "$pkgdir/usr/bin/paru"
+  install -Dm644 paru.conf "$pkgdir/etc/paru.conf"
+  install -Dm644 man/paru.8 "$pkgdir/usr/share/man/man8/paru.8"
+  install -Dm644 man/paru.conf.5 "$pkgdir/usr/share/man/man5/paru.conf.5"
+  install -Dm644 completions/bash "$pkgdir/usr/share/bash-completion/completions/paru.bash"
+  install -Dm644 completions/fish "$pkgdir/usr/share/fish/vendor_completions.d/paru.fish"
+  install -Dm644 completions/zsh "$pkgdir/usr/share/zsh/site-functions/_paru"
+  install -d "$pkgdir/usr/share"
+  cp -r locale "$pkgdir/usr/share/"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
