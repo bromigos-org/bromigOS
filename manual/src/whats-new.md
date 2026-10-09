@@ -21,6 +21,21 @@ Developers can read every change in the repository's `CHANGELOG.md`.
 
 <!-- releases: tools/release/release.py adds each release below this line, newest first -->
 
+## 0.1.3
+<!-- release: 0.1.3-rc1 -->
+
+*9 October 2026 · Release candidate 0.1.3-rc1, on the rc channel. When it's ready, this same build becomes the stable release.*
+
+bromigOS 0.1.3 is a release candidate with no user-visible changes listed since the previous stable release.
+
+### Before you update
+
+Nothing to do: `bromigos update` takes care of everything.
+
+### Known issues
+
+None known.
+
 ## 0.1.2
 <!-- release: 0.1.2-rc2 -->
 

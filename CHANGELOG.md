@@ -11,6 +11,15 @@ VECTOR's, `bromigos-org/vector-archive`).
 
 <!-- releases: tools/release/release.py adds each release below this line, newest first -->
 
+## [0.1.3] - 2026-10-09
+<!-- release: 0.1.3-rc1 -->
+
+Release candidate v0.1.3-rc1.
+
+Since v0.1.2. In plain words: the manual's What's new (manual/src/whats-new.md).
+
+No changes.
+
 ## [0.1.2] - 2026-10-09
 <!-- release: 0.1.2-rc2 -->
 

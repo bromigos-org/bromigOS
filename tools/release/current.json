@@ -1,17 +1,17 @@
 {
-  "version": "0.1.2",
-  "tag": "v0.1.2-rc2",
+  "version": "0.1.3",
+  "tag": "v0.1.3-rc1",
   "kind": "rc",
-  "since": "v0.1.1",
+  "since": "v0.1.2",
   "date": "2026-10-09",
   "bromigos": {
-    "base": "2d80486f0b2dc74aecea4b88dae94f780987d9cb"
+    "base": "421add43a92438a390766ea5b3332d1070f49761"
   },
   "vector": {
-    "base": "8cff3a7983246e1392cc2a546081ddfc4eb85e38",
-    "since": "v0.1.1",
-    "commit": "172967ccc9f86a31d9897936feccc57a4861e4b7",
-    "branch": "release/v0.1.2-rc2"
+    "base": "6cebe2d59d46d4fff7359a9a75c895513a49ba6d",
+    "since": "v0.1.2",
+    "commit": "ad9361fbf12cb76aa5a8963cc83ca2f0b7ff6b3c",
+    "branch": "release-dryrun/v0.1.3-rc1"
   },
   "drafted_by": "qwen3.8-flash-next"
 }
