@@ -66,8 +66,15 @@ class Prometheus(Adapter):
                 continue
             out.append({"name": lb.get("alertname"), "severity": lb.get("severity"), "state": a.get("state"),
                         "summary": (a.get("annotations") or {}).get("summary") or (a.get("annotations") or {}).get("description"),
-                        "since": a.get("activeAt"), "labels": lb})
+                        "since": a.get("activeAt"), "labels": lb,
+                        "link": self.alert_link(lb.get("alertname"))})
         return out
+
+    def alert_link(self, name):
+        """The server's own alerts page, searched for this alert (its detail: rule, labels, since)."""
+        if not self.endpoint or not name:
+            return None
+        return f"{self.endpoint}/alerts?search={urllib.parse.quote(str(name))}"
 
 
 @register
@@ -90,6 +97,12 @@ class Alertmanager(Adapter):
         d = self.get_json("/api/v2/status", timeout=3)
         return isinstance(d, dict) and "cluster" in d
 
+    def alert_link(self, labels):
+        """Alertmanager's page for this alert (filtered by its name)."""
+        if not self.endpoint or not labels.get("alertname"):
+            return None
+        return f"{self.endpoint}/#/alerts?filter=" + urllib.parse.quote('{alertname="%s"}' % labels["alertname"])
+
     def alerts(self):
         out = []
         for a in self.get_json("/api/v2/alerts?active=true&silenced=false&inhibited=false", timeout=6) or []:
@@ -98,5 +111,6 @@ class Alertmanager(Adapter):
                 continue
             out.append({"name": lb.get("alertname"), "severity": lb.get("severity"),
                         "state": "firing" if (a.get("status") or {}).get("state") == "active" else "pending",
-                        "summary": (a.get("annotations") or {}).get("summary"), "since": a.get("startsAt"), "labels": lb})
+                        "summary": (a.get("annotations") or {}).get("summary"), "since": a.get("startsAt"), "labels": lb,
+                        "link": a.get("generatorURL") or self.alert_link(lb)})
         return out

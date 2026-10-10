@@ -24,7 +24,9 @@ Records (every field may be None when a source doesn't know it; "source" is alwa
   secrets      {name, reachable, initialized, sealed, standby, version}   (status only: never a secret)
   ci           {repo, kind: pr|run, number, title, status: open|queued|in_progress|completed,
                 conclusion: success|failure|cancelled|None, url, updated}
-  alerts       {name, severity, state: firing|pending, summary, since, labels}
+  alerts       {name, severity, state: firing|pending, summary, since, labels, link (its page on the source)}
+  energy       {name, kind: solar, production_w, consumption_w, net_w (+ from the grid, - to it), today_wh,
+                consumed_today_wh, lifetime_wh, battery_pct, battery_w, inverters, state}
 """
 import concurrent.futures as cf
 
@@ -39,7 +41,7 @@ SCHEMAS = {
     "agents": ("key", "name", "status", "cwd"),
     "secrets": ("name", "reachable", "initialized", "sealed", "standby", "version"),
     "ci": ("repo", "kind", "number", "title", "status", "conclusion", "url", "updated"),
-    "alerts": ("name", "severity", "state", "summary", "since", "labels"),
+    "alerts": ("name", "severity", "state", "summary", "since", "labels", "link"),
     "voice": ("name", "endpoint", "up", "tts", "stt", "sample_rate", "tts_model", "stt_model"),
     "media": ("name", "endpoint", "up", "running", "pending", "vram_free", "vram_total", "gpu", "version", "models"),
     # the lab's own services (adapters/lab*.py); `state` is ok | warn | crit where the adapter judges it
@@ -59,6 +61,8 @@ SCHEMAS = {
     "packages": ("name", "repo", "latest", "built", "age_h", "packages", "state"),
     "backups": ("name", "kind", "last_success", "age_h", "schedule", "ok", "max_age_hours", "offsite"),
     "ocr": ("name", "endpoint", "up", "model", "via"),
+    "energy": ("name", "kind", "production_w", "consumption_w", "net_w", "today_wh", "consumed_today_wh",
+               "lifetime_wh", "battery_pct", "battery_w", "inverters", "state"),
 }
 
 
@@ -218,12 +222,13 @@ ddns = _lab("ddns", "Dynamic DNS records against the current public address")
 network = _lab("network", "Network devices, clients and WAN throughput (UniFi through unpoller)")
 storage = _lab("storage", "Object stores, NAS pools, shares and volumes: used and total")
 apps = _lab("apps", "The lab's apps and whether they answer (web UIs, search, databases, log stacks)")
-games = _lab("games", "Game servers: online, players (Pelican)")
+games = _lab("games", "Game servers: online, players (Pelican, Minecraft)")
 library = _lab("library", "The media library's apps: queue, health, disk (Sonarr, Radarr, …, Jellyfin, Plex)")
 runners = _lab("runners", "CI runner pools: online, busy, queued (GitHub Actions Runner Controller)")
 packages = _lab("packages", "Package repository channels: the latest build and its age")
 backups = _lab("backups", "Backup targets and their last success")
 ocr = _lab("ocr", "OCR services (the `ocr` job kind runs on them)")
+energy = _lab("energy", "Home energy: solar production, what the house uses, the grid and batteries (Enphase)")
 
 
 def logs_query(selector=None, since_min=60, limit=200, contains=None, timeout=15):

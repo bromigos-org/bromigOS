@@ -1,0 +1,17 @@
+{
+  "_about": "An IQ Gateway with production and consumption CTs (firmware 8), GET /production.json?details=1; made-up readings.",
+  "production": [
+    {"type": "inverters", "activeCount": 18, "readingTime": 1791535400, "wNow": 4102, "whLifetime": 18590000},
+    {"type": "eim", "activeCount": 1, "measurementType": "production", "readingTime": 1791535405, "wNow": 4180.4,
+     "whLifetime": 18604211.2, "varhLeadLifetime": 0.0, "whToday": 23400.7, "whLastSevenDays": 151002.0,
+     "rmsCurrent": 34.1, "rmsVoltage": 241.2, "pwrFactor": 0.99}
+  ],
+  "consumption": [
+    {"type": "eim", "activeCount": 1, "measurementType": "total-consumption", "readingTime": 1791535405,
+     "wNow": 1240.2, "whLifetime": 9120333.0, "whToday": 11800.1, "whLastSevenDays": 80113.0},
+    {"type": "eim", "activeCount": 1, "measurementType": "net-consumption", "readingTime": 1791535405,
+     "wNow": -2940.2, "whLifetime": 1200.0, "whToday": 0, "whLastSevenDays": 0}
+  ],
+  "storage": [{"type": "acb", "activeCount": 2, "readingTime": 1791535405, "wNow": -650, "whNow": 7200,
+               "state": "charging", "percentFull": 72}]
+}

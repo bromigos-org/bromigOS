@@ -1,0 +1,10 @@
+{
+  "_about": "An older Envoy with no CTs, GET /production.json: only the inverters (the eim entry reports nothing); made-up readings.",
+  "production": [
+    {"type": "inverters", "activeCount": 12, "readingTime": 1791535400, "wNow": 2310, "whLifetime": 9311000},
+    {"type": "eim", "activeCount": 0, "measurementType": "production", "readingTime": 0, "wNow": 0.0, "whLifetime": 0.0,
+     "whToday": 0.0}
+  ],
+  "consumption": [],
+  "storage": [{"type": "acb", "activeCount": 0, "readingTime": 0, "wNow": 0, "whNow": 0, "state": "idle", "percentFull": 0}]
+}

@@ -19,7 +19,7 @@ provides hides its consumers, and a source that's down reads "unreachable".
 from . import caps, config, registry
 from .caps import (agents, alerts, available, ci, deployments, hosts, metrics, metrics_range, models, models_level,
                    media, scalar, secrets, series, voice, workloads)
-from .caps import (apps, backups, certs, ddns, games, gpus, library, logs, logs_query, network, ocr,  # noqa: F401
+from .caps import (apps, backups, certs, ddns, energy, games, gpus, library, logs, logs_query, network, ocr,  # noqa: F401
                    packages, routes, runners, storage)
 from .registry import CAPABILITIES, Adapter, Unreachable, register
 from .snapshot import snapshot, source as snapshot_source
@@ -28,7 +28,7 @@ __all__ = ["caps", "config", "registry", "Adapter", "Unreachable", "register", "
            "available", "ci", "deployments", "hosts", "metrics", "metrics_range", "models", "models_level", "scalar",
            "media", "secrets", "series", "voice", "workloads", "snapshot", "snapshot_source", "status", "configured", "source_of",
            "kubectl", "github_orgs", "lab_name", "lab_url", "relay_hosts",
-           "apps", "backups", "certs", "ddns", "games", "gpus", "library", "logs", "logs_query", "network", "ocr",
+           "apps", "backups", "certs", "ddns", "energy", "games", "gpus", "library", "logs", "logs_query", "network", "ocr",
            "packages", "routes", "runners", "storage"]
 
 

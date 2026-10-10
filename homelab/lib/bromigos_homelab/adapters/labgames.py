@@ -1,4 +1,5 @@
-"""Game servers: Pelican (and Pterodactyl, its ancestor). Capability: games. Read-only.
+"""Game servers: Pelican (and Pterodactyl, its ancestor), and Minecraft servers by the status any
+client sees (below). Capability: games. Read-only.
 
     [[source]]
     type = "pelican"                    # a Pelican exporter's metrics (pelican_server_*) in the metrics source
@@ -111,3 +112,169 @@ class Pelican(L.LabAdapter):
         up = L.mq_soft("pelican_exporter_up")
         return game_findings(self.games(), self.opt("expect_running", ()),
                              all((r["value"] or 0) > 0 for r in up) if up else None, self.name)
+
+
+# ------------------------------------------------------------------ Minecraft (Server List Ping)
+# The status a Minecraft Java server gives any client before it logs in: the handshake
+# (next state 1, status), a status request, and its JSON answer (version, players and a
+# sample of their names, the message of the day), then a ping for the round trip. No login,
+# no RCON, nothing changed. https://minecraft.wiki/w/Java_Edition_protocol/Server_List_Ping
+#
+#     [[source]]
+#     type = "minecraft"
+#     endpoint = "minecraft://mc.example.org:25565"    # or host:port, or a host (port 25565)
+#     # servers = [{ name = "creative", address = "mc.example.org:25566" }]   # more than one
+import json as _json  # noqa: E402
+import re as _re  # noqa: E402
+import socket as _socket  # noqa: E402
+import struct as _struct  # noqa: E402
+import time as _time  # noqa: E402
+
+
+def _varint(n):
+    n &= 0xFFFFFFFF
+    out = b""
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        out += bytes([b | (0x80 if n else 0)])
+        if not n:
+            return out
+
+
+def _read_varint(sock):
+    n = shift = 0
+    for _ in range(5):
+        b = sock.recv(1)
+        if not b:
+            raise ConnectionError("the server closed the connection")
+        n |= (b[0] & 0x7F) << shift
+        if not b[0] & 0x80:
+            return n - (1 << 32) if n & (1 << 31) else n
+        shift += 7
+    raise ValueError("a varint longer than 5 bytes")
+
+
+def _recv_exact(sock, n):
+    buf = b""
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError("the server closed the connection")
+        buf += chunk
+    return buf
+
+
+def _packet(pid, payload=b""):
+    body = _varint(pid) + payload
+    return _varint(len(body)) + body
+
+
+def parse_address(addr, default_port=25565):
+    """(host, port) from "minecraft://host:port", "host:port", "[v6]:port" or "host"."""
+    a = (addr or "").strip()
+    a = _re.sub(r"^[a-z]+://", "", a).rstrip("/")
+    m = _re.match(r"^\[([^\]]+)\](?::(\d+))?$", a)
+    if m:
+        return m.group(1), int(m.group(2) or default_port)
+    if a.count(":") == 1:
+        h, p = a.split(":")
+        return h, int(p)
+    return a, default_port
+
+
+def motd_text(desc):
+    """The message of the day as plain text: a string, or a chat component ({text, extra})."""
+    def flat(d):
+        if d is None:
+            return ""
+        if isinstance(d, str):
+            return _re.sub(r"§.", "", d)
+        if isinstance(d, list):
+            return "".join(flat(x) for x in d)
+        if isinstance(d, dict):
+            return flat(d.get("text", "")) + "".join(flat(e) for e in d.get("extra") or [])
+        return str(d)
+    return " ".join(flat(desc).split())
+
+
+def slp(host, port, timeout=4.0):
+    """The server's status JSON and the ping's round trip in ms."""
+    with _socket.create_connection((host, port), timeout=timeout) as s:
+        s.settimeout(timeout)
+        hs = _varint(767) + _varint(len(host.encode())) + host.encode() + _struct.pack(">H", port) + _varint(1)
+        s.sendall(_packet(0, hs) + _packet(0))
+        _read_varint(s)                                    # the packet's length
+        if _read_varint(s) != 0:
+            raise ValueError("not a status answer")
+        n = _read_varint(s)
+        status = _json.loads(_recv_exact(s, n).decode("utf-8", "replace"))
+        t0 = _time.perf_counter()
+        s.sendall(_packet(1, _struct.pack(">q", 1)))
+        try:
+            _read_varint(s)
+            _read_varint(s)
+            _recv_exact(s, 8)
+            ms = (_time.perf_counter() - t0) * 1000
+        except (OSError, ValueError):
+            ms = None
+    return status, ms
+
+
+def game_from_status(name, status, ms=None):
+    pl = status.get("players") or {}
+    ver = status.get("version") or {}
+    sample = [p.get("name") for p in pl.get("sample") or [] if isinstance(p, dict) and p.get("name")]
+    # a server that hides its players fills the sample with lines of text ("§7and 12 more")
+    names = [n for n in sample if _re.match(r"^[A-Za-z0-9_]{2,16}$", n)]
+    return {"name": name, "game": "Minecraft", "status": "running", "players": pl.get("online"),
+            "players_max": pl.get("max"), "uptime_s": None, "cpu_pct": None, "mem_bytes": None,
+            "version": ver.get("name"), "motd": motd_text(status.get("description")), "latency_ms": ms,
+            "player_names": names}
+
+
+@register
+class Minecraft(L.LabAdapter):
+    type = "minecraft"
+    provides = ("games",)
+    default_ports = (25565,)
+    local = True
+
+    def configured(self):
+        return bool(self.endpoint or self.opts.get("servers"))
+
+    def targets(self):
+        out = []
+        if self.endpoint:
+            out.append((self.name, self.endpoint))
+        for s in self.opts.get("servers") or []:
+            if isinstance(s, dict) and s.get("address"):
+                out.append((s.get("name") or s["address"], s["address"]))
+            elif isinstance(s, str):
+                out.append((s, s))
+        return out
+
+    def probe(self):
+        try:
+            slp(*parse_address(self.endpoint), timeout=3)
+            return True
+        except (OSError, ValueError):
+            return False
+
+    def games(self):
+        out = []
+        for name, addr in self.targets():
+            try:
+                host, port = parse_address(addr)
+                st, ms = slp(host, port, timeout=float(self.opt("timeout", 4)))
+                out.append(dict(game_from_status(name, st, ms), address=addr))
+            except (OSError, ValueError) as e:
+                out.append({"name": name, "game": "Minecraft", "status": "stopped", "players": None,
+                            "players_max": None, "uptime_s": None, "cpu_pct": None, "mem_bytes": None, "address": addr,
+                            "error": f"no answer: {getattr(e, 'strerror', None) or e}"[:120]})
+        if not out:
+            raise Unreachable(f"{self.name}: no endpoint (minecraft://host:port) or servers in homelab.toml")
+        return out
+
+    def doctor(self):
+        return game_findings(self.games(), self.opt("expect_running", ()), None, self.name)

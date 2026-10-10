@@ -24,6 +24,9 @@
 #   herdr            agents                           — (the herdr CLI on this machine)
 #   github           ci                               — (your `gh` login); orgs = […], repos = […]
 #   lab              snapshot, hosts                  a Lab API serving GET /api/status
+#   enphase          energy (solar, the house, grid)  https://envoy.local (firmware 7+: auth_ref = an owner
+#                                                     token, tls_verify = false); history_metric = "…" (optional)
+#   minecraft        games (players, version)         minecraft://host:25565; servers = [{ name, address }]
 #
 # provides = [...] narrows (or names) what a source answers for; enabled = false turns it off.
 #
