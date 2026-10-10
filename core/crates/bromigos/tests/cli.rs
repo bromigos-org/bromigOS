@@ -1373,3 +1373,80 @@ fn restart_knows_idle() {
     let o = s.run(&["restart", "idle", "--check", "--json"]);
     assert!(o.status.success(), "{}", stderr(&o));
 }
+
+/// The public repository's address migration: a [bromigos] Server line that is exactly the
+/// r2.dev address moves to pkgs.bromigos.org (the channel's path kept), with a backup; any
+/// other line, and a second run, change nothing. `sudo` is a stand-in that runs the command
+/// as the user (without install's root ownership).
+#[test]
+fn migration_moves_the_r2dev_address() {
+    let s = Sandbox::new();
+    let script = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../migrations/20261010080000-public-repo-address.sh"
+    );
+    s.script(
+        "bin",
+        "sudo",
+        "#!/bin/bash\na=(); while (($#)); do case $1 in -o|-g) shift 2 ;; *) a+=(\"$1\"); shift ;; esac; done; exec \"${a[@]}\"\n",
+    );
+    let r2 = "https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev";
+    let conf = format!(
+        "[options]\nSigLevel = Required\n\n[mine]\nServer = {r2}/$repo/stable/$arch\n\n\
+         [bromigos]\nSigLevel = Required DatabaseOptional\nServer = {r2}/$repo/stable/$arch\n"
+    );
+    fs::write(s.p("pacman.conf"), &conf).unwrap();
+    fs::create_dir_all(s.p("home/.local/state/bromigos")).unwrap();
+    fs::write(
+        s.p("home/.local/state/bromigos/channel.toml"),
+        format!("# x\nbase = \"{r2}\"\n"),
+    )
+    .unwrap();
+    let run = |conf: &Path| {
+        let mut c = Command::new("bash");
+        c.arg(script)
+            .env("PATH", format!("{}:/usr/bin:/bin", s.p("bin").display()))
+            .env("HOME", s.p("home"))
+            .env("XDG_STATE_HOME", s.p("home/.local/state"))
+            .env("BROMIGOS_PACMAN_CONF", conf);
+        output(c)
+    };
+    let o = run(&s.p("pacman.conf"));
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let new = fs::read_to_string(s.p("pacman.conf")).unwrap();
+    assert!(new.ends_with("[bromigos]\nSigLevel = Required DatabaseOptional\nServer = https://pkgs.bromigos.org/$repo/stable/$arch\n"), "{new}");
+    assert!(
+        new.contains(&format!("[mine]\nServer = {r2}/$repo/stable/$arch\n")),
+        "another section's line stays"
+    );
+    assert_eq!(
+        fs::read_to_string(s.p("pacman.conf.bromigos-r2dev")).unwrap(),
+        conf,
+        "the backup"
+    );
+    assert!(
+        fs::read_to_string(s.p("home/.local/state/bromigos/channel.toml"))
+            .unwrap()
+            .contains("base = \"https://pkgs.bromigos.org\"")
+    );
+    // again: nothing to do
+    let o = run(&s.p("pacman.conf"));
+    assert!(o.status.success());
+    assert_eq!(fs::read_to_string(s.p("pacman.conf")).unwrap(), new);
+    // edge's path moves too; a line that isn't exactly the address doesn't
+    fs::write(
+        s.p("edge.conf"),
+        format!("[bromigos]\nServer = {r2}/$repo/$arch\n"),
+    )
+    .unwrap();
+    assert!(run(&s.p("edge.conf")).status.success());
+    assert_eq!(
+        fs::read_to_string(s.p("edge.conf")).unwrap(),
+        "[bromigos]\nServer = https://pkgs.bromigos.org/$repo/$arch\n"
+    );
+    let near = format!("[bromigos]\nServer = {r2}/$repo/stable/$arch/\n");
+    fs::write(s.p("near.conf"), &near).unwrap();
+    assert!(run(&s.p("near.conf")).status.success());
+    assert_eq!(fs::read_to_string(s.p("near.conf")).unwrap(), near);
+    assert!(!s.p("near.conf.bromigos-r2dev").exists());
+}
