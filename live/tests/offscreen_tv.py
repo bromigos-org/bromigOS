@@ -106,6 +106,8 @@ def child(tree, out, opts):
             im = Image.open(opts["poster"]).convert("RGBA")
             slot = tv.slot(tv.channel("big")[1])
             tv.poster[str(slot.item["id"])] = (im.tobytes(), im.width, im.height)
+        if opts.get("bumper"):
+            tv._bumper = lambda s_, b=tuple(opts["bumper"]): b if s_ == "big" else None
         state["picture"] = off.tv_warm(r, tv, lambda: r.render(tgt.fbo, 30), limit=15)
         covered = set(opts.get("covered") or ())
         if opts.get("swap"):
@@ -357,6 +359,35 @@ def main():
             Image.fromarray(frame).save(os.path.join(out, "tv-three.png"))
             Image.fromarray(frame[int(560 * sy):int(1100 * sy), int(1000 * sx):int(1700 * sx)]).save(
                 os.path.join(out, "tv-three-crop.png"))
+
+        # one channel on two screens: the same moment, decoded once
+        frame, st = render(env, REPO, {"palette": wick, "clip": clip, "screens": "big+wave", "frames": 120},
+                           "tv-shared")
+        desc = st.get("describe") or {}
+        sc = desc.get("screens") or {}
+        wx0, wy0 = int(1475 * sx), int(762 * sy)
+        wave_px = frame[wy0 + 6:wy0 + int(110 * sy) - 6, wx0 + 6:wx0 + int(124 * sx) - 6].astype(np.int16)
+        check("one channel on two screens: one player decodes for both, both show it",
+              sc.get("wave", {}).get("follows") == "big" and (sc.get("big", {}).get("playing") or {}).get("has_frame")
+              and sc.get("wave", {}).get("playing") is None and float(wave_px.reshape(-1, 3).std(axis=0).mean()) > 20,
+              {k: (v.get("follows"), bool(v.get("playing"))) for k, v in sc.items()})
+        if out:
+            from PIL import Image
+            Image.fromarray(frame[int(560 * sy):int(1100 * sy), int(1000 * sx):int(1700 * sx)]).save(
+                os.path.join(out, "tv-shared-crop.png"))
+
+        # a channel's bumper card between items
+        frame, st = render(env, REPO, {"palette": wick, "clip": clip, "frames": 60,
+                                       "bumper": ["bumper", "NIGHT BLOCK", "Test Card S1E4 · Episode 4", "21:30"]},
+                           "tv-bumper")
+        card = frame[y0 + 8:y1 - 8, x0 + 8:x1 - 8].reshape(-1, 3).astype(np.int16)
+        dark = float((card.max(axis=1) < 45).mean())
+        lit = float((card[:, 1] > 150).mean())
+        check("a bumper: the channel's dark card over the picture, its words lit", dark > 0.4 and lit > 0.01,
+              f"{dark:.2f} dark, {lit:.3f} lit")
+        if out:
+            from PIL import Image
+            Image.fromarray(frame[y0 - 60:y1 + 60, x0 - 60:x1 + 60]).save(os.path.join(out, "tv-bumper-crop.png"))
 
         # the frame swap: tuned while covered (so paused), the screen never keeps the last picture
         red = os.path.join(root, "red.mp4")

@@ -3,8 +3,11 @@ YouTube, playing as if live (lib/bromigos_tv.py has the channels and the schedul
 
 Each of the den's three screens (the big monitor, the scope, the small monitor) has a
 channel list. Channel 1 is the screen's own picture, drawn as it always was. The media
-channels come after it. Every screen plays its own channel at the same time, each with a
-player of its own (at most [tv] max_playing at once: past that, the rest show posters).
+channels come after it: every channel, unless a channel's `screens` keeps it to some.
+Every screen plays its own channel at the same time, each with a player of its own (at most
+[tv] max_playing at once: past that, the rest show posters). Two screens on the same
+channel show the same moment from one player. A screen nobody has tuned starts on
+[tv] start's channel for it.
 
     the picture   libmpv (live/live/mpvgl.py) decodes on the GPU into a texture the size of
                   the screen; the server is asked for a stream that size (a few hundred
@@ -21,6 +24,8 @@ player of its own (at most [tv] max_playing at once: past that, the rest show po
                   jumps to where it would be now. Still motion (or no GPU) shows the item's
                   poster instead; reduced motion a still frame, renewed every 30 s, unless
                   the sound is on.
+    bumpers       a channel with `bumpers = true` opens each item with a few seconds' card:
+                  the channel's name, what's on and the time, like a TV network's block.
     the pointer   the background window takes the pointer over the den's screens only (its
                   input region), and over the hint while it shows. Over a screen: the hint
                   (what's on, the channel buttons, the speaker, the volume, Full screen, Watch
@@ -62,6 +67,7 @@ REDUCED_EVERY = 30.0          # reduced motion: a new still frame this often
 DRIFT = 3.0                   # seconds off the schedule before the picture is put back
 IDLE_CLOSE = 30.0             # a screen's player is closed after this long with nothing on
 HINT_W, HINT_H = 404, 112     # the hover hint, logical px
+BUMPER = 5.0                  # seconds of a channel's bumper card at the start of each item
 MAX_PLAYING = 3               # every screen (measured: live/README.md, "The den TV", what it costs)
 COVER_OPACITY = 0.9           # a window under this opacity doesn't count as covering a screen
 
@@ -142,6 +148,7 @@ class TV:
         for s in on[1:]:                   # sound on one screen at a time (an older tv.json had more)
             self.screens[s]["sound"] = False
         self.decks = {s: Deck(s) for s in TVL.SCREENS}
+        self.follows = {}                  # screen -> the screen whose player it shows (the same channel)
         self.live = {}                     # YouTube live streams now: channel key -> video
         self.fails = {}                    # channel key -> [(when, item id)] that wouldn't play
         self.retry_at = {}                 # channel key -> when to try its server again
@@ -181,6 +188,17 @@ class TV:
         self.worker.start()
         self.resolver = threading.Thread(target=self._resolve_loop, daemon=True, name="den-tv-youtube")
         self.resolver.start()
+        self._apply_start()
+
+    def _apply_start(self):
+        """A screen nobody has tuned starts on [tv] start's channel for it."""
+        for s in TVL.SCREENS:
+            st = self.screens[s]
+            if st.get("tuned") or st.get("channel") not in (None, "own"):
+                continue
+            k = TVL.start_key(self.cfg, s)
+            if k and any(ch["key"] == k for ch in self.lineup(s)):
+                st["channel"] = k
 
     # ------------------------------------------------------------------ config
     def conf(self):
@@ -199,6 +217,7 @@ class TV:
         """The [tv] table changed (the channel guide, an edit): read the channels again now."""
         self._lineups.clear()
         self.last_slot.clear()
+        self._apply_start()
         self.wake.set()
         self._changed()
 
@@ -286,6 +305,7 @@ class TV:
         n = (n - 1) % len(lu) + 1
         ch = lu[n - 1]
         self.screens[screen]["channel"] = ch["key"]
+        self.screens[screen]["tuned"] = True
         self.save()
         d = self.decks[screen]
         d.tune = (_mono(), n, ch["name"])
@@ -398,13 +418,18 @@ class TV:
         media = [s for s, _ in self.media_screens()]
         order = ([snd] if snd else []) + [s for s in media if s != snd]
         cap = self.max_playing()
+        self.follows = self._sharing(media, snd)
+        decoding = [s for s in order if s not in self.follows]
         for s in TVL.SCREENS:
             d = self.decks[s]
-            if s not in media:
+            if s not in media or s in self.follows:
                 d.allowed = False
                 d.capped = False
+                if s in self.follows and d.player is not None and d.loaded:
+                    d.player.stop()                              # the screen it follows decodes for both
+                    d.loaded = None
                 continue
-            d.capped = order.index(s) >= cap
+            d.capped = decoding.index(s) >= cap
             sound_on = s == snd
             want = (drawing and not software and not d.capped and (s not in self.covered or sound_on)
                     and (motion == "full" or (motion == "reduced" and sound_on)))
@@ -428,6 +453,23 @@ class TV:
             self.full_proc = None
             self.log("tv: full screen closed; back to the den")
 
+    def _sharing(self, media, snd):
+        """{follower: owner} for screens on the same channel: one player decodes for all of
+        them (the same moment, as on real TV). The owner: the screen with the sound, else
+        the first not covered, else the first."""
+        by = {}
+        for s in media:
+            by.setdefault(self.screens[s]["channel"], []).append(s)
+        out = {}
+        for _key, group in by.items():
+            if len(group) < 2:
+                continue
+            owner = snd if snd in group else next((s for s in group if s not in self.covered), group[0])
+            for s in group:
+                if s != owner:
+                    out[s] = owner
+        return out
+
     # ------------------------------------------------------------------ the frame (GL thread)
     def layout(self, w, h, px_rects, view=(0, 0), sf=1):
         """The scene's size, each den screen's rect in render px, the visible window's
@@ -448,13 +490,28 @@ class TV:
         self.drawn_at = _mono()
         tint = float(self.conf().get("tint", 0.4))
         out = {"tv": {}, "tvtex": {}, "tune": {}, "osd": {}}
-        for s in TVL.SCREENS:
+        frames = {}                                    # an owner's frame this draw: (texture, its px aspect)
+        follows = dict(self.follows)
+        order = [s for s in TVL.SCREENS if s not in follows] + [s for s in TVL.SCREENS if s in follows]
+        for s in order:
             d = self.decks[s]
             n, ch = self.channel(s)
             if ch["kind"] != "own":
-                d.idle_at = None
                 x, y, w, h = self.px.get(s, (0, 0, 320, 240))
-                tex, aspect = self._picture(s, ch, max(64, int(w * 1.5)), max(48, int(h * 1.5)), w / max(h, 1))
+                own = follows.get(s)
+                if own and self.screens[own]["channel"] != self.screens[s]["channel"]:
+                    own = None                                   # tuned away since the tick
+                if own and frames.get(own):
+                    tex, src_aspect = frames[own]
+                    tex, aspect = tex, src_aspect / max(w / max(h, 1), 1e-3)
+                    d.idle_at = d.idle_at or _mono()                 # its own player isn't needed
+                    if d.player is not None and _mono() - d.idle_at > IDLE_CLOSE:
+                        self._close_player(d)
+                else:
+                    d.idle_at = None
+                    tex, aspect = self._picture(s, ch, max(64, int(w * 1.5)), max(48, int(h * 1.5)), w / max(h, 1))
+                    if tex and aspect == 1.0 and self.decks[s].player is not None and self.decks[s].player.has_frame:
+                        frames[s] = (tex, w / max(h, 1))
                 out["tv"][s] = (1.0, 1.0 if tex else 0.0, aspect, tint)
                 out["tvtex"][s] = tex or 0
             else:
@@ -763,6 +820,8 @@ class TV:
         elif d.vol_osd:
             d.vol_osd = None
         speaker = screen == self.sound_screen() and self._effective_sound(screen)[0]
+        if lines is None:
+            lines = self._bumper(screen)
         if not (lines or vol is not None or speaker or static) or screen not in self.px:
             return 0.0, None
         sig = (lines, vol, speaker, self.px[screen][2:])
@@ -770,6 +829,18 @@ class TV:
             d.osd_sig = sig
             self._draw_osd(d, lines, vol, speaker)
         return static, d.osd_tex
+
+    def _bumper(self, screen):
+        """("bumper", channel name, what's on, the time) for the first BUMPER seconds of each
+        item on a channel with `bumpers = true`, else None. From the wall clock, so every
+        screen on the channel shows it together."""
+        n, ch = self.channel(screen)
+        if ch["kind"] == "own" or not ch.get("bumpers"):
+            return None
+        slot = self.slot(ch)
+        if not slot or slot.offset is None or slot.offset > BUMPER:
+            return None
+        return ("bumper", ch["name"], TVL.label(slot.item), time.strftime("%H:%M", time.localtime(slot.start or 0)))
 
     def _draw_osd(self, d, lines, vol, speaker):
         import cairo
@@ -780,6 +851,36 @@ class TV:
         r, g, b, _ = glkit.col("phosphor")
         u = h / 100.0
         cr.select_font_face("Geist Mono", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        if lines and lines[0] == "bumper":
+            # a network's bumper: the channel's name large, what's on, the time, over a dark card
+            _, chname, what, clock = lines
+            cr.set_source_rgba(0.0, 0.0, 0.0, 0.82)
+            cr.rectangle(0, 0, w, h)
+            cr.fill()
+            cr.set_source_rgba(r, g, b, 0.9)
+            cr.set_line_width(max(1.0, u))
+            cr.rectangle(4 * u, 4 * u, w - 8 * u, h - 8 * u)
+            cr.stroke()
+
+            def centre(t, size, y, alpha=0.95, maxw=None, least=0.0):
+                cr.set_font_size(size)
+                while maxw and size > least and cr.text_extents(t).x_advance > maxw:
+                    size *= 0.92                                   # smaller to fit, down to `least`
+                    cr.set_font_size(size)
+                while maxw and t and cr.text_extents(t).x_advance > maxw:
+                    t = t[:-2] + "…"
+                e = cr.text_extents(t)
+                cr.set_source_rgba(r, g, b, alpha)
+                cr.move_to((w - e.x_advance) / 2, y)
+                cr.show_text(t)
+            series, _, title = what.partition(" · ")
+            centre(chname.upper()[:28], 16 * u, 30 * u, maxw=w - 14 * u, least=8 * u)
+            centre("UP NEXT", 7 * u, 46 * u, 0.7)
+            centre(series, 9 * u, 60 * u, 0.95, maxw=w - 14 * u, least=6 * u)
+            if title:
+                centre(title, 8 * u, 72 * u, 0.85, maxw=w - 14 * u, least=6 * u)
+            centre(clock, 7 * u, 88 * u, 0.7)
+            lines = None
         if lines:
             _, n, name = lines
             cr.set_font_size(22 * u)
@@ -1435,7 +1536,8 @@ class TV:
             d = self.decks[s]
             r = {"channel": n, "of": len(self.lineup(s)), "name": ch["name"], "kind": ch["kind"], "key": ch["key"],
                  "sound": st["sound"], "volume": st["volume"], "rect": [round(v) for v in self.rects.get(s, ())],
-                 "allowed": d.allowed, "capped": d.capped, "covered": s in self.covered}
+                 "allowed": d.allowed, "capped": d.capped, "covered": s in self.covered,
+                 "follows": self.follows.get(s), "tuned": bool(st.get("tuned"))}
             slot = self.slot(ch)
             if slot:
                 keep = ("id", "title", "series", "season", "episode", "kind", "duration", "year", "server", "poster",

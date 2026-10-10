@@ -24,7 +24,7 @@ The config, in ~/.config/bromigos-live/config.toml (docs: live/README.md, "The d
     source = "plex"               # a jellyfin or plex source in homelab.toml (default: the first)
     library = "TV Shows"          # or collection = "…" or playlist = "…", by title
     order = "shuffle"             # or "in order"
-    screens = ["big"]             # the den screens that carry it (default: the big monitor)
+    screens = ["big"]             # only these den screens carry it (default: every screen)
 
     [[tv.channel]]
     name = "Studio"
@@ -69,7 +69,7 @@ OWN = {"big": ("RELAY MAP", "the homelab's nodes and links"),
        "wave": ("SCOPE", "this machine's network traffic"),
        "emblem": ("BURN-IN", "the burn-in emblem")}
 SCREEN_NAMES = {"big": "the big monitor", "wave": "the scope", "emblem": "the small monitor"}
-DEFAULT_SCREENS = ("big",)              # a channel's screens when neither it nor [tv] screens says
+DEFAULT_SCREENS = ("big", "wave", "emblem")   # a channel's screens when neither it nor [tv] screens says: all
 ANY = ("any", "all", "*")                 # screens = "any": every screen
 DEFAULT_VOLUME = 60
 STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "bromigos-live")
@@ -160,7 +160,7 @@ def panel_channel():
             d = tomllib.load(f)
     except (OSError, ValueError):
         return None
-    e = {"name": d.get("channel_name") or "", "screens": [d.get("screen") or "big"], "order": d.get("order") or None}
+    e = {"name": d.get("channel_name") or "", "screens": d.get("screen") or "any", "order": d.get("order") or None}
     what = str(d.get("play") or "")
     if (d.get("source") or "") == "youtube" or (d.get("youtube") and not what):
         if not d.get("youtube"):
@@ -754,6 +754,16 @@ def screen_state(st, screen, default_volume=DEFAULT_VOLUME):
     except (TypeError, ValueError):
         s["volume"] = default_volume
     return s
+
+
+def start_key(cfg, screen):
+    """The key of the channel a screen starts on ([tv] start = {big = "Shows", …}: a name or
+    key), or None: channel 1."""
+    want = ((cfg or {}).get("tv") or {}).get("start") or {}
+    v = want.get(screen) if isinstance(want, dict) else None
+    if not v:
+        return None
+    return _slug(str(v))
 
 
 def save_state(st):

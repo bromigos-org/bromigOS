@@ -162,8 +162,8 @@ class ChannelsTest(unittest.TestCase):
 
     def test_lineups(self):
         self.assertEqual([c["name"] for c in TV.lineup(self.CFG, "big")], ["RELAY MAP", "Saturday", "Mixes", "Studio"])
-        self.assertEqual([c["name"] for c in TV.lineup(self.CFG, "wave")], ["SCOPE", "Saturday"])
-        self.assertEqual([c["name"] for c in TV.lineup(self.CFG, "emblem")], ["BURN-IN", "Clips"])
+        self.assertEqual([c["name"] for c in TV.lineup(self.CFG, "wave")], ["SCOPE", "Saturday", "Mixes", "Studio"])
+        self.assertEqual([c["name"] for c in TV.lineup(self.CFG, "emblem")], ["BURN-IN", "Mixes", "Studio", "Clips"])
         self.assertEqual([c["name"] for c in TV.lineup({}, "big")], ["RELAY MAP"])
         self.assertEqual([c["name"] for c in TV.lineup({"tv": dict(self.CFG["tv"], enabled=False)}, "big")],
                          ["RELAY MAP"])
@@ -174,7 +174,7 @@ class ChannelsTest(unittest.TestCase):
         self.assertEqual(by["Mixes"]["order"], "in order")            # a playlist: its own order
         self.assertEqual(by["Studio"]["order"], "shuffle")            # a channel's uploads
         self.assertEqual(by["Clips"]["order"], "in order")            # a YouTube playlist
-        self.assertEqual(by["Mixes"]["screens"], ["big"])
+        self.assertEqual(by["Mixes"]["screens"], ["big", "wave", "emblem"])     # no screens: every screen
 
     def test_live_now_is_a_channel_of_its_own(self):
         lu = TV.lineup(self.CFG, "big", live={"studio": {"id": "x", "title": "Live", "url": "u"}})
@@ -193,7 +193,8 @@ class ChannelsTest(unittest.TestCase):
         with open(os.path.join(d, "media.toml"), "w") as f:
             f.write('source = "youtube"\nyoutube = "https://www.youtube.com/@examplestudio"\nkeep = "~/Videos/YouTube"\n')
         ch = TV.channels({})[0]
-        self.assertEqual((ch["kind"], ch["keep"], ch["screens"]), ("youtube", "~/Videos/YouTube", ["big"]))
+        self.assertEqual((ch["kind"], ch["keep"], ch["screens"]),
+                         ("youtube", "~/Videos/YouTube", ["big", "wave", "emblem"]))
 
     def test_state_is_remembered(self):
         st = TV.state()

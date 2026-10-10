@@ -82,8 +82,8 @@ def tv_config(cfg):
     screens = os.environ.get("OFF_TV_SCREEN", "big").split(",")
     cfg["tv"] = dict(cfg.get("tv") or {}, enabled=True,
                      channel=[{"name": "TEST CLIP" if len(screens) == 1 else f"TEST {s.upper()}",
-                               "files": [os.path.abspath(clips[i % len(clips)])], "screens": [s]}
-                              for i, s in enumerate(screens)])
+                               "files": [os.path.abspath(clips[i % len(clips)])], "screens": s.split("+")}
+                              for i, s in enumerate(screens)])     # big+wave: one channel on both
 
 
 def tv_tune(r):
@@ -92,7 +92,7 @@ def tv_tune(r):
     if tv is None:
         return None
     import bromigos_tv as TVL
-    screens = os.environ.get("OFF_TV_SCREEN", "big").split(",")
+    screens = [x.split("+")[0] for x in os.environ.get("OFF_TV_SCREEN", "big").split(",")]
     chans = [c for c in TVL.channels(tv.cfg, panel=False) if c["kind"] == "files"]
     by = {}
     for ch in chans:

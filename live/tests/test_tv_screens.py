@@ -190,6 +190,46 @@ class ScreensTest(unittest.TestCase):
             self.assertEqual([c["name"] for c in self.tv.lineup(s)][-1], "Everywhere")
         self.assertEqual(len(self.tv.lineup("wave")), 3)
 
+    def test_a_screen_starts_on_its_start_channel(self):
+        self.cfg["tv"]["start"] = {"big": "Everywhere", "wave": "Clips", "emblem": "Nope"}
+        tv = make_tv(self, self.cfg)
+        tv.stop.set()
+        self.assertEqual({s: tv.channel(s)[1]["name"] for s in TV.SCREENS},
+                         {"big": "Everywhere", "wave": "Clips", "emblem": "BURN-IN"})   # a name it lacks: channel 1
+        tv.tune_to("wave", 1)                                  # tuned by hand: remembered over the start
+        tv2 = make_tv(self, self.cfg)
+        tv2.stop.set()
+        self.assertEqual(tv2.channel("wave")[0], 1)
+        self.assertEqual(tv2.channel("big")[1]["name"], "Everywhere")
+
+    def test_the_same_channel_on_two_screens_decodes_once(self):
+        tv = self.tv
+        tv.tune_to("big", 3)                                   # Everywhere
+        tv.tune_to("wave", 3)                                  # Everywhere too
+        tv.tune_to("emblem", 2)
+        self.tick()
+        self.assertEqual(tv.follows, {"wave": "big"})
+        self.assertFalse(tv.decks["wave"].allowed)
+        self.assertTrue(tv.decks["big"].allowed)
+        tv.set_sound("wave", on=True)                          # the sound's screen decodes for both
+        self.tick()
+        self.assertEqual(tv.follows, {"big": "wave"})
+        self.assertEqual(json.loads(tv.command("state --json"))["screens"]["big"]["follows"], "wave")
+
+    def test_bumpers(self):
+        tv = self.tv
+        tv.tune_to("big", 2)
+        ch = tv.channel("big")[1]
+        slot = TV.Slot(item={"id": "x", "title": "Episode 4", "series": "Example", "kind": "episode", "season": 1,
+                             "episode": 4}, offset=2.0, start=time.time() - 2, end=time.time() + 600)
+        with mock.patch.object(tv, "slot", lambda c: slot):
+            self.assertIsNone(tv._bumper("big"))               # not asked for
+            ch["bumpers"] = True
+            b = tv._bumper("big")
+            self.assertEqual(b[:3], ("bumper", "Shows", "Example S1E4 · Episode 4"))
+            slot["offset"] = 30.0
+            self.assertIsNone(tv._bumper("big"))               # only the first seconds
+
     def test_max_playing(self):
         tv = self.tv
         self.cfg["tv"]["max_playing"] = 2
@@ -579,7 +619,7 @@ class ScreensOptionTest(unittest.TestCase):
     def test_screens_values(self):
         self.assertEqual(TV.screens_of("any"), ["big", "wave", "emblem"])
         self.assertEqual(TV.screens_of(["scope", "small"]), ["wave", "emblem"])
-        self.assertEqual(TV.screens_of(None), ["big"])
+        self.assertEqual(TV.screens_of(None), ["big", "wave", "emblem"])        # every screen by default
         with mock.patch.object(TV, "panel_channel", lambda: None):
             chans = TV.channels({"tv": {"screens": ["wave"], "channel": [{"name": "A", "files": "/x"},
                                                                          {"name": "B", "files": "/y",
