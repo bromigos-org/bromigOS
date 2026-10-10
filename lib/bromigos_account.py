@@ -14,6 +14,7 @@ API (docs/plugins.md, "A widget that needs an account"):
     A.sign_out(provider)               forgets the stored token
     A.token(provider)                  -> a usable access token, refreshed when it has expired,
                                          or None when signed out (may use the network)
+    A.refresh(provider)                -> refresh now (after a 401): the new token, or None
     A.set_token(provider, token, who=None)   store a pasted token (a GitLab personal access token)
     A.configure(provider, **fields)    writes client_id / base to accounts.toml
     A.needs(provider)                  -> the config fields still missing, e.g. ["client_id"]
@@ -423,6 +424,15 @@ def token(provider):
         if not rec:
             return None
     return rec["access_token"]
+
+
+def refresh(provider):
+    """Refresh the stored token now (after the service answered 401): the new access
+    token, or None when there's nothing to refresh with."""
+    _p(provider)
+    rec = _load(provider, fresh=True)
+    new = _refresh(provider, rec) if rec else None
+    return new["access_token"] if new else None
 
 
 def set_token(provider, tok, who=None):
