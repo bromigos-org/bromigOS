@@ -67,16 +67,23 @@ class VirtualPointer:
         self._send(self.ptr, 2, struct.pack("<III", self._ms(), which, 1 if down else 0))
         self._frame()
 
+    def arrive(self, x, y, settle=0.15):
+        """To (x, y) the way a hand gets there: from a pixel away, then a moment's rest, so
+        the surface under it has had its enter and motion before a button goes down."""
+        self.move(x + 2, y + 1)
+        self.move(x, y)
+        time.sleep(settle)
+
     def click(self, which=LEFT, at=None):
         if at:
-            self.move(*at)
+            self.arrive(*at)
         self.button(which, True)
         time.sleep(0.05)
         self.button(which, False)
 
     def drag(self, start, end, steps=12, hold=0.15):
         """Press at start, move to end in steps (a person's drag), let go."""
-        self.move(*start)
+        self.arrive(*start)
         self.button(LEFT, True)
         time.sleep(hold)
         (x0, y0), (x1, y1) = start, end

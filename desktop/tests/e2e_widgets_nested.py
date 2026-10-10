@@ -170,15 +170,24 @@ def scenarios(n, r):
     r.check("Hyprland draws it there", wait_for(lambda: (want[0], want[1], w, h) in n.layer_rects("bromigos-widgets"), 4),
             (want, n.layer_rects("bromigos-widgets")))
 
-    # -- a corner drag resizes, within the panel's limits
+    # -- a corner drag resizes, within the panel's size classes
+    import panels as PN
+    smallest = PN.StoragePanel.limits()[0]
     x, y, w, h = rect(n, "storage")
-    ptr.drag((x + w, y + h), (x + w - 400, y + h - 300))       # far smaller than its minimum
-    r.check("a corner drag stops at the panel's minimum (STORAGE: 320x140)",
-            settle(n, lambda p: (p["storage"]["width"], p["storage"]["height"]) == (320, 140)), rect(n, "storage"))
+    ptr.drag((x + w, y + h), (x + w - 400, y + h - 300))       # far smaller than its smallest class
+    r.check(f"a corner drag stops at the panel's smallest size (STORAGE compact: {smallest[0]}x{smallest[1]})",
+            settle(n, lambda p: (p["storage"]["width"], p["storage"]["height"]) == smallest), rect(n, "storage"))
     x, y, w, h = rect(n, "storage")
     ptr.drag((x + w, y + h), (x + w + 101, y + h + 37))
-    r.check("…and grows on the 8 px grid", settle(n, lambda p: (p["storage"]["x"] + p["storage"]["width"]) % 8 == 0
-                                                  and p["storage"]["width"] > 320), rect(n, "storage"))
+    r.check("…grows on the 8 px grid inside its class", settle(
+        n, lambda p: (p["storage"]["x"] + p["storage"]["width"]) % 8 == 0 and p["storage"]["width"] > smallest[0]
+        and PN.StoragePanel.size_class(p["storage"]["width"], p["storage"]["height"]) == "compact"), rect(n, "storage"))
+    x, y, w, h = rect(n, "storage")
+    std_min_h = dict((c[0], c[1]) for c in PN.StoragePanel.size_classes())["standard"][1]
+    ptr.drag((x + w, y + h), (x + 500, y + std_min_h - 4))      # just short of the standard class
+    r.check("…and between two classes it snaps to the nearer one (standard)", settle(
+        n, lambda p: PN.StoragePanel.size_class(p["storage"]["width"], p["storage"]["height"]) == "standard"
+        and p["storage"]["height"] >= std_min_h), rect(n, "storage"))
 
     # -- the × hides one
     x, y, w, h = rect(n, "notes")
@@ -298,6 +307,17 @@ def shots(n, r):
         n.shot(f"edit-{theme}")
         n.widgets("edit", "cancel")
         editing(n, False)
+    # the size classes: SYSTEM large, WEATHER wide, NETWORK compact, then edit mode over them
+    for name, cls in (("system", "large"), ("weather", "wide"), ("network", "compact"), ("storage", "tall")):
+        subprocess.run(["bromigos-panels", "size", name, cls, "--json"], env=n.env, capture_output=True, timeout=60)
+    subprocess.run(["bromigos-panels", "show", "weather", "--json"], env=n.env, capture_output=True, timeout=60)
+    time.sleep(3)                                                # they reload
+    n.widgets("edit", "on")
+    editing(n)
+    time.sleep(1.5)
+    n.shot("edit-sizes-tidewell")
+    n.widgets("edit", "done")
+    editing(n, False)
     res = n.bromigos("accessibility", "contrast", "high", "--no-reload")
     if not r.check("high contrast set in the sandbox", res.returncode == 0, (res.stdout[-300:], res.stderr[-300:])):
         return
