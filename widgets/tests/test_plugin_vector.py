@@ -45,6 +45,73 @@ class Status(unittest.TestCase):
         self.assertEqual(V.read_status(path)["switch"], "off")
 
 
+class Daemon(unittest.TestCase):
+    """Running or not: his daemon's answer on its socket (what `bromigos vector status`
+    asks), never only the state file. The state file says "off" while his window is closed
+    and the daemon runs; that's standing by, not "not running"."""
+
+    def serve(self, reply):
+        """A stand-in daemon on a socket in a temp dir: answers "status" with reply."""
+        import socket
+        import threading
+        path = os.path.join(tempfile.mkdtemp(), "bromigos-holo.sock")
+        srv = socket.socket(socket.AF_UNIX)
+        srv.bind(path)
+        srv.listen(4)
+        self.addCleanup(srv.close)
+
+        def run():
+            while True:
+                try:
+                    c, _ = srv.accept()
+                except OSError:
+                    return
+                with c:
+                    if c.recv(1024) == b"status":
+                        c.sendall(reply)
+        threading.Thread(target=run, daemon=True).start()
+        return path
+
+    def test_the_daemon_answers(self):
+        path = self.serve(json.dumps({"pid": 954742, "motion": "full", "switch": "on"}).encode())
+        self.assertEqual(V.daemon_status(path)["pid"], 954742)
+
+    def test_nothing_answers(self):
+        self.assertIsNone(V.daemon_status(os.path.join(tempfile.mkdtemp(), "none.sock")))
+
+    def test_window_closed_is_standing_by_not_not_running(self):
+        path = self.serve(json.dumps({"pid": 954742, "motion": "full", "switch": "on"}).encode())
+        state = {"state": "off", "switch": "on", "mood": "calm", "voice": "main", "unread": 0}
+        st = V.merged_status(state, V.daemon_status(path))
+        self.assertEqual((st["state"], st["pid"]), ("away", 954742))
+        p = PT.make(V.VectorPanel, demo=True)
+        p.status = st
+        tips = PT.draw(p, 460, 300)
+        self.assertTrue(any("VECTOR is running (pid 954742)" in t for t in tips), tips)
+        self.assertFalse(any("isn't running" in t for t in tips))
+
+    def test_a_state_file_left_behind_is_not_running(self):
+        st = V.merged_status({"state": "idle", "switch": "on"}, V.daemon_status(os.path.join(tempfile.mkdtemp(), "x")))
+        self.assertIsNone(st)
+
+    def test_the_switch_is_the_daemons(self):
+        st = V.merged_status({"state": "idle", "switch": "on"}, {"pid": 1, "switch": "off"})
+        self.assertEqual((st["state"], st["switch"]), ("idle", "off"))
+        self.assertEqual(V.merged_status({"state": "idle"}, "unknown"), {"state": "idle"})   # not asked yet: the file
+
+    def test_the_panel_asks_the_daemon(self):
+        path = self.serve(json.dumps({"pid": 7, "switch": "on"}).encode())
+        state = os.path.join(tempfile.mkdtemp(), "bromigos-vector.json")
+        with open(state, "w") as f:
+            json.dump({"state": "off", "switch": "on"}, f)
+        p = PT.make(V.VectorPanel)
+        p.daemon.data, p.daemon.runs = V.daemon_status(path), 1
+        read = V.read_status
+        with mock.patch.object(V, "read_status", lambda path=None: read(state)):
+            p.tick()
+        self.assertEqual(p.status["state"], "away")
+
+
 class Prs(unittest.TestCase):
     def test_parse(self):
         got = V.parse_prs([{"number": 3, "title": "a", "url": "u3", "isDraft": True, "updatedAt": "2026-10-01T00:00:00Z",

@@ -1,8 +1,12 @@
 """VECTOR: the desktop's AI at a glance. What he's doing, his emergency switch, what he did
 last, and his pull requests waiting for your review.
 
+  * whether he's running: his daemon's own answer on its socket,
+    $XDG_RUNTIME_DIR/bromigos-holo.sock (the question `bromigos vector status` asks), every 5 s.
+    Nothing answering is "not running", whatever an old state file says;
   * his state: $XDG_RUNTIME_DIR/bromigos-vector.json, which his daemon rewrites whenever it
-    changes (state, mood, voice, model, muted, unread, switch);
+    changes (state, mood, voice, model, muted, unread, switch). Its "off" means his window is
+    closed while the daemon runs: STANDING BY, not "not running";
   * the emergency switch: `bromigos vector switch toggle`, the same as Super+Ctrl+Esc and
     the bar: off at once, back on only after a YES in a confirmation menu. The panel never
     turns him on by itself;
@@ -18,6 +22,7 @@ import json
 import math
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -28,11 +33,13 @@ import _kit as K  # noqa: E402
 import draw as D  # noqa: E402
 
 STATUS = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "bromigos-vector.json")
+SOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "bromigos-holo.sock")
 AUDIT = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "bromigos",
                      "vector-audit.log")
 TAIL_BYTES = 96 * 1024
 STATES = {"idle": ("IDLE", "phosphor"), "listening": ("LISTENING", "cyan"), "thinking": ("THINKING", "amber"),
-          "speaking": ("SPEAKING", "phosphor"), "error": ("ERROR", "danger"), "off": ("NOT RUNNING", "static")}
+          "speaking": ("SPEAKING", "phosphor"), "error": ("ERROR", "danger"), "off": ("NOT RUNNING", "static"),
+          "away": ("STANDING BY", "soft")}
 MOODS = {"calm": "phosphor", "excited": "cyan", "concerned": "amber", "alarmed": "danger"}
 
 
@@ -45,6 +52,57 @@ def read_status(path=STATUS):
         return d if isinstance(d, dict) else None
     except (OSError, ValueError):
         return None
+
+
+def daemon_status(path=SOCK, timeout=1.0):
+    """His daemon's own answer about itself, asked on its socket the way `bromigos vector
+    status` asks it ("status"): a dict (its pid, motion, switch, …), {} when it took the
+    question but answered slowly or in words (it's running), or None when nothing takes it
+    (he isn't running)."""
+    s = socket.socket(socket.AF_UNIX)
+    s.settimeout(timeout)
+    try:
+        s.connect(path)
+    except OSError:
+        s.close()
+        return None
+    buf = b""
+    try:
+        s.sendall(b"status")
+        while True:
+            chunk = s.recv(65536)
+            if not chunk:
+                break
+            buf += chunk
+            try:
+                d = json.loads(buf.decode())
+                return d if isinstance(d, dict) else {}
+            except ValueError:
+                continue
+    except OSError:
+        pass                                  # it took the connection: running, however it answered
+    finally:
+        s.close()
+    return {}
+
+
+def merged_status(state, daemon):
+    """What the panel shows: the state file (`state`) as the daemon's answer (`daemon`) has
+    it. daemon None: nothing answers, so he isn't running (a state file left behind says
+    nothing). daemon a dict: running; the state file's "off" (his window closed) reads
+    "away", and its switch is the daemon's. daemon "unknown" (not asked yet): the file."""
+    if daemon == "unknown":
+        return state
+    if daemon is None:
+        return None
+    st = dict(state or {"state": "away"})
+    if st.get("state") in (None, "off"):
+        st["state"] = "away"
+    if daemon.get("switch") in ("on", "off"):
+        st["switch"] = daemon["switch"]
+    if daemon.get("pid"):
+        st["pid"] = daemon["pid"]
+    return st
 
 
 def parse_audit(lines, limit=40):
@@ -191,6 +249,8 @@ class VectorPanel(K.KitPanel):
         else:
             self.demo_prs = None
             self.prs = self.poller(lambda: fetch_prs(self.conf.get("account", "bromigodev")), every=300, name="prs")
+            # running or not: his daemon's own answer, as `bromigos vector status` asks it
+            self.daemon = self.poller(daemon_status, every=5, idle=60, name="daemon")
         self.tick()
 
     def tick(self):
@@ -198,7 +258,8 @@ class VectorPanel(K.KitPanel):
             self._animate()
             return
         seen = time.monotonic() - self.drawn_at < 30
-        self.status = read_status()
+        d = getattr(self, "daemon", None)
+        self.status = merged_status(read_status(), d.data if d is not None and d.runs else "unknown")
         if not seen:
             return
         try:
@@ -385,8 +446,12 @@ class VectorPanel(K.KitPanel):
 
     def _state_tip(self, st):
         if not st:
-            return "VECTOR isn't running: there's no state file. Start him with bromigos-holo vector (or Super+V)."
+            return "VECTOR isn't running: his daemon doesn't answer. Start him with bromigos-holo vector (or Super+V)."
         state = st.get("state") or "?"
+        if state == "away":
+            return (f"VECTOR is running{' (pid ' + str(st['pid']) + ')' if st.get('pid') else ''} with his window "
+                    "closed: Super+V brings him up." + (" His emergency switch is off." if st.get("switch") == "off"
+                                                        else ""))
         bits = [f"VECTOR is {state}" + (" (his emergency switch is off)" if st.get("switch") == "off" else "")]
         if st.get("mood"):
             bits.append(f"mood {st['mood']}")
