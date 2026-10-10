@@ -11,7 +11,9 @@ GitHub Action (.github/workflows/privacy.yml) and VECTOR's build guard.
 
 Two layers of patterns:
   * PUBLIC: generic shapes (private IPv4 addresses, internal DNS names, MAC addresses,
-    token shapes). Safe to publish; they name nothing about this lab.
+    token shapes). Safe to publish; they name nothing about this lab. Test fixtures use the
+    documentation ranges, which these never match: IPv4 192.0.2.0/24, 198.51.100.0/24 and
+    203.0.113.0/24 (RFC 5737), IPv6 2001:db8::/32 (RFC 3849), MACs 00:00:5E:00:53:xx (RFC 7042).
   * PRIVATE: the operator's specific names (subnet, domain, Vault tree, host names), kept
     in the encrypted overlay under guard.patterns, so this public file doesn't have to
     spell them out. Read from ~/.config/bromigos/private/config.json, or from the
@@ -35,7 +37,8 @@ PUBLIC = [
     ("private IPv4 address (regex-escaped)", r"(?<![\d.])(?:10|192\\\.168|172\\\.(?:1[6-9]|2\d|3[01]))\\\.\d{1,3}\\\."),
     ("internal DNS name", r"(?i)\b[a-z0-9-]+\.[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:local|lan|internal|home\.arpa|localdomain)\b"),
     ("internal DNS name (regex-escaped)", r"(?i)\b[a-z0-9-]+\\\.[a-z0-9-]+\\\.(?:local|lan|internal)\b"),
-    ("MAC address", r"(?i)(?<![0-9a-f:])(?:[0-9a-f]{2}:){5}[0-9a-f]{2}(?![0-9a-f:])"),
+    # not the documentation block 00:00:5E:00:53:xx (RFC 7042), which fixtures use
+    ("MAC address", r"(?i)(?<![0-9a-f:])(?!00:00:5e:00:53:)(?:[0-9a-f]{2}:){5}[0-9a-f]{2}(?![0-9a-f:])"),
     ("GitHub token", r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})"),
     ("Vault token", r"\bhv[sb]\.[A-Za-z0-9_-]{20,}"),
     ("AWS key id", r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),

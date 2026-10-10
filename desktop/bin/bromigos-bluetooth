@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # bromigos:summary=Bluetooth: the adapter (on, off, visible), paired devices, pairing new ones, through bluez
 # bromigos:args=[status] | power on|off | discoverable on|off | scan [SECONDS] | pair MAC | connect MAC | disconnect MAC | trust MAC on|off | remove MAC  [--json]
-# bromigos:examples=bromigos bluetooth; bromigos bluetooth power on; bromigos bluetooth scan; bromigos bluetooth pair AC:80:0A:00:00:01
+# bromigos:examples=bromigos bluetooth; bromigos bluetooth power on; bromigos bluetooth scan; bromigos bluetooth pair 00:00:5E:00:53:10
 """bromigos-bluetooth (`bromigos bluetooth`): Bluetooth, through bluez (`bluetoothctl`, one
 command at a time). Settings › Bluetooth drives it.
 

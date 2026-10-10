@@ -45,9 +45,9 @@
       {"entryPoints": ["traefik"], "service": "api@internal", "rule": "PathPrefix(`/api`)", "status": "enabled", "name": "api@internal", "provider": "internal"}
     ],
     "services": [
-      {"name": "media-tv-0123456789abcdef0123@kubernetescrd", "provider": "kubernetescrd", "status": "enabled", "type": "loadbalancer", "serverStatus": {"http://10.42.0.10:8989": "UP"}, "loadBalancer": {"servers": [{"url": "http://10.42.0.10:8989"}]}},
-      {"name": "chat-chat-1111111111aaaaaaaaaa@kubernetescrd", "provider": "kubernetescrd", "status": "enabled", "type": "loadbalancer", "serverStatus": {"http://10.42.0.11:8080": "DOWN"}, "loadBalancer": {"servers": [{"url": "http://10.42.0.11:8080"}]}},
-      {"name": "monitoring-grafana-80@kubernetes", "provider": "kubernetes", "status": "enabled", "type": "loadbalancer", "loadBalancer": {"servers": [{"url": "http://10.42.0.12:3000"}]}},
+      {"name": "media-tv-0123456789abcdef0123@kubernetescrd", "provider": "kubernetescrd", "status": "enabled", "type": "loadbalancer", "serverStatus": {"http://198.51.100.10:8989": "UP"}, "loadBalancer": {"servers": [{"url": "http://198.51.100.10:8989"}]}},
+      {"name": "chat-chat-1111111111aaaaaaaaaa@kubernetescrd", "provider": "kubernetescrd", "status": "enabled", "type": "loadbalancer", "serverStatus": {"http://198.51.100.11:8080": "DOWN"}, "loadBalancer": {"servers": [{"url": "http://198.51.100.11:8080"}]}},
+      {"name": "monitoring-grafana-80@kubernetes", "provider": "kubernetes", "status": "enabled", "type": "loadbalancer", "loadBalancer": {"servers": [{"url": "http://198.51.100.12:3000"}]}},
       {"name": "api@internal", "provider": "internal", "status": "enabled"}
     ]
   },

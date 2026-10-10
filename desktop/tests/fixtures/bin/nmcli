@@ -96,7 +96,7 @@ def activate(c, dev=None):
         c.setdefault("dns", ["192.0.2.1"])
     elif c["type"] == "wireguard":
         dev = "wg0"
-        c.setdefault("ip4", "10.9.0.2/32")
+        c.setdefault("ip4", "203.0.113.2/32")
     elif c["type"] == "vpn":
         dev = "wlan0"
     else:

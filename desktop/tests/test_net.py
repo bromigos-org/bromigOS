@@ -27,7 +27,7 @@ class NetTest(CmdTest):
         nets = {n["ssid"]: n for n in d["wifi"]["networks"]}
         self.assertTrue(nets["Greywater Light"]["in_use"] and nets["Greywater Light"]["saved"])
         self.assertEqual(nets["Greywater Light"]["signal"], 82)             # the strongest of its two access points
-        self.assertEqual(nets["Greywater Light"]["bssid"], "A0:63:91:5E:11:20")   # '\:' unescaped
+        self.assertEqual(nets["Greywater Light"]["bssid"], "00:00:5E:00:53:40")   # '\:' unescaped
         self.assertIn("Station:Nine", nets)                                # a ':' in an SSID
         self.assertFalse(nets["Low Note Cafe"]["secured"])
         self.assertTrue(nets["Kite Works"]["enterprise"])
@@ -36,7 +36,7 @@ class NetTest(CmdTest):
         wlan = next(x for x in d["devices"] if x["name"] == "wlan0")
         self.assertEqual((wlan["ip4"], wlan["gateway"], wlan["dns"]),
                          (["192.0.2.41/24"], "192.0.2.1", ["192.0.2.1", "1.1.1.1"]))
-        self.assertEqual(wlan["hwaddr"], "3C:9C:0F:12:34:56")
+        self.assertEqual(wlan["hwaddr"], "00:00:5E:00:53:30")
         self.assertEqual([x["name"] for x in d["wired"]], ["enp5s0"])
         self.assertEqual([(v["name"], v["type"]) for v in d["vpns"]], [("office", "vpn"), ("wg-station-nine", "wireguard")])
         self.assertNotIn("lo", [c["name"] for c in d["connections"]])

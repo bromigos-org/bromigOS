@@ -515,7 +515,7 @@ For example:
 bromigos bluetooth
 bromigos bluetooth power on
 bromigos bluetooth scan
-bromigos bluetooth pair AC:80:0A:00:00:01
+bromigos bluetooth pair 00:00:5E:00:53:10
 ```
 
 From the `bromigos-desktop` package.

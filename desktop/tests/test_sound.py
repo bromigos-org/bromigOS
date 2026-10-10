@@ -23,8 +23,8 @@ class SoundTest(CmdTest):
 
     def test_default_output_moves_the_apps(self):
         d = self.cmd("sound", "output", "WH-1000XM5")
-        self.assertEqual(d["output"]["default"], "bluez_output.AC_80_0A_00_00_01.1")
-        self.assertTrue(all(a["output"] == "bluez_output.AC_80_0A_00_00_01.1" for a in d["apps"]))
+        self.assertEqual(d["output"]["default"], "bluez_output.00_00_5E_00_53_10.1")
+        self.assertTrue(all(a["output"] == "bluez_output.00_00_5E_00_53_10.1" for a in d["apps"]))
         self.assertIn("WH-1000XM5", d["said"])
         self.cmd("sound", "output", "nope", ok=False)
 
@@ -52,7 +52,7 @@ class SoundTest(CmdTest):
         d = self.cmd("sound", "app-mute", "91", "on")
         self.assertTrue(next(a for a in d["apps"] if a["id"] == 91)["muted"])
         d = self.cmd("sound", "app-output", "91", "WH-1000XM5")
-        self.assertEqual(next(a for a in d["apps"] if a["id"] == 91)["output"], "bluez_output.AC_80_0A_00_00_01.1")
+        self.assertEqual(next(a for a in d["apps"] if a["id"] == 91)["output"], "bluez_output.00_00_5E_00_53_10.1")
         self.cmd("sound", "app-volume", "12345", "35", ok=False)
 
     def test_the_desktops_sounds(self):

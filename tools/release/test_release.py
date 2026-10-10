@@ -186,6 +186,15 @@ class Privacy(unittest.TestCase):
             self.assertTrue(bad(t), t)
         self.assertEqual([x[2] for x in bad("Hacker news")], ["a commit author's name"])
 
+    def test_documentation_ranges_pass(self):
+        """Fixtures use RFC 5737 / RFC 3849 / RFC 7042 ranges; the rules let them through."""
+        rs = guard.rules([])
+        for t in ["Joins 192.0.2.41/24 via 198.51.100.1 and 203.0.113.2.", "Has 2001:db8::1/64.",
+                  "Pairs 00:00:5E:00:53:10 and 00:00:5e:00:53:4f."]:
+            self.assertEqual(guard.scan("notes", t, rs), [], t)
+        for t in ["Pairs AC:80:0A:00:00:01.", "Pairs 00:00:5E:00:54:10."]:  # privacy: allow
+            self.assertTrue(guard.scan("notes", t, rs), t)
+
     def test_redact_keeps_the_commit_link(self):
         rs = guard.rules([])
         out = guard.redact("- docs: as omarchy does ([abc1234](https://x/commit/abc))\n- fine\n", rs)
