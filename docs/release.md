@@ -191,13 +191,37 @@ Every workflow has a **dry run** switch, on by default.
 
 ## The ISO
 
-The installer image is built and tested by hand ([iso.md](iso.md)): it needs a privileged
-container, ~15 GB of disk and KVM, more than the shared runners give. When one is built from
-a release's tag, attach it with its checksum:
+Each release's installer image goes on its GitHub Release, built from the stable channel
+once the release workflow has published it. It's built and tested by hand, on a
+workstation: it needs a privileged container, about 15 GB of disk and KVM, more than the
+shared runners give. [iso.md](iso.md#a-releases-iso) has every step and command:
 
-```text
-gh release upload v0.1.2 ~/.cache/bromigos-iso/bromigos-*-x86_64.iso ~/.cache/bromigos-iso/bromigos-*-x86_64.iso.sha256
+1. build it from the tag, downloading from the homelab's repository and naming the public
+   one (`iso/build.sh --medium-repo <public repo> --version X.Y.Z`);
+2. check what's on it (`iso/check-medium.sh`: the repository it names, no keys or CA,
+   no proprietary packages, the privacy guard, the pictures);
+3. test it in the harness, UEFI and BIOS, one of them with no network: the live session,
+   an install, the first boot, the first update and its rollback;
+4. sign it with the package signing key (a detached, armoured `.sig`);
+5. attach it in parts, because GitHub takes files under 2 GiB and the ISO is about
+   4.3 GB, with the whole ISO's `.sha256` and `.sig`, and add the download steps to the
+   Release's text.
+
+Downloading it is putting the parts together, then checking the checksum and the
+signature against `packaging/keys/bromigos.asc`:
+
+```bash
+cat bromigos-0.1.2-x86_64.iso.part? > bromigos-0.1.2-x86_64.iso
+sha256sum -c bromigos-0.1.2-x86_64.iso.sha256
+gpg --verify bromigos-0.1.2-x86_64.iso.sig bromigos-0.1.2-x86_64.iso
 ```
+
+An installed system updates from the public repository, so its updates work once that's
+live ([public.md](public.md)). Installing needs no network. The repositories stay private
+after go-live, so the Releases' files reach only the organisation's members.
+
+v0.1.2 was the first release with an ISO, attached on 2026-10-09
+([iso.md](iso.md#test-runs) has its run).
 
 ## The public repository
 
@@ -246,5 +270,6 @@ for tagging and checksums, which reads the packages' bucket).
 | `tools/release/guard.py`, `privacy_guard.py` | the privacy check |
 | `tools/release/checksums.sh` | SHA256SUMS from the channel's signed database, signed |
 | `tools/release/go-public.sh`, `test_go_public.py` | making the package repository public ([public.md](public.md)), and its tests |
+| `iso/build.sh`, `iso/check-medium.sh`, `iso/test.sh` | a release's ISO: built, checked and tested by hand ([iso.md](iso.md#a-releases-iso)) |
 | `tools/release/current.json` | written by each release PR: the release its commit prepares |
 | `CHANGELOG.md`, `manual/src/whats-new.md` | the technical log, and the notes for users |

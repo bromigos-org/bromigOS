@@ -7,7 +7,9 @@ needs is on the medium, so installing needs no network.
 
 This page explains how the ISO is built, what's on it, what the installer does and how to
 test it. For users, the manual's [Install](../manual/src/install.md) page covers it.
-During early access the ISO isn't published; you build it yourself, below.
+Each release's ISO is attached to its GitHub Release, signed ([A release's
+ISO](#a-releases-iso)). During early access the repository is private, so only its members
+can download it there.
 
 ![The ISO's boot menu: the title BROMIGOS // RELAY MEDIUM over the den at night, the
 burn-in emblem, a countdown, and the entries Start bromigOS, Install bromigOS, safe
@@ -24,9 +26,11 @@ they follow archiso's releases.
 iso/
   build.sh                  builds the ISO in a privileged archlinux container (Docker)
   build-in-container.sh     the build itself: the offline repository, the profile, mkarchiso
+  check-medium.sh           unpacks a built ISO and checks what it carries (a release's)
   test.sh                   boots the medium and the installed system in QEMU, headless
   test/live-checks.sh       what the live desktop, and the installed system, must have
   test/screen-wait.py       waits for a boot menu on the VM's screen and saves it
+  test/medium-privacy.py    the privacy guard over an unpacked medium
   syslinux-theme.py         the BIOS menu's picture and font
   profile/
     profiledef.sh           the medium's name, boot modes, squashfs options, kernel parameters
@@ -95,6 +99,14 @@ installer's archinstall config points at it, so an install reads only the medium
 Packages are verified as always (`SigLevel = Required`). bromigOS's key is trusted at
 boot by archiso's `pacman-init.service`, which fills every keyring on the system,
 including `bromigos-keyring`'s.
+
+`pacman-init` runs once the clock is set, after `time-sync.target`. archiso's
+`systemd-time-wait-sync` holds that target until a time server answers, and with no
+network it would hold it forever, so the keyring would stay empty and archinstall would
+stop with "required key missing from keyring". The medium's drop-in
+(`etc/systemd/system/systemd-time-wait-sync.service.d/bromigos-iso.conf`) lets it wait 30
+seconds at most. The installer starts `pacman-init` before archinstall, so it waits for
+the keyring if it isn't ready yet.
 
 ### Arch's live tools
 
@@ -228,19 +240,23 @@ iso/build.sh --repo <repo> [--channel stable|rc|edge] [--ca <ca.pem>]
 ```
 
 `<repo>` is the package repository's base URL, which must be reachable from the build
-machine. The medium remembers it as the installed system's repository.
+machine. The medium remembers it as the installed system's repository, unless
+`--medium-repo` names another.
 
 | Option | What it does |
 |---|---|
+| `--medium-repo URL` | The repository the medium names for the installed system, when it isn't the one the build downloads from. A release's ISO downloads from the homelab's and names the public mirror. `--ca` then stays in the build and isn't put on the medium. |
+| `--version V` | The medium's version, in its file name (`bromigos-V-x86_64.iso`). The default is the build's date. |
 | `--channel NAME` | Which channel's packages go on the medium, and which channel the installed system follows. The default is `stable`. |
-| `--ca FILE` | The repository's CA certificate, if it has its own. It goes on the medium too. |
+| `--ca FILE` | The repository's CA certificate, if it has its own. It goes on the medium too, unless `--medium-repo` names another repository. |
 | `--hosts "IP NAME"` | The repository host's address, when DNS doesn't give it |
 | `--out DIR` | Where the ISO goes. The default is `~/.cache/bromigos-iso`. |
 | `--test-key FILE` | Makes a test build (below) |
 | `--keep-work` | Keeps mkarchiso's work directory, to look inside the image |
 
-The result is `<out>/bromigos-<version>-x86_64.iso` and its `.sha256`. Package downloads
-are cached in `<out>/cache`, so a rebuild downloads only what changed.
+The result is `<out>/bromigos-<version>-x86_64.iso` and its `.sha256`, owned by whoever
+ran the build. Package downloads are cached in `<out>/cache`, so a rebuild downloads only
+what changed.
 
 What the build does, in the container:
 
@@ -262,9 +278,10 @@ What the build does, in the container:
 The squashfs is compressed with zstd, not releng's xz. The offline repository is most of
 the image and is already zstd, so xz would gain little and cost minutes.
 
-**A test build** (`--test-key FILE`) lets that SSH key sign in as the live user, turns
-sshd on, adds a serial console, and labels the medium `BROMIGOS_TEST`. Build a medium for
-people without it.
+**A test build** (`--test-key FILE`) lets that SSH key sign in as the live user, adds a
+serial console, and labels the medium `BROMIGOS_TEST`. Build a medium for people without
+it. sshd runs on every medium, as on Arch's own, but nobody can sign in over it: `live`
+and `root` have empty passwords, which sshd refuses, and only a test build has a key.
 
 ### What CI checks
 
@@ -283,9 +300,129 @@ CI doesn't build or boot the image. mkarchiso needs a privileged container and a
 20 GB of disk, and the boot test needs KVM and 6 GB of memory. That's more than the
 shared runners have to spare, so those run by hand.
 
+## A release's ISO
+
+A release's ISO is built by hand from the release's tag, checked, tested, signed, and
+attached to its GitHub Release. It's an ordinary build with three differences: it carries
+the `stable` channel, it names the public repository, and it has no test key.
+
+### Where it finds packages
+
+- **Installing** reads only the offline repository on the medium, so it works with no
+  network, before or after the public repository goes live.
+- **Updating** the installed system reads the repository the medium names
+  (`/etc/bromigos-iso/repo.url`). For a release that's the public mirror, the R2 address
+  that `install.sh`'s `PUBLIC_REPO` holds after go-live ([public.md](public.md)). The
+  build downloads from the homelab's repository, which has the same packages, and writes
+  the public address on the medium with `--medium-repo`. The homelab's CA stays in the
+  build.
+
+Until `tools/release/go-public.sh --yes` turns the mirror's address on, it answers
+"401 Unauthorized". An installed system's `bromigos update` fails at the sync until then,
+and works afterwards with nothing to change on the machine. If go-live uses a custom
+domain (`--domain`), keep the r2.dev address on too. Otherwise machines installed from
+earlier ISOs need a migration of their `Server` line ([public.md](public.md#the-address)).
+
+The GitHub repositories stay private after go-live, so a Release's files reach only the
+organisation's members. Publishing the ISO to everyone is a separate choice: the public
+mirror could carry it too.
+
+### Making it
+
+1. **Wait for the release.** The release workflow publishes the stable channel
+   ([Releasing](release.md)). The ISO takes that channel's packages.
+2. **Build it** from a checkout of the tag, with the homelab's repository, its CA and the
+   public address. With a warm cache it takes about five minutes; a cold one downloads
+   2 GB first.
+
+   ```bash
+   git worktree add ../bromigos-v0.1.3 v0.1.3
+   ../bromigos-v0.1.3/iso/build.sh --repo <homelab repo> --ca <homelab ca.pem> \
+       --medium-repo <public repo> --channel stable --version 0.1.3 \
+       --out ~/.cache/bromigos-iso-0.1.3
+   ```
+
+   A fix to `iso/` made after the tag can go in, as 0.1.2's did: build from main, whose
+   `iso/` is newer, with the same options. The packages are still the tag's: they come
+   from the stable channel.
+3. **Check what's on it** with `iso/check-medium.sh`. It unpacks the ISO (the squashfs in
+   an unprivileged container, as you) and checks:
+   - the repository the medium names and its channel;
+   - no CA, no test key, no `authorized_keys`, no serial console, no `BROMIGOS_TEST` label;
+   - no package with a proprietary licence in the offline repository;
+   - the privacy guard (`iso/test/medium-privacy.py`), with the repository's own rules.
+     Every text file and file name is checked for the lab's own names (the private
+     overlay, `PRIVACY_PATTERNS`, the hashed internal words). bromigOS's files also get
+     the whole guard: private addresses, internal host names, MAC addresses and token
+     shapes. Arch's packages hit a few everyday words; the report shows those apart;
+   - the pictures bromigOS puts on it, listed for you to look at: no likeness
+     ([ASSETS.md](ASSETS.md)).
+
+   ```bash
+   iso/check-medium.sh ~/.cache/bromigos-iso-0.1.3/bromigos-0.1.3-x86_64.iso --repo <public repo>
+   ```
+
+   After go-live, `--repo` defaults to `install.sh`'s `PUBLIC_REPO`. A finding in
+   bromigOS's files is fixed where it comes from, then the ISO is built again.
+4. **Test it** in the harness ([Testing it](#testing-it)), UEFI and BIOS. The medium has
+   no test key, so the harness brings its own through cloud-init. Run one firmware with
+   no network, which is how the medium is meant to install:
+
+   ```bash
+   iso/test.sh boot --iso <iso> --firmware uefi --hosts "<ip> <homelab host>"
+   iso/test.sh install
+   iso/test.sh boot-disk --update-repo <homelab repo> --ca <homelab ca.pem>
+   BROMIGOS_ISOTEST_OFFLINE=1 iso/test.sh boot --iso <iso> --firmware bios   # in another BROMIGOS_ISOTEST_DIR
+   BROMIGOS_ISOTEST_OFFLINE=1 iso/test.sh install --no-encrypt
+   iso/test.sh boot-disk --update-repo <homelab repo> --ca <homelab ca.pem>
+   ```
+
+   `install` takes no `--repo`, so the installed system names the public address, as a
+   user's does. The installed-system checks see that. Only the first update reads the
+   homelab's copy (`--update-repo`), because the public one isn't reachable before
+   go-live.
+5. **Sign it** with the package signing key, from the deployment's secret store, in a
+   throwaway GnuPG home. Then verify it with `packaging/keys/bromigos.asc` alone:
+
+   ```bash
+   export GNUPGHOME=$(mktemp -d); chmod 700 "$GNUPGHOME"
+   <the key> | gpg --batch --import
+   <the passphrase> | gpg --batch --pinentry-mode loopback --passphrase-fd 0 \
+       --local-user 393E7D54F7DE58FE75B97214947C9D6193D3DD8B --armor --detach-sign \
+       --output <iso>.sig <iso>
+   gpgconf --kill all; rm -rf "$GNUPGHOME"
+   ```
+
+6. **Attach it.** GitHub takes files under 2 GiB, and the ISO is about 4.3 GB, so it goes
+   up in parts. The checksum and the signature are for the whole ISO.
+
+   ```bash
+   cd ~/.cache/bromigos-iso-0.1.3
+   split -b 1500M -d -a 1 --numeric-suffixes=1 bromigos-0.1.3-x86_64.iso bromigos-0.1.3-x86_64.iso.part
+   gh release upload v0.1.3 -R bromigos-org/bromigOS bromigos-0.1.3-x86_64.iso.part? \
+       bromigos-0.1.3-x86_64.iso.sha256 bromigos-0.1.3-x86_64.iso.sig
+   rm bromigos-0.1.3-x86_64.iso.part?
+   ```
+
+   Add the download steps below to the Release's text (`gh release edit --notes-file`).
+7. **Clean up.** Keep the ISO, its `.sha256` and `.sig` in `~/.cache/bromigos-iso-<version>`.
+   Remove its `cache/` and `work/`, the test VMs' directories, and the checkout.
+
+### Downloading it
+
+```bash
+cat bromigos-0.1.2-x86_64.iso.part? > bromigos-0.1.2-x86_64.iso
+sha256sum -c bromigos-0.1.2-x86_64.iso.sha256
+gpg --import bromigos.asc        # packaging/keys/bromigos.asc
+gpg --verify bromigos-0.1.2-x86_64.iso.sig bromigos-0.1.2-x86_64.iso
+```
+
+The key's fingerprint is `393E 7D54 F7DE 58FE 75B9 7214 947C 9D61 93D3 DD8B`
+([public.md](public.md#the-signing-key)).
+
 ## Testing it
 
-`iso/test.sh` boots a test build in QEMU, headless. It saves screenshots through QEMU's
+`iso/test.sh` boots a medium in QEMU, headless. It saves screenshots through QEMU's
 monitor into `~/.cache/bromigos-isotest/shots/` and never opens a window. The VM has
 6 GB of memory, 4 CPUs, virtio-vga with Mesa's software renderer, a USB tablet so it can
 click, and a 40 GB disk.
@@ -320,6 +457,10 @@ More about each:
   `memtest`, or `disk` (after an install, the installed system's GRUB). Each check's
   result goes in `menu-ENTRY-FIRMWARE.out`. `BROMIGOS_ISOTEST_VGA` picks the display
   device; the default is `virtio-vga`.
+- **`boot`** works with any medium. A test build has the harness's key. Any other medium
+  gets it from a cloud-init seed (`DIR/seed.iso`, a second CD labelled `CIDATA`), which
+  releng's cloud-init reads as on Arch's own medium. So a release's medium is tested as
+  it was built.
 - **`boot`'s live checks** cover Hyprland, the bar, the panels (widgets), the live layer,
   SDDM, the theme, the splash theme, the offline repository, pacman resolving `bromigos`
   from it, bromigOS's key being trusted, and the installer.
@@ -338,7 +479,12 @@ More about each:
   medium it runs `--channel stable` after `sudo pacman -Sy`. That tests a move to an older
   channel, which once failed with "signature is invalid". Then `live-checks.sh updated`
   checks the channel, the snapshot pair, the snapshots in `grub-btrfs.cfg`, the update
-  recorded for `--rollback`, and a clean `bromigos update --check`.
+  recorded for `--rollback`, and a clean `bromigos update --check`. With `--update-repo
+  URL`, the update reads that copy of the channels instead of the system's own repository
+  (and trusts `--ca`). The checks before it still see the system as installed.
+- **`BROMIGOS_ISOTEST_OFFLINE=1`** starts the VM with no network (QEMU's `restrict=on`):
+  only the harness's SSH reaches it. With it, `boot` and `install` test the medium the way
+  it's meant to install, with no time server and no mirrors.
 
 The installed-system checks include: btrfs with the subvolumes, with LUKS under it (or
 none for `--no-encrypt`); snapper's `root` and `home` with `wheel` allowed; snap-pac's
@@ -359,6 +505,45 @@ To run a second VM beside another, give it its own directory, SSH port and displ
 ## Test runs
 
 Newest first. All runs were on a workstation with KVM.
+
+### 2026-10-09, 19:02 to 19:46 Pacific: v0.1.2's ISO
+
+The first release's medium, now on the v0.1.2 GitHub Release: the `stable` channel at
+v0.1.2 (`bromigos-core` 0.1.2.r143.g07924b0, `bromigos-vector` 0.1.2.r58.g172967c),
+naming the public mirror, with no test key. 4.3 GB (4,321,310,720 bytes), with 827
+packages in the offline repository (2.0 GB). The build took 3 min 35 s with the cache
+warm. Its `iso/` is main's: the tag's, plus the keyring fix below. The packages are the
+tag's.
+
+| | Live | Install time | Installed system | First update and rollback |
+|---|---|---|---|---|
+| UEFI, encrypted (LUKS2) | 16/16 | 2 min 21 s | 76/76 | 7/7 |
+| BIOS, `--no-encrypt`, with no network for the live session and the install | 16/16 | 1 min 52 s | 75/75 | 7/7 |
+
+- The harness gave the medium its key through cloud-init. The installed systems named the
+  public address, on `stable`. The first update read the homelab's copy
+  (`--update-repo`), moved to edge, and was rolled back.
+- `iso/check-medium.sh`: the public address, `stable`, no CA, no keys, no serial console,
+  and no proprietary package (`1password` isn't on it). The guard found nothing in the
+  live system's own files. In bromigOS's packages it found an example MAC address in
+  `bromigos bluetooth`'s help, and in the three manual pages made from it, and an address
+  in a test of VECTOR's guard. Both are made up, and both have since changed on main. The
+  lab's name appears only as the lore's public place. In Arch's packages it found 18
+  everyday words in word lists and hardware databases. The pictures were the den with the
+  chair empty, the worlds' art and the emblems: no likeness.
+
+What it found and fixed:
+
+- **An install with no network failed**: archinstall stopped with "keyring is not
+  writable" and "required key missing from keyring". archiso's `pacman-init` waits for
+  `time-sync.target`, which waits for a time server, so with no network the live
+  system's keyring stayed empty. Every earlier run had a network, so it never showed. The
+  medium now waits 30 seconds at most, and the installer waits for the keyring
+  ([The offline repository](#the-offline-repository)). The ISO was built again with the
+  fix and every test run again; the table is the second build's.
+- The live check of bromigOS's key ran before `pacman-init`, when the VM's clock synced
+  80 s after boot. The check now waits for it.
+- The harness's cloud-init seed needed its own port on q35's AHCI controller.
 
 ### 2026-10-09, 11:15 to 12:05 Pacific: rolling back from a booted snapshot
 
