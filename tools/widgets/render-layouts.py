@@ -6,9 +6,13 @@ the live layer's own frame behind it), and a copy with the scene's keep-clear ar
 (dashed red: kept clear; dashed amber: kept clear while there's room elsewhere), to check the
 scene shows.
 
-    tools/widgets/render-layouts.py OUTDIR [--size 2560x1440] THEME:LAYOUT…
+    tools/widgets/render-layouts.py OUTDIR [--size 2560x1440] [--lab big] THEME:LAYOUT…
 
-LAYOUT is a layout's id (minimal, homelab, …) or "theme", the theme's own. For example:
+LAYOUT is a layout's id (minimal, homelab, …), "theme" (the theme's own) or a layout file's
+path (THEME:path/to/my-desk.toml). Widgets that fit their content get the height their demo
+readings need (gallery.naturals_of). --lab big: LAB shows a lab the size a real one grows to
+(demo_lab.BIG_LAB: six nodes, 36 services), so the picture shows LAB fitting a big lab.
+For example:
 
     tools/widgets/render-layouts.py out wick:theme tidewell:theme mire:theme wick:homelab tidewell:homelab
 
@@ -36,7 +40,8 @@ def catalog(sandbox):
     """Every widget with demo readings, the homelab's too (a made-up lab), all signed in."""
     env = dict(os.environ, BROMIGOS_WIDGETS_DEMO="1", BROMIGOS_WIDGETS_DEMO_LAB="1",
                BROMIGOS_HOMELAB=os.path.join(ROOT, "homelab"), **sandbox)
-    code = "import json, gallery, layouts as L; print(json.dumps(L.catalog_of(gallery.entries(), lambda p: True)))"
+    code = ("import json, gallery, layouts as L; e = gallery.entries(); "
+            "print(json.dumps(L.catalog_of(e, lambda p: True, naturals=gallery.naturals_of(e))))")
     r = subprocess.run([sys.executable, "-c", code], cwd=os.path.join(ROOT, "widgets"), env=env,
                        capture_output=True, text=True, timeout=180)
     if r.returncode:
@@ -70,6 +75,10 @@ def main(argv):
         i = argv.index("--bromigos")
         os.environ["BROMIGOS"] = argv[i + 1]
         del argv[i:i + 2]
+    if "--lab" in argv:
+        i = argv.index("--lab")
+        os.environ["BROMIGOS_WIDGETS_DEMO_LAB_SIZE"] = argv[i + 1]
+        del argv[i:i + 2]
     size = (2560, 1440)
     if "--size" in argv:
         i = argv.index("--size")
@@ -98,7 +107,11 @@ def main(argv):
             theme, _, ident = job.partition(":")
             ident = ident or "theme"
             info = L.scene_info(theme, os.path.join(ROOT, "themes", theme))
-            t = info["recommended"] if ident == "theme" else L.templates()[ident]
+            if ident.endswith(".toml"):                 # a layout file of anyone's
+                t = L.load(os.path.expanduser(ident))
+                ident = t["id"]
+            else:
+                t = info["recommended"] if ident == "theme" else L.templates()[ident]
             scr = L.Screen.size(*size, bar=BAR)
             fit = L.fit(t, scr, cat, info["clear"], info.get("focus"))
             scene = {"panels": [{"name": n, "x": p["x"], "y": p["y"], "width": p["width"], "height": p["height"]}
@@ -116,7 +129,9 @@ def main(argv):
                 fails += 1
                 continue
             outline(png, os.path.join(out, f"{theme}-{ident}-clear.png"), fit, info)
-            print(f"{theme}:{ident} {t['title']}: {', '.join(fit['placed'])}; covers {round(fit['coverage'] * 100)}%"
+            print(f"{theme}:{ident} {t['title']}: " + ", ".join(f"{n} {p['x']},{p['y']} {p['width']}x{p['height']}"
+                                                            for n, p in fit["placed"].items())
+                  + f"; covers {round(fit['coverage'] * 100)}%"
                   + "".join(f"; {x['title']} left out: {x['why']}" for x in fit["left_out"]) + f" -> {png}")
     finally:
         shutil.rmtree(work, ignore_errors=True)

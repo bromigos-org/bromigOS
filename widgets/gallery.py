@@ -104,6 +104,7 @@ def meta_of(obj, name=None):
             "sizes": [{"name": n, "min": list(lo), "max": list(hi), "start": list(st)} for n, lo, hi, st in cs],
             "default_size": default if any(c[0] == default for c in cs) else cs[0][0],
             "start": list(start),
+            "fit": getattr(inner, "fit", None) if getattr(inner, "fit", None) in ("content",) else None,
             "form": WS.fields(getattr(inner, "settings", None) or [])}
 
 
@@ -330,6 +331,50 @@ def render_previews(items, outdir, ticks=2):
         surf.write_to_png(out)
         paths[name] = out
     return paths
+
+
+def naturals_of(items, ticks=1, made=None):
+    """{name: {class: height}}: what each panel that fits its content (fit = "content")
+    needs in each of its classes, read from its data now (panels.naturals). Each is made,
+    sampled `ticks` times a second apart, then measured offscreen; made: {name: panel} to
+    measure instead (edit mode's own panels). Demo readings when the caller set them."""
+    import panels as P
+    import plugins as PL
+    core = core_classes()
+    if made is None:
+        made = {}
+        for it in items:
+            name = it["name"]
+            if it.get("fit") != "content" or name == "notes":
+                continue
+            try:
+                if name in core:
+                    cls, layout = core[name], {}
+                else:
+                    path = PL.files()[name][0]
+                    cls, layout = PL.load(os.path.realpath(path) if "#" not in path else path)
+                made[name] = PL.make(cls, dict(layout, name=name), lambda p: None)
+            except Exception:                         # noqa: BLE001  one that won't load: no natural height
+                continue
+        if made:
+            time.sleep(0.5)                           # a panel's own thread's first reading (LAB's snapshot)
+        for i in range(max(1, ticks)):
+            for p in made.values():
+                try:
+                    p.tick()
+                except Exception:                     # noqa: BLE001
+                    pass
+            if i < ticks - 1:
+                time.sleep(1.0)
+    out = {}
+    for name, p in made.items():
+        try:
+            got = P.naturals(p)
+        except Exception:                             # noqa: BLE001  measuring failed: its start sizes
+            got = {}
+        if got:
+            out[name] = got
+    return out
 
 
 def notes_text(limit=12):

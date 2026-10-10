@@ -42,9 +42,13 @@ reload`). The weather's place is ~/.config/bromigos/weather.toml. Settings › W
                                      ext info` (fetched and checked) and each widget's words, read
                                      from its code without running it
   bromigos panels move NAME X Y      its place, px from the top left of the usable area
-  bromigos panels size NAME W H      its size in px (edit mode keeps it to the panel's size classes)
+  bromigos panels size NAME W H      its size in px (edit mode keeps it to the panel's size classes).
+                                     Bigger: it grows where it is and pushes the panels in its way
+                                     down or aside; when they can't move, it moves to free space
+                                     (never onto the scene's keep-clear areas); no room: it says so
   bromigos panels size NAME CLASS    one of its size classes (compact, standard, wide, tall, large),
-                                     at that class's starting size (`gallery` lists each panel's)
+                                     at that class's starting width and the height its content
+                                     needs (`gallery` lists each panel's classes)
   bromigos panels monitor NAME|""    every panel onto one output ("": the primary), each one's own
                                      monitor forgotten (edit mode puts one panel on another monitor)
   bromigos panels weather place PLACE | coords LAT LON | units metric|imperial | name TEXT | clear
@@ -272,9 +276,13 @@ def _put(d, p, force=False, size=None):
     name = p["name"]
     w, h = size or (p.get("width"), p.get("height"))
     if size is None and (not (w and h) or force and not p.get("visible", True)):
-        it = _gallery_item(name, d)               # off, added: its default size class
-        if it:
+        it = _gallery_item(name, d)               # off, added: its default size class, as tall
+        if it:                                    # as its content needs there
             w, h = it["start"]
+            nat = _natural(name, it.get("default_size")) if it.get("fit") == "content" else None
+            c = next((c for c in it.get("sizes") or [] if c["name"] == it.get("default_size")), None)
+            if nat and c:
+                h = max(c["min"][1], min(c["max"][1], nat))
     w, h = int(w or 470), int(h or 300)
     mons = _monitors()
     m = _monitor_of(d, mons, entry=p)
@@ -290,7 +298,7 @@ def _put(d, p, force=False, size=None):
             and not any(A.overlaps((own[0], own[1], w, h), r) for r in hard):
         spot = own
     else:
-        spot = A.place(w, h, taken, area, avoid, soft, strict=True)
+        spot = A.place(w, h, taken, area, avoid, soft, strict=True, hard=hard)
     if spot is None:
         raise Fail(A.no_room(_title(name)))
     p.update(x=int(spot[0]), y=int(spot[1]), width=w, height=h)
@@ -372,12 +380,64 @@ def size(args):
     if len(args) != 3:
         raise Fail("bromigos panels size NAME W H | NAME CLASS")
     d, _, _ = load()
-    p = _panel(d, args[0])
+    p = _panel(d, args[0], plugins=True)
     w, h = _num(args[1], "width", 120, 4000), _num(args[2], "height", 80, 4000)
-    if p.get("visible", True):
-        _put(d, p, size=(w, h))                 # bigger: still clear of the others, or moved
-    p["width"], p["height"] = w, h
-    return _save(d, f"{p['name']}: {p['width']}×{p['height']}")
+    d, said = _resize(d, p, w, h)
+    return _save(d, said)
+
+
+def _natural(name, cls):
+    """The height the running panels say a widget's content needs in a size class (their
+    health file's "natural"), or None."""
+    n = ((health().get("natural") if running() else None) or {}).get(name) or {}
+    v = n.get(cls)
+    return int(v) if isinstance(v, (int, float)) and v > 0 else None
+
+
+def _resize(d, p, w, h):
+    """A panel at a new size: where it is when that's clear; else the panels it now overlaps
+    pushed down or sideways into free space; else it moves to the nearest free spot, never
+    into the scene's keep-clear areas. No room anywhere: Fail, saying so (nothing changes).
+    Returns (the layout, what to say)."""
+    import arrange as A
+    name = p["name"]
+    title = _upper_title(name, d)
+    if not p.get("visible", True):
+        p["width"], p["height"] = w, h
+        return d, f"{title}: {w}×{h} (off; it takes that size when it's switched on)"
+    mons = _monitors()
+    m = _monitor_of(d, mons, entry=p)
+    conn = m.get("name") if m else ""
+    scr = _screen_of(m)
+    area = (scr.W, scr.H)
+    now = _now(d, mons)
+    cur = _rect(dict(now.get(name) or {}, **{k: p[k] for k in ("x", "y", "width", "height") if k in p})) \
+        or (A.MARGIN[0], A.MARGIN[1], w, h)
+    others = {n: _rect(s) for n, s in now.items() if n != name and s.get("visible") and (s.get("conn") or "") == conn
+              and _rect(s)}
+    hard, soft = _scene_avoid(scr)
+    avoid = [(area[0] - 1204, area[1] - 664, 1180, 640), (area[0] - 440, 0, 440, 320)]
+    r = A.make_room((cur[0], cur[1], w, h), others, area, hard, soft, avoid, before=cur)
+    if r is None:
+        raise Fail(A.no_room_to_grow(title, cur, (cur[0], cur[1], w, h)))
+    x, y = r["rect"][:2]
+    p.update(x=int(x), y=int(y), width=w, height=h)
+    d = A.apply(d, {n: {"x": mx, "y": my} for n, (mx, my) in r["moved"].items()})
+    said = f"{title}: {w}×{h}"
+    if r["moved"]:
+        said += f"; {', '.join(_upper_title(n, d) for n in sorted(r['moved']))} moved to make room"
+    if r["how"] == "moved":
+        said += f"; no room where it was, so it's at {x},{y} now"
+    return d, said
+
+
+def _upper_title(name, d=None):
+    """A widget's own title, as it shows on the desktop ("LAB")."""
+    try:
+        it = _gallery_item(name, d)
+    except Fail:
+        it = None
+    return str(it["title"]) if it and it.get("title") else name.upper()
 
 
 def size_class(args):
@@ -394,9 +454,15 @@ def size_class(args):
         raise Fail(f"{name} has no {cls!r} size (it has: {', '.join(c['name'] for c in it['sizes'])})")
     d, _, _ = load()
     p = _panel(d, name, plugins=True)
-    if p.get("visible", True) and "x" in p and "y" in p:
-        _put(d, p, size=tuple(c["start"]))      # bigger: still clear of the others, or moved
-    p["width"], p["height"] = c["start"]
+    w, h = c["start"]
+    nat = _natural(name, cls) if it.get("fit") == "content" else None
+    if nat:                                     # as tall as its content needs, inside the class
+        h = max(c["min"][1], min(c["max"][1], nat))
+    if "x" in p and "y" in p:
+        d, said = _resize(d, p, w, h)
+        p = _panel(d, name, plugins=True)
+    else:
+        p["width"], p["height"] = w, h
     return _save(d, f"{it['title'].title()}: {cls}, {p['width']}×{p['height']}")
 
 
@@ -669,9 +735,11 @@ def gallery_cmd(args):
 
 # ------------------------------------------------------------------ layouts (widgets/layouts.py)
 def _catalog(d):
+    """Every widget's sizes for the layouts; with the panels running, the heights each one's
+    content needs now (their health file's "natural")."""
     import gallery
     import layouts as L
-    return L.catalog_of(gallery.entries(d))
+    return L.catalog_of(gallery.entries(d), naturals=(health().get("natural") if running() else None))
 
 
 def _template(ident, info):

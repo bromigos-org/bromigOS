@@ -35,3 +35,55 @@ DEMO_LAB = {
     "nodeDisks": [{"node": n, "pct": p, "used": u, "capacity": c} for n, p, u, c in (
         ("hub", 41.0, 410e9, 1000e9), ("forge", 63.0, 1.26e12, 2000e9), ("mast-1", 22.0, 110e9, 500e9))],
 }
+
+
+def _big_lab():
+    """A bigger made-up lab, the size a real one grows to: six nodes with long names, 36
+    services in five groups (one down, one slow to answer), the NAS pool, the object
+    store's share and three node disks. For pictures and tests of panels that must fit
+    their content (BROMIGOS_WIDGETS_DEMO_LAB_SIZE=big)."""
+    groups = {
+        "AI": ["Ollama", "ComfyUI", "Voice", "LiteLLM", "Open WebUI", "Embeddings", "Whisper", "Reranker"],
+        "PLATFORM": ["Argo CD", "Grafana", "Prometheus", "Alertmanager", "Loki", "Tempo", "Vault", "Traefik"],
+        "HOME": ["Jellyfin", "Immich", "Files", "Backups", "Home Assistant", "Paperless", "Audiobooks", "Recipes"],
+        "DEV": ["Forgejo", "Registry", "Woodpecker", "Renovate", "Sonar", "Docs"],
+        "NETWORK": ["DNS", "DHCP", "WireGuard", "Unifi", "Uptime", "Speedtest"],
+    }
+    services, status = [], {}
+    for g, names in groups.items():
+        items = []
+        for i, n in enumerate(names):
+            sid = n.lower().replace(" ", "-")
+            items.append({"id": sid, "name": n})
+            status[sid] = {"status": "up", "ms": 8 + (i * 7) % 45}
+        services.append({"name": g, "services": items})
+    status["paperless"] = {"status": "down"}
+    status["sonar"] = {"status": "degraded", "ms": 2400}
+    status["rustfs"] = {"status": "up", "ms": 14}
+    nodes = [("controller-1", 28.0, 61.0, 2.1, 16), ("gpu-worker-1", 71.0, 83.0, 9.4, 32),
+             ("storage-node", 9.0, 38.0, 0.7, 8), ("edge-gateway", 14.0, 41.0, 0.9, 4),
+             ("compute-west", 46.0, 66.0, 5.2, 24), ("compute-east", 39.0, 58.0, 4.4, 24)]
+    return {
+        "source": "demo",
+        "cluster": {"nodesReady": 6, "nodesTotal": 6, "podsRunning": 214, "podsNotRunning": 1, "deploymentsShort": 1,
+                    "cpuNow": 34.0, "cpuSeries": [], "alertsFiring": 3},
+        "argocd": {"healthy": 58, "total": 60},
+        "traefik": {"rpsNow": 41.0},
+        "network": {"wanDownBps": 120e6, "wanUpBps": 18e6},
+        "ai": {"rpmNow": 52.0, "failedPerHour": 1.0, "rpmSeries": [], "models": []},
+        "nodes": [{"name": n, "cpuPct": c, "memPct": m, "load1": l, "cores": k} for n, c, m, l, k in nodes],
+        "config": {"groups": services},
+        "services": status,
+        "nas": {"device": {"name": "storage-node"},
+                "pool": {"used": 38.2e12, "total": 64.0e12, "raidMembers": 8, "health": "healthy"},
+                "disks": [{"slot": i + 1, "model": "IronWolf Pro", "size": 8e12, "health": "good", "state": "normal",
+                           "tempC": 35 + i % 4, "hours": 18000 + 400 * i} for i in range(8)],
+                "shares": [{"name": "objects", "usage": 2.4e12, "quota": -1,
+                            "volumes": [{"claim": "rustfs/rustfs-data"}]}]},
+        "nodeDisks": [{"node": n, "pct": p, "used": u, "capacity": c} for n, p, u, c in (
+            ("controller-1", 47.0, 470e9, 1000e9), ("gpu-worker-1", 72.0, 1.44e12, 2000e9),
+            ("storage-node", 31.0, 155e9, 500e9))],
+    }
+
+
+BIG_LAB = _big_lab()

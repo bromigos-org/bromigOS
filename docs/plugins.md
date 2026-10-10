@@ -179,6 +179,27 @@ gallery says who made a panel from where it came from: bromigOS, an extension's
 [widgets.md](widgets.md) lists the panels bromigOS ships, and
 [widgets/README.md](../widgets/README.md) describes the code.
 
+### Fitting its content
+
+A panel must never cut off what it shows. When its content needs more room than it has,
+it shows less: the last whole row and "+N MORE", or a section folded to one line. Never
+half a row.
+
+A panel whose height follows its data, such as a list, can say so:
+
+```python
+class TidesPanel(K.KitPanel):
+    fit = "content"            # layouts and the desktop give it the height its rows need
+```
+
+Its `natural_height(width)` is then measured by drawing it offscreen at its class's
+tallest size. Draw from the top down, and don't stretch anything to fill the height, or
+the measure says it needs all of it. A panel can compute `natural_height(width, cls)`
+itself instead. See [Fitting to content](widgets.md#fitting-to-content).
+
+Check a panel with a big list before you ship it: `python3 widgets/tests/fitcheck.py
+NAME` draws it at each class's smallest and start sizes and says where it runs off.
+
 ### Settings and the kit
 
 A panel lists its own settings in `settings`, and reads them with `self.setting(key)`.

@@ -18,9 +18,18 @@ Each widget is placed by anchors, not pixels, so one file fits a 1366x768 laptop
     side = "left"                 # left or right: a column (lane 1 by the edge, 2 beside it…)
     lane = 1                      #   stacked in file order, from = "top" or "bottom"
     priority = 1                  # 1 matters most: the last to be shrunk or left out
+    fit = "content"               # its height: what its content needs, within its size class
+                                  #   (the default for a widget that fits its content);
+                                  #   "fixed": its class's start height
 
     side = "top" | "bottom"       # a row along that edge, from = "left" or "right"
     at = [0.1, 0.2]               # a place as fractions of the area (a saved layout's)
+
+A widget that fits its content (panels.Panel.fit, "content": LAB, ALERTS, CI…) gets the
+height its content needs at that width, kept inside its size class: the catalog's
+"natural" heights, which the running panels publish from their data (the health file) and
+the picture tools measure from demo data. A widget whose content needs more than its class
+allows gets the most it allows, and folds what it shows (it never cuts a section in half).
 
 Bigger is never the answer: a widget that doesn't fit goes down a size class, then is left
 out, lowest priority first, and the result says what was left out and why. The same
@@ -171,7 +180,9 @@ def parse(doc, ident, source="bromigos", path=None):
         e = {"names": names, "size": w.get("size"), "small": w.get("small"), "big": w.get("big"),
              "side": w.get("side"), "lane": int(w.get("lane", 1)), "from": w.get("from"),
              "at": w.get("at"), "priority": int(w.get("priority", 5)), "order": i,
-             "width": w.get("width"), "height": w.get("height")}
+             "width": w.get("width"), "height": w.get("height"), "fit": w.get("fit")}
+        if e["fit"] not in (None, "content", "fixed"):
+            raise ValueError(f"{ident}: {names[0]}: fit is \"content\" or \"fixed\"")
         if e["at"] is not None:
             if not (isinstance(e["at"], list) and len(e["at"]) == 2 and all(isinstance(v, (int, float)) for v in e["at"])):
                 raise ValueError(f"{ident}: {names[0]}: at is [x, y], fractions of the area")
@@ -338,12 +349,16 @@ def scene_avoid(scr, info=None):
 
 
 # ------------------------------------------------------------------ what each widget can be
-def catalog_of(entries, signed_in=None):
+def catalog_of(entries, signed_in=None, naturals=None):
     """{name: {"title", "classes": [(name, min, max, start)], "default", "available",
-    "why", "account"}} from the gallery's entries (gallery.entries). A widget with an account
-    sign-in (a "secret-signin" setting) nobody is signed in to counts as unavailable;
-    signed_in(provider) answers (default: lib/bromigos_account; with demo readings, yes)."""
+    "why", "account", "fit", "natural"}} from the gallery's entries (gallery.entries). A
+    widget with an account sign-in (a "secret-signin" setting) nobody is signed in to counts
+    as unavailable; signed_in(provider) answers (default: lib/bromigos_account; with demo
+    readings, yes). naturals: {name: {class: height}}, what each widget's content needs in
+    each class (the running panels' health file, or gallery.naturals_of); an entry's own
+    "natural" is used when it has one."""
     out = {}
+    naturals = naturals or {}
     for e in entries:
         provider = next((f.get("provider") for f in e.get("form") or [] if f.get("kind") == "secret-signin"), None)
         title = TITLES.get(e["name"]) or _sentence(e.get("title") or e["name"])
@@ -357,8 +372,22 @@ def catalog_of(entries, signed_in=None):
                                       for c in e.get("sizes") or []] or
                           [("standard", tuple(e.get("min_size") or (240, 120)), tuple(e.get("max_size") or (1600, 1400)),
                             (int(e.get("width") or 470), int(e.get("height") or 300)))],
-                          "default": e.get("default_size") or "standard", "category": e.get("category")}
+                          "default": e.get("default_size") or "standard", "category": e.get("category"),
+                          "fit": e.get("fit"),
+                          "natural": {str(k): int(v) for k, v in (naturals.get(e["name"]) or e.get("natural") or {}).items()
+                                      if isinstance(v, (int, float)) and v > 0}}
     return out
+
+
+def content_height(cat, cls, fit=None):
+    """The height a widget's content needs in size class cls (cls: (name, min, max, start)),
+    kept inside the class; None when it has no natural height there or fit is "fixed"."""
+    if fit == "fixed" or (fit is None and cat.get("fit") != "content" and not cat.get("natural")):
+        return None
+    nat = (cat.get("natural") or {}).get(cls[0])
+    if not nat:
+        return None
+    return int(max(cls[1][1], min(cls[2][1], nat)))
 
 
 def _sentence(title):
@@ -404,6 +433,9 @@ def _pref(e, cat, scr):
     out = []
     for c in [first] + sorted((c for c in classes if c is not first and _sq(c[3]) < _sq(first[3])),
                               key=lambda c: -_sq(c[3])):
+        nat = content_height(cat, c, e.get("fit")) if c[0] != "own" else None
+        if nat:                                         # as tall as its content, inside the class
+            c = (c[0], c[1], c[2], (c[3][0], -(-nat // STEP) * STEP if nat + STEP <= c[2][1] else nat))
         out.append(c)
         snug = (max(c[1][0], int(c[3][0] * 0.85) // STEP * STEP), max(c[1][1], int(c[3][1] * 0.85) // STEP * STEP))
         if snug != tuple(c[3]) and c[0] != "own":       # the same class, a little smaller
@@ -716,9 +748,19 @@ def tidy_template(state, scr):
 def tidy(state, scr, catalog, clear=(), focus=None):
     """Tidy up: the widgets on now packed without overlapping, their order kept, off the
     scene's focal points where it can (every keep-clear area is soft here: the widgets are
-    the ones you chose). Returns fit()'s result (left_out: those with no room at all)."""
+    the ones you chose); one that fits its content as tall as its content needs, inside its
+    size class. Returns fit()'s result (left_out: those with no room at all)."""
     clear = [dict(c, soft=True) for c in clear or []]
     cat = dict(catalog)
+    state = {n: dict(s) for n, s in state.items()}
+    for n, s in state.items():                 # a widget that fits its content: as tall as it needs
+        c = cat.get(n)
+        if c and s.get("width") and s.get("height"):
+            name = A.fit_class([k[:3] for k in c["classes"]], s["width"], s["height"])[2]
+            cls = next((k for k in c["classes"] if k[0] == name), None)
+            nat = content_height(c, cls) if cls else None
+            if nat:
+                s["height"] = nat
     for n, s in state.items():               # a widget the catalog doesn't know keeps its own size only
         if n not in cat and s.get("visible", True):
             cat[n] = {"title": TITLES.get(n) or _sentence(n), "available": True, "why": "", "account": None, "default": "own",

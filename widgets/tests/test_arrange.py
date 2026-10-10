@@ -251,3 +251,84 @@ class SizeClasses(unittest.TestCase):
         r, name = A.resize_in_classes((1400, 100, 640, 520), "se", self.CLASSES, AREA)
         self.assertEqual(name, "large")
         self.assertLessEqual(r[0] + r[2], AREA[0])                         # still inside the area
+
+
+class MakeRoom(unittest.TestCase):
+    """A panel made bigger grows where it is and pushes its neighbours aside; it moves only
+    when they can't move, and never onto the scene: the Wick's den, 2560x1440 with its bar."""
+
+    @classmethod
+    def setUpClass(cls):
+        import layouts as L
+        repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        info = L.scene_info("wick", os.path.join(repo, "themes", "wick"))
+        scr = L.Screen.size(2560, 1440)
+        cls.area = (scr.W, scr.H)
+        rects = L.scene_rects(info["clear"], scr)
+        cls.hard = [r[:4] for r in rects if not r[5]]
+        cls.soft = [r[:4] for r in rects if r[5]]
+
+    def desk(self):
+        """His desk as it was when LAB was made taller: LAB and SYSTEM on the left wall,
+        VECTOR and ALERTS beside them, the den remote at the bottom, CI under the window."""
+        return {"vector": (510, 24, 460, 300), "alerts": (510, 340, 460, 300), "system": (24, 680, 300, 180),
+                "media": (340, 1000, 620, 200), "ci": (2056, 880, 480, 300)}
+
+    def test_lab_grows_in_place_and_system_moves_down(self):
+        lab = (24, 24, 470, 640)
+        r = A.make_room((24, 24, 470, 900), self.desk(), self.area, self.hard, self.soft, before=lab)
+        self.assertEqual(r["how"], "pushed")
+        self.assertEqual(r["rect"], (24, 24, 470, 900))            # where it was: never onto the scene
+        self.assertEqual(r["moved"], {"system": (24, 940)})       # SYSTEM under it, a gap away
+        others = dict(self.desk(), system=(24, 940, 300, 180))
+        for n, o in others.items():
+            self.assertFalse(A.overlaps(r["rect"], o), n)
+
+    def test_nothing_in_the_way_stays_put(self):
+        r = A.make_room((24, 24, 470, 600), {"system": (24, 680, 300, 180)}, self.area, self.hard, self.soft,
+                        before=(24, 24, 470, 640))
+        self.assertEqual((r["how"], r["moved"], r["rect"]), ("in place", {}, (24, 24, 470, 600)))
+
+    def test_moving_never_goes_onto_the_scene(self):
+        # CI under the window, made much taller: in place it would cover the window and the
+        # station; it moves to free space, which is never a keep-clear area
+        ci = (2056, 880, 480, 300)
+        others = {k: v for k, v in self.desk().items() if k != "ci"}
+        r = A.make_room((2056, 880, 480, 600), others, self.area, self.hard, self.soft, before=ci)
+        self.assertEqual(r["how"], "moved")
+        for a in self.hard:
+            self.assertFalse(A.overlaps(r["rect"], a), (r["rect"], a))
+        for o in others.values():
+            self.assertFalse(A.overlaps(r["rect"], o, A.GAP), (r["rect"], o))
+        # 700 tall: no free spot off the scene at all, so no room (it isn't put on the window)
+        self.assertIsNone(A.make_room((2056, 880, 480, 700), others, self.area, self.hard, self.soft, before=ci))
+
+    def test_the_teleport_that_happened(self):
+        # LAB 470x900 when nothing could be pushed used to land at 986,16: on the window
+        crowded = dict(self.desk(), system=(24, 680, 470, 700), media=(24, 1396 - 10, 10, 10))
+        r = A.make_room((24, 24, 470, 900), crowded, self.area, self.hard, self.soft, before=(24, 24, 470, 640))
+        if r is not None:
+            for a in self.hard:
+                self.assertFalse(A.overlaps(r["rect"], a), (r, a))
+
+    def test_no_room_anywhere_says_so(self):
+        full = {f"p{i}": (i * 400, 0, 384, 600) for i in range(4)}
+        self.assertIsNone(A.make_room((0, 0, 380, 900), full, (1600, 860), before=(0, 0, 380, 600)))
+        self.assertIsNone(A.make_room((24, 24, 470, 2000), {}, self.area))           # taller than the screen
+        self.assertEqual(A.no_room_to_grow("LAB", (24, 24, 470, 640), (24, 24, 470, 900)),
+                         "No room to make LAB 900 tall here: move or hide something")
+        self.assertEqual(A.no_room_to_grow("CI", (0, 0, 480, 300), (0, 0, 780, 300)),
+                         "No room to make CI 780 wide here: move or hide something")
+
+    def test_pushes_cascade(self):
+        # A grows down into B, which goes down into C, which goes down too
+        others = {"b": (0, 220, 300, 100), "c": (0, 340, 300, 100)}
+        r = A.make_room((0, 0, 300, 300), others, (1000, 1000), before=(0, 0, 300, 200))
+        self.assertEqual(r["moved"], {"b": (0, 316), "c": (0, 432)})
+
+    def test_place_never_gives_up_the_hard_areas(self):
+        # everything but the scene's keep-clear areas taken: no spot, rather than one on the scene
+        W, H = self.area
+        taken = [(x, y, 64, 64) for x in range(0, W, 80) for y in range(0, H, 80)
+                 if not any(A.overlaps((x, y, 64, 64), a, A.GAP) for a in self.hard)]
+        self.assertIsNone(A.place(300, 200, taken, self.area, hard=self.hard, strict=True))

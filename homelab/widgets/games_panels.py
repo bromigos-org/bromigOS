@@ -86,6 +86,7 @@ class GamesPanel(K.KitPanel):
     category, reads = "homelab", "your homelab's game servers (Pelican, Minecraft)"
     width, height = 460, 260
     interval = 10.0                    # the draw refresh; the servers are asked every 60 s
+    fit = "content"                    # as tall as its rows (panels.Panel.fit)
     sizes = {
         "compact": ((240, 120), (380, 190), (280, 140)),
         "standard": ((400, 200), (620, 420), (460, 260)),

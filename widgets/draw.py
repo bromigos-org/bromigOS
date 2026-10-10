@@ -100,6 +100,7 @@ def text(cr, x, y, s, size=11, color="soft", weight="medium", spacing=0.0, align
         cr.move_to(round(x), round(y))
     src(cr, color, alpha)
     PangoCairo.show_layout(cr, lay)
+    mark(cr, x, y, w, h, s)
     return w, h
 
 
@@ -108,6 +109,57 @@ def label(cr, x, y, s, color="dim", size=11, align="left", alpha=1.0):
     """Small uppercase monospace label, wide tracking (0.18em)."""
     return text(cr, x, y, s.upper(), size=size, color=color, weight="semibold",
                 spacing=0.18, align=align, alpha=alpha)
+
+
+def first_fit(cr, options, width, size=11, weight="semibold", spacing=0.18, upper=True):
+    """The first of options (longest wording first) that fits in width px, as label() draws
+    it; the last one when none does."""
+    for s in options:
+        t = s.upper() if upper else s
+        if layout(cr, t, max(size, 10), weight, spacing).get_pixel_size()[0] <= width:
+            return s
+    return options[-1]
+
+
+# ----------------------------------------------------------------- measuring
+# While a panel is measured (how tall its content is: panels.measure) or checked (that it
+# never draws past its edges: the tests), record() collects what it draws: each text's
+# box and each bar's, gauge's and chart's, in the panel's own px, with the clip in force.
+_marks = None
+
+
+class record:
+    """with D.record() as marks: …: every mark() inside, as {"box": (x0, y0, x1, y1),
+    "clip": (x0, y0, x1, y1), "what": the text, or the primitive's name}."""
+
+    def __enter__(self):
+        global _marks
+        self.saved, _marks = _marks, []
+        return _marks
+
+    def __exit__(self, *exc):
+        global _marks
+        _marks = self.saved
+        return False
+
+
+def mark(cr, x, y, w, h, what):
+    """Notes a drawn box (user space) while record() is on; nothing otherwise."""
+    if _marks is None:
+        return
+    xs, ys = [], []
+    for px, py in ((x, y), (x + w, y), (x, y + h), (x + w, y + h)):
+        dx, dy = cr.user_to_device(px, py)
+        xs.append(dx)
+        ys.append(dy)
+    c0, c1, c2, c3 = cr.clip_extents()
+    cxs, cys = [], []
+    for px, py in ((c0, c1), (c2, c1), (c0, c3), (c2, c3)):
+        dx, dy = cr.user_to_device(px, py)
+        cxs.append(dx)
+        cys.append(dy)
+    _marks.append({"box": (min(xs), min(ys), max(xs), max(ys)),
+                   "clip": (min(cxs), min(cys), max(cxs), max(cys)), "what": what})
 
 
 # ----------------------------------------------------------------- frame
@@ -178,9 +230,11 @@ def cells(cr, x, y, w, h, frac, n=24, warn=0.75, crit=0.9, gap=2):
             src(cr, "guard", 0.9)
         cr.rectangle(round(cx), y, max(1, round(cw)), h)
         cr.fill()
+    mark(cr, x, y, w, h, "cells")
 
 
 def bar(cr, x, y, w, h, frac, color="phosphor"):
+    mark(cr, x, y, w, h, "bar")
     src(cr, "guard", 0.9)
     cr.rectangle(x, y, w, h)
     cr.fill()
@@ -192,6 +246,8 @@ def bar(cr, x, y, w, h, frac, color="phosphor"):
 
 def ring(cr, cx, cy, r, frac, width=6, color="phosphor", dashed=False):
     """Arc gauge from 12 o'clock clockwise with 24 vector ticks around it."""
+    e = r + width / 2 + 6
+    mark(cr, cx - e, cy - e, 2 * e, 2 * e, "ring")
     cr.new_path()
     cr.set_line_width(width)
     src(cr, "guard", 0.95)
@@ -218,6 +274,7 @@ def ring(cr, cx, cy, r, frac, width=6, color="phosphor", dashed=False):
 def spark(cr, x, y, w, h, values, color="phosphor", lo=None, hi=None, fill=True):
     """A sparkline of values (oldest first) in the box; lo/hi fix the scale (else the data's)."""
     vals = [v for v in values if v is not None]
+    mark(cr, x, y, w, h, "spark")
     if len(vals) < 2:
         return
     lo = min(vals) if lo is None else lo
@@ -337,4 +394,5 @@ def seg7(cr, x, y, h, s, color="phosphor", ghost=True, glow=True):
                 src(cr, "guard", 0.35)
             cr.fill()
         cx += w + gap
+    mark(cr, x, y, cx - x - gap, h, "seg7")
     return cx - x - gap

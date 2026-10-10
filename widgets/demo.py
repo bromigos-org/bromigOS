@@ -270,7 +270,7 @@ def _demo_nmcli(*args, timeout=8):
 
 P._nmcli = _demo_nmcli
 
-from demo_lab import DEMO_LAB  # noqa: E402  (shared with the live layer's pictures)
+from demo_lab import BIG_LAB, DEMO_LAB  # noqa: E402  (shared with the live layer's pictures)
 
 
 def _demo_lab():
@@ -287,7 +287,9 @@ def _demo_lab():
     except ImportError:
         return
     H.snapshot_source = lambda: "demo"
-    H.snapshot = lambda: dict(DEMO_LAB, generatedAt=time.time() - 4)
+    # BROMIGOS_WIDGETS_DEMO_LAB_SIZE=big: a lab the size a real one grows to (demo_lab.BIG_LAB)
+    lab = BIG_LAB if os.environ.get("BROMIGOS_WIDGETS_DEMO_LAB_SIZE") == "big" else DEMO_LAB
+    H.snapshot = lambda: dict(lab, generatedAt=time.time() - 4)
     H.source_of = lambda *a, **k: None
     H.lab_url = lambda: None
     H.config.panels = lambda: []

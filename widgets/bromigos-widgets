@@ -338,20 +338,28 @@ class Surface:
         return A.fit_class(self.classes(), *self.size_now())[2]
 
     def set_size_class(self, name):
-        """To a size class's start size (the gallery's size picker)."""
+        """To a size class (the gallery's size picker, Add to desktop): its start width, and
+        the height its content needs there when it fits its content (else its start height)."""
         start = next((c[3] for c in self.classes() if c[0] == name), None)
         if start:
-            self.resize(*start)
+            panel = getattr(self, "panel", None)
+            h = P.fit_height(panel, start[0], name) if panel is not None else None
+            self.resize(start[0], h or start[1])
 
     def set_layer(self, top):
         GtkLayerShell.set_layer(self.win, GtkLayerShell.Layer.TOP if top else GtkLayerShell.Layer.BOTTOM)
 
 
 class PanelWindow(Surface):
-    def __init__(self, app, panel, monitor, x, y, name=None):
+    def __init__(self, app, panel, monitor, x, y, name=None, fit=None):
         self.app, self.panel = app, panel
         self.name = name or getattr(panel, "name", "panel")
         self.x, self.y = int(x), int(y)
+        # the room it was given (layout.json's size: what edit mode moves and the layouts
+        # place), and whether its frame follows its content inside it (fit_content)
+        self.box = (int(panel.width), int(panel.height))
+        self.fit = fit if fit in ("content", "fixed") else getattr(getattr(panel, "inner", panel), "fit", None)
+        self.fitted_at = 0.0
         self.win = layer_window(monitor, x, y, panel.width, panel.height)
         self.area = Gtk.DrawingArea()
         self.area.set_size_request(panel.width, panel.height)
@@ -380,19 +388,47 @@ class PanelWindow(Surface):
         return True
 
     def size_now(self):
-        return (int(self.panel.width), int(self.panel.height))
+        return self.box
 
     def classes(self):
         return G.classes_of(self.panel)
 
     def resize(self, w, h):
-        w, h = int(w), int(h)
+        """Its room: the frame takes all of it (fit_content may shrink it again later)."""
+        self.box = (int(w), int(h))
+        self.fitted_at = 0.0
+        self.show_height(int(h))
+
+    def show_height(self, h):
+        """The frame's height on the desktop, inside its room (the top left stays put)."""
+        w, h = self.box[0], min(int(h), self.box[1])
         inner = getattr(self.panel, "inner", self.panel)       # a plugin's SafePanel
         inner.width, inner.height = w, h
         self.area.set_size_request(w, h)
         self.win.set_size_request(w, h)
         self.win.resize(w, h)
         self.redraw()
+
+    def shown_height(self):
+        return int(getattr(self.panel, "inner", self.panel).height)
+
+    def content_target(self):
+        """The frame height its content needs now, inside its room and its size class's
+        heights; None when it doesn't fit its content."""
+        if self.fit != "content":
+            return None
+        w, h = self.box
+        name = A.fit_class(self.classes(), w, h)[2]
+        c = next((c for c in self.classes() if c[0] == name), None)
+        if c is None:
+            return None
+        try:
+            nat = getattr(self.panel, "inner", self.panel).natural_height(w, name)
+        except Exception:                      # noqa: BLE001  a plugin's sum failing: its whole room
+            nat = None
+        if not nat:
+            return h
+        return int(max(c[1][1], min(h, nat)))
 
     def on_click(self, _w, ev):
         if ev.button == 3:                     # a right-click: edit mode, this panel picked
@@ -472,11 +508,16 @@ class NotesWindow(Surface):
         self.view.connect("focus-out-event", lambda *a: self.release())
         GLib.timeout_add_seconds(5, self.watch_file)
 
+    fit = None
+
     def size_now(self):
         return (int(self.w), int(self.h))
 
     def classes(self):
         return G.classes_of(None)
+
+    def content_target(self):
+        return None
 
     def resize(self, w, h):
         self.w, self.h = int(w), int(h)
@@ -621,7 +662,7 @@ class App:
                 panel = core[name](spec)
                 panel.width = spec.get("width", panel.width)
                 panel.height = spec.get("height", panel.height)
-                win = PanelWindow(self, panel, mon, spec["x"], spec["y"], name)
+                win = PanelWindow(self, panel, mon, spec["x"], spec["y"], name, spec.get("fit"))
             win.monitor, win.pin = conn, spec.get("output") or None
             self.windows[name] = win
             if spec.get("visible", True):
@@ -633,6 +674,8 @@ class App:
         self.fall_back()
         GLib.timeout_add_seconds(2, self.scan_plugins)
         GLib.timeout_add_seconds(2, self.write_health)
+        self.naturals, self.naturals_at = {}, 0.0
+        GLib.timeout_add_seconds(5, self.fit_content)
         self.coverage.start()
         # Hotplug: when an output goes away (monitor powered off, unplugged), gtk-layer-shell
         # turns the compositor's 'closed' into a window close. Keep the windows, remember
@@ -796,7 +839,7 @@ class App:
         if old and A.fits((old[0], old[1], w, h), taken, area, A.GAP) and \
                 not any(A.overlaps((old[0], old[1], w, h), r) for r in avoid):
             return old[0], old[1]
-        spot = A.place(w, h, taken, area, avoid, soft, strict=True)
+        spot = A.place(w, h, taken, area, avoid, soft, strict=True, hard=self.hard_areas(conn))
         if spot is None:
             return None
         places[name] = list(spot)
@@ -831,6 +874,17 @@ class App:
             except Exception as e:                # noqa: BLE001  never in the way of adding one
                 print(f"bromigos-widgets: the scene's keep-clear areas: {e}", file=sys.stderr, flush=True)
         return self.avoid(area) + hard, soft
+
+    def hard_areas(self, conn, area=None):
+        """The scene's hard keep-clear areas on an output: never a place for a panel."""
+        m = self.monitor(conn)
+        if not m:
+            return []
+        try:
+            import layouts as L
+            return L.scene_avoid(L.Screen.of(m))[0]
+        except Exception:                        # noqa: BLE001
+            return []
 
     def say(self, text):
         """A message the user sees (a notification), and the log."""
@@ -879,7 +933,7 @@ class App:
                     roomless = spot is None
                     x, y = spot or MARGIN_SPOT
                     safe = PL.SafePanel(name, panel, path)
-                    win = PanelWindow(self, safe, gdk_monitor(conn, self.mons), x, y, name)
+                    win = PanelWindow(self, safe, gdk_monitor(conn, self.mons), x, y, name, spec.get("fit"))
                     win.pos = (x, y)
                     win.monitor, win.pin = conn, spec.get("output") or None
                     if self.editor:
@@ -912,6 +966,53 @@ class App:
             print("bromigos-widgets: plugin scan failed:", e, file=sys.stderr, flush=True)
         return True
 
+    # ------------------------------------------------------------------ fitting to content
+    FIT_EVERY = 30.0         # s: at most one change of a panel's frame in this long
+    NATURALS_EVERY = 60.0    # s: how often the heights the layouts read are measured again
+
+    def fit_content(self):
+        """Every 5 s, outside edit mode: a panel that fits its content (fit "content") has
+        its frame follow what its content needs, inside the room it was given, its top left
+        where it is. Hysteresis: only when that changes by more than a row (panels.ROW), and
+        not more than once every FIT_EVERY seconds, so it never jumps with each reading.
+        Then the heights each widget's content needs in each class (the health file's
+        "natural", for `bromigos panels layout apply` and Tidy up), once a minute."""
+        now = time.monotonic()
+        if self.editor is None:
+            for w in self.windows.values():
+                if not hasattr(w, "show_height") or not w.visible() or self.coverage.covers(w.monitor):
+                    continue
+                target = w.content_target()
+                if target is None:
+                    if w.shown_height() != w.box[1]:
+                        w.show_height(w.box[1])
+                    continue
+                if abs(target - w.shown_height()) > P.ROW and now - w.fitted_at >= self.FIT_EVERY:
+                    w.show_height(target)
+                    w.fitted_at = now
+        if now - self.naturals_at >= self.NATURALS_EVERY:
+            self.naturals_at = now
+            got = {}
+            for n, w in self.windows.items():
+                if getattr(w, "fit", None) == "content" and hasattr(w, "panel"):
+                    try:
+                        nat = P.naturals(w.panel, width=w.box[0])
+                    except Exception as e:            # noqa: BLE001  never in the way of the panels
+                        print(f"bromigos-widgets: {n}: measuring its content: {e}", file=sys.stderr, flush=True)
+                        continue
+                    if nat:
+                        got[n] = nat
+            self.naturals = got
+        return True
+
+    def unfit(self):
+        """Edit mode: every panel's frame fills its room again (what's being arranged)."""
+        for w in self.windows.values():
+            if hasattr(w, "show_height") and w.shown_height() != w.box[1]:
+                w.show_height(w.box[1])
+            if hasattr(w, "fitted_at"):
+                w.fitted_at = 0.0
+
     def write_health(self):
         try:
             plug = {}
@@ -924,7 +1025,8 @@ class App:
             d = {"t": time.time(), "pid": os.getpid(), "uptime_s": round(time.time() - self.started),
                  "covered": self.coverage.covers(self.primary), "covered_outputs": sorted(self.coverage.on),
                  "editing": self.editor is not None, "plugins": plug,
-                 "monitor": self.primary, "outputs": [m["name"] for m in self.mons], "panels": self.state()}
+                 "monitor": self.primary, "outputs": [m["name"] for m in self.mons], "panels": self.state(),
+                 "natural": getattr(self, "naturals", {})}
             import plugins as PL
             tmp = PL.HEALTH + ".tmp"
             with open(tmp, "w") as f:
@@ -1108,6 +1210,7 @@ class App:
     def edit(self, how="toggle", select=None):
         if how in ("on", "toggle") and self.editor is None:
             import editmode
+            self.unfit()
             self.editor = editmode.Editor(self, select)
         elif how in ("done", "toggle") and self.editor:
             self.editor.done()
@@ -1232,7 +1335,7 @@ class App:
         area = self.area(w.monitor)
         taken = self.shown_rects(w.monitor, name)
         avoid, soft = self.keep_clear(w.monitor, area)
-        spot = A.place(*w.size_now(), taken, area, avoid, soft, strict=True)
+        spot = A.place(*w.size_now(), taken, area, avoid, soft, strict=True, hard=self.hard_areas(w.monitor))
         if spot is None:
             panel = getattr(w, "panel", None)
             self.say(A.no_room(G.meta_of(panel, name)["title"] if panel is not None else "FIELD NOTES"))

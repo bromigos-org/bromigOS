@@ -33,6 +33,18 @@ def store_share(nas):
     return None
 
 
+def disk_node(nd, i):
+    """A node disk's node, as the snapshot names it: its node, else its hostname, instance
+    (without the port), address or label; else "node N" (its place in the list), never "?"."""
+    for k in ("node", "hostname", "host", "instance", "address", "label", "name"):
+        v = str(nd.get(k) or "").strip()
+        if k == "instance" and v.count(":") == 1:
+            v = v.split(":", 1)[0]
+        if v and v.lower() not in ("?", "unknown", "none", "null", "-"):
+            return v
+    return f"node {i + 1}"
+
+
 class LabSource(threading.Thread):
     """Polls the snapshot every `every` s. state: 'ok' | 'stale' | 'unauthorized' | 'down'."""
 
@@ -81,6 +93,7 @@ class LabPanel(Panel):
              "standard": ((420, 600), (780, 1200), (470, 640)),
              "large": ((820, 520), (1500, 1200), (980, 700))}
     interval = 1.0                       # redraw cadence for the freshness clock; data every 20 s
+    fit = "content"                      # as tall as the lab it shows (natural_height)
 
     def __init__(self, cfg=None, wake=None):
         super().__init__(cfg)
@@ -136,7 +149,7 @@ class LabPanel(Panel):
             side = min(h - top - 16, int(w * 0.48))
             self._hologram(cr, d, x0, top, side, h - top - 16)
             x0 = x0 + side + 20
-        self._body(cr, d, x0, x1, top)
+        self._body(cr, d, x0, x1, top, h - self.BOTTOM)
 
     def _summary(self, cr, d, x0, x1, y):
         """The cluster in four numbers: nodes ready, pods, Argo apps healthy, alerts firing."""
@@ -168,20 +181,66 @@ class LabPanel(Panel):
             self.region(ix, y, cw - 6, 40, tip, acts[i])
         return y + 50
 
-    def _body(self, cr, d, x0, x1, y):
+    # ------------------------------------------------------------ fitting the room it has
+    # The body's sections, under the summary strip. When they don't all fit, they fold to a
+    # summary in this order (SERVICES to "36/36 UP" and the ones that aren't up, the node map
+    # to one chip per node, STORAGE POOLS to one line); still too tall, the node map and then
+    # SERVICES are left out. A section is never cut in half.
+    SECTIONS = ("nodes", "services", "pools")
+    FOLD = ("services", "nodes", "pools")
+    DROP = ("nodes", "services")
+    BOTTOM = 10                          # px kept under the last line
+
+    def plan(self, cr, d, x0, x1, room):
+        """{section: "full" | "fold" | None} that fits in `room` px under the summary strip
+        (starting at its top), and the height it takes."""
+        hs = {s: {m: self._section(cr, d, s, m, x0, x1, 0, draw=False) for m in ("full", "fold")}
+              for s in self.SECTIONS}
+        mode = {s: "full" for s in self.SECTIONS}
+
+        def total():
+            return 50 + sum(10 + hs[s][mode[s]] for s in self.SECTIONS if mode[s])
+        for s in self.FOLD:
+            if total() <= room:
+                break
+            mode[s] = "fold"
+        for s in self.DROP:
+            if total() <= room:
+                break
+            mode[s] = None
+        return mode, total()
+
+    def natural_height(self, width, cls=None):
+        """Everything in full: the summary strip and each section's own height at this width
+        (at the large size, beside the hologram, and never shorter than the class allows)."""
+        d = self.lab.data
+        cls = cls or self.size_class(width, self.height)
+        if not d or cls == "compact":
+            return None if not d else 44 + 50 + self.BOTTOM
+        import cairo
+        cr = cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32, 4, 4))
+        x0, x1 = 16, width - 16
+        if cls == "large":
+            x0 += int(width * 0.48) + 20
+        hs = sum(10 + self._section(cr, d, s, "full", x0, x1, 0, draw=False) for s in self.SECTIONS)
+        return 44 + 50 + hs + self.BOTTOM
+
+    def _section(self, cr, d, name, mode, x0, x1, y, draw=True):
+        """One section from y, full or folded; the y under it."""
+        return {"nodes": self._nodes, "services": self._services, "pools": self._pools}[name](
+            cr, d, x0, x1, y, mode=mode, draw=draw) - y
+
+    def _body(self, cr, d, x0, x1, y, bottom=None):
+        mode, _need = self.plan(cr, d, x0, x1, (bottom or 10 ** 6) - y)
+        self.folded = {s: m for s, m in mode.items() if m != "full"}
         y = self._summary(cr, d, x0, x1, y)
-        D.rule(cr, x0, y, x1)
-        y += 10
-        # --- node map: a bus with the nodes hanging off it
-        y = self._nodes(cr, d, x0, x1, y)
-        D.rule(cr, x0, y, x1)
-        y += 10
-        # --- services matrix
-        y = self._services(cr, d, x0, x1, y)
-        D.rule(cr, x0, y, x1)
-        y += 10
-        # --- storage pools
-        self._pools(cr, d, x0, x1, y)
+        for s in self.SECTIONS:
+            if not mode[s]:
+                continue
+            D.rule(cr, x0, y, x1)
+            y += 10
+            y = self._section(cr, d, s, mode[s], x0, x1, y) + y
+        return y
 
     # ------------------------------------------------------------ the hologram
     @staticmethod
@@ -340,138 +399,269 @@ class LabPanel(Panel):
         dom = H.config.setting("services", "domain", "")
         return f"https://{sid}.{dom}" if dom else H.lab_url()
 
-    def _nodes(self, cr, d, x0, x1, y):
-        nodes = d.get("nodes") or []
-        D.label(cr, x0, y, "NODE MAP", "dim")
-        cl = d.get("cluster", {})
-        D.label(cr, x1, y, f"CLUSTER CPU {cl.get('cpuNow', 0):.0f}%", "static", align="right")
-        y += 20
-        n = max(1, len(nodes))
-        bw = (x1 - x0 - (n - 1) * 8) / n
-        bus_y = y + 4
-        D.src(cr, "dim", 0.6)
-        cr.set_line_width(1)
-        cr.move_to(x0, bus_y + 0.5)
-        cr.line_to(x1, bus_y + 0.5)
-        cr.stroke()
-        pulse = max(0.0, 1 - (time.time() - self.pulse_at) / 1.6)
-        for i, nd in enumerate(nodes):
-            bx = x0 + i * (bw + 8)
-            cx = bx + bw / 2
-            cpu, mem = nd.get("cpuPct", 0) / 100, nd.get("memPct", 0) / 100
-            worst = max(D.level(cpu, 0.85, 0.95), D.level(mem, 0.9, 0.97),
-                        key=["phosphor", "amber", "danger", "static"].index)
-            D.src(cr, "dim", 0.6)
-            cr.move_to(cx + 0.5, bus_y)
-            cr.line_to(cx + 0.5, bus_y + 10)
-            cr.stroke()
-            by = bus_y + 10
-            D.src(cr, "void", 0.7)
-            cr.rectangle(bx, by, bw, 76)
-            cr.fill()
-            D.brackets(cr, bx, by, bw, 76, 6, worst, 1.2, 0.9)
-            D.dot(cr, bx + 9, by + 11, 2.5 + 1.5 * pulse, worst, glow=True)
-            D.text(cr, bx + 18, by + 4, nd.get("name", "?").replace("k8s-", "").upper(), 10, "soft", "semibold", spacing=0.08, width=bw - 22)
-            D.label(cr, bx + 6, by + 25, "CPU", "dim", size=10)
-            D.bar(cr, bx + 40, by + 30, bw - 46, 5, cpu, D.level(cpu, 0.85, 0.95))
-            D.label(cr, bx + 6, by + 41, "MEM", "dim", size=10)
-            D.bar(cr, bx + 40, by + 46, bw - 46, 5, mem, D.level(mem, 0.9, 0.97))
-            D.label(cr, bx + 6, by + 57, f"L{nd.get('load1', 0):.1f} · {nd.get('cores', '?')}C", "static", size=10)
-            self.region(bx, by, bw, 76, f"Node {nd.get('name')}: CPU {nd.get('cpuPct', 0):.0f}%, memory "
-                        f"{nd.get('memPct', 0):.0f}%, load {nd.get('load1', 0):.2f} on {nd.get('cores')} cores. "
-                        "Amber: memory past 90% or CPU past 85%.")
-        return bus_y + 10 + 76 + 12
+    @staticmethod
+    def _node_name(nd):
+        return (nd.get("name") or "?").replace("k8s-", "").upper()
 
-    def _services(self, cr, d, x0, x1, y):
+    def _node_tip(self, nd):
+        return (f"Node {nd.get('name')}: CPU {nd.get('cpuPct', 0):.0f}%, memory {nd.get('memPct', 0):.0f}%, load "
+                f"{nd.get('load1', 0):.2f} on {nd.get('cores')} cores. Amber: memory past 90% or CPU past 85%.")
+
+    @staticmethod
+    def _node_worst(nd):
+        cpu, mem = (nd.get("cpuPct") or 0) / 100, (nd.get("memPct") or 0) / 100
+        return max(D.level(cpu, 0.85, 0.95), D.level(mem, 0.9, 0.97), key=["phosphor", "amber", "danger", "static"].index)
+
+    def _node_grid(self, cr, nodes, width):
+        """(columns, box width): as many boxes to a row as fit each node's whole name, the
+        rows evened out (six nodes: two rows of three, not four and two)."""
+        n = max(1, len(nodes))
+        need = max([D.layout(cr, self._node_name(nd), 10, "semibold", 0.08).get_pixel_size()[0] + 28
+                    for nd in nodes] + [104])
+        k = n
+        while k > 1 and (width - (k - 1) * 8) / k < need:
+            k -= 1
+        rows = math.ceil(n / k)
+        k = math.ceil(n / rows)
+        return k, (width - (k - 1) * 8) / k
+
+    def _nodes(self, cr, d, x0, x1, y, mode="full", draw=True):
+        nodes = d.get("nodes") or []
+        cl = d.get("cluster", {})
+        if draw:
+            D.label(cr, x0, y, "NODE MAP", "dim")
+            D.label(cr, x1, y, f"CLUSTER CPU {cl.get('cpuNow', 0):.0f}%", "static", align="right")
+        y += 20
+        if mode == "fold":
+            return self._node_chips(cr, nodes, x0, x1, y, draw)
+        k, bw = self._node_grid(cr, nodes, x1 - x0)
+        pulse = max(0.0, 1 - (time.time() - self.pulse_at) / 1.6) if draw else 0
+        rows = [nodes[i:i + k] for i in range(0, len(nodes), k)] or [[]]
+        for r, row in enumerate(rows):
+            bus_y = y + 4
+            if draw:
+                D.src(cr, "dim", 0.6)
+                cr.set_line_width(1)
+                cr.move_to(x0, bus_y + 0.5)
+                cr.line_to(x1, bus_y + 0.5)
+                cr.stroke()
+            for i, nd in enumerate(row):
+                if draw:
+                    self._node_box(cr, nd, x0 + i * (bw + 8), bus_y, bw, pulse)
+            y = bus_y + 10 + 76 + (12 if r == len(rows) - 1 else 6)
+        return y
+
+    def _node_box(self, cr, nd, bx, bus_y, bw, pulse):
+        cx = bx + bw / 2
+        cpu, mem = (nd.get("cpuPct") or 0) / 100, (nd.get("memPct") or 0) / 100
+        worst = self._node_worst(nd)
+        D.src(cr, "dim", 0.6)
+        cr.move_to(cx + 0.5, bus_y)
+        cr.line_to(cx + 0.5, bus_y + 10)
+        cr.stroke()
+        by = bus_y + 10
+        D.src(cr, "void", 0.7)
+        cr.rectangle(bx, by, bw, 76)
+        cr.fill()
+        D.brackets(cr, bx, by, bw, 76, 6, worst, 1.2, 0.9)
+        D.dot(cr, bx + 9, by + 11, 2.5 + 1.5 * pulse, worst, glow=True)
+        D.text(cr, bx + 18, by + 4, self._node_name(nd), 10, "soft", "semibold", spacing=0.08, width=bw - 22)
+        D.label(cr, bx + 6, by + 25, "CPU", "dim", size=10)
+        D.bar(cr, bx + 40, by + 30, bw - 46, 5, cpu, D.level(cpu, 0.85, 0.95))
+        D.label(cr, bx + 6, by + 41, "MEM", "dim", size=10)
+        D.bar(cr, bx + 40, by + 46, bw - 46, 5, mem, D.level(mem, 0.9, 0.97))
+        D.label(cr, bx + 6, by + 57, f"L{nd.get('load1', 0):.1f} · {nd.get('cores', '?')}C", "static", size=10)
+        self.region(bx, by, bw, 76, self._node_tip(nd))
+
+    def _node_chips(self, cr, nodes, x0, x1, y, draw=True):
+        """The node map folded: one chip per node, its health's colour and its name (whole
+        when it fits the row), the readings in its hover hint."""
+        cx, ch = x0, 20
+        for nd in nodes:
+            name = self._node_name(nd)
+            cw = min(x1 - x0, D.layout(cr, name, 10, "semibold", 0.08).get_pixel_size()[0] + 26)
+            if cx > x0 and cx + cw > x1:
+                cx, y = x0, y + ch + 4
+            if draw:
+                col = self._node_worst(nd)
+                D.src(cr, col, 0.12)
+                cr.rectangle(cx, y, cw, ch)
+                cr.fill()
+                D.src(cr, col, 0.6)
+                cr.set_line_width(1)
+                cr.rectangle(cx + 0.5, y + 0.5, cw - 1, ch - 1)
+                cr.stroke()
+                D.dot(cr, cx + 9, y + ch / 2, 2.5, col, glow=False)
+                D.text(cr, cx + 17, y + 3, name, 10, "soft", "semibold", spacing=0.08, width=cw - 21)
+                self.region(cx, y, cw, ch, self._node_tip(nd))
+            cx += cw + 6
+        return y + ch + 10
+
+    def _service_cols(self, cr, services, width):
+        """As many service columns (four at most, two at least) as fit each name whole."""
+        need = max([D.layout(cr, (s.get("name") or s["id"]).upper(), 10, "semibold", 0.06).get_pixel_size()[0] + 20
+                    for s in services] + [60])
+        k = 4
+        while k > 2 and (width - (k - 1) * 4) / k < need:
+            k -= 1
+        return k, (width - (k - 1) * 4) / k
+
+    def _services(self, cr, d, x0, x1, y, mode="full", draw=True):
         groups = d.get("config", {}).get("groups", [])
         status = d.get("services", {})
-        total = sum(len(g.get("services", [])) for g in groups)
-        up = sum(1 for g in groups for s in g.get("services", []) if status.get(s["id"], {}).get("status") == "up")
-        D.label(cr, x0, y, "SERVICES", "dim")
-        D.label(cr, x1, y, f"{up}/{total} UP", "phosphor" if up == total else "amber", align="right")
+        every = [s for g in groups for s in g.get("services", [])]
+        total = len(every)
+        up = sum(1 for s in every if status.get(s["id"], {}).get("status") == "up")
+        if draw:
+            D.label(cr, x0, y, "SERVICES", "dim")
+            D.label(cr, x1, y, f"{up}/{total} UP", "phosphor" if up == total else "amber", align="right")
+            if mode == "fold":
+                self.region(x0, y, x1 - x0, 16, f"{up} of {total} services answering"
+                            + (": the ones that aren't are listed under it" if up < total else "")
+                            + ". Make the panel taller to see every service.")
         y += 20
-        cols = 4
-        cw = (x1 - x0 - (cols - 1) * 4) / cols
+        if not every:
+            return y + 4
+        cols, cw = self._service_cols(cr, every, x1 - x0)
         ch = 21
+        if mode == "fold":
+            bad = [s for s in every if status.get(s["id"], {}).get("status") != "up"]
+            for i, s in enumerate(bad):
+                r, c = divmod(i, cols)
+                if draw:
+                    self._service(cr, s, status, x0 + c * (cw + 4), y + r * (ch + 3), cw, ch)
+            return y + math.ceil(len(bad) / cols) * (ch + 3) + 4
         for g in groups:
-            D.label(cr, x0, y, g.get("name", ""), "static", size=10)
+            if draw:
+                D.label(cr, x0, y, g.get("name", ""), "static", size=10)
             y += 16
             for i, s in enumerate(g.get("services", [])):
                 r, c = divmod(i, cols)
-                cx, cy = x0 + c * (cw + 4), y + r * (ch + 3)
-                st = status.get(s["id"], {})
-                state = st.get("status")
-                col = {"up": "phosphor", "down": "danger"}.get(state, "amber")
-                D.src(cr, col, 0.10 if state == "up" else 0.22)
-                cr.rectangle(cx, cy, cw, ch)
-                cr.fill()
-                D.src(cr, col, 0.55 if state == "up" else 1)
-                cr.set_line_width(1)
-                cr.rectangle(cx + 0.5, cy + 0.5, cw - 1, ch - 1)
-                cr.stroke()
-                D.src(cr, col)
-                cr.rectangle(cx + 5, cy + ch / 2 - 2, 4, 4)
-                cr.fill()
-                D.text(cr, cx + 14, cy + 3, s.get("name", s["id"]).upper(), 10,
-                       "soft" if state == "up" else col, "semibold", spacing=0.06, width=cw - 18)
-                url = s.get("lan") or s.get("wan")
-                ms = st.get("ms")
-                tip = (f"{s.get('name')} ({s.get('role', '')}): {state or 'unknown'}"
-                       + (f", answered in {ms:.0f} ms" if isinstance(ms, (int, float)) else "")
-                       + (f". Click to open {url}" if url else (f". Address {s.get('address')}" if s.get("address") else "")))
-                act = (lambda u=url: open_url(u)) if url else \
-                    ((lambda a=s.get("address"): copy_text(a)) if s.get("address") else None)
-                self.region(cx, cy, cw, ch, tip, act)
+                if draw:
+                    self._service(cr, s, status, x0 + c * (cw + 4), y + r * (ch + 3), cw, ch)
             rows = math.ceil(len(g.get("services", [])) / cols)
             y += rows * (ch + 3) + 4
         return y + 4
 
-    def _pools(self, cr, d, x0, x1, y):
-        D.label(cr, x0, y, "STORAGE POOLS", "dim")
-        y += 20
+    def _service(self, cr, s, status, cx, cy, cw, ch):
+        st = status.get(s["id"], {})
+        state = st.get("status")
+        col = {"up": "phosphor", "down": "danger"}.get(state, "amber")
+        D.src(cr, col, 0.10 if state == "up" else 0.22)
+        cr.rectangle(cx, cy, cw, ch)
+        cr.fill()
+        D.src(cr, col, 0.55 if state == "up" else 1)
+        cr.set_line_width(1)
+        cr.rectangle(cx + 0.5, cy + 0.5, cw - 1, ch - 1)
+        cr.stroke()
+        D.src(cr, col)
+        cr.rectangle(cx + 5, cy + ch / 2 - 2, 4, 4)
+        cr.fill()
+        D.text(cr, cx + 14, cy + 3, s.get("name", s["id"]).upper(), 10,
+               "soft" if state == "up" else col, "semibold", spacing=0.06, width=cw - 18)
+        url = s.get("lan") or s.get("wan")
+        ms = st.get("ms")
+        tip = (f"{s.get('name')} ({s.get('role', '')}): {state or 'unknown'}"
+               + (f", answered in {ms:.0f} ms" if isinstance(ms, (int, float)) else "")
+               + (f". Click to open {url}" if url else (f". Address {s.get('address')}" if s.get("address") else "")))
+        act = (lambda u=url: open_url(u)) if url else \
+            ((lambda a=s.get("address"): copy_text(a)) if s.get("address") else None)
+        self.region(cx, cy, cw, ch, tip, act)
+
+    def _pools(self, cr, d, x0, x1, y, mode="full", draw=True):
         nas = d.get("nas") or {}
         pool = nas.get("pool") or {}
+        rf = store_share(nas)
+        disks = d.get("nodeDisks") or []
+        if mode == "fold":
+            if draw:
+                self._pools_line(cr, d, nas, pool, rf, disks, x0, x1, y)
+            return y + 20
+        if draw:
+            D.label(cr, x0, y, "STORAGE POOLS", "dim")
+        y += 20
+        if pool.get("total"):
+            if draw:
+                self._nas_row(cr, nas, pool, x0, x1, y)
+            y += 34
+        if rf:
+            if draw:
+                where = f"the NAS share {rf['name']}" if rf.get("name") else "the NAS"
+                quota = f"quota {S.human(rf['quota'])}" if (rf.get("quota") or 0) > 0 else "no quota"
+                D.label(cr, x0, y, "RUSTFS", "phosphor")
+                D.label(cr, x0 + 70, y, f"{S.human(rf['usage'], digits=1)} on {where}", "soft")
+                st = (d.get("services") or {}).get(OBJECT_STORE, {}).get("status")
+                D.dot(cr, x1 - 4, y + 7, 3, "phosphor" if st == "up" else "danger")
+                self.region(x0, y, x1 - x0, 16, f"RustFS object store: {S.human(rf['usage'])} used on {where} "
+                            f"({quota}); console {st or 'unknown'}. Click to open.",
+                            lambda: open_url(self._svc_url(d, OBJECT_STORE)))
+            y += 22
+        for i, nd in enumerate(disks):
+            if draw:
+                frac = (nd.get("pct") or 0) / 100
+                name = disk_node(nd, i)
+                D.text(cr, x0, y, name.replace("k8s-", "").upper(), 10, "static", "semibold", spacing=0.18, width=104)
+                D.bar(cr, x0 + 110, y + 4, x1 - x0 - 210, 5, frac, D.level(frac, 0.8, 0.9))
+                D.label(cr, x1, y, f"{S.human(nd.get('used') or 0, digits=0)}/{S.human(nd.get('capacity') or 0, digits=0)}",
+                        "soft", size=9, align="right")
+                self.region(x0, y, x1 - x0, 15, f"Local disk on {name}: {frac * 100:.0f}% used, "
+                            f"{S.human(nd.get('used') or 0)} of {S.human(nd.get('capacity') or 0)}")
+            y += 16
+        return y
+
+    def _nas_row(self, cr, nas, pool, x0, x1, y):
+        frac = pool["used"] / pool["total"]
+        D.label(cr, x0, y, "NAS", "phosphor")
+        D.label(cr, x0 + 44, y, f"{S.human(pool['used'], digits=1)} / {S.human(pool['total'], digits=1)}", "soft")
+        disks = nas.get("disks") or []
+        # disk bays as small cells at the right
+        bx = x1 - len(disks) * 16
+        for i, dk in enumerate(disks):
+            bad = dk.get("health") != "good" or dk.get("state") != "normal"
+            col = "danger" if bad else D.level(dk.get("tempC") or 0, 45, 55)
+            D.src(cr, col, 0.9)
+            cr.rectangle(bx + i * 16, y + 1, 12, 12)
+            cr.fill()
+            self.region(bx + i * 16, y, 14, 14, f"NAS bay {dk.get('slot')}: {dk.get('model', '')} "
+                        f"{S.human(dk.get('size'))}, {dk.get('health')}, {dk.get('tempC')} °C, "
+                        f"{dk.get('hours', 0)} power-on hours")
+        D.cells(cr, x0, y + 18, x1 - x0, 7, frac, n=48, warn=0.8, crit=0.9)
+        dev = nas.get("device") or {}
+        self.region(x0, y, bx - x0 - 6, 28, f"{dev.get('name', 'NAS')}: RAID pool ({pool.get('raidMembers')} disks, "
+                    f"{pool.get('health')}) {S.human(pool['used'])} used of {S.human(pool['total'])}")
+
+    def _pools_line(self, cr, d, nas, pool, rf, disks, x0, x1, y):
+        """STORAGE POOLS folded to one line: the NAS pool's use, the object store's and the
+        fullest node disk; the whole of each in the hover hint."""
+        parts, tips, col = [], [], "soft"
         if pool.get("total"):
             frac = pool["used"] / pool["total"]
-            D.label(cr, x0, y, "NAS", "phosphor")
-            D.label(cr, x0 + 44, y, f"{S.human(pool['used'], digits=1)} / {S.human(pool['total'], digits=1)}", "soft")
-            disks = nas.get("disks") or []
-            # disk bays as 8 small cells at the right
-            bx = x1 - len(disks) * 16
-            for i, dk in enumerate(disks):
-                bad = dk.get("health") != "good" or dk.get("state") != "normal"
-                col = "danger" if bad else D.level(dk.get("tempC") or 0, 45, 55)
-                D.src(cr, col, 0.9)
-                cr.rectangle(bx + i * 16, y + 1, 12, 12)
-                cr.fill()
-                self.region(bx + i * 16, y, 14, 14, f"NAS bay {dk.get('slot')}: {dk.get('model', '')} "
-                            f"{S.human(dk.get('size'))}, {dk.get('health')}, {dk.get('tempC')} °C, "
-                            f"{dk.get('hours', 0)} power-on hours")
-            D.cells(cr, x0, y + 18, x1 - x0, 7, frac, n=48, warn=0.8, crit=0.9)
-            dev = nas.get("device") or {}
-            self.region(x0, y, bx - x0 - 6, 28, f"{dev.get('name', 'NAS')}: RAID pool ({pool.get('raidMembers')} disks, "
-                        f"{pool.get('health')}) {S.human(pool['used'])} used of {S.human(pool['total'])}")
-            y += 34
-        rf = store_share(nas)
+            parts.append(f"NAS {frac * 100:.0f}%")
+            col = D.level(frac, 0.8, 0.9) if frac >= 0.8 else col
+            bad = [dk for dk in nas.get("disks") or [] if dk.get("health") != "good" or dk.get("state") != "normal"]
+            if bad:
+                parts[-1] += f" · {len(bad)} DISK{'S' if len(bad) > 1 else ''} BAD"
+                col = "danger"
+            tips.append(f"NAS pool {S.human(pool['used'])} used of {S.human(pool['total'])} ({pool.get('health')})"
+                        + (f"; {len(bad)} disk(s) not healthy" if bad else ""))
         if rf:
-            where = f"the NAS share {rf['name']}" if rf.get("name") else "the NAS"
-            quota = f"quota {S.human(rf['quota'])}" if (rf.get("quota") or 0) > 0 else "no quota"
-            D.label(cr, x0, y, "RUSTFS", "phosphor")
-            D.label(cr, x0 + 70, y, f"{S.human(rf['usage'], digits=1)} on {where}", "soft")
-            st = (d.get("services") or {}).get(OBJECT_STORE, {}).get("status")
-            D.dot(cr, x1 - 4, y + 7, 3, "phosphor" if st == "up" else "danger")
-            self.region(x0, y, x1 - x0, 16, f"RustFS object store: {S.human(rf['usage'])} used on {where} "
-                        f"({quota}); console {st or 'unknown'}. Click to open.",
-                        lambda: open_url(self._svc_url(d, OBJECT_STORE)))
-            y += 22
-        for nd in d.get("nodeDisks") or []:
-            frac = nd["pct"] / 100
-            D.label(cr, x0, y, nd["node"].replace("k8s-", ""), "static", size=9)
-            D.bar(cr, x0 + 110, y + 4, x1 - x0 - 210, 5, frac, D.level(frac, 0.8, 0.9))
-            D.label(cr, x1, y, f"{S.human(nd['used'], digits=0)}/{S.human(nd['capacity'], digits=0)}",
-                    "soft", size=9, align="right")
-            self.region(x0, y, x1 - x0, 15, f"Local disk on node {nd['node']}: {nd['pct']:.0f}% used")
-            y += 16
+            parts.append(f"RUSTFS {S.human(rf['usage'], digits=0)}")
+            tips.append(f"RustFS object store {S.human(rf['usage'])}")
+        if disks:
+            most = max(nd.get("pct") or 0 for nd in disks)
+            parts.append(f"DISKS ≤{most:.0f}%")
+            if most >= 80:
+                col = "danger" if most >= 90 else ("amber" if col != "danger" else col)
+            tips.append("node disks: " + ", ".join(f"{disk_node(nd, i)} {nd.get('pct') or 0:.0f}%"
+                                                   for i, nd in enumerate(disks)))
+        lw = D.label(cr, x0, y, "STORAGE POOLS", "dim")[0]
+        room = x1 - x0 - lw - 12
+        while parts and D.layout(cr, " · ".join(parts), 10, "semibold", 0.18).get_pixel_size()[0] > room:
+            parts.pop()
+        if parts:
+            D.label(cr, x1, y, " · ".join(parts), col, size=10, align="right")
+        self.region(x0, y, x1 - x0, 16, ("Storage, folded to one line (make the panel taller for each pool): "
+                                         + "; ".join(tips) + ".") if tips else "No storage pools in the snapshot.")
 
 
 # =================================================================== SWITCHBOARD

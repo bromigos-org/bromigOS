@@ -76,6 +76,7 @@ def snapshot(shares):
 class StorageRowsTest(unittest.TestCase):
     def setUp(self):
         self.lab, self.D = load_lab()
+        FakePanel._nas_row = self.lab.LabPanel._nas_row      # the NAS pool's row, drawn as the panel draws it
 
     def draw(self, shares):
         self.D.texts.clear()

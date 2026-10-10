@@ -431,19 +431,21 @@ def draw_transport(panel, cr, x, y, playing, act, size=26, can=None, what="the p
 
 
 def draw_bars(cr, x, y, w, h, bars, color="phosphor", alpha=0.85):
-    """The visualizer's bars, mirrored lightly under a baseline."""
+    """The visualizer's bars, mirrored lightly under a baseline: bars and reflection both
+    inside the box (the bars take 4/5 of it)."""
     n = len(bars)
     if not n:
         return
     bw = w / n
+    hb = max(1.0, (h - 2) / 1.25)
     for i, v in enumerate(bars):
-        bh = max(1.0, v * h)
+        bh = max(1.0, v * hb)
         col = "amber" if v > 0.85 else color
         D.src(cr, col, alpha * (0.45 + 0.55 * v))
-        cr.rectangle(x + i * bw + 1, y + h - bh, bw - 2, bh)
+        cr.rectangle(x + i * bw + 1, y + hb - bh, bw - 2, bh)
         cr.fill()
         D.src(cr, col, 0.12)
-        cr.rectangle(x + i * bw + 1, y + h + 2, bw - 2, bh * 0.25)
+        cr.rectangle(x + i * bw + 1, y + hb + 2, bw - 2, bh * 0.25)
         cr.fill()
 
 

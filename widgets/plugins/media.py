@@ -166,6 +166,8 @@ class MediaPanel(Panel):
 
     @classmethod
     def available(cls):
+        if _demo():                               # pictures: its made-up den TV and library
+            return True
         H = _homelab()
         if H is not None:
             try:
@@ -482,6 +484,8 @@ class MediaPanel(Panel):
             D.text(cr, x, y, "Nothing yet." if self.server or _demo() else
                    "No media server: add a Jellyfin or Plex source to homelab.toml.", 10, "static", width=w)
             return
+        if posters and h - 18 < 60:               # too short for posters: a line each
+            posters = False
         if posters:
             pw, ph = 80, 120
             if h < ph + 20:
@@ -503,14 +507,18 @@ class MediaPanel(Panel):
                     D.src(cr, "guard", 0.8)
                     cr.rectangle(cx, y, pw, ph)
                     cr.fill()
+                    cr.save()                         # its title on the blank poster, inside it
+                    cr.rectangle(cx, y, pw, ph)
+                    cr.clip()
                     D.text(cr, cx + 4, y + 4, label(it), 9, "soft", width=pw - 8, wrap=True)
+                    cr.restore()
                 if it.get("position") and it.get("duration"):
                     D.bar(cr, cx, y + ph - 4, pw, 4, it["position"] / it["duration"])
                 self.region(cx, y, pw, ph, f"{label(it)}. Click: open it in {self.server or 'the server'}",
                             (lambda i=it: self._web(i)))
                 cx += pw + 10
             return
-        end = y + h
+        end = y + h - 18
         for it in items:
             if y + 18 > end:
                 break

@@ -286,5 +286,71 @@ class Strict(unittest.TestCase):
         self.assertIn("No room for GPU", A.no_room("GPU"))
 
 
+class ContentHeights(unittest.TestCase):
+    """A widget that fits its content gets the height its content needs, inside its class
+    (the catalog's natural heights: the running panels' health file, or measured)."""
+
+    def wick(self):
+        return L.scene_info("wick", os.path.join(REPO, "themes", "wick"))
+
+    def tpl(self, extra=""):
+        import tomllib
+        return L.parse(tomllib.loads('''
+            [[widget]]
+            name = "lab"
+            size = "standard"
+            side = "left"
+            priority = 1
+            ''' + extra + '''
+            [[widget]]
+            name = "alerts"
+            size = "standard"
+            side = "left"
+            lane = 2
+            priority = 2
+        '''), "t")
+
+    def test_lab_as_tall_as_its_lab_and_alerts_as_short_as_its_rows(self):
+        cat = catalog()
+        cat["lab"] = dict(cat["lab"], fit="content", natural={"standard": 913, "large": 913, "compact": 104})
+        cat["alerts"] = dict(cat["alerts"], fit="content", natural={"standard": 152})
+        scr = L.Screen.size(2560, 1440)
+        info = self.wick()
+        r = L.fit(self.tpl(), scr, cat, info["clear"], info["focus"], budget=1.0)
+        self.assertEqual(r["placed"]["lab"]["height"], 920)          # 913, to the 8 px grid, inside 600..1200
+        self.assertEqual(r["placed"]["alerts"]["height"], 152)       # four rows: not the 300 it starts at
+        check_fit(self.tpl(), r, scr, info, cat)
+
+    def test_more_than_the_class_allows_gets_its_tallest(self):
+        cat = catalog()
+        cat["lab"] = dict(cat["lab"], fit="content", natural={"standard": 5000})
+        r = L.fit(self.tpl(), L.Screen.size(2560, 1440), cat, budget=1.0)
+        self.assertEqual(r["placed"]["lab"]["height"], 1200)
+
+    def test_fixed_keeps_the_start_height(self):
+        cat = catalog()
+        cat["lab"] = dict(cat["lab"], fit="content", natural={"standard": 913})
+        r = L.fit(self.tpl('fit = "fixed"\n'), L.Screen.size(2560, 1440), cat, budget=1.0)
+        self.assertEqual(r["placed"]["lab"]["height"], 640)
+        with self.assertRaises(ValueError):
+            self.tpl('fit = "tall"\n')
+
+    def test_no_natural_height_keeps_the_start(self):
+        cat = catalog()
+        cat["lab"] = dict(cat["lab"], natural={})
+        r = L.fit(self.tpl(), L.Screen.size(2560, 1440), cat, budget=1.0)
+        self.assertEqual(r["placed"]["lab"]["height"], 640)
+
+    def test_tidy_gives_each_its_content_height(self):
+        cat = catalog()
+        cat["alerts"] = dict(cat["alerts"], fit="content", natural={"standard": 152})
+        state = {"alerts": {"x": 600, "y": 300, "width": 460, "height": 300, "visible": True},
+                 "system": {"x": 24, "y": 24, "width": 470, "height": 320, "visible": True}}
+        info = self.wick()
+        r = L.tidy(state, L.Screen.size(2560, 1440), cat, info["clear"], info["focus"])
+        self.assertEqual(r["placed"]["alerts"]["height"], 152)
+        self.assertEqual(r["placed"]["system"]["height"], 320)       # no preference: its own size
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,28 @@ class PanelsTest(CmdTest):
     def panel(self, d, name):
         return next(p for p in d["panels"] if p["name"] == name)
 
+    def _desk(self, panels):
+        self._mine({"version": 2, "monitor": "", "panels": panels})
+
+    def test_made_bigger_it_pushes_its_neighbour_down(self):
+        # SYSTEM grows down into NETWORK: SYSTEM stays where it is, NETWORK moves under it
+        self._desk([{"name": "system", "x": 24, "y": 24, "width": 470, "height": 300, "visible": True},
+                    {"name": "network", "x": 24, "y": 340, "width": 470, "height": 300, "visible": True},
+                    {"name": "storage", "x": 24, "y": 900, "width": 470, "height": 200, "visible": False}])
+        d = self.cmd("panels", "size", "system", "470", "500")
+        self.assertEqual([self.panel(d, "system")[k] for k in ("x", "y", "width", "height")], [24, 24, 470, 500])
+        self.assertEqual((self.panel(d, "network")["x"], self.panel(d, "network")["y"]), (24, 540))
+        self.assertIn("NETWORK moved to make room", d["said"])
+        self.assertEqual(d["overlapping"], [])
+
+    def test_no_room_to_grow_says_so_and_changes_nothing(self):
+        self._desk([{"name": "system", "x": 24, "y": 24, "width": 470, "height": 300, "visible": True}])
+        before = self.cmd("panels")["panels"]
+        doc = json.loads(self.run_cmd("panels", "size", "system", "2400", "1300").stdout)
+        self.assertFalse(doc["ok"])
+        self.assertEqual(doc["error"], "No room to make SYSTEM 2400 wide and 1300 tall here: move or hide something")
+        self.assertEqual(self.cmd("panels")["panels"], before)
+
     def test_status_from_bromigos_layout(self):
         d = self.cmd("panels")
         self.assertFalse(d["yours"])
@@ -236,11 +258,26 @@ class PanelsTest(CmdTest):
         """The shown panels that overlap, from the layout written (status's own check)."""
         return d["overlapping"]
 
+    @staticmethod
+    def _hard_areas(w=2560, h=1440):
+        """The Wick's hard keep-clear areas on the fixtures' primary monitor (2560x1440, no bar)."""
+        import sys
+        sys.path.insert(0, os.path.join(REPO, "widgets"))
+        import layouts as L
+        info = L.scene_info("wick", os.path.join(REPO, "themes", "wick"))
+        return [r[:4] for r in L.scene_rects(info["clear"], L.Screen(w, h)) if not r[5]]
+
+    @staticmethod
+    def _overlap(a, b):
+        return not (a[0] + a[2] <= b[0] or b[0] + b[2] <= a[0] or a[1] + a[3] <= b[1] or b[1] + b[3] <= a[1])
+
     def test_switching_on_widget_after_widget_never_stacks(self):
         """The stacking bug: about ten widgets switched on in a row from Customize (each a
         `bromigos panels show NAME`) all landed on one spot. Each now gets its own place, and
         when there's no room left it says so instead."""
         said_no_room = False
+        placed = []
+        on = {p["name"] for p in self.cmd("panels")["panels"] if p["visible"]}   # already on: kept where they are
         for name in ("gpu", "nowplaying", "updates", "vector", "youtube", "discord", "calendars", "ci", "weather",
                      "connections", "workbench", "notes", "shortcuts"):
             r = self.run_cmd("panels", "show", name)
@@ -252,12 +289,27 @@ class PanelsTest(CmdTest):
             self.assertEqual(self._overlaps(doc), [], name)
             p = self.panel(doc, name)
             self.assertTrue(p["visible"] and p["x"] is not None, name)
+            if name not in on:
+                placed.append(name)
         d = self.cmd("panels")
         self.assertEqual(self._overlaps(d), [])
-        self.assertGreaterEqual(sum(1 for p in d["panels"] if p["visible"]), 10)
-        # a widget made bigger stays clear of the others, or moves
-        d = self.cmd("panels", "size", "network", "wide")
-        self.assertEqual(self._overlaps(d), [])
+        # most of them fit; none was put on the den's screens or its window to find room
+        # (the scene's hard keep-clear areas are never given up, even when room runs out)
+        self.assertGreaterEqual(sum(1 for p in d["panels"] if p["visible"]), 8)
+        hard = self._hard_areas()
+        for p in d["panels"]:
+            if p["name"] in placed and p["x"] is not None and p["visible"]:
+                r = (p["x"], p["y"], p["width"], p["height"])
+                self.assertFalse(any(self._overlap(r, a) for a in hard), (p["name"], r))
+        # a widget made bigger stays clear of the others (they move aside, or it moves); on a
+        # desktop this full there may be no room for it: then it says so and nothing changes
+        before = self.cmd("panels")["panels"]
+        doc = json.loads(self.run_cmd("panels", "size", "network", "wide").stdout)
+        if doc.get("ok") is False:
+            self.assertIn("No room to make NETWORK", doc["error"])
+            self.assertEqual(self.cmd("panels")["panels"], before)
+        else:
+            self.assertEqual(self._overlaps(doc), [])
         del said_no_room
 
     def test_add_with_no_room_says_so(self):

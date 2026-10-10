@@ -181,6 +181,25 @@ When you switch on a panel and there's no room left for it, bromigOS tells you: 
 for GPU: hide something or try a smaller size". It never puts one panel on top of
 another.
 
+### Panels that fit what they show
+
+Some panels show lists that grow and shrink, such as LAB, ALERTS and CI & PRs. These
+panels take the height their content needs. A layout gives LAB room for your whole lab,
+and ALERTS with four alerts is a short panel, not a big empty box. As the list changes,
+the panel's frame follows it, inside the room it was given. It changes only now and then,
+so it doesn't jump around.
+
+When a panel has less room than its content needs, it shows less instead of cutting
+anything off. LAB, for example, shows "34/36 UP" and only the services that are down.
+Make it taller to see everything again.
+
+### Making a panel bigger
+
+When you make a panel bigger, it stays where it is. Panels in its way move down or to the
+side. If they can't, the panel moves to free space, never onto the scene's screens or
+window. If there's no room anywhere, nothing changes and bromigOS tells you: "No room to
+make LAB 900 tall here: move or hide something".
+
 ## Choose panels
 
 The tray in edit mode, the **Widgets** tab of [Customize](themes-and-worlds.md#customize)

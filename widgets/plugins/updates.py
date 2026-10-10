@@ -347,7 +347,11 @@ class UpdatesPanel(K.KitPanel):
             x += self.chip(cr, x, y, lab, col, f"{r['what']} needs a {r['need']}: {r['why']}") + 6
             shown += 1
         if len(rs) > shown:
-            self.chip(cr, x, y, f"+{len(rs) - shown}", "static", "; ".join(f"{r['what']}: {r['need']}" for r in rs[shown:]))
+            more = f"+{len(rs) - shown}"
+            if x + D.layout(cr, more, 9, "semibold", 0.1).get_pixel_size()[0] + 10 > x1:
+                x = x0
+                y += 20
+            self.chip(cr, x, y, more, "static", "; ".join(f"{r['what']}: {r['need']}" for r in rs[shown:]))
         return y + 22
 
     def _pkgs(self, cr, d, x0, x1, top, bottom, both=True, which=None, columns=False):

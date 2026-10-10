@@ -203,6 +203,7 @@ class CiPanel(K.KitPanel):
     category, reads = "notes", "GitHub through your gh login, every 3 minutes while shown"
     width, height = 480, 300
     interval = 10.0
+    fit = "content"                    # as tall as its rows (panels.Panel.fit)
     sizes = {
         "compact": ((240, 120), (380, 190), (280, 140)),
         "standard": ((400, 240), (640, 420), (480, 300)),

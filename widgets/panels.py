@@ -19,6 +19,10 @@ CATEGORIES = ("system", "network", "homelab", "media", "notes", "fun")
 # The size classes a panel can declare (its `sizes`), smallest first
 # (docs/widgets.md, "Size classes").
 SIZE_CLASSES = ("compact", "standard", "wide", "tall", "large")
+# Fitting to content (docs/widgets.md, "Fitting to content"): the room left under a panel's
+# last line, and the change in what it needs (one row) before its frame follows.
+PAD = 12
+ROW = 24
 
 
 def open_url(url):
@@ -52,6 +56,11 @@ class Panel:
     # min_size to max_size, and the panel just scales.
     sizes = {}
     default_size = "standard"           # the class a panel starts at (Add to desktop)
+    # "content": its height follows what it has to show (natural_height): layouts, Tidy up,
+    # Add to desktop and the size picker give it the height its content needs, within its
+    # class, and on the desktop its frame shrinks to its content inside the room it was
+    # given. None: it fills whatever size it's given (a chart, a picture).
+    fit = None
 
     # The widget's own settings: [{"key", "label", "kind", "default", "hint", "choices"?,
     # "provider"?}] (widget_settings.py; docs/widgets.md, "A widget's settings"). Settings ›
@@ -118,6 +127,19 @@ class Panel:
         want = name or cls.default_size
         return next((c[3] for c in cs if c[0] == want), cs[0][3] if cs else (cls.width, cls.height))
 
+    def natural_height(self, width, cls=None):
+        """The height (px) its content needs at this width, in its class `cls` (the class
+        it's in now, by default): its last line's bottom plus PAD, measured by drawing it
+        offscreen at the class's tallest (measure()). None when it has no preference (fit
+        isn't "content"). Data-driven panels read their current data, so the answer changes
+        as the data does; a panel can compute it itself instead."""
+        if self.fit != "content":
+            return None
+        c = class_of(type(self), cls or self.size_class(width, getattr(self, "height", 0)))
+        if c is None:
+            return None
+        return measure(self, width, c[2][1])
+
     def __init__(self, cfg=None):
         self.cfg = cfg or {}
         self.regions = []               # (x, y, w, h, tooltip, action-or-None)
@@ -145,6 +167,64 @@ class Panel:
 
     def draw(self, cr, w, h):
         raise NotImplementedError
+
+
+def class_of(cls, name):
+    """A panel class's size class by name: (name, min, max, start), or None."""
+    return next((c for c in cls.size_classes() if c[0] == name), None)
+
+
+def measure(panel, w, h):
+    """How far down a panel draws at w x h: its lowest mark's bottom plus PAD (draw.record),
+    drawn offscreen to nowhere. The panel's hover regions are kept as they were."""
+    inner = getattr(panel, "inner", panel)            # a plugin's SafePanel: the panel itself
+    surf = cairo.RecordingSurface(cairo.CONTENT_COLOR_ALPHA, (0, 0, int(w), int(h)))
+    cr = cairo.Context(surf)
+    # what drawing it changes, put back: its hover regions, when it was last seen (a kit
+    # panel's pollers wake for a panel being looked at) and the class it last drew at
+    kept = {k: getattr(inner, k) for k in ("regions", "drawn_at", "last_class", "drawn") if hasattr(inner, k)}
+    kept["regions"] = list(kept.get("regions", []))
+    try:
+        with D.record() as marks:
+            inner.render(cr, int(w), int(h))
+    finally:
+        for k, v in kept.items():
+            setattr(inner, k, v)
+    content = [m["box"][3] for m in marks if m["box"][1] > 36]     # under the header
+    return int(math.ceil(max(content, default=44) + PAD))
+
+
+def fit_height(panel, width, name):
+    """The height a panel gets in its class `name` at this width: what its content needs
+    (natural_height), kept inside the class's heights; the class's start height when it has
+    no preference. A panel whose content needs more than the class allows gets the most it
+    allows, and shows less (it never cuts a section in half)."""
+    inner = getattr(panel, "inner", panel)
+    c = class_of(type(inner), name)
+    if c is None:
+        return None
+    try:
+        nat = inner.natural_height(width, name)
+    except Exception:                                  # noqa: BLE001  a panel's own sum failing: its start
+        nat = None
+    if nat is None:
+        return int(c[3][1])
+    return int(max(c[1][1], min(c[2][1], nat)))
+
+
+def naturals(panel, width=None):
+    """{class: the height fit_height gives at the class's start width (or `width`, for the
+    class the panel is in now)} for every class: what the layouts read (the health file's
+    "natural"). {} when the panel has no preference."""
+    inner = getattr(panel, "inner", panel)
+    if getattr(inner, "fit", None) != "content":
+        return {}
+    out = {}
+    now = inner.size_class(inner.width, inner.height)
+    for name, lo, hi, start in inner.size_classes():
+        w = width if (width and name == now) else start[0]
+        out[name] = fit_height(inner, w, name)
+    return out
 
 
 # =================================================================== SYSTEM
@@ -295,7 +375,9 @@ class SystemPanel(Panel):
             y += step
         ctemp = s.temps.get("CPU")
         la = s.load
-        foot = (f"{ctemp:.0f}°C · " if ctemp is not None else "") + f"LOAD {la[0]:.1f}"
+        temp = f"{ctemp:.0f}°C" if ctemp is not None else ""
+        foot = D.first_fit(cr, [" · ".join(t for t in (temp, f"LOAD {la[0]:.1f}") if t), temp or f"LOAD {la[0]:.1f}",
+                                f"L {la[0]:.1f}"], x1 - x0)
         D.label(cr, x0, h - 22, foot, D.level(ctemp, 80, 90) if ctemp is not None else "soft")
         self.region(x0, h - 26, x1 - x0, 18, (f"CPU package {ctemp:.0f} °C; " if ctemp is not None else "")
                     + f"load average over a minute {la[0]:.2f}")
@@ -1963,7 +2045,10 @@ class ConnectionsPanel(Panel):
         if not self.wifi:
             D.text(cr, 16, y - 1, "none seen" if self.radio else "radio off", 10, "static")
             y += 16
-        room = (h - y - 16 - (24 + 17 * len(self.vpns) if self.vpns else 0)) // 17 if tall else 4
+        # room for the VPNs under the Wi-Fi (their heading and at least one of them)
+        vpn_block = (28 + 17 * min(len(self.vpns), 8 if tall else 3)) if self.vpns else 0
+        room = (h - 6 - y - vpn_block) // 17
+        room = room if tall else min(4, room)
         for net in self.wifi[:max(1, int(room))]:
             if y + 17 > h - 6:
                 break
@@ -1982,13 +2067,25 @@ class ConnectionsPanel(Panel):
             self.region(16, y - 2, w - 32, 17, tip, None if net["used"] else (lambda n=net: self._join(n)))
             y += 17
         # vpns
-        if self.vpns:
+        up = {a["name"] for a in self.active}
+        if self.vpns and y + 12 + 16 + 17 > h - 6 and y + 12 + 14 <= h - 6:
+            # no room for the list: the VPNs folded to one line, each one in its hover hint
+            y += 4
+            D.rule(cr, 16, y, w - 16)
+            y += 8
+            n = sum(1 for v in self.vpns if v["name"] in up)
+            D.label(cr, 16, y, "VPN", "dim", size=10)
+            D.label(cr, w - 16, y, f"{n} UP OF {len(self.vpns)}", "phosphor" if n else "static", size=10, align="right")
+            self.region(16, y - 2, w - 32, 16, "VPNs: " + ", ".join(f"{v['name']} {'up' if v['name'] in up else 'down'}"
+                                                                    for v in self.vpns)
+                        + ". Make the panel taller to switch them here.")
+            y += 16
+        elif self.vpns and y + 12 + 16 + 17 <= h - 6:
             y += 4
             D.rule(cr, 16, y, w - 16)
             y += 8
             D.label(cr, 16, y, "VPN", "dim", size=10)
             y += 16
-            up = {a["name"] for a in self.active}
             for v in self.vpns[:8 if tall else 3]:
                 if y + 17 > h - 6:
                     break

@@ -190,7 +190,8 @@ class Editor:
                 win = self.app.windows[n]
                 taken = [r for k, r in self.rects(conn).items() if k not in here or k in done]
                 done.append(n)
-                win.place(*A.place(*win.size_now(), taken, (W, H), self.app.avoid((W, H)), self.tray_rects(conn)))
+                win.place(*A.place(*win.size_now(), taken, (W, H), self.app.avoid((W, H)), self.tray_rects(conn),
+                                   hard=self.app.hard_areas(conn)))
             lost += here
         if lost:
             self.status.set_text(f"Brought onto the screen: {', '.join(self.title(n) for n in lost)}. "
@@ -492,6 +493,10 @@ class Editor:
     def on_release(self, _w, ev, canvas):
         if self.drag:
             d, self.drag = self.drag, None
+            win = self.app.windows.get(d["name"])
+            if win and d["part"] not in ("body", "close") and win.rect() != d["rect"] \
+                    and not self.make_room(d["name"], d["rect"]):
+                self.no_room_to_grow(d["name"], d["rect"], win.rect())
             if self.app.state() != d["before"]:
                 self.history.push(d["before"])
                 self.changed()
@@ -592,6 +597,8 @@ class Editor:
         if (nw, nh) != (w, h):
             self.record(key=f"size {name}")
             self.app.windows[name].resize(nw, nh)
+            if not self.make_room(name, (x, y, w, h)):
+                self.no_room_to_grow(name, (x, y, w, h), (x, y, nw, nh))
             self.changed()
 
     def hide(self, name):
@@ -638,11 +645,43 @@ class Editor:
             return True
         tray = self.tray_rects(conn)
         avoid, soft = self.app.keep_clear(conn, area)
-        spot = A.place(w, h, taken, area, avoid + tray, tray + soft, strict=True)
+        spot = A.place(w, h, taken, area, avoid + tray, tray + soft, strict=True, hard=self.app.hard_areas(conn))
         if spot is None:
             return False
         win.place(*spot)
         return True
+
+    def make_room(self, name, before):
+        """After a panel took a new size where it is: the panels it now overlaps pushed down
+        or aside into free space; when they can't move, the panel moves to the nearest free
+        spot, never onto the scene's keep-clear areas (arrange.make_room). False when there's
+        no room for it anywhere (the caller puts it back and says so)."""
+        win = self.app.windows[name]
+        conn = win.monitor
+        area = self.size(conn)
+        others = {n: r for n, r in self.rects(conn).items() if n != name}
+        hard = self.app.hard_areas(conn)
+        avoid, soft = self.app.keep_clear(conn, area)
+        avoid = [a for a in avoid if a not in hard] + self.tray_rects(conn)
+        r = A.make_room(win.rect(), others, area, hard, soft, avoid, before=before)
+        if r is None:
+            return False
+        win.place(*r["rect"][:2])
+        for n, (mx, my) in r["moved"].items():
+            self.app.windows[n].place(mx, my)
+        if r["moved"] or r["how"] == "moved":
+            moved = ", ".join(self.title(n) for n in sorted(r["moved"]))
+            self.status.set_text((f"Moved {moved} to make room. " if moved else "")
+                                 + ("No room where it was, so it moved. " if r["how"] == "moved" else "")
+                                 + "Ctrl+Z undoes it.")
+        return True
+
+    def no_room_to_grow(self, name, before, after):
+        """Back to its size before, and the tray says why."""
+        win = self.app.windows[name]
+        win.resize(*before[2:])
+        win.place(*before[:2])
+        self.status.set_text(A.no_room_to_grow(self.title(name), before, after))
 
     def undo(self):
         st = self.history.undo(self.app.state())
@@ -894,7 +933,10 @@ class Editor:
         conn = self.main.conn
         m = self.app.monitor(conn)
         scr = L.Screen.of(m) if m else L.Screen(*self.size(conn))
-        cat = L.catalog_of(self.items())
+        # the heights each panel's content needs now, measured from the panels themselves
+        made = {n: w.panel for n, w in self.app.windows.items() if getattr(w, "fit", None) == "content"
+                and getattr(w, "panel", None) is not None}
+        cat = L.catalog_of(self.items(), naturals=G.naturals_of([], made=made))
         return conn, scr, cat, L.scene_info()
 
     def toggle_layouts(self):
@@ -1174,16 +1216,21 @@ class Editor:
             return
         self.record()
         before = (win.rect(), win.size_class())
-        win.set_size_class(cls)
+        shown = win.visible()
+        win.set_size_class(cls)                  # its start width, as tall as its content needs
         x, y, w, h = win.rect()
         W, H = self.size(win.monitor)
         win.place(min(x, max(0, W - w)), min(y, max(0, H - h)))
-        # bigger, or switched on: still clear of the others, or moved to a free spot
-        if not self.put_clear(name):
+        # on already: grown where it is, the others pushed aside (or it moves to free space);
+        # switched on: where it was when that's clear, else a free spot
+        ok = self.make_room(name, before[0]) if shown else self.put_clear(name)
+        if not ok:
             self.history.undos.pop()
+            after = win.rect()
             win.resize(*before[0][2:])
             win.place(*before[0][:2])
-            self.status.set_text(A.no_room(f"{self.title(name)} at its {cls} size"))
+            self.status.set_text(A.no_room_to_grow(self.title(name), before[0], after) if shown else
+                                 A.no_room(f"{self.title(name)} at its {cls} size"))
             self.changed(rebuild=True)
             return
         if not win.visible():

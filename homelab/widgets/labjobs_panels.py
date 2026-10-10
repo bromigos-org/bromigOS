@@ -147,6 +147,7 @@ class LabJobsPanel(K.KitPanel):
     category, reads = "homelab", "the lab job queue (bromigos lab jobs)"
     width, height = 460, 300
     interval = 3.0
+    fit = "content"                    # as tall as its rows (panels.Panel.fit)
     sizes = {
         "compact": ((240, 120), (380, 190), (280, 140)),
         "standard": ((400, 220), (620, 420), (460, 300)),

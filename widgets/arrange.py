@@ -204,14 +204,18 @@ def free_spot(w, h, taken, area, avoid=(), gap=GAP, grid=GRID, start=MARGIN):
     return None
 
 
-def place(w, h, taken, area, avoid=(), soft=(), strict=False):
+def place(w, h, taken, area, avoid=(), soft=(), strict=False, hard=()):
     """Where a panel being added goes: a free spot clear of the panels and of `avoid`
     (VECTOR's corner, the notifications, the scene's focal points); else one clear of the
-    panels only, still keeping off `soft` (edit mode's tray); else one clear of the panels.
+    panels only, still keeping off `soft` (edit mode's tray, the scene's soft areas); else
+    one clear of the panels. `hard`: the scene's keep-clear areas, kept off at every step
+    (a panel never goes into the den's screens to find room).
     taken: the panels shown on that monitor, and nothing else (a hidden one takes no room).
     When nothing is clear of them: None with strict (say "no room", never stack), else the
     top left, inside the area (a panel that must show somewhere: its monitor went away)."""
-    spot = free_spot(w, h, taken, area, avoid) or free_spot(w, h, taken, area, soft) or free_spot(w, h, taken, area)
+    hard = list(hard)
+    spot = free_spot(w, h, taken, area, list(avoid) + hard) or free_spot(w, h, taken, area, list(soft) + hard) \
+        or free_spot(w, h, taken, area, hard)
     if spot or strict:
         return spot
     W, H = area
@@ -221,6 +225,134 @@ def place(w, h, taken, area, avoid=(), soft=(), strict=False):
 def no_room(title):
     """What to say when a panel has no room anywhere."""
     return f"No room for {title}: hide something or try a smaller size"
+
+
+def no_room_to_grow(title, old, new):
+    """What to say when a panel can't take a new size anywhere on its monitor."""
+    (_, _, ow, oh), (_, _, nw, nh) = old, new
+    what = f"{nw} wide and {nh} tall" if nw != ow and nh != oh else f"{nw} wide" if nw != ow else f"{nh} tall"
+    return f"No room to make {title} {what} here: move or hide something"
+
+
+def _directions(old, new):
+    """Which way to push the neighbours first: the way the panel grew."""
+    ox, oy, ow, oh = old
+    nx, ny, nw, nh = new
+    out = []
+    if ny + nh > oy + oh:
+        out.append("down")
+    if nx + nw > ox + ow:
+        out.append("right")
+    if nx < ox:
+        out.append("left")
+    if ny < oy:
+        out.append("up")
+    return out + [d for d in ("down", "right", "left", "up") if d not in out]
+
+
+def _shift(r, blockers, d, area, gap):
+    """r moved `d` until it's `gap` clear of every blocker; None when that leaves the area."""
+    x, y, w, h = r
+    W, H = area
+    if d == "down":
+        y = max(b[1] + b[3] for b in blockers) + gap
+    elif d == "up":
+        y = min(b[1] for b in blockers) - gap - h
+    elif d == "right":
+        x = max(b[0] + b[2] for b in blockers) + gap
+    else:
+        x = min(b[0] for b in blockers) - gap - w
+    if x < 0 or y < 0 or x + w > W or y + h > H:
+        return None
+    return (int(x), int(y), w, h)
+
+
+def push(rect, others, area, hard=(), soft=(), gap=GAP, prefer=("down", "right", "left", "up"), budget=3000):
+    """Room for rect by moving the panels it overlaps: each pushed down or sideways (in
+    `prefer`'s order) until it's clear, and any it then overlaps after it, each staying in
+    the area and off the hard areas (off the soft ones too, unless there's no other way).
+    others: {name: rect}. Returns {name: (x, y)} of the ones moved ({} when none need to), or
+    None when they can't all be moved clear."""
+    names = sorted(others)
+
+    def outside(r, soft_ok):
+        return any(overlaps(r, a) for a in hard) or (not soft_ok and any(overlaps(r, a) for a in soft))
+
+    for soft_ok in (False, True):
+        left = [budget]
+
+        def dfs(fixed, cur, todo):
+            if left[0] <= 0:
+                return None
+            left[0] -= 1
+            if not todo:
+                return {}
+            n, rest = todo[0], todo[1:]
+            r = cur[n]
+            blockers = [f for f in fixed.values() if overlaps(r, f)]
+            if not blockers:
+                return dfs(fixed, cur, rest)
+            for d in prefer:
+                nr = _shift(r, blockers, d, area, gap)
+                if nr is None or outside(nr, soft_ok) or any(overlaps(nr, f) for f in fixed.values()):
+                    continue
+                nfixed, ncur = dict(fixed), dict(cur)
+                nfixed[n] = ncur[n] = nr
+                more = [m for m in names if m not in nfixed and m not in rest and overlaps(nr, cur[m])]
+                sub = dfs(nfixed, ncur, rest + more)
+                if sub is not None:
+                    sub[n] = nr[:2]
+                    return sub
+            return None
+        first = [n for n in names if overlaps(rect, others[n])]
+        got = dfs({"\0self": tuple(rect)}, dict(others), first)
+        if got is not None:
+            return got
+    return None
+
+
+def make_room(rect, others, area, hard=(), soft=(), avoid=(), before=None, gap=GAP):
+    """A panel taking a new size (rect: its new x, y, w, h, grown where it is): first in
+    place, pushing the panels it now overlaps down or sideways into free space (push);
+    when that can't be done, moved to the nearest free spot that's off the scene's hard
+    keep-clear areas (and `avoid`, VECTOR's corner and the notifications, while there's
+    room elsewhere; the soft areas only as a last resort). Never into a hard area.
+    others: {name: rect} of the other panels shown on that monitor; before: its rect now.
+    Returns {"rect", "moved": {name: (x, y)}, "how": "in place" | "pushed" | "moved"}, or
+    None when there's no room for it anywhere (say no_room_to_grow)."""
+    W, H = area
+    x, y, w, h = (int(v) for v in rect)
+    if w > W or h > H:
+        return None
+    x, y = min(max(0, x), W - w), min(max(0, y), H - h)
+    rect = (x, y, w, h)
+    hard, soft, avoid = list(hard), list(soft), list(avoid)
+    if not any(overlaps(rect, a) for a in hard):
+        got = push(rect, others, area, hard, soft, gap, _directions(before or rect, rect))
+        if got is not None:
+            return {"rect": rect, "moved": got, "how": "pushed" if got else "in place"}
+    taken = list(others.values())
+    for keep in (hard + avoid + soft, hard + soft, hard):
+        spot = nearest_spot(w, h, taken, area, keep, (x, y), gap)
+        if spot:
+            return {"rect": (spot[0], spot[1], w, h), "moved": {}, "how": "moved"}
+    return None
+
+
+def nearest_spot(w, h, taken, area, avoid=(), near=(0, 0), gap=GAP, step=GRID * 2):
+    """The free top left nearest `near` for a w x h panel: clear of the taken rects by
+    `gap`, off `avoid`, inside the area. None when there's none."""
+    W, H = area
+    best = None
+    for yy in range(0, max(1, H - h + 1), step):
+        for xx in range(0, max(1, W - w + 1), step):
+            r = (xx, yy, w, h)
+            if any(overlaps(r, t, gap) for t in taken) or any(overlaps(r, a) for a in avoid):
+                continue
+            d = (xx - near[0]) ** 2 + (yy - near[1]) ** 2
+            if best is None or d < best[0]:
+                best = (d, xx, yy)
+    return (best[1], best[2]) if best else None
 
 
 def fits(rect, taken, area, gap=0):

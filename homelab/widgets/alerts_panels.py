@@ -130,16 +130,24 @@ class AlertsPanel(K.KitPanel):
     interval = 5.0                     # the draw refresh; the alerts are read every 30 s
     sizes = {
         "compact": ((240, 120), (380, 190), (280, 140)),
-        "standard": ((400, 220), (620, 420), (460, 300)),
+        "standard": ((400, 150), (620, 420), (460, 300)),
         "wide": ((640, 180), (1100, 360), (780, 240)),
         "tall": ((380, 440), (560, 900), (420, 560)),
         "large": ((660, 460), (1200, 900), (760, 560)),
     }
     default_size = "standard"
+    fit = "content"                    # as tall as its alerts (four of them: no 300 px box)
 
     @classmethod
     def available(cls):
         return available()
+
+    def natural_height(self, width, cls=None):
+        """All clear: the ring and its words; else what the list draws (measured)."""
+        r = self.result()
+        if r and r.get("ok") and r.get("sources") and not (r.get("items") or []):
+            return 44 + 2 * 38 + 8 + 30 + 12
+        return super().natural_height(width, cls)
     settings = [{"key": "show_pending", "label": "Show pending alerts", "kind": "bool", "default": True,
                  "hint": "Pending: the condition holds but hasn't lasted long enough to fire"}]
 

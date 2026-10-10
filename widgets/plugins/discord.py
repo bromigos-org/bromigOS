@@ -338,7 +338,13 @@ class DiscordPanel(K.KitPanel):
 
     def _members(self, cr, d, x0, x1, top, bottom, cols=1, pic=False):
         rows = d.get("list") or []
+        if top + 14 > bottom:                     # no room even for its heading: left out
+            return
         D.label(cr, x0, top, f"ONLINE NOW · {len(rows)}", "dim", size=10)
+        if rows and top + 18 + 20 > bottom:       # room for the heading only: who, in its hover hint
+            self.region(x0, top - 2, x1 - x0, 16, f"{len(rows)} online: " + ", ".join(m["name"] for m in rows[:30])
+                        + (" and more" if len(rows) > 30 else "") + ". Make the panel taller to see them here.")
+            return
         y0 = top + 18
         if not rows:
             msg = ("Set server = \"ID\" for names (the server's widget must be on)." if not d.get("widget")
@@ -348,7 +354,7 @@ class DiscordPanel(K.KitPanel):
                         "Enable Server Widget, then server = \"ID\" in discord.toml")
             return
         cw = (x1 - x0 - (cols - 1) * 12) / cols
-        per = max(1, int((bottom - y0) // 20))
+        per = max(1, int((bottom - y0) // 20))       # at least one row: there's room for it (above)
         for i, m in enumerate(rows[:per * cols]):
             self._member_row(cr, m, x0 + (i // per) * (cw + 12), y0 + (i % per) * 20, cw, pic)
         if len(rows) > per * cols:

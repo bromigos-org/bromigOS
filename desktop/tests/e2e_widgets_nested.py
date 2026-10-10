@@ -22,6 +22,9 @@ lives in a dotfiles repository. A virtual keyboard (vkbd.py) and a virtual point
   - Esc saves layout.json through the symlink (still a link), `bromigos panels` shows it;
     Cancel puts everything back and writes nothing; a right-click on a panel starts it;
   - the panels keep drawing while edit mode is on;
+  - fitting to content: CI & PRs in a 420 px room draws a frame as tall as its rows, fills
+    its room again in edit mode (what's saved is the room), and shrinks back after; SYSTEM
+    made taller with Ctrl+Down pushes NETWORK under it down, and nothing overlaps;
   - a second monitor: a second nested output (WAYLAND-2, made with `hyprctl output create
     wayland`, right of the first). Edit mode puts a canvas on each; a drag over the edge
     puts SYSTEM on the second, saved as its own monitor; unplugged (`hyprctl output
@@ -584,6 +587,55 @@ def shots(n, r):
         editing(n, False)
 
 
+def fit_phase(n, r):
+    """A panel that fits its content (CI & PRs: fit = "content"): its frame follows its rows
+    inside its room; edit mode shows (and saves) the room; growing pushes a neighbour."""
+    with open(n.link) as f:
+        doc = json.load(f)
+    st = {k: {"visible": False} for k in A.state_of(doc)}
+    st.update({"system": {"x": 24, "y": 24, "width": 470, "height": 470, "visible": True},
+               "network": {"x": 24, "y": 510, "width": 470, "height": 300, "visible": True},
+               "ci": {"x": 2056, "y": 886, "width": 480, "height": 420, "visible": True}})
+    A.write(A.apply(doc, st), n.link)
+    n.widgets("reload")                       # the panels start again in place (the same pid)
+
+    def placed(p):
+        return all(rect(n, k) == tuple(st[k][x] for x in ("x", "y", "width", "height"))
+                   for k in ("system", "network", "ci")) and (p.get("ci") or {}).get("visible")
+    r.check("fit: the panels read the new layout", settle(n, placed, 25), n.panels())
+
+    def ci_layer():
+        return [x for x in n.layer_rects("bromigos-widgets") if x[:2] == (2056, 886)]
+    shrunk = wait_for(lambda: any(h < 420 - 24 for *_, h in ci_layer()), 20, 0.5)
+    r.check("fit: CI's frame is as tall as its rows, inside its 420 px room", shrunk, (ci_layer(), n.panels().get("ci")))
+    r.check("…and its room is still 420 (what the layout keeps)", (n.panels().get("ci") or {}).get("height") == 420,
+            n.panels().get("ci"))
+    n.widgets("edit", "on")
+    editing(n)
+    r.check("fit: edit mode shows the whole room", wait_for(lambda: any(h == 420 for *_, h in ci_layer()), 5), ci_layer())
+    # SYSTEM picked, then made taller with Ctrl+Down: NETWORK under it moves down
+    n.ptr.click(vptr.LEFT, at=(24 + 200, 24 + 200))
+    time.sleep(0.4)
+    for _ in range(8):                        # 8 px a press, until it runs into NETWORK
+        n.kb.combo("CTRL + DOWN")
+        if settle(n, lambda p: p["system"]["y"] + p["system"]["height"] > 510, 1.5):
+            break
+    sysr = rect(n, "system")
+    net = rect(n, "network")
+    r.check("fit: SYSTEM made taller pushes NETWORK down, a gap under it",
+            bool(sysr) and net[1] == sysr[1] + sysr[3] + 16 and net[0] == 24, (sysr, net))
+    n.kb.tap("ESCAPE")
+    editing(n, False)
+    saved = n.saved()
+    r.check("fit: Esc saves the room, not the frame", saved["ci"]["height"] == 420 and
+            not A.overlaps(tuple(saved["system"][k] for k in ("x", "y", "width", "height")),
+                           tuple(saved["network"][k] for k in ("x", "y", "width", "height"))), saved)
+    r.check("fit: out of edit mode, the frame follows its rows again",
+            wait_for(lambda: any(h < 420 - 24 for *_, h in ci_layer()), 15, 0.5), ci_layer())
+    errs = open(os.path.join(n.home, "widgets.err")).read() if os.path.exists(os.path.join(n.home, "widgets.err")) else ""
+    r.check("fit: the panels logged no traceback", "Traceback" not in errs, errs[-1500:])
+
+
 def main():
     keep = "--keep" in sys.argv
     shots_dir = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else None
@@ -600,6 +652,7 @@ def main():
         monitors_phase(n, r)
         settings_phase(n, r)
         customize_phase(n, r)
+        fit_phase(n, r)
         if shots_dir:
             shots(n, r)
     finally:

@@ -323,7 +323,8 @@ class Box:
             "BROMIGOS_HOLO_ROOT": os.path.join(d, "empty"), "BROMIGOS_NOTES": os.path.join(d, "empty", "notes.md"),
             "PYTHONDONTWRITEBYTECODE": "1", "NO_AT_BRIDGE": "1", "GSETTINGS_BACKEND": "memory",
         }
-        for k in ("__GLX_VENDOR_LIBRARY_NAME", "__EGL_VENDOR_LIBRARY_FILENAMES", "CUDA_VISIBLE_DEVICES", "TZ"):
+        for k in ("__GLX_VENDOR_LIBRARY_NAME", "__EGL_VENDOR_LIBRARY_FILENAMES", "CUDA_VISIBLE_DEVICES", "TZ",
+                  "BROMIGOS_WIDGETS_DEMO_LAB_SIZE"):
             if k in os.environ:
                 env[k] = os.environ[k]
         env.update({k: str(v) for k, v in extra.items()})

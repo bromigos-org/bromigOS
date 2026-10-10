@@ -233,7 +233,8 @@ standard panel, and wider, taller or larger ones that show more. These sizes are
 
 In edit mode, a panel resizes freely inside a class. Between two classes it snaps to the
 nearest one, so it's never at a size it has no layout for. The gallery's cards have a
-size picker, and **Add to desktop** uses the panel's default class.
+size picker, and **Add to desktop** uses the panel's default class. A panel that fits its
+content takes the height its content needs in that class (below).
 
 bromigOS's panels have these:
 
@@ -288,6 +289,67 @@ class MoonPanel(Panel):
 A panel that declares no `sizes` has one class, `standard`, from `min_size` to
 `max_size`, and simply gets the size the user chose. `tick()` can read what the last
 draw used, so a panel can sample more only while it's large.
+
+## Fitting to content
+
+Some panels show lists that grow and shrink: LAB's services, ALERTS, CI's builds. A
+fixed size cuts a long list off, and leaves a short one in a mostly empty box. So these
+panels fit their content.
+
+A panel that fits its content sets `fit = "content"`. LAB, ALERTS, CI & PRs, LAB JOBS and
+GAME SERVERS do. Its `natural_height(width)` says how tall its content is at that width,
+from its data now. By default the panel is drawn offscreen at its class's tallest size,
+and its last line's bottom is the answer. A panel can work it out itself instead, as LAB
+does.
+
+That height is used in four places, always kept inside the panel's size class:
+
+- **Layouts** give the panel the height its content needs.
+- **Tidy up** does the same for each panel it moves.
+- **Add to desktop** and the **size picker** start the panel at that height.
+- **On the desktop**, the panel's frame shrinks to its content inside the room it was
+  given. ALERTS with four alerts is a short panel, not a 300 px box.
+
+The frame doesn't jump with every reading. It changes only when the height needed moves
+by more than one row (24 px), at most once every 30 seconds, and never in edit mode. In
+edit mode every frame fills the room it was given, so you arrange what's really reserved.
+
+The running panels measure each one's heights once a minute and publish them in their
+health file (`natural`). `bromigos panels layout apply` and `tidy` read them from there.
+The picture tools measure them from demo readings.
+
+A layout can turn this off for one widget with `fit = "fixed"`: it then gets its class's
+start height.
+
+### Never cut off
+
+When a panel's content needs more room than its size allows, the panel folds what it
+shows. It never cuts a section or a row in half.
+
+LAB folds its sections in this order:
+
+1. SERVICES becomes "34/36 UP" and only the services that are down or slow.
+2. The node map becomes one small chip per node. Each node's readings are in its hover
+   hint.
+3. STORAGE POOLS becomes one summary line.
+
+If it still doesn't fit, the node map and then SERVICES are left out. The summary strip
+at the top always shows. Node names show in full when they fit, and always in the hover
+hint. The node boxes wrap into rows so that each name fits.
+
+Other panels stop a list at the last whole row and say how many more there are
+("+12 MORE"), or fold a section to one line. CONNECTIONS, for example, folds its VPNs to
+"1 UP OF 3".
+
+`widgets/tests/test_fit_content.py` checks every built-in and plugin panel. It draws each
+one with a big fixture at each class's smallest and start sizes:
+
+- LAB with six nodes, 36 services in five groups and three storage pools;
+- every other list grown to 20 rows: alerts, builds, events, jobs, and so on.
+
+Nothing may be drawn past the panel's edges, and no row may be cut by a clip, unless the
+panel scrolls. `widgets/tests/fitcheck.py NAME` runs the same check and prints what it
+found. `draw.record()` collects what a panel draws for the check, and for measuring.
 
 ## A widget's settings
 
@@ -476,7 +538,12 @@ side = "left"              # left or right: a column. top or bottom: a row along
 lane = 1                   # a column's place from the edge: 1 by the edge, 2 beside it
 from = "top"               # a column fills from the top or the bottom; a row from the left or right
 priority = 1               # 1 matters most
+fit = "content"            # optional: "fixed" keeps its class's start height (below)
 ```
+
+A widget that fits its content gets the height its content needs, inside its size class
+([Fitting to content](#fitting-to-content)). `fit = "fixed"` gives it its class's start
+height instead.
 
 A widget is placed by anchors, not pixels, so one file fits every screen. Each column
 stacks its widgets in file order, and lane 2 starts where lane 1's widest widget ends. A
@@ -582,6 +649,25 @@ off and bromigOS says "No room for X: hide something or try a smaller size".
 `bromigos panels` reports any pair that overlaps (`overlapping`), and Settings › Widgets
 offers Tidy up for them.
 
+The scene's hard keep-clear areas are never given up to find room. When nothing else is
+free, the widget stays off rather than go on the den's screens.
+
+### Making a widget bigger
+
+A widget made bigger keeps its place. This is the same for `bromigos panels size`, the
+size picker, a corner dragged in edit mode and Ctrl+arrow keys:
+
+1. It grows where it is. Any widget it now overlaps is pushed down, or to the side, into
+   free space. A pushed widget can push the next one.
+2. If the widgets in its way can't move, it moves to the nearest free spot. That spot is
+   never on a hard keep-clear area. A soft one is used only when nothing else is free.
+3. If there's no room anywhere, nothing changes and bromigOS says so: "No room to make
+   LAB 900 tall here: move or hide something".
+
+`arrange.make_room()` does this. Its tests use the Wick's keep-clear areas
+(`widgets/tests/test_arrange.py`). Before, a bigger LAB could jump onto the den's window
+to avoid SYSTEM below it.
+
 This fixed a bug where switching on about ten widgets in a row stacked them all on
 SYSTEM. Customize's switch turned each widget on without giving it a place. The panels
 then searched for free space counting every widget, hidden ones too. On a full screen
@@ -593,6 +679,10 @@ they found none, used the top left, and remembered it. The fixture
 `tools/widgets/render-layouts.py OUTDIR THEME:LAYOUT…` draws a layout on a theme as the
 real desktop, offscreen, with demo readings (the theme previews' renderer). It also writes
 a copy with the keep-clear areas outlined, to check the scene shows.
+
+LAYOUT can be a layout file's path, such as `wick:~/.config/bromigos/widgets/layouts/my-desk.toml`.
+`--lab big` gives LAB a lab the size a real one grows to: six nodes and 36 services
+(`widgets/demo_lab.py`, `BIG_LAB`).
 
 ## High contrast
 
@@ -735,6 +825,10 @@ again. It uses `checkupdates` from `pacman-contrib`, which bromigos-widgets inst
 
 The VECTOR panel shows:
 
+- whether he's running. The panel asks his daemon on its socket every 5 seconds, the same
+  question `bromigos vector status` asks. When nothing answers, he isn't running,
+  whatever an old state file says. When his window is closed but the daemon runs, the
+  panel says STANDING BY;
 - what he's doing now, with his mood, voice and model, from his state file;
 - his emergency switch. A click is the same as Super+Ctrl+Esc: off at once, and back on
   only after you answer YES;
