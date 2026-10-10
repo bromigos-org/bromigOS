@@ -333,6 +333,34 @@ def settings_phase(n, r):
     r.check("Settings: every step ran", len(steps) == 6, (out[-600:], err[-1200:]))
 
 
+def customize_phase(n, r):
+    """The Customize window (bromigos customize): opened on its Widgets tab, Ctrl+Tab to
+    Themes, Esc closes it; with --shots, a picture of each tab."""
+    n.widgets("edit", "done")
+    editing(n, False)
+    env = dict(n.env, BROMIGOS_PREVIEWS_HOLD="1", BROMIGOS_WIDGETS_DEMO="1",
+               PYTHONPATH=os.pathsep.join([os.path.join(REPO, "desktop", "lib"), os.path.join(REPO, "lib")]))
+    p = subprocess.Popen([sys.executable, os.path.join(REPO, "desktop", "bin", "bromigos-customize"), "--tab", "widgets"],
+                         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    n.procs.append(p)
+    up = wait_for(lambda: n.layer_rects("bromigos-theme-switcher"), 20)
+    r.check("Customize opens over the desktop (Super+Ctrl+Shift+Space's window)", up, n.layers())
+    if not up:
+        return
+    time.sleep(5)                                        # the widget gallery draws its pictures
+    n.shot("customize-widgets")
+    n.kb.combo("CTRL + TAB")
+    time.sleep(1.5)
+    n.shot("customize-themes")
+    n.kb.tap("ESCAPE")
+    r.check("Esc closes it", wait_for(lambda: not n.layer_rects("bromigos-theme-switcher"), 8), n.layers())
+    try:
+        err = p.communicate(timeout=10)[1]
+    except subprocess.TimeoutExpired:
+        err = ""
+    r.check("Customize logged no traceback", "Traceback" not in (err or ""), (err or "")[-1500:])
+
+
 def draws_go_up(n):
     """The panels redraw while edit mode is on (their stats, to the app's stderr)."""
     def count():
@@ -405,6 +433,7 @@ def main():
         n.start()
         scenarios(n, r)
         settings_phase(n, r)
+        customize_phase(n, r)
         if shots_dir:
             shots(n, r)
     finally:

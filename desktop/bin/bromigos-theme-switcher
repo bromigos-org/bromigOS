@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
-# bromigos:summary=Pick a theme from previews of the desktop wearing it (SUPER+CTRL+SHIFT+SPACE)
-# bromigos:args=[--list [--json]] [--render [NAME…]] [--screenshot OUT.png --size WxH [--select NAME] [--filter TEXT]]
+# bromigos:summary=Customize: themes from previews of the desktop wearing them, and the widget gallery (SUPER+CTRL+SHIFT+SPACE)
+# bromigos:args=[--tab themes|widgets] [--list [--json]] [--render [NAME…]] [--screenshot OUT.png --size WxH [--tab TAB] [--select NAME] [--filter TEXT]]
 # bromigos:examples=bromigos theme switcher; bromigos theme switcher --list; bromigos theme previews
-"""bromigos-theme-switcher: every theme as a preview of the desktop wearing it (its world
-or the den, the bar, a terminal and a panel in its colours), in a grid sized to the
-monitor it opens on. Arrows move, Enter applies (`bromigos theme set`), typing filters,
-Esc closes. Themes from the extension catalogs come after the installed ones; choosing
-one installs it first (in a terminal).
+"""bromigos-theme-switcher, the Customize window (`bromigos customize`): tabs for the
+looks of the desktop, built so more can follow.
 
-  bromigos theme switcher                      the window
+  Themes   every theme as a preview of the desktop wearing it (its world or the den, the
+           bar, a terminal and a panel in its colours), in a grid sized to the monitor it
+           opens on. Arrows move, Enter applies (`bromigos theme set`), typing filters.
+           Themes from the extension catalogs come after the installed ones; choosing one
+           installs it first (in a terminal). Install from URL, Make your own (`bromigos
+           theme new --from` the one selected) and Remove (yours and extensions' only).
+  Widgets  the widget gallery as cards (lib/bromigos_widgetcards.py): on or off, sizes,
+           Add to desktop, settings, Remove, Install from URL and Get more.
+
+Ctrl+Tab (or Ctrl+1, Ctrl+2) changes tab; Esc closes a sheet, then the window.
+
+  bromigos theme switcher                      the window, on Themes
+  bromigos customize [--tab themes|widgets]    the window, on that tab
   bromigos theme switcher --list [--json]      the themes, their previews and whether each is current
   bromigos theme switcher --render [NAME…]     draw missing or stale previews (bromigos theme previews), no window
   bromigos theme switcher --screenshot OUT.png --size WxH [--select NAME] [--filter TEXT] [--backdrop IMG]
@@ -30,6 +39,11 @@ for _p in (os.path.join(HERE, "..", "lib"), os.path.join(HERE, "..", "..", "lib"
     if os.path.isdir(_p) and _p not in sys.path:
         sys.path.append(_p)
 
+for _p in (os.path.join(HERE, "..", "settings"), "/usr/lib/bromigos/settings"):   # the forms (bromigos_settings)
+    if os.path.isdir(os.path.join(_p, "bromigos_settings")) and _p not in sys.path:
+        sys.path.append(_p)
+        break
+
 import bromigos_hypr as H  # noqa: E402
 import bromigos_previews as PV  # noqa: E402
 # the cards and the themes behind them, shared with Settings › Theme
@@ -37,7 +51,10 @@ from bromigos_themecards import (WICK, CardKit, Entry, PreviewWatch, card_css, c
                                  installed, kind_of, render_background, rgba, theme_colors)
 
 APP_ID = "org.bromigos.ThemeSwitcher"
-KEYS = "←↑→↓ choose · Enter apply · type to filter · Esc close"
+KEYS = "←↑→↓ choose · Enter apply · type to filter · Ctrl+Tab widgets · Esc close"
+WKEYS = "type to filter · Ctrl+Tab themes · Esc close"
+TABS = (("themes", "THEMES", "Every theme as a preview of your desktop wearing it"),
+        ("widgets", "WIDGETS", "The widget gallery: every panel, on or off, and more from the catalog"))
 
 
 # ------------------------------------------------------------------ the monitor and the grid
@@ -113,6 +130,10 @@ def load_gtk():
     except (ValueError, ImportError):
         LS = None
     from gi.repository import Gdk, Gio, GLib, Gtk, Pango
+    try:
+        gi.require_version("Adw", "1")             # the forms in the sheets (bromigos_settings.widgetform)
+    except ValueError:
+        pass
     return Gtk, Gdk, Gio, GLib, Pango, LS
 
 
@@ -157,8 +178,10 @@ tooltip label {{ color: {c['soft']}; }}
 
 
 class Switcher:
-    def __init__(self, Gtk, Gdk, Gio, GLib, Pango, LS, app, monitor, entries, shot=None):
+    def __init__(self, Gtk, Gdk, Gio, GLib, Pango, LS, app, monitor, entries, shot=None, tab="themes"):
         self.Gtk, self.Gdk, self.Gio, self.GLib, self.Pango, self.LS = Gtk, Gdk, Gio, GLib, Pango, LS
+        self.tab = tab if tab in dict((t[0], 1) for t in TABS) else "themes"
+        self.sheet_box = None
         self.app, self.entries, self.shot = app, entries, shot
         self.monitor = monitor
         self.g = Grid(monitor[0], monitor[1], len(entries))
@@ -169,11 +192,23 @@ class Switcher:
         self.pending = {e.name for e in entries if not e.catalog and not e.fresh}
         self.closing = False
 
-        win = Gtk.ApplicationWindow(application=app, title="Themes")
+        win = Gtk.ApplicationWindow(application=app, title="Customize")
         win.add_css_class("bromigos-switcher")
         self.win = win
+        from bromigos_widgetcards import Ctx, widget_css
+        self.ctx = Ctx(Gtk, Gio, GLib, win, self.say)
+        try:                                            # the forms' rows (libadwaita) in the theme's colours
+            from gi.repository import Adw
+            Adw.init()
+            from bromigos_settings import style as ST
+            adw = Gtk.CssProvider()
+            adw.load_from_string(ST.css(ST.colors()[0]))
+            Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), adw,
+                                                      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        except Exception:                               # noqa: BLE001  no libadwaita: no forms, the rest works
+            pass
         prov = Gtk.CssProvider()
-        prov.load_from_string(css(self.colors, self.g))
+        prov.load_from_string(css(self.colors, self.g) + widget_css(self.colors, self.g.font))
         Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), prov,
                                                   Gtk.STYLE_PROVIDER_PRIORITY_USER)
         self.layer = bool(LS and not shot and LS.is_supported())
@@ -240,12 +275,27 @@ class Switcher:
 
         head = Gtk.Box(spacing=14)
         head.add_css_class("head")
-        head.set_tooltip_text("Themes: the installed ones, then the catalog's. Type to filter, Esc to close")
-        title = Gtk.Label(label="THEMES")
+        head.set_tooltip_text("Customize: the themes and the widgets. Type to filter, Ctrl+Tab to change tab, "
+                              "Esc to close")
+        title = Gtk.Label(label="CUSTOMIZE")
         title.add_css_class("title")
-        title.set_tooltip_text("The theme switcher (SUPER+CTRL+SHIFT+SPACE): every theme as a preview of your "
-                               "desktop wearing it. `bromigos theme previews` draws the previews.")
+        title.set_tooltip_text("Customize (SUPER+CTRL+SHIFT+SPACE): every theme as a preview of your desktop "
+                               "wearing it, and every widget. `bromigos customize --tab widgets` opens it on "
+                               "the widgets.")
         head.append(title)
+        self.tabs = {}
+        group = None
+        for tid, label, hint in TABS:
+            t = Gtk.ToggleButton(label=label)
+            t.add_css_class("tab")
+            if group is None:
+                group = t
+            else:
+                t.set_group(group)
+            t.set_tooltip_text(f"{hint} (Ctrl+Tab changes tab)")
+            t.connect("toggled", lambda b, tid=tid: b.get_active() and self.show_tab(tid))
+            self.tabs[tid] = t
+            head.append(t)
         self.count = Gtk.Label()
         self.count.add_css_class("count")
         head.append(self.count)
@@ -255,9 +305,9 @@ class Switcher:
         self.search.add_css_class("filter")
         self.search.set_size_request(min(360, max(200, g.w // 4)), -1)
         self.search.set_valign(self.Gtk.Align.CENTER)
-        self.search.set_tooltip_text("Type anywhere to filter the themes by name, description or kind "
-                                     "(world, colour, catalog); Enter applies the one selected")
-        self.search.connect("search-changed", lambda *_: self._refilter())
+        self.search.set_tooltip_text("Type anywhere to filter: the themes by name, description or kind (world, "
+                                     "colour, catalog), the widgets by name, what they show or who made them")
+        self.search.connect("search-changed", lambda *_: self._searched())
         self.search.connect("activate", lambda *_: self._activate_selected())
         self.search.connect("stop-search", lambda *_: self.close())
         head.append(self.search)
@@ -292,7 +342,41 @@ class Switcher:
         self.scroll.set_child(stack)
         self.scroll.set_tooltip_text("Every theme as a preview of your desktop wearing it; scroll, or move "
                                      "with the arrows, when there are more than fit")
-        panel.append(self.scroll)
+        themes = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        tool = Gtk.Box(spacing=6)
+        tool.add_css_class("wtool")
+        tool.set_tooltip_text("Make a theme of your own from the one selected, remove one you added, or add one "
+                              "from a link")
+        tool.set_margin_start(g.PAD)
+        tool.set_margin_end(g.PAD)
+        tool.set_margin_top(10)
+        tool.append(Gtk.Box(hexpand=True))
+        self.make_b = self.ctx.button("Make your own…", self.make_theme, "A new theme of yours, a copy of the one "
+                                      "selected to change as you like (bromigos theme new --from)")
+        self.remove_b = self.ctx.button("Remove", self.remove_theme, "Removes the theme selected: one you installed "
+                                        "or made (never bromigOS's, never the one in force)", destructive=True)
+        tool.append(self.ctx.button("Wallpaper, sounds, lights…", lambda: self.open_settings("theme#around-it"),
+                                    "What goes with the theme on: the live background, the wallpaper, the theme's "
+                                    "sounds, the keyboard's lights (Settings › Theme)"))
+        tool.append(self.make_b)
+        tool.append(self.remove_b)
+        tool.append(self.ctx.button("Install from URL…", self.install_theme, "A theme from any git repository or "
+                                    "folder: you see what it is before it's installed"))
+        themes.append(tool)
+        themes.append(self.scroll)
+        from bromigos_widgetcards import WidgetsTab
+        self.widgets = WidgetsTab(Gtk, self.Pango, self)
+        wbox = self.widgets.widget
+        wbox.set_margin_start(g.PAD)
+        wbox.set_margin_end(g.PAD)
+        wbox.set_margin_top(10)
+        wbox.set_margin_bottom(g.PAD)
+        wbox.set_size_request(-1, g.view_h)
+        # each tab its own height: the themes' grid keeps its cards' shape
+        self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.NONE, vhomogeneous=False)
+        self.stack.add_named(themes, "themes")
+        self.stack.add_named(wbox, "widgets")
+        panel.append(self.stack)
 
         foot = Gtk.Box(spacing=18)
         foot.add_css_class("foot")
@@ -307,6 +391,7 @@ class Switcher:
                                      "(bromigos theme previews); each card fills in when its preview is ready")
         foot.append(self.status)
         keys = Gtk.Label(label=KEYS)
+        self.keys_l = keys
         keys.add_css_class("keys")
         keys.set_tooltip_text("Arrow keys move the selection, Enter applies the theme selected, letters filter, "
                               "Esc closes; a click on a card applies it")
@@ -314,6 +399,175 @@ class Switcher:
         panel.append(foot)
         self._update_count()
         return panel
+
+    # ---------------------------------------------------------------- tabs, sheets (the Widgets tab's host)
+    def show_tab(self, tid):
+        self.tab = tid
+        self.stack.set_visible_child_name(tid)
+        if not self.tabs[tid].get_active():
+            self.tabs[tid].set_active(True)
+        self.keys_l.set_label(KEYS if tid == "themes" else WKEYS)
+        self._update_count()
+        self._show_hint(self._selected_entry())
+
+    def next_tab(self, step=1):
+        ids = [t[0] for t in TABS]
+        self.show_tab(ids[(ids.index(self.tab) + step) % len(ids)])
+
+    def query(self):
+        return self._query()
+
+    def _searched(self):
+        if self.tab == "widgets":
+            self.widgets.fill()
+        else:
+            self._refilter()
+
+    def widget_cols(self):
+        return max(1, int((self.g.inner + 12) // (max(320, self.g.card_w * 0.8) + 12)))
+
+    def widget_card_w(self):
+        n = self.widget_cols()
+        return int((self.g.inner - 12 * (n - 1)) // n)
+
+    def counted(self):
+        self._update_count()
+
+    def say(self, text):
+        self.status.set_label(text)
+        self.status.set_visible(True)
+        self.GLib.timeout_add_seconds(6, lambda: (self._update_count(), False)[1])
+
+    def open_settings(self, target):
+        self.ctx.run(["bromigos", "settings", target])
+        self.close()
+
+    def sheet(self, form, title):
+        """A form (a bromigos_settings.widgetform Sheet) over the panel: a dialog window would
+        open under this one's overlay."""
+        Gtk = self.Gtk
+        self.close_sheet()
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.add_css_class("sheet")
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_size_request(min(760, self.g.w - 80), min(720, self.g.h - 80))
+        box.add_controller(Gtk.GestureClick())         # a click inside never reaches the scrim's close
+        top = Gtk.Box(spacing=8)
+        top.set_margin_start(14)
+        top.set_margin_end(10)
+        top.set_margin_top(10)
+        t = Gtk.Label(label=title.upper(), xalign=0, hexpand=True)
+        t.add_css_class("sheettitle")
+        t.set_tooltip_text("Esc or Close puts this away")
+        top.append(t)
+        top.append(self.ctx.button("Close", self.close_sheet, "Puts this away (Esc)"))
+        box.append(top)
+        form.page.set_vexpand(True)
+        box.append(form.page)
+        form.on_close = self.close_sheet
+        self.sheet_box = box
+        self.panel.set_sensitive(False)
+        self.over.add_overlay(box)
+
+    def close_sheet(self):
+        if self.sheet_box is not None:
+            self.over.remove_overlay(self.sheet_box)
+            self.sheet_box = None
+            self.panel.set_sensitive(True)
+
+    def confirm(self, heading, body, yes, then):
+        Gtk = self.Gtk
+
+        class Form:
+            page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+            on_close = None
+        f = Form()
+        lb = Gtk.Label(label=body, wrap=True, xalign=0)
+        lb.set_tooltip_text(heading)
+        f.page.append(lb)
+        row = Gtk.Box(spacing=6, halign=Gtk.Align.END)
+        row.append(self.ctx.button("Cancel", self.close_sheet, "Leaves it as it is"))
+        row.append(self.ctx.button(yes, lambda: (self.close_sheet(), then()), heading, destructive=True))
+        f.page.append(row)
+        f.page.set_margin_start(14)
+        f.page.set_margin_end(14)
+        self.sheet(f, heading)
+
+    # ---------------------------------------------------------------- the Themes tab's tools
+    def install_theme(self):
+        from bromigos_settings.widgetform import InstallFromURL
+        self.sheet(InstallFromURL(self.ctx, done=self._reload_themes), "ADD A THEME FROM A URL")
+
+    def _reload_themes(self):
+        have = {e.name for e in self.entries}
+        for e in installed():
+            if e.name not in have:
+                self.entries.append(e)
+                self._add_card(e)
+        self.relayout()
+        self._refilter()
+
+    def make_theme(self):
+        e = self._selected_entry()
+        if e is None or e.catalog:
+            self.say("Pick an installed theme to start from")
+            return
+        Gtk = self.Gtk
+
+        class Form:
+            page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+            on_close = None
+        f = Form()
+        f.page.set_margin_start(14)
+        f.page.set_margin_end(14)
+        lb = Gtk.Label(label=f"A copy of {e.display}, as a theme of your own to change: its colours in colors.toml, "
+                             f"its wallpapers, its name. It's made in ~/Themes/<name> and installed.", wrap=True,
+                       xalign=0)
+        lb.set_tooltip_text("bromigos theme new NAME --from " + e.name)
+        f.page.append(lb)
+        name = Gtk.Entry(placeholder_text="its name: lowercase letters, digits and -")
+        name.set_tooltip_text("The new theme's name (bromigos theme new NAME)")
+        f.page.append(name)
+        row = Gtk.Box(spacing=6, halign=Gtk.Align.END)
+        row.append(self.ctx.button("Cancel", self.close_sheet, "Makes nothing"))
+
+        def make():
+            n = name.get_text().strip().lower()
+            if not n:
+                return
+            folder = os.path.join(os.path.expanduser("~/Themes"), n)
+            os.makedirs(os.path.dirname(folder), exist_ok=True)
+
+            def made(doc, err):
+                if not doc or doc.get("ok") is False:
+                    self.say(f"Not made: {(doc or {}).get('error') or err}"[:200])
+                    return
+                self.ctx.change(["bromigos", "ext", "install", "--copy", folder, "--json"],
+                                f"{n}: made in {folder} and installed; edit its colors.toml, then bromigos ext "
+                                f"update {n}", done=lambda _d: (self.close_sheet(), self._reload_themes()))
+            self.ctx.json(["bromigos", "theme", "new", n, "--from", e.name, "--dir", folder, "--json"], made)
+        name.connect("activate", lambda *_: make())
+        row.append(self.ctx.button("Make it", make, f"Copies {e.display} into a theme of your own", primary=True))
+        f.page.append(row)
+        self.sheet(f, f"MAKE YOUR OWN FROM {e.display.upper()}")
+
+    def remove_theme(self):
+        e = self._selected_entry()
+        if e is None or e.catalog or "system" in e.sources or e.current:
+            self.say("Only a theme you installed or made, and not the one in force, can be removed")
+            return
+        self.confirm(f"Remove {e.display}?", f"{e.display} goes: an extension's checkout and links, or your own "
+                                             "theme's folder (bromigos theme remove).", "Remove",
+                     lambda: self.ctx.change(["bromigos", "theme", "remove", e.name, "--json"],
+                                             f"Removed {e.display}", done=lambda _d: self._drop(e)))
+
+    def _drop(self, e):
+        c = self.cards.pop(e.name, None)
+        if c is not None:
+            self.flow.remove(c)
+        self.entries = [x for x in self.entries if x.name != e.name]
+        self._refilter()
 
     def _add_card(self, e):
         child = self.kit.card(e, self.g.card_w, self.g.card_h, pending=e.name in self.pending,
@@ -355,6 +609,11 @@ class Switcher:
         self._update_count()
 
     def _update_count(self):
+        if getattr(self, "tab", "themes") == "widgets" and hasattr(self, "widgets"):
+            self.count.set_label(self.widgets.count())
+            self.count.set_tooltip_text("Every widget there is, how many are on your desktop, and the catalog's")
+            self.status.set_visible(False)
+            return
         n_inst = sum(1 for e in self.entries if not e.catalog)
         n_cat = sum(1 for e in self.entries if e.catalog)
         q = self._query() if hasattr(self, "search") else ""
@@ -379,6 +638,13 @@ class Switcher:
         self._show_hint(self._selected_entry())
 
     def _show_hint(self, e):
+        if getattr(self, "tab", "themes") == "widgets":
+            self.hint.set_label("Switch a widget on or off, pick its size, or add one: Arrange on the desktop "
+                                "moves them")
+            return
+        if hasattr(self, "remove_b") and e is not None:
+            self.remove_b.set_sensitive(not (e.catalog or "system" in e.sources or e.current))
+            self.make_b.set_sensitive(not e.catalog)
         if e is None:
             self.hint.set_label("")
             return
@@ -422,9 +688,21 @@ class Switcher:
     def _key(self, _ctl, keyval, _code, state):
         Gdk = self.Gdk
         name = Gdk.keyval_name(keyval) or ""
+        ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
         if name == "Escape":
-            self.close()
+            if self.sheet_box is not None:
+                self.close_sheet()
+            else:
+                self.close()
             return True
+        if ctrl and name in ("Tab", "ISO_Left_Tab", "Page_Down", "Page_Up"):
+            self.next_tab(-1 if name in ("ISO_Left_Tab", "Page_Up") or state & Gdk.ModifierType.SHIFT_MASK else 1)
+            return True
+        if ctrl and name in ("1", "2"):
+            self.show_tab(TABS[int(name) - 1][0])
+            return True
+        if self.sheet_box is not None or self.tab != "themes":
+            return False
         moves = {"Left": (-1, 0), "Right": (1, 0), "Up": (0, -1), "Down": (0, 1),
                  "Page_Up": (0, -max(1, int(self.g.rows_visible))), "Page_Down": (0, max(1, int(self.g.rows_visible)))}
         if name in moves:
@@ -563,12 +841,12 @@ def run_window(shot=None):
                 d = Gdk.Display.get_default()
                 g = d.get_monitors().get_item(0).get_geometry() if d.get_monitors().get_n_items() else None
                 mon = (g.width, g.height, None) if g else (1920, 1080, None)
-        sw = Switcher(Gtk, Gdk, Gio, GLib, Pango, LS, a, mon, entries, shot)
+        sw = Switcher(Gtk, Gdk, Gio, GLib, Pango, LS, a, mon, entries, shot, tab=(shot or {}).get("tab") or TAB[0])
         state["sw"] = sw
         sw.win.present()
         cur = next((e for e in entries if e.current), entries[0])
         first = shot.get("select") if shot and shot.get("select") else cur.name
-        GLib.idle_add(lambda: (sw.fit(), sw.select(first), False)[2])
+        GLib.idle_add(lambda: (sw.fit(), sw.select(first), sw.show_tab(sw.tab), False)[3])
         if shot and shot.get("filter"):
             GLib.idle_add(lambda: (sw.search.set_text(shot["filter"]), sw._refilter(), False)[2])
         # once laid out: the selection in view (the filter's first match when it hid it)
@@ -578,6 +856,9 @@ def run_window(shot=None):
 
     def snap(sw, n):
         win = sw.win
+        if sw.tab == "widgets" and (sw.ctx.pending or sw.widgets.gallery is None) and n < 120:
+            GLib.timeout_add(250, snap, sw, n + 1)        # the gallery's pictures first
+            return False
         w, h = win.get_width(), win.get_height()
         if (w, h) != (shot["w"], shot["h"]) and n < 40:
             GLib.timeout_add(150, snap, sw, n + 1)
@@ -606,6 +887,9 @@ def run_window(shot=None):
     if app.chosen is not None:
         return apply_entry(app.chosen)
     return 0
+
+
+TAB = ["themes"]          # the tab the window opens on (--tab)
 
 
 def arg(a, flag, default=None):
@@ -642,11 +926,13 @@ def main():
                 state = "" if e.fresh else ("  (stale: drawing)" if e.preview else "  (none yet)")
                 print(f"{tag} {e.name:<12} {e.display:<14} {e.preview or '-'}{state}")
         return 0
+    if "--tab" in a:
+        TAB[0] = arg(a, "--tab", "themes")
     if a and a[0] == "--screenshot":
         size = arg(a, "--size", "1920x1080")
         w, h = (int(x) for x in size.lower().split("x"))
         shot = {"out": a[1], "w": w, "h": h, "select": arg(a, "--select"), "filter": arg(a, "--filter"),
-                "backdrop": arg(a, "--backdrop"), "catalog": "--catalog" in a}
+                "backdrop": arg(a, "--backdrop"), "catalog": "--catalog" in a, "tab": TAB[0]}
         return run_window(shot)
     return run_window()
 

@@ -86,8 +86,8 @@ check() {
   for f in hypr/hyprland.lua hypr/bromigos/*.lua user/hypr/hyprland.lua; do
     luac -p "$f" 2>/dev/null || lua -e "assert(loadfile('$f'))"
   done
-  python -m py_compile bin/bromigos-menu bin/bromigos-webapp bin/bromigos-theme-switcher \
-    bin/bromigos-theme-previews lib/bromigos_previews.py lib/bromigos_themecards.py \
+  python -m py_compile bin/bromigos-menu bin/bromigos-webapp bin/bromigos-theme-switcher bin/bromigos-customize \
+    bin/bromigos-theme-previews lib/bromigos_previews.py lib/bromigos_themecards.py lib/bromigos_widgetcards.py \
     bin/bromigos-setup-keybindings bin/bromigos-setup-input bin/bromigos-setup-config lib/bromigos_hypr.py
   sh -n systemd/theme-previews-hook
   sh -n rofi/scripts/power-menu rofi/scripts/quick-note waybar/scripts/copy-ip bin/bromigos-dispatch
@@ -123,7 +123,7 @@ package() {
   install -Dm0755 -t "$lib/desktop/rofi/" rofi/scripts/power-menu rofi/scripts/quick-note
   install -Dm0755 -t "$lib/desktop/bin/" bin/bromigos-shot bin/bromigos-rec bin/bromigos-banner \
     bin/bromigos-wallpaper bin/bromigos-menu bin/bromigos-webapp bin/bromigos-theme-switcher \
-    bin/bromigos-theme-previews bin/bromigos-extensions \
+    bin/bromigos-customize bin/bromigos-theme-previews bin/bromigos-extensions \
     bin/bromigos-setup-keybindings bin/bromigos-setup-input bin/bromigos-setup-config
   # shared by the menu and the setup tools (rofi, the user's hyprland.lua, the safe reload)
   install -Dm0644 lib/bromigos_hypr.py "$lib/lib/bromigos_hypr.py"
@@ -132,6 +132,8 @@ package() {
   install -Dm0644 lib/bromigos_previews.py "$lib/lib/bromigos_previews.py"
   # the theme cards, shared by the switcher and Settings › Theme
   install -Dm0644 lib/bromigos_themecards.py "$lib/lib/bromigos_themecards.py"
+  # the Customize window's Widgets tab (the switcher's window; docs/widgets.md)
+  install -Dm0644 lib/bromigos_widgetcards.py "$lib/lib/bromigos_widgetcards.py"
   install -Dm0644 systemd/bromigos-theme-previews.service "$pkgdir/usr/lib/systemd/user/bromigos-theme-previews.service"
   install -Dm0755 systemd/theme-previews-hook "$lib/desktop/theme-previews-hook"
   install -Dm0644 "$startdir/bromigos-theme-previews.hook" "$pkgdir/usr/share/libalpm/hooks/bromigos-theme-previews.hook"
@@ -165,7 +167,8 @@ package() {
   install -Dm0755 bin/bromigos-windows "$lib/desktop/bin/bromigos-windows"
   install -d "$pkgdir/usr/bin"
   for f in bromigos-shot bromigos-rec bromigos-banner bromigos-wallpaper bromigos-menu bromigos-webapp bromigos-keys \
-           bromigos-theme-switcher bromigos-theme-previews bromigos-setup-keybindings bromigos-setup-input \
+           bromigos-theme-switcher bromigos-customize bromigos-theme-previews bromigos-setup-keybindings \
+           bromigos-setup-input \
            bromigos-setup-config bromigos-extensions; do
     ln -s "/usr/lib/bromigos/desktop/bin/$f" "$pkgdir/usr/bin/$f"
   done

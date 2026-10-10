@@ -61,6 +61,7 @@ INSTALLED = {
 PROGRAMS = {
     "bromigos-settings": "desktop/settings/bromigos-settings",
     "bromigos-theme-switcher": "desktop/bin/bromigos-theme-switcher",
+    "bromigos-customize": "desktop/bin/bromigos-customize",
     "bromigos-keys": "desktop/bin/bromigos-keys",
     "bromigos-setup-keybindings": "desktop/bin/bromigos-setup-keybindings",
     "bromigos-menu": "desktop/bin/bromigos-menu",

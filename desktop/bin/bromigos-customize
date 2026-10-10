@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+# bromigos:summary=Customize: the themes and the widget gallery in one window, with tabs (SUPER+CTRL+SHIFT+SPACE)
+# bromigos:args=[--tab themes|widgets]
+# bromigos:examples=bromigos customize; bromigos customize --tab widgets
+"""bromigos-customize: the Customize window, on the tab asked for (themes when none is).
+The window is bromigos-theme-switcher's, which `bromigos theme switcher` opens on Themes;
+`--help` there says the rest."""
+import os
+import runpy
+import sys
+
+here = os.path.dirname(os.path.realpath(__file__))
+sys.argv[0] = os.path.join(here, "bromigos-theme-switcher")
+runpy.run_path(sys.argv[0], run_name="__main__")

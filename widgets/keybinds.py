@@ -93,7 +93,7 @@ EXEC = [
     (r"bromigos-live\b.*wallpaper", "Wallpaper", "LIVE LAYER"),
     # LAUNCH
     (r"^bromigos-menu\b", "Desktop menu: launch, install, setup, style, update, toggles (typing searches everything)", "LAUNCH"),
-    (r"^bromigos-theme-switcher\b", "Theme switcher (previews)", "LAUNCH"),
+    (r"^bromigos-theme-switcher\b|^bromigos-customize\b", "Customize: themes (previews) and widgets", "LAUNCH"),
     (r"^bromigos-wallpaper next\b", "Next wallpaper", "LAUNCH"),
     (r"^bromigos settings\b|^bromigos-settings\b", "Settings: idle and lock, theme, shortcuts, updates", "LAUNCH"),
     (r"^bromigos-webapp launch (\S+)", lambda m: f"Web app: {m.group(1)}", "LAUNCH"),

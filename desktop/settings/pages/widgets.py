@@ -83,6 +83,9 @@ class WidgetsPage:
         self.rows["layout"].append(ctx.loading(self.g_layout, "Reading the panels' layout…"))
         self.rows["gallery"].append(ctx.loading(self.g_gallery, "Drawing every widget…"))
         self.rows["more"].append(ctx.loading(self.g_more, "Reading the catalog (fetched every six hours)…"))
+        self.g_gallery.set_header_suffix(ctx.button(
+            "Open Customize", lambda: ctx.launch(["bromigos-customize", "--tab", "widgets"]),
+            "Opens Customize over the whole screen on its Widgets tab: the same gallery as cards, beside the themes"))
         self.build_filters()
         self.refresh()
 

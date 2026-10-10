@@ -95,8 +95,10 @@ def apps():
 
 
 def style():
-    items = [Item("style/switcher", "style", "Theme…", "pick a theme from previews (SUPER+CTRL+SHIFT+SPACE)", None,
-                  ("run", ["bromigos-theme-switcher"])),
+    items = [Item("style/switcher", "style", "Customize: themes…", "pick a theme from previews (SUPER+CTRL+SHIFT+SPACE)",
+                  None, ("run", ["bromigos-customize", "--tab", "themes"])),
+             Item("style/widgets", "style", "Customize: widgets…", "the widget gallery: switch them on, sizes, more",
+                  None, ("run", ["bromigos-customize", "--tab", "widgets"])),
              Item("style/wallpaper-next", "style", "Next wallpaper", "SUPER+CTRL+SPACE", None, ("run", ["bromigos-wallpaper", "next"]))]
     d = _json(["bromigos", "theme", "list", "--json"], {})
     for t in d.get("themes", []):

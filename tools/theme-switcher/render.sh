@@ -4,12 +4,14 @@
 #
 #   tools/theme-switcher/render.sh OUTDIR [--size WxH]… [--theme NAME] [--previews DIR] [--select NAME]
 #                                  [--filter TEXT] [--catalog FILE] [--name SUFFIX] [--backdrop IMAGE]
+#                                  [--tab themes|widgets]
 #
 # (no --size: 1366x768, 1920x1080, 2560x1440 and 3440x1440; --theme: the theme in force,
 # default wick; --previews: a cache of previews to reuse instead of drawing them, the
 # OUTDIR/previews of an earlier run; --catalog: a JSON file of catalog themes to show;
 # --backdrop: the desktop behind it, instead of the theme in force's preview, e.g. a full-size
-# `bromigos theme previews NAME --size WxH --out` picture)
+# `bromigos theme previews NAME --size WxH --out` picture; --tab: the Customize window's tab,
+# the widgets with demo readings)
 #
 # A throwaway home where this checkout's `bromigos` (core/target/debug, or $BROMIGOS;
 # build it first) sets the theme and `bromigos theme previews` draws every preview into
@@ -24,7 +26,7 @@ set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/../.." && pwd)
 out=${1:?OUTDIR}; shift
-sizes=() theme=wick previews='' select='' filter='' catalog='' suffix='' backdrop_in=''
+sizes=() theme=wick previews='' select='' filter='' catalog='' suffix='' backdrop_in='' tab=themes
 while (($#)); do
   case $1 in
     --size) sizes+=("$2"); shift 2 ;;
@@ -35,6 +37,7 @@ while (($#)); do
     --catalog) catalog=$(cd "$(dirname "$2")" && pwd)/$(basename "$2"); shift 2 ;;
     --name) suffix=-$2; shift 2 ;;
     --backdrop) backdrop_in=$(cd "$(dirname "$2")" && pwd)/$(basename "$2"); shift 2 ;;
+    --tab) tab=$2; shift 2 ;;
     *) echo "render: unknown argument $1" >&2; exit 2 ;;
   esac
 done
@@ -60,6 +63,8 @@ chmod 700 "$work/run"
 cat >"$work/bin/bromigos" <<EOF
 #!/bin/sh
 [ "\$1" = session ] && exit 0
+# this checkout's commands (bromigos panels, …), and the widgets' demo readings
+export BROMIGOS_LIB_BIN="$root/desktop/bin" BROMIGOS_WIDGETS_DEMO=1
 exec "$bin" "\$@"
 EOF
 chmod +x "$work/bin/bromigos"
@@ -96,7 +101,7 @@ for s in "${sizes[@]}"; do
   wpid=$!
   for _ in $(seq 50); do [[ -S $rt/wl-render ]] && break; sleep 0.1; done
   [[ -S $rt/wl-render ]] || { echo "render: weston didn't start:" >&2; tail -5 "$work/weston-$s.log" >&2; exit 1; }
-  args=(--screenshot "$out/switcher-$s$suffix.png" --size "$s")
+  args=(--screenshot "$out/switcher-$s$suffix.png" --size "$s" --tab "$tab")
   [[ -n $backdrop ]] && args+=(--backdrop "$backdrop")
   [[ -n $select ]] && args+=(--select "$select")
   [[ -n $filter ]] && args+=(--filter "$filter")

@@ -160,9 +160,9 @@ class ThemePage:
                                            "your desktop wearing it.",
                       hint="Every theme installed, then the ones the extension catalogs offer", key="themes")
         self.themes_group = g
-        g.set_header_suffix(ctx.button("Full switcher", lambda: ctx.launch(["bromigos-theme-switcher"]),
-                                       "Opens the theme switcher over the whole screen (SUPER+CTRL+SHIFT+SPACE): "
-                                       "bigger previews, arrows and type-to-filter"))
+        g.set_header_suffix(ctx.button("Open Customize", lambda: ctx.launch(["bromigos-customize", "--tab", "themes"]),
+                                       "Opens Customize over the whole screen (SUPER+CTRL+SHIFT+SPACE): bigger "
+                                       "previews, arrows and type-to-filter, and the widgets in the next tab"))
         self.busy = Adw.ActionRow(title="")
         sp = Gtk.Spinner()
         sp.set_spinning(not self.still)

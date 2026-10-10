@@ -212,7 +212,10 @@ def fetched(name, preview):
 
 def render_background(names):
     """Draw these previews in the background (bromigos theme previews, its own process: it
-    outlives the window and waits its turn behind another run)."""
+    outlives the window and waits its turn behind another run). BROMIGOS_PREVIEWS_HOLD=1
+    draws none: a test's window in a sandbox leaves nothing running after it."""
+    if os.environ.get("BROMIGOS_PREVIEWS_HOLD") == "1":
+        return
     exe = None
     for d in (os.path.join(HERE, "..", "bin"), "/usr/lib/bromigos/desktop/bin"):
         p = os.path.join(d, "bromigos-theme-previews")
