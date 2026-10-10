@@ -1,8 +1,9 @@
 """A widget's settings form (docs/widgets.md, "A widget's settings"), drawn from the fields
 its panel declares (widgets/widget_settings.py): a text, list, number, switch or choice
-row for each value, and a sign-in for each account. Values go through `bromigos panels
-set|unset NAME KEY … --json` (each change toasts Undo); sign-ins go through
-lib/bromigos_account.py, which keeps tokens in the keyring and never shows them.
+row for each value, and a sign-in section for each service it uses: each of the service's
+accounts, which of them the widget shows, and Add another account… Values go through
+`bromigos panels set|unset NAME KEY … --json` (each change toasts Undo); sign-ins go
+through lib/bromigos_account.py, which keeps tokens in the keyring and never shows them.
 
     WidgetForm(ctx, entry, done=None).present()     entry: a `bromigos panels gallery` widget
 
@@ -202,7 +203,7 @@ class WidgetForm(Sheet):
         k = f["key"]
         old = self.values.get(k)
         args = list(raw) if isinstance(raw, list) else [str(raw)]
-        if f["kind"] == "list" and not args:
+        if f["kind"] in ("list", "secret-signin") and not args:
             argv, undo = CMD + ["unset", self.name, k, "--json"], None
         else:
             argv = CMD + ["set", self.name, k] + args + ["--json"]
@@ -211,14 +212,18 @@ class WidgetForm(Sheet):
 
         def ok(d):
             self.values = d.get("values") or self.values
+            for si in self.signins:                        # which accounts it shows may have changed
+                si.refresh_all()
             if self.done:
                 self.done()
         self.ctx.change(argv, lambda d: d.get("said") or f"{f['label']} saved", undo=undo, done=ok)
 
 
 class SignIn:
-    """An account row: Sign in, Signed in as …, Sign out. The sign-in runs off the window's
-    thread; its prompt (a code to type, or a page to open) shows here."""
+    """A widget's sign-in to a service: a block for each of the service's accounts (Sign in,
+    Signed in as …, Sign out), which of them this widget shows, and Add another account…
+    A service starts with one account, "default"; more are named ("work"), each with its
+    own server and app when it needs them (lib/bromigos_account.py)."""
 
     def __init__(self, form, field):
         self.form, self.f, self.ctx = form, field, form.ctx
@@ -230,23 +235,192 @@ class SignIn:
         self.group = Adw.PreferencesGroup(title=GLib.markup_escape_text(field.get("label") or self.ptitle),
                                           description=GLib.markup_escape_text(field.get("hint") or
                                                                               f"Sign in to {self.ptitle} for this widget."))
+        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self.group.add(self.box)
+        self.blocks = []
+        self.adder = None
+        self.rebuild()
+
+    # ------------------------------------------------------------------ the accounts
+    def names(self):
+        if self.A is None:
+            return ["default"]
+        try:
+            return self.A.names(self.provider) if hasattr(self.A, "names") else ["default"]
+        except Exception:                                         # noqa: BLE001  shown as the default, never raised
+            return ["default"]
+
+    def can_add(self):
+        return self.A is not None and hasattr(self.A, "add_account") and self.provider in self.A.PROVIDERS
+
+    def rebuild(self):
+        """A block per account, then Add another account…"""
+        c = self.box.get_first_child()
+        while c is not None:
+            self.box.remove(c)
+            c = self.box.get_first_child()
+        self.blocks = [Account(self, n) for n in self.names()]
+        for b in self.blocks:
+            self.box.append(b.list)
+        if self.can_add():
+            self.adder = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+            self.adder.add_css_class("boxed-list")
+            self.box.append(self.adder)
+            self.add_closed()
+        for b in self.blocks:
+            b.refresh()
+
+    def block(self, name):
+        return next((b for b in self.blocks if b.name == name), None)
+
+    def many(self):
+        return len(self.blocks) > 1
+
+    def signed_in_names(self):
+        out = []
+        for b in self.blocks:
+            try:
+                st = self.A.status(self.provider, **b.kw)
+            except Exception:                                     # noqa: BLE001
+                st = {}
+            if st.get("signed_in"):
+                out.append(b.name)
+        return out
+
+    def shown(self):
+        """The accounts this widget shows: the setting's list, or every signed-in one."""
+        names = self.names()
+        want = [n for n in (self.form.values.get(self.f["key"]) or []) if n in names]
+        return want or self.signed_in_names() or names[:1]
+
+    def set_shown(self, name, on):
+        """Show or stop showing an account here. Back to every signed-in account when that's
+        what's chosen, so an account signed in later shows by itself."""
+        cur = self.shown()
+        want = [n for n in self.names() if (n in cur and n != name) or (n == name and on)]
+        if not want:
+            self.ctx.toast("A widget shows one account at least")
+            self.refresh_all()
+            return
+        raw = [] if set(want) == set(self.signed_in_names()) else want
+        self.form.change(self.f, raw)
+
+    def refresh_all(self):
+        for b in self.blocks:
+            b.refresh()
+
+    # ------------------------------------------------------------------ Add another account…
+    def _clear_adder(self):
+        c = self.adder.get_first_child() if self.adder else None
+        while c is not None:
+            self.adder.remove(c)
+            c = self.adder.get_first_child()
+
+    def add_closed(self, note=None):
+        self._clear_adder()
+        what = (f"Such as your company's own {self.ptitle}" if self.A.has_server(self.provider)
+                else f"A second {self.ptitle} account, side by side with the first")
+        r = Adw.ActionRow(title=GLib.markup_escape_text(f"Another {self.ptitle} account"),
+                          subtitle=GLib.markup_escape_text(note or what))
+        r.add_suffix(self.ctx.button("Add another account…", self.open_add, f"Adds another {self.ptitle} account: "
+                                     "this widget shows its rows beside the others, each tagged with its name"))
+        self.adder.append(self.ctx.hint(r, f"Every widget that uses {self.ptitle} can show this account too"))
+
+    def open_add(self):
+        """The new account's name, and its server for GitLab or GitHub. Its client ID comes
+        after, and only when its server needs one."""
+        self._clear_adder()
+        self.add_name = Adw.EntryRow(title="Name, such as work")
+        self.ctx.hint(self.add_name, "A short name for the account: lower-case letters, digits, - and _. The widget "
+                                     "tags its rows with it")
+        self.adder.append(self.add_name)
+        self.add_server = None
+        if self.A.has_server(self.provider):
+            pub = short_url(self.A.PROVIDERS[self.provider]["base"])
+            self.add_server = Adw.EntryRow(title=f"Server address (empty: {pub})")
+            self.ctx.hint(self.add_server, f"Your own {self.ptitle}, such as https://git.example.org. Leave it empty "
+                                           f"for {pub}, which uses bromigOS's own app")
+            self.adder.append(self.add_server)
+        r = Adw.ActionRow(title="")
+        r.add_suffix(self.ctx.button("Cancel", self.add_closed, "Adds nothing"))
+        r.add_suffix(self.ctx.button("Add", self.submit_add, "Adds the account; then sign in to it", primary=True))
+        self.add_name.connect("entry-activated", lambda *_: self.submit_add())
+        self.adder.append(r)
+
+    def submit_add(self):
+        name = self.add_name.get_text().strip()
+        server = self.add_server.get_text().strip() if self.add_server else ""
+        try:
+            self.A.add_account(self.provider, name, base=server or None)
+        except Exception as e:                                    # noqa: BLE001  said in the form
+            self.ctx.toast(f"Not added: {e}"[:200], timeout=8)
+            return
+        self.ctx.toast(f"Added the {self.ptitle} account {name}")
+        self.rebuild()
+        if self.form.done:
+            self.form.done()
+
+
+class Account:
+    """One account's block in a SignIn: Sign in, Signed in as …, Sign out, Remove. The
+    sign-in runs off the window's thread; its prompt (a code to type, or a page to open)
+    shows here."""
+
+    def __init__(self, signin, name):
+        self.si, self.name = signin, name
+        self.form, self.ctx, self.A, self.provider = signin.form, signin.ctx, signin.A, signin.provider
+        self.ptitle, self.help = signin.ptitle, signin.help
+        self.kw = {} if name == "default" else {"account": name}
+        self.list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        self.list.add_css_class("boxed-list")
         self.rows = []
         self.cancel = False
         self.deadline = None
-        self.refresh()
+
+    def label(self):
+        try:
+            return self.A.label(self.provider, **self.kw) if hasattr(self.A, "label") else self.name
+        except Exception:                                         # noqa: BLE001
+            return self.name
+
+    def head(self, words):
+        """A row's title: "Signed in as …", or "work: signed in as …" when there are several."""
+        if not self.si.many():
+            return words
+        return f"{self.label()}: {words[0].lower()}{words[1:]}"
+
+    def where(self):
+        try:
+            return short_url(self.A.base(self.provider, **self.kw))
+        except Exception:                                         # noqa: BLE001
+            return self.ptitle
 
     def clear(self):
         for r in self.rows:
-            self.group.remove(r)
+            self.list.remove(r)
         self.rows = []
 
     def add(self, w):
-        self.group.add(w)
+        self.list.append(w)
         self.rows.append(w)
         return w
 
     def button(self, label, cb, hint, primary=False, destructive=False):
         return self.ctx.button(label, cb, hint, primary=primary, destructive=destructive)
+
+    def extras(self, r):
+        """With several accounts: whether this widget shows it (a check), and Remove… for a
+        named one."""
+        if self.si.many():
+            on = self.name in self.si.shown()
+            c = Gtk.CheckButton(active=on, valign=Gtk.Align.CENTER)
+            c.set_tooltip_text(f"Show {self.label()}'s rows in this widget. Unticked, the widget leaves this account "
+                               "out; other widgets still can show it")
+            c.connect("toggled", lambda w: self.si.set_shown(self.name, w.get_active()))
+            r.add_prefix(c)
+        if self.name != "default" and hasattr(self.A, "remove_account"):
+            r.add_suffix(self.button("Remove…", self.ask_remove, f"Signs {self.label()} out and forgets its settings, "
+                                     "after you confirm"))
 
     def refresh(self, note=None):
         self.clear()
@@ -256,30 +430,36 @@ class SignIn:
                                    "This bromigOS has no account sign-in helper yet"))
             return
         try:
-            st = self.A.status(self.provider)
+            st = self.A.status(self.provider, **self.kw)
         except Exception as e:                                    # noqa: BLE001  shown, never raised
             st = {"signed_in": False, "who": None, "needs": [], "via": None}
             note = note or f"Couldn't read the sign-in: {e}"
+        many = self.si.many()
         if st.get("signed_in"):
             via = " through gh" if st.get("via") == "gh" else ""
-            r = Adw.ActionRow(title=GLib.markup_escape_text(f"Signed in{via} as {st.get('who') or '…'}"),
-                              subtitle=GLib.markup_escape_text(f"{self.ptitle}: the token is in your keyring"
+            where = f"{self.where()} · " if many else f"{self.ptitle}: "
+            r = Adw.ActionRow(title=GLib.markup_escape_text(self.head(f"Signed in{via} as {st.get('who') or '…'}")),
+                              subtitle=GLib.markup_escape_text(where + "the token is in your keyring"
                                                                if not via else "Your gh login covers it: nothing to do here"))
             if st.get("via") != "gh":
                 r.add_suffix(self.button("Sign out", self.sign_out, f"Forgets the {self.ptitle} sign-in (the token "
                                                                     "in your keyring)", destructive=True))
-            self.add(self.ctx.hint(r, f"Signed in to {self.ptitle}"))
+            self.extras(r)
+            self.add(self.ctx.hint(r, f"Signed in to {self.ptitle}" + (f" ({self.label()})" if many else "")))
         elif st.get("needs"):
             self.connect_form(st["needs"], note)
             return
         else:
-            r = Adw.ActionRow(title=GLib.markup_escape_text(f"Not signed in to {self.ptitle}"),
-                              subtitle=GLib.markup_escape_text(note or "Sign in once; the widget stays signed in"))
+            r = Adw.ActionRow(title=GLib.markup_escape_text(self.head(f"Not signed in to {self.ptitle}")),
+                              subtitle=GLib.markup_escape_text(note or (f"{self.where()} · sign in once; the widget "
+                                                                        "stays signed in" if many else
+                                                                        "Sign in once; the widget stays signed in")))
             r.add_suffix(self.button("Sign in", self.sign_in, f"Signs in to {self.ptitle}: you confirm it on "
                                                                 f"{self.ptitle}'s own page", primary=True))
             if self.provider == "gitlab":
                 r.add_suffix(self.button("Paste a token…", self.paste_token, "Use a GitLab personal access token "
                                                                               "instead of signing in"))
+            self.extras(r)
             self.add(self.ctx.hint(r, f"Sign in to {self.ptitle} for this widget"))
         if note and st.get("signed_in"):
             self.add(Adw.ActionRow(title=GLib.markup_escape_text(note)))
@@ -293,12 +473,14 @@ class SignIn:
             fields = [{"key": k, "label": k, "hint": "", "required": True} for k in missing]
         cur = {}
         try:
-            cur = self.A.config(self.provider) or {}
+            cur = self.A.config(self.provider, **self.kw) or {}
         except Exception:                                         # noqa: BLE001
             pass
-        head = Adw.ActionRow(title=GLib.markup_escape_text(f"Connect {self.ptitle}"),
+        head = Adw.ActionRow(title=GLib.markup_escape_text(self.head(f"Connect {self.ptitle}")),
                              subtitle=GLib.markup_escape_text(note or self.help or "Its client ID first"))
         head.set_subtitle_lines(6)
+        if self.name != "default":
+            head.add_suffix(self.button("Remove…", self.ask_remove, f"Forgets {self.label()}, after you confirm"))
         self.add(self.ctx.hint(head, f"{self.ptitle} needs your own app's ID once, shared by every widget that uses "
                                      f"it (~/.config/bromigos/accounts.toml)"))
         entries = {}
@@ -309,23 +491,47 @@ class SignIn:
             self.ctx.hint(r, f.get("hint") or f.get("label") or f["key"])
             entries[f["key"]] = r.entry
             self.add(r)
+        self.entries = entries
         # each field's Save saves them all, then offers Sign in
 
     def save_config(self, entries):
         vals = {k: r.get_text().strip() for k, r in entries.items() if r.get_text().strip()}
         try:
-            self.A.configure(self.provider, **vals)
+            self.A.configure(self.provider, **self.kw, **vals)
         except Exception as e:                                    # noqa: BLE001
             self.refresh(f"Not saved: {e}")
             return
         self.ctx.toast(f"{self.ptitle}: saved")
         self.refresh()
 
+    # ------------------------------------------------------------------ remove (a named account)
+    def ask_remove(self):
+        self.clear()
+        r = Adw.ActionRow(title=GLib.markup_escape_text(f"Remove the {self.ptitle} account {self.label()}?"),
+                          subtitle="It signs out and forgets the account's settings. Every widget stops showing it.")
+        r.set_subtitle_lines(3)
+        r.add_suffix(self.button("Cancel", self.refresh, "Keeps it"))
+        r.add_suffix(self.button("Remove", self.remove, "Signs it out and forgets it", destructive=True))
+        self.add(self.ctx.hint(r, "Removing an account can't be undone; you can add it again"))
+
+    def remove(self):
+        lab = self.label()
+        try:
+            self.A.remove_account(self.provider, self.name)
+        except Exception as e:                                    # noqa: BLE001
+            self.refresh(f"Not removed: {e}")
+            return
+        self.ctx.toast(f"Removed the {self.ptitle} account {lab}")
+        self.si.rebuild()
+        if self.form.done:
+            self.form.done()
+
     # ------------------------------------------------------------------ the sign-in
     def sign_in(self):
         self.cancel = False
         self.clear()
-        self.waiting = self.add(Adw.ActionRow(title=GLib.markup_escape_text(f"Asking {self.ptitle} for a code…")))
+        self.waiting = self.add(Adw.ActionRow(title=GLib.markup_escape_text(
+            self.head(f"Asking {self.ptitle} for a code…"))))
         self.waiting.add_prefix(Adw.Spinner())
         cancel = self.button("Cancel", self.stop, "Stops waiting for the sign-in")
         self.waiting.add_suffix(cancel)
@@ -333,11 +539,11 @@ class SignIn:
         def run():
             try:
                 st = self.A.sign_in(self.provider, on_prompt=lambda d: GLib.idle_add(self.prompt, d),
-                                    cancelled=lambda: self.cancel)
+                                    cancelled=lambda: self.cancel, **self.kw)
                 GLib.idle_add(self.finished, st, None)
             except Exception as e:                                # noqa: BLE001
                 GLib.idle_add(self.finished, None, e)
-        threading.Thread(target=run, daemon=True, name=f"signin-{self.provider}").start()
+        threading.Thread(target=run, daemon=True, name=f"signin-{self.provider}-{self.name}").start()
 
     def stop(self):
         self.cancel = True
@@ -347,7 +553,7 @@ class SignIn:
     def prompt(self, d):
         """The device flow's code (large, with Copy and the page), or PKCE's page to open."""
         if getattr(self, "waiting", None) is not None:
-            self.waiting.set_title(GLib.markup_escape_text(f"Waiting for you to approve on {self.ptitle}…"))
+            self.waiting.set_title(GLib.markup_escape_text(self.head(f"Waiting for you to approve on {self.ptitle}…")))
         if d.get("user_code"):
             url = d.get("verification_uri_complete") or d.get("verification_uri")
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin_top=12, margin_bottom=12,
@@ -397,7 +603,7 @@ class SignIn:
             return False
         if err is None:
             self.ctx.toast(f"Signed in to {self.ptitle} as {(st or {}).get('who') or '…'}")
-            self.refresh()
+            self.si.refresh_all()                                 # the others' "shown here" may change
         elif type(err).__name__ == "NeedsConfig":
             self.clear()
             self.connect_form(getattr(err, "fields", []) or ["client_id"])
@@ -412,12 +618,12 @@ class SignIn:
 
     def sign_out(self):
         try:
-            self.A.sign_out(self.provider)
+            self.A.sign_out(self.provider, **self.kw)
         except Exception as e:                                    # noqa: BLE001
             self.refresh(f"Couldn't sign out: {e}")
             return
-        self.ctx.toast(f"Signed out of {self.ptitle}")
-        self.refresh()
+        self.ctx.toast(f"Signed out of {self.ptitle}" + (f" ({self.label()})" if self.si.many() else ""))
+        self.si.refresh_all()
 
     def paste_token(self):
         self.clear()
@@ -430,12 +636,12 @@ class SignIn:
             if not tok:
                 return
             try:
-                self.A.set_token(self.provider, tok)
+                self.A.set_token(self.provider, tok, **self.kw)
             except Exception as e:                                # noqa: BLE001
                 self.refresh(f"Not stored: {e}")
                 return
             self.ctx.toast(f"{self.ptitle}: token stored in your keyring")
-            self.refresh()
+            self.si.refresh_all()
         r.connect("apply", apply)
         self.add(self.ctx.hint(r, "Pasted here, it goes to your keyring and is never shown again"))
         back = Adw.ActionRow(title="")

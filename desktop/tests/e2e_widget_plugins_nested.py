@@ -14,8 +14,9 @@ checks:
     size class, and draws without an error;
   - edit mode's tray shows them (with --shots, a picture of it);
   - nothing logged a traceback;
-  - TWITCH's settings form (widget_form_driver.py) in its sign-in states: not set up,
-    signed out, the device code shown, signed in, with a stand-in sign-in that reaches no
+  - TWITCH's and GITLAB's settings forms (widget_form_driver.py): not set up, signed out,
+    the device code shown, signed in. Then a second account is added (on a server of its
+    own, for GitLab), signed in, chosen and removed. A stand-in sign-in reaches no
     service (with --shots, a picture of each).
 
 Not part of `unittest discover` (it needs kwin_wayland, Hyprland and a GPU):
@@ -109,15 +110,20 @@ def scenarios(n, r):
 
 
 def form(n, r, outdir):
-    """Settings' form for TWITCH, in its sign-in states (widget_form_driver.py)."""
+    """Settings' forms for TWITCH and GITLAB, in their sign-in states, with a second account
+    (widget_form_driver.py). GitLab's second account is on a server of its own."""
     env = dict(n.env, PYTHONPATH=os.pathsep.join([os.path.join(DESKTOP, "lib"), os.path.join(REPO, "lib"), HERE]),
                BROMIGOS_WIDGETS_DEMO="1")
-    p = subprocess.run([sys.executable, os.path.join(HERE, "widget_form_driver.py"), os.path.join(DESKTOP, "settings"),
-                        "twitch", outdir], env=env, capture_output=True, text=True, timeout=120)
-    lines = [ln for ln in p.stdout.splitlines() if ln.startswith(("PASS", "FAIL"))]
-    for ln in lines:
-        r.check("form: " + ln.split(" ", 1)[1].split(" | ")[0], ln.startswith("PASS"), ln.split(" | ", 1)[-1])
-    r.check("the form's driver finished", p.returncode == 0 and lines, (p.stdout[-600:], p.stderr[-1200:]))
+    for widget in ("twitch", "gitlab"):
+        p = subprocess.run([sys.executable, os.path.join(HERE, "widget_form_driver.py"),
+                            os.path.join(DESKTOP, "settings"), widget, outdir], env=env, capture_output=True, text=True,
+                           timeout=180)
+        lines = [ln for ln in p.stdout.splitlines() if ln.startswith(("PASS", "FAIL"))]
+        for ln in lines:
+            r.check(f"form ({widget}): " + ln.split(" ", 1)[1].split(" | ")[0], ln.startswith("PASS"),
+                    ln.split(" | ", 1)[-1])
+        r.check(f"the form's driver finished ({widget})", p.returncode == 0 and lines,
+                (p.stdout[-600:], p.stderr[-1200:]))
 
 
 def main():
