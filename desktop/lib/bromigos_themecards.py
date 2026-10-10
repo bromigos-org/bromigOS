@@ -259,6 +259,8 @@ flowboxchild.card .badge.catalog {{ background-color: {a(c['void'], .78)}; color
   border: 1px solid {a(c['warn'], .7)}; }}
 flowboxchild.card .badge.pending {{ background-color: {a(c['void'], .82)}; color: {c['warn']};
   border: 1px solid {a(c['warn'], .55)}; }}
+flowboxchild.card .badge.pending.quiet {{ background-color: {a(c['void'], .55)}; border-color: transparent;
+  padding: 2px; margin: 6px; }}
 """
 
 
@@ -338,9 +340,13 @@ class CardKit:
         sp = Gtk.Spinner()
         sp.set_spinning(not self.still)
         pend.append(sp)
-        pend.append(Gtk.Label(label="UPDATING" if e.preview else "DRAWING"))
-        pend.set_tooltip_text("This preview is being drawn offscreen in the background; the card fills in when "
-                              "it's ready")
+        if e.preview:                                  # an older picture shows: a quiet mark, no word
+            pend.add_css_class("quiet")
+            pend.set_tooltip_text("A newer preview is being drawn in the background; this one is from before")
+        else:
+            pend.append(Gtk.Label(label="DRAWING"))
+            pend.set_tooltip_text("This preview is being drawn offscreen in the background; the card fills in "
+                                  "when it's ready")
         pend.set_visible(pending)
         child.pending_badge = pend
         over.add_overlay(pend)

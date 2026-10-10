@@ -147,6 +147,22 @@ def demo_interfaces():
 
 
 S.interfaces = demo_interfaces
+# SHORTCUTS: a fixed set of keys, as a fresh install has them (a picture never reads the
+# machine's Hyprland)
+import keybinds as _KB  # noqa: E402
+
+_KEYS = [(sec, keys, desc, None) for sec, rows in (
+    ("VECTOR", [(["SUPER", "E"], "Show / minimize"), (["SUPER", "V"], "Hold to talk"),
+                (["SUPER", "ALT", "V"], "Chat box shown/hidden")]),
+    ("PANELS + NOTES", [(["SUPER", "W"], "All desktop panels"), (["SUPER", "ALT", "W"], "Edit widgets"),
+                        (["SUPER", "S"], "System panel"), (["ALT", "N"], "Type in field notes")]),
+    ("HOLOGRAMS", [(["SUPER", "H"], "Holo deck (this machine)"), (["SUPER", "T"], "Timeline")]),
+    ("LAUNCH", [(["SUPER", "SPACE"], "Desktop menu"), (["SUPER", "CTRL", "SHIFT", "SPACE"], "Customize")]),
+    ("WINDOWS", [(["ALT", "C"], "Close window"), (["ALT", "F"], "Maximize"), (["ALT", "TAB"], "Window switcher")]))
+    for keys, desc in rows]
+_KB.shortcuts = lambda: list(_KEYS)
+_KB.config_mtime = lambda: 1
+
 S.top_processes = demo_top_processes
 S.DiskIO = DemoDiskIO
 S.connections = demo_connections

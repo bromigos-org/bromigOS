@@ -93,7 +93,7 @@ def meta_of(obj, name=None):
     start = next((c[3] for c in cs if c[0] == default), cs[0][3])
     return {"title": str(getattr(inner, "title", None) or (name or "").upper()),
             "description": str(getattr(inner, "description", "") or ""),
-            "category": cat if cat in CATEGORIES else "fun",
+            "category": cat if isinstance(cat, str) and cat.replace("-", "").isalnum() else "fun",
             "reads": str(getattr(inner, "reads", "") or ""),
             "min_size": (min(c[1][0] for c in cs), min(c[1][1] for c in cs)),
             "max_size": (max(c[2][0] for c in cs), max(c[2][1] for c in cs)),
@@ -192,6 +192,14 @@ def with_values(e, doc):
     return e
 
 
+def categories(items):
+    """The categories the widgets declare, bromigOS's in their order first, then any other
+    a widget names: [{"id", "title"}]."""
+    have = {it["category"] for it in items}
+    order = [c for c in CATEGORIES if c in have] + sorted(have - set(CATEGORIES))
+    return [{"id": c, "title": CATEGORY_NAMES.get(c, c.replace("-", " ").title())} for c in order]
+
+
 def addable(e):
     """Whether the gallery offers this entry to add: available, or already on the desktop
     (then it's shown greyed out with the reason, so it can be taken off)."""
@@ -250,6 +258,8 @@ def render_previews(items, outdir, ticks=2):
     sampled `ticks` times a second apart, then drawn (a second or two for all of them)."""
     import cairo
 
+    os.environ["BROMIGOS_WIDGETS_DEMO"] = "1"     # pictures: made-up readings, never this machine's,
+    import demo  # noqa: F401                     # and never an empty panel on a fresh install
     import plugins as PL
     os.makedirs(outdir, exist_ok=True)
     core = core_classes()
@@ -310,12 +320,19 @@ def notes_text(limit=12):
         return []
 
 
+DEMO_NOTES = ["# Tuesday", "- relay firmware: flash the spare board", "- ask about the tide tables",
+              "- lamplighter log, 21:40: north quay light steady", "", "Ideas", "- a widget for the harbour bells"]
+
+
 def draw_notes(cr, w, h, lines=None):
-    """FIELD NOTES drawn as a picture (the gallery's card; the panel itself is a text box)."""
+    """FIELD NOTES drawn as a picture (the gallery's card; the panel itself is a text box).
+    With demo readings, made-up notes."""
     import draw as D
-    top = D.frame(cr, w, h, "FIELD NOTES", f"{len(lines or [])} LINES" if lines is not None else "")
+    if lines is None:
+        lines = DEMO_NOTES if "demo" in sys.modules else notes_text()
+    top = D.frame(cr, w, h, "FIELD NOTES", f"{len(lines)} LINES")
     y = top
-    for ln in (lines if lines is not None else notes_text()):
+    for ln in lines:
         if y > h - 28:
             break
         D.text(cr, 16, y, ln or " ", 13, "soft")
@@ -329,7 +346,7 @@ def main(argv):
         got = render_previews(items, previews)
         for it in items:
             it["preview"] = got.get(it["name"])
-    print(json.dumps({"widgets": items, "categories": [{"id": c, "title": CATEGORY_NAMES[c]} for c in CATEGORIES]}))
+    print(json.dumps({"widgets": items, "categories": categories(items)}))
     return 0
 
 

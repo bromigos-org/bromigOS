@@ -161,20 +161,11 @@ class WidgetsTab:
         tool = Gtk.Box(spacing=6)
         tool.add_css_class("wtool")
         tool.set_tooltip_text("The categories, arranging the panels on the desktop, and adding a widget from a link")
+        self.chipbox = Gtk.Box(spacing=6)              # filled from the categories the widgets declare
+        self.chipbox.set_tooltip_text("Only one category of widget, by each widget's own category")
         self.chips = {}
-        group = None
-        for cid, label in CATEGORIES:
-            t = Gtk.ToggleButton(label=label)
-            if group is None:
-                group = t
-            else:
-                t.set_group(group)
-            t.set_active(cid == "all")
-            t.set_tooltip_text("Every widget" if cid == "all" else f"Only the {label.lower()} widgets, by each "
-                                                                   "widget's own category")
-            t.connect("toggled", lambda b, c=cid: b.get_active() and self.set_category(c))
-            self.chips[cid] = t
-            tool.append(t)
+        tool.append(self.chipbox)
+        self.build_chips([{"id": c, "title": t} for c, t in CATEGORIES[1:]])
         tool.append(Gtk.Box(hexpand=True))
         tool.append(self.ctx.button("Arrange on the desktop", self.arrange,
                                     "Closes this and starts edit mode: drag the panels, resize them by a corner "
@@ -195,6 +186,31 @@ class WidgetsTab:
         self.list.append(self.loading)
         self.refresh()
 
+    def build_chips(self, cats):
+        Gtk = self.Gtk
+        c = self.chipbox.get_first_child()
+        while c is not None:
+            n = c.get_next_sibling()
+            self.chipbox.remove(c)
+            c = n
+        self.chips = {}
+        group = None
+        for cid, label in [("all", "All")] + [(x["id"], x["title"].split(" ")[0]) for x in cats]:
+            t = Gtk.ToggleButton(label=label)
+            if group is None:
+                group = t
+            else:
+                t.set_group(group)
+            t.set_active(cid == self.category)
+            t.set_tooltip_text("Every widget" if cid == "all" else f"Only the {label.lower()} widgets, by each "
+                                                                   "widget's own category")
+            t.connect("toggled", lambda b, c=cid: b.get_active() and self.set_category(c))
+            self.chips[cid] = t
+            self.chipbox.append(t)
+        if self.category not in self.chips:
+            self.category = "all"
+            self.chips["all"].set_active(True)
+
     # ------------------------------------------------------------------ data
     def refresh(self):
         self.ctx.json(["bromigos", "panels", "gallery", "--previews", cache_dir(), "--json"], self.got_gallery)
@@ -206,6 +222,8 @@ class WidgetsTab:
             for w in doc.get("widgets") or []:
                 if w.get("preview"):
                     self.previews[w["name"]] = w["preview"]
+            if doc.get("categories"):
+                self.build_chips(doc["categories"])
         else:
             self.gallery = {"_error": (doc or {}).get("error") or err}
         self.fill()
@@ -260,7 +278,7 @@ class WidgetsTab:
         for e in (self.catalog or {}).get("results") or []:
             if e.get("installed") or e.get("bundled"):
                 continue
-            cat = next((t for t in e.get("tags") or [] if t in dict(CATEGORIES)), "fun")
+            cat = next((t for t in e.get("tags") or [] if t in self.chips and t != "all"), "fun")
             if self.matches(cat, e["name"], e.get("display_name"), e.get("description"), " ".join(e.get("tags") or [])):
                 groups["more"].append(("c", e))
         shown = 0
@@ -275,7 +293,7 @@ class WidgetsTab:
             flow = Gtk.FlowBox(homogeneous=True, column_spacing=12, row_spacing=12,
                                selection_mode=Gtk.SelectionMode.NONE)
             cols = max(1, self.host.widget_cols())
-            flow.set_min_children_per_line(1)
+            flow.set_min_children_per_line(cols)
             flow.set_max_children_per_line(cols)
             for kind, x in items:
                 flow.append(self.card(x) if kind == "w" else self.catalog_card(x))
@@ -317,8 +335,8 @@ class WidgetsTab:
             child.add_css_class("off")
         cw = self.host.widget_card_w()
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.append(self.picture(self.previews.get(w["name"]), cw, int(cw * 0.42),
-                                f"{title}, drawn when this opened"))
+        box.append(self.picture(self.previews.get(w["name"]), cw, int(cw * 0.62),
+                                f"{title}, drawn with made-up readings"))
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
         body.add_css_class("wbody")
         body.append(self.label(title.upper(), "wname", 1))
@@ -346,6 +364,9 @@ class WidgetsTab:
             dd.connect("notify::selected", lambda d, _p: self.panels(["size", w["name"], names[d.get_selected()]],
                                                                     f"{title}: {names[d.get_selected()]}"))
             row.append(dd)
+        body.append(row)
+        row = Gtk.Box(spacing=6)                     # the actions, on a line of their own
+        row.set_tooltip_text(f"What you can do with {title}")
         if not w["visible"]:
             row.append(ctx.button("Add to desktop", lambda: self.panels(["add", w["name"]], f"{title}: on, in a free "
                                                                                               "spot"),
@@ -375,7 +396,7 @@ class WidgetsTab:
         child.add_css_class("wcard")
         cw = self.host.widget_card_w()
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.append(self.picture(e.get("preview"), cw, int(cw * 0.42), f"{title}: the catalog's picture of it"))
+        box.append(self.picture(e.get("preview"), cw, int(cw * 0.62), f"{title}: the catalog's picture of it"))
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
         body.add_css_class("wbody")
         body.append(self.label(title.upper(), "wname", 1))

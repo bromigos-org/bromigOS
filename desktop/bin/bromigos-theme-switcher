@@ -189,6 +189,12 @@ class Switcher:
         self.cards = {}
         self.kit = CardKit(Gtk, Pango, still=bool(shot))
         self.sel_name = None
+        # previews to draw; held (a test's sandbox, BROMIGOS_PREVIEWS_HOLD), an older picture counts as done
+        hold = os.environ.get("BROMIGOS_PREVIEWS_HOLD") == "1"
+        if hold:                                     # its older picture is the picture
+            for e in entries:
+                if e.preview and not e.catalog:
+                    e.fresh = True
         self.pending = {e.name for e in entries if not e.catalog and not e.fresh}
         self.closing = False
 
@@ -424,7 +430,8 @@ class Switcher:
             self._refilter()
 
     def widget_cols(self):
-        return max(1, int((self.g.inner + 12) // (max(320, self.g.card_w * 0.8) + 12)))
+        """Widget cards at least 400 px wide: four to a row at 1920, five at 2560."""
+        return max(2, int((self.g.inner + 12) // (400 + 12)))
 
     def widget_card_w(self):
         n = self.widget_cols()

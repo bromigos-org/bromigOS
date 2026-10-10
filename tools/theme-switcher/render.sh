@@ -79,7 +79,7 @@ run() {
   env -i HOME="$work/home" XDG_CONFIG_HOME="$work/config" XDG_STATE_HOME="$work/state" \
     XDG_CACHE_HOME="$work/cache" XDG_DATA_HOME="$work/data" XDG_RUNTIME_DIR="${RUNDIR:-$work/run}" \
     PATH="$work/bin:$root/desktop/bin:/usr/bin:/bin" LANG=C.UTF-8 TZ=UTC BROMIGOS="$work/bin/bromigos" \
-    BROMIGOS_THEME_CATALOG="$catalog" NO_AT_BRIDGE=1 GSK_RENDERER=cairo \
+    BROMIGOS_THEME_CATALOG="$catalog" NO_AT_BRIDGE=1 GSK_RENDERER=cairo BROMIGOS_PREVIEWS_HOLD="${BROMIGOS_PREVIEWS_HOLD:-}" \
     ${__EGL_VENDOR_LIBRARY_FILENAMES:+__EGL_VENDOR_LIBRARY_FILENAMES="$__EGL_VENDOR_LIBRARY_FILENAMES"} \
     "$@"
 }
