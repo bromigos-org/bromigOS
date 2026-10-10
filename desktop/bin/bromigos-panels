@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # bromigos:summary=The desktop panels: which are on, where they sit, the monitor, the weather's place (your layout.json and weather.toml)
-# bromigos:args=[status] | show|hide NAME | move NAME X Y | size NAME W H | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
-# bromigos:examples=bromigos panels; bromigos panels show weather; bromigos panels weather place "San Diego"; bromigos panels hide connections
+# bromigos:args=[status] | edit | gallery [--previews DIR] | show|hide|add NAME | move NAME X Y | size NAME W H | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
+# bromigos:examples=bromigos panels; bromigos panels edit; bromigos panels add weather; bromigos panels weather place "San Diego"; bromigos panels hide connections
 """bromigos-panels (`bromigos panels`): the desktop panels' layout (bromigos-widgets). The
 panels read your ~/.config/bromigos/widgets/layout.json, else bromigOS's
 (/usr/share/bromigos/widgets/layout.json); a change here copies bromigOS's the first time,
@@ -9,12 +9,19 @@ keeps every key it doesn't know, and tells running panels to read it again (`bro
 reload`). The weather's place is ~/.config/bromigos/weather.toml. Settings › Widgets drives it.
 
   bromigos panels [status]           each panel: on or off, where, its size; the monitor; the weather
+  bromigos panels edit               edit mode on the desktop: drag the panels, resize them, switch
+                                     them on and off (Super+Alt+W; Esc saves)
+  bromigos panels gallery [--previews DIR]
+                                     every panel there is (built in, the homelab's, extensions',
+                                     yours): what it shows, who made it, what it reads, where it is
   bromigos panels show|hide NAME     a panel on or off at login (and now, when the panels run)
+  bromigos panels add NAME           a panel on, in a free spot on the desktop
   bromigos panels move NAME X Y      its place, px from the top left of the usable area
   bromigos panels size NAME W H
   bromigos panels monitor NAME|""    the output they go on ("": the primary)
   bromigos panels weather place PLACE | coords LAT LON | units metric|imperial | name TEXT | clear
-  bromigos panels reset              bromigOS's layout and no weather.toml
+  bromigos panels reset              bromigOS's layout and no weather.toml (a layout.json that's a
+                                     symlink stays one: bromigOS's layout is written through it)
 """
 import json
 import os
@@ -25,6 +32,13 @@ sys.path.insert(0, "/usr/lib/bromigos/lib")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
 import bromigos_cli as C  # noqa: E402
 from bromigos_cli import Fail  # noqa: E402
+
+# the widgets' own code (arrange.py: free space; gallery.py: every panel there is): a
+# checkout's widgets/, else the installed package's
+for _w in (os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "widgets"), "/usr/lib/bromigos/widgets"):
+    if os.path.isfile(os.path.join(_w, "arrange.py")):
+        sys.path.insert(0, os.path.realpath(_w))
+        break
 
 USAGE = __doc__.split("\n\n", 1)[1]
 # what each panel shows (docs/widgets.md), and the key that shows or hides it
@@ -120,12 +134,35 @@ def _tell(said):
     return dict(status(), said=said, note=note)
 
 
-def _panel(d, name):
+def _panel(d, name, plugins=False):
+    """Its entry in the layout; with plugins, a plugin panel the layout doesn't list yet
+    gets one."""
     p = next((p for p in d["panels"] if isinstance(p, dict) and p.get("name") == name), None)
+    if p is None and plugins and name in _gallery_names():
+        p = {"name": name}
+        d["panels"].append(p)
     if p is None:
         have = ", ".join(p.get("name") for p in d["panels"] if isinstance(p, dict))
         raise Fail(f"no panel {name!r} (there are: {have})")
     return p
+
+
+def _gallery_names():
+    """The plugin panels there are (bromigOS's in widgets/plugins/, the homelab's,
+    extensions', yours). The core ones (panels.CORE, notes) are in the layout already."""
+    try:
+        import gallery
+        core = set(gallery.core_classes()) | {"notes"}
+        return {e["name"] for e in gallery.entries(_layout_or_empty()) if e["name"] not in core}
+    except Exception:
+        return set()
+
+
+def _layout_or_empty():
+    try:
+        return load()[0]
+    except Fail:
+        return {"panels": []}
 
 
 def _num(raw, what, lo=-10000, hi=20000):
@@ -143,7 +180,7 @@ def show(on):
         if len(args) != 1:
             raise Fail(f"bromigos panels {'show' if on else 'hide'} NAME")
         d, _, _ = load()
-        p = _panel(d, args[0])
+        p = _panel(d, args[0], plugins=True)
         p["visible"] = on
         title = ABOUT.get(p["name"], (p["name"],))[0]
         return _save(d, f"{title} panel: {'on' if on else 'off'}")
@@ -225,11 +262,82 @@ def weather_cmd(args):
 
 
 def reset(_args):
-    C.write_file(user_layout(), None)
+    if os.path.islink(user_layout()):        # into a dotfiles repository: the link stays
+        with open(default_layout()) as f:
+            C.write_file(user_layout(), f.read())
+    else:
+        C.write_file(user_layout(), None)
     C.write_file(weather_file(), None)
     return _tell("The panels: bromigOS's layout, no weather place")
 
 
+def edit(_args):
+    rc, _, err = C.run(["bromigos-widgets", "edit", "on"], timeout=15)
+    if rc != 0:
+        raise Fail(f"the panels didn't start edit mode: {err.strip() or rc}")
+    return {"said": "Edit mode: drag the panels, resize them by a corner, switch them in the tray. Esc saves."}
+
+
+def _area():
+    """The panels' usable area, from Hyprland when it answers (else a 1080p screen's)."""
+    rc, out, _ = C.run(["hyprctl", "monitors", "-j"], timeout=3) if C.have("hyprctl") else (1, "", "")
+    try:
+        mons = json.loads(out) if rc == 0 else []
+    except ValueError:
+        mons = []
+    d = _layout_or_empty()
+    m = next((m for m in mons if m.get("name") == d.get("monitor")), None) or (mons[0] if mons else None)
+    if not m:
+        return 1920, 1046
+    scale = float(m.get("scale") or 1) or 1
+    rl, rt, rr, rb = (m.get("reserved") or [0, 0, 0, 0])[:4]
+    return int(m["width"] / scale - rl - rr), int(m["height"] / scale - rt - rb)
+
+
+def add(args):
+    if len(args) != 1:
+        raise Fail("bromigos panels add NAME")
+    name = args[0]
+    if running():
+        d, _, _ = load()
+        if name not in {p.get("name") for p in d["panels"] if isinstance(p, dict)} and name not in _gallery_names():
+            raise Fail(f"no panel {name!r}")
+        rc, _, err = C.run(["bromigos-widgets", "add", name], timeout=5)
+        if rc != 0:
+            raise Fail(err.strip() or "the panels didn't answer")
+        import time
+        time.sleep(0.3)                         # the panels save the layout themselves
+        return dict(status(), said=f"{ABOUT.get(name, (name,))[0]} panel: on, in a free spot")
+    import arrange as A
+    d, _, _ = load()
+    p = _panel(d, name, plugins=True)
+    st = A.state_of(d)
+    w, h = int(p.get("width") or 470), int(p.get("height") or 300)
+    taken = [(s["x"], s["y"], s.get("width", 470), s.get("height", 300)) for n, s in st.items()
+             if n != name and s.get("visible", True) and "x" in s and "y" in s]
+    area = _area()
+    spot = A.place(w, h, taken, area, [(area[0] - 1204, area[1] - 664, 1180, 640), (area[0] - 440, 0, 440, 320)])
+    if spot:
+        p["x"], p["y"] = spot
+    p.update(width=w, height=h, visible=True)
+    return _save(d, f"{ABOUT.get(name, (name,))[0]} panel: on, at {p.get('x')},{p.get('y')}")
+
+
+def gallery_cmd(args):
+    import gallery
+    previews = C.flag(args, "--previews")
+    items = gallery.entries(_layout_or_empty())
+    if previews:
+        got = gallery.render_previews(items, os.path.expanduser(previews))
+    for it in items:
+        it["key"] = (ABOUT.get(it["name"]) or (None, None, None))[2]
+        if previews:
+            it["preview"] = got.get(it["name"])
+    return {"widgets": items, "categories": [{"id": c, "title": gallery.CATEGORY_NAMES[c]} for c in gallery.CATEGORIES],
+            "running": running(), "user_file": user_layout()}
+
+
 if __name__ == "__main__":
-    sys.exit(C.main({"status": status, "show": show(True), "hide": show(False), "move": move, "size": size,
+    sys.exit(C.main({"status": status, "show": show(True), "hide": show(False), "add": add, "edit": edit,
+                     "gallery": gallery_cmd, "move": move, "size": size,
                      "monitor": monitor, "weather": weather_cmd, "reset": reset}, USAGE))

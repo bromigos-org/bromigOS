@@ -110,6 +110,8 @@ def toggles():
     items = [Item("toggle/mute", "toggle", "Mute all sound", "theme sounds and VECTOR (SUPER+SHIFT+M)", None, ("run", ["bromigos", "mute"]), stay=True),
              Item("toggle/live", "toggle", "Live layer on/off", "the animated background", None, ("run", ["bromigos-live", "toggle"]), stay=True),
              Item("toggle/widgets", "toggle", "Desktop panels", "all of them (SUPER+W)", None, ("run", ["bromigos-widgets", "toggle", "all"]), stay=True),
+             Item("toggle/widgets-edit", "toggle", "Edit widgets", "move, resize, switch panels on and off (SUPER+ALT+W)",
+                  None, ("run", ["bromigos-widgets", "edit", "on"])),
              Item("toggle/screensaver", "toggle", "Screensaver", "now", None, ("run", ["bromigos-live", "screensaver"]))]
     items += power_profiles()
     # accessibility (bromigos accessibility; docs/accessibility.md): the setting now, and the

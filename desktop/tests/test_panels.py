@@ -77,6 +77,76 @@ class PanelsTest(CmdTest):
         self.assertTrue(self.panel(d, "system")["visible"])
         self.assertFalse(d["weather"]["exists"])
 
+    def test_reset_keeps_a_dotfiles_symlink(self):
+        dots = self.path("dotfiles", "widgets")
+        os.makedirs(dots)
+        real = os.path.join(dots, "layout.json")
+        with open(real, "w") as f:
+            json.dump({"monitor": "DP-9", "panels": [{"name": "system", "x": 1, "y": 1, "visible": False}]}, f)
+        os.makedirs(self.path(".config", "bromigos", "widgets"))
+        link = self.path(".config", "bromigos", "widgets", "layout.json")
+        os.symlink(real, link)
+        d = self.cmd("panels", "move", "system", "64", "32")
+        self.assertTrue(os.path.islink(link))                               # a change writes through it
+        with open(real) as f:
+            self.assertEqual(json.load(f)["panels"][0]["x"], 64)
+        d = self.cmd("panels", "reset")
+        self.assertTrue(os.path.islink(link))                               # and so does reset
+        self.assertTrue(self.panel(d, "system")["visible"])
+        with open(real) as f:
+            self.assertEqual(json.load(f)["monitor"], "")
+
+    def test_add_puts_it_in_a_free_spot(self):
+        d = self.cmd("panels", "add", "weather")
+        w = self.panel(d, "weather")
+        self.assertTrue(w["visible"])
+        boxes = [(p["x"], p["y"], p["width"], p["height"]) for p in d["panels"]
+                 if p["visible"] and p["name"] != "weather"]
+        mine = (w["x"], w["y"], w["width"], w["height"])
+        for b in boxes:                                                       # clear of every shown panel
+            self.assertTrue(mine[0] + mine[2] <= b[0] or b[0] + b[2] <= mine[0] or
+                            mine[1] + mine[3] <= b[1] or b[1] + b[3] <= mine[1], (mine, b))
+        self.cmd("panels", "add", "nope", ok=False)
+
+    def test_gallery_lists_every_panel_with_its_words(self):
+        d = self.cmd("panels", "gallery")
+        names = [w["name"] for w in d["widgets"]]
+        for n in ("system", "network", "storage", "shortcuts", "workbench", "notes", "weather", "connections"):
+            self.assertIn(n, names)
+        for w in d["widgets"]:
+            self.assertTrue(w["description"], w["name"])
+            self.assertIn(w["category"], [c["id"] for c in d["categories"]])
+            self.assertTrue(w["author"])
+            self.assertLessEqual(w["min_size"][0], w["max_size"][0])
+        system = next(w for w in d["widgets"] if w["name"] == "system")
+        self.assertEqual((system["source"], system["author"], system["key"]), ("bromigos", "bromigOS", "SUPER + S"))
+        self.assertFalse(next(w for w in d["widgets"] if w["name"] == "weather")["visible"])
+
+    def test_a_plugin_panel_switches_on_and_off(self):
+        plug = self.path(".config", "bromigos", "plugins", "widgets")
+        os.makedirs(plug)
+        with open(os.path.join(plug, "hello.py"), "w") as f:
+            f.write("from panels import Panel\n\nclass Hello(Panel):\n    name, title = 'hello', 'HELLO'\n"
+                    "    description = 'Says hello'\n    category, reads = 'fun', 'nothing'\n\n"
+                    "    def draw(self, cr, w, h):\n        pass\n\nPANEL = Hello\n")
+        g = self.cmd("panels", "gallery")
+        hello = next(w for w in g["widgets"] if w["name"] == "hello")
+        self.assertEqual((hello["source"], hello["author"], hello["category"]), ("yours", "you", "fun"))
+        d = self.cmd("panels", "hide", "hello")
+        self.assertFalse(self.panel(d, "hello")["visible"])
+
+    def test_edit_asks_the_panels(self):
+        stub = os.path.join(self.tmp, "stub")             # a stand-in bromigos-widgets: never the real one
+        os.makedirs(stub)
+        with open(os.path.join(stub, "bromigos-widgets"), "w") as f:
+            f.write('#!/bin/sh\necho "$*" >> "$HOME/widgets.log"\n[ -z "$FAIL" ]\n')
+        os.chmod(os.path.join(stub, "bromigos-widgets"), 0o755)
+        env = {"PATH": f"{stub}:{self.env['PATH']}"}
+        self.assertIn("Esc saves", self.cmd("panels", "edit", env=env)["said"])
+        self.assertEqual(self.read("widgets.log").split("\n")[0], "edit on")
+        doc = self.cmd("panels", "edit", ok=False, env=dict(env, FAIL="1"))
+        self.assertIn("edit mode", doc["error"])
+
     def test_a_broken_layout_is_said(self):
         os.makedirs(self.path(".config", "bromigos", "widgets"))
         with open(self.path(".config", "bromigos", "widgets", "layout.json"), "w") as f:

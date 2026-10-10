@@ -77,6 +77,7 @@ EXEC = [
     (r"bromigos-live\b.*radial", "Radial quick-launch", "HOLOGRAMS"),
     # PANELS + NOTES: the desktop widgets
     (r"bromigos-widgets toggle all", "All desktop panels", "PANELS + NOTES"),
+    (r"bromigos-widgets edit", "Edit widgets: move, resize, switch on and off", "PANELS + NOTES"),
     (r"bromigos-widgets toggle shortcuts", "This shortcuts panel", "PANELS + NOTES"),
     (r"keybinds\.py rofi", "Search shortcuts (Enter runs)", "PANELS + NOTES"),
     (r"bromigos-widgets toggle (\w+)", lambda m: f"{m.group(1).capitalize()} panel", "PANELS + NOTES"),
