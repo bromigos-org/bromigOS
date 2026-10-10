@@ -61,5 +61,25 @@ class SizeClasses(unittest.TestCase):
                     self.assertFalse(overlap, f"{name}: {a[0]} and {b[0]} overlap")
 
 
+class Availability(unittest.TestCase):
+    def test_available_by_default_and_with_a_reason(self):
+        class Needs(P.Panel):
+            @classmethod
+            def available(cls):
+                return False, "no media source configured"
+
+        class Broken(P.Panel):
+            @classmethod
+            def available(cls):
+                raise RuntimeError("boom")
+        cache = {}
+        self.assertEqual(G.availability(Plain, cache), (True, ""))
+        self.assertEqual(G.availability(Needs, cache), (False, "no media source configured"))
+        self.assertEqual(G.availability(Broken, cache), (True, ""))       # an error never hides a panel
+        self.assertIn(Needs, cache)
+        self.assertFalse(G.addable({"available": False, "visible": False}))
+        self.assertTrue(G.addable({"available": False, "visible": True}))  # on the desktop: shown, greyed
+
+
 if __name__ == "__main__":
     unittest.main()

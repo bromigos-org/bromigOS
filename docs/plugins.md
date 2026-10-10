@@ -159,6 +159,7 @@ attributes from your `Panel` subclass. All are optional.
 | `category` | `system`, `network`, `homelab`, `media`, `notes` or `fun` | `system` |
 | `reads` | What it reads, in a few words, such as `"your CPU"` | Empty |
 | `min_size`, `max_size` | The smallest and largest (width, height) edit mode lets it take, in pixels | (240, 120) and (1600, 1400) |
+| `available()` | A class method: `True`, or `(False, "why")` when it can't show anything here, such as `(False, "no media source configured")`. The gallery then doesn't offer it, and greys it out with the reason while it's on the desktop. Keep it cheap: no network. | `True` |
 | `sizes`, `default_size` | Its [size classes](widgets.md#size-classes), each with a layout of its own, and the one it starts in | One class, `standard`, from `min_size` to `max_size` |
 
 ```python

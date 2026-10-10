@@ -61,6 +61,24 @@ def classes_of(obj):
     return [("standard", tuple(src["min_size"]), tuple(src["max_size"]), (src["width"], src["height"]))]
 
 
+def availability(obj, cache=None):
+    """(available, reason) from a panel's available() (panels.Panel.available): True,
+    False or (bool, reason); an error in it counts as available. cache: a dict kept for one
+    opening of the gallery, so each class is asked once."""
+    inner = getattr(obj, "inner", obj)
+    key = inner if isinstance(inner, type) else type(inner)
+    if cache is not None and key in cache:
+        return cache[key]
+    try:
+        got = inner.available() if hasattr(inner, "available") else True
+    except Exception:
+        got = True
+    ok, why = (bool(got[0]), str(got[1]) if len(got) > 1 and got[1] else "") if isinstance(got, tuple) else (bool(got), "")
+    if cache is not None:
+        cache[key] = (ok, why)
+    return ok, why
+
+
 def meta_of(obj, name=None):
     """A panel class's or instance's gallery words (a plugin's SafePanel too)."""
     inner = getattr(obj, "inner", obj)
@@ -153,6 +171,12 @@ def entry(name, meta, source, state, ext=None):
                 settings=SETTINGS.get(name))
 
 
+def addable(e):
+    """Whether the gallery offers this entry to add: available, or already on the desktop
+    (then it's shown greyed out with the reason, so it can be taken off)."""
+    return e.get("available", True) or e.get("visible")
+
+
 def entries(doc=None, plugins=True):
     """Every panel: bromigOS's, then the plugins (homelab's, extensions', yours), each with
     its place in the layout (doc: a layout.json; the user's, else bromigOS's)."""
@@ -164,13 +188,16 @@ def entries(doc=None, plugins=True):
     state = A.state_of(doc)
     out = []
     core = core_classes()
+    asked = {}
     for name in ORDER:
         if name == "notes":
             meta = notes_meta()
+            ok, why = True, ""
         else:
             cls = core[name]
             meta = dict(meta_of(cls, name), width=cls.width, height=cls.height)
-        out.append(entry(name, meta, "bromigos", state))
+            ok, why = availability(cls, asked)
+        out.append(dict(entry(name, meta, "bromigos", state), available=ok, unavailable=why))
     if not plugins:
         return out
     import plugins as PL
@@ -189,6 +216,7 @@ def entries(doc=None, plugins=True):
             err = f"{type(e).__name__}: {str(e)[:160]}"
         e = entry(name, meta, src, state, exts.get(name) if src == "extension" else None)
         e["error"] = err
+        e["available"], e["unavailable"] = availability(cls, asked) if err is None else (False, err)
         if name not in state:
             e["visible"] = bool(layout.get("visible", True)) if err is None else False
         out.append(e)

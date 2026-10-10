@@ -287,6 +287,8 @@ class WidgetsPage:
         for w in self.gallery.get("widgets") or []:
             if not self.matches(w["category"], w["name"], w["title"], w["description"], w["reads"], w["author"]):
                 continue
+            if not w.get("available", True) and not w["visible"]:      # nothing it could show here
+                continue
             sec = "desktop" if w["visible"] else {"bromigos": "builtin", "homelab": "builtin",
                                                   "extension": "extensions"}.get(w["source"], "yours")
             self.rows[sec].append(self.card(self.sections[sec], w))
@@ -304,6 +306,8 @@ class WidgetsPage:
         meta = f"by {w['author']}" + (f" · reads {w['reads']}" if w.get("reads") else "")
         if w.get("error"):
             meta += f" · can't load: {w['error']}"
+        elif not w.get("available", True):
+            meta += f" · can't show anything here: {w.get('unavailable') or 'not available'}"
         sub = (w["description"] or "A widget") + "\n" + meta
         box = Gtk.Box(spacing=6)
         if w.get("settings"):
@@ -341,6 +345,8 @@ class WidgetsPage:
         pic = self.picture(self.previews.get(w["name"]))
         ctx.hint(pic, f"{title}, drawn when this page opened")
         r.add_prefix(pic)
+        if not w.get("available", True):
+            r.add_css_class("dim-label")                # greyed: switch it off, or set up what it needs
         return r
 
     # ------------------------------------------------------------------ the catalog

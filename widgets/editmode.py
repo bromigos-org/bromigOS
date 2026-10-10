@@ -95,6 +95,7 @@ class Editor:
         self.tray_pos = None                      # (x, y) once the tray is dragged
         self.cards = {}
         self.closed = False
+        self.asked = {}                           # each panel's available(), asked once per opening
         vis = self.visible_names()
         self.sel = select if select in vis else (vis[0] if vis else None)
         self.css = Gtk.CssProvider()
@@ -793,6 +794,7 @@ class Editor:
             e = G.entry(name, dict(meta), src, {name: dict(w.rect_state(), visible=w.visible())},
                         exts.get(name) if src == "extension" else None)
             e["disabled"] = getattr(panel, "disabled", None)
+            e["available"], e["unavailable"] = (True, "") if panel is None else G.availability(panel, self.asked)
             out.append(e)
         return out
 
@@ -808,7 +810,7 @@ class Editor:
         for c in self.list.get_children():
             self.list.remove(c)
         self.cards = {}
-        items = [e for e in self.items() if self.matches(e)]
+        items = [e for e in self.items() if self.matches(e) and G.addable(e)]
         sections = [("ON YOUR DESKTOP", [e for e in items if e["visible"]]),
                     ("BUILT IN", [e for e in items if not e["visible"] and e["source"] in ("bromigos", "homelab")]),
                     ("INSTALLED EXTENSIONS", [e for e in items if not e["visible"] and e["source"] == "extension"]),
@@ -853,6 +855,9 @@ class Editor:
         meta = f"by {e['author']}" + (f" · reads {e['reads']}" if e["reads"] else "")
         if e.get("disabled"):
             meta += " · switched off after errors"
+        if not e.get("available", True):
+            meta += f" · can't show anything here: {e.get('unavailable') or 'not available'}"
+            box.set_opacity(0.55)
         ml = self.label(meta, "card-meta", wrap=True)
         ml.set_tooltip_text(f"Who made it ({e['source']}) and what it reads")
         col.pack_start(ml, False, False, 0)

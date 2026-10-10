@@ -143,11 +143,13 @@ The steps:
 2. Fill in what the gallery shows: `description`, `category`, `reads`, `min_size` and
    `max_size` ([plugins.md](plugins.md#what-the-gallery-shows)). Lay the panel out from
    the `w` and `h` that `draw()` gets, so any size in its range looks right.
-3. Set `LAYOUT = {"width": …, "height": …, "visible": False}` if it shouldn't appear
+3. If it needs something that may not be there, such as a configured source, give it an
+   `available()` class method that says so. The gallery won't offer it until it is.
+4. Set `LAYOUT = {"width": …, "height": …, "visible": False}` if it shouldn't appear
    until someone switches it on. Without a position, it finds a free spot.
-4. Read real data only. When there's nothing to read, say so in the panel. For pictures,
+5. Read real data only. When there's nothing to read, say so in the panel. For pictures,
    give `demo.py` steady made-up readings for it.
-5. Draw it offscreen with `bromigos-widgets render <name> out.png` and look at it at its
+6. Draw it offscreen with `bromigos-widgets render <name> out.png` and look at it at its
    smallest and largest sizes.
 
 To make bigger sizes worth having, give it [size classes](#size-classes).

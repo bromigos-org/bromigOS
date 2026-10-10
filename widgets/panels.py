@@ -54,6 +54,14 @@ class Panel:
     default_size = "standard"           # the class a panel starts at (Add to desktop)
 
     @classmethod
+    def available(cls):
+        """Whether this panel can show anything here: True, or (False, "why"), such as
+        (False, "no media source configured"). The widget gallery leaves an unavailable
+        panel out of what can be added, and greys it out, with the reason, while it's on the
+        desktop. Called once each time the gallery opens: keep it cheap, with no network."""
+        return True
+
+    @classmethod
     def size_classes(cls):
         """[(name, min, max, start)] in SIZE_CLASSES order: the declared classes, else one
         "standard" class spanning min_size to max_size."""
