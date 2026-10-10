@@ -177,12 +177,12 @@ class Privacy(unittest.TestCase):
         bad = lambda t: guard.scan("notes", t, rs)  # noqa: E731
         self.assertEqual(bad("The theme switcher shows previews."), [])
         # the shapes each rule stops (fixtures, not anyone's real names)
-        for t in ["Runs on 192.168.1.20 now.",  # privacy: allow
-                  "Talks to nas.example.lan.",  # privacy: allow
+        for t in ["Runs on 192.168.1.20 now.",  # privacy: allow (a shape the rule must stop)
+                  "Talks to nas.example.lan.",  # privacy: allow (a shape the rule must stop)
                   "Thanks to Jane for this.",
                   "Mail jane@example.org.", "Like Omarchy does.",
                   "From api.tools.svc:4000.",
-                  "Token sk-abcdefghijklmnopqrstuvwxyz123456."]:  # privacy: allow
+                  "Token sk-abcdefghijklmnopqrstuvwxyz123456."]:  # privacy: allow (a shape the rule must stop)
             self.assertTrue(bad(t), t)
         self.assertEqual([x[2] for x in bad("Hacker news")], ["a commit author's name"])
 
@@ -192,7 +192,7 @@ class Privacy(unittest.TestCase):
         for t in ["Joins 192.0.2.41/24 via 198.51.100.1 and 203.0.113.2.", "Has 2001:db8::1/64.",
                   "Pairs 00:00:5E:00:53:10 and 00:00:5e:00:53:4f."]:
             self.assertEqual(guard.scan("notes", t, rs), [], t)
-        for t in ["Pairs AC:80:0A:00:00:01.", "Pairs 00:00:5E:00:54:10."]:  # privacy: allow
+        for t in ["Pairs AC:80:0A:00:00:01.", "Pairs 00:00:5E:00:54:10."]:  # privacy: allow (MACs the rule must stop)
             self.assertTrue(guard.scan("notes", t, rs), t)
 
     def test_redact_keeps_the_commit_link(self):
@@ -203,7 +203,7 @@ class Privacy(unittest.TestCase):
     def test_draft_retries_past_a_leak(self):
         good = json.dumps({"summary": "S.", "before_you_update": [], "new": ["Fine."], "improved": [],
                            "fixed": [], "known_issues": []})
-        leak = good.replace("Fine.", "Runs on 10.1.2.3.")  # privacy: allow
+        leak = good.replace("Fine.", "Runs on 10.1.2.3.")  # privacy: allow (the leak the draft must retry past)
         answers = iter([leak, good])
         with mock.patch.object(release, "chat", lambda m: next(answers)):
             n = release.draft("bromigOS", PLAN, [], {}, [], guard.rules([]), "bromigOS")
@@ -211,7 +211,7 @@ class Privacy(unittest.TestCase):
 
     def test_model_input_is_redacted(self):
         with self.internal_project("Quillmoor"):
-            self.assertEqual(release.private("on 10.0.0.7 via Quillmoor", guard.rules([])),  # privacy: allow
+            self.assertEqual(release.private("on 10.0.0.7 via Quillmoor", guard.rules([])),  # privacy: allow (the address redaction must hide)
                              "on <private> via <private>")
 
     @staticmethod
