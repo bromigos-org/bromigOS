@@ -19,6 +19,11 @@
 #   PKGS_GPG_PASSPHRASE        its passphrase
 #   PKGS_REPO=bromigos  PKGS_ARCH=x86_64  PKGS_KEEP=3 (versions kept per package)
 #   PKGS_REBUILD=0      PKGS_ONLY= (space-separated package dirs, default all)
+#   PKGS_GCS_BUCKET     optional: the public mirror, a Google Cloud Storage bucket that
+#   PKGS_GCS_ACCESS_KEY_ID      gets a copy of the channel after every publish, under the
+#   PKGS_GCS_SECRET_ACCESS_KEY  same lease (an HMAC key: GCS speaks S3). Unset, no mirror.
+#                       PKGS_GCS_ENDPOINT=https://storage.googleapis.com
+#   PKGS_MIRROR_ONLY=0  1: build nothing, only bring the mirror up to date with this channel
 #   PKGS_CHANNEL=edge   the channel published: edge (every push to main) lives at
 #                       <repo>/<arch>/ (the first layout, so pacman.conf's Server line
 #                       never changed); stable (vX.Y.Z tags) and rc (vX.Y.Z-rcN tags)
@@ -105,6 +110,28 @@ dest="pkgs:$PKGS_S3_BUCKET/$prefix"
 echo "publish: channel $channel -> $prefix"
 rcl() { rclone --config /dev/null --stats 0 "$@"; }
 
+# ── The public mirror (Google Cloud Storage), when PKGS_GCS_BUCKET is set ────
+# The homelab bucket stays the primary: every read below is from it. The mirror gets a
+# copy of the channel once the primary is published (mirror_channel, below).
+mirror=0
+if [[ -n "${PKGS_GCS_BUCKET:-}" ]]; then
+  for v in PKGS_GCS_ACCESS_KEY_ID PKGS_GCS_SECRET_ACCESS_KEY; do
+    [[ -n "${!v:-}" ]] || { echo "publish: PKGS_GCS_BUCKET is set but $v isn't" >&2; exit 2; }
+  done
+  export RCLONE_CONFIG_GCS_TYPE=s3
+  export RCLONE_CONFIG_GCS_PROVIDER=GCS
+  export RCLONE_CONFIG_GCS_ENDPOINT="${PKGS_GCS_ENDPOINT:-https://storage.googleapis.com}"
+  export RCLONE_CONFIG_GCS_ACCESS_KEY_ID="$PKGS_GCS_ACCESS_KEY_ID"
+  export RCLONE_CONFIG_GCS_SECRET_ACCESS_KEY="$PKGS_GCS_SECRET_ACCESS_KEY"
+  export RCLONE_CONFIG_GCS_NO_CHECK_BUCKET=true
+  unset PKGS_GCS_ACCESS_KEY_ID PKGS_GCS_SECRET_ACCESS_KEY
+  gdest="gcs:$PKGS_GCS_BUCKET/$prefix"
+  mirror=1
+  echo "publish: mirroring to the public bucket too"
+elif [[ "${PKGS_MIRROR_ONLY:-0}" == 1 ]]; then
+  echo "publish: PKGS_MIRROR_ONLY=1 needs PKGS_GCS_BUCKET" >&2; exit 2
+fi
+
 rcl lsf --files-only "$dest" > "$work/listing" 2>/dev/null || : > "$work/listing"
 in_bucket() { grep -qxF "$1" "$work/listing"; }
 
@@ -151,6 +178,9 @@ reuse_from() {
 # changed), whatever is built, so a fix to the bootstrap alone goes out too.
 for f in install.sh packaging/keys/bromigos.asc; do
   if [[ -f "$root/$f" ]]; then rcl copyto --checksum "$root/$f" "pkgs:$PKGS_S3_BUCKET/$repo/$(basename "$f")"; fi
+  if [[ -f "$root/$f" ]] && (( mirror )); then
+    rcl copyto --checksum --header-upload "Cache-Control: no-cache" "$root/$f" "gcs:$PKGS_GCS_BUCKET/$repo/$(basename "$f")"
+  fi
 done
 
 db="$work/repo/$repo.db.tar.gz"
@@ -185,6 +215,46 @@ release() {
   [[ "$(rcl cat "$lock" 2>/dev/null || true)" == "$me "* ]] && rcl deletefile "$lock" 2>/dev/null
   held_by_me=0
 }
+
+# ── The mirror's copy of the channel ─────────────────────────────────────────
+# Run under the lease, so no other publish changes the primary meanwhile. The order keeps
+# the mirror consistent for a pacman reading it at any moment:
+#   1. new packages and their signatures (and the signed lab catalog);
+#   2. the databases, each signature straight after its database;
+#   3. only then, whatever the primary pruned.
+# The old database names only files that are still there until step 3. Databases and the
+# catalog say Cache-Control: no-cache, so a public cache never serves a stale database
+# beside a fresh signature. --checksum compares MD5s, which both buckets keep.
+mirror_channel() {
+  local f base nocache=(--header-upload "Cache-Control: no-cache")
+  rcl copy --checksum --include '/*.pkg.tar.*' "$dest" "$gdest"
+  rcl copy --checksum "${nocache[@]}" --include '/lab/**' "$dest" "$gdest"
+  rcl lsf --files-only "$dest" > "$work/listing.mirror"
+  for base in "$repo.files" "$repo.db"; do
+    for f in "$base.tar.gz" "$base.tar.gz.sig" "$base" "$base.sig"; do
+      grep -qxF "$f" "$work/listing.mirror" || continue
+      rcl copyto --checksum "${nocache[@]}" "$dest/$f" "$gdest/$f"
+    done
+  done
+  # Nothing is left to copy, so this only deletes what the primary no longer has.
+  rcl sync --checksum --exclude '/.publish-lock' "$dest" "$gdest"
+  echo "publish: the public mirror matches $prefix"
+}
+# mirror_if_behind: compare first, so a run that changed nothing doesn't take the lease.
+mirror_if_behind() {
+  (( mirror )) || return 0
+  if rcl check --checksum --exclude '/.publish-lock' "$dest" "$gdest" >/dev/null 2>&1; then
+    echo "publish: the public mirror is up to date"
+    return 0
+  fi
+  acquire
+  mirror_channel
+}
+
+if [[ "${PKGS_MIRROR_ONLY:-0}" == 1 ]]; then
+  mirror_if_behind
+  exit 0
+fi
 
 # ── Build ────────────────────────────────────────────────────────────────────
 if [[ -n "${PKGS_ONLY:-}" ]]; then
@@ -232,6 +302,7 @@ done
 
 if (( ${#built[@]} == 0 )); then
   echo "publish: nothing new to publish"
+  mirror_if_behind   # catches up after a run whose mirror step failed
   exit 0
 fi
 
@@ -296,3 +367,11 @@ cut -f1 "$work/pkgs" | sort -u | while read -r name; do
     echo "publish: pruned $old"
   done
 done
+
+# ── The public mirror, last: the primary is published whatever happens here ──
+# A failure fails the run, so it shows; the next run catches the mirror up (mirror_if_behind).
+# Called plainly, never in an || list, where bash would ignore set -e inside it and carry on
+# to the databases after a failed package copy.
+if (( mirror )); then
+  mirror_channel
+fi

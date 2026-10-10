@@ -80,6 +80,7 @@ VECTOR, the desktop's AI assistant, is documented in his own repository,
 | [iso.md](iso.md) | The live and install ISO, and its installer |
 | [iso-encryption.md](iso-encryption.md) | Full-disk encryption in the ISO's installer |
 | [release.md](release.md) | Cutting a release: versions, release notes, tags and promoting a candidate to stable |
+| [public.md](public.md) | Making the package repository public: the Cloud Storage mirror and `go-public.sh` |
 
 ## The project
 

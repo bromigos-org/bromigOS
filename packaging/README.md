@@ -171,7 +171,7 @@ cases:
   workflow itself;
 - a version tag, `vX.Y.Z` or `vX.Y.Z-rcN`;
 - by hand, with `gh workflow run packages`. The inputs are `rebuild`, `only` (some
-  package folders) and `channel`.
+  package folders), `channel` and `mirror_only`.
 
 Pull requests never run it. It runs `ci/publish.sh` in an `archlinux:base-devel`
 container. The script does this:
@@ -192,8 +192,10 @@ container. The script does this:
    signature to `lab/models.toml`. `bromigos lab models refresh` fetches it from there
    ([docs/lab-models.md](../docs/lab-models.md)).
 7. It keeps the newest three versions of each package and deletes older ones.
+8. It copies the channel to the public mirror, still under the lease. See
+   [The public mirror](#the-public-mirror).
 
-A run with nothing new uploads nothing.
+A run with nothing new uploads nothing, unless the public mirror is behind.
 
 Only one publisher may change the database at a time. Within this repository, the
 workflow's `concurrency` group runs one publish per channel at a time. VECTOR's
@@ -225,6 +227,38 @@ To release, tag both repositories that publish, because `bromigos` depends on
 `bromigos-vector`. Push `vX.Y.Z` here and in `bromigos-org/vector`. `install.sh` and the
 ISO follow `stable` by default.
 
+### The public mirror
+
+Every channel is published to two buckets. The homelab's bucket is the primary: CI reads
+the current database from it and writes there first. A Google Cloud Storage bucket,
+`gs://bromigos-pkgs` in the `bromigos-org` project, gets a copy. It's private until
+bromigOS goes public, which is one command ([docs/public.md](../docs/public.md)).
+
+`publish.sh` copies the channel to the mirror at the end of every publish, while it still
+holds the lease. The order keeps the mirror valid for a pacman that reads it at any
+moment:
+
+1. the new packages and their signatures, and the signed lab catalog;
+2. the databases, each with its signature straight after it;
+3. last, deletions of whatever the primary pruned.
+
+Until step 2, the old database names only files the mirror still has. The databases, the
+catalog, `install.sh` and the key are uploaded with `Cache-Control: no-cache`. Then a public
+cache never serves an old database beside a new signature.
+
+If the copy fails, the run fails, but the primary is already published. The next run sees
+that the mirror differs (`rclone check`) and copies the channel again. To bring a channel's
+mirror up to date without building anything, run the workflow by hand:
+
+```bash
+gh workflow run packages -R bromigos-org/bromigOS -f channel=rc -f mirror_only=true
+```
+
+`manual/publish.sh` copies the web manual to the mirror the same way.
+
+Without the `PKGS_GCS_*` secrets, `publish.sh` skips the mirror. A fork or a local run
+then publishes to one bucket only.
+
 ### What CI needs
 
 These repository secrets hold the publishing credentials. Their values live in the
@@ -236,6 +270,8 @@ deployment's secret store, never in this repository.
 | `PKGS_S3_BUCKET` | The bucket. Packages go to `<bucket>/bromigos/x86_64/`. |
 | `PKGS_S3_ACCESS_KEY_ID`, `PKGS_S3_SECRET_ACCESS_KEY` | A key that can write that bucket only |
 | `PKGS_GPG_PRIVATE_KEY`, `PKGS_GPG_PASSPHRASE` | The signing key matching `keys/bromigos.asc` |
+| `PKGS_GCS_BUCKET` | The public mirror's bucket, `bromigos-pkgs` |
+| `PKGS_GCS_ACCESS_KEY_ID`, `PKGS_GCS_SECRET_ACCESS_KEY` | An HMAC key of the service account `bromigos-pkgs-publisher`, which may write that bucket only |
 
 The secrets are only ever environment variables. `publish.sh` never prints them and never
 passes them as arguments. It keeps the key in a temporary `GNUPGHOME` that it deletes on

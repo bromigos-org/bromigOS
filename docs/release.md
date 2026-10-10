@@ -199,6 +199,18 @@ a release's tag, attach it with its checksum:
 gh release upload v0.1.2 ~/.cache/bromigos-iso/bromigos-*-x86_64.iso ~/.cache/bromigos-iso/bromigos-*-x86_64.iso.sha256
 ```
 
+## The public repository
+
+Every channel a release publishes is also copied to a Google Cloud Storage bucket, which is
+private during early access. Making it public is one command, run once:
+
+```bash
+tools/release/go-public.sh          # checks, and prints what it would do
+tools/release/go-public.sh --yes    # opens the bucket and lands the prepared changes
+```
+
+[public.md](public.md) explains what it does, what it costs and how to undo it.
+
 ## Known limitations
 
 - **One web manual for every channel.** CI publishes the manual from `main`
@@ -233,5 +245,6 @@ for tagging and checksums, which reads the packages' bucket).
 | `tools/release/cliff.toml` | git-cliff's grouping of our commit subjects |
 | `tools/release/guard.py`, `privacy_guard.py` | the privacy check |
 | `tools/release/checksums.sh` | SHA256SUMS from the channel's signed database, signed |
+| `tools/release/go-public.sh`, `test_go_public.py` | making the package repository public ([public.md](public.md)), and its tests |
 | `tools/release/current.json` | written by each release PR: the release its commit prepares |
 | `CHANGELOG.md`, `manual/src/whats-new.md` | the technical log, and the notes for users |

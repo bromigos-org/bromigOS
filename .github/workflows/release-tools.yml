@@ -29,7 +29,7 @@ jobs:
           git config --global user.name ci && git config --global user.email ci@localhost
           python3 -m unittest discover -s tools/release -v
       - name: shellcheck
-        run: shellcheck -S warning tools/release/checksums.sh packaging/ci/publish.sh
+        run: shellcheck -S warning tools/release/checksums.sh tools/release/go-public.sh packaging/ci/publish.sh
       - name: the workflows parse
         run: |
           python3 - <<'EOF'
