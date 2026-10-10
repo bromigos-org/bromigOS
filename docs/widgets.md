@@ -303,12 +303,13 @@ file changes.
    |---|---|
    | `key` | The name the value is saved under |
    | `label` | What the form calls it |
-   | `kind` | `text`, `list`, `number`, `bool`, `choice` or `secret-signin` |
+   | `kind` | `text`, `list`, `number`, `bool`, `choice`, `secret-signin` or `link` |
    | `default` | Its value until the user sets one |
    | `hint` | One line under it, saying what it's for |
    | `choices` | For `choice`: a list of `[value, label]` pairs |
    | `min`, `max`, `step` | For `number`: its range |
    | `provider` | For `secret-signin`: `github`, `gitlab`, `twitch` or `spotify` |
+   | `page` | For `link`: the Settings page it opens, as `bromigos settings PAGE` names it. A `link` holds no value. |
 
 2. Read a value with `self.setting("<key>")`. It's the field's default, then the panel's
    key in `layout.json`, then the user's file, last one wins.
@@ -633,8 +634,9 @@ Then turn the panel on by setting `"visible": true` on the `weather` entry in yo
 
 The media panel, `widgets/plugins/media.py`, follows the den TV
 ([live/README.md](../live/README.md#the-den-tv)). It asks the live layer what's on through
-`bromigos-live tv state`. When the den isn't drawn, it works out its own channel's schedule
-from the same cache (`lib/bromigos_tv.py`).
+`bromigos-live tv state`. It shows the screen its settings name, else the one with the
+sound, else the first showing a media channel. When the den isn't drawn, it works out its
+own channel's schedule from the same cache (`lib/bromigos_tv.py`).
 
 | Size class | Shows |
 |---|---|
@@ -654,9 +656,13 @@ Its settings, in `~/.config/bromigos/widgets/media.toml`, describe one den TV ch
 | `play` | What to play: `library:<name>`, `collection:<name>` or `playlist:<name>`. The form lists what the servers last offered. |
 | `youtube` | A YouTube playlist's or channel's address, with `source = "youtube"` |
 | `order` | `shuffle` or `in order`. Empty: a playlist in order, the rest shuffled. |
-| `screen` | `big`, `wave` or `emblem` |
+| `screen` | `big`, `wave`, `emblem`, or `any` for every screen |
 | `channel_name` | What the TV calls the channel |
 | `keep`, `keep_all`, `keep_max_gb` | For YouTube: a folder to keep videos in, whether to keep every video, and a cap in GB |
+
+Its form ends with a link to the channel guide (Settings › Den TV), where every other
+channel is ([docs/settings.md](settings.md#den-tv)). The link is a `link` field, which holds
+no value (see [A widget's settings](#a-widgets-settings)).
 
 The panel is offered in the gallery only when there's something to show: a `video`
 source in `homelab.toml`, or a den TV channel.

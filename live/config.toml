@@ -101,19 +101,25 @@ station = true           # screensaver Drift relay station; spokes are the lab's
 
 [tv]                     # the den TV: channels from your Plex, Jellyfin, YouTube or files on the den's screens
 enabled = true           # false: every screen shows only its own picture (channel 1)
-quality = "auto"         # the den's stream: "auto" (the file, or 480p over direct_max_mbps), "direct", "480p", "720p"
+quality = "auto"         # the den's streams: "auto" (sized to each screen: 240p or 360p, or the file when it's
+                         # already that small), "direct" (every file as it is), "480p", "720p"
 fullscreen_quality = "direct"   # full screen with sound (bromigos-live tv open)
 tint = 0.4               # how much the den's phosphor colours the picture (0: true colour)
 volume = 60              # a screen's volume until you set one (the sound starts off)
 duck = 30                # percent of it while VECTOR speaks or a codec call plays
 refresh_minutes = 15     # how often a channel's list is read again (YouTube: hourly)
+max_playing = 3          # how many screens decode at once (each its own channel); past it, posters
+cover_opacity = 0.9      # a window at least this opaque over a muted screen pauses it (with sound: plays on)
+# screens = ["big"]      # the screens a channel goes on when it doesn't say ("any": every screen)
 # A channel is a [[tv.channel]] table in your config (live/README.md, "The den TV"):
 #   [[tv.channel]]
 #   name = "Saturday"
 #   source = "plex"          # a jellyfin or plex source in homelab.toml (default: the first)
 #   library = "TV Shows"     # or collection = "…", playlist = "…", youtube = "<URL>", files = "~/Videos"
 #   order = "shuffle"        # or "in order" (a playlist's default)
-#   screens = ["big"]        # big (the big monitor), wave (the scope), emblem (the small monitor)
+#   screens = ["big"]        # big (the big monitor), wave (the scope), emblem (the small monitor), or "any"
+#   shows = ["…", "…"]       # shows you pick (titles or ids); order = "in order" takes turns between them
+# Settings › Den TV (bromigos-live tv guide, SUPER+ALT+G) adds, removes and reorders them for you.
 
 [world]                  # a theme's world (bromigos theme set mire|tidewell): drawn instead of the den
 enabled = true           # false = always the den, whatever the theme

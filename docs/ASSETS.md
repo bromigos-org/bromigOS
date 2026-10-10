@@ -49,10 +49,10 @@ the models used.
 | Peripheral modules (`peripherals/`) | Written for the operator's desktop, generalised | yes, as code | Dependencies aren't vendored. No keymap file ships |
 | The README's header emblem (`themes/wick/emblem/emblem-512.png`) | The Wick's emblem kit | yes, as a brand asset | Shown at the top of the README |
 | README pictures from the render set (eleven files and an animated loop) | Offscreen renders by `tools/screenshots/render.py`, with demo readings | yes | No faces, no real hostnames. [List](#docs-and-readme-images) |
-| Manual pictures (`manual/src/images/`, 30 files) | Offscreen renders and bromigos.org stills, with demo readings | yes | bromigOS only, no likeness, no lab hosts. [List](#manual-pictures) |
+| Manual pictures (`manual/src/images/`, 31 files) | Offscreen renders and bromigos.org stills, with demo readings | yes | bromigOS only, no likeness, no lab hosts. [List](#manual-pictures) |
 | The built manual's page furniture (`bromigos-manual`, and the published manual) | mdBook's theme: Open Sans (Apache-2.0), Source Code Pro (OFL 1.1), Font Awesome Free icons (CC BY 4.0), highlight.js (BSD-3-Clause), clipboard.js, elasticlunr and mark.js (MIT), mdBook's own scripts and styles (MPL-2.0) | yes | Built by mdBook. The fonts' licence files ship beside them |
 | Docs images from bromigos.org (six files) | The site's published stills | yes | Offscreen renders with demo data. [List](#docs-and-readme-images) |
-| Docs images rendered offscreen (ten files) | bromigOS's own test tools | yes | No faces, no real hostnames. [List](#docs-and-readme-images) |
+| Docs images rendered offscreen (eleven files) | bromigOS's own test tools | yes | No faces, no real hostnames. [List](#docs-and-readme-images) |
 
 ## How each was made
 
@@ -235,6 +235,9 @@ resized to WebP for the repository.
   - `den-colour-themes.webp`: the den recoloured for the Wick, Cinder and Rime
   - `den-tv.webp`: the den TV playing a test pattern that ffmpeg generates, with its hint
     (`live/tools/offscreen.py bg` with `OFF_TV`, cropped)
+  - `den-tv-guide.webp`: Settings › Den TV, the channel guide, with made-up channels and
+    generated stripe posters from a stand-in Jellyfin (`desktop/tests/test_den_tv_guide.py`
+    with `BROMIGOS_TEST_SHOTS`, cropped)
 - **The README's header emblem** is `themes/wick/emblem/emblem-512.png`, from the Wick's
   emblem kit. It's not copied into `docs/images/`.
 
@@ -246,6 +249,10 @@ no likeness and no lab hosts.
 - **`den-tv.webp`**, on the Themes and worlds page. The den TV playing a test pattern that
   ffmpeg generates, with its hint, rendered offscreen (`live/tools/offscreen.py bg` with
   `OFF_TV`), cropped. The same picture as the docs'.
+- **`den-tv-guide.webp`**, on the Themes and worlds page. The channel guide (Settings › Den
+  TV) with made-up channels and generated stripe posters from a stand-in Jellyfin, drawn in
+  a headless weston (`desktop/tests/test_den_tv_guide.py`), cropped. The same picture as
+  the docs'.
 - **`app-launcher.webp`**, on the Getting around page. The app launcher listing bromigOS's
   own entries, rendered offscreen, cropped.
 - **`boot-menu-snapshots.webp`**, on The boot menu page. The installed system's GRUB

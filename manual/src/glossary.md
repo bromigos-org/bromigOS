@@ -65,8 +65,9 @@ their own colours.
 ## Den TV
 
 The [den](#den)'s screens playing your own videos as TV channels: from Jellyfin, Plex,
-YouTube or a folder, always part-way through something, as if they'd been on all along. A
-*TV channel* is one of these, not an update [channel](#channel). See
+YouTube or a folder, always part-way through something, as if they'd been on all along.
+Each screen plays its own channel. A *TV channel* is one of these, not an update
+[channel](#channel). The channel guide (Settings › Den TV) lists them all. See
 [The den TV](themes-and-worlds.md#the-den-tv).
 
 ## The Drift

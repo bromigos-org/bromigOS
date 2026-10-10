@@ -119,7 +119,8 @@ rows = [
   { match = "Den TV: full screen with sound", text = "Watch what's on the [den TV](themes-and-worlds.md#the-den-tv) full screen, with sound, from the same moment." },
   { match = "Den TV: next channel", text = "Change the den TV to its next channel." },
   { match = "Den TV: previous channel", text = "Change the den TV to its previous channel." },
-  { match = "Den TV: sound on/off", text = "Turn the den TV's sound on or off." },
+  { match = "Den TV: sound on/off", text = "Turn the den TV's sound on or off, on the screen under the pointer. One screen plays sound at a time." },
+  { match = "Den TV: the channel guide", text = "The den TV's [channel guide](themes-and-worlds.md#the-channel-guide): every channel on every screen, to add, remove and reorder." },
 ]
 
 [[keys]]

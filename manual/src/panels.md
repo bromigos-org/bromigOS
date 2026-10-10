@@ -224,7 +224,9 @@ open it in Jellyfin or Plex, which remember where you were.
 
 Its **Settings…** make a TV channel without editing a file. Choose a source and a library,
 collection or playlist from your server, or paste a YouTube address. You can also choose
-the den screen, the order, and a folder to keep YouTube videos in.
+the den screen, the order, and a folder to keep YouTube videos in. For every other
+channel, the form links to the
+[channel guide](themes-and-worlds.md#the-channel-guide).
 
 ## Set up the weather
 

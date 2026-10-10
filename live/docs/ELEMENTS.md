@@ -177,15 +177,17 @@ starts it again, or stops when no Wayland session is left.
   plays comes from the wall clock, so it's real, not decoration. Channel 1 is the screen's
   own element, so the den is unchanged until you tune in.
 - **Data:** the channel's list, read by a thread and cached (`lib/bromigos_tv.py`); the
-  picture from libmpv's render API (`live/mpvgl.py`), decoded on the GPU.
-- **Code:** `live/tv.py`. `Background.render()` asks `tv.gl()` for the uniforms and draws
-  the hint after the frame (`_draw_hint`). In `bg.frag`, `tv_picture()` and `tv_osd()`,
-  called in `den()` for the screen in `u_tv` and `u_tune`. Uniforms: `u_tv`, `u_tune`,
-  `u_tvtex`, `u_osd`. `Background.rebuild()` leaves the relay map off the big monitor while
-  a channel plays there.
+  picture from libmpv's render API (`live/mpvgl.py`), decoded on the GPU, one player per
+  screen showing a media channel.
+- **Code:** `live/tv.py`. `Background.render()` asks `tv.gl()` for each screen's uniforms
+  and draws the hint after the frame (`_draw_hint`). In `bg.frag`, `tv_picture()` and
+  `tv_osd()`, called in `den()` for each screen with its own uniforms and textures:
+  `u_tv_wave`, `u_tv_emb`, `u_tv_big`, `u_tune_*`, `u_tvtex_*` and `u_osd_*`.
+  `Background.rebuild()` leaves the relay map off the big monitor while a channel plays
+  there.
 - **Config:** `[tv]` and `[[tv.channel]]` ([../README.md](../README.md#the-den-tv)).
-- **Cost:** see [../README.md](../README.md#the-den-tv). Nothing is decoded while the
-  screen isn't in view.
+- **Cost:** see [../README.md](../README.md#the-den-tv). Nothing is decoded while a
+  screen isn't in view, or while a window covers a muted one.
 
 ### Meters
 

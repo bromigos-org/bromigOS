@@ -22,7 +22,8 @@ modules to the same folder:
 | `emblem_braille.py` | Draws the emblem as coloured braille for the terminal banner |
 | `bromigos_private.py` | Reads the private overlay: values a user keeps encrypted in their dotfiles |
 | `bromigos_account.py` | Signs a widget in to an online account, such as Twitch or GitHub, and keeps the token in the keyring |
-| `bromigos_tv.py` | The den TV's channels, their wall-clock schedule, and each screen's remembered channel and sound |
+| `bromigos_tv.py` | The den TV's channels, their wall-clock schedule, picked shows taking turns, and each screen's remembered channel and sound |
+| `bromigos_tvconfig.py` | Writes the den TV's `[[tv.channel]]` tables in place, keeping comments: the channel guide's writer |
 | `bromigos_youtube.py` | YouTube playlists and channels through yt-dlp, cached, with live streams and keeping videos |
 
 ### bromigos_account
@@ -99,11 +100,24 @@ plays them and the MEDIA panel shows them, so both read the schedule from here.
 `lineup(cfg, screen)` lists a screen's channels, its own picture first.
 `schedule_at(items, t, seed, order)` says what's on at time `t` and how far in.
 `now_next(channel)` does the same from the channel's cached list, with no network.
+A channel of picked shows (`shows`, `items`, `collections`) is matched to the server's ids
+once (`resolve_picks`). In order, `rotation_at(groups, t, anchor)` has the shows take
+turns, and `rotation_advance(channel)` keeps where each one is in the live layer's state.
+
+### bromigos_tvconfig
+
+Edits the `[[tv.channel]]` tables of the live layer's `config.toml` as text, a table at a
+time, so comments, blank lines and other tables stay exactly as they were. `load()` gives
+a `Doc` with `channels()`, `add(table)`, `remove(i)` and `restore(i, text)` for Undo,
+`move(i, j)`, `set(i, key, value)` and `save()`. A save is checked first: the new file
+must parse, and nothing but the channels may read differently. It's written in one step
+to the file a symlink points at. The channel guide (Settings › Den TV) uses it.
 
 ### bromigos_youtube
 
 Reads a YouTube playlist or channel with `yt-dlp --flat-playlist -J`, which needs no API
 key, and caches it in `~/.cache/bromigos/youtube/`. `videos(url)` gives its videos,
-`live_now(url)` a channel's live stream, and `keep(video, folder)` saves one video in the
+`live_now(url)` a channel's live stream, `stream(url, height)` the addresses mpv plays for
+a video no taller than `height`, and `keep(video, folder)` saves one video in the
 layout Plex and Jellyfin read. The module's docstring describes each function, and its
 interface stays stable for the panels that use it.

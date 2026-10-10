@@ -230,8 +230,13 @@ screen](../docs/images/den-tv.webp)
 Each of the den's three screens has a channel list: the big monitor (`big`), the scope
 (`wave`) and the small monitor (`emblem`). Channel 1 is the screen's own picture, drawn
 exactly as before. The media channels that name the screen come after it. With every screen
-on channel 1, the den is pixel for pixel what it was without the den TV. One media channel
-plays at a time: tuning a second screen to one sends the first back to channel 1.
+on channel 1, the den is pixel for pixel what it was without the den TV.
+
+Every screen plays its own channel at the same time. Each has a player of its own, and
+the sound comes from one screen at a time.
+
+The channel guide (Settings › Den TV) shows every channel on every screen, and adds,
+removes, reorders and renames them. See [The channel guide](#the-channel-guide).
 
 The den TV is the den's only. Mire and Tidewell have no screen to put it on. A world could
 name a screen region for it, but none does yet.
@@ -247,7 +252,13 @@ name = "Saturday"
 source = "plex"            # a jellyfin or plex source in homelab.toml; default: the first
 library = "TV Shows"       # or collection = "…" or playlist = "…", by its name
 order = "shuffle"          # or "in order"
-screens = ["big"]          # big, wave or emblem; default: the big monitor
+screens = ["big"]          # big, wave, emblem, or "any" (every screen); default: [tv] screens,
+                           # else the big monitor
+
+[[tv.channel]]
+name = "Sitcoms"
+shows = ["Example Show", "Another Show"]   # shows you pick, by title or id
+order = "in order"         # take turns: "alternate" says the same; "shuffle" mixes them
 
 [[tv.channel]]
 name = "Studio"
@@ -264,6 +275,14 @@ files = "~/Videos/Home"    # a folder, searched through, or a list of files
   round, so the time of day says what's on (`lib/bromigos_tv.py`). A playlist plays in its
   own order by default, and anything else shuffled. A shuffle is the same all day and on
   every machine, and a new item slots in without reordering the rest.
+- **Shows you pick.** `shows` lists series, `items` single movies and `collections`
+  collections, by title or by id. Shuffled, their episodes mix together. In order, they
+  take turns like a network's evening block: show A's next episode, then show B's, then
+  A's again. Each show goes on from where it left off, day after day, so the channel never
+  starts again at S1E1. Where each show is lives in
+  `~/.local/state/bromigos-live/tv-rotation.json`, never in `config.toml`. A title is
+  matched once and its id remembered (`tv-picks.json`), so a show renamed on the server
+  still plays. A title the server doesn't have is named in the guide.
 - **Jellyfin and Plex** come through `bromigos-homelab`'s `video` capability
   ([docs/homelab.md](../docs/homelab.md#capabilities)). The server needs a key: a
   Jellyfin API key or a Plex token, in the source's `auth_ref`. A library that a tool fills
@@ -281,31 +300,68 @@ files = "~/Videos/Home"    # a folder, searched through, or a list of files
   ever removed.
 
 The `[tv]` table in `config.toml` has the rest: the stream's quality, full screen's, how
-much the den's phosphor tints the picture, the volume a screen starts at and the ducking.
+much the den's phosphor tints the picture, the volume a screen starts at, the ducking,
+`max_playing` (how many screens decode at once), `cover_opacity` (how opaque a window must
+be to count as covering a screen) and `screens` (the screens a channel goes on when it
+doesn't say).
 
 ### How it plays
 
 `live/tv.py` runs the den TV and `live/mpvgl.py` draws the picture:
 
-- **Decoding.** libmpv, through python-mpv, decodes on the GPU where it can (NVDEC on
-  NVIDIA, VA-API elsewhere). Its render API draws each frame into a texture the size of
-  the screen. `bg.frag` draws the texture in the screen's glass, with the tube's curve,
-  scanlines, a soft glow and the den's phosphor tint.
-- **The stream.** A server's file plays as it is. Over the source's `direct_max_mbps`, 20
-  by default, the server transcodes it to 480p for the den. Full screen plays the file.
-- **Pausing.** mpv decodes only while a media channel is on a screen that's drawn and in
-  view. A second without a frame pauses it, so the lock screen, a fullscreen window, a
-  deck and the screensaver all stop it. So does a window over the screen. Coming back,
-  the channel jumps to where it would be now.
-- **Motion.** With still motion, or no GPU, the screen shows the item's poster and nothing
-  is decoded. With reduced motion, it shows a still frame renewed every 30 seconds, unless
-  the sound is on.
-- **Nothing on.** Thirty seconds after the last media channel goes off, mpv closes.
-- **The cost.** Measured on an RTX 5070 at 2560×1440: a frame of the den takes 0.46 ms of
-  the GPU, and 1.1 to 1.2 ms with a 1080p H.264 or HEVC video on the big monitor. The live
-  layer's CPU stays within a percent or two of one core of the den alone, because NVDEC
-  decodes. (`tools/offscreen.py bench 20 bg`, with and without `OFF_TV`; the nested test's
-  `--measure`.)
+- **A player per screen.** Each screen showing a media channel has its own libmpv player,
+  through python-mpv. Each decodes on the GPU where it can (NVDEC on NVIDIA, VA-API
+  elsewhere), for every codec the GPU has, MPEG-2 and MPEG-4 included. Its render API
+  draws each frame into that screen's texture, a few hundred pixels across, with mpv's
+  cheapest scalers. `bg.frag` draws each texture in its screen's glass, with the tube's
+  curve, scanlines, a soft glow and the den's phosphor tint.
+- **The stream, sized to the screen.** A den screen is about 200 pixels tall, so the
+  server is asked for a stream that size. Jellyfin and Plex transcode to the smallest
+  height at least as tall as the screen's texture: 360p for the big monitor and 240p for
+  the scope and the small monitor at 2560×1440. A file that is already that small plays as
+  it is. A 4K remux never streams whole into a postage stamp. Full screen plays the file
+  itself. `[tv] quality = "direct"` plays every file as it is instead.
+- **YouTube, resolved ahead.** A thread of its own asks yt-dlp for each video's stream, no
+  taller than the screen, H.264 first. It resolves what's on and the next two ahead and
+  keeps each answer for as long as YouTube's address lasts, about six hours. mpv never
+  runs yt-dlp for the den, so a short clip starts at once. Until then, the screen shows the
+  video's thumbnail. A video YouTube refuses is skipped, and the hint says why.
+- **A new channel or item.** The screen shows static, the channel number and the new
+  item's poster until the new item's own first frame. The last item's picture is never
+  left on the screen, even while the screen is paused.
+- **Pausing, screen by screen.** A screen decodes only while it's drawn and in view. A
+  second without a frame pauses every screen, so the lock screen, a fullscreen window, a
+  deck and the screensaver all stop them. A window over a screen pauses it only when the
+  screen is muted. A screen with its sound on plays on behind windows, since you're
+  listening. A window more see-through than `[tv] cover_opacity` (0.9) doesn't count.
+  Hyprland's own opacity is what counts: a terminal that draws its own see-through
+  background looks opaque to it. Coming back, the channel jumps to where it would be now.
+- **Motion.** With still motion, or no GPU, each screen shows its item's poster and
+  nothing is decoded. With reduced motion, it shows a still frame renewed every 30
+  seconds, unless its sound is on.
+- **At most `max_playing`.** `[tv] max_playing`, 3 by default, is how many screens decode
+  at once. Past it, the screen with the sound plays first, then the big monitor, the scope
+  and the small monitor. The others show their posters.
+- **Nothing on.** Thirty seconds after a screen's last media channel goes off, its mpv
+  closes.
+- **The cost.** Measured on an RTX 5070 at 2560×1440, with generated 640×360 H.264 test
+  clips, one per screen, each decoded by NVDEC:
+
+  | | The den alone | One screen playing | Three screens playing |
+  |---|---|---|---|
+  | Offscreen, 30 frames a second: CPU (of one core) | 4.6% | 5.6% | 9.6% |
+  | Offscreen: the GPU's shader use | 1.7% | 1.9% | 3.0% |
+  | In the nested Hyprland: CPU (of one core) | 10.5% | 11.4% | 17.4% |
+  | In the nested Hyprland: the GPU's shader use | 0.1% | 0.4% | 0.5% |
+
+  Three screens cost about 5 to 7% of one core and 1 to 2% of the GPU over the den alone.
+  NVDEC's share stays under a percent, since the streams are sized to the screens. A
+  1080p H.264 or HEVC video on the big monitor took a frame of the den from 0.46 ms of the
+  GPU to 1.1 to 1.2 ms. That is why `max_playing` is 3 by default: even a weak GPU's
+  decoder handles three 240p or 360p streams. A folder channel plays its files at their
+  own size, so on a weak machine with large files, set `max_playing = 1`.
+  (`tests/offscreen_tv.py` with `OFF_MEASURE=20`, and `../desktop/tests/e2e_tv_nested.py
+  --measure 15`. The nested numbers include the nested compositor's own work.)
 
 ### The pointer, the hint and the keys
 
@@ -315,7 +371,7 @@ shows, so a click anywhere else on the desktop goes through as before.
 
 | Over a screen | What happens |
 |---|---|
-| Hover | The hint: what's on, the channel number, ◀ ▶, the speaker, − and + with the volume bar, **FULL** and the server's or YouTube's page |
+| Hover | The hint: what's on, the channel number, ◀ ▶, the speaker, − and + with the volume bar, **FULL**, the server's or YouTube's page and **GUIDE**. A line under them says when the sound can't be heard (the desktop muted, bromigOS muted) or what went wrong on the channel |
 | Click | A media channel opens in mpv, full screen with sound, at the same moment. Channel 1 moves to the next channel. |
 | Wheel | The next or previous channel, with a burst of static and the channel number on the screen |
 | Wheel over the volume bar, or sideways | The volume, shown as a bar on the screen |
@@ -329,21 +385,28 @@ Full screen is a normal mpv window. It takes the screen's volume, and the server
 goes to mpv in a file only you can read, never on its command line. Closing it brings the
 TV back at the live position, with its sound as it was.
 
+The keys act on the screen under the pointer. With the pointer elsewhere, they act on the
+screen with the sound, else the first showing a media channel, else the big monitor.
+
 | Key | What it does |
 |---|---|
-| Super+Alt+P | The media channel full screen with sound |
+| Super+Alt+P | The channel full screen with sound |
 | Super+Alt+. and Super+Alt+, | The next and previous channel |
-| Super+Alt+M | The TV's sound on or off |
+| Super+Alt+M | The screen's sound on or off |
+| Super+Alt+G | The channel guide |
 
 ### Sound
 
 The TV is silent until you turn its sound on: the speaker in the hint, Super+Alt+M,
-`bromigos-live tv sound on`, or turning the volume up. Each screen remembers its channel,
-its sound and its volume, from 0 to 100, in `~/.local/state/bromigos-live/tv.json`.
+`bromigos-live tv sound on`, or turning the volume up. The sound comes from one screen at a
+time. Turning it on for one screen turns it off on the others, and a small speaker on the
+screen shows where it comes from. Each screen remembers its channel, its sound and its
+volume, from 0 to 100, in `~/.local/state/bromigos-live/tv.json`.
 
 - PipeWire shows the TV as **bromigOS den TV**, in the mixer and Settings › Sound.
 - With the sound off, no audio is decoded at all.
 - bromigOS's mute (Super+Shift+M, `bromigos mute`) silences it.
+- When the desktop's own output is muted, the hint says "Your desktop is muted".
 - The lock screen and the screensaver silence it, and the sound comes back after.
 - While VECTOR speaks or a codec call plays, it ducks to `[tv] duck`, 30% by default.
 - A small speaker on the screen says the sound is on.
@@ -351,26 +414,59 @@ its sound and its volume, from 0 to 100, in `~/.local/state/bromigos-live/tv.jso
 ### Commands
 
 ```bash
-bromigos-live tv list                  # every screen's channels; * marks the one on
-bromigos-live tv set 2 big             # channel 2 on the big monitor
-bromigos-live tv next                  # the next channel (prev: the previous)
-bromigos-live tv open                  # full screen with sound
-bromigos-live tv web                   # what's on, in the server's or YouTube's web page
-bromigos-live tv sound toggle          # on, off or toggle
-bromigos-live tv volume up             # up, down, or a level: volume 40
-bromigos-live tv state --json          # what's on, the sound, what mpv is doing
+bromigos-live tv list                       # every screen's channels; * marks the one on
+bromigos-live tv set 2 --screen big         # channel 2 on the big monitor
+bromigos-live tv next --screen scope        # the next channel (prev: the previous)
+bromigos-live tv open                       # full screen with sound
+bromigos-live tv web                        # what's on, in the server's or YouTube's web page
+bromigos-live tv guide                      # the channel guide (Settings › Den TV)
+bromigos-live tv sound on --screen small    # on, off or toggle; on one screen at a time
+bromigos-live tv volume up                  # up, down, or a level: volume 40
+bromigos-live tv state --json               # what's on each screen, the sound, what mpv is doing
 ```
 
-`bromigos-live tv help` has the details.
+`--screen` takes `big`, `wave` or `emblem`, and `scope` and `small` too. Without it, a
+command acts on the screen under the pointer, as the keys do. `bromigos-live tv help` has
+the details.
+
+### The channel guide
+
+The channel guide is Settings' **Den TV** page
+([docs/settings.md](../docs/settings.md#den-tv)). It opens from Settings, from
+`bromigos-live tv guide`, from Super+Alt+G, from the hint's **GUIDE** and from the MEDIA
+panel's settings.
+
+![The channel guide: the big monitor's channels as cards, each with its poster, what's on
+now and next, a progress bar, its source and order, the one on air marked](../docs/images/den-tv-guide.webp)
+
+- **What it shows.** A grid for each screen, channel 1 first. Each card has what's on now
+  and next, the item's poster, a progress bar, the channel's source and its order. The
+  channel each screen is on says **ON AIR**, and the screen with the sound says so.
+- **What it changes.** Add channel (a library, collection or playlist the servers list,
+  shows or movies you pick from a searchable grid of posters, a YouTube address, a folder,
+  or your downloaded YouTube videos), and for each card: Tune now, Rename, Pick shows,
+  Move earlier or later, the screens it's on, and Remove, with Undo. Drag a card onto
+  another to put it before that one, or onto another screen's grid to move it there.
+- **Keys.** Tab moves between cards. On a card, Enter tunes, Delete removes, F2 renames,
+  and Alt and an arrow move it.
+- **The file.** It writes the `[[tv.channel]]` tables of
+  `~/.config/bromigos-live/config.toml` in place (`lib/bromigos_tvconfig.py`). Comments,
+  blank lines and every other table stay as they were, and a channel's own comments move
+  with it. Each save is checked first, then written in one step to the file a symlink
+  points at, so a dotfiles link stays a link. The live layer notices a change that only
+  touches the channels and reads them again without rebuilding the den, so nothing
+  restarts.
 
 ### Tests
 
 | Test | What it checks |
 |---|---|
 | `tests/test_tv.py` | The schedule, the channels, the remembered state, YouTube against a stand-in for yt-dlp (`tests/fake_ytdlp.py`) and keeping videos |
-| `tests/offscreen_tv.py` | The den pixel for pixel as before with no media channel on, a generated test clip playing through libmpv in two themes, the hint, and the poster with still motion |
+| `tests/test_tv_screens.py` | Every screen at once, `max_playing`, the sound on one screen, `--screen`, covering and opacity, the hint's speaker, streams sized to each screen from stand-in Jellyfin and Plex servers (`tests/fake_media.py`), YouTube resolved while yt-dlp is slow and the screen is covered and uncovered, picked shows shuffled and taking turns, and the config writer keeping comments |
+| `tests/offscreen_tv.py` | The den pixel for pixel as before with no media channel on, a generated test clip playing through libmpv in two themes, the hint, the poster with still motion, three screens playing at once, and a tune that never leaves the last channel's picture. `OFF_MEASURE=20` measures the cost |
 | `../homelab/tests/test_video.py` | The Jellyfin and Plex adapters against fake servers |
-| `../desktop/tests/e2e_tv_nested.py` | The whole thing in a nested Hyprland, with a fake Jellyfin and a PipeWire nobody hears |
+| `../desktop/tests/test_den_tv_guide.py` | The channel guide, Add channel and the show picker, drawn in a headless weston, and every control's hover hint |
+| `../desktop/tests/e2e_tv_nested.py` | The whole thing in a nested Hyprland, with a fake Jellyfin and a PipeWire nobody hears: three screens playing, the sound moving, and the channel guide driven (`den_tv_guide_driver.py`) with the live layer following |
 
 ## Screen sizes
 

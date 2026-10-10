@@ -428,8 +428,12 @@ auth_ref = "@file:~/.local/share/bromigos/plex-token"
   file only you can read, such as `~/.local/share/bromigos/jellyfin-key` with mode 0600.
 - **A Plex token.** Plex's support article *Finding an authentication token* shows where
   to read yours. Keep it in a file the same way, or in Vault (`@vault:kv/plex#token`).
-- **Streams.** A file plays as it is. One over `direct_max_mbps` is transcoded by the
-  server to 480p for the den's small screens. Full screen plays the file.
+- **Streams, sized to the screen.** The den asks for a stream as tall as the screen it's
+  drawn on, a couple of hundred pixels. The server transcodes to the smallest of 240p,
+  360p, 480p, 720p and 1080p that is at least that tall, at that height's bitrate. A file
+  that is already small (no more than three times that bitrate, and no taller than twice
+  that height) plays as it is. Without a size, a file plays as it is unless it's over
+  `direct_max_mbps`, which gets a 480p transcode. Full screen plays the file.
 - **The key** goes in a request header, never in an address, so it never shows in a
   command line or a log.
 - **Read-only.** Nothing marks anything watched or changes a library.
@@ -444,8 +448,10 @@ haven't downloaded.
 
 In Python, `H.video()` is the capability, and `H.video_source(name)` gives one server's
 adapter, with `playlists()`, `video_items(kind, id)`, `video_resume()`, `video_latest()`,
-`video_stream(item, quality)`, `video_web(item)` and `video_poster(item)`
-(`adapters/labvideo.py`).
+`video_stream(item, quality, height)`, `video_web(item)` and `video_poster(item)`
+(`adapters/labvideo.py`). For channels of shows you pick, it also lists `video_shows()`
+and `video_movies()`, gives a show's episodes with `video_show_items(id)`, and one item
+with `video_item(id)`.
 
 #### What a kubeconfig needs
 

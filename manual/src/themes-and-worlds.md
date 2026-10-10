@@ -135,9 +135,10 @@ silent until you turn the sound on. (A TV channel has nothing to do with the upd
 ![The den's big monitor playing a test pattern, with the hint under it: what's on, the
 channel buttons, the sound, the volume and Full screen](images/den-tv.webp)
 
-Each of the den's three screens has its own TV channels. Channel 1 is what the screen
-always shows, such as the relay map on the big monitor. Your channels come after it, and
-the den stays exactly as it was until you change channel.
+Each of the den's three screens has its own TV channels, and each plays its own channel at
+the same time. Channel 1 is what the screen always shows, such as the relay map on the big
+monitor. Your channels come after it, and the den stays exactly as it was until you change
+channel.
 
 ### Watch it
 
@@ -147,28 +148,55 @@ Point at a screen that has channels. A hint shows what's on.
 |---|---|
 | Change channel | Scroll over the screen, or click ◀ ▶ in the hint |
 | Watch it big, with sound | Click the screen, or **FULL** in the hint. mpv opens full screen at the same moment. Close it to go back. |
-| Turn the sound on or off | The speaker in the hint, or <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd> |
+| Turn the sound on or off | The speaker in the hint, or <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd>. The sound comes from one screen at a time: turning it on for one turns it off on the others. |
 | Change the volume | − and + in the hint, or scroll over its volume bar. Turning it up turns the sound on. |
 | Open it in Jellyfin, Plex or YouTube | The button at the end of the hint |
+| See every channel | **GUIDE** in the hint, or <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd> |
 
 From the keyboard, <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd> opens what's on full
 screen, and <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>.</kbd> and
-<kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>,</kbd> change channel. Each screen remembers its
-channel, its sound and its volume.
+<kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>,</kbd> change channel. The keys act on the screen
+under the pointer. Each screen remembers its channel, its sound and its volume.
+
+If the sound is on but you hear nothing, the hint says why, such as "Your desktop is
+muted".
 
 The TV goes quiet when you lock the screen or the screensaver starts, and when you mute
 everything with <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>. It turns down while
 VECTOR speaks. In the sound settings it's called **bromigOS den TV**.
 
-It only plays while you can see it. Behind a window, or with the screen locked, it pauses
-and costs nothing. When it shows again, it's where it would be by now.
+It only plays while you can see it. With the screen locked, or behind a window while it's
+silent, it pauses and costs nothing. A screen whose sound is on keeps playing behind
+windows, so you can listen. When it shows again, it's where it would be by now.
 
-### Add a TV channel
+### The channel guide
 
-The easiest way is the MEDIA panel's settings ([Panels](panels.md#media)). Choose a
-library, collection or playlist from your server, or paste a YouTube address.
+The channel guide shows every channel on every screen, like a TV guide: what's on now and
+next, with its poster and how far through it is. Open it with **GUIDE** in the hint,
+<kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd>, or Settings › **Den TV**.
 
-To add more, put them in `~/.config/bromigos-live/config.toml`:
+![The channel guide: the big monitor's channels as cards, with posters, what's on now and
+next, and the channel on air marked](images/den-tv-guide.webp)
+
+| To | Do this |
+|---|---|
+| Add a channel | **Add channel…**, then choose what it plays, its name, its order and its screens |
+| Make a channel of shows you pick | **Add channel…**, then **Shows or movies you pick**. Search, click the posters, and choose the order. |
+| Watch a channel now | **Tune now** on its card, or Enter |
+| Reorder | Drag a card onto another one, or Alt and an arrow key |
+| Move to another screen | Drag the card onto that screen's channels, or choose its screens in the card's menu |
+| Rename | The card's menu, or F2 |
+| Remove | The card's menu, or Delete. **Undo** brings it back. |
+
+The den follows each change at once, without restarting.
+
+### Add a TV channel by hand
+
+The guide is the easiest way. The MEDIA panel's settings make one channel too
+([Panels](panels.md#media)).
+
+The channels are kept in `~/.config/bromigos-live/config.toml`, and you can write them
+there yourself:
 
 ```toml
 [[tv.channel]]
@@ -190,10 +218,15 @@ Replace `<id>` with the playlist's ID. The den TV reads the file when you save i
   video it plays is saved there, in the layout Plex and Jellyfin read, and plays offline
   from then on. Any folder works, a NAS share included. `keep_max_gb = 50` caps it.
 - **Videos on your disk.** `files = "~/Videos/Home"` plays a folder.
+- **Shows you pick.** `shows = ["Example Show", "Another Show"]` plays those shows'
+  episodes. Shuffled, they mix. With `order = "in order"`, they take turns, one episode of
+  each, like an evening on a TV network. Each show goes on from where it left off, day
+  after day. `items = [...]` picks movies, and `collections = [...]` collections.
 
 A playlist plays in order, and anything else shuffled, the same way all day. Add
 `order = "in order"` or `order = "shuffle"` to choose. Add `screens = ["wave"]` to put a
-channel on the scope, or `"emblem"` for the small monitor.
+channel on the scope, `"emblem"` for the small monitor, or `screens = "any"` for every
+screen.
 
 The den TV's player (mpv) and YouTube support (yt-dlp) come with bromigOS. With the
 background still or on a computer without a working graphics card, it shows posters

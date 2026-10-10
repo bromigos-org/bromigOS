@@ -139,6 +139,7 @@ button between them. On a big screen the content is clamped at 1000 px wide.
 | Desktop | `idle` | [Idle & lock](#idle-and-lock) | `bromigos idle` |
 | | `theme` | [Theme](#theme) | `bromigos theme` |
 | | `live` | [Live layer & holograms](#live-layer-and-holograms) | `bromigos anim`, `scene`, `keys` |
+| | `den-tv` | [Den TV](#den-tv) | `bromigos-live tv`, `lib/bromigos_tvconfig.py` |
 | | `widgets` | [Widgets](#widgets) | `bromigos panels` |
 | | `notifications` | [Notifications](#notifications) | `bromigos notifications` |
 | | `shortcuts` | [Shortcuts](#shortcuts) | `bromigos keys` |
@@ -365,6 +366,32 @@ rest. Themes are described in [theming.md](theming.md).
 writes them into `~/.config/bromigos/live/overrides.toml` and keeps everything else in
 that file. Reset puts every animation and setting back, but leaves keys to the Shortcuts
 page.
+
+### Den TV
+
+The den TV plays your own videos on the den's three screens, as TV channels
+([live/README.md](../live/README.md#the-den-tv)). This page is its channel guide. It opens
+from Settings, `bromigos-live tv guide`, Super+Alt+G, the hint's **GUIDE** and the MEDIA
+panel's settings.
+
+- A grid for each screen: the big monitor, the scope and the small monitor. Every channel
+  is a card, channel 1 first, with what's on now and next, the poster, a progress bar, its
+  source and its order. The channel each screen is on says **ON AIR**.
+- **Add channel…**: a library, collection or playlist the servers list, shows or movies you
+  pick (a searchable grid of posters), a YouTube address, a folder, or your downloaded
+  YouTube videos. Then a name, an order and its screens, every screen by default.
+- Each card: **Tune now** (`bromigos-live tv set N --screen S`) and a menu with Rename, Pick
+  shows, Move earlier or later, its screens and Remove. A toast has Undo.
+- Drag a card onto another to put it before that one, or onto another screen's grid to
+  move it there.
+- On a card, Enter tunes, Delete removes, F2 renames, and Alt and an arrow move it.
+
+It writes the `[[tv.channel]]` tables of `~/.config/bromigos-live/config.toml` through
+`lib/bromigos_tvconfig.py`, which edits them in place. Comments and every other table stay
+as they were, each save is checked before it's written, and a symlinked file stays a link.
+The live layer reads the channels again without a restart. What's on comes from the den
+TV's cache, so the page never waits on a server. A new channel's list is read in the
+background. Posters are kept in `~/.cache/bromigos/tv/posters/`.
 
 ### Widgets
 
@@ -751,7 +778,11 @@ These cover:
   `test_bluetooth`, `test_power`, `test_input`, `test_clock`, `test_notifications`,
   `test_defaults`, `test_startup`, `test_panels`, `test_memory`, `test_about`,
   `test_avatar` and `test_extlist`;
-- VECTOR's guard (`test_vector_guard.py`).
+- VECTOR's guard (`test_vector_guard.py`);
+- the Den TV page (`test_den_tv_guide.py`): drawn in a headless weston of its own against a
+  stand-in Jellyfin, with Add channel and the show picker, and no control without a hint.
+  The nested den TV test drives it as a user would (`den_tv_guide_driver.py`, from
+  `e2e_tv_nested.py`).
 
 The stand-ins live in `desktop/tests/fixtures/bin/`. They include `hyprctl`, `pactl`,
 `nmcli`, `bluetoothctl`, `powerprofilesctl`, `timedatectl`, `dunstctl`, `xdg-mime`,
