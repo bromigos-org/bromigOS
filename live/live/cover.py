@@ -40,6 +40,7 @@ class Cover:
         y0 = ch - fy / PLATE_H * ch - h / 2
         self.x0 = int(round(min(max(x0, 0), cw - w)))
         self.y0 = int(round(min(max(y0, 0), ch - h)))
+        inner.view = (self.x0, ch - self.y0 - h)       # the window's top-left in the scene: the den TV's pointer
 
     def __getattr__(self, name):          # events, commands, state: the scene's own
         return getattr(self.inner, name)

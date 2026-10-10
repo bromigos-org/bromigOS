@@ -96,6 +96,23 @@ class Background:
         self.layers = Layers()          # opt-in shader layers (layers/*.frag), GPU-budgeted
         from .traffic import Traffic
         self.traffic = Traffic(clock=lambda: self.loop_clock())   # ships decided per crossing
+        self.view = (0, 0)              # the visible window's top-left in this scene (cover.py's crop)
+        self.sf = 1                     # the monitor's scale: logical px for the pointer
+        self.tv = None                  # the den TV (live/tv.py), once the den is drawn
+        self._tv_media = None
+        self._hint_prog = None
+
+    def den_tv(self):
+        """The den TV: its channels on the den's screens (live/tv.py). Made with the den."""
+        if self.tv is None and self.den_on():
+            from .tv import TV
+            self.tv = TV(self.cfg, log=lambda *a: print("bromigos-live:", *a, flush=True))
+        return self.tv
+
+    def close(self):
+        if self.tv is not None:
+            self.tv.close()
+            self.tv = None
 
     def _path(self):
         bg = self.cfg["background"]
@@ -223,7 +240,8 @@ class Background:
     # ------------------------------------------------------------------ build
     def rebuild(self, d):
         b = glkit.Batch(self.stage.atlas)
-        if self.den_on():
+        on_big = self.tv is not None and self.tv.media_screen()[0] == "big"
+        if self.den_on() and not on_big:              # a media channel on the big monitor: no relay map
             x, y, w, h = self._px(DEN["big"])
             gadgets.constellation(b, d, x + w / 2, y + h / 2, min(w, h) * 0.36, space=1, labels=False, mini=True)
         self.stage.painter.upload(b)
@@ -262,6 +280,14 @@ class Background:
             self.checked_at = mono
             if self._sig() != self.under_sig:
                 self._load_under()
+                self.last_build = 0.0
+        tv = self.den_tv() if self.den_on() else None
+        tvu = None
+        if tv is not None:
+            tv.layout(self.w, self.h, {k: self._px(DEN[k]) for k in ("big", "wave", "emblem")}, self.view, self.sf)
+            tvu = tv.gl()
+            if tvu["tv"][0] != self._tv_media:              # the relay map steps off the big monitor, or back
+                self._tv_media = tvu["tv"][0]
                 self.last_build = 0.0
         if mono - self.last_build > 2.0:
             self.rebuild(d)
@@ -340,6 +366,8 @@ class Background:
                  ("u_bloom", bloom), ("u_schem", self.schem_tex or self.stage.emit.tex),
                  ("u_ring", self.emblem.ring), ("u_flame", self.emblem.flame or self.emblem.ring),
                  ("u_shipmask", self.shipmask or self.stage.emit.tex)]
+        if tvu is not None:
+            units += [("u_tvtex", tvu["tvtex"] or self.stage.emit.tex), ("u_osd", tvu["osd"] or self.stage.emit.tex)]
         for i, (name, tex) in enumerate(units):
             GL.glActiveTexture(GL.GL_TEXTURE0 + i)
             GL.glBindTexture(GL.GL_TEXTURE_2D, tex)
@@ -395,6 +423,8 @@ class Background:
         f.f("u_meter1", *self._px(DEN["meter1"]))
         f.f("u_meter_v", *self.meter_v)
         f.f("u_meter_face", *self.face)
+        f.f("u_tv", *(tvu["tv"] if tvu else (0.0, 0.0, 1.0, 0.0)))
+        f.f("u_tune", *(tvu["tune"] if tvu else (0.0, 0.0, 0.0, 0.0)))
         sp = cfg.get("space", {})
         hl = gadgets.health(d) if sp.get("health_tint", True) else 0
         green = gadgets.all_green(d) and sp.get("relay_beam", True)
@@ -419,6 +449,58 @@ class Background:
         self.loop_uniforms(f)
         self.stage.fs.draw()
         self.layers.draw(fbo, self.w, self.h, t, d)
+        if tv is not None:
+            self._draw_hint(fbo, tv)
+
+    _HINT_VS = """#version 330 core
+layout(location = 0) in vec2 a_pos;
+uniform vec4 u_rect;   // x y w h px, top-left origin
+uniform vec2 u_res;
+out vec2 v_uv;
+void main() {
+    vec2 p = u_rect.xy + a_pos * u_rect.zw;
+    v_uv = a_pos;
+    gl_Position = vec4(p.x / u_res.x * 2.0 - 1.0, 1.0 - p.y / u_res.y * 2.0, 0.0, 1.0);
+}"""
+    _HINT_FS = """#version 330 core
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+void main() { o = texture(u_tex, v_uv); }"""
+
+    def _draw_hint(self, fbo, tv):
+        """The den TV's hover hint, over the finished frame (premultiplied)."""
+        got = tv.hint_texture(self.sf)
+        if not got:
+            return
+        tex, (x, y, w, h) = got
+        if self._hint_prog is None:
+            self._hint_prog = glkit.Program(self._HINT_VS, self._HINT_FS)
+            self._hint_vao = GL.glGenVertexArrays(1)
+            self._hint_vbo = GL.glGenBuffers(1)
+            GL.glBindVertexArray(self._hint_vao)
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._hint_vbo)
+            quad = np.array([0, 0, 1, 0, 0, 1, 1, 1], dtype=np.float32)
+            GL.glBufferData(GL.GL_ARRAY_BUFFER, quad.nbytes, quad, GL.GL_STATIC_DRAW)
+            GL.glEnableVertexAttribArray(0)
+            GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+            GL.glBindVertexArray(0)
+        vx, vy = self.view
+        p = self._hint_prog
+        GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, fbo)
+        GL.glViewport(0, 0, self.w, self.h)
+        GL.glEnable(GL.GL_BLEND)
+        GL.glBlendFunc(GL.GL_ONE, GL.GL_ONE_MINUS_SRC_ALPHA)
+        p.use()
+        p.f("u_rect", x * self.sf + vx, y * self.sf + vy, w * self.sf, h * self.sf)
+        p.f("u_res", float(self.w), float(self.h))
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, tex)
+        p.i("u_tex", 0)
+        GL.glBindVertexArray(self._hint_vao)
+        GL.glDrawArrays(GL.GL_TRIANGLE_STRIP, 0, 4)
+        GL.glBindVertexArray(0)
+        GL.glDisable(GL.GL_BLEND)
 
     # ---- scanner control (bromigos-live scan / scan-pin / scan-hold on|off)
     def scan(self):

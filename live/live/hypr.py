@@ -94,6 +94,26 @@ def monitor_state(name):
     return windows, full, mon
 
 
+def covering(name, rect):
+    """True when a window on the monitor's visible workspaces overlaps rect (x, y, w, h in
+    the monitor's logical px): the den TV pauses behind it."""
+    mons = request("monitors") or []
+    mon = next((m for m in mons if m.get("name") == name), None)
+    if not mon:
+        return False
+    ids = {(mon.get("activeWorkspace") or {}).get("id"), (mon.get("specialWorkspace") or {}).get("id") or None}
+    mx, my = mon.get("x", 0), mon.get("y", 0)
+    x, y, w, h = rect
+    for c in request("clients") or []:
+        if (c.get("workspace") or {}).get("id") not in ids or not c.get("mapped", True) or c.get("hidden"):
+            continue
+        (cx, cy), (cw, ch) = c.get("at") or (0, 0), c.get("size") or (0, 0)
+        cx, cy = cx - mx, cy - my
+        if cx < x + w and x < cx + cw and cy < y + h and y < cy + ch:
+            return True
+    return False
+
+
 def resolve_monitor(name):
     """The output to draw on: lib/bromigos_monitors.primary (the setting when that output is
     there, else setup's primary, the focused, the first); `name` when Hyprland can't be asked."""

@@ -15,6 +15,10 @@ verb), event, key, part, notes, scan, pin, radial, and for the zoomable maps
 wheel X Y DY, dclick X Y, drag X0 Y0 X1 Y1 [shift|right], hover X Y (2560x1440 coords).
 OFF_MOTION=full|reduced|still renders under that motion setting (docs/accessibility.md)
 instead of the user's; `w still` (worlds) draws a new still frame.
+OFF_TV=clip.mp4 (bg, bench bg): the den TV plays that file as a channel on OFF_TV_SCREEN
+(big, wave or emblem; default big), through libmpv like the daemon; OFF_TV_HINT=1 shows
+its hover hint, OFF_TV_SOUND=1 its speaker. Point XDG_CACHE_HOME and XDG_STATE_HOME at a
+scratch folder: the channel's list is cached there.
 For worlds: w <verb> <args> runs a world verb (live/world.py World.command), e.g.
   "0 w set agents a:working,b:working; 4 w set agents a:needs_you,b:working; 6 w event critical;
    8 w event fill win; 9 w set user dozing; 10 w set cpu 0.95; 12 w set hour 19.2"
@@ -67,6 +71,49 @@ def egl():
     print("offscreen GL:", GL.glGetString(GL.GL_RENDERER).decode(), file=sys.stderr)
 
 
+def tv_config(cfg):
+    """OFF_TV: a channel of one local file on a den screen (live/tv.py), before the scene."""
+    clip = os.environ.get("OFF_TV")
+    if not clip:
+        return
+    cfg["tv"] = dict(cfg.get("tv") or {}, enabled=True,
+                     channel=[{"name": "TEST CLIP", "files": [os.path.abspath(clip)],
+                               "screens": [os.environ.get("OFF_TV_SCREEN", "big")]}])
+
+
+def tv_tune(r):
+    """Tune the screen to the clip's channel (in memory: never the user's tv.json)."""
+    tv = r.den_tv() if os.environ.get("OFF_TV") else None
+    if tv is None:
+        return None
+    import bromigos_tv as TVL
+    scr = os.environ.get("OFF_TV_SCREEN", "big")
+    ch = next(c for c in TVL.channels(tv.cfg, panel=False) if c["kind"] == "files")
+    TVL.fetch_items(ch, max_age=0)
+    tv.screens[scr]["channel"] = ch["key"]
+    tv.screens[scr]["sound"] = os.environ.get("OFF_TV_SOUND") == "1"
+    tv.lineup = lambda s, _tv=tv: [TVL.own_channel(s)] + ([ch] if s == scr else [])
+    if os.environ.get("OFF_TV_HINT") == "1":
+        from live.scene import DEN
+        inner = getattr(r, "inner", r)
+        tv.layout(inner.w, inner.h, {k: inner._px(DEN[k]) for k in ("big", "wave", "emblem")}, inner.view, 1)
+        tv.hover = scr
+        tv.hint_rect = tv._place_hint(scr)
+    return tv
+
+
+def tv_warm(r, tv, render, limit=12.0):
+    """Draw until mpv has a frame on the screen (it decodes in real time)."""
+    t_end = time.time() + limit
+    while time.time() < t_end:
+        tv.tick(motion=os.environ.get("OFF_MOTION", "full"))
+        render()
+        if tv.player is not None and tv.player.has_frame or tv.motion == "still" and tv.poster_tex:
+            return True
+        time.sleep(0.03)
+    return False
+
+
 def main():
     kind, out = sys.argv[1], sys.argv[2]
     egl()
@@ -77,6 +124,7 @@ def main():
         cfg["general"]["motion"] = os.environ["OFF_MOTION"]
         cfg["general"]["reduced_motion"] = os.environ["OFF_MOTION"] != "full"
     motion.set_current(motion.mode(cfg))
+    tv_config(cfg)
     data = Data(cfg, lambda *a, **k: None)
     data.start()
     time.sleep(float(os.environ.get("OFF_WARM", 3.5)))
@@ -119,6 +167,9 @@ def main():
         while time.time() < t_end and not r.ready():
             time.sleep(0.5)
     tgt = glkit.Target(W, H)
+    tv = tv_tune(r) if kind == "bg" else None
+    if tv is not None:
+        print("tv: picture" if tv_warm(r, tv, lambda: r.render(tgt.fbo, 30)) else "tv: no picture yet", file=sys.stderr)
     clock = {"t": 0.0}
     r.now = lambda: clock["t"]
     if hasattr(r, "loop_clock"):
@@ -184,6 +235,9 @@ def main():
                     print("world:", r.command(ev[2][0], " ".join(ev[2][1:])), file=sys.stderr)
         if hasattr(r, "tick"):
             r.tick(t)
+        if tv is not None:
+            tv.tick(motion=os.environ.get("OFF_MOTION", "full"))
+            time.sleep(1 / 30)                 # mpv decodes in real time
         r.render(tgt.fbo, 30)
         hv = getattr(r, "hv", None)
         if hv is not None and hv.live is not None and not getattr(r, "_hv_waited", False):
@@ -255,7 +309,10 @@ def bench(cfg, data):
         from live import cover
         r = cover.wrap(lambda cw, ch: Background(cfg, data, cw, ch), W, H)
     tgt = glkit.Target(W, H)
-    q = GL.glGenQueries(1)[0]
+    tv = tv_tune(r) if what == "bg" else None
+    if tv is not None:
+        print("tv: picture" if tv_warm(r, tv, lambda: r.render(tgt.fbo, 30)) else "tv: no picture", file=sys.stderr)
+    q0, q1 = GL.glGenQueries(2)          # timestamps, not GL_TIME_ELAPSED: mpv (the den TV) times its own passes
     gpu = []
     for item in filter(None, (x.strip() for x in os.environ.get("OFF_BENCH_W", "").split(";"))):
         verb, _, rest = item.partition(" ")      # OFF_BENCH_W="event flyby:petrel; set cpu 0.1": world verbs first
@@ -268,15 +325,18 @@ def bench(cfg, data):
     nxt = t0
     frame_cpu = 0.0
     while time.monotonic() - t0 < secs:
-        GL.glBeginQuery(GL.GL_TIME_ELAPSED, q)
+        if tv is not None and n % 15 == 0:
+            tv.tick(motion="full")
+        GL.glQueryCounter(q0, GL.GL_TIMESTAMP)
         c0 = time.thread_time()
         r.render(tgt.fbo, 30)
         frame_cpu += time.thread_time() - c0
-        GL.glEndQuery(GL.GL_TIME_ELAPSED)
+        GL.glQueryCounter(q1, GL.GL_TIMESTAMP)
         if n % 15 == 0:
-            v = ctypes.c_uint64(0)
-            GL.glGetQueryObjectui64v(q, GL.GL_QUERY_RESULT, ctypes.byref(v))
-            gpu.append(v.value / 1e6)
+            a, b = ctypes.c_uint64(0), ctypes.c_uint64(0)
+            GL.glGetQueryObjectui64v(q0, GL.GL_QUERY_RESULT, ctypes.byref(a))
+            GL.glGetQueryObjectui64v(q1, GL.GL_QUERY_RESULT, ctypes.byref(b))
+            gpu.append((b.value - a.value) / 1e6)
         n += 1
         GL.glFlush()
         nxt += 1 / 30

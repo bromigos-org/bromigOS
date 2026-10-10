@@ -31,7 +31,7 @@ allow_software = false
 #     lab alerts, paper fills), floor pulses (network throughput), den scope
 #     (network), den meters (CPU/GPU), relay map, scanner schematic values, ship
 #     density (network), relay beam (lab all green), health tint, rings,
-#     constellation, hologram.
+#     constellation, hologram, the den TV's channels (your own library, on its schedule).
 #   decoration (fixed calm pace, tied to nothing): [loops] streaks, floor-row
 #     scroll and mug steam, stars, the emblem's rotation, the scanner sweep itself.
 #   worlds ([world]; a theme's live/world.toml): every effect and actor names its signal
@@ -98,6 +98,22 @@ relay_beam = true        # beam from the station while every lab node is Ready a
 health_tint = true       # space + rain shift amber (hot / lab link stale) or red (node or service down)
 planet = true            # screensaver gas giant; its terminator is the local time of day
 station = true           # screensaver Drift relay station; spokes are the lab's services, lit = up
+
+[tv]                     # the den TV: channels from your Plex, Jellyfin, YouTube or files on the den's screens
+enabled = true           # false: every screen shows only its own picture (channel 1)
+quality = "auto"         # the den's stream: "auto" (the file, or 480p over direct_max_mbps), "direct", "480p", "720p"
+fullscreen_quality = "direct"   # full screen with sound (bromigos-live tv open)
+tint = 0.4               # how much the den's phosphor colours the picture (0: true colour)
+volume = 60              # a screen's volume until you set one (the sound starts off)
+duck = 30                # percent of it while VECTOR speaks or a codec call plays
+refresh_minutes = 15     # how often a channel's list is read again (YouTube: hourly)
+# A channel is a [[tv.channel]] table in your config (live/README.md, "The den TV"):
+#   [[tv.channel]]
+#   name = "Saturday"
+#   source = "plex"          # a jellyfin or plex source in homelab.toml (default: the first)
+#   library = "TV Shows"     # or collection = "…", playlist = "…", youtube = "<URL>", files = "~/Videos"
+#   order = "shuffle"        # or "in order" (a playlist's default)
+#   screens = ["big"]        # big (the big monitor), wave (the scope), emblem (the small monitor)
 
 [world]                  # a theme's world (bromigos theme set mire|tidewell): drawn instead of the den
 enabled = true           # false = always the den, whatever the theme

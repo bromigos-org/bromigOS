@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# bromigos:summary=The animated live layer: start/stop, decks, toggles
-# bromigos:args=start|stop|restart|status|open <deck>|<deck> …
+# bromigos:summary=The animated live layer: start/stop, decks, toggles, the den TV
+# bromigos:args=start|stop|restart|status|open <deck>|tv <verb>|<deck> …
 # bromigos-live — the animated, data-reactive live layer.
 #
 #   bromigos-live start [--login]  start the daemon (supervised; no-op if running)
@@ -25,6 +25,8 @@
 #   bromigos-live plugin <name> [verb args]   a hot-loaded deck plugin (<plugins>/decks/<name>.py)
 #   bromigos-live world [verb …]   the theme's world: state, event notify|critical|fill win|lab_alert,
 #                                  set <signal> <value> (hold one, to try it), clear, rollcall
+#   bromigos-live tv [verb …]      the den TV (live/live/tv.py; `bromigos-live tv help`): next, prev,
+#                                  set N, open, web, sound on|off|toggle, volume up|down|N, list, state
 #   bromigos-live ctl <cmd>        raw control command (burst, transmission, reload, state, theme, activity idle|active)
 #   bromigos-live status
 set -u
@@ -237,6 +239,30 @@ except Exception: print(60)')
     scan-hold) ctl "scan-hold ${2:-on}" ;;
     ctl) shift; ctl "$*" ;;
     world) shift; ctl "world $*" || { echo "not running (bromigos-live start)"; exit 1; } ;;
+    tv)
+        shift
+        case "${1:-}" in
+            help|-h|--help)
+                cat <<'HELP'
+bromigos-live tv: the den TV, channels on the den's screens (live/README.md, "The den TV")
+
+  bromigos-live tv next|prev [SCREEN]     change channel (the screen with a media channel, else big)
+  bromigos-live tv set N [SCREEN]         go to channel N; channel 1 is the screen's own picture
+  bromigos-live tv open [SCREEN]          full screen with sound in mpv, at the same moment
+  bromigos-live tv web [SCREEN]           what's on, in Jellyfin's, Plex's or YouTube's web page
+  bromigos-live tv sound on|off|toggle    the TV's sound (off until you turn it on)
+  bromigos-live tv volume up|down|N       5% steps, or a level from 0 to 100
+  bromigos-live tv list                   every screen's channels, * on the one showing
+  bromigos-live tv state [--json]         what's on, the sound, what mpv is doing
+
+SCREEN is big (the big monitor), wave (the scope) or emblem (the small monitor).
+Channels are [[tv.channel]] tables in ~/.config/bromigos-live/config.toml, or the MEDIA
+panel's settings. A YouTube channel can keep what it plays in a folder: keep = "~/Videos/YouTube",
+keep_all = true for every video, keep_max_gb = 50 for a size cap (the oldest go first).
+HELP
+                exit 0 ;;
+        esac
+        ctl "tv ${*:-state}" || { echo "not running (bromigos-live start)"; exit 1; } ;;
     status)
         if running; then echo "daemon up (daemon $(inst daemon), supervisor $(inst supervisor))"; ctl state; else echo "stopped"; fi
         [ -f "$STATE/muted" ] && echo "sounds: muted" || echo "sounds: on"

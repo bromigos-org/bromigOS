@@ -77,11 +77,27 @@ class LockWatch(threading.Thread):
                 continue
             try:
                 with open(f"/proc/{d.name}/comm") as f:
-                    if f.read().strip() in self.names:
+                    if f.read().strip() in self.names and self._ours(d.name):
                         return int(d.name)
             except OSError:
                 continue
         return None
+
+    @staticmethod
+    def _ours(pid):
+        """A locker for this session: one started for another Hyprland (a nested test session,
+        a second seat) says so in its HYPRLAND_INSTANCE_SIGNATURE, and doesn't count. One
+        that doesn't say, or can't be read, does."""
+        mine = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+        if not mine:
+            return True
+        try:
+            with open(f"/proc/{pid}/environ", "rb") as f:
+                env = f.read().split(b"\0")
+        except OSError:
+            return True
+        theirs = next((e.split(b"=", 1)[1] for e in env if e.startswith(b"HYPRLAND_INSTANCE_SIGNATURE=")), None)
+        return theirs is None or theirs.decode(errors="replace") == mine
 
     def run(self):
         self.pid = self._find()

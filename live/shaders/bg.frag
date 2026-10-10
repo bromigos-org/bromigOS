@@ -38,6 +38,12 @@ uniform vec2 u_meter_v;         // needle values 0..1
 uniform vec3 u_meter_face;
 uniform sampler2D u_ring;
 uniform sampler2D u_flame;
+// the den TV (live/live/tv.py): a media channel on one of the screens, its on-screen display
+uniform vec4 u_tv;              // screen (0 none, 1 scope, 2 small monitor, 3 big monitor), has a picture,
+                                // the picture's aspect over the screen's, how much the den's phosphor tints it
+uniform vec4 u_tune;            // screen with an OSD (0 none), tuning static 0..1, has an OSD, -
+uniform sampler2D u_tvtex;      // mpv's frame (mipmapped: the glow), or the poster
+uniform sampler2D u_osd;        // the OSD: channel number, volume, speaker (premultiplied)
 
 #include rain
 #include space
@@ -104,11 +110,49 @@ float glass(vec2 px, vec4 rect, out vec2 uv, out vec3 base) {
     return smoothstep(2.0, -4.0, d);
 }
 
+// The den TV's picture in a screen's glass: the tube's curve, scanlines, a soft glow and the
+// den's phosphor tint; snow until there's a picture.
+vec3 tv_picture(vec2 px, vec2 uv, vec3 g) {
+    vec2 q = uv * 2.0 - 1.0;
+    q *= 1.0 + dot(q, q) * 0.045;
+    vec2 t = q * 0.5 + 0.5;
+    if (u_tv.z < 1.0) t.x = (t.x - 0.5) / u_tv.z + 0.5;          // a poster: fitted, never stretched
+    else if (u_tv.z > 1.0) t.y = (t.y - 0.5) * u_tv.z + 0.5;
+    float inside = step(0.0, t.x) * step(t.x, 1.0) * step(0.0, t.y) * step(t.y, 1.0);
+    vec3 v;
+    if (u_tv.y > 0.5) {
+        v = texture(u_tvtex, clamp(t, 0.0, 1.0)).rgb * inside;
+        v += textureLod(u_tvtex, clamp(t, 0.0, 1.0), 3.0).rgb * 0.16 * inside;
+    } else {
+        v = vec3(hash2(floor(px * 0.7) + floor(u_time * 24.0) * (1.0 - u_calm)) * 0.32);
+    }
+    float l = dot(v, vec3(0.3, 0.59, 0.11));
+    v = mix(v, PHOS * l * 1.15, u_tv.w);
+    float sl = 0.78 + 0.22 * cos(px.y * 3.14159);                  // one dark line every other row
+    float vig = clamp(1.0 - dot(q * q, vec2(0.22, 0.3)), 0.0, 1.0);
+    return g * 0.45 + v * 0.88 * sl * (0.5 + 0.5 * vig);
+}
+
+// Over a screen while its channel changes: static, then the OSD.
+vec3 tv_osd(vec2 px, vec2 uv, vec3 sc) {
+    if (u_tune.y > 0.0) {
+        float n = hash2(floor(px * vec2(0.6, 1.0)) + floor(u_time * 30.0) * 7.0);
+        sc = mix(sc, PHOS * (0.15 + n * 0.85) * 0.8, u_tune.y);
+    }
+    if (u_tune.z > 0.5) {
+        vec4 o = texture(u_osd, uv);
+        sc = sc * (1.0 - o.a) + o.rgb * 1.1;
+    }
+    return sc;
+}
+
 vec3 den(vec2 px, vec3 c) {
     vec2 uv; vec3 g;
     // waveform scope: the real network envelope on the den's oscilloscope
     float m = glass(px, u_wave_rect, uv, g);
-    if (m > 0.0) {
+    if (m > 0.0 && u_tv.x == 1.0) {
+        c = mix(c, tv_picture(px, uv, g), m);
+    } else if (m > 0.0) {
         float f = uv.x * 47.0;
         int i = int(floor(f));
         float env = mix(u_wave[i], u_wave[min(i + 1, 47)], fract(f));
@@ -122,9 +166,12 @@ vec3 den(vec2 px, vec3 c) {
         vec3 sc = g + SOFT * tr * 0.95 + PHOS * (mid + grid);
         c = mix(c, sc, m);
     }
+    if (m > 0.0 && u_tune.x == 1.0) c = mix(c, tv_osd(px, uv, c), m);
     // the burn-in on the den's monitor: ring turning against the clock
     m = glass(px, u_emb_rect, uv, g);
-    if (m > 0.0) {
+    if (m > 0.0 && u_tv.x == 2.0) {
+        c = mix(c, tv_picture(px, uv, g), m);
+    } else if (m > 0.0) {
         float asp = u_emb_rect.z / u_emb_rect.w;
         vec2 p = (uv - 0.5) * vec2(asp, 1.0) / 0.86;
         float ca = cos(-u_den.y), sa = sin(-u_den.y);
@@ -138,9 +185,12 @@ vec3 den(vec2 px, vec3 c) {
         sc += PHOS * nz * (0.05 + u_den.z * 0.5);
         c = mix(c, sc, m);
     }
+    if (m > 0.0 && u_tune.x == 2.0) c = mix(c, tv_osd(px, uv, c), m);
     // the big monitor gets a fresh glass; the relay map is drawn on it (emissive)
     m = glass(px, u_big_rect, uv, g);
-    if (m > 0.0) c = mix(c, g * 0.8, m);
+    if (m > 0.0 && u_tv.x == 3.0) c = mix(c, tv_picture(px, uv, g), m);
+    else if (m > 0.0) c = mix(c, g * 0.8, m);
+    if (m > 0.0 && u_tune.x == 3.0) c = mix(c, tv_osd(px, uv, c), m);
     // two analog meters: CPU and GPU load
     for (int k = 0; k < 2; k++) {
         vec4 r = k == 0 ? u_meter0 : u_meter1;

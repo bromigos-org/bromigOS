@@ -1,0 +1,122 @@
+{
+ "id": "PLexample0000000000000000000000000",
+ "title": "Lo-fi mixes",
+ "_type": "playlist",
+ "channel": "Example Studio",
+ "extractor": "youtube:tab",
+ "webpage_url": "https://www.youtube.com/playlist?list=PLexample0000000000000000000000000",
+ "entries": [
+  {
+   "title": "Mix one",
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/vid00000011/hq720.jpg",
+     "height": 202,
+     "width": 360
+    },
+    {
+     "url": "https://i.ytimg.com/vi/vid00000011/hq720.jpg?big",
+     "height": 404,
+     "width": 720
+    }
+   ],
+   "duration": 3600,
+   "view_count": 1011,
+   "timestamp": null,
+   "live_status": null,
+   "availability": null,
+   "channel_url": null,
+   "uploader_url": null,
+   "creators": null,
+   "ie_key": "Youtube",
+   "id": "vid00000011",
+   "_type": "url",
+   "url": "https://www.youtube.com/watch?v=vid00000011",
+   "__x_forwarded_for_ip": null
+  },
+  {
+   "title": "Mix two",
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/vid00000012/hq720.jpg",
+     "height": 202,
+     "width": 360
+    },
+    {
+     "url": "https://i.ytimg.com/vi/vid00000012/hq720.jpg?big",
+     "height": 404,
+     "width": 720
+    }
+   ],
+   "duration": 2700,
+   "view_count": 1012,
+   "timestamp": null,
+   "live_status": null,
+   "availability": null,
+   "channel_url": null,
+   "uploader_url": null,
+   "creators": null,
+   "ie_key": "Youtube",
+   "id": "vid00000012",
+   "_type": "url",
+   "url": "https://www.youtube.com/watch?v=vid00000012",
+   "__x_forwarded_for_ip": null
+  },
+  {
+   "title": "[Deleted video]",
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/vid00000013/hq720.jpg",
+     "height": 202,
+     "width": 360
+    },
+    {
+     "url": "https://i.ytimg.com/vi/vid00000013/hq720.jpg?big",
+     "height": 404,
+     "width": 720
+    }
+   ],
+   "duration": null,
+   "view_count": 1013,
+   "timestamp": null,
+   "live_status": null,
+   "availability": null,
+   "channel_url": null,
+   "uploader_url": null,
+   "creators": null,
+   "ie_key": "Youtube",
+   "id": "vid00000013",
+   "_type": "url",
+   "url": "https://www.youtube.com/watch?v=vid00000013",
+   "__x_forwarded_for_ip": null
+  },
+  {
+   "title": "Mix three",
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/vid00000014/hq720.jpg",
+     "height": 202,
+     "width": 360
+    },
+    {
+     "url": "https://i.ytimg.com/vi/vid00000014/hq720.jpg?big",
+     "height": 404,
+     "width": 720
+    }
+   ],
+   "duration": 3300,
+   "view_count": 1014,
+   "timestamp": null,
+   "live_status": null,
+   "availability": null,
+   "channel_url": null,
+   "uploader_url": null,
+   "creators": null,
+   "ie_key": "Youtube",
+   "id": "vid00000014",
+   "_type": "url",
+   "url": "https://www.youtube.com/watch?v=vid00000014",
+   "__x_forwarded_for_ip": null
+  }
+ ]
+}

@@ -1,0 +1,66 @@
+{
+ "id": "UCxxxxxxxxxxxxxxxxxxxxxx",
+ "channel": "Example Studio",
+ "title": "Example Studio - Live",
+ "_type": "playlist",
+ "extractor": "youtube:tab",
+ "webpage_url": "https://www.youtube.com/@examplestudio/streams",
+ "entries": [
+  {
+   "title": "Live: modelling session",
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/vid00000007/hq720.jpg",
+     "height": 202,
+     "width": 360
+    },
+    {
+     "url": "https://i.ytimg.com/vi/vid00000007/hq720.jpg?big",
+     "height": 404,
+     "width": 720
+    }
+   ],
+   "duration": null,
+   "view_count": 1007,
+   "timestamp": null,
+   "live_status": "is_live",
+   "availability": null,
+   "channel_url": null,
+   "uploader_url": null,
+   "creators": null,
+   "ie_key": "Youtube",
+   "id": "vid00000007",
+   "_type": "url",
+   "url": "https://www.youtube.com/watch?v=vid00000007",
+   "__x_forwarded_for_ip": null
+  },
+  {
+   "title": "Release party",
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/vid00000006/hq720.jpg",
+     "height": 202,
+     "width": 360
+    },
+    {
+     "url": "https://i.ytimg.com/vi/vid00000006/hq720.jpg?big",
+     "height": 404,
+     "width": 720
+    }
+   ],
+   "duration": 3842,
+   "view_count": 1006,
+   "timestamp": null,
+   "live_status": "was_live",
+   "availability": null,
+   "channel_url": null,
+   "uploader_url": null,
+   "creators": null,
+   "ie_key": "Youtube",
+   "id": "vid00000006",
+   "_type": "url",
+   "url": "https://www.youtube.com/watch?v=vid00000006",
+   "__x_forwarded_for_ip": null
+  }
+ ]
+}

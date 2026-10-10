@@ -43,6 +43,16 @@ def _vector_alive():
         return False
 
 
+def _vector_speaking():
+    """VECTOR's daemon says he's speaking ($XDG_RUNTIME_DIR/bromigos-vector.json): the den TV ducks."""
+    try:
+        import json
+        with open(os.path.join(RUNTIME, "bromigos-vector.json")) as f:
+            return json.load(f).get("state") == "speaking"
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 def log(*a):
     print("bromigos-live:", *a, flush=True)
 
@@ -183,8 +193,21 @@ class GLWindow:
             log("GL renderer unknown:", e)
 
     def _unrealize(self, area):
+        try:
+            area.make_current()            # the den TV frees its GL objects and mpv's render context
+        except Exception:
+            pass
         self._close_renderer()
         self.rsize = None
+
+    def set_input(self, rects):
+        """The window's input region: these logical rects take the pointer, the rest passes
+        through (the background: the den TV's screens and its hint; none by default)."""
+        w = self.win.get_window()
+        if w is None:
+            return
+        import cairo
+        w.input_shape_combine_region(cairo.Region([cairo.RectangleInt(*r) for r in rects]), 0, 0)
 
     def _close_renderer(self):
         """A world owns pollers (herdr, VECTOR's state); stop them with it."""
@@ -218,6 +241,8 @@ class GLWindow:
                 self.failed = True
                 return True
         fbo = GL.glGetIntegerv(GL.GL_DRAW_FRAMEBUFFER_BINDING)
+        if getattr(self.renderer, "sf", sf) != sf:
+            self.renderer.sf = sf                  # the den TV's pointer: logical px
         self.frames += 1
         self.last_frame = time.monotonic()
         try:
@@ -328,6 +353,7 @@ class App:
         self.world_sig = world.signature(self.cfg)
         try:
             self.bg = GLWindow(self, GtkLayerShell.Layer.BACKGROUND, "bromigos-live", make, input_ok=False)
+            self._tv_events(self.bg)
         except Exception as e:
             self.bg = None
             self.bg_tries += 1
@@ -342,6 +368,129 @@ class App:
             log(f"background started after {self.bg_tries} failed attempt(s)")
         self.bg_fault, self.bg_tries, self.bg_retry_at = "", 0, 0.0
         self.refresh_state()
+        return True
+
+    # ------------------------------------------------------------------ the den TV (live/tv.py)
+    def den_tv(self):
+        r = self.bg.renderer if self.bg and not self.bg.dead else None
+        return getattr(r, "tv", None) if r is not None and not getattr(r, "is_world", False) else None
+
+    def _tv_events(self, win):
+        """The pointer over the den's screens: the background window's input region is
+        only their rects (and the hint while it shows), so everywhere else clicks go through."""
+        a = win.area
+        a.add_events(Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.ENTER_NOTIFY_MASK | Gdk.EventMask.BUTTON_PRESS_MASK
+                     | Gdk.EventMask.BUTTON_RELEASE_MASK | Gdk.EventMask.SCROLL_MASK
+                     | Gdk.EventMask.SMOOTH_SCROLL_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK)
+        self._scroll_acc = 0.0
+
+        def tv():
+            return self.den_tv()
+
+        def motion(_w, ev):
+            t = tv()
+            if t:
+                t.pointer_motion(ev.x, ev.y)
+                self._tv_redraw()
+            return True
+
+        def leave(_w, ev):
+            t = tv()
+            if t and ev.detail != Gdk.NotifyType.INFERIOR:
+                t.pointer_leave()
+                self._tv_redraw()
+            return False
+
+        def press(_w, ev):
+            t = tv()
+            if t and ev.type == Gdk.EventType.BUTTON_PRESS:
+                out = t.click(ev.x, ev.y, ev.button)
+                if out:
+                    log(out)
+                self._tv_redraw()
+            return True
+
+        def release(_w, ev):
+            t = tv()
+            if t:
+                t.release()
+            return True
+
+        def scroll(_w, ev):
+            t = tv()
+            if not t:
+                return False
+            shift = bool(ev.state & Gdk.ModifierType.SHIFT_MASK)
+            dy = dx = 0.0
+            d = ev.direction
+            if d in (Gdk.ScrollDirection.UP, Gdk.ScrollDirection.DOWN):
+                dy = -1.0 if d == Gdk.ScrollDirection.UP else 1.0
+            elif d in (Gdk.ScrollDirection.LEFT, Gdk.ScrollDirection.RIGHT):
+                dx = -1.0 if d == Gdk.ScrollDirection.LEFT else 1.0
+            elif d == Gdk.ScrollDirection.SMOOTH:
+                ok, sdx, sdy = ev.get_scroll_deltas()
+                if not ok:
+                    return True
+                self._scroll_acc += sdy
+                self._scroll_acc_x = getattr(self, "_scroll_acc_x", 0.0) + sdx
+                if abs(self._scroll_acc) >= 1.0:           # a touchpad: one step per notch's worth
+                    dy, self._scroll_acc = (1.0 if self._scroll_acc > 0 else -1.0), 0.0
+                elif abs(self._scroll_acc_x) >= 1.0:
+                    dx, self._scroll_acc_x = (1.0 if self._scroll_acc_x > 0 else -1.0), 0.0
+            if dy or dx:
+                t.scroll(ev.x, ev.y, dy, shift, dx)
+                self._tv_redraw()
+            return True
+        a.connect("motion-notify-event", motion)
+        a.connect("enter-notify-event", motion)          # a pointer that lands without moving
+        a.connect("leave-notify-event", leave)
+        a.connect("button-press-event", press)
+        a.connect("button-release-event", release)
+        a.connect("scroll-event", scroll)
+        if not getattr(self, "_tv_timer", None):
+            self._tv_timer = GLib.timeout_add(500, self._tv_tick)
+
+    def _tv_changed(self):
+        """The den TV's channels or hint changed: its input region, and a frame."""
+        GLib.idle_add(self._tv_region)
+
+    def _tv_region(self):
+        t = self.den_tv()
+        if t and self.bg:
+            rects = t.input_rects()
+            if rects != getattr(self, "_tv_rects", None):
+                self._tv_rects = rects
+                self.bg.set_input(rects)
+        self._tv_redraw()
+        return False
+
+    def _tv_redraw(self):
+        """A frame now, for a still background (motion still, or no GPU) or a slow one."""
+        if self.bg and not self.bg.dead and self.bg.fps == 0 and self.mode != "paused":
+            self.bg.area.queue_render()
+
+    def _tv_tick(self):
+        t = self.den_tv()
+        if t is None:
+            return True
+        if t.on_change is None:
+            t.on_change = self._tv_changed
+            self._tv_region()
+        screen, _ch = t.media_screen()
+        covered = set()
+        if screen and t.rects.get(screen):
+            now = time.monotonic()
+            if now - getattr(self, "_tv_cov_at", 0.0) > 1.0:
+                self._tv_cov_at = now
+                self._tv_cov = hypr.covering(self.cfg["general"]["monitor"], t.rects[screen])
+            if getattr(self, "_tv_cov", False):
+                covered.add(screen)
+        saver = "screensaver" in self.overlays
+        speaking = bool(getattr(self.codec, "current", None)) or _vector_speaking()
+        t.tick(covered=covered, quiet=self.locked or saver, ducked=speaking, motion=motion.mode(self.cfg),
+               software=bool(self.software))
+        if t.hint_expired():
+            self._tv_redraw()
         return True
 
     def hide_background(self):
@@ -891,6 +1040,13 @@ class App:
                 return "schematic pinned" if r.scan_pin_toggle() else "schematic unpinned"
             r.scan_hold(arg.strip() != "off")
             return "hold " + ("off" if arg.strip() == "off" else "on")
+        if c == "tv":                               # bromigos-live tv …: the den TV (live/tv.py)
+            t = self.den_tv()
+            if t is None:
+                return "no den TV: the den isn't drawn (a world, or the background is off)"
+            out = t.command(arg.strip())
+            self._tv_redraw()
+            return out
         if c == "theme":                            # bromigos theme set: the world may have changed
             return self.check_world()
         if c == "world":                            # bromigos-live ctl world [state|event …|set …|clear|rollcall]

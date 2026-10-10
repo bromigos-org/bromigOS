@@ -1,0 +1,199 @@
+{
+ "id": "@examplestudio",
+ "channel": "Example Studio",
+ "channel_id": "UCxxxxxxxxxxxxxxxxxxxxxx",
+ "title": "Example Studio",
+ "_type": "playlist",
+ "extractor": "youtube:tab",
+ "extractor_key": "YoutubeTab",
+ "webpage_url": "https://www.youtube.com/@examplestudio",
+ "uploader": "Example Studio",
+ "entries": [
+  {
+   "id": "UCxxxxxxxxxxxxxxxxxxxxxx",
+   "channel": "Example Studio",
+   "title": "Example Studio - Videos",
+   "_type": "playlist",
+   "webpage_url": "https://www.youtube.com/@examplestudio/videos",
+   "entries": [
+    {
+     "title": "Studio log 32",
+     "thumbnails": [
+      {
+       "url": "https://i.ytimg.com/vi/vid00000001/hq720.jpg",
+       "height": 202,
+       "width": 360
+      },
+      {
+       "url": "https://i.ytimg.com/vi/vid00000001/hq720.jpg?big",
+       "height": 404,
+       "width": 720
+      }
+     ],
+     "duration": 855,
+     "view_count": 1001,
+     "timestamp": null,
+     "live_status": null,
+     "availability": null,
+     "channel_url": null,
+     "uploader_url": null,
+     "creators": null,
+     "ie_key": "Youtube",
+     "id": "vid00000001",
+     "_type": "url",
+     "url": "https://www.youtube.com/watch?v=vid00000001",
+     "__x_forwarded_for_ip": null
+    },
+    {
+     "title": "Project teaser",
+     "thumbnails": [
+      {
+       "url": "https://i.ytimg.com/vi/vid00000002/hq720.jpg",
+       "height": 202,
+       "width": 360
+      },
+      {
+       "url": "https://i.ytimg.com/vi/vid00000002/hq720.jpg?big",
+       "height": 404,
+       "width": 720
+      }
+     ],
+     "duration": 82,
+     "view_count": 1002,
+     "timestamp": null,
+     "live_status": null,
+     "availability": null,
+     "channel_url": null,
+     "uploader_url": null,
+     "creators": null,
+     "ie_key": "Youtube",
+     "id": "vid00000002",
+     "_type": "url",
+     "url": "https://www.youtube.com/watch?v=vid00000002",
+     "__x_forwarded_for_ip": null
+    },
+    {
+     "title": "Behind the scenes",
+     "thumbnails": [
+      {
+       "url": "https://i.ytimg.com/vi/vid00000003/hq720.jpg",
+       "height": 202,
+       "width": 360
+      },
+      {
+       "url": "https://i.ytimg.com/vi/vid00000003/hq720.jpg?big",
+       "height": 404,
+       "width": 720
+      }
+     ],
+     "duration": 870,
+     "view_count": 1003,
+     "timestamp": null,
+     "live_status": null,
+     "availability": null,
+     "channel_url": null,
+     "uploader_url": null,
+     "creators": null,
+     "ie_key": "Youtube",
+     "id": "vid00000003",
+     "_type": "url",
+     "url": "https://www.youtube.com/watch?v=vid00000003",
+     "__x_forwarded_for_ip": null
+    },
+    {
+     "title": "[Private video]",
+     "thumbnails": [
+      {
+       "url": "https://i.ytimg.com/vi/vid00000004/hq720.jpg",
+       "height": 202,
+       "width": 360
+      },
+      {
+       "url": "https://i.ytimg.com/vi/vid00000004/hq720.jpg?big",
+       "height": 404,
+       "width": 720
+      }
+     ],
+     "duration": null,
+     "view_count": 1004,
+     "timestamp": null,
+     "live_status": null,
+     "availability": null,
+     "channel_url": null,
+     "uploader_url": null,
+     "creators": null,
+     "ie_key": "Youtube",
+     "id": "vid00000004",
+     "_type": "url",
+     "url": "https://www.youtube.com/watch?v=vid00000004",
+     "__x_forwarded_for_ip": null
+    },
+    {
+     "title": "Material library tour",
+     "thumbnails": [
+      {
+       "url": "https://i.ytimg.com/vi/vid00000005/hq720.jpg",
+       "height": 202,
+       "width": 360
+      },
+      {
+       "url": "https://i.ytimg.com/vi/vid00000005/hq720.jpg?big",
+       "height": 404,
+       "width": 720
+      }
+     ],
+     "duration": 327,
+     "view_count": 1005,
+     "timestamp": null,
+     "live_status": null,
+     "availability": null,
+     "channel_url": null,
+     "uploader_url": null,
+     "creators": null,
+     "ie_key": "Youtube",
+     "id": "vid00000005",
+     "_type": "url",
+     "url": "https://www.youtube.com/watch?v=vid00000005",
+     "__x_forwarded_for_ip": null
+    }
+   ]
+  },
+  {
+   "id": "UCxxxxxxxxxxxxxxxxxxxxxx",
+   "channel": "Example Studio",
+   "title": "Example Studio - Live",
+   "_type": "playlist",
+   "webpage_url": "https://www.youtube.com/@examplestudio/streams",
+   "entries": [
+    {
+     "title": "Release party",
+     "thumbnails": [
+      {
+       "url": "https://i.ytimg.com/vi/vid00000006/hq720.jpg",
+       "height": 202,
+       "width": 360
+      },
+      {
+       "url": "https://i.ytimg.com/vi/vid00000006/hq720.jpg?big",
+       "height": 404,
+       "width": 720
+      }
+     ],
+     "duration": 3842,
+     "view_count": 1006,
+     "timestamp": null,
+     "live_status": "was_live",
+     "availability": null,
+     "channel_url": null,
+     "uploader_url": null,
+     "creators": null,
+     "ie_key": "Youtube",
+     "id": "vid00000006",
+     "_type": "url",
+     "url": "https://www.youtube.com/watch?v=vid00000006",
+     "__x_forwarded_for_ip": null
+    }
+   ]
+  }
+ ]
+}

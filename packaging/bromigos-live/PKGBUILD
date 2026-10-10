@@ -23,7 +23,10 @@ optdepends=('pipewire-audio: sound cues (pw-play)'
             'github-cli: CI in the Swarm deck'
             'nvidia-utils: GPU readings on NVIDIA'
             'grim: the intercept freezes the screen it tears'
-            'iputils: latency readings')
+            'iputils: latency readings'
+            'python-mpv: the den TV (libmpv draws your library on the den screens)'
+            'mpv: the den TV full screen with sound'
+            'yt-dlp: YouTube channels on the den TV')
 makedepends=('git' 'python')
 # the tests check() runs: a pixbuf's rows at any width (tests/test_pixbuf.py)
 checkdepends=('python-numpy' 'python-gobject' 'gdk-pixbuf2' 'desktop-file-utils')
