@@ -1091,7 +1091,11 @@ pub fn boot_modules(fstab: &str) -> Option<Vec<String>> {
         let fs = (*f.get(2)?).to_owned();
         let mut mods = vec![fs.clone()];
         if fs == "vfat" {
-            for o in f.get(3).map(|o| o.split(',').collect::<Vec<_>>()).unwrap_or_default() {
+            for o in f
+                .get(3)
+                .map(|o| o.split(',').collect::<Vec<_>>())
+                .unwrap_or_default()
+            {
                 if let Some(cp) = o.strip_prefix("codepage=") {
                     mods.push(format!("nls_cp{cp}"));
                 }
@@ -1257,7 +1261,12 @@ pub fn make_root_plan(
         ),
         (
             Step::Unlock,
-            argv(&["sudo", "rm", "-f", &top(&format!("{root}/var/lib/pacman/db.lck"))]),
+            argv(&[
+                "sudo",
+                "rm",
+                "-f",
+                &top(&format!("{root}/var/lib/pacman/db.lck")),
+            ]),
         ),
         (Step::Unmount, argv(&["sudo", "umount", TOP])),
         (Step::Unmount, argv(&["sudo", "rmdir", TOP])),
@@ -1270,9 +1279,10 @@ pub fn make_root_plan(
     if !restore.is_empty() {
         // /boot's file system needs modules the snapshot hasn't for this kernel (so that boot
         // stopped in emergency mode, /boot unmounted): the replaced root has them
-        let mounted = files
-            .read("/proc/self/mountinfo")
-            .is_some_and(|mi| mi.lines().any(|l| l.split_whitespace().nth(4) == Some("/boot")));
+        let mounted = files.read("/proc/self/mountinfo").is_some_and(|mi| {
+            mi.lines()
+                .any(|l| l.split_whitespace().nth(4) == Some("/boot"))
+        });
         match (mounted, boot_modules(&fstab)) {
             (true, _) => {}
             (false, Some(mods)) => {
@@ -1312,7 +1322,10 @@ pub fn make_root_plan(
                 &format!("/boot/vmlinuz-{}", k.pkgbase),
             ]),
         ));
-        kernel_steps.push((Step::Kernel, argv(&["sudo", "mkinitcpio", "-p", &k.pkgbase])));
+        kernel_steps.push((
+            Step::Kernel,
+            argv(&["sudo", "mkinitcpio", "-p", &k.pkgbase]),
+        ));
         kernels.push(k);
     }
     if kernels.is_empty() {
@@ -2754,10 +2767,21 @@ mod tests {
         assert_eq!(b.device, "UUID=40f82c71-4a33-40c8-b6ff-55a463706c47");
         // the normal root, and other layouts' snapshot paths
         assert_eq!(booted_from(NORMAL_CMDLINE), None);
-        let b = booted_from("root=/dev/mapper/root rootflags=subvol=\"/@/.snapshots/12/snapshot\"").unwrap();
-        assert_eq!((b.number, b.subvol.as_str()), (12, "@/.snapshots/12/snapshot"));
-        assert_eq!(booted_from("rootflags=subvol=@.snapshots/3/snapshot"), None, "no root=");
-        assert_eq!(booted_from("root=/dev/vda2 rootflags=subvol=@.snapshots/x/snapshot"), None);
+        let b = booted_from("root=/dev/mapper/root rootflags=subvol=\"/@/.snapshots/12/snapshot\"")
+            .unwrap();
+        assert_eq!(
+            (b.number, b.subvol.as_str()),
+            (12, "@/.snapshots/12/snapshot")
+        );
+        assert_eq!(
+            booted_from("rootflags=subvol=@.snapshots/3/snapshot"),
+            None,
+            "no root="
+        );
+        assert_eq!(
+            booted_from("root=/dev/vda2 rootflags=subvol=@.snapshots/x/snapshot"),
+            None
+        );
     }
 
     #[test]
@@ -2789,18 +2813,30 @@ mod tests {
             root_layout("UUID=x / btrfs rw,subvol=@root 0 0\n"),
             RootLayout::Named("@root".into())
         );
-        assert_eq!(root_layout("UUID=x / btrfs rw,relatime 0 0\n"), RootLayout::Default);
+        assert_eq!(
+            root_layout("UUID=x / btrfs rw,relatime 0 0\n"),
+            RootLayout::Default
+        );
         assert!(matches!(
             root_layout("UUID=x / btrfs rw,subvolid=256 0 0\n"),
             RootLayout::Other(w) if w.contains("subvolid")
         ));
-        assert!(matches!(root_layout("UUID=x / ext4 rw 0 1\n"), RootLayout::Other(_)));
-        assert!(matches!(root_layout("# UUID=x / btrfs rw,subvol=@ 0 0\n"), RootLayout::Other(_)));
+        assert!(matches!(
+            root_layout("UUID=x / ext4 rw 0 1\n"),
+            RootLayout::Other(_)
+        ));
+        assert!(matches!(
+            root_layout("# UUID=x / btrfs rw,subvol=@ 0 0\n"),
+            RootLayout::Other(_)
+        ));
         assert_eq!(
             boot_modules(ISO_FSTAB),
             Some(vec!["vfat".into(), "nls_cp437".into(), "nls_ascii".into()])
         );
-        assert_eq!(boot_modules("UUID=x /boot ext4 rw 0 2\n"), Some(vec!["ext4".into()]));
+        assert_eq!(
+            boot_modules("UUID=x /boot ext4 rw 0 2\n"),
+            Some(vec!["ext4".into()])
+        );
         assert_eq!(boot_modules("UUID=x / btrfs rw 0 0\n"), None);
     }
 
@@ -2810,7 +2846,10 @@ mod tests {
         assert!(kernels_to_restore(&fs, "7.2.9-arch1-1").is_empty());
         assert_eq!(
             kernels_to_restore(&fs, "7.2.10-arch1-1"),
-            vec![Kernel { pkgbase: "linux".into(), release: "7.2.9-arch1-1".into() }]
+            vec![Kernel {
+                pkgbase: "linux".into(),
+                release: "7.2.9-arch1-1".into()
+            }]
         );
     }
 
@@ -2847,12 +2886,18 @@ mod tests {
         let done = make_root(&paths, &mut r, &plan).unwrap();
         assert_eq!(r.ran, cmds);
         assert!(done.notes[0].starts_with("reboot"));
-        assert!(done.notes[1].contains("btrfs subvolume delete -R /mnt/@.before-rollback-20261009-183012"));
+        assert!(
+            done.notes[1]
+                .contains("btrfs subvolume delete -R /mnt/@.before-rollback-20261009-183012")
+        );
         // recorded: the update after the snapshot is rolled back, so --check stops offering it
         let recs = records(&paths);
         assert!(recs[1].rolled_back && !recs[0].rolled_back);
         let text = fs::read_to_string(log_path(&paths)).unwrap();
-        assert!(text.lines().last().unwrap().contains("\"root\":3"), "{text}");
+        assert!(
+            text.lines().last().unwrap().contains("\"root\":3"),
+            "{text}"
+        );
     }
 
     #[test]
@@ -2880,7 +2925,10 @@ mod tests {
         // the modules, then /boot mounts
         let unmounted = snapshot_boot().with(
             "/proc/self/mountinfo",
-            &SNAP_MOUNTINFO.replace("167 35 254:1 / /boot rw,relatime shared:125 - vfat /dev/vda1 rw,fmask=0022\n", ""),
+            &SNAP_MOUNTINFO.replace(
+                "167 35 254:1 / /boot rw,relatime shared:125 - vfat /dev/vda1 rw,fmask=0022\n",
+                "",
+            ),
         );
         let plan = make_root_plan(&paths, &mut r, &unmounted, &b, "s").unwrap();
         let cmds: Vec<String> = plan.steps.iter().map(|(_, c)| c.join(" ")).collect();
@@ -2892,20 +2940,31 @@ mod tests {
             ]
         );
         // a failure there leaves the rest to type, the top level still mounted for it
-        let mut r2 = FakeRun::default().on_run(&cmds[5], 1, "modprobe: FATAL: Module vfat not found");
+        let mut r2 =
+            FakeRun::default().on_run(&cmds[5], 1, "modprobe: FATAL: Module vfat not found");
         let e = make_root(&paths, &mut r2, &plan).unwrap_err();
-        assert!(e.contains("is the root now") && e.contains("sudo mount /boot; sudo install"), "{e}");
+        assert!(
+            e.contains("is the root now") && e.contains("sudo mount /boot; sudo install"),
+            "{e}"
+        );
         assert!(!r2.ran.iter().any(|c| c.contains("umount")), "{:?}", r2.ran);
         // no preset to rebuild with: said, not done
         let fs = snapshot_boot().without("/etc/mkinitcpio.d/linux.preset");
         let plan = make_root_plan(&paths, &mut r, &fs, &b, "s").unwrap();
         assert_eq!(plan.steps.len(), 7);
-        assert!(plan.notes[0].contains("put the snapshot's kernel into /boot"), "{:?}", plan.notes);
+        assert!(
+            plan.notes[0].contains("put the snapshot's kernel into /boot"),
+            "{:?}",
+            plan.notes
+        );
         // nothing recorded before: one line says what became the root
         make_root(&paths, &mut r, &plan).unwrap();
         let text = fs::read_to_string(log_path(&paths)).unwrap();
         assert_eq!(text.lines().count(), 1);
-        assert!(text.contains("\"root\":3") && text.contains("\"snapshot\":null"), "{text}");
+        assert!(
+            text.contains("\"root\":3") && text.contains("\"snapshot\":null"),
+            "{text}"
+        );
     }
 
     #[test]
@@ -2920,7 +2979,10 @@ mod tests {
         );
         let plan = make_root_plan(&paths, &mut r, &fs, &b, "s").unwrap();
         let e = make_root(&paths, &mut r, &plan).unwrap_err();
-        assert!(e.contains("no space left") && e.contains("@ is back as it was"), "{e}");
+        assert!(
+            e.contains("no space left") && e.contains("@ is back as it was"),
+            "{e}"
+        );
         assert_eq!(
             &r.ran[4..],
             [
@@ -2938,7 +3000,8 @@ mod tests {
         assert!(make_root(&paths, &mut r, &plan).is_err());
         assert_eq!(r.ran.len(), 2);
         // an unmount that fails is the reboot's: the rollback stands
-        let mut r = FakeRun::default().on_run("sudo umount /run/bromigos-rollback", 32, "target is busy");
+        let mut r =
+            FakeRun::default().on_run("sudo umount /run/bromigos-rollback", 32, "target is busy");
         let done = make_root(&paths, &mut r, &plan).unwrap();
         assert!(done.notes.iter().any(|n| n.contains("target is busy")));
     }
@@ -2950,10 +3013,16 @@ mod tests {
         let mut r = FakeRun::default();
         let fs = snapshot_boot().with("/etc/fstab", "UUID=x / btrfs rw,relatime 0 0\n");
         let e = make_root_plan(&paths, &mut r, &fs, &b, "s").unwrap_err();
-        assert!(e.contains("default subvolume") && e.contains("set-default"), "{e}");
+        assert!(
+            e.contains("default subvolume") && e.contains("set-default"),
+            "{e}"
+        );
         let fs = snapshot_boot().with("/etc/fstab", "UUID=x / btrfs rw,subvolid=256 0 0\n");
         let e = make_root_plan(&paths, &mut r, &fs, &b, "s").unwrap_err();
-        assert!(e.contains("subvolid") && e.contains("docs/update.md"), "{e}");
+        assert!(
+            e.contains("subvolid") && e.contains("docs/update.md"),
+            "{e}"
+        );
         // the root subvolume in use: not a snapshot boot after all
         let fs = snapshot_boot().with(
             "/proc/self/mountinfo",
@@ -2968,7 +3037,11 @@ mod tests {
         let mut r = FakeRun::default().answer("findmnt -no FSTYPE /", 0, "overlay\n");
         let e = env_of(&mut r, &snapshot_boot());
         assert_eq!(e.booted.as_ref().map(|b| b.number), Some(3));
-        assert!(e.summary().contains("snapshot 3 from the boot menu"), "{}", e.summary());
+        assert!(
+            e.summary().contains("snapshot 3 from the boot menu"),
+            "{}",
+            e.summary()
+        );
         assert!(!e.needs_setup());
     }
 }
