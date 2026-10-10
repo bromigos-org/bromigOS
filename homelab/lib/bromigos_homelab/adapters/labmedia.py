@@ -11,8 +11,8 @@ the media servers (Jellyfin, Plex). Capability: library. Read-only.
     auth_ref = "@file:~/.local/share/bromigos/sonarr-key"   # its API key (sent as X-Api-Key)
 
     [[source]]
-    type = "jellyfin"                   # or "plex": up and version
-    endpoint = "http://jellyfin.lab:8096"
+    type = "jellyfin"                   # or "plex": up and version, and with a key (auth_ref) the
+    endpoint = "http://jellyfin.lab:8096"   # video libraries the den TV plays (labvideo.py)
 
 Pinchflat, the YouTube downloader (capability youtube-downloader):
 
@@ -38,6 +38,7 @@ import base64
 from ..registry import Unreachable, register
 from ..youtube import parse_feed, parse_opml
 from . import labcommon as L
+from .labvideo import JellyfinVideo, PlexVideo
 
 KINDS = {"sonarr": "tv", "radarr": "movies", "lidarr": "music", "readarr": "books", "prowlarr": "indexers",
          "bazarr": "subtitles", "whisparr": "adult", "jellyfin": "media server", "plex": "media server"}
@@ -191,9 +192,9 @@ class Arr(L.LabAdapter):
 
 
 @register
-class Jellyfin(L.LabAdapter):
+class Jellyfin(JellyfinVideo, L.LabAdapter):
     type = "jellyfin"
-    provides = ("library",)
+    provides = ("library", "video")
     default_ports = (8096,)
 
     def probe(self):
@@ -208,9 +209,9 @@ class Jellyfin(L.LabAdapter):
 
 
 @register
-class Plex(L.LabAdapter):
+class Plex(PlexVideo, L.LabAdapter):
     type = "plex"
-    provides = ("library",)
+    provides = ("library", "video")
     default_ports = (32400,)
 
     def probe(self):

@@ -1,0 +1,604 @@
+{
+ "_about": "Made-up answers in the shapes Jellyfin 10.11 and Plex 1.43 give (no real library). Keys are a path, or a path and the first query parameter that tells requests apart.",
+ "jellyfin": {
+  "/Users": [
+   {
+    "Name": "kid",
+    "Id": "u-kid",
+    "Policy": {
+     "IsAdministrator": false
+    }
+   },
+   {
+    "Name": "admin",
+    "Id": "u-admin",
+    "Policy": {
+     "IsAdministrator": true,
+     "IsDisabled": false
+    }
+   }
+  ],
+  "/Users/u-admin/Views": {
+   "Items": [
+    {
+     "Name": "Shows",
+     "Id": "lib-shows",
+     "CollectionType": "tvshows",
+     "ChildCount": 3
+    },
+    {
+     "Name": "Films",
+     "Id": "lib-films",
+     "CollectionType": "movies",
+     "ChildCount": 1
+    },
+    {
+     "Name": "YouTube",
+     "Id": "lib-yt",
+     "CollectionType": "tvshows",
+     "ChildCount": 1
+    },
+    {
+     "Name": "Music",
+     "Id": "lib-music",
+     "CollectionType": "music"
+    }
+   ]
+  },
+  "/Users/u-admin/Items?IncludeItemTypes=BoxSet": {
+   "Items": [
+    {
+     "Name": "Space shows",
+     "Id": "box1",
+     "ChildCount": 2
+    }
+   ]
+  },
+  "/Users/u-admin/Items?IncludeItemTypes=Playlist": {
+   "Items": [
+    {
+     "Name": "Lo-fi mixes",
+     "Id": "pl1",
+     "ChildCount": 2,
+     "MediaType": "Video"
+    },
+    {
+     "Name": "Road trip",
+     "Id": "pl2",
+     "ChildCount": 9,
+     "MediaType": "Audio"
+    }
+   ]
+  },
+  "/Users/u-admin/Items?ParentId=lib-shows": {
+   "Items": [
+    {
+     "Name": "Episode 1",
+     "Id": "jep2",
+     "Type": "Episode",
+     "SeriesName": "Second Show",
+     "SeriesId": "ser1",
+     "ParentIndexNumber": 1,
+     "IndexNumber": 1,
+     "RunTimeTicks": 13200000000,
+     "ProductionYear": 2001,
+     "DateCreated": "2026-09-30T12:00:00.0000000Z",
+     "ImageTags": {},
+     "MediaSources": [
+      {
+       "Id": "jep2",
+       "Bitrate": 4000000,
+       "RunTimeTicks": 13200000000
+      }
+     ],
+     "UserData": {
+      "PlaybackPositionTicks": 0
+     }
+    },
+    {
+     "Name": "Episode 2",
+     "Id": "jep1",
+     "Type": "Episode",
+     "SeriesName": "First Show",
+     "SeriesId": "ser1",
+     "ParentIndexNumber": 1,
+     "IndexNumber": 2,
+     "RunTimeTicks": 14400000000,
+     "ProductionYear": 2001,
+     "DateCreated": "2026-09-30T12:00:00.0000000Z",
+     "ImageTags": {
+      "Primary": "tag"
+     },
+     "MediaSources": [
+      {
+       "Id": "jep1",
+       "Bitrate": 4000000,
+       "RunTimeTicks": 14400000000
+      }
+     ],
+     "UserData": {
+      "PlaybackPositionTicks": 0
+     }
+    },
+    {
+     "Name": "Episode 1",
+     "Id": "jep0",
+     "Type": "Episode",
+     "SeriesName": "First Show",
+     "SeriesId": "ser1",
+     "ParentIndexNumber": 1,
+     "IndexNumber": 1,
+     "RunTimeTicks": 14400000000,
+     "ProductionYear": 2001,
+     "DateCreated": "2026-09-30T12:00:00.0000000Z",
+     "ImageTags": {},
+     "MediaSources": [
+      {
+       "Id": "jep0",
+       "Bitrate": 4000000,
+       "RunTimeTicks": 14400000000
+      }
+     ],
+     "UserData": {
+      "PlaybackPositionTicks": 0
+     }
+    },
+    {
+     "Name": "Episode 1",
+     "Id": "jep3",
+     "Type": "Episode",
+     "SeriesName": "First Show",
+     "SeriesId": "ser1",
+     "ParentIndexNumber": 2,
+     "IndexNumber": 1,
+     "RunTimeTicks": 30000000000,
+     "ProductionYear": 2001,
+     "DateCreated": "2026-09-30T12:00:00.0000000Z",
+     "ImageTags": {
+      "Primary": "tag"
+     },
+     "MediaSources": [
+      {
+       "Id": "jep3",
+       "Bitrate": 45000000,
+       "RunTimeTicks": 30000000000
+      }
+     ],
+     "UserData": {
+      "PlaybackPositionTicks": 0
+     }
+    },
+    {
+     "Name": "First Show",
+     "Id": "series-x",
+     "Type": "Series"
+    }
+   ]
+  },
+  "/Users/u-admin/Items?ParentId=lib-yt": {
+   "Items": [
+    {
+     "Name": "Episode 314",
+     "Id": "jep5",
+     "Type": "Episode",
+     "SeriesName": "Example Studio",
+     "SeriesId": "yt",
+     "ParentIndexNumber": 2026,
+     "IndexNumber": 314,
+     "RunTimeTicks": 8400000000,
+     "ProductionYear": 2001,
+     "DateCreated": "2026-09-30T12:00:00.0000000Z",
+     "ImageTags": {
+      "Primary": "tag"
+     },
+     "MediaSources": [
+      {
+       "Id": "jep5",
+       "Bitrate": 4000000,
+       "RunTimeTicks": 8400000000
+      }
+     ],
+     "UserData": {
+      "PlaybackPositionTicks": 0
+     }
+    }
+   ]
+  },
+  "/Playlists/pl1/Items?": {
+   "Items": [
+    {
+     "Name": "Mix two",
+     "Id": "mx2",
+     "Type": "Video",
+     "RunTimeTicks": 27000000000,
+     "MediaSources": [
+      {
+       "Bitrate": 900000
+      }
+     ]
+    },
+    {
+     "Name": "Mix one",
+     "Id": "mx1",
+     "Type": "Video",
+     "RunTimeTicks": 36000000000,
+     "MediaSources": [
+      {
+       "Bitrate": 900000
+      }
+     ]
+    }
+   ]
+  },
+  "/Users/u-admin/Items/Resume?": {
+   "Items": [
+    {
+     "Name": "Episode 2",
+     "Id": "jep1",
+     "Type": "Episode",
+     "SeriesName": "First Show",
+     "SeriesId": "ser1",
+     "ParentIndexNumber": 1,
+     "IndexNumber": 2,
+     "RunTimeTicks": 14400000000,
+     "ProductionYear": 2001,
+     "DateCreated": "2026-09-30T12:00:00.0000000Z",
+     "ImageTags": {
+      "Primary": "tag"
+     },
+     "MediaSources": [
+      {
+       "Id": "jep1",
+       "Bitrate": 4000000,
+       "RunTimeTicks": 14400000000
+      }
+     ],
+     "UserData": {
+      "PlaybackPositionTicks": 6100000000
+     }
+    }
+   ]
+  },
+  "/Users/u-admin/Items/Latest?": [
+   {
+    "Name": "Episode 314",
+    "Id": "jep5",
+    "Type": "Episode",
+    "SeriesName": "Example Studio",
+    "SeriesId": "yt",
+    "ParentIndexNumber": 2026,
+    "IndexNumber": 314,
+    "RunTimeTicks": 8400000000,
+    "ProductionYear": 2001,
+    "DateCreated": "2026-09-30T12:00:00.0000000Z",
+    "ImageTags": {
+     "Primary": "tag"
+    },
+    "MediaSources": [
+     {
+      "Id": "jep5",
+      "Bitrate": 4000000,
+      "RunTimeTicks": 8400000000
+     }
+    ],
+    "UserData": {
+     "PlaybackPositionTicks": 0
+    }
+   },
+   {
+    "Name": "A Film",
+    "Id": "film1",
+    "Type": "Movie",
+    "ProductionYear": 1999,
+    "RunTimeTicks": 72000000000,
+    "ImageTags": {
+     "Primary": "t"
+    }
+   }
+  ]
+ },
+ "plex": {
+  "/identity": {
+   "MediaContainer": {
+    "size": 0,
+    "machineIdentifier": "machine0123",
+    "version": "1.43.0"
+   }
+  },
+  "/library/sections": {
+   "MediaContainer": {
+    "Directory": [
+     {
+      "key": "5",
+      "type": "movie",
+      "title": "Movies"
+     },
+     {
+      "key": "6",
+      "type": "show",
+      "title": "TV Shows"
+     },
+     {
+      "key": "4",
+      "type": "artist",
+      "title": "Music"
+     }
+    ]
+   }
+  },
+  "/library/sections/5/collections": {
+   "MediaContainer": {
+    "size": 0
+   }
+  },
+  "/library/sections/6/collections": {
+   "MediaContainer": {
+    "Metadata": [
+     {
+      "ratingKey": "700",
+      "title": "Cartoons",
+      "childCount": 1,
+      "type": "collection"
+     }
+    ]
+   }
+  },
+  "/playlists?playlistType=video": {
+   "MediaContainer": {
+    "Metadata": [
+     {
+      "ratingKey": "800",
+      "title": "Lo-fi mixes",
+      "leafCount": 2,
+      "type": "playlist"
+     }
+    ]
+   }
+  },
+  "/library/sections/6/all?type=4": {
+   "MediaContainer": {
+    "Metadata": [
+     {
+      "ratingKey": "11",
+      "key": "/library/metadata/11",
+      "type": "episode",
+      "title": "Episode 1",
+      "grandparentTitle": "Second Show",
+      "parentIndex": 1,
+      "index": 1,
+      "duration": 1320000,
+      "addedAt": 1790000000,
+      "thumb": "/library/metadata/11/thumb/1",
+      "grandparentThumb": "/library/metadata/900/thumb/1",
+      "Media": [
+       {
+        "id": 11,
+        "duration": 1320000,
+        "bitrate": 4000,
+        "videoCodec": "h264",
+        "Part": [
+         {
+          "id": 11,
+          "key": "/library/parts/11/1700000000/file.mkv",
+          "duration": 1320000
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "ratingKey": "10",
+      "key": "/library/metadata/10",
+      "type": "episode",
+      "title": "Episode 2",
+      "grandparentTitle": "First Show",
+      "parentIndex": 1,
+      "index": 2,
+      "duration": 1440000,
+      "addedAt": 1790000000,
+      "thumb": "/library/metadata/10/thumb/1",
+      "grandparentThumb": "/library/metadata/900/thumb/1",
+      "Media": [
+       {
+        "id": 10,
+        "duration": 1440000,
+        "bitrate": 30000,
+        "videoCodec": "h264",
+        "Part": [
+         {
+          "id": 10,
+          "key": "/library/parts/10/1700000000/file.mkv",
+          "duration": 1440000
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "ratingKey": "9",
+      "key": "/library/metadata/9",
+      "type": "episode",
+      "title": "Episode 1",
+      "grandparentTitle": "First Show",
+      "parentIndex": 1,
+      "index": 1,
+      "duration": 1440000,
+      "addedAt": 1790000000,
+      "thumb": "/library/metadata/9/thumb/1",
+      "grandparentThumb": "/library/metadata/900/thumb/1",
+      "Media": [
+       {
+        "id": 9,
+        "duration": 1440000,
+        "bitrate": 4000,
+        "videoCodec": "h264",
+        "Part": [
+         {
+          "id": 9,
+          "key": "/library/parts/9/1700000000/file.mkv",
+          "duration": 1440000
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "/library/sections/5/all?type=1": {
+   "MediaContainer": {
+    "Metadata": [
+     {
+      "ratingKey": "20",
+      "type": "movie",
+      "title": "A Film",
+      "year": 1999,
+      "duration": 6355605,
+      "thumb": "/t",
+      "Media": [
+       {
+        "bitrate": 903,
+        "Part": [
+         {
+          "key": "/library/parts/20/1/file.mkv"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "/library/collections/700/children": {
+   "MediaContainer": {
+    "Metadata": [
+     {
+      "ratingKey": "901",
+      "type": "show",
+      "title": "Old Toons"
+     }
+    ]
+   }
+  },
+  "/library/metadata/901/allLeaves": {
+   "MediaContainer": {
+    "Metadata": [
+     {
+      "ratingKey": "30",
+      "key": "/library/metadata/30",
+      "type": "episode",
+      "title": "Episode 1",
+      "grandparentTitle": "Old Toons",
+      "parentIndex": 1,
+      "index": 1,
+      "duration": 420000,
+      "addedAt": 1790000000,
+      "thumb": "/library/metadata/30/thumb/1",
+      "grandparentThumb": "/library/metadata/900/thumb/1",
+      "Media": [
+       {
+        "id": 30,
+        "duration": 420000,
+        "bitrate": 4000,
+        "videoCodec": "h264",
+        "Part": [
+         {
+          "id": 30,
+          "key": "/library/parts/30/1700000000/file.mkv",
+          "duration": 420000
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "/playlists/800/items": {
+   "MediaContainer": {
+    "Metadata": [
+     {
+      "ratingKey": "41",
+      "type": "movie",
+      "title": "Mix two",
+      "duration": 2700000,
+      "Media": [
+       {
+        "Part": [
+         {
+          "key": "/p/41"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "ratingKey": "40",
+      "type": "movie",
+      "title": "Mix one",
+      "duration": 3600000,
+      "Media": [
+       {
+        "Part": [
+         {
+          "key": "/p/40"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "/library/onDeck": {
+   "MediaContainer": {
+    "Metadata": [
+     {
+      "ratingKey": "10",
+      "key": "/library/metadata/10",
+      "type": "episode",
+      "title": "Episode 2",
+      "grandparentTitle": "First Show",
+      "parentIndex": 1,
+      "index": 2,
+      "duration": 1440000,
+      "addedAt": 1790000000,
+      "thumb": "/library/metadata/10/thumb/1",
+      "grandparentThumb": "/library/metadata/900/thumb/1",
+      "viewOffset": 108243,
+      "Media": [
+       {
+        "id": 10,
+        "duration": 1440000,
+        "bitrate": 4000,
+        "videoCodec": "h264",
+        "Part": [
+         {
+          "id": 10,
+          "key": "/library/parts/10/1700000000/file.mkv",
+          "duration": 1440000
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "/library/recentlyAdded": {
+   "MediaContainer": {
+    "Metadata": [
+     {
+      "ratingKey": "50",
+      "type": "season",
+      "title": "Season 2",
+      "parentTitle": "First Show",
+      "index": 2,
+      "thumb": "/library/metadata/50/thumb/1",
+      "addedAt": 1790000500
+     }
+    ]
+   }
+  }
+ }
+}

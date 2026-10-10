@@ -66,6 +66,7 @@ SCHEMAS = {
     # Pinchflat: one record for the downloader (kind "downloader": queue, errors, sources, recent),
     # then one per source (kind "channel" | "playlist")
     "youtube-downloader": ("name", "kind", "up", "videos", "newest", "newest_at", "queue", "errors", "state", "link"),
+    "video": ("name", "kind", "id", "title", "count", "media", "server"),
 }
 
 
@@ -235,6 +236,17 @@ energy = _lab("energy", "Home energy: solar production, what the house uses, the
 youtube_downloader = _lab("youtube-downloader", "YouTube downloaders (Pinchflat): sources, newest videos, the "
                                                 "download queue and failed jobs")
 youtube_downloader.__name__ = "youtube_downloader"
+video = _lab("video", "A media server's video libraries, collections and playlists (Jellyfin, Plex): what the den TV plays")
+
+
+def video_source(name=None):
+    """The adapter of a configured video server: the one named, else the first (None without one).
+    Its video_items, video_resume, video_latest, video_stream, video_web and video_poster
+    methods read one server (adapters/labvideo.py)."""
+    provs = registry.providers("video")
+    if name:
+        return next((a for a in provs if a.name == name), None)
+    return provs[0] if provs else None
 
 
 def logs_query(selector=None, since_min=60, limit=200, contains=None, timeout=15):
