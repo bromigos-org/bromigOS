@@ -413,5 +413,50 @@ class FailureTest(unittest.TestCase):
         self.assertGreater(self.tv.retry_at["ch"], self.livetv._mono())
 
 
+class TLSBundleTest(unittest.TestCase):
+    """live/tv.py: mpv trusts the system's roots and the lab's CA together, never the lab's alone
+    (its tls-ca-file replaces the trust store, so YouTube's streams failed verification)."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.dirname(HERE))
+        try:
+            from live import tv as livetv
+        except ImportError as e:
+            self.skipTest(str(e))
+        self.livetv = livetv
+        self.dir = tempfile.mkdtemp()
+        self.sys_ca = os.path.join(self.dir, "system.pem")
+        self.lab_ca = os.path.join(self.dir, "lab.crt")
+        with open(self.sys_ca, "w") as f:
+            f.write("SYSTEM ROOTS\n")
+        with open(self.lab_ca, "w") as f:
+            f.write("LAB CA\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_bundle_has_both(self):
+        out = self.livetv.tls_bundle(self.lab_ca, system=(self.sys_ca,), out_dir=self.dir)
+        self.assertNotEqual(out, self.lab_ca)
+        with open(out) as f:
+            text = f.read()
+        self.assertIn("SYSTEM ROOTS", text)
+        self.assertIn("LAB CA", text)
+
+    def test_no_system_bundle_falls_back_to_the_lab_ca(self):
+        out = self.livetv.tls_bundle(self.lab_ca, system=(os.path.join(self.dir, "none.pem"),), out_dir=self.dir)
+        self.assertEqual(out, self.lab_ca)
+
+    def test_rewritten_when_the_lab_ca_changes(self):
+        out = self.livetv.tls_bundle(self.lab_ca, system=(self.sys_ca,), out_dir=self.dir)
+        later = time.time() + 5
+        with open(self.lab_ca, "w") as f:
+            f.write("NEW LAB CA\n")
+        os.utime(self.lab_ca, (later, later))
+        self.livetv.tls_bundle(self.lab_ca, system=(self.sys_ca,), out_dir=self.dir)
+        with open(out) as f:
+            self.assertIn("NEW LAB CA", f.read())
+
+
 if __name__ == "__main__":
     unittest.main()

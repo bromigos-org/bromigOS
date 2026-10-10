@@ -61,6 +61,33 @@ def _mono():
     return MONO()
 
 
+
+SYSTEM_CAS = ("/etc/ssl/certs/ca-certificates.crt", "/etc/ca-certificates/extracted/tls-ca-bundle.pem",
+              "/etc/ssl/cert.pem")
+
+
+def tls_bundle(extra, system=SYSTEM_CAS, out_dir=None):
+    """A CA bundle of the system's roots and `extra` (a lab's own CA), written once to the
+    runtime dir and rewritten when either changes; `extra` alone when no system bundle is found."""
+    sysf = next((f for f in system if os.path.isfile(f)), None)
+    if not sysf:
+        return extra
+    out_dir = out_dir or os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
+    out = os.path.join(out_dir, "bromigos-tv-ca.pem")
+    try:
+        newest = max(os.path.getmtime(sysf), os.path.getmtime(extra))
+        if os.path.isfile(out) and os.path.getmtime(out) >= newest:
+            return out
+        with open(sysf, "rb") as a, open(extra, "rb") as b:
+            data = a.read().rstrip(b"\n") + b"\n" + b.read()
+        tmp = out + ".tmp"
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, out)
+        return out
+    except OSError:
+        return extra
+
 class TV:
     def __init__(self, cfg, log=print):
         self.cfg = cfg
@@ -331,14 +358,19 @@ class TV:
             return False
 
     def _tls_ca(self):
+        """The CA file for mpv: the system's trusted roots plus the lab's own CA, in one bundle.
+        mpv's tls-ca-file replaces the trust store, so the lab's CA alone would fail every
+        other site (YouTube's streams) with "Peer certificate failed verification"."""
         H = TVL._homelab()
         if H is None:
             return None
         try:
             ca = H.config.expand(H.config.setting("tls", "ca_file", ""))
-            return ca if ca and os.path.isfile(ca) else None
         except Exception:                                       # noqa: BLE001
             return None
+        if not ca or not os.path.isfile(ca):
+            return None
+        return tls_bundle(ca)
 
     def stream(self, ch, slot, full=False):
         """{"url", "headers", "ytdl_format", "title", "start", "web", "kind"} for what's on, or None."""
