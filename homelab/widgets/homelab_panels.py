@@ -26,8 +26,8 @@ Bindings (one per panel):
                                     table: one row per series (columns = label names + "value")
     url = "https://…"               status: up when it answers (expect = 200), with its time
     capability = "<name>"           hosts | workloads | deployments | models | agents | secrets |
-                                    ci | alerts. table: rows (columns = fields, limit); status:
-                                    a light per item (ok_field / ok_values); stat: the count
+                                    ci | alerts | youtube-downloader (Pinchflat). table: rows
+                                    (columns = fields, limit); status: a light per item (ok_field / ok_values); stat: the count
                                     (where = { field = value } filters, for every kind)
 For workloads, select = { namespace = "ai", name = "vllm.*", kind = "pod", state = "running" }.
 Optional: width, height, x, y, visible, decimals, label, limit, interval.
@@ -119,6 +119,14 @@ class DeclaredPanel(Panel):
     category, reads = "homelab", "your homelab's sources"
     min_size = (200, 100)
 
+    @classmethod
+    def available(cls):
+        """A capability panel needs a source that provides it (no network: homelab.toml only)."""
+        cap = (cls.spec or {}).get("capability")
+        if cap and not H.available(cap):
+            return False, f"nothing in homelab.toml provides {cap}"
+        return True
+
     def __init__(self, cfg=None):
         super().__init__(cfg)
         s = self.spec
@@ -180,13 +188,16 @@ class DeclaredPanel(Panel):
                 self.value = 1.0 if ok else 0.0
         elif "capability" in s:
             cap = s["capability"]
-            res = H.workloads(**(s.get("select") or {})) if cap == "workloads" else getattr(H, cap)()
+            res = H.workloads(**(s.get("select") or {})) if cap == "workloads" else \
+                getattr(H, cap.replace("-", "_"))()                 # youtube-downloader -> H.youtube_downloader()
             self._result(res)
             items = _where(res["items"], s.get("where"))
             okf = s.get("ok_field") or {"hosts": "up", "workloads": "state", "deployments": "health", "models": "up",
-                                        "agents": "status", "secrets": "sealed", "alerts": "state", "ci": "conclusion"}.get(cap)
+                                        "agents": "status", "secrets": "sealed", "alerts": "state", "ci": "conclusion",
+                                        "youtube-downloader": "state"}.get(cap)
             okv = s.get("ok_values") or {"workloads": ["running"], "deployments": ["healthy"], "secrets": [False],
-                                         "agents": ["working", "finished"], "alerts": [], "ci": ["success", None]}.get(cap, [True])
+                                         "agents": ["working", "finished"], "alerts": [], "ci": ["success", None],
+                                         "youtube-downloader": ["ok"]}.get(cap, [True])
             with self.lock:
                 self.value = float(len(items))
                 cols = s.get("columns") or ["name", okf]

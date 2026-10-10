@@ -22,6 +22,46 @@ def _count(items, pred):
     return sum(1 for i in items if pred(i))
 
 
+def _yt_state(r):
+    if r.get("kind") == "downloader":
+        return "crit" if r.get("up") is False else "warn" if (r.get("errors") or 0) > 0 else "ok"
+    return r.get("state") if r.get("state") in ("ok", "warn", "crit", "unknown") else "ok"
+
+
+def _yt_hint(r):
+    if r.get("kind") == "downloader":
+        if r.get("up") is False:
+            return f"{r['name']}: DOWN ({r.get('detail') or 'no answer'}). Nothing downloads until it's back."
+        bits = [f"{r['name']}: up", f"{r.get('sources', 0)} sources ({r.get('channels', 0)} channels, "
+                f"{r.get('playlists', 0)} playlists)", f"{r.get('videos') or 0} videos downloaded"]
+        bits.append(f"{r['queue']} waiting to download" if r.get("queue") is not None else
+                    "the queue is unknown (turn on its metrics: ENABLE_PROMETHEUS)")
+        if r.get("errors"):
+            bits.append(f"{r['errors']} failed in the last 30 days (Pinchflat's History page says why)")
+        if r.get("recent"):
+            bits.append("newest: " + "; ".join(f"{i['title']} ({i['source']})" for i in r["recent"][:3]))
+        if r.get("detail"):
+            bits.append(r["detail"])
+        return " · ".join(bits) + (f" · open {r['link']}" if r.get("link") else "")
+    what = {"playlist": "a playlist: its videos keep the playlist's order, and `bromigos lab youtube sync` makes "
+                        "it a playlist in Jellyfin or Plex",
+            "channel": "a channel: one season per year, newest last"}.get(r.get("kind"), "a source")
+    return (f"{r['name']}: {what}. {r.get('videos') if r.get('videos') is not None else '?'} videos" +
+            (f" · newest: {r['newest']} ({(r.get('newest_at') or '?')[:10]})" if r.get("newest") else "") +
+            (f" · {r['detail']}" if r.get("detail") else "") + (f" · on YouTube: {r['link']}" if r.get("link") else ""))
+
+
+def _yt_summary(items):
+    me = [i for i in items if i.get("kind") == "downloader"]
+    src = [i for i in items if i.get("kind") != "downloader"]
+    q = sum(i.get("queue") or 0 for i in me)
+    err = sum(i.get("errors") or 0 for i in me)
+    if me and not any(i.get("up") for i in me):
+        return "Pinchflat is down"
+    return (f"{len(src)} sources · {sum(i.get('videos') or 0 for i in src)} videos · {q} waiting" +
+            (f" · {err} failed" if err else ""))
+
+
 def _backup_state(r):
     age, limit = r.get("age_h"), r.get("max_age_hours") or 30
     if r.get("ok") is False or age is None:
@@ -101,6 +141,12 @@ CARDS = [
          (f" · {r['version']}" if r.get("version") else ""),
          summary=lambda items: f"{_count(items, lambda i: i.get('up'))} of {len(items)} up · "
                                f"{sum(i.get('queue') or 0 for i in items)} downloading"),
+    dict(id="youtube-downloader", title="YouTube downloads", order=136,
+         columns=("name", "kind", "videos", "newest", "queue", "errors"), state=_yt_state,
+         hint="Pinchflat downloads YouTube channels and playlists into your media library, so they play in "
+              "Jellyfin or Plex. The first row is Pinchflat itself: the download queue and failed jobs. Then one "
+              "row per channel or playlist, with its newest video. Read-only.",
+         item_hint=_yt_hint, summary=_yt_summary),
     dict(id="runners", title="CI runners", order=140, columns=("name", "online", "runners", "busy", "queued", "max"),
          hint="Self-hosted GitHub Actions runner pools (Actions Runner Controller): online, runners up, jobs "
               "waiting. Amber: jobs queue on a full pool.",

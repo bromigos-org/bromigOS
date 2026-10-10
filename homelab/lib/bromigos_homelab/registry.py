@@ -38,7 +38,7 @@ ERRORS = []            # (where, "Type: message")
 CAPABILITIES = ("metrics", "hosts", "workloads", "deployments", "models", "agents", "secrets", "ci", "alerts", "voice", "media",
                 # the lab's own services (adapters/lab*.py; docs/homelab.md, "Adapters")
                 "gpus", "logs", "routes", "certs", "ddns", "network", "storage", "apps", "games", "library",
-                "runners", "packages", "backups", "ocr", "energy")
+                "runners", "packages", "backups", "ocr", "energy", "youtube-downloader")
 EXTRAS = {"snapshot", "knowledge"}     # a whole-lab snapshot (lab); a memory/knowledge service (gnosis)
 
 

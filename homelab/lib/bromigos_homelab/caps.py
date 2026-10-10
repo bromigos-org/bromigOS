@@ -63,6 +63,9 @@ SCHEMAS = {
     "ocr": ("name", "endpoint", "up", "model", "via"),
     "energy": ("name", "kind", "production_w", "consumption_w", "net_w", "today_wh", "consumed_today_wh",
                "lifetime_wh", "battery_pct", "battery_w", "inverters", "state"),
+    # Pinchflat: one record for the downloader (kind "downloader": queue, errors, sources, recent),
+    # then one per source (kind "channel" | "playlist")
+    "youtube-downloader": ("name", "kind", "up", "videos", "newest", "newest_at", "queue", "errors", "state", "link"),
 }
 
 
@@ -92,7 +95,7 @@ def collect(cap, method=None, *args, **kw):
     if not provs:
         return res
     res["sources"] = [a.name for a in provs]
-    method = method or cap
+    method = method or cap.replace("-", "_")         # youtube-downloader -> a.youtube_downloader()
 
     def one(a):
         return a, getattr(a, method)(*args, **kw)
@@ -229,6 +232,9 @@ packages = _lab("packages", "Package repository channels: the latest build and i
 backups = _lab("backups", "Backup targets and their last success")
 ocr = _lab("ocr", "OCR services (the `ocr` job kind runs on them)")
 energy = _lab("energy", "Home energy: solar production, what the house uses, the grid and batteries (Enphase)")
+youtube_downloader = _lab("youtube-downloader", "YouTube downloaders (Pinchflat): sources, newest videos, the "
+                                                "download queue and failed jobs")
+youtube_downloader.__name__ = "youtube_downloader"
 
 
 def logs_query(selector=None, since_min=60, limit=200, contains=None, timeout=15):

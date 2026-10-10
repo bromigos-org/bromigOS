@@ -13,8 +13,30 @@ the media servers (Jellyfin, Plex). Capability: library. Read-only.
     [[source]]
     type = "jellyfin"                   # or "plex": up and version
     endpoint = "http://jellyfin.lab:8096"
+
+Pinchflat, the YouTube downloader (capability youtube-downloader):
+
+    [[source]]
+    name = "pinchflat"
+    type = "pinchflat"
+    endpoint = "http://pinchflat.lab:8945"
+    route_token_ref = "@file:~/.local/share/bromigos/pinchflat-route-token"   # the route_token in
+                                        # the OPML link on Pinchflat's Sources page (lists the sources)
+    auth_ref = "@file:~/.local/share/bromigos/pinchflat-basic"   # optional: "user:password" when
+                                        # Pinchflat has BASIC_AUTH_USERNAME and _PASSWORD set
+    metrics = "endpoint"                # where the download queue comes from: "endpoint" (its own
+                                        # /metrics, with ENABLE_PROMETHEUS set), "source" (the lab's
+                                        # metrics source scrapes it) or "none"
+
+Pinchflat has no JSON API. What it does serve, read here: /healthcheck (up), the OPML list
+of sources (names and feeds; needs the route token), each source's podcast feed (its link,
+which says channel or playlist, and its downloaded videos, newest first), and PromEx's
+Prometheus metrics (Oban's job queues: the download queue and failed jobs).
 """
+import base64
+
 from ..registry import Unreachable, register
+from ..youtube import parse_feed, parse_opml
 from . import labcommon as L
 
 KINDS = {"sonarr": "tv", "radarr": "movies", "lidarr": "music", "readarr": "books", "prowlarr": "indexers",
@@ -199,3 +221,146 @@ class Plex(L.LabAdapter):
         d = (self.fetch("/identity", timeout=5, headers={"Accept": "application/json"}) or {}).get("MediaContainer") or {}
         return [{"name": self.name, "kind": "media server", "up": bool(d), "version": d.get("version"),
                  "claimed": d.get("claimed")}]
+
+
+# ------------------------------------------------------------------ Pinchflat (YouTube downloads)
+QUEUE_METRIC = "pinchflat_prom_ex_oban_queue_length_count"
+DOWNLOAD_QUEUE = "media_fetching"            # Pinchflat's Oban queue for downloads
+WAITING = ("available", "scheduled", "executing", "retryable")
+
+
+def queue_from_metrics(rows):
+    """(waiting downloads, failed jobs) from PromEx's Oban queue-length rows. Failed: jobs
+    Oban gave up on ("discarded") in any queue; Pinchflat keeps finished jobs 30 days."""
+    if not rows:
+        return None, None
+    q = sum(r["value"] or 0 for r in rows if (r["labels"].get("queue") == DOWNLOAD_QUEUE
+                                              and r["labels"].get("state") in WAITING))
+    err = sum(r["value"] or 0 for r in rows if r["labels"].get("state") == "discarded")
+    return int(q), int(err)
+
+
+@register
+class Pinchflat(L.LabAdapter):
+    """Pinchflat: its sources (channels and playlists), what each has downloaded, the download
+    queue and failed jobs. One record for Pinchflat itself (kind "downloader"), then one per
+    source. Read-only: every call is a GET."""
+    type = "pinchflat"
+    hints = ("pinchflat",)
+    provides = ("youtube-downloader",)
+    default_ports = (8945,)
+
+    def auth_headers(self):
+        from .. import config
+        cred = config.resolve(self.opts.get("auth_ref") or "")
+        if not cred:
+            return {}
+        return {"Authorization": "Basic " + base64.b64encode(cred.encode()).decode()}
+
+    def probe(self):
+        d = self.request("/healthcheck", timeout=3)
+        return isinstance(d, dict) and d.get("status") == "ok" and self._is_pinchflat()
+
+    def _is_pinchflat(self):
+        try:
+            return b"Pinchflat" in self.request("/", timeout=3, raw=True)
+        except Exception:
+            return False
+
+    def link(self):
+        return self.opts.get("link") or self.endpoint or None
+
+    def route_token(self):
+        from .. import config
+        return config.resolve(self.opts.get("route_token_ref") or "")
+
+    def sources(self):
+        """[{name, feed, uuid}], or None without a route token (the OPML list needs it)."""
+        tok = self.route_token()
+        if not tok:
+            return None
+        from urllib.parse import quote
+        return parse_opml(self.fetch(f"/sources/opml.xml?route_token={quote(tok)}", raw=True, timeout=10))
+
+    def feed(self, src):
+        path = f"/sources/{src['uuid']}/feed.xml" if src.get("uuid") else src["feed"]
+        return parse_feed(self.fetch(path, raw=True, timeout=15))
+
+    def queue(self):
+        """(waiting downloads, failed jobs), or (None, None) when no metrics are to be had."""
+        how = self.opt("metrics", "endpoint")
+        rows = []
+        if how == "endpoint":
+            try:
+                rows = L.rows_of(L.parse_prom(self.fetch("/metrics", raw=True, timeout=6)), QUEUE_METRIC)
+            except Exception:
+                rows = []
+        if not rows and how in ("endpoint", "source"):
+            rows = L.mq_soft(QUEUE_METRIC)
+        return queue_from_metrics(rows)
+
+    def youtube_downloader(self):
+        try:
+            h = self.fetch("/healthcheck", timeout=5)
+        except Exception as e:
+            code = getattr(e, "code", None)
+            return [{"name": self.name, "kind": "downloader", "up": False, "state": "crit", "link": self.link(),
+                     "detail": f"HTTP {code}" if code else "unreachable: " + str(e).split(": ", 1)[-1][:120]}]
+        up = isinstance(h, dict) and h.get("status") == "ok"
+        queue, errors = self.queue()
+        srcs, why = [], ""
+        try:
+            listed = self.sources()
+        except Exception as e:
+            listed, why = [], f"the source list didn't load: {str(e)[:100]}"
+        if listed is None:
+            why = "no route_token_ref: set it to list the sources (the OPML link on Pinchflat's Sources page)"
+        recent = []
+        for s in listed or []:
+            rec = {"name": s["name"], "kind": None, "up": True, "videos": None, "newest": None, "newest_at": None,
+                   "queue": None, "errors": None, "link": None, "state": "ok", "uuid": s.get("uuid")}
+            try:
+                f = self.feed(s)
+                newest = f["items"][0] if f["items"] else None
+                rec.update(kind=f["kind"], videos=len(f["items"]), link=f["link"] or None,
+                           newest=newest and newest["title"], newest_at=L.iso(newest and newest["at"]))
+                recent += [dict(i, source=s["name"]) for i in f["items"][:5]]
+            except Exception as e:
+                rec.update(state="unknown", detail=f"its feed didn't load: {str(e)[:100]}")
+            srcs.append(rec)
+        recent.sort(key=lambda i: i.get("at") or 0, reverse=True)
+        state = "crit" if not up else "warn" if (errors or 0) > 0 else "ok"
+        me = {"name": self.name, "kind": "downloader", "up": up, "videos": sum(r["videos"] or 0 for r in srcs) if srcs else None,
+              "newest": recent[0]["title"] if recent else None, "newest_at": L.iso(recent[0]["at"]) if recent else None,
+              "queue": queue, "errors": errors, "link": self.link(), "state": state,
+              "sources": len(srcs), "playlists": sum(1 for r in srcs if r["kind"] == "playlist"),
+              "channels": sum(1 for r in srcs if r["kind"] == "channel"),
+              "recent": [{"title": i["title"], "source": i["source"], "at": L.iso(i["at"])} for i in recent[:8]]}
+        if why:
+            me["detail"] = why
+        return [me] + sorted(srcs, key=lambda r: r["name"].lower())
+
+    def doctor(self):
+        recs = self.youtube_downloader()
+        me = recs[0]
+        title = f"{self.name} (YouTube downloads)"
+        if not me["up"]:
+            return [self.finding(f"youtube.{self.name}", title, "fail", me.get("detail") or "down",
+                                 "Pinchflat doesn't answer its health check. Look at its container's logs; if it "
+                                 "moved, fix its endpoint in homelab.toml.", check="youtube")]
+        out = []
+        if me.get("errors"):
+            out.append(self.finding(f"youtube.{self.name}.failed", title, "warn",
+                                    f"{me['errors']} job(s) failed in the last 30 days",
+                                    "Open Pinchflat's History page to see why. A run of failures often means "
+                                    "yt-dlp needs an update: Pinchflat updates it daily, or restart it.",
+                                    check="youtube"))
+        if me.get("detail"):
+            out.append(self.finding(f"youtube.{self.name}.sources", title, "warn", me["detail"],
+                                    "Copy the OPML link from Pinchflat's Sources page; its route_token value goes "
+                                    "in a file that route_token_ref names.", check="youtube"))
+        if not out:
+            out.append(self.finding(f"youtube.{self.name}", title, "ok",
+                                    f"{me['sources']} sources · {me.get('videos') or 0} videos · "
+                                    f"{me['queue'] if me['queue'] is not None else '?'} waiting", check="youtube"))
+        return out

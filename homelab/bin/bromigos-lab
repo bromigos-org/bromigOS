@@ -32,6 +32,10 @@
   bromigos lab doctor [--json] [--check ID]
                                     checks with fixes in plain words: DNS, TLS, GPUs, disks
                                     and NAS, backups, GitOps drift, expiring tokens, targets
+  bromigos lab youtube [status]     the YouTube downloads card: Pinchflat's sources, newest videos, queue
+  bromigos lab youtube sync [--dry-run] [--server jellyfin|plex] [--json]
+                                    turn Pinchflat's downloaded YouTube playlists into ordered
+                                    playlists in Jellyfin and Plex (idempotent; docs/homelab.md)
   bromigos lab connect [ARGS]       = bromigos setup homelab [ARGS]: find services, write homelab.toml
   bromigos lab target [ARGS]        = bromigos target [ARGS]: where AI runs
   bromigos lab deploy|restart|logs|backups|power|provision
@@ -385,6 +389,11 @@ def main(argv):
         return Q.Service().serve()
     if cmd in ("dashboard", "tui"):
         return tui()
+    if cmd == "youtube":                                         # youtube.py: Pinchflat's playlists
+        if not rest or rest[0] == "status":
+            return cmd_status(argparse.Namespace(json="--json" in rest, card="youtube-downloader"))
+        from bromigos_homelab import youtube
+        return youtube.main(rest)
     p = argparse.ArgumentParser(prog=f"bromigos lab {cmd}")
     p.add_argument("--json", action="store_true")
     if cmd == "status":
