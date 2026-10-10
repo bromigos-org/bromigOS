@@ -796,15 +796,7 @@ class Editor:
         chips.set_min_children_per_line(4)
         chips.set_column_spacing(4)
         chips.set_row_spacing(4)
-        self.chips = {}
-        for cat, title in [(None, "All")] + [(c, G.CATEGORY_NAMES[c].split(" ")[0]) for c in G.CATEGORIES]:
-            t = Gtk.ToggleButton(label=title)
-            t.get_style_context().add_class("chip")
-            t.set_active(cat is None)
-            t.set_tooltip_text("Every widget" if cat is None else f"Only {G.CATEGORY_NAMES[cat].lower()} widgets")
-            t.connect("toggled", self.chip_toggled, cat)
-            self.chips[cat] = t
-            chips.add(t)
+        self.chipbox, self.chips, self.chip_ids = chips, {}, None
         self.body.pack_start(chips, False, False, 0)
         self.monitor_combo = None
         mons = self.app.monitors()
@@ -919,6 +911,30 @@ class Editor:
         self.query = text.strip().lower()
         self.fill_cards()
 
+    def build_chips(self, items):
+        """The category buttons from what the widgets declare (gallery.category_buttons, as
+        Customize and Settings have them); built again when a widget brings a new one."""
+        buttons = G.category_buttons(items)
+        ids = [b[0] for b in buttons]
+        if ids == self.chip_ids:
+            return
+        self.chip_ids = ids
+        for c in self.chipbox.get_children():
+            self.chipbox.remove(c)
+        self.chips = {}
+        if self.category not in ids:
+            self.category = None
+        for cid, label, hint in buttons:
+            cat = None if cid == "all" else cid
+            t = Gtk.ToggleButton(label=label)
+            t.get_style_context().add_class("chip")
+            t.set_active(cat == self.category)
+            t.set_tooltip_text(hint if cat is None else f"Only these: {hint[0].lower()}{hint[1:]}")
+            t.connect("toggled", self.chip_toggled, cat)
+            self.chips[cat] = t
+            self.chipbox.add(t)
+        self.chipbox.show_all()
+
     def chip_toggled(self, btn, cat):
         if getattr(self, "_chipping", False):
             return
@@ -957,7 +973,9 @@ class Editor:
         for c in self.list.get_children():
             self.list.remove(c)
         self.cards = {}
-        items = [e for e in self.items() if self.matches(e) and G.addable(e)]
+        every = self.items()
+        self.build_chips([e for e in every if G.addable(e)])
+        items = [e for e in every if self.matches(e) and G.addable(e)]
         sections = [("ON YOUR DESKTOP", [e for e in items if e["visible"]]),
                     ("BUILT IN", [e for e in items if not e["visible"] and e["source"] in ("bromigos", "homelab")]),
                     ("INSTALLED EXTENSIONS", [e for e in items if not e["visible"] and e["source"] == "extension"]),

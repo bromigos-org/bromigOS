@@ -5,6 +5,9 @@ set|unset NAME KEY … --json` (each change toasts Undo); sign-ins go through
 lib/bromigos_account.py, which keeps tokens in the keyring and never shows them.
 
     WidgetForm(ctx, entry, done=None).present()     entry: a `bromigos panels gallery` widget
+
+category_buttons() is the galleries' category buttons, shared by Settings › Widgets and
+Customize's Widgets tab.
 """
 import os
 import threading
@@ -13,6 +16,19 @@ import time
 from gi.repository import Adw, GLib, Gtk
 
 CMD = ["bromigos", "panels"]
+
+
+def category_buttons(cats):
+    """The category buttons, [(id, label, hint)] with All first, from the "categories" that
+    `bromigos panels gallery` gives (widgets/gallery.py's categories(), which edit mode's
+    tray uses itself): Customize's Widgets tab and Settings › Widgets draw these."""
+    out = [("all", "All", "Every widget")]
+    for c in cats or []:
+        if isinstance(c, dict) and c.get("id"):
+            title = str(c.get("title") or c["id"])
+            out.append((c["id"], str(c.get("label") or title.split(" ")[0]),
+                        str(c.get("hint") or f"The {title.lower()} widgets")))
+    return out
 
 
 def home(path):

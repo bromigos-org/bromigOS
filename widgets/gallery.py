@@ -35,6 +35,10 @@ import widget_settings as WS  # noqa: E402
 CATEGORIES = ("system", "network", "homelab", "media", "notes", "fun")
 CATEGORY_NAMES = {"system": "System", "network": "Network", "homelab": "Homelab", "media": "Media",
                   "notes": "Notes and work", "fun": "Fun and extras"}
+# what each of bromigOS's categories holds (a category button's hint)
+CATEGORY_HINTS = {"system": "This machine: CPU, memory, disks, keys", "network": "Traffic, Wi-Fi, connections",
+                  "homelab": "Your servers", "media": "Music and video", "notes": "Notes and your work",
+                  "fun": "Weather and other extras"}
 # FIELD NOTES isn't a Panel (it's a text box): its words, here
 NOTES = {"title": "FIELD NOTES", "description": "A notepad on your desktop that saves as you type",
          "category": "notes", "reads": "your notes file", "min_size": (280, 160), "max_size": (1200, 1200),
@@ -193,11 +197,28 @@ def with_values(e, doc):
 
 
 def categories(items):
-    """The categories the widgets declare, bromigOS's in their order first, then any other
-    a widget names: [{"id", "title"}]."""
-    have = {it["category"] for it in items}
-    order = [c for c in CATEGORIES if c in have] + sorted(have - set(CATEGORIES))
-    return [{"id": c, "title": CATEGORY_NAMES.get(c, c.replace("-", " ").title())} for c in order]
+    """The category buttons every gallery shows (edit mode's tray, Customize's Widgets tab,
+    Settings › Widgets), from the categories the widgets declare: bromigOS's in their
+    order first, then any other a widget names. [{"id", "title", "label", "hint", "count"}]:
+    label is the button's word, hint what it holds and how many widgets are in it. The
+    galleries add "All" before them."""
+    have = {}
+    for it in items:
+        have[it["category"]] = have.get(it["category"], 0) + 1
+    order = [c for c in CATEGORIES if c in have] + sorted(set(have) - set(CATEGORIES))
+    out = []
+    for c in order:
+        title = CATEGORY_NAMES.get(c, c.replace("-", " ").replace("_", " ").title())
+        n = have[c]
+        what = CATEGORY_HINTS.get(c) or f"Widgets that call themselves {title.lower()}"
+        out.append({"id": c, "title": title, "label": title.split(" ")[0], "count": n,
+                    "hint": f"{what} ({n} widget{'s' if n != 1 else ''})"})
+    return out
+
+
+def category_buttons(items):
+    """categories() as the buttons to draw: [(id, label, hint)], "All" first."""
+    return [("all", "All", "Every widget")] + [(c["id"], c["label"], c["hint"]) for c in categories(items)]
 
 
 def addable(e):
@@ -346,7 +367,7 @@ def main(argv):
         got = render_previews(items, previews)
         for it in items:
             it["preview"] = got.get(it["name"])
-    print(json.dumps({"widgets": items, "categories": categories(items)}))
+    print(json.dumps({"widgets": items, "categories": categories([it for it in items if addable(it)])}))
     return 0
 
 

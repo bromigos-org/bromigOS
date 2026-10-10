@@ -544,7 +544,8 @@ def gallery_cmd(args):
         it["key"] = (ABOUT.get(it["name"]) or (None, None, None))[2]
         if previews:
             it["preview"] = got.get(it["name"])
-    return {"widgets": items, "categories": [{"id": c, "title": gallery.CATEGORY_NAMES[c]} for c in gallery.CATEGORIES],
+    # the category buttons, from what the widgets the gallery offers declare (gallery.categories)
+    return {"widgets": items, "categories": gallery.categories([it for it in items if gallery.addable(it)]),
             "running": running(), "user_file": user_layout()}
 
 

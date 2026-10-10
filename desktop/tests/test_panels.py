@@ -148,13 +148,29 @@ class PanelsTest(CmdTest):
             self.assertIn(n, names)
         for w in d["widgets"]:
             self.assertTrue(w["description"], w["name"])
-            self.assertIn(w["category"], [c["id"] for c in d["categories"]])
+            if w.get("available", True) or w["visible"]:                     # one the gallery offers
+                self.assertIn(w["category"], [c["id"] for c in d["categories"]])
             self.assertTrue(w["author"])
             self.assertLessEqual(w["min_size"][0], w["max_size"][0])
         system = next(w for w in d["widgets"] if w["name"] == "system")
         self.assertEqual((system["source"], system["author"], system["key"]), ("bromigos", "bromigOS", "SUPER + S"))
         self.assertFalse(next(w for w in d["widgets"] if w["name"] == "weather")["visible"])
 
+    def test_gallery_categories_are_what_the_widgets_declare(self):
+        # a widget of your own in a category bromigOS doesn't have: it gets a button too
+        plug = self.path(".config", "bromigos", "plugins", "widgets")
+        os.makedirs(plug)
+        with open(os.path.join(plug, "tide_watch.py"), "w") as f:
+            f.write("from panels import Panel\n\n\nclass Tide(Panel):\n    name, title = 'tide_watch', 'TIDE'\n"
+                    "    description = 'The tides'\n    category = 'harbour-life'\n\n\nPANEL = Tide\n")
+        d = self.cmd("panels", "gallery")
+        cats = {c["id"]: c for c in d["categories"]}
+        offered = {w["category"] for w in d["widgets"] if w.get("available", True) or w["visible"]}
+        self.assertEqual(set(cats), offered)
+        self.assertEqual((cats["harbour-life"]["label"], cats["harbour-life"]["count"]), ("Harbour", 1))
+        self.assertIn("(1 widget)", cats["harbour-life"]["hint"])
+        self.assertEqual(list(cats)[0], "system")                             # bromigOS's own order first
+        self.assertEqual(list(cats)[-1], "harbour-life")
     def test_a_plugin_panel_switches_on_and_off(self):
         plug = self.path(".config", "bromigos", "plugins", "widgets")
         os.makedirs(plug)

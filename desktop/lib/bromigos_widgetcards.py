@@ -18,8 +18,6 @@ import subprocess
 
 from bromigos_themecards import rgba
 
-CATEGORIES = [("all", "All"), ("system", "System"), ("network", "Network"), ("homelab", "Homelab"),
-              ("media", "Media"), ("notes", "Notes"), ("fun", "Fun")]
 CODE = {"live-deck", "widget", "vector-tool", "vector-memory", "homelab-adapter", "command", "hook"}
 SECTIONS = [("desktop", "ON YOUR DESKTOP", "The widgets on your desktop now"),
             ("builtin", "BUILT IN", "bromigOS's widgets that are off"),
@@ -165,7 +163,7 @@ class WidgetsTab:
         self.chipbox.set_tooltip_text("Only one category of widget, by each widget's own category")
         self.chips = {}
         tool.append(self.chipbox)
-        self.build_chips([{"id": c, "title": t} for c, t in CATEGORIES[1:]])
+        self.build_chips([])                           # All, until the gallery says which there are
         tool.append(Gtk.Box(hexpand=True))
         tool.append(self.ctx.button("Arrange on the desktop", self.arrange,
                                     "Closes this and starts edit mode: drag the panels, resize them by a corner "
@@ -195,15 +193,15 @@ class WidgetsTab:
             c = n
         self.chips = {}
         group = None
-        for cid, label in [("all", "All")] + [(x["id"], x["title"].split(" ")[0]) for x in cats]:
+        from bromigos_settings.widgetform import category_buttons
+        for cid, label, hint in category_buttons(cats):
             t = Gtk.ToggleButton(label=label)
             if group is None:
                 group = t
             else:
                 t.set_group(group)
             t.set_active(cid == self.category)
-            t.set_tooltip_text("Every widget" if cid == "all" else f"Only the {label.lower()} widgets, by each "
-                                                                   "widget's own category")
+            t.set_tooltip_text(hint if cid == "all" else f"Only these: {hint[0].lower()}{hint[1:]}")
             t.connect("toggled", lambda b, c=cid: b.get_active() and self.set_category(c))
             self.chips[cid] = t
             self.chipbox.append(t)

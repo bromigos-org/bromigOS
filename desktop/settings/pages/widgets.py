@@ -16,10 +16,6 @@ from bromigos_settings import Entry, Page
 
 CMD = ["bromigos", "panels"]
 EXT = ["bromigos", "ext"]
-CATEGORIES = [("all", "All", "Every widget"), ("system", "System", "This machine: CPU, memory, disks, keys"),
-              ("network", "Network", "Traffic, Wi-Fi, connections"), ("homelab", "Homelab", "Your servers"),
-              ("media", "Media", "Music and video"), ("notes", "Notes", "Notes and your work"),
-              ("fun", "Fun", "Weather and other extras")]
 CODE_KINDS = {"live-deck", "widget", "vector-tool", "vector-memory", "homelab-adapter", "command", "hook"}
 GALLERY_SECTIONS = [("desktop", "On your desktop", "The widgets on your desktop now. Switch one off, or arrange them on the "
                                             "desktop with Edit on the desktop."),
@@ -49,8 +45,9 @@ def repo_link(e):
     return url or None
 
 
-def category_of(tags):
-    return next((t for t in tags or [] if t in dict((c[0], 1) for c in CATEGORIES[1:])), "fun")
+def category_of(tags, ids=("system", "network", "homelab", "media", "notes", "fun")):
+    """A catalog widget's category: the first of its tags that's a category button's."""
+    return next((t for t in tags or [] if t in ids), "fun")
 
 
 class WidgetsPage:
@@ -116,6 +113,7 @@ class WidgetsPage:
             if w.get("preview"):
                 self.previews[w["name"]] = w["preview"]
         self.gallery = doc
+        self.build_chips(doc.get("categories") or [])
         self.ctx.clear_group(self.g_gallery, self.rows["gallery"])
         self.fill_gallery()
 
@@ -252,10 +250,29 @@ class WidgetsPage:
                               "who made them")
         self.search.connect("search-changed", lambda e: self._filter(query=e.get_text()))
         box.append(self.search)
-        self.chips = ctx.toggle_group(CATEGORIES, current="all", on_select=lambda c: self._filter(category=c),
-                                      hint="Only one category of widget: from each widget's own category")
-        box.append(self.chips)
+        self.chipslot = Gtk.Box()                      # the category buttons, once the gallery is read
+        self.chips, self.chip_ids = None, None
+        box.append(self.chipslot)
+        self.build_chips([])
         self.g_gallery.add(box)
+
+    def build_chips(self, cats):
+        """The category buttons from what the widgets declare, as Customize has them
+        (widgetform.category_buttons); "All" until the gallery's been read."""
+        from bromigos_settings.widgetform import category_buttons
+        buttons = category_buttons(cats)
+        ids = [b[0] for b in buttons]
+        if ids == self.chip_ids:
+            return
+        self.chip_ids = ids
+        if self.category not in ids:
+            self.category = "all"
+        if self.chips is not None:
+            self.chipslot.remove(self.chips)
+        self.chips = self.ctx.toggle_group(buttons, current=self.category,
+                                           on_select=lambda c: self._filter(category=c),
+                                           hint="Only one category of widget: from each widget's own category")
+        self.chipslot.append(self.chips)
 
     def _filter(self, query=None, category=None):
         if query is not None:
@@ -377,7 +394,7 @@ class WidgetsPage:
         n = 0
         for e in c.get("results") or []:
             title = e.get("display_name") or e["name"]
-            cat = category_of(e.get("tags"))
+            cat = category_of(e.get("tags"), self.chip_ids or ())
             authors = ", ".join(a.split(" <")[0] for a in e.get("authors") or []) or "an unnamed author"
             if not self.matches(cat, e["name"], title, e.get("description"), authors, " ".join(e.get("tags") or [])):
                 continue

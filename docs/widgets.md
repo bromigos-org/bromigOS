@@ -144,8 +144,10 @@ are:
 Each card shows a picture of the panel, its name, what it shows, who made it and what it
 reads. It has an on/off switch, **Add to desktop**, and **Settings…** for a panel with
 settings of its own, such as the weather's place. Search finds a panel by any of those
-words, and the category buttons narrow the list: System, Network, Homelab, Media, Notes
-and Fun.
+words, and the category buttons narrow the list. There's a button for each category the
+widgets declare: bromigOS's System, Network, Homelab, Media, Notes and Fun when a widget is
+in them, then any other a widget names. Each button's hint says how many widgets it holds.
+`gallery.categories()` in `widgets/gallery.py` makes the list for all three galleries.
 
 **Install from URL** installs a widget from any git repository, or a folder on this
 machine. It shows the widget's name, its maker and licence, what it reads, whether it runs
