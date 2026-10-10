@@ -40,7 +40,7 @@ RUNNABLE = BROMIGOS + ["YOURS", "LAUNCH", "CAPTURE"]
 
 KEYNAMES = {
     "RETURN": "ENTER", "ESCAPE": "ESC", "LEFT": "←", "RIGHT": "→", "UP": "↑", "DOWN": "↓",
-    "SLASH": "/", "SPACE": "SPACE", "TAB": "TAB", "COMMA": ",",
+    "SLASH": "/", "SPACE": "SPACE", "TAB": "TAB", "COMMA": ",", "PERIOD": ".",
     "MOUSE:272": "LMB DRAG", "MOUSE:273": "RMB DRAG",
     "XF86AUDIOMUTE": "MUTE", "XF86AUDIOLOWERVOLUME": "VOL−", "XF86AUDIORAISEVOLUME": "VOL+",
     "XF86AUDIOMICMUTE": "MIC", "XF86MONBRIGHTNESSUP": "BRI+", "XF86MONBRIGHTNESSDOWN": "BRI−",
@@ -87,6 +87,10 @@ EXEC = [
     (r"bromigos-live\b.*scan-pin", "Scanner: pin hardware schematic", "LIVE LAYER"),
     (r"bromigos-live\b.*scan-hold", "Scanner: hold to scan", "LIVE LAYER"),
     (r"bromigos-live\b.*codec-quiet", "Codec calls: voice on/off", "LIVE LAYER"),
+    (r"bromigos-live\b.*tv open", "Den TV: full screen with sound", "LIVE LAYER"),
+    (r"bromigos-live\b.*tv next", "Den TV: next channel", "LIVE LAYER"),
+    (r"bromigos-live\b.*tv prev", "Den TV: previous channel", "LIVE LAYER"),
+    (r"bromigos-live\b.*tv sound", "Den TV: sound on/off", "LIVE LAYER"),
     (r"^bromigos mute\b", "Mute everything: the theme's sounds and VECTOR's voice", "LIVE LAYER"),
     (r"bromigos-live\b.*mute", "Live layer sounds on/off", "LIVE LAYER"),
     (r"bromigos-live\b.*toggle", "Live background on/off", "LIVE LAYER"),
