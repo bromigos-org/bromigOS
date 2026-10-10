@@ -12,7 +12,22 @@ os.environ.setdefault("XDG_CONFIG_HOME", tempfile.mkdtemp())       # no user's w
 import demo  # noqa: E402,F401  (made-up readings: never this machine's)
 import cairo  # noqa: E402
 
+import keybinds  # noqa: E402
 import panels as P  # noqa: E402
+
+# SHORTCUTS reads the binds from Hyprland or the user's config; a clean home (a package
+# build) has none, and then its size classes would draw alike. A fixed set instead.
+_BINDS = [(sec, keys, desc, None) for sec, rows in (
+    ("VECTOR", [(["SUPER", "E"], "Show / minimize"), (["SUPER", "V"], "Hold to talk"),
+                (["SUPER", "ALT", "V"], "Chat box shown/hidden")]),
+    ("PANELS + NOTES", [(["SUPER", "W"], "All desktop panels"), (["SUPER", "ALT", "W"], "Edit widgets"),
+                        (["SUPER", "S"], "System panel"), (["ALT", "N"], "Type in field notes")]),
+    ("HOLOGRAMS", [(["SUPER", "H"], "Holo deck (this machine)"), (["SUPER", "T"], "Timeline")]),
+    ("LAUNCH", [(["SUPER", "SPACE"], "Desktop menu"), (["SUPER", "COMMA"], "Settings")]),
+    ("WINDOWS", [(["ALT", "C"], "Close window"), (["ALT", "F"], "Maximize"), (["ALT", "TAB"], "Window switcher")]))
+    for keys, desc in rows]
+keybinds.shortcuts = lambda: list(_BINDS)
+keybinds.config_mtime = lambda: 1
 
 
 def draw(panel, w, h):
