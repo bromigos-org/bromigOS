@@ -803,8 +803,10 @@ class App:
         GLib.idle_add(self.redraw_panel, panel)
 
     def redraw_panel(self, panel):
+        import plugins as PL
         for w in self.windows.values():
-            if getattr(w, "panel", None) is panel and w.visible() and (self.editor or not self.coverage.covered):
+            if PL.same_panel(getattr(w, "panel", None), panel) and w.visible() and \
+                    (self.editor or not self.coverage.covered):
                 w.redraw()
         return False
 

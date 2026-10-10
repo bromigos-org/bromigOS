@@ -242,6 +242,12 @@ def free_spot(w, h, taken, area, avoid=()):
     return None
 
 
+def same_panel(shown, panel):
+    """Whether a window's panel is `panel`: itself, or a plugin's SafePanel around it (a
+    plugin's wake() hands over its own instance, not the wrapper)."""
+    return shown is panel or (shown is not None and getattr(shown, "inner", None) is panel)
+
+
 def make(cls, spec, wake=None):
     """A panel instance: with the host's wake hook when its constructor takes one (a panel that
     animates when its data lands, like LAB), else plain."""
