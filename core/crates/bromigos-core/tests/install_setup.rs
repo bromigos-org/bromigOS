@@ -684,3 +684,26 @@ fn an_answers_file_takes_an_accessibility_section() {
     fs::write(&p, "[accessibility]\nmotions = \"reduced\"\n").unwrap();
     assert!(setup::load_answers(&p).is_err());
 }
+
+#[test]
+fn answers_install_an_extension_in_a_folder_of_its_repository() {
+    // [extensions] install takes a source, or a table with the folder and the ref
+    let a: bromigos_core::setup::ExtensionsAnswer = toml::from_str(
+        "install = [\"hello-deck\", { source = \"https://example.org/x.git\", path = \"examples/moon\", ref = \"v1\" }]\n\
+         approve = true\n",
+    )
+    .unwrap();
+    assert!(a.approve);
+    let (src, opts) = a.install[0].parts();
+    assert_eq!(
+        (src.as_str(), opts.path, opts.git_ref),
+        ("hello-deck", None, None)
+    );
+    let (src, opts) = a.install[1].parts();
+    assert_eq!(src, "https://example.org/x.git");
+    assert_eq!(opts.path.as_deref(), Some("examples/moon"));
+    assert_eq!(opts.git_ref.as_deref(), Some("v1"));
+    let bad: Result<bromigos_core::setup::ExtensionsAnswer, _> =
+        toml::from_str("install = [{ path = \"x\" }]\n");
+    assert!(bad.is_err());
+}

@@ -118,9 +118,10 @@ pub struct AccessibilityAnswer {
 #[serde(deny_unknown_fields)]
 pub struct ExtensionsAnswer {
     /// Sources as `bromigos ext install` takes them: a git URL (with @tag to pin it), a
-    /// folder, a catalog name.
+    /// folder, a catalog name; or a table, `{ source = "…", path = "…", ref = "…" }`, for
+    /// an extension in a folder inside its repository.
     #[serde(default)]
-    pub install: Vec<String>,
+    pub install: Vec<InstallItem>,
     /// Approve the ones that run code or reach VECTOR. The ledger records that this file
     /// approved them (its path and sha256), and the extensions' log has a line each.
     /// Without it they are refused; themes install either way.
@@ -129,6 +130,47 @@ pub struct ExtensionsAnswer {
     /// The answers file these came from (set when it's read).
     #[serde(skip)]
     pub from: String,
+}
+
+/// One `[extensions] install` entry: a source, or a source with its folder and ref.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(untagged)]
+pub enum InstallItem {
+    Source(String),
+    Table {
+        source: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        path: Option<String>,
+        #[serde(default, rename = "ref", skip_serializing_if = "Option::is_none")]
+        git_ref: Option<String>,
+    },
+}
+
+impl InstallItem {
+    /// (the source, `bromigos ext install`'s options for it).
+    pub fn parts(&self) -> (String, crate::ext::InstallOpts) {
+        match self {
+            InstallItem::Source(s) => (s.clone(), crate::ext::InstallOpts::default()),
+            InstallItem::Table {
+                source,
+                path,
+                git_ref,
+            } => (
+                source.clone(),
+                crate::ext::InstallOpts {
+                    path: path.clone(),
+                    git_ref: git_ref.clone(),
+                    ..Default::default()
+                },
+            ),
+        }
+    }
+}
+
+impl From<&str> for InstallItem {
+    fn from(s: &str) -> Self {
+        InstallItem::Source(s.to_owned())
+    }
 }
 
 /// Where AI work runs (targets.toml).
@@ -1193,13 +1235,14 @@ pub fn load_answers(p: &Path) -> Result<Answers, String> {
 /// ones that run code approved by this file only when it says `approve = true`.
 pub fn apply_extensions(paths: &Paths, a: &ExtensionsAnswer) -> Applied {
     let (mut done, mut failed) = (vec![], vec![]);
-    for src in &a.install {
+    for item in &a.install {
+        let (src, opts) = item.parts();
         let from = if a.from.is_empty() {
             "setup answers".to_owned()
         } else {
             a.from.clone()
         };
-        let r = crate::ext::install(paths, src, &crate::ext::InstallOpts::default(), &mut |_| {
+        let r = crate::ext::install(paths, &src, &opts, &mut |_| {
             a.approve
                 .then(|| crate::ext::Approval::Answers(from.clone()))
         });
