@@ -328,7 +328,9 @@ class Account:
         return self.A.PROVIDERS[self.provider]["title"]
 
     def draw_signin(self, cr, w, h, top, what):
-        """The signed-out state: what's needed, a sign-in button, or the code to enter."""
+        """The signed-out state: what's needed, a sign-in button, or the code to enter.
+        what: a sentence saying what the panel reads ("The Twitch panel reads your channel
+        and who you follow"); it opens both the not-set-up and the signed-out words."""
         p = self.panel
         st = self.status()
         t = self.title()
@@ -352,13 +354,13 @@ class Account:
         if st.get("needs"):
             prov = A.PROVIDERS[self.provider]
             p.empty(cr, w, h, top, f"{t.upper()} ISN'T SET UP",
-                    f"{what} needs your own {t} app's client ID. {prov['app_help']} Then run: "
+                    f"{what.rstrip('.')}. It needs your own {t} app's client ID. {prov['app_help']} Then run: "
                     f"bromigos account configure {self.provider} client_id=YOUR_ID",
                     tip=f"{t} sign-in needs a client ID in {home_path(A.accounts_path())}. {prov['app_help']}")
             return
         err = s.error if s.state == "error" else st.get("error")
         p.empty(cr, w, h, top, f"NOT SIGNED IN TO {t.upper()}",
-                (f"Last try: {err}. " if err else "") + f"{what}. Sign in once; the token stays in your keyring.",
+                (f"Last try: {err}. " if err else "") + f"{what.rstrip('.')}. Sign in once; the token stays in your keyring.",
                 button=("Sign in", f"Sign in to {t}: a code to enter on {t}'s site (or a browser page), "
                         "then the token is kept in your login keyring", self.signin.start))
 

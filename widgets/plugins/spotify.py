@@ -254,7 +254,7 @@ class SpotifyPanel(K.KitPanel):
                     + (". The Spotify app on this computer takes the clicks (MPRIS)" if self.mpris else "")
                     + ". Now playing (the NOW PLAYING panel) covers any media player.")
         if self.acct and not st.get("signed_in"):
-            self.acct.draw_signin(cr, w, h, top, "This panel")
+            self.acct.draw_signin(cr, w, h, top, "The Spotify panel reads what your account plays, its queue and recent tracks")
             return
         poll = getattr(self, "p_now", None)
         if poll and poll.error and self.player is None:
