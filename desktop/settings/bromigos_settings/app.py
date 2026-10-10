@@ -351,6 +351,9 @@ class Window(Adw.ApplicationWindow):
                 GLib.timeout_add(150, self._focus_key, pid, key, tries + 1)
             return False
         w.grab_focus()
+        act = getattr(w, "_bromigos_activate", None)       # a deep link that opens something (a widget's form)
+        if act:
+            act()
         w.add_css_class("bromigos-found")
         GLib.timeout_add(2600, lambda: (w.remove_css_class("bromigos-found"), False)[1])
         return False

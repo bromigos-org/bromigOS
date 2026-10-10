@@ -55,7 +55,7 @@ check() {
 package() {
   local lib="$pkgdir/usr/lib/bromigos/widgets" f
   for f in arrange.py demo.py demo_lab.py draw.py editmode.py gallery.py keybinds.py panels.py plugins.py sources.py \
-           keybinds-dump.lua; do
+           widget_settings.py keybinds-dump.lua; do
     install -Dm0644 "$_root/widgets/$f" "$lib/$f"
   done
   install -Dm0755 "$_root/widgets/bromigos-widgets" "$lib/bromigos-widgets"

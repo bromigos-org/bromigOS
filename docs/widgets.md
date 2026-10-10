@@ -230,6 +230,71 @@ A panel that declares no `sizes` has one class, `standard`, from `min_size` to
 `max_size`, and simply gets the size the user chose. `tick()` can read what the last
 draw used, so a panel can sample more only while it's large.
 
+## A widget's settings
+
+A widget can have settings of its own, such as a place, a list of hosts or an account to
+sign in to. It declares them, and bromigOS draws the form: the card's **Settings…**
+button, in edit mode's tray and in Settings › Widgets, opens it. The values are saved in
+`~/.config/bromigos/widgets/<name>.toml`, and the widget reads them again as soon as the
+file changes.
+
+1. List the fields in `settings` on your `Panel` subclass. Each is a dict:
+
+   | Key | What it is |
+   |---|---|
+   | `key` | The name the value is saved under |
+   | `label` | What the form calls it |
+   | `kind` | `text`, `list`, `number`, `bool`, `choice` or `secret-signin` |
+   | `default` | Its value until the user sets one |
+   | `hint` | One line under it, saying what it's for |
+   | `choices` | For `choice`: a list of `[value, label]` pairs |
+   | `min`, `max`, `step` | For `number`: its range |
+   | `provider` | For `secret-signin`: `github`, `gitlab`, `twitch` or `spotify` |
+
+2. Read a value with `self.setting("<key>")`. It's the field's default, then the panel's
+   key in `layout.json`, then the user's file, last one wins.
+
+```python
+class TidePanel(Panel):
+    name, title = "tide", "TIDE"
+    settings = [
+        {"key": "harbour", "label": "Harbour", "kind": "text", "default": "", "hint": "As the tide table names it"},
+        {"key": "every", "label": "Check every (minutes)", "kind": "number", "default": 30, "min": 5, "max": 720},
+        {"key": "units", "label": "Heights in", "kind": "choice", "default": "metres",
+         "choices": [["metres", "Metres"], ["feet", "Feet"]]},
+    ]
+
+    def draw(self, cr, w, h):
+        D.frame(cr, w, h, self.title, self.setting("harbour").upper())
+```
+
+From a terminal, `bromigos panels settings <name>` shows the fields and their values,
+`bromigos panels set <name> <key> <value>` changes one, and `bromigos panels unset <name>
+<key>` puts it back to its default. A `list` takes several values.
+
+The file is replaced in one step, and a symbolic link stays a link, as with `layout.json`.
+
+### Accounts
+
+A `secret-signin` field isn't a value in the file. It's a sign-in to an online account,
+through the shared helper `lib/bromigos_account.py`. The form shows **Sign in**, then
+**Signed in as …** with **Sign out**.
+
+- **The sign-in.** For GitHub, GitLab and Twitch, the form shows a short code, large, with
+  **Copy**, **Open the page** and how long the code still works. You type the code on the
+  service's own page. For Spotify, **Open the sign-in page** opens it, and the form
+  finishes by itself when you approve.
+- **Connecting a service.** Each service needs your own app's client ID once, and GitLab
+  your instance's address. When one is missing, the form asks for it under **Connect
+  <service>**, with where to make the app. It's saved in `~/.config/bromigos/accounts.toml`
+  and shared by every widget that uses that service.
+- **GitHub through gh.** If you're signed in to the `gh` command, the form says **Signed
+  in through gh as …**, and there's nothing to do.
+- **A GitLab token.** **Paste a token…** stores a personal access token instead.
+
+Tokens go to your login keyring, never to a file. The form never shows one, and nothing
+logs one. A widget gets a usable token with `bromigos_account.token("<provider>")`.
+
 ## Place the panels
 
 The layout lives in `~/.config/bromigos/widgets/layout.json`. Edit mode, Settings and

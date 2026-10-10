@@ -26,6 +26,7 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 import arrange as A  # noqa: E402
+import widget_settings as WS  # noqa: E402
 
 CATEGORIES = ("system", "network", "homelab", "media", "notes", "fun")
 CATEGORY_NAMES = {"system": "System", "network": "Network", "homelab": "Homelab", "media": "Media",
@@ -94,7 +95,8 @@ def meta_of(obj, name=None):
             "max_size": (max(c[2][0] for c in cs), max(c[2][1] for c in cs)),
             "sizes": [{"name": n, "min": list(lo), "max": list(hi), "start": list(st)} for n, lo, hi, st in cs],
             "default_size": default if any(c[0] == default for c in cs) else cs[0][0],
-            "start": list(start)}
+            "start": list(start),
+            "form": WS.fields(getattr(inner, "settings", None) or [])}
 
 
 # ------------------------------------------------------------------ who made it
@@ -171,6 +173,21 @@ def entry(name, meta, source, state, ext=None):
                 settings=SETTINGS.get(name))
 
 
+def layout_entry(doc, name):
+    """A panel's keys in layout.json (its "plugins" entry over its "panels" one)."""
+    out = dict(next((p for p in (doc or {}).get("panels") or [] if isinstance(p, dict) and p.get("name") == name), {}))
+    out.update(((doc or {}).get("plugins") or {}).get(name) or {})
+    return out
+
+
+def with_values(e, doc):
+    """The entry with its settings' current values, when it has a form."""
+    if e.get("form"):
+        e["values"] = WS.values(e["name"], e["form"], layout_entry(doc, e["name"]))
+        e["settings_file"] = WS.path(e["name"])
+    return e
+
+
 def addable(e):
     """Whether the gallery offers this entry to add: available, or already on the desktop
     (then it's shown greyed out with the reason, so it can be taken off)."""
@@ -197,7 +214,7 @@ def entries(doc=None, plugins=True):
             cls = core[name]
             meta = dict(meta_of(cls, name), width=cls.width, height=cls.height)
             ok, why = availability(cls, asked)
-        out.append(dict(entry(name, meta, "bromigos", state), available=ok, unavailable=why))
+        out.append(with_values(dict(entry(name, meta, "bromigos", state), available=ok, unavailable=why), doc))
     if not plugins:
         return out
     import plugins as PL
@@ -217,6 +234,7 @@ def entries(doc=None, plugins=True):
         e = entry(name, meta, src, state, exts.get(name) if src == "extension" else None)
         e["error"] = err
         e["available"], e["unavailable"] = availability(cls, asked) if err is None else (False, err)
+        with_values(e, doc)
         if name not in state:
             e["visible"] = bool(layout.get("visible", True)) if err is None else False
         out.append(e)

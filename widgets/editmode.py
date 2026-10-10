@@ -873,8 +873,9 @@ class Editor:
                                        lambda: self.show(name, free=True)), False, False, 0)
         if len(e.get("sizes") or []) > 1:
             col.pack_start(self.size_picker(e), False, False, 2)
-        if e.get("settings"):
-            s = e["settings"]
+        if e.get("form") or e.get("settings"):
+            s = ({"page": "widgets", "key": f"form-{name}", "what": ", ".join(f["label"] for f in e["form"])}
+                 if e.get("form") else e["settings"])
             target = s["page"] + (f"#{s['key']}" if s.get("key") else "")
             row.pack_start(self.button("Settings…", f"{e['title']}'s own settings ({s['what']}): saves, leaves "
                                                     f"edit mode and opens Settings › {s['page'].title()}",

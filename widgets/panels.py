@@ -53,6 +53,20 @@ class Panel:
     sizes = {}
     default_size = "standard"           # the class a panel starts at (Add to desktop)
 
+    # The widget's own settings: [{"key", "label", "kind", "default", "hint", "choices"?,
+    # "provider"?}] (widget_settings.py; docs/widgets.md, "A widget's settings"). Settings ›
+    # Widgets draws a form from it; the values go in ~/.config/bromigos/widgets/<name>.toml.
+    settings = []
+
+    def setting(self, key, default=None):
+        """A setting's value: the field's default, then this panel's keys in layout.json,
+        then <name>.toml (read again when it changes)."""
+        r = getattr(self, "_settings", None)
+        if r is None:
+            import widget_settings as WS
+            r = self._settings = WS.Reader((self.cfg or {}).get("name") or self.name, self.settings, self.cfg)
+        return r.get().get(key, default)
+
     @classmethod
     def available(cls):
         """Whether this panel can show anything here: True, or (False, "why"), such as

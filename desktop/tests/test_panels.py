@@ -135,6 +135,34 @@ class PanelsTest(CmdTest):
         d = self.cmd("panels", "hide", "hello")
         self.assertFalse(self.panel(d, "hello")["visible"])
 
+    def test_a_widgets_own_settings(self):
+        plug = self.path(".config", "bromigos", "plugins", "widgets")
+        os.makedirs(plug)
+        with open(os.path.join(plug, "hello.py"), "w") as f:
+            f.write("from panels import Panel\n\nclass Hello(Panel):\n    name, title = 'hello', 'HELLO'\n"
+                    "    settings = [{'key': 'place', 'label': 'Place', 'kind': 'text', 'default': 'Oslo'},\n"
+                    "                {'key': 'hosts', 'label': 'Hosts', 'kind': 'list', 'default': []},\n"
+                    "                {'key': 'every', 'label': 'Every', 'kind': 'number', 'default': 60, 'min': 10},\n"
+                    "                {'key': 'gh', 'label': 'GitHub', 'kind': 'secret-signin', 'provider': 'github'}]\n\n"
+                    "    def draw(self, cr, w, h):\n        pass\n\nPANEL = Hello\n")
+        d = self.cmd("panels", "settings", "hello")
+        self.assertEqual(d["values"], {"place": "Oslo", "hosts": [], "every": 60})
+        self.assertEqual([f["kind"] for f in d["form"]], ["text", "list", "number", "secret-signin"])
+        d = self.cmd("panels", "set", "hello", "place", "Bergen")
+        self.assertEqual(d["values"]["place"], "Bergen")
+        d = self.cmd("panels", "set", "hello", "hosts", "a", "b")
+        self.assertEqual(d["values"]["hosts"], ["a", "b"])
+        self.assertIn('hosts = ["a", "b"]', self.read(".config", "bromigos", "widgets", "hello.toml"))
+        self.assertIn("number", self.cmd("panels", "set", "hello", "every", "soon", ok=False)["error"])
+        self.cmd("panels", "set", "hello", "every", "5", ok=False)
+        self.cmd("panels", "set", "hello", "gh", "token", ok=False)            # a sign-in is never a value
+        self.cmd("panels", "set", "hello", "nope", "x", ok=False)
+        d = self.cmd("panels", "unset", "hello", "place")
+        self.assertEqual(d["values"]["place"], "Oslo")
+        g = next(w for w in self.cmd("panels", "gallery")["widgets"] if w["name"] == "hello")
+        self.assertEqual(g["values"]["hosts"], ["a", "b"])
+        self.assertIn("settings of its own", self.cmd("panels", "settings", "system", ok=False)["error"])
+
     def test_edit_asks_the_panels(self):
         stub = os.path.join(self.tmp, "stub")             # a stand-in bromigos-widgets: never the real one
         os.makedirs(stub)

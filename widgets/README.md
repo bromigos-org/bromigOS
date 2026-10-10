@@ -55,6 +55,7 @@ shortcuts, and Alt+N to type in the notes. The full list is the manual's
 | `bromigos-widgets` | The app: one window per panel, the heartbeat, the control socket, hotplug recovery |
 | `editmode.py` | Edit mode: the canvas over the panels, the drags, the keyboard, and the tray with the widget gallery |
 | `arrange.py` | Edit mode's geometry and file, with no GTK: snapping, free space, undo, reading and writing `layout.json` |
+| `widget_settings.py` | A widget's own settings: its declared fields, and their values in `~/.config/bromigos/widgets/<name>.toml` |
 | `gallery.py` | The widget gallery's list: every panel, what it shows, who made it, what it reads, and its pictures |
 | `panels.py` | The built-in panels |
 | `plugins.py` | Loads plugin panels, from users and from `bromigos-homelab`, and finds them free space |

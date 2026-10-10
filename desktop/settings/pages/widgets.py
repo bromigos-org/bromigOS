@@ -310,7 +310,13 @@ class WidgetsPage:
             meta += f" · can't show anything here: {w.get('unavailable') or 'not available'}"
         sub = (w["description"] or "A widget") + "\n" + meta
         box = Gtk.Box(spacing=6)
-        if w.get("settings"):
+        if w.get("form"):
+            b = ctx.button("Settings…", lambda w=w: self.form(w), f"{title}'s own settings: "
+                           + ", ".join(f["label"] for f in w["form"]))
+            b._bromigos_key = f"form-{w['name']}"            # bromigos settings widgets#form-NAME opens it
+            b._bromigos_activate = lambda w=w: self.form(w)
+            box.append(b)
+        elif w.get("settings"):
             s = w["settings"]
             box.append(ctx.button("Settings…", lambda s=s: ctx.open_page(s["page"], s.get("key")),
                                   f"{title}'s own settings: {s['what']}"))
@@ -407,6 +413,10 @@ class WidgetsPage:
                             hint="Opens the guide to writing a widget",
                             buttons=[("Guide", lambda: ctx.open_docs("extensions.md"),
                                       "The manual's Extensions page: making and sharing a widget")]))
+
+    def form(self, w):
+        from bromigos_settings.widgetform import WidgetForm
+        WidgetForm(self.ctx, w, done=lambda: self.read_gallery()).present()
 
     def install(self, name):
         self.ctx.terminal(EXT + ["install", name])

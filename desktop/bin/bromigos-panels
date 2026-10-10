@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bromigos:summary=The desktop panels: which are on, where they sit, the monitor, the weather's place (your layout.json and weather.toml)
-# bromigos:args=[status] | edit | gallery [--previews DIR] | show|hide|add NAME | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
+# bromigos:args=[status] | edit | gallery [--previews DIR] | show|hide|add NAME | settings NAME | set NAME KEY VALUE… | unset NAME KEY | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
 # bromigos:examples=bromigos panels; bromigos panels edit; bromigos panels add weather; bromigos panels weather place "San Diego"; bromigos panels hide connections
 """bromigos-panels (`bromigos panels`): the desktop panels' layout (bromigos-widgets). The
 panels read your ~/.config/bromigos/widgets/layout.json, else bromigOS's
@@ -16,6 +16,10 @@ reload`). The weather's place is ~/.config/bromigos/weather.toml. Settings › W
                                      yours): what it shows, who made it, what it reads, where it is
   bromigos panels show|hide NAME     a panel on or off at login (and now, when the panels run)
   bromigos panels add NAME           a panel on, in a free spot on the desktop
+  bromigos panels settings NAME      a widget's own settings: its fields and their values
+  bromigos panels set NAME KEY VALUE…   one of them (a list takes several values; it's written to
+                                     ~/.config/bromigos/widgets/NAME.toml, which the widget reads)
+  bromigos panels unset NAME KEY     back to its default
   bromigos panels move NAME X Y      its place, px from the top left of the usable area
   bromigos panels size NAME W H      its size in px (edit mode keeps it to the panel's size classes)
   bromigos panels size NAME CLASS    one of its size classes (compact, standard, wide, tall, large),
@@ -352,6 +356,54 @@ def add(args):
     return _save(d, f"{ABOUT.get(name, (name,))[0]} panel: on, at {p.get('x')},{p.get('y')}")
 
 
+def _widget(name):
+    try:
+        import gallery
+        it = next((e for e in gallery.entries(_layout_or_empty()) if e["name"] == name), None)
+    except Exception as e:
+        raise Fail(f"the widgets' code isn't here to read {name}: {e}")
+    if it is None:
+        raise Fail(f"no panel {name!r}")
+    if not it.get("form"):
+        raise Fail(f"{name} has no settings of its own" + (f" (Settings › {it['settings']['page'].title()} has "
+                                                           f"{it['settings']['what']})" if it.get("settings") else ""))
+    return it
+
+
+def settings_cmd(args):
+    if len(args) != 1:
+        raise Fail("bromigos panels settings NAME")
+    it = _widget(args[0])
+    return {"name": it["name"], "title": it["title"], "form": it["form"], "values": it["values"],
+            "file": it["settings_file"]}
+
+
+def set_cmd(args):
+    if len(args) < 3:
+        raise Fail("bromigos panels set NAME KEY VALUE…")
+    import widget_settings as WS
+    it = _widget(args[0])
+    field = next((f for f in it["form"] if f["key"] == args[1]), None)
+    if field is None:
+        raise Fail(f"{args[0]} has no setting {args[1]!r} (it has: {', '.join(f['key'] for f in it['form'])})")
+    raw = args[2:] if field["kind"] == "list" else " ".join(args[2:])
+    try:
+        vals = WS.set_value(it["name"], it["form"], args[1], raw, it["title"].title())
+    except ValueError as e:
+        raise Fail(str(e))
+    return {"name": it["name"], "form": it["form"], "values": vals, "file": WS.path(it["name"]),
+            "said": f"{it['title'].title()}: {field['label']} set"}
+
+
+def unset_cmd(args):
+    if len(args) != 2:
+        raise Fail("bromigos panels unset NAME KEY")
+    import widget_settings as WS
+    it = _widget(args[0])
+    WS.unset(it["name"], args[1], it["title"].title())
+    return dict(settings_cmd([args[0]]), said=f"{it['title'].title()}: {args[1]} back to its default")
+
+
 def gallery_cmd(args):
     import gallery
     previews = C.flag(args, "--previews")
@@ -368,5 +420,6 @@ def gallery_cmd(args):
 
 if __name__ == "__main__":
     sys.exit(C.main({"status": status, "show": show(True), "hide": show(False), "add": add, "edit": edit,
+                     "settings": settings_cmd, "set": set_cmd, "unset": unset_cmd,
                      "gallery": gallery_cmd, "move": move, "size": size,
                      "monitor": monitor, "weather": weather_cmd, "reset": reset}, USAGE))
