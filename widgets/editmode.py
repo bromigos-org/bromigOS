@@ -604,23 +604,45 @@ class Editor:
 
     def show(self, name, free=False):
         """On, where it was, or in a free spot when that's taken or off the area (always,
-        with free: Add to desktop)."""
-        self.record()
+        with free: Add to desktop). With no room anywhere it stays off, and the tray says so:
+        it never goes on top of another."""
         win = self.app.windows[name]
+        before = (win.rect(), win.visible())
+        self.record()
         if free:                                  # Add to desktop: at its default size
             win.set_size_class(G.meta_of(getattr(win, "panel", None), name)["default_size"]
                                if getattr(win, "panel", None) is not None else "standard")
+        if not self.put_clear(name, force=free):
+            self.history.undos.pop()
+            if (win.rect(), win.visible()) != before:
+                win.resize(*before[0][2:])
+                win.place(*before[0][:2])
+            self.status.set_text(A.no_room(self.title(name)))
+            self.changed(rebuild=True)
+            return False
+        self.app.set_visible(name, True)
+        self.select(name)
+        self.changed(rebuild=True)
+        return True
+
+    def put_clear(self, name, force=False):
+        """The panel where it is when that's inside the area and clear of the panels shown
+        (force: never), else in a free spot, off the tray, VECTOR's corner and the scene's
+        focal points where it can be. False when nothing is clear of the panels."""
+        win = self.app.windows[name]
         x, y, w, h = win.rect()
         conn = win.monitor
         taken = [r for n, r in self.rects(conn).items() if n != name]
         area = self.size(conn)
-        if free or not A.fits((x, y, w, h), taken, area):
-            tray = self.tray_rects(conn)
-            spot = A.place(w, h, taken, area, self.app.avoid(area) + tray, tray)
-            win.place(*spot)
-        self.app.set_visible(name, True)
-        self.select(name)
-        self.changed(rebuild=True)
+        if not force and A.fits((x, y, w, h), taken, area):
+            return True
+        tray = self.tray_rects(conn)
+        avoid, soft = self.app.keep_clear(conn, area)
+        spot = A.place(w, h, taken, area, avoid + tray, tray + soft, strict=True)
+        if spot is None:
+            return False
+        win.place(*spot)
+        return True
 
     def undo(self):
         st = self.history.undo(self.app.state())
@@ -723,12 +745,8 @@ class Editor:
             self.history.undos.pop()
             self.status.set_text(f"{conn} isn't ready yet; try again in a moment.")
             return
-        area = self.size(conn)
-        taken = [r for n, r in self.rects(conn).items() if n != name]
-        x, y, w, h = win.rect()
-        if not A.fits((x, y, w, h), taken, area):
-            tray = self.tray_rects(conn)
-            win.place(*A.place(w, h, taken, area, self.app.avoid(area) + tray, tray))
+        if not self.put_clear(name):
+            self.status.set_text(f"{A.no_room(self.title(name))} on {conn}; it's kept where it was there.")
         self.changed()
         self.redraw()
 
@@ -829,6 +847,9 @@ class Editor:
         self.body.pack_start(url, False, False, 0)
         inner.pack_start(self.body, True, True, 0)
 
+        self.layouts_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.layouts_box.get_style_context().add_class("card")
+        inner.pack_start(self.layouts_box, False, False, 0)
         self.confirm = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.confirm.get_style_context().add_class("confirm")
         self.confirm.pack_start(self.label("Put every panel back where bromigOS puts it, at its first size? "
@@ -849,6 +870,12 @@ class Editor:
         foot.pack_start(self.redo_b, False, False, 0)
         foot.pack_start(self.button("Reset…", "Asks first, then puts every panel back in bromigOS's default layout",
                                     lambda: self.confirm.show_all()), False, False, 0)
+        foot.pack_start(self.button("Layouts…", "Ready-made layouts (Minimal, Developer, Homelab, …) and the theme's "
+                                    "own, fitted to this monitor: pick one, then Done keeps it or Ctrl+Z undoes it",
+                                    self.toggle_layouts), False, False, 0)
+        foot.pack_start(self.button("Tidy up", "Packs the panels on this monitor so none overlaps, in the same "
+                                    "order, off the scene's focal points (Ctrl+Z undoes it)", self.tidy),
+                        False, False, 0)
         foot.pack_end(self.button("Done", "Saves the layout and leaves edit mode (Esc)", self.done, "primary"),
                       False, False, 0)
         foot.pack_end(self.button("Cancel", "Leaves edit mode and puts everything back as it was when it began",
@@ -857,7 +884,81 @@ class Editor:
         self.status = self.label("", "tray-sub", wrap=True)
         inner.pack_start(self.status, False, False, 0)
         self.fill_cards()
+        GLib.idle_add(lambda: (self.layouts_box.hide(), False)[1])
         return box
+
+    # ------------------------------------------------------------------ layouts, tidy up (layouts.py)
+    def _layout_env(self):
+        """(screen, catalog, scene) for the monitor the tray is on."""
+        import layouts as L
+        conn = self.main.conn
+        m = self.app.monitor(conn)
+        scr = L.Screen.of(m) if m else L.Screen(*self.size(conn))
+        cat = L.catalog_of(self.items())
+        return conn, scr, cat, L.scene_info()
+
+    def toggle_layouts(self):
+        box = self.layouts_box
+        if box.get_visible():
+            box.hide()
+            return
+        for c in box.get_children():
+            box.remove(c)
+        import layouts as L
+        try:
+            conn, scr, cat, info = self._layout_env()
+            items = ([("theme", info["recommended"])] if info.get("recommended") else []) + list(L.templates().items())
+        except Exception as e:                    # noqa: BLE001
+            self.status.set_text(f"The layouts can't be read: {e}")
+            return
+        box.pack_start(self.label(f"LAYOUTS FOR {info['title'].upper()}", "section"), False, False, 0)
+        for ident, t in items:
+            r = L.fit(t, scr, cat, info["clear"], info.get("focus"))
+            name = t["title"] + (f" (made for {t['made_for']})" if t.get("made_for") else "")
+            hint = f"{t['description']}. {len(r['placed'])} widgets, {round(r['coverage'] * 100)}% of the screen" + \
+                ("".join(f". {x['title']} left out: {x['why']}" for x in r["left_out"]))
+            b = self.button(name, hint, lambda t=t, r=r: self.use_layout(t, r, conn))
+            b.get_child().set_xalign(0)
+            box.pack_start(b, False, False, 0)
+        box.show_all()
+
+    def use_layout(self, t, r, conn):
+        """A layout's placement on the panels here (Done saves it, Ctrl+Z undoes it)."""
+        if not r["placed"]:
+            self.status.set_text(f"{t['title']}: nothing it shows can show here")
+            return
+        self.record()
+        st = {}
+        for n, w in self.app.windows.items():
+            if w.monitor != conn:
+                continue
+            p = r["placed"].get(n)
+            st[n] = dict(x=p["x"], y=p["y"], width=p["width"], height=p["height"], visible=True) if p else \
+                {"visible": False}
+        self.app.apply_state(st)
+        gone = [x["title"] for x in r["left_out"]]
+        self.status.set_text(f"{t['title']}: {len(r['placed'])} widgets." + (f" Left out: {', '.join(gone)}." if gone else "")
+                             + " Done keeps it; Ctrl+Z undoes it.")
+        self.layouts_box.hide()
+        self.changed(rebuild=True)
+
+    def tidy(self):
+        import layouts as L
+        conn, scr, cat, info = self._layout_env()
+        now = {n: dict(zip(("x", "y", "width", "height"), self.app.windows[n].rect()), visible=True)
+               for n in self.visible_names(conn)}
+        if not now:
+            return
+        r = L.tidy(now, scr, cat, info["clear"], info.get("focus"))
+        self.record()
+        st = {n: (dict(r["placed"][n], visible=True) if n in r["placed"] else {"visible": False}) for n in now}
+        for s in st.values():
+            s.pop("size", None)
+        self.app.apply_state(st)
+        gone = [x["title"] for x in r["left_out"]]
+        self.status.set_text("Tidied." + (f" {A.no_room(', '.join(gone))}; switched off." if gone else "")
+                             + " Ctrl+Z undoes it.")
+        self.changed(rebuild=True)
 
     def fill_monitors(self):
         """The Monitor list shows the picked widget's monitor (none picked: greyed out)."""
@@ -1072,10 +1173,19 @@ class Editor:
             self.changed(rebuild=True)          # the button pressed again: shown as it is
             return
         self.record()
+        before = (win.rect(), win.size_class())
         win.set_size_class(cls)
         x, y, w, h = win.rect()
         W, H = self.size(win.monitor)
         win.place(min(x, max(0, W - w)), min(y, max(0, H - h)))
+        # bigger, or switched on: still clear of the others, or moved to a free spot
+        if not self.put_clear(name):
+            self.history.undos.pop()
+            win.resize(*before[0][2:])
+            win.place(*before[0][:2])
+            self.status.set_text(A.no_room(f"{self.title(name)} at its {cls} size"))
+            self.changed(rebuild=True)
+            return
         if not win.visible():
             self.app.set_visible(name, True)
         self.select(name)

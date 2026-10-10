@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# theme-set hook (bromigos-desktop): the desktop's widgets follow the theme (docs/widgets.md,
+# "Layouts"). The layout in force is remembered for the old theme's scene, and the new
+# scene's comes back, or the layout made for it the first time. The colour themes draw the
+# Wick's den, so switching between them and the Wick changes nothing. In the background:
+# `bromigos theme set` doesn't wait for the widgets' gallery to load.
+set -eu
+command -v bromigos >/dev/null 2>&1 || exit 0
+name=${1:-${BROMIGOS_THEME:-}}
+[ -n "$name" ] || exit 0
+(bromigos panels layout theme "$name" --json >/dev/null 2>&1 || true) &

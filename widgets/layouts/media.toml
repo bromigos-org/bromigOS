@@ -1,0 +1,34 @@
+# A layout (docs/widgets.md, "Layouts"): the format is in widgets/layouts.py.
+title = "Media"
+description = "Music and video: what's playing, the den TV and your library, Spotify, YouTube"
+archetype = "media"
+
+[[widget]]
+name = "nowplaying"
+size = "standard"
+small = "compact"
+big = "large"
+side = "left"
+priority = 1
+
+[[widget]]
+name = "media"
+size = "wide"
+small = "compact"
+side = "left"
+priority = 2
+
+[[widget]]
+name = "spotify"
+size = "standard"
+small = "compact"
+side = "left"
+priority = 2
+
+[[widget]]
+name = "youtube"
+size = "standard"
+small = "compact"
+side = "left"
+lane = 2
+priority = 3

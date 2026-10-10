@@ -231,6 +231,129 @@ class PanelsTest(CmdTest):
             f.write("{ nope")
         self.assertIn("layout.json", self.cmd("panels", ok=False)["error"])
 
+    # ------------------------------------------------------------------ never stacked; layouts
+    def _overlaps(self, d):
+        """The shown panels that overlap, from the layout written (status's own check)."""
+        return d["overlapping"]
+
+    def test_switching_on_widget_after_widget_never_stacks(self):
+        """The stacking bug: about ten widgets switched on in a row from Customize (each a
+        `bromigos panels show NAME`) all landed on one spot. Each now gets its own place, and
+        when there's no room left it says so instead."""
+        said_no_room = False
+        for name in ("gpu", "nowplaying", "updates", "vector", "youtube", "discord", "calendars", "ci", "weather",
+                     "connections", "workbench", "notes", "shortcuts"):
+            r = self.run_cmd("panels", "show", name)
+            doc = json.loads(r.stdout)
+            if doc.get("ok") is False:
+                self.assertIn("No room for", doc["error"])
+                said_no_room = True
+                continue
+            self.assertEqual(self._overlaps(doc), [], name)
+            p = self.panel(doc, name)
+            self.assertTrue(p["visible"] and p["x"] is not None, name)
+        d = self.cmd("panels")
+        self.assertEqual(self._overlaps(d), [])
+        self.assertGreaterEqual(sum(1 for p in d["panels"] if p["visible"]), 10)
+        # a widget made bigger stays clear of the others, or moves
+        d = self.cmd("panels", "size", "network", "wide")
+        self.assertEqual(self._overlaps(d), [])
+        del said_no_room
+
+    def test_add_with_no_room_says_so(self):
+        big = [{"name": n, "x": x, "y": y, "width": 1240, "height": 700} for n, x, y in
+               (("system", 0, 0), ("network", 1260, 0), ("storage", 0, 720), ("notes", 1260, 720))]
+        self._mine({"version": 2, "monitor": "", "panels": big + [{"name": "weather", "visible": False}]})
+        doc = self.cmd("panels", "add", "weather", ok=False)
+        self.assertIn("No room for Weather: hide something or try a smaller size", doc["error"])
+        self.assertFalse(self.panel(self.cmd("panels"), "weather")["visible"])      # nothing changed
+
+    def test_layouts_are_listed_fitted_to_the_screen(self):
+        d = self.cmd("panels", "layouts")
+        ids = [x["id"] for x in d["layouts"]]
+        self.assertEqual(ids[0], "theme")                                        # the theme's own first
+        self.assertEqual(d["layouts"][0]["made_for"], "the Wick")
+        for want in ("minimal", "developer", "homelab", "streamer", "media", "gamer", "everything"):
+            self.assertIn(want, ids)
+        self.assertEqual((d["scene"], d["screen"]["width"], d["first_run"]), ("wick", 2560, True))
+        self.assertTrue(any("screens" in c["name"] for c in d["clear"]))
+        dev = next(x for x in d["layouts"] if x["id"] == "developer")
+        self.assertTrue(any("signed in" in n for n in dev["notes"]))           # nobody's signed in here
+
+    def test_apply_undo_keeps_each_widgets_own_settings(self):
+        d = self.cmd("panels", "layout", "apply", "minimal")
+        on = {p["name"] for p in d["panels"] if p["visible"]}
+        self.assertEqual(on, {"system", "weather", "nowplaying"})
+        self.assertEqual(self._overlaps(d), [])
+        self.assertTrue(d["undo"])
+        with open(self.path(".config", "bromigos", "widgets", "layout.json")) as f:
+            mine = json.load(f)
+        net = next(p for p in mine["panels"] if p["name"] == "network")
+        self.assertFalse(net["visible"])
+        self.assertEqual(net["ping"][1]["host"], "1.1.1.1")                     # its own settings: kept
+        d = self.cmd("panels", "layout", "undo")
+        self.assertTrue(self.panel(d, "network")["visible"])
+        self.assertFalse(self.panel(d, "nowplaying")["visible"] if any(p["name"] == "nowplaying" for p in d["panels"])
+                         else False)
+        d = self.cmd("panels", "layout", "undo")                                 # again: back to Minimal
+        self.assertFalse(self.panel(d, "network")["visible"])
+        self.cmd("panels", "layout", "apply", "nope", ok=False)
+
+    def test_apply_writes_through_a_symlink(self):
+        dots = os.path.join(self.home, "dotfiles")
+        os.makedirs(dots)
+        with open(os.path.join(REPO, "widgets", "layout.json")) as f:
+            text = f.read()
+        with open(os.path.join(dots, "layout.json"), "w") as f:
+            f.write(text)
+        os.makedirs(self.path(".config", "bromigos", "widgets"))
+        link = self.path(".config", "bromigos", "widgets", "layout.json")
+        os.symlink(os.path.join(dots, "layout.json"), link)
+        self.cmd("panels", "layout", "apply", "theme")
+        self.assertTrue(os.path.islink(link))
+        with open(os.path.join(dots, "layout.json")) as f:
+            self.assertTrue(next(p for p in json.load(f)["panels"] if p["name"] == "nowplaying")["visible"])
+
+    def test_save_a_layout_of_your_own_and_apply_it(self):
+        self.cmd("panels", "layout", "apply", "theme")
+        before = {p["name"]: (p["x"], p["y"]) for p in self.cmd("panels")["panels"] if p["visible"]}
+        d = self.cmd("panels", "layout", "save", "My desk")
+        self.assertEqual(d["id"], "my-desk")
+        self.assertTrue(os.path.exists(d["path"]))
+        self.cmd("panels", "layout", "apply", "minimal")
+        d = self.cmd("panels", "layout", "apply", "my-desk")
+        self.assertEqual({p["name"]: (p["x"], p["y"]) for p in d["panels"] if p["visible"]}, before)
+        self.assertIn("my-desk", [x["id"] for x in self.cmd("panels", "layouts")["layouts"]])
+
+    def test_tidy_untangles_the_stacked_layout(self):
+        with open(os.path.join(REPO, "widgets", "tests", "fixtures", "layout-stacked.json")) as f:
+            doc = json.load(f)
+        doc["panels"] = [p for p in doc["panels"] if p["name"] not in ("lab", "alerts", "labjobs", "game_servers")]
+        self._mine(doc)
+        self.assertTrue(self._overlaps(self.cmd("panels")))
+        d = self.cmd("panels", "tidy")
+        self.assertEqual(self._overlaps(d), [])
+        self.assertIn("Tidied", d["said"])
+        self.assertTrue(self._overlaps(self.cmd("panels", "layout", "undo")))  # undo puts it back
+
+    def test_each_theme_has_its_own_layout_and_colour_themes_share_the_wicks(self):
+        self.cmd("panels", "layout", "apply", "minimal")                         # the Wick: Minimal
+        d = self.cmd("panels", "layout", "theme", "tidewell")                    # first time: made for it
+        self.assertTrue(d["changed"])
+        self.assertEqual(d["layout"], "theme-tidewell")
+        tide = {p["name"] for p in d["panels"] if p["visible"]}
+        self.assertNotEqual(tide, {"system", "weather", "nowplaying"})
+        d = self.cmd("panels", "layout", "theme", "cinder")                      # the den again: Minimal back
+        self.assertEqual({p["name"] for p in d["panels"] if p["visible"]}, {"system", "weather", "nowplaying"})
+        d = self.cmd("panels", "layout", "theme", "wick")                        # the same den: nothing changes
+        self.assertFalse(d["changed"])
+        d = self.cmd("panels", "layout", "theme", "tidewell")                    # Tidewell's, as it was
+        self.assertEqual({p["name"] for p in d["panels"] if p["visible"]}, tide)
+        # one layout for every theme: the other themes' memories go, each gets it fitted
+        self.cmd("panels", "layout", "apply", "minimal", "--all-themes")
+        d = self.cmd("panels", "layout", "theme", "mire")
+        self.assertEqual(d["layout"], "minimal")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,41 @@
+# A layout (docs/widgets.md, "Layouts"): the format is in widgets/layouts.py.
+title = "Streamer"
+description = "Your channels and your people: Twitch, YouTube, Discord, what's playing and this machine"
+archetype = "streamer"
+
+[[widget]]
+name = "twitch"
+size = "standard"
+small = "compact"
+side = "left"
+priority = 1
+
+[[widget]]
+name = "youtube"
+size = "standard"
+small = "compact"
+side = "left"
+priority = 2
+
+[[widget]]
+name = "discord"
+size = "standard"
+small = "compact"
+side = "left"
+lane = 2
+priority = 2
+
+[[widget]]
+name = "system"
+size = "compact"
+side = "left"
+lane = 2
+priority = 4
+
+[[widget]]
+name = "nowplaying"
+size = "standard"
+small = "compact"
+side = "right"
+from = "bottom"
+priority = 3

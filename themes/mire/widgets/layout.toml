@@ -1,0 +1,76 @@
+# Mire and the desktop's widgets (docs/widgets.md, "Layouts"; the format is in
+# widgets/layouts.py). [[clear]]: the scene's focal points, as fractions of the 2560x1440
+# picture (x, y, width, height), from live/world.toml: the Sleeper rising among the wrecks
+# (its head at 330, 1280 and its hand at 810, 1260, the shoulder and crown, the waders),
+# Hollis on the porch (his rects), and the shack, its lamp, the boat and the mast (soft). Layouts,
+# Tidy up and adding a widget keep off them.
+
+scene_title = "Mire"
+
+[[clear]]
+name = "the Sleeper"
+rect = [0.0, 0.5, 0.5, 0.5]
+
+[[clear]]
+name = "Hollis on the porch"
+rect = [0.5, 0.44, 0.135, 0.22]
+
+[[clear]]
+name = "the shack's roof"
+rect = [0.6, 0.2, 0.3, 0.18]
+soft = true
+
+[[clear]]
+name = "the porch, its lamp and the boat"
+rect = [0.5, 0.37, 0.4, 0.4]
+soft = true
+
+[[clear]]
+name = "the mast"
+rect = [0.58, 0.0, 0.12, 0.3]
+soft = true
+
+# The layout made for Mire: the panels in the misty sky over the trees, what's playing on
+# the water by the boat.
+title = "Made for Mire"
+description = "The panels in the misty sky: the Sleeper, Hollis and the shack clear"
+archetype = "theme"
+
+[[widget]]
+name = "system"
+size = "standard"
+small = "compact"
+big = "large"
+side = "left"
+priority = 1
+
+[[widget]]
+name = "network"
+size = "standard"
+small = "compact"
+side = "left"
+lane = 2
+priority = 2
+
+[[widget]]
+name = "storage"
+size = "standard"
+small = "compact"
+side = "left"
+lane = 2
+priority = 3
+
+[[widget]]
+name = "workbench"
+size = "standard"
+small = "compact"
+side = "left"
+lane = 3
+priority = 3
+
+[[widget]]
+name = "nowplaying"
+size = "compact"
+side = "bottom"
+from = "right"
+priority = 4

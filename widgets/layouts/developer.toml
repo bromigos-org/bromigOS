@@ -1,0 +1,49 @@
+# A layout (docs/widgets.md, "Layouts"): the format is in widgets/layouts.py.
+title = "Developer"
+description = "Your code and this machine: GitHub or GitLab, CI and pull requests, your repos, the keys"
+archetype = "developer"
+
+[[widget]]
+name = "system"
+size = "standard"
+small = "compact"
+big = "large"
+side = "left"
+priority = 1
+
+[[widget]]
+name = "workbench"
+size = "standard"
+small = "compact"
+side = "left"
+priority = 2
+
+[[widget]]
+name = ["github", "gitlab"]
+size = "standard"
+small = "compact"
+side = "left"
+lane = 2
+priority = 1
+
+[[widget]]
+name = "ci"
+size = "standard"
+small = "compact"
+side = "left"
+lane = 2
+priority = 2
+
+[[widget]]
+name = "shortcuts"
+size = "standard"
+side = "left"
+lane = 2
+priority = 5
+
+[[widget]]
+name = "updates"
+size = "compact"
+side = "right"
+from = "bottom"
+priority = 4

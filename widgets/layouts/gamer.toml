@@ -1,0 +1,42 @@
+# A layout (docs/widgets.md, "Layouts"): the format is in widgets/layouts.py.
+title = "Gamer"
+description = "The GPU and this machine under load, your game servers, Discord and what's playing"
+archetype = "gamer"
+
+[[widget]]
+name = "gpu"
+size = "standard"
+small = "compact"
+side = "left"
+priority = 1
+
+[[widget]]
+name = "system"
+size = "standard"
+small = "compact"
+big = "large"
+side = "left"
+priority = 2
+
+[[widget]]
+name = ["games", "game_servers"]
+size = "standard"
+small = "compact"
+side = "left"
+lane = 2
+priority = 2
+
+[[widget]]
+name = "discord"
+size = "standard"
+small = "compact"
+side = "left"
+lane = 2
+priority = 3
+
+[[widget]]
+name = "nowplaying"
+size = "compact"
+side = "right"
+from = "bottom"
+priority = 4

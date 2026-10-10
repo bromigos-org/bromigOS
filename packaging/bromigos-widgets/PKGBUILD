@@ -50,7 +50,8 @@ pkgver() {
 check() {
   cd "$_root/widgets"
   python -m py_compile bromigos-widgets *.py plugins/*.py
-  # edit mode's geometry and file: snapping, free space, undo, layout.json through a symlink
+  # edit mode's geometry and file: snapping, free space, undo, layout.json through a symlink;
+  # the layouts fitted to five screens with no overlaps and the scenes kept clear
   # and the built-in plugin panels (plugins/*.py): their parsing, empty states and size classes,
   # and lib/bromigos_account.py, the sign-in helper they share
   python -m unittest discover -s tests
@@ -61,7 +62,8 @@ check() {
 
 package() {
   local lib="$pkgdir/usr/lib/bromigos/widgets" f
-  for f in arrange.py demo.py demo_lab.py draw.py editmode.py gallery.py keybinds.py panels.py plugins.py sources.py \
+  for f in arrange.py demo.py demo_lab.py draw.py editmode.py gallery.py keybinds.py layouts.py panels.py plugins.py \
+           sources.py \
            widget_settings.py keybinds-dump.lua; do
     install -Dm0644 "$_root/widgets/$f" "$lib/$f"
   done
@@ -73,6 +75,8 @@ package() {
   install -d "$pkgdir/usr/bin"
   ln -s /usr/lib/bromigos/widgets/bromigos-widgets "$pkgdir/usr/bin/bromigos-widgets"
   install -Dm0644 "$_root/widgets/layout.json" "$pkgdir/usr/share/bromigos/widgets/layout.json"
+  # the ready-made layouts (docs/widgets.md, "Layouts"); each theme's own is in its folder
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/widgets/layouts/" "$_root"/widgets/layouts/*.toml
   # the app launcher's entries (docs/menu.md, "In the app launcher")
   install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_root"/widgets/applications/*.desktop
   install -Dm0644 -t "$pkgdir/usr/share/doc/$pkgname/" "$_root/widgets/README.md"

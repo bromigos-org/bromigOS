@@ -4,7 +4,8 @@ GTK, so it's tested on its own (widgets/tests/test_arrange.py).
   * snap_move() and snap_resize(): a dragged panel snaps to the other panels' edges (and
     16 px gaps beside them, and the usable area's edges) within 8 px, else to an 8 px
     grid. They return the guides to draw: the lines it snapped to.
-  * free_spot(): the first place a panel fits, clear of the others by 16 px.
+  * free_spot(): the first place a panel fits, clear of the others by 16 px; place(): the
+    spot a panel being switched on gets (strict: None when there's no room, never stacked).
   * History: undo and redo inside one edit session.
   * Monitors: each panel's own monitor, found by its make, model and serial (else its
     connector's name) with find_output(); where a panel shows while its monitor isn't
@@ -203,15 +204,23 @@ def free_spot(w, h, taken, area, avoid=(), gap=GAP, grid=GRID, start=MARGIN):
     return None
 
 
-def place(w, h, taken, area, avoid=(), soft=()):
+def place(w, h, taken, area, avoid=(), soft=(), strict=False):
     """Where a panel being added goes: a free spot clear of the panels and of `avoid`
-    (VECTOR's corner, the notifications); else one clear of the panels only, still
-    keeping off `soft` (edit mode's tray); else the top left, inside the area."""
+    (VECTOR's corner, the notifications, the scene's focal points); else one clear of the
+    panels only, still keeping off `soft` (edit mode's tray); else one clear of the panels.
+    taken: the panels shown on that monitor, and nothing else (a hidden one takes no room).
+    When nothing is clear of them: None with strict (say "no room", never stack), else the
+    top left, inside the area (a panel that must show somewhere: its monitor went away)."""
     spot = free_spot(w, h, taken, area, avoid) or free_spot(w, h, taken, area, soft) or free_spot(w, h, taken, area)
-    if spot:
+    if spot or strict:
         return spot
     W, H = area
     return min(MARGIN[0], max(0, W - w)), min(MARGIN[1], max(0, H - h))
+
+
+def no_room(title):
+    """What to say when a panel has no room anywhere."""
+    return f"No room for {title}: hide something or try a smaller size"
 
 
 def fits(rect, taken, area, gap=0):

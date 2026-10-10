@@ -1,0 +1,8 @@
+# A layout (docs/widgets.md, "Layouts"): the format is in widgets/layouts.py.
+# Every widget that can show something here, packed tidily around the scene's focal points.
+# It may cover more than a third of the screen, and says so when it does.
+title = "Everything"
+description = "Every widget that can show something here, packed tidily around the scene"
+archetype = "everything"
+pack = true
+budget = 1.0

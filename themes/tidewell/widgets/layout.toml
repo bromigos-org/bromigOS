@@ -1,0 +1,72 @@
+# Tidewell and the desktop's widgets (docs/widgets.md, "Layouts"; the format is in
+# widgets/layouts.py). [[clear]]: the scene's focal points, as fractions of the 2560x1440
+# picture (x, y, width, height), from live/world.toml: the waterline (water line = 246) and
+# the boats on it, Greywater Light on its rock (at 2216, 40), and the Choir's swim zones
+# (their zones; the far band behind the kelp is soft). Layouts, Tidy up and adding a widget
+# keep off them.
+
+scene_title = "Tidewell"
+
+[[clear]]
+name = "the waterline, the sky and the boats"
+rect = [0.0, 0.0, 1.0, 0.215]
+
+[[clear]]
+name = "Greywater Light"
+rect = [0.8, 0.0, 0.15, 0.13]
+
+[[clear]]
+name = "the Choir's swim zone"
+rect = [0.04, 0.43, 0.71, 0.45]
+
+[[clear]]
+name = "the Choir's far band, behind the kelp"
+rect = [0.2, 0.29, 0.58, 0.1]
+soft = true
+
+# The layout made for Tidewell: a column on the dark cliff, one widget in the open water
+# above the Choir, and a row in the abyss along the bottom.
+title = "Made for Tidewell"
+description = "A column on the cliff, a row in the abyss: the waterline, the lamp and the Choir clear"
+archetype = "theme"
+
+[[widget]]
+name = "system"
+size = "standard"
+small = "compact"
+big = "large"
+side = "right"
+priority = 1
+
+[[widget]]
+name = "network"
+size = "standard"
+small = "compact"
+side = "right"
+priority = 2
+
+[[widget]]
+name = "storage"
+size = "standard"
+small = "compact"
+side = "right"
+priority = 3
+
+[[widget]]
+name = "workbench"
+size = "standard"
+small = "compact"
+side = "left"
+priority = 4
+
+[[widget]]
+name = "nowplaying"
+size = "compact"
+side = "bottom"
+priority = 3
+
+[[widget]]
+name = "weather"
+size = "compact"
+side = "bottom"
+priority = 5

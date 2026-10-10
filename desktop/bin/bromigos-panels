@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # bromigos:summary=The desktop panels: which are on, where they sit, the monitor, the weather's place (your layout.json and weather.toml)
-# bromigos:args=[status] | edit | gallery [--previews DIR] | show|hide|add NAME | settings NAME | set NAME KEY VALUE… | unset NAME KEY | inspect SOURCE [--path DIR] [--ref REF] | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
-# bromigos:examples=bromigos panels; bromigos panels edit; bromigos panels add weather; bromigos panels weather place "San Diego"; bromigos panels hide connections
+# bromigos:args=[status] | edit | gallery [--previews DIR] | layouts | layout apply ID [--monitor NAME] [--all-themes] | layout save NAME | layout undo | tidy [--monitor NAME] | show|hide|add NAME | settings NAME | set NAME KEY VALUE… | unset NAME KEY | inspect SOURCE [--path DIR] [--ref REF] | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
+# bromigos:examples=bromigos panels; bromigos panels edit; bromigos panels layouts; bromigos panels layout apply homelab; bromigos panels tidy; bromigos panels add weather; bromigos panels weather place "San Diego"; bromigos panels hide connections
 """bromigos-panels (`bromigos panels`): the desktop panels' layout (bromigos-widgets). The
 panels read your ~/.config/bromigos/widgets/layout.json, else bromigOS's
 (/usr/share/bromigos/widgets/layout.json); a change here copies bromigOS's the first time,
@@ -14,8 +14,25 @@ reload`). The weather's place is ~/.config/bromigos/weather.toml. Settings › W
   bromigos panels gallery [--previews DIR]
                                      every panel there is (built in, the homelab's, extensions',
                                      yours): what it shows, who made it, what it reads, where it is
-  bromigos panels show|hide NAME     a panel on or off at login (and now, when the panels run)
-  bromigos panels add NAME           a panel on, in a free spot on the desktop
+  bromigos panels layouts            the ready-made layouts (Minimal, Developer, Homelab, …) and the
+                                     theme's own, each fitted to your screen: what goes where, and
+                                     what it would leave out and why
+  bromigos panels layout apply ID [--monitor NAME] [--all-themes]
+                                     one of them: which widgets are on, their sizes and places (each
+                                     widget's own settings are kept). For the theme in force; with
+                                     --all-themes, for every theme. ID "theme": the theme's own
+  bromigos panels layout save NAME   the widgets as they are now, as a layout of your own
+                                     (~/.config/bromigos/widgets/layouts/)
+  bromigos panels layout undo        back to the layout before the last apply or tidy (again: redo)
+  bromigos panels layout theme NAME  the theme changed to NAME (its theme-set hook runs this): the
+                                     layout is remembered for the old theme's scene, and the new
+                                     one's comes back, or its own layout the first time
+  bromigos panels tidy [--monitor NAME]
+                                     the widgets on now packed without overlapping, in the same
+                                     order, off the scene's focal points (layout undo undoes it)
+  bromigos panels show|hide NAME     a panel on or off at login (and now, when the panels run); on,
+                                     it keeps its place when that's clear, else gets a free spot
+  bromigos panels add NAME           a panel on, in a free spot on the desktop (no room: it says so)
   bromigos panels settings NAME      a widget's own settings: its fields and their values
   bromigos panels set NAME KEY VALUE…   one of them (a list takes several values; it's written to
                                      ~/.config/bromigos/widgets/NAME.toml, which the widget reads)
@@ -41,6 +58,7 @@ import sys
 
 sys.path.insert(0, "/usr/lib/bromigos/lib")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "lib"))   # a checkout's lib/
 import bromigos_cli as C  # noqa: E402
 from bromigos_cli import Fail  # noqa: E402
 
@@ -144,7 +162,13 @@ def status(_args=None):
     if not w["exists"] and (wp.get("place") or wp.get("lat") is not None):
         w.update({k: wp.get(k) for k in ("place", "lat", "lon", "name") if wp.get(k) not in (None, "")},
                  units=wp.get("units", "metric"), source="layout.json")
-    return {"panels": panels, "monitor": d.get("monitor") or "", "file": path, "yours": mine,
+    try:
+        import arrange as A
+        import layouts as L
+        over = [list(x) for x in L.overlapping(A.state_of(d))]
+    except Exception:
+        over = []
+    return {"panels": panels, "monitor": d.get("monitor") or "", "file": path, "yours": mine, "overlapping": over,
             "user_file": user_layout(), "default_file": default_layout(), "weather": w, "running": running()}
 
 
@@ -210,10 +234,127 @@ def show(on):
             raise Fail(f"bromigos panels {'show' if on else 'hide'} NAME")
         d, _, _ = load()
         p = _panel(d, args[0], plugins=True)
-        p["visible"] = on
         title = ABOUT.get(p["name"], (p["name"],))[0]
+        if on and not p.get("visible", True) or on and ("x" not in p or "y" not in p):
+            _put(d, p)                          # its own place when that's clear, else a free spot
+        p["visible"] = on
         return _save(d, f"{title} panel: {'on' if on else 'off'}")
     return fn
+
+
+def _title(name):
+    t = ABOUT.get(name, (None,))[0]
+    if t:
+        return t
+    try:
+        it = _gallery_item(name)
+        if it:
+            return it["title"].title() if it["title"].isupper() else it["title"]
+    except Fail:
+        pass
+    return name.replace("_", " ").title()
+
+
+def _gallery_item(name, d=None):
+    try:
+        import gallery
+        return next((e for e in gallery.entries(d or _layout_or_empty()) if e["name"] == name), None)
+    except Exception as e:
+        raise Fail(f"the widgets' code isn't here to read {name}: {e}")
+
+
+def _put(d, p, force=False, size=None):
+    """A panel being switched on gets a place on its monitor: its own when that's inside the
+    area and clear of the panels shown there (force: never), else a free spot clear of them,
+    off VECTOR's corner, the notifications and the scene's focal points where it can be.
+    No room anywhere: Fail, saying so (it's never put on top of another)."""
+    import arrange as A
+    name = p["name"]
+    w, h = size or (p.get("width"), p.get("height"))
+    if size is None and (not (w and h) or force and not p.get("visible", True)):
+        it = _gallery_item(name, d)               # off, added: its default size class
+        if it:
+            w, h = it["start"]
+    w, h = int(w or 470), int(h or 300)
+    mons = _monitors()
+    m = _monitor_of(d, mons, entry=p)
+    conn = m.get("name") if m else ""
+    scr = _screen_of(m)
+    area = (scr.W, scr.H)
+    taken = [_rect(s) for n, s in _now(d, mons).items() if n != name and s.get("visible") and s.get("conn", "") == conn
+             and _rect(s)]
+    hard, soft = _scene_avoid(scr)
+    avoid = [(area[0] - 1204, area[1] - 664, 1180, 640), (area[0] - 440, 0, 440, 320)] + hard
+    own = (p.get("x"), p.get("y"))
+    if not force and own[0] is not None and own[1] is not None and A.fits((own[0], own[1], w, h), taken, area) \
+            and not any(A.overlaps((own[0], own[1], w, h), r) for r in hard):
+        spot = own
+    else:
+        spot = A.place(w, h, taken, area, avoid, soft, strict=True)
+    if spot is None:
+        raise Fail(A.no_room(_title(name)))
+    p.update(x=int(spot[0]), y=int(spot[1]), width=w, height=h)
+    return spot
+
+
+def _rect(s):
+    if all(s.get(k) is not None for k in ("x", "y", "width", "height")):
+        return (int(s["x"]), int(s["y"]), int(s["width"]), int(s["height"]))
+    return None
+
+
+def _scene_avoid(scr):
+    try:
+        import layouts as L
+        return L.scene_avoid(scr)
+    except Exception:
+        return [], []
+
+
+def _primary(d, mons):
+    try:
+        import bromigos_monitors as BM
+        return BM.primary(mons, d.get("monitor") or "")
+    except ImportError:
+        if d.get("monitor") and any(m.get("name") == d.get("monitor") for m in mons):
+            return d["monitor"]
+        return min(mons, key=lambda m: m.get("id", 0)).get("name") if mons else ""
+
+
+def _monitor_of(d, mons, name=None, entry=None):
+    """Hyprland's entry for the monitor named, else the panel's own (its "output"), else the
+    panels' primary. None without Hyprland."""
+    import arrange as A
+    live = [m for m in mons if m.get("name") and not m.get("disabled")]
+    if name:
+        m = next((m for m in live if m["name"] == name), None)
+        if m is None:
+            raise Fail(f"no monitor {name!r} (there are: {', '.join(m['name'] for m in live) or 'none'})")
+        return m
+    conn = A.find_output(live, entry.get("output")) if entry and entry.get("output") else None
+    conn = conn or _primary(d, live)
+    return next((m for m in live if m["name"] == conn), None)
+
+
+def _screen_of(m):
+    import layouts as L
+    return L.Screen.of(m) if m else L.Screen.size(1920, 1080)
+
+
+def _now(d, mons):
+    """{name: {x, y, width, height, visible, conn}}: where the panels are now. The running
+    panels say (their health file: a plugin placed by free space too), else layout.json."""
+    import arrange as A
+    h = health().get("panels") if running() else None
+    if isinstance(h, dict) and h:
+        return {n: dict(s, conn=s.get("output") or "") for n, s in h.items()}
+    live = [m for m in mons if m.get("name") and not m.get("disabled")]
+    prim = _primary(d, live) or ""
+    out = {}
+    for n, s in A.state_of(d).items():
+        conn = (A.find_output(live, s.get("output")) if s.get("output") else None) or prim
+        out[n] = dict(s, conn=conn)
+    return out
 
 
 def move(args):
@@ -232,7 +373,10 @@ def size(args):
         raise Fail("bromigos panels size NAME W H | NAME CLASS")
     d, _, _ = load()
     p = _panel(d, args[0])
-    p["width"], p["height"] = _num(args[1], "width", 120, 4000), _num(args[2], "height", 80, 4000)
+    w, h = _num(args[1], "width", 120, 4000), _num(args[2], "height", 80, 4000)
+    if p.get("visible", True):
+        _put(d, p, size=(w, h))                 # bigger: still clear of the others, or moved
+    p["width"], p["height"] = w, h
     return _save(d, f"{p['name']}: {p['width']}×{p['height']}")
 
 
@@ -250,6 +394,8 @@ def size_class(args):
         raise Fail(f"{name} has no {cls!r} size (it has: {', '.join(c['name'] for c in it['sizes'])})")
     d, _, _ = load()
     p = _panel(d, name, plugins=True)
+    if p.get("visible", True) and "x" in p and "y" in p:
+        _put(d, p, size=tuple(c["start"]))      # bigger: still clear of the others, or moved
     p["width"], p["height"] = c["start"]
     return _save(d, f"{it['title'].title()}: {cls}, {p['width']}×{p['height']}")
 
@@ -331,52 +477,25 @@ def edit(_args):
     return {"said": "Edit mode: drag the panels, resize them by a corner, switch them in the tray. Esc saves."}
 
 
-def _area():
-    """The panels' usable area, from Hyprland when it answers (else a 1080p screen's)."""
-    mons = _monitors()
-    d = _layout_or_empty()
-    m = next((m for m in mons if m.get("name") == d.get("monitor")), None) or (mons[0] if mons else None)
-    if not m:
-        return 1920, 1046
-    scale = float(m.get("scale") or 1) or 1
-    rl, rt, rr, rb = (m.get("reserved") or [0, 0, 0, 0])[:4]
-    return int(m["width"] / scale - rl - rr), int(m["height"] / scale - rt - rb)
-
-
 def add(args):
     if len(args) != 1:
         raise Fail("bromigos panels add NAME")
     name = args[0]
+    d, _, _ = load()
+    if name not in {p.get("name") for p in d["panels"] if isinstance(p, dict)} and name not in _gallery_names():
+        raise Fail(f"no panel {name!r}")
+    p = dict(_panel(d, name, plugins=True))
+    _put(d, p, force=True)                      # no room: it says so here, and nothing changes
     if running():
-        d, _, _ = load()
-        if name not in {p.get("name") for p in d["panels"] if isinstance(p, dict)} and name not in _gallery_names():
-            raise Fail(f"no panel {name!r}")
         rc, _, err = C.run(["bromigos-widgets", "add", name], timeout=5)
         if rc != 0:
             raise Fail(err.strip() or "the panels didn't answer")
         import time
         time.sleep(0.3)                         # the panels save the layout themselves
-        return dict(status(), said=f"{ABOUT.get(name, (name,))[0]} panel: on, in a free spot")
-    import arrange as A
-    d, _, _ = load()
-    p = _panel(d, name, plugins=True)
-    st = A.state_of(d)
-    w, h = int(p.get("width") or 470), int(p.get("height") or 300)
-    try:                                        # off: its default size class, as the gallery's Add does
-        import gallery
-        it = next((e for e in gallery.entries(d) if e["name"] == name), None)
-        if it and not p.get("visible", True):
-            w, h = it["start"]
-    except Exception:
-        pass
-    taken = [(s["x"], s["y"], s.get("width", 470), s.get("height", 300)) for n, s in st.items()
-             if n != name and s.get("visible", True) and "x" in s and "y" in s]
-    area = _area()
-    spot = A.place(w, h, taken, area, [(area[0] - 1204, area[1] - 664, 1180, 640), (area[0] - 440, 0, 440, 320)])
-    if spot:
-        p["x"], p["y"] = spot
-    p.update(width=w, height=h, visible=True)
-    return _save(d, f"{ABOUT.get(name, (name,))[0]} panel: on, at {p.get('x')},{p.get('y')}")
+        return dict(status(), said=f"{_title(name)} panel: on, in a free spot")
+    entry = _panel(d, name, plugins=True)
+    entry.update({k: p[k] for k in ("x", "y", "width", "height")}, visible=True)
+    return _save(d, f"{_title(name)} panel: on, at {entry['x']},{entry['y']}")
 
 
 def _widget(name):
@@ -548,9 +667,297 @@ def gallery_cmd(args):
     return {"widgets": items, "categories": gallery.categories([it for it in items if gallery.addable(it)]),
             "running": running(), "user_file": user_layout()}
 
+# ------------------------------------------------------------------ layouts (widgets/layouts.py)
+def _catalog(d):
+    import gallery
+    import layouts as L
+    return L.catalog_of(gallery.entries(d))
+
+
+def _template(ident, info):
+    """A layout by its id: bromigOS's, yours, or "theme" (the theme's own, made for its
+    scene; "theme-<scene>" too)."""
+    import layouts as L
+    if ident in ("theme", f"theme-{info['scene']}"):
+        if not info.get("recommended"):
+            raise Fail(f"{info['title']} has no layout of its own (bromigos panels layouts lists the others)")
+        return info["recommended"]
+    errors = []
+    ts = L.templates(errors)
+    if ident not in ts:
+        raise Fail(f"no layout {ident!r} (there are: {', '.join(['theme'] + list(ts))})"
+                   + (f"; {'; '.join(errors)}" if errors else ""))
+    return ts[ident]
+
+
+def _on_monitor(d, mons, m):
+    """The panels on a monitor (or every panel, without Hyprland), from layout.json."""
+    import arrange as A
+    import layouts as L  # noqa: F401
+    if not m:
+        return set(A.state_of(d))
+    live = [x for x in mons if x.get("name") and not x.get("disabled")]
+    prim = _primary(d, live)
+    out = set()
+    for n, s in A.state_of(d).items():
+        conn = (A.find_output(live, s.get("output")) if s.get("output") else None) or prim
+        if conn == m["name"]:
+            out.add(n)
+    return out
+
+
+def _output_for(d, mons, m, explicit):
+    """What a layout applied to monitor m writes as each panel's "output": None (the
+    primary) unless a monitor was named and it isn't the primary."""
+    import arrange as A
+    if not m or not explicit or m["name"] == _primary(d, [x for x in mons if not x.get("disabled")]):
+        return None
+    return A.identity(m)
+
+
+def _notes(r):
+    """What a fit left out, and whether it covers more than the budget, in words."""
+    out = [f"{x['title']} left out: {x['why']}" for x in r["left_out"]]
+    if r["over_budget"]:
+        out.append(f"It covers {round(r['coverage'] * 100)}% of the screen, more than the third bromigOS keeps "
+                   "to so the scene shows")
+    return out
+
+
+def _fit_on(d, t, info, mons, m, cat=None):
+    import layouts as L
+    scr = _screen_of(m)
+    r = L.fit(t, scr, cat if cat is not None else _catalog(d), info["clear"], info.get("focus"))
+    r["screen"] = {"width": scr.W, "height": scr.H, "screen_width": scr.SW, "screen_height": scr.SH,
+                   "x": scr.ox, "y": scr.oy, "monitor": (m or {}).get("name") or ""}
+    return r
+
+
+def _write_layout(d, new, before, what, scene, said):
+    """layout.json with a new placement (through its symlink, in one step), the old one kept
+    for `layout undo`, and remembered for the scene."""
+    import arrange as A
+    import layouts as L
+    L.save_undo(before, what, scene)
+    doc = A.apply(d, new)
+    out = _save(doc, said)
+    L.remember(scene, A.state_of(doc))
+    L.set_record(scene=scene)
+    return out
+
+
+def layouts_cmd(args):
+    """Every layout there is, the theme's own first, each fitted to the monitor (a miniature
+    of where each widget would go, and what it would leave out)."""
+    import layouts as L
+    monitor = C.flag(args, "--monitor")
+    d, path, mine = load()
+    mons = _monitors()
+    m = _monitor_of(d, mons, monitor)
+    info = L.scene_info()
+    errors = list(info.get("errors") or [])
+    ts = L.templates(errors)
+    cat = _catalog(d)
+    out = []
+    items = ([("theme", info["recommended"])] if info.get("recommended") else []) + list(ts.items())
+    for ident, t in items:
+        r = _fit_on(d, t, info, mons, m, cat)
+        out.append({"id": ident, "title": t["title"], "description": t["description"], "archetype": t["archetype"],
+                    "source": t["source"], "made_for": t.get("made_for"), "path": t.get("path"),
+                    "placed": r["placed"], "left_out": r["left_out"], "coverage": r["coverage"],
+                    "over_budget": r["over_budget"], "notes": _notes(r)})
+    scr = _screen_of(m)
+    rects = L.scene_rects(info["clear"], scr, info.get("focus"))
+    undo = L.peek_undo()
+    return {"layouts": out, "theme": info["theme"], "scene": info["scene"], "scene_title": info["title"],
+            "clear": [{"x": r[0], "y": r[1], "width": r[2], "height": r[3], "name": r[4], "soft": r[5]} for r in rects],
+            "screen": {"width": scr.W, "height": scr.H, "full_width": scr.SW, "full_height": scr.SH, "x": scr.ox,
+                       "y": scr.oy, "monitor": (m or {}).get("name") or ""},
+            "background": _background(info), "first_run": not mine, "everywhere": L.record()["everywhere"],
+            "undo": {"what": undo["what"], "at": undo["at"]} if undo else None, "errors": errors,
+            "user_dir": L.user_dir()}
+
+
+def _background(info):
+    """A still of the scene, for a layout's miniature: the theme's painting, else the den."""
+    import layouts as L
+    for d in L.theme_dirs(info["theme"]) + ([L.current_dir()] if info["theme"] == L.current_theme() else []):
+        p = os.path.join(d, "backgrounds", "comp.webp")
+        if os.path.isfile(p):
+            return p
+    for p in (os.path.join(os.environ.get("BROMIGOS_SHARE_DIR") or "/usr/share/bromigos", "wallpaper",
+                           "bromigos-den-empty-2560x1440.jpg"),
+              "/usr/share/backgrounds/bromigos/bromigos-den-empty-2560x1440.jpg",
+              os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "wallpaper",
+                           "bromigos-den-empty-2560x1440.jpg")):
+        if os.path.isfile(p):
+            return os.path.realpath(p)
+    return None
+
+
+def layout_cmd(args):
+    if not args:
+        raise Fail("bromigos panels layout apply ID [--monitor NAME] [--all-themes] | save NAME | undo | theme NAME")
+    verb, rest = args[0], args[1:]
+    if verb == "apply":
+        return layout_apply(rest)
+    if verb == "save":
+        return layout_save(rest)
+    if verb == "undo":
+        return layout_undo(rest)
+    if verb == "theme":
+        return layout_theme(rest)
+    raise Fail("bromigos panels layout apply|save|undo|theme")
+
+
+def layout_apply(args):
+    import arrange as A
+    import layouts as L
+    monitor = C.flag(args, "--monitor")
+    everywhere = C.flag(args, "--all-themes", takes=False)
+    if len(args) != 1:
+        raise Fail("bromigos panels layout apply ID [--monitor NAME] [--all-themes]")
+    d, _, _ = load()
+    mons = _monitors()
+    info = L.scene_info()
+    t = _template(args[0], info)
+    m = _monitor_of(d, mons, monitor)
+    r = _fit_on(d, t, info, mons, m)
+    if not r["placed"]:
+        raise Fail(f"{t['title']}: nothing it shows can show here" + (f" ({'; '.join(_notes(r))})" if r["left_out"] else ""))
+    before = A.state_of(d)
+    new = L.to_state(r, _on_monitor(d, mons, m), _output_for(d, mons, m, bool(monitor)))
+    if everywhere:
+        L.forget_scenes()
+        L.set_record(everywhere=args[0] if args[0] != "theme" else None)
+    said = f"{t['title']}: {len(r['placed'])} widgets" + (" on every theme" if everywhere else
+                                                          f" for {info['title']}")
+    out = _write_layout(d, new, before, f"the {t['title']} layout", info["scene"], said)
+    return dict(out, layout=args[0], placed=r["placed"], left_out=r["left_out"], coverage=r["coverage"],
+                over_budget=r["over_budget"], notes=_notes(r), scene=info["scene"], undo=True)
+
+
+def layout_save(args):
+    import layouts as L
+    desc = C.flag(args, "--description") or ""
+    monitor = C.flag(args, "--monitor")
+    name = " ".join(args).strip()
+    if not name or len(name) > 60 or "\n" in name:
+        raise Fail("bromigos panels layout save NAME (a short name)")
+    d, _, _ = load()
+    mons = _monitors()
+    m = _monitor_of(d, mons, monitor)
+    conn = (m or {}).get("name", "")
+    now = {n: s for n, s in _now(d, mons).items() if (s.get("conn") or "") == conn or not m}
+    if not any(s.get("visible") for s in now.values()):
+        raise Fail("no widgets on that monitor to save")
+    ident = L.slug(name)
+    if ident in ("theme",) or ident.startswith("theme-"):
+        ident = "my-" + ident
+    path = os.path.join(L.user_dir(), f"{ident}.toml")
+    C.write_file(path, L.from_state(now, _screen_of(m), _catalog(d), name, desc))
+    return {"said": f"Saved as your layout {name!r} (bromigos panels layout apply {ident})", "id": ident,
+            "path": path}
+
+
+def layout_undo(_args):
+    import arrange as A
+    import layouts as L
+    u = L.take_undo()
+    if not u:
+        raise Fail("nothing to undo: no layout was applied or tidied since")
+    d, _, _ = load()
+    before = A.state_of(d)
+    doc = L.restore(d, u["panels"])
+    L.save_undo(before, f"undoing {u['what']}", u.get("scene"))        # undo again puts it back
+    out = _save(doc, f"Back to the layout before {u['what']}")
+    scene = u.get("scene") or L.record()["scene"]
+    if scene:
+        L.remember(scene, A.state_of(doc))
+    return dict(out, undo=True)
+
+
+def layout_theme(args):
+    """The theme changed (the theme-set hook): the layout in force is remembered for the old
+    scene, and the new scene's comes back, else the layout applied to every theme, else the
+    one made for it. A colour theme draws the Wick's den: the same scene, nothing changes."""
+    import arrange as A
+    import layouts as L
+    name = args[0] if args else L.current_theme()
+    info = L.scene_info(name)
+    title = info["title"][:1].upper() + info["title"][1:]
+    rec = L.record()
+    d, _, mine = load()
+    cur = A.state_of(d)
+    old = rec["scene"]
+    if old == info["scene"]:
+        return {"said": f"{title}: the same scene, the same layout", "scene": info["scene"], "changed": False}
+    if old:
+        L.remember(old, cur)
+    elif mine:                                # nobody said which scene this was arranged for: kept
+        L.set_record(scene=info["scene"])
+        L.remember(info["scene"], cur)
+        return {"said": f"Your layout kept for {info['title']}", "scene": info["scene"], "changed": False}
+    saved = L.recall(info["scene"])
+    if saved is not None:
+        doc = L.restore(d, saved)
+        L.save_undo(cur, f"switching to {info['title']}", info["scene"])
+        out = _save(doc, f"{title}: your layout for it")
+        L.set_record(scene=info["scene"])
+        return dict(out, scene=info["scene"], changed=True)
+    t = None
+    if rec["everywhere"]:
+        try:
+            t = _template(rec["everywhere"], info)
+        except Fail:
+            t = None
+    t = t or info.get("recommended")
+    if t is None:
+        L.set_record(scene=info["scene"])
+        L.remember(info["scene"], cur)
+        return {"said": f"{title} has no layout of its own: yours is kept", "scene": info["scene"],
+                "changed": False}
+    mons = _monitors()
+    m = _monitor_of(d, mons)
+    r = _fit_on(d, t, info, mons, m)
+    new = L.to_state(r, _on_monitor(d, mons, m), None)
+    out = _write_layout(d, new, cur, f"switching to {info['title']}", info["scene"],
+                        f"{title}: {t['title']}")
+    return dict(out, scene=info["scene"], changed=True, layout=t["id"], left_out=r["left_out"], notes=_notes(r))
+
+
+def tidy_cmd(args):
+    """Tidy up: the widgets on now packed without overlapping, their order kept, off the
+    scene's focal points; any with no room at all is switched off and named."""
+    import arrange as A
+    import layouts as L
+    monitor = C.flag(args, "--monitor")
+    d, _, _ = load()
+    mons = _monitors()
+    m = _monitor_of(d, mons, monitor)
+    conn = (m or {}).get("name", "")
+    now = {n: s for n, s in _now(d, mons).items() if s.get("visible") and _rect(s) and
+           ((s.get("conn") or "") == conn or not m)}
+    if not now:
+        raise Fail("no widgets on that monitor to tidy")
+    info = L.scene_info()
+    scr = _screen_of(m)
+    r = L.tidy(now, scr, _catalog(d), info["clear"], info.get("focus"))
+    new = {}
+    for n in now:
+        p = r["placed"].get(n)
+        new[n] = {"x": p["x"], "y": p["y"], "width": p["width"], "height": p["height"], "visible": True} if p else \
+            {"visible": False}
+    gone = [x["title"] for x in r["left_out"]]
+    said = f"Tidied {len(r['placed'])} widgets" + (f"; {A.no_room(', '.join(gone))} (switched off)" if gone else "")
+    out = _write_layout(d, new, A.state_of(d), "tidying up", info["scene"], said)
+    return dict(out, placed=r["placed"], left_out=r["left_out"], undo=True)
+
+
 
 if __name__ == "__main__":
     sys.exit(C.main({"status": status, "show": show(True), "hide": show(False), "add": add, "edit": edit,
                      "settings": settings_cmd, "set": set_cmd, "unset": unset_cmd, "inspect": inspect_cmd,
                      "gallery": gallery_cmd, "move": move, "size": size,
-                     "monitor": monitor, "weather": weather_cmd, "reset": reset}, USAGE))
+                     "monitor": monitor, "weather": weather_cmd, "reset": reset, "layouts": layouts_cmd,
+                     "layout": layout_cmd, "tidy": tidy_cmd}, USAGE))

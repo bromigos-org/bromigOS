@@ -52,6 +52,8 @@ if os.environ.get("BROMIGOS_WIDGETS_DEMO") == "1":
 
 SOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "bromigos-widgets.sock")
 from plugins import LAYOUT  # noqa: E402  the user's layout.json, else the packaged default
+
+MARGIN_SPOT = (28, 16)       # where a panel that isn't shown waits (a hidden plugin without a place)
 NOTES = os.path.expanduser("~/.local/share/bromigos/notes.md")
 
 
@@ -645,6 +647,24 @@ class App:
         GLib.timeout_add_seconds(30, self.check_surfaces)
         self.listen()
         GLib.timeout_add(int(os.environ.get("BROMIGOS_TICK_MS", "100")), self.loop)
+        GLib.idle_add(self.first_run)
+
+    def first_run(self):
+        """Which scene the layout is arranged for, written down the first time (a theme switch
+        remembers it for that scene); and, with no layout of the user's yet, the layouts
+        offered once (Customize › Widgets has them)."""
+        try:
+            import layouts as L
+            if not L.record().get("scene"):
+                L.set_record(scene=L.scene_info()["scene"])
+            flag = os.path.join(os.path.dirname(L.record_path()), "layouts-offered")
+            if not os.path.exists(A.user_path()) and not os.path.exists(flag) and not os.environ.get("BROMIGOS_WIDGETS_DEMO"):
+                open(flag, "w").close()
+                self.say("Pick a layout for your widgets: Customize › Widgets › Layouts, or bromigos panels layouts. "
+                         "Minimal, Developer, Homelab and more, fitted to your screen and your theme.")
+        except Exception as e:                    # noqa: BLE001  never in the way of the panels
+            print(f"bromigos-widgets: layouts: {e}", file=sys.stderr, flush=True)
+        return False
 
     # ------------------------------------------------------------------ monitors
     @property
@@ -754,35 +774,68 @@ class App:
 
     def _place(self, name, spec, conn):
         """Position for a plugin: layout.json "plugins" > its LAYOUT > a remembered spot > free space
-        (on `conn`, the output it goes on)."""
-        import plugins as PL
+        (on `conn`, the output it goes on). Free space is clear of the panels shown there (a
+        hidden one takes no room) and of the scene's focal points. A hidden plugin without a
+        place gets one when it's switched on. None: no room anywhere; it stays off rather than
+        go on top of another (it used to fall back to the top left, and remember that, which
+        stacked every new widget on SYSTEM)."""
         if "x" in spec and "y" in spec:
             return spec["x"], spec["y"]
+        if not spec.get("visible", True):
+            return MARGIN_SPOT                    # off: placed when it's switched on
         try:
             with open(self.PLACES) as f:
                 places = json.load(f)
         except (OSError, ValueError):
             places = {}
         w, h = spec.get("width", 470), spec.get("height", 200)
-        taken = [(p["x"], p["y"], p.get("width", 470), p.get("height", 420)) for p in self.cfg["panels"]
-                 if self.target(p.get("output")) == conn and "x" in p and "y" in p]
-        for n, win in self.windows.items():
-            if n in self.plugins and n != name and hasattr(win, "pos") and win.monitor == conn:
-                taken.append((*win.pos, win.panel.width, win.panel.height))
-        W, H = self.area(conn)
-        avoid = self.avoid((W, H))
+        taken = self.shown_rects(conn, name)
+        area = self.area(conn)
+        avoid, soft = self.keep_clear(conn, area)
         old = places.get(name)
-        if old and PL.free_spot(w, h, taken, (W, H), avoid) is not None:
-            ox, oy = old
-            if all(ox + w + 16 <= rx or rx + rw + 16 <= ox or oy + h + 16 <= ry or ry + rh + 16 <= oy
-                   for rx, ry, rw, rh in taken + avoid):
-                return ox, oy
-        spot = PL.free_spot(w, h, taken, (W, H), avoid) or (28, 16)
+        if old and A.fits((old[0], old[1], w, h), taken, area, A.GAP) and \
+                not any(A.overlaps((old[0], old[1], w, h), r) for r in avoid):
+            return old[0], old[1]
+        spot = A.place(w, h, taken, area, avoid, soft, strict=True)
+        if spot is None:
+            return None
         places[name] = list(spot)
         os.makedirs(os.path.dirname(self.PLACES), exist_ok=True)
         with open(self.PLACES, "w") as f:
             json.dump(places, f)
         return spot
+
+    def shown_rects(self, conn, but=None):
+        """The rects of the panels shown on an output, and of those layout.json shows there that
+        aren't loaded yet (a plugin later in the scan)."""
+        out = [w.rect() for n, w in self.windows.items() if n != but and w.monitor == conn and self.shown(n)]
+        for p in list(self.cfg.get("panels") or []) + [dict(v, name=k) for k, v in (self.cfg.get("plugins") or {}).items()
+                                                     if isinstance(v, dict)]:
+            n = p.get("name")
+            if n and n != but and n not in self.windows and p.get("visible", True) and "x" in p and "y" in p \
+                    and self.target(p.get("output")) == conn:
+                out.append((p["x"], p["y"], p.get("width", 470), p.get("height", 300)))
+        return out
+
+    def keep_clear(self, conn, area=None):
+        """Where a panel being added shouldn't go on an output: VECTOR's console, the
+        notifications and the scene's focal points (layouts.scene_avoid); and the scene's soft
+        areas, kept clear while there's room elsewhere."""
+        area = area or self.area(conn)
+        hard, soft = [], []
+        m = self.monitor(conn)
+        if m:
+            try:
+                import layouts as L
+                hard, soft = L.scene_avoid(L.Screen.of(m))
+            except Exception as e:                # noqa: BLE001  never in the way of adding one
+                print(f"bromigos-widgets: the scene's keep-clear areas: {e}", file=sys.stderr, flush=True)
+        return self.avoid(area) + hard, soft
+
+    def say(self, text):
+        """A message the user sees (a notification), and the log."""
+        print(f"bromigos-widgets: {text}", file=sys.stderr, flush=True)
+        self.launch(["notify-send", "-a", "Desktop panels", "-i", "preferences-desktop", "Desktop panels", text])
 
     def _close_plugin(self, name):
         w = self.windows.pop(name, None)
@@ -822,7 +875,9 @@ class App:
                     spec.setdefault("width", panel.width)
                     spec.setdefault("height", panel.height)
                     conn = self.target(spec.get("output"))
-                    x, y = self._place(name, spec, conn)
+                    spot = self._place(name, spec, conn)
+                    roomless = spot is None
+                    x, y = spot or MARGIN_SPOT
                     safe = PL.SafePanel(name, panel, path)
                     win = PanelWindow(self, safe, gdk_monitor(conn, self.mons), x, y, name)
                     win.pos = (x, y)
@@ -831,7 +886,10 @@ class App:
                         win.set_layer(True)
                     win.win.connect("delete-event", self.on_surface_closed, name)
                     self.windows[name] = win
-                    if spec.get("visible", True):
+                    if roomless:
+                        PL.log(name, A.no_room(name) + " (left off)")
+                        self.say(A.no_room(G.meta_of(panel, name)["title"]))
+                    elif spec.get("visible", True):
                         win.win.show_all()
                     PL.log(name, f"loaded at {x},{y} ({panel.width}x{panel.height})")
                     loaded = True
@@ -1163,7 +1221,8 @@ class App:
         return doc
 
     def add(self, name):
-        """A panel on, in a free spot (`bromigos panels add`), saved."""
+        """A panel on, in a free spot (`bromigos panels add`), saved; or, with no room for it
+        anywhere, left off and said so (never on top of another)."""
         w = self.windows[name]
         if self.editor:
             self.editor.show(name, free=True)
@@ -1171,8 +1230,14 @@ class App:
         if not w.visible():                    # its default size class, as the gallery's Add does
             w.set_size_class(G.meta_of(getattr(w, "panel", None), name)["default_size"])
         area = self.area(w.monitor)
-        taken = [x.rect() for n, x in self.on(w.monitor).items() if n != name and x.visible()]
-        w.place(*A.place(*w.size_now(), taken, area, self.avoid(area)))
+        taken = self.shown_rects(w.monitor, name)
+        avoid, soft = self.keep_clear(w.monitor, area)
+        spot = A.place(*w.size_now(), taken, area, avoid, soft, strict=True)
+        if spot is None:
+            panel = getattr(w, "panel", None)
+            self.say(A.no_room(G.meta_of(panel, name)["title"] if panel is not None else "FIELD NOTES"))
+            return
+        w.place(*spot)
         self.set_visible(name, True)
         self.save_layout()
 

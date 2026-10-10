@@ -1,0 +1,154 @@
+{
+  "_comment": "The stacking bug (docs/widgets.md, Layouts): a layout after about ten widgets were switched on from Customize on a 2560x1440 screen, every one at the same remembered spot, then dragged partly apart. A regression fixture: Tidy up must leave none overlapping.",
+  "monitor": "DP-1",
+  "panels": [
+    {
+      "name": "system",
+      "x": 28,
+      "y": 16,
+      "width": 470,
+      "height": 470,
+      "visible": true
+    },
+    {
+      "name": "network",
+      "x": 28,
+      "y": 502,
+      "width": 470,
+      "height": 262,
+      "ping": [
+        {
+          "label": "GATEWAY"
+        },
+        {
+          "label": "WAN",
+          "host": "1.1.1.1"
+        }
+      ],
+      "visible": true
+    },
+    {
+      "name": "storage",
+      "x": 28,
+      "y": 780,
+      "width": 470,
+      "height": 214,
+      "visible": true
+    },
+    {
+      "name": "shortcuts",
+      "x": 28,
+      "y": 1010,
+      "width": 470,
+      "height": 384,
+      "visible": true
+    },
+    {
+      "name": "lab",
+      "x": 514,
+      "y": 16,
+      "width": 470,
+      "height": 752,
+      "visible": true
+    },
+    {
+      "name": "workbench",
+      "x": 514,
+      "y": 784,
+      "width": 470,
+      "height": 300,
+      "_workbench": "Recent git repos + zoxide's most-visited folders; projects/folders = how many rows of each.",
+      "projects": 5,
+      "folders": 3,
+      "visible": true
+    },
+    {
+      "name": "notes",
+      "x": 514,
+      "y": 1100,
+      "width": 470,
+      "height": 268,
+      "visible": true
+    },
+    {
+      "name": "gpu",
+      "x": 1446,
+      "y": 320,
+      "width": 460,
+      "height": 300,
+      "visible": true
+    },
+    {
+      "name": "nowplaying",
+      "x": 1084,
+      "y": 336,
+      "width": 460,
+      "height": 200,
+      "visible": true
+    },
+    {
+      "name": "spotify",
+      "x": 608,
+      "y": 292,
+      "width": 460,
+      "height": 200,
+      "visible": true
+    },
+    {
+      "name": "twitch",
+      "x": 752,
+      "y": 372,
+      "width": 460,
+      "height": 300,
+      "visible": true
+    },
+    {
+      "name": "updates",
+      "x": 1152,
+      "y": 730,
+      "width": 460,
+      "height": 280,
+      "visible": true
+    },
+    {
+      "name": "vector",
+      "x": 928,
+      "y": 710,
+      "width": 460,
+      "height": 300,
+      "visible": true
+    },
+    {
+      "name": "youtube",
+      "x": 960,
+      "y": 964,
+      "width": 460,
+      "height": 300,
+      "visible": true
+    },
+    {
+      "name": "alerts",
+      "x": 1645,
+      "y": 744,
+      "width": 460,
+      "height": 300,
+      "visible": true
+    },
+    {
+      "name": "labjobs",
+      "x": 1168,
+      "y": 1140,
+      "width": 460,
+      "height": 300,
+      "visible": true
+    },
+    {
+      "name": "game_servers",
+      "x": 1640,
+      "y": 928,
+      "width": 470,
+      "height": 372,
+      "visible": true
+    }
+  ]
+}

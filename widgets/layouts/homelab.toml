@@ -1,0 +1,48 @@
+# A layout (docs/widgets.md, "Layouts"): the format is in widgets/layouts.py.
+title = "Homelab"
+description = "Your servers at a glance: the lab's hologram, alerts, jobs, storage, the network and game servers"
+archetype = "homelab"
+
+[[widget]]
+name = "lab"
+size = "large"
+small = "standard"
+side = "left"
+priority = 1
+
+[[widget]]
+name = "storage"
+size = "standard"
+small = "compact"
+side = "left"
+priority = 3
+
+[[widget]]
+name = "network"
+size = "standard"
+small = "compact"
+side = "left"
+priority = 4
+
+[[widget]]
+name = "alerts"
+size = "standard"
+small = "compact"
+side = "left"
+lane = 2
+priority = 2
+
+[[widget]]
+name = "labjobs"
+size = "standard"
+small = "compact"
+side = "left"
+lane = 2
+priority = 3
+
+[[widget]]
+name = ["games", "game_servers"]
+size = "compact"
+side = "right"
+from = "bottom"
+priority = 5
