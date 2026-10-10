@@ -18,9 +18,15 @@ The interface (stable: other parts of bromigOS import it):
         When yt-dlp fails, the last good answer comes back with "error" set, so a
         network hiccup never empties a list. Never raises.
 
-    Y.live_now(url, max_age=600, refresh=True) -> Video or None
+    Y.live_now(url, max_age=600, refresh=True) -> Video, False or None
         The channel's live stream if it's live right now (its /streams tab, read like
-        videos(), with a shorter cache).
+        videos(), with a shorter cache); False when it isn't; None when that can't be
+        told (not a channel, or yt-dlp failed with nothing cached).
+
+    Y.channel_videos(url, limit=15) -> [Video, ...]
+        videos()'s list alone, each also with yt-dlp's own names for two fields
+        (timestamp = uploaded, live_status = live). Raises RuntimeError when yt-dlp failed
+        and nothing is cached, so a caller can fall back to the channel's public feed.
 
     Y.cached(url) -> the same document as videos(), from the cache only (no yt-dlp,
         no network): for a panel drawing, or None.
@@ -220,11 +226,23 @@ def videos(url, max_age=3600, limit=200, refresh=True, tab="videos", timeout=90)
 
 
 def live_now(url, max_age=600, refresh=True):
-    """The channel's live stream right now, or None (not a channel, nothing live)."""
+    """The channel's live stream right now; False when nothing is live; None when that
+    can't be told (not a channel, or no listing to go by)."""
     if not is_channel(url):
         return None
     doc = videos(url, max_age=max_age, limit=10, refresh=refresh, tab="streams")
-    return next((v for v in doc.get("videos") or [] if v.get("live") == "is_live"), None)
+    if doc.get("error") and not doc.get("videos"):
+        return None
+    return next((v for v in doc.get("videos") or [] if v.get("live") == "is_live"), False)
+
+
+def channel_videos(url, limit=15, max_age=3600):
+    """videos()'s list, with yt-dlp's names for the upload time and the live state too."""
+    doc = videos(url, max_age=max_age, limit=max(int(limit), 1))
+    vids = doc.get("videos") or []
+    if doc.get("error") and not vids:
+        raise RuntimeError(doc["error"])
+    return [dict(v, timestamp=v.get("uploaded"), live_status=v.get("live")) for v in vids[:int(limit)]]
 
 
 # ------------------------------------------------------------------ keeping videos

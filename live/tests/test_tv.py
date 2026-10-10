@@ -274,6 +274,16 @@ class YouTubeTest(unittest.TestCase):
         v = Y.live_now("https://www.youtube.com/@examplestudio")
         self.assertEqual((v["title"], v["live"]), ("Live: modelling session", "is_live"))
         self.assertIsNone(Y.live_now("https://www.youtube.com/playlist?list=PL1"))
+        with mock.patch.object(Y, "videos", return_value={"videos": [{"id": "x", "live": "was_live"}], "error": None}):
+            self.assertIs(Y.live_now("https://www.youtube.com/@quiet"), False)      # known not live
+        self.assertIsNone(Y.live_now("https://www.youtube.com/@gone"))              # can't be told
+
+    def test_channel_videos_for_the_youtube_panel(self):
+        got = Y.channel_videos("https://www.youtube.com/@examplestudio", limit=2)
+        self.assertEqual([(v["title"], v["live_status"]) for v in got], [("Studio log 32", None), ("Project teaser", None)])
+        self.assertIn("timestamp", got[0])
+        with self.assertRaises(RuntimeError):
+            Y.channel_videos("https://www.youtube.com/@gone")
 
     def test_no_ytdlp(self):
         with mock.patch.dict(os.environ, {"BROMIGOS_YTDLP": ""}), mock.patch.object(Y.shutil, "which", return_value=None):
