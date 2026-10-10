@@ -343,8 +343,9 @@ through the shared helper `lib/bromigos_account.py`. The form shows **Sign in**,
   **Copy**, **Open the page** and how long the code still works. You type the code on the
   service's own page. For Spotify, **Open the sign-in page** opens it, and the form
   finishes by itself when you approve.
-- **Connecting a service.** Each service needs your own app's client ID once, and GitLab
-  your instance's address. When one is missing, the form asks for it under **Connect
+- **Connecting a service.** bromigOS has its own apps for GitHub, gitlab.com and Twitch,
+  so those go straight to Sign in. Spotify, and a GitLab server of your own, need your own
+  app's client ID once (and the GitLab server's address). When one is missing, the form asks for it under **Connect
   <service>**, with where to make the app. It's saved in `~/.config/bromigos/accounts.toml`
   and shared by every widget that uses that service.
 - **GitHub through gh.** If you're signed in to the `gh` command, the form says **Signed
@@ -591,12 +592,15 @@ The GitLab panel shows your work on gitlab.com or on your own GitLab:
 - the latest pipelines of the projects you were last active in. Wide, tall and large
   show each project's recent pipelines as a strip.
 
-For your own GitLab, set its address once: `bromigos account configure gitlab
-base=https://git.example.org`. Then sign in one of two ways:
+On gitlab.com, click **Sign in** in the panel's **Settings…** and enter the code on
+GitLab's page; bromigOS has its own gitlab.com app. For your own GitLab server, set its
+address once: `bromigos account configure gitlab base=https://git.example.org`. Then sign
+in one of two ways:
 
 - **The device flow**, on GitLab 17.2 or later. In GitLab, User settings › Applications:
-  add an application, untick **Confidential**, tick `read_api` and `read_user`, and give
-  the redirect URI `http://127.0.0.1`. Give the panel its application ID.
+  add an application, untick **Confidential**, tick **Device authorization grant**,
+  `read_api` and `read_user`, and give the redirect URI `http://localhost`. Give the panel
+  its application ID.
 - **A personal access token** with `read_api`: **Paste a token…** in the panel's
   settings, or `bromigos account set-token gitlab`.
 

@@ -102,10 +102,13 @@ PROVIDERS = {
         "device_url": "{base}/oauth/authorize_device", "token_url": "{base}/oauth/token",
         "scopes": ["read_api", "read_user"], "scope_key": "scope",
         "who_url": "{base}/api/v4/user", "who_field": "username",
-        "app_help": "In GitLab (17.2 or later), User settings › Applications: a new application, "
-                    "Confidential unticked, scopes read_api and read_user, redirect URI http://127.0.0.1. "
-                    "Copy its Application ID. Or store a personal access token instead "
-                    "(bromigos account set-token gitlab).",
+        # bromigOS's own gitlab.com application (non-confidential, device grant: its ID isn't a
+        # secret). It only works on gitlab.com; a self-hosted GitLab needs an application of its own.
+        "client_id": "5e34e8644147e7edfa98f96d443f34968c7cc7faae644beb61831fa5ede4f86d",
+        "app_help": "For your own GitLab server (17.2 or later), User settings › Applications: a new "
+                    "application, Confidential unticked, Device authorization grant ticked, scopes "
+                    "read_api and read_user, redirect URI http://localhost. Copy its Application ID. Or "
+                    "store a personal access token instead (bromigos account set-token gitlab).",
     },
     "spotify": {
         "title": "Spotify", "flow": "pkce", "base": "https://open.spotify.com", "port": 8898,
@@ -169,6 +172,9 @@ def config(provider):
     got = _read_all().get(provider) or {}
     out.update({k: v for k, v in got.items() if isinstance(v, (str, int))})
     out["base"] = str(out.get("base") or p["base"]).rstrip("/")
+    # bromigOS's own app is registered on the provider's public site only
+    if "client_id" not in got and out["base"] != p["base"].rstrip("/"):
+        out["client_id"] = None
     return out
 
 

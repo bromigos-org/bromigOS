@@ -31,10 +31,17 @@ class Base(unittest.TestCase):
 
 class Config(Base):
     def test_needs_a_client_id_until_configured(self):
-        self.assertEqual(A.needs("gitlab"), ["client_id"])
-        A.configure("gitlab", client_id="abc123")
+        self.assertEqual(A.needs("spotify"), ["client_id"])
+        A.configure("spotify", client_id="abc123")
+        self.assertEqual(A.needs("spotify"), [])
+        self.assertEqual(A.config("spotify")["client_id"], "abc123")
+
+    def test_gitlab_com_ships_an_app_but_a_self_hosted_gitlab_needs_its_own(self):
         self.assertEqual(A.needs("gitlab"), [])
-        self.assertEqual(A.config("gitlab")["client_id"], "abc123")
+        A.configure("gitlab", base="https://git.example.org")
+        self.assertEqual(A.needs("gitlab"), ["client_id"])
+        A.configure("gitlab", client_id="own")
+        self.assertEqual(A.config("gitlab")["client_id"], "own")
 
     def test_twitch_ships_bromigos_app_and_yours_wins(self):
         self.assertEqual(A.needs("twitch"), [])
@@ -55,7 +62,7 @@ class Config(Base):
 
     def test_sign_in_without_config_raises_needs_config(self):
         with self.assertRaises(A.NeedsConfig) as c:
-            A.sign_in("gitlab", on_prompt=lambda d: None)
+            A.sign_in("spotify", on_prompt=lambda d: None)
         self.assertEqual(c.exception.fields, ["client_id"])
 
     def test_fields_describe_the_form(self):
