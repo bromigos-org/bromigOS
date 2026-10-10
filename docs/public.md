@@ -77,7 +77,8 @@ Without `--yes` it changes nothing. With `--yes` it does this, in order:
    the site, and the /os/get page shows the install steps instead of the Discord note.
 
 With `GO_PUBLIC_VAULT_PATH` set, it also marks the bucket's record in Vault public.
-The GitHub repositories stay private.
+This step leaves the GitHub repositories as they are. `--repos` makes them public:
+see [The GitHub repositories](#the-github-repositories).
 
 ### The same bucket change by hand
 
@@ -100,37 +101,47 @@ tools/release/go-public.sh --private --domain pkgs.bromigos.org --yes
 This turns the public address off again. It doesn't revert the two merged branches. Revert
 those with `git revert` if you need to.
 
-## CI once the repositories are public
+## The GitHub repositories
 
-The GitHub repositories are private too. Making them public is a separate decision, and
-nothing here changes a repository's visibility. When they are public, run:
+At go-live, the GitHub repositories `bromigOS`, `vector` and `extensions` become public
+too. Their histories start at v0.1.2 for that reason. The `-archive` repositories, which
+hold the earlier history, stay private. One command does it, after the steps above:
 
 ```bash
-tools/release/go-public.sh --ci            # prints what it would change
-tools/release/go-public.sh --ci --yes      # changes it
+tools/release/go-public.sh --repos            # prints everything it would change
+tools/release/go-public.sh --repos --yes      # changes it
 ```
 
-Public repositories never use the homelab's runners: a fork's pull request could run code
-on them. GitHub's hosted runners are free for public repositories. So `--ci` moves CI there,
-in both repositories:
+Without `--yes` it changes nothing. With `--yes` it does this, in order:
 
-- It deletes every `CI_RUNNER_*` variable. Every job then runs on GitHub's runner.
-  `packages.yml` publishes to the R2 bucket alone, and the homelab copies from it
-  ([packaging/README.md](../packaging/README.md#when-the-public-bucket-is-the-primary)).
-- It sets the secret `LITELLM_BASE_URL` to the model's public address, so release-prepare
-  still drafts the notes. It deletes the variable of that name, whose value would show in
-  public logs.
-- It sets the variable `ISO_REPO_URL` to the public package repository, once `install.sh`
-  names one. Otherwise it deletes it.
-- It lists runs still queued for a homelab runner, with the commands to start them again.
+1. **It moves CI to GitHub's runners**, in bromigOS and vector. Public repositories never
+   use the homelab's runners: a fork's pull request could run code on them. GitHub's
+   hosted runners are free for public repositories.
+   - It deletes every `CI_RUNNER_*` variable. Every job then runs on GitHub's runner.
+     `packages.yml` publishes to the R2 bucket alone, and the homelab copies from it
+     ([packaging/README.md](../packaging/README.md#when-the-public-bucket-is-the-primary)).
+   - It sets the secret `LITELLM_BASE_URL` to the model's public address, so
+     release-prepare still drafts the notes. It checks first that the address answers.
+     It deletes the variable of that name, whose value would show in public logs.
+   - It sets the variable `ISO_REPO_URL` to the public package repository, once
+     `install.sh` names one. Otherwise it deletes it.
+   - It lists runs still queued for a homelab runner, with the commands to start them
+     again.
+2. **It makes each repository public.**
+3. **It turns on what a public repository needs**, in each one:
+   - private vulnerability reporting, so a security problem can be reported privately;
+   - secret scanning with push protection, which refuses a push that contains a secret;
+   - approval for workflow runs from every outside contributor's fork
+     (`all_external_contributors`).
 
-Before anything, it checks that the model's public address answers. It reads the address
-from `GO_PUBLIC_LITELLM_PUBLIC_URL`, or from a record in Vault that
-`GO_PUBLIC_CI_VAULT_PATH` names. The script's header lists the names.
+It reads the model's public address from `GO_PUBLIC_LITELLM_PUBLIC_URL`, or from a record
+in Vault that `GO_PUBLIC_CI_VAULT_PATH` names. The script's header lists the names.
 
-`tools/release/go-public.sh --ci --private --yes` puts the homelab's runners and the
-in-cluster address back. The first publish on a homelab runner then takes the primary
-back from R2.
+`--ci` does step 1 alone. `tools/release/go-public.sh --ci --private --yes` puts the
+homelab's runners and the in-cluster address back. The first publish on a homelab runner
+then takes the primary back from R2. The command never makes a repository private again.
+Do that by hand with `gh repo edit <repo> --visibility private
+--accept-visibility-change-consequences`, then run `--ci --private`.
 
 Every workflow takes a `hosted` input, which runs it on GitHub's runner while the
 variables still name the homelab's. Use it to check a change before the switch. While the
@@ -161,6 +172,12 @@ migration that rewrites the `Server` line, so choose before many people install.
 custom domain is the better long-term address. While bromigos.org's DNS is elsewhere,
 r2.dev is the only one available.
 
+The v0.1.2 ISO names the r2.dev address. Every machine installed from it has that
+address in its `/etc/pacman.conf`. So with `--domain`, the command keeps the r2.dev
+address on as well, and those machines keep getting updates. `--private --domain` turns
+both off. ISOs built after go-live name the custom domain
+(`iso/build.sh --medium-repo https://pkgs.bromigos.org`), so new installs use it.
+
 ## The signing key
 
 Every package and every database is signed with the bromigOS key:
@@ -184,7 +201,7 @@ secrets, never in a repository. To replace the key, follow
 
 | File | What |
 |---|---|
-| `tools/release/go-public.sh` | The command; `--ci` moves CI to GitHub's runners |
+| `tools/release/go-public.sh` | The command; `--repos` makes the GitHub repositories public, `--ci` moves CI to GitHub's runners |
 | `tools/release/test_go_public.py` | Its tests, with a stubbed Cloudflare API and bucket, and throwaway repositories |
 | `packaging/ci/publish.sh` | Publishes each channel, then copies it to the mirror |
 | `manual/publish.sh` | Publishes the web manual to both buckets |

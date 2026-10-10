@@ -268,7 +268,7 @@ then publishes to one bucket only.
 ### When the public bucket is the primary
 
 Once the GitHub repositories are public, CI can't use the homelab's runners
-([public.md](../docs/public.md#ci-once-the-repositories-are-public)). GitHub's runners
+([public.md](../docs/public.md#the-github-repositories)). GitHub's runners
 can't reach the homelab's bucket. So there, the R2 bucket becomes the primary, and the
 homelab's bucket becomes its copy.
 

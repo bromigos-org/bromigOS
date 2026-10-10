@@ -8,6 +8,8 @@
 #   tools/release/go-public.sh --private [--domain HOST] [--yes]
 #                                                       undo the bucket part: private again
 #   tools/release/go-public.sh --ci [--private] [--yes] move CI to GitHub's runners (or back)
+#   tools/release/go-public.sh --repos [--yes]          the GitHub repositories go public:
+#                                                       --ci's switch, then each repository
 #
 # The bucket is the Cloudflare R2 bucket bromigos-pkgs. It goes public at its r2.dev
 # address, or with --domain at a custom domain (pkgs.bromigos.org) in a Cloudflare zone.
@@ -29,12 +31,16 @@
 # or GO_PUBLIC_VAULT_PATH, the bucket's record in Vault: account_id, access_key, secret_key,
 # and cloudflare_token_path + cloudflare_token_field naming where the API token is.
 # Run it from a bromigOS checkout, signed in to GitHub (git over SSH) with push access to
-# both repositories. The repositories themselves stay private.
+# both repositories. This step leaves the GitHub repositories as they are: --repos is theirs.
 #
-# --ci is the step for when the GitHub repositories go public (whoever decides that makes
-# them public; this never changes a repository's visibility). Public repositories may not
-# use the homelab's runners, so it moves CI to GitHub's (docs/public.md, "CI once the
-# repositories are public"):
+# --repos makes bromigOS, vector and extensions public on GitHub (GO_PUBLIC_REPOS; the
+# -archive repositories stay private). First it does --ci's switch, below. Then, in each:
+# the visibility goes public, private vulnerability reporting and secret scanning with push
+# protection go on, and workflow runs from every outside contributor's fork wait for
+# approval (all_external_contributors). Without --yes it only prints all of it.
+#
+# --ci alone moves CI to GitHub's runners. Public repositories may not use the homelab's
+# runners, so --repos does it first (docs/public.md, "The GitHub repositories"):
 #   - deletes every CI_RUNNER_* variable in bromigOS and vector: each job falls back to
 #     GitHub's hosted runner, and packages.yml publishes to the R2 bucket alone, which the
 #     homelab then copies from;
@@ -58,6 +64,7 @@ OS_BRANCH=${GO_PUBLIC_OS_BRANCH:-go-public}
 SITE_REPO=${GO_PUBLIC_SITE_REPO:-bromigos-org/bromigos.org}
 SITE_BRANCH=${GO_PUBLIC_SITE_BRANCH:-os-get-public}
 VECTOR_REPO=${GO_PUBLIC_VECTOR_REPO:-bromigos-org/vector}
+read -r -a PUBLIC_REPOS <<<"${GO_PUBLIC_REPOS:-$OS_REPO $VECTOR_REPO bromigos-org/extensions}"
 VAULT_PATH=${GO_PUBLIC_VAULT_PATH:-}
 GIT_BASE=${GO_PUBLIC_GIT_BASE:-git@github.com:}
 API=${GO_PUBLIC_CF_API:-https://api.cloudflare.com/client/v4}
@@ -68,15 +75,16 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/../.." && pwd)
 FPR=${GO_PUBLIC_FPR:-$(sed -n 's/^FPR=\([0-9A-F]\{40\}\)$/\1/p' "$root/install.sh")}
 
-yes=0 private=0 domain='' ci=0
+yes=0 private=0 domain='' ci=0 repos=0
 while (($#)); do
   case $1 in
     --yes) yes=1; shift ;;
     --private) private=1; shift ;;
     --ci) ci=1; shift ;;
+    --repos) repos=1; shift ;;
     --domain) domain=${2:?--domain needs a host name}; shift 2 ;;
-    -h|--help) sed -n '2,52p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "go-public: unknown option $1 (--yes, --domain HOST, --private, --ci)" >&2; exit 2 ;;
+    -h|--help) sed -n '2,58p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "go-public: unknown option $1 (--yes, --domain HOST, --private, --ci, --repos)" >&2; exit 2 ;;
   esac
 done
 
@@ -90,8 +98,8 @@ export GNUPGHOME="$tmp/gnupg"
 mkdir -m 700 "$GNUPGHOME"
 
 # ── --ci: CI moves to GitHub's runners, or back ──────────────────────────────
-if ((ci)); then
-  [[ -z $domain ]] || die "--domain is for the bucket, not --ci"
+ci_switch() {
+  [[ -z $domain ]] || die "--domain is for the bucket, not --ci or --repos"
   for t in curl jq gh; do command -v "$t" >/dev/null || die "needs $t"; done
   setting() {   # setting NAME: GO_PUBLIC_NAME from the environment, else the Vault record
     local v="GO_PUBLIC_$1"
@@ -130,8 +138,8 @@ if ((ci)); then
     fi
     say "the next publish on the homelab's runner takes the primary back from R2, once the"
     say "homelab's copy has caught up (packaging/README.md, \"When the public bucket is the primary\")"
-    ((yes)) && say "CI is on the homelab's runners again" || say "dry run done"
-    exit 0
+    if ((yes)); then say "CI is on the homelab's runners again"; else say "dry run done"; fi
+    return 0
   fi
   say "CI to GitHub's runners"
   url=$(setting LITELLM_PUBLIC_URL)
@@ -162,7 +170,38 @@ if ((ci)); then
     gh run list -R "$r" --status queued --json databaseId,workflowName -q '.[] | "\(.databaseId) \(.workflowName)"' \
       | while read -r id name; do say "  $r: run $id ($name) is queued for a homelab runner: gh run cancel $id -R $r, then gh run rerun $id -R $r"; done
   done
-  ((yes)) && say "CI runs on GitHub's runners; packages publish to R2 alone" || say "dry run done"
+  if ((yes)); then say "CI runs on GitHub's runners; packages publish to R2 alone"; fi
+}
+
+# ── --repos: the GitHub repositories go public ───────────────────────────────
+repos_switch() {
+  local r
+  say "the GitHub repositories go public: ${PUBLIC_REPOS[*]}"
+  for r in "${PUBLIC_REPOS[@]}"; do
+    if [[ $(gh repo view "$r" --json visibility -q .visibility) == PUBLIC ]]; then
+      say "  $r is public already"
+    else
+      run "gh repo edit $r --visibility public" gh repo edit "$r" --visibility public --accept-visibility-change-consequences
+    fi
+    # what a public repository needs: a private way to report a vulnerability, pushes with a
+    # secret refused, and no workflow run from an outside contributor's fork until approved
+    run "enable private vulnerability reporting in $r" gh api -X PUT "repos/$r/private-vulnerability-reporting"
+    run "enable secret scanning with push protection in $r" gh api -X PATCH "repos/$r" --input - \
+      <<<'{"security_and_analysis":{"secret_scanning":{"status":"enabled"},"secret_scanning_push_protection":{"status":"enabled"}}}'
+    run "require approval of workflow runs from all external contributors' forks in $r" \
+      gh api -X PUT "repos/$r/actions/permissions/fork-pr-contributor-approval" -f approval_policy=all_external_contributors
+  done
+  if ((yes)); then say "the repositories are public, and CI runs on GitHub's runners"; else say "dry run done"; fi
+}
+
+if ((repos)); then
+  ((private)) && die "--repos doesn't make the repositories private again. By hand: gh repo edit <repo> --visibility private --accept-visibility-change-consequences, then $0 --ci --private --yes"
+  ci=1
+fi
+if ((ci)); then
+  ci_switch
+  ((repos)) && repos_switch
+  ((yes)) || ((repos)) || ((private)) || say "dry run done"
   exit 0
 fi
 
@@ -230,8 +269,8 @@ fi
 # ── Undo: private again ──────────────────────────────────────────────────────
 if ((private)); then
   say "making $BUCKET private again"
-  if [[ -n $domain ]]; then change DELETE "$B/domains/custom/$domain"
-  else change PUT "$B/domains/managed" '{"enabled":false}'; fi
+  [[ -z $domain ]] || change DELETE "$B/domains/custom/$domain"
+  change PUT "$B/domains/managed" '{"enabled":false}'   # with --domain, it was kept on too
   say "the repositories and the site keep their go-public commits; revert those by hand if needed"
   exit 0
 fi
@@ -295,6 +334,12 @@ if [[ -n $public_now ]]; then
 elif [[ -n $domain ]]; then
   change POST "$B/domains/custom" "{\"domain\":\"$domain\",\"zoneId\":\"$zone\",\"enabled\":true,\"minTLS\":\"1.2\"}"
 else
+  change PUT "$B/domains/managed" '{"enabled":true}'
+fi
+# With a custom domain the r2.dev address stays on as well: the v0.1.2 ISO's installs name it
+# in their pacman.conf (docs/public.md, "The address"), so they keep getting updates.
+if [[ -n $domain && $(jq -r '.enabled' <<<"$managed") != true ]]; then
+  say "  and $R2DEV_URL too, for the machines installed from the v0.1.2 ISO"
   change PUT "$B/domains/managed" '{"enabled":true}'
 fi
 

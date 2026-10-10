@@ -45,12 +45,13 @@ case $url in
         en=false; grep -qx managed "$FAKE/public" 2>/dev/null && en=true
         ok "{\"bucketId\":\"b\",\"domain\":\"pub-0123abcd.r2.dev\",\"enabled\":$en}" ;;
       "PUT /accounts/acct/r2/buckets/bromigos-pkgs/domains/managed")
-        [[ $data == *true* ]] && echo managed > "$FAKE/public"; ok '{}' ;;
+        if [[ $data == *true* ]]; then echo managed >> "$FAKE/public"; else sed -i '/^managed$/d' "$FAKE/public" 2>/dev/null; fi; ok '{}' ;;
       "GET /zones?name=bromigos.org") ok '[{"id":"zone1"}]' ;;
       "GET /zones?name="*) ok '[]' ;;
       "GET /accounts/acct/r2/buckets/bromigos-pkgs/domains/custom")
         if grep -qx custom "$FAKE/public" 2>/dev/null; then ok '{"domains":[{"domain":"pkgs.bromigos.org","enabled":true}]}'; else ok '{"domains":[]}'; fi ;;
-      "POST /accounts/acct/r2/buckets/bromigos-pkgs/domains/custom") echo custom > "$FAKE/public"; ok '{}' ;;
+      "POST /accounts/acct/r2/buckets/bromigos-pkgs/domains/custom") echo custom >> "$FAKE/public"; ok '{}' ;;
+      "DELETE /accounts/acct/r2/buckets/bromigos-pkgs/domains/custom/"*) sed -i '/^custom$/d' "$FAKE/public"; ok '{}' ;;
       *) echo '{"success":false,"errors":[{"message":"unexpected"}]}' ;;
     esac ;;
   http://s3.test/bromigos-pkgs/*)
@@ -87,6 +88,8 @@ case "$1 $2" in
   "secret list") for f in "$d"/secrets/*; do [[ -f $f ]] && echo "${f##*/}"; done ;;
   "secret set") mkdir -p "$d/secrets"; cat > "$d/secrets/$3" ;;
   "api repos/"*) base64 < "$FAKE/gh/install.sh" ;;
+  "api -X") echo "$3 $4 ${*:5}" >> "$FAKE/gh-api"; if [[ " $* " == *" --input - "* ]]; then cat >> "$FAKE/gh-api"; fi; echo >> "$FAKE/gh-api" ;;
+  "repo edit") d="$FAKE/gh/${3//\//_}"; mkdir -p "$d"; echo PUBLIC > "$d/visibility" ;;
   "run list") cat "$d/queued" 2>/dev/null || true ;;
   *) echo "gh stub: $*" >&2; exit 1 ;;
 esac
@@ -255,7 +258,8 @@ class GoPublic(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn('POST /accounts/acct/r2/buckets/bromigos-pkgs/domains/custom {"domain":"pkgs.bromigos.org","zoneId":"zone1"',
                       self.read("changes"))
-        self.assertNotIn("domains/managed {", self.read("changes"))
+        # the r2.dev address stays on too: the v0.1.2 ISO's installs use it
+        self.assertIn('PUT /accounts/acct/r2/buckets/bromigos-pkgs/domains/managed {"enabled":true}', self.read("changes"))
         self.assertIn("PUBLIC_REPO=https://pkgs.bromigos.org", self.show("bromigos-org/bromigOS", "install.sh"))
         self.assertIn("https://pkgs.bromigos.org/bromigos/install.sh", self.show("bromigos-org/bromigOS", "README.md"))
         self.assertIn("https://pkgs.bromigos.org/bromigos/install.sh", self.show("bromigos-org/bromigos.org", "page.tsx"))
@@ -291,6 +295,13 @@ class GoPublic(unittest.TestCase):
         r = self.run_script()
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("not " + R2DEV, r.stderr)
+
+    def test_private_with_a_domain_turns_both_addresses_off(self):
+        r = self.run_script("--private", "--domain", "pkgs.bromigos.org", "--yes")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        changes = self.read("changes")
+        self.assertIn("DELETE /accounts/acct/r2/buckets/bromigos-pkgs/domains/custom/pkgs.bromigos.org", changes)
+        self.assertIn('{"enabled":false}', changes)
 
     def test_private_undoes_only_with_yes(self):
         r = self.run_script("--private")
@@ -389,6 +400,45 @@ class GoPublicCI(GoPublic):
         self.assertEqual(self.value(self.OS, "vars/CI_RUNNER_SMOKE"), "runner-small")
         self.assertEqual(self.value(self.VEC, "vars/CI_RUNNER_PACKAGES"), "runner-big")
         self.assertEqual(self.value(self.OS, "secrets/LITELLM_BASE_URL"), "http://model.example:4000")
+
+    def test_repos_dry_run_shows_everything_and_changes_nothing(self):
+        r = self.ci_repos()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        for repo in ("bromigOS", "vector", "extensions"):
+            self.assertIn(f"would run: gh repo edit bromigos-org/{repo} --visibility public", r.stdout)
+            self.assertIn(f"would run: enable secret scanning with push protection in bromigos-org/{repo}", r.stdout)
+        self.assertIn("would run: gh variable delete CI_RUNNER_PACKAGES -R bromigos-org/vector", r.stdout)
+        self.assertNotIn("repo edit", self.read("log"))
+        self.assertFalse(os.path.exists(os.path.join(self.fake, "gh-api")))
+
+    def test_repos_yes_moves_ci_first_then_makes_them_public(self):
+        r = self.ci_repos("--yes")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        log = self.read("log")
+        self.assertLess(log.index("variable delete CI_RUNNER_PACKAGES -R bromigos-org/vector"),
+                        log.index("repo edit bromigos-org/bromigOS"))
+        for repo in (self.OS, self.VEC, "bromigos-org_extensions"):
+            self.assertEqual(self.value(repo, "visibility").strip(), "PUBLIC")
+        self.assertEqual(self.names(self.OS, "vars"), [])
+        api = self.read("gh-api")
+        for repo in ("bromigOS", "vector", "extensions"):
+            self.assertIn(f"PUT repos/bromigos-org/{repo}/private-vulnerability-reporting", api)
+            self.assertIn(f"PATCH repos/bromigos-org/{repo}", api)
+            self.assertIn(f"PUT repos/bromigos-org/{repo}/actions/permissions/fork-pr-contributor-approval "
+                          "-f approval_policy=all_external_contributors", api)
+        self.assertIn('"secret_scanning_push_protection":{"status":"enabled"}', api)
+
+    def test_repos_never_goes_back_to_private(self):
+        r = self.ci_repos("--private", "--yes")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("repo edit", self.read("log"))
+
+    def ci_repos(self, *args):
+        os.environ["GO_PUBLIC_LITELLM_PUBLIC_URL"] = "https://model.test"
+        try:
+            return self.run_script("--repos", *args)
+        finally:
+            os.environ.pop("GO_PUBLIC_LITELLM_PUBLIC_URL")
 
     def test_ci_private_needs_the_lab_settings(self):
         r = self.ci("--private", "--yes")
