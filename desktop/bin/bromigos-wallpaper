@@ -72,6 +72,22 @@ session_swaybg() {
     done
 }
 
+# Query the background itself, not whether the daemon (which also hosts decks) runs.
+# A stale socket, an off background or a failed renderer leaves the still as fallback.
+live_background() {
+    python3 - <<'PYLIVE'
+import os, socket, sys
+try:
+    with socket.socket(socket.AF_UNIX) as s:
+        s.settimeout(1)
+        s.connect(os.path.join(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"), "bromigos-live.sock"))
+        s.sendall(b"background-active")
+        sys.exit(0 if s.recv(64) == b"on" else 1)
+except OSError:
+    sys.exit(1)
+PYLIVE
+}
+
 restart_swaybg() {
     local img="$1" old outputs p
     # links from before wall.jpg (an older bromigos-wallpaper): made from the saved choice
@@ -80,6 +96,10 @@ restart_swaybg() {
     exec 9>"$STATE/.swaybg.lock"
     flock -w 10 9 || true
     old=$(session_swaybg)
+    if live_background; then
+        [ -n "$old" ] && kill $old 2>/dev/null || true
+        return
+    fi
     # this session's outputs (Hyprland's list), else the running swaybg's, else every output
     outputs=$(hyprctl monitors 2>/dev/null | awk '/^Monitor / { print $2 }' || true)
     [ -n "$outputs" ] || outputs=$(for p in $old; do
@@ -199,22 +219,16 @@ case "${1:-status}" in
         echo "den -> $(readlink "$STATE/den.jpg")"
         ;;
     apply)
-        # session start, and every theme switch (hooks/theme-set.d/wallpaper): recreate the
-        # links from the saved choice and the theme in force, then start swaybg. swaybg and
-        # the live layer share the background layer and the surface mapped last is drawn on
-        # top: a swaybg restarted after the live layer covered the animation with a still. So
-        # the live layer is remapped after it (ctl reload), and nothing restarts when the
-        # picture didn't change.
+        # Session start and update's theme step: refresh files, then hand the background
+        # to live when it is healthy. Never stack a still above its animation.
         before=$(readlink "$STATE/wall.jpg" 2>/dev/null || true)
         set_variant "$(current)"
-        if [ "$before" != "$(readlink "$STATE/wall.jpg")" ] || [ -z "$(session_swaybg)" ]; then
+        if live_background || [ "$before" != "$(readlink "$STATE/wall.jpg")" ] || [ -z "$(session_swaybg)" ]; then
             restart_swaybg "$STATE/wall.jpg"
-            [ -x "$LIVE_BIN" ] && "$LIVE_BIN" ctl reload >/dev/null 2>&1 || true
         fi
         ;;
     outputs)
-        # a monitor came or went (Hyprland's monitor.added): swaybg on every output again,
-        # then the live layer remapped over it (the surface mapped last is drawn on top)
+        # A monitor came or went: a still only while live is off or failed.
         restart_swaybg "$STATE/wall.jpg"
         [ -x "$LIVE_BIN" ] && "$LIVE_BIN" ctl reload >/dev/null 2>&1 || true
         ;;

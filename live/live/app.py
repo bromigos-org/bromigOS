@@ -312,6 +312,8 @@ class App:
         self.history.event("start", "live layer started" + (" (login)" if login else ""))
         if self.bg_enabled:
             self.show_background()
+        else:
+            self.wallpaper_fallback()
         hypr.Events(lambda ev, arg: GLib.idle_add(self.on_hypr, ev, arg)).start()
         self.notif = Notifications(self.on_notify)
         self.notif.start()
@@ -338,6 +340,14 @@ class App:
         if login:                                  # a world's roll call, after the intercept
             GLib.timeout_add(5500, lambda: (self._world_event("login"), False)[1])
 
+    def wallpaper_fallback(self):
+        """Reconcile the still asynchronously; its socket query runs on this main loop."""
+        import shutil
+        import subprocess
+        tool = shutil.which("bromigos-wallpaper")
+        if tool:
+            subprocess.Popen([tool, "apply"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     # ------------------------------------------------------------------ layers
     def show_background(self):
         """Create the background window. A failure is kept as a fault (status shows it) and
@@ -363,10 +373,13 @@ class App:
             log(f"background failed to start ({self.bg_fault}); retry {self.bg_tries} in {wait} s")
             import traceback
             traceback.print_exc()
+            self.wallpaper_fallback()
             return False
         if self.bg_fault:
             log(f"background started after {self.bg_tries} failed attempt(s)")
         self.bg_fault, self.bg_tries, self.bg_retry_at = "", 0, 0.0
+        self.wallpaper_active = True
+        self.wallpaper_fallback()
         self.refresh_state()
         return True
 
@@ -509,6 +522,7 @@ class App:
             self.show_background()
         else:
             self.hide_background()
+            self.wallpaper_fallback()
 
     def _world_event(self, name, **info):
         """An event for the world, when one is drawn (the den takes rain bursts instead)."""
@@ -681,6 +695,10 @@ class App:
         elif self.stall_n >= 12 and not self.covered:
             self.heal("stalled for a minute with the desktop visible", force=True)
             self.stall_n = 0
+        active = bool(self.bg_enabled and self.bg and not self.bg.dead and not self.bg.failed)
+        if active != getattr(self, "wallpaper_active", active):
+            self.wallpaper_fallback()
+        self.wallpaper_active = active
         return True
 
     def health(self):
@@ -951,6 +969,8 @@ class App:
 
     def command(self, cmd):
         c, _, arg = cmd.partition(" ")
+        if c == "background-active":
+            return "on" if self.bg_enabled and self.bg and not self.bg.dead and not self.bg.failed else "off"
         if c == "ping":
             return "pong"
         if c == "state":
@@ -1115,6 +1135,8 @@ class App:
         self.bg_enabled = bool(self.cfg["background"].get("enabled", True)) and not self.bg_user_off
         if self.bg_enabled:
             self.show_background()
+        else:
+            self.wallpaper_fallback()
 
 
 QUIT = threading.Event()        # SIGTERM: quit, whether the main loop runs yet or not

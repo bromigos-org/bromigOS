@@ -59,6 +59,13 @@ The homelab decks (Lab, Mind, Ops and Netmap) come with the `bromigos-homelab` p
 ([docs/homelab.md](../docs/homelab.md)). Your own decks, shader layers and modules are
 plugins in `~/.config/bromigos/plugins/live/` ([docs/plugins.md](../docs/plugins.md)).
 
+The static wallpaper is a fallback while the animated background is off or failed.
+Starting a healthy background removes the session's `swaybg` surfaces. Theme rendering
+and monitor changes keep the still off while that background is active. Switching the
+background off, a renderer failure or the daemon exiting restores the still. Other
+Wayland sessions, including nested tests, keep their own wallpapers.
+
+
 ## Try it
 
 ```bash

@@ -96,6 +96,7 @@ supervise() {
         fi
         cd "$HERE" && "$PY" -m live.app $first >>"$LOG" 2>&1
         rc=$?
+        command -v bromigos-wallpaper >/dev/null && bromigos-wallpaper apply >/dev/null 2>&1
         first=""
         [ $rc -eq 0 ] && break                       # clean quit (stop)
         [ -f "$STATE/stopping" ] && break
