@@ -268,6 +268,26 @@ bromigos panels show weather
 
 The forecast comes from Open-Meteo, a free weather service.
 
+## Calendar releases
+
+CALENDAR can add tracked TV episodes and film releases to your calendar. Open its
+**Settings…** and turn on **Your media server's releases**. Sonarr or Radarr must be
+connected in [Your homelab](homelab.md#media-requests).
+
+The setting is `media = true` in `~/.config/bromigos/widgets/calendars.toml`. It adds
+releases without replacing your other calendars. For the whole workflow, see
+[Your media](media.md#put-releases-on-your-calendar).
+
+To export the releases as calendar files for another app:
+
+```bash
+bromigos lab media calendar tv > ~/Downloads/tv-releases.ics
+bromigos lab media calendar movies > ~/Downloads/film-releases.ics
+```
+
+These are copies of the feed at that moment. Export again to update them. `--past` and
+`--future` set how many days to include. The panel reads fresh releases by itself.
+
 ## A panel's own settings
 
 Many panels have settings of their own, such as which calendars to show or which Discord

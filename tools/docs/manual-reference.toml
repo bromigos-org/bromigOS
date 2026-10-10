@@ -198,6 +198,7 @@ rows = [
   { route = "anim", text = "List the background's animations, and turn each one on or off." },
   { route = "scene", text = "Change the background's other settings: the world, the screensaver, the sound volume." },
   { route = "live", text = "Turn the animated background on or off, or open a [hologram](holograms.md): `bromigos live timeline`." },
+  { route = "customize", text = "Preview themes and choose a panel layout in [Customize](themes-and-worlds.md#customize)." },
   { route = "panels", text = "Show, hide or move the desktop [panels](panels.md), start edit mode, list every widget, and set the weather's place." },
   { route = "widgets", text = "Show or hide one panel or all of them." },
   { route = "account", text = "Sign a panel in to an online account, such as Twitch, GitHub, GitLab or Spotify. A service can have several accounts, such as gitlab.com and your company's GitLab. See [Panels that need an account](panels.md#panels-that-need-an-account)." },
@@ -220,6 +221,7 @@ title = "Your homelab"
 rows = [
   { route = "setup homelab", text = "Find [your homelab](homelab.md)'s services and connect them." },
   { route = "homelab", text = "See what's connected from your homelab, and what doesn't answer." },
+  { route = "media", text = "Open [Your media](media.md) in the terminal: find, request, monitor, play or delete shows, films and albums." },
   { route = "lab", text = "Open [the lab console](lab.md): your homelab's status, its GPUs, and jobs to run on them." },
 ]
 

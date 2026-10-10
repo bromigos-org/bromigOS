@@ -194,11 +194,72 @@ def changelog(repo, since, tag, url, rs):
     return guard.redact(cliff(repo, "--tag", tag, rng, url=url).strip() + "\n", rs).strip()
 
 
+UNRELEASED = re.compile(r"<!-- unreleased: (v[0-9]+\.[0-9]+\.[0-9]+) -->\n(.*?)<!-- /unreleased -->", re.S)
+
+
+def reviewed_highlights(repo, since):
+    """Reviewed edge changes, carried through release candidates until a new baseline."""
+    carried = []
+    try:
+        with open(os.path.join(repo, "tools/release/current.json")) as f:
+            current = json.load(f)
+        if current.get("since") and (not since or vtuple(since) <= vtuple(current["since"])):
+            carried = current.get("highlights") or []
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(os.path.join(repo, "manual/src/whats-new.md")) as f:
+            pending = manual_highlights(f.read(), since)
+    except OSError:
+        pending = []
+    out = []
+    for h in carried + pending:
+        if h not in out:
+            out.append(h)
+    return out
+
+
+def manual_highlights(text, since):
+    """Only shipped headings count; a later baseline cannot repeat older highlights."""
+    m = UNRELEASED.search(text)
+    if not m or (since and vtuple(since) > vtuple(m[1])):
+        return []
+    items, section, text = [], None, []
+
+    def finish():
+        if section and text:
+            plain = re.sub(r"\[([^]]+)\]\([^)]*\)", r"\1", " ".join(text))
+            items.append({"section": section, "text": plain})
+        text.clear()
+
+    for line in m[2].splitlines():
+        if line.startswith("### "):
+            finish()
+            section = {"New": "new", "Improved": "improved", "Fixed": "fixed"}.get(line[4:])
+        elif line.startswith("- "):
+            finish()
+            text.append(line[2:].strip())
+        elif line.startswith("  ") and text:
+            text.append(line.strip())
+        elif not line.strip():
+            finish()
+    finish()
+    return items
+
+
+def include_highlights(notes, highlights):
+    """Keep reviewed changes even if a model or fallback omits an older feature."""
+    for section in ("new", "improved", "fixed"):
+        items = [h["text"] for h in highlights if h["section"] == section]
+        notes[section] = list(dict.fromkeys(items + notes[section]))
+    return notes
+
+
 def facts(repo, since):
     """What an update does by itself: new migrations (each one's leading comment), and the
     package dependency lines that changed."""
     rng = f"{since}..HEAD" if since else "HEAD"
-    out = {"migrations": [], "dependency_changes": []}
+    out = {"migrations": [], "dependency_changes": [], "highlights": reviewed_highlights(repo, since)}
     for f in git(repo, "diff", "--diff-filter=A", "--name-only", rng, "--", "migrations/", check=False).split():
         try:
             with open(os.path.join(repo, f)) as fh:
@@ -333,7 +394,7 @@ def fallback(cs):
     """Notes without a model (a dry run with no key): each user-facing commit's subject."""
     loud = [c["subject"] for c in cs if c["group"] not in QUIET_GROUPS]
     return {"summary": "Drafted without the model (no LITELLM_API_KEY): the commit subjects, unedited.",
-            "before_you_update": [], "new": [], "improved": loud[:25], "fixed": [], "known_issues": []}
+            "before_you_update": [], "new": [], "improved": loud, "fixed": [], "known_issues": []}
 
 
 def notes_cmd(a):
@@ -359,7 +420,13 @@ def notes_cmd(a):
         print(f"release: {product}: {len(cs)} commits since {since}, {len(fx['migrations'])} new migrations, "
               f"{len(issues)} known issues", file=sys.stderr)
         t = time.time()
-        out[key] = draft(product, plan, cs, fx, issues, rs, names) if have_model else fallback(cs)
+        highlights = [{**h, "text": private(h["text"], rs)} for h in fx["highlights"]]
+        fx["highlights"] = highlights
+        out[key] = include_highlights(
+            draft(product, plan, cs, fx, issues, rs, names) if have_model else fallback(cs), highlights)
+        if problems(out[key], rs):
+            die(f"{product}: reviewed highlights did not pass the privacy check")
+        out[key + "_highlights"] = highlights
         print(f"release: {product}: notes drafted in {time.time() - t:.0f} s", file=sys.stderr)
         out[key + "_changelog"] = changelog(repo, since, plan["tag"], URL[key], rs)
         out[key + "_commits"] = len(cs)
@@ -479,7 +546,13 @@ def bump_cargo(root, version):
 
 def write_cmd(a):
     plan, notes = load(a.plan), load(a.notes)
-    edit(os.path.join(ROOT, "manual/src/whats-new.md"), lambda t: upsert(t, plan["version"], notes_section(plan, notes)))
+    def manual(text):
+        if notes.get("bromigos_highlights"):
+            if reviewed_highlights(ROOT, plan["bromigos"]["since"]) != notes["bromigos_highlights"]:
+                die("reviewed highlights changed after drafting; draft the notes again")
+            text = UNRELEASED.sub("", text, count=1)
+        return upsert(text, plan["version"], notes_section(plan, notes))
+    edit(os.path.join(ROOT, "manual/src/whats-new.md"), manual)
     edit(os.path.join(ROOT, "CHANGELOG.md"), lambda t: upsert(t, plan["version"], changelog_section(plan, notes)))
     bump_cargo(ROOT, plan["version"])
     cur = {k: plan[k] for k in ("version", "tag", "kind", "since", "date")}
@@ -488,6 +561,7 @@ def write_cmd(a):
         cur["vector"] = {"base": plan["vector"]["base"], "since": plan["vector"]["since"],
                          "commit": a.vector_commit, "branch": a.vector_branch}
     cur["drafted_by"] = notes["drafted_by"]
+    cur["highlights"] = notes.get("bromigos_highlights") or []
     save(os.path.join(HERE, "current.json"), cur)
 
 

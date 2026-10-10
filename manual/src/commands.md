@@ -55,6 +55,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos anim`](#bromigos-anim) | List the background's animations, and turn each one on or off. |
 | [`bromigos scene`](#bromigos-scene) | Change the background's other settings: the world, the screensaver, the sound volume. |
 | [`bromigos live`](#bromigos-live) | Turn the animated background on or off, or open a [hologram](holograms.md): `bromigos live timeline`. |
+| [`bromigos customize`](#bromigos-customize) | Preview themes and choose a panel layout in [Customize](themes-and-worlds.md#customize). |
 | [`bromigos panels`](#bromigos-panels) | Show, hide or move the desktop [panels](panels.md), start edit mode, list every widget, and set the weather's place. |
 | [`bromigos widgets`](#bromigos-widgets) | Show or hide one panel or all of them. |
 | [`bromigos account`](#bromigos-account) | Sign a panel in to an online account, such as Twitch, GitHub, GitLab or Spotify. A service can have several accounts, such as gitlab.com and your company's GitLab. See [Panels that need an account](panels.md#panels-that-need-an-account). |
@@ -77,6 +78,7 @@ This page lists the commands by task first, then each one in full.
 |---|---|
 | [`bromigos setup homelab`](#bromigos-setup-homelab) | Find [your homelab](homelab.md)'s services and connect them. |
 | [`bromigos homelab`](#bromigos-homelab) | See what's connected from your homelab, and what doesn't answer. |
+| [`bromigos media`](#bromigos-media) | Open [Your media](media.md) in the terminal: find, request, monitor, play or delete shows, films and albums. |
 | [`bromigos lab`](#bromigos-lab) | Open [the lab console](lab.md): your homelab's status, its GPUs, and jobs to run on them. |
 
 ### Apps, extensions and the menu
@@ -123,13 +125,6 @@ The desktop runs these for you. You don't need them day to day.
 | [`bromigos lock-run`](#bromigos-lock-run) | Starts the lock screen, and keeps the screen locked if the lock screen crashes. |
 | [`bromigos banner`](#bromigos-banner) | Prints the login banner in a terminal. |
 | [`bromigos secrets`](#bromigos-secrets) | Refreshes the desktop's secret files from Vault, if you keep secrets there. |
-
-### Other commands
-
-| Command | What it does |
-|---|---|
-| [`bromigos customize`](#bromigos-customize) | Customize: the themes and the widget gallery in one window, with tabs (SUPER+CTRL+SHIFT+SPACE) |
-| [`bromigos media`](#bromigos-media) | Your media library in a terminal: TV, films, music, YouTube, downloads and what's coming; request, monitor, change quality, play or delete |
 
 ## Every command in full
 

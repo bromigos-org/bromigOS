@@ -6,6 +6,7 @@ contributors, and for anyone writing a theme, a panel, a deck or a homelab adapt
 - To **use** bromigOS, read [the manual](../manual/src/index.md).
 - To **build, test and send a change**, read [CONTRIBUTING.md](../CONTRIBUTING.md).
 - To **write or edit these pages**, follow [WRITING.md](WRITING.md).
+- The [manual coverage audit](manual-audit.md) lists checked commands, keys and fixed gaps.
 
 ## Where files live
 

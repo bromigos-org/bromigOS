@@ -134,3 +134,16 @@ on the bar.
 
 Every `bromigos` command has `--help`. Many also have `--json`, for scripts. See
 [Files and folders](files.md) for more.
+
+## Media files on a NAS
+
+If Jellyfin cannot play a file, check its media mount, permissions and transcoding logs.
+If several media apps freeze together while the NAS still answers, check the filesystem
+connection from the app's host. A stuck NFS lock connection can leave imports and playback
+waiting even though the server is reachable.
+
+Ask the lab administrator to check the client mount and lock service. Reconnect through
+the lab's maintenance procedure, then check the affected apps. Restarting one media app
+may not fix a host's stuck connection. Avoid deleting library files to try to clear it.
+
+For request, language and download checks, see [Your media](media.md#if-something-goes-wrong).

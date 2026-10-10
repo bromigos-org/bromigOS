@@ -113,6 +113,8 @@ name the file in that server's source as `token_ref`. See [The lab console](lab.
 
 ### Media requests
 
+Start with [Your media](media.md) to find, download and watch a title.
+
 To ask your lab for films, shows and music (`bromigos lab media`, see
 [The lab console](lab.md#media-requests)), add a source for each app you have. Each needs
 its address and its API key, which is on the app's Settings › General page. Put each key

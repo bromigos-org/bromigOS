@@ -4,8 +4,7 @@ This page is for anyone changing bromigOS's code or docs. It covers how the repo
 laid out, how to build and test it, how to try your build on a real machine, and how to
 send a change.
 
-bromigOS is in early access, and this repository is private. If you can read this, you
-have access.
+bromigOS is in early access.
 
 ## Before you start
 

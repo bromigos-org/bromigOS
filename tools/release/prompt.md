@@ -7,6 +7,11 @@ about the update (migrations that run by themselves, packages added), known issu
 every commit since the last stable release: its group, its subject and its body. Commit
 messages are written for developers; turn them into what a user notices.
 
+`facts.highlights` contains shipped changes already reviewed in the manual. The tool
+includes those items directly in the final notes. Do not repeat them. Use the commits
+for additional changes. A planning document or a service catalogue alone does not mean
+provisioning is built. Describe provisioning only when its implementation has merged.
+
 Answer with JSON only, in exactly this shape:
 
 - `summary`: one or two sentences: what this release is about, for a user.

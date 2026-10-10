@@ -52,6 +52,29 @@ writing.
 To mute his voice and keep his written answers, middle-click VECTOR on the bar. To mute
 him and the theme's sounds together, press <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>.
 
+## Read a Claude Code session
+
+VECTOR can read Claude Code sessions on this computer. Ask “What is Claude working on?”,
+“Read the last reply from the documentation session”, or “What did its background job
+find?” He can show replies, search past messages and read a reply aloud.
+
+To hear new replies as they finish, press `Super+Alt+C`. Press it again to stop. The bar
+says **READING CLAUDE** while follow mode is on. From a terminal:
+
+```bash
+bromigos vector claude follow on
+bromigos vector claude follow status
+bromigos vector claude say
+bromigos vector claude follow off
+```
+
+With several sessions, tell him which one you mean. You can give `follow on` a session
+ID or a few words that identify it. `follow on all` follows every local session.
+
+This reads local session records and transcripts. It does not send a message to Claude
+or change the session. Replies are redacted before VECTOR reads or speaks them. Sessions
+that run only on the web are not on this computer and cannot be read this way.
+
 ## What he calls you
 
 VECTOR addresses you by the name and form of address you give him:

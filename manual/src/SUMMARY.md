@@ -24,6 +24,7 @@
     - [Your own shortcuts](shortcuts.md)
 - [Apps](apps.md)
     - [Web apps](webapps.md)
+- [Your media](media.md)
 - [Your homelab](homelab.md)
     - [The lab console](lab.md)
     - [Lab models](lab-models.md)

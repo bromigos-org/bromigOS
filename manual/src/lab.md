@@ -119,6 +119,8 @@ bromigos lab models recommend         # better models that fit your graphics car
 
 ## YouTube downloads
 
+For finding, downloading and watching media, start with [Your media](media.md).
+
 If your lab runs [Pinchflat](homelab.md), it downloads YouTube channels and playlists into
 your media library. Then they play in Jellyfin or Plex, like your other shows. You can run
 it from here without opening its web page.
@@ -229,6 +231,8 @@ ComfyUI keeps the last job's models in memory until something frees them.
 graphics cards, see [Lab models](lab-models.md).
 
 ## Media requests
+
+[Your media](media.md) walks through requests, tracking, deletion and playback.
 
 If your lab runs a media stack, you can ask it for a film, a show, an anime or music by
 name. It gets the best quality your lab's profiles allow, in your languages, and puts it in

@@ -83,6 +83,24 @@ review. They show up:
   release ends with `== what's new: bromigOS 0.1.2 (bromigos whats-new)`;
 - in the GitHub Release, with how to update, the links, and the checksums.
 
+### Keep shipped changes in the next notes
+
+Between releases, put reviewed user changes in `manual/src/whats-new.md`, inside
+`<!-- unreleased: v0.1.2 -->` and `<!-- /unreleased -->` markers. Use the stable release
+that these changes follow. Bullets under `### New`, `### Improved` and `### Fixed` go
+straight into the next release notes. Wrap continuation lines with two leading spaces.
+Link to the task guide for the full instructions.
+
+The model gets those highlights as facts and drafts the other changes from every commit.
+The tool then includes the reviewed items, so an older feature cannot disappear from a
+long draft. The no-model fallback keeps every user-facing commit subject too.
+
+Preparing the release removes the consumed highlights block from the manual. The release
+manifest, `tools/release/current.json`, carries those items through later candidates of
+the same release. A new stable baseline does not repeat them. Planned work stays outside these sections. In
+particular, add lab provisioning when its implementation merges, not when its design
+or service catalogue changes.
+
 **For developers** (`CHANGELOG.md`): every commit, grouped by area (Desktop, Core, Live
 layer…; VECTOR's by Added, Changed, Fixed), with links. It's git-cliff's
 (`tools/release/cliff.toml`), not edited by hand. VECTOR's repository keeps its own

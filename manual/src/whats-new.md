@@ -19,6 +19,45 @@ are. To change the channel you follow, see [Channels](update-and-rollback.md#cha
 
 Developers can read every change in the repository's `CHANGELOG.md`.
 
+<!-- unreleased: v0.1.2 -->
+## On edge since 0.1.2
+
+These changes are already on the `edge` channel. They are not a new stable release.
+Run `bromigos update` to get them. The next release notes will include these highlights.
+
+### New
+
+- **Panel layouts.** Pick a layout in [Customize](themes-and-worlds.md#customize), keep a
+  different layout for each theme, or save your own. [Tidy up](panels.md#tidy-up) separates
+  overlapping panels. Panels size themselves to their content and the space available.
+- **Accounts.** Sign in to several accounts of the same service. Public GitHub, GitLab
+  and Twitch use bromigOS's built-in apps. See [Accounts](panels.md#several-accounts).
+- **Den TV.** Each of the three screens can play its own channel. The guide lets you pick
+  shows, choose a screen and add short bumpers between items. See
+  [The den TV](themes-and-worlds.md#the-den-tv).
+- **Your media.** Request shows, films and albums with `bromigos lab media` or the
+  `bromigos media` terminal library. Choose seasons, quality and audio, track unreleased
+  titles and confirm deletion. [Your media](media.md) brings the workflow together.
+- **YouTube downloads.** Add channels and playlists to Pinchflat, choose quality and keep
+  downloaded playlists in Jellyfin or Plex. See [YouTube](media.md#keep-youtube-channels-and-playlists).
+- **Calendar releases.** Add tracked TV episodes and film releases to CALENDAR beside
+  your own events. See [Calendar releases](panels.md#calendar-releases).
+- **Claude Code sessions.** VECTOR can read local sessions, find past replies and read
+  each new reply aloud in follow mode. See [Read a session](vector.md#read-a-claude-code-session).
+
+### Fixed
+
+- The static wallpaper no longer hides a working live background. Panel toggling restores
+  the visible set, LAB uses the room in its frame, and empty ALERTS stays compact.
+- Colour switches refresh live backgrounds, scanners, overlays and HUD text. A pinned
+  scanner stays visible in the new colours.
+<!-- /unreleased -->
+
+**Not shipped yet.** Lab provisioning is still planned. Its service catalogue is built,
+but the commands do not create a lab yet. It belongs in the release notes when its
+implementation merges. See the
+[provisioning plan](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-provision.md).
+
 <!-- releases: tools/release/release.py adds each release below this line, newest first -->
 
 ## 0.1.2
