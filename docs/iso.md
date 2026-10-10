@@ -7,9 +7,8 @@ needs is on the medium, so installing needs no network.
 
 This page explains how the ISO is built, what's on it, what the installer does and how to
 test it. For users, the manual's [Install](../manual/src/install.md) page covers it.
-Each release's ISO is attached to its GitHub Release, signed ([A release's
-ISO](#a-releases-iso)). During early access the repository is private, so only its members
-can download it there.
+Each release's ISO is attached to its GitHub Release, signed, for anyone to download ([A
+release's ISO](#a-releases-iso)).
 
 ![The ISO's boot menu: the title BROMIGOS // RELAY MEDIUM over the den at night, the
 burn-in emblem, a countdown, and the entries Start bromigOS, Install bromigOS, safe
@@ -245,7 +244,7 @@ machine. The medium remembers it as the installed system's repository, unless
 
 | Option | What it does |
 |---|---|
-| `--medium-repo URL` | The repository the medium names for the installed system, when it isn't the one the build downloads from. A release's ISO downloads from the homelab's and names the public mirror. `--ca` then stays in the build and isn't put on the medium. |
+| `--medium-repo URL` | The repository the medium names for the installed system, when it isn't the one the build downloads from: a build that reads a private copy of the channels, say, for a medium that names the public repository. `--ca` then stays in the build and isn't put on the medium. |
 | `--version V` | The medium's version, in its file name (`bromigos-V-x86_64.iso`). The default is the build's date. |
 | `--channel NAME` | Which channel's packages go on the medium, and which channel the installed system follows. The default is `stable`. |
 | `--ca FILE` | The repository's CA certificate, if it has its own. It goes on the medium too, unless `--medium-repo` names another repository. |
@@ -309,36 +308,30 @@ the `stable` channel, it names the public repository, and it has no test key.
 ### Where it finds packages
 
 - **Installing** reads only the offline repository on the medium, so it works with no
-  network, before or after the public repository goes live.
+  network.
 - **Updating** the installed system reads the repository the medium names
-  (`/etc/bromigos-iso/repo.url`). For a release that's the public mirror, the R2 address
-  that `install.sh`'s `PUBLIC_REPO` holds after go-live ([public.md](public.md)). The
-  build downloads from the homelab's repository, which has the same packages, and writes
-  the public address on the medium with `--medium-repo`. The homelab's CA stays in the
-  build.
+  (`/etc/bromigos-iso/repo.url`). For a release that's the public repository,
+  `https://pkgs.bromigos.org`, as `install.sh`'s `PUBLIC_REPO` ([public.md](public.md)).
+  The build downloads from the same address, so it needs no CA and no private access.
 
-Until `tools/release/go-public.sh --yes` turns the mirror's address on, it answers
-"401 Unauthorized". An installed system's `bromigos update` fails at the sync until then,
-and works afterwards with nothing to change on the machine. If go-live uses a custom
-domain (`--domain`), keep the r2.dev address on too. Otherwise machines installed from
-earlier ISOs need a migration of their `Server` line ([public.md](public.md#the-address)).
+The first v0.1.2 ISO, attached on 2026-10-09 before the repository went public, named
+the bucket's r2.dev address instead. It was replaced on 2026-10-10. Machines installed
+from it move to `pkgs.bromigos.org` on an update, through a migration
+([public.md](public.md#the-r2dev-address)).
 
-The GitHub repositories stay private after go-live, so a Release's files reach only the
-organisation's members. Publishing the ISO to everyone is a separate choice: the public
-mirror could carry it too.
+The repository and its Releases are public, so anyone can download the ISO.
 
 ### Making it
 
 1. **Wait for the release.** The release workflow publishes the stable channel
    ([Releasing](release.md)). The ISO takes that channel's packages.
-2. **Build it** from a checkout of the tag, with the homelab's repository, its CA and the
-   public address. With a warm cache it takes about five minutes; a cold one downloads
-   2 GB first.
+2. **Build it** from a checkout of the tag, from the public repository. With a warm cache
+   it takes about five minutes; a cold one downloads 2 GB first.
 
    ```bash
    git worktree add ../bromigos-v0.1.3 v0.1.3
-   ../bromigos-v0.1.3/iso/build.sh --repo <homelab repo> --ca <homelab ca.pem> \
-       --medium-repo <public repo> --channel stable --version 0.1.3 \
+   ../bromigos-v0.1.3/iso/build.sh --repo https://pkgs.bromigos.org \
+       --medium-repo https://pkgs.bromigos.org --channel stable --version 0.1.3 \
        --out ~/.cache/bromigos-iso-0.1.3
    ```
 
@@ -359,28 +352,27 @@ mirror could carry it too.
      ([ASSETS.md](ASSETS.md)).
 
    ```bash
-   iso/check-medium.sh ~/.cache/bromigos-iso-0.1.3/bromigos-0.1.3-x86_64.iso --repo <public repo>
+   iso/check-medium.sh ~/.cache/bromigos-iso-0.1.3/bromigos-0.1.3-x86_64.iso
    ```
 
-   After go-live, `--repo` defaults to `install.sh`'s `PUBLIC_REPO`. A finding in
-   bromigOS's files is fixed where it comes from, then the ISO is built again.
+   The repository it must name is `install.sh`'s `PUBLIC_REPO` (`--repo` gives another).
+   A finding in bromigOS's files is fixed where it comes from, then the ISO is built
+   again.
 4. **Test it** in the harness ([Testing it](#testing-it)), UEFI and BIOS. The medium has
    no test key, so the harness brings its own through cloud-init. Run one firmware with
    no network, which is how the medium is meant to install:
 
    ```bash
-   iso/test.sh boot --iso <iso> --firmware uefi --hosts "<ip> <homelab host>"
+   iso/test.sh boot --iso <iso> --firmware uefi
    iso/test.sh install
-   iso/test.sh boot-disk --update-repo <homelab repo> --ca <homelab ca.pem>
+   iso/test.sh boot-disk
    BROMIGOS_ISOTEST_OFFLINE=1 iso/test.sh boot --iso <iso> --firmware bios   # in another BROMIGOS_ISOTEST_DIR
    BROMIGOS_ISOTEST_OFFLINE=1 iso/test.sh install --no-encrypt
-   iso/test.sh boot-disk --update-repo <homelab repo> --ca <homelab ca.pem>
+   iso/test.sh boot-disk
    ```
 
    `install` takes no `--repo`, so the installed system names the public address, as a
-   user's does. The installed-system checks see that. Only the first update reads the
-   homelab's copy (`--update-repo`), because the public one isn't reachable before
-   go-live.
+   user's does, and its first update reads from it.
 5. **Sign it** with the package signing key, from the deployment's secret store, in a
    throwaway GnuPG home. Then verify it with `packaging/keys/bromigos.asc` alone:
 
@@ -481,7 +473,8 @@ More about each:
   checks the channel, the snapshot pair, the snapshots in `grub-btrfs.cfg`, the update
   recorded for `--rollback`, and a clean `bromigos update --check`. With `--update-repo
   URL`, the update reads that copy of the channels instead of the system's own repository
-  (and trusts `--ca`). The checks before it still see the system as installed.
+  (and trusts `--ca`): for a medium whose repository can't be reached from the test, such
+  as a private one. The checks before it still see the system as installed.
 - **`BROMIGOS_ISOTEST_OFFLINE=1`** starts the VM with no network (QEMU's `restrict=on`):
   only the harness's SSH reaches it. With it, `boot` and `install` test the medium the way
   it's meant to install, with no time server and no mirrors.
@@ -506,11 +499,35 @@ To run a second VM beside another, give it its own directory, SSH port and displ
 
 Newest first. All runs were on a workstation with KVM.
 
-### 2026-10-09, 19:02 to 19:46 Pacific: v0.1.2's ISO
+### 2026-10-10, 00:48 to 01:01 Pacific: v0.1.2's ISO, naming pkgs.bromigos.org
 
-The first release's medium, now on the v0.1.2 GitHub Release: the `stable` channel at
+The ISO now on the v0.1.2 Release, which replaced the first one below. It was built from
+the public repository, `https://pkgs.bromigos.org`, which it names. The packages are the
+same v0.1.2 ones, without `1password`, which the public repository leaves out. 4.3 GB,
+with `iso/` from main. The build took 6 min 21 s with a cold cache.
+
+| | Live | Install time | Installed system | First update and rollback |
+|---|---|---|---|---|
+| UEFI, encrypted (LUKS2) | 16/16 | 3 min 17 s | 76/76 | 7/7 |
+| BIOS, `--no-encrypt`, with no network for the live session and the install | 16/16 | 2 min 36 s | 75/75 | 7/7 |
+
+- The installed systems named `https://pkgs.bromigos.org/$repo/stable/$arch`, and the
+  first update read from it, with no `--update-repo`.
+- `iso/check-medium.sh` passed every check but the guard, which found the same five lines
+  in the same packages as the first ISO's run (below).
+- **The migration, on a machine installed from the first ISO.** That system, as installed,
+  named the r2.dev address on `stable`. `bromigos channel edge` kept the address, and
+  `bromigos update` brought `bromigos-core` 0.1.2.r158.g2a3b405, which has the migration.
+  The update ran `20261010080000-public-repo-address`, and the `Server` line became
+  `https://pkgs.bromigos.org/$repo/$arch`. `/etc/pacman.conf.bromigos-r2dev` held the old
+  file, one line different. The next `bromigos update` synced from `pkgs.bromigos.org`
+  and had nothing to do ([public.md](public.md#the-r2dev-address)).
+
+### 2026-10-09, 19:02 to 19:46 Pacific: v0.1.2's first ISO
+
+The first release's medium, replaced on 2026-10-10 (above): the `stable` channel at
 v0.1.2 (`bromigos-core` 0.1.2.r143.g07924b0, `bromigos-vector` 0.1.2.r58.g172967c),
-naming the public mirror, with no test key. 4.3 GB (4,321,310,720 bytes), with 827
+naming the bucket's r2.dev address, with no test key. 4.3 GB (4,321,310,720 bytes), with 827
 packages in the offline repository (2.0 GB). The build took 3 min 35 s with the cache
 warm. Its `iso/` is main's: the tag's, plus the keyring fix below. The packages are the
 tag's.
@@ -521,8 +538,8 @@ tag's.
 | BIOS, `--no-encrypt`, with no network for the live session and the install | 16/16 | 1 min 52 s | 75/75 | 7/7 |
 
 - The harness gave the medium its key through cloud-init. The installed systems named the
-  public address, on `stable`. The first update read the homelab's copy
-  (`--update-repo`), moved to edge, and was rolled back.
+  r2.dev address, on `stable`. Before go-live that address wasn't public yet, so the first
+  update read the homelab's copy (`--update-repo`), moved to edge, and was rolled back.
 - `iso/check-medium.sh`: the public address, `stable`, no CA, no keys, no serial console,
   and no proprietary package (`1password` isn't on it). The guard found nothing in the
   live system's own files. In bromigOS's packages it found an example MAC address in

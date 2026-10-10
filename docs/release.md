@@ -191,13 +191,14 @@ Every workflow has a **dry run** switch, on by default.
 
 ## The ISO
 
-Each release's installer image goes on its GitHub Release, built from the stable channel
-once the release workflow has published it. It's built and tested by hand, on a
+Each release's installer image goes on its GitHub Release, for anyone to download. It's
+built from the stable channel once the release workflow has published it. It's built and tested by hand, on a
 workstation: it needs a privileged container, about 15 GB of disk and KVM, more than the
 shared runners give. [iso.md](iso.md#a-releases-iso) has every step and command:
 
-1. build it from the tag, downloading from the homelab's repository and naming the public
-   one (`iso/build.sh --medium-repo <public repo> --version X.Y.Z`);
+1. build it from the tag, from the public repository, which the medium names for updates
+   (`iso/build.sh --repo https://pkgs.bromigos.org --medium-repo https://pkgs.bromigos.org
+   --version X.Y.Z`);
 2. check what's on it (`iso/check-medium.sh`: the repository it names, no keys or CA,
    no proprietary packages, the privacy guard, the pictures);
 3. test it in the harness, UEFI and BIOS, one of them with no network: the live session,
@@ -216,24 +217,19 @@ sha256sum -c bromigos-0.1.2-x86_64.iso.sha256
 gpg --verify bromigos-0.1.2-x86_64.iso.sig bromigos-0.1.2-x86_64.iso
 ```
 
-An installed system updates from the public repository, so its updates work once that's
-live ([public.md](public.md)). Installing needs no network. The repositories stay private
-after go-live, so the Releases' files reach only the organisation's members.
+Installing needs no network. An installed system updates from `https://pkgs.bromigos.org`.
 
-v0.1.2 was the first release with an ISO, attached on 2026-10-09
-([iso.md](iso.md#test-runs) has its run).
+v0.1.2 was the first release with an ISO. The first one, attached on 2026-10-09, named the
+bucket's r2.dev address. It was replaced on 2026-10-10 with one that names
+`pkgs.bromigos.org`, and a migration moves machines installed from the first one
+([public.md](public.md#the-r2dev-address)). [iso.md](iso.md#test-runs) has both runs.
 
 ## The public repository
 
-Every channel a release publishes is also copied to a Cloudflare R2 bucket, which is
-private during early access. Making it public is one command, run once:
-
-```bash
-tools/release/go-public.sh          # checks, and prints what it would do
-tools/release/go-public.sh --yes    # turns on its public address and lands the prepared changes
-```
-
-[public.md](public.md) explains what it does, what it costs and how to undo it.
+Every channel a release publishes is also copied to a Cloudflare R2 bucket, public at
+`https://pkgs.bromigos.org` since 2026-10-09. `tools/release/go-public.sh` opened it, and
+the GitHub repositories with it. [public.md](public.md) explains what it did, what it
+costs, how to undo it, and when the bucket's r2.dev address can be turned off.
 
 ## Known limitations
 

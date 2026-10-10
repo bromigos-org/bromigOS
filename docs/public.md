@@ -12,11 +12,11 @@ copy current.
 
 | Piece | State now |
 |---|---|
-| The bucket, `bromigos-pkgs` | In the Bromigos Cloudflare account's R2. Public access is off: no r2.dev address and no custom domain. |
+| The bucket, `bromigos-pkgs` | In the Bromigos Cloudflare account's R2. Public at `https://pkgs.bromigos.org`, and at its r2.dev address until the machines that use that have moved ([The r2.dev address](#the-r2dev-address)). |
 | Its writer | An R2 API token that may read and write this bucket only. CI uses its S3 key, because `publish.sh` speaks the S3 protocol. |
 | The copy | Every publish, in both repositories, copies its channel to the bucket under the same lease. The manual is copied too. |
-| `install.sh` | It reads its default repository from `PUBLIC_REPO`, which is empty. Without `--repo` it stops, as before. |
-| The go-live changes | Two prepared branches: `go-public` in bromigOS, and `os-get-public` in bromigos.org. They carry the bucket's r2.dev address. Neither is merged. |
+| `install.sh` | Its default repository, `PUBLIC_REPO`, is `https://pkgs.bromigos.org`. |
+| The go-live changes | Landed on 2026-10-09: the `go-public` branch in bromigOS and `os-get-public` in bromigos.org, with the custom domain. |
 
 R2 keeps no old versions of an object. The bucket holds the same paths as the homelab's:
 
@@ -171,11 +171,36 @@ migration that rewrites the `Server` line, so choose before many people install.
 custom domain is the better long-term address. While bromigos.org's DNS is elsewhere,
 r2.dev is the only one available.
 
-The v0.1.2 ISO names the r2.dev address. Every machine installed from it has that
-address in its `/etc/pacman.conf`. So with `--domain`, the command keeps the r2.dev
-address on as well, and those machines keep getting updates. `--private --domain` turns
-both off. ISOs built after go-live name the custom domain
-(`iso/build.sh --medium-repo https://pkgs.bromigos.org`), so new installs use it.
+### The r2.dev address
+
+The first v0.1.2 ISO, attached to the Release on 2026-10-09, named the r2.dev address.
+Every machine installed from it has that address in its `/etc/pacman.conf`. So with
+`--domain`, the command kept the r2.dev address on as well, and those machines keep
+getting updates. `--private --domain` turns both off. The ISO on the v0.1.2 Release was
+replaced on 2026-10-10 with one that names `https://pkgs.bromigos.org`, and every ISO
+after it does too ([iso.md](iso.md#a-releases-iso)).
+
+The migration `20261010080000-public-repo-address`, in `bromigos-core`, moves those
+machines. On their next `bromigos update` after it arrives, it rewrites the `[bromigos]`
+`Server` line from the r2.dev address to `https://pkgs.bromigos.org`, keeping the channel.
+It touches only a line that is exactly the r2.dev address, and keeps the old file as
+`/etc/pacman.conf.bromigos-r2dev`. It reaches `edge` with the commit that added it, and
+`stable` and `rc` with the next release made from that commit or later.
+
+**Keep the r2.dev address on until** the first stable release with the migration
+(v0.1.3, or whatever comes after 0.1.2) has been out for four weeks. A machine updates
+from the r2.dev address one last time to get the migration, so it must still answer
+then. A machine that hasn't updated by the time it's off fails to sync the `bromigos`
+database. Its owner fixes it with one command:
+
+```bash
+bromigos channel stable --repo https://pkgs.bromigos.org
+```
+
+To turn it off: in the Cloudflare dashboard, R2, `bromigos-pkgs`, Settings, Public
+access, disallow the r2.dev subdomain. Or use the API call in [The same bucket change by
+hand](#the-same-bucket-change-by-hand) with `{"enabled":false}`. Don't use
+`go-public.sh --private --domain`, which turns the custom domain off too.
 
 ## The signing key
 
