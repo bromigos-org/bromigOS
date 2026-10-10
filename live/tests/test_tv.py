@@ -13,6 +13,7 @@ tests/fixtures, no network). No GPU, no desktop.
   keeping the last good list, live now, keeping videos (the layout, the .nfo, the size cap,
   an age-gated video), never on battery.
 """
+import atexit
 import json
 import os
 import shutil
@@ -27,6 +28,7 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(REPO, "lib"))
 
 SANDBOX = tempfile.mkdtemp(prefix="bromigos-tvtest-")
+atexit.register(shutil.rmtree, SANDBOX, True)      # its kept videos run to hundreds of MB: never left in /tmp
 assert "bromigos_tv" not in sys.modules or sys.modules["bromigos_tv"].CACHE.startswith(tempfile.gettempdir()), \
     "bromigos_tv was imported with the user's own paths"
 for k, sub in (("XDG_CACHE_HOME", "cache"), ("XDG_STATE_HOME", "state"), ("XDG_CONFIG_HOME", "config")):

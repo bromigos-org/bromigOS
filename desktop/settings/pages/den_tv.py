@@ -22,7 +22,7 @@ import time
 import tomllib
 import urllib.request
 
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
+from gi.repository import Adw, Gdk, GLib, Gtk, Pango
 
 from bromigos_settings import Entry, Page
 
@@ -362,38 +362,47 @@ class Guide:
         return child
 
     def _menu(self, child, s, num, ch, idx):
+        """The card's menu: a popover of plain buttons (Settings exports no actions)."""
         ctx = self.ctx
-        group = Gio.SimpleActionGroup()
-        menu = Gio.Menu()
+        pop = Gtk.Popover()
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        for side in ("top", "bottom", "start", "end"):
+            getattr(box, f"set_margin_{side}")(6)
 
-        def act(name, cb, label):
-            a = Gio.SimpleAction.new(name, None)
-            a.connect("activate", lambda *_: cb())
-            group.add_action(a)
-            menu.append(label, f"card.{name}")
+        def item(label, cb, hint, destructive=False):
+            b = Gtk.Button(label=label)
+            b.add_css_class("flat")
+            if destructive:
+                b.add_css_class("destructive-action")
+            b.get_child().set_xalign(0)
+            b.connect("clicked", lambda *_: (pop.popdown(), cb()))
+            ctx.hint(b, hint)
+            box.append(b)
         if idx == "panel":
-            act("panel", lambda: ctx.open_page("widgets"), "Edit in the MEDIA panel's settings…")
+            item("Edit in the MEDIA panel's settings…", lambda: ctx.open_page("widgets"),
+                 "This channel is the MEDIA panel's own: its settings are in Settings › Widgets")
         else:
-            act("rename", lambda: self.rename_dialog(idx, ch), "Rename…")
+            item("Rename…", lambda: self.rename_dialog(idx, ch), f"A new name for {ch['name']} (F2)")
             if ch.get("picks"):
-                act("shows", lambda: self.edit_picks(idx, ch), "Pick shows…")
-            act("earlier", lambda: self.move(idx, -1), "Move earlier")
-            act("later", lambda: self.move(idx, +1), "Move later")
-            sub = Gio.Menu()
+                item("Pick shows…", lambda: self.edit_picks(idx, ch), "Add or leave out shows, movies and collections")
+            item("Move earlier", lambda: self.move(idx, -1), "One place earlier on every screen it's on (Alt+←)")
+            item("Move later", lambda: self.move(idx, +1), "One place later on every screen it's on (Alt+→)")
+            head = Gtk.Label(label="ON THESE SCREENS", xalign=0)
+            head.add_css_class("tv-meta")
+            head.set_margin_top(6)
+            box.append(head)
             for x, title in SCREENS:
-                a = Gio.SimpleAction.new_stateful(f"on-{x}", None, GLib.Variant.new_boolean(x in ch["screens"]))
-                a.connect("change-state", lambda a_, v, x=x: self.set_screen(idx, ch, x, v.get_boolean()))
-                group.add_action(a)
-                sub.append(title, f"card.on-{x}")
-            menu.append_section("On these screens", sub)
-            rm = Gio.Menu()
-            a = Gio.SimpleAction.new("remove", None)
-            a.connect("activate", lambda *_: self.remove(idx, ch))
-            group.add_action(a)
-            rm.append("Remove", "card.remove")
-            menu.append_section(None, rm)
-        child.insert_action_group("card", group)
-        b = Gtk.MenuButton(icon_name="view-more-symbolic", menu_model=menu)
+                cb = Gtk.CheckButton(label=title, active=x in ch["screens"])
+                cb.connect("toggled", lambda w, x=x: (pop.popdown(), self.set_screen(idx, ch, x, w.get_active())))
+                ctx.hint(cb, f"Whether {title.lower()} carries {ch['name']}")
+                box.append(cb)
+            sep = Gtk.Separator()
+            sep.set_margin_top(4)
+            box.append(sep)
+            item("Remove", lambda: self.remove(idx, ch), f"Takes {ch['name']} off every screen (Undo puts it back)",
+                 destructive=True)
+        pop.set_child(box)
+        b = Gtk.MenuButton(icon_name="view-more-symbolic", popover=pop)
         ctx.hint(b, f"{ch['name']}: rename, pick its shows, move it, choose its screens, or remove it")
         return b
 

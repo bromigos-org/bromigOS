@@ -25,6 +25,7 @@ desktop, no network.
   screens changed, through a symlink, atomically, and a change that wouldn't parse refused;
 - screens = "any", [tv] screens, the aliases.
 """
+import atexit
 import json
 import os
 import shutil
@@ -41,6 +42,7 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 # (its paths are read then), whichever test module comes first
 if "bromigos_tv" not in sys.modules:
     _SANDBOX = tempfile.mkdtemp(prefix="bromigos-tvscr-env-")
+    atexit.register(shutil.rmtree, _SANDBOX, True)
     for _k, _sub in (("XDG_CACHE_HOME", "cache"), ("XDG_STATE_HOME", "state"), ("XDG_CONFIG_HOME", "config")):
         os.environ[_k] = os.path.join(_SANDBOX, _sub)
     os.environ.setdefault("BROMIGOS_HOMELAB_CONFIG", os.path.join(_SANDBOX, "none.toml"))
@@ -100,6 +102,14 @@ def homelab(t, *servers):
     t.addCleanup(back)
 
 
+def make_tv(t, cfg):
+    """A TV whose threads are done before the test's sandbox goes."""
+    tv = livetv.TV(cfg, log=lambda *a: None)
+    t.addCleanup(lambda: (tv.worker.join(15), tv.resolver.join(15)))
+    t.addCleanup(tv.close)
+    return tv
+
+
 def files_channel(name, screens, n=3, dur=600):
     """A files channel with its items in the cache already (no ffprobe)."""
     ch = {"name": name, "files": [f"/media/{name}"], "screens": screens}
@@ -152,9 +162,8 @@ class ScreensTest(unittest.TestCase):
         self.cfg = {"tv": {"channel": [files_channel("Shows", ["big"]), files_channel("Clips", ["wave"]),
                                        files_channel("Movies", ["emblem"]),
                                        files_channel("Everywhere", "any")]}}
-        self.tv = livetv.TV(self.cfg, log=lambda *a: None)
+        self.tv = make_tv(self, self.cfg)
         self.tv.stop.set()
-        self.addCleanup(self.tv.close)
         for d in self.tv.decks.values():
             d.player = Player()
         self.tv.px = {"big": (1188, 678, 200, 175), "wave": (1475, 762, 124, 110), "emblem": (1090, 920, 158, 143)}
@@ -212,9 +221,8 @@ class ScreensTest(unittest.TestCase):
     def test_an_old_state_with_two_sounds(self):
         TV.save_state({"screens": {"big": {"channel": "shows", "sound": True}, "wave": {"channel": "clips",
                                                                                          "sound": True}}})
-        tv = livetv.TV(self.cfg, log=lambda *a: None)
+        tv = make_tv(self, self.cfg)
         tv.stop.set()
-        self.addCleanup(tv.close)
         self.assertEqual([s for s in TV.SCREENS if tv.screens[s]["sound"]], ["big"])
 
     def test_commands_take_a_screen(self):
@@ -328,9 +336,8 @@ class SizedStreamTest(unittest.TestCase):
     def tv(self, server, channel):
         homelab(self, server)
         cfg = {"tv": {"channel": [channel]}}
-        tv = livetv.TV(cfg, log=lambda *a: None)
+        tv = make_tv(self, cfg)
         tv.stop.set()
-        self.addCleanup(tv.close)
         tv.px = {"big": (1188, 678, 200, 175), "wave": (1475, 762, 124, 110), "emblem": (1090, 920, 158, 143)}
         ch = TV.channels(cfg)[0]
         TV.fetch_items(ch, max_age=0)
@@ -422,8 +429,7 @@ class YouTubeResolveTest(unittest.TestCase):
             for i in ids], "fetched": time.time() + 3600, "error": None})
         cfg = {"tv": {"channel": [{"name": "Clips", "youtube": "https://www.youtube.com/playlist?list=PLexample",
                                    "screens": ["big"], "order": "in order"}]}}
-        tv = livetv.TV(cfg, log=lambda *a: None)
-        self.addCleanup(tv.close)
+        tv = make_tv(self, cfg)
         tv.px = {"big": (1188, 678, 200, 175)}
         d = tv.decks["big"]
         d.player = Player()
