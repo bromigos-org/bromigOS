@@ -140,15 +140,14 @@ class Panel(unittest.TestCase):
         self.assertTrue(any("calendars.toml" in t for t in tips), tips)
 
     def test_missing_icalendar_says_so(self):
-        p = PT.make(C.CalendarPanel)
-        p.cals = lambda: [{"source": "x.ics", "name": "x", "colour": "phosphor"}]
-        real = C.icalendar_module
-        C.icalendar_module = lambda: None
-        try:
+        # Keep the initial background fetch from overwriting our explicit run.
+        with unittest.mock.patch.object(C.K.threading.Thread, "start"), \
+                unittest.mock.patch.object(C, "icalendar_module", return_value=None):
+            p = PT.make(C.CalendarPanel)
+            p.cals = lambda: [{"source": "x.ics", "name": "x", "colour": "phosphor"}]
             p.poll.run_once()
-        finally:
-            C.icalendar_module = real
-        tips = PT.draw(p, 440, 300)
+            self.assertEqual(p.poll.data, {"missing": True})
+            tips = PT.draw(p, 440, 300)
         self.assertTrue(any("python-icalendar" in t for t in tips), tips)
 
     def test_every_size_class_draws_with_hints(self):
