@@ -140,7 +140,10 @@ class Player:
         self.sounds.append((on, vol))
 
     def seek(self, pos):
-        pass
+        self.seeks = getattr(self, "seeks", 0) + 1
+
+    def seeking(self):
+        return False
 
     def stop(self):
         self.stopped += 1
@@ -445,6 +448,146 @@ class SizedStreamTest(unittest.TestCase):
         self.assertEqual((seen["hwdec"], seen["hwdec_codecs"]), ("auto", "all"))
         self.assertEqual(seen["scale"], "bilinear")
         self.assertFalse(seen["ytdl"])
+
+
+class OpeningPlayer(Player):
+    """A stand-in player that opens what it's given on the (fake) server, as mpv would."""
+    def load(self, url, **k):
+        super().load(url, **k)
+        if url.startswith("http"):
+            try:
+                req = urllib.request.Request(url, headers=k.get("headers") or {})
+                urllib.request.urlopen(req, timeout=5).read(64)
+            except OSError:
+                pass
+
+
+@unittest.skipIf(livetv is None, "no PyOpenGL")
+class StreamOpensTest(unittest.TestCase):
+    """The den never floods a server: at most one stream per playing screen, none for a
+    screen that shares another's, none for prefetch, and each one ended when its screen
+    moves on. Frames drawn through tv.gl() with GL stood in for, players that open their
+    stream on a fake Jellyfin or Plex that counts every open."""
+
+    def setUp(self):
+        sandbox(self)
+        for target, val in (("live.glkit.texture_from_cairo", lambda surf: 1), ("live.glkit.texture_rgba", lambda *a: 1),
+                            ("live.mpvgl.available", lambda: (True, "")), ("live.mpvgl.Player", OpeningPlayer)):
+            p = mock.patch(target, val)
+            p.start()
+            self.addCleanup(p.stop)
+        p = mock.patch.object(livetv.GL, "glDeleteTextures", lambda *a: None)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def make(self, srv, extra=()):
+        homelab(self, srv)
+        cfg = {"tv": {"channel": [{"name": "Shows", "source": srv.type, "library": "Shows"},
+                                  {"name": "Films", "source": srv.type, "library": "Movies"}] + list(extra)}}
+        for ch in TV.channels(cfg):
+            TV.fetch_items(ch, max_age=0)
+        tv = make_tv(self, cfg)
+        tv.stop.set()
+        tv.px = {"big": (1188, 678, 200, 175), "wave": (1475, 762, 124, 110), "emblem": (1090, 920, 158, 143)}
+        tv.rects = dict(tv.px)
+        return tv
+
+    def frames(self, tv, n, covered=lambda i: set()):
+        for i in range(n):
+            tv.drawn_at = livetv._mono()
+            tv.tick(covered=covered(i))
+            tv.gl()
+
+    def test_a_transcode_opens_once_however_the_screen_is_covered(self):
+        srv = FM.FakeJellyfin(bitrate_kbps=60000, height=2160, codec="hevc", bit_depth=10)   # a 4K remux
+        self.addCleanup(srv.close)
+        tv = self.make(srv)
+        tv.tune_to("big", 2)
+        self.frames(tv, 40, covered=lambda i: {"big"} if i % 2 else set())
+        opens = srv.opens()
+        self.assertEqual(len(opens), 1, opens)
+        self.assertNotIn("StartTimeTicks=", opens[0])                    # Jellyfin 10.11 fails every segment with it
+        self.assertGreater(tv.decks["big"].player.loads[0]["start"], 0)  # mpv seeks there instead
+        self.assertIn("DeviceId=bromigos-den-tv-big", opens[0])
+        self.assertEqual(srv.stopped, [])
+
+    def test_two_screens_on_one_channel_open_one_stream(self):
+        srv = FM.FakeJellyfin(bitrate_kbps=60000, height=2160, codec="hevc", bit_depth=10)
+        self.addCleanup(srv.close)
+        tv = self.make(srv)
+        tv.tune_to("big", 2)
+        tv.tune_to("wave", 2)
+        self.frames(tv, 40, covered=lambda i: {"big"} if i % 3 == 0 else set())
+        self.assertEqual(len(srv.opens()), 1, srv.opens())
+        self.assertIn(tv.follows, ({"wave": "big"}, {"big": "wave"}))     # whichever started, it stays
+
+    def test_changing_channel_ends_the_last_stream(self):
+        srv = FM.FakeJellyfin(bitrate_kbps=60000, height=2160, codec="hevc", bit_depth=10)
+        self.addCleanup(srv.close)
+        tv = self.make(srv)
+        for n in (2, 3, 2, 3, 1, 2):
+            tv.tune_to("big", n)
+            self.frames(tv, 6)
+        time.sleep(0.5)                                                  # the stops go on a thread
+        self.assertEqual(len(srv.opens()), 5, srv.opens())               # one per media tune, channel 1 none
+        self.assertEqual(len(srv.stopped), 4, srv.stopped)               # each one ended when it was left
+        self.assertTrue(all("PlaySessionId=" in x for x in srv.stopped))
+
+    def test_a_drifting_player_is_put_back_once_not_every_frame(self):
+        srv = FM.FakeJellyfin()                                          # a direct stream: kept to the clock
+        self.addCleanup(srv.close)
+        tv = self.make(srv)
+        tv.tune_to("big", 2)
+        self.frames(tv, 3)
+        d = tv.decks["big"]
+        d.player.has_frame = True
+        d.loaded_at -= 20                                                # long since opened, and 0 s in: drifted
+        t_end = time.time() + 2.5
+        while time.time() < t_end:                                       # 30 frames a second
+            self.frames(tv, 1)
+            time.sleep(1 / 30)
+        self.assertEqual(getattr(d.player, "seeks", 0), 1)               # one seek, not one a frame
+        self.assertEqual(len(srv.opens()), 1)
+
+    def test_a_small_h264_file_plays_as_it_is(self):
+        srv = FM.FakeJellyfin(bitrate_kbps=4000, height=1080, codec="h264")
+        self.addCleanup(srv.close)
+        tv = self.make(srv)
+        tv.tune_to("big", 2)
+        tv.tune_to("emblem", 3)
+        self.frames(tv, 20)
+        opens = srv.opens()
+        self.assertEqual(len(opens), 2, opens)
+        self.assertTrue(all("/stream?static=true" in p for p in opens), opens)      # no transcode at all
+        self.assertTrue(all(ld.get("start") for d in tv.decks.values() if d.player for ld in d.player.loads))
+
+    def test_prefetch_never_opens_a_server_stream(self):
+        srv = FM.FakeJellyfin()
+        self.addCleanup(srv.close)
+        tv = self.make(srv)
+        tv.tune_to("big", 2)
+        ch = tv.channel("big")[1]
+        before = len(srv.opens())
+        tv._prefetch("big", ch, tv.slot(ch))
+        self.assertEqual(len(srv.opens()), before)
+
+    def test_plex_too(self):
+        srv = FM.FakePlex(bitrate_kbps=60000, height=2160, codec="hevc", bit_depth=10)
+        self.addCleanup(srv.close)
+        tv = self.make(srv)
+        tv.tune_to("big", 2)
+        tv.tune_to("wave", 2)
+        self.frames(tv, 30, covered=lambda i: {"big"} if i % 2 else set())
+        opens = srv.opens()
+        self.assertEqual(len(opens), 1, opens)
+        self.assertNotIn("offset=0&", opens[0])                          # the transcode starts where it's on
+        ld = tv.decks["big"].player.loads[0]
+        self.assertIsNone(ld.get("start"))                               # …so mpv doesn't seek again
+        tv.tune_to("big", 3)
+        tv.tune_to("wave", 3)
+        self.frames(tv, 6)
+        time.sleep(0.5)
+        self.assertEqual(len(srv.stopped), 1, srv.stopped)
 
 
 @unittest.skipIf(livetv is None, "no PyOpenGL")

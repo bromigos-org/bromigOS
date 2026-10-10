@@ -25,12 +25,14 @@ MOVIES = {"m1": "Colour Bars", "m2": "Tone"}
 class _Base:
     key = "test-key"
 
-    def __init__(self, clip=None, poster=None, bitrate_kbps=800, height=360):
+    def __init__(self, clip=None, poster=None, bitrate_kbps=800, height=360, codec="h264", bit_depth=8):
         self.clip = open(clip, "rb").read() if clip else b"\0" * 1024
         self.poster = open(poster, "rb").read() if poster else b""
         self.bitrate = bitrate_kbps
         self.height = height
+        self.codec, self.bit_depth = codec, bit_depth
         self.seen = []
+        self.stopped = []                     # DELETE /Videos/ActiveEncodings… (Jellyfin), stop?session=… (Plex)
         me = self
 
         class H(BaseHTTPRequestHandler):
@@ -73,6 +75,11 @@ class _Base:
             def do_HEAD(self):
                 self.do_GET()
 
+            def do_DELETE(self):
+                me.seen.append((self.path, dict(self.headers)))
+                me.stopped.append(self.path)
+                return self.send(204, b"")
+
             def do_GET(self):
                 me.seen.append((self.path, dict(self.headers)))
                 u = urllib.parse.urlparse(self.path)
@@ -92,6 +99,11 @@ class _Base:
         """The paths asked for that contain `part`."""
         return [p for p, _h in self.seen if part in p]
 
+    def opens(self):
+        """Every stream opened: a direct file, or a transcode's playlist."""
+        return [p for p, _h in self.seen if "/stream?" in p or "master.m3u8" in p or "start.m3u8" in p
+                or p.startswith("/library/parts/")]
+
 
 class FakeJellyfin(_Base):
     type = "jellyfin"
@@ -101,13 +113,15 @@ class FakeJellyfin(_Base):
                 "SeriesId": sid, "ParentIndexNumber": 1, "IndexNumber": n + 1, "RunTimeTicks": CLIP * TICKS,
                 "ImageTags": {"Primary": "p"},
                 "MediaSources": [{"Id": eid, "Bitrate": self.bitrate * 1000,
-                                  "MediaStreams": [{"Type": "Video", "Height": self.height}]}]}
+                                  "MediaStreams": [{"Type": "Video", "Height": self.height, "Codec": self.codec,
+                                                    "BitDepth": self.bit_depth}]}]}
 
     def _movie(self, mid):
         return {"Name": MOVIES[mid], "Id": mid, "Type": "Movie", "ProductionYear": 2001, "RunTimeTicks": CLIP * TICKS,
                 "ImageTags": {"Primary": "p"},
                 "MediaSources": [{"Id": mid, "Bitrate": self.bitrate * 1000,
-                                  "MediaStreams": [{"Type": "Video", "Height": self.height}]}]}
+                                  "MediaStreams": [{"Type": "Video", "Height": self.height, "Codec": self.codec,
+                                                    "BitDepth": self.bit_depth}]}]}
 
     def answer(self, h, path, q):
         if h.headers.get("Authorization") != f'MediaBrowser Token="{self.key}"' and not path.endswith("/Primary"):
@@ -115,6 +129,8 @@ class FakeJellyfin(_Base):
         if path.startswith("/Videos/") and path.endswith("/stream"):
             return h.video()
         if path.startswith("/Videos/") and path.endswith("/master.m3u8"):
+            if "StartTimeTicks" in q:                  # as Jellyfin 10.11: such a playlist's segments all fail
+                return h.send(400, b"Error processing request.", "text/plain")
             return h.hls()
         if path.endswith("/Images/Primary"):
             return h.send(200, self.poster, "image/png")
@@ -164,13 +180,15 @@ class FakePlex(_Base):
         return {"ratingKey": eid, "type": "episode", "title": f"Episode {n + 1}", "grandparentTitle": SHOWS[sid][0],
                 "grandparentRatingKey": sid, "parentIndex": 1, "index": n + 1, "duration": CLIP * 1000,
                 "thumb": f"/library/metadata/{eid}/thumb",
-                "Media": [{"bitrate": self.bitrate, "height": self.height,
+                "Media": [{"bitrate": self.bitrate, "height": self.height, "videoCodec": self.codec,
+                           "videoProfile": "main 10" if self.bit_depth > 8 else "high",
                            "Part": [{"key": f"/library/parts/{eid}/file.mp4"}]}]}
 
     def _movie(self, mid):
         return {"ratingKey": mid, "type": "movie", "title": MOVIES[mid], "year": 2001, "duration": CLIP * 1000,
                 "thumb": f"/library/metadata/{mid}/thumb",
-                "Media": [{"bitrate": self.bitrate, "height": self.height,
+                "Media": [{"bitrate": self.bitrate, "height": self.height, "videoCodec": self.codec,
+                           "videoProfile": "main 10" if self.bit_depth > 8 else "high",
                            "Part": [{"key": f"/library/parts/{mid}/file.mp4"}]}]}
 
     def answer(self, h, path, q):
@@ -182,6 +200,9 @@ class FakePlex(_Base):
             return h.video()
         if path == "/video/:/transcode/universal/start.m3u8":
             return h.hls()
+        if path == "/video/:/transcode/universal/stop":
+            self.stopped.append(path + "?" + urllib.parse.urlencode(q))
+            return mc({})
         if path.endswith("/thumb") or path == "/photo/:/transcode":
             return h.send(200, self.poster, "image/png")
         if path == "/identity":

@@ -149,6 +149,13 @@ class Player:
     def paused(self):
         return bool(self.m.pause)
 
+    def seeking(self):
+        """mpv is still seeking (or opening): its position is where it's going, not where it is."""
+        try:
+            return bool(self.m.seeking)
+        except Exception:                                       # noqa: BLE001
+            return False
+
     def sound(self, on, volume):
         """Sound on (the audio track decoded, unmuted) or off (no audio decoded at all)."""
         want_aid = "auto" if on else "no"

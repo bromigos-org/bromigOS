@@ -329,12 +329,20 @@ doesn't say: every screen) and `start` (each screen's first channel).
   draws each frame into that screen's texture, a few hundred pixels across, with mpv's
   cheapest scalers. `bg.frag` draws each texture in its screen's glass, with the tube's
   curve, scanlines, a soft glow and the den's phosphor tint.
-- **The stream, sized to the screen.** A den screen is about 200 pixels tall, so the
-  server is asked for a stream that size. Jellyfin and Plex transcode to the smallest
-  height at least as tall as the screen's texture: 360p for the big monitor and 240p for
-  the scope and the small monitor at 2560×1440. A file that is already that small plays as
-  it is. A 4K remux never streams whole into a postage stamp. Full screen plays the file
-  itself. `[tv] quality = "direct"` plays every file as it is instead.
+- **The stream.** A file the GPU decodes cheaply plays as it is: 1080p or less, 8-bit,
+  H.264 or another codec every GPU decodes, under the source's `direct_max_mbps`. mpv seeks
+  in it itself, and the server only sends bytes. Anything else, such as a 4K remux or
+  10-bit HEVC, is transcoded by the server to the screen's size: 360p for the big monitor
+  and 240p for the others at 2560×1440. Full screen plays the file itself.
+  `[tv] quality = "direct"` plays every file as it is instead.
+- **One stream per screen, ended when it's left.** Each screen opens one stream for what
+  it shows, under a device id of its own (`bromigos-den-tv-big` and so on). A screen on the
+  same channel as another opens none: it shows the other's frames, or the poster until
+  there are some. Changing channel, a new item or a screen going quiet tells the server
+  its transcode is over at once. A late or slow transcode is left to play rather than
+  chased: it's put back to the clock only when it's two minutes off, since each seek
+  starts the server's encoder again. A direct stream is put back when it's three seconds
+  off, at most every ten seconds.
 - **YouTube, resolved ahead.** A thread of its own asks yt-dlp for each video's stream, no
   taller than the screen, H.264 first. It resolves what's on and the next two ahead and
   keeps each answer for as long as YouTube's address lasts, about six hours. mpv never

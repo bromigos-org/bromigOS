@@ -27,7 +27,10 @@ Each adapter also answers, for the TV and the panel (not capabilities: one serve
     video_items(kind, id, limit)    the items in one of those, in its own order
     video_resume(limit)             continue watching: items part-way through
     video_latest(limit)             recently added
-    video_stream(item, quality, height)  {"url", "headers", "direct", "quality"}: what mpv plays
+    video_stream(item, quality, height, start, device)
+                                    {"url", "headers", "direct", "quality", "session", "from_start"}: what
+                                    mpv plays (from_start: the stream itself begins at `start`)
+    video_stop(stream)              end a transcode video_stream started (when its screen moves on)
     video_shows()                   every series, to pick from: {id, title, year, poster, count, server}
     video_show_items(id)            a series' episodes
     video_movies()                  every movie, to pick from (items)
@@ -44,10 +47,16 @@ source's `direct_max_mbps`, 20 by default: then a 480p transcode), or a height s
 "480p" or "720p" (the server transcodes to H.264 at that height, over HLS).
 
 With `height` (the pixels it's drawn at: a den screen is a couple of hundred), "auto"
-sizes the stream to it: the smallest height in HEIGHTS at least that tall, transcoded at
-that height's bitrate, unless the file itself is already small (no more than three times
-that bitrate, and no taller than twice the height): then it plays as it is. A 4K remux
-drawn 260 pixels tall comes as a 360p stream, not 60 GB.
+plays the file as it is when the desktop's GPU decodes it cheaply: 1080p or less, 8-bit,
+H.264 (or another codec every GPU decodes: MPEG-2, MPEG-4, VC-1, VP8, VP9, 8-bit HEVC), and
+no more than `direct_max_mbps`. mpv seeks in it by itself, and the server does nothing but
+send bytes. Anything else (a 4K remux, 10-bit HEVC, AV1, an unknown codec over the cap) is
+transcoded to the smallest height in HEIGHTS at least that tall, at that height's bitrate.
+Plex's transcode starts where the screen starts (its offset); Jellyfin's playlist covers the
+whole item and starts encoding at the segment mpv seeks to (its StartTimeTicks breaks every
+segment, so it isn't sent). Each screen has its own device id, so a
+new stream on one never ends another's, and video_stop() ends a transcode at once when its
+screen moves on.
 """
 import time
 import urllib.parse
@@ -70,17 +79,34 @@ def fit_height(height):
     return "1080p"
 
 
-def _quality(q, bitrate_kbps, max_mbps, height=None, source_height=None):
-    """"direct" or a HEIGHTS key, for the asked quality, the item's bitrate and height, and
-    the height it's drawn at (None: not sized)."""
+CHEAP = ("h264", "avc", "avc1", "mpeg2video", "mpeg2", "mpeg4", "msmpeg4v3", "vc1", "wmv3", "vp8", "vp9", "hevc",
+         "h265")                           # codecs every GPU's decoder takes (HEVC: 8-bit only)
+
+
+def cheap_to_decode(item, max_mbps):
+    """The file plays as it is on a den screen: 1080p or less, 8-bit, a codec every GPU
+    decodes, no more than max_mbps. False when it can't be told and the bitrate is unknown."""
+    codec = str(item.get("codec") or "").lower()
+    depth = item.get("bit_depth") or 8
+    h, kbps = item.get("height"), item.get("bitrate")
+    if codec and codec not in CHEAP:
+        return False
+    if h and h > 1088 or depth > 8:
+        return False
+    if kbps and kbps > max_mbps * 1000:
+        return False
+    return bool(codec or kbps)
+
+
+def _quality(q, bitrate_kbps, max_mbps, height=None, source_height=None, item=None):
+    """"direct" or a HEIGHTS key, for the asked quality, the item, and the height it's
+    drawn at (None: not sized)."""
     q = (q or "auto").lower()
     if q == "direct" or q not in HEIGHTS and q != "auto":
         return "direct"
     if q == "auto" and height:
-        fit = fit_height(int(height))
-        h, kbps = HEIGHTS[fit]
-        small = bitrate_kbps and bitrate_kbps <= kbps * 3 and (not source_height or source_height <= h * 2)
-        return "direct" if small else fit
+        it = dict(item or {}, bitrate=bitrate_kbps, height=source_height)
+        return "direct" if cheap_to_decode(it, max_mbps) else fit_height(int(height))
     if q == "auto":
         return "direct" if not bitrate_kbps or bitrate_kbps <= max_mbps * 1000 else "480p"
     return q
@@ -154,6 +180,10 @@ class JellyfinVideo(VideoServer):
                 "bitrate": int(src["Bitrate"] / 1000) if src.get("Bitrate") else None,
                 "height": next((m.get("Height") for m in src.get("MediaStreams") or [] if m.get("Type") == "Video"),
                                None),
+                "codec": next((m.get("Codec") for m in src.get("MediaStreams") or [] if m.get("Type") == "Video"),
+                              None),
+                "bit_depth": next((m.get("BitDepth") for m in src.get("MediaStreams") or [] if m.get("Type") == "Video"),
+                                  None),
                 "position": round((ud.get("PlaybackPositionTicks") or 0) / TICKS, 3) or None,
                 "added": _year_ts(it.get("DateCreated")), "server": self.name}
 
@@ -227,18 +257,37 @@ class JellyfinVideo(VideoServer):
         q = urllib.parse.urlencode({"Limit": str(limit), "Fields": self.FIELDS, "GroupItems": "true"})
         return [self._item(i) for i in self.fetch(f"/Users/{uid}/Items/Latest?{q}", timeout=8) or []]
 
-    def video_stream(self, item, quality="auto", height=None):
-        q = _quality(quality, item.get("bitrate"), self.video_direct_max(), height, item.get("height"))
+    def video_stream(self, item, quality="auto", height=None, start=None, device=None):
+        q = _quality(quality, item.get("bitrate"), self.video_direct_max(), height, item.get("height"), item)
         iid = item["id"]
+        dev = device or DEVICE
+        session = None
         if q == "direct":
             url = f"{self.endpoint}/Videos/{iid}/stream?static=true&MediaSourceId={iid}"
         else:
             h, kbps = HEIGHTS[q]
-            url = f"{self.endpoint}/Videos/{iid}/master.m3u8?" + urllib.parse.urlencode({
-                "MediaSourceId": iid, "DeviceId": DEVICE, "PlaySessionId": uuid.uuid4().hex,
-                "VideoCodec": "h264", "AudioCodec": "aac", "MaxHeight": str(h),
-                "VideoBitrate": str(kbps * 1000), "AudioBitrate": "128000", "SegmentContainer": "ts"})
-        return {"url": url, "headers": self.auth_headers(), "direct": q == "direct", "quality": q}
+            session = uuid.uuid4().hex
+            args = {"MediaSourceId": iid, "DeviceId": dev, "PlaySessionId": session,
+                    "VideoCodec": "h264", "AudioCodec": "aac", "MaxHeight": str(h),
+                    "VideoBitrate": str(kbps * 1000), "AudioBitrate": "128000", "SegmentContainer": "ts"}
+            # No StartTimeTicks: Jellyfin 10.11 answers every segment of such a playlist with 400.
+            # Its playlist covers the whole item, and the segment mpv asks for at `start` is
+            # where Jellyfin starts encoding.
+            url = f"{self.endpoint}/Videos/{iid}/master.m3u8?" + urllib.parse.urlencode(args)
+        return {"url": url, "headers": self.auth_headers(), "direct": q == "direct", "quality": q,
+                "session": session and {"device": dev, "play": session}, "from_start": False}
+
+    def video_stop(self, stream):
+        """End the transcode a video_stream() started (no-op for a direct stream)."""
+        sess = (stream or {}).get("session")
+        if not sess:
+            return False
+        q = urllib.parse.urlencode({"DeviceId": sess["device"], "PlaySessionId": sess["play"]})
+        try:
+            self.request(f"/Videos/ActiveEncodings?{q}", method="DELETE", timeout=5, raw=True)
+            return True
+        except Exception:                                   # noqa: BLE001  gone already
+            return False
 
     def video_web(self, item):
         return f"{self.web_base()}/web/#/details?id={item['id']}"
@@ -284,6 +333,8 @@ class PlexVideo(VideoServer):
                 "poster": m.get("grandparentThumb") if t == "episode" and m.get("grandparentThumb") else (
                     m.get("thumb") or m.get("parentThumb")),
                 "bitrate": media.get("bitrate"), "part": part.get("key"), "height": media.get("height"),
+                "codec": media.get("videoCodec"),
+                "bit_depth": 10 if "10" in str(media.get("videoProfile") or "") else None,
                 "position": round((m.get("viewOffset") or 0) / 1000.0, 3) or None,
                 "added": float(m["addedAt"]) if m.get("addedAt") else None, "server": self.name}
 
@@ -360,21 +411,36 @@ class PlexVideo(VideoServer):
         q = f"/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size={int(limit)}"
         return [self._item(m) for m in self._get(q).get("Metadata") or []]
 
-    def video_stream(self, item, quality="auto", height=None):
-        q = _quality(quality, item.get("bitrate"), self.video_direct_max(), height, item.get("height"))
+    def video_stream(self, item, quality="auto", height=None, start=None, device=None):
+        q = _quality(quality, item.get("bitrate"), self.video_direct_max(), height, item.get("height"), item)
         if q == "direct" and item.get("part"):
             return {"url": f"{self.endpoint}{item['part']}", "headers": self.auth_headers(), "direct": True,
-                    "quality": "direct"}
+                    "quality": "direct", "session": None, "from_start": False}
         if q == "direct":
             q = "1080p"
         h, kbps = HEIGHTS[q]
+        session = uuid.uuid4().hex
         # Plex picks a client profile by platform: "Chrome" is one every server knows (an
-        # unknown product or client id gets 400 Bad Request)
+        # unknown product or client id gets 400 Bad Request). With an offset, the stream
+        # itself begins there.
         url = f"{self.endpoint}/video/:/transcode/universal/start.m3u8?" + urllib.parse.urlencode({
             "path": f"/library/metadata/{item['id']}", "mediaIndex": "0", "partIndex": "0", "protocol": "hls",
-            "offset": "0", "copyts": "1", "fastSeek": "1", "videoResolution": f"{h * 16 // 9}x{h}",
-            "maxVideoBitrate": str(kbps), "session": uuid.uuid4().hex, "X-Plex-Platform": "Chrome"})
-        return {"url": url, "headers": self.auth_headers(), "direct": False, "quality": q}
+            "offset": f"{float(start or 0):.0f}", "copyts": "1", "fastSeek": "1",
+            "videoResolution": f"{h * 16 // 9}x{h}", "maxVideoBitrate": str(kbps), "session": session,
+            "X-Plex-Client-Identifier": device or DEVICE, "X-Plex-Platform": "Chrome"})
+        return {"url": url, "headers": self.auth_headers(), "direct": False, "quality": q,
+                "session": {"device": device or DEVICE, "play": session}, "from_start": bool(start)}
+
+    def video_stop(self, stream):
+        """End the transcode a video_stream() started (no-op for a direct stream)."""
+        sess = (stream or {}).get("session")
+        if not sess:
+            return False
+        try:
+            self._get(f"/video/:/transcode/universal/stop?session={sess['play']}", timeout=5)
+            return True
+        except Exception:                                   # noqa: BLE001
+            return False
 
     def video_web(self, item):
         key = urllib.parse.quote(f"/library/metadata/{item['id']}", safe="")

@@ -431,12 +431,15 @@ auth_ref = "@file:~/.local/share/bromigos/plex-token"
   file only you can read, such as `~/.local/share/bromigos/jellyfin-key` with mode 0600.
 - **A Plex token.** Plex's support article *Finding an authentication token* shows where
   to read yours. Keep it in a file the same way, or in Vault (`@vault:kv/plex#token`).
-- **Streams, sized to the screen.** The den asks for a stream as tall as the screen it's
-  drawn on, a couple of hundred pixels. The server transcodes to the smallest of 240p,
-  360p, 480p, 720p and 1080p that is at least that tall, at that height's bitrate. A file
-  that is already small (no more than three times that bitrate, and no taller than twice
-  that height) plays as it is. Without a size, a file plays as it is unless it's over
-  `direct_max_mbps`, which gets a 480p transcode. Full screen plays the file.
+- **Streams, sized to the screen.** The den passes the height a screen draws at, a couple
+  of hundred pixels. A file the GPU decodes cheaply plays as it is: 1080p or less, 8-bit, a
+  codec every GPU decodes (H.264, MPEG-2, MPEG-4, VC-1, VP8, VP9, 8-bit HEVC), under
+  `direct_max_mbps`. Anything else is transcoded to the smallest of 240p, 360p, 480p, 720p
+  and 1080p that is at least that tall. Plex's transcode starts at the screen's position
+  (its offset). Jellyfin's starts where mpv seeks: Jellyfin 10.11 fails every segment of a
+  playlist asked for with StartTimeTicks, so it isn't sent. Each screen has its own device
+  id, and `video_stop(stream)` ends a transcode when its screen moves on. Without a size, a
+  file plays as it is unless it's over `direct_max_mbps`. Full screen plays the file.
 - **The key** goes in a request header, never in an address, so it never shows in a
   command line or a log.
 - **Read-only.** Nothing marks anything watched or changes a library.

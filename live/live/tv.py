@@ -65,6 +65,8 @@ TUNE_OSD = 1.6                # seconds the channel number shows
 VOLUME_OSD = 1.3
 REDUCED_EVERY = 30.0          # reduced motion: a new still frame this often
 DRIFT = 3.0                   # seconds off the schedule before the picture is put back
+DRIFT_EVERY = 10.0            # how often that's checked (a seek restarts a server's transcode)
+DRIFT_TRANSCODE = 120.0       # a server's transcode is put back only this far off
 IDLE_CLOSE = 30.0             # a screen's player is closed after this long with nothing on
 HINT_W, HINT_H = 404, 112     # the hover hint, logical px
 BUMPER = 5.0                  # seconds of a channel's bumper card at the start of each item
@@ -125,6 +127,7 @@ class Deck:
         self.name = name
         self.player = None
         self.loaded = None                 # (channel key, item id) in its mpv
+        self.stream = None                 # the stream it plays (a server's: its transcode, ended when it moves on)
         self.loaded_at = 0.0
         self.idle_at = None                # when it last had nothing on (its player closes after IDLE_CLOSE)
         self.allowed = False               # drawing, in view (or with sound), within max_playing: decode
@@ -133,6 +136,7 @@ class Deck:
         self.osd_tex = None
         self.osd_sig = None
         self.reduced_at = 0.0
+        self.drift_at = 0.0
         self.tune = None                   # (monotonic start, number, name): the channel's number, static
         self.vol_osd = None                # monotonic start
 
@@ -149,6 +153,7 @@ class TV:
             self.screens[s]["sound"] = False
         self.decks = {s: Deck(s) for s in TVL.SCREENS}
         self.follows = {}                  # screen -> the screen whose player it shows (the same channel)
+        self._owners = {}                  # channel key -> the screen decoding it for the others (kept while it can)
         self.live = {}                     # YouTube live streams now: channel key -> video
         self.fails = {}                    # channel key -> [(when, item id)] that wouldn't play
         self.retry_at = {}                 # channel key -> when to try its server again
@@ -426,8 +431,7 @@ class TV:
                 d.allowed = False
                 d.capped = False
                 if s in self.follows and d.player is not None and d.loaded:
-                    d.player.stop()                              # the screen it follows decodes for both
-                    d.loaded = None
+                    self._unload(d)                              # the screen it follows decodes for both
                 continue
             d.capped = decoding.index(s) >= cap
             sound_on = s == snd
@@ -437,9 +441,10 @@ class TV:
             d.allowed = want
             if d.player is None:
                 continue
-            if want and not was and d.loaded:
+            if want and not was and d.loaded and d.player.has_frame:
                 slot = self.slot(self.channel(s)[1])
-                if slot and slot.offset is not None:
+                pos = d.player.position()
+                if slot and slot.offset is not None and (pos is None or abs(pos - slot.offset) > DRIFT):
                     d.player.seek(slot.offset)                   # back on: where the channel is now
             try:
                 if not (motion == "reduced" and not sound_on):
@@ -460,14 +465,20 @@ class TV:
         by = {}
         for s in media:
             by.setdefault(self.screens[s]["channel"], []).append(s)
-        out = {}
-        for _key, group in by.items():
+        out, owners = {}, {}
+        for key, group in by.items():
             if len(group) < 2:
                 continue
-            owner = snd if snd in group else next((s for s in group if s not in self.covered), group[0])
+            owner = self._owners.get(key)
+            if snd in group:
+                owner = snd                                      # the sound's screen decodes
+            elif owner not in group:
+                owner = next((s for s in group if s not in self.covered), group[0])
+            owners[key] = owner                                  # kept: no new stream when a window comes and goes
             for s in group:
                 if s != owner:
                     out[s] = owner
+        self._owners = owners
         return out
 
     # ------------------------------------------------------------------ the frame (GL thread)
@@ -501,9 +512,16 @@ class TV:
                 own = follows.get(s)
                 if own and self.screens[own]["channel"] != self.screens[s]["channel"]:
                     own = None                                   # tuned away since the tick
-                if own and frames.get(own):
-                    tex, src_aspect = frames[own]
-                    tex, aspect = tex, src_aspect / max(w / max(h, 1), 1e-3)
+                if own:
+                    # the screen it follows decodes for both: its frame, else the poster (never a
+                    # player of its own, not even for a moment: each start is a server's stream)
+                    if frames.get(own):
+                        tex, src_aspect = frames[own]
+                        aspect = src_aspect / max(w / max(h, 1), 1e-3)
+                    else:
+                        slot = self.slot(ch)
+                        p = self._poster_texture(d, slot.item if slot else None)
+                        tex, aspect = (p[0], (p[1] / max(p[2], 1)) / max(w / max(h, 1), 1e-3)) if p else (None, 1.0)
                     d.idle_at = d.idle_at or _mono()                 # its own player isn't needed
                     if d.player is not None and _mono() - d.idle_at > IDLE_CLOSE:
                         self._close_player(d)
@@ -537,7 +555,8 @@ class TV:
             self._ensure_loaded(d, ch, slot)
             if self.motion == "reduced" and not self.screens[screen]["sound"]:
                 now = _mono()
-                if now - d.reduced_at > REDUCED_EVERY and d.loaded:
+                direct = (d.stream or {}).get("quality") in (None, "direct")    # a transcode keeps its frame
+                if now - d.reduced_at > REDUCED_EVERY and d.loaded and (direct or not d.player.has_frame):
                     d.reduced_at = now
                     d.player.pause(True)
                     if slot.offset is not None:
@@ -627,16 +646,19 @@ class TV:
         a = TVL.server_of(ch)
         if a is None:
             return None
-        if full:
-            s = a.video_stream(it, self.conf().get("fullscreen_quality", "direct"))
-        else:
-            try:
-                s = a.video_stream(it, self.conf().get("quality", "auto"), height=height)
-            except TypeError:                                   # an older bromigos-homelab: not sized
-                s = a.video_stream(it, self.conf().get("quality", "auto"))
+        start = (slot.offset + 1.0) if slot.offset is not None else None     # the second it takes to open
+        try:
+            if full:
+                s = a.video_stream(it, self.conf().get("fullscreen_quality", "direct"), start=start,
+                                   device="bromigos-den-tv-full")
+            else:
+                s = a.video_stream(it, self.conf().get("quality", "auto"), height=height, start=start,
+                                   device=f"bromigos-den-tv-{screen or 'big'}")
+        except TypeError:                                       # an older bromigos-homelab: not sized
+            s = a.video_stream(it, self.conf().get("quality", "auto"))
         return {"url": s["url"], "headers": s["headers"], "ytdl_format": None, "title": title, "start": slot.offset,
                 "web": None, "server": {"jellyfin": "Jellyfin", "plex": "Plex"}.get(a.type, a.type), "adapter": a,
-                "quality": s.get("quality")}
+                "quality": s.get("quality"), "session": s.get("session"), "from_start": s.get("from_start")}
 
     # ------------------------------------------------------------------ YouTube's streams, resolved ahead
     @staticmethod
@@ -714,19 +736,20 @@ class TV:
             self.log(f"tv: no stream for {TVL.label(slot.item)}: {e}")
         if s and s.get("pending"):                              # YouTube: the resolver's on it; the poster meanwhile
             if d.loaded and d.loaded != want:
-                d.player.stop()                                 # never the last item's picture
-                d.loaded = None
+                self._unload(d)                                 # never the last item's picture
             return
         if s and s.get("error"):
             self.notes[ch["key"]] = (_mono(), f"YouTube refused: {s['error']}")
             self._skip(d, ch, slot, str(slot.item.get("id")), "YouTube refused it")
             return
+        self._end_stream(d)                                     # the last item's transcode ends now
         d.loaded = want
         d.loaded_at = _mono()
         if not s or not s.get("url"):
             d.player.stop()                                     # never the last item's picture
             return
-        start = (slot.offset + 1.0) if slot.offset is not None else None      # the second it takes to open
+        d.stream = s
+        start = None if s.get("from_start") or slot.offset is None else slot.offset + 1.0   # a second to open
         d.player.load(s["url"], start=start, headers=s["headers"], ytdl_format=s.get("ytdl_format"),
                       title=s["title"], audio=s.get("audio"))
         d.player.pause(not d.allowed and not self.motion == "reduced")
@@ -743,16 +766,39 @@ class TV:
         if not d.loaded or p is None:
             return
         failed = p.ended is not None and p.ended[0] == "error"
-        slow = (not p.started and d.allowed and _mono() - d.loaded_at > 25)
+        grace = 25 if (d.stream or {}).get("quality") in (None, "direct") else 60     # a transcode takes longer
+        slow = (not p.started and d.allowed and _mono() - d.loaded_at > grace)
         if failed or slow:
             self._skip(d, ch, slot, d.loaded[1], "error" if failed else "no answer")
             return
-        # drift: mpv's clock against the wall clock, now and then
-        if p.started and d.allowed and slot.offset is not None and _mono() - d.loaded_at > 8:
-            if int(_mono()) % 10 == 0:
-                pos = p.position()
-                if pos is not None and abs(pos - slot.offset) > DRIFT and slot.offset < (slot.item.get("duration") or 0) - 2:
-                    p.seek(slot.offset)
+        # drift: mpv's clock against the wall clock, every DRIFT_EVERY seconds once it plays.
+        # Never while it's still opening or seeking: a seek in a server's transcode starts its
+        # encoder again, and asking again before it answers only piles them up.
+        now = _mono()
+        if (p.started and p.has_frame and d.allowed and slot.offset is not None and now - d.loaded_at > 8
+                and now - d.drift_at > DRIFT_EVERY and not p.seeking()):
+            d.drift_at = now
+            pos = p.position()
+            # a transcode that starts late (or encodes at about real time) is let run: chasing
+            # the clock would start its encoder again and again
+            allow = DRIFT if (d.stream or {}).get("quality") in (None, "direct") else DRIFT_TRANSCODE
+            if pos is not None and abs(pos - slot.offset) > allow and slot.offset < (slot.item.get("duration") or 0) - 2:
+                d.drift_at = now + DRIFT_EVERY                   # and give that seek time to land
+                p.seek(slot.offset)
+
+    def _end_stream(self, d):
+        """Tell the server a screen's transcode is over (off the drawing thread)."""
+        st, d.stream = d.stream, None
+        a = (st or {}).get("adapter")
+        if a is not None and st.get("session") and hasattr(a, "video_stop"):
+            threading.Thread(target=a.video_stop, args=(st,), daemon=True, name="den-tv-stop").start()
+
+    def _unload(self, d):
+        """A screen's player stops, and its server stream with it."""
+        if d.player is not None:
+            d.player.stop()
+        d.loaded = None
+        self._end_stream(d)
 
     def _skip(self, d, ch, slot, iid, why):
         """An item that won't play: left out for a day. Three in two minutes are the server's
@@ -772,10 +818,9 @@ class TV:
             self.log(f"tv: {TVL.label(slot.item)} didn't play ({why}); skipping it")
             TVL.mark_bad(iid)
         self.last_slot.pop(ch["key"], None)
-        d.loaded = None
         if d.player is not None:
             d.player.ended = None
-            d.player.stop()
+        self._unload(d)
 
     def _poster_texture(self, d, item):
         if not item:
@@ -795,6 +840,7 @@ class TV:
         return tex, w, h
 
     def _close_player(self, d):
+        self._end_stream(d)
         if d.player is not None:
             d.player.close()
             d.player = None
