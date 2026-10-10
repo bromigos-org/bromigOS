@@ -376,6 +376,8 @@ def _signed_in(provider):
             if os.path.isdir(p) and p not in sys.path:
                 sys.path.append(p)
         import bromigos_account as AC
+        if hasattr(AC, "accounts"):                  # several accounts per service: any one will do
+            return any(a.get("signed_in") for a in AC.accounts(provider))
         return bool(AC.status(provider).get("signed_in"))
     except Exception:                              # noqa: BLE001  no keyring, no library
         return False
