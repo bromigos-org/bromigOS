@@ -505,6 +505,7 @@ services = ["caddy", "netdata", "restic", "homepage"]
 title = "AI"
 summary = "local LLMs behind LiteLLM, ComfyUI with models for your VRAM, voice and hearing, chat and search"
 services = ["ollama", "litellm", "comfyui", "voice", "whisper", "open-webui", "searxng"]
+offered = ["hermes", "openclaw", "nemoclaw"]
 choose = { "llm-server" = ["vllm when an NVIDIA GPU has 24 GB or more", "ollama otherwise"] }
 
 [preset.games]
@@ -648,3 +649,76 @@ vllm_min_vram_gib = 24
 voice_gpu_min_vram_gib = 8
 # GPU drivers: only on these distributions, and always as a dry run first
 gpu_driver_distros = ["debian", "ubuntu", "fedora", "arch"]
+
+# Agents use an existing OpenAI-compatible lab model endpoint. Credentials are
+# collected by the provisioner, never by catalog values.
+[service.llm-endpoint]
+title = "Existing model endpoint"
+summary = "connect agents to your lab's LiteLLM, Ollama or vLLM endpoint"
+group = "ai"
+kind = "host"
+needs = { cpu = 0, ram_gib = 0, disk_gib = 0 }
+ports = []
+provides = ["llm-gateway", "llm-server"]
+
+[service.hermes]
+title = "Hermes Agent"
+summary = "a persistent personal agent with memory and optional Telegram or Discord"
+group = "ai"
+kind = "compose"
+image = "nousresearch/hermes-agent:v0.21.6@sha256:55e192fba0cd4fde61142abbff5adeacff40efdb482ccd0ff877924bd274f909"
+licence = "MIT"
+needs = { cpu = 2, ram_gib = 2, disk_gib = 5, gpu = "none" }
+ports = [8642]
+provides = ["agent"]
+depends = ["llm-gateway"]
+models = { from = "catalog", capabilities = ["llm"] }
+[[service.hermes.configure]]
+do = "setting"
+name = "Model, profile, persistent memory and allowed tools"
+[[service.hermes.configure]]
+do = "secret"
+name = "LLM API key and optional messaging tokens"
+[[service.hermes.configure]]
+do = "setting"
+name = "Messaging user allowlists; no shell or file tools"
+
+[service.openclaw]
+title = "OpenClaw"
+summary = "a personal AI agent with local API access and optional messaging"
+group = "ai"
+kind = "compose"
+image = "ghcr.io/openclaw/openclaw:2026.9.9@sha256:7f10d5cc975a90b65192eaa099454fe33ce8ce2390806c61c65cd868e9ef730d"
+licence = "MIT"
+needs = { cpu = 2, ram_gib = 2, disk_gib = 5, gpu = "none" }
+ports = [18789]
+provides = ["agent"]
+depends = ["llm-gateway"]
+models = { from = "catalog", capabilities = ["llm"] }
+[[service.openclaw.configure]]
+do = "setting"
+name = "Model, profile, memory and allowed tools"
+[[service.openclaw.configure]]
+do = "secret"
+name = "LLM API key and optional messaging tokens"
+[[service.openclaw.configure]]
+do = "setting"
+name = "Messaging user allowlists; no shell or file tools"
+
+[service.nemoclaw]
+title = "NVIDIA NemoClaw"
+summary = "OpenClaw in an OpenShell sandbox; a Linux host is required, messaging stays off"
+group = "ai"
+kind = "host"
+licence = "Apache-2.0"
+needs = { cpu = 4, ram_gib = 8, disk_gib = 20, gpu = "none" }
+ports = [8080, 18789]
+provides = ["agent"]
+depends = ["llm-gateway"]
+models = { from = "catalog", capabilities = ["llm"] }
+[[service.nemoclaw.configure]]
+do = "setting"
+name = "Model endpoint, restricted network policy and tools; messaging disabled"
+[[service.nemoclaw.configure]]
+do = "secret"
+name = "Compatible endpoint API key"

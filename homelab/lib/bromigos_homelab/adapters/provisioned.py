@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from .. import provision as P
+from .. import provision as P, agentprovision as A
 from ..registry import Adapter, register
 
 
@@ -18,7 +18,7 @@ class Provisioned(Adapter):
         except (OSError, ValueError, KeyError):
             picked = []
         self.provides = ("hosts", "workloads") + (("deployments",) if "argocd" in picked else ()) + \
-                        (("backups",) if "restic" in picked else ()) + (("secrets",) if "vault" in picked else ())
+                        (("backups",) if "restic" in picked else ()) + (("secrets",) if "vault" in picked else ()) + (("agents",) if any(a in picked for a in A.AGENTS) else ())
         super().__init__(source)
 
     def configured(self):
@@ -51,6 +51,17 @@ class Provisioned(Adapter):
                             "state": "failed" if broken else {"Running": "running", "Pending": "pending", "Succeeded": "stopped", "Failed": "failed"}.get(phase, "unknown"),
                             "restarts": sum(c.get("restartCount", 0) for c in containers)})
         return out
+
+    def agents(self):
+        state = self.state()
+        rows = []
+        for agent in A.AGENTS:
+            if agent in state["selected"]:
+                try:
+                    rows.append(A.metadata(state, agent))
+                except (P.ProvisionError, ValueError, OSError):
+                    rows.append({"name": agent, "status": "unreachable", "model": state["agents"]["model"], "gateways": "unknown", "activity": "unknown"})
+        return rows
 
     def secrets(self):
         state = self.state()
@@ -85,4 +96,5 @@ class Provisioned(Adapter):
         from ..doctor import finding
         state = self.state()
         P.verify_services(state)
+        A.verify(state)
         return [finding("provision.services", "Provisioned services", "ok", "Selected services answer; Vault is initialised and unsealed when selected")]

@@ -385,8 +385,8 @@ register_card("secrets", title="Vault", order=90, columns=("name", "initialized"
               summary=lambda items: "sealed!" if any(i.get("sealed") for i in items) else
               ("unsealed" if items else "-"))
 
-register_card("agents", title="Agents", order=120, columns=("name", "status", "cwd"),
-              hint="Coding agents working on this machine (herdr)")
+register_card("agents", title="Agents", order=120, columns=("name", "status", "model", "gateways", "activity", "cwd"),
+              hint="Lab agents and local coding agents. Lab rows show health, model, gateways and activity metadata; no messages or secrets are read.")
 register_card("ci", title="CI and pull requests", order=130,
               columns=("repo", "kind", "number", "title", "status", "conclusion"),
               hint="Open pull requests and the latest CI runs of the repos you named (GitHub)")

@@ -61,7 +61,8 @@
   bromigos lab connect [ARGS]       = bromigos setup homelab [ARGS]: find services, write homelab.toml
   bromigos lab target [ARGS]        = bromigos target [ARGS]: where AI runs
   bromigos lab provision [plan|apply|add SERVICE|remove SERVICE] --repo PATH [options]
-                                    review and provision your own box or cluster
+                                    review and provision your own box or cluster, including agents
+      --llm-url URL --agent-model ID  connect agents to an existing model endpoint
   bromigos lab deploy|restart|logs|backups|power
                                     Phase 2 and 3 (docs/PLAN.md): not built yet
   bromigos lab serve                the job queue's service (bromigos-lab.service runs it)

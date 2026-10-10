@@ -116,3 +116,5 @@ readings, by `tools/screenshots/render.py <outdir>`. Its scenes are in
 `tools/screenshots/scenes/`, and `--list` names every picture. Before a picture is kept,
 it's read back with tesseract and checked for words no picture may show.
 [theming.md](theming.md#the-previews) explains the desktop it draws.
+
+[Agents in your lab](lab-agents.md) records agent installation, settings and upstream sources.

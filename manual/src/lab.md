@@ -494,3 +494,38 @@ in place. Repeating apply preserves backup passwords and Vault's recovery shares
 After health checks pass, provisioning connects the lab console and runs the doctor.
 Run `bromigos lab` to see it, or `bromigos lab doctor` to check it again.
 Prometheus, Grafana, Loki, GPU setup and NAS mounting are reserved for a later slice.
+
+## Setting up agents
+
+To set up Hermes Agent or OpenClaw, choose them in the Provision tree or terminal
+checklist. They use an existing LiteLLM, Ollama or vLLM endpoint. The URL must be reachable
+from your target and include `/v1`. For Hermes or OpenClaw on the same Linux box as
+the model server, use `http://lab-model-host:<port>/v1`. You need an age public key to encrypt credentials
+collected during planning. Keep its private identity available for apply.
+
+```bash
+bromigos lab provision --services hermes openclaw --ssh <user>@<host> \
+  --repo <folder> --age-recipient <age-public-key> --llm-url <model-url>
+```
+
+The prompts let you choose a model, profile, memory tools and messaging channels. Enter
+the model ID served by your endpoint. API keys and bot tokens use hidden prompts.
+Telegram and Discord are off unless you choose them. Each needs numeric allowed user
+IDs. Shell and file tools stay disabled.
+
+Review and commit the generated repository, then apply it:
+
+```bash
+bromigos lab provision apply --repo <folder>
+```
+
+Apply installs containers, keeps their memory and session disks, stores credentials in
+Vault when present, and checks their health. Without Vault, credentials stay encrypted
+with sops and age in your repository. The Agents card in `bromigos lab` shows health,
+model, gateways and activity metadata. It never shows message text or tokens. Host API
+ports bind to loopback. Cluster services stay inside the cluster.
+
+NVIDIA NemoClaw has an experimental host plan in the picker. It creates an OpenClaw sandbox on a Linux Docker
+host through NVIDIA OpenShell. This slice keeps its messaging off and refuses a
+cluster-only target. It never recreates an existing sandbox. See the
+[agent installer notes](../../docs/lab-agents.md#nemoclaw-boundaries) for these limits.

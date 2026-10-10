@@ -2,7 +2,8 @@
 
 `bromigos lab provision` generates a Git repository for your lab and applies its Ansible
 roles from the desktop. The first slice installs Core services, or adds k3s, Helm,
-Argo CD and Vault. The [manual](../manual/src/lab.md#setting-up-a-lab) explains how to run it.
+Argo CD and Vault. It also provisions agents against existing model endpoints, as
+explained in [Agents in your lab](lab-agents.md). The [manual](../manual/src/lab.md#setting-up-a-lab) explains how to run it.
 
 This implements part of the provisioning design approved on 2026-10-09. The remaining
 work is listed below. The service catalog still contains services reserved for that work.
@@ -93,7 +94,7 @@ find, create or mount NAS shares.
 Verify checks running containers and Core's HTTP responses, cluster node readiness,
 Vault's seal state, the first backup and Argo CD's synced and healthy applications.
 It adds a `provisioned` source to `homelab.toml`, preserves existing sources and target
-choices, and creates `targets.toml` if needed. No AI service is selected, so it leaves
+choices, and creates `targets.toml` if needed. When no model server is selected, it leaves
 the default AI target order alone. The provisioned adapter reads the explicit target
 through SSH or the chosen kubeconfig. It checks the live lab, not a saved health result.
 Finally apply runs `bromigos lab doctor`.
@@ -150,7 +151,7 @@ The approved design also covers these features. They are not built here:
 
 - Proxmox VM and container creation.
 - GPU inventory, driver installation and model download sizing.
-- Prometheus, Grafana, Loki and the AI, games, media, home and network services.
+- Prometheus, Grafana, Loki, new model servers, and games, media, home and network services.
 - Finding a NAS, creating shares and testing and mounting NFS or SMB storage.
 - The catalog's app-specific configure steps, account sign-in and library setup.
 - Public certificates, DNS and opt-in tunnels.

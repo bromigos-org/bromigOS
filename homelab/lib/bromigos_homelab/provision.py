@@ -17,9 +17,9 @@ import time
 import urllib.error
 import urllib.request
 
-from . import services
+from . import services, agentprovision as A
 
-SUPPORTED = ("caddy", "netdata", "restic", "homepage", "kubernetes", "helm", "argocd", "vault")
+SUPPORTED = ("caddy", "netdata", "restic", "homepage", "kubernetes", "helm", "argocd", "vault", "llm-endpoint") + A.AGENTS
 IMAGES = {"caddy": "caddy:2.11.7", "netdata": "netdata/netdata:v2.12.1",
           "homepage": "ghcr.io/gethomepage/homepage:v2.5.0", "restic": "restic/restic:0.19.1"}
 K3S = "v1.37.1+k3s1"
@@ -124,6 +124,8 @@ print(json.dumps(dict(cpu=os.cpu_count(), ram_gib=mem, disk_gib=shutil.disk_usag
 
 
 def selection(cat, picked, facts=None):
+    if any(a in picked for a in A.AGENTS):
+        picked = list(dict.fromkeys(list(picked) + ["llm-endpoint"]))
     resolved = services.resolve(cat, picked)
     if resolved["unknown"] or resolved["conflicts"] or resolved.get("unmet"):
         raise ProvisionError("Selection has unknown services, conflicts or unmet dependencies")
@@ -139,7 +141,7 @@ def task(name, module, options, **extra):
     return {"name": name, module: options, **extra}
 
 
-def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient="", domain="", listen_address="127.0.0.1", cat=None):
+def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient="", domain="", listen_address="127.0.0.1", cat=None, agents=None):
     """Pure, deterministic plan. Contains no generated secrets."""
     cat = cat or services.load()
     validate_target(target)
@@ -165,8 +167,14 @@ def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient
         raise ProvisionError("Caddy's listen address must be a local or private IPv4 address") from None
     if domain and not re.fullmatch(r"[a-zA-Z0-9.-]+", domain):
         raise ProvisionError("The HTTPS name must be a DNS name")
+    if any(a in picked for a in A.AGENTS):
+        A.validate(agents or {}, picked, target)
+        if not age_recipient.startswith("age1"):
+            raise ProvisionError("Agents need --age-recipient for encrypted credentials collected during plan, even before Vault exists")
     state = dict(format=1, target=target, selected=picked, inventory=facts, git_url=repo_url,
                  backup_path=backup_path, age_recipient=age_recipient, domain=domain, listen_address=listen_address)
+    if any(a in picked for a in A.AGENTS):
+        state["agents"] = agents
     files = {"plan.json": dump(state), ".gitignore": ".runtime/\n*.retry\n*.log\n",
              "README.md": "# Your lab\n\nReview plan.json and the Ansible roles before applying.\n"
              "Publish this repository at the Git URL in the plan before applying Argo CD.\n"
@@ -313,6 +321,8 @@ def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient
                 "helm": {"releaseName": "lab-core", "valueFiles": ["../" + svc + "/values.yaml" for svc in picked if svc in IMAGES]}}, "lab-core"))
         # Empty roots must still contain a valid resource.
         files["gitops/argocd-apps/namespace.yaml"] = dump({"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": "lab"}})
+    A.plan(files, state, roles)
+    files["ansible/playbooks/provision.json"] = dump([{ "name": "Converge your lab", "hosts": "all", "become": is_box, "gather_facts": False, "roles": roles}])
     return files, resolved
 
 
@@ -335,7 +345,7 @@ def generate(repo, files):
     return repo
 
 
-def summary(cat, resolved, facts, repo):
+def summary(cat, resolved, facts, repo, agents=None):
     print(f"Plan: {repo}")
     for svc in resolved["services"]:
         row = cat["service"][svc]
@@ -348,6 +358,9 @@ def summary(cat, resolved, facts, repo):
         print(reason)
     for warning in resolved["warnings"]:
         print("Capacity: " + warning)
+    if agents:
+        print("  Agent model: " + agents["model"] + " at " + agents["endpoint"])
+        print("  Profile: " + agents.get("profile", "assistant") + "; gateways: " + (", ".join(agents.get("gateways", [])) or "none") + "; tools: " + agents.get("tools", "memory"))
     print("Model downloads: none. Removing a selection does not delete resources or data.")
 
 
@@ -486,7 +499,8 @@ def apply(repo, reveal=reveal_once):
     # Fresh capacity checks and review occur before any writes on the target.
     facts = inventory(target)
     resolved = selection(services.load(), picked, facts)
-    summary(services.load(), resolved, facts, repo)
+    A.validate(state.get("agents", {}), picked, target)
+    summary(services.load(), resolved, facts, repo, state.get("agents"))
     if any("unknown" not in w for w in resolved["warnings"]):
         raise ProvisionError("Selection does not fit; remove services or provide a larger target")
     if input("Apply this reviewed repository? Type yes: ").strip() != "yes":
@@ -519,6 +533,7 @@ def apply(repo, reveal=reveal_once):
         # Runtime secret only on the target, root-owned; never in generated repository.
         run(ssh_args(target) + ["sudo -n install -d -m 0700 /opt/bromigos-lab"])
         run(ssh_args(target) + ["sudo -n sh -c 'umask 077; cat > /opt/bromigos-lab/restic-password'"], values["restic"])
+    A.runtime_secrets(state, values)
     collection_path = repo / ".runtime/collections"
     run(["ansible-galaxy", "collection", "install", "-r", str(repo / "ansible/requirements.json"), "-p", str(collection_path)])
     env = dict(os.environ, ANSIBLE_CONFIG=str(repo / "ansible/ansible.cfg"), ANSIBLE_NO_LOG="true",
@@ -594,12 +609,14 @@ def apply(repo, reveal=reveal_once):
                 time.sleep(2)
         else:
             raise ProvisionError("The first restic backup did not succeed")
-    for attempt in range(30):
+    attempts = 120 if any(a in picked for a in A.AGENTS) else 30
+    for attempt in range(attempts):
         try:
             verify_services(state)
+            A.verify(state)
             break
         except ProvisionError:
-            if attempt == 29:
+            if attempt == attempts - 1:
                 raise
             time.sleep(2)
     connect(repo, state)
@@ -620,6 +637,8 @@ def main(argv=None):
     parser.add_argument("--context", help="Explicit Kubernetes context; never uses the ambient context")
     parser.add_argument("--preset", choices=("core", "advanced"), default="core")
     parser.add_argument("--services", nargs="+", choices=SUPPORTED, help="Selection from the dashboard tree")
+    parser.add_argument("--llm-url", default="", help="Existing LiteLLM, Ollama or vLLM OpenAI-compatible URL, including /v1")
+    parser.add_argument("--agent-model", default="", help="Model ID served by the endpoint; otherwise choose interactively")
     parser.add_argument("--custom", action="store_true", help="Choose services in a terminal checklist")
     parser.add_argument("--listen-address", default="127.0.0.1", help="Private IPv4 address for Caddy; defaults to loopback")
     parser.add_argument("--domain", default="", help="LAN HTTPS name; Caddy issues a local certificate")
@@ -631,6 +650,7 @@ def main(argv=None):
         if args.verb == "apply":
             return apply(args.repo)
         cat = services.load()
+        credentials = {}
         if args.verb in ("add", "remove"):
             state = json.loads((Path(args.repo) / "plan.json").read_text())
             picked = state["selected"]
@@ -641,7 +661,7 @@ def main(argv=None):
             else:
                 picked = [p for p in picked if p != args.service]
             target = state["target"]
-            options = {"repo_url": state["git_url"], "backup_path": state["backup_path"], "age_recipient": state["age_recipient"], "domain": state.get("domain", ""), "listen_address": state.get("listen_address", "127.0.0.1")}
+            options = {"repo_url": state["git_url"], "backup_path": state["backup_path"], "age_recipient": state["age_recipient"], "domain": state.get("domain", ""), "listen_address": state.get("listen_address", "127.0.0.1"), "agents": state.get("agents", {})}
         else:
             if bool(args.ssh) == bool(args.kubeconfig):
                 raise ProvisionError("Choose exactly one of --ssh or --kubeconfig")
@@ -651,10 +671,21 @@ def main(argv=None):
             if args.custom:
                 picked = checklist(cat, picked)
             options = dict(repo_url=args.git_url, backup_path=args.backup_path, age_recipient=args.age_recipient, domain=args.domain, listen_address=args.listen_address)
+        if any(a in picked for a in A.AGENTS):
+            existing_repo = Path(args.repo)
+            if (existing_repo / ".git").exists() and run(["git", "status", "--porcelain"], cwd=existing_repo).strip():
+                raise ProvisionError("Commit changes in your lab repository before changing its plan")
+            saved = decrypt(existing_repo) if (existing_repo / "secrets.enc.json").exists() else {}
+            agent_opts = options.get("agents") or dict(endpoint=args.llm_url, model=args.agent_model)
+            agent_opts, credentials = A.configure(picked, agent_opts, saved)
+            options["agents"] = agent_opts
         facts = inventory(target)
         files, resolved = plan_files(target, picked, facts, cat=cat, **options)
         repo = generate(args.repo, files)
-        summary(cat, resolved, facts, repo)
+        if credentials:
+            encrypt(repo, options["age_recipient"], credentials)
+            credentials.clear()
+        summary(cat, resolved, facts, repo, options.get("agents"))
         print("Review and commit the files. Publish them if using Argo CD. Then run: bromigos lab provision apply --repo " + shlex.quote(str(repo)))
         return 0
     except (ProvisionError, OSError, ValueError, KeyError, EOFError, KeyboardInterrupt) as error:
@@ -742,7 +773,7 @@ def connect(repo, state):
     write(homelab, current)
     targets = config_dir / "targets.toml"
     if not targets.exists():
-        write(targets, "# No AI services selected. Keep the desktop's default target order.\n[targets]\n")
+        write(targets, "# No model servers provisioned. Keep the desktop's default target order.\n[targets]\n")
     env = dict(os.environ, BROMIGOS_HOMELAB_CONFIG=str(homelab))
     executable = Path(__file__).resolve().parents[2] / "bin/bromigos-lab"
     doc = json.loads(run([str(executable), "doctor", "--json"], env=env))
