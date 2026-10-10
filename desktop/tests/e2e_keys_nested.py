@@ -69,6 +69,8 @@ def wait_for(fn, timeout=8.0, step=0.1):
 
 
 class Nest:
+    SIZE = (1600, 900)          # the virtual screen kwin hosts the nested Hyprland in
+
     def __init__(self, keep=False, shots=None):
         self.keep, self.shots = keep, shots
         self.tmp = tempfile.mkdtemp(prefix="bk-", dir="/tmp")
@@ -109,8 +111,8 @@ class Nest:
     def start(self):
         env = dict(self.base, PATH="/usr/bin")
         env.pop("DBUS_SESSION_BUS_ADDRESS")
-        self.kwin = subprocess.Popen(["dbus-run-session", "--", "kwin_wayland", "--virtual", "--width", "1600",
-                                      "--height", "900", "--socket", "kw", "--no-lockscreen", "--no-global-shortcuts"],
+        self.kwin = subprocess.Popen(["dbus-run-session", "--", "kwin_wayland", "--virtual", "--width", str(self.SIZE[0]),
+                                      "--height", str(self.SIZE[1]), "--socket", "kw", "--no-lockscreen", "--no-global-shortcuts"],
                                      env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                      start_new_session=True)
         if not wait_for(lambda: os.path.exists(os.path.join(self.run, "kw")), 15):

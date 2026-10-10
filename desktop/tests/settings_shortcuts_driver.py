@@ -112,7 +112,8 @@ class T(A.App):
         results.append(("Reset… -> every key bromigOS's", ok, self.toasts[-1][0] if self.toasts else ""))
 
 
-T(render=("/dev/null", "shortcuts", 1120, 780)).run([sys.argv[0]])
+T(render={"out": "/dev/null", "page": "shortcuts", "key": None, "search": None, "size": (1120, 780),
+          "advanced": False, "audit": False}).run([sys.argv[0]])
 bad = 0
 for name, ok, toast in results:
     print(("PASS" if ok else "FAIL"), name, "|", toast, flush=True)
