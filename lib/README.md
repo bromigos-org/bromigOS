@@ -132,3 +132,16 @@ Screen numbers remain the live player's own numbering. `Store.edit()` serializes
 edits with CLI and TUI edits and uses the comment-preserving writer. Read operations use
 cache only unless `refresh=True` is requested. `main()` provides the JSON CLI and its
 exit codes. [Your media](../manual/src/media.md#make-channels-for-the-den-tv) has examples.
+
+## Den TV controls
+
+The den screens have themed volume and channel knobs, mute, skip and a standby lamp.
+The optional hover panel uses `tv.hover_hint`; `bromigos-live tv hint on|off` changes it.
+The MEDIA widget has a rotary dial and per-screen sound controls. Full-screen playback
+loads only the den's own `live/tvosc.lua`, with a private palette and IPC connection;
+it leaves global mpv settings alone. The number-pad remote selects a screen with
+Super+KP 1/2/3 and releases it with Super+KP 0, Escape or a fifteen-second timeout.
+
+`lib/bromigos_tvplay.py` shares media search and on-demand playback between the Den TV
+app, media TUI, CLI and VECTOR. `lib/bromigos_tvremote.py` shares hint, selection and
+remote commands. The media TUI uses `p` to play on a den screen and `P` for a profile.

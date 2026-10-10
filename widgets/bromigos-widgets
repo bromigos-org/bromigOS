@@ -364,12 +364,13 @@ class PanelWindow(Surface):
         self.area = Gtk.DrawingArea()
         self.area.set_size_request(panel.width, panel.height)
         self.area.set_has_tooltip(True)
-        self.area.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.POINTER_MOTION_MASK
+        self.area.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK | Gdk.EventMask.POINTER_MOTION_MASK
                              | Gdk.EventMask.SCROLL_MASK | Gdk.EventMask.SMOOTH_SCROLL_MASK)
         self.area.connect("scroll-event", self.on_scroll)
         self.area.connect("draw", self.on_draw)
         self.area.connect("query-tooltip", self.on_tip)
         self.area.connect("button-press-event", self.on_click)
+        self.area.connect("button-release-event", self.on_release)
         self.area.connect("motion-notify-event", self.on_motion)
         self.win.add(self.area)
         self._hand = None
@@ -438,6 +439,8 @@ class PanelWindow(Surface):
         if ev.button == 3:                     # a right-click: edit mode, this panel picked
             self.app.edit("on", self.name)
             return True
+        if getattr(self.panel,"pointer_press",lambda *_: False)(ev.x,ev.y,ev.button):
+            return True
         r = self.panel.hit(ev.x, ev.y)
         if r and r[5]:
             r[5]()
@@ -450,11 +453,19 @@ class PanelWindow(Surface):
         if not ok:
             dy = {Gdk.ScrollDirection.UP: -1, Gdk.ScrollDirection.DOWN: 1}.get(ev.direction, 0)
         if dy:
-            self.panel.scroll(dy)
+            handled = getattr(self.panel,"scroll_at",lambda *_: False)(ev.x,ev.y,dy)
+            if not handled: self.panel.scroll(dy)
             self.redraw()
         return True
 
+    def on_release(self, _w, ev):
+        if getattr(self.panel,"pointer_release",lambda: False)():
+            self.redraw(); return True
+        return False
+
     def on_motion(self, _w, ev):
+        if getattr(self.panel,"pointer_motion",lambda *_: False)(ev.x,ev.y):
+            self.redraw(); return True
         r = self.panel.hit(ev.x, ev.y)
         want = bool(r and r[5])
         if want != self._hand:

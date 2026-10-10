@@ -13,6 +13,7 @@ the models used.
 
 | Asset | Source | Ships? | Notes |
 |---|---|---|---|
+| Den TV controller (`live/live/tvosc.lua`), analog controls and MEDIA rotary dial | Drawn and written for bromigOS | yes | `MIT OR Apache-2.0`; no vendored mpv scripts or art |
 | Code: the core, widgets, live layer, VECTOR, scripts | Written for bromigOS, first on the operator's desktop | yes | `MIT OR Apache-2.0` |
 | Lab console test snapshot (`homelab/tests/snapshots/lab-tui.svg`) | Textual render with recorded fake readings | yes | No real desktop or lab data |
 | Bromigos palette, emblem ("the burn-in") and lore | Bromigos original | yes, as brand assets | Licensed apart from the code |

@@ -10,6 +10,7 @@ by lib/bromigos_keys_eval.lua, which needs `lua`.
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -411,6 +412,27 @@ class ClashTest(Base):
         plan = BK.Plan(st)
         plan.bind(BK.default_target(st, "SUPER + SPACE"), BK.Combo.parse("super + space"))
         self.assertFalse(plan.changed())
+
+
+class TVRemoteKeysTest(Base):
+    def test_physical_names_and_remote_rebind_keep_their_scope(self):
+        self.assertEqual(BK.Combo.parse("KP_1").key, "code:87")
+        self.assertEqual(BK.Combo.parse("KP_ADD").key, "code:86")
+        st = self.box.state()
+        target = BK.default_target(st, "code:86")
+        self.assertEqual(target.actions, [{"exec": "bromigos-live tv remote volume-up"}])
+        plan = BK.Plan(st)
+        plan.bind(target, BK.Combo.parse("KP_7"), resolution="replace")
+        self.assertTrue(BK.commit(plan, FakeHypr(self.box), wait=.2)[0])
+        self.assertIn("bromigos-live tv remote volume-up", dumped(self.box)["code:79"])
+        script = "package.path = " + json.dumps(os.path.join(REPO,"desktop","hypr","?.lua")) + " .. ';' .. package.path\n" + '''
+local scope = nil
+hl = { dsp = { exec_cmd = function(cmd) return cmd end },
+       bind = function(keys, command) assert(scope == "bromigos-tv-remote"); print(keys .. "|" .. command) end,
+       define_submap = function(name, callback) scope=name; callback(); scope=nil end }
+''' + BK.binds_body(plan.record)
+        checked = subprocess.run(["lua", "-"], input=script, capture_output=True, text=True, check=True)
+        self.assertIn("code:79|bromigos-live tv remote volume-up", checked.stdout)
 
 
 class ClashConfigTest(Base):

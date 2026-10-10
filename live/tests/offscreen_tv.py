@@ -98,6 +98,15 @@ def child(tree, out, opts):
     r.loop_clock = lambda: 2.0
     tgt = glkit.Target(W, H)
     state = {}
+    if opts.get("controls"):
+        tv = r.den_tv()
+        inner = getattr(r, "inner", r)
+        tv.layout(inner.w, inner.h, {k: inner._px(scene.DEN[k]) for k in ("big", "wave", "emblem")}, inner.view, 1)
+        tv.selected = "big"
+        tv.remote_at = livetv.MONO()
+        tv.screens["big"].update(volume=65, sound=True)
+        tv.analog_hover = ("big", "volume")
+        tv.feedback("big", "REMOTE")
     frames = int(opts.get("frames", 1))
     if opts.get("clip"):
         tv = off.tv_tune(r)

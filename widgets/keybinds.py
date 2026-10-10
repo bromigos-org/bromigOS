@@ -39,6 +39,22 @@ BROMIGOS = SECTIONS[:4]
 RUNNABLE = BROMIGOS + ["YOURS", "LAUNCH", "CAPTURE"]
 
 KEYNAMES = {
+    "CODE:87": "KP_1",
+    "CODE:88": "KP_2",
+    "CODE:89": "KP_3",
+    "CODE:90": "KP_0",
+    "CODE:91": "KP_DECIMAL",
+    "CODE:86": "KP_ADD",
+    "CODE:82": "KP_SUBTRACT",
+    "CODE:80": "KP_8",
+    "CODE:84": "KP_5",
+    "CODE:85": "KP_6",
+    "CODE:83": "KP_4",
+    "CODE:104": "KP_ENTER",
+    "CODE:63": "KP_MULTIPLY",
+    "CODE:106": "KP_DIVIDE",
+    "CODE:79": "KP_7",
+    "CODE:81": "KP_9",
     "RETURN": "ENTER", "ESCAPE": "ESC", "LEFT": "←", "RIGHT": "→", "UP": "↑", "DOWN": "↓",
     "SLASH": "/", "SPACE": "SPACE", "TAB": "TAB", "COMMA": ",", "PERIOD": ".",
     "MOUSE:272": "LMB DRAG", "MOUSE:273": "RMB DRAG",
@@ -56,6 +72,28 @@ KEYNAMES = {
 # (regex on the exec command, description, section). First match wins; the list
 # order is also the row order inside each section.
 EXEC = [
+    # Den TV remote: scoped number-pad actions, plus global screen selection.
+    (r"bromigos-live tv select big\b", "TV remote: select the big monitor", "LIVE LAYER"),
+    (r"bromigos-live tv select scope\b", "TV remote: select the scope", "LIVE LAYER"),
+    (r"bromigos-live tv select small\b", "TV remote: select the small monitor", "LIVE LAYER"),
+    (r"bromigos-live tv select none\b", "TV remote: leave remote mode", "LIVE LAYER"),
+    (r"bromigos-live tv remote volume-up\b", "TV remote: raise volume", "LIVE LAYER"),
+    (r"bromigos-live tv remote volume-down\b", "TV remote: lower volume", "LIVE LAYER"),
+    (r"bromigos-live tv remote channel-up\b", "TV remote: next channel (digit 8 while entering a number)", "LIVE LAYER"),
+    (r"bromigos-live tv remote channel-down\b", "TV remote: previous channel (digit 2 while entering a number)", "LIVE LAYER"),
+    (r"bromigos-live tv remote mute\b", "TV remote: mute or unmute (digit 5 while entering a number)", "LIVE LAYER"),
+    (r"bromigos-live tv remote skip\b", "TV remote: next item (digit 6 while entering a number)", "LIVE LAYER"),
+    (r"bromigos-live tv remote previous\b", "TV remote: previous item (digit 4 while entering a number)", "LIVE LAYER"),
+    (r"bromigos-live tv remote open\b", "TV remote: full screen, or tune the entered number", "LIVE LAYER"),
+    (r"bromigos-live tv remote sound\b", "TV remote: move sound to this TV", "LIVE LAYER"),
+    (r"bromigos-live tv remote guide\b", "TV remote: open Den TV", "LIVE LAYER"),
+    (r"bromigos-live tv remote digits\b", "TV remote: enter a channel number", "LIVE LAYER"),
+    (r"bromigos-live tv remote leave\b", "TV remote: leave remote mode (digit 0 while entering a number)", "LIVE LAYER"),
+    (r"bromigos-live tv remote cancel\b", "TV remote: leave remote mode", "LIVE LAYER"),
+    (r"bromigos-live tv remote digit-1\b", "TV remote: channel digit 1", "LIVE LAYER"),
+    (r"bromigos-live tv remote digit-3\b", "TV remote: channel digit 3", "LIVE LAYER"),
+    (r"bromigos-live tv remote digit-7\b", "TV remote: channel digit 7", "LIVE LAYER"),
+    (r"bromigos-live tv remote digit-9\b", "TV remote: channel digit 9", "LIVE LAYER"),
     # VECTOR: the caretaker on the line, and his voice
     (r"bromigos-holo\b.*\bswitch\b", "VECTOR: emergency switch (off at once; on asks first)", "VECTOR"),
     (r"bromigos-holo\b.*\bclaude\b.*\bfollow\b", "VECTOR: read Claude's replies aloud as they finish (on/off)", "VECTOR"),

@@ -257,6 +257,13 @@ bromigos-live tv: the den TV, channels on the den's screens (live/README.md, "Th
   bromigos-live tv sound on|off|toggle    the screen's sound (off until you turn it on; on one
                                           screen at a time: turning it on here turns it off there)
   bromigos-live tv volume up|down|N       5% steps, or a level from 0 to 100
+  bromigos-live tv hint on|off [--json]    show or hide the floating controls
+  bromigos-live tv select big|scope|small|none [--json]   enter or leave number-pad remote mode
+  bromigos-live tv remote ACTION [--screen S] [--json]   one remote action; --help lists actions
+  bromigos-live tv skip|previous --screen S             next or previous item
+  bromigos-live tv search QUERY --kind all|shows|movies|youtube|seasons|episodes [--json]
+  bromigos-live tv play TITLE --screen S [--resume] [--json]   play from the start or saved position
+                          --id ID [--source NAME] | --url URL
   bromigos-live tv list                   every screen's channels, * on the one showing
   bromigos-live tv channels [--json]      contents, order, screens and now/next (works while off)
   bromigos-live tv channel --help         add, rename, order, bumpers, move, items, remove, undo
@@ -274,6 +281,12 @@ HELP
                 exit 0 ;;
             guide)
                 exec bromigos-tv-guide ;;
+            play|search)
+                export PYTHONPATH="$HERE/../lib:$HERE/../homelab/lib:/usr/lib/bromigos/lib:${PYTHONPATH:-}"
+                exec "$PY" -m bromigos_tvplay "$@" ;;
+            hint|select|remote)
+                export PYTHONPATH="$HERE/../lib:$HERE/../desktop/lib:/usr/lib/bromigos/lib:${PYTHONPATH:-}"
+                exec "$PY" -m bromigos_tvremote "$@" ;;
             channels|channel)
                 if [[ -f "$HERE/../lib/bromigos_tvchannels.py" ]]; then
                     export PYTHONPATH="$HERE/../lib:$HERE/../homelab/lib:${PYTHONPATH:-}"

@@ -696,3 +696,16 @@ chosen den wallpaper from `~/.local/state/bromigos/wallpaper/`.
 In the Bromigos stories, the den is the radio room of the Wick, a relay station at the
 edge of the Drift. The glyph rain is written in the Drift's own script, and the codec
 channels are the station's radio bands.
+
+## Den TV controls
+
+The den screens have themed volume and channel knobs, mute, skip and a standby lamp.
+The optional hover panel uses `tv.hover_hint`; `bromigos-live tv hint on|off` changes it.
+The MEDIA widget has a rotary dial and per-screen sound controls. Full-screen playback
+loads only the den's own `live/tvosc.lua`, with a private palette and IPC connection;
+it leaves global mpv settings alone. The number-pad remote selects a screen with
+Super+KP 1/2/3 and releases it with Super+KP 0, Escape or a fifteen-second timeout.
+
+`lib/bromigos_tvplay.py` shares media search and on-demand playback between the Den TV
+app, media TUI, CLI and VECTOR. `lib/bromigos_tvremote.py` shares hint, selection and
+remote commands. The media TUI uses `p` to play on a den screen and `P` for a profile.

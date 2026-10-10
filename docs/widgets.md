@@ -754,7 +754,7 @@ Its settings, in `~/.config/bromigos/widgets/media.toml`, describe one den TV ch
 | `channel_name` | What the TV calls the channel |
 | `keep`, `keep_all`, `keep_max_gb` | For YouTube: a folder to keep videos in, whether to keep every video, and a cap in GB |
 
-Its form ends with a link to the channel guide (Settings › Den TV), where every other
+Its form ends with a link to the channel guide (the Den TV app), where every other
 channel is ([docs/settings.md](settings.md#den-tv)). The link is a `link` field, which holds
 no value (see [A widget's settings](#a-widgets-settings)).
 
@@ -1112,3 +1112,12 @@ over time. Discord's counts are approximate and can lag a few minutes.
 
 They read every 3 seconds (LAB JOBS), 30 seconds (SOLAR, ALERTS) or a minute (GAME
 SERVERS), and stop while the panel is hidden.
+
+### MEDIA volume dial
+
+The den remote's rotary dial controls the screen with sound; its label names that
+screen. Scroll or drag in a circle or up and down to change volume. Click to mute or
+unmute. Each screen row has a speaker and percentage. Clicking the speaker moves sound
+to that screen, or mutes it; scrolling over the row changes its volume. Compact uses a
+small dial; wide and large use a larger one. All controls have hover hints and use the
+active palette. Reduced motion has no animated sweep.

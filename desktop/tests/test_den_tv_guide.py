@@ -114,6 +114,11 @@ class GuideRender(unittest.TestCase):
         from PIL import Image
         return Image.open(out).convert("RGB"), r
 
+    def test_play_picker_and_its_hints(self):
+        image, result = self.render("play", extra=("--audit",), env={"BROMIGOS_DEN_TV_OPEN":"play"})
+        self.assertEqual(image.size, (1180,980))
+        self.assertNotIn("without a hint", result.stderr)
+
     def test_the_guide(self):
         im, _r = self.render("guide")
         self.assertEqual(im.size, (1180, 980))

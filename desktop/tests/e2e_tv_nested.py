@@ -236,6 +236,11 @@ screens = ["emblem"]
         self.audio.pactl("set-default-sink", "speakers")
         self.ptr = Wheel(os.path.join(self.run, "wayland-1"), *self.SIZE)
         self.start_live()
+        # Default keybinds use the source wrapper, but autostart remains a no-op.
+        with open(os.path.join(self.stubs, "bromigos-live"), "w") as f:
+            f.write('#!/bin/sh\ncase "$1" in start|stop|restart) exit 0;; esac\nexec ' +
+                    __import__("shlex").quote(os.path.join(REPO,"live/bin/bromigos-live")) + ' "$@"\n')
+        os.chmod(os.path.join(self.stubs, "bromigos-live"), 0o755)
 
     def live_env(self):
         env = dict(self.env, **{k: v for k, v in self.audio.env.items() if k.startswith(("PIPEWIRE", "PULSE"))})
@@ -583,6 +588,59 @@ def guide(n, r):
             "the den TV's channels changed; read again" in log and log.count("background failed") == 0, log[-600:])
 
 
+def controller_checks(n, r):
+    """The shipped physical-code binds through a virtual keyboard, and the real mpv OSC."""
+    n.ptr.move(80,80)
+    for locked in (0,16):  # Mod2 is NumLock in the fixture's US keymap.
+        n.kb.lock(locked)
+        n.kb.combo("SUPER + KP_1")
+        r.check("remote: select BIG with NumLock " + ("on" if locked else "off"),
+                wait_for(lambda:n.state().get("selected")=="big",5), n.state().get("selected"))
+        r.check("remote: enters its Hyprland submap", "bromigos-tv-remote" in n.submap(), n.submap())
+        old=n.state()["screens"]["big"]["volume"]
+        n.kb.combo("KP_ADD")
+        r.check("remote: number-pad volume",wait_for(lambda:n.state()["screens"]["big"]["volume"]==min(100,old+5),5))
+        n.kb.combo("KP_DECIMAL"); n.kb.combo("KP_2")
+        r.check("remote: digit 2 tunes after one second",wait_for(lambda:n.state()["screens"]["big"]["channel"]==2 and n.state().get("digits") is None,5))
+        n.kb.combo("KP_6")
+        r.check("remote: skip plays the next item",wait_for(lambda:n.state()["screens"]["big"].get("on_demand"),5))
+        n.kb.combo("KP_0")
+        r.check("remote: deselect and reset",wait_for(lambda:n.state().get("selected") is None and n.submap() == "default",5))
+    n.kb.combo("SUPER + KP_2")
+    r.check("remote: select scope",wait_for(lambda:n.state().get("selected")=="wave",5))
+    r.check("remote: idle timeout gives the keyboard back",wait_for(lambda:n.state().get("selected") is None and n.submap() == "default",18))
+    n.tv("set","2","--screen","big")
+    n.tv("open","--screen","big")
+    args_path=os.path.join(n.home,"mpv-args.txt")
+    r.check("full screen: private controller loaded by --script, global config off",wait_for(lambda:os.path.exists(args_path),8))
+    with open(args_path) as f: args=f.read().splitlines()
+    r.check("full screen: no stock OSC or global scripts", "--no-config" in args and "--load-scripts=no" in args and "--osc=no" in args and any("tvosc.lua" in v for v in args),args)
+    path=next(v.split("=",1)[1] for v in args if v.startswith("--input-ipc-server="))
+    def mpv(*command):
+        try:
+            with socket.socket(socket.AF_UNIX) as sock:
+                sock.settimeout(2);sock.connect(path)
+                sock.sendall(json.dumps(dict(command=list(command),request_id=71)).encode()+b"\n")
+                buf=b""
+                while True:
+                    data=sock.recv(65536)
+                    if not data:return None
+                    buf+=data
+                    while b"\n" in buf:
+                        line,buf=buf.split(b"\n",1);doc=json.loads(line)
+                        if doc.get("request_id")==71:return doc.get("data",doc.get("error")=="success")
+        except OSError:return None
+    r.check("full screen: Lua controller answers in real nested mpv",wait_for(lambda:bool(mpv("get_property","user-data/den/controller")),8))
+    mpv("set_property","volume",37)
+    r.check("full screen: volume shared with the den",wait_for(lambda:n.state()["screens"]["big"]["volume"]==37,5))
+    mpv("quit")
+    r.check("full screen: back to den, same volume",wait_for(lambda:not n.state().get("full_screen") and n.state()["screens"]["big"]["volume"]==37,8))
+    point=n.state()["controls"]["big"]["volume"]
+    n.ptr.move(*point);n.ptr.scroll(-1)
+    r.check("analog: wheel turns the scene volume knob",wait_for(lambda:n.state()["screens"]["big"]["volume"]==42,5))
+    r.check("analog: every screen has its physical controls",all(set(v)=={"volume","channel","mute","skip"} for v in n.state()["controls"].values()))
+
+
 def measure_cost(n, r, secs):
     """The live layer's CPU (all its threads, mpv's decoder included) and the GPU it uses,
     with the TV playing and with every screen on its own picture."""
@@ -646,7 +704,9 @@ def main():
     r = Run()
     try:
         n.start()
-        if "--guide-only" in sys.argv:
+        if "--controls-only" in sys.argv:
+            controller_checks(n,r)
+        elif "--guide-only" in sys.argv:
             guide(n,r)
         else:
             scenarios(n, r, measure)

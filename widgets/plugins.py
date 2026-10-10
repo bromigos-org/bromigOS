@@ -183,6 +183,18 @@ class SafePanel:
             except Exception as e:
                 self._fail("scroll", e)
 
+    def _pointer(self, name, *args):
+        cb = getattr(self.inner, name, None)
+        if cb:
+            try: return cb(*args)
+            except Exception as e: self._fail(name, e)
+        return False
+
+    def scroll_at(self, x, y, dy): return self._pointer("scroll_at", x, y, dy)
+    def pointer_press(self, x, y, button): return self._pointer("pointer_press", x, y, button)
+    def pointer_motion(self, x, y): return self._pointer("pointer_motion", x, y)
+    def pointer_release(self): return self._pointer("pointer_release")
+
     def render(self, cr, w, h):
         import cairo
 

@@ -99,6 +99,9 @@ def audit(directory, plugins=False):
         if p.suffix == '.py':
             # Plugins don't inherit engine geometry exceptions by sharing its filename.
             findings = python_issues(p.read_text(), '' if plugins else p.name)
+        elif p.suffix == '.lua':
+            findings = [(p.read_text()[:m.start()].count('\n') + 1, 'literal Lua colour')
+                        for m in re.finditer(r'(?:#[0-9a-fA-F]{6}\b|&H[0-9a-fA-F]{6}&)', p.read_text())]
         elif p.suffix in ('.glsl', '.frag', '.vert'):
             findings = shader_issues(p.read_text())
             # Original Drift-script glyph strokes, not colours. Only that array is exempt.

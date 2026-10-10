@@ -92,7 +92,7 @@ Choose **Add**, or press `a`. Search, pick a result and choose its seasons, qual
 audio. **Plan** shows what would happen. **Request** confirms it.
 
 The **TV**, **Movies** and **Music** tabs show what you have. Use arrows or `j`, `k`, `h`
-and `l` to move. Pick a show to see its seasons, or an artist to see its albums. Press `p`
+and `l` to move. Pick a show to see its seasons, or an artist to see its albums. Press `P`
 to change its profile, `m` to change monitoring, or `f` to search now.
 From the top tabs, press `Down` or `j` to enter the table. At its first row,
 `Up` or `k` takes you back. Press `Ctrl+C` or `q` to quit, even while typing or in a
@@ -310,3 +310,28 @@ permissions. Check the media server's logs for missing files or transcoding erro
 If several media apps freeze while the NAS still answers, its client may have a stuck
 NFS lock connection. Ask the lab administrator to check it through the lab's maintenance
 procedure. See [Media files on a NAS](troubleshooting.md#media-files-on-a-nas).
+
+## Play something on a den screen
+
+Press `p` in the media library to open **Play on den TV**. Choose BIG, SCOPE or SMALL.
+Pick a show, then its season and episode, or choose a movie. The YouTube view lists
+downloaded videos; you can also search with a YouTube video URL. Turn **Resume where
+you left off** on to use the server's saved position. Otherwise playback starts at the
+beginning. `P` changes a quality profile.
+
+The Den TV app has a **Play…** button for each screen with the same choices.
+The screen shows **ON DEMAND** while your choice plays. When it ends, or you change
+channel, the screen returns to its channel's live schedule.
+
+```bash
+bromigos-live tv play --screen big "Cowboy Bebop S01E05" --json
+bromigos-live tv play --screen scope --id ITEM_ID --source SERVER_NAME --resume --json
+bromigos-live tv play --screen small --url "https://www.youtube.com/watch?v=VIDEO_ID" --json
+bromigos-live tv search "Cowboy Bebop" --kind shows --json
+```
+
+`SERVER_NAME` is a source name from your media settings. Use `--id` when titles are
+ambiguous. Search with `--kind seasons --id SHOW_ID`, then `--kind episodes --id SHOW_ID
+--season 1` to list episodes. Ask VECTOR to “play Cowboy Bebop episode 5 on the big TV.”
+See [the den controls](themes-and-worlds.md#the-den-tv) for sound, full screen and the
+number-pad remote.

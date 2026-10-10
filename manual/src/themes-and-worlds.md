@@ -321,3 +321,60 @@ A theme can also be a plain folder in `~/.config/bromigos/themes/`, with a `colo
 in it. The full format, and how to make a world, are in the developer docs:
 [theming.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/theming.md) and
 [worlds.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/worlds.md).
+
+## Controls on the den's equipment
+
+Each TV has a volume knob, a channel knob, MUTE and SKIP beneath its screen, plus a
+standby lamp. Scroll a knob to turn it. Click the volume knob to mute; click the channel
+knob to go to the next channel. Hover to see a small value readout. A change shows its
+volume, channel or mute mark on the TV for about a second and a half. The same feedback
+appears for commands, VECTOR, keys and the MEDIA widget. Reduced motion uses an
+immediate on/off change.
+
+The floating hover panel is optional. Turn **Floating controls** off in Settings › Den
+TV or in the Den TV app, or run `bromigos-live tv hint off`. `tv hint on` brings it back.
+The config setting is `[tv] hover_hint = false`; the equipment controls keep working.
+Nothing is drawn when Den TV is disabled.
+
+The MEDIA remote has a rotary volume dial. Its label names the screen with sound.
+Scroll it or drag around it or up and down. Click to mute or unmute. Each screen's row
+shows a speaker and percentage: click the speaker to move the sound there, or mute it;
+scroll over the row to change that screen's volume. Only one screen has sound at a time.
+
+Full screen uses its own themed mpv controls. Hover the volume icon to unfold a slider
+upward; scroll to change volume, or click the icon to mute. The channel buttons change
+what is playing, and **BACK** returns to the den. Audio and subtitle menus are beside
+the timeline. Your normal mpv settings stay separate. Volume follows you back to the
+screen when you close the player.
+
+### The number-pad remote
+
+Press Super+KP 1, 2 or 3 to select BIG, SCOPE or SMALL. Its bezel lights up. While selected,
+the number pad controls that TV. NumLock may be on or off. Super+KP 0, Escape or fifteen
+seconds without a key returns the pad to its normal use. Super+KP 1/2/3 switches screens.
+
+```text
+           / Guide       * Sound here     − Volume down
+       7              8 Channel up     9          + Volume up
+       4 Previous     5 Mute           6 Skip
+       1              2 Channel down   3          Enter Full screen
+       0 Leave remote                  . Enter channel number
+```
+
+Press decimal, then the channel's digits. It tunes after a one-second pause; Enter tunes
+immediately. While entering a channel, zero is a digit; Escape still leaves the remote.
+These keys appear in SHORTCUTS, Super+K and Settings › Keys, where you can rebind them.
+The [keys page](keys.md#den-tv-remote) has the defaults.
+
+Commands use the same controls:
+
+```bash
+bromigos-live tv select big --json
+bromigos-live tv remote volume-up --json
+bromigos-live tv remote mute --screen scope --json
+bromigos-live tv select none --json
+```
+
+An explicit `--screen` sends a single action without taking over your number pad.
+To choose an episode, movie or YouTube video, use **Play…** in the app or
+[Play on den TV](media.md#play-something-on-a-den-screen).

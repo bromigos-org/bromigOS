@@ -93,7 +93,18 @@ def parse_feed(text):
             at = email.utils.parsedate_to_datetime(it.findtext("pubDate") or "").timestamp()
         except (TypeError, ValueError):
             pass
-        items.append({"title": (it.findtext("title") or "").strip(), "link": link, "id": video_id(link), "at": at})
+        row = {"title": (it.findtext("title") or "").strip(), "link": link, "id": video_id(link), "at": at}
+        enclosure = it.find("enclosure")
+        if enclosure is not None and enclosure.get("url"):
+            row["download"] = enclosure.get("url")
+        duration = it.findtext("{http://www.itunes.com/dtds/podcast-1.0.dtd}duration")
+        if duration:
+            try:
+                seconds = 0
+                for part in duration.split(":"): seconds = seconds * 60 + float(part)
+                row["duration"] = seconds
+            except ValueError: pass
+        items.append(row)
     link = (ch.findtext("link") or "").strip()
     return {"name": (ch.findtext("title") or "").strip(), "link": link, "kind": source_kind(link), "items": items}
 

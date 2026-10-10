@@ -125,6 +125,33 @@ rows = [
 ]
 
 [[keys]]
+title = "The den TV remote keys"
+intro = "Select a screen with Super and a number-pad key. These buttons work while the remote is selected, with NumLock on or off. See the [remote diagram](themes-and-worlds.md#the-number-pad-remote)."
+rows = [
+  { match = "TV remote: select the big monitor", text = "Select the big monitor." },
+  { match = "TV remote: select the scope", text = "Select the scope." },
+  { match = "TV remote: select the small monitor", text = "Select the small monitor." },
+  { match = "TV remote: leave remote mode", text = "Leave remote mode." },
+  { match = "TV remote: raise volume", text = "Raise volume." },
+  { match = "TV remote: lower volume", text = "Lower volume." },
+  { match = "TV remote: next channel (digit 8 while entering a number)", text = "Next channel (digit 8 while entering a number)." },
+  { match = "TV remote: previous channel (digit 2 while entering a number)", text = "Previous channel (digit 2 while entering a number)." },
+  { match = "TV remote: mute or unmute (digit 5 while entering a number)", text = "Mute or unmute (digit 5 while entering a number)." },
+  { match = "TV remote: next item (digit 6 while entering a number)", text = "Next item (digit 6 while entering a number)." },
+  { match = "TV remote: previous item (digit 4 while entering a number)", text = "Previous item (digit 4 while entering a number)." },
+  { match = "TV remote: full screen, or tune the entered number", text = "Full screen, or tune the entered number." },
+  { match = "TV remote: move sound to this TV", text = "Move sound to this tv." },
+  { match = "TV remote: open Den TV", text = "Open den tv." },
+  { match = "TV remote: enter a channel number", text = "Enter a channel number." },
+  { match = "TV remote: leave remote mode (digit 0 while entering a number)", text = "Leave remote mode (digit 0 while entering a number)." },
+  { match = "TV remote: leave remote mode", text = "Leave remote mode." },
+  { match = "TV remote: channel digit 1", text = "Channel digit 1." },
+  { match = "TV remote: channel digit 3", text = "Channel digit 3." },
+  { match = "TV remote: channel digit 7", text = "Channel digit 7." },
+  { match = "TV remote: channel digit 9", text = "Channel digit 9." },
+]
+
+[[keys]]
 title = "Screenshots and recording"
 intro = "Screenshots are saved to `~/Pictures/screenshots` and copied to the clipboard. Recordings go to `~/Videos/recordings`."
 rows = [

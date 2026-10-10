@@ -128,6 +128,33 @@ The [live layer](glossary.md#live-layer) draws the animated background.
 | <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd></span> | Turn the den TV's sound on or off, on the screen under the pointer. One screen plays sound at a time. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd></span> | Open the [Den TV](themes-and-worlds.md#the-channel-guide) app: channels, contents and what is on, with controls for every screen. |
 
+### The den TV remote keys
+
+Select a screen with Super and a number-pad key. These buttons work while the remote is selected, with NumLock on or off. See the [remote diagram](themes-and-worlds.md#the-number-pad-remote).
+
+| Keys | What it does |
+|---|---|
+| <span class="keys"><kbd>Super</kbd>+<kbd>KP_1</kbd></span> | Select the big monitor. |
+| <span class="keys"><kbd>Super</kbd>+<kbd>KP_2</kbd></span> | Select the scope. |
+| <span class="keys"><kbd>Super</kbd>+<kbd>KP_3</kbd></span> | Select the small monitor. |
+| <span class="keys"><kbd>Esc</kbd></span> or <span class="keys"><kbd>Super</kbd>+<kbd>KP_0</kbd></span> | Leave remote mode. |
+| <span class="keys"><kbd>KP_ADD</kbd></span> | Raise volume. |
+| <span class="keys"><kbd>KP_SUBTRACT</kbd></span> | Lower volume. |
+| <span class="keys"><kbd>KP_8</kbd></span> | Next channel (digit 8 while entering a number). |
+| <span class="keys"><kbd>KP_2</kbd></span> | Previous channel (digit 2 while entering a number). |
+| <span class="keys"><kbd>KP_5</kbd></span> | Mute or unmute (digit 5 while entering a number). |
+| <span class="keys"><kbd>KP_6</kbd></span> | Next item (digit 6 while entering a number). |
+| <span class="keys"><kbd>KP_4</kbd></span> | Previous item (digit 4 while entering a number). |
+| <span class="keys"><kbd>KP_ENTER</kbd></span> | Full screen, or tune the entered number. |
+| <span class="keys"><kbd>KP_MULTIPLY</kbd></span> | Move sound to this tv. |
+| <span class="keys"><kbd>KP_DIVIDE</kbd></span> | Open den tv. |
+| <span class="keys"><kbd>KP_DECIMAL</kbd></span> | Enter a channel number. |
+| <span class="keys"><kbd>KP_0</kbd></span> | Leave remote mode (digit 0 while entering a number). |
+| <span class="keys"><kbd>KP_1</kbd></span> | Channel digit 1. |
+| <span class="keys"><kbd>KP_3</kbd></span> | Channel digit 3. |
+| <span class="keys"><kbd>KP_7</kbd></span> | Channel digit 7. |
+| <span class="keys"><kbd>KP_9</kbd></span> | Channel digit 9. |
+
 ### Screenshots and recording
 
 Screenshots are saved to `~/Pictures/screenshots` and copied to the clipboard. Recordings go to `~/Videos/recordings`.
@@ -167,3 +194,13 @@ Your keyboard's own media keys. Each change shows on screen for a moment.
 
 The keys for VECTOR need VECTOR, which a full install includes. A keyboard with macro keys
 can have more: see [Keyboards and peripherals](peripherals.md).
+
+## Den TV remote
+
+Super+KP 1 selects BIG, Super+KP 2 selects SCOPE and Super+KP 3 selects SMALL.
+The selected TV lights up. Its number pad works like a remote until Super+KP 0,
+Escape or fifteen seconds without a key. NumLock can be on or off.
+See the [remote diagram](themes-and-worlds.md#the-number-pad-remote) for its volume,
+channel, mute, skip, full-screen and guide buttons. Decimal starts a channel number;
+enter the digits and wait one second, or press Enter to tune now. Settings › Keys
+can change every binding.

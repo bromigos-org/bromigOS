@@ -59,9 +59,24 @@ class MediaRemote(unittest.TestCase):
             plugintest.draw(p, 760, 250)
             nxt = next(r for r in p.regions if r[4].startswith("The next channel"))
             nxt[5]()
-            snd = next(r for r in p.regions if r[4].startswith("Sound from"))
+            snd = next(r for r in p.regions if r[4].startswith("Sound from SCOPE"))
             snd[5]()
         self.assertEqual(asked, ["tv next --screen wave", "tv sound toggle --screen wave"])
+
+    def test_knob_scroll_drag_and_click_use_shared_screen_commands(self):
+        p = self.panel
+        plugintest.draw(p, 760, 250)
+        x,y,w,h = p._knob_rect[:4]
+        asked=[]
+        with mock.patch.object(media, "_ask", lambda cmd, timeout=1.5: asked.append(cmd)), mock.patch.object(p, "tick", lambda: None):
+            p.scroll_at(x+w/2,y+h/2,-1)
+            p.pointer_press(x+w/2,y+h/2)
+            p.pointer_release()
+            p.pointer_press(x+w/2,y+h/2)
+            p.pointer_motion(x+w/2,y+h/2-12)
+            p.pointer_release()
+        self.assertTrue(any("tv volume" in c and "--screen big" in c for c in asked), asked)
+        self.assertIn("tv sound toggle --screen big", asked)
 
 
 if __name__ == "__main__":

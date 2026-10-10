@@ -23,6 +23,7 @@ from bromigos_cli import Fail  # noqa: E402
 
 # key: (type, (lo, hi) or choices, what it does)
 KEYS = {
+    "tv.hover_hint": ("bool", None, "show the floating TV controls on hover"),
     "tv.enabled": ("bool", None, "play media on the den's screens"),
     "tv.max_playing": ("int", (1, 3), "screens decoding video at once"),
     "tv.cover_opacity": ("float", (0.0, 1.0), "window opacity that pauses a covered silent screen"),
@@ -79,7 +80,7 @@ def layers():
     return default, base, over, p
 
 
-FALLBACK = {"tv.enabled": True, "tv.max_playing": 3, "tv.cover_opacity": .9,
+FALLBACK = {"tv.hover_hint": True, "tv.enabled": True, "tv.max_playing": 3, "tv.cover_opacity": .9,
             "world.enabled": True, "world.ambient_sounds": True, "sounds.enabled": True, "sounds.volume": 0.3,
             "screensaver.enabled": True, "space.planet": True, "space.station": True, "space.stars": True,
             "space.traffic": True, "codec.enabled": True, "codec.on_critical": True, "codec.on_lab_alert": True,

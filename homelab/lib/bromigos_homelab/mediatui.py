@@ -6,7 +6,7 @@ download clients are fetching), UPCOMING (the calendar of what you track) and AD
 and request, as `media get`) and CHANNELS (the den TV). The header has the library's totals and the free space.
 
 On a selected title, season, album or episode file: m monitors or stops, n picks up new
-episodes or not, p changes the quality profile, f searches now, o opens it in Jellyfin,
+episodes or not, P changes the quality profile, p plays on a den TV, f searches now, o opens it in Jellyfin,
 O in Seerr, t plays it full screen, D deletes it. A delete says exactly what goes and how
 much space it frees, then needs the title typed, or D pressed a second time. / filters, s
 sorts (added, size, name, missing, profile). Vim keys beside the arrows; every key, tab,
@@ -420,10 +420,11 @@ class MediaApp(App):
         Binding("s", "sort", "Sort", tooltip="Sort by added, size, name, missing or profile"),
         Binding("m", "monitor", "Monitor", tooltip="Monitor or stop monitoring the title, season or album under the cursor"),
         Binding("n", "new_items", "New eps", tooltip="Pick up new episodes and seasons, or stop (TV, music)"),
-        Binding("p", "profile", "Profile", tooltip="Change the quality profile"),
+        Binding("P", "profile", "Profile", tooltip="Change the quality profile"),
         Binding("f", "search_now", "Search now", tooltip="Ask the indexers for it now"),
         Binding("o", "open('jellyfin')", "Open", tooltip="Open it in Jellyfin (O: in Seerr)"),
         Binding("O", "open('seerr')", "Seerr", show=False, tooltip="Open it in Seerr"),
+        Binding("p", "den_play", "Den TV", tooltip="Play the selected title on a den TV screen"),
         Binding("t", "play", "Play", tooltip="Play it full screen (a show: its next unwatched episode), from Jellyfin"),
         Binding("e", "episodes", "Episodes", show=False, tooltip="Show the season's episode files (TV)"),
         Binding("D", "delete", "Delete", tooltip="Delete the title, season, album or file under the cursor (asks twice)"),
@@ -871,6 +872,24 @@ class MediaApp(App):
             return
         self.src.open(url)
         self.notify(f"Opening {r['title']} in {where.title()}")
+
+    def action_den_play(self):
+        from .tvplayui import PlayOnDen, TVP
+        title, kind = "", "all"
+        tab = self.query_one("#tabs", TabbedContent).active
+        if tab in self.shown:
+            _, r, sub = self._target()
+            if r:
+                title = r.get("title", "")
+                kind = "shows" if tab == "tv" else ("movies" if tab == "movies" else "all")
+                if sub and sub[0] == "file":
+                    title = sub[1].get("code", "")
+        elif tab == "youtube":
+            kind = "youtube"
+        def picked(req):
+            if req:
+                self._do(lambda: TVP.play(**req), lambda v: v.get("message", "Playing on den TV"))
+        self.push_screen(PlayOnDen(title, kind), picked)
 
     def action_play(self):
         kind, r, _ = self._target()

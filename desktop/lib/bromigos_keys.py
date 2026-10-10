@@ -198,7 +198,7 @@ def _shown_names():
         for k, v in kb.KEYNAMES.items():
             seen[v] = seen.get(v, 0) + 1
         for k, v in kb.KEYNAMES.items():
-            if seen[v] == 1 and v != k and not k.startswith(("MOUSE", "CODE")):
+            if seen[v] == 1 and v != k and (not k.startswith(("MOUSE", "CODE")) or (k.startswith("CODE:") and v.startswith("KP_"))):
                 out.setdefault(v.upper(), k)
     return out
 
@@ -213,6 +213,8 @@ def canon_key(key):
     if low.startswith("mouse"):
         return low
     k = _shown_names().get(k.upper(), k)
+    if k.lower().startswith("code:"):
+        return canon_key(k)
     sym = keysym(k)
     if sym is None:                     # no libxkbcommon: trust the name
         return k.upper()
@@ -496,7 +498,7 @@ def evaluate(lua_path, env=None, exclusive=None):
 def _live_from_json(raw):
     out = []
     for b in raw:
-        if b.get("submap") and str(b.get("submap_universal")).lower() != "true":
+        if b.get("submap") not in (None, "", "bromigos-tv-remote") and str(b.get("submap_universal")).lower() != "true":
             continue
         mods = [n for n, bit in MOD_BITS.items() if b.get("modmask", 0) & bit]
         key = b.get("key") or (f"code:{b['keycode']}" if b.get("keycode") else "")
@@ -815,7 +817,8 @@ class Plan:
             for o in owners:
                 self.notes.append(f"{o.what} lost {combo.display()}")
         self.expect.append((combo, _main(target.actions)))
-        self._check_lockout(before, combo, confirm)
+        self._check_lockout(before, combo, confirm, remote=all(action_of(a)[0] == "exec" and
+            action_of(a)[1].startswith("bromigos-live tv remote ") for a in target.actions))
 
     def unbind(self, combo, confirm=False):
         """Take whatever is on `combo` off it (a default is turned off)."""
@@ -974,14 +977,14 @@ class Plan:
             out["the terminal"] = self._keys_for(lambda p: p.strip() == self._terminal.strip())
         return out
 
-    def _check_lockout(self, before, combo, confirm):
+    def _check_lockout(self, before, combo, confirm, remote=False):
         reasons = []
         after = self._critical_keys()
         for name, had in before.items():
             if had and not after.get(name):
                 reasons.append(f"that leaves {name} without a key (it's how you get back to everything, "
                                f"Shortcuts too)")
-        if combo is not None and typing_key(combo):
+        if combo is not None and typing_key(combo) and not remote:
             reasons.append(f"{combo.display()} without a modifier stops that key from typing in every app")
         if reasons and not confirm:
             raise Lockout(reasons)

@@ -137,6 +137,19 @@ class Guide:
             ctx.placeholder(self.page, "The den TV", "This needs bromigOS's den TV library (bromigos-core 0.1.2 or "
                                                      "newer).")
             return
+        playback = ctx.group(self.page, "The screens", "Play something now, or return to a channel. Only one screen has sound.", key="playback")
+        self.screen_rows = {}
+        for screen, title in SCREEN_NAME.items():
+            self.screen_rows[screen] = ctx.row(playback, title, "", key="screen-" + screen,
+                hint="Choose an item to play now, from the start or where you left off",
+                buttons=[("Play…", lambda s=screen: self.play_dialog(s), "Shows, seasons, episodes, movies and YouTube"),
+                         ("Full screen", lambda s=screen: ctx.run(LIVE + ["open", "--screen", s]), "Open this TV in its own full-screen player"),
+                         ("Sound", lambda s=screen: ctx.run(LIVE + ["sound", "toggle", "--screen", s]), "Move sound here or mute it")])
+        ctx.json(["bromigos", "scene", "get", "tv.hover_hint", "--json"],
+                 lambda doc, err: ctx.switch_row(playback, "Floating controls on hover", key="hover-hint",
+                     active=((doc or {}).get("values") or {}).get("tv.hover_hint", True),
+                     hint="Off leaves the physical knobs and number-pad remote",
+                     on_toggle=lambda v: ctx.change(["bromigos", "scene", "set", "tv.hover_hint", str(v).lower()], "TV hover hint updated")))
         top = ctx.group(self.page, "Channels", None, key="channels")
         self.top = top
         self.status = ctx.row(top, "The den's three screens", "", key="status",
@@ -165,6 +178,8 @@ class Guide:
         want = os.environ.get("BROMIGOS_DEN_TV_OPEN")         # the tests' renders: a dialog open
         if want == "add":
             GLib.idle_add(lambda: (self.add_dialog(), False)[1])
+        elif want == "play":
+            GLib.idle_add(lambda: (self.play_dialog("big"), False)[1])
         elif want == "picker":
             GLib.idle_add(lambda: (self.picker(None, lambda *_: None, {"shows": ["Test Card"], "items": [], "collections": []}, "in order"), False)[1])
 
@@ -198,6 +213,10 @@ class Guide:
     def _got_live(self, doc, _err):
         self.ctx.pending -= 1
         self.live = doc if isinstance(doc, dict) and doc.get("screens") else None
+        for s, row in self.screen_rows.items():
+            state = ((self.live or {}).get("screens") or {}).get(s) or {}
+            row.set_subtitle(("ON DEMAND · " if state.get("on_demand") else "") +
+                             str(state.get("now") or state.get("name") or "Its own picture"))
         self._draw()
         self._fetch_missing()
 
@@ -643,6 +662,94 @@ class Guide:
         d.set_default_widget(ok)
         d.present(self.ctx.window)
         return d, ok
+
+    def play_dialog(self, screen):
+        import bromigos_tvplay as TVP
+        ctx = self.ctx
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        for side in ("top", "bottom", "start", "end"): getattr(content, "set_margin_" + side)(12)
+        toolbar = Gtk.Box(spacing=8)
+        back = Gtk.Button(label="Back")
+        search = Gtk.SearchEntry(placeholder_text="Title or YouTube video URL", hexpand=True)
+        ctx.hint(search, "Search Jellyfin/Plex, or downloaded YouTube; a show opens seasons then episodes")
+        types = Gtk.DropDown.new_from_strings(["All", "Shows", "Movies", "Downloaded YouTube"])
+        ctx.hint(types, "Which library to search")
+        toolbar.append(back); toolbar.append(search); toolbar.append(types); content.append(toolbar)
+        note = Gtk.Label(label="Reading your library…", xalign=0)
+        content.append(note)
+        listing = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
+        listing.add_css_class("boxed-list")
+        ctx.hint(listing, "Double-click or Enter: choose a show, season or episode; Play starts a selected item")
+        scroller = Gtk.ScrolledWindow(vexpand=True, min_content_height=260); scroller.set_child(listing)
+        content.append(scroller)
+        resume = Gtk.CheckButton(label="Resume where you left off")
+        ctx.hint(resume, "Off plays from the start; on uses the media server's saved position")
+        content.append(resume)
+        state = dict(scope={"kind": "all"}, parents=[], rows=[], serial=0)
+        def chosen():
+            row = listing.get_selected_row()
+            return state["rows"][row.get_index()] if row and row.get_index() < len(state["rows"]) else None
+        def populate(rows, error=None):
+            while listing.get_first_child(): listing.remove(listing.get_first_child())
+            state["rows"] = rows
+            for item in rows:
+                row = Gtk.ListBoxRow()
+                label = Gtk.Label(label=TVL.label(item) + " · " + str(item.get("server") or "YouTube"),
+                                  xalign=0, ellipsize=Pango.EllipsizeMode.END)
+                for side in ("top", "bottom", "start", "end"): getattr(label, "set_margin_" + side)(9)
+                row.set_child(label); ctx.hint(row, TVL.label(item)); listing.append(row)
+            note.set_text(error or (str(len(rows)) + " found" if rows else "Nothing found. Try another title or check that it is downloaded."))
+        def fetch(query=""):
+            state["serial"] += 1; serial = state["serial"]; scope = dict(state["scope"])
+            note.set_text("Reading your library…")
+            def run():
+                try: rows, err = TVP.search(query, **scope), None
+                except Exception as e: rows, err = [], str(e)
+                def done():
+                    if serial == state["serial"] and dialog.get_visible(): populate(rows, err)
+                    return False
+                GLib.idle_add(done)
+            threading.Thread(target=run, daemon=True).start()
+        def drill(item):
+            state["parents"].append((dict(state["scope"]), state["rows"]))
+            state["scope"] = dict(kind="seasons" if item["kind"] == "show" else "episodes",
+                                  id_=item["id"], source=item.get("server"))
+            if item["kind"] == "season": state["scope"]["season"] = item["season"]
+            fetch()
+        def play(_dialog):
+            item = chosen()
+            if not item: ctx.toast("Choose a title first"); return
+            if item.get("kind") in ("show", "season"): drill(item); return
+            ok.set_sensitive(False)
+            use_resume = resume.get_active()
+            def run():
+                try: result = TVP.play(screen=screen, item=item, resume=use_resume); err = None
+                except Exception as e: result, err = {}, str(e)
+                def done():
+                    ok.set_sensitive(True)
+                    if err: ctx.toast(err)
+                    else: ctx.toast(result.get("message", "Playing")); dialog.close(); self.refresh()
+                    return False
+                GLib.idle_add(done)
+            threading.Thread(target=run, daemon=True).start()
+        dialog, ok = self._dialog("Play on " + SCREEN_NAME.get(screen, screen), content, "Play", play, width=720, height=620)
+        ctx.hint(ok, "Play the selected episode, movie or YouTube video now")
+        def activate(_list, row):
+            item = chosen()
+            if item and item.get("kind") in ("show", "season"): drill(item)
+            else: play(dialog)
+        listing.connect("row-activated", activate)
+        def go_back(*_):
+            if state["parents"]:
+                state["serial"] += 1; state["scope"], rows = state["parents"].pop(); populate(rows)
+        back.connect("clicked", go_back); ctx.hint(back, "Back to the previous list")
+        def find(*_):
+            state["parents"] = []; state["scope"] = dict(kind=("all", "shows", "movies", "youtube")[types.get_selected()])
+            fetch(search.get_text())
+        search.connect("activate", find); types.connect("notify::selected", find)
+        dialog.connect("closed", lambda *_: state.update(serial=state["serial"] + 1))
+        fetch()
+        return dialog
 
     def rename_dialog(self, idx, ch):
         page = Adw.PreferencesPage()

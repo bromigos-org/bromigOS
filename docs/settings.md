@@ -370,7 +370,7 @@ page.
 ### Den TV
 
 Settings holds only the den TV's playback controls: `tv.enabled`, `tv.max_playing` and
-`tv.cover_opacity`. They use `bromigos scene` and the live overrides file. Cover opacity
+`tv.cover_opacity`, plus `tv.hover_hint` for the floating controls. They use `bromigos scene` and the live overrides file. Cover opacity
 is the window-opacity threshold that pauses a covered silent screen; it does not fade
 the video. **Open Den TV…** launches `bromigos-tv-guide`.
 
@@ -841,3 +841,9 @@ and pacman:
 
 The last run passed 22 of 22 checks. A virtual Bluetooth controller needs bluez's btvirt,
 which Arch doesn't package, so pairing is tested against the stand-in only.
+
+The Den TV app also has **Play…** for each screen. Search shows, seasons and episodes,
+movies, downloaded YouTube videos or a YouTube video URL. Choose **Resume** to use the
+saved position. On-demand playback returns to the live channel when it ends or the
+channel changes. Its Floating controls switch hides only the hover panel; the den's
+physical knobs and buttons remain available.

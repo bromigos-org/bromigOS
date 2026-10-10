@@ -21,6 +21,7 @@ Sizes: compact (the three screens, a line each), wide (with posters and what's n
 (and continue watching and recently added).
 """
 import json
+import math
 import os
 import socket
 import sys
@@ -191,6 +192,9 @@ class MediaPanel(Panel):
         self.lib_error = None
         self.server = None
         self.posters = {}                # item id -> cairo surface (or None)
+        self._knob_rect = None
+        self._row_hits = []
+        self._dial_drag = None
         self.shown = "compact"
         self._stop = threading.Event()
         self._fetched = 0.0
@@ -353,6 +357,8 @@ class MediaPanel(Panel):
         top = D.frame(cr, w, h, self.title, right, "phosphor")
         self.region(0, 0, w, 34, "MEDIA: a remote for the den TV, all three screens at once (click a screen's row "
                                  "to choose it), and your media server's continue watching and recently added")
+        self._row_hits = []
+        self._knob_rect = None
         x0, x1 = 16, w - 16
         y = self._draw_remote(cr, x0, x1, top, n, cls)
         if cls != "large":
@@ -377,6 +383,9 @@ class MediaPanel(Panel):
             return y + 50
         live = any(r.get("live") for r in self.rows)
         tall = cls != "compact"
+        end_x = x1
+        x1 -= 92 if tall else 64
+        dial_y = y + (68 if tall else 33)
         rh = 46 if tall else 22
         for r in self.rows:
             scr = r.get("screen")
@@ -408,14 +417,14 @@ class MediaPanel(Panel):
             sound = r.get("sound") and r.get("kind") != "own"
             if tall:
                 head = (f"{SHORT.get(scr, '')} · CH {r['channel']} " if live and scr else "") + (r.get("name") or "")
-                D.label(cr, px, y, head, "phosphor" if chosen else "dim", 10)
-                if sound:
-                    D.text(cr, x1, y - 1, "♪ SOUND", 9, "amber", "semibold", align="right")
+                D.text(cr, px, y, head, 10, "phosphor" if chosen else "dim", width=x1 - px - 56)
+
             else:
                 D.label(cr, px, y, f"{SHORT.get(scr, '')} {r.get('channel') or ''}" if live else "TV",
                         "phosphor" if chosen else "dim", 10)
-                if sound:
-                    D.text(cr, px + 62, y - 1, "♪", 10, "amber", "semibold")
+
+            row_end = x1
+            x1 -= 54
             if r.get("kind") == "own":
                 now = "Its own picture"
             elif it:
@@ -439,25 +448,113 @@ class MediaPanel(Panel):
             tip = (f"{dict(SCREENS).get(scr, 'The den TV')}: {r.get('name')}"
                    + (f", {label(it)}" if it else "") + (f"; next {label(r['next_item'])}" if r.get("next_item") else "")
                    + (". Click: choose it for the buttons below" if live else ""))
-            self.region(x0 - 6, y - 3, x1 - x0 + 12, rh, tip, (lambda s=scr: self._choose(s)) if live else None)
+            x1 = row_end
+            self._row_hits.append((scr, (x0 - 6, y - 3, x1 - x0 + 12, rh)))
+            self.region(x0 - 6, y - 3, x1 - x0 + 12, rh, tip + ". Wheel: volume", (lambda s=scr: self._choose(s)) if live else None)
+            if live:
+                self._speaker(cr, x1 - 49, y - 1, sound)
+                D.text(cr, x1, y, f"{r.get('volume', 60)}%", 9, "phosphor" if sound else "dim", align="right")
+                self.region(x1 - 52, y - 3, 54, 19, "Sound from " + SHORT.get(scr, "TV") +
+                            (": click to mute" if sound else ": click to move sound here"),
+                            lambda scr=scr: self._tv_to("sound toggle", scr))
             y += rh + (2 if tall else 0)
         if not live:
             return y
+        self._draw_dial(cr, end_x - (43 if tall else 28), dial_y, 34 if tall else 21)
+        x1 = end_x
         y += 4
         s = self.sel
         bx = x0
         name = dict(SCREENS).get(s, "the screen").lower()
         bx += self._button(cr, bx, y, "◀ CH", f"The previous channel on {name}", lambda: self._tv("prev")) + 6
         bx += self._button(cr, bx, y, "CH ▶", f"The next channel on {name}", lambda: self._tv("next")) + 6
-        on = bool(n and n.get("sound"))
-        bx += self._button(cr, bx, y, "SOUND ON" if on else "SOUND OFF",
-                           f"Sound from {name}: click to turn it " + ("off" if on else "on (one screen at a time)"),
-                           lambda: self._tv("sound toggle")) + 6
-        if n and n.get("kind") != "own":
+        if n:
             bx += self._button(cr, bx, y, "FULL", f"{name.capitalize()}'s channel in mpv, full screen with sound, at "
                                                   "the same moment", self._open) + 6
         self._button(cr, bx, y, "GUIDE", "Every channel: the channel guide (Den TV)", self._guide)
         return y + 24
+
+    @staticmethod
+    def _speaker(cr, x, y, on):
+        D.src(cr, "phosphor" if on else "dim")
+        cr.move_to(x, y + 4); cr.line_to(x + 4, y + 4); cr.line_to(x + 9, y)
+        cr.line_to(x + 9, y + 12); cr.line_to(x + 4, y + 8); cr.line_to(x, y + 8)
+        cr.close_path(); cr.fill(); cr.set_line_width(1)
+        if on:
+            for r in (4, 7): cr.arc(x + 9, y + 6, r, -.8, .8); cr.stroke()
+        else:
+            cr.move_to(x + 12, y + 3); cr.line_to(x + 17, y + 10)
+            cr.move_to(x + 17, y + 3); cr.line_to(x + 12, y + 10); cr.stroke()
+
+    def _dial_screen(self):
+        return next((r for r in self.rows if r.get("sound") and r.get("kind") != "own"), self.now or {})
+
+    def _draw_dial(self, cr, cx, cy, radius):
+        row = self._dial_screen()
+        value = row.get("volume", 60)
+        self._knob_rect = (cx - radius, cy - radius, radius * 2, radius * 2)
+        D.src(cr, "guard"); cr.arc(cx, cy, radius - 3, 0, math.tau); cr.fill()
+        start, sweep = math.pi * .75, math.pi * 1.5
+        cr.set_line_width(1)
+        for i in range(21):
+            a = start + sweep * i / 20
+            D.src(cr, "phosphor" if i <= round(value / 5) else "dim", .9)
+            cr.move_to(cx + math.cos(a) * (radius - 3), cy + math.sin(a) * (radius - 3))
+            cr.line_to(cx + math.cos(a) * radius, cy + math.sin(a) * radius); cr.stroke()
+        D.src(cr, "phosphor", .9); cr.set_line_width(2)
+        cr.arc(cx, cy, radius - 6, start, start + sweep * value / 100); cr.stroke()
+        D.text(cr, cx, cy - 5, str(value) + "%", 10 if radius < 25 else 14,
+               "phosphor" if row.get("sound") else "dim", "semibold", align="center")
+        D.text(cr, cx, cy + radius - 1, SHORT.get(row.get("screen"), "VOLUME"), 9, "dim", align="center")
+        self.region(*self._knob_rect, "Volume for " + SHORT.get(row.get("screen"), "TV") +
+                    ": wheel or drag to turn; click to mute or unmute", lambda: None)
+
+    @staticmethod
+    def _inside(x, y, rect):
+        return rect and rect[0] <= x <= rect[0] + rect[2] and rect[1] <= y <= rect[1] + rect[3]
+
+    def scroll_at(self, x, y, dy):
+        row = self._dial_screen() if self._inside(x, y, self._knob_rect) else             next((r for r in self.rows if any(s == r.get("screen") and self._inside(x, y, rect)
+                                             for s, rect in self._row_hits)), None)
+        if not row or not row.get("live"): return False
+        self._tv_to("volume " + ("up" if dy < 0 else "down"), row.get("screen")); return True
+
+    def pointer_press(self, x, y, button=1):
+        if button != 1 or not self._inside(x, y, self._knob_rect): return False
+        row = self._dial_screen()
+        if not row.get("live"): return False
+        rx, ry, rw, rh = self._knob_rect
+        self._dial_drag = dict(x=x, y=y, cx=rx + rw/2, cy=ry + rh/2, value=row.get("volume",60),
+                               screen=row.get("screen"), moved=False)
+        return True
+
+    def pointer_motion(self, x, y):
+        d = self._dial_drag
+        if not d: return False
+        dx, dy = x - d["x"], y - d["y"]
+        if abs(dx) + abs(dy) < 4: return False
+        d["moved"] = True
+        if abs(dx) > abs(dy) * .7:
+            a0 = math.atan2(d["y"] - d["cy"], d["x"] - d["cx"])
+            a1 = math.atan2(y - d["cy"], x - d["cx"])
+            delta = (a1 - a0 + math.pi) % math.tau - math.pi
+            value = d["value"] + delta * 100 / (math.pi * 1.5)
+        else: value = d["value"] - dy * 1.5
+        value = max(0,min(100,round(value)))
+        row = next((r for r in self.rows if r.get("screen") == d["screen"]), {})
+        if row.get("volume") != value: self._tv_to("volume " + str(value), d["screen"])
+        return True
+
+    def pointer_release(self):
+        d, self._dial_drag = self._dial_drag, None
+        if not d: return False
+        if not d["moved"]: self._tv_to("sound toggle", d["screen"])
+        return True
+
+    def _tv_to(self, verb, screen):
+        _ask("tv " + verb + (f" --screen {screen}" if screen else ""))
+        self.tick()
+        if self.wake: self.wake()
 
     def _choose(self, screen):
         self.sel = screen

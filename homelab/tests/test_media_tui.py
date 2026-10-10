@@ -192,6 +192,38 @@ class TUI(Stack):
                         self.assertEqual(self.st.deleted_files, [])
                     self.run_app(fn)
 
+    def test_play_picker_drills_into_seasons_and_episodes(self):
+        from bromigos_homelab import tvplayui as U
+        show = dict(id="show", title="Starlight Harbor", kind="show", server="library")
+        season = dict(id="show", title="Season 1", kind="season", season=1, server="library")
+        episode = dict(id="ep5", title="Episode 5", series="Starlight Harbor", kind="episode", server="library")
+        def search(query="", **scope):
+            return {"shows": [show], "seasons": [season], "episodes": [episode],
+                    "movies": [dict(id="movie", title="Lanterns of Kiri", kind="movie", server="library")]}[scope["kind"]]
+        async def fn(app, pilot):
+            await pilot.press("p")
+            await self.settle(app, pilot)
+            self.assertIsInstance(app.screen, U.PlayOnDen)
+            await pilot.press("enter")
+            await self.settle(app, pilot)
+            self.assertEqual(app.screen.rows[0]["kind"], "season")
+            await pilot.press("enter")
+            await self.settle(app, pilot)
+            self.assertEqual(app.screen.rows[0]["id"], "ep5")
+            await pilot.press("enter")
+            await self.settle(app, pilot)
+            self.assertEqual(play.call_args.kwargs["item"]["id"], "ep5")
+            self.assertEqual(play.call_args.kwargs["screen"], "big")
+            app.action_tab("movies")
+            await self.settle(app, pilot)
+            await pilot.press("p")
+            await self.settle(app, pilot)
+            self.assertEqual(app.screen.rows[0]["kind"], "movie")
+            await pilot.press("ctrl+c")
+            self.assertTrue(app._exit)
+        with mock.patch.object(U.TVP, "search", side_effect=search), mock.patch.object(U.TVP, "play", return_value={"message": "Playing"}) as play:
+            self.run_app(fn)
+
     def test_switching_tabs_cancels_delete_confirmation(self):
         async def fn(app, pilot):
             await pilot.press("D")
@@ -452,7 +484,7 @@ class TUI(Stack):
             await pilot.press("O")
             await self.settle(app, pilot, 2)
             self.assertEqual(self.opened, [f"{self.srv.url}/seerr/tv/8004"])
-            await pilot.press("p")
+            await pilot.press("P")
             await self.settle(app, pilot, 2)
             app.screen.query_one("#prof").value = 7
             await pilot.click("#prof-yes")

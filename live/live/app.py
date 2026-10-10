@@ -429,6 +429,8 @@ class App:
         def press(_w, ev):
             t = tv()
             if t and ev.type == Gdk.EventType.BUTTON_PRESS:
+                if t.analog_target(ev.x, ev.y):
+                    self.sound.play("terminal")
                 out = t.click(ev.x, ev.y, ev.button)
                 if out:
                     log(out)

@@ -270,3 +270,10 @@ records where each one comes from and whether it may ship.
 
 bromigOS is based on Arch Linux. It is not affiliated with or endorsed by the Arch Linux
 project.
+
+## Den TV controls
+
+Control each den screen with the knobs below it, the MEDIA remote or your number pad.
+The full-screen player has a volume slider that opens when you hover its speaker.
+Choose an episode, movie or YouTube video from Den TV, the media library or VECTOR.
+See [the den controls](manual/src/themes-and-worlds.md#controls-on-the-dens-equipment).

@@ -352,7 +352,7 @@ then press a key:
 | `8`, `c` | Channels tab; add or remove a selected title from a channel |
 | `m` | Monitor it, or stop. On a season or an album, just that one |
 | `n` | Pick up new episodes and seasons, or stop |
-| `p` | Change its quality profile |
+| `P` | Change its quality profile |
 | `f` | Search for it now |
 | `o`, `O` | Open it in Jellyfin, or in Seerr |
 | `t` | Play it full screen. A show plays its next unwatched episode |
@@ -540,3 +540,7 @@ NVIDIA NemoClaw has an experimental host plan in the picker. It creates an OpenC
 host through NVIDIA OpenShell. This slice keeps its messaging off and refuses a
 cluster-only target. It never recreates an existing sandbox. See the
 [agent installer notes](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-agents.md#nemoclaw-boundaries) for these limits.
+
+In the media library, `p` opens **Play on den TV**; `P` changes the quality profile.
+Pick a screen, show, season and episode, a movie or a downloaded YouTube video.
+See [Play something on a den screen](media.md#play-something-on-a-den-screen).

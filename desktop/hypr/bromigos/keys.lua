@@ -48,7 +48,7 @@ end
 local function with_description(opts, text)
     local o = {}
     for k, v in pairs(opts or {}) do
-        if k ~= "mod" then          -- ours, not hl.bind's
+        if k ~= "mod" and k ~= "submap" then          -- ours, not hl.bind's
             o[k] = v
         end
     end
@@ -73,7 +73,13 @@ local function bind(b)
     local opts = b.opts
     table.insert(M.binds, { keys = b.keys, kind = b.kind, payload = b.payload,
                             release = opts.release and true or false, mouse = opts.mouse and true or false })
-    return hl.bind(b.keys, b.dispatcher, with_description(with_exclusions(b.keys, opts), b.source))
+    local function make()
+        return hl.bind(b.keys, b.dispatcher, with_description(with_exclusions(b.keys, opts), b.source))
+    end
+    if opts.submap then
+        return hl.define_submap(opts.submap, make)
+    end
+    return make()
 end
 
 local function register(keys, kind, payload, source, dispatcher, opts)
@@ -206,6 +212,10 @@ end
 
 --- Bind keys to a shell command.
 function M.exec(keys, cmd, opts)
+    if cmd:match("^bromigos%-live%s+tv%s+remote%s+") then
+        local scoped = {}; for k, v in pairs(opts or {}) do scoped[k] = v end
+        scoped.submap = "bromigos-tv-remote"; opts = scoped
+    end
     local source = ("hl.dsp.exec_cmd(%q)"):format(cmd)
     return register(keys, "exec", cmd, source, compile(keys, source), opts)
 end

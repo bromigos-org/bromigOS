@@ -27,6 +27,10 @@ for _row, _start in (("qwertyuiop", 16), ("asdfghjkl", 30), ("zxcvbnm", 44)):
     for _i, _c in enumerate(_row):
         KEYS[_c.upper()] = _start + _i
 MODS = {"SHIFT": (42, 1), "CTRL": (29, 4), "ALT": (56, 8), "SUPER": (125, 64)}
+KEYS.update({"KP_1":79,"KP_2":80,"KP_3":81,"KP_0":82,"KP_DECIMAL":83,"KP_ADD":78,
+             "KP_SUBTRACT":74,"KP_8":72,"KP_5":76,"KP_6":77,"KP_4":75,"KP_ENTER":96,
+             "KP_MULTIPLY":55,"KP_DIVIDE":98,"KP_7":71,"KP_9":73})
+
 CHARS = {" ": "SPACE", "-": "MINUS", "/": "SLASH", ".": "PERIOD", ",": "COMMA"}
 
 
@@ -139,8 +143,12 @@ class VirtualKeyboard:
 
     def modifiers(self, mask):
         self.mods = mask
-        self._send(self.kb, 2, struct.pack("<IIII", mask, 0, 0, 0))
+        self._send(self.kb, 2, struct.pack("<IIII", mask, 0, getattr(self, "locked", 0), 0))
         self._roundtrip()
+
+    def lock(self, mask):
+        self.locked = mask
+        self.modifiers(self.mods)
 
     def combo(self, keys, hold=0.05):
         """Press "SUPER + SHIFT + W": the modifiers down, the key down and up, the modifiers up."""
