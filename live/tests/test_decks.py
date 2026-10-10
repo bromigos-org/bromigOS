@@ -101,8 +101,9 @@ class ConstellationTest(unittest.TestCase):
 class NoPrivateNamesTest(unittest.TestCase):
     """What ships names no one's own deck, trading system, lab or machines."""
 
-    # k8s_<app>: the names of one lab's NAS shares; a panel finds its share in the snapshot
-    PRIVATE = re.compile(r"blackflame|k8s_[a-z]", re.I)
+    # k8s_<app>: the names of one lab's NAS shares; a panel finds its share in the snapshot.
+    # VECTOR's public tool names (k8s_restart, k8s_scale, k8s_delete_pod, k8s_run_job) aren't shares.
+    PRIVATE = re.compile(r"blackflame|k8s_(?!(?:restart|scale|delete_pod|run_job)\b)[a-z]", re.I)
     TREES = ("live/live", "live/bin", "live/config.toml", "live/shaders", "live/tools", "desktop/bin", "desktop/lib",
              "desktop/startpage", "desktop/hypr", "widgets", "homelab/lib", "homelab/live", "homelab/share",
              "homelab/widgets", "themes/mire/live", "themes/tidewell/live")
