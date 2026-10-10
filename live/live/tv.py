@@ -550,6 +550,10 @@ class TV:
         d = self.decks[screen]
         slot = self.slot(ch)
         item = slot.item if slot else None
+        if item is None:
+            if d.loaded:
+                self._unload(d)  # changed/empty picks must not keep the removed item's audio
+            return None, 1.0
         poster_only = self.motion == "still" or self.software or d.capped or not self._player_ok(d)
         if not poster_only and item is not None:
             self._ensure_loaded(d, ch, slot)

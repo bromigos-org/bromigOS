@@ -304,6 +304,7 @@ class TUI(Stack):
             app.query_one('#ch-items').move_cursor(row=1)
             await pilot.press('alt+up');await self.settle(app,pilot,3)
             self.assertEqual(app.channel_store.load().channels()[0]['shows'],['Two','One'])
+            self.assertEqual(app.query_one('#ch-items').cursor_row,0)
             await pilot.press('h','v','b');await self.settle(app,pilot,3)
             row=app.channel_store.load().channels()[0]
             self.assertEqual(row['order'],'alternate');self.assertFalse(row['bumpers'])
@@ -318,6 +319,17 @@ class TUI(Stack):
             self.assertEqual(app.channel_store.load().channels()[0]['name'],'Night Block')
             self.assertIn('# order kept',app.channel_store.load().text)
             self.assertEqual(self.st.deleted,[])
+        self.run_app(fn)
+
+    def test_channel_poll_reads_live_state_without_fetching_content(self):
+        self.seed_channels()
+        async def fn(app,pilot):
+            with mock.patch.object(T.CH.TV,'fetch_items') as fetch, mock.patch.object(T.CH,'live_state',
+                return_value={'screens':{'big':{'key':'night-block','now':'Broadcast','next':'After'}}}):
+                app.poll_channels();await self.settle(app,pilot,3)
+                fetch.assert_not_called()
+                self.assertEqual(app.channel_rows[0]['on_screens'],['big'])
+                self.assertEqual(app.channel_rows[0]['now'],'Broadcast')
         self.run_app(fn)
 
     def test_channel_picker_from_movies_music_youtube_upcoming_and_search(self):
@@ -351,6 +363,7 @@ class TUI(Stack):
             app.query_one('#ch-list').move_cursor(row=1)
             await pilot.press('alt+up');await self.settle(app,pilot,3)
             self.assertEqual(app.channel_store.load().channels()[0]['name'],'Films')
+            self.assertEqual(app.selected_channel()['name'],'Films')
         self.run_app(fn)
 
     def test_every_tab_shows_its_data(self):

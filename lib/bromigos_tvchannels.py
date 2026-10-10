@@ -6,6 +6,7 @@ comment-preserving, checked, atomic writer through the target of a dotfiles syml
 """
 import argparse
 import contextlib
+from collections import Counter
 import fcntl
 import json
 import os
@@ -94,10 +95,27 @@ class Store:
         """The guide's existing doc edit, serialized with every other channel edit."""
         with self.locked():
             doc = self.load()
+            before = doc.channels()
             result = change(doc)
+            after = doc.channels()
+            old = Counter(TV._slug(self.display_name(row,i)) for i,row in enumerate(before))
+            new = Counter(TV._slug(self.display_name(row,i)) for i,row in enumerate(after))
+            if any(count > 1 and count > old[key] for key,count in new.items()):
+                raise ChannelError("A channel already has that name", 3)
+            previous = {row.get('name') for row in before}
+            for row in after:
+                if row.get('name') not in previous and ('name' in row):
+                    name = str(row['name'] or '').strip()
+                    if not name or name.isdecimal() or TV._slug(name) == 'own':
+                        raise ChannelError("Give the channel a name other than a number or Own", 2)
             doc.save()
         control("tv reload")
         return result
+
+    @staticmethod
+    def display_name(row, index=0):
+        channel = TV._entry(row, set())
+        return channel['name'] if channel else row.get('name') or f"Channel {index+1}"
 
     @staticmethod
     def index(doc, channel):
@@ -107,7 +125,7 @@ class Store:
             n = int(text) - 1
             if 0 <= n < len(rows):
                 return n
-        hits = [i for i, row in enumerate(rows) if _title(row.get("name", "")) == _title(text)]
+        hits = [i for i, row in enumerate(rows) if _title(Store.display_name(row,i)) == _title(text)]
         if len(hits) == 1:
             return hits[0]
         if len(hits) > 1:
@@ -119,7 +137,7 @@ class Store:
         if not str(name).strip() or str(name).strip().isdecimal():
             raise ChannelError("Give the channel a name, rather than only a number", 2)
         slug = TV._slug(str(name))
-        if any(i != except_index and TV._slug(r.get("name") or "") == slug
+        if any(i != except_index and TV._slug(Store.display_name(r,i)) == slug
                for i, r in enumerate(doc.channels())):
             raise ChannelError("A channel already has that name", 3)
 
@@ -215,6 +233,7 @@ class Store:
         def change(doc):
             i = self.index(doc, channel)
             row = doc.channels()[i]
+            row["name"] = self.display_name(row,i)
             if key == "name":
                 self.unique(doc, value, i)
             doc.set(i, key, value)
@@ -241,6 +260,7 @@ class Store:
         def change(doc):
             i = self.index(doc, channel)
             row = doc.channels()[i]
+            row["name"] = self.display_name(row,i)
             if kind(row) != "picked":
                 msg = "Library channels already include their library; choose a picked channel" if kind(row) == "library" \
                     else "Choose a picked channel to add or remove individual titles"
@@ -268,7 +288,7 @@ class Store:
             n = int(position) - 1
             if not 0 <= n < len(doc.channels()):
                 raise ChannelError("Position is outside the channel list", 2)
-            name = doc.channels()[i]['name']; doc.move(i, n); return name
+            name = self.display_name(doc.channels()[i],i); doc.move(i, n); return name
         name = self.edit(change)
         return {"name": name, "message": f"Moved {name} to {position}"}
 
@@ -282,14 +302,14 @@ class Store:
                     pos = int(position) - 1
                     if not 0 <= pos < len(vals):
                         raise ChannelError("Position is outside this picked list", 2)
-                    vals.insert(pos, vals.pop(j)); doc.set(i, key, vals); return row['name']
+                    vals.insert(pos, vals.pop(j)); doc.set(i, key, vals); return self.display_name(row,i)
             raise ChannelError("That item is not in the channel", 4)
         name = self.edit(change)
         return {"name": name, "message": f"Moved {title} to {position}"}
 
     def remove(self, channel):
         def change(doc):
-            i = self.index(doc, channel); name = doc.channels()[i]['name']
+            i = self.index(doc, channel); name = self.display_name(doc.channels()[i],i)
             idx, text = doc.remove(i)
             TV._write_json(self.undo_file, {"index": idx, "text": text, "name": name})
             return name
@@ -396,7 +416,8 @@ def main(argv=None):
         elif a.action == 'tune': result = store.tune(a.channel,a.screen)
         elif a.action == 'undo': result = store.undo()
         elif a.action == 'remove':
-            row = store.load().channels()[store.index(store.load(),a.channel)]
+            doc = store.load(); index = store.index(doc,a.channel)
+            row = doc.channels()[index]; row['name'] = store.display_name(row,index)
             if not a.yes:
                 if not sys.stdin.isatty() or input(f"Remove channel {row['name']}? Type its name: ").strip() != row['name']:
                     raise ChannelError('Nothing removed; use --yes to confirm',2)

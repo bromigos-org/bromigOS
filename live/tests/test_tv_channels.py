@@ -109,6 +109,24 @@ class Channels(unittest.TestCase):
         with mock.patch.object(C,'control',return_value=None):
             self.assertEqual(self.cli('set','2','--screen','big')[0],1)
 
+    def test_guide_edits_share_name_validation(self):
+        with self.assertRaises(C.ChannelError):
+            self.store.edit(lambda doc: doc.add({'name':'Night Block','shows':['New']}))
+        self.assertEqual(len(self.store.load().channels()),2)
+        with self.assertRaises(C.ChannelError):
+            self.store.edit(lambda doc: doc.set(1,'name','Night Block'))
+        self.assertEqual(self.store.load().channels()[1]['name'],'Films')
+
+    def test_unnamed_legacy_channels_use_the_guide_readers_display_name(self):
+        self.store.edit(lambda doc: doc.add({'library':'Music'}))
+        row=self.store.snapshot(live={})['channels'][-1]
+        self.assertEqual(row['name'],'Music')
+        self.store.set('Music','bumpers',True)
+        self.store.set('Music','name','Albums')
+        self.assertEqual(self.store.load().channels()[-1]['name'],'Albums')
+        self.store.remove('Albums');self.store.undo()
+        self.assertEqual(self.store.load().channels()[-1]['name'],'Albums')
+
     def test_multiple_editors_load_latest_file(self):
         other=C.Store(self.file)
         self.store.item('Night Block','C')

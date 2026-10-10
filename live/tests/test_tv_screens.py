@@ -116,7 +116,7 @@ def files_channel(name, screens, n=3, dur=600):
     c = TV._entry(ch, set())
     TV._write_json(TV.cache_path(c), {"items": [{"id": f"{c['key']}-{i}", "title": f"{name} {i}", "duration": dur,
                                                  "url": f"/media/{name}/{i}.mp4"} for i in range(n)],
-                                      "fetched": time.time() + 3600, "error": None})
+                                      "fetched": time.time() + 3600, "error": None, "definition": TV.content_signature(c)})
     return ch
 
 
@@ -175,6 +175,15 @@ class ScreensTest(unittest.TestCase):
     def tick(self, **k):
         self.tv.drawn_at = livetv._mono()
         self.tv.tick(**k)
+
+    def test_empty_schedule_stops_the_previous_items_audio_and_stream(self):
+        self.tv.tune_to('big',2)
+        deck=self.tv.decks['big'];deck.loaded=('shows','old-item')
+        deck.stream={'url':'old-stream'}
+        with mock.patch.object(self.tv,'slot',return_value=None):
+            self.assertEqual(self.tv._picture('big',self.tv.channel('big')[1],200,175,1.0),(None,1.0))
+        self.assertEqual(deck.player.stopped,1)
+        self.assertIsNone(deck.loaded);self.assertIsNone(deck.stream)
 
     def test_every_screen_plays_its_own_channel_at_once(self):
         tv = self.tv

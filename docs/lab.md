@@ -393,6 +393,8 @@ terminal. Without a terminal, both print the Requests card instead.
   live CLI. `c` on a library title opens add/remove/new choices. A diamond marks channel
   membership. The Channels tab shows contents, order, bumpers, screens and now/next;
   its controls edit picks, reorder, tune, rename and confirm deletion, with undo.
+  A cache-only poll updates screens and now/next every five seconds without cancelling
+  slower content fetches. Reordering keeps the selected channel or pick.
   All channel tests use sandbox config and stub control sockets.
 
 The same changes are CLI verbs too: `library`, `monitor`, `profile`, `refresh` and `delete`.

@@ -516,7 +516,8 @@ when starting from a channel name. All writes share `bromigos_tvchannels.Store` 
 GTK guide, media TUI and VECTOR. A lock around the read/edit/write prevents the interfaces
 from overwriting each other's newer changes. The content cache records the channel definition. Changed picks or sources refresh
 immediately rather than waiting for the regular cache age. A failed refresh never keeps
-items from a different definition. Channel deletion keeps a recoverable table
+items from a different definition. An empty schedule stops the previous item's picture
+and sound while the new list loads. Channel deletion keeps a recoverable table
 in user state for `channel undo`.
 
 Picked `items` may include YouTube URLs or `music:artist:NAME` / `music:album:NAME`.

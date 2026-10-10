@@ -515,6 +515,7 @@ class MediaApp(App):
                 pass
         self.action_refresh()
         self.set_interval(5.0, self.load_downloads)
+        self.set_interval(5.0, self.poll_channels)
 
     # ------------------------------------------------------------------ loading
     def action_refresh(self):
@@ -1018,24 +1019,47 @@ class MediaApp(App):
     def load_channels(self):
         try:
             doc = self.channel_store.snapshot(refresh=True)
-            self.call_from_thread(self.show_channels, doc['channels'])
+            if not self._exit:
+                self.call_from_thread(self.show_channels, self.channel_store.snapshot()['channels'])
         except (CH.ChannelError, ValueError, OSError) as e:
             self.call_from_thread(self.notify, str(e), severity="error")
 
+    @work(thread=True, group="channel-state", exclusive=True)
+    def poll_channels(self):
+        """Live screens and clock, from local cache; leave slow content fetches alone."""
+        try:
+            rows = self.channel_store.snapshot()['channels']
+            if not self._exit: self.call_from_thread(self.show_channels, rows)
+        except (CH.ChannelError, ValueError, OSError):
+            pass
+
     def show_channels(self, rows):
+        table = self.query_one('#ch-list', HintTable)
+        old_index = table.cursor_row
+        old_row = self.channel_rows[old_index] if 0 <= old_index < len(self.channel_rows) else None
+        item_index = self.query_one('#ch-items', HintTable).cursor_row
+        old_item = old_row['contents'][item_index]['value'] if old_row and 0 <= item_index < len(old_row['contents']) else None
+        def members(data):
+            return [(r['name'], [(c['kind'], c['value'], c['title']) for c in r['contents']]) for r in data]
+        changed = members(rows) != members(self.channel_rows)
         self.channel_rows = rows
-        self.query_one("#ch-list", HintTable).fill(
+        table.fill(
             ("#", "Channel", "Kind", "Order", "Bumpers", "On now"),
             [(r['number'], r['name'], r['kind'], r['order'], "on" if r['bumpers'] else "off",
               ", ".join(r['on_screens']) or "-") for r in rows],
             [(r['now'] or "Nothing playing") + " → " + (r['next'] or "Nothing next") for r in rows],
             "Enter/l: contents · F2 rename · v order · b bumpers · Alt+↑/↓ reorder · D delete · Ctrl+Z undo")
-        self.show_channel(self.query_one("#ch-list", HintTable).cursor_row)
-        for kind, recs in self.recs.items():
-            self.show_library(kind, recs)
-        self.show_upcoming(self.upcoming_rows)
-        self.show_youtube(self.youtube_rows)
-        self.show_found(self.found, focus=False)
+        index = next((i for i,r in enumerate(rows) if old_row and r['key']==old_row['key']), min(old_index,max(0,len(rows)-1)))
+        table.move_cursor(row=index)
+        self.show_channel(index)
+        if rows and old_item is not None:
+            position = next((i for i,c in enumerate(rows[index]['contents']) if c['value']==old_item), None)
+            if position is not None: self.query_one('#ch-items', HintTable).move_cursor(row=position)
+        if changed:
+            for kind, recs in self.recs.items(): self.show_library(kind, recs)
+            self.show_upcoming(self.upcoming_rows)
+            self.show_youtube(self.youtube_rows)
+            self.show_found(self.found, focus=False)
 
     def show_channel(self, index):
         row = self.channel_rows[index] if 0 <= index < len(self.channel_rows) else None
@@ -1088,12 +1112,14 @@ class MediaApp(App):
                 if kind=='music': title = 'music:' + ('album:' if media_kind=='album' else 'artist:') + title
         if not title:
             self.notify('Choose a title or YouTube source first'); return
+        choices = list(self.channel_rows)
         def selected(choice):
             if choice == 'new':
                 self.action_channel_new(title, kind)
             elif choice:
                 verb, number = choice.split(':')
-                self.channel_change(lambda: self.channel_store.item(number, title, remove=verb=='remove', item_kind=kind))
+                row = next(r for r in choices if str(r['number']) == number)
+                self.channel_change(lambda: self.channel_store.item(row['name'], title, remove=verb=='remove', item_kind=kind))
         self.push_screen(ChannelPicker(title, self.channel_rows), selected)
 
     def action_channel_new(self, title=None, kind='show'):
