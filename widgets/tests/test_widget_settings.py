@@ -40,8 +40,8 @@ class WidgetSettings(unittest.TestCase):
 
     def test_defaults_then_layout_then_the_file(self):
         v = WS.values("demo", SCHEMA)
-        self.assertEqual(v, {"place": "", "hosts": ["gateway"], "every": 60, "glow": True, "units": "metric"})
-        self.assertNotIn("account", v)                                  # a sign-in is never a value
+        self.assertEqual(v, {"place": "", "hosts": ["gateway"], "every": 60, "glow": True, "units": "metric",
+                             "account": []})                     # a sign-in's value: which accounts (none: all)
         v = WS.values("demo", SCHEMA, layout={"place": "Oslo", "every": 30})
         self.assertEqual((v["place"], v["every"]), ("Oslo", 30))
         WS.set_value("demo", SCHEMA, "place", "Bergen")
@@ -59,6 +59,17 @@ class WidgetSettings(unittest.TestCase):
                        ("place", "two\nlines"), ("account", "token")):
             with self.assertRaises(ValueError, msg=(k, bad)):
                 WS.parse(f[k], bad)
+
+    def test_a_sign_in_holds_account_names_never_a_token(self):
+        import bromigos_account as A                                     # on the path through widget_settings
+        f = {f["key"]: f for f in WS.fields(SCHEMA)}
+        A.add_account("github", "work", base="https://github.example.org", client_id="ghe-app")
+        self.assertEqual(WS.parse(f["account"], "default, work"), ["default", "work"])
+        self.assertEqual(WS.set_value("demo", SCHEMA, "account", ["work"])["account"], ["work"])
+        token_shape = "gh" + "p_" + "0123456789abcdefghijklmnopqrstuvwxyz"     # made-up, built so no scanner trips
+        for bad in (token_shape, "nobody", "Work Laptop"):
+            with self.assertRaises(ValueError, msg=bad):
+                WS.parse(f["account"], bad)
 
     def test_written_through_a_symlink(self):
         dots = os.path.join(self.tmp, "dotfiles")

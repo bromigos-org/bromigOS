@@ -7,8 +7,12 @@ Sign-in, through lib/bromigos_account.py with the token in your keyring: GitLab'
 flow (GitLab 17.2 or later, with an application of your own), or a personal access token
 you paste with `bromigos account set-token gitlab`. Both are sent as a bearer token, which
 GitLab accepts for either. The instance is `base` in the [gitlab] table of
-~/.config/bromigos/accounts.toml (gitlab.com when unset). It reads every 4 minutes while
-the panel is seen.
+~/.config/bromigos/accounts.toml (gitlab.com when unset).
+
+Several accounts: gitlab.com and your company's own GitLab, say. The `account` setting
+lists which to show (every signed-in one when empty). Their rows are merged, newest first,
+each tagged with its account's label. Each account is read on its own, every 4 minutes
+while the panel is seen.
 """
 import json
 import os
@@ -110,6 +114,34 @@ def parse_pipelines(items):
             for p in items or []]
 
 
+def merge_feeds(feeds):
+    """One feed from several accounts' [(label, data)]: merge requests, to-dos and projects
+    merged and sorted as for one account, each row tagged with its account's label ("acct")
+    and the account's web root ("base"). A project's id becomes "<label>/<id>", so two
+    servers' projects never share pipelines."""
+    if not feeds:
+        return None
+    if len(feeds) == 1:
+        lab, d = feeds[0]
+        return dict(d, accounts=[{"label": lab, "login": d.get("login"), "base": d.get("base")}])
+    out = {"mrs": [], "todos": [], "projects": [], "pipelines": {}, "at": 0,
+           "accounts": [{"label": lab, "login": d.get("login"), "base": d.get("base")} for lab, d in feeds],
+           "login": feeds[0][1].get("login"), "base": feeds[0][1].get("base")}
+    for lab, d in feeds:
+        tag = {"acct": lab, "acct_base": d.get("base")}
+        out["mrs"] += [dict(m, **tag) for m in d.get("mrs") or []]
+        out["todos"] += [dict(t, **tag) for t in d.get("todos") or []]
+        for pr in d.get("projects") or []:
+            key = f"{lab}/{pr['id']}"
+            out["projects"].append(dict(pr, id=key, **tag))
+            out["pipelines"][key] = (d.get("pipelines") or {}).get(pr["id"]) or []
+        out["at"] = max(out["at"], d.get("at") or 0)
+    out["mrs"].sort(key=lambda m: -(m["updated"] or 0))
+    out["todos"].sort(key=lambda t: -(t["at"] or 0))
+    out["projects"].sort(key=lambda pr: -(pr["active"] or 0))
+    return out
+
+
 def status_of(s):
     return STATUS.get(s, ("static", (s or "?").replace("_", " ")))
 
@@ -153,6 +185,27 @@ def demo_data(now=None):
             "base": "https://gitlab.example.org"}
 
 
+def demo_two(now=None):
+    """Demo readings for two accounts: gitlab.com, and a company's own GitLab ("work")."""
+    now = now or time.time()
+    m, h = 60, 3600
+    work = demo_data(now)
+    work["login"] = "you"
+    pub = {"login": "you", "base": "https://gitlab.com", "at": now,
+           "mrs": [{"iid": 12, "title": "Docs: a plainer install guide", "url": "https://gitlab.com/lantern-oss/lantern/"
+                    "-/merge_requests/12", "project": "lantern-oss/lantern", "author": "kit", "updated": now - 70 * m,
+                    "draft": False, "why": "review", "conflicts": False, "pipeline": "success"}],
+           "todos": [{"id": 9, "action": "mentioned", "words": TODO_WORDS["mentioned"], "title": "Packaging for Arch",
+                      "kind": "Issue", "ref": "#88", "project": "lantern-oss/lantern", "author": "rue", "at": now - 5 * h,
+                      "url": "https://gitlab.com/lantern-oss/lantern/-/issues/88"}],
+           "projects": [{"id": 7, "path": "lantern-oss/lantern", "name": "lantern", "url": "https://gitlab.com/"
+                         "lantern-oss/lantern", "stars": 210, "active": now - 3 * h}],
+           "pipelines": {7: [{"id": 500 + j, "status": "failed" if j == 4 else "success", "ref": "main",
+                              "url": "https://gitlab.com/lantern-oss/lantern/-/pipelines/" + str(500 + j),
+                              "updated": now - 3 * h - j * 6 * h, "source": "push"} for j in range(12)]}}
+    return merge_feeds([("gitlab.com", pub), ("work", work)])
+
+
 # ------------------------------------------------------------------ the panel
 class GitLabPanel(K.KitPanel):
     name, title = "gitlab", "GITLAB"
@@ -178,24 +231,30 @@ class GitLabPanel(K.KitPanel):
     def __init__(self, cfg=None, wake=None):
         super().__init__(cfg, wake)
         if K.demo():
-            self.acct, self.poll, self.demo = None, None, demo_data()
+            self.accts, self.demo = None, demo_data()          # demo_two(): two accounts, for pictures
             return
         self.demo = None
-        self.acct = K.Account(self, "gitlab")
-        import bromigos_account as A
-        self.api = Client(lambda: A.base("gitlab"), self.acct.token)
-        self.poll = self.poller(self.fetch, every=EVERY, idle=EVERY)
+        self.accts = K.Accounts(self, "gitlab", [("poll", self.fetch, EVERY, EVERY)])
 
     def base(self):
         if self.demo:
             return self.demo["base"]
-        import bromigos_account as A
-        return A.base("gitlab")
+        shown = self.accts.signed_in() or self.accts.shown()
+        return shown[0].base()
 
-    def fetch(self):
-        if not self.acct.status().get("signed_in"):
+    def feed(self):
+        """The data to draw: the demo's, or every shown account's, merged."""
+        if self.demo:
+            return self.demo
+        return merge_feeds([(a.label(), d) for a, d in self.accts.data()])
+
+    def error(self):
+        return None if self.demo else self.accts.error_words()
+
+    def fetch(self, acct):
+        if not acct.status().get("signed_in"):
             return None
-        api = self.api
+        api = Client(acct.base, acct.token)
         me = api.get("/user")
         user = me.get("username")
         assigned = parse_mrs(api.get("/merge_requests", scope="assigned_to_me", state="opened", per_page=30), "assigned")
@@ -213,32 +272,44 @@ class GitLabPanel(K.KitPanel):
             except urllib.error.HTTPError:
                 pipes[p["id"]] = []
         return {"login": user, "mrs": merge_mrs(review, assigned), "todos": todos, "projects": projects,
-                "pipelines": pipes, "at": time.time(), "base": self.base()}
+                "pipelines": pipes, "at": time.time(), "base": acct.base()}
 
     # ---- drawing
+    def many(self):
+        d = self.demo
+        return len(d.get("accounts") or []) > 1 if d else self.accts.many()
+
     def draw(self, cr, w, h):
         cls = self.size_class(w, h)
-        d = self.demo or (self.poll.data if self.poll else None)
+        d = self.feed()
         host = urllib.parse.urlparse(self.base()).hostname or "gitlab"
-        right = (f"@{d['login']}" if d and d.get("login") else host) if cls == "compact" else \
-            (f"@{d['login']} · {host}" if d and d.get("login") else host)
+        if d and len(d.get("accounts") or []) > 1:
+            labs = [a["label"] for a in d["accounts"]]
+            right = f"{len(labs)} ACCOUNTS" if cls == "compact" else " + ".join(labs)
+            where = " and ".join(f"{a['label']} (@{a['login'] or '?'} on "
+                                 f"{urllib.parse.urlparse(a['base'] or '').hostname or '?'})" for a in d["accounts"])
+        else:
+            right = (f"@{d['login']}" if d and d.get("login") else host) if cls == "compact" else \
+                (f"@{d['login']} · {host}" if d and d.get("login") else host)
+            where = host
         top = D.frame(cr, w, h, self.title, right)
-        self.region(0, 0, w, 34, f"Your GitLab feed on {host}: merge requests waiting on you, your to-dos and your "
+        self.region(0, 0, w, 34, f"Your GitLab feed on {where}: merge requests waiting on you, your to-dos and your "
                     "projects' pipelines, read every 4 minutes while seen. Click a row to open it.",
                     lambda: K.open_url(self.base() + "/dashboard/todos"))
-        if not self.demo and not self.acct.status().get("signed_in"):
-            self.acct.draw_signin(cr, w, h, top, "The GitLab panel reads your merge requests, to-dos and pipelines")
+        if not self.demo and not self.accts.signed_in():
+            self.accts.first().draw_signin(cr, w, h, top, "The GitLab panel reads your merge requests, to-dos and "
+                                           "pipelines")
             return
+        err = self.error()
         if d is None:
-            err = self.poll.error if self.poll else None
             D.label(cr, 16, top + 6, "NO ANSWER" if err else "READING…", "amber" if err else "static")
             if err:
                 D.text(cr, 16, top + 26, err, 11, "soft", "regular", width=w - 32, wrap=True)
             self.region(0, top, w, h - top, err or f"Reading {host} for the first time")
             return
-        if self.poll and self.poll.error:
+        if err:
             D.label(cr, w - 16, h - 18, "STALE", "amber", size=10, align="right")
-            self.region(w - 80, h - 20, 64, 16, f"The last read failed ({self.poll.error}); showing the one before")
+            self.region(w - 80, h - 20, 64, 16, f"The last read failed ({err}); showing the one before")
         x0, x1 = 16, w - 16
         if cls == "compact":
             self._counts(cr, d, x0, x1, top, h)
@@ -311,14 +382,16 @@ class GitLabPanel(K.KitPanel):
         two = rowh > 24
         D.text(cr, x0 + 14 + tw, y + 1, m["title"], 11, "static" if m["draft"] else "soft", "medium",
                width=x1 - x0 - 14 - tw - (0 if two else 210))
-        meta = f"{m['project']}!{m['iid']} · {m['author'] or '?'} · {K.ago(m['updated'])}" + \
+        acct = f"{m['acct']} · " if m.get("acct") else ""
+        meta = f"{acct}{m['project']}!{m['iid']} · {m['author'] or '?'} · {K.ago(m['updated'])}" + \
             (" · CONFLICTS" if m["conflicts"] else "")
         if two:
             D.text(cr, x0 + 14 + tw, y + 16, meta, 10, "danger" if m["conflicts"] else "static", "regular",
                    width=x1 - x0 - 14 - tw)
         else:
             D.text(cr, x1, y + 2, meta, 10, "static", "regular", align="right", width=206)
-        self.region(x0, y, x1 - x0, rowh - 2, f"{m['title']}: merge request {m['project']}!{m['iid']} by "
+        self.region(x0, y, x1 - x0, rowh - 2, f"{m['title']}: merge request {m['project']}!{m['iid']}"
+                    + (f" on {m['acct']}" if m.get("acct") else "") + " by "
                     f"{m['author'] or '?'}, {'your review is asked' if m['why'] == 'review' else 'assigned to you'}, "
                     f"updated {K.ago(m['updated'])} ago; pipeline {word}"
                     + (", a draft" if m["draft"] else "") + (", has merge conflicts" if m["conflicts"] else "")
@@ -330,13 +403,15 @@ class GitLabPanel(K.KitPanel):
         D.dot(cr, x0 + 4, y + 8, 3, col, glow=False)
         two = rowh > 24
         D.text(cr, x0 + 14, y + 1, t["title"], 11, "soft", "medium", width=x1 - x0 - 14 - (0 if two else 210))
-        meta = f"{t['author'] or '?'} {t['words']} · {t['project'].split('/')[-1]}{t['ref']} · {K.ago(t['at'])}"
+        meta = (f"{t['acct']} · " if t.get("acct") else "") + \
+            f"{t['author'] or '?'} {t['words']} · {t['project'].split('/')[-1]}{t['ref']} · {K.ago(t['at'])}"
         if two:
             D.text(cr, x0 + 14, y + 16, meta, 10, "static", "regular", width=x1 - x0 - 14)
         else:
             D.text(cr, x1, y + 2, meta, 10, "static", "regular", align="right", width=206)
         self.region(x0, y, x1 - x0, rowh - 2, f"To-do: {t['author'] or 'someone'} {t['words']} on {t['title']} "
-                    f"({t['project']}{t['ref']}), {K.ago(t['at'])} ago. Click to open it.",
+                    f"({t['project']}{t['ref']}" + (f" on {t['acct']}" if t.get("acct") else "") +
+                    f"), {K.ago(t['at'])} ago. Click to open it.",
                     lambda u=t["url"]: K.open_url(u))
 
     def _pipes(self, cr, d, x0, x1, top, bottom, strip=False, big=False):
@@ -357,8 +432,15 @@ class GitLabPanel(K.KitPanel):
             col, word = status_of(last["status"]) if last else ("static", "no pipelines")
             D.dot(cr, x0 + 4, y + rowh / 2 - 2, 4 if big else 3, col,
                   glow=bool(last) and last["status"] == "running" and K.motion() == "full")
-            D.text(cr, x0 + 14, y + (rowh - 16) / 2, p["path"].split("/")[-1], 11, "soft", "medium", width=name_w - 14)
-            self.region(x0, y, name_w, rowh - 2, f"{p['path']}: latest pipeline {word}"
+            nm = p["path"].split("/")[-1]
+            if p.get("acct"):
+                tw = D.text(cr, x0 + 14, y + (rowh - 14) / 2, p["acct"], 9, "static", "semibold",
+                            width=name_w * 0.4)[0]
+                D.text(cr, x0 + 20 + tw, y + (rowh - 16) / 2, nm, 11, "soft", "medium", width=name_w - 20 - tw)
+            else:
+                D.text(cr, x0 + 14, y + (rowh - 16) / 2, nm, 11, "soft", "medium", width=name_w - 14)
+            self.region(x0, y, name_w, rowh - 2, f"{p['path']}" + (f" on {p['acct']}" if p.get("acct") else "")
+                        + f": latest pipeline {word}"
                         + (f" on {last['ref']}, {K.ago(last['updated'])} ago" if last else "")
                         + f"; {p['stars']} stars; active {K.ago(p['active'])} ago. Click to open its pipelines.",
                         lambda u=(p["url"] or "") + "/-/pipelines": K.open_url(u))

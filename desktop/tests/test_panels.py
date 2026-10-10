@@ -195,7 +195,7 @@ class PanelsTest(CmdTest):
                     "                {'key': 'gh', 'label': 'GitHub', 'kind': 'secret-signin', 'provider': 'github'}]\n\n"
                     "    def draw(self, cr, w, h):\n        pass\n\nPANEL = Hello\n")
         d = self.cmd("panels", "settings", "hello")
-        self.assertEqual(d["values"], {"place": "Oslo", "hosts": [], "every": 60})
+        self.assertEqual(d["values"], {"place": "Oslo", "hosts": [], "every": 60, "gh": []})   # gh: every account
         self.assertEqual([f["kind"] for f in d["form"]], ["text", "list", "number", "secret-signin"])
         d = self.cmd("panels", "set", "hello", "place", "Bergen")
         self.assertEqual(d["values"]["place"], "Bergen")
@@ -204,7 +204,8 @@ class PanelsTest(CmdTest):
         self.assertIn('hosts = ["a", "b"]', self.read(".config", "bromigos", "widgets", "hello.toml"))
         self.assertIn("number", self.cmd("panels", "set", "hello", "every", "soon", ok=False)["error"])
         self.cmd("panels", "set", "hello", "every", "5", ok=False)
-        self.cmd("panels", "set", "hello", "gh", "token", ok=False)            # a sign-in is never a value
+        self.cmd("panels", "set", "hello", "gh", "token", ok=False)            # a sign-in's value is account names
+        self.assertEqual(self.cmd("panels", "set", "hello", "gh", "default")["values"]["gh"], ["default"])
         self.cmd("panels", "set", "hello", "nope", "x", ok=False)
         d = self.cmd("panels", "unset", "hello", "place")
         self.assertEqual(d["values"]["place"], "Oslo")

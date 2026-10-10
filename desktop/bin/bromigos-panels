@@ -409,7 +409,7 @@ def set_cmd(args):
     field = next((f for f in it["form"] if f["key"] == args[1]), None)
     if field is None:
         raise Fail(f"{args[0]} has no setting {args[1]!r} (it has: {', '.join(f['key'] for f in it['form'])})")
-    raw = args[2:] if field["kind"] == "list" else " ".join(args[2:])
+    raw = args[2:] if field["kind"] in ("list", "secret-signin") else " ".join(args[2:])
     try:
         vals = WS.set_value(it["name"], it["form"], args[1], raw, it["title"].title())
     except ValueError as e:

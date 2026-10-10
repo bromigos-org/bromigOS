@@ -7,6 +7,9 @@ It works with NOW PLAYING (nowplaying.py): when the Spotify app runs on this mac
 MPRIS player takes the play, pause and skip clicks (instant, and free accounts too),
 while the Web API adds the device, the queue and the history. Without the app, the Web
 API carries the clicks, which Spotify allows for Premium accounts only.
+
+It shows one account. With several Spotify accounts, it's the first one its `account`
+setting lists, or else the first one signed in.
 """
 import os
 import sys
@@ -134,12 +137,21 @@ class SpotifyPanel(K.KitPanel):
         self.mpris_at = 0.0
         self.last_real = 0.0
         if K.demo():
-            self.acct = None
+            self.accts = None
             self.player, self.queue, self.recent = dict(DEMO_PLAYER), list(DEMO_QUEUE), list(DEMO_RECENT)
             return
-        self.acct = K.Account(self, "spotify")
+        # one player: with several Spotify accounts, the first one the account setting lists
+        # (or the first signed in)
+        self.accts = K.Accounts(self, "spotify")
         self.p_now = self.poller(self.fetch_player, every=5, name="player")
         self.p_lists = self.poller(self.fetch_lists, every=60, idle=90, name="lists")
+
+    @property
+    def acct(self):
+        if self.accts is None:
+            return None
+        signed = self.accts.signed_in()
+        return signed[0] if signed else self.accts.first()
 
     # ---- data
     def api(self, path, method=None, data=None):

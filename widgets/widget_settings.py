@@ -15,8 +15,10 @@ A panel declares its fields:
 
 and reads them with `self.setting(key)` (panels.Panel), which takes, last wins: the
 field's default, the panel's keys in layout.json, then <name>.toml. The file is read
-again when it changes. A `secret-signin` field is never a value: it's a sign-in through
-bromigos_account, whose tokens live in the keyring.
+again when it changes. A `secret-signin` field is a sign-in through bromigos_account,
+whose tokens live in the keyring. Its value is only which of that service's accounts the
+widget shows, by name (["default", "work"]); empty, the default, means every signed-in
+one. A token is never a value.
 
 Settings › Widgets draws a form from the list, and `bromigos panels settings|set|unset`
 read and write the file. Writes replace the file in one step and keep a symlink a
@@ -24,6 +26,8 @@ symlink, like layout.json.
 """
 import json
 import os
+import re
+import sys
 
 KINDS = ("text", "list", "number", "bool", "choice", "secret-signin")
 
@@ -58,9 +62,11 @@ def values(name, schema, layout=None, stored=None):
     stored = read_file(name) if stored is None else stored
     out = {}
     for f in fields(schema):
-        if f["kind"] == "secret-signin":
-            continue
         k = f["key"]
+        if f["kind"] == "secret-signin":
+            v = stored.get(k, (layout or {}).get(k, []))
+            out[k] = [str(x) for x in v] if isinstance(v, list) else []
+            continue
         v = f.get("default", [] if f["kind"] == "list" else "" if f["kind"] in ("text", "choice") else None)
         if layout and k in layout:
             v = layout[k]
@@ -105,7 +111,49 @@ def parse(field, raw):
         if s not in allowed:
             raise ValueError(f"{label}: one of {', '.join(map(str, allowed))}")
         return s
-    raise ValueError(f"{label}: a sign-in, not a value (use the form's Sign in)")
+    if kind == "secret-signin":
+        return account_names(field, raw)
+    raise ValueError(f"{label}: not a kind of setting")
+
+
+ACCOUNT_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+
+
+def _account_helper():
+    try:
+        import bromigos_account
+        return bromigos_account
+    except ImportError:
+        lib = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "lib")
+        if os.path.isfile(os.path.join(lib, "bromigos_account.py")):
+            sys.path.append(lib)
+            try:
+                import bromigos_account
+                return bromigos_account
+            except ImportError:
+                return None
+    return None
+
+
+def account_names(field, raw):
+    """A secret-signin field's value: the names of the accounts the widget shows. Each must
+    be one of the provider's accounts (bromigos account list), so a token pasted here by
+    mistake is refused, never saved."""
+    label = field.get("label") or field["key"]
+    items = raw if isinstance(raw, list) else str(raw).replace(",", "\n").split()
+    names = [str(x).strip() for x in items if str(x).strip()]
+    A = _account_helper()
+    known = None
+    if A is not None and field.get("provider") in getattr(A, "PROVIDERS", {}) and hasattr(A, "names"):
+        try:
+            known = A.names(field["provider"])
+        except Exception:                              # noqa: BLE001  no keyring: check the names' shape only
+            known = None
+    for n in names:
+        if not ACCOUNT_NAME.match(n) or (known is not None and n not in known):
+            raise ValueError(f"{label}: account names, such as default or work"
+                             + (f" (this one has {', '.join(known)})" if known else ""))
+    return list(dict.fromkeys(names))
 
 
 def _toml(v):

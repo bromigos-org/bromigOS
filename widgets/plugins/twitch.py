@@ -6,6 +6,10 @@ lib/bromigos_account.py (provider "twitch"), with a client ID from your own Twit
 and no secret. The token stays in your keyring. More channels to watch go in
 ~/.config/bromigos/widgets/twitch.toml (`channels = ["a_login", …]`).
 
+Several Twitch accounts: the `account` setting lists which to show (every signed-in one
+when empty). The live channels they follow are merged, each tagged with the account that
+follows it, and "your channel" is whichever of yours is live (else the first).
+
 Large adds the featured stream's thumbnail and its chat activity: messages a minute, read
 from Twitch's anonymous read-only chat (IRC, as a "justinfan" guest). It counts messages;
 it never keeps or shows what they say. Chat is connected only while the panel is large,
@@ -58,6 +62,30 @@ def merge_live(followed, watched, me_login=None):
     rows = [s for k, s in out.items() if k and k != me_login]
     rows.sort(key=lambda s: -s["viewers"])
     return rows
+
+
+def merge_accounts(feeds):
+    """One reading from several accounts' [(label, data)]: your channel is the first one
+    that's live (else the first account's), and the live channels are merged, none of your
+    own, most viewers first, each tagged with the account that follows it ("acct")."""
+    feeds = [(lab, d) for lab, d in feeds if d]
+    if not feeds:
+        return None
+    if len(feeds) == 1:
+        return feeds[0][1]
+    lead_lab, lead = next(((lab, d) for lab, d in feeds if d.get("mine")), feeds[0])
+    mine = {(d.get("me") or {}).get("login") for _, d in feeds}
+    live = {}
+    for lab, d in feeds:
+        for row in d.get("live") or []:
+            if row["login"] in mine:
+                continue
+            have = live.get(row["login"])
+            if have is None or (row.get("followed") and not have.get("followed")):
+                live[row["login"]] = dict(row, acct=lab)
+    rows = sorted(live.values(), key=lambda r: -r["viewers"])
+    return dict(lead, live=rows, acct=lead_lab, accounts=[{"label": lab, "login": (d.get("me") or {}).get("login"),
+                                                           "live": bool(d.get("mine"))} for lab, d in feeds])
 
 
 def uptime(started):
@@ -233,24 +261,26 @@ class TwitchPanel(K.KitPanel):
         self.demo = K.demo()                          # made-up readings, for pictures
         self.chat = None
         self.thumb = None                       # (login, bytes) of the featured stream's picture
-        self.auth_error = None
+        self.auth_error = {}                    # account name -> why Twitch refused its sign-in
         if self.demo:
-            self.acc = None
+            self.accts = None
             self.data = demo_data()
             self.chat = DemoChat("relay_keeper")
-            self.poll = None
             return
-        self.acc = K.Account(self, "twitch")
         self.data = None
-        self.poll = self.poller(self.fetch, every=POLL, name="helix")
+        self.accts = K.Accounts(self, "twitch", [("helix", self.fetch, POLL, None)])
+
+    def current(self):
+        """Every shown account's reading, merged (merge_accounts)."""
+        return merge_accounts([(a.label(), d) for a, d in self.accts.data("helix")])
 
     # ---- data
-    def _get(self, path, **q):
+    def _get(self, acct, path, **q):
         import bromigos_account as A
-        tok = A.token("twitch")
+        tok = acct.token()
         if not tok:
             raise PermissionError("signed out")
-        cid = A.config("twitch").get("client_id") or ""
+        cid = acct.config().get("client_id") or ""
         qs = urllib.parse.urlencode([(k, v) for k, vs in q.items() for v in (vs if isinstance(vs, list) else [vs])])
         url = f"{HELIX}/{path}" + (f"?{qs}" if qs else "")
         try:
@@ -259,29 +289,31 @@ class TwitchPanel(K.KitPanel):
             if e.code != 401:
                 raise
             # the token may have been revoked or gone stale: refresh once, then ask again
-            new = A.refresh("twitch")
+            new = acct.refresh()
             if not new:
                 raise PermissionError("Twitch didn't accept the stored sign-in (unused for 30 days, or revoked)")
             return A.http_json(url, headers={"Authorization": f"Bearer {new}", "Client-Id": cid})
 
-    def fetch(self):
-        if not self.acc.status().get("signed_in"):
-            return self.data
+    def fetch(self, acct):
+        pl = self.accts.poller(acct, "helix")
+        if not acct.status().get("signed_in"):
+            return pl.data if pl else None
         try:
-            me = (self._get("users").get("data") or [{}])[0]
+            me = (self._get(acct, "users").get("data") or [{}])[0]
         except PermissionError as e:
-            self.auth_error = str(e)
+            self.auth_error[acct.name] = str(e)
             return None
-        self.auth_error = None
+        self.auth_error.pop(acct.name, None)
+        get = lambda path, **q: self._get(acct, path, **q)  # noqa: E731
         uid = me.get("id")
         out = {"me": {"id": uid, "login": me.get("login"), "name": me.get("display_name") or me.get("login"),
                       "image": me.get("profile_image_url")}, "at": time.time()}
-        mine = [parse_stream(s) for s in self._get("streams", user_id=uid).get("data") or []]
+        mine = [parse_stream(s) for s in get("streams", user_id=uid).get("data") or []]
         out["mine"] = mine[0] if mine else None
-        ch = (self._get("channels", broadcaster_id=uid).get("data") or [{}])[0]
+        ch = (get("channels", broadcaster_id=uid).get("data") or [{}])[0]
         out["channel"] = {"title": ch.get("title") or "", "game": ch.get("game_name") or ""}
         try:
-            out["followers"] = self._get("channels/followers", broadcaster_id=uid, first=1).get("total")
+            out["followers"] = get("channels/followers", broadcaster_id=uid, first=1).get("total")
         except (urllib.error.HTTPError, OSError):
             out["followers"] = None
         followed = []
@@ -290,7 +322,7 @@ class TwitchPanel(K.KitPanel):
             q = {"user_id": uid, "first": 100}
             if cursor:
                 q["after"] = cursor
-            page = self._get("streams/followed", **q)
+            page = get("streams/followed", **q)
             followed += [parse_stream(s) for s in page.get("data") or []]
             cursor = (page.get("pagination") or {}).get("cursor")
             if not cursor:
@@ -298,7 +330,7 @@ class TwitchPanel(K.KitPanel):
         watched = []
         names = self.conf.list("channels")[:100]
         if names:
-            watched = [parse_stream(s) for s in self._get("streams", user_login=names).get("data") or []]
+            watched = [parse_stream(s) for s in get("streams", user_login=names).get("data") or []]
         out["live"] = merge_live(followed, watched, out["me"]["login"])
         out["watched"] = names
         return out
@@ -328,7 +360,7 @@ class TwitchPanel(K.KitPanel):
         """Chat runs only while large, seen and the featured stream is live."""
         if self.demo:
             return
-        d = self.poll.data if self.poll else None
+        d = self.current()
         if d:
             self.data = d
         feat = self.featured(self.data)
@@ -347,7 +379,7 @@ class TwitchPanel(K.KitPanel):
     # ---- drawing
     def draw(self, cr, w, h):
         cls = self.size_class(w, h)
-        d = self.data if self.demo else (self.poll.data if self.poll else None) or self.data
+        d = self.data if self.demo else self.current() or self.data
         me = (d or {}).get("me") or {}
         live_n = len((d or {}).get("live") or [])
         right = None
@@ -358,17 +390,20 @@ class TwitchPanel(K.KitPanel):
                     + (f" ({live_n})" if d else "") + ". Read every minute while the panel is seen. Click to open Twitch.",
                     lambda: K.open_url("https://www.twitch.tv/directory/following"))
         if not self.demo:
-            st = self.acc.status()
-            if not st.get("signed_in") or self.auth_error:
-                if self.auth_error and st.get("signed_in"):
-                    self.empty(cr, w, h, top, "SIGN IN AGAIN", self.auth_error + ".",
-                               button=("Sign in", "Sign in to Twitch again with the device flow",
-                                       self.acc.signin.start))
+            signed = self.accts.signed_in()
+            bad = [a for a in signed if self.auth_error.get(a.name)]
+            if not signed or len(bad) == len(signed):
+                if bad:
+                    a = bad[0]
+                    self.empty(cr, w, h, top, "SIGN IN AGAIN", self.auth_error[a.name] + ".",
+                               button=("Sign in", f"Sign in to {a.title()} again with the device flow",
+                                       a.signin.start))
                 else:
-                    self.acc.draw_signin(cr, w, h, top, "The Twitch panel reads your channel and the channels you follow")
+                    self.accts.first().draw_signin(cr, w, h, top, "The Twitch panel reads your channel and the "
+                                                   "channels you follow")
                 return
             if d is None:
-                err = self.poll.error if self.poll else None
+                err = self.accts.error_words("helix")
                 self.empty(cr, w, h, top, "NO ANSWER FROM TWITCH" if err else "READING TWITCH…", err or "",
                            color="amber" if err else "static")
                 return
@@ -458,7 +493,8 @@ class TwitchPanel(K.KitPanel):
         rh = 34 if titles else 20
         D.dot(cr, x0 + 4, y + 8, 3, "danger", glow=False)
         D.text(cr, x0 + 14, y, s["name"], 12, "soft", "semibold", width=(x1 - x0) * 0.42)
-        D.text(cr, x0 + 14 + (x1 - x0) * 0.44, y + 1, s["game"], 11, "static", "regular", width=(x1 - x0) * 0.36)
+        game = (f"{s['acct']} · " if s.get("acct") else "") + s["game"]
+        D.text(cr, x0 + 14 + (x1 - x0) * 0.44, y + 1, game, 11, "static", "regular", width=(x1 - x0) * 0.36)
         D.text(cr, x1, y, f"{K.short(s['viewers'])}", 12, "phosphor", "semibold", align="right")
         if titles:
             D.text(cr, x0 + 14, y + 17, s["title"], 10, "static", "regular", width=x1 - x0 - 14)
@@ -466,6 +502,7 @@ class TwitchPanel(K.KitPanel):
                     f"{s['name']} is live: {s['viewers']:,} watching, for {uptime(s['started'])}, in "
                     f"{s['game'] or 'no category'}. “{s['title']}”"
                     + ("" if s.get("followed", True) else " (a channel from your settings; you don't follow it)")
+                    + (f" (followed on {s['acct']})" if s.get("acct") and s.get("followed", True) else "")
                     + ". Click to open it on twitch.tv.", lambda u=channel_url(s["login"]): K.open_url(u))
         return rh
 

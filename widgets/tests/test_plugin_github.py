@@ -102,5 +102,51 @@ class Panel(unittest.TestCase):
         PT.every_class(self, PT.make(G.GitHubPanel, demo=True))
 
 
+class SeveralAccounts(unittest.TestCase):
+    """github.com and a GitHub Enterprise Server in one panel."""
+
+    def test_enterprise_addresses(self):
+        seen = []
+
+        class R:
+            headers = {}
+
+            def read(self):
+                return b'{"data": {"viewer": {}}}'
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake(req, timeout=None):
+            seen.append(req.full_url)
+            return R()
+        c = G.Client(lambda: "tok", lambda: "https://github.example.org/api/v3")
+        with mock.patch.object(G.urllib.request, "urlopen", fake):
+            c.get("/user")
+            c.graphql("query{viewer{login}}")
+        self.assertEqual(seen, ["https://github.example.org/api/v3/user", "https://github.example.org/api/graphql"])
+        api = "https://github.example.org/api/v3"
+        self.assertEqual(G.web_of(api), "https://github.example.org")
+        self.assertEqual(G.html_url(api + "/repos/corp/app/pulls/7", api=api), "https://github.example.org/corp/app/pull/7")
+        self.assertEqual(G.html_url("https://api.github.com/repos/o/r/pulls/5"), "https://github.com/o/r/pull/5")
+
+    def test_rows_merged_tagged_and_graphs_added(self):
+        a, b = G.demo_data(1000.0), G.demo_data(1000.0)
+        b["reviews"] = [dict(b["reviews"][0], number=9, updated=999.0, url="https://github.example.org/corp/app/pull/9")]
+        m = G.merge_feeds([("github.com", a), ("work", b)])
+        self.assertEqual([x["label"] for x in m["accounts"]], ["github.com", "work"])
+        self.assertEqual(m["reviews"][0]["acct"], "work")                             # newest first, across both
+        self.assertEqual(len(m["notifications"]), 2 * len(a["notifications"]))
+        self.assertEqual(m["contrib"]["total"], 2 * a["contrib"]["total"])
+        self.assertNotIn("acct", G.merge_feeds([("github.com", a)])["reviews"][0])    # one account: as before
+        p = PT.make(G.GitHubPanel, demo=True)
+        p.demo = m
+        PT.every_class(self, p)
+        self.assertIn("Accounts: github.com (@you), work (@you).", " ".join(PT.draw(p, 460, 320)))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -137,6 +137,7 @@ class Poller:
         self.runs = 0
         self._wake = threading.Event()
         self.name = name
+        self.stopped = False
         if start:
             threading.Thread(target=self._loop, daemon=True, name=f"{panel.name}-{name}").start()
 
@@ -169,9 +170,14 @@ class Poller:
             except Exception:                          # noqa: BLE001
                 pass
 
+    def stop(self):
+        """Stop for good (an account the panel no longer shows): its thread ends."""
+        self.stopped = True
+        self._wake.set()
+
     def _loop(self):
         first = True
-        while True:
+        while not self.stopped:
             if first or (self.seen() and self.stale()):
                 first = False
                 self.run_once()
@@ -203,6 +209,7 @@ class KitPanel(P.Panel):
         self.conf = Settings((cfg or {}).get("name") or self.name, cfg, self.settings)
         self._conf_v = self.conf.version
         self.last_class = None
+        self.account_sets = []                       # the Accounts this panel shows (settings_changed re-reads them)
 
     def poller(self, fn, every, idle=None, name="poll", start=True):
         p = Poller(self, fn, every, idle, name, start)
@@ -221,6 +228,8 @@ class KitPanel(P.Panel):
         super().render(cr, w, h)
 
     def settings_changed(self):
+        for a in self.account_sets:
+            a.sync()
         for p in self.pollers:
             p.kick()
 
@@ -285,16 +294,28 @@ class KitPanel(P.Panel):
 
 # ------------------------------------------------------------------ the account sign-in, drawn
 class Account:
-    """A panel's sign-in to one provider (lib/bromigos_account.py), with what to draw."""
+    """A panel's sign-in to one account at a provider (lib/bromigos_account.py), with what
+    to draw. name: the account ("default", the one every service starts with, or a named
+    one such as "work")."""
 
-    def __init__(self, panel, provider):
+    def __init__(self, panel, provider, name="default", on_change=None):
         import bromigos_account as A
-        self.A, self.panel, self.provider = A, panel, provider
-        self.signin = A.Signin(provider, on_change=lambda s: self._changed())
+        self.A, self.panel, self.provider, self.name = A, panel, provider, name
+        self.on_change = on_change
+        try:
+            self.signin = A.Signin(provider, on_change=lambda s: self._changed(), account=name)
+        except TypeError:                              # an older helper, with one account per service
+            self.signin = A.Signin(provider, on_change=lambda s: self._changed())
         self._st, self._st_at = None, 0.0
+        self._label = None
+
+    def _kw(self):
+        return {} if self.name == "default" else {"account": self.name}
 
     def _changed(self):
         self._st_at = 0.0
+        if self.on_change:
+            self.on_change(self)
         if self.signin.state == "signed_in":
             for p in self.panel.pollers:
                 p.kick()
@@ -309,17 +330,40 @@ class Account:
         """status() from the helper, asked at most every 10 s (it reads the keyring)."""
         if self._st is None or time.monotonic() - self._st_at > 10:
             try:
-                self._st = self.A.status(self.provider)
+                self._st = self.A.status(self.provider, **self._kw())
             except Exception as e:                     # noqa: BLE001  no keyring, …
                 self._st = {"signed_in": False, "who": None, "needs": [], "via": None, "error": str(e)[:120]}
             self._st_at = time.monotonic()
+            self._label = None
         return self._st
 
     def token(self):
-        return self.A.token(self.provider)
+        return self.A.token(self.provider, **self._kw())
+
+    def refresh(self):
+        return self.A.refresh(self.provider, **self._kw())
+
+    def config(self):
+        return self.A.config(self.provider, **self._kw())
+
+    def base(self):
+        return self.A.base(self.provider, **self._kw())
+
+    def api(self):
+        return self.A.api(self.provider, **self._kw())
+
+    def label(self):
+        """A short tag for this account's rows: "gitlab.com", "work"."""
+        if self._label is None:
+            try:
+                self._label = self.A.label(self.provider, **self._kw())
+            except Exception:                          # noqa: BLE001  an older helper, or an account just removed
+                self._label = self.name
+        return self._label
 
     def title(self):
-        return self.A.PROVIDERS[self.provider]["title"]
+        t = self.A.PROVIDERS[self.provider]["title"]
+        return t if self.name == "default" else f"{t} ({self.label()})"
 
     def draw_signin(self, cr, w, h, top, what):
         """The signed-out state: what's needed, a sign-in button, or the code to enter.
@@ -347,9 +391,10 @@ class Account:
         A = self.A
         if st.get("needs"):
             prov = A.PROVIDERS[self.provider]
+            cmd = f"bromigos account configure {self.provider}" + (f" --as {self.name}" if self.name != "default" else "")
             p.empty(cr, w, h, top, f"{t.upper()} ISN'T SET UP",
                     f"{what.rstrip('.')}. It needs your own {t} app's client ID. {prov['app_help']} Then run: "
-                    f"bromigos account configure {self.provider} client_id=YOUR_ID",
+                    f"{cmd} client_id=YOUR_ID",
                     tip=f"{t} sign-in needs a client ID in {home_path(A.accounts_path())}. {prov['app_help']}")
             return
         err = s.error if s.state == "error" else st.get("error")
@@ -357,6 +402,126 @@ class Account:
                 (f"Last try: {err}. " if err else "") + f"{what.rstrip('.')}. Sign in once; the token stays in your keyring.",
                 button=("Sign in", f"Sign in to {t}: a code to enter on {t}'s site (or a browser page), "
                         "then the token is kept in your login keyring", self.signin.start))
+
+
+class Accounts:
+    """The accounts a panel shows at one provider, for a widget that can show several at
+    once (gitlab.com and your company's GitLab, say).
+
+    Which ones: the value of the panel's `secret-signin` setting for this provider, a list
+    of account names. Empty (the default), it's every signed-in account; with none signed
+    in, the default account, so the panel can offer its sign-in.
+
+    pollers: [(name, fn, every, idle)]. Each account gets its own Poller for each, calling
+    fn(account), so every account keeps its own pace and rate limit. data(name) gives
+    [(account, its data)] for the signed-in accounts that have some.
+
+        self.accts = K.Accounts(self, "gitlab", [("poll", self.fetch, 240, 240)])
+        feeds = self.accts.data()                  # [(K.Account, data), …]
+    """
+
+    def __init__(self, panel, provider, pollers=(), key=None):
+        import bromigos_account as A
+        self.A, self.panel, self.provider = A, panel, provider
+        self.specs = list(pollers)
+        self.key = key or next((f["key"] for f in getattr(panel, "settings", []) or []
+                                if isinstance(f, dict) and f.get("kind") == "secret-signin"
+                                and f.get("provider") == provider), "account")
+        self.by_name, self.polls = {}, {}            # name -> Account; (name, poller name) -> Poller
+        self._names, self._at = None, 0.0
+        panel.account_sets.append(self)
+        self.sync()
+
+    def _all(self):
+        try:
+            return self.A.accounts(self.provider)
+        except Exception:                              # noqa: BLE001  an older helper, or no keyring
+            return [{"name": "default", "signed_in": False}]
+
+    def chosen(self):
+        """The names the setting lists that exist; None when it lists none (all signed in)."""
+        try:
+            want = self.panel.conf.list(self.key)
+        except Exception:                              # noqa: BLE001
+            want = []
+        return want or None
+
+    def sync(self):
+        """Read which accounts to show again, making and stopping their pollers."""
+        rows = self._all()
+        known = [r["name"] for r in rows]
+        want = [n for n in (self.chosen() or []) if n in known]
+        if not want:
+            want = [r["name"] for r in rows if r.get("signed_in")] or [known[0] if known else "default"]
+        for n in want:
+            if n not in self.by_name:
+                self.by_name[n] = Account(self.panel, self.provider, n, on_change=lambda a: self._dirty())
+            for pname, fn, every, idle in self.specs:
+                if (n, pname) not in self.polls:
+                    self.polls[(n, pname)] = self.panel.poller(lambda a=self.by_name[n], fn=fn: fn(a), every, idle,
+                                                               name=f"{pname}-{n}")
+        for (n, pname), pl in list(self.polls.items()):
+            if n not in want:
+                pl.stop()
+                self.polls.pop((n, pname))
+                if pl in self.panel.pollers:
+                    self.panel.pollers.remove(pl)
+        self._names, self._at = want, time.monotonic()
+        return want
+
+    def _dirty(self):
+        self._at = 0.0
+
+    def names(self):
+        if self._names is None or time.monotonic() - self._at > 10:
+            self.sync()
+        return self._names
+
+    def shown(self):
+        return [self.by_name[n] for n in self.names()]
+
+    def signed_in(self):
+        return [a for a in self.shown() if a.status().get("signed_in")]
+
+    def first(self):
+        """The account to draw a sign-in for when none shown is signed in."""
+        return self.shown()[0]
+
+    def many(self):
+        """More than one account is showing rows: each row carries its account's label."""
+        return len(self.signed_in()) > 1
+
+    def poller(self, acct, name=None):
+        return self.polls.get((acct.name, name or (self.specs[0][0] if self.specs else "poll")))
+
+    def data(self, name=None):
+        """[(account, data)] of the signed-in accounts shown whose poller has read something."""
+        out = []
+        for a in self.signed_in():
+            pl = self.poller(a, name)
+            if pl is not None and pl.data is not None:
+                out.append((a, pl.data))
+        return out
+
+    def errors(self, name=None):
+        """[(account, words)] of the last failed reads."""
+        out = []
+        for a in self.signed_in():
+            pl = self.poller(a, name)
+            if pl is not None and pl.error:
+                out.append((a, pl.error))
+        return out
+
+    def error_words(self, name=None):
+        errs = self.errors(name)
+        if not errs:
+            return None
+        if len(errs) == 1 and not self.many():
+            return errs[0][1]
+        return "; ".join(f"{a.label()}: {e}" for a, e in errs)
+
+    def labels(self):
+        return [a.label() for a in self.signed_in()]
 
 
 # ------------------------------------------------------------------ commands

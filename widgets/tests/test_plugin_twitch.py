@@ -94,5 +94,22 @@ class States(unittest.TestCase):
         PT.every_class(self, PT.make(twitch.TwitchPanel, demo=True))
 
 
+class SeveralAccounts(unittest.TestCase):
+    def test_live_merged_and_your_live_channel_leads(self):
+        def reading(login, live, mine=None):
+            return {"me": {"login": login, "name": login}, "mine": mine, "channel": {"title": "", "game": ""},
+                    "live": [dict(twitch.parse_stream(STREAM), login=lg, name=lg, viewers=v, followed=True)
+                             for lg, v in live]}
+        main = reading("relay_keeper", [("tidewatch", 1873), ("alt_me", 40)])
+        alt = reading("alt_me", [("tidewatch", 1873), ("harbourlights", 220)],
+                      mine=dict(twitch.parse_stream(STREAM), login="alt_me", viewers=40))
+        m = twitch.merge_accounts([("twitch.tv", main), ("alt", alt)])
+        self.assertEqual(m["me"]["login"], "alt_me")                                 # the one that's live
+        self.assertEqual([(r["login"], r["acct"]) for r in m["live"]],
+                         [("tidewatch", "twitch.tv"), ("harbourlights", "alt")])     # none of your own
+        self.assertIs(twitch.merge_accounts([("twitch.tv", main)]), main)
+        self.assertIsNone(twitch.merge_accounts([]))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,11 @@ else GitHub's device flow through lib/bromigos_account.py, with the token in you
 It reads every 4 minutes while the panel is seen, with conditional requests, so an
 unchanged answer costs nothing against GitHub's rate limit. The contribution graph is read
 hourly, and only while the panel is large.
+
+Several accounts: github.com and a GitHub Enterprise Server, or two github.com accounts.
+The `account` setting lists which to show (every signed-in one when empty). Their rows
+are merged, newest first, each tagged with its account's label, and the contribution
+graphs are added up. Each account is read on its own, with its own rate limit.
 """
 import json
 import os
@@ -36,8 +41,9 @@ CONTRIB_QUERY = ("query{viewer{login contributionsCollection{contributionCalenda
 class Client:
     """GET with If-None-Match: a 304 answer gives back the last copy (and costs no rate limit)."""
 
-    def __init__(self, token_fn):
+    def __init__(self, token_fn, api_fn=None):
         self.token_fn = token_fn
+        self.api_fn = api_fn or (lambda: API)           # GitHub Enterprise Server: <base>/api/v3
         self.cache = {}                                   # url -> (etag, data)
         self.remaining = None
 
@@ -49,7 +55,7 @@ class Client:
                 "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "bromigOS"}
 
     def get(self, path, **params):
-        url = API + path + ("?" + urllib.parse.urlencode(params) if params else "")
+        url = self.api_fn().rstrip("/") + path + ("?" + urllib.parse.urlencode(params) if params else "")
         h = self._headers()
         hit = self.cache.get(url)
         if hit and hit[0]:
@@ -69,7 +75,9 @@ class Client:
 
     def graphql(self, query):
         h = dict(self._headers(), **{"Content-Type": "application/json"})
-        req = urllib.request.Request(API + "/graphql", data=json.dumps({"query": query}).encode(), headers=h)
+        root = self.api_fn().rstrip("/")
+        url = root.removesuffix("/v3") + "/graphql" if root.endswith("/api/v3") else root + "/graphql"
+        req = urllib.request.Request(url, data=json.dumps({"query": query}).encode(), headers=h)
         with urllib.request.urlopen(req, timeout=20) as r:
             d = json.loads(r.read())
         if d.get("errors"):
@@ -78,11 +86,17 @@ class Client:
 
 
 # ------------------------------------------------------------------ parsing
-def html_url(api_url, kind=None):
+def web_of(api):
+    """The web root for an API root: api.github.com -> github.com; <base>/api/v3 -> <base>."""
+    api = (api or API).rstrip("/")
+    return "https://github.com" if api == API else api.removesuffix("/api/v3")
+
+
+def html_url(api_url, kind=None, api=API):
     """An API address as the page to open: repos/o/r/pulls/5 -> github.com/o/r/pull/5."""
     if not api_url:
         return None
-    u = api_url.replace("https://api.github.com/repos/", "https://github.com/")
+    u = api_url.replace(api.rstrip("/") + "/repos/", web_of(api) + "/")
     u = u.replace("/pulls/", "/pull/").replace("/commits/", "/commit/")
     if "/releases/" in u and kind == "Release":
         u = u.rsplit("/releases/", 1)[0] + "/releases"
@@ -95,7 +109,7 @@ REASONS = {"review_requested": "review asked", "mention": "mentioned", "team_men
            "manual": "subscribed", "invitation": "invitation", "approval_requested": "approval asked"}
 
 
-def parse_notifications(items):
+def parse_notifications(items, api=API):
     out = []
     for n in items or []:
         s = n.get("subject") or {}
@@ -103,14 +117,14 @@ def parse_notifications(items):
                     "repo": (n.get("repository") or {}).get("full_name") or "?", "reason": n.get("reason") or "",
                     "why": REASONS.get(n.get("reason"), (n.get("reason") or "").replace("_", " ")),
                     "unread": bool(n.get("unread")), "updated": K.iso_time(n.get("updated_at")),
-                    "url": html_url(s.get("url"), s.get("type")) or (n.get("repository") or {}).get("html_url")})
+                    "url": html_url(s.get("url"), s.get("type"), api) or (n.get("repository") or {}).get("html_url")})
     return out
 
 
-def parse_search(d):
+def parse_search(d, api=API):
     out = []
     for it in (d or {}).get("items") or []:
-        repo = (it.get("repository_url") or "").replace("https://api.github.com/repos/", "")
+        repo = (it.get("repository_url") or "").replace(api.rstrip("/") + "/repos/", "")
         out.append({"repo": repo, "number": it.get("number"), "title": it.get("title") or "?",
                     "url": it.get("html_url"), "author": (it.get("user") or {}).get("login"),
                     "updated": K.iso_time(it.get("updated_at")), "draft": bool(it.get("draft")),
@@ -166,6 +180,42 @@ def parse_events(items, me=None):
         out.append({"actor": actor, "me": actor == me, "repo": (e.get("repo") or {}).get("name") or "?",
                     "type": e.get("type") or "", "words": event_words(e), "at": K.iso_time(e.get("created_at"))})
     out.sort(key=lambda e: -(e["at"] or 0))
+    return out
+
+
+def merge_contrib(graphs):
+    """Several accounts' contribution graphs as one: each day's counts added up."""
+    graphs = [g for g in graphs if g and g.get("weeks")]
+    if len(graphs) < 2:
+        return graphs[0] if graphs else None
+    per = {}
+    for g in graphs:
+        for wk in g["weeks"]:
+            for date, n in wk:
+                per[date] = per.get(date, 0) + n
+    base = max(graphs, key=lambda g: sum(len(w) for w in g["weeks"]))
+    return {"total": sum(g.get("total") or 0 for g in graphs),
+            "weeks": [[(date, per.get(date, 0)) for date, _ in wk] for wk in base["weeks"]]}
+
+
+LISTS = (("notifications", "updated"), ("reviews", "updated"), ("assigned", "updated"), ("mine", "updated"),
+         ("repos", "pushed"), ("events", "at"))
+
+
+def merge_feeds(feeds):
+    """One feed from several accounts' [(label, data)]: each list merged and sorted as for
+    one account, newest first, every row tagged with its account's label ("acct")."""
+    if not feeds:
+        return None
+    accts = [{"label": lab, "login": d.get("login"), "web": d.get("web") or "https://github.com"} for lab, d in feeds]
+    if len(feeds) == 1:
+        return dict(feeds[0][1], accounts=accts)
+    out = {"login": feeds[0][1].get("login"), "web": feeds[0][1].get("web"), "accounts": accts,
+           "at": max(d.get("at") or 0 for _, d in feeds), "contrib": merge_contrib([d.get("contrib") for _, d in feeds])}
+    for key, when in LISTS:
+        rows = [dict(r, acct=lab) for lab, d in feeds for r in d.get(key) or []]
+        rows.sort(key=lambda r: -(r.get(when) or 0))
+        out[key] = rows
     return out
 
 
@@ -232,7 +282,7 @@ def demo_data(now=None):
             days.append((time.strftime("%Y-%m-%d", time.localtime(t)), v))
         weeks.append(days)
     return {"login": "you", "notifications": notifs, "reviews": reviews, "assigned": assigned, "mine": mine,
-            "repos": repos, "events": events, "at": now,
+            "repos": repos, "events": events, "at": now, "web": "https://github.com",
             "contrib": {"total": sum(c for w in weeks for _, c in w), "weeks": weeks}}
 
 
@@ -264,32 +314,47 @@ class GitHubPanel(K.KitPanel):
     def __init__(self, cfg=None, wake=None):
         super().__init__(cfg, wake)
         self.offset = 0
+        self.clients = {}                               # account name -> Client (its own ETags and rate limit)
         if K.demo():
-            self.acct, self.poll, self.graph = None, None, None
+            self.accts = None
             self.demo = demo_data()
             return
         self.demo = None
-        self.acct = K.Account(self, "github")
-        self.api = Client(self.acct.token)
-        self.poll = self.poller(self.fetch, every=EVERY, idle=EVERY)
-        self.graph = self.poller(self.fetch_graph, every=GRAPH_EVERY, idle=GRAPH_EVERY, name="graph")
+        self.accts = K.Accounts(self, "github", [("poll", self.fetch, EVERY, EVERY),
+                                                 ("graph", self.fetch_graph, GRAPH_EVERY, GRAPH_EVERY)])
 
     def signed_in(self):
-        return self.demo is not None or self.acct.status().get("signed_in")
+        return self.demo is not None or bool(self.accts.signed_in())
 
-    def fetch(self):
-        if not self.acct.status().get("signed_in"):
+    def client(self, acct):
+        c = self.clients.get(acct.name)
+        if c is None:
+            c = self.clients[acct.name] = Client(acct.token, acct.api)
+        return c
+
+    def feed(self):
+        if self.demo:
+            return self.demo
+        return merge_feeds([(a.label(), d) for a, d in self.accts.data("poll")])
+
+    def web(self):
+        d = self.feed()
+        return (d or {}).get("web") or "https://github.com"
+
+    def fetch(self, acct):
+        if not acct.status().get("signed_in"):
             return None
-        api = self.api
+        api = self.client(acct)
+        root = acct.api()
         me = api.get("/user").get("login")
-        out = {"login": me, "at": time.time()}
-        out["notifications"] = parse_notifications(api.get("/notifications", per_page=30))
+        out = {"login": me, "at": time.time(), "web": web_of(root)}
+        out["notifications"] = parse_notifications(api.get("/notifications", per_page=30), root)
         out["reviews"] = parse_search(api.get("/search/issues", q="is:open is:pr review-requested:@me archived:false",
-                                              per_page=20, sort="updated"))
+                                              per_page=20, sort="updated"), root)
         out["assigned"] = parse_search(api.get("/search/issues", q="is:open assignee:@me archived:false",
-                                               per_page=20, sort="updated"))
+                                               per_page=20, sort="updated"), root)
         out["mine"] = parse_search(api.get("/search/issues", q="is:open is:pr author:@me archived:false",
-                                           per_page=20, sort="updated"))
+                                           per_page=20, sort="updated"), root)
         repos = parse_repos(api.get("/user/repos", sort="pushed", per_page=30, affiliation="owner"))
         out["repos"] = repos
         events = []
@@ -299,16 +364,23 @@ class GitHubPanel(K.KitPanel):
             except urllib.error.HTTPError:
                 continue
         events.sort(key=lambda e: -(e["at"] or 0))
-        out["events"] = events[:30]
+        out["events"] = [dict(e, web=out["web"]) for e in events[:30]]
         out["remaining"] = api.remaining
         return out
 
-    def fetch_graph(self):
-        if self.last_class != "large" or not self.acct.status().get("signed_in"):
+    def fetch_graph(self, acct):
+        pl = self.accts.poller(acct, "graph")
+        if self.last_class != "large" or not acct.status().get("signed_in"):
             self._graph_skipped = True
-            return self.graph.data if self.graph else None
+            return pl.data if pl else None
         self._graph_skipped = False
-        return parse_contrib(self.api.graphql(CONTRIB_QUERY))
+        return parse_contrib(self.client(acct).graphql(CONTRIB_QUERY))
+
+    def graph(self):
+        """(the contribution graph, added up over the accounts, or None; an error or None)."""
+        if self.demo:
+            return self.demo.get("contrib"), None
+        return merge_contrib([d for _, d in self.accts.data("graph")]), self.accts.error_words("graph")
 
     def scroll(self, dy):
         self.offset = max(0, self.offset + int(dy))
@@ -316,26 +388,33 @@ class GitHubPanel(K.KitPanel):
     # ---- drawing
     def draw(self, cr, w, h):
         cls = self.size_class(w, h)
-        d = self.demo or (self.poll.data if self.poll else None)
-        right = f"@{d['login']}" if d and d.get("login") else None
+        d = self.feed()
+        accts = (d or {}).get("accounts") or []
+        if len(accts) > 1:
+            right = f"{len(accts)} ACCOUNTS" if cls == "compact" else " + ".join(a["label"] for a in accts)
+            whose = " Accounts: " + ", ".join(f"{a['label']} (@{a['login'] or '?'})" for a in accts) + "."
+        else:
+            right = f"@{d['login']}" if d and d.get("login") else None
+            whose = ""
         top = D.frame(cr, w, h, self.title, right)
         self.region(0, 0, w, 34, "Your personal GitHub feed: notifications, what waits on you, your repositories. "
                     "Read every 4 minutes while seen (unchanged answers cost nothing). Click a row to open it. "
-                    "CI & PRs is the build board for the repositories you list.",
-                    lambda: K.open_url("https://github.com/notifications"))
+                    "CI & PRs is the build board for the repositories you list." + whose,
+                    lambda: K.open_url(self.web() + "/notifications"))
         if not self.signed_in():
-            self.acct.draw_signin(cr, w, h, top, "The GitHub panel reads your notifications, reviews and repositories")
+            self.accts.first().draw_signin(cr, w, h, top, "The GitHub panel reads your notifications, reviews and "
+                                           "repositories")
             return
+        err = None if self.demo else self.accts.error_words("poll")
         if d is None:
-            err = self.poll.error if self.poll else None
             D.label(cr, 16, top + 6, "NO ANSWER" if err else "READING…", "amber" if err else "static")
             if err:
                 D.text(cr, 16, top + 26, err, 11, "soft", "regular", width=w - 32, wrap=True)
             self.region(0, top, w, h - top, err or "Reading GitHub for the first time")
             return
-        if self.poll and self.poll.error:
+        if err:
             D.label(cr, w - 16, h - 18, "STALE", "amber", size=10, align="right")
-            self.region(w - 80, h - 20, 64, 16, f"The last read failed ({self.poll.error}); showing the one before, "
+            self.region(w - 80, h - 20, 64, 16, f"The last read failed ({err}); showing the one before, "
                         f"from {K.ago(d.get('at'))} ago")
         x0, x1 = 16, w - 16
         waiting = d["reviews"] + [a for a in d["assigned"] if a["url"] not in {r["url"] for r in d["reviews"]}]
@@ -373,11 +452,11 @@ class GitHubPanel(K.KitPanel):
 
     def _counts(self, cr, d, waiting, unread, x0, x1, top, h):
         cells = [("REVIEWS", len(d["reviews"]), "amber" if d["reviews"] else "static",
-                  f"{len(d['reviews'])} pull request(s) waiting for your review", "https://github.com/pulls/review-requested"),
+                  f"{len(d['reviews'])} pull request(s) waiting for your review", self.web() + "/pulls/review-requested"),
                  ("ASSIGNED", len(d["assigned"]), "soft", f"{len(d['assigned'])} open issue(s) or PR(s) assigned to you",
-                  "https://github.com/issues/assigned"),
+                  self.web() + "/issues/assigned"),
                  ("UNREAD", len(unread), "phosphor" if unread else "static", f"{len(unread)} unread notification(s)",
-                  "https://github.com/notifications")]
+                  self.web() + "/notifications")]
         cw = (x1 - x0) / 3
         sz = max(22, min(40, h - top - 40))
         for i, (lbl, n, col, tip, url) in enumerate(cells):
@@ -412,14 +491,16 @@ class GitHubPanel(K.KitPanel):
         mark = "PR" if it["pr"] else "IS"
         self.chip(cr, x0, y + 2, mark, col)
         two = rowh > 24
-        meta = f"{it['repo']}#{it['number']} · {it.get('author') or '?'} · {K.ago(it['updated'])}"
+        meta = (f"{it['acct']} · " if it.get("acct") else "") + \
+            f"{it['repo']}#{it['number']} · {it.get('author') or '?'} · {K.ago(it['updated'])}"
         D.text(cr, x0 + 30, y + 1, it["title"], 11, "soft", "medium", width=x1 - x0 - 30 - (0 if two else 200))
         if two:
             D.text(cr, x0 + 30, y + 16, meta, 10, "static", "regular", width=x1 - x0 - 30)
         else:
             D.text(cr, x1, y + 2, meta, 10, "static", "regular", align="right", width=196)
         kind = "pull request" if it["pr"] else "issue"
-        self.region(x0, y, x1 - x0, rowh - 2, f"{it['title']}: {kind} {it['repo']}#{it['number']} by "
+        self.region(x0, y, x1 - x0, rowh - 2, f"{it['title']}: {kind} {it['repo']}#{it['number']}"
+                    + (f" on {it['acct']}" if it.get("acct") else "") + " by "
                     f"{it.get('author') or '?'}, updated {K.ago(it['updated'])} ago, {it.get('comments', 0)} comment(s)"
                     f"{', a draft' if it.get('draft') else ''}. Click to open it.", lambda u=it["url"]: K.open_url(u))
 
@@ -428,12 +509,13 @@ class GitHubPanel(K.KitPanel):
         two = rowh > 24
         D.text(cr, x0 + 14, y + 1, n["title"], 11, "soft" if n["unread"] else "static", "medium",
                width=x1 - x0 - 14 - (0 if two else 200))
-        meta = f"{n['repo']} · {n['why']} · {K.ago(n['updated'])}"
+        meta = (f"{n['acct']} · " if n.get("acct") else "") + f"{n['repo']} · {n['why']} · {K.ago(n['updated'])}"
         if two:
             D.text(cr, x0 + 14, y + 16, meta, 10, "static", "regular", width=x1 - x0 - 14)
         else:
             D.text(cr, x1, y + 2, meta, 10, "static", "regular", align="right", width=196)
-        self.region(x0, y, x1 - x0, rowh - 2, f"{n['title']} ({n['type'] or 'notification'} in {n['repo']}): "
+        self.region(x0, y, x1 - x0, rowh - 2, f"{n['title']} ({n['type'] or 'notification'} in {n['repo']}"
+                    + (f" on {n['acct']}" if n.get("acct") else "") + "): "
                     f"{n['why']}, {'unread' if n['unread'] else 'read'}, {K.ago(n['updated'])} ago. Click to open it.",
                     lambda u=n["url"]: K.open_url(u))
 
@@ -451,10 +533,12 @@ class GitHubPanel(K.KitPanel):
             D.src(cr, "amber", 0.10)
             cr.rectangle(x0, y + 1, (x1 - x0) * frac, 18)
             cr.fill()
-            D.text(cr, x0 + 4, y + 2, r["name"], 11, "soft", "medium", width=(x1 - x0) * 0.55)
+            D.text(cr, x0 + 4, y + 2, (f"{r['acct']} · " if r.get("acct") else "") + r["name"], 11, "soft", "medium",
+                   width=(x1 - x0) * 0.55)
             D.text(cr, x1 - 4, y + 2, f"★ {K.short(r['stars'])}", 11, "amber", "semibold", align="right")
             D.text(cr, x1 - 70, y + 3, K.ago(r["pushed"]), 10, "static", "regular", align="right")
-            self.region(x0, y, x1 - x0, 20, f"{r['full']}{' (private)' if r['private'] else ''}: {r['stars']} stars, "
+            self.region(x0, y, x1 - x0, 20, f"{r['full']}{' (private)' if r['private'] else ''}"
+                        + (f" on {r['acct']}" if r.get("acct") else "") + f": {r['stars']} stars, "
                         f"{r['forks']} forks, {r['issues']} open issues, {r['language'] or 'no language'}; last push "
                         f"{K.ago(r['pushed'])} ago. {r['description'][:120]} Click to open it.",
                         lambda u=r["url"]: K.open_url(u))
@@ -475,20 +559,25 @@ class GitHubPanel(K.KitPanel):
             who = "you" if e["me"] else e["actor"]
             D.text(cr, x0 + 14, y + 1, f"{who} {e['words']}", 11, "soft" if not e["me"] else "static", "regular",
                    width=(x1 - x0) * 0.62)
-            D.text(cr, x1, y + 2, f"{e['repo'].split('/')[-1]} · {K.ago(e['at'])}", 10, "static", "regular",
+            D.text(cr, x1, y + 2, (f"{e['acct']} · " if e.get("acct") else "") +
+                   f"{e['repo'].split('/')[-1]} · {K.ago(e['at'])}", 10, "static", "regular",
                    align="right", width=(x1 - x0) * 0.36)
-            self.region(x0, y, x1 - x0, 18, f"{who} {e['words']} in {e['repo']}, {K.ago(e['at'])} ago. Click to open "
-                        "the repository.", lambda r=e["repo"]: K.open_url(f"https://github.com/{r}"))
+            self.region(x0, y, x1 - x0, 18, f"{who} {e['words']} in {e['repo']}"
+                        + (f" on {e['acct']}" if e.get("acct") else "") + f", {K.ago(e['at'])} ago. Click to open "
+                        "the repository.", lambda r=e["repo"], web=e.get("web") or self.web(): K.open_url(f"{web}/{r}"))
             y += 20
 
     def _graph(self, cr, d, x0, x1, top, bottom):
-        c = d.get("contrib") if self.demo else (self.graph.data if self.graph else None)
-        if c is None and self.graph and getattr(self, "_graph_skipped", True) and not self.graph.busy:
-            self.graph.kick()                           # just became large: read it now
+        c, gerr = self.graph()
+        if c is None and not self.demo and getattr(self, "_graph_skipped", True):
+            for a in self.accts.signed_in():             # just became large: read it now
+                pl = self.accts.poller(a, "graph")
+                if pl is not None and not pl.busy:
+                    pl.kick()
         D.label(cr, x0, top, "CONTRIBUTIONS · LAST YEAR" + (f" · {c['total']:,}" if c else ""), "phosphor", size=10)
         if not c or not c["weeks"]:
-            D.text(cr, x0, top + 20, "Reading the contribution graph…" if not (self.graph and self.graph.error)
-                   else self.graph.error, 11, "static", "regular", width=x1 - x0)
+            D.text(cr, x0, top + 20, gerr or "Reading the contribution graph…", 11, "static", "regular",
+                   width=x1 - x0)
             self.region(x0, top, x1 - x0, bottom - top, "Your contribution graph, read hourly while the panel is large")
             return
         weeks = c["weeks"]
