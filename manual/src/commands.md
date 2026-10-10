@@ -1213,7 +1213,7 @@ From the `bromigos-desktop` package.
 Your homelab's console: status, GPUs and models, GPU jobs on the lab, doctor (no arguments: the live dashboard).
 
 ```text
-bromigos lab [status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | connect … | target …]
+bromigos lab [status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | media search|get|status|upcoming|language … | connect … | target …]
 ```
 
 For example:
@@ -1226,6 +1226,7 @@ bromigos lab run hologram --prompt "a brass telescope"
 bromigos lab run voice --text "Lights are on."
 bromigos lab jobs watch
 bromigos lab doctor
+bromigos lab media get "Cowboy Bebop" --seasons all --specials
 ```
 
 From the `bromigos-homelab` package.

@@ -80,6 +80,9 @@ def build(ctx):
                           "The rack as a hologram, lit by these readings (SUPER+SHIFT+H)"))
     g.set_header_suffix(box)
 
+    # ---------------------------------------------------------------- media requests
+    _media(ctx, page)
+
     # ---------------------------------------------------------------- GPUs and models
     gm = ctx.group(page, "GPUs and models", "What each GPU holds, and what each server has loaded.",
                    hint="bromigos lab models: installed and loaded where, with VRAM", key="models")
@@ -185,6 +188,57 @@ def build(ctx):
     return page
 
 
+AUDIO = [("en ja", "English, with Japanese as a second track"), ("en", "English"), ("ja", "Japanese"),
+         ("ja en", "Japanese, with English as a second track"), ("any", "Any language")]
+SUBS = [("en", "English"), ("ja", "Japanese"), ("en ja", "English and Japanese"), ("es", "Spanish"), ("fr", "French"),
+        ("de", "German")]
+
+
+def _opts(base, cur):
+    """base, plus the current value when it isn't one of them (set by hand or on the command line)."""
+    return base if not cur or cur in [v for v, _ in base] else base + [(cur, cur.replace(" ", ", "))]
+
+
+def _media(ctx, page):
+    """Your languages for `bromigos lab media get`: [media] in homelab.toml, through `bromigos
+    lab media language`. Sonarr and Radarr pick the matching profile; Bazarr fetches the
+    subtitles."""
+    g = ctx.group(page, "Media requests", "The languages `bromigos lab media get` and VECTOR ask your lab for.",
+                  hint="Your [media] settings in homelab.toml: the audio you want (the first required, the rest welcome "
+                       "as extra tracks), anime's own, and the subtitles Bazarr fetches", key="media")
+    wait = _waiting(g, "Reading your languages…")
+
+    def shown(doc, err):
+        g.remove(wait)
+        if not doc or doc.get("error"):
+            ctx.note(g, f"bromigos lab media language didn't answer: {err or doc.get('error')}", "warn")
+            return
+        audio, anime, subs = " ".join(doc["audio"]), " ".join(doc["anime_audio"]), " ".join(doc["subtitles"])
+        set_ = lambda verb, label: (lambda v: ctx.change(["bromigos", "lab", "media", "language", verb] + v.split()
+                                                         + ["--json"], f"{label}: {v.replace(' ', ', ')}"))
+        ctx.combo_row(g, "Audio", "the first language is required; a release with both tracks ranks first",
+                      hint="Sonarr and Radarr use the profile that matches (Recyclarr's TRaSH profiles score the audio "
+                           "languages): with English first, a release with no English track isn't grabbed",
+                      options=_opts(AUDIO, audio), current=audio, on_select=set_("set", "Audio"), key="audio")
+        ctx.combo_row(g, "Anime audio", "anime's own, when it differs (dub or the original with subtitles)",
+                      hint="Anime goes to the TRaSH anime profile with this audio rule; 'Same as audio' follows the "
+                           "row above", options=[("same", "Same as audio")] + _opts(AUDIO, anime if anime != audio
+                                                                                    else None),
+                      current="same" if anime == audio else anime, on_select=set_("anime", "Anime audio"),
+                      key="anime_audio")
+        ctx.switch_row(g, "Require the first audio language", "off: it's only preferred, other releases still count",
+                       hint="On: a release without your first audio language is never grabbed",
+                       active=doc.get("required", True),
+                       on_toggle=lambda on: ctx.change(["bromigos", "lab", "media", "language", "required",
+                                                        "yes" if on else "no", "--json"],
+                                                       "Required" if on else "Preferred only"), key="required")
+        ctx.combo_row(g, "Subtitles", "what Bazarr fetches for new and requested titles",
+                      hint="Sets Bazarr's default language profile (made when it's missing)",
+                      options=_opts(SUBS, subs), current=subs, on_select=set_("subtitles", "Subtitles"),
+                      key="subtitles")
+    ctx.json(["bromigos", "lab", "media", "language", "--json"], shown)
+
+
 def _not_installed(ctx, page):
     """Without bromigos-homelab: what the page will show, each part a row the search can land on
     (greyed, saying why), the way to install and connect, and where AI runs (which works now)."""
@@ -238,6 +292,9 @@ PAGE = Page(id="lab", title="Lab", icon="network-server-symbolic applications-sc
             keywords=["homelab", "gpu", "models", "jobs", "doctor", "comfyui", "voice", "argo", "lab"],
             entries=[Entry("status", "The lab's status", ["nodes", "gpus", "services", "alerts", "storage", "argo"],
                            "The lab"),
+                     Entry("audio", "Media audio language", ["dub", "dual audio", "anime", "sonarr", "radarr", "language"],
+                           "Media requests"),
+                     Entry("subtitles", "Media subtitles", ["bazarr", "subs", "language"], "Media requests"),
                      Entry("models", "GPUs and models", ["vram", "unload", "comfyui", "ollama", "loaded"],
                            "GPUs and models"),
                      Entry("jobs", "Recent jobs", ["queue", "image", "hologram", "voice line", "results"],

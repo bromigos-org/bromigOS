@@ -868,6 +868,24 @@ files again when they change. Repeating events, time zones, all-day events and m
 cancelled meetings are handled, with `python-icalendar` and `python-dateutil`, which
 bromigos-widgets installs.
 
+**Your media server's releases.** With bromigos-homelab and a Sonarr or Radarr source in
+`homelab.toml`, `media = true` adds two calendars:
+
+- **TV**: new episodes of the shows you track, at their air time, as "Show S02E05 · Title".
+- **Movies**: your tracked films on their digital and disc release days. The cinema date
+  is left out, because the home release is what gets downloaded.
+
+A ✓ before a title means it's already downloaded.
+
+```toml
+media = true                                   # in calendars.toml
+media_colours = { tv = "cyan", movies = "amber" }   # optional
+```
+
+The panel reads Sonarr's and Radarr's own calendar feeds through `bromigos lab media
+calendar tv|movies`. The apps' API keys stay in the lab's config, so they never reach this
+panel's settings or its cache.
+
 ### Now playing
 
 The now playing panel shows what a media player on this computer plays: Spotify,

@@ -66,7 +66,7 @@ or with `--kube-context`.
 | storage | S3 object stores such as MinIO, a NAS and its shares |
 | apps and databases | Open WebUI, SearXNG, Redis, Dragonfly, Neo4j |
 | game servers | Pelican |
-| media | Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Jellyfin, Plex, Pinchflat (YouTube downloads) |
+| media | Seerr, Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Jellyfin, Plex, qBittorrent, SABnzbd, slskd, Pinchflat (YouTube downloads) |
 | backups | backup jobs, NAS snapshots, Velero, Proxmox Backup Server |
 
 Many of these need no address of their own. bromigOS finds them through your metrics or
@@ -110,6 +110,42 @@ For YouTube cookies (`bromigos lab youtube cookies`), say where Pinchflat reads 
 `bromigos lab youtube sync` makes each downloaded playlist a playlist in Jellyfin or
 Plex, in YouTube's order. It needs an API key for each media server: put it in a file and
 name the file in that server's source as `token_ref`. See [The lab console](lab.md#youtube-downloads).
+
+### Media requests
+
+To ask your lab for films, shows and music (`bromigos lab media`, see
+[The lab console](lab.md#media-requests)), add a source for each app you have. Each needs
+its address and its API key, which is on the app's Settings › General page. Put each key
+in its own file, as above.
+
+```toml
+[[source]]
+name = "seerr"
+type = "seerr"
+endpoint = "http://seerr.lan:5055"
+auth_ref = "@file:~/.local/share/bromigos/seerr-key"
+
+[[source]]
+name = "sonarr"                  # the same for radarr, lidarr, prowlarr and bazarr
+type = "arr"
+endpoint = "http://sonarr.lan:8989"
+auth_ref = "@file:~/.local/share/bromigos/sonarr-key"
+
+[[source]]
+name = "qbittorrent"             # and sabnzbd, slskd: for each download's progress
+type = "qbittorrent"
+endpoint = "http://qbittorrent.lan:8080"
+auth_ref = "@file:~/.local/share/bromigos/qbittorrent-key"
+
+[media]
+audio = ["en", "ja"]             # your audio languages, best first
+subtitles = ["en"]
+```
+
+Seerr is optional. Without it, requests go straight to Sonarr, Radarr and Lidarr. With it,
+they show in Seerr's Requests too. qBittorrent needs a WebUI API key (version 5.2 or later),
+or `user_ref` and its password. slskd takes its password, and `import_path`: the folder its
+downloads land in, as Lidarr sees it.
 
 ## Keep passwords out of the file
 

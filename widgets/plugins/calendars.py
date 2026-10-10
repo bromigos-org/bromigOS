@@ -11,11 +11,19 @@ floating times are handled.
 Addresses are fetched every 15 minutes while the panel is seen (with ETag and
 Last-Modified, so an unchanged calendar costs one short answer); local files are read
 again when they change. Settings: ~/.config/bromigos/widgets/calendars.toml.
+
+Your media server's releases (`media = true`, with bromigos-homelab and a Sonarr or Radarr
+source in homelab.toml): new episodes of the shows you track ("TV") and your tracked films'
+home releases ("Movies"), from Sonarr's and Radarr's own calendar feeds. They're read
+through `bromigos lab media calendar tv|movies`, so their API keys stay in the lab's
+config and never reach this panel's settings. A ✓ marks what's already downloaded.
 """
 import datetime as dt
 import hashlib
 import os
 import re
+import shutil
+import subprocess
 import sys
 import time
 import urllib.error
@@ -78,6 +86,64 @@ def default_name(src):
 
 def is_url(src):
     return src.startswith(("http://", "https://", "webcal://", "webcals://"))
+
+
+# ------------------------------------------------------------------ the lab's media releases
+MEDIA = (("lab:tv", "TV", "cyan"), ("lab:movies", "Movies", "amber"))
+
+
+def is_lab(src):
+    return src in ("lab:tv", "lab:movies")
+
+
+def _lab_bin():
+    return next((p for p in (os.environ.get("BROMIGOS_LAB_BIN"), "/usr/lib/bromigos/bin/bromigos-lab",
+                             shutil.which("bromigos-lab")) if p and os.path.exists(p)), None)
+
+
+def lab_fetch(src, past=BEHIND_DAYS, future=AHEAD_DAYS):
+    """The ICS of the lab's Sonarr (lab:tv) or Radarr (lab:movies), through bromigos lab."""
+    exe = _lab_bin()
+    if not exe:
+        raise RuntimeError("needs bromigos-homelab (bromigos lab) with a Sonarr or Radarr source")
+    r = subprocess.run([exe, "media", "calendar", src.split(":", 1)[1], "--past", str(past), "--future", str(future)],
+                       capture_output=True, timeout=60, stdin=subprocess.DEVNULL)
+    if r.returncode != 0 or not r.stdout.lstrip().startswith(b"BEGIN:VCALENDAR"):
+        why = (r.stderr or b"").decode("utf-8", "replace").strip().splitlines()
+        raise RuntimeError(why[-1][:160] if why else "bromigos lab media calendar didn't answer")
+    return r.stdout
+
+
+_EP = re.compile(r"^(.*?) - (\d+)x(\d+)(?: - (.*))?$")
+_MOVIE = re.compile(r"^(.*?) \((Theatrical|Cinema|Digital|Physical) Release\)$")
+
+
+def media_event(e, src):
+    """A Sonarr or Radarr feed's event in the panel's words, or None to leave it out:
+    "Show S02E05 · Title" at its air time, a film on its digital or disc release day (the
+    cinema date is left out: the home release is what gets downloaded), and ✓ when it's on
+    disk (the feed's STATUS:CONFIRMED)."""
+    done = (e.get("status") or "").upper() == "CONFIRMED"
+    title = e["title"]
+    if src == "lab:tv":
+        m = _EP.match(title)
+        if m:
+            title = f"{m.group(1)} S{int(m.group(2)):02d}E{int(m.group(3)):02d}" + (f" · {m.group(4)}" if m.group(4) else "")
+    else:
+        m = _MOVIE.match(title)
+        if m:
+            if m.group(2) in ("Theatrical", "Cinema"):
+                return None
+            title = f"{m.group(1)} · {m.group(2).lower()} release"
+    return dict(e, title=("✓ " if done else "") + title, downloaded=done)
+
+
+def media_calendars(conf):
+    """[media] on: the lab's TV and Movies feeds as calendars (colours from media_colours)."""
+    if not conf.get("media"):
+        return []
+    cols = conf.get("media_colours") or {}
+    return [{"source": src, "name": name, "colour": str(cols.get(name.lower()) or col)} for src, name, col in MEDIA]
 
 
 def https_url(src):
@@ -207,7 +273,8 @@ def parse(data, cal=None, lo=None, hi=None, tz=None):
                 continue
             out.append({"uid": uid, "title": _text(c, "summary") or "(no title)", "start": t0, "end": t1,
                         "all_day": all_day, "location": _text(c, "location"), "description": _text(c, "description"),
-                        "url": _text(c, "url"), "cal": cal["name"], "colour": cal["colour"]})
+                        "url": _text(c, "url"), "cal": cal["name"], "colour": cal["colour"],
+                        "status": _text(c, "status")})
     out.sort(key=lambda e: (e["start"], not e["all_day"], e["title"]))
     return out
 
@@ -309,7 +376,12 @@ class Sources:
             st = self.state.setdefault(src, {"events": [], "error": None, "fetched": 0, "day": None, "data": None})
             try:
                 changed = False
-                if is_url(src):
+                if is_lab(src):
+                    if force or now - st["fetched"] >= FETCH_EVERY or st["data"] is None:
+                        st["data"] = [lab_fetch(src)]
+                        st["fetched"] = now
+                        changed = True
+                elif is_url(src):
                     if force or now - st["fetched"] >= FETCH_EVERY or st["data"] is None:
                         if st["data"] is None and os.path.exists(self.cache_file(src)):
                             with open(self.cache_file(src), "rb") as f:     # last copy, while offline
@@ -334,6 +406,8 @@ class Sources:
                     evs = []
                     for d in st["data"] or []:
                         evs += parse(d, c)
+                    if is_lab(src):
+                        evs = [x for x in (media_event(e, src) for e in evs) if x]
                     st["events"], st["day"], st["colour"] = evs, today, c.get("colour")
                 st["error"] = None
             except FileNotFoundError:
@@ -410,6 +484,9 @@ class CalendarPanel(K.KitPanel):
          "hint": "One per line: an ICS address (https:// or webcal://), an .ics file, or a folder of .ics files"},
         {"key": "week_start", "label": "Large: the week starts", "kind": "choice", "default": "today",
          "choices": ["today", "monday", "sunday"]},
+        {"key": "media", "label": "Your media server's releases", "kind": "bool", "default": False,
+         "hint": "New episodes of the shows you track (TV) and your films' home releases (Movies), from your lab's "
+                 "Sonarr and Radarr. Needs bromigos-homelab with a Sonarr or Radarr source; ✓ marks what's downloaded"},
     ]
 
     def __init__(self, cfg=None, wake=None):
@@ -424,7 +501,7 @@ class CalendarPanel(K.KitPanel):
             self.poll = self.poller(self.fetch, every=CHECK_EVERY, idle=120)
 
     def cals(self):
-        return calendars_of(self.conf.get("calendars", []))
+        return calendars_of(self.conf.get("calendars", [])) + media_calendars(self.conf)
 
     def fetch(self):
         cals = self.cals()

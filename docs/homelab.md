@@ -221,6 +221,7 @@ With no provider, everything is empty and whatever asked hides itself. Every rec
 | `backups` | `name, kind, last_success, age_h, schedule, ok, max_age_hours, offsite` |
 | `ocr` | `name, endpoint, up, model, via`: where the `ocr` job kind sends pages |
 | `youtube-downloader` | `name, kind, up, videos, newest, newest_at, queue, errors, state, link`. The first record is the downloader itself (`kind` is `downloader`, with `queue`, `errors`, `sources` and `recent`). Then there's one per channel or playlist. Read it from Python as `H.youtube_downloader()`. |
+| `requests` | `name, kind, state, progress, speed, eta_s, size, left, client`. Seerr's requests (`kind` movie or tv), and what qBittorrent, SABnzbd and slskd are downloading (`kind` torrent, usenet or soulseek; `progress` in %, `speed` in bytes a second). `bromigos lab media` joins them with the *arr queues ([lab.md](lab.md#media-requests)). Read it from Python as `H.requests()`. |
 | `energy` | `name, kind, production_w, consumption_w, net_w, today_wh, consumed_today_wh, lifetime_wh, battery_pct, battery_w, inverters, state`. `net_w` is positive while you draw from the grid and negative while you send to it. |
 
 `media` and `video` are different things. `media` is a server that *makes* pictures and
@@ -345,6 +346,8 @@ read the way it's configured reads *unreachable* and says why. Nothing else is a
 | `arr` | scraparr's or exportarr's metrics, or one app's API | library |
 | `jellyfin`, `plex` | their health and identity endpoints; with a key, their video libraries | library, video |
 | `pinchflat` | Pinchflat's health check, its list of sources and each source's feed, and its job queue metrics | youtube-downloader |
+| `seerr` | Seerr's (or Overseerr's, Jellyseerr's) requests; `bromigos lab media` requests through it | requests |
+| `qbittorrent`, `sabnzbd`, `slskd` | each download client's downloads: progress, speed, time left; SABnzbd's failures and why | requests |
 | `arc` | GitHub's Actions Runner Controller: its listener and runner pods, or its `gha_*` metrics | runners |
 | `pacman-repo` | a pacman repository's databases per channel, and the publishing workflow's runs | packages |
 | `backups` | backup CronJobs, NAS share snapshots, Velero's last successful backup | backups |
@@ -539,6 +542,19 @@ The sync is one file, `bromigos_homelab/youtube.py`, and needs only Python. On t
 also reads its settings from the environment: `PINCHFLAT_URL`, `PINCHFLAT_ROUTE_TOKEN`,
 `JELLYFIN_URL`, `JELLYFIN_TOKEN`, `PLEX_URL` and `PLEX_TOKEN`. That's how provisioning runs
 it every hour ([lab-provision.md](lab-provision.md#configure-steps)).
+
+#### Media requests: Seerr, the *arr apps and the download clients
+
+`bromigos lab media` asks a lab's media stack for films, shows, anime and music
+([lab.md](lab.md#media-requests)). It reads through these sources, each optional:
+
+- `seerr`, with its API key: requests go through it, so they show in Seerr.
+- `arr` sources with an endpoint and an API key, one per app: Sonarr, Radarr, Lidarr,
+  Prowlarr and Bazarr. The source's name, or `app = "sonarr"`, says which app it is.
+- `qbittorrent`, `sabnzbd` and `slskd`, for the real progress of each download.
+- `jellyfin` and `plex`, to say what you have already.
+
+The lab console's Requests card shows the same data, read-only.
 
 #### The `ocr` job kind
 

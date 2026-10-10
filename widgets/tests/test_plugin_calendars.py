@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
@@ -153,6 +154,59 @@ class Panel(unittest.TestCase):
     def test_every_size_class_draws_with_hints(self):
         PT.every_class(self, PT.make(C.CalendarPanel, demo=True))
 
+
+
+SONARR_ICS = ics(["UID:NzbDrone_episode_1", "SUMMARY:Paper Moon Cafe - 4x01 - Reopening", "STATUS:TENTATIVE",
+                  "DTSTART:20261102T020000Z", "DTEND:20261102T024500Z"],
+                 ["UID:NzbDrone_episode_2", "SUMMARY:Starlight Harbor - 1x26 - The Real Folk Blues",
+                  "STATUS:CONFIRMED", "DTSTART:20261020T150000Z", "DTEND:20261020T152400Z"], tzdef=False)
+RADARR_ICS = ics(["UID:Radarr_movie_201_cinemas", "SUMMARY:Comet Drift (Theatrical Release)", "STATUS:TENTATIVE",
+                  "DTSTART;VALUE=DATE:20261015", "DTEND;VALUE=DATE:20261016"],
+                 ["UID:Radarr_movie_201_digital", "SUMMARY:Comet Drift (Digital Release)", "STATUS:TENTATIVE",
+                  "DTSTART;VALUE=DATE:20261105", "DTEND;VALUE=DATE:20261106"],
+                 ["UID:Radarr_movie_202_physical", "SUMMARY:Lanterns of Kiri (Physical Release)", "STATUS:CONFIRMED",
+                  "DTSTART;VALUE=DATE:20261110", "DTEND;VALUE=DATE:20261111"], tzdef=False)
+
+
+@NEEDS_ICAL
+class MediaReleases(unittest.TestCase):
+    """Your media server's releases: the lab's Sonarr and Radarr feeds (made-up titles)."""
+
+    def test_off_by_default_and_two_calendars_when_on(self):
+        self.assertEqual(C.media_calendars({}), [])
+        cals = C.media_calendars({"media": True})
+        self.assertEqual([(c["source"], c["name"]) for c in cals], [("lab:tv", "TV"), ("lab:movies", "Movies")])
+        self.assertNotEqual(cals[0]["colour"], cals[1]["colour"])
+
+    def test_events_in_the_panels_words(self):
+        fetched = {"lab:tv": SONARR_ICS, "lab:movies": RADARR_ICS}
+        src = C.Sources()
+        with unittest.mock.patch.object(C, "lab_fetch", lambda s, *a, **k: fetched[s]), \
+                unittest.mock.patch.object(C.time, "time", lambda: ts(2026, 10, 18)):
+            r = src.refresh(C.media_calendars({"media": True}))
+        self.assertEqual(r["errors"], {})
+        titles = [e["title"] for e in r["events"]]
+        self.assertEqual(titles, ["✓ Starlight Harbor S01E26 · The Real Folk Blues", "Paper Moon Cafe S04E01 · Reopening",
+                                  "Comet Drift · digital release", "✓ Lanterns of Kiri · physical release"])
+        tv = next(e for e in r["events"] if e["cal"] == "TV" and not e["downloaded"])
+        self.assertEqual(tv["start"], ts(2026, 11, 2, 2))                      # at its air time
+        self.assertFalse(any("Theatrical" in t or "cinema" in t for t in titles))
+
+    def test_a_lab_that_cant_answer_is_an_error_not_a_crash(self):
+        def broken(*a, **k):
+            raise RuntimeError("no sonarr source in homelab.toml")
+        with unittest.mock.patch.object(C, "lab_fetch", broken):
+            r = C.Sources().refresh(C.media_calendars({"media": True}))
+        self.assertEqual(r["events"], [])
+        self.assertIn("no sonarr source", r["errors"]["lab:tv"])
+
+    def test_the_command_reads_the_feed(self):
+        with unittest.mock.patch.object(C, "_lab_bin", lambda: "/usr/lib/bromigos/bin/bromigos-lab"), \
+                unittest.mock.patch.object(C.subprocess, "run") as run:
+            run.return_value = unittest.mock.Mock(returncode=0, stdout=SONARR_ICS, stderr=b"")
+            self.assertEqual(C.lab_fetch("lab:tv"), SONARR_ICS)
+        argv = run.call_args[0][0]
+        self.assertEqual(argv[1:5], ["media", "calendar", "tv", "--past"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -67,6 +67,9 @@ SCHEMAS = {
     # then one per source (kind "channel" | "playlist")
     "youtube-downloader": ("name", "kind", "up", "videos", "newest", "newest_at", "queue", "errors", "state", "link"),
     "video": ("name", "kind", "id", "title", "count", "media", "server"),
+    # Seerr's requests (kind movie | tv), and the download clients' downloads (kind torrent |
+    # usenet | soulseek: progress %, speed B/s, eta_s): adapters/labrequests.py
+    "requests": ("name", "kind", "state", "progress", "speed", "eta_s", "size", "left", "client"),
 }
 
 
@@ -236,6 +239,8 @@ energy = _lab("energy", "Home energy: solar production, what the house uses, the
 youtube_downloader = _lab("youtube-downloader", "YouTube downloaders (Pinchflat): sources, newest videos, the "
                                                 "download queue and failed jobs")
 youtube_downloader.__name__ = "youtube_downloader"
+requests = _lab("requests", "Media requests (Seerr) and what the download clients are fetching (qBittorrent, SABnzbd, "
+                            "slskd)")
 video = _lab("video", "A media server's video libraries, collections and playlists (Jellyfin, Plex): what the den TV plays")
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # bromigos:summary=Your homelab's console: status, GPUs and models, GPU jobs on the lab, doctor (no arguments: the live dashboard)
-# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | connect … | target …]
-# bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor
+# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | media search|get|status|upcoming|language … | connect … | target …]
+# bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor; bromigos lab media get "Cowboy Bebop" --seasons all --specials
 # bromigos:menu=LAUNCH:Lab console
 """bromigos lab: the homelab's console (docs/homelab.md, "The lab console"; the manual's Lab chapter).
 
@@ -39,6 +39,17 @@
   bromigos lab youtube quality NAME Q    best, 2160p … 480p, audio (new downloads only)
   bromigos lab youtube cookies set FILE | clear | status
                                     control Pinchflat without its web page (each takes --json)
+  bromigos lab media search NAME [--movie|--tv|--anime|--music]
+                                    find a film, show, anime or music: year, release dates,
+                                    whether it's in your library or requested, the profile, the size
+  bromigos lab media get ID|NAME|URL [--quality best|2160p|1080p|720p] [--audio en|ja|any]
+                     [--seasons all|latest|future|1,3|2-4] [--episodes S02E05,…] [--specials]
+                     [--new yes|no] [--when announced|cinemas|released] [--yes]
+                                    request it through Seerr, Sonarr, Radarr or Lidarr (a YouTube
+                                    link: Pinchflat), at the best profile for it; asks first
+  bromigos lab media status [NAME] [--why] | upcoming [--days N] | recent [--hours N]
+  bromigos lab media language [show | set LANG… | anime LANG… | subtitles LANG… | required yes|no]
+                                    each takes --json (docs/lab.md, "Media requests")
   bromigos lab youtube sync [--dry-run] [--server jellyfin|plex] [--json]
                                     turn Pinchflat's downloaded YouTube playlists into ordered
                                     playlists in Jellyfin and Plex (idempotent; docs/homelab.md)
@@ -403,6 +414,11 @@ def main(argv):
             return youtube.main(rest)
         from bromigos_homelab import pinchflat
         return pinchflat.main(rest)
+    if cmd == "media":                                           # requests: mediareq.py; no verb: the card
+        if not rest or rest == ["--json"]:
+            return cmd_status(argparse.Namespace(json="--json" in rest, card="requests"))
+        from bromigos_homelab import mediareq
+        return mediareq.main(rest)
     p = argparse.ArgumentParser(prog=f"bromigos lab {cmd}")
     p.add_argument("--json", action="store_true")
     if cmd == "status":

@@ -228,6 +228,122 @@ ComfyUI keeps the last job's models in memory until something frees them.
 `bromigos lab models unload comfyui` frees them now. To find the best open models for your
 graphics cards, see [Lab models](lab-models.md).
 
+## Media requests
+
+If your lab runs a media stack, you can ask it for a film, a show, an anime or music by
+name. It gets the best quality your lab's profiles allow, in your languages, and puts it in
+your media library, where Jellyfin, Plex or your music server plays it. The stack is
+Seerr, Sonarr for TV, Radarr for films and Lidarr for music.
+
+### Find it
+
+```bash
+bromigos lab media search "cowboy bebop"
+bromigos lab media search dune --movie            # or --tv, --anime, --music
+```
+
+Each result has an id, then its year and kind, and the profile it would get. It also says
+how much disk space it needs, and whether Jellyfin or Plex has it already. A film that
+isn't out yet shows its dates, such as "in cinemas 2026-12-18, digital TBA".
+
+### Get it
+
+```bash
+bromigos lab media get "Cowboy Bebop"
+bromigos lab media get tv:tvdb:76885 --specials    # by its id from search
+```
+
+Before it asks for anything, it shows what it will do:
+
+- which profile it picked, and why;
+- the audio you'll get;
+- what it fetches now, and whether new episodes come later;
+- about how much space it takes, and how much is free.
+
+Then it asks you. Add `--yes` to skip the question.
+
+If several titles have that name, such as the US and UK versions of a show, it lists them.
+Then give the id instead.
+
+**Which seasons.** You choose with `--seasons`:
+
+| You want | Add |
+|---|---|
+| The whole show, and new episodes as they come (the default) | nothing |
+| Seasons 1 and 3, or 2 to 4 | `--seasons 1,3`, or `--seasons 2-4` |
+| Just the latest season | `--seasons latest` |
+| Nothing now, only new episodes from here on | `--seasons future` |
+| A few episodes | `--episodes S02E05,S03E01` |
+| The specials too | `--specials` |
+| Not new episodes and seasons | `--new no` |
+
+A show you already have keeps what it has. `bromigos lab media get "Show" --seasons 4`
+adds season 4 to it. To stop new episodes of a show, run
+`bromigos lab media get "Show" --seasons none --new no`.
+
+**Films that aren't out yet.** Ask for them now. Your lab watches for the release and
+fetches the film when it's out at home, on digital or disc. It never fetches a camera copy
+from a cinema. `bromigos lab media upcoming` lists what's coming and when.
+
+**Music.** Search with `--music`, then get an artist (all their albums) or one album. If
+your lab's usual sources find nothing for an album, it tries Soulseek next, if your lab
+has it. It tells you which it used.
+
+**YouTube.** A YouTube channel's or playlist's address goes to Pinchflat, the same as
+`bromigos lab youtube add` (above).
+
+### Quality
+
+Your lab's profiles decide the quality, and `get` takes the best one for each kind:
+
+- **Films:** a 4K remux or 4K web release when your lab has a 4K profile, else 1080p.
+- **TV:** 4K web releases.
+- **Anime:** the anime profile, usually 1080p Blu-ray, because most anime isn't made in 4K.
+- **Music:** lossless (FLAC).
+
+`--quality 1080p` caps it for one request.
+
+### Your languages
+
+```bash
+bromigos lab media language                  # what's set
+bromigos lab media language set en ja        # English, with Japanese welcome as a second track
+bromigos lab media language anime ja         # anime in Japanese (with subtitles)
+bromigos lab media language anime same       # anime like everything else
+bromigos lab media language subtitles en     # the subtitles your lab fetches
+bromigos lab media language required no      # the first language is only preferred
+```
+
+The first audio language is required. A release without it isn't downloaded. A release
+with both tracks, such as an anime with English and Japanese audio, ranks first. Until you
+set them, your languages follow your desktop's language. You can also set them in
+**Settings › Lab**. `--audio ja` changes the audio for one request.
+
+### What's happening
+
+```bash
+bromigos lab media status                    # everything downloading, stuck or requested
+bromigos lab media status "Cowboy Bebop"     # one title in detail
+bromigos lab media recent                    # what arrived today
+```
+
+`status` shows each download's progress and time left. When something is stuck, it says
+why. For one title, it also shows:
+
+- which seasons are monitored and on disk;
+- whether new episodes are picked up;
+- the audio languages of the files;
+- the subtitles.
+
+If nothing has turned up, it says what your lab's indexers found when it asked them.
+
+The dashboard's **Requests** card shows the same thing. The **Calendar** panel can show new
+episodes and film releases too: turn on "Your media server's releases" in its settings.
+
+VECTOR does all this when you ask him: "download Cowboy Bebop", "get season 2 of …",
+"what's coming up?". He tells you what he found and asks before he requests, unless you
+plainly asked him to download one thing. When it's in your library, he tells you.
+
 ## Shortcuts to other commands
 
 - `bromigos lab connect` is the same as `bromigos setup homelab`.

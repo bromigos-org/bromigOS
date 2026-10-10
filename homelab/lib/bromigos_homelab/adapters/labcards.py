@@ -62,6 +62,52 @@ def _yt_summary(items):
             (f" · {err} failed" if err else ""))
 
 
+def _requests_card(_res):
+    """The Requests card: what's downloading for Sonarr, Radarr and Lidarr (progress and time
+    left from qBittorrent and SABnzbd), Seerr's open requests and Soulseek fetches. The same
+    data as `bromigos lab media status`, read-only (it hands nothing to Lidarr)."""
+    from .. import mediareq as M
+    lab = M.Lab()
+    if not lab.configured():
+        return None
+    d = M.status(lab, finish=False)
+    items = []
+    for g in sorted(d["downloads"], key=lambda g: -(g.get("left") or 0)):
+        stuck = any(k in g["states"] for k in ("stuck", "importFailed", "importBlocked", "failed", "failedPending"))
+        kind = {"sonarr": "TV", "radarr": "film", "lidarr": "music"}[g["app"]]
+        audio = "+".join(M.lang_name(a) for a in g["audio"])
+        items.append({"name": g["title"], "kind": kind, "status": ", ".join(f"{n} {k}" for k, n in g["states"].items()),
+                      "progress": f"{g['progress']:.0f}%" if g["progress"] is not None else "?",
+                      "left": M.hm(g["eta_s"]) if g.get("eta_s") else "-", "audio": audio or "-",
+                      "state": "warn" if stuck else "ok",
+                      "hint": f"{g['title']} ({kind}): {g['items']} item(s), {M.human(g['size'])}"
+                              + (f", {M.human(g['speed'])}/s" if g.get("speed") else "")
+                              + (f", about {M.hm(g['eta_s'])} left" if g.get("eta_s") else "")
+                              + (f" · audio {audio} (from the release names)" if audio else "")
+                              + "".join(f" · why: {w[:160]}" for w in g["why"][:2])})
+    for r in d.get("requests") or []:
+        items.append({"name": r["name"], "kind": "film" if r["kind"] == "movie" else "TV", "status": f"Seerr: {r['media']}",
+                      "progress": "-", "left": "-", "audio": "-", "state": "ok",
+                      "hint": f"{r['name']}: requested in Seerr by {r.get('by') or '?'}, {r['media']}: Sonarr or Radarr "
+                              "is looking for it (or waiting for its release)"})
+    for f in d.get("soulseek") or []:
+        items.append({"name": f["name"], "kind": "music", "status": f"Soulseek: {f['state']}",
+                      "progress": f"{f['progress']:.0f}%", "left": M.hm(f["eta_s"]) if f.get("eta_s") else "-",
+                      "audio": "-", "state": "warn" if f["state"] == "failed" else "ok",
+                      "hint": f"{f['name']} from {f['user']} on Soulseek ({f['files']} files): Lidarr imports it when "
+                              "it's done (bromigos lab media status hands it over)"})
+    stuck = sum(1 for i in items if i["state"] == "warn" and i["kind"] != "subtitles")
+    going = sum(1 for g in d["downloads"] if any(k in g["states"] for k in ("downloading", "queued", "importing",
+                                                                           "importPending", "delay", "paused")))
+    summary = (f"{going} downloading" if going else "nothing downloading") + (f" · {stuck} stuck" if stuck else "") + \
+        (f" · {len(d['requests'])} requested" if d.get("requests") else "")
+    if d.get("subtitle_warning"):
+        items.append({"name": "Bazarr", "kind": "subtitles", "status": "no providers", "progress": "-", "left": "-",
+                      "audio": "-", "state": "warn", "hint": d["subtitle_warning"]})
+    return {"columns": ["name", "kind", "status", "progress", "left", "audio"], "items": items, "summary": summary,
+            "errors": {f"media{i}": e for i, e in enumerate(d.get("errors") or [])}}
+
+
 def _backup_state(r):
     age, limit = r.get("age_h"), r.get("max_age_hours") or 30
     if r.get("ok") is False or age is None:
@@ -147,6 +193,11 @@ CARDS = [
               "Jellyfin or Plex. The first row is Pinchflat itself: the download queue and failed jobs. Then one "
               "row per channel or playlist, with its newest video. Read-only.",
          item_hint=_yt_hint, summary=_yt_summary),
+    dict(id="requests", title="Requests", order=137, capability=None, needs=("requests", "library"), covers=("requests",),
+         hint="Films, shows and music you asked for (bromigos lab media get): what Sonarr, Radarr and Lidarr are "
+              "downloading, with progress and time left from qBittorrent and SABnzbd, Seerr's open requests and "
+              "Soulseek fetches. Amber: stuck or failed to import (hover for why). Read-only.",
+         build=_requests_card),
     dict(id="runners", title="CI runners", order=140, columns=("name", "online", "runners", "busy", "queued", "max"),
          hint="Self-hosted GitHub Actions runner pools (Actions Runner Controller): online, runners up, jobs "
               "waiting. Amber: jobs queue on a full pool.",

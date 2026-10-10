@@ -24,10 +24,11 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab youtube` | Show Pinchflat's YouTube downloads card ([below](#youtube-downloads)). |
 | `bromigos lab youtube add`, `list`, `remove`, `pause`, `resume`, `refresh`, `status`, `quality`, `cookies` | Control Pinchflat without its web page ([below](#youtube-downloads)). |
 | `bromigos lab youtube sync` | Turn Pinchflat's playlists into playlists in Jellyfin and Plex. |
+| `bromigos lab media search`, `get`, `status`, `upcoming`, `recent`, `language` | Ask your media stack for films, shows, anime and music at the best quality, in your languages ([below](#media-requests)). |
 | `bromigos lab connect …` | Run `bromigos setup homelab …`: find services and write `homelab.toml`. |
 | `bromigos lab target …` | Run `bromigos target …`: choose where AI runs ([targets.md](targets.md)). |
 | Super+Shift+H | Open the Lab deck, a hologram of the rack lit by the same readings. |
-| Settings › Lab | See the status, models, recent jobs, the doctor and the targets in a window. |
+| Settings › Lab | See the status, models, recent jobs, the doctor and the targets in a window. Set your media languages. |
 
 > **Planned.** Changing the lab itself is Phase 2: deploying, restarting, logs, backups,
 > power, and adding or replacing models. Setting up a new lab is Phase 3
@@ -197,6 +198,178 @@ replaced. It checks the CSRF token and the session cookie as Phoenix does.
 `bromigos lab youtube sync` turns each downloaded YouTube playlist into a playlist in
 Jellyfin, Plex, or both, in the playlist's order. It's safe to run again. Add `--dry-run`
 to see what it would change first.
+
+### Media requests
+
+`bromigos lab media` asks your lab's media stack for a film, a show, an anime or music, at
+the best quality its profiles allow and in your languages. The manual's
+[Lab console](../manual/src/lab.md#media-requests) page shows how to use it. The code is
+`homelab/lib/bromigos_homelab/mediareq.py`, and the adapters it reads through are in
+`adapters/labrequests.py` (Seerr, qBittorrent, SABnzbd, slskd) and `adapters/labmedia.py`
+(the `arr` type, Jellyfin, Plex).
+
+| Command | What it does |
+|---|---|
+| `search NAME [--movie\|--tv\|--anime\|--music]` | Titles with their year, kind, release dates, the profile each would get, the estimated size, and whether Jellyfin, Plex, Sonarr, Radarr or Seerr already has it |
+| `get ID\|NAME\|URL [options] [--yes]` | Prints the plan, asks, then requests. Without a terminal it needs `--yes`, and exits 2 with the plan otherwise |
+| `status [NAME] [--why]` | What's downloading, stuck, imported or failed, and why. With a name: that title's seasons, monitoring, audio and subtitles |
+| `upcoming [--days N]` | What you track and when it comes out (Sonarr's and Radarr's calendars) |
+| `recent [--hours N]` | What Sonarr, Radarr and Lidarr imported lately |
+| `language [show\|set\|anime\|subtitles\|required] …` | Your languages: `[media]` in `homelab.toml` |
+| `calendar tv\|movies` | Sonarr's or Radarr's iCal feed, for the Calendar widget |
+
+Each takes `--json`. `bromigos lab media` alone shows the Requests card. Exit codes: 0 done,
+1 an error, 2 asked and not confirmed, 3 the name matches several titles (the JSON lists
+them), 4 nothing found.
+
+`get`'s options:
+
+| Option | Meaning |
+|---|---|
+| `--quality best\|2160p\|1080p\|720p` | best (the default), or a ceiling: a profile that allows more is skipped |
+| `--audio en\|ja\|any` | This request's audio, instead of your setting |
+| `--seasons all\|latest\|future\|none\|1,3\|2-4` | What to fetch now. `future` fetches nothing now and only new episodes from here on |
+| `--episodes S02E05,S03E01` | Just these episodes |
+| `--specials` | Season 0 too |
+| `--new yes\|no` | Pick up new episodes and seasons (Sonarr's `monitorNewItems`). Default yes |
+| `--when announced\|cinemas\|released` | Films: Radarr's minimum availability. Default `released`, the home release, so never a cam copy |
+
+**Where a request goes.**
+
+- **TV and films** go through Seerr when a `seerr` source exists and has a non-4K server.
+  The request carries the profile, the root folder and the seasons, so it shows in Seerr.
+  Afterwards the code sets what Seerr can't in Sonarr: the anime series type, specials, and
+  new-item monitoring. `future`, `none` and `--episodes` go straight to Sonarr.
+- **A show already in Sonarr** never goes through Seerr. Its monitoring changes in Sonarr:
+  the seasons asked for are added to what's monitored, so "also get season 4" leaves 1–3 as
+  they were. Its profile changes only with `--quality` or `--audio`.
+- **Monitoring** uses Sonarr's own operations. `all`, `latest` and `future` are its season
+  pass monitor options. Season numbers set each season's monitored flag, and the episodes
+  follow it. Episodes use `episode/monitor`. Then it searches what's wanted now.
+- **Music** goes to Lidarr: an artist with all its albums, or one album (its artist is added
+  unmonitored). When Lidarr's album search finishes with nothing in its queue, slskd searches
+  Soulseek. It picks the folder that's complete (80% of the album's tracks or more), then
+  lossless, a free upload slot, a short queue and speed. The download is recorded in
+  `~/.local/state/bromigos/media-requests.json`. When slskd has it, the next `status` asks
+  Lidarr to import that folder (`DownloadedAlbumsScan` on the slskd source's `import_path`).
+  Lidarr then moves it into the music library, where a music server such as Navidrome reads
+  it.
+- **A YouTube link** goes to Pinchflat, through the same code as `bromigos lab youtube add`.
+
+**The profile.** `pick_profile()` reads the profiles that exist and their custom-format
+scores. It never goes by a profile's name alone.
+
+1. Anime goes to the anime profiles: a name with "Anime", or anime custom formats with
+   scores. Other titles avoid them. A Recyclarr (TRaSH) profile, one with custom-format
+   scores, beats a built-in one.
+2. The audio rule decides among those (below).
+3. Then the best quality it allows: resolution first, then remux, Blu-ray, web and TV.
+4. Music takes the profile whose best is lossless, preferring one with nothing lossy.
+
+It says which profile and why ("Remux + WEB 2160p: the best profile here, up to
+Remux-2160p, a TRaSH profile; English audio required"). When nothing fits, it says that
+too, for example "no anime profile here".
+
+**Anime** is TMDB's anime keyword (Seerr's own test), TVDB's Anime genre or Sonarr's series
+type, or animation whose original language is Japanese. Western animation isn't anime.
+
+**Languages.** `[media]` in `homelab.toml` holds them, and `language` writes them. It edits
+the `[media]` table in place, through a symlink if there is one, keeping comments. It
+checks that the new file reads back before it replaces the old one.
+
+```toml
+[media]
+audio = ["en", "ja"]       # best first, ISO 639-1; default: the desktop's language
+audio_required = true      # the first must be there (default); false: only preferred
+anime_audio = ["en", "ja"] # anime's own (default: audio)
+subtitles = ["en"]         # what Bazarr fetches (default: the first audio language)
+quality = "best"
+seerr = true               # false: straight to the *arr apps
+```
+
+How they map onto Sonarr's and Radarr's profiles. A release's score is the sum of the custom
+formats it matches, and a release under the profile's minimum score is never grabbed.
+`profile_audio()` reads these scores:
+
+| Your first audio language | The profile it takes | What the profile's scores do |
+|---|---|---|
+| English, required | `Remux-1080p - Anime (English audio)` | "Anime Dual Audio" +5000 and "Dubs Only" +4000, and a minimum of 3000. TRaSH's other formats can't reach 3000 without them, so a release with no English track is rejected |
+| English, preferred | `Remux-1080p - Anime (English preferred)` | The same scores, no such minimum |
+| Japanese or the original | `Remux-1080p - Anime` | TRaSH as published: "Dubs Only" -10000 |
+| any | the one without a language rule | |
+
+Live-action profiles with "Language: Not English" at -10000 count as English-required. The
+homelab repository's Recyclarr config makes these profiles (its docs/arr-stack-setup.md,
+"Audio language"). A lab without them gets the closest match, and the plan says the
+language doesn't match.
+
+**Subtitles.** `language subtitles` and `get` make a Bazarr language profile for your
+subtitle languages when there's none, and make it the default for new series and films.
+`get` gives the requested title that profile. `status` reads Bazarr's subtitles and missing
+subtitles per episode. It says when Bazarr has no subtitle providers turned on, because then
+it finds none.
+
+**Status.** It joins Sonarr's, Radarr's and Lidarr's queues with the download clients, by
+download id (a torrent's hash, SABnzbd's `nzo_id`). The progress, speed and time left come
+from qBittorrent and SABnzbd, because the *arr queues lag behind them. The audio languages
+come from the release names while downloading, and from the files' media info once they're
+imported. With a name, it adds that title's seasons, monitoring, files below the profile's
+target, failed downloads and why, and Bazarr's subtitles. If something is monitored, missing
+and not downloading, it asks Prowlarr's indexers for the title (read-only). It says which
+indexers answered with results, which with nothing, and which Prowlarr has paused for
+failing.
+
+**Is it there already?** Jellyfin and Plex are searched by title and matched on their TMDB,
+TVDB or IMDb ids. Jellyfin also gives the resolution, the seasons, the episodes and the
+audio languages.
+
+**Size and space.** The estimate is the runtime times the profile's best quality's size per
+minute, from the app's quality definitions (Recyclarr sets TRaSH's). It uses the preferred
+size, else the middle of the minimum and maximum, else twice the minimum. The free space is
+the root folder's, as the app reports it.
+
+**Configuration.** One source per app. Every one is optional:
+
+```toml
+[[source]]
+name = "seerr"
+type = "seerr"
+endpoint = "https://seerr.lab.example"
+auth_ref = "@file:~/.local/share/bromigos/seerr-key"
+
+[[source]]
+name = "sonarr"            # also radarr, lidarr, prowlarr, bazarr: the name says which app
+type = "arr"               # (or app = "sonarr"; else it asks the app)
+endpoint = "https://sonarr.lab.example"
+auth_ref = "@file:~/.local/share/bromigos/sonarr-key"
+
+[[source]]
+name = "qbittorrent"
+type = "qbittorrent"
+endpoint = "https://qbittorrent.lab.example"
+auth_ref = "@file:~/.local/share/bromigos/qbittorrent-key"   # a WebUI API key (5.2+); or
+                                                            # user_ref + auth_ref the password
+[[source]]
+name = "sabnzbd"
+type = "sabnzbd"
+endpoint = "https://sabnzbd.lab.example"
+auth_ref = "@file:~/.local/share/bromigos/sabnzbd-key"
+
+[[source]]
+name = "slskd"
+type = "slskd"
+endpoint = "https://slskd.lab.example"
+auth_ref = "@file:~/.local/share/bromigos/slskd-password"   # user_ref: its user, "slskd" by default
+import_path = "/media/downloads/slskd"                     # its downloads folder, as Lidarr sees it
+```
+
+Jellyfin, Plex and Pinchflat are the sources the console already reads.
+
+**Tests.** `homelab/tests/test_lab_media.py` covers the profile picker, anime detection, the
+languages, seasons and episodes, and every command. It runs them against a fake stack
+(`homelab/tests/mediafake.py`): one local server that answers like Seerr, Sonarr, Radarr,
+Lidarr, Prowlarr, Bazarr, Jellyfin, Plex, qBittorrent, SABnzbd and slskd. It uses the apps'
+recorded answer shapes, with made-up titles and values.
 
 ## Models
 
@@ -438,7 +611,11 @@ From there you can free what ComfyUI holds. It doesn't change the lab otherwise.
 
 VECTOR reads the console and makes things on the lab through the same queue. His tools
 are `lab_console`, `lab_jobs`, `lab_job_submit` and `lab_job_cancel`, in the vector
-repository's `holo/vector/lab.py`.
+repository's `holo/vector/lab.py`. His media tools (`media_search`, `media_get`,
+`media_status`, `media_upcoming`, `media_recent`, `media_language`, in
+`holo/vector/media.py`) run `bromigos lab media`. He plans a request, tells you, and requests
+on your go-ahead. His terminal may read `bromigos lab media`, but requests go through his
+tools.
 
 - His jobs are recorded as his.
 - He never uses `--cloud`.

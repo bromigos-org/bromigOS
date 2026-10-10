@@ -40,7 +40,10 @@ CAPABILITIES = ("metrics", "hosts", "workloads", "deployments", "models", "agent
                 "gpus", "logs", "routes", "certs", "ddns", "network", "storage", "apps", "games", "library",
                 "runners", "packages", "backups", "ocr", "energy", "youtube-downloader",
                 # a media server's video libraries, for the den TV (adapters/labvideo.py)
-                "video")
+                "video",
+                # media requests and their downloads: Seerr, qBittorrent, SABnzbd, slskd
+                # (adapters/labrequests.py; `bromigos lab media`, mediareq.py)
+                "requests")
 EXTRAS = {"snapshot", "knowledge"}     # a whole-lab snapshot (lab); a memory/knowledge service (gnosis)
 
 
