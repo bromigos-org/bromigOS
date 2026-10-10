@@ -1634,6 +1634,7 @@ def gather_downloads(lab):
     return out
 
 
+STALLED_S = 30 * 86400           # a time left longer than this is a stall, not an estimate
 QUEUE_PARAMS = {"sonarr": {"includeSeries": "true", "includeEpisode": "true"}, "radarr": {"includeMovie": "true"},
                 "lidarr": {"includeArtist": "true", "includeAlbum": "true"}}
 
@@ -1694,8 +1695,10 @@ def group_rows(rows):
         g["items"] += 1
         g["size"] += r["size"] or 0
         g["left"] += r["left"] or 0
-        if r["eta_s"] is not None:
+        if r["eta_s"] is not None and r["eta_s"] <= STALLED_S:
             g["eta_s"] = max(g["eta_s"] or 0, r["eta_s"])
+        elif r["eta_s"] is not None:
+            g["stalled"] = g.get("stalled", 0) + 1                 # a client's "never" (no seeds, no speed)
         g["speed"] += r["speed"] or 0
         g["states"][r["state"]] = g["states"].get(r["state"], 0) + 1
         g["audio"].update(r["audio"])
@@ -2525,6 +2528,8 @@ def status_lines(d):
                 line += f" at {human(g['speed'])}/s"
             if g.get("eta_s"):
                 line += f", about {hm(g['eta_s'])} left"
+            if g.get("stalled"):
+                line += f" ({g['stalled']} stalled: no seeds or no speed)"
             if g["audio"]:
                 line += f"; audio {'+'.join(lang_name(a) for a in g['audio'])} (from the release names)"
             L.append(line)

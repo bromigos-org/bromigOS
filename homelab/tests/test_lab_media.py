@@ -439,6 +439,11 @@ class Status(Stack):
         code, d = self.js("status", "starlight")
         item = next(i for i in d["items"] if i["what"] == "S01E03")
         self.assertEqual((item["progress"], item["eta_s"], item["speed"]), (75.0, 200, 5_000_000))
+        self.st.torrents[0]["eta"] = 8640000                     # qBittorrent's "never", and Sonarr's own
+        self.st.queue["sonarr"][0]["timeleft"] = "587.14:00:00"  # guess: a stall, never "587 d left"
+        code, out, _ = self.cli("status")
+        self.assertIn("(1 stalled: no seeds or no speed)", out)
+        self.assertNotIn(" d ", out.split("Starlight Harbor:")[1].split("\n")[0])
 
     def test_missing_with_nothing_found_explains_the_indexers(self):
         self.st.add_series(8004, [1], profile=8)
