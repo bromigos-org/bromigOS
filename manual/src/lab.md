@@ -528,4 +528,4 @@ ports bind to loopback. Cluster services stay inside the cluster.
 NVIDIA NemoClaw has an experimental host plan in the picker. It creates an OpenClaw sandbox on a Linux Docker
 host through NVIDIA OpenShell. This slice keeps its messaging off and refuses a
 cluster-only target. It never recreates an existing sandbox. See the
-[agent installer notes](../../docs/lab-agents.md#nemoclaw-boundaries) for these limits.
+[agent installer notes](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-agents.md#nemoclaw-boundaries) for these limits.
