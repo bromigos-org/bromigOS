@@ -159,6 +159,7 @@ attributes from your `Panel` subclass. All are optional.
 | `category` | `system`, `network`, `homelab`, `media`, `notes` or `fun` | `system` |
 | `reads` | What it reads, in a few words, such as `"your CPU"` | Empty |
 | `min_size`, `max_size` | The smallest and largest (width, height) edit mode lets it take, in pixels | (240, 120) and (1600, 1400) |
+| `sizes`, `default_size` | Its [size classes](widgets.md#size-classes), each with a layout of its own, and the one it starts in | One class, `standard`, from `min_size` to `max_size` |
 
 ```python
 class LoadPanel(Panel):
@@ -168,7 +169,8 @@ class LoadPanel(Panel):
     min_size, max_size = (360, 120), (720, 240)
 ```
 
-`draw(cr, w, h)` gets the size the user chose, so lay the panel out from `w` and `h`. The
+`draw(cr, w, h)` gets the size the user chose, so lay the panel out from `w` and `h`.
+With `sizes`, `self.size_class(w, h)` says which layout to draw. The
 gallery says who made a panel from where it came from: bromigOS, an extension's
 `authors`, or you.
 

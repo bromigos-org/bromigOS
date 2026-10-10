@@ -41,7 +41,8 @@ bromigos-widgets stats                # print draw counts and coverage to the ap
 bromigos-widgets render <name> out.png    # draw one panel offscreen, with no window
 ```
 
-`render` also takes a plugin's path, such as `plugins/x.py`, and `--ticks <n>`.
+`render` also takes a plugin's path, such as `plugins/x.py`, `--ticks <n>`, and
+`--size <w>x<h>` to draw it at another size, in that size class's layout.
 
 The keys are Super+W for all panels, Super+Alt+W for edit mode, Super+S, N, D, B and F for one each, Super+K for
 shortcuts, and Alt+N to type in the notes. The full list is the manual's

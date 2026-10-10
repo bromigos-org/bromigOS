@@ -310,6 +310,13 @@ class WidgetsPage:
             s = w["settings"]
             box.append(ctx.button("Settings…", lambda s=s: ctx.open_page(s["page"], s.get("key")),
                                   f"{title}'s own settings: {s['what']}"))
+        if len(w.get("sizes") or []) > 1:
+            opts = [(c["name"], f"{c['name'].title()} {c['start'][0]}×{c['start'][1]}") for c in w["sizes"]]
+            cur = w.get("size_class") or w.get("default_size")
+            box.append(ctx.dropdown(opts, cur, on_select=lambda c, n=w["name"], t=title, was=cur: self._change(
+                ["size", n, c], f"{t}: {c}", ["size", n, was] if was else None, gallery=True),
+                hint=f"{title}'s size: each size lays it out its own way, with more to see as it grows",
+                max_chars=22))
         if not w["visible"]:
             box.append(ctx.button("Add to desktop", lambda n=w["name"], t=title: self._change(
                 ["add", n], f"{t}: on, in a free spot", ["hide", n], gallery=True),

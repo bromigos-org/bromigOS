@@ -46,16 +46,37 @@ def core_classes():
     return P.CORE
 
 
+def classes_of(obj):
+    """A panel's size classes, [(name, min, max, start)] (panels.Panel.size_classes):
+    FIELD NOTES' one class when obj is None."""
+    inner = getattr(obj, "inner", obj)
+    if inner is not None and hasattr(inner, "size_classes"):
+        try:
+            return [(n, tuple(lo), tuple(hi), tuple(st)) for n, lo, hi, st in inner.size_classes()]
+        except Exception:                      # a plugin's bad `sizes`: its plain limits
+            pass
+    src = NOTES if inner is None else {"min_size": getattr(inner, "min_size", (240, 120)),
+                                        "max_size": getattr(inner, "max_size", (1600, 1400)),
+                                        "width": getattr(inner, "width", 470), "height": getattr(inner, "height", 200)}
+    return [("standard", tuple(src["min_size"]), tuple(src["max_size"]), (src["width"], src["height"]))]
+
+
 def meta_of(obj, name=None):
     """A panel class's or instance's gallery words (a plugin's SafePanel too)."""
     inner = getattr(obj, "inner", obj)
     cat = getattr(inner, "category", "system")
+    cs = classes_of(obj)
+    default = getattr(inner, "default_size", "standard")
+    start = next((c[3] for c in cs if c[0] == default), cs[0][3])
     return {"title": str(getattr(inner, "title", None) or (name or "").upper()),
             "description": str(getattr(inner, "description", "") or ""),
             "category": cat if cat in CATEGORIES else "fun",
             "reads": str(getattr(inner, "reads", "") or ""),
-            "min_size": tuple(getattr(inner, "min_size", (240, 120))),
-            "max_size": tuple(getattr(inner, "max_size", (1600, 1400)))}
+            "min_size": (min(c[1][0] for c in cs), min(c[1][1] for c in cs)),
+            "max_size": (max(c[2][0] for c in cs), max(c[2][1] for c in cs)),
+            "sizes": [{"name": n, "min": list(lo), "max": list(hi), "start": list(st)} for n, lo, hi, st in cs],
+            "default_size": default if any(c[0] == default for c in cs) else cs[0][0],
+            "start": list(start)}
 
 
 # ------------------------------------------------------------------ who made it
@@ -110,15 +131,24 @@ def source_of(path):
 
 
 # ------------------------------------------------------------------ the list
+def notes_meta():
+    return dict(NOTES, **{k: v for k, v in meta_of(None, "notes").items() if k not in ("title", "description",
+                                                                                     "category", "reads")})
+
+
 def entry(name, meta, source, state, ext=None):
     s = state.get(name) or {}
     author = {"bromigos": "bromigOS", "homelab": "bromigOS (homelab)", "yours": "you"}.get(source)
     if source == "extension":
         author = ", ".join(a.split(" <")[0] for a in (ext or {}).get("authors") or []) or (ext or {}).get("name") or "?"
+    width, height = s.get("width", meta.get("width")), s.get("height", meta.get("height"))
+    cls = None
+    if width and height and meta.get("sizes"):
+        import arrange
+        cls = arrange.fit_class([(c["name"], c["min"], c["max"]) for c in meta["sizes"]], width, height)[2]
     return dict(meta, name=name, source=source, author=author, extension=ext,
                 visible=bool(s.get("visible", True)),
-                x=s.get("x"), y=s.get("y"), width=s.get("width", meta.get("width")),
-                height=s.get("height", meta.get("height")),
+                x=s.get("x"), y=s.get("y"), width=width, height=height, size_class=cls,
                 min_size=list(meta["min_size"]), max_size=list(meta["max_size"]),
                 settings=SETTINGS.get(name))
 
@@ -136,7 +166,7 @@ def entries(doc=None, plugins=True):
     core = core_classes()
     for name in ORDER:
         if name == "notes":
-            meta = dict(NOTES)
+            meta = notes_meta()
         else:
             cls = core[name]
             meta = dict(meta_of(cls, name), width=cls.width, height=cls.height)
@@ -155,8 +185,7 @@ def entries(doc=None, plugins=True):
                         height=layout.get("height", cls.height))
             err = None
         except Exception as e:                        # listed, with why it can't load
-            meta = {"title": name.upper(), "description": "", "category": "fun", "reads": "",
-                    "min_size": (240, 120), "max_size": (1600, 1400), "width": 470, "height": 200}
+            meta = dict(meta_of(object(), name), width=470, height=200, category="fun")
             err = f"{type(e).__name__}: {str(e)[:160]}"
         e = entry(name, meta, src, state, exts.get(name) if src == "extension" else None)
         e["error"] = err

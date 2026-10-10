@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bromigos:summary=The desktop panels: which are on, where they sit, the monitor, the weather's place (your layout.json and weather.toml)
-# bromigos:args=[status] | edit | gallery [--previews DIR] | show|hide|add NAME | move NAME X Y | size NAME W H | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
+# bromigos:args=[status] | edit | gallery [--previews DIR] | show|hide|add NAME | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
 # bromigos:examples=bromigos panels; bromigos panels edit; bromigos panels add weather; bromigos panels weather place "San Diego"; bromigos panels hide connections
 """bromigos-panels (`bromigos panels`): the desktop panels' layout (bromigos-widgets). The
 panels read your ~/.config/bromigos/widgets/layout.json, else bromigOS's
@@ -17,7 +17,9 @@ reload`). The weather's place is ~/.config/bromigos/weather.toml. Settings › W
   bromigos panels show|hide NAME     a panel on or off at login (and now, when the panels run)
   bromigos panels add NAME           a panel on, in a free spot on the desktop
   bromigos panels move NAME X Y      its place, px from the top left of the usable area
-  bromigos panels size NAME W H
+  bromigos panels size NAME W H      its size in px (edit mode keeps it to the panel's size classes)
+  bromigos panels size NAME CLASS    one of its size classes (compact, standard, wide, tall, large),
+                                     at that class's starting size (`gallery` lists each panel's)
   bromigos panels monitor NAME|""    the output they go on ("": the primary)
   bromigos panels weather place PLACE | coords LAT LON | units metric|imperial | name TEXT | clear
   bromigos panels reset              bromigOS's layout and no weather.toml (a layout.json that's a
@@ -197,12 +199,32 @@ def move(args):
 
 
 def size(args):
+    if len(args) == 2:
+        return size_class(args)
     if len(args) != 3:
-        raise Fail("bromigos panels size NAME W H")
+        raise Fail("bromigos panels size NAME W H | NAME CLASS")
     d, _, _ = load()
     p = _panel(d, args[0])
     p["width"], p["height"] = _num(args[1], "width", 120, 4000), _num(args[2], "height", 80, 4000)
     return _save(d, f"{p['name']}: {p['width']}×{p['height']}")
+
+
+def size_class(args):
+    name, cls = args
+    try:
+        import gallery
+        it = next((e for e in gallery.entries(_layout_or_empty()) if e["name"] == name), None)
+    except Exception as e:
+        raise Fail(f"the widgets' code isn't here to read {name}'s sizes: {e}")
+    if it is None:
+        raise Fail(f"no panel {name!r}")
+    c = next((c for c in it["sizes"] if c["name"] == cls), None)
+    if c is None:
+        raise Fail(f"{name} has no {cls!r} size (it has: {', '.join(c['name'] for c in it['sizes'])})")
+    d, _, _ = load()
+    p = _panel(d, name, plugins=True)
+    p["width"], p["height"] = c["start"]
+    return _save(d, f"{it['title'].title()}: {cls}, {p['width']}×{p['height']}")
 
 
 def monitor(args):
@@ -313,6 +335,13 @@ def add(args):
     p = _panel(d, name, plugins=True)
     st = A.state_of(d)
     w, h = int(p.get("width") or 470), int(p.get("height") or 300)
+    try:                                        # off: its default size class, as the gallery's Add does
+        import gallery
+        it = next((e for e in gallery.entries(d) if e["name"] == name), None)
+        if it and not p.get("visible", True):
+            w, h = it["start"]
+    except Exception:
+        pass
     taken = [(s["x"], s["y"], s.get("width", 470), s.get("height", 300)) for n, s in st.items()
              if n != name and s.get("visible", True) and "x" in s and "y" in s]
     area = _area()

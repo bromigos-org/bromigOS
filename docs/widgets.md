@@ -150,9 +150,65 @@ The steps:
 5. Draw it offscreen with `bromigos-widgets render <name> out.png` and look at it at its
    smallest and largest sizes.
 
+To make bigger sizes worth having, give it [size classes](#size-classes).
+
 The panels pick the file up within 2 seconds. It appears in the widget gallery under its
 category, with its own picture, and edit mode can place and size it. Nothing else needs
 to change: no list to add it to, no key, no layout entry.
+
+## Size classes
+
+A panel can have several sizes, each with a layout of its own: a compact readout, the
+standard panel, and wider, taller or larger ones that show more. These sizes are its
+*size classes*.
+
+| Class | Meant for |
+|---|---|
+| `compact` | One reading at a glance |
+| `standard` | The panel as it's usually seen |
+| `wide` | More across: a longer history, a strip of hours |
+| `tall` | More down: a longer list |
+| `large` | More of everything, and room for bigger pictures |
+
+In edit mode, a panel resizes freely inside a class. Between two classes it snaps to the
+nearest one, so it's never at a size it has no layout for. The gallery's cards have a
+size picker, and **Add to desktop** uses the panel's default class.
+
+To give a panel size classes:
+
+1. Set `sizes` on your `Panel` subclass. Each class has a smallest and a largest
+   (width, height) in pixels, and may have a third, the size it starts at. Without that,
+   it starts at its smallest.
+2. Set `default_size` to the class it starts in.
+3. In `draw(cr, w, h)`, ask which class you're drawing with `self.size_class(w, h)`,
+   and lay out for it. Inside a class, lay out from `w` and `h`, because the user can
+   make it any size in the class's range.
+4. Draw each class offscreen, at its smallest and largest:
+   `bromigos-widgets render <name> out.png --size <w>x<h>`.
+
+```python
+class MoonPanel(Panel):
+    name, title = "moon", "MOON"
+    sizes = {
+        "compact": ((240, 120), (360, 180)),
+        "standard": ((380, 172), (560, 260), (380, 172)),
+        "large": ((640, 400), (960, 720)),
+    }
+    default_size = "standard"
+
+    def draw(self, cr, w, h):
+        top = D.frame(cr, w, h, self.title)
+        if self.size_class(w, h) == "compact":
+            ...                                # the disc and the percentage
+        elif self.size_class(w, h) == "large":
+            ...                                # the month ahead as a row of discs
+        else:
+            ...
+```
+
+A panel that declares no `sizes` has one class, `standard`, from `min_size` to
+`max_size`, and simply gets the size the user chose. `tick()` can read what the last
+draw used, so a panel can sample more only while it's large.
 
 ## Place the panels
 

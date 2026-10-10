@@ -141,6 +141,34 @@ def snap_resize(rect, corner, px, py, others, area, limits, snap=True, tol=SNAP,
     return (left, top, nw, nh), guides
 
 
+def fit_class(classes, w, h):
+    """(w, h) moved into the nearest size class: classes are [(name, min, max, ...)].
+    Inside a class it stays as it is; between two it goes to the closer one's edge.
+    Returns (w, h, the class's name)."""
+    best = None
+    for c in classes:
+        name, lo, hi = c[0], c[1], c[2]
+        cw, ch = max(lo[0], min(hi[0], w)), max(lo[1], min(hi[1], h))
+        d = (cw - w) ** 2 + (ch - h) ** 2
+        if best is None or d < best[0]:
+            best = (d, int(cw), int(ch), name)
+    return (best[1], best[2], best[3]) if best else (int(w), int(h), None)
+
+
+def resize_in_classes(rect, corner, classes, area):
+    """A resized rect (from snap_resize) fitted into its nearest size class, the corner
+    opposite `corner` kept where it is and the panel kept inside the area."""
+    x, y, w, h = rect
+    W, H = area
+    nw, nh, name = fit_class(classes, w, h)
+    if "w" in corner:
+        x = max(0, x + w - nw)
+    if "n" in corner:
+        y = max(0, y + h - nh)
+    x, y = min(x, max(0, W - nw)), min(y, max(0, H - nh))
+    return (x, y, nw, nh), name
+
+
 # ------------------------------------------------------------------ free space
 def overlaps(a, b, gap=0):
     ax, ay, aw, ah = a

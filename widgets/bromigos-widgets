@@ -23,8 +23,9 @@ monitor named in layout.json (above any background/live layer, below windows).
                                    panels first if they aren't running: the Field Notes entry)
   bromigos-widgets reload          re-read layout.json
   bromigos-widgets stats           print draw counts and coverage to the app's stderr
-  bromigos-widgets render NAME|plugins/x.py OUT.png [--ticks N]
-                                   draw one panel to a PNG offscreen (no window; real readings)
+  bromigos-widgets render NAME|plugins/x.py OUT.png [--ticks N] [--size WxH]
+                                   draw one panel to a PNG offscreen (no window; real readings;
+                                   --size: at that size, in the layout of its size class there)
 
 Plugins: plugins/<name>.py defines a Panel subclass; it is picked up, hot-reloaded and
 isolated by plugins.py (see its docstring). Health: $XDG_RUNTIME_DIR/bromigos-widgets-health.json.
@@ -86,7 +87,10 @@ if len(sys.argv) > 2 and sys.argv[1] == "render":
     import plugins as PL
     args = sys.argv[2:]
     ticks = int(args[args.index("--ticks") + 1]) if "--ticks" in args else 3
-    print(json.dumps(PL.render(args[0], args[1], ticks=ticks)))
+    w = h = None
+    if "--size" in args:                    # a size class's layout: --size 760x560
+        w, h = (int(v) for v in args[args.index("--size") + 1].lower().split("x"))
+    print(json.dumps(PL.render(args[0], args[1], ticks=ticks, w=w, h=h)))
     sys.exit(0)
 
 if len(sys.argv) > 1 and sys.argv[1] == "gallery":
@@ -292,6 +296,20 @@ class Surface:
         GtkLayerShell.set_margin(self.win, GtkLayerShell.Edge.LEFT, self.x)
         GtkLayerShell.set_margin(self.win, GtkLayerShell.Edge.TOP, self.y)
 
+    def limits(self):
+        cs = self.classes()
+        return ((min(c[1][0] for c in cs), min(c[1][1] for c in cs)),
+                (max(c[2][0] for c in cs), max(c[2][1] for c in cs)))
+
+    def size_class(self):
+        return A.fit_class(self.classes(), *self.size_now())[2]
+
+    def set_size_class(self, name):
+        """To a size class's start size (the gallery's size picker)."""
+        start = next((c[3] for c in self.classes() if c[0] == name), None)
+        if start:
+            self.resize(*start)
+
     def set_layer(self, top):
         GtkLayerShell.set_layer(self.win, GtkLayerShell.Layer.TOP if top else GtkLayerShell.Layer.BOTTOM)
 
@@ -331,9 +349,8 @@ class PanelWindow(Surface):
     def size_now(self):
         return (int(self.panel.width), int(self.panel.height))
 
-    def limits(self):
-        m = G.meta_of(self.panel)
-        return m["min_size"], m["max_size"]
+    def classes(self):
+        return G.classes_of(self.panel)
 
     def resize(self, w, h):
         w, h = int(w), int(h)
@@ -425,8 +442,8 @@ class NotesWindow(Surface):
     def size_now(self):
         return (int(self.w), int(self.h))
 
-    def limits(self):
-        return G.NOTES["min_size"], G.NOTES["max_size"]
+    def classes(self):
+        return G.classes_of(None)
 
     def resize(self, w, h):
         self.w, self.h = int(w), int(h)
@@ -975,6 +992,8 @@ class App:
         if self.editor:
             self.editor.show(name, free=True)
             return
+        if not w.visible():                    # its default size class, as the gallery's Add does
+            w.set_size_class(G.meta_of(getattr(w, "panel", None), name)["default_size"])
         area = self.area()
         taken = [x.rect() for n, x in self.windows.items() if n != name and x.visible()]
         w.place(*A.place(*w.size_now(), taken, area, self.avoid(area)))

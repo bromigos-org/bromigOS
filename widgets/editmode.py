@@ -199,6 +199,9 @@ class Editor:
         w = self.app.windows.get(name)
         return G.meta_of(w.panel, name)["title"] if getattr(w, "panel", None) is not None else G.NOTES["title"]
 
+    def classes(self, name):
+        return self.app.windows[name].classes()
+
     def hit(self, x, y):
         """(name, part) under the pointer: part is close, nw, ne, sw, se or body."""
         names = self.visible_names()
@@ -294,7 +297,9 @@ class Editor:
         drag = self.drag and self.drag["name"] == name
         if not (selected or drag or hov[0] == name):
             return
-        label = f"{self.title(name)}   {w}×{h}   AT {x},{y}"
+        cls = self.app.windows[name].size_class()
+        many = len(self.classes(name)) > 1
+        label = f"{self.title(name)}   {cls.upper() + ' ' if many and cls else ''}{w}×{h}   AT {x},{y}"
         lay = D.layout(cr, label, 11, "semibold", 0.12)
         tw = min(lay.get_pixel_size()[0] + 16, w - HANDLE)
         ty = y + h - 24
@@ -312,11 +317,15 @@ class Editor:
             return True
         t = self.title(name)
         (lw, lh), (hw, hh) = self.limits(name)
+        cs = self.classes(name)
+        sizes = ", ".join(f"{c[0]} {c[1][0]}×{c[1][1]} to {c[2][0]}×{c[2][1]}" for c in cs)
         tooltip.set_text({
             "close": f"Hide {t} (H). It stays in the tray: switch it on there to bring it back.",
             "body": f"{t}: drag to move it. It snaps to an 8 px grid and to the other panels' edges; "
                     "hold Ctrl to place it freely. Arrow keys nudge it (Shift: 10 px).",
-        }.get(part, f"Drag to resize {t}: {lw}×{lh} to {hw}×{hh} px. Ctrl+arrows resize it from the keyboard."))
+        }.get(part, (f"Drag to resize {t}. Its sizes: {sizes} px; between them it snaps to the nearest, "
+                     "and each lays it out its own way." if len(cs) > 1 else
+                     f"Drag to resize {t}: {lw}×{lh} to {hw}×{hh} px.") + " Ctrl+arrows resize it from the keyboard."))
         return True
 
     def set_cursor(self, part):
@@ -371,6 +380,7 @@ class Editor:
             py = (y if "n" in c else y + h) + dy
             r, self.guides = A.snap_resize(d["rect"], c, px, py, self.others(name), self.size(), self.limits(name),
                                            snap=not free)
+            r, _cls = A.resize_in_classes(r, c, self.classes(name), self.size())
             self.app.windows[name].place(r[0], r[1])
             self.app.windows[name].resize(r[2], r[3])
         self.area.queue_draw()
@@ -473,6 +483,7 @@ class Editor:
         x, y, w, h = self.app.windows[name].rect()
         W, H = self.size()
         nw, nh = A.clamp_size(min(w + dw, W - x), min(h + dh, H - y), self.limits(name))
+        nw, nh, _cls = A.fit_class(self.classes(name), nw, nh)
         if (nw, nh) != (w, h):
             self.record(key=f"size {name}")
             self.app.windows[name].resize(nw, nh)
@@ -491,6 +502,9 @@ class Editor:
         with free: Add to desktop)."""
         self.record()
         win = self.app.windows[name]
+        if free:                                  # Add to desktop: at its default size
+            win.set_size_class(G.meta_of(getattr(win, "panel", None), name)["default_size"]
+                               if getattr(win, "panel", None) is not None else "standard")
         x, y, w, h = win.rect()
         taken = [r for n, r in self.rects().items() if n != name]
         if free or not A.fits((x, y, w, h), taken, self.size()):
@@ -774,7 +788,7 @@ class Editor:
         out = []
         for name, w in self.app.windows.items():
             panel = getattr(w, "panel", None)
-            meta = G.NOTES if panel is None else G.meta_of(panel, name)
+            meta = G.notes_meta() if panel is None else G.meta_of(panel, name)
             src = G.source_of(self.app.plugins[name][0]) if name in self.app.plugins else "bromigos"
             e = G.entry(name, dict(meta), src, {name: dict(w.rect_state(), visible=w.visible())},
                         exts.get(name) if src == "extension" else None)
@@ -852,6 +866,8 @@ class Editor:
         if not e["visible"]:
             row.pack_start(self.button("Add to desktop", f"Puts {e['title']} on the desktop, in a free spot",
                                        lambda: self.show(name, free=True)), False, False, 0)
+        if len(e.get("sizes") or []) > 1:
+            col.pack_start(self.size_picker(e), False, False, 2)
         if e.get("settings"):
             s = e["settings"]
             target = s["page"] + (f"#{s['key']}" if s.get("key") else "")
@@ -863,6 +879,36 @@ class Editor:
         ev.add(box)
         self.cards[name] = box
         return ev
+
+    def size_picker(self, e):
+        """One button per size class; the one it's in now pressed."""
+        name = e["name"]
+        box = Gtk.Box(spacing=3)
+        cur = self.app.windows[name].size_class()
+        for c in e["sizes"]:
+            b = Gtk.ToggleButton(label=c["name"].title())
+            b.get_style_context().add_class("chip")
+            b.set_active(c["name"] == cur)
+            b.set_tooltip_text(f"{e['title']} at its {c['name']} size: {c['start'][0]}×{c['start'][1]} px "
+                               f"(it can be {c['min'][0]}×{c['min'][1]} to {c['max'][0]}×{c['max'][1]})")
+            b.connect("clicked", lambda _b, n=c["name"]: self.set_class(name, n))
+            box.pack_start(b, False, False, 0)
+        return box
+
+    def set_class(self, name, cls):
+        win = self.app.windows[name]
+        if win.size_class() == cls and win.visible():
+            self.changed(rebuild=True)          # the button pressed again: shown as it is
+            return
+        self.record()
+        win.set_size_class(cls)
+        x, y, w, h = win.rect()
+        W, H = self.size()
+        win.place(min(x, max(0, W - w)), min(y, max(0, H - h)))
+        if not win.visible():
+            self.app.set_visible(name, True)
+        self.select(name)
+        self.changed(rebuild=True)
 
     def draw_thumb(self, widget, cr, name):
         win = self.app.windows.get(name)

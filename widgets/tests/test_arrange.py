@@ -229,3 +229,25 @@ class LayoutFile(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SizeClasses(unittest.TestCase):
+    CLASSES = [("compact", (240, 140), (360, 220)), ("standard", (420, 300), (560, 480)),
+               ("large", (700, 560), (1000, 900))]
+
+    def test_inside_a_class_it_stays(self):
+        self.assertEqual(A.fit_class(self.CLASSES, 500, 400), (500, 400, "standard"))
+        self.assertEqual(A.fit_class(self.CLASSES, 300, 180), (300, 180, "compact"))
+
+    def test_between_classes_it_snaps_to_the_nearest(self):
+        self.assertEqual(A.fit_class(self.CLASSES, 380, 260), (360, 220, "compact"))
+        self.assertEqual(A.fit_class(self.CLASSES, 400, 290), (420, 300, "standard"))
+        self.assertEqual(A.fit_class(self.CLASSES, 640, 520), (700, 560, "large"))
+        self.assertEqual(A.fit_class(self.CLASSES, 5000, 5000), (1000, 900, "large"))
+
+    def test_a_resize_keeps_the_far_corner(self):
+        r, name = A.resize_in_classes((100, 100, 380, 260), "nw", self.CLASSES, AREA)
+        self.assertEqual((r, name), ((120, 140, 360, 220), "compact"))      # bottom right stays at 480,360
+        r, name = A.resize_in_classes((1400, 100, 640, 520), "se", self.CLASSES, AREA)
+        self.assertEqual(name, "large")
+        self.assertLessEqual(r[0] + r[2], AREA[0])                         # still inside the area

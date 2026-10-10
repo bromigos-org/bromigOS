@@ -15,6 +15,9 @@ import sources as S
 
 # The widget gallery's categories (a panel's `category`), in the order it lists them.
 CATEGORIES = ("system", "network", "homelab", "media", "notes", "fun")
+# The size classes a panel can declare (its `sizes`), smallest first
+# (docs/widgets.md, "Size classes").
+SIZE_CLASSES = ("compact", "standard", "wide", "tall", "large")
 
 
 def open_url(url):
@@ -41,6 +44,56 @@ class Panel:
     # the sizes edit mode lets it take (px): (width, height)
     min_size = (240, 120)
     max_size = (1600, 1400)
+    # Size classes (docs/widgets.md, "Size classes"): {class: (min, max)} or
+    # {class: (min, max, start)}, each a (width, height) in px; the class names are
+    # SIZE_CLASSES. Edit mode resizes freely inside a class and snaps between them, and
+    # draw() lays the panel out for size_class(w, h). Empty: one class, "standard", from
+    # min_size to max_size, and the panel just scales.
+    sizes = {}
+    default_size = "standard"           # the class a panel starts at (Add to desktop)
+
+    @classmethod
+    def size_classes(cls):
+        """[(name, min, max, start)] in SIZE_CLASSES order: the declared classes, else one
+        "standard" class spanning min_size to max_size."""
+        out = []
+        for name in SIZE_CLASSES:
+            spec = (cls.sizes or {}).get(name)
+            if not spec:
+                continue
+            lo, hi = tuple(spec[0]), tuple(spec[1])
+            start = tuple(spec[2]) if len(spec) > 2 else lo
+            out.append((name, lo, hi, start))
+        if not out:
+            out = [("standard", tuple(cls.min_size), tuple(cls.max_size), (cls.width, cls.height))]
+        return out
+
+    @classmethod
+    def limits(cls):
+        """The smallest and largest (width, height) over every class."""
+        cs = cls.size_classes()
+        return ((min(c[1][0] for c in cs), min(c[1][1] for c in cs)),
+                (max(c[2][0] for c in cs), max(c[2][1] for c in cs)))
+
+    @classmethod
+    def size_class(cls, w, h):
+        """The class a (w, h) panel is in: the one whose range holds it, else the nearest
+        (a layout.json written by hand can hold any size)."""
+        best, dist = None, None
+        for name, lo, hi, _start in cls.size_classes():
+            dx = max(lo[0] - w, 0, w - hi[0])
+            dy = max(lo[1] - h, 0, h - hi[1])
+            d = dx * dx + dy * dy
+            if dist is None or d < dist:
+                best, dist = name, d
+        return best
+
+    @classmethod
+    def start_size(cls, name=None):
+        """The size a class starts at (default_size's when name is None)."""
+        cs = cls.size_classes()
+        want = name or cls.default_size
+        return next((c[3] for c in cs if c[0] == want), cs[0][3] if cs else (cls.width, cls.height))
 
     def __init__(self, cfg=None):
         self.cfg = cfg or {}
