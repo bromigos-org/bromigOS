@@ -31,6 +31,8 @@ url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 depends=('sddm' 'qt6-declarative' 'weston'
          'ttf-geist-mono' 'ttf-meslo-nerd' 'noto-fonts' 'noto-fonts-emoji'
+         # Japanese, Chinese and Korean titles (anime, music, YouTube) instead of empty boxes
+         'noto-fonts-cjk'
          'breeze-icons' 'adwaita-cursors' 'python'
          # the gtk hook builds another theme's GTK theme from GTK's own (gresource)
          'gtk3' 'gtk4' 'glib2-devel'
