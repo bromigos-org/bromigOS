@@ -20,7 +20,7 @@ import gi  # noqa: E402
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import GLib, Gtk  # noqa: E402
 
 from bromigos_settings import app as A  # noqa: E402
 
@@ -96,9 +96,9 @@ class Driver(A.App):
         self.form.present()
 
     def form_type(self):
-        row = next(x for x in walk(self.form.dialog) if isinstance(x, Adw.EntryRow) and x.get_title() == "Harbour")
-        row.set_text("Greywater Light")
-        row.emit("apply")
+        box = self.form.inputs["harbour"]
+        box.set_text("Greywater Light")
+        box.emit("activate")
         GLib.timeout_add(600, lambda: (shot("widget-settings-form"), False)[1])
 
     def form_check(self):

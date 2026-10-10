@@ -25,6 +25,10 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
+# pictures for docs and tests: made-up readings, never this machine's (demo.py)
+if os.environ.get("BROMIGOS_WIDGETS_DEMO") == "1":
+    import demo  # noqa: E402,F401
+
 import arrange as A  # noqa: E402
 import widget_settings as WS  # noqa: E402
 

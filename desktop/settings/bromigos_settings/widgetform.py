@@ -6,12 +6,66 @@ lib/bromigos_account.py, which keeps tokens in the keyring and never shows them.
 
     WidgetForm(ctx, entry, done=None).present()     entry: a `bromigos panels gallery` widget
 """
+import os
 import threading
 import time
 
 from gi.repository import Adw, GLib, Gtk
 
 CMD = ["bromigos", "panels"]
+
+
+def home(path):
+    """A path as a person reads it: ~/… under the home folder."""
+    h = os.path.expanduser("~")
+    return "~" + path[len(h):] if path and h != "/" and (path == h or path.startswith(h + "/")) else path
+
+
+def short_url(url):
+    """A link to show (the button opens the whole one): no scheme, no www., no query."""
+    u = (url or "").split("?", 1)[0].split("#", 1)[0]
+    for p in ("https://", "http://"):
+        u = u.removeprefix(p)
+    return u.removeprefix("www.").rstrip("/")
+
+
+def field_row(f, text, on_apply, example=None):
+    """A labelled text box, down the row: the field's name, its hint under it, then the box
+    (an example in it while it's empty) with its Save button. Enter saves too."""
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, margin_top=10, margin_bottom=10,
+                  margin_start=12, margin_end=12)
+    t = Gtk.Label(label=f["label"], xalign=0)
+    box.append(t)
+    if f.get("hint"):
+        h = Gtk.Label(label=f["hint"], xalign=0, wrap=True)
+        h.add_css_class("dim-label")
+        h.add_css_class("caption")
+        box.append(h)
+    line = Gtk.Box(spacing=6, margin_top=4)
+    e = Gtk.Entry(text=text, hexpand=True)
+    if example:
+        e.set_placeholder_text(example)
+    e.set_tooltip_text(f.get("hint") or f["label"])
+    b = Gtk.Button(label="Save")
+    b.set_tooltip_text(f"Saves {f['label']} (Enter does too)")
+    b.connect("clicked", lambda *_: on_apply(e.get_text()))
+    e.connect("activate", lambda *_: on_apply(e.get_text()))
+    line.append(e)
+    line.append(b)
+    box.append(line)
+    r = Gtk.ListBoxRow(activatable=False, selectable=False)
+    r.set_child(box)
+    r.set_tooltip_text(f.get("hint") or f["label"])
+    r.entry = e
+    return r
+
+
+def sentence(text, more):
+    """Two hints as one: a full stop between them."""
+    text = (text or "").strip()
+    if not text:
+        return more
+    return text + ("" if text[-1] in ".!?:" else ".") + " " + more
 
 
 def account():
@@ -23,33 +77,60 @@ def account():
         return None
 
 
-class WidgetForm:
+class Sheet:
+    """A form's content (self.page, an Adw.PreferencesPage) and how it's shown: present()
+    as an Adw.Dialog over a Settings window, or a host takes self.page and gives
+    on_close (the Customize window shows it in its own sheet: a dialog window would open
+    under its overlay)."""
+    title = ""
+    size = (560, 600)
+    on_close = None
+
+    def _page(self):
+        self.page = Adw.PreferencesPage()
+        self.dialog = None
+
+    def present(self):
+        self.dialog = Adw.Dialog(title=self.title, content_width=self.size[0], content_height=self.size[1])
+        tv = Adw.ToolbarView()
+        hb = Adw.HeaderBar()
+        t = Gtk.Label(label=self.title)                # the whole title: the header makes room for it
+        t.add_css_class("title")
+        hb.set_title_widget(t)
+        tv.add_top_bar(hb)
+        tv.set_content(self.page)
+        self.dialog.set_child(tv)
+        self.dialog.present(self.ctx.window)
+        return self.dialog
+
+    def close(self):
+        if self.dialog is not None:
+            self.dialog.close()
+        elif self.on_close:
+            self.on_close()
+
+
+class WidgetForm(Sheet):
     def __init__(self, ctx, entry, done=None):
         self.ctx, self.e, self.done = ctx, entry, done
         self.name = entry["name"]
-        self.title = entry["title"].title() if entry["title"].isupper() else entry["title"]
+        self.wtitle = entry["title"].title() if entry["title"].isupper() else entry["title"]
+        self.title = f"{self.wtitle} settings"
         self.values = dict(entry.get("values") or {})
-        self.dialog = Adw.Dialog(title=self.title, content_width=560, content_height=600)
-        tv = Adw.ToolbarView()
-        tv.add_top_bar(Adw.HeaderBar())
-        self.page = Adw.PreferencesPage()
-        tv.set_content(self.page)
-        self.dialog.set_child(tv)
+        self._page()
         self.signins = []
+        self.inputs = {}                    # each text field's box, by key (the tests type in them)
         self.build()
-
-    def present(self):
-        self.dialog.present(self.ctx.window)
-        return self.dialog
 
     # ------------------------------------------------------------------ the rows
     def build(self):
         ctx, e = self.ctx, self.e
         values = [f for f in e["form"] if f["kind"] != "secret-signin"]
         if values:
-            g = Adw.PreferencesGroup(title=GLib.markup_escape_text(self.title.upper()),
-                                     description=GLib.markup_escape_text(f"Saved in {e.get('settings_file') or 'its file'}; "
-                                                                         "the widget reads it again at once."))
+            g = Adw.PreferencesGroup(title=GLib.markup_escape_text(self.wtitle.upper()),
+                                     description=GLib.markup_escape_text(
+                                         f"Saved in {home(e.get('settings_file')) or 'its file'}; the widget reads it "
+                                         "again at once."))
             for f in values:
                 g.add(self.row(f))
             self.page.add(g)
@@ -65,11 +146,11 @@ class WidgetForm:
         cur = self.values.get(k)
         hint = f.get("hint") or f["label"]
         if kind in ("text", "list"):
-            r = Adw.EntryRow(title=GLib.markup_escape_text(f["label"] + (" (separate with commas)" if kind == "list" else "")))
-            r.set_text(", ".join(map(str, cur or [])) if kind == "list" else str(cur or ""))
-            r.set_show_apply_button(True)
-            r.connect("apply", lambda w: self.change(f, [x.strip() for x in w.get_text().split(",") if x.strip()]
-                                                     if kind == "list" else w.get_text()))
+            g = dict(f, hint=sentence(f.get("hint"), "Separate them with commas.") if kind == "list" else f.get("hint"))
+            r = field_row(g, ", ".join(map(str, cur or [])) if kind == "list" else str(cur or ""),
+                          lambda text: self.change(f, [x.strip() for x in text.split(",") if x.strip()]
+                                                   if kind == "list" else text), example=f.get("example"))
+            self.inputs[k] = r.entry
         elif kind == "number":
             lo, hi = f.get("min", -1e9), f.get("max", 1e9)
             r = Adw.SpinRow.new_with_range(lo, hi, f.get("step", 1))
@@ -96,7 +177,7 @@ class WidgetForm:
                 r.set_selected(vals.index(cur))
             r.connect("notify::selected", lambda w, _p: 0 <= w.get_selected() < len(vals) and
                       self.change(f, vals[w.get_selected()]))
-        if f.get("hint") and hasattr(r, "set_subtitle"):
+        if f.get("hint") and kind not in ("text", "list") and hasattr(r, "set_subtitle"):
             r.set_subtitle(GLib.markup_escape_text(f["hint"]))
         ctx.hint(r, f"{f['label']}: {hint}. Runs bromigos panels set {self.name} {k} …")
         return r
@@ -206,16 +287,13 @@ class SignIn:
                                      f"it (~/.config/bromigos/accounts.toml)"))
         entries = {}
         for f in fields:
-            r = Adw.EntryRow(title=GLib.markup_escape_text(f.get("label") or f["key"]))
-            r.set_text(str(cur.get(f["key"]) or ""))
+            hint = f.get("hint") if f.get("hint") != self.help else ""     # said once, above
+            r = field_row(dict(f, label=f.get("label") or f["key"], hint=hint), str(cur.get(f["key"]) or ""),
+                          lambda _t: self.save_config(entries))
             self.ctx.hint(r, f.get("hint") or f.get("label") or f["key"])
-            entries[f["key"]] = r
+            entries[f["key"]] = r.entry
             self.add(r)
-        r = Adw.ActionRow(title="Then sign in")
-        r.add_suffix(self.button("Save", lambda: self.save_config(entries), f"Saves {self.ptitle}'s settings to "
-                                                                             "~/.config/bromigos/accounts.toml",
-                                 primary=True))
-        self.add(self.ctx.hint(r, "Saves them, then offers Sign in"))
+        # each field's Save saves them all, then offers Sign in
 
     def save_config(self, entries):
         vals = {k: r.get_text().strip() for k, r in entries.items() if r.get_text().strip()}
@@ -231,7 +309,7 @@ class SignIn:
     def sign_in(self):
         self.cancel = False
         self.clear()
-        self.waiting = self.add(Adw.ActionRow(title=GLib.markup_escape_text(f"Asking {self.ptitle}…")))
+        self.waiting = self.add(Adw.ActionRow(title=GLib.markup_escape_text(f"Asking {self.ptitle} for a code…")))
         self.waiting.add_prefix(Adw.Spinner())
         cancel = self.button("Cancel", self.stop, "Stops waiting for the sign-in")
         self.waiting.add_suffix(cancel)
@@ -252,16 +330,28 @@ class SignIn:
 
     def prompt(self, d):
         """The device flow's code (large, with Copy and the page), or PKCE's page to open."""
+        if getattr(self, "waiting", None) is not None:
+            self.waiting.set_title(GLib.markup_escape_text(f"Waiting for you to approve on {self.ptitle}…"))
         if d.get("user_code"):
-            code = Gtk.Label(label=d["user_code"], selectable=True)
-            code.add_css_class("title-1")
-            r = Adw.ActionRow(title="Type this code on the page", subtitle=GLib.markup_escape_text(
-                d.get("verification_uri") or ""))
-            r.add_suffix(code)
-            r.add_suffix(self.button("Copy", lambda: self.ctx.copy(d["user_code"]), "Copies the code"))
             url = d.get("verification_uri_complete") or d.get("verification_uri")
-            r.add_suffix(self.button("Open the page", lambda: self.ctx.open_url(url), f"Opens {url} in your browser",
-                                     primary=True))
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin_top=12, margin_bottom=12,
+                          margin_start=12, margin_end=12)
+            box.append(Gtk.Label(label=f"Type this code on {self.ptitle}'s page:", xalign=0))
+            row = Gtk.Box(spacing=10)
+            code = Gtk.Label(label=d["user_code"], selectable=True, xalign=0, hexpand=True)
+            code.add_css_class("title-1")
+            code.set_tooltip_text("The code: type it on the page, or copy it")
+            row.append(code)
+            row.append(self.button("Copy", lambda: self.ctx.copy(d["user_code"]), "Copies the code"))
+            row.append(self.button("Open the page", lambda: self.ctx.open_url(url), f"Opens {url} in your browser",
+                                   primary=True))
+            box.append(row)
+            where = Gtk.Label(label=short_url(d.get("verification_uri") or url), xalign=0, selectable=True)
+            where.add_css_class("dim-label")
+            where.set_tooltip_text(url)
+            box.append(where)
+            r = Gtk.ListBoxRow(activatable=False, selectable=False)
+            r.set_child(box)
             self.add(self.ctx.hint(r, f"{self.ptitle} shows this sign-in when you type the code there"))
             self.left = self.add(Adw.ActionRow(title=""))
             self.deadline = time.monotonic() + float(d.get("expires_in") or 900)
@@ -375,20 +465,18 @@ def approval_file(doc, when=None):
     return path
 
 
-class InstallFromURL:
+class InstallFromURL(Sheet):
     """Paste a git URL (or pick a folder), see what it would add and what it can do
     (`bromigos panels inspect`, which runs `bromigos ext info`), then Install: the button
     is the approval, given through a setup answers file, the existing way."""
 
-    def __init__(self, ctx, done=None):
+    title = "Add from a URL"
+    size = (720, 700)
+
+    def __init__(self, ctx, done=None, source=None):
         self.ctx, self.done = ctx, done
         self.doc = None
-        self.dialog = Adw.Dialog(title="Add from a URL", content_width=720, content_height=700)
-        tv = Adw.ToolbarView()
-        tv.add_top_bar(Adw.HeaderBar())
-        self.page = Adw.PreferencesPage()
-        tv.set_content(self.page)
-        self.dialog.set_child(tv)
+        self._page()
         g = Adw.PreferencesGroup(title="WHERE IT IS", description="A git URL (https://, ssh:// or git@host:path; add "
                                                                   "@tag to pin a version), or a folder on this machine.")
         self.url = Adw.EntryRow(title="Git URL or folder")
@@ -408,10 +496,9 @@ class InstallFromURL:
         self.result.set_visible(False)
         self.page.add(self.result)
         self.rows = []
-
-    def present(self):
-        self.dialog.present(self.ctx.window)
-        return self.dialog
+        if source:                                  # a catalog entry or a link: check it straight away
+            self.url.set_text(source)
+            GLib.idle_add(lambda: (self.check(), False)[1])
 
     def pick(self):
         fd = Gtk.FileDialog(title="The extension's folder")
@@ -495,7 +582,7 @@ class InstallFromURL:
             return
         r = Adw.ActionRow(title="Install it?", subtitle="It runs as you. Installing records that you approved it here."
                           if doc.get("code") else "It's data only.")
-        r.add_suffix(self.ctx.button("Cancel", self.dialog.close, "Closes this without installing anything"))
+        r.add_suffix(self.ctx.button("Cancel", self.close, "Closes this without installing anything"))
         r.add_suffix(self.ctx.button("Install", self.install, "Installs it: this click is your approval, recorded in "
                                                               "the extensions' ledger", primary=True))
         self.add(self.ctx.hint(r, "Your approval: the extension runs code as you"))
@@ -515,7 +602,7 @@ class InstallFromURL:
             ok = bool(res) and all(x.get("ok", True) for x in items)
             if ok:
                 self.ctx.toast(f"Installed {doc['name']}: its widget is in the gallery within a few seconds")
-                self.dialog.close()
+                self.close()
                 if self.done:
                     GLib.timeout_add_seconds(3, lambda: (self.done(), False)[1])
             else:
