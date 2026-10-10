@@ -346,7 +346,10 @@ class App:
         import subprocess
         tool = shutil.which("bromigos-wallpaper")
         if tool:
-            subprocess.Popen([tool, "apply"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            def run():
+                subprocess.Popen([tool, "apply"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return False
+            GLib.idle_add(run)                  # constructor: wait until the control socket exists
 
     # ------------------------------------------------------------------ layers
     def show_background(self):
@@ -378,7 +381,7 @@ class App:
         if self.bg_fault:
             log(f"background started after {self.bg_tries} failed attempt(s)")
         self.bg_fault, self.bg_tries, self.bg_retry_at = "", 0, 0.0
-        self.wallpaper_active = True
+        self.wallpaper_active = False
         self.wallpaper_fallback()
         self.refresh_state()
         return True
@@ -695,7 +698,7 @@ class App:
         elif self.stall_n >= 12 and not self.covered:
             self.heal("stalled for a minute with the desktop visible", force=True)
             self.stall_n = 0
-        active = bool(self.bg_enabled and self.bg and not self.bg.dead and not self.bg.failed)
+        active = bool(self.bg_enabled and self.bg and not self.bg.dead and not self.bg.failed and self.bg.frames)
         if active != getattr(self, "wallpaper_active", active):
             self.wallpaper_fallback()
         self.wallpaper_active = active
@@ -953,6 +956,10 @@ class App:
                 with conn:
                     try:
                         cmd = conn.recv(256).decode().strip()
+                        if cmd == "background-active":
+                            # Plain state only, no GTK: answer even while a renderer starts.
+                            conn.sendall(self.command(cmd).encode())
+                            continue
                         done = threading.Event()
                         out = {}
 
@@ -970,7 +977,7 @@ class App:
     def command(self, cmd):
         c, _, arg = cmd.partition(" ")
         if c == "background-active":
-            return "on" if self.bg_enabled and self.bg and not self.bg.dead and not self.bg.failed else "off"
+            return "on" if self.bg_enabled and self.bg and not self.bg.dead and not self.bg.failed and self.bg.frames else "off"
         if c == "ping":
             return "pong"
         if c == "state":

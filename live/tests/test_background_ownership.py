@@ -15,5 +15,7 @@ class Ownership(unittest.TestCase):
         for enabled, exists, dead, failed, expected in [(True, True, False, False, 'on'),
                 (False, True, False, False, 'off'), (True, False, False, False, 'off'),
                 (True, True, True, False, 'off'), (True, True, False, True, 'off')]:
-            app = SimpleNamespace(bg_enabled=enabled, bg=SimpleNamespace(dead=dead, failed=failed) if exists else None)
+            app = SimpleNamespace(bg_enabled=enabled, bg=SimpleNamespace(dead=dead, failed=failed, frames=1) if exists else None)
             self.assertEqual(ns['command'](app, 'background-active'), expected)
+        app = SimpleNamespace(bg_enabled=True, bg=SimpleNamespace(dead=False, failed=False, frames=0))
+        self.assertEqual(ns['command'](app, 'background-active'), 'off')
