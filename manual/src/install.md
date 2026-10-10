@@ -12,38 +12,27 @@ There are two ways to install bromigOS:
 You need:
 
 - a computer with Arch Linux installed, and a user account that can use `sudo`;
-- a network connection;
-- the address of the bromigOS package repository. During early access the repository is
-  private, so ask whoever runs it. If it uses its own security certificate, ask for that
-  file too.
+- a network connection.
 
 ## Install on Arch Linux
 
 1. Log in as your own user, not as root.
-2. Download the installer, with the repository's address in place of `<repo>`:
+2. Download the installer:
 
    ```bash
-   curl -fsSLO <repo>/bromigos/install.sh
-   ```
-
-   If the repository has its own certificate, tell `curl` about it:
-
-   ```bash
-   curl --cacert ~/repo-ca.crt -fsSLO <repo>/bromigos/install.sh
+   curl -fsSLO https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev/bromigos/install.sh
    ```
 
 3. Read it if you like. It's short: `less install.sh`.
 4. Run it:
 
    ```bash
-   bash install.sh --repo <repo>
+   bash install.sh
    ```
 
-   With the repository's own certificate, add `--ca`:
-
-   ```bash
-   bash install.sh --repo <repo> --ca ~/repo-ca.crt
-   ```
+   To install from another copy of the repository, such as your own mirror, add
+   `--repo <address>`. If that copy has its own security certificate, add
+   `--ca <certificate file>` too.
 
 5. Type your password when `sudo` asks, and answer the package manager's questions.
 6. Answer the [first-run questions](first-run.md) when they appear.
@@ -72,7 +61,7 @@ Running it again is safe. It only changes what's missing. It writes everything i
 
 ### Installer options
 
-Add these after `--repo <repo>`:
+Add these after `bash install.sh`:
 
 | Option | What it does |
 |---|---|

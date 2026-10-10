@@ -366,9 +366,8 @@ both architectures.
 
 ## Using the repository
 
-During early access the package repository is private. To get access, ask on the
-[Bromigos Discord](https://discord.gg/8bjGcFvGZU). On a new machine, `install.sh` adds
-the repository and its key ([docs/install.md](../docs/install.md)).
+The package repository is public, at `https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev`. On a new machine, `install.sh` adds the
+repository and its key ([docs/install.md](../docs/install.md)).
 
 To add it by hand instead, run this once per machine, as root, from a checkout of this
 repository:

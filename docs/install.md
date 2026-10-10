@@ -14,36 +14,36 @@ You need:
 
 - **Arch Linux,** freshly installed, with a user who can use `sudo` and a working network.
   archinstall's minimal profile is enough.
-- **The repository's base URL,** written `<repo>` below. During early access the
-  repository is private. To get access, ask on the
-  [Bromigos Discord](https://discord.gg/8bjGcFvGZU).
-- **The repository's CA certificate,** if its TLS certificate is signed by its own
-  certificate authority. You pass it with `--ca`.
+- **Another repository, if you use one.** By default `install.sh` installs from the
+  public repository, `https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev`. A mirror of your own is written `<repo>` below. If its TLS
+  certificate is signed by its own certificate authority, pass that certificate with
+  `--ca`.
 
 ## Install
 
 Signed in as your own user, not root, download the script, read it, then run it:
 
 ```bash
-curl -fsSLO <repo>/bromigos/install.sh
+curl -fsSLO https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev/bromigos/install.sh
 less install.sh
-bash install.sh --repo <repo> --ca <ca.pem>
+bash install.sh
 ```
 
-Leave out `--ca` if the repository doesn't need it. If it does, `curl` needs the
-certificate too, to download the script: add `--cacert <ca.pem>` to the first command.
+From another repository, download the script from it and add `--repo <repo>`, and
+`--ca <ca.pem>` if it has its own certificate authority. Then `curl` needs the certificate
+too: add `--cacert <ca.pem>` to the first command.
 
 When it's done, reboot and sign in at the Bromigos login screen.
 
 Piping the script straight into bash works too:
-`curl -fsSL <repo>/bromigos/install.sh | bash -s -- --repo <repo>`. It asks its questions
+`curl -fsSL https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev/bromigos/install.sh | bash`. It asks its questions
 on the terminal, not the pipe. With no terminal at all, such as `ssh` without `-t`, it
 stops unless you add `--yes`. Then it installs unattended, and `bromigos setup` asks the
 first-run questions after you sign in.
 
 | `install.sh` option | What it does |
 |---|---|
-| `--repo URL` | The package repository's base URL. Required, or set `BROMIGOS_REPO_URL`. |
+| `--repo URL` | The package repository's base URL, or set `BROMIGOS_REPO_URL`. The default is the public repository, `https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev`. |
 | `--ca FILE` or `--ca URL` | A CA certificate to trust for the repository's TLS |
 | `--channel NAME` | `stable` (the default), `rc` or `edge`. See [update.md](update.md#channels). |
 | `--dry-run` | Says what it would do, and changes nothing |

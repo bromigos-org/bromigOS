@@ -18,9 +18,6 @@ This manual shows you how to use it. It's for people who have installed bromigOS
 about to. How bromigOS is built is in the developer docs, in the repository's `docs/`
 folder.
 
-> **Early access.** bromigOS's packages come from a private repository for now. Ask
-> whoever runs it for the address.
-
 ## Start here
 
 1. [Install](install.md) bromigOS.

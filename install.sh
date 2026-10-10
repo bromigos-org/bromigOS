@@ -3,10 +3,10 @@
 # read it, then run it:
 #
 #   curl -fsSLO <repo>/bromigos/install.sh    (a repository with its own CA: curl --cacert FILE)
-#   bash install.sh --repo <repo> [options] [-- bromigos install args]
+#   bash install.sh [--repo <repo>] [options] [-- bromigos install args]
 #
 #   --repo URL     the package repository's base URL (pacman Server is URL/$repo/$arch);
-#                  or BROMIGOS_REPO_URL; default: the public repository, once there is one
+#                  or BROMIGOS_REPO_URL; default: the public repository, https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev
 #   --ca FILE|URL  a CA certificate to trust for the repository's TLS (a homelab's own CA)
 #   --channel NAME stable (default: tagged releases), rc, or edge (every push to main);
 #                  `bromigos channel` switches later (docs/update.md)
@@ -19,7 +19,7 @@
 # does the rest (docs/install.md). Safe to run again. Logs to ~/.local/state/bromigos/install.log.
 set -euo pipefail
 FPR=393E7D54F7DE58FE75B97214947C9D6193D3DD8B
-PUBLIC_REPO=''   # the public repository's base URL; empty during early access (docs/public.md)
+PUBLIC_REPO=https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev   # the public repository's base URL (docs/public.md)
 say() { printf 'install.sh: %s\n' "$*" | tee -a "$log"; }
 run() { if ((dry)); then say "would run: $*"; else say "run: $*"; "$@"; fi; }
 

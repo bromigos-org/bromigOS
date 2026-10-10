@@ -148,24 +148,18 @@ make your own, or install one from a Git repository.
 
 ## Install
 
-bromigOS is in early access. Its packages come from a private repository for now. To get
-access, ask on the [Bromigos Discord](https://discord.gg/8bjGcFvGZU). You'll get the
-repository's address, which is `<repo>` below. If the repository uses its own
-certificate authority, you'll get its certificate too.
-
 On a fresh Arch install, signed in as your own user, download the installer and read it.
-It's about eighty lines. If you were given a certificate, add `--cacert <certificate.pem>`
-to the `curl` command.
+It's about eighty lines.
 
 ```bash
-curl -fsSL <repo>/bromigos/install.sh -o install.sh
+curl -fsSLO https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev/bromigos/install.sh
 less install.sh
 ```
 
-Then run it. Leave out `--ca` if you weren't given a certificate.
+Then run it:
 
 ```bash
-bash install.sh --repo <repo> --ca <certificate.pem>
+bash install.sh
 ```
 
 The script adds the bromigOS repository and checks its signing key against a fingerprint
@@ -176,7 +170,7 @@ in.
 
 The installer also adds paru, a helper for the AUR. The AUR (Arch User Repository) is
 where Arch users share build recipes for software Arch doesn't carry. bromigOS itself
-never needs it. To leave paru out, run `bash install.sh --repo <repo> -- --no-aur`, or
+never needs it. To leave paru out, run `bash install.sh -- --no-aur`, or
 choose "Off" on the setup's AUR page.
 
 **From the ISO.** The ISO boots straight into a live bromigOS desktop, so you can try it
