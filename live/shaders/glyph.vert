@@ -22,7 +22,7 @@ void main() {
     if (a_ex.x > 0.0) {
         float dt = u_time - a_ex.x;
         if (dt < 0.0) col.a = 0.0;
-        else col.rgb = mix(col.rgb, vec3(0.92, 1.0, 0.88), a_ex.y * exp(-dt * 14.0));
+        else col.rgb = mix(col.rgb, THEME_WHITE, a_ex.y * exp(-dt * 14.0));
     }
     v_col = col;
 }

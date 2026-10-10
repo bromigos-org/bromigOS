@@ -15,7 +15,14 @@ manual's [Themes and worlds](../manual/src/themes-and-worlds.md) and
 ## What it draws
 
 Colour switches refresh the live layer’s shaders and tinted textures on the next frame,
-including paused backgrounds and open overlays. The session stays running.
+including paused backgrounds and open overlays. The session stays running. A pinned or held scanner stays visible in the new colours.
+
+Live drawing code uses `col("soft")` and the other palette roles. Shaders use
+`THEME_SOFT`, `THEME_PRIMARY` and the other `THEME_` tokens, resolved before compiling.
+`tests/test_palette_literals.py` rejects fixed UI colours; its exact exceptions are
+geometry, masks, light intensities and the den’s art shades, which are retinted.
+Audit personal plugin folders with `python3 tests/test_palette_literals.py --plugins DIR`.
+A world may still set its own art colours in `live/world.toml`.
 
 - **The background.** With the default theme, the Wick, the background is *the den*: a
   painted radio room whose screens, meters and floor the live layer brings to life. The
@@ -127,7 +134,7 @@ Four render tests check what the unit tests can't:
 | `tests/offscreen_motion.py` | Reduced motion and the still mode, for the den, a world and the overlays |
 | `tests/offscreen_sizes.py` | The background at six screen sizes, from 1280×800 to 3440×1440 |
 | `tests/offscreen_retint.py` | The den recoloured for the Wick and the six colour themes |
-| `tests/offscreen_theme_switch.py` | Existing den and radial surfaces switch Wick → Cinder → Wick; each frame matches a fresh scene in the new colours |
+| `tests/offscreen_theme_switch.py` | Existing den, pinned scanner and radial surfaces switch Wick → Cinder → Rime → Wick; scanner hues match each palette, and frames match fresh scenes |
 | `tests/software_session.py` | The daemon on a software renderer: a still frame, at low CPU ([No GPU](#no-gpu)) |
 
 ## Decks

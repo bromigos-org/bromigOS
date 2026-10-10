@@ -111,7 +111,7 @@ vec3 water(vec2 px, vec3 c) {
         c = mix(under, deep / max(wt.a, 1e-3), wt.a);
         float ca = pow(abs(sin(px.x * 0.021 / u_scale + sin(px.y * 0.033 / u_scale + u_time * 0.7) * 2.0 + u_swell.z * 0.8)
                          * sin(px.y * 0.027 / u_scale - u_time * 0.6 + sin(px.x * 0.013 / u_scale) * 2.0)), 7.0);
-        c += vec3(0.35, 0.75, 0.85) * ca * exp(-depth / (170.0 * u_scale)) * u_caus.x * u_grade.rgb;
+        c += THEME_CYAN * ca * exp(-depth / (170.0 * u_scale)) * u_caus.x * u_grade.rgb;
 #ifdef FX_RAYS
         float lx = (px.x + depth * u_rays.y) / u_scale;
         float sh = w_noise(vec2(lx * 0.006, u_swell.z * 0.04)) * 0.65 + w_noise(vec2(lx * 0.017, u_swell.z * 0.07 + 3.0)) * 0.35;
@@ -122,9 +122,9 @@ vec3 water(vec2 px, vec3 c) {
     } else {
         // the sea surface just above the line catches the swell's crests
         float above = -depth;
-        c += vec3(0.6, 0.75, 0.8) * exp(-above / (6.0 * u_scale)) * u_swell.w * 0.25 * u_grade.rgb;
+        c += THEME_SOFT * exp(-above / (6.0 * u_scale)) * u_swell.w * 0.25 * u_grade.rgb;
     }
-    c += vec3(0.75, 0.9, 0.95) * men * 0.45 * u_grade.rgb;
+    c += THEME_SOFT * men * 0.45 * u_grade.rgb;
     return c;
 #else
     vec2 wuv = (px / u_res - 0.5) / u_wview.z + 0.5 + u_wview.xy;
@@ -137,7 +137,7 @@ vec3 water(vec2 px, vec3 c) {
     float fres = mix(1.0, 0.55, clamp(depth / (u_res.y * 0.4), 0.0, 1.0));
     vec3 tint = wt.rgb / max(wt.a, 1e-3) * u_grade.rgb;
     vec3 w = tint + refl * u_line.z * fres;
-    w += vec3(0.5, 0.6, 0.65) * max(n.y, 0.0) * 0.015 * u_grade.rgb;      // glints where the rings tilt
+    w += THEME_DIM * max(n.y, 0.0) * 0.015 * u_grade.rgb;      // glints where the rings tilt
     return mix(c, w, wt.a);
 #endif
 }
@@ -159,7 +159,7 @@ vec3 rain(vec2 px) {
         float len = 0.35 + 0.3 * w_hash1(h * 17.0);
         float y = f.y - w_hash1(h * 53.0) * (1.0 - len);
         float on = step(0.0, y) * step(y, len);
-        acc += vec3(0.62, 0.7, 0.75) * exp(-d * d / (0.5 * sc)) * on * (L == 0 ? 0.16 : 0.09);
+        acc += THEME_SOFT * exp(-d * d / (0.5 * sc)) * on * (L == 0 ? 0.16 : 0.09);
     }
     return acc * u_grade.rgb * 1.6;
 }
@@ -233,10 +233,10 @@ vec3 spray(vec2 px) {
             float sp = (140.0 + 300.0 * h2) * u_spray[k].w * u_scale;
             vec2 p = o0 + vec2(cos(ang), sin(ang)) * sp * age + vec2(0.0, 520.0 * u_scale) * age * age;
             float d = length(px - p) / u_scale;
-            acc += vec3(0.85, 0.92, 0.95) * exp(-d * d / (2.0 + 2.0 * h1)) * (1.0 - age / 1.8);
+            acc += THEME_WHITE * exp(-d * d / (2.0 + 2.0 * h1)) * (1.0 - age / 1.8);
         }
         float ring = abs(length((px - o0) * vec2(1.0, 4.0)) / u_scale - age * 160.0);
-        acc += vec3(0.7, 0.85, 0.9) * exp(-ring * ring / 30.0) * (1.0 - age / 1.8) * 0.4 * u_spray[k].w;
+        acc += THEME_SOFT * exp(-ring * ring / 30.0) * (1.0 - age / 1.8) * 0.4 * u_spray[k].w;
     }
     return acc * u_grade.rgb;
 }
@@ -267,7 +267,7 @@ vec3 bubbles(vec2 px) {
                 float rim = exp(-pow((d - r) / (0.7 * u_scale), 2.0));
                 float hi = exp(-dot(q - vec2(-0.35, -0.35) * r, q - vec2(-0.35, -0.35) * r) / (0.18 * r * r + 0.3));
                 float life = smoothstep(0.0, 0.12, a) * (1.0 - smoothstep(0.9, 1.3, a));
-                acc += vec3(0.62, 0.85, 0.9) * (rim * 0.55 + hi * 0.8 + 0.06) * life * u_bubble[k].w;
+                acc += THEME_SOFT * (rim * 0.55 + hi * 0.8 + 0.06) * life * u_bubble[k].w;
             }
             continue;
         }
@@ -282,7 +282,7 @@ vec3 bubbles(vec2 px) {
             vec2 p = o0 + vec2((h2 - 0.5) * 120.0, (h1 - 0.5) * 22.0) * u_scale;
             float r = (2.0 + 3.0 * h2) * u_scale * (1.0 + a * 2.0);
             float d = abs(length((px - p) * vec2(1.0, 2.2)) - r);
-            acc += vec3(0.7, 0.85, 0.85) * exp(-d * d / (0.6 * u_scale)) * (1.0 - a / 0.45) * u_bubble[k].w;
+            acc += THEME_SOFT * exp(-d * d / (0.6 * u_scale)) * (1.0 - a / 0.45) * u_bubble[k].w;
         }
     }
     return acc * u_grade.rgb;
@@ -313,6 +313,6 @@ void main() {
     c += rain(px);
 #endif
 #endif
-    c += vec3(0.6, 0.65, 0.75) * u_flash * 0.12;
+    c += THEME_WHITE * u_flash * 0.12;
     o = vec4(c, 1.0);
 }

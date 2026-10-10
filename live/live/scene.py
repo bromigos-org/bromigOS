@@ -63,7 +63,7 @@ class Background:
         self.variant = None
         self.segs = []
         self.steam_on = False
-        self.face = (0.62, 0.8, 0.55)
+        self.face = glkit.T.rgb("soft")
         self.checked_at = 0.0
         self.shipmask = None
         self._load_under()
@@ -102,6 +102,16 @@ class Background:
         self.tv = None                  # the den TV (live/tv.py), once the den is drawn
         self._tv_media = None
         self._hint_prog = None
+
+    def theme_state(self):
+        """Keep a held or pinned scanner visible while its coloured textures rebuild."""
+        return {k: getattr(self, k) for k in ("scan_pin", "scan_held", "scan_req", "pin_amt", "hold_amt")}
+
+    def restore_theme_state(self, state):
+        for k, v in state.items():
+            setattr(self, k, v)
+        if self.scan_held:
+            self.hold_t = time.monotonic()       # the key's remaining hold is still bounded
 
     def den_tv(self):
         """The den TV: its channels on the den's screens (live/tv.py). Made with the den."""

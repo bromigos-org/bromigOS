@@ -45,8 +45,8 @@ vec2 corner(int i) {   // two triangles: 0..5 -> unit quad corners
 
 // Heat ramp for part glow: phosphor -> amber -> danger.
 vec3 heat(vec3 base, float h) {
-    vec3 amber = vec3(0.831, 0.686, 0.216);
-    vec3 danger = vec3(1.0, 0.463, 0.435);
+    vec3 amber = THEME_WARN;
+    vec3 danger = THEME_DANGER;
     if (h <= 0.0) return base;
     return h < 0.5 ? mix(base, amber, h * 2.0) : mix(amber, danger, (h - 0.5) * 2.0);
 }

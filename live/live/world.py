@@ -736,8 +736,8 @@ class World:
         # light: the hour's grade, the lightning
         cl = self.spec.get("clock", {})
         g = skyclock.grade(sig["hour"], {
-            "night": cl.get("night", (0.6, 0.7, 0.85)), "day": cl.get("day", (1, 1, 1)),
-            "dawn_tint": cl.get("dawn_tint", (1.0, 0.8, 0.8)), "dusk_tint": cl.get("dusk_tint", (1.0, 0.75, 0.6)),
+            "night": cl.get("night", glkit.T.rgb("dim")), "day": cl.get("day", glkit.T.rgb("white")),
+            "dawn_tint": cl.get("dawn_tint", glkit.T.rgb("soft")), "dusk_tint": cl.get("dusk_tint", glkit.T.rgb("warn")),
             "dawn": cl.get("dawn", (5.5, 7.5)), "dusk": cl.get("dusk", (18.0, 20.5))})
         if sig.get("storm") and self.split:
             g = (g[0] * 0.7, g[1] * 0.72, g[2] * 0.8, g[3])
@@ -816,7 +816,7 @@ class World:
         wt = self.water
         p.f("u_fog", self.surface_y * self.sy, float(wt.get("fog_distance", 260)) * self.sy, 1.0 if self.split else 0.0,
             float(wt.get("fog_actors", 0.6)) if amount is None else amount)
-        p.f("u_fogcol", *[float(x) for x in wt.get("fog", (0.01, 0.04, 0.07))])
+        p.f("u_fogcol", *[float(x) for x in wt.get("fog", glkit.T.rgb("panel"))])
 
     def _draw_items(self, items, t, sig):
         gi = si = 0
@@ -854,7 +854,7 @@ class World:
             p.f("u_sway", 0.0, 0.0, 0.0, 1.0)
         if L.sky:
             p.f("u_sky", 1.0, self.surface_y * self.sy, 0.55, 0.0)
-            tw = self.spec.get("clock", {}).get("twilight", (1.0, 0.55, 0.35))
+            tw = self.spec.get("clock", {}).get("twilight", glkit.T.rgb("warn"))
             p.f("u_twi", *[float(x) for x in tw])
             m = self.fx.by.get("moon")
             if m:
@@ -951,7 +951,7 @@ class World:
         p.i("u_atlas", 0)
         self._common(p)
         p.f("u_time", t)
-        p.f("u_water", *[float(x) for x in self.water.get("tint", (0.03, 0.06, 0.07))])
+        p.f("u_water", *[float(x) for x in self.water.get("tint", glkit.T.rgb("panel"))])
         self._fog(p)
         rim = next((s["rim"] for s in sprs if s.get("rim")), None)
         p.f("u_rim", *([float(x) for x in rim] if rim else (0.0, 0.0, 0.0, 0.0)))
@@ -1031,7 +1031,7 @@ class World:
         per = float(e.get("period", 2.4))
         u = (t % per) / per
         k = 0.75 if self.calm else math.exp(-((u - 0.1) ** 2) / 0.004) + 0.15    # reduced motion: steady
-        c = e.get("color", (1.0, 0.3, 0.25))
+        c = e.get("color", glkit.T.rgb("danger"))
         r = float(e.get("radius", 7))
         at = e.get("at", (1800, 300))
         return (at[0], at[1], r, r, c[0], c[1], c[2], k)  + (0.0,)
@@ -1071,7 +1071,7 @@ class World:
             strength *= 1.0 - 0.4 * rain
             fx.mist_phase = (fx.mist_phase + dt * (0.015 + 0.06 * v)) % 1000.0
             p.f("u_mist", strength, band[0] * sy, band[1] * sy, fx.mist_phase)
-            p.f("u_mistcol", *[float(x) for x in e.get("color", (0.55, 0.62, 0.62))])
+            p.f("u_mistcol", *[float(x) for x in e.get("color", glkit.T.rgb("muted"))])
         e = fx.by.get("line")
         if e:
             tip = self.line_tip()
@@ -1086,14 +1086,14 @@ class World:
             ox, oy = self._par(float(e.get("depth", 31)))
             p.f("u_fline", tip[0] * sx + ox, tip[1] * sy + oy, end[0] * sx + ox, end[1] * sy + oy)
             p.f("u_fline2", sag * sy, 1.0 if show else 0.0, 0.0, 0.0)
-            p.f("u_flinecol", *[float(x) for x in e.get("color", (0.8, 0.82, 0.78))])
+            p.f("u_flinecol", *[float(x) for x in e.get("color", glkit.T.rgb("soft"))])
         e = fx.by.get("beam")
         if e and not self._ok(e):
             p.f("u_beam", 0.0, 0.0, 0.0, 0.0)
         elif e:
             rate = float(e.get("rate", 0.35)) + float(e.get("rate_gain", 0.12)) * min(float(sig.get(e.get("rate_signal", "ingress"), 0.0) or 0.0), 6.0)
             fx.beam_phase = (fx.beam_phase + dt * rate) % (2 * math.pi)
-            cols = e.get("colors", [(1.0, 0.95, 0.8), (1.0, 0.72, 0.25), (1.0, 0.3, 0.25)])
+            cols = e.get("colors", [glkit.T.rgb("white"), glkit.T.rgb("warn"), glkit.T.rgb("danger")])
             lvl = int(sig.get(e.get("signal", "health"), 0) or 0)
             c = cols[max(0, min(lvl, len(cols) - 1))]
             at = e.get("at", (1880, 225))
@@ -1125,7 +1125,7 @@ class World:
                 follow = (win[0] + (win[2] - win[0]) * mx) * sx
             p.f("u_rays", float(e.get("gain", 0.25)) * (float(e.get("base", 0.15)) + (1.0 - float(e.get("base", 0.15))) * light),
                 float(e.get("slant", 0.18)), float(e.get("reach", 520)) * sy, follow)
-            p.f("u_rayscol", *[float(x) for x in e.get("color", (0.45, 0.75, 0.85))])
+            p.f("u_rayscol", *[float(x) for x in e.get("color", glkit.T.rgb("cyan"))])
         wk = np.zeros((12, 4), np.float32)
         ox, oy = self._par(self.water_depth)
         for i, (x, y, s) in enumerate(wakes[:12]):

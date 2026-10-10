@@ -36,10 +36,10 @@ vec3 moon(vec2 px) {
                                    : smoothstep(-k * w + 0.04, -k * w - 0.04, d.x);
         float mare = 0.82 + 0.18 * w_noise(d * 3.0 + 7.0);
         float edge = smoothstep(1.0, 0.94, r);
-        c = vec3(0.93, 0.95, 0.88) * mare * (lit * 0.95 + 0.03) * edge;
+        c = THEME_WHITE * mare * (lit * 0.95 + 0.03) * edge;
     }
     float illum = 0.5 * (1.0 - k);
-    c += vec3(0.6, 0.7, 0.8) * exp(-max(r - 1.0, 0.0) * 1.6) * 0.18 * illum;
+    c += THEME_SOFT * exp(-max(r - 1.0, 0.0) * 1.6) * 0.18 * illum;
     return c * u_moon2.x;
 }
 
@@ -60,7 +60,7 @@ vec3 stars(vec2 px) {
         float d2 = dot(px - p, px - p);
         float tw = mix(0.55 + 0.45 * sin(u_time * (1.1 + 2.3 * w_hash1(h * 71.0)) + h * 40.0), 0.8, u_calm);
         float mag = 0.25 + 0.75 * pow(w_hash1(h * 13.0), 3.0);
-        acc += vec3(0.85, 0.9, 1.0) * exp(-d2 / 1.1) * tw * mag;
+        acc += THEME_WHITE * exp(-d2 / 1.1) * tw * mag;
     }
     return acc * u_stars.x * fade;
 }
@@ -76,7 +76,7 @@ vec3 bolt(vec2 px) {
     float drift = (w_hash1(floor(y / 230.0) + u_bolt.w) - 0.5) * 160.0 * (y / u_bolt.y);
     x += mix(a, b, f) + drift;
     float d = abs(px.x - x);
-    return vec3(0.85, 0.9, 1.0) * (exp(-d * d / 2.5) + exp(-d / 40.0) * 0.18) * u_bolt.z;
+    return THEME_WHITE * (exp(-d * d / 2.5) + exp(-d / 40.0) * 0.18) * u_bolt.z;
 }
 
 void main() {

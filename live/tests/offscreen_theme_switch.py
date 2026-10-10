@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Switch Wick -> Cinder -> Wick on existing den and radial surfaces, headless EGL.
+"""Switch Wick -> Cinder -> Rime -> Wick on den, scanner and radial surfaces, headless EGL.
 Runs the daemon's frame handler in a sandbox; no desktop socket, theme or window.
 The switched frames must equal freshly constructed scenes in the new palette.
 """
@@ -27,7 +27,7 @@ def main():
     exec(compile(ast.Module(body=[node], type_ignores=[]), path, 'exec'), ns)
     draw = ns['_render']
     bromigos = '/usr/bin/bromigos'
-    paths = {t: R.palette_json(t, bromigos) for t in ('wick', 'cinder')}
+    paths = {t: R.palette_json(t, bromigos) for t in ('wick', 'cinder', 'rime')}
     cfg = config.load()
     cfg['background']['underlay'] = R.DEN
     cfg['general']['motion'] = 'full'
@@ -42,20 +42,23 @@ def main():
     os.makedirs(out, exist_ok=True)
     from PIL import Image
     try:
-        for name, cls in [('den', scene.Background), ('radial', overlays.Radial)]:
+        for name, cls in [('den', scene.Background), ('scanner', scene.Background), ('radial', overlays.Radial)]:
             def make(w, h):
                 random.seed(1)
                 np.random.seed(1)
                 r = cls(cfg, data, w, h)
                 r.now = lambda: 2.
                 r.loop_clock = lambda: 2.
+                if name == "scanner":
+                    r.scan_pin = True
+                    r.pin_amt = 1.0
                 return r
             app = NS(bg=None)
             win = NS(renderer=None, rsize=None, failed=False, frames=5, fps=30,
                      app=app, make_renderer=make)
             win._close_renderer = lambda: getattr(win.renderer, 'close', lambda: None)()
             previous = None
-            for theme in ('wick', 'cinder', 'wick'):
+            for theme in ('wick', 'cinder', 'rime', 'wick'):
                 R.use_theme(paths[theme])
                 target.bind()
                 draw(win, area, None)
@@ -66,6 +69,21 @@ def main():
                 GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, target.fbo)
                 reference = np.frombuffer(GL.glReadPixels(0, 0, R.W, R.H, GL.GL_RGB, GL.GL_UNSIGNED_BYTE), np.uint8)
                 assert np.array_equal(frame, reference), f'{name}: stale pixels after switch to {theme} ({np.count_nonzero(frame != reference)} channels differ)'
+                if name == "scanner":
+                    assert win.renderer.scan_pin, "palette switch lost the pinned scanner"
+                    GL.glBindTexture(GL.GL_TEXTURE_2D, win.renderer.schem_tex)
+                    pixels = np.frombuffer(GL.glGetTexImage(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA, GL.GL_UNSIGNED_BYTE), np.uint8)
+                    pixels = pixels.reshape(660, 860, 4)
+                    rgb = pixels[:, :, :3].astype(float)
+                    mask = (pixels[:, :, 3] > 150) & (rgb.max(axis=2) > 100)
+                    hue = R.oklab(rgb[mask].astype(np.uint8))
+                    hue = float(np.degrees(np.arctan2(hue[:, 2].mean(), hue[:, 1].mean())) % 360)
+                    Image.fromarray(pixels).save(f"{out}/schematic-{theme}.png")
+                    expected = R.oklab(np.asarray([glkit.T.rgb255("soft")], np.uint8))[0]
+                    expected = float(np.degrees(np.arctan2(expected[2], expected[1])) % 360)
+                    error = abs((hue - expected + 180) % 360 - 180)
+                    assert error < 15, f"scanner {theme}: hue {hue:.1f} differs from palette {expected:.1f}"
+                    print(f"PASS scanner {theme}: hue {hue:.1f}°, palette {expected:.1f}°")
                 if previous is not None:
                     assert np.count_nonzero(frame != previous) > 10000, f'{name}: hue did not change'
                 previous = frame.copy()

@@ -3,7 +3,7 @@
 // time of day, and the relay beam that runs only while the lab is all green.
 // Needs rain.glsl (palette, hashes, seg_dist) included first.
 
-const vec3 NIGHT = vec3(0.0, 0.02, 0.0);   // the planet's faint night-side tint (another theme: its primary)
+const vec3 NIGHT = THEME_NIGHT;   // the planet's faint night-side tint (another theme: its primary)
 
 uniform vec4 u_space;        // stars on, smoothed traffic level 0..1 (<0 = traffic off), beam on, health (0 ok, 1 amber, 2 red)
 uniform vec4 u_space_rect;   // sky region x y w h (px)

@@ -115,6 +115,12 @@ A layer draws only when its JSON says `"enabled": true`. The live layer measures
 layer's GPU time every frame. A layer that goes over its budget, or fails to compile, is
 switched off until its files change. A broken layer never stops the background.
 
+Use palette tokens such as `THEME_PRIMARY`, `THEME_SOFT`, `THEME_DIM` and
+`THEME_DANGER` for colours. The live layer resolves them before compiling and rebuilds
+shader layers on a theme switch. Python decks use `live.glkit.col("soft")` and the
+other palette roles. Avoid fixed RGB and hex colours; `live/tests/test_palette_literals.py`
+checks drawing code, and `--plugins DIR` checks a personal plugin folder.
+
 The shader gets real readings as uniforms: CPU, GPU, memory and video memory load, network
 traffic, and the health of your homelab. The full contract is at the top of
 `live/live/plugins.py`.

@@ -17,9 +17,9 @@ vec3 ship_world(vec3 p, int i) {
 }
 
 vec4 ship_colour(int part, int i) {
-    const vec3 PHOS = vec3(0.2235, 1.0, 0.0784);
-    const vec3 SOFT = vec3(0.612, 1.0, 0.541);
-    const vec3 AMBER = vec3(0.831, 0.686, 0.216);
+    const vec3 PHOS = THEME_PRIMARY;
+    const vec3 SOFT = THEME_SOFT;
+    const vec3 AMBER = THEME_WARN;
     vec4 l = u_sl[i];
     if (part == 0) return vec4(PHOS, 0.55 * l.x);                 // hull
     if (part == 1) return vec4(SOFT, 0.75 * l.y);                 // spire

@@ -235,8 +235,11 @@ class GLWindow:
         theme = glkit.T.version()
         if self.renderer is None or size != self.rsize or theme != getattr(self, "theme_seen", None):
             try:
+                state = getattr(self.renderer, "theme_state", lambda: None)()
                 self._close_renderer()
                 self.renderer = self.make_renderer(*size)
+                if state is not None:
+                    self.renderer.restore_theme_state(state)
                 self.rsize = size
                 self.theme_seen = theme
             except Exception as e:

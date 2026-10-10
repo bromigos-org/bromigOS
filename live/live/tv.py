@@ -900,7 +900,7 @@ class TV:
         if lines and lines[0] == "bumper":
             # a network's bumper: the channel's name large, what's on, the time, over a dark card
             _, chname, what, clock = lines
-            cr.set_source_rgba(0.0, 0.0, 0.0, 0.82)
+            cr.set_source_rgba(*glkit.col("panel", 0.82))
             cr.rectangle(0, 0, w, h)
             cr.fill()
             cr.set_source_rgba(r, g, b, 0.9)

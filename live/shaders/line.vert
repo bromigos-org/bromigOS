@@ -40,7 +40,7 @@ void main() {
         vec4 pp = u_part[part];
         col.rgb = heat(col.rgb, pp.y);
         col.a *= pp.x;
-        if (pp.z > 0.5) col.rgb = mix(col.rgb, vec3(0.9, 1.0, 0.85), 0.35 + 0.15 * sin(u_time * 6.0));
+        if (pp.z > 0.5) col.rgb = mix(col.rgb, THEME_WHITE, 0.35 + 0.15 * sin(u_time * 6.0));
     }
     col.a *= (a_ex.y > 0.0 && u_time < a_ex.y) ? 0.0 : 1.0;
     col.rgb *= a_ex.w;

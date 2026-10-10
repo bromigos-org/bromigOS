@@ -17,9 +17,9 @@ uniform vec4 u_steam;        // rim centre x, rim y, rim half width, on
 uniform vec4 u_steam2;       // plume height (px), intensity, loop period (s), scale
 
 const float TAU_ = 6.28318530718;
-const vec3 STREAK = vec3(0.60, 1.0, 0.66);
-const vec3 ROWC = vec3(0.084, 0.159, 0.105);
-const vec3 STEAMC = vec3(0.78, 1.0, 0.74);
+const vec3 STREAK = THEME_STREAK;
+const vec3 ROWC = THEME_ROWC;
+const vec3 STEAMC = THEME_STEAMC;
 
 // ------------------------------------------------------------------ streaks
 vec3 den_streaks(vec2 px) {

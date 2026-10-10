@@ -27,14 +27,6 @@ from . import LIB  # noqa: E402,F401  (puts the shared libs on sys.path)
 from . import motion  # noqa: E402
 import bromigos_theme as T  # noqa: E402
 
-# The Wick's names for the colours; col() takes them from the theme in force
-# (bromigos_theme: phosphor is the theme's primary, amber its warn, guard its selection).
-PAL = {
-    "void": (0x00, 0x05, 0x00), "panel": (0x00, 0x13, 0x00), "guard": (0x00, 0x3b, 0x00),
-    "phosphor": (0x39, 0xff, 0x14), "soft": (0x9c, 0xff, 0x8a), "dim": (0x15, 0x9b, 0x09),
-    "amber": (0xd4, 0xaf, 0x37), "danger": (0xff, 0x76, 0x6f), "static": (0x7e, 0x92, 0x7e),
-    "white": (0xe8, 0xff, 0xe0),
-}
 
 
 def col(name, a=1.0):
@@ -53,17 +45,21 @@ def read_shader(name):
         return theme_consts(f.read())
 
 
-# The shaders' named UI colours, written as the Wick's: in another theme they are
-# swapped for its colours when the shader is compiled (an overlay opened after a theme
-# switch has them). The Wick's shader text is left exactly as written.
+# Legacy plugin shaders' named UI colours. Packaged shaders use THEME_ tokens.
 _CONSTS = {"VOID": "void", "PHOS": "primary", "SOFT": "soft", "DIM": "dim", "AMBER": "warn",
            "DANGER": "danger", "amber": "warn", "danger": "danger"}
 # The den's own shades of the Wick's green (its screens' glass, the gadgets' panel, the
 # meters, the loops' streaks, floor rows and steam): another theme gets each at its own
 # lightness in the theme's colours (bromigos_theme.retint_rgb: greens to primary's hue,
 # near-black greens onto its background -> panel -> selection), as the plate itself
-# (scene.retint_plate). The Wick's shader text is left exactly as written.
-_SHADES = {"GLASS", "GLASS_LIT", "PLATE_PANEL", "METER_INK", "METER_NEEDLE", "STREAK", "ROWC", "STEAMC"}
+# (scene.retint_plate).
+# Only these art shades keep the Wick's painted lightness. Other themes retint them.
+_SHADES = {
+    "GLASS": (0.012, 0.05, 0.012), "GLASS_LIT": (0.03, 0.13, 0.025),
+    "PLATE_PANEL": (0.0, 0.035, 0.0), "METER_INK": (0.04, 0.12, 0.04),
+    "METER_NEEDLE": (0.02, 0.05, 0.02), "STREAK": (0.60, 1.0, 0.66),
+    "ROWC": (0.084, 0.159, 0.105), "STEAMC": (0.78, 1.0, 0.74),
+}
 
 
 def _intercept(key, fallback):
@@ -89,14 +85,25 @@ _COMPUTED = {
 }
 
 
-def theme_consts(src):
+def theme_consts(src, legacy=True):
     import re
     # read the palette now, not up to a second late: a theme switch rebuilds the background
     # at once, and a shader compiled from the last theme's cache keeps its colours (the den's
     # rain came up Tidewell-blue after tidewell -> wick)
     T.version(0.0)
-    if T.is_wick():
-        return src
+    def token(m):
+        name = m.group(1)
+        if name in _SHADES:
+            rgb = _SHADES[name] if T.is_wick() else T.retint_rgb(_SHADES[name])
+        elif name in _COMPUTED:
+            rgb = _COMPUTED[name]()
+        else:
+            rgb = T.rgb(name.lower())
+        return "vec3(%.4f, %.4f, %.4f)" % tuple(rgb)
+
+    # Legacy plugin shaders can still declare the old named colours.
+    if not legacy or T.is_wick():
+        return re.sub(r"\bTHEME_([A-Z_]+)\b", token, src)
 
     def vec(name):
         return "vec3(%.4f, %.4f, %.4f)" % T.rgb(name)
@@ -113,7 +120,8 @@ def theme_consts(src):
         return m.group(0)
     src = re.sub(r"\b((?:const\s+)?vec3\s+(\w+)\s*=\s*)vec3\([^)]*\)", sub, src)
     # ov.frag's plates under the gadgets: the panel colour
-    return src.replace("mix(c, vec3(0.0, 0.03, 0.0), plate)", "mix(c, %s, plate)" % vec("panel"))
+    src = src.replace("mix(c, vec3(0.0, 0.03, 0.0), plate)", "mix(c, %s, plate)" % vec("panel"))
+    return re.sub(r"\bTHEME_([A-Z_]+)\b", token, src)
 
 
 def _includes(src):
@@ -132,7 +140,10 @@ def _compile(src, kind):
 
 class Program:
     def __init__(self, vs, fs):
-        vs, fs = _includes(vs), _includes(fs)
+        # Raw plugin sources can use the same tokens as packaged shaders. Colours
+        # already resolved by read_shader must not have their art shades retinted twice.
+        vs = theme_consts(_includes(vs), legacy=False)
+        fs = theme_consts(_includes(fs), legacy=False)
         self.id = GL.glCreateProgram()
         a, b = _compile(vs, GL.GL_VERTEX_SHADER), _compile(fs, GL.GL_FRAGMENT_SHADER)
         GL.glAttachShader(self.id, a)

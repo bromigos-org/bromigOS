@@ -103,9 +103,9 @@ def _meta(name, frag=None):
 
 class Layer:
     def __init__(self, name, src, meta):
-        from .glkit import Program
+        from .glkit import Program, theme_consts
         self.name, self.meta = name, meta
-        self.prog = Program(VS, src)
+        self.prog = Program(VS, theme_consts(src))
         self.vao = GL.glGenVertexArrays(1)
         self.q = GL.glGenQueries(2)
         self.qi = 0

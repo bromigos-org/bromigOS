@@ -99,11 +99,11 @@ float rbox(vec2 p, vec2 b, float r) {
 }
 
 // The den's own shades of the Wick's green (another theme: retinted, glkit.theme_consts)
-const vec3 GLASS = vec3(0.012, 0.05, 0.012);         // a den screen's dark glass
-const vec3 GLASS_LIT = vec3(0.03, 0.13, 0.025);      // ... and its lit phosphor
-const vec3 PLATE_PANEL = vec3(0.0, 0.035, 0.0);      // the deep panel under the gadgets
-const vec3 METER_INK = vec3(0.04, 0.12, 0.04);       // a meter's scale
-const vec3 METER_NEEDLE = vec3(0.02, 0.05, 0.02);    // ... and its needle
+const vec3 GLASS = THEME_GLASS;         // a den screen's dark glass
+const vec3 GLASS_LIT = THEME_GLASS_LIT;      // ... and its lit phosphor
+const vec3 PLATE_PANEL = THEME_PLATE_PANEL;      // the deep panel under the gadgets
+const vec3 METER_INK = THEME_METER_INK;       // a meter's scale
+const vec3 METER_NEEDLE = THEME_METER_NEEDLE;    // ... and its needle
 
 // CRT glass for a den screen: coverage (feathered) and a lit phosphor base.
 float glass(vec2 px, vec4 rect, out vec2 uv, out vec3 base) {
@@ -217,7 +217,7 @@ vec3 den(vec2 px, vec3 c) {
         float red = step(0.37, ang) * (arc + tk);
         vec3 ink = METER_INK;
         face = mix(face, ink, clamp(arc + tk, 0.0, 1.0) * 0.85);
-        face = mix(face, vec3(0.55, 0.18, 0.15), clamp(red, 0.0, 1.0) * 0.8);
+        face = mix(face, THEME_DANGER * 0.55, clamp(red, 0.0, 1.0) * 0.8);
         // needle
         float na = mix(-0.6, 0.6, (k == 0 ? u_meter_v.x : u_meter_v.y));
         vec2 nd = vec2(sin(na), -cos(na));

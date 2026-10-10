@@ -2,12 +2,12 @@
 // and the rain field. Needs u_time, u_rain_rect, u_rain, u_burst.
 // u_calm (1 under reduced motion, live/motion.py): the glyphs stop changing as they fall.
 uniform float u_calm;        // 1: reduced motion: no flicker, twinkle or blinking (bg.frag, ov.frag)
-const vec3 VOID = vec3(0.0, 0.0196, 0.0);
-const vec3 PHOS = vec3(0.2235, 1.0, 0.0784);
-const vec3 SOFT = vec3(0.612, 1.0, 0.541);
-const vec3 DIM = vec3(0.0824, 0.608, 0.0353);
-const vec3 AMBER = vec3(0.831, 0.686, 0.216);
-const vec3 DANGER = vec3(1.0, 0.463, 0.435);
+const vec3 VOID = THEME_BACKGROUND;
+const vec3 PHOS = THEME_PRIMARY;
+const vec3 SOFT = THEME_SOFT;
+const vec3 DIM = THEME_DIM;
+const vec3 AMBER = THEME_WARN;
+const vec3 DANGER = THEME_DANGER;
 
 float hash1(float n) { return fract(sin(n * 127.1) * 43758.5453); }
 float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }

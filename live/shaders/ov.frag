@@ -26,7 +26,7 @@ uniform float u_tear_style;     // the intercept's static: 0 scanline tears (the
 
 // The tear's grade of the captured screen, written as the Wick's green: another theme's
 // (its [intercept] static colour, else its primary) at the same brightness (glkit.theme_consts).
-const vec3 TEAR = vec3(0.25, 1.25, 0.2);
+const vec3 TEAR = THEME_TEAR;
 
 #include rain
 #include space
@@ -134,7 +134,7 @@ void main() {
         add += ec * u_edge.x * (clamp(2.0 - d, 0.0, 1.0) + exp(-d / 14.0) * 0.35);
     }
     // plates: panel green under gadgets
-    c = mix(c, vec3(0.0, 0.03, 0.0), plate);
+    c = mix(c, THEME_PANEL, plate);
     a = max(a, plate);
     add += emit.rgb + texture(u_bloom, v_uv).rgb * u_glow;
     c += add;
