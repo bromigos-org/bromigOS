@@ -136,7 +136,8 @@ The forecast comes from Open-Meteo, a free weather service.
   describe it in a settings file. See
   [Your own panels](homelab.md#your-own-panels-without-code).
 - **With code:** a panel can be a small Python file in
-  `~/.config/bromigos/plugins/widgets/`, or an [extension](extensions.md). The developer
+  `~/.config/bromigos/plugins/widgets/`, or an [extension](extensions.md).
+  [Make your own widget](make-a-widget.md) walks you through it. The developer
   docs' [plugins.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/plugins.md)
   shows how.
 

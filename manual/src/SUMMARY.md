@@ -29,6 +29,7 @@
     - [Lab models](lab-models.md)
 - [Creating with AI](where-ai-runs.md)
 - [Extensions](extensions.md)
+    - [Make your own widget](make-a-widget.md)
 - [Updating and rolling back](update-and-rollback.md)
 - [Hardware](hardware.md)
     - [Keyboards and peripherals](peripherals.md)
