@@ -22,7 +22,13 @@ keyboard (vkbd.py) drive it. It checks:
   - a window over the TV pauses decoding; with it gone the TV catches up to the clock;
   - `bromigos-live tv` next, prev, set, sound and volume (capped at 100), and every
     screen's channel, sound and volume remembered across a restart;
-  - the live layer's CPU and GPU with the TV playing against without (printed).
+  - every screen playing its own channel at once (three players), the sound moving from
+    screen to screen (one PipeWire stream, the others silent), and a screen with its sound
+    on playing on behind a window while a muted one pauses;
+  - the channel guide (Settings › Den TV, driven by den_tv_guide_driver.py): a channel
+    added, dragged, moved to another screen, tuned, removed and put back, and the live
+    layer following each without a restart;
+  - the live layer's CPU and GPU with three screens playing, one, and none (printed).
 
 Shift+wheel and the volume keys can't be read over the TV: the background never has the
 keyboard, so Hyprland tells it neither Shift nor a key. Rebinding Hyprland's keys on hover
@@ -156,6 +162,14 @@ class TVNest(Nest):
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=200x300", "-frames:v", "1",
                         self.poster], check=True)
         self.jf, self.jf_seen = fake_jellyfin(self.clip, self.poster)
+        self.media2 = os.path.join(self.tmp, "media2")
+        self.media3 = os.path.join(self.tmp, "media3")
+        for d, src in ((self.media2, "smptebars=size=640x360:rate=24"), (self.media3, "mandelbrot=size=640x360:rate=24")):
+            os.makedirs(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", src, "-f", "lavfi", "-i",
+                            "sine=frequency=660:sample_rate=48000", "-t", str(CLIP_SECONDS), "-c:v", "libx264",
+                            "-preset", "veryfast", "-pix_fmt", "yuv420p", "-c:a", "aac", os.path.join(d, "clip.mp4")],
+                           check=True)
         cfg = os.path.join(self.home, ".config")
         os.makedirs(os.path.join(cfg, "bromigos-live"))
         os.makedirs(os.path.join(cfg, "bromigos"), exist_ok=True)
@@ -194,6 +208,16 @@ screens = ["big", "wave"]
 name = "Second"
 files = "{media}"
 screens = ["big"]
+
+[[tv.channel]]
+name = "Scope Clips"
+files = "{self.media2}"
+screens = ["wave"]
+
+[[tv.channel]]
+name = "Small Clips"
+files = "{self.media3}"
+screens = ["emblem"]
 ''')
         # mpv for full screen: the real one, its arguments written down first
         with open(os.path.join(self.stubs, "mpv"), "w") as f:
@@ -327,8 +351,9 @@ def scenarios(n, r, measure=0):
     st = n.state()
     big = st["screens"]["big"]["rect"]
     wave = st["screens"]["wave"]["rect"]
-    r.check("the big monitor and the scope take the pointer, the small monitor doesn't (one channel)",
-            sorted(map(tuple, st["input"])) == sorted([tuple(big), tuple(wave)]), st["input"])
+    emblem = st["screens"]["emblem"]["rect"]
+    r.check("every screen with a channel of its own takes the pointer",
+            sorted(map(tuple, st["input"])) == sorted([tuple(big), tuple(wave), tuple(emblem)]), st["input"])
 
     # -- tune in from the command line: the schedule's position
     out = n.tv("set", "2", "big")
@@ -354,7 +379,7 @@ def scenarios(n, r, measure=0):
     time.sleep(0.6)
     n.shot("tv-hint")
     st = n.state()
-    r.check("the hint takes the pointer too while it shows", len(st.get("input") or []) == 3, st.get("input"))
+    r.check("the hint takes the pointer too while it shows", len(st.get("input") or []) == 4, st.get("input"))
     ptr.move(80, 80)
     r.check("moving off the screens hides it", wait_for(lambda: n.state().get("hint") is None, 4), n.state())
 
@@ -422,13 +447,22 @@ def scenarios(n, r, measure=0):
     n.ctl_live("screensaver close")
     r.check("closing it gives the sound back", wait_for(lambda: n.tv_stream() is not None, 8), n.streams())
 
-    # -- a window over the TV pauses decoding
+    # -- a window over the TV: a screen with its sound on plays on; a muted one pauses
     p = subprocess.Popen(["kitty"] if shutil.which("kitty") else ["foot"], env=n.env, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, start_new_session=True)
-    r.check("a window over the TV pauses decoding", wait_for(lambda: (n.state().get("playing") or {}).get("paused"), 10),
-            n.state().get("playing"))
-    time.sleep(4)
+    r.check("a window over it: covered", wait_for(lambda: "big" in (n.state().get("covered") or []), 10),
+            n.state().get("covered"))
+    time.sleep(2)
+    r.check("…with its sound on, it plays on behind the window (you hear it)",
+            (n.state().get("playing") or {}).get("paused") is False and n.tv_stream() is not None,
+            (n.state().get("playing"), n.streams()))
+    n.tv("sound", "off", "--screen", "big")
+    r.check("a muted screen behind a window pauses decoding",
+            wait_for(lambda: (n.state()["screens"]["big"].get("playing") or {}).get("paused"), 10),
+            n.state()["screens"]["big"].get("playing"))
+    time.sleep(3)
     os.killpg(p.pid, signal.SIGTERM)
+    n.tv("sound", "on", "--screen", "big")
     r.check("with it gone, decoding resumes", wait_for(lambda: (n.state().get("playing") or {}).get("paused") is False, 10))
     time.sleep(2.5)
     s = n.state()
@@ -479,10 +513,34 @@ def scenarios(n, r, measure=0):
     r.check("tv sound off", wait_for(lambda: n.tv_stream() is None, 4))
     n.tv("volume", "up")
     r.check("tv volume up from silent turns it on", n.state()["screens"]["big"]["sound"])
-    n.tv("set", "2", "wave")
+    # -- every screen at once, the sound moving between them
+    n.tv("set", "3", "--screen", "wave")
+    n.tv("set", "2", "--screen", "emblem")
     s = n.state()["screens"]
-    r.check("one media channel at a time: the scope tuned in, the big monitor back to its own",
-            s["wave"]["channel"] == 2 and s["big"]["channel"] == 1, {k: v["channel"] for k, v in s.items()})
+    r.check("the scope and the small monitor tuned in; the big monitor stays on its channel",
+            s["wave"]["name"] == "Scope Clips" and s["emblem"]["name"] == "Small Clips" and s["big"]["channel"] == 2,
+            {k: (v["channel"], v["name"]) for k, v in s.items()})
+    r.check("three screens play at once, each with a player of its own",
+            wait_for(lambda: all((v.get("playing") or {}).get("has_frame") and
+                                 not (v.get("playing") or {}).get("paused")
+                                 for v in n.state()["screens"].values()), 20),
+            {k: v.get("playing") for k, v in n.state()["screens"].items()})
+    n.shot("tv-three-screens")
+    n.tv("sound", "on", "--screen", "scope")
+    r.check("sound on the scope: the big monitor's goes off, one stream in PipeWire",
+            wait_for(lambda: n.state().get("sound_from") == "wave" and
+                     len([x for x in n.streams() if x["name"] == "bromigOS den TV"]) == 1 and
+                     not n.state()["screens"]["big"]["sound"], 8), (n.state().get("sound_from"), n.streams()))
+    n.tv("sound", "on", "--screen", "small")
+    r.check("…and on to the small monitor", wait_for(lambda: n.state().get("sound_from") == "emblem" and
+                                                     len([x for x in n.streams()
+                                                          if x["name"] == "bromigOS den TV"]) == 1, 8),
+            (n.state().get("sound_from"), n.streams()))
+    ptr.move(*center(emblem))
+    r.check("the hint over the small monitor: its speaker on, the others' off",
+            wait_for(lambda: n.state().get("hint") == "emblem", 4) and n.state()["screens"]["emblem"]["sound"])
+    ptr.move(80, 80)
+    n.tv("sound", "on", "--screen", "big")
     n.tv("set", "2", "big")
     lst = n.tv("list")
     r.check("tv list", "Test Card" in (lst or "") and "RELAY MAP" in lst, lst)
@@ -497,8 +555,32 @@ def scenarios(n, r, measure=0):
     after = {k: (v["channel"], v["sound"], v["volume"]) for k, v in n.state()["screens"].items()}
     r.check("each screen's channel, sound and volume remembered", before == after, (before, after))
 
+    # -- the channel guide (Settings › Den TV): the live layer follows each change
+    guide(n, r)
+
     if measure:
         measure_cost(n, r, measure)
+
+
+def guide(n, r):
+    env = dict(n.live_env(), PATH=f"{os.path.join(REPO, 'live', 'bin')}:{n.stubs}:/usr/bin",
+               PYTHONPATH=os.pathsep.join([os.path.join(REPO, "lib"), os.path.join(REPO, "homelab", "lib")]))
+    with open(os.path.join(n.home, ".config", "bromigos-live", "config.toml")) as f:
+        text = f.read()
+    with open(os.path.join(n.home, ".config", "bromigos-live", "config.toml"), "w") as f:
+        f.write("# the den TV, as the test has it\n" + text)
+    time.sleep(3)                                              # the live layer reads the comment line too
+    p = subprocess.run([sys.executable, os.path.join(HERE, "den_tv_guide_driver.py"),
+                        os.path.join(os.path.dirname(HERE), "settings"), os.path.join(n.tmp, "media2")],
+                       env=env, capture_output=True, text=True, timeout=300)
+    steps = [ln for ln in p.stdout.splitlines() if ln.startswith(("PASS", "FAIL"))]
+    for ln in steps:
+        name, _, detail = ln.split(" ", 1)[1].partition(" | ")
+        r.check("guide: " + name, ln.startswith("PASS"), detail)
+    r.check("guide: the driver ran every step", len(steps) >= 8, (p.returncode, p.stdout[-500:], p.stderr[-1500:]))
+    log = open(os.path.join(n.home, "live.log")).read()
+    r.check("guide: the live layer read the channels again without a restart (no new background)",
+            "the den TV's channels changed; read again" in log and log.count("background failed") == 0, log[-600:])
 
 
 def measure_cost(n, r, secs):
@@ -524,18 +606,26 @@ def measure_cost(n, r, secs):
               f"decoder {avg(dec):.1f}% (nvidia-smi pmon, {len(sm)} samples)", flush=True)
         return cpu
     n.ptr.move(80, 80)
-    n.tv("sound", "off")
-    n.tv("set", "2", "big")
-    time.sleep(3)
-    on = sample("TV playing on the big monitor (muted)")
-    n.tv("sound", "on")
+    for s in ("big", "wave", "emblem"):
+        n.tv("sound", "off", "--screen", s)
+    n.tv("set", "2", "--screen", "big")
+    n.tv("set", "3", "--screen", "wave")
+    n.tv("set", "2", "--screen", "emblem")
+    time.sleep(4)
+    three = sample("three screens playing (muted)")
+    n.tv("sound", "on", "--screen", "big")
     time.sleep(2)
-    sample("TV playing with sound")
-    n.tv("set", "1", "big")
-    n.tv("set", "1", "wave")
-    time.sleep(40)                                   # mpv is closed after 30 s with nothing on
+    sample("three screens playing, the big monitor's sound on")
+    n.tv("sound", "off", "--screen", "big")
+    n.tv("set", "1", "--screen", "wave")
+    n.tv("set", "1", "--screen", "emblem")
+    time.sleep(35)                                   # a screen's mpv is closed after 30 s with nothing on
+    one = sample("one screen playing (the big monitor)")
+    n.tv("set", "1", "--screen", "big")
+    time.sleep(35)
     off = sample("no media channel (the den as before)")
-    r.check("the TV's cost is small: under 6% of a core over the den alone", on - off < 6, (on, off))
+    r.check("one screen's cost is small: under 6% of a core over the den alone", one - off < 6, (one, off))
+    r.check("three screens: under 12% of a core over the den alone", three - off < 12, (three, off))
 
 
 def main():

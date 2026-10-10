@@ -11,6 +11,7 @@ A panel declares its fields:
          "choices": [["metric", "°C and km/h"], ["imperial", "°F and mph"]]},
         {"key": "glow", "label": "Glow", "kind": "bool", "default": True},
         {"key": "account", "label": "GitHub", "kind": "secret-signin", "provider": "github"},
+        {"key": "guide", "label": "The channel guide", "kind": "link", "page": "den-tv"},
     ]
 
 and reads them with `self.setting(key)` (panels.Panel), which takes, last wins: the
@@ -18,7 +19,8 @@ field's default, the panel's keys in layout.json, then <name>.toml. The file is 
 again when it changes. A `secret-signin` field is a sign-in through bromigos_account,
 whose tokens live in the keyring. Its value is only which of that service's accounts the
 widget shows, by name (["default", "work"]); empty, the default, means every signed-in
-one. A token is never a value.
+one. A token is never a value. A `link` field holds no value: the form shows it as a row
+that opens another Settings page (`page`, as `bromigos settings PAGE` names it).
 
 Settings › Widgets draws a form from the list, and `bromigos panels settings|set|unset`
 read and write the file. Writes replace the file in one step and keep a symlink a
@@ -29,7 +31,7 @@ import os
 import re
 import sys
 
-KINDS = ("text", "list", "number", "bool", "choice", "secret-signin")
+KINDS = ("text", "list", "number", "bool", "choice", "secret-signin", "link")
 
 
 def path(name):
@@ -63,6 +65,8 @@ def values(name, schema, layout=None, stored=None):
     out = {}
     for f in fields(schema):
         k = f["key"]
+        if f["kind"] == "link":                     # a way to another page, not a setting
+            continue
         if f["kind"] == "secret-signin":
             v = stored.get(k, (layout or {}).get(k, []))
             out[k] = [str(x) for x in v] if isinstance(v, list) else []
@@ -113,6 +117,8 @@ def parse(field, raw):
         return s
     if kind == "secret-signin":
         return account_names(field, raw)
+    if kind == "link":
+        raise ValueError(f"{label}: a link to another Settings page, not a setting")
     raise ValueError(f"{label}: not a kind of setting")
 
 

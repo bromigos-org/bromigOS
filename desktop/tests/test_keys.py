@@ -620,8 +620,8 @@ class WebappTest(Base):
         self.assertEqual([(x.source, x.ref) for x in o], [("webapp", "gmail")])
         self.assertEqual(st.your_user_entries(), [])          # the block isn't "your own bind"
         # binding the web app to another key moves its hotkey
-        plan.bind(BK.Target.webapp("gmail", "Gmail"), BK.Combo.parse("SUPER + ALT + G"))
-        self.assertEqual(plan.webapps[0]["hotkey"], "SUPER + ALT + G")
+        plan.bind(BK.Target.webapp("gmail", "Gmail"), BK.Combo.parse("SUPER + ALT + J"))
+        self.assertEqual(plan.webapps[0]["hotkey"], "SUPER + ALT + J")
         self.assertTrue(plan.record.empty())
 
     def test_replace_a_webapps_key(self):

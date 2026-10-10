@@ -10,7 +10,8 @@ Plex source in homelab.toml (bromigos_homelab's `video` capability), every 5 min
 Its settings make one TV channel, the panel's channel, in ~/.config/bromigos/widgets/media.toml:
 the source, what to play (a library, collection or playlist, chosen from the list the
 servers last gave), a YouTube URL instead, the order, the den screen, and for YouTube a
-folder to keep videos in.
+folder to keep videos in. Every other channel is in the channel guide (Settings › Den TV),
+which the form links to.
 
 Sizes: compact (now and next), wide (and continue watching), large (and recently added,
 with posters).
@@ -86,7 +87,7 @@ def _settings_fields():
         {"key": "order", "label": "Order", "kind": "choice", "default": "",
          "choices": [["", "Its own (playlists in order, the rest shuffled)"], ["shuffle", "Shuffled, the same all day"],
                      ["in order", "In order"]]},
-        {"key": "screen", "label": "Den screen", "kind": "choice", "default": "big", "choices": SCREENS,
+        {"key": "screen", "label": "Den screen", "kind": "choice", "default": "big", "choices": SCREENS + [["any", "Every screen"]],
          "hint": "Which of the den's screens carries the channel"},
         {"key": "channel_name", "label": "Channel name", "kind": "text", "default": "",
          "hint": "What the TV calls it; the library's or playlist's name by default"},
@@ -95,6 +96,8 @@ def _settings_fields():
         {"key": "keep_all", "label": "Keep every video, not just what plays", "kind": "bool", "default": False},
         {"key": "keep_max_gb", "label": "Keep at most (GB)", "kind": "number", "default": 50, "min": 1, "max": 10000,
          "hint": "Over this, the oldest kept videos go first"},
+        {"key": "guide", "label": "Every channel: the channel guide", "kind": "link", "page": "den-tv",
+         "hint": "All the den TV's channels on every screen: add, remove, reorder, pick shows (Settings › Den TV)"},
     ]
 
 
@@ -190,7 +193,8 @@ class MediaPanel(Panel):
             want = self.setting("screen", "big")
             screens = d.get("screens") or {}
             media = [s for s, v in screens.items() if v.get("kind") != "own"]
-            pick = want if want in media else (media[0] if media else None)
+            snd = d.get("sound_from")
+            pick = want if want in media else (snd if snd in media else (media[0] if media else None))
             if pick:
                 v = dict(screens[pick], screen=pick, live=True)
                 if v.get("offset") is not None and v.get("start"):

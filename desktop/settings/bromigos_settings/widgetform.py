@@ -142,7 +142,8 @@ class WidgetForm(Sheet):
     # ------------------------------------------------------------------ the rows
     def build(self):
         ctx, e = self.ctx, self.e
-        values = [f for f in e["form"] if f["kind"] != "secret-signin"]
+        values = [f for f in e["form"] if f["kind"] not in ("secret-signin", "link")]
+        links = [f for f in e["form"] if f["kind"] == "link"]
         if values:
             g = Adw.PreferencesGroup(title=GLib.markup_escape_text(self.wtitle.upper()),
                                      description=GLib.markup_escape_text(
@@ -150,12 +151,34 @@ class WidgetForm(Sheet):
                                          "again at once."))
             for f in values:
                 g.add(self.row(f))
+            for f in links:
+                g.add(self.link(f))
+            self.page.add(g)
+        elif links:
+            g = Adw.PreferencesGroup(title=GLib.markup_escape_text(self.wtitle.upper()))
+            for f in links:
+                g.add(self.link(f))
             self.page.add(g)
         for f in e["form"]:
             if f["kind"] == "secret-signin":
                 s = SignIn(self, f)
                 self.signins.append(s)
                 self.page.add(s.group)
+
+    def link(self, f):
+        """A `link` field: a row that opens another Settings page (this form closes)."""
+        r = Adw.ActionRow(title=GLib.markup_escape_text(f["label"]),
+                          subtitle=GLib.markup_escape_text(f.get("hint") or ""))
+        r.set_activatable(True)
+        r.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+        page = f.get("page") or ""
+
+        def go(*_):
+            self.close()
+            self.ctx.open_page(page)
+        r.connect("activated", go)
+        self.ctx.hint(r, f"{f['label']}: opens Settings › {page} (bromigos settings {page})")
+        return r
 
     def row(self, f):
         ctx = self.ctx
