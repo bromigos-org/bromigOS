@@ -82,8 +82,7 @@ class Entry:
             lines.append(f"The preview couldn't be drawn: {self.failed} (bromigos theme previews {self.name} "
                          "tries again)")
         elif not self.catalog and not self.fresh:
-            lines.append("The preview is being drawn" + (" (the one shown is of an older version)" if self.preview
-                                                         else ""))
+            lines.append("A newer preview is on its way" if self.preview else "The preview is being drawn")
         return "\n".join(lines)
 
     def haystack(self):

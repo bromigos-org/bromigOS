@@ -614,7 +614,7 @@ with a `.json` file beside each. The stamp is a hash of everything the picture s
 - the preview renderer's version.
 
 So when a theme or the live layer changes, the preview is drawn again. Until the new one
-is ready, the switcher shows the old one marked UPDATING. A theme takes 10 to 20 seconds
+is ready, the switcher shows the old one with a small spinner in its corner. A theme takes 10 to 20 seconds
 to draw, a world the longest. Only one is drawn at a time, at low priority.
 
 **When previews are drawn.** Always in the background, when a theme may have changed:
