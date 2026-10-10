@@ -223,6 +223,25 @@ register_card("workloads", title="Workloads", order=55, capability="workloads", 
 
 
 # ------------------------------------------------------------------ storage
+def _gib(b):
+    if b is None:
+        return "?"
+    return f"{b / 2 ** 40:.1f} TiB" if b >= 2 ** 40 else f"{b / 2 ** 30:.0f} GiB"
+
+
+def share_of(device):
+    """("nas.lab.example", "/volume/media") from a network mount's device: host:/path (NFS)
+    or //host/share (SMB). (None, device) for anything else."""
+    d = str(device or "")
+    if d.startswith("//"):
+        host, _, rest = d[2:].partition("/")
+        return host or None, "/" + rest
+    if ":" in d and not d.startswith("/"):
+        host, _, path = d.partition(":")
+        return host or None, path or "/"
+    return None, d
+
+
 def _storage(_res):
     warn = float(config.setting("console", "disk_warn_pct", 85))
     crit = float(config.setting("console", "disk_crit_pct", 95))
@@ -230,6 +249,11 @@ def _storage(_res):
 
     def st(p):
         return "crit" if p >= crit else "warn" if p >= warn else "ok"
+
+    def free_words(free, total, where=""):
+        if free is None:
+            return ""
+        return f" · {_gib(free)} free" + (f" of {_gib(total)}" if total else "") + (f" on {where}" if where else "")
     if "storage" in registry.CAPABILITIES and caps.available("storage"):
         for x in caps.collect("storage")["items"]:
             p = x.get("used_pct")
@@ -237,35 +261,54 @@ def _storage(_res):
                 p = 100.0 * x["used"] / x["total"]
             if p is None:
                 continue
-            items.append({"name": x.get("name"), "kind": x.get("kind") or "storage", "used_pct": _pct(p),
-                          "state": st(p), "hint": f"{x.get('name')}: {p:.0f}% used"})
+            free = x.get("free")
+            if free is None and x.get("used") is not None and x.get("total"):
+                free = max(0.0, x["total"] - x["used"])
+            items.append({"name": x.get("name"), "kind": x.get("kind") or "storage", "nas": x.get("nas"), "free": free,
+                          "free_h": _gib(free) if free is not None else None, "used_pct": _pct(p), "state": st(p),
+                          "hint": f"{x.get('name')} ({x.get('kind') or 'storage'}): {p:.0f}% used"
+                                  + free_words(free, x.get("total"), x.get("nas"))})
     if caps.available("metrics"):
-        q = ('100*(1-node_filesystem_avail_bytes{fstype=~"nfs.*|cifs|smb.*"}'
-             '/node_filesystem_size_bytes{fstype=~"nfs.*|cifs|smb.*"})')
+        fs = 'fstype=~"nfs.*|cifs|smb.*"'
+        size = {(r["labels"].get("instance"), r["labels"].get("device")): r["value"]
+                for r in caps.metrics(f"node_filesystem_size_bytes{{{fs}}}", timeout=6)["items"]}
         seen = set()
-        for x in caps.metrics(q, timeout=6)["items"]:
+        for x in caps.metrics(f"node_filesystem_avail_bytes{{{fs}}}", timeout=6)["items"]:
             dev = x["labels"].get("device") or x["labels"].get("mountpoint")
-            if dev in seen or x["value"] is None:
+            total = size.get((x["labels"].get("instance"), x["labels"].get("device")))
+            if dev in seen or x["value"] is None or not total:
                 continue
             seen.add(dev)
-            items.append({"name": dev, "kind": "NAS share", "used_pct": _pct(x["value"]), "state": st(x["value"]),
-                          "hint": f"{dev} (a network share): {x['value']:.0f}% used"})
+            p = 100.0 * (1 - x["value"] / total)
+            nas, path = share_of(dev)
+            proto = "SMB" if str(x["labels"].get("fstype", "")).startswith(("cifs", "smb")) else "NFS"
+            where = f"{path} on the NAS {nas} ({proto})" if nas else f"{dev} (a network share)"
+            mnt = x["labels"].get("mountpoint")
+            items.append({"name": path if nas else dev, "kind": f"{proto} share", "nas": nas, "free": x["value"],
+                          "free_h": _gib(x["value"]), "used_pct": _pct(p), "state": st(p),
+                          "hint": f"{where}: {p:.0f}% used · {_gib(x['value'])} free of {_gib(total)}"
+                                  + (f" · mounted at {mnt}" if mnt else "")})
     for h in caps.hosts()["items"]:
         if h.get("disk_pct") is None or any(i["name"] == h["name"] for i in items):
             continue
-        items.append({"name": h["name"], "kind": "root disk", "used_pct": _pct(h["disk_pct"]),
-                      "state": st(h["disk_pct"]), "hint": f"{h['name']}'s root disk: {h['disk_pct']:.0f}% used"})
+        items.append({"name": h["name"], "kind": "root disk", "nas": None, "free": None, "free_h": None,
+                      "used_pct": _pct(h["disk_pct"]), "state": st(h["disk_pct"]),
+                      "hint": f"{h['name']}'s root disk: {h['disk_pct']:.0f}% used"})
     if not items:
         return None
     items.sort(key=lambda i: -(i["used_pct"] or 0))
     full = items[0]
-    return {"columns": ["name", "kind", "used_pct"], "items": items,
-            "summary": f"fullest: {full['name']} {full['used_pct']:.0f}%"}
+    nases = sorted({i["nas"] for i in items if i.get("nas")})
+    return {"columns": ["name", "kind", "nas", "free_h", "used_pct"], "items": items,
+            "summary": f"fullest: {full['name']} {full['used_pct']:.0f}%"
+                       + (f" ({_gib(full['free'])} free)" if full.get("free") is not None else "")
+                       + (f" · NAS: {', '.join(nases)}" if nases else "")}
 
 
 register_card("storage", title="Storage", order=60, capability=None, needs=("hosts", "metrics", "storage"),
               covers=("storage",),
-              hint="Disks and shares, fullest first: NAS shares and pools, then each machine's root disk. "
+              hint="Disks and shares, fullest first: each NAS share the lab uses (which NAS, and how much is free), "
+                   "the NAS's pools, then each machine's root disk. "
                    f"Amber from {85}%, red from {95}% ([console] disk_warn_pct / disk_crit_pct).", build=_storage)
 
 

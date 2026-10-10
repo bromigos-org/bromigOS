@@ -10,6 +10,7 @@ volumes (storage), and the lab's databases' health (Redis / Dragonfly, Neo4j; ap
 
     [[source]]
     type = "nas"                        # NAS metrics in the metrics source: pools, shares, disks
+    # label = "Media NAS"               # what the console's Storage card calls it (default: its name)
     # volume_classes = ["nfs-client"]   # PVCs of these storage classes (default: NFS-provisioned ones)
 
     [[source]]
@@ -199,8 +200,13 @@ class NAS(L.LabAdapter):
         L.mq("vector(1)")                         # Unreachable without metrics
         recs = nas_records(L.mq_soft("nas_pool_total_bytes"), L.mq_soft("nas_pool_used_bytes"),
                            L.mq_soft("nas_share_usage_bytes"), L.mq_soft("nas_share_quota_bytes"), self._volumes())
+        label = self.opt("label", self.name)      # what the console calls this NAS ("nas" by default)
         for r in recs:
             r["state"] = L.level(r.get("used_pct"), 85, 95) if r.get("used_pct") is not None else "ok"
+            if r["kind"] in ("pool", "share"):
+                r["nas"] = label
+            if r.get("free") is None and r.get("used") is not None and r.get("total"):
+                r["free"] = max(0.0, r["total"] - r["used"])
         return recs
 
     def _provisioner(self):

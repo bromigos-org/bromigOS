@@ -52,7 +52,7 @@ SCHEMAS = {
     "certs": ("name", "namespace", "dns_names", "not_after", "days_left", "ready", "issuer", "state"),
     "ddns": ("name", "type", "public_ip", "dns_ip", "match", "proxied", "updated", "state"),
     "network": ("name", "kind", "model", "up", "clients", "rx_bps", "tx_bps", "uptime_s", "version"),
-    "storage": ("name", "kind", "used", "total", "used_pct", "objects", "healthy", "state"),
+    "storage": ("name", "kind", "used", "total", "used_pct", "objects", "healthy", "state", "nas", "free"),
     "apps": ("name", "kind", "up", "version", "detail", "endpoint", "vram_used", "link"),
     "games": ("name", "game", "status", "players", "players_max", "uptime_s", "cpu_pct", "mem_bytes"),
     "library": ("name", "kind", "up", "version", "queue", "queue_errors", "missing", "disk_free", "disk_total",
