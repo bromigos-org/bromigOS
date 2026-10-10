@@ -34,8 +34,11 @@ How it works, how to connect a homelab and how to write an adapter:
   release.
 - `jobs.toml` records what each lab job kind measured on a real GPU
   ([docs/homelab.md](../docs/homelab.md#measured-kinds-jobstoml)).
-- `profiles.toml` is the service catalog and presets for provisioning a new lab, which is
-  planned ([docs/lab-provision.md](../docs/lab-provision.md)).
+- `profiles.toml` is the service catalog and presets for `bromigos lab provision`
+  ([docs/lab-provision.md](../docs/lab-provision.md)). It includes Hermes and OpenClaw
+  containers using an existing model endpoint, and an experimental NemoClaw host plan.
+  [Agent installer notes](../docs/lab-agents.md) explain configuration, credentials,
+  tool restrictions and the remaining limits.
 
 ## The data layer
 
@@ -53,6 +56,7 @@ The main modules in `lib/bromigos_homelab/`:
 | `jobs.py`, `jobqueue.py` | the job kinds, and the queue `bromigos-lab.service` runs |
 | `labmodels.py` | what's installed and loaded on the lab's servers; load and unload |
 | `catalog*.py` | the model catalog: picking, planning, serving, upgrades, the refresh and the bench |
+| `provision.py`, `agentprovision.py` | generate a lab repository, apply its reviewed plan and check service health |
 | `tui.py` | the `bromigos lab` dashboard, built with Textual |
 
 ## Run the tests
@@ -68,3 +72,7 @@ The tests run against recorded API answers in `tests/fixtures/` and a stand-in l
 
 `tests/e2e_lab.py` is different: it runs against a real lab, under `dbus-run-session`.
 [docs/lab.md](../docs/lab.md#tests) describes it.
+
+`test/vm/lab-agents-e2e.py` provisions real Hermes and OpenClaw containers in a throwaway
+Debian guest against an isolated model stub. It checks replies, tool restrictions,
+repeat apply and the doctor, then removes the guest. It needs no lab or messaging bots.
