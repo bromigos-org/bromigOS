@@ -30,7 +30,7 @@ depends=('bromigos-core' 'bromigos-lab-catalog' 'python' 'python-textual')
 # VECTOR's terminal must know `bromigos lab`'s aliases (target, connect) and refuse what
 # changes the lab before they exist: vector c5f67cb (r33)
 conflicts=('bromigos-vector<0.1.0.r33')
-checkdepends=('python-textual' 'desktop-file-utils')
+checkdepends=('python-textual' 'desktop-file-utils' 'python-cairo' 'python-gobject' 'pango' 'python-psutil')   # the homelab widgets drawn in their tests
 optdepends=('bromigos-widgets: the LAB panel and declared panels'
             'bromigos-live: the Ops, Netmap and Mind decks; the worlds homelab signals'
             'bromigos-vector: VECTOR homelab tools and Gnosis memory'
