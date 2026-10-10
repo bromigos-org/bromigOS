@@ -156,9 +156,10 @@ jobs:
       - name: Pin the recipes to this source
         if: steps.configured.outputs.ready == 'true'
         run: |
-          tag="aur-bootstrap-${GITHUB_SHA:0:12}"
+          source_sha=$(git log -1 --format=%H -- packaging/keys packaging/bromigos-keyring packaging/bromigos-mirrorlist LICENSE-MIT LICENSE-APACHE)
+          tag="aur-bootstrap-${source_sha:0:12}"
           if ! git rev-parse "$tag" >/dev/null 2>&1; then
-            git tag "$tag" "$GITHUB_SHA"
+            git tag "$tag" "$source_sha"
             git push origin "$tag"
           fi
           python packaging/ci/prepare-aur-bootstrap.py "$tag"

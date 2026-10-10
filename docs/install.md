@@ -46,6 +46,7 @@ first-run questions after you sign in.
 | `--repo URL` | The package repository's base URL, or set `BROMIGOS_REPO_URL`. The default is the public repository, `https://pkgs.bromigos.org`. |
 | `--ca FILE` or `--ca URL` | A CA certificate to trust for the repository's TLS |
 | `--channel NAME` | `stable` (the default), `rc` or `edge`. See [update.md](update.md#channels). |
+| `--aur-route` | Print the alternative AUR bootstrap steps and exit. |
 | `--dry-run` | Says what it would do, and changes nothing |
 | anything else | Passed on to `bromigos install`, such as `--with herdr`. `--yes` also stops pacman from asking. |
 

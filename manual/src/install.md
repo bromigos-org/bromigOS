@@ -70,6 +70,7 @@ Add these after `bash install.sh`:
 | `--channel stable` | Follow tagged releases. This is the default. |
 | `--channel rc` | Follow release candidates, the versions about to become stable. |
 | `--channel edge` | Get every change as soon as it's built. |
+| `--aur-route` | Print the AUR bootstrap steps and exit. |
 | `--dry-run` | Say what it would do, and change nothing. |
 | `--with bromigos-apps` | Also install the [app bundle](apps.md). Repeat `--with` for more packages. |
 | `--no-setup` | Skip the first-run questions. Run `bromigos setup` later. |
