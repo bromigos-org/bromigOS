@@ -14,7 +14,7 @@ public default the caller passes, so the desktop still runs, just without the la
 
 Each user keeps their own keys; the module is in lib/README.md ("bromigos_private"). Add one with
 `bromigos-private edit`. Real secrets (tokens, keys, kubeconfigs) never go in here:
-they stay in Vault and reach ~/.local/share/bromigos/ through `bromigos-secrets sync`.
+they stay in Vault and reach ~/.local/share/bromigos/ through `bromigos secrets sync`.
 """
 import json
 import os

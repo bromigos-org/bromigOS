@@ -206,7 +206,7 @@ Move private values into the encrypted overlay and read them in code:
   bromigos-private edit          # sops edit linux/.config/bromigos/private.sops.yaml
   code: bromigos_private.url("lab"), .get("lan.ping"), .vault("lab_api")   (lib/bromigos_private.py)
   docs/skills: write {{endpoints.lab}}-style placeholders or name the key
-Real secrets (tokens, keys) go to Vault, never into the repo; `bromigos-secrets sync` copies them.
+Real secrets (tokens, keys) go to Vault, never into the repo; `bromigos secrets sync` copies them.
 A false positive can end its line with `privacy: allow`. See AGENTS.md, "Private values".
 """, file=sys.stderr)
     return 1
