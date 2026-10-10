@@ -1,0 +1,49 @@
+# TYPE pinchflat_prom_ex_application_git_author_info gauge
+# TYPE pinchflat_prom_ex_application_git_sha_info gauge
+# TYPE pinchflat_prom_ex_application_dependency_info gauge
+# TYPE pinchflat_prom_ex_application_primary_info gauge
+# HELP pinchflat_prom_ex_oban_queue_length_count The total number jobs that are in the queue in the designated state
+# TYPE pinchflat_prom_ex_oban_queue_length_count gauge
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="remote_metadata",state="discarded"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="default",state="executing"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="remote_metadata",state="retryable"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="local_data",state="completed"} 4
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="local_data",state="retryable"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="fast_indexing",state="retryable"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="local_data",state="scheduled"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_fetching",state="available"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="local_data",state="cancelled"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_fetching",state="executing"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="remote_metadata",state="cancelled"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="default",state="discarded"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_fetching",state="cancelled"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_collection_indexing",state="available"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_collection_indexing",state="completed"} 3
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_fetching",state="completed"} 12
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="remote_metadata",state="executing"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_collection_indexing",state="scheduled"} 1
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="local_data",state="discarded"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="remote_metadata",state="available"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="local_data",state="executing"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="default",state="available"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="local_data",state="available"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="remote_metadata",state="completed"} 3
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="default",state="cancelled"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="fast_indexing",state="scheduled"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="default",state="retryable"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="fast_indexing",state="cancelled"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="default",state="completed"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="remote_metadata",state="scheduled"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="default",state="scheduled"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_fetching",state="discarded"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_fetching",state="retryable"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_collection_indexing",state="discarded"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="fast_indexing",state="available"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="fast_indexing",state="executing"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="fast_indexing",state="completed"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_collection_indexing",state="executing"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_collection_indexing",state="cancelled"} 2
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_collection_indexing",state="retryable"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="fast_indexing",state="discarded"} 0
+pinchflat_prom_ex_oban_queue_length_count{name="Oban",queue="media_fetching",state="scheduled"} 0
+# TYPE pinchflat_prom_ex_application_uptime_milliseconds_count gauge

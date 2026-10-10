@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="FIXTURE-CSRF">
+    <title>
+      Pinchflat
+    </title>
+    <link phx-track-static rel="stylesheet" href="/assets/app-84c55c57753816656f5134f541d32ba5.css?vsn=d">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?cachebust=2024-03-20">
+    <script defer phx-track-static type="text/javascript" src="/assets/app-521b5c83d8b2f79295a25943104e99d5.js?vsn=d">
+    </script>
+  </head>
+  <body x-data="{ 
+      sidebarVisible: false,
+      proEnabled: false,
+      onboarding: true
+    }" class="dark text-bodydark bg-boxdark-2" data-socket-path="/live">
+    <div class="flex h-screen overflow-hidden">
+  <aside x-bind:class="sidebarVisible ? 'translate-x-0' : '-translate-x-full'" class="-translate-x-full absolute left-0 top-0 z-9999 flex h-screen w-65 flex-col overflow-y-hidden justify-between bg-black duration-300 ease-linear shadow-lg sm:shadow-none dark:bg-boxdark lg:static lg:translate-x-0" @click.outside="sidebarVisible = false">
+  <section>
+    <div class="flex items-center justify-between gap-2 px-6 py-4">
+      <a href="/" class="flex items-center">
+        <img src="/images/logo-2024-03-20-63ac49d6543a4c455078df63b868105e.png?vsn=d" alt="Pinchflat" class="w-auto">
+      </a>
+      <button class="block mt-3 lg:hidden" @click.stop="sidebarVisible = !sidebarVisible">
+        <span class="hero-arrow-left fill-current"></span>
+      </button>
+    </div>
+    <div class="no-scrollbar flex flex-col overflow-y-auto duration-300 ease-linear">
+      <nav class="mt-3 px-4 py-4 lg:px-6">
+        <h3 class="mb-4 ml-4 text-sm font-medium text-bodydark2">
+          <span>MENU</span>
+        </h3>
+        <div class="flex flex-col justify-between">
+          <ul class="mb-6 flex flex-col gap-1.5">
+            <li class="text-bodydark1">
+  <a href="/" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_self">
+  <span class="hero-home "></span> Home
+</a>
+</li>
+            <li class="text-bodydark1">
+  <a href="/sources" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_self">
+  <span class="hero-tv "></span> Sources
+</a>
+</li>
+            <li class="text-bodydark1">
+  <a href="/media_profiles" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_self">
+  <span class="hero-adjustments-vertical "></span> Media Profiles
+</a>
+</li>
+            <li class="text-bodydark1" x-data="{ selected: false }">
+  <span class="font-medium cursor-pointer group relative flex items-center justify-between rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4" x-on:click="selected = !selected">
+    <span class="flex items-center gap-2.5">
+      <span class="hero-cog-6-tooth"></span> Config
+    </span>
+    <span class="text-bodydark2">
+      <span class="hero-chevron-down" x-bind:class="{ &#39;rotate-180&#39;: selected }"></span>
+    </span>
+  </span>
+  <ul x-cloak x-show="selected">
+    <li class="text-bodydark2">
+      <a href="/settings" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 pl-10">
+   Settings
+</a>
+    </li><li class="text-bodydark2">
+      <a href="/app_info" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 pl-10">
+   App Info
+</a>
+    </li>
+  </ul>
+</li>
+          </ul>
+        </div>
+      </nav>
+    </div>
+  </section>
+  <section>
+    <nav class="px-4 py-4 lg:px-6">
+      <ul class="mb-6 flex flex-col gap-1.5">
+        <li class="text-bodydark1">
+  <a href="https://github.com/kieraneglin/pinchflat/wiki" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_blank">
+  <span class="hero-book-open scale-110"></span> Docs
+</a>
+</li>
+        <li class="text-bodydark1">
+  <a href="https://github.com/kieraneglin/pinchflat" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_blank">
+  <span class="si-github "></span> Github
+</a>
+</li>
+        <li class="text-bodydark1">
+  <a href="https://discord.gg/j7T6dCuwU4" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_blank">
+  <span class="si-discord "></span> Discord
+</a>
+</li>
+        <li>
+          <span class="font-medium text-bodydark1 group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out cursor-pointer hover:bg-graydark dark:hover:bg-meta-4" phx-click="[]">
+            <span class="hero-currency-dollar scale-110"></span> Donate
+          </span>
+        </li>
+        <li>
+          <span class="group relative flex items-center gap-2.5 px-4 pt-2 text-sm" x-on:click="markVersionAsSeen(&#39;2025.9.26&#39;)">
+            <span>Pinchflat 2025.9.26</span>
+            <a href="https://github.com/kieraneglin/pinchflat/releases" target="_blank" class="bg-meta-2 text-boxdark px-1.5 rounded-full text-xs" x-cloak x-show="!isVersionSeen(&#39;2025.9.26&#39;)">
+              NEW
+            </a>
+          </span>
+          <span class="group relative flex items-center gap-2.5 px-4 pt-2 text-sm">
+            yt-dlp 2026.08.19
+          </span>
+        </li>
+      </ul>
+    </nav>
+  </section>
+</aside>
+  <div class="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
+    <header class="sticky top-0 z-999 flex min-h-20 w-full bg-white drop-shadow-1 dark:bg-boxdark dark:drop-shadow-none">
+  <div class="flex flex-grow items-center justify-between lg:justify-end px-4 py-4 shadow-2 md:px-6 2xl:px-11">
+    <div class="flex items-center gap-2 sm:gap-4 lg:hidden w-2/6">
+      <section class="pr-1">
+        <img src="/images/icon-2024-03-20-de2b82e475e8dbadfc790429fff9b0d8.png?vsn=d" alt="Pinchflat" class="w-10">
+      </section>
+      <button class="z-99999 block mx-2 rounded-sm border border-stroke bg-white p-1.5 shadow-sm dark:border-strokedark dark:bg-boxdark lg:hidden" @click.stop="sidebarVisible = !sidebarVisible">
+        <span class="hero-bars-3"></span>
+      </button>
+    </div>
+    <div class="bg-meta-4 rounded-md w-4/6 lg:w-3/6 xl:w-2/6">
+      <div class="relative">
+        <span class="absolute left-2 top-1/2 -translate-y-1/2 flex">
+          <span class="hero-magnifying-glass"></span>
+        </span>
+        <form action="/search">
+          <input type="text" name="q" placeholder="Search all media..." class="w-full bg-transparent pl-9 pr-4 border-0 focus:ring-0 focus:outline-none">
+        </form>
+      </div>
+    </div>
+  </div>
+</header>
+    <main>
+      <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+        <div class="flex flex-col gap-7.5" id="flash-group">
+  <div id="client-error" class="pb-8" role="alert" hidden phx-connected="[]" phx-disconnected="[]">
+  <div class="flex justify-between w-full border-l-6 bg-opacity-[50%] p-5 shadow-md dark:bg-opacity-40 dark:text-white border-[#F87171] bg-[#F87171]">
+    <main>
+      <h5 class="mb-2 text-lg font-bold">
+        We can&#39;t find the internet
+      </h5>
+      <p class="mt-2 text-md leading-5 opacity-80">
+    Attempting to reconnect <span class="hero-arrow-path ml-1 h-3 w-3 animate-spin"></span>
+  </p>
+    </main>
+    <button type="button" aria-label="close" phx-click="[]">
+      <span class="hero-x-mark-solid h-7 w-7 opacity-70 hover:opacity-100"></span>
+    </button>
+  </div>
+</div>
+  <div id="server-error" class="pb-8" role="alert" hidden phx-connected="[]" phx-disconnected="[]">
+  <div class="flex justify-between w-full border-l-6 bg-opacity-[50%] p-5 shadow-md dark:bg-opacity-40 dark:text-white border-[#F87171] bg-[#F87171]">
+    <main>
+      <h5 class="mb-2 text-lg font-bold">
+        Something went wrong!
+      </h5>
+      <p class="mt-2 text-md leading-5 opacity-80">
+    Hang in there while we get back on track <span class="hero-arrow-path ml-1 h-3 w-3 animate-spin"></span>
+  </p>
+    </main>
+    <button type="button" aria-label="close" phx-click="[]">
+      <span class="hero-x-mark-solid h-7 w-7 opacity-70 hover:opacity-100"></span>
+    </button>
+  </div>
+</div>
+</div>
+        <div class="mb-6 flex gap-3 flex-row items-center justify-between">
+  <div class="flex gap-3 items-center min-w-0">
+    <a href="/sources">
+      <span class="hero-arrow-left w-10 h-10 hover:dark:text-white"></span>
+    </a>
+    <h2 class="text-title-md2 font-bold text-black dark:text-white ml-4 truncate">
+      Little SDO
+    </h2>
+  </div>
+  <nav>
+    <a href="/sources/3/edit">
+      <button class="text-center font-medium text-white whitespace-nowrap rounded-lg inline-flex items-center justify-center px-8 py-4 bg-primary hover:bg-opacity-90 lg:px-8 xl:px-10 disabled:bg-opacity-50 disabled:cursor-not-allowed disabled:text-grey-5 " type="submit">
+        <span class="hero-pencil-square mr-2"></span> Edit <span class="hidden sm:inline pl-1">Source</span>
+</button>
+    </a>
+  </nav>
+</div>
+<div class="rounded-sm border border-stroke bg-white px-5 py-5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5">
+  <div class="max-w-full">
+    <div x-data="{
+    openTab: getTabFromHash(&#39;source&#39;, &#39;source&#39;),
+    activeClasses: &#39;text-meta-5 border-meta-5&#39;,
+    inactiveClasses: &#39;border-transparent&#39;
+  }" @hashchange.window="openTab = getTabFromHash(openTab, &#39;source&#39;)" class="w-full">
+  <header class="flex flex-col md:flex-row md:justify-between border-b border-strokedark">
+    <div class="flex flex-wrap gap-5 sm:gap-10">
+      <a href="#" @click.prevent="openTab = setTabByName(&#39;source&#39;)" x-bind:class="openTab === &#39;source&#39; ? activeClasses : inactiveClasses" class="border-b-2 py-4 w-full sm:w-fit text-sm font-medium hover:text-meta-5 md:text-base">
+        <span class="text-xl">Source</span>
+      </a><a href="#" @click.prevent="openTab = setTabByName(&#39;pending&#39;)" x-bind:class="openTab === &#39;pending&#39; ? activeClasses : inactiveClasses" class="border-b-2 py-4 w-full sm:w-fit text-sm font-medium hover:text-meta-5 md:text-base">
+        <span class="text-xl">Pending</span>
+      </a><a href="#" @click.prevent="openTab = setTabByName(&#39;downloaded&#39;)" x-bind:class="openTab === &#39;downloaded&#39; ? activeClasses : inactiveClasses" class="border-b-2 py-4 w-full sm:w-fit text-sm font-medium hover:text-meta-5 md:text-base">
+        <span class="text-xl">Downloaded</span>
+      </a><a href="#" @click.prevent="openTab = setTabByName(&#39;other&#39;)" x-bind:class="openTab === &#39;other&#39; ? activeClasses : inactiveClasses" class="border-b-2 py-4 w-full sm:w-fit text-sm font-medium hover:text-meta-5 md:text-base">
+        <span class="text-xl">Other</span>
+      </a><a href="#" @click.prevent="openTab = setTabByName(&#39;tasks&#39;)" x-bind:class="openTab === &#39;tasks&#39; ? activeClasses : inactiveClasses" class="border-b-2 py-4 w-full sm:w-fit text-sm font-medium hover:text-meta-5 md:text-base">
+        <span class="text-xl">Tasks</span>
+      </a>
+    </div>
+    <div class="mx-4 my-4 lg:my-0 flex gap-5 sm:gap-10 items-center">
+        <div x-data="{ dropdownOpen: false }" class="relative flex justify-center w-full sm:w-50">
+  <span x-on:click.prevent="dropdownOpen = !dropdownOpen" class="cursor-pointer inline-flex gap-2.5 rounded-md bg-primary px-5.5 py-3 font-medium text-white hover:bg-opacity-95">
+    Actions
+    <span class="hero-chevron-down fill-current duration-200 ease-linear mt-1" x-bind:class="dropdownOpen &amp;&amp; &#39;rotate-180&#39;"></span>
+  </span>
+  <div x-show="dropdownOpen" x-on:click.outside="dropdownOpen = false" class="absolute left-0 top-full z-40 mt-2 w-full rounded-md bg-black py-3 shadow-card">
+    <ul class="flex flex-col">
+      <li>
+        <span class="flex px-5 py-2 font-medium text-bodydark2 hover:text-white cursor-pointer">
+    <a href="https://pinchflat.example/sources/00000000-1111-4222-8333-444444444444/feed.xml" x-on:click="
+          $event.preventDefault();
+          copyWithCallbacks(
+            &#39;https://pinchflat.example/sources/00000000-1111-4222-8333-444444444444/feed.xml&#39;,
+            () =&gt; copied = true,
+            () =&gt; copied = false
+          )
+        " x-data="{ copied: false }">
+      Copy RSS Feed
+      <span x-show="copied" x-transition.duration.150ms><span class="hero-check ml-2 h-4 w-4"></span></span>
+    </a>
+        </span>
+      </li><li>
+        <span class="flex px-5 py-2 font-medium text-bodydark2 hover:text-white cursor-pointer">
+    <span x-data="{ copied: false }" x-on:click="
+        copyWithCallbacks(
+          String.raw`{
+  &quot;enabled&quot;: true,
+  &quot;id&quot;: 3,
+  &quot;description&quot;: &quot;Meet Little SDO! This animated version of NASA&#39;s Solar Dynamics Observatory is here to introduce you to all the great new ways we&#39;ll be looking at the sun and predicting how it will affect our lives on Earth.&quot;,
+  &quot;uuid&quot;: &quot;00000000-1111-4222-8333-444444444444&quot;,
+  &quot;inserted_at&quot;: &quot;2026-10-10T07:42:24Z&quot;,
+  &quot;updated_at&quot;: &quot;2026-10-10T07:42:30Z&quot;,
+  &quot;media_profile&quot;: {
+    &quot;id&quot;: 2,
+    &quot;name&quot;: &quot;Playlists (in order)&quot;,
+    &quot;inserted_at&quot;: &quot;2026-10-10T06:48:24Z&quot;,
+    &quot;updated_at&quot;: &quot;2026-10-10T07:15:01Z&quot;,
+    &quot;output_path_template&quot;: &quot;/playlists/{{ source_custom_name }}/{{ static_season__episode_by_index }} - {{ title }} [{{ id }}].{{ ext }}&quot;,
+    &quot;sponsorblock_categories&quot;: [],
+    &quot;sponsorblock_behaviour&quot;: &quot;disabled&quot;,
+    &quot;download_thumbnail&quot;: true,
+    &quot;embed_thumbnail&quot;: true,
+    &quot;download_auto_subs&quot;: false,
+    &quot;download_subs&quot;: true,
+    &quot;embed_subs&quot;: true,
+    &quot;sub_langs&quot;: &quot;en&quot;,
+    &quot;preferred_resolution&quot;: &quot;1080p&quot;,
+    &quot;download_metadata&quot;: false,
+    &quot;embed_metadata&quot;: true,
+    &quot;download_nfo&quot;: true,
+    &quot;media_container&quot;: null,
+    &quot;audio_track&quot;: null,
+    &quot;download_source_images&quot;: false,
+    &quot;livestream_behaviour&quot;: &quot;include&quot;,
+    &quot;marked_for_deletion_at&quot;: null,
+    &quot;redownload_delay_days&quot;: 1,
+    &quot;shorts_behaviour&quot;: &quot;include&quot;
+  },
+  &quot;nfo_filepath&quot;: &quot;/downloads/playlists/Little SDO/tvshow.nfo&quot;,
+  &quot;original_url&quot;: &quot;https://www.youtube.com/playlist?list=PLCFE9837C2F7EB8AA&quot;,
+  &quot;media_profile_id&quot;: 2,
+  &quot;custom_name&quot;: &quot;Little SDO&quot;,
+  &quot;collection_id&quot;: &quot;PLCFE9837C2F7EB8AA&quot;,
+  &quot;collection_name&quot;: &quot;Little SDO&quot;,
+  &quot;collection_type&quot;: &quot;playlist&quot;,
+  &quot;download_media&quot;: true,
+  &quot;fast_index&quot;: false,
+  &quot;download_cutoff_date&quot;: null,
+  &quot;min_duration_seconds&quot;: null,
+  &quot;max_duration_seconds&quot;: null,
+  &quot;title_filter_regex&quot;: null,
+  &quot;marked_for_deletion_at&quot;: null,
+  &quot;banner_filepath&quot;: null,
+  &quot;fanart_filepath&quot;: null,
+  &quot;poster_filepath&quot;: null,
+  &quot;series_directory&quot;: &quot;/downloads/playlists/Little SDO&quot;,
+  &quot;last_indexed_at&quot;: &quot;2026-10-10T07:42:29Z&quot;,
+  &quot;index_frequency_minutes&quot;: 1440,
+  &quot;cookie_behaviour&quot;: &quot;disabled&quot;,
+  &quot;output_path_template_override&quot;: null,
+  &quot;retention_period_days&quot;: null
+}`,
+          () =&gt; copied = true, 
+          () =&gt; copied = false
+        )
+      ">
+      Copy JSON
+      <span x-show="copied" x-transition.duration.150ms><span class="hero-check ml-2 h-4 w-4"></span></span>
+    </span>
+        </span>
+      </li><li>
+        <span class="flex px-5 py-2 font-medium text-bodydark2 hover:text-white cursor-pointer">
+    <a href="/sources/new?template_id=3">
+      Use as Template
+    </a>
+        </span>
+      </li><li>
+        <span class="flex px-5 py-2 font-medium text-bodydark2 hover:text-white cursor-pointer">
+    <div class="h-px w-full bg-bodydark2"></div>
+        </span>
+      </li><li>
+        <span class="flex px-5 py-2 font-medium text-bodydark2 hover:text-white cursor-pointer">
+    <a href="/sources/3/force_download_pending" data-method="post" data-csrf="FIXTURE-CSRF" data-to="/sources/3/force_download_pending" data-confirm="Are you sure you want to force a download of all pending media items? This isn&#39;t normally needed.">
+      Download Pending
+    </a>
+        </span>
+      </li><li>
+        <span class="flex px-5 py-2 font-medium text-bodydark2 hover:text-white cursor-pointer">
+    <a href="/sources/3/force_redownload" data-method="post" data-csrf="FIXTURE-CSRF" data-to="/sources/3/force_redownload" data-confirm="Are you sure you want to re-download all currently downloaded media items? This doesn&#39;t upgrade your media, but will download any missing files if your settings have changed. This isn&#39;t normally needed.">
+      Redownload Existing
+    </a>
+        </span>
+      </li><li>
+        <span class="flex px-5 py-2 font-medium text-bodydark2 hover:text-white cursor-pointer">
+    <a href="/sources/3/force_index" data-method="post" data-csrf="FIXTURE-CSRF" data-to="/sources/3/force_index" data-confirm="Are you sure you want index all content from this source? This isn&#39;t normally needed.">
+      Force Index
+    </a>
+        </span>
+      </li><li>
+        <span class="flex px-5 py-2 font-medium text-bodydark2 hover:text-white cursor-pointer">
+    <a href="/sources/3/force_metadata_refresh" data-method="post" data-csrf="FIXTURE-CSRF" data-to="/sources/3/force_metadata_refresh" data-confirm="Are you sure you want to refresh this source&#39;s metadata?">
+      Refresh Metadata
+    </a>
+        </span>
+      </li><li>
+        <span class="flex px-5 py-2 font-medium text-bodydark2 hover:text-white cursor-pointer">
+    <a href="/sources/3/sync_files_on_disk" data-method="post" data-csrf="FIXTURE-CSRF" data-to="/sources/3/sync_files_on_disk" data-confirm="Are you sure you want to sync files? This will update media items if their files have been deleted. File addition or moves are not detected. This isn&#39;t normally needed.">
+      Sync Files on Disk
+    </a>
+        </span>
+      </li><li>
+        <span class="flex px-5 py-2 font-medium text-bodydark2 hover:text-white cursor-pointer">
+    <div class="h-px w-full bg-bodydark2"></div>
+        </span>
+      </li><li>
+        <span class="flex px-5 py-2 font-medium text-bodydark2 hover:text-white cursor-pointer">
+    <a href="/sources/3" data-method="delete" data-csrf="FIXTURE-CSRF" data-to="/sources/3" data-confirm="Are you sure you want to delete this source (leaving files in place)? This cannot be undone.">
+      Delete Source
+    </a>
+        </span>
+      </li><li>
+        <span class="flex px-5 py-2 font-medium text-bodydark2 hover:text-white cursor-pointer">
+    <a href="/sources/3?delete_files=true" data-method="delete" data-csrf="FIXTURE-CSRF" data-to="/sources/3?delete_files=true" class="mt-5 md:mt-0" data-confirm="Are you sure you want to delete this source and it&#39;s files on disk? This cannot be undone.">
+      Delete Source + Files
+    </a>
+        </span>
+      </li>
+    </ul>
+  </div>
+</div>
+    </div>
+  </header>
+  <div class="mt-4 min-h-60">
+    <div x-show="openTab === &#39;source&#39;" class="font-medium leading-relaxed">
+        <div class="flex flex-col text-white gap-10">
+          <section>
+            <h3 class="font-bold text-xl mb-2 mt-6">Raw Attributes</h3>
+            <section>
+              <strong>Media Profile:</strong>
+              <a href="/media_profiles/2" class="underline decoration-bodydark decoration-1 hover:decoration-white" target="_self">
+                Playlists (in order)
+</a>
+            </section>
+            <ul>
+  <li class="mb-2 w-2/3">
+    <strong>uuid:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        00000000-1111-4222-8333-444444444444
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>fanart_filepath:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>inserted_at:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        2026-10-10T07:42:24Z
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>output_path_template_override:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>fast_index:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        false
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>nfo_filepath:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        /downloads/playlists/Little SDO/tvshow.nfo
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>index_frequency_minutes:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        1440
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>description:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        Meet Little SDO! This animated version of NASA&#39;s Solar Dynamics Observatory is here to introduce you to all the great new ways we&#39;ll be looking at the sun and predicting how it will affect our lives on Earth.
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>enabled:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        true
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>id:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        3
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>retention_period_days:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>original_url:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        <a href="https://www.youtube.com/playlist?list=PLCFE9837C2F7EB8AA" class="text-blue-500 hover:text-blue-300" target="_blank">
+  https://www.youtube.com/playlist?list=PLCFE9837C2F7EB8AA
+</a>
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>banner_filepath:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>last_indexed_at:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        2026-10-10T07:42:29Z
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>download_media:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        true
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>collection_id:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        PLCFE9837C2F7EB8AA
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>poster_filepath:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>max_duration_seconds:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>collection_type:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        playlist
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>custom_name:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        Little SDO
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>updated_at:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        2026-10-10T07:42:30Z
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>marked_for_deletion_at:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>title_filter_regex:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>download_cutoff_date:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>series_directory:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        /downloads/playlists/Little SDO
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>min_duration_seconds:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>cookie_behaviour:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        disabled
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>media_profile_id:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        2
+    </code>
+  </li><li class="mb-2 w-2/3">
+    <strong>collection_name:</strong>
+    <code class="inline-block text-sm font-mono text-gray p-0.5 mx-0.5">
+        Little SDO
+    </code>
+  </li>
+</ul>
+          </section>
+        </div>
+    </div><div x-show="openTab === &#39;pending&#39;" class="font-medium leading-relaxed">
+        <div id="phx-GN0bPyyBjiGrnRTi" data-phx-session="SFMyNTY.g2gDaAJhBnQAAAAIdwJpZG0AAAAUcGh4LUdOMGJQeXlCamlHcm5SVGl3B3Nlc3Npb250AAAAAm0AAAALbWVkaWFfc3RhdGVtAAAAB3BlbmRpbmdtAAAACXNvdXJjZV9pZGEDdwR2aWV3dy5FbGl4aXIuUGluY2hmbGF0V2ViLlNvdXJjZXMuTWVkaWFJdGVtVGFibGVMaXZldwpwYXJlbnRfcGlkdwNuaWx3BnJvdXRlcncDbmlsdwhyb290X3BpZHcDbmlsdwlyb290X3ZpZXd3LkVsaXhpci5QaW5jaGZsYXRXZWIuU291cmNlcy5NZWRpYUl0ZW1UYWJsZUxpdmV3EWxpdmVfc2Vzc2lvbl9uYW1ldwNuaWxuBgDL9sMkoQFiAAFRgA.rndcqHi66EDWp7hQUX2JiFMxqevKcc0-EVXUGewcO-w" data-phx-static="SFMyNTY.g2gDaAJhBnQAAAADdwJpZG0AAAAUcGh4LUdOMGJQeXlCamlHcm5SVGl3BWZsYXNodAAAAAB3CmFzc2lnbl9uZXdqbgYAy_bDJKEBYgABUYA.R0Y6AfNndE2mzSqvsYsW_2p9RpvbG3aIVxyEYKOUZZc"><div class="mb-4 flex items-center">
+  <div class="group relative inline-block cursor-pointer">
+  <div>
+  <button class="flex justify-center items-center rounded-lg  bg-form-input border-2 border-strokedark hover:bg-meta-4 hover:border-form-strokedark h-10 w-10" type="button" phx-click="reload_page">
+    <span class="hero-arrow-path text-stroke"></span>
+  </button>
+  </div>
+</div>
+  <p class="ml-2">Nothing Here!</p>
+</div></div>
+    </div><div x-show="openTab === &#39;downloaded&#39;" class="font-medium leading-relaxed">
+        <div id="phx-GN0bPyyR_1WrnRUi" data-phx-session="SFMyNTY.g2gDaAJhBnQAAAAIdwJpZG0AAAAUcGh4LUdOMGJQeXlSXzFXcm5SVWl3B3Nlc3Npb250AAAAAm0AAAALbWVkaWFfc3RhdGVtAAAACmRvd25sb2FkZWRtAAAACXNvdXJjZV9pZGEDdwR2aWV3dy5FbGl4aXIuUGluY2hmbGF0V2ViLlNvdXJjZXMuTWVkaWFJdGVtVGFibGVMaXZldwpwYXJlbnRfcGlkdwNuaWx3BnJvdXRlcncDbmlsdwhyb290X3BpZHcDbmlsdwlyb290X3ZpZXd3LkVsaXhpci5QaW5jaGZsYXRXZWIuU291cmNlcy5NZWRpYUl0ZW1UYWJsZUxpdmV3EWxpdmVfc2Vzc2lvbl9uYW1ldwNuaWxuBgDM9sMkoQFiAAFRgA.9kh5sgCH9UxFGXOvpQuyYZLV6rfT1uHSuWcRP8hlp-g" data-phx-static="SFMyNTY.g2gDaAJhBnQAAAADdwJpZG0AAAAUcGh4LUdOMGJQeXlSXzFXcm5SVWl3BWZsYXNodAAAAAB3CmFzc2lnbl9uZXdqbgYAzPbDJKEBYgABUYA.5TagU1a1J28OD99sNchtaGgjGgarud2yUCvIMtDD-Uw"><div>
+  <header class="flex justify-between items-center mb-4">
+    <span class="flex items-center">
+      <div class="group relative inline-block cursor-pointer">
+  <div>
+  <button class="flex justify-center items-center rounded-lg  bg-form-input border-2 border-strokedark hover:bg-meta-4 hover:border-form-strokedark h-10 w-10" type="button" phx-click="reload_page">
+    <span class="hero-arrow-path text-stroke"></span>
+  </button>
+  </div>
+  <div class="hidden absolute top-full z-20 mt-3 whitespace-nowrap rounded-md p-1.5 text-sm font-medium opacity-0 drop-shadow-4 group-hover:opacity-100 group-hover:block bg-meta-4 border border-form-strokedark text-wrap left-1/2 -translate-x-1/2 text-nowrap">
+    <span class="border-t border-l border-form-strokedark absolute -z-10 h-2 w-2 rotate-45 rounded-sm bg-meta-4 -top-1 left-1/2 -translate-x-1/2 ">
+    </span>
+    <div class="px-3">Refresh</div>
+  </div>
+</div>
+      <span class="ml-2">
+        Showing <span x-data x-text="Intl.NumberFormat().format(4)">4</span> of <span x-data x-text="Intl.NumberFormat().format(4)">4</span>
+      </span>
+    </span>
+    <div class="bg-meta-4 rounded-md">
+      <div class="relative">
+        <span class="absolute left-2 top-1/2 -translate-y-1/2 flex">
+          <span class="hero-magnifying-glass"></span>
+        </span>
+        <form phx-change="search_term" phx-submit="search_term">
+          <input type="text" name="q" placeholder="Search in table..." class="w-full bg-transparent pl-9 pr-4 border-0 focus:ring-0 focus:outline-none" phx-debounce="200">
+        </form>
+      </div>
+    </div>
+  </header>
+  <table class="w-full table-auto bg-boxdark text-white">
+  <thead>
+    <tr class="text-left bg-meta-4">
+      <th class="px-4 py-4 font-medium text-white ">
+        <div class="relative">
+          Title
+        </div>
+      </th><th class="px-4 py-4 font-medium text-white ">
+        <div class="relative">
+          Upload Date
+        </div>
+      </th><th class="px-4 py-4 font-medium text-white ">
+        <div class="relative">
+        </div>
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="hover:bg-strokedark">
+      <td class="px-4 py-5 max-w-xs">
+      <section class="flex items-center space-x-1">
+        <span class="truncate">
+          <a href="/sources/3/media/21" class="underline decoration-bodydark decoration-1 hover:decoration-white" target="_self">
+            NASA | Introducing Little SDO
+</a>
+        </span>
+      </section>
+      </td><td class="px-4 py-5 ">
+      2010-02-02
+      </td><td class="px-4 py-5 flex justify-end">
+      <a href="/sources/3/media/21/edit" class="hover:text-secondary duration-200 ease-in-out mr-4">
+  <span class="hero-pencil-square"></span>
+</a>
+      </td>
+    </tr><tr class="hover:bg-strokedark">
+      <td class="px-4 py-5 max-w-xs">
+      <section class="flex items-center space-x-1">
+        <span class="truncate">
+          <a href="/sources/3/media/15" class="underline decoration-bodydark decoration-1 hover:decoration-white" target="_self">
+            NASA | Little SDO: Big Sun
+</a>
+        </span>
+      </section>
+      </td><td class="px-4 py-5 ">
+      2010-02-02
+      </td><td class="px-4 py-5 flex justify-end">
+      <a href="/sources/3/media/15/edit" class="hover:text-secondary duration-200 ease-in-out mr-4">
+  <span class="hero-pencil-square"></span>
+</a>
+      </td>
+    </tr><tr class="hover:bg-strokedark">
+      <td class="px-4 py-5 max-w-xs">
+      <section class="flex items-center space-x-1">
+        <span class="truncate">
+          <a href="/sources/3/media/16" class="underline decoration-bodydark decoration-1 hover:decoration-white" target="_self">
+            NASA | Little SDO: Tons of Data
+</a>
+        </span>
+      </section>
+      </td><td class="px-4 py-5 ">
+      2009-08-06
+      </td><td class="px-4 py-5 flex justify-end">
+      <a href="/sources/3/media/16/edit" class="hover:text-secondary duration-200 ease-in-out mr-4">
+  <span class="hero-pencil-square"></span>
+</a>
+      </td>
+    </tr><tr class="hover:bg-strokedark">
+      <td class="px-4 py-5 max-w-xs">
+      <section class="flex items-center space-x-1">
+        <span class="truncate">
+          <a href="/sources/3/media/17" class="underline decoration-bodydark decoration-1 hover:decoration-white" target="_self">
+            NASA | Little SDO: Looking Inside the Sun
+</a>
+        </span>
+      </section>
+      </td><td class="px-4 py-5 ">
+      2009-07-09
+      </td><td class="px-4 py-5 flex justify-end">
+      <a href="/sources/3/media/17/edit" class="hover:text-secondary duration-200 ease-in-out mr-4">
+  <span class="hero-pencil-square"></span>
+</a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+  <section class="flex justify-center mt-5">
+    <nav>
+  <ul class="flex flex-wrap items-center">
+    <li>
+      <span class="pagination-prev h-8 w-8 items-center justify-center rounded cursor-not-allowed" phx-value-direction="dec">
+        <span class="hero-chevron-left"></span>
+      </span>
+    </li>
+    <li>
+      <span class="mx-2">
+        Page <span x-data x-text="Intl.NumberFormat().format(1)">1</span> of <span x-data x-text="Intl.NumberFormat().format(1)">1</span>
+      </span>
+    </li>
+    <li>
+      <span class="pagination-next flex h-8 w-8 items-center justify-center rounded cursor-not-allowed" phx-value-direction="inc">
+        <span class="hero-chevron-right"></span>
+      </span>
+    </li>
+  </ul>
+</nav>
+  </section>
+</div></div>
+    </div><div x-show="openTab === &#39;other&#39;" class="font-medium leading-relaxed">
+        <div id="phx-GN0bPyyd6OmrnRVi" data-phx-session="SFMyNTY.g2gDaAJhBnQAAAAIdwJpZG0AAAAUcGh4LUdOMGJQeXlkNk9tcm5SVml3B3Nlc3Npb250AAAAAm0AAAALbWVkaWFfc3RhdGVtAAAABW90aGVybQAAAAlzb3VyY2VfaWRhA3cEdmlld3cuRWxpeGlyLlBpbmNoZmxhdFdlYi5Tb3VyY2VzLk1lZGlhSXRlbVRhYmxlTGl2ZXcKcGFyZW50X3BpZHcDbmlsdwZyb3V0ZXJ3A25pbHcIcm9vdF9waWR3A25pbHcJcm9vdF92aWV3dy5FbGl4aXIuUGluY2hmbGF0V2ViLlNvdXJjZXMuTWVkaWFJdGVtVGFibGVMaXZldxFsaXZlX3Nlc3Npb25fbmFtZXcDbmlsbgYAzfbDJKEBYgABUYA.zqlDYEy5HUxtXtgJVxSFFlcNiFyR258QHtHMBNNF-EY" data-phx-static="SFMyNTY.g2gDaAJhBnQAAAADdwJpZG0AAAAUcGh4LUdOMGJQeXlkNk9tcm5SVml3BWZsYXNodAAAAAB3CmFzc2lnbl9uZXdqbgYAzfbDJKEBYgABUYA.orOVMIxQio37dM4wD_CkXz1CMXH6WHIZ4yYmDYAHD_U"><div class="mb-4 flex items-center">
+  <div class="group relative inline-block cursor-pointer">
+  <div>
+  <button class="flex justify-center items-center rounded-lg  bg-form-input border-2 border-strokedark hover:bg-meta-4 hover:border-form-strokedark h-10 w-10" type="button" phx-click="reload_page">
+    <span class="hero-arrow-path text-stroke"></span>
+  </button>
+  </div>
+</div>
+  <p class="ml-2">Nothing Here!</p>
+</div></div>
+    </div><div x-show="openTab === &#39;tasks&#39;" class="font-medium leading-relaxed">
+          <table class="w-full table-auto bg-boxdark text-black dark:text-white">
+  <thead>
+    <tr class="text-left bg-meta-4">
+      <th class="px-4 py-4 font-medium text-white ">
+        <div class="relative">
+          Worker
+        </div>
+      </th><th class="px-4 py-4 font-medium text-white ">
+        <div class="relative">
+          State
+        </div>
+      </th><th class="px-4 py-4 font-medium text-white ">
+        <div class="relative">
+          Scheduled At
+        </div>
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="hover:bg-strokedark">
+      <td class="px-4 py-5 ">
+              Pinchflat.SlowIndexing.MediaCollectionIndexingWorker
+      </td><td class="px-4 py-5 ">
+              scheduled
+      </td><td class="px-4 py-5 ">
+              <time>2026-10-11 00:42:29</time>
+      </td>
+    </tr>
+  </tbody>
+</table>
+    </div>
+  </div>
+</div>
+  </div>
+</div>
+      </div>
+    </main>
+  </div>
+</div>
+    <div id="donate-modal" phx-remove="[]" data-cancel="[[&quot;exec&quot;,{&quot;attr&quot;:&quot;phx-remove&quot;}]]" class="relative z-99999 hidden">
+  <div id="donate-modal-bg" class="bg-black-2/80 fixed inset-0 transition-opacity" aria-hidden="true"></div>
+  <div class="fixed inset-0 overflow-y-auto" aria-labelledby="donate-modal-title" aria-describedby="donate-modal-description" role="dialog" aria-modal="true" tabindex="0">
+    <div class="flex min-h-full items-center justify-center">
+      <div class="w-full max-w-3xl p-2 sm:p-6 lg:py-8">
+        <div id="donate-modal-container" phx-window-keydown="[]" phx-key="escape" phx-click-away="[]" class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-graydark p-8 sm:p-14 shadow-lg ring-1 transition">
+          <div class="absolute top-6 right-5">
+            <button phx-click="[]" type="button" class="-m-3 flex-none p-3 opacity-60 hover:opacity-80" aria-label="close">
+              <span class="hero-x-mark-solid h-5 w-5 text-white"></span>
+            </button>
+          </div>
+          <div id="donate-modal-content">
+  <section x-data="{ inputValue: '' }">
+    <h3 class="text-2xl text-white">Donate</h3>
+    <p class="text-sm">Thank you for your support :&rpar;</p>
+    <p class="mt-4">
+      If you find the project valuable and want to say thanks, a
+      <a href="https://supporters.eff.org/donate" class="text-blue-500 hover:text-blue-300" target="_blank">
+        donation to the Electronic Frontier Foundation
+</a>
+      would be greatly appreciated! You can optionally post proof of donation on
+      <a href="https://github.com/kieraneglin/pinchflat/issues/234" class="text-blue-500 hover:text-blue-300" target="_blank">
+  this issue
+</a>
+      to hopefully inspire others to donate as well.
+    </p>
+    <p class="mt-4">
+      The Electronic Frontier Foundation is a nonprofit organization who defend your online liberties and backed
+      <code class="inline-block text-sm font-mono text-gray bg-boxdark rounded-md p-0.5 mx-0.5 text-nowrap">
+  youtube-dl
+</code>
+      when Google took them down<a href="https://github.com/github/dmca/blob/9a85e0f021f7967af80e186b890776a50443f06c/2020/11/2020-11-16-RIAA-reversal-effletter.pdf" class="text-blue-500 hover:text-blue-300" target="_blank">
+        <span class="hero-arrow-top-right-on-square h-3 w-3"></span>
+</a>
+    </p>
+    <a href="https://supporters.eff.org/donate" target="_blank">
+      <button class="text-center font-medium text-white whitespace-nowrap rounded-sm inline-flex items-center justify-center px-8 py-4 bg-primary hover:bg-opacity-90 lg:px-8 xl:px-10 disabled:bg-opacity-50 disabled:cursor-not-allowed disabled:text-grey-5 w-full mt-8" type="submit">
+        Donate
+</button>
+    </a>
+  </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    <template x-if="!proEnabled && !onboarding">
+      <div id="upgrade-modal" phx-remove="[]" data-cancel="[[&quot;exec&quot;,{&quot;attr&quot;:&quot;phx-remove&quot;}]]" class="relative z-99999 hidden">
+  <div id="upgrade-modal-bg" class="bg-black-2/80 fixed inset-0 transition-opacity" aria-hidden="true"></div>
+  <div class="fixed inset-0 overflow-y-auto" aria-labelledby="upgrade-modal-title" aria-describedby="upgrade-modal-description" role="dialog" aria-modal="true" tabindex="0">
+    <div class="flex min-h-full items-center justify-center">
+      <div class="w-full max-w-3xl p-2 sm:p-6 lg:py-8">
+        <div id="upgrade-modal-container" phx-key="escape" class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-graydark p-8 sm:p-14 shadow-lg ring-1 transition">
+          <div id="upgrade-modal-content">
+  <section>
+    <h3 class="text-2xl text-white">Pro Mode</h3>
+    <p class="text-sm">Don't worry - Pinchflat is completely free :&rpar;</p>
+    <p class="mt-4">
+      If you find the project valuable and want to say thanks, a
+      <a href="https://supporters.eff.org/donate" class="text-blue-500 hover:text-blue-300" target="_blank">
+        donation to the Electronic Frontier Foundation
+</a>
+      would be greatly appreciated! You can optionally post proof of donation on
+      <a href="https://github.com/kieraneglin/pinchflat/issues/234" class="text-blue-500 hover:text-blue-300" target="_blank">
+  this issue
+</a>
+      to hopefully inspire others to donate as well.
+    </p>
+    <p class="mt-4">
+      The Electronic Frontier Foundation is a nonprofit organization who defend your online liberties and backed
+      <code class="inline-block text-sm font-mono text-gray bg-boxdark rounded-md p-0.5 mx-0.5 text-nowrap">
+  youtube-dl
+</code>
+      when Google took them down<a href="https://github.com/github/dmca/blob/9a85e0f021f7967af80e186b890776a50443f06c/2020/11/2020-11-16-RIAA-reversal-effletter.pdf" class="text-blue-500 hover:text-blue-300" target="_blank">
+        <span class="hero-arrow-top-right-on-square h-3 w-3"></span>
+</a>. <strong>You do not need to donate to unlock Pro</strong>. It's just a way to show support!
+    </p>
+    <p class="mt-4">
+      To unlock Pro, simply type
+      <code class="inline-block text-sm font-mono text-gray bg-boxdark rounded-md p-0.5 mx-0.5 text-nowrap">
+  got it
+</code>
+      into the text box and press the button.
+    </p>
+    <div id="phx-GN0bPyyvuVSrnRWi" data-phx-session="SFMyNTY.g2gDaAJhBnQAAAAIdwJpZG0AAAAUcGh4LUdOMGJQeXl2dVZTcm5SV2l3B3Nlc3Npb250AAAAAHcEdmlld3ciRWxpeGlyLlBpbmNoZmxhdC5VcGdyYWRlQnV0dG9uTGl2ZXcKcGFyZW50X3BpZHcDbmlsdwZyb3V0ZXJ3A25pbHcIcm9vdF9waWR3A25pbHcJcm9vdF92aWV3dyJFbGl4aXIuUGluY2hmbGF0LlVwZ3JhZGVCdXR0b25MaXZldxFsaXZlX3Nlc3Npb25fbmFtZXcDbmlsbgYAzfbDJKEBYgABUYA.ss_r5QviD81py1CNNY1Bp7pCDamAle26DrKuzkuI5h0" data-phx-static="SFMyNTY.g2gDaAJhBnQAAAADdwJpZG0AAAAUcGh4LUdOMGJQeXl2dVZTcm5SV2l3BWZsYXNodAAAAAB3CmFzc2lnbl9uZXdqbgYAzvbDJKEBYgABUYA.UjJW96UFT7qXJe2I8WjLVvkTSa9U-LHdhOrdpMwtSlg"><form id="upgradeForm" phx-change="check_matching_text" phx-hook="supress-enter-submission">
+  <div phx-feedback-for="unlock-pro-textbox">
+  <label class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+</label>
+  <div class="flex items-center">
+    <input type="text" name="unlock-pro-textbox" value="" class="w-full rounded-lg border-[1.5px] px-5 py-3 font-normal border-form-strokedark bg-form-input outline-none transition active:border-primary disabled:cursor-default disabled:bg-whiter text-white focus:border-primary ">
+  </div>
+</div>
+</form>
+<button class="text-center font-medium text-white whitespace-nowrap rounded-sm inline-flex items-center justify-center px-8 py-4 bg-primary hover:bg-opacity-90 lg:px-8 xl:px-10 disabled:bg-opacity-50 disabled:cursor-not-allowed disabled:text-grey-5 w-full mt-4" type="button" disabled phx-click="[]" x-on:click="setTimeout(() =&gt; { proEnabled = true }, 200)">
+  Unlock Pro
+</button></div>
+  </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    </template>
+  </body>
+</html>

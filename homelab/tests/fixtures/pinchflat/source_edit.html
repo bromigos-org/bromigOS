@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="FIXTURE-CSRF">
+    <title>
+      Pinchflat
+    </title>
+    <link phx-track-static rel="stylesheet" href="/assets/app-84c55c57753816656f5134f541d32ba5.css?vsn=d">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?cachebust=2024-03-20">
+    <script defer phx-track-static type="text/javascript" src="/assets/app-521b5c83d8b2f79295a25943104e99d5.js?vsn=d">
+    </script>
+  </head>
+  <body x-data="{ 
+      sidebarVisible: false,
+      proEnabled: false,
+      onboarding: true
+    }" class="dark text-bodydark bg-boxdark-2" data-socket-path="/live">
+    <div class="flex h-screen overflow-hidden">
+  <aside x-bind:class="sidebarVisible ? 'translate-x-0' : '-translate-x-full'" class="-translate-x-full absolute left-0 top-0 z-9999 flex h-screen w-65 flex-col overflow-y-hidden justify-between bg-black duration-300 ease-linear shadow-lg sm:shadow-none dark:bg-boxdark lg:static lg:translate-x-0" @click.outside="sidebarVisible = false">
+  <section>
+    <div class="flex items-center justify-between gap-2 px-6 py-4">
+      <a href="/" class="flex items-center">
+        <img src="/images/logo-2024-03-20-63ac49d6543a4c455078df63b868105e.png?vsn=d" alt="Pinchflat" class="w-auto">
+      </a>
+      <button class="block mt-3 lg:hidden" @click.stop="sidebarVisible = !sidebarVisible">
+        <span class="hero-arrow-left fill-current"></span>
+      </button>
+    </div>
+    <div class="no-scrollbar flex flex-col overflow-y-auto duration-300 ease-linear">
+      <nav class="mt-3 px-4 py-4 lg:px-6">
+        <h3 class="mb-4 ml-4 text-sm font-medium text-bodydark2">
+          <span>MENU</span>
+        </h3>
+        <div class="flex flex-col justify-between">
+          <ul class="mb-6 flex flex-col gap-1.5">
+            <li class="text-bodydark1">
+  <a href="/" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_self">
+  <span class="hero-home "></span> Home
+</a>
+</li>
+            <li class="text-bodydark1">
+  <a href="/sources" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_self">
+  <span class="hero-tv "></span> Sources
+</a>
+</li>
+            <li class="text-bodydark1">
+  <a href="/media_profiles" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_self">
+  <span class="hero-adjustments-vertical "></span> Media Profiles
+</a>
+</li>
+            <li class="text-bodydark1" x-data="{ selected: false }">
+  <span class="font-medium cursor-pointer group relative flex items-center justify-between rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4" x-on:click="selected = !selected">
+    <span class="flex items-center gap-2.5">
+      <span class="hero-cog-6-tooth"></span> Config
+    </span>
+    <span class="text-bodydark2">
+      <span class="hero-chevron-down" x-bind:class="{ &#39;rotate-180&#39;: selected }"></span>
+    </span>
+  </span>
+  <ul x-cloak x-show="selected">
+    <li class="text-bodydark2">
+      <a href="/settings" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 pl-10">
+   Settings
+</a>
+    </li><li class="text-bodydark2">
+      <a href="/app_info" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 pl-10">
+   App Info
+</a>
+    </li>
+  </ul>
+</li>
+          </ul>
+        </div>
+      </nav>
+    </div>
+  </section>
+  <section>
+    <nav class="px-4 py-4 lg:px-6">
+      <ul class="mb-6 flex flex-col gap-1.5">
+        <li class="text-bodydark1">
+  <a href="https://github.com/kieraneglin/pinchflat/wiki" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_blank">
+  <span class="hero-book-open scale-110"></span> Docs
+</a>
+</li>
+        <li class="text-bodydark1">
+  <a href="https://github.com/kieraneglin/pinchflat" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_blank">
+  <span class="si-github "></span> Github
+</a>
+</li>
+        <li class="text-bodydark1">
+  <a href="https://discord.gg/j7T6dCuwU4" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_blank">
+  <span class="si-discord "></span> Discord
+</a>
+</li>
+        <li>
+          <span class="font-medium text-bodydark1 group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out cursor-pointer hover:bg-graydark dark:hover:bg-meta-4" phx-click="[]">
+            <span class="hero-currency-dollar scale-110"></span> Donate
+          </span>
+        </li>
+        <li>
+          <span class="group relative flex items-center gap-2.5 px-4 pt-2 text-sm" x-on:click="markVersionAsSeen(&#39;2025.9.26&#39;)">
+            <span>Pinchflat 2025.9.26</span>
+            <a href="https://github.com/kieraneglin/pinchflat/releases" target="_blank" class="bg-meta-2 text-boxdark px-1.5 rounded-full text-xs" x-cloak x-show="!isVersionSeen(&#39;2025.9.26&#39;)">
+              NEW
+            </a>
+          </span>
+          <span class="group relative flex items-center gap-2.5 px-4 pt-2 text-sm">
+            yt-dlp 2026.08.19
+          </span>
+        </li>
+      </ul>
+    </nav>
+  </section>
+</aside>
+  <div class="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
+    <header class="sticky top-0 z-999 flex min-h-20 w-full bg-white drop-shadow-1 dark:bg-boxdark dark:drop-shadow-none">
+  <div class="flex flex-grow items-center justify-between lg:justify-end px-4 py-4 shadow-2 md:px-6 2xl:px-11">
+    <div class="flex items-center gap-2 sm:gap-4 lg:hidden w-2/6">
+      <section class="pr-1">
+        <img src="/images/icon-2024-03-20-de2b82e475e8dbadfc790429fff9b0d8.png?vsn=d" alt="Pinchflat" class="w-10">
+      </section>
+      <button class="z-99999 block mx-2 rounded-sm border border-stroke bg-white p-1.5 shadow-sm dark:border-strokedark dark:bg-boxdark lg:hidden" @click.stop="sidebarVisible = !sidebarVisible">
+        <span class="hero-bars-3"></span>
+      </button>
+    </div>
+    <div class="bg-meta-4 rounded-md w-4/6 lg:w-3/6 xl:w-2/6">
+      <div class="relative">
+        <span class="absolute left-2 top-1/2 -translate-y-1/2 flex">
+          <span class="hero-magnifying-glass"></span>
+        </span>
+        <form action="/search">
+          <input type="text" name="q" placeholder="Search all media..." class="w-full bg-transparent pl-9 pr-4 border-0 focus:ring-0 focus:outline-none">
+        </form>
+      </div>
+    </div>
+  </div>
+</header>
+    <main>
+      <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+        <div class="flex flex-col gap-7.5" id="flash-group">
+  <div id="client-error" class="pb-8" role="alert" hidden phx-connected="[]" phx-disconnected="[]">
+  <div class="flex justify-between w-full border-l-6 bg-opacity-[50%] p-5 shadow-md dark:bg-opacity-40 dark:text-white border-[#F87171] bg-[#F87171]">
+    <main>
+      <h5 class="mb-2 text-lg font-bold">
+        We can&#39;t find the internet
+      </h5>
+      <p class="mt-2 text-md leading-5 opacity-80">
+    Attempting to reconnect <span class="hero-arrow-path ml-1 h-3 w-3 animate-spin"></span>
+  </p>
+    </main>
+    <button type="button" aria-label="close" phx-click="[]">
+      <span class="hero-x-mark-solid h-7 w-7 opacity-70 hover:opacity-100"></span>
+    </button>
+  </div>
+</div>
+  <div id="server-error" class="pb-8" role="alert" hidden phx-connected="[]" phx-disconnected="[]">
+  <div class="flex justify-between w-full border-l-6 bg-opacity-[50%] p-5 shadow-md dark:bg-opacity-40 dark:text-white border-[#F87171] bg-[#F87171]">
+    <main>
+      <h5 class="mb-2 text-lg font-bold">
+        Something went wrong!
+      </h5>
+      <p class="mt-2 text-md leading-5 opacity-80">
+    Hang in there while we get back on track <span class="hero-arrow-path ml-1 h-3 w-3 animate-spin"></span>
+  </p>
+    </main>
+    <button type="button" aria-label="close" phx-click="[]">
+      <span class="hero-x-mark-solid h-7 w-7 opacity-70 hover:opacity-100"></span>
+    </button>
+  </div>
+</div>
+</div>
+        <div class="mb-6 flex gap-3 flex-row items-center">
+  <a href="/sources">
+    <span class="hero-arrow-left w-10 h-10 hover:dark:text-white"></span>
+  </a>
+  <h2 class="text-title-md2 font-bold text-black dark:text-white ml-4 truncate">
+    Editing "Little SDO"
+  </h2>
+</div>
+<div class="rounded-sm border border-stroke bg-white px-5 pb-2.5 pt-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
+  <div class="max-w-full">
+    <div class="flex flex-col gap-10">
+      <form action="/sources/3" method="post" x-data="{ advancedMode: !!JSON.parse(localStorage.getItem(&#39;advancedMode&#39;)) }" x-init="$watch(&#39;advancedMode&#39;, value =&gt; localStorage.setItem(&#39;advancedMode&#39;, JSON.stringify(value)))">
+  <input name="_method" type="hidden" hidden value="patch">
+  <input name="_csrf_token" type="hidden" hidden value="FIXTURE-CSRF">
+  <section x-data="{ mediaProfileId: null }">
+    <section class="flex justify-between items-center mt-4">
+      <h3 class="text-2xl text-white">
+        General Options
+      </h3>
+      <span class="cursor-pointer hover:underline" x-on:click="advancedMode = !advancedMode">
+        Editing Mode: <span x-text="advancedMode ? 'Advanced' : 'Standard'"></span>
+      </span>
+    </section>
+    <div phx-feedback-for="source[original_url]">
+  <label for="source_original_url" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Source URL
+</label>
+  <div class="flex items-center">
+    <input type="text" name="source[original_url]" id="source_original_url" value="https://www.youtube.com/playlist?list=PLCFE9837C2F7EB8AA" class="w-full rounded-lg border-[1.5px] px-5 py-3 font-normal border-form-strokedark bg-form-input outline-none transition active:border-primary disabled:cursor-default disabled:bg-whiter text-white focus:border-primary " x-init="$el.focus()">
+  </div>
+  <p class="mt-1 text-sm leading-5">
+  URL of a channel or playlist (required)
+</p>
+</div>
+    <div phx-feedback-for="source[custom_name]">
+  <label for="source_custom_name" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Custom Name
+</label>
+  <div class="flex items-center">
+    <input type="text" name="source[custom_name]" id="source_custom_name" value="Little SDO" class="w-full rounded-lg border-[1.5px] px-5 py-3 font-normal border-form-strokedark bg-form-input outline-none transition active:border-primary disabled:cursor-default disabled:bg-whiter text-white focus:border-primary ">
+  </div>
+  <p class="mt-1 text-sm leading-5">
+  Does not impact indexing or downloading. Will be inferred from the source if left blank
+</p>
+</div>
+    <div phx-feedback-for="source[media_profile_id]">
+  <label for="source_media_profile_id" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Media Profile
+</label>
+  <div class="flex">
+    <select id="source_media_profile_id" name="source[media_profile_id]" class="relative z-20 w-full appearance-none rounded border border-form-strokedark py-3 pl-5 pr-12 outline-none transition focus:border-primary active:border-primary bg-form-input text-black text-white disabled:text-opacity-50 disabled:cursor-not-allowed disabled:border-black " x-model.fill="mediaProfileId">
+      <option value="1">Channels (Media Center)</option><option selected value="2">Playlists (in order)</option>
+    </select>
+  </div>
+  <p class="mt-1 text-sm leading-5">
+  Sets your preferences for what media to look for and how to store it
+</p>
+</div>
+    <h3 class="mt-8 text-2xl text-black dark:text-white">
+      Indexing Options
+    </h3>
+    <section x-data="{ fastIndexingEnabled: null }">
+      <div phx-feedback-for="source[index_frequency_minutes]">
+  <label for="source_index_frequency_minutes" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Index Frequency
+</label>
+  <div class="flex">
+    <select id="source_index_frequency_minutes" name="source[index_frequency_minutes]" class="relative z-20 w-full appearance-none rounded border border-form-strokedark py-3 pl-5 pr-12 outline-none transition focus:border-primary active:border-primary bg-form-input text-black text-white disabled:text-opacity-50 disabled:cursor-not-allowed disabled:border-black " x-init="$watch(&#39;fastIndexingEnabled&#39;, v =&gt; v &amp;&amp; ($el.value = 30 * 24 * 60))" x-bind:disabled="fastIndexingEnabled == true">
+      <option value="-1">Only once when first created</option><option value="30">30 minutes</option><option value="60">1 Hour</option><option value="180">3 Hours</option><option value="360">6 Hours</option><option value="720">12 Hours</option><option selected value="1440">Daily (recommended)</option><option value="10080">Weekly</option><option value="43200">Monthly</option>
+    </select>
+  </div>
+  <p class="mt-1 text-sm leading-5">
+  Indexing is the process of checking for media to download. For best results, set this to the longest delay you can tolerate for this source
+</p>
+</div>
+      <div phx-click="[]">
+        <div x-data="{ enabled: false }" class="" phx-update="ignore" id="source_fast_index-wrapper">
+  <label for="source_fast_index" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Use Fast Indexing
+    <span class="text-xs text-bodydark">(pro)</span>
+</label>
+  <div class="relative flex flex-col">
+    <input type="hidden" id="source_fast_index" name="source[fast_index]" x-bind:value="enabled" x-init="
+          // `enabled` is the data attribute that the toggle uses internally
+          fastIndexingEnabled = enabled
+          $watch(&#39;enabled&#39;, value =&gt; fastIndexingEnabled = !!value)
+        ">
+    <div class="inline-block cursor-pointer" @click="enabled = !enabled; dispatchFor(&#39;source_fast_index&#39;, &#39;change&#39;)">
+      <div x-bind:class="enabled && '!bg-primary'" class="block h-8 w-14 rounded-full bg-black"></div>
+      <div x-bind:class="enabled && '!right-1 !translate-x-full'" class="absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-white transition ">
+      </div>
+    </div>
+    <p class="mt-1 text-sm leading-5">
+  Not recommended for playlists. Overrides &#39;Index Frequency&#39;. See below for more details (seriously, there&#39;s a TL;DR that&#39;s worth reading)
+</p>
+  </div>
+</div>
+      </div>
+    </section>
+    <h3 class="mt-8 text-2xl text-black dark:text-white">
+      Downloading Options
+    </h3>
+    <div x-data="{ enabled: true }" class="" phx-update="ignore" id="source_download_media-wrapper">
+  <label for="source_download_media" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Download Media
+</label>
+  <div class="relative flex flex-col">
+    <input type="hidden" id="source_download_media" name="source[download_media]" x-bind:value="enabled">
+    <div class="inline-block cursor-pointer" @click="enabled = !enabled; dispatchFor(&#39;source_download_media&#39;, &#39;change&#39;)">
+      <div x-bind:class="enabled && '!bg-primary'" class="block h-8 w-14 rounded-full bg-black"></div>
+      <div x-bind:class="enabled && '!right-1 !translate-x-full'" class="absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-white transition ">
+      </div>
+    </div>
+    <p class="mt-1 text-sm leading-5">
+  Unchecking still indexes media but it won&#39;t be downloaded until you enable this option
+</p>
+  </div>
+</div>
+    <div phx-feedback-for="source[cookie_behaviour]">
+  <label for="source_cookie_behaviour" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Cookie Behaviour
+</label>
+  <div class="flex">
+    <select id="source_cookie_behaviour" name="source[cookie_behaviour]" class="relative z-20 w-full appearance-none rounded border border-form-strokedark py-3 pl-5 pr-12 outline-none transition focus:border-primary active:border-primary bg-form-input text-black text-white disabled:text-opacity-50 disabled:cursor-not-allowed disabled:border-black ">
+      <option selected value="disabled">Disabled</option><option value="when_needed">When Needed</option><option value="all_operations">All Operations</option>
+    </select>
+  </div>
+  <p class="mt-1 text-sm leading-5">
+  Uses your YouTube cookies for this source (if configured). &#39;When Needed&#39; tries to minimize cookie usage except for certain indexing and downloading tasks. See docs
+</p>
+</div>
+    <section x-show="advancedMode">
+      <div phx-feedback-for="source[min_duration_seconds]">
+  <label for="source_min_duration_seconds" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Minimum Duration (seconds)
+</label>
+  <div class="flex items-center">
+    <input type="number" name="source[min_duration_seconds]" id="source_min_duration_seconds" class="w-full rounded-lg border-[1.5px] px-5 py-3 font-normal border-form-strokedark bg-form-input outline-none transition active:border-primary disabled:cursor-default disabled:bg-whiter text-white focus:border-primary " min="0">
+  </div>
+  <p class="mt-1 text-sm leading-5">
+  Minimum duration of the media to be downloaded. Can be blank
+</p>
+</div>
+      <div phx-feedback-for="source[max_duration_seconds]">
+  <label for="source_max_duration_seconds" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Maximum Duration (seconds)
+</label>
+  <div class="flex items-center">
+    <input type="number" name="source[max_duration_seconds]" id="source_max_duration_seconds" class="w-full rounded-lg border-[1.5px] px-5 py-3 font-normal border-form-strokedark bg-form-input outline-none transition active:border-primary disabled:cursor-default disabled:bg-whiter text-white focus:border-primary " min="0">
+  </div>
+  <p class="mt-1 text-sm leading-5">
+  Maximum duration of the media to be downloaded. Can be blank
+</p>
+</div>
+    </section>
+    <section x-data="{ cutoffDate: &#39;&#39; }">
+      <div phx-feedback-for="source[download_cutoff_date]">
+  <label for="source_download_cutoff_date" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Download Cutoff Date
+</label>
+  <div class="flex items-center">
+    <input type="text" name="source[download_cutoff_date]" id="source_download_cutoff_date" class="w-full rounded-lg border-[1.5px] px-5 py-3 font-normal border-form-strokedark bg-form-input outline-none transition active:border-primary disabled:cursor-default disabled:bg-whiter text-white focus:border-primary " title="YYYY-MM-DD" pattern="((?:19|20)[0-9][0-9])-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])" placeholder="YYYY-MM-DD" maxlength="10" x-model="cutoffDate">
+          <div phx-feedback-for="download_cutoff_date_preset">
+  <div class="flex">
+    <select name="download_cutoff_date_preset" class="relative z-20 w-full appearance-none rounded border border-form-strokedark py-3 pl-5 pr-12 outline-none transition focus:border-primary active:border-primary bg-form-input text-black text-white disabled:text-opacity-50 disabled:cursor-not-allowed disabled:border-black w-30 lg:w-60 ml-2 md:ml-4" x-on:change="cutoffDate = $event.target.value || &#39;&#39;">
+      <option value="">Select preset</option>
+      <option value="2026-10-03">7 days</option><option value="2026-09-26">14 days</option><option value="2026-09-10">30 days</option><option value="2026-08-11">60 days</option><option value="2026-07-12">90 days</option><option value="2026-04-13">180 days</option><option value="2025-10-10">365 days</option>
+    </select>
+  </div>
+</div>
+  </div>
+  <p class="mt-1 text-sm leading-5">
+  Only download media uploaded after this date. Leave blank to download all media. Must be in YYYY-MM-DD format. Old media may be deleted or downloaded if you change this date
+</p>
+</div>
+    </section>
+    <div phx-feedback-for="source[retention_period_days]">
+  <label for="source_retention_period_days" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Retention Period (days)
+</label>
+  <div class="flex items-center">
+    <input type="number" name="source[retention_period_days]" id="source_retention_period_days" class="w-full rounded-lg border-[1.5px] px-5 py-3 font-normal border-form-strokedark bg-form-input outline-none transition active:border-primary disabled:cursor-default disabled:bg-whiter text-white focus:border-primary " min="0">
+  </div>
+  <p class="mt-1 text-sm leading-5">
+  Days between when media is <em>downloaded</em> and when it's deleted. Leave blank to keep media indefinitely
+</p>
+</div>
+    <section x-show="advancedMode">
+      <h3 class="mt-8 text-2xl text-black dark:text-white">
+        Advanced Options
+      </h3>
+      <p class="text-sm mt-2">
+        Tread carefully
+      </p>
+      <div phx-feedback-for="source[title_filter_regex]">
+  <label for="source_title_filter_regex" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Title Filter Regex
+</label>
+  <div class="flex items-center">
+    <input type="text" name="source[title_filter_regex]" id="source_title_filter_regex" class="w-full rounded-lg border-[1.5px] px-5 py-3 font-normal border-form-strokedark bg-form-input outline-none transition active:border-primary disabled:cursor-default disabled:bg-whiter text-white focus:border-primary " placeholder="(?i)^How to Bike$">
+  </div>
+  <p class="mt-1 text-sm leading-5">
+  A PCRE-compatible regex. Only media with titles that match this regex will be downloaded. <a href="https://github.com/nalgeon/sqlean/blob/main/docs/regexp.md#supported-syntax" class="underline decoration-bodydark decoration-1 hover:decoration-white" target="_blank">See here</a> for syntax
+</p>
+</div>
+      <section x-data="{ 
+  placeholders: JSON.parse(&#39;{&quot;1&quot;:&quot;/channels/{{ source_custom_name }}/{{ season_by_year__episode_by_date_and_index }} - {{ title }} [{{ id }}].{{ ext }}&quot;,&quot;2&quot;:&quot;/playlists/{{ source_custom_name }}/{{ static_season__episode_by_index }} - {{ title }} [{{ id }}].{{ ext }}&quot;}&#39;),
+  inputValue: null
+}
+" x-on:load-template="inputValue = placeholders[mediaProfileId]">
+        <div phx-feedback-for="source[output_path_template_override]">
+  <label for="source_output_path_template_override" class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+    Output path template override
+</label>
+  <div class="flex items-center">
+    <input type="text" name="source[output_path_template_override]" id="source_output_path_template_override" class="w-full rounded-lg border-[1.5px] px-5 py-3 font-normal border-form-strokedark bg-form-input outline-none transition active:border-primary disabled:cursor-default disabled:bg-whiter text-white focus:border-primary font-mono" x-model.fill="inputValue" x-bind:placeholder="placeholders[mediaProfileId]">
+  </div>
+  <p class="mt-1 text-sm leading-5">
+  Must end with .{{ ext }}. Same rules as Media Profile output path templates. <span class="underline decoration-bodydark decoration-1 hover:decoration-white cursor-pointer" x-on:click="$dispatch('load-template')">Click here</span> to load your media profile's output template
+</p>
+</div>
+      </section>
+    </section>
+    <button class="text-center font-medium text-white whitespace-nowrap rounded-lg inline-flex items-center justify-center px-8 py-4 bg-primary hover:bg-opacity-90 lg:px-8 xl:px-10 disabled:bg-opacity-50 disabled:cursor-not-allowed disabled:text-grey-5 my-10 sm:mb-7.5 w-full sm:w-auto" type="submit">
+  Save Source
+</button>
+    <div class="rounded-sm dark:bg-meta-4 p-4 md:p-6 mb-5">
+      <aside>
+  <h2 class="text-2xl font-bold mb-2">What is fast indexing?</h2>
+  <section class="ml-2 md:ml-4 mb-4 max-w-prose">
+    <p>
+      Indexing is the act of scanning a channel or playlist (aka: source) for new media.
+    </p>
+    <p class="mt-2">
+      Normal indexing uses <code class="text-sm">yt-dlp</code>
+      to scan the entire source on your specified frequency, but it's very slow for large sources. This is the most accurate way to find uploaded media with the tradeoff being that pairing a large source that's indexed frequently will result in you spending most of your time indexing. Only so many indexing operations can be running at the same time so this can impact your other source's ability to index.
+    </p>
+    <p class="mt-2">
+      Fast indexing takes a different approach. It still does an initial scan the slow way but after that it uses a secondary mechanism (either RSS or YouTube's API) to frequently check for new videos. This has the potential to be hundreds of times faster, but it can miss videos if the uploader un-privates an old video or uploads dozens of videos in the space of a few minutes.
+    </p>
+    <p class="mt-2">
+      RSS is used by default but you should enable the YouTube API if you want the best version of fast indexing. This isn't needed for most users but it provides the fastest and most reliable media updates.
+      <a href="https://github.com/kieraneglin/pinchflat/wiki/Generating-a-YouTube-API-key" class="text-blue-500 hover:text-blue-300" target="_blank">
+        Here is some documentation
+</a>
+      on how to get your API key which you can add in the
+      <a href="/settings" class="text-blue-500 hover:text-blue-300" target="_blank">
+        settings
+</a>
+      page.
+    </p>
+    <p class="mt-2">
+      To make up for this limitation, a normal index is still run monthly to catch any videos that were missed by fast indexing. Fast indexing overrides the normal index frequency.
+    </p>
+    <p class="mt-4">
+      <h4 class="font-bold text-xl">TL;DR</h4>
+      <strong class="mt-2 inline-block">In general:</strong>
+      <ul class="list-disc list-inside ml-2 md:ml-5">
+        <li>
+          Uses RSS by default which is fine for most users
+        </li>
+        <li>
+          <a href="https://github.com/kieraneglin/pinchflat/wiki/Generating-a-YouTube-API-key" class="text-blue-500 hover:text-blue-300" target="_blank">
+            Create a YouTube API key
+</a>
+          and add it in your
+          <a href="/settings" class="text-blue-500 hover:text-blue-300" target="_blank">
+            settings
+</a>
+          for the fastest possible media updates
+        </li>
+      </ul>
+      <strong class="mt-2 inline-block">Fast indexing is great if any of these apply:</strong>
+      <ul class="list-disc list-inside ml-2 md:ml-5">
+        <li>The source is large channel and uploads frequently</li>
+        <li>You want to download a source's new content as soon as possible</li>
+      </ul>
+      <strong class="mt-2 inline-block">Consider <em>not</em> using fast indexing if any of these apply:</strong>
+      <ul class="list-disc list-inside ml-2 md:ml-5">
+        <li>The source is a playlist</li>
+        <li>The source has under 200 videos</li>
+        <li>The source rarely uploads</li>
+        <li>You don't mind if it takes longer for new content to be picked up</li>
+      </ul>
+    </p>
+  </section>
+</aside>
+    </div>
+  </section>
+</form>
+    </div>
+  </div>
+</div>
+      </div>
+    </main>
+  </div>
+</div>
+    <div id="donate-modal" phx-remove="[]" data-cancel="[[&quot;exec&quot;,{&quot;attr&quot;:&quot;phx-remove&quot;}]]" class="relative z-99999 hidden">
+  <div id="donate-modal-bg" class="bg-black-2/80 fixed inset-0 transition-opacity" aria-hidden="true"></div>
+  <div class="fixed inset-0 overflow-y-auto" aria-labelledby="donate-modal-title" aria-describedby="donate-modal-description" role="dialog" aria-modal="true" tabindex="0">
+    <div class="flex min-h-full items-center justify-center">
+      <div class="w-full max-w-3xl p-2 sm:p-6 lg:py-8">
+        <div id="donate-modal-container" phx-window-keydown="[]" phx-key="escape" phx-click-away="[]" class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-graydark p-8 sm:p-14 shadow-lg ring-1 transition">
+          <div class="absolute top-6 right-5">
+            <button phx-click="[]" type="button" class="-m-3 flex-none p-3 opacity-60 hover:opacity-80" aria-label="close">
+              <span class="hero-x-mark-solid h-5 w-5 text-white"></span>
+            </button>
+          </div>
+          <div id="donate-modal-content">
+  <section x-data="{ inputValue: '' }">
+    <h3 class="text-2xl text-white">Donate</h3>
+    <p class="text-sm">Thank you for your support :&rpar;</p>
+    <p class="mt-4">
+      If you find the project valuable and want to say thanks, a
+      <a href="https://supporters.eff.org/donate" class="text-blue-500 hover:text-blue-300" target="_blank">
+        donation to the Electronic Frontier Foundation
+</a>
+      would be greatly appreciated! You can optionally post proof of donation on
+      <a href="https://github.com/kieraneglin/pinchflat/issues/234" class="text-blue-500 hover:text-blue-300" target="_blank">
+  this issue
+</a>
+      to hopefully inspire others to donate as well.
+    </p>
+    <p class="mt-4">
+      The Electronic Frontier Foundation is a nonprofit organization who defend your online liberties and backed
+      <code class="inline-block text-sm font-mono text-gray bg-boxdark rounded-md p-0.5 mx-0.5 text-nowrap">
+  youtube-dl
+</code>
+      when Google took them down<a href="https://github.com/github/dmca/blob/9a85e0f021f7967af80e186b890776a50443f06c/2020/11/2020-11-16-RIAA-reversal-effletter.pdf" class="text-blue-500 hover:text-blue-300" target="_blank">
+        <span class="hero-arrow-top-right-on-square h-3 w-3"></span>
+</a>
+    </p>
+    <a href="https://supporters.eff.org/donate" target="_blank">
+      <button class="text-center font-medium text-white whitespace-nowrap rounded-sm inline-flex items-center justify-center px-8 py-4 bg-primary hover:bg-opacity-90 lg:px-8 xl:px-10 disabled:bg-opacity-50 disabled:cursor-not-allowed disabled:text-grey-5 w-full mt-8" type="submit">
+        Donate
+</button>
+    </a>
+  </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    <template x-if="!proEnabled && !onboarding">
+      <div id="upgrade-modal" phx-remove="[]" data-cancel="[[&quot;exec&quot;,{&quot;attr&quot;:&quot;phx-remove&quot;}]]" class="relative z-99999 hidden">
+  <div id="upgrade-modal-bg" class="bg-black-2/80 fixed inset-0 transition-opacity" aria-hidden="true"></div>
+  <div class="fixed inset-0 overflow-y-auto" aria-labelledby="upgrade-modal-title" aria-describedby="upgrade-modal-description" role="dialog" aria-modal="true" tabindex="0">
+    <div class="flex min-h-full items-center justify-center">
+      <div class="w-full max-w-3xl p-2 sm:p-6 lg:py-8">
+        <div id="upgrade-modal-container" phx-key="escape" class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-graydark p-8 sm:p-14 shadow-lg ring-1 transition">
+          <div id="upgrade-modal-content">
+  <section>
+    <h3 class="text-2xl text-white">Pro Mode</h3>
+    <p class="text-sm">Don't worry - Pinchflat is completely free :&rpar;</p>
+    <p class="mt-4">
+      If you find the project valuable and want to say thanks, a
+      <a href="https://supporters.eff.org/donate" class="text-blue-500 hover:text-blue-300" target="_blank">
+        donation to the Electronic Frontier Foundation
+</a>
+      would be greatly appreciated! You can optionally post proof of donation on
+      <a href="https://github.com/kieraneglin/pinchflat/issues/234" class="text-blue-500 hover:text-blue-300" target="_blank">
+  this issue
+</a>
+      to hopefully inspire others to donate as well.
+    </p>
+    <p class="mt-4">
+      The Electronic Frontier Foundation is a nonprofit organization who defend your online liberties and backed
+      <code class="inline-block text-sm font-mono text-gray bg-boxdark rounded-md p-0.5 mx-0.5 text-nowrap">
+  youtube-dl
+</code>
+      when Google took them down<a href="https://github.com/github/dmca/blob/9a85e0f021f7967af80e186b890776a50443f06c/2020/11/2020-11-16-RIAA-reversal-effletter.pdf" class="text-blue-500 hover:text-blue-300" target="_blank">
+        <span class="hero-arrow-top-right-on-square h-3 w-3"></span>
+</a>. <strong>You do not need to donate to unlock Pro</strong>. It's just a way to show support!
+    </p>
+    <p class="mt-4">
+      To unlock Pro, simply type
+      <code class="inline-block text-sm font-mono text-gray bg-boxdark rounded-md p-0.5 mx-0.5 text-nowrap">
+  got it
+</code>
+      into the text box and press the button.
+    </p>
+    <div id="phx-GN0bPz6OU1J9ihYC" data-phx-session="SFMyNTY.g2gDaAJhBnQAAAAIdwJpZG0AAAAUcGh4LUdOMGJQejZPVTFKOWloWUN3B3Nlc3Npb250AAAAAHcEdmlld3ciRWxpeGlyLlBpbmNoZmxhdC5VcGdyYWRlQnV0dG9uTGl2ZXcKcGFyZW50X3BpZHcDbmlsdwZyb3V0ZXJ3A25pbHcIcm9vdF9waWR3A25pbHcJcm9vdF92aWV3dyJFbGl4aXIuUGluY2hmbGF0LlVwZ3JhZGVCdXR0b25MaXZldxFsaXZlX3Nlc3Npb25fbmFtZXcDbmlsbgYA-ffDJKEBYgABUYA.Dy4pdOWbwDp2zuaj2ZyWH53jElLsBSOEre7RMtmoZrY" data-phx-static="SFMyNTY.g2gDaAJhBnQAAAADdwJpZG0AAAAUcGh4LUdOMGJQejZPVTFKOWloWUN3BWZsYXNodAAAAAB3CmFzc2lnbl9uZXdqbgYA-ffDJKEBYgABUYA.QDldDsMGAff_xk22WFfS3xgcz9z9VcVD7F-bWFFI5RQ"><form id="upgradeForm" phx-change="check_matching_text" phx-hook="supress-enter-submission">
+  <div phx-feedback-for="unlock-pro-textbox">
+  <label class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+</label>
+  <div class="flex items-center">
+    <input type="text" name="unlock-pro-textbox" value="" class="w-full rounded-lg border-[1.5px] px-5 py-3 font-normal border-form-strokedark bg-form-input outline-none transition active:border-primary disabled:cursor-default disabled:bg-whiter text-white focus:border-primary ">
+  </div>
+</div>
+</form>
+<button class="text-center font-medium text-white whitespace-nowrap rounded-sm inline-flex items-center justify-center px-8 py-4 bg-primary hover:bg-opacity-90 lg:px-8 xl:px-10 disabled:bg-opacity-50 disabled:cursor-not-allowed disabled:text-grey-5 w-full mt-4" type="button" disabled phx-click="[]" x-on:click="setTimeout(() =&gt; { proEnabled = true }, 200)">
+  Unlock Pro
+</button></div>
+  </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    </template>
+  </body>
+</html>

@@ -21,7 +21,9 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab run KIND [PRESET] …` | Queue a job on the lab's GPUs. |
 | `bromigos lab jobs` | List, follow, cancel and retry jobs. |
 | `bromigos lab doctor [--json]` | Run checks. Each problem comes with a fix in plain words. |
-| `bromigos lab youtube [sync]` | Show Pinchflat's YouTube downloads, or turn its playlists into playlists in Jellyfin and Plex ([below](#youtube-downloads)). |
+| `bromigos lab youtube` | Show Pinchflat's YouTube downloads card ([below](#youtube-downloads)). |
+| `bromigos lab youtube add`, `list`, `remove`, `pause`, `resume`, `refresh`, `status`, `quality`, `cookies` | Control Pinchflat without its web page ([below](#youtube-downloads)). |
+| `bromigos lab youtube sync` | Turn Pinchflat's playlists into playlists in Jellyfin and Plex. |
 | `bromigos lab connect …` | Run `bromigos setup homelab …`: find services and write `homelab.toml`. |
 | `bromigos lab target …` | Run `bromigos target …`: choose where AI runs ([targets.md](targets.md)). |
 | Super+Shift+H | Open the Lab deck, a hologram of the rack lit by the same readings. |
@@ -86,7 +88,9 @@ A few details:
 - **Alerts** leaves out Prometheus's always-firing Watchdog alert.
 - **YouTube downloads** has a hover hint on every row. Pinchflat's row lists the newest
   downloads. A playlist's row says that `bromigos lab youtube sync` turns it into a
-  playlist on your media server.
+  playlist on your media server. In the dashboard, the card has an **Add a channel or
+  playlist…** button (key `a`), a form that runs the same code as `bromigos lab youtube
+  add`.
 
 Each card is `ok`, `warn`, `crit`, `unreachable` or `empty`. The console's own state is
 its worst card's.
@@ -102,13 +106,97 @@ To add a card, see [Status cards](homelab.md#status-cards).
 ### YouTube downloads
 
 [Pinchflat](homelab.md#youtube-downloads-pinchflat) downloads YouTube channels and
-playlists into your media library. Two commands work with it:
+playlists into your media library. `bromigos lab youtube` shows its card in full. The other
+commands control it. The manual's [Lab console](../manual/src/lab.md#youtube-downloads)
+page shows how to use them.
 
-- `bromigos lab youtube` shows its card in full: the download queue, failed jobs, and each
-  channel and playlist with its newest video.
-- `bromigos lab youtube sync` turns each downloaded YouTube playlist into a playlist in
-  Jellyfin, Plex, or both, in the playlist's order. It's safe to run again. Add
-  `--dry-run` to see what it would change first.
+| Command | What it does in Pinchflat |
+|---|---|
+| `add URL [--playlist\|--channel] [--since DATE] [--name NAME] [--quality Q]` | Creates a source. The URL says playlist or channel. A playlist gets the `Playlists (in order)` media profile, a channel `Channels (Media Center)`. |
+| `list` | Every source: kind, quality, videos downloaded and waiting, last check, newest video. |
+| `remove NAME\|URL [--delete-files] [--yes]` | Deletes the source after asking. The files stay unless `--delete-files`. |
+| `pause NAME`, `resume NAME` | Turns the source's Enabled switch off or on. |
+| `refresh [NAME]` | Force Index on one source, or on all. |
+| `status` | The download queue and failed jobs (its metrics), active tasks, recent downloads. |
+| `quality NAME Q` | Moves the source to the profile for that quality. New downloads only. |
+| `cookies set FILE \| clear \| status` | Stores YouTube cookies, and turns Cookie Behaviour to When Needed on every source (or off). |
+
+Each one takes `--json`. The code is `homelab/lib/bromigos_homelab/pinchflat.py`.
+
+**How it talks to Pinchflat.** Pinchflat has no JSON API. It's a Phoenix app, so the code
+drives its web pages the way a browser does:
+
+1. It GETs the page with the form, such as `/sources/new`, with the basic auth.
+2. It keeps the session cookie and reads the CSRF token from the page.
+3. It POSTs the form back. A new source sends every field the form has, with Pinchflat's
+   own defaults. An edit sends only the field it changes, with `_method=patch`.
+
+Pinchflat answers a good form with a redirect. It answers a bad one with the form again,
+and the command prints the form's errors. Delete, Force Index and the Enabled switch are
+links and toggles in its pages. The code POSTs what those send.
+
+It was built against Pinchflat v2025.9.26. Before it sends a form, it checks that the form
+has every field it needs. If one is missing, Pinchflat has changed: the command stops,
+sends nothing, and says so.
+
+It lists sources through the media profiles' pages, because the Sources page shows ten at
+a time and only to a browser. Each source's own page has its settings and its counts.
+
+**Quality.** Pinchflat sets quality per media profile. Its choices are `4320p`, `2160p`,
+`1440p`, `1080p`, `720p`, `480p`, `360p` and `audio`. `best` means `4320p`, its highest:
+yt-dlp then takes the best a video has. For a quality other than the base profile's, the
+code makes a copy of the base profile at that quality, named like `Playlists (in order) ·
+2160p`. It makes it through Pinchflat's own "use as template" form, so every other setting,
+the output template included, is the base's. It reuses the copy next time. A lab that
+keeps the base profiles' templates in step should keep the copies' too.
+
+**Configuration.** It reads the first `pinchflat` source in `homelab.toml`, or the one
+`--source NAME` names:
+
+```toml
+[[source]]
+name = "pinchflat"
+type = "pinchflat"
+endpoint = "https://pinchflat.lab.example"
+auth_ref = "@file:~/.local/share/bromigos/pinchflat-login"   # "user:password"
+# or: user_ref = "@file:…/pinchflat-user", and auth_ref holds only the password
+cookies_store = "vault:secret/lab/pinchflat#cookies"   # or "file:/path/to/extras/cookies.txt"
+
+[youtube]
+quality = "1080p"                                 # the default for add
+channel_profile = "Channels (Media Center)"      # the profile a channel gets
+playlist_profile = "Playlists (in order)"        # and a playlist
+```
+
+When neither profile name exists and Pinchflat has only one profile, that one is used.
+`PINCHFLAT_URL` and `PINCHFLAT_AUTH` replace the endpoint and the login.
+
+**Cookies.** `cookies set` checks that the file is a Netscape `cookies.txt` with
+youtube.com cookies. It never prints a value. Then it writes the file to the store:
+
+- `vault:PATH#FIELD` writes the field, and `FIELD_set_at` beside it, with the `vault` CLI
+  and its login. The rest of the path is kept. `clear` empties the field rather than
+  deleting it. A lab that copies the field into Pinchflat's `extras/cookies.txt`, for
+  example with an ExternalSecret, gets the change at its next refresh.
+- `file:PATH` writes the file itself, mode 0600.
+
+`cookies status` reads the store and warns when the cookies are over 30 days old.
+
+**Sizes.** The manual's table of disk space per hour comes from yt-dlp's format lists for
+35 recent NASA videos, read in October 2026 with Pinchflat's own format choice (H.264 up to
+1080p, VP9 above it). The medians were about 1.1 GB an hour at 1080p and 5.8 GB at 4K. The
+highest were 2 GB and 9 GB, for 60-frames-a-second video.
+
+**Tests.** `homelab/tests/test_lab_youtube_cli.py` runs every command against a fake
+Pinchflat (`homelab/tests/pinchflatfake.py`). The fake serves pages recorded from a real
+Pinchflat v2025.9.26 (`homelab/tests/fixtures/pinchflat/`), with the host and tokens
+replaced. It checks the CSRF token and the session cookie as Phoenix does.
+
+### Playlists in your media server
+
+`bromigos lab youtube sync` turns each downloaded YouTube playlist into a playlist in
+Jellyfin, Plex, or both, in the playlist's order. It's safe to run again. Add `--dry-run`
+to see what it would change first.
 
 ## Models
 

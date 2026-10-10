@@ -69,6 +69,16 @@ class Live:
         jobqueue.ensure_service()
         return j
 
+    def youtube_add(self, url, kind=None, since=None, name=None, quality=None):
+        """The YouTube card's form: what `bromigos lab youtube add` does, in its words."""
+        from . import pinchflat
+        pf, s = pinchflat.connect()
+        return pinchflat.describe_add(pinchflat.add_source(pf, s, url, kind, since, name, quality))
+
+    def youtube_quality(self):
+        from . import pinchflat
+        return pinchflat.settings().get("quality") or pinchflat.DEFAULT_QUALITY
+
     def now(self):
         return time.time()
 
@@ -234,6 +244,74 @@ class RunJob(ModalScreen):
         self.dismiss((v, self.query_one("#prompt", Input).value.strip()))
 
 
+QUALITY_WORDS = {"best": "the best there is, up to 8K", "4320p": "8K, where a video has it",
+                 "2160p": "4K, about 5-10 GB an hour", "1440p": "about 2-3.5 GB an hour",
+                 "1080p": "about 1-2 GB an hour", "720p": "about 0.5-1 GB an hour", "480p": "about 0.3 GB an hour",
+                 "360p": "under 0.3 GB an hour", "audio": "sound only, about 0.06 GB an hour"}
+
+
+class AddYouTube(ModalScreen):
+    """The YouTube card's "Add a channel or playlist…" form: `bromigos lab youtube add`."""
+
+    BINDINGS = [Binding("escape", "dismiss(None)", "Cancel", tooltip="Close the form without adding anything")]
+
+    def __init__(self, quality="1080p"):
+        super().__init__()
+        self.quality = quality
+
+    def compose(self):
+        from .pinchflat import CHOICES
+        with Vertical(id="ytbox"):
+            yield Label("ADD A CHANNEL OR PLAYLIST", classes="title")
+            i = Input(placeholder="https://www.youtube.com/@channel or …/playlist?list=…", id="yt-url")
+            i.tooltip = "The YouTube channel's or playlist's address. A video in a playlist works too: its playlist is added."
+            yield i
+            s = Select([("Work it out from the address", "auto"), ("A playlist (kept in its order)", "playlist"),
+                        ("A channel (every upload)", "channel")], value="auto", allow_blank=False, id="yt-kind")
+            s.tooltip = "Whether it's a playlist or a channel. The address usually says; pick one if it doesn't."
+            yield s
+            q = Select([(f"{c} · {QUALITY_WORDS.get(c, '')}", c) for c in CHOICES], value=self.quality,
+                       allow_blank=False, id="yt-quality")
+            q.tooltip = "The most it downloads. Higher costs more disk: 4K takes about five times the space of 1080p."
+            yield q
+            i = Input(placeholder="only videos after (YYYY-MM-DD), or leave empty for all", id="yt-since")
+            i.tooltip = "Skip older videos: only ones uploaded after this date are downloaded"
+            yield i
+            i = Input(placeholder="a name (YouTube's, if left empty)", id="yt-name")
+            i.tooltip = "The name in Pinchflat, its folder on disk and the playlist in your media server"
+            yield i
+            with Horizontal():
+                b = Button("Add it", variant="primary", id="yt-go")
+                b.tooltip = "Add it to Pinchflat, which starts downloading (bromigos lab youtube add)"
+                yield b
+                b = Button("Cancel", id="yt-no")
+                b.tooltip = "Close without adding anything"
+                yield b
+
+    @on(Button.Pressed, "#yt-no")
+    def no(self):
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#yt-go")
+    def go(self):
+        url = self.query_one("#yt-url", Input).value.strip()
+        if not url:
+            self.notify("Give the channel's or playlist's address first", severity="warning")
+            return
+        since = self.query_one("#yt-since", Input).value.strip()
+        if since:
+            import datetime
+            try:
+                datetime.date.fromisoformat(since)
+            except ValueError:
+                self.notify("The date is YYYY-MM-DD, such as 2025-01-31", severity="warning")
+                return
+        kind = self.query_one("#yt-kind", Select).value
+        self.dismiss({"url": url, "kind": None if kind == "auto" else kind, "since": since or None,
+                      "name": self.query_one("#yt-name", Input).value.strip() or None,
+                      "quality": self.query_one("#yt-quality", Select).value})
+
+
 class LabApp(App):
     TITLE = "LAB"
     CSS = """
@@ -252,6 +330,10 @@ class LabApp(App):
     #joblog { height: 12; border-top: solid $panel; }
     #runbox { width: 76; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
     RunJob { align: center middle; }
+    AddYouTube { align: center middle; }
+    #ytbox { width: 84; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
+    #ytbox Horizontal { height: auto; margin-top: 1; }
+    #yt-add { margin: 0 1; }
     .title { text-style: bold; color: $primary; }
     Select, Input { margin: 1 0 0 0; }
     #runbox Horizontal { height: auto; margin-top: 1; }
@@ -267,6 +349,8 @@ class LabApp(App):
         Binding("c", "cancel_job", "Cancel job", tooltip="Cancel the job under the cursor (Jobs tab)"),
         Binding("R", "retry_job", "Retry", tooltip="Queue the job under the cursor again (Jobs tab)"),
         Binding("d", "doctor", "Run doctor", tooltip="Run every check now (Doctor tab)"),
+        Binding("a", "youtube_add", "Add YouTube", show=False,
+                tooltip="Add a YouTube channel or playlist to Pinchflat (the YouTube downloads card)"),
         Binding("],L", "tab_step(1)", "Next tab", show=False),
         Binding("[,H", "tab_step(-1)", "Previous tab", show=False),
     ]
@@ -295,6 +379,11 @@ class LabApp(App):
                     with Vertical():
                         yield Static("", id="detail-title")
                         yield Static("", id="detail-hint")
+                        b = Button("Add a channel or playlist…", id="yt-add")
+                        b.tooltip = ("Add a YouTube channel or playlist to Pinchflat: it downloads every video into "
+                                     "your media library (bromigos lab youtube add). Key: a")
+                        b.display = False
+                        yield b
                         yield HintTable(id="detail", cursor_type="row", zebra_stripes=True)
             with TabPane("MODELS", id="models"):
                 with Vertical():
@@ -392,6 +481,7 @@ class LabApp(App):
         self.current = cid
         self.query_one("#detail-title", Static).update(marked(c["state"], f"{c['title'].upper()} · {c.get('summary') or ''}"))
         self.query_one("#detail-hint", Static).update(c.get("hint") or "")
+        self.query_one("#yt-add", Button).display = cid == "youtube-downloader"
         cols = [k for k in (c.get("columns") or []) if k != "state"]
         rows, hints = [], []
         for it in c.get("items", []):
@@ -580,6 +670,32 @@ class LabApp(App):
         self.action_tab("doctor")
         self.query_one("#docsum", Static).update("running the checks…")
         self.load_doctor()
+
+    @on(Button.Pressed, "#yt-add")
+    def _yt_add_pressed(self):
+        self.action_youtube_add()
+
+    def action_youtube_add(self):
+        try:
+            q = self.src.youtube_quality()
+        except Exception:
+            q = "1080p"
+        self.push_screen(AddYouTube(q), self._youtube_added)
+
+    def _youtube_added(self, form):
+        if form:
+            self.notify(f"adding {form['url']}…")
+            self.youtube_add(form)
+
+    @work(thread=True, group="youtube")
+    def youtube_add(self, form):
+        try:
+            words = self.src.youtube_add(form["url"], form["kind"], form["since"], form["name"], form["quality"])
+        except Exception as e:                        # PinchflatError's words, or what broke
+            self.call_from_thread(self.notify, str(e), severity="error", timeout=12)
+            return
+        self.call_from_thread(self.notify, words, timeout=12)
+        self.call_from_thread(self.load_status)
 
     def action_new_job(self):
         self.push_screen(RunJob(self.src.kinds()), self._queued)

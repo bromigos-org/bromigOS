@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="FIXTURE-CSRF">
+    <title>
+      Pinchflat
+    </title>
+    <link phx-track-static rel="stylesheet" href="/assets/app-84c55c57753816656f5134f541d32ba5.css?vsn=d">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?cachebust=2024-03-20">
+    <script defer phx-track-static type="text/javascript" src="/assets/app-521b5c83d8b2f79295a25943104e99d5.js?vsn=d">
+    </script>
+  </head>
+  <body x-data="{ 
+      sidebarVisible: false,
+      proEnabled: false,
+      onboarding: true
+    }" class="dark text-bodydark bg-boxdark-2" data-socket-path="/live">
+    <div class="flex h-screen overflow-hidden">
+  <aside x-bind:class="sidebarVisible ? 'translate-x-0' : '-translate-x-full'" class="-translate-x-full absolute left-0 top-0 z-9999 flex h-screen w-65 flex-col overflow-y-hidden justify-between bg-black duration-300 ease-linear shadow-lg sm:shadow-none dark:bg-boxdark lg:static lg:translate-x-0" @click.outside="sidebarVisible = false">
+  <section>
+    <div class="flex items-center justify-between gap-2 px-6 py-4">
+      <a href="/" class="flex items-center">
+        <img src="/images/logo-2024-03-20-63ac49d6543a4c455078df63b868105e.png?vsn=d" alt="Pinchflat" class="w-auto">
+      </a>
+      <button class="block mt-3 lg:hidden" @click.stop="sidebarVisible = !sidebarVisible">
+        <span class="hero-arrow-left fill-current"></span>
+      </button>
+    </div>
+    <div class="no-scrollbar flex flex-col overflow-y-auto duration-300 ease-linear">
+      <nav class="mt-3 px-4 py-4 lg:px-6">
+        <h3 class="mb-4 ml-4 text-sm font-medium text-bodydark2">
+          <span>MENU</span>
+        </h3>
+        <div class="flex flex-col justify-between">
+          <ul class="mb-6 flex flex-col gap-1.5">
+            <li class="text-bodydark1">
+  <a href="/" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_self">
+  <span class="hero-home "></span> Home
+</a>
+</li>
+            <li class="text-bodydark1">
+  <a href="/sources" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_self">
+  <span class="hero-tv "></span> Sources
+</a>
+</li>
+            <li class="text-bodydark1">
+  <a href="/media_profiles" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_self">
+  <span class="hero-adjustments-vertical "></span> Media Profiles
+</a>
+</li>
+            <li class="text-bodydark1" x-data="{ selected: false }">
+  <span class="font-medium cursor-pointer group relative flex items-center justify-between rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4" x-on:click="selected = !selected">
+    <span class="flex items-center gap-2.5">
+      <span class="hero-cog-6-tooth"></span> Config
+    </span>
+    <span class="text-bodydark2">
+      <span class="hero-chevron-down" x-bind:class="{ &#39;rotate-180&#39;: selected }"></span>
+    </span>
+  </span>
+  <ul x-cloak x-show="selected">
+    <li class="text-bodydark2">
+      <a href="/settings" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 pl-10">
+   Settings
+</a>
+    </li><li class="text-bodydark2">
+      <a href="/app_info" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 pl-10">
+   App Info
+</a>
+    </li>
+  </ul>
+</li>
+          </ul>
+        </div>
+      </nav>
+    </div>
+  </section>
+  <section>
+    <nav class="px-4 py-4 lg:px-6">
+      <ul class="mb-6 flex flex-col gap-1.5">
+        <li class="text-bodydark1">
+  <a href="https://github.com/kieraneglin/pinchflat/wiki" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_blank">
+  <span class="hero-book-open scale-110"></span> Docs
+</a>
+</li>
+        <li class="text-bodydark1">
+  <a href="https://github.com/kieraneglin/pinchflat" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_blank">
+  <span class="si-github "></span> Github
+</a>
+</li>
+        <li class="text-bodydark1">
+  <a href="https://discord.gg/j7T6dCuwU4" class="font-medium group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out hover:bg-meta-4 " target="_blank">
+  <span class="si-discord "></span> Discord
+</a>
+</li>
+        <li>
+          <span class="font-medium text-bodydark1 group relative flex items-center gap-2.5 rounded-sm px-4 py-2 duration-300 ease-in-out duration-300 ease-in-out cursor-pointer hover:bg-graydark dark:hover:bg-meta-4" phx-click="[]">
+            <span class="hero-currency-dollar scale-110"></span> Donate
+          </span>
+        </li>
+        <li>
+          <span class="group relative flex items-center gap-2.5 px-4 pt-2 text-sm" x-on:click="markVersionAsSeen(&#39;2025.9.26&#39;)">
+            <span>Pinchflat 2025.9.26</span>
+            <a href="https://github.com/kieraneglin/pinchflat/releases" target="_blank" class="bg-meta-2 text-boxdark px-1.5 rounded-full text-xs" x-cloak x-show="!isVersionSeen(&#39;2025.9.26&#39;)">
+              NEW
+            </a>
+          </span>
+          <span class="group relative flex items-center gap-2.5 px-4 pt-2 text-sm">
+            yt-dlp 2026.08.19
+          </span>
+        </li>
+      </ul>
+    </nav>
+  </section>
+</aside>
+  <div class="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
+    <header class="sticky top-0 z-999 flex min-h-20 w-full bg-white drop-shadow-1 dark:bg-boxdark dark:drop-shadow-none">
+  <div class="flex flex-grow items-center justify-between lg:justify-end px-4 py-4 shadow-2 md:px-6 2xl:px-11">
+    <div class="flex items-center gap-2 sm:gap-4 lg:hidden w-2/6">
+      <section class="pr-1">
+        <img src="/images/icon-2024-03-20-de2b82e475e8dbadfc790429fff9b0d8.png?vsn=d" alt="Pinchflat" class="w-10">
+      </section>
+      <button class="z-99999 block mx-2 rounded-sm border border-stroke bg-white p-1.5 shadow-sm dark:border-strokedark dark:bg-boxdark lg:hidden" @click.stop="sidebarVisible = !sidebarVisible">
+        <span class="hero-bars-3"></span>
+      </button>
+    </div>
+    <div class="bg-meta-4 rounded-md w-4/6 lg:w-3/6 xl:w-2/6">
+      <div class="relative">
+        <span class="absolute left-2 top-1/2 -translate-y-1/2 flex">
+          <span class="hero-magnifying-glass"></span>
+        </span>
+        <form action="/search">
+          <input type="text" name="q" placeholder="Search all media..." class="w-full bg-transparent pl-9 pr-4 border-0 focus:ring-0 focus:outline-none">
+        </form>
+      </div>
+    </div>
+  </div>
+</header>
+    <main>
+      <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+        <div class="flex flex-col gap-7.5" id="flash-group">
+  <div id="client-error" class="pb-8" role="alert" hidden phx-connected="[]" phx-disconnected="[]">
+  <div class="flex justify-between w-full border-l-6 bg-opacity-[50%] p-5 shadow-md dark:bg-opacity-40 dark:text-white border-[#F87171] bg-[#F87171]">
+    <main>
+      <h5 class="mb-2 text-lg font-bold">
+        We can&#39;t find the internet
+      </h5>
+      <p class="mt-2 text-md leading-5 opacity-80">
+    Attempting to reconnect <span class="hero-arrow-path ml-1 h-3 w-3 animate-spin"></span>
+  </p>
+    </main>
+    <button type="button" aria-label="close" phx-click="[]">
+      <span class="hero-x-mark-solid h-7 w-7 opacity-70 hover:opacity-100"></span>
+    </button>
+  </div>
+</div>
+  <div id="server-error" class="pb-8" role="alert" hidden phx-connected="[]" phx-disconnected="[]">
+  <div class="flex justify-between w-full border-l-6 bg-opacity-[50%] p-5 shadow-md dark:bg-opacity-40 dark:text-white border-[#F87171] bg-[#F87171]">
+    <main>
+      <h5 class="mb-2 text-lg font-bold">
+        Something went wrong!
+      </h5>
+      <p class="mt-2 text-md leading-5 opacity-80">
+    Hang in there while we get back on track <span class="hero-arrow-path ml-1 h-3 w-3 animate-spin"></span>
+  </p>
+    </main>
+    <button type="button" aria-label="close" phx-click="[]">
+      <span class="hero-x-mark-solid h-7 w-7 opacity-70 hover:opacity-100"></span>
+    </button>
+  </div>
+</div>
+</div>
+        <div class="mb-6 flex gap-3 flex-row items-center justify-between">
+  <h2 class="text-title-md2 font-bold text-black dark:text-white">Sources</h2>
+  <nav class="flex items-center justify-between gap-6">
+    <a href="https://pinchflat.example/sources/opml.xml?route_token=FIXTURE-ROUTE-TOKEN" x-on:click="
+          $event.preventDefault();
+          copyWithCallbacks(
+            &#39;https://pinchflat.example/sources/opml.xml?route_token=FIXTURE-ROUTE-TOKEN&#39;,
+            () =&gt; copied = true,
+            () =&gt; copied = false
+          )
+        " x-data="{ copied: false }">
+      Copy OPML <span class="hidden sm:inline">Feed</span>
+      <span x-show="copied" x-transition.duration.150ms><span class="hero-check ml-2 h-4 w-4"></span></span>
+    </a>
+    <a href="/sources/new">
+      <button class="text-center font-medium text-white whitespace-nowrap rounded-lg inline-flex items-center justify-center px-8 py-4 bg-primary hover:bg-opacity-90 lg:px-8 xl:px-10 disabled:bg-opacity-50 disabled:cursor-not-allowed disabled:text-grey-5 " type="submit">
+        <span class="font-bold mx-2">+</span> New <span class="hidden sm:inline pl-1">Source</span>
+</button>
+    </a>
+  </nav>
+</div>
+<div class="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+  <div class="max-w-full overflow-x-auto">
+    <div id="phx-GN0bP2isiwETZhbC" data-phx-session="SFMyNTY.g2gDaAJhBnQAAAAIdwJpZG0AAAAUcGh4LUdOMGJQMmlzaXdFVFpoYkN3B3Nlc3Npb250AAAAA20AAAAWaW5pdGlhbF9zb3J0X2RpcmVjdGlvbncDYXNjbQAAABBpbml0aWFsX3NvcnRfa2V5dwtjdXN0b21fbmFtZW0AAAAQcmVzdWx0c19wZXJfcGFnZWEKdwR2aWV3dzVFbGl4aXIuUGluY2hmbGF0V2ViLlNvdXJjZXMuU291cmNlTGl2ZS5JbmRleFRhYmxlTGl2ZXcKcGFyZW50X3BpZHcDbmlsdwZyb3V0ZXJ3A25pbHcIcm9vdF9waWR3A25pbHcJcm9vdF92aWV3dzVFbGl4aXIuUGluY2hmbGF0V2ViLlNvdXJjZXMuU291cmNlTGl2ZS5JbmRleFRhYmxlTGl2ZXcRbGl2ZV9zZXNzaW9uX25hbWV3A25pbG4GAL36wyShAWIAAVGA.f8ZcTobKwcWTII_Gg_bNK1rLp_3jkwX37yzjFZ5nK7A" data-phx-static="SFMyNTY.g2gDaAJhBnQAAAADdwJpZG0AAAAUcGh4LUdOMGJQMmlzaXdFVFpoYkN3BWZsYXNodAAAAAB3CmFzc2lnbl9uZXdqbgYAvfrDJKEBYgABUYA.yN3RHUWNX5_WaTCTMRQk82wUCTYKTocYV6D9hUV2Bck"><div class="flex flex-col min-w-max">
+  <table class="w-full table-auto bg-boxdark text-white">
+  <thead>
+    <tr class="text-left bg-meta-4">
+      <th class="px-4 py-4 font-medium text-white cursor-pointer" phx-click="sort_update" phx-value-sort_key="custom_name">
+        <div class="relative">
+          Name
+          <span class="hero-chevron-up w-3 h-3 mt-2 ml-1 absolute"></span>
+        </div>
+      </th><th class="px-4 py-4 font-medium text-white cursor-pointer" phx-click="sort_update" phx-value-sort_key="pending_count">
+        <div class="relative">
+          Pending
+        </div>
+      </th><th class="px-4 py-4 font-medium text-white cursor-pointer" phx-click="sort_update" phx-value-sort_key="downloaded_count">
+        <div class="relative">
+          Downloaded
+        </div>
+      </th><th class="px-4 py-4 font-medium text-white cursor-pointer" phx-click="sort_update" phx-value-sort_key="media_size_bytes">
+        <div class="relative">
+          Size
+        </div>
+      </th><th class="px-4 py-4 font-medium text-white cursor-pointer" phx-click="sort_update" phx-value-sort_key="media_profile_name">
+        <div class="relative">
+          Media Profile
+        </div>
+      </th><th class="px-4 py-4 font-medium text-white cursor-pointer" phx-click="sort_update" phx-value-sort_key="enabled">
+        <div class="relative">
+          Enabled?
+        </div>
+      </th><th class="px-4 py-4 font-medium text-white ">
+        <div class="relative">
+        </div>
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="hover:bg-strokedark">
+      <td class="px-4 py-5 truncate max-w-xs">
+      <a href="/sources/3" class="underline decoration-bodydark decoration-1 hover:decoration-white" target="_self">
+        Little SDO
+</a>
+      </td><td class="px-4 py-5 ">
+      <a href="/sources/3/#tab-pending" class="underline decoration-bodydark decoration-1 hover:decoration-white" target="_self">
+        <span x-data x-text="Intl.NumberFormat().format(0)">0</span>
+</a>
+      </td><td class="px-4 py-5 ">
+      <a href="/sources/3/#tab-downloaded" class="underline decoration-bodydark decoration-1 hover:decoration-white" target="_self">
+        <span x-data x-text="Intl.NumberFormat().format(4)">4</span>
+</a>
+      </td><td class="px-4 py-5 ">
+      <span x-data x-text="Intl.NumberFormat().format(25.42)">25.42</span> MB
+      </td><td class="px-4 py-5 truncate max-w-xs">
+      <a href="/media_profiles/2" class="underline decoration-bodydark decoration-1 hover:decoration-white" target="_self">
+        Playlists (in order)
+</a>
+      </td><td class="px-4 py-5 ">
+      <div>
+  <form method="post" class="enabled_toggle_form" phx-change="update" phx-target="1">
+    <div x-data="{ enabled: true }" class="" phx-update="ignore" id="source_3_enabled_input-wrapper">
+  <div class="relative flex flex-col">
+    <input type="hidden" id="source_3_enabled_input" name="source[enabled]" x-bind:value="enabled">
+    <div class="inline-block cursor-pointer" @click="enabled = !enabled; dispatchFor(&#39;source_3_enabled_input&#39;, &#39;change&#39;)">
+      <div x-bind:class="enabled && '!bg-primary'" class="block h-8 w-14 rounded-full bg-black"></div>
+      <div x-bind:class="enabled && '!right-1 !translate-x-full'" class="absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-white transition ">
+      </div>
+    </div>
+  </div>
+</div>
+</form>
+</div>
+      </td><td class="px-4 py-5 flex place-content-evenly">
+      <a href="/sources/3/edit" class="hover:text-secondary duration-200 ease-in-out mx-1">
+  <span class="hero-pencil-square"></span>
+</a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+  <section class="flex justify-center my-5">
+    <nav>
+  <ul class="flex flex-wrap items-center">
+    <li>
+      <span class="pagination-prev h-8 w-8 items-center justify-center rounded cursor-not-allowed" phx-value-direction="dec">
+        <span class="hero-chevron-left"></span>
+      </span>
+    </li>
+    <li>
+      <span class="mx-2">
+        Page <span x-data x-text="Intl.NumberFormat().format(1)">1</span> of <span x-data x-text="Intl.NumberFormat().format(1)">1</span>
+      </span>
+    </li>
+    <li>
+      <span class="pagination-next flex h-8 w-8 items-center justify-center rounded cursor-not-allowed" phx-value-direction="inc">
+        <span class="hero-chevron-right"></span>
+      </span>
+    </li>
+  </ul>
+</nav>
+  </section>
+</div></div>
+  </div>
+</div>
+      </div>
+    </main>
+  </div>
+</div>
+    <div id="donate-modal" phx-remove="[]" data-cancel="[[&quot;exec&quot;,{&quot;attr&quot;:&quot;phx-remove&quot;}]]" class="relative z-99999 hidden">
+  <div id="donate-modal-bg" class="bg-black-2/80 fixed inset-0 transition-opacity" aria-hidden="true"></div>
+  <div class="fixed inset-0 overflow-y-auto" aria-labelledby="donate-modal-title" aria-describedby="donate-modal-description" role="dialog" aria-modal="true" tabindex="0">
+    <div class="flex min-h-full items-center justify-center">
+      <div class="w-full max-w-3xl p-2 sm:p-6 lg:py-8">
+        <div id="donate-modal-container" phx-window-keydown="[]" phx-key="escape" phx-click-away="[]" class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-graydark p-8 sm:p-14 shadow-lg ring-1 transition">
+          <div class="absolute top-6 right-5">
+            <button phx-click="[]" type="button" class="-m-3 flex-none p-3 opacity-60 hover:opacity-80" aria-label="close">
+              <span class="hero-x-mark-solid h-5 w-5 text-white"></span>
+            </button>
+          </div>
+          <div id="donate-modal-content">
+  <section x-data="{ inputValue: '' }">
+    <h3 class="text-2xl text-white">Donate</h3>
+    <p class="text-sm">Thank you for your support :&rpar;</p>
+    <p class="mt-4">
+      If you find the project valuable and want to say thanks, a
+      <a href="https://supporters.eff.org/donate" class="text-blue-500 hover:text-blue-300" target="_blank">
+        donation to the Electronic Frontier Foundation
+</a>
+      would be greatly appreciated! You can optionally post proof of donation on
+      <a href="https://github.com/kieraneglin/pinchflat/issues/234" class="text-blue-500 hover:text-blue-300" target="_blank">
+  this issue
+</a>
+      to hopefully inspire others to donate as well.
+    </p>
+    <p class="mt-4">
+      The Electronic Frontier Foundation is a nonprofit organization who defend your online liberties and backed
+      <code class="inline-block text-sm font-mono text-gray bg-boxdark rounded-md p-0.5 mx-0.5 text-nowrap">
+  youtube-dl
+</code>
+      when Google took them down<a href="https://github.com/github/dmca/blob/9a85e0f021f7967af80e186b890776a50443f06c/2020/11/2020-11-16-RIAA-reversal-effletter.pdf" class="text-blue-500 hover:text-blue-300" target="_blank">
+        <span class="hero-arrow-top-right-on-square h-3 w-3"></span>
+</a>
+    </p>
+    <a href="https://supporters.eff.org/donate" target="_blank">
+      <button class="text-center font-medium text-white whitespace-nowrap rounded-sm inline-flex items-center justify-center px-8 py-4 bg-primary hover:bg-opacity-90 lg:px-8 xl:px-10 disabled:bg-opacity-50 disabled:cursor-not-allowed disabled:text-grey-5 w-full mt-8" type="submit">
+        Donate
+</button>
+    </a>
+  </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    <template x-if="!proEnabled && !onboarding">
+      <div id="upgrade-modal" phx-remove="[]" data-cancel="[[&quot;exec&quot;,{&quot;attr&quot;:&quot;phx-remove&quot;}]]" class="relative z-99999 hidden">
+  <div id="upgrade-modal-bg" class="bg-black-2/80 fixed inset-0 transition-opacity" aria-hidden="true"></div>
+  <div class="fixed inset-0 overflow-y-auto" aria-labelledby="upgrade-modal-title" aria-describedby="upgrade-modal-description" role="dialog" aria-modal="true" tabindex="0">
+    <div class="flex min-h-full items-center justify-center">
+      <div class="w-full max-w-3xl p-2 sm:p-6 lg:py-8">
+        <div id="upgrade-modal-container" phx-key="escape" class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-graydark p-8 sm:p-14 shadow-lg ring-1 transition">
+          <div id="upgrade-modal-content">
+  <section>
+    <h3 class="text-2xl text-white">Pro Mode</h3>
+    <p class="text-sm">Don't worry - Pinchflat is completely free :&rpar;</p>
+    <p class="mt-4">
+      If you find the project valuable and want to say thanks, a
+      <a href="https://supporters.eff.org/donate" class="text-blue-500 hover:text-blue-300" target="_blank">
+        donation to the Electronic Frontier Foundation
+</a>
+      would be greatly appreciated! You can optionally post proof of donation on
+      <a href="https://github.com/kieraneglin/pinchflat/issues/234" class="text-blue-500 hover:text-blue-300" target="_blank">
+  this issue
+</a>
+      to hopefully inspire others to donate as well.
+    </p>
+    <p class="mt-4">
+      The Electronic Frontier Foundation is a nonprofit organization who defend your online liberties and backed
+      <code class="inline-block text-sm font-mono text-gray bg-boxdark rounded-md p-0.5 mx-0.5 text-nowrap">
+  youtube-dl
+</code>
+      when Google took them down<a href="https://github.com/github/dmca/blob/9a85e0f021f7967af80e186b890776a50443f06c/2020/11/2020-11-16-RIAA-reversal-effletter.pdf" class="text-blue-500 hover:text-blue-300" target="_blank">
+        <span class="hero-arrow-top-right-on-square h-3 w-3"></span>
+</a>. <strong>You do not need to donate to unlock Pro</strong>. It's just a way to show support!
+    </p>
+    <p class="mt-4">
+      To unlock Pro, simply type
+      <code class="inline-block text-sm font-mono text-gray bg-boxdark rounded-md p-0.5 mx-0.5 text-nowrap">
+  got it
+</code>
+      into the text box and press the button.
+    </p>
+    <div id="phx-GN0bP2jFdqsTZhbi" data-phx-session="SFMyNTY.g2gDaAJhBnQAAAAIdwJpZG0AAAAUcGh4LUdOMGJQMmpGZHFzVFpoYml3B3Nlc3Npb250AAAAAHcEdmlld3ciRWxpeGlyLlBpbmNoZmxhdC5VcGdyYWRlQnV0dG9uTGl2ZXcKcGFyZW50X3BpZHcDbmlsdwZyb3V0ZXJ3A25pbHcIcm9vdF9waWR3A25pbHcJcm9vdF92aWV3dyJFbGl4aXIuUGluY2hmbGF0LlVwZ3JhZGVCdXR0b25MaXZldxFsaXZlX3Nlc3Npb25fbmFtZXcDbmlsbgYAvvrDJKEBYgABUYA.z6Nfwr5zUBNnuxw6PU_uitfXstM6PAOyj6BQh8vIV5o" data-phx-static="SFMyNTY.g2gDaAJhBnQAAAADdwJpZG0AAAAUcGh4LUdOMGJQMmpGZHFzVFpoYml3BWZsYXNodAAAAAB3CmFzc2lnbl9uZXdqbgYAvvrDJKEBYgABUYA.sibB-gBAMouIVrEzjC6Co8TeRrwoLVsU8B88Hipb3GQ"><form id="upgradeForm" phx-change="check_matching_text" phx-hook="supress-enter-submission">
+  <div phx-feedback-for="unlock-pro-textbox">
+  <label class="mt-5 mb-2 inline-block text-md font-medium text-black dark:text-white">
+</label>
+  <div class="flex items-center">
+    <input type="text" name="unlock-pro-textbox" value="" class="w-full rounded-lg border-[1.5px] px-5 py-3 font-normal border-form-strokedark bg-form-input outline-none transition active:border-primary disabled:cursor-default disabled:bg-whiter text-white focus:border-primary ">
+  </div>
+</div>
+</form>
+<button class="text-center font-medium text-white whitespace-nowrap rounded-sm inline-flex items-center justify-center px-8 py-4 bg-primary hover:bg-opacity-90 lg:px-8 xl:px-10 disabled:bg-opacity-50 disabled:cursor-not-allowed disabled:text-grey-5 w-full mt-4" type="button" disabled phx-click="[]" x-on:click="setTimeout(() =&gt; { proEnabled = true }, 200)">
+  Unlock Pro
+</button></div>
+  </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    </template>
+  </body>
+</html>

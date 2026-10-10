@@ -82,20 +82,32 @@ bromigos lab doctor
 
 ### YouTube downloads with Pinchflat
 
-Pinchflat downloads YouTube channels and playlists into your media library. To see it in
-the lab console, add it to `homelab.toml` with its route token. The token is in the OPML
-link on Pinchflat's Sources page: copy the part after `route_token=` into a file.
+Pinchflat downloads YouTube channels and playlists into your media library. Add it to
+`homelab.toml`. If its web page asks for a user and password, put them in a file as
+`user:password` and name the file in `auth_ref`:
 
 ```toml
 [[source]]
 type = "pinchflat"
 endpoint = "http://pinchflat.lan:8945"
-route_token_ref = "@file:~/.local/share/bromigos/pinchflat-route-token"
+auth_ref = "@file:~/.local/share/bromigos/pinchflat-login"
 ```
+
+Without a password, it needs Pinchflat's route token instead. The token is in the OPML link
+on Pinchflat's Sources page: copy the part after `route_token=` into a file, and name it in
+`route_token_ref`.
 
 To see its download queue too, start Pinchflat with `ENABLE_PROMETHEUS=true`.
 
-`bromigos lab youtube sync` then makes each downloaded playlist a playlist in Jellyfin or
+For YouTube cookies (`bromigos lab youtube cookies`), say where Pinchflat reads them, with
+`cookies_store` in the same source:
+
+- `cookies_store = "file:/srv/pinchflat/config/extras/cookies.txt"` when its config folder
+  is on this machine or a share you have mounted;
+- `cookies_store = "vault:secret/lab/pinchflat#cookies"` when your lab copies Pinchflat's
+  cookies from Vault.
+
+`bromigos lab youtube sync` makes each downloaded playlist a playlist in Jellyfin or
 Plex, in YouTube's order. It needs an API key for each media server: put it in a file and
 name the file in that server's source as `token_ref`. See [The lab console](lab.md#youtube-downloads).
 

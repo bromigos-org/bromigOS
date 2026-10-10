@@ -20,10 +20,16 @@ Pinchflat, the YouTube downloader (capability youtube-downloader):
     name = "pinchflat"
     type = "pinchflat"
     endpoint = "http://pinchflat.lab:8945"
-    route_token_ref = "@file:~/.local/share/bromigos/pinchflat-route-token"   # the route_token in
-                                        # the OPML link on Pinchflat's Sources page (lists the sources)
     auth_ref = "@file:~/.local/share/bromigos/pinchflat-basic"   # optional: "user:password" when
-                                        # Pinchflat has BASIC_AUTH_USERNAME and _PASSWORD set
+                                        # Pinchflat has BASIC_AUTH_USERNAME and _PASSWORD set; or
+    user_ref = "@file:~/.local/share/bromigos/pinchflat-user"    # the user here, and auth_ref
+                                        # holds only the password
+    route_token_ref = "@file:~/.local/share/bromigos/pinchflat-route-token"   # optional: the
+                                        # route_token in the OPML link on Pinchflat's Sources page
+                                        # (lists the sources); read from that page when the basic
+                                        # auth is set, so only an open Pinchflat needs it
+    cookies_store = "vault:secret/lab/pinchflat#cookies"   # optional: where `bromigos lab youtube
+                                        # cookies` keeps YouTube cookies (pinchflat.py)
     metrics = "endpoint"                # where the download queue comes from: "endpoint" (its own
                                         # /metrics, with ENABLE_PROMETHEUS set), "source" (the lab's
                                         # metrics source scrapes it) or "none"
@@ -34,6 +40,7 @@ which says channel or playlist, and its downloaded videos, newest first), and Pr
 Prometheus metrics (Oban's job queues: the download queue and failed jobs).
 """
 import base64
+import re
 
 from ..registry import Unreachable, register
 from ..youtube import parse_feed, parse_opml
@@ -251,9 +258,18 @@ class Pinchflat(L.LabAdapter):
     provides = ("youtube-downloader",)
     default_ports = (8945,)
 
-    def auth_headers(self):
+    def credentials(self):
+        """"user:password" for Pinchflat's basic auth, or "": auth_ref holds both, or user_ref
+        the user and auth_ref the password (two files, as a secret store keeps them)."""
         from .. import config
         cred = config.resolve(self.opts.get("auth_ref") or "")
+        user = config.resolve(self.opts.get("user_ref") or "")
+        if user and cred:
+            return f"{user}:{cred}"
+        return cred or ""
+
+    def auth_headers(self):
+        cred = self.credentials()
         if not cred:
             return {}
         return {"Authorization": "Basic " + base64.b64encode(cred.encode()).decode()}
@@ -272,8 +288,18 @@ class Pinchflat(L.LabAdapter):
         return self.opts.get("link") or self.endpoint or None
 
     def route_token(self):
+        """route_token_ref, or the token in the OPML link on the Sources page (which the basic
+        auth opens)."""
         from .. import config
-        return config.resolve(self.opts.get("route_token_ref") or "")
+        tok = config.resolve(self.opts.get("route_token_ref") or "")
+        if tok or not self.credentials():
+            return tok
+        try:
+            page = self.fetch("/sources", raw=True, timeout=8).decode("utf-8", "replace")
+        except Exception:
+            return ""
+        m = re.search(r"/sources/opml(?:\.xml)?\?route_token=([A-Za-z0-9_\-]+)", page)
+        return m.group(1) if m else ""
 
     def sources(self):
         """[{name, feed, uuid}], or None without a route token (the OPML list needs it)."""
@@ -315,7 +341,8 @@ class Pinchflat(L.LabAdapter):
         except Exception as e:
             listed, why = [], f"the source list didn't load: {str(e)[:100]}"
         if listed is None:
-            why = "no route_token_ref: set it to list the sources (the OPML link on Pinchflat's Sources page)"
+            why = ("no route_token_ref and no auth_ref: set either to list the sources (the route token is in "
+                   "the OPML link on Pinchflat's Sources page)")
         recent = []
         for s in listed or []:
             rec = {"name": s["name"], "kind": None, "up": True, "videos": None, "newest": None, "newest_at": None,

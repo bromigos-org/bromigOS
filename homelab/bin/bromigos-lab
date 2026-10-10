@@ -32,7 +32,13 @@
   bromigos lab doctor [--json] [--check ID]
                                     checks with fixes in plain words: DNS, TLS, GPUs, disks
                                     and NAS, backups, GitOps drift, expiring tokens, targets
-  bromigos lab youtube [status]     the YouTube downloads card: Pinchflat's sources, newest videos, queue
+  bromigos lab youtube              the YouTube downloads card: Pinchflat's sources, newest videos, queue
+  bromigos lab youtube add URL [--playlist|--channel] [--since DATE] [--name NAME] [--quality Q]
+  bromigos lab youtube list | status | refresh [NAME] | pause NAME | resume NAME
+  bromigos lab youtube remove NAME|URL [--delete-files] [--yes]
+  bromigos lab youtube quality NAME Q    best, 2160p … 480p, audio (new downloads only)
+  bromigos lab youtube cookies set FILE | clear | status
+                                    control Pinchflat without its web page (each takes --json)
   bromigos lab youtube sync [--dry-run] [--server jellyfin|plex] [--json]
                                     turn Pinchflat's downloaded YouTube playlists into ordered
                                     playlists in Jellyfin and Plex (idempotent; docs/homelab.md)
@@ -389,11 +395,14 @@ def main(argv):
         return Q.Service().serve()
     if cmd in ("dashboard", "tui"):
         return tui()
-    if cmd == "youtube":                                         # youtube.py: Pinchflat's playlists
-        if not rest or rest[0] == "status":
+    if cmd == "youtube":                                         # the card; youtube.py's sync; pinchflat.py
+        if not rest or rest == ["--json"]:
             return cmd_status(argparse.Namespace(json="--json" in rest, card="youtube-downloader"))
-        from bromigos_homelab import youtube
-        return youtube.main(rest)
+        if rest[0] == "sync":
+            from bromigos_homelab import youtube
+            return youtube.main(rest)
+        from bromigos_homelab import pinchflat
+        return pinchflat.main(rest)
     p = argparse.ArgumentParser(prog=f"bromigos lab {cmd}")
     p.add_argument("--json", action="store_true")
     if cmd == "status":

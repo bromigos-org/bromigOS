@@ -120,11 +120,103 @@ bromigos lab models recommend         # better models that fit your graphics car
 ## YouTube downloads
 
 If your lab runs [Pinchflat](homelab.md), it downloads YouTube channels and playlists into
-your media library. Then they play in Jellyfin or Plex, like your other shows.
+your media library. Then they play in Jellyfin or Plex, like your other shows. You can run
+it from here without opening its web page.
 
-- `bromigos lab youtube` shows what Pinchflat is doing: how many videos are waiting, any
-  that failed, and the newest video from each channel and playlist. The Status tab has the
-  same card, **YouTube downloads**. Hover over a row for more.
+### Add a channel or a playlist
+
+```bash
+bromigos lab youtube add https://www.youtube.com/playlist?list=PLCFE9837C2F7EB8AA
+bromigos lab youtube add https://www.youtube.com/@NASAGoddard --since 2025-01-01
+```
+
+It says what it will download. A playlist keeps its order. A channel gets every upload.
+
+- It works out from the address whether it's a playlist or a channel. If it can't, add
+  `--playlist` or `--channel`.
+- `--since 2025-01-01` skips videos uploaded before that date. It's worth it for a big
+  channel.
+- `--name NAME` sets its name in Pinchflat, on disk and in your media server.
+- `--quality` sets the most it downloads. See below.
+
+In the dashboard (`bromigos lab`), the **YouTube downloads** card has an **Add a channel or
+playlist…** button. It does the same thing. The key is `a`.
+
+### Look after them
+
+```bash
+bromigos lab youtube list                      # each one: kind, quality, videos, last check, newest video
+bromigos lab youtube status                    # the download queue, failures, recent downloads
+bromigos lab youtube refresh "Little SDO"      # check for new videos now (leave out the name: all of them)
+bromigos lab youtube pause "Little SDO"        # stop checking and downloading; resume starts it again
+bromigos lab youtube remove "Little SDO"       # stop downloading it; the videos stay
+bromigos lab youtube remove "Little SDO" --delete-files   # and delete its videos too
+```
+
+`remove` asks before it does anything. Your videos stay on disk unless you add
+`--delete-files`. After a removal, the playlist in Jellyfin and Plex goes at the next sync.
+
+Every command takes `--json`.
+
+### Quality and disk space
+
+Videos download at up to 1080p unless you say otherwise. Higher quality costs disk space.
+As a rough guide, for an hour of video:
+
+| Quality | About |
+|---|---|
+| `480p` | 0.3 GB |
+| `720p` | 0.5 to 1 GB |
+| `1080p` | 1 to 2 GB |
+| `1440p` | 2 to 3.5 GB |
+| `2160p` (4K) | 5 to 10 GB |
+| `audio` | 0.06 GB (sound only) |
+
+These come from the sizes YouTube offers for each quality, in the formats Pinchflat picks.
+Fast-moving or 60-frames-a-second video sits at the top of each range. Talking heads and
+slides sit at the bottom. `best` takes the highest a video has, up to 8K.
+
+- `add --quality 2160p` downloads a new source in 4K.
+- `bromigos lab youtube quality "Little SDO" 2160p` changes an existing one. Only new
+  downloads change. The videos you already have stay as they are.
+- To change the default for everything you add, set it in `homelab.toml`:
+
+  ```toml
+  [youtube]
+  quality = "1440p"
+  ```
+
+### If YouTube asks Pinchflat to sign in
+
+Sometimes YouTube stops a lab's downloads with "Sign in to confirm you're not a bot".
+Pinchflat can then use a browser's YouTube cookies.
+
+1. Sign in to YouTube with a **spare Google account**. Never use your main one: YouTube
+   can block an account whose cookies a downloader uses.
+2. Export its cookies in the `cookies.txt` format, with an exporter add-on for your
+   browser.
+3. Give them to your lab:
+
+   ```bash
+   bromigos lab youtube cookies set ~/Downloads/cookies.txt
+   ```
+
+4. Delete the exported file. Your lab keeps its own copy.
+
+`set` checks the file and never shows the cookies. It turns on **When Needed** cookies for
+every channel and playlist, so Pinchflat only uses them when YouTube asks.
+
+- `bromigos lab youtube cookies status` says whether there are cookies and how old they
+  are. After about 30 days it reminds you to export fresh ones.
+- `bromigos lab youtube cookies clear` removes them and turns their use off.
+
+Where the cookies go depends on your lab. See [Homelab](homelab.md#youtube-downloads-with-pinchflat).
+
+### Playlists in Jellyfin and Plex
+
+- `bromigos lab youtube` shows the **YouTube downloads** card: how many videos are
+  waiting, any that failed, and the newest video from each channel and playlist. The
+  dashboard's Status tab has the same card. Hover over a row for more.
 - `bromigos lab youtube sync` makes each downloaded YouTube playlist a playlist in Jellyfin
   or Plex, in the same order as on YouTube. Run it as often as you like: it only changes
   what's different. To see what it would do first, add `--dry-run`.

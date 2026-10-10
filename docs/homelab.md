@@ -481,8 +481,9 @@ turns its playlists into real playlists on your media server.
 Pinchflat has no JSON API, so the `pinchflat` adapter reads what it does serve:
 
 - `/healthcheck`, for whether it's up;
-- its list of sources, as OPML. That needs Pinchflat's *route token*, which is in the OPML
-  link on its Sources page;
+- its list of sources, as OPML. That needs Pinchflat's *route token*. With the basic auth
+  set, the adapter reads it from the OPML link on Pinchflat's Sources page. Without it, set
+  `route_token_ref`;
 - each source's podcast feed. The feed's link says whether the source is a channel or a
   playlist, and its items are the downloaded videos, newest first;
 - its job queue, from its Prometheus metrics. Set `ENABLE_PROMETHEUS=true` in Pinchflat's
@@ -494,12 +495,16 @@ Pinchflat has no JSON API, so the `pinchflat` adapter reads what it does serve:
 name = "pinchflat"
 type = "pinchflat"
 endpoint = "http://pinchflat.lab.example:8945"
-route_token_ref = "@file:~/.local/share/bromigos/pinchflat-route-token"
-auth_ref = "@file:~/.local/share/bromigos/pinchflat-login"   # only with Pinchflat's basic auth: "user:password"
+auth_ref = "@file:~/.local/share/bromigos/pinchflat-login"   # with Pinchflat's basic auth: "user:password"
+# user_ref = "@file:…/pinchflat-user"   # or the user here, and auth_ref holds only the password
+route_token_ref = "@file:~/.local/share/bromigos/pinchflat-route-token"   # only without the basic auth
 metrics = "endpoint"     # its own /metrics; "source" reads the lab's metrics source; "none" skips the queue
+cookies_store = "vault:secret/lab/pinchflat#cookies"   # for `bromigos lab youtube cookies` (lab.md)
 ```
 
-Without `route_token_ref`, the card still shows Pinchflat itself, and says what to set.
+Without either the basic auth or `route_token_ref`, the card still shows Pinchflat itself,
+and says what to set. To add, remove and change sources from the command line, see
+[lab.md](lab.md#youtube-downloads).
 
 **The playlist sync.** `bromigos lab youtube sync` turns each downloaded playlist into an
 ordered playlist in Jellyfin, Plex, or both. It finds each video by the YouTube ID in its
