@@ -17,6 +17,10 @@ for k, sub in (("XDG_CONFIG_HOME", ".config"), ("XDG_STATE_HOME", ".local/state"
     os.environ.setdefault(k, os.path.join(_HOME, sub))
 
 
+# Real readings unless a test asks for demo ones, even after another test imported demo.py
+os.environ["BROMIGOS_WIDGETS_DEMO"] = "0"
+
+
 def make(cls, demo=False, cfg=None):
     """A panel instance; demo=True draws its own made-up readings (as the picture tools do)."""
     if demo:
@@ -24,8 +28,7 @@ def make(cls, demo=False, cfg=None):
     try:
         return cls(cfg or {})
     finally:
-        if demo:
-            os.environ.pop("BROMIGOS_WIDGETS_DEMO", None)
+        os.environ["BROMIGOS_WIDGETS_DEMO"] = "0"
 
 
 def draw(panel, w, h):

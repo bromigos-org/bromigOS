@@ -5,7 +5,9 @@ API (docs/plugins.md, "A widget that needs an account"):
     import bromigos_account as A
 
     A.status(provider)                 -> {"signed_in", "who", "needs", "via"}; no network
-    A.sign_in(provider, on_prompt=None)  blocks until signed in; returns status(provider).
+    A.sign_in(provider, on_prompt=None, cancelled=None)
+                                       blocks until signed in; returns status(provider).
+                                         cancelled: a callable or threading.Event to stop it.
                                          Device flow: on_prompt({"user_code", "verification_uri",
                                          "verification_uri_complete", "expires_in"}); PKCE:
                                          on_prompt({"auth_url"}). Without on_prompt the page
@@ -605,8 +607,19 @@ def _default_prompt(provider):
     return show
 
 
-def sign_in(provider, on_prompt=None, cancelled=lambda: False):
-    """Sign in, blocking until it's done: returns status(provider)."""
+def _stopper(cancelled):
+    """cancelled as a callable: a function, a threading.Event, or None."""
+    if cancelled is None:
+        return lambda: False
+    if hasattr(cancelled, "is_set"):
+        return cancelled.is_set
+    return cancelled
+
+
+def sign_in(provider, on_prompt=None, cancelled=None):
+    """Sign in, blocking until it's done: returns status(provider). cancelled: a callable
+    or a threading.Event; when it says True the sign-in stops with SignInError."""
+    cancelled = _stopper(cancelled)
     p = _p(provider)
     missing = needs(provider)
     if missing:

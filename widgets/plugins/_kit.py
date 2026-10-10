@@ -17,9 +17,10 @@ module is imported by the panels beside it:
             super().__init__(cfg)
             self.poll = self.poller(self.fetch, every=300)   # runs only while it's seen
 
-Settings: each panel's own file, ~/.config/bromigos/widgets/<name>.toml, read over the
-panel's keys in layout.json, and read again when it changes. `settings` on the class says
-what's in it, for the gallery card's Settings… form (docs/plugins.md, "Settings").
+Settings: `settings` on the class lists the fields; Settings › Widgets draws their form,
+and the values live in ~/.config/bromigos/widgets/<name>.toml (widget_settings.py). The
+kit's self.conf reads them through the same reader as Panel.setting(), with .list() for a
+list and a version that goes up when they change, so the pollers fetch again.
 
 Demo readings: when the picture tools import demo.py ("demo" in sys.modules), demo() is
 True and each panel draws its own made-up readings instead of reading anything.
@@ -45,7 +46,10 @@ CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.
 
 def demo():
     """True while a picture is drawn with made-up readings (demo.py imported)."""
-    return "demo" in sys.modules or os.environ.get("BROMIGOS_WIDGETS_DEMO") == "1"
+    v = os.environ.get("BROMIGOS_WIDGETS_DEMO")
+    if v is not None:                                  # set either way: it decides (tests set "0")
+        return v == "1"
+    return "demo" in sys.modules
 
 
 def motion():
@@ -65,52 +69,42 @@ def high_contrast():
 
 # ------------------------------------------------------------------ settings
 def settings_path(name):
-    return os.path.join(CONFIG, "bromigos", "widgets", f"{name}.toml")
+    """~/.config/bromigos/widgets/<name>.toml, where the panel's settings live."""
+    try:
+        import widget_settings as WS
+        return WS.path(name)
+    except ImportError:                                # an older bromigos-widgets
+        return os.path.join(CONFIG, "bromigos", "widgets", f"{name}.toml")
 
 
 class Settings:
-    """A panel's settings: its layout.json keys, then widgets/<name>.toml over them, then
-    the declared defaults under both. Re-read when the file changes (checked at most once
-    every 2 s)."""
+    """A panel's settings through the framework's reader (widget_settings.Reader, the same
+    values Panel.setting() gives and Settings › Widgets writes): each declared field's
+    default, then the panel's keys in layout.json, then widgets/<name>.toml, read again
+    when the file changes. .version goes up when they change."""
 
     def __init__(self, name, cfg=None, spec=()):
-        self.name, self.cfg = name, dict(cfg or {})
-        self.defaults = {s["key"]: s.get("default") for s in spec or () if "key" in s}
-        self.path = settings_path(name)
-        self.mtime, self.checked, self.values, self.error = None, 0.0, {}, None
-        self.version = 0
+        import widget_settings as WS
+        self.name, self.spec = name, list(spec or ())
+        self.path = WS.path(name)
+        self.reader = WS.Reader(name, self.spec, dict(cfg or {}))
+        self.version, self._seen = 0, None
+        self.error = None
         self.reload(force=True)
 
     def reload(self, force=False):
-        now = time.monotonic()
-        if not force and now - self.checked < 2:
-            return False
-        self.checked = now
-        try:
-            m = os.path.getmtime(self.path)
-        except OSError:
-            m = None
-        if m == self.mtime and not force:
-            return False
-        self.mtime = m
-        vals = dict(self.defaults)
-        vals.update({k: v for k, v in self.cfg.items() if k not in ("x", "y", "width", "height", "visible", "name")})
-        self.error = None
-        if m is not None:
-            try:
-                import tomllib
-                with open(self.path, "rb") as f:
-                    vals.update(tomllib.load(f))
-            except (OSError, ValueError) as e:
-                self.error = f"{os.path.basename(self.path)}: {e}"[:160]
-        self.values = vals
-        self.version += 1
-        return True
+        vals = self.reader.get()
+        m = self.reader._mtime
+        if force or m != self._seen:
+            self._seen = m
+            self.version += 1
+            self.values = vals
+            return True
+        return False
 
     def get(self, key, default=None):
-        self.reload()
-        v = self.values.get(key)
-        return default if v is None else v
+        v = self.reader.get().get(key)
+        return default if v is None or v == "" else v
 
     def list(self, key):
         """A list setting; a string is split on commas, spaces and new lines."""
@@ -120,7 +114,7 @@ class Settings:
         return [str(x).strip() for x in v if str(x).strip()]
 
     def exists(self):
-        return self.mtime is not None
+        return os.path.exists(self.path)
 
 
 def home_path(p):
@@ -206,7 +200,7 @@ class KitPanel(P.Panel):
         self.wake = wake                             # the host's hook: redraw when data lands
         self.drawn_at = time.monotonic()            # as if seen: the first fetch happens
         self.pollers = []
-        self.conf = Settings(self.name, cfg, self.settings)
+        self.conf = Settings((cfg or {}).get("name") or self.name, cfg, self.settings)
         self._conf_v = self.conf.version
         self.last_class = None
 
