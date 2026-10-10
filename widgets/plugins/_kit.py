@@ -6,7 +6,7 @@ A file whose name starts with "_" isn't a panel (plugins.files() passes it over)
 module is imported by the panels beside it:
 
     import os, sys
-    sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+    sys.path.append(os.path.dirname(os.path.realpath(__file__)))   # after the standard library
     import _kit as K
 
     class MyPanel(K.KitPanel):

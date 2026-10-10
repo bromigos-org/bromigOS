@@ -26,7 +26,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
-sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+sys.path.append(os.path.dirname(os.path.realpath(__file__)))   # after the standard library
 import _kit as K  # noqa: E402
 
 import draw as D  # noqa: E402

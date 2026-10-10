@@ -14,7 +14,7 @@ import threading
 import time
 import urllib.error
 
-sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+sys.path.append(os.path.dirname(os.path.realpath(__file__)))   # after the standard library
 import _kit as K  # noqa: E402
 import nowplaying as NP  # noqa: E402  the shared art, transport and MPRIS reading
 

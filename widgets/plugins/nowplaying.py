@@ -17,7 +17,7 @@ import tempfile
 import threading
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+sys.path.append(os.path.dirname(os.path.realpath(__file__)))   # after the standard library
 import _kit as K  # noqa: E402
 
 import cairo  # noqa: E402

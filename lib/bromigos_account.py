@@ -451,7 +451,7 @@ def status(provider):
     if p.get("gh") and gh_token():
         return {"signed_in": True, "who": _gh_login(), "needs": [], "via": "gh"}
     rec = _load(provider)
-    return {"signed_in": bool(rec), "who": (rec or {}).get("who"), "needs": needs(provider),
+    return {"signed_in": bool(rec), "who": (rec or {}).get("who"), "needs": [] if rec else needs(provider),
             "via": "keyring" if rec else None}
 
 
