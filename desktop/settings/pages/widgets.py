@@ -182,6 +182,23 @@ class WidgetsPage:
             buttons=[("Edit on the desktop", self.edit, "Starts edit mode: the panels come above your windows, "
                                                          "and the widget gallery opens beside them")],
             advanced={"runs": "bromigos panels edit", "file": d["user_file"]}))
+        self.rows["layout"].append(ctx.row(
+            g, "Layouts", "Ready-made layouts (Minimal, Developer, Homelab, Streamer, Media, Gamer, Everything) and "
+                          "the theme's own, fitted to your screen and kept off the scene. Each theme remembers its own.",
+            key="layouts", hint="Opens Customize › Widgets, where each layout is drawn small: click one to use it",
+            buttons=[("Choose a layout…", lambda: ctx.run(["bromigos", "customize", "--tab", "widgets"]),
+                      "Opens Customize › Widgets at the Layouts row"),
+                     ("Tidy up", lambda: self._change(["tidy"], "Tidied", ["layout", "undo"]),
+                      "Packs the widgets on now so none overlaps, in the same order, off the scene's focal points")],
+            advanced={"runs": "bromigos panels layouts | layout apply ID | tidy",
+                      "file": "~/.config/bromigos/widgets/layouts/"}))
+        if d.get("overlapping"):
+            pairs = ", ".join(" and ".join(p) for p in d["overlapping"][:4])
+            self.rows["layout"].append(ctx.row(
+                g, "Overlapping", f"These widgets cover each other: {pairs}. Tidy up separates them.", key="overlap",
+                hint="Widgets on top of each other: Tidy up packs them so none overlaps",
+                buttons=[("Tidy up", lambda: self._change(["tidy"], "Tidied", ["layout", "undo"]),
+                          "Packs the widgets so none overlaps (bromigos panels tidy)")]))
         g = self.g_place
         ctx.clear_group(g, self.rows["place"])
         rows = self.rows["place"]
@@ -511,6 +528,8 @@ PAGE = Page(
         Entry("layout", "Panel layout", ["positions", "arrange panels", "layout.json"], "Layout"),
         Entry("edit", "Edit widgets on the desktop", ["edit mode", "move widgets", "drag panels", "resize panels"],
               "Layout"),
+        Entry("layouts", "Widget layouts", ["templates", "layouts", "minimal", "developer", "homelab", "tidy up",
+                                             "overlapping widgets", "archetypes"], "Layout"),
         Entry("monitor", "Panels' monitor", ["which screen", "output"], "Where they go"),
         Entry("panels", "Widget gallery", ["show panel", "hide panel", "system panel", "network panel",
                                            "storage", "workbench", "notes panel", "connections", "add widget"],

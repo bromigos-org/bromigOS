@@ -476,6 +476,8 @@ def _cover(im, w, h):
     return im.crop((x, y, x + w, y + h))
 
 
+# bromigos-homelab's widgets: a picture with any of them gets the made-up lab (demo_lab.py)
+HOMELAB_PANELS = {"lab", "alerts", "labjobs", "games", "solar"}
 PANELS = ("system", "network")       # what a preview shows (the switcher's): the default scene's panels
 BAR_H = 34                          # the bar's height (waybar config.jsonc): panel positions start below it
 # the panels' places when the default layout has none: bromigos-homelab's LAB, beside SYSTEM
@@ -898,7 +900,7 @@ class Nested:
         # the panels: the scene's, where it puts them (a layout.json of their own)
         os.makedirs(os.path.join(cfg, "bromigos", "widgets"), exist_ok=True)
         lay = default_layout()
-        lay["panels"] = scene["panels"]
+        lay["panels"] = [dict(p, visible=True) for p in scene["panels"]]   # a plugin's own default is off
         with open(os.path.join(cfg, "bromigos", "widgets", "layout.json"), "w") as f:
             json.dump(lay, f)
         names = [p["name"] for p in scene["panels"]]
@@ -916,7 +918,7 @@ class Nested:
                     '<allow eavesdrop="true"/><allow own="*"/></policy></busconfig>\n')
         base = box.env(XDG_RUNTIME_DIR=rt, BROMIGOS_SHARE_DIR=share, DBUS_SESSION_BUS_ADDRESS=f"unix:path={rt}/bus",
                        PATH=f"{stubs}:{os.path.join(box.dir, 'bin')}:/usr/bin:/bin")
-        if "lab" in names and homelab_dir():
+        if set(names) & HOMELAB_PANELS and homelab_dir():
             base.update(BROMIGOS_HOMELAB=homelab_dir(), BROMIGOS_WIDGETS_DEMO_LAB="1")
         if gtk:
             base["GTK_THEME"] = gtk

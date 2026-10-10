@@ -57,6 +57,14 @@ flowboxchild.wcard .wpic {{ background-color: {a(c['void'], .9)}; border-bottom:
 .head button.tab:checked {{ background-color: {c['primary']}; color: {c['void']}; border-color: {c['primary']}; }}
 .sheet {{ background-color: {a(c['panel'], .99)}; border: 1px solid {c['dim']};
   box-shadow: 0 0 0 1px {a(c['primary'], .25)}, 0 16px 64px {a(c['void'], .85)}; }}
+.lcard {{ border: 1px solid {a(c['dim'], .35)}; background-color: {a(c['void'], .55)}; padding: 0 0 8px 0; }}
+.lcard:hover {{ border-color: {a(c['primary'], .55)}; }}
+.lcard.made {{ border-color: {a(c['primary'], .7)}; }}
+.lcard .wname, .lcard .wdesc, .lcard .wmeta {{ margin: 0 10px; }}
+.lcard .lfor {{ color: {c['void']}; background-color: {c['primary']}; font-size: {font - 3}px; font-weight: 700;
+  letter-spacing: 0.1em; padding: 0 6px; margin: 6px 10px 0 10px; }}
+.lcard .lnote {{ color: {c['warn']}; font-size: {font - 2}px; margin: 0 10px; }}
+.lhead .wmeta {{ margin-top: 14px; }}
 .sheet .sheettitle {{ color: {c['primary']}; letter-spacing: 0.18em; font-weight: 700; }}
 """
 
@@ -147,6 +155,221 @@ class Ctx:
                              stderr=subprocess.DEVNULL)
 
 
+def _rgb(h):
+    h = (h or "#39ff14").lstrip("#")
+    return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)) if len(h) >= 6 else (0.2, 1.0, 0.1)
+
+
+class LayoutsRow:
+    """The Layouts row at the top of the Widgets tab: a card per layout (`bromigos panels
+    layouts`), the theme's own first ("Made for <theme>"), each a miniature of the screen
+    with the scene behind and each widget where that layout puts it, fitted to this monitor.
+    A click applies it; Undo puts the layout before it back; Tidy up packs the widgets on now."""
+    MINI_W = 300
+
+    def __init__(self, tab):
+        Gtk = tab.Gtk
+        self.tab, self.Gtk, self.ctx = tab, Gtk, tab.ctx
+        self.doc, self.bg, self.bg_for = None, None, None
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        head = Gtk.Box(spacing=10)
+        head.add_css_class("lhead")
+        self.title = Gtk.Label(label="LAYOUTS", xalign=0)
+        self.title.add_css_class("wsection")
+        self.title.set_tooltip_text("Ready-made layouts: which widgets are on, their sizes and places, fitted to "
+                                    "your screen and kept off the scene's focal points")
+        head.append(self.title)
+        self.sub = Gtk.Label(xalign=0, hexpand=True, wrap=True)
+        self.sub.add_css_class("wmeta")
+        self.sub.set_tooltip_text("The theme in force and the screen the layouts are fitted to")
+        head.append(self.sub)
+        self.tidy_b = self.ctx.button("Tidy up", self.tidy, "Packs the widgets on now so none overlaps, in the "
+                                      "same order, off the scene's focal points (bromigos panels tidy; Undo undoes it)")
+        self.tidy_b.set_valign(Gtk.Align.END)
+        head.append(self.tidy_b)
+        self.undo_b = self.ctx.button("Undo", self.undo, "Puts back the layout from before the last one applied "
+                                      "or tidied (bromigos panels layout undo)")
+        self.undo_b.set_valign(Gtk.Align.END)
+        head.append(self.undo_b)
+        box.append(head)
+        self.strip = Gtk.Box(spacing=12)
+        sc = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.AUTOMATIC, vscrollbar_policy=Gtk.PolicyType.NEVER,
+                                propagate_natural_height=True)
+        sc.set_child(self.strip)
+        sc.set_tooltip_text("Each layout, small: click one to put it on your desktop")
+        self.scroller = sc
+        box.append(sc)
+        self.widget = box
+        self.loading = Gtk.Label(label="FITTING THE LAYOUTS TO YOUR SCREEN…", xalign=0)
+        self.loading.add_css_class("empty")
+        self.strip.append(self.loading)
+        self.refresh()
+
+    def refresh(self):
+        self.ctx.json(["bromigos", "panels", "layouts", "--json"], self.got)
+
+    def got(self, doc, err):
+        Gtk = self.Gtk
+        c = self.strip.get_first_child()
+        while c is not None:
+            n = c.get_next_sibling()
+            self.strip.remove(c)
+            c = n
+        if not doc or doc.get("ok") is False:
+            lb = Gtk.Label(label=f"bromigos panels layouts didn't answer: {(doc or {}).get('error') or err}"[:200])
+            lb.add_css_class("empty")
+            self.strip.append(lb)
+            return
+        self.doc = doc
+        scr = doc.get("screen") or {}
+        self.title.set_label("PICK A LAYOUT TO START" if doc.get("first_run") else "LAYOUTS")
+        self.sub.set_label(f"for {doc.get('scene_title') or doc.get('theme')} on "
+                           f"{scr.get('monitor') or 'this screen'}, {scr.get('full_width', scr.get('width'))}×"
+                           f"{scr.get('full_height', scr.get('height'))}"
+                           + (" · applied to every theme: " + doc["everywhere"] if doc.get("everywhere") else ""))
+        self.undo_b.set_visible(bool(doc.get("undo")))
+        if doc.get("undo"):
+            self.undo_b.set_tooltip_text(f"Puts back the layout from before {doc['undo']['what']} "
+                                         "(bromigos panels layout undo; again: redo)")
+        fw = scr.get("full_width") or scr.get("width") or 1920
+        fh = scr.get("full_height") or scr.get("height") or 1080
+        # the miniature, its words, a note and the button, with room for the scrollbar
+        self.strip.set_size_request(-1, int(self.MINI_W * fh / fw) + 186)
+        for item in doc.get("layouts") or []:
+            self.strip.append(self.card(item))
+
+    def card(self, item):
+        Gtk = self.Gtk
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, valign=Gtk.Align.START)
+        card.set_size_request(self.MINI_W, -1)
+        card.add_css_class("lcard")
+        if item.get("made_for"):
+            card.add_css_class("made")
+        scr = (self.doc or {}).get("screen") or {}
+        fw, fh = scr.get("full_width") or scr.get("width") or 1920, scr.get("full_height") or scr.get("height") or 1080
+        da = Gtk.DrawingArea()
+        da.set_content_width(self.MINI_W)
+        da.set_content_height(int(self.MINI_W * fh / fw))
+        da.set_draw_func(self.draw, item)
+        da.set_tooltip_text(f"{item['title']}, small: where each widget goes on your screen; the dashed boxes are "
+                            "the scene's focal points, kept clear")
+        card.append(da)
+        if item.get("made_for"):
+            lf = Gtk.Label(label=f"MADE FOR {item['made_for'].upper()}", xalign=0, halign=Gtk.Align.START)
+            lf.add_css_class("lfor")
+            lf.set_tooltip_text(f"{item['made_for']}'s own layout, chosen to suit its scene")
+            card.append(lf)
+        if not item["title"].lower().startswith("made for"):     # the theme's own: its tag says it
+            card.append(self.tab.label(item["title"].upper(), "wname", 1))
+        card.append(self.tab.label(item["description"], "wdesc"))
+        n = len(item.get("placed") or {})
+        meta = f"{n} widget{'s' if n != 1 else ''} · {round(item.get('coverage', 0) * 100)}% of the screen"
+        if item.get("source") == "yours":
+            meta += " · yours"
+        card.append(self.tab.label(meta, "wmeta", 1))
+        notes = item.get("notes") or []
+        if notes:
+            ln = self.tab.label(f"{len(notes)} note{'s' if len(notes) != 1 else ''}: " + notes[0], "lnote")
+            ln.set_tooltip_text("\n".join(notes))
+            card.append(ln)
+        b = self.ctx.button("Use this layout", lambda: self.apply(item),
+                            f"Puts {item['title']} on your desktop: these widgets on, at these sizes and places. "
+                            "Each widget keeps its own settings; Undo puts yours back", primary=True)
+        b.set_margin_start(10)
+        b.set_halign(Gtk.Align.START)
+        card.append(b)
+        card.set_tooltip_text(f"{item['title']}: {item['description']}" + ("\n" + "\n".join(notes) if notes else ""))
+        click = Gtk.GestureClick()
+        click.connect("released", lambda *_: self.apply(item))
+        da.add_controller(click)
+        return card
+
+    def background(self, w, h):
+        path = (self.doc or {}).get("background")
+        if not path:
+            return None
+        if self.bg_for != (path, w, h):
+            self.bg_for, self.bg = (path, w, h), None
+            try:
+                import gi
+                gi.require_version("GdkPixbuf", "2.0")
+                from gi.repository import GdkPixbuf
+                pb = GdkPixbuf.Pixbuf.new_from_file(path)
+                s = max(w / pb.get_width(), h / pb.get_height())          # cover, as the live layer does
+                sw, sh = max(w, round(pb.get_width() * s)), max(h, round(pb.get_height() * s))
+                pb = pb.scale_simple(sw, sh, GdkPixbuf.InterpType.BILINEAR)
+                self.bg = pb.new_subpixbuf((sw - w) // 2, (sh - h) // 2, w, h)
+            except Exception:                                             # noqa: BLE001  no picture: a plain screen
+                self.bg = None
+        return self.bg
+
+    def draw(self, _area, cr, w, h, item):
+        colors = getattr(self.tab.host, "colors", {}) or {}
+        prim, void, soft = _rgb(colors.get("primary")), _rgb(colors.get("void", "#000500")), _rgb(colors.get("soft"))
+        warn = _rgb(colors.get("warn", "#d4af37"))
+        scr = (self.doc or {}).get("screen") or {}
+        fw = scr.get("full_width") or scr.get("width") or 1920
+        k = w / fw
+        ox, oy = (scr.get("x") or 0) * k, (scr.get("y") or 0) * k
+        bg = self.background(w, h)
+        if bg is not None:
+            from gi.repository import Gdk
+            Gdk.cairo_set_source_pixbuf(cr, bg, 0, 0)
+            cr.paint()
+        else:
+            cr.set_source_rgb(*void)
+            cr.paint()
+        cr.set_source_rgba(*void, 0.25)
+        cr.paint()
+        if oy:                                     # the bar
+            cr.set_source_rgba(*void, 0.85)
+            cr.rectangle(0, 0, w, oy)
+            cr.fill()
+        cr.set_line_width(1)
+        cr.set_dash([3, 3])
+        for c in (self.doc or {}).get("clear") or []:
+            cr.set_source_rgba(*warn, 0.35 if c.get("soft") else 0.7)
+            cr.rectangle(ox + c["x"] * k + 0.5, oy + c["y"] * k + 0.5, c["width"] * k - 1, c["height"] * k - 1)
+            cr.stroke()
+        cr.set_dash([])
+        for name, p in (item.get("placed") or {}).items():
+            x, y, pw, ph = ox + p["x"] * k, oy + p["y"] * k, p["width"] * k, p["height"] * k
+            cr.set_source_rgba(*void, 0.82)
+            cr.rectangle(x, y, pw, ph)
+            cr.fill()
+            cr.set_source_rgba(*prim, 0.9)
+            cr.rectangle(x + 0.5, y + 0.5, pw - 1, ph - 1)
+            cr.stroke()
+            cr.set_source_rgba(*prim, 0.9)
+            cr.rectangle(x + 1, y + 1, pw - 2, min(4, ph / 6))
+            cr.fill()
+            if pw > 26 and ph > 12:
+                cr.set_source_rgb(*soft)
+                cr.select_font_face("Geist Mono")
+                cr.set_font_size(max(6, min(9, ph / 3)))
+                label = name.upper()[: max(2, int(pw / 6))]
+                cr.move_to(x + 3, y + min(ph - 2, 14))
+                cr.show_text(label)
+
+    def apply(self, item):
+        notes = item.get("notes") or []
+        self.ctx.change(["bromigos", "panels", "layout", "apply", item["id"], "--json"],
+                        lambda d: (d.get("said") or item["title"]) + (f" ({'; '.join(notes)})" if notes else "")
+                        + ". Undo puts yours back", done=lambda _d: self.after())
+
+    def undo(self):
+        self.ctx.change(["bromigos", "panels", "layout", "undo", "--json"], lambda d: d.get("said") or "Undone",
+                        done=lambda _d: self.after())
+
+    def tidy(self):
+        self.ctx.change(["bromigos", "panels", "tidy", "--json"], lambda d: (d.get("said") or "Tidied")
+                        + ". Undo puts it back", done=lambda _d: self.after())
+
+    def after(self):
+        self.refresh()
+        self.ctx.json(["bromigos", "panels", "gallery", "--json"], self.tab.got_gallery)
+
+
 class WidgetsTab:
     def __init__(self, Gtk, Pango, host):
         self.Gtk, self.Pango, self.host = Gtk, Pango, host
@@ -182,6 +405,7 @@ class WidgetsTab:
         self.loading.add_css_class("empty")
         self.loading.set_tooltip_text("bromigos panels gallery: every widget, drawn once for its picture")
         self.list.append(self.loading)
+        self.layouts = LayoutsRow(self)            # the Layouts row, first in the list
         self.refresh()
 
     def build_chips(self, cats):
@@ -255,6 +479,8 @@ class WidgetsTab:
             n = c.get_next_sibling()
             self.list.remove(c)
             c = n
+        if not self.host.query().strip():          # the Layouts row first, while nothing is searched for
+            self.list.append(self.layouts.widget)
         if self.gallery is None:
             self.list.append(self.loading)
             return

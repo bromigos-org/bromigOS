@@ -16,6 +16,9 @@ lives in a dotfiles repository. A virtual keyboard (vkbd.py) and a virtual point
     hides one;
   - the keyboard alone: Tab picks, arrows nudge (Shift: 10 px), H hides, Ctrl+Z undoes;
   - adding a hidden panel finds it a free spot;
+  - a layout applied (`bromigos panels layout apply minimal`) shows its widgets where it
+    says, none overlapping, written through the symlink; undo brings the earlier ones back;
+    two widgets moved on top of each other are untangled by `bromigos panels tidy`;
   - Esc saves layout.json through the symlink (still a link), `bromigos panels` shows it;
     Cancel puts everything back and writes nothing; a right-click on a panel starts it;
   - the panels keep drawing while edit mode is on;
@@ -474,6 +477,54 @@ def customize_phase(n, r):
     r.check("Customize logged no traceback", "Traceback" not in (err or ""), (err or "")[-1500:])
 
 
+def layouts_phase(n, r):
+    """A layout applied and undone (`bromigos panels layout apply|undo`, as Customize's
+    Layouts row runs them) with the panels running: they read it again, the layout's widgets
+    show where it says and none overlaps; undo brings the earlier ones back; and Tidy up
+    untangles two put on top of each other."""
+    n.widgets("edit", "done")
+    editing(n, False)
+
+    def shown():
+        return {k for k, s in n.panels().items() if s.get("visible")}
+
+    def overlapping():
+        import layouts as L
+        return L.overlapping({k: s for k, s in n.panels().items() if s.get("visible")})
+    sys.path.insert(0, os.path.join(REPO, "widgets"))
+    settle(n, lambda p: "system" in p, 8)
+    before = shown()
+    res = n.bromigos("panels", "layout", "apply", "minimal", "--json")
+    try:
+        doc = json.loads(res.stdout)
+    except ValueError:
+        doc = {}
+    if not r.check("bromigos panels layout apply minimal", doc.get("ok") is True, (res.stdout[-400:], res.stderr[-400:])):
+        return
+    placed = set(doc.get("placed") or {})
+    r.check("the running panels show the layout's widgets, and only them",
+            wait_for(lambda: shown() == placed, 15, 0.5), (shown(), placed))
+    r.check("where the layout put them", wait_for(lambda: all(
+        rect(n, k)[:2] == (p["x"], p["y"]) for k, p in doc["placed"].items()), 10, 0.5),
+        ({k: rect(n, k) for k in placed}, doc["placed"]))
+    r.check("none overlaps", not overlapping(), overlapping())
+    r.check("as many surfaces as widgets shown",
+            wait_for(lambda: len(n.layer_rects("bromigos-widgets")) == len(placed), 10, 0.5), n.layers())
+    r.check("layout.json is still a symlink (written through it)", os.path.islink(n.link))
+    n.shot("layout-minimal")
+    res = n.bromigos("panels", "layout", "undo", "--json")
+    r.check("bromigos panels layout undo", res.returncode == 0, res.stderr[-400:])
+    r.check("undo brings the widgets from before back", wait_for(lambda: shown() == before, 15, 0.5), (shown(), before))
+    # two on top of each other, then Tidy up
+    sx, sy = rect(n, "system")[:2]
+    n.bromigos("panels", "move", "network", str(sx + 40), str(sy + 40), "--json")
+    r.check("two widgets put on top of each other", wait_for(lambda: overlapping(), 15, 0.5), n.panels())
+    res = n.bromigos("panels", "tidy", "--json")
+    r.check("bromigos panels tidy", res.returncode == 0, res.stderr[-400:])
+    r.check("Tidy up: none overlaps, none switched off",
+            wait_for(lambda: not overlapping() and shown() == before, 15, 0.5), (overlapping(), shown()))
+
+
 def draws_go_up(n):
     """The panels redraw while edit mode is on (their stats, to the app's stderr)."""
     def count():
@@ -545,6 +596,7 @@ def main():
     try:
         n.start()
         scenarios(n, r)
+        layouts_phase(n, r)
         monitors_phase(n, r)
         settings_phase(n, r)
         customize_phase(n, r)
