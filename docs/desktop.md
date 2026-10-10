@@ -388,8 +388,10 @@ or moved. When you unplug one, its workspaces move to the monitor that's left.
 
 ### What goes on which monitor
 
-The bar and the wallpaper go on every monitor. The live background and the panels
-(widgets) go on the *primary* monitor. bromigOS picks the primary in this order:
+The bar and the wallpaper go on every monitor. The live background goes on the *primary*
+monitor, and so do the panels (widgets) until you drag one onto another monitor
+([widgets.md](widgets.md#more-than-one-monitor)). bromigOS picks the primary in this
+order:
 
 1. The surface's own setting: `general.monitor` in the live layer's config, or `"monitor"`
    in the panels' layout.
@@ -399,7 +401,8 @@ The bar and the wallpaper go on every monitor. The live background and the panel
 4. The first monitor.
 
 The code is `lib/bromigos_monitors.py`. When the primary is unplugged, the background and
-the panels move to another monitor, and they move back when it returns. VECTOR's hologram
+the panels move to another monitor, and they move back when it returns. A panel on another
+monitor of its own moves to the primary while that monitor is unplugged. VECTOR's hologram
 follows the same rule, and `BROMIGOS_HOLO_MONITOR` overrides it.
 
 ### Setting monitors up

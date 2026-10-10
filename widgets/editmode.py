@@ -4,16 +4,18 @@ and a right-click on a panel start it.
 
 Why a mode, and not Alt+drag: Hyprland's own Alt+drag (or Super+drag) moves windows and
 catches the drag before a panel sees it, and a panel without keyboard focus never learns a
-modifier is held. So edit mode puts one surface over the panels' monitor:
+modifier is held. So edit mode puts a surface over every monitor:
 
   * the panels move up to the layer above windows, so nothing covers them, and keep
     updating;
-  * a transparent *canvas* on the overlay layer above them takes the pointer and the
-    keyboard: a frame and a title on each panel, a drag moves it, a corner resizes it
-    within its own limits, × hides it; snapping and guides come from arrange.py;
-  * a floating *tray*, the widget gallery: every panel, hidden ones too, with on/off
-    switches, Add to desktop (a free spot), search and categories; Undo, Redo, Reset,
-    Cancel and Done.
+  * a transparent *canvas* on each monitor's overlay layer, above them, takes the pointer:
+    a frame and a title on each panel, a drag moves it, a corner resizes it within its own
+    limits, × hides it; snapping and guides come from arrange.py. A drag works in the
+    desktop's layout, so a panel dragged over a monitor's edge goes onto that monitor;
+  * a floating *tray*, the widget gallery, on the canvas of the monitor in focus (which
+    takes the keyboard): every panel, hidden ones too, with on/off switches, Add to
+    desktop (a free spot), search and categories; the picked panel's monitor; Undo, Redo,
+    Reset, Cancel and Done.
 
 Esc or Done saves layout.json (arrange.write: one step, through a dotfiles symlink);
 Cancel puts everything back as it was when edit mode began. Keyboard: Tab picks the next
@@ -81,21 +83,87 @@ def _key_of(name):
             "notes": "Super+F", "shortcuts": "Super+K"}.get(name)
 
 
+class Canvas:
+    """Edit mode's surface on one monitor: the overlay over its usable area, the panels on
+    it drawn framed. The main one, on the monitor in focus, holds the tray and the keyboard."""
+
+    def __init__(self, ed, conn, main):
+        self.ed, self.conn, self.main = ed, conn, main
+        win = Gtk.Window()
+        win.get_style_context().add_class("bromigos")
+        win.set_app_paintable(True)
+        vis = win.get_screen().get_rgba_visual()
+        if vis:
+            win.set_visual(vis)
+        GtkLayerShell.init_for_window(win)
+        GtkLayerShell.set_namespace(win, "bromigos-widgets-edit")
+        GtkLayerShell.set_layer(win, GtkLayerShell.Layer.OVERLAY)
+        mon = ed.app.gdk(conn)
+        if mon is not None:
+            GtkLayerShell.set_monitor(win, mon)
+        for e in (GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.BOTTOM, GtkLayerShell.Edge.LEFT,
+                  GtkLayerShell.Edge.RIGHT):
+            GtkLayerShell.set_anchor(win, e, True)
+        GtkLayerShell.set_exclusive_zone(win, 0)          # under the bar: the panels' own area
+        GtkLayerShell.set_keyboard_mode(win, GtkLayerShell.KeyboardMode.EXCLUSIVE if main
+                                        else GtkLayerShell.KeyboardMode.NONE)
+        self.win = win
+        overlay = Gtk.Overlay()
+        area = Gtk.DrawingArea()
+        area.set_can_focus(True)
+        area.set_has_tooltip(True)
+        area.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK
+                        | Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK)
+        area.connect("draw", ed.on_draw, self)
+        area.connect("button-press-event", ed.on_press, self)
+        area.connect("button-release-event", ed.on_release, self)
+        area.connect("motion-notify-event", ed.on_motion, self)
+        area.connect("query-tooltip", ed.on_tip, self)
+        self.area = area
+        overlay.add(area)
+        if main:
+            area.connect("size-allocate", lambda *_: ed.place_tray())
+            ed.tray = ed.build_tray()
+            overlay.add_overlay(ed.tray)
+            win.connect("key-press-event", ed.on_key)
+        win.add(overlay)
+        win.connect("delete-event", lambda *_: (ed.canvas_closed(self), True)[1])
+        win.show_all()
+        if main:
+            ed.confirm.hide()
+            area.grab_focus()
+
+    def origin(self):
+        """The top left of this monitor's usable area, in the desktop's layout."""
+        m = self.ed.app.monitor(self.conn)
+        return A.usable(m)[:2] if m else (0, 0)
+
+    def size(self):
+        a = self.area.get_allocation()
+        if a.width > 1 and a.height > 1:
+            return a.width, a.height
+        return self.ed.app.area(self.conn)
+
+    def redraw(self):
+        self.area.queue_draw()
+
+
 class Editor:
     def __init__(self, app, select=None):
         self.app = app
         self.start = app.state()                  # Cancel goes back to this
-        self.start_monitor = (app.monitor_setting, app.monitor_name)
+        self.start_fell = {n: (w.fell, w.home) for n, w in app.windows.items()}
         self.history = A.History()
         self.drag = None
         self.tray_drag = None
-        self.guides = []
+        self.guides, self.guide_on = [], None     # the snap guides, and the monitor they're on
         self.hover = None                         # (name, part)
         self.query, self.category = "", None
         self.tray_pos = None                      # (x, y) once the tray is dragged
         self.cards = {}
         self.closed = False
         self.asked = {}                           # each panel's available(), asked once per opening
+        self.canvases = {}
         vis = self.visible_names()
         self.sel = select if select in vis else (vis[0] if vis else None)
         self.css = Gtk.CssProvider()
@@ -111,20 +179,23 @@ class Editor:
         GLib.timeout_add(150, self.rescue)
 
     def rescue(self):
-        """A shown panel that's off the screen (a layout from a bigger monitor) comes onto
-        it, in a free spot, so it can be reached; Cancel puts it back."""
-        W, H = self.size()
-        lost = [n for n in self.visible_names() if not self.reachable(self.app.windows[n].rect(), W, H)]
-        done = []
-        for n in lost:
-            win = self.app.windows[n]
-            taken = [r for k, r in self.rects().items() if k not in lost or k in done]
-            done.append(n)
-            win.place(*A.place(*win.size_now(), taken, (W, H), self.app.avoid((W, H)), self.tray_rects()))
+        """A shown panel that's off its monitor (a layout from a bigger one) comes onto it,
+        in a free spot, so it can be reached; Cancel puts it back."""
+        lost = []
+        for conn in self.canvases:
+            W, H = self.size(conn)
+            here = [n for n in self.visible_names(conn) if not self.reachable(self.app.windows[n].rect(), W, H)]
+            done = []
+            for n in here:
+                win = self.app.windows[n]
+                taken = [r for k, r in self.rects(conn).items() if k not in here or k in done]
+                done.append(n)
+                win.place(*A.place(*win.size_now(), taken, (W, H), self.app.avoid((W, H)), self.tray_rects(conn)))
+            lost += here
         if lost:
             self.status.set_text(f"Brought onto the screen: {', '.join(self.title(n) for n in lost)}. "
                                  "Done keeps them there; Cancel puts them back.")
-            self.area.queue_draw()
+            self.redraw()
         return False
 
     @staticmethod
@@ -132,66 +203,73 @@ class Editor:
         x, y, w, h = rect
         return x + w >= grip and y + h >= grip and x <= W - grip and y <= H - grip
 
-    def tray_rects(self):
+    def tray_rects(self, conn=None):
+        if conn is not None and conn != self.main.conn:
+            return []
         t = self.tray.get_allocation()
         return [(t.x, t.y, t.width, t.height)] if self.tray.get_visible() and t.width > 1 else []
 
-    # ------------------------------------------------------------------ the surface
+    # ------------------------------------------------------------------ the surfaces
     def build(self):
-        win = Gtk.Window()
-        win.get_style_context().add_class("bromigos")
-        win.set_app_paintable(True)
-        vis = win.get_screen().get_rgba_visual()
-        if vis:
-            win.set_visual(vis)
-        GtkLayerShell.init_for_window(win)
-        GtkLayerShell.set_namespace(win, "bromigos-widgets-edit")
-        GtkLayerShell.set_layer(win, GtkLayerShell.Layer.OVERLAY)
-        GtkLayerShell.set_monitor(win, self.app.mon)
-        for e in (GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.BOTTOM, GtkLayerShell.Edge.LEFT,
-                  GtkLayerShell.Edge.RIGHT):
-            GtkLayerShell.set_anchor(win, e, True)
-        GtkLayerShell.set_exclusive_zone(win, 0)          # under the bar: the panels' own area
-        GtkLayerShell.set_keyboard_mode(win, GtkLayerShell.KeyboardMode.EXCLUSIVE)
-        self.win = win
-        overlay = Gtk.Overlay()
-        area = Gtk.DrawingArea()
-        area.set_can_focus(True)
-        area.set_has_tooltip(True)
-        area.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK
-                        | Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK)
-        area.connect("draw", self.on_draw)
-        area.connect("button-press-event", self.on_press)
-        area.connect("button-release-event", self.on_release)
-        area.connect("motion-notify-event", self.on_motion)
-        area.connect("query-tooltip", self.on_tip)
-        area.connect("size-allocate", lambda *_: self.place_tray())
-        self.area = area
-        overlay.add(area)
-        self.tray = self.build_tray()
-        overlay.add_overlay(self.tray)
-        win.add(overlay)
-        win.connect("key-press-event", self.on_key)
-        win.connect("delete-event", lambda *_: (self.done(), True)[1])
-        win.show_all()
-        self.confirm.hide()
-        area.grab_focus()
+        """A canvas on each monitor; the tray and the keyboard on the one in focus."""
+        names = [m["name"] for m in self.app.mons] or [self.app.primary]
+        focused = next((m["name"] for m in self.app.mons if m.get("focused")), None)
+        home = focused if focused in names else (self.app.primary if self.app.primary in names else names[0])
+        self.canvases = {}
+        self.main = Canvas(self, home, True)
+        self.canvases[home] = self.main
+        for n in names:
+            if n != home:
+                self.canvases[n] = Canvas(self, n, False)
+        self.area, self.win = self.main.area, self.main.win
 
-    def size(self):
-        a = self.area.get_allocation()
-        if a.width > 1 and a.height > 1:
-            return a.width, a.height
-        return self.app.area()
+    def canvas_closed(self, _canvas):
+        """A canvas's monitor went away (or the compositor closed it): the canvases again,
+        one on each monitor there is now (the tray on the one in focus)."""
+        def again():
+            if not self.closed:
+                self.app.reattach()
+                self.monitors_changed(force=True)
+            return False
+        GLib.timeout_add(300, again)
+
+    def monitors_changed(self, force=False):
+        """The monitors changed (a hotplug) or a panel moved to another: a canvas for each
+        monitor there is now, the panels kept inside their areas."""
+        if self.closed:
+            return
+        have = set(self.canvases)
+        want = {m["name"] for m in self.app.mons}
+        if force or have != want:
+            for c in self.canvases.values():
+                c.win.destroy()
+            self.build()
+            self.fill_monitors()
+            GLib.idle_add(self.fit_area)
+        self.redraw()
+
+    def redraw(self):
+        for c in self.canvases.values():
+            c.redraw()
+
+    def size(self, conn=None):
+        c = self.canvases.get(conn) if conn else getattr(self, "main", None)
+        return c.size() if c else self.app.area(conn)
+
+    def canvas_of(self, name):
+        w = self.app.windows.get(name)
+        return self.canvases.get(w.monitor) if w else None
 
     # ------------------------------------------------------------------ panels
-    def visible_names(self):
-        return [n for n, w in self.app.windows.items() if w.visible()]
+    def visible_names(self, conn=None):
+        return [n for n, w in self.app.windows.items() if w.visible() and (conn is None or w.monitor == conn)]
 
-    def rects(self):
-        return {n: self.app.windows[n].rect() for n in self.visible_names()}
+    def rects(self, conn=None):
+        return {n: self.app.windows[n].rect() for n in self.visible_names(conn)}
 
     def others(self, name):
-        return [r for n, r in self.rects().items() if n != name]
+        conn = self.app.windows[name].monitor
+        return [r for n, r in self.rects(conn).items() if n != name]
 
     def limits(self, name):
         return self.app.windows[name].limits()
@@ -203,9 +281,9 @@ class Editor:
     def classes(self, name):
         return self.app.windows[name].classes()
 
-    def hit(self, x, y):
-        """(name, part) under the pointer: part is close, nw, ne, sw, se or body."""
-        names = self.visible_names()
+    def hit(self, x, y, canvas=None):
+        """(name, part) under the pointer on a canvas: part is close, nw, ne, sw, se or body."""
+        names = self.visible_names((canvas or self.main).conn)
         if self.sel in names:
             names.remove(self.sel)
             names.append(self.sel)            # the selected one is on top
@@ -222,8 +300,8 @@ class Editor:
         return None, None
 
     # ------------------------------------------------------------------ drawing
-    def on_draw(self, _w, cr):
-        W, H = self.size()
+    def on_draw(self, _w, cr, canvas):
+        W, H = canvas.size()
         hc = D.T.high_contrast()
         cr.set_operator(cairo.OPERATOR_SOURCE)
         r, g, b = D.rgb("void")
@@ -235,7 +313,7 @@ class Editor:
             for gy in range(0, H, 32):
                 cr.rectangle(gx, gy, 1.2, 1.2)
         cr.fill()
-        rects = self.rects()
+        rects = self.rects(canvas.conn)
         cr.set_operator(cairo.OPERATOR_CLEAR)            # each panel shows through, crisp
         for (x, y, w, h) in rects.values():
             cr.rectangle(x, y, w, h)
@@ -244,7 +322,7 @@ class Editor:
         order = [n for n in rects if n != self.sel] + ([self.sel] if self.sel in rects else [])
         for n in order:
             self.draw_frame(cr, n, rects[n], n == self.sel, hc)
-        if self.guides:
+        if self.guides and self.guide_on == canvas.conn:
             D.src(cr, "amber", 1.0)
             cr.set_line_width(2 if hc else 1)
             cr.set_dash([] if hc else [6, 4])
@@ -257,9 +335,12 @@ class Editor:
                     cr.line_to(hi + 12, pos + 0.5)
             cr.stroke()
             cr.set_dash([])
-        if not rects:
-            D.text(cr, W / 2, H / 2 - 10, "NO PANELS ON THE DESKTOP: SWITCH ONE ON IN THE TRAY", 14, "soft",
+        if not rects and canvas.main:
+            D.text(cr, W / 2, H / 2 - 10, "NO PANELS ON THIS MONITOR: SWITCH ONE ON IN THE TRAY", 14, "soft",
                    "semibold", align="center")
+        elif not rects:
+            D.text(cr, W / 2, H / 2 - 10, f"{canvas.conn}: DRAG A PANEL ONTO THIS MONITOR TO PUT IT HERE", 14,
+                   "soft", "semibold", align="center")
         return True
 
     def draw_frame(self, cr, name, rect, selected, hc):
@@ -310,11 +391,12 @@ class Editor:
         D.text(cr, x + HANDLE / 2 + 10, ty + 4, label, 11, "void" if selected else "soft", "semibold", 0.12)
 
     # ------------------------------------------------------------------ hints
-    def on_tip(self, _w, x, y, _kb, tooltip):
-        name, part = self.hit(x, y)
+    def on_tip(self, _w, x, y, _kb, tooltip, canvas):
+        name, part = self.hit(x, y, canvas)
         if not name:
-            tooltip.set_text("Edit mode: drag a panel to move it, or a corner to resize it. "
-                             "Esc saves and leaves; Cancel in the tray puts everything back.")
+            more = " Drag a panel over a monitor's edge to put it on that monitor." if len(self.canvases) > 1 else ""
+            tooltip.set_text("Edit mode: drag a panel to move it, or a corner to resize it." + more +
+                             " Esc saves and leaves; Cancel in the tray puts everything back.")
             return True
         t = self.title(name)
         (lw, lh), (hw, hh) = self.limits(name)
@@ -323,25 +405,28 @@ class Editor:
         tooltip.set_text({
             "close": f"Hide {t} (H). It stays in the tray: switch it on there to bring it back.",
             "body": f"{t}: drag to move it. It snaps to an 8 px grid and to the other panels' edges; "
-                    "hold Ctrl to place it freely. Arrow keys nudge it (Shift: 10 px).",
+                    "hold Ctrl to place it freely. Arrow keys nudge it (Shift: 10 px)."
+                    + (" Drag it over a monitor's edge to put it on that monitor." if len(self.canvases) > 1 else ""),
         }.get(part, (f"Drag to resize {t}. Its sizes: {sizes} px; between them it snaps to the nearest, "
                      "and each lays it out its own way." if len(cs) > 1 else
                      f"Drag to resize {t}: {lw}×{lh} to {hw}×{hh} px.") + " Ctrl+arrows resize it from the keyboard."))
         return True
 
-    def set_cursor(self, part):
+    def set_cursor(self, part, canvas=None):
         names = {"body": "move", "close": "pointer", "nw": "nw-resize", "se": "se-resize",
                  "ne": "ne-resize", "sw": "sw-resize", "grabbing": "grabbing"}
-        gw = self.area.get_window()
+        area = (canvas or self.main).area
+        gw = area.get_window()
         if gw:
-            gw.set_cursor(Gdk.Cursor.new_from_name(self.area.get_display(), names[part]) if part in names else None)
+            gw.set_cursor(Gdk.Cursor.new_from_name(area.get_display(), names[part]) if part in names else None)
 
     # ------------------------------------------------------------------ the pointer
-    def on_press(self, _w, ev):
-        self.area.grab_focus()
+    def on_press(self, _w, ev, canvas):
+        if canvas.main:
+            self.area.grab_focus()
         if ev.type != Gdk.EventType.BUTTON_PRESS:
             return True
-        name, part = self.hit(ev.x, ev.y)
+        name, part = self.hit(ev.x, ev.y, canvas)
         if ev.button != 1:
             if name:
                 self.select(name)
@@ -354,49 +439,67 @@ class Editor:
             self.hide(name)
             return True
         self.to_front(name)
-        self.drag = {"name": name, "part": part, "x0": ev.x, "y0": ev.y, "rect": self.app.windows[name].rect(),
-                     "before": self.app.state()}
-        self.set_cursor("grabbing" if part == "body" else part)
+        ox, oy = canvas.origin()
+        win = self.app.windows[name]
+        wx, wy = (self.canvases[win.monitor].origin() if win.monitor in self.canvases else (ox, oy))
+        # the drag in the desktop's layout: where the pointer and the panel's top left began
+        self.drag = {"name": name, "part": part, "g0": (ox + ev.x, oy + ev.y), "rect": win.rect(),
+                     "at": (wx + win.x, wy + win.y), "before": self.app.state()}
+        self.set_cursor("grabbing" if part == "body" else part, canvas)
         return True
 
-    def on_motion(self, _w, ev):
+    def on_motion(self, _w, ev, canvas):
         if not self.drag:
-            h = self.hit(ev.x, ev.y)
+            h = self.hit(ev.x, ev.y, canvas)
             if h != self.hover:
                 self.hover = h
-                self.set_cursor(h[1])
-                self.area.queue_draw()
+                self.set_cursor(h[1], canvas)
+                self.redraw()
             return True
         d = self.drag
         free = bool(ev.get_state() & Gdk.ModifierType.CONTROL_MASK)
         x, y, w, h = d["rect"]
-        dx, dy = ev.x - d["x0"], ev.y - d["y0"]
+        ox, oy = canvas.origin()
+        gx, gy = ox + ev.x, oy + ev.y                  # the pointer, in the desktop's layout
+        dx, dy = gx - d["g0"][0], gy - d["g0"][1]
         name = d["name"]
+        win = self.app.windows[name]
         if d["part"] == "body":
-            nx, ny, self.guides = A.snap_move((x + dx, y + dy, w, h), self.others(name), self.size(), snap=not free)
-            self.app.windows[name].place(nx, ny)
+            # over another monitor's edge: the panel goes onto that monitor
+            to = A.monitor_at(self.app.mons, gx, gy)
+            if to and to != win.monitor and to in self.canvases and self.app.move_panel(name, to):
+                self.redraw()
+            tx, ty = self.canvases[win.monitor].origin() if win.monitor in self.canvases else (0, 0)
+            lx, ly = d["at"][0] + dx - tx, d["at"][1] + dy - ty
+            nx, ny, self.guides = A.snap_move((lx, ly, w, h), self.others(name), self.size(win.monitor),
+                                              snap=not free)
+            self.guide_on = win.monitor
+            win.place(nx, ny)
         else:
             c = d["part"]
             px = (x if "w" in c else x + w) + dx
             py = (y if "n" in c else y + h) + dy
-            r, self.guides = A.snap_resize(d["rect"], c, px, py, self.others(name), self.size(), self.limits(name),
+            area = self.size(win.monitor)
+            r, self.guides = A.snap_resize(d["rect"], c, px, py, self.others(name), area, self.limits(name),
                                            snap=not free)
-            r, _cls = A.resize_in_classes(r, c, self.classes(name), self.size())
-            self.app.windows[name].place(r[0], r[1])
-            self.app.windows[name].resize(r[2], r[3])
-        self.area.queue_draw()
+            r, _cls = A.resize_in_classes(r, c, self.classes(name), area)
+            self.guide_on = win.monitor
+            win.place(r[0], r[1])
+            win.resize(r[2], r[3])
+        self.redraw()
         return True
 
-    def on_release(self, _w, ev):
+    def on_release(self, _w, ev, canvas):
         if self.drag:
             d, self.drag = self.drag, None
             if self.app.state() != d["before"]:
                 self.history.push(d["before"])
                 self.changed()
+                self.fill_monitors()
             self.guides = []
-            self.hover = self.hit(ev.x, ev.y)
-            self.set_cursor(self.hover[1])
-            self.area.queue_draw()
+            self.hover = self.hit(ev.x, ev.y, canvas)
+            self.set_cursor(self.hover[1], canvas)
+            self.redraw()
         return True
 
     # ------------------------------------------------------------------ the keyboard
@@ -459,7 +562,8 @@ class Editor:
         self.sel = name
         for n, c in self.cards.items():
             (c.get_style_context().add_class if n == name else c.get_style_context().remove_class)("selected")
-        self.area.queue_draw()
+        self.fill_monitors()
+        self.redraw()
 
     def to_front(self, name):
         """The picked panel over any it overlaps: mapped again, it's the top of its layer."""
@@ -474,7 +578,7 @@ class Editor:
 
     def nudge(self, name, dx, dy):
         x, y, w, h = self.app.windows[name].rect()
-        nx, ny, _ = A.snap_move((x + dx, y + dy, w, h), [], self.size(), snap=False)
+        nx, ny, _ = A.snap_move((x + dx, y + dy, w, h), [], self.size(self.app.windows[name].monitor), snap=False)
         if (nx, ny) != (x, y):
             self.record(key=f"nudge {name}")
             self.app.windows[name].place(nx, ny)
@@ -482,7 +586,7 @@ class Editor:
 
     def resize_by(self, name, dw, dh):
         x, y, w, h = self.app.windows[name].rect()
-        W, H = self.size()
+        W, H = self.size(self.app.windows[name].monitor)
         nw, nh = A.clamp_size(min(w + dw, W - x), min(h + dh, H - y), self.limits(name))
         nw, nh, _cls = A.fit_class(self.classes(name), nw, nh)
         if (nw, nh) != (w, h):
@@ -507,10 +611,12 @@ class Editor:
             win.set_size_class(G.meta_of(getattr(win, "panel", None), name)["default_size"]
                                if getattr(win, "panel", None) is not None else "standard")
         x, y, w, h = win.rect()
-        taken = [r for n, r in self.rects().items() if n != name]
-        if free or not A.fits((x, y, w, h), taken, self.size()):
-            tray = self.tray_rects()
-            spot = A.place(w, h, taken, self.size(), self.app.avoid(self.size()) + tray, tray)
+        conn = win.monitor
+        taken = [r for n, r in self.rects(conn).items() if n != name]
+        area = self.size(conn)
+        if free or not A.fits((x, y, w, h), taken, area):
+            tray = self.tray_rects(conn)
+            spot = A.place(w, h, taken, area, self.app.avoid(area) + tray, tray)
             win.place(*spot)
         self.app.set_visible(name, True)
         self.select(name)
@@ -537,13 +643,14 @@ class Editor:
         self.record()
         st = self.app.state()
         for n, s in default.items():
-            if n in st:
-                st[n].update(s)
+            if n in st:                           # bromigOS's place, on the primary monitor
+                st[n].update(s, output=self.app.primary, pin=None)
         self.app.apply_state(st)
         self.changed(rebuild=True)
+        self.fill_monitors()
 
     def changed(self, rebuild=False):
-        self.area.queue_draw()
+        self.redraw()
         self.undo_b.set_sensitive(self.history.can_undo())
         self.redo_b.set_sensitive(self.history.can_redo())
         if rebuild:                     # after the switch that asked has finished its signal
@@ -563,10 +670,10 @@ class Editor:
     def cancel(self):
         if self.closed:
             return
-        if (self.app.monitor_setting, self.app.monitor_name) != self.start_monitor:
-            self.app.monitor_setting = self.start_monitor[0]
-            self.app.move_to_monitor(self.start_monitor[1])
         self.app.apply_state(self.start)
+        for n, (fell, home) in self.start_fell.items():
+            if n in self.app.windows:
+                self.app.windows[n].fell, self.app.windows[n].home = fell, home
         self.close()
 
     def close(self):
@@ -574,7 +681,8 @@ class Editor:
         GLib.source_remove(self._thumbs)
         self.app.raise_panels(False)
         Gtk.StyleContext.remove_provider_for_screen(Gdk.Screen.get_default(), self.css)
-        self.win.destroy()
+        for c in self.canvases.values():
+            c.win.destroy()
         self.app.editor = None
         self.app.write_health()
         notes = self.app.windows.get("notes")
@@ -589,27 +697,40 @@ class Editor:
 
     def restyle(self):
         self.css.load_from_data(tray_css())
-        self.area.queue_draw()
+        self.redraw()
         self.tick_thumbs()
 
-    def monitor_moved(self):
-        """The panels went to another output: the canvas goes with them."""
-        tray_pos = self.tray_pos
-        self.win.destroy()
-        self.build()
-        self.tray_pos = tray_pos
-        GLib.idle_add(self.fit_area)
-
     def fit_area(self):
-        """After a move to a smaller output: every panel back inside the area."""
-        W, H = self.size()
+        """After the monitors changed: every panel back inside its monitor's area."""
         for n in self.visible_names():
-            x, y, w, h = self.app.windows[n].rect()
+            win = self.app.windows[n]
+            W, H = self.size(win.monitor)
+            x, y, w, h = win.rect()
             nx, ny, _ = A.snap_move((x, y, w, h), [], (W, H), snap=False)
             if (nx, ny) != (x, y):
-                self.app.windows[n].place(nx, ny)
-        self.area.queue_draw()
+                win.place(nx, ny)
+        self.redraw()
         return False
+
+    def set_monitor(self, name, conn):
+        """The tray's Monitor list: the picked panel onto that monitor, where it was when
+        that's free there, else in a free spot."""
+        win = self.app.windows.get(name)
+        if not win or conn == win.monitor:
+            return
+        self.record()
+        if not self.app.move_panel(name, conn):
+            self.history.undos.pop()
+            self.status.set_text(f"{conn} isn't ready yet; try again in a moment.")
+            return
+        area = self.size(conn)
+        taken = [r for n, r in self.rects(conn).items() if n != name]
+        x, y, w, h = win.rect()
+        if not A.fits((x, y, w, h), taken, area):
+            tray = self.tray_rects(conn)
+            win.place(*A.place(w, h, taken, area, self.app.avoid(area) + tray, tray))
+        self.changed()
+        self.redraw()
 
     # ------------------------------------------------------------------ the tray (the widget gallery)
     def button(self, label, hint, cb, cls=None):
@@ -631,6 +752,7 @@ class Editor:
         return lb
 
     def build_tray(self):
+        self.query, self.category = "", None      # a new tray: its search empty, All picked
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         box.get_style_context().add_class("edit-tray")
         box.set_size_request(TRAY_W, -1)
@@ -684,20 +806,21 @@ class Editor:
             self.chips[cat] = t
             chips.add(t)
         self.body.pack_start(chips, False, False, 0)
+        self.monitor_combo = None
         mons = self.app.monitors()
         if len(mons) > 1:
             mb = Gtk.Box(spacing=6)
-            mb.pack_start(self.label("Monitor", "tray-sub"), False, False, 0)
+            ml = self.label("Monitor", "tray-sub")
+            ml.set_tooltip_text("The monitor the picked widget sits on")
+            mb.pack_start(ml, False, False, 0)
             combo = Gtk.ComboBoxText()
-            for m in mons:
-                combo.append(m, m)
-            combo.set_active_id(self.app.monitor_name)
-            combo.set_tooltip_text("The output the panels go on: they all move there now, and stay there "
-                                   "when you save")
-            combo.connect("changed", lambda c: c.get_active_id() and self.app.move_to_monitor(c.get_active_id(),
-                                                                                            chosen=True))
+            for conn, label in mons:
+                combo.append(conn, label)
+            combo.connect("changed", self.monitor_picked)
             mb.pack_start(combo, True, True, 0)
+            self.monitor_combo = combo
             self.body.pack_start(mb, False, False, 0)
+            self.fill_monitors()
         self.scroll = Gtk.ScrolledWindow()
         self.scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.scroll.set_propagate_natural_height(True)
@@ -744,6 +867,27 @@ class Editor:
         self.fill_cards()
         return box
 
+    def fill_monitors(self):
+        """The Monitor list shows the picked widget's monitor (none picked: greyed out)."""
+        combo = getattr(self, "monitor_combo", None)
+        if combo is None or self.closed:
+            return
+        win = self.app.windows.get(self.sel) if self.sel in self.visible_names() else None
+        self._filling = True
+        try:
+            combo.set_active_id(win.monitor if win else None)
+            combo.set_sensitive(win is not None)
+            combo.set_tooltip_text(f"The monitor {self.title(self.sel)} sits on: pick another to move it there. "
+                                   "Dragging it over a monitor's edge does the same." if win else
+                                   "Pick a widget on the desktop first, then choose its monitor here")
+        finally:
+            self._filling = False
+
+    def monitor_picked(self, combo):
+        if getattr(self, "_filling", False) or not combo.get_active_id() or not self.sel:
+            return
+        self.set_monitor(self.sel, combo.get_active_id())
+
     def place_tray(self):
         W, H = self.size()
         tw = max(TRAY_W, self.tray.get_allocated_width())
@@ -756,7 +900,6 @@ class Editor:
 
     def tray_press(self, _w, ev):
         if ev.button == 1:
-            W, H = self.size()
             self.tray_drag = (ev.x_root, ev.y_root, self.tray.get_margin_start(), self.tray.get_margin_top())
         return True
 
@@ -913,7 +1056,7 @@ class Editor:
         self.record()
         win.set_size_class(cls)
         x, y, w, h = win.rect()
-        W, H = self.size()
+        W, H = self.size(win.monitor)
         win.place(min(x, max(0, W - w)), min(y, max(0, H - h)))
         if not win.visible():
             self.app.set_visible(name, True)

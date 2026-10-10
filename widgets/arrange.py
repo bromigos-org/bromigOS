@@ -6,13 +6,17 @@ GTK, so it's tested on its own (widgets/tests/test_arrange.py).
     grid. They return the guides to draw: the lines it snapped to.
   * free_spot(): the first place a panel fits, clear of the others by 16 px.
   * History: undo and redo inside one edit session.
+  * Monitors: each panel's own monitor, found by its make, model and serial (else its
+    connector's name) with find_output(); where a panel shows while its monitor isn't
+    connected (fallback_spot) and what layout.json keeps for it then (kept_place).
   * read() and write(): layout.json. write() replaces the file in one step and, when
     ~/.config/bromigos/widgets/layout.json is a symlink (into a dotfiles repository, say),
-    writes through it, so the link stays a link.
+    writes through it, so the link stays a link. migrate() brings a layout from before
+    each panel had its own monitor up to date.
 
-A state is {name: {"x", "y", "width", "height", "visible"}}: where each panel is.
-Positions are px from the top left of the usable area (under the bar) of the panels'
-monitor, as in layout.json.
+A state is {name: {"x", "y", "width", "height", "visible"}}, and "output" when the panel
+has a monitor of its own: where each panel is. Positions are px from the top left of the
+usable area (under the bar) of the panel's monitor, as in layout.json.
 """
 import copy
 import json
@@ -25,6 +29,8 @@ SNAP = 8            # px: how close an edge must be to snap to another
 GAP = 16            # px: the gap between panels that snapping offers, and free_spot keeps
 MARGIN = (28, 16)   # the default layout's left and top margins: where free_spot starts
 KEYS = ("x", "y", "width", "height", "visible")
+VERSION = 2         # layout.json's: 2 gives each panel its own "output"
+ID_KEYS = ("make", "model", "serial")
 
 
 # ------------------------------------------------------------------ snapping
@@ -215,6 +221,89 @@ def fits(rect, taken, area, gap=0):
     return x >= 0 and y >= 0 and x + w <= W and y + h <= H and not any(overlaps(rect, t, gap) for t in taken)
 
 
+# ------------------------------------------------------------------ monitors
+def _live(monitors):
+    return [m for m in monitors or [] if isinstance(m, dict) and m.get("name") and not m.get("disabled")]
+
+
+def identity(m):
+    """A monitor as layout.json remembers it: its make, model and serial, which stay the
+    same on any port, and its connector's name ("DP-1"), the fallback."""
+    return {**{k: str(m.get(k) or "") for k in ID_KEYS}, "name": str(m.get("name") or "")}
+
+
+def find_output(monitors, want):
+    """The connector of the monitor `want` names, or None when it isn't connected. want is
+    a panel's "output" ({"make", "model", "serial", "name"}) or a connector's name. The
+    make, model and serial come first, so a monitor plugged into another port is still
+    found; of several alike (no serial), the one on the same connector, else the first.
+    Then the connector's name alone."""
+    mons = _live(monitors)
+    if isinstance(want, str):
+        want = {"name": want}
+    if not isinstance(want, dict) or not mons:
+        return None
+    key = tuple(str(want.get(k) or "") for k in ID_KEYS)
+    name = str(want.get("name") or "")
+    if any(key):
+        same = [m for m in mons if tuple(str(m.get(k) or "") for k in ID_KEYS) == key]
+        if same:
+            return next((m["name"] for m in same if m["name"] == name),
+                        min(same, key=lambda m: m.get("id", 0))["name"])
+    return name if name and any(m["name"] == name for m in mons) else None
+
+
+def bounds(m):
+    """A monitor's whole rect in the desktop's layout, in logical px: (x, y, w, h)."""
+    scale = float(m.get("scale") or 1) or 1
+    w, h = (m.get("width") or 0) / scale, (m.get("height") or 0) / scale
+    if (m.get("transform") or 0) % 2:
+        w, h = h, w
+    return int(m.get("x") or 0), int(m.get("y") or 0), int(w), int(h)
+
+
+def usable(m):
+    """A monitor's usable area (under the bar), where the panels' x and y start: (x, y) in
+    the desktop's layout and its (w, h), in logical px."""
+    x, y, w, h = bounds(m)
+    rl, rt, rr, rb = (list(m.get("reserved") or []) + [0, 0, 0, 0])[:4]
+    return int(x + rl), int(y + rt), int(w - rl - rr), int(h - rt - rb)
+
+
+def monitor_at(monitors, gx, gy):
+    """The connector of the monitor under (gx, gy) in the desktop's layout, or None."""
+    for m in _live(monitors):
+        x, y, w, h = bounds(m)
+        if x <= gx < x + w and y <= gy < y + h:
+            return m["name"]
+    return None
+
+
+def fallback_spot(rect, taken, area, avoid=()):
+    """Where a panel shows on the primary monitor while its own isn't connected: its own
+    place when that's inside the area and clear of the panels there, else a free spot."""
+    x, y, w, h = rect
+    if fits((x, y, w, h), taken, area):
+        return x, y
+    return place(w, h, taken, area, avoid)
+
+
+def kept_place(now, pin, fell=None, home=None, monitors=()):
+    """What layout.json keeps for a panel: (output, x, y). now = (connector, x, y), where
+    it shows; pin = its own monitor (its "output"), or None for one that goes on the
+    primary. fell = (connector, x, y) where it was shown on the primary because its own
+    monitor wasn't connected, and home its saved (x, y) then: untouched there, it keeps
+    its own monitor and place. Otherwise it keeps where it is, its monitor by make, model
+    and serial."""
+    if fell and home and tuple(now) == tuple(fell):
+        return pin, int(home[0]), int(home[1])
+    conn, x, y = now
+    if pin is None and not fell:
+        return None, int(x), int(y)
+    m = next((m for m in _live(monitors) if m["name"] == conn), None)
+    return (identity(m) if m else {"name": conn}), int(x), int(y)
+
+
 # ------------------------------------------------------------------ undo
 class History:
     """Undo and redo for one edit session: push(before) ahead of each change. Changes
@@ -306,38 +395,72 @@ def write(doc, path=None):
     return target
 
 
+def migrate(doc, monitors=()):
+    """A layout from before each panel had its own monitor (version 1: one "monitor" for
+    them all) as version 2: each panel without an "output" gets that monitor, by its make,
+    model and serial when it's connected (else by its connector's name), so the panels
+    stay where they were and follow that monitor to another port. "monitor" stays: where
+    the panels without a monitor of their own go. Returns (layout, whether any panel got
+    one); a layout that's version 2 already comes back as it is."""
+    if not isinstance(doc, dict) or not isinstance(doc.get("version", 1), int) or doc.get("version", 1) >= VERSION:
+        return doc, False
+    d = copy.deepcopy(doc)
+    d["version"] = VERSION
+    name = str(d.get("monitor") or "")
+    if not name:
+        return d, False
+    m = next((m for m in _live(monitors) if m["name"] == name), None)
+    out = identity(m) if m else {"name": name}
+    entries = [p for p in d.get("panels") or [] if isinstance(p, dict) and p.get("name")]
+    entries += [p for p in (d.get("plugins") or {}).values() if isinstance(p, dict)] \
+        if isinstance(d.get("plugins"), dict) else []
+    got = False
+    for p in entries:
+        if not p.get("output"):
+            p["output"] = dict(out)
+            got = True
+    return d, got
+
+
 def state_of(doc):
-    """{name: {x, y, width, height, visible}} as layout.json places them (its "plugins"
-    map over its "panels" entries); a key the layout doesn't give is left out."""
+    """{name: {x, y, width, height, visible, output}} as layout.json places them (its
+    "plugins" map over its "panels" entries); a key the layout doesn't give is left out."""
     out = {}
     for p in doc.get("panels") or []:
         if isinstance(p, dict) and p.get("name"):
-            out[p["name"]] = {k: p[k] for k in KEYS if k in p}
+            out[p["name"]] = {k: p[k] for k in KEYS + ("output",) if k in p}
     for name, p in (doc.get("plugins") or {}).items():
         if isinstance(p, dict):
-            out.setdefault(name, {}).update({k: p[k] for k in KEYS if k in p})
+            out.setdefault(name, {}).update({k: p[k] for k in KEYS + ("output",) if k in p})
     for s in out.values():
         s.setdefault("visible", True)
     return out
 
 
 def apply(doc, state, monitor=None):
-    """A copy of the layout with `state` written in: each panel's place, size and
-    visibility where layout.json keeps it (its "plugins" entry when it has one, else its
-    "panels" entry, else a new "panels" entry). Every other key stays as it was."""
+    """A copy of the layout with `state` written in: each panel's place, size, visibility
+    and monitor where layout.json keeps it (its "plugins" entry when it has one, else its
+    "panels" entry, else a new "panels" entry). An "output" of None takes the panel's own
+    monitor away (it goes on the primary). Every other key stays as it was."""
     d = copy.deepcopy(doc)
+    d["version"] = VERSION
     panels = d.setdefault("panels", [])
     plugins = d.get("plugins") if isinstance(d.get("plugins"), dict) else {}
     for name, s in state.items():
         vals = {k: (bool(s[k]) if k == "visible" else int(s[k])) for k in KEYS if k in s}
         if name in plugins and isinstance(plugins[name], dict):
-            plugins[name].update(vals)
-            continue
-        entry = next((p for p in panels if isinstance(p, dict) and p.get("name") == name), None)
-        if entry is None:
-            entry = {"name": name}
-            panels.append(entry)
+            entry = plugins[name]
+        else:
+            entry = next((p for p in panels if isinstance(p, dict) and p.get("name") == name), None)
+            if entry is None:
+                entry = {"name": name}
+                panels.append(entry)
         entry.update(vals)
+        if "output" in s:
+            if s["output"]:
+                entry["output"] = dict(s["output"]) if isinstance(s["output"], dict) else {"name": str(s["output"])}
+            else:
+                entry.pop("output", None)
     if monitor is not None:
         d["monitor"] = monitor
     return d

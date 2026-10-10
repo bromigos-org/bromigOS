@@ -14,10 +14,17 @@ The panels are one GTK3 process, written in Python with GtkLayerShell, Cairo, Pa
 psutil. Hyprland starts it at login, from the `hyprland.start` autostart in the default
 `hyprland.lua`.
 
-Each panel is its own layer-shell window on the *bottom* layer of the primary monitor.
-That puts it above the animated background and below every window. A 100 ms heartbeat
-drives the redraws. Redraws pause while windows cover the desktop on that monitor, but
-sampling carries on cheaply, so graphs still have history when you come back.
+Each panel is its own layer-shell window on the *bottom* layer of its monitor: the one
+its `output` in layout.json names (found by make, model and serial with
+`arrange.find_output()`), else the primary. That puts it above the animated background and
+below every window. A 100 ms heartbeat drives the redraws. Redraws pause while windows
+cover the desktop on a panel's monitor, but sampling carries on cheaply, so graphs still
+have history when you come back.
+
+On a hotplug (Hyprland's `monitoradded` and `monitorremoved` events, and GTK's), `App.fall_back()`
+puts each panel back on its monitor, or on the primary while its monitor is gone. A panel
+standing in on the primary remembers its own place (`fell` and `home`), and
+`arrange.kept_place()` saves that place rather than the stand-in one.
 
 The package installs:
 
@@ -136,13 +143,16 @@ with each plugin's status, errors and draw times.
 ## Edit mode
 
 Edit mode (`editmode.py`) moves every panel to the *top* layer, above windows, and puts
-one transparent surface, the canvas, on the *overlay* layer above them. The canvas covers
-the panels' monitor under the bar, so its coordinates are the layout's. It takes the
-pointer and the keyboard, draws the frames, handles and guides, and moves a panel by
-changing its layer-shell margins. The panels keep their 100 ms heartbeat, and keep
+a transparent surface, a canvas, on each monitor's *overlay* layer above them. A canvas
+covers its monitor under the bar, so its coordinates are the layout's for the panels on
+that monitor. The canvases take the pointer, and the one on the focused monitor holds the
+tray and the keyboard. They draw the frames, handles and guides, and move a panel by
+changing its layer-shell margins. A drag works in the desktop's layout (each canvas's
+origin plus the pointer), so when the pointer crosses onto another monitor the panel's
+window moves to that output (`App.move_panel()`). The panels keep their 100 ms heartbeat, and keep
 drawing even when windows would cover them. Leaving puts them back on the bottom layer.
 
-The tray is a GTK widget inside the canvas. Its cards draw each panel live, small, every
+The tray is a GTK widget inside the main canvas. Its cards draw each panel live, small, every
 2 seconds. Done calls `App.save_layout()`, which writes through `arrange.write()`. The
 health file carries `editing` and every panel's place and size (`panels`), which the
 end-to-end test reads.
@@ -150,8 +160,8 @@ end-to-end test reads.
 ## Tests
 
 `check()` in `packaging/bromigos-widgets/PKGBUILD` compiles every file, runs the unit
-tests in `tests/` (snapping, free space, undo, and `layout.json` written through a
-symlink), and checks the launcher entries with `tools/launcher/check.py`.
+tests in `tests/` (snapping, free space, undo, each panel's monitor and its migration,
+and `layout.json` written through a symlink), and checks the launcher entries with `tools/launcher/check.py`.
 `desktop/tests/e2e_widgets_nested.py` drives edit mode in a nested Hyprland, with a
-virtual keyboard and pointer. CI's `launcher.yml` runs the full
+virtual keyboard and pointer, on one output and then two. CI's `launcher.yml` runs the full
 launcher check.

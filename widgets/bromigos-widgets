@@ -4,8 +4,10 @@
 """Bromigos desktop widgets: SYSTEM, NETWORK, STORAGE, WORKBENCH, FIELD NOTES, SHORTCUTS (and LAB and the
 homelab's declared panels with bromigos-homelab: plugins).
 
-One GTK3 process, one layer-shell surface per panel on the BOTTOM layer of the
-monitor named in layout.json (above any background/live layer, below windows).
+One GTK3 process, one layer-shell surface per panel on the BOTTOM layer (above any
+background/live layer, below windows) of its own monitor: the one its layout.json entry's
+"output" names (by make, model and serial, else connector), else the primary. A panel
+whose monitor isn't connected shows on the primary, and goes back when it returns.
 
   bromigos-widgets                 run (Hyprland login autostart)
   bromigos-widgets toggle NAME     show/hide one panel (system|network|storage|lab|workbench|shortcuts|notes)
@@ -30,7 +32,7 @@ monitor named in layout.json (above any background/live layer, below windows).
 Plugins: plugins/<name>.py defines a Panel subclass; it is picked up, hot-reloaded and
 isolated by plugins.py (see its docstring). Health: $XDG_RUNTIME_DIR/bromigos-widgets-health.json.
 
-Redraws pause while the active workspace on that monitor has tiled or
+Redraws pause while the active workspace on a panel's monitor has tiled or
 fullscreen windows covering the desktop; sampling continues (cheaply) so the
 waterfall and scope have history when you come back.
 """
@@ -170,26 +172,31 @@ def hypr_request(cmd):
 
 
 class Coverage(threading.Thread):
-    """Listens to Hyprland's event socket and tracks whether the desktop on our
-    monitor is covered by tiled/fullscreen windows."""
+    """Listens to Hyprland's event socket and tracks which monitors' desktops are covered
+    by tiled/fullscreen windows (`on`: their names). A monitor coming or going calls
+    on_hotplug."""
 
-    def __init__(self, monitor, on_change):
+    def __init__(self, on_change, on_hotplug=None):
         super().__init__(daemon=True)
-        self.monitor = monitor
-        self.on_change = on_change
-        self.covered = False
+        self.on_change, self.on_hotplug = on_change, on_hotplug
+        self.on = set()
         self.check()
+
+    def covers(self, monitor):
+        return monitor in self.on
 
     def check(self):
         mons = hypr_request("j/monitors") or []
-        mon = next((m for m in mons if m["name"] == self.monitor), {})
-        shown = {mon.get("activeWorkspace", {}).get("id"), (mon.get("specialWorkspace") or {}).get("id") or None}
-        shown.discard(None)
         clients = hypr_request("j/clients") or []
-        cov = any(c["workspace"]["id"] in shown and (not c["floating"] or c.get("fullscreen"))
-                  and c.get("mapped", True) and not c.get("hidden") for c in clients)
-        if cov != self.covered:
-            self.covered = cov
+        cov = set()
+        for mon in mons:
+            shown = {(mon.get("activeWorkspace") or {}).get("id"), (mon.get("specialWorkspace") or {}).get("id") or None}
+            shown.discard(None)
+            if any(c["workspace"]["id"] in shown and (not c["floating"] or c.get("fullscreen"))
+                   and c.get("mapped", True) and not c.get("hidden") for c in clients):
+                cov.add(mon.get("name"))
+        if cov != self.on:
+            self.on = cov
             GLib.idle_add(self.on_change)
 
     def run(self):
@@ -199,22 +206,39 @@ class Coverage(threading.Thread):
         path = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "hypr", sig, ".socket2.sock")
         watch = (b"workspace", b"openwindow", b"closewindow", b"movewindow", b"changefloatingmode",
                  b"fullscreen", b"focusedmon", b"activespecial")
+        hotplug = (b"monitoradded", b"monitorremoved", b"monitoraddedv2", b"monitorremovedv2")
         while True:
             try:
                 with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
                     s.connect(path)
                     f = s.makefile("rb")
                     for line in f:
-                        if line.split(b">>")[0] in watch:
+                        ev = line.split(b">>")[0]
+                        if ev in watch or ev in hotplug:
                             self.check()
+                        if ev in hotplug and self.on_hotplug:
+                            GLib.idle_add(self.on_hotplug)
             except OSError:
                 time.sleep(5)
 
 
-def resolve_monitor(name):
-    """The output the panels go on: lib/bromigos_monitors.primary (the layout's "monitor"
+def monitors():
+    """Hyprland's monitors (`hyprctl monitors -j`), the disabled left out."""
+    return [m for m in (hypr_request("j/monitors") or []) if m.get("name") and not m.get("disabled")]
+
+
+def setup_primary():
+    try:
+        import bromigos_monitors
+        return bromigos_monitors.setup_primary()
+    except (ImportError, AttributeError):
+        return ""
+
+
+def resolve_monitor(name, mons=None):
+    """The panels' primary output: lib/bromigos_monitors.primary (the layout's "monitor"
     when that output is there, else setup's primary, the focused, the first)."""
-    mons = hypr_request("j/monitors") or []
+    mons = monitors() if mons is None else mons
     try:
         import bromigos_monitors
         return bromigos_monitors.primary(mons, name)
@@ -224,9 +248,10 @@ def resolve_monitor(name):
         return (min(mons, key=lambda m: m.get("id", 0)).get("name") if mons else None) or name
 
 
-def gdk_monitor(name):
-    """Map a Hyprland output name to the Gdk.Monitor with the same geometry."""
-    mons = hypr_request("j/monitors") or []
+def gdk_monitor(name, mons=None, strict=False):
+    """Map a Hyprland output name to the Gdk.Monitor with the same geometry. Not found:
+    None when strict (GTK hasn't heard of it yet: try again later), else GTK's primary."""
+    mons = monitors() if mons is None else mons
     m = next((m for m in mons if m["name"] == name), None)
     disp = Gdk.Display.get_default()
     if m:
@@ -234,6 +259,8 @@ def gdk_monitor(name):
             g = disp.get_monitor(i).get_geometry()
             if g.x == m["x"] and g.y == m["y"]:
                 return disp.get_monitor(i)
+    if strict:
+        return None
     return disp.get_primary_monitor() or disp.get_monitor(0)
 
 
@@ -279,8 +306,12 @@ def layer_window(monitor, x, y, w, h, keyboard=False):
 
 class Surface:
     """What edit mode needs of a panel's window: where it is, moving and sizing it, the
-    layer it's on."""
+    layer it's on. monitor: the output it shows on; pin: its own monitor (layout.json's
+    "output"), None for one that goes on the primary; fell: (output, x, y) while it shows
+    on the primary because its own monitor isn't connected, home: its saved (x, y) then."""
     x = y = 0
+    monitor = ""
+    pin = fell = home = None
 
     def rect(self):
         w, h = self.size_now()
@@ -563,20 +594,23 @@ class NotesWindow(Surface):
 # ------------------------------------------------------------------ app
 class App:
     def __init__(self):
+        self.mons = monitors()
         self.cfg = self.read_layout()
         self.monitor_setting = self.cfg.get("monitor", "")       # the layout's, as written
-        self.monitor_name = resolve_monitor(self.monitor_setting)
+        self.primary = resolve_monitor(self.monitor_setting, self.mons)
         self.css = Gtk.CssProvider()
         self.css.load_from_data(theme_css())
         self.theme_seen = D.T.version()
         Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), self.css,
                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        mon = gdk_monitor(self.monitor_name)
         self.editor = None
         self.windows = {}
+        self.lost = set()
         core = P.CORE
         for spec in self.cfg["panels"]:
             name = spec["name"]
+            conn = self.target(spec.get("output"))
+            mon = gdk_monitor(conn, self.mons)
             if name == "notes":
                 win = NotesWindow(self, mon, spec["x"], spec["y"], spec.get("width", 470), spec.get("height", 420))
             elif name not in core:
@@ -586,35 +620,141 @@ class App:
                 panel.width = spec.get("width", panel.width)
                 panel.height = spec.get("height", panel.height)
                 win = PanelWindow(self, panel, mon, spec["x"], spec["y"], name)
+            win.monitor, win.pin = conn, spec.get("output") or None
             self.windows[name] = win
             if spec.get("visible", True):
                 win.win.show_all()
-        self.mon = mon
         self.plugins = {}            # name -> (path, mtime)
         self.started = time.time()
+        self.coverage = Coverage(self.on_coverage, self.reattach_soon)
         self.scan_plugins()
+        self.fall_back()
         GLib.timeout_add_seconds(2, self.scan_plugins)
         GLib.timeout_add_seconds(2, self.write_health)
-        self.coverage = Coverage(self.monitor_name, self.on_coverage)
         self.coverage.start()
-        # Hotplug: when the output goes away (monitor powered off), gtk-layer-shell turns
-        # the compositor's 'closed' into a window close. Keep the windows, remember which
-        # were shown, and map them again on the output when it comes back.
-        self.lost = set()
+        # Hotplug: when an output goes away (monitor powered off, unplugged), gtk-layer-shell
+        # turns the compositor's 'closed' into a window close. Keep the windows, remember
+        # which were shown, and map them again: on the primary while their own monitor is
+        # gone, and back on it when it returns.
         for name, w in self.windows.items():
             w.win.connect("delete-event", self.on_surface_closed, name)
         disp = Gdk.Display.get_default()
         disp.connect("monitor-added", lambda *_: self.reattach_soon())
-        disp.connect("monitor-removed", lambda *_: self.lost.update(n for n, w in self.windows.items() if w.visible()))
+        disp.connect("monitor-removed", lambda *_: (self.lost.update(n for n, w in self.windows.items()
+                                                                      if w.visible()), self.reattach_soon()))
         GLib.timeout_add_seconds(30, self.check_surfaces)
         self.listen()
         GLib.timeout_add(int(os.environ.get("BROMIGOS_TICK_MS", "100")), self.loop)
 
+    # ------------------------------------------------------------------ monitors
+    @property
+    def monitor_name(self):
+        """The panels' primary output (the health file's "monitor")."""
+        return self.primary
+
+    def target(self, pin):
+        """The output a panel goes on: its own monitor when that's connected, else the
+        primary."""
+        return (A.find_output(self.mons, pin) if pin else None) or self.primary
+
+    def gdk(self, conn):
+        """The Gdk.Monitor of an output, or None while GTK hasn't heard of it."""
+        return gdk_monitor(conn, self.mons, strict=True)
+
+    def monitor(self, name):
+        """Hyprland's entry for an output, or None."""
+        return next((m for m in self.mons if m["name"] == name), None)
+
+    def on(self, conn):
+        """The panels' windows on an output."""
+        return {n: w for n, w in self.windows.items() if w.monitor == conn}
+
+    def shown(self, name):
+        w = self.windows.get(name)
+        return bool(w and (w.visible() or name in self.lost))
+
+    def put(self, w, conn, x=None, y=None):
+        """A panel's window onto another output (mapped again there when it was shown).
+        False when GTK doesn't know that output yet."""
+        mon = gdk_monitor(conn, self.mons, strict=True)
+        if mon is None:
+            return False
+        shown = self.shown(w.name)
+        if x is not None:
+            w.place(x, y)
+        if conn != w.monitor or w.name in self.lost:
+            w.win.hide()
+            GtkLayerShell.set_monitor(w.win, mon)
+            w.monitor = conn
+            if shown:
+                w.win.show_all()
+                w.redraw()
+        self.lost.discard(w.name)
+        return True
+
+    def pick_primary(self):
+        """The primary again, after a hotplug: another when it went away, or the one the
+        layout or `bromigos setup monitors` asks for when that came back. Returns whether it
+        changed."""
+        best = resolve_monitor(self.monitor_setting, self.mons)
+        here = self.monitor(self.primary) is not None
+        if best and best != self.primary and (not here or best in (self.monitor_setting, setup_primary())):
+            print(f"bromigos-widgets: primary {self.primary} -> {best}", file=sys.stderr, flush=True)
+            self.primary = best
+            return True
+        return False
+
+    def fall_back(self):
+        """Each panel onto its own monitor when that's connected, else onto the primary:
+        at its own place when that's free there, else in a free spot; its saved place is
+        kept (arrange.kept_place) for when its monitor comes back. Returns the names moved."""
+        moved = set()
+        for n, w in self.windows.items():
+            own = A.find_output(self.mons, w.pin) if w.pin else None
+            if w.fell and (w.monitor, w.x, w.y) != tuple(w.fell):
+                # moved by hand while on the primary: it lives there now
+                w.pin, w.fell, w.home = self.identity(w.monitor), None, None
+                own = w.monitor
+            if own:
+                if w.fell:                        # its monitor is back: its own place again
+                    hx, hy = w.home
+                    if self.put(w, own, hx, hy):
+                        w.fell = w.home = None
+                        moved.add(n)
+                elif own != w.monitor and self.put(w, own):
+                    moved.add(n)
+                continue
+            if w.pin and not w.fell:              # its monitor just went
+                area = self.area(self.primary)
+                taken = [x.rect() for k, x in self.on(self.primary).items() if k != n and self.shown(k)]
+                spot = A.fallback_spot(w.rect(), taken, area, self.avoid(area))
+                home = (w.x, w.y)
+                if self.put(w, self.primary, *spot):
+                    w.fell, w.home = (self.primary, w.x, w.y), home
+                    moved.add(n)
+            elif w.monitor != self.primary:       # the primary changed
+                x, y, ww, hh = w.rect()
+                W, H = self.area(self.primary)
+                if self.put(w, self.primary, min(x, max(0, W - ww)), min(y, max(0, H - hh))):
+                    if w.fell:
+                        w.fell = (self.primary, w.x, w.y)
+                    moved.add(n)
+        if moved:
+            print(f"bromigos-widgets: placed {', '.join(sorted(moved))} by their monitors", file=sys.stderr, flush=True)
+            if self.editor:
+                self.editor.monitors_changed()
+        return moved
+
+    def identity(self, conn):
+        m = self.monitor(conn)
+        return A.identity(m) if m else {"name": conn}
+
     # ------------------------------------------------------------------ plugins
     PLACES = os.path.expanduser("~/.local/state/bromigos/widgets-plugin-places.json")
 
-    def _place(self, name, spec):
-        """Position for a plugin: layout.json "plugins" > its LAYOUT > a remembered spot > free space."""
+    def _place(self, name, spec, conn):
+        """Position for a plugin: layout.json "plugins" > its LAYOUT > a remembered spot > free space
+        (on `conn`, the output it goes on)."""
         import plugins as PL
         if "x" in spec and "y" in spec:
             return spec["x"], spec["y"]
@@ -624,14 +764,12 @@ class App:
         except (OSError, ValueError):
             places = {}
         w, h = spec.get("width", 470), spec.get("height", 200)
-        taken = [(p["x"], p["y"], p.get("width", 470), p.get("height", 420)) for p in self.cfg["panels"]]
+        taken = [(p["x"], p["y"], p.get("width", 470), p.get("height", 420)) for p in self.cfg["panels"]
+                 if self.target(p.get("output")) == conn and "x" in p and "y" in p]
         for n, win in self.windows.items():
-            if n in self.plugins and n != name and hasattr(win, "pos"):
+            if n in self.plugins and n != name and hasattr(win, "pos") and win.monitor == conn:
                 taken.append((*win.pos, win.panel.width, win.panel.height))
-        mons = hypr_request("j/monitors") or []
-        m = next((x for x in mons if x["name"] == self.monitor_name), {"width": 2560, "height": 1440, "reserved": [0, 34, 0, 0]})
-        rl, rt, rr, rb = (m.get("reserved") or [0, 0, 0, 0])[:4]
-        W, H = m["width"] - rl - rr, m["height"] - rt - rb
+        W, H = self.area(conn)
         avoid = self.avoid((W, H))
         old = places.get(name)
         if old and PL.free_spot(w, h, taken, (W, H), avoid) is not None:
@@ -655,6 +793,7 @@ class App:
     def scan_plugins(self):
         """(Re)load new or changed plugins, close removed ones; never raises."""
         import plugins as PL
+        loaded = False
         try:
             found = PL.files()
             for name in list(self.plugins):
@@ -682,10 +821,12 @@ class App:
                     panel.height = int(spec.get("height", panel.height))
                     spec.setdefault("width", panel.width)
                     spec.setdefault("height", panel.height)
-                    x, y = self._place(name, spec)
+                    conn = self.target(spec.get("output"))
+                    x, y = self._place(name, spec, conn)
                     safe = PL.SafePanel(name, panel, path)
-                    win = PanelWindow(self, safe, self.mon, x, y, name)
+                    win = PanelWindow(self, safe, gdk_monitor(conn, self.mons), x, y, name)
                     win.pos = (x, y)
+                    win.monitor, win.pin = conn, spec.get("output") or None
                     if self.editor:
                         win.set_layer(True)
                     win.win.connect("delete-event", self.on_surface_closed, name)
@@ -693,6 +834,7 @@ class App:
                     if spec.get("visible", True):
                         win.win.show_all()
                     PL.log(name, f"loaded at {x},{y} ({panel.width}x{panel.height})")
+                    loaded = True
                     if self.editor:
                         self.editor.changed(rebuild=True)
                 except Exception:
@@ -702,6 +844,8 @@ class App:
                     self.load_errors[name] = traceback.format_exc().strip().splitlines()[-1][:200]
                 else:
                     getattr(self, "load_errors", {}).pop(name, None)
+            if loaded and hasattr(self, "coverage"):   # one whose monitor isn't connected: on the primary
+                self.fall_back()
             for name in list(self.plugins):           # a switched-off plugin hides
                 w = self.windows.get(name)
                 if w and getattr(w.panel, "disabled", None) and w.visible():
@@ -720,8 +864,9 @@ class App:
                 elif name in getattr(self, "load_errors", {}):
                     plug[name] = {"status": "load_failed", "last_error": self.load_errors[name]}
             d = {"t": time.time(), "pid": os.getpid(), "uptime_s": round(time.time() - self.started),
-                 "covered": self.coverage.covered, "editing": self.editor is not None, "plugins": plug,
-                 "monitor": self.monitor_name, "panels": self.state()}
+                 "covered": self.coverage.covers(self.primary), "covered_outputs": sorted(self.coverage.on),
+                 "editing": self.editor is not None, "plugins": plug,
+                 "monitor": self.primary, "outputs": [m["name"] for m in self.mons], "panels": self.state()}
             import plugins as PL
             tmp = PL.HEALTH + ".tmp"
             with open(tmp, "w") as f:
@@ -740,88 +885,101 @@ class App:
         return True                       # keep the window; it is mapped again later
 
     def reattach_soon(self):
+        GLib.idle_add(lambda: (self.reattach(), False)[1])
         for d in (1500, 4000, 9000):
             GLib.timeout_add(d, lambda: (self.reattach(), False)[1])
         GLib.timeout_add(12000, lambda: (self.check_surfaces(), False)[1])
         return False
 
-    def _monitor_present(self):
-        return any(m.get("name") == self.monitor_name for m in (hypr_request("j/monitors") or []))
-
-    def repick(self):
-        """Hotplug: the panels' output went away and another is there, or the one the
-        layout asks for came back: move to it (lib/bromigos_monitors decides)."""
-        best = resolve_monitor(self.monitor_setting)
-        if best and best != self.monitor_name and (not self._monitor_present() or best == self.monitor_setting):
-            print(f"bromigos-widgets: output {self.monitor_name} -> {best}", file=sys.stderr, flush=True)
-            self.monitor_name = best
-            self.coverage.monitor = best
-            return True
-        return False
-
     def reattach(self, names=None):
-        if self.repick():
-            names = {n for n, w in self.windows.items() if w.visible()} | self.lost
-        names = set(names or self.lost)
-        if not names or not self._monitor_present():
+        """After a hotplug: every panel by its monitor (fall_back), and the shown panels
+        whose surfaces closed mapped again."""
+        self.mons = monitors()
+        if not self.mons:
             return False
-        mon = gdk_monitor(self.monitor_name)
+        self.pick_primary()
+        self.fall_back()
+        names = set(names or ()) | self.lost
+        again = set()
         for n in names:
             w = self.windows.get(n)
-            if not w:
+            if not w or self.monitor(w.monitor) is None:
+                continue
+            mon = gdk_monitor(w.monitor, self.mons, strict=True)
+            if mon is None:
                 continue
             w.win.hide()
-            if mon:
-                GtkLayerShell.set_monitor(w.win, mon)
+            GtkLayerShell.set_monitor(w.win, mon)
             w.win.show_all()
             w.redraw()
-        print(f"bromigos-widgets: re-attached {', '.join(sorted(names))}", file=sys.stderr, flush=True)
-        self.lost -= names
+            again.add(n)
+        if again:
+            print(f"bromigos-widgets: re-attached {', '.join(sorted(again))}", file=sys.stderr, flush=True)
+        self.lost -= again
+        if self.editor:
+            self.editor.monitors_changed()
         return False
 
     def check_surfaces(self):
-        """Backstop every 30 s: every shown panel must have a surface on the monitor."""
-        if not self._monitor_present():
-            if self.repick():
-                self.reattach({n for n, w in self.windows.items() if w.visible()} | self.lost)
+        """Backstop every 30 s: every shown panel must have a surface on its monitor."""
+        self.mons = monitors()
+        if not self.mons:
             return True
         data = hypr_request("j/layers") or {}
-        levels = (data.get(self.monitor_name) or {}).get("levels", {})
-        have = sum(1 for lv in levels.values() for L in lv if L.get("namespace") == "bromigos-widgets")
-        shown = [n for n, w in self.windows.items() if w.visible()]
-        if have < len(shown) or self.lost:
-            print(f"bromigos-widgets: {have} surfaces for {len(shown)} shown panels; re-attaching",
+        short = False
+        for m in self.mons:
+            levels = (data.get(m["name"]) or {}).get("levels", {})
+            have = sum(1 for lv in levels.values() for L in lv if L.get("namespace") == "bromigos-widgets")
+            shown = [n for n, w in self.on(m["name"]).items() if w.visible()]
+            short = short or have < len(shown)
+        strays = any(self.monitor(w.monitor) is None for w in self.windows.values())
+        if short or strays or self.lost:
+            print("bromigos-widgets: a shown panel has no surface on its monitor; re-attaching",
                   file=sys.stderr, flush=True)
-            self.reattach(set(shown) | self.lost)
+            self.reattach({n for n, w in self.windows.items() if w.visible()} if short else None)
         return True
 
     def read_layout(self):
+        """layout.json (the user's, else bromigOS's). One from before each panel had its own
+        monitor is brought up to date (arrange.migrate) and, when it's the user's, written
+        back at once (through a symlink, in one step), while that monitor is connected to
+        say its make, model and serial."""
         with open(LAYOUT) as f:
-            return json.load(f)
+            doc = json.load(f)
+        new, got = A.migrate(doc, self.mons)
+        if got and os.path.realpath(LAYOUT) == os.path.realpath(A.user_path()):
+            try:
+                A.write(new)
+                print("bromigos-widgets: layout.json: each panel's monitor written in", file=sys.stderr, flush=True)
+            except OSError as e:
+                print(f"bromigos-widgets: layout.json not migrated: {e}", file=sys.stderr, flush=True)
+        return new
 
     def wake(self, panel):
         GLib.idle_add(self.redraw_panel, panel)
 
+    def drawn(self, w):
+        """Whether a panel's window is worth drawing now: shown, and its monitor's desktop
+        not covered (edit mode: always)."""
+        return w.visible() and (self.editor is not None or not self.coverage.covers(w.monitor))
+
     def redraw_panel(self, panel):
         import plugins as PL
         for w in self.windows.values():
-            if PL.same_panel(getattr(w, "panel", None), panel) and w.visible() and \
-                    (self.editor or not self.coverage.covered):
+            if PL.same_panel(getattr(w, "panel", None), panel) and self.drawn(w):
                 w.redraw()
         return False
 
     def on_coverage(self):
-        if not self.coverage.covered:
-            for w in self.windows.values():
-                if w.visible():
-                    w.redraw()
+        for w in self.windows.values():
+            if self.drawn(w):
+                w.redraw()
         return False
 
     def loop(self):
         """100 ms heartbeat: sample each panel on its own interval; redraw at
         10 fps only while a panel runs a short animation (the Lab's sync pulse)."""
         now = time.monotonic()
-        show = self.editor is not None or not self.coverage.covered    # edit mode: above the windows
         if D.T.version() != self.theme_seen:   # `bromigos theme set`: new colours, redraw
             self.theme_seen = D.T.version()
             self.css.load_from_data(theme_css())
@@ -837,9 +995,9 @@ class App:
             if now - w.last_tick >= p.interval - 0.01:
                 p.tick()
                 w.last_tick = now
-                if show and w.visible():
+                if self.drawn(w):
                     w.redraw()
-            elif p.animating and show and w.visible():
+            elif p.animating and self.drawn(w):
                 w.redraw()
         return True
 
@@ -879,7 +1037,7 @@ class App:
         elif msg[0] == "add" and len(msg) > 1 and msg[1] in self.windows:
             self.add(msg[1])
         elif msg[0] == "stats":
-            print(f"covered={self.coverage.covered} " + " ".join(
+            print(f"covered={sorted(self.coverage.on)} " + " ".join(
                 f"{n}:draws={getattr(w, 'draws', 0)},visible={w.visible()}" for n, w in self.windows.items()),
                 file=sys.stderr, flush=True)
         elif msg[0] == "reload":
@@ -902,8 +1060,10 @@ class App:
         self.write_health()
 
     def state(self):
-        """{name: {x, y, width, height, visible}} of every panel, as it is now."""
-        return {n: dict(w.rect_state(), visible=bool(w.visible())) for n, w in self.windows.items()}
+        """{name: {x, y, width, height, visible, output, pin}} of every panel, as it is now:
+        output, the monitor it shows on; pin, its own monitor (None: the primary's)."""
+        return {n: dict(w.rect_state(), visible=self.shown(n), output=w.monitor, pin=w.pin)
+                for n, w in self.windows.items()}
 
     def apply_state(self, state):
         for n, s in state.items():
@@ -912,6 +1072,10 @@ class App:
                 continue
             if (s.get("width"), s.get("height")) != w.size_now() and s.get("width") and s.get("height"):
                 w.resize(s["width"], s["height"])
+            if "pin" in s:
+                w.pin = s["pin"]
+            if s.get("output") and s["output"] != w.monitor and self.monitor(s["output"]):
+                self.put(w, s["output"])
             if "x" in s and "y" in s:
                 w.place(s["x"], s["y"])
             self.set_visible(n, s.get("visible", True))
@@ -932,19 +1096,14 @@ class App:
         for w in self.windows.values():
             w.set_layer(top)
 
-    def area(self):
-        """The usable area of the panels' monitor (logical px, under the bar)."""
-        mons = hypr_request("j/monitors") or []
-        m = next((x for x in mons if x["name"] == self.monitor_name), None)
+    def area(self, conn=None):
+        """The usable area of an output (logical px, under the bar); the primary's by default."""
+        m = self.monitor(conn or self.primary)
         if not m:
-            g = self.mon.get_geometry() if self.mon else None
+            mon = gdk_monitor(conn or self.primary, self.mons)
+            g = mon.get_geometry() if mon else None
             return (g.width, g.height - 34) if g else (2560, 1406)
-        scale = float(m.get("scale") or 1) or 1
-        W, H = m["width"] / scale, m["height"] / scale
-        if m.get("transform", 0) % 2:
-            W, H = H, W
-        rl, rt, rr, rb = (m.get("reserved") or [0, 0, 0, 0])[:4]
-        return int(W - rl - rr), int(H - rt - rb)
+        return A.usable(m)[2:]
 
     @staticmethod
     def avoid(area):
@@ -954,37 +1113,52 @@ class App:
         return [(W - 24 - 1180, H - 24 - 640, 1180, 640), (W - 440, 0, 440, 320)]
 
     def monitors(self):
-        return [m["name"] for m in (hypr_request("j/monitors") or []) if m.get("name")]
+        """The outputs there are: [(name, a label for it)]."""
+        out = []
+        for m in self.mons:
+            what = " ".join(v for v in (m.get("make"), m.get("model")) if v)
+            out.append((m["name"], f"{m['name']} · {what}" if what else m["name"]))
+        return out
 
-    def move_to_monitor(self, name, chosen=False):
-        """Every panel to another output (edit mode's monitor list; Cancel, back)."""
-        if name == self.monitor_name and not chosen:
-            return
-        if chosen:
-            self.monitor_setting = name
-        self.monitor_name = name
-        self.coverage.monitor = name
-        self.mon = gdk_monitor(name)
-        for w in self.windows.values():
-            shown = w.visible()
-            w.win.hide()
-            GtkLayerShell.set_monitor(w.win, self.mon)
-            if shown:
-                w.win.show_all()
+    def move_panel(self, name, conn):
+        """A panel onto another output by the user's hand (edit mode): it's that monitor's
+        now, by make, model and serial. Returns whether it moved."""
+        w = self.windows.get(name)
+        if not w or conn == w.monitor or self.monitor(conn) is None:
+            return False
+        if not self.put(w, conn):
+            return False
+        w.pin, w.fell, w.home = self.identity(conn), None, None
         if self.editor:
-            self.editor.monitor_moved()
+            w.set_layer(True)
+        return True
+
+    def layout_state(self, names):
+        """What layout.json keeps for these panels: place, size, on or off, and each one's
+        own monitor (arrange.kept_place: a panel standing in on the primary keeps its own)."""
+        out = {}
+        for n in names:
+            w = self.windows[n]
+            pin, x, y = A.kept_place((w.monitor, w.x, w.y), w.pin, w.fell, w.home, self.mons)
+            out[n] = dict(w.rect_state(), x=x, y=y, visible=self.shown(n), output=pin)
+        return out
 
     def save_layout(self, before=None):
         """layout.json with every panel as it is now (edit mode's Done): the user's file,
         first copied from bromigOS's; through a symlink, kept a symlink (arrange.write)."""
         doc, _path, _mine = A.read()
+        doc = A.migrate(doc, self.mons)[0]
         now = self.state()
         known = A.state_of(doc)
         # the panels the layout already lists, and any plugin moved or switched this time
-        keep = {n: s for n, s in now.items() if n in known or n in G.core_classes() or n == "notes"
-                or (before or {}).get(n) != s}
-        doc = A.apply(doc, keep, monitor=self.monitor_setting)
+        keep = [n for n, s in now.items() if n in known or n in G.core_classes() or n == "notes"
+                or (before or {}).get(n) != s]
+        doc = A.apply(doc, self.layout_state(keep))
         A.write(doc)
+        for n in keep:                            # what's saved is where they are
+            w = self.windows[n]
+            if not w.fell:
+                w.pin = G.layout_entry(doc, n).get("output") or None
         self.cfg = doc
         return doc
 
@@ -996,8 +1170,8 @@ class App:
             return
         if not w.visible():                    # its default size class, as the gallery's Add does
             w.set_size_class(G.meta_of(getattr(w, "panel", None), name)["default_size"])
-        area = self.area()
-        taken = [x.rect() for n, x in self.windows.items() if n != name and x.visible()]
+        area = self.area(w.monitor)
+        taken = [x.rect() for n, x in self.on(w.monitor).items() if n != name and x.visible()]
         w.place(*A.place(*w.size_now(), taken, area, self.avoid(area)))
         self.set_visible(name, True)
         self.save_layout()

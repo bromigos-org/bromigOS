@@ -192,12 +192,14 @@ class WidgetsPage:
                             hint="Opens the layout file in your editor (bromigos-widgets reload after)",
                             buttons=[("Open", lambda: self._open(d), "Opens layout.json in your editor")],
                             advanced={"file": d["user_file"], "runs": "bromigos panels move|size NAME …"}))
-        rows.append(ctx.entry_row(g, "Monitor (empty: the primary display)", d["monitor"], key="monitor",
+        rows.append(ctx.entry_row(g, "Monitor for every panel (empty: the primary display)", d["monitor"],
+                                  key="monitor",
                                   on_apply=lambda v: self._change(["monitor", v.strip()],
                                                                   f"Panels on {v.strip() or 'the primary'}",
                                                                   ["monitor", d["monitor"]]),
-                                  hint="The output the panels go on, e.g. DP-1; empty: the primary display "
-                                       "(Settings › Displays)",
+                                  hint="Puts every panel on one output, e.g. DP-1, forgetting the monitor each "
+                                       "one was dragged to; empty: the primary display (Settings › Displays). "
+                                       "To put one panel on another monitor, drag it there in edit mode",
                                   advanced={"file": d["user_file"], "key": "monitor",
                                             "runs": "bromigos panels monitor NAME"}))
         state = "running: a change shows at once" if d["running"] else "not running: a change shows at their next start"

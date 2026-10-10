@@ -1,5 +1,6 @@
 {
-  "_comment": "bromigOS's default panel layout (/usr/share/bromigos/widgets/layout.json). Copy it to ~/.config/bromigos/widgets/layout.json to change it: positions in px from the top-left of the usable area (below the bar) on `monitor`, then `bromigos-widgets reload`. visible=false starts a panel hidden (toggle it with its keybind). Plugin panels (docs/plugins.md) find free space unless placed here.",
+  "_comment": "bromigOS's default panel layout (/usr/share/bromigos/widgets/layout.json). Copy it to ~/.config/bromigos/widgets/layout.json to change it: positions in px from the top-left of the usable area (below the bar) of the panel's monitor, then `bromigos-widgets reload`. A panel's `output` is its own monitor ({make, model, serial, name}; edit mode writes it when you drag a panel onto another monitor); without one it goes on `monitor`, and \"\" there means the primary. visible=false starts a panel hidden (toggle it with its keybind). Plugin panels (docs/plugins.md) find free space unless placed here.",
+  "version": 2,
   "monitor": "",
   "panels": [
     { "name": "system",      "x": 28,  "y": 16,  "width": 470, "height": 470 },

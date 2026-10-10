@@ -1,7 +1,8 @@
 # Panels
 
 Panels are the readouts on your desktop. They sit under your windows, on the left side of
-your [primary monitor](glossary.md#primary-monitor), and show live readings: how busy your
+your [primary monitor](glossary.md#primary-monitor) until you move them, and show live
+readings: how busy your
 machine is, your network, your disks, your projects and your notes. Every reading is real.
 Hover over any part of a panel to see what it is.
 
@@ -79,7 +80,7 @@ Edit mode lets you move, resize and choose panels right on your desktop.
 2. The panels come up above your windows, each with a frame. A tray with every panel
    opens on the right.
 3. Drag a panel to move it. It snaps into line with the others. Hold <kbd>Ctrl</kbd> to
-   place it freely.
+   place it freely. To put it on another monitor, drag it over that monitor's edge.
 4. Drag a corner to make it bigger or smaller.
 5. Click a panel's × to hide it. To bring one back, flip its switch in the tray, or click
    **Add to desktop** to put it in a free spot.
@@ -92,6 +93,13 @@ Each panel's card in the tray has buttons for its sizes, such as **Compact** and
 
 <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes a change. **Reset…** in the tray puts every panel
 back where bromigOS first had it.
+
+### More than one monitor
+
+Each panel can go on any monitor. Drag it across, or pick it and choose a monitor in the
+tray's **Monitor** list. A panel knows its monitor even when you plug it into another
+port. When you unplug a monitor, its panels move to your primary monitor for the time
+being. They go back to their places when you plug it in again.
 
 You can do it all from the keyboard. <kbd>Tab</kbd> picks the next panel, the arrow keys
 move it (with <kbd>Shift</kbd>, 10 pixels at a time), <kbd>Ctrl</kbd> and an arrow
@@ -115,8 +123,8 @@ To install a widget someone shared as a link, click **Install from URL…** in S
 Widgets and paste the link. Settings shows what the widget reads and what it can do before
 anything is installed, and installs it only when you click **Install**.
 
-Settings › Widgets also shows a small picture of where the panels sit, and chooses which
-monitor they use.
+Settings › Widgets also shows a small picture of where the panels sit. Its **Monitor for
+every panel** puts them all on one monitor.
 
 You can also choose and place panels from a terminal:
 

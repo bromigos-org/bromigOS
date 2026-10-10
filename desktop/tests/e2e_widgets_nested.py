@@ -18,7 +18,13 @@ lives in a dotfiles repository. A virtual keyboard (vkbd.py) and a virtual point
   - adding a hidden panel finds it a free spot;
   - Esc saves layout.json through the symlink (still a link), `bromigos panels` shows it;
     Cancel puts everything back and writes nothing; a right-click on a panel starts it;
-  - the panels keep drawing while edit mode is on.
+  - the panels keep drawing while edit mode is on;
+  - a second monitor: a second nested output (WAYLAND-2, made with `hyprctl output create
+    wayland`, right of the first). Edit mode puts a canvas on each; a drag over the edge
+    puts SYSTEM on the second, saved as its own monitor; unplugged (`hyprctl output
+    remove`), SYSTEM shows on the first and layout.json keeps it where it was; plugged in
+    again, it goes back. A layout from before each panel had its own monitor is migrated
+    when the panels start, written through the symlink.
 
 With --shots DIR it saves pictures of edit mode (grim, inside the nested session) in two
 themes (set with `bromigos theme set --no-reload` in the sandbox) and with high contrast.
@@ -54,7 +60,8 @@ class WidgetsNest(Nest):
         with open(self.lua) as f:
             conf = f.read()
         conf = conf.replace("bromigos = {\n", 'bromigos = {\n    monitors = { { output = "WAYLAND-1", mode = "2560x1440@60", '
-                            'position = "0x0", scale = 1 } },\n', 1)
+                            'position = "0x0", scale = 1 }, { output = "WAYLAND-2", mode = "1920x1080@60", '
+                            'position = "2560x0", scale = 1 } },\n', 1)
         with open(self.lua, "w") as f:
             f.write(conf)
         self.original = conf
@@ -110,6 +117,15 @@ class WidgetsNest(Nest):
             for lv, ls in mon.get("levels", {}).items():
                 out.setdefault(lv, []).extend((x.get("namespace"), x["x"], x["y"], x["w"], x["h"]) for x in ls)
         return out
+
+    def layers_on(self, monitor, namespace):
+        """[(x, y, w, h)] of a namespace's layers on one output."""
+        try:
+            doc = json.loads(self.ctl("layers", "-j") or "{}")
+        except ValueError:
+            return []
+        return [(x["x"], x["y"], x["w"], x["h"]) for lv in (doc.get(monitor) or {}).get("levels", {}).values()
+                for x in lv if x.get("namespace") == namespace]
 
     def layer_rects(self, namespace, level=None):
         return [tuple(x[1:]) for lv, ls in self.layers().items() if level is None or lv == level
@@ -237,7 +253,8 @@ def scenarios(n, r):
     r.check("layout.json is still a symlink into the dotfiles", os.path.islink(n.link))
     saved = n.saved()
     r.check("…and holds the layout as it was left",
-            all(saved[k] == {**final[k]} for k in final if k in saved), (saved, final))
+            all({key: saved[k].get(key) for key in A.KEYS} == {key: final[k][key] for key in A.KEYS}
+                for k in final if k in saved), (saved, final))
     st = subprocess.run(["bromigos-panels", "--json"], env=n.env, capture_output=True, text=True, timeout=30)
     doc = json.loads(st.stdout or "{}")
     sysp = next((x for x in doc.get("panels", []) if x["name"] == "system"), {})
@@ -270,6 +287,102 @@ def scenarios(n, r):
     editing(n, False)
     errs = open(os.path.join(n.home, "widgets.err")).read() if os.path.exists(os.path.join(n.home, "widgets.err")) else ""
     r.check("the panels logged no traceback", "Traceback" not in errs, errs[-1500:])
+
+
+def monitors_phase(n, r):
+    """A second monitor: canvases on both, a drag over the edge, unplugged and back, and an
+    old layout migrated."""
+    n.widgets("edit", "done")
+    editing(n, False)
+    n.ctl("output", "create", "wayland", "WAYLAND-2")
+    up = wait_for(lambda: "WAYLAND-2" in (n.health().get("outputs") or []), 12)
+    if not r.check("a second output, WAYLAND-2, and the panels see it", up, (n.ctl("monitors"), n.health())):
+        return
+    r.check("…the panels stay on the first",
+            settle(n, lambda p: all(s.get("output") == "WAYLAND-1" for s in p.values())), n.panels())
+    mons = {m["name"]: m for m in json.loads(n.ctl("monitors", "-j"))}
+    second = mons["WAYLAND-2"]
+    box = (max(m["x"] + m["width"] for m in mons.values()), max(m["y"] + m["height"] for m in mons.values()))
+    ptr = vptr.VirtualPointer(os.path.join(n.run, "wayland-1"), *box)      # the whole layout
+    n.widgets("edit", "on")
+    r.check("edit mode: a canvas on each monitor",
+            wait_for(lambda: n.layers_on("WAYLAND-1", "bromigos-widgets-edit")
+                     and n.layers_on("WAYLAND-2", "bromigos-widgets-edit"), 8), n.layers())
+    time.sleep(1.0)
+    x, y, w, h = rect(n, "system")
+    grab = (x + 150, y + 200)
+    to = (second["x"] + 400, second["y"] + 300)
+    ptr.drag(grab, to)
+    lx, ly = x + to[0] - grab[0] - second["x"], y + to[1] - grab[1] - second["y"]
+    want = A.snap_move((lx, ly, w, h), [], (second["width"], second["height"]))[:2]
+    r.check("a drag over the edge puts SYSTEM on WAYLAND-2, where the pointer took it",
+            settle(n, lambda p: p["system"].get("output") == "WAYLAND-2"
+                   and (p["system"]["x"], p["system"]["y"]) == want), (n.panels().get("system"), want))
+    r.check("…and Hyprland shows it there",
+            wait_for(lambda: any((rx - second["x"] if rx >= second["x"] else rx, ry, rw, rh) == (*want, w, h)
+                                 for rx, ry, rw, rh in n.layers_on("WAYLAND-2", "bromigos-widgets")), 5),
+            n.layers_on("WAYLAND-2", "bromigos-widgets"))
+    n.shot("edit-two-monitors")
+    n.kb.tap("ESCAPE")
+    editing(n, False)
+    entry = next(p for p in json.load(open(n.link))["panels"] if p["name"] == "system")
+    r.check("Esc saves SYSTEM's own monitor and its place there, through the symlink",
+            os.path.islink(n.link) and (entry.get("output") or {}).get("name") == "WAYLAND-2"
+            and (entry["x"], entry["y"]) == want, entry)
+    with open(n.link) as f:
+        text = f.read()
+
+    # -- unplugged: SYSTEM stands in on the first; the layout keeps it where it was
+    n.ctl("output", "remove", "WAYLAND-2")
+    r.check("unplugged: SYSTEM falls back to WAYLAND-1",
+            settle(n, lambda p: p["system"].get("output") == "WAYLAND-1" and p["system"]["visible"], 15),
+            n.panels().get("system"))
+    s = n.panels().get("system") or {}
+    r.check("…shown there, clear of the panels on it",
+            wait_for(lambda: (s.get("x"), s.get("y"), w, h) in n.layers_on("WAYLAND-1", "bromigos-widgets"), 5)
+            and all(not A.overlaps((s["x"], s["y"], w, h), (o["x"], o["y"], o["width"], o["height"]))
+                    for k, o in n.panels().items() if k != "system" and o["visible"]),
+            (s, n.layers_on("WAYLAND-1", "bromigos-widgets")))
+    n.widgets("edit", "on")
+    editing(n)
+    n.kb.tap("ESCAPE")                                            # saving while it stands in
+    editing(n, False)
+    with open(n.link) as f:
+        r.check("…and layout.json still has it on WAYLAND-2, where it was, after a save", f.read() == text)
+
+    # -- plugged in again: back where it was
+    n.ctl("output", "create", "wayland", "WAYLAND-2")
+    r.check("plugged in again: SYSTEM goes back to WAYLAND-2, at its place",
+            settle(n, lambda p: p["system"].get("output") == "WAYLAND-2"
+                   and (p["system"]["x"], p["system"]["y"]) == want, 15), n.panels().get("system"))
+    r.check("…on Hyprland's second output",
+            wait_for(lambda: len(n.layers_on("WAYLAND-2", "bromigos-widgets")) == 1, 8),
+            n.layers_on("WAYLAND-2", "bromigos-widgets"))
+
+    # -- a layout from before: one "monitor" for every panel
+    old = {k: v for k, v in json.loads(text).items() if k != "version"}
+    old["monitor"] = "WAYLAND-2"
+    for p in old["panels"]:
+        p.pop("output", None)
+    with open(os.path.realpath(n.link), "w") as f:
+        json.dump(old, f)
+    n.widgets("reload")
+    time.sleep(2)
+    migrated = wait_for(lambda: json.load(open(n.link)).get("version") == 2, 10)
+    doc = json.load(open(n.link))
+    r.check("an old layout is migrated when the panels start: each panel's monitor written in",
+            migrated and all((p.get("output") or {}).get("name") == "WAYLAND-2" for p in doc["panels"]), doc)
+    r.check("…through the symlink", os.path.islink(n.link))
+    r.check("…and the panels go on it", settle(n, lambda p: p and all(s.get("output") == "WAYLAND-2"
+                                                                       for s in p.values()), 10), n.panels())
+    # back as it was: one monitor, the layout as saved before
+    with open(os.path.realpath(n.link), "w") as f:
+        f.write(text)
+    n.ctl("output", "remove", "WAYLAND-2")
+    n.widgets("reload")
+    settle(n, lambda p: p and all(s.get("output") == "WAYLAND-1" for s in p.values()), 15)
+    errs = open(os.path.join(n.home, "widgets.err")).read() if os.path.exists(os.path.join(n.home, "widgets.err")) else ""
+    r.check("two monitors: the panels logged no traceback", "Traceback" not in errs, errs[-1500:])
 
 
 TIDE = """from panels import Panel
@@ -432,6 +545,7 @@ def main():
     try:
         n.start()
         scenarios(n, r)
+        monitors_phase(n, r)
         settings_phase(n, r)
         customize_phase(n, r)
         if shots_dir:

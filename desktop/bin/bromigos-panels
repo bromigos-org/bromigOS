@@ -28,7 +28,8 @@ reload`). The weather's place is ~/.config/bromigos/weather.toml. Settings › W
   bromigos panels size NAME W H      its size in px (edit mode keeps it to the panel's size classes)
   bromigos panels size NAME CLASS    one of its size classes (compact, standard, wide, tall, large),
                                      at that class's starting size (`gallery` lists each panel's)
-  bromigos panels monitor NAME|""    the output they go on ("": the primary)
+  bromigos panels monitor NAME|""    every panel onto one output ("": the primary), each one's own
+                                     monitor forgotten (edit mode puts one panel on another monitor)
   bromigos panels weather place PLACE | coords LAT LON | units metric|imperial | name TEXT | clear
   bromigos panels reset              bromigOS's layout and no weather.toml (a layout.json that's a
                                      symlink stays one: bromigOS's layout is written through it)
@@ -78,7 +79,8 @@ def weather_file():
 
 
 def load():
-    """(layout, its path, whether it's yours)."""
+    """(layout, its path, whether it's yours). A layout from before each panel had its own
+    monitor comes up to date (arrange.migrate); a change writes it so."""
     for path, mine in ((user_layout(), True), (default_layout(), False)):
         if os.path.isfile(path):
             try:
@@ -88,8 +90,22 @@ def load():
                 raise Fail(f"{path}: {e}")
             if not isinstance(d, dict) or not isinstance(d.get("panels"), list):
                 raise Fail(f"{path}: no \"panels\" list")
+            try:
+                import arrange as A
+                d = A.migrate(d, _monitors() if d.get("version", 1) < A.VERSION and d.get("monitor") else ())[0]
+            except (ImportError, TypeError):
+                pass
             return d, path, mine
     return {"monitor": "", "panels": []}, None, False
+
+
+def _monitors():
+    """Hyprland's monitors, when it answers."""
+    rc, out, _ = C.run(["hyprctl", "monitors", "-j"], timeout=3) if C.have("hyprctl") else (1, "", "")
+    try:
+        return json.loads(out) if rc == 0 else []
+    except ValueError:
+        return []
 
 
 def running():
@@ -117,9 +133,12 @@ def status(_args=None):
         if not isinstance(p, dict) or not p.get("name"):
             continue
         title, what, key = ABOUT.get(p["name"], (p["name"].replace("-", " ").title(), "", None))
+        out = p.get("output") if isinstance(p.get("output"), dict) else {}
         panels.append({"name": p["name"], "title": title, "what": what, "key": key,
                        "visible": bool(p.get("visible", True)),
-                       "x": p.get("x"), "y": p.get("y"), "width": p.get("width"), "height": p.get("height")})
+                       "x": p.get("x"), "y": p.get("y"), "width": p.get("width"), "height": p.get("height"),
+                       "output": out.get("name") or "",
+                       "output_model": " ".join(v for v in (out.get("make"), out.get("model")) if v)})
     w = weather()
     wp = next((p for p in d["panels"] if isinstance(p, dict) and p.get("name") == "weather"), {})
     if not w["exists"] and (wp.get("place") or wp.get("lat") is not None):
@@ -236,10 +255,14 @@ def size_class(args):
 
 
 def monitor(args):
+    """Every panel onto one output: the layout's "monitor", each panel's own forgotten."""
     if len(args) != 1 or not re.fullmatch(r"[\w.\-]{0,40}", args[0]):
         raise Fail('bromigos panels monitor NAME|""')
     d, _, _ = load()
     d["monitor"] = args[0]
+    for p in list(d["panels"]) + list((d.get("plugins") or {}).values() if isinstance(d.get("plugins"), dict) else []):
+        if isinstance(p, dict):
+            p.pop("output", None)
     return _save(d, f"Panels on {args[0] or 'the primary output'}")
 
 
@@ -310,11 +333,7 @@ def edit(_args):
 
 def _area():
     """The panels' usable area, from Hyprland when it answers (else a 1080p screen's)."""
-    rc, out, _ = C.run(["hyprctl", "monitors", "-j"], timeout=3) if C.have("hyprctl") else (1, "", "")
-    try:
-        mons = json.loads(out) if rc == 0 else []
-    except ValueError:
-        mons = []
+    mons = _monitors()
     d = _layout_or_empty()
     m = next((m for m in mons if m.get("name") == d.get("monitor")), None) or (mons[0] if mons else None)
     if not m:

@@ -53,6 +53,39 @@ class PanelsTest(CmdTest):
         self.assertEqual(d["monitor"], "DP-1")
         self.cmd("panels", "monitor", "DP-1; rm", ok=False)
 
+    def _mine(self, doc):
+        os.makedirs(self.path(".config", "bromigos", "widgets"), exist_ok=True)
+        with open(self.path(".config", "bromigos", "widgets", "layout.json"), "w") as f:
+            json.dump(doc, f)
+
+    def test_monitor_puts_every_panel_on_one_forgetting_their_own(self):
+        own = {"make": "Dell Inc.", "model": "DELL P2419H", "serial": "7NK8JR2", "name": "HDMI-A-1"}
+        self._mine({"version": 2, "monitor": "", "panels": [{"name": "system", "x": 1, "y": 1, "output": own},
+                                                             {"name": "notes", "x": 2, "y": 2}],
+                    "plugins": {"lab": {"x": 3, "y": 3, "output": own}}})
+        d = self.cmd("panels")
+        self.assertEqual((self.panel(d, "system")["output"], self.panel(d, "system")["output_model"]),
+                         ("HDMI-A-1", "Dell Inc. DELL P2419H"))
+        self.assertEqual(self.panel(d, "notes")["output"], "")
+        d = self.cmd("panels", "monitor", "DP-1")
+        self.assertEqual((d["monitor"], self.panel(d, "system")["output"]), ("DP-1", ""))
+        with open(self.path(".config", "bromigos", "widgets", "layout.json")) as f:
+            mine = json.load(f)
+        self.assertNotIn("output", mine["panels"][0])
+        self.assertNotIn("output", mine["plugins"]["lab"])
+
+    def test_an_old_layout_gets_each_panels_monitor_on_a_change(self):
+        # one "monitor" for every panel (before version 2): each panel gets it, by make,
+        # model and serial (the hyprctl stand-in's HDMI-A-1)
+        self._mine({"monitor": "HDMI-A-1", "panels": [{"name": "system", "x": 1, "y": 1},
+                                                      {"name": "notes", "x": 2, "y": 2}]})
+        self.cmd("panels", "move", "notes", "40", "60", env={"HYPRLAND_INSTANCE_SIGNATURE": "test"})
+        with open(self.path(".config", "bromigos", "widgets", "layout.json")) as f:
+            mine = json.load(f)
+        self.assertEqual(mine["version"], 2)
+        self.assertEqual(mine["panels"][0]["output"]["serial"], "7NK8JR2")
+        self.assertEqual(mine["panels"][1]["output"]["name"], "HDMI-A-1")
+
     def test_weather(self):
         d = self.cmd("panels", "weather", "place", "San", "Diego")
         self.assertEqual(d["weather"]["place"], "San Diego")

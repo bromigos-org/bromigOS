@@ -1,9 +1,9 @@
 # Panels (widgets)
 
 The panels, which most people call widgets, are small dashboards on the desktop. They sit
-above the animated background and below your windows, on the primary monitor. Each shows
-real readings only, and every part you can hover over explains what it is and what a
-click does.
+above the animated background and below your windows. They start on the primary monitor,
+and you can drag each one onto any monitor. Each shows real readings only, and every part
+you can hover over explains what it is and what a click does.
 
 This page covers what each panel shows and how to configure it. The manual's
 [Panels](../manual/src/panels.md) page is the user's guide. The code is described in
@@ -82,11 +82,13 @@ these:
 - run `bromigos panels edit`.
 
 The panels come up above your windows and keep updating. A frame and a name mark each
-one, and the widget gallery opens beside them in a tray you can drag aside.
+one, on every monitor, and the widget gallery opens beside them in a tray you can drag
+aside. The tray opens on the monitor you're using.
 
 | To | Do this |
 |---|---|
 | Move a panel | Drag it. It snaps to an 8 px grid and to the other panels' edges, and a guide line shows what it lined up with. Hold Ctrl to place it freely. |
+| Put a panel on another monitor | Drag it over the monitor's edge, or pick it and choose the monitor in the tray's **Monitor** list. |
 | Resize a panel | Drag a corner. Each panel has its own smallest and largest size. |
 | Hide a panel | Click its ×, or pick it and press H. |
 | Show a hidden panel | Flip its switch in the tray. It goes back where it was, or to a free spot if that's taken. **Add to desktop** always finds it a free spot. |
@@ -107,8 +109,25 @@ catches the drag before a panel sees it. A panel also never learns that a key is
 while it doesn't have the keyboard. Edit mode takes the pointer and the keyboard for as
 long as it's on, so a plain drag works.
 
-The panels go on one monitor. The tray's **Monitor** list, shown when there's more than
-one, moves them all to another. A panel can't sit on a different monitor from the rest.
+### More than one monitor
+
+Each panel can sit on any monitor. Drag it over a monitor's edge and it goes onto that
+monitor. The tray's **Monitor** list, shown when there's more than one, does the same for
+the picked panel.
+
+A panel remembers its monitor by the monitor's make, model and serial number, so it finds
+the monitor again on another port. When a monitor doesn't report those, the panel goes by
+the port's name, such as `DP-1`.
+
+When you unplug a monitor, its panels move to the primary monitor. Each goes to its own
+place there if that's free, and to a free spot if not. Its place on the unplugged monitor
+is kept, even if you save in edit mode meanwhile, and it goes back when you plug the
+monitor in again. If you move it by hand while it's on the primary, it stays where you put
+it.
+
+A panel you never put on another monitor goes on the primary monitor
+([desktop.md](desktop.md#what-goes-on-which-monitor)). `bromigos panels monitor <name>`
+puts every panel on one monitor and forgets each one's own.
 
 ## The widget gallery
 
@@ -338,7 +357,21 @@ cp /usr/share/bromigos/widgets/layout.json ~/.config/bromigos/widgets/
 
 Your file replaces the default whole. Each panel's entry has `x`, `y`, `width`, `height`
 and `visible`, plus that panel's own keys. Positions are in pixels from the top left of
-the area under the bar. After you edit it, run `bromigos-widgets reload`.
+the area under the bar, on the panel's monitor. After you edit it, run `bromigos-widgets
+reload`.
+
+A panel on a monitor of its own has an `output` key. Edit mode writes it:
+
+```json
+{ "name": "system", "x": 28, "y": 16, "width": 470, "height": 470,
+  "output": { "make": "Dell Inc.", "model": "DELL U2723QE", "serial": "1A2B3C", "name": "DP-2" } }
+```
+
+A panel without `output` goes on the layout's `"monitor"`, or on the primary monitor when
+that's `""`. The layout's `"version"` is 2. A layout from before each panel had its own
+monitor has one `"monitor"` for every panel. When the panels start, they give each panel
+that monitor as its `output` and write the file back, through a symbolic link if it is
+one.
 
 Panel plugins and the homelab's panels find free space on their own unless your layout
 places them. Once you move or switch one in edit mode, it gets an entry of its own.
