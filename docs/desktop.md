@@ -60,6 +60,9 @@ These come with the defaults, in the same package:
 
 - `bromigos-shot` and `bromigos-rec` take screenshots and recordings.
 - `bromigos-banner` prints the login banner.
+- `bromigos-customize` opens the Customize window, which Super+Ctrl+Shift+Space opens on
+  its Themes tab. Its tabs are Themes ([theming.md](theming.md#the-theme-switcher)) and
+  Widgets ([widgets.md](widgets.md#the-widget-gallery)).
 - The bar's readings live in `/usr/lib/bromigos/desktop/waybar/`.
 - The power menu and the quick note live in `/usr/lib/bromigos/desktop/rofi/`.
 - `bromigos-dispatch`, in `/usr/lib/bromigos/bin/`, runs one Hyprland dispatcher in either

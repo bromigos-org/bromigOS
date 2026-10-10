@@ -7,8 +7,9 @@ that reacts to what your machine is doing.
 
 ## Change the theme
 
-1. Press <kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>. The theme
-   switcher opens, with a picture of your desktop wearing each theme.
+1. Press <kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>. The
+   Customize window opens on its Themes tab, with a picture of your desktop wearing each
+   theme.
 2. Choose a theme with the arrow keys or the mouse. To narrow the list, type part of a
    name, or `world` or `colour`.
 3. Press <kbd>Enter</kbd>, or click the theme. The desktop changes colour within a second.
@@ -18,6 +19,26 @@ that reacts to what your machine is doing.
 
 Press <kbd>Esc</kbd> to close the switcher without changing anything. Hover over a card to
 read what the theme is.
+
+## Customize
+
+The window you choose themes in is called Customize. It has two tabs:
+
+- **Themes**, the pictures above;
+- **Widgets**, every [panel](panels.md) you can put on your desktop, with a switch for
+  each, its sizes, and more to install.
+
+Press <kbd>Ctrl</kbd>+<kbd>Tab</kbd> to change tab. In the menu, **STYLE** has an item for
+each tab. The app launcher lists it as **Customize**.
+
+On the Themes tab:
+
+- **Make your own…** copies the theme you've selected into a new theme of yours, to
+  change as you like.
+- **Remove** removes a theme you added. It can't remove bromigOS's own themes, or the one
+  you're wearing.
+- **Install from URL…** adds a theme someone shared as a link.
+- **Wallpaper, sounds, lights…** opens Settings at what goes with any theme.
 
 You can also choose a theme in **Settings › Theme**, or in the menu under **STYLE**. Or
 from a terminal:

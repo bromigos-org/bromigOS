@@ -25,7 +25,7 @@ rows = [
   { match = "Files", text = "Open the file manager." },
   { match = "Window switcher", text = "Pick an open window from a list and switch to it." },
   { match = "Settings: idle and lock, theme, shortcuts, updates", text = "Open [Settings](settings.md)." },
-  { match = "Theme switcher (previews)", text = "Open the [theme switcher](themes-and-worlds.md), with a preview of each theme." },
+  { match = "Customize: themes (previews) and widgets", text = "Open [Customize](themes-and-worlds.md#customize): a preview of each theme, and a tab for the widgets." },
   { match = "Next wallpaper", text = "Show the next den wallpaper. This only changes something when you have more than one." },
   { match = "Radial quick-launch", text = "Open the quick-launch ring: a terminal, a browser, and the FIELD NOTES panel, ready to type in." },
 ]

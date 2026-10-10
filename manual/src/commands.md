@@ -124,6 +124,12 @@ The desktop runs these for you. You don't need them day to day.
 | [`bromigos banner`](#bromigos-banner) | Prints the login banner in a terminal. |
 | [`bromigos secrets`](#bromigos-secrets) | Refreshes the desktop's secret files from Vault, if you keep secrets there. |
 
+### Other commands
+
+| Command | What it does |
+|---|---|
+| [`bromigos customize`](#bromigos-customize) | Customize: the themes and the widget gallery in one window, with tabs (SUPER+CTRL+SHIFT+SPACE) |
+
 ## Every command in full
 
 Each command's own help, A to Z. Commands built into `bromigos` show their whole `--help`; the others show how to call them and an example or two, and their own `--help` says more.
@@ -621,6 +627,23 @@ Options:
       --all    Include hidden commands
   -h, --help   Print help
 ```
+
+### bromigos customize
+
+Customize: the themes and the widget gallery in one window, with tabs (SUPER+CTRL+SHIFT+SPACE).
+
+```text
+bromigos customize [--tab themes|widgets]
+```
+
+For example:
+
+```text
+bromigos customize
+bromigos customize --tab widgets
+```
+
+From the `bromigos-desktop` package.
 
 ### bromigos defaults
 
@@ -2107,10 +2130,10 @@ From the `bromigos-desktop` package.
 
 ### bromigos theme switcher
 
-Pick a theme from previews of the desktop wearing it (SUPER+CTRL+SHIFT+SPACE).
+Customize: themes from previews of the desktop wearing them, and the widget gallery (SUPER+CTRL+SHIFT+SPACE).
 
 ```text
-bromigos theme switcher [--list [--json]] [--render [NAME…]] [--screenshot OUT.png --size WxH [--select NAME] [--filter TEXT]]
+bromigos theme switcher [--tab themes|widgets] [--list [--json]] [--render [NAME…]] [--screenshot OUT.png --size WxH [--tab TAB] [--select NAME] [--filter TEXT]]
 ```
 
 For example:

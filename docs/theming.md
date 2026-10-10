@@ -532,9 +532,27 @@ an unknown theme or a failed reload. The JSON output's schema is in
 
 ## The theme switcher
 
-**Super+Ctrl+Shift+Space** opens the theme switcher. You can also run
-`bromigos theme switcher`, or choose STYLE › Theme… in the menu. It shows every theme as
+The theme switcher is the Themes tab of the Customize window. Customize has a tab for each
+part of the desktop's look: **Themes**, and **Widgets**, the
+[widget gallery](widgets.md#the-widget-gallery). Ctrl+Tab, or Ctrl+1 and Ctrl+2, moves
+between them.
+
+**Super+Ctrl+Shift+Space** opens Customize on Themes. You can also run `bromigos theme
+switcher` or `bromigos customize`, or choose STYLE › Customize: themes… in the menu.
+`bromigos customize --tab widgets` opens it on Widgets. The Themes tab shows every theme as
 a preview of your desktop wearing it. Choosing one runs `bromigos theme set`.
+
+Above the cards are the Themes tab's tools:
+
+- **Wallpaper, sounds, lights…** opens Settings › Theme at what goes with any theme: the
+  live background, the wallpaper, the theme's sounds and the keyboard's lights.
+- **Make your own…** copies the selected theme into a new one of yours, in
+  `~/Themes/<name>`, with `bromigos theme new <name> --from <selected>`, and installs it.
+  Change its `colors.toml`, then run `bromigos ext update <name>`.
+- **Remove** removes the selected theme, when it's one you installed or made. bromigOS's
+  own themes and the theme in force can't be removed.
+- **Install from URL…** installs a theme from a git repository or a folder, after showing
+  what it is. It works as in the [widget gallery](widgets.md#the-widget-gallery).
 
 The switcher opens over the monitor you're on, with the desktop dimmed behind it. It fits
 as many cards as suit that monitor, each at least 300 pixels wide and 16:9 like the
@@ -553,7 +571,8 @@ Hover over a card to see what it is and what choosing it does.
 | Arrows, Page Up, Page Down, Home, End | Move the selection. It starts on the theme in force. |
 | Enter, or a click | Apply the selected theme. A catalog theme is installed first. |
 | Letters | Filter by name, description, kind (`world`, `den`, `colour`) or `catalog`. |
-| Esc, a click outside, or the shortcut again | Close the switcher. |
+| Ctrl+Tab | Change tab. |
+| Esc, a click outside, or the shortcut again | Close the switcher. Esc closes an open form first. |
 
 `bromigos theme switcher --list` prints the cards and their pictures.
 

@@ -111,8 +111,10 @@ one, moves them all to another. A panel can't sit on a different monitor from th
 
 ## The widget gallery
 
-The widget gallery lists every panel there is, including hidden ones. It's in edit
-mode's tray and in Settings › Widgets. Its sections are:
+The widget gallery lists every panel there is, including hidden ones. It's in three
+places: edit mode's tray, the Widgets tab of the Customize window (`bromigos customize
+--tab widgets`, or Ctrl+Tab from the theme switcher), and Settings › Widgets. Its sections
+are:
 
 - **On your desktop:** the panels that are on;
 - **Built in:** bromigOS's panels that are off, and the homelab's;
@@ -139,6 +141,11 @@ whether it runs code. A widget always runs code. So **Install…** opens a termi
 
 A panel tells the gallery about itself through a few class attributes. Writing your own
 is in [plugins.md](plugins.md#what-the-gallery-shows).
+
+The Customize window shows the gallery as cards, like the themes beside it. **Arrange on
+the desktop** closes it and starts edit mode. A widget you installed or made has
+**Remove**: an extension's goes with `bromigos ext remove`, and your own plugin file goes
+to the trash. bromigOS's own widgets can only be switched off.
 
 From a terminal:
 

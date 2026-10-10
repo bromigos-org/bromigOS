@@ -42,7 +42,8 @@ How the defaults and a user's own files fit together is in
 Most go to `/usr/lib/bromigos/desktop/bin/` and are linked into `/usr/bin/`:
 
 - `bromigos-menu`, the desktop menu ([docs/menu.md](../docs/menu.md));
-- `bromigos-theme-switcher` and `bromigos-theme-previews`;
+- `bromigos-theme-switcher`, the Customize window, and `bromigos-customize`, which opens it
+  on a tab; `bromigos-theme-previews`;
 - `bromigos-wallpaper`, `bromigos-webapp` and `bromigos-windows`;
 - `bromigos-keys`, the shortcut picker;
 - `bromigos-setup-keybindings`, `bromigos-setup-input` and `bromigos-setup-config`;
@@ -71,7 +72,7 @@ in [docs/settings.md](../docs/settings.md#the-commands-behind-the-pages).
 - `bromigos_extlist.py` holds the extension rows that Settings and the extensions window
   share.
 - `bromigos_previews.py` and `bromigos_themecards.py` draw the theme switcher's previews
-  and cards.
+  and cards. `bromigos_widgetcards.py` is the Customize window's Widgets tab.
 - `bromigos_peripherals.py` holds the peripheral modules' logic
   ([docs/peripherals.md](../docs/peripherals.md)).
 

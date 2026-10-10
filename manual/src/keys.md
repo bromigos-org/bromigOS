@@ -27,7 +27,7 @@ The keys you'll use most. Learn the first one and you can find everything else.
 | <span class="keys"><kbd>Alt</kbd>+<kbd>E</kbd></span> | Open the file manager. |
 | <span class="keys"><kbd>Alt</kbd>+<kbd>Tab</kbd></span> | Pick an open window from a list and switch to it. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>,</kbd></span> | Open [Settings](settings.md). |
-| <span class="keys"><kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd></span> | Open the [theme switcher](themes-and-worlds.md), with a preview of each theme. |
+| <span class="keys"><kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd></span> | Open [Customize](themes-and-worlds.md#customize): a preview of each theme, and a tab for the widgets. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>Space</kbd></span> | Show the next den wallpaper. This only changes something when you have more than one. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>A</kbd></span> | Open the quick-launch ring: a terminal, a browser, and the FIELD NOTES panel, ready to type in. |
 

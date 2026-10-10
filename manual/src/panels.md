@@ -101,8 +101,8 @@ windows, so it can't move panels too.
 
 ## Choose panels
 
-The tray in edit mode and **Settings › Widgets** both show the widget gallery: every
-panel there is, on or off. Each one says what it shows, who made it and what it reads.
+The tray in edit mode, the **Widgets** tab of [Customize](themes-and-worlds.md#customize)
+and **Settings › Widgets** all show the widget gallery: every panel there is, on or off. Each one says what it shows, who made it and what it reads.
 Type in the search box, or pick a category, to find one.
 
 **Get more widgets**, in Settings › Widgets, lists widgets other people made, from the

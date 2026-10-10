@@ -27,7 +27,7 @@ The top level lists the groups, followed by every item of every group, written a
 | Group | Read from |
 |---|---|
 | LAUNCH | The desktop entries, through `Gio.AppInfo`, with their icons |
-| STYLE | `bromigos theme list --json`: the theme switcher, the next wallpaper, each theme |
+| STYLE | `bromigos theme list --json`: Customize's Themes and Widgets tabs, the next wallpaper, each theme |
 | TOGGLE | Animations, the mute, the live layer, the panels, the screensaver, power profiles, accessibility, idle |
 | VECTOR | `bromigos-holo`'s verbs, when VECTOR is installed |
 | HOLOGRAMS | The live layer's decks, when the live layer is installed |
@@ -103,7 +103,7 @@ Each package ships the entries for what it owns:
 | Entry | What it opens | Package | Menu item |
 |---|---|---|---|
 | bromigOS Settings | `bromigos settings` | bromigos-desktop | SETUP › Settings… |
-| Theme Switcher | `bromigos-theme-switcher` | bromigos-desktop | STYLE › Theme… |
+| Customize | `bromigos customize` | bromigos-desktop | STYLE › Customize: themes… |
 | Shortcuts | `bromigos keys` | bromigos-desktop | SETUP › Shortcuts… |
 | Key List | `bromigos setup keybindings` | bromigos-desktop | SETUP › Keybindings |
 | Extensions | `bromigos extensions` | bromigos-desktop | INSTALL › Extension catalog… |
@@ -190,7 +190,7 @@ The fresh-machine test checks `--dump` (`test/vm/checks.sh`).
 | Keys | What they do |
 |---|---|
 | Alt+P | Open the plain app launcher (`rofi -show drun`), which lists every bromigOS window. |
-| Super+Ctrl+Shift+Space | Open the theme switcher. See [theming.md](theming.md). |
+| Super+Ctrl+Shift+Space | Open Customize on its Themes tab. See [theming.md](theming.md#the-theme-switcher). |
 | Super+Ctrl+Space | Show the next wallpaper. |
 | Super+K | Show the SHORTCUTS panel, the same list as SETUP › Keybindings. |
 
