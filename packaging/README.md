@@ -171,7 +171,8 @@ cases:
   workflow itself;
 - a version tag, `vX.Y.Z` or `vX.Y.Z-rcN`;
 - by hand, with `gh workflow run packages`. The inputs are `rebuild`, `only` (some
-  package folders), `channel` and `mirror_only`.
+  package folders), `channel`, `mirror_only`, `hosted` and `prefix`. The last two are for
+  tests: see [When the public bucket is the primary](#when-the-public-bucket-is-the-primary).
 
 Pull requests never run it. It runs `ci/publish.sh` in an `archlinux:base-devel`
 container. The script does this:
@@ -264,6 +265,49 @@ gh workflow run packages -R bromigos-org/bromigOS -f channel=rc -f mirror_only=t
 Without the `PKGS_PUBLIC_*` secrets, `publish.sh` skips the mirror. A fork or a local run
 then publishes to one bucket only.
 
+### When the public bucket is the primary
+
+Once the GitHub repositories are public, CI can't use the homelab's runners
+([public.md](../docs/public.md#ci-once-the-repositories-are-public)). GitHub's runners
+can't reach the homelab's bucket. So there, the R2 bucket becomes the primary, and the
+homelab's bucket becomes its copy.
+
+The workflow picks the primary with `PKGS_PRIMARY`:
+
+| Where the job runs | `PKGS_PRIMARY` | What `publish.sh` does |
+|---|---|---|
+| A runner that `CI_RUNNER_PACKAGES` names | `s3` | Publishes to the homelab's bucket, then copies to R2, as above |
+| GitHub's runner (no variable, or the `hosted` input) | `public` | Publishes to R2 alone, with the same lease, pruning and order |
+
+With R2 as the primary, `publish.sh` also does this:
+
+- It uploads the databases, the lab catalog, `install.sh` and the key with
+  `Cache-Control: no-cache`.
+- It leaves a note, `bromigos/.primary`, in the bucket. It says that R2 is the primary.
+- It doesn't build `1password`, which the public bucket never carries. The homelab's copy
+  then has no `1password` either. Machines get it from the AUR instead.
+
+The homelab copies R2 into its own bucket while that note is there, every few minutes. It
+checks each database's signature, copies the packages, swaps the database in last, and
+only then deletes what R2 dropped. Machines that use the homelab's address see the same
+signed repository.
+
+The homelab's bucket takes the primary back by itself. The first publish on a homelab
+runner sees the note. It waits until the homelab's bucket has R2's database for every
+channel, so nothing published meanwhile is lost. Then it deletes the note, and the homelab
+stops copying.
+
+`manual/publish.sh` and `tools/release/checksums.sh` follow `PKGS_PRIMARY` too.
+
+To try GitHub's runner without touching the real channels, run the workflow with `hosted`
+and a `prefix`. It publishes everything under that folder of R2, such as
+`ci-test/bromigos/x86_64/`:
+
+```bash
+gh workflow run packages -R bromigos-org/bromigOS -f hosted=true -f prefix=ci-test
+gh workflow run manual -R bromigos-org/bromigOS -f hosted=true -f prefix=ci-test
+```
+
 ### What CI needs
 
 These repository secrets hold the publishing credentials. Their values live in the
@@ -284,7 +328,9 @@ passes them as arguments. It keeps the key in a temporary `GNUPGHOME` that it de
 exit.
 
 The repository variable `CI_RUNNER_PACKAGES` names a self-hosted runner that can reach
-the bucket. Without it, the job runs on GitHub's hosted runner.
+the homelab's bucket. Without it, the job runs on GitHub's hosted runner and publishes to
+R2 alone ([When the public bucket is the primary](#when-the-public-bucket-is-the-primary)).
+A public repository never sets it.
 
 A fork's pull request must never reach a self-hosted runner. So only pushes to `main`,
 version tags and manual runs use the runners that `CI_RUNNER_PACKAGES` and

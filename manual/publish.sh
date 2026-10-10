@@ -3,7 +3,8 @@
 # (served at https://<host>/bromigos/manual/; homelab helm/bromigos-pkgs). Run by
 # .github/workflows/manual.yml with the same bucket credentials as packaging/ci/publish.sh
 # (never printed), and to the public mirror when PKGS_PUBLIC_BUCKET is set (packaging/README.md).
-# `manual/publish.sh --build-only DIR` just builds.
+# PKGS_PRIMARY=public publishes to the public bucket alone, and PKGS_ROOT under a folder, as
+# publish.sh does. `manual/publish.sh --build-only DIR` just builds.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 out=$(mktemp -d)
@@ -11,6 +12,21 @@ trap 'rm -rf "$out"' EXIT
 mdbook build "$here" -d "$out/book"
 test -f "$out/book/index.html"
 if [[ "${1:-}" == "--build-only" ]]; then cp -r "$out/book" "$2"; echo "manual: built into $2"; exit 0; fi
+[[ -z ${PKGS_ROOT:-} || $PKGS_ROOT =~ ^[a-z0-9][a-z0-9._-]*$ ]] || { echo "manual: PKGS_ROOT is one folder name" >&2; exit 2; }
+path="${PKGS_ROOT:+$PKGS_ROOT/}${PKGS_REPO:-bromigos}/manual"
+rcl() { rclone --config /dev/null --stats 0 "$@"; }
+public() {   # the public bucket, as remote pub:
+  export RCLONE_CONFIG_PUB_TYPE=s3 RCLONE_CONFIG_PUB_PROVIDER=Cloudflare RCLONE_CONFIG_PUB_REGION=auto
+  export RCLONE_CONFIG_PUB_NO_CHECK_BUCKET=true RCLONE_CONFIG_PUB_ENDPOINT="${PKGS_PUBLIC_ENDPOINT:?}"
+  export RCLONE_CONFIG_PUB_ACCESS_KEY_ID="${PKGS_PUBLIC_ACCESS_KEY_ID:?}" RCLONE_CONFIG_PUB_SECRET_ACCESS_KEY="${PKGS_PUBLIC_SECRET_ACCESS_KEY:?}"
+  unset PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY
+  rcl sync --checksum "$out/book" "pub:${PKGS_PUBLIC_BUCKET:?}/$path"
+}
+if [[ ${PKGS_PRIMARY:-s3} == public ]]; then
+  public
+  echo "manual: published $(find "$out/book" -type f | wc -l) files to the public bucket's $path/"
+  exit 0
+fi
 for v in PKGS_S3_ENDPOINT PKGS_S3_BUCKET PKGS_S3_ACCESS_KEY_ID PKGS_S3_SECRET_ACCESS_KEY; do
   [[ -n "${!v:-}" ]] || { echo "manual: $v is not set" >&2; exit 2; }
 done
@@ -19,14 +35,10 @@ export RCLONE_CONFIG_PKGS_ENDPOINT="$PKGS_S3_ENDPOINT" RCLONE_CONFIG_PKGS_ACCESS
 export RCLONE_CONFIG_PKGS_SECRET_ACCESS_KEY="$PKGS_S3_SECRET_ACCESS_KEY"
 export RCLONE_CONFIG_PKGS_FORCE_PATH_STYLE=true RCLONE_CONFIG_PKGS_NO_CHECK_BUCKET=true
 unset PKGS_S3_ACCESS_KEY_ID PKGS_S3_SECRET_ACCESS_KEY
-rclone --config /dev/null --stats 0 sync --checksum "$out/book" "pkgs:$PKGS_S3_BUCKET/${PKGS_REPO:-bromigos}/manual"
-echo "manual: published $(find "$out/book" -type f | wc -l) files to ${PKGS_REPO:-bromigos}/manual/"
+rcl sync --checksum "$out/book" "pkgs:$PKGS_S3_BUCKET/$path"
+echo "manual: published $(find "$out/book" -type f | wc -l) files to $path/"
 # The public mirror (packaging/README.md, "The public mirror"), when its bucket is set.
 if [[ -n "${PKGS_PUBLIC_BUCKET:-}" ]]; then
-  export RCLONE_CONFIG_PUB_TYPE=s3 RCLONE_CONFIG_PUB_PROVIDER=Cloudflare RCLONE_CONFIG_PUB_REGION=auto
-  export RCLONE_CONFIG_PUB_NO_CHECK_BUCKET=true RCLONE_CONFIG_PUB_ENDPOINT="${PKGS_PUBLIC_ENDPOINT:?}"
-  export RCLONE_CONFIG_PUB_ACCESS_KEY_ID="${PKGS_PUBLIC_ACCESS_KEY_ID:?}" RCLONE_CONFIG_PUB_SECRET_ACCESS_KEY="${PKGS_PUBLIC_SECRET_ACCESS_KEY:?}"
-  unset PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY
-  rclone --config /dev/null --stats 0 sync --checksum "$out/book" "pub:$PKGS_PUBLIC_BUCKET/${PKGS_REPO:-bromigos}/manual"
+  public
   echo "manual: and to the public mirror"
 fi

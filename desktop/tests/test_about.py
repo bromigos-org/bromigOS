@@ -16,7 +16,7 @@ def published_at(base):
     """Where manual/publish.sh puts the manual, as the repository serves it: <base>/<its
     PKGS_REPO default>/manual/, read from the publisher itself."""
     with open(os.path.join(REPO, "manual", "publish.sh")) as f:
-        repo = re.search(r'pkgs:\$PKGS_S3_BUCKET/\$\{PKGS_REPO:-([\w.-]+)\}/manual"', f.read()).group(1)
+        repo = re.search(r'^path="\$\{PKGS_ROOT:\+\$PKGS_ROOT/\}\$\{PKGS_REPO:-([\w.-]+)\}/manual"$', f.read(), re.M).group(1)
     return f"{base}/{repo}/manual/"
 
 

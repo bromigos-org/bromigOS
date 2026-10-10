@@ -24,6 +24,15 @@
 #   PKGS_PUBLIC_ACCESS_KEY_ID   under the same lease. Unset, no mirror.
 #   PKGS_PUBLIC_SECRET_ACCESS_KEY
 #   PKGS_MIRROR_ONLY=0  1: build nothing, only bring the mirror up to date with this channel
+#   PKGS_PRIMARY=s3     which bucket is the primary, the one read and written first:
+#                       s3      the PKGS_S3_* bucket, with PKGS_PUBLIC_* as its mirror;
+#                       public  the PKGS_PUBLIC_* bucket alone (PKGS_S3_* isn't needed). On
+#                               GitHub's hosted runners, which can't reach a private bucket.
+#                               Every run then leaves <repo>/.primary in the bucket, which says
+#                               so: a private copy pulls the channels from it while it's there
+#                               (packaging/README.md, "When the public bucket is the primary").
+#   PKGS_ROOT=          a folder in the bucket(s) to publish under instead of their root, for a
+#                       test run (e.g. ci-test: ci-test/<repo>/<arch>/...)
 #   PKGS_CHANNEL=edge   the channel published: edge (every push to main) lives at
 #                       <repo>/<arch>/ (the first layout, so pacman.conf's Server line
 #                       never changed); stable (vX.Y.Z tags) and rc (vX.Y.Z-rcN tags)
@@ -44,9 +53,14 @@ arch=${PKGS_ARCH:-x86_64}
 keep=${PKGS_KEEP:-3}
 rebuild=${PKGS_REBUILD:-0}
 channel=${PKGS_CHANNEL:-edge}
+primary=${PKGS_PRIMARY:-s3}
+[[ $primary == s3 || $primary == public ]] || { echo "publish: PKGS_PRIMARY must be s3 or public" >&2; exit 2; }
+[[ -z ${PKGS_ROOT:-} || $PKGS_ROOT =~ ^[a-z0-9][a-z0-9._-]*$ ]] \
+  || { echo "publish: PKGS_ROOT is one folder name: lower-case letters, digits and . _ -" >&2; exit 2; }
+top="${PKGS_ROOT:+$PKGS_ROOT/}$repo"   # the repository's folder in the bucket
 case "$channel" in
-  edge) prefix="$repo/$arch" ;;
-  stable|rc) prefix="$repo/$channel/$arch" ;;
+  edge) prefix="$top/$arch" ;;
+  stable|rc) prefix="$top/$channel/$arch" ;;
   *) echo "publish: PKGS_CHANNEL must be edge, stable or rc (dev is a local repo: packaging/dev-repo.sh)" >&2; exit 2 ;;
 esac
 case "$channel" in
@@ -55,8 +69,12 @@ case "$channel" in
   *) reuse=${PKGS_REUSE-} ;;
 esac
 
-for v in PKGS_S3_ENDPOINT PKGS_S3_BUCKET PKGS_S3_ACCESS_KEY_ID \
-         PKGS_S3_SECRET_ACCESS_KEY PKGS_GPG_PRIVATE_KEY PKGS_GPG_PASSPHRASE; do
+if [[ $primary == public ]]; then
+  need=(PKGS_PUBLIC_ENDPOINT PKGS_PUBLIC_BUCKET PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY)
+else
+  need=(PKGS_S3_ENDPOINT PKGS_S3_BUCKET PKGS_S3_ACCESS_KEY_ID PKGS_S3_SECRET_ACCESS_KEY)
+fi
+for v in "${need[@]}" PKGS_GPG_PRIVATE_KEY PKGS_GPG_PASSPHRASE; do
   [[ -n "${!v:-}" ]] || { echo "publish: $v is not set" >&2; exit 2; }
 done
 [[ "$keep" =~ ^[1-9][0-9]*$ ]] || { echo "publish: PKGS_KEEP must be >= 1" >&2; exit 2; }
@@ -96,41 +114,76 @@ echo "$fpr:6:" | gpg --batch --quiet --import-ownertrust
 export GPGKEY="$fpr"
 echo "publish: signing as $fpr"
 
-# ── The bucket (rclone, configured from the environment only) ────────────────
-export RCLONE_CONFIG_PKGS_TYPE=s3
-export RCLONE_CONFIG_PKGS_PROVIDER=Other
-export RCLONE_CONFIG_PKGS_ENDPOINT="$PKGS_S3_ENDPOINT"
-export RCLONE_CONFIG_PKGS_ACCESS_KEY_ID="$PKGS_S3_ACCESS_KEY_ID"
-export RCLONE_CONFIG_PKGS_SECRET_ACCESS_KEY="$PKGS_S3_SECRET_ACCESS_KEY"
-export RCLONE_CONFIG_PKGS_REGION=us-east-1
-export RCLONE_CONFIG_PKGS_FORCE_PATH_STYLE=true
-export RCLONE_CONFIG_PKGS_NO_CHECK_BUCKET=true
-unset PKGS_S3_ACCESS_KEY_ID PKGS_S3_SECRET_ACCESS_KEY
-dest="pkgs:$PKGS_S3_BUCKET/$prefix"
-echo "publish: channel $channel -> $prefix"
+# ── The buckets (rclone, configured from the environment only) ───────────────
+# Remote pkgs: is the primary, remote pub: the public mirror when there is one.
 rcl() { rclone --config /dev/null --stats 0 "$@"; }
+s3_remote() {   # s3_remote NAME PROVIDER PREFIX: remote NAME from PREFIX_ENDPOINT and its key
+  local n=$1 e="${3}_ENDPOINT" a="${3}_ACCESS_KEY_ID" k="${3}_SECRET_ACCESS_KEY"
+  export "RCLONE_CONFIG_${n}_TYPE=s3" "RCLONE_CONFIG_${n}_PROVIDER=$2" "RCLONE_CONFIG_${n}_NO_CHECK_BUCKET=true"
+  export "RCLONE_CONFIG_${n}_ENDPOINT=${!e}" "RCLONE_CONFIG_${n}_ACCESS_KEY_ID=${!a}" "RCLONE_CONFIG_${n}_SECRET_ACCESS_KEY=${!k}"
+  if [[ $2 == Cloudflare ]]; then export "RCLONE_CONFIG_${n}_REGION=auto"
+  else export "RCLONE_CONFIG_${n}_REGION=us-east-1" "RCLONE_CONFIG_${n}_FORCE_PATH_STYLE=true"; fi
+}
+# meta: the upload options for the files pacman (or a person) reads by a fixed name: the
+# databases, the lab catalog, install.sh and the key. A public bucket sits behind a cache,
+# which must never serve an old database beside a new signature.
+mirror=0 meta=()
+if [[ $primary == public ]]; then
+  s3_remote PKGS Cloudflare PKGS_PUBLIC
+  bucket=$PKGS_PUBLIC_BUCKET
+  meta=(--header-upload "Cache-Control: no-cache")
+  unset PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY PKGS_S3_ACCESS_KEY_ID PKGS_S3_SECRET_ACCESS_KEY
+  echo "publish: the public bucket is the primary; there's no mirror"
+else
+  s3_remote PKGS Other PKGS_S3
+  bucket=$PKGS_S3_BUCKET
+  unset PKGS_S3_ACCESS_KEY_ID PKGS_S3_SECRET_ACCESS_KEY
+  # The public mirror (Cloudflare R2), when PKGS_PUBLIC_BUCKET is set. This bucket stays the
+  # primary: every read below is from it. The mirror gets a copy of the channel once the
+  # primary is published (mirror_channel, below).
+  if [[ -n "${PKGS_PUBLIC_BUCKET:-}" ]]; then
+    for v in PKGS_PUBLIC_ENDPOINT PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY; do
+      [[ -n "${!v:-}" ]] || { echo "publish: PKGS_PUBLIC_BUCKET is set but $v isn't" >&2; exit 2; }
+    done
+    s3_remote PUB Cloudflare PKGS_PUBLIC
+    unset PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY
+    gdest="pub:$PKGS_PUBLIC_BUCKET/$prefix"
+    mirror=1
+    echo "publish: mirroring to the public bucket too"
+  elif [[ "${PKGS_MIRROR_ONLY:-0}" == 1 ]]; then
+    echo "publish: PKGS_MIRROR_ONLY=1 needs PKGS_PUBLIC_BUCKET" >&2; exit 2
+  fi
+fi
+dest="pkgs:$bucket/$prefix"
+echo "publish: channel $channel -> $prefix"
 
-# ── The public mirror (Cloudflare R2), when PKGS_PUBLIC_BUCKET is set ───────
-# The homelab bucket stays the primary: every read below is from it. The mirror gets a
-# copy of the channel once the primary is published (mirror_channel, below).
-mirror=0
-if [[ -n "${PKGS_PUBLIC_BUCKET:-}" ]]; then
-  for v in PKGS_PUBLIC_ENDPOINT PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY; do
-    [[ -n "${!v:-}" ]] || { echo "publish: PKGS_PUBLIC_BUCKET is set but $v isn't" >&2; exit 2; }
+# ── Which bucket is the primary: <repo>/.primary ─────────────────────────────
+# A public-primary run says so in the bucket, so a private copy (the homelab's) knows to
+# pull the channels from it. A run with the private bucket as the primary takes that role
+# back: first it waits until the private bucket has every channel's current database
+# (pulled by that copy, every few minutes), so nothing the public bucket got meanwhile is
+# lost, then it removes the note, and the copy stops pulling.
+# (rclone cat of a missing object prints nothing and succeeds: hence the -z tests.)
+marker="$top/.primary"
+if [[ $primary == public ]]; then
+  if [[ -z $(rcl cat "pkgs:$bucket/$marker" 2>/dev/null) ]]; then
+    printf 'public %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${GITHUB_REPOSITORY:-local}#${GITHUB_RUN_ID:-$$}" \
+      | rcl rcat "${meta[@]}" "pkgs:$bucket/$marker"
+    echo "publish: $marker: the public bucket is now the primary"
+  fi
+elif (( mirror )) && [[ -n $(rcl cat "pub:$PKGS_PUBLIC_BUCKET/$marker" 2>/dev/null) ]]; then
+  echo "publish: the public bucket has been the primary; waiting for this bucket to have its channels"
+  deadline=$(( $(date +%s) + 1800 ))
+  for p in "$top/$arch" "$top/rc/$arch" "$top/stable/$arch"; do
+    while [[ "$(rcl md5sum --include "/$repo.db.tar.gz" "pub:$PKGS_PUBLIC_BUCKET/$p" 2>/dev/null)" \
+             != "$(rcl md5sum --include "/$repo.db.tar.gz" "pkgs:$bucket/$p" 2>/dev/null)" ]]; do
+      (( $(date +%s) < deadline )) || { echo "publish: $p is still behind the public bucket after 30 minutes; is the private copy pulling it?" >&2; exit 1; }
+      echo "publish: $p: not yet the public bucket's; checking again in 30 s"
+      sleep 30
+    done
   done
-  export RCLONE_CONFIG_PUB_TYPE=s3
-  export RCLONE_CONFIG_PUB_PROVIDER=Cloudflare
-  export RCLONE_CONFIG_PUB_REGION=auto
-  export RCLONE_CONFIG_PUB_ENDPOINT="$PKGS_PUBLIC_ENDPOINT"
-  export RCLONE_CONFIG_PUB_ACCESS_KEY_ID="$PKGS_PUBLIC_ACCESS_KEY_ID"
-  export RCLONE_CONFIG_PUB_SECRET_ACCESS_KEY="$PKGS_PUBLIC_SECRET_ACCESS_KEY"
-  export RCLONE_CONFIG_PUB_NO_CHECK_BUCKET=true
-  unset PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY
-  gdest="pub:$PKGS_PUBLIC_BUCKET/$prefix"
-  mirror=1
-  echo "publish: mirroring to the public bucket too"
-elif [[ "${PKGS_MIRROR_ONLY:-0}" == 1 ]]; then
-  echo "publish: PKGS_MIRROR_ONLY=1 needs PKGS_PUBLIC_BUCKET" >&2; exit 2
+  rcl deletefile "pub:$PKGS_PUBLIC_BUCKET/$marker"
+  echo "publish: this bucket is the primary again"
 fi
 
 rcl lsf --files-only "$dest" > "$work/listing" 2>/dev/null || : > "$work/listing"
@@ -140,8 +193,8 @@ in_bucket() { grep -qxF "$1" "$work/listing"; }
 declare -A reuse_dir=()
 for ch in $reuse; do
   case "$ch" in
-    edge) reuse_dir[$ch]="pkgs:$PKGS_S3_BUCKET/$repo/$arch" ;;
-    stable|rc) reuse_dir[$ch]="pkgs:$PKGS_S3_BUCKET/$repo/$ch/$arch" ;;
+    edge) reuse_dir[$ch]="pkgs:$bucket/$top/$arch" ;;
+    stable|rc) reuse_dir[$ch]="pkgs:$bucket/$top/$ch/$arch" ;;
     *) echo "publish: PKGS_REUSE: no channel $ch" >&2; exit 2 ;;
   esac
   [[ $ch == "$channel" ]] && continue
@@ -178,9 +231,10 @@ reuse_from() {
 # fingerprint is pinned in install.sh itself. Copied on every run (--checksum: only when
 # changed), whatever is built, so a fix to the bootstrap alone goes out too.
 for f in install.sh packaging/keys/bromigos.asc; do
-  if [[ -f "$root/$f" ]]; then rcl copyto --checksum "$root/$f" "pkgs:$PKGS_S3_BUCKET/$repo/$(basename "$f")"; fi
-  if [[ -f "$root/$f" ]] && (( mirror )); then
-    rcl copyto --checksum --header-upload "Cache-Control: no-cache" "$root/$f" "pub:$PKGS_PUBLIC_BUCKET/$repo/$(basename "$f")"
+  [[ -f "$root/$f" ]] || continue
+  rcl copyto --checksum "${meta[@]}" "$root/$f" "pkgs:$bucket/$top/$(basename "$f")"
+  if (( mirror )); then
+    rcl copyto --checksum --header-upload "Cache-Control: no-cache" "$root/$f" "pub:$PKGS_PUBLIC_BUCKET/$top/$(basename "$f")"
   fi
 done
 
@@ -285,6 +339,7 @@ mirror_if_behind() {
 }
 
 if [[ "${PKGS_MIRROR_ONLY:-0}" == 1 ]]; then
+  [[ $primary == public ]] && echo "publish: the public bucket is the primary: there's no mirror to bring up to date"
   mirror_if_behind
   exit 0
 fi
@@ -302,6 +357,11 @@ fi
 export PKGDEST="$work/out"
 built=()
 for name in "${dirs[@]}"; do
+  # The public bucket never carries what may not be redistributed (public_skip, above).
+  if [[ $primary == public && " ${public_skip[*]} " == *" $name "* ]]; then
+    echo "publish: $name: not published to the public bucket (its licence; packaging/README.md)"
+    continue
+  fi
   dir="$root/packaging/$name"
   echo "::group::$name"
   pushd "$dir" >/dev/null
@@ -349,6 +409,12 @@ done
 # --verify checks the current database's signature before touching it;
 # --sign signs the new one. repo-add replaces an older entry of the same name.
 repo-add --verify --sign --key "$fpr" "$db" "${built[@]}"
+if [[ $primary == public ]]; then   # and no entry of it from an older copy, either
+  names=$(tar -xzOf "$db" --wildcards '*/desc' | awk '/^%NAME%$/ { getline; print }')
+  for p in "${public_skip[@]}"; do
+    if grep -qxF "$p" <<<"$names"; then repo-remove --quiet --verify --sign --key "$fpr" "$db" "$p"; fi
+  done
+fi
 
 # ── Upload: packages first, then the database, so the database never names a
 # file the bucket doesn't have. No symlinks in S3: the .db/.files names are
@@ -358,10 +424,10 @@ for f in "${built[@]}"; do
   rcl copyto "$f.sig" "$dest/$(basename "$f").sig"
 done
 for base in "$repo.db" "$repo.files"; do
-  rcl copyto "$work/repo/$base.tar.gz" "$dest/$base.tar.gz"
-  rcl copyto "$work/repo/$base.tar.gz.sig" "$dest/$base.tar.gz.sig"
-  rcl copyto "$work/repo/$base.tar.gz" "$dest/$base"
-  rcl copyto "$work/repo/$base.tar.gz.sig" "$dest/$base.sig"
+  rcl copyto "${meta[@]}" "$work/repo/$base.tar.gz" "$dest/$base.tar.gz"
+  rcl copyto "${meta[@]}" "$work/repo/$base.tar.gz.sig" "$dest/$base.tar.gz.sig"
+  rcl copyto "${meta[@]}" "$work/repo/$base.tar.gz" "$dest/$base"
+  rcl copyto "${meta[@]}" "$work/repo/$base.tar.gz.sig" "$dest/$base.sig"
 done
 printf 'publish: published %s\n' "${built[@]##*/}"
 
@@ -372,8 +438,8 @@ printf 'publish: published %s\n' "${built[@]##*/}"
 if printf '%s\n' "${built[@]##*/}" | grep -q '^bromigos-lab-catalog-'; then
   cp "$root/homelab/share/lab/models.toml" "$work/models.toml"
   gpg --batch --quiet --detach-sign --no-armor --use-agent -u "$fpr" "$work/models.toml"
-  rcl copyto "$work/models.toml" "$dest/lab/models.toml"
-  rcl copyto "$work/models.toml.sig" "$dest/lab/models.toml.sig"
+  rcl copyto "${meta[@]}" "$work/models.toml" "$dest/lab/models.toml"
+  rcl copyto "${meta[@]}" "$work/models.toml.sig" "$dest/lab/models.toml.sig"
   echo "publish: the lab model catalog, signed, at lab/models.toml"
 fi
 

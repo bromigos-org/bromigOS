@@ -10,8 +10,9 @@
 # The database's signature is checked against packaging/keys/bromigos.asc first.
 #
 # Environment (never printed): PKGS_S3_ENDPOINT, PKGS_S3_BUCKET, PKGS_S3_ACCESS_KEY_ID,
-# PKGS_S3_SECRET_ACCESS_KEY (read access is enough); PKGS_GPG_PRIVATE_KEY and
-# PKGS_GPG_PASSPHRASE to sign. PKGS_REPO=bromigos PKGS_ARCH=x86_64.
+# PKGS_S3_SECRET_ACCESS_KEY (read access is enough), or with PKGS_PRIMARY=public the
+# PKGS_PUBLIC_* ones (packaging/ci/publish.sh); PKGS_GPG_PRIVATE_KEY and PKGS_GPG_PASSPHRASE
+# to sign. PKGS_REPO=bromigos PKGS_ARCH=x86_64.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/../.." && pwd)
@@ -26,9 +27,18 @@ case "$channel" in
   stable|rc) prefix="$repo/$channel/$arch" ;;
   *) echo "checksums: no channel $channel" >&2; exit 2 ;;
 esac
-for v in PKGS_S3_ENDPOINT PKGS_S3_BUCKET PKGS_S3_ACCESS_KEY_ID PKGS_S3_SECRET_ACCESS_KEY; do
-  [[ -n "${!v:-}" ]] || { echo "checksums: $v is not set" >&2; exit 2; }
+# The bucket publish.sh treats as the primary: PKGS_S3_* by default, PKGS_PUBLIC_* with
+# PKGS_PRIMARY=public (GitHub's hosted runners).
+if [[ ${PKGS_PRIMARY:-s3} == public ]]; then
+  v=PKGS_PUBLIC provider=Cloudflare region=auto
+else
+  v=PKGS_S3 provider=Other region=us-east-1
+fi
+for s in ENDPOINT BUCKET ACCESS_KEY_ID SECRET_ACCESS_KEY; do
+  n="${v}_$s"
+  [[ -n "${!n:-}" ]] || { echo "checksums: $n is not set" >&2; exit 2; }
 done
+endpoint="${v}_ENDPOINT" bucket="${v}_BUCKET" akid="${v}_ACCESS_KEY_ID" secret="${v}_SECRET_ACCESS_KEY"
 
 work=$(mktemp -d)
 export GNUPGHOME="$work/gnupg"
@@ -36,11 +46,12 @@ trap 'gpgconf --kill all >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
 mkdir -m 700 "$GNUPGHOME"
 mkdir -p "$out"
 
-export RCLONE_CONFIG_PKGS_TYPE=s3 RCLONE_CONFIG_PKGS_PROVIDER=Other RCLONE_CONFIG_PKGS_REGION=us-east-1
-export RCLONE_CONFIG_PKGS_ENDPOINT="$PKGS_S3_ENDPOINT" RCLONE_CONFIG_PKGS_ACCESS_KEY_ID="$PKGS_S3_ACCESS_KEY_ID"
-export RCLONE_CONFIG_PKGS_SECRET_ACCESS_KEY="$PKGS_S3_SECRET_ACCESS_KEY"
+export RCLONE_CONFIG_PKGS_TYPE=s3 RCLONE_CONFIG_PKGS_PROVIDER=$provider RCLONE_CONFIG_PKGS_REGION=$region
+export RCLONE_CONFIG_PKGS_ENDPOINT="${!endpoint}" RCLONE_CONFIG_PKGS_ACCESS_KEY_ID="${!akid}"
+export RCLONE_CONFIG_PKGS_SECRET_ACCESS_KEY="${!secret}"
 export RCLONE_CONFIG_PKGS_FORCE_PATH_STYLE=true RCLONE_CONFIG_PKGS_NO_CHECK_BUCKET=true
-unset PKGS_S3_ACCESS_KEY_ID PKGS_S3_SECRET_ACCESS_KEY
+bucket=${!bucket}
+unset PKGS_S3_ACCESS_KEY_ID PKGS_S3_SECRET_ACCESS_KEY PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY
 rcl() { rclone --config /dev/null --stats 0 "$@"; }
 
 gpg --batch --quiet --import "$root/packaging/keys/bromigos.asc" 2>/dev/null
@@ -51,8 +62,8 @@ expect=()
 deadline=$(( $(date +%s) + 1800 ))
 while :; do
   db="$work/$repo.db.tar.gz"
-  if ! rcl copyto "pkgs:$PKGS_S3_BUCKET/$prefix/$repo.db.tar.gz" "$db" \
-     || ! rcl copyto "pkgs:$PKGS_S3_BUCKET/$prefix/$repo.db.tar.gz.sig" "$db.sig"; then
+  if ! rcl copyto "pkgs:$bucket/$prefix/$repo.db.tar.gz" "$db" \
+     || ! rcl copyto "pkgs:$bucket/$prefix/$repo.db.tar.gz.sig" "$db.sig"; then
     echo "checksums: the $channel channel has no database at $prefix" >&2
     exit 1
   fi
