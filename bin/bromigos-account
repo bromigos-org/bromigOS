@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+# bromigos:summary=Sign in to an online account a widget uses (Twitch, GitHub, GitLab, Spotify); tokens stay in your keyring
+# bromigos:args=status|login|logout|configure|set-token PROVIDER [client_id=ID] [base=URL]
+# bromigos:examples=bromigos account configure twitch client_id=abc123|bromigos account login twitch
+"""bromigos-account (`bromigos account …`, package bromigos-core): the command line of
+lib/bromigos_account.py, the sign-in helper widgets share (docs/plugins.md, "A widget that
+needs an account").
+
+    bromigos account status PROVIDER       signed in or not, and as whom (JSON)
+    bromigos account login PROVIDER        the device flow (Twitch, GitHub, GitLab) or a
+                                           browser sign-in (Spotify); the token goes to the keyring
+    bromigos account logout PROVIDER       forget the token
+    bromigos account configure PROVIDER client_id=ID [base=URL]   ~/.config/bromigos/accounts.toml
+    bromigos account set-token PROVIDER    store a pasted token (read without echo)
+"""
+import os
+import sys
+
+for d in (os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "lib"), "/usr/lib/bromigos/lib"):
+    if os.path.isfile(os.path.join(d, "bromigos_account.py")):
+        sys.path.insert(0, d)
+        break
+import bromigos_account  # noqa: E402
+
+sys.exit(bromigos_account.main(sys.argv[1:]))

@@ -46,8 +46,10 @@ pkgver() {
 
 check() {
   cd "$_root/widgets"
-  python -m py_compile bromigos-widgets *.py
+  python -m py_compile bromigos-widgets *.py plugins/*.py
   # edit mode's geometry and file: snapping, free space, undo, layout.json through a symlink
+  # and the built-in plugin panels (plugins/*.py): their parsing, empty states and size classes,
+  # and lib/bromigos_account.py, the sign-in helper they share
   python -m unittest discover -s tests
   # the app launcher's entries (widgets/applications): desktop-file-validate, the keys every
   # entry needs, their icons (tools/launcher/check.py; CI's launcher.yml runs all of it)

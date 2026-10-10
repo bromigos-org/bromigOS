@@ -120,6 +120,8 @@ package() {
     "$_root"/bin/bromigos-remove-extension
   # `bromigos terminal`: a command in the user's terminal (the launcher's terminal entries)
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-terminal
+  # `bromigos account`: sign in to an account a widget uses (lib/bromigos_account.py)
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-account
   # the app launcher's entries (docs/menu.md, "In the app launcher")
   install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_root"/core/applications/*.desktop
   # bromigOS's app icons in the hicolor theme every icon theme inherits (theme/app-icons, drawn
