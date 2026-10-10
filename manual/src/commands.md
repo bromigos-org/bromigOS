@@ -258,8 +258,8 @@ bromigos account status|login|logout|configure|set-token PROVIDER [client_id=ID]
 For example:
 
 ```text
-bromigos account configure twitch client_id=abc123
 bromigos account login twitch
+bromigos account configure gitlab client_id=abc123
 bromigos account status github
 ```
 

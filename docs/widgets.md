@@ -696,13 +696,14 @@ minute. Chat activity comes from Twitch's read-only guest chat. The panel counts
 and never keeps or shows what they say, and connects only while it's large, on screen and
 the stream is live.
 
-To set it up:
+To set it up, open its **Settings…** and click **Sign in** ([Accounts](#accounts)).
+Twitch's activation page opens; enter the code the panel shows. bromigOS has its own
+Twitch app, so there's nothing to register.
 
-1. Register an application at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps).
-   Set **Client Type** to **Public**, and the OAuth redirect URL to `http://localhost`.
-   Twitch asks for one, but the sign-in doesn't use it.
-2. Give the panel the app's client ID, then sign in ([Accounts](#accounts)). Twitch's
-   activation page opens; enter the code the panel shows.
+To use an app of your own instead, register one at
+[dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) with **Client Type**
+**Public** and the OAuth redirect URL `http://localhost` (Twitch asks for one; the sign-in
+doesn't use it), then run `bromigos account configure twitch client_id=ID`.
 
 The panel reads Twitch every minute while you can see it. Setting: `channels`, more
 channels to watch, by their Twitch login.

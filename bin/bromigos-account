@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # bromigos:summary=Sign in to an online account a widget uses (Twitch, GitHub, GitLab, Spotify); tokens stay in your keyring
 # bromigos:args=status|login|logout|configure|set-token PROVIDER [client_id=ID] [base=URL]
-# bromigos:examples=bromigos account configure twitch client_id=abc123; bromigos account login twitch; bromigos account status github
+# bromigos:examples=bromigos account login twitch; bromigos account configure gitlab client_id=abc123; bromigos account status github
 """bromigos-account (`bromigos account …`, package bromigos-core): the command line of
 lib/bromigos_account.py, the sign-in helper widgets share (docs/plugins.md, "A widget that
 needs an account").

@@ -31,10 +31,16 @@ class Base(unittest.TestCase):
 
 class Config(Base):
     def test_needs_a_client_id_until_configured(self):
-        self.assertEqual(A.needs("twitch"), ["client_id"])
-        A.configure("twitch", client_id="abc123")
+        self.assertEqual(A.needs("gitlab"), ["client_id"])
+        A.configure("gitlab", client_id="abc123")
+        self.assertEqual(A.needs("gitlab"), [])
+        self.assertEqual(A.config("gitlab")["client_id"], "abc123")
+
+    def test_twitch_ships_bromigos_app_and_yours_wins(self):
         self.assertEqual(A.needs("twitch"), [])
-        self.assertEqual(A.config("twitch")["client_id"], "abc123")
+        self.assertTrue(A.config("twitch")["client_id"])
+        A.configure("twitch", client_id="mine")
+        self.assertEqual(A.config("twitch")["client_id"], "mine")
 
     def test_configure_keeps_other_tables_and_base(self):
         A.configure("twitch", client_id="t1")
@@ -49,7 +55,7 @@ class Config(Base):
 
     def test_sign_in_without_config_raises_needs_config(self):
         with self.assertRaises(A.NeedsConfig) as c:
-            A.sign_in("twitch", on_prompt=lambda d: None)
+            A.sign_in("gitlab", on_prompt=lambda d: None)
         self.assertEqual(c.exception.fields, ["client_id"])
 
     def test_fields_describe_the_form(self):

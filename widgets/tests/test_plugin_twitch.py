@@ -66,11 +66,22 @@ class States(unittest.TestCase):
         A.KEYRING = A.MemoryKeyring()
         A._cache.clear()
 
-    def test_unconfigured_says_how_to_set_up(self):
+    def test_signed_out_offers_sign_in(self):
+        # bromigOS ships its own Twitch app, so a fresh install goes straight to Sign in
         with quiet_pollers():
             p = PT.make(twitch.TwitchPanel)
         tips = " ".join(PT.draw(p, 460, 300))
-        self.assertIn("client ID", tips)
+        self.assertIn("Sign in to Twitch", tips)
+
+    def test_unconfigured_says_how_to_set_up(self):
+        cid = A.PROVIDERS["twitch"].pop("client_id")
+        try:
+            with quiet_pollers():
+                p = PT.make(twitch.TwitchPanel)
+            tips = " ".join(PT.draw(p, 460, 300))
+            self.assertIn("client ID", tips)
+        finally:
+            A.PROVIDERS["twitch"]["client_id"] = cid
         self.assertIn("accounts.toml", tips)
 
     def test_signed_out_offers_sign_in(self):

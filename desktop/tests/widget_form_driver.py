@@ -42,6 +42,8 @@ def fake_sign_in(provider, on_prompt=None, cancelled=None):
 
 
 ACC.sign_in = fake_sign_in
+# "not set up" needs a provider without a built-in app: hide bromigOS's own Twitch client ID
+ACC.PROVIDERS[WIDGET].pop("client_id", None) if WIDGET in ACC.PROVIDERS else None
 
 
 def entry():

@@ -81,8 +81,10 @@ PROVIDERS = {
         "device_url": "https://id.twitch.tv/oauth2/device", "token_url": "https://id.twitch.tv/oauth2/token",
         "scopes": ["user:read:follows"], "scope_key": "scopes",
         "who_url": "https://id.twitch.tv/oauth2/validate", "who_field": "login", "who_auth": "OAuth",
-        "app_help": "Make an app at dev.twitch.tv/console/apps: Client Type Public, OAuth Redirect "
-                    "URL http://localhost. Copy its Client ID.",
+        # bromigOS's own Twitch app (a Public client: its ID isn't a secret), so signing in needs no setup
+        "client_id": "re6ewya32fu9j3m3kyezdfvw5b500f",
+        "app_help": "To use your own app instead: make one at dev.twitch.tv/console/apps (Client Type "
+                    "Public, OAuth Redirect URL http://localhost) and copy its Client ID.",
     },
     "github": {
         "title": "GitHub", "flow": "device", "base": "https://github.com",
@@ -158,7 +160,7 @@ def _read_all():
 def config(provider):
     """The provider's settings: client_id, base, port (accounts.toml over the defaults)."""
     p = _p(provider)
-    out = {"base": p["base"], "client_id": None}
+    out = {"base": p["base"], "client_id": p.get("client_id")}
     if "port" in p:
         out["port"] = p["port"]
     got = _read_all().get(provider) or {}
