@@ -19,10 +19,10 @@
 #   PKGS_GPG_PASSPHRASE        its passphrase
 #   PKGS_REPO=bromigos  PKGS_ARCH=x86_64  PKGS_KEEP=3 (versions kept per package)
 #   PKGS_REBUILD=0      PKGS_ONLY= (space-separated package dirs, default all)
-#   PKGS_GCS_BUCKET     optional: the public mirror, a Google Cloud Storage bucket that
-#   PKGS_GCS_ACCESS_KEY_ID      gets a copy of the channel after every publish, under the
-#   PKGS_GCS_SECRET_ACCESS_KEY  same lease (an HMAC key: GCS speaks S3). Unset, no mirror.
-#                       PKGS_GCS_ENDPOINT=https://storage.googleapis.com
+#   PKGS_PUBLIC_ENDPOINT        optional: the public mirror, a Cloudflare R2 bucket (or any S3
+#   PKGS_PUBLIC_BUCKET          bucket) that gets a copy of the channel after every publish,
+#   PKGS_PUBLIC_ACCESS_KEY_ID   under the same lease. Unset, no mirror.
+#   PKGS_PUBLIC_SECRET_ACCESS_KEY
 #   PKGS_MIRROR_ONLY=0  1: build nothing, only bring the mirror up to date with this channel
 #   PKGS_CHANNEL=edge   the channel published: edge (every push to main) lives at
 #                       <repo>/<arch>/ (the first layout, so pacman.conf's Server line
@@ -110,26 +110,27 @@ dest="pkgs:$PKGS_S3_BUCKET/$prefix"
 echo "publish: channel $channel -> $prefix"
 rcl() { rclone --config /dev/null --stats 0 "$@"; }
 
-# ── The public mirror (Google Cloud Storage), when PKGS_GCS_BUCKET is set ────
+# ── The public mirror (Cloudflare R2), when PKGS_PUBLIC_BUCKET is set ───────
 # The homelab bucket stays the primary: every read below is from it. The mirror gets a
 # copy of the channel once the primary is published (mirror_channel, below).
 mirror=0
-if [[ -n "${PKGS_GCS_BUCKET:-}" ]]; then
-  for v in PKGS_GCS_ACCESS_KEY_ID PKGS_GCS_SECRET_ACCESS_KEY; do
-    [[ -n "${!v:-}" ]] || { echo "publish: PKGS_GCS_BUCKET is set but $v isn't" >&2; exit 2; }
+if [[ -n "${PKGS_PUBLIC_BUCKET:-}" ]]; then
+  for v in PKGS_PUBLIC_ENDPOINT PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY; do
+    [[ -n "${!v:-}" ]] || { echo "publish: PKGS_PUBLIC_BUCKET is set but $v isn't" >&2; exit 2; }
   done
-  export RCLONE_CONFIG_GCS_TYPE=s3
-  export RCLONE_CONFIG_GCS_PROVIDER=GCS
-  export RCLONE_CONFIG_GCS_ENDPOINT="${PKGS_GCS_ENDPOINT:-https://storage.googleapis.com}"
-  export RCLONE_CONFIG_GCS_ACCESS_KEY_ID="$PKGS_GCS_ACCESS_KEY_ID"
-  export RCLONE_CONFIG_GCS_SECRET_ACCESS_KEY="$PKGS_GCS_SECRET_ACCESS_KEY"
-  export RCLONE_CONFIG_GCS_NO_CHECK_BUCKET=true
-  unset PKGS_GCS_ACCESS_KEY_ID PKGS_GCS_SECRET_ACCESS_KEY
-  gdest="gcs:$PKGS_GCS_BUCKET/$prefix"
+  export RCLONE_CONFIG_PUB_TYPE=s3
+  export RCLONE_CONFIG_PUB_PROVIDER=Cloudflare
+  export RCLONE_CONFIG_PUB_REGION=auto
+  export RCLONE_CONFIG_PUB_ENDPOINT="$PKGS_PUBLIC_ENDPOINT"
+  export RCLONE_CONFIG_PUB_ACCESS_KEY_ID="$PKGS_PUBLIC_ACCESS_KEY_ID"
+  export RCLONE_CONFIG_PUB_SECRET_ACCESS_KEY="$PKGS_PUBLIC_SECRET_ACCESS_KEY"
+  export RCLONE_CONFIG_PUB_NO_CHECK_BUCKET=true
+  unset PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY
+  gdest="pub:$PKGS_PUBLIC_BUCKET/$prefix"
   mirror=1
   echo "publish: mirroring to the public bucket too"
 elif [[ "${PKGS_MIRROR_ONLY:-0}" == 1 ]]; then
-  echo "publish: PKGS_MIRROR_ONLY=1 needs PKGS_GCS_BUCKET" >&2; exit 2
+  echo "publish: PKGS_MIRROR_ONLY=1 needs PKGS_PUBLIC_BUCKET" >&2; exit 2
 fi
 
 rcl lsf --files-only "$dest" > "$work/listing" 2>/dev/null || : > "$work/listing"
@@ -179,7 +180,7 @@ reuse_from() {
 for f in install.sh packaging/keys/bromigos.asc; do
   if [[ -f "$root/$f" ]]; then rcl copyto --checksum "$root/$f" "pkgs:$PKGS_S3_BUCKET/$repo/$(basename "$f")"; fi
   if [[ -f "$root/$f" ]] && (( mirror )); then
-    rcl copyto --checksum --header-upload "Cache-Control: no-cache" "$root/$f" "gcs:$PKGS_GCS_BUCKET/$repo/$(basename "$f")"
+    rcl copyto --checksum --header-upload "Cache-Control: no-cache" "$root/$f" "pub:$PKGS_PUBLIC_BUCKET/$repo/$(basename "$f")"
   fi
 done
 

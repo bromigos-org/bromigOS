@@ -1,46 +1,66 @@
-"""Tests for tools/release/go-public.sh (docs/public.md). gcloud, curl and vault are stubs
-that serve a fake bucket from a folder and log every call; the two repositories are bare git
-repositories on disk; the signing key is a throwaway. Nothing reaches a network.
+"""Tests for tools/release/go-public.sh (docs/public.md). curl is a stub that plays the
+Cloudflare API, the bucket's S3 endpoint and its public address, from a folder, and logs
+every call; vault is a stub too. The two repositories are bare git repositories on disk,
+and the signing key is a throwaway. Nothing reaches a network.
 
-The dry run must check everything and change nothing. With --yes, the bucket is opened, the
-anonymous downloads are verified, and both prepared branches land on main."""
+The dry run must check everything and change nothing. With --yes, the bucket's public
+address is turned on, the anonymous downloads are verified, and both prepared branches
+land on main."""
 import os
 import shutil
 import subprocess
 import tarfile
 import tempfile
-import textwrap
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "go-public.sh")
-URL = "https://storage.googleapis.com/test-pkgs"
+R2DEV = "https://pub-0123abcd.r2.dev"
+TOKEN = "cf-token-must-never-show"
 GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.org",
            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.org"}
 
-# gcloud: `storage cat gs://BUCKET/PATH` reads $FAKE/bucket/PATH; describe and get-iam-policy
-# read $FAKE/state; update and the policy bindings change it. Every call goes to $FAKE/log.
-GCLOUD = r"""#!/usr/bin/env bash
-echo "gcloud $*" >> "$FAKE/log"
-args=(); for a in "$@"; do case $a in --project|--billing-project=*|--format=*) ;; *) args+=("$a") ;; esac; done
-set -- "${args[@]}"
-[[ $1 == bromigos-org ]] && shift   # the value after --project
-case "$1 $2 $3" in
-  "storage cat "*) f=${3#gs://*/}; exec cat "$FAKE/bucket/$f" ;;
-  "storage buckets describe") cat "$FAKE/pap" ;;
-  "storage buckets get-iam-policy") if [[ -f $FAKE/public ]]; then echo '{"bindings":[{"members":["allUsers"]}]}'; else echo '{"bindings":[]}'; fi ;;
-  "storage buckets update") [[ " $* " == *" --no-public-access-prevention "* ]] && echo inherited > "$FAKE/pap" ;;
-  "storage buckets add-iam-policy-binding") touch "$FAKE/public" ;;
-  *) echo "gcloud stub: unexpected $*" >&2; exit 1 ;;
-esac
-"""
-# curl -fsS -o OUT URL: anonymous, so only once the fake bucket is public.
+# The stub: the API at http://cf.test/v4, S3 at http://s3.test/<bucket>/<key> (only with the
+# key, from -K), the public address only once $FAKE/public names it.
 CURL = r"""#!/usr/bin/env bash
 echo "curl $*" >> "$FAKE/log"
-out='' url=''
-while (($#)); do case $1 in -o) out=$2; shift 2 ;; -*) shift ;; *) url=$1; shift ;; esac; done
-[[ -f $FAKE/public ]] || exit 22
-cp "$FAKE/bucket/${url#https://storage.googleapis.com/test-pkgs/}" "$out"
+out='' url='' method=GET data='' conf=''
+while (($#)); do
+  case $1 in
+    -o) out=$2; shift 2 ;; -X) method=$2; shift 2 ;; --data) data=$2; shift 2 ;;
+    -K) conf=$(cat "$2"); shift 2 ;; -H|--aws-sigv4) shift 2 ;; -*) shift ;; *) url=$1; shift ;;
+  esac
+done
+put() { if [[ -n $out ]]; then cp "$1" "$out"; else cat "$1"; fi; }
+ok() { printf '{"success":true,"errors":[],"result":%s}\n' "$1"; }
+case $url in
+  http://cf.test/v4/*)
+    [[ $conf == *"Bearer $EXPECT_TOKEN"* ]] || { echo '{"success":false,"errors":[{"message":"auth"}]}'; exit 0; }
+    echo "api $method ${url#http://cf.test/v4} $data" >> "$FAKE/changes"
+    case "$method ${url#http://cf.test/v4}" in
+      "GET /accounts/acct/r2/buckets/bromigos-pkgs/domains/managed")
+        en=false; grep -qx managed "$FAKE/public" 2>/dev/null && en=true
+        ok "{\"bucketId\":\"b\",\"domain\":\"pub-0123abcd.r2.dev\",\"enabled\":$en}" ;;
+      "PUT /accounts/acct/r2/buckets/bromigos-pkgs/domains/managed")
+        [[ $data == *true* ]] && echo managed > "$FAKE/public"; ok '{}' ;;
+      "GET /zones?name=bromigos.org") ok '[{"id":"zone1"}]' ;;
+      "GET /zones?name="*) ok '[]' ;;
+      "GET /accounts/acct/r2/buckets/bromigos-pkgs/domains/custom")
+        if grep -qx custom "$FAKE/public" 2>/dev/null; then ok '{"domains":[{"domain":"pkgs.bromigos.org","enabled":true}]}'; else ok '{"domains":[]}'; fi ;;
+      "POST /accounts/acct/r2/buckets/bromigos-pkgs/domains/custom") echo custom > "$FAKE/public"; ok '{}' ;;
+      *) echo '{"success":false,"errors":[{"message":"unexpected"}]}' ;;
+    esac ;;
+  http://s3.test/bromigos-pkgs/*)
+    [[ $conf == *'user = "AKID:SECRET"'* ]] || exit 22
+    f="$FAKE/bucket/${url#http://s3.test/bromigos-pkgs/}"; [[ -f $f ]] || exit 22; put "$f" ;;
+  https://pub-0123abcd.r2.dev/*)
+    grep -qx managed "$FAKE/public" 2>/dev/null || exit 22
+    f="$FAKE/bucket/${url#https://pub-0123abcd.r2.dev/}"; [[ -f $f ]] || exit 22; put "$f" ;;
+  https://pkgs.bromigos.org/*)
+    grep -qx custom "$FAKE/public" 2>/dev/null || exit 22
+    f="$FAKE/bucket/${url#https://pkgs.bromigos.org/}"; [[ -f $f ]] || exit 22; put "$f" ;;
+  *) exit 6 ;;
+esac
 """
 VAULT = """#!/usr/bin/env bash\necho "vault $*" >> "$FAKE/log"\n"""
 
@@ -55,12 +75,11 @@ class GoPublic(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.fake = os.path.join(self.tmp, "fake")
         os.makedirs(os.path.join(self.fake, "bucket", "bromigos"))
-        with open(os.path.join(self.fake, "pap"), "w") as f:
-            f.write("enforced\n")
-        open(os.path.join(self.fake, "log"), "w").close()
+        for f in ("log", "changes"):
+            open(os.path.join(self.fake, f), "w").close()
         self.bin = os.path.join(self.tmp, "bin")
         os.makedirs(self.bin)
-        for name, body in (("gcloud", GCLOUD), ("curl", CURL), ("vault", VAULT)):
+        for name, body in (("curl", CURL), ("vault", VAULT)):
             path = os.path.join(self.bin, name)
             with open(path, "w") as f:
                 f.write(body)
@@ -71,9 +90,10 @@ class GoPublic(unittest.TestCase):
         self.make_bucket()
         self.gitbase = os.path.join(self.tmp, "remotes") + "/"
         self.make_remote("bromigos-org/bromigOS", "go-public",
-                         {"install.sh": f"FPR={self.fpr}\nPUBLIC_REPO={URL}   # public\n"})
+                         {"install.sh": f"FPR={self.fpr}\nPUBLIC_REPO={R2DEV}   # public\n",
+                          "README.md": f"curl -fsSLO {R2DEV}/bromigos/install.sh\n"})
         self.make_remote("bromigos-org/bromigos.org", "os-get-public",
-                         {"page.tsx": "install steps\n"})
+                         {"page.tsx": f"curl -fsSLO {R2DEV}/bromigos/install.sh\n"})
 
     def tearDown(self):
         subprocess.run(["gpgconf", "--homedir", self.gnupg, "--kill", "all"], capture_output=True)
@@ -98,7 +118,7 @@ class GoPublic(unittest.TestCase):
             d = os.path.join(b, prefix)
             os.makedirs(os.path.join(d, "pkg-1-1"))
             with open(os.path.join(d, "pkg-1-1", "desc"), "w") as f:
-                f.write("%NAME%\npkg\n")
+                f.write("%NAME%\npkg\n\n%LICENSE%\nLicenseRef-Test-Proprietary\n")
             db = os.path.join(d, "bromigos.db")
             with tarfile.open(db, "w:gz") as t:
                 t.add(os.path.join(d, "pkg-1-1"), arcname="pkg-1-1")
@@ -110,9 +130,9 @@ class GoPublic(unittest.TestCase):
         git(bare, "init", "-q", "--bare", "-b", "main")
         work = os.path.join(self.tmp, "work-" + os.path.basename(name))
         git(self.tmp, "clone", "-q", bare, work)
-        with open(os.path.join(work, "README"), "w") as f:
+        with open(os.path.join(work, "MAIN"), "w") as f:
             f.write("main\n")
-        git(work, "add", "README")
+        git(work, "add", "MAIN")
         git(work, "commit", "-qm", "main")
         git(work, "push", "-q", "origin", "HEAD:main")
         git(work, "checkout", "-qb", branch)
@@ -132,13 +152,21 @@ class GoPublic(unittest.TestCase):
 
     def run_script(self, *args):
         env = {**os.environ, **GIT_ENV, "PATH": self.bin + os.pathsep + os.environ["PATH"],
-               "FAKE": self.fake, "GO_PUBLIC_FPR": self.fpr, "GO_PUBLIC_BUCKET": "test-pkgs",
-               "GO_PUBLIC_GIT_BASE": self.gitbase, "GO_PUBLIC_VAULT_PATH": "secret/test"}
+               "FAKE": self.fake, "EXPECT_TOKEN": TOKEN, "GO_PUBLIC_FPR": self.fpr,
+               "GO_PUBLIC_GIT_BASE": self.gitbase, "GO_PUBLIC_CF_API": "http://cf.test/v4",
+               "GO_PUBLIC_S3_ENDPOINT": "http://s3.test", "GO_PUBLIC_TRIES": "2",
+               "GO_PUBLIC_WAIT": "0", "CLOUDFLARE_API_TOKEN": TOKEN, "CF_ACCOUNT_ID": "acct",
+               "PKGS_PUBLIC_ACCESS_KEY_ID": "AKID", "PKGS_PUBLIC_SECRET_ACCESS_KEY": "SECRET"}
+        env.pop("GO_PUBLIC_VAULT_PATH", None)
         return subprocess.run(["bash", SCRIPT, *args], capture_output=True, text=True, env=env)
 
-    def log(self):
-        with open(os.path.join(self.fake, "log")) as f:
+    def read(self, name):
+        with open(os.path.join(self.fake, name)) as f:
             return f.read()
+
+    def show(self, name, path):
+        bare = os.path.join(self.tmp, "remotes", name + ".git")
+        return git(bare, "show", "main:" + path)
 
     def main_files(self, name):
         bare = os.path.join(self.tmp, "remotes", name + ".git")
@@ -148,50 +176,71 @@ class GoPublic(unittest.TestCase):
         bare = os.path.join(self.tmp, "remotes", name + ".git")
         return git(bare, "branch", "--format=%(refname:short)").split()
 
+    def assert_no_secrets(self, r):
+        for text in (r.stdout, r.stderr, self.read("log")):
+            self.assertNotIn(TOKEN, text)
+            self.assertNotIn("SECRET", text)
+
     def test_dry_run_checks_everything_and_changes_nothing(self):
         r = self.run_script()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         out = r.stdout
         self.assertIn("dry run: nothing changes", out)
+        self.assertIn(f"bromigos-pkgs is private; it will be public at {R2DEV}", out)
         self.assertIn(f"the mirror's signing key is {self.fpr}", out)
         for ch in ("edge", "rc", "stable"):
             self.assertIn(f"{ch}: 1 packages, database signed by {self.fpr}", out)
+        self.assertIn("note: pkg (LicenseRef-Test-Proprietary) is proprietary", out)
         self.assertIn("merges cleanly", out)
-        self.assertIn("would run: gcloud storage buckets add-iam-policy-binding gs://test-pkgs --member=allUsers --role=roles/storage.legacyObjectReader", out.replace("--project bromigos-org --billing-project=bromigos-org ", ""))
-        self.assertIn("would run: gcloud", out)
-        self.assertIn("$0.12 per GB", out)
-        log = self.log()
-        self.assertNotIn("buckets update", log)
-        self.assertNotIn("add-iam-policy-binding", log)
-        self.assertNotIn("curl", log)
-        self.assertNotIn("vault", log)
+        self.assertIn('would run: PUT /accounts/acct/r2/buckets/bromigos-pkgs/domains/managed {"enabled":true}', out)
+        self.assertIn("rate-limits r2.dev", out)
+        changes = self.read("changes")
+        self.assertNotIn("PUT", changes)
+        self.assertNotIn("POST", changes)
+        self.assertNotIn("r2.dev/", self.read("log"))      # no anonymous fetches
+        self.assertNotIn("vault", self.read("log"))
         self.assertNotIn("install.sh", self.main_files("bromigos-org/bromigOS"))
         self.assertIn("go-public", self.branches("bromigos-org/bromigOS"))
         self.assertIn("os-get-public", self.branches("bromigos-org/bromigos.org"))
+        self.assert_no_secrets(r)
 
-    def test_yes_goes_public_and_lands_both_branches(self):
+    def test_yes_goes_public_on_r2dev_and_lands_both_branches(self):
         r = self.run_script("--yes")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        log = self.log()
-        self.assertIn("--no-public-access-prevention", log)
-        self.assertIn("add-iam-policy-binding gs://test-pkgs --member=allUsers --role=roles/storage.legacyObjectReader", log)
-        self.assertLess(log.index("add-iam-policy-binding"), log.index("curl"))
-        self.assertIn("vault kv patch secret/test status=public since", log)
+        changes = self.read("changes")
+        self.assertIn('PUT /accounts/acct/r2/buckets/bromigos-pkgs/domains/managed {"enabled":true}', changes)
+        log = self.read("log")
+        self.assertLess(log.index("-X PUT"), log.index(R2DEV + "/bromigos/bromigos.asc"))
         for ch in ("edge", "rc", "stable"):
-            self.assertIn(f"{ch}: {URL}/", r.stdout)
-        os_files = self.main_files("bromigos-org/bromigOS")
-        self.assertIn("install.sh", os_files)
-        self.assertIn("LATER", os_files)          # rebased on main as it is now
+            self.assertIn(f"{ch}: {R2DEV}/", r.stdout)
+        self.assertIn(f"PUBLIC_REPO={R2DEV}", self.show("bromigos-org/bromigOS", "install.sh"))
+        self.assertIn("LATER", self.main_files("bromigos-org/bromigOS"))   # rebased on today's main
         self.assertNotIn("go-public", self.branches("bromigos-org/bromigOS"))
         self.assertIn("page.tsx", self.main_files("bromigos-org/bromigos.org"))
-        self.assertIn("packages are public", r.stdout)
+        self.assertIn(f"packages are public at {R2DEV}", r.stdout)
+        self.assert_no_secrets(r)
+
+    def test_a_custom_domain_rewrites_the_address(self):
+        r = self.run_script("--domain", "pkgs.bromigos.org", "--yes")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('POST /accounts/acct/r2/buckets/bromigos-pkgs/domains/custom {"domain":"pkgs.bromigos.org","zoneId":"zone1"',
+                      self.read("changes"))
+        self.assertNotIn("domains/managed {", self.read("changes"))
+        self.assertIn("PUBLIC_REPO=https://pkgs.bromigos.org", self.show("bromigos-org/bromigOS", "install.sh"))
+        self.assertIn("https://pkgs.bromigos.org/bromigos/install.sh", self.show("bromigos-org/bromigOS", "README.md"))
+        self.assertIn("https://pkgs.bromigos.org/bromigos/install.sh", self.show("bromigos-org/bromigos.org", "page.tsx"))
+
+    def test_a_domain_outside_cloudflare_stops(self):
+        r = self.run_script("--domain", "pkgs.example.net")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("isn't a zone in this Cloudflare account", r.stderr)
 
     def test_a_missing_channel_stops_before_anything(self):
         os.remove(os.path.join(self.fake, "bucket", "bromigos", "rc", "x86_64", "bromigos.db"))
         r = self.run_script("--yes")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("the rc channel isn't on the mirror", r.stderr)
-        self.assertNotIn("add-iam-policy-binding", self.log())
+        self.assertNotIn("PUT", self.read("changes"))
 
     def test_a_bad_signature_stops_before_anything(self):
         db = os.path.join(self.fake, "bucket", "bromigos", "x86_64", "bromigos.db")
@@ -200,10 +249,9 @@ class GoPublic(unittest.TestCase):
         r = self.run_script("--yes")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("doesn't match its signature", r.stderr)
-        self.assertNotIn("add-iam-policy-binding", self.log())
+        self.assertNotIn("PUT", self.read("changes"))
 
-    def test_a_branch_that_sets_another_url_stops(self):
-        bare = os.path.join(self.tmp, "remotes", "bromigos-org/bromigOS.git")
+    def test_a_branch_with_another_address_stops(self):
         work = os.path.join(self.tmp, "work-bromigOS")
         git(work, "checkout", "-q", "go-public")
         with open(os.path.join(work, "install.sh"), "w") as f:
@@ -212,14 +260,16 @@ class GoPublic(unittest.TestCase):
         git(work, "push", "-q", "origin", "go-public")
         r = self.run_script()
         self.assertNotEqual(r.returncode, 0)
-        self.assertIn("not " + URL, r.stderr)
-        self.assertTrue(os.path.isdir(bare))
+        self.assertIn("not " + R2DEV, r.stderr)
 
     def test_private_undoes_only_with_yes(self):
         r = self.run_script("--private")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("would run: gcloud", r.stdout)
-        self.assertNotIn("remove-iam-policy-binding", self.log())
+        self.assertIn('would run: PUT /accounts/acct/r2/buckets/bromigos-pkgs/domains/managed {"enabled":false}', r.stdout)
+        self.assertNotIn("PUT", self.read("changes"))
+        r = self.run_script("--private", "--yes")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn('{"enabled":false}', self.read("changes"))
 
 
 if __name__ == "__main__":

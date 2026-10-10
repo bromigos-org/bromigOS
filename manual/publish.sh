@@ -2,7 +2,7 @@
 # Build the manual (mdBook) and publish it next to the packages, at <bucket>/<repo>/manual/
 # (served at https://<host>/bromigos/manual/; homelab helm/bromigos-pkgs). Run by
 # .github/workflows/manual.yml with the same bucket credentials as packaging/ci/publish.sh
-# (never printed), and to the public mirror when PKGS_GCS_BUCKET is set (packaging/README.md).
+# (never printed), and to the public mirror when PKGS_PUBLIC_BUCKET is set (packaging/README.md).
 # `manual/publish.sh --build-only DIR` just builds.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -22,11 +22,11 @@ unset PKGS_S3_ACCESS_KEY_ID PKGS_S3_SECRET_ACCESS_KEY
 rclone --config /dev/null --stats 0 sync --checksum "$out/book" "pkgs:$PKGS_S3_BUCKET/${PKGS_REPO:-bromigos}/manual"
 echo "manual: published $(find "$out/book" -type f | wc -l) files to ${PKGS_REPO:-bromigos}/manual/"
 # The public mirror (packaging/README.md, "The public mirror"), when its bucket is set.
-if [[ -n "${PKGS_GCS_BUCKET:-}" ]]; then
-  export RCLONE_CONFIG_GCS_TYPE=s3 RCLONE_CONFIG_GCS_PROVIDER=GCS RCLONE_CONFIG_GCS_NO_CHECK_BUCKET=true
-  export RCLONE_CONFIG_GCS_ENDPOINT="${PKGS_GCS_ENDPOINT:-https://storage.googleapis.com}"
-  export RCLONE_CONFIG_GCS_ACCESS_KEY_ID="${PKGS_GCS_ACCESS_KEY_ID:?}" RCLONE_CONFIG_GCS_SECRET_ACCESS_KEY="${PKGS_GCS_SECRET_ACCESS_KEY:?}"
-  unset PKGS_GCS_ACCESS_KEY_ID PKGS_GCS_SECRET_ACCESS_KEY
-  rclone --config /dev/null --stats 0 sync --checksum "$out/book" "gcs:$PKGS_GCS_BUCKET/${PKGS_REPO:-bromigos}/manual"
+if [[ -n "${PKGS_PUBLIC_BUCKET:-}" ]]; then
+  export RCLONE_CONFIG_PUB_TYPE=s3 RCLONE_CONFIG_PUB_PROVIDER=Cloudflare RCLONE_CONFIG_PUB_REGION=auto
+  export RCLONE_CONFIG_PUB_NO_CHECK_BUCKET=true RCLONE_CONFIG_PUB_ENDPOINT="${PKGS_PUBLIC_ENDPOINT:?}"
+  export RCLONE_CONFIG_PUB_ACCESS_KEY_ID="${PKGS_PUBLIC_ACCESS_KEY_ID:?}" RCLONE_CONFIG_PUB_SECRET_ACCESS_KEY="${PKGS_PUBLIC_SECRET_ACCESS_KEY:?}"
+  unset PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY
+  rclone --config /dev/null --stats 0 sync --checksum "$out/book" "pub:$PKGS_PUBLIC_BUCKET/${PKGS_REPO:-bromigos}/manual"
   echo "manual: and to the public mirror"
 fi

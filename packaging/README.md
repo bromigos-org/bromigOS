@@ -230,9 +230,9 @@ ISO follow `stable` by default.
 ### The public mirror
 
 Every channel is published to two buckets. The homelab's bucket is the primary: CI reads
-the current database from it and writes there first. A Google Cloud Storage bucket,
-`gs://bromigos-pkgs` in the `bromigos-org` project, gets a copy. It's private until
-bromigOS goes public, which is one command ([docs/public.md](../docs/public.md)).
+the current database from it and writes there first. A Cloudflare R2 bucket,
+`bromigos-pkgs`, gets a copy. It's private until bromigOS goes public, which is one
+command ([docs/public.md](../docs/public.md)).
 
 `publish.sh` copies the channel to the mirror at the end of every publish, while it still
 holds the lease. The order keeps the mirror valid for a pacman that reads it at any
@@ -256,7 +256,7 @@ gh workflow run packages -R bromigos-org/bromigOS -f channel=rc -f mirror_only=t
 
 `manual/publish.sh` copies the web manual to the mirror the same way.
 
-Without the `PKGS_GCS_*` secrets, `publish.sh` skips the mirror. A fork or a local run
+Without the `PKGS_PUBLIC_*` secrets, `publish.sh` skips the mirror. A fork or a local run
 then publishes to one bucket only.
 
 ### What CI needs
@@ -270,8 +270,9 @@ deployment's secret store, never in this repository.
 | `PKGS_S3_BUCKET` | The bucket. Packages go to `<bucket>/bromigos/x86_64/`. |
 | `PKGS_S3_ACCESS_KEY_ID`, `PKGS_S3_SECRET_ACCESS_KEY` | A key that can write that bucket only |
 | `PKGS_GPG_PRIVATE_KEY`, `PKGS_GPG_PASSPHRASE` | The signing key matching `keys/bromigos.asc` |
-| `PKGS_GCS_BUCKET` | The public mirror's bucket, `bromigos-pkgs` |
-| `PKGS_GCS_ACCESS_KEY_ID`, `PKGS_GCS_SECRET_ACCESS_KEY` | An HMAC key of the service account `bromigos-pkgs-publisher`, which may write that bucket only |
+| `PKGS_PUBLIC_ENDPOINT` | The public mirror's S3 endpoint, `https://<account>.r2.cloudflarestorage.com` |
+| `PKGS_PUBLIC_BUCKET` | The public mirror's bucket, `bromigos-pkgs` |
+| `PKGS_PUBLIC_ACCESS_KEY_ID`, `PKGS_PUBLIC_SECRET_ACCESS_KEY` | The S3 key of an R2 API token that may read and write that bucket only |
 
 The secrets are only ever environment variables. `publish.sh` never prints them and never
 passes them as arguments. It keeps the key in a temporary `GNUPGHOME` that it deletes on

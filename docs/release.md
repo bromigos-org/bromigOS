@@ -201,12 +201,12 @@ gh release upload v0.1.2 ~/.cache/bromigos-iso/bromigos-*-x86_64.iso ~/.cache/br
 
 ## The public repository
 
-Every channel a release publishes is also copied to a Google Cloud Storage bucket, which is
+Every channel a release publishes is also copied to a Cloudflare R2 bucket, which is
 private during early access. Making it public is one command, run once:
 
 ```bash
 tools/release/go-public.sh          # checks, and prints what it would do
-tools/release/go-public.sh --yes    # opens the bucket and lands the prepared changes
+tools/release/go-public.sh --yes    # turns on its public address and lands the prepared changes
 ```
 
 [public.md](public.md) explains what it does, what it costs and how to undo it.

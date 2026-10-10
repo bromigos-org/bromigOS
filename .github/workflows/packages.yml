@@ -44,7 +44,7 @@ on:
         options: [edge, rc, stable]
         default: edge
       mirror_only:
-        description: "Build nothing: only bring the public mirror (GCS) up to date with the channel"
+        description: "Build nothing: only bring the public mirror (R2) up to date with the channel"
         type: boolean
         default: false
 
@@ -107,9 +107,10 @@ jobs:
           PKGS_GPG_PRIVATE_KEY: ${{ secrets.PKGS_GPG_PRIVATE_KEY }}
           PKGS_GPG_PASSPHRASE: ${{ secrets.PKGS_GPG_PASSPHRASE }}
           # the public mirror (packaging/README.md, "The public mirror"); unset, publish.sh skips it
-          PKGS_GCS_BUCKET: ${{ secrets.PKGS_GCS_BUCKET }}
-          PKGS_GCS_ACCESS_KEY_ID: ${{ secrets.PKGS_GCS_ACCESS_KEY_ID }}
-          PKGS_GCS_SECRET_ACCESS_KEY: ${{ secrets.PKGS_GCS_SECRET_ACCESS_KEY }}
+          PKGS_PUBLIC_ENDPOINT: ${{ secrets.PKGS_PUBLIC_ENDPOINT }}
+          PKGS_PUBLIC_BUCKET: ${{ secrets.PKGS_PUBLIC_BUCKET }}
+          PKGS_PUBLIC_ACCESS_KEY_ID: ${{ secrets.PKGS_PUBLIC_ACCESS_KEY_ID }}
+          PKGS_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.PKGS_PUBLIC_SECRET_ACCESS_KEY }}
           PKGS_MIRROR_ONLY: ${{ inputs.mirror_only && '1' || '0' }}
           PKGS_KEEP: "3"
           PKGS_REBUILD: ${{ inputs.rebuild && '1' || '0' }}
@@ -120,5 +121,5 @@ jobs:
         # publish.sh through its environment, never its command line.
         run: >-
           sudo -u builder
-          --preserve-env=PKGS_S3_ENDPOINT,PKGS_S3_BUCKET,PKGS_S3_ACCESS_KEY_ID,PKGS_S3_SECRET_ACCESS_KEY,PKGS_GPG_PRIVATE_KEY,PKGS_GPG_PASSPHRASE,PKGS_GCS_BUCKET,PKGS_GCS_ACCESS_KEY_ID,PKGS_GCS_SECRET_ACCESS_KEY,PKGS_MIRROR_ONLY,PKGS_KEEP,PKGS_REBUILD,PKGS_ONLY,PKGS_CHANNEL,CARGO_HOME,BROMIGOS_CARGO_TARGET_DIR
+          --preserve-env=PKGS_S3_ENDPOINT,PKGS_S3_BUCKET,PKGS_S3_ACCESS_KEY_ID,PKGS_S3_SECRET_ACCESS_KEY,PKGS_GPG_PRIVATE_KEY,PKGS_GPG_PASSPHRASE,PKGS_PUBLIC_ENDPOINT,PKGS_PUBLIC_BUCKET,PKGS_PUBLIC_ACCESS_KEY_ID,PKGS_PUBLIC_SECRET_ACCESS_KEY,PKGS_MIRROR_ONLY,PKGS_KEEP,PKGS_REBUILD,PKGS_ONLY,PKGS_CHANNEL,CARGO_HOME,BROMIGOS_CARGO_TARGET_DIR
           packaging/ci/publish.sh
