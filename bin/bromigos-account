@@ -1,17 +1,27 @@
 #!/usr/bin/env python3
-# bromigos:summary=Sign in to an online account a widget uses (Twitch, GitHub, GitLab, Spotify); tokens stay in your keyring
-# bromigos:args=status|login|logout|configure|set-token PROVIDER [client_id=ID] [base=URL]
-# bromigos:examples=bromigos account login twitch; bromigos account configure gitlab client_id=abc123; bromigos account status github
+# bromigos:summary=Sign in to the online accounts widgets use (Twitch, GitHub, GitLab, Spotify), several per service if you like; tokens stay in your keyring
+# bromigos:args=list [PROVIDER] | add PROVIDER NAME [base=URL] [client_id=ID] [label=TEXT] | remove PROVIDER NAME | status|login|logout|set-token|configure PROVIDER [--as NAME] [client_id=ID] [base=URL]
+# bromigos:examples=bromigos account login twitch; bromigos account add gitlab work base=https://git.example.org; bromigos account configure gitlab --as work client_id=abc123; bromigos account login gitlab --as work; bromigos account list
 """bromigos-account (`bromigos account …`, package bromigos-core): the command line of
 lib/bromigos_account.py, the sign-in helper widgets share (docs/plugins.md, "A widget that
 needs an account").
 
-    bromigos account status PROVIDER       signed in or not, and as whom (JSON)
-    bromigos account login PROVIDER        the device flow (Twitch, GitHub, GitLab) or a
+A service can have several accounts: the one it starts with, "default", and named ones,
+such as gitlab.com and your company's own GitLab ("work"). --as NAME picks one; without
+it, a command means the default account.
+
+    bromigos account list [PROVIDER] [--json]  every account, its server and who's signed in
+    bromigos account add PROVIDER NAME [base=URL] [client_id=ID] [label=TEXT]
+                                           another account; base: its own server (GitLab,
+                                           GitHub Enterprise), which needs its own app
+    bromigos account remove PROVIDER NAME [--yes]   sign it out and forget it (asks first)
+    bromigos account status PROVIDER [--as NAME]    signed in or not, and as whom (JSON)
+    bromigos account login PROVIDER [--as NAME]     the device flow (Twitch, GitHub, GitLab) or a
                                            browser sign-in (Spotify); the token goes to the keyring
-    bromigos account logout PROVIDER       forget the token
-    bromigos account configure PROVIDER client_id=ID [base=URL]   ~/.config/bromigos/accounts.toml
-    bromigos account set-token PROVIDER    store a pasted token (read without echo)
+    bromigos account logout PROVIDER [--as NAME]    forget the token
+    bromigos account configure PROVIDER [--as NAME] client_id=ID [base=URL] [label=TEXT]
+                                           ~/.config/bromigos/accounts.toml
+    bromigos account set-token PROVIDER [--as NAME] store a pasted token (read without echo)
 """
 import os
 import sys

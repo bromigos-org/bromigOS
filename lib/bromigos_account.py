@@ -4,6 +4,10 @@ API (docs/plugins.md, "A widget that needs an account"):
 
     import bromigos_account as A
 
+Every function takes account="default": a service can have several named accounts, such
+as gitlab.com and your company's own GitLab ("work"). The one you had before named
+accounts existed is "default", and nothing about it changed.
+
     A.status(provider)                 -> {"signed_in", "who", "needs", "via"}; no network
     A.sign_in(provider, on_prompt=None, cancelled=None)
                                        blocks until signed in; returns status(provider).
@@ -23,6 +27,14 @@ API (docs/plugins.md, "A widget that needs an account"):
     A.fields(provider)                 -> [{"key", "label", "hint", "required"}] for a settings form
     A.config(provider)                 -> {"client_id", "base", …} as configured
     A.base(provider)                   -> the provider's web root (GitLab: your instance)
+    A.api(provider)                    -> its API root (GitHub Enterprise: <base>/api/v3)
+    A.label(provider)                  -> a short name to tag an account's rows: its label, the
+                                         host for "default" (gitlab.com), else its name
+    A.names(provider)                  -> ["default", "work", …]; no keyring
+    A.accounts(provider)               -> [{"name", "label", "base", "signed_in", "who", "needs",
+                                         "via"}], "default" first; no network
+    A.add_account(provider, name, base=None, client_id=None, label=None)
+    A.remove_account(provider, name)   signs it out, then forgets its settings
     A.Signin(provider)                 a non-blocking sign-in for a panel to draw: .start(),
                                          .state ("idle" | "waiting" | "signed_in" | "error"),
                                          .prompt (the on_prompt dict), .error, .cancel()
@@ -37,11 +49,15 @@ API (docs/plugins.md, "A widget that needs an account"):
 
 Where things live:
 
-  * Client IDs and a GitLab instance URL: ~/.config/bromigos/accounts.toml, one table per
-    provider ([twitch] client_id = "…"). Every widget for that service shares them. They
-    come from the user's own developer app; bromigOS ships no client ID and no secret.
+  * Client IDs and a server address: ~/.config/bromigos/accounts.toml. The default
+    account is the provider's table ([gitlab] base = "…"); a named one is a table under it,
+    [gitlab.accounts.work], with base, client_id and label. Every widget for that service
+    shares them. bromigOS ships its own client IDs for Twitch, GitHub and gitlab.com;
+    they're used only on the public site (an account with another base needs its own app).
+    A named account on the same server as the default one shares the default's settings.
   * Tokens: the login keyring, through libsecret (the Secret Service), one item per
-    provider, labelled "bromigOS: <Provider> sign-in". Never in a file.
+    account: service "bromigos-account:<provider>", account "<name>" ("default" for the
+    first), labelled "bromigOS: <Provider> sign-in". Never in a file.
 
 No flow here needs a client secret: Twitch and GitLab take a public client through the
 device flow (RFC 8628), GitHub's OAuth apps allow the device flow, and Spotify takes the
@@ -56,14 +72,18 @@ authorised devices.
 
 Command line (bin/bromigos-account, which is `bromigos account`):
 
-    bromigos account status|login|logout PROVIDER
-    bromigos account configure PROVIDER client_id=ID [base=URL]
-    bromigos account set-token PROVIDER         (reads the token without echoing it)
+    bromigos account list [PROVIDER] [--json]
+    bromigos account add PROVIDER NAME [base=URL] [client_id=ID] [label=TEXT]
+    bromigos account remove PROVIDER NAME [--yes]      (signs out, then forgets its settings)
+    bromigos account status|login|logout PROVIDER [--as NAME]
+    bromigos account configure PROVIDER [--as NAME] client_id=ID [base=URL] [label=TEXT]
+    bromigos account set-token PROVIDER [--as NAME]   (reads the token without echoing it)
 """
 import base64
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -88,20 +108,22 @@ PROVIDERS = {
     },
     "github": {
         "title": "GitHub", "flow": "device", "base": "https://github.com",
-        "device_url": "https://github.com/login/device/code", "token_url": "https://github.com/login/oauth/access_token",
+        "device_url": "{base}/login/device/code", "token_url": "{base}/login/oauth/access_token",
         "scopes": ["repo", "read:user", "notifications"], "scope_key": "scope",
-        "who_url": "https://api.github.com/user", "who_field": "login", "gh": True,
+        # GitHub Enterprise Server: the same paths under its own address, its API at /api/v3
+        "api": "https://api.github.com", "api_self": "{base}/api/v3",
+        "who_url": "{api}/user", "who_field": "login", "gh": True,
         # bromigOS's own OAuth app (device flow, no secret: its ID isn't one), used when gh isn't signed in
         "client_id": "Ov23liUrAQsRagfTYxQj",
         "app_help": "To use your own app instead: make an OAuth app at github.com/settings/developers "
                     "with Enable Device Flow ticked (and Expire user access tokens unticked), and copy its "
-                    "Client ID.",
+                    "Client ID. On GitHub Enterprise Server, make it there the same way.",
     },
     "gitlab": {
         "title": "GitLab", "flow": "device", "base": "https://gitlab.com",
         "device_url": "{base}/oauth/authorize_device", "token_url": "{base}/oauth/token",
-        "scopes": ["read_api", "read_user"], "scope_key": "scope",
-        "who_url": "{base}/api/v4/user", "who_field": "username",
+        "scopes": ["read_api", "read_user"], "scope_key": "scope", "api": "{base}/api/v4",
+        "who_url": "{api}/user", "who_field": "username",
         # bromigOS's own gitlab.com application (non-confidential, device grant: its ID isn't a
         # secret). It only works on gitlab.com; a self-hosted GitLab needs an application of its own.
         "client_id": "5e34e8644147e7edfa98f96d443f34968c7cc7faae644beb61831fa5ede4f86d",
@@ -132,11 +154,11 @@ PROVIDERS = {
 class NeedsConfig(Exception):
     """The provider isn't configured yet: .fields lists what's missing (["client_id"])."""
 
-    def __init__(self, provider, fields):
-        self.provider, self.fields = provider, list(fields)
+    def __init__(self, provider, fields, account="default"):
+        self.provider, self.fields, self.account = provider, list(fields), account
         p = PROVIDERS.get(provider, {})
-        super().__init__(f"{p.get('title', provider)} needs {', '.join(self.fields)} in {accounts_path()}. "
-                         + p.get("app_help", ""))
+        who = p.get("title", provider) + (f" ({account})" if account != "default" else "")
+        super().__init__(f"{who} needs {', '.join(self.fields)} in {accounts_path()}. " + p.get("app_help", ""))
 
 
 class SignInError(Exception):
@@ -163,14 +185,46 @@ def _read_all():
         return {}
 
 
-def config(provider):
-    """The provider's settings: client_id, base, port (accounts.toml over the defaults)."""
+DEFAULT = "default"
+NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+
+
+def _scalars(table):
+    return {k: v for k, v in (table or {}).items() if isinstance(v, (str, int)) and not isinstance(v, bool)}
+
+
+def _named(doc, provider):
+    """{name: table} of the provider's named accounts in accounts.toml."""
+    acc = (doc.get(provider) or {}).get("accounts")
+    return {k: v for k, v in acc.items() if isinstance(v, dict)} if isinstance(acc, dict) else {}
+
+
+def _check(provider, account):
+    """The provider's entry; KeyError when the provider or the named account doesn't exist."""
     p = _p(provider)
+    if account != DEFAULT and account not in _named(_read_all(), provider):
+        raise KeyError(f"no {p['title']} account named {account!r} "
+                       f"(add it: bromigos account add {provider} {account})")
+    return p
+
+
+def config(provider, account=DEFAULT):
+    """The account's settings: client_id, base, port (accounts.toml over the defaults). A
+    named account on the same server as the default one takes the default's settings it
+    doesn't set itself (its client ID, Spotify's port)."""
+    p = _check(provider, account)
+    doc = _read_all()
+    top = _scalars(doc.get(provider))
+    got = top
+    if account != DEFAULT:
+        got = _scalars(_named(doc, provider)[account])
+        same = str(got.get("base") or p["base"]).rstrip("/") == str(top.get("base") or p["base"]).rstrip("/")
+        inherit = {k: v for k, v in top.items() if k != "label" and (same or k == "port")}
+        got = {**inherit, **got}
     out = {"base": p["base"], "client_id": p.get("client_id")}
     if "port" in p:
         out["port"] = p["port"]
-    got = _read_all().get(provider) or {}
-    out.update({k: v for k, v in got.items() if isinstance(v, (str, int))})
+    out.update(got)
     out["base"] = str(out.get("base") or p["base"]).rstrip("/")
     # bromigOS's own app is registered on the provider's public site only
     if "client_id" not in got and out["base"] != p["base"].rstrip("/"):
@@ -178,11 +232,47 @@ def config(provider):
     return out
 
 
-def base(provider):
-    return config(provider)["base"]
+def base(provider, account=DEFAULT):
+    return config(provider, account)["base"]
 
 
-def fields(provider):
+def api(provider, account=DEFAULT):
+    """The account's API root: api.github.com, or <base>/api/v3 on GitHub Enterprise Server;
+    <base>/api/v4 for GitLab; the web root for a provider without one."""
+    p = _p(provider)
+    b = base(provider, account)
+    if p.get("api_self") and b != p["base"].rstrip("/"):
+        return p["api_self"].format(base=b)
+    return (p.get("api") or "{base}").format(base=b)
+
+
+def label(provider, account=DEFAULT):
+    """A short name for the account's rows: its label, else the host for the default one
+    ("gitlab.com"), else its name ("work")."""
+    c = config(provider, account)
+    if c.get("label"):
+        return str(c["label"])
+    if account == DEFAULT:
+        host = urllib.parse.urlparse(c["base"]).hostname or provider
+        return host.removeprefix("www.").removeprefix("open.")
+    return account
+
+
+def names(provider):
+    """The provider's account names, "default" first (no keyring)."""
+    _p(provider)
+    return [DEFAULT] + sorted(_named(_read_all(), provider))
+
+
+def accounts(provider):
+    """Every account of the provider, "default" first, each with its status (no network)."""
+    out = []
+    for n in names(provider):
+        out.append(dict(status(provider, n), name=n, label=label(provider, n), base=base(provider, n)))
+    return out
+
+
+def fields(provider, account=DEFAULT):
     p = _p(provider)
     if p["flow"] == "plex-pin":
         return []                                   # no app: the client identifier is made on first use
@@ -190,14 +280,23 @@ def fields(provider):
     if provider == "gitlab":
         out.append({"key": "base", "label": "GitLab address", "hint": "https://gitlab.com, or your own instance",
                     "required": False})
+    elif provider == "github":
+        out.append({"key": "base", "label": "GitHub address",
+                    "hint": "https://github.com, or your GitHub Enterprise Server", "required": False})
     return out
 
 
-def needs(provider):
-    if provider == "github" and gh_token():
+def has_server(provider):
+    """True when an account of this provider can live on a server of its own (GitLab, GitHub
+    Enterprise): the settings form asks for its address."""
+    return any(f["key"] == "base" for f in fields(provider))
+
+
+def needs(provider, account=DEFAULT):
+    if _gh_covers(provider, account):
         return []
-    c = config(provider)
-    return [f["key"] for f in fields(provider) if f["required"] and not c.get(f["key"])]
+    c = config(provider, account)
+    return [f["key"] for f in fields(provider, account) if f["required"] and not c.get(f["key"])]
 
 
 def _toml_value(v):
@@ -208,30 +307,101 @@ def _toml_value(v):
     return json.dumps(str(v))
 
 
-def configure(provider, **values):
-    """Set fields of [provider] in accounts.toml, keeping the rest of the file's tables."""
-    _p(provider)
-    doc = _read_all()
-    t = dict(doc.get(provider) or {})
-    for k, v in values.items():
-        if v in (None, ""):
-            t.pop(k, None)
-        else:
-            t[k] = v
-    doc[provider] = t
+def _toml_key(k):
+    return k if re.fullmatch(r"[A-Za-z0-9_-]+", k) else json.dumps(k)
+
+
+def _write_all(doc):
     lines = ["# bromigOS's account settings (lib/bromigos_account.py): client IDs, never secrets", ""]
     for name, table in doc.items():
         if not isinstance(table, dict):
             continue
-        lines.append(f"[{name}]")
-        lines += [f"{k} = {_toml_value(v)}" for k, v in table.items() if isinstance(v, (str, int, bool))]
+        lines.append(f"[{_toml_key(name)}]")
+        lines += [f"{_toml_key(k)} = {_toml_value(v)}" for k, v in table.items() if isinstance(v, (str, int, bool))]
         lines.append("")
+        for an, at in _named(doc, name).items():
+            lines.append(f"[{_toml_key(name)}.accounts.{_toml_key(an)}]")
+            lines += [f"{_toml_key(k)} = {_toml_value(v)}" for k, v in at.items() if isinstance(v, (str, int, bool))]
+            lines.append("")
     path = accounts_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
         f.write("\n".join(lines))
     os.replace(tmp, path)
+
+
+def _table(doc, provider, account):
+    """The account's table in doc, made when missing (the default's is [provider])."""
+    t = doc.setdefault(provider, {})
+    if account == DEFAULT:
+        return t
+    return t.setdefault("accounts", {}).setdefault(account, {})
+
+
+def configure(provider, account=DEFAULT, **values):
+    """Set fields of the account's table in accounts.toml ([provider], or
+    [provider.accounts.<name>]), keeping the rest of the file's tables. An empty value
+    removes the field."""
+    _check(provider, account)
+    doc = _read_all()
+    t = _table(doc, provider, account)
+    for k, v in values.items():
+        if v in (None, ""):
+            t.pop(k, None)
+        else:
+            t[k] = v
+    _write_all(doc)
+
+
+def _norm_base(provider, url):
+    """A server address as typed (git.example.org/) -> https://git.example.org; None for the
+    provider's public site (its built-in app applies)."""
+    url = str(url or "").strip().rstrip("/")
+    if not url:
+        return None
+    if "://" not in url:
+        url = "https://" + url
+    pub = _p(provider)["base"].rstrip("/")
+    return None if url in (pub, pub.replace("https://www.", "https://")) else url
+
+
+def add_account(provider, name, base=None, client_id=None, label=None):
+    """A new named account: its table in accounts.toml. base: its server (None or the public
+    site: bromigOS's built-in app, when the provider has one). Returns status for it."""
+    p = _p(provider)
+    name = str(name or "").strip()
+    if name == DEFAULT:
+        raise ValueError(f"{p['title']} already has its default account")
+    if not NAME_RE.match(name):
+        raise ValueError("an account name is lower-case letters, digits, - and _, up to 32 (like work)")
+    doc = _read_all()
+    if name in _named(doc, provider):
+        raise ValueError(f"{p['title']} already has an account named {name}")
+    b = _norm_base(provider, base)
+    if b and not has_server(provider):
+        raise ValueError(f"{p['title']} has no servers of its own: leave the address out")
+    t = _table(doc, provider, name)
+    for k, v in (("base", b), ("client_id", (client_id or "").strip()), ("label", (label or "").strip())):
+        if v:
+            t[k] = v
+    _write_all(doc)
+    return status(provider, name)
+
+
+def remove_account(provider, name):
+    """Sign the named account out, then forget its table. The default account stays: sign
+    it out instead."""
+    p = _check(provider, name)
+    if name == DEFAULT:
+        raise ValueError(f"the default {p['title']} account can't be removed: sign it out instead")
+    sign_out(provider, name)
+    doc = _read_all()
+    acc = doc.get(provider, {}).get("accounts", {})
+    acc.pop(name, None)
+    if not acc:
+        doc[provider].pop("accounts", None)
+    _write_all(doc)
 
 
 # ------------------------------------------------------------------ the keyring (libsecret)
@@ -301,8 +471,8 @@ class MemoryKeyring:
 
 
 KEYRING = None
-ACCOUNT = "default"
-_cache = {}                      # provider -> (time read, record): the keyring is asked at most every 30 s
+ACCOUNT = DEFAULT                # the keyring account of the one sign-in a provider had before named accounts
+_cache = {}                      # (provider, account) -> (time read, record): the keyring is asked at most every 30 s
 
 
 def _ring():
@@ -316,28 +486,30 @@ def _service(provider):
     return f"bromigos-account:{provider}"
 
 
-def _load(provider, fresh=False):
-    hit = _cache.get(provider)
+def _load(provider, fresh=False, account=DEFAULT):
+    key = (provider, account)
+    hit = _cache.get(key)
     if hit and not fresh and time.monotonic() - hit[0] < 30:
         return hit[1]
     try:
-        raw = _ring().get(_service(provider), ACCOUNT)
+        raw = _ring().get(_service(provider), account)
         rec = json.loads(raw) if raw else None
     except (RuntimeError, ValueError, OSError, subprocess.SubprocessError):
         rec = None
-    _cache[provider] = (time.monotonic(), rec)
+    _cache[key] = (time.monotonic(), rec)
     return rec
 
 
-def _save(provider, rec):
-    _ring().set(_service(provider), ACCOUNT, f"bromigOS: {_p(provider)['title']} sign-in", json.dumps(rec))
-    _cache[provider] = (time.monotonic(), rec)
+def _save(provider, rec, account=DEFAULT):
+    title = _p(provider)["title"] + (f" ({account})" if account != DEFAULT else "")
+    _ring().set(_service(provider), account, f"bromigOS: {title} sign-in", json.dumps(rec))
+    _cache[(provider, account)] = (time.monotonic(), rec)
 
 
-def sign_out(provider):
+def sign_out(provider, account=DEFAULT):
     _p(provider)
-    _ring().delete(_service(provider), ACCOUNT)
-    _cache[provider] = (time.monotonic(), None)
+    _ring().delete(_service(provider), account)
+    _cache[(provider, account)] = (time.monotonic(), None)
 
 
 # ------------------------------------------------------------------ gh
@@ -358,6 +530,12 @@ def gh_token():
             tok = None
     _gh.update(t=time.monotonic(), token=tok)
     return tok
+
+
+def _gh_covers(provider, account=DEFAULT):
+    """The gh login stands in for GitHub's default account on github.com."""
+    p = _p(provider)
+    return bool(p.get("gh") and account == DEFAULT and base(provider) == p["base"].rstrip("/") and gh_token())
 
 
 # ------------------------------------------------------------------ HTTP
@@ -388,8 +566,8 @@ def http_json(url, data=None, headers=None, method=None, timeout=15, form=True):
     return json.loads(raw) if raw.strip() else {}
 
 
-def _fmt(url, provider):
-    return url.format(base=base(provider))
+def _fmt(url, provider, account=DEFAULT):
+    return url.format(base=base(provider, account), api=api(provider, account) if "{api}" in url else "")
 
 
 def _err_code(body):
@@ -400,7 +578,7 @@ def _err_code(body):
     return body.get("error") or body.get("message")
 
 
-def _who(provider, access):
+def _who(provider, access, account=DEFAULT):
     p = _p(provider)
     if not p.get("who_url"):
         return None
@@ -409,84 +587,84 @@ def _who(provider, access):
             h = {p["who_header"]: access, **_plex_headers(provider)}
         else:
             h = {"Authorization": f"{p.get('who_auth', 'Bearer')} {access}",
-                 "Client-Id": config(provider).get("client_id") or ""}
-        d = http_json(_fmt(p["who_url"], provider), headers=h)
+                 "Client-Id": config(provider, account).get("client_id") or ""}
+        d = http_json(_fmt(p["who_url"], provider, account), headers=h)
         return d.get(p["who_field"]) or d.get("login") or d.get("id")
     except (OSError, ValueError):
         return None
 
 
-def _record(provider, tok, who=None):
+def _record(provider, tok, who=None, account=DEFAULT):
     now = time.time()
+    c = config(provider, account)
     rec = {"access_token": tok["access_token"], "refresh_token": tok.get("refresh_token"),
            "expires_at": now + float(tok["expires_in"]) if tok.get("expires_in") else None,
-           "scope": tok.get("scope"), "client_id": config(provider).get("client_id"), "base": base(provider),
-           "got": now}
-    rec["who"] = who or _who(provider, rec["access_token"])
+           "scope": tok.get("scope"), "client_id": c.get("client_id"), "base": c["base"], "got": now}
+    rec["who"] = who or _who(provider, rec["access_token"], account)
     return rec
 
 
-def _refresh(provider, rec):
+def _refresh(provider, rec, account=DEFAULT):
     if not rec.get("refresh_token"):
         return None
     p = _p(provider)
     try:
-        tok = http_json(_fmt(p["token_url"], provider), {"grant_type": "refresh_token", "refresh_token": rec["refresh_token"],
-                                                         "client_id": rec.get("client_id") or config(provider)["client_id"]})
+        tok = http_json(_fmt(p["token_url"], provider, account),
+                        {"grant_type": "refresh_token", "refresh_token": rec["refresh_token"],
+                         "client_id": rec.get("client_id") or config(provider, account)["client_id"]})
     except (OSError, ValueError):
         return None
     if not tok.get("access_token"):
         return None
     tok.setdefault("refresh_token", rec["refresh_token"])        # Spotify may not send a new one
-    new = _record(provider, tok, who=rec.get("who"))
-    _save(provider, new)
+    new = _record(provider, tok, who=rec.get("who"), account=account)
+    _save(provider, new, account)
     return new
 
 
-def token(provider):
+def token(provider, account=DEFAULT):
     """A usable access token, or None. Refreshes one that has expired (or is within a
-    minute of it). GitHub: the gh login first, when there is one."""
-    p = _p(provider)
-    if p.get("gh"):
-        t = gh_token()
-        if t:
-            return t
-    rec = _load(provider)
+    minute of it). GitHub's default account: the gh login first, when there is one."""
+    _p(provider)
+    if _gh_covers(provider, account):
+        return gh_token()
+    rec = _load(provider, account=account)
     if not rec:
         return None
     if rec.get("expires_at") and rec["expires_at"] - 60 < time.time():
-        rec = _refresh(provider, _load(provider, fresh=True) or rec)
+        rec = _refresh(provider, _load(provider, fresh=True, account=account) or rec, account)
         if not rec:
             return None
     return rec["access_token"]
 
 
-def refresh(provider):
+def refresh(provider, account=DEFAULT):
     """Refresh the stored token now (after the service answered 401): the new access
     token, or None when there's nothing to refresh with."""
     _p(provider)
-    rec = _load(provider, fresh=True)
-    new = _refresh(provider, rec) if rec else None
+    rec = _load(provider, fresh=True, account=account)
+    new = _refresh(provider, rec, account) if rec else None
     return new["access_token"] if new else None
 
 
-def set_token(provider, tok, who=None):
+def set_token(provider, tok, who=None, account=DEFAULT):
     """Store a token the user pasted (a personal access token): no expiry, no refresh."""
+    _check(provider, account)
     tok = (tok or "").strip()
     if not tok:
         raise SignInError("an empty token")
-    rec = _record(provider, {"access_token": tok}, who=who)
+    rec = _record(provider, {"access_token": tok}, who=who, account=account)
     rec["pasted"] = True
-    _save(provider, rec)
-    return status(provider)
+    _save(provider, rec, account)
+    return status(provider, account)
 
 
-def status(provider):
-    p = _p(provider)
-    if p.get("gh") and gh_token():
+def status(provider, account=DEFAULT):
+    _check(provider, account)
+    if _gh_covers(provider, account):
         return {"signed_in": True, "who": _gh_login(), "needs": [], "via": "gh"}
-    rec = _load(provider)
-    return {"signed_in": bool(rec), "who": (rec or {}).get("who"), "needs": [] if rec else needs(provider),
+    rec = _load(provider, account=account)
+    return {"signed_in": bool(rec), "who": (rec or {}).get("who"), "needs": [] if rec else needs(provider, account),
             "via": "keyring" if rec else None}
 
 
@@ -504,14 +682,14 @@ def _gh_login():
 
 
 # ------------------------------------------------------------------ the device flow (RFC 8628)
-def device_start(provider):
+def device_start(provider, account=DEFAULT):
     """Ask for a user code: {device_code, user_code, verification_uri, verification_uri_complete,
     expires_in, interval}."""
     p = _p(provider)
-    c = config(provider)
+    c = config(provider, account)
     if not c.get("client_id"):
-        raise NeedsConfig(provider, ["client_id"])
-    d = http_json(_fmt(p["device_url"], provider), {"client_id": c["client_id"], p["scope_key"]: " ".join(p["scopes"])})
+        raise NeedsConfig(provider, ["client_id"], account)
+    d = http_json(_fmt(p["device_url"], provider, account), {"client_id": c["client_id"], p["scope_key"]: " ".join(p["scopes"])})
     if not d.get("device_code"):
         raise SignInError(f"{p['title']} gave no device code: {str(d)[:120]}")
     d.setdefault("verification_uri_complete", d.get("verification_uri"))
@@ -520,10 +698,11 @@ def device_start(provider):
     return d
 
 
-def device_poll(provider, start, cancelled=lambda: False, sleep=time.sleep):
+def device_poll(provider, start, cancelled=lambda: False, sleep=None, account=DEFAULT):
     """Wait for the user to approve; returns the token answer. Honours slow_down."""
+    sleep = sleep or time.sleep                      # looked up now, so a test can stand in for it
     p = _p(provider)
-    c = config(provider)
+    c = config(provider, account)
     interval = float(start.get("interval") or 5)
     deadline = time.time() + float(start.get("expires_in") or 900)
     data = {"client_id": c["client_id"], "device_code": start["device_code"],
@@ -535,7 +714,7 @@ def device_poll(provider, start, cancelled=lambda: False, sleep=time.sleep):
             raise SignInError("cancelled")
         sleep(interval)
         try:
-            tok = http_json(_fmt(p["token_url"], provider), data)
+            tok = http_json(_fmt(p["token_url"], provider, account), data)
         except urllib.error.HTTPError as e:
             tok = getattr(e, "body", None) or {}
         code = _err_code(tok) if not (isinstance(tok, dict) and tok.get("access_token")) else None
@@ -557,7 +736,8 @@ def device_poll(provider, start, cancelled=lambda: False, sleep=time.sleep):
 # ------------------------------------------------------------------ Plex's PIN (plex.tv/link)
 def _plex_headers(provider="plex"):
     """The headers plex.tv wants from a client: its product name and a stable identifier
-    (a random one, made on first use and kept in accounts.toml)."""
+    (a random one, made on first use and kept in accounts.toml). It names this machine, so
+    every Plex account signed in here sends the default account's one."""
     c = config(provider)
     cid = c.get("client_id")
     if not cid:
@@ -567,7 +747,7 @@ def _plex_headers(provider="plex"):
     return {"X-Plex-Product": _p(provider)["product"], "X-Plex-Client-Identifier": cid}
 
 
-def plex_start(provider="plex"):
+def plex_start(provider="plex", account=DEFAULT):
     """Ask plex.tv for a PIN: {device_code (the PIN's id), user_code, verification_uri,
     verification_uri_complete, expires_in, interval}. Without `strong`, the code is the short
     one plex.tv/link takes."""
@@ -580,8 +760,9 @@ def plex_start(provider="plex"):
             "interval": 2}
 
 
-def plex_poll(provider, start, cancelled=lambda: False, sleep=time.sleep):
+def plex_poll(provider, start, cancelled=lambda: False, sleep=None, account=DEFAULT):
     """Wait for the code to be entered at plex.tv/link: {"access_token": the account's token}."""
+    sleep = sleep or time.sleep
     p = _p(provider)
     deadline = time.time() + float(start.get("expires_in") or 900)
     while time.time() < deadline:
@@ -599,13 +780,14 @@ def plex_poll(provider, start, cancelled=lambda: False, sleep=time.sleep):
     raise SignInError("the code expired before it was entered; start again")
 
 
-def plex_claim_token(provider="plex"):
+def plex_claim_token(provider="plex", account=DEFAULT):
     """A claim token ("claim-…") for a new Plex Media Server, from the signed-in account. A
     server started with it as PLEX_CLAIM joins that account. It lasts only a few minutes, so
     ask for it just before the server starts."""
-    tok = token(provider)
+    tok = token(provider, account)
     if not tok:
-        raise SignInError("sign in to Plex first: bromigos account login plex")
+        raise SignInError("sign in to Plex first: bromigos account login plex"
+                          + (f" --as {account}" if account != DEFAULT else ""))
     d = http_json(_p(provider)["claim_url"], headers={"X-Plex-Token": tok, **_plex_headers(provider)})
     if not str(d.get("token") or "").startswith("claim-"):
         raise SignInError(f"Plex gave no claim token: {str(d)[:120]}")
@@ -619,27 +801,27 @@ def pkce_pair():
     return verifier, challenge
 
 
-def pkce_url(provider, challenge, state, redirect):
+def pkce_url(provider, challenge, state, redirect, account=DEFAULT):
     p = _p(provider)
-    c = config(provider)
+    c = config(provider, account)
     if not c.get("client_id"):
-        raise NeedsConfig(provider, ["client_id"])
+        raise NeedsConfig(provider, ["client_id"], account)
     q = {"client_id": c["client_id"], "response_type": "code", "redirect_uri": redirect, "state": state,
          "code_challenge_method": "S256", "code_challenge": challenge, p["scope_key"]: " ".join(p["scopes"])}
     return p["auth_url"] + "?" + urllib.parse.urlencode(q)
 
 
-def pkce_flow(provider, on_prompt, cancelled=lambda: False, timeout=300):
+def pkce_flow(provider, on_prompt, cancelled=lambda: False, timeout=300, account=DEFAULT):
     """Listen on 127.0.0.1:<port>, send the user to the authorize page, take the code from
     the redirect, and trade it (with the verifier) for tokens."""
     import http.server
     p = _p(provider)
-    c = config(provider)
+    c = config(provider, account)
     port = int(c.get("port") or p.get("port") or 8898)
     redirect = f"http://127.0.0.1:{port}/callback"
     verifier, challenge = pkce_pair()
     state = secrets.token_urlsafe(16)
-    url = pkce_url(provider, challenge, state, redirect)
+    url = pkce_url(provider, challenge, state, redirect, account)
     got = {}
 
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -683,8 +865,14 @@ def pkce_flow(provider, on_prompt, cancelled=lambda: False, timeout=300):
 
 
 # ------------------------------------------------------------------ sign in
-def _default_prompt(provider):
-    title = _p(provider)["title"]
+def _title(provider, account=DEFAULT):
+    """"GitLab", or "GitLab (work)" for a named account."""
+    t = _p(provider)["title"]
+    return t if account == DEFAULT else f"{t} ({account})"
+
+
+def _default_prompt(provider, account=DEFAULT):
+    title = _title(provider, account)
 
     def show(d):
         url = d.get("verification_uri_complete") or d.get("auth_url")
@@ -707,32 +895,32 @@ def _stopper(cancelled):
     return cancelled
 
 
-def sign_in(provider, on_prompt=None, cancelled=None):
-    """Sign in, blocking until it's done: returns status(provider). cancelled: a callable
-    or a threading.Event; when it says True the sign-in stops with SignInError."""
+def sign_in(provider, on_prompt=None, cancelled=None, account=DEFAULT):
+    """Sign in, blocking until it's done: returns status(provider, account). cancelled: a
+    callable or a threading.Event; when it says True the sign-in stops with SignInError."""
     cancelled = _stopper(cancelled)
-    p = _p(provider)
-    missing = needs(provider)
+    p = _check(provider, account)
+    missing = needs(provider, account)
     if missing:
-        raise NeedsConfig(provider, missing)
-    prompt = on_prompt or _default_prompt(provider)
+        raise NeedsConfig(provider, missing, account)
+    prompt = on_prompt or _default_prompt(provider, account)
     if p["flow"] in ("device", "plex-pin"):
-        start = (plex_start if p["flow"] == "plex-pin" else device_start)(provider)
+        start = (plex_start if p["flow"] == "plex-pin" else device_start)(provider, account=account)
         prompt({k: start.get(k) for k in ("user_code", "verification_uri", "verification_uri_complete", "expires_in")})
-        tok = (plex_poll if p["flow"] == "plex-pin" else device_poll)(provider, start, cancelled)
+        tok = (plex_poll if p["flow"] == "plex-pin" else device_poll)(provider, start, cancelled, account=account)
     else:
-        tok = pkce_flow(provider, prompt, cancelled)
+        tok = pkce_flow(provider, prompt, cancelled, account=account)
     if not tok.get("access_token"):
         raise SignInError(f"{p['title']} gave no token")
-    _save(provider, _record(provider, tok))
-    return status(provider)
+    _save(provider, _record(provider, tok, account=account), account)
+    return status(provider, account)
 
 
 class Signin:
     """A sign-in a panel can draw while it runs: start() and read .state and .prompt."""
 
-    def __init__(self, provider, on_change=None):
-        self.provider, self.on_change = provider, on_change
+    def __init__(self, provider, on_change=None, account=DEFAULT):
+        self.provider, self.on_change, self.account = provider, on_change, account
         self.state, self.prompt, self.error = "idle", None, None
         self._stop = False
         self.thread = None
@@ -759,11 +947,11 @@ class Signin:
                     subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                      start_new_session=True)
             try:
-                sign_in(self.provider, prompt, lambda: self._stop)
+                sign_in(self.provider, prompt, lambda: self._stop, account=self.account)
                 self._set(state="signed_in", prompt=None)
-            except (NeedsConfig, SignInError, OSError, ValueError, RuntimeError) as e:
+            except (NeedsConfig, SignInError, OSError, ValueError, RuntimeError, KeyError) as e:
                 self._set(state="error", error=str(e)[:240], prompt=None)
-        self.thread = threading.Thread(target=run, daemon=True, name=f"signin-{self.provider}")
+        self.thread = threading.Thread(target=run, daemon=True, name=f"signin-{self.provider}-{self.account}")
         self.thread.start()
 
     def cancel(self):
@@ -772,35 +960,108 @@ class Signin:
 
 
 # ------------------------------------------------------------------ command line
+VERBS = ("status", "login", "logout", "configure", "set-token", "list", "add", "remove")
+
+
+def _usage():
+    print(__doc__.split("Command line")[1].split("\n", 1)[1].strip())
+    return 2
+
+
+def _opts(argv):
+    """(positional words, --as NAME, flags): --as NAME (or --as=NAME), --yes, --json."""
+    words, acct, flags = [], DEFAULT, set()
+    it = iter(argv)
+    for a in it:
+        if a == "--as":
+            acct = next(it, "") or DEFAULT
+        elif a.startswith("--as="):
+            acct = a.split("=", 1)[1] or DEFAULT
+        elif a in ("--yes", "-y", "--json"):
+            flags.add("json" if a == "--json" else "yes")
+        else:
+            words.append(a)
+    return words, acct, flags
+
+
+def _list_lines(provider, rows):
+    out = [_p(provider)["title"]]
+    for r in rows:
+        state = (f"signed in{' through gh' if r.get('via') == 'gh' else ''}"
+                 + (f" as {r['who']}" if r.get("who") else "")) if r["signed_in"] else \
+            ("needs " + ", ".join(r["needs"]) if r.get("needs") else "not signed in")
+        out.append(f"  {r['name']:<12} {r['label']:<20} {r['base']:<32} {state}")
+    return out
+
+
 def main(argv):
-    if len(argv) < 2 or argv[0] not in ("status", "login", "logout", "configure", "set-token"):
-        print(__doc__.split("Command line")[1].split("\n", 1)[1].strip())
-        return 2
-    verb, prov = argv[0], argv[1]
+    words, acct, flags = _opts(argv)
+    if not words or words[0] not in VERBS or (words[0] != "list" and len(words) < 2):
+        return _usage()
+    verb, prov = words[0], (words[1] if len(words) > 1 else None)
+    kv = dict(a.split("=", 1) for a in words[2:] if "=" in a)
     try:
-        if verb == "status":
-            print(json.dumps(status(prov)))
+        if verb == "list":
+            provs = [prov] if prov else list(PROVIDERS)
+            got = {p: accounts(p) for p in provs}
+            if "json" in flags:
+                print(json.dumps(got if not prov else got[prov]))
+            else:
+                for p in provs:
+                    print("\n".join(_list_lines(p, got[p])))
+        elif verb == "add":
+            name = words[2] if len(words) > 2 and "=" not in words[2] else None
+            if not name:
+                print("bromigos account: add PROVIDER NAME [base=URL] [client_id=ID] [label=TEXT]", file=sys.stderr)
+                return 2
+            st = add_account(prov, name, base=kv.get("base"), client_id=kv.get("client_id"), label=kv.get("label"))
+            more = f"; it needs {', '.join(st['needs'])}: bromigos account configure {prov} --as {name} " + \
+                " ".join(f"{k}=…" for k in st["needs"]) if st.get("needs") else \
+                f"; sign in with: bromigos account login {prov} --as {name}"
+            print(f"added the {_p(prov)['title']} account {name} ({base(prov, name)}){more}")
+        elif verb == "remove":
+            name = words[2] if len(words) > 2 else ""
+            _check(prov, name)
+            if name == DEFAULT:
+                raise ValueError(f"the default {_p(prov)['title']} account can't be removed: "
+                                 f"bromigos account logout {prov}")
+            if "yes" not in flags:
+                if not sys.stdin.isatty():
+                    print("bromigos account: remove asks first; add --yes to remove without asking", file=sys.stderr)
+                    return 1
+                ans = input(f"Remove the {_p(prov)['title']} account {name}? It signs out and forgets its "
+                            "settings. [y/N] ")
+                if ans.strip().lower() not in ("y", "yes"):
+                    print("kept it")
+                    return 1
+            remove_account(prov, name)
+            print(f"removed the {_p(prov)['title']} account {name}")
+        elif verb == "status":
+            print(json.dumps(status(prov, acct)))
         elif verb == "logout":
-            sign_out(prov)
-            print(f"signed out of {_p(prov)['title']}")
+            sign_out(prov, acct)
+            print(f"signed out of {_title(prov, acct)}")
         elif verb == "configure":
-            configure(prov, **dict(a.split("=", 1) for a in argv[2:] if "=" in a))
-            print(f"{accounts_path()}: [{prov}] updated")
+            configure(prov, acct, **kv)
+            where = f"[{prov}]" if acct == DEFAULT else f"[{prov}.accounts.{acct}]"
+            print(f"{accounts_path()}: {where} updated")
         elif verb == "set-token":
+            _check(prov, acct)
             import getpass
-            tok = getpass.getpass(f"{_p(prov)['title']} token: ") if sys.stdin.isatty() else sys.stdin.read()
-            print(json.dumps(set_token(prov, tok)))
+            tok = getpass.getpass(f"{_title(prov, acct)} token: ") if sys.stdin.isatty() else sys.stdin.read()
+            print(json.dumps(set_token(prov, tok, account=acct)))
         else:
             def show(d):
                 if d.get("user_code"):
                     print(f"Go to {d['verification_uri']} and enter {d['user_code']}")
                 else:
                     print(f"Opening {d['auth_url']}")
-                _default_prompt(prov)(d)
-            s = sign_in(prov, show)
-            print(f"signed in to {_p(prov)['title']}" + (f" as {s['who']}" if s.get("who") else ""))
-    except (NeedsConfig, SignInError, KeyError, RuntimeError) as e:
-        print(f"bromigos account: {e}", file=sys.stderr)
+                _default_prompt(prov, acct)(d)
+            s = sign_in(prov, show, account=acct)
+            print(f"signed in to {_title(prov, acct)}" + (f" as {s['who']}" if s.get("who") else ""))
+    except (NeedsConfig, SignInError, KeyError, RuntimeError, ValueError) as e:
+        msg = e.args[0] if isinstance(e, KeyError) and e.args else e
+        print(f"bromigos account: {msg}", file=sys.stderr)
         return 1
     return 0
 

@@ -31,9 +31,11 @@ Widgets that read an online account sign in through this module: the device flow
 GitHub, GitLab), the authorization code with PKCE on a loopback port (Spotify), or Plex's
 PIN, a code you enter at plex.tv/link. `plex_claim_token()` gives a new Plex server the
 claim token that adds it to your account. Tokens
-go to the login keyring through libsecret, never to a file. Client IDs are the user's
-own, in `~/.config/bromigos/accounts.toml`. For GitHub it uses the `gh` login when there
-is one. `bromigos account` is its command line, and
+go to the login keyring through libsecret, never to a file. Client IDs and server
+addresses are in `~/.config/bromigos/accounts.toml`. A service can have several accounts,
+such as gitlab.com and a company's own GitLab: the first is `default`, and each other one
+has a name and its own table and keyring item. For GitHub's default account it uses the
+`gh` login when there is one. `bromigos account` is its command line, and
 [docs/plugins.md](../docs/plugins.md#a-widget-that-needs-an-account) shows a panel that
 uses it.
 
