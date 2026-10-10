@@ -215,6 +215,158 @@ day, a relay station whose spokes are the homelab's services, this machine's loa
 the time. Any key, click or real mouse movement ends it.
 [ELEMENTS.md](docs/ELEMENTS.md#screensaver-planet-and-station) has the details.
 
+## The den TV
+
+The den TV turns the den's screens into TVs. A *TV channel* (not an update channel) plays
+your own videos as if it were live television: from your Jellyfin or Plex server, a YouTube playlist or channel, or
+a folder of video files. Whatever the time, the channel is part-way through something, as
+if it had been on all along. The manual's
+[Themes and worlds](../manual/src/themes-and-worlds.md#the-den-tv) page is the user's guide.
+
+![The den with a test pattern playing on its big monitor, a speaker in its corner, and the
+hover hint under it: the channel, the buttons to change it, the sound, the volume and Full
+screen](../docs/images/den-tv.webp)
+
+Each of the den's three screens has a channel list: the big monitor (`big`), the scope
+(`wave`) and the small monitor (`emblem`). Channel 1 is the screen's own picture, drawn
+exactly as before. The media channels that name the screen come after it. With every screen
+on channel 1, the den is pixel for pixel what it was without the den TV. One media channel
+plays at a time: tuning a second screen to one sends the first back to channel 1.
+
+The den TV is the den's only. Mire and Tidewell have no screen to put it on. A world could
+name a screen region for it, but none does yet.
+
+### Channels
+
+A channel is a `[[tv.channel]]` table in `~/.config/bromigos-live/config.toml`, or the one
+the MEDIA panel's settings describe ([docs/widgets.md](../docs/widgets.md#media)).
+
+```toml
+[[tv.channel]]
+name = "Saturday"
+source = "plex"            # a jellyfin or plex source in homelab.toml; default: the first
+library = "TV Shows"       # or collection = "…" or playlist = "…", by its name
+order = "shuffle"          # or "in order"
+screens = ["big"]          # big, wave or emblem; default: the big monitor
+
+[[tv.channel]]
+name = "Studio"
+youtube = "https://www.youtube.com/@example"   # a channel's uploads, or a playlist's address
+live = true                # while the channel is live, "Studio LIVE" follows it
+keep = "~/Videos/YouTube"  # keep what it plays; keep_all = true keeps every video
+
+[[tv.channel]]
+name = "Home movies"
+files = "~/Videos/Home"    # a folder, searched through, or a list of files
+```
+
+- **The schedule.** The channel's items play end to end from a fixed start, round and
+  round, so the time of day says what's on (`lib/bromigos_tv.py`). A playlist plays in its
+  own order by default, and anything else shuffled. A shuffle is the same all day and on
+  every machine, and a new item slots in without reordering the rest.
+- **Jellyfin and Plex** come through `bromigos-homelab`'s `video` capability
+  ([docs/homelab.md](../docs/homelab.md#capabilities)). The server needs a key: a
+  Jellyfin API key or a Plex token, in the source's `auth_ref`. A library that a tool fills
+  with downloaded YouTube videos plays like any other, by its name: `library = "YouTube"`.
+  It plays offline, with no ads, and doesn't break when YouTube changes.
+- **YouTube** comes through `yt-dlp`, with no API key (`lib/bromigos_youtube.py`). A
+  channel's or playlist's list is read once an hour and cached. A video that won't play,
+  such as an age-gated, removed or blocked one, is skipped for a day and logged.
+- **Keeping YouTube videos.** With `keep`, each video the TV plays is downloaded into that
+  folder, at a low priority, one at a time, and never on battery. The TV plays the kept
+  file from then on, so it works offline. The folder can be a NAS share. The layout is the
+  one Plex and Jellyfin read: `<Channel>/Season <year>/<date> - <title>.mkv`, or
+  `<Playlist>/Season 1/S01E<number> - <title>.mkv`, each with a `.nfo` and a thumbnail.
+  `keep_max_gb` caps it, and the oldest kept videos go first. Only files the TV kept are
+  ever removed.
+
+The `[tv]` table in `config.toml` has the rest: the stream's quality, full screen's, how
+much the den's phosphor tints the picture, the volume a screen starts at and the ducking.
+
+### How it plays
+
+`live/tv.py` runs the den TV and `live/mpvgl.py` draws the picture:
+
+- **Decoding.** libmpv, through python-mpv, decodes on the GPU where it can (NVDEC on
+  NVIDIA, VA-API elsewhere). Its render API draws each frame into a texture the size of
+  the screen. `bg.frag` draws the texture in the screen's glass, with the tube's curve,
+  scanlines, a soft glow and the den's phosphor tint.
+- **The stream.** A server's file plays as it is. Over the source's `direct_max_mbps`, 20
+  by default, the server transcodes it to 480p for the den. Full screen plays the file.
+- **Pausing.** mpv decodes only while a media channel is on a screen that's drawn and in
+  view. A second without a frame pauses it, so the lock screen, a fullscreen window, a
+  deck and the screensaver all stop it. So does a window over the screen. Coming back,
+  the channel jumps to where it would be now.
+- **Motion.** With still motion, or no GPU, the screen shows the item's poster and nothing
+  is decoded. With reduced motion, it shows a still frame renewed every 30 seconds, unless
+  the sound is on.
+- **Nothing on.** Thirty seconds after the last media channel goes off, mpv closes.
+
+### The pointer, the hint and the keys
+
+The background takes the pointer over the den's screens that have more than one channel,
+and nowhere else. Its input region is those screens' rectangles, and the hint's while it
+shows, so a click anywhere else on the desktop goes through as before.
+
+| Over a screen | What happens |
+|---|---|
+| Hover | The hint: what's on, the channel number, ◀ ▶, the speaker, − and + with the volume bar, **FULL** and the server's or YouTube's page |
+| Click | A media channel opens in mpv, full screen with sound, at the same moment. Channel 1 moves to the next channel. |
+| Wheel | The next or previous channel, with a burst of static and the channel number on the screen |
+| Wheel over the volume bar, or sideways | The volume, shown as a bar on the screen |
+
+Shift and the wheel, and the volume keys, can't reach the den TV. The background never
+has the keyboard, so Hyprland tells it about neither. Taking the volume keys over while
+the pointer is over the TV would mean rebinding them, and a live layer that stopped
+mid-hover would leave them rebound.
+
+Full screen is a normal mpv window. It takes the screen's volume, and the server's key
+goes to mpv in a file only you can read, never on its command line. Closing it brings the
+TV back at the live position, with its sound as it was.
+
+| Key | What it does |
+|---|---|
+| Super+Alt+P | The media channel full screen with sound |
+| Super+Alt+. and Super+Alt+, | The next and previous channel |
+| Super+Alt+M | The TV's sound on or off |
+
+### Sound
+
+The TV is silent until you turn its sound on: the speaker in the hint, Super+Alt+M,
+`bromigos-live tv sound on`, or turning the volume up. Each screen remembers its channel,
+its sound and its volume, from 0 to 100, in `~/.local/state/bromigos-live/tv.json`.
+
+- PipeWire shows the TV as **bromigOS den TV**, in the mixer and Settings › Sound.
+- With the sound off, no audio is decoded at all.
+- bromigOS's mute (Super+Shift+M, `bromigos mute`) silences it.
+- The lock screen and the screensaver silence it, and the sound comes back after.
+- While VECTOR speaks or a codec call plays, it ducks to `[tv] duck`, 30% by default.
+- A small speaker on the screen says the sound is on.
+
+### Commands
+
+```bash
+bromigos-live tv list                  # every screen's channels; * marks the one on
+bromigos-live tv set 2 big             # channel 2 on the big monitor
+bromigos-live tv next                  # the next channel (prev: the previous)
+bromigos-live tv open                  # full screen with sound
+bromigos-live tv web                   # what's on, in the server's or YouTube's web page
+bromigos-live tv sound toggle          # on, off or toggle
+bromigos-live tv volume up             # up, down, or a level: volume 40
+bromigos-live tv state --json          # what's on, the sound, what mpv is doing
+```
+
+`bromigos-live tv help` has the details.
+
+### Tests
+
+| Test | What it checks |
+|---|---|
+| `tests/test_tv.py` | The schedule, the channels, the remembered state, YouTube against a stand-in for yt-dlp (`tests/fake_ytdlp.py`) and keeping videos |
+| `tests/offscreen_tv.py` | The den pixel for pixel as before with no media channel on, a generated test clip playing through libmpv in two themes, the hint, and the poster with still motion |
+| `../homelab/tests/test_video.py` | The Jellyfin and Plex adapters against fake servers |
+| `../desktop/tests/e2e_tv_nested.py` | The whole thing in a nested Hyprland, with a fake Jellyfin and a PipeWire nobody hears |
+
 ## Screen sizes
 
 The den and the worlds are painted at 16:9. On a screen of another shape, the scene
@@ -307,6 +459,7 @@ The background never draws over application windows. Decks do, but only while op
 | `live/world.py`, `actors.py`, `shaders/world*` | Worlds: a theme's whole scene and its actors |
 | `live/worldfeed.py`, `activity.py`, `skyclock.py` | Readings only worlds need: coding agents, your activity, the local sky |
 | `live/videoloop.py`, `shaders/world_yuv.frag` | Video loops decoded by ffmpeg and drawn on the GPU |
+| `live/tv.py`, `live/mpvgl.py` | The den TV: its channels on the den's screens, the hint, sound and full screen; libmpv drawing into a texture |
 | `live/fireflies.py` | Mire's fireflies |
 | `live/cover.py`, `live/pixbuf.py` | Fitting a 16:9 scene to any screen, and reading images at any width |
 | `live/decks.py` | The deck catalogue and the Tab cycle (`bromigos-live decks`) |
@@ -345,7 +498,8 @@ Signal-driven animation of hyprlock is retired: `[events] lock_emblem` must stay
 
 | Path | What it holds |
 |---|---|
-| `~/.local/state/bromigos-live/` | `live.log`, the 72-hour history (`history.npz`, `events.jsonl`), `swarm-seen.json`, the `muted` and `codec-quiet` flags |
+| `~/.local/state/bromigos-live/` | `live.log`, the 72-hour history (`history.npz`, `events.jsonl`), `swarm-seen.json`, the `muted` and `codec-quiet` flags, the den TV's `tv.json` |
+| `~/.cache/bromigos/tv/` | The den TV's channel lists, what the servers offer, files' lengths, and items that wouldn't play |
 | `~/.cache/bromigos-live/` | The clean den plate, charts, CI results, the Drift map's layout and spoken lines. All rebuilt when needed |
 | `$XDG_RUNTIME_DIR/bromigos-live.sock` | The control socket |
 | `$XDG_RUNTIME_DIR/bromigos-live.lock` | Held by the daemon for its whole life, with its process ID and start time. A second daemon exits with code 4 |

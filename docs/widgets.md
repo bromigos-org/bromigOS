@@ -43,6 +43,7 @@ list of shortcuts, in ember orange">
 | `solar` | Solar now: what the roof makes, what the house uses, the grid and batteries ([below](#the-homelabs-widgets)) | No. Offered when a homelab source provides energy |
 | `games` | Your homelab's game servers: up or down, and who's playing ([below](#the-homelabs-widgets)) | No. Offered when a homelab source provides games |
 | `alerts` | The homelab's firing and pending alerts, worst first ([below](#the-homelabs-widgets)) | No. Offered when a homelab source provides alerts |
+| `media` | The den TV's now and next, and a media server's continue watching and recently added ([below](#media)) | No. Offered with a Jellyfin or Plex source, or a den TV channel |
 
 ## Show or hide a panel
 
@@ -382,6 +383,38 @@ units = "imperial"         # °F and mph; the default, "metric", is °C and km/h
 
 Then turn the panel on by setting `"visible": true` on the `weather` entry in your
 `layout.json`.
+
+## Media
+
+The media panel, `widgets/plugins/media.py`, follows the den TV
+([live/README.md](../live/README.md#the-den-tv)). It asks the live layer what's on through
+`bromigos-live tv state`. When the den isn't drawn, it works out its own channel's schedule
+from the same cache (`lib/bromigos_tv.py`).
+
+| Size class | Shows |
+|---|---|
+| `compact` | What's on, how far in, and what's next |
+| `wide` | The TV's buttons (channel, sound, volume, full screen), and continue watching |
+| `large` | Recently added too, with posters |
+
+Continue watching and recently added come from the first Jellyfin or Plex source in
+`homelab.toml`, or the one the panel's `source` names, every 5 minutes and only while the
+panel is wide or large ([homelab.md](homelab.md#video-libraries)).
+
+Its settings, in `~/.config/bromigos/widgets/media.toml`, describe one den TV channel:
+
+| Key | What it sets |
+|---|---|
+| `source` | A Jellyfin or Plex source's name, or `youtube` |
+| `play` | What to play: `library:<name>`, `collection:<name>` or `playlist:<name>`. The form lists what the servers last offered. |
+| `youtube` | A YouTube playlist's or channel's address, with `source = "youtube"` |
+| `order` | `shuffle` or `in order`. Empty: a playlist in order, the rest shuffled. |
+| `screen` | `big`, `wave` or `emblem` |
+| `channel_name` | What the TV calls the channel |
+| `keep`, `keep_all`, `keep_max_gb` | For YouTube: a folder to keep videos in, whether to keep every video, and a cap in GB |
+
+The panel is offered in the gallery only when there's something to show: a `video`
+source in `homelab.toml`, or a den TV channel.
 
 ## Connections
 

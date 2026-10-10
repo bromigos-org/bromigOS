@@ -205,6 +205,7 @@ With no provider, everything is empty and whatever asked hides itself. Every rec
 | `alerts` | `name, severity, state, summary, since, labels, link`. `state` is firing or pending. `link` is the alert's page on its source. |
 | `voice` | `name, endpoint, up, tts, stt, sample_rate, tts_model, stt_model`: a speech service VECTOR talks through |
 | `media` | `name, endpoint, up, running, pending, vram_free, vram_total, gpu, version, models` |
+| `video` | `name, kind, id, title, count, media, server`: one per library, collection and playlist on a Jellyfin or Plex server. `kind` is library, collection or playlist. |
 | `gpus` | `name, host, model, uuid, vram_used, vram_total, util_pct, temp_c, power_w, power_limit_w, driver, holds` |
 | `logs` | `name, errors, window_min, link`, and `logs_query(app, since_min, limit, contains)` for log lines |
 | `routes` | `name, host, entrypoints, service, up, status, tls, rps, error_pct` |
@@ -221,6 +222,10 @@ With no provider, everything is empty and whatever asked hides itself. Every rec
 | `ocr` | `name, endpoint, up, model, via`: where the `ocr` job kind sends pages |
 | `youtube-downloader` | `name, kind, up, videos, newest, newest_at, queue, errors, state, link`. The first record is the downloader itself (`kind` is `downloader`, with `queue`, `errors`, `sources` and `recent`). Then there's one per channel or playlist. Read it from Python as `H.youtube_downloader()`. |
 | `energy` | `name, kind, production_w, consumption_w, net_w, today_wh, consumed_today_wh, lifetime_wh, battery_pct, battery_w, inverters, state`. `net_w` is positive while you draw from the grid and negative while you send to it. |
+
+`media` and `video` are different things. `media` is a server that *makes* pictures and
+videos, such as ComfyUI. `video` is a server that *plays* your own, such as Jellyfin or
+Plex: the den TV and the MEDIA panel read it ([Video libraries](#video-libraries)).
 
 Sizes such as `vram_used`, `used` and `total` are in bytes. On unified memory,
 `vram_total` is `None`. `holds` lists what uses a GPU, as `"namespace/app"`.
@@ -338,7 +343,7 @@ read the way it's configured reads *unreachable* and says why. Nothing else is a
 | `ocr` | an OpenAI-compatible OCR server, or a model on the lab's LLM gateway | ocr, apps |
 | `pelican` | a Pelican exporter's metrics, else the panel's client API | games |
 | `arr` | scraparr's or exportarr's metrics, or one app's API | library |
-| `jellyfin`, `plex` | their health and identity endpoints | library |
+| `jellyfin`, `plex` | their health and identity endpoints; with a key, their video libraries | library, video |
 | `pinchflat` | Pinchflat's health check, its list of sources and each source's feed, and its job queue metrics | youtube-downloader |
 | `arc` | GitHub's Actions Runner Controller: its listener and runner pods, or its `gha_*` metrics | runners |
 | `pacman-repo` | a pacman repository's databases per channel, and the publishing workflow's runs | packages |
@@ -368,6 +373,8 @@ Their options:
 | `pbs` | `endpoint`, `auth_ref` (a token, sent as `PBSAPIToken=`) |
 | `enphase` | `endpoint`, `auth_ref` (an owner token, for firmware 7 and later), `tls_verify = false` or `tls_ca`; `history_metric` |
 | `minecraft` | `endpoint` (`minecraft://host:25565`), or `servers = [{ name, address }]` for several; `timeout` (4 s) |
+| `jellyfin` | `endpoint`, `auth_ref` (an API key); `user` (whose continue watching; default the first administrator); `web_url`; `direct_max_mbps` (20) |
+| `plex` | `endpoint`, `auth_ref` (a Plex token); `web_url`; `direct_max_mbps` (20) |
 
 Numbers in brackets are the defaults.
 
@@ -397,6 +404,48 @@ endpoint = "minecraft://mc.example.org:25565"
 
 A namespace with no pods reads *not deployed* on the `workload` adapter, not *down*.
 Pelican's start, stop and restart aren't built yet.
+
+#### Video libraries
+
+With a key, a `jellyfin` or `plex` source also provides `video`: its libraries,
+collections and playlists, the items in each, what you were watching, what's new, and a
+stream for each item. The den TV plays them as channels
+([live/README.md](../live/README.md#the-den-tv)), and the MEDIA panel shows them.
+
+```toml
+[[source]]
+type = "jellyfin"
+endpoint = "@private:endpoints.jellyfin"
+auth_ref = "@file:~/.local/share/bromigos/jellyfin-key"
+
+[[source]]
+type = "plex"
+endpoint = "@private:endpoints.plex"
+auth_ref = "@file:~/.local/share/bromigos/plex-token"
+```
+
+- **A Jellyfin key.** In Jellyfin, open **Dashboard › API Keys** and add one. Put it in a
+  file only you can read, such as `~/.local/share/bromigos/jellyfin-key` with mode 0600.
+- **A Plex token.** Plex's support article *Finding an authentication token* shows where
+  to read yours. Keep it in a file the same way, or in Vault (`@vault:kv/plex#token`).
+- **Streams.** A file plays as it is. One over `direct_max_mbps` is transcoded by the
+  server to 480p for the den's small screens. Full screen plays the file.
+- **The key** goes in a request header, never in an address, so it never shows in a
+  command line or a log.
+- **Read-only.** Nothing marks anything watched or changes a library.
+
+Without a key, the source still reports the server's health, and the den TV and the MEDIA
+panel say the key is missing and where it goes.
+
+A library of YouTube videos that a downloader keeps on your server, named for example
+`YouTube`, plays like any other: `library = "YouTube"`. It plays offline, with no ads, and
+keeps working when YouTube changes. The den TV's own YouTube source streams anything you
+haven't downloaded.
+
+In Python, `H.video()` is the capability, and `H.video_source(name)` gives one server's
+adapter, with `playlists()`, `video_items(kind, id)`, `video_resume()`, `video_latest()`,
+`video_stream(item, quality)`, `video_web(item)` and `video_poster(item)`
+(`adapters/labvideo.py`).
 
 #### What a kubeconfig needs
 
@@ -620,6 +669,7 @@ spark and label. It reads the snapshot, so it shows whatever your lab provides.
 | VECTOR's memory in Gnosis | a `gnosis` source with both tokens |
 | VECTOR's voice and hearing from the lab | a `voice` source, or `lab.url` in his `voice.json` |
 | ComfyUI's state on a declared panel | a `comfyui` source |
+| the den TV's Jellyfin and Plex channels, and the MEDIA panel | a `jellyfin` or `plex` source with a key ([Video libraries](#video-libraries)) |
 | the lab console's other cards | the matching capability ([lab.md](lab.md)) |
 
 The Ops, Netmap and Mind decks have no default key. Open them with the command shown, the

@@ -42,6 +42,7 @@ choose them.
 | YOUTUBE | A channel's newest videos, and whether it's live. | none | no |
 | DISCORD | Who's online in a Discord server. | none | no |
 | LAB JOBS, SOLAR, GAME SERVERS, ALERTS | Your homelab's job queue, solar power, game servers and alerts. | none | offered when your homelab has them |
+| MEDIA | What's on the [den TV](themes-and-worlds.md#the-den-tv), now and next, and your media server's continue watching and recently added. | none | no; offered when you have a media server or a den TV channel |
 
 The panels marked "no" are off until you add them: open edit mode, find one in the tray,
 and click **Add to desktop**. Each one says on the panel itself what it needs before it
@@ -128,6 +129,21 @@ bromigos panels hide connections  # turn one off
 bromigos panels move notes 514 16 # move one, in pixels from the top-left
 bromigos panels size notes 470 400 # resize one: width and height in pixels
 ```
+
+## Media
+
+MEDIA follows the [den TV](themes-and-worlds.md#the-den-tv). It comes in three sizes:
+
+- **compact:** what's on and what's next, with how long is left;
+- **wide:** the TV's buttons, and what you were part-way through on your server;
+- **large:** recently added too, with posters.
+
+Click what's on to watch it full screen with sound. Click something you were watching to
+open it in Jellyfin or Plex, which remember where you were.
+
+Its **Settings…** make a TV channel without editing a file. Choose a source and a library,
+collection or playlist from your server, or paste a YouTube address. You can also choose
+the den screen, the order, and a folder to keep YouTube videos in.
 
 ## Set up the weather
 

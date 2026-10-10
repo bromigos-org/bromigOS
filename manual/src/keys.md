@@ -121,6 +121,10 @@ The [live layer](glossary.md#live-layer) draws the animated background.
 | <span class="keys"><kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></span> | Turn the spoken part of [codec calls](glossary.md#codec-call) off, or on again. The calls still show. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>X</kbd></span> | Pin a drawing of this machine's hardware to the background, with live readings. Press again to remove it. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>Z</kbd></span> | Hold to show the hardware drawing. Let go to hide it. |
+| <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd></span> | Watch what's on the [den TV](themes-and-worlds.md#the-den-tv) full screen, with sound, from the same moment. |
+| <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>.</kbd></span> | Change the den TV to its next channel. |
+| <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>,</kbd></span> | Change the den TV to its previous channel. |
+| <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd></span> | Turn the den TV's sound on or off. |
 
 ### Screenshots and recording
 

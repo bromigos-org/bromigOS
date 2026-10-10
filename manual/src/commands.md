@@ -1240,7 +1240,7 @@ Arguments:
 ```
 
 ```text
-bromigos live start|stop|restart|status|open <deck>|<deck> …
+bromigos live start|stop|restart|status|open <deck>|tv <verb>|<deck> …
 ```
 
 From the `bromigos-live` package.

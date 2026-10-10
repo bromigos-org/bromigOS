@@ -22,6 +22,8 @@ modules to the same folder:
 | `emblem_braille.py` | Draws the emblem as coloured braille for the terminal banner |
 | `bromigos_private.py` | Reads the private overlay: values a user keeps encrypted in their dotfiles |
 | `bromigos_account.py` | Signs a widget in to an online account, such as Twitch or GitHub, and keeps the token in the keyring |
+| `bromigos_tv.py` | The den TV's channels, their wall-clock schedule, and each screen's remembered channel and sound |
+| `bromigos_youtube.py` | YouTube playlists and channels through yt-dlp, cached, with live streams and keeping videos |
 
 ### bromigos_account
 
@@ -87,3 +89,19 @@ default the caller passes, so the desktop still runs.
 
 The panels find this folder on their own, as `../lib` beside `widgets/`. For the live
 layer, set `BROMIGOS_PYLIB` to this folder's path, or put it on `PYTHONPATH`.
+
+### bromigos_tv
+
+The den TV's channels ([live/README.md](../live/README.md#the-den-tv)). The live layer
+plays them and the MEDIA panel shows them, so both read the schedule from here.
+`lineup(cfg, screen)` lists a screen's channels, its own picture first.
+`schedule_at(items, t, seed, order)` says what's on at time `t` and how far in.
+`now_next(channel)` does the same from the channel's cached list, with no network.
+
+### bromigos_youtube
+
+Reads a YouTube playlist or channel with `yt-dlp --flat-playlist -J`, which needs no API
+key, and caches it in `~/.cache/bromigos/youtube/`. `videos(url)` gives its videos,
+`live_now(url)` a channel's live stream, and `keep(video, folder)` saves one video in the
+layout Plex and Jellyfin read. The module's docstring describes each function, and its
+interface stays stable for the panels that use it.

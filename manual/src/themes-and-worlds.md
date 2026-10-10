@@ -122,6 +122,86 @@ Craft cross the sky now and then in both worlds.
 Both worlds can move less, or hold still like a photograph. See
 [Accessibility](accessibility.md).
 
+## The den TV
+
+The den's screens can show your own videos, like a TV that's always on. A TV channel plays
+from your Jellyfin or Plex server, a YouTube playlist or channel, or a folder of videos.
+Whenever you look, it's part-way through something, as if it had been on all along. It's
+silent until you turn the sound on. (A TV channel has nothing to do with the update
+[channel](glossary.md#channel) your machine follows.)
+
+![The den's big monitor playing a test pattern, with the hint under it: what's on, the
+channel buttons, the sound, the volume and Full screen](images/den-tv.webp)
+
+Each of the den's three screens has its own TV channels. Channel 1 is what the screen
+always shows, such as the relay map on the big monitor. Your channels come after it, and
+the den stays exactly as it was until you change channel.
+
+### Watch it
+
+Point at a screen that has channels. A hint shows what's on.
+
+| To | Do this |
+|---|---|
+| Change channel | Scroll over the screen, or click ◀ ▶ in the hint |
+| Watch it big, with sound | Click the screen, or **FULL** in the hint. mpv opens full screen at the same moment. Close it to go back. |
+| Turn the sound on or off | The speaker in the hint, or <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd> |
+| Change the volume | − and + in the hint, or scroll over its volume bar. Turning it up turns the sound on. |
+| Open it in Jellyfin, Plex or YouTube | The button at the end of the hint |
+
+From the keyboard, <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd> opens what's on full
+screen, and <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>.</kbd> and
+<kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>,</kbd> change channel. Each screen remembers its
+channel, its sound and its volume.
+
+The TV goes quiet when you lock the screen or the screensaver starts, and when you mute
+everything with <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>. It turns down while
+VECTOR speaks. In the sound settings it's called **bromigOS den TV**.
+
+It only plays while you can see it. Behind a window, or with the screen locked, it pauses
+and costs nothing. When it shows again, it's where it would be by now.
+
+### Add a TV channel
+
+The easiest way is the MEDIA panel's settings ([Panels](panels.md#media)). Choose a
+library, collection or playlist from your server, or paste a YouTube address.
+
+To add more, put them in `~/.config/bromigos-live/config.toml`:
+
+```toml
+[[tv.channel]]
+name = "Saturday"
+library = "TV Shows"          # or collection = "…" or playlist = "…"
+
+[[tv.channel]]
+name = "Lo-fi"
+youtube = "https://www.youtube.com/playlist?list=<id>"
+```
+
+Replace `<id>` with the playlist's ID. The den TV reads the file when you save it.
+
+- **Jellyfin or Plex** needs your server in [Your homelab](homelab.md), with a key: a
+  Jellyfin API key or a Plex token. The MEDIA panel tells you if the key is missing.
+- **YouTube** needs `yt-dlp` (`sudo pacman -S yt-dlp`). A channel's address plays its
+  videos. If it's live, a second channel follows it with the live stream.
+- **Keep YouTube videos.** Add `keep = "~/Videos/YouTube"` to a YouTube channel. Each
+  video it plays is saved there, in the layout Plex and Jellyfin read, and plays offline
+  from then on. Any folder works, a NAS share included. `keep_max_gb = 50` caps it.
+- **Videos on your disk.** `files = "~/Videos/Home"` plays a folder.
+
+A playlist plays in order, and anything else shuffled, the same way all day. Add
+`order = "in order"` or `order = "shuffle"` to choose. Add `screens = ["wave"]` to put a
+channel on the scope, or `"emblem"` for the small monitor.
+
+The den TV needs `python-mpv` and `mpv` (`sudo pacman -S python-mpv mpv`). With the
+background still or on a computer without a working graphics card, it shows posters
+instead.
+
+### The worlds
+
+The den TV is the den's: the Wick and the colour themes have it. Mire and Tidewell have no
+screens, so they don't.
+
 ## Turn parts of the background on and off
 
 The background is made of many small animations: rain, stars, passing ships, the flash on

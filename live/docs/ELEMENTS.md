@@ -41,6 +41,7 @@ calm pace and is tied to nothing.
 | [Relay map](#relay-map) | The den's big monitor | The homelab's nodes and links | `background.den` |
 | [Emblem monitor](#emblem-monitor) | The den monitor left of the desk | The burn-in turning (decoration) | `background.den` |
 | [Meters](#meters) | Two analog meters on the desk | CPU load and GPU load | `background.den` |
+| [The den TV](#the-den-tv) | Any of the three screens above | Your own videos as TV channels, on the clock | `[tv]` |
 | [Glyph rain and bursts](#glyph-rain-and-bursts) | The dark sky at the top | CPU load, and bursts for events | `[rain]` |
 | [Floor pulses](#floor-pulses) | The den's floor grid | Download and upload | `[floor]` |
 | [Ships and debris](#ships-and-debris) | The open sky and the den's window | Network throughput as traffic | `space.traffic` |
@@ -165,6 +166,26 @@ starts it again, or stops when no Wayland session is left.
 - **Config:** `background.den`.
 - **Change it:** the turn rate is the `24.0` in `u_den`. Never redraw the emblem by hand.
   It comes from `lib/bromigos_emblem.py` in the `bromigos-core` package.
+
+### The den TV
+
+- **Looks like:** a TV picture in one of the den's screens, in the screen's glass: the
+  tube's curve, scanlines, a soft glow, and the den's phosphor tinting it. Changing
+  channel gives a burst of static and the channel number. A small speaker in the corner
+  means the sound is on.
+- **Shows:** a TV channel from your own library: Jellyfin, Plex, YouTube or a folder. What
+  plays comes from the wall clock, so it's real, not decoration. Channel 1 is the screen's
+  own element, so the den is unchanged until you tune in.
+- **Data:** the channel's list, read by a thread and cached (`lib/bromigos_tv.py`); the
+  picture from libmpv's render API (`live/mpvgl.py`), decoded on the GPU.
+- **Code:** `live/tv.py`. `Background.render()` asks `tv.gl()` for the uniforms and draws
+  the hint after the frame (`_draw_hint`). In `bg.frag`, `tv_picture()` and `tv_osd()`,
+  called in `den()` for the screen in `u_tv` and `u_tune`. Uniforms: `u_tv`, `u_tune`,
+  `u_tvtex`, `u_osd`. `Background.rebuild()` leaves the relay map off the big monitor while
+  a channel plays there.
+- **Config:** `[tv]` and `[[tv.channel]]` ([../README.md](../README.md#the-den-tv)).
+- **Cost:** see [../README.md](../README.md#the-den-tv). Nothing is decoded while the
+  screen isn't in view.
 
 ### Meters
 

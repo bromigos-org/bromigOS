@@ -116,6 +116,10 @@ rows = [
   { match = "Codec calls: voice on/off", text = "Turn the spoken part of [codec calls](glossary.md#codec-call) off, or on again. The calls still show." },
   { match = "Scanner: pin hardware schematic", text = "Pin a drawing of this machine's hardware to the background, with live readings. Press again to remove it." },
   { match = "Scanner: hold to scan", text = "Hold to show the hardware drawing. Let go to hide it." },
+  { match = "Den TV: full screen with sound", text = "Watch what's on the [den TV](themes-and-worlds.md#the-den-tv) full screen, with sound, from the same moment." },
+  { match = "Den TV: next channel", text = "Change the den TV to its next channel." },
+  { match = "Den TV: previous channel", text = "Change the den TV to its previous channel." },
+  { match = "Den TV: sound on/off", text = "Turn the den TV's sound on or off." },
 ]
 
 [[keys]]
