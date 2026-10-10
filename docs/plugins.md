@@ -205,6 +205,9 @@ too. The helper:
 - signs in with the **authorization code and PKCE** for a service with no device flow,
   such as Spotify. Your browser opens the service's page, and the answer comes back to a
   port on this machine, `http://127.0.0.1:8898/callback`.
+- signs in to **Plex** with its PIN. It works like the device flow: you enter a short code
+  at `plex.tv/link`. Plex needs no app of your own. The lab's provisioning uses this
+  sign-in to add a new Plex server to your account ([lab-provision.md](lab-provision.md)).
 - keeps the tokens in your login keyring, through libsecret. They're never written to a
   file.
 - refreshes a token that has expired.

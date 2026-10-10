@@ -26,7 +26,9 @@ modules to the same folder:
 ### bromigos_account
 
 Widgets that read an online account sign in through this module: the device flow (Twitch,
-GitHub, GitLab), or the authorization code with PKCE on a loopback port (Spotify). Tokens
+GitHub, GitLab), the authorization code with PKCE on a loopback port (Spotify), or Plex's
+PIN, a code you enter at plex.tv/link. `plex_claim_token()` gives a new Plex server the
+claim token that adds it to your account. Tokens
 go to the login keyring through libsecret, never to a file. Client IDs are the user's
 own, in `~/.config/bromigos/accounts.toml`. For GitHub it uses the `gh` login when there
 is one. `bromigos account` is its command line, and

@@ -30,7 +30,10 @@ API (docs/plugins.md, "A widget that needs an account"):
                                        JSON over HTTPS; HTTPError carries .body (parsed JSON or text)
     A.gh_token()                       the user's `gh` login token, read when asked, never stored
     A.PROVIDERS                        {name: {...}}: twitch, github, gitlab (device flow),
-                                         spotify (authorization code with PKCE, loopback redirect)
+                                         spotify (authorization code with PKCE, loopback redirect),
+                                         plex (Plex's PIN: a code entered at plex.tv/link)
+    A.plex_claim_token()               a claim token for a new Plex Media Server (its PLEX_CLAIM),
+                                         from the signed-in Plex account; valid a few minutes
 
 Where things live:
 
@@ -44,6 +47,12 @@ No flow here needs a client secret: Twitch and GitLab take a public client throu
 device flow (RFC 8628), GitHub's OAuth apps allow the device flow, and Spotify takes the
 authorization code with PKCE (RFC 7636) on a loopback redirect,
 http://127.0.0.1:<port>/callback.
+
+Plex needs no app at all. Its PIN sign-in has the device flow's shape: bromigOS asks
+plex.tv for a four-character code, you enter it at plex.tv/link, and bromigOS polls until
+Plex hands over the account's token. The only setting is a client identifier, a random ID
+made on first use and kept in accounts.toml, so Plex lists this machine once under your
+authorised devices.
 
 Command line (bin/bromigos-account, which is `bromigos account`):
 
@@ -102,6 +111,13 @@ PROVIDERS = {
         "app_help": "Make an app at developer.spotify.com/dashboard with the Web API, and the redirect "
                     "URI http://127.0.0.1:8898/callback. Copy its Client ID.",
     },
+    "plex": {
+        "title": "Plex", "flow": "plex-pin", "base": "https://plex.tv", "product": "bromigOS",
+        "pin_url": "https://plex.tv/api/v2/pins", "link_url": "https://plex.tv/link",
+        "claim_url": "https://plex.tv/api/claim/token.json",
+        "who_url": "https://plex.tv/api/v2/user", "who_field": "username", "who_header": "X-Plex-Token",
+        "app_help": "Nothing to set up: you sign in with a free Plex account by entering a code at plex.tv/link.",
+    },
 }
 
 
@@ -157,6 +173,8 @@ def base(provider):
 
 def fields(provider):
     p = _p(provider)
+    if p["flow"] == "plex-pin":
+        return []                                   # no app: the client identifier is made on first use
     out = [{"key": "client_id", "label": f"{p['title']} client ID", "hint": p["app_help"], "required": True}]
     if provider == "gitlab":
         out.append({"key": "base", "label": "GitLab address", "hint": "https://gitlab.com, or your own instance",
@@ -376,8 +394,12 @@ def _who(provider, access):
     if not p.get("who_url"):
         return None
     try:
-        d = http_json(_fmt(p["who_url"], provider), headers={"Authorization": f"{p.get('who_auth', 'Bearer')} {access}",
-                                                             "Client-Id": config(provider).get("client_id") or ""})
+        if p.get("who_header"):
+            h = {p["who_header"]: access, **_plex_headers(provider)}
+        else:
+            h = {"Authorization": f"{p.get('who_auth', 'Bearer')} {access}",
+                 "Client-Id": config(provider).get("client_id") or ""}
+        d = http_json(_fmt(p["who_url"], provider), headers=h)
         return d.get(p["who_field"]) or d.get("login") or d.get("id")
     except (OSError, ValueError):
         return None
@@ -521,6 +543,64 @@ def device_poll(provider, start, cancelled=lambda: False, sleep=time.sleep):
     raise SignInError("the code expired before it was approved; start again")
 
 
+# ------------------------------------------------------------------ Plex's PIN (plex.tv/link)
+def _plex_headers(provider="plex"):
+    """The headers plex.tv wants from a client: its product name and a stable identifier
+    (a random one, made on first use and kept in accounts.toml)."""
+    c = config(provider)
+    cid = c.get("client_id")
+    if not cid:
+        import uuid
+        cid = str(uuid.uuid4())
+        configure(provider, client_id=cid)
+    return {"X-Plex-Product": _p(provider)["product"], "X-Plex-Client-Identifier": cid}
+
+
+def plex_start(provider="plex"):
+    """Ask plex.tv for a PIN: {device_code (the PIN's id), user_code, verification_uri,
+    verification_uri_complete, expires_in, interval}. Without `strong`, the code is the short
+    one plex.tv/link takes."""
+    p = _p(provider)
+    d = http_json(p["pin_url"], {}, headers=_plex_headers(provider), method="POST")
+    if not d.get("id") or not d.get("code"):
+        raise SignInError(f"Plex gave no PIN: {str(d)[:120]}")
+    return {"device_code": str(d["id"]), "user_code": d["code"], "verification_uri": p["link_url"],
+            "verification_uri_complete": p["link_url"], "expires_in": int(d.get("expiresIn") or 900),
+            "interval": 2}
+
+
+def plex_poll(provider, start, cancelled=lambda: False, sleep=time.sleep):
+    """Wait for the code to be entered at plex.tv/link: {"access_token": the account's token}."""
+    p = _p(provider)
+    deadline = time.time() + float(start.get("expires_in") or 900)
+    while time.time() < deadline:
+        if cancelled():
+            raise SignInError("cancelled")
+        sleep(float(start.get("interval") or 2))
+        try:
+            d = http_json(f"{p['pin_url']}/{start['device_code']}", headers=_plex_headers(provider))
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                raise SignInError("the code expired before it was entered; start again") from None
+            raise SignInError(f"Plex said: HTTP {e.code}") from None
+        if d.get("authToken"):
+            return {"access_token": d["authToken"]}
+    raise SignInError("the code expired before it was entered; start again")
+
+
+def plex_claim_token(provider="plex"):
+    """A claim token ("claim-…") for a new Plex Media Server, from the signed-in account. A
+    server started with it as PLEX_CLAIM joins that account. It lasts only a few minutes, so
+    ask for it just before the server starts."""
+    tok = token(provider)
+    if not tok:
+        raise SignInError("sign in to Plex first: bromigos account login plex")
+    d = http_json(_p(provider)["claim_url"], headers={"X-Plex-Token": tok, **_plex_headers(provider)})
+    if not str(d.get("token") or "").startswith("claim-"):
+        raise SignInError(f"Plex gave no claim token: {str(d)[:120]}")
+    return d["token"]
+
+
 # ------------------------------------------------------------------ authorization code + PKCE, loopback
 def pkce_pair():
     verifier = base64.urlsafe_b64encode(secrets.token_bytes(48)).rstrip(b"=").decode()
@@ -625,10 +705,10 @@ def sign_in(provider, on_prompt=None, cancelled=None):
     if missing:
         raise NeedsConfig(provider, missing)
     prompt = on_prompt or _default_prompt(provider)
-    if p["flow"] == "device":
-        start = device_start(provider)
+    if p["flow"] in ("device", "plex-pin"):
+        start = (plex_start if p["flow"] == "plex-pin" else device_start)(provider)
         prompt({k: start.get(k) for k in ("user_code", "verification_uri", "verification_uri_complete", "expires_in")})
-        tok = device_poll(provider, start, cancelled)
+        tok = (plex_poll if p["flow"] == "plex-pin" else device_poll)(provider, start, cancelled)
     else:
         tok = pkce_flow(provider, prompt, cancelled)
     if not tok.get("access_token"):

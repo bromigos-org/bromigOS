@@ -164,3 +164,57 @@ class GitHubThroughGh(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PlexPin(Base):
+    """Plex's PIN: a code entered at plex.tv/link, then the account's token. No network."""
+
+    def answers(self, polls):
+        calls = []
+
+        def fake(url, data=None, headers=None, method=None, timeout=15, form=True):
+            calls.append((method or ("POST" if data is not None else "GET"), url, dict(headers or {})))
+            if url == "https://plex.tv/api/v2/pins":
+                return {"id": 4242, "code": "AB12", "expiresIn": 900}
+            if url == "https://plex.tv/api/v2/pins/4242":
+                r = polls.pop(0)
+                if isinstance(r, Exception):
+                    raise r
+                return r
+            if url == "https://plex.tv/api/v2/user":
+                return {"username": "viewer"}
+            if url == "https://plex.tv/api/claim/token.json":
+                return {"token": "claim-xyz"}
+            raise AssertionError(url)
+        return calls, fake
+
+    def test_needs_nothing_and_signs_in_through_plex_tv_link(self):
+        self.assertEqual((A.fields("plex"), A.needs("plex")), ([], []))
+        calls, fake = self.answers([{"authToken": None}, {"authToken": "plex-account-token"}])
+        shown = []
+        with mock.patch.object(A, "http_json", fake), mock.patch.object(A.time, "sleep"):
+            s = A.sign_in("plex", on_prompt=shown.append)
+        self.assertEqual((shown[0]["user_code"], shown[0]["verification_uri"]), ("AB12", "https://plex.tv/link"))
+        self.assertEqual((s["signed_in"], s["who"]), (True, "viewer"))
+        self.assertEqual(A.token("plex"), "plex-account-token")
+        cid = A.config("plex")["client_id"]                   # made once, kept, sent every time
+        self.assertTrue(cid)
+        self.assertTrue(all(h.get("X-Plex-Client-Identifier") == cid and h.get("X-Plex-Product") == "bromigOS"
+                            for _, _, h in calls))
+        self.assertEqual(calls[-1][2].get("X-Plex-Token"), "plex-account-token")     # who: Plex's own header
+
+    def test_expired_pin(self):
+        gone = urllib.error.HTTPError("https://plex.tv/api/v2/pins/4242", 404, "Not Found", {}, None)
+        _, fake = self.answers([gone])
+        with mock.patch.object(A, "http_json", fake), mock.patch.object(A.time, "sleep"):
+            with self.assertRaises(A.SignInError) as c:
+                A.sign_in("plex", on_prompt=lambda d: None)
+        self.assertIn("expired", str(c.exception))
+
+    def test_claim_token_for_a_new_server(self):
+        _, fake = self.answers([])
+        with self.assertRaises(A.SignInError):
+            A.plex_claim_token()
+        A.set_token("plex", "plex-account-token", who="viewer")
+        with mock.patch.object(A, "http_json", fake):
+            self.assertEqual(A.plex_claim_token(), "claim-xyz")
