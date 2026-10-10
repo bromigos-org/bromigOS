@@ -186,12 +186,22 @@ file with `approve = true`:
 
 ```toml
 [extensions]
-install = ["https://github.com/you/thing@v1.0", "hello-deck"]
+install = ["https://github.com/you/thing@v1.0", "hello-deck",
+           { source = "https://github.com/you/widgets", path = "moon", ref = "v2" }]
 approve = true          # approve the ones that run code or reach VECTOR
 ```
 
+An entry is a source, or a table with the `source`, the extension's `path` inside the
+repository, and a `ref`.
+
 Pass it to `bromigos setup --answers <file>` or `bromigos install --answers <file>`. The
 ledger records that file's path and sha256 as the approval.
+
+**Install from URL**, in Settings › Widgets, uses this same way. You paste a git URL or
+pick a folder, and `bromigos panels inspect` shows what it would add and what it can do,
+without installing anything. **Install** is then your approval. Settings writes an answers
+file that says so, under `~/.local/state/bromigos/ext/approvals/`, and runs `bromigos
+setup --answers` with it. The file stays there, so the ledger's record points at it.
 
 **The manifest must match what ships.**
 

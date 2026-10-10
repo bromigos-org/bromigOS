@@ -272,6 +272,67 @@ def scenarios(n, r):
     r.check("the panels logged no traceback", "Traceback" not in errs, errs[-1500:])
 
 
+TIDE = """from panels import Panel
+import draw as D
+
+
+class TideWatch(Panel):
+    name, title = "tide_watch", "TIDE WATCH"
+    description = "The next high and low tides for a harbour you choose"
+    category, reads = "fun", "a tide table you point it at"
+    settings = [
+        {"key": "harbour", "label": "Harbour", "kind": "text", "default": "Harbor Point"},
+        {"key": "every", "label": "Check every (minutes)", "kind": "number", "default": 30, "min": 5, "max": 720},
+        {"key": "units", "label": "Heights in", "kind": "choice", "default": "metres",
+         "choices": [["metres", "Metres"], ["feet", "Feet"]]},
+        {"key": "glow", "label": "Glow at high tide", "kind": "bool", "default": True},
+        {"key": "account", "label": "GitHub", "kind": "secret-signin", "provider": "github"},
+    ]
+
+    def draw(self, cr, w, h):
+        D.frame(cr, w, h, self.title, self.setting("harbour").upper())
+        self.region(0, 0, w, 34, "A demo widget with settings")
+
+
+PANEL = TideWatch
+"""
+
+
+def settings_phase(n, r):
+    """Settings › Widgets (settings_driver_widgets.py): a widget's form, and Install from URL
+    from a git repository made here, its extension in a folder inside it."""
+    n.widgets("edit", "done")                                    # Settings is a window: no overlay above it
+    editing(n, False)
+    plug = os.path.join(n.home, ".config", "bromigos", "plugins", "widgets")
+    os.makedirs(plug, exist_ok=True)
+    with open(os.path.join(plug, "tide_watch.py"), "w") as f:
+        f.write(TIDE)
+    repo = os.path.join(n.tmp, "src", "gauges")
+    os.makedirs(os.path.join(repo, "examples"))
+    made = n.bromigos("ext", "new", "widget", "hello-gauge", "--dir", os.path.join(repo, "examples", "hello-gauge"))
+    if not r.check("a widget extension to install (bromigos ext new widget)", made.returncode == 0, made.stderr[-300:]):
+        return
+    git = ["git", "-C", repo, "-c", "user.name=test", "-c", "user.email=test@example.org"]
+    for argv in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "the widget"]):
+        subprocess.run(git + argv, capture_output=True, env=n.env)
+    env = dict(n.env, PYTHONPATH=os.pathsep.join([os.path.join(REPO, "desktop", "lib"), os.path.join(REPO, "lib"),
+                                                   os.path.join(REPO, "desktop", "settings")]),
+               SHOTS=n.shots or "")
+    p = subprocess.Popen([sys.executable, os.path.join(HERE, "settings_driver_widgets.py"),
+                          os.path.join(REPO, "desktop", "settings"), repo, "examples/hello-gauge"],
+                         env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    n.procs.append(p)
+    try:
+        out, err = p.communicate(timeout=300)
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, 9)
+        out, err = p.communicate()
+    steps = [ln for ln in out.splitlines() if ln.startswith(("PASS", "FAIL"))]
+    for ln in steps:
+        r.check("Settings: " + ln.split(" ", 1)[1].split(" | ")[0], ln.startswith("PASS"), ln)
+    r.check("Settings: every step ran", len(steps) == 6, (out[-600:], err[-1200:]))
+
+
 def draws_go_up(n):
     """The panels redraw while edit mode is on (their stats, to the app's stderr)."""
     def count():
@@ -343,6 +404,7 @@ def main():
     try:
         n.start()
         scenarios(n, r)
+        settings_phase(n, r)
         if shots_dir:
             shots(n, r)
     finally:

@@ -109,6 +109,12 @@ settings of its own, such as the weather's place. Search finds a panel by any of
 words, and the category buttons narrow the list: System, Network, Homelab, Media, Notes
 and Fun.
 
+**Install from URL** installs a widget from any git repository, or a folder on this
+machine. It shows the widget's name, its maker and licence, what it reads, whether it runs
+code and what it may reach, before anything is installed. **Install** is your approval
+([extensions.md](extensions.md#trust-and-approval) says how it's recorded). In edit mode,
+the tray's **Install from URL…** saves, leaves edit mode and opens it in Settings.
+
 **Get more widgets** browses the community catalog, which `bromigos ext search --kind
 widget` reads. Each entry shows its author, its licence, a link to its repository, and
 whether it runs code. A widget always runs code. So **Install…** opens a terminal, where

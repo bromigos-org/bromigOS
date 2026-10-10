@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bromigos:summary=The desktop panels: which are on, where they sit, the monitor, the weather's place (your layout.json and weather.toml)
-# bromigos:args=[status] | edit | gallery [--previews DIR] | show|hide|add NAME | settings NAME | set NAME KEY VALUE… | unset NAME KEY | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
+# bromigos:args=[status] | edit | gallery [--previews DIR] | show|hide|add NAME | settings NAME | set NAME KEY VALUE… | unset NAME KEY | inspect SOURCE [--path DIR] [--ref REF] | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
 # bromigos:examples=bromigos panels; bromigos panels edit; bromigos panels add weather; bromigos panels weather place "San Diego"; bromigos panels hide connections
 """bromigos-panels (`bromigos panels`): the desktop panels' layout (bromigos-widgets). The
 panels read your ~/.config/bromigos/widgets/layout.json, else bromigOS's
@@ -20,6 +20,10 @@ reload`). The weather's place is ~/.config/bromigos/weather.toml. Settings › W
   bromigos panels set NAME KEY VALUE…   one of them (a list takes several values; it's written to
                                      ~/.config/bromigos/widgets/NAME.toml, which the widget reads)
   bromigos panels unset NAME KEY     back to its default
+  bromigos panels inspect SOURCE [--path DIR] [--ref REF]
+                                     what an extension would add, before it's installed: `bromigos
+                                     ext info` (fetched and checked) and each widget's words, read
+                                     from its code without running it
   bromigos panels move NAME X Y      its place, px from the top left of the usable area
   bromigos panels size NAME W H      its size in px (edit mode keeps it to the panel's size classes)
   bromigos panels size NAME CLASS    one of its size classes (compact, standard, wide, tall, large),
@@ -404,6 +408,113 @@ def unset_cmd(args):
     return dict(settings_cmd([args[0]]), said=f"{it['title'].title()}: {args[1]} back to its default")
 
 
+# ------------------------------------------------------------------ inspect (Install from URL)
+WIDGET_WORDS = ("title", "description", "category", "reads", "default_size")
+
+
+def widget_words(path):
+    """A widget file's gallery words, read from its source without running it: the class
+    attributes title, description, category, reads, default_size, and the names of its
+    size classes, settings and accounts (literals only; anything else is left out)."""
+    import ast
+    try:
+        with open(path, encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=path)
+    except (OSError, SyntaxError, ValueError) as e:
+        return {"error": f"{os.path.basename(path)}: {e}"}
+    best = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        got = {}
+        for stmt in node.body:
+            if not isinstance(stmt, ast.Assign):
+                continue
+            for tgt in stmt.targets:
+                names = [tgt] if isinstance(tgt, ast.Name) else list(tgt.elts) if isinstance(tgt, ast.Tuple) else []
+                vals = [stmt.value] if len(names) == 1 else (list(stmt.value.elts) if isinstance(stmt.value, ast.Tuple)
+                                                               else [])
+                for n, v in zip(names, vals):
+                    if not isinstance(n, ast.Name):
+                        continue
+                    try:
+                        lit = ast.literal_eval(v)
+                    except (ValueError, SyntaxError, TypeError):
+                        continue
+                    if n.id in WIDGET_WORDS + ("name",) and isinstance(lit, str):
+                        got[n.id] = lit
+                    elif n.id == "sizes" and isinstance(lit, dict):
+                        got["sizes"] = [k for k in ("compact", "standard", "wide", "tall", "large") if k in lit]
+                    elif n.id == "settings" and isinstance(lit, list):
+                        got["settings"] = [f.get("label") or f.get("key") for f in lit
+                                           if isinstance(f, dict) and f.get("kind") != "secret-signin"]
+                        got["accounts"] = [f.get("provider") for f in lit
+                                           if isinstance(f, dict) and f.get("kind") == "secret-signin"]
+        if len(got) > len(best):
+            best = got
+    return best
+
+
+def _fetch(src):
+    """A checkout of the source to read from: (folder, a temp folder to remove or None)."""
+    import subprocess
+    import tempfile
+    if src.get("kind") != "git" or os.path.isdir(src.get("url") or ""):
+        return src.get("url"), None
+    tmp = tempfile.mkdtemp(prefix="bromigos-inspect-")
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0", GIT_ASKPASS="true")
+    base = ["git", "-c", "core.hooksPath=/dev/null", "-c", "protocol.ext.allow=never"]
+    ref = src.get("ref")
+    clone = base + ["clone", "-q", "--depth", "1"] + (["--branch", ref] if ref and src.get("ref_kind") != "commit"
+                                                       else []) + ["--", src["url"], tmp + "/x"]
+    r = subprocess.run(clone, capture_output=True, text=True, timeout=120, env=env)
+    if r.returncode != 0:
+        return None, tmp
+    return tmp + "/x", tmp
+
+
+def inspect_cmd(args):
+    path = C.flag(args, "--path")
+    ref = C.flag(args, "--ref")
+    if len(args) != 1:
+        raise Fail("bromigos panels inspect SOURCE [--path DIR] [--ref REF]")
+    argv = ["bromigos", "ext", "info", args[0]] + (["--path", path] if path else []) + (["--ref", ref] if ref else [])
+    rc, out, err = C.run(argv + ["--json"], timeout=180)
+    try:
+        doc = json.loads(out) if out.strip() else {}
+    except ValueError:
+        doc = {}
+    if rc != 0 or not doc.get("info"):
+        raise Fail((doc.get("error") if isinstance(doc, dict) else None) or err.strip() or "bromigos ext info failed")
+    info = doc["info"]
+    plan = info.get("plan") or {}
+    manifest = info.get("manifest") or {}
+    meta = manifest.get("extension") or {}
+    widgets = []
+    folder, tmp = _fetch(plan.get("source") or {}) if not info.get("installed") else (None, None)
+    try:
+        root = os.path.join(folder, (plan.get("source") or {}).get("path") or "") if folder else None
+        for part in plan.get("parts") or manifest.get("provides") or []:
+            if part.get("kind") != "widget":
+                continue
+            w = {"name": part.get("name"), "path": part.get("path")}
+            if root:
+                w.update(widget_words(os.path.join(root, part.get("path") or "")))
+            widgets.append(w)
+    finally:
+        if tmp:
+            import shutil
+            shutil.rmtree(tmp, ignore_errors=True)
+    perms = plan.get("permissions") or manifest.get("permissions") or {}
+    return {"source": args[0], "path": path, "ref": ref, "name": plan.get("name") or meta.get("name"),
+            "version": plan.get("version") or meta.get("version"), "description": meta.get("description"),
+            "authors": meta.get("authors") or [], "licence": meta.get("licence") or meta.get("license"),
+            "homepage": meta.get("homepage"), "kinds": sorted({p.get("kind") for p in plan.get("parts") or []}),
+            "code": bool(perms.get("code")), "permissions": perms, "widgets": widgets,
+            "commit": plan.get("commit"), "warnings": plan.get("warnings") or [], "installed": info.get("installed"),
+            "data_only": plan.get("data_only")}
+
+
 def gallery_cmd(args):
     import gallery
     previews = C.flag(args, "--previews")
@@ -420,6 +531,6 @@ def gallery_cmd(args):
 
 if __name__ == "__main__":
     sys.exit(C.main({"status": status, "show": show(True), "hide": show(False), "add": add, "edit": edit,
-                     "settings": settings_cmd, "set": set_cmd, "unset": unset_cmd,
+                     "settings": settings_cmd, "set": set_cmd, "unset": unset_cmd, "inspect": inspect_cmd,
                      "gallery": gallery_cmd, "move": move, "size": size,
                      "monitor": monitor, "weather": weather_cmd, "reset": reset}, USAGE))

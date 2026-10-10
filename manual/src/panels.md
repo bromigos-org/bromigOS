@@ -93,6 +93,10 @@ bromigOS catalog. Each shows who made it, its licence and a link to its code. A 
 a small program, so **Install…** opens a terminal that tells you what it can do and asks
 before it installs. **Uninstall** removes it again.
 
+To install a widget someone shared as a link, click **Install from URL…** in Settings ›
+Widgets and paste the link. Settings shows what the widget reads and what it can do before
+anything is installed, and installs it only when you click **Install**.
+
 Settings › Widgets also shows a small picture of where the panels sit, and chooses which
 monitor they use.
 

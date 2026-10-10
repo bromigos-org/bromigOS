@@ -335,3 +335,191 @@ class SignIn:
         back = Adw.ActionRow(title="")
         back.add_suffix(self.button("Back", self.refresh, "Sign in instead"))
         self.add(back)
+
+
+# ------------------------------------------------------------------ Install from URL
+def _toml_str(s):
+    import json
+    return json.dumps(str(s), ensure_ascii=False)
+
+
+def approvals_dir():
+    import os
+    state = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    return os.path.join(state, "bromigos", "ext", "approvals")
+
+
+def approval_file(doc, when=None):
+    """A setup answers file that approves this one extension (docs/extensions.md, "Trust and
+    approval"): the existing way to approve code without a terminal. It's kept, so the
+    ledger's record of the approval (this file's path and sha256) points at what was
+    approved, and where."""
+    import os
+    when = when or time.strftime("%Y-%m-%d %H:%M %Z")
+    os.makedirs(approvals_dir(), exist_ok=True)
+    name = "".join(c for c in (doc.get("name") or "extension") if c.isalnum() or c in "-_")
+    path = os.path.join(approvals_dir(), f"settings-{time.strftime('%Y%m%dT%H%M%S')}-{name}.toml")
+    perms = doc.get("permissions") or {}
+    item = "{ source = " + _toml_str(doc["source"]) + (f", path = {_toml_str(doc['path'])}" if doc.get("path") else "") \
+        + (f", ref = {_toml_str(doc['ref'])}" if doc.get("ref") else "") + " }"
+    lines = [f"# Approved in Settings › Widgets (Install from URL), {when}: the person read what it",
+             "# can do, below, and clicked Install. bromigos setup --answers installed it from this file.",
+             f"# {doc.get('name')} {doc.get('version') or ''} by {', '.join(doc.get('authors') or []) or '?'}"
+             f" ({doc.get('licence') or 'no licence given'}), commit {doc.get('commit') or '?'}",
+             f"# runs code: {'yes' if doc.get('code') else 'no'}; network: {perms.get('network', 'none')}; "
+             f"files: {', '.join(perms.get('filesystem') or []) or 'none'}"
+             + (f"; VECTOR: {perms['vector']}" if perms.get("vector") else ""),
+             "[extensions]", f"install = [{item}]", "approve = true", ""]
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
+    return path
+
+
+class InstallFromURL:
+    """Paste a git URL (or pick a folder), see what it would add and what it can do
+    (`bromigos panels inspect`, which runs `bromigos ext info`), then Install: the button
+    is the approval, given through a setup answers file, the existing way."""
+
+    def __init__(self, ctx, done=None):
+        self.ctx, self.done = ctx, done
+        self.doc = None
+        self.dialog = Adw.Dialog(title="Add from a URL", content_width=720, content_height=700)
+        tv = Adw.ToolbarView()
+        tv.add_top_bar(Adw.HeaderBar())
+        self.page = Adw.PreferencesPage()
+        tv.set_content(self.page)
+        self.dialog.set_child(tv)
+        g = Adw.PreferencesGroup(title="WHERE IT IS", description="A git URL (https://, ssh:// or git@host:path; add "
+                                                                  "@tag to pin a version), or a folder on this machine.")
+        self.url = Adw.EntryRow(title="Git URL or folder")
+        ctx.hint(self.url, "For example https://github.com/someone/their-widget@v1.0, or a folder you made with "
+                           "bromigos ext new widget")
+        g.add(self.url)
+        self.sub = Adw.EntryRow(title="Its folder inside the repository (if it isn't the root)")
+        ctx.hint(self.sub, "Like examples/moon-phase: the folder that holds bromigos-ext.toml")
+        g.add(self.sub)
+        r = Adw.ActionRow(title="")
+        r.add_suffix(ctx.button("Pick a folder…", self.pick, "Chooses a folder on this machine instead of a URL"))
+        r.add_suffix(ctx.button("Check it", self.check, "Fetches it and checks it (bromigos ext info): nothing is "
+                                                        "installed yet", primary=True))
+        g.add(r)
+        self.page.add(g)
+        self.result = Adw.PreferencesGroup(title="WHAT IT WOULD ADD")
+        self.result.set_visible(False)
+        self.page.add(self.result)
+        self.rows = []
+
+    def present(self):
+        self.dialog.present(self.ctx.window)
+        return self.dialog
+
+    def pick(self):
+        fd = Gtk.FileDialog(title="The extension's folder")
+
+        def done(d, res):
+            try:
+                f = d.select_folder_finish(res)
+            except GLib.Error:
+                return
+            if f is not None and f.get_path():
+                self.url.set_text(f.get_path())
+        fd.select_folder(self.ctx.window, None, done)
+
+    def clear(self):
+        for r in self.rows:
+            self.result.remove(r)
+        self.rows = []
+
+    def add(self, w):
+        self.result.add(w)
+        self.rows.append(w)
+        return w
+
+    def row(self, title, sub, hint):
+        r = Adw.ActionRow(title=GLib.markup_escape_text(title), subtitle=GLib.markup_escape_text(sub or ""))
+        r.set_subtitle_lines(4)
+        return self.add(self.ctx.hint(r, hint))
+
+    def check(self):
+        src = self.url.get_text().strip()
+        if not src:
+            self.ctx.toast("Paste a git URL, or pick a folder")
+            return
+        self.clear()
+        self.result.set_visible(True)
+        r = self.add(Adw.ActionRow(title="Fetching and checking it…"))
+        r.add_prefix(Adw.Spinner())
+        argv = CMD + ["inspect", src] + (["--path", self.sub.get_text().strip()] if self.sub.get_text().strip() else [])
+        self.ctx.json(argv + ["--json"], self.checked)
+
+    def checked(self, doc, err):
+        self.clear()
+        if not doc or doc.get("ok") is False:
+            self.doc = None
+            self.row("It can't be installed", (doc or {}).get("error") or err or "no answer",
+                     "bromigos ext info refused it, or couldn't fetch it")
+            return
+        self.doc = doc
+        perms = doc.get("permissions") or {}
+        self.row(f"{doc['name']} {doc.get('version') or ''}", doc.get("description") or "",
+                 "Its name and version, as its manifest says")
+        self.row("Made by", f"{', '.join(doc.get('authors') or []) or 'nobody named'} · "
+                            f"{doc.get('licence') or 'no licence given'}"
+                 + (f" · {doc['homepage']}" if doc.get("homepage") else ""), "Who made it, and its licence")
+        for w in doc.get("widgets") or []:
+            words = w.get("description") or "a widget"
+            extra = []
+            if w.get("reads"):
+                extra.append(f"reads {w['reads']}")
+            if w.get("sizes"):
+                extra.append("sizes: " + ", ".join(w["sizes"]))
+            if w.get("accounts"):
+                extra.append("signs in to " + ", ".join(a for a in w["accounts"] if a))
+            self.row(f"Widget: {(w.get('title') or w.get('name') or '?').title()}", words + (
+                "\n" + " · ".join(extra) if extra else ""), "A desktop panel it adds, in its own words (read from its "
+                                                           "code without running it)")
+        kinds = ", ".join(k for k in doc.get("kinds") or [] if k != "widget")
+        if kinds:
+            self.row("Also", kinds, "Other parts it adds")
+        net = perms.get("network", "none")
+        net = ", ".join(net) if isinstance(net, list) else net
+        self.row("Runs code" if doc.get("code") else "Data only",
+                 (f"Network: {net} · Files outside its folder: {', '.join(perms.get('filesystem') or []) or 'none'}"
+                  + (f" · VECTOR: {perms['vector']}" if perms.get("vector") else "")),
+                 "What it says it reaches. bromigOS shows and records this, but doesn't enforce it: an extension runs "
+                 "as you, like any program you install.")
+        for wtext in doc.get("warnings") or []:
+            self.row("Note", str(wtext), "From bromigos ext info")
+        if doc.get("installed"):
+            self.row("Already installed", "Update it from Settings › Extensions", "It's installed already")
+            return
+        r = Adw.ActionRow(title="Install it?", subtitle="It runs as you. Installing records that you approved it here."
+                          if doc.get("code") else "It's data only.")
+        r.add_suffix(self.ctx.button("Cancel", self.dialog.close, "Closes this without installing anything"))
+        r.add_suffix(self.ctx.button("Install", self.install, "Installs it: this click is your approval, recorded in "
+                                                              "the extensions' ledger", primary=True))
+        self.add(self.ctx.hint(r, "Your approval: the extension runs code as you"))
+
+    def install(self):
+        doc = self.doc
+        try:
+            path = approval_file(doc)
+        except OSError as e:
+            self.ctx.toast(f"Not installed: {e}")
+            return
+        self.ctx.toast(f"Installing {doc['name']}…")
+
+        def fin(res, err):
+            items = (res or {}).get("setup") or []
+            ext = next((x for x in items if x.get("section") == "extensions" or "extensions" in str(x)), {})
+            ok = bool(res) and all(x.get("ok", True) for x in items)
+            if ok:
+                self.ctx.toast(f"Installed {doc['name']}: its widget is in the gallery within a few seconds")
+                self.dialog.close()
+                if self.done:
+                    GLib.timeout_add_seconds(3, lambda: (self.done(), False)[1])
+            else:
+                why = ext.get("detail") or err or "failed"
+                self.clear()
+                self.row("Not installed", str(why)[:400], "bromigos setup --answers said this")
+        self.ctx.json(["bromigos", "setup", "--answers", path, "--json"], fin)

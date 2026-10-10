@@ -409,6 +409,13 @@ class WidgetsPage:
         if not n:
             rows.append(ctx.row(g, "Nothing found", "No catalog widget matches" if self.query or self.category != "all"
                                 else "The catalog lists no widgets yet", hint="bromigos ext search --kind widget"))
+        r = ctx.row(g, "Install from URL", "A widget from any git repository, or a folder: you see what it can do "
+                                           "before it's installed", key="install-url",
+                    hint="Paste a git URL or pick a folder; it's checked before anything is installed",
+                    buttons=[("Install from URL…", self.from_url, "Fetches a widget, shows what it would add and "
+                                                                  "what it can do, then asks")])
+        r._bromigos_activate = self.from_url             # bromigos settings widgets#install-url opens it
+        rows.append(r)
         rows.append(ctx.row(g, "Make your own", "bromigos ext new widget NAME makes a working widget to edit",
                             hint="Opens the guide to writing a widget",
                             buttons=[("Guide", lambda: ctx.open_docs("extensions.md"),
@@ -417,6 +424,10 @@ class WidgetsPage:
     def form(self, w):
         from bromigos_settings.widgetform import WidgetForm
         WidgetForm(self.ctx, w, done=lambda: self.read_gallery()).present()
+
+    def from_url(self):
+        from bromigos_settings.widgetform import InstallFromURL
+        InstallFromURL(self.ctx, done=self.refresh).present()
 
     def install(self, name):
         self.ctx.terminal(EXT + ["install", name])

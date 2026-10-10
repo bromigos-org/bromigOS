@@ -708,6 +708,10 @@ class Editor:
                                                 "community catalog, where you can install more", lambda:
                            self.leave_then(["bromigos", "settings", "widgets#more"]))
         self.body.pack_start(more, False, False, 0)
+        url = self.button("Install from URL…", "Saves, leaves edit mode and opens Settings › Widgets to install a "
+                                               "widget from a git URL or a folder, after showing what it can do",
+                          lambda: self.leave_then(["bromigos", "settings", "widgets#install-url"]))
+        self.body.pack_start(url, False, False, 0)
         inner.pack_start(self.body, True, True, 0)
 
         self.confirm = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
