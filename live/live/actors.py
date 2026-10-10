@@ -32,7 +32,7 @@ scales them.
 """
 import math
 
-from . import glkit
+import bromigos_theme as palette
 import random
 
 TAU = 2 * math.pi
@@ -86,8 +86,8 @@ class Def:
         self.lamp = t.get("lamp")
         self.signal = t.get("signal")
         self.max = int(t.get("max", 12))
-        self.signal_color = tuple(t.get("signal_color", glkit.T.rgb("warn")))
-        self.error_color = tuple(t.get("error_color", glkit.T.rgb("danger")))
+        self.signal_color = tuple(t.get("signal_color", palette.rgb("warn")))
+        self.error_color = tuple(t.get("error_color", palette.rgb("danger")))
         self.on = t.get("on") or []
         self.spots = [tuple(s) for s in t.get("spots", [])]
         self.world = world
@@ -222,7 +222,7 @@ class Actors:
                 lp = d.lamp
                 flick = 1.0 if self.calm else 1.0 + 0.04 * math.sin(t * 7.3) * math.sin(t * 2.9)
                 fl = (1.0 + 1.5 * inst.flare) if inst else 1.0
-                c = lp.get("color", glkit.T.rgb("warn"))
+                c = lp.get("color", palette.rgb("warn"))
                 r = float(lp.get("radius", 90))
                 lamp_glows.append((float(lp.get("depth", d.depth)),
                                    (lp["at"][0], lp["at"][1], r, r, c[0], c[1], c[2], lv * flick * fl, 0.0)))
@@ -498,7 +498,7 @@ class Actors:
         w = h * asp
         sx = e["dir"] * (-1.0 if c.get("faces", "right") == "left" else 1.0)
         z = e["z"]
-        hz = d.t.get("haze", glkit.col("panel", 0.5))
+        hz = d.t.get("haze", (*palette.rgb("panel"), 0.5))
         haze = float(hz[3]) * (float(c.get("haze", 0.15)) + (1.0 - float(c.get("haze", 0.15))) * z ** 0.8)
         bright = float(c.get("bright", 0.6)) * (1.0 - 0.35 * z)
         depth = float(c.get("depth", d.depth))
@@ -511,7 +511,7 @@ class Actors:
                                 "bright": bright, "fog": False, "reflect": 0.0, "par": d.parallax, "add": False,
                                 "craft": True, "clouds": float(d.t.get("clouds", 0.0)),
                                 "cloud_luma": tuple(d.t.get("cloud_luma", (0.1, 0.3))),
-                                "rim": tuple(d.t.get("rim", glkit.col("soft", 0.5)))}))
+                                "rim": tuple(d.t.get("rim", (*palette.rgb("soft"), 0.5)))}))
         lit = inst.alpha * (1.0 - 0.6 * haze)
         cloud = float(d.t.get("clouds", 0.0))
         luma = d.t.get("cloud_luma", (0.1, 0.3))
@@ -538,7 +538,7 @@ class Actors:
             if k * lit < 0.01:
                 continue
             gx, gy = place(*L["at"])
-            col = L.get("color", glkit.T.rgb("white"))
+            col = L.get("color", palette.rgb("white"))
             rad = float(L.get("radius", 4)) * scale
             k *= cover(gx, gy)                           # a lamp behind a cloud goes with the hull
             glows.append((depth + 0.01, (gx, gy, rad, rad, col[0], col[1], col[2], k * lit * float(L.get("gain", 1.0)), 0.0)))
@@ -551,7 +551,7 @@ class Actors:
             life = float(T.get("life", 3.0))
             while hist and t - hist[0][2] > life:
                 hist.pop(0)
-            col = T.get("color", glkit.T.rgb("soft"))
+            col = T.get("color", palette.rgb("soft"))
             rad0 = float(T.get("radius", 3)) * scale
             gap = every * e["speed"] * 0.8          # puffs stretched along the path, so they join into one streak
             for (px, py, t0) in hist:
@@ -1134,7 +1134,7 @@ class Actors:
         if em and d.sprites.get(em):
             es = d.sprites[em]
             col = (d.error_color if inst.error else d.signal_color) if cfg.get("signal") else \
-                tuple(cfg.get("color") or sc.get("light_color") or d.t.get("light_color", glkit.T.rgb("cyan")))
+                tuple(cfg.get("color") or sc.get("light_color") or d.t.get("light_color", palette.rgb("cyan")))
             lit_e = inst.light * inst.alpha * self._blink(inst, t, cfg) * (1.0 + (0.5 if self.calm else 1.8) * inst.flare)
             if lit_e > 0.01:
                 e_uv = es.frame(fi)
@@ -1148,7 +1148,7 @@ class Actors:
         # a diver leaves a fading trail of light above it
         if cfg.get("motion") == "dive" and inst.v is None:
             a = t - inst.state_t
-            c = tuple(cfg.get("trail", glkit.T.rgb("cyan")))
+            c = tuple(cfg.get("trail", palette.rgb("cyan")))
             for k in range(1, 9):
                 ty = base - h * 0.5 - k * 34.0 * min(a, 12.0) / 12.0 * 3.0
                 inten = 0.5 * math.exp(-k / 3.0) * math.exp(-a / 9.0) * inst.alpha
@@ -1189,7 +1189,7 @@ class Actors:
                 if wade > 0 and gy > cut + 1:
                     continue
                 own = inst.extra.get("light_color") or inst.extra.get("tint")   # its own colour: its lights wear it
-                c = col_sig or tuple(cfg.get("color") or (own[:3] if own else None) or L.get("color", glkit.T.rgb("white")))
+                c = col_sig or tuple(cfg.get("color") or (own[:3] if own else None) or L.get("color", palette.rgb("white")))
                 rad = float(L.get("radius", 6)) * (h / max(d.height, 1)) ** 0.5
                 if col_sig:
                     rad *= float(d.t.get("signal_radius", 1.8))

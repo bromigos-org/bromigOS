@@ -17,7 +17,7 @@ pass: [(depth, (x, y, rx, ry, r, g, b, intensity, fog))].
 """
 import math
 
-from . import glkit
+import bromigos_theme as palette
 
 import numpy as np
 
@@ -51,8 +51,8 @@ class Fireflies:
         self.hue = rng.random(n)
         self.count = float(e.get("base", 6))
         self.disturb = []                                  # (x, y, t0)
-        c0 = e.get("color", glkit.T.rgb("primary"))
-        c1 = e.get("color2", glkit.T.rgb("warn"))
+        c0 = e.get("color", palette.rgb("primary"))
+        c1 = e.get("color2", palette.rgb("warn"))
         self.c0, self.c1 = np.array(c0, float), np.array(c1, float)
         self.near_depth = float(e.get("near_depth", 44))
         self.far_depth = float(e.get("far_depth", 25))
