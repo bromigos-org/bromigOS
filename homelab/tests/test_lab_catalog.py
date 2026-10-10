@@ -529,3 +529,103 @@ class RealCatalogTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ------------------------------------------------------------------ the service catalog (profiles.toml)
+from bromigos_homelab import services as SV                  # noqa: E402
+
+PROFILES = os.path.normpath(os.path.join(HERE, "..", "share", "lab", "profiles.toml"))
+
+
+class ProfilesTest(unittest.TestCase):
+    def setUp(self):
+        self.cat = SV.load(PROFILES)
+
+    def test_catalog_is_consistent(self):
+        self.assertEqual(SV.validate(self.cat), [])
+
+    def test_validate_catches_mistakes(self):
+        bad = SV.load(PROFILES)
+        bad["service"]["pinchflat"]["depends"] = ["teleporter"]
+        bad["service"]["plex"]["image"] = "plexinc/pms-docker:latest"
+        bad["service"]["arr"]["mounts"] = {"/x": "backups"}
+        bad["service"]["jellyfin"]["configure"].append({"do": "reboot"})
+        bad["preset"]["media"]["offered"] = ["jellyfin"]
+        msgs = " | ".join(SV.validate(bad))
+        for want in ("teleporter", "isn't pinned", "storage doesn't list 'backups'", "'reboot'", "both ticked and offered"):
+            self.assertIn(want, msgs)
+
+    def test_both_media_servers_fill_the_role_without_conflict(self):
+        self.assertEqual(SV.providers(self.cat, "media-library"), ["jellyfin", "plex"])
+        r = SV.resolve(self.cat, ["jellyfin", "plex"])
+        self.assertEqual((r["conflicts"], r["added"]), ([], []))
+
+    def test_arr_and_pinchflat_depend_on_the_role_not_on_jellyfin(self):
+        for s in ("arr", "pinchflat"):
+            self.assertEqual(self.cat["service"][s]["depends"], ["media-library"])
+        # Plex only: nothing else is ticked for them
+        r = SV.resolve(self.cat, ["plex", "arr", "pinchflat"])
+        self.assertEqual((r["services"], r["added"]), (["plex", "arr", "pinchflat"], []))
+        # Jellyfin only
+        r = SV.resolve(self.cat, ["jellyfin", "arr", "pinchflat"])
+        self.assertEqual((r["services"], r["added"]), (["jellyfin", "arr", "pinchflat"], []))
+        # neither: Jellyfin, the default, is ticked, and the picker says why
+        r = SV.resolve(self.cat, ["pinchflat"])
+        self.assertEqual(r["services"], ["jellyfin", "pinchflat"])
+        self.assertEqual(r["added"], [("jellyfin", "Pinchflat needs a media library: Jellyfin is ticked too.")])
+
+    def test_the_youtube_library_and_sync_go_to_every_ticked_media_server(self):
+        steps = self.cat["service"]["pinchflat"]["configure"]
+        lib = next(s for s in steps if s["do"] == "library")
+        self.assertEqual((lib["name"], lib["path"], lib["on"]), ("YouTube", "{media}/youtube", "media-library"))
+        for picked, want in ((["plex", "pinchflat"], ["plex"]), (["jellyfin", "pinchflat"], ["jellyfin"]),
+                             (["jellyfin", "plex", "pinchflat"], ["jellyfin", "plex"])):
+            self.assertEqual(SV.targets(self.cat, picked, "pinchflat", lib), want)
+        timer = next(s for s in steps if s["do"] == "timer")
+        self.assertIn("youtube.py sync", timer["run"])
+        self.assertEqual({k for k in timer["env"] if k.endswith("_URL")}, {"PINCHFLAT_URL", "JELLYFIN_URL", "PLEX_URL"})
+
+    def test_pinchflat_entry(self):
+        p = self.cat["service"]["pinchflat"]
+        self.assertEqual((p["group"], p["ports"], p["provides"], p["exposes"]), ("media", [8945], ["youtube-downloader"], "youtube"))
+        self.assertTrue(p["image"].startswith("ghcr.io/kieraneglin/pinchflat:") and "@sha256:" in p["image"])
+        self.assertEqual(p["mounts"], {"/config": "state", "/downloads": "media:youtube"})
+        self.assertEqual(p["source"]["type"], "pinchflat")
+        profiles = {s["values"]["name"]: s["values"]["output_path_template"] for s in p["configure"] if s["do"] == "setting"}
+        self.assertEqual(len(profiles), 2)
+        # the playlist profile numbers by playlist position (Season 1, sNNeXX); the sync orders by it,
+        # and finds each video by the [id] in its file name
+        playlist = next(t for n, t in profiles.items() if n.startswith("Playlist"))
+        channel = next(t for n, t in profiles.items() if n.startswith("Channel"))
+        self.assertIn("{{ static_season__episode_by_index }}", playlist)
+        self.assertIn("{{ season_by_year__episode_by_date", channel)
+        self.assertTrue(all("[{{ id }}]" in t for t in profiles.values()))
+        self.assertEqual(SV.placeholders(playlist), [])               # Pinchflat's own templates, left alone
+
+    def test_plex_entry_and_the_media_preset(self):
+        px = self.cat["service"]["plex"]
+        self.assertEqual((px["ports"], px["provides"], px["exposes"], px["account"]), ([32400], ["media-library"], "plex", "plex"))
+        self.assertRegex(px["image"], r"^plexinc/pms-docker:\d+\.\d+\.\d+\.\d+-[0-9a-f]+$")
+        self.assertIn("Plex Pass", px["notes"])
+        self.assertIn("free Plex account", px["summary"])
+        signin = next(s for s in px["configure"] if s["do"] == "sign-in")
+        self.assertEqual((signin["provider"], signin["before_start"]), ("plex", True))
+        self.assertEqual(SV.preset(self.cat, "media"), {"services": ["jellyfin", "arr", "pinchflat"], "offered": ["plex"]})
+        self.assertFalse(self.cat["service"]["jellyfin"].get("account"))   # Jellyfin: no account
+
+    def test_storage(self):
+        st = self.cat["storage"]
+        self.assertEqual(st["purpose"]["media"]["folders"], ["movies", "tv", "music", "youtube"])
+        self.assertEqual(st["purpose"]["downloads"]["folders"], ["downloads"])
+        self.assertEqual(st["prefer"], "nfs")
+        r = SV.resolve(self.cat, SV.preset(self.cat, "media")["services"] + ["restic"])
+        self.assertEqual(r["storage"], ["backups", "downloads", "media"])
+        brands = st["brand"]
+        self.assertEqual({k for k, b in brands.items() if b["creates_shares"]}, {"truenas"})
+        self.assertIn("All Squash", brands["unifi"]["squash"])
+        self.assertTrue(brands["unifi"]["export"].startswith("<nas>:/var/nfs/shared/"))
+        # databases never on a share
+        for k, v in self.cat["service"].items():
+            for path, where in (v.get("mounts") or {}).items():
+                if path == "/config":
+                    self.assertEqual(where, "state", k)

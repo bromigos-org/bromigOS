@@ -21,9 +21,31 @@
 #                      model catalog (models.toml, docs/lab-models.md), picked by VRAM tier
 #   exposes            the web UI behind the reverse proxy (a subdomain), if any
 #   gpu_driver         true: it needs the NVIDIA container toolkit (or ROCm), installed with a dry run first
+#   image              the container image, pinned to a version (or a digest); `lab update` bumps it
+#   chart              { repo, name, version }: the Helm chart on a Kubernetes target
+#   storage            [purposes from [storage]] it keeps files on: media, downloads, backups
+#   mounts             { container path = "media" | "media:<folder>" | "downloads" | "backups" |
+#                        "state" | "scratch" }; state and scratch stay on the box's own disk
+#   env                { NAME = value } for its container (placeholders below)
+#   account            an account it signs in to during setup (bromigos_account: "plex")
+#   source             the homelab.toml source the Verify step writes, so the console reads it
+#   [[service.<id>.configure]]
+#                      steps applied after it starts, in order (docs/lab-provision.md, "Configure
+#                      steps"): do = "folder" | "first-run" | "secret" | "sign-in" | "library" |
+#                      "setting" | "timer"
+#
+#   Placeholders in env, source and configure: {tz} the box's time zone; {media}, {downloads},
+#   {backups} where that purpose's share is mounted; {url:<service>} a service's address on the
+#   box; {secret:<name>} a generated secret (sops, or Vault). Pinchflat's own {{ … }} templates
+#   are left alone. An env value naming a service that isn't ticked is left out.
 #
 # [preset.<id>]        a named selection over the catalog; picking it ticks its services, then
 #                      anything can be added or removed (presets and Custom are the same screen)
+#   services           ticked when the preset is picked
+#   offered            listed with the preset but not ticked (Plex in Media)
+#
+# [storage]            the NAS you already have: what each purpose holds, the folders made on it,
+#                      how it's mounted, and what each NAS brand needs (docs/lab-provision.md, "Storage")
 #
 # [sizing]             the rules the inventory applies (VRAM tiers: cpu, 8, 12, 16, 24, 32, 48, 80 GB)
 
@@ -59,6 +81,8 @@ kind = "compose"
 needs = { cpu = 1, ram_gib = 0.5, disk_gib = 1 }
 ports = []
 provides = ["backups"]
+storage = ["backups"]
+mounts = { "/repository" = "backups:restic" }
 default = true
 untick_warning = "Without backups, a dead disk loses the lab's data, models' settings and your services' state."
 
@@ -185,15 +209,94 @@ provides = ["game-node"]
 notes = "The default template is Minecraft Paper on 25565; the panel adds others."
 
 # ------------------------------------------------------------------ Media
+# Jellyfin and Plex both provide media-library and can run side by side: the arr apps and
+# Pinchflat depend on the role, so either one (or both) satisfies them. The YouTube library and
+# the playlist sync are set up on every media server that's ticked.
 [service.jellyfin]
 title = "Jellyfin"
-summary = "your films, shows and music, streamed to any screen (GPU transcoding when there is one)"
+summary = "your films, shows and music, streamed to any screen (GPU transcoding when there is one); open source, no account"
 group = "media"
 kind = "compose"
 needs = { cpu = 4, ram_gib = 4, disk_gib = 20, gpu = "none" }
 ports = [8096]
 provides = ["media-library"]
 exposes = "media"
+storage = ["media"]
+mounts = { "/config" = "state", "/cache" = "scratch", "/media" = "media" }
+env = { TZ = "{tz}" }
+source = { type = "jellyfin", token_ref = "{secret:jellyfin-api-key}" }
+
+[[service.jellyfin.configure]]
+do = "first-run"
+summary = "finish Jellyfin's startup wizard: an admin user with a generated password"
+secret = "jellyfin-admin"
+
+[[service.jellyfin.configure]]
+do = "secret"
+name = "jellyfin-api-key"
+summary = "an API key for the desktop and the playlist sync (Dashboard › API Keys)"
+
+[[service.jellyfin.configure]]
+do = "library"
+name = "Films"
+type = "movies"
+path = "{media}/movies"
+
+[[service.jellyfin.configure]]
+do = "library"
+name = "Shows"
+type = "shows"
+path = "{media}/tv"
+
+[[service.jellyfin.configure]]
+do = "library"
+name = "Music"
+type = "music"
+path = "{media}/music"
+
+[service.plex]
+title = "Plex"
+summary = "Plex Media Server: your library in the Plex apps on any TV or phone. Needs a free Plex account: you sign in once during setup"
+group = "media"
+kind = "helm"
+image = "plexinc/pms-docker:1.43.4.10903-e5521bd8c"
+chart = { repo = "https://raw.githubusercontent.com/plexinc/pms-docker/gh-pages", name = "plex-media-server", version = "1.9.0" }
+needs = { cpu = 4, ram_gib = 4, disk_gib = 20, gpu = "none" }
+ports = [32400]
+provides = ["media-library"]
+exposes = "plex"
+storage = ["media"]
+# Plex's database wants a disk with file locking: never a network share
+mounts = { "/config" = "state", "/transcode" = "scratch", "/data" = "media" }
+env = { TZ = "{tz}", PLEX_CLAIM = "{secret:plex-claim}" }
+account = "plex"
+source = { type = "plex", token_ref = "{secret:plex-token}" }
+notes = "GPU transcoding needs Plex Pass, Plex's paid subscription. Without it, Plex transcodes on the CPU."
+
+[[service.plex.configure]]
+do = "sign-in"
+provider = "plex"
+summary = "sign in to your Plex account: enter the code shown at plex.tv/link. The account's token is kept as plex-token, and a claim token (plex-claim, valid a few minutes) adds the new server to your account"
+secrets = ["plex-token", "plex-claim"]
+before_start = true
+
+[[service.plex.configure]]
+do = "library"
+name = "Films"
+type = "movies"
+path = "{media}/movies"
+
+[[service.plex.configure]]
+do = "library"
+name = "Shows"
+type = "shows"
+path = "{media}/tv"
+
+[[service.plex.configure]]
+do = "library"
+name = "Music"
+type = "music"
+path = "{media}/music"
 
 [service.arr]
 title = "The arr apps"
@@ -203,7 +306,104 @@ kind = "compose"
 needs = { cpu = 2, ram_gib = 3, disk_gib = 10 }
 ports = [8989, 7878, 9696, 6767]
 provides = ["library-manager"]
-depends = ["jellyfin"]
+depends = ["media-library"]
+storage = ["media", "downloads"]
+mounts = { "/config" = "state", "/media" = "media", "/downloads" = "downloads" }
+
+[service.pinchflat]
+title = "Pinchflat"
+summary = "Downloads YouTube channels and playlists to your media library, so they play in Jellyfin or Plex and on the den TV."
+group = "media"
+kind = "compose"
+# v2025.9.26 (plus upstream's yt-dlp fix for arm64): this build is published only as `latest`,
+# so it's pinned by its digest
+image = "ghcr.io/kieraneglin/pinchflat:latest@sha256:01b4f98aabaf3f5fe394213f7a32578c9e84e42080f52e2f8334021a4473b202"
+needs = { cpu = 1, ram_gib = 1, disk_gib = 2 }
+ports = [8945]
+provides = ["youtube-downloader"]
+depends = ["media-library"]
+exposes = "youtube"
+storage = ["media"]
+# its SQLite database stays on the box: Pinchflat warns against a network share for /config
+mounts = { "/config" = "state", "/downloads" = "media:youtube" }
+# ENABLE_PROMETHEUS: its /metrics carries the download queue the console shows
+env = { TZ = "{tz}", ENABLE_PROMETHEUS = "true" }
+source = { type = "pinchflat", route_token_ref = "{secret:pinchflat-route-token}", metrics = "endpoint" }
+
+[[service.pinchflat.configure]]
+do = "folder"
+path = "{media}/youtube"
+
+[[service.pinchflat.configure]]
+do = "library"
+on = "media-library"            # on every ticked media server: Jellyfin, Plex, or both
+name = "YouTube"
+type = "shows"
+path = "{media}/youtube"
+
+[[service.pinchflat.configure]]
+do = "setting"
+app = "pinchflat"
+kind = "media_profile"
+summary = "for channels: a season per year, episodes by upload date"
+[service.pinchflat.configure.values]
+name = "Channel (a season per year)"
+output_path_template = "/{{ source_custom_name }}/{{ season_by_year__episode_by_date_and_index }} - {{ title }} [{{ id }}].{{ ext }}"
+preferred_resolution = "1080p"
+download_subs = true
+embed_subs = true
+sub_langs = "en"
+download_thumbnail = true
+embed_thumbnail = true
+embed_metadata = true
+download_nfo = true
+download_source_images = true
+shorts_behaviour = "exclude"
+livestream_behaviour = "exclude"
+redownload_delay_days = 1
+
+[[service.pinchflat.configure]]
+do = "setting"
+app = "pinchflat"
+kind = "media_profile"
+summary = "for playlists: Season 1, each video numbered by its place in the playlist (the sync orders by it)"
+[service.pinchflat.configure.values]
+name = "Playlist (in playlist order)"
+output_path_template = "/{{ source_custom_name }}/{{ static_season__episode_by_index }} - {{ title }} [{{ id }}].{{ ext }}"
+preferred_resolution = "1080p"
+download_subs = true
+embed_subs = true
+sub_langs = "en"
+download_thumbnail = true
+embed_thumbnail = true
+embed_metadata = true
+download_nfo = true
+download_source_images = true
+shorts_behaviour = "include"
+livestream_behaviour = "exclude"
+redownload_delay_days = 1
+
+[[service.pinchflat.configure]]
+do = "secret"
+name = "pinchflat-route-token"
+summary = "Pinchflat's route token (in the OPML link on its Sources page): the console and the sync list sources with it"
+
+[[service.pinchflat.configure]]
+do = "timer"
+name = "youtube-playlists"
+summary = "every hour, bromigos lab youtube sync: each downloaded YouTube playlist becomes an ordered playlist in Jellyfin and Plex"
+every = "1h"
+# the sync is one file with no dependencies (homelab/lib/bromigos_homelab/youtube.py): a systemd
+# timer runs it on a Linux box, a CronJob on Kubernetes
+run = "python3 youtube.py sync"
+[service.pinchflat.configure.env]
+PINCHFLAT_URL = "{url:pinchflat}"
+PINCHFLAT_ROUTE_TOKEN = "{secret:pinchflat-route-token}"
+JELLYFIN_URL = "{url:jellyfin}"
+JELLYFIN_TOKEN = "{secret:jellyfin-api-key}"
+PLEX_URL = "{url:plex}"
+PLEX_TOKEN = "{secret:plex-token}"
+YOUTUBE_LIBRARY = "YouTube"
 
 # ------------------------------------------------------------------ Home
 [service.home-assistant]
@@ -294,8 +494,9 @@ services = ["pelican-panel", "pelican-wings"]
 
 [preset.media]
 title = "Media"
-summary = "Jellyfin and the arr apps"
-services = ["jellyfin", "arr"]
+summary = "Jellyfin, the arr apps, and Pinchflat for YouTube; Plex too, if you want it (it needs a free Plex account)"
+services = ["jellyfin", "arr", "pinchflat"]
+offered = ["plex"]
 
 [preset.home]
 title = "Home"
@@ -306,6 +507,111 @@ services = ["home-assistant"]
 title = "Advanced"
 summary = "Prometheus, Grafana and Loki; Vault; Kubernetes with Argo CD"
 services = ["prometheus", "grafana", "loki", "vault", "kubernetes"]
+
+# ------------------------------------------------------------------ storage: the NAS you already have
+# The Storage step (docs/lab-provision.md) finds the NASes on the network, or takes an address,
+# lists their shares, and asks for one share per purpose. It checks each by writing a test file
+# and deleting it. Databases and scratch space ("state", "scratch" in a service's mounts) never
+# go on a share: they stay on the box's own disk.
+[storage]
+protocols = ["nfs", "smb"]
+prefer = "nfs"                  # for media on Linux; SMB works too
+discover = ["mdns:_nfs._tcp", "mdns:_smb._tcp", "showmount -e <address>"]
+check = "write a test file in each share, read it back, delete it"
+
+[storage.purpose.media]
+title = "Media"
+summary = "films, shows, music and YouTube downloads: what Jellyfin and Plex play"
+folders = ["movies", "tv", "music", "youtube"]
+
+[storage.purpose.downloads]
+title = "Downloads"
+summary = "where downloads land before the arr apps sort them into media. On the same share as media, moving them is instant"
+folders = ["downloads"]
+
+[storage.purpose.backups]
+title = "Backups"
+summary = "restic's encrypted backups of the lab's data and settings"
+folders = ["restic"]
+
+# how a chosen share is attached, per target
+[storage.apply]
+linux = "systemd automount units, NFS or CIFS; SMB credentials in a sops-encrypted file in the lab repo"
+kubernetes = "an NFS StorageClass through nfs-subdir-external-provisioner, or static PersistentVolumes"
+proxmox = "the share added as Proxmox storage (pvesm add nfs, or POST /storage), or mounted inside the VM"
+helm = { repo = "https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/", name = "nfs-subdir-external-provisioner", version = "4.0.18" }
+
+# What each NAS brand needs. creates_shares: setup can make the share through the NAS's API;
+# otherwise it gives the steps and uses a share you made. squash: the setting that makes the
+# NAS write every file as one user, so every service can read every file. fix: what to change
+# when the write test fails.
+[storage.brand.generic]
+title = "Any NFS or SMB share"
+creates_shares = false
+squash = "map all users to one user (NFS all_squash, with anonuid and anongid)"
+fix = "Give the box's address read and write access to the share. For NFS, map all users to one user that owns the folder."
+
+[storage.brand.linux]
+title = "A Linux NFS server"
+creates_shares = false
+export = "<folder> <lab network>/24(rw,sync,no_subtree_check,all_squash,anonuid=<uid>,anongid=<gid>)"
+squash = "all_squash with anonuid and anongid in /etc/exports"
+fix = "Add the box's network to the export in /etc/exports with rw and all_squash, then run exportfs -ra."
+docs = "https://man7.org/linux/man-pages/man5/exports.5.html"
+
+[storage.brand.truenas]
+title = "TrueNAS (25.04 or later)"
+creates_shares = true
+api = "JSON-RPC 2.0 over a WebSocket, wss://<nas>/api/current, with an API key"
+create = ["pool.dataset.create", "sharing.nfs.create", "sharing.smb.create"]
+health = ["pool.query", "pool.dataset.query"]
+key = "Your account icon › My API Keys › Add API Key. It's shown once, and works over HTTPS only."
+squash = "mapall_user and mapall_group on the NFS share"
+fix = "In Shares › NFS, edit the share: add the box's network, and set Mapall User and Mapall Group to the folder's owner."
+docs = "https://api.truenas.com/"
+
+[storage.brand.synology]
+title = "Synology (DSM 7)"
+creates_shares = false          # no published API for shared folders or NFS rules
+steps = ["Control Panel › File Services › NFS: tick Enable NFS service, then Apply.",
+         "Control Panel › Shared Folder › Create: name the folder and pick its volume.",
+         "Select the folder › Edit › NFS Permissions › Create: the box's address, Read/Write, and Squash set to Map all users to admin."]
+squash = "Map all users to admin"
+fix = "Shared Folder › Edit › NFS Permissions: give the box's address Read/Write, with Squash set to Map all users to admin."
+docs = "https://kb.synology.com/en-us/DSM/help/DSM/AdminCenter/file_share_privilege_nfs?version=7"
+
+[storage.brand.unifi]
+title = "UniFi Drive (UNAS)"
+creates_shares = false          # UniFi documents no API for UniFi Drive's shares or health
+steps = ["UniFi Drive › All Files › New Shared Drive: name it and add users.",
+         "UniFi Drive › Settings › Services: turn on NFS.",
+         "On the Shared Drive, choose Collaborative Mode (All Squash). Don't choose Isolated Mode: it can't be undone, and the drive becomes NFS-only."]
+export = "<nas>:/var/nfs/shared/<Shared Drive name>"
+squash = "Collaborative Mode (All Squash)"
+fix = "In UniFi Drive, check NFS is on (Settings › Services) and the Shared Drive uses Collaborative Mode (All Squash)."
+docs = "https://help.ui.com/hc/en-us/articles/26277250895895"
+
+[storage.brand.qnap]
+title = "QNAP (QTS, QuTS hero)"
+creates_shares = false          # no current published API for shared folders or NFS
+steps = ["Control Panel › Network & File Services › Win/Mac/NFS/WebDAV › NFS Service: tick Enable NFS service.",
+         "Control Panel › Privilege › Shared Folders: create the folder.",
+         "Edit Shared Folder Permission › NFS host access: tick Access right, add the box's address, Read/Write, Squash all users."]
+squash = "Squash all users"
+fix = "Shared Folders › Edit Shared Folder Permission › NFS host access: add the box's address with Read/Write and Squash all users."
+docs = "https://www.qnap.com/en/how-to/faq/article/how-to-know-whether-the-nas-shared-folder-is-opened-for-access-via-nfs"
+
+[storage.brand.unraid]
+title = "Unraid (7)"
+creates_shares = false          # its API reads shares and disks but can't make shares yet
+health = ["array", "shares", "disks"]
+api = "GraphQL at /graphql with an x-api-key header (built in from 7.2)"
+steps = ["Shares › Add Share: name it and choose where it's stored.",
+         "Turn on NFS in Unraid's settings.",
+         "Open the share: set NFS Export to Yes, and Security to Private with a rule for the box's address."]
+squash = "the share's NFS Security rule"
+fix = "Open the share in Shares: NFS Export Yes, and a Private rule giving the box's address read and write."
+docs = "https://docs.unraid.net/unraid-os/using-unraid-to/manage-storage/shares/"
 
 # ------------------------------------------------------------------ sizing
 [sizing]
