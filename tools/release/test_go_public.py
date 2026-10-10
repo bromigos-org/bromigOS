@@ -5,7 +5,10 @@ and the signing key is a throwaway. Nothing reaches a network.
 
 The dry run must check everything and change nothing. With --yes, the bucket's public
 address is turned on, the anonymous downloads are verified, and both prepared branches
-land on main."""
+land on main.
+
+--ci moves CI to GitHub's runners (and --ci --private back): gh is a stub too, playing the
+repositories' variables, secrets, visibility and queued runs from folders."""
 import os
 import shutil
 import subprocess
@@ -56,6 +59,8 @@ case $url in
   https://pub-0123abcd.r2.dev/*)
     grep -qx managed "$FAKE/public" 2>/dev/null || exit 22
     f="$FAKE/bucket/${url#https://pub-0123abcd.r2.dev/}"; [[ -f $f ]] || exit 22; put "$f" ;;
+  https://model.test/*)
+    if [[ -f $FAKE/model-up ]]; then printf 200; else printf 000; exit 7; fi ;;
   https://pkgs.bromigos.org/*)
     grep -qx custom "$FAKE/public" 2>/dev/null || exit 22
     f="$FAKE/bucket/${url#https://pkgs.bromigos.org/}"; [[ -f $f ]] || exit 22; put "$f" ;;
@@ -63,6 +68,29 @@ case $url in
 esac
 """
 VAULT = """#!/usr/bin/env bash\necho "vault $*" >> "$FAKE/log"\n"""
+
+# gh: $FAKE/gh/<owner_repo>/{vars,secrets}/<NAME> hold values; visibility, install.sh and
+# queued runs are files beside them. Every call is logged (values never are: they're stdin
+# or --body, and the log keeps only the words before them).
+GH = r"""#!/usr/bin/env bash
+echo "gh ${*%%--body*}" >> "$FAKE/log"
+repo='' args=()
+while (($#)); do case $1 in -R) repo=$2; shift 2 ;; *) args+=("$1"); shift ;; esac; done
+set -- "${args[@]}"
+d="$FAKE/gh/${repo//\//_}"
+case "$1 $2" in
+  "repo view") d="$FAKE/gh/${3//\//_}"; cat "$d/visibility" 2>/dev/null || echo PRIVATE ;;
+  "variable list")
+    for f in "$d"/vars/*; do [[ -f $f ]] && jq -n --arg n "${f##*/}" --arg v "$(cat "$f")" '{name: $n, value: $v}'; done | jq -s . ;;
+  "variable set") mkdir -p "$d/vars"; printf '%s' "$5" > "$d/vars/$3" ;;
+  "variable delete") rm "$d/vars/$3" ;;
+  "secret list") for f in "$d"/secrets/*; do [[ -f $f ]] && echo "${f##*/}"; done ;;
+  "secret set") mkdir -p "$d/secrets"; cat > "$d/secrets/$3" ;;
+  "api repos/"*) base64 < "$FAKE/gh/install.sh" ;;
+  "run list") cat "$d/queued" 2>/dev/null || true ;;
+  *) echo "gh stub: $*" >&2; exit 1 ;;
+esac
+"""
 
 
 def git(cwd, *args):
@@ -79,7 +107,7 @@ class GoPublic(unittest.TestCase):
             open(os.path.join(self.fake, f), "w").close()
         self.bin = os.path.join(self.tmp, "bin")
         os.makedirs(self.bin)
-        for name, body in (("curl", CURL), ("vault", VAULT)):
+        for name, body in (("curl", CURL), ("vault", VAULT), ("gh", GH)):
             path = os.path.join(self.bin, name)
             with open(path, "w") as f:
                 f.write(body)
@@ -272,6 +300,105 @@ class GoPublic(unittest.TestCase):
         r = self.run_script("--private", "--yes")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn('{"enabled":false}', self.read("changes"))
+
+
+class GoPublicCI(GoPublic):
+    """--ci: the repositories' CI settings, through the gh stub."""
+    OS, VEC = "bromigos-org_bromigOS", "bromigos-org_vector"
+    LAB = {"RUNNER_PACKAGES": "runner-big", "RUNNER_SMOKE": "runner-small", "LITELLM_LAB_URL": "http://model.example:4000"}
+
+    def setUp(self):
+        super().setUp()
+        self.put(self.OS, "vars/CI_RUNNER_PACKAGES", "runner-big")
+        self.put(self.OS, "vars/CI_RUNNER_SMOKE", "runner-small")
+        self.put(self.OS, "vars/LITELLM_BASE_URL", "http://model.example:4000")
+        self.put(self.OS, "secrets/LITELLM_API_KEY", "key")
+        self.put(self.VEC, "vars/CI_RUNNER_PACKAGES", "runner-big")
+        with open(os.path.join(self.fake, "gh", "install.sh"), "w") as f:
+            f.write("FPR=x\nPUBLIC_REPO=''\n")
+        open(os.path.join(self.fake, "model-up"), "w").close()
+
+    def put(self, repo, path, text):
+        f = os.path.join(self.fake, "gh", repo, path)
+        os.makedirs(os.path.dirname(f), exist_ok=True)
+        with open(f, "w") as fh:
+            fh.write(text)
+
+    def names(self, repo, kind):
+        d = os.path.join(self.fake, "gh", repo, kind)
+        return sorted(os.listdir(d)) if os.path.isdir(d) else []
+
+    def value(self, repo, path):
+        with open(os.path.join(self.fake, "gh", repo, path)) as f:
+            return f.read()
+
+    def ci(self, *args, **env):
+        os.environ.update(env)
+        try:
+            return self.run_script("--ci", *args)
+        finally:
+            for k in env:
+                os.environ.pop(k)
+
+    def test_ci_dry_run_changes_nothing(self):
+        r = self.ci(GO_PUBLIC_LITELLM_PUBLIC_URL="https://model.test")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("would run: gh variable delete CI_RUNNER_PACKAGES -R bromigos-org/bromigOS", r.stdout)
+        self.assertIn("would run: gh variable delete CI_RUNNER_PACKAGES -R bromigos-org/vector", r.stdout)
+        self.assertIn("count against the account's free minutes", r.stdout)
+        self.assertEqual(self.names(self.OS, "vars"), ["CI_RUNNER_PACKAGES", "CI_RUNNER_SMOKE", "LITELLM_BASE_URL"])
+        self.assertNotIn("variable delete", self.read("log"))
+        self.assertNotIn("cf.test", self.read("log"))      # --ci never touches the bucket
+
+    def test_ci_yes_moves_ci_to_githubs_runners(self):
+        self.put(self.OS, "visibility", "PUBLIC")
+        self.put(self.VEC, "queued", "42 packages\n")
+        r = self.ci("--yes", GO_PUBLIC_LITELLM_PUBLIC_URL="https://model.test")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.names(self.OS, "vars"), [])
+        self.assertEqual(self.names(self.VEC, "vars"), [])
+        self.assertEqual(self.value(self.OS, "secrets/LITELLM_BASE_URL"), "https://model.test")
+        self.assertIn("run 42 (packages) is queued", r.stdout)
+        gh_calls = [l for l in self.read("log").splitlines() if l.startswith("gh ")]
+        self.assertFalse([l for l in gh_calls if "model.test" in l])   # the secret goes on stdin
+
+    def test_ci_names_the_public_repository_for_the_iso_check(self):
+        with open(os.path.join(self.fake, "gh", "install.sh"), "w") as f:
+            f.write(f"FPR=x\nPUBLIC_REPO='{R2DEV}'   # set by go-public\n")
+        r = self.ci("--yes", GO_PUBLIC_LITELLM_PUBLIC_URL="https://model.test")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.value(self.OS, "vars/ISO_REPO_URL"), R2DEV)
+
+    def test_ci_stops_when_the_model_doesnt_answer(self):
+        os.remove(os.path.join(self.fake, "model-up"))
+        r = self.ci("--yes", GO_PUBLIC_LITELLM_PUBLIC_URL="https://model.test")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("doesn't answer", r.stderr)
+        self.assertEqual(len(self.names(self.OS, "vars")), 3)
+
+    def test_ci_needs_the_public_address(self):
+        r = self.ci("--yes")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("GO_PUBLIC_LITELLM_PUBLIC_URL", r.stderr)
+
+    def test_ci_private_puts_the_lab_back(self):
+        self.ci("--yes", GO_PUBLIC_LITELLM_PUBLIC_URL="https://model.test")
+        r = self.ci("--private", "--yes", **{"GO_PUBLIC_" + k: v for k, v in self.LAB.items()})
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.value(self.OS, "vars/CI_RUNNER_PACKAGES"), "runner-big")
+        self.assertEqual(self.value(self.OS, "vars/CI_RUNNER_SMOKE"), "runner-small")
+        self.assertEqual(self.value(self.VEC, "vars/CI_RUNNER_PACKAGES"), "runner-big")
+        self.assertEqual(self.value(self.OS, "secrets/LITELLM_BASE_URL"), "http://model.example:4000")
+
+    def test_ci_private_needs_the_lab_settings(self):
+        r = self.ci("--private", "--yes")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("GO_PUBLIC_RUNNER_PACKAGES", r.stderr)
+
+
+# GoPublicCI inherits GoPublic's tests too; they'd only run twice.
+for _n in [n for n in vars(GoPublic) if n.startswith("test_")]:
+    setattr(GoPublicCI, _n, None)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@
 #   tools/release/go-public.sh [--domain HOST] --yes    do it
 #   tools/release/go-public.sh --private [--domain HOST] [--yes]
 #                                                       undo the bucket part: private again
+#   tools/release/go-public.sh --ci [--private] [--yes] move CI to GitHub's runners (or back)
 #
 # The bucket is the Cloudflare R2 bucket bromigos-pkgs. It goes public at its r2.dev
 # address, or with --domain at a custom domain (pkgs.bromigos.org) in a Cloudflare zone.
@@ -29,6 +30,26 @@
 # and cloudflare_token_path + cloudflare_token_field naming where the API token is.
 # Run it from a bromigOS checkout, signed in to GitHub (git over SSH) with push access to
 # both repositories. The repositories themselves stay private.
+#
+# --ci is the step for when the GitHub repositories go public (whoever decides that makes
+# them public; this never changes a repository's visibility). Public repositories may not
+# use the homelab's runners, so it moves CI to GitHub's (docs/public.md, "CI once the
+# repositories are public"):
+#   - deletes every CI_RUNNER_* variable in bromigOS and vector: each job falls back to
+#     GitHub's hosted runner, and packages.yml publishes to the R2 bucket alone, which the
+#     homelab then copies from;
+#   - sets the secret LITELLM_BASE_URL to the model's public address (and deletes the old
+#     variable of that name), so release-prepare still drafts the notes;
+#   - sets the variable ISO_REPO_URL to the public package repository once install.sh names
+#     one, and deletes it otherwise (iso-check can't reach the homelab's).
+# --ci --private puts the homelab's runners and address back. Its settings, from the
+# environment, or from GO_PUBLIC_CI_VAULT_PATH, a record in Vault with the same names in
+# lower case without GO_PUBLIC_ (runner_packages, runner_smoke, litellm_lab_url,
+# litellm_public_url, iso_repo_url):
+#   GO_PUBLIC_LITELLM_PUBLIC_URL   the model's public address (--ci)
+#   GO_PUBLIC_RUNNER_PACKAGES, GO_PUBLIC_RUNNER_SMOKE, GO_PUBLIC_LITELLM_LAB_URL
+#                                  the homelab's runner labels and address (--ci --private)
+#   GO_PUBLIC_ISO_REPO_URL         optional, for --ci --private
 set -euo pipefail
 
 BUCKET=${GO_PUBLIC_BUCKET:-bromigos-pkgs}
@@ -36,6 +57,7 @@ OS_REPO=${GO_PUBLIC_OS_REPO:-bromigos-org/bromigOS}
 OS_BRANCH=${GO_PUBLIC_OS_BRANCH:-go-public}
 SITE_REPO=${GO_PUBLIC_SITE_REPO:-bromigos-org/bromigos.org}
 SITE_BRANCH=${GO_PUBLIC_SITE_BRANCH:-os-get-public}
+VECTOR_REPO=${GO_PUBLIC_VECTOR_REPO:-bromigos-org/vector}
 VAULT_PATH=${GO_PUBLIC_VAULT_PATH:-}
 GIT_BASE=${GO_PUBLIC_GIT_BASE:-git@github.com:}
 API=${GO_PUBLIC_CF_API:-https://api.cloudflare.com/client/v4}
@@ -46,14 +68,15 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/../.." && pwd)
 FPR=${GO_PUBLIC_FPR:-$(sed -n 's/^FPR=\([0-9A-F]\{40\}\)$/\1/p' "$root/install.sh")}
 
-yes=0 private=0 domain=''
+yes=0 private=0 domain='' ci=0
 while (($#)); do
   case $1 in
     --yes) yes=1; shift ;;
     --private) private=1; shift ;;
+    --ci) ci=1; shift ;;
     --domain) domain=${2:?--domain needs a host name}; shift 2 ;;
-    -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "go-public: unknown option $1 (--yes, --domain HOST, --private)" >&2; exit 2 ;;
+    -h|--help) sed -n '2,52p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "go-public: unknown option $1 (--yes, --domain HOST, --private, --ci)" >&2; exit 2 ;;
   esac
 done
 
@@ -65,6 +88,83 @@ trap 'rm -rf "$tmp"' EXIT
 umask 077
 export GNUPGHOME="$tmp/gnupg"
 mkdir -m 700 "$GNUPGHOME"
+
+# ── --ci: CI moves to GitHub's runners, or back ──────────────────────────────
+if ((ci)); then
+  [[ -z $domain ]] || die "--domain is for the bucket, not --ci"
+  for t in curl jq gh; do command -v "$t" >/dev/null || die "needs $t"; done
+  setting() {   # setting NAME: GO_PUBLIC_NAME from the environment, else the Vault record
+    local v="GO_PUBLIC_$1"
+    if [[ -n ${!v:-} ]]; then printf '%s' "${!v}"; return; fi
+    [[ -n ${GO_PUBLIC_CI_VAULT_PATH:-} ]] || return 0
+    if [[ ! -f $tmp/ci.json ]]; then
+      command -v vault >/dev/null || die "GO_PUBLIC_CI_VAULT_PATH is set but vault isn't installed"
+      vault kv get -format=json "$GO_PUBLIC_CI_VAULT_PATH" | jq '.data.data' > "$tmp/ci.json" \
+        || die "can't read $GO_PUBLIC_CI_VAULT_PATH from Vault"
+    fi
+    jq -r --arg k "${1,,}" '.[$k] // empty' "$tmp/ci.json"
+  }
+  vars_of() { gh variable list -R "$1" --json name,value; }
+  secret_set() { printf '%s' "$3" | gh secret set "$1" -R "$2"; }   # the value on stdin
+  run() {   # run DESCRIPTION COMMAND...: done with --yes, else only said
+    if ((yes)); then say "run: $1"; "${@:2}" >/dev/null; else say "would run: $1"; fi
+  }
+  ((yes)) || say "dry run: nothing changes. Add --yes to do it."
+  for r in "$OS_REPO" "$VECTOR_REPO"; do
+    vis=$(gh repo view "$r" --json visibility -q .visibility) || die "can't read $r (signed in to GitHub?)"
+    say "$r is ${vis,,}"
+    [[ $vis == PUBLIC ]] || ((private)) || say "  note: while it's private, GitHub's runners count against the account's free minutes"
+  done
+  if ((private)); then
+    say "CI back to the homelab's runners"
+    pk=$(setting RUNNER_PACKAGES) sm=$(setting RUNNER_SMOKE) lab=$(setting LITELLM_LAB_URL) iso=$(setting ISO_REPO_URL)
+    [[ -n $pk && -n $sm && -n $lab ]] \
+      || die "needs GO_PUBLIC_RUNNER_PACKAGES, GO_PUBLIC_RUNNER_SMOKE and GO_PUBLIC_LITELLM_LAB_URL (or GO_PUBLIC_CI_VAULT_PATH; see the header)"
+    run "gh variable set CI_RUNNER_PACKAGES -R $OS_REPO" gh variable set CI_RUNNER_PACKAGES -R "$OS_REPO" --body "$pk"
+    run "gh variable set CI_RUNNER_SMOKE -R $OS_REPO" gh variable set CI_RUNNER_SMOKE -R "$OS_REPO" --body "$sm"
+    run "gh variable set CI_RUNNER_PACKAGES -R $VECTOR_REPO" gh variable set CI_RUNNER_PACKAGES -R "$VECTOR_REPO" --body "$pk"
+    run "gh secret set LITELLM_BASE_URL -R $OS_REPO (the homelab's address)" secret_set LITELLM_BASE_URL "$OS_REPO" "$lab"
+    if [[ -n $iso ]]; then run "gh variable set ISO_REPO_URL -R $OS_REPO" gh variable set ISO_REPO_URL -R "$OS_REPO" --body "$iso"
+    elif vars_of "$OS_REPO" | jq -e 'any(.[]; .name == "ISO_REPO_URL")' >/dev/null; then
+      run "gh variable delete ISO_REPO_URL -R $OS_REPO" gh variable delete ISO_REPO_URL -R "$OS_REPO"
+    fi
+    say "the next publish on the homelab's runner takes the primary back from R2, once the"
+    say "homelab's copy has caught up (packaging/README.md, \"When the public bucket is the primary\")"
+    ((yes)) && say "CI is on the homelab's runners again" || say "dry run done"
+    exit 0
+  fi
+  say "CI to GitHub's runners"
+  url=$(setting LITELLM_PUBLIC_URL)
+  [[ $url == https://* ]] || die "needs GO_PUBLIC_LITELLM_PUBLIC_URL, the model's public https address (or GO_PUBLIC_CI_VAULT_PATH)"
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${url%/}/health/liveliness" || true)
+  [[ $code == 200 ]] || die "the model's public address doesn't answer (/health/liveliness: ${code:-no answer})"
+  say "  the model's public address answers"
+  gh secret list -R "$OS_REPO" --json name -q '.[].name' | grep -qx LITELLM_API_KEY \
+    || die "$OS_REPO has no LITELLM_API_KEY secret: the public address needs the key"
+  for r in "$OS_REPO" "$VECTOR_REPO"; do
+    for n in $(vars_of "$r" | jq -r '.[] | select(.name | startswith("CI_RUNNER_")) | .name'); do
+      run "gh variable delete $n -R $r" gh variable delete "$n" -R "$r"
+    done
+  done
+  run "gh secret set LITELLM_BASE_URL -R $OS_REPO (the public address)" secret_set LITELLM_BASE_URL "$OS_REPO" "$url"
+  if vars_of "$OS_REPO" | jq -e 'any(.[]; .name == "LITELLM_BASE_URL")' >/dev/null; then
+    run "gh variable delete LITELLM_BASE_URL -R $OS_REPO (now a secret: a variable is printed in public logs)" \
+      gh variable delete LITELLM_BASE_URL -R "$OS_REPO"
+  fi
+  pub=$(gh api "repos/$OS_REPO/contents/install.sh" -q .content | base64 -d | sed -n "s/^PUBLIC_REPO='\{0,1\}\([^' ]*\).*/\1/p")
+  if [[ -n $pub ]]; then
+    run "gh variable set ISO_REPO_URL -R $OS_REPO ($pub)" gh variable set ISO_REPO_URL -R "$OS_REPO" --body "$pub"
+  elif vars_of "$OS_REPO" | jq -e 'any(.[]; .name == "ISO_REPO_URL")' >/dev/null; then
+    run "gh variable delete ISO_REPO_URL -R $OS_REPO (GitHub's runners can't reach it)" gh variable delete ISO_REPO_URL -R "$OS_REPO"
+  fi
+  # Jobs queued for a homelab runner keep waiting for one; they need starting again.
+  for r in "$OS_REPO" "$VECTOR_REPO"; do
+    gh run list -R "$r" --status queued --json databaseId,workflowName -q '.[] | "\(.databaseId) \(.workflowName)"' \
+      | while read -r id name; do say "  $r: run $id ($name) is queued for a homelab runner: gh run cancel $id -R $r, then gh run rerun $id -R $r"; done
+  done
+  ((yes)) && say "CI runs on GitHub's runners; packages publish to R2 alone" || say "dry run done"
+  exit 0
+fi
 
 for t in curl jq git gpg tar sha256sum; do
   command -v "$t" >/dev/null || die "needs $t"
@@ -263,6 +363,7 @@ fi
 
 if ((yes)); then
   say "bromigOS's packages are public at $URL"
+  say "when the GitHub repositories go public too, move CI off the homelab's runners: $0 --ci --yes"
 else
   say "dry run done: every check passed. Run it again with --yes to go public."
 fi

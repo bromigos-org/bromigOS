@@ -100,6 +100,42 @@ tools/release/go-public.sh --private --domain pkgs.bromigos.org --yes
 This turns the public address off again. It doesn't revert the two merged branches. Revert
 those with `git revert` if you need to.
 
+## CI once the repositories are public
+
+The GitHub repositories are private too. Making them public is a separate decision, and
+nothing here changes a repository's visibility. When they are public, run:
+
+```bash
+tools/release/go-public.sh --ci            # prints what it would change
+tools/release/go-public.sh --ci --yes      # changes it
+```
+
+Public repositories never use the homelab's runners: a fork's pull request could run code
+on them. GitHub's hosted runners are free for public repositories. So `--ci` moves CI there,
+in both repositories:
+
+- It deletes every `CI_RUNNER_*` variable. Every job then runs on GitHub's runner.
+  `packages.yml` publishes to the R2 bucket alone, and the homelab copies from it
+  ([packaging/README.md](../packaging/README.md#when-the-public-bucket-is-the-primary)).
+- It sets the secret `LITELLM_BASE_URL` to the model's public address, so release-prepare
+  still drafts the notes. It deletes the variable of that name, whose value would show in
+  public logs.
+- It sets the variable `ISO_REPO_URL` to the public package repository, once `install.sh`
+  names one. Otherwise it deletes it.
+- It lists runs still queued for a homelab runner, with the commands to start them again.
+
+Before anything, it checks that the model's public address answers. It reads the address
+from `GO_PUBLIC_LITELLM_PUBLIC_URL`, or from a record in Vault that
+`GO_PUBLIC_CI_VAULT_PATH` names. The script's header lists the names.
+
+`tools/release/go-public.sh --ci --private --yes` puts the homelab's runners and the
+in-cluster address back. The first publish on a homelab runner then takes the primary
+back from R2.
+
+Every workflow takes a `hosted` input, which runs it on GitHub's runner while the
+variables still name the homelab's. Use it to check a change before the switch. While the
+repositories are private, those runs count against the account's free minutes.
+
 ## What it costs
 
 R2 doesn't charge for downloads. That's why the packages are there.
@@ -148,7 +184,7 @@ secrets, never in a repository. To replace the key, follow
 
 | File | What |
 |---|---|
-| `tools/release/go-public.sh` | The command |
+| `tools/release/go-public.sh` | The command; `--ci` moves CI to GitHub's runners |
 | `tools/release/test_go_public.py` | Its tests, with a stubbed Cloudflare API and bucket, and throwaway repositories |
 | `packaging/ci/publish.sh` | Publishes each channel, then copies it to the mirror |
 | `manual/publish.sh` | Publishes the web manual to both buckets |
