@@ -41,6 +41,7 @@ These need [VECTOR](vector.md), which a full install includes.
 | <span class="keys"><kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></span> | Turn conversation mode on or off. In conversation mode you speak and he answers, hands-free. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>V</kbd></span> | Hold to talk to VECTOR. He listens while you hold the keys. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd></span> | Keep VECTOR's chat box open, or let it fold away again. Clicking him does the same. |
+| <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd></span> | Turn follow mode on or off. While it's on, VECTOR reads each of Claude Code's replies aloud once it's finished, and READING CLAUDE shows on the bar. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>Esc</kbd></span> | VECTOR's [emergency switch](vector.md#the-emergency-switch). Press it to stop his commands, his answer and his speech at once. Press it again, and choose YES, to switch him back on. |
 
 ### Windows

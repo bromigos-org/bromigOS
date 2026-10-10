@@ -38,6 +38,7 @@ rows = [
   { match = "VECTOR: conversation mode on/off (hands-free)", text = "Turn conversation mode on or off. In conversation mode you speak and he answers, hands-free." },
   { match = "VECTOR: hold to talk", text = "Hold to talk to VECTOR. He listens while you hold the keys." },
   { match = "VECTOR: chat box shown/hidden (or click him; folded away until you point at him)", text = "Keep VECTOR's chat box open, or let it fold away again. Clicking him does the same." },
+  { match = "VECTOR: read Claude's replies aloud as they finish (on/off)", text = "Turn follow mode on or off. While it's on, VECTOR reads each of Claude Code's replies aloud once it's finished, and READING CLAUDE shows on the bar." },
   { match = "VECTOR: voice on/off", text = "Mute or unmute VECTOR's voice." },
   { match = "VECTOR: cycle voices (auto, then each voice)", text = "Change VECTOR's voice." },
   { match = "VECTOR: emergency switch (off at once; on asks first)", text = "VECTOR's [emergency switch](vector.md#the-emergency-switch). Press it to stop his commands, his answer and his speech at once. Press it again, and choose YES, to switch him back on." },

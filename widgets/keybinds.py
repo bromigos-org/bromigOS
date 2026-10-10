@@ -58,6 +58,7 @@ KEYNAMES = {
 EXEC = [
     # VECTOR: the caretaker on the line, and his voice
     (r"bromigos-holo\b.*\bswitch\b", "VECTOR: emergency switch (off at once; on asks first)", "VECTOR"),
+    (r"bromigos-holo\b.*\bclaude\b.*\bfollow\b", "VECTOR: read Claude's replies aloud as they finish (on/off)", "VECTOR"),
     (r"bromigos-holo\b.*\b(vector|pilot)\b", "VECTOR: show / minimize", "VECTOR"),
     (r"bromigos-holo\b.*\bconversation\b", "VECTOR: conversation mode on/off (hands-free)", "VECTOR"),
     (r"bromigos-holo\b.*\bptt\b", "VECTOR: hold to talk", "VECTOR"),
