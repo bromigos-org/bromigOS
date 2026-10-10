@@ -621,3 +621,7 @@ Hyprland 0.56.2's auto-reload on. Then `bromigos-core` r101 with the hooks went 
 - **The control, with the hooks moved aside.** Five reloads happened 0.64 s into the
   transaction, and Hyprland fell into emergency mode with only its 3 emergency binds. In
   another run, Hyprland stopped answering and the VM needed a reboot.
+
+An AUR bootstrap install can use `Include = /etc/pacman.d/bromigos-mirrorlist`
+in its `[bromigos]` section. `bromigos channel` reads that server too. A channel
+change replaces the include with an explicit server and keeps the mirrorlist file.

@@ -165,6 +165,7 @@ Then it runs `bromigos setup`, unless you gave `--no-setup`.
 | `bromigos-widgets` | bromigOS desktop widgets: system, network, storage, workbench, notes and shortcuts panels | *with bromigOS* |
 | `bromigos-vector` | VECTOR, the desktop's caretaker, and the hologram renderer he lives in (from the `vector` repository) | *with bromigOS* |
 | `bromigos-manual` | bromigOS manual: how to use the desktop, as HTML, for reading offline | *with bromigOS* |
+| `bromigos-mirrorlist` | bromigOS package repository mirrors | *with bromigOS* (through `bromigos-keyring`) |
 | `bromigos-homelab` | bromigOS homelab integrations: capabilities, adapters, the LAB panel, homelab decks and VECTOR tools | *with bromigOS* (through `bromigos-desktop`) |
 | `ttf-geist-mono` | Geist Mono, a monospaced typeface by Vercel | *with bromigOS* (through `bromigos-settings`) |
 | `bromigos-lab-catalog` | bromigOS lab model catalog: the best open models per AI capability and GPU size, with licences | *with bromigOS* (through `bromigos-homelab`) |
@@ -453,3 +454,23 @@ What it found and fixed:
 - Two build dependencies were missing: `glib2-devel` and Pillow.
 - A newly added screen was sorted as the leftmost.
 - swaybg kept running on an unplugged screen.
+
+## The AUR bootstrap route
+
+`bromigos-keyring` and `bromigos-mirrorlist` are also built from the AUR.
+The manual's [AUR steps](../manual/src/install.md#start-from-the-aur) explain how
+users add the repository. `install.sh --aur-route` prints those steps.
+
+The recipes live in `packaging/aur/`. After the signed package workflow passes,
+its AUR job pins them to an immutable `aur-bootstrap-<commit>` tag, records the
+archive checksum, and copies the repo packages' versions. It builds and installs
+both recipes in an Arch container. It adds the repository there, runs
+`pacman -Sy`, and verifies a signed `bromigos-core` download. Only then does it
+push the PKGBUILDs and `.SRCINFO` to the AUR.
+
+The keyring's install hook populates `bromigos` in pacman's keyring and prints
+the two configuration lines. It never edits `pacman.conf`. The mirrorlist is
+backed up by pacman, so later updates keep a user's extra mirrors.
+
+The channel reader accepts the mirrorlist's `Include`. Switching channels writes
+an explicit `Server` in `pacman.conf`, leaving the packaged mirrorlist alone.

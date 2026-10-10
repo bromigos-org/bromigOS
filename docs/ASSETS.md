@@ -52,6 +52,7 @@ the models used.
 | README pictures from the render set (eleven files and an animated loop) | Offscreen renders by `tools/screenshots/render.py`, with demo readings | yes | No faces, no real hostnames. [List](#docs-and-readme-images) |
 | Manual pictures (`manual/src/images/`, 31 files) | Offscreen renders and bromigos.org stills, with demo readings | yes | bromigOS only, no likeness, no lab hosts. [List](#manual-pictures) |
 | The built manual's page furniture (`bromigos-manual`, and the published manual) | mdBook's theme: Open Sans (Apache-2.0), Source Code Pro (OFL 1.1), Font Awesome Free icons (CC BY 4.0), highlight.js (BSD-3-Clause), clipboard.js, elasticlunr and mark.js (MIT), mdBook's own scripts and styles (MPL-2.0) | yes | Built by mdBook. The fonts' licence files ship beside them |
+| bromigOS repository mirrorlist | bromigOS source, with a public package URL | yes | Text only |
 | mehshell theme colour files and test fixtures | Generated from bromigOS theme colours by `lib/bromigos_prompt.py` | yes | Text only; no personal data |
 | Docs images from bromigos.org (six files) | The site's published stills | yes | Offscreen renders with demo data. [List](#docs-and-readme-images) |
 | Docs images rendered offscreen (eleven files) | bromigOS's own test tools | yes | No faces, no real hostnames. [List](#docs-and-readme-images) |

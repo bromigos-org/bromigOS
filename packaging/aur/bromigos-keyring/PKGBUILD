@@ -1,0 +1,35 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+# Contributor: blackflame
+pkgname=bromigos-keyring
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='bromigOS package-signing key for pacman'
+arch=('any')
+depends=('pacman' 'bromigos-mirrorlist')
+makedepends=('gnupg')
+install=bromigos-keyring.install
+options=('!debug')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+_tag=v0.1.2
+source=("bromigos-$_tag.tar.gz::$url/archive/refs/tags/$_tag.tar.gz")
+sha256sums=('6fd57b665a9b07e4b421da1bd52e66a9fa930ef452984ef40afff2f3a57bab04')
+_source_root() { printf '%s' "$srcdir/bromigOS-${_tag#v}"; }
+
+build() {
+  _root=$(_source_root)
+  local tmp
+  tmp=$(mktemp -d)
+  GNUPGHOME="$tmp" gpg --batch --quiet --import "$_root/packaging/keys/bromigos.asc"
+  GNUPGHOME="$tmp" gpg --batch --with-colons --list-keys |
+    awk -F: '/^pub:/ { p = 1; next } /^fpr:/ && p { print $10 ":4:"; p = 0 }' > "$srcdir/bromigos-trusted"
+  GNUPGHOME="$tmp" gpg --batch --export > "$srcdir/bromigos.gpg"
+  gpgconf --homedir "$tmp" --kill all 2>/dev/null || true
+  rm -rf "$tmp"
+  test -s "$srcdir/bromigos-trusted"
+}
+package() {
+  _root=$(_source_root)
+  install -Dm644 -t "$pkgdir/usr/share/pacman/keyrings/" "$srcdir/bromigos.gpg" "$srcdir/bromigos-trusted"
+  install -Dm644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+}

@@ -1,6 +1,8 @@
 # Install
 
-There are two ways to install bromigOS:
+You can install bromigOS on an existing Arch Linux system or from a USB stick.
+On an existing system, use the script below or [start from the AUR](#start-from-the-aur).
+
 
 - **On an Arch Linux system you already have.** A short script adds bromigOS's packages
   and sets everything up. This is the way to install today.
@@ -75,6 +77,43 @@ Add these after `bash install.sh`:
 | `--no-aur` | Don't install an AUR helper, and leave the AUR out of updates. |
 
 You can change the channel later. See [Channels](update-and-rollback.md#channels).
+
+
+## Start from the AUR
+
+If you already use an AUR helper, you can install the repository's signing key
+and mirrorlist first. The mirrorlist is the file that lists package servers.
+
+```bash
+paru -S bromigos-keyring bromigos-mirrorlist
+```
+
+Read the PKGBUILDs before building them. Both packages use a pinned source tag
+and checksums. The keyring imports and locally trusts the bromigOS signing key.
+Neither package edits `/etc/pacman.conf`.
+
+Add these two lines to `/etc/pacman.conf` yourself:
+
+```ini
+[bromigos]
+Include = /etc/pacman.d/bromigos-mirrorlist
+```
+
+The mirrorlist follows stable releases at
+`https://pkgs.bromigos.org/$repo/stable/$arch`. The shorter path without `stable`
+serves edge builds. Extra mirrors can be added as more `Server` lines.
+
+Then install the command and start the desktop installer:
+
+```bash
+sudo pacman -Syu bromigos-core
+bromigos install
+```
+
+`bromigos channel` can switch channels afterwards. Versions before the mirrorlist
+support was added need a `Server` line in place of `Include` to use that command.
+The package install message shows the two lines above. `bash install.sh --aur-route`
+prints these steps without changing anything.
 
 ## Install from the USB stick
 

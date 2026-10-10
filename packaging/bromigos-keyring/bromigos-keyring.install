@@ -12,4 +12,11 @@ post_install() {
   if [ -x usr/bin/pacman-key ]; then
     post_upgrade
   fi
+  cat <<'NOTICE'
+To enable bromigOS, add these lines to /etc/pacman.conf:
+[bromigos]
+Include = /etc/pacman.d/bromigos-mirrorlist
+Install bromigos-mirrorlist too, then run pacman -Syu.
+After installing bromigos-core, bromigos channel can switch channels.
+NOTICE
 }

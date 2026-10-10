@@ -42,6 +42,7 @@ packages. That table is generated from these PKGBUILDs.
 | Package | Installs | Built from |
 |---|---|---|
 | `bromigos` | Only its licences. It depends on the whole desktop and lists the optional pieces. | — |
+| `bromigos-mirrorlist` | `/etc/pacman.d/bromigos-mirrorlist`, with the stable server | The file beside its PKGBUILD |
 | `bromigos-keyring` | The signing key in `/usr/share/pacman/keyrings/` | `keys/bromigos.asc` |
 | `bromigos-core` | `/usr/bin/bromigos`, the themes, the theme templates, the shared Python libraries, the migrations and three pacman hooks | `core/`, `themes/`, `theme/`, `lib/`, `migrations/`, `bin/` |
 | `bromigos-desktop` | The desktop's default configs in `/usr/share/bromigos/default/`, and the tools they call | `desktop/`, `peripherals/` |
@@ -405,3 +406,26 @@ It's safe to run again. Each step checks first and changes only what differs.
 3. Wait for it to reach every machine.
 4. Switch CI's secrets to the new key.
 5. Drop the old key from the keyring, and list it in a `bromigos-revoked` file.
+
+## Publishing the AUR bootstrap packages
+
+The `packages` workflow publishes `bromigos-keyring` and `bromigos-mirrorlist`
+to the AUR after the signed repository and the Arch container check pass.
+The AUR account is `blackflame`. The maintainer credit stays
+`bromigOS <packages@bromigos.org>`, with a contributor credit for that account.
+
+`packaging/ci/prepare-aur-bootstrap.py` copies each repo package's version to its
+AUR recipe and pins the source to an immutable packaging tag with a checksum.
+The AUR keyring installs the same public key and trust file as the repo package.
+The container check verifies that the packages leave `pacman.conf` alone and
+that pacman accepts the signed repository and a signed core package.
+
+The workflow uses `AUR_SSH_PRIVATE_KEY`. To configure the same key on bromigOS:
+
+```bash
+gh secret set AUR_SSH_PRIVATE_KEY -R bromigos-org/bromigOS < ~/.ssh/aur-bromigos-ci
+```
+
+The public key belongs in the AUR account's profile. The private key is never
+printed. Missing secrets skip AUR publishing. The install steps live in the
+manual's [AUR route](../manual/src/install.md#start-from-the-aur).

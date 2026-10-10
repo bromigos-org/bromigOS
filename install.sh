@@ -10,6 +10,7 @@
 #   --ca FILE|URL  a CA certificate to trust for the repository's TLS (a homelab's own CA)
 #   --channel NAME stable (default: tagged releases), rc, or edge (every push to main);
 #                  `bromigos channel` switches later (docs/update.md)
+#   --aur-route   print the alternative AUR bootstrap steps and exit
 #   --dry-run      say what it would do; change nothing
 #
 # Piped (curl … | bash -s -- --repo <repo>), it asks on the terminal, not the pipe. With no
@@ -27,6 +28,19 @@ main() {
   repo=${BROMIGOS_REPO_URL:-$PUBLIC_REPO} ca='' channel=${BROMIGOS_CHANNEL:-stable} dry=0 rest=()
   while (($#)); do
     case $1 in
+      --aur-route)
+        cat <<'AUR_ROUTE'
+Build bromigos-keyring and bromigos-mirrorlist from the AUR as your own user:
+paru -S bromigos-keyring bromigos-mirrorlist
+Then add these two lines to /etc/pacman.conf yourself:
+[bromigos]
+Include = /etc/pacman.d/bromigos-mirrorlist
+Install the desktop's command and run the installer:
+sudo pacman -Syu bromigos-core
+bromigos install
+The packages do not edit pacman.conf. See the manual's Install page for details.
+AUR_ROUTE
+        return 0 ;;
       --repo) repo=$2; shift 2 ;; --ca) ca=$2; shift 2 ;; --channel) channel=$2; shift 2 ;;
       -n|--dry-run) dry=1; rest+=(--dry-run); shift ;;
       -h|--help) sed -n '2,19p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//' || echo "install.sh: its header lists the options"; exit 0 ;;

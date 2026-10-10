@@ -1,0 +1,15 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+pkgname=bromigos-mirrorlist
+pkgver=1
+pkgrel=1
+pkgdesc='bromigOS package repository mirrors'
+arch=('any')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+backup=('etc/pacman.d/bromigos-mirrorlist')
+options=('!debug')
+_root="${startdir%/packaging/*}"
+package() {
+  install -Dm644 "$_root/packaging/bromigos-mirrorlist/bromigos-mirrorlist" "$pkgdir/etc/pacman.d/bromigos-mirrorlist"
+  install -Dm644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+}

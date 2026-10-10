@@ -148,6 +148,8 @@ make your own, or install one from a Git repository.
 
 ## Install
 
+If you already use the AUR, you can [install the keyring and mirrorlist first](manual/src/install.md#start-from-the-aur).
+
 On a fresh Arch install, signed in as your own user, download the installer and read it.
 It's about eighty lines.
 

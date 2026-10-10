@@ -145,6 +145,14 @@ pub fn section(conf: &str) -> Option<Section> {
         if let Some((k, v)) = t.split_once('=') {
             match k.trim() {
                 "Server" => server = Some(v.trim().to_owned()),
+                "Include" if server.is_none() => {
+                    if let Ok(mirrors) = fs::read_to_string(v.trim()) {
+                        server = mirrors.lines().find_map(|line| {
+                            let (key, value) = line.trim().split_once('=')?;
+                            (key.trim() == "Server").then(|| value.trim().to_owned())
+                        });
+                    }
+                }
                 "SigLevel" => siglevel = Some(v.trim().to_owned()),
                 _ => {}
             }
@@ -170,7 +178,7 @@ pub fn rewrite(conf: &str, server: &str, siglevel: &str) -> Option<String> {
             .then(|| t.split_once('=').map(|(k, _)| k.trim()))
             .flatten();
         match key {
-            Some("Server") => {
+            Some("Server" | "Include") => {
                 out.push_str(&format!("Server = {server}\n"));
                 if !has_sig {
                     out.push_str(&format!("SigLevel = {siglevel}\n"));
@@ -519,5 +527,34 @@ mod tests {
             "[bromigos]\nServer = https://h/$repo/rc/$arch\nSigLevel = Required DatabaseOptional\n\n[multilib]\nInclude = x\n"
         );
         assert!(rewrite("[core]\nInclude = x\n", "s", "l").is_none());
+    }
+}
+
+#[cfg(test)]
+mod mirrorlist_tests {
+    use super::*;
+    #[test]
+    fn reads_include_and_switches_without_changing_the_packaged_mirrorlist() {
+        let d = tempfile::tempdir().unwrap();
+        let file = d.path().join("mirrors");
+        let mirrors =
+            "# Future mirrors go here\nServer = https://pkgs.example/$repo/stable/$arch\n";
+        fs::write(&file, mirrors).unwrap();
+        let conf = format!(
+            "[core]\nInclude = /elsewhere\n[bromigos]\nInclude = {}\n",
+            file.display()
+        );
+        let sec = section(&conf).unwrap();
+        assert_eq!(of_server(&sec.server).unwrap().0, Channel::Stable);
+        let updated = rewrite(
+            &conf,
+            "https://pkgs.example/$repo/$arch",
+            "Required DatabaseOptional",
+        )
+        .unwrap();
+        assert!(updated.contains("[core]\nInclude = /elsewhere"));
+        assert!(updated.contains("Server = https://pkgs.example/$repo/$arch"));
+        assert!(!updated.contains(&file.display().to_string()));
+        assert_eq!(fs::read_to_string(file).unwrap(), mirrors);
     }
 }

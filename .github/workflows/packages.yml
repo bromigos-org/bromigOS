@@ -136,3 +136,53 @@ jobs:
           sudo -u builder
           --preserve-env=PKGS_S3_ENDPOINT,PKGS_S3_BUCKET,PKGS_S3_ACCESS_KEY_ID,PKGS_S3_SECRET_ACCESS_KEY,PKGS_GPG_PRIVATE_KEY,PKGS_GPG_PASSPHRASE,PKGS_PUBLIC_ENDPOINT,PKGS_PUBLIC_BUCKET,PKGS_PUBLIC_ACCESS_KEY_ID,PKGS_PUBLIC_SECRET_ACCESS_KEY,PKGS_MIRROR_ONLY,PKGS_PRIMARY,PKGS_ROOT,PKGS_KEEP,PKGS_REBUILD,PKGS_ONLY,PKGS_CHANNEL,GITHUB_REPOSITORY,GITHUB_RUN_ID,CARGO_HOME,BROMIGOS_CARGO_TARGET_DIR
           packaging/ci/publish.sh
+
+  aur-bootstrap:
+    name: Test and publish the AUR bootstrap packages
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check the AUR key is configured
+        id: configured
+        env:
+          AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          if [ -n "$AUR_KEY" ]; then echo 'ready=true' >> "$GITHUB_OUTPUT"; fi
+      - name: Pin the recipes to this source
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          tag="aur-bootstrap-${GITHUB_SHA:0:12}"
+          if ! git rev-parse "$tag" >/dev/null 2>&1; then
+            git tag "$tag" "$GITHUB_SHA"
+            git push origin "$tag"
+          fi
+          python packaging/ci/prepare-aur-bootstrap.py "$tag"
+      - name: Install and verify in a disposable Arch container
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          docker run --rm -v "$PWD:/work:ro" archlinux:base-devel bash /work/packaging/ci/test-aur-bootstrap.sh /work
+      - name: Publish bromigos-mirrorlist
+        if: steps.configured.outputs.ready == 'true'
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: bromigos-mirrorlist
+          pkgbuild: packaging/aur/bromigos-mirrorlist/PKGBUILD
+          assets: packaging/aur/bromigos-mirrorlist/bromigos-mirrorlist
+          commit_username: blackflame
+          commit_email: packages@bromigos.org
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+      - name: Publish bromigos-keyring
+        if: steps.configured.outputs.ready == 'true'
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: bromigos-keyring
+          pkgbuild: packaging/aur/bromigos-keyring/PKGBUILD
+          assets: packaging/aur/bromigos-keyring/bromigos-keyring.install
+          commit_username: blackflame
+          commit_email: packages@bromigos.org
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
