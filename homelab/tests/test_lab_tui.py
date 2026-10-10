@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import time
 import unittest
+from unittest import mock
 
 import labfake
 
@@ -107,13 +108,23 @@ def _norm(svg):
 class DashboardTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls._no_color = os.environ.pop("NO_COLOR", None)
         cls._tz = os.environ.get("TZ")
         os.environ["TZ"] = "UTC"                      # the clock on screen, the same everywhere
         time.tzset()
         cls.fx = Fixture()
+        # The snapshot must not read the developer's installed desktop palette.
+        cls._theme = mock.patch.object(tui, "bromigos_theme", lambda: tui.Theme(
+            name="bromigos", primary="#39ff14", secondary="#9cff8a", accent="#3fe0c5", warning="#d4af37",
+            error="#ff766f", success="#39ff14", foreground="#c4f5bb", background="#000500",
+            surface="#001300", panel="#003b00", dark=True))
+        cls._theme.start()
 
     @classmethod
     def tearDownClass(cls):
+        cls._theme.stop()
+        if cls._no_color is not None:
+            os.environ["NO_COLOR"] = cls._no_color
         if cls._tz is None:
             os.environ.pop("TZ", None)
         else:
