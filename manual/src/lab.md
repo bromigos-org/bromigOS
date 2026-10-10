@@ -405,3 +405,88 @@ plainly asked him to download one thing. When it's in your library, he tells you
   shows what's using it.
 - **A card says "unreachable".** That service didn't answer. `bromigos lab doctor` says what
   to check.
+
+## Setting up a lab
+
+To set up a spare Linux box, install Ansible, sops and age on your desktop first. The
+box needs Python 3, an SSH key login and passwordless sudo. Debian, Ubuntu, Fedora and
+Arch Linux are supported. Check the SSH host key before you accept it.
+
+```bash
+ssh-copy-id <user>@<host>
+ssh <user>@<host>
+age-keygen -o <age-key-file>
+```
+
+Keep the age key file safe. Use the public key printed by `age-keygen` below. Choose an
+existing backup destination on the box. A second disk or a mounted NAS share is better
+than the disk being backed up.
+
+```bash
+bromigos lab provision --repo <lab-folder> --ssh <user>@<host> \
+  --preset core --backup-path <backup-folder> --age-recipient <age-public-key>
+```
+
+The command reads the box and generates your own lab Git repository. It lists services,
+ports, RAM and disk needs. Review and commit the files before you apply them.
+
+```bash
+bromigos lab provision apply --repo <lab-folder>
+```
+
+Apply waits for you to type `yes`. It starts Caddy, Netdata, restic backups and Homepage.
+Caddy listens on the box itself at first. Forward it to your desktop, then open
+`http://localhost:8080` in your browser. Netdata is under `/netdata/`.
+
+```bash
+ssh -L 8080:127.0.0.1:80 <user>@<host>
+```
+
+To let other machines on your local network reach it, add
+`--listen-address <local-network-address>` to the plan. Public addresses are refused. Add
+`--domain <lab-dns-name>` to the plan for local HTTPS. Point that name at the box and
+trust Caddy's local certificate authority on machines that open it.
+
+To add Kubernetes, Helm, Argo CD and Vault, commit the current repository, then generate
+an Advanced plan. Supply the Git URL where you will publish this repository.
+
+```bash
+bromigos lab provision --repo <lab-folder> --ssh <user>@<host> \
+  --preset advanced --backup-path <backup-folder> --age-recipient <age-public-key> \
+  --git-url <your-lab-git-url>
+```
+
+Review, commit and publish the new files at that URL. Then run apply again. Argo CD keeps
+its applications in sync with the repository. You can reach its web page with a
+Kubernetes port forward; its service stays inside the cluster.
+
+Vault shows five recovery shares once, directly in your terminal. Save all five in your
+password manager before you type `stored`. Any three can unseal it. You also choose an
+operator password. Generated service passwords go into Vault. Its initial root token is
+revoked after setup. Without Vault, passwords are encrypted with sops and age in your
+lab repository.
+
+Automatic unseal is a separate choice. Type `yes` only if you want three recovery shares
+stored in a Kubernetes Secret. Cluster administrators can read them. Keep all five in
+your password manager even if you choose this option.
+
+For an existing cluster, install Helm and kubectl on the desktop too. Replace `--ssh`
+with `--kubeconfig <file> --context <context>`. Choose the context explicitly. Vault needs
+a default storage class. Core needs an existing backup volume claim in `lab-core`, named
+by `--backup-path`. Its web services stay inside the cluster.
+
+Use `--custom` for the terminal checklist. The dashboard's **Provision** tab has the same
+service tree and gives you the command for your selection. To change one service:
+
+```bash
+bromigos lab provision add vault --repo <lab-folder>
+bromigos lab provision remove restic --repo <lab-folder>
+```
+
+Commit the repository before changing its plan. These commands only prepare a new plan.
+Apply still needs your `yes`. Removing a selection leaves its running service and data
+in place. Repeating apply preserves backup passwords and Vault's recovery shares.
+
+After health checks pass, provisioning connects the lab console and runs the doctor.
+Run `bromigos lab` to see it, or `bromigos lab doctor` to check it again.
+Prometheus, Grafana, Loki, GPU setup and NAS mounting are reserved for a later slice.

@@ -19,7 +19,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.theme import Theme
 from textual.widgets import (Button, DataTable, Footer, Input, Label, RichLog, Select, Static, TabbedContent,
-                             TabPane)
+                             TabPane, Tree)
 
 MARK = {"ok": "●", "warn": "▲", "crit": "✖", "unreachable": "?", "empty": "·", "unknown": "·", "fail": "✖",
         "skip": "·"}
@@ -356,7 +356,7 @@ class LabApp(App):
         Binding("],L", "tab_step(1)", "Next tab", show=False),
         Binding("[,H", "tab_step(-1)", "Previous tab", show=False),
     ]
-    TABS = ("status", "models", "jobs", "doctor")
+    TABS = ("status", "models", "jobs", "doctor", "provision")
     MAIN = {"models": "#modeltable", "jobs": "#jobtable", "doctor": "#findings"}
 
     def __init__(self, source=None, clock=None, interval=15.0):
@@ -370,6 +370,9 @@ class LabApp(App):
         self.doctor_doc = None
         self.current = None
         self.loaded_at = None
+        from . import services
+        self.provision_cat = services.load()
+        self.provision_selected = services.preset(self.provision_cat, "core")["services"]
 
     # ------------------------------------------------------------------ layout
     def compose(self) -> ComposeResult:
@@ -403,6 +406,14 @@ class LabApp(App):
                     yield Static("Press d to run the checks.", id="docsum", classes="dim")
                     yield HintTable(id="findings", cursor_type="row", zebra_stripes=True)
                     yield Static("", id="fix")
+            with TabPane("PROVISION", id="provision"):
+                yield Static("Choose services. The terminal command takes inventory and generates a reviewable plan.")
+                yield Tree("Your lab", id="provision-tree")
+                yield Static("", id="provision-hint")
+                with Horizontal():
+                    yield Button("Core", id="provision-core")
+                    yield Button("Advanced", id="provision-advanced")
+                yield Static("", id="provision-command")
         yield Static("", id="hint")
         yield Footer()
 
@@ -415,6 +426,7 @@ class LabApp(App):
                 self.query_one(f"#tabs Tab#--content-tab-{tid}").tooltip = hint
             except Exception:
                 pass
+        self.show_provision_tree()
         self.load_status()
         self.load_jobs()
         self.set_interval(self.interval, self.load_status)
@@ -594,6 +606,55 @@ class LabApp(App):
         f = fs[r] if 0 <= r < len(fs) else None
         self.query_one("#fix", Static).update(f"FIX: {f['fix']}" if f and f.get("fix") else "")
 
+    def show_provision_tree(self):
+        from . import provision
+        tree = self.query_one("#provision-tree", Tree)
+        tree.clear()
+        for group, rows in provision.picker_rows(self.provision_cat):
+            parent = tree.root.add(group.upper(), expand=True)
+            for sid, title, hint in rows:
+                parent.add_leaf(f"[{'x' if sid in self.provision_selected else ' '}] {title}", data=sid)
+        tree.root.expand()
+        self.query_one("#provision-command", Static).update(
+            "bromigos lab provision --repo <folder> --ssh <user@host> --services " +
+            " ".join(self.provision_selected) +
+            "\nAdd --backup-path and --age-recipient for Core; --git-url for Argo CD. "
+            "Apply waits for an explicit yes in your terminal.")
+
+    @on(Tree.NodeHighlighted, "#provision-tree")
+    def provision_hint(self, event):
+        if event.node.data:
+            row = self.provision_cat["service"][event.node.data]
+            self.query_one("#provision-hint", Static).update(row["summary"] + " · ports " + str(row["ports"]) +
+                " · RAM " + str(row["needs"].get("ram_gib", 0)) + " GiB · disk " + str(row["needs"].get("disk_gib", 0)) + " GiB")
+
+    @on(Tree.NodeSelected, "#provision-tree")
+    def provision_toggle(self, event):
+        from . import services
+        sid = event.node.data
+        if not sid:
+            return
+        picked = list(self.provision_selected)
+        if sid in picked:
+            picked.remove(sid)
+            warning = self.provision_cat["service"][sid].get("untick_warning")
+            if warning:
+                self.notify(warning, severity="warning", timeout=12)
+        else:
+            picked.append(sid)
+        result = services.resolve(self.provision_cat, picked)
+        for _, words in result["added"]:
+            self.notify(words)
+        self.provision_selected = result["services"]
+        self.show_provision_tree()
+
+    @on(Button.Pressed, "#provision-core")
+    @on(Button.Pressed, "#provision-advanced")
+    def provision_preset(self, event):
+        from . import provision
+        self.provision_selected = provision.preset_selection(self.provision_cat, event.button.id.removeprefix("provision-"))
+        self.show_provision_tree()
+
     # ------------------------------------------------------------------ actions
     @on(TabbedContent.TabActivated)
     def _tab(self, ev):
@@ -632,6 +693,8 @@ class LabApp(App):
             if tid == "status":
                 w = self.query_one(f"#card-{self.current}", CardButton) if self.current else None
                 (w or self.query_one("#cards").query(CardButton).first()).focus()
+            elif tid == "provision":
+                self.query_one("#provision-tree", Tree).focus()
             else:
                 self.query_one(self.MAIN[tid], HintTable).focus()
         except Exception:

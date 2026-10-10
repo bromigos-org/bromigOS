@@ -1214,7 +1214,7 @@ From the `bromigos-desktop` package.
 Your homelab's console: status, GPUs and models, GPU jobs on the lab, doctor (no arguments: the live dashboard).
 
 ```text
-bromigos lab [status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | media search|get|status|upcoming|language … | connect … | target …]
+bromigos lab [status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | media search|get|status|upcoming|language … | provision [plan|apply|add SERVICE|remove SERVICE] --repo PATH … | connect … | target …]
 ```
 
 For example:

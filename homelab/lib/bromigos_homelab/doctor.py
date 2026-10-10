@@ -28,6 +28,7 @@ import socket
 import ssl
 import subprocess
 import time
+import tomllib
 import urllib.parse
 
 from . import caps, config, registry
@@ -388,6 +389,21 @@ def targets():
     """`bromigos target --json`: each service's first answering target. A homelab target
     that doesn't answer, ahead of what the service uses, is a finding; a fallback behind it
     that the lab doesn't have (an older workflow kept for other ComfyUIs) is not."""
+    # A fresh Core/Advanced lab selects no AI provider. Do not turn packaged default
+    # fallbacks into failures for services the user has never configured.
+    if not any(caps.available(cap) for cap in ("models", "voice", "media")):
+        path = os.environ.get("BROMIGOS_TARGETS_CONFIG") or os.path.join(
+            os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "bromigos", "targets.toml")
+        try:
+            with open(path, "rb") as stream:
+                choices = tomllib.load(stream)
+        except FileNotFoundError:
+            choices = {}
+        except (OSError, ValueError):
+            choices = {"targets": {"invalid": True}}  # let the normal check report it
+        if not choices.get("targets") and not choices.get("service"):
+            yield finding("targets.none", "AI targets", "skip", "no AI provider or personal target choices configured")
+            return
     exe = shutil.which("bromigos") or "/usr/bin/bromigos"
     if not os.path.exists(exe):
         return

@@ -19,8 +19,8 @@ As of 2026-10-09:
 - Phase 4, hardware and polish, has finished all its batches so far: the shell, themes
   beyond the desktop, safety, extensions, hardware, peripherals, accessibility, Settings,
   the shortcut picker and the boot menus.
-- Phase 5, the lab console, has its first part built. Its second and third parts are
-  planned.
+- Phase 5, the lab console, has its first part built. Its second part is planned.
+  The first provisioning slice of its third part is built.
 - No decisions are open.
 
 <!-- site:plan-highlights -->
@@ -168,8 +168,7 @@ What's left:
 
 ### Phase 4: hardware and polish
 
-Phase 4 started from a list of features that Omarchy had and bromigOS lacked, approved on
-2026-10-08. Each was adapted to bromigOS's packages and themes. Each batch below says what
+Phase 4 started from a list of desktop features approved on 2026-10-08. Each was adapted to bromigOS's packages and themes. Each batch below says what
 was built and what's left.
 
 #### The shell
@@ -393,15 +392,18 @@ come from any module.
 
 #### Part 3: setting up a new lab
 
-> **Planned.** Not built yet. The design is [lab-provision.md](lab-provision.md).
+`lab provision` generates and applies a user's own lab repository. Core installs Caddy,
+Netdata, restic and Homepage. Advanced adds k3s, Helm, Argo CD and Vault. It supports one
+Linux box over SSH and an existing cluster with an explicit kubeconfig and context.
 
-`lab provision` will set up a new user's lab. The user picks a preset or their own set of
-services. It will reach the machines over SSH, take an inventory, write a plan as the
-user's own lab repository, apply it with Ansible, verify it, and write `homelab.toml` and
-`targets.toml`. Only the reverse proxy will be exposed, and nothing will be public without
-opting in. Installing an operating system on bare metal is out of scope.
+The command takes a read-only inventory, checks the selection, writes the plan and waits
+for `yes` before Ansible applies it. Verification connects the lab console and runs its
+doctor. Vault recovery shares are shown once, outside logs. Repeated apply preserves data.
+The terminal checklist and console tree use the existing catalog resolver.
 
-The service catalog and presets are already data, in `homelab/share/lab/profiles.toml`.
+The implementation and remaining approved design are in
+[lab-provision.md](lab-provision.md). GPU setup, additional services, NAS mounting and
+Proxmox creation remain for later slices. Installing an operating system is out of scope.
 
 ## VECTOR without a homelab
 
@@ -441,9 +443,9 @@ piece went into a package or stayed personal.
 | A personal deck, a game-server panel, the voice cast, likeness art | Personal: the operator's plugins, in his dotfiles |
 | The keyboard's macro keys, dial and lighting | A peripheral module in `bromigos-desktop` |
 
-## What we borrowed from Omarchy
+## Desktop foundations
 
-The plan studied Omarchy on 2026-10-07 and adapted these ideas:
+The plan adopted these ideas on 2026-10-07:
 
 - **Three places for files.** Read-only defaults, the user's own settings, and generated
   state ([README.md](README.md#where-files-live)).
@@ -465,9 +467,8 @@ Two ideas aren't built: seeding new users from `/etc/skel`, since the migrations
 user's configs instead, and `bromigos refresh <app>` to reset an app's config to the
 defaults.
 
-What bromigOS does differently: its own code is packaged, not pulled with `git pull`. The
-core is Rust rather than shell scripts. VECTOR, the live layer and the holograms have no
-counterpart there.
+bromigOS packages its own code. The core is Rust. VECTOR, the live layer and the
+holograms are separate parts of the desktop.
 
 ## Decisions
 
@@ -482,8 +483,7 @@ package's configuration or into personal plugins, and keeps working exactly as b
 Each step was checked against his live desktop before the dotfiles' copy was removed.
 This held through phases 1 and 2.
 
-**Repositories (2026-10-07).** One main repository plus a few satellites, as Omarchy does,
-not many repositories, as EndeavourOS does. `bromigOS` holds everything that versions
+**Repositories (2026-10-07).** One main repository plus a few satellites. `bromigOS` holds everything that versions
 together. VECTOR has his own repository, because he has his own release pace and tests,
 and he's useful outside bromigOS. Possible later satellites are `bromigos-iso` and
 `bromigos-pkgs`.
@@ -502,14 +502,13 @@ and he's useful outside bromigOS. Possible later satellites are `bromigos-iso` a
 
 **Packaging (2026-10-07).** bromigOS's own code is packaged too, not updated with
 `git pull`. Packages give versions, clean uninstalls, and pacman owning every file.
-Migrations and lists of third-party packages are borrowed from Omarchy.
+Migrations and third-party package lists follow established desktop practices.
 
 **Package hosting (2026-10-07).** A private, signed pacman repository, built by CI on
 self-hosted runners. Going public would mean the same pipeline publishing to a public host,
 such as Cloudflare R2, not a new pipeline.
 
-**Licence (2026-10-07).** The code is `MIT OR Apache-2.0`, as with Omarchy and most Rust
-tools. The brand assets, such as the emblem, art, voices and sounds, are all rights
+**Licence (2026-10-07).** The code is `MIT OR Apache-2.0`. The brand assets, such as the emblem, art, voices and sounds, are all rights
 reserved. [ASSETS.md](ASSETS.md) tracks each one.
 
 **VECTOR's brain without a homelab (2026-10-07).** Local first, cloud optional. The first

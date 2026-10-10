@@ -14,6 +14,7 @@ the models used.
 | Asset | Source | Ships? | Notes |
 |---|---|---|---|
 | Code: the core, widgets, live layer, VECTOR, scripts | Written for bromigOS, first on the operator's desktop | yes | `MIT OR Apache-2.0` |
+| Lab console test snapshot (`homelab/tests/snapshots/lab-tui.svg`) | Textual render with recorded fake readings | yes | No real desktop or lab data |
 | Bromigos palette, emblem ("the burn-in") and lore | Bromigos original | yes, as brand assets | Licensed apart from the code |
 | Bromigos logos, favicons, lockups and house palette (`brand/`) | Traced from the canon `bromigos-logo.png` | yes, as brand assets | Source only, not packaged. No likeness |
 | The canonical burn-in (`theme/emblem/identity.json`, `flame.svg`) | Bromigos original | yes, as a brand asset | In `bromigos-core`. Every emblem kit is drawn from it |

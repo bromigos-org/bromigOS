@@ -89,7 +89,10 @@ def resolve(cat, selected):
     order = list(svc)
     picked = sorted(want, key=order.index)
     storage = sorted({p for s in picked for p in svc[s].get("storage") or []})
-    return {"services": picked, "added": added, "conflicts": conflicts, "storage": storage, "unknown": unknown}
+    unmet = [(s, need) for s in picked for need in svc[s].get("depends") or []
+             if not any(p in picked for p in providers(cat, need))]
+    return {"services": picked, "added": added, "conflicts": conflicts, "storage": storage, "unknown": unknown,
+            "unmet": unmet}
 
 
 def preset(cat, name):
@@ -190,3 +193,31 @@ def validate(cat):
         if not p.get("folders"):
             out.append(f"storage purpose {k}: no folders")
     return out
+
+
+def fit(cat, picked, inventory):
+    """Capacity warnings shared by the plan and both pickers; absent facts stay unknown."""
+    warnings = []
+    sizing = cat.get("sizing", {})
+    needs = [cat["service"][s].get("needs", {}) for s in picked]
+    for key, reserve in (("ram_gib", sizing.get("ram_headroom_gib", 4)), ("disk_gib", 0)):
+        available = inventory.get(key)
+        if available is None:
+            if key == "disk_gib":
+                warnings.append("Disk capacity is unknown; inspect your cluster storage before applying")
+            continue
+        required = sum(float(n.get(key, 0)) for n in needs) + reserve
+        usable = available * (1 - sizing.get("disk_headroom_pct", 15) / 100) if key == "disk_gib" else available
+        if required > usable:
+            warnings.append(f"{key}: needs {required:.1f} GiB, has {usable:.1f} GiB available")
+    required_cpu = max((n.get("cpu", 0) for n in needs), default=0)
+    if inventory.get("cpu") is not None and required_cpu > inventory["cpu"]:
+        warnings.append(f"CPU: needs {required_cpu} cores, has {inventory['cpu']}")
+    for sid, need in zip(picked, needs):
+        gpu = need.get("gpu", "none")
+        if gpu != "none" and (inventory.get("gpu", "none") == "none" or
+                              gpu != "any" and inventory.get("gpu") != gpu):
+            warnings.append(f"{sid}: needs a {gpu} GPU")
+        if gpu != "none" and inventory.get("vram_gib", 0) < need.get("vram_gib", 0):
+            warnings.append(f"{sid}: too little GPU memory")
+    return warnings

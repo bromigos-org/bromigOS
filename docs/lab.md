@@ -26,15 +26,16 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab youtube sync` | Turn Pinchflat's playlists into playlists in Jellyfin and Plex. |
 | `bromigos lab media search`, `get`, `status`, `upcoming`, `recent`, `language` | Ask your media stack for films, shows, anime and music at the best quality, in your languages ([below](#media-requests)). |
 | `bromigos media` | Your media library in a terminal: browse, monitor, change quality, play, delete ([below](#media-requests)). |
+| `bromigos lab provision …` | Generate and apply Core or Advanced on your own target ([lab-provision.md](lab-provision.md)). |
 | `bromigos lab connect …` | Run `bromigos setup homelab …`: find services and write `homelab.toml`. |
 | `bromigos lab target …` | Run `bromigos target …`: choose where AI runs ([targets.md](targets.md)). |
 | Super+Shift+H | Open the Lab deck, a hologram of the rack lit by the same readings. |
 | Settings › Lab | See the status, models, recent jobs, the doctor and the targets in a window. Set your media languages. |
 
 > **Planned.** Changing the lab itself is Phase 2: deploying, restarting, logs, backups,
-> power, and adding or replacing models. Setting up a new lab is Phase 3
-> ([lab-provision.md](lab-provision.md)). Those commands exist already, but they only say
-> they aren't built yet. See [Planned: changing the lab](#planned-changing-the-lab).
+> power, and adding or replacing models. Those commands only say they are not built yet.
+> Setting up Core and Advanced is built in `lab provision`
+> ([lab-provision.md](lab-provision.md)). See [Planned: changing the lab](#planned-changing-the-lab).
 
 ## The dashboard
 
@@ -710,7 +711,8 @@ applies, and each command will ask you first.
 | `lab power` | Wake a sleeping machine, and set GPU power limits. |
 | `lab models add`, `remove`, `replace` | Change the model set in ComfyUI's or vLLM's values. |
 
-`lab provision` and `lab update` belong to Phase 3 ([lab-provision.md](lab-provision.md)).
+`lab provision` has its first slice built ([lab-provision.md](lab-provision.md)).
+`lab update` remains planned.
 
 ## Tests
 

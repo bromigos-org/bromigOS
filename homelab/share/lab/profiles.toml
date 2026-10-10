@@ -453,16 +453,36 @@ kind = "helm"
 needs = { cpu = 1, ram_gib = 1, disk_gib = 2 }
 ports = [8200]
 provides = ["secrets"]
+depends = ["helm"]
 
 [service.kubernetes]
-title = "Kubernetes (k3s) with Argo CD"
+title = "Kubernetes (k3s)"
 summary = "run the lab as a cluster, deployed from your lab repo by Argo CD (GitOps)"
 group = "advanced"
 kind = "cluster"
 needs = { cpu = 4, ram_gib = 8, disk_gib = 40 }
 ports = [6443]
-provides = ["cluster", "gitops"]
+provides = ["cluster"]
 notes = "With it, the other services install as Helm charts that Argo CD syncs from the lab repo."
+
+[service.helm]
+title = "Helm"
+summary = "install and converge versioned Kubernetes charts"
+group = "advanced"
+kind = "host"
+needs = { cpu = 1, ram_gib = 0.1, disk_gib = 0.1 }
+ports = []
+depends = ["cluster"]
+
+[service.argocd]
+title = "Argo CD"
+summary = "keep the cluster in sync with your own lab Git repository"
+group = "advanced"
+kind = "helm"
+needs = { cpu = 2, ram_gib = 1.5, disk_gib = 2 }
+ports = [8080]
+provides = ["gitops"]
+depends = ["helm"]
 
 # ------------------------------------------------------------------ Network (opt-in)
 [service.cloudflare-tunnel]
@@ -506,7 +526,8 @@ services = ["home-assistant"]
 [preset.advanced]
 title = "Advanced"
 summary = "Prometheus, Grafana and Loki; Vault; Kubernetes with Argo CD"
-services = ["prometheus", "grafana", "loki", "vault", "kubernetes"]
+services = ["kubernetes", "helm", "argocd", "vault"]
+offered = ["prometheus", "grafana", "loki"]
 
 # ------------------------------------------------------------------ storage: the NAS you already have
 # The Storage step (docs/lab-provision.md) finds the NASes on the network, or takes an address,

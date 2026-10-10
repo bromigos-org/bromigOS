@@ -31,7 +31,12 @@ depends=('bromigos-core' 'bromigos-lab-catalog' 'python' 'python-textual')
 # changes the lab before they exist: vector c5f67cb (r33)
 conflicts=('bromigos-vector<0.1.0.r33')
 checkdepends=('python-textual' 'desktop-file-utils' 'python-cairo' 'python-gobject' 'pango' 'python-psutil')   # the homelab widgets drawn in their tests
-optdepends=('bromigos-widgets: the LAB panel and declared panels'
+optdepends=('ansible-core: apply a reviewed lab provision plan'
+            'helm: provision an existing Kubernetes cluster'
+            'sops: encrypt generated lab credentials without Vault'
+            'age: recipients for encrypted lab credentials'
+            'openssh: provision a Linux box over SSH'
+            'bromigos-widgets: the LAB panel and declared panels'
             'bromigos-live: the Ops, Netmap and Mind decks; the worlds homelab signals'
             'bromigos-vector: VECTOR homelab tools and Gnosis memory'
             'kubectl: the kubernetes source (read-only kubeconfig)'

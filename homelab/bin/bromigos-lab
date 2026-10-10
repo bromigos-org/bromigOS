@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bromigos:summary=Your homelab's console: status, GPUs and models, GPU jobs on the lab, doctor (no arguments: the live dashboard)
-# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | media search|get|status|upcoming|language … | connect … | target …]
+# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | media search|get|status|upcoming|language … | provision [plan|apply|add SERVICE|remove SERVICE] --repo PATH … | connect … | target …]
 # bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor; bromigos lab media get "Cowboy Bebop" --seasons all --specials
 # bromigos:menu=LAUNCH:Lab console
 """bromigos lab: the homelab's console (docs/homelab.md, "The lab console"; the manual's Lab chapter).
@@ -60,7 +60,9 @@
                                     playlists in Jellyfin and Plex (idempotent; docs/homelab.md)
   bromigos lab connect [ARGS]       = bromigos setup homelab [ARGS]: find services, write homelab.toml
   bromigos lab target [ARGS]        = bromigos target [ARGS]: where AI runs
-  bromigos lab deploy|restart|logs|backups|power|provision
+  bromigos lab provision [plan|apply|add SERVICE|remove SERVICE] --repo PATH [options]
+                                    review and provision your own box or cluster
+  bromigos lab deploy|restart|logs|backups|power
                                     Phase 2 and 3 (docs/PLAN.md): not built yet
   bromigos lab serve                the job queue's service (bromigos-lab.service runs it)
 
@@ -78,7 +80,9 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 # this file's own tree first (/usr/lib/bromigos/lib when installed; homelab/lib and lib/ in a checkout)
 for p in reversed((os.path.join(os.path.dirname(HERE), "lib"), os.path.join(os.path.dirname(os.path.dirname(HERE)), "lib"),
                    "/usr/lib/bromigos/lib")):
-    if os.path.isdir(p) and p not in sys.path:
+    if os.path.isdir(p):
+        if p in sys.path:
+            sys.path.remove(p)
         sys.path.insert(0, p)
 
 from bromigos_homelab import jobqueue as Q  # noqa: E402
@@ -95,8 +99,6 @@ PHASE2 = {
             "Workloads card's hint.",
     "backups": "lab backups (list, run, restore) is Phase 2. The doctor already checks backup age.",
     "power": "lab power (Wake-on-LAN, GPU power limits) is Phase 2.",
-    "provision": "lab provision (a new GPU box: profiles, inventory, plan, apply) is Phase 3 "
-                 "(docs/lab-provision.md).",
     "update": "lab update (image versions in your lab repo) comes with provisioning, Phase 3.",
 }
 
@@ -416,6 +418,9 @@ def main(argv):
         return connect(rest)
     if cmd == "target":
         return target(rest)
+    if cmd == "provision":
+        from bromigos_homelab import provision
+        return provision.main(rest)
     if cmd in PHASE2:
         print(PHASE2[cmd], file=sys.stderr)
         return 3

@@ -126,6 +126,7 @@ class DashboardTest(unittest.TestCase):
         async def go():
             async with app.run_test(size=(150, 46)) as pilot:
                 await pilot.pause(0.3)
+                await pilot.wait_for_scheduled_animations()
                 await steps(app, pilot)
         asyncio.run(go())
         return app
@@ -145,6 +146,7 @@ class DashboardTest(unittest.TestCase):
             t = app.query_one("#detail", tui.HintTable)
             seen["rows"] = t.row_count
             seen["hints"] = list(t.hints)
+            await pilot.wait_for_scheduled_animations()
             svg = app.export_screenshot()
             seen["svg"] = svg
         self.run_app(steps)
@@ -248,7 +250,7 @@ class DashboardTest(unittest.TestCase):
         self.assertEqual(seen["row_up"], 1)
         self.assertEqual(seen["row_G"], seen["rows"] - 1)
         self.assertEqual(seen["tab2"], "jobs")
-        self.assertEqual(seen["tab_wrap"], "doctor")
+        self.assertEqual(seen["tab_wrap"], "provision")
 
     def test_new_job_form(self):
         async def steps(app, pilot):
