@@ -140,7 +140,9 @@ Each update is recorded in `~/.local/state/bromigos/updates.jsonl`.
 
 `bromigos channel` shows or switches the channel this machine follows: `stable`, `rc`,
 `edge` or `dev`. The channel is the `Server` line of the `[bromigos]` section in
-`/etc/pacman.conf`.
+`/etc/pacman.conf`. It also reads a server from the mirrorlist named by an
+`Include` in that section. A channel switch replaces the include with an explicit
+server and leaves the packaged mirrorlist unchanged.
 
 - To switch, it rewrites that line and its `SigLevel` with `sudo install`.
 - It deletes the old channel's sync database, so the next `pacman -Sy` fetches the new

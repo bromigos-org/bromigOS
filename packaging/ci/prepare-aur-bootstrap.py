@@ -25,13 +25,14 @@ for attempt in range(4):
         time.sleep(2)
 for name in ('bromigos-keyring', 'bromigos-mirrorlist'):
     recipe = root / 'packaging' / name / 'PKGBUILD'
-    version = subprocess.check_output(
-        ['bash', '-ec', 'source "$startdir/PKGBUILD"; if declare -F pkgver >/dev/null; then pkgver; else printf "%s" "$pkgver"; fi'],
-        env=dict(os.environ, startdir=str(recipe.parent)), text=True).strip()
+    version, release = subprocess.check_output(
+        ['bash', '-ec', 'source "$startdir/PKGBUILD"; if declare -F pkgver >/dev/null; then aur_version=$(pkgver); else aur_version=$pkgver; fi; printf "%s\n%s\n" "$aur_version" "$pkgrel"'],
+        env=dict(os.environ, startdir=str(recipe.parent)), text=True).strip().splitlines()
     target = root / 'packaging/aur' / name
     path = target / 'PKGBUILD'
     text = path.read_text()
     text = re.sub(r'^pkgver=.*$', f'pkgver={version}', text, flags=re.M)
+    text = re.sub(r'^pkgrel=.*$', f'pkgrel={release}', text, flags=re.M)
     text = re.sub(r'^_tag=.*$', f'_tag={tag}', text, flags=re.M)
     sums = [checksum]
     if name == 'bromigos-mirrorlist':

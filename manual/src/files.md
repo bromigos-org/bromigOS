@@ -24,6 +24,7 @@ All in `~/.config/bromigos/`:
 | File or folder | What it holds | Changed by |
 |---|---|---|
 | `accessibility.toml` | Motion and contrast. | [Accessibility](accessibility.md) |
+| `shell.toml` | Your prompt choice. | [Shell and terminal](shell.md) |
 | `aur.toml` | Whether bromigOS uses the AUR. | `bromigos aur` |
 | `idle.toml` | When the screensaver, the lock and sleep happen. | [Idle and lock](idle.md) |
 | `targets.toml` | Where AI work runs. | [Creating with AI](where-ai-runs.md) |
@@ -64,6 +65,18 @@ files, in your editor.
 | `~/Pictures/screenshots/` | Your screenshots. |
 | `~/Videos/recordings/` | Your screen recordings. |
 | `~/Pictures/bromigos/lab/` | What your homelab made for you. |
+
+## The package repository
+
+| File | What it holds |
+|---|---|
+| `/etc/pacman.conf` | Which repositories pacman uses. You add bromigOS here. |
+| `/etc/pacman.d/bromigos-mirrorlist` | The stable package server and any extra mirrors you add. |
+| `/usr/share/pacman/keyrings/bromigos.gpg` | The public signing key installed by `bromigos-keyring`. |
+| `/usr/share/pacman/keyrings/bromigos-trusted` | The signing key's fingerprint for pacman. |
+
+The [AUR install route](install.md#start-from-the-aur) puts the keyring and
+mirrorlist in place. The packages leave `pacman.conf` for you to edit.
 
 ## Keep your settings in dotfiles
 
