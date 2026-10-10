@@ -4,7 +4,8 @@ What the desktop shows of YouTube: a playlist's or a channel's videos (the den T
 YouTube channels, the panels), and whether a channel is live right now. It runs
 `yt-dlp --flat-playlist -J`, which lists a playlist without opening each video, and
 keeps the answer in a cache. Nothing here runs on every frame, and nothing here plays
-anything: mpv plays a video's `url` through its own yt-dlp hook.
+anything: stream() finds a video's stream addresses for mpv ahead of time (the den TV
+resolves what's on and what's next in the background, so a channel starts at once).
 
 The interface (stable: other parts of bromigOS import it):
 
@@ -37,6 +38,14 @@ The interface (stable: other parts of bromigOS import it):
         "shorts" or "playlists". A playlist URL or a video URL is left as it is.
 
     Y.available() -> True when yt-dlp is installed.
+
+    Y.stream(url, height=360, audio=True, timeout=60)
+        -> {"video": URL, "audio": URL or None, "headers": {…}, "expires": unix seconds,
+            "height": the video's height}
+        The addresses mpv plays for a video (or a live stream), in a format no taller
+        than `height` (H.264 first: every GPU decodes it), its audio apart. A YouTube
+        address lasts about six hours; "expires" says when (from the address itself).
+        Raises StreamError with yt-dlp's own reason ("Sign in to confirm your age …").
 
 Keeping videos (the den TV's `keep` setting): a copy on disk in the layout Plex and
 Jellyfin read, so a kept video plays offline and a media server can show it too.
@@ -179,6 +188,54 @@ def _run(url, limit, timeout):
         err = (p.stderr or "").strip().splitlines()
         raise RuntimeError((err[-1] if err else f"yt-dlp exited with {p.returncode}")[:200])
     return json.loads(p.stdout)
+
+
+class StreamError(RuntimeError):
+    """yt-dlp couldn't give a video's stream: its reason."""
+
+
+def stream_format(height=360, audio=True):
+    """yt-dlp's format for a video no taller than height: H.264 first, then any codec."""
+    h = int(height)
+    if audio:
+        return (f"bv*[height<={h}][vcodec^=avc1]+ba/bv*[height<={h}]+ba/b[height<={h}]/"
+                f"bv*[height<={max(h, 480)}]+ba/b")
+    return f"bv*[height<={h}][vcodec^=avc1]/bv*[height<={h}]/b[height<={h}]/bv*[height<={max(h, 480)}]/b"
+
+
+def stream(url, height=360, audio=True, timeout=60):
+    """The stream addresses for a video (see the module's docs). Never cached on disk:
+    they're tied to this machine's address and run out."""
+    exe = ytdlp()
+    if not exe:
+        raise StreamError("yt-dlp isn't installed (sudo pacman -S yt-dlp)")
+    cmd = [exe, "-J", "--no-warnings", "--no-playlist", "-f", stream_format(height, audio), url]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise StreamError(f"no answer in {timeout} s") from None
+    except OSError as e:
+        raise StreamError(str(e)) from None
+    if p.returncode != 0 or not p.stdout.strip():
+        err = [x for x in (p.stderr or "").strip().splitlines() if x.strip()]
+        msg = err[-1] if err else f"yt-dlp exited with {p.returncode}"
+        raise StreamError(re.sub(r"^ERROR:\s*(\[[^\]]*\]\s*)?([\w-]+:\s*)?", "", msg)[:200])
+    try:
+        d = json.loads(p.stdout)
+    except ValueError:
+        raise StreamError("yt-dlp's answer wasn't JSON") from None
+    fmts = d.get("requested_formats") or []
+    vid = next((f for f in fmts if (f.get("vcodec") or "none") != "none"), None)
+    aud = next((f for f in fmts if (f.get("vcodec") or "none") == "none"), None)
+    if vid is None:
+        vid = d if d.get("url") else None
+    if vid is None or not vid.get("url"):
+        raise StreamError("no playable format")
+    m = re.search(r"[?&/]expire[=/](\d+)", vid["url"])
+    expires = float(m.group(1)) if m else time.time() + 5 * 3600
+    return {"video": vid["url"], "audio": aud.get("url") if aud else None,
+            "headers": dict(vid.get("http_headers") or d.get("http_headers") or {}), "expires": expires,
+            "height": vid.get("height") or d.get("height")}
 
 
 def _save(url, doc):

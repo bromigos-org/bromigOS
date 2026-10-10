@@ -27,7 +27,11 @@ Each adapter also answers, for the TV and the panel (not capabilities: one serve
     video_items(kind, id, limit)    the items in one of those, in its own order
     video_resume(limit)             continue watching: items part-way through
     video_latest(limit)             recently added
-    video_stream(item, quality)     {"url", "headers", "direct", "quality"}: what mpv plays
+    video_stream(item, quality, height)  {"url", "headers", "direct", "quality"}: what mpv plays
+    video_shows()                   every series, to pick from: {id, title, year, poster, count, server}
+    video_show_items(id)            a series' episodes
+    video_movies()                  every movie, to pick from (items)
+    video_item(id)                  one item, or None
     video_web(item)                 the item's page in the server's web app
     video_poster(item)              (url, headers) of its poster, or (None, {})
 
@@ -38,6 +42,12 @@ An item is {id, title, series, season, episode, kind: movie | episode | video, d
 quality is "direct" (the file as it is), "auto" (direct, unless its bitrate is over the
 source's `direct_max_mbps`, 20 by default: then a 480p transcode), or a height such as
 "480p" or "720p" (the server transcodes to H.264 at that height, over HLS).
+
+With `height` (the pixels it's drawn at: a den screen is a couple of hundred), "auto"
+sizes the stream to it: the smallest height in HEIGHTS at least that tall, transcoded at
+that height's bitrate, unless the file itself is already small (no more than three times
+that bitrate, and no taller than twice the height): then it plays as it is. A 4K remux
+drawn 260 pixels tall comes as a 360p stream, not 60 GB.
 """
 import time
 import urllib.parse
@@ -47,16 +57,30 @@ from ..registry import Unreachable
 from . import labcommon as L
 
 TICKS = 10_000_000                         # Jellyfin's RunTimeTicks: 100 ns
-HEIGHTS = {"360p": (360, 900), "480p": (480, 1500), "576p": (576, 2000), "720p": (720, 3000),
+HEIGHTS = {"240p": (240, 450), "360p": (360, 900), "480p": (480, 1500), "576p": (576, 2000), "720p": (720, 3000),
            "1080p": (1080, 8000)}          # height, video kbit/s
 DEVICE = "bromigos-den-tv"
 
 
-def _quality(q, bitrate_kbps, max_mbps):
-    """"direct" or a HEIGHTS key, for the asked quality and the item's bitrate."""
+def fit_height(height):
+    """The smallest HEIGHTS key at least `height` pixels tall (1080p at most)."""
+    for k, (h, _kbps) in sorted(HEIGHTS.items(), key=lambda kv: kv[1][0]):
+        if h >= height:
+            return k
+    return "1080p"
+
+
+def _quality(q, bitrate_kbps, max_mbps, height=None, source_height=None):
+    """"direct" or a HEIGHTS key, for the asked quality, the item's bitrate and height, and
+    the height it's drawn at (None: not sized)."""
     q = (q or "auto").lower()
     if q == "direct" or q not in HEIGHTS and q != "auto":
         return "direct"
+    if q == "auto" and height:
+        fit = fit_height(int(height))
+        h, kbps = HEIGHTS[fit]
+        small = bitrate_kbps and bitrate_kbps <= kbps * 3 and (not source_height or source_height <= h * 2)
+        return "direct" if small else fit
     if q == "auto":
         return "direct" if not bitrate_kbps or bitrate_kbps <= max_mbps * 1000 else "480p"
     return q
@@ -128,6 +152,8 @@ class JellyfinVideo(VideoServer):
                 "poster": f"/Items/{it.get('Id')}/Images/Primary" if (it.get("ImageTags") or {}).get("Primary")
                 else (f"/Items/{it.get('SeriesId')}/Images/Primary" if it.get("SeriesId") else None),
                 "bitrate": int(src["Bitrate"] / 1000) if src.get("Bitrate") else None,
+                "height": next((m.get("Height") for m in src.get("MediaStreams") or [] if m.get("Type") == "Video"),
+                               None),
                 "position": round((ud.get("PlaybackPositionTicks") or 0) / TICKS, 3) or None,
                 "added": _year_ts(it.get("DateCreated")), "server": self.name}
 
@@ -163,6 +189,34 @@ class JellyfinVideo(VideoServer):
             data = self.fetch(f"/Users/{uid}/Items?{q}", timeout=15) or {}
         return [self._item(i) for i in data.get("Items") or [] if i.get("Type") in ("Movie", "Episode", "Video")]
 
+    def video_shows(self):
+        uid = self._user()
+        q = urllib.parse.urlencode({"IncludeItemTypes": "Series", "Recursive": "true", "SortBy": "SortName",
+                                    "Fields": "ProductionYear,RecursiveItemCount,ChildCount", "EnableImages": "true"})
+        return [{"id": v.get("Id"), "title": v.get("Name") or "", "year": v.get("ProductionYear"),
+                 "poster": f"/Items/{v.get('Id')}/Images/Primary" if (v.get("ImageTags") or {}).get("Primary") else None,
+                 "count": v.get("RecursiveItemCount") or v.get("ChildCount"), "kind": "show", "server": self.name}
+                for v in (self.fetch(f"/Users/{uid}/Items?{q}", timeout=15) or {}).get("Items") or []]
+
+    def video_show_items(self, id_):
+        uid = self._user()
+        q = urllib.parse.urlencode({"UserId": uid, "Fields": self.FIELDS, "EnableImages": "true"})
+        data = self.fetch(f"/Shows/{id_}/Episodes?{q}", timeout=15)
+        if data is None:
+            raise LookupError(f"{self.name}: no series {id_}")
+        return [self._item(i) for i in data.get("Items") or [] if i.get("Type") == "Episode"]
+
+    def video_movies(self):
+        uid = self._user()
+        q = urllib.parse.urlencode({"IncludeItemTypes": "Movie", "Recursive": "true", "SortBy": "SortName",
+                                    "Fields": self.FIELDS, "EnableImages": "true"})
+        return [self._item(i) for i in (self.fetch(f"/Users/{uid}/Items?{q}", timeout=20) or {}).get("Items") or []]
+
+    def video_item(self, id_):
+        uid = self._user()
+        it = self.fetch(f"/Users/{uid}/Items/{id_}", timeout=8)
+        return self._item(it) if it and it.get("Id") else None
+
     def video_resume(self, limit=12):
         uid = self._user()
         q = urllib.parse.urlencode({"Limit": str(limit), "MediaTypes": "Video", "Fields": self.FIELDS})
@@ -173,8 +227,8 @@ class JellyfinVideo(VideoServer):
         q = urllib.parse.urlencode({"Limit": str(limit), "Fields": self.FIELDS, "GroupItems": "true"})
         return [self._item(i) for i in self.fetch(f"/Users/{uid}/Items/Latest?{q}", timeout=8) or []]
 
-    def video_stream(self, item, quality="auto"):
-        q = _quality(quality, item.get("bitrate"), self.video_direct_max())
+    def video_stream(self, item, quality="auto", height=None):
+        q = _quality(quality, item.get("bitrate"), self.video_direct_max(), height, item.get("height"))
         iid = item["id"]
         if q == "direct":
             url = f"{self.endpoint}/Videos/{iid}/stream?static=true&MediaSourceId={iid}"
@@ -229,7 +283,7 @@ class PlexVideo(VideoServer):
                 "duration": round(dur / 1000.0, 3) if dur else None, "year": m.get("year"),
                 "poster": m.get("grandparentThumb") if t == "episode" and m.get("grandparentThumb") else (
                     m.get("thumb") or m.get("parentThumb")),
-                "bitrate": media.get("bitrate"), "part": part.get("key"),
+                "bitrate": media.get("bitrate"), "part": part.get("key"), "height": media.get("height"),
                 "position": round((m.get("viewOffset") or 0) / 1000.0, 3) or None,
                 "added": float(m["addedAt"]) if m.get("addedAt") else None, "server": self.name}
 
@@ -271,6 +325,34 @@ class PlexVideo(VideoServer):
             items = eps
         return [i for i in items if i["kind"] in ("movie", "episode", "video")]
 
+    def _sections(self, typ):
+        return [s for s in self._get("/library/sections").get("Directory") or [] if s.get("type") == typ]
+
+    def video_shows(self):
+        out = []
+        for sec in self._sections("show"):
+            for m in self._get(f"/library/sections/{sec.get('key')}/all?type=2", timeout=20).get("Metadata") or []:
+                out.append({"id": str(m.get("ratingKey")), "title": m.get("title") or "", "year": m.get("year"),
+                            "poster": m.get("thumb"), "count": m.get("leafCount"), "kind": "show", "server": self.name})
+        return out
+
+    def video_show_items(self, id_):
+        data = self._get(f"/library/metadata/{id_}/allLeaves", timeout=20)
+        if not data:
+            raise LookupError(f"{self.name}: no show {id_}")
+        return [self._item(m) for m in data.get("Metadata") or [] if m.get("type") == "episode"]
+
+    def video_movies(self):
+        out = []
+        for sec in self._sections("movie"):
+            out += [self._item(m) for m in self._get(f"/library/sections/{sec.get('key')}/all?type=1",
+                                                     timeout=20).get("Metadata") or []]
+        return out
+
+    def video_item(self, id_):
+        m = (self._get(f"/library/metadata/{id_}").get("Metadata") or [None])[0]
+        return self._item(m) if m else None
+
     def video_resume(self, limit=12):
         return [self._item(m) for m in (self._get("/library/onDeck").get("Metadata") or [])[:limit]]
 
@@ -278,8 +360,8 @@ class PlexVideo(VideoServer):
         q = f"/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size={int(limit)}"
         return [self._item(m) for m in self._get(q).get("Metadata") or []]
 
-    def video_stream(self, item, quality="auto"):
-        q = _quality(quality, item.get("bitrate"), self.video_direct_max())
+    def video_stream(self, item, quality="auto", height=None):
+        q = _quality(quality, item.get("bitrate"), self.video_direct_max(), height, item.get("height"))
         if q == "direct" and item.get("part"):
             return {"url": f"{self.endpoint}{item['part']}", "headers": self.auth_headers(), "direct": True,
                     "quality": "direct"}

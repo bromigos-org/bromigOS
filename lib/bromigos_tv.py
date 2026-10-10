@@ -36,6 +36,18 @@ The config, in ~/.config/bromigos-live/config.toml (docs: live/README.md, "The d
     name = "Home movies"
     files = "~/Videos/Home"       # video files on disk: a folder, or a list of paths
 
+    [[tv.channel]]
+    name = "Sitcoms"
+    shows = ["Example Show", "Another Show"]   # series you pick (titles or ids); items = [...]
+    order = "in order"            # movies, collections = [...] collections; "in order" takes turns
+    screens = "any"               # every screen; [tv] screens is the default for a channel
+
+A channel made of picked shows (`shows`, `items`, `collections`) shuffles their episodes
+together, or with "in order" (or "alternate") takes turns: show A's next episode, then
+show B's, and round again, each show going on from where it left off (rotation_at, kept
+in the live layer's state, never in config.toml). A title is matched once and its id
+remembered, so a renamed folder doesn't break the channel.
+
 The schedule: the items with a known length, in order or shuffled, play end to end from a
 fixed start (EPOCH), round and round. A playlist plays in its own order by default, a
 library or a collection shuffled. A shuffled pass is ordered by a hash of (seed, the date
@@ -57,10 +69,13 @@ OWN = {"big": ("RELAY MAP", "the homelab's nodes and links"),
        "wave": ("SCOPE", "this machine's network traffic"),
        "emblem": ("BURN-IN", "the burn-in emblem")}
 SCREEN_NAMES = {"big": "the big monitor", "wave": "the scope", "emblem": "the small monitor"}
-DEFAULT_SCREENS = ("big",)
+DEFAULT_SCREENS = ("big",)              # a channel's screens when neither it nor [tv] screens says
+ANY = ("any", "all", "*")                 # screens = "any": every screen
 DEFAULT_VOLUME = 60
 STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "bromigos-live")
 STATE = os.path.join(STATE_DIR, "tv.json")
+ROTATION = os.path.join(STATE_DIR, "tv-rotation.json")    # in-order picked shows: where each one is
+PICKS = os.path.join(STATE_DIR, "tv-picks.json")          # picked titles matched to their ids
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "bromigos", "tv")
 BAD_FOR = 24 * 3600                      # an item that wouldn't play is left out this long
 
@@ -70,12 +85,45 @@ def _slug(s):
     return re.sub(r"[^a-z0-9]+", "-", (s or "").lower()).strip("-") or "channel"
 
 
-def _entry(e, seen):
+def screens_of(v, default=DEFAULT_SCREENS):
+    """A `screens` value as a list of SCREENS: a list, one name, or "any" (every screen)."""
+    if v is None or v == "" or v == []:
+        v = list(default)
+    if isinstance(v, str):
+        v = list(SCREENS) if v.lower() in ANY else [v]
+    out = []
+    for x in v:
+        x = str(x).lower()
+        x = {"scope": "wave", "small": "emblem"}.get(x, x)
+        if x in ANY:
+            return list(SCREENS)
+        if x in SCREENS and x not in out:
+            out.append(x)
+    return out
+
+
+def _as_list(v):
+    if v is None or v == "":
+        return []
+    return [v] if isinstance(v, (str, int)) else list(v)
+
+
+def norm_order(v, default="shuffle"):
+    """"in order" or "shuffle"; "alternate" (taking turns) is "in order"."""
+    o = str(v or default).lower().replace("_", " ").replace("-", " ").strip()
+    return "in order" if o in ("in order", "inorder", "order", "alternate", "turns", "rotate") else "shuffle"
+
+
+def _entry(e, seen, default_screens=DEFAULT_SCREENS):
     """One [[tv.channel]] table (or the media panel's settings) as a channel dict, or None."""
     if not isinstance(e, dict) or e.get("enabled", True) is False:
         return None
     name = str(e.get("name") or "").strip()
-    if e.get("youtube"):
+    picks = bool(_as_list(e.get("shows")) or _as_list(e.get("items")) or _as_list(e.get("collections")))
+    if picks and not e.get("youtube") and not e.get("files"):
+        kind = "server"
+        default_order = "shuffle"
+    elif e.get("youtube"):
         kind = "youtube"
         playlist_url = "list=" in str(e["youtube"]) and "/watch" not in str(e["youtube"])
         default_order = "in order" if playlist_url else "shuffle"
@@ -87,18 +135,17 @@ def _entry(e, seen):
         default_order = "shuffle"
     else:
         return None
+    picks = picks and kind == "server"
     name = name or str(e.get("library") or e.get("collection") or e.get("playlist") or
-                       ("Files" if kind == "files" else "YouTube"))
+                       ("Picked shows" if picks else "Files" if kind == "files" else "YouTube"))
     key = _slug(name)
     if key in seen:
         return None
     seen.add(key)
-    screens = e.get("screens") or e.get("screen") or list(DEFAULT_SCREENS)
-    if isinstance(screens, str):
-        screens = [screens]
-    order = str(e.get("order") or default_order).lower().replace("_", " ")
-    order = "in order" if order in ("in order", "inorder", "order") else "shuffle"
-    return dict(e, name=name, key=key, kind=kind, order=order, screens=[x for x in screens if x in SCREENS],
+    screens = screens_of(e.get("screens") if e.get("screens") not in (None, "", []) else e.get("screen"),
+                         default_screens)
+    order = norm_order(e.get("order"), default_order)
+    return dict(e, name=name, key=key, kind=kind, order=order, screens=screens, picks=picks,
                 seed=str(e.get("seed", key)))
 
 
@@ -146,8 +193,9 @@ def channels(cfg, panel=True):
         pc = panel_channel()
         if pc:
             entries.append(pc)
+    default = screens_of(tv.get("screens"), DEFAULT_SCREENS) if tv.get("screens") else DEFAULT_SCREENS
     for e in entries:
-        ch = _entry(e, seen)
+        ch = _entry(e, seen, default)
         if ch:
             out.append(ch)
     return out
@@ -361,6 +409,15 @@ def fetch_items(ch, max_age=900, refresh=True):
         elif ch["kind"] == "files":
             doc["items"] = local_files(ch["files"])
             doc["server"] = "files"
+        elif ch.get("picks"):
+            a = server_of(ch)
+            if a is None:
+                raise LookupError(f"no video server{' named ' + ch['source'] if ch.get('source') else ''} "
+                                  "in homelab.toml")
+            doc["items"], doc["groups"], missing = pick_items(ch, a)
+            doc["server"] = a.name
+            if missing:
+                doc["error"] = f"{a.name} has nothing called " + ", ".join(repr(m) for m in missing)
         else:
             a = server_of(ch)
             if a is None:
@@ -382,6 +439,205 @@ def fetch_items(ch, max_age=900, refresh=True):
     except OSError:
         pass
     return doc
+
+
+# ------------------------------------------------------------------ picked shows
+def _read(path):
+    try:
+        with open(path) as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+PICK_KINDS = (("shows", "show"), ("items", "movie"), ("collections", "collection"))
+
+
+def _choices(a, kind):
+    """What a server offers to pick from: its shows, movies or collections, as records
+    with id and title (the adapter's video_shows / video_movies, the `video` collections)."""
+    if kind == "show":
+        return a.video_shows()
+    if kind == "movie":
+        return a.video_movies()
+    return [b for b in a.video() if b.get("kind") == "collection"]
+
+
+def resolve_picks(ch, a):
+    """{kind: [(id, title, what was written)]} for a channel's picks on server a, and the
+    names that matched nothing. An id is used as it is; a title is matched once (case
+    aside) and its id remembered in PICKS, so a show renamed on the server still plays."""
+    memory = _read(PICKS)
+    mine = memory.setdefault(a.name, {})
+    out, missing, listed, changed = {}, [], {}, False
+    for key, kind in PICK_KINDS:
+        want = [str(x) for x in _as_list(ch.get(key)) if str(x).strip()]
+        if not want:
+            continue
+        known = mine.setdefault(kind, {})
+        rows = []
+        for w in want:
+            low = w.strip().lower()
+            if low in known:
+                rows.append((known[low]["id"], known[low].get("title") or w, w))
+                continue
+            if kind not in listed:
+                try:
+                    listed[kind] = _choices(a, kind)
+                except Exception:                              # noqa: BLE001  the server: next time
+                    listed[kind] = []
+            hit = next((c for c in listed[kind] if str(c.get("id")) == w.strip()), None) or \
+                next((c for c in listed[kind] if str(c.get("title") or "").strip().lower() == low), None)
+            if hit is None:
+                missing.append(w)
+                continue
+            known[low] = {"id": str(hit["id"]), "title": hit.get("title")}
+            changed = True
+            rows.append((str(hit["id"]), hit.get("title") or w, w))
+        out[kind] = rows
+    if changed:
+        try:
+            _write_json(PICKS, memory)
+        except OSError:
+            pass
+    return out, missing
+
+
+def forget_pick(server, kind, name):
+    """Drop a remembered match (its id is gone from the server): matched by title again."""
+    memory = _read(PICKS)
+    if memory.get(server, {}).get(kind, {}).pop(str(name).strip().lower(), None) is not None:
+        try:
+            _write_json(PICKS, memory)
+        except OSError:
+            pass
+
+
+def pick_items(ch, a):
+    """(items, groups, missing) for a channel of picked shows, movies and collections. Each
+    show (and each collection) is a group of its own, its episodes in season and episode
+    order; the picked movies are one group, in the order written. groups: [[id, title]]."""
+    picked, missing = resolve_picks(ch, a)
+    items, groups = [], []
+    for sid, title, written in picked.get("show", []):
+        try:
+            eps = sort_episodes(a.video_show_items(sid))
+        except Exception:                                     # noqa: BLE001  a show deleted, or renamed with a new id
+            forget_pick(a.name, "show", written)
+            missing.append(written)
+            continue
+        gid = f"show:{sid}"
+        groups.append([gid, title])
+        items += [dict(i, group=gid) for i in eps]
+    movies = []
+    for mid, title, written in picked.get("movie", []):
+        try:
+            it = a.video_item(mid)
+        except Exception:                                     # noqa: BLE001
+            it = None
+        if not it:
+            forget_pick(a.name, "movie", written)
+            missing.append(written)
+            continue
+        movies.append(dict(it, group="items"))
+    if movies:
+        groups.append(["items", "Movies"])
+        items += movies
+    for cid, title, written in picked.get("collection", []):
+        try:
+            got = a.video_items("collection", cid)
+        except Exception:                                     # noqa: BLE001
+            forget_pick(a.name, "collection", written)
+            missing.append(written)
+            continue
+        gid = f"collection:{cid}"
+        groups.append([gid, title])
+        items += [dict(i, group=gid) for i in got]
+    return items, groups, missing
+
+
+def _groups_of(doc):
+    """[(group id, [its items])] from a picked channel's cached doc, in the groups' order."""
+    by = {}
+    for i in doc.get("items") or []:
+        by.setdefault(i.get("group") or "items", []).append(i)
+    order = [g[0] for g in doc.get("groups") or []] or list(by)
+    return [(g, by.get(g, [])) for g in order]
+
+
+def day_start(t):
+    """Local midnight before t."""
+    lt = time.localtime(t)
+    return time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
+
+
+def rotation_at(groups, t, anchor=None, bad=()):
+    """Taking turns: the Slot on at wall-clock time t when the groups (shows) play one item
+    each in turn, each group in its own order, from the anchor {"t": when, "pos": {group:
+    the id of its next item}, "turn": whose turn it is then}. With no anchor: from local
+    midnight, every group at its first item. The Slot's `anchor` is the same schedule
+    anchored at the start of what's on (rotation_advance keeps it, so the walk stays short)."""
+    gs = [(g, playable(its, bad)) for g, its in groups]
+    gs = [(g, its) for g, its in gs if its]
+    if not gs:
+        return None
+    anchor = anchor or {}
+    order = [g for g, _ in gs]
+    items = dict(gs)
+    cur = float(anchor.get("t") or day_start(t))
+    k = order.index(anchor["turn"]) if anchor.get("turn") in order else 0
+    pos = {}
+    for g, its in gs:
+        want = (anchor.get("pos") or {}).get(g)
+        ids = [str(i.get("id")) for i in its]
+        pos[g] = ids.index(str(want)) if want is not None and str(want) in ids else 0
+    if t < cur:                                  # before the anchor (a clock set back): its first item
+        t = cur
+    count = sum(len(v) for v in items.values())
+    for _ in range(500000):
+        g = order[k % len(order)]
+        its = items[g]
+        i = pos[g] % len(its)
+        d = float(its[i]["duration"])
+        if cur + d > t:
+            here = {x: str(items[x][pos[x] % len(items[x])].get("id")) for x in order}
+            pos[g] = i + 1
+            g2 = order[(k + 1) % len(order)]
+            nxt = items[g2][pos[g2] % len(items[g2])]
+            return Slot(item=its[i], offset=t - cur, start=cur, end=cur + d, index=i, next=nxt, pass_=0,
+                        count=count, group=g, anchor={"t": cur, "pos": here, "turn": g})
+        cur += d
+        pos[g] = i + 1
+        k += 1
+    return None
+
+
+def rotation_state(key):
+    return (_read(ROTATION).get(key) or None)
+
+
+def rotation_advance(ch, t=None, every=3 * 3600):
+    """The worker's job for an in-order picked channel: keep its anchor near now (where each
+    show is), so the walk from it stays short and each show goes on where it left off, day
+    after day. Written when there's none yet or it's older than `every` seconds."""
+    if not (ch.get("picks") and ch.get("order") == "in order"):
+        return None
+    t = time.time() if t is None else t
+    doc = cached_items(ch) or {}
+    st = _read(ROTATION)
+    old = st.get(ch["key"])
+    if old and t - float(old.get("t") or 0) < every:
+        return old
+    s = rotation_at(_groups_of(doc), t, old, bad_items())
+    if not s:
+        return old
+    st[ch["key"]] = s.anchor
+    try:
+        _write_json(ROTATION, st)
+    except OSError:
+        pass
+    return s.anchor
 
 
 def catalog(max_age=900, refresh=True):
@@ -452,7 +708,10 @@ def now_next(ch, t=None):
         v = ch.get("video") or {}
         return Slot(item=dict(v, kind="live"), offset=None, start=None, end=None, index=0, next=None)
     doc = cached_items(ch) or {}
-    return schedule_at(doc.get("items") or [], time.time() if t is None else t, ch.get("seed", ch.get("key")),
+    t = time.time() if t is None else t
+    if ch.get("picks") and ch.get("order") == "in order":
+        return rotation_at(_groups_of(doc), t, rotation_state(ch.get("key")), bad_items())
+    return schedule_at(doc.get("items") or [], t, ch.get("seed", ch.get("key")),
                        ch.get("order", "shuffle"), bad=bad_items())
 
 

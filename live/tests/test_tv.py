@@ -27,6 +27,8 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(REPO, "lib"))
 
 SANDBOX = tempfile.mkdtemp(prefix="bromigos-tvtest-")
+assert "bromigos_tv" not in sys.modules or sys.modules["bromigos_tv"].CACHE.startswith(tempfile.gettempdir()), \
+    "bromigos_tv was imported with the user's own paths"
 for k, sub in (("XDG_CACHE_HOME", "cache"), ("XDG_STATE_HOME", "state"), ("XDG_CONFIG_HOME", "config")):
     os.environ[k] = os.path.join(SANDBOX, sub)
 os.environ["BROMIGOS_YTDLP"] = os.path.join(HERE, "fake_ytdlp.py")
@@ -395,15 +397,16 @@ class FailureTest(unittest.TestCase):
 
     def fail(self, iid):
         p = self.Player()
-        self.tv.player = p
-        self.tv.loaded = ("ch", iid)
-        self.tv._check_failure({"key": "ch", "name": "Ch"}, TV.Slot(item={"id": iid, "title": iid}, offset=1.0))
+        d = self.tv.decks["big"]
+        d.player = p
+        d.loaded = ("ch", iid)
+        self.tv._check_failure(d, {"key": "ch", "name": "Ch"}, TV.Slot(item={"id": iid, "title": iid}, offset=1.0))
         return p
 
     def test_one_bad_item_is_skipped(self):
         p = self.fail("a")
         self.assertIn("a", TV.bad_items())
-        self.assertIsNone(self.tv.loaded)
+        self.assertIsNone(self.tv.decks["big"].loaded)
         self.assertEqual(p.stopped, 1)
 
     def test_a_server_thats_down_skips_nothing(self):

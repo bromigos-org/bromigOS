@@ -15,6 +15,7 @@ from .stage import Stage
 
 TAU = 2 * math.pi
 
+TV_UNIFORM = {"wave": "wave", "emblem": "emb", "big": "big"}   # bg.frag's den TV uniforms, per screen
 DEN = {   # screen rects in the 2560x1440 den wallpaper (fitted by hand)
     "wave": (1475, 762, 124, 110),
     "emblem": (1090, 920, 158, 143),
@@ -240,7 +241,7 @@ class Background:
     # ------------------------------------------------------------------ build
     def rebuild(self, d):
         b = glkit.Batch(self.stage.atlas)
-        on_big = self.tv is not None and self.tv.media_screen()[0] == "big"
+        on_big = self.tv is not None and self.tv.showing("big")
         if self.den_on() and not on_big:              # a media channel on the big monitor: no relay map
             x, y, w, h = self._px(DEN["big"])
             gadgets.constellation(b, d, x + w / 2, y + h / 2, min(w, h) * 0.36, space=1, labels=False, mini=True)
@@ -286,8 +287,8 @@ class Background:
         if tv is not None:
             tv.layout(self.w, self.h, {k: self._px(DEN[k]) for k in ("big", "wave", "emblem")}, self.view, self.sf)
             tvu = tv.gl()
-            if tvu["tv"][0] != self._tv_media:              # the relay map steps off the big monitor, or back
-                self._tv_media = tvu["tv"][0]
+            if tvu["tv"]["big"][0] != self._tv_media:       # the relay map steps off the big monitor, or back
+                self._tv_media = tvu["tv"]["big"][0]
                 self.last_build = 0.0
         if mono - self.last_build > 2.0:
             self.rebuild(d)
@@ -367,7 +368,9 @@ class Background:
                  ("u_ring", self.emblem.ring), ("u_flame", self.emblem.flame or self.emblem.ring),
                  ("u_shipmask", self.shipmask or self.stage.emit.tex)]
         if tvu is not None:
-            units += [("u_tvtex", tvu["tvtex"] or self.stage.emit.tex), ("u_osd", tvu["osd"] or self.stage.emit.tex)]
+            for s, u in TV_UNIFORM.items():
+                units += [(f"u_tvtex_{u}", tvu["tvtex"][s] or self.stage.emit.tex),
+                          (f"u_osd_{u}", tvu["osd"][s] or self.stage.emit.tex)]
         for i, (name, tex) in enumerate(units):
             GL.glActiveTexture(GL.GL_TEXTURE0 + i)
             GL.glBindTexture(GL.GL_TEXTURE_2D, tex)
@@ -423,8 +426,9 @@ class Background:
         f.f("u_meter1", *self._px(DEN["meter1"]))
         f.f("u_meter_v", *self.meter_v)
         f.f("u_meter_face", *self.face)
-        f.f("u_tv", *(tvu["tv"] if tvu else (0.0, 0.0, 1.0, 0.0)))
-        f.f("u_tune", *(tvu["tune"] if tvu else (0.0, 0.0, 0.0, 0.0)))
+        for s, u in TV_UNIFORM.items():
+            f.f(f"u_tv_{u}", *(tvu["tv"][s] if tvu else (0.0, 0.0, 1.0, 0.0)))
+            f.f(f"u_tune_{u}", *(tvu["tune"][s] if tvu else (0.0, 0.0, 0.0, 0.0)))
         sp = cfg.get("space", {})
         hl = gadgets.health(d) if sp.get("health_tint", True) else 0
         green = gadgets.all_green(d) and sp.get("relay_beam", True)

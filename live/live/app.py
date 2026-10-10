@@ -476,15 +476,18 @@ class App:
         if t.on_change is None:
             t.on_change = self._tv_changed
             self._tv_region()
-        screen, _ch = t.media_screen()
+        rects = {s: t.rects[s] for s, _ch in t.media_screens() if t.rects.get(s)}
         covered = set()
-        if screen and t.rects.get(screen):
+        if rects:
             now = time.monotonic()
             if now - getattr(self, "_tv_cov_at", 0.0) > 1.0:
                 self._tv_cov_at = now
-                self._tv_cov = hypr.covering(self.cfg["general"]["monitor"], t.rects[screen])
-            if getattr(self, "_tv_cov", False):
-                covered.add(screen)
+                try:
+                    least = float(t.conf().get("cover_opacity", 0.9))
+                except (TypeError, ValueError):
+                    least = 0.9
+                self._tv_cov = hypr.covered(self.cfg["general"]["monitor"], rects, least)
+            covered = set(getattr(self, "_tv_cov", set())) & set(rects)
         saver = "screensaver" in self.overlays
         speaking = bool(getattr(self.codec, "current", None)) or _vector_speaking()
         t.tick(covered=covered, quiet=self.locked or saver, ducked=speaking, motion=motion.mode(self.cfg),
@@ -1094,6 +1097,15 @@ class App:
         new = config.load()
         self.monitor_setting = new["general"].get("monitor", "")
         new["general"]["monitor"] = hypr.resolve_monitor(self.monitor_setting)
+        t = self.den_tv()
+        if t is not None and {k: v for k, v in new.items() if k != "tv"} == {k: v for k, v in self.cfg.items()
+                                                                             if k != "tv"}:
+            # only the den TV's channels changed (the channel guide): no new background, no
+            # player closed; the screens carry on and the lists are read again
+            self.cfg["tv"] = new.get("tv") or {}
+            t.reconfigured()
+            log("config: the den TV's channels changed; read again")
+            return
         self.cfg.clear()
         self.cfg.update(new)
         self._apply_motion()

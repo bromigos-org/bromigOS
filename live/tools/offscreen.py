@@ -72,43 +72,60 @@ def egl():
 
 
 def tv_config(cfg):
-    """OFF_TV: a channel of one local file on a den screen (live/tv.py), before the scene."""
+    """OFF_TV: a channel of one local file on a den screen (live/tv.py), before the scene.
+    OFF_TV_SCREEN names the screen, or several (big,wave,emblem): one channel each, each
+    its own clip when OFF_TV names several (comma-separated), all at once."""
     clip = os.environ.get("OFF_TV")
     if not clip:
         return
+    clips = clip.split(",")
+    screens = os.environ.get("OFF_TV_SCREEN", "big").split(",")
     cfg["tv"] = dict(cfg.get("tv") or {}, enabled=True,
-                     channel=[{"name": "TEST CLIP", "files": [os.path.abspath(clip)],
-                               "screens": [os.environ.get("OFF_TV_SCREEN", "big")]}])
+                     channel=[{"name": "TEST CLIP" if len(screens) == 1 else f"TEST {s.upper()}",
+                               "files": [os.path.abspath(clips[i % len(clips)])], "screens": [s]}
+                              for i, s in enumerate(screens)])
 
 
 def tv_tune(r):
-    """Tune the screen to the clip's channel (in memory: never the user's tv.json)."""
+    """Tune the screens to the clips' channels (in memory: never the user's tv.json)."""
     tv = r.den_tv() if os.environ.get("OFF_TV") else None
     if tv is None:
         return None
     import bromigos_tv as TVL
-    scr = os.environ.get("OFF_TV_SCREEN", "big")
-    ch = next(c for c in TVL.channels(tv.cfg, panel=False) if c["kind"] == "files")
-    TVL.fetch_items(ch, max_age=0)
-    tv.screens[scr]["channel"] = ch["key"]
-    tv.screens[scr]["sound"] = os.environ.get("OFF_TV_SOUND") == "1"
-    tv.lineup = lambda s, _tv=tv: [TVL.own_channel(s)] + ([ch] if s == scr else [])
-    if os.environ.get("OFF_TV_HINT") == "1":
+    screens = os.environ.get("OFF_TV_SCREEN", "big").split(",")
+    chans = [c for c in TVL.channels(tv.cfg, panel=False) if c["kind"] == "files"]
+    by = {}
+    for ch in chans:
+        TVL.fetch_items(ch, max_age=0)
+        for s in ch["screens"]:
+            by[s] = ch
+            tv.screens[s]["channel"] = ch["key"]
+            tv.screens[s]["sound"] = False
+    snd = os.environ.get("OFF_TV_SOUND")
+    if snd and snd != "0":
+        tv.screens[screens[0] if snd == "1" else snd]["sound"] = True
+    tv.lineup = lambda s, _tv=tv: [TVL.own_channel(s)] + ([by[s]] if s in by else [])
+    if os.environ.get("OFF_TV_HINT"):
         from live.scene import DEN
         inner = getattr(r, "inner", r)
         tv.layout(inner.w, inner.h, {k: inner._px(DEN[k]) for k in ("big", "wave", "emblem")}, inner.view, 1)
-        tv.hover = scr
-        tv.hint_rect = tv._place_hint(scr)
+        h = os.environ["OFF_TV_HINT"]
+        if h != "0":
+            tv.hover = screens[0] if h == "1" else h
+            tv.hint_rect = tv._place_hint(tv.hover)
     return tv
 
 
 def tv_warm(r, tv, render, limit=12.0):
-    """Draw until mpv has a frame on the screen (it decodes in real time)."""
+    """Draw until mpv has a frame on every playing screen (it decodes in real time)."""
     t_end = time.time() + limit
     while time.time() < t_end:
         tv.tick(motion=os.environ.get("OFF_MOTION", "full"))
         render()
-        if tv.player is not None and tv.player.has_frame or tv.motion == "still" and tv.poster_tex:
+        decks = [tv.decks[s] for s, _ch in tv.media_screens()]
+        if decks and all(d.player is not None and d.player.has_frame for d in decks if not d.capped):
+            return True
+        if tv.motion == "still" and decks and all(d.poster_tex for d in decks):
             return True
         time.sleep(0.03)
     return False

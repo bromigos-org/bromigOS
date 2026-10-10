@@ -5,6 +5,10 @@
                               a channel's /streams tab, its /videos tab (or any other
                               channel URL), a playlist; a URL with "gone" fails as a removed
                               video does, "slow" never answers in time
+  -J --no-playlist -f FORMAT URL
+                              a video's stream addresses, after FAKE_YTDLP_SLEEP seconds
+                              (a URL with "agegate" fails); FAKE_YTDLP_MEDIA: a local file
+                              they point at
   a download (--print after_move:filepath)
                               writes a small file where the -o template says, with the info
                               JSON and the thumbnail beside it, and prints its path; a URL
@@ -35,6 +39,27 @@ if "--flat-playlist" in args:
             else "ytdlp-videos.json" if url.endswith("/videos") else "ytdlp-channel.json")
     with open(os.path.join(FIX, name)) as f:
         print(f.read())
+    sys.exit(0)
+
+if "-J" in args and "--no-playlist" in args:
+    # a video's stream addresses (bromigos_youtube.stream): FAKE_YTDLP_SLEEP seconds first, like
+    # a real resolve; "agegate" fails as an age-gated video does. FAKE_YTDLP_MEDIA: the file the
+    # addresses point at (a local path mpv can open), else made-up googlevideo ones.
+    time.sleep(float(os.environ.get("FAKE_YTDLP_SLEEP", "0")))
+    if "agegate" in url:
+        print("ERROR: [youtube] agegate: Sign in to confirm your age. This video may be inappropriate for some users.",
+              file=sys.stderr)
+        sys.exit(1)
+    vid = url.rsplit("=", 1)[-1].rsplit("/", 1)[-1]
+    fmt = args[args.index("-f") + 1]
+    h = int(re.search(r"height<=(\d+)", fmt).group(1)) if "height<=" in fmt else 1080
+    media = os.environ.get("FAKE_YTDLP_MEDIA")
+    vurl = media or f"https://rr1---sn-example.googlevideo.com/videoplayback?expire=2000000000&id={vid}&itag=134"
+    aurl = media or f"https://rr1---sn-example.googlevideo.com/videoplayback?expire=2000000000&id={vid}&itag=251"
+    hdr = {"User-Agent": "fake"}
+    print(json.dumps({"id": vid, "title": f"Video {vid}", "requested_formats": [
+        {"format_id": "134", "url": vurl, "height": min(h, 360), "vcodec": "avc1.4d401e", "http_headers": hdr},
+        {"format_id": "251", "url": aurl, "vcodec": "none", "acodec": "opus", "http_headers": hdr}]}))
     sys.exit(0)
 
 if "--print" in args:

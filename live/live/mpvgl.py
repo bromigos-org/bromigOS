@@ -1,9 +1,16 @@
 """libmpv drawing into a GL texture: the den TV's picture (live/live/tv.py).
 
 mpv decodes on its own threads, on the GPU where it can (hwdec=auto: NVDEC on NVIDIA,
-VA-API elsewhere), and draws each new frame into our framebuffer through its render API
-(mpv_render_context, OpenGL). We ask for a frame only when the live layer draws one, never
-blocking for a frame's time, and the TV's own texture is small: the screen's size.
+VA-API elsewhere; every codec the GPU has, MPEG-2 and MPEG-4 included, not only mpv's
+short default list), and draws each new frame into our framebuffer through its render API
+(mpv_render_context, OpenGL), with mpv's cheapest scalers (the picture is a few hundred
+pixels: no high-quality filters to pay for). We ask for a frame only when the live layer
+draws one, never blocking for a frame's time, and each texture is small: its screen's size.
+Each den screen playing has a Player of its own.
+
+A frame is only the item's own: after load(), frame() gives None (the TV shows the poster
+or static) until mpv has the new item's first frame at its position (playback-restart),
+paused or not, so the last item's picture is never left on the screen.
 
 python-mpv (Arch: python-mpv) is the binding. Without it, or without libmpv, available()
 says why and the TV shows posters only.
@@ -50,13 +57,17 @@ def _proc_address():
 
 
 class Player:
-    def __init__(self, log=print, client_name="bromigOS den TV", tls_ca=None, ytdl_format=None):
+    def __init__(self, log=print, client_name="bromigOS den TV", tls_ca=None, ytdl_format=None, ytdl=True):
+        """With the GL context current. One per playing screen: each has its own decoder,
+        render context and texture."""
         ok, why = available()
         if not ok:
             raise RuntimeError(why)
         mpv = _mpv
         self.log = log
-        opts = dict(vo="libmpv", hwdec="auto", aid="no", mute=True, keep_open="yes", idle=True, ytdl=True,
+        opts = dict(vo="libmpv", hwdec="auto", hwdec_codecs="all", aid="no", mute=True, keep_open="yes", idle=True,
+                    ytdl=bool(ytdl), scale="bilinear", dscale="bilinear", cscale="bilinear", dither_depth="no",
+                    correct_downscaling=False, linear_downscaling=False, sigmoid_upscaling=False, deband=False,
                     input_default_bindings=False, input_vo_keyboard=False, osc=False, terminal=False,
                     audio_client_name=client_name, cache="yes", demuxer_max_bytes="32MiB",
                     demuxer_readahead_secs=20, hr_seek="yes", volume_max=100, sub="no",
@@ -73,6 +84,9 @@ class Player:
         self.has_frame = False
         self.ended = None                     # (reason, error) of the last end-file, from mpv's thread
         self.started = False
+        self.ready = False                    # the loaded item's first frame is decoded (playback-restart)
+        self.gen = 0                          # load()s so far: an event for an older one is ignored
+        self._loaded_gen = -1
 
         @self.m.event_callback("end-file")
         def _end(ev):
@@ -87,19 +101,31 @@ class Player:
         def _loaded(_ev):
             self.started = True
             self.ended = None
+            self._loaded_gen = self.gen
+
+        @self.m.event_callback("playback-restart")
+        def _restart(_ev):
+            if self._loaded_gen == self.gen:              # the new item's frame, not the last one's
+                self.ready = True
 
     def _log(self, level, prefix, text):
         if level in ("error", "fatal", "warn"):
             self.log(f"tv: mpv {prefix}: {text.strip()[:200]}")
 
     # ---- control (any thread: mpv's properties are thread safe)
-    def load(self, url, start=None, headers=None, ytdl_format=None, title=""):
-        self.has_frame = self.started = False
+    def load(self, url, start=None, headers=None, ytdl_format=None, title="", audio=None):
+        """Play url (from start seconds), with audio from another address when the video
+        has none of its own (YouTube's are apart). Everything goes in as a property, never
+        in loadfile's comma-separated options: a title or an address may have commas."""
+        self.gen += 1
+        self.has_frame = self.started = self.ready = False
         self.ended = None
         self.m["http-header-fields"] = [f"{k}: {v}" for k, v in (headers or {}).items()]
+        self.m["audio-files"] = [audio] if audio else []
+        self.m["force-media-title"] = title or ""
         if ytdl_format:
             self.m["ytdl-format"] = ytdl_format
-        opts = {"force-media-title": title} if title else {}
+        opts = {}
         if start:
             opts["start"] = f"{max(0.0, float(start)):.2f}"
         self.m.loadfile(url, "replace", **opts)
@@ -132,7 +158,8 @@ class Player:
         self.m.mute = not on
 
     def stop(self):
-        self.has_frame = False
+        self.has_frame = self.ready = False
+        self.gen += 1
         try:
             self.m.command_async("stop")
         except Exception:                                       # noqa: BLE001
@@ -165,15 +192,17 @@ class Player:
         prev = GL.glGetIntegerv(GL.GL_DRAW_FRAMEBUFFER_BINDING)
         vp = GL.glGetIntegerv(GL.GL_VIEWPORT)
         self._target(int(w), int(h))
-        if self._fresh.is_set():
+        fresh = self._fresh.is_set()
+        catch_up = self.ready and not self.has_frame          # the first frame came while we weren't asking
+        if fresh or catch_up:
             self._fresh.clear()
-            if self.ctx.update():
+            if self.ctx.update() or catch_up:
                 self.ctx.render(opengl_fbo={"w": self.size[0], "h": self.size[1], "fbo": int(self.fbo)},
                                 flip_y=False, block_for_target_time=False)
                 for _ in range(16):                    # an error mpv's own GL left behind isn't ours
                     if GL.glGetError() == GL.GL_NO_ERROR:
                         break
-                self.has_frame = True
+                self.has_frame = self.ready            # until then it may be the last item's frame
                 GL.glBindTexture(GL.GL_TEXTURE_2D, self.tex)       # the glow reads a blurred level
                 GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
         # mpv leaves its own GL state behind: give the scene back what it had

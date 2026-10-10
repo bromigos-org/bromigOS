@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIVE = os.path.dirname(HERE)
@@ -48,7 +49,10 @@ def sandbox():
 # ------------------------------------------------------------------ one render (a child process)
 def child(tree, out, opts):
     """Draw one den frame with the code in tree; save it as .npy (and the TV's state as .json)."""
+    global W, H
     import time
+    if opts.get("size"):
+        W, H = opts["size"]
     sys.path.insert(0, os.path.join(tree, "live"))
     sys.path.insert(0, os.path.join(tree, "lib"))
     import importlib.util
@@ -76,10 +80,15 @@ def child(tree, out, opts):
     motion.set_current(cfg["general"]["motion"])
     if "tv" in opts:
         cfg["tv"] = opts["tv"]
+    if "tint" in opts:
+        cfg.setdefault("tv", {})["tint"] = opts["tint"]
     if opts.get("clip"):
         os.environ["OFF_TV"] = opts["clip"]
-        os.environ["OFF_TV_SCREEN"] = "big"
-        os.environ["OFF_TV_HINT"] = "1" if opts.get("hint") else "0"
+        os.environ["OFF_TV_SCREEN"] = opts.get("screens") or "big"
+        os.environ["OFF_TV_HINT"] = opts["hint"] if isinstance(opts.get("hint"), str) else (
+            "1" if opts.get("hint") else "0")
+        if opts.get("sound"):
+            os.environ["OFF_TV_SOUND"] = opts["sound"]
         os.environ["OFF_MOTION"] = cfg["general"]["motion"]
         off.tv_config(cfg)
     d = Data({}, lambda *a, **k: None)
@@ -98,12 +107,53 @@ def child(tree, out, opts):
             slot = tv.slot(tv.channel("big")[1])
             tv.poster[str(slot.item["id"])] = (im.tobytes(), im.width, im.height)
         state["picture"] = off.tv_warm(r, tv, lambda: r.render(tgt.fbo, 30), limit=15)
+        covered = set(opts.get("covered") or ())
+        if opts.get("swap"):
+            # the frame swap: a screen showing clip A is tuned (covered, so paused) to clip B's
+            # channel; read its middle pixel every frame until B's colour shows
+            swap = opts["swap"]
+            import bromigos_tv as TVL
+            chB = dict(next(c for c in TVL.channels(tv.cfg, panel=False) if c["key"] != tv.screens["big"]["channel"]))
+            tv.lineup = lambda s, _tv=tv, a=tv.lineup("big"): a + [chB] if s == "big" else [TVL.own_channel(s)]
+            mid = [int((BIG[0] + BIG[2] / 2) * W / 2560.0), H - int((BIG[1] + BIG[3] / 2) * H / 1440.0)]
+
+            def middle():
+                GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, tgt.fbo)
+                return [int(v) for v in np.frombuffer(GL.glReadPixels(mid[0], mid[1], 1, 1, GL.GL_RGB,
+                                                                       GL.GL_UNSIGNED_BYTE), np.uint8)]
+            tv.tick(covered={"big"} if swap.get("covered") else set(), motion=cfg["general"]["motion"])
+            r.render(tgt.fbo, 30)
+            state["before"] = middle()
+            tv.tune_to("big", number=3)
+            seen = []
+            t_end = time.time() + 12
+            while time.time() < t_end:
+                tv.tick(covered={"big"} if swap.get("covered") else set(), motion=cfg["general"]["motion"])
+                r.render(tgt.fbo, 30)
+                seen.append(middle())
+                d = tv.decks["big"]
+                if d.player is not None and d.player.has_frame and len(seen) > 40:
+                    break
+                real_sleep(0.03)
+            state["seen"] = seen
+            state["paused"] = tv.decks["big"].player.paused() if tv.decks["big"].player else None
+            try:
+                state["hwdec"] = tv.decks["big"].player.m.hwdec_current
+            except Exception:                           # noqa: BLE001
+                state["hwdec"] = None
         for i in range(frames):                         # the meters settle; the last frames play the clip
-            tv.tick(motion=cfg["general"]["motion"])
+            tv.tick(covered=covered, motion=cfg["general"]["motion"])
             r.render(tgt.fbo, 30)
             if i >= frames - 8:
                 real_sleep(1 / 24)
         state["describe"] = tv.describe()
+        if opts.get("measure"):
+            if opts.get("tv_off"):
+                for s_ in tv.screens:
+                    tv.screens[s_]["channel"] = "own"
+                for d in tv.decks.values():
+                    tv._close_player(d)
+            state["measure"] = measure(r, tv, tgt, cfg, float(opts["measure"]), real_sleep)
     else:
         for _ in range(frames):
             r.render(tgt.fbo, 30)
@@ -114,6 +164,48 @@ def child(tree, out, opts):
         json.dump(state, f, default=str)
     getattr(r, "close", lambda: None)()
     os._exit(0)                                         # mpv's threads: no lingering at exit
+
+
+def measure(r, tv, tgt, cfg, secs, real_sleep):
+    """Draw at 30 frames a second for secs with every screen playing: this process's CPU
+    (mpv's decoders and the scene, all threads) and the GPU's use (nvidia-smi, when there)."""
+    import resource
+    import shutil as sh
+    from OpenGL import GL
+    import time as _t
+    gpu = None
+    if sh.which("nvidia-smi"):
+        gpu = subprocess.Popen(["nvidia-smi", "pmon", "-s", "u", "-c", str(int(secs)), "-d", "1"],
+                               stdout=subprocess.PIPE, text=True)
+    ru0 = resource.getrusage(resource.RUSAGE_SELF)
+    w0 = _t.perf_counter()
+    n = 0
+    while _t.perf_counter() - w0 < secs:
+        f0 = _t.perf_counter()
+        tv.tick(motion=cfg["general"]["motion"])
+        r.render(tgt.fbo, 30)
+        GL.glFinish()
+        n += 1
+        real_sleep(max(0.0, 1 / 30 - (_t.perf_counter() - f0)))
+    wall = _t.perf_counter() - w0
+    ru1 = resource.getrusage(resource.RUSAGE_SELF)
+    cpu = (ru1.ru_utime + ru1.ru_stime - ru0.ru_utime - ru0.ru_stime) / wall * 100
+    sm = dec = []
+    if gpu:
+        out = gpu.communicate(timeout=secs + 15)[0]
+        rows = [ln.split() for ln in out.splitlines() if ln.strip() and not ln.startswith("#")]
+        mine = [x for x in rows if len(x) > 6 and x[1] == str(os.getpid())]
+        sm = [float(x[3]) for x in mine if x[3] != "-"]
+        dec = [float(x[6]) for x in mine if x[6] != "-"]
+    avg = lambda v: round(sum(v) / len(v), 1) if v else None  # noqa: E731
+    hw = {}
+    for s, d in tv.decks.items():
+        try:
+            hw[s] = d.player.m.hwdec_current if d.player else None
+        except Exception:                               # noqa: BLE001
+            hw[s] = None
+    return {"cpu": round(cpu, 1), "fps": round(n / wall, 1), "gpu_sm": avg(sm), "gpu_dec": avg(dec), "samples": len(sm),
+            "hwdec": hw}
 
 
 def render(env, tree, opts, name):
@@ -230,6 +322,61 @@ def main():
               (red[:, 0] > red[:, 1] + 30).mean() > 0.1, f"playing={playing}")
         if out:
             Image.fromarray(still[y0 - 60:y1 + 60, x0 - 60:x1 + 60]).save(os.path.join(out, "tv-still-crop.png"))
+
+        # every screen at once: three clips, three players
+        clips = []
+        for name, src in (("bars", "smptebars=size=640x360:rate=24"), ("mandel", "mandelbrot=size=640x360:rate=24"),
+                          ("life", "testsrc=size=640x360:rate=24")):
+            c = os.path.join(root, f"{name}.mp4")
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", src, "-t", "120", "-c:v", "libx264",
+                            "-preset", "veryfast", "-pix_fmt", "yuv420p", c], check=True)
+            clips.append(c)
+        three = ",".join([clip] + clips[:2])
+        frame, st = render(env, REPO, {"palette": wick, "clip": three, "screens": "big,wave,emblem", "frames": 160,
+                                       "sound": "wave"}, "tv-three")
+        desc = st.get("describe") or {}
+        playing = {k: (v.get("playing") or {}) for k, v in (desc.get("screens") or {}).items()}
+        check("three screens play at once, each its own channel and player",
+              all(playing.get(k, {}).get("has_frame") for k in ("big", "wave", "emblem"))
+              and len({playing[k].get("item") for k in playing}) == 3, {k: v.get("item") for k, v in playing.items()})
+        check("…the sound from one screen only (the scope)", desc.get("sound_from") == "wave"
+              and [k for k, v in desc["screens"].items() if v["sound"]] == ["wave"])
+        secs = float(os.environ.get("OFF_MEASURE", "0") or 0)
+        if secs:
+            # what it costs, at 2560x1440 (the den's own size): the den alone, one screen, three
+            for label, o in (("the den alone", {}),
+                             ("one screen playing", {"clip": clip, "screens": "big"}),
+                             ("three screens playing", {"clip": three, "screens": "big,wave,emblem"})):
+                o = dict(o, palette=wick, frames=30, size=[2560, 1440], measure=secs)
+                if not o.get("clip"):
+                    o.update(clip=clip, screens="big", tv_off=True)
+                _f, m = render(env, REPO, o, "measure")
+                print(f"MEASURE  {label} at 2560x1440: {json.dumps(m.get('measure'))}", flush=True)
+        if out:
+            from PIL import Image
+            Image.fromarray(frame).save(os.path.join(out, "tv-three.png"))
+            Image.fromarray(frame[int(560 * sy):int(1100 * sy), int(1000 * sx):int(1700 * sx)]).save(
+                os.path.join(out, "tv-three-crop.png"))
+
+        # the frame swap: tuned while covered (so paused), the screen never keeps the last picture
+        red = os.path.join(root, "red.mp4")
+        blue = os.path.join(root, "blue.mp4")
+        for c, col in ((red, "red"), (blue, "blue")):
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"color=c={col}:size=320x180:rate=24",
+                            "-t", "120", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", c], check=True)
+        for covered in (True, False):
+            _f, st = render(env, REPO, {"palette": wick, "clip": f"{red},{blue}", "screens": "big,wave", "frames": 2,
+                                        "tint": 0, "swap": {"covered": covered}}, f"tv-swap-{covered}")
+            seen = st.get("seen") or []
+            reds = [p for p in seen if p[0] > p[2] + 40]
+            blues = [p for p in seen if p[2] > p[0] + 40]
+            what = "covered (paused)" if covered else "playing"
+            check(f"the frame swap, {what}: the old channel's red was on before",
+                  (st.get("before") or [0, 0, 0])[0] > (st.get("before") or [0, 0, 0])[2] + 40, st.get("before"))
+            check(f"…and after the tune never again: static or the poster, then the new item's blue",
+                  not reds and len(blues) > 0, f"{len(reds)} red frames, {len(blues)} blue of {len(seen)}")
+            check(f"…decoded on the GPU ({what})", (st.get("hwdec") or "no") != "no" or not shutil.which("nvidia-smi"),
+                  st.get("hwdec"))
     finally:
         shutil.rmtree(root, ignore_errors=True)
     print(f"\n{sum(results)}/{len(results)} checks pass")

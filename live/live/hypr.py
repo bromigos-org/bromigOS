@@ -94,24 +94,58 @@ def monitor_state(name):
     return windows, full, mon
 
 
-def covering(name, rect):
-    """True when a window on the monitor's visible workspaces overlaps rect (x, y, w, h in
-    the monitor's logical px): the den TV pauses behind it."""
+def opacity(client, active_address=None):
+    """How opaque Hyprland draws a window, 0..1: its own opacity (window rules, `setprop`)
+    times decoration:active_opacity or inactive_opacity. A client that draws its own
+    see-through background (a terminal's background_opacity) can't be seen from here."""
+    addr = client.get("address")
+    focused = addr and addr == active_address
+    prop = "opacity" if focused else "opacity_inactive"
+    own = request(f"getprop address:{addr} {prop}") if addr else None
+    try:
+        a = float((own or {}).get(prop, (own or {}).get("opacity", 1.0)))
+    except (TypeError, ValueError, AttributeError):
+        a = 1.0
+    opt = request("getoption decoration:" + ("active_opacity" if focused else "inactive_opacity")) or {}
+    try:
+        a *= float(opt.get("float", 1.0))
+    except (TypeError, ValueError):
+        pass
+    return max(0.0, min(1.0, a))
+
+
+def covered(name, rects, min_opacity=0.9):
+    """The keys of rects ({key: (x, y, w, h)} in the monitor's logical px) that a window on
+    the monitor's visible workspaces overlaps and hides: opaque enough (min_opacity; a
+    see-through window doesn't count). The den TV pauses a muted screen behind one."""
+    out = set()
     mons = request("monitors") or []
     mon = next((m for m in mons if m.get("name") == name), None)
-    if not mon:
-        return False
+    if not mon or not rects:
+        return out
     ids = {(mon.get("activeWorkspace") or {}).get("id"), (mon.get("specialWorkspace") or {}).get("id") or None}
     mx, my = mon.get("x", 0), mon.get("y", 0)
-    x, y, w, h = rect
+    active = (request("activewindow") or {}).get("address")
+    alpha = {}
     for c in request("clients") or []:
         if (c.get("workspace") or {}).get("id") not in ids or not c.get("mapped", True) or c.get("hidden"):
             continue
         (cx, cy), (cw, ch) = c.get("at") or (0, 0), c.get("size") or (0, 0)
         cx, cy = cx - mx, cy - my
-        if cx < x + w and x < cx + cw and cy < y + h and y < cy + ch:
-            return True
-    return False
+        for key, (x, y, w, h) in rects.items():
+            if key in out or not (cx < x + w and x < cx + cw and cy < y + h and y < cy + ch):
+                continue
+            a = alpha.get(c.get("address"))
+            if a is None:
+                a = alpha[c.get("address")] = opacity(c, active)
+            if a >= min_opacity:
+                out.add(key)
+    return out
+
+
+def covering(name, rect, min_opacity=0.9):
+    """True when an opaque enough window on the monitor's visible workspaces overlaps rect."""
+    return bool(covered(name, {"r": rect}, min_opacity))
 
 
 def resolve_monitor(name):

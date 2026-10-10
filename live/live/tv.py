@@ -3,28 +3,36 @@ YouTube, playing as if live (lib/bromigos_tv.py has the channels and the schedul
 
 Each of the den's three screens (the big monitor, the scope, the small monitor) has a
 channel list. Channel 1 is the screen's own picture, drawn as it always was. The media
-channels come after it. One media channel plays at a time: tuning a second screen to one
-sends the first back to its own picture.
+channels come after it. Every screen plays its own channel at the same time, each with a
+player of its own (at most [tv] max_playing at once: past that, the rest show posters).
 
     the picture   libmpv (live/live/mpvgl.py) decodes on the GPU into a texture the size of
-                  the screen, muted unless you turn the sound on; bg.frag draws it in the
-                  screen's glass with scanlines, curvature and glow.
-    pausing       decoding runs only while the live layer draws and the screen is in view:
-                  no frames drawn for a second (locked, a fullscreen window, a deck, the
-                  screensaver), or a window over the screen, pauses mpv. Coming back, the
-                  channel jumps to where it would be now. Still motion (or no GPU) shows the
-                  item's poster instead; reduced motion a still frame, renewed every 30 s,
-                  unless the sound is on.
+                  the screen; the server is asked for a stream that size (a few hundred
+                  pixels: a transcode, unless the file is already small), YouTube for a
+                  format that size. bg.frag draws it in the screen's glass with scanlines,
+                  curvature and glow. A new channel or item shows static, the channel's
+                  number and the item's poster until its own first frame: never the last
+                  item's picture.
+    pausing       each screen on its own: it decodes only while the live layer draws and the
+                  screen is in view. No frames drawn for a second (locked, a fullscreen
+                  window, a deck, the screensaver), or an opaque window over a muted screen
+                  (one with the sound on keeps playing behind windows; a see-through window,
+                  under [tv] cover_opacity, never counts) pauses it. Coming back, the channel
+                  jumps to where it would be now. Still motion (or no GPU) shows the item's
+                  poster instead; reduced motion a still frame, renewed every 30 s, unless
+                  the sound is on.
     the pointer   the background window takes the pointer over the den's screens only (its
                   input region), and over the hint while it shows. Over a screen: the hint
-                  (what's on, the channel buttons, the speaker, the volume, Full screen and
-                  Watch in Plex/Jellyfin/YouTube). A click opens the channel in mpv, full
-                  screen with sound, at the same moment; scroll changes channel, Shift+scroll
-                  the volume.
-    sound         off by default, remembered per screen with its volume. bromigOS's mute,
-                  the lock screen and the screensaver silence it; VECTOR speaking (or a
-                  codec call) ducks it to [tv] duck percent. PipeWire sees it as
-                  "bromigOS den TV".
+                  (what's on, the channel buttons, the speaker, the volume, Full screen, Watch
+                  in Plex/Jellyfin/YouTube and the channel guide). A click opens the channel
+                  in mpv, full screen with sound, at the same moment; scroll changes channel,
+                  a sideways scroll the volume.
+    sound         off by default, and on one screen at a time: turning it on for one turns
+                  it off on the others. The speaker on that screen shows where it comes from.
+                  Each screen remembers its volume. bromigOS's mute, the lock screen and the
+                  screensaver silence it; VECTOR speaking (or a codec call) ducks it to
+                  [tv] duck percent. PipeWire sees it as "bromigOS den TV". When the desktop
+                  itself is muted, the hint says so.
 
 Nothing here touches the network on the drawing thread: a worker thread reads the channels'
 lists (cached), YouTube's live streams, posters and YouTube downloads (`keep`).
@@ -43,23 +51,31 @@ from . import LIB  # noqa: F401  (the shared libs on sys.path)
 import bromigos_tv as TVL  # noqa: E402
 
 SHADER_INDEX = {"wave": 1, "emblem": 2, "big": 3}
-LOW_FORMAT = "bestvideo[height<=480]+bestaudio/best[height<=480]/best"
-LOW_FORMAT_MUTED = "bestvideo[height<=480]/best[height<=480]/best"
+PRIORITY = ("big", "wave", "emblem")       # who plays first when [tv] max_playing is fewer than the screens
+ALIASES = {"scope": "wave", "small": "emblem", "monitor": "big"}
+YT_HEIGHTS = (240, 360, 480, 720, 1080)
 FULL_FORMAT = "bestvideo[height<=1080]+bestaudio/best"
 TUNE_STATIC = 0.35            # seconds of static when a channel changes (full motion)
 TUNE_OSD = 1.6                # seconds the channel number shows
 VOLUME_OSD = 1.3
 REDUCED_EVERY = 30.0          # reduced motion: a new still frame this often
 DRIFT = 3.0                   # seconds off the schedule before the picture is put back
+IDLE_CLOSE = 30.0             # a screen's player is closed after this long with nothing on
 HINT_W, HINT_H = 404, 112     # the hover hint, logical px
+MAX_PLAYING = 3               # every screen (measured: live/README.md, "The den TV", what it costs)
+COVER_OPACITY = 0.9           # a window under this opacity doesn't count as covering a screen
 
 
-MONO = time.monotonic          # the TV's clock (the offscreen tests fix the scene's, not this)
+def yt_format(height, sound):
+    """yt-dlp's format for a den screen drawn `height` pixels tall: the smallest of
+    YT_HEIGHTS at least that tall (a 4K video comes as 240p or 360p), with or without audio."""
+    h = next((x for x in YT_HEIGHTS if x >= height), YT_HEIGHTS[-1])
+    if sound:
+        return f"bestvideo[height<={h}]+bestaudio/best[height<={h}]/best"
+    return f"bestvideo[height<={h}]/best[height<={h}]/best"
 
 
-def _mono():
-    return MONO()
-
+LOW_FORMAT_MUTED = yt_format(360, False)
 
 
 SYSTEM_CAS = ("/etc/ssl/certs/ca-certificates.crt", "/etc/ca-certificates/extracted/tls-ca-bundle.pem",
@@ -88,6 +104,33 @@ def tls_bundle(extra, system=SYSTEM_CAS, out_dir=None):
     except OSError:
         return extra
 
+
+MONO = time.monotonic          # the TV's clock (the offscreen tests fix the scene's, not this)
+
+
+def _mono():
+    return MONO()
+
+
+class Deck:
+    """One den screen's playback: its player, what's loaded, its textures and on-screen display."""
+
+    def __init__(self, name):
+        self.name = name
+        self.player = None
+        self.loaded = None                 # (channel key, item id) in its mpv
+        self.loaded_at = 0.0
+        self.idle_at = None                # when it last had nothing on (its player closes after IDLE_CLOSE)
+        self.allowed = False               # drawing, in view (or with sound), within max_playing: decode
+        self.capped = False                # past [tv] max_playing: the poster
+        self.poster_tex = None             # (item id, texture, w, h)
+        self.osd_tex = None
+        self.osd_sig = None
+        self.reduced_at = 0.0
+        self.tune = None                   # (monotonic start, number, name): the channel's number, static
+        self.vol_osd = None                # monotonic start
+
+
 class TV:
     def __init__(self, cfg, log=print):
         self.cfg = cfg
@@ -95,27 +138,24 @@ class TV:
         st = TVL.state()
         conf = self.conf()
         self.screens = {s: TVL.screen_state(st, s, int(conf.get("volume", TVL.DEFAULT_VOLUME))) for s in TVL.SCREENS}
+        on = [s for s in PRIORITY if self.screens[s]["sound"]]
+        for s in on[1:]:                   # sound on one screen at a time (an older tv.json had more)
+            self.screens[s]["sound"] = False
+        self.decks = {s: Deck(s) for s in TVL.SCREENS}
         self.live = {}                     # YouTube live streams now: channel key -> video
         self.fails = {}                    # channel key -> [(when, item id)] that wouldn't play
         self.retry_at = {}                 # channel key -> when to try its server again
         self._lineups = {}
-        self.player = None
         self.player_why = ""               # why there's no picture (no python-mpv, a failure)
-        self.loaded = None                 # (channel key, item id) in mpv
-        self.loaded_at = 0.0
-        self.allowed = False               # drawing and in view: decode
         self.drawn_at = 0.0
         self.covered = set()
         self.quiet = False                 # locked or the screensaver: no sound
         self.ducked = False
+        self.desktop_muted = False         # the desktop's own output is muted (the hint says so)
+        self._mute_check_at = 0.0
         self.motion = "full"
         self.software = False
-        self.tune = None                   # (screen, monotonic start, number, name)
-        self.vol_osd = None                # (screen, monotonic start)
         self.poster = {}                   # item id -> (rgba bytes, w, h) from the worker
-        self.poster_tex = None             # (item id, texture, w, h)
-        self.osd_tex = None
-        self.osd_sig = None
         self.hint_tex = None
         self.hint_sig = None
         self.hover = None                  # the screen the pointer is over (or its hint)
@@ -127,15 +167,20 @@ class TV:
         self.rects = {}                    # screen -> logical rect
         self.px = {}                       # screen -> render px rect
         self.last_slot = {}
-        self.slot_at = 0.0
-        self.reduced_at = 0.0
         self.full_proc = None
+        self.resolved = {}                 # (YouTube URL, height) -> Y.stream()'s answer, or {"error", "at"}
+        self.notes = {}                    # channel key -> (monotonic, what went wrong): the hint says it
+        self._rq = []                      # YouTube streams to resolve: (url, height)
+        self._rlock = threading.Lock()
+        self._rwake = threading.Event()
         self.on_change = None              # the app: input region, redraw
         self.keeper = None
         self.stop = threading.Event()
         self.wake = threading.Event()
         self.worker = threading.Thread(target=self._work, daemon=True, name="den-tv")
         self.worker.start()
+        self.resolver = threading.Thread(target=self._resolve_loop, daemon=True, name="den-tv-youtube")
+        self.resolver.start()
 
     # ------------------------------------------------------------------ config
     def conf(self):
@@ -143,6 +188,19 @@ class TV:
 
     def enabled(self):
         return self.conf().get("enabled", True) is not False
+
+    def max_playing(self):
+        try:
+            return max(0, min(3, int(self.conf().get("max_playing", MAX_PLAYING))))
+        except (TypeError, ValueError):
+            return MAX_PLAYING
+
+    def reconfigured(self):
+        """The [tv] table changed (the channel guide, an edit): read the channels again now."""
+        self._lineups.clear()
+        self.last_slot.clear()
+        self.wake.set()
+        self._changed()
 
     def lineup(self, screen):
         """The screen's channels (the config and the media panel's file, read every 2 s at most)."""
@@ -163,13 +221,34 @@ class TV:
                 return n + 1, ch
         return 1, lu[0]
 
-    def media_screen(self):
-        """(screen, channel) showing a media channel, or (None, None)."""
-        for s in ("big", "wave", "emblem"):
+    def showing(self, screen):
+        """True when the screen shows a media channel (not its own picture)."""
+        return self.channel(screen)[1]["kind"] != "own"
+
+    def media_screens(self):
+        """[(screen, channel)] for every screen showing a media channel."""
+        out = []
+        for s in PRIORITY:
             n, ch = self.channel(s)
             if ch["kind"] != "own":
+                out.append((s, ch))
+        return out
+
+    def media_screen(self):
+        """(screen, channel) of the first screen showing a media channel (the sound's, first), or (None, None)."""
+        ms = self.media_screens()
+        snd = self.sound_screen()
+        for s, ch in ms:
+            if s == snd:
                 return s, ch
-        return None, None
+        return ms[0] if ms else (None, None)
+
+    def sound_screen(self):
+        """The screen whose sound is on (one at a time), when it shows a media channel."""
+        for s in PRIORITY:
+            if self.screens[s]["sound"] and self.showing(s):
+                return s
+        return None
 
     def interactive(self):
         """The screens that have more than one channel (the pointer's region)."""
@@ -177,6 +256,15 @@ class TV:
 
     def save(self):
         TVL.save_state({"screens": {s: dict(v) for s, v in self.screens.items()}})
+
+    @property
+    def player(self):
+        """The player of the screen with the sound, else the first playing (the tests', describe's)."""
+        s, _ = self.media_screen()
+        d = self.decks.get(s) if s else None
+        if d is not None and d.player is not None:
+            return d.player
+        return next((d.player for d in self.decks.values() if d.player is not None), None)
 
     # ------------------------------------------------------------------ the schedule
     def slot(self, ch):
@@ -198,17 +286,24 @@ class TV:
         n = (n - 1) % len(lu) + 1
         ch = lu[n - 1]
         self.screens[screen]["channel"] = ch["key"]
-        if ch["kind"] != "own":                       # one media channel at a time
-            for other in TVL.SCREENS:
-                if other != screen and self.channel(other)[1]["kind"] != "own":
-                    self.screens[other]["channel"] = "own"
         self.save()
-        self.tune = (screen, _mono(), n, ch["name"])
+        d = self.decks[screen]
+        d.tune = (_mono(), n, ch["name"])
         self.last_slot.pop(ch["key"], None)
         self.wake.set()
         self._changed()
         self.log(f"tv: {TVL.SCREEN_NAMES.get(screen, screen)} on channel {n}, {ch['name']}")
         return f"{screen}: channel {n} of {len(lu)}, {ch['name']}"
+
+    def rekey(self, old, new):
+        """A channel renamed (its key is its name's): the screens tuned to it stay on it."""
+        moved = [s for s, v in self.screens.items() if v.get("channel") == old]
+        for s in moved:
+            self.screens[s]["channel"] = new
+        if moved:
+            self.save()
+        self.reconfigured()
+        return f"renamed on {', '.join(moved) or 'no screen'}"
 
     def _changed(self):
         self.hint_sig = None
@@ -226,57 +321,109 @@ class TV:
             if v > s["volume"] and not s["sound"] and on is None:
                 on = True                                       # turning it up turns it on
             s["volume"] = v
-            self.vol_osd = (screen, _mono())
+            self.decks[screen].vol_osd = _mono()
         if on is not None:
             s["sound"] = bool(on)
+            if on:                                              # one screen at a time
+                for other in TVL.SCREENS:
+                    if other != screen:
+                        self.screens[other]["sound"] = False
         self.save()
+        if s["sound"]:
+            self._mute_check_at = 0.0
+            self._check_desktop_mute()
         self._apply_sound()
         self._changed()
-        return f"{screen}: sound {'on' if s['sound'] else 'off'}, volume {s['volume']}%"
+        out = f"{screen}: sound {'on' if s['sound'] else 'off'}, volume {s['volume']}%"
+        if s["sound"] and self.desktop_muted:
+            out += " (your desktop is muted)"
+        return out
 
-    def _effective_sound(self):
-        screen, ch = self.media_screen()
-        if not screen:
+    def _effective_sound(self, screen=None):
+        """(on, volume) for a screen's player (default: the screen with the sound)."""
+        screen = screen or self.sound_screen()
+        if not screen or screen != self.sound_screen():
             return False, 0
         s = self.screens[screen]
         from .sound import muted
-        on = s["sound"] and not self.quiet and not muted() and self.allowed
+        on = s["sound"] and not self.quiet and not muted() and self.decks[screen].allowed
         vol = s["volume"] * (float(self.conf().get("duck", 30)) / 100.0 if self.ducked else 1.0)
         return on, vol
 
     def _apply_sound(self):
-        if self.player is None:
+        for s, d in self.decks.items():
+            if d.player is None:
+                continue
+            on, vol = self._effective_sound(s)
+            try:
+                d.player.sound(on, vol)
+            except Exception as e:                              # noqa: BLE001
+                self.log(f"tv: sound: {e}")
+
+    def _check_desktop_mute(self):
+        """The desktop's output muted (wpctl, else pactl), off the drawing thread, every few
+        seconds while a screen has its sound on: the hint says so."""
+        now = _mono()
+        if now - self._mute_check_at < 3.0 or not self.sound_screen():
             return
-        on, vol = self._effective_sound()
-        try:
-            self.player.sound(on, vol)
-        except Exception as e:                                  # noqa: BLE001
-            self.log(f"tv: sound: {e}")
+        self._mute_check_at = now
+
+        def run():
+            muted = False
+            try:
+                if shutil.which("wpctl"):
+                    out = subprocess.run(["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"], capture_output=True,
+                                         text=True, timeout=2).stdout
+                    muted = "MUTED" in out
+                elif shutil.which("pactl"):
+                    out = subprocess.run(["pactl", "get-sink-mute", "@DEFAULT_SINK@"], capture_output=True, text=True,
+                                         timeout=2).stdout
+                    muted = "yes" in out.lower()
+            except (OSError, subprocess.SubprocessError):
+                return
+            if muted != self.desktop_muted:
+                self.desktop_muted = muted
+                self._changed()
+        threading.Thread(target=run, daemon=True, name="den-tv-mute").start()
 
     # ------------------------------------------------------------------ the app's tick (0.5 s)
     def tick(self, covered=None, quiet=False, ducked=False, motion="full", software=False):
-        """Play or pause: frames drawn in the last second, the screen not covered, not still."""
+        """Each screen: play or pause. Frames drawn in the last second, not covered by an
+        opaque window (unless its sound is on), within max_playing, not still."""
         self.covered = set(covered or ())
         self.quiet, self.ducked = quiet, ducked
         self.motion, self.software = motion, software
-        screen, ch = self.media_screen()
         drawing = _mono() - self.drawn_at < 1.2
-        sound_on = screen is not None and self.screens[screen]["sound"]
-        want = (screen is not None and drawing and screen not in self.covered and not software
-                and (motion == "full" or (motion == "reduced" and sound_on)))
-        was = self.allowed
-        self.allowed = want
-        if self.player is not None:
-            if want and not was and self.loaded:
-                slot = self.slot(ch)
+        snd = self.sound_screen()
+        media = [s for s, _ in self.media_screens()]
+        order = ([snd] if snd else []) + [s for s in media if s != snd]
+        cap = self.max_playing()
+        for s in TVL.SCREENS:
+            d = self.decks[s]
+            if s not in media:
+                d.allowed = False
+                d.capped = False
+                continue
+            d.capped = order.index(s) >= cap
+            sound_on = s == snd
+            want = (drawing and not software and not d.capped and (s not in self.covered or sound_on)
+                    and (motion == "full" or (motion == "reduced" and sound_on)))
+            was = d.allowed
+            d.allowed = want
+            if d.player is None:
+                continue
+            if want and not was and d.loaded:
+                slot = self.slot(self.channel(s)[1])
                 if slot and slot.offset is not None:
-                    self.player.seek(slot.offset)             # back on: where the channel is now
+                    d.player.seek(slot.offset)                   # back on: where the channel is now
             try:
-                if not (self.motion == "reduced" and not sound_on and screen is not None):
-                    self.player.pause(not want)
+                if not (motion == "reduced" and not sound_on):
+                    d.player.pause(not want)
             except Exception:                                   # noqa: BLE001
                 pass
-            self._apply_sound()
+        self._apply_sound()
+        if snd:
+            self._check_desktop_mute()
         if self.full_proc is not None and self.full_proc.poll() is not None:
             self.full_proc = None
             self.log("tv: full screen closed; back to the den")
@@ -295,50 +442,61 @@ class TV:
         self._changed()
 
     def gl(self):
-        """Per frame, with the scene's GL context current: the uniforms bg.frag needs."""
+        """Per frame, with the scene's GL context current: the uniforms bg.frag needs, per
+        screen: "tv" (on, has a picture, aspect, tint), "tvtex", "tune" (static, has an OSD),
+        "osd"."""
         self.drawn_at = _mono()
-        out = {"tv": (0.0, 0.0, 1.0, 0.0), "tvtex": 0, "tune": (0.0, 0.0, 0.0, 0.0), "osd": 0}
-        screen, ch = self.media_screen()
         tint = float(self.conf().get("tint", 0.4))
-        if screen:
-            x, y, w, h = self.px.get(screen, (0, 0, 320, 240))
-            tex, aspect = self._picture(screen, ch, max(64, int(w * 1.5)), max(48, int(h * 1.5)), w / max(h, 1))
-            out["tv"] = (float(SHADER_INDEX[screen]), 1.0 if tex else 0.0, aspect, tint)
-            out["tvtex"] = tex or 0
-        elif self.player is not None and _mono() - self.loaded_at > 30:
-            self._close_player()                               # nothing on for a while: give it back
-        osd_screen, static, osd = self._osd(screen)
-        if osd_screen:
-            out["tune"] = (float(SHADER_INDEX[osd_screen]), static, 1.0 if osd else 0.0, 0.0)
-            out["osd"] = osd or 0
+        out = {"tv": {}, "tvtex": {}, "tune": {}, "osd": {}}
+        for s in TVL.SCREENS:
+            d = self.decks[s]
+            n, ch = self.channel(s)
+            if ch["kind"] != "own":
+                d.idle_at = None
+                x, y, w, h = self.px.get(s, (0, 0, 320, 240))
+                tex, aspect = self._picture(s, ch, max(64, int(w * 1.5)), max(48, int(h * 1.5)), w / max(h, 1))
+                out["tv"][s] = (1.0, 1.0 if tex else 0.0, aspect, tint)
+                out["tvtex"][s] = tex or 0
+            else:
+                out["tv"][s] = (0.0, 0.0, 1.0, 0.0)
+                out["tvtex"][s] = 0
+                if d.idle_at is None:
+                    d.idle_at = _mono()
+                if d.player is not None and _mono() - d.idle_at > IDLE_CLOSE:
+                    self._close_player(d)                       # nothing on for a while: give it back
+            static, osd = self._osd(s)
+            out["tune"][s] = (static, 1.0 if osd else 0.0, 0.0, 0.0)
+            out["osd"][s] = osd or 0
         return out
 
     def _picture(self, screen, ch, w, h, screen_aspect):
-        """(texture, its aspect over the screen's) for the media screen: mpv's frame, or the
-        poster (still motion, no mpv, loading), or (None, 1) for static."""
+        """(texture, its aspect over the screen's) for a media screen: mpv's frame, or the
+        poster (still motion, no mpv, past max_playing, loading), or (None, 1) for static."""
+        d = self.decks[screen]
         slot = self.slot(ch)
         item = slot.item if slot else None
-        poster_only = self.motion == "still" or self.software or not self._player_ok()
+        poster_only = self.motion == "still" or self.software or d.capped or not self._player_ok(d)
         if not poster_only and item is not None:
-            self._ensure_loaded(ch, slot)
+            self._ensure_loaded(d, ch, slot)
             if self.motion == "reduced" and not self.screens[screen]["sound"]:
                 now = _mono()
-                if now - self.reduced_at > REDUCED_EVERY and self.loaded:
-                    self.reduced_at = now
-                    self.player.pause(True)
+                if now - d.reduced_at > REDUCED_EVERY and d.loaded:
+                    d.reduced_at = now
+                    d.player.pause(True)
                     if slot.offset is not None:
-                        self.player.seek(slot.offset)
-            self._check_failure(ch, slot)
-            tex = self.player.frame(w, h)
-            if tex:
-                return tex, 1.0
-        p = self._poster_texture(item)
+                        d.player.seek(slot.offset)
+            self._check_failure(d, ch, slot)
+            if d.player is not None:
+                tex = d.player.frame(w, h)
+                if tex:
+                    return tex, 1.0
+        p = self._poster_texture(d, item)
         if p:
             return p[0], (p[1] / max(p[2], 1)) / max(screen_aspect, 1e-3)
         return None, 1.0
 
-    def _player_ok(self):
-        if self.player is not None:
+    def _player_ok(self, d):
+        if d.player is not None:
             return True
         if self.player_why:
             return False
@@ -349,7 +507,8 @@ class TV:
             self.log(f"tv: {why}; posters only")
             return False
         try:
-            self.player = mpvgl.Player(log=self.log, tls_ca=self._tls_ca(), ytdl_format=LOW_FORMAT_MUTED)
+            d.player = mpvgl.Player(log=self.log, tls_ca=self._tls_ca(), ytdl_format=LOW_FORMAT_MUTED, ytdl=False)
+            d.loaded = None
             self._apply_sound()
             return True
         except Exception as e:                                  # noqa: BLE001
@@ -357,161 +516,265 @@ class TV:
             self.log(f"tv: no picture ({self.player_why}); posters only")
             return False
 
-    def _tls_ca(self):
-        """The CA file for mpv: the system's trusted roots plus the lab's own CA, in one bundle.
-        mpv's tls-ca-file replaces the trust store, so the lab's CA alone would fail every
-        other site (YouTube's streams) with "Peer certificate failed verification"."""
+    def _lab_ca(self):
+        """The homelab's own CA file (homelab.toml [tls] ca_file), or None."""
         H = TVL._homelab()
         if H is None:
             return None
         try:
             ca = H.config.expand(H.config.setting("tls", "ca_file", ""))
+            return ca if ca and os.path.isfile(ca) else None
         except Exception:                                       # noqa: BLE001
             return None
-        if not ca or not os.path.isfile(ca):
-            return None
-        return tls_bundle(ca)
 
-    def stream(self, ch, slot, full=False):
-        """{"url", "headers", "ytdl_format", "title", "start", "web", "kind"} for what's on, or None."""
+    def _tls_ca(self):
+        """The CA file for mpv: the system's trusted roots plus the lab's own CA, in one bundle.
+        mpv's tls-ca-file replaces the trust store, so the lab's CA alone would fail every
+        other site (YouTube's streams) with "Peer certificate failed verification"."""
+        ca = self._lab_ca()
+        return tls_bundle(ca) if ca else None
+
+    def screen_height(self, screen):
+        """The pixels a screen's picture is drawn at (its texture's height): what to ask for."""
+        rect = self.px.get(screen)
+        if not rect:
+            from .scene import DEN
+            rect = DEN.get(screen, (0, 0, 200, 175))
+        return max(48, int(rect[3] * 1.5))
+
+    def stream(self, ch, slot, full=False, screen=None):
+        """{"url", "headers", "ytdl_format", "title", "start", "web", "kind"} for what's on, or
+        None. Not full: sized to the screen (a transcode, or a small YouTube format)."""
         if slot is None:
             return None
         it = slot.item
         title = TVL.label(it)
+        height = None if full else self.screen_height(screen or "big")
+        sound = self._effective_sound(screen)[0] if screen else False
         if ch["kind"] == "live":
-            return {"url": it.get("url"), "headers": {}, "ytdl_format": FULL_FORMAT if full else LOW_FORMAT_MUTED,
-                    "title": title, "start": None, "web": it.get("url"), "server": "YouTube"}
+            if full:
+                return {"url": it.get("url"), "headers": {}, "ytdl_format": FULL_FORMAT, "title": title, "start": None,
+                        "web": it.get("url"), "server": "YouTube"}
+            return self._resolved_stream(it.get("url"), height, title, None)
         if ch["kind"] == "files":
             return {"url": it.get("url"), "headers": {}, "ytdl_format": None, "title": title, "start": slot.offset,
                     "web": None, "server": "Files"}
         if ch["kind"] == "youtube":
             import bromigos_youtube as Y
             path = Y.kept(ch.get("keep"), it.get("id")) if ch.get("keep") else None
-            fmt = FULL_FORMAT if full else (LOW_FORMAT if self._effective_sound()[0] else LOW_FORMAT_MUTED)
-            return {"url": path or it.get("url"), "headers": {}, "ytdl_format": None if path else fmt, "title": title,
-                    "start": slot.offset, "web": it.get("url"), "server": "YouTube", "kept": bool(path)}
+            if path or full:
+                return {"url": path or it.get("url"), "headers": {}, "ytdl_format": None if path else FULL_FORMAT,
+                        "title": title, "start": slot.offset, "web": it.get("url"), "server": "YouTube",
+                        "kept": bool(path)}
+            return self._resolved_stream(it.get("url"), height, title, slot.offset)
         a = TVL.server_of(ch)
         if a is None:
             return None
-        q = self.conf().get("fullscreen_quality", "direct") if full else self.conf().get("quality", "auto")
-        s = a.video_stream(it, q)
+        if full:
+            s = a.video_stream(it, self.conf().get("fullscreen_quality", "direct"))
+        else:
+            try:
+                s = a.video_stream(it, self.conf().get("quality", "auto"), height=height)
+            except TypeError:                                   # an older bromigos-homelab: not sized
+                s = a.video_stream(it, self.conf().get("quality", "auto"))
         return {"url": s["url"], "headers": s["headers"], "ytdl_format": None, "title": title, "start": slot.offset,
-                "web": None, "server": {"jellyfin": "Jellyfin", "plex": "Plex"}.get(a.type, a.type), "adapter": a}
+                "web": None, "server": {"jellyfin": "Jellyfin", "plex": "Plex"}.get(a.type, a.type), "adapter": a,
+                "quality": s.get("quality")}
 
-    def _ensure_loaded(self, ch, slot):
-        want = (ch["key"], str(slot.item.get("id")))
-        if self.loaded == want or _mono() < self.retry_at.get(ch["key"], 0):
+    # ------------------------------------------------------------------ YouTube's streams, resolved ahead
+    @staticmethod
+    def yt_height(height):
+        return next((x for x in YT_HEIGHTS if x >= (height or 360)), YT_HEIGHTS[-1])
+
+    def _resolved_stream(self, url, height, title, start):
+        """The stream for a YouTube video from the resolver, or {"pending": True} while it
+        works on it, or {"error": why}. mpv itself never runs yt-dlp for the den."""
+        if not url:
+            return None
+        h = self.yt_height(height)
+        r = self.resolved.get((url, h))
+        if (r is None or ("video" in r and r["expires"] - time.time() < 600)
+                or ("error" in r and time.time() - r["at"] > 120)):
+            self.resolve_later(url, h, first=True)
+            return {"pending": True}
+        if "error" in r:
+            return {"error": r["error"]}
+        return {"url": r["video"], "audio": r.get("audio"), "headers": r.get("headers") or {}, "ytdl_format": None,
+                "title": title, "start": start, "web": url, "server": "YouTube", "quality": f"{r.get('height')}p"}
+
+    def resolve_later(self, url, height, first=False):
+        """Queue a YouTube video's stream for the resolver (once): what's on first, then what's next."""
+        key = (url, self.yt_height(height))
+        r = self.resolved.get(key)
+        if r is not None and ("error" in r and time.time() - r["at"] < 120
+                              or "video" in r and r["expires"] - time.time() > 900):
             return
+        with self._rlock:
+            if key in self._rq:
+                if first and self._rq[0] != key:
+                    self._rq.remove(key)
+                    self._rq.insert(0, key)
+                return
+            self._rq.insert(0, key) if first else self._rq.append(key)
+        self._rwake.set()
+
+    def _resolve_loop(self):
+        """The resolver thread: yt-dlp for each queued video, one at a time. Covering,
+        uncovering or a short clip ending never cancels one: its answer is kept (about six
+        hours) for whenever the video comes on."""
+        while not self.stop.is_set():
+            with self._rlock:
+                key = self._rq.pop(0) if self._rq else None
+            if key is None:
+                self._rwake.wait(10.0)
+                self._rwake.clear()
+                continue
+            url, h = key
+            try:
+                import bromigos_youtube as Y
+                t0 = time.time()
+                self.resolved[key] = Y.stream(url, height=h, audio=True)
+                self.log(f"tv: YouTube stream for {url.rsplit('=', 1)[-1]} ({h}p) in {time.time() - t0:.1f} s")
+            except Exception as e:                              # noqa: BLE001  (StreamError, and anything else)
+                self.resolved[key] = {"error": str(e)[:200] or type(e).__name__, "at": time.time()}
+                self.log(f"tv: YouTube refused {url}: {self.resolved[key]['error']}")
+            if len(self.resolved) > 64:
+                now = time.time()
+                for k in [k for k, v in self.resolved.items() if v.get("expires", v.get("at", 0) + 7200) < now]:
+                    self.resolved.pop(k, None)
+            self._changed()
+
+    def _ensure_loaded(self, d, ch, slot):
+        want = (ch["key"], str(slot.item.get("id")))
+        if d.loaded == want or _mono() < self.retry_at.get(ch["key"], 0):
+            return
+        if d.loaded and d.loaded[0] == ch["key"] and d.tune is None:
+            d.tune = (_mono(), self.channel(d.name)[0], ch["name"])     # the next item: a moment of static
         try:
-            s = self.stream(ch, slot)
+            s = self.stream(ch, slot, screen=d.name)
         except Exception as e:                                  # noqa: BLE001
             s = None
             self.log(f"tv: no stream for {TVL.label(slot.item)}: {e}")
-        self.loaded = want
-        self.loaded_at = _mono()
+        if s and s.get("pending"):                              # YouTube: the resolver's on it; the poster meanwhile
+            if d.loaded and d.loaded != want:
+                d.player.stop()                                 # never the last item's picture
+                d.loaded = None
+            return
+        if s and s.get("error"):
+            self.notes[ch["key"]] = (_mono(), f"YouTube refused: {s['error']}")
+            self._skip(d, ch, slot, str(slot.item.get("id")), "YouTube refused it")
+            return
+        d.loaded = want
+        d.loaded_at = _mono()
         if not s or not s.get("url"):
+            d.player.stop()                                     # never the last item's picture
             return
         start = (slot.offset + 1.0) if slot.offset is not None else None      # the second it takes to open
-        self.player.load(s["url"], start=start, headers=s["headers"], ytdl_format=s.get("ytdl_format"),
-                         title=s["title"])
-        self.player.pause(not self.allowed and not self.motion == "reduced")
+        d.player.load(s["url"], start=start, headers=s["headers"], ytdl_format=s.get("ytdl_format"),
+                      title=s["title"], audio=s.get("audio"))
+        d.player.pause(not d.allowed and not self.motion == "reduced")
         self._apply_sound()
-        self.log(f"tv: playing {s['title']}" + (f" from {TVL.fmt_time(slot.offset)}" if slot.offset else ""))
+        self.log(f"tv: {d.name}: playing {s['title']}" + (f" from {TVL.fmt_time(slot.offset)}" if slot.offset else "")
+                 + (f" ({s['quality']})" if s.get("quality") else ""))
+        self.wake.set()                                         # its poster, now
         self._keep(ch, slot)
 
-    def _check_failure(self, ch, slot):
+    def _check_failure(self, d, ch, slot):
         """An item that won't play is skipped (left out of the schedule for a day), never a
         stalled screen: an error from mpv, or nothing after 25 s of trying while allowed."""
-        p = self.player
-        if not self.loaded or p is None:
+        p = d.player
+        if not d.loaded or p is None:
             return
         failed = p.ended is not None and p.ended[0] == "error"
-        slow = (not p.started and self.allowed and _mono() - self.loaded_at > 25)
+        slow = (not p.started and d.allowed and _mono() - d.loaded_at > 25)
         if failed or slow:
-            iid = self.loaded[1]
-            now = _mono()
-            recent = [(t, i) for t, i in self.fails.get(ch["key"], []) if now - t < 120] + [(now, iid)]
-            self.fails[ch["key"]] = recent
-            if len(recent) >= 3:
-                # three in two minutes: the server (or the network), not the items. Put them
-                # back and try again in a minute, on static, rather than skip the whole list.
-                TVL.unmark_bad([i for _, i in recent])
-                self.fails[ch["key"]] = []
-                self.retry_at[ch["key"]] = now + 60
-                self.log(f"tv: {ch['name']} isn't answering; trying again in a minute")
-            else:
-                self.log(f"tv: {TVL.label(slot.item)} didn't play ({'error' if failed else 'no answer'}); skipping it")
-                TVL.mark_bad(iid)
-            self.last_slot.pop(ch["key"], None)
-            self.loaded = None
-            p.ended = None
-            p.stop()
+            self._skip(d, ch, slot, d.loaded[1], "error" if failed else "no answer")
             return
         # drift: mpv's clock against the wall clock, now and then
-        if p.started and self.allowed and slot.offset is not None and _mono() - self.loaded_at > 8:
+        if p.started and d.allowed and slot.offset is not None and _mono() - d.loaded_at > 8:
             if int(_mono()) % 10 == 0:
                 pos = p.position()
                 if pos is not None and abs(pos - slot.offset) > DRIFT and slot.offset < (slot.item.get("duration") or 0) - 2:
                     p.seek(slot.offset)
 
-    def _poster_texture(self, item):
+    def _skip(self, d, ch, slot, iid, why):
+        """An item that won't play: left out for a day. Three in two minutes are the server's
+        (or the network's) fault, not the items': they're put back and the channel tries
+        again in a minute, on its poster, rather than skip the whole list."""
+        now = _mono()
+        recent = [(t, i) for t, i in self.fails.get(ch["key"], []) if now - t < 120] + [(now, iid)]
+        self.fails[ch["key"]] = recent
+        if len(recent) >= 3:
+            TVL.unmark_bad([i for _, i in recent])
+            self.fails[ch["key"]] = []
+            self.retry_at[ch["key"]] = now + 60
+            self.log(f"tv: {ch['name']} isn't answering; trying again in a minute")
+            if ch["key"] not in self.notes or now - self.notes[ch["key"]][0] > 5:
+                self.notes[ch["key"]] = (now, f"{ch['name']} isn't answering; trying again in a minute")
+        else:
+            self.log(f"tv: {TVL.label(slot.item)} didn't play ({why}); skipping it")
+            TVL.mark_bad(iid)
+        self.last_slot.pop(ch["key"], None)
+        d.loaded = None
+        if d.player is not None:
+            d.player.ended = None
+            d.player.stop()
+
+    def _poster_texture(self, d, item):
         if not item:
             return None
         iid = str(item.get("id"))
-        if self.poster_tex and self.poster_tex[0] == iid:
-            return self.poster_tex[1:]
+        if d.poster_tex and d.poster_tex[0] == iid:
+            return d.poster_tex[1:]
         img = self.poster.get(iid)
         if img is None:
             return None
         data, w, h = img
         from . import glkit
-        if self.poster_tex:
-            GL.glDeleteTextures([self.poster_tex[1]])
+        if d.poster_tex:
+            GL.glDeleteTextures([d.poster_tex[1]])
         tex = glkit.texture_rgba(data, w, h, GL.GL_RGBA)
-        self.poster_tex = (iid, tex, w, h)
+        d.poster_tex = (iid, tex, w, h)
         return tex, w, h
 
-    def _close_player(self):
-        if self.player is not None:
-            self.player.close()
-            self.player = None
-            self.loaded = None
-            self.log("tv: nothing on; mpv closed")
+    def _close_player(self, d):
+        if d.player is not None:
+            d.player.close()
+            d.player = None
+            d.loaded = None
+            self.log(f"tv: {d.name}: nothing on; its mpv closed")
 
     # ------------------------------------------------------------------ the on-screen display
-    def _osd(self, media_screen):
-        """(screen, static 0..1, texture) for the screen's OSD: the channel number while
-        tuning, the volume while it changes, a small speaker while the sound is on."""
+    def _osd(self, screen):
+        """(static 0..1, texture) for a screen's OSD: the channel number while tuning, the
+        volume while it changes, a small speaker on the screen the sound comes from."""
+        d = self.decks[screen]
         now = _mono()
-        screen, static, lines = None, 0.0, None
-        if self.tune and now - self.tune[1] < TUNE_OSD:
-            screen = self.tune[0]
+        static, lines = 0.0, None
+        if d.tune and now - d.tune[0] < TUNE_OSD:
             if self.motion == "full":
-                static = max(0.0, 1.0 - (now - self.tune[1]) / TUNE_STATIC)
-            lines = ("tune", self.tune[2], self.tune[3])
-        elif self.tune:
-            self.tune = None
+                static = max(0.0, 1.0 - (now - d.tune[0]) / TUNE_STATIC)
+            lines = ("tune", d.tune[1], d.tune[2])
+        elif d.tune:
+            d.tune = None
         vol = None
-        if self.vol_osd and now - self.vol_osd[1] < VOLUME_OSD:
-            screen = screen or self.vol_osd[0]
-            vol = self.screens[self.vol_osd[0]]["volume"]
-        speaker = media_screen is not None and self._effective_sound()[0]
-        if speaker and screen is None:
-            screen = media_screen
-        if screen is None:
-            return None, 0.0, None
-        if screen not in self.px:
-            return None, 0.0, None
-        sig = (screen, lines, vol, speaker and screen == media_screen, self.px[screen][2:])
-        if sig != self.osd_sig:
-            self.osd_sig = sig
-            self._draw_osd(screen, lines, vol, speaker and screen == media_screen)
-        return screen, static, self.osd_tex
+        if d.vol_osd and now - d.vol_osd < VOLUME_OSD:
+            vol = self.screens[screen]["volume"]
+        elif d.vol_osd:
+            d.vol_osd = None
+        speaker = screen == self.sound_screen() and self._effective_sound(screen)[0]
+        if not (lines or vol is not None or speaker or static) or screen not in self.px:
+            return 0.0, None
+        sig = (lines, vol, speaker, self.px[screen][2:])
+        if sig != d.osd_sig:
+            d.osd_sig = sig
+            self._draw_osd(d, lines, vol, speaker)
+        return static, d.osd_tex
 
-    def _draw_osd(self, screen, lines, vol, speaker):
+    def _draw_osd(self, d, lines, vol, speaker):
         import cairo
         from . import glkit
-        w, h = (max(32, int(v)) for v in self.px[screen][2:])
+        w, h = (max(32, int(v)) for v in self.px[d.name][2:])
         surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
         cr = cairo.Context(surf)
         r, g, b, _ = glkit.col("phosphor")
@@ -559,11 +822,9 @@ class TV:
                 cr.arc(x + s * 0.8, y + s * 0.6, s * 0.35 * k, -0.9, 0.9)
                 cr.stroke()
         surf.flush()
-        if self.osd_tex is None:
-            self.osd_tex = glkit.texture_from_cairo(surf)
-        else:
-            GL.glDeleteTextures([self.osd_tex])
-            self.osd_tex = glkit.texture_from_cairo(surf)
+        if d.osd_tex is not None:
+            GL.glDeleteTextures([d.osd_tex])
+        d.osd_tex = glkit.texture_from_cairo(surf)
 
     # ------------------------------------------------------------------ the hover hint
     def hint_visible(self):
@@ -584,7 +845,8 @@ class TV:
         return (hx, hy, HINT_W, HINT_H)
 
     def _target(self, x, y):
-        """("hint", None) | ("screen", screen) | (None, None) for a logical point."""
+        """("hint", screen) | ("screen", screen) | (None, None) for a logical point. The hint
+        comes first: a click on it is never a click on the screen under it."""
         def inside(r):
             return r and r[0] <= x <= r[0] + r[2] and r[1] <= y <= r[1] + r[3]
         if self.hint_visible() and inside(self.hint_rect):
@@ -639,15 +901,15 @@ class TV:
 
     def click(self, x, y, button=1):
         kind, s = self._target(x, y)
+        if kind == "hint":                     # a button, or nothing: never the screen under it
+            self.hint_until = 0.0
+            act = self._button_at(x, y)
+            return self._do(act, x) if act else None
         if kind == "screen" and button == 1:
             n, ch = self.channel(s)
             if ch["kind"] != "own":
                 return self.open_full(s)
             return self.tune_to(s, step=1)
-        if kind == "hint":
-            act = self._button_at(x, y)
-            if act:
-                return self._do(act, x)
         return None
 
     def release(self):
@@ -655,6 +917,8 @@ class TV:
 
     def _do(self, act, x=None):
         s = self.hover
+        if s is None:
+            return None
         if act == "prev":
             return self.tune_to(s, step=-1)
         if act == "next":
@@ -663,6 +927,8 @@ class TV:
             return self.open_full(s)
         if act == "web":
             return self.open_web(s)
+        if act == "guide":
+            return self.open_guide(s)
         if act == "speaker":
             return self.set_sound(s, on=not self.screens[s]["sound"])
         if act == "down":
@@ -696,6 +962,26 @@ class TV:
             return self.set_sound(s, volume=self.screens[s]["volume"] + (5 if dy < 0 else -5))
         return self.tune_to(s, step=1 if dy > 0 else -1)
 
+    def _hint_note(self, s):
+        """The hint's warning line, or "": what went wrong on the channel (in the last five
+        minutes), or the sound is on but can't be heard."""
+        st = self.screens[s]
+        n, ch = self.channel(s)
+        note = self.notes.get(ch["key"])
+        if note and _mono() - note[0] < 300:
+            return note[1]
+        if not st["sound"]:
+            snd = self.sound_screen()
+            return f"Sound comes from {TVL.SCREEN_NAMES.get(snd, snd)}" if snd else ""
+        from .sound import muted
+        if self.desktop_muted:
+            return "Your desktop is muted"
+        if muted():
+            return "bromigOS's sound is muted (bromigos-live mute)"
+        if self.quiet:
+            return "Quiet while locked or on the screensaver"
+        return ""
+
     def hint_texture(self, sf):
         """(texture, logical rect) of the hint, drawn again when what it says changes."""
         if not self.hint_visible():
@@ -705,14 +991,15 @@ class TV:
         lu = self.lineup(s)
         slot = self.slot(ch)
         st = self.screens[s]
+        note = self._hint_note(s)
         sig = (s, n, len(lu), ch["key"], (slot.item or {}).get("id") if slot else None, st["sound"], st["volume"],
-               int(slot.offset // 60) if slot and slot.offset else None, sf)
+               int(slot.offset // 60) if slot and slot.offset else None, sf, note)
         if sig != self.hint_sig or self.hint_tex is None:
             self.hint_sig = sig
-            self._draw_hint(s, n, lu, ch, slot, st, sf)
+            self._draw_hint(s, n, lu, ch, slot, st, sf, note)
         return self.hint_tex, self.hint_rect
 
-    def _draw_hint(self, s, n, lu, ch, slot, st, sf):
+    def _draw_hint(self, s, n, lu, ch, slot, st, sf, note=""):
         import cairo
         from . import glkit
         W, H = int(HINT_W * sf), int(HINT_H * sf)
@@ -720,6 +1007,7 @@ class TV:
         cr = cairo.Context(surf)
         cr.scale(sf, sf)
         ph, dim, soft = glkit.col("phosphor"), glkit.col("dim"), glkit.col("soft")
+        warn = glkit.col("warn")
         bg = glkit.col("void")
         cr.set_source_rgba(bg[0], bg[1], bg[2], 0.88)
         cr.rectangle(0, 0, HINT_W, HINT_H)
@@ -796,10 +1084,14 @@ class TV:
             if ch["kind"] in ("youtube", "live", "server"):
                 web = "YOUTUBE" if ch["kind"] != "server" else (self._server_name(ch) or "WEB").upper()
                 button(324, y, 70, 24, web[:8], "web")
-            text(10, 88, "Click the screen: full screen with sound", 10, dim, False)
-            text(10, 103, "Wheel: channel · wheel on the volume bar: volume", 10, dim, False)
+            if note:
+                text(10, 88, note, 10, warn if st["sound"] else dim, st["sound"], maxw=300)
+            else:
+                text(10, 88, "Click the screen: full screen with sound", 10, dim, False, maxw=300)
+            text(10, 103, "Wheel: channel · on the volume bar: volume", 10, dim, False, maxw=300)
         else:
             text(76, 61, "Scroll or ◀ ▶ to change channel", 10, dim, False)
+        button(324, 80, 70, 24, "GUIDE", "guide")
         surf.flush()
         if self.hint_tex is not None:
             GL.glDeleteTextures([self.hint_tex])
@@ -835,11 +1127,15 @@ class TV:
         a = TVL.server_of(ch)
         return {"jellyfin": "Jellyfin", "plex": "Plex"}.get(getattr(a, "type", ""), "")
 
-    # ------------------------------------------------------------------ full screen, the web page
+    # ------------------------------------------------------------------ full screen, the web page, the guide
     def _pick(self, screen):
+        """The screen a command acts on: the one named, else the one under the pointer, else
+        the one with the sound, else the first showing a media channel, else the big monitor."""
         if screen and screen in self.screens:
             return screen
-        s, _ = self.media_screen()
+        if self.hover in self.screens:
+            return self.hover
+        s = self.sound_screen() or self.media_screen()[0]
         return s or "big"
 
     def open_full(self, screen=None):
@@ -870,8 +1166,8 @@ class TV:
             conf.write(f"tls-ca-file={ca}\ntls-verify=yes\n")
         conf.close()
         cmd = ["mpv", "--fs", "--force-window=immediate", f"--include={conf.name}", f"--volume={st['volume']}",
-               "--volume-max=100", f"--title={s['title']} · bromigOS den TV", "--audio-client-name=bromigOS den TV",
-               f"--force-media-title={s['title']}"]
+               "--volume-max=100", "--hwdec=auto", "--hwdec-codecs=all", f"--title={s['title']} · bromigOS den TV",
+               "--audio-client-name=bromigOS den TV", f"--force-media-title={s['title']}"]
         if s.get("ytdl_format"):
             cmd.append(f"--ytdl-format={s['ytdl_format']}")
         start = s.get("start")
@@ -908,6 +1204,17 @@ class TV:
             return f"xdg-open: {e}"
         return f"opened {url.split('?')[0]}"
 
+    def open_guide(self, screen=None):
+        """The channel guide: Settings › Den TV (bromigos settings den-tv)."""
+        for cmd in (["bromigos", "settings", "den-tv"], ["bromigos-settings", "den-tv"]):
+            if shutil.which(cmd[0]):
+                try:
+                    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                    return "the channel guide: Settings › Den TV"
+                except OSError as e:
+                    return f"{cmd[0]}: {e}"
+        return "Settings isn't installed (bromigos settings den-tv)"
+
     # ------------------------------------------------------------------ YouTube keep
     def _keep(self, ch, slot):
         if ch["kind"] != "youtube" or not ch.get("keep"):
@@ -928,16 +1235,19 @@ class TV:
 
     # ------------------------------------------------------------------ the worker
     def _work(self):
-        """Lists (each channel's, cached), YouTube live checks, posters, keep = "all"."""
+        """Lists (each channel's, cached), YouTube live checks, posters, keep = "all", and
+        where each in-order picked channel is."""
         live_at = {}
         while not self.stop.is_set():
             try:
                 chans = TVL.channels(self.cfg) if self.enabled() else []
-                screen, on = self.media_screen()
-                for ch in sorted(chans, key=lambda c: 0 if on and c["key"] == on["key"] else 1):
+                on = self.media_screens()
+                keys = {ch["key"] for _, ch in on}
+                for ch in sorted(chans, key=lambda c: 0 if c["key"] in keys else 1):
                     if self.stop.is_set():
                         return
                     TVL.fetch_items(ch, max_age=float(self.conf().get("refresh_minutes", 15)) * 60)
+                    TVL.rotation_advance(ch)
                     if ch["kind"] == "youtube" and ch.get("live") and time.time() - live_at.get(ch["key"], 0) > 600:
                         live_at[ch["key"]] = time.time()
                         import bromigos_youtube as Y
@@ -951,18 +1261,37 @@ class TV:
                             self.live.pop(ch["key"], None)
                     if ch["kind"] == "youtube" and ch.get("keep") and ch.get("keep_all"):
                         self._keep_all(ch)
-                if on is not None:
-                    slot = self.slot(on)
+                for s, ch in on:
+                    slot = self.slot(ch)
                     if slot:
-                        self._fetch_poster(on, slot.item)
+                        self._prefetch(s, ch, slot)
+                        self._fetch_poster(ch, slot.item)
                         if slot.next:
-                            self._fetch_poster(on, slot.next)
+                            self._fetch_poster(ch, slot.next)
                 if chans:
                     TVL.catalog(max_age=900)
             except Exception as e:                              # noqa: BLE001  never take the layer down
                 self.log(f"tv: worker: {type(e).__name__}: {e}")
             self.wake.wait(20.0)
             self.wake.clear()
+
+    def _prefetch(self, screen, ch, slot):
+        """YouTube: resolve what's on and the next two ahead, so each starts at once."""
+        if ch["kind"] not in ("youtube", "live"):
+            return
+        h = self.screen_height(screen)
+        self.resolve_later(slot.item.get("url"), h, first=True)
+        if ch["kind"] != "youtube":
+            return
+        nxt = slot
+        for _ in range(2):
+            if not nxt or not nxt.end:
+                break
+            nxt = TVL.now_next(ch, nxt.end + 0.001)
+            if nxt:
+                import bromigos_youtube as Y
+                if not (ch.get("keep") and Y.kept(ch.get("keep"), nxt.item.get("id"))):
+                    self.resolve_later(nxt.item.get("url"), h)
 
     def _fetch_poster(self, ch, item):
         iid = str(item.get("id"))
@@ -982,40 +1311,68 @@ class TV:
             import ssl
             import urllib.request
             from PIL import Image
-            ca = self._tls_ca()
-            ctx = ssl.create_default_context(cafile=ca) if ca else ssl.create_default_context()
+            ctx = ssl.create_default_context()                # the system's CAs, and the lab's added
+            ca = self._lab_ca()
+            if ca:
+                ctx.load_verify_locations(cafile=ca)
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=10, context=ctx) as r:
                 b = r.read(4 << 20)
             im = Image.open(io.BytesIO(b)).convert("RGBA")
             im.thumbnail((360, 360))
             self.poster[iid] = (im.tobytes(), im.width, im.height)
-            if len(self.poster) > 24:
-                for k in list(self.poster)[:8]:
+            if len(self.poster) > 48:
+                showing = {d.poster_tex[0] for d in self.decks.values() if d.poster_tex}
+                for k in [k for k in list(self.poster)[:16] if k not in showing]:
                     self.poster.pop(k, None)
+            self._changed()
         except Exception as e:                                  # noqa: BLE001
             self.log(f"tv: no poster for {TVL.label(item)}: {type(e).__name__}")
             self.poster[iid] = None
 
     # ------------------------------------------------------------------ commands (bromigos-live tv …)
-    def command(self, arg):
+    @staticmethod
+    def parse(arg):
+        """(verb, screen or None, the other words): `--screen X`, `--screen=X` or a bare
+        screen name (big, wave, emblem; scope and small too)."""
         parts = arg.split()
         verb = parts[0] if parts else "state"
-        rest = parts[1:]
-        screens = [x for x in rest if x in TVL.SCREENS]
-        rest = [x for x in rest if x not in TVL.SCREENS]
-        screen = screens[0] if screens else None
+        rest, screen, i = [], None, 1
+        while i < len(parts):
+            w = parts[i]
+            if w == "--screen" and i + 1 < len(parts):
+                screen = parts[i + 1]
+                i += 2
+                continue
+            if w.startswith("--screen="):
+                screen = w.split("=", 1)[1]
+            elif w in TVL.SCREENS or w in ALIASES:
+                screen = w
+            else:
+                rest.append(w)
+            i += 1
+        if screen is not None:
+            screen = ALIASES.get(screen, screen)
+            if screen not in TVL.SCREENS:
+                screen = "?" + screen
+        return verb, screen, rest
+
+    def command(self, arg):
+        verb, screen, rest = self.parse(arg)
+        if screen and screen.startswith("?"):
+            return f"no screen called {screen[1:]}: big, wave (the scope) or emblem (the small monitor)"
         if verb in ("next", "prev"):
-            s = screen or self.media_screen()[0] or "big"
-            return self.tune_to(s, step=1 if verb == "next" else -1)
+            return self.tune_to(self._pick(screen), step=1 if verb == "next" else -1)
         if verb == "set":
             if not rest or not rest[0].isdigit():
-                return "bromigos-live tv set N [big|wave|emblem]"
-            return self.tune_to(screen or "big", number=int(rest[0]))
+                return "bromigos-live tv set N [--screen big|wave|emblem]"
+            return self.tune_to(self._pick(screen), number=int(rest[0]))
         if verb == "open":
             return self.open_full(screen)
         if verb == "web":
             return self.open_web(screen)
+        if verb == "guide":
+            return self.open_guide(screen)
         if verb == "sound":
             s = self._pick(screen)
             w = (rest or ["toggle"])[0]
@@ -1031,54 +1388,77 @@ class TV:
                 return self.set_sound(s, volume=cur - 5)
             if w.isdigit():
                 return self.set_sound(s, volume=int(w))
-            return "bromigos-live tv volume up|down|N [big|wave|emblem]"
+            return "bromigos-live tv volume up|down|N [--screen big|wave|emblem]"
+        if verb == "reload":
+            return self.reconfigured() or "channels read again"
+        if verb == "rename":
+            if len(rest) != 2:
+                return "bromigos-live tv rename OLD-KEY NEW-KEY"
+            return self.rekey(*rest)
         if verb == "list":
             out = []
+            snd = self.sound_screen()
             for s in TVL.SCREENS:
                 cur, _ = self.channel(s)
                 for n, ch in enumerate(self.lineup(s), 1):
                     out.append(f"{s:<7} {'*' if n == cur else ' '} {n:>2}  {ch['name']}"
-                               + ("" if ch["kind"] == "own" else f"  ({ch['kind']})"))
+                               + ("" if ch["kind"] == "own" else f"  ({ch['kind']})")
+                               + ("  [sound]" if n == cur and s == snd else ""))
             return "\n".join(out)
         if verb == "state":
             import json
             return json.dumps(self.describe(), indent=None if "--json" in rest else 1)
-        return "bromigos-live tv next|prev|set N|open|web|sound on|off|toggle|volume up|down|N|list|state [screen]"
+        return ("bromigos-live tv next|prev|set N|open|web|guide|sound on|off|toggle|volume up|down|N|list|state "
+                "[--screen big|wave|emblem]")
+
+    def _playing(self, s):
+        d = self.decks[s]
+        if d.player is None or not d.loaded:
+            return None
+        pos = d.player.position()
+        try:
+            hw = d.player.m.hwdec_current
+        except Exception:                                       # noqa: BLE001
+            hw = None
+        on, vol = self._effective_sound(s)
+        return {"item": d.loaded[1], "position": None if pos is None else round(pos, 2), "hwdec": hw,
+                "paused": d.player.paused(), "sound": on, "volume": round(vol), "has_frame": d.player.has_frame}
 
     def describe(self):
-        out = {"screens": {}, "playing": None, "picture": "mpv" if self.player else (self.player_why or "off"),
-               "allowed": self.allowed, "covered": sorted(self.covered)}
+        snd = self.sound_screen()
+        out = {"screens": {}, "playing": None, "picture": "mpv" if any(d.player for d in self.decks.values())
+               else (self.player_why or "off"), "covered": sorted(self.covered), "sound_from": snd,
+               "desktop_muted": self.desktop_muted, "max_playing": self.max_playing()}
         for s in TVL.SCREENS:
             n, ch = self.channel(s)
             st = self.screens[s]
-            d = {"channel": n, "of": len(self.lineup(s)), "name": ch["name"], "kind": ch["kind"],
-                 "sound": st["sound"], "volume": st["volume"], "rect": [round(v) for v in self.rects.get(s, ())]}
+            d = self.decks[s]
+            r = {"channel": n, "of": len(self.lineup(s)), "name": ch["name"], "kind": ch["kind"], "key": ch["key"],
+                 "sound": st["sound"], "volume": st["volume"], "rect": [round(v) for v in self.rects.get(s, ())],
+                 "allowed": d.allowed, "capped": d.capped, "covered": s in self.covered}
             slot = self.slot(ch)
             if slot:
                 keep = ("id", "title", "series", "season", "episode", "kind", "duration", "year", "server", "poster",
-                        "thumbnail", "url")
-                d["now"] = TVL.label(slot.item)
-                d["offset"] = None if slot.offset is None else round(slot.offset, 2)
-                d["next"] = TVL.label(slot.next) if slot.next else None
-                d["item"] = {k: slot.item.get(k) for k in keep if slot.item.get(k) is not None}
-                d["next_item"] = {k: slot.next.get(k) for k in keep if slot.next.get(k) is not None} if slot.next else None
-                d["start"], d["end"] = slot.start, slot.end
-                d["source"] = ch.get("source") or None
-            out["screens"][s] = d
-        if self.player is not None and self.loaded:
-            pos = self.player.position()
-            try:
-                hw = self.player.m.hwdec_current
-            except Exception:                                   # noqa: BLE001
-                hw = None
-            out["playing"] = {"item": self.loaded[1], "position": None if pos is None else round(pos, 2), "hwdec": hw,
-                              "paused": self.player.paused(), "sound": self._effective_sound()[0],
-                              "volume": round(self._effective_sound()[1])}
+                        "thumbnail", "url", "group")
+                r["now"] = TVL.label(slot.item)
+                r["offset"] = None if slot.offset is None else round(slot.offset, 2)
+                r["next"] = TVL.label(slot.next) if slot.next else None
+                r["item"] = {k: slot.item.get(k) for k in keep if slot.item.get(k) is not None}
+                r["next_item"] = {k: slot.next.get(k) for k in keep if slot.next.get(k) is not None} if slot.next else None
+                r["start"], r["end"] = slot.start, slot.end
+                r["source"] = ch.get("source") or None
+            r["playing"] = self._playing(s)
+            out["screens"][s] = r
+        first = snd or next((s for s in PRIORITY if out["screens"][s]["playing"]), None)
+        if first:
+            out["playing"] = out["screens"][first]["playing"]
+        out["allowed"] = any(self.decks[s].allowed for s in TVL.SCREENS)
         out["hint"] = self.hover
         if self.hover and self.hint_rect:
             hx, hy = self.hint_rect[:2]
             out["hint_rect"] = [round(v) for v in self.hint_rect]
             out["buttons"] = {a: [round(hx + bx + bw / 2), round(hy + by + bh / 2)] for bx, by, bw, bh, a in self.buttons}
+            out["hint_note"] = self._hint_note(self.hover)
         out["input"] = self.input_rects()
         out["full_screen"] = self.full_proc is not None and self.full_proc.poll() is None
         return out
@@ -1086,12 +1466,19 @@ class TV:
     def close(self):
         self.stop.set()
         self.wake.set()
-        self._close_player()
-        for t in (self.osd_tex, self.hint_tex) + ((self.poster_tex[1],) if self.poster_tex else ()):
-            if t:
-                try:
-                    GL.glDeleteTextures([t])
-                except Exception:                               # noqa: BLE001
-                    pass
-        self.osd_tex = self.hint_tex = self.poster_tex = None
-
+        self._rwake.set()
+        for d in self.decks.values():
+            self._close_player(d)
+            for t in (d.osd_tex,) + ((d.poster_tex[1],) if d.poster_tex else ()):
+                if t:
+                    try:
+                        GL.glDeleteTextures([t])
+                    except Exception:                           # noqa: BLE001
+                        pass
+            d.osd_tex = d.poster_tex = None
+        if self.hint_tex:
+            try:
+                GL.glDeleteTextures([self.hint_tex])
+            except Exception:                                   # noqa: BLE001
+                pass
+        self.hint_tex = None
