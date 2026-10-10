@@ -55,7 +55,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos anim`](#bromigos-anim) | List the background's animations, and turn each one on or off. |
 | [`bromigos scene`](#bromigos-scene) | Change the background's other settings: the world, the screensaver, the sound volume. |
 | [`bromigos live`](#bromigos-live) | Turn the animated background on or off, or open a [hologram](holograms.md): `bromigos live timeline`. |
-| [`bromigos panels`](#bromigos-panels) | Show, hide or move the desktop [panels](panels.md), and set the weather's place. |
+| [`bromigos panels`](#bromigos-panels) | Show, hide or move the desktop [panels](panels.md), start edit mode, list every widget, and set the weather's place. |
 | [`bromigos widgets`](#bromigos-widgets) | Show or hide one panel or all of them. |
 | [`bromigos mute`](#bromigos-mute) | Mute or unmute the theme's sounds and VECTOR's voice together. |
 | [`bromigos boot`](#bromigos-boot) | Turn the themed [boot menu](boot-menu.md) on or off. |
@@ -1329,14 +1329,15 @@ From the `bromigos-desktop` package.
 The desktop panels: which are on, where they sit, the monitor, the weather's place (your layout.json and weather.toml).
 
 ```text
-bromigos panels [status] | show|hide NAME | move NAME X Y | size NAME W H | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
+bromigos panels [status] | edit | gallery [--previews DIR] | show|hide|add NAME | move NAME X Y | size NAME W H | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
 ```
 
 For example:
 
 ```text
 bromigos panels
-bromigos panels show weather
+bromigos panels edit
+bromigos panels add weather
 bromigos panels weather place "San Diego"
 bromigos panels hide connections
 ```
@@ -2184,10 +2185,10 @@ Options:
 
 ### bromigos widgets
 
-The desktop panels: run them (login does), show or hide one or all, type in the notes.
+The desktop panels: run them (login does), show or hide one or all, edit mode, type in the notes.
 
 ```text
-bromigos widgets [toggle NAME|all | show NAME|all | notes | reload]
+bromigos widgets [toggle NAME|all | show NAME|all | add NAME | edit [on|done|cancel] | notes | reload | gallery [--previews DIR]]
 ```
 
 From the `bromigos-widgets` package.

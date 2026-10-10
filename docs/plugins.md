@@ -147,6 +147,31 @@ To look at a panel without the desktop, render it offscreen:
 bromigos-widgets render <name or path/to/plugin.py> out.png
 ```
 
+### What the gallery shows
+
+The [widget gallery](widgets.md#the-widget-gallery) and edit mode read a few class
+attributes from your `Panel` subclass. All are optional.
+
+| Attribute | What it is | Default |
+|---|---|---|
+| `title` | The name on its frame and its card | The panel's name |
+| `description` | One line: what it shows | Empty |
+| `category` | `system`, `network`, `homelab`, `media`, `notes` or `fun` | `system` |
+| `reads` | What it reads, in a few words, such as `"your CPU"` | Empty |
+| `min_size`, `max_size` | The smallest and largest (width, height) edit mode lets it take, in pixels | (240, 120) and (1600, 1400) |
+
+```python
+class LoadPanel(Panel):
+    name, title = "load_panel", "LOAD"
+    description = "The load average over 1, 5 and 15 minutes"
+    category, reads = "system", "the load average"
+    min_size, max_size = (360, 120), (720, 240)
+```
+
+`draw(cr, w, h)` gets the size the user chose, so lay the panel out from `w` and `h`. The
+gallery says who made a panel from where it came from: bromigOS, an extension's
+`authors`, or you.
+
 [widgets.md](widgets.md) lists the panels bromigOS ships, and
 [widgets/README.md](../widgets/README.md) describes the code.
 

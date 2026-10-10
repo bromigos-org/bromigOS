@@ -123,9 +123,10 @@ running desktop.
 
 Bigger tests run by hand:
 
-- **End to end in a nested Hyprland.** `desktop/tests/e2e_settings_nested.py` and
-  `e2e_keys_nested.py` drive Settings and the shortcut picker in a Hyprland session that
-  runs inside a virtual display. Nothing appears on your screen.
+- **End to end in a nested Hyprland.** `desktop/tests/e2e_settings_nested.py`,
+  `e2e_keys_nested.py` and `e2e_widgets_nested.py` drive Settings, the shortcut picker and
+  the panels' edit mode in a Hyprland session that runs inside a virtual display. Nothing
+  appears on your screen.
 - **A fresh machine.** `test/vm/arch-vm.sh` installs bromigOS on a new virtual machine
   and checks it. It needs KVM and about 8 GB of free memory.
   [docs/install.md](docs/install.md) explains it.

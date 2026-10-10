@@ -370,14 +370,19 @@ page.
 
 `bromigos panels` manages the desktop panels (widgets). The page has:
 
-- a small drawing of where each panel sits;
-- a switch per panel, with what it shows and its key;
+- a small drawing of where each panel sits, and **Edit on the desktop**, which starts
+  [edit mode](widgets.md#edit-mode);
 - the monitor, where empty means the primary;
+- the [widget gallery](widgets.md#the-widget-gallery): every panel with a picture, what
+  it shows, who made it and what it reads, a switch, **Add to desktop**, and search and
+  categories;
+- **Get more widgets**, the community catalog's widgets, which install in a terminal;
 - the weather panel's place, units and label.
 
 A change writes your `~/.config/bromigos/widgets/layout.json` or `weather.toml`, and the
 running panels reload at once. The first change copies bromigOS's layout into yours,
-keeping every key. Reset removes both files. See [widgets.md](widgets.md).
+keeping every key. Reset removes both files, or writes bromigOS's layout through
+`layout.json` when it's a link. See [widgets.md](widgets.md).
 
 ### Notifications
 

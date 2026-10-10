@@ -14,6 +14,7 @@ choose them.
 |---|---|
 | show or hide all the panels | <kbd>Super</kbd>+<kbd>W</kbd> |
 | show or hide one panel | its key, in the table below |
+| move, resize and choose panels | <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>W</kbd> (edit mode, below) |
 
 ## The panels
 
@@ -51,16 +52,52 @@ added to your notes with the time.
 
 Your notes are a plain text file, `~/.local/share/bromigos/notes.md`.
 
-## Choose and place panels
+## Arrange the panels
 
-Open **Settings › Widgets** and turn each panel on or off. The page shows a small picture
-of where the panels sit, and chooses which monitor they use.
+Edit mode lets you move, resize and choose panels right on your desktop.
 
-To move or resize a panel, use a terminal:
+1. Press <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>W</kbd>, or right-click any panel. You can
+   also choose **Edit widgets** in the menu (<kbd>Super</kbd>+<kbd>Space</kbd>).
+2. The panels come up above your windows, each with a frame. A tray with every panel
+   opens on the right.
+3. Drag a panel to move it. It snaps into line with the others. Hold <kbd>Ctrl</kbd> to
+   place it freely.
+4. Drag a corner to make it bigger or smaller.
+5. Click a panel's × to hide it. To bring one back, flip its switch in the tray, or click
+   **Add to desktop** to put it in a free spot.
+6. Press <kbd>Esc</kbd> or click **Done** to save. **Cancel** puts everything back.
+
+<kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes a change. **Reset…** in the tray puts every panel
+back where bromigOS first had it.
+
+You can do it all from the keyboard. <kbd>Tab</kbd> picks the next panel, the arrow keys
+move it (with <kbd>Shift</kbd>, 10 pixels at a time), <kbd>Ctrl</kbd> and an arrow
+resizes it, and <kbd>H</kbd> hides it. <kbd>F6</kbd> moves to the tray and back.
+
+Why not just hold <kbd>Alt</kbd> and drag? On bromigOS, <kbd>Alt</kbd> and a drag moves
+windows, so it can't move panels too.
+
+## Choose panels
+
+The tray in edit mode and **Settings › Widgets** both show the widget gallery: every
+panel there is, on or off. Each one says what it shows, who made it and what it reads.
+Type in the search box, or pick a category, to find one.
+
+**Get more widgets**, in Settings › Widgets, lists widgets other people made, from the
+bromigOS catalog. Each shows who made it, its licence and a link to its code. A widget is
+a small program, so **Install…** opens a terminal that tells you what it can do and asks
+before it installs. **Uninstall** removes it again.
+
+Settings › Widgets also shows a small picture of where the panels sit, and chooses which
+monitor they use.
+
+You can also choose and place panels from a terminal:
 
 ```bash
 bromigos panels                   # which panels are on, and where
+bromigos panels edit              # start edit mode on the desktop
 bromigos panels show weather      # turn one on
+bromigos panels add weather       # turn one on, in a free spot
 bromigos panels hide connections  # turn one off
 bromigos panels move notes 514 16 # move one, in pixels from the top-left
 bromigos panels size notes 470 400 # resize one: width and height in pixels

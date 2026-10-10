@@ -49,7 +49,7 @@ folder under `~/.local/share/bromigos/ext/active/`, where the matching loader fi
 | `theme` | A theme folder: `colors.toml`, `theme.toml`, backgrounds, maybe a world | `themes/<name>` | `bromigos theme`, the theme switcher |
 | `live-deck` | A deck: one `.py` file defining `DECK` | `live/decks/<name>.py` | `bromigos-live plugin <name>` |
 | `live-layer` | A shader layer: `<name>.frag` and its `.json` | `live/layers/<name>.frag` and `.json` | The live background |
-| `widget` | A panel: one `.py` file with a `panels.Panel` subclass | `widgets/<name>.py` | `bromigos-widgets` |
+| `widget` | A panel: one `.py` file with a `panels.Panel` subclass ([what the gallery shows](plugins.md#what-the-gallery-shows)) | `widgets/<name>.py` | `bromigos-widgets` |
 | `vector-tool` | A VECTOR plugin whose `register(vector)` adds tools | `vector/<name>.py` | VECTOR, when he starts |
 | `vector-memory` | A VECTOR plugin whose `register(vector)` adds a memory store | `vector/<name>.py` | VECTOR, when he starts |
 | `vector-skill` | A skill: `<name>.md`, or a folder with a `SKILL.md` | `skills/<name>` | VECTOR's skill catalog |
