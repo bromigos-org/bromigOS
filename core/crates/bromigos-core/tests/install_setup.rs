@@ -170,7 +170,71 @@ fn a_dry_run_plans_and_leaves_other_network_and_display_managers_alone() {
     assert!(ds.commands.iter().any(|c| c.contains("gtk-theme Bromigos")));
     assert!(!ds.commands.iter().any(|c| c.contains("icon-theme")));
     assert_eq!(s("theme").status, Status::Planned);
+    assert!(r.steps.iter().all(|s| s.name != "aur packages"));
+
+    // a --with package no synced repository has (1password, which the public mirror leaves
+    // out) comes from the AUR with the helper, after the repositories' packages
+    f.answers
+        .insert("pacman -Si herdr".into(), (0, String::new()));
+    f.answers.insert(
+        "paru --version".into(),
+        (0, "paru v2.1.0 - libalpm v16.0.1".into()),
+    );
+    let r = install::run(
+        &paths,
+        &Options {
+            dry_run: true,
+            extras: vec!["herdr".into(), "1password".into()],
+            ..Options::default()
+        },
+        &mut f,
+    );
+    let s = |n: &str| r.steps.iter().find(|s| s.name == n).unwrap().clone();
+    let pkgs = s("packages").commands.join(" ");
+    assert!(
+        pkgs.starts_with("sudo pacman -S --needed") && pkgs.ends_with(" bromigos herdr"),
+        "{pkgs}"
+    );
+    let a = s("aur packages");
+    assert_eq!(a.status, Status::Planned, "{a:#?}");
+    assert_eq!(a.commands, vec!["paru -S --needed 1password".to_string()]);
+    // with the AUR off it's left out, and says how to get it
+    let r = install::run(
+        &paths,
+        &Options {
+            dry_run: true,
+            no_aur: true,
+            extras: vec!["1password".into()],
+            ..Options::default()
+        },
+        &mut f,
+    );
+    let a = r.steps.iter().find(|s| s.name == "aur packages").unwrap();
+    assert_eq!(a.status, Status::Skipped);
+    assert!(
+        a.commands.is_empty() && a.detail.contains("paru -S 1password"),
+        "{a:#?}"
+    );
+    assert!(f.ran.is_empty(), "a dry run runs nothing: {:?}", f.ran);
     unsafe { std::env::remove_var("BROMIGOS_PACMAN_CONF") };
+}
+
+#[test]
+fn extras_the_repositories_lack_go_to_the_aur() {
+    let mut f = Fake::new(&[
+        ("pacman -Si herdr", 0, "Name : herdr\n"),
+        ("pacman -Sg gnome", 0, "gnome nautilus\n"),
+    ]);
+    let x = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let (repo, aur) = install::split_extras(&mut f, &x(&["herdr", "1password", "gnome"]));
+    assert_eq!(
+        (repo, aur.clone()),
+        (x(&["herdr", "gnome"]), x(&["1password"]))
+    );
+    assert_eq!(
+        install::aur_command(bromigos_core::aur::Helper::Yay, true, &aur).join(" "),
+        "yay -S --needed --noconfirm 1password"
+    );
 }
 
 fn mon(output: &str, w: u32, h: u32, hz: f64, pw: u32) -> Monitor {

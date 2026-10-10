@@ -188,6 +188,7 @@ same way.
 | `bromigos update [--yes] [--no-aur]` | the AUR step: reviewed at a terminal; `--yes`: no review; `--no-aur`: not this time |
 | `bromigos update --check` | the AUR updates waiting, with the repositories' |
 | `bromigos install --no-aur` | no AUR helper; the AUR off |
+| `bromigos install --with PKG` | a `PKG` no synced repository has (`1password`, which the public mirror leaves out) comes from the AUR with the helper, after the repositories' packages; with the AUR off it's left out, and the step says so |
 | `bromigos setup aur`, `--aur on\|off` | the setup page |
 | `bromigos hw setup [--aur]` | a driver only the AUR has, after a question (`--aur`: without it) |
 

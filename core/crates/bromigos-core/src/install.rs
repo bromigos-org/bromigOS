@@ -4,7 +4,9 @@
 //! 1. preflight: a regular user with sudo, on Arch, with the `[bromigos]` repository;
 //! 2. packages: `sudo pacman -S --needed bromigos <extras>`; then bromigOS's paru, the AUR
 //!    helper, unless the AUR is off here (`--no-aur`) or a helper is installed
-//!    ([`crate::aur`]: from bromigOS's repository, never the AUR; never fatal);
+//!    ([`crate::aur`]: from bromigOS's repository, never the AUR; never fatal); then the
+//!    `<extras>` no synced repository has (1password, which the public mirror leaves out)
+//!    from the AUR with that helper ([`split_extras`]);
 //! 3. system services: NetworkManager, SDDM (unless another display manager is enabled),
 //!    Bluetooth when bluez is installed; user services: PipeWire and WirePlumber;
 //!    then snapshots and the boot menu for rolling an update back, where / is btrfs
@@ -300,6 +302,26 @@ pub fn package_command(opts: &Options, overwrite: &[String]) -> Vec<String> {
     a
 }
 
+/// The `--with` packages split by where they come from: (in the synced repositories, a
+/// package or a group; not in them). The second lot is the AUR's: the public mirror of
+/// `[bromigos]` leaves out what may not be redistributed (1password), so a public install
+/// gets that from the AUR through the helper, as Arch users do (docs/aur.md).
+pub fn split_extras(runner: &mut dyn Runner, extras: &[String]) -> (Vec<String>, Vec<String>) {
+    extras.iter().cloned().partition(|x| {
+        runner.query(&["pacman", "-Si", x]).0 == 0 || runner.query(&["pacman", "-Sg", x]).0 == 0
+    })
+}
+
+/// The AUR step's command: the helper builds and installs them as this user.
+pub fn aur_command(helper: crate::aur::Helper, yes: bool, pkgs: &[String]) -> Vec<String> {
+    let mut a = argv(&[helper.bin(), "-S", "--needed"]);
+    if yes {
+        a.push("--noconfirm".into());
+    }
+    a.extend(pkgs.iter().cloned());
+    a
+}
+
 /// Which display manager is enabled (the target of display-manager.service), if any.
 pub fn enabled_dm(runner: &mut dyn Runner) -> Option<String> {
     let (_, out) = runner.query(&["systemctl", "show", "-P", "Id", "display-manager.service"]);
@@ -389,7 +411,14 @@ pub fn run(paths: &Paths, opts: &Options, runner: &mut dyn Runner) -> Report {
     // 2. packages
     let mut cmds = vec![];
     let overwrite = overwrite_globs(cx.runner, |p| Path::new(p).exists());
-    let pkg = package_command(opts, &overwrite);
+    let (repo_extras, aur_extras) = split_extras(cx.runner, &opts.extras);
+    let pkg = package_command(
+        &Options {
+            extras: repo_extras.clone(),
+            ..opts.clone()
+        },
+        &overwrite,
+    );
     match cx.exec(&mut cmds, pkg, true) {
         Ok(()) => steps.push(step(
             "packages",
@@ -399,7 +428,7 @@ pub fn run(paths: &Paths, opts: &Options, runner: &mut dyn Runner) -> Report {
                 Status::Done
             },
             if overwrite.is_empty() {
-                format!("{META} {}", opts.extras.join(" "))
+                format!("{META} {}", repo_extras.join(" "))
                     .trim()
                     .to_string()
             } else {
@@ -458,7 +487,41 @@ pub fn run(paths: &Paths, opts: &Options, runner: &mut dyn Runner) -> Report {
         ));
     }
     cx.log.line(&format!("aur: {detail}"));
+    let helper_planned = status == Status::Planned;
     steps.push(step("aur", status, detail, cmds));
+
+    // 2c. the `--with` packages the repositories don't have (1password on the public
+    // mirror), from the AUR with the helper. A failure shows, and the install goes on: the
+    // desktop doesn't need them
+    if !aur_extras.is_empty() {
+        let names = aur_extras.join(" ");
+        let helper = crate::aur::found(cx.runner)
+            .helper
+            .or(helper_planned.then_some(crate::aur::Helper::Paru));
+        let mut cmds = vec![];
+        let (status, detail) = if opts.no_aur || !crate::aur::enabled(paths) {
+            (
+                Status::Skipped,
+                format!(
+                    "{names}: not in the repositories, and the AUR is off here (bromigos aur on, \
+                     then paru -S {names})"
+                ),
+            )
+        } else if let Some(h) = helper {
+            match cx.exec(&mut cmds, aur_command(h, opts.yes, &aur_extras), true) {
+                Ok(()) if opts.dry_run => (Status::Planned, format!("{names}, from the AUR")),
+                Ok(()) => (Status::Done, format!("{names}, from the AUR")),
+                Err(e) => (Status::Failed, format!("{names} from the AUR: {e}")),
+            }
+        } else {
+            (
+                Status::Skipped,
+                format!("{names}: not in the repositories, and no AUR helper here to get them"),
+            )
+        };
+        cx.log.line(&format!("aur packages: {detail}"));
+        steps.push(step("aur packages", status, detail, cmds));
+    }
 
     // 3. services
     if opts.no_services {

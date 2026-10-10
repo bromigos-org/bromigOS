@@ -19,7 +19,7 @@ depends=('bromigos-core' 'bromigos-desktop'
          'neovim' 'tmux' 'lazygit' 'mise' 'chromium' 'spotify-launcher' 'signal-desktop'
          # LazyVim's own needs: lazy.nvim clones plugins, its pickers search with these
          'git' 'ripgrep' 'fd' 'wl-clipboard' 'btop')
-optdepends=('1password: the password manager (bromigOS builds it into its repository)'
+optdepends=('1password: the password manager (bromigos install --with 1password)'
             'nodejs: language servers LazyVim installs through mason'
             'python: the same, for Python tooling')
 makedepends=('git' 'lua')

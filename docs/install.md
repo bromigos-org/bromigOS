@@ -173,11 +173,11 @@ Then it runs `bromigos setup`, unless you gave `--no-setup`.
 | `paru` | Feature packed AUR helper | by `bromigos install` (its `aur` step), unless `--no-aur` or `bromigos setup aur` leaves it out |
 | `1password` | Password manager and secure wallet | optional, for `bromigos-apps` |
 
-`herdr`, `ttf-geist-mono`, `1password` and `paru` aren't in Arch's own repositories, so bromigOS packages them into its own, each pinned by checksum. No install needs an AUR helper.
+`herdr`, `ttf-geist-mono`, `1password` and `paru` aren't in Arch's own repositories, so bromigOS packages them into its own, each pinned by checksum. Only `1password` needs the AUR, and only on a public install (below).
 
 - `herdr` and `paru` are built from their upstream source.
 - `ttf-geist-mono` packages the fonts from Geist's release.
-- `1password` repackages 1Password's own Linux download. It isn't built from source.
+- `1password` repackages 1Password's own Linux download. It isn't built from source. Its licence is proprietary, so the public mirror leaves it out: there, `bromigos install --with 1password` gets it from the AUR with paru.
 
 <!-- /generated:packages -->
 

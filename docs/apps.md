@@ -29,7 +29,9 @@ option.
 | Signal | `signal-desktop` | Its own | Its own |
 | 1Password | `1password` | Its own | Its own |
 
-1Password is optional. bromigOS builds it into its own repository.
+1Password is optional. Install it with `bromigos install --with 1password`. The lab's
+repository has bromigOS's build of it; the public mirror leaves it out, because its licence
+is proprietary, so a public install gets it from the AUR with paru ([aur.md](aur.md)).
 
 The theme reaches these apps through `bromigos theme set`:
 
@@ -85,9 +87,15 @@ touched.
 
 ## 1Password
 
-bromigOS builds 1Password into its repository from 1Password's official Linux tarball,
-pinned by checksum. The tarball's upstream signature was checked when the version was
-pinned.
+bromigOS builds 1Password into the lab's repository from 1Password's official Linux
+tarball, pinned by checksum. The tarball's upstream signature was checked when the version
+was pinned.
+
+The public mirror doesn't carry it: 1Password's licence is proprietary, so the mirror has
+no file of it and its databases don't list it. On a public install, `bromigos install
+--with 1password` sees that no repository has it and installs the AUR's `1password` with
+paru instead (with the AUR off, it says so and installs nothing; `bromigos aur on`). You
+can also run `paru -S 1password` yourself.
 
 The package doesn't make the PolicyKit policy for unlocking with your system password,
 because that policy would be filled with the build machine's users. To unlock 1Password

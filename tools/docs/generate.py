@@ -348,11 +348,13 @@ def packages_section():
         desc = pkgs[n]["desc"] if n in pkgs else ELSEWHERE[n][0] + f" (from {ELSEWHERE[n][1]})"
         lines.append(f"| `{n}` | {_cell(desc)} | {how[n]} |")
     lines += ["", "`herdr`, `ttf-geist-mono`, `1password` and `paru` aren't in Arch's own repositories, "
-              "so bromigOS packages them into its own, each pinned by checksum. No install needs an "
-              "AUR helper.", "",
+              "so bromigOS packages them into its own, each pinned by checksum. Only `1password` "
+              "needs the AUR, and only on a public install (below).", "",
               "- `herdr` and `paru` are built from their upstream source.",
               "- `ttf-geist-mono` packages the fonts from Geist's release.",
-              "- `1password` repackages 1Password's own Linux download. It isn't built from source.", ""]
+              "- `1password` repackages 1Password's own Linux download. It isn't built from source. "
+              "Its licence is proprietary, so the public mirror leaves it out: there, "
+              "`bromigos install --with 1password` gets it from the AUR with paru.", ""]
     return "\n".join(lines)
 
 

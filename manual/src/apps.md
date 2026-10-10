@@ -80,7 +80,7 @@ reach them, they take its colours.
 | mise | A starting `config.toml` for your tools. |
 | Chromium | Settings for Wayland. Its window frame takes the theme's colour when you switch themes while it's open. |
 | Spotify, Signal | As they come. |
-| 1Password | Optional. Install it with `sudo pacman -S 1password`. |
+| 1Password | Optional. Install it with `bromigos install --with 1password`: from bromigOS's repository where it has it, otherwise from the AUR with paru. |
 
 To install the bundle:
 
