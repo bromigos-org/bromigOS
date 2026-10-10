@@ -67,6 +67,11 @@ Edit mode lets you move, resize and choose panels right on your desktop.
    **Add to desktop** to put it in a free spot.
 6. Press <kbd>Esc</kbd> or click **Done** to save. **Cancel** puts everything back.
 
+Bigger panels show more, not just the same thing larger. A large SYSTEM panel adds the
+busiest programs and every temperature, and a wide WEATHER panel shows the hours ahead.
+Each panel's card in the tray has buttons for its sizes, such as **Compact** and
+**Large**.
+
 <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes a change. **Reset…** in the tray puts every panel
 back where bromigOS first had it.
 

@@ -50,7 +50,7 @@ class DemoSystem:
         self.os = "bromigOS"
         self.boot = time.time() - 3 * 86400 - 4 * 3600
         self.session_start = time.time() - 6 * 3600 - 1260
-        self.temps = {"CPU": 58.0, "NVME": 41.0}
+        self.temps = {"CPU": 58.0, "GPU": 51.0, "NVME": 41.0, "BOARD": 37.0}
         for k in range(history):                       # a waterfall with history already in it
             self.history.append(_per(k * 2.0 * 0.21))
         self.sample()
@@ -77,6 +77,10 @@ class DemoNet:
             self.rx_hist.append(1.8e6 * (0.4 + math.sin(k * 0.13) ** 2) + 9e5 * max(0, math.sin(k * 0.05)) ** 8)
             self.tx_hist.append(2.4e5 * (0.4 + math.sin(k * 0.19 + 1) ** 2))
         self.iface, self.gw = "enp7s0", None
+        # an hour already seen, a minute a point (the wide and large sizes)
+        self.minutes_rx = [1.1e6 * (0.5 + math.sin(k * 0.21) ** 2) + 2.5e6 * max(0, math.sin(k * 0.09)) ** 12
+                           for k in range(60)]
+        self.minutes_tx = [1.6e5 * (0.5 + math.sin(k * 0.17 + 1) ** 2) for k in range(60)]
         self.rx = self.tx = 0.0
         self.addr = None
         self.signal = None
@@ -111,6 +115,41 @@ def demo_storage():
              "pct": 70.0, "fstype": "ext4", "mounted": True}]
 
 
+def demo_top_processes(n=6):
+    rows = [("Hyprland", 2140, 8.4, 0.31), ("firefox", 3311, 6.2, 1.9), ("bromigos-live", 2290, 4.8, 0.42),
+            ("kitty", 4120, 2.1, 0.12), ("python3", 2301, 1.6, 0.09), ("pipewire", 1802, 0.7, 0.03),
+            ("code", 5120, 0.5, 0.88)]
+    return [{"pid": pid, "name": nm, "cpu": cpu, "mem": int(gb * 2 ** 30)} for nm, pid, cpu, gb in rows][:n]
+
+
+class DemoDiskIO:
+    def __init__(self, history=120):
+        self.read_hist = deque((4e6 * (0.3 + math.sin(k * 0.21) ** 2) for k in range(history)), maxlen=history)
+        self.write_hist = deque((1.2e6 * (0.2 + math.sin(k * 0.17 + 2) ** 4) for k in range(history)),
+                                maxlen=history)
+        self.read, self.write = self.read_hist[-1], self.write_hist[-1]
+
+    def sample(self):
+        return self
+
+
+def demo_connections(n=8):
+    rows = [("203.0.113.40", 6, ["firefox"]), ("198.51.100.7", 3, ["firefox", "code"]),
+            ("192.0.2.18", 2, ["ssh"]), ("203.0.113.91", 1, ["pipewire-pulse"]), ("198.51.100.53", 1, ["git"])]
+    return [{"host": h, "count": c, "procs": p} for h, c, p in rows][:n]
+
+
+def demo_interfaces():
+    return [{"name": "enp7s0", "up": True, "speed": 2500, "addrs": ["198.51.100.12", "2001:db8::12"], "mac": None},
+            {"name": "wlan0", "up": True, "speed": 0, "addrs": ["192.0.2.41"], "mac": None},
+            {"name": "wg0", "up": False, "speed": 0, "addrs": [], "mac": None},
+            {"name": "docker0", "up": False, "speed": 0, "addrs": ["172.17.0.1"], "mac": None}]
+
+
+S.interfaces = demo_interfaces
+S.top_processes = demo_top_processes
+S.DiskIO = DemoDiskIO
+S.connections = demo_connections
 S.GPU = DemoGPU
 S.System = DemoSystem
 S.Net = DemoNet
@@ -139,11 +178,22 @@ _PROJECTS = [("drift-atlas", "~/projects", 1800, "main", 3, 1),
 _FOLDERS = [("Pictures", 41.0), ("notes", 33.0), ("Downloads", 20.0)]
 
 
+_SUBJECTS = ["Draw the harbour lights at dusk", "Debounce the relay's watchdog", "Warmer amber for the bar",
+             "Log the lamplighter's rounds", "Kit list: spare beacon batteries", "Tidy the chart legends",
+             "Fix the tide table's leap day"]
+
+
 def _scan(self):
+    big = getattr(self, "drawn", "standard") in ("tall", "large")
+    projects = _PROJECTS + [("tide-tables", "~/projects", 5 * 86400, "main", 0, 0),
+                            ("chart-room", "~/projects", 9 * 86400, "main", 1, 0)]
     self.projects = [{"path": f"/srv/demo/{n}", "name": n, "where": w, "t": _NOW - ago, "branch": b, "changed": c,
-                      "ahead": a, "behind": 0} for n, w, ago, b, c, a in _PROJECTS][:self.n_projects]
+                      "ahead": a, "behind": 0, "subject": _SUBJECTS[i % len(_SUBJECTS)],
+                      "days": [int(3 * max(0, math.sin(i * 1.7 + d * 0.6)) ** 2 * (5 - i % 5)) for d in range(14)]}
+                     for i, (n, w, ago, b, c, a) in enumerate(projects)][:max(self.n_projects, 12 if big else 0)]
+    folders = _FOLDERS + [("music", 12.0), ("Documents", 9.0), ("scratch", 4.0)]
     self.folders = [{"path": f"/srv/demo/{n}", "name": n, "where": "~", "score": s}
-                    for n, s in _FOLDERS][:self.n_folders]
+                    for n, s in folders][:max(self.n_folders, 10 if big else 0)]
     self.scanned = time.time()
 
 
@@ -155,15 +205,20 @@ def demo_weather(now=None):
     """Open-Meteo's answer for a made-up harbour town on a wet night."""
     now = now or _NOW
     hours = [time.strftime("%Y-%m-%dT%H:00", time.localtime(now + 3600 * (h - 2))) for h in range(48)]
-    days = [time.strftime("%Y-%m-%d", time.localtime(now + 86400 * d)) for d in range(4)]
+    days = [time.strftime("%Y-%m-%d", time.localtime(now + 86400 * d)) for d in range(7)]
     return {
         "current": {"time": hours[2], "temperature_2m": 11.4, "relative_humidity_2m": 88, "apparent_temperature": 9.6,
                     "weather_code": 61, "wind_speed_10m": 14.2, "wind_direction_10m": 230, "precipitation": 0.6,
                     "is_day": 0},
         "hourly": {"time": hours, "temperature_2m": [11 + 3 * math.sin((h - 6) / 24 * 6.283) for h in range(48)],
-                   "precipitation_probability": [int(60 + 30 * math.sin(h / 5.0)) for h in range(48)]},
-        "daily": {"time": days, "weather_code": [61, 3, 2, 80], "temperature_2m_max": [14.1, 15.8, 17.2, 13.9],
-                  "temperature_2m_min": [8.2, 7.9, 9.4, 8.8], "precipitation_probability_max": [80, 30, 10, 70],
+                   "precipitation_probability": [int(60 + 30 * math.sin(h / 5.0)) for h in range(48)],
+                   "weather_code": [61 if math.sin(h / 5.0) > 0.3 else 3 if math.sin(h / 5.0) > -0.4 else 2
+                                    for h in range(48)],
+                   "is_day": [1 if 7 <= int(t[11:13]) < 19 else 0 for t in hours]},
+        "daily": {"time": days, "weather_code": [61, 3, 2, 80, 0, 1, 95],
+                  "temperature_2m_max": [14.1, 15.8, 17.2, 13.9, 18.6, 19.4, 16.0],
+                  "temperature_2m_min": [8.2, 7.9, 9.4, 8.8, 9.1, 10.3, 11.2],
+                  "precipitation_probability_max": [80, 30, 10, 70, 0, 5, 60],
                   "sunrise": [d + "T07:12" for d in days], "sunset": [d + "T18:41" for d in days]},
     }
 

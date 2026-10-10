@@ -174,11 +174,29 @@ In edit mode, a panel resizes freely inside a class. Between two classes it snap
 nearest one, so it's never at a size it has no layout for. The gallery's cards have a
 size picker, and **Add to desktop** uses the panel's default class.
 
+bromigOS's panels have these:
+
+| Panel | Sizes | What the bigger sizes add |
+|---|---|---|
+| `system` | compact, standard, large | Compact is one CPU ring with memory and the GPU. Large adds each thread's history, the whole CPU over time, every temperature and the busiest processes. |
+| `network` | compact, standard, wide, large | Wide adds the last hour of traffic. Large adds who this machine is talking to, and every interface. |
+| `storage` | compact, standard, tall, large | Tall lists every filesystem with its device, and the disks' reads and writes over time. Large puts rings across the top. |
+| `workbench` | compact, standard, tall, large | Tall and large add each project's last commit and a fortnight of commits. |
+| `shortcuts` | standard, wide | Wide sets the sections out in columns. |
+| `weather` | compact, standard, wide, large | Wide is a strip of the next hours. Large adds the week ahead. |
+| `connections` | compact, standard, tall | Tall lists every network in reach and the saved ones. |
+| `lab` | compact, standard, large | Large adds a turning hologram of the lab's nodes, the holo deck's constellation. Reduced motion holds it still. |
+
+FIELD NOTES has one size: a bigger pad shows more of your notes.
+
+The bigger sizes read more only while they're shown. For example, SYSTEM lists processes
+only when it's large, and NETWORK reads its connections only then.
+
 To give a panel size classes:
 
 1. Set `sizes` on your `Panel` subclass. Each class has a smallest and a largest
    (width, height) in pixels, and may have a third, the size it starts at. Without that,
-   it starts at its smallest.
+   it starts at its smallest. No size may be in two classes, so keep their ranges apart.
 2. Set `default_size` to the class it starts in.
 3. In `draw(cr, w, h)`, ask which class you're drawing with `self.size_class(w, h)`,
    and lay out for it. Inside a class, lay out from `w` and `h`, because the user can

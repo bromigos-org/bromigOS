@@ -296,6 +296,109 @@ def http_alive(url, timeout=4):
         return False
 
 
+# ------------------------------------------------------------------ for the larger size classes
+# Read only while a panel is drawn at a size that shows them (a panel's tick() asks).
+_procs = {}
+
+
+def top_processes(n=6):
+    """The busiest processes now: [{"pid", "name", "cpu" (% of one CPU), "mem" (bytes)}].
+    The first call primes each process's counter; from the second, cpu is per interval."""
+    seen = set()
+    rows = []
+    for p in psutil.process_iter(["pid", "name"]):
+        pid = p.info["pid"]
+        seen.add(pid)
+        proc = _procs.setdefault(pid, p)
+        try:
+            cpu = proc.cpu_percent(None)
+            mem = proc.memory_info().rss
+        except (psutil.Error, OSError):
+            continue
+        rows.append({"pid": pid, "name": p.info["name"] or "?", "cpu": cpu, "mem": mem})
+    for pid in list(_procs):
+        if pid not in seen:
+            del _procs[pid]
+    rows.sort(key=lambda r: (-r["cpu"], -r["mem"]))
+    return rows[:n]
+
+
+class DiskIO:
+    """Read and write rates over all disks, with a history (bytes a second)."""
+
+    def __init__(self, history=120):
+        self.read_hist = deque([0.0] * history, maxlen=history)
+        self.write_hist = deque([0.0] * history, maxlen=history)
+        self.read = self.write = 0.0
+        self._last = None
+
+    def sample(self):
+        c = psutil.disk_io_counters()
+        now = time.monotonic()
+        if c is None:
+            return self
+        if self._last:
+            dt = max(1e-3, now - self._last[0])
+            self.read = max(0.0, (c.read_bytes - self._last[1]) / dt)
+            self.write = max(0.0, (c.write_bytes - self._last[2]) / dt)
+        self._last = (now, c.read_bytes, c.write_bytes)
+        self.read_hist.append(self.read)
+        self.write_hist.append(self.write)
+        return self
+
+
+def connections(n=8):
+    """Who this machine is talking to: [{"host", "count", "procs"}], busiest first (TCP
+    connections that are established, by remote address)."""
+    by = {}
+    try:
+        conns = psutil.net_connections(kind="inet")
+    except (psutil.Error, OSError):
+        return []
+    names = {}
+    for c in conns:
+        if c.status != psutil.CONN_ESTABLISHED or not c.raddr:
+            continue
+        host = c.raddr.ip
+        if host.startswith(("127.", "::1")):
+            continue
+        e = by.setdefault(host, {"host": host, "count": 0, "procs": set()})
+        e["count"] += 1
+        if c.pid:
+            if c.pid not in names:
+                try:
+                    names[c.pid] = psutil.Process(c.pid).name()
+                except (psutil.Error, OSError):
+                    names[c.pid] = None
+            if names[c.pid]:
+                e["procs"].add(names[c.pid])
+    rows = sorted(by.values(), key=lambda e: -e["count"])[:n]
+    for e in rows:
+        e["procs"] = sorted(e["procs"])
+    return rows
+
+
+def interfaces():
+    """Every network interface but loopback: [{"name", "up", "speed" (Mb/s or 0),
+    "addrs" (IPv4 and IPv6, without link-local), "mac"}]."""
+    out = []
+    try:
+        stats, addrs = psutil.net_if_stats(), psutil.net_if_addrs()
+    except (psutil.Error, OSError):
+        return out
+    for name, st in sorted(stats.items()):
+        if name == "lo":
+            continue
+        ips, mac = [], None
+        for a in addrs.get(name, []):
+            if a.family == socket.AF_INET or (a.family == socket.AF_INET6 and not a.address.startswith("fe80")):
+                ips.append(a.address.split("%")[0])
+            elif a.family == psutil.AF_LINK:
+                mac = a.address
+        out.append({"name": name, "up": bool(st.isup), "speed": int(st.speed or 0), "addrs": ips, "mac": mac})
+    return out
+
+
 # ------------------------------------------------------------------ formatting
 def human(n, unit="B", base=1024.0, digits=1):
     if n is None:

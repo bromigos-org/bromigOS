@@ -55,6 +55,10 @@ class SizeClasses(unittest.TestCase):
                 self.assertIn(cname, P.SIZE_CLASSES, name)
                 self.assertTrue(lo[0] <= start[0] <= hi[0] and lo[1] <= start[1] <= hi[1], (name, cname))
             self.assertIn(cls.default_size, [c[0] for c in cs], name)
+            for i, a in enumerate(cs):                 # no size is in two classes
+                for b in cs[i + 1:]:
+                    overlap = (a[1][0] <= b[2][0] and b[1][0] <= a[2][0] and a[1][1] <= b[2][1] and b[1][1] <= a[2][1])
+                    self.assertFalse(overlap, f"{name}: {a[0]} and {b[0]} overlap")
 
 
 if __name__ == "__main__":
