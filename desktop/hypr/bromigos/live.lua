@@ -33,3 +33,9 @@ K.exec("SUPER + SHIFT + C", live .. " codec-quiet")
 K.exec("SUPER + X", live .. " scan-pin")
 K.exec("SUPER + Z", live .. " scan-hold on")
 K.exec("SUPER + Z", live .. " scan-hold off", { release = true })
+-- The den TV (live/README.md, "The den TV"): the media channel full screen with sound,
+-- the next and previous channel, and its sound on or off.
+K.exec("SUPER + ALT + P", live .. " tv open")
+K.exec("SUPER + ALT + period", live .. " tv next")
+K.exec("SUPER + ALT + comma", live .. " tv prev")
+K.exec("SUPER + ALT + M", live .. " tv sound toggle")
