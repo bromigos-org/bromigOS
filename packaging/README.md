@@ -420,7 +420,10 @@ The AUR keyring installs the same public key and trust file as the repo package.
 The container check verifies that the packages leave `pacman.conf` alone and
 that pacman accepts the signed repository and a signed core package.
 
-The workflow uses `AUR_SSH_PRIVATE_KEY`. To configure the same key on bromigOS:
+Source tags use the existing `RELEASE_TOKEN` when configured, as the release
+workflow does. This allows a tag to retain an older workflow snapshot. Without it,
+GitHub can reject tag creation when that snapshot differs from the current branch.
+The AUR push uses `AUR_SSH_PRIVATE_KEY`. To configure the same key on bromigOS:
 
 ```bash
 gh secret set AUR_SSH_PRIVATE_KEY -R bromigos-org/bromigOS < ~/.ssh/aur-bromigos-ci
