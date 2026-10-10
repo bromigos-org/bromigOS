@@ -421,7 +421,9 @@ The container check verifies that the packages leave `pacman.conf` alone and
 that pacman accepts the signed repository and a signed core package.
 
 Source tags use the existing `RELEASE_TOKEN` when configured, as the release
-workflow does. This allows a tag to retain an older workflow snapshot. Without it,
+workflow does. For a classic token, retain its existing scopes and enable
+`workflow` to tag an older workflow snapshot. Existing verified source tags are
+reused without moving them. Without it,
 GitHub can reject tag creation when that snapshot differs from the current branch.
 The AUR push uses `AUR_SSH_PRIVATE_KEY`. To configure the same key on bromigOS:
 

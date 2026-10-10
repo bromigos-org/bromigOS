@@ -159,6 +159,11 @@ jobs:
         run: |
           source_sha=$(git log -1 --format=%H -- packaging/keys packaging/bromigos-keyring packaging/bromigos-mirrorlist LICENSE-MIT LICENSE-APACHE)
           tag="aur-bootstrap-$source_sha"
+          short_tag="aur-bootstrap-${source_sha:0:12}"
+          # Reuse an earlier immutable tag only when its commit matches exactly.
+          if [ "$(git rev-parse "$short_tag^{commit}" 2>/dev/null || true)" = "$source_sha" ]; then
+            tag="$short_tag"
+          fi
           if ! git rev-parse "$tag" >/dev/null 2>&1; then
             git tag "$tag" "$source_sha"
             git push origin "$tag"
