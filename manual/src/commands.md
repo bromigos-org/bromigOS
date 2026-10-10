@@ -57,7 +57,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos live`](#bromigos-live) | Turn the animated background on or off, or open a [hologram](holograms.md): `bromigos live timeline`. |
 | [`bromigos panels`](#bromigos-panels) | Show, hide or move the desktop [panels](panels.md), start edit mode, list every widget, and set the weather's place. |
 | [`bromigos widgets`](#bromigos-widgets) | Show or hide one panel or all of them. |
-| [`bromigos account`](#bromigos-account) | Sign a panel in to an online account, such as Twitch, GitHub, GitLab or Spotify. See [Panels that need an account](panels.md#panels-that-need-an-account). |
+| [`bromigos account`](#bromigos-account) | Sign a panel in to an online account, such as Twitch, GitHub, GitLab or Spotify. A service can have several accounts, such as gitlab.com and your company's GitLab. See [Panels that need an account](panels.md#panels-that-need-an-account). |
 | [`bromigos mute`](#bromigos-mute) | Mute or unmute the theme's sounds and VECTOR's voice together. |
 | [`bromigos boot`](#bromigos-boot) | Turn the themed [boot menu](boot-menu.md) on or off. |
 | [`bromigos emblem`](#bromigos-emblem) | Draw a theme's emblem pictures. For people making themes. |
@@ -249,18 +249,20 @@ Options:
 
 ### bromigos account
 
-Sign in to an online account a widget uses (Twitch, GitHub, GitLab, Spotify); tokens stay in your keyring.
+Sign in to the online accounts widgets use (Twitch, GitHub, GitLab, Spotify), several per service if you like; tokens stay in your keyring.
 
 ```text
-bromigos account status|login|logout|configure|set-token PROVIDER [client_id=ID] [base=URL]
+bromigos account list [PROVIDER] | add PROVIDER NAME [base=URL] [client_id=ID] [label=TEXT] | remove PROVIDER NAME | status|login|logout|set-token|configure PROVIDER [--as NAME] [client_id=ID] [base=URL]
 ```
 
 For example:
 
 ```text
 bromigos account login twitch
-bromigos account configure gitlab client_id=abc123
-bromigos account status github
+bromigos account add gitlab work base=https://git.example.org
+bromigos account configure gitlab --as work client_id=abc123
+bromigos account login gitlab --as work
+bromigos account list
 ```
 
 From the `bromigos-core` package.

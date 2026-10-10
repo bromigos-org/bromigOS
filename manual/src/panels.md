@@ -193,9 +193,9 @@ GITHUB, GITLAB, SPOTIFY and TWITCH show your own account, so they need you to si
 once. Open the panel's **Settings…** and click **Sign in**.
 
 1. **Connect the service, if asked.** GitHub, gitlab.com and Twitch need nothing:
-   bromigOS has its own apps for them. Spotify, and a GitLab server of your own, need an
-   app of your own; the form says where to make it and what to paste. You do this once per service, and every panel for
-   that service shares it.
+   bromigOS has its own apps for them. Spotify, and a GitLab or GitHub server of your
+   own, need an app of your own. The form says where to make it and what to paste. You
+   do this once per service, and every panel for that service shares it.
 2. **Sign in.** For GitHub, GitLab and Twitch, a short code appears. Type it on the page
    that opens, and approve. For Spotify, approve on Spotify's page; the form finishes by
    itself.
@@ -205,13 +205,37 @@ The sign-in is kept in your login keyring, never in a file. **Sign out** forgets
 If you use the `gh` command and you're signed in to it, GITHUB uses that, and there's
 nothing to do. GITLAB can also take a personal access token: **Paste a token…**.
 
+### Several accounts
+
+You can sign in to more than one account of a service. For example, gitlab.com and your
+company's own GitLab, GitHub and a GitHub Enterprise server, or two Twitch accounts. One
+panel shows them all.
+
+1. In the panel's **Settings…**, click **Add another account…**.
+2. Give it a short name, such as `work`. For GitLab and GitHub, give its server's address
+   too, or leave it empty for the public site.
+3. A server of your own needs its own app, so the form asks for its client ID. Then click
+   **Sign in**, as for the first account.
+
+With two accounts signed in, the panel merges their rows, newest first. Each row shows
+which account it came from, such as `gitlab.com` or `work`. Each account has a tick box
+in the form: untick it to leave that account out of this panel. **Remove…** signs an
+account out and forgets it, after asking. SPOTIFY shows one account at a time: the first
+one ticked.
+
 From a terminal:
 
 ```bash
 bromigos account login twitch
-bromigos account configure gitlab client_id=YOUR_CLIENT_ID   # services without a bromigOS app
 bromigos account status twitch
 bromigos account logout twitch
+bromigos account configure spotify client_id=YOUR_CLIENT_ID      # services without a bromigOS app
+
+bromigos account add gitlab work base=https://git.example.org    # another account, on its own server
+bromigos account configure gitlab --as work client_id=YOUR_APP_ID
+bromigos account login gitlab --as work
+bromigos account list                                            # every account, and who's signed in
+bromigos account remove gitlab work
 ```
 
 The developer docs' [widgets.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/widgets.md#the-built-in-widgets)

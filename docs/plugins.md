@@ -211,29 +211,41 @@ too. The helper:
 - keeps the tokens in your login keyring, through libsecret. They're never written to a
   file.
 - refreshes a token that has expired.
-- uses your `gh` login for GitHub when there is one. It reads the token when it's needed
-  and never stores it.
+- uses your `gh` login for GitHub's default account on github.com when there is one. It
+  reads the token when it's needed and never stores it.
 
-No flow needs a client secret, and bromigOS ships no client ID. You make an app of your
-own on the service's developer site and give the helper its client ID. Client IDs go in
-`~/.config/bromigos/accounts.toml`, one table per service, and every widget for that
-service shares them.
+No flow needs a client secret. bromigOS ships its own client IDs for Twitch, GitHub and
+gitlab.com, which work only on those public sites. For Spotify, or a server of your own,
+you make an app on the service's developer site and give the helper its client ID.
+Client IDs go in `~/.config/bromigos/accounts.toml`, one table per service, and every
+widget for that service shares them.
+
+A service can have several accounts, such as gitlab.com and a company's own GitLab. The
+first is called `default`. Each other one has a name, such as `work`, and a table of its
+own, `[gitlab.accounts.work]`, with its server, its client ID and a label. Every helper
+function takes `account="default"`. The default account's table and keyring item are
+where they always were.
 
 From a terminal:
 
 ```bash
-bromigos account configure twitch client_id=YOUR_CLIENT_ID
 bromigos account login twitch          # shows a code to enter at twitch.tv/activate
 bromigos account status twitch         # signed in, and as whom
 bromigos account set-token gitlab      # store a personal access token instead
 bromigos account logout twitch
+bromigos account configure spotify client_id=YOUR_CLIENT_ID
+
+bromigos account add gitlab work base=https://git.example.org      # a second account
+bromigos account configure gitlab --as work client_id=YOUR_APP_ID   # its server's own app
+bromigos account login gitlab --as work
+bromigos account list                  # every account, its server and who's signed in
+bromigos account remove gitlab work    # signs it out and forgets it, after asking
 ```
 
-In a panel:
+In a panel, `K.Accounts` gives you the accounts the user chose, each with its own poller:
 
 ```python
 import _kit as K
-import bromigos_account as A
 
 class FollowsPanel(K.KitPanel):
     name, title = "follows", "FOLLOWS"
@@ -241,23 +253,29 @@ class FollowsPanel(K.KitPanel):
 
     def __init__(self, cfg=None, wake=None):
         super().__init__(cfg, wake)
-        self.account = K.Account(self, "twitch")
-        self.poll = self.poller(self.fetch, every=60)
+        self.accounts = K.Accounts(self, "twitch", [("poll", self.fetch, 60, None)])
 
-    def fetch(self):
-        token = self.account.token()               # None when signed out
+    def fetch(self, account):                       # once per account, on its own thread
+        token = account.token()                     # None when signed out
         ...
 
     def draw(self, cr, w, h):
         top = D.frame(cr, w, h, self.title)
-        if not self.account.status()["signed_in"]:
-            self.account.draw_signin(cr, w, h, top, "Live channels you follow")
+        if not self.accounts.signed_in():
+            self.accounts.first().draw_signin(cr, w, h, top, "Live channels you follow")
             return
-        ...
+        for account, data in self.accounts.data():  # each signed-in account that has read something
+            ...                                     # tag rows with account.label() when accounts.many()
 ```
 
-`draw_signin` draws what's missing, a **Sign in** button, and then the code to enter.
-The helper's functions are listed at the top of `lib/bromigos_account.py`:
+The `secret-signin` field's value is which accounts the widget shows. `K.Accounts` reads
+it for you: the accounts it lists, or every signed-in one when it's empty, or the default
+account, signed out, so the panel can offer **Sign in**. `draw_signin` draws what's
+missing, a **Sign in** button, and then the code to enter. A panel that shows one account
+at a time can use `K.Account(self, "twitch")`, which is the default account.
+
+The helper's functions are listed at the top of `lib/bromigos_account.py`. Each takes
+`account="default"`:
 
 | Function | What it does |
 |---|---|
@@ -267,6 +285,10 @@ The helper's functions are listed at the top of `lib/bromigos_account.py`:
 | `token(provider)` | A token to send, refreshed if it expired, or `None` |
 | `configure(provider, client_id=…)` | Writes `accounts.toml` |
 | `set_token(provider, token)` | Stores a token you pasted |
+| `accounts(provider)` | Every account, `default` first, each with its status and label |
+| `add_account(provider, name, base=None)` | Adds a named account, on its own server if `base` is given |
+| `remove_account(provider, name)` | Signs it out and forgets it |
+| `base(provider)`, `api(provider)`, `label(provider)` | Its web address, its API address and its short name |
 
 ## Configuration files
 

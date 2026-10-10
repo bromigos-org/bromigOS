@@ -335,25 +335,66 @@ The file is replaced in one step, and a symbolic link stays a link, as with `lay
 
 ### Accounts
 
-A `secret-signin` field isn't a value in the file. It's a sign-in to an online account,
-through the shared helper `lib/bromigos_account.py`. The form shows **Sign in**, then
-**Signed in as …** with **Sign out**.
+A `secret-signin` field is a sign-in to an online account, through the shared helper
+`lib/bromigos_account.py`. The form shows **Sign in**, then **Signed in as …** with
+**Sign out**.
 
 - **The sign-in.** For GitHub, GitLab and Twitch, the form shows a short code, large, with
   **Copy**, **Open the page** and how long the code still works. You type the code on the
   service's own page. For Spotify, **Open the sign-in page** opens it, and the form
   finishes by itself when you approve.
 - **Connecting a service.** bromigOS has its own apps for GitHub, gitlab.com and Twitch,
-  so those go straight to Sign in. Spotify, and a GitLab server of your own, need your own
-  app's client ID once (and the GitLab server's address). When one is missing, the form asks for it under **Connect
-  <service>**, with where to make the app. It's saved in `~/.config/bromigos/accounts.toml`
-  and shared by every widget that uses that service.
+  so those go straight to Sign in. Spotify needs your own app's client ID once. So does
+  a GitLab or GitHub Enterprise server of your own, along with its address. When one is
+  missing, the form asks for it under **Connect <service>**, with where to make the app.
+  It's saved in `~/.config/bromigos/accounts.toml` and shared by every widget that uses
+  that service.
 - **GitHub through gh.** If you're signed in to the `gh` command, the form says **Signed
   in through gh as …**, and there's nothing to do.
 - **A GitLab token.** **Paste a token…** stores a personal access token instead.
 
 Tokens go to your login keyring, never to a file. The form never shows one, and nothing
 logs one. A widget gets a usable token with `bromigos_account.token("<provider>")`.
+
+#### Several accounts
+
+A service can have more than one account. For example, you can be signed in to gitlab.com
+and to your company's own GitLab at the same time. Or to GitHub and a GitHub Enterprise
+server, or to two Twitch accounts.
+
+- **The first account** is called `default`. It's the one you had before, and nothing
+  about it changes.
+- **Add another account…** in the form asks for a name, such as `work`. For GitLab and
+  GitHub it also asks for the server's address. Leave the address empty for the public
+  site, which uses bromigOS's own app. A server of your own needs its own app, so the
+  form then asks for its client ID.
+- **One widget shows them all.** When more than one account is signed in, each one has a
+  tick box: whether this widget shows it. By default a widget shows every signed-in
+  account. The widget merges their rows and sorts them as it would for one account. Each
+  row is tagged with its account's short name, such as `gitlab.com` or `work`.
+- **Each account is read on its own.** It has its own polling and its own rate limit.
+- **Remove…** signs a named account out and forgets its settings, after you confirm. The
+  `default` account can't be removed, only signed out.
+
+The field's value in `<name>.toml` is the list of accounts the widget shows, by name,
+such as `account = ["work"]`. An empty list, the default, means every signed-in account.
+It's never a token: `bromigos panels set` accepts only names that exist.
+
+In `accounts.toml`, the default account is the service's table, as before. Each named
+account is a table under it, with its server, its client ID and a label:
+
+```toml
+[gitlab]                         # the default account: gitlab.com, bromigOS's own app
+
+[gitlab.accounts.work]
+base = "https://git.example.org"
+client_id = "your-application-id"
+label = "work"
+```
+
+A named account on the same server as the default one shares the default's client ID.
+In the keyring, each account has its own item. The service is
+`bromigos-account:<provider>` and the account is the account's name.
 
 ## Place the panels
 
@@ -577,6 +618,12 @@ OAuth app at github.com › Settings › Developer settings › OAuth Apps with 
 Flow** ticked and **Expire user access tokens** unticked, then run
 `bromigos account configure github client_id=ID`.
 
+For GitHub Enterprise Server, add it as another account: **Add another account…** with
+its address, or `bromigos account add github work base=https://github.example.org`. Make
+the same kind of OAuth app on that server, and give the account its client ID. The panel
+then shows both accounts, each row tagged with its account, and adds up their
+contribution graphs.
+
 The panel reads GitHub every 4 minutes while you can see it. Each request carries the
 last answer's ETag, so an unchanged answer doesn't count against GitHub's rate limit. It
 reads the contribution graph once an hour, and only while large. Settings: `repos` (how
@@ -593,16 +640,18 @@ The GitLab panel shows your work on gitlab.com or on your own GitLab:
   show each project's recent pipelines as a strip.
 
 On gitlab.com, click **Sign in** in the panel's **Settings…** and enter the code on
-GitLab's page; bromigOS has its own gitlab.com app. For your own GitLab server, set its
-address once: `bromigos account configure gitlab base=https://git.example.org`. Then sign
-in one of two ways:
+GitLab's page; bromigOS has its own gitlab.com app. For your own GitLab server, add it as
+another account with **Add another account…**, or from a terminal:
+`bromigos account add gitlab work base=https://git.example.org`. One panel then shows
+both, each row tagged with its account ([Several accounts](#several-accounts)). Then sign
+in to your server one of two ways:
 
 - **The device flow**, on GitLab 17.2 or later. In GitLab, User settings › Applications:
   add an application, untick **Confidential**, tick **Device authorization grant**,
   `read_api` and `read_user`, and give the redirect URI `http://localhost`. Give the panel
   its application ID.
 - **A personal access token** with `read_api`: **Paste a token…** in the panel's
-  settings, or `bromigos account set-token gitlab`.
+  settings, or `bromigos account set-token gitlab --as work`.
 
 The panel reads GitLab every 4 minutes while you can see it. Setting: `projects`, how
 many projects show their pipelines.
@@ -695,6 +744,9 @@ It asks Spotify what's playing every 5 seconds while something plays and the pan
 screen, and every 20 seconds while paused. It reads the queue and the history once a
 minute, and only while tall or large. Setting: `show_queue`.
 
+The panel shows one account. If you have signed in to more than one Spotify account, it
+shows the first one its `account` setting lists, or else the first one signed in.
+
 ### Twitch
 
 The Twitch panel shows your own channel (live or offline, viewers, title, category) and
@@ -715,6 +767,10 @@ doesn't use it), then run `bromigos account configure twitch client_id=ID`.
 
 The panel reads Twitch every minute while you can see it. Setting: `channels`, more
 channels to watch, by their Twitch login.
+
+With two Twitch accounts ([Several accounts](#several-accounts)), the panel merges the
+live channels both follow, each tagged with the account that follows it. Your channel is
+whichever of yours is live, or else the first account's.
 
 ### YouTube
 
