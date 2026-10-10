@@ -1,0 +1,4 @@
+[{"id": 901, "status": "failed", "ref": "tables", "web_url": "https://gitlab.example.org/harbor/tides/-/pipelines/901",
+  "updated_at": "2026-10-09T20:04:00Z", "source": "merge_request_event"},
+ {"id": 900, "status": "waiting_for_resource", "ref": "main", "web_url": "https://gitlab.example.org/harbor/tides/-/pipelines/900",
+  "created_at": "2026-10-09T19:00:00Z", "source": "push"}]

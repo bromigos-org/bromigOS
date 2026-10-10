@@ -1,0 +1,6 @@
+[{"iid": 54, "title": "Move the tide tables", "web_url": "https://gitlab.example.org/harbor/tides/-/merge_requests/54",
+  "references": {"full": "harbor/tides!54"}, "author": {"username": "ana"}, "updated_at": "2026-10-09T20:00:00.123Z",
+  "draft": false, "has_conflicts": true, "head_pipeline": {"status": "failed"}},
+ {"iid": 318, "title": "Retry the uplink", "web_url": "https://gitlab.example.org/harbor/relay/-/merge_requests/318",
+  "references": {"full": "harbor/relay!318"}, "author": {"username": "tobias"}, "updated_at": "2026-10-09T22:00:00Z",
+  "work_in_progress": false, "has_conflicts": false}]

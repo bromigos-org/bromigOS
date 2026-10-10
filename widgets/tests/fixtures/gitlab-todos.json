@@ -1,0 +1,7 @@
+[{"id": 7, "action_name": "build_failed", "target_type": "MergeRequest",
+  "target": {"iid": 54, "title": "Move the tide tables", "web_url": "https://gitlab.example.org/harbor/tides/-/merge_requests/54"},
+  "target_url": "https://gitlab.example.org/harbor/tides/-/merge_requests/54",
+  "project": {"path_with_namespace": "harbor/tides"}, "author": {"username": "ana"}, "created_at": "2026-10-09T20:05:00Z"},
+ {"id": 8, "action_name": "directly_addressed", "target_type": "Issue",
+  "target": {"iid": 203, "title": "Flaky parser test"}, "project": {"path_with_namespace": "harbor/tides"},
+  "author": {"username": "mara"}, "created_at": "2026-10-09T18:00:00Z", "target_url": "https://gitlab.example.org/harbor/tides/-/issues/203"}]
