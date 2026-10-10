@@ -152,7 +152,7 @@ On a fresh Arch install, signed in as your own user, download the installer and 
 It's about eighty lines.
 
 ```bash
-curl -fsSLO https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev/bromigos/install.sh
+curl -fsSLO https://pkgs.bromigos.org/bromigos/install.sh
 less install.sh
 ```
 

@@ -15,7 +15,7 @@ You need:
 - **Arch Linux,** freshly installed, with a user who can use `sudo` and a working network.
   archinstall's minimal profile is enough.
 - **Another repository, if you use one.** By default `install.sh` installs from the
-  public repository, `https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev`. A mirror of your own is written `<repo>` below. If its TLS
+  public repository, `https://pkgs.bromigos.org`. A mirror of your own is written `<repo>` below. If its TLS
   certificate is signed by its own certificate authority, pass that certificate with
   `--ca`.
 
@@ -24,7 +24,7 @@ You need:
 Signed in as your own user, not root, download the script, read it, then run it:
 
 ```bash
-curl -fsSLO https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev/bromigos/install.sh
+curl -fsSLO https://pkgs.bromigos.org/bromigos/install.sh
 less install.sh
 bash install.sh
 ```
@@ -36,14 +36,14 @@ too: add `--cacert <ca.pem>` to the first command.
 When it's done, reboot and sign in at the Bromigos login screen.
 
 Piping the script straight into bash works too:
-`curl -fsSL https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev/bromigos/install.sh | bash`. It asks its questions
+`curl -fsSL https://pkgs.bromigos.org/bromigos/install.sh | bash`. It asks its questions
 on the terminal, not the pipe. With no terminal at all, such as `ssh` without `-t`, it
 stops unless you add `--yes`. Then it installs unattended, and `bromigos setup` asks the
 first-run questions after you sign in.
 
 | `install.sh` option | What it does |
 |---|---|
-| `--repo URL` | The package repository's base URL, or set `BROMIGOS_REPO_URL`. The default is the public repository, `https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev`. |
+| `--repo URL` | The package repository's base URL, or set `BROMIGOS_REPO_URL`. The default is the public repository, `https://pkgs.bromigos.org`. |
 | `--ca FILE` or `--ca URL` | A CA certificate to trust for the repository's TLS |
 | `--channel NAME` | `stable` (the default), `rc` or `edge`. See [update.md](update.md#channels). |
 | `--dry-run` | Says what it would do, and changes nothing |

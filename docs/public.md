@@ -1,6 +1,6 @@
 # Making the package repository public
 
-bromigOS's packages are public, at `https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev`. CI copies every channel to that Cloudflare R2
+bromigOS's packages are public, at `https://pkgs.bromigos.org`. CI copies every channel to that Cloudflare R2
 bucket, which serves them to anyone with no charge for downloads. During early access the
 bucket was private, and `tools/release/go-public.sh` opened it.
 

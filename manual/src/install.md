@@ -20,7 +20,7 @@ You need:
 2. Download the installer:
 
    ```bash
-   curl -fsSLO https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev/bromigos/install.sh
+   curl -fsSLO https://pkgs.bromigos.org/bromigos/install.sh
    ```
 
 3. Read it if you like. It's short: `less install.sh`.
