@@ -1,0 +1,8 @@
+{"total_count": 2, "incomplete_results": false, "items": [
+ {"number": 412, "title": "Size classes", "html_url": "https://github.com/octo/widgets/pull/412",
+  "repository_url": "https://api.github.com/repos/octo/widgets", "user": {"login": "mara"},
+  "updated_at": "2026-10-09T23:00:00Z", "draft": false, "comments": 4,
+  "pull_request": {"url": "https://api.github.com/repos/octo/widgets/pulls/412"}},
+ {"number": 91, "title": "Crash on resume", "html_url": "https://github.com/octo/relay/issues/91",
+  "repository_url": "https://api.github.com/repos/octo/relay", "user": {"login": "ana"},
+  "updated_at": "2026-10-09T20:00:00Z", "comments": 6}]}

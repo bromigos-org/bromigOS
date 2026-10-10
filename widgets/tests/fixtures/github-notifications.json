@@ -1,0 +1,10 @@
+[{"id": "101", "unread": true, "reason": "review_requested", "updated_at": "2026-10-10T04:40:28Z",
+  "subject": {"title": "ci: run the golden-frame tests", "url": "https://api.github.com/repos/octo/widgets/pulls/827",
+              "latest_comment_url": null, "type": "PullRequest"},
+  "repository": {"full_name": "octo/widgets", "html_url": "https://github.com/octo/widgets"}},
+ {"id": "102", "unread": false, "reason": "mention", "updated_at": "2026-10-09T20:00:00Z",
+  "subject": {"title": "Crash on resume", "url": "https://api.github.com/repos/octo/relay/issues/91", "type": "Issue"},
+  "repository": {"full_name": "octo/relay", "html_url": "https://github.com/octo/relay"}},
+ {"id": "103", "unread": true, "reason": "subscribed", "updated_at": "2026-10-09T18:00:00Z",
+  "subject": {"title": "v1.2.0", "url": "https://api.github.com/repos/octo/relay/releases/12345", "type": "Release"},
+  "repository": {"full_name": "octo/relay", "html_url": "https://github.com/octo/relay"}}]

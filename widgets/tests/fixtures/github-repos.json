@@ -1,0 +1,7 @@
+[{"name": "widgets", "full_name": "octo/widgets", "stargazers_count": 1284, "forks_count": 96, "open_issues_count": 23,
+  "pushed_at": "2026-10-09T23:54:56Z", "language": "Python", "private": false, "archived": false,
+  "html_url": "https://github.com/octo/widgets", "description": "Panels"},
+ {"name": "old", "full_name": "octo/old", "stargazers_count": 5, "archived": true, "pushed_at": "2020-01-01T00:00:00Z"},
+ {"name": "relay", "full_name": "octo/relay", "stargazers_count": 0, "forks_count": 0, "open_issues_count": 1,
+  "pushed_at": "2026-10-08T10:00:00Z", "language": null, "private": true, "archived": false,
+  "html_url": "https://github.com/octo/relay", "description": null}]

@@ -1,0 +1,8 @@
+[{"type": "WatchEvent", "actor": {"login": "kai"}, "repo": {"name": "octo/widgets"}, "payload": {"action": "started"},
+  "created_at": "2026-10-09T22:00:00Z"},
+ {"type": "PushEvent", "actor": {"login": "octo"}, "repo": {"name": "octo/widgets"},
+  "payload": {"ref": "refs/heads/main", "size": 3, "commits": [{}, {}, {}]}, "created_at": "2026-10-09T23:00:00Z"},
+ {"type": "PullRequestEvent", "actor": {"login": "mara"}, "repo": {"name": "octo/widgets"},
+  "payload": {"action": "closed", "pull_request": {"number": 410, "merged": true}}, "created_at": "2026-10-09T21:00:00Z"},
+ {"type": "IssuesEvent", "actor": {"login": "ana"}, "repo": {"name": "octo/relay"},
+  "payload": {"action": "opened", "issue": {"number": 91}}, "created_at": "2026-10-09T20:00:00Z"}]
