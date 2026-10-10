@@ -301,6 +301,11 @@ much the den's phosphor tints the picture, the volume a screen starts at and the
   is decoded. With reduced motion, it shows a still frame renewed every 30 seconds, unless
   the sound is on.
 - **Nothing on.** Thirty seconds after the last media channel goes off, mpv closes.
+- **The cost.** Measured on an RTX 5070 at 2560×1440: a frame of the den takes 0.46 ms of
+  the GPU, and 1.1 to 1.2 ms with a 1080p H.264 or HEVC video on the big monitor. The live
+  layer's CPU stays within a percent or two of one core of the den alone, because NVDEC
+  decodes. (`tools/offscreen.py bench 20 bg`, with and without `OFF_TV`; the nested test's
+  `--measure`.)
 
 ### The pointer, the hint and the keys
 
