@@ -200,10 +200,11 @@ class CertTest(unittest.TestCase):
         a = labedge.CertManager({"name": "cm", "type": "cert-manager"})
         exp = [{"labels": {"name": "wildcard", "namespace": "ingress", "issuer_name": "le"}, "value": NOW + 40 * 86400}]
         ready = [{"labels": {"name": "wildcard", "namespace": "ingress", "condition": "True"}, "value": 1}]
-        with mock.patch.object(L, "mq_soft", side_effect=lambda q: exp if "expiration" in q else ready if "ready" in q else []):
+        with mock.patch.object(L, "mq_soft", side_effect=lambda q: exp if "expiration" in q else ready if "ready" in q else []), \
+                mock.patch("time.time", return_value=NOW):    # the fixtures' now, not the clock's
             (c,) = a.certs()
         self.assertTrue(c["ready"])
-        self.assertIn(c["days_left"], (39, 40))
+        self.assertEqual(c["days_left"], 40)
         served = [{"labels": {"cn": "example.net", "sans": "*.example.net,example.net"}, "value": NOW + 5 * 86400}]
         with mock.patch.object(L, "mq_soft", side_effect=lambda q: served if "traefik" in q else []), \
                 mock.patch.object(L, "kube", return_value=None):
