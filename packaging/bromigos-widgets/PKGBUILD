@@ -21,7 +21,9 @@ optdepends=('git: recent repos on WORKBENCH'
             'iputils: the latency radar'
             'lua: SHORTCUTS from a Lua Hyprland config when Hyprland is not running')
 makedepends=('git' 'python')
-checkdepends=('desktop-file-utils')
+checkdepends=('desktop-file-utils'
+             # the tests draw every panel offscreen (tests/: cairo, Pango, psutil)
+             'python-cairo' 'python-gobject' 'pango' 'python-psutil')
 options=('!debug')
 
 _root="${startdir%/packaging/*}"

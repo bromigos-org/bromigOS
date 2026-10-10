@@ -53,7 +53,9 @@ optdepends=('git: bromigos theme install <url>'
             'python-evdev: the dial of a peripheral module (bromigos peripheral enable installs it)'
             'python-openrazer: the lighting of a Razer keyboard (bromigos peripheral enable installs it)')
 makedepends=('git' 'python' 'lua' 'zsh' 'python-pillow')
-checkdepends=('desktop-file-utils')
+checkdepends=('desktop-file-utils'
+             # the widget gallery's tests (bromigos panels gallery reads the panels: cairo, psutil)
+             'python-cairo' 'python-psutil' 'python-gobject' 'pango')
 options=('!debug')
 
 _root="${startdir%/packaging/*}"
