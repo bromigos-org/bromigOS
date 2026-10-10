@@ -51,6 +51,8 @@ Run `bromigos update` to get them. The next release notes will include these hig
 
 ### Improved
 
+- The zsh prompt follows your theme. Choose mehshell, Starship or a plain prompt in
+  [Shell and terminal](shell.md), and bromigOS keeps your choice.
 - Japanese, Chinese and Korean titles draw correctly in media, music and YouTube views,
   using the fonts installed with bromigOS.
 

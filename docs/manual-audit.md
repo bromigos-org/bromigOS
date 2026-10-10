@@ -2,14 +2,15 @@
 
 This audit checks whether the commands and default shortcuts shipped by bromigOS appear
 in the manual. It also checks the newer media workflows against their parsers and source.
-The results below are from 10 October 2026.
+The results below are from 10 October 2026, including the merged provisioner and
+shell-prompt command.
 
 ## What was checked
 
 | Source | Coverage |
 |---|---|
-| `bromigos commands --json`, with only this checkout's executables | 69 visible command routes |
-| Built-in help and the generated Commands page | 127 command and subcommand help sections |
+| `bromigos commands --json`, with only this checkout's executables | 70 visible command routes |
+| Built-in help and the generated Commands page | 128 command and subcommand help sections |
 | `widgets/keybinds.py`, read from the packaged Hyprland config | 80 default key actions |
 | `tools/docs/manual-reference.toml` | Every visible route and default key action has a task row |
 | Generated Commands and Keys pages | Both match the code |
