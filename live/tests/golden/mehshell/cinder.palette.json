@@ -1,0 +1,83 @@
+{
+  "colors": {
+    "background": "#090606",
+    "cyan": "#6fd3ff",
+    "danger": "#ff3b3b",
+    "danger_surface": "#2b0808",
+    "danger_text": "#ffd8d8",
+    "dim": "#8a3f1e",
+    "faint": "#5a4a44",
+    "gold": "#ffd36a",
+    "muted": "#9a8078",
+    "panel": "#171010",
+    "primary": "#ff7a2a",
+    "rust": "#5a1a0e",
+    "selection": "#2b1a16",
+    "soft": "#ffc8a0",
+    "text": "#f0dcd0",
+    "void": "#050303",
+    "warn": "#ffcf5a",
+    "warn_surface": "#3d2a0a",
+    "white": "#fff0e6"
+  },
+  "contrast": {
+    "lowest": {
+      "bg": "panel",
+      "fg": "selection",
+      "min": 3.0,
+      "ok": false,
+      "ratio": 1.12
+    },
+    "mode": "normal",
+    "ok": false
+  },
+  "mode": "dark",
+  "motion": "full",
+  "name": "Cinder",
+  "schema": 1,
+  "tables": {
+    "holo": {
+      "glow": "#ffcf5a",
+      "highlight": "#fff0e6",
+      "label": "#f0dcd0",
+      "line": "#ff7a2a"
+    },
+    "qt": {
+      "button": "#281a18",
+      "header": "#100a0a",
+      "negative_on_selection": "#5a1a0e",
+      "neutral_on_selection": "#4a3010",
+      "view": "#0c0808",
+      "view_alt": "#120c0c",
+      "window_alt": "#1d1414"
+    },
+    "terminal": {
+      "background": "#090606",
+      "color0": "#090606",
+      "color1": "#ff3b3b",
+      "color10": "#ffc8a0",
+      "color11": "#ffd36a",
+      "color12": "#9fc6ff",
+      "color13": "#e8b0e6",
+      "color14": "#a0e4ff",
+      "color15": "#fff4ee",
+      "color2": "#ff7a2a",
+      "color3": "#ffcf5a",
+      "color4": "#6fa8ff",
+      "color5": "#d78bd6",
+      "color6": "#6fd3ff",
+      "color7": "#c8b4ac",
+      "color8": "#5a4a44",
+      "color9": "#ff7b7b",
+      "foreground": "#f0dcd0"
+    },
+    "widgets": {
+      "frame": "#8a3f1e",
+      "graph": "#ff7a2a",
+      "header": "#ff7a2a",
+      "track": "#2b1a16",
+      "value": "#ffc8a0"
+    }
+  },
+  "theme": "cinder"
+}

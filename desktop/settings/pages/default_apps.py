@@ -107,6 +107,7 @@ class DefaultAppsPage:
                                     "runs": "bromigos defaults files APP"})
         _plain(r, "File manager's key", f"Starts: {fk['command']}" + ("" if fk["from"] != "bromigOS" else " (bromigOS's)"))
         r.add_prefix(Gtk.Image.new_from_icon_name("system-file-manager-symbolic"))
+        self.ctx.json(["bromigos", "shell", "--json"], lambda doc, err: self._prompt(g, doc, err))
         self._webapps(d["webapps"])
 
     def _kind_row(self, g, k):
@@ -174,6 +175,20 @@ class DefaultAppsPage:
         self.ctx.change(CMD + ["set", k["kind"], app, "--json"], lambda d: d.get("said") or "Changed",
                         undo=(CMD + ["set", k["kind"], old, "--json"]) if old else None,
                         done=self.sync, failed=lambda *_: self.refresh())
+
+    def _prompt(self, group, doc, err):
+        if not doc or doc.get("ok") is False:
+            self.ctx.failed(group, ["bromigos", "shell", "--json"], err)
+            return
+        self.ctx.combo_row(group, "Prompt", "The zsh prompt. Open a new shell after changing it.",
+                           options=[("mehshell", "mehshell"), ("starship", "Starship"), ("none", "None")],
+                           current=doc["prompt"], key="prompt",
+                           hint="Existing startup files keep their own prompt until you use bromigOS's zsh setup",
+                           on_select=lambda v: self.ctx.change(
+                               ["bromigos", "shell", "prompt", v, "--json"],
+                               lambda d: d.get("said", "Prompt changed"),
+                               undo=["bromigos", "shell", "prompt", doc["prompt"], "--json"],
+                               done=lambda _: self.refresh(), failed=lambda *_: self.refresh()))
 
     def _terminal(self, app, old):
         if app == old.get("app"):
@@ -258,6 +273,7 @@ PAGE = Page(
         Entry("mail", "Email", ["mailto", "mail client", "email client"], "Opens with"),
         Entry("terminal", "Terminal", ["terminal emulator", "kitty", "foot", "alacritty", "$TERMINAL", "console"],
               "bromigOS's keys"),
+        Entry("prompt", "Prompt", ["zsh", "shell", "mehshell", "starship"], "bromigOS's keys"),
         Entry("files-key", "File manager's key", ["SUPER+E", "file manager shortcut"], "bromigOS's keys"),
         Entry("webapps", "Web apps", ["webapp", "pwa", "site as an app"], "Web apps"),
         Entry("webapp-catalog", "Add a web app", ["gmail", "youtube", "github", "chatgpt"], "Web apps"),

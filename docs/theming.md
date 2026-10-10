@@ -1177,3 +1177,18 @@ bromigos-live world rollcall               # play the login roll call
   hover hint. `--previews DIR` reuses an earlier run's previews.
 - **The den's recolouring.** `live/tests/test_retint.py` and
   `live/tests/offscreen_retint.py`.
+
+## The shell prompt
+
+`bromigos shell prompt mehshell` chooses mehshell in the packaged zsh setup.
+The choice lives in `~/.config/bromigos/shell.toml`. See the manual's
+[shell page](../manual/src/shell.md) for setup and the other choices.
+
+After a theme switch, `theme/hooks/theme-set.d/30-mehshell` runs
+`live/tools/make-mehshell.py`. It reads the rendered `palette.json` and replaces
+only the marked colour block in `~/.config/mehshell/config`. Other prompt options
+stay in place. It clears the instant prompt cache so old colours cannot return.
+mehshell reads the config again at each prompt.
+
+The generator uses the same colour roles for Wick, its six colour variants,
+Tidewell and Mire. Its reference files are in `live/tests/golden/mehshell/`.

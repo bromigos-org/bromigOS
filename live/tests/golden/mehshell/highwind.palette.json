@@ -1,0 +1,83 @@
+{
+  "colors": {
+    "background": "#0a0d1a",
+    "cyan": "#8ad8ff",
+    "danger": "#ff6670",
+    "danger_surface": "#2a0d12",
+    "danger_text": "#ffd9dc",
+    "dim": "#8a7540",
+    "faint": "#525a78",
+    "gold": "#ffe29c",
+    "muted": "#8c94b3",
+    "panel": "#141a2e",
+    "primary": "#f5c76a",
+    "rust": "#4a1a20",
+    "selection": "#243052",
+    "soft": "#f8e6bf",
+    "text": "#e4e9f7",
+    "void": "#05070f",
+    "warn": "#ff9f5a",
+    "warn_surface": "#3a2a10",
+    "white": "#f6f9ff"
+  },
+  "contrast": {
+    "lowest": {
+      "bg": "panel",
+      "fg": "selection",
+      "min": 3.0,
+      "ok": false,
+      "ratio": 1.33
+    },
+    "mode": "normal",
+    "ok": false
+  },
+  "mode": "dark",
+  "motion": "full",
+  "name": "Highwind",
+  "schema": 1,
+  "tables": {
+    "holo": {
+      "glow": "#f5c76a",
+      "highlight": "#f6f9ff",
+      "label": "#e4e9f7",
+      "line": "#8ad8ff"
+    },
+    "qt": {
+      "button": "#223050",
+      "header": "#0f1324",
+      "negative_on_selection": "#4a1a20",
+      "neutral_on_selection": "#4a3a10",
+      "view": "#0d1020",
+      "view_alt": "#111528",
+      "window_alt": "#1a2138"
+    },
+    "terminal": {
+      "background": "#0a0d1a",
+      "color0": "#0a0d1a",
+      "color1": "#ff6670",
+      "color10": "#f8e6bf",
+      "color11": "#ffe29c",
+      "color12": "#a9c8ff",
+      "color13": "#e0c5ff",
+      "color14": "#b3e6ff",
+      "color15": "#f4f7ff",
+      "color2": "#f5c76a",
+      "color3": "#ff9f5a",
+      "color4": "#7eaaff",
+      "color5": "#c99cff",
+      "color6": "#8ad8ff",
+      "color7": "#c3cbe0",
+      "color8": "#525a78",
+      "color9": "#ff9aa0",
+      "foreground": "#e4e9f7"
+    },
+    "widgets": {
+      "frame": "#8a7540",
+      "graph": "#8ad8ff",
+      "header": "#f5c76a",
+      "track": "#243052",
+      "value": "#f8e6bf"
+    }
+  },
+  "theme": "highwind"
+}

@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+# bromigos:summary=Choose the zsh prompt: mehshell, starship or none
+# bromigos:args=[status] | prompt mehshell|starship|none [--json]
+# bromigos:examples=bromigos shell prompt mehshell; bromigos shell prompt starship; bromigos shell prompt none
+"""Choose the prompt used by bromigOS's zsh setup. Open a new shell after changing it."""
+import os
+from pathlib import Path
+import sys
+import tomllib
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lib"))
+import bromigos_cli as C
+from bromigos_prompt import atomic_write, update
+
+FILE = Path(C.CONFIG) / "bromigos/shell.toml"
+CHOICES = ("mehshell", "starship", "none")
+
+
+def status(args=None):
+    data = tomllib.loads(FILE.read_text()) if FILE.exists() else {}
+    choice = data.get("prompt", "none")
+    if choice not in CHOICES:
+        raise C.Fail(f"Invalid prompt in {FILE}")
+    return {"prompt": choice, "managed": FILE.exists(), "file": str(FILE)}
+
+
+def prompt(args):
+    if len(args) != 1 or args[0] not in CHOICES:
+        raise C.Fail("bromigos shell prompt mehshell|starship|none")
+    choice = args[0]
+    if choice != "none":
+        C.need(choice, choice)
+    # This file owns only the shell choice. Never edit a user's startup files here.
+    if choice == "mehshell":
+        update()
+    atomic_write(FILE, f'# bromigOS zsh prompt\nprompt = "{choice}"\n')
+    return dict(status(), said=f"Prompt: {choice}. Open a new zsh shell.")
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"status": status, "prompt": prompt}, __doc__))

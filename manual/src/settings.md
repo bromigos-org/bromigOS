@@ -247,3 +247,6 @@ Packages, extensions and you can add pages to Settings. A page of your own is a 
 Python file in `~/.config/bromigos/plugins/settings/`. The developer docs'
 [settings.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/settings.md) shows
 one.
+
+The **Prompt** row in Default apps chooses mehshell, Starship or a plain zsh
+prompt. See [Shell and terminal](shell.md) for existing installs.

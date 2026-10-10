@@ -38,7 +38,7 @@ options=('!debug')
 # Built in-tree from the checkout this PKGBUILD lives in; cargo's output
 # goes to $srcdir, so the source tree is only read.
 _root="${startdir%/packaging/*}"
-_paths=(core bin themes theme lib migrations manual/src/whats-new.md packaging/bromigos-core LICENSE-MIT LICENSE-APACHE)
+_paths=(core bin themes theme lib live/tools/make-mehshell.py migrations manual/src/whats-new.md packaging/bromigos-core LICENSE-MIT LICENSE-APACHE)
 
 # <workspace version>.r<commits touching the package>.g<last such commit>,
 # e.g. 0.1.0.r12.g1a2b3c4: rises with every change, and with a version bump
@@ -82,6 +82,7 @@ check() {
   cargo test --frozen --all-features
   # the app launcher's entries (core/applications): desktop-file-validate, the keys every
   # entry needs, their icons (tools/launcher/check.py; CI's launcher.yml runs all of it)
+  python -m unittest discover -s "$_root/live/tests" -p test_mehshell.py
   python "$_root/tools/launcher/check.py" --static --only core
 }
 
@@ -147,6 +148,8 @@ package() {
   install -Dm0644 -t "$pkgdir/usr/share/bromigos/art/workflows/" "$_root"/core/crates/bromigos-art/workflows/*.json
   # the world-loop post step `bromigos art make video.loop --alpha` runs (docs/art.md)
   install -Dm0755 "$_root/theme/tools/glow-loop.py" "$pkgdir/usr/share/bromigos/tools/glow-loop.py"
+  install -Dm0755 "$_root/live/tools/make-mehshell.py" "$pkgdir/usr/share/bromigos/tools/make-mehshell.py"
+  install -Dm0755 "$_root/theme/hooks/theme-set.d/30-mehshell" "$pkgdir/usr/share/bromigos/hooks/theme-set.d/30-mehshell"
   # the idle policy's packaged defaults and the hypridle template `bromigos idle` renders
   # (built into the binary too; these win: docs/idle.md)
   install -Dm0644 "$_root/core/crates/bromigos-core/idle/idle.toml" "$pkgdir/usr/share/bromigos/default/idle.toml"

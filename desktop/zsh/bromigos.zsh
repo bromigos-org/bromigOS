@@ -15,3 +15,17 @@ fi
 # Frecent folders: `z <part>` jumps, `zi` picks with fzf. Its database also feeds the
 # WORKBENCH desktop panel (bromigos-widgets), so the folders you actually use show up there.
 (( $+commands[zoxide] )) && eval "$(zoxide init zsh)"
+
+# Existing installs without shell.toml keep their own prompt.
+if [[ -r ${XDG_CONFIG_HOME:-$HOME/.config}/bromigos/shell.toml && -z $_bromigos_prompt_loaded ]]; then
+  typeset -g _bromigos_prompt_loaded=1
+  # The config parser prints a validated engine name, never evaluated config text.
+  local _bromigos_engine
+  _bromigos_engine=$(python -c 'import os,pathlib,tomllib; p=pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or pathlib.Path.home()/".config")/"bromigos/shell.toml"; v=tomllib.loads(p.read_text()).get("prompt","none"); print(v if v in ("mehshell","starship","none") else "none")' 2>/dev/null)
+  case $_bromigos_engine in
+    mehshell) (( $+commands[mehshell] )) && eval "$(mehshell init zsh)" ;;
+    starship) (( $+commands[starship] )) && eval "$(starship init zsh)" ;;
+    none) PROMPT='%~ %# '; RPROMPT='' ;;
+  esac
+  unset _bromigos_engine
+fi

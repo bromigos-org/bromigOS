@@ -1,0 +1,3 @@
+#!/bin/sh
+# Keep the user's mehshell options; replace only the managed colour block.
+exec python "${BROMIGOS_SHARE_DIR:-/usr/share/bromigos}/tools/make-mehshell.py" "${BROMIGOS_THEME_DIR}/palette.json"

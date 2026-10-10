@@ -268,3 +268,9 @@ rows = [
   { route = "banner", text = "Prints the login banner in a terminal." },
   { route = "secrets", text = "Refreshes the desktop's secret files from Vault, if you keep secrets there." },
 ]
+
+[[commands]]
+title = "Shell prompt"
+rows = [
+  { route = "shell", text = "Choose the zsh prompt: mehshell, Starship or a plain prompt. See [Shell and terminal](shell.md)." },
+]

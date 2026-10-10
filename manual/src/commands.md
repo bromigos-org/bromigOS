@@ -126,6 +126,12 @@ The desktop runs these for you. You don't need them day to day.
 | [`bromigos banner`](#bromigos-banner) | Prints the login banner in a terminal. |
 | [`bromigos secrets`](#bromigos-secrets) | Refreshes the desktop's secret files from Vault, if you keep secrets there. |
 
+### Shell prompt
+
+| Command | What it does |
+|---|---|
+| [`bromigos shell`](#bromigos-shell) | Choose the zsh prompt: mehshell, Starship or a plain prompt. See [Shell and terminal](shell.md). |
+
 ## Every command in full
 
 Each command's own help, A to Z. Commands built into `bromigos` show their whole `--help`; the others show how to call them and an example or two, and their own `--help` says more.
@@ -1927,6 +1933,24 @@ For example:
 ```text
 bromigos setup keybindings
 bromigos setup keybindings --list
+```
+
+From the `bromigos-desktop` package.
+
+### bromigos shell
+
+Choose the zsh prompt: mehshell, starship or none.
+
+```text
+bromigos shell [status] | prompt mehshell|starship|none [--json]
+```
+
+For example:
+
+```text
+bromigos shell prompt mehshell
+bromigos shell prompt starship
+bromigos shell prompt none
 ```
 
 From the `bromigos-desktop` package.

@@ -108,3 +108,25 @@ fn other_theme_words_go_to_the_router() {
         String::from_utf8_lossy(&o.stderr)
     );
 }
+
+/// Every shipped palette must produce the reviewed mehshell colours.
+#[test]
+fn mehshell_golden_for_each_theme() {
+    let d = tempfile::tempdir().unwrap();
+    for name in ["wick", "rime", "sunder", "cinder", "lowtown", "highwind", "deepvein", "tidewell", "mire"] {
+        let o = run(d.path(), &["theme", "set", name, "--no-reload"]);
+        assert!(o.status.success(), "{name}: {}", String::from_utf8_lossy(&o.stderr));
+        let palette = d.path().join(".local/state/bromigos/theme/current/palette.json");
+        let config = d.path().join("mehshell-config");
+        let _ = std::fs::remove_file(&config);
+        let generated = Command::new("python")
+            .arg(repo().join("live/tools/make-mehshell.py"))
+            .arg(palette).arg(&config)
+            .env("HOME", d.path()).env("XDG_CACHE_HOME", d.path().join("cache"))
+            .output().unwrap();
+        assert!(generated.status.success(), "{}", String::from_utf8_lossy(&generated.stderr));
+        let actual = std::fs::read_to_string(config).unwrap();
+        let golden = std::fs::read_to_string(repo().join(format!("live/tests/golden/mehshell/{name}.config"))).unwrap();
+        assert!(actual.ends_with(&golden), "{name} colours changed: review the golden file");
+    }
+}

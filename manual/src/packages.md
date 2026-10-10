@@ -24,6 +24,7 @@ bromigos install --with bromigos-apps
 | `bromigos-vector` | VECTOR, the desktop's caretaker, and the hologram renderer he lives in (from the `vector` repository) | *with bromigOS* |
 | `bromigos-manual` | bromigOS manual: how to use the desktop, as HTML, for reading offline | *with bromigOS* |
 | `bromigos-homelab` | bromigOS homelab integrations: capabilities, adapters, the LAB panel, homelab decks and VECTOR tools | *with bromigOS* (through `bromigos-desktop`) |
+| `mehshell` | Fast parallel zsh prompt engine for bromigOS | *with bromigOS* (through `bromigos-desktop`) |
 | `ttf-geist-mono` | Geist Mono, a monospaced typeface by Vercel | *with bromigOS* (through `bromigos-settings`) |
 | `bromigos-lab-catalog` | bromigOS lab model catalog: the best open models per AI capability and GPU size, with licences | *with bromigOS* (through `bromigos-homelab`) |
 | `bromigos-apps` | bromigOS app bundle: LazyVim, tmux, lazygit, mise, Chromium, Spotify and Signal, configured and themed | optional: `bromigos install --with bromigos-apps` |

@@ -22,7 +22,7 @@ license=('MIT OR Apache-2.0')
 # bromigos-homelab: the LAB panel and the homelab decks live there (inert with no sources)
 depends=('bromigos-core' 'bromigos-live' 'bromigos-widgets' 'bromigos-settings' 'bromigos-homelab'
          'hyprland' 'waybar' 'rofi' 'dunst' 'gtklock' 'hypridle' 'hyprlock' 'swaybg'
-         'zsh' 'python' 'libnotify' 'wl-clipboard' 'grim' 'slurp' 'playerctl' 'kitty'
+         'zsh' 'mehshell' 'python' 'libnotify' 'wl-clipboard' 'grim' 'slurp' 'playerctl' 'kitty'
          # the session's plumbing: screen sharing and file pickers, password prompts,
          # sound (the bar's volume: pactl; capture sounds: pw-play), the network (nmtui)
          'xdg-desktop-portal-hyprland' 'xdg-desktop-portal-gtk' 'hyprpolkitagent'
@@ -39,7 +39,8 @@ depends=('bromigos-core' 'bromigos-live' 'bromigos-widgets' 'bromigos-settings' 
          # the shortcut picker (bromigos keys): reading the user's hyprland.lua without
          # Hyprland, the "press the new shortcut" window, key names
          'lua' 'gtk4-layer-shell' 'libxkbcommon')
-optdepends=('git: bromigos theme install <url>'
+optdepends=('starship: optional zsh prompt'
+            'git: bromigos theme install <url>'
             'swappy: annotate a screenshot from its notification'
             'wf-recorder: screen recording (bromigos-rec)'
             'brightnessctl: the brightness keys'
@@ -61,7 +62,7 @@ options=('!debug')
 _root="${startdir%/packaging/*}"
 # the small commands Settings drives (bromigos sound, …; desktop/bin/bromigos-<name>), installed
 # to /usr/lib/bromigos/bin where `bromigos <name>` finds them (docs/settings.md)
-_settings_cmds=(sound scene display net bluetooth power clock notifications defaults startup panels memory about avatar)
+_settings_cmds=(shell sound scene display net bluetooth power clock notifications defaults startup panels memory about avatar)
 _paths=(desktop peripherals packaging/bromigos-desktop LICENSE-MIT LICENSE-APACHE)
 
 # <workspace version>.r<commits touching the package>.g<last such commit> (as bromigos-core)

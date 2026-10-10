@@ -1,0 +1,83 @@
+{
+  "colors": {
+    "background": "#000500",
+    "cyan": "#3fe0c5",
+    "danger": "#ff766f",
+    "danger_surface": "#1a0503",
+    "danger_text": "#ffd9d6",
+    "dim": "#159b09",
+    "faint": "#4e6b4e",
+    "gold": "#f0d36a",
+    "muted": "#7e927e",
+    "panel": "#001300",
+    "primary": "#39ff14",
+    "rust": "#4a0e0e",
+    "selection": "#003b00",
+    "soft": "#9cff8a",
+    "text": "#c4f5bb",
+    "void": "#000500",
+    "warn": "#d4af37",
+    "warn_surface": "#4a3a0a",
+    "white": "#e8ffe0"
+  },
+  "contrast": {
+    "lowest": {
+      "bg": "panel",
+      "fg": "selection",
+      "min": 3.0,
+      "ok": false,
+      "ratio": 1.48
+    },
+    "mode": "normal",
+    "ok": false
+  },
+  "mode": "dark",
+  "motion": "full",
+  "name": "Wick",
+  "schema": 1,
+  "tables": {
+    "holo": {
+      "glow": "#39ff14",
+      "highlight": "#e8ffe0",
+      "label": "#c4f5bb",
+      "line": "#39ff14"
+    },
+    "qt": {
+      "button": "#002800",
+      "header": "#000d00",
+      "negative_on_selection": "#4a0e0e",
+      "neutral_on_selection": "#4a3c00",
+      "view": "#000900",
+      "view_alt": "#001000",
+      "window_alt": "#001a00"
+    },
+    "terminal": {
+      "background": "#000500",
+      "color0": "#000500",
+      "color1": "#ff766f",
+      "color10": "#9cff8a",
+      "color11": "#f0d36a",
+      "color12": "#8ccaf5",
+      "color13": "#e3a8ef",
+      "color14": "#8af5e2",
+      "color15": "#e6f5e6",
+      "color2": "#39ff14",
+      "color3": "#d4af37",
+      "color4": "#5aa9e6",
+      "color5": "#c97bdb",
+      "color6": "#3fe0c5",
+      "color7": "#b4c8b4",
+      "color8": "#4e6b4e",
+      "color9": "#ff9d97",
+      "foreground": "#c4f5bb"
+    },
+    "widgets": {
+      "frame": "#159b09",
+      "graph": "#39ff14",
+      "header": "#39ff14",
+      "track": "#003b00",
+      "value": "#9cff8a"
+    }
+  },
+  "theme": "wick"
+}

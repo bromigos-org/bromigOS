@@ -1,0 +1,83 @@
+{
+  "colors": {
+    "background": "#070709",
+    "cyan": "#4fe3ff",
+    "danger": "#ff5252",
+    "danger_surface": "#2a0a12",
+    "danger_text": "#ffd6de",
+    "dim": "#8a3a6a",
+    "faint": "#534f66",
+    "gold": "#ffe066",
+    "muted": "#8c86a0",
+    "panel": "#12121a",
+    "primary": "#ff5fa8",
+    "rust": "#4a1030",
+    "selection": "#22223a",
+    "soft": "#ffc2e0",
+    "text": "#e6e1ef",
+    "void": "#030304",
+    "warn": "#ffd84a",
+    "warn_surface": "#3a3010",
+    "white": "#f5f0ff"
+  },
+  "contrast": {
+    "lowest": {
+      "bg": "panel",
+      "fg": "selection",
+      "min": 3.0,
+      "ok": false,
+      "ratio": 1.2
+    },
+    "mode": "normal",
+    "ok": false
+  },
+  "mode": "dark",
+  "motion": "full",
+  "name": "Lowtown",
+  "schema": 1,
+  "tables": {
+    "holo": {
+      "glow": "#ff5fa8",
+      "highlight": "#f5f0ff",
+      "label": "#e6e1ef",
+      "line": "#4fe3ff"
+    },
+    "qt": {
+      "button": "#1e1e34",
+      "header": "#0d0d12",
+      "negative_on_selection": "#4a1030",
+      "neutral_on_selection": "#4a3a10",
+      "view": "#0a0a0e",
+      "view_alt": "#0f0f15",
+      "window_alt": "#17172a"
+    },
+    "terminal": {
+      "background": "#070709",
+      "color0": "#070709",
+      "color1": "#ff5252",
+      "color10": "#ffc2e0",
+      "color11": "#ffe066",
+      "color12": "#9ec0ff",
+      "color13": "#deb3ff",
+      "color14": "#93f0ff",
+      "color15": "#f8f4ff",
+      "color2": "#ff5fa8",
+      "color3": "#ffd84a",
+      "color4": "#6a9cff",
+      "color5": "#c77dff",
+      "color6": "#4fe3ff",
+      "color7": "#b9b4c8",
+      "color8": "#534f66",
+      "color9": "#ff8080",
+      "foreground": "#e6e1ef"
+    },
+    "widgets": {
+      "frame": "#8a3a6a",
+      "graph": "#4fe3ff",
+      "header": "#ff5fa8",
+      "track": "#22223a",
+      "value": "#ffc2e0"
+    }
+  },
+  "theme": "lowtown"
+}

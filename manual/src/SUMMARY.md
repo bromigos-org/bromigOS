@@ -22,6 +22,7 @@
 - [Settings](settings.md)
     - [Idle and lock](idle.md)
     - [Your own shortcuts](shortcuts.md)
+- [Shell and terminal](shell.md)
 - [Apps](apps.md)
     - [Web apps](webapps.md)
 - [Your media](media.md)

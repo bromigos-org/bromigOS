@@ -1,0 +1,83 @@
+{
+  "colors": {
+    "background": "#06040c",
+    "cyan": "#6ff0d8",
+    "danger": "#ff5c7a",
+    "danger_surface": "#2a0a18",
+    "danger_text": "#ffd6e1",
+    "dim": "#5e3f9c",
+    "faint": "#574c70",
+    "gold": "#ffd98a",
+    "muted": "#8f84a8",
+    "panel": "#120c1e",
+    "primary": "#b388ff",
+    "rust": "#3e1030",
+    "selection": "#261a3a",
+    "soft": "#dcc8ff",
+    "text": "#e6ddf5",
+    "void": "#030207",
+    "warn": "#f0c060",
+    "warn_surface": "#3a2c10",
+    "white": "#f6efff"
+  },
+  "contrast": {
+    "lowest": {
+      "bg": "panel",
+      "fg": "selection",
+      "min": 3.0,
+      "ok": false,
+      "ratio": 1.17
+    },
+    "mode": "normal",
+    "ok": false
+  },
+  "mode": "dark",
+  "motion": "full",
+  "name": "Deepvein",
+  "schema": 1,
+  "tables": {
+    "holo": {
+      "glow": "#6ff0d8",
+      "highlight": "#f6efff",
+      "label": "#e6ddf5",
+      "line": "#b388ff"
+    },
+    "qt": {
+      "button": "#221638",
+      "header": "#0c0814",
+      "negative_on_selection": "#3e1030",
+      "neutral_on_selection": "#4a3a10",
+      "view": "#090610",
+      "view_alt": "#0e0a18",
+      "window_alt": "#181028"
+    },
+    "terminal": {
+      "background": "#06040c",
+      "color0": "#06040c",
+      "color1": "#ff5c7a",
+      "color10": "#dcc8ff",
+      "color11": "#ffd98a",
+      "color12": "#a8bfff",
+      "color13": "#efb8ff",
+      "color14": "#a6f7e8",
+      "color15": "#faf5ff",
+      "color2": "#b388ff",
+      "color3": "#f0c060",
+      "color4": "#7a9cff",
+      "color5": "#e08cff",
+      "color6": "#6ff0d8",
+      "color7": "#c6bcd8",
+      "color8": "#574c70",
+      "color9": "#ff8aa0",
+      "foreground": "#e6ddf5"
+    },
+    "widgets": {
+      "frame": "#5e3f9c",
+      "graph": "#b388ff",
+      "header": "#b388ff",
+      "track": "#261a3a",
+      "value": "#dcc8ff"
+    }
+  },
+  "theme": "deepvein"
+}
