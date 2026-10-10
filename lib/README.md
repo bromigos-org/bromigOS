@@ -21,6 +21,17 @@ modules to the same folder:
 | `bromigos_emblem.py` | Draws the emblem, called the burn-in, to its canonical spec |
 | `emblem_braille.py` | Draws the emblem as coloured braille for the terminal banner |
 | `bromigos_private.py` | Reads the private overlay: values a user keeps encrypted in their dotfiles |
+| `bromigos_account.py` | Signs a widget in to an online account, such as Twitch or GitHub, and keeps the token in the keyring |
+
+### bromigos_account
+
+Widgets that read an online account sign in through this module: the device flow (Twitch,
+GitHub, GitLab), or the authorization code with PKCE on a loopback port (Spotify). Tokens
+go to the login keyring through libsecret, never to a file. Client IDs are the user's
+own, in `~/.config/bromigos/accounts.toml`. For GitHub it uses the `gh` login when there
+is one. `bromigos account` is its command line, and
+[docs/plugins.md](../docs/plugins.md#a-widget-that-needs-an-account) shows a panel that
+uses it.
 
 ### bromigos_theme
 

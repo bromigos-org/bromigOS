@@ -179,6 +179,98 @@ gallery says who made a panel from where it came from: bromigOS, an extension's
 [widgets.md](widgets.md) lists the panels bromigOS ships, and
 [widgets/README.md](../widgets/README.md) describes the code.
 
+### Settings
+
+A panel's own settings go in `~/.config/bromigos/widgets/<name>.toml`. bromigOS's
+built-in plugin panels read that file over the panel's keys in `layout.json`, and read it
+again when it changes. They describe what it holds in a `settings` list:
+
+```python
+settings = [
+    {"key": "repos", "label": "Repositories", "kind": "list", "default": [],
+     "hint": "owner/name, one per line"},
+]
+```
+
+`kind` is `text`, `list`, `number`, `bool`, `choice` (with `choices`) or
+`secret-signin` (with `provider`, below). A secret never goes in this file.
+
+The built-in panels share a small kit, `widgets/plugins/_kit.py`. `KitPanel` reads the
+settings file and gives the panel `self.conf`. `self.poller(fetch, every)` fetches on a
+thread, and stops while the panel isn't drawn: when it's hidden, or windows cover it.
+`self.empty(…)` draws the empty state, which says what to set up and where.
+
+### A widget that needs an account
+
+Some widgets read an online account, such as Twitch, GitHub, GitLab or Spotify. They all
+sign in through one helper, `lib/bromigos_account.py`, and a community widget can use it
+too. The helper:
+
+- signs in with the **device flow**: the panel shows a short code, and you enter it on the
+  service's own site. Twitch, GitHub and GitLab work this way.
+- signs in with the **authorization code and PKCE** for a service with no device flow,
+  such as Spotify. Your browser opens the service's page, and the answer comes back to a
+  port on this machine, `http://127.0.0.1:8898/callback`.
+- keeps the tokens in your login keyring, through libsecret. They're never written to a
+  file.
+- refreshes a token that has expired.
+- uses your `gh` login for GitHub when there is one. It reads the token when it's needed
+  and never stores it.
+
+No flow needs a client secret, and bromigOS ships no client ID. You make an app of your
+own on the service's developer site and give the helper its client ID. Client IDs go in
+`~/.config/bromigos/accounts.toml`, one table per service, and every widget for that
+service shares them.
+
+From a terminal:
+
+```bash
+bromigos account configure twitch client_id=YOUR_CLIENT_ID
+bromigos account login twitch          # shows a code to enter at twitch.tv/activate
+bromigos account status twitch         # signed in, and as whom
+bromigos account set-token gitlab      # store a personal access token instead
+bromigos account logout twitch
+```
+
+In a panel:
+
+```python
+import _kit as K
+import bromigos_account as A
+
+class FollowsPanel(K.KitPanel):
+    name, title = "follows", "FOLLOWS"
+    settings = [{"key": "account", "label": "Twitch", "kind": "secret-signin", "provider": "twitch"}]
+
+    def __init__(self, cfg=None, wake=None):
+        super().__init__(cfg, wake)
+        self.account = K.Account(self, "twitch")
+        self.poll = self.poller(self.fetch, every=60)
+
+    def fetch(self):
+        token = self.account.token()               # None when signed out
+        ...
+
+    def draw(self, cr, w, h):
+        top = D.frame(cr, w, h, self.title)
+        if not self.account.status()["signed_in"]:
+            self.account.draw_signin(cr, w, h, top, "Live channels you follow")
+            return
+        ...
+```
+
+`draw_signin` draws what's missing, a **Sign in** button, and then the code to enter.
+The helper's functions are listed at the top of `lib/bromigos_account.py`:
+
+| Function | What it does |
+|---|---|
+| `status(provider)` | `{signed_in, who, needs, via}`, with no network |
+| `sign_in(provider, on_prompt=None)` | Signs in and waits until it's done. `on_prompt` gets the code to show, or the page to open. |
+| `sign_out(provider)` | Forgets the token |
+| `token(provider)` | A token to send, refreshed if it expired, or `None` |
+| `configure(provider, client_id=…)` | Writes `accounts.toml` |
+| `set_token(provider, token)` | Stores a token you pasted |
+
 ## Configuration files
 
 | File | Packaged default | Yours |
