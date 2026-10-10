@@ -21,6 +21,7 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab run KIND [PRESET] …` | Queue a job on the lab's GPUs. |
 | `bromigos lab jobs` | List, follow, cancel and retry jobs. |
 | `bromigos lab doctor [--json]` | Run checks. Each problem comes with a fix in plain words. |
+| `bromigos lab youtube [sync]` | Show Pinchflat's YouTube downloads, or turn its playlists into playlists in Jellyfin and Plex ([below](#youtube-downloads)). |
 | `bromigos lab connect …` | Run `bromigos setup homelab …`: find services and write `homelab.toml`. |
 | `bromigos lab target …` | Run `bromigos target …`: choose where AI runs ([targets.md](targets.md)). |
 | Super+Shift+H | Open the Lab deck, a hologram of the rack lit by the same readings. |
@@ -68,7 +69,8 @@ need attention also list their items.
 | Models | the models the servers serve, with requests a minute and tokens a second | `models` |
 | GitOps apps | Argo CD or Flux apps, with sync and health, problems first | `deployments` |
 | Workloads | how many pods, containers and VMs run, and the ones that don't | `workloads` |
-| Storage | NAS shares and pools, then every root disk, fullest first | `storage`, NFS and SMB mounts, `hosts` |
+| Storage | each NAS share the lab uses, with its NAS and its free space; the NAS's pools; then every root disk; fullest first | `storage`, NFS and SMB mounts, `hosts` |
+| YouTube downloads | Pinchflat: its download queue and failed jobs, then each channel and playlist with its newest video | `youtube-downloader` |
 | Alerts | firing and pending alerts | `alerts` |
 | Jobs | the lab's job queue | the queue's state |
 | Vault | up or sealed, never a secret | `secrets` |
@@ -82,6 +84,9 @@ A few details:
   a DGX Spark, shows its memory as its node's. A model served across two GPUs is named on
   both.
 - **Alerts** leaves out Prometheus's always-firing Watchdog alert.
+- **YouTube downloads** has a hover hint on every row. Pinchflat's row lists the newest
+  downloads. A playlist's row says that `bromigos lab youtube sync` turns it into a
+  playlist on your media server.
 
 Each card is `ok`, `warn`, `crit`, `unreachable` or `empty`. The console's own state is
 its worst card's.
@@ -93,6 +98,17 @@ its worst card's.
   an internal app you don't want in a screenshot.
 
 To add a card, see [Status cards](homelab.md#status-cards).
+
+### YouTube downloads
+
+[Pinchflat](homelab.md#youtube-downloads-pinchflat) downloads YouTube channels and
+playlists into your media library. Two commands work with it:
+
+- `bromigos lab youtube` shows its card in full: the download queue, failed jobs, and each
+  channel and playlist with its newest video.
+- `bromigos lab youtube sync` turns each downloaded YouTube playlist into a playlist in
+  Jellyfin, Plex, or both, in the playlist's order. It's safe to run again. Add
+  `--dry-run` to see what it would change first.
 
 ## Models
 

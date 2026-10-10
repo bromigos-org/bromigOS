@@ -66,7 +66,7 @@ or with `--kube-context`.
 | storage | S3 object stores such as MinIO, a NAS and its shares |
 | apps and databases | Open WebUI, SearXNG, Redis, Dragonfly, Neo4j |
 | game servers | Pelican |
-| media | Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Jellyfin, Plex |
+| media | Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Jellyfin, Plex, Pinchflat (YouTube downloads) |
 | backups | backup jobs, NAS snapshots, Velero, Proxmox Backup Server |
 
 Many of these need no address of their own. bromigOS finds them through your metrics or
@@ -79,6 +79,25 @@ advice on what to fix, run:
 ```bash
 bromigos lab doctor
 ```
+
+### YouTube downloads with Pinchflat
+
+Pinchflat downloads YouTube channels and playlists into your media library. To see it in
+the lab console, add it to `homelab.toml` with its route token. The token is in the OPML
+link on Pinchflat's Sources page: copy the part after `route_token=` into a file.
+
+```toml
+[[source]]
+type = "pinchflat"
+endpoint = "http://pinchflat.lan:8945"
+route_token_ref = "@file:~/.local/share/bromigos/pinchflat-route-token"
+```
+
+To see its download queue too, start Pinchflat with `ENABLE_PROMETHEUS=true`.
+
+`bromigos lab youtube sync` then makes each downloaded playlist a playlist in Jellyfin or
+Plex, in YouTube's order. It needs an API key for each media server: put it in a file and
+name the file in that server's source as `token_ref`. See [The lab console](lab.md#youtube-downloads).
 
 ## Keep passwords out of the file
 

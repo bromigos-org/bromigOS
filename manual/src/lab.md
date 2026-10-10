@@ -117,6 +117,21 @@ bromigos lab models unload comfyui    # free what ComfyUI holds
 bromigos lab models recommend         # better models that fit your graphics cards
 ```
 
+## YouTube downloads
+
+If your lab runs [Pinchflat](homelab.md), it downloads YouTube channels and playlists into
+your media library. Then they play in Jellyfin or Plex, like your other shows.
+
+- `bromigos lab youtube` shows what Pinchflat is doing: how many videos are waiting, any
+  that failed, and the newest video from each channel and playlist. The Status tab has the
+  same card, **YouTube downloads**. Hover over a row for more.
+- `bromigos lab youtube sync` makes each downloaded YouTube playlist a playlist in Jellyfin
+  or Plex, in the same order as on YouTube. Run it as often as you like: it only changes
+  what's different. To see what it would do first, add `--dry-run`.
+
+The Status tab's **Storage** card shows each share on your NAS that the lab uses, which
+NAS it's on, and how much space is free.
+
 ComfyUI keeps the last job's models in memory until something frees them.
 `bromigos lab models unload comfyui` frees them now. To find the best open models for your
 graphics cards, see [Lab models](lab-models.md).

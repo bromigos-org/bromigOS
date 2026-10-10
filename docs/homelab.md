@@ -211,7 +211,7 @@ With no provider, everything is empty and whatever asked hides itself. Every rec
 | `certs` | `name, namespace, dns_names, not_after, days_left, ready, issuer` |
 | `ddns` | `name, type, public_ip, dns_ip, match, proxied, updated` |
 | `network` | `name, kind, model, up, clients, rx_bps, tx_bps, uptime_s, version` |
-| `storage` | `name, kind, used, total, used_pct, objects, healthy` |
+| `storage` | `name, kind, used, total, used_pct, objects, healthy, nas, free`. `nas` names the NAS a pool or share is on. |
 | `apps` | `name, kind, up, version, detail, endpoint, vram_used, link`. `up` is `None` when the app isn't deployed. |
 | `games` | `name, game, status, players, players_max, uptime_s, cpu_pct, mem_bytes` |
 | `library` | `name, kind, up, version, queue, queue_errors, missing, disk_free, disk_total, issues` |
@@ -219,6 +219,7 @@ With no provider, everything is empty and whatever asked hides itself. Every rec
 | `packages` | `name, repo, latest, built, age_h, packages` |
 | `backups` | `name, kind, last_success, age_h, schedule, ok, max_age_hours, offsite` |
 | `ocr` | `name, endpoint, up, model, via`: where the `ocr` job kind sends pages |
+| `youtube-downloader` | `name, kind, up, videos, newest, newest_at, queue, errors, state, link`. The first record is the downloader itself (`kind` is `downloader`, with `queue`, `errors`, `sources` and `recent`). Then there's one per channel or playlist. Read it from Python as `H.youtube_downloader()`. |
 | `energy` | `name, kind, production_w, consumption_w, net_w, today_wh, consumed_today_wh, lifetime_wh, battery_pct, battery_w, inverters, state`. `net_w` is positive while you draw from the grid and negative while you send to it. |
 
 Sizes such as `vram_used`, `used` and `total` are in bytes. On unified memory,
@@ -338,6 +339,7 @@ read the way it's configured reads *unreachable* and says why. Nothing else is a
 | `pelican` | a Pelican exporter's metrics, else the panel's client API | games |
 | `arr` | scraparr's or exportarr's metrics, or one app's API | library |
 | `jellyfin`, `plex` | their health and identity endpoints | library |
+| `pinchflat` | Pinchflat's health check, its list of sources and each source's feed, and its job queue metrics | youtube-downloader |
 | `arc` | GitHub's Actions Runner Controller: its listener and runner pods, or its `gha_*` metrics | runners |
 | `pacman-repo` | a pacman repository's databases per channel, and the publishing workflow's runs | packages |
 | `backups` | backup CronJobs, NAS share snapshots, Velero's last successful backup | backups |
@@ -409,7 +411,7 @@ reason.
 Each of these adapters has a `doctor()` method, so `bromigos lab doctor` checks it. The
 finding ids start with the area: `gpus.*`, `logs.*`, `routes.*`, `certs.*`, `ddns.*`,
 `network.*`, `nas.*`, `apps.*`, `s3.*`, `games.*`, `library.*`, `models.*`, `ocr.*`,
-`runners.*`, `packages.*` and `backups.*`. For example:
+`runners.*`, `packages.*`, `backups.*` and `youtube.*`. For example:
 
 - `dcgm` warns about temperature, nearly full VRAM and XID errors.
 - `cert-manager` warns about certificates close to expiry, or not ready.
@@ -420,6 +422,63 @@ Argo CD adds `argo.<app>.why`. It lists each app that's out of sync or degraded,
 reason. It also flags an app that went out of sync three or more times in the last hour.
 That pattern means Argo CD fixes the app and something undoes the fix, such as a
 controller adding a field the app's Git source doesn't have.
+
+#### YouTube downloads: Pinchflat
+
+[Pinchflat](https://github.com/kieraneglin/pinchflat) downloads YouTube channels and
+playlists into your media library, so they play in Jellyfin or Plex. bromigOS reads it and
+turns its playlists into real playlists on your media server.
+
+Pinchflat has no JSON API, so the `pinchflat` adapter reads what it does serve:
+
+- `/healthcheck`, for whether it's up;
+- its list of sources, as OPML. That needs Pinchflat's *route token*, which is in the OPML
+  link on its Sources page;
+- each source's podcast feed. The feed's link says whether the source is a channel or a
+  playlist, and its items are the downloaded videos, newest first;
+- its job queue, from its Prometheus metrics. Set `ENABLE_PROMETHEUS=true` in Pinchflat's
+  container for these. The queue is the jobs waiting in its download queue. Failed jobs are
+  the ones it gave up on in the last 30 days.
+
+```toml
+[[source]]
+name = "pinchflat"
+type = "pinchflat"
+endpoint = "http://pinchflat.lab.example:8945"
+route_token_ref = "@file:~/.local/share/bromigos/pinchflat-route-token"
+auth_ref = "@file:~/.local/share/bromigos/pinchflat-login"   # only with Pinchflat's basic auth: "user:password"
+metrics = "endpoint"     # its own /metrics; "source" reads the lab's metrics source; "none" skips the queue
+```
+
+Without `route_token_ref`, the card still shows Pinchflat itself, and says what to set.
+
+**The playlist sync.** `bromigos lab youtube sync` turns each downloaded playlist into an
+ordered playlist in Jellyfin, Plex, or both. It finds each video by the YouTube ID in its
+file name, such as `[dQw4w9WgXcQ]`. It orders the videos by the episode number in the file
+name, which Pinchflat's playlist profile sets to the video's place in the playlist. Then it
+creates the playlist, or adds, removes and moves videos until it matches.
+
+- It's safe to run again and again. A run with nothing to change changes nothing.
+- `--dry-run` says what it would change, and changes nothing.
+- `--server jellyfin` or `--server plex` limits it to one server. `--source NAME` limits it
+  to one playlist.
+- It never deletes a playlist. It only changes playlists named after a Pinchflat playlist.
+
+It reads the `pinchflat`, `jellyfin` and `plex` sources in `homelab.toml`. Give the media
+servers an API key in `token_ref`. For Jellyfin, that's an API key from Dashboard › API
+Keys. For Plex, it's the token of a signed-in account. A `[youtube]` table sets the rest:
+
+```toml
+[youtube]
+library = "YouTube"     # the media server's library that Pinchflat downloads into
+prefix = ""             # put before each playlist's name, such as "YT: "
+jellyfin_user = ""      # whose playlists they are in Jellyfin (default: the first admin)
+```
+
+The sync is one file, `bromigos_homelab/youtube.py`, and needs only Python. On the lab, it
+also reads its settings from the environment: `PINCHFLAT_URL`, `PINCHFLAT_ROUTE_TOKEN`,
+`JELLYFIN_URL`, `JELLYFIN_TOKEN`, `PLEX_URL` and `PLEX_TOKEN`. That's how provisioning runs
+it every hour ([lab-provision.md](lab-provision.md#configure-steps)).
 
 #### The `ocr` job kind
 
@@ -652,8 +711,11 @@ method raises, the console shows one *unreachable* card.
 - `gpus`. Without it, the GPUs card reads NVIDIA's DCGM exporter through `metrics`, then
   the media server's device. A record may add `cuda` to the fields above.
 - `storage`: `name`, `kind` (pool, share, bucket or disk), and `used` and `total` in bytes,
-  or `used_pct`. The Storage card and the doctor's disk check read it beside each host's
-  root disk.
+  or `used_pct`. `nas` names the NAS it's on, and `free` is in bytes. The Storage card and
+  the doctor's disk check read it beside each host's root disk. The card also reads every
+  NFS and SMB share a machine mounts, from node-exporter. It names the share's NAS, from
+  the mount's address, and shows its free space. A `nas` source's `label` sets the name
+  the card uses for that NAS.
 - `backups`: `name`, `last_success` (Unix seconds or ISO 8601), `ok`, `max_age_hours`. The
   doctor's backup check reads it. Without it, that check is skipped.
 
