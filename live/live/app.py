@@ -252,6 +252,8 @@ class GLWindow:
             traceback.print_exc()
             self.failed = True
             self.set_fps(0)
+        if self.frames == 1 and self is self.app.bg and not self.failed:
+            self.app.wallpaper_fallback()          # first painted frame: remove the still now
         return True
 
     def set_fps(self, fps):

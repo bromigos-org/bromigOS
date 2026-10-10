@@ -19,3 +19,24 @@ class Ownership(unittest.TestCase):
             self.assertEqual(ns['command'](app, 'background-active'), expected)
         app = SimpleNamespace(bg_enabled=True, bg=SimpleNamespace(dead=False, failed=False, frames=0))
         self.assertEqual(ns['command'](app, 'background-active'), 'off')
+
+    def test_the_first_successful_background_frame_removes_the_still(self):
+        import time
+        from unittest.mock import Mock
+        path = Path(__file__).resolve().parents[1] / 'live/app.py'
+        tree = ast.parse(path.read_text())
+        node = next(n for c in tree.body if isinstance(c, ast.ClassDef) and c.name == 'GLWindow'
+                    for n in c.body if isinstance(n, ast.FunctionDef) and n.name == '_render')
+        ns = {'time': time, 'GL': SimpleNamespace(glGetIntegerv=lambda _: 0, GL_DRAW_FRAMEBUFFER_BINDING=0)}
+        exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), 'exec'), ns)
+        reconcile = Mock()
+        app = SimpleNamespace(wallpaper_fallback=reconcile)
+        win = SimpleNamespace(failed=False, rsize=(100,100), renderer=SimpleNamespace(sf=1,render=lambda *_: None),
+                              frames=0, fps=20, app=app)
+        app.bg = win
+        area = SimpleNamespace(get_scale_factor=lambda: 1, get_allocated_width=lambda: 100,
+                               get_allocated_height=lambda: 100)
+        ns['_render'](win, area, None)
+        reconcile.assert_called_once()
+        ns['_render'](win, area, None)
+        reconcile.assert_called_once()
