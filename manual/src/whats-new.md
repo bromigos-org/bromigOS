@@ -45,6 +45,15 @@ Run `bromigos update` to get them. The next release notes will include these hig
 - **Claude Code sessions.** VECTOR can read local sessions, find past replies and read
   each new reply aloud in follow mode. See [Read a session](vector.md#read-a-claude-code-session).
 
+- **Lab provisioning.** Review a generated repository, then apply Core services or k3s,
+  Helm, Argo CD and Vault. See [Setting up a lab](lab.md#setting-up-a-lab) for Linux boxes,
+  existing clusters and the current limits.
+
+### Improved
+
+- Japanese, Chinese and Korean titles draw correctly in media, music and YouTube views,
+  using the fonts installed with bromigOS.
+
 ### Fixed
 
 - The static wallpaper no longer hides a working live background. Panel toggling restores
@@ -53,10 +62,9 @@ Run `bromigos update` to get them. The next release notes will include these hig
   scanner stays visible in the new colours.
 <!-- /unreleased -->
 
-**Not shipped yet.** Lab provisioning is still planned. Its service catalogue is built,
-but the commands do not create a lab yet. It belongs in the release notes when its
-implementation merges. See the
-[provisioning plan](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-provision.md).
+**Still planned.** The first provisioning implementation has merged. Its AI, media and
+game installers, NAS share discovery and public DNS setup are not built yet. See the
+[provisioning limits](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-provision.md).
 
 <!-- releases: tools/release/release.py adds each release below this line, newest first -->
 

@@ -13,6 +13,7 @@ The results below are from 10 October 2026.
 | `widgets/keybinds.py`, read from the packaged Hyprland config | 80 default key actions |
 | `tools/docs/manual-reference.toml` | Every visible route and default key action has a task row |
 | Generated Commands and Keys pages | Both match the code |
+| Newly merged `bromigos lab provision --help` | Matches the lab setup guide and its supported services |
 | Media and YouTube command examples in the new guide and calendar section | 22 examples parsed without executing requests |
 
 Hidden implementation helpers, personal commands and personal key bindings are outside
@@ -37,7 +38,9 @@ SHORTCUTS panel include that machine's additions.
   and release preparation includes the reviewed edge highlights.
 
 No visible command route or default key action remains without a manual entry. The
-provisioning commands are still stubs; they are labelled planned, not shipped features.
+first provisioning implementation is merged and documented in
+[Setting up a lab](../manual/src/lab.md#setting-up-a-lab). AI, media and game installers
+remain planned.
 “Night Block” is an example channel to create, not a built-in schedule.
 
 ## Repeat the audit
