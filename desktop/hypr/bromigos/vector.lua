@@ -35,6 +35,8 @@ K.exec("SUPER + V", holo .. " ptt on")
 K.exec("SUPER + V", holo .. " ptt off", { release = true })
 K.exec("SUPER + SHIFT + V", "bromigos mute")
 K.exec("SUPER + ALT + V", holo .. " chat")
+-- Follow mode: VECTOR reads Claude Code's replies aloud as they finish, until pressed again.
+K.exec("SUPER + ALT + C", holo .. " claude follow toggle")
 -- The emergency switch: VECTOR off at once (his commands, his answer, his speech); while
 -- he's off, the same keys ask YES before switching him back on. Works with his daemon hung.
 K.exec("SUPER + CTRL + ESCAPE", holo .. " switch toggle --from=key")

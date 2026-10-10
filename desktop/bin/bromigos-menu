@@ -189,7 +189,9 @@ def vector():
     v = [("vector", "Show VECTOR", "the line (SUPER+E)"), ("conversation", "Conversation mode", "hands-free (SUPER+SHIFT+E)"),
          ("gallery", "Hologram gallery", "his 3D models (SUPER+O)"), ("history", "History", "past conversations"),
          ("mute", "Mute his voice", "VECTOR only")]
-    return [Item("vector/" + k, "vector", l, h, None, ("run", ["bromigos-holo", k])) for k, l, h in v]
+    return [Item("vector/" + k, "vector", l, h, None, ("run", ["bromigos-holo", k])) for k, l, h in v] + [
+        Item("vector/claude-follow", "vector", "Read Claude aloud", "Claude Code's replies as they finish (SUPER+ALT+C)",
+             None, ("run", ["bromigos-holo", "claude", "follow", "toggle"]))]
 
 
 # without the live layer's catalog (bromigos-live decks), bromigOS's own decks

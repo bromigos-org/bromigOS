@@ -70,6 +70,12 @@ if w.get("on"):                      # watch mode: say so for as long as it's on
     tip = (f"VECTOR is watching the focused window (a glance every {w.get('every_s')} s, words only, no images kept); "
            f"off in {left // 60} min {left % 60} s, or say 'stop watching'"
            + (f"\npaused: {w['paused']}" if w.get("paused") else "") + "\n" + tip)
+cf = st.get("claude_follow") or {}
+if cf.get("on"):                     # follow mode: Claude Code's replies read aloud, for as long as it's on
+    text = "<span color='#9cff8a'>◉ READING CLAUDE</span> " + text
+    who = "every live session" if cf.get("target") == "all" else ", ".join(cf.get("sessions") or []) or "a session"
+    tip = (f"VECTOR reads Claude Code's replies aloud as they finish ({who}); say 'stop reading Claude', "
+           "SUPER+ALT+C or bromigos vector claude follow off\n" + tip)
 if st.get("switch") == "off":       # the emergency switch: the red VECTOR OFF beside this pip says so too
     tip = ("Emergency switch OFF: his terminal runs nothing and his tools change nothing until you switch "
            "him back on (the red VECTOR OFF on the bar, SUPER+CTRL+ESCAPE, Settings › VECTOR)\n" + tip)
@@ -78,4 +84,5 @@ cls += ["listening", "conversation"] if st.get("conversation") else []
 cls += [f"voice-{st.get('voice') or 'main'}"] if state == "speaking" else []
 cls += [f"mood-{mood}"] if mood != "calm" else []
 cls += ["watching"] if w.get("on") else []
+cls += ["reading-claude"] if cf.get("on") else []
 print(T.retint(json.dumps({"text": text, "tooltip": tip, "class": cls})))
