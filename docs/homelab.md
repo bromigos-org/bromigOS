@@ -202,7 +202,7 @@ With no provider, everything is empty and whatever asked hides itself. Every rec
 | `agents` | `key, name, status, cwd`. `status` is working, needs_you, finished or error. |
 | `secrets` | `name, reachable, initialized, sealed, standby, version`. Status only: nothing reads a secret. |
 | `ci` | `repo, kind, number, title, status, conclusion, url, updated`. `kind` is pr or run. |
-| `alerts` | `name, severity, state, summary, since, labels`. `state` is firing or pending. |
+| `alerts` | `name, severity, state, summary, since, labels, link`. `state` is firing or pending. `link` is the alert's page on its source. |
 | `voice` | `name, endpoint, up, tts, stt, sample_rate, tts_model, stt_model`: a speech service VECTOR talks through |
 | `media` | `name, endpoint, up, running, pending, vram_free, vram_total, gpu, version, models` |
 | `gpus` | `name, host, model, uuid, vram_used, vram_total, util_pct, temp_c, power_w, power_limit_w, driver, holds` |
@@ -219,6 +219,7 @@ With no provider, everything is empty and whatever asked hides itself. Every rec
 | `packages` | `name, repo, latest, built, age_h, packages` |
 | `backups` | `name, kind, last_success, age_h, schedule, ok, max_age_hours, offsite` |
 | `ocr` | `name, endpoint, up, model, via`: where the `ocr` job kind sends pages |
+| `energy` | `name, kind, production_w, consumption_w, net_w, today_wh, consumed_today_wh, lifetime_wh, battery_pct, battery_w, inverters, state`. `net_w` is positive while you draw from the grid and negative while you send to it. |
 
 Sizes such as `vram_used`, `used` and `total` are in bytes. On unified memory,
 `vram_total` is `None`. `holds` lists what uses a GPU, as `"namespace/app"`.
@@ -341,6 +342,8 @@ read the way it's configured reads *unreachable* and says why. Nothing else is a
 | `pacman-repo` | a pacman repository's databases per channel, and the publishing workflow's runs | packages |
 | `backups` | backup CronJobs, NAS share snapshots, Velero's last successful backup | backups |
 | `pbs` | Proxmox Backup Server's API: each backup group's newest snapshot | backups |
+| `enphase` | Enphase's IQ Gateway (the Envoy): `/production.json`, else `/api/v1/production` | energy |
+| `minecraft` | A Minecraft Java server's status, as any client sees it before logging in | games |
 
 Their options:
 
@@ -361,8 +364,34 @@ Their options:
 | `pacman-repo` | `channels` (default edge, rc and stable), `endpoint`, `github_repo`, `workflow`; `stale_hours` (24) |
 | `backups` | `match`, `exclude`, `local_classes`, `offsite`, `ignore` |
 | `pbs` | `endpoint`, `auth_ref` (a token, sent as `PBSAPIToken=`) |
+| `enphase` | `endpoint`, `auth_ref` (an owner token, for firmware 7 and later), `tls_verify = false` or `tls_ca`; `history_metric` |
+| `minecraft` | `endpoint` (`minecraft://host:25565`), or `servers = [{ name, address }]` for several; `timeout` (4 s) |
 
 Numbers in brackets are the defaults.
+
+Two more need a few words:
+
+- **enphase**: firmware 7 and later answer only over HTTPS with a token. An owner gets
+  one, valid for a year, from entrez.enphaseenergy.com. Put it in a file and point
+  `auth_ref` at it, such as `"@file:~/.config/bromigos/envoy.token"`. The gateway's
+  certificate is self-signed, so set `tls_verify = false`. Older firmware answers over
+  plain HTTP with no token. What the house uses, and the grid, need the gateway's
+  consumption meters. Without them only production shows.
+- **minecraft**: it sends the handshake and the status request any client sends, and
+  reads the answer: players, the most allowed, the version, the message of the day, and
+  a sample of names. It never logs in.
+
+```toml
+[[source]]
+type = "enphase"
+endpoint = "https://envoy.local"
+auth_ref = "@file:~/.config/bromigos/envoy.token"
+tls_verify = false
+
+[[source]]
+type = "minecraft"
+endpoint = "minecraft://mc.example.org:25565"
+```
 
 A namespace with no pods reads *not deployed* on the `workload` adapter, not *down*.
 Pelican's start, stop and restart aren't built yet.

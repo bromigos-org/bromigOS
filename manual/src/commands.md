@@ -57,6 +57,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos live`](#bromigos-live) | Turn the animated background on or off, or open a [hologram](holograms.md): `bromigos live timeline`. |
 | [`bromigos panels`](#bromigos-panels) | Show, hide or move the desktop [panels](panels.md), start edit mode, list every widget, and set the weather's place. |
 | [`bromigos widgets`](#bromigos-widgets) | Show or hide one panel or all of them. |
+| [`bromigos account`](#bromigos-account) | Sign a panel in to an online account, such as Twitch, GitHub, GitLab or Spotify. See [Panels that need an account](panels.md#panels-that-need-an-account). |
 | [`bromigos mute`](#bromigos-mute) | Mute or unmute the theme's sounds and VECTOR's voice together. |
 | [`bromigos boot`](#bromigos-boot) | Turn the themed [boot menu](boot-menu.md) on or off. |
 | [`bromigos emblem`](#bromigos-emblem) | Draw a theme's emblem pictures. For people making themes. |
@@ -239,6 +240,24 @@ Options:
       --json  Print the JSON document (schema in core/README.md)
   -h, --help  Print help
 ```
+
+### bromigos account
+
+Sign in to an online account a widget uses (Twitch, GitHub, GitLab, Spotify); tokens stay in your keyring.
+
+```text
+bromigos account status|login|logout|configure|set-token PROVIDER [client_id=ID] [base=URL]
+```
+
+For example:
+
+```text
+bromigos account configure twitch client_id=abc123
+bromigos account login twitch
+bromigos account status github
+```
+
+From the `bromigos-core` package.
 
 ### bromigos anim
 

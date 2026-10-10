@@ -97,6 +97,34 @@ WEATHER and CONNECTIONS are off by default. LAB comes with `bromigos-homelab`.
 WORKBENCH's rows open Neovim, a terminal or the file manager. SYSTEM's GPU readings come
 from NVIDIA's NVML library, so they need an NVIDIA GPU.
 
+### The built-in plugin panels
+
+More built-in panels are files in `plugins/`, one each, loaded like any plugin and off
+until someone adds them. They share `plugins/_kit.py`: settings through
+`widget_settings.py`, pollers that stop while a panel isn't drawn, empty states, buttons
+and pictures. The ones that sign in to an account use `lib/bromigos_account.py`.
+
+| Panel | File | Reads | Every (while shown) |
+|---|---|---|---|
+| GPU | `gpu.py` | NVML (NVIDIA), or `/sys/class/drm` (AMD, Intel); processes through NVML | 2 s; processes 4 s |
+| UPDATES | `updates.py` | `bromigos update --check --json`, cached in `~/.cache/bromigos/widgets/` | 3 h, and when pacman's database changes |
+| VECTOR | `vector.py` | His state file, his audit log, `gh search prs` | 2 s; PRs 5 min |
+| CI & PRS | `ci.py` | One `gh api graphql` query | 3 min |
+| GITHUB | `github.py` | GitHub's REST and GraphQL APIs, with ETags | 4 min; the graph hourly |
+| GITLAB | `gitlab.py` | GitLab's API (`/api/v4`) | 4 min |
+| CALENDAR | `calendars.py` | ICS addresses, files and folders (python-icalendar, dateutil) | 15 min; files on change |
+| NOW PLAYING | `nowplaying.py` | MPRIS through Playerctl; cava for the visualizer | 1 s |
+| SPOTIFY | `spotify.py` | Spotify's Web API, and MPRIS when the app is here | 5 s playing, 20 s paused |
+| TWITCH | `twitch.py` | Helix; the anonymous chat when large | 1 min |
+| YOUTUBE | `youtube.py` | The channel's feed and `/live` page | 15 min; live 10 min |
+| DISCORD | `discord.py` | The invite and server widget APIs | 3 min |
+
+The homelab's own (LAB JOBS, SOLAR, GAME SERVERS, ALERTS) are `*_panels.py` generators in
+`homelab/widgets/`, each offered only when a source provides what it reads.
+
+Name a plugin file unlike any Python module (`calendars.py`, not `calendar.py`). Its
+folder is on the import path, and the tests put it first.
+
 ## Plugin health
 
 `plugins.py` keeps each plugin panel isolated. An error is logged to

@@ -194,6 +194,7 @@ rows = [
   { route = "live", text = "Turn the animated background on or off, or open a [hologram](holograms.md): `bromigos live timeline`." },
   { route = "panels", text = "Show, hide or move the desktop [panels](panels.md), start edit mode, list every widget, and set the weather's place." },
   { route = "widgets", text = "Show or hide one panel or all of them." },
+  { route = "account", text = "Sign a panel in to an online account, such as Twitch, GitHub, GitLab or Spotify. See [Panels that need an account](panels.md#panels-that-need-an-account)." },
   { route = "mute", text = "Mute or unmute the theme's sounds and VECTOR's voice together." },
   { route = "boot", text = "Turn the themed [boot menu](boot-menu.md) on or off." },
   { route = "emblem", text = "Draw a theme's emblem pictures. For people making themes." },

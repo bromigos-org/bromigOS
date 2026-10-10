@@ -27,6 +27,22 @@ list of shortcuts, in ember orange">
 | `weather` | The forecast for a place you choose ([below](#weather)) | No |
 | `connections` | Network connections, Wi-Fi and VPNs ([below](#connections)) | No |
 | `lab` | Your homelab at a glance, and any panels you declare ([homelab.md](homelab.md)) | With `bromigos-homelab` and a configured homelab |
+| `gpu` | The graphics card: load, video memory, temperature, power, and which programs use it ([below](#gpu)) | No |
+| `updates` | Updates waiting, what needs a restart, and your last updates with their snapshots ([below](#updates)) | No |
+| `vector` | VECTOR's state, his emergency switch, his recent actions and his pull requests ([below](#vector)) | No |
+| `ci` | CI & PRs: the build-status board for the repositories you list ([below](#ci--prs)) | No |
+| `github` | Your GitHub feed: notifications, reviews, your repositories ([below](#github)) | No |
+| `gitlab` | Your GitLab merge requests, to-dos and pipelines ([below](#gitlab)) | No |
+| `calendars` | Today's and the coming days' events from ICS calendars ([below](#calendar)) | No |
+| `nowplaying` | What a media player plays, with its cover, the controls and a visualizer ([below](#now-playing)) | No |
+| `spotify` | Your Spotify account: what plays on any device, the queue and recent tracks ([below](#spotify)) | No |
+| `twitch` | Your Twitch channel, and the channels you follow that are live ([below](#twitch)) | No |
+| `youtube` | A channel's latest videos, and whether it's live ([below](#youtube)) | No |
+| `discord` | Who's online in a Discord server ([below](#discord)) | No |
+| `labjobs` | The lab job queue: what runs, what waits and why ([below](#the-homelabs-widgets)) | No. Offered with `bromigos-homelab` and a configured homelab |
+| `solar` | Solar now: what the roof makes, what the house uses, the grid and batteries ([below](#the-homelabs-widgets)) | No. Offered when a homelab source provides energy |
+| `games` | Your homelab's game servers: up or down, and who's playing ([below](#the-homelabs-widgets)) | No. Offered when a homelab source provides games |
+| `alerts` | The homelab's firing and pending alerts, worst first ([below](#the-homelabs-widgets)) | No. Offered when a homelab source provides alerts |
 
 ## Show or hide a panel
 
@@ -375,3 +391,294 @@ VPN to bring it up or down.
 
 The panel checks every 15 seconds. It says so when NetworkManager isn't running. To turn
 it on, set `"visible": true` on the `connections` entry in your `layout.json`.
+
+## The built-in widgets
+
+bromigOS ships more widgets than it shows at first. They're all off until you add them
+from the [widget gallery](#the-widget-gallery), or with `bromigos panels add <name>`. Each
+one:
+
+- has a layout for every [size class](#size-classes). A bigger size shows more, not the
+  same thing larger;
+- reads its source only while you can see it, and stops while it's hidden or covered;
+- says what's missing when its source isn't set up, and how to set it up;
+- keeps its own settings on its card's **Settings…**, saved in
+  `~/.config/bromigos/widgets/<name>.toml` ([above](#a-widgets-settings)).
+
+The widgets that read an online account sign in through Settings, or with `bromigos
+account` ([Accounts](#accounts)).
+
+### GPU
+
+The GPU panel shows the graphics card's load, video memory, temperature, power draw,
+clocks and fan. It also lists the programs that use the card, with each one's video
+memory, and on NVIDIA its share of the card's work.
+
+- **NVIDIA** cards are read through NVML, the library the driver installs. The panel
+  reads it directly, every 2 seconds, without starting `nvidia-smi`.
+- **AMD** cards are read from the kernel's files in `/sys/class/drm`. The kernel doesn't
+  say which program uses an AMD card, so the panel says so.
+- **Intel** cards give only their clock there. The panel says that the load needs
+  `intel_gpu_top`.
+
+Large and wide add ten minutes of history for the load, video memory, temperature and
+power. With several cards, the first is shown and large lists the others.
+
+### Updates
+
+The updates panel shows what `bromigos update` would do: the upgrades waiting in the
+repositories and the AUR, migrations, and anything that needs a restart or a reboot. It
+also shows your last updates and the snapshots taken before and after each one.
+
+- **Update** runs `bromigos update` in your terminal. It asks before it changes anything.
+- **Check** checks now.
+
+Checking syncs a throwaway copy of the package databases, so the panel checks at most
+every 3 hours while it's on screen, and again when packages change. It keeps the answer
+in `~/.cache/bromigos/widgets/updates.json`, so starting the panels again doesn't check
+again. It needs `pacman-contrib` for `checkupdates`.
+
+### VECTOR
+
+The VECTOR panel shows:
+
+- what he's doing now, with his mood, voice and model, from his state file;
+- his emergency switch. A click is the same as Super+Ctrl+Esc: off at once, and back on
+  only after you answer YES;
+- his recent actions from his audit log: each tool, whether it went through, and when.
+  The values he passed are never shown, only their names, and anything that looks like a
+  token is hidden;
+- his open pull requests, through your own `gh` login, every 5 minutes. Click one to
+  open it.
+
+His GitHub account is the `account` setting. It's `bromigodev` unless you change it. When
+VECTOR isn't installed, the gallery doesn't offer the panel.
+
+### CI & PRs
+
+The CI & PRs panel is the build-status board. For each repository you list, it shows
+whether the default branch's latest commit passes its checks, and the last ten commits as
+a strip of lights. Under them are the pull requests that ask for your review, and your own
+open ones with their checks and review state.
+
+It reads GitHub through your `gh` login, in one query every 3 minutes while it's on
+screen. Its settings:
+
+```toml
+# ~/.config/bromigos/widgets/ci.toml
+repos = ["owner/name", "owner/other"]
+mine = true            # your own open pull requests too
+```
+
+With no repositories, it shows only the pull requests. The [GitHub](#github) panel is the
+personal feed.
+
+### GitHub
+
+The GitHub panel is your personal feed:
+
+- your notifications;
+- pull requests that ask for your review, and issues or pull requests assigned to you;
+- your repositories, newest push first, with their stars, and what happened on them
+  lately, such as stars, forks and new issues.
+
+Large adds your open pull requests and your contribution graph for the last year. Click
+any row to open it on GitHub.
+
+If you've signed in to the `gh` command, the panel uses that login. It asks `gh` for the
+token each time and never stores it. Without `gh`, sign in with GitHub's device flow:
+make an OAuth app at github.com › Settings › Developer settings › OAuth Apps with **Enable
+Device Flow** ticked, and give the panel its client ID ([Accounts](#accounts)).
+
+The panel reads GitHub every 4 minutes while you can see it. Each request carries the
+last answer's ETag, so an unchanged answer doesn't count against GitHub's rate limit. It
+reads the contribution graph once an hour, and only while large. Settings: `repos` (how
+many repositories to list) and `activity_repos` (how many to read activity from).
+
+### GitLab
+
+The GitLab panel shows your work on gitlab.com or on your own GitLab:
+
+- merge requests that ask for your review or are assigned to you, with their pipeline's
+  state and any merge conflicts;
+- your to-do list;
+- the latest pipelines of the projects you were last active in. Wide, tall and large
+  show each project's recent pipelines as a strip.
+
+For your own GitLab, set its address once: `bromigos account configure gitlab
+base=https://git.example.org`. Then sign in one of two ways:
+
+- **The device flow**, on GitLab 17.2 or later. In GitLab, User settings › Applications:
+  add an application, untick **Confidential**, tick `read_api` and `read_user`, and give
+  the redirect URI `http://127.0.0.1`. Give the panel its application ID.
+- **A personal access token** with `read_api`: **Paste a token…** in the panel's
+  settings, or `bromigos account set-token gitlab`.
+
+The panel reads GitLab every 4 minutes while you can see it. Setting: `projects`, how
+many projects show their pipelines.
+
+### Calendar
+
+The calendar panel (`calendars`) shows today's events and the days ahead. It reads ICS
+calendars, the format almost every calendar app can share. You don't sign in to anything.
+
+| Size | Shows |
+|---|---|
+| Compact | The next event, and how long until it starts or ends |
+| Standard | Today's events, then the next few |
+| Wide | Three to five days side by side |
+| Tall | The next seven days as a list |
+| Large | A week as a grid of hours, with a line at the time now |
+
+Hover over an event for its time, place and notes. If its place is a web address, or its
+notes hold a video-call link, a click opens it.
+
+```toml
+# ~/.config/bromigos/widgets/calendars.toml
+calendars = [
+  "https://calendar.example.org/me/basic.ics",   # an address; webcal:// works too
+  "~/Documents/holidays.ics",                    # a file
+  "~/.local/share/calendars/home",               # a folder of .ics files (vdirsyncer)
+]
+week_start = "monday"     # the large grid's first day: "today" (the default), "monday" or "sunday"
+```
+
+To give a calendar a name or a colour, write it as a table instead:
+
+```toml
+[[calendars]]
+source = "https://calendar.example.org/team.ics"
+name = "Work"
+colour = "#58a6ff"
+```
+
+A CalDAV server, such as Nextcloud, Radicale or Fastmail, gives each calendar an export
+or subscription address. vdirsyncer syncs a CalDAV account to folders of `.ics` files.
+
+The panel fetches each address every 15 minutes while you can see it, and asks first
+whether anything changed. It keeps the last copy, so it still works offline. It reads
+files again when they change. Repeating events, time zones, all-day events and moved or
+cancelled meetings are handled. It needs `python-icalendar` and `python-dateutil`, and
+says so when they're missing.
+
+### Now playing
+
+The now playing panel shows what a media player on this computer plays: Spotify,
+Firefox, mpv, VLC, or any other player that speaks MPRIS, the desktop's standard way for
+players to say what they play and take commands. It shows the title, artist, album and
+cover, the position (click the bar to jump), previous, play or pause and next, and a
+visualizer when [cava](https://github.com/karlstav/cava) is installed.
+
+With several players open, it shows the one playing. Tall and large list every player;
+click one to show it. Covers from the web are downloaded once and kept in
+`~/.cache/bromigos/widgets/art/`. It needs `playerctl`.
+
+The visualizer runs cava only while something plays and the panel is on screen. It stops
+when the music pauses, when the panel is hidden, and when motion is reduced
+([accessibility.md](accessibility.md)). Settings: `player` (always show this player when
+it's open) and `visualizer` (off for no visualizer).
+
+### Spotify
+
+The Spotify panel shows what your Spotify account plays on any device: a phone, a
+speaker or this computer. It shows the track and cover, the device, its volume, shuffle
+and repeat, and previous, play or pause and next. Tall and large add what's up next and
+what you played recently.
+
+It works with [now playing](#now-playing). When the Spotify app runs here, this panel's
+clicks go to the app, which is instant and works with a free account. Without the app,
+they go through Spotify's Web API, which allows them for Premium accounts only.
+
+To set it up:
+
+1. Create an app at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
+   with **Web API** ticked.
+2. Add the redirect URI `http://127.0.0.1:8898/callback`, exactly as written.
+3. Give the panel the app's client ID, then sign in ([Accounts](#accounts)). Your browser
+   opens Spotify's page; approve it.
+
+The panel listens on `127.0.0.1:8898` only while you sign in. To use another port, run
+`bromigos account configure spotify port=NNNN` and change the redirect URI to match.
+
+It asks Spotify what's playing every 5 seconds while something plays and the panel is on
+screen, and every 20 seconds while paused. It reads the queue and the history once a
+minute, and only while tall or large. Setting: `show_queue`.
+
+### Twitch
+
+The Twitch panel shows your own channel (live or offline, viewers, title, category) and
+the channels you follow that are live now, busiest first. Click one to open it on
+twitch.tv. Large adds the featured stream's picture and its chat activity, in messages a
+minute. Chat activity comes from Twitch's read-only guest chat. The panel counts messages
+and never keeps or shows what they say, and connects only while it's large, on screen and
+the stream is live.
+
+To set it up:
+
+1. Register an application at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps).
+   Set **Client Type** to **Public**, and the OAuth redirect URL to `http://localhost`.
+   Twitch asks for one, but the sign-in doesn't use it.
+2. Give the panel the app's client ID, then sign in ([Accounts](#accounts)). Twitch's
+   activation page opens; enter the code the panel shows.
+
+The panel reads Twitch every minute while you can see it. Setting: `channels`, more
+channels to watch, by their Twitch login.
+
+### YouTube
+
+The YouTube panel shows a channel's latest videos and whether it's live, with no account
+and no API key. Set `channel` to an @handle or a channel ID (UC…). A handle is looked up
+once and remembered. Set `shorts = false` to leave Shorts out.
+
+- **The videos** come from the channel's public feed, every 15 minutes while the panel is
+  on screen.
+- **Live or not:** the feed doesn't say, so the panel opens the channel's `/live` page
+  every 10 minutes. When it can't tell, it says the live status is unknown rather than
+  guess.
+
+Click a video to open it. Wide and tall add a chart of the latest videos' views. Large
+shows each video's picture, fetched only while the panel is large.
+
+### Discord
+
+The Discord panel shows how many members of a Discord server are online, with no sign-in
+and no token. It reads Discord's public invite and server widget:
+
+```toml
+# ~/.config/bromigos/widgets/discord.toml
+invite = "abc123"          # an invite code, or a discord.gg/… link
+server = "1234567890"      # a server ID whose widget is on
+```
+
+- **An invite** gives the server's name and icon, the members online and the members in
+  all. Use one that doesn't expire.
+- **A server ID** gives who's online by name, their status, and who's in each voice
+  channel. The server's widget must be on: in Discord, **Server Settings › Widget ›
+  Enable Server Widget**, which also shows the server ID.
+
+The panel reads Discord every 3 minutes while you can see it, and draws the online count
+over time. Discord's counts are approximate and can lag a few minutes.
+
+### The homelab's widgets
+
+`bromigos-homelab` adds four widgets. The gallery offers each one only when your
+`homelab.toml` has a source for it ([homelab.md](homelab.md)).
+
+- **LAB JOBS** reads the lab job queue, the same as `bromigos lab jobs`. It shows the job
+  that runs and how far along it is, the jobs that wait and why, and the GPU's free
+  memory, with what the next job needs outlined. Large adds the last 6 hours and each
+  kind's count and time. Click a finished job to open what it made, or another job to
+  read its log. The × cancels a job after a second click.
+- **SOLAR** reads an Enphase gateway (an `enphase` source): what the roof makes, what the
+  house uses, what goes to or comes from the grid, and the batteries. Large draws them
+  joined by lines as thick as the power on them, and today's curve. The gateway keeps no
+  history on the network, so the curve is the panel's own samples, kept for a week in
+  `~/.local/state/bromigos/widgets/`, unless the source's `history_metric` names one.
+- **GAME SERVERS** shows each server (`minecraft` and `pelican` sources), whether it's up,
+  and how many play. Minecraft servers also give their version and, when they list them,
+  the players' names. Click a Minecraft server to copy its address.
+- **ALERTS** shows what fires and what's pending, worst first, with how long each has
+  lasted. Click one to open its page on the source that raised it.
+
+They read every 3 seconds (LAB JOBS), 30 seconds (SOLAR, ALERTS) or a minute (GAME
+SERVERS), and stop while the panel is hidden.

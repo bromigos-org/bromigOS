@@ -179,26 +179,20 @@ gallery says who made a panel from where it came from: bromigOS, an extension's
 [widgets.md](widgets.md) lists the panels bromigOS ships, and
 [widgets/README.md](../widgets/README.md) describes the code.
 
-### Settings
+### Settings and the kit
 
-A panel's own settings go in `~/.config/bromigos/widgets/<name>.toml`. bromigOS's
-built-in plugin panels read that file over the panel's keys in `layout.json`, and read it
-again when it changes. They describe what it holds in a `settings` list:
+A panel lists its own settings in `settings`, and reads them with `self.setting(key)`.
+Settings draws the form, and the values go in `~/.config/bromigos/widgets/<name>.toml`.
+[widgets.md](widgets.md#a-widgets-settings) has the fields. A secret never goes in that
+file.
 
-```python
-settings = [
-    {"key": "repos", "label": "Repositories", "kind": "list", "default": [],
-     "hint": "owner/name, one per line"},
-]
-```
+bromigOS's built-in plugin panels share a small kit, `widgets/plugins/_kit.py`:
 
-`kind` is `text`, `list`, `number`, `bool`, `choice` (with `choices`) or
-`secret-signin` (with `provider`, below). A secret never goes in this file.
-
-The built-in panels share a small kit, `widgets/plugins/_kit.py`. `KitPanel` reads the
-settings file and gives the panel `self.conf`. `self.poller(fetch, every)` fetches on a
-thread, and stops while the panel isn't drawn: when it's hidden, or windows cover it.
-`self.empty(…)` draws the empty state, which says what to set up and where.
+- `KitPanel` gives a panel `self.conf`, the same values as `self.setting()`, with
+  `.list(key)` for a list.
+- `self.poller(fetch, every)` fetches on a thread, and stops while the panel isn't drawn:
+  when it's hidden, or windows cover it. The next draw wakes it.
+- `self.empty(…)` draws the empty state, which says what to set up and where.
 
 ### A widget that needs an account
 

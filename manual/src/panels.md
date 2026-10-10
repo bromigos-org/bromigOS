@@ -29,6 +29,23 @@ choose them.
 | WEATHER | The weather now, for the next 24 hours, and for three days. | none | no |
 | CONNECTIONS | What's connected, Wi-Fi networks in reach, VPNs, and a switch for Wi-Fi. | none | no |
 | LAB | Your homelab at a glance. | none | when you've [connected a homelab](homelab.md) |
+| GPU | The graphics card: how busy it is, its memory, temperature and power, and which programs use it. | none | no |
+| UPDATES | Updates waiting, and a button to install them. | none | no |
+| VECTOR | What VECTOR is doing, his emergency switch, what he did lately, and his pull requests. | none | no |
+| CI & PRS | Whether your projects' builds pass, and pull requests waiting for you. | none | no |
+| GITHUB | Your GitHub notifications, reviews, repositories and stars. | none | no |
+| GITLAB | Your GitLab merge requests, to-dos and pipelines. | none | no |
+| CALENDAR | Today's events and the days ahead, from your calendars. | none | no |
+| NOW PLAYING | The song or video playing, with its cover and the controls. | none | no |
+| SPOTIFY | What your Spotify account plays on any device, and what's next. | none | no |
+| TWITCH | Your Twitch channel, and the channels you follow that are live. | none | no |
+| YOUTUBE | A channel's newest videos, and whether it's live. | none | no |
+| DISCORD | Who's online in a Discord server. | none | no |
+| LAB JOBS, SOLAR, GAME SERVERS, ALERTS | Your homelab's job queue, solar power, game servers and alerts. | none | offered when your homelab has them |
+
+The panels marked "no" are off until you add them: open edit mode, find one in the tray,
+and click **Add to desktop**. Each one says on the panel itself what it needs before it
+can show anything, such as a calendar's address or a sign-in.
 
 ## Use the panels
 
@@ -130,6 +147,48 @@ bromigos panels show weather
 
 The forecast comes from Open-Meteo, a free weather service.
 
+## A panel's own settings
+
+Many panels have settings of their own, such as which calendars to show or which Discord
+server to watch. Click **Settings…** on the panel's card, in edit mode's tray or in
+**Settings › Widgets**. The panel changes as soon as you save.
+
+From a terminal:
+
+```bash
+bromigos panels settings calendars            # what it has, and the values now
+bromigos panels set discord invite abc123     # change one
+```
+
+## Panels that need an account
+
+GITHUB, GITLAB, SPOTIFY and TWITCH show your own account, so they need you to sign in
+once. Open the panel's **Settings…** and click **Sign in**.
+
+1. **Connect the service.** Each service needs an app of your own on its developer site.
+   The form says where to make it and what to paste. You do this once per service, and
+   every panel for that service shares it.
+2. **Sign in.** For GitHub, GitLab and Twitch, a short code appears. Type it on the page
+   that opens, and approve. For Spotify, approve on Spotify's page; the form finishes by
+   itself.
+
+The sign-in is kept in your login keyring, never in a file. **Sign out** forgets it.
+
+If you use the `gh` command and you're signed in to it, GITHUB uses that, and there's
+nothing to do. GITLAB can also take a personal access token: **Paste a token…**.
+
+From a terminal:
+
+```bash
+bromigos account configure twitch client_id=YOUR_CLIENT_ID
+bromigos account login twitch
+bromigos account status twitch
+bromigos account logout twitch
+```
+
+The developer docs' [widgets.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/widgets.md#the-built-in-widgets)
+say, for each panel, where to make the app.
+
 ## Panels of your own
 
 - **For your homelab:** a gauge, a chart, a status light or a table needs no code. You
@@ -144,5 +203,7 @@ The forecast comes from Open-Meteo, a free weather service.
 ## Where the settings go
 
 Your layout is `~/.config/bromigos/widgets/layout.json`, and the weather's place is in
-`~/.config/bromigos/weather.toml`. Settings writes both for you. If you edit them by hand,
+`~/.config/bromigos/weather.toml`. A panel's own settings are in
+`~/.config/bromigos/widgets/<name>.toml`, and the services' client IDs in
+`~/.config/bromigos/accounts.toml`. Settings writes them all for you. If you edit them by hand,
 run `bromigos widgets reload`.
