@@ -24,11 +24,15 @@ optdepends=('git: recent repos on WORKBENCH'
             'cava: the visualizer on NOW PLAYING'
             'pacman-contrib: checkupdates, for the pending updates on UPDATES'
             'github-cli: the pull requests on VECTOR and CI & PRs, through your gh login'
+            'python-icalendar: CALENDAR reads your .ics calendars'
+            'python-dateutil: repeating events on CALENDAR'
             'libsecret: keeps the sign-ins of account widgets (Twitch, GitHub, GitLab, Spotify) in your keyring')
 makedepends=('git' 'python')
 checkdepends=('desktop-file-utils'
              # the tests draw every panel offscreen (tests/: cairo, Pango, psutil)
-             'python-cairo' 'python-gobject' 'pango' 'python-psutil')
+             'python-cairo' 'python-gobject' 'pango' 'python-psutil'
+             # CALENDAR's parsing tests
+             'python-icalendar' 'python-dateutil')
 options=('!debug')
 
 _root="${startdir%/packaging/*}"
