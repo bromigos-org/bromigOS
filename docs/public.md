@@ -30,11 +30,12 @@ bromigos/manual/                              the web manual
 
 ## Before you go public
 
-- **Check the proprietary packages.** The repository builds `1password` from 1Password's
-  own download. Its licence is proprietary. A public mirror redistributes it to anyone, so
-  check that 1Password's terms allow that. If they don't, drop it from the repository
-  first, and point users at the AUR. The command's checks name every package whose licence
-  is proprietary.
+- **Check the proprietary packages.** The lab's repository builds `1password` from
+  1Password's own download, under a proprietary licence. The mirror leaves it out:
+  `publish.sh` copies no file of it, and the mirror's databases are the lab's with it
+  removed, signed again with the same key. Public users get it from the AUR
+  (`bromigos install --with 1password`). The command's checks name any package whose
+  licence is proprietary that is still in the mirror's edge database.
 - **Check the mirror is current.** The command checks that every channel's database is on
   the mirror and verifies against the signing key. To copy a channel again without building
   anything, run

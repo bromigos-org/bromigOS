@@ -226,25 +226,57 @@ release() {
 # The old database names only files that are still there until step 3. Databases and the
 # catalog say Cache-Control: no-cache, so a public cache never serves a stale database
 # beside a fresh signature. --checksum compares MD5s, which both buckets keep.
+#
+# The mirror leaves out what may not be redistributed: 1password (a proprietary licence).
+# The lab's bucket keeps it. The mirror gets no file of it, and its databases are the
+# primary's with it repo-removed, signed again with the same key. Public installs get it
+# from the AUR (bromigos install --with 1password; docs/apps.md). .mirror-source holds the
+# MD5 of the primary database the mirror's was made from, so mirror_if_behind can tell.
+public_skip=(1password)
+mirror_skip=(--exclude '/.publish-lock' --exclude '/.mirror-source'
+             --exclude "/$repo.db*" --exclude "/$repo.files*")
+for p in "${public_skip[@]}"; do mirror_skip+=(--exclude "/$p-[0-9]*"); done
 mirror_channel() {
-  local f base nocache=(--header-upload "Cache-Control: no-cache")
-  rcl copy --checksum --include '/*.pkg.tar.*' "$dest" "$gdest"
+  local f base p src names nocache=(--header-upload "Cache-Control: no-cache") drop=()
+  rcl copy --checksum "${mirror_skip[@]}" --include '/*.pkg.tar.*' "$dest" "$gdest"
   rcl copy --checksum "${nocache[@]}" --include '/lab/**' "$dest" "$gdest"
+  rm -rf "$work/pub" && mkdir "$work/pub"
   rcl lsf --files-only "$dest" > "$work/listing.mirror"
+  for f in "$repo.db.tar.gz" "$repo.db.tar.gz.sig" "$repo.files.tar.gz" "$repo.files.tar.gz.sig"; do
+    if grep -qxF "$f" "$work/listing.mirror"; then rcl copyto "$dest/$f" "$work/pub/$f"; fi
+  done
+  src=
+  if [[ -f "$work/pub/$repo.db.tar.gz" ]]; then
+    src=$(md5sum < "$work/pub/$repo.db.tar.gz" | cut -d' ' -f1)
+    names=$(tar -xzOf "$work/pub/$repo.db.tar.gz" --wildcards '*/desc' | awk '/^%NAME%$/ { getline; print }')
+    for p in "${public_skip[@]}"; do
+      if grep -qxF "$p" <<<"$names"; then drop+=("$p"); fi
+    done
+    if (( ${#drop[@]} )); then
+      repo-remove --quiet --verify --sign --key "$fpr" "$work/pub/$repo.db.tar.gz" "${drop[@]}"
+      echo "publish: the public mirror's databases leave out ${drop[*]}"
+    fi
+  fi
   for base in "$repo.files" "$repo.db"; do
-    for f in "$base.tar.gz" "$base.tar.gz.sig" "$base" "$base.sig"; do
-      grep -qxF "$f" "$work/listing.mirror" || continue
-      rcl copyto --checksum "${nocache[@]}" "$dest/$f" "$gdest/$f"
+    for f in "$base.tar.gz" "$base.tar.gz.sig"; do
+      [[ -f "$work/pub/$f" ]] || continue
+      rcl copyto --checksum "${nocache[@]}" "$work/pub/$f" "$gdest/$f"
+      rcl copyto --checksum "${nocache[@]}" "$work/pub/$f" "$gdest/${f/.tar.gz/}"
     done
   done
-  # Nothing is left to copy, so this only deletes what the primary no longer has.
-  rcl sync --checksum --exclude '/.publish-lock' "$dest" "$gdest"
+  # Nothing is left to copy, so this only deletes what the primary no longer has; then
+  # whatever of the left-out packages an earlier copy put there.
+  rcl sync --checksum "${mirror_skip[@]}" "$dest" "$gdest"
+  for p in "${public_skip[@]}"; do rcl delete --include "/$p-[0-9]*" "$gdest"; done
+  printf '%s\n' "$src" | rcl rcat "$gdest/.mirror-source"
   echo "publish: the public mirror matches $prefix"
 }
 # mirror_if_behind: compare first, so a run that changed nothing doesn't take the lease.
 mirror_if_behind() {
   (( mirror )) || return 0
-  if rcl check --checksum --exclude '/.publish-lock' "$dest" "$gdest" >/dev/null 2>&1; then
+  if rcl check --checksum "${mirror_skip[@]}" "$dest" "$gdest" >/dev/null 2>&1 \
+     && [[ "$(rcl md5sum "$dest/$repo.db.tar.gz" 2>/dev/null | cut -d' ' -f1)" \
+           == "$(rcl cat "$gdest/.mirror-source" 2>/dev/null)" ]]; then
     echo "publish: the public mirror is up to date"
     return 0
   fi

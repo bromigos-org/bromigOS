@@ -52,7 +52,7 @@ packages. That table is generated from these PKGBUILDs.
 | `bromigos-lab-catalog` | The lab model catalog, `/usr/share/bromigos/homelab/lab/models.toml` | `homelab/share/lab/` |
 | `bromigos-apps` | The app bundle's default configs and `bromigos apps setup` | `apps/` |
 | `bromigos-manual` | The manual as HTML in `/usr/share/doc/bromigos/manual/`, which Settings opens | `manual/` |
-| `herdr`, `ttf-geist-mono`, `1password`, `paru` | Upstream software, built here so no install needs an AUR helper | upstream sources, pinned by checksum |
+| `herdr`, `ttf-geist-mono`, `1password`, `paru` | Upstream software, built here so no install needs an AUR helper (`1password` stays off the public mirror) | upstream sources, pinned by checksum |
 
 Some packages need a closer look.
 
@@ -241,6 +241,11 @@ moment:
 1. the new packages and their signatures, and the signed lab catalog;
 2. the databases, each with its signature straight after it;
 3. last, deletions of whatever the primary pruned.
+
+The mirror leaves out `1password`, whose licence is proprietary: no file of it is copied,
+and its databases are the primary's with it removed (`repo-remove`), signed again with the
+same key. The lab's bucket keeps it; public users get it from the AUR. `.mirror-source` on
+the mirror holds the MD5 of the primary database its own was made from.
 
 Until step 2, the old database names only files the mirror still has. The databases, the
 catalog, `install.sh` and the key are uploaded with `Cache-Control: no-cache`. Then a public
