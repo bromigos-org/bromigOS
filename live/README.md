@@ -14,6 +14,9 @@ manual's [Themes and worlds](../manual/src/themes-and-worlds.md) and
 
 ## What it draws
 
+Colour switches refresh the live layer’s shaders and tinted textures on the next frame,
+including paused backgrounds and open overlays. The session stays running.
+
 - **The background.** With the default theme, the Wick, the background is *the den*: a
   painted radio room whose screens, meters and floor the live layer brings to life. The
   den sits behind every window.
@@ -124,6 +127,7 @@ Four render tests check what the unit tests can't:
 | `tests/offscreen_motion.py` | Reduced motion and the still mode, for the den, a world and the overlays |
 | `tests/offscreen_sizes.py` | The background at six screen sizes, from 1280×800 to 3440×1440 |
 | `tests/offscreen_retint.py` | The den recoloured for the Wick and the six colour themes |
+| `tests/offscreen_theme_switch.py` | Existing den and radial surfaces switch Wick → Cinder → Wick; each frame matches a fresh scene in the new colours |
 | `tests/software_session.py` | The daemon on a software renderer: a still frame, at low CPU ([No GPU](#no-gpu)) |
 
 ## Decks

@@ -19,7 +19,7 @@ from gi.repository import Gdk, Gio, GLib, Gtk, GtkLayerShell  # noqa: E402
 
 from OpenGL import GL  # noqa: E402
 
-from . import config, hypr, motion, software  # noqa: E402
+from . import config, glkit, hypr, motion, software  # noqa: E402
 from .data import Data  # noqa: E402
 from .sound import Sound, toggle_mute  # noqa: E402
 from .watch import LockWatch, Notifications  # noqa: E402
@@ -229,18 +229,22 @@ class GLWindow:
         size = (area.get_allocated_width() * sf, area.get_allocated_height() * sf)
         if size[0] < 16 or size[1] < 16:
             return True
-        if self.renderer is None or size != self.rsize:
+        # Renderer construction allocates FBOs and changes the current binding.
+        # Keep GTK's destination before rebuilding so the first new frame is visible.
+        fbo = GL.glGetIntegerv(GL.GL_DRAW_FRAMEBUFFER_BINDING)
+        theme = glkit.T.version()
+        if self.renderer is None or size != self.rsize or theme != getattr(self, "theme_seen", None):
             try:
                 self._close_renderer()
                 self.renderer = self.make_renderer(*size)
                 self.rsize = size
+                self.theme_seen = theme
             except Exception as e:
                 import traceback
                 traceback.print_exc()
                 log("renderer init failed:", e)
                 self.failed = True
                 return True
-        fbo = GL.glGetIntegerv(GL.GL_DRAW_FRAMEBUFFER_BINDING)
         if getattr(self.renderer, "sf", sf) != sf:
             self.renderer.sf = sf                  # the den TV's pointer: logical px
         self.frames += 1
@@ -541,6 +545,14 @@ class App:
         """Theme switched (bromigos theme set → `theme` on the socket), or world.toml edited:
         rebuild the background as the new world or the den."""
         from . import world
+        # Colour variants share the den (no world.toml), but its shaders and textures
+        # were tinted when built. Refresh every live surface in its own GL context,
+        # including paused surfaces, without replacing windows or the session.
+        palette = glkit.T.version(0.0)
+        if palette != getattr(self, "palette_seen", None):
+            self.palette_seen = palette
+            for win in ([self.bg] if self.bg else []) + list(self.overlays.values()):
+                win.area.queue_render()
         sig = world.signature(self.cfg)
         if sig != getattr(self, "world_sig", None) and self.bg_enabled:
             log("world changed:", sig[0] if sig else "none (the den)")
