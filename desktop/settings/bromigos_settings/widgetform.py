@@ -175,9 +175,12 @@ class WidgetForm(Sheet):
 
         def go(*_):
             self.close()
-            self.ctx.open_page(page)
+            if f.get("command") == "bromigos-tv-guide":
+                self.ctx.launch(["bromigos-tv-guide"])
+            else:
+                self.ctx.open_page(page)
         r.connect("activated", go)
-        self.ctx.hint(r, f"{f['label']}: opens Settings › {page} (bromigos settings {page})")
+        self.ctx.hint(r, f.get("hint") or f"{f['label']}: opens Settings › {page} (bromigos settings {page})")
         return r
 
     def row(self, f):

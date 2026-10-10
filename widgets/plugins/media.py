@@ -14,7 +14,7 @@ every 5 minutes.
 Its settings make one TV channel, the panel's channel, in ~/.config/bromigos/widgets/media.toml:
 the source, what to play (a library, collection or playlist, chosen from the list the
 servers last gave), a YouTube URL instead, the order, the den screen, and for YouTube a
-folder to keep videos in. Every other channel is in the channel guide (Settings › Den TV),
+folder to keep videos in. Every other channel is in the channel guide (Den TV),
 which the form links to.
 
 Sizes: compact (the three screens, a line each), wide (with posters and what's next), large
@@ -101,8 +101,8 @@ def _settings_fields():
         {"key": "keep_all", "label": "Keep every video, not just what plays", "kind": "bool", "default": False},
         {"key": "keep_max_gb", "label": "Keep at most (GB)", "kind": "number", "default": 50, "min": 1, "max": 10000,
          "hint": "Over this, the oldest kept videos go first"},
-        {"key": "guide", "label": "Every channel: the channel guide", "kind": "link", "page": "den-tv",
-         "hint": "All the den TV's channels on every screen: add, remove, reorder, pick shows (Settings › Den TV)"},
+        {"key": "guide", "label": "Every channel: the channel guide", "kind": "link", "command": "bromigos-tv-guide",
+         "hint": "All the den TV's channels on every screen: add, remove, reorder, pick shows (Den TV)"},
     ]
 
 
@@ -371,7 +371,7 @@ class MediaPanel(Panel):
         label = TV.label if TV else (lambda it: (it or {}).get("title", ""))
         if not self.rows:
             D.text(cr, x0, y, "Nothing on the den TV.", 13, "soft")
-            D.text(cr, x0, y + 20, "Add channels in the channel guide (Settings › Den TV, SUPER+ALT+G), or give "
+            D.text(cr, x0, y + 20, "Add channels in the channel guide (Den TV, SUPER+ALT+G), or give "
                                    "this panel one in its Settings.", 10, "dim", width=x1 - x0, wrap=True)
             self.region(x0, y, x1 - x0, 44, "Opens the channel guide (bromigos-live tv guide)", self._guide)
             return y + 50
@@ -456,7 +456,7 @@ class MediaPanel(Panel):
         if n and n.get("kind") != "own":
             bx += self._button(cr, bx, y, "FULL", f"{name.capitalize()}'s channel in mpv, full screen with sound, at "
                                                   "the same moment", self._open) + 6
-        self._button(cr, bx, y, "GUIDE", "Every channel: the channel guide (Settings › Den TV)", self._guide)
+        self._button(cr, bx, y, "GUIDE", "Every channel: the channel guide (Den TV)", self._guide)
         return y + 24
 
     def _choose(self, screen):

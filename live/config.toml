@@ -122,7 +122,7 @@ cover_opacity = 0.9      # a window at least this opaque over a muted screen pau
 #   screens = ["big"]        # optional: only big (the big monitor), wave (the scope), emblem (the small monitor)
 #   shows = ["…", "…"]       # shows you pick (titles or ids); order = "in order" takes turns between them
 #   bumpers = true           # a station card opens each item: the channel, what's on, the time
-# Settings › Den TV (bromigos-live tv guide, SUPER+ALT+G) adds, removes and reorders them for you.
+# The Den TV app (bromigos-live tv guide, SUPER+ALT+G) adds, removes and reorders them for you.
 
 [world]                  # a theme's world (bromigos theme set mire|tidewell): drawn instead of the den
 enabled = true           # false = always the den, whatever the theme

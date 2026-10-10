@@ -369,31 +369,25 @@ page.
 
 ### Den TV
 
-The den TV plays your own videos on the den's three screens, as TV channels
-([live/README.md](../live/README.md#the-den-tv)). This page is its channel guide. It opens
-from Settings, `bromigos-live tv guide`, Super+Alt+G, the hint's **GUIDE** and the MEDIA
-panel's settings.
+Settings holds only the den TV's playback controls: `tv.enabled`, `tv.max_playing` and
+`tv.cover_opacity`. They use `bromigos scene` and the live overrides file. Cover opacity
+is the window-opacity threshold that pauses a covered silent screen; it does not fade
+the video. **Open Den TV…** launches `bromigos-tv-guide`.
 
-- Every channel once, as a card, channel 1 (each screen's own picture) first: what's on now
-  and next, the poster, a progress bar, its source and its order. Under it, **BIG**,
-  **SCOPE** and **SMALL** tune that screen (`bromigos-live tv set N --screen S`); the button
-  of a screen on air there is lit.
-- **Add channel…**: a library, collection or playlist the servers list, shows or movies you
-  pick (a searchable grid of posters), a YouTube address, a folder, or your downloaded
-  YouTube videos. Then a name, an order and its screens, every screen by default.
-- Each card's menu: Rename, Pick shows, Move earlier or later, Bumpers, its screens (every
-  screen unless you say) and Remove. A toast has Undo. The menu is a popover of plain
-  buttons: Settings exports no actions.
-- Drag a card onto another to put it before that one.
-- On a card, 1, 2 and 3 tune the screens, Delete removes, F2 renames, and Alt and an arrow
-  move it.
+The channel guide is a standalone GTK4/libadwaita application, `org.bromigos.DenTV`, in
+`desktop/settings/bromigos_tvguide.py`. It reuses the house-style toolkit for rows,
+commands, toasts, theme watching and sandbox renders, with no Settings sidebar. Its
+launcher entry is **Den TV**. Super+Alt+G, `bromigos-live tv guide`, the TV hover hint's
+**GUIDE** button and the MEDIA panel all open it.
 
-It writes the `[[tv.channel]]` tables of `~/.config/bromigos-live/config.toml` through
-`lib/bromigos_tvconfig.py`, which edits them in place. Comments and every other table stay
-as they were, each save is checked before it's written, and a symlinked file stays a link.
-The live layer reads the channels again without a restart. What's on comes from the den
-TV's cache, so the page never waits on a server. A new channel's list is read in the
-background. Posters are kept in `~/.cache/bromigos/tv/posters/`.
+The guide, media TUI, CLI and VECTOR share `lib/bromigos_tvchannels.py`. Its `Store`
+serializes edits and uses `bromigos_tvconfig.py` to keep comments and other tables,
+check the result, and write atomically through symlinks. A change asks the running live
+layer to reload; its config watcher is the fallback. Neither rebuilds the background.
+The guide reads posters and now/next from the den's cache. New channels fetch contents
+in a worker thread. [The manual](../manual/src/themes-and-worlds.md#the-channel-guide)
+explains its controls; [Your media](../manual/src/media.md#make-channels-for-the-den-tv)
+covers the shared CLI and terminal tab.
 
 ### Widgets
 
@@ -781,7 +775,7 @@ These cover:
   `test_defaults`, `test_startup`, `test_panels`, `test_memory`, `test_about`,
   `test_avatar` and `test_extlist`;
 - VECTOR's guard (`test_vector_guard.py`);
-- the Den TV page (`test_den_tv_guide.py`): drawn in a headless weston of its own against a
+- the standalone Den TV app (`test_den_tv_guide.py`): drawn in a headless weston of its own against a
   stand-in Jellyfin, with Add channel and the show picker, and no control without a hint.
   The nested den TV test drives it as a user would (`den_tv_guide_driver.py`, from
   `e2e_tv_nested.py`).

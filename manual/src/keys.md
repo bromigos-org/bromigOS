@@ -126,7 +126,7 @@ The [live layer](glossary.md#live-layer) draws the animated background.
 | <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>.</kbd></span> | Change the den TV to its next channel. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>,</kbd></span> | Change the den TV to its previous channel. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>M</kbd></span> | Turn the den TV's sound on or off, on the screen under the pointer. One screen plays sound at a time. |
-| <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd></span> | The den TV's [channel guide](themes-and-worlds.md#the-channel-guide): every channel on every screen, to add, remove and reorder. |
+| <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd></span> | Open the [Den TV](themes-and-worlds.md#the-channel-guide) app: channels, contents and what is on, with controls for every screen. |
 
 ### Screenshots and recording
 

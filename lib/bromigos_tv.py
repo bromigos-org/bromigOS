@@ -62,6 +62,7 @@ import os
 import re
 import tempfile
 import time
+import urllib.parse
 
 EPOCH = 1767225600.0                     # 2026-01-01T00:00:00Z: every channel's day one
 SCREENS = ("big", "wave", "emblem")      # the den's screens, as live/live/scene.py's DEN names them
@@ -314,7 +315,10 @@ def cached_items(ch):
     """{"items": [...], "fetched", "error", "server"} for a channel, from the cache only."""
     try:
         with open(cache_path(ch)) as f:
-            return json.load(f)
+            doc = json.load(f)
+        if doc.get('definition') and doc['definition'] != content_signature(ch):
+            return None
+        return doc
     except (OSError, ValueError):
         return None
 
@@ -387,16 +391,25 @@ def local_files(spec):
     return out
 
 
+def content_signature(ch):
+    keys = ("source", "shows", "items", "collections", "library", "collection", "playlist", "youtube", "files", "tab")
+    text = json.dumps({key: ch.get(key) for key in keys}, sort_keys=True, default=str)
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
 def fetch_items(ch, max_age=900, refresh=True):
     """A channel's items, read from its server or YouTube when the cache is older than
     max_age seconds, else from the cache. Never raises: a failure keeps the last list,
     with "error" set. Called from a thread, never from a frame."""
     old = cached_items(ch)
-    if old and time.time() - (old.get("fetched") or 0) < (max_age if not old.get("error") else min(max_age, 120)):
+    signature = content_signature(ch)
+    changed = bool(old and old.get("definition") and old["definition"] != signature)
+    if old and old.get("definition") == signature and time.time() - (old.get("fetched") or 0) < (max_age if not old.get("error") else min(max_age, 120)):
         return old
     if not refresh:
         return old
-    doc = {"items": (old or {}).get("items") or [], "fetched": time.time(), "error": None, "server": None}
+    doc = {"items": [] if changed else (old or {}).get("items") or [], "fetched": time.time(),
+           "definition": signature, "error": None, "server": None}
     try:
         if ch["kind"] == "youtube":
             import bromigos_youtube as Y
@@ -411,11 +424,11 @@ def fetch_items(ch, max_age=900, refresh=True):
             doc["server"] = "files"
         elif ch.get("picks"):
             a = server_of(ch)
-            if a is None:
+            if a is None and any(not youtube_pick(v) for k in PICK_KEYS for v in _as_list(ch.get(k))):
                 raise LookupError(f"no video server{' named ' + ch['source'] if ch.get('source') else ''} "
                                   "in homelab.toml")
             doc["items"], doc["groups"], missing = pick_items(ch, a)
-            doc["server"] = a.name
+            doc["server"] = a.name if a else "youtube"
             if missing:
                 doc["error"] = f"{a.name} has nothing called " + ", ".join(repr(m) for m in missing)
         else:
@@ -514,11 +527,18 @@ def forget_pick(server, kind, name):
             pass
 
 
+def youtube_pick(value):
+    host = (urllib.parse.urlparse(str(value)).hostname or "").lower()
+    return host in ("youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be")
+
+
 def pick_items(ch, a):
     """(items, groups, missing) for a channel of picked shows, movies and collections. Each
     show (and each collection) is a group of its own, its episodes in season and episode
     order; the picked movies are one group, in the order written. groups: [[id, title]]."""
-    picked, missing = resolve_picks(ch, a)
+    extras = [str(v) for v in _as_list(ch.get("items")) if youtube_pick(v) or str(v).startswith("music:")]
+    server_picks = dict(ch, items=[v for v in _as_list(ch.get("items")) if str(v) not in extras])
+    picked, missing = resolve_picks(server_picks, a) if a else ({}, [])
     items, groups = [], []
     for sid, title, written in picked.get("show", []):
         try:
@@ -554,6 +574,24 @@ def pick_items(ch, a):
         gid = f"collection:{cid}"
         groups.append([gid, title])
         items += [dict(i, group=gid) for i in got]
+    for value in extras:
+        gid = "pick:" + hashlib.sha1(value.encode()).hexdigest()[:16]
+        try:
+            if youtube_pick(value):
+                import bromigos_youtube as Y
+                doc = Y.videos(value)
+                if doc.get("error"): raise LookupError(doc["error"])
+                got = [dict(v, kind="video", server="youtube", poster=v.get("thumbnail"))
+                       for v in doc.get("videos") or [] if v.get("live") not in ("is_live", "is_upcoming")]
+                title = doc.get("title") or value
+            else:
+                _, music_kind, title = value.split(":", 2)
+                got = a.video_music(music_kind, title) if a else []
+            if not got: raise LookupError("No playable items")
+            groups.append([gid, title])
+            items += [dict(v, group=gid) for v in got]
+        except (LookupError, ValueError, AttributeError):
+            missing.append(value)
     return items, groups, missing
 
 

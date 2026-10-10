@@ -253,11 +253,13 @@ bromigos-live tv: the den TV, channels on the den's screens (live/README.md, "Th
   bromigos-live tv open                   full screen with sound in mpv, at the same moment
   bromigos-live tv web                    what's on, in Jellyfin's, Plex's or YouTube's web page
   bromigos-live tv guide                  the channel guide: every channel, add, remove, reorder
-                                          (Settings › Den TV)
+                                          (the standalone Den TV app)
   bromigos-live tv sound on|off|toggle    the screen's sound (off until you turn it on; on one
                                           screen at a time: turning it on here turns it off there)
   bromigos-live tv volume up|down|N       5% steps, or a level from 0 to 100
   bromigos-live tv list                   every screen's channels, * on the one showing
+  bromigos-live tv channels [--json]      contents, order, screens and now/next (works while off)
+  bromigos-live tv channel --help         add, rename, order, bumpers, move, items, remove, undo
   bromigos-live tv state [--json]         what's on each screen, the sound, what mpv is doing
 
 Each takes --screen big|wave|emblem (the big monitor, the scope, the small monitor; scope
@@ -270,8 +272,25 @@ keep = "~/Videos/YouTube", keep_all = true for every video, keep_max_gb = 50 for
 (the oldest go first).
 HELP
                 exit 0 ;;
-            guide)                      # Settings opens whether or not the live layer runs
-                exec bromigos settings den-tv ;;
+            guide)
+                exec bromigos-tv-guide ;;
+            channels|channel)
+                if [[ -f "$HERE/../lib/bromigos_tvchannels.py" ]]; then
+                    export PYTHONPATH="$HERE/../lib:$HERE/../homelab/lib:${PYTHONPATH:-}"
+                else
+                    export PYTHONPATH="/usr/lib/bromigos/lib:${PYTHONPATH:-}"
+                fi
+                exec "$PY" -m bromigos_tvchannels "$@" ;;
+            set)
+                if [[ " $* " == *" --json "* ]]; then
+                    if [[ -f "$HERE/../lib/bromigos_tvchannels.py" ]]; then
+                        export PYTHONPATH="$HERE/../lib:$HERE/../homelab/lib:${PYTHONPATH:-}"
+                    else
+                        export PYTHONPATH="/usr/lib/bromigos/lib:${PYTHONPATH:-}"
+                    fi
+                    exec "$PY" -m bromigos_tvchannels "$@"
+                fi ;;
+
         esac
         ctl "tv ${*:-state}" || { echo "not running (bromigos-live start)"; exit 1; } ;;
     status)

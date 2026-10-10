@@ -1,7 +1,7 @@
 """The den TV's channels, written in place: the [[tv.channel]] tables of the live layer's
 config (~/.config/bromigos-live/config.toml), changed without touching anything else.
 
-The channel guide (Settings › Den TV) adds, removes, reorders, renames and moves channels
+Den TV, the media UI and the CLI add, remove, reorder, rename and move channels
 between screens through this. The file is edited as text, a channel table at a time, so
 every comment, blank line and other table stays exactly as it was: a channel's own
 comments (the lines right above its [[tv.channel]] line, and those inside it) go with it

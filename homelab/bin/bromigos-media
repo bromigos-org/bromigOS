@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-# bromigos:summary=Your media library in a terminal: TV, films, music, YouTube, downloads and what's coming; request, monitor, change quality, play or delete
-# bromigos:args=[tv|movies|music|youtube|downloads|upcoming|add] | search|get|status|upcoming|recent|library|language|monitor|profile|refresh|delete …
+# bromigos:summary=Your media library in a terminal: TV, films, music, YouTube, downloads, releases and den TV channels; request, monitor, change quality, play or delete
+# bromigos:args=[tv|movies|music|youtube|downloads|upcoming|add|channels] | search|get|status|upcoming|recent|library|language|monitor|profile|refresh|delete|channel …
 # bromigos:examples=bromigos media; bromigos media movies; bromigos media get "Cowboy Bebop"; bromigos media status
 # bromigos:menu=LAUNCH:Media library
 """bromigos media: the media library (docs/lab.md, "Media requests"; the manual's Lab console).
 
   bromigos media [TAB]              the terminal UI (Textual), on TAB: tv, movies, music, youtube,
-                                    downloads, upcoming or add
+                                    downloads, upcoming, add or channels
   bromigos media VERB …             = bromigos lab media VERB …: search, get, status, upcoming,
-                                    recent, library, language, monitor, profile, refresh, delete
+                                    recent, library, language, monitor, profile, refresh, delete, channel
 """
 import os
 import sys
@@ -18,7 +18,7 @@ for p in reversed((os.path.join(os.path.dirname(HERE), "lib"), "/usr/lib/bromigo
     if os.path.isdir(p) and p not in sys.path:
         sys.path.insert(0, p)
 
-TABS = ("tv", "movies", "music", "youtube", "downloads", "upcoming", "add")
+TABS = ("tv", "movies", "music", "youtube", "downloads", "upcoming", "add", "channels")
 
 
 def main(argv):

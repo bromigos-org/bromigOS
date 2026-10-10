@@ -168,11 +168,11 @@ class JellyfinVideo(VideoServer):
         return pick["Id"]
 
     def _item(self, it):
-        kind = {"Movie": "movie", "Episode": "episode"}.get(it.get("Type"), "video")
+        kind = {"Movie": "movie", "Episode": "episode", "Audio": "audio"}.get(it.get("Type"), "video")
         src = (it.get("MediaSources") or [{}])[0]
         ud = it.get("UserData") or {}
         ticks = it.get("RunTimeTicks") or src.get("RunTimeTicks")
-        return {"id": it.get("Id"), "title": it.get("Name") or "", "series": it.get("SeriesName"),
+        return {"id": it.get("Id"), "title": it.get("Name") or "", "series": it.get("SeriesName") or (it.get("AlbumArtist") if kind == "audio" else None),
                 "season": it.get("ParentIndexNumber"), "episode": it.get("IndexNumber"), "kind": kind,
                 "duration": round(ticks / TICKS, 3) if ticks else None, "year": it.get("ProductionYear"),
                 "poster": f"/Items/{it.get('Id')}/Images/Primary" if (it.get("ImageTags") or {}).get("Primary")
@@ -192,10 +192,10 @@ class JellyfinVideo(VideoServer):
         out = []
         for v in (self.fetch(f"/Users/{uid}/Views", timeout=6) or {}).get("Items") or []:
             ct = v.get("CollectionType")
-            if ct not in ("movies", "tvshows", "homevideos", "musicvideos", "mixed", None):
+            if ct not in ("movies", "tvshows", "homevideos", "musicvideos", "music", "mixed", None):
                 continue
             out.append({"name": v.get("Name"), "kind": "library", "id": v.get("Id"), "title": v.get("Name"),
-                        "count": v.get("ChildCount"), "media": {"movies": "movies", "tvshows": "shows"}.get(ct, "mixed"),
+                        "count": v.get("ChildCount"), "media": {"movies": "movies", "tvshows": "shows", "music": "music"}.get(ct, "mixed"),
                         "server": self.name})
         for t, kind in (("BoxSet", "collection"), ("Playlist", "playlist")):
             q = urllib.parse.urlencode({"IncludeItemTypes": t, "Recursive": "true", "Fields": "ChildCount"})
@@ -213,11 +213,11 @@ class JellyfinVideo(VideoServer):
             q = urllib.parse.urlencode(dict(base, UserId=uid))
             data = self.fetch(f"/Playlists/{id_}/Items?{q}", timeout=15) or {}
         else:
-            q = urllib.parse.urlencode(dict(base, ParentId=id_, Recursive="true", IncludeItemTypes="Movie,Episode,Video",
+            q = urllib.parse.urlencode(dict(base, ParentId=id_, Recursive="true", IncludeItemTypes="Movie,Episode,Video,Audio",
                                             SortBy="SeriesSortName,ParentIndexNumber,IndexNumber,SortName",
                                             SortOrder="Ascending"))
             data = self.fetch(f"/Users/{uid}/Items?{q}", timeout=15) or {}
-        return [self._item(i) for i in data.get("Items") or [] if i.get("Type") in ("Movie", "Episode", "Video")]
+        return [self._item(i) for i in data.get("Items") or [] if i.get("Type") in ("Movie", "Episode", "Video", "Audio")]
 
     def video_shows(self):
         uid = self._user()
@@ -247,6 +247,20 @@ class JellyfinVideo(VideoServer):
         it = self.fetch(f"/Users/{uid}/Items/{id_}", timeout=8)
         return self._item(it) if it and it.get("Id") else None
 
+    def video_music(self, kind, title):
+        if kind not in ("artist", "album"): raise ValueError("Music kind: artist or album")
+        uid = self._user()
+        typ = "MusicArtist" if kind == "artist" else "MusicAlbum"
+        query = urllib.parse.urlencode(dict(IncludeItemTypes=typ, Recursive="true", SearchTerm=title))
+        rows = (self.fetch(f"/Users/{uid}/Items?{query}",timeout=15) or {}).get("Items") or []
+        hits = [r for r in rows if (r.get("Name") or "").strip().casefold() == title.strip().casefold()]
+        if len(hits) != 1: raise LookupError("Choose a unique music title in the media server")
+        scope = {"ArtistIds": hits[0]['Id']} if kind == "artist" else {"ParentId": hits[0]['Id']}
+        query = urllib.parse.urlencode(dict(scope,IncludeItemTypes="Audio",Recursive="true",Fields=self.FIELDS,
+                                           SortBy="Album,ParentIndexNumber,IndexNumber,SortName"))
+        return [self._item(r) for r in (self.fetch(f"/Users/{uid}/Items?{query}",timeout=15) or {}).get("Items") or []
+                if r.get("Type") == "Audio"]
+
     def video_resume(self, limit=12):
         uid = self._user()
         q = urllib.parse.urlencode({"Limit": str(limit), "MediaTypes": "Video", "Fields": self.FIELDS})
@@ -258,6 +272,9 @@ class JellyfinVideo(VideoServer):
         return [self._item(i) for i in self.fetch(f"/Users/{uid}/Items/Latest?{q}", timeout=8) or []]
 
     def video_stream(self, item, quality="auto", height=None, start=None, device=None):
+        if item.get("kind") == "audio":
+            return {"url": f"{self.endpoint}/Audio/{item['id']}/stream?static=true", "headers": self.auth_headers(),
+                    "direct": True, "quality": "direct", "session": None, "from_start": False}
         q = _quality(quality, item.get("bitrate"), self.video_direct_max(), height, item.get("height"), item)
         iid = item["id"]
         dev = device or DEVICE
@@ -328,7 +345,7 @@ class PlexVideo(VideoServer):
         return {"id": str(m.get("ratingKey")), "title": title, "series": series,
                 "season": m.get("parentIndex") if t == "episode" else (m.get("index") if t == "season" else None),
                 "episode": m.get("index") if t == "episode" else None,
-                "kind": {"movie": "movie", "episode": "episode", "season": "season", "show": "show"}.get(t, "video"),
+                "kind": {"movie": "movie", "episode": "episode", "season": "season", "show": "show", "track": "audio"}.get(t, "video"),
                 "duration": round(dur / 1000.0, 3) if dur else None, "year": m.get("year"),
                 "poster": m.get("grandparentThumb") if t == "episode" and m.get("grandparentThumb") else (
                     m.get("thumb") or m.get("parentThumb")),
@@ -341,10 +358,12 @@ class PlexVideo(VideoServer):
     def video(self):
         out = []
         for s in self._get("/library/sections").get("Directory") or []:
-            if s.get("type") not in ("movie", "show"):
+            if s.get("type") not in ("movie", "show", "artist"):
                 continue
             out.append({"name": s.get("title"), "kind": "library", "id": str(s.get("key")), "title": s.get("title"),
-                        "count": None, "media": "movies" if s.get("type") == "movie" else "shows", "server": self.name})
+                        "count": None, "media": "movies" if s.get("type") == "movie" else "music" if s.get("type") == "artist" else "shows", "server": self.name})
+            if s.get("type") == "artist":
+                continue
             for c in self._get(f"/library/sections/{s.get('key')}/collections").get("Metadata") or []:
                 out.append({"name": c.get("title"), "kind": "collection", "id": str(c.get("ratingKey")),
                             "title": c.get("title"), "count": c.get("childCount"), "media": "mixed", "server": self.name})
@@ -357,7 +376,7 @@ class PlexVideo(VideoServer):
         if kind == "library":
             secs = self._get("/library/sections").get("Directory") or []
             sec = next((s for s in secs if str(s.get("key")) == str(id_)), {})
-            typ = 4 if sec.get("type") == "show" else 1            # episodes, or movies
+            typ = 4 if sec.get("type") == "show" else 10 if sec.get("type") == "artist" else 1            # episodes, or movies
             path = f"/library/sections/{id_}/all?type={typ}&sort=titleSort"
         elif kind == "collection":
             path = f"/library/collections/{id_}/children"
@@ -374,7 +393,7 @@ class PlexVideo(VideoServer):
                 else:
                     eps.append(i)
             items = eps
-        return [i for i in items if i["kind"] in ("movie", "episode", "video")]
+        return [i for i in items if i["kind"] in ("movie", "episode", "video", "audio")]
 
     def _sections(self, typ):
         return [s for s in self._get("/library/sections").get("Directory") or [] if s.get("type") == typ]
@@ -404,6 +423,17 @@ class PlexVideo(VideoServer):
         m = (self._get(f"/library/metadata/{id_}").get("Metadata") or [None])[0]
         return self._item(m) if m else None
 
+    def video_music(self, kind, title):
+        if kind not in ("artist", "album"): raise ValueError("Music kind: artist or album")
+        typ = 8 if kind == "artist" else 9
+        hits = []
+        for sec in self._sections("artist"):
+            rows = self._get(f"/library/sections/{sec['key']}/all?type={typ}",timeout=20).get("Metadata") or []
+            hits += [r for r in rows if (r.get('title') or '').strip().casefold() == title.strip().casefold()]
+        if len(hits) != 1: raise LookupError("Choose a unique music title in the media server")
+        rows = self._get(f"/library/metadata/{hits[0]['ratingKey']}/allLeaves",timeout=20).get('Metadata') or []
+        return [self._item(r) for r in rows if r.get('type') == 'track']
+
     def video_resume(self, limit=12):
         return [self._item(m) for m in (self._get("/library/onDeck").get("Metadata") or [])[:limit]]
 
@@ -412,6 +442,10 @@ class PlexVideo(VideoServer):
         return [self._item(m) for m in self._get(q).get("Metadata") or []]
 
     def video_stream(self, item, quality="auto", height=None, start=None, device=None):
+        if item.get("kind") == "audio":
+            if not item.get("part"): raise LookupError("Music track has no playable file")
+            return {"url": self.endpoint + item['part'], "headers": self.auth_headers(), "direct": True,
+                    "quality": "direct", "session": None, "from_start": False}
         q = _quality(quality, item.get("bitrate"), self.video_direct_max(), height, item.get("height"), item)
         if q == "direct" and item.get("part"):
             return {"url": f"{self.endpoint}{item['part']}", "headers": self.auth_headers(), "direct": True,

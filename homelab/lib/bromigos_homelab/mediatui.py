@@ -3,7 +3,7 @@ library in a terminal UI (Textual), on the same code as `bromigos lab media` (me
 
 Tabs: TV (Sonarr), MOVIES (Radarr), MUSIC (Lidarr), YOUTUBE (Pinchflat), DOWNLOADS (what the
 download clients are fetching), UPCOMING (the calendar of what you track) and ADD (search
-and request, as `media get`). The header has the library's totals and the free space.
+and request, as `media get`) and CHANNELS (the den TV). The header has the library's totals and the free space.
 
 On a selected title, season, album or episode file: m monitors or stops, n picks up new
 episodes or not, p changes the quality profile, f searches now, o opens it in Jellyfin,
@@ -20,11 +20,13 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import (Button, Checkbox, Footer, Input, Label, RichLog, Select, Static, TabbedContent,
                              TabPane, Tabs)
 
 from . import mediareq as M
+from .tvchannels import channels as CH
 from .tui import HintTable, bromigos_theme
 
 GLYPH = {"tv": "▤", "movie": "▣", "artist": "♫", "album": "◉", "youtube": "▶"}
@@ -146,9 +148,9 @@ class Confirm(ModalScreen):
         p = self.plan
         with Vertical(id="delbox"):
             yield Label(f"Delete {p['what']}?", classes="title", id="del-what")
-            yield Static(f"It frees {M.human(p['size'])}. The files go from the disk; Jellyfin and Plex rescan."
+            yield Static(("Only the channel is removed. Its media files stay. Ctrl+Z restores it." if p["scope"] == "channel" else f"It frees {M.human(p['size'])}. The files go from the disk; Jellyfin and Plex rescan."
                          + ("" if p["scope"] != "season" else " The season stops being monitored, so it isn't "
-                            "fetched again."), classes="dim")
+                            "fetched again.")), classes="dim")
             i = MediaInput(placeholder=f"Type {p['title']} to delete it", id="del-name")
             i.tooltip = "Type the title exactly (any case), then Enter; or press D again"
             yield i
@@ -304,11 +306,76 @@ class Request(ModalScreen):
             self.query_one("#req-plan", RichLog).write(f"Not requested: {e}")
 
 
+class ChannelForm(ModalScreen):
+    """A name, title or new channel source; Escape cancels without writing."""
+    BINDINGS = [Binding("escape", "dismiss(None)", "Cancel")]
+
+    def __init__(self, title="New channel", value="", create=False):
+        super().__init__(); self.title_, self.value, self.create = title, value, create
+
+    def compose(self):
+        with Vertical(id="channel-box"):
+            yield Label(self.title_)
+            yield MediaInput(value=self.value, placeholder="Name", id="channel-name")
+            if self.create:
+                yield Select([(t, k) for t, k in (("Picked shows", "shows"), ("Picked items", "items"),
+                             ("Library", "library"), ("YouTube playlist", "youtube"), ("Folder", "folder"))],
+                             value="shows", allow_blank=False, id="channel-kind")
+                yield MediaInput(placeholder="Titles separated by |, library name, URL or folder", id="channel-source")
+            yield Button("Save", id="channel-save", variant="primary")
+            yield Button("Cancel", id="channel-cancel")
+
+    @on(Button.Pressed, "#channel-cancel")
+    def cancel(self): self.dismiss(None)
+
+    @on(Button.Pressed, "#channel-save")
+    def save(self):
+        name = self.query_one("#channel-name", Input).value.strip()
+        if not name: return
+        result = {"name": name}
+        if self.create:
+            key = self.query_one("#channel-kind", Select).value
+            value = self.query_one("#channel-source", Input).value.strip()
+            result[key] = [v.strip() for v in value.split("|") if v.strip()] if key in ("shows", "items") else value
+        self.dismiss(result)
+
+
+class ChannelPicker(ModalScreen):
+    BINDINGS = [Binding("escape", "dismiss(None)", "Cancel")]
+
+    def __init__(self, title, rows):
+        super().__init__(); self.title_, self.rows = title, rows
+
+    def compose(self):
+        options = [("New channel…", "new")]
+        for row in self.rows:
+            if row['kind'] == 'picked':
+                options.append(("Add to " + row['name'], f"add:{row['number']}"))
+                if CH.membership(self.title_, [row]):
+                    options.append(("Remove from " + row['name'], f"remove:{row['number']}"))
+        with Vertical(id="channel-box"):
+            yield Label("Add to channel… / Remove from channel…")
+            label = self.title_.split(':',2)[-1] if self.title_.startswith('music:') else self.title_
+            yield Label(label)
+            yield Select(options, value=options[0][1], allow_blank=False, id="channel-pick")
+            if any(r['kind'] == 'library' for r in self.rows):
+                yield Label("Library channels already include everything in their library.")
+            yield Button("Use channel", id="channel-use", variant="primary")
+            yield Button("Cancel", id="channel-cancel")
+
+    @on(Button.Pressed, "#channel-use")
+    def choose(self): self.dismiss(self.query_one("#channel-pick", Select).value)
+
+    @on(Button.Pressed, "#channel-cancel")
+    def cancel(self): self.dismiss(None)
+
+
 # ------------------------------------------------------------------ the app
 class MediaApp(App):
     TITLE = "MEDIA"
     CSS = """
     Screen { background: $background; }
+    #tabs { height: 1fr; min-height: 0; }
     #top { height: 1; padding: 0 1; background: $panel; color: $foreground; }
     .list { width: 3fr; }
     .side { width: 2fr; border-left: solid $panel; }
@@ -320,7 +387,8 @@ class MediaApp(App):
     #hint { height: 2; padding: 0 1; color: $text-muted; border-top: solid $panel; }
     .title { text-style: bold; color: $primary; }
     .dim { color: $text-muted; }
-    Confirm, PickProfile, Request { align: center middle; }
+    #channel-box { width: 80; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
+    Confirm, PickProfile, Request, ChannelForm, ChannelPicker, Tune { align: center middle; }
     #delbox, #profbox, #reqbox { width: 90; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
     #delbox { border: solid $error; }
     #reqbox RichLog { height: 10; }
@@ -338,6 +406,16 @@ class MediaApp(App):
         Binding("5", "tab('downloads')", "Downloads", show=False, tooltip="What's downloading, and why it's stuck"),
         Binding("6", "tab('upcoming')", "Upcoming", show=False, tooltip="What you track and when it comes out"),
         Binding("7,a", "tab('add')", "Add", tooltip="Find something and request it (as bromigos lab media get)"),
+        Binding("8", "tab('channels')", "Channels", show=False),
+        Binding("c", "channel_picker", "Channel…"),
+        Binding("ctrl+n", "channel_new", "New channel"),
+        Binding("f2", "channel_rename", "Rename channel", show=False),
+        Binding("b", "channel_bumpers", "Bumpers", show=False),
+        Binding("v", "channel_order", "Order", show=False),
+        Binding("x", "channel_remove_item", "Remove item", show=False),
+        Binding("alt+up", "channel_move(-1)", "Move up", show=False),
+        Binding("alt+down", "channel_move(1)", "Move down", show=False),
+        Binding("ctrl+z", "channel_undo", "Undo"),
         Binding("slash", "filter", "Filter", tooltip="Show only the titles matching what you type"),
         Binding("s", "sort", "Sort", tooltip="Sort by added, size, name, missing or profile"),
         Binding("m", "monitor", "Monitor", tooltip="Monitor or stop monitoring the title, season or album under the cursor"),
@@ -352,7 +430,7 @@ class MediaApp(App):
         Binding("],L", "tab_step(1)", "Next tab", priority=True),
         Binding("[,H", "tab_step(-1)", "Previous tab", priority=True),
     ]
-    TABS = ("tv", "movies", "music", "youtube", "downloads", "upcoming", "add")
+    TABS = ("tv", "movies", "music", "youtube", "downloads", "upcoming", "add", "channels")
     KIND = {"tv": "tv", "movies": "movies", "music": "music"}
 
     def __init__(self, source=None, start="tv"):
@@ -367,6 +445,11 @@ class MediaApp(App):
         self.filter = {"tv": "", "movies": "", "music": ""}
         self.found = []
         self._season = None
+        self.channel_store = CH.Store()
+        self.channel_rows = []
+        self.youtube_rows = []
+        self.upcoming_rows = []
+        self.download_rows = []
 
     # ------------------------------------------------------------------ layout
     def compose(self) -> ComposeResult:
@@ -403,6 +486,17 @@ class MediaApp(App):
                         s.tooltip = "Narrow the search"
                         yield s
                     yield MediaTable(id="add-list", cursor_type="row", zebra_stripes=True)
+            with TabPane("CHANNELS", id="channels"):
+                with Horizontal():
+                    yield MediaTable(id="ch-list", cursor_type="row", zebra_stripes=True, classes="list")
+                    with Vertical(classes="side"):
+                        yield Static("", id="ch-detail", classes="detail")
+                        yield MediaTable(id="ch-items", cursor_type="row")
+                with Horizontal(classes="detail"):
+                    for label, ident in (("New", "new"), ("Rename", "rename"), ("Order", "order"),
+                                         ("Bumpers", "bumpers"), ("Remove item", "remove-item"),
+                                         ("Delete", "delete"), ("Undo", "undo"), ("Tune", "tune")):
+                        yield Button(label, id="ch-" + ident)
         yield Static("", id="hint")
         yield Static("↑/↓ j/k move · g/G first/last · Ctrl+D/U page · Enter open · ←/→ h/l panes\n"
                      "↓/j tabs → list · ↑/k first row → tabs · [/] H/L tabs · Ctrl+C/q quit", id="nav", markup=False)
@@ -424,6 +518,7 @@ class MediaApp(App):
 
     # ------------------------------------------------------------------ loading
     def action_refresh(self):
+        self.load_channels()
         self.load_totals()
         for k in ("tv", "movies", "music"):
             self.load_library(k)
@@ -481,6 +576,8 @@ class MediaApp(App):
             cols = ("", "artist", "albums", "tracks", "size", "profile", "new")
             data = [(GLYPH["artist"], r["title"], r["albums"], f"{r['tracks']}/{r['of']}", M.human(r["size"]),
                      r["profile"], "yes" if r.get("new_items") else "no") for r in rows]
+        data = [(str(row[0]) + (" ◇" if CH.membership(r['title'], self.channel_rows) else ""), *row[1:])
+                for row, r in zip(data, rows)]
         data = [tuple(_short(c) for c in row) for row in data]
         hints = [self._hint(kind, r) for r in rows]
         t.fill(cols, data, hints, f"Sorted by {key} (s to change); Enter or l: its seasons, albums or files")
@@ -511,13 +608,20 @@ class MediaApp(App):
 
     @on(HintTable.RowHighlighted)
     def _highlight(self, ev):
+        if ev.data_table.id == "ch-list":
+            self.show_channel(ev.cursor_row)
         tid = ev.data_table.id or ""
         if tid.endswith("-list") and tid.split("-")[0] in self.shown:
             self.select(tid.split("-")[0], ev.cursor_row)
-        self.query_one("#hint", Static).update(ev.data_table.tooltip or "")
+        pane = next((w for w in ev.data_table.ancestors if isinstance(w, TabPane)), None)
+        if pane and pane.id == self.query_one("#tabs", TabbedContent).active:
+            self.query_one("#hint", Static).update(ev.data_table.tooltip or "")
 
     @on(HintTable.RowSelected)
     def _enter(self, ev):
+        if ev.data_table.id == "ch-list":
+            self.query_one("#ch-items", HintTable).focus()
+            return
         tid = ev.data_table.id or ""
         if tid.endswith("-list") and tid.split("-")[0] in self.shown:
             self.query_one(f"#{tid.split('-')[0]}-sub", HintTable).focus()
@@ -585,7 +689,7 @@ class MediaApp(App):
                     "D deletes its files" for z in rows], "Seasons")
         elif kind == "music":
             t.fill(("album", "year", "tracks", "format", "size", "monitored"),
-                   [(a["title"], a.get("year") or "", f"{a['tracks']}/{a['of']}", a["format"], M.human(a["size"]),
+                   [(a["title"] + (" ◇" if CH.membership("music:album:" + a["title"], self.channel_rows) else ""), a.get("year") or "", f"{a['tracks']}/{a['of']}", a["format"], M.human(a["size"]),
                      "yes" if a["monitored"] else "no") for a in rows],
                    [f"{a['title']} ({a.get('type')}): {a['tracks']} of {a['of']} tracks, {a['format']}. m monitors "
                     "or stops it; D deletes it" for a in rows], "Albums")
@@ -603,9 +707,10 @@ class MediaApp(App):
 
     def show_downloads(self, d):
         gs = d.get("downloads") or []
+        self.download_rows = gs
         t = self.query_one("#dl-list", HintTable)
         t.fill(("title", "items", "status", "progress", "speed", "left", "audio"),
-               [(g["title"], g["items"], ", ".join(f"{n} {k}" for k, n in g["states"].items()),
+               [(g["title"] + (" ◇" if CH.membership(g["title"], self.channel_rows) else ""), g["items"], ", ".join(f"{n} {k}" for k, n in g["states"].items()),
                  "?" if g["progress"] is None else f"{g['progress']:.0f}%",
                  f"{M.human(g['speed'])}/s" if g.get("speed") else "-", M.hm(g["eta_s"]) if g.get("eta_s") else "-",
                  "+".join(g["audio"]) or "-") for g in gs],
@@ -626,9 +731,10 @@ class MediaApp(App):
         self.call_from_thread(self.show_upcoming, rows)
 
     def show_upcoming(self, rows):
+        self.upcoming_rows = rows
         self.query_one("#up-list", HintTable).fill(
             ("date", "title", "what", "", "on disk"),
-            [(r["date"], r["title"], r["what"], r.get("name") or "", "yes" if r.get("has_file") else "") for r in rows],
+            [(r["date"], r["title"] + (" ◇" if CH.membership(r["title"], self.channel_rows) else ""), r["what"], r.get("name") or "", "yes" if r.get("has_file") else "") for r in rows],
             [f"{r['title']} {r['what']} {r.get('name') or ''} on {r['date']}" for r in rows],
             "New episodes and films' cinema, digital and disc dates, from Sonarr's and Radarr's calendars")
 
@@ -641,6 +747,7 @@ class MediaApp(App):
         self.call_from_thread(self.show_youtube, rows)
 
     def show_youtube(self, rows):
+        self.youtube_rows = rows
         if not rows:
             self.query_one("#yt-list", HintTable).fill(
                 ("",), [("No channels or playlists yet: bromigos lab youtube add URL, or paste a link in ADD",)], [],
@@ -648,7 +755,7 @@ class MediaApp(App):
             return
         self.query_one("#yt-list", HintTable).fill(
             ("", "name", "kind", "quality", "videos", "waiting", "newest"),
-            [(GLYPH["youtube"], r["name"], r.get("kind") or "?", r.get("quality") or "?", r.get("downloaded") or 0,
+            [(GLYPH["youtube"] + (" ◇" if CH.membership(r.get("url"), self.channel_rows) else ""), r["name"], r.get("kind") or "?", r.get("quality") or "?", r.get("downloaded") or 0,
               r.get("pending") or 0, (r.get("newest") or "-")[:40]) for r in rows],
             [f"{r['name']}: {'paused' if not r.get('enabled', True) else 'checking daily'}; "
              "bromigos lab youtube remove|pause|quality changes it" for r in rows],
@@ -668,17 +775,17 @@ class MediaApp(App):
             self.call_from_thread(self.notify, str(e), severity="error")
         self.call_from_thread(self.show_found, found)
 
-    def show_found(self, found):
+    def show_found(self, found, focus=True):
         self.found = found
         t = self.query_one("#add-list", HintTable)
         t.fill(("", "title", "year", "kind", "release", "profile", "size", "have it"),
-               [(GLYPH.get(i["kind"], "·"), i.get("title") or "", i.get("year") or "",
+               [(GLYPH.get(i["kind"], "·") + (" ◇" if CH.membership(i.get("title"), self.channel_rows) else ""), i.get("title") or "", i.get("year") or "",
                  ("anime " if i.get("anime") else "") + i["kind"], i.get("release") or "",
                  (i.get("profile") or {}).get("name") or "-", M.human(i.get("size")) if i.get("size") else "-",
                  ", ".join(list((i.get("library") or {})) + ([i["arr"]["app"]] if i.get("arr") else [])) or "-")
                 for i in found],
                [M.summary(i) for i in found], "Enter: request it (seasons, quality, audio)")
-        if found:
+        if found and focus:
             t.focus()
 
     def _requested(self, res):
@@ -782,6 +889,9 @@ class MediaApp(App):
         self.load_sub("tv", r)
 
     def action_delete(self):
+        if self.query_one("#tabs", TabbedContent).active == "channels":
+            self.action_channel_delete()
+            return
         kind, r, sub = self._target()
         if r is None:
             return
@@ -849,6 +959,15 @@ class MediaApp(App):
     def check_action(self, action, parameters):
         if action == "content":
             return isinstance(self.focused, Tabs) and not isinstance(self.screen, ModalScreen)
+        library_actions = ('monitor','new_items','profile','search_now','play','open','episodes','filter','sort')
+        channel_actions = ('channel_rename','channel_order','channel_bumpers','channel_remove_item','channel_move','channel_tune')
+        if action in library_actions + channel_actions + ('delete',):
+            if isinstance(self.screen, ModalScreen): return False
+            try: tab = self.query_one('#tabs',TabbedContent).active
+            except NoMatches: return False
+            if action in library_actions: return tab in self.shown
+            if action in channel_actions: return tab == 'channels'
+            return tab in self.shown or tab == 'channels'
         return True
 
     def action_leave(self):
@@ -861,7 +980,7 @@ class MediaApp(App):
     def action_content(self):
         tid = self.query_one("#tabs", TabbedContent).active
         target = {"youtube": "yt-list", "downloads": "dl-list", "upcoming": "up-list",
-                  "add": "add-list"}.get(tid, f"{tid}-list")
+                  "add": "add-list", "channels": "ch-list"}.get(tid, f"{tid}-list")
         self.query_one(f"#{target}", HintTable).focus()
 
     def action_tab(self, tid):
@@ -886,9 +1005,169 @@ class MediaApp(App):
         self.action_tab(self.TABS[(self.TABS.index(cur) + step) % len(self.TABS)])
 
     def action_pane(self, step):
+        if self.query_one("#tabs", TabbedContent).active == "channels":
+            self.query_one("#ch-items" if step > 0 else "#ch-list", HintTable).focus()
+            return
         kind = self.query_one("#tabs", TabbedContent).active
         if kind in self.shown:
             self.query_one(f"#{kind}-{'sub' if step > 0 else 'list'}", HintTable).focus()
+
+
+    # ------------------------------------------------------------------ shared den TV channels
+    @work(thread=True, group="channels", exclusive=True)
+    def load_channels(self):
+        try:
+            doc = self.channel_store.snapshot(refresh=True)
+            self.call_from_thread(self.show_channels, doc['channels'])
+        except (CH.ChannelError, ValueError, OSError) as e:
+            self.call_from_thread(self.notify, str(e), severity="error")
+
+    def show_channels(self, rows):
+        self.channel_rows = rows
+        self.query_one("#ch-list", HintTable).fill(
+            ("#", "Channel", "Kind", "Order", "Bumpers", "On now"),
+            [(r['number'], r['name'], r['kind'], r['order'], "on" if r['bumpers'] else "off",
+              ", ".join(r['on_screens']) or "-") for r in rows],
+            [(r['now'] or "Nothing playing") + " → " + (r['next'] or "Nothing next") for r in rows],
+            "Enter/l: contents · F2 rename · v order · b bumpers · Alt+↑/↓ reorder · D delete · Ctrl+Z undo")
+        self.show_channel(self.query_one("#ch-list", HintTable).cursor_row)
+        for kind, recs in self.recs.items():
+            self.show_library(kind, recs)
+        self.show_upcoming(self.upcoming_rows)
+        self.show_youtube(self.youtube_rows)
+        self.show_found(self.found, focus=False)
+
+    def show_channel(self, index):
+        row = self.channel_rows[index] if 0 <= index < len(self.channel_rows) else None
+        self.query_one("#ch-detail", Static).update(
+            (f"{row['name']}\nNow: {row['now'] or '-'}\nNext: {row['next'] or '-'}\n" +
+             (row['error'] or "")) if row else "No channels yet. Ctrl+N adds one.")
+        contents = row['contents'] if row else []
+        self.query_one("#ch-items", HintTable).fill(("Title", "Kind"),
+            [(c['title'], c.get('media_kind') or c['kind']) for c in contents], [c['title'] for c in contents],
+            "x removes a pick · Alt+↑/↓ moves it. Library titles are included automatically.")
+
+    def selected_channel(self):
+        if self.query_one("#tabs", TabbedContent).active != "channels": return None
+        index = self.query_one("#ch-list", HintTable).cursor_row
+        return self.channel_rows[index] if 0 <= index < len(self.channel_rows) else None
+
+    def channel_change(self, fn):
+        try:
+            result = fn()
+            self.notify(result.get('message', 'Channel updated'))
+            self.show_channels(self.channel_store.snapshot(live={})['channels'])
+            self.load_channels()
+        except (CH.ChannelError, ValueError, OSError) as e:
+            self.notify(str(e), severity="error")
+
+    def action_channel_picker(self):
+        tid = self.query_one("#tabs", TabbedContent).active
+        if tid == 'channels':
+            self.action_channel_tune(); return
+        title, kind = None, 'show'
+        if tid in self.shown:
+            _, record, sub = self._target()
+            if record:
+                title = record['title']; kind = 'show' if tid == 'tv' else 'movie' if tid == 'movies' else 'music'
+                if tid == 'music':
+                    title = 'music:' + ('album:' + sub[1]['title'] if sub and sub[0] == 'album'
+                                      else 'artist:' + title)
+        elif tid == 'youtube':
+            index = self.query_one("#yt-list", HintTable).cursor_row
+            if 0 <= index < len(self.youtube_rows):
+                r = self.youtube_rows[index]; title = r.get('original_url') or r.get('url'); kind = 'youtube'
+        elif tid in ('add','upcoming','downloads'):
+            records, table = {'add': (self.found,'add-list'), 'upcoming': (self.upcoming_rows,'up-list'),
+                              'downloads': (self.download_rows,'dl-list')}[tid]
+            index = self.query_one('#'+table,HintTable).cursor_row
+            if 0 <= index < len(records):
+                record = records[index]; title = record.get('title')
+                media_kind = record.get('kind') or {'sonarr':'tv','radarr':'movie','lidarr':'artist'}.get(record.get('app'))
+                kind = 'show' if media_kind in ('tv','anime') else 'movie' if media_kind=='movie' else 'music'
+                if kind=='music': title = 'music:' + ('album:' if media_kind=='album' else 'artist:') + title
+        if not title:
+            self.notify('Choose a title or YouTube source first'); return
+        def selected(choice):
+            if choice == 'new':
+                self.action_channel_new(title, kind)
+            elif choice:
+                verb, number = choice.split(':')
+                self.channel_change(lambda: self.channel_store.item(number, title, remove=verb=='remove', item_kind=kind))
+        self.push_screen(ChannelPicker(title, self.channel_rows), selected)
+
+    def action_channel_new(self, title=None, kind='show'):
+        def saved(data):
+            if not data: return
+            if title and not any(data.get(key) for key in ('library','youtube','folder')):
+                key = 'shows' if kind=='show' else 'items'
+                data[key] = list(data.get(key) or [])
+                if title not in data[key]: data[key].append(title)
+            self.channel_change(lambda: self.channel_store.create(**data))
+        self.push_screen(ChannelForm(create=True), saved)
+
+    def action_channel_rename(self):
+        row = self.selected_channel()
+        if row:
+            self.push_screen(ChannelForm('Rename channel', row['name']),
+                lambda data: self.channel_change(lambda: self.channel_store.set(row['name'], 'name', data['name'])) if data else None)
+
+    def action_channel_order(self):
+        row = self.selected_channel()
+        if row:
+            order = CH.ORDERS[(CH.ORDERS.index(row['order']) + 1) % len(CH.ORDERS)]
+            self.channel_change(lambda: self.channel_store.set(row['name'], 'order', order))
+
+    def action_channel_bumpers(self):
+        row = self.selected_channel()
+        if row: self.channel_change(lambda: self.channel_store.set(row['name'], 'bumpers', not row['bumpers']))
+
+    def action_channel_move(self, step):
+        row = self.selected_channel()
+        if not row: return
+        table = self.query_one("#ch-items", HintTable)
+        if self.focused is table and row['kind']=='picked' and row['contents']:
+            item = row['contents'][table.cursor_row]
+            values = CH._list(row['table'].get(item['kind']+'s'))
+            pos = values.index(item['value']) + 1 + step
+            self.channel_change(lambda: self.channel_store.move_item(row['name'], item['value'], pos))
+        else:
+            self.channel_change(lambda: self.channel_store.move(row['name'], row['number'] + step))
+
+    def action_channel_remove_item(self):
+        row = self.selected_channel()
+        if row and row['contents']:
+            i = self.query_one("#ch-items", HintTable).cursor_row
+            title = row['contents'][i]['value']
+            self.channel_change(lambda: self.channel_store.item(row['name'], title, remove=True))
+
+    def action_channel_delete(self):
+        row = self.selected_channel()
+        if not row: return
+        plan = {'what': 'channel ' + row['name'], 'title': row['name'], 'size': 0, 'scope': 'channel'}
+        self.push_screen(Confirm(plan), lambda ok: self.channel_change(lambda: self.channel_store.remove(row['name'])) if ok else None)
+
+    def action_channel_undo(self): self.channel_change(self.channel_store.undo)
+
+    def action_channel_tune(self):
+        row = self.selected_channel()
+        if not row: return
+        class Tune(ModalScreen):
+            BINDINGS = [Binding('escape', 'dismiss(None)', 'Cancel')]
+            def compose(self):
+                with Vertical(id='channel-box'):
+                    yield Select([('Big monitor','big'),('Scope','wave'),('Small monitor','emblem')],
+                                 value='big', allow_blank=False, id='channel-screen')
+                    yield Button('Tune',id='channel-tune')
+            @on(Button.Pressed, '#channel-tune')
+            def choose(self): self.dismiss(self.query_one('#channel-screen',Select).value)
+        self.push_screen(Tune(), lambda screen: self.channel_change(lambda: self.channel_store.tune(row['name'],screen)) if screen else None)
+
+    @on(Button.Pressed)
+    def channel_button(self, event):
+        if not (event.button.id or '').startswith('ch-'): return
+        action = event.button.id[3:].replace('-', '_')
+        getattr(self, 'action_channel_' + action)()
 
 
 def main(argv=None):

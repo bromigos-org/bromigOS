@@ -115,6 +115,11 @@ def g_settings():
     return [circle(5, 5, 2.55), circle(5, 5, 0.85, True)] + [stroke(t) for t in teeth]
 
 
+def g_tv():
+    return [rect(1.1, 2.4, 7.8, 5.5), stroke(P((3, .8),(5, 2.4),(7, .8))),
+            fill(P((4, 3.6),(6.5, 5.1),(4, 6.5)) + " Z"), stroke(P((3, 8.7),(7, 8.7)))]
+
+
 def g_theme():
     # a drop of paint, half filled: the colours
     drop = "M5 0.7 C5 0.7 1.6 4.5 1.6 6.3 A3.4 3.4 0 0 0 8.4 6.3 C8.4 4.5 5 0.7 5 0.7 Z"
@@ -276,6 +281,7 @@ def g_mind():
 
 # name -> (glyph, what it is for). bromigOS's set; VECTOR's two go to the vector repository.
 ICONS = {
+    "bromigos-den-tv": (g_tv, "Den TV"),
     "bromigos-settings": (g_settings, "Settings"),
     "bromigos-theme": (g_theme, "the theme switcher"),
     "bromigos-shortcuts": (g_shortcuts, "Shortcuts (press the keys)"),

@@ -25,7 +25,7 @@ keyboard (vkbd.py) drive it. It checks:
   - every screen playing its own channel at once (three players), the sound moving from
     screen to screen (one PipeWire stream, the others silent), and a screen with its sound
     on playing on behind a window while a muted one pauses;
-  - the channel guide (Settings › Den TV, driven by den_tv_guide_driver.py): a channel
+  - the channel guide (the standalone Den TV app, driven by den_tv_guide_driver.py): a channel
     added, dragged, moved to another screen, tuned, removed and put back, and the live
     layer following each without a restart;
   - the live layer's CPU and GPU with three screens playing, one, and none (printed).
@@ -37,7 +37,7 @@ could leave them rebound if the live layer died mid-hover (live/README.md, "The 
 Not part of `unittest discover` (it needs kwin_wayland, Hyprland, PipeWire, mpv,
 python-mpv and a GPU):
 
-    python3 desktop/tests/e2e_tv_nested.py [--keep] [--shots DIR] [--measure SECONDS]
+    python3 desktop/tests/e2e_tv_nested.py [--keep] [--shots DIR] [--measure SECONDS] [--guide-only]
 """
 import json
 import os
@@ -555,7 +555,7 @@ def scenarios(n, r, measure=0):
     after = {k: (v["channel"], v["sound"], v["volume"]) for k, v in n.state()["screens"].items()}
     r.check("each screen's channel, sound and volume remembered", before == after, (before, after))
 
-    # -- the channel guide (Settings › Den TV): the live layer follows each change
+    # -- the channel guide (the standalone Den TV app): the live layer follows each change
     guide(n, r)
 
     if measure:
@@ -563,7 +563,7 @@ def scenarios(n, r, measure=0):
 
 
 def guide(n, r):
-    env = dict(n.live_env(), PATH=f"{os.path.join(REPO, 'live', 'bin')}:{n.stubs}:/usr/bin",
+    env = dict(n.live_env(), PATH=f"{os.path.join(REPO, 'desktop', 'settings')}:{os.path.join(REPO, 'live', 'bin')}:{n.stubs}:/usr/bin",
                PYTHONPATH=os.pathsep.join([os.path.join(REPO, "lib"), os.path.join(REPO, "homelab", "lib")]))
     with open(os.path.join(n.home, ".config", "bromigos-live", "config.toml")) as f:
         text = f.read()
@@ -646,7 +646,10 @@ def main():
     r = Run()
     try:
         n.start()
-        scenarios(n, r, measure)
+        if "--guide-only" in sys.argv:
+            guide(n,r)
+        else:
+            scenarios(n, r, measure)
     finally:
         n.stop()
         if keep:

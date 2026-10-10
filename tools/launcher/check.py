@@ -51,7 +51,7 @@ DIRS = {"core": "bromigos-core", "desktop": "bromigos-desktop", "live": "bromigo
         "widgets": "bromigos-widgets", "homelab": "bromigos-homelab"}
 REQUIRED = ("Name", "GenericName", "Comment", "Keywords", "Categories", "Icon", "TryExec", "Exec")
 # apps the menu has no row for: they're listed under LAUNCH like any app
-NO_MENU_ITEM = {"org.bromigos.PowerMenu", "org.bromigos.FieldNotes"}
+NO_MENU_ITEM = {"org.bromigos.PowerMenu", "org.bromigos.FieldNotes", "org.bromigos.DenTV"}
 # installed paths -> this checkout (an entry naming a program by its absolute path)
 INSTALLED = {
     "/usr/lib/bromigos/desktop/rofi/power-menu": "desktop/rofi/scripts/power-menu",
@@ -59,6 +59,7 @@ INSTALLED = {
 }
 # the programs on PATH, as the packages install them
 PROGRAMS = {
+    "bromigos-tv-guide": "desktop/settings/bromigos-tv-guide",
     "bromigos-settings": "desktop/settings/bromigos-settings",
     "bromigos-theme-switcher": "desktop/bin/bromigos-theme-switcher",
     "bromigos-customize": "desktop/bin/bromigos-customize",
@@ -72,6 +73,7 @@ PROGRAMS = {
 # what running each entry's Exec must do: ("help", text in its --help) for a GTK window;
 # ("live", command the live layer gets); ("widgets", datagram); ("ran", program, argv part)
 EXPECT = {
+    "org.bromigos.DenTV": ("help", "Den TV"),
     "org.bromigos.Settings": ("help", "bromigos settings"),
     "org.bromigos.ThemeSwitcher": ("help", "bromigos theme switcher"),
     "org.bromigos.Shortcuts": ("ran", "rofi", "-dmenu"),

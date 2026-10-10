@@ -199,6 +199,70 @@ The screens start silent. Turn sound on with the speaker in a screen's controls.
 one screen has sound at a time. Channel 1 restores that screen's normal picture.
 For all controls and channel settings, see [The den TV](themes-and-worlds.md#the-den-tv).
 
+## Make channels for the den TV
+
+In `bromigos media`, choose **Channels** or press `8`. Each channel shows its kind,
+play order, bumpers and the screens on it now. Select one to see its titles and what's
+on now and next. A library channel includes everything in its library. A picked channel
+holds the shows, movies, YouTube addresses or music you choose.
+
+From **TV**, **Movies**, **YouTube** or **Music**, select a title and press `c`.
+This also works on search results, downloads and upcoming titles.
+Choose **Add to…**, **Remove from…**, or **New channel…**. A small diamond marks titles
+already in a channel. Adding something to a channel does not download it; it must be
+available from the media server or YouTube. Music plays through the den's sound controls.
+
+On **Channels**, `Ctrl+N` adds a channel, `F2` renames it, `v` changes its order, and `b`
+switches bumpers. Select a picked item and use `Alt+Up` or `Alt+Down` to reorder it,
+or `x` to remove it. From the channel list, the same arrows move the whole channel.
+`D` asks before deleting a channel. `Ctrl+Z` restores the last deleted channel.
+**Tune**, or `c` on this tab, chooses a screen.
+
+Removing a pick or a channel keeps the media files. Each change shows a confirmation
+message, preserves comments in the config, and reaches the den without a restart.
+The [Den TV app](themes-and-worlds.md#the-channel-guide) offers the same channels in a
+window with posters.
+
+### Use commands or ask VECTOR
+
+To see the channels and add a show:
+
+```bash
+bromigos-live tv channels --json
+bromigos-live tv channel add "Night Block" --shows "Example Show" "Another Show" --order alternate --bumpers
+bromigos lab media channel add "Example Show" --to "Night Block" --json
+```
+
+Names work wherever a command asks for a channel. The numbers in `tv channels` are
+positions in the config. Screen numbers are separate: channel 1 is each screen's own
+picture. `channel tune` finds the right screen number from the name.
+
+```bash
+bromigos-live tv channel add-item "Night Block" "Example Film" --kind movie --json
+bromigos-live tv channel remove-item "Night Block" "Example Show" --json
+bromigos-live tv channel move-item "Night Block" "Another Show" 1 --json
+bromigos-live tv channel order "Night Block" shuffle --json
+bromigos-live tv channel bumpers "Night Block" off --json
+bromigos-live tv channel rename "Night Block" "Evening" --json
+bromigos-live tv channel move "Evening" 1 --json
+bromigos-live tv channel tune "Evening" --screen wave --json
+bromigos-live tv channel remove "Evening"
+bromigos-live tv channel undo --json
+```
+
+`remove` asks you to type the channel name. Scripts can pass `--yes`. All channel
+commands accept `--json`. Exit codes are 0 for success, 1 for an operation that failed,
+2 for invalid arguments or a missing confirmation, 3 for a conflicting name, and 4 for
+something not found. `tv channels --refresh` reads library contents from the servers;
+without it, now/next and contents use the local cache.
+
+Ask VECTOR, the desktop's AI assistant, "Add this show to Night Block", "What's on the
+den TV?", or "Tune the scope to Evening". From the phone he can read channels and add
+or remove individual picks. Creating channels, tuning screens and deleting whole
+channels stay on the desktop. A whole-channel delete needs your explicit request naming
+it. The [command reference](commands.md) and `bromigos-live tv channel --help` list the
+options for libraries, YouTube and folders.
+
 ## Put releases on your calendar
 
 Open the CALENDAR panel's **Settings…** and turn on **Your media server's releases**.

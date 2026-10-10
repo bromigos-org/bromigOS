@@ -132,6 +132,12 @@ The desktop runs these for you. You don't need them day to day.
 |---|---|
 | [`bromigos shell`](#bromigos-shell) | Choose the zsh prompt: mehshell, Starship or a plain prompt. See [Shell and terminal](shell.md). |
 
+### Other commands
+
+| Command | What it does |
+|---|---|
+| [`bromigos tv guide`](#bromigos-tv-guide) |  |
+
 ## Every command in full
 
 Each command's own help, A to Z. Commands built into `bromigos` show their whole `--help`; the others show how to call them and an example or two, and their own `--help` says more.
@@ -1274,10 +1280,10 @@ Options:
 
 ### bromigos media
 
-Your media library in a terminal: TV, films, music, YouTube, downloads and what's coming; request, monitor, change quality, play or delete.
+Your media library in a terminal: TV, films, music, YouTube, downloads, releases and den TV channels; request, monitor, change quality, play or delete.
 
 ```text
-bromigos media [tv|movies|music|youtube|downloads|upcoming|add] | search|get|status|upcoming|recent|library|language|monitor|profile|refresh|delete …
+bromigos media [tv|movies|music|youtube|downloads|upcoming|add|channels] | search|get|status|upcoming|recent|library|language|monitor|profile|refresh|delete|channel …
 ```
 
 For example:
@@ -1706,7 +1712,7 @@ Options:
 
 ### bromigos scene
 
-The live layer's settings beyond the animation switches: the world, the screensaver's content, the sounds' volume, the codec's calls.
+The live layer's settings beyond the animation switches: the world, the screensaver's content, the sounds' volume, the codec's calls and den TV playback.
 
 ```text
 bromigos scene [get [KEY…]] | set KEY VALUE | reset [KEY…] | keys  [--json]
@@ -2187,6 +2193,16 @@ For example:
 bromigos theme switcher
 bromigos theme switcher --list
 bromigos theme previews
+```
+
+From the `bromigos-desktop` package.
+
+### bromigos tv guide
+
+
+
+```text
+bromigos tv guide
 ```
 
 From the `bromigos-desktop` package.

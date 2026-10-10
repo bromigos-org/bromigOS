@@ -126,3 +126,11 @@ Some tests run by hand, because they need kwin_wayland, Hyprland, rofi and a GPU
 The app launcher's entries are checked by `tools/launcher/check.py`
 ([docs/menu.md](../docs/menu.md#tests)). Settings' offscreen renders are
 `tools/settings/render.sh` ([docs/settings.md](../docs/settings.md#tests)).
+
+## Den TV
+
+`settings/bromigos-tv-guide` opens the standalone GTK4/libadwaita channel guide, with its
+launcher entry **Den TV**. It uses the Settings toolkit's colours and controls, and
+`bromigos_tvchannels.Store` for shared channel edits. Settings keeps only playback
+controls and an open button. [The manual](../manual/src/themes-and-worlds.md#the-channel-guide)
+explains the app; `tests/e2e_tv_nested.py` drives it in a separate compositor.

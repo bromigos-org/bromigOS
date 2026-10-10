@@ -255,7 +255,7 @@ Every screen plays its own channel at the same time. Each has a player of its ow
 the sound comes from one screen at a time. Two screens on the same channel show the same
 moment, like real TV, from one player.
 
-The channel guide (Settings › Den TV) shows every channel once, with a button for each
+The channel guide (the Den TV app) shows every channel once, with a button for each
 screen to tune it. It also adds, removes, reorders and renames channels. See
 [The channel guide](#the-channel-guide).
 
@@ -462,7 +462,7 @@ bromigos-live tv set 2 --screen big         # channel 2 on the big monitor
 bromigos-live tv next --screen scope        # the next channel (prev: the previous)
 bromigos-live tv open                       # full screen with sound
 bromigos-live tv web                        # what's on, in the server's or YouTube's web page
-bromigos-live tv guide                      # the channel guide (Settings › Den TV)
+bromigos-live tv guide                      # the channel guide (the Den TV app)
 bromigos-live tv sound on --screen small    # on, off or toggle; on one screen at a time
 bromigos-live tv volume up                  # up, down, or a level: volume 40
 bromigos-live tv state --json               # what's on each screen, the sound, what mpv is doing
@@ -474,8 +474,8 @@ the details.
 
 ### The channel guide
 
-The channel guide is Settings' **Den TV** page
-([docs/settings.md](../docs/settings.md#den-tv)). It opens from Settings, from
+The channel guide is the standalone **Den TV** app (`bromigos-tv-guide`)
+([docs/settings.md](../docs/settings.md#den-tv)). Settings has playback controls and an open button. The guide opens from
 `bromigos-live tv guide`, from Super+Alt+G, from the hint's **GUIDE** and from the MEDIA
 panel's settings.
 
@@ -488,18 +488,41 @@ progress bar, its source and order, and a lit button for each screen it's on air
   button of each screen on air there is lit, and the card says **ON AIR**.
 - **What it changes.** Add channel (a library, collection or playlist the servers list,
   shows or movies you pick from a searchable grid of posters, a YouTube address, a folder,
-  or your downloaded YouTube videos), and for each card: Rename, Pick shows, Move earlier
+  or your downloaded YouTube videos), and for each card: Rename, Contents (view, add, remove and reorder picks), Pick shows, Move earlier
   or later, Bumpers, the screens it's on (every screen unless you say), and Remove, with
-  Undo. Drag a card onto another to put it before that one.
+  confirmation and Undo. Media files stay. Drag a card onto another to put it before that one.
 - **Keys.** Tab moves between cards. On a card, 1, 2 and 3 tune the big monitor, the scope
   and the small monitor. Delete removes, F2 renames, and Alt and an arrow move it.
 - **The file.** It writes the `[[tv.channel]]` tables of
-  `~/.config/bromigos-live/config.toml` in place (`lib/bromigos_tvconfig.py`). Comments,
+  `~/.config/bromigos-live/config.toml` in place through `lib/bromigos_tvchannels.py` and `lib/bromigos_tvconfig.py`. Comments,
   blank lines and every other table stay as they were, and a channel's own comments move
   with it. Each save is checked first, then written in one step to the file a symlink
   points at, so a dotfiles link stays a link. The live layer notices a change that only
   touches the channels and reads them again without rebuilding the den, so nothing
   restarts.
+
+### Shared channel commands
+
+`bromigos-live tv channels --json` lists configured channels, contents, order, bumpers,
+screens and now/next from the cache. `--refresh` reads contents from the servers.
+`bromigos-live tv channel --help` lists create, rename, order, bumpers, move,
+add-item, remove-item, move-item, tune, remove and undo. Each takes `--json`.
+`remove` requires confirmation or `--yes`; it removes no media files.
+The [media guide](../manual/src/media.md#make-channels-for-the-den-tv) has examples.
+
+Channel identifiers are names or one-based config positions. Screen channel numbers
+include its own picture and any extra live stream. Use `channel tune NAME --screen S`
+when starting from a channel name. All writes share `bromigos_tvchannels.Store` with the
+GTK guide, media TUI and VECTOR. A lock around the read/edit/write prevents the interfaces
+from overwriting each other's newer changes. The content cache records the channel definition. Changed picks or sources refresh
+immediately rather than waiting for the regular cache age. A failed refresh never keeps
+items from a different definition. Channel deletion keeps a recoverable table
+in user state for `channel undo`.
+
+Picked `items` may include YouTube URLs or `music:artist:NAME` / `music:album:NAME`.
+YouTube picks use the existing resolver and cache; music comes from Jellyfin or Plex and
+plays through the TV's sound controls. Titles not yet on the server remain picks and
+show a missing-title message until available.
 
 ### Tests
 

@@ -609,7 +609,7 @@ class YouTubeResolveTest(unittest.TestCase):
                         "screens": ["big"]}, set())
         TV._write_json(TV.cache_path(ch), {"items": [
             {"id": i, "title": f"Clip {i}", "duration": dur, "url": f"https://www.youtube.com/watch?v={i}"}
-            for i in ids], "fetched": time.time() + 3600, "error": None})
+            for i in ids], "fetched": time.time() + 3600, "error": None, "definition": TV.content_signature(ch)})
         cfg = {"tv": {"channel": [{"name": "Clips", "youtube": "https://www.youtube.com/playlist?list=PLexample",
                                    "screens": ["big"], "order": "in order"}]}}
         tv = make_tv(self, cfg)

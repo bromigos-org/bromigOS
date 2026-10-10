@@ -35,7 +35,7 @@ K.exec("SUPER + Z", live .. " scan-hold on")
 K.exec("SUPER + Z", live .. " scan-hold off", { release = true })
 -- The den TV (live/README.md, "The den TV"): on the screen under the pointer (else the one
 -- with the sound): full screen with sound, the next and previous channel, its sound on or
--- off; and the channel guide (Settings › Den TV).
+-- off; and the standalone Den TV app.
 K.exec("SUPER + ALT + P", live .. " tv open")
 K.exec("SUPER + ALT + period", live .. " tv next")
 K.exec("SUPER + ALT + comma", live .. " tv prev")

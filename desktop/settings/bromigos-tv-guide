@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+"""Den TV: the standalone channel guide. Open with bromigos-live tv guide or Super+Alt+G.
+
+bromigos-tv-guide [--render OUT.png] [--audit] [--size WxH]
+"""
+import os
+import sys
+if any(a in ('--help','-h') for a in sys.argv[1:]):
+    print(__doc__); sys.exit(0)
+sys.path.insert(0,os.path.dirname(os.path.realpath(__file__)))
+sys.path.append('/usr/lib/bromigos/lib')
+import gi
+gi.require_version('Gtk','4.0')
+gi.require_version('Adw','1')
+from bromigos_tvguide import main
+sys.exit(main(sys.argv))

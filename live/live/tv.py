@@ -635,7 +635,7 @@ class TV:
         if ch["kind"] == "files":
             return {"url": it.get("url"), "headers": {}, "ytdl_format": None, "title": title, "start": slot.offset,
                     "web": None, "server": "Files"}
-        if ch["kind"] == "youtube":
+        if ch["kind"] == "youtube" or it.get("server") == "youtube":
             import bromigos_youtube as Y
             path = Y.kept(ch.get("keep"), it.get("id")) if ch.get("keep") else None
             if path or full:
@@ -1337,7 +1337,7 @@ class TV:
         if ch["kind"] == "own" or not slot:
             return "no media channel on"
         url = None
-        if ch["kind"] in ("youtube", "live"):
+        if ch["kind"] in ("youtube", "live") or slot.item.get("server") == "youtube":
             url = slot.item.get("url")
         else:
             a = TVL.server_of(ch)
@@ -1352,15 +1352,13 @@ class TV:
         return f"opened {url.split('?')[0]}"
 
     def open_guide(self, screen=None):
-        """The channel guide: Settings › Den TV (bromigos settings den-tv)."""
-        for cmd in (["bromigos", "settings", "den-tv"], ["bromigos-settings", "den-tv"]):
-            if shutil.which(cmd[0]):
-                try:
-                    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-                    return "the channel guide: Settings › Den TV"
-                except OSError as e:
-                    return f"{cmd[0]}: {e}"
-        return "Settings isn't installed (bromigos settings den-tv)"
+        """The independent Den TV application, also usable while playback is off."""
+        try:
+            subprocess.Popen(["bromigos-tv-guide"], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+            return "Opened Den TV"
+        except OSError as e:
+            return f"Den TV: {e}"
 
     # ------------------------------------------------------------------ YouTube keep
     def _keep(self, ch, slot):
@@ -1424,18 +1422,18 @@ class TV:
 
     def _prefetch(self, screen, ch, slot):
         """YouTube: resolve what's on and the next two ahead, so each starts at once."""
-        if ch["kind"] not in ("youtube", "live"):
+        if ch["kind"] not in ("youtube", "live") and slot.item.get("server") != "youtube":
             return
         h = self.screen_height(screen)
         self.resolve_later(slot.item.get("url"), h, first=True)
-        if ch["kind"] != "youtube":
+        if ch["kind"] != "youtube" and not ch.get("picks"):
             return
         nxt = slot
         for _ in range(2):
             if not nxt or not nxt.end:
                 break
             nxt = TVL.now_next(ch, nxt.end + 0.001)
-            if nxt:
+            if nxt and (ch["kind"] == "youtube" or nxt.item.get("server") == "youtube"):
                 import bromigos_youtube as Y
                 if not (ch.get("keep") and Y.kept(ch.get("keep"), nxt.item.get("id"))):
                     self.resolve_later(nxt.item.get("url"), h)
@@ -1445,7 +1443,7 @@ class TV:
         if not item or iid in self.poster:
             return
         url, headers = None, {}
-        if ch["kind"] in ("youtube", "live"):
+        if ch["kind"] in ("youtube", "live") or item.get("server") == "youtube":
             url = item.get("thumbnail") or item.get("poster")
         else:
             a = TVL.server_of(ch)
@@ -1576,6 +1574,8 @@ class TV:
         out = {"screens": {}, "playing": None, "picture": "mpv" if any(d.player for d in self.decks.values())
                else (self.player_why or "off"), "covered": sorted(self.covered), "sound_from": snd,
                "desktop_muted": self.desktop_muted, "max_playing": self.max_playing()}
+        out['lineups'] = {screen: [dict(number=n, name=ch['name'], key=ch['key'], kind=ch['kind'])
+                                      for n, ch in enumerate(self.lineup(screen), 1)] for screen in TVL.SCREENS}
         for s in TVL.SCREENS:
             n, ch = self.channel(s)
             st = self.screens[s]

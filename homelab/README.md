@@ -57,7 +57,8 @@ The main modules in `lib/bromigos_homelab/`:
 | `labmodels.py` | what's installed and loaded on the lab's servers; load and unload |
 | `catalog*.py` | the model catalog: picking, planning, serving, upgrades, the refresh and the bench |
 | `provision.py`, `agentprovision.py` | generate a lab repository, apply its reviewed plan and check service health |
-| `mediatui.py` | the media library, with shared lab table keys and safe quit from forms |
+| `mediatui.py` | The media library and den Channels tab, with shared lab keys and safe quit |
+| `tvchannels.py` | Loads the shared den channel library from bromigos-core |
 | `tui.py` | the `bromigos lab` dashboard, built with Textual |
 
 ## Run the tests

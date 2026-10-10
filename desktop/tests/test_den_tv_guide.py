@@ -1,4 +1,4 @@
-"""Settings › Den TV, the channel guide (desktop/settings/pages/den_tv.py), drawn in a
+"""Standalone Den TV, the channel guide (desktop/settings/bromigos_tvguide.py), drawn in a
 headless weston of its own (no window anywhere), against a stand-in Jellyfin
 (live/tests/fake_media.py: generated posters, never real media) and a throwaway HOME:
 
@@ -104,7 +104,7 @@ class GuideRender(unittest.TestCase):
 
     def render(self, name, extra=(), env=None, size="1180x980"):
         out = os.path.join(self.tmp, name + ".png")
-        r = subprocess.run([sys.executable, os.path.join(DESKTOP, "settings", "bromigos-settings"), "--render", out,
+        r = subprocess.run([sys.executable, os.path.join(DESKTOP, "settings", "bromigos-tv-guide"), "--render", out,
                             "--page", "den-tv", "--size", size, *extra], env=dict(self.env, **(env or {})),
                            capture_output=True, text=True, timeout=120)
         self.assertEqual(r.returncode, 0, r.stderr[-3000:])
@@ -124,7 +124,7 @@ class GuideRender(unittest.TestCase):
         self.assertTrue(os.listdir(os.path.join(self.home, ".cache", "bromigos", "tv", "posters")))
 
     def test_every_control_has_a_hint(self):
-        r = subprocess.run([sys.executable, os.path.join(DESKTOP, "settings", "bromigos-settings"), "--audit",
+        r = subprocess.run([sys.executable, os.path.join(DESKTOP, "settings", "bromigos-tv-guide"), "--audit",
                             "--page", "den-tv", "--size", "1180x980"], env=self.env, capture_output=True, text=True,
                            timeout=120)
         doc = json.loads(r.stdout.strip().splitlines()[-1])

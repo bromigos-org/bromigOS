@@ -174,7 +174,10 @@ windows, so you can listen. When it shows again, it's where it would be by now.
 The channel guide shows every channel once, like a TV guide: what's on now and next, with
 its poster and how far through it is. Under each one, **BIG**, **SCOPE** and **SMALL** put
 that screen on it; the lit button shows where it's on air. Open the guide with **GUIDE** in
-the hint, <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd>, or Settings › **Den TV**.
+the hint, <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd>, or the **Den TV** app in the launcher.
+`bromigos-live tv guide` and the MEDIA panel's guide button open the same app.
+Settings keeps playback on/off, how many screens play at once, and when a window pauses
+a silent screen. Its **Open Den TV…** button opens the guide.
 
 ![The channel guide: every channel as a card, with posters, what's on now and next, and a
 lit button for each screen it's on air on](images/den-tv-guide.webp)
@@ -188,9 +191,14 @@ lit button for each screen it's on air on](images/den-tv-guide.webp)
 | Keep a channel off a screen | Its menu's screens. Every channel is on every screen until you say. |
 | Open each item with a station card | **Bumpers** in its menu: a few seconds with the channel's name, what's on and the time |
 | Rename | The card's menu, or F2 |
-| Remove | The card's menu, or Delete. **Undo** brings it back. |
+| Remove | The card's menu, or Delete. Confirm first; **Undo** brings it back. Media files stay. |
 
-The den follows each change at once, without restarting.
+Use a card's **Contents…** menu to see its titles, reorder picks, or add and remove
+items. **Shuffle**, **In order** and **Alternate** choose its play order.
+
+The den follows each change at once, without restarting. The
+[media library and commands](media.md#make-channels-for-the-den-tv) edit these same
+channels.
 
 ### Add a TV channel by hand
 

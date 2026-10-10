@@ -1,4 +1,4 @@
-"""Drive Settings › Den TV (the channel guide) inside e2e_tv_nested.py's nested Hyprland, as
+"""Drive Den TV (the channel guide) inside e2e_tv_nested.py's nested Hyprland, as
 a user would: Add channel filled in and Add clicked, a card dropped before another, its
 screens changed, a screen's tune button, Remove and its Undo. After each, the live layer running in the
 nest is asked what it has (`bromigos-live tv list|state`): the channels follow without a
@@ -21,7 +21,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import GLib, Gtk  # noqa: E402
 
-from bromigos_settings import app as A  # noqa: E402
+import bromigos_tvguide as A  # noqa: E402
 
 MEDIA = sys.argv[2]
 results = []
@@ -145,13 +145,18 @@ def steps(d):
 
     def remove():
         i = d.index("Driven")
-        g.remove(i, g.entries[i][1])
+        dialog = g.remove(i, g.entries[i][1])
+        button = next(b for b in walk(dialog) if isinstance(b, Gtk.Button) and b.get_label() == "Remove")
+        button.emit("clicked")
 
     def undo():
         u = next(u for _t, u in reversed(d.toasts) if u)
         u()
 
     return [
+        ("Den TV is its own application window", lambda: None,
+         lambda: (d.win.get_title() == "Den TV" and d.get_application_id() == "org.bromigos.DenTV",
+                  (d.win.get_title(), d.get_application_id()))),
         ("the guide lists the live layer's channels", lambda: None,
          lambda: (all(ch for _i, ch, _t in g.entries) and len(g.entries) >= 3 and g.live is not None,
                   [t.get("name") for _i, _c, t in g.entries])),

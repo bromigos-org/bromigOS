@@ -23,6 +23,7 @@ modules to the same folder:
 | `bromigos_private.py` | Reads the private overlay: values a user keeps encrypted in their dotfiles |
 | `bromigos_account.py` | Signs a widget in to an online account, such as Twitch or GitHub, and keeps the token in the keyring |
 | `bromigos_tv.py` | The den TV's channels, their wall-clock schedule, picked shows taking turns, and each screen's remembered channel and sound |
+| `bromigos_tvchannels.py` | Shared channel operations and JSON CLI for the guide, media and VECTOR |
 | `bromigos_tvconfig.py` | Writes the den TV's `[[tv.channel]]` tables in place, keeping comments: the channel guide's writer |
 | `bromigos_youtube.py` | YouTube playlists and channels through yt-dlp, cached, with live streams and keeping videos |
 
@@ -111,7 +112,7 @@ time, so comments, blank lines and other tables stay exactly as they were. `load
 a `Doc` with `channels()`, `add(table)`, `remove(i)` and `restore(i, text)` for Undo,
 `move(i, j)`, `set(i, key, value)` and `save()`. A save is checked first: the new file
 must parse, and nothing but the channels may read differently. It's written in one step
-to the file a symlink points at. The channel guide (Settings › Den TV) uses it.
+to the file a symlink points at. The standalone Den TV guide uses it through `bromigos_tvchannels.Store`.
 
 ### bromigos_youtube
 
@@ -121,3 +122,13 @@ key, and caches it in `~/.cache/bromigos/youtube/`. `videos(url)` gives its vide
 a video no taller than `height`, and `keep(video, folder)` saves one video in the
 layout Plex and Jellyfin read. The module's docstring describes each function, and its
 interface stays stable for the panels that use it.
+
+### bromigos_tvchannels
+
+`Store` reads channel summaries and contents, creates, renames, reorders and deletes
+channels, adds/removes/reorders picks, changes order and bumpers, restores the last
+deleted table, and tunes a screen. Names and one-based config positions identify channels.
+Screen numbers remain the live player's own numbering. `Store.edit()` serializes guide
+edits with CLI and TUI edits and uses the comment-preserving writer. Read operations use
+cache only unless `refresh=True` is requested. `main()` provides the JSON CLI and its
+exit codes. [Your media](../manual/src/media.md#make-channels-for-the-den-tv) has examples.

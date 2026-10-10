@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Den TV
+GenericName=Channel guide
+Comment=Manage your den TV channels and see what's on now and next
+Icon=bromigos-den-tv
+TryExec=bromigos-tv-guide
+Exec=bromigos-tv-guide
+Terminal=false
+Categories=AudioVideo;Video;GTK;
+Keywords=tv;den;channels;guide;media;jellyfin;plex;youtube;
+StartupNotify=true
+StartupWMClass=org.bromigos.DenTV

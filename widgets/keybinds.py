@@ -92,7 +92,7 @@ EXEC = [
     (r"bromigos-live\b.*tv next", "Den TV: next channel", "LIVE LAYER"),
     (r"bromigos-live\b.*tv prev", "Den TV: previous channel", "LIVE LAYER"),
     (r"bromigos-live\b.*tv sound", "Den TV: sound on/off", "LIVE LAYER"),
-    (r"bromigos-live\b.*tv guide", "Den TV: the channel guide", "LIVE LAYER"),
+    (r"bromigos-live\b.*tv guide", "Open Den TV: channels and guide", "LIVE LAYER"),
     (r"^bromigos mute\b", "Mute everything: the theme's sounds and VECTOR's voice", "LIVE LAYER"),
     (r"bromigos-live\b.*mute", "Live layer sounds on/off", "LIVE LAYER"),
     (r"bromigos-live\b.*toggle", "Live background on/off", "LIVE LAYER"),

@@ -94,7 +94,7 @@ check() {
   sh -n rofi/scripts/power-menu rofi/scripts/quick-note waybar/scripts/copy-ip bin/bromigos-dispatch
   bash -n bin/bromigos-shot bin/bromigos-rec bin/bromigos-wallpaper hooks/theme-set.d/*
   python -m py_compile bin/bromigos-windows
-  python -m py_compile settings/bromigos-settings settings/bromigos_settings/*.py settings/pages/*.py waybar/scripts/idle.py bin/bromigos-peripherals lib/bromigos_peripherals.py
+  python -m py_compile settings/bromigos-settings settings/bromigos-tv-guide settings/bromigos_tvguide.py settings/bromigos_settings/*.py settings/pages/*.py waybar/scripts/idle.py bin/bromigos-peripherals lib/bromigos_peripherals.py
   python -m py_compile bin/bromigos-keys lib/bromigos_keys.py lib/bromigos_keycapture.py lib/bromigos_cli.py lib/bromigos_extlist.py
   local c
   for c in "${_settings_cmds[@]}"; do python -m py_compile "bin/bromigos-$c"; done
@@ -176,6 +176,9 @@ package() {
   ln -s /usr/lib/bromigos/desktop/bin/bromigos-windows "$pkgdir/usr/bin/bromigos-windows"
   # Settings (bromigos settings, SUPER+,; docs/settings.md): the app, and the page folder any
   # package may add a page to
+  install -Dm0755 settings/bromigos-tv-guide "$lib/settings/bromigos-tv-guide"
+  install -Dm0644 settings/bromigos_tvguide.py "$lib/settings/bromigos_tvguide.py"
+  ln -s /usr/lib/bromigos/settings/bromigos-tv-guide "$pkgdir/usr/bin/bromigos-tv-guide"
   install -Dm0755 settings/bromigos-settings "$lib/settings/bromigos-settings"
   install -Dm0644 -t "$lib/settings/bromigos_settings/" settings/bromigos_settings/*.py
   install -Dm0644 -t "$lib/settings/pages/" settings/pages/*.py

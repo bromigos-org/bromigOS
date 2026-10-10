@@ -373,7 +373,7 @@ Jellyfin, Plex and Pinchflat are the sources the console already reads.
 terminal. Without a terminal, both print the Requests card instead.
 
 - Tabs: TV (Sonarr), MOVIES (Radarr), MUSIC (Lidarr), YOUTUBE (Pinchflat), DOWNLOADS,
-  UPCOMING and ADD (search, then the `get` form). The header has the library's totals and
+  UPCOMING, ADD (search, then the `get` form) and CHANNELS (the den TV). The header has the library's totals and
   the free space.
 - A title's side table lists its seasons, its albums, or a season's episode files (`e`).
 - Keys act on the row under the cursor: `m` monitor, `n` new episodes, `p` profile, `f`
@@ -388,6 +388,12 @@ terminal. Without a terminal, both print the Requests card instead.
   `[`/`]` and `H`/`L` switch tabs even from an input. Switching tabs cancels an open dialog.
   A key strip above the footer shows the navigation keys.
 - The lab console's `M` opens it, and returns to the console when it closes.
+
+- Channels use `bromigos_tvchannels.Store`, shared with the standalone GTK guide and
+  live CLI. `c` on a library title opens add/remove/new choices. A diamond marks channel
+  membership. The Channels tab shows contents, order, bumpers, screens and now/next;
+  its controls edit picks, reorder, tune, rename and confirm deletion, with undo.
+  All channel tests use sandbox config and stub control sockets.
 
 The same changes are CLI verbs too: `library`, `monitor`, `profile`, `refresh` and `delete`.
 

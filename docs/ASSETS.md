@@ -238,7 +238,7 @@ resized to WebP for the repository.
   - `den-colour-themes.webp`: the den recoloured for the Wick, Cinder and Rime
   - `den-tv.webp`: the den TV playing a test pattern that ffmpeg generates, with its hint
     (`live/tools/offscreen.py bg` with `OFF_TV`, cropped)
-  - `den-tv-guide.webp`: Settings › Den TV, the channel guide, with made-up channels and
+  - `den-tv-guide.webp`: The standalone Den TV app, the channel guide, with made-up channels and
     generated stripe posters from a stand-in Jellyfin (`desktop/tests/test_den_tv_guide.py`
     with `BROMIGOS_TEST_SHOTS`, cropped)
 - **The README's header emblem** is `themes/wick/emblem/emblem-512.png`, from the Wick's
@@ -252,8 +252,7 @@ no likeness and no lab hosts.
 - **`den-tv.webp`**, on the Themes and worlds page. The den TV playing a test pattern that
   ffmpeg generates, with its hint, rendered offscreen (`live/tools/offscreen.py bg` with
   `OFF_TV`), cropped. The same picture as the docs'.
-- **`den-tv-guide.webp`**, on the Themes and worlds page. The channel guide (Settings › Den
-  TV) with made-up channels and generated stripe posters from a stand-in Jellyfin, drawn in
+- **`den-tv-guide.webp`**, on the Themes and worlds page. The standalone Den TV channel guide with made-up channels and generated stripe posters from a stand-in Jellyfin, drawn in
   a headless weston (`desktop/tests/test_den_tv_guide.py`), cropped. The same picture as
   the docs'.
 - **`app-launcher.webp`**, on the Getting around page. The app launcher listing bromigOS's
@@ -351,3 +350,7 @@ made. For reference, here are the terms each provider published, as read on 2026
 
 The local processing tools, Depth Anything V2, SAM, LaMa and BiRefNet, are open-weights
 models used to split and cut the paintings.
+
+- **Den TV launcher icon** (`theme/app-icons/*/apps/bromigos-den-tv.svg`): **yes**.
+  Drawn in code by `theme/tools/build-app-icons.py`, like the other launcher icons.
+  A TV outline and play glyph; no outside art.

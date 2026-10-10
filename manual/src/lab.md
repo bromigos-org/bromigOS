@@ -349,6 +349,7 @@ then press a key:
 | `Enter` | Open the selected item |
 | `Left`, `Right`, `h`, `l` | Switch between the title list and its side table |
 | `[`, `]`, `H`, `L` | Previous or next tab, including while typing. Cancel an open dialog |
+| `8`, `c` | Channels tab; add or remove a selected title from a channel |
 | `m` | Monitor it, or stop. On a season or an album, just that one |
 | `n` | Pick up new episodes and seasons, or stop |
 | `p` | Change its quality profile |
@@ -359,7 +360,8 @@ then press a key:
 | `D` | Delete it |
 | `/`, `s` | Filter by name, and change the sort: newest, size, name, missing, profile |
 
-Hover over anything to see what it does.
+Hover over anything to see what it does. The [media guide](media.md#make-channels-for-the-den-tv)
+covers Channels, its keys and CLI commands.
 
 **Deleting** removes the files from the disk, and frees the space. First it shows what goes
 and how much space that frees. Then type the title, or press `D` again. On a season, an

@@ -115,9 +115,9 @@ direct_max_mbps = 20
         self.assertTrue(r["ok"], r["errors"])
         got = {(x["source"], x["kind"], x["title"]) for x in r["items"]}
         self.assertEqual(got, {("jellyfin", "library", "Shows"), ("jellyfin", "library", "Films"),
-                               ("jellyfin", "library", "YouTube"), ("jellyfin", "collection", "Space shows"),
+                               ("jellyfin", "library", "YouTube"), ("jellyfin", "library", "Music"), ("jellyfin", "collection", "Space shows"),
                                ("jellyfin", "playlist", "Lo-fi mixes"),
-                               ("plex", "library", "Movies"), ("plex", "library", "TV Shows"),
+                               ("plex", "library", "Movies"), ("plex", "library", "TV Shows"), ("plex", "library", "Music"),
                                ("plex", "collection", "Cartoons"), ("plex", "playlist", "Lo-fi mixes")})
         self.assertEqual([p["title"] for p in caps.video_source("plex").playlists()], ["Lo-fi mixes"])
         self.assertEqual([p["id"] for p in caps.video_source("jellyfin").playlists()], ["pl1"])   # not the audio one

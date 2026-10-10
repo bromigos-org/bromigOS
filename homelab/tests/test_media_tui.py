@@ -36,9 +36,18 @@ class Stack(unittest.TestCase):
         self.tmp = tempfile.mkdtemp(prefix="media-tui-")
         toml = F.homelab_toml(os.path.join(self.tmp, "homelab.toml"), self.srv.url, None,
                               '[media]\naudio = ["en", "ja"]\nsubtitles = ["en"]\n')
-        self.patches = [mock.patch.object(config, "USER", toml),
+        self.channel_config = os.path.join(self.tmp, "live-config.toml")
+        with open(self.channel_config, "w") as f: f.write("# sandbox den channels\n[tv]\nenabled = true\n")
+        self.patches = [mock.patch.dict(os.environ, {"BROMIGOS_LIVE_CONFIG": self.channel_config,
+                                                   "XDG_STATE_HOME": self.tmp}),
+                        mock.patch.object(config, "USER", toml),
                         mock.patch.object(M, "STATE_FILE", os.path.join(self.tmp, "state.json")),
                         mock.patch.object(M, "_wait", lambda fn, timeout=60, every=2.0: fn())]
+        if T is not None:
+            self.patches += [mock.patch.object(T.CH, "control", return_value=None),
+                             mock.patch.object(T.CH.TV, "state", return_value={}),
+                             mock.patch.object(T.CH.TV, "cached_items", return_value=None),
+                             mock.patch.object(T.CH.TV, "fetch_items", return_value={"items": []})]
         for p in self.patches:
             p.start()
         config._cache["sig"] = None
@@ -243,6 +252,105 @@ class TUI(Stack):
             await pilot.press("left_square_bracket")
             await pilot.pause()
             self.assertEqual(app.query_one("#tabs").active, "tv")
+        self.run_app(fn)
+
+    def test_media_wrapper_opens_channels_tab(self):
+        import runpy
+        program=os.path.join(os.path.dirname(os.path.dirname(__file__)),'bin','bromigos-media')
+        wrapper=runpy.run_path(program,run_name='test_wrapper')
+        with mock.patch.object(T,'main',return_value=0) as main:
+            self.assertEqual(wrapper['main'](['channels']),0)
+            main.assert_called_once_with(['channels'])
+
+    def seed_channels(self):
+        with open(self.channel_config, 'a') as f:
+            f.write('\n# A picked block\n[[tv.channel]]\nname = "Night Block" # name kept\n'
+                    'shows = ["One", "Two"] # order kept\norder = "in-order"\nbumpers = true\n')
+
+    def test_tv_add_and_remove_channel_pick_and_marker(self):
+        self.seed_channels()
+        async def fn(app, pilot):
+            title = app.query_one('#tv-list').get_row_at(0)[1]
+            await pilot.press('c');await pilot.pause()
+            app.screen.query_one('#channel-pick').value = 'add:1'
+            await pilot.click('#channel-use');await self.settle(app,pilot,4)
+            self.assertIn(title,app.channel_store.load().channels()[0]['shows'])
+            self.assertIn('◇',app.query_one('#tv-list').get_row_at(0)[0])
+            await pilot.press('c');await pilot.pause()
+            app.screen.query_one('#channel-pick').value = 'remove:1'
+            await pilot.click('#channel-use');await self.settle(app,pilot,4)
+            self.assertNotIn(title,app.channel_store.load().channels()[0]['shows'])
+            self.assertNotIn('◇',app.query_one('#tv-list').get_row_at(0)[0])
+            self.assertIn('# name kept',app.channel_store.load().text)
+            self.assertIn('# order kept',app.channel_store.load().text)
+        self.run_app(fn)
+
+    def test_create_channel_from_tv_picker(self):
+        async def fn(app,pilot):
+            title = app.query_one('#tv-list').get_row_at(0)[1]
+            await pilot.press('c');await pilot.pause()
+            await pilot.click('#channel-use');await pilot.pause()
+            app.screen.query_one('#channel-name').value = 'New Block'
+            await pilot.click('#channel-save');await self.settle(app,pilot,4)
+            row=app.channel_store.load().channels()[0]
+            self.assertEqual((row['name'],row['shows']),('New Block',[title]))
+        self.run_app(fn)
+
+    def test_channel_reorder_delete_undo_and_comments(self):
+        self.seed_channels()
+        async def fn(app,pilot):
+            await pilot.press('8');await pilot.pause()
+            await pilot.press('l');await pilot.pause()
+            app.query_one('#ch-items').move_cursor(row=1)
+            await pilot.press('alt+up');await self.settle(app,pilot,3)
+            self.assertEqual(app.channel_store.load().channels()[0]['shows'],['Two','One'])
+            await pilot.press('h','v','b');await self.settle(app,pilot,3)
+            row=app.channel_store.load().channels()[0]
+            self.assertEqual(row['order'],'alternate');self.assertFalse(row['bumpers'])
+            self.shot(app, 'channels')
+            await pilot.press('D');await pilot.pause()
+            await pilot.press('escape');self.assertEqual(len(app.channel_store.load().channels()),1)
+            await pilot.press('D');await pilot.pause()
+            app.screen.query_one('#del-name').value = 'Night Block'
+            await pilot.press('enter');await self.settle(app,pilot,3)
+            self.assertEqual(app.channel_store.load().channels(),[])
+            await pilot.press('ctrl+z');await self.settle(app,pilot,3)
+            self.assertEqual(app.channel_store.load().channels()[0]['name'],'Night Block')
+            self.assertIn('# order kept',app.channel_store.load().text)
+            self.assertEqual(self.st.deleted,[])
+        self.run_app(fn)
+
+    def test_channel_picker_from_movies_music_youtube_upcoming_and_search(self):
+        self.seed_channels()
+        async def fn(app,pilot):
+            url='https://www.youtube.com/playlist?list=test'
+            app.show_youtube([{'name':'Clips','url':url}])
+            app.show_found([{'kind':'movie','title':'Comet Drift'}],focus=False)
+            for tab, value in (('movies',None),('music',None),('youtube',url),('upcoming','Paper Moon Cafe'),
+                               ('add','Comet Drift')):
+                app.action_tab(tab);await pilot.pause()
+                if tab=='add': app.query_one('#add-list').focus()
+                await pilot.press('c');await pilot.pause()
+                self.assertIsInstance(app.screen,T.ChannelPicker,tab)
+                title=app.screen.title_
+                if value:self.assertEqual(title,value)
+                app.screen.query_one('#channel-pick').value='add:1'
+                await pilot.click('#channel-use');await self.settle(app,pilot,2)
+                rows=app.channel_store.load().channels()[0]
+                self.assertIn(title,rows['items'] if tab in ('movies','music','youtube','add') else rows['shows'])
+        self.run_app(fn)
+
+    def test_create_and_reorder_channels(self):
+        self.seed_channels()
+        async def fn(app,pilot):
+            await pilot.press('8','ctrl+n');await pilot.pause()
+            app.screen.query_one('#channel-name').value='Films'
+            app.screen.query_one('#channel-kind').value='library'
+            app.screen.query_one('#channel-source').value='Movies'
+            await pilot.click('#channel-save');await self.settle(app,pilot,3)
+            app.query_one('#ch-list').move_cursor(row=1)
+            await pilot.press('alt+up');await self.settle(app,pilot,3)
+            self.assertEqual(app.channel_store.load().channels()[0]['name'],'Films')
         self.run_app(fn)
 
     def test_every_tab_shows_its_data(self):

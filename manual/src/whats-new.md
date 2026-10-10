@@ -49,6 +49,9 @@ Run `bromigos update` to get them. The next release notes will include these hig
   Helm, Argo CD and Vault. See [Setting up a lab](lab.md#setting-up-a-lab) for Linux boxes,
   existing clusters and the current limits.
 
+- Den TV has its own app, and the media library has a Channels tab. Manage channel picks
+  from the terminal, CLI or VECTOR. The phone can read channels and change individual picks.
+
 ### Improved
 
 - The zsh prompt follows your theme. Choose mehshell, Starship or a plain prompt in

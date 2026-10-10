@@ -2708,6 +2708,11 @@ def parser():
     c.add_argument("which", choices=("tv", "movies"))
     c.add_argument("--past", type=int, default=7)
     c.add_argument("--future", type=int, default=90)
+    c = cmd("channel", "add or remove a library title from a den TV channel")
+    c.add_argument("action", choices=("add", "remove", "list"))
+    c.add_argument("title", nargs="?")
+    c.add_argument("--to", dest="channel", help="channel name or number")
+    c.add_argument("--kind", choices=("show", "movie", "music", "youtube"), default="show")
     return p
 
 
@@ -2719,6 +2724,15 @@ def main(argv=None):
         return 2
     js = getattr(a, "json", False)
     try:
+        if a.cmd == "channel":
+            from .tvchannels import channels
+            args = ["channels"] if a.action == "list" else ["channel", "add-item" if a.action == "add"
+                    else "remove-item", a.channel or "", a.title or ""]
+            if a.action == "add":
+                args += ["--kind", a.kind]
+            if js:
+                args += ["--json"]
+            return channels.main(args)
         return _main(a, js)
     except Ambiguous as e:
         if js:
