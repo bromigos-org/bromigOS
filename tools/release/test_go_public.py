@@ -88,7 +88,7 @@ class GoPublic(unittest.TestCase):
         os.makedirs(self.gnupg, mode=0o700)
         self.fpr = self.make_key()
         self.make_bucket()
-        self.gitbase = os.path.join(self.tmp, "remotes") + "/"
+        self.gitbase = "file://" + os.path.join(self.tmp, "remotes") + "/"
         self.make_remote("bromigos-org/bromigOS", "go-public",
                          {"install.sh": f"FPR={self.fpr}\nPUBLIC_REPO={R2DEV}   # public\n",
                           "README.md": f"curl -fsSLO {R2DEV}/bromigos/install.sh\n"})

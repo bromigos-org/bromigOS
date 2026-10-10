@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: tools
-        run: pacman -Syu --noconfirm --needed git git-cliff python python-yaml shellcheck >/dev/null
+        run: pacman -Syu --noconfirm --needed git git-cliff python python-yaml shellcheck jq >/dev/null
       - uses: actions/checkout@v5
       - name: tests
         run: |

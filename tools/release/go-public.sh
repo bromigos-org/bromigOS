@@ -66,7 +66,7 @@ umask 077
 export GNUPGHOME="$tmp/gnupg"
 mkdir -m 700 "$GNUPGHOME"
 
-for t in curl jq git gpg tar; do
+for t in curl jq git gpg tar sha256sum; do
   command -v "$t" >/dev/null || die "needs $t"
 done
 [[ -n $FPR ]] || die "can't read the key's fingerprint (FPR=) from install.sh"
@@ -205,7 +205,7 @@ if ((yes)); then
     sleep "${GO_PUBLIC_WAIT:-10}"
   done
   ((ok)) || die "$URL/$REPO/bromigos.asc still isn't readable; nothing else was changed. Undo: $0 --private${domain:+ --domain $domain} --yes"
-  cmp -s "$tmp/anon.asc" "$tmp/bromigos.asc" || die "the key anyone downloads differs from the mirror's"
+  [[ $(sha256sum <"$tmp/anon.asc") == "$(sha256sum <"$tmp/bromigos.asc")" ]] || die "the key anyone downloads differs from the mirror's"
   curl -fsS -o "$tmp/anon.sh" "$URL/$REPO/install.sh" || die "$URL/$REPO/install.sh isn't readable"
   for c in "${CHANNELS[@]}"; do
     name=${c%%:*} prefix=${c#*:}
