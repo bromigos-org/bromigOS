@@ -7,6 +7,7 @@ arch=('x86_64' 'aarch64')
 url='https://github.com/bromigos-org/mehshell'
 license=('MIT')
 depends=('zsh')
+conflicts=('mehshell-bin')
 makedepends=('go')
 options=('!debug')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
