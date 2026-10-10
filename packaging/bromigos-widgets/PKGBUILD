@@ -14,19 +14,13 @@ arch=('any')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 depends=('bromigos-core' 'python' 'python-gobject' 'gtk3' 'gtk-layer-shell' 'python-cairo'
-         'python-psutil' 'pango' 'hyprland')
-optdepends=('git: recent repos on WORKBENCH'
-            'zoxide: most-visited folders on WORKBENCH'
-            'nvidia-utils: GPU readings on NVIDIA'
-            'iputils: the latency radar'
-            'lua: SHORTCUTS from a Lua Hyprland config when Hyprland is not running'
-            'playerctl: NOW PLAYING reads and controls media players'
-            'cava: the visualizer on NOW PLAYING'
-            'pacman-contrib: checkupdates, for the pending updates on UPDATES'
-            'github-cli: the pull requests on VECTOR and CI & PRs, through your gh login'
-            'python-icalendar: CALENDAR reads your .ics calendars'
-            'python-dateutil: repeating events on CALENDAR'
-            'libsecret: keeps the sign-ins of account widgets (Twitch, GitHub, GitLab, Spotify) in your keyring')
+         'python-psutil' 'pango' 'hyprland'
+         # every built-in panel works out of the box: WORKBENCH, the latency radar, NOW PLAYING
+         # and its visualizer, UPDATES, CI & PRs, CALENDAR, and the account widgets' keyring
+         'git' 'zoxide' 'iputils' 'playerctl' 'cava' 'pacman-contrib' 'github-cli'
+         'python-icalendar' 'python-dateutil' 'libsecret')
+optdepends=('nvidia-utils: GPU readings on NVIDIA'
+            'lua: SHORTCUTS from a Lua Hyprland config when Hyprland is not running')
 makedepends=('git' 'python')
 checkdepends=('desktop-file-utils'
              # the tests draw every panel offscreen (tests/: cairo, Pango, psutil)

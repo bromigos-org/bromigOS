@@ -184,7 +184,7 @@ Replace `<id>` with the playlist's ID. The den TV reads the file when you save i
 
 - **Jellyfin or Plex** needs your server in [Your homelab](homelab.md), with a key: a
   Jellyfin API key or a Plex token. The MEDIA panel tells you if the key is missing.
-- **YouTube** needs `yt-dlp` (`sudo pacman -S yt-dlp`). A channel's address plays its
+- **YouTube:** a channel's address plays its
   videos. If it's live, a second channel follows it with the live stream.
 - **Keep YouTube videos.** Add `keep = "~/Videos/YouTube"` to a YouTube channel. Each
   video it plays is saved there, in the layout Plex and Jellyfin read, and plays offline
@@ -195,7 +195,7 @@ A playlist plays in order, and anything else shuffled, the same way all day. Add
 `order = "in order"` or `order = "shuffle"` to choose. Add `screens = ["wave"]` to put a
 channel on the scope, or `"emblem"` for the small monitor.
 
-The den TV needs `python-mpv` and `mpv` (`sudo pacman -S python-mpv mpv`). With the
+The den TV's player (mpv) and YouTube support (yt-dlp) come with bromigOS. With the
 background still or on a computer without a working graphics card, it shows posters
 instead.
 

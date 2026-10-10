@@ -520,7 +520,7 @@ also shows your last updates and the snapshots taken before and after each one.
 Checking syncs a throwaway copy of the package databases, so the panel checks at most
 every 3 hours while it's on screen, and again when packages change. It keeps the answer
 in `~/.cache/bromigos/widgets/updates.json`, so starting the panels again doesn't check
-again. It needs `pacman-contrib` for `checkupdates`.
+again. It uses `checkupdates` from `pacman-contrib`, which bromigos-widgets installs.
 
 ### VECTOR
 
@@ -648,8 +648,8 @@ or subscription address. vdirsyncer syncs a CalDAV account to folders of `.ics` 
 The panel fetches each address every 15 minutes while you can see it, and asks first
 whether anything changed. It keeps the last copy, so it still works offline. It reads
 files again when they change. Repeating events, time zones, all-day events and moved or
-cancelled meetings are handled. It needs `python-icalendar` and `python-dateutil`, and
-says so when they're missing.
+cancelled meetings are handled, with `python-icalendar` and `python-dateutil`, which
+bromigos-widgets installs.
 
 ### Now playing
 
@@ -661,7 +661,8 @@ visualizer when [cava](https://github.com/karlstav/cava) is installed.
 
 With several players open, it shows the one playing. Tall and large list every player;
 click one to show it. Covers from the web are downloaded once and kept in
-`~/.cache/bromigos/widgets/art/`. It needs `playerctl`.
+`~/.cache/bromigos/widgets/art/`. It reads players through `playerctl`, which
+bromigos-widgets installs.
 
 The visualizer runs cava only while something plays and the panel is on screen. It stops
 when the music pauses, when the panel is hidden, and when motion is reduced

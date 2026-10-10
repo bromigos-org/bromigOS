@@ -16,17 +16,12 @@ url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 depends=('bromigos-core' 'python' 'python-gobject' 'gtk3' 'gtk-layer-shell' 'librsvg'
          'python-cairo' 'python-opengl' 'python-numpy' 'python-pillow' 'python-psutil'
-         'ffmpeg' 'hyprland')
-optdepends=('pipewire-audio: sound cues (pw-play)'
-            'libnotify: notices from the supervisor'
-            'git: the Swarm deck and the timeline'
-            'github-cli: CI in the Swarm deck'
-            'nvidia-utils: GPU readings on NVIDIA'
-            'grim: the intercept freezes the screen it tears'
-            'iputils: latency readings'
-            'python-mpv: the den TV (libmpv draws your library on the den screens)'
-            'mpv: the den TV full screen with sound'
-            'yt-dlp: YouTube channels on the den TV')
+         'ffmpeg' 'hyprland'
+         # every built-in feature works out of the box: sound cues, notices, the Swarm deck,
+         # the intercept, latency, and the den TV (libmpv, mpv, yt-dlp and its JS runtime)
+         'pipewire-audio' 'libnotify' 'git' 'github-cli' 'grim' 'iputils'
+         'python-mpv' 'mpv' 'yt-dlp' 'deno')
+optdepends=('nvidia-utils: GPU readings on NVIDIA')
 makedepends=('git' 'python')
 # the tests check() runs: a pixbuf's rows at any width (tests/test_pixbuf.py)
 checkdepends=('python-numpy' 'python-gobject' 'gdk-pixbuf2' 'desktop-file-utils')
