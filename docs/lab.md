@@ -380,6 +380,13 @@ terminal. Without a terminal, both print the Requests card instead.
   search now, `o` and `O` open in Jellyfin and Seerr, `t` play (Jellyfin to mpv full
   screen, as the den TV opens a channel), `D` delete, `/` filter, `s` sort. Vim keys work
   beside the arrows, and every key, tab, row and button has a hint.
+- `Ctrl+C` and `q` have priority over inputs and modal screens. Quitting dismisses an
+  open confirmation with no result. Confirmed changes run synchronously to completion.
+- `Down`/`j` enters the active tab's first table from the tab bar. `Up`/`k` at row zero
+  returns to the tab bar. The tables share the lab's `HintTable` Vim bindings:
+  `j`/`k`, `g`/`G`, `Ctrl+D`/`Ctrl+U`, and `h`/`l` or arrows between panes.
+  `[`/`]` and `H`/`L` switch tabs even from an input. Switching tabs cancels an open dialog.
+  A key strip above the footer shows the navigation keys.
 - The lab console's `M` opens it, and returns to the console when it closes.
 
 The same changes are CLI verbs too: `library`, `monitor`, `profile`, `refresh` and `delete`.
@@ -400,7 +407,8 @@ name the title. His terminal can't run `delete` at all.
 **Tests.** `homelab/tests/test_lab_media.py` covers the profile picker, anime detection, the
 languages, seasons and episodes, and every command. `homelab/tests/test_media_tui.py` drives
 the TUI with Textual's pilot: every tab, the delete dialog (cancel, typing the name, `D`
-twice, a season), monitor, profile, open, search and request, and filter and sort. With
+twice, a season), quitting from every tab and modal, arrows and Vim keys between tabs
+and content, monitor, profile, open, search and request, and filter and sort. With
 `MEDIA_SCREENSHOTS=DIR` it writes each tab as an SVG; the manual's pictures come from those. It runs them against a fake stack
 (`homelab/tests/mediafake.py`): one local server that answers like Seerr, Sonarr, Radarr,
 Lidarr, Prowlarr, Bazarr, Jellyfin, Plex, qBittorrent, SABnzbd and slskd. It uses the apps'

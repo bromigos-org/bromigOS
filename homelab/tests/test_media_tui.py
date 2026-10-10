@@ -131,6 +131,7 @@ class TUI(Stack):
             async with app.run_test(size=size) as pilot:
                 await self.settle(app, pilot)
                 await fn(app, pilot)
+            self.assertFalse(app.is_running)
         self.opened = []
         asyncio.run(go())
 
@@ -146,6 +147,103 @@ class TUI(Stack):
             os.makedirs(d, exist_ok=True)
             with open(os.path.join(d, f"media-{name}.svg"), "w") as f:
                 f.write(app.export_screenshot(title=f"bromigos media · {name}"))
+
+    def test_quit_from_every_tab_and_input(self):
+        for key in ("ctrl+c", "q"):
+            for tid in T.MediaApp.TABS:
+                with self.subTest(key=key, tab=tid):
+                    async def fn(app, pilot):
+                        if tid in app.shown:
+                            app.action_filter()
+                        elif tid == "add":
+                            app.query_one("#add-q").focus()
+                        await pilot.press(key)
+                        self.assertTrue(app._exit)
+                        self.assertEqual(self.st.deleted, [])
+                    self.run_app(fn, start=tid)
+
+    def test_quit_cancels_modals_without_deleting(self):
+        for key in ("ctrl+c", "q"):
+            for dialog in ("delete", "profile", "request"):
+                with self.subTest(key=key, dialog=dialog):
+                    async def fn(app, pilot):
+                        if dialog == "delete":
+                            app.action_delete()
+                        elif dialog == "profile":
+                            app.action_profile()
+                        else:
+                            app.push_screen(T.Request(app.src, {"kind": "tv", "title": "Test show"}))
+                        await pilot.pause()
+                        if dialog == "delete":
+                            app.screen.query_one("#del-name").value = app.screen.plan["title"]
+                            app.screen.armed = True
+                        await pilot.press(key)
+                        self.assertTrue(app._exit)
+                        self.assertEqual(self.st.deleted, [])
+                        self.assertEqual(self.st.deleted_files, [])
+                    self.run_app(fn)
+
+    def test_switching_tabs_cancels_delete_confirmation(self):
+        async def fn(app, pilot):
+            await pilot.press("D")
+            await pilot.pause()
+            app.screen.query_one("#del-name").value = app.screen.plan["title"]
+            await pilot.press("right_square_bracket")
+            await pilot.pause()
+            self.assertNotIsInstance(app.screen, T.Confirm)
+            self.assertEqual(app.query_one("#tabs").active, "movies")
+            self.assertEqual(self.st.deleted, [])
+        self.run_app(fn)
+
+    def test_tabs_to_content_and_back_on_every_tab(self):
+        async def fn(app, pilot):
+            for tid in app.TABS:
+                for down, up in (("down", "up"), ("j", "k")):
+                    with self.subTest(tab=tid, down=down):
+                        app.action_tab(tid)
+                        await pilot.pause()
+                        bar = app.query_one("#tabs Tabs", T.Tabs)
+                        bar.focus()
+                        await pilot.press(down)
+                        self.assertIsInstance(app.focused, T.MediaTable)
+                        table = app.focused
+                        table.move_cursor(row=0)
+                        await pilot.press(up)
+                        self.assertIs(app.focused, bar)
+                        self.assertEqual(app.query_one("#tabs").active, tid)
+        self.run_app(fn)
+
+    def test_table_motion_panes_and_global_tabs(self):
+        async def fn(app, pilot):
+            table = app.query_one("#tv-list")
+            table.focus()
+            await pilot.press("g", "j")
+            self.assertEqual(table.cursor_row, 1)
+            await pilot.press("k")
+            self.assertEqual(table.cursor_row, 0)
+            await pilot.press("G")
+            self.assertEqual(table.cursor_row, table.row_count - 1)
+            await pilot.press("g", "ctrl+d", "ctrl+u")
+            self.assertIs(app.focused, table)
+            for right, left in (("right", "left"), ("l", "h")):
+                await pilot.press(right)
+                self.assertIs(app.focused, app.query_one("#tv-sub"))
+                await pilot.press(left)
+                self.assertIs(app.focused, table)
+            await pilot.press("slash")
+            await pilot.pause()
+            await pilot.press("right_square_bracket")
+            await pilot.pause()
+            self.assertEqual(app.query_one("#tabs").active, "movies")
+            await pilot.press("H")
+            await pilot.pause()
+            self.assertEqual(app.query_one("#tabs").active, "tv")
+            await pilot.press("L")
+            await pilot.pause()
+            await pilot.press("left_square_bracket")
+            await pilot.pause()
+            self.assertEqual(app.query_one("#tabs").active, "tv")
+        self.run_app(fn)
 
     def test_every_tab_shows_its_data(self):
         async def fn(app, pilot):

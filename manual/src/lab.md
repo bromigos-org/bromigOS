@@ -340,6 +340,15 @@ then press a key:
 
 | Key | Does |
 |---|---|
+| `Ctrl+C`, `q` | Quit from any tab, input or dialog. Cancel an unconfirmed delete |
+| `Down`, `j` on the tab bar | Focus the active tab's first table |
+| `Up`, `k` at a table's first row | Return to the tab bar |
+| `Up`, `Down`, `j`, `k` | Move through rows |
+| `g`, `G` | First or last row |
+| `Ctrl+D`, `Ctrl+U` | Page down or up |
+| `Enter` | Open the selected item |
+| `Left`, `Right`, `h`, `l` | Switch between the title list and its side table |
+| `[`, `]`, `H`, `L` | Previous or next tab, including while typing. Cancel an open dialog |
 | `m` | Monitor it, or stop. On a season or an album, just that one |
 | `n` | Pick up new episodes and seasons, or stop |
 | `p` | Change its quality profile |

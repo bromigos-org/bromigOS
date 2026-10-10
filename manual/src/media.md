@@ -94,6 +94,9 @@ audio. **Plan** shows what would happen. **Request** confirms it.
 The **TV**, **Movies** and **Music** tabs show what you have. Use arrows or `j`, `k`, `h`
 and `l` to move. Pick a show to see its seasons, or an artist to see its albums. Press `p`
 to change its profile, `m` to change monitoring, or `f` to search now.
+From the top tabs, press `Down` or `j` to enter the table. At its first row,
+`Up` or `k` takes you back. Press `Ctrl+C` or `q` to quit, even while typing or in a
+dialog. An unconfirmed delete is cancelled.
 See the [library's keys](lab.md#your-media-library) for the full list.
 
 ### Ask VECTOR

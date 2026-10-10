@@ -22,7 +22,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import (Button, Checkbox, Footer, Input, Label, RichLog, Select, Static, TabbedContent,
-                             TabPane)
+                             TabPane, Tabs)
 
 from . import mediareq as M
 from .tui import HintTable, bromigos_theme
@@ -111,6 +111,25 @@ class Live:
         return M.play(self.lab, rec)
 
 
+class MediaInput(Input):
+    """Leave global quit and tab keys available while entering text."""
+
+    def check_consume_key(self, key, character):
+        if key in ("q", "H", "L", "left_square_bracket", "right_square_bracket"):
+            return False
+        return super().check_consume_key(key, character)
+
+
+class MediaTable(HintTable):
+    """Keep the lab's shared Vim bindings; Up at the first row returns to tabs."""
+
+    def action_cursor_up(self):
+        if self.cursor_row == 0:
+            self.app.query_one("#tabs Tabs", Tabs).focus()
+        else:
+            super().action_cursor_up()
+
+
 # ------------------------------------------------------------------ dialogs
 class Confirm(ModalScreen):
     """Delete, in two steps: what goes and the space it frees; then type the title, or press D
@@ -130,7 +149,7 @@ class Confirm(ModalScreen):
             yield Static(f"It frees {M.human(p['size'])}. The files go from the disk; Jellyfin and Plex rescan."
                          + ("" if p["scope"] != "season" else " The season stops being monitored, so it isn't "
                             "fetched again."), classes="dim")
-            i = Input(placeholder=f"Type {p['title']} to delete it", id="del-name")
+            i = MediaInput(placeholder=f"Type {p['title']} to delete it", id="del-name")
             i.tooltip = "Type the title exactly (any case), then Enter; or press D again"
             yield i
             c = Checkbox("Don't fetch it again (an import exclusion)", id="del-exclude",
@@ -219,7 +238,7 @@ class Request(ModalScreen):
                            value="all", id="req-seasons", allow_blank=False)
                 s.tooltip = "What to fetch now"
                 yield s
-                i = Input(placeholder="or seasons: 1,3 or 2-4 · or episodes: S02E05,S03E01", id="req-pick")
+                i = MediaInput(placeholder="or seasons: 1,3 or 2-4 · or episodes: S02E05,S03E01", id="req-pick")
                 i.tooltip = "Some seasons (1,3 or 2-4) or episodes (S02E05,S03E01); leave empty for the choice above"
                 yield i
                 c = Checkbox("Keep up with new episodes", value=True, id="req-new")
@@ -297,6 +316,7 @@ class MediaApp(App):
     .filter { display: none; }
     .filter.-on { display: block; }
     HintTable { height: 1fr; }
+    #nav { height: 2; color: $text-muted; }
     #hint { height: 2; padding: 0 1; color: $text-muted; border-top: solid $panel; }
     .title { text-style: bold; color: $primary; }
     .dim { color: $text-muted; }
@@ -308,7 +328,8 @@ class MediaApp(App):
     Select, Input, Checkbox { margin: 1 0 0 0; }
     """
     BINDINGS = [
-        Binding("q", "quit", "Quit", tooltip="Leave"),
+        Binding("ctrl+c,q", "leave", "Quit", priority=True, tooltip="Cancel any open form and leave"),
+        Binding("down,j", "content", "Content", priority=True),
         Binding("r", "refresh", "Refresh", tooltip="Read the library again"),
         Binding("1", "tab('tv')", "TV", show=False, tooltip="Shows in Sonarr"),
         Binding("2", "tab('movies')", "Movies", show=False, tooltip="Films in Radarr"),
@@ -328,8 +349,8 @@ class MediaApp(App):
         Binding("t", "play", "Play", tooltip="Play it full screen (a show: its next unwatched episode), from Jellyfin"),
         Binding("e", "episodes", "Episodes", show=False, tooltip="Show the season's episode files (TV)"),
         Binding("D", "delete", "Delete", tooltip="Delete the title, season, album or file under the cursor (asks twice)"),
-        Binding("],L", "tab_step(1)", "Next tab", show=False),
-        Binding("[,H", "tab_step(-1)", "Previous tab", show=False),
+        Binding("],L", "tab_step(1)", "Next tab", priority=True),
+        Binding("[,H", "tab_step(-1)", "Previous tab", priority=True),
     ]
     TABS = ("tv", "movies", "music", "youtube", "downloads", "upcoming", "add")
     KIND = {"tv": "tv", "movies": "movies", "music": "music"}
@@ -355,34 +376,36 @@ class MediaApp(App):
                 with TabPane(name, id=tid):
                     with Horizontal():
                         with Vertical(classes="list"):
-                            f = Input(placeholder="filter: type part of a title, Enter to keep, Escape to clear",
+                            f = MediaInput(placeholder="filter: type part of a title, Enter to keep, Escape to clear",
                                       id=f"{tid}-filter", classes="filter")
                             f.tooltip = "Only titles containing this"
                             yield f
-                            yield HintTable(id=f"{tid}-list", cursor_type="row", zebra_stripes=True)
+                            yield MediaTable(id=f"{tid}-list", cursor_type="row", zebra_stripes=True)
                         with Vertical(classes="side"):
                             yield Static("", id=f"{tid}-detail", classes="detail")
-                            yield HintTable(id=f"{tid}-sub", cursor_type="row", zebra_stripes=True)
+                            yield MediaTable(id=f"{tid}-sub", cursor_type="row", zebra_stripes=True)
             with TabPane("YOUTUBE", id="youtube"):
-                yield HintTable(id="yt-list", cursor_type="row", zebra_stripes=True)
+                yield MediaTable(id="yt-list", cursor_type="row", zebra_stripes=True)
             with TabPane("DOWNLOADS", id="downloads"):
                 with Vertical():
                     yield Static("", id="dl-sum", classes="dim")
-                    yield HintTable(id="dl-list", cursor_type="row", zebra_stripes=True)
+                    yield MediaTable(id="dl-list", cursor_type="row", zebra_stripes=True)
             with TabPane("UPCOMING", id="upcoming"):
-                yield HintTable(id="up-list", cursor_type="row", zebra_stripes=True)
+                yield MediaTable(id="up-list", cursor_type="row", zebra_stripes=True)
             with TabPane("ADD", id="add"):
                 with Vertical():
                     with Horizontal(classes="detail"):
-                        i = Input(placeholder="a film, show, anime, artist or album, or a YouTube link", id="add-q")
+                        i = MediaInput(placeholder="a film, show, anime, artist or album, or a YouTube link", id="add-q")
                         i.tooltip = "What to look for; Enter searches"
                         yield i
                         s = Select([("Films and TV", ""), ("Films", "movie"), ("TV", "tv"), ("Anime", "anime"),
                                     ("Music", "music")], value="", id="add-kind", allow_blank=False)
                         s.tooltip = "Narrow the search"
                         yield s
-                    yield HintTable(id="add-list", cursor_type="row", zebra_stripes=True)
+                    yield MediaTable(id="add-list", cursor_type="row", zebra_stripes=True)
         yield Static("", id="hint")
+        yield Static("↑/↓ j/k move · g/G first/last · Ctrl+D/U page · Enter open · ←/→ h/l panes\n"
+                     "↓/j tabs → list · ↑/k first row → tabs · [/] H/L tabs · Ctrl+C/q quit", id="nav", markup=False)
         yield Footer()
 
     def on_mount(self):
@@ -823,16 +846,42 @@ class MediaApp(App):
             self.show_library(kind, self.recs[kind])
             self.notify(f"Sorted by {self.sort[kind]}")
 
+    def check_action(self, action, parameters):
+        if action == "content":
+            return isinstance(self.focused, Tabs) and not isinstance(self.screen, ModalScreen)
+        return True
+
+    def action_leave(self):
+        # No affirmative modal result reaches its callback. A confirmed delete runs
+        # synchronously, so quitting cannot interrupt its multi-step operation.
+        if isinstance(self.screen, ModalScreen):
+            self.screen.dismiss(None)
+        self.exit()
+
+    def action_content(self):
+        tid = self.query_one("#tabs", TabbedContent).active
+        target = {"youtube": "yt-list", "downloads": "dl-list", "upcoming": "up-list",
+                  "add": "add-list"}.get(tid, f"{tid}-list")
+        self.query_one(f"#{target}", HintTable).focus()
+
     def action_tab(self, tid):
+        self.set_focus(None)
         self.query_one("#tabs", TabbedContent).active = tid
-        target = {"youtube": "#yt-list", "downloads": "#dl-list", "upcoming": "#up-list", "add": "#add-q"}.get(
-            tid, f"#{tid}-list")
-        try:
-            self.query_one(target).focus()
-        except Exception:
-            pass
+        self.call_after_refresh(self._focus_tab, tid)
+
+    def _focus_tab(self, tid):
+        if self.query_one("#tabs", TabbedContent).active != tid:
+            return
+        if tid == "add":
+            self.query_one("#add-q", Input).focus()
+        else:
+            self.action_content()
 
     def action_tab_step(self, step):
+        if isinstance(self.screen, ModalScreen):
+            self.screen.dismiss(None)
+            self.call_after_refresh(self.action_tab_step, step)
+            return
         cur = self.query_one("#tabs", TabbedContent).active
         self.action_tab(self.TABS[(self.TABS.index(cur) + step) % len(self.TABS)])
 
