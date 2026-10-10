@@ -10,13 +10,18 @@ on:
   pull_request:
     paths: ["tools/release/**", ".github/workflows/release*.yml", "packaging/ci/publish.sh"]
   workflow_dispatch:
+    inputs:
+      hosted:
+        description: "Run on GitHub's hosted runner, as once the repositories are public (docs/public.md)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   test:
-    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name != 'pull_request' && !inputs.hosted && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
     container: archlinux:base
     timeout-minutes: 10
     steps:

@@ -13,13 +13,18 @@ on:
   pull_request:
     paths: ["iso/**", "settings/plymouth/**", "settings/grub/**", ".github/workflows/iso-check.yml"]
   workflow_dispatch:
+    inputs:
+      hosted:
+        description: "Run on GitHub's hosted runner, as once the repositories are public (docs/public.md)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   check:
-    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name != 'pull_request' && !inputs.hosted && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
     container: archlinux:base
     timeout-minutes: 20
     steps:
@@ -109,7 +114,7 @@ jobs:
         env:
           # the lab's repository only off pull requests: GitHub's runners can't reach it, and
           # a pull request's job never gets a secret
-          ISO_REPO: ${{ github.event_name != 'pull_request' && vars.ISO_REPO_URL || '' }}
+          ISO_REPO: ${{ github.event_name != 'pull_request' && !inputs.hosted && vars.ISO_REPO_URL || '' }}
           ISO_REPO_CA: ${{ github.event_name != 'pull_request' && secrets.ISO_REPO_CA || '' }}
         run: |
           set -e

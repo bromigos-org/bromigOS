@@ -12,6 +12,10 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      hosted:
+        description: "Run on GitHub's hosted runner, as once the repositories are public (docs/public.md)"
+        type: boolean
+        default: false
       tag:
         description: "The release, as its release commit names it (e.g. v0.1.2-rc1)"
         type: string
@@ -40,10 +44,11 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/v') &&
        github.event.pull_request.head.repo.full_name == github.repository)
-    # It reads the channel's database from the packages' bucket, so a homelab runner, but not
-    # the packages one: Cut waits for packages.yml's tag runs, which need that runner, and
-    # holding it would deadlock (2026-10-09: v0.1.2-rc1 waited 2 h on itself).
-    runs-on: ${{ vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    # It reads the channel's database from the packages' bucket: the private one from a
+    # homelab runner, but not the packages one: Cut waits for packages.yml's tag runs, which
+    # need that runner, and holding it would deadlock (2026-10-09: v0.1.2-rc1 waited 2 h on
+    # itself). On GitHub's runner, the public bucket (PKGS_PRIMARY below).
+    runs-on: ${{ !inputs.hosted && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
     container: archlinux:base
     timeout-minutes: 180
     env:
@@ -84,6 +89,13 @@ jobs:
           PKGS_S3_BUCKET: ${{ secrets.PKGS_S3_BUCKET }}
           PKGS_S3_ACCESS_KEY_ID: ${{ secrets.PKGS_S3_ACCESS_KEY_ID }}
           PKGS_S3_SECRET_ACCESS_KEY: ${{ secrets.PKGS_S3_SECRET_ACCESS_KEY }}
+          # the checksums are read from the bucket packages.yml treats as the primary: the
+          # public one wherever this job can't reach the private one (packaging/ci/publish.sh)
+          PKGS_PRIMARY: ${{ !inputs.hosted && vars.CI_RUNNER_SMOKE && vars.CI_RUNNER_PACKAGES && 's3' || 'public' }}
+          PKGS_PUBLIC_ENDPOINT: ${{ secrets.PKGS_PUBLIC_ENDPOINT }}
+          PKGS_PUBLIC_BUCKET: ${{ secrets.PKGS_PUBLIC_BUCKET }}
+          PKGS_PUBLIC_ACCESS_KEY_ID: ${{ secrets.PKGS_PUBLIC_ACCESS_KEY_ID }}
+          PKGS_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.PKGS_PUBLIC_SECRET_ACCESS_KEY }}
           PKGS_GPG_PRIVATE_KEY: ${{ secrets.PKGS_GPG_PRIVATE_KEY }}
           PKGS_GPG_PASSPHRASE: ${{ secrets.PKGS_GPG_PASSPHRASE }}
         run: |

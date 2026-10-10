@@ -10,6 +10,10 @@ name: release-prepare
 on:
   workflow_dispatch:
     inputs:
+      hosted:
+        description: "Run on GitHub's hosted runner, as once the repositories are public (docs/public.md)"
+        type: boolean
+        default: false
       version:
         description: "patch, minor, major (from the last stable release), or an exact X.Y.Z"
         type: string
@@ -21,6 +25,10 @@ on:
         default: rc
       dry_run:
         description: "Dry run: draft PRs on release-dryrun/ branches that nothing tags"
+        type: boolean
+        default: true
+      prs:
+        description: "Push the branches and open the PRs (off: the notes only, in the run's summary)"
         type: boolean
         default: true
 
@@ -37,14 +45,18 @@ permissions:
 jobs:
   prepare:
     name: Notes, changelog, version, the release PRs
-    # light work and the homelab's model (its address is the variable LITELLM_BASE_URL)
-    runs-on: ${{ vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    # light work and the homelab's model, at the secret LITELLM_BASE_URL: its in-cluster
+    # address from the homelab's runners, its public one (key-authenticated; streamed, so
+    # Cloudflare's 100 s limit never applies) from GitHub's (tools/release/go-public.sh --ci).
+    # A secret, not a variable: a variable's value is printed in the log, which is public
+    # once the repository is. (The variable still works, for a fork.)
+    runs-on: ${{ !inputs.hosted && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
     container: archlinux:base
     timeout-minutes: 90
     env:
       DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
       HAVE_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' && '1' || '' }}
-      HAVE_MODEL: ${{ secrets.LITELLM_API_KEY != '' && vars.LITELLM_BASE_URL != '' && '1' || '' }}
+      HAVE_MODEL: ${{ secrets.LITELLM_API_KEY != '' && (secrets.LITELLM_BASE_URL != '' || vars.LITELLM_BASE_URL != '') && '1' || '' }}
       HAVE_PATTERNS: ${{ secrets.PRIVACY_PATTERNS != '' && '1' || '' }}
     steps:
       - name: tools
@@ -72,7 +84,7 @@ jobs:
         run: |
           missing=()
           [[ $HAVE_RELEASE_TOKEN ]] || missing+=("secret RELEASE_TOKEN: VECTOR's repository, the release branches and PRs")
-          [[ $HAVE_MODEL ]] || missing+=("secret LITELLM_API_KEY and variable LITELLM_BASE_URL: the model that drafts the notes")
+          [[ $HAVE_MODEL ]] || missing+=("secrets LITELLM_API_KEY and LITELLM_BASE_URL: the model that drafts the notes")
           [[ $HAVE_PATTERNS ]] || missing+=("secret PRIVACY_PATTERNS: the lab's own names, for the privacy check")
           for m in "${missing[@]}"; do
             if [[ $DRY_RUN ]]; then echo "::warning::dry run without the $m (docs/release.md, \"What CI needs\")"
@@ -87,16 +99,18 @@ jobs:
           KIND: ${{ inputs.kind }}
           GH_TOKEN: ${{ github.token }}
           VECTOR_GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          LITELLM_BASE_URL: ${{ vars.LITELLM_BASE_URL }}
+          LITELLM_BASE_URL: ${{ secrets.LITELLM_BASE_URL || vars.LITELLM_BASE_URL }}
           LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
           PRIVACY_PATTERNS: ${{ secrets.PRIVACY_PATTERNS }}
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          PRS: ${{ inputs.prs && '1' || '' }}
         run: |
           git config --global --add safe.directory '*'
           git config --global user.name "bromigOS release"
           git config --global user.email "packages@bromigos.org"
+          [[ $HAVE_RELEASE_TOKEN ]] && export VECTOR_DIR=.release/vector
           # the PRs are opened with RELEASE_TOKEN (Actions may not open them here)
-          [[ $HAVE_RELEASE_TOKEN ]] && export PUSH=1 GH_TOKEN=$RELEASE_TOKEN VECTOR_DIR=.release/vector
+          [[ $HAVE_RELEASE_TOKEN && $PRS ]] && export PUSH=1 GH_TOKEN=$RELEASE_TOKEN
           OUT=$RUNNER_TEMP/out tools/release/prepare.sh
 
       - name: Summary

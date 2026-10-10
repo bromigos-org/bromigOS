@@ -252,11 +252,15 @@ Besides what packages.yml already has (packaging/README.md, "What CI needs"):
 |---|---|---|
 | `RELEASE_TOKEN` | secret | a fine-grained token for bromigos-org/bromigOS and bromigos-org/vector: Contents, Pull requests and Actions read and write. It pushes the release branches and tags (a tag pushed with a workflow's own token starts no workflow, so packages.yml wouldn't run) and opens the PRs (the repositories don't let Actions open them) |
 | `LITELLM_API_KEY` | secret | a LiteLLM key that may use the `qwen3.8-flash-next` model |
-| `LITELLM_BASE_URL` | variable | the LiteLLM address the runners reach |
+| `LITELLM_BASE_URL` | secret | the LiteLLM address the runners reach: the in-cluster one from the homelab's runners, the public one from GitHub's. A secret, because a variable's value is printed in the run's log, which anyone can read once the repository is public. A variable of the same name still works, for a fork |
 | `PRIVACY_PATTERNS` | secret | the lab's own names, one regular expression per line: the dotfiles' list, plus anything else the notes must never say |
 
 The release runs on the homelab runners (`CI_RUNNER_SMOKE` for preparing, `CI_RUNNER_PACKAGES`
-for tagging and checksums, which reads the packages' bucket).
+for tagging and checksums, which reads the packages' bucket). Without those variables it runs
+on GitHub's runners. The checksums then come from the R2 bucket, and the notes from the
+model's public address. Every release workflow takes a `hosted` input to try that, and
+release-prepare a `prs` input: off, a dry run puts the notes in the run's summary and opens
+no PRs.
 
 ## Files
 

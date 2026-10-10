@@ -11,6 +11,15 @@ on:
   pull_request:
     paths: ["manual/**", ".github/workflows/manual.yml"]
   workflow_dispatch:
+    inputs:
+      hosted:
+        description: "Run on GitHub's hosted runner, as once the repositories are public (docs/public.md)"
+        type: boolean
+        default: false
+      prefix:
+        description: "A test: publish under this folder of the bucket (e.g. ci-test)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -18,7 +27,7 @@ permissions:
 jobs:
   manual:
     name: Build and publish
-    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_PACKAGES || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name != 'pull_request' && !inputs.hosted && vars.CI_RUNNER_PACKAGES || 'ubuntu-latest' }}
     container:
       image: archlinux:base-devel
     timeout-minutes: 15
@@ -39,4 +48,7 @@ jobs:
           PKGS_PUBLIC_BUCKET: ${{ secrets.PKGS_PUBLIC_BUCKET }}
           PKGS_PUBLIC_ACCESS_KEY_ID: ${{ secrets.PKGS_PUBLIC_ACCESS_KEY_ID }}
           PKGS_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.PKGS_PUBLIC_SECRET_ACCESS_KEY }}
+          # as packages.yml: the private bucket only where the job can reach it
+          PKGS_PRIMARY: ${{ !inputs.hosted && vars.CI_RUNNER_PACKAGES && 's3' || 'public' }}
+          PKGS_ROOT: ${{ inputs.prefix }}
         run: manual/publish.sh

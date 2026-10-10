@@ -40,6 +40,11 @@ on:
       - "tools/docs/**"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
+    inputs:
+      hosted:
+        description: "Run on GitHub's hosted runner, as once the repositories are public (docs/public.md)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -50,10 +55,10 @@ jobs:
     # A cargo build: the package builder (the small runners' container jobs get 512 MiB),
     # with a cargo cache of its own on the node, so after the first run only what changed
     # compiles.
-    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_PACKAGES || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name != 'pull_request' && !inputs.hosted && vars.CI_RUNNER_PACKAGES || 'ubuntu-latest' }}
     container:
       image: archlinux:base-devel
-      volumes: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_PACKAGES && fromJSON('["/ci-cache:/ci-cache"]') || fromJSON('[]') }}
+      volumes: ${{ github.event_name != 'pull_request' && !inputs.hosted && vars.CI_RUNNER_PACKAGES && fromJSON('["/ci-cache:/ci-cache"]') || fromJSON('[]') }}
     timeout-minutes: 30
     steps:
       - name: tools
@@ -90,7 +95,7 @@ jobs:
   docs:
     name: Keys and packages, manual, links
     # light: the small amd64 runners when the variable names them
-    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name != 'pull_request' && !inputs.hosted && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
     container: archlinux:base
     timeout-minutes: 15
     steps:

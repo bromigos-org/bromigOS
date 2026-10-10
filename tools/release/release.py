@@ -239,7 +239,10 @@ def chat(messages):
             "response_format": {"type": "json_schema",
                                 "json_schema": {"name": "release_notes", "schema": SCHEMA, "strict": True}}}
     req = urllib.request.Request(base.rstrip("/") + "/v1/chat/completions", data=json.dumps(body).encode(),
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+                                 # a User-Agent of our own: Cloudflare, in front of the model's public
+                                 # address, refuses urllib's (error 1010)
+                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                                          "User-Agent": "bromigOS-release (+https://github.com/bromigos-org/bromigOS)"})
     last = None
     for attempt in range(3):
         try:

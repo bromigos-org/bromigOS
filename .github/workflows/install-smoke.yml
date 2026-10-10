@@ -14,6 +14,11 @@ on:
   pull_request:
     paths: ["install.sh", "test/vm/**", "packaging/keys/**", ".github/workflows/install-smoke.yml"]
   workflow_dispatch:
+    inputs:
+      hosted:
+        description: "Run on GitHub's hosted runner, as once the repositories are public (docs/public.md)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,7 +27,7 @@ jobs:
   smoke:
     # A small job: the light amd64 runners (homelab-amd64, two at a time) when the variable
     # names them, never the single package builder.
-    runs-on: ${{ github.event_name != 'pull_request' && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name != 'pull_request' && !inputs.hosted && vars.CI_RUNNER_SMOKE || 'ubuntu-latest' }}
     container: archlinux:base
     timeout-minutes: 15
     steps:

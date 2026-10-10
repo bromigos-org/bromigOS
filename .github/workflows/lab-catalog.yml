@@ -22,6 +22,10 @@ on:
     - cron: "17 13 * * 1"          # Mondays 13:17 UTC (06:17 Pacific)
   workflow_dispatch:
     inputs:
+      hosted:
+        description: "Run on GitHub's hosted runner, as once the repositories are public (docs/public.md)"
+        type: boolean
+        default: false
       since:
         description: "How far back new models count (days)"
         default: "60"
@@ -43,7 +47,7 @@ permissions:
 jobs:
   refresh:
     name: Refresh the lab model catalog
-    runs-on: ${{ vars.CI_RUNNER_PACKAGES || 'ubuntu-latest' }}
+    runs-on: ${{ !inputs.hosted && vars.CI_RUNNER_PACKAGES || 'ubuntu-latest' }}
     container:
       image: archlinux:base
     timeout-minutes: 45
