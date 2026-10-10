@@ -174,7 +174,9 @@ for r in "$OS_REPO:$OS_BRANCH" "$SITE_REPO:$SITE_BRANCH"; do
   ahead=$(git -C "$dir" rev-list --count "origin/main..origin/$branch")
   git -C "$dir" merge-tree --write-tree origin/main "origin/$branch" >/dev/null \
     || die "$repo's $branch conflicts with main: rebase it first (docs/public.md)"
-  git -C "$dir" diff "origin/main...origin/$branch" | grep -qF "$R2DEV_URL" \
+  # Captured, not piped into grep -q: grep would stop at the first match, and pipefail
+  # would count git's SIGPIPE as a failure.
+  [[ $(git -C "$dir" diff "origin/main...origin/$branch") == *"$R2DEV_URL"* ]] \
     || die "$repo's $branch doesn't mention $R2DEV_URL, the bucket's address (docs/public.md)"
   say "  $repo: $branch is $ahead commit(s) on main's history, and merges cleanly"
 done

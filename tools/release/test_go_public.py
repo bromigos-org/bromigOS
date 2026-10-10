@@ -91,7 +91,9 @@ class GoPublic(unittest.TestCase):
         self.gitbase = "file://" + os.path.join(self.tmp, "remotes") + "/"
         self.make_remote("bromigos-org/bromigOS", "go-public",
                          {"install.sh": f"FPR={self.fpr}\nPUBLIC_REPO={R2DEV}   # public\n",
-                          "README.md": f"curl -fsSLO {R2DEV}/bromigos/install.sh\n"})
+                          "README.md": f"curl -fsSLO {R2DEV}/bromigos/install.sh\n",
+                          # a diff far bigger than a pipe's buffer, after the address
+                          "zz-big.md": "".join(f"line {i}\n" for i in range(50000))})
         self.make_remote("bromigos-org/bromigos.org", "os-get-public",
                          {"page.tsx": f"curl -fsSLO {R2DEV}/bromigos/install.sh\n"})
 
