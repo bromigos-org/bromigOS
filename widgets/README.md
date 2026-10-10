@@ -169,3 +169,8 @@ scene, none overlapping), and checks the launcher entries with `tools/launcher/c
 `desktop/tests/e2e_widgets_nested.py` drives edit mode in a nested Hyprland, with a
 virtual keyboard and pointer, on one output and then two. CI's `launcher.yml` runs the full
 launcher check.
+
+The MEDIA panel's **GUIDE** button opens the standalone **Den TV** app
+(`bromigos-tv-guide`), including while the live background is off. Its settings form
+opens that same app. [The media guide](../manual/src/media.md#make-channels-for-the-den-tv)
+explains channels and their shared controls.

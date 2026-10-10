@@ -40,6 +40,12 @@ class MediaRemote(unittest.TestCase):
                 self.panel.render(cairo.Context(surf), w, h)
                 surf.write_to_png(os.path.join(out, f"media-{name}.png"))
 
+    def test_guide_button_opens_the_standalone_app(self):
+        with mock.patch("subprocess.Popen") as start:
+            self.panel._guide()
+        self.assertEqual(start.call_args.args[0], ["bromigos-tv-guide"])
+        self.assertTrue(start.call_args.kwargs["start_new_session"])
+
     def test_a_click_chooses_the_screen_the_buttons_act_on(self):
         p = self.panel
         p.sel = "big"

@@ -553,7 +553,7 @@ class MediaPanel(Panel):
 
     def _guide(self):
         import subprocess
-        subprocess.Popen(["bromigos", "settings", "den-tv"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        subprocess.Popen(["bromigos-tv-guide"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          start_new_session=True)
 
     def _open(self):
