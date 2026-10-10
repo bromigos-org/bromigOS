@@ -72,6 +72,9 @@ class LabSource(threading.Thread):
 
 class LabPanel(Panel):
     name, title = "lab", "LAB"
+    description = "Your homelab at a glance: hosts, workloads, deployments, models and alerts"
+    category, reads = "homelab", "your homelab's sources"
+    min_size, max_size = (420, 400), (1200, 1200)
     height = 640
     interval = 1.0                       # redraw cadence for the freshness clock; data every 20 s
 

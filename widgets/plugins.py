@@ -258,9 +258,7 @@ def render(target, out, ticks=3, w=None, h=None, background=(0, 0.02, 0, 1)):
     import cairo
 
     import panels as P
-    core = {"system": P.SystemPanel, "network": P.NetworkPanel, "storage": P.StoragePanel,
-            "workbench": P.WorkbenchPanel, "shortcuts": P.ShortcutsPanel,
-                "weather": P.WeatherPanel, "connections": P.ConnectionsPanel}
+    core = P.CORE
     layout = {}
     if target.endswith(".py") or target in files():
         path = target if target.endswith(".py") else files()[target][0]

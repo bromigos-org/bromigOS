@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# bromigos:summary=The desktop panels: run them (login does), show or hide one or all, type in the notes
-# bromigos:args=[toggle NAME|all | show NAME|all | notes | reload]
+# bromigos:summary=The desktop panels: run them (login does), show or hide one or all, edit mode, type in the notes
+# bromigos:args=[toggle NAME|all | show NAME|all | add NAME | edit [on|done|cancel] | notes | reload | gallery [--previews DIR]]
 """Bromigos desktop widgets: SYSTEM, NETWORK, STORAGE, WORKBENCH, FIELD NOTES, SHORTCUTS (and LAB and the
 homelab's declared panels with bromigos-homelab: plugins).
 
@@ -12,6 +12,13 @@ monitor named in layout.json (above any background/live layer, below windows).
   bromigos-widgets toggle all      show/hide every panel
   bromigos-widgets show NAME|all   show one panel or every one (never hides; the app launcher's
                                    Desktop Panels entry), starting the panels if they aren't running
+  bromigos-widgets add NAME        show a panel in a free spot on the desktop, and save it there
+  bromigos-widgets edit [on|done|cancel]
+                                   edit mode: move, resize and switch the panels on the desktop
+                                   (no word: on, or done when it's on; starts the panels first)
+  bromigos-widgets gallery [--previews DIR]
+                                   every panel there is, as JSON (the widget gallery's list);
+                                   --previews draws each to DIR/<name>.png
   bromigos-widgets notes           focus FIELD NOTES for typing (Esc hands focus back; starts the
                                    panels first if they aren't running: the Field Notes entry)
   bromigos-widgets reload          re-read layout.json
@@ -50,7 +57,7 @@ def client(argv):
         s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         s.sendto(" ".join(argv).encode(), SOCK)
     except OSError:
-        if argv[0] not in ("show", "notes") or not start_daemon():
+        if argv[0] not in ("show", "notes", "edit", "add") or not start_daemon():
             sys.exit("bromigos-widgets is not running")
         s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         s.sendto(" ".join(argv).encode(), SOCK)
@@ -82,6 +89,10 @@ if len(sys.argv) > 2 and sys.argv[1] == "render":
     print(json.dumps(PL.render(args[0], args[1], ticks=ticks)))
     sys.exit(0)
 
+if len(sys.argv) > 1 and sys.argv[1] == "gallery":
+    import gallery
+    sys.exit(gallery.main(sys.argv[2:]))
+
 if len(sys.argv) > 1:
     if sys.argv[1] in ("-h", "--help", "help"):
         sys.exit(__doc__)
@@ -95,7 +106,9 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("GtkLayerShell", "0.1")
 from gi.repository import Gdk, GLib, Gtk, GtkLayerShell  # noqa: E402
 
+import arrange as A  # noqa: E402
 import draw as D  # noqa: E402
+import gallery as G  # noqa: E402
 import panels as P  # noqa: E402
 
 
@@ -260,9 +273,34 @@ def layer_window(monitor, x, y, w, h, keyboard=False):
     return win
 
 
-class PanelWindow:
-    def __init__(self, app, panel, monitor, x, y):
+class Surface:
+    """What edit mode needs of a panel's window: where it is, moving and sizing it, the
+    layer it's on."""
+    x = y = 0
+
+    def rect(self):
+        w, h = self.size_now()
+        return (self.x, self.y, w, h)
+
+    def rect_state(self):
+        x, y, w, h = self.rect()
+        return {"x": x, "y": y, "width": w, "height": h}
+
+    def place(self, x, y):
+        self.x, self.y = int(x), int(y)
+        self.pos = (self.x, self.y)
+        GtkLayerShell.set_margin(self.win, GtkLayerShell.Edge.LEFT, self.x)
+        GtkLayerShell.set_margin(self.win, GtkLayerShell.Edge.TOP, self.y)
+
+    def set_layer(self, top):
+        GtkLayerShell.set_layer(self.win, GtkLayerShell.Layer.TOP if top else GtkLayerShell.Layer.BOTTOM)
+
+
+class PanelWindow(Surface):
+    def __init__(self, app, panel, monitor, x, y, name=None):
         self.app, self.panel = app, panel
+        self.name = name or getattr(panel, "name", "panel")
+        self.x, self.y = int(x), int(y)
         self.win = layer_window(monitor, x, y, panel.width, panel.height)
         self.area = Gtk.DrawingArea()
         self.area.set_size_request(panel.width, panel.height)
@@ -290,7 +328,26 @@ class PanelWindow:
         tooltip.set_text(r[4] + ("" if r[5] or "Click" in r[4] else ""))
         return True
 
+    def size_now(self):
+        return (int(self.panel.width), int(self.panel.height))
+
+    def limits(self):
+        m = G.meta_of(self.panel)
+        return m["min_size"], m["max_size"]
+
+    def resize(self, w, h):
+        w, h = int(w), int(h)
+        inner = getattr(self.panel, "inner", self.panel)       # a plugin's SafePanel
+        inner.width, inner.height = w, h
+        self.area.set_size_request(w, h)
+        self.win.set_size_request(w, h)
+        self.win.resize(w, h)
+        self.redraw()
+
     def on_click(self, _w, ev):
+        if ev.button == 3:                     # a right-click: edit mode, this panel picked
+            self.app.edit("on", self.name)
+            return True
         r = self.panel.hit(ev.x, ev.y)
         if r and r[5]:
             r[5]()
@@ -323,13 +380,14 @@ class PanelWindow:
         self.area.queue_draw()
 
 
-class NotesWindow:
+class NotesWindow(Surface):
     """FIELD NOTES: a plain-text pad that autosaves to ~/.local/share/bromigos/notes.md."""
     name = "notes"
 
     def __init__(self, app, monitor, x, y, w, h):
         self.app = app
         self.w, self.h = w, h
+        self.x, self.y = int(x), int(y)
         self.win = layer_window(monitor, x, y, w, h, keyboard=True)
         overlay = Gtk.Overlay()
         self.header = Gtk.DrawingArea()
@@ -337,6 +395,8 @@ class NotesWindow:
         self.header.connect("draw", self.on_draw)
         self.header.set_has_tooltip(True)
         self.header.connect("query-tooltip", self.on_tip)
+        self.header.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+        self.header.connect("button-press-event", self.on_click)
         overlay.add(self.header)
         self.view = Gtk.TextView()
         self.view.get_style_context().add_class("notes")
@@ -361,6 +421,29 @@ class NotesWindow:
         self.view.connect("key-press-event", self.on_key)
         self.view.connect("focus-out-event", lambda *a: self.release())
         GLib.timeout_add_seconds(5, self.watch_file)
+
+    def size_now(self):
+        return (int(self.w), int(self.h))
+
+    def limits(self):
+        return G.NOTES["min_size"], G.NOTES["max_size"]
+
+    def resize(self, w, h):
+        self.w, self.h = int(w), int(h)
+        self.header.set_size_request(self.w, self.h)
+        self.win.set_size_request(self.w, self.h)
+        self.win.resize(self.w, self.h)
+        self.header.queue_draw()
+
+    def lines(self, limit=12):
+        s, e = self.buf.get_bounds()
+        return self.buf.get_text(s, e, True).splitlines()[-limit:]
+
+    def on_click(self, _w, ev):
+        if ev.button == 3:                     # a right-click on its frame: edit mode
+            self.app.edit("on", self.name)
+            return True
+        return False
 
     def load(self):
         try:
@@ -432,7 +515,8 @@ class NotesWindow:
         if y > 34:
             return False
         tooltip.set_text(f"Field notes: plain text saved to {NOTES} as you type. "
-                         "Alt+N focuses it, Esc hands focus back; Alt+Shift+N appends a quick note from anywhere.")
+                         "Alt+N focuses it, Esc hands focus back; Alt+Shift+N appends a quick note from anywhere. "
+                         "Right-click here to arrange the panels (edit mode).")
         return True
 
     def on_draw(self, _w, cr):
@@ -471,10 +555,9 @@ class App:
         Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), self.css,
                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         mon = gdk_monitor(self.monitor_name)
+        self.editor = None
         self.windows = {}
-        core = {"system": P.SystemPanel, "network": P.NetworkPanel, "storage": P.StoragePanel,
-                "workbench": P.WorkbenchPanel, "shortcuts": P.ShortcutsPanel,
-                "weather": P.WeatherPanel, "connections": P.ConnectionsPanel}
+        core = P.CORE
         for spec in self.cfg["panels"]:
             name = spec["name"]
             if name == "notes":
@@ -485,7 +568,7 @@ class App:
                 panel = core[name](spec)
                 panel.width = spec.get("width", panel.width)
                 panel.height = spec.get("height", panel.height)
-                win = PanelWindow(self, panel, mon, spec["x"], spec["y"])
+                win = PanelWindow(self, panel, mon, spec["x"], spec["y"], name)
             self.windows[name] = win
             if spec.get("visible", True):
                 win.win.show_all()
@@ -532,8 +615,7 @@ class App:
         m = next((x for x in mons if x["name"] == self.monitor_name), {"width": 2560, "height": 1440, "reserved": [0, 34, 0, 0]})
         rl, rt, rr, rb = (m.get("reserved") or [0, 0, 0, 0])[:4]
         W, H = m["width"] - rl - rr, m["height"] - rt - rb
-        avoid = [(W - 24 - 1180, H - 24 - 640, 1180, 640),       # VECTOR's console (bottom right)
-                 (W - 440, 0, 440, 320)]                            # notifications (top right)
+        avoid = self.avoid((W, H))
         old = places.get(name)
         if old and PL.free_spot(w, h, taken, (W, H), avoid) is not None:
             ox, oy = old
@@ -562,6 +644,8 @@ class App:
                 if name not in found:
                     PL.log(name, "removed; closing")
                     self._close_plugin(name)
+                    if self.editor:
+                        self.editor.changed(rebuild=True)
             for name, (path, mtime) in found.items():
                 if name in self.windows and name not in self.plugins:
                     continue                          # a core panel's name: never shadowed
@@ -583,13 +667,17 @@ class App:
                     spec.setdefault("height", panel.height)
                     x, y = self._place(name, spec)
                     safe = PL.SafePanel(name, panel, path)
-                    win = PanelWindow(self, safe, self.mon, x, y)
+                    win = PanelWindow(self, safe, self.mon, x, y, name)
                     win.pos = (x, y)
+                    if self.editor:
+                        win.set_layer(True)
                     win.win.connect("delete-event", self.on_surface_closed, name)
                     self.windows[name] = win
                     if spec.get("visible", True):
                         win.win.show_all()
                     PL.log(name, f"loaded at {x},{y} ({panel.width}x{panel.height})")
+                    if self.editor:
+                        self.editor.changed(rebuild=True)
                 except Exception:
                     import traceback
                     PL.log(name, "load failed:\n" + traceback.format_exc())
@@ -615,7 +703,8 @@ class App:
                 elif name in getattr(self, "load_errors", {}):
                     plug[name] = {"status": "load_failed", "last_error": self.load_errors[name]}
             d = {"t": time.time(), "pid": os.getpid(), "uptime_s": round(time.time() - self.started),
-                 "covered": self.coverage.covered, "plugins": plug}
+                 "covered": self.coverage.covered, "editing": self.editor is not None, "plugins": plug,
+                 "monitor": self.monitor_name, "panels": self.state()}
             import plugins as PL
             tmp = PL.HEALTH + ".tmp"
             with open(tmp, "w") as f:
@@ -698,7 +787,7 @@ class App:
 
     def redraw_panel(self, panel):
         for w in self.windows.values():
-            if getattr(w, "panel", None) is panel and w.visible() and not self.coverage.covered:
+            if getattr(w, "panel", None) is panel and w.visible() and (self.editor or not self.coverage.covered):
                 w.redraw()
         return False
 
@@ -713,10 +802,12 @@ class App:
         """100 ms heartbeat: sample each panel on its own interval; redraw at
         10 fps only while a panel runs a short animation (the Lab's sync pulse)."""
         now = time.monotonic()
-        show = not self.coverage.covered
+        show = self.editor is not None or not self.coverage.covered    # edit mode: above the windows
         if D.T.version() != self.theme_seen:   # `bromigos theme set`: new colours, redraw
             self.theme_seen = D.T.version()
             self.css.load_from_data(theme_css())
+            if self.editor:
+                self.editor.restyle()
             for w in self.windows.values():
                 if getattr(w, "panel", None) is not None and w.visible():
                     w.redraw()
@@ -762,15 +853,142 @@ class App:
                 w = self.windows.get(n)
                 if w and not w.visible():
                     w.win.show_all()
-        elif msg[0] == "notes" and "notes" in self.windows:
+        elif msg[0] == "notes" and "notes" in self.windows and not self.editor:
             self.windows["notes"].focus()
+        elif msg[0] == "edit":
+            self.edit(msg[1] if len(msg) > 1 else "toggle", msg[2] if len(msg) > 2 else None)
+        elif msg[0] == "add" and len(msg) > 1 and msg[1] in self.windows:
+            self.add(msg[1])
         elif msg[0] == "stats":
             print(f"covered={self.coverage.covered} " + " ".join(
                 f"{n}:draws={getattr(w, 'draws', 0)},visible={w.visible()}" for n, w in self.windows.items()),
                 file=sys.stderr, flush=True)
         elif msg[0] == "reload":
+            if self.editor:                    # a change from Settings or the CLI mid-edit: theirs wins
+                self.editor.cancel()
             os.execv(sys.executable, [sys.executable, os.path.realpath(__file__)])
         return True
+
+    # --- edit mode (editmode.py)
+    def edit(self, how="toggle", select=None):
+        if how in ("on", "toggle") and self.editor is None:
+            import editmode
+            self.editor = editmode.Editor(self, select)
+        elif how in ("done", "toggle") and self.editor:
+            self.editor.done()
+        elif how == "cancel" and self.editor:
+            self.editor.cancel()
+        elif how == "on" and self.editor and select:
+            self.editor.select(select)
+        self.write_health()
+
+    def state(self):
+        """{name: {x, y, width, height, visible}} of every panel, as it is now."""
+        return {n: dict(w.rect_state(), visible=bool(w.visible())) for n, w in self.windows.items()}
+
+    def apply_state(self, state):
+        for n, s in state.items():
+            w = self.windows.get(n)
+            if not w:
+                continue
+            if (s.get("width"), s.get("height")) != w.size_now() and s.get("width") and s.get("height"):
+                w.resize(s["width"], s["height"])
+            if "x" in s and "y" in s:
+                w.place(s["x"], s["y"])
+            self.set_visible(n, s.get("visible", True))
+
+    def set_visible(self, name, on):
+        w = self.windows.get(name)
+        if not w or bool(w.visible()) == bool(on):
+            return
+        if on:
+            w.win.show_all()
+            if self.editor:
+                w.set_layer(True)
+        else:
+            w.win.hide()
+
+    def raise_panels(self, top):
+        """Edit mode: the panels above the windows (the top layer), and back below them."""
+        for w in self.windows.values():
+            w.set_layer(top)
+
+    def area(self):
+        """The usable area of the panels' monitor (logical px, under the bar)."""
+        mons = hypr_request("j/monitors") or []
+        m = next((x for x in mons if x["name"] == self.monitor_name), None)
+        if not m:
+            g = self.mon.get_geometry() if self.mon else None
+            return (g.width, g.height - 34) if g else (2560, 1406)
+        scale = float(m.get("scale") or 1) or 1
+        W, H = m["width"] / scale, m["height"] / scale
+        if m.get("transform", 0) % 2:
+            W, H = H, W
+        rl, rt, rr, rb = (m.get("reserved") or [0, 0, 0, 0])[:4]
+        return int(W - rl - rr), int(H - rt - rb)
+
+    @staticmethod
+    def avoid(area):
+        """Where a new panel shouldn't go: VECTOR's console (bottom right) and the
+        notifications (top right)."""
+        W, H = area
+        return [(W - 24 - 1180, H - 24 - 640, 1180, 640), (W - 440, 0, 440, 320)]
+
+    def monitors(self):
+        return [m["name"] for m in (hypr_request("j/monitors") or []) if m.get("name")]
+
+    def move_to_monitor(self, name, chosen=False):
+        """Every panel to another output (edit mode's monitor list; Cancel, back)."""
+        if name == self.monitor_name and not chosen:
+            return
+        if chosen:
+            self.monitor_setting = name
+        self.monitor_name = name
+        self.coverage.monitor = name
+        self.mon = gdk_monitor(name)
+        for w in self.windows.values():
+            shown = w.visible()
+            w.win.hide()
+            GtkLayerShell.set_monitor(w.win, self.mon)
+            if shown:
+                w.win.show_all()
+        if self.editor:
+            self.editor.monitor_moved()
+
+    def save_layout(self, before=None):
+        """layout.json with every panel as it is now (edit mode's Done): the user's file,
+        first copied from bromigOS's; through a symlink, kept a symlink (arrange.write)."""
+        doc, _path, _mine = A.read()
+        now = self.state()
+        known = A.state_of(doc)
+        # the panels the layout already lists, and any plugin moved or switched this time
+        keep = {n: s for n, s in now.items() if n in known or n in G.core_classes() or n == "notes"
+                or (before or {}).get(n) != s}
+        doc = A.apply(doc, keep, monitor=self.monitor_setting)
+        A.write(doc)
+        self.cfg = doc
+        return doc
+
+    def add(self, name):
+        """A panel on, in a free spot (`bromigos panels add`), saved."""
+        w = self.windows[name]
+        if self.editor:
+            self.editor.show(name, free=True)
+            return
+        area = self.area()
+        taken = [x.rect() for n, x in self.windows.items() if n != name and x.visible()]
+        w.place(*A.place(*w.size_now(), taken, area, self.avoid(area)))
+        self.set_visible(name, True)
+        self.save_layout()
+
+    @staticmethod
+    def launch(argv):
+        import subprocess
+        try:
+            subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        except OSError as e:
+            print(f"bromigos-widgets: {argv[0]}: {e}", file=sys.stderr, flush=True)
 
 
 def main():

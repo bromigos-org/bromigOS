@@ -86,6 +86,9 @@ def panel(name):
     class Declared(DeclaredPanel):
         pass
     Declared.spec = spec
+    # the widget gallery's words (docs/plugins.md): homelab.toml's description, else its kind
+    Declared.title = str(spec.get("title") or spec["name"]).upper()
+    Declared.description = str(spec.get("description") or f"A {spec['kind']} you declared in homelab.toml")
     return Declared, layout
 
 
@@ -113,6 +116,8 @@ def _where(items, where):
 class DeclaredPanel(Panel):
     spec = {}
     interval = 1.0
+    category, reads = "homelab", "your homelab's sources"
+    min_size = (200, 100)
 
     def __init__(self, cfg=None):
         super().__init__(cfg)

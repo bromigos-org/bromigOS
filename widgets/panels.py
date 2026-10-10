@@ -13,6 +13,9 @@ import cairo
 import draw as D
 import sources as S
 
+# The widget gallery's categories (a panel's `category`), in the order it lists them.
+CATEGORIES = ("system", "network", "homelab", "media", "notes", "fun")
+
 
 def open_url(url):
     if not url:
@@ -31,6 +34,13 @@ class Panel:
     width = 470
     height = 200
     interval = 2.0                      # seconds between samples
+    # What the widget gallery says about it (docs/plugins.md, "What the gallery shows"):
+    description = ""                    # one line: what it shows
+    category = "system"                 # one of CATEGORIES
+    reads = ""                          # what it reads, in a few words: "your CPU and memory"
+    # the sizes edit mode lets it take (px): (width, height)
+    min_size = (240, 120)
+    max_size = (1600, 1400)
 
     def __init__(self, cfg=None):
         self.cfg = cfg or {}
@@ -64,6 +74,9 @@ class Panel:
 # =================================================================== SYSTEM
 class SystemPanel(Panel):
     name, title = "system", "SYSTEM"
+    description = "CPU and threads, a load waterfall, memory, video memory, the GPU, uptime"
+    category, reads = "system", "your CPU, memory, GPU and temperatures"
+    min_size, max_size = (460, 452), (900, 640)
     height = 452
     interval = 2.0
 
@@ -200,6 +213,9 @@ class SystemPanel(Panel):
 # =================================================================== NETWORK
 class NetworkPanel(Panel):
     name, title = "network", "NETWORK"
+    description = "The interface, a traffic scope, and a latency radar to the hosts you list"
+    category, reads = "network", "your network interfaces, and pings"
+    min_size, max_size = (380, 240), (1000, 600)
     height = 262
     interval = 1.0
 
@@ -345,6 +361,9 @@ class NetworkPanel(Panel):
 # =================================================================== STORAGE
 class StoragePanel(Panel):
     name, title = "storage", "STORAGE"
+    description = "The mounted filesystems and how full they are"
+    category, reads = "system", "your mounted disks"
+    min_size, max_size = (320, 140), (1000, 800)
     height = 214
     interval = 30.0
 
@@ -397,6 +416,9 @@ class WorkbenchPanel(Panel):
     """Recent projects (git repos by last local activity) and the folders you actually
     use (zoxide's frecency database). Each row opens in nvim, a terminal or Dolphin."""
     name, title = "workbench", "WORKBENCH"
+    description = "Your recent Git repositories and most-visited folders"
+    category, reads = "notes", "your Git repositories and zoxide"
+    min_size, max_size = (360, 200), (1000, 900)
     height = 300
     interval = 1.0                       # cheap redraw; the scan runs every 60 s in a thread
     ROW, HEAD = 26, 20
@@ -593,6 +615,9 @@ class ShortcutsPanel(Panel):
     Bromigos, launch or capture line to run it (window, workspace, system and hold-to-use
     binds stay keyboard-only)."""
     name, title = "shortcuts", "SHORTCUTS"
+    description = "Every key binding, read from Hyprland"
+    category, reads = "system", "Hyprland's key bindings"
+    min_size, max_size = (440, 200), (1000, 1200)
     height = 384
     interval = 5.0
     ROW, HEAD = 24, 26
@@ -724,6 +749,9 @@ WMO = {0: "clear", 1: "mostly clear", 2: "partly cloudy", 3: "overcast", 45: "fo
 
 class WeatherPanel(Panel):
     name, title = "weather", "WEATHER"
+    description = "The forecast for a place you choose: now, 24 hours and three days"
+    category, reads = "fun", "Open-Meteo, for your place"
+    min_size, max_size = (400, 260), (900, 600)
     height = 300
     interval = 60.0                    # the draw refresh; the fetch is its own thread, every 10 min
 
@@ -910,6 +938,9 @@ def _nmcli(*args, timeout=8):
 
 class ConnectionsPanel(Panel):
     name, title = "connections", "CONNECTIONS"
+    description = "Network connections, Wi-Fi in reach and VPNs, with a Wi-Fi switch"
+    category, reads = "network", "NetworkManager"
+    min_size, max_size = (360, 200), (900, 900)
     height = 262
     interval = 15.0
 
@@ -1050,3 +1081,9 @@ class ConnectionsPanel(Panel):
                             f"Click to bring it {'down' if on else 'up'}.",
                             lambda n=v["name"], o=on: self._run(n, "connection", "down" if o else "up", "id", n))
                 y += 17
+
+
+# bromigOS's panels that layout.json lists by name, in the gallery's order. More built-in
+# panels are files in plugins/ beside this one (docs/widgets.md, "Adding a widget").
+CORE = {"system": SystemPanel, "network": NetworkPanel, "storage": StoragePanel, "shortcuts": ShortcutsPanel,
+        "workbench": WorkbenchPanel, "weather": WeatherPanel, "connections": ConnectionsPanel}

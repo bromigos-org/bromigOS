@@ -1,0 +1,258 @@
+"""The widget gallery's list: every panel there is, with what it shows, who made it, what
+it reads and where it sits (docs/widgets.md, "The widget gallery").
+
+Edit mode's tray (editmode.py) and Settings › Widgets (through `bromigos panels gallery`)
+both read it. Each entry:
+
+    name, title, description, category, reads    the panel's own words (panels.Panel)
+    source       "bromigos" (built in), "homelab" (bromigos-homelab's), "extension"
+                 (installed with `bromigos ext`) or "yours" (a file in your plugin folder)
+    author       "bromigOS", the extension's authors, or "you"
+    extension    the extension it came from, with its licence and homepage (or None)
+    visible, x, y, width, height    as layout.json has it
+    min_size, max_size              the sizes edit mode lets it take
+    settings     where its own settings are (Settings' page and row), or None
+
+`bromigos-widgets gallery [--previews DIR]` prints it as JSON; with --previews, it draws
+each panel once to DIR/<name>.png (demo readings when BROMIGOS_WIDGETS_DEMO=1).
+"""
+import json
+import os
+import sys
+import time
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+
+import arrange as A  # noqa: E402
+
+CATEGORIES = ("system", "network", "homelab", "media", "notes", "fun")
+CATEGORY_NAMES = {"system": "System", "network": "Network", "homelab": "Homelab", "media": "Media",
+                  "notes": "Notes and work", "fun": "Fun and extras"}
+# FIELD NOTES isn't a Panel (it's a text box): its words, here
+NOTES = {"title": "FIELD NOTES", "description": "A notepad on your desktop that saves as you type",
+         "category": "notes", "reads": "your notes file", "min_size": (280, 160), "max_size": (1200, 1200),
+         "width": 470, "height": 268}
+# the panels with settings of their own, and where Settings keeps them
+SETTINGS = {"weather": {"page": "widgets", "key": "weather-place", "what": "the place, units and label"},
+            "lab": {"page": "lab", "key": None, "what": "the homelab's sources"},
+            "network": {"page": "widgets", "key": "layout", "what": "the hosts the radar pings (layout.json)"}}
+ORDER = ("system", "network", "storage", "shortcuts", "workbench", "notes", "weather", "connections")
+
+
+def core_classes():
+    import panels as P
+    return P.CORE
+
+
+def meta_of(obj, name=None):
+    """A panel class's or instance's gallery words (a plugin's SafePanel too)."""
+    inner = getattr(obj, "inner", obj)
+    cat = getattr(inner, "category", "system")
+    return {"title": str(getattr(inner, "title", None) or (name or "").upper()),
+            "description": str(getattr(inner, "description", "") or ""),
+            "category": cat if cat in CATEGORIES else "fun",
+            "reads": str(getattr(inner, "reads", "") or ""),
+            "min_size": tuple(getattr(inner, "min_size", (240, 120))),
+            "max_size": tuple(getattr(inner, "max_size", (1600, 1400)))}
+
+
+# ------------------------------------------------------------------ who made it
+def _ledger():
+    state = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    try:
+        with open(os.path.join(state, "bromigos", "ext", "ledger.json")) as f:
+            return (json.load(f) or {}).get("extensions") or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _manifest(root):
+    try:
+        import tomllib
+        with open(os.path.join(root, "bromigos-ext.toml"), "rb") as f:
+            return tomllib.load(f).get("extension") or {}
+    except (OSError, ValueError, ImportError):
+        return {}
+
+
+def extensions():
+    """{widget name: the extension that provides it} from `bromigos ext`'s ledger and each
+    extension's manifest: name, authors, licence, homepage, source, enabled."""
+    out = {}
+    for name, e in _ledger().items():
+        if not isinstance(e, dict):
+            continue
+        m = _manifest(e.get("root") or e.get("dir") or "")
+        src = e.get("source") or {}
+        info = {"name": name, "version": e.get("version"), "description": e.get("description") or m.get("description"),
+                "authors": m.get("authors") or [], "licence": m.get("licence") or m.get("license"),
+                "homepage": m.get("homepage") or (src.get("url") if str(src.get("url", "")).startswith("https://") else None),
+                "source": src.get("url"), "enabled": bool(e.get("enabled", True)), "code": True}
+        for p in e.get("parts") or []:
+            if p.get("kind") == "widget":
+                out[p.get("name")] = info
+    return out
+
+
+def source_of(path):
+    """Where a plugin file came from: bromigos, homelab, extension or yours."""
+    import plugins as PL
+    p = (path or "").split("#", 1)[0]
+    if p.startswith(os.path.join(HERE, "plugins") + os.sep):
+        return "bromigos"
+    if PL._HOMELAB and p.startswith(PL._HOMELAB + os.sep):
+        return "homelab"
+    if p.startswith(PL.EXT + os.sep):
+        return "extension"
+    return "yours"
+
+
+# ------------------------------------------------------------------ the list
+def entry(name, meta, source, state, ext=None):
+    s = state.get(name) or {}
+    author = {"bromigos": "bromigOS", "homelab": "bromigOS (homelab)", "yours": "you"}.get(source)
+    if source == "extension":
+        author = ", ".join(a.split(" <")[0] for a in (ext or {}).get("authors") or []) or (ext or {}).get("name") or "?"
+    return dict(meta, name=name, source=source, author=author, extension=ext,
+                visible=bool(s.get("visible", True)),
+                x=s.get("x"), y=s.get("y"), width=s.get("width", meta.get("width")),
+                height=s.get("height", meta.get("height")),
+                min_size=list(meta["min_size"]), max_size=list(meta["max_size"]),
+                settings=SETTINGS.get(name))
+
+
+def entries(doc=None, plugins=True):
+    """Every panel: bromigOS's, then the plugins (homelab's, extensions', yours), each with
+    its place in the layout (doc: a layout.json; the user's, else bromigOS's)."""
+    if doc is None:
+        try:
+            doc = A.read()[0]
+        except (OSError, ValueError):
+            doc = {"panels": []}
+    state = A.state_of(doc)
+    out = []
+    core = core_classes()
+    for name in ORDER:
+        if name == "notes":
+            meta = dict(NOTES)
+        else:
+            cls = core[name]
+            meta = dict(meta_of(cls, name), width=cls.width, height=cls.height)
+        out.append(entry(name, meta, "bromigos", state))
+    if not plugins:
+        return out
+    import plugins as PL
+    exts = extensions()
+    for name, (path, _m) in sorted(PL.files().items()):
+        if name in core or name == "notes":
+            continue
+        src = source_of(path)
+        try:
+            cls, layout = PL.load(os.path.realpath(path) if "#" not in path else path)
+            meta = dict(meta_of(cls, name), width=layout.get("width", cls.width),
+                        height=layout.get("height", cls.height))
+            err = None
+        except Exception as e:                        # listed, with why it can't load
+            meta = {"title": name.upper(), "description": "", "category": "fun", "reads": "",
+                    "min_size": (240, 120), "max_size": (1600, 1400), "width": 470, "height": 200}
+            err = f"{type(e).__name__}: {str(e)[:160]}"
+        e = entry(name, meta, src, state, exts.get(name) if src == "extension" else None)
+        e["error"] = err
+        if name not in state:
+            e["visible"] = bool(layout.get("visible", True)) if err is None else False
+        out.append(e)
+    return out
+
+
+def render_previews(items, outdir, ticks=2):
+    """Draws each panel once to outdir/<name>.png at its size: instantiated together,
+    sampled `ticks` times a second apart, then drawn (a second or two for all of them)."""
+    import cairo
+
+    import plugins as PL
+    os.makedirs(outdir, exist_ok=True)
+    core = core_classes()
+    made = {}
+    for it in items:
+        name = it["name"]
+        try:
+            if name == "notes":
+                made[name] = None
+                continue
+            if name in core:
+                cls, layout = core[name], {}
+            else:
+                path = PL.files()[name][0]
+                cls, layout = PL.load(os.path.realpath(path) if "#" not in path else path)
+            cfg = dict(layout, name=name)
+            made[name] = PL.make(cls, cfg, lambda p: None)
+        except Exception:
+            continue
+    for i in range(max(1, ticks)):
+        for p in made.values():
+            try:
+                p and p.tick()
+            except Exception:
+                pass
+        if i < ticks - 1:
+            time.sleep(1.0)
+    paths = {}
+    for it in items:
+        name = it["name"]
+        if name not in made:
+            continue
+        w, h = int(it.get("width") or 470), int(it.get("height") or 200)
+        surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
+        cr = cairo.Context(surf)
+        try:
+            if made[name] is None:
+                draw_notes(cr, w, h)
+            else:
+                cr.push_group()
+                made[name].render(cr, w, h)
+                cr.pop_group_to_source()
+                cr.paint()
+        except Exception:
+            continue
+        out = os.path.join(outdir, f"{name}.png")
+        surf.write_to_png(out)
+        paths[name] = out
+    return paths
+
+
+def notes_text(limit=12):
+    path = os.path.expanduser("~/.local/share/bromigos/notes.md")
+    try:
+        with open(path) as f:
+            return f.read().splitlines()[-limit:]
+    except OSError:
+        return []
+
+
+def draw_notes(cr, w, h, lines=None):
+    """FIELD NOTES drawn as a picture (the gallery's card; the panel itself is a text box)."""
+    import draw as D
+    top = D.frame(cr, w, h, "FIELD NOTES", f"{len(lines or [])} LINES" if lines is not None else "")
+    y = top
+    for ln in (lines if lines is not None else notes_text()):
+        if y > h - 28:
+            break
+        D.text(cr, 16, y, ln or " ", 13, "soft")
+        y += 19
+
+
+def main(argv):
+    previews = argv[argv.index("--previews") + 1] if "--previews" in argv else None
+    items = entries()
+    if previews:
+        got = render_previews(items, previews)
+        for it in items:
+            it["preview"] = got.get(it["name"])
+    print(json.dumps({"widgets": items, "categories": [{"id": c, "title": CATEGORY_NAMES[c]} for c in CATEGORIES]}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

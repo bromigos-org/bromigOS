@@ -32,6 +32,9 @@ A user's own layout goes in `~/.config/bromigos/widgets/layout.json`.
 ```bash
 bromigos-widgets toggle <name>|all    # show or hide one panel, or all of them
 bromigos-widgets show <name>|all      # show one or all; never hides
+bromigos-widgets add <name>           # show one in a free spot, and save it there
+bromigos-widgets edit [on|done|cancel]    # edit mode; no word: on, or done when it's on
+bromigos-widgets gallery [--previews <dir>]   # every panel there is, as JSON
 bromigos-widgets notes                # focus the notes panel for typing; Esc hands focus back
 bromigos-widgets reload               # read layout.json again
 bromigos-widgets stats                # print draw counts and coverage to the app's stderr
@@ -40,7 +43,7 @@ bromigos-widgets render <name> out.png    # draw one panel offscreen, with no wi
 
 `render` also takes a plugin's path, such as `plugins/x.py`, and `--ticks <n>`.
 
-The keys are Super+W for all panels, Super+S, N, D, B and F for one each, Super+K for
+The keys are Super+W for all panels, Super+Alt+W for edit mode, Super+S, N, D, B and F for one each, Super+K for
 shortcuts, and Alt+N to type in the notes. The full list is the manual's
 [Keys](../manual/src/keys.md) page, which is generated from `keybinds.py`.
 
@@ -49,6 +52,9 @@ shortcuts, and Alt+N to type in the notes. The full list is the manual's
 | File | What it does |
 |---|---|
 | `bromigos-widgets` | The app: one window per panel, the heartbeat, the control socket, hotplug recovery |
+| `editmode.py` | Edit mode: the canvas over the panels, the drags, the keyboard, and the tray with the widget gallery |
+| `arrange.py` | Edit mode's geometry and file, with no GTK: snapping, free space, undo, reading and writing `layout.json` |
+| `gallery.py` | The widget gallery's list: every panel, what it shows, who made it, what it reads, and its pictures |
 | `panels.py` | The built-in panels |
 | `plugins.py` | Loads plugin panels, from users and from `bromigos-homelab`, and finds them free space |
 | `sources.py` | The readers: psutil, NVML, temperatures, Wi-Fi signal, ping, storage |
@@ -97,8 +103,25 @@ minute, or 5 slow draws in a row, the plugin is switched off until its file chan
 health file, `$XDG_RUNTIME_DIR/bromigos-widgets-health.json`, is written every 2 seconds
 with each plugin's status, errors and draw times.
 
+## Edit mode
+
+Edit mode (`editmode.py`) moves every panel to the *top* layer, above windows, and puts
+one transparent surface, the canvas, on the *overlay* layer above them. The canvas covers
+the panels' monitor under the bar, so its coordinates are the layout's. It takes the
+pointer and the keyboard, draws the frames, handles and guides, and moves a panel by
+changing its layer-shell margins. The panels keep their 100 ms heartbeat, and keep
+drawing even when windows would cover them. Leaving puts them back on the bottom layer.
+
+The tray is a GTK widget inside the canvas. Its cards draw each panel live, small, every
+2 seconds. Done calls `App.save_layout()`, which writes through `arrange.write()`. The
+health file carries `editing` and every panel's place and size (`panels`), which the
+end-to-end test reads.
+
 ## Tests
 
-`check()` in `packaging/bromigos-widgets/PKGBUILD` compiles every file and checks the
-launcher entries with `tools/launcher/check.py`. CI's `launcher.yml` runs the full
+`check()` in `packaging/bromigos-widgets/PKGBUILD` compiles every file, runs the unit
+tests in `tests/` (snapping, free space, undo, and `layout.json` written through a
+symlink), and checks the launcher entries with `tools/launcher/check.py`.
+`desktop/tests/e2e_widgets_nested.py` drives edit mode in a nested Hyprland, with a
+virtual keyboard and pointer. CI's `launcher.yml` runs the full
 launcher check.

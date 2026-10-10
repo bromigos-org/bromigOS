@@ -45,6 +45,8 @@ pkgver() {
 check() {
   cd "$_root/widgets"
   python -m py_compile bromigos-widgets *.py
+  # edit mode's geometry and file: snapping, free space, undo, layout.json through a symlink
+  python -m unittest discover -s tests
   # the app launcher's entries (widgets/applications): desktop-file-validate, the keys every
   # entry needs, their icons (tools/launcher/check.py; CI's launcher.yml runs all of it)
   python "$_root/tools/launcher/check.py" --static --only widgets
@@ -52,7 +54,8 @@ check() {
 
 package() {
   local lib="$pkgdir/usr/lib/bromigos/widgets" f
-  for f in demo.py demo_lab.py draw.py keybinds.py panels.py plugins.py sources.py keybinds-dump.lua; do
+  for f in arrange.py demo.py demo_lab.py draw.py editmode.py gallery.py keybinds.py panels.py plugins.py sources.py \
+           keybinds-dump.lua; do
     install -Dm0644 "$_root/widgets/$f" "$lib/$f"
   done
   install -Dm0755 "$_root/widgets/bromigos-widgets" "$lib/bromigos-widgets"

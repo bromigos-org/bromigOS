@@ -19,6 +19,10 @@ class __CAMEL__Panel(Panel):
     name, title = "__IDENT__", "__UPPER__"
     width, height = 380, 132
     interval = 2.0
+    # what the widget gallery shows (bromigOS's docs/plugins.md, "What the gallery shows")
+    description = "The load average over 1, 5 and 15 minutes"
+    category, reads = "system", "the load average"
+    min_size, max_size = (360, 120), (720, 240)    # the sizes edit mode lets it take
 
     def __init__(self, cfg=None):
         super().__init__(cfg)
