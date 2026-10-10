@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 # The ISO build proper, run by iso/build.sh inside a privileged archlinux container:
 # /src is the bromigOS checkout (read-only), /out the output and cache volume,
-# $ISO_REPO the package repository, /in/repo-ca.crt its CA, /in/test_key.pub a test key.
+# $ISO_REPO the package repository, $ISO_MEDIUM_REPO the one the medium names (default
+# $ISO_REPO), $ISO_VERSION the medium's version, /in/repo-ca.crt the CA of $ISO_REPO,
+# /in/test_key.pub a test key, $ISO_OWNER (uid:gid) the owner of what it makes.
 set -euo pipefail
 repo=${ISO_REPO:?}
+medium_repo=${ISO_MEDIUM_REPO:-$repo}
+# the CA goes on the medium only for the repository it names: a public build downloads from
+# a repository with its own CA and names the public mirror, which needs none
+medium_ca=0; [[ -f /in/repo-ca.crt && $medium_repo == "$repo" ]] && medium_ca=1
 channel=${ISO_CHANNEL:-stable}
 case $channel in edge) sub='' ;; *) sub="/$channel" ;; esac        # as install.sh lays the channels out
 profile_src=/src/iso/profile
@@ -57,11 +63,15 @@ for f in "$profile"/syslinux/*.cfg "$profile"/grub/*.cfg; do
     [[ -f $f ]] || continue
     sed -i -e 's/Arch Linux install medium/bromigOS live medium/g' -e 's/Arch Linux/bromigOS/g' "$f"
 done
+# a release's version in the file name (bromigos-0.1.2-x86_64.iso), else the build's date
+if [[ -n ${ISO_VERSION:-} ]]; then
+    sed -i "s/^iso_version=.*/iso_version=\"$ISO_VERSION\"/" "$profile/profiledef.sh"
+fi
 # what the medium remembers for the installed system: the repository and its CA
 install -d "$profile/airootfs/etc/bromigos-iso"
-printf '%s\n' "$repo" > "$profile/airootfs/etc/bromigos-iso/repo.url"
+printf '%s\n' "$medium_repo" > "$profile/airootfs/etc/bromigos-iso/repo.url"
 printf '%s\n' "$channel" > "$profile/airootfs/etc/bromigos-iso/channel"
-[[ -f /in/repo-ca.crt ]] && install -m0644 /in/repo-ca.crt "$profile/airootfs/etc/bromigos-iso/repo-ca.crt"
+(( medium_ca )) && install -m0644 /in/repo-ca.crt "$profile/airootfs/etc/bromigos-iso/repo-ca.crt"
 # a test build: the live user takes this key over SSH, and the console is on the serial port too
 if [[ -f /in/test_key.pub ]]; then
     install -m0644 /in/test_key.pub "$profile/airootfs/etc/bromigos-iso/test_authorized_keys"
@@ -69,7 +79,7 @@ if [[ -f /in/test_key.pub ]]; then
     sed -i 's/^iso_label=.*/iso_label="BROMIGOS_TEST"/' "$profile/profiledef.sh"
 fi
 # the CA, trusted on the live medium itself (its pacman reaches the repository once online)
-if [[ -f /in/repo-ca.crt ]]; then
+if (( medium_ca )); then
     install -Dm0644 /in/repo-ca.crt "$profile/airootfs/etc/ca-certificates/trust-source/anchors/bromigos-repo-ca.crt"
 fi
 
@@ -161,6 +171,12 @@ rm -f /out/iso/bromigos-*.iso
 mkarchiso -v -w "$iso_work" -o /out/iso "$profile" 2>&1 | grep -vE '^\[mkarchiso\] INFO: (Adding|Creating|Installing)' | tail -40
 iso=$(ls /out/iso/bromigos-*.iso | tail -1)
 (cd /out/iso && sha256sum "$(basename "$iso")" > "$(basename "$iso").sha256")
-cp "$iso" "$iso.sha256" /out/
-[[ ${ISO_KEEP_WORK:-0} == 1 ]] || rm -rf "$iso_work" "$profile"
-say "done: /out/$(basename "$iso") ($(du -h "$iso" | cut -f1))"
+mv -f "$iso" "$iso.sha256" /out/
+rmdir /out/iso 2>/dev/null || true
+iso=/out/$(basename "$iso")
+[[ ${ISO_KEEP_WORK:-0} == 1 ]] || rm -rf "$iso_work" "$profile" "$empty" "$work/download.log"
+# what the build made belongs to whoever ran iso/build.sh, not to the container's root
+if [[ -n ${ISO_OWNER:-} ]]; then
+    chown -R "$ISO_OWNER" "$iso" "$iso.sha256" "$cache" "$work" 2>/dev/null || true
+fi
+say "done: $iso ($(du -h "$iso" | cut -f1))"

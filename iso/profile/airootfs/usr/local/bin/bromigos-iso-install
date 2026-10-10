@@ -130,6 +130,10 @@ args=(--config "$config" --creds "$creds" --offline --skip-ntp --skip-wkd --skip
 (( menu )) || args+=(--silent)
 say "archinstall ${args[*]}"
 if (( ! dry )); then
+    # pacman's keyring, which archinstall verifies every package with: archiso's pacman-init
+    # fills it after time-sync.target (30 s at most with no network, the medium's
+    # systemd-time-wait-sync drop-in); started here, it waits for that, or returns at once
+    systemctl start pacman-init.service || { say "pacman's keyring isn't ready (systemctl status pacman-init)"; exit 1; }
     archinstall "${args[@]}"
     [[ -d $target/etc/pacman.d ]] || target=/mnt/archinstall
     [[ -d $target/etc/pacman.d ]] || { say "archinstall didn't leave a system at /mnt (nor /mnt/archinstall)"; exit 1; }

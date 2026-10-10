@@ -66,7 +66,9 @@ if [[ $mode == live ]]; then
     check "the offline repository: Arch's core and extra, bromigOS" test -f /var/lib/bromigos/repo/core/os/x86_64/core.db -a -f /var/lib/bromigos/repo/extra/os/x86_64/extra.db -a -f /var/lib/bromigos/repo/bromigos/x86_64/bromigos.db
     # a live medium has no synced databases until something syncs them (archinstall does): sync, then resolve
     check "pacman resolves bromigos from the medium (offline)" bash -c "sudo pacman -Sy >/dev/null 2>&1 && pacman -Sp bromigos 2>/dev/null | grep -q '^file:///var/lib/bromigos/repo/'"
-    check "bromigOS's key is trusted" bash -c "pacman-key --list-keys 2>/dev/null | grep -qi bromigos"
+    # pacman-init (releng's) fills the keyring once the clock is set: after time-sync.target,
+    # which can take a minute or more after boot
+    check "bromigOS's key is trusted" bash -c "for _ in \$(seq 90); do systemctl is-active -q pacman-init && break; sleep 2; done; pacman-key --list-keys 2>/dev/null | grep -qi bromigos"
     check "the installer is there" test -x /usr/local/bin/bromigos-iso-install
     check "archinstall is there" command -v archinstall
     check "the live user has no password and sudo" bash -c "sudo -n true"

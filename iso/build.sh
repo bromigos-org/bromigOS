@@ -4,10 +4,18 @@
 # the host. The medium carries an offline copy of the repositories (Arch's core and extra
 # for everything it needs, and bromigOS's), so an install needs no network.
 #
-#   iso/build.sh --repo URL [--ca FILE] [--out DIR] [--test-key FILE] [--keep-work]
+#   iso/build.sh --repo URL [--medium-repo URL] [--version V] [--ca FILE] [--out DIR]
+#                [--test-key FILE] [--keep-work]
 #
 #   --repo URL      bromigOS's package repository (https://…; it must be reachable from
-#                   here; the medium remembers it as the installed system's repository)
+#                   here; the medium remembers it as the installed system's repository,
+#                   unless --medium-repo names another)
+#   --medium-repo URL  the repository the medium names for the installed system, when it
+#                   isn't the one the build downloads from: a public build reads the
+#                   homelab's and names the public mirror (docs/iso.md, "A release's ISO").
+#                   --ca then stays in the build: it isn't put on the medium
+#   --version V     the medium's version, in its file name (bromigos-V-x86_64.iso);
+#                   default: the build's date (YYYY.MM.DD)
 #   --channel NAME  stable (default: tagged releases), rc, or edge (every push to main):
 #                   the packages on the medium, and the installed system's channel
 #   --ca FILE       that repository's TLS CA, when it has its own (it goes on the medium
@@ -25,12 +33,12 @@ set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/.." && pwd)
 
-repo='' ca='' hosts='' out='' testkey='' keep=0 channel=stable
+repo='' medium_repo='' version='' ca='' hosts='' out='' testkey='' keep=0 channel=stable
 while (($#)); do
     case $1 in
-        --repo) repo=$2; shift 2 ;; --ca) ca=$2; shift 2 ;; --hosts) hosts=$2; shift 2 ;; --channel) channel=$2; shift 2 ;;
+        --repo) repo=$2; shift 2 ;; --medium-repo) medium_repo=$2; shift 2 ;; --version) version=$2; shift 2 ;; --ca) ca=$2; shift 2 ;; --hosts) hosts=$2; shift 2 ;; --channel) channel=$2; shift 2 ;;
         --out) out=$2; shift 2 ;; --test-key) testkey=$2; shift 2 ;; --keep-work) keep=1; shift ;;
-        -h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "iso/build.sh: unknown option $1" >&2; exit 2 ;;
     esac
 done
@@ -42,7 +50,8 @@ out=$(cd "$out" && pwd)
 
 mounts=(-v "$root:/src:ro" -v "$out:/out")
 case $channel in stable|rc|edge) ;; *) echo "iso/build.sh: --channel is stable, rc or edge" >&2; exit 2 ;; esac
-env=(-e "ISO_REPO=$repo" -e "ISO_CHANNEL=$channel" -e "ISO_KEEP_WORK=$keep")
+[[ -z $version || $version =~ ^[0-9A-Za-z._+-]+$ ]] || { echo "iso/build.sh: --version is letters, digits and . _ + -" >&2; exit 2; }
+env=(-e "ISO_REPO=$repo" -e "ISO_MEDIUM_REPO=$medium_repo" -e "ISO_VERSION=$version" -e "ISO_CHANNEL=$channel" -e "ISO_KEEP_WORK=$keep" -e "ISO_OWNER=$(id -u):$(id -g)")
 if [[ -n $ca ]]; then mounts+=(-v "$(realpath "$ca"):/in/repo-ca.crt:ro"); fi
 if [[ -n $testkey ]]; then mounts+=(-v "$(realpath "$testkey"):/in/test_key.pub:ro"); fi
 addhost=(); [[ -n $hosts ]] && addhost=(--add-host "${hosts#* }:${hosts%% *}")

@@ -3,16 +3,20 @@
 # with -display none, screenshots through its monitor to DIR/shots/, never a window.
 #
 #   iso/test.sh boot    --iso FILE [--firmware uefi|bios] [--hosts "IP NAME"]
-#                       boots the medium (a test build: iso/build.sh --test-key DIR/id_ed25519.pub),
-#                       waits for the live desktop, screenshots it, runs the live checks
+#                       boots the medium, waits for the live desktop, screenshots it, runs
+#                       the live checks. Any medium: a test build (iso/build.sh --test-key
+#                       DIR/id_ed25519.pub) has the key; a public one gets it from a cloud-init
+#                       seed the harness attaches (DIR/seed.iso), so the medium is tested as built
 #   iso/test.sh install [--repo URL] [--ca FILE] [--no-encrypt]
 #                       the unattended install onto the VM's disk, over SSH (btrfs on
 #                       LUKS2 by default; --no-encrypt: plain btrfs)
-#   iso/test.sh boot-disk [--firmware uefi|bios] [--update-channel NAME]
+#   iso/test.sh boot-disk [--firmware uefi|bios] [--update-channel NAME] [--update-repo URL [--ca FILE]]
 #                       boots the installed system, signs in at the login screen (QMP keys),
 #                       screenshots it, runs test/vm/checks.sh in it, then the first update
 #                       (to NAME; default the other channel: edge from stable, else stable)
-#                       and a rollback of it
+#                       and a rollback of it. --update-repo: the update reads this copy of the
+#                       channels (and trusts --ca), when the system's own repository isn't
+#                       reachable yet (a public medium before go-live, docs/iso.md)
 #   iso/test.sh menu ENTRY  the medium's boot menu (UEFI GRUB or BIOS syslinux) saved, then one
 #                       channel booted and checked: live, install (the installer opens),
 #                       safe (nomodeset), memtest, disk (the installed system's GRUB), speech
@@ -28,6 +32,7 @@
 # ~/.cache/bromigos-isotest): the key, the disk, the console log, shots/. Beside another
 # run: BROMIGOS_ISOTEST_DIR, _PORT (SSH), _VNC (display) and _MEM (MiB, 6144); BROMIGOS_ISOTEST_QEMU adds QEMU
 # arguments (a faked laptop: -smbios file=… from test/vm/smbios-chassis.py; docs/hardware.md),
+# BROMIGOS_ISOTEST_OFFLINE=1 cuts the VM off from the network (the SSH forward stays), and
 # BROMIGOS_ISOTEST_VGA the display device (default virtio-vga; e.g. virtio-vga,xres=1024,yres=768
 # offers the firmware that mode, which GRUB's GFXMODE=auto takes).
 # The VM stops when the session that started it ends (test/vm/vm-keeper.py):
@@ -41,12 +46,12 @@ ovmf_code=/usr/share/edk2/x64/OVMF_CODE.4m.fd
 ovmf_vars=/usr/share/edk2/x64/OVMF_VARS.4m.fd
 
 cmd=${1:-}; shift || true
-iso='' firmware='' hosts='' repo='' ca='' encrypt=1 update_channel='' 
+iso='' firmware='' hosts='' repo='' ca='' encrypt=1 update_channel='' update_repo=''
 while (($#)); do
     case $1 in
         --iso) iso=$2; shift 2 ;; --firmware) firmware=$2; shift 2 ;; --hosts) hosts=$2; shift 2 ;;
         --repo) repo=$2; shift 2 ;; --ca) ca=$2; shift 2 ;; --dir) dir=$2; shift 2 ;; --no-encrypt) encrypt=0; shift ;;
-        --update-channel) update_channel=$2; shift 2 ;; *) break ;;
+        --update-channel) update_channel=$2; shift 2 ;; --update-repo) update_repo=$2; shift 2 ;; *) break ;;
     esac
 done
 mkdir -p "$dir/shots"
@@ -80,9 +85,18 @@ start_vm() {        # start_vm medium|disk
         # the medium first, even after an install put the disk's GRUB first in the firmware's
         # own order (bootindex: OVMF follows it; SeaBIOS too)
         cd=(-drive "file=$iso,if=none,id=medium,media=cdrom,readonly=on" -device "ide-cd,drive=medium,bootindex=0" -boot "menu=off")
+        # the harness's key for `live` as a NoCloud seed (a second CD labelled CIDATA, on
+        # q35's second AHCI port: one device each): the
+        # medium's cloud-init (releng's, as on Arch's own medium) adds it, and releng's sshd
+        # is on. A public build carries no test key; a test build already has it
+        seed
+        cd+=(-drive "file=$dir/seed.iso,if=none,id=seed,media=cdrom,readonly=on" -device "ide-cd,drive=seed,bus=ide.1")
     else
         boot=(-boot "order=c")
     fi
+    # BROMIGOS_ISOTEST_OFFLINE=1: the VM reaches nothing but the harness's SSH (QEMU's
+    # restrict=on), as a machine with no network: the offline install
+    local net_restrict=''; [[ ${BROMIGOS_ISOTEST_OFFLINE:-0} == 1 ]] && net_restrict=',restrict=on'
     : > "$dir/console.log"
     # through vm-keeper.py: QEMU stops when whoever started the test is gone
     # (BROMIGOS_VM_OWNER=none keeps it until down)
@@ -90,11 +104,22 @@ start_vm() {        # start_vm medium|disk
     "$root/test/vm/vm-keeper.py" --ready "$dir/qmp.sock" --log "$dir/keeper.log" -- \
         qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -m "${BROMIGOS_ISOTEST_MEM:-6144}" -smp 4 "${fw[@]}" ${BROMIGOS_ISOTEST_QEMU:-} \
         -drive "file=$dir/disk.qcow2,if=virtio" "${cd[@]}" "${boot[@]}" \
-        -nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$port-:22" \
+        -nic "user,model=virtio-net-pci${net_restrict},hostfwd=tcp:127.0.0.1:$port-:22" \
         -device "${BROMIGOS_ISOTEST_VGA:-virtio-vga}" -device qemu-xhci -device usb-tablet -display none -vnc "127.0.0.1:${BROMIGOS_ISOTEST_VNC:-48}" \
         -qmp "unix:$dir/qmp.sock,server,nowait" -serial "file:$dir/console.log" \
         -pidfile "$dir/qemu.pid"
     printf '%s\n' "$firmware" > "$dir/firmware"
+}
+
+seed() {            # DIR/seed.iso: cloud-init's NoCloud seed, the harness's key for `live`
+    local d=$dir/seed
+    rm -rf "$d"; mkdir -p "$d"
+    printf 'instance-id: bromigos-isotest\n' > "$d/meta-data"
+    # lock_passwd false: `live` keeps its empty password, as on the medium; and its host name
+    printf '#cloud-config\npreserve_hostname: true\nusers:\n  - name: live\n    lock_passwd: false\n    ssh_authorized_keys:\n      - %s\n' \
+        "$(cat "$key.pub")" > "$d/user-data"
+    xorriso -as mkisofs -quiet -V CIDATA -J -r -o "$dir/seed.iso" "$d/user-data" "$d/meta-data" 2>/dev/null
+    rm -rf "$d"
 }
 
 shot() {
@@ -218,6 +243,28 @@ case $cmd in
         # a move fail "signature is invalid")
         if [[ -z $update_channel ]]; then
             if "${SSH[@]}" "grep -A2 '^\[bromigos\]' /etc/pacman.conf | grep -q '/stable/'"; then update_channel=edge; else update_channel=stable; fi
+        fi
+        # the system's repository, swapped for a reachable copy of it for the update only: its
+        # [bromigos] Server's base, the channel's path kept (the installed-system checks above
+        # saw the address the medium gave it)
+        if [[ -n $update_repo ]]; then
+            if [[ -n $ca ]]; then
+                "${SCP[@]}" "$ca" "tester@127.0.0.1:update-ca.crt"
+                "${SSH[@]}" "sudo install -Dm0644 update-ca.crt /etc/ca-certificates/trust-source/anchors/isotest-update-ca.crt && sudo update-ca-trust"
+            fi
+            "${SSH[@]}" "sudo python3 - '$update_repo'" <<'PY'
+import re, sys
+p = "/etc/pacman.conf"
+out, sect = [], ""
+for line in open(p).read().split("\n"):
+    if line.startswith("["):
+        sect = line.strip()
+    if sect == "[bromigos]":
+        line = re.sub(r"^Server = \S+?(/\$repo(?:/[a-z]+)?/\$arch)$", lambda m: "Server = " + sys.argv[1] + m.group(1), line)
+    out.append(line)
+open(p, "w").write("\n".join(out))
+PY
+            "${SSH[@]}" "grep -A2 '^\[bromigos\]' /etc/pacman.conf" | sed 's/^/update repository: /'
         fi
         "${SSH[@]}" "sudo pacman -Sy" > "$dir/sync-$firmware.out" 2>&1 || rc=$?
         before=$("${SSH[@]}" "pacman -Q bromigos-core")

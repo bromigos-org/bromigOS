@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v5
       - name: shellcheck
         run: |
-          shellcheck -S warning iso/build.sh iso/build-in-container.sh iso/test.sh iso/test/live-checks.sh \
+          shellcheck -S warning iso/build.sh iso/build-in-container.sh iso/check-medium.sh iso/test.sh iso/test/live-checks.sh \
             iso/profile/profiledef.sh iso/profile/airootfs/root/customize_airootfs.sh \
             iso/profile/airootfs/usr/local/bin/bromigos-iso-install \
             iso/profile/airootfs/usr/local/bin/bromigos-iso-autostart
