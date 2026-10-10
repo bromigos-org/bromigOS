@@ -38,7 +38,7 @@ A user's own layout goes in `~/.config/bromigos/widgets/layout.json`.
 ## Commands
 
 ```bash
-bromigos-widgets toggle <name>|all    # show or hide one panel, or all of them
+bromigos-widgets toggle <name>|all    # show or hide one panel, or hide/restore the visible set
 bromigos-widgets show <name>|all      # show one or all; never hides
 bromigos-widgets add <name>           # show one in a free spot, and save it there
 bromigos-widgets edit [on|done|cancel]    # edit mode; no word: on, or done when it's on
@@ -52,8 +52,8 @@ bromigos-widgets render <name> out.png    # draw one panel offscreen, with no wi
 `render` also takes a plugin's path, such as `plugins/x.py`, `--ticks <n>`, and
 `--size <w>x<h>` to draw it at another size, in that size class's layout.
 
-The keys are Super+W for all panels, Super+Alt+W for edit mode, Super+S, N, D, B and F for one each, Super+K for
-shortcuts, and Alt+N to type in the notes. The full list is the manual's
+Super+W hides the visible panels and restores exactly that set. The other keys are
+Super+Alt+W for edit mode, Super+S, N, D, B and F for one each, Super+K for shortcuts, and Alt+N to type in the notes. The full list is the manual's
 [Keys](../manual/src/keys.md) page, which is generated from `keybinds.py`.
 
 ## Files

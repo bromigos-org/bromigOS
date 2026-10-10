@@ -72,9 +72,12 @@ class NaturalHeight(unittest.TestCase):
             lab = F.panels(["lab"])["lab"]
             nat = lab.natural_height(470, "standard")
             out = {"natural": nat, "fit": P.fit_height(lab, 470, "standard"), "naturals": P.naturals(lab)}
-            for h in (nat, 640, 600):
+            for h in (nat, 1200, 640, 600):
                 F.problems(lab, 470, h)
                 out[str(h)] = lab.folded
+            short = lab.frame_height(470, "standard", 900)
+            out["short"] = short
+            out["short_problems"] = F.problems(lab, 470, short)
             names = []
             import draw as D, cairo
             with D.record() as m:
@@ -87,6 +90,9 @@ class NaturalHeight(unittest.TestCase):
         self.assertTrue(700 <= nat <= 1200, nat)                 # six nodes, 36 services: taller than 640
         self.assertEqual(got["fit"], nat)
         self.assertEqual(got["naturals"]["standard"], nat)
+        self.assertLess(got["short"], 900)
+        self.assertEqual(got["short_problems"], [])
+        self.assertEqual(got["1200"], {})
         self.assertEqual(got[str(nat)], {})                      # at its natural height: everything in full
         self.assertEqual(got["640"], {"services": "fold"})       # shorter: SERVICES folds first
         texts = got["texts"]
@@ -108,8 +114,15 @@ class NaturalHeight(unittest.TestCase):
             four = P.fit_height(a, 460, "standard")
             a.res = dict(a.res, items=a.res["items"] * 6)
             many = P.fit_height(a, 460, "standard")
-            print(json.dumps({"five": five, "four": four, "many": many, "regions": len(a.regions)}))
+            a.res = dict(a.res, items=[])
+            clear = P.fit_height(a, 460, "standard")
+            regions = len(a.regions)
+            problems = F.problems(a, 460, clear)
+            print(json.dumps({"five": five, "four": four, "many": many, "clear": clear,
+                              "problems": problems, "regions": regions}))
         '''), script=True)
+        self.assertEqual(got["clear"], 150)
+        self.assertEqual(got["problems"], [])
         self.assertLess(got["four"], 220)                         # four rows: no mostly empty 300 px box
         self.assertLess(got["four"], got["five"])
         self.assertEqual(got["many"], 420)                        # more than fits: the class's tallest

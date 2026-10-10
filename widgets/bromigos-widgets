@@ -11,7 +11,7 @@ whose monitor isn't connected shows on the primary, and goes back when it return
 
   bromigos-widgets                 run (Hyprland login autostart)
   bromigos-widgets toggle NAME     show/hide one panel (system|network|storage|lab|workbench|shortcuts|notes)
-  bromigos-widgets toggle all      show/hide every panel
+  bromigos-widgets toggle all      hide/restore the visible panels
   bromigos-widgets show NAME|all   show one panel or every one (never hides; the app launcher's
                                    Desktop Panels entry), starting the panels if they aren't running
   bromigos-widgets add NAME        show a panel in a free spot on the desktop, and save it there
@@ -377,7 +377,7 @@ class PanelWindow(Surface):
 
     def on_draw(self, _w, cr):
         self.draws = getattr(self, "draws", 0) + 1
-        self.panel.render(cr, self.panel.width, self.panel.height)
+        self.panel.render(cr, self.box[0], self.shown_height())
         return True
 
     def on_tip(self, _w, x, y, _kb, tooltip):
@@ -428,7 +428,11 @@ class PanelWindow(Surface):
             nat = None
         if not nat:
             return h
-        return int(max(c[1][1], min(h, nat)))
+        target = int(max(c[1][1], min(h, nat)))
+        inner = getattr(self.panel, "inner", self.panel)
+        if hasattr(inner, "frame_height"):
+            target = int(max(c[1][1], inner.frame_height(w, name, target)))
+        return target
 
     def on_click(self, _w, ev):
         if ev.button == 3:                     # a right-click: edit mode, this panel picked
@@ -1176,9 +1180,15 @@ class App:
         if not msg:
             return True
         if msg[0] == "toggle" and len(msg) > 1:
-            names = list(self.windows) if msg[1] == "all" else [msg[1]]
+            names = [msg[1]]
             if msg[1] == "all":
-                show = not any(w.visible() for w in self.windows.values())
+                visible = {n for n, w in self.windows.items() if w.visible()}
+                show = not visible
+                if visible:
+                    self.hidden_set = visible
+                names = list(visible or getattr(self, "hidden_set", set()))
+                if show:
+                    self.hidden_set = set()
             for n in names:
                 w = self.windows.get(n)
                 if not w:

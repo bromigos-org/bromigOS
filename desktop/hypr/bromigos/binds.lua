@@ -75,7 +75,7 @@ K.exec("SUPER + L", "loginctl lock-session")
 -- FIELD NOTES: focus the pad for typing (Esc hands focus back) / quick note from anywhere.
 K.exec(mainMod .. " + N", "bromigos-widgets notes", MOD)
 K.exec(mainMod .. " + SHIFT + N", "/usr/lib/bromigos/desktop/rofi/quick-note", MOD)
--- Desktop panels: toggle all / one at a time.
+-- Desktop panels: toggle the visible set / one at a time.
 K.exec("SUPER + W", "bromigos-widgets toggle all")
 -- Edit mode: drag the panels, resize them, switch them on and off (press again or Esc: save).
 K.exec("SUPER + ALT + W", "bromigos-widgets edit")

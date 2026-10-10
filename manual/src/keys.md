@@ -86,7 +86,7 @@ The [panels](panels.md) are the readouts on the desktop, under your windows.
 
 | Keys | What it does |
 |---|---|
-| <span class="keys"><kbd>Super</kbd>+<kbd>W</kbd></span> | Show or hide all the panels. |
+| <span class="keys"><kbd>Super</kbd>+<kbd>W</kbd></span> | Hide the visible panels. Press again to restore exactly that set. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>W</kbd></span> | Arrange the panels: drag to move or resize them, and turn them on or off. Press Esc to save. See [Arrange the panels](panels.md#arrange-the-panels). |
 | <span class="keys"><kbd>Super</kbd>+<kbd>S</kbd></span> | Show or hide the SYSTEM panel: processor, memory, graphics card. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>N</kbd></span> | Show or hide the NETWORK panel. |

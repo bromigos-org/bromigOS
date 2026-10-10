@@ -350,7 +350,7 @@ class ClashTest(Base):
             BK.Plan(st).bind(BK.Target.command("foot"), BK.Combo.parse("SUPER + W"))
         c = cm.exception
         self.assertEqual([(o.source, o.keys) for o in c.owners], [("default", "SUPER + W")])
-        self.assertEqual(c.owners[0].what, "All desktop panels")
+        self.assertEqual(c.owners[0].what, "Hide / restore the visible desktop panels")
         self.assertFalse(c.can_swap)                       # foot has no key to give
 
     def test_replace_turns_the_default_off(self):
@@ -673,7 +673,7 @@ class ResetTest(Base):
         self.assertTrue(BK.commit(plan, FakeHypr(self.box), wait=0.2)[0])
         st = self.box.state()
         rows, off = BK.listing(st)
-        self.assertEqual([(o["keys"], o["what"]) for o in off], [("SUPER + W", "All desktop panels")])
+        self.assertEqual([(o["keys"], o["what"]) for o in off], [("SUPER + W", "Hide / restore the visible desktop panels")])
         plan = BK.Plan(st)
         plan.reset("SUPER + W")
         self.assertTrue(BK.commit(plan, FakeHypr(self.box), wait=0.2)[0])

@@ -146,7 +146,7 @@ class AlertsPanel(K.KitPanel):
         """All clear: the ring and its words; else what the list draws (measured)."""
         r = self.result()
         if r and r.get("ok") and r.get("sources") and not (r.get("items") or []):
-            return 44 + 2 * 38 + 8 + 30 + 12
+            return 120
         return super().natural_height(width, cls)
     settings = [{"key": "show_pending", "label": "Show pending alerts", "kind": "bool", "default": True,
                  "hint": "Pending: the condition holds but hasn't lasted long enough to fire"}]
@@ -232,7 +232,7 @@ class AlertsPanel(K.KitPanel):
     def _clear(self, cr, w, h, top, cls):
         cx, cy = w / 2, top + (h - top) / 2 - 8
         r = max(14, min(38, (h - top) / 3))
-        if cls != "compact":
+        if cls != "compact" and h > 150:
             D.ring(cr, cx, cy, r, 1.0, 5, "phosphor")
             D.text(cr, cx, cy - 9, "OK", 15, "phosphor", "bold", align="center", glow=True)
             D.label(cr, cx, cy + r + 12, "NOTHING FIRING", "soft", align="center")

@@ -47,7 +47,7 @@ list of shortcuts, in ember orange">
 
 ## Show or hide a panel
 
-Each panel has a key. Super+W shows or hides them all. Super+S, Super+N, Super+D,
+Each panel has a key. Super+W hides and restores the visible set. Super+S, Super+N, Super+D,
 Super+B and Super+F toggle the system, network, storage, workbench and notes panels. The
 manual's [Keys](../manual/src/keys.md) page has the full list.
 
@@ -308,7 +308,9 @@ That height is used in four places, always kept inside the panel's size class:
 - **Tidy up** does the same for each panel it moves.
 - **Add to desktop** and the **size picker** start the panel at that height.
 - **On the desktop**, the panel's frame shrinks to its content inside the room it was
-  given. ALERTS with four alerts is a short panel, not a 300 px box.
+  given. ALERTS with four alerts is a short panel. When none are firing or pending,
+  it shows a compact all-clear message. LAB unfolds whole sections when its frame has
+  room, then removes unused space below them.
 
 The frame doesn't jump with every reading. It changes only when the height needed moves
 by more than one row (24 px), at most once every 30 seconds, and never in edit mode. In

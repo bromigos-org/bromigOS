@@ -209,7 +209,10 @@ def fit_height(panel, width, name):
         nat = None
     if nat is None:
         return int(c[3][1])
-    return int(max(c[1][1], min(c[2][1], nat)))
+    target = int(max(c[1][1], min(c[2][1], nat)))
+    if hasattr(inner, "frame_height"):
+        target = int(max(c[1][1], inner.frame_height(width, name, target)))
+    return target
 
 
 def naturals(panel, width=None):

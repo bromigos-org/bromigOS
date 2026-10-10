@@ -587,6 +587,15 @@ def shots(n, r):
         editing(n, False)
 
 
+def visibility_phase(n, r):
+    """The real daemon restores the chosen set, including after applying a layout."""
+    before = {k for k, p in n.panels().items() if p.get("visible")}
+    n.widgets("toggle", "all")
+    r.check("toggle all: hides the visible set", settle(n, lambda p: not any(v.get("visible") for v in p.values()), 8))
+    n.widgets("toggle", "all")
+    r.check("toggle all: restores exactly that set", settle(n, lambda p: {k for k, v in p.items() if v.get("visible")} == before, 8))
+
+
 def fit_phase(n, r):
     """A panel that fits its content (CI & PRs: fit = "content"): its frame follows its rows
     inside its room; edit mode shows (and saves) the room; growing pushes a neighbour."""
@@ -653,6 +662,7 @@ def main():
         settings_phase(n, r)
         customize_phase(n, r)
         fit_phase(n, r)
+        visibility_phase(n, r)
         if shots_dir:
             shots(n, r)
     finally:

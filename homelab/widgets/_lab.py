@@ -225,6 +225,18 @@ class LabPanel(Panel):
         hs = sum(10 + self._section(cr, d, s, "full", x0, x1, 0, draw=False) for s in self.SECTIONS)
         return 44 + 50 + hs + self.BOTTOM
 
+    def frame_height(self, width, cls, room):
+        """Shrink unused space after whole sections have folded to fit the available room."""
+        if not self.lab.data or cls == "compact":
+            return room
+        import cairo
+        cr = cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32, 4, 4))
+        x0, x1 = 16, width - 16
+        if cls == "large":
+            return room                 # the hologram also needs this height
+        _, need = self.plan(cr, self.lab.data, x0, x1, room - 44 - self.BOTTOM)
+        return min(room, 44 + need + self.BOTTOM)
+
     def _section(self, cr, d, name, mode, x0, x1, y, draw=True):
         """One section from y, full or folded; the y under it."""
         return {"nodes": self._nodes, "services": self._services, "pools": self._pools}[name](

@@ -82,7 +82,7 @@ rows = [
 title = "Panels and notes"
 intro = "The [panels](panels.md) are the readouts on the desktop, under your windows."
 rows = [
-  { match = "All desktop panels", text = "Show or hide all the panels." },
+  { match = "Hide / restore the visible desktop panels", text = "Hide the visible panels. Press again to restore exactly that set." },
   { match = "Edit widgets: move, resize, switch on and off", text = "Arrange the panels: drag to move or resize them, and turn them on or off. Press Esc to save. See [Arrange the panels](panels.md#arrange-the-panels)." },
   { match = "System panel", text = "Show or hide the SYSTEM panel: processor, memory, graphics card." },
   { match = "Network panel", text = "Show or hide the NETWORK panel." },
