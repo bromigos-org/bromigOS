@@ -192,8 +192,8 @@ bromigos panels set discord invite abc123     # change one
 GITHUB, GITLAB, SPOTIFY and TWITCH show your own account, so they need you to sign in
 once. Open the panel's **Settings…** and click **Sign in**.
 
-1. **Connect the service, if asked.** Twitch needs nothing: bromigOS has its own Twitch
-   app. GitLab and Spotify need an app of your own on their developer sites; the form says
+1. **Connect the service, if asked.** GitHub and Twitch need nothing: bromigOS has its
+   own apps for them. GitLab and Spotify need an app of your own on their developer sites; the form says
    where to make it and what to paste. You do this once per service, and every panel for
    that service shares it.
 2. **Sign in.** For GitHub, GitLab and Twitch, a short code appears. Type it on the page

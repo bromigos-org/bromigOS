@@ -569,9 +569,12 @@ Large adds your open pull requests and your contribution graph for the last year
 any row to open it on GitHub.
 
 If you've signed in to the `gh` command, the panel uses that login. It asks `gh` for the
-token each time and never stores it. Without `gh`, sign in with GitHub's device flow:
-make an OAuth app at github.com › Settings › Developer settings › OAuth Apps with **Enable
-Device Flow** ticked, and give the panel its client ID ([Accounts](#accounts)).
+token each time and never stores it. Without `gh`, click **Sign in** in its
+**Settings…** ([Accounts](#accounts)) and enter the code on GitHub's page. bromigOS has its
+own GitHub app for this, so there's nothing to register. To use an app of your own, make an
+OAuth app at github.com › Settings › Developer settings › OAuth Apps with **Enable Device
+Flow** ticked and **Expire user access tokens** unticked, then run
+`bromigos account configure github client_id=ID`.
 
 The panel reads GitHub every 4 minutes while you can see it. Each request carries the
 last answer's ETag, so an unchanged answer doesn't count against GitHub's rate limit. It

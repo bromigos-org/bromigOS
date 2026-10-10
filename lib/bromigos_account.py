@@ -91,8 +91,11 @@ PROVIDERS = {
         "device_url": "https://github.com/login/device/code", "token_url": "https://github.com/login/oauth/access_token",
         "scopes": ["repo", "read:user", "notifications"], "scope_key": "scope",
         "who_url": "https://api.github.com/user", "who_field": "login", "gh": True,
-        "app_help": "Sign in to the gh command (gh auth login), or make an OAuth app at "
-                    "github.com/settings/developers with Enable Device Flow ticked, and copy its Client ID.",
+        # bromigOS's own OAuth app (device flow, no secret: its ID isn't one), used when gh isn't signed in
+        "client_id": "Ov23liUrAQsRagfTYxQj",
+        "app_help": "To use your own app instead: make an OAuth app at github.com/settings/developers "
+                    "with Enable Device Flow ticked (and Expire user access tokens unticked), and copy its "
+                    "Client ID.",
     },
     "gitlab": {
         "title": "GitLab", "flow": "device", "base": "https://gitlab.com",
