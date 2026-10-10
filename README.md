@@ -14,7 +14,8 @@ real readings, your homelab is on screen, and an AI with a voice lives on your d
 [![iso-check](https://github.com/bromigos-org/bromigOS/actions/workflows/iso-check.yml/badge.svg?branch=main)](https://github.com/bromigos-org/bromigOS/actions/workflows/iso-check.yml)
 
 [Install](#install) · [Manual](manual/src/index.md) · [Docs](docs/README.md) ·
-[Contributing](CONTRIBUTING.md) · [Website](https://bromigos.org/os)
+[Contributing](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md) ·
+[Website](https://bromigos.org/os)
 
 </div>
 
@@ -246,6 +247,8 @@ Each machine follows a *channel*. The default, `stable`, gets tagged releases.
   themes, widgets, decks and tools.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** covers building, testing and the repository's
   layout.
+- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** is the code of conduct everyone here
+  follows.
 - **[bromigos.org/os](https://bromigos.org/os)** has more pictures and the roadmap.
 
 ## Status

@@ -17,6 +17,7 @@ have access.
   its decision log.
 - **Working with an AI coding assistant?** [AGENTS.md](AGENTS.md) has the rules it
   follows. They're the same rules as here.
+- **Everyone here** follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Repository layout
 
