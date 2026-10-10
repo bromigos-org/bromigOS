@@ -129,6 +129,7 @@ The desktop runs these for you. You don't need them day to day.
 | Command | What it does |
 |---|---|
 | [`bromigos customize`](#bromigos-customize) | Customize: the themes and the widget gallery in one window, with tabs (SUPER+CTRL+SHIFT+SPACE) |
+| [`bromigos media`](#bromigos-media) | Your media library in a terminal: TV, films, music, YouTube, downloads and what's coming; request, monitor, change quality, play or delete |
 
 ## Every command in full
 
@@ -1269,6 +1270,25 @@ Usage: bromigos lock-run
 Options:
   -h, --help  Print help
 ```
+
+### bromigos media
+
+Your media library in a terminal: TV, films, music, YouTube, downloads and what's coming; request, monitor, change quality, play or delete.
+
+```text
+bromigos media [tv|movies|music|youtube|downloads|upcoming|add] | search|get|status|upcoming|recent|library|language|monitor|profile|refresh|delete …
+```
+
+For example:
+
+```text
+bromigos media
+bromigos media movies
+bromigos media get "Cowboy Bebop"
+bromigos media status
+```
+
+From the `bromigos-homelab` package.
 
 ### bromigos memory
 

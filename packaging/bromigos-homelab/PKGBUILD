@@ -65,7 +65,7 @@ pkgver() {
 check() {
   cd "$_root/homelab"
   python -m py_compile lib/bromigos_homelab/*.py lib/bromigos_homelab/adapters/*.py \
-    live/*.py widgets/*.py vector/*.py bin/bromigos-homelab bin/bromigos-setup-homelab bin/bromigos-lab
+    live/*.py widgets/*.py vector/*.py bin/bromigos-homelab bin/bromigos-setup-homelab bin/bromigos-lab bin/bromigos-media
   # with no sources every capability is empty and nothing raises
   BROMIGOS_HOMELAB_CONFIG=/nonexistent BROMIGOS_SHARE_DIR=/nonexistent PYTHONPATH=lib \
     python -c 'import bromigos_homelab as H; assert not H.configured(); assert H.snapshot() is None; assert H.hosts()["items"] == []'
@@ -85,7 +85,7 @@ package() {
   install -Dm0644 -t "$home/widgets/" "$_root"/homelab/widgets/*.py
   install -Dm0644 -t "$home/vector/" "$_root"/homelab/vector/*.py
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/homelab/bin/bromigos-homelab "$_root"/homelab/bin/bromigos-setup-homelab \
-    "$_root"/homelab/bin/bromigos-lab
+    "$_root"/homelab/bin/bromigos-lab "$_root"/homelab/bin/bromigos-media
   install -Dm0644 -t "$pkgdir/usr/lib/systemd/user/" "$_root"/homelab/systemd/bromigos-lab.service \
     "$_root"/homelab/systemd/bromigos-lab-models.service "$_root"/homelab/systemd/bromigos-lab-models.timer
   # the lab's data; the model catalog (models.toml) is bromigos-lab-catalog's, so it updates on its own

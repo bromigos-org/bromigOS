@@ -2032,6 +2032,379 @@ def recent(lab, since):
     return list(groups.values())
 
 
+# ------------------------------------------------------------------ the library (`bromigos media`, the TUI)
+def _poster_of(x):
+    for im in x.get("images") or []:
+        if im.get("coverType") == "poster":
+            return im.get("remoteUrl") or im.get("url")
+    return x.get("remotePoster")
+
+
+def library(lab, kind):
+    """What's in Sonarr (tv), Radarr (movies) or Lidarr (music), one record per title, newest
+    first: size on disk, profile, monitoring, what's missing."""
+    if kind == "tv":
+        if not lab.app("sonarr"):
+            return []
+        profiles = {p["id"]: p["name"] for p in lab.profiles("sonarr")}
+        out = []
+        for s in lab.arr_get("sonarr", "/series") or []:
+            st = s.get("statistics") or {}
+            seasons = [{"season": z["seasonNumber"], "monitored": z.get("monitored"),
+                        "files": (z.get("statistics") or {}).get("episodeFileCount", 0),
+                        "aired": (z.get("statistics") or {}).get("episodeCount", 0),
+                        "episodes": (z.get("statistics") or {}).get("totalEpisodeCount", 0),
+                        "size": (z.get("statistics") or {}).get("sizeOnDisk", 0)} for z in s.get("seasons") or []]
+            missing = sum(z["aired"] - z["files"] for z in seasons if z["monitored"])
+            out.append({"kind": "tv", "app": "sonarr", "id": s["id"], "title": s.get("title"), "year": s.get("year"),
+                        "size": st.get("sizeOnDisk") or 0, "files": st.get("episodeFileCount") or 0,
+                        "episodes": st.get("totalEpisodeCount") or 0, "seasons": seasons, "missing": missing,
+                        "profile": profiles.get(s.get("qualityProfileId"), str(s.get("qualityProfileId"))),
+                        "profile_id": s.get("qualityProfileId"), "monitored": s.get("monitored"),
+                        "new_items": s.get("monitorNewItems") == "all", "series_type": s.get("seriesType"),
+                        "status": s.get("status"), "added": s.get("added"), "network": s.get("network"),
+                        "poster": _poster_of(s), "tvdb": s.get("tvdbId"), "tmdb": s.get("tmdbId"),
+                        "imdb": s.get("imdbId")})
+    elif kind == "movies":
+        if not lab.app("radarr"):
+            return []
+        profiles = {p["id"]: p["name"] for p in lab.profiles("radarr")}
+        out = []
+        for m in lab.arr_get("radarr", "/movie") or []:
+            mf = m.get("movieFile") or {}
+            it = {"kind": "movie", "title": m.get("title"), "dates": movie_dates(m)}
+            out.append({"kind": "movie", "app": "radarr", "id": m["id"], "title": m.get("title"), "year": m.get("year"),
+                        "size": m.get("sizeOnDisk") or mf.get("size") or 0, "has_file": m.get("hasFile"),
+                        "missing": 0 if m.get("hasFile") or not m.get("monitored") else 1,
+                        "profile": profiles.get(m.get("qualityProfileId"), str(m.get("qualityProfileId"))),
+                        "profile_id": m.get("qualityProfileId"), "monitored": m.get("monitored"),
+                        "quality": ((mf.get("quality") or {}).get("quality") or {}).get("name"),
+                        "audio": _langs_of((mf.get("mediaInfo") or {}).get("audioLanguages")),
+                        "release": release_text(it), "status": m.get("status"), "added": m.get("added"),
+                        "waits_for": m.get("minimumAvailability"), "poster": _poster_of(m),
+                        "tmdb": m.get("tmdbId"), "imdb": m.get("imdbId"), "movie_file": mf.get("id")})
+    elif kind == "music":
+        if not lab.app("lidarr"):
+            return []
+        profiles = {p["id"]: p["name"] for p in lab.profiles("lidarr")}
+        out = []
+        for a in lab.arr_get("lidarr", "/artist") or []:
+            st = a.get("statistics") or {}
+            out.append({"kind": "artist", "app": "lidarr", "id": a["id"], "title": a.get("artistName"),
+                        "size": st.get("sizeOnDisk") or 0, "albums": st.get("albumCount") or 0,
+                        "tracks": st.get("trackFileCount") or 0, "of": st.get("totalTrackCount") or 0,
+                        "missing": max(0, (st.get("totalTrackCount") or 0) - (st.get("trackFileCount") or 0)),
+                        "profile": profiles.get(a.get("qualityProfileId"), str(a.get("qualityProfileId"))),
+                        "profile_id": a.get("qualityProfileId"), "monitored": a.get("monitored"),
+                        "new_items": a.get("monitorNewItems") == "all", "added": a.get("added"),
+                        "poster": _poster_of(a), "mbid": a.get("foreignArtistId")})
+    else:
+        raise MediaError(f"library kind: tv, movies or music, not {kind!r}")
+    out.sort(key=lambda r: r.get("added") or "", reverse=True)
+    return out
+
+
+def albums(lab, artist_id):
+    """An artist's albums: monitored, tracks on disk, format (from the track files), size."""
+    files = lab.arr_get("lidarr", "/trackfile", artistId=artist_id) or []
+    fmt, size = {}, {}
+    for f in files:
+        q = ((f.get("quality") or {}).get("quality") or {}).get("name") or "?"
+        fmt.setdefault(f.get("albumId"), set()).add(q)
+        size[f.get("albumId")] = size.get(f.get("albumId"), 0) + (f.get("size") or 0)
+    out = []
+    for al in lab.arr_get("lidarr", "/album", artistId=artist_id) or []:
+        st = al.get("statistics") or {}
+        out.append({"id": al["id"], "title": al.get("title"), "year": _year(al.get("releaseDate")),
+                    "type": al.get("albumType"), "monitored": al.get("monitored"),
+                    "tracks": st.get("trackFileCount") or 0, "of": st.get("totalTrackCount") or 0,
+                    "format": ", ".join(sorted(fmt.get(al["id"], set()))) or "-", "size": size.get(al["id"], 0)})
+    out.sort(key=lambda a: a.get("year") or 0)
+    return out
+
+
+def episode_files(lab, series_id, season=None):
+    """A series' episode files: S01E02, size, quality, audio and subtitle languages."""
+    eps = {e.get("episodeFileId"): e for e in lab.arr_get("sonarr", "/episode", seriesId=series_id) or []
+           if e.get("episodeFileId")}
+    out = []
+    for f in lab.arr_get("sonarr", "/episodefile", seriesId=series_id) or []:
+        if season is not None and f.get("seasonNumber") != season:
+            continue
+        e = eps.get(f["id"]) or {}
+        out.append({"id": f["id"], "season": f.get("seasonNumber"), "episode": e.get("episodeNumber"),
+                    "code": f"S{f.get('seasonNumber', 0):02d}E{e.get('episodeNumber', 0):02d}",
+                    "title": e.get("title"), "size": f.get("size") or 0,
+                    "quality": ((f.get("quality") or {}).get("quality") or {}).get("name"),
+                    "audio": _langs_of((f.get("mediaInfo") or {}).get("audioLanguages")),
+                    "subtitles": _langs_of((f.get("mediaInfo") or {}).get("subtitles")),
+                    "below_target": bool(f.get("qualityCutoffNotMet")), "path": f.get("relativePath")})
+    out.sort(key=lambda f: (f["season"] or 0, f["episode"] or 0))
+    return out
+
+
+def totals(lab):
+    """Library totals and the free space (the header of `bromigos media`)."""
+    out = {}
+    for kind in ("tv", "movies", "music"):
+        try:
+            recs = library(lab, kind)
+        except MediaError:
+            continue
+        out[kind] = {"count": len(recs), "size": sum(r.get("size") or 0 for r in recs)}
+    for app in ("sonarr", "radarr", "lidarr"):
+        if lab.app(app):
+            try:
+                out["free"] = lab.root(app)[1]
+                break
+            except MediaError:
+                continue
+    return out
+
+
+def set_monitored(lab, app, arr_id, on, season=None, new_items=None):
+    """Monitor or unmonitor a whole title, one season (its episodes follow), or new episodes
+    and seasons (new_items). -> the title's monitoring in words."""
+    path = {"sonarr": "/series", "radarr": "/movie", "lidarr": "/artist"}[app] + f"/{arr_id}"
+    x = lab.arr_get(app, path)
+    if new_items is not None:
+        x["monitorNewItems"] = "all" if new_items else "none"
+    elif season is not None:
+        hit = [z for z in x.get("seasons") or [] if z["seasonNumber"] == int(season)]
+        if not hit:
+            raise MediaError(f"no season {season}")
+        hit[0]["monitored"] = bool(on)
+        if on:
+            x["monitored"] = True
+    else:
+        x["monitored"] = bool(on)
+    x = lab.arr_send(app, path, x, "PUT") or x
+    return describe_monitoring(x) if app == "sonarr" else ("monitored" if x.get("monitored") else "not monitored")
+
+
+def set_album_monitored(lab, album_id, on):
+    lab.arr_send("lidarr", "/album/monitor", {"albumIds": [album_id], "monitored": bool(on)}, "PUT")
+
+
+def set_profile(lab, app, arr_id, profile):
+    """Move a title to another quality profile (an id or a name)."""
+    profs = lab.profiles(app)
+    p = next((x for x in profs if str(x["id"]) == str(profile) or x["name"].lower() == str(profile).lower()), None)
+    if not p:
+        raise MediaError(f"{app} has no profile {profile!r}: " + ", ".join(x["name"] for x in profs))
+    path = {"sonarr": "/series", "radarr": "/movie", "lidarr": "/artist"}[app] + f"/{arr_id}"
+    x = lab.arr_get(app, path)
+    x["qualityProfileId"] = p["id"]
+    lab.arr_send(app, path, x, "PUT")
+    return p["name"]
+
+
+def search_now(lab, app, arr_id, season=None, album_id=None):
+    if app == "sonarr":
+        cmd = {"name": "SeasonSearch", "seriesId": arr_id, "seasonNumber": int(season)} if season is not None else \
+            {"name": "SeriesSearch", "seriesId": arr_id}
+    elif app == "radarr":
+        cmd = {"name": "MoviesSearch", "movieIds": [arr_id]}
+    else:
+        cmd = {"name": "AlbumSearch", "albumIds": [album_id]} if album_id else {"name": "ArtistSearch", "artistId": arr_id}
+    lab.arr_send(app, "/command", cmd)
+    return cmd["name"]
+
+
+def delete_plan(lab, app, arr_id, season=None, file_ids=None, album_id=None):
+    """Exactly what a delete removes, before it happens: {"what", "title", "size", "files", "scope"}."""
+    if app == "sonarr":
+        s = lab.arr_get("sonarr", f"/series/{arr_id}")
+        if file_ids:
+            fs = [f for f in episode_files(lab, arr_id) if f["id"] in set(file_ids)]
+            return {"scope": "files", "title": s["title"], "size": sum(f["size"] for f in fs), "files": len(fs),
+                    "what": f"{s['title']} {', '.join(f['code'] for f in fs)}: the file{'s' if len(fs) != 1 else ''}"}
+        if season is not None:
+            fs = episode_files(lab, arr_id, int(season))
+            name = "the specials" if int(season) == 0 else f"season {season}"
+            return {"scope": "season", "title": s["title"], "size": sum(f["size"] for f in fs), "files": len(fs),
+                    "what": f"{s['title']} {name}: {len(fs)} episode file{'s' if len(fs) != 1 else ''}"}
+        st = s.get("statistics") or {}
+        n = len([z for z in s.get("seasons") or [] if z["seasonNumber"] > 0])
+        return {"scope": "title", "title": s["title"], "size": st.get("sizeOnDisk") or 0,
+                "files": st.get("episodeFileCount") or 0,
+                "what": f"{s['title']}: {n} season{'s' if n != 1 else ''}, {st.get('episodeFileCount') or 0} files, "
+                        f"files and all"}
+    if app == "radarr":
+        m = lab.arr_get("radarr", f"/movie/{arr_id}")
+        return {"scope": "title", "title": m["title"], "size": m.get("sizeOnDisk") or 0,
+                "files": 1 if m.get("hasFile") else 0,
+                "what": f"{m['title']} ({m.get('year')}): " + ("the film, files and all" if m.get("hasFile")
+                                                             else "the entry (no file on disk)")}
+    a = lab.arr_get("lidarr", f"/artist/{arr_id}")
+    if album_id:
+        al = next((x for x in albums(lab, arr_id) if x["id"] == album_id), None) or {}
+        return {"scope": "album", "title": f"{a.get('artistName')}: {al.get('title')}", "size": al.get("size") or 0,
+                "files": al.get("tracks") or 0, "what": f"{a.get('artistName')}: {al.get('title')}, files and all"}
+    st = a.get("statistics") or {}
+    return {"scope": "title", "title": a.get("artistName"), "size": st.get("sizeOnDisk") or 0,
+            "files": st.get("trackFileCount") or 0,
+            "what": f"{a.get('artistName')}: {st.get('albumCount') or 0} albums, files and all"}
+
+
+def _seerr_forget(lab, kind, tmdb=None, tvdb=None):
+    """Remove the title from Seerr (its media entry and its requests), when Seerr has it."""
+    if not lab.seerr or not (tmdb or tvdb):
+        return None
+    try:
+        page = lab.call(lab.seerr, "/api/v1/media?take=500&skip=0&filter=all") or {}
+    except MediaError:
+        return None
+    for m in page.get("results") or []:
+        if (tmdb and m.get("tmdbId") == tmdb and m.get("mediaType") == kind) or (tvdb and m.get("tvdbId") == tvdb):
+            lab.call(lab.seerr, f"/api/v1/media/{m['id']}", method="DELETE")
+            return m["id"]
+    return None
+
+
+def refresh_servers(lab):
+    """Ask Jellyfin and Plex to rescan their libraries (a delete leaves them showing gaps otherwise)."""
+    done = []
+    j = lab.src("jellyfin")
+    if j:
+        try:
+            j.request("/Library/Refresh", data={}, method="POST", raw=True, timeout=15)
+            done.append(j.name)
+        except Exception:                                  # noqa: BLE001
+            pass
+    p = lab.src("plex")
+    if p:
+        try:
+            secs = (p.request("/library/sections", headers={"Accept": "application/json"}, timeout=15) or {})
+            for d in (secs.get("MediaContainer") or {}).get("Directory") or []:
+                p.request(f"/library/sections/{d['key']}/refresh", raw=True, timeout=15)
+            done.append(p.name)
+        except Exception:                                  # noqa: BLE001
+            pass
+    return done
+
+
+def delete(lab, app, arr_id, season=None, file_ids=None, album_id=None, exclude=False):
+    """Delete as delete_plan() said: the files, and for a whole title its entry (with an import
+    exclusion when asked, so it isn't fetched again), its Seerr request, and a library rescan.
+    A season or files: the files go and that season (those episodes) stop being monitored."""
+    plan = delete_plan(lab, app, arr_id, season, file_ids, album_id)
+    ex = "true" if exclude else "false"
+    seerr = None
+    if app == "sonarr" and (season is not None or file_ids):
+        fs = [f for f in episode_files(lab, arr_id, None if season is None else int(season))
+              if not file_ids or f["id"] in set(file_ids)]
+        if fs:
+            lab.arr_send("sonarr", "/episodefile/bulk", {"episodeFileIds": [f["id"] for f in fs]}, "DELETE")
+        if season is not None:
+            set_monitored(lab, "sonarr", arr_id, False, season=int(season))
+        else:
+            eps = [e["id"] for e in lab.arr_get("sonarr", "/episode", seriesId=arr_id) or []
+                   if e.get("episodeFileId") in {f["id"] for f in fs}]
+            if eps:
+                lab.arr_send("sonarr", "/episode/monitor", {"episodeIds": eps, "monitored": False}, "PUT")
+    elif app == "sonarr":
+        s = lab.arr_get("sonarr", f"/series/{arr_id}")
+        lab.call(lab.app("sonarr"), f"/api/v3/series/{arr_id}?deleteFiles=true&addImportListExclusion={ex}",
+                 method="DELETE")
+        seerr = _seerr_forget(lab, "tv", s.get("tmdbId"), s.get("tvdbId"))
+    elif app == "radarr":
+        m = lab.arr_get("radarr", f"/movie/{arr_id}")
+        lab.call(lab.app("radarr"), f"/api/v3/movie/{arr_id}?deleteFiles=true&addImportExclusion={ex}",
+                 method="DELETE")
+        seerr = _seerr_forget(lab, "movie", m.get("tmdbId"))
+    elif album_id:
+        lab.call(lab.app("lidarr"), f"/api/v1/album/{album_id}?deleteFiles=true&addImportListExclusion={ex}",
+                 method="DELETE")
+    else:
+        lab.call(lab.app("lidarr"), f"/api/v1/artist/{arr_id}?deleteFiles=true&addImportListExclusion={ex}",
+                 method="DELETE")
+    return dict(plan, deleted=True, excluded=bool(exclude) and plan["scope"] in ("title", "album"),
+                seerr=seerr, rescanned=refresh_servers(lab))
+
+
+def _ids(rec):
+    return {"kind": "tv" if rec["kind"] == "tv" else "movie", "title": rec["title"], "tmdb": rec.get("tmdb"),
+            "tvdb": rec.get("tvdb"), "imdb": rec.get("imdb")}
+
+
+def web_link(lab, rec, where="jellyfin"):
+    """The title's page in Jellyfin, Plex or Seerr (for a browser), or None."""
+    if where == "seerr" and lab.seerr and rec.get("tmdb"):
+        return f"{lab.seerr.endpoint}/{'tv' if rec['kind'] == 'tv' else 'movie'}/{rec['tmdb']}"
+    if rec["kind"] not in ("tv", "movie"):
+        return None
+    hit = (in_jellyfin if where == "jellyfin" else in_plex)(lab, _ids(rec)) if lab.src(where) else None
+    return lab.src(where).video_web({"id": hit["id"]}) if hit else None
+
+
+def play(lab, rec, runner=None):
+    """Play a film, or a show's next unwatched episode, from Jellyfin in mpv, full screen with sound,
+    the way the den TV opens a channel (its headers in a 0600 file, never on the command line)."""
+    import shutil
+    import subprocess
+    import tempfile
+    j = lab.src("jellyfin")
+    if not j or rec["kind"] not in ("tv", "movie"):
+        raise MediaError("playing needs a jellyfin source (with an API key) and a film or a show")
+    hit = in_jellyfin(lab, _ids(rec))
+    if not hit:
+        raise MediaError(f"{rec['title']} isn't in Jellyfin (yet)")
+    item_id, title = hit["id"], rec["title"]
+    if rec["kind"] == "tv":
+        uid = j._user()
+        q = urllib.parse.urlencode({"ParentId": item_id, "Recursive": "true", "IncludeItemTypes": "Episode",
+                                    "IsPlayed": "false", "SortBy": "ParentIndexNumber,IndexNumber", "Limit": 1,
+                                    "Fields": j.FIELDS})
+        eps = (j.fetch(f"/Users/{uid}/Items?{q}", timeout=15) or {}).get("Items") or []
+        if not eps:
+            raise MediaError(f"{title}: no unwatched episode in Jellyfin")
+        it = j._item(eps[0])
+        title = f"{title} S{it.get('season') or 0:02d}E{it.get('episode') or 0:02d} · {it['title']}"
+    else:
+        it = {"id": item_id, "bitrate": None}
+    st = j.video_stream(it, "direct")
+    if runner is None:
+        if not shutil.which("mpv"):
+            raise MediaError("mpv isn't installed (sudo pacman -S mpv)")
+        runner = lambda cmd: subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                              start_new_session=True)
+    conf = tempfile.NamedTemporaryFile("w", prefix="bromigos-media-", suffix=".conf",
+                                       dir=os.environ.get("XDG_RUNTIME_DIR") or None, delete=False)
+    os.chmod(conf.name, 0o600)
+    for k, v in (st.get("headers") or {}).items():
+        val = f"{k}: {v}"
+        conf.write(f"http-header-fields-append=%{len(val.encode())}%{val}\n")
+    from . import config
+    ca = config.expand(j.opts.get("tls_ca") or config.setting("tls", "ca_file", ""))
+    if ca and os.path.isfile(ca):
+        conf.write(f"tls-ca-file={ca}\ntls-verify=yes\n")
+    conf.close()
+    runner(["mpv", "--fs", "--force-window=immediate", f"--include={conf.name}", "--hwdec=auto",
+            f"--title={title} · bromigOS", f"--force-media-title={title}", st["url"]])
+    import threading
+    threading.Timer(20.0, lambda: os.path.exists(conf.name) and os.remove(conf.name)).start()
+    return title
+
+
+def find_one(lab, name, kind=None):
+    """One title in the library by name or id (sonarr:12, radarr:40, lidarr:7): (app, record)."""
+    m = re.match(r"^(sonarr|radarr|lidarr):(\d+)$", name.strip())
+    kinds = {"tv": ("tv",), "movie": ("movies",), "music": ("music",)}.get(kind, ("tv", "movies", "music"))
+    recs = [r for k in kinds for r in library(lab, k)]
+    if m:
+        hit = [r for r in recs if r["app"] == m.group(1) and r["id"] == int(m.group(2))]
+    else:
+        q = _norm_title(name)
+        hit = [r for r in recs if _norm_title(r["title"]) == q] or [r for r in recs if q and q in _norm_title(r["title"])]
+    if not hit:
+        raise MediaError(f"nothing in the library called {name!r}")
+    if len(hit) > 1:
+        raise Ambiguous(name, [Item(id=f"{r['app']}:{r['id']}", kind=r["kind"], title=r["title"], year=r.get("year"))
+                               for r in hit])
+    return hit[0]["app"], hit[0]
+
+
 # ------------------------------------------------------------------ words
 def summary(it):
     """One line: 'The Office (US), 2005, TV, 9 seasons, Sonarr profile WEB-2160p, about 180 GB'."""
@@ -2302,6 +2675,30 @@ def parser():
     c = cmd("language", "your audio and subtitle languages (anime same: anime follows your audio again)")
     c.add_argument("verb", nargs="?", default="show", choices=("show", "set", "anime", "subtitles", "required"))
     c.add_argument("values", nargs="*", metavar="LANG")
+    c = cmd("library", "what's in Sonarr, Radarr or Lidarr: size, profile, monitoring, missing")
+    c.add_argument("which", nargs="?", choices=("tv", "movies", "music"), default="tv")
+    c = cmd("delete", "delete a title, a season or episode files, files and all (asks you to type its name)")
+    c.add_argument("what", nargs="+", metavar="NAME|ID")
+    kinds(c)
+    c.add_argument("--season", type=int, help="only this season's files (then it stops being monitored)")
+    c.add_argument("--episodes", help="only these episodes' files: S01E02,S01E03")
+    c.add_argument("--album", help="music: only this album")
+    c.add_argument("--exclude", action="store_true", help="and never fetch it again (an import exclusion)")
+    c.add_argument("--yes", "-y", action="store_true", help="don't ask")
+    c = cmd("monitor", "monitor or stop monitoring a title, a season, or its new episodes")
+    c.add_argument("what", nargs="+", metavar="NAME|ID")
+    c.add_argument("--off", action="store_true", help="stop monitoring")
+    c.add_argument("--season", type=int)
+    c.add_argument("--new", action="store_true", help="new episodes and seasons (Sonarr's monitorNewItems)")
+    kinds(c)
+    c = cmd("profile", "move a title to another quality profile")
+    c.add_argument("what", metavar="NAME|ID")
+    c.add_argument("profile")
+    kinds(c)
+    c = cmd("refresh", "search for a title (or a season) now")
+    c.add_argument("what", nargs="+", metavar="NAME|ID")
+    c.add_argument("--season", type=int)
+    kinds(c)
     c = cmd("calendar", "the TV or Movies iCal feed (for the Calendar widget)")
     c.add_argument("which", choices=("tv", "movies"))
     c.add_argument("--past", type=int, default=7)
@@ -2391,6 +2788,20 @@ def _main(a, js):
         else:
             print("\n".join(status_lines(d)))
         return 0
+    if a.cmd == "library":
+        recs = library(lab, a.which)
+        if js:
+            print(json.dumps(recs, indent=1, default=str))
+        else:
+            for r in recs:
+                print(f"  {r['app']}:{r['id']:<6} {r['title'][:40]:<40} {human(r['size']):>8}  {r['profile'][:28]:<28} "
+                      + ("monitored" if r.get("monitored") else "not monitored")
+                      + (f", {r['missing']} missing" if r.get("missing") else ""))
+        return 0
+    if a.cmd in ("delete", "monitor", "profile", "refresh"):
+        name = " ".join(a.what) if isinstance(a.what, list) else a.what
+        app, rec = find_one(lab, name, a.kind)
+        return cmd_change(lab, a, js, app, rec)
     if a.cmd == "upcoming":
         rows = upcoming(lab, a.days)
         if js:
@@ -2410,6 +2821,63 @@ def _main(a, js):
                 print(f"Nothing imported in the last {a.hours:g} hours.")
         return 0
     return 2
+
+
+def cmd_change(lab, a, js, app, rec):
+    out = (lambda *x: None) if js else print
+    if a.cmd == "delete":
+        file_ids = None
+        if a.episodes:
+            want = set(parse_episodes(a.episodes))
+            file_ids = [f["id"] for f in episode_files(lab, rec["id"]) if (f["season"], f["episode"]) in want]
+            if not file_ids:
+                raise MediaError("none of those episodes has a file")
+        album_id = None
+        if a.album:
+            al = [x for x in albums(lab, rec["id"]) if _norm_title(a.album) in _norm_title(x["title"])]
+            if len(al) != 1:
+                raise MediaError(f"{len(al)} albums match {a.album!r}")
+            album_id = al[0]["id"]
+        pl = delete_plan(lab, app, rec["id"], a.season, file_ids, album_id)
+        q = f"Delete {pl['what']}? It frees {human(pl['size'])}" + (
+            ", and it won't be fetched again" if a.exclude else "") + "."
+        out(q)
+        if not a.yes:
+            if not sys.stdin.isatty():
+                if js:
+                    print(json.dumps({"plan": pl, "asked": True}, default=str))
+                print("(nothing deleted: add --yes to delete without a terminal)", file=sys.stderr)
+                return 2
+            try:
+                typed = input(f"Type {pl['title']!r} to delete it: ").strip()
+            except EOFError:
+                typed = ""
+            if _norm_title(typed) != _norm_title(pl["title"]):
+                out("Nothing deleted.")
+                return 1
+        res = delete(lab, app, rec["id"], a.season, file_ids, album_id, a.exclude)
+        out(f"Deleted {res['what']} ({human(res['size'])})." + (" Removed from Seerr." if res.get("seerr") else "")
+            + (f" {', '.join(res['rescanned'])} rescanning." if res.get("rescanned") else ""))
+        if js:
+            print(json.dumps(res, default=str))
+        return 0
+    if a.cmd == "monitor":
+        said = set_monitored(lab, app, rec["id"], not a.off, a.season, (not a.off) if a.new else None)
+        out(f"{rec['title']}: {said}.")
+        if js:
+            print(json.dumps({"title": rec["title"], "monitoring": said}))
+        return 0
+    if a.cmd == "profile":
+        name = set_profile(lab, app, rec["id"], a.profile)
+        out(f"{rec['title']} now uses {name}. Run `bromigos lab media refresh` to search for it now.")
+        if js:
+            print(json.dumps({"title": rec["title"], "profile": name}))
+        return 0
+    name = search_now(lab, app, rec["id"], a.season)
+    out(f"Searching for {rec['title']} now ({name}).")
+    if js:
+        print(json.dumps({"title": rec["title"], "search": name}))
+    return 0
 
 
 def cmd_language(a, js):

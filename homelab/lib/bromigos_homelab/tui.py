@@ -349,6 +349,8 @@ class LabApp(App):
         Binding("c", "cancel_job", "Cancel job", tooltip="Cancel the job under the cursor (Jobs tab)"),
         Binding("R", "retry_job", "Retry", tooltip="Queue the job under the cursor again (Jobs tab)"),
         Binding("d", "doctor", "Run doctor", tooltip="Run every check now (Doctor tab)"),
+        Binding("M", "media", "Media", tooltip="Your media library: TV, films, music, downloads, requests "
+                                                "(bromigos media)"),
         Binding("a", "youtube_add", "Add YouTube", show=False,
                 tooltip="Add a YouTube channel or playlist to Pinchflat (the YouTube downloads card)"),
         Binding("],L", "tab_step(1)", "Next tab", show=False),
@@ -715,6 +717,17 @@ class LabApp(App):
         self.action_tab("jobs")
         self.load_jobs()
 
+    def action_media(self):
+        """The media library (bromigos media), in this terminal; back here when it's closed."""
+        exe = _media_bin()
+        if not exe:
+            self.notify("bromigos media isn't installed", severity="warning")
+            return
+        import subprocess
+        with self.suspend():
+            subprocess.run([exe])
+        self.load_status()
+
     def action_cancel_job(self):
         j = self._selected_job()
         if j and self.query_one("#tabs", TabbedContent).active == "jobs":
@@ -731,6 +744,13 @@ class LabApp(App):
             except ValueError as e:
                 self.notify(str(e), severity="warning")
             self.load_jobs()
+
+
+def _media_bin():
+    import shutil
+    here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+    return next((p for p in (os.path.join(here, "bin", "bromigos-media"), "/usr/lib/bromigos/bin/bromigos-media",
+                             shutil.which("bromigos-media")) if p and os.path.exists(p)), None)
 
 
 def main():

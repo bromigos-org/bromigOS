@@ -319,6 +319,51 @@ with both tracks, such as an anime with English and Japanese audio, ranks first.
 set them, your languages follow your desktop's language. You can also set them in
 **Settings › Lab**. `--audio ja` changes the audio for one request.
 
+### Your media library
+
+```bash
+bromigos media              # or: bromigos lab media
+```
+
+This opens your media library in the terminal. It has a tab for TV, films, music, YouTube,
+downloads, what's coming up, and one to add something. The top line says how much you have
+and how much space is free.
+
+![The media library in a terminal: the TV tab, a show's seasons beside it](images/media-library.webp)
+
+Move with the arrow keys or Vim's (`j`, `k`, `h`, `l`). Pick a show, an artist or a film,
+then press a key:
+
+| Key | Does |
+|---|---|
+| `m` | Monitor it, or stop. On a season or an album, just that one |
+| `n` | Pick up new episodes and seasons, or stop |
+| `p` | Change its quality profile |
+| `f` | Search for it now |
+| `o`, `O` | Open it in Jellyfin, or in Seerr |
+| `t` | Play it full screen. A show plays its next unwatched episode |
+| `e` | List a season's episode files |
+| `D` | Delete it |
+| `/`, `s` | Filter by name, and change the sort: newest, size, name, missing, profile |
+
+Hover over anything to see what it does.
+
+**Deleting** removes the files from the disk, and frees the space. First it shows what goes
+and how much space that frees. Then type the title, or press `D` again. On a season, an
+episode file or an album, only that goes, and it stops being monitored. You can tick
+"Don't fetch it again", so your lab doesn't add it back from a list.
+
+![The delete question: what goes, how much space it frees, the title to type](images/media-delete.webp)
+
+The same changes work as commands:
+
+```bash
+bromigos lab media library tv                     # or movies, music
+bromigos lab media monitor "Paper Moon" --season 2 --off
+bromigos lab media profile "Paper Moon" WEB-1080p
+bromigos lab media delete "Paper Moon" --season 1  # asks you to type the name
+```
+
 ### What's happening
 
 ```bash

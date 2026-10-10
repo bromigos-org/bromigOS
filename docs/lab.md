@@ -25,6 +25,7 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab youtube add`, `list`, `remove`, `pause`, `resume`, `refresh`, `status`, `quality`, `cookies` | Control Pinchflat without its web page ([below](#youtube-downloads)). |
 | `bromigos lab youtube sync` | Turn Pinchflat's playlists into playlists in Jellyfin and Plex. |
 | `bromigos lab media search`, `get`, `status`, `upcoming`, `recent`, `language` | Ask your media stack for films, shows, anime and music at the best quality, in your languages ([below](#media-requests)). |
+| `bromigos media` | Your media library in a terminal: browse, monitor, change quality, play, delete ([below](#media-requests)). |
 | `bromigos lab connect …` | Run `bromigos setup homelab …`: find services and write `homelab.toml`. |
 | `bromigos lab target …` | Run `bromigos target …`: choose where AI runs ([targets.md](targets.md)). |
 | Super+Shift+H | Open the Lab deck, a hologram of the rack lit by the same readings. |
@@ -365,8 +366,41 @@ import_path = "/media/downloads/slskd"                     # its downloads folde
 
 Jellyfin, Plex and Pinchflat are the sources the console already reads.
 
+**The media library, `bromigos media`.** A terminal UI (Textual,
+`homelab/lib/bromigos_homelab/mediatui.py`) over the same functions. `bromigos media` is
+`homelab/bin/bromigos-media`; `bromigos lab media` with nothing after it opens it too, in a
+terminal. Without a terminal, both print the Requests card instead.
+
+- Tabs: TV (Sonarr), MOVIES (Radarr), MUSIC (Lidarr), YOUTUBE (Pinchflat), DOWNLOADS,
+  UPCOMING and ADD (search, then the `get` form). The header has the library's totals and
+  the free space.
+- A title's side table lists its seasons, its albums, or a season's episode files (`e`).
+- Keys act on the row under the cursor: `m` monitor, `n` new episodes, `p` profile, `f`
+  search now, `o` and `O` open in Jellyfin and Seerr, `t` play (Jellyfin to mpv full
+  screen, as the den TV opens a channel), `D` delete, `/` filter, `s` sort. Vim keys work
+  beside the arrows, and every key, tab, row and button has a hint.
+- The lab console's `M` opens it, and returns to the console when it closes.
+
+The same changes are CLI verbs too: `library`, `monitor`, `profile`, `refresh` and `delete`.
+
+**Deleting.** `delete_plan()` says exactly what goes and how much space it frees. `delete()`
+then does it:
+
+- a whole title: the app's own delete, with `deleteFiles` and, when asked, an import
+  exclusion. Its Seerr entry and requests go too;
+- a season, episode files or an album: just those files. A season or those episodes then
+  stop being monitored, so they aren't fetched again;
+- then Jellyfin and Plex rescan.
+
+The TUI asks twice: type the title, or press `D` again. The CLI asks you to type the title,
+or takes `--yes`. VECTOR's `media_delete` deletes only when your latest words ask for it and
+name the title. His terminal can't run `delete` at all.
+
 **Tests.** `homelab/tests/test_lab_media.py` covers the profile picker, anime detection, the
-languages, seasons and episodes, and every command. It runs them against a fake stack
+languages, seasons and episodes, and every command. `homelab/tests/test_media_tui.py` drives
+the TUI with Textual's pilot: every tab, the delete dialog (cancel, typing the name, `D`
+twice, a season), monitor, profile, open, search and request, and filter and sort. With
+`MEDIA_SCREENSHOTS=DIR` it writes each tab as an SVG; the manual's pictures come from those. It runs them against a fake stack
 (`homelab/tests/mediafake.py`): one local server that answers like Seerr, Sonarr, Radarr,
 Lidarr, Prowlarr, Bazarr, Jellyfin, Plex, qBittorrent, SABnzbd and slskd. It uses the apps'
 recorded answer shapes, with made-up titles and values.

@@ -273,6 +273,10 @@ no likeness and no lab hosts.
 - **`lab-console.webp`**, on The lab console page. `bromigos lab` in a terminal,
   rendered offscreen with demo readings (`tools/screenshots/render.py`, `lab-console`);
   the tests' recorded lab, not a real one.
+- **`media-library.webp`** and **`media-delete.webp`**, on The lab console page. `bromigos
+  media`'s TV tab and its delete question, exported by its tests
+  (`homelab/tests/test_media_tui.py`, `MEDIA_SCREENSHOTS=DIR`) from a fake media stack with
+  made-up titles, converted from SVG at 1600 wide.
 - **`menu.webp`**, on The menu page. The menu with a search typed, rendered offscreen
   with demo readings (`tools/screenshots/render.py`, `menu`).
 - **`screensaver.webp`**, on the Idle and lock page. The screensaver's still from

@@ -196,7 +196,8 @@ CARDS = [
     dict(id="requests", title="Requests", order=137, capability=None, needs=("requests", "library"), covers=("requests",),
          hint="Films, shows and music you asked for (bromigos lab media get): what Sonarr, Radarr and Lidarr are "
               "downloading, with progress and time left from qBittorrent and SABnzbd, Seerr's open requests and "
-              "Soulseek fetches. Amber: stuck or failed to import (hover for why). Read-only.",
+              "Soulseek fetches. Amber: stuck or failed to import (hover for why). Read-only; M (or bromigos media) "
+              "opens the media library to change things.",
          build=_requests_card),
     dict(id="runners", title="CI runners", order=140, columns=("name", "online", "runners", "busy", "queued", "max"),
          hint="Self-hosted GitHub Actions runner pools (Actions Runner Controller): online, runners up, jobs "

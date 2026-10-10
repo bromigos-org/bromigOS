@@ -178,6 +178,7 @@ class State:
         self.jellyfin_items = []
         self.calendar = {"sonarr": [], "radarr": []}
         self.prowlarr_results = []
+        self.deleted, self.deleted_files, self.rescans, self.seerr_media = [], [], [], []
 
     # ---- Sonarr helpers
     def add_series(self, tv, monitored_seasons=(), profile=7, new="all", files=0, series_type="standard"):
@@ -190,14 +191,18 @@ class State:
             n = s["seasonNumber"]
             seasons.append({"seasonNumber": n, "monitored": n in monitored_seasons,
                             "statistics": {"episodeFileCount": files if n == 1 else 0, "episodeCount": s["episodeCount"],
-                                           "totalEpisodeCount": s["episodeCount"], "sizeOnDisk": 0}})
+                                           "totalEpisodeCount": s["episodeCount"],
+                                           "sizeOnDisk": files * 2 * 10 ** 9 if n == 1 else 0}})
             for e in range(1, s["episodeCount"] + 1):
+                has = n == 1 and e <= files
                 eps.append({"id": sid * 1000 + n * 100 + e, "seriesId": sid, "seasonNumber": n, "episodeNumber": e,
-                            "monitored": n in monitored_seasons, "hasFile": n == 1 and e <= files})
+                            "title": f"Episode {e}", "monitored": n in monitored_seasons, "hasFile": has,
+                            "episodeFileId": (sid * 1000 + n * 100 + e) * 10 if has else 0})
         self.series[sid] = dict(look, id=sid, seasons=seasons, monitored=bool(monitored_seasons), qualityProfileId=profile,
                                 monitorNewItems=new, seriesType=series_type, path=f"/media/tv/{look['title']}",
-                                statistics={"episodeFileCount": files, "totalEpisodeCount": len(eps), "sizeOnDisk": 0,
-                                            "seasonCount": len(seasons)})
+                                statistics={"episodeFileCount": files, "totalEpisodeCount": len(eps),
+                                            "sizeOnDisk": files * 2 * 10 ** 9, "seasonCount": len(seasons)},
+                                added=f"2026-10-0{1 + sid % 9}T00:00:00Z")
         self.episodes[sid] = eps
         return sid
 
@@ -208,6 +213,18 @@ class State:
             for e in self.episodes.get(sid, []):
                 if e["seasonNumber"] == season["seasonNumber"]:
                     e["monitored"] = season["monitored"]
+
+
+def seed_music(st):
+    """An artist with two albums in Lidarr, one on disk in FLAC."""
+    st.artists[300] = {"id": 300, "artistName": "The Quiet Engines", "foreignArtistId": "aaaaaaaa-0000-4000-8000-000000000001",
+                       "qualityProfileId": 2, "monitored": True, "monitorNewItems": "all", "added": "2026-10-02T00:00:00Z",
+                       "statistics": {"sizeOnDisk": 300_000_000, "albumCount": 2, "trackFileCount": 10,
+                                      "totalTrackCount": 22}}
+    st.albums[400] = {"id": 400, "artistId": 300, "title": "Glass Valley", "releaseDate": "2016-05-20T00:00:00Z",
+                      "albumType": "Album", "monitored": True, "statistics": {"trackFileCount": 10, "totalTrackCount": 10}}
+    st.albums[401] = {"id": 401, "artistId": 300, "title": "Low Tide", "releaseDate": "2019-01-11T00:00:00Z",
+                      "albumType": "Album", "monitored": False, "statistics": {"trackFileCount": 0, "totalTrackCount": 12}}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -268,12 +285,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_PUT(self):
         self._route("PUT")
 
+    def do_DELETE(self):
+        self._route("DELETE")
+
     def _route(self, method):
         u = urllib.parse.urlsplit(self.path)
         parts = u.path.split("/", 2)
         app, path = parts[1], "/" + (parts[2] if len(parts) > 2 else "")
         qs = urllib.parse.parse_qs(u.query)
-        body = self._body() if method in ("POST", "PUT") else None
+        body = self._body() if method in ("POST", "PUT", "DELETE") else None
         if app not in KEYS:
             return self._send(404, {"message": "no such app"})
         if not self._auth(app, qs):
@@ -321,6 +341,12 @@ class Handler(BaseHTTPRequestHandler):
                     st.movies[mid] = dict(radarr_lookup(body["mediaId"]), id=mid, qualityProfileId=body["profileId"],
                                           monitored=True, minimumAvailability="released", hasFile=False)
             return 201, {"id": rid, "status": 2}
+        if path.startswith("/api/v1/media") and method == "GET":
+            return {"results": st.seerr_media}
+        m = re.match(r"^/api/v1/media/(\d+)$", path)
+        if m and method == "DELETE":
+            st.seerr_media = [x for x in st.seerr_media if x["id"] != int(m.group(1))]
+            return 204, b""
         if path.startswith("/api/v1/request"):
             return {"results": [{"id": r["id"], "status": 2, "createdAt": "2026-10-01T00:00:00Z",
                                  "requestedBy": {"displayName": "tester"},
@@ -358,6 +384,11 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/series/(\d+)$", p)
         if m:
             sid = int(m.group(1))
+            if method == "DELETE":
+                st.series.pop(sid)
+                st.episodes.pop(sid, None)
+                st.deleted.append(("sonarr", sid, qs.get("deleteFiles"), qs.get("addImportListExclusion")))
+                return 200, {}
             if method == "PUT":
                 old = st.series[sid]
                 changed = {s["seasonNumber"] for s in body["seasons"]
@@ -394,9 +425,20 @@ class Handler(BaseHTTPRequestHandler):
             return 202, {}
         if p == "/episodefile":
             sid = int(qs["seriesId"][0])
-            return [{"id": e["id"], "seasonNumber": e["seasonNumber"], "qualityCutoffNotMet": e["episodeNumber"] == 1,
+            return [{"id": e["episodeFileId"], "seasonNumber": e["seasonNumber"], "size": 2 * 10 ** 9,
+                     "qualityCutoffNotMet": e["episodeNumber"] == 1,
+                     "quality": {"quality": {"name": "Bluray-1080p"}},
+                     "relativePath": f"Season {e['seasonNumber']}/E{e['episodeNumber']:02d}.mkv",
                      "mediaInfo": {"audioLanguages": "eng/jpn" if e["episodeNumber"] > 1 else "jpn", "subtitles": "eng"}}
                     for e in st.episodes.get(sid, []) if e["hasFile"]]
+        if p == "/episodefile/bulk" and method == "DELETE":
+            gone = set(body["episodeFileIds"])
+            for eps in st.episodes.values():
+                for e in eps:
+                    if e["episodeFileId"] in gone:
+                        e.update(hasFile=False, episodeFileId=0)
+            st.deleted_files += sorted(gone)
+            return 200, {}
         if p == "/command":
             st.commands.append(("sonarr", body))
             return 201, {"id": len(st.commands), "status": "queued", "name": body["name"]}
@@ -440,6 +482,10 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/movie/(\d+)$", p)
         if m:
             mid = int(m.group(1))
+            if method == "DELETE":
+                st.movies.pop(mid)
+                st.deleted.append(("radarr", mid, qs.get("deleteFiles"), qs.get("addImportExclusion")))
+                return 200, {}
             if method == "PUT":
                 st.movies[mid] = body
                 return 202, body
@@ -490,7 +536,34 @@ class Handler(BaseHTTPRequestHandler):
             st.artists[aid] = dict(body, id=aid)
             return 201, st.artists[aid]
         if p == "/artist":
-            return list(st.artists.values())
+            return [dict(a, statistics=a.get("statistics") or {"sizeOnDisk": 0, "albumCount": 0, "trackFileCount": 0,
+                                                               "totalTrackCount": 0}) for a in st.artists.values()]
+        m = re.match(r"^/artist/(\d+)$", p)
+        if m:
+            aid = int(m.group(1))
+            if method == "DELETE":
+                st.artists.pop(aid)
+                st.deleted.append(("lidarr", aid, qs.get("deleteFiles"), qs.get("addImportListExclusion")))
+                return 200, {}
+            if method == "PUT":
+                st.artists[aid] = body
+                return 202, body
+            return st.artists[aid]
+        if p == "/album" and method == "GET":
+            return [al for al in st.albums.values() if al.get("artistId") == int(qs["artistId"][0])]
+        m = re.match(r"^/album/(\d+)$", p)
+        if m and method == "DELETE":
+            st.albums.pop(int(m.group(1)))
+            st.deleted.append(("lidarr-album", int(m.group(1)), qs.get("deleteFiles"), qs.get("addImportListExclusion")))
+            return 200, {}
+        if p == "/album/monitor":
+            for i in body["albumIds"]:
+                st.albums[i]["monitored"] = body["monitored"]
+            return 202, {}
+        if p == "/trackfile":
+            return [{"albumId": al["id"], "size": 30_000_000, "quality": {"quality": {"name": "FLAC"}}}
+                    for al in st.albums.values() if al.get("artistId") == int(qs["artistId"][0])
+                    for _ in range((al.get("statistics") or {}).get("trackFileCount", 0))]
         if p == "/command" and method == "POST":
             st.commands.append(("lidarr", body))
             if body["name"] == "AlbumSearch" and st.lidarr_finds:
@@ -544,6 +617,9 @@ class Handler(BaseHTTPRequestHandler):
     # ---------------------------------------------------------------- Jellyfin and Plex
     def app_jellyfin(self, method, path, qs, body):
         st = self.st
+        if path == "/Library/Refresh":
+            st.rescans.append("jellyfin")
+            return 204, b""
         if path == "/Items":
             if qs.get("searchTerm"):
                 t = qs["searchTerm"][0].lower()
@@ -559,6 +635,11 @@ class Handler(BaseHTTPRequestHandler):
         raise KeyError(path)
 
     def app_plex(self, method, path, qs, body):
+        if path == "/library/sections":
+            return {"MediaContainer": {"Directory": [{"key": "1", "type": "show"}]}}
+        if path == "/library/sections/1/refresh":
+            self.st.rescans.append("plex")
+            return 200, b""
         if path == "/hubs/search":
             return {"MediaContainer": {"Hub": []}}
         raise KeyError(path)

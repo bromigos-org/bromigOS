@@ -39,6 +39,8 @@
   bromigos lab youtube quality NAME Q    best, 2160p … 480p, audio (new downloads only)
   bromigos lab youtube cookies set FILE | clear | status
                                     control Pinchflat without its web page (each takes --json)
+  bromigos lab media                the media library (a terminal UI; = bromigos media): TV, films,
+                                    music, YouTube, downloads, upcoming, add; monitor, profile, delete
   bromigos lab media search NAME [--movie|--tv|--anime|--music]
                                     find a film, show, anime or music: year, release dates,
                                     whether it's in your library or requested, the profile, the size
@@ -47,7 +49,10 @@
                      [--new yes|no] [--when announced|cinemas|released] [--yes]
                                     request it through Seerr, Sonarr, Radarr or Lidarr (a YouTube
                                     link: Pinchflat), at the best profile for it; asks first
-  bromigos lab media status [NAME] [--why] | upcoming [--days N] | recent [--hours N]
+  bromigos lab media status [NAME] [--why] | upcoming [--days N] | recent [--hours N] | library tv|movies|music
+  bromigos lab media monitor NAME [--season N|--new] [--off] | profile NAME PROFILE | refresh NAME
+  bromigos lab media delete NAME [--season N|--episodes S01E02|--album A] [--exclude] [--yes]
+                                    deletes files and all: asks you to type the name
   bromigos lab media language [show | set LANG… | anime LANG… | subtitles LANG… | required yes|no]
                                     each takes --json (docs/lab.md, "Media requests")
   bromigos lab youtube sync [--dry-run] [--server jellyfin|plex] [--json]
@@ -386,6 +391,18 @@ def tui():
     return T.main()
 
 
+def media_tui(argv):
+    try:
+        from bromigos_homelab import mediatui
+    except ImportError as e:
+        if "textual" in str(e):
+            print("The media library needs Textual: sudo pacman -S python-textual. Meanwhile: bromigos lab media "
+                  "status, library, get …", file=sys.stderr)
+            return 2
+        raise
+    return mediatui.main(argv)
+
+
 def main(argv):
     if not argv:
         if sys.stdout.isatty() and sys.stdin.isatty():
@@ -414,7 +431,9 @@ def main(argv):
             return youtube.main(rest)
         from bromigos_homelab import pinchflat
         return pinchflat.main(rest)
-    if cmd == "media":                                           # requests: mediareq.py; no verb: the card
+    if cmd == "media":                                           # requests: mediareq.py; no verb: the library
+        if not rest and sys.stdout.isatty() and sys.stdin.isatty():  # in a terminal, `bromigos media`'s TUI
+            return media_tui([])
         if not rest or rest == ["--json"]:
             return cmd_status(argparse.Namespace(json="--json" in rest, card="requests"))
         from bromigos_homelab import mediareq
