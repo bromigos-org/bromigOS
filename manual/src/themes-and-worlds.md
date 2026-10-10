@@ -135,10 +135,10 @@ silent until you turn the sound on. (A TV channel has nothing to do with the upd
 ![The den's big monitor playing a test pattern, with the hint under it: what's on, the
 channel buttons, the sound, the volume and Full screen](images/den-tv.webp)
 
-Each of the den's three screens has its own TV channels, and each plays its own channel at
-the same time. Channel 1 is what the screen always shows, such as the relay map on the big
-monitor. Your channels come after it, and the den stays exactly as it was until you change
-channel.
+Every channel can play on any of the den's three screens, and each screen plays its own
+channel at the same time. Channel 1 is what the screen always shows, such as the relay map
+on the big monitor. Your channels come after it, and the den stays exactly as it was until
+you change channel. Two screens on the same channel show the same moment, like real TV.
 
 ### Watch it
 
@@ -171,20 +171,22 @@ windows, so you can listen. When it shows again, it's where it would be by now.
 
 ### The channel guide
 
-The channel guide shows every channel on every screen, like a TV guide: what's on now and
-next, with its poster and how far through it is. Open it with **GUIDE** in the hint,
-<kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd>, or Settings › **Den TV**.
+The channel guide shows every channel once, like a TV guide: what's on now and next, with
+its poster and how far through it is. Under each one, **BIG**, **SCOPE** and **SMALL** put
+that screen on it; the lit button shows where it's on air. Open the guide with **GUIDE** in
+the hint, <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd>, or Settings › **Den TV**.
 
-![The channel guide: the big monitor's channels as cards, with posters, what's on now and
-next, and the channel on air marked](images/den-tv-guide.webp)
+![The channel guide: every channel as a card, with posters, what's on now and next, and a
+lit button for each screen it's on air on](images/den-tv-guide.webp)
 
 | To | Do this |
 |---|---|
 | Add a channel | **Add channel…**, then choose what it plays, its name, its order and its screens |
 | Make a channel of shows you pick | **Add channel…**, then **Shows or movies you pick**. Search, click the posters, and choose the order. |
-| Watch a channel now | **Tune now** on its card, or Enter |
+| Watch a channel now | **BIG**, **SCOPE** or **SMALL** on its card, or 1, 2 or 3 |
 | Reorder | Drag a card onto another one, or Alt and an arrow key |
-| Move to another screen | Drag the card onto that screen's channels, or choose its screens in the card's menu |
+| Keep a channel off a screen | Its menu's screens. Every channel is on every screen until you say. |
+| Open each item with a station card | **Bumpers** in its menu: a few seconds with the channel's name, what's on and the time |
 | Rename | The card's menu, or F2 |
 | Remove | The card's menu, or Delete. **Undo** brings it back. |
 
@@ -224,9 +226,19 @@ Replace `<id>` with the playlist's ID. The den TV reads the file when you save i
   after day. `items = [...]` picks movies, and `collections = [...]` collections.
 
 A playlist plays in order, and anything else shuffled, the same way all day. Add
-`order = "in order"` or `order = "shuffle"` to choose. Add `screens = ["wave"]` to put a
-channel on the scope, `"emblem"` for the small monitor, or `screens = "any"` for every
-screen.
+`order = "in order"` or `order = "shuffle"` to choose. Every channel plays on every screen.
+To keep one to some screens, add `screens = ["wave"]` for the scope, or `"emblem"` for the
+small monitor. `bumpers = true` opens each item with a station card.
+
+To start each screen on its own channel, name them:
+
+```toml
+[tv.start]
+big = "Saturday"
+wave = "Lo-fi"
+```
+
+A screen starts there until you change its channel. Then it remembers yours.
 
 The den TV's player (mpv) and YouTube support (yt-dlp) come with bromigOS. With the
 background still or on a computer without a working graphics card, it shows posters

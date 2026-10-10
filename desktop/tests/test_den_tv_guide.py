@@ -31,20 +31,19 @@ name = "Test Card"
 source = "jellyfin"
 library = "Shows"
 order = "in order"
-screens = ["big"]
 
 [[tv.channel]]
 name = "Block"                 # two shows taking turns
 source = "jellyfin"
 shows = ["Test Card", "Night Shift"]
 order = "in order"
-screens = ["big", "wave"]
+bumpers = true
 
 [[tv.channel]]
 name = "Films"
 source = "jellyfin"
 library = "Movies"
-screens = "any"
+screens = ["big", "emblem"]    # kept off the scope
 """
 
 

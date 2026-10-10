@@ -632,17 +632,19 @@ Then turn the panel on by setting `"visible": true` on the `weather` entry in yo
 
 ## Media
 
-The media panel, `widgets/plugins/media.py`, follows the den TV
+The media panel, `widgets/plugins/media.py`, is a remote for the den TV
 ([live/README.md](../live/README.md#the-den-tv)). It asks the live layer what's on through
-`bromigos-live tv state`. It shows the screen its settings name, else the one with the
-sound, else the first showing a media channel. When the den isn't drawn, it works out its
+`bromigos-live tv state`, and shows all three screens at once, which hovering one screen
+can't: each one's channel, what's on, how far in and where the sound comes from. Click a
+screen's row to choose it. The buttons act on that screen: the previous and next channel,
+its sound, full screen, and the channel guide. When the den isn't drawn, it works out its
 own channel's schedule from the same cache (`lib/bromigos_tv.py`).
 
 | Size class | Shows |
 |---|---|
-| `compact` | What's on, how far in, and what's next |
-| `wide` | The TV's buttons (channel, sound, volume, full screen), and continue watching |
-| `large` | Recently added too, with posters |
+| `compact` | A line for each screen, and the buttons |
+| `wide` | Each screen with its poster and what's next, and the buttons |
+| `large` | Continue watching and recently added too, with posters |
 
 Continue watching and recently added come from the first Jellyfin or Plex source in
 `homelab.toml`, or the one the panel's `source` names, every 5 minutes and only while the

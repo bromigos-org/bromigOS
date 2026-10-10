@@ -1,11 +1,15 @@
-"""MEDIA: what's on the den TV, now and next, and your media server's continue watching and
-recently added (bromigOS's built-in plugin panel; docs/widgets.md, "Media").
+"""MEDIA: a remote for the den TV, and your media server's continue watching and recently
+added (bromigOS's built-in plugin panel; docs/widgets.md, "Media").
 
-The den TV (the live layer's channels on the den's screens; live/README.md, "The den TV")
-says what's on through its control socket (`bromigos-live tv state`). When the den isn't
-drawn, the panel works out its own channel's schedule from the same cache
-(lib/bromigos_tv.py). Continue watching and recently added come from the first Jellyfin or
-Plex source in homelab.toml (bromigos_homelab's `video` capability), every 5 minutes.
+The den TV (the live layer's channels on the den's three screens; live/README.md, "The den
+TV") says what's on through its control socket (`bromigos-live tv state`). The panel shows
+all three screens at once, which hovering one screen can't: each one's channel, what's on
+and next, how far in, its poster, and where the sound comes from. Click a screen's row to
+choose it; the buttons change its channel and sound, open it full screen, or open the
+channel guide. When the den isn't drawn, the panel works out its own channel's schedule
+from the same cache (lib/bromigos_tv.py). Continue watching and recently added come from
+the first Jellyfin or Plex source in homelab.toml (bromigos_homelab's `video` capability),
+every 5 minutes.
 
 Its settings make one TV channel, the panel's channel, in ~/.config/bromigos/widgets/media.toml:
 the source, what to play (a library, collection or playlist, chosen from the list the
@@ -13,8 +17,8 @@ servers last gave), a YouTube URL instead, the order, the den screen, and for Yo
 folder to keep videos in. Every other channel is in the channel guide (Settings › Den TV),
 which the form links to.
 
-Sizes: compact (now and next), wide (and continue watching), large (and recently added,
-with posters).
+Sizes: compact (the three screens, a line each), wide (with posters and what's next), large
+(and continue watching and recently added).
 """
 import json
 import os
@@ -38,6 +42,7 @@ RUNTIME = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
 SOCK = os.path.join(RUNTIME, "bromigos-live.sock")
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "bromigos", "widgets", "media")
 SCREENS = [["big", "The big monitor"], ["wave", "The scope"], ["emblem", "The small monitor"]]
+SHORT = {"big": "BIG", "wave": "SCOPE", "emblem": "SMALL"}
 
 
 def _tv():
@@ -123,11 +128,23 @@ def _demo():
     return "demo" in sys.modules or os.environ.get("BROMIGOS_WIDGETS_DEMO") == "1"
 
 
-DEMO = {"now": {"name": "Saturday", "channel": 2, "of": 3, "screen": "big", "sound": False, "volume": 60, "live": True,
+DEMO = {"now": {"name": "Saturday", "channel": 2, "of": 3, "screen": "big", "sound": True, "volume": 60, "live": True,
                 "item": {"title": "The Long Watch", "series": "Relay Station", "season": 2, "episode": 5,
                          "kind": "episode", "duration": 1440}, "offset": 610,
                 "next_item": {"title": "Static", "series": "Relay Station", "season": 2, "episode": 6, "kind": "episode",
                               "duration": 1380}},
+        "screens": [
+            {"screen": "big", "name": "Saturday", "channel": 2, "of": 4, "kind": "server", "sound": True, "volume": 60,
+             "live": True,
+             "item": {"title": "The Long Watch", "series": "Relay Station", "season": 2, "episode": 5,
+                      "kind": "episode", "duration": 1440}, "offset": 610,
+             "next_item": {"title": "Static", "series": "Relay Station", "season": 2, "episode": 6,
+                           "kind": "episode", "duration": 1380}},
+            {"screen": "wave", "name": "Lo-fi", "channel": 3, "of": 4, "kind": "youtube", "sound": False, "live": True,
+             "volume": 60, "item": {"title": "Rain on the relay", "kind": "video", "duration": 3600}, "offset": 1200,
+             "next_item": {"title": "Night drive", "kind": "video", "duration": 2400}},
+            {"screen": "emblem", "name": "BURN-IN", "channel": 1, "of": 4, "kind": "own", "sound": False, "live": True,
+             "volume": 60}],
         "resume": [{"title": "Night Shift", "series": "Harbour Lights", "season": 1, "episode": 3, "kind": "episode",
                     "duration": 2700, "position": 1800},
                    {"title": "Drift", "year": 1998, "kind": "movie", "duration": 6100, "position": 900}],
@@ -138,9 +155,9 @@ DEMO = {"now": {"name": "Saturday", "channel": 2, "of": 3, "screen": "big", "sou
 
 class MediaPanel(Panel):
     name, title = "media", "MEDIA"
-    description = "What's on the den TV, now and next, with continue watching and recently added"
+    description = "A remote for the den TV's three screens, with continue watching and recently added"
     category, reads = "media", "the den TV, and your Jellyfin or Plex server"
-    sizes = {"compact": ((300, 120), (520, 200), (380, 150)),
+    sizes = {"compact": ((300, 140), (520, 200), (380, 150)),
              "wide": ((640, 210), (1200, 340), (760, 250)),
              "large": ((640, 400), (1200, 900), (760, 560))}
     default_size = "compact"
@@ -165,7 +182,9 @@ class MediaPanel(Panel):
     def __init__(self, cfg=None, wake=None):
         super().__init__(cfg)
         self.wake = wake
-        self.now = None                  # the den TV's media screen: {name, channel, of, screen, item, offset, …}
+        self.now = None                  # the selected screen's row (below)
+        self.rows = []                   # each den screen: {screen, name, channel, of, kind, item, offset, sound, …}
+        self.sel = None                  # the screen the buttons act on (a click on its row)
         self.resume, self.latest = [], []
         self.lib_error = None
         self.server = None
@@ -179,27 +198,45 @@ class MediaPanel(Panel):
     # ---- reading
     def tick(self):
         if _demo():
-            self.now, self.resume, self.latest = DEMO["now"], DEMO["resume"], DEMO["latest"]
+            self.rows, self.resume, self.latest = DEMO["screens"], DEMO["resume"], DEMO["latest"]
+            self.sel = self.sel or "big"
+            self.now = next(r for r in self.rows if r["screen"] == self.sel)
             return
-        self.now = self._now()
+        self.rows = self._screens()
+        live = [r for r in self.rows if r.get("live")]
+        if live:
+            if self.sel not in [r["screen"] for r in live]:
+                snd = next((r["screen"] for r in live if r.get("sound")), None)
+                media = [r["screen"] for r in live if r.get("kind") != "own"]
+                self.sel = snd or (media[0] if media else "big")
+            self.now = next(r for r in live if r["screen"] == self.sel)
+        else:
+            self.now = self.rows[0] if self.rows else None
 
-    def _now(self):
+    def _screens(self):
+        """Every den screen's row from the live layer, or the panel's own channel when the den
+        isn't drawn."""
         out = _ask("tv state --json")
         if out and out.startswith("{"):
             try:
                 d = json.loads(out)
             except ValueError:
                 d = {}
-            want = self.setting("screen", "big")
-            screens = d.get("screens") or {}
-            media = [s for s, v in screens.items() if v.get("kind") != "own"]
-            snd = d.get("sound_from")
-            pick = want if want in media else (snd if snd in media else (media[0] if media else None))
-            if pick:
-                v = dict(screens[pick], screen=pick, live=True)
-                if v.get("offset") is not None and v.get("start"):
-                    v["offset"] = time.time() - v["start"]
-                return v
+            rows = []
+            for scr, _t in SCREENS:
+                v = (d.get("screens") or {}).get(scr)
+                if not v:
+                    continue
+                r = dict(v, screen=scr, live=True)
+                if r.get("offset") is not None and r.get("start"):
+                    r["offset"] = time.time() - r["start"]
+                rows.append(r)
+            if rows:
+                return rows
+        n = self._now()
+        return [n] if n else []
+
+    def _now(self):
         # the den isn't drawn (or nothing media is on): the panel's own channel, from the cache
         TV = _tv()
         if TV is None:
@@ -218,7 +255,26 @@ class MediaPanel(Panel):
         while not self._stop.is_set():
             if self.shown != "compact" and time.time() - self._fetched > 300:
                 self._fetch_library()
+            if self.shown != "compact":
+                self._now_posters()
             self._stop.wait(10)
+
+    def _now_posters(self):
+        """The posters of what each screen shows (a thread): the server's, or YouTube's thumbnail."""
+        H = _homelab()
+        for r in list(self.rows):
+            it = r.get("item") or {}
+            if not it.get("id") or str(it.get("id")) in self.posters:
+                continue
+            a = None
+            if it.get("server") not in (None, "youtube", "files") and H is not None:
+                try:
+                    a = H.video_source(it.get("server"))
+                except Exception:                              # noqa: BLE001
+                    a = None
+            self._poster(a, it)
+        if self.wake:
+            self.wake()
 
     def _fetch_library(self):
         """Continue watching and recently added, with their posters (a thread; every 5 minutes)."""
@@ -248,19 +304,23 @@ class MediaPanel(Panel):
             self.wake()
 
     def _poster(self, a, it):
+        """A poster as a cairo surface, kept as a PNG in CACHE: through the server's adapter, or
+        (a=None) the item's own thumbnail address (YouTube's)."""
         iid = str(it.get("id"))
         if iid in self.posters:
             return
-        path = os.path.join(CACHE, f"{a.name}-{iid}.png")
+        path = os.path.join(CACHE, f"{a.name if a else 'web'}-{iid}.png")
         if not os.path.exists(path):
-            url, headers = a.video_poster(it)
-            if not url:
+            url, headers = a.video_poster(it) if a else (it.get("thumbnail") or it.get("poster"), {})
+            if not url or not str(url).startswith(("http://", "https://")):
                 self.posters[iid] = None
                 return
             try:
+                import ssl
                 import urllib.request
                 req = urllib.request.Request(url, headers=headers)
-                with urllib.request.urlopen(req, timeout=10, context=a._ctx()) as r:
+                with urllib.request.urlopen(req, timeout=10, context=a._ctx() if a else
+                                            ssl.create_default_context()) as r:
                     data = r.read(4 << 20)
                 import gi
                 gi.require_version("GdkPixbuf", "2.0")
@@ -286,74 +346,122 @@ class MediaPanel(Panel):
             self.shown = cls
             self._fetched = 0.0
         n = self.now
-        right = None
-        if n and n.get("channel"):
-            right = f"CH {n['channel']}/{n['of']}"
+        snd = next((r for r in self.rows if r.get("sound") and r.get("kind") != "own"), None)
+        right = f"SOUND · {SHORT.get(snd['screen'], '')}" if snd else None
         top = D.frame(cr, w, h, self.title, right, "phosphor")
-        self.region(0, 0, w, 34, "MEDIA: what the den TV shows (scroll over the TV to change channel), and your "
-                                 "media server's continue watching and recently added")
+        self.region(0, 0, w, 34, "MEDIA: a remote for the den TV, all three screens at once (click a screen's row "
+                                 "to choose it), and your media server's continue watching and recently added")
         x0, x1 = 16, w - 16
-        y = self._draw_now(cr, x0, x1, top, n, cls)
-        if cls == "compact":
+        y = self._draw_remote(cr, x0, x1, top, n, cls)
+        if cls != "large":
             return
         lw = (x1 - x0)
         y += 6
         D.rule(cr, x0, y, x1)
         y += 10
-        if cls == "wide":
-            self._row_list(cr, x0, y, lw, h - y - 10, "CONTINUE WATCHING", self.resume, posters=False)
-            return
         half = (h - y - 10) / 2
         self._row_list(cr, x0, y, lw, half - 8, "CONTINUE WATCHING", self.resume, posters=True)
         self._row_list(cr, x0, y + half, lw, half, "RECENTLY ADDED", self.latest, posters=True)
 
-    def _draw_now(self, cr, x0, x1, y, n, cls):
+    def _draw_remote(self, cr, x0, x1, y, n, cls):
+        """A row for each den screen (the chosen one marked), then the buttons for it."""
         TV = _tv()
         label = TV.label if TV else (lambda it: (it or {}).get("title", ""))
-        if not n:
+        if not self.rows:
             D.text(cr, x0, y, "Nothing on the den TV.", 13, "soft")
-            D.text(cr, x0, y + 20, "Scroll over a den screen to change channel, or give this panel a channel in",
-                   10, "dim", width=x1 - x0)
-            D.text(cr, x0, y + 34, "its Settings (a library, a playlist or YouTube).", 10, "dim", width=x1 - x0)
+            D.text(cr, x0, y + 20, "Add channels in the channel guide (Settings › Den TV, SUPER+ALT+G), or give "
+                                   "this panel one in its Settings.", 10, "dim", width=x1 - x0, wrap=True)
+            self.region(x0, y, x1 - x0, 44, "Opens the channel guide (bromigos-live tv guide)", self._guide)
             return y + 50
-        it = n.get("item")
-        D.label(cr, x0, y, ("ON " + {"big": "THE BIG MONITOR", "wave": "THE SCOPE", "emblem": "THE SMALL MONITOR"}
-                            .get(n.get("screen"), "THE TV") + " · " if n.get("screen") else "") + n.get("name", ""),
-                "dim", 10)
-        y += 18
-        if not it:
-            D.text(cr, x0, y, "Tuning in… (the channel's list is on its way)", 12, "static")
-            return y + 22
-        title = label(it)
-        D.text(cr, x0, y, "▶ " + title, 14, "phosphor", "semibold", width=x1 - x0, glow=True)
-        dur, off = it.get("duration"), n.get("offset")
-        self.region(x0, y - 2, x1 - x0, 22, f"Now on the den TV: {title}. Click: full screen with sound "
-                                           "(bromigos-live tv open)", self._open)
-        y += 22
-        if dur and off is not None:
-            D.bar(cr, x0, y, x1 - x0, 4, max(0.0, min(1.0, off / dur)))
-            left = max(0, dur - off)
-            D.text(cr, x1, y + 8, f"{int(left // 60)} min left", 10, "dim", align="right")
-            y += 8
-        nxt = n.get("next_item")
-        if nxt:
-            D.text(cr, x0, y, "NEXT  " + label(nxt), 10, "static", width=(x1 - x0) * 0.7)
-            self.region(x0, y - 2, (x1 - x0) * 0.7, 16, f"Next on {n.get('name')}: {label(nxt)}")
-        y += 18
-        if n.get("live") and cls != "compact":
-            bx = x0
-            bx += self._button(cr, bx, y, "◀ CH", "The den TV's previous channel", lambda: self._tv("prev")) + 6
-            bx += self._button(cr, bx, y, "CH ▶", "The den TV's next channel", lambda: self._tv("next")) + 6
-            snd = "SOUND ON" if n.get("sound") else "SOUND OFF"
-            tip = (f"The den TV's sound, now {snd.lower()} at {n.get('volume')}%: click to turn it "
-                   + ("off" if n.get("sound") else "on"))
-            bx += self._button(cr, bx, y, snd, tip, lambda: self._tv("sound toggle")) + 6
-            bx += self._button(cr, bx, y, "−", "Volume down 5%", lambda: self._tv("volume down")) + 4
-            bx += self._button(cr, bx, y, "+", "Volume up 5%", lambda: self._tv("volume up")) + 6
-            self._button(cr, bx, y, "FULL SCREEN", "Open it in mpv, full screen with sound, at the same moment",
-                         self._open)
-            y += 24
-        return y
+        live = any(r.get("live") for r in self.rows)
+        tall = cls != "compact"
+        rh = 46 if tall else 22
+        for r in self.rows:
+            scr = r.get("screen")
+            chosen = live and scr == self.sel
+            it = r.get("item")
+            px = x0
+            if chosen:
+                D.src(cr, "phosphor", 0.10)
+                cr.rectangle(x0 - 6, y - 3, x1 - x0 + 12, rh)
+                cr.fill()
+                D.src(cr, "phosphor", 0.9)
+                cr.rectangle(x0 - 6, y - 3, 2, rh)
+                cr.fill()
+            if tall:
+                pw, ph = 30, 44
+                surf = self.posters.get(str((it or {}).get("id"))) if it else None
+                if surf is not None:
+                    cr.save()
+                    cr.translate(px, y)
+                    cr.scale(pw / surf.get_width(), ph / surf.get_height())
+                    cr.set_source_surface(surf, 0, 0)
+                    cr.paint()
+                    cr.restore()
+                else:
+                    D.src(cr, "guard", 0.8)
+                    cr.rectangle(px, y, pw, ph)
+                    cr.fill()
+                px += pw + 10
+            sound = r.get("sound") and r.get("kind") != "own"
+            if tall:
+                head = (f"{SHORT.get(scr, '')} · CH {r['channel']} " if live and scr else "") + (r.get("name") or "")
+                D.label(cr, px, y, head, "phosphor" if chosen else "dim", 10)
+                if sound:
+                    D.text(cr, x1, y - 1, "♪ SOUND", 9, "amber", "semibold", align="right")
+            else:
+                D.label(cr, px, y, f"{SHORT.get(scr, '')} {r.get('channel') or ''}" if live else "TV",
+                        "phosphor" if chosen else "dim", 10)
+                if sound:
+                    D.text(cr, px + 62, y - 1, "♪", 10, "amber", "semibold")
+            if r.get("kind") == "own":
+                now = "Its own picture"
+            elif it:
+                now = "▶ " + label(it)
+            else:
+                now = "Tuning in…"
+            if tall:
+                D.text(cr, px, y + 12, now, 11, "soft" if it else "static", "semibold", width=x1 - px)
+                dur, off = (it or {}).get("duration"), r.get("offset")
+                if dur and off is not None:
+                    D.bar(cr, px, y + 28, x1 - px, 3, max(0.0, min(1.0, off / dur)))
+                nxt = r.get("next_item")
+                if nxt:
+                    D.text(cr, px, y + 32, "NEXT  " + label(nxt), 9, "static", width=x1 - px)
+            else:
+                line = (f"{r.get('name')}: " + now.lstrip("▶ ")) if r.get("kind") != "own" else now
+                D.text(cr, px + 76, y - 1, line, 11, "soft" if it else "static", width=x1 - px - 76)
+                dur, off = (it or {}).get("duration"), r.get("offset")
+                if dur and off is not None:
+                    D.bar(cr, px + 76, y + 15, x1 - px - 76, 2, max(0.0, min(1.0, off / dur)))
+            tip = (f"{dict(SCREENS).get(scr, 'The den TV')}: {r.get('name')}"
+                   + (f", {label(it)}" if it else "") + (f"; next {label(r['next_item'])}" if r.get("next_item") else "")
+                   + (". Click: choose it for the buttons below" if live else ""))
+            self.region(x0 - 6, y - 3, x1 - x0 + 12, rh, tip, (lambda s=scr: self._choose(s)) if live else None)
+            y += rh + (2 if tall else 0)
+        if not live:
+            return y
+        y += 4
+        s = self.sel
+        bx = x0
+        name = dict(SCREENS).get(s, "the screen").lower()
+        bx += self._button(cr, bx, y, "◀ CH", f"The previous channel on {name}", lambda: self._tv("prev")) + 6
+        bx += self._button(cr, bx, y, "CH ▶", f"The next channel on {name}", lambda: self._tv("next")) + 6
+        on = bool(n and n.get("sound"))
+        bx += self._button(cr, bx, y, "SOUND ON" if on else "SOUND OFF",
+                           f"Sound from {name}: click to turn it " + ("off" if on else "on (one screen at a time)"),
+                           lambda: self._tv("sound toggle")) + 6
+        if n and n.get("kind") != "own":
+            bx += self._button(cr, bx, y, "FULL", f"{name.capitalize()}'s channel in mpv, full screen with sound, at "
+                                                  "the same moment", self._open) + 6
+        self._button(cr, bx, y, "GUIDE", "Every channel: the channel guide (Settings › Den TV)", self._guide)
+        return y + 24
+
+    def _choose(self, screen):
+        self.sel = screen
+        self.now = next((r for r in self.rows if r.get("screen") == screen), self.now)
+        if self.wake:
+            self.wake()
 
     def _row_list(self, cr, x, y, w, h, title, items, posters):
         D.label(cr, x, y, title + (f" · {self.server}" if self.server else ""), "dim", 10)
@@ -430,13 +538,18 @@ class MediaPanel(Panel):
 
     # ---- actions
     def _tv(self, verb):
-        _ask("tv " + verb)
-        self.now = self._now()
+        _ask("tv " + verb + (f" --screen {self.sel}" if self.sel else ""))
+        self.tick()
         if self.wake:
             self.wake()
 
+    def _guide(self):
+        import subprocess
+        subprocess.Popen(["bromigos", "settings", "den-tv"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+
     def _open(self):
-        out = _ask("tv open")
+        out = _ask("tv open" + (f" --screen {self.sel}" if self.sel else ""))
         if out is None:
             import subprocess
             subprocess.Popen(["bromigos-live", "tv", "open"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

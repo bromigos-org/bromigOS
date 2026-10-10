@@ -213,14 +213,17 @@ bromigos panels size notes 470 400 # resize one: width and height in pixels
 
 ## Media
 
-MEDIA follows the [den TV](themes-and-worlds.md#the-den-tv). It comes in three sizes:
+MEDIA is a remote for the [den TV](themes-and-worlds.md#the-den-tv): all three screens at
+once, what each is showing and where the sound comes from. Click a screen's line to choose
+it, then use the buttons to change its channel, turn its sound on or off, watch it full
+screen, or open the channel guide. It comes in three sizes:
 
-- **compact:** what's on and what's next, with how long is left;
-- **wide:** the TV's buttons, and what you were part-way through on your server;
-- **large:** recently added too, with posters.
+- **compact:** a line for each screen, and the buttons;
+- **wide:** each screen with its poster and what's next;
+- **large:** what you were part-way through on your server, and what's new, with posters.
 
-Click what's on to watch it full screen with sound. Click something you were watching to
-open it in Jellyfin or Plex, which remember where you were.
+Click something you were watching to open it in Jellyfin or Plex, which remember where you
+were.
 
 Its **Settings…** make a TV channel without editing a file. Choose a source and a library,
 collection or playlist from your server, or paste a YouTube address. You can also choose

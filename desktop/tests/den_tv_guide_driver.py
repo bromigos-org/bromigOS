@@ -1,6 +1,6 @@
 """Drive Settings › Den TV (the channel guide) inside e2e_tv_nested.py's nested Hyprland, as
-a user would: Add channel filled in and Add clicked, a card dropped before another and onto
-another screen, Remove and its Undo, Tune now. After each, the live layer running in the
+a user would: Add channel filled in and Add clicked, a card dropped before another, its
+screens changed, a screen's tune button, Remove and its Undo. After each, the live layer running in the
 nest is asked what it has (`bromigos-live tv list|state`): the channels follow without a
 restart. Prints PASS/FAIL lines.
 
@@ -19,7 +19,7 @@ import gi  # noqa: E402
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import GLib  # noqa: E402
+from gi.repository import GLib, Gtk  # noqa: E402
 
 from bromigos_settings import app as A  # noqa: E402
 
@@ -37,6 +37,17 @@ def live(*args):
         return subprocess.run(["bromigos-live", "tv", *args], capture_output=True, text=True, timeout=15).stdout
     except (OSError, subprocess.SubprocessError):
         return ""
+
+
+def walk(w):
+    stack = [w]
+    while stack:
+        x = stack.pop()
+        yield x
+        c = x.get_first_child()
+        while c is not None:
+            stack.append(c)
+            c = c.get_next_sibling()
 
 
 def lineup(screen):
@@ -120,10 +131,17 @@ def steps(d):
     def drop_before_first():
         i = d.index("Driven")
         first = next(i_ for i_, ch, t in g.entries if ch and "big" in ch["screens"])
-        g._dropped(f"{i}:big", "big", first)
+        g._dropped(str(i), first)
 
     def to_small():
-        g._dropped(f"{d.index('Driven')}:wave", "emblem", None)
+        g.set_screens(d.index("Driven"), ["big", "emblem"])
+
+    def tune():
+        n = lineup("emblem").index("Driven") + 1
+        card = g.cards["driven"]
+        btn = [b for b in walk(card) if isinstance(b, Gtk.Button) and b.get_label() == "SMALL"][0]
+        d.tuned_n = n
+        btn.emit("clicked")                                   # the card's SMALL button
 
     def remove():
         i = d.index("Driven")
@@ -132,11 +150,6 @@ def steps(d):
     def undo():
         u = next(u for _t, u in reversed(d.toasts) if u)
         u()
-
-    def tune():
-        n = lineup("emblem").index("Driven") + 1
-        d.tuned_n = n
-        g.tune("emblem", n)
 
     return [
         ("the guide lists the live layer's channels", lambda: None,
@@ -150,10 +163,10 @@ def steps(d):
              "~/.config/bromigos-live/config.toml")).read(), "comment")),
         ("dragged before the first: channel 2 on the big monitor", drop_before_first,
          lambda: (lineup("big")[1:2] == ["Driven"], lineup("big"))),
-        ("dropped onto the small monitor: it moves there from the scope", to_small,
+        ("its screens: the big and small monitors, not the scope", to_small,
          lambda: ("Driven" in lineup("emblem") and "Driven" not in lineup("wave") and "Driven" in lineup("big"),
                   (lineup("big"), lineup("wave"), lineup("emblem")))),
-        ("Tune now: the small monitor on it", tune,
+        ("the card's SMALL button: the small monitor on it", tune,
          lambda: (json.loads(live("state", "--json") or "{}").get("screens", {}).get("emblem", {}).get("name")
                   == "Driven", live("state", "--json")[:300])),
         ("Remove: gone from every screen", remove,

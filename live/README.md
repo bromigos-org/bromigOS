@@ -229,14 +229,17 @@ screen](../docs/images/den-tv.webp)
 
 Each of the den's three screens has a channel list: the big monitor (`big`), the scope
 (`wave`) and the small monitor (`emblem`). Channel 1 is the screen's own picture, drawn
-exactly as before. The media channels that name the screen come after it. With every screen
-on channel 1, the den is pixel for pixel what it was without the den TV.
+exactly as before. Every media channel comes after it, on every screen, unless the
+channel's `screens` keeps it to some. With every screen on channel 1, the den is pixel for
+pixel what it was without the den TV.
 
 Every screen plays its own channel at the same time. Each has a player of its own, and
-the sound comes from one screen at a time.
+the sound comes from one screen at a time. Two screens on the same channel show the same
+moment, like real TV, from one player.
 
-The channel guide (Settings › Den TV) shows every channel on every screen, and adds,
-removes, reorders and renames them. See [The channel guide](#the-channel-guide).
+The channel guide (Settings › Den TV) shows every channel once, with a button for each
+screen to tune it. It also adds, removes, reorders and renames channels. See
+[The channel guide](#the-channel-guide).
 
 The den TV is the den's only. Mire and Tidewell have no screen to put it on. A world could
 name a screen region for it, but none does yet.
@@ -252,13 +255,17 @@ name = "Saturday"
 source = "plex"            # a jellyfin or plex source in homelab.toml; default: the first
 library = "TV Shows"       # or collection = "…" or playlist = "…", by its name
 order = "shuffle"          # or "in order"
-screens = ["big"]          # big, wave, emblem, or "any" (every screen); default: [tv] screens,
-                           # else the big monitor
+screens = ["big"]          # optional: only these screens (big, wave, emblem); default: every screen
 
 [[tv.channel]]
 name = "Sitcoms"
 shows = ["Example Show", "Another Show"]   # shows you pick, by title or id
 order = "in order"         # take turns: "alternate" says the same; "shuffle" mixes them
+bumpers = true             # a few seconds' card opens each item: the channel, what's on, the time
+
+[tv.start]                 # where a screen starts until you change its channel
+big = "Saturday"
+wave = "Studio"
 
 [[tv.channel]]
 name = "Studio"
@@ -302,8 +309,15 @@ files = "~/Videos/Home"    # a folder, searched through, or a list of files
 The `[tv]` table in `config.toml` has the rest: the stream's quality, full screen's, how
 much the den's phosphor tints the picture, the volume a screen starts at, the ducking,
 `max_playing` (how many screens decode at once), `cover_opacity` (how opaque a window must
-be to count as covering a screen) and `screens` (the screens a channel goes on when it
-doesn't say).
+be to count as covering a screen), `screens` (the screens a channel goes on when it
+doesn't say: every screen) and `start` (each screen's first channel).
+
+- **Where a screen starts.** `[tv.start]` names a channel for each screen. A screen nobody
+  has tuned starts there, so the three screens open on different channels. Once you
+  change a screen's channel, it remembers yours, channel 1 included.
+- **Bumpers.** With `bumpers = true`, the first five seconds of each item show a card in
+  the screen's glass, like a TV network's evening block: the channel's name, "UP NEXT",
+  what's on and the time. Every screen on the channel shows it at the same moment.
 
 ### How it plays
 
@@ -339,6 +353,9 @@ doesn't say).
 - **Motion.** With still motion, or no GPU, each screen shows its item's poster and
   nothing is decoded. With reduced motion, it shows a still frame renewed every 30
   seconds, unless its sound is on.
+- **The same channel on two screens.** Both show the same moment, as on real TV, and one
+  player decodes for both. The screen with the sound decodes, else the first one in view.
+  The other draws the same frame in its own glass.
 - **At most `max_playing`.** `[tv] max_playing`, 3 by default, is how many screens decode
   at once. Past it, the screen with the sound plays first, then the big monitor, the scope
   and the small monitor. The others show their posters.
@@ -436,19 +453,20 @@ The channel guide is Settings' **Den TV** page
 `bromigos-live tv guide`, from Super+Alt+G, from the hint's **GUIDE** and from the MEDIA
 panel's settings.
 
-![The channel guide: the big monitor's channels as cards, each with its poster, what's on
-now and next, a progress bar, its source and order, the one on air marked](../docs/images/den-tv-guide.webp)
+![The channel guide: every channel as a card, each with its poster, what's on now and next, a
+progress bar, its source and order, and a lit button for each screen it's on air on](../docs/images/den-tv-guide.webp)
 
-- **What it shows.** A grid for each screen, channel 1 first. Each card has what's on now
-  and next, the item's poster, a progress bar, the channel's source and its order. The
-  channel each screen is on says **ON AIR**, and the screen with the sound says so.
+- **What it shows.** Every channel once, channel 1 (each screen's own picture) first. Each
+  card has what's on now and next, the item's poster, a progress bar, the channel's source
+  and its order. Under it, **BIG**, **SCOPE** and **SMALL** tune that screen to it. The
+  button of each screen on air there is lit, and the card says **ON AIR**.
 - **What it changes.** Add channel (a library, collection or playlist the servers list,
   shows or movies you pick from a searchable grid of posters, a YouTube address, a folder,
-  or your downloaded YouTube videos), and for each card: Tune now, Rename, Pick shows,
-  Move earlier or later, the screens it's on, and Remove, with Undo. Drag a card onto
-  another to put it before that one, or onto another screen's grid to move it there.
-- **Keys.** Tab moves between cards. On a card, Enter tunes, Delete removes, F2 renames,
-  and Alt and an arrow move it.
+  or your downloaded YouTube videos), and for each card: Rename, Pick shows, Move earlier
+  or later, Bumpers, the screens it's on (every screen unless you say), and Remove, with
+  Undo. Drag a card onto another to put it before that one.
+- **Keys.** Tab moves between cards. On a card, 1, 2 and 3 tune the big monitor, the scope
+  and the small monitor. Delete removes, F2 renames, and Alt and an arrow move it.
 - **The file.** It writes the `[[tv.channel]]` tables of
   `~/.config/bromigos-live/config.toml` in place (`lib/bromigos_tvconfig.py`). Comments,
   blank lines and every other table stay as they were, and a channel's own comments move
@@ -462,8 +480,8 @@ now and next, a progress bar, its source and order, the one on air marked](../do
 | Test | What it checks |
 |---|---|
 | `tests/test_tv.py` | The schedule, the channels, the remembered state, YouTube against a stand-in for yt-dlp (`tests/fake_ytdlp.py`) and keeping videos |
-| `tests/test_tv_screens.py` | Every screen at once, `max_playing`, the sound on one screen, `--screen`, covering and opacity, the hint's speaker, streams sized to each screen from stand-in Jellyfin and Plex servers (`tests/fake_media.py`), YouTube resolved while yt-dlp is slow and the screen is covered and uncovered, picked shows shuffled and taking turns, and the config writer keeping comments |
-| `tests/offscreen_tv.py` | The den pixel for pixel as before with no media channel on, a generated test clip playing through libmpv in two themes, the hint, the poster with still motion, three screens playing at once, and a tune that never leaves the last channel's picture. `OFF_MEASURE=20` measures the cost |
+| `tests/test_tv_screens.py` | Every screen at once, `[tv.start]`, one player for two screens on a channel, bumpers, `max_playing`, the sound on one screen, `--screen`, covering and opacity, the hint's speaker, streams sized to each screen from stand-in Jellyfin and Plex servers (`tests/fake_media.py`), YouTube resolved while yt-dlp is slow and the screen is covered and uncovered, picked shows shuffled and taking turns, and the config writer keeping comments |
+| `tests/offscreen_tv.py` | The den pixel for pixel as before with no media channel on, a generated test clip playing through libmpv in two themes, the hint, the poster with still motion, three screens playing at once, one channel on two screens from one player, a bumper card, and a tune that never leaves the last channel's picture. `OFF_MEASURE=20` measures the cost |
 | `../homelab/tests/test_video.py` | The Jellyfin and Plex adapters against fake servers |
 | `../desktop/tests/test_den_tv_guide.py` | The channel guide, Add channel and the show picker, drawn in a headless weston, and every control's hover hint |
 | `../desktop/tests/e2e_tv_nested.py` | The whole thing in a nested Hyprland, with a fake Jellyfin and a PipeWire nobody hears: three screens playing, the sound moving, and the channel guide driven (`den_tv_guide_driver.py`) with the live layer following |

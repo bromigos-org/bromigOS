@@ -374,17 +374,19 @@ The den TV plays your own videos on the den's three screens, as TV channels
 from Settings, `bromigos-live tv guide`, Super+Alt+G, the hint's **GUIDE** and the MEDIA
 panel's settings.
 
-- A grid for each screen: the big monitor, the scope and the small monitor. Every channel
-  is a card, channel 1 first, with what's on now and next, the poster, a progress bar, its
-  source and its order. The channel each screen is on says **ON AIR**.
+- Every channel once, as a card, channel 1 (each screen's own picture) first: what's on now
+  and next, the poster, a progress bar, its source and its order. Under it, **BIG**,
+  **SCOPE** and **SMALL** tune that screen (`bromigos-live tv set N --screen S`); the button
+  of a screen on air there is lit.
 - **Add channel…**: a library, collection or playlist the servers list, shows or movies you
   pick (a searchable grid of posters), a YouTube address, a folder, or your downloaded
   YouTube videos. Then a name, an order and its screens, every screen by default.
-- Each card: **Tune now** (`bromigos-live tv set N --screen S`) and a menu with Rename, Pick
-  shows, Move earlier or later, its screens and Remove. A toast has Undo.
-- Drag a card onto another to put it before that one, or onto another screen's grid to
-  move it there.
-- On a card, Enter tunes, Delete removes, F2 renames, and Alt and an arrow move it.
+- Each card's menu: Rename, Pick shows, Move earlier or later, Bumpers, its screens (every
+  screen unless you say) and Remove. A toast has Undo. The menu is a popover of plain
+  buttons: Settings exports no actions.
+- Drag a card onto another to put it before that one.
+- On a card, 1, 2 and 3 tune the screens, Delete removes, F2 renames, and Alt and an arrow
+  move it.
 
 It writes the `[[tv.channel]]` tables of `~/.config/bromigos-live/config.toml` through
 `lib/bromigos_tvconfig.py`, which edits them in place. Comments and every other table stay

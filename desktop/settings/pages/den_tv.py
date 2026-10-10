@@ -1,9 +1,10 @@
-"""Den TV: the channel guide. Every channel of the den's three screens (the big monitor,
-the scope, the small monitor) as a TV guide: what's on now and next, with its poster, its
-source, its order and how far through it is, the channel each screen is on marked. Add a
-channel (a library, collection or playlist from your Jellyfin or Plex, shows or movies you
-pick, a YouTube playlist or channel, a folder, your downloaded YouTube videos), remove one
-(with Undo), drag one to reorder it or onto another screen, rename it, tune a screen to it.
+"""Den TV: the channel guide. Every channel, once, as a TV guide: what's on now and next,
+with its poster, its source, its order and how far through it is, and a tune button for
+each of the den's three screens (the big monitor, the scope, the small monitor), lit where
+it's on air. Add a channel (a library, collection or playlist from your Jellyfin or Plex,
+shows or movies you pick, a YouTube playlist or channel, a folder, your downloaded YouTube
+videos), remove one (with Undo), drag one to reorder it, rename it, keep it to some
+screens, give it bumpers.
 
 The channels are the [[tv.channel]] tables of ~/.config/bromigos-live/config.toml, changed
 in place by lib/bromigos_tvconfig.py (comments and other tables kept, written atomically
@@ -44,6 +45,7 @@ except ImportError:                        # an older bromigos-core: no guide
 
 SCREENS = [("big", "The big monitor"), ("wave", "The scope"), ("emblem", "The small monitor")]
 SCREEN_NAME = dict(SCREENS)
+SHORT = {"big": "big", "wave": "scope", "emblem": "small"}
 LIVE = ["bromigos-live", "tv"]
 CARD_W, POSTER_H = 216, 122
 ORDERS = [("", "Its own (playlists in order, the rest shuffled)"), ("shuffle", "Shuffled, the same all day"),
@@ -128,8 +130,6 @@ class Guide:
         self.posters = {}                         # item id -> poster file, or None
         self.fetching = set()
         self.cards = {}
-        self.flows = {}
-        self.groups = {}
         self.entries = []                         # [(index in the file, channel dict or None, table)]
         self.panel = None
         if TVL is None:
@@ -139,31 +139,26 @@ class Guide:
         top = ctx.group(self.page, "Channels", None, key="channels")
         self.top = top
         self.status = ctx.row(top, "The den's three screens", "", key="status",
-                              hint="Each screen plays its own channel at once; channel 1 is the screen's own picture",
+                              hint="Each screen plays its own channel at once, and every channel can play on any "
+                                   "screen; channel 1 is each screen's own picture",
                               buttons=[("Add channel…", self.add_dialog,
                                         "Makes a new channel: a library, shows you pick, YouTube or a folder"),
                                        ("Refresh", self.refresh, "Reads the channels and what's on again")],
                               advanced={"file": C.path() if C else "", "runs": "bromigos-live tv set N --screen S"})
-        for s, title in SCREENS:
-            g = ctx.group(self.page, title, None, key=f"screen-{s}",
-                          hint=f"{title}'s channels, channel 1 first. Drag a card to reorder it, or onto another "
-                               "screen to move it there")
-            flow = Gtk.FlowBox(homogeneous=True, column_spacing=10, row_spacing=10,
-                               selection_mode=Gtk.SelectionMode.NONE, activate_on_single_click=False)
-            flow.set_min_children_per_line(1)
-            flow.set_max_children_per_line(5)
-            flow.set_valign(Gtk.Align.START)
-            flow.set_margin_top(6)
-            flow.connect("child-activated", lambda _f, child: self.tune(child._screen, child._number))
-            ctx.hint(flow, f"{title}'s channels: Enter tunes it, Delete removes, F2 renames, Alt+arrows move")
-            drop = Gtk.DropTarget.new(str, Gdk.DragAction.MOVE)
-            drop.connect("drop", lambda _t, v, _x, _y, s=s: self._dropped(v, s, None))
-            drop.connect("enter", lambda t, *_: (t.get_widget().add_css_class("tv-screen-drop"), Gdk.DragAction.MOVE)[1])
-            drop.connect("leave", lambda t: t.get_widget().remove_css_class("tv-screen-drop"))
-            flow.add_controller(drop)
-            g.add(flow)
-            self.flows[s] = flow
-            self.groups[s] = g
+        g = ctx.group(self.page, "The guide", "Every channel, once. Each card has a button for each screen: "
+                                              "the lit one is on air there.", key="grid",
+                      hint="Drag a card onto another to put it before that one; its menu chooses its screens")
+        flow = Gtk.FlowBox(homogeneous=True, column_spacing=10, row_spacing=10,
+                           selection_mode=Gtk.SelectionMode.NONE, activate_on_single_click=False)
+        flow.set_min_children_per_line(1)
+        flow.set_max_children_per_line(5)
+        flow.set_valign(Gtk.Align.START)
+        flow.set_margin_top(6)
+        ctx.hint(flow, "Every channel: on a card, 1, 2 and 3 tune the big monitor, the scope and the small monitor; "
+                       "Delete removes, F2 renames, Alt and an arrow move it")
+        g.add(flow)
+        self.flow = flow
+        self.grid = g
         self.refresh()
         GLib.timeout_add_seconds(20, self._tick)
         want = os.environ.get("BROMIGOS_DEN_TV_OPEN")         # the tests' renders: a dialog open
@@ -221,84 +216,91 @@ class Guide:
             out.append((len(out) + 1, self.panel, "panel"))
         return out
 
+    def _number(self, s, key):
+        """A channel's number on a screen (None when it isn't on that screen)."""
+        return next((num for num, ch, _i in self.lineup(s) if ch["key"] == key), None)
+
     def _draw(self):
         running = self.live is not None
         n = sum(1 for _i, ch, _t in self.entries if ch)
         bad = sum(1 for _i, ch, _t in self.entries if ch is None)
         snd = (self.live or {}).get("sound_from")
+        tuned = {s: self._tuned(s) for s, _t in SCREENS}
+        on = []
+        for s, title in SCREENS:
+            ch = next((c for _num, c, _i in self.lineup(s) if c["key"] == tuned[s]), None) or TVL.own_channel(s)
+            on.append(f"{SHORT[s]}: {ch['name']}" + (" (sound)" if snd == s else ""))
         self.status.set_subtitle(GLib.markup_escape_text(
             f"{n} channel{'s' if n != 1 else ''}" + (f" (and {bad} that can't play: no name or nothing to play)"
-                                                     if bad else "")
-            + (" · the live layer isn't running: tuning waits for it" if not running else "")
-            + (f" · sound from {SCREEN_NAME.get(snd, snd).lower()}" if snd else "")))
-        for s, _title in SCREENS:
-            flow = self.flows[s]
-            while (c := flow.get_first_child()) is not None:
-                flow.remove(c)
-            tuned = self._tuned(s)
-            lu = self.lineup(s)
-            on = next((num for num, ch, _i in lu if ch["key"] == tuned), 1)
-            self.groups[s].set_description(GLib.markup_escape_text(
-                f"{len(lu)} channel{'s' if len(lu) != 1 else ''} · on channel {on}"
-                + (" · its sound is on" if snd == s else "")))
-            for num, ch, idx in lu:
-                flow.append(self._card(s, num, ch, idx, num == on, snd == s and num == on))
+                                                     if bad else "") + " · " + " · ".join(on)
+            + (" · the live layer isn't running: tuning waits for it" if not running else "")))
+        while (c := self.flow.get_first_child()) is not None:
+            self.flow.remove(c)
+        self.flow.append(self._card(None, None, tuned, snd))                  # channel 1: each screen's own
+        for idx, ch, _t in self.entries:
+            if ch:
+                self.flow.append(self._card(ch, idx, tuned, snd))
+        if self.panel:
+            self.flow.append(self._card(self.panel, "panel", tuned, snd))
 
     # ------------------------------------------------------------------ a card
-    def _card(self, s, num, ch, idx, on_air, sound):
+    def _card(self, ch, idx, tuned, snd):
+        """A channel's card: its poster, what's on now and next, how far in, its source and
+        order, and a tune button for each screen (lit where it's on air). ch None: channel 1."""
         ctx = self.ctx
+        own = ch is None
         child = Gtk.FlowBoxChild()
         child.add_css_class("tv-card")
         child.set_focusable(True)
-        child._screen, child._number, child._index, child._ch = s, num, idx, ch
-        if on_air:
+        child._index, child._ch = idx, ch
+        key = "own" if own else ch["key"]
+        airing = [s for s, _t in SCREENS if tuned.get(s) == key]
+        if airing:
             child.add_css_class("on-air")
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.set_size_request(CARD_W, -1)
-        slot = None if ch["kind"] == "own" else TVL.now_next(ch)
+        slot = None if own else TVL.now_next(ch)
+        item = slot.item if slot else None
         pic = Gtk.Picture(content_fit=Gtk.ContentFit.COVER, can_shrink=True)
         pic.set_size_request(CARD_W, POSTER_H)
         pic.add_css_class("tv-poster")
-        item = slot.item if slot else None
-        self._set_poster(pic, ch, item)
+        if not own:
+            self._set_poster(pic, ch, item)
         frame = Gtk.Overlay()
         frame.set_child(pic)
-        if ch["kind"] == "own":
-            own = Gtk.Label(label=ch["name"], wrap=True, justify=Gtk.Justification.CENTER)
-            own.add_css_class("tv-chnum")
-            frame.add_overlay(own)
+        if own:
+            lab = Gtk.Label(label="RELAY MAP · SCOPE · BURN-IN", wrap=True, justify=Gtk.Justification.CENTER)
+            lab.add_css_class("tv-chnum")
+            frame.add_overlay(lab)
         box.append(frame)
         inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
         for side in ("start", "end"):
             getattr(inner, f"set_margin_{side}")(8)
         inner.set_margin_bottom(8)
         head = Gtk.Box(spacing=6)
-        lab = Gtk.Label(label=f"CH {num}", xalign=0)
+        nums = {s: (1 if own else self._number(s, key)) for s, _t in SCREENS}
+        shown = sorted({v for v in nums.values() if v})
+        lab = Gtk.Label(label="CH " + "/".join(map(str, shown)) if shown else "CH –", xalign=0)
         lab.add_css_class("tv-chnum")
+        ctx.hint(lab, "Its number: " + ", ".join(f"{SCREEN_NAME[s].lower()} {v}" if v else
+                                                 f"not on {SCREEN_NAME[s].lower()}" for s, v in nums.items()))
         head.append(lab)
-        name = Gtk.Label(label=ch["name"], xalign=0, hexpand=True, ellipsize=Pango.EllipsizeMode.END,
-                         max_width_chars=14)
+        name = Gtk.Label(label="Own picture" if own else ch["name"], xalign=0, hexpand=True,
+                         ellipsize=Pango.EllipsizeMode.END, max_width_chars=14)
         name.add_css_class("tv-name")
         head.append(name)
-        if sound:
-            sp = Gtk.Label(label="SOUND")
-            sp.add_css_class("tv-sound")
-            ctx.hint(sp, f"The den's sound comes from {SCREEN_NAME[s].lower()} (one screen at a time)")
-            head.append(sp)
-        if on_air:
+        if airing:
             badge = Gtk.Label(label="ON AIR")
             badge.add_css_class("tv-onair")
-            ctx.hint(badge, f"{SCREEN_NAME[s]} is on this channel now")
+            ctx.hint(badge, "On now on " + ", ".join(SCREEN_NAME[s].lower() for s in airing))
             head.append(badge)
         inner.append(head)
-        if ch["kind"] == "own":
-            now = Gtk.Label(label=ch.get("what", "").capitalize(), xalign=0, wrap=True, max_width_chars=24)
-            now.add_css_class("tv-now")
-            inner.append(now)
-            meta = Gtk.Label(label="The screen's own picture, as bromigOS draws it", xalign=0, wrap=True,
-                             max_width_chars=24)
-            meta.add_css_class("tv-meta")
-            inner.append(meta)
+        if own:
+            for line in ("Each screen's own picture: the relay map, the scope's traffic, the burn-in",
+                         "As bromigOS draws them, before any channel"):
+                lb = Gtk.Label(label=line, xalign=0, wrap=True, max_width_chars=24)
+                lb.add_css_class("tv-meta" if "As" in line else "tv-now")
+                inner.append(lb)
         else:
             nowt = TVL.label(item) if item else "Nothing yet: reading its list…"
             cached = TVL.cached_items(ch) or {}
@@ -323,45 +325,60 @@ class Guide:
             ctx.hint(nxt, "What comes on after it" + (f", at {time.strftime('%H:%M', time.localtime(slot.end))}"
                                                       if slot and slot.end else ""))
             inner.append(nxt)
-            meta = Gtk.Label(label=f"{_channel_text(ch)} · {_order_text(ch)}", xalign=0,
-                             ellipsize=Pango.EllipsizeMode.END, max_width_chars=24)
+            only = [x for x, _t in SCREENS if x in ch["screens"]]
+            meta = Gtk.Label(label=f"{_channel_text(ch)} · {_order_text(ch)}"
+                             + ("" if len(only) == len(SCREENS) else " · only " + ", ".join(SHORT[x] for x in only))
+                             + (" · bumpers" if ch.get("bumpers") else ""),
+                             xalign=0, ellipsize=Pango.EllipsizeMode.END, max_width_chars=24)
             meta.add_css_class("tv-meta")
-            others = [SCREEN_NAME[x].lower() for x in ch["screens"] if x != s]
-            ctx.hint(meta, _channel_text(ch) + f"; {_order_text(ch)}" +
-                     (f"; also on {', '.join(others)}" if others else "; on this screen only") +
-                     ("; from the MEDIA panel's settings" if idx == "panel" else ""))
+            ctx.hint(meta, _channel_text(ch) + f"; {_order_text(ch)}"
+                     + ("; on every screen" if len(only) == len(SCREENS) else
+                        "; only on " + ", ".join(SCREEN_NAME[x].lower() for x in only))
+                     + ("; a bumper card opens each item" if ch.get("bumpers") else "")
+                     + ("; from the MEDIA panel's settings" if idx == "panel" else ""))
             inner.append(meta)
-        acts = Gtk.Box(spacing=6)
+        acts = Gtk.Box(spacing=4)
         acts.set_margin_top(4)
-        tune = ctx.button("Tune now" if not on_air else "On now", lambda: self.tune(s, num),
-                          f"Puts {SCREEN_NAME[s].lower()} on channel {num}, {ch['name']} "
-                          f"(bromigos-live tv set {num} --screen {s})")
-        tune.set_sensitive(not on_air)
-        tune.set_hexpand(True)
-        acts.append(tune)
-        if ch["kind"] != "own":
-            acts.append(self._menu(child, s, num, ch, idx))
+        for s, title in SCREENS:
+            num = nums[s]
+            b = Gtk.Button(label=SHORT[s].upper())
+            b.set_hexpand(True)
+            if s in airing:
+                b.add_css_class("suggested-action")
+                ctx.hint(b, f"{title} is on this channel now" + (" (its sound is on)" if snd == s else ""))
+            elif num is None:
+                b.set_sensitive(False)
+                ctx.hint(b, f"Not on {title.lower()}: its menu's screens leave it out")
+            else:
+                ctx.hint(b, f"Tunes {title.lower()} to channel {num} (bromigos-live tv set {num} --screen {s})")
+                b.connect("clicked", lambda *_a, s=s, num=num: self.tune(s, num))
+            acts.append(b)
+        if not own:
+            acts.append(self._menu(child, ch, idx))
+        child._nums = nums
         inner.append(acts)
         box.append(inner)
         child.set_child(box)
-        ctx.hint(child, f"Channel {num} on {SCREEN_NAME[s].lower()}: {ch['name']}"
-                 + (" (on now)" if on_air else "") + ". Enter: tune · Delete: remove · F2: rename · Alt+←/→: move")
+        ctx.hint(child, ("Channel 1, each screen's own picture" if own else ch["name"])
+                 + (f": on air on {', '.join(SHORT[s] for s in airing)}" if airing else "")
+                 + ". 1, 2, 3: tune the big monitor, the scope, the small monitor"
+                 + ("" if own else " · Delete: remove · F2: rename · Alt+←/→: move"))
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", lambda _c, kv, _code, st, c=child: self._key(c, kv, st))
         child.add_controller(keys)
         if isinstance(idx, int):
             src = Gtk.DragSource(actions=Gdk.DragAction.MOVE)
-            src.connect("prepare", lambda *_a, i=idx, s=s: Gdk.ContentProvider.new_for_value(f"{i}:{s}"))
+            src.connect("prepare", lambda *_a, i=idx: Gdk.ContentProvider.new_for_value(str(i)))
             child.add_controller(src)
             drop = Gtk.DropTarget.new(str, Gdk.DragAction.MOVE)
-            drop.connect("drop", lambda _t, v, _x, _y, i=idx, s=s: self._dropped(v, s, i))
+            drop.connect("drop", lambda _t, v, _x, _y, i=idx: self._dropped(v, i))
             drop.connect("enter", lambda t, *_: (t.get_widget().add_css_class("drop"), Gdk.DragAction.MOVE)[1])
             drop.connect("leave", lambda t: t.get_widget().remove_css_class("drop"))
             child.add_controller(drop)
-        self.cards[(s, num)] = child
+        self.cards[key] = child
         return child
 
-    def _menu(self, child, s, num, ch, idx):
+    def _menu(self, child, ch, idx):
         """The card's menu: a popover of plain buttons (Settings exports no actions)."""
         ctx = self.ctx
         pop = Gtk.Popover()
@@ -385,8 +402,14 @@ class Guide:
             item("Rename…", lambda: self.rename_dialog(idx, ch), f"A new name for {ch['name']} (F2)")
             if ch.get("picks"):
                 item("Pick shows…", lambda: self.edit_picks(idx, ch), "Add or leave out shows, movies and collections")
-            item("Move earlier", lambda: self.move(idx, -1), "One place earlier on every screen it's on (Alt+←)")
-            item("Move later", lambda: self.move(idx, +1), "One place later on every screen it's on (Alt+→)")
+            item("Move earlier", lambda: self.move(idx, -1), "One place earlier in every screen's numbers (Alt+←)")
+            item("Move later", lambda: self.move(idx, +1), "One place later in every screen's numbers (Alt+→)")
+            bump = Gtk.CheckButton(label="Bumpers between items", active=bool(ch.get("bumpers")))
+            bump.connect("toggled", lambda w: (pop.popdown(), self.set_key(idx, ch, "bumpers", True if w.get_active()
+                                                                           else None)))
+            ctx.hint(bump, "A few seconds' card, like a TV network's block, opens each item: the channel's name, "
+                           "what's on and the time")
+            box.append(bump)
             head = Gtk.Label(label="ON THESE SCREENS", xalign=0)
             head.add_css_class("tv-meta")
             head.set_margin_top(6)
@@ -394,7 +417,7 @@ class Guide:
             for x, title in SCREENS:
                 cb = Gtk.CheckButton(label=title, active=x in ch["screens"])
                 cb.connect("toggled", lambda w, x=x: (pop.popdown(), self.set_screen(idx, ch, x, w.get_active())))
-                ctx.hint(cb, f"Whether {title.lower()} carries {ch['name']}")
+                ctx.hint(cb, f"Whether {title.lower()} carries {ch['name']} (every screen does unless you say)")
                 box.append(cb)
             sep = Gtk.Separator()
             sep.set_margin_top(4)
@@ -403,15 +426,16 @@ class Guide:
                  destructive=True)
         pop.set_child(box)
         b = Gtk.MenuButton(icon_name="view-more-symbolic", popover=pop)
-        ctx.hint(b, f"{ch['name']}: rename, pick its shows, move it, choose its screens, or remove it")
+        ctx.hint(b, f"{ch['name']}: rename, pick its shows, bumpers, move it, choose its screens, or remove it")
         return b
 
     def _key(self, child, kv, state):
-        idx, ch, s = child._index, child._ch, child._screen
+        idx, ch = child._index, child._ch
         alt = bool(state & Gdk.ModifierType.ALT_MASK)
-        if kv in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space) and not alt:
-            self.tune(s, child._number)
-            return True
+        for k, (s, _t) in zip((Gdk.KEY_1, Gdk.KEY_2, Gdk.KEY_3), SCREENS):
+            if kv == k and child._nums.get(s):
+                self.tune(s, child._nums[s])
+                return True
         if not isinstance(idx, int):
             return False
         if kv in (Gdk.KEY_Delete, Gdk.KEY_BackSpace):
@@ -547,60 +571,44 @@ class Guide:
 
     def set_screen(self, idx, ch, screen, on):
         now = list(ch["screens"])
-        new = [x for x, _t in SCREENS if (x in now or (on and x == screen)) and not (not on and x == screen)]
-        if not new:
+        new = [x for x, _t in SCREENS if (x in now and x != screen) or (on and x == screen)]
+        self.set_screens(idx, new, ch["name"])
+
+    def set_screens(self, idx, screens, name=None):
+        """Which screens carry channel idx: every screen writes no `screens` key at all."""
+        name = name or self.entries[idx][2].get("name") or "the channel"
+        if not screens:
             self.ctx.toast("A channel needs at least one screen: remove it instead")
             self.refresh()
             return
         old = (self.entries[idx][2] or {}).get("screens")
-        self._write(lambda d: d.set(idx, "screens", self._screens_value(new)),
-                    f"{ch['name']}: on {', '.join(SCREEN_NAME[x].lower() for x in new)}",
+        val = None if len(screens) == len(SCREENS) else list(screens)
+        self._write(lambda d: d.set(idx, "screens", val),
+                    f"{name}: " + ("on every screen" if val is None else
+                                   "only on " + ", ".join(SCREEN_NAME[x].lower() for x in screens)),
                     undo=lambda _b: self._write(lambda d: d.set(idx, "screens", old), "Screens put back"))
+
+    def set_key(self, idx, ch, key, value):
+        old = (self.entries[idx][2] or {}).get(key)
+        self._write(lambda d: d.set(idx, key, value), f"{ch['name']}: {key} {'on' if value else 'off'}",
+                    undo=lambda _b: self._write(lambda d: d.set(idx, key, old), "Put back"))
 
     @staticmethod
     def _screens_value(screens):
-        return "any" if len(screens) == len(SCREENS) else list(screens)
+        return None if len(screens) == len(SCREENS) else list(screens)
 
-    def _dropped(self, value, screen, target):
-        """A card dropped on another card (before it) or on a screen's empty space (its end):
-        reordered, and moved to that screen when it came from another."""
+    def _dropped(self, value, target):
+        """A card dropped on another: it goes before that one, in every screen's numbers."""
         try:
-            i, from_ = str(value).split(":", 1)
-            i = int(i)
+            i = int(str(value).split(":", 1)[0])
         except ValueError:
             return False
-        if not (0 <= i < len(self.entries)):
+        if not (0 <= i < len(self.entries)) or target == i or not isinstance(target, int):
             return False
-        ch = self.entries[i][1]
-        table = self.entries[i][2]
-        j = target if isinstance(target, int) else None
-        screens = list(ch["screens"]) if ch else [from_]
-        moved_screen = from_ != screen
-        if moved_screen:
-            screens = [screen if x == from_ else x for x in screens]
-            screens = [x for k, x in enumerate(screens) if x not in screens[:k]]
-            if screen not in screens:
-                screens.append(screen)
-        old_screens = table.get("screens")
-
-        def change(d):
-            if moved_screen:
-                d.set(i, "screens", self._screens_value(screens))
-            if j is not None and j != i:
-                d.move(i, j if j < i else j - 1)
-            return None
-        what = table.get("name") or "the channel"
-        said = f"{what}: moved to {SCREEN_NAME[screen].lower()}" if moved_screen else f"Moved {what}"
-
-        def undo(_b):
-            def back(d):
-                now = j if j is not None and j < i else (j - 1 if j is not None else i)
-                if j is not None and now != i:
-                    d.move(now, i)
-                if moved_screen:
-                    d.set(i, "screens", old_screens)
-            self._write(back, "Put back")
-        self._write(change, said, undo=undo)
+        j = target if target < i else target - 1
+        what = self.entries[i][2].get("name") or "the channel"
+        self._write(lambda d: d.move(i, j), f"Moved {what}",
+                    undo=lambda _b: self._write(lambda d: d.move(j, i), "Put back"))
         return True
 
     # ------------------------------------------------------------------ dialogs
@@ -701,7 +709,7 @@ class Guide:
                         "turns: one episode of each, then the next")
         g2.add(order)
         g3 = Adw.PreferencesGroup(title="ON THESE SCREENS",
-                                  description="Any screen by default: each screen numbers its own channels")
+                                  description="Every screen by default: turn one off to keep the channel from it")
         page.add(g3)
         checks = {}
         for x, title in SCREENS:
@@ -774,7 +782,8 @@ class Guide:
             table = {"name": nm, **t}
             if ordv:
                 table["order"] = ordv
-            table["screens"] = self._screens_value(scr)
+            if self._screens_value(scr):
+                table["screens"] = self._screens_value(scr)
             d.close()
             self._write(lambda doc: doc.add(table), f"Added {nm}",
                         undo=lambda i: self._write(lambda doc: doc.remove(i), f"Removed {nm}"))
@@ -995,11 +1004,10 @@ PAGE = Page(
     docs="settings.md#den-tv", icon="video-display-symbolic tv-symbolic",
     summary="channels on the den's screens",
     intro="The channel guide: every channel on the den's three screens, what's on now and next. Add one from your "
-          "Jellyfin or Plex, shows you pick, YouTube or a folder; drag to reorder or move it to another screen.",
+          "Jellyfin or Plex, shows you pick, YouTube or a folder; tune any screen to any channel.",
     keywords=["tv", "den", "channels", "guide", "jellyfin", "plex", "youtube", "shows", "movies", "scope",
               "monitor", "media"],
     entries=[Entry("channels", "The den TV's channels", ["add channel", "guide", "tv"], "Channels"),
              Entry("status", "Add a channel", ["new channel", "library", "playlist", "youtube", "shows"], "Channels"),
-             Entry("screen-big", "The big monitor's channels", ["big", "monitor"], "The big monitor"),
-             Entry("screen-wave", "The scope's channels", ["scope", "wave"], "The scope"),
-             Entry("screen-emblem", "The small monitor's channels", ["small monitor", "emblem"], "The small monitor")])
+             Entry("grid", "Tune a screen", ["big monitor", "scope", "small monitor", "tune", "on air", "bumpers"],
+                   "The guide")])

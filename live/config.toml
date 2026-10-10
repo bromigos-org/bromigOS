@@ -110,15 +110,18 @@ duck = 30                # percent of it while VECTOR speaks or a codec call pla
 refresh_minutes = 15     # how often a channel's list is read again (YouTube: hourly)
 max_playing = 3          # how many screens decode at once (each its own channel); past it, posters
 cover_opacity = 0.9      # a window at least this opaque over a muted screen pauses it (with sound: plays on)
-# screens = ["big"]      # the screens a channel goes on when it doesn't say ("any": every screen)
+# screens = ["big"]      # the screens a channel goes on when it doesn't say (default: every screen)
+# [tv.start]             # each screen's channel until you change it (a channel's name)
+# big = "Saturday"
 # A channel is a [[tv.channel]] table in your config (live/README.md, "The den TV"):
 #   [[tv.channel]]
 #   name = "Saturday"
 #   source = "plex"          # a jellyfin or plex source in homelab.toml (default: the first)
 #   library = "TV Shows"     # or collection = "…", playlist = "…", youtube = "<URL>", files = "~/Videos"
 #   order = "shuffle"        # or "in order" (a playlist's default)
-#   screens = ["big"]        # big (the big monitor), wave (the scope), emblem (the small monitor), or "any"
+#   screens = ["big"]        # optional: only big (the big monitor), wave (the scope), emblem (the small monitor)
 #   shows = ["…", "…"]       # shows you pick (titles or ids); order = "in order" takes turns between them
+#   bumpers = true           # a station card opens each item: the channel, what's on, the time
 # Settings › Den TV (bromigos-live tv guide, SUPER+ALT+G) adds, removes and reorders them for you.
 
 [world]                  # a theme's world (bromigos theme set mire|tidewell): drawn instead of the den
