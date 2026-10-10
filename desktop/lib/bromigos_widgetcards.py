@@ -288,8 +288,11 @@ class WidgetsTab:
             lb.add_css_class("wsection")
             lb.set_tooltip_text(hint)
             self.list.append(lb)
-            flow = Gtk.FlowBox(homogeneous=True, column_spacing=12, row_spacing=12,
-                               selection_mode=Gtk.SelectionMode.NONE)
+            # not homogeneous, so each row is as tall as its own cards (a short last row stays
+            # short); every card is one column wide (card()), so the grid keeps its 4 or 5 a row
+            flow = Gtk.FlowBox(homogeneous=False, column_spacing=12, row_spacing=12,
+                               selection_mode=Gtk.SelectionMode.NONE, halign=Gtk.Align.START,
+                               valign=Gtk.Align.START)
             cols = max(1, self.host.widget_cols())
             flow.set_min_children_per_line(cols)
             flow.set_max_children_per_line(cols)
@@ -332,6 +335,7 @@ class WidgetsTab:
         if not w["visible"]:
             child.add_css_class("off")
         cw = self.host.widget_card_w()
+        child.set_size_request(cw - 16, -1)       # a column wide (the flow box shares out the rest)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.append(self.picture(self.previews.get(w["name"]), cw, int(cw * 0.62),
                                 f"{title}, drawn with made-up readings"))
@@ -393,6 +397,7 @@ class WidgetsTab:
         child = Gtk.FlowBoxChild()
         child.add_css_class("wcard")
         cw = self.host.widget_card_w()
+        child.set_size_request(cw - 16, -1)       # a column wide (the flow box shares out the rest)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.append(self.picture(e.get("preview"), cw, int(cw * 0.62), f"{title}: the catalog's picture of it"))
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
