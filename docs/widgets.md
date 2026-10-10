@@ -81,6 +81,10 @@ these:
 - click **Edit on the desktop** in Settings › Widgets;
 - run `bromigos panels edit`.
 
+<img src="images/edit-mode.webp" width="600" alt="Edit mode: the panels framed on the
+desktop, NETWORK picked with its size and place on its frame, and the tray with the widget
+gallery on the right">
+
 The panels come up above your windows and keep updating. A frame and a name mark each
 one, on every monitor, and the widget gallery opens beside them in a tray you can drag
 aside. The tray opens on the monitor you're using.
@@ -163,6 +167,10 @@ whether it runs code. A widget always runs code. So **Install…** opens a termi
 
 A panel tells the gallery about itself through a few class attributes. Writing your own
 is in [plugins.md](plugins.md#what-the-gallery-shows).
+
+<img src="images/customize-widgets.webp" width="600" alt="The Customize window on its
+Widgets tab: a card for each panel with its picture, switch and size, under the category
+buttons">
 
 The Customize window shows the gallery as cards, like the themes beside it. **Arrange on
 the desktop** closes it and starts edit mode. A widget you installed or made has

@@ -49,10 +49,10 @@ the models used.
 | Peripheral modules (`peripherals/`) | Written for the operator's desktop, generalised | yes, as code | Dependencies aren't vendored. No keymap file ships |
 | The README's header emblem (`themes/wick/emblem/emblem-512.png`) | The Wick's emblem kit | yes, as a brand asset | Shown at the top of the README |
 | README pictures from the render set (eleven files and an animated loop) | Offscreen renders by `tools/screenshots/render.py`, with demo readings | yes | No faces, no real hostnames. [List](#docs-and-readme-images) |
-| Manual pictures (`manual/src/images/`, 28 files) | Offscreen renders and bromigos.org stills, with demo readings | yes | bromigOS only, no likeness, no lab hosts. [List](#manual-pictures) |
+| Manual pictures (`manual/src/images/`, 30 files) | Offscreen renders and bromigos.org stills, with demo readings | yes | bromigOS only, no likeness, no lab hosts. [List](#manual-pictures) |
 | The built manual's page furniture (`bromigos-manual`, and the published manual) | mdBook's theme: Open Sans (Apache-2.0), Source Code Pro (OFL 1.1), Font Awesome Free icons (CC BY 4.0), highlight.js (BSD-3-Clause), clipboard.js, elasticlunr and mark.js (MIT), mdBook's own scripts and styles (MPL-2.0) | yes | Built by mdBook. The fonts' licence files ship beside them |
 | Docs images from bromigos.org (six files) | The site's published stills | yes | Offscreen renders with demo data. [List](#docs-and-readme-images) |
-| Docs images rendered offscreen (eight files) | bromigOS's own test tools | yes | No faces, no real hostnames. [List](#docs-and-readme-images) |
+| Docs images rendered offscreen (ten files) | bromigOS's own test tools | yes | No faces, no real hostnames. [List](#docs-and-readme-images) |
 
 ## How each was made
 
@@ -220,7 +220,15 @@ resized to WebP for the repository.
   - `screensaver.webp`, from `overlay-screensaver`
   - `panels-cinder.webp`, from `widgets-cinder`
 - **Offscreen renders by bromigOS's own test tools.** No faces and no real hostnames.
-  - `theme-switcher.webp`: the theme switcher, with its previews
+  - `theme-switcher.webp`: the Customize window on its Themes tab, with the previews,
+    over the Wick (`tools/screenshots/render.py`, `theme-switcher`: the switcher's own
+    renderer, `tools/theme-switcher/render.sh` with `BROMIGOS_PREVIEWS_HOLD=1`, in a
+    headless weston), 1600 wide
+  - `customize-widgets.webp`: the Customize window on its Widgets tab, every widget drawn
+    with demo readings (`tools/screenshots/render.py`, `customize-widgets`), 1600 wide
+  - `edit-mode.webp`: edit mode on the Wick desktop, NETWORK picked, with the tray
+    (`tools/screenshots/render.py`, `edit-mode`: the nested desktop, demo readings),
+    1600 wide
   - `settings-idle.webp`, `settings-accessibility.webp`, `settings-updates.webp`: the
     Settings window, with fixture data
   - `boot-menu.webp`, `boot-snapshots.webp`: GRUB's menu and its snapshot list, in QEMU
@@ -283,9 +291,15 @@ no likeness and no lab hosts.
   offscreen with demo readings (`tools/screenshots/render.py`, `settings`).
 - **`theme-cinder.webp`**, on the Themes and worlds page. The desktop in Cinder, rendered
   offscreen with demo readings (`tools/screenshots/render.py`, `theme-cinder`).
-- **`theme-switcher.webp`**, on the Themes and worlds page. The theme switcher over the
-  Wick, rendered offscreen with demo readings (`tools/screenshots/render.py`,
-  `theme-switcher`).
+- **`theme-switcher.webp`**, on the Themes and worlds page. The Customize window on its
+  Themes tab over the Wick, rendered offscreen with demo readings
+  (`tools/screenshots/render.py`, `theme-switcher`). The same picture as the docs'.
+- **`customize-widgets.webp`**, on the Themes and worlds page. The Customize window on its
+  Widgets tab over the Wick, rendered offscreen with demo readings
+  (`tools/screenshots/render.py`, `customize-widgets`). The same picture as the docs'.
+- **`edit-mode.webp`**, on the Panels page. Edit mode on the Wick desktop, NETWORK picked,
+  rendered offscreen in the nested desktop with demo readings
+  (`tools/screenshots/render.py`, `edit-mode`). The same picture as the docs'.
 - **`themes-grid.webp`**, on the Themes and worlds page. The nine themes as the theme
   switcher previews them, rendered offscreen with demo readings
   (`tools/screenshots/render.py`, `themes-grid`).

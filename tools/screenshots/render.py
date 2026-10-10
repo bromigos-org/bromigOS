@@ -464,9 +464,9 @@ def _settings(ctx, m):
     ctx.desktop("wick", scene("settings"), m, hook=hook)
 
 
-@shot("theme-switcher", "The theme switcher",
-      "The theme switcher (SUPER+CTRL+SHIFT+SPACE): each theme a live preview of the desktop wearing it; type "
-      "to filter, Enter to wear one.")
+@shot("theme-switcher", "Customize: Themes",
+      "The Customize window on its Themes tab (SUPER+CTRL+SHIFT+SPACE): each theme a live preview of the desktop "
+      "wearing it; type to filter, Enter to wear one; Ctrl+Tab for the Widgets tab.")
 def _switcher(ctx, m):
     cache = ctx.previews()
     tmp = os.path.join(ctx.work, "switcher")
@@ -475,11 +475,42 @@ def _switcher(ctx, m):
     ctx.desktop("wick", {}, backdrop)
     r = subprocess.run(["bash", os.path.join(ROOT, "tools", "theme-switcher", "render.sh"), tmp, "--size", f"{W}x{H}",
                         "--previews", cache, "--select", "mire", "--name", "shot", "--backdrop", backdrop],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, env=dict(os.environ, BROMIGOS_PREVIEWS_HOLD="1"))
     p = os.path.join(tmp, f"switcher-{W}x{H}-shot.png")
     if not os.path.exists(p):
         raise RuntimeError(f"the switcher's render failed: {r.stdout[-300:]} {r.stderr[-300:]}")
     shutil.copy(p, m)
+
+
+@shot("customize-widgets", "Customize: Widgets",
+      "Customize's Widgets tab (bromigos customize --tab widgets): every widget as a card, drawn with made-up "
+      "readings, with its switch, its sizes and Add to desktop; the category buttons from what the widgets declare.")
+def _customize_widgets(ctx, m):
+    cache = ctx.previews()
+    tmp = os.path.join(ctx.work, "customize")
+    backdrop = os.path.join(ctx.work, "customize-desk.png")
+    ctx.desktop("wick", {}, backdrop)
+    r = subprocess.run(["bash", os.path.join(ROOT, "tools", "theme-switcher", "render.sh"), tmp, "--size", f"{W}x{H}",
+                        "--previews", cache, "--tab", "widgets", "--name", "shot", "--backdrop", backdrop],
+                       capture_output=True, text=True, env=dict(os.environ, BROMIGOS_PREVIEWS_HOLD="1"))
+    p = os.path.join(tmp, f"switcher-{W}x{H}-shot.png")
+    if not os.path.exists(p):
+        raise RuntimeError(f"Customize's render failed: {r.stdout[-300:]} {r.stderr[-300:]}")
+    shutil.copy(p, m)
+
+
+@shot("edit-mode", "Edit mode",
+      "Edit mode (SUPER+ALT+W): the panels framed above the windows, NETWORK picked with its size and place, and "
+      "the widget gallery in its tray beside them.")
+def _edit_mode(ctx, m):
+    def hook(n):
+        env = dict(n.env, BROMIGOS_WIDGETS_DEMO="1")
+        subprocess.run([SYS_PY, os.path.join(PV.SRC.widgets, "bromigos-widgets"), "edit", "on", "network"], env=env,
+                       capture_output=True, timeout=20)
+        if not wait_for(lambda: "bromigos-widgets-edit" in n.layers(), 15):
+            raise RuntimeError("edit mode didn't start")
+        time.sleep(4.0)                          # the tray's cards draw each panel, small
+    ctx.desktop("wick", scene("edit"), m, hook=hook)
 
 
 @shot("lab-console", "bromigos lab",

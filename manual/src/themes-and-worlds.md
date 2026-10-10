@@ -15,7 +15,7 @@ that reacts to what your machine is doing.
 3. Press <kbd>Enter</kbd>, or click the theme. The desktop changes colour within a second.
    A few apps change the next time you open them.
 
-![The theme switcher: a preview of the desktop in each theme, with Mire chosen](images/theme-switcher.webp)
+![The Customize window on its Themes tab: a preview of the desktop in each theme, with Mire chosen](images/theme-switcher.webp)
 
 Press <kbd>Esc</kbd> to close the switcher without changing anything. Hover over a card to
 read what the theme is.
@@ -30,6 +30,8 @@ The window you choose themes in is called Customize. It has two tabs:
 
 Press <kbd>Ctrl</kbd>+<kbd>Tab</kbd> to change tab. In the menu, **STYLE** has an item for
 each tab. The app launcher lists it as **Customize**.
+
+![The Customize window on its Widgets tab: a card for each panel, with a picture of it, its switch and its size, under category buttons](images/customize-widgets.webp)
 
 On the Themes tab:
 

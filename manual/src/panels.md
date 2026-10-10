@@ -79,6 +79,9 @@ Edit mode lets you move, resize and choose panels right on your desktop.
    also choose **Edit widgets** in the menu (<kbd>Super</kbd>+<kbd>Space</kbd>).
 2. The panels come up above your windows, each with a frame. A tray with every panel
    opens on the right.
+
+   ![Edit mode: the panels framed on the desktop, NETWORK picked, and the tray with every panel on the right](images/edit-mode.webp)
+
 3. Drag a panel to move it. It snaps into line with the others. Hold <kbd>Ctrl</kbd> to
    place it freely. To put it on another monitor, drag it over that monitor's edge.
 4. Drag a corner to make it bigger or smaller.

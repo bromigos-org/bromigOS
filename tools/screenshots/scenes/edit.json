@@ -1,0 +1,12 @@
+{
+  "_comment": "Edit mode: the default panels in two columns, no terminal; edit mode starts over them (render.py's edit-mode).",
+  "panels": [
+    {"name": "system",    "x": 28,  "y": 16},
+    {"name": "network",   "x": 28,  "y": 502},
+    {"name": "storage",   "x": 28,  "y": 780},
+    {"name": "weather",   "x": 514, "y": 16},
+    {"name": "workbench", "x": 514, "y": 332},
+    {"name": "notes",     "x": 514, "y": 648}
+  ],
+  "terminal": false
+}

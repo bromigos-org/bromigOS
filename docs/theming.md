@@ -11,8 +11,8 @@ This page is for people making or changing themes. To use them, read the manual'
 the designs for future ones, are in [worlds.md](worlds.md). The
 [glossary](../manual/src/glossary.md) defines bromigOS's terms.
 
-![The theme switcher: a grid of nine previews, each showing the desktop, a terminal and
-the panels in a different theme](images/theme-switcher.webp)
+![The Customize window on its Themes tab: a grid of nine previews, each showing the
+desktop, a terminal and the panels in a different theme](images/theme-switcher.webp)
 
 ## The themes bromigOS ships
 

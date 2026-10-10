@@ -874,6 +874,9 @@ def run_window(shot=None):
         snapshot = Gtk.Snapshot()
         paintable.snapshot(snapshot, w, h)
         node = snapshot.to_node()
+        if node is None and n < 60:                       # no frame drawn yet: a moment more
+            GLib.timeout_add(150, snap, sw, n + 1)
+            return False
         ok = False
         if node is not None:
             tex = win.get_renderer().render_texture(node, None)
