@@ -1373,7 +1373,7 @@ From the `bromigos-desktop` package.
 The desktop panels: which are on, where they sit, the monitor, the weather's place (your layout.json and weather.toml).
 
 ```text
-bromigos panels [status] | edit | gallery [--previews DIR] | show|hide|add NAME | settings NAME | set NAME KEY VALUE… | unset NAME KEY | inspect SOURCE [--path DIR] [--ref REF] | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
+bromigos panels [status] | edit | gallery [--previews DIR] | layouts | layout apply ID [--monitor NAME] [--all-themes] | layout save NAME | layout undo | tidy [--monitor NAME] | show|hide|add NAME | settings NAME | set NAME KEY VALUE… | unset NAME KEY | inspect SOURCE [--path DIR] [--ref REF] | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
 ```
 
 For example:
@@ -1381,6 +1381,9 @@ For example:
 ```text
 bromigos panels
 bromigos panels edit
+bromigos panels layouts
+bromigos panels layout apply homelab
+bromigos panels tidy
 bromigos panels add weather
 bromigos panels weather place "San Diego"
 bromigos panels hide connections

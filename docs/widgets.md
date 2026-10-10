@@ -426,12 +426,172 @@ that monitor as its `output` and write the file back, through a symbolic link if
 one.
 
 Panel plugins and the homelab's panels find free space on their own unless your layout
-places them. Once you move or switch one in edit mode, it gets an entry of its own.
+places them, clear of the panels shown and of the scene's focal points ([Layouts](#layouts)).
+Once you move or switch one on, it gets an entry of its own.
 [plugins.md](plugins.md) explains how to write a panel of your own.
 
 Your `layout.json` can be a symbolic link, for example into a dotfiles repository. Every
 writer replaces the file it points to in one step, and the link stays a link.
 `bromigos panels reset` writes bromigOS's layout through the link instead of removing it.
+
+## Layouts
+
+A layout is a ready-made arrangement of the panels: which ones are on, their size classes
+and where they sit. bromigOS ships seven, and each theme with a scene of its own ships one
+more, made for that scene. People apply one from Customize › Widgets, edit mode's
+**Layouts…** list, or `bromigos panels layout apply ID`. The manual's
+[Panels page](../manual/src/panels.md#layouts) is the user's side. The code is
+`widgets/layouts.py`, with no GTK, so it's tested on its own.
+
+| Layout | What it puts on |
+|---|---|
+| `minimal` | SYSTEM, WEATHER, NOW PLAYING |
+| `developer` | SYSTEM, WORKBENCH, GITHUB or GITLAB, CI & PRS, SHORTCUTS, UPDATES |
+| `homelab` | LAB (large), ALERTS, LAB JOBS, STORAGE, NETWORK, GAME SERVERS |
+| `streamer` | TWITCH, YOUTUBE, DISCORD, NOW PLAYING, SYSTEM (compact) |
+| `media` | NOW PLAYING, MEDIA (the den TV and your library), SPOTIFY, YOUTUBE |
+| `gamer` | GPU, SYSTEM, GAME SERVERS, DISCORD, NOW PLAYING |
+| `everything` | every widget that can show something, packed tidily |
+| `theme` | the theme's own: "Made for the Wick", "Made for Tidewell", "Made for Mire" |
+
+### The file
+
+A layout is a TOML file. bromigOS's are in `widgets/layouts/<id>.toml`, installed to
+`/usr/share/bromigos/widgets/layouts/`. Yours go in `~/.config/bromigos/widgets/layouts/`,
+and one of yours with the same id replaces bromigOS's.
+
+```toml
+title = "Homelab"
+description = "Your servers at a glance"
+archetype = "homelab"
+budget = 0.33              # optional: the most of the screen it may cover (default a third)
+
+[[widget]]
+name = "lab"               # or a list, the first that can show something: ["github", "gitlab"]
+size = "large"             # its size class
+small = "standard"         # on a screen smaller than 1600x900
+big = "large"              # on one at least 3200x1800
+side = "left"              # left or right: a column. top or bottom: a row along that edge
+lane = 1                   # a column's place from the edge: 1 by the edge, 2 beside it
+from = "top"               # a column fills from the top or the bottom; a row from the left or right
+priority = 1               # 1 matters most
+```
+
+A widget is placed by anchors, not pixels, so one file fits every screen. Each column
+stacks its widgets in file order, and lane 2 starts where lane 1's widest widget ends. A
+saved layout uses `at = [x, y]` instead: a place as fractions of the area, with the
+widget's own `width` and `height`.
+
+### Fitting a layout to a screen
+
+`layouts.fit()` places each widget, then checks two limits:
+
+- **Room.** A widget never overlaps another and never covers the scene's keep-clear
+  areas. A column's widget with no room on its side tries the other side at the same
+  size first.
+- **The budget.** The widgets cover at most a third of the screen, so the scene shows.
+
+When a widget doesn't fit, the lowest-priority widget in its way goes down a size: first
+the same class a little smaller, then the next class down. When it's at its smallest, it
+is left out. The result names every widget left out and why. These are the reasons:
+
+- no room for it, even at its smallest size;
+- the layout would cover more than the budget;
+- nobody is signed in to its account (a widget with a `secret-signin` setting);
+- its `available()` says no, for example a homelab widget with no source;
+- it isn't installed.
+
+`pack = true` (Everything) flows every widget that can show something into columns,
+starting at compact size. It may cover more than the budget, and says so.
+
+`tests/test_layout_templates.py` fits every layout, on every scene, to five screens:
+1920x1080, 2560x1440, a 3440x1440 ultrawide, 3840x2160 and 1366x768. Nothing may overlap,
+leave the area, cover a hard keep-clear area, or pass the budget.
+
+### Keep-clear areas: a theme's `widgets/layout.toml`
+
+The scene behind the panels is the point of the desktop. A theme says where its focal
+points are in `<theme>/widgets/layout.toml`, as rects in fractions of the 2560x1440
+picture (x, y, width, height). The same file holds the layout made for that scene.
+
+```toml
+scene_title = "Tidewell"
+
+[[clear]]
+name = "the Choir's swim zone"
+rect = [0.04, 0.43, 0.71, 0.45]
+
+[[clear]]
+name = "the Choir's far band, behind the kelp"
+rect = [0.2, 0.29, 0.58, 0.1]
+soft = true                 # kept clear while there's room elsewhere
+
+title = "Made for Tidewell"
+description = "A column on the cliff, a row in the abyss"
+[[widget]]
+name = "system"
+side = "right"
+```
+
+The scene is painted for 16:9 and drawn to cover the screen, centred on its `[view]
+focus` (`live/live/cover.py`). The rects follow it onto a 21:9 or 16:10 screen.
+
+| Scene | Kept clear |
+|---|---|
+| the Wick's den | the den's screens and TVs (the live layer's `DEN` rects in `live/live/scene.py`), the window and the station; the desk is soft |
+| Tidewell | the waterline, the sky and the boats; Greywater Light; the Choir's swim zones (from `live/world.toml`); their far band is soft |
+| Mire | the Sleeper; Hollis on the porch; the shack's roof, the porch and the mast are soft |
+
+A colour theme, one with no scene of its own, draws the Wick's den recoloured. Without a
+`widgets/layout.toml` of its own, it uses the Wick's file and shares the Wick's
+remembered layout. Give it a file and it becomes a scene of its own, with no code change.
+A world without a file keeps the middle of the screen clear.
+
+Tidy up treats every keep-clear area as soft: the widgets on it are the ones you chose.
+Adding a widget keeps off them where it can.
+
+### Applying, remembering, undo
+
+`bromigos panels layout apply ID` fits the layout to the panels' primary monitor, or to
+`--monitor NAME`. It changes only which widgets are on, their size and their place, so
+each widget keeps its own settings. It writes `layout.json` in one step, through its
+symlink if it is one. Running panels read it again.
+
+| File | What it holds |
+|---|---|
+| `~/.config/bromigos/widgets/scenes/<scene>.json` | the layout last used on each scene |
+| `~/.local/state/bromigos/widgets/layout-scene.json` | the scene `layout.json` is arranged for, and a layout applied with `--all-themes` |
+| `~/.local/state/bromigos/widgets/layout-undo.json` | the layout before the last apply, tidy or theme switch |
+
+When the theme changes, the `widgets` theme-set hook runs `bromigos panels layout theme
+NAME` in the background. It saves the layout in force for the old scene. Then it puts back
+the new scene's saved layout. The first time, it fits the layout applied to every theme,
+or else the new theme's own. Wick and a colour theme are one scene, so switching between
+them changes nothing.
+
+`bromigos panels layout undo` puts back the layout from before. Run it again to redo.
+
+### Never on top of another
+
+Every way of switching a widget on finds it a place clear of the widgets shown: the
+switches in Customize and Settings (`bromigos panels show`), Add to desktop (`bromigos
+panels add`), a bigger size class, edit mode's tray, and a plugin that starts shown
+without a place. A hidden widget takes no room. When nothing is clear, the widget stays
+off and bromigOS says "No room for X: hide something or try a smaller size".
+`bromigos panels` reports any pair that overlaps (`overlapping`), and Settings › Widgets
+offers Tidy up for them.
+
+This fixed a bug where switching on about ten widgets in a row stacked them all on
+SYSTEM. Customize's switch turned each widget on without giving it a place. The panels
+then searched for free space counting every widget, hidden ones too. On a full screen
+they found none, used the top left, and remembered it. The fixture
+`widgets/tests/fixtures/layout-stacked.json` is that layout. Tidy up must untangle it.
+
+### Pictures
+
+`tools/widgets/render-layouts.py OUTDIR THEME:LAYOUT…` draws a layout on a theme as the
+real desktop, offscreen, with demo readings (the theme previews' renderer). It also writes
+a copy with the keep-clear areas outlined, to check the scene shows.
 
 ## High contrast
 

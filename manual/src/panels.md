@@ -111,6 +111,76 @@ resizes it, and <kbd>H</kbd> hides it. <kbd>F6</kbd> moves to the tray and back.
 Why not just hold <kbd>Alt</kbd> and drag? On bromigOS, <kbd>Alt</kbd> and a drag moves
 windows, so it can't move panels too.
 
+## Layouts
+
+A layout is a ready-made set of panels, already sized and placed for you. Pick one and
+your desktop changes at once. Each panel keeps its own settings, such as the weather's
+place.
+
+| Layout | What it shows |
+|---|---|
+| Made for your theme | The panels this theme's scene suits, placed around it. It comes first. |
+| Minimal | SYSTEM, WEATHER and NOW PLAYING. |
+| Developer | SYSTEM, WORKBENCH, GITHUB or GITLAB, CI & PRS, SHORTCUTS and UPDATES. |
+| Homelab | Your homelab's LAB hologram, large, with ALERTS, LAB JOBS, STORAGE, NETWORK and GAME SERVERS. |
+| Streamer | TWITCH, YOUTUBE, DISCORD, NOW PLAYING and a small SYSTEM. |
+| Media | NOW PLAYING, MEDIA, SPOTIFY and YOUTUBE. |
+| Gamer | GPU, SYSTEM, GAME SERVERS, DISCORD and NOW PLAYING. |
+| Everything | Every panel that can show something, packed tidily. |
+
+To pick one:
+
+1. Open **Customize** (<kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd>)
+   and choose the **Widgets** tab. The **Layouts** row is at the top.
+2. Each card is your screen in miniature, with your theme's scene behind it. It shows
+   where each panel would go. The dashed boxes are the parts of the scene a layout keeps
+   clear.
+3. Click a card, or its **Use this layout** button.
+4. Changed your mind? Click **Undo**.
+
+In edit mode, the tray's **Layouts…** button lists them too. There, <kbd>Ctrl</kbd>+<kbd>Z</kbd>
+undoes one, and **Done** keeps it. In a terminal, `bromigos panels layouts` lists them,
+and `bromigos panels layout apply homelab` applies one.
+
+Layouts fit any screen, from a 1366×768 laptop to a 4K or ultrawide monitor. On a small
+screen, panels come in smaller sizes. A layout never covers more than about a third of the
+screen, so you can still see your scene. When a panel doesn't fit, or can't show anything
+on your machine, the layout leaves it out and says why. For example, GITHUB needs you to
+be signed in, and LAB needs a [homelab](homelab.md). Everything is the exception: it may
+cover more, and it tells you when it does.
+
+### Each theme has its own layout
+
+Your scene is the point of your desktop, so each theme keeps the panels off its best
+parts. The Wick keeps its screens, TVs and window clear. Tidewell keeps the waterline,
+the lighthouse and the creatures' water clear. Mire keeps the Sleeper and Hollis clear.
+
+Your desktop remembers a layout for each theme. When you switch theme, your panels switch
+to the layout you last had on that theme. The first time, you get the layout made for
+it. The colour themes (Cinder, Deepvein, Highwind, Lowtown, Rime and Sunder) paint the
+Wick's den in other colours, so they share the Wick's layout. Switching between them
+leaves your panels alone.
+
+To use one layout on every theme, run `bromigos panels layout apply minimal
+--all-themes`.
+
+### Save your own
+
+Arrange the panels the way you like, then run `bromigos panels layout save "My desk"`.
+It joins the list as one of yours, and `bromigos panels layout apply my-desk` brings it
+back.
+
+### Tidy up
+
+Panels on top of each other? Click **Tidy up** in edit mode's tray, in Customize's
+Layouts row, or in **Settings › Widgets**. You can also run `bromigos panels tidy`. Tidy
+up moves your panels so none covers another. It keeps them in the same order, and keeps
+them off the scene where it can. **Undo** puts them back.
+
+When you switch on a panel and there's no room left for it, bromigOS tells you: "No room
+for GPU: hide something or try a smaller size". It never puts one panel on top of
+another.
+
 ## Choose panels
 
 The tray in edit mode, the **Widgets** tab of [Customize](themes-and-worlds.md#customize)

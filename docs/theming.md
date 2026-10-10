@@ -166,7 +166,7 @@ themes/<name>/
   art.toml          how a world's art is made (art.md)
   art.log.jsonl     every job that made it
   art/              working sources for the art; not in Git or the package
-  widgets/          reserved
+  widgets/          layout.toml: the scene's keep-clear areas and the panels' layout made for it
   sounds/           reserved
   lock/             reserved
 ```
@@ -174,6 +174,11 @@ themes/<name>/
 Only `colors.toml` is required.
 
 Nothing reads the reserved folders yet. They hold a README that says what they're for.
+
+`widgets/layout.toml` tells the desktop's panels where the scene's focal points are, so
+layouts keep off them, and holds the panels' layout made for this scene.
+[widgets.md](widgets.md#layouts) has the format. A theme without one draws the Wick's den
+and uses the Wick's file.
 `bromigos theme set` copies a theme's files into `current/`, except READMEs, `art.toml`,
 `art.log.jsonl` and `art/`.
 

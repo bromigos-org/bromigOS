@@ -30,7 +30,8 @@ The package installs:
 
 - the code in `/usr/lib/bromigos/widgets/`;
 - `/usr/bin/bromigos-widgets`;
-- the default layout in `/usr/share/bromigos/widgets/layout.json`.
+- the default layout in `/usr/share/bromigos/widgets/layout.json`;
+- the ready-made layouts in `/usr/share/bromigos/widgets/layouts/`.
 
 A user's own layout goes in `~/.config/bromigos/widgets/layout.json`.
 
@@ -62,6 +63,8 @@ shortcuts, and Alt+N to type in the notes. The full list is the manual's
 | `bromigos-widgets` | The app: one window per panel, the heartbeat, the control socket, hotplug recovery |
 | `editmode.py` | Edit mode: the canvas over the panels, the drags, the keyboard, and the tray with the widget gallery |
 | `arrange.py` | Edit mode's geometry and file, with no GTK: snapping, free space, undo, reading and writing `layout.json` |
+| `layouts.py` | Layouts, with no GTK: reading them, each theme's keep-clear areas, fitting a layout to a screen, Tidy up, and the layout remembered per theme |
+| `layouts/` | The ready-made layouts (Minimal, Developer, Homelab, Streamer, Media, Gamer, Everything), installed to `/usr/share/bromigos/widgets/layouts/` |
 | `widget_settings.py` | A widget's own settings: its declared fields, and their values in `~/.config/bromigos/widgets/<name>.toml` |
 | `gallery.py` | The widget gallery's list: every panel, what it shows, who made it, what it reads, and its pictures |
 | `panels.py` | The built-in panels |
@@ -161,7 +164,8 @@ end-to-end test reads.
 
 `check()` in `packaging/bromigos-widgets/PKGBUILD` compiles every file, runs the unit
 tests in `tests/` (snapping, free space, undo, each panel's monitor and its migration,
-and `layout.json` written through a symlink), and checks the launcher entries with `tools/launcher/check.py`.
+`layout.json` written through a symlink, and every layout fitted to five screens on each
+scene, none overlapping), and checks the launcher entries with `tools/launcher/check.py`.
 `desktop/tests/e2e_widgets_nested.py` drives edit mode in a nested Hyprland, with a
 virtual keyboard and pointer, on one output and then two. CI's `launcher.yml` runs the full
 launcher check.

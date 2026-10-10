@@ -10,6 +10,10 @@ If you installed from the bromigOS USB stick, these questions were answered for 
 Wick theme, with VECTOR's brain, voice and creation tools off. Run `bromigos setup` to
 answer them yourself.
 
+The first time you log in, a notification offers ready-made layouts for your panels:
+Minimal, Developer, Homelab and more, each fitted to your screen and your theme. They're
+in Customize, on the Widgets tab ([Layouts](panels.md#layouts)).
+
 ## Answer the questions
 
 Each question is a page with a list of choices.
