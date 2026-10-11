@@ -709,3 +709,8 @@ Super+KP 1/2/3 and releases it with Super+KP 0, Escape or a fifteen-second timeo
 `lib/bromigos_tvplay.py` shares media search and on-demand playback between the Den TV
 app, media TUI, CLI and VECTOR. `lib/bromigos_tvremote.py` shares hint, selection and
 remote commands. The media TUI uses `p` to play on a den screen and `P` for a profile.
+
+The package's check dependencies include PyOpenGL, Cairo, Pillow, GTK3, mpv and ffmpeg.
+That runs the fake-player control tests and the private controller's real `--vo=null`
+tests in the build container. A minimal source checkout skips those tests when their
+runtime is absent; it still runs the shared search and config-writer checks.

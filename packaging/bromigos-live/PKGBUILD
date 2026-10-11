@@ -24,7 +24,8 @@ depends=('bromigos-core' 'python' 'python-gobject' 'gtk3' 'gtk-layer-shell' 'lib
 optdepends=('nvidia-utils: GPU readings on NVIDIA')
 makedepends=('git' 'python')
 # the tests check() runs: a pixbuf's rows at any width (tests/test_pixbuf.py)
-checkdepends=('python-numpy' 'python-gobject' 'gdk-pixbuf2' 'desktop-file-utils')
+checkdepends=('python-numpy' 'python-gobject' 'gdk-pixbuf2' 'desktop-file-utils'
+              'python-opengl' 'python-cairo' 'python-pillow' 'gtk3' 'mpv' 'ffmpeg')
 options=('!debug')
 
 _root="${startdir%/packaging/*}"

@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import test_tv_screens as S
 
 
+@unittest.skipUnless(S.livetv is not None, getattr(S, "WHY", "needs PyOpenGL"))
 class Controls(unittest.TestCase):
     def setUp(self):
         S.sandbox(self)

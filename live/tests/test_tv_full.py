@@ -11,7 +11,10 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from live import tvfull, glkit
+try:
+    from live import tvfull, glkit
+except ImportError:
+    tvfull = glkit = None
 
 
 def wait(fn, timeout=6):
@@ -23,7 +26,7 @@ def wait(fn, timeout=6):
     return fn()
 
 
-@unittest.skipUnless(shutil.which("mpv") and shutil.which("ffmpeg"), "needs mpv and ffmpeg")
+@unittest.skipUnless(glkit is not None and shutil.which("mpv") and shutil.which("ffmpeg"), "needs PyOpenGL, mpv and ffmpeg")
 class Full(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(prefix="den-full-test-");self.addCleanup(self.tmp.cleanup)
