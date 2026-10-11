@@ -34,7 +34,8 @@ import urllib.request
 
 from . import catalog as C
 
-KEYRING = "/usr/share/pacman/keyrings/bromigos.gpg"
+KEYRING = ("/usr/share/pacman/keyrings/bromigos.gpg" if os.path.isfile("/usr/share/pacman/keyrings/bromigos.gpg")
+           else "/usr/share/bromigos-lab/bromigos.gpg")
 PACMAN_CONF = "/etc/pacman.conf"
 UA = "bromigos-lab-catalog/1 (+https://github.com/bromigos-org/bromigOS)"
 
@@ -100,7 +101,7 @@ def verify(data_path, sig_path, keyring=KEYRING):
     if not gpgv:
         return False, "gpgv isn't installed (gnupg)"
     if not os.path.isfile(keyring):
-        return False, f"no {keyring} (bromigos-keyring)"
+        return False, f"no {keyring} (reinstall bromigos-lab or bromigos-keyring)"
     p = subprocess.run([gpgv, "--keyring", keyring, sig_path, data_path], capture_output=True, text=True, timeout=30)
     if p.returncode != 0:
         return False, "the signature doesn't match bromigOS's key"

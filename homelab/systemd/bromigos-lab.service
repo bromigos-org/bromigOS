@@ -5,12 +5,12 @@
 #   systemctl --user enable --now bromigos-lab.service
 [Unit]
 Description=bromigOS lab job queue (bromigos lab jobs)
-Documentation=file:///usr/share/doc/bromigos-homelab/homelab.md
+Documentation=file:///usr/share/doc/bromigos-lab/lab.md
 After=default.target
 
 [Service]
 Type=simple
-ExecStart=/usr/lib/bromigos/bin/bromigos-lab serve
+ExecStart=/usr/bin/bromigos-lab serve
 Restart=on-failure
 RestartSec=5
 # a job's own processes (bromigos art make, the bake) end with it

@@ -40,6 +40,8 @@ permissions:
 jobs:
   release:
     name: Tag, publish, GitHub Releases
+    outputs:
+      tag: ${{ steps.cut.outputs.tag }}
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/v') &&
@@ -76,6 +78,7 @@ jobs:
           token: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Cut
+        id: cut
         shell: bash
         env:
           RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
@@ -104,6 +107,10 @@ jobs:
           git config --global user.email "packages@bromigos.org"
           [[ $HAVE_RELEASE_TOKEN ]] && export VECTOR_DIR=.release/vector
           OUT=$RUNNER_TEMP/out tools/release/cut.sh
+          if [[ -f $RUNNER_TEMP/out/result.env ]]; then
+            source "$RUNNER_TEMP/out/result.env"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Summary
         if: always()
@@ -123,3 +130,16 @@ jobs:
           name: release${{ env.DRY_RUN && '-dryrun' || '' }}
           path: ${{ runner.temp }}/out/
           if-no-files-found: ignore
+
+  aur-lab:
+    name: Standalone lab AUR release
+    needs: release
+    if: >-
+      needs.release.outputs.tag != '' &&
+      !contains(needs.release.outputs.tag, '-rc') &&
+      !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+    uses: ./.github/workflows/release-lab.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}

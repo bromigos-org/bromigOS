@@ -119,3 +119,6 @@ it's read back with tesseract and checked for words no picture may show.
 [theming.md](theming.md#the-previews) explains the desktop it draws.
 
 [Agents in your lab](lab-agents.md) records agent installation, settings and upstream sources.
+
+The [standalone lab package](lab-package.md) documents package ownership, clean Arch
+testing and the AUR release gate.

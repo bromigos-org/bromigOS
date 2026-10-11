@@ -1,0 +1,74 @@
+# Publish the standalone console from an immutable source release, after a clean install test.
+name: release-lab
+on:
+  push:
+    tags: ['bromigos-lab-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Stable source release tag (bromigos-lab-vX.Y.Z or vX.Y.Z)'
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+    secrets:
+      AUR_SSH_PRIVATE_KEY:
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: release-lab
+  cancel-in-progress: false
+jobs:
+  publish:
+    name: Test standalone Arch install and publish to AUR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Validate the release tag
+        id: release
+        env:
+          SOURCE_TAG: ${{ inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          [[ $SOURCE_TAG =~ ^(bromigos-lab-)?v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 2
+          echo "tag=$SOURCE_TAG" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          fetch-depth: 0
+      - name: Verify the immutable source and pin the recipe
+        env:
+          SOURCE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          test "$(git rev-parse "refs/tags/$SOURCE_TAG^{commit}")" = "$(git rev-parse HEAD)"
+          python packaging/ci/prepare-aur-lab.py "$SOURCE_TAG"
+      - name: Install and test with no bromigOS desktop
+        run: >-
+          docker run --rm --memory=4g --cpus=2 --pids-limit=512
+          -v "$PWD:/work:ro" archlinux:base-devel
+          bash /work/packaging/ci/test-aur-lab.sh /work
+      - name: Publish bromigos-lab
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: bromigos-lab
+          pkgbuild: packaging/aur/bromigos-lab/PKGBUILD
+          commit_username: blackflame
+          commit_email: packages@bromigos.org
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+      - name: Publish the component release
+        env:
+          SOURCE_TAG: ${{ steps.release.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ $SOURCE_TAG == bromigos-lab-* ]] && ! gh release view "$SOURCE_TAG" >/dev/null 2>&1; then
+            gh release create "$SOURCE_TAG" --verify-tag --title "bromigos-lab ${SOURCE_TAG#bromigos-lab-v}" \
+              --notes 'Standalone Arch console, adapters, catalog and provisioning. The pinned AUR source passed a clean Arch install, fake doctor and headless TUI test before publication.'
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bromigos-lab-aur-recipe
+          path: packaging/aur/bromigos-lab/PKGBUILD

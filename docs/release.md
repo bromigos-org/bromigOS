@@ -291,3 +291,11 @@ no PRs.
 | `iso/build.sh`, `iso/check-medium.sh`, `iso/test.sh` | a release's ISO: built, checked and tested by hand ([iso.md](iso.md#a-releases-iso)) |
 | `tools/release/current.json` | written by each release PR: the release its commit prepares |
 | `CHANGELOG.md`, `manual/src/whats-new.md` | the technical log, and the notes for users |
+
+## Standalone lab AUR release
+
+After a stable bromigOS release, the release workflow calls `release-lab.yml` with
+that immutable tag. It renders a checksummed recipe, tests it in Arch without desktop
+packages, then publishes `bromigos-lab` through the configured AUR account.
+A component release tag, `bromigos-lab-vX.Y.Z`, runs the same gate without releasing
+the desktop or VECTOR. See [the lab package](lab-package.md).

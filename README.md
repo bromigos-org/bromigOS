@@ -147,6 +147,13 @@ make your own, or install one from a Git repository.
   and thinks with any OpenAI-compatible service. With a GPU of 8 GB or more, he can run
   a model locally.
 
+## Just the lab console
+
+The lab console also runs on plain Arch Linux. Install `bromigos-lab` from the AUR
+and run `bromigos-lab`. It includes the terminal dashboard, adapters, model catalog
+and provisioning. The bromigOS desktop is optional.
+See [installing the standalone console](manual/src/lab.md#install-on-plain-arch).
+
 ## Install
 
 If you already use the AUR, you can [install the keyring and mirrorlist first](manual/src/install.md#start-from-the-aur).

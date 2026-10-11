@@ -17,7 +17,8 @@ packaging/
   bromigos-settings/       the login screen, boot splash, boot menu, GTK, icon and cursor themes (settings/)
   bromigos-live/           the live layer (live/)
   bromigos-widgets/        the desktop panels (widgets/)
-  bromigos-homelab/        the homelab integrations (homelab/)
+  bromigos-lab/            the standalone console, adapters and provisioning (homelab/)
+  bromigos-homelab/        optional desktop homelab plugins (homelab/)
   bromigos-lab-catalog/    the lab model catalog (homelab/share/lab/models.toml)
   bromigos-apps/           the app bundle's configs (apps/)
   bromigos-manual/         the manual (manual/), built as HTML to read offline
@@ -49,7 +50,8 @@ packages. That table is generated from these PKGBUILDs.
 | `bromigos-settings` | The SDDM login theme, the Plymouth splash, the GRUB boot theme, and the GTK, icon and cursor themes | `settings/`, the Wick's emblem kit, the den |
 | `bromigos-live` | The live layer in `/usr/lib/bromigos/live/`, `/usr/bin/bromigos-live` and its default config | `live/` |
 | `bromigos-widgets` | The panels in `/usr/lib/bromigos/widgets/`, `/usr/bin/bromigos-widgets` and the default layout | `widgets/` |
-| `bromigos-homelab` | The homelab library, its decks, panels and VECTOR plugin, and `bromigos lab` | `homelab/` |
+| `bromigos-lab` | The standalone console, library, services, catalog fallback and provisioning | `homelab/` |
+| `bromigos-homelab` | Desktop decks, panels, VECTOR plugin and launcher entries; depends on `bromigos-lab` | `homelab/` |
 | `bromigos-lab-catalog` | The lab model catalog, `/usr/share/bromigos/homelab/lab/models.toml` | `homelab/share/lab/` |
 | `bromigos-apps` | The app bundle's default configs and `bromigos apps setup` | `apps/` |
 | `bromigos-manual` | The manual as HTML in `/usr/share/doc/bromigos/manual/`, which Settings opens | `manual/` |
@@ -434,3 +436,10 @@ gh secret set AUR_SSH_PRIVATE_KEY -R bromigos-org/bromigOS < ~/.ssh/aur-bromigos
 The public key belongs in the AUR account's profile. The private key is never
 printed. Missing secrets skip AUR publishing. The install steps live in the
 manual's [AUR route](../manual/src/install.md#start-from-the-aur).
+
+## Standalone lab releases
+
+The AUR recipe template is `aur/bromigos-lab/PKGBUILD.in`. A release job renders its
+version, immutable source tag and checksum. The signed-repository recipe and the AUR
+recipe call the same `install-lab.sh`, so their file ownership agrees.
+See [the lab package release gate](../docs/lab-package.md).

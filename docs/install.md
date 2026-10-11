@@ -8,6 +8,14 @@ This page explains each step, its options and its files, for contributors. For u
 the manual's [Install](../manual/src/install.md) page is shorter. To install from the
 ISO instead, see [iso.md](iso.md).
 
+## Standalone lab package
+
+`bromigos-lab` runs on plain Arch without `bromigos-core`. Its AUR recipe builds from
+an immutable source release and verifies a SHA-256 checksum. The release workflow
+installs that exact archive in a clean Arch container before pushing to the AUR.
+Users can follow [the standalone console instructions](../manual/src/lab.md#install-on-plain-arch).
+The [package split and release gate](lab-package.md) explain ownership and testing.
+
 ## Before you start
 
 You need:
@@ -167,8 +175,9 @@ Then it runs `bromigos setup`, unless you gave `--no-setup`.
 | `bromigos-vector` | VECTOR, the desktop's caretaker, and the hologram renderer he lives in (from the `vector` repository) | *with bromigOS* |
 | `bromigos-manual` | bromigOS manual: how to use the desktop, as HTML, for reading offline | *with bromigOS* |
 | `bromigos-mirrorlist` | bromigOS package repository mirrors | *with bromigOS* (through `bromigos-keyring`) |
-| `bromigos-homelab` | bromigOS homelab integrations: capabilities, adapters, the LAB panel, homelab decks and VECTOR tools | *with bromigOS* (through `bromigos-desktop`) |
+| `bromigos-homelab` | bromigOS homelab integrations: desktop panels, homelab decks and VECTOR tools | *with bromigOS* (through `bromigos-desktop`) |
 | `ttf-geist-mono` | Geist Mono, a monospaced typeface by Vercel | *with bromigOS* (through `bromigos-settings`) |
+| `bromigos-lab` | Standalone homelab console, adapters, model catalog and reviewed provisioning | *with bromigOS* (through `bromigos-homelab`) |
 | `bromigos-lab-catalog` | bromigOS lab model catalog: the best open models per AI capability and GPU size, with licences | *with bromigOS* (through `bromigos-homelab`) |
 | `bromigos-apps` | bromigOS app bundle: LazyVim, tmux, lazygit, mise, Chromium, Spotify and Signal, configured and themed | optional: `bromigos install --with bromigos-apps` |
 | `herdr` | Terminal workspace manager for AI coding agents | optional: `bromigos install --with herdr` |

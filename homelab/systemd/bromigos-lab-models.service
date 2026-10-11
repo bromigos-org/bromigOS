@@ -4,7 +4,7 @@
 # It never installs or changes anything. Quiet with no homelab configured.
 [Unit]
 Description=bromigOS lab models: the newest catalog, and a nudge when a better model fits
-Documentation=file:///usr/share/doc/bromigos-lab-catalog/lab-models.md
+Documentation=file:///usr/share/doc/bromigos-lab/lab-models.md
 After=network-online.target
 
 [Service]

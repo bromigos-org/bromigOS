@@ -19,7 +19,8 @@ As of 2026-10-09:
 - Phase 4, hardware and polish, has finished all its batches so far: the shell, themes
   beyond the desktop, safety, extensions, hardware, peripherals, accessibility, Settings,
   the shortcut picker and the boot menus.
-- Phase 5, the lab console, has its first part built. Its second part is planned.
+- Phase 5, the lab console, includes provisioning and monitoring. The standalone
+  `bromigos-lab` package also runs on plain Arch ([lab-package.md](lab-package.md)).
   Its third part now includes service, VM, cluster and monitoring provisioning.
 - No decisions are open.
 

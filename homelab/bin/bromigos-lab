@@ -391,7 +391,11 @@ def connect(rest):
 
 
 def target(rest):
-    return _exec([os.environ.get("BROMIGOS_BIN") or shutil.which("bromigos") or "/usr/bin/bromigos", "target"] + rest)
+    exe = os.environ.get("BROMIGOS_BIN") or shutil.which("bromigos")
+    if not exe:
+        print("Desktop target commands need the optional bromigos-core package. Lab sources use bromigos-lab connect.", file=sys.stderr)
+        return 3
+    return _exec([exe, "target"] + rest)
 
 
 def tui():
@@ -413,6 +417,9 @@ def media_tui(argv):
             print("The media library needs Textual: sudo pacman -S python-textual. Meanwhile: bromigos lab media "
                   "status, library, get …", file=sys.stderr)
             return 2
+        if (getattr(e, "name", "") or "").startswith("bromigos_tv"):
+            print("Den TV media tools need the optional bromigos-core package. Media commands still work with bromigos-lab media.", file=sys.stderr)
+            return 3
         raise
     return mediatui.main(argv)
 
@@ -424,7 +431,7 @@ def main(argv):
         return cmd_status(argparse.Namespace(json=False, card=None))
     cmd, rest = argv[0], argv[1:]
     if cmd in ("-h", "--help", "help"):
-        print(__doc__.strip())
+        print(__doc__.strip() if shutil.which("bromigos") else __doc__.strip().replace("bromigos lab", "bromigos-lab"))
         return 0
     if cmd == "connect":
         return connect(rest)

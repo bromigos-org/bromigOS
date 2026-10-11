@@ -195,3 +195,6 @@ checks it for problems. See [The lab console](lab.md).
 The developer docs'
 [homelab.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/homelab.md) has every
 kind of service, the settings file in full, and how to write support for a new service.
+
+The console also works on plain Arch. Follow [Install on plain Arch](lab.md#install-on-plain-arch)
+for the standalone `bromigos-lab` AUR package.

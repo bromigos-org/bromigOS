@@ -1,6 +1,6 @@
 # Your homelab on the desktop (bromigos-homelab)
 
-`bromigos-homelab` connects the servers you run at home to the bromigOS desktop. It works
+`bromigos-lab` provides the console and adapters. `bromigos-homelab` connects the servers you run at home to the bromigOS desktop. It works
 with whatever your homelab runs, because the desktop asks for kinds of readings, not for
 particular products. This page is for someone connecting an unusual setup, writing an
 adapter, or adding to the lab console. For using it, read the manual's
@@ -921,3 +921,6 @@ node readiness, cached storage inventory and capacity proposals. The console sho
 and capacity cards. VECTOR, the desktop AI assistant, can read proposals with
 `lab_capacity`; this tool cannot create a VM. Provider extensions register a
 `vmproviders.Provider` implementation. See [infrastructure](lab-infrastructure.md).
+
+The library and console belong to [the standalone package](lab-package.md). Desktop
+plugins keep their installed paths in `bromigos-homelab`.

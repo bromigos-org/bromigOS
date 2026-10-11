@@ -9,6 +9,12 @@ On an existing system, use the script below or [start from the AUR](#start-from-
 - **From the bromigOS USB stick.** It boots straight into the desktop, and installs from
   there. The stick image isn't published yet.
 
+## Install only the lab console
+
+For the console on an existing Arch system, install `bromigos-lab` from the AUR.
+It needs Python and Textual, a library for terminal interfaces. It does not install
+Hyprland, the desktop or VECTOR. Follow [Install on plain Arch](lab.md#install-on-plain-arch).
+
 ## Before you start
 
 You need:

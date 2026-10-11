@@ -5,7 +5,41 @@ doing and what its graphics cards hold, runs AI jobs on them, and checks the lab
 problems. It reads the services you connected. Anything your lab doesn't have is simply
 not shown.
 
-You need a homelab connected first: run `bromigos setup homelab`.
+Connect a homelab first with `bromigos-lab connect`, or `bromigos setup homelab` on bromigOS.
+
+## Install on plain Arch
+
+The `bromigos-lab` AUR package runs without the bromigOS desktop. It includes the
+terminal dashboard, service adapters, model catalog and provisioning.
+With an AUR helper, run `paru -S bromigos-lab`. Without one:
+
+```bash
+sudo pacman -S --needed base-devel git
+git clone https://aur.archlinux.org/bromigos-lab.git
+cd bromigos-lab
+less PKGBUILD
+makepkg -si
+```
+
+Read the recipe before building it. It uses a pinned source release and a SHA-256
+checksum. It installs the console without changing your desktop or system settings.
+Connect your services and check them:
+
+```bash
+bromigos-lab connect
+bromigos-lab doctor
+bromigos-lab
+```
+
+Replace `bromigos lab` with `bromigos-lab` in the commands on this page. Both use
+`~/.config/bromigos/homelab.toml` and the same lab state. Provisioning asks for an
+explicit `yes` before changing machines. Install the optional tools listed by
+`pacman -Qi bromigos-lab` for the services and providers you choose.
+
+On bromigOS, `bromigos-homelab` pulls in this package and keeps `bromigos lab` working.
+Its desktop panels, live decks and VECTOR plugins are separate integrations.
+Desktop target commands, art jobs and the Den TV media screen need the optional
+`bromigos-core` package. The main console, adapters and provisioning run without it.
 
 ## Look at your lab
 

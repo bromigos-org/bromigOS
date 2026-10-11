@@ -29,7 +29,7 @@ belongs to a package, so pacman installs, updates and removes all of it.
 | [`desktop/`](desktop/README.md) | Default configs for Hyprland, the bar, the launcher, notifications and the lock screen, plus the menu, Settings and other tools | `bromigos-desktop` |
 | [`live/`](live/README.md) | The live layer: the animated background, the worlds and the decks | `bromigos-live` |
 | [`widgets/`](widgets/README.md) | The desktop panels (widgets) | `bromigos-widgets` |
-| [`homelab/`](homelab/README.md) | The homelab integrations and `bromigos lab` | `bromigos-homelab` |
+| [`homelab/`](homelab/README.md) | The homelab integrations and `bromigos lab` | `bromigos-lab`, `bromigos-homelab` |
 | [`settings/`](settings/README.md) | The login screen, boot splash, boot menu, and the GTK, icon and cursor themes | `bromigos-settings` |
 | [`theme/`](theme/README.md) | The templates every theme renders into each app's config, the bar's icons and the canonical emblem | `bromigos-core` |
 | `themes/` | The nine themes: colours, art, emblems and the worlds' scenes | `bromigos-core` |

@@ -1,7 +1,7 @@
 # homelab/: the homelab integrations
 
-This folder is the `bromigos-homelab` package. It connects the servers someone runs at home
-to the bromigOS desktop. One data layer asks for *capabilities*, kinds of readings such as
+This folder builds the standalone `bromigos-lab` package and the optional desktop
+integrations in `bromigos-homelab`. The console runs on plain Arch Linux. One data layer asks for *capabilities*, kinds of readings such as
 metrics, hosts or models. *Adapters* for real services, such as Prometheus or Kubernetes,
 provide them. Nothing here knows anyone's hosts, and nothing is on until a source is
 configured.
@@ -19,7 +19,7 @@ How it works, how to connect a homelab and how to write an adapter:
 | `live/` | `/usr/lib/bromigos/homelab/live/` | the Lab, Mind, Ops and Netmap decks, as live-layer plugins |
 | `widgets/` | `/usr/lib/bromigos/homelab/widgets/` | the LAB panel, and the generator for panels declared in `homelab.toml` |
 | `vector/` | `/usr/lib/bromigos/homelab/vector/` | VECTOR's read-only homelab tools and his Gnosis memory, as a VECTOR plugin |
-| `bin/` | `/usr/lib/bromigos/bin/` | `bromigos homelab`, `bromigos setup homelab` and `bromigos lab` |
+| `bin/` | `/usr/lib/bromigos/bin/`, with `/usr/bin/bromigos-lab` | `bromigos homelab`, `bromigos setup homelab` and `bromigos lab` |
 | `applications/` | `/usr/share/applications/` | app launcher entries for the lab console and the homelab decks |
 | `systemd/` | `/usr/lib/systemd/user/` | the job queue's service, and the model catalog's weekly timer |
 | `share/homelab.toml` | `/usr/share/bromigos/default/homelab.toml` | the packaged default: every key documented, no sources |
@@ -99,3 +99,14 @@ Super+KP 1/2/3 and releases it with Super+KP 0, Escape or a fifteen-second timeo
 `lib/bromigos_tvplay.py` shares media search and on-demand playback between the Den TV
 app, media TUI, CLI and VECTOR. `lib/bromigos_tvremote.py` shares hint, selection and
 remote commands. The media TUI uses `p` to play on a den screen and `P` for a profile.
+
+## Standalone package and AUR tests
+
+`bromigos-lab` owns the library, commands, job services and default data at the existing
+paths. It includes a fallback model catalog in `/usr/share/bromigos-lab/models.toml`.
+The desktop's separately updated catalog keeps priority. The package also includes
+the public verification key for signed refreshes. `bromigos-homelab` owns the
+panels, decks, VECTOR plugins, launcher entries and rack hologram.
+
+See [the package split](../docs/lab-package.md) for the clean Arch test and release gate.
+No test needs desktop sudo, a window, a real lab or a real bot.

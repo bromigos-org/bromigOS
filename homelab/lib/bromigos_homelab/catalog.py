@@ -342,6 +342,7 @@ def candidates_paths():
     if os.environ.get("BROMIGOS_LAB_CATALOG"):
         out.append(os.environ["BROMIGOS_LAB_CATALOG"])
     out += [os.path.join(CACHE, "models.toml"), os.path.join(SHARE, "homelab", "lab", "models.toml"),
+            "/usr/share/bromigos-lab/models.toml",
             os.path.normpath(os.path.join(HERE, "..", "..", "share", "lab", "models.toml"))]
     return out
 

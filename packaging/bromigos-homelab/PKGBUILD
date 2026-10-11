@@ -1,32 +1,15 @@
 # Maintainer: bromigOS <packages@bromigos.org>
-#
-# The homelab integrations (homelab/, Python; docs/homelab.md): connect any homelab to the
-# desktop. Capabilities (metrics, hosts, workloads, deployments, models, agents, secrets,
-# ci, alerts, and the lab's own services: gpus, logs, routes, certs, ddns, network, storage,
-# apps, games, library, runners, packages, backups, ocr) from adapters (Prometheus,
-# VictoriaMetrics, Alertmanager, Kubernetes, Docker, Argo CD, Flux, LiteLLM, Ollama,
-# OpenAI-compatible, vLLM, Vault, herdr, GitHub, a Lab API, Gnosis, DCGM, Loki, Traefik,
-# cert-manager, UniFi Poller, S3, a NAS, Pelican, the *arr apps, ARC, backups, …), and what
-# the desktop builds on them: the LAB panel and declared panels (widgets), the Ops, Netmap
-# and Mind decks (live layer), VECTOR's homelab tools and Gnosis memory.
-#   /usr/lib/bromigos/lib/bromigos_homelab   the data layer (one import for every consumer)
-#   /usr/lib/bromigos/homelab/{live,widgets,vector}   the decks, panels and VECTOR plugins
-#   /usr/lib/bromigos/bin/bromigos-{homelab,setup-homelab,lab}   `bromigos homelab …`, `bromigos setup homelab`,
-#                                             `bromigos lab` (the console: status, models, jobs, doctor; its dashboard)
-#   /usr/lib/systemd/user/bromigos-lab.service the lab job queue (`bromigos lab run` starts it)
-#   /usr/share/bromigos/homelab/lab/          the lab's data: provisioning profiles (Phase 3), the model catalog
-#   /usr/share/bromigos/homelab/holo          the rack hologram (VECTOR's gallery, with a homelab)
-#   /usr/share/bromigos/default/homelab.toml  documented, no sources (the user's
-#                                             ~/.config/bromigos/homelab.toml adds them)
+# Desktop plugins and launcher entries. The standalone bromigos-lab package owns
+# the library, commands, services and defaults at their existing paths.
 
 pkgname=bromigos-homelab
 pkgver=0.1.0.r20.g1772056
 pkgrel=1
-pkgdesc='bromigOS homelab integrations: capabilities, adapters, the LAB panel, homelab decks and VECTOR tools'
+pkgdesc='bromigOS homelab integrations: desktop panels, homelab decks and VECTOR tools'
 arch=('any')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
-depends=('bromigos-core' 'bromigos-lab-catalog' 'python' 'python-textual')
+depends=('bromigos-core' 'bromigos-lab' 'bromigos-lab-catalog')
 # VECTOR's terminal must know `bromigos lab`'s aliases (target, connect) and refuse what
 # changes the lab before they exist: vector c5f67cb (r33)
 conflicts=('bromigos-vector<0.1.0.r33')
@@ -86,21 +69,10 @@ check() {
 }
 
 package() {
-  local lib="$pkgdir/usr/lib/bromigos/lib/bromigos_homelab" home="$pkgdir/usr/lib/bromigos/homelab"
-  install -Dm0644 -t "$lib/" "$_root"/homelab/lib/bromigos_homelab/*.py
-  install -Dm0644 -t "$lib/adapters/" "$_root"/homelab/lib/bromigos_homelab/adapters/*.py
+  local home="$pkgdir/usr/lib/bromigos/homelab"
   install -Dm0644 -t "$home/live/" "$_root"/homelab/live/*.py
   install -Dm0644 -t "$home/widgets/" "$_root"/homelab/widgets/*.py
   install -Dm0644 -t "$home/vector/" "$_root"/homelab/vector/*.py
-  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/homelab/bin/bromigos-homelab "$_root"/homelab/bin/bromigos-setup-homelab \
-    "$_root"/homelab/bin/bromigos-lab "$_root"/homelab/bin/bromigos-media
-  install -Dm0644 -t "$pkgdir/usr/lib/systemd/user/" "$_root"/homelab/systemd/bromigos-lab.service \
-    "$_root"/homelab/systemd/bromigos-lab-models.service "$_root"/homelab/systemd/bromigos-lab-models.timer
-  # the lab's data; the model catalog (models.toml) is bromigos-lab-catalog's, so it updates on its own
-  for _f in "$_root"/homelab/share/lab/*.toml; do
-    [[ ${_f##*/} == models.toml ]] || install -Dm0644 -t "$pkgdir/usr/share/bromigos/homelab/lab/" "$_f"
-  done
-  install -Dm0644 "$_root/homelab/share/homelab.toml" "$pkgdir/usr/share/bromigos/default/homelab.toml"
   # the app launcher's entries (docs/menu.md, "In the app launcher")
   install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_root"/homelab/applications/*.desktop
   # the rack hologram (homelab/holo/README.md): VECTOR's gallery shows it when a source is configured
@@ -108,5 +80,5 @@ package() {
     "$_root"/homelab/holo/*.holo.npz "$_root"/homelab/holo/README.md
   install -Dm0644 -t "$pkgdir/usr/share/doc/$pkgname/" "$_root/docs/homelab.md"
   install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
-  python -m compileall -q -o 0 -o 1 -s "$pkgdir" -p / "$lib" "$home" >/dev/null
+  python -m compileall -q -o 0 -o 1 -s "$pkgdir" -p / "$home" >/dev/null
 }

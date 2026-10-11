@@ -5,7 +5,8 @@ doing, what its GPUs hold and what needs fixing, and it queues work on the lab's
 This page explains how it works, for someone extending it or debugging it. For using it,
 read the manual's [The lab console](../manual/src/lab.md) page.
 
-The console comes with `bromigos-homelab` and reads the same sources as the rest of the
+The console ships as standalone `bromigos-lab`. The desktop integration package
+`bromigos-homelab` depends on it and reads the same sources as the rest of the
 desktop ([homelab.md](homelab.md)). A *source* is one of your services, listed in
 `homelab.toml`. Whatever your lab lacks is simply absent. A source that doesn't answer
 shows *unreachable*, and nothing crashes.
@@ -770,3 +771,6 @@ The Provision tab can review a generated repository, plan a cluster specificatio
 apply a plan, add a node, drain a worker or run an owned VM command. Resource changes run in the terminal and
 keep their explicit approval prompts. Capacity and VM cards use read-only adapter data.
 [Infrastructure](lab-infrastructure.md) describes providers, storage and monitoring.
+
+The [standalone package](lab-package.md) runs without desktop dependencies and publishes
+to the AUR after a clean Arch install test.
