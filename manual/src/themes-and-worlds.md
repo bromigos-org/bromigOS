@@ -137,8 +137,9 @@ channel buttons, the sound, the volume and Full screen](images/den-tv.webp)
 
 Every channel can play on any of the den's three screens, and each screen plays its own
 channel at the same time. Channel 1 is what the screen always shows, such as the relay map
-on the big monitor. Your channels come after it, and the den stays exactly as it was until
-you change channel. Two screens on the same channel show the same moment, like real TV.
+on the big monitor. Your channels come after it. The equipment controls appear when
+Den TV is on; turning Den TV off leaves the scene unchanged. Two screens on the same
+channel show the same moment, like real TV.
 
 ### Watch it
 

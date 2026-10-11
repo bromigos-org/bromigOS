@@ -248,8 +248,8 @@ screen](../docs/images/den-tv.webp)
 Each of the den's three screens has a channel list: the big monitor (`big`), the scope
 (`wave`) and the small monitor (`emblem`). Channel 1 is the screen's own picture, drawn
 exactly as before. Every media channel comes after it, on every screen, unless the
-channel's `screens` keeps it to some. With every screen on channel 1, the den is pixel for
-pixel what it was without the den TV.
+channel's `screens` keeps it to some. Equipment controls appear while Den TV is enabled.
+With Den TV disabled, the den is pixel for pixel what it was without the feature.
 
 Every screen plays its own channel at the same time. Each has a player of its own, and
 the sound comes from one screen at a time. Two screens on the same channel show the same
