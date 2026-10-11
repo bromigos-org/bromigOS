@@ -1129,6 +1129,8 @@ class TV(Controls):
             return self.open_web(s)
         if act == "guide":
             return self.open_guide(s)
+        if act == "skip":
+            return self.skip_item(s)
         if act == "speaker":
             return self.set_sound(s, on=not self.screens[s]["sound"])
         if act == "down":
@@ -1284,11 +1286,12 @@ class TV(Controls):
             if ch["kind"] in ("youtube", "live", "server"):
                 web = "YOUTUBE" if ch["kind"] != "server" else (self._server_name(ch) or "WEB").upper()
                 button(324, y, 70, 24, web[:8], "web")
+            button(256, 80, 64, 24, "SKIP", "skip")
             if note:
-                text(10, 88, note, 10, warn if st["sound"] else dim, st["sound"], maxw=300)
+                text(10, 88, note, 10, warn if st["sound"] else dim, st["sound"], maxw=240)
             else:
-                text(10, 88, "Click the screen: full screen with sound", 10, dim, False, maxw=300)
-            text(10, 103, "Wheel: channel · on the volume bar: volume", 10, dim, False, maxw=300)
+                text(10, 88, "Click screen: full screen with sound", 10, dim, False, maxw=240)
+            text(10, 103, "Wheel: channel · bar: volume", 10, dim, False, maxw=240)
         else:
             text(76, 61, "Scroll or ◀ ▶ to change channel", 10, dim, False)
         button(324, 80, 70, 24, "GUIDE", "guide")

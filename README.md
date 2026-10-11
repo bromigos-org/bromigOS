@@ -283,6 +283,7 @@ project.
 ## Den TV controls
 
 Control each den screen with its hover menu, the MEDIA remote or your number pad.
+Use **SKIP** in the hover menu or MEDIA widget to play the next item.
 The full-screen player has a volume slider that opens when you hover its speaker.
 Choose an episode, movie or YouTube video from Den TV, the media library or VECTOR.
 See [the den controls](manual/src/themes-and-worlds.md#den-tv-controls).

@@ -59,9 +59,11 @@ class MediaRemote(unittest.TestCase):
             plugintest.draw(p, 760, 250)
             nxt = next(r for r in p.regions if r[4].startswith("The next channel"))
             nxt[5]()
+            skip = next(r for r in p.regions if r[4].startswith("Skip to the next item"))
+            skip[5]()
             snd = next(r for r in p.regions if r[4].startswith("Sound from SCOPE"))
             snd[5]()
-        self.assertEqual(asked, ["tv next --screen wave", "tv sound toggle --screen wave"])
+        self.assertEqual(asked, ["tv next --screen wave", "tv skip --screen wave", "tv sound toggle --screen wave"])
 
     def test_knob_scroll_drag_and_click_use_shared_screen_commands(self):
         p = self.panel

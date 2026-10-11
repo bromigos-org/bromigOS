@@ -729,7 +729,7 @@ The media panel, `widgets/plugins/media.py`, is a remote for the den TV
 `bromigos-live tv state`, and shows all three screens at once, which hovering one screen
 can't: each one's channel, what's on, how far in and where the sound comes from. Click a
 screen's row to choose it. The buttons act on that screen: the previous and next channel,
-its sound, full screen, and the channel guide. When the den isn't drawn, it works out its
+its sound, **SKIP** for the next item, full screen, and the channel guide. When the den isn't drawn, it works out its
 own channel's schedule from the same cache (`lib/bromigos_tv.py`).
 
 | Size class | Shows |

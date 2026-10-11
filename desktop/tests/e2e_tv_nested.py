@@ -417,7 +417,7 @@ def scenarios(n, r, measure=0):
     # -- the hint's buttons: speaker, −, +
     time.sleep(0.6)
     btn = n.state().get("buttons") or {}
-    r.check("the hint has its buttons", {"prev", "next", "speaker", "down", "up", "bar", "full", "web"} <= set(btn), btn)
+    r.check("the hint has its buttons", {"prev", "next", "speaker", "down", "up", "bar", "full", "web", "skip", "guide"} <= set(btn), btn)
     if "speaker" in btn:
         ptr.click(at=btn["speaker"])
         r.check("the speaker button: sound off, and the stream gone",
@@ -431,6 +431,10 @@ def scenarios(n, r, measure=0):
         ptr.click(at=(bx - 42 + 84 * 0.25, by))                    # a quarter along the 84 px bar
         r.check("clicking the bar sets the level", wait_for(lambda: abs(n.state()["screens"]["big"]["volume"] - 25) <= 3, 3),
                 n.state()["screens"]["big"]["volume"])
+    ptr.click(at=btn["skip"])
+    r.check("the hover menu skips to the next item", wait_for(
+        lambda: n.state()["screens"]["big"].get("on_demand"), 5))
+    n.tv("set", "2", "--screen", "big")
     n.tv("volume", "40")
 
     # -- the desktop's sound around it

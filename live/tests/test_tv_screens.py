@@ -323,6 +323,10 @@ class ScreensTest(unittest.TestCase):
         self.assertTrue(tv.screens["big"]["sound"])
         self.assertIn(tuple(int(round(v)) for v in tv.hint_rect), tv.input_rects())    # the hint takes the pointer
         self.assertIn("guide", btn)
+        x, y, w, h = btn["skip"]
+        with mock.patch.object(tv, "skip_item", return_value="Next item") as skip:
+            self.assertEqual(tv.click(hx + x + w / 2, hy + y + h / 2), "Next item")
+        skip.assert_called_once_with("big")
 
     def test_the_hint_says_the_desktop_is_muted(self):
         tv = self.tv

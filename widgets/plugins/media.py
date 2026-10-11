@@ -5,8 +5,9 @@ The den TV (the live layer's channels on the den's three screens; live/README.md
 TV") says what's on through its control socket (`bromigos-live tv state`). The panel shows
 all three screens at once, which hovering one screen can't: each one's channel, what's on
 and next, how far in, its poster, and where the sound comes from. Click a screen's row to
-choose it; the buttons change its channel and sound, open it full screen, or open the
-channel guide. When the den isn't drawn, the panel works out its own channel's schedule
+choose it; the buttons change its channel and sound, skip to the next item, open it
+full screen, or open the channel guide. When the den isn't drawn, the panel works out
+its own channel's schedule
 from the same cache (lib/bromigos_tv.py). Continue watching and recently added come from
 the first Jellyfin or Plex source in homelab.toml (bromigos_homelab's `video` capability),
 every 5 minutes.
@@ -468,6 +469,9 @@ class MediaPanel(Panel):
         name = dict(SCREENS).get(s, "the screen").lower()
         bx += self._button(cr, bx, y, "◀ CH", f"The previous channel on {name}", lambda: self._tv("prev")) + 6
         bx += self._button(cr, bx, y, "CH ▶", f"The next channel on {name}", lambda: self._tv("next")) + 6
+        if n and n.get("kind") != "own":
+            bx += self._button(cr, bx, y, "SKIP", f"Skip to the next item on {name}",
+                               lambda: self._tv("skip")) + 6
         if n:
             bx += self._button(cr, bx, y, "FULL", f"{name.capitalize()}'s channel in mpv, full screen with sound, at "
                                                   "the same moment", self._open) + 6

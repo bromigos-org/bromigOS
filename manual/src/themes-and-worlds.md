@@ -325,7 +325,8 @@ in it. The full format, and how to make a world, are in the developer docs:
 
 ## Den TV controls
 
-Hover over a TV to open its menu for channels, sound, volume, **FULL** and **GUIDE**.
+Hover over a TV to open its menu for channels, sound, volume, **SKIP**, **FULL**
+and **GUIDE**. **SKIP** plays the next item on that screen’s channel.
 The menu is on by default. A change shows its volume, channel or crossed-out speaker
 on the TV for about a second and a half. The same feedback appears for commands,
 VECTOR, keys and the MEDIA widget. Reduced motion uses an immediate on/off change.
@@ -336,7 +337,8 @@ The config setting is `[tv] hover_hint = false`. The MEDIA remote, number-pad re
 and Den TV app remain available.
 Nothing is drawn when Den TV is disabled.
 
-The MEDIA remote has a rotary volume dial. Its label names the screen with sound.
+The MEDIA remote has a **SKIP** button for the selected screen and a rotary volume dial.
+The dial’s label names the screen with sound.
 Scroll it or drag around it or up and down. Click to mute or unmute. Each screen's row
 shows a speaker and percentage: click the speaker to move the sound there, or mute it;
 scroll over the row to change that screen's volume. Only one screen has sound at a time.

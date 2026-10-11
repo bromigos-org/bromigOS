@@ -699,7 +699,7 @@ channels are the station's radio bands.
 
 ## Den TV controls
 
-The den screens have a hover menu for channels, sound, volume, full screen and the guide.
+The den screens have a hover menu for channels, sound, volume, skip, full screen and the guide.
 The hover menu is on by default and uses `tv.hover_hint`.
 `bromigos-live tv hint on|off` changes it.
 The MEDIA widget has a rotary dial and per-screen sound controls. Full-screen playback
