@@ -98,15 +98,6 @@ def child(tree, out, opts):
     r.loop_clock = lambda: 2.0
     tgt = glkit.Target(W, H)
     state = {}
-    if opts.get("controls"):
-        tv = r.den_tv()
-        inner = getattr(r, "inner", r)
-        tv.layout(inner.w, inner.h, {k: inner._px(scene.DEN[k]) for k in ("big", "wave", "emblem")}, inner.view, 1)
-        tv.selected = "big"
-        tv.remote_at = livetv.MONO()
-        tv.screens["big"].update(volume=65, sound=True)
-        tv.analog_hover = ("big", "volume")
-        tv.feedback("big", "REMOTE")
     frames = int(opts.get("frames", 1))
     if opts.get("clip"):
         tv = off.tv_tune(r)
@@ -279,7 +270,10 @@ def main():
         check("…and with media channels set up, every screen on its own channel 1", diff == 0, f"{diff} pixels differ")
         if out:
             from PIL import Image
+            Image.fromarray(before).save(os.path.join(out, "den-wick-before.png"))
             Image.fromarray(now).save(os.path.join(out, "den-wick.png"))
+            Image.fromarray(np.abs(now.astype(int) - before.astype(int)).astype("uint8")).save(
+                os.path.join(out, "den-wick-diff.png"))
 
         # the clip on the big monitor
         clip = os.path.join(root, "test-pattern.mp4")

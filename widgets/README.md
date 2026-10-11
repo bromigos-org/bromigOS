@@ -177,8 +177,9 @@ explains channels and their shared controls.
 
 ## Den TV controls
 
-The den screens have themed volume and channel knobs, mute, skip and a standby lamp.
-The optional hover panel uses `tv.hover_hint`; `bromigos-live tv hint on|off` changes it.
+The den screens have a hover menu for channels, sound, volume, full screen and the guide.
+The hover menu is on by default and uses `tv.hover_hint`.
+`bromigos-live tv hint on|off` changes it.
 The MEDIA widget has a rotary dial and per-screen sound controls. Full-screen playback
 loads only the den's own `live/tvosc.lua`, with a private palette and IPC connection;
 it leaves global mpv settings alone. The number-pad remote selects a screen with

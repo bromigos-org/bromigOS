@@ -1,4 +1,4 @@
-"""Physical knobs, remote mode and on-demand playback, with sandbox state and fake players."""
+"""Hover menu, remote mode and on-demand playback, with sandbox state and fake players."""
 import json
 import os
 import sys
@@ -21,28 +21,33 @@ class Controls(unittest.TestCase):
         for d in self.tv.decks.values(): d.player = S.Player()
         self.submap = mock.patch.object(self.tv, "_submap"); self.submap.start(); self.addCleanup(self.submap.stop)
 
-    def test_hint_off_keeps_analog_regions_and_tv_off_has_none(self):
+    def test_hover_menu_defaults_on_and_can_be_disabled(self):
         tv = self.tv
-        tv.tune_to("big",2); tv.pointer_motion(120,120)
+        tv.tune_to("big", 2)
+        tv.pointer_motion(120, 120)
         self.assertTrue(tv.hint_visible())
+        self.assertIn(tuple(round(v) for v in tv.hint_rect), tv.input_rects())
         tv.cfg["tv"]["hover_hint"] = False
         self.assertFalse(tv.hint_visible())
-        self.assertEqual(len(tv.analog_regions()),12)
-        s,a,r = tv.analog_regions()[0]
-        tv.scroll(r[0]+r[2]/2,r[1]+r[3]/2,-1)
-        self.assertEqual(tv.screens[s]["volume"],65)
-        self.assertIsNotNone(tv.decks[s].vol_osd)
-        tv.cfg["tv"]["enabled"] = False; tv.reconfigured()
-        self.assertEqual(tv.analog_regions(),[]); self.assertEqual(tv.input_rects(),[])
-        self.assertEqual(tv._osd("big"),(0.0,None))
+        self.assertEqual(tv.input_rects(), list(tv.rects.values()))
+        tv.cfg["tv"]["enabled"] = False
+        tv.reconfigured()
+        self.assertEqual(tv.input_rects(), [])
+        self.assertEqual(tv._osd("big"), (0.0, None))
 
-    def test_knob_readout_clears_when_the_pointer_leaves_the_layer(self):
+    def test_old_control_positions_do_not_capture_input_or_change_tv(self):
         tv = self.tv
-        _,_,rect = tv.analog_regions()[0]
-        tv.pointer_motion(rect[0]+rect[2]/2, rect[1]+rect[3]/2)
-        self.assertEqual(tv.analog_hover, ("big","volume"))
-        tv.pointer_leave()
-        self.assertIsNone(tv.analog_hover)
+        before = tv.describe()["screens"]
+        for x, y, w, h in tv.rects.values():
+            unit = max(12, min(23, w / 8))
+            for i in range(4):
+                cx, cy = x + w * (.17 + i * .21), y + h + unit * .9
+                tv.pointer_motion(cx, cy)
+                self.assertIsNone(tv.click(cx, cy))
+                self.assertIsNone(tv.scroll(cx, cy, -1))
+                self.assertFalse(any(rx <= cx <= rx + rw and ry <= cy <= ry + rh
+                                     for rx, ry, rw, rh in tv.input_rects()))
+        self.assertEqual(tv.describe()["screens"], before)
 
     def test_mute_glyph_is_drawn_even_while_the_volume_bar_is_showing(self):
         from PIL import Image
@@ -108,16 +113,6 @@ class Controls(unittest.TestCase):
         self.assertFalse(tv.screens["big"]["sound"])
         self.assertEqual(tv.sound_screen(), "wave")
         tv.full_session = None
-
-    def test_channel_knob_mute_and_skip_are_real_actions(self):
-        tv = self.tv
-        for action in ("channel","mute","skip"):
-            s,_,r = next(v for v in tv.analog_regions() if v[:2]==("big",action))
-            tv.click(r[0]+r[2]/2,r[1]+r[3]/2)
-        self.assertEqual(tv.channel("big")[0],2)
-        self.assertTrue(tv.screens["big"]["sound"])
-        self.assertIn("big",tv.overrides)
-        tv.release(); self.assertIsNone(tv.analog_press)
 
 
 if __name__ == "__main__": unittest.main()

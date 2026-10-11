@@ -635,10 +635,6 @@ def controller_checks(n, r):
     r.check("full screen: volume shared with the den",wait_for(lambda:n.state()["screens"]["big"]["volume"]==37,5))
     mpv("quit")
     r.check("full screen: back to den, same volume",wait_for(lambda:not n.state().get("full_screen") and n.state()["screens"]["big"]["volume"]==37,8))
-    point=n.state()["controls"]["big"]["volume"]
-    n.ptr.move(*point);n.ptr.scroll(-1)
-    r.check("analog: wheel turns the scene volume knob",wait_for(lambda:n.state()["screens"]["big"]["volume"]==42,5))
-    r.check("analog: every screen has its physical controls",all(set(v)=={"volume","channel","mute","skip"} for v in n.state()["controls"].values()))
 
 
 def measure_cost(n, r, secs):

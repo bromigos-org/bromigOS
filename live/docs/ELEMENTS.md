@@ -180,10 +180,10 @@ starts it again, or stops when no Wayland session is left.
 - **Data:** the channel's list, read by a thread and cached (`lib/bromigos_tv.py`); the
   picture from libmpv's render API (`live/mpvgl.py`), decoded on the GPU, one player per
   screen showing a media channel.
-- **Controls:** `live/tvcontrol.py` draws the equipment's knobs, buttons and standby
-  lamp from each screen's rectangle. Tiny readouts last only while the pointer is over
-  a knob, including when the pointer leaves for another window. `tv.hover_hint` controls
-  the floating panel independently. The same action path serves keys, CLI and VECTOR.
+- **Controls:** `live/tv.py` draws the hover menu, on by default. `tv.hover_hint`
+  controls its visibility. `live/tvcontrol.py` handles the number-pad remote and
+  on-demand playback. The same actions and on-screen feedback serve the hover menu,
+  MEDIA widget, keys, CLI and VECTOR.
 - **Code:** `live/tv.py`. `Background.render()` asks `tv.gl()` for each screen's uniforms
   and draws the hint after the frame (`_draw_hint`). In `bg.frag`, `tv_picture()` and
   `tv_osd()`, called in `den()` for each screen with its own uniforms and textures:

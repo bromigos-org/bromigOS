@@ -101,7 +101,7 @@ station = true           # screensaver Drift relay station; spokes are the lab's
 
 [tv]                     # the den TV: channels from your Plex, Jellyfin, YouTube or files on the den's screens
 enabled = true           # false: every screen shows only its own picture (channel 1)
-hover_hint = true        # floating controls on hover (off: use the physical knobs or number-pad remote)
+hover_hint = true        # floating controls on hover (off: use the widget, app or number-pad remote)
 quality = "auto"         # the den's streams: "auto" (sized to each screen: 240p or 360p, or the file when it's
                          # already that small), "direct" (every file as it is), "480p", "720p"
 fullscreen_quality = "direct"   # full screen with sound (bromigos-live tv open)

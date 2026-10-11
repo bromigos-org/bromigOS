@@ -699,8 +699,9 @@ channels are the station's radio bands.
 
 ## Den TV controls
 
-The den screens have themed volume and channel knobs, mute, skip and a standby lamp.
-The optional hover panel uses `tv.hover_hint`; `bromigos-live tv hint on|off` changes it.
+The den screens have a hover menu for channels, sound, volume, full screen and the guide.
+The hover menu is on by default and uses `tv.hover_hint`.
+`bromigos-live tv hint on|off` changes it.
 The MEDIA widget has a rotary dial and per-screen sound controls. Full-screen playback
 loads only the den's own `live/tvosc.lua`, with a private palette and IPC connection;
 it leaves global mpv settings alone. The number-pad remote selects a screen with
@@ -715,11 +716,9 @@ That runs the fake-player control tests and the private controller's real `--vo=
 tests in the build container. A minimal source checkout skips those tests when their
 runtime is absent; it still runs the shared search and config-writer checks.
 
-A knob’s value readout disappears when the pointer leaves the live layer, including
-when it moves onto another window. The equipment controls keep their input regions.
-
 The null-player tests wait for mpv and its IPC worker to exit before removing their
 sandbox, so palette polling cannot race directory cleanup.
 
 Muting shows a crossed-out speaker on the TV for the feedback interval, even if the
-volume bar is still visible. Keys, the CLI and both kinds of knob use the same path.
+volume bar is still visible. The hover menu, keys, CLI, VECTOR and MEDIA knob use
+the same path.

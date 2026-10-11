@@ -114,7 +114,6 @@ class Background:
             setattr(self, k, v)
         if self.tv:
             self.tv.cfg = self.cfg
-            self.tv.control_sig.clear()
             self.tv.hint_sig = None
             for d in self.tv.decks.values(): d.osd_sig = None
         if self.scan_held:
@@ -491,12 +490,9 @@ void main() { o = texture(u_tex, v_uv); }"""
 
     def _draw_hint(self, fbo, tv):
         """The den TV's hover hint, over the finished frame (premultiplied)."""
-        surfaces = tv.analog_textures(self.sf)
         hint = tv.hint_texture(self.sf)
         if hint:
-            surfaces.append(hint)
-        for got in surfaces:
-            self._draw_tv_surface(fbo, got)
+            self._draw_tv_surface(fbo, hint)
 
     def _draw_tv_surface(self, fbo, got):
         tex, (x, y, w, h) = got

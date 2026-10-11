@@ -148,7 +148,7 @@ class Guide:
         ctx.json(["bromigos", "scene", "get", "tv.hover_hint", "--json"],
                  lambda doc, err: ctx.switch_row(playback, "Floating controls on hover", key="hover-hint",
                      active=((doc or {}).get("values") or {}).get("tv.hover_hint", True),
-                     hint="Off leaves the physical knobs and number-pad remote",
+                     hint="Off leaves the MEDIA widget and number-pad remote",
                      on_toggle=lambda v: ctx.change(["bromigos", "scene", "set", "tv.hover_hint", str(v).lower()], "TV hover hint updated")))
         top = ctx.group(self.page, "Channels", None, key="channels")
         self.top = top

@@ -137,8 +137,8 @@ channel buttons, the sound, the volume and Full screen](images/den-tv.webp)
 
 Every channel can play on any of the den's three screens, and each screen plays its own
 channel at the same time. Channel 1 is what the screen always shows, such as the relay map
-on the big monitor. Your channels come after it. The equipment controls appear when
-Den TV is on; turning Den TV off leaves the scene unchanged. Two screens on the same
+on the big monitor. Your channels come after it. The hover menu appears when you point
+at a TV; turning Den TV off leaves the scene unchanged. Two screens on the same
 channel show the same moment, like real TV.
 
 ### Watch it
@@ -323,19 +323,17 @@ in it. The full format, and how to make a world, are in the developer docs:
 [theming.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/theming.md) and
 [worlds.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/worlds.md).
 
-## Controls on the den's equipment
+## Den TV controls
 
-Each TV has a volume knob, a channel knob, MUTE and SKIP beneath its screen, plus a
-standby lamp. Scroll a knob to turn it. Click the volume knob to mute; click the channel
-knob to go to the next channel. Hover to see a small value readout; move away to hide it.
-A change shows its
-volume, channel or crossed-out speaker on the TV for about a second and a half. The same feedback
-appears for commands, VECTOR, keys and the MEDIA widget. Reduced motion uses an
-immediate on/off change.
+Hover over a TV to open its menu for channels, sound, volume, **FULL** and **GUIDE**.
+The menu is on by default. A change shows its volume, channel or crossed-out speaker
+on the TV for about a second and a half. The same feedback appears for commands,
+VECTOR, keys and the MEDIA widget. Reduced motion uses an immediate on/off change.
 
-The floating hover panel is optional. Turn **Floating controls** off in Settings › Den
+To hide the hover menu, turn **Floating controls** off in Settings › Den
 TV or in the Den TV app, or run `bromigos-live tv hint off`. `tv hint on` brings it back.
-The config setting is `[tv] hover_hint = false`; the equipment controls keep working.
+The config setting is `[tv] hover_hint = false`. The MEDIA remote, number-pad remote
+and Den TV app remain available.
 Nothing is drawn when Den TV is disabled.
 
 The MEDIA remote has a rotary volume dial. Its label names the screen with sound.

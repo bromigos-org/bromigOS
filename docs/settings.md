@@ -845,5 +845,5 @@ which Arch doesn't package, so pairing is tested against the stand-in only.
 The Den TV app also has **Play…** for each screen. Search shows, seasons and episodes,
 movies, downloaded YouTube videos or a YouTube video URL. Choose **Resume** to use the
 saved position. On-demand playback returns to the live channel when it ends or the
-channel changes. Its Floating controls switch hides only the hover panel; the den's
-physical knobs and buttons remain available.
+channel changes. Its Floating controls switch hides the hover menu, which is on by
+default. The MEDIA widget and number-pad remote remain available.

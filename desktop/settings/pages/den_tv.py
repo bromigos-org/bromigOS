@@ -12,7 +12,7 @@ def build(ctx):
         ctx.switch_row(group, "Den TV", "Play media on the den's screens", key="enabled",
             active=vals.get('tv.enabled',True), hint="Turn media playback off or on",
             on_toggle=lambda v: change('tv.enabled',v))
-        ctx.switch_row(group, "Floating controls on hover", "Off leaves the physical TV knobs and number-pad remote",
+        ctx.switch_row(group, "Floating controls on hover", "Off leaves the MEDIA widget and number-pad remote",
             key="hover-hint", active=vals.get('tv.hover_hint',True), hint="Show the floating TV controls",
             on_toggle=lambda v: change('tv.hover_hint',v))
         ctx.combo_row(group, "Screens playing at once", key="max-playing", options=[(n, str(n)) for n in (1,2,3)],

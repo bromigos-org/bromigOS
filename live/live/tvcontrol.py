@@ -1,6 +1,5 @@
-"""The den's physical controls and number-pad remote. All inputs call TV's same actions."""
+"""The den's number-pad remote and playback. All inputs call TV's same actions."""
 import json
-import math
 import subprocess
 import time
 
@@ -15,11 +14,6 @@ class Controls:
         self.remote_at = 0.0
         self.digits = None
         self.digits_at = 0.0
-        self.analog_hover = None
-        self.analog_press = None
-        self.control_tex = {}
-        self.control_sig = {}
-        self.control_rects = {}
 
     def feedback(self, screen, text):
         self.decks[screen].feedback = (time.monotonic(), text)
@@ -196,94 +190,3 @@ class Controls:
             self.select_screen("none")
         elif self.digits is not None and now - self.digits_at >= 1:
             self.commit_digits()
-
-    def analog_regions(self):
-        out = []
-        if not self.enabled():
-            return out
-        for s, (x, y, w, h) in self.rects.items():
-            unit = max(12, min(23, w / 8))
-            cy = y + h + unit * .9
-            for i, act in enumerate(("volume", "channel", "mute", "skip")):
-                cx = x + w * (.17 + i * .21)
-                out.append((s, act, (cx - unit / 2, cy - unit / 2, unit, unit)))
-        return out
-
-    def analog_target(self, x, y):
-        return next(((s, a) for s, a, r in self.analog_regions()
-                     if r[0] <= x <= r[0] + r[2] and r[1] <= y <= r[1] + r[3]), None)
-
-    def analog_action(self, screen, action, step=None):
-        if action == "volume":
-            return self.set_sound(screen, volume=self.screens[screen]["volume"] + 5 * step) if step else \
-                self.set_sound(screen, on=not self.screens[screen]["sound"])
-        if action == "channel":
-            return self.tune_to(screen, step=step or 1)
-        if action == "mute":
-            return self.set_sound(screen, on=not self.screens[screen]["sound"])
-        return self.skip_item(screen)
-
-    def analog_textures(self, sf=1):
-        """Physical knobs below each screen, plus its selected bezel. No TV: no pixels."""
-        if not self.enabled():
-            return []
-        import cairo
-        from OpenGL import GL
-        from . import glkit
-        out = []
-        palette = glkit.T.version(0.0)
-        for s, (x, y, w, h) in self.rects.items():
-            unit = max(12, min(23, w / 8))
-            rect = (x - 4, y - 4, w + 8, h + unit * 2.0 + 8)
-            n, ch = self.channel(s)
-            state = self.screens[s]
-            pressed = self.analog_press if self.motion == "full" else None
-            sig = (rect, state["volume"], state["sound"], n, self.selected == s, self.analog_hover, pressed, palette, sf)
-            if self.control_sig.get(s) != sig:
-                surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, max(1, math.ceil(rect[2] * sf)),
-                                           max(1, math.ceil(rect[3] * sf)))
-                cr = cairo.Context(surf); cr.scale(sf, sf)
-                if self.selected == s:
-                    cr.set_source_rgba(*glkit.col("phosphor", .9)); cr.set_line_width(1.5)
-                    cr.rectangle(2, 2, w + 4, h + 4); cr.stroke()
-                for _, act, r in (v for v in self.analog_regions() if v[0] == s):
-                    cx, cy = r[0] + unit / 2 - rect[0], r[1] + unit / 2 - rect[1]
-                    cr.set_source_rgba(*glkit.col("panel", .92)); cr.arc(cx, cy, unit * .5, 0, math.tau); cr.fill()
-                    cr.set_source_rgba(*glkit.col("dim", .8)); cr.set_line_width(.8)
-                    cr.arc(cx, cy, unit * .45, 0, math.tau); cr.stroke()
-                    if act in ("volume", "channel"):
-                        frac = state["volume"] / 100 if act == "volume" else (n - 1) / max(1, len(self.lineup(s)) - 1)
-                        start, sweep = math.pi * .75, math.pi * 1.5
-                        for i in range(11):
-                            angle = start + sweep * i / 10
-                            cr.move_to(cx + math.cos(angle) * unit * .39, cy + math.sin(angle) * unit * .39)
-                            cr.line_to(cx + math.cos(angle) * unit * .47, cy + math.sin(angle) * unit * .47)
-                        cr.stroke()
-                        cr.set_source_rgba(*glkit.col("phosphor", .95)); cr.set_line_width(1.4)
-                        cr.arc(cx, cy, unit * .33, start, start + max(.001, sweep * frac)); cr.stroke()
-                        angle = start + sweep * frac
-                        cr.move_to(cx, cy); cr.line_to(cx + math.cos(angle) * unit * .24, cy + math.sin(angle) * unit * .24)
-                        cr.stroke()
-                    else:
-                        down = pressed == (s, act)
-                        cr.set_source_rgba(*glkit.col("phosphor", .65 if down else .95))
-                        cr.select_font_face("Geist Mono", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
-                        cr.set_font_size(unit * .38)
-                        text = "M" if act == "mute" else ">|"
-                        e = cr.text_extents(text); cr.move_to(cx - e.x_advance / 2, cy + unit * .13 + (1 if down else 0))
-                        cr.show_text(text)
-                cr.set_source_rgba(*glkit.col("phosphor", .95 if self.showing(s) else .25))
-                cr.arc(w + 1, h + unit, 1.5, 0, math.tau); cr.fill()
-                if self.analog_hover and self.analog_hover[0] == s:
-                    act = self.analog_hover[1]
-                    label = f"VOL {state['volume']}%" if act == "volume" else \
-                        (f"CH {n} {ch['name']}" if act == "channel" else ("MUTE / SOUND" if act == "mute" else "NEXT ITEM"))
-                    cr.set_source_rgba(*glkit.col("panel", .94)); cr.rectangle(4, h + unit * 1.5 + 4, w, unit * .55); cr.fill()
-                    cr.set_source_rgba(*glkit.col("phosphor")); cr.set_font_size(unit * .42)
-                    cr.move_to(6, h + unit * 2 + 3); cr.show_text(label[:int(w / (unit * .26))])
-                surf.flush()
-                if self.control_tex.get(s): GL.glDeleteTextures([self.control_tex[s]])
-                self.control_tex[s] = glkit.texture_from_cairo(surf)
-                self.control_sig[s] = sig
-            out.append((self.control_tex[s], rect))
-        return out

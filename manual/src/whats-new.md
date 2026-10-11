@@ -145,8 +145,7 @@ This release gives you a manual emergency switch, adds VECTOR and the hologram g
 - The online manual may not match your installed channel; the manual opened from Settings matches your packages.
 
 
-The den TVs now have knobs and buttons on their equipment, an optional hover panel,
-and a number-pad remote. Full-screen playback has its own themed volume slider and
+The den TVs have a hover menu, on by default, and a number-pad remote. Full-screen playback has its own themed volume slider and
 channel controls. MEDIA has a rotary volume dial. Pick an episode, movie or YouTube
 video with **Play…** in Den TV, `p` in the media library, the CLI or VECTOR; the screen
-returns to its live channel afterward. See [den controls](themes-and-worlds.md#controls-on-the-dens-equipment).
+returns to its live channel afterward. See [den controls](themes-and-worlds.md#den-tv-controls).

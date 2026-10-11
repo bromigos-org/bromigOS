@@ -1032,7 +1032,6 @@ class TV(Controls):
     def input_rects(self):
         """Logical rects the background window takes the pointer in."""
         out = [self.rects[s] for s in self.interactive() if s in self.rects]
-        out.extend(r for _, _, r in self.analog_regions())
         if self.hint_visible() and self.hint_rect:
             out.append(self.hint_rect)
         return [tuple(int(round(v)) for v in r) for r in out]
@@ -1057,13 +1056,6 @@ class TV(Controls):
         return None, None
 
     def pointer_motion(self, x, y):
-        analog = self.analog_target(x, y)
-        if analog != self.analog_hover:
-            self.analog_hover = analog
-            self._changed()
-        if analog:
-            self.pointer_leave(now=True, keep_analog=True)
-            return
         kind, s = self._target(x, y)
         if self.dragging and self.hint_visible():
             self._drag_volume(x)
@@ -1077,12 +1069,9 @@ class TV(Controls):
         elif self.hover is not None:
             self.pointer_leave(now=True)
 
-    def pointer_leave(self, now=False, keep_analog=False):
+    def pointer_leave(self, now=False):
         """The pointer left the screens and the hint: the hint goes after a moment (time to
         come back), or at once."""
-        if not keep_analog and self.analog_hover is not None:
-            self.analog_hover = None
-            self._changed()
         if self.hover is None:
             return
         if not now:
@@ -1111,11 +1100,6 @@ class TV(Controls):
         return None
 
     def click(self, x, y, button=1):
-        analog = self.analog_target(x, y)
-        if analog and button == 1:
-            self.analog_press = analog
-            self._changed()
-            return self.analog_action(*analog)
         kind, s = self._target(x, y)
         if kind == "hint":                     # a button, or nothing: never the screen under it
             self.hint_until = 0.0
@@ -1129,8 +1113,6 @@ class TV(Controls):
         return None
 
     def release(self):
-        self.analog_press = None
-        self._changed()
         self.dragging = False
 
     def _do(self, act, x=None):
@@ -1170,9 +1152,6 @@ class TV(Controls):
         volume (the bar, − and +), a sideways scroll over the screen, or Shift and the wheel
         where the compositor tells the background about Shift (Hyprland doesn't: the
         background never has the keyboard)."""
-        analog = self.analog_target(x, y)
-        if analog:
-            return self.analog_action(*analog, step=1 if dy < 0 else -1)
         kind, s = self._target(x, y)
         if not kind:
             return None
@@ -1677,8 +1656,6 @@ class TV(Controls):
             out["hint_rect"] = [round(v) for v in self.hint_rect]
             out["buttons"] = {a: [round(hx + bx + bw / 2), round(hy + by + bh / 2)] for bx, by, bw, bh, a in self.buttons}
             out["hint_note"] = self._hint_note(self.hover)
-        out["controls"] = {s: {a: [round(r[0] + r[2] / 2), round(r[1] + r[3] / 2)]
-                                  for scr, a, r in self.analog_regions() if scr == s} for s in TVL.SCREENS}
         out["input"] = self.input_rects()
         out["full_screen"] = self.full_proc is not None and self.full_proc.poll() is None
         return out
@@ -1688,9 +1665,6 @@ class TV(Controls):
             self.full_session.close()
         if self.selected:
             self.select_screen("none")
-        for texture in self.control_tex.values():
-            try: GL.glDeleteTextures([texture])
-            except Exception: pass
         self.stop.set()
         self.wake.set()
         self._rwake.set()
