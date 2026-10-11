@@ -44,6 +44,20 @@ class Controls(unittest.TestCase):
         tv.pointer_leave()
         self.assertIsNone(tv.analog_hover)
 
+    def test_mute_glyph_is_drawn_even_while_the_volume_bar_is_showing(self):
+        from PIL import Image
+        from live import glkit
+        captured=[]
+        def texture(surface):
+            captured.append(Image.frombytes("RGBA", (surface.get_width(),surface.get_height()), bytes(surface.get_data()), "raw", "BGRA"))
+            return 1
+        with mock.patch.object(glkit,"texture_from_cairo", side_effect=texture), mock.patch.object(S.livetv.GL,"glDeleteTextures"):
+            self.tv._draw_osd(self.tv.decks["big"], None, 65, False)
+            self.tv._draw_osd(self.tv.decks["big"], None, 65, False, feedback="MUTED")
+        crop=(170,145,200,175)
+        self.assertIsNone(captured[0].crop(crop).getbbox())
+        self.assertIsNotNone(captured[1].crop(crop).getbbox(), "the crossed-out speaker must appear on the TV")
+
     def test_remote_selection_digits_actions_and_timeout_share_feedback(self):
         tv = self.tv
         tv.command("select scope"); self.assertEqual(tv.selected,"wave")

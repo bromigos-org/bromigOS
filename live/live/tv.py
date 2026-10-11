@@ -990,10 +990,11 @@ class TV(Controls):
             cr.set_source_rgba(r, g, b, 0.9 * alpha)
             cr.move_to(x0, y0 - 3 * u)
             cr.show_text(f"VOL {vol}")
-        if speaker and vol is None:
+        muted_feedback = feedback == "MUTED"
+        if (speaker and vol is None) or muted_feedback:
             s = 7 * u
             x, y = w - 16 * u, h - 13 * u
-            cr.set_source_rgba(r, g, b, 0.7)
+            cr.set_source_rgba(r, g, b, 0.7 * (alpha if muted_feedback else 1.0))
             cr.move_to(x, y + s * 0.35)
             cr.line_to(x + s * 0.35, y + s * 0.35)
             cr.line_to(x + s * 0.8, y)
@@ -1003,9 +1004,14 @@ class TV(Controls):
             cr.close_path()
             cr.fill()
             cr.set_line_width(max(1.0, 0.9 * u))
-            for k in (1, 2):
-                cr.arc(x + s * 0.8, y + s * 0.6, s * 0.35 * k, -0.9, 0.9)
+            if muted_feedback:
+                cr.move_to(x + s, y + s * .2); cr.line_to(x + s * 1.6, y + s)
+                cr.move_to(x + s * 1.6, y + s * .2); cr.line_to(x + s, y + s)
                 cr.stroke()
+            else:
+                for k in (1, 2):
+                    cr.arc(x + s * 0.8, y + s * 0.6, s * 0.35 * k, -0.9, 0.9)
+                    cr.stroke()
         if feedback or tag:
             cr.set_font_size(8 * u)
             for text, yy, opacity in ((feedback, 12 * u, alpha), (tag, h - 7 * u, 1.0)):

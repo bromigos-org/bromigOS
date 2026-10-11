@@ -720,3 +720,6 @@ when it moves onto another window. The equipment controls keep their input regio
 
 The null-player tests wait for mpv and its IPC worker to exit before removing their
 sandbox, so palette polling cannot race directory cleanup.
+
+Muting shows a crossed-out speaker on the TV for the feedback interval, even if the
+volume bar is still visible. Keys, the CLI and both kinds of knob use the same path.

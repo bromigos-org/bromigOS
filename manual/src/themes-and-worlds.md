@@ -329,7 +329,7 @@ Each TV has a volume knob, a channel knob, MUTE and SKIP beneath its screen, plu
 standby lamp. Scroll a knob to turn it. Click the volume knob to mute; click the channel
 knob to go to the next channel. Hover to see a small value readout; move away to hide it.
 A change shows its
-volume, channel or mute mark on the TV for about a second and a half. The same feedback
+volume, channel or crossed-out speaker on the TV for about a second and a half. The same feedback
 appears for commands, VECTOR, keys and the MEDIA widget. Reduced motion uses an
 immediate on/off change.
 

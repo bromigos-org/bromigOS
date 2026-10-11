@@ -172,7 +172,8 @@ starts it again, or stops when no Wayland session is left.
 - **Looks like:** a TV picture in one of the den's screens, in the screen's glass: the
   tube's curve, scanlines, a soft glow, and the den's phosphor tinting it. Changing
   channel gives a burst of static and the channel number. A small speaker in the corner
-  means the sound is on.
+  means the sound is on. Muting briefly shows a crossed-out speaker, including while
+  the volume bar is visible.
 - **Shows:** a TV channel from your own library: Jellyfin, Plex, YouTube or a folder. What
   plays comes from the wall clock, so it's real, not decoration. Channel 1 is the screen's
   own element. The scene stays unchanged when Den TV is disabled.
