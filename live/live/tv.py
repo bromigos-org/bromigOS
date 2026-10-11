@@ -1056,7 +1056,7 @@ class TV(Controls):
             self.analog_hover = analog
             self._changed()
         if analog:
-            self.pointer_leave(now=True)
+            self.pointer_leave(now=True, keep_analog=True)
             return
         kind, s = self._target(x, y)
         if self.dragging and self.hint_visible():
@@ -1071,9 +1071,12 @@ class TV(Controls):
         elif self.hover is not None:
             self.pointer_leave(now=True)
 
-    def pointer_leave(self, now=False):
+    def pointer_leave(self, now=False, keep_analog=False):
         """The pointer left the screens and the hint: the hint goes after a moment (time to
         come back), or at once."""
+        if not keep_analog and self.analog_hover is not None:
+            self.analog_hover = None
+            self._changed()
         if self.hover is None:
             return
         if not now:

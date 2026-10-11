@@ -36,6 +36,14 @@ class Controls(unittest.TestCase):
         self.assertEqual(tv.analog_regions(),[]); self.assertEqual(tv.input_rects(),[])
         self.assertEqual(tv._osd("big"),(0.0,None))
 
+    def test_knob_readout_clears_when_the_pointer_leaves_the_layer(self):
+        tv = self.tv
+        _,_,rect = tv.analog_regions()[0]
+        tv.pointer_motion(rect[0]+rect[2]/2, rect[1]+rect[3]/2)
+        self.assertEqual(tv.analog_hover, ("big","volume"))
+        tv.pointer_leave()
+        self.assertIsNone(tv.analog_hover)
+
     def test_remote_selection_digits_actions_and_timeout_share_feedback(self):
         tv = self.tv
         tv.command("select scope"); self.assertEqual(tv.selected,"wave")

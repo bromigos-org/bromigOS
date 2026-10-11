@@ -175,10 +175,14 @@ starts it again, or stops when no Wayland session is left.
   means the sound is on.
 - **Shows:** a TV channel from your own library: Jellyfin, Plex, YouTube or a folder. What
   plays comes from the wall clock, so it's real, not decoration. Channel 1 is the screen's
-  own element, so the den is unchanged until you tune in.
+  own element. The scene stays unchanged when Den TV is disabled.
 - **Data:** the channel's list, read by a thread and cached (`lib/bromigos_tv.py`); the
   picture from libmpv's render API (`live/mpvgl.py`), decoded on the GPU, one player per
   screen showing a media channel.
+- **Controls:** `live/tvcontrol.py` draws the equipment's knobs, buttons and standby
+  lamp from each screen's rectangle. Tiny readouts last only while the pointer is over
+  a knob, including when the pointer leaves for another window. `tv.hover_hint` controls
+  the floating panel independently. The same action path serves keys, CLI and VECTOR.
 - **Code:** `live/tv.py`. `Background.render()` asks `tv.gl()` for each screen's uniforms
   and draws the hint after the frame (`_draw_hint`). In `bg.frag`, `tv_picture()` and
   `tv_osd()`, called in `den()` for each screen with its own uniforms and textures:
