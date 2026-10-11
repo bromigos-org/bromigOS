@@ -56,7 +56,9 @@ optdepends=('starship: optional zsh prompt'
 makedepends=('git' 'python' 'lua' 'zsh' 'python-pillow')
 checkdepends=('desktop-file-utils'
              # the widget gallery's tests (bromigos panels gallery reads the panels: cairo, psutil)
-             'python-cairo' 'python-psutil' 'python-gobject' 'pango')
+             'python-cairo' 'python-psutil' 'python-gobject' 'pango'
+             # compile dictation's literal Unicode keyboard map without a desktop
+             'libxkbcommon')
 options=('!debug')
 
 _root="${startdir%/packaging/*}"
