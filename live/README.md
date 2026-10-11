@@ -717,3 +717,6 @@ runtime is absent; it still runs the shared search and config-writer checks.
 
 A knob’s value readout disappears when the pointer leaves the live layer, including
 when it moves onto another window. The equipment controls keep their input regions.
+
+The null-player tests wait for mpv and its IPC worker to exit before removing their
+sandbox, so palette polling cannot race directory cleanup.

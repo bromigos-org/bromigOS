@@ -44,9 +44,15 @@ class Full(unittest.TestCase):
         self.tv.set_sound=changed
         self.session=tvfull.Session(self.tv,"big",dict(url=clip,title="Test Card",headers={},start=0),
                                    extra=["--vo=null","--ao=null","--fs=no","--hwdec=no"])
-        self.addCleanup(self.session.close)
+        self.addCleanup(self.close_session)
         self.assertTrue(wait(lambda:os.path.exists(self.session.sock_path)))
         self.assertTrue(wait(lambda:self.query("get_property","user-data/den/controller")))
+
+    def close_session(self):
+        self.session.close()
+        self.session.proc.wait(timeout=5)
+        self.session.thread.join(timeout=5)
+        self.assertFalse(self.session.thread.is_alive(), "the IPC worker must finish before its sandbox is removed")
 
     def query(self,*args):
         try:
