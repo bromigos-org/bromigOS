@@ -254,6 +254,29 @@ class TUI(Stack):
                         self.assertEqual(app.query_one("#tabs").active, tid)
         self.run_app(fn)
 
+    def test_tab_bar_vim_keys_match_arrows_and_keep_focus(self):
+        async def fn(app, pilot):
+            bar = app.query_one("#tabs Tabs", T.Tabs)
+            for tid in app.TABS:
+                for right, left in (("right", "left"), ("l", "h")):
+                    with self.subTest(tab=tid, right=right):
+                        app.action_tab(tid)
+                        await pilot.pause()
+                        bar.focus()
+                        await pilot.press(right)
+                        self.assertEqual(app.query_one("#tabs").active,
+                                         app.TABS[(app.TABS.index(tid) + 1) % len(app.TABS)])
+                        self.assertIs(app.focused, bar)
+                        await pilot.press(left)
+                        self.assertEqual(app.query_one("#tabs").active, tid)
+                        self.assertIs(app.focused, bar)
+            app.action_tab("add")
+            await pilot.pause()
+            await pilot.press("h", "l")
+            self.assertEqual(app.query_one("#add-q").value, "hl")
+            self.assertEqual(app.query_one("#tabs").active, "add")
+        self.run_app(fn)
+
     def test_table_motion_panes_and_global_tabs(self):
         async def fn(app, pilot):
             table = app.query_one("#tv-list")

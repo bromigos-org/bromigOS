@@ -64,6 +64,9 @@ The main modules in `lib/bromigos_homelab/`:
 | `observability.py` | required monitoring, dashboards, alerts and read-only connections |
 | `tui.py` | the `bromigos lab` dashboard, built with Textual |
 
+The media library’s tab bar uses `Left`/`Right` or `h`/`l` to select a tab.
+`Down`/`j` enters its table; `Up`/`k` at the first row returns to the tab bar.
+
 ## Run the tests
 
 From the repository's root:

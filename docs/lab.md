@@ -383,7 +383,8 @@ terminal. Without a terminal, both print the Requests card instead.
   beside the arrows, and every key, tab, row and button has a hint.
 - `Ctrl+C` and `q` have priority over inputs and modal screens. Quitting dismisses an
   open confirmation with no result. Confirmed changes run synchronously to completion.
-- `Down`/`j` enters the active tab's first table from the tab bar. `Up`/`k` at row zero
+- `Left`/`Right` and `h`/`l` select tabs while the tab bar has focus.
+  `Down`/`j` enters the active tab's first table from the tab bar. `Up`/`k` at row zero
   returns to the tab bar. The tables share the lab's `HintTable` Vim bindings:
   `j`/`k`, `g`/`G`, `Ctrl+D`/`Ctrl+U`, and `h`/`l` or arrows between panes.
   `[`/`]` and `H`/`L` switch tabs even from an input. Switching tabs cancels an open dialog.

@@ -398,6 +398,8 @@ class MediaApp(App):
     BINDINGS = [
         Binding("ctrl+c,q", "leave", "Quit", priority=True, tooltip="Cancel any open form and leave"),
         Binding("down,j", "content", "Content", priority=True),
+        Binding("h", "tab_bar(-1)", "Previous tab", priority=True, show=False),
+        Binding("l", "tab_bar(1)", "Next tab", priority=True, show=False),
         Binding("r", "refresh", "Refresh", tooltip="Read the library again"),
         Binding("1", "tab('tv')", "TV", show=False, tooltip="Shows in Sonarr"),
         Binding("2", "tab('movies')", "Movies", show=False, tooltip="Films in Radarr"),
@@ -499,7 +501,7 @@ class MediaApp(App):
                                          ("Delete", "delete"), ("Undo", "undo"), ("Tune", "tune")):
                         yield Button(label, id="ch-" + ident)
         yield Static("", id="hint")
-        yield Static("↑/↓ j/k move · g/G first/last · Ctrl+D/U page · Enter open · ←/→ h/l panes\n"
+        yield Static("↑/↓ j/k move · g/G first/last · Ctrl+D/U page · Enter open · ←/→ h/l tabs/panes\n"
                      "↓/j tabs → list · ↑/k first row → tabs · [/] H/L tabs · Ctrl+C/q quit", id="nav", markup=False)
         yield Footer()
 
@@ -977,7 +979,7 @@ class MediaApp(App):
             self.notify(f"Sorted by {self.sort[kind]}")
 
     def check_action(self, action, parameters):
-        if action == "content":
+        if action in ("content", "tab_bar"):
             return isinstance(self.focused, Tabs) and not isinstance(self.screen, ModalScreen)
         library_actions = ('monitor','new_items','profile','search_now','play','open','episodes','filter','sort')
         channel_actions = ('channel_rename','channel_order','channel_bumpers','channel_remove_item','channel_move','channel_tune')
@@ -996,6 +998,13 @@ class MediaApp(App):
         if isinstance(self.screen, ModalScreen):
             self.screen.dismiss(None)
         self.exit()
+
+    def action_tab_bar(self, step):
+        bar = self.query_one("#tabs Tabs", Tabs)
+        if step > 0:
+            bar.action_next_tab()
+        else:
+            bar.action_previous_tab()
 
     def action_content(self):
         tid = self.query_one("#tabs", TabbedContent).active
