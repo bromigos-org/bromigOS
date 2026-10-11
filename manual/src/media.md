@@ -221,10 +221,15 @@ play order, bumpers and the screens on it now. Select one to see its titles and 
 on now and next. A library channel includes everything in its library. A picked channel
 holds the shows, movies, YouTube addresses or music you choose.
 
-From **TV**, **Movies**, **YouTube** or **Music**, select a title and press `c`.
-This also works on search results, downloads and upcoming titles.
-Choose **Add to…**, **Remove from…**, or **New channel…**. A small diamond marks titles
-already in a channel. Adding something to a channel does not download it; it must be
+From **TV**, **Movies**, **YouTube** or **Music**, select a title and click
+**Add to channel… (c)** below the list, or press `c`. This also works on Search
+results, Downloads and Upcoming titles. In Music, selecting an album adds that album.
+Choose **Add to Night Block** (or another picked channel), then **Use channel**.
+You can also choose **Remove from…** or **New channel…**.
+
+![The Media channel picker with Add to Night Block selected](images/media-channel-picker.webp)
+
+A small diamond marks titles already in a channel. Adding something to a channel does not download it; it must be
 available from the media server or YouTube. Music plays through the den's sound controls.
 
 On **Channels**, `Ctrl+N` adds a channel, `F2` renames it, `v` changes its order, and `b`

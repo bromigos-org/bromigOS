@@ -399,8 +399,10 @@ terminal. Without a terminal, both print the Requests card instead.
 - The lab console's `M` opens it, and returns to the console when it closes.
 
 - Channels use `bromigos_tvchannels.Store`, shared with the standalone GTK guide and
-  live CLI. `c` on a library title opens add/remove/new choices. A diamond marks channel
-  membership. The Channels tab shows contents, order, bumpers, screens and now/next;
+  live CLI. **Add to channel… (c)** below the active title tab opens add/remove/new
+  choices; `c` opens the same picker. Choose an **Add to** entry, then **Use channel**.
+  The button retains table focus before opening, so a selected album stays selected.
+  A diamond marks channel membership. The Channels tab shows contents, order, bumpers, screens and now/next;
   its controls edit picks, reorder, tune, rename and confirm deletion, with undo.
   A cache-only poll updates screens and now/next every five seconds without cancelling
   slower content fetches. Reordering keeps the selected channel or pick.

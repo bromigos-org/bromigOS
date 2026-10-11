@@ -64,6 +64,10 @@ The main modules in `lib/bromigos_homelab/`:
 | `observability.py` | required monitoring, dashboards, alerts and read-only connections |
 | `tui.py` | the `bromigos lab` dashboard, built with Textual |
 
+The media library shows **Add to channel… (c)** below each title tab. Select a title
+or album, use the button or `c`, choose **Add to** a picked channel, then **Use channel**.
+The button preserves the selected Music album when it opens the picker.
+
 The media library’s tab bar uses `Left`/`Right` or `h`/`l` to select a tab.
 `Down`/`j` enters its table; `Up`/`k` at the first row returns to the tab bar.
 The Search tab (`7` or `Ctrl+F`) finds titles beyond your library. Type a title, choose

@@ -250,7 +250,7 @@ title = "Your homelab"
 rows = [
   { route = "setup homelab", text = "Find [your homelab](homelab.md)'s services and connect them." },
   { route = "homelab", text = "See what's connected from your homelab, and what doesn't answer." },
-  { route = "media", text = "Open [Your media](media.md) in the terminal: use the Search tab to find media, request, monitor, play or delete shows, films and albums." },
+  { route = "media", text = "Open [Your media](media.md) in the terminal: find and request media, add titles to channels, monitor, play or delete shows, films and albums." },
   { route = "lab", text = "Open [the lab console](lab.md): your homelab's status, its GPUs, and jobs to run on them." },
 ]
 

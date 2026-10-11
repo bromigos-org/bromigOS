@@ -79,7 +79,7 @@ This page lists the commands by task first, then each one in full.
 |---|---|
 | [`bromigos setup homelab`](#bromigos-setup-homelab) | Find [your homelab](homelab.md)'s services and connect them. |
 | [`bromigos homelab`](#bromigos-homelab) | See what's connected from your homelab, and what doesn't answer. |
-| [`bromigos media`](#bromigos-media) | Open [Your media](media.md) in the terminal: use the Search tab to find media, request, monitor, play or delete shows, films and albums. |
+| [`bromigos media`](#bromigos-media) | Open [Your media](media.md) in the terminal: find and request media, add titles to channels, monitor, play or delete shows, films and albums. |
 | [`bromigos lab`](#bromigos-lab) | Open [the lab console](lab.md): your homelab's status, its GPUs, and jobs to run on them. |
 
 ### Apps, extensions and the menu

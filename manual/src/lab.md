@@ -395,6 +395,9 @@ then press a key:
 | `D` | Delete it |
 | `/`, `s` | Filter by name, and change the sort: newest, size, name, missing, profile |
 
+**Add to channel… (c)** below the list puts the selected title in a picked channel.
+Choose the channel’s **Add to** entry, then **Use channel**.
+
 Hover over anything to see what it does. The [media guide](media.md#make-channels-for-the-den-tv)
 covers Channels, its keys and CLI commands.
 

@@ -16,7 +16,7 @@ The colours are the desktop theme's, like `bromigos lab`'s dashboard.
 """
 import subprocess
 
-from textual import on, work
+from textual import events, on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -390,6 +390,8 @@ class MediaApp(App):
     #search-status { height: 2; padding: 0 1; color: $text-muted; }
     #nav { height: 2; color: $text-muted; }
     #hint { height: 2; padding: 0 1; color: $text-muted; border-top: solid $panel; }
+    #title-actions { height: 3; padding: 0 1; }
+    #title-actions Static { width: 1fr; padding: 1 1; color: $text-muted; }
     .title { text-style: bold; color: $primary; }
     .dim { color: $text-muted; }
     #channel-box { width: 80; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
@@ -414,7 +416,7 @@ class MediaApp(App):
         Binding("6", "tab('upcoming')", "Upcoming", show=False, tooltip="What you track and when it comes out"),
         Binding("7,a,ctrl+f", "tab('search')", "Search", tooltip="Find something and request it (as bromigos lab media get)"),
         Binding("8", "tab('channels')", "Channels", show=False),
-        Binding("c", "channel_picker", "Channel…"),
+        Binding("c", "channel_picker", "Add to channel…"),
         Binding("ctrl+n", "channel_new", "New channel"),
         Binding("f2", "channel_rename", "Rename channel", show=False),
         Binding("b", "channel_bumpers", "Bumpers", show=False),
@@ -445,6 +447,7 @@ class MediaApp(App):
         super().__init__()
         self.src = source or Live()
         self.start = start
+        self.channel_focus = None
         self.recs = {"tv": [], "movies": [], "music": []}
         self.shown = {"tv": [], "movies": [], "music": []}
         self.subrows = {"tv": [], "movies": [], "music": []}
@@ -508,6 +511,9 @@ class MediaApp(App):
                                          ("Bumpers", "bumpers"), ("Remove item", "remove-item"),
                                          ("Delete", "delete"), ("Undo", "undo"), ("Tune", "tune")):
                         yield Button(label, id="ch-" + ident)
+        with Horizontal(id="title-actions"):
+            yield Button("Add to channel… (c)", id="title-channel", tooltip="Choose a channel for the selected title")
+            yield Static("Select a title, then add it to a channel. Choose the channel and confirm.", markup=False)
         yield Static("", id="hint")
         yield Static("↑/↓ j/k move · g/G first/last · Ctrl+D/U page · Enter open · ←/→ h/l tabs/panes\n"
                      "↓/j tabs → list · ↑/k first row → tabs · [/] H/L tabs · Ctrl+C/q quit", id="nav", markup=False)
@@ -527,6 +533,26 @@ class MediaApp(App):
         self.action_refresh()
         self.set_interval(5.0, self.load_downloads)
         self.set_interval(5.0, self.poll_channels)
+
+    def on_descendant_focus(self, event: events.DescendantFocus):
+        if isinstance(event.widget, HintTable) and not isinstance(self.screen, ModalScreen):
+            self.channel_focus = event.widget
+
+    @on(TabbedContent.TabActivated, "#tabs")
+    def title_actions(self, event):
+        try:
+            self.query_one("#title-actions").display = event.pane.id != "channels"
+        except NoMatches:
+            pass
+
+    @on(Button.Pressed, "#title-channel")
+    def title_channel(self):
+        # Clicking the button must retain the selected album in a side table.
+        table = self.channel_focus
+        pane = next((w for w in table.ancestors if isinstance(w, TabPane)), None) if table else None
+        if pane and pane.id == self.query_one("#tabs", TabbedContent).active:
+            self.set_focus(table)
+        self.action_channel_picker()
 
     # ------------------------------------------------------------------ loading
     def action_refresh(self):

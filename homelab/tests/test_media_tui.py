@@ -395,7 +395,7 @@ class TUI(Stack):
                                ('search','Comet Drift')):
                 app.action_tab(tab);await pilot.pause()
                 if tab=='search': app.query_one('#search-list').focus()
-                await pilot.press('c');await pilot.pause()
+                await pilot.click('#title-channel');await pilot.pause()
                 self.assertIsInstance(app.screen,T.ChannelPicker,tab)
                 title=app.screen.title_
                 if value:self.assertEqual(title,value)
@@ -403,6 +403,43 @@ class TUI(Stack):
                 await pilot.click('#channel-use');await self.settle(app,pilot,2)
                 rows=app.channel_store.load().channels()[0]
                 self.assertIn(title,rows['items'] if tab in ('movies','music','youtube','search') else rows['shows'])
+        self.run_app(fn)
+
+    def test_channel_button_keeps_the_selected_album_and_keyboard_activation(self):
+        self.seed_channels()
+        async def fn(app, pilot):
+            app.action_tab("music")
+            await self.settle(app, pilot, 2)
+            table = app.query_one("#music-sub")
+            table.focus()
+            await pilot.pause()
+            album = app.subrows["music"][table.cursor_row]["title"]
+            await pilot.click("#title-channel")
+            await pilot.pause()
+            self.assertEqual(app.screen.title_, "music:album:" + album)
+            await pilot.press("escape")
+            await pilot.pause()
+            app.query_one("#title-channel").focus()
+            await pilot.press("enter")
+            await pilot.pause()
+            self.assertEqual(app.screen.title_, "music:album:" + album)
+            await pilot.press("escape")
+            app.action_tab("channels")
+            await pilot.pause()
+            self.assertFalse(app.query_one("#title-actions").display)
+        self.run_app(fn)
+
+    def test_add_to_channel_with_keyboard_only(self):
+        self.seed_channels()
+        async def fn(app, pilot):
+            title = app.query_one("#tv-list").get_row_at(0)[1]
+            await pilot.press("c")
+            await pilot.pause()
+            await pilot.press("enter", "down", "enter")
+            self.shot(app, "channel-picker")
+            await pilot.press("tab", "enter")
+            await self.settle(app, pilot, 3)
+            self.assertIn(title, app.channel_store.load().channels()[0]["shows"])
         self.run_app(fn)
 
     def test_create_and_reorder_channels(self):
