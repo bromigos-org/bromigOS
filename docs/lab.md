@@ -410,14 +410,14 @@ then does it:
   stop being monitored, so they aren't fetched again;
 - then Jellyfin and Plex rescan.
 
-The TUI asks twice: type the title, or press `D` again. The CLI asks you to type the title,
+The TUI shows a Delete/Cancel dialog with Cancel focused first. The CLI asks you to type the title,
 or takes `--yes`. VECTOR's `media_delete` deletes only when your latest words ask for it and
 name the title. His terminal can't run `delete` at all.
 
 **Tests.** `homelab/tests/test_lab_media.py` covers the profile picker, anime detection, the
 languages, seasons and episodes, and every command. `homelab/tests/test_media_tui.py` drives
-the TUI with Textual's pilot: every tab, the delete dialog (cancel, typing the name, `D`
-twice, a season), quitting from every tab and modal, arrows and Vim keys between tabs
+the TUI with Textual's pilot: every tab, the delete dialog (default Cancel, Delete and
+a season), quitting from every tab and modal, arrows and Vim keys between tabs
 and content, monitor, profile, open, search and request, and filter and sort. With
 `MEDIA_SCREENSHOTS=DIR` it writes each tab as an SVG; the manual's pictures come from those. It runs them against a fake stack
 (`homelab/tests/mediafake.py`): one local server that answers like Seerr, Sonarr, Radarr,

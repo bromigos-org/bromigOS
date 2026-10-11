@@ -66,6 +66,7 @@ The main modules in `lib/bromigos_homelab/`:
 
 The media library’s tab bar uses `Left`/`Right` or `h`/`l` to select a tab.
 `Down`/`j` enters its table; `Up`/`k` at the first row returns to the tab bar.
+Delete shows what will go, then asks for Delete or Cancel. Cancel is selected first.
 
 ## Run the tests
 

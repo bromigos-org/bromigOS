@@ -8,7 +8,7 @@ and request, as `media get`) and CHANNELS (the den TV). The header has the libra
 On a selected title, season, album or episode file: m monitors or stops, n picks up new
 episodes or not, P changes the quality profile, p plays on a den TV, f searches now, o opens it in Jellyfin,
 O in Seerr, t plays it full screen, D deletes it. A delete says exactly what goes and how
-much space it frees, then needs the title typed, or D pressed a second time. / filters, s
+much space it frees, then asks for Delete or Cancel. / filters, s
 sorts (added, size, name, missing, profile). Vim keys beside the arrows; every key, tab,
 row and button has a hint.
 
@@ -134,11 +134,9 @@ class MediaTable(HintTable):
 
 # ------------------------------------------------------------------ dialogs
 class Confirm(ModalScreen):
-    """Delete, in two steps: what goes and the space it frees; then type the title, or press D
-    again. Escape cancels."""
+    """Show what goes, then ask for Delete or Cancel. Cancel has focus by default."""
 
-    BINDINGS = [Binding("escape", "dismiss(None)", "Cancel", tooltip="Close without deleting anything"),
-                Binding("D", "again", "Delete (press twice)", tooltip="Press D again to delete")]
+    BINDINGS = [Binding("escape", "dismiss(None)", "Cancel", tooltip="Close without deleting anything")]
 
     def __init__(self, plan):
         super().__init__()
@@ -151,9 +149,6 @@ class Confirm(ModalScreen):
             yield Static(("Only the channel is removed. Its media files stay. Ctrl+Z restores it." if p["scope"] == "channel" else f"It frees {M.human(p['size'])}. The files go from the disk; Jellyfin and Plex rescan."
                          + ("" if p["scope"] != "season" else " The season stops being monitored, so it isn't "
                             "fetched again.")), classes="dim")
-            i = MediaInput(placeholder=f"Type {p['title']} to delete it", id="del-name")
-            i.tooltip = "Type the title exactly (any case), then Enter; or press D again"
-            yield i
             c = Checkbox("Don't fetch it again (an import exclusion)", id="del-exclude",
                          value=False, disabled=p["scope"] not in ("title", "album"))
             c.tooltip = "Sonarr, Radarr or Lidarr won't add it again from a list"
@@ -162,29 +157,12 @@ class Confirm(ModalScreen):
                 b = Button("Cancel", id="del-no")
                 b.tooltip = "Keep it (Escape)"
                 yield b
-                b = Button("Delete", id="del-yes", variant="error", disabled=True)
-                b.tooltip = "Enabled once the title is typed"
+                b = Button("Delete", id="del-yes", variant="error")
+                b.tooltip = "Delete only the files listed above"
                 yield b
 
     def on_mount(self):
-        self.armed = False
-        self.query_one("#del-name", Input).focus()
-
-    @on(Input.Changed, "#del-name")
-    def typed(self, ev):
-        self.query_one("#del-yes", Button).disabled = M._norm_title(ev.value) != M._norm_title(self.plan["title"])
-
-    @on(Input.Submitted, "#del-name")
-    def entered(self, ev):
-        if not self.query_one("#del-yes", Button).disabled:
-            self.go()
-
-    def action_again(self):
-        if self.armed:
-            self.go()
-        else:
-            self.armed = True
-            self.query_one("#del-what", Label).update(f"Delete {self.plan['what']}? Press D once more to delete.")
+        self.query_one("#del-no", Button).focus()
 
     @on(Button.Pressed, "#del-no")
     def no(self):

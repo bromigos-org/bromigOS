@@ -277,7 +277,7 @@ no likeness and no lab hosts.
   rendered offscreen with demo readings (`tools/screenshots/render.py`, `lab-console`);
   the tests' recorded lab, not a real one.
 - **`media-library.webp`** and **`media-delete.webp`**, on The lab console and Your media
-  pages. `bromigos media`'s TV tab and its delete question, exported by its tests
+  pages. `bromigos media`'s TV tab and its Delete/Cancel question, exported by its tests
   (`homelab/tests/test_media_tui.py`, `MEDIA_SCREENSHOTS=DIR`) from a fake media stack with
   made-up titles, converted from SVG at 1600 wide.
 - **`menu.webp`**, on The menu page. The menu with a search typed, rendered offscreen

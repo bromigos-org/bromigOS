@@ -145,7 +145,7 @@ removed title or album from being added back by an import list. A removed season
 episode stops being monitored.
 
 In the terminal library, select the title, season or album and press `D`. Read the
-question, then type its title or press `D` again. Escape cancels. **Don't fetch it again**
+question, then choose **Delete** or **Cancel**. Cancel is selected first; Escape cancels. **Don't fetch it again**
 adds the import exclusion. To keep files and only stop looking for more, use `m` instead.
 The [delete reference](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab.md#the-media-library)
 explains the scopes.

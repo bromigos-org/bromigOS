@@ -184,8 +184,7 @@ class TUI(Stack):
                             app.push_screen(T.Request(app.src, {"kind": "tv", "title": "Test show"}))
                         await pilot.pause()
                         if dialog == "delete":
-                            app.screen.query_one("#del-name").value = app.screen.plan["title"]
-                            app.screen.armed = True
+                            app.screen.query_one("#del-yes").focus()
                         await pilot.press(key)
                         self.assertTrue(app._exit)
                         self.assertEqual(self.st.deleted, [])
@@ -228,7 +227,7 @@ class TUI(Stack):
         async def fn(app, pilot):
             await pilot.press("D")
             await pilot.pause()
-            app.screen.query_one("#del-name").value = app.screen.plan["title"]
+            app.screen.query_one("#del-yes").focus()
             await pilot.press("right_square_bracket")
             await pilot.pause()
             self.assertNotIsInstance(app.screen, T.Confirm)
@@ -367,8 +366,7 @@ class TUI(Stack):
             await pilot.press('D');await pilot.pause()
             await pilot.press('escape');self.assertEqual(len(app.channel_store.load().channels()),1)
             await pilot.press('D');await pilot.pause()
-            app.screen.query_one('#del-name').value = 'Night Block'
-            await pilot.press('enter');await self.settle(app,pilot,3)
+            await pilot.click('#del-yes');await self.settle(app,pilot,3)
             self.assertEqual(app.channel_store.load().channels(),[])
             await pilot.press('ctrl+z');await self.settle(app,pilot,3)
             self.assertEqual(app.channel_store.load().channels()[0]['name'],'Night Block')
@@ -447,7 +445,7 @@ class TUI(Stack):
             self.shot(app, "downloads")
         self.run_app(fn)
 
-    def test_delete_cancel_then_confirm_by_name(self):
+    def test_delete_cancel_then_confirm_with_button(self):
         async def fn(app, pilot):
             tv = app.query_one("#tv-list")
             row = next(i for i in range(tv.row_count) if tv.get_row_at(i)[1] == "Starlight Harbor")
@@ -457,23 +455,22 @@ class TUI(Stack):
             await self.settle(app, pilot, 2)
             self.assertIn("Delete Starlight Harbor: 1 season, 6 files, files and all?",
                           str(app.screen.query_one("#del-what").render()))
-            self.assertTrue(app.screen.query_one("#del-yes").disabled)
+            self.assertFalse(app.screen.query_one("#del-yes").disabled)
+            self.assertIs(app.focused, app.screen.query_one("#del-no"))
+            self.assertFalse(app.screen.query("#del-name"))
             self.shot(app, "delete")
-            await pilot.press("escape")
+            await pilot.press("enter")
             await self.settle(app, pilot, 2)
-            self.assertEqual(self.st.deleted, [])                               # cancelled: nothing went
+            self.assertEqual(self.st.deleted, [])                               # default Cancel: nothing went
             await pilot.press("D")
             await self.settle(app, pilot, 2)
-            await pilot.click("#del-name")
-            await pilot.press(*"starlight harbor")
-            self.assertFalse(app.screen.query_one("#del-yes").disabled)
-            await pilot.press("enter")
+            await pilot.click("#del-yes")
             await self.settle(app, pilot, 6)
             self.assertEqual(self.st.deleted, [("sonarr", self.sh, ["true"], ["false"])])
             self.assertNotIn(self.sh, self.st.series)
         self.run_app(fn)
 
-    def test_delete_a_season_with_d_twice(self):
+    def test_delete_a_season_with_confirmation_button(self):
         async def fn(app, pilot):
             tv = app.query_one("#tv-list")
             tv.move_cursor(row=next(i for i in range(tv.row_count) if tv.get_row_at(i)[1] == "Paper Moon Cafe"))
@@ -487,7 +484,7 @@ class TUI(Stack):
             await self.settle(app, pilot, 2)
             self.assertIn("Paper Moon Cafe season 1: 4 episode files", str(app.screen.query_one("#del-what").render()))
             app.screen.query_one("#del-no").focus()
-            await pilot.press("D", "D")
+            await pilot.click("#del-yes")
             await self.settle(app, pilot, 6)
             self.assertEqual(len(self.st.deleted_files), 4)
             self.assertIn(self.pm, self.st.series)

@@ -381,7 +381,7 @@ then press a key:
 | `g`, `G` | First or last row |
 | `Ctrl+D`, `Ctrl+U` | Page down or up |
 | `Enter` | Open the selected item |
-| `Left`, `Right`, `h`, `l` | Switch between the title list and its side table |
+| `Left`, `Right`, `h`, `l` | Select tabs on the tab bar; switch between the title list and its side table |
 | `[`, `]`, `H`, `L` | Previous or next tab, including while typing. Cancel an open dialog |
 | `8`, `c` | Channels tab; add or remove a selected title from a channel |
 | `m` | Monitor it, or stop. On a season or an album, just that one |
@@ -398,11 +398,12 @@ Hover over anything to see what it does. The [media guide](media.md#make-channel
 covers Channels, its keys and CLI commands.
 
 **Deleting** removes the files from the disk, and frees the space. First it shows what goes
-and how much space that frees. Then type the title, or press `D` again. On a season, an
+and how much space that frees. Choose **Delete** or **Cancel**; Cancel is selected first.
+On a season, an
 episode file or an album, only that goes, and it stops being monitored. You can tick
 "Don't fetch it again", so your lab doesn't add it back from a list.
 
-![The delete question: what goes, how much space it frees, the title to type](images/media-delete.webp)
+![The delete question shows what goes, how much space it frees, and Delete and Cancel buttons](images/media-delete.webp)
 
 The same changes work as commands:
 
