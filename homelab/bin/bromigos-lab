@@ -40,7 +40,7 @@
   bromigos lab youtube cookies set FILE | clear | status
                                     control Pinchflat without its web page (each takes --json)
   bromigos lab media                the media library (a terminal UI; = bromigos media): TV, films,
-                                    music, YouTube, downloads, upcoming, add and channels; monitor, profile, delete
+                                    music, YouTube, downloads, upcoming, search and channels; monitor, profile, delete
   bromigos lab media search NAME [--movie|--tv|--anime|--music]
                                     find a film, show, anime or music: year, release dates,
                                     whether it's in your library or requested, the profile, the size
@@ -50,6 +50,7 @@
                                     request it through Seerr, Sonarr, Radarr or Lidarr (a YouTube
                                     link: Pinchflat), at the best profile for it; asks first
   bromigos lab media status [NAME] [--why] | upcoming [--days N] | recent [--hours N] | library tv|movies|music
+                                    status shows actual transfer totals, stalled downloads and import problems
   bromigos lab media monitor NAME [--season N|--new] [--off] | profile NAME PROFILE | refresh NAME
   bromigos lab media delete NAME [--season N|--episodes S01E02|--album A] [--exclude] [--yes]
                                     deletes files and all: asks you to type the name

@@ -405,6 +405,54 @@ class Music(Stack):
 
 
 class Status(Stack):
+    def test_season_pack_counts_client_size_and_speed_once(self):
+        sid = self.st.add_series(8001, [1], profile=11)
+        self.st.queue["sonarr"] = [
+            {"seriesId": sid, "series": {"title": "Starlight Harbor"},
+             "episode": {"seasonNumber": 1, "episodeNumber": n}, "size": 9000,
+             "sizeleft": 8000, "downloadId": "PACK" if n != 4 else "pack", "status": "downloading"}
+            for n in (3, 4, 5)]
+        self.st.queue["sonarr"].append(
+            {"seriesId": sid, "series": {"title": "Starlight Harbor"},
+             "episode": {"seasonNumber": 1, "episodeNumber": 6}, "size": 6000,
+             "sizeleft": 5000, "downloadId": "single", "status": "downloading"})
+        self.st.torrents = [
+            {"hash": "pack", "name": "Starlight Harbor batch", "progress": .25,
+             "size": 1000, "amount_left": 750, "dlspeed": 500, "eta": 180, "state": "downloading"},
+            {"hash": "single", "name": "Starlight Harbor 06", "progress": .5,
+             "size": 1000, "amount_left": 500, "dlspeed": 700, "eta": 90, "state": "downloading"}]
+        code, result = self.js("status")
+        self.assertEqual(code, 0)
+        group = result["downloads"][0]
+        self.assertEqual((group["items"], group["size"], group["left"], group["speed"],
+                          group["progress"], group["eta_s"]), (4, 2000, 1250, 1200, 37.5, 180))
+        self.assertEqual(group["what"], ["S01E03", "S01E04", "S01E05", "S01E06"])
+        # Without client IDs, separate queue entries still contribute separately.
+        for row in self.st.queue["sonarr"]:
+            row.pop("downloadId")
+        _, result = self.js("status")
+        self.assertEqual(result["downloads"][0]["size"], 33000)
+
+    def test_client_waiting_states_are_not_reported_as_downloading(self):
+        sid = self.st.add_series(8001, [1], profile=11)
+        self.st.queue["sonarr"] = [{"seriesId": sid, "series": {"title": "Starlight Harbor"},
+                                   "episode": {"seasonNumber": 1, "episodeNumber": 3},
+                                   "size": 1000, "sizeleft": 1000, "downloadId": "ABC",
+                                   "trackedDownloadState": "downloading", "status": "downloading"}]
+        for state, expected in (("stalledDL", "stalled"), ("metaDL", "waiting for torrent details"),
+                                ("stoppedDL", "paused"), ("queuedDL", "queued")):
+            with self.subTest(state=state):
+                self.st.torrents = [{"hash": "abc", "name": "Starlight Harbor", "progress": 0,
+                                     "size": 1000, "amount_left": 1000, "dlspeed": 0,
+                                     "state": state, "num_seeds": 0}]
+                _, result = self.js("status")
+                self.assertEqual(result["downloads"][0]["states"], {expected: 1})
+                if state == "stalledDL":
+                    self.assertIn("No seeders connected", result["downloads"][0]["why"])
+        self.st.queue["sonarr"][0]["trackedDownloadState"] = "importBlocked"
+        _, result = self.js("status")
+        self.assertEqual(result["downloads"][0]["states"], {"importBlocked": 1})
+
     def test_downloads_join_the_clients(self):
         sid = self.st.add_series(8001, [1], profile=11, files=2, series_type="anime")
         self.st.queue["sonarr"] = [{"seriesId": sid, "seasonNumber": 1, "series": {"title": "Starlight Harbor"},

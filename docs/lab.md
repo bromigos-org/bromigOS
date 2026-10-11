@@ -314,7 +314,11 @@ it finds none.
 
 **Status.** It joins Sonarr's, Radarr's and Lidarr's queues with the download clients, by
 download id (a torrent's hash, SABnzbd's `nzo_id`). The progress, speed and time left come
-from qBittorrent and SABnzbd, because the *arr queues lag behind them. The audio languages
+from qBittorrent and SABnzbd, because the *arr queues lag behind them. Size and bytes
+left also come from the client when available. A title’s totals count each download
+id once; the item count and episode list still include every queue row. Stalled,
+paused and waiting-for-details torrents are shown as such, while import errors
+keep the app’s own state. The audio languages
 come from the release names while downloading, and from the files' media info once they're
 imported. With a name, it adds that title's seasons, monitoring, files below the profile's
 target, failed downloads and why, and Bazarr's subtitles. If something is monitored, missing

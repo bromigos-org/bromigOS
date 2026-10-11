@@ -98,7 +98,7 @@ bromigos media
 
 ![The media library shows TV titles and their seasons in the terminal](images/media-library.webp)
 
-Choose **Add**, or press `a`. Search, pick a result and choose its seasons, quality and
+Choose **Search**, or press `7` or `Ctrl+F`. Search, pick a result and choose its seasons, quality and
 audio. **Plan** shows what would happen. **Request** confirms it.
 
 The **TV**, **Movies** and **Music** tabs show what you have. Use arrows or `j`, `k`, `h`
@@ -131,7 +131,10 @@ bromigos lab media upcoming --days 30
 bromigos lab media recent --hours 24
 ```
 
-`status` shows progress, time left and failures. A title's status adds its seasons,
+`status` shows progress, time left and failures. A season pack’s size and speed are
+counted once, even when it covers several episodes. Stalled torrents, paused
+downloads and torrents waiting for their details are labelled separately from
+active downloads. A stalled torrent with no connected seeders says so. A title's status adds its seasons,
 monitoring, file languages and subtitles. `upcoming` lists what you track, with its
 known dates. `recent` lists files that reached the library.
 

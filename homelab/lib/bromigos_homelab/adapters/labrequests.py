@@ -140,11 +140,12 @@ class QBittorrent(L.LabAdapter):
 
 def download_of_torrent(t, source=None):
     eta = t.get("eta")
+    why = "No seeders connected" if t.get("state") == "stalledDL" and t.get("num_seeds") == 0 else None
     return {"name": t.get("name"), "kind": "torrent", "id": (t.get("hash") or "").lower(),
             "progress": round(100 * (t.get("progress") or 0), 1), "speed": t.get("dlspeed"),
             "eta_s": eta if eta is not None and 0 <= eta < 8640000 else None, "size": t.get("size"),
             "left": t.get("amount_left"), "state": t.get("state"), "category": t.get("category"),
-            "seeds": t.get("num_seeds"), "client": source}
+            "seeds": t.get("num_seeds"), "client": source, "why": why}
 
 
 @register

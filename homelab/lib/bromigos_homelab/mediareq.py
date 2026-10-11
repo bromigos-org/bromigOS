@@ -1650,8 +1650,10 @@ def queue_rows(lab, dl):
             rows.append({"app": app, "error": str(e)})
             continue
         for r in recs:
-            d = dl.get((r.get("downloadId") or "").lower()) or dl.get(r.get("downloadId") or "") or {}
-            size, left = r.get("size") or 0, r.get("sizeleft") or 0
+            download_id = (r.get("downloadId") or "").lower()
+            d = dl.get(download_id) or dl.get(r.get("downloadId") or "") or {}
+            size = d.get("size") if d.get("size") is not None else r.get("size") or 0
+            left = d.get("left") if d.get("left") is not None else r.get("sizeleft") or 0
             if app == "sonarr":
                 ep = r.get("episode") or {}
                 title = (r.get("series") or {}).get("title")
@@ -1668,7 +1670,13 @@ def queue_rows(lab, dl):
             state = r.get("trackedDownloadState") or r.get("status") or "?"
             if (r.get("trackedDownloadStatus") or "") in ("warning", "error") and state == "downloading":
                 state = "stuck"
+            if state in ("downloading", "queued", "warning"):
+                state = {"stalledDL": "stalled", "metaDL": "waiting for torrent details",
+                         "forcedMetaDL": "waiting for torrent details", "stoppedDL": "paused",
+                         "pausedDL": "paused", "queuedDL": "queued", "error": "failed",
+                         "missingFiles": "failed"}.get(d.get("state"), state)
             rows.append({"app": app, "arr_id": arr_id, "title": title, "what": what, "release": r.get("title"),
+                         "download_id": download_id,
                          "state": state, "status": r.get("trackedDownloadStatus"),
                          "progress": d.get("progress") if d.get("progress") is not None else
                          (round(100 * (1 - left / size), 1) if size else None),
@@ -1686,6 +1694,7 @@ def queue_rows(lab, dl):
 def group_rows(rows):
     """One line per title: how many items, overall progress, what's left, the longest wait."""
     out = {}
+    seen = {}
     for r in rows:
         if r.get("error"):
             continue
@@ -1693,13 +1702,17 @@ def group_rows(rows):
                                                       "items": 0, "size": 0, "left": 0, "eta_s": None, "speed": 0,
                                                       "states": {}, "why": [], "audio": set(), "what": []})
         g["items"] += 1
-        g["size"] += r["size"] or 0
-        g["left"] += r["left"] or 0
-        if r["eta_s"] is not None and r["eta_s"] <= STALLED_S:
-            g["eta_s"] = max(g["eta_s"] or 0, r["eta_s"])
-        elif r["eta_s"] is not None:
-            g["stalled"] = g.get("stalled", 0) + 1                 # a client's "never" (no seeds, no speed)
-        g["speed"] += r["speed"] or 0
+        downloads = seen.setdefault((r["app"], r["arr_id"]), set())
+        download_id = r.get("download_id") or id(r)
+        if download_id not in downloads:
+            downloads.add(download_id)
+            g["size"] += r["size"] or 0
+            g["left"] += r["left"] or 0
+            if r["eta_s"] is not None and r["eta_s"] <= STALLED_S:
+                g["eta_s"] = max(g["eta_s"] or 0, r["eta_s"])
+            elif r["eta_s"] is not None:
+                g["stalled"] = g.get("stalled", 0) + 1             # a client's "never" (no seeds, no speed)
+            g["speed"] += r["speed"] or 0
         g["states"][r["state"]] = g["states"].get(r["state"], 0) + 1
         g["audio"].update(r["audio"])
         g["what"].append(r["what"])

@@ -81,6 +81,10 @@ In the delete dialog, `Left`/`Right` chooses Cancel or Delete; Enter activates
 the selected button. `Up`/`Down` moves to or from the exclusion checkbox; Enter
 or Space toggles it. Escape cancels. Cancel is selected when the dialog opens.
 
+Download totals count each client transfer once, even when Sonarr lists every episode
+of a season pack. Client size, remaining bytes and speed take precedence over stale
+queue values. Paused, stalled and waiting-for-details torrents keep those states.
+
 ## Run the tests
 
 From the repository's root:
