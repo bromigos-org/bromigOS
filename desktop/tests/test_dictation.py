@@ -122,7 +122,8 @@ class ControllerLifecycle(unittest.TestCase):
         controller.session = SimpleNamespace(finished=done)
         controller.last_command = 0
         controller.app = mock.Mock()
-        self.assertFalse(controller._idle())
+        with mock.patch.object(UI.time, "monotonic", return_value=121):
+            self.assertFalse(controller._idle())
         controller.app.quit.assert_called_once()
 
     def test_long_preview_keeps_the_latest_words_without_using_markup(self):
