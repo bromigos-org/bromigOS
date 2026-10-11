@@ -131,6 +131,16 @@ class MediaTable(HintTable):
         else:
             super().action_cursor_up()
 
+    def fill(self, columns, rows, hints, base_hint=""):
+        self.channel_base_hints = list(hints)
+        hints = [self.app.channel_hint(self, index, hint) for index, hint in enumerate(self.channel_base_hints)]
+        super().fill(columns, rows, hints, base_hint)
+
+    def refresh_membership(self):
+        self.hints = [self.app.channel_hint(self, index, hint)
+                      for index, hint in enumerate(getattr(self, "channel_base_hints", []))]
+        self.watch_hover_coordinate(self.hover_coordinate, self.hover_coordinate)
+
 
 # ------------------------------------------------------------------ dialogs
 class Confirm(ModalScreen):
@@ -351,13 +361,16 @@ class ChannelPicker(ModalScreen):
         options = [("New channel…", "new")]
         for row in self.rows:
             if row['kind'] == 'picked':
-                options.append(("Add to " + row['name'], f"add:{row['number']}"))
                 if CH.membership(self.title_, [row]):
-                    options.append(("Remove from " + row['name'], f"remove:{row['number']}"))
+                    options.append(("Already in " + row['name'] + " — remove", f"remove:{row['number']}"))
+                else:
+                    options.append(("Add to " + row['name'], f"add:{row['number']}"))
         with Vertical(id="channel-box"):
             yield Label("Add to channel… / Remove from channel…")
             label = self.title_.split(':',2)[-1] if self.title_.startswith('music:') else self.title_
             yield Label(label)
+            names = [row['name'] for row in CH.membership(self.title_, self.rows)]
+            yield Label("Channels: " + (", ".join(names) or "none"), id="channel-membership", markup=False)
             yield Select(options, value=options[0][1], allow_blank=False, id="channel-pick")
             if any(r['kind'] == 'library' for r in self.rows):
                 yield Label("Library channels already include everything in their library.")
@@ -513,7 +526,8 @@ class MediaApp(App):
                         yield Button(label, id="ch-" + ident)
         with Horizontal(id="title-actions"):
             yield Button("Add to channel… (c)", id="title-channel", tooltip="Choose a channel for the selected title")
-            yield Static("Select a title, then add it to a channel. Choose the channel and confirm.", markup=False)
+            yield Static("Select a title to see its channels. Use c or the button to change them.",
+                         id="title-membership", markup=False)
         yield Static("", id="hint")
         yield Static("↑/↓ j/k move · g/G first/last · Ctrl+D/U page · Enter open · ←/→ h/l tabs/panes\n"
                      "↓/j tabs → list · ↑/k first row → tabs · [/] H/L tabs · Ctrl+C/q quit", id="nav", markup=False)
@@ -537,11 +551,46 @@ class MediaApp(App):
     def on_descendant_focus(self, event: events.DescendantFocus):
         if isinstance(event.widget, HintTable) and not isinstance(self.screen, ModalScreen):
             self.channel_focus = event.widget
+            self.update_membership(event.widget, event.widget.cursor_row)
+
+    def channel_title(self, table, index):
+        tid = table.id or ""
+        if tid.endswith("-list") and tid.split("-")[0] in self.shown:
+            records = self.shown[tid.split("-")[0]]
+        elif tid == "music-sub":
+            records = self.subrows["music"]
+            return "music:album:" + records[index]["title"] if 0 <= index < len(records) else None
+        elif tid == "tv-sub":
+            return (self.current("tv")[1] or {}).get("title")
+        else:
+            records = {"search-list": self.found, "up-list": self.upcoming_rows,
+                       "dl-list": self.download_rows, "yt-list": self.youtube_rows}.get(tid, [])
+        if not 0 <= index < len(records):
+            return None
+        record = records[index]
+        return (record.get("original_url") or record.get("url")) if tid == "yt-list" else record.get("title")
+
+    def channel_hint(self, table, index, hint):
+        title = self.channel_title(table, index)
+        if not title:
+            return hint
+        names = [row["name"] for row in CH.membership(title, self.channel_rows)]
+        return hint + " · Channels: " + (", ".join(names) or "none")
+
+    def update_membership(self, table, index):
+        title = self.channel_title(table, index)
+        names = [row["name"] for row in CH.membership(title, self.channel_rows)] if title else []
+        self.query_one("#title-membership", Static).update(
+            "Channels: " + (", ".join(names) or "none") + " · c to add or remove"
+            if title else "Select a title to see its channels. Use c or the button to change them.")
 
     @on(TabbedContent.TabActivated, "#tabs")
     def title_actions(self, event):
         try:
             self.query_one("#title-actions").display = event.pane.id != "channels"
+            if event.pane.id != "channels":
+                table = event.pane.query_one(MediaTable)
+                self.update_membership(table, table.cursor_row)
         except NoMatches:
             pass
 
@@ -654,6 +703,8 @@ class MediaApp(App):
         pane = next((w for w in ev.data_table.ancestors if isinstance(w, TabPane)), None)
         if pane and pane.id == self.query_one("#tabs", TabbedContent).active:
             self.query_one("#hint", Static).update(ev.data_table.tooltip or "")
+            if self.focused is ev.data_table or self.channel_focus is ev.data_table:
+                self.update_membership(ev.data_table, ev.cursor_row)
 
     @on(HintTable.RowSelected)
     def _enter(self, ev):
@@ -1139,6 +1190,12 @@ class MediaApp(App):
             self.show_upcoming(self.upcoming_rows)
             self.show_youtube(self.youtube_rows)
             self.show_found(self.found, focus=False)
+            for media_table in self.query(MediaTable):
+                media_table.refresh_membership()
+            focused = self.channel_focus
+            pane = next((w for w in focused.ancestors if isinstance(w, TabPane)), None) if focused else None
+            if pane and pane.id == self.query_one("#tabs", TabbedContent).active:
+                self.update_membership(focused, focused.cursor_row)
 
     def show_channel(self, index):
         row = self.channel_rows[index] if 0 <= index < len(self.channel_rows) else None

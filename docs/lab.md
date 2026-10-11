@@ -402,7 +402,10 @@ terminal. Without a terminal, both print the Requests card instead.
   live CLI. **Add to channel… (c)** below the active title tab opens add/remove/new
   choices; `c` opens the same picker. Choose an **Add to** entry, then **Use channel**.
   The button retains table focus before opening, so a selected album stays selected.
-  A diamond marks channel membership. The Channels tab shows contents, order, bumpers, screens and now/next;
+  A diamond marks channel membership. Each row’s hover hint includes the channel
+  names, and the selected row’s names stay visible beside the Add button. Membership
+  hints update when channel contents change. The picker lists current memberships
+  and replaces duplicate Add choices with **Already in … — remove**. The Channels tab shows contents, order, bumpers, screens and now/next;
   its controls edit picks, reorder, tune, rename and confirm deletion, with undo.
   A cache-only poll updates screens and now/next every five seconds without cancelling
   slower content fetches. Reordering keeps the selected channel or pick.

@@ -66,7 +66,9 @@ The main modules in `lib/bromigos_homelab/`:
 
 The media library shows **Add to channel… (c)** below each title tab. Select a title
 or album, use the button or `c`, choose **Add to** a picked channel, then **Use channel**.
-The button preserves the selected Music album when it opens the picker.
+The button preserves the selected Music album when it opens the picker. The selected
+row’s channel names stay visible beside it; hovering over a row shows the same names.
+The picker lists current memberships and marks **Already in** entries for removal.
 
 The media library’s tab bar uses `Left`/`Right` or `h`/`l` to select a tab.
 `Down`/`j` enters its table; `Up`/`k` at the first row returns to the tab bar.

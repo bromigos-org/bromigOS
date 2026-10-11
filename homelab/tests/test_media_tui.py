@@ -399,8 +399,14 @@ class TUI(Stack):
                 self.assertIsInstance(app.screen,T.ChannelPicker,tab)
                 title=app.screen.title_
                 if value:self.assertEqual(title,value)
-                app.screen.query_one('#channel-pick').value='add:1'
-                await pilot.click('#channel-use');await self.settle(app,pilot,2)
+                picker = app.screen.query_one('#channel-pick')
+                if T.CH.membership(title, [app.channel_rows[0]]):
+                    # Search can find the same film already added from Movies.
+                    picker.value = 'remove:1'
+                    await pilot.press('escape');await pilot.pause()
+                else:
+                    picker.value = 'add:1'
+                    await pilot.click('#channel-use');await self.settle(app,pilot,2)
                 rows=app.channel_store.load().channels()[0]
                 self.assertIn(title,rows['items'] if tab in ('movies','music','youtube','search') else rows['shows'])
         self.run_app(fn)
@@ -414,6 +420,20 @@ class TUI(Stack):
             table.focus()
             await pilot.pause()
             album = app.subrows["music"][table.cursor_row]["title"]
+            artist = app.current("music")[1]["title"]
+            app.channel_store.item("Night Block", "music:album:" + album, item_kind="music")
+            app.channel_store.create(name="Artists", items=["music:artist:" + artist])
+            app.load_channels()
+            await self.settle(app, pilot, 3)
+            table.focus()
+            await pilot.pause()
+            self.assertIn("Night Block", str(app.query_one("#title-membership").render()))
+            app.query_one("#music-list").focus()
+            await pilot.pause()
+            self.assertIn("Artists", str(app.query_one("#title-membership").render()))
+            self.assertNotIn("Night Block", str(app.query_one("#title-membership").render()))
+            table.focus()
+            await pilot.pause()
             await pilot.click("#title-channel")
             await pilot.pause()
             self.assertEqual(app.screen.title_, "music:album:" + album)
@@ -440,6 +460,41 @@ class TUI(Stack):
             await pilot.press("tab", "enter")
             await self.settle(app, pilot, 3)
             self.assertIn(title, app.channel_store.load().channels()[0]["shows"])
+        self.run_app(fn)
+
+    def test_selected_and_hovered_title_names_its_channels_and_refreshes_after_removal(self):
+        self.seed_channels()
+        async def fn(app, pilot):
+            table = app.query_one("#tv-list")
+            title = table.get_row_at(0)[1]
+            app.channel_store.item("Night Block", title)
+            app.channel_store.create(name="Weekend", shows=[title])
+            app.load_channels()
+            await self.settle(app, pilot, 3)
+            table.focus()
+            await pilot.pause()
+            membership = str(app.query_one("#title-membership").render())
+            self.assertIn("Night Block", membership)
+            self.assertIn("Weekend", membership)
+            await pilot.hover("#tv-list", offset=(10, 1))
+            await pilot.pause()
+            self.assertIn("Night Block", table.tooltip)
+            self.assertIn("Weekend", table.tooltip)
+            self.shot(app, "channel-membership")
+            await pilot.press("c")
+            await pilot.pause()
+            self.assertIn("Night Block", str(app.screen.query_one("#channel-membership").render()))
+            selector = app.screen.query_one("#channel-pick")
+            options = dict((value, str(label)) for label, value in selector._options)
+            self.assertIn("Already in Night Block", options["remove:1"])
+            self.assertNotIn("add:1", options)
+            selector.value = "remove:1"
+            await pilot.click("#channel-use")
+            await self.settle(app, pilot, 3)
+            membership = str(app.query_one("#title-membership").render())
+            self.assertNotIn("Night Block", membership)
+            self.assertIn("Weekend", membership)
+            self.assertIn("Channels: Weekend", table.hints[0])
         self.run_app(fn)
 
     def test_create_and_reorder_channels(self):

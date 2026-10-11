@@ -280,8 +280,8 @@ no likeness and no lab hosts.
 - **`dictation.webp`**, on Dictation. The real dictation panel in a nested Hyprland,
   cropped from `desktop/tests/e2e_dictation_nested.py --shots DIR`, with synthetic audio
   and a made-up transcript. The microphone and audio meter are drawn in code.
-- **`media-library.webp`**, **`media-search.webp`**, **`media-channel-picker.webp`** and **`media-delete.webp`**, on The lab console and Your media
-  pages. `bromigos media`'s TV and Search tabs, channel picker and Delete/Cancel question, exported by its tests
+- **`media-library.webp`**, **`media-search.webp`**, **`media-channel-picker.webp`**, **`media-channel-membership.webp`** and **`media-delete.webp`**, on The lab console and Your media
+  pages. `bromigos media`'s TV and Search tabs, channel picker, membership labels and Delete/Cancel question, exported by its tests
   (`homelab/tests/test_media_tui.py`, `MEDIA_SCREENSHOTS=DIR`) from a fake media stack with
   made-up titles, converted from SVG at 1600 wide.
 - **`menu.webp`**, on The menu page. The menu with a search typed, rendered offscreen

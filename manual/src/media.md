@@ -229,7 +229,13 @@ You can also choose **Remove from…** or **New channel…**.
 
 ![The Media channel picker with Add to Night Block selected](images/media-channel-picker.webp)
 
-A small diamond marks titles already in a channel. Adding something to a channel does not download it; it must be
+A small diamond marks titles already in a channel. Select or hover over a title to
+see its channel names. The names also stay visible beside **Add to channel…**.
+The picker lists its current channels and marks **Already in … — remove**.
+
+![A selected show marked with a diamond and the channel names Night Block and Weekend](images/media-channel-membership.webp)
+
+Adding something to a channel does not download it; it must be
 available from the media server or YouTube. Music plays through the den's sound controls.
 
 On **Channels**, `Ctrl+N` adds a channel, `F2` renames it, `v` changes its order, and `b`
