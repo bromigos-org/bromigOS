@@ -26,6 +26,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos setup config`](#bromigos-setup-config) | Open one of your config files in your editor. When you close the Hyprland file, it's checked and reloaded safely. |
 | [`bromigos keys`](#bromigos-keys) | Make [your own shortcuts](shortcuts.md): press new keys for anything. |
 | [`bromigos display`](#bromigos-display) | Change your monitors' resolution, refresh rate, scale and layout. |
+| [`bromigos dictate`](#bromigos-dictate) | [Dictate at your cursor](dictation.md): start, finish, cancel or check a recording. |
 | [`bromigos sound`](#bromigos-sound) | Choose speakers and microphone, and set volumes. |
 | [`bromigos net`](#bromigos-net) | Turn Wi-Fi on or off, join a network, or connect a VPN. |
 | [`bromigos bluetooth`](#bromigos-bluetooth) | Turn Bluetooth on or off, and pair or connect devices. |
@@ -670,6 +671,25 @@ bromigos defaults
 bromigos defaults set browser firefox.desktop
 bromigos defaults terminal foot.desktop
 bromigos defaults apps editor
+```
+
+From the `bromigos-desktop` package.
+
+### bromigos dictate
+
+Hold to dictate into the focused app, with an audio meter and transcript preview.
+
+```text
+bromigos dictate on | off | cancel | status [--json]
+```
+
+For example:
+
+```text
+bromigos dictate status
+bromigos dictate on
+bromigos dictate off
+bromigos dictate cancel
 ```
 
 From the `bromigos-desktop` package.

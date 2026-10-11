@@ -65,6 +65,7 @@ KEYNAMES = {
     # mode); a module that's on names its own keys (_peripherals)
     "F13": "M1", "F14": "M2", "F15": "M3", "F16": "M4", "F17": "M5",
     "F18": "SIDE 1", "F19": "SIDE 2", "F20": "SIDE 3", "F24": "DIAL PRESS",
+    "CODE:135": "MENU",
     "CODE:191": "M1", "CODE:192": "M2", "CODE:193": "M3", "CODE:194": "M4", "CODE:195": "M5",
     "CODE:196": "SIDE 1", "CODE:197": "SIDE 2", "CODE:198": "SIDE 3", "CODE:202": "DIAL PRESS",
 }
@@ -72,6 +73,7 @@ KEYNAMES = {
 # (regex on the exec command, description, section). First match wins; the list
 # order is also the row order inside each section.
 EXEC = [
+    (r"bromigos dictate on\b", "Dictate at the cursor (hold)", "CAPTURE"),
     # Den TV remote: scoped number-pad actions, plus global screen selection.
     (r"bromigos-live tv select big\b", "TV remote: select the big monitor", "LIVE LAYER"),
     (r"bromigos-live tv select scope\b", "TV remote: select the scope", "LIVE LAYER"),

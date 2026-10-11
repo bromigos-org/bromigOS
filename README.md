@@ -280,6 +280,12 @@ records where each one comes from and whether it may ship.
 bromigOS is based on Arch Linux. It is not affiliated with or endorsed by the Arch Linux
 project.
 
+## Dictation
+
+Hold the Menu key to dictate into the selected app. A panel at the top centre shows
+microphone activity and your words. Release to insert the text and dismiss the panel.
+See [Dictation](manual/src/dictation.md).
+
 ## Den TV controls
 
 Control each den screen with its hover menu, the MEDIA remote or your number pad.

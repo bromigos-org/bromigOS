@@ -19,6 +19,7 @@
 title = "Open things"
 intro = "The keys you'll use most. Learn the first one and you can find everything else."
 rows = [
+  { match = "Dictate at the cursor (hold)", text = "Hold the [Menu key](dictation.md) to dictate into the focused app. Release it to insert your words." },
   { match = "Desktop menu: launch, install, setup, style, update, toggles (typing searches everything)", text = "Open the [menu](menu.md). Type to find any app or command, or to open Settings." },
   { match = "Launcher", text = "Open the app launcher." },
   { match = "Terminal", text = "Open a terminal." },
@@ -196,6 +197,7 @@ rows = [
   { route = "setup config", text = "Open one of your config files in your editor. When you close the Hyprland file, it's checked and reloaded safely." },
   { route = "keys", text = "Make [your own shortcuts](shortcuts.md): press new keys for anything." },
   { route = "display", text = "Change your monitors' resolution, refresh rate, scale and layout." },
+  { route = "dictate", text = "[Dictate at your cursor](dictation.md): start, finish, cancel or check a recording." },
   { route = "sound", text = "Choose speakers and microphone, and set volumes." },
   { route = "net", text = "Turn Wi-Fi on or off, join a network, or connect a VPN." },
   { route = "bluetooth", text = "Turn Bluetooth on or off, and pair or connect devices." },

@@ -8,6 +8,32 @@ fix at once, and it never touches `~/.config`.
 This page is for someone changing the defaults or building on them. For using the desktop,
 read the manual's [Getting around](../manual/src/desktop.md) page.
 
+## Dictation
+
+`bromigos dictate` is the hold-to-dictate controller. The Menu key's press and release
+binds are in `desktop/hypr/bromigos/dictation.lua`; the shortcut picker moves both.
+The user guide is [Dictation](../manual/src/dictation.md).
+
+`desktop/lib/bromigos_dictation.py` opens `pw-record` only for a recording. A worker
+transcribes snapshots every 1.2 seconds through the existing voice socket's `stt` request,
+or a configured `voice` provider's `/v1/stt` endpoint. Release closes the microphone,
+transcribes the final tail, then inserts once. Cancel invalidates an in-flight response.
+Recordings stop at two minutes. PCM snapshots are private temporary files removed after
+each request; neither audio nor transcripts are logged or saved.
+
+`bromigos_dictation_ui.py` draws a GTK4 layer at the top centre of the focused monitor.
+Its keyboard mode is `NONE`, its input region is empty, and it reserves no screen space.
+The audio meter and microphone drawing follow the theme and reduced-motion setting.
+The controller's socket and locks belong to one Wayland display under
+`$XDG_RUNTIME_DIR/bromigos-dictation/`. It exits after two minutes idle.
+
+`bromigos_type.py` inserts literal Unicode through `zwp_virtual_keyboard_v1`, with a
+one-level keymap and no modifiers. It does not touch the clipboard or send Enter.
+Insertion checks the original focused window before each batch. Tests use synthetic
+audio, a stub voice socket and a real entry in a nested Hyprland:
+`desktop/tests/e2e_dictation_nested.py`. The unit tests cover final audio, cancellation,
+silence, focus changes and temporary-file cleanup.
+
 <!-- site:desktop-configs -->
 ## How your files load the defaults
 

@@ -50,6 +50,12 @@ Most go to `/usr/lib/bromigos/desktop/bin/` and are linked into `/usr/bin/`:
 - `bromigos-extensions`, the extensions window;
 - `bromigos-shot`, `bromigos-rec` and `bromigos-banner`.
 
+`bromigos dictate` records while the Menu key is held. Its top-centre panel shows audio
+activity and transcript previews without taking focus. Release inserts the text through
+a Wayland virtual keyboard and hides the panel. See [Dictation](../manual/src/dictation.md).
+`lib/bromigos_dictation.py` handles recording and speech; `bromigos_dictation_ui.py`
+draws the panel; `bromigos_type.py` inserts Unicode without using the clipboard.
+
 The commands behind Settings' pages go to `/usr/lib/bromigos/bin/`, where `bromigos <name>`
 finds them: `display`, `sound`, `net`, `bluetooth`, `power`, `clock`, `notifications`,
 `defaults`, `startup`, `panels`, `scene`, `memory`, `about` and `avatar`. They're listed

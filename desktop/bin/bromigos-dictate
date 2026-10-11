@@ -1,0 +1,91 @@
+#!/usr/bin/python
+# bromigos:summary=Hold to dictate into the focused app, with an audio meter and transcript preview
+# bromigos:args=on | off | cancel | status [--json]
+# bromigos:examples=bromigos dictate status; bromigos dictate on; bromigos dictate off; bromigos dictate cancel
+"""The Menu key calls on when pressed and off when released. Tests use a private session."""
+import fcntl
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))
+for path in ("/usr/lib/bromigos/lib", "/usr/lib/bromigos/homelab/lib", os.path.join(ROOT, "lib"),
+             os.path.join(ROOT, "homelab", "lib"), os.path.join(HERE, "..", "lib")):
+    if os.path.isdir(path):
+        sys.path.insert(0, path)
+import bromigos_dictation as D  # noqa: E402
+
+
+def ask(path, command):
+    with socket.socket(socket.AF_UNIX) as connection:
+        connection.settimeout(6)
+        connection.connect(path)
+        connection.sendall(json.dumps({"command": command}).encode())
+        data = bytearray()
+        while not data.endswith(b"\n"):
+            part = connection.recv(4096)
+            if not part or len(data) + len(part) > 65536:
+                raise D.DictationError("The dictation controller did not answer")
+            data.extend(part)
+        return json.loads(data)
+
+
+def main(argv):
+    if not argv or argv[0] in ("--help", "-h"):
+        print("bromigos dictate on|off|cancel|status [--json]\n"
+              "Hold Menu to dictate; release it to insert your words into the focused app.\n"
+              "on starts recording, off inserts, cancel discards, status reports the state.")
+        return 0
+    command = argv[0]
+    if command == "serve" and len(argv) == 1:
+        from bromigos_dictation_ui import serve
+        serve()
+        return 0
+    if command not in ("on", "off", "cancel", "status") or any(a != "--json" for a in argv[1:]):
+        raise D.DictationError("Use on, off, cancel or status")
+    directory = D.runtime()
+    path = os.path.join(directory, "control.sock")
+    # Serialize press and release, including the first cold start.
+    with open(os.path.join(directory, "commands.lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            result = ask(path, command)
+        except (FileNotFoundError, ConnectionRefusedError):
+            if command != "on":
+                result = {"ok": True, "state": "idle"}
+            else:
+                process = subprocess.Popen([sys.executable, os.path.realpath(__file__), "serve"],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    start_new_session=True)
+                deadline = time.monotonic() + 5
+                while True:
+                    try:
+                        result = ask(path, command)
+                        break
+                    except (FileNotFoundError, ConnectionRefusedError):
+                        if time.monotonic() > deadline:
+                            process.terminate()
+                            try:
+                                process.wait(2)
+                            except subprocess.TimeoutExpired:
+                                process.kill()
+                                process.wait()
+                            raise D.DictationError("The dictation overlay could not start") from None
+                        time.sleep(.025)
+    if "--json" in argv:
+        print(json.dumps(result))
+    else:
+        print(result.get("error") or result.get("state", "idle"))
+    return 0 if result.get("ok") else 1
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main(sys.argv[1:]))
+    except (D.DictationError, OSError, ValueError):
+        print("Dictation is unavailable in this session; check your voice service and Wayland session", file=sys.stderr)
+        raise SystemExit(1)

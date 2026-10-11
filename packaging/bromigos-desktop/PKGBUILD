@@ -30,7 +30,7 @@ depends=('bromigos-core' 'bromigos-live' 'bromigos-widgets' 'bromigos-settings' 
          'networkmanager' 'xdg-utils'
          # the menu (apps via Gio), the theme switcher's previews, web apps' desktop entries,
          # the on-screen display for volume, brightness and mute
-         'python-gobject' 'python-pillow' 'desktop-file-utils' 'swayosd'
+         'python-gobject' 'python-cairo' 'python-pillow' 'desktop-file-utils' 'swayosd'
          # the theme switcher's previews are drawn offscreen: the bar (GTK 3) and the terminal
          # in a headless compositor of their own
          'weston' 'gtk3'
@@ -62,7 +62,7 @@ options=('!debug')
 _root="${startdir%/packaging/*}"
 # the small commands Settings drives (bromigos sound, …; desktop/bin/bromigos-<name>), installed
 # to /usr/lib/bromigos/bin where `bromigos <name>` finds them (docs/settings.md)
-_settings_cmds=(shell sound scene display net bluetooth power clock notifications defaults startup panels memory about avatar)
+_settings_cmds=(shell sound scene dictate display net bluetooth power clock notifications defaults startup panels memory about avatar)
 _paths=(desktop peripherals packaging/bromigos-desktop LICENSE-MIT LICENSE-APACHE)
 
 # <workspace version>.r<commits touching the package>.g<last such commit> (as bromigos-core)
@@ -128,6 +128,8 @@ package() {
     bin/bromigos-setup-keybindings bin/bromigos-setup-input bin/bromigos-setup-config
   # shared by the menu and the setup tools (rofi, the user's hyprland.lua, the safe reload)
   install -Dm0644 lib/bromigos_hypr.py "$lib/lib/bromigos_hypr.py"
+  # Hold-to-dictate and its non-interactive overlay; insertion uses the session's virtual keyboard.
+  install -Dm0644 -t "$lib/lib/" lib/bromigos_dictation.py lib/bromigos_dictation_ui.py lib/bromigos_type.py
   # the theme switcher's previews (bromigos theme previews; docs/theming.md, "The previews"):
   # the renderer, its user service and the pacman hook that starts it after an update
   install -Dm0644 lib/bromigos_previews.py "$lib/lib/bromigos_previews.py"

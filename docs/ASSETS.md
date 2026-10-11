@@ -13,7 +13,8 @@ the models used.
 
 | Asset | Source | Ships? | Notes |
 |---|---|---|---|
-| Den TV controller (`live/live/tvosc.lua`), analog controls and MEDIA rotary dial | Drawn and written for bromigOS | yes | `MIT OR Apache-2.0`; no vendored mpv scripts or art |
+| Den TV controller (`live/live/tvosc.lua`) and MEDIA rotary dial | Drawn and written for bromigOS | yes | `MIT OR Apache-2.0`; no vendored mpv scripts or art |
+| Dictation panel and `dictation.webp` | Drawn for bromigOS; nested render with synthetic speech | yes | No desktop capture, audio, private text or external art |
 | Code: the core, widgets, live layer, VECTOR, scripts | Written for bromigOS, first on the operator's desktop | yes | `MIT OR Apache-2.0` |
 | Lab console test snapshot (`homelab/tests/snapshots/lab-tui.svg`) | Textual render with recorded fake readings | yes | No real desktop or lab data |
 | Bromigos palette, emblem ("the burn-in") and lore | Bromigos original | yes, as brand assets | Licensed apart from the code |
@@ -276,6 +277,9 @@ no likeness and no lab hosts.
 - **`lab-console.webp`**, on The lab console and Your media pages. `bromigos lab` in a terminal,
   rendered offscreen with demo readings (`tools/screenshots/render.py`, `lab-console`);
   the tests' recorded lab, not a real one.
+- **`dictation.webp`**, on Dictation. The real dictation panel in a nested Hyprland,
+  cropped from `desktop/tests/e2e_dictation_nested.py --shots DIR`, with synthetic audio
+  and a made-up transcript. The microphone and audio meter are drawn in code.
 - **`media-library.webp`** and **`media-delete.webp`**, on The lab console and Your media
   pages. `bromigos media`'s TV tab and its Delete/Cancel question, exported by its tests
   (`homelab/tests/test_media_tui.py`, `MEDIA_SCREENSHOTS=DIR`) from a fake media stack with

@@ -17,6 +17,7 @@
 - [Themes and worlds](themes-and-worlds.md)
     - [The boot menu](boot-menu.md)
 - [VECTOR](vector.md)
+- [Dictation](dictation.md)
 - [Panels](panels.md)
 - [Holograms](holograms.md)
 - [Settings](settings.md)

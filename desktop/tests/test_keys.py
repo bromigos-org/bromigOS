@@ -259,7 +259,8 @@ class TitleThemeTest(unittest.TestCase):
             for block in blocks:
                 self.assertNotRegex(block, r"expand\s*:\s*false", name)
 
-    @unittest.skipUnless(shutil.which("rofi"), "no rofi")
+    @unittest.skipUnless(shutil.which("rofi") and (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")),
+                         "rofi theme dump needs a test display")
     def test_rofi_reads_the_title(self):
         import subprocess
         out = subprocess.run(["rofi", "-theme-str", H.title_theme("BROMIGOS"), "-dump-theme"],
@@ -406,6 +407,14 @@ class ClashTest(Base):
         body = BK.binds_body(plan.record)
         self.assertIn('K.exec("SUPER + ALT + CTRL + V", "holo ptt on")', body)
         self.assertIn('K.exec("SUPER + ALT + CTRL + V", "holo ptt off", { release = true })', body)
+
+    def test_dictation_menu_key_rebinds_both_edges_to_f8(self):
+        st = self.box.state()
+        plan = BK.Plan(st)
+        plan.bind(BK.default_target(st, "code:135"), BK.Combo.parse("F8"))
+        body = BK.binds_body(plan.record)
+        self.assertIn('K.exec("F8", "bromigos dictate on")', body)
+        self.assertIn('K.exec("F8", "bromigos dictate off", { release = true })', body)
 
     def test_already_there(self):
         st = self.box.state()

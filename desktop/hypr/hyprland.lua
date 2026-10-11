@@ -336,5 +336,6 @@ K.defaults = true
 require("bromigos.peripherals")
 require("bromigos.binds")
 require("bromigos.live")
+require("bromigos.dictation")
 require("bromigos.vector")
 K.finish()   -- binds them all: a desktop key a window key would share moves (keys.lua)

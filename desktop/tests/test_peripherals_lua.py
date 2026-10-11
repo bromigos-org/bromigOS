@@ -79,7 +79,7 @@ class LoaderTest(unittest.TestCase):
     def test_no_module_on_changes_nothing(self):
         without = self.record(None)
         self.assertFalse([r for r in without if r[0] == "device"])
-        self.assertFalse([r for r in without if r[1].startswith("code:")])
+        self.assertFalse([r for r in without if r[1] in ("code:191", "code:192")])
         mic = [b for b in without if b[1] == "XF86AudioMicMute"]
         self.assertEqual(mic[0][3], "")
         broken = self.record("this isn't lua {")
