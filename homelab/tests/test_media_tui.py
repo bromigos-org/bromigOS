@@ -164,8 +164,8 @@ class TUI(Stack):
                     async def fn(app, pilot):
                         if tid in app.shown:
                             app.action_filter()
-                        elif tid == "add":
-                            app.query_one("#add-q").focus()
+                        elif tid == "search":
+                            app.query_one("#search-q").focus()
                         await pilot.press(key)
                         self.assertTrue(app._exit)
                         self.assertEqual(self.st.deleted, [])
@@ -269,11 +269,11 @@ class TUI(Stack):
                         await pilot.press(left)
                         self.assertEqual(app.query_one("#tabs").active, tid)
                         self.assertIs(app.focused, bar)
-            app.action_tab("add")
+            app.action_tab("search")
             await pilot.pause()
             await pilot.press("h", "l")
-            self.assertEqual(app.query_one("#add-q").value, "hl")
-            self.assertEqual(app.query_one("#tabs").active, "add")
+            self.assertEqual(app.query_one("#search-q").value, "hl")
+            self.assertEqual(app.query_one("#tabs").active, "search")
         self.run_app(fn)
 
     def test_table_motion_panes_and_global_tabs(self):
@@ -392,9 +392,9 @@ class TUI(Stack):
             app.show_youtube([{'name':'Clips','url':url}])
             app.show_found([{'kind':'movie','title':'Comet Drift'}],focus=False)
             for tab, value in (('movies',None),('music',None),('youtube',url),('upcoming','Paper Moon Cafe'),
-                               ('add','Comet Drift')):
+                               ('search','Comet Drift')):
                 app.action_tab(tab);await pilot.pause()
-                if tab=='add': app.query_one('#add-list').focus()
+                if tab=='search': app.query_one('#search-list').focus()
                 await pilot.press('c');await pilot.pause()
                 self.assertIsInstance(app.screen,T.ChannelPicker,tab)
                 title=app.screen.title_
@@ -402,7 +402,7 @@ class TUI(Stack):
                 app.screen.query_one('#channel-pick').value='add:1'
                 await pilot.click('#channel-use');await self.settle(app,pilot,2)
                 rows=app.channel_store.load().channels()[0]
-                self.assertIn(title,rows['items'] if tab in ('movies','music','youtube','add') else rows['shows'])
+                self.assertIn(title,rows['items'] if tab in ('movies','music','youtube','search') else rows['shows'])
         self.run_app(fn)
 
     def test_create_and_reorder_channels(self):
@@ -443,6 +443,31 @@ class TUI(Stack):
             await pilot.press("5")
             await self.settle(app, pilot, 4)
             self.shot(app, "downloads")
+        self.run_app(fn)
+
+    def test_delete_dialog_arrows_enter_and_exclusion_without_mouse(self):
+        async def fn(app, pilot):
+            await pilot.press("D")
+            await self.settle(app, pilot, 2)
+            self.assertIs(app.focused, app.screen.query_one("#del-no"))
+            await pilot.press("right")
+            self.assertIs(app.focused, app.screen.query_one("#del-yes"))
+            await pilot.press("left", "enter")
+            await self.settle(app, pilot, 2)
+            self.assertNotIsInstance(app.screen, T.Confirm)
+            self.assertEqual(self.st.deleted, [])
+            await pilot.press("D")
+            await self.settle(app, pilot, 2)
+            await pilot.press("up")
+            checkbox = app.screen.query_one("#del-exclude")
+            self.assertIs(app.focused, checkbox)
+            await pilot.press("enter")
+            self.assertTrue(checkbox.value)
+            await pilot.press("down", "right")
+            self.assertIs(app.focused, app.screen.query_one("#del-yes"))
+            await pilot.press("enter")
+            await self.settle(app, pilot, 4)
+            self.assertTrue(self.st.deleted)
         self.run_app(fn)
 
     def test_delete_cancel_then_confirm_with_button(self):
@@ -512,15 +537,50 @@ class TUI(Stack):
             self.assertEqual(self.st.series[self.pm]["qualityProfileId"], 7)
         self.run_app(fn)
 
+    def test_search_tab_button_finds_a_title_outside_the_library(self):
+        self.st.movies.pop(251)
+        async def fn(app, pilot):
+            await pilot.press("ctrl+f")
+            await self.settle(app, pilot, 2)
+            self.assertEqual(app.query_one("#tabs").active, "search")
+            self.assertIs(app.focused, app.query_one("#search-q"))
+            await pilot.click("#search-go")
+            self.assertEqual(app.found, [])
+            self.assertIs(app.focused, app.query_one("#search-q"))
+            app.query_one("#search-q").value = "comet"
+            app.query_one("#search-kind").value = "movie"
+            await pilot.click("#search-go")
+            await self.settle(app, pilot, 6)
+            table = app.query_one("#search-list")
+            self.assertEqual(table.get_row_at(0)[1], "Comet Drift")
+            self.assertEqual(table.get_row_at(0)[-1], "-")
+            self.assertEqual(self.st.seerr_requests, [])
+            self.assertEqual(self.st.commands, [])
+            self.shot(app, "search")
+            await pilot.press("enter")
+            await self.settle(app, pilot, 2)
+            self.assertIsInstance(app.screen, T.Request)
+        self.run_app(fn, size=(100, 35))
+
+    def test_search_tab_command_preserves_cli_search_with_a_title(self):
+        import runpy
+        entry = runpy.run_path(os.path.join(os.path.dirname(__file__), "../bin/bromigos-media"))
+        with mock.patch.object(T, "main", return_value=0) as tui, \
+                mock.patch.object(M, "main", return_value=0) as cli:
+            self.assertEqual(entry["main"](["search"]), 0)
+            tui.assert_called_once_with(["search"])
+            self.assertEqual(entry["main"](["search", "Comet Drift"]), 0)
+            cli.assert_called_once_with(["search", "Comet Drift"])
+
     def test_search_and_add(self):
         async def fn(app, pilot):
             await pilot.press("7")
             await self.settle(app, pilot, 2)
             await pilot.press(*"comet", "enter")
             await self.settle(app, pilot, 6)
-            t = app.query_one("#add-list")
+            t = app.query_one("#search-list")
             self.assertEqual(t.get_row_at(0)[1], "Comet Drift")
-            self.shot(app, "add")
+            self.shot(app, "search")
             await pilot.press("enter")                                          # its request form
             await self.settle(app, pilot, 2)
             await pilot.click("#req-planbtn")

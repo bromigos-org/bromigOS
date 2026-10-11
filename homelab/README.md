@@ -66,7 +66,14 @@ The main modules in `lib/bromigos_homelab/`:
 
 The media library’s tab bar uses `Left`/`Right` or `h`/`l` to select a tab.
 `Down`/`j` enters its table; `Up`/`k` at the first row returns to the tab bar.
+The Search tab (`7` or `Ctrl+F`) finds titles beyond your library. Type a title, choose
+a media type, then press Enter or Search. Enter a result to request it. `/` filters
+the titles you already track.
 Delete shows what will go, then asks for Delete or Cancel. Cancel is selected first.
+
+In the delete dialog, `Left`/`Right` chooses Cancel or Delete; Enter activates
+the selected button. `Up`/`Down` moves to or from the exclusion checkbox; Enter
+or Space toggles it. Escape cancels. Cancel is selected when the dialog opens.
 
 ## Run the tests
 

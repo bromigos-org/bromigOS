@@ -52,7 +52,7 @@ the models used.
 | Peripheral modules (`peripherals/`) | Written for the operator's desktop, generalised | yes, as code | Dependencies aren't vendored. No keymap file ships |
 | The README's header emblem (`themes/wick/emblem/emblem-512.png`) | The Wick's emblem kit | yes, as a brand asset | Shown at the top of the README |
 | README pictures from the render set (eleven files and an animated loop) | Offscreen renders by `tools/screenshots/render.py`, with demo readings | yes | No faces, no real hostnames. [List](#docs-and-readme-images) |
-| Manual pictures (`manual/src/images/`, 31 files) | Offscreen renders and bromigos.org stills, with demo readings | yes | bromigOS only, no likeness, no lab hosts. [List](#manual-pictures) |
+| Manual pictures (`manual/src/images/`) | Offscreen renders and bromigos.org stills, with demo readings | yes | bromigOS only, no likeness, no lab hosts. [List](#manual-pictures) |
 | The built manual's page furniture (`bromigos-manual`, and the published manual) | mdBook's theme: Open Sans (Apache-2.0), Source Code Pro (OFL 1.1), Font Awesome Free icons (CC BY 4.0), highlight.js (BSD-3-Clause), clipboard.js, elasticlunr and mark.js (MIT), mdBook's own scripts and styles (MPL-2.0) | yes | Built by mdBook. The fonts' licence files ship beside them |
 | bromigOS repository mirrorlist | bromigOS source, with a public package URL | yes | Text only |
 | mehshell theme colour files and test fixtures | Generated from bromigOS theme colours by `lib/bromigos_prompt.py` | yes | Text only; no personal data |
@@ -280,8 +280,8 @@ no likeness and no lab hosts.
 - **`dictation.webp`**, on Dictation. The real dictation panel in a nested Hyprland,
   cropped from `desktop/tests/e2e_dictation_nested.py --shots DIR`, with synthetic audio
   and a made-up transcript. The microphone and audio meter are drawn in code.
-- **`media-library.webp`** and **`media-delete.webp`**, on The lab console and Your media
-  pages. `bromigos media`'s TV tab and its Delete/Cancel question, exported by its tests
+- **`media-library.webp`**, **`media-search.webp`** and **`media-delete.webp`**, on The lab console and Your media
+  pages. `bromigos media`'s TV and Search tabs and its Delete/Cancel question, exported by its tests
   (`homelab/tests/test_media_tui.py`, `MEDIA_SCREENSHOTS=DIR`) from a fake media stack with
   made-up titles, converted from SVG at 1600 wide.
 - **`menu.webp`**, on The menu page. The menu with a search typed, rendered offscreen

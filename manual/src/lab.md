@@ -364,7 +364,7 @@ bromigos media              # or: bromigos lab media
 ```
 
 This opens your media library in the terminal. It has a tab for TV, films, music, YouTube,
-downloads, what's coming up, and one to add something. The top line says how much you have
+downloads, what's coming up, Search, and Channels. The top line says how much you have
 and how much space is free.
 
 ![The media library in a terminal: the TV tab, a show's seasons beside it](images/media-library.webp)
@@ -383,6 +383,7 @@ then press a key:
 | `Enter` | Open the selected item |
 | `Left`, `Right`, `h`, `l` | Select tabs on the tab bar; switch between the title list and its side table |
 | `[`, `]`, `H`, `L` | Previous or next tab, including while typing. Cancel an open dialog |
+| `7`, `a`, `Ctrl+F` | Search for media, including titles outside your library |
 | `8`, `c` | Channels tab; add or remove a selected title from a channel |
 | `m` | Monitor it, or stop. On a season or an album, just that one |
 | `n` | Pick up new episodes and seasons, or stop |
@@ -399,6 +400,8 @@ covers Channels, its keys and CLI commands.
 
 **Deleting** removes the files from the disk, and frees the space. First it shows what goes
 and how much space that frees. Choose **Delete** or **Cancel**; Cancel is selected first.
+Use `Left`/`Right` to choose a button and Enter to activate it.
+`Up`/`Down` moves to or from the exclusion checkbox; Enter or Space toggles it.
 On a season, an
 episode file or an album, only that goes, and it stops being monitored. You can tick
 "Don't fetch it again", so your lab doesn't add it back from a list.

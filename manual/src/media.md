@@ -10,6 +10,16 @@ Pinchflat downloads YouTube. Jellyfin or Plex plays the files.
 
 ## Get a show, film or album
 
+### From the Media app
+
+Open `bromigos media`, then choose **Search** or press `7` or `Ctrl+F`.
+Type a title, choose Films, TV, Anime or Music, and press Enter or the **Search** button.
+Search includes media you do not have yet. The **Have it** column shows existing matches.
+Press Enter on a result to choose what to request, its quality and audio languages.
+Searching alone does not download anything. `/` filters titles already in your library.
+
+![The Media app’s Search tab with a film outside the library](images/media-search.webp)
+
 ### From a terminal
 
 Find the right title first:
@@ -149,6 +159,10 @@ question, then choose **Delete** or **Cancel**. Cancel is selected first; Escape
 adds the import exclusion. To keep files and only stop looking for more, use `m` instead.
 The [delete reference](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab.md#the-media-library)
 explains the scopes.
+
+The delete dialog starts on Cancel. `Left`/`Right` chooses a button and Enter
+activates it. `Up`/`Down` moves to or from the exclusion checkbox; Enter or Space
+toggles it. Escape cancels.
 
 ## Keep YouTube channels and playlists
 

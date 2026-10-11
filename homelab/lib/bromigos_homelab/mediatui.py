@@ -2,7 +2,7 @@
 library in a terminal UI (Textual), on the same code as `bromigos lab media` (mediareq.py).
 
 Tabs: TV (Sonarr), MOVIES (Radarr), MUSIC (Lidarr), YOUTUBE (Pinchflat), DOWNLOADS (what the
-download clients are fetching), UPCOMING (the calendar of what you track) and ADD (search
+download clients are fetching), UPCOMING (the calendar of what you track) and SEARCH (search
 and request, as `media get`) and CHANNELS (the den TV). The header has the library's totals and the free space.
 
 On a selected title, season, album or episode file: m monitors or stops, n picks up new
@@ -136,7 +136,12 @@ class MediaTable(HintTable):
 class Confirm(ModalScreen):
     """Show what goes, then ask for Delete or Cancel. Cancel has focus by default."""
 
-    BINDINGS = [Binding("escape", "dismiss(None)", "Cancel", tooltip="Close without deleting anything")]
+    BINDINGS = [Binding("escape", "dismiss(None)", "Cancel", tooltip="Close without deleting anything"),
+                Binding("left", "choose_button(-1)", "Previous", priority=True, show=False),
+                Binding("right", "choose_button(1)", "Next", priority=True, show=False),
+                Binding("up", "choice_step(-1)", "Previous", priority=True, show=False),
+                Binding("down", "choice_step(1)", "Next", priority=True, show=False),
+                Binding("enter", "activate_choice", "Choose", priority=True, show=False)]
 
     def __init__(self, plan):
         super().__init__()
@@ -160,9 +165,27 @@ class Confirm(ModalScreen):
                 b = Button("Delete", id="del-yes", variant="error")
                 b.tooltip = "Delete only the files listed above"
                 yield b
+            yield Label("←/→ choose a button · Enter select · ↑/↓ checkbox/buttons · Escape cancel", classes="dim")
 
     def on_mount(self):
         self.query_one("#del-no", Button).focus()
+
+    def action_choose_button(self, step):
+        buttons = [self.query_one("#del-no", Button), self.query_one("#del-yes", Button)]
+        current = buttons.index(self.focused) if self.focused in buttons else 0
+        buttons[(current + step) % len(buttons)].focus()
+
+    def action_activate_choice(self):
+        if isinstance(self.focused, Button):
+            self.focused.press()
+        elif isinstance(self.focused, Checkbox) and not self.focused.disabled:
+            self.focused.toggle()
+
+    def action_choice_step(self, step):
+        choices = [self.query_one(selector) for selector in ("#del-exclude", "#del-no", "#del-yes")]
+        choices = [choice for choice in choices if not choice.disabled]
+        current = choices.index(self.focused) if self.focused in choices else 0
+        choices[(current + step) % len(choices)].focus()
 
     @on(Button.Pressed, "#del-no")
     def no(self):
@@ -361,6 +384,10 @@ class MediaApp(App):
     .filter { display: none; }
     .filter.-on { display: block; }
     HintTable { height: 1fr; }
+    #search-q { width: 1fr; }
+    #search-kind { width: 22; }
+    #search-go { margin: 1 0 0 1; }
+    #search-status { height: 2; padding: 0 1; color: $text-muted; }
     #nav { height: 2; color: $text-muted; }
     #hint { height: 2; padding: 0 1; color: $text-muted; border-top: solid $panel; }
     .title { text-style: bold; color: $primary; }
@@ -385,7 +412,7 @@ class MediaApp(App):
         Binding("4", "tab('youtube')", "YouTube", show=False, tooltip="Pinchflat's channels and playlists"),
         Binding("5", "tab('downloads')", "Downloads", show=False, tooltip="What's downloading, and why it's stuck"),
         Binding("6", "tab('upcoming')", "Upcoming", show=False, tooltip="What you track and when it comes out"),
-        Binding("7,a", "tab('add')", "Add", tooltip="Find something and request it (as bromigos lab media get)"),
+        Binding("7,a,ctrl+f", "tab('search')", "Search", tooltip="Find something and request it (as bromigos lab media get)"),
         Binding("8", "tab('channels')", "Channels", show=False),
         Binding("c", "channel_picker", "Channel…"),
         Binding("ctrl+n", "channel_new", "New channel"),
@@ -407,11 +434,11 @@ class MediaApp(App):
         Binding("p", "den_play", "Den TV", tooltip="Play the selected title on a den TV screen"),
         Binding("t", "play", "Play", tooltip="Play it full screen (a show: its next unwatched episode), from Jellyfin"),
         Binding("e", "episodes", "Episodes", show=False, tooltip="Show the season's episode files (TV)"),
-        Binding("D", "delete", "Delete", tooltip="Delete the title, season, album or file under the cursor (asks twice)"),
+        Binding("D", "delete", "Delete", tooltip="Review what goes, then choose Delete or Cancel"),
         Binding("],L", "tab_step(1)", "Next tab", priority=True),
         Binding("[,H", "tab_step(-1)", "Previous tab", priority=True),
     ]
-    TABS = ("tv", "movies", "music", "youtube", "downloads", "upcoming", "add", "channels")
+    TABS = ("tv", "movies", "music", "youtube", "downloads", "upcoming", "search", "channels")
     KIND = {"tv": "tv", "movies": "movies", "music": "music"}
 
     def __init__(self, source=None, start="tv"):
@@ -456,17 +483,20 @@ class MediaApp(App):
                     yield MediaTable(id="dl-list", cursor_type="row", zebra_stripes=True)
             with TabPane("UPCOMING", id="upcoming"):
                 yield MediaTable(id="up-list", cursor_type="row", zebra_stripes=True)
-            with TabPane("ADD", id="add"):
+            with TabPane("SEARCH", id="search"):
                 with Vertical():
                     with Horizontal(classes="detail"):
-                        i = MediaInput(placeholder="a film, show, anime, artist or album, or a YouTube link", id="add-q")
+                        i = MediaInput(placeholder="a film, show, anime, artist or album, or a YouTube link", id="search-q")
                         i.tooltip = "What to look for; Enter searches"
                         yield i
                         s = Select([("Films and TV", ""), ("Films", "movie"), ("TV", "tv"), ("Anime", "anime"),
-                                    ("Music", "music")], value="", id="add-kind", allow_blank=False)
+                                    ("Music", "music")], value="", id="search-kind", allow_blank=False)
                         s.tooltip = "Narrow the search"
                         yield s
-                    yield MediaTable(id="add-list", cursor_type="row", zebra_stripes=True)
+                        yield Button("Search", id="search-go", variant="primary")
+                    yield Static("Find media you don’t have yet. Type a title, then press Enter or Search.",
+                                 id="search-status", markup=False)
+                    yield MediaTable(id="search-list", cursor_type="row", zebra_stripes=True)
             with TabPane("CHANNELS", id="channels"):
                 with Horizontal():
                     yield MediaTable(id="ch-list", cursor_type="row", zebra_stripes=True, classes="list")
@@ -489,7 +519,7 @@ class MediaApp(App):
         for tid, hint in (("tv", "Shows in Sonarr: seasons, size, profile, monitoring"), ("movies", "Films in Radarr"),
                           ("music", "Artists and albums in Lidarr"), ("youtube", "Pinchflat's channels and playlists"),
                           ("downloads", "What the download clients are fetching"),
-                          ("upcoming", "What you track and when it comes out"), ("add", "Find and request")):
+                          ("upcoming", "What you track and when it comes out"), ("search", "Find and request")):
             try:
                 self.query_one(f"#tabs Tab#--content-tab-{tid}").tooltip = hint
             except Exception:
@@ -607,7 +637,7 @@ class MediaApp(App):
         tid = ev.data_table.id or ""
         if tid.endswith("-list") and tid.split("-")[0] in self.shown:
             self.query_one(f"#{tid.split('-')[0]}-sub", HintTable).focus()
-        elif tid == "add-list" and 0 <= ev.cursor_row < len(self.found):
+        elif tid == "search-list" and 0 <= ev.cursor_row < len(self.found):
             self.push_screen(Request(self.src, self.found[ev.cursor_row]), self._requested)
 
     def select(self, kind, row):
@@ -732,7 +762,7 @@ class MediaApp(App):
         self.youtube_rows = rows
         if not rows:
             self.query_one("#yt-list", HintTable).fill(
-                ("",), [("No channels or playlists yet: bromigos lab youtube add URL, or paste a link in ADD",)], [],
+                ("",), [("No channels or playlists yet: bromigos lab youtube add URL, or paste a link in SEARCH",)], [],
                 "Pinchflat downloads YouTube channels and playlists into your library")
             return
         self.query_one("#yt-list", HintTable).fill(
@@ -743,10 +773,23 @@ class MediaApp(App):
              "bromigos lab youtube remove|pause|quality changes it" for r in rows],
             "Pinchflat's channels and playlists (bromigos lab youtube)")
 
-    # ------------------------------------------------------------------ add
-    @on(Input.Submitted, "#add-q")
+    # ------------------------------------------------------------------ search
+    @on(Input.Submitted, "#search-q")
     def _search(self, ev):
-        self.run_search(ev.value, self.query_one("#add-kind", Select).value)
+        self.search_titles()
+
+    @on(Button.Pressed, "#search-go")
+    def search_button(self):
+        self.search_titles()
+
+    def search_titles(self):
+        q = self.query_one("#search-q", Input).value.strip()
+        if not q:
+            self.query_one("#search-status", Static).update("Enter a title to search for.")
+            self.query_one("#search-q", Input).focus()
+            return
+        self.query_one("#search-status", Static).update("Searching…")
+        self.run_search(q, self.query_one("#search-kind", Select).value)
 
     @work(thread=True, group="search", exclusive=True)
     def run_search(self, q, kind):
@@ -759,7 +802,10 @@ class MediaApp(App):
 
     def show_found(self, found, focus=True):
         self.found = found
-        t = self.query_one("#add-list", HintTable)
+        self.query_one("#search-status", Static).update(
+            f"Results: {len(found)} · Enter a result to request it · Have it shows what’s already in your library"
+            if found else "No results. Try another title or media type.")
+        t = self.query_one("#search-list", HintTable)
         t.fill(("", "title", "year", "kind", "release", "profile", "size", "have it"),
                [(GLYPH.get(i["kind"], "·") + (" ◇" if CH.membership(i.get("title"), self.channel_rows) else ""), i.get("title") or "", i.get("year") or "",
                  ("anime " if i.get("anime") else "") + i["kind"], i.get("release") or "",
@@ -987,10 +1033,11 @@ class MediaApp(App):
     def action_content(self):
         tid = self.query_one("#tabs", TabbedContent).active
         target = {"youtube": "yt-list", "downloads": "dl-list", "upcoming": "up-list",
-                  "add": "add-list", "channels": "ch-list"}.get(tid, f"{tid}-list")
+                  "search": "search-list", "channels": "ch-list"}.get(tid, f"{tid}-list")
         self.query_one(f"#{target}", HintTable).focus()
 
     def action_tab(self, tid):
+        tid = "search" if tid == "add" else tid
         self.set_focus(None)
         self.query_one("#tabs", TabbedContent).active = tid
         self.call_after_refresh(self._focus_tab, tid)
@@ -998,8 +1045,8 @@ class MediaApp(App):
     def _focus_tab(self, tid):
         if self.query_one("#tabs", TabbedContent).active != tid:
             return
-        if tid == "add":
-            self.query_one("#add-q", Input).focus()
+        if tid == "search":
+            self.query_one("#search-q", Input).focus()
         else:
             self.action_content()
 
@@ -1107,8 +1154,8 @@ class MediaApp(App):
             index = self.query_one("#yt-list", HintTable).cursor_row
             if 0 <= index < len(self.youtube_rows):
                 r = self.youtube_rows[index]; title = r.get('original_url') or r.get('url'); kind = 'youtube'
-        elif tid in ('add','upcoming','downloads'):
-            records, table = {'add': (self.found,'add-list'), 'upcoming': (self.upcoming_rows,'up-list'),
+        elif tid in ('search','upcoming','downloads'):
+            records, table = {'search': (self.found,'search-list'), 'upcoming': (self.upcoming_rows,'up-list'),
                               'downloads': (self.download_rows,'dl-list')}[tid]
             index = self.query_one('#'+table,HintTable).cursor_row
             if 0 <= index < len(records):
@@ -1204,5 +1251,6 @@ class MediaApp(App):
 
 def main(argv=None):
     start = (argv or [None])[0] if argv else None
+    start = "search" if start == "add" else start
     MediaApp(start=start if start in MediaApp.TABS else "tv").run()
     return 0

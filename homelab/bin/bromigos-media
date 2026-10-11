@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-# bromigos:summary=Your media library in a terminal: TV, films, music, YouTube, downloads, releases and den TV channels; request, monitor, change quality, play or delete
-# bromigos:args=[tv|movies|music|youtube|downloads|upcoming|add|channels] | search|get|status|upcoming|recent|library|language|monitor|profile|refresh|delete|channel …
+# bromigos:summary=Your media library in a terminal: TV, films, music, YouTube, downloads, releases, search and den TV channels; request, monitor, change quality, play or delete
+# bromigos:args=[tv|movies|music|youtube|downloads|upcoming|search|channels] | search|get|status|upcoming|recent|library|language|monitor|profile|refresh|delete|channel …
 # bromigos:examples=bromigos media; bromigos media movies; bromigos media get "Cowboy Bebop"; bromigos media status
 # bromigos:menu=LAUNCH:Media library
 """bromigos media: the media library (docs/lab.md, "Media requests"; the manual's Lab console).
 
   bromigos media [TAB]              the terminal UI (Textual), on TAB: tv, movies, music, youtube,
-                                    downloads, upcoming, add or channels
+                                    downloads, upcoming, search or channels (add is an alias)
   bromigos media VERB …             = bromigos lab media VERB …: search, get, status, upcoming,
                                     recent, library, language, monitor, profile, refresh, delete, channel
 """
@@ -29,7 +29,7 @@ def main(argv):
         import subprocess
         lab = os.path.join(HERE, "bromigos-lab")
         return subprocess.call([lab if os.path.exists(lab) else "/usr/lib/bromigos/bin/bromigos-lab", "media"])
-    if not argv or argv[0] in TABS:
+    if not argv or argv[0] in TABS or argv == ["search"]:
         try:
             from bromigos_homelab import mediatui
         except ImportError as e:

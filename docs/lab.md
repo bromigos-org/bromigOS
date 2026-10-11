@@ -374,13 +374,20 @@ Jellyfin, Plex and Pinchflat are the sources the console already reads.
 terminal. Without a terminal, both print the Requests card instead.
 
 - Tabs: TV (Sonarr), MOVIES (Radarr), MUSIC (Lidarr), YOUTUBE (Pinchflat), DOWNLOADS,
-  UPCOMING, ADD (search, then the `get` form) and CHANNELS (the den TV). The header has the library's totals and
+  UPCOMING, SEARCH (search, then the `get` form) and CHANNELS (the den TV). The header has the library's totals and
   the free space.
+- Search (`7`, `a` or `Ctrl+F`) looks up titles in the connected services, including
+  titles outside the library. Enter or the Search button runs the lookup; selecting
+  a result opens the request form. The media-type picker narrows the lookup, and
+  the Have it column shows existing library matches. `/` filters tracked titles.
 - A title's side table lists its seasons, its albums, or a season's episode files (`e`).
 - Keys act on the row under the cursor: `m` monitor, `n` new episodes, `p` profile, `f`
   search now, `o` and `O` open in Jellyfin and Seerr, `t` play (Jellyfin to mpv full
   screen, as the den TV opens a channel), `D` delete, `/` filter, `s` sort. Vim keys work
   beside the arrows, and every key, tab, row and button has a hint.
+- Delete dialogs bind `Left`/`Right` to their buttons and Enter to the focused
+  button or checkbox. `Up`/`Down` follows the focus order, skipping disabled controls.
+  Cancel starts focused.
 - `Ctrl+C` and `q` have priority over inputs and modal screens. Quitting dismisses an
   open confirmation with no result. Confirmed changes run synchronously to completion.
 - `Left`/`Right` and `h`/`l` select tabs while the tab bar has focus.
