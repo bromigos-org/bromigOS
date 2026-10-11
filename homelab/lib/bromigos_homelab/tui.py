@@ -1,8 +1,9 @@
 """`bromigos lab` with no arguments: the live terminal dashboard (Textual).
 
-Four tabs read the same data as the commands: STATUS (every card `bromigos lab status` has),
+Five tabs use the command data and reviewed plans: STATUS (every card `bromigos lab status` has),
 MODELS (`lab models`), JOBS (`lab jobs`, with a log, cancel, retry and a new-job form) and
-DOCTOR (`lab doctor`, each finding's fix). Everything has a hover hint: a card says what it
+DOCTOR (`lab doctor`, each finding's fix) and PROVISION (services, VMs and cluster plans).
+Everything has a hover hint: a card says what it
 shows, a row what it is (the table's tooltip follows the row under the pointer), a key in
 the footer what it does. Reads run in worker threads: the screen never waits on the lab.
 
@@ -372,7 +373,8 @@ class LabApp(App):
         self.loaded_at = None
         from . import services
         self.provision_cat = services.load()
-        self.provision_selected = services.preset(self.provision_cat, "core")["services"]
+        from . import provision
+        self.provision_selected = provision.preset_selection(self.provision_cat, 'core')
 
     # ------------------------------------------------------------------ layout
     def compose(self) -> ComposeResult:
@@ -407,13 +409,32 @@ class LabApp(App):
                     yield HintTable(id="findings", cursor_type="row", zebra_stripes=True)
                     yield Static("", id="fix")
             with TabPane("PROVISION", id="provision"):
-                yield Static("Choose services. The terminal command takes inventory and generates a reviewable plan.")
-                yield Tree("Your lab", id="provision-tree")
-                yield Static("", id="provision-hint")
-                with Horizontal():
-                    yield Button("Core", id="provision-core")
-                    yield Button("Advanced", id="provision-advanced")
-                yield Static("", id="provision-command")
+                with VerticalScroll():
+                    yield Static("Choose services. The terminal command takes inventory and generates a reviewable plan.")
+                    yield Tree("Your lab", id="provision-tree")
+                    yield Static("", id="provision-hint")
+                    with Horizontal():
+                        yield Button("Core", id="provision-core")
+                        yield Button("Advanced", id="provision-advanced")
+                    yield Static("", id="provision-command")
+                    yield Input(placeholder='Generated lab repository path', id='infra-repo')
+                    yield Input(placeholder='Cluster or new-node specification JSON path', id='infra-spec')
+                    yield Input(placeholder='Node name for drain/removal', id='infra-name')
+                    yield Select([('Worker', 'worker'), ('GPU (prepared driver/runtime)', 'gpu')], value='worker', allow_blank=False, id='infra-role')
+                    with Horizontal():
+                        yield Button('Read plan', id='infra-read')
+                        yield Button('Plan cluster', id='infra-plan')
+                        yield Button('Apply', id='infra-apply')
+                    with Horizontal():
+                        yield Button('Add node', id='infra-grow')
+                        yield Button('Drain node', id='infra-remove')
+                    yield Static('', id='infra-review')
+                    yield Input(placeholder='Provider name for VM actions', id='infra-provider')
+                    yield Select([(name.title(), name) for name in ('list', 'start', 'stop', 'delete', 'snapshot', 'console')], value='list', allow_blank=False, id='infra-vm-action')
+                    yield Input(placeholder='Snapshot name, when taking a snapshot', id='infra-snapshot')
+                    with Horizontal():
+                        yield Button('Read storage', id='infra-storage')
+                        yield Button('VM command', id='infra-vm')
         yield Static("", id="hint")
         yield Footer()
 
@@ -621,6 +642,42 @@ class LabApp(App):
             "\nAdd --backup-path and --age-recipient for Core; --git-url for Argo CD. "
             "Apply waits for an explicit yes in your terminal.")
 
+    @on(Button.Pressed, '#infra-read')
+    @on(Button.Pressed, '#infra-plan')
+    @on(Button.Pressed, '#infra-apply')
+    @on(Button.Pressed, '#infra-grow')
+    @on(Button.Pressed, '#infra-remove')
+    @on(Button.Pressed, '#infra-storage')
+    @on(Button.Pressed, '#infra-vm')
+    def infrastructure_action(self, event):
+        import json, subprocess
+        from pathlib import Path
+        repo = self.query_one('#infra-repo', Input).value.strip()
+        spec = self.query_one('#infra-spec', Input).value.strip()
+        review = self.query_one('#infra-review', Static)
+        if not repo:
+            review.update('Enter your generated lab repository path.'); return
+        if event.button.id == 'infra-read':
+            try:
+                state = json.loads((Path(repo) / 'plan.json').read_text())
+                rows = [n['name'] + ': ' + n['role'] + ', ' + n.get('on', 'existing SSH') + ', ' + str(n.get('vm', {}).get('cpu', '?')) + ' CPUs, ' + str(n.get('vm', {}).get('ram_mib', '?')) + ' MiB RAM, ' + str(n.get('vm', {}).get('disk_gib', '?')) + ' GiB at ' + n.get('vm', {}).get('storage', 'existing') for n in state['infrastructure']['nodes']]
+                review.update('\n'.join(rows + ['Volume class: ' + state['infrastructure'].get('storage_class', 'local-path')] + state['review_notes'] + ['Storage inventory: ' + json.dumps(state.get('storage_inventory', {})), 'Services: ' + ', '.join(state['selected']), 'Monitoring: private ports 9090, 9093, 3000 and 3100']))
+            except (OSError, ValueError, KeyError): review.update('No valid cluster plan at that path.')
+            return
+        provider = self.query_one('#infra-provider', Input).value.strip()
+        argv = {'infra-plan': ['cluster', '--spec', spec], 'infra-apply': ['apply'],
+                'infra-grow': ['add-node', '--role', self.query_one('#infra-role', Select).value] + (['--node-spec', spec] if spec else []) + (['--on', provider] if provider else []),
+                'infra-remove': ['remove-node', '--name', self.query_one('#infra-name', Input).value.strip()],
+                'infra-storage': ['storage', 'list'],
+                'infra-vm': ['vm', self.query_one('#infra-vm-action', Select).value, '--on', provider, '--name', self.query_one('#infra-name', Input).value.strip()]}[event.button.id]
+        if event.button.id == 'infra-vm' and self.query_one('#infra-vm-action', Select).value == 'snapshot':
+            argv += ['--snapshot-name', self.query_one('#infra-snapshot', Input).value.strip()]
+        executable = Path(__file__).resolve().parents[2] / 'bin/bromigos-lab'
+        # Credential prompts and approval stay in this terminal, outside the dashboard.
+        with self.suspend():
+            result = subprocess.run([str(executable), 'provision'] + argv + ['--repo', repo])
+        review.update('Command finished.' if result.returncode == 0 else 'Command stopped; review its terminal explanation.')
+
     @on(Tree.NodeHighlighted, "#provision-tree")
     def provision_hint(self, event):
         if event.node.data:
@@ -630,6 +687,9 @@ class LabApp(App):
 
     @on(Tree.NodeSelected, "#provision-tree")
     def provision_toggle(self, event):
+        from . import observability
+        if event.node.data in observability.SERVICES:
+            self.notify('Monitoring is included in every provision plan.'); return
         from . import services
         sid = event.node.data
         if not sid:

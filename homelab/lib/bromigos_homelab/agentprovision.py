@@ -222,7 +222,7 @@ def plan(files, state, roles):
         files['ansible/roles/agents/tasks/main.json'] = P.dump([
             P.task('Read agents release ownership', 'ansible.builtin.command', {'argv': ['helm', 'status', 'lab-agents', '-n', 'lab-agents', '-o', 'json', '--kubeconfig', target['kubeconfig'], '--kube-context', target['context']]}, register='agent_release', failed_when=False, changed_when=False),
             P.task('Check agents ownership', 'ansible.builtin.assert', {'that': ["agent_release.rc != 0 or (agent_release.stdout | from_json).info.description == 'bromigos-lab-provision'"]}),
-            P.task('Converge agents', 'ansible.builtin.command', {'argv': args}, changed_when=False)])
+            P.task('Converge agents', 'ansible.builtin.command', {'argv': P.O.helm_command(args)}, no_log=False, changed_when=False)])
         if 'argocd' in picked:
             files['gitops/argocd-apps/agents.yaml'] = P.dump({'apiVersion': 'argoproj.io/v1alpha1', 'kind': 'Application', 'metadata': {'name': 'lab-agents', 'namespace': 'argocd'}, 'spec': {'project': 'default', 'source': {'repoURL': state['git_url'], 'targetRevision': 'HEAD', 'path': 'helm/agents', 'helm': {'releaseName': 'lab-agents', 'valueFiles': ['../' + a + '/values.yaml' for a in containers]}}, 'destination': {'server': 'https://kubernetes.default.svc', 'namespace': 'lab-agents'}, 'syncPolicy': {'automated': {'prune': False, 'selfHeal': True}}}})
     if 'nemoclaw' in chosen:

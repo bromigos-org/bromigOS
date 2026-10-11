@@ -83,6 +83,10 @@ def prometheus_query(promql, range_minutes=None, step_seconds=60):
     return {"count": len(res), "result": [{"metric": r["labels"], "value": r["value"]} for r in res[:40]]}
 
 
+def lab_capacity():
+    return _need(H.caps.collect('capacity'))
+
+
 # ------------------------------------------------------------------ Kubernetes (read only)
 def k8s_get(kind, namespace=None, name=None, selector=None):
     kind = kind.lower().rstrip()
@@ -271,6 +275,8 @@ def knowledge_search(query, space=None, limit=6):
 # ------------------------------------------------------------------ registration
 def register(vector):
     has = H.available
+    if has('capacity'):
+        vector.tool('lab_capacity', 'Read-only proposals for a new Kubernetes worker or GPU node after sustained pressure. Never creates resources; user approval is required.', _p({}), lab_capacity)
     if H.snapshot_source():
         vector.tool("lab_status", "The homelab's summary (its lab snapshot). section: overview (default), nodes, services, "
                     "gpu, storage, network, games, solar.", _p({"section": S}), lab_status)

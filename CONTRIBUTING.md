@@ -127,10 +127,20 @@ Bigger tests run by hand:
   the panels' edit mode in a Hyprland session that runs inside a virtual display. Nothing
   appears on your screen.
 - **A fresh machine.** `test/vm/arch-vm.sh` installs bromigOS on a new virtual machine
-  and checks it. It needs KVM and about 8 GB of free memory.
+  and checks it. It needs KVM and at least 14 GB of available memory before starting.
   [docs/install.md](docs/install.md) explains it.
 - **The ISO.** `iso/build.sh` builds the ISO, and `iso/test.sh` boots and installs it in
   QEMU. [docs/iso.md](docs/iso.md) explains both.
+
+The lab provisioner has isolated Debian tests too. `test/vm/lab-provision-e2e.py`
+checks Core, Advanced, repeat apply and an explicit kubeconfig.
+`test/vm/lab-infrastructure-e2e.py` needs nested KVM. It checks single-box monitoring,
+creates two libvirt guests, joins a third and verifies cluster monitoring. Both paths
+check targets, a Grafana dashboard and a real alert firing and resolving. The keeper
+stops guests if the parent dies. It caps test VM RAM at 8 GiB by default and CPUs
+at four. The nested lab test reserves at most 10 GiB and four CPUs in total.
+These tests never need a real Proxmox API or NAS.
+See [infrastructure tests](docs/lab-infrastructure.md#extensions-and-tests).
 
 ### Screenshots
 

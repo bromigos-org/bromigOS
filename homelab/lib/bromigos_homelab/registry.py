@@ -43,7 +43,7 @@ CAPABILITIES = ("metrics", "hosts", "workloads", "deployments", "models", "agent
                 "video",
                 # media requests and their downloads: Seerr, qBittorrent, SABnzbd, slskd
                 # (adapters/labrequests.py; `bromigos lab media`, mediareq.py)
-                "requests")
+                "requests", "capacity", "vms")
 EXTRAS = {"snapshot", "knowledge"}     # a whole-lab snapshot (lab); a memory/knowledge service (gnosis)
 
 

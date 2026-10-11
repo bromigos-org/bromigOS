@@ -65,6 +65,7 @@ manual's [Files and folders](../manual/src/files.md) lists them for users.
 | [lab.md](lab.md) | `bromigos lab`: status, models, GPU jobs and the health check |
 | [lab-models.md](lab-models.md) | The model catalog: the best open models for each task and GPU size |
 | [lab-provision.md](lab-provision.md) | Setting up Core services, Kubernetes, Argo CD and Vault |
+| [lab-infrastructure.md](lab-infrastructure.md) | VM providers, storage, cluster growth and monitoring |
 | [targets.md](targets.md) | Where AI work runs: your homelab, this machine or the cloud |
 
 VECTOR, the desktop's AI assistant, is documented in his own repository,

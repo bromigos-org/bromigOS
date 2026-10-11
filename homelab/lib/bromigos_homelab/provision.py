@@ -17,9 +17,9 @@ import time
 import urllib.error
 import urllib.request
 
-from . import services, agentprovision as A
+from . import services, agentprovision as A, observability as O
 
-SUPPORTED = ("caddy", "netdata", "restic", "homepage", "kubernetes", "helm", "argocd", "vault", "llm-endpoint") + A.AGENTS
+SUPPORTED = ("caddy", "netdata", "restic", "homepage", "kubernetes", "helm", "argocd", "vault", "llm-endpoint") + A.AGENTS + O.SERVICES
 IMAGES = {"caddy": "caddy:2.11.7", "netdata": "netdata/netdata:v2.12.1",
           "homepage": "ghcr.io/gethomepage/homepage:v2.5.0", "restic": "restic/restic:0.19.1"}
 K3S = "v1.37.1+k3s1"
@@ -42,6 +42,16 @@ def run(argv, data=None, cwd=None, env=None):
         if Path(argv[0]).name == "ansible-playbook":
             names = re.findall(r"TASK \[([a-zA-Z0-9 :_-]+)\]", result.stdout)
             stage = " at " + names[-1] if names else ""
+            categories = ('version check failed', 'ownership conflict', 'release busy', 'immutable field', 'resource exists', 'permission refused', 'readiness timeout', 'connection refused', 'upgrade failed')
+            reported = re.findall(r'"stdout"\s*:\s*"bromigos-helm: ([a-z ]+)(?:\\n)?"', result.stdout)
+            stage += next(('; Helm ' + label for label in reported if label in categories), '')
+        if Path(argv[0]).name == 'ssh' and result.returncode == 255:
+            reasons = {'host key verification failed': 'host key verification failed', 'permission denied': 'authentication refused',
+                       'connection refused': 'connection refused', 'connection timed out': 'connection timed out',
+                       'no route to host': 'no route to host', 'connection reset': 'connection reset',
+                       'connection closed': 'connection closed', 'bad configuration': 'SSH configuration invalid',
+                       'too many authentication': 'too many authentication attempts'}
+            stage = next(('; ' + summary for pattern, summary in reasons.items() if pattern in result.stderr.lower()), stage)
         raise ProvisionError(f"{Path(argv[0]).name} failed (exit {result.returncode}){stage}; check reach and prerequisites")
     return result.stdout
 
@@ -67,6 +77,9 @@ def ssh_args(target):
         args += ["-o", "UserKnownHostsFile=" + target["known_hosts"]]
     if target.get("identity"):
         args += ["-i", target["identity"]]
+    if target.get('jump'):
+        proxy = shlex.join(ssh_args(target['jump'])[:-1] + ['-W', '%h:%p', target['jump']['ssh']])
+        args += ['-o', 'ProxyCommand=' + proxy]
     return args + [target["ssh"]]
 
 
@@ -101,16 +114,30 @@ def inventory(target):
                 if value.endswith(suffix):
                     return float(value[:-len(suffix)]) * factor / 2**30
             return float(value) / 2**30
-        return {"cpu": sum(float(n["status"]["allocatable"]["cpu"].removesuffix("m")) /
+        facts = {"cpu": sum(float(n["status"]["allocatable"]["cpu"].removesuffix("m")) /
                            (1000 if n["status"]["allocatable"]["cpu"].endswith("m") else 1) for n in nodes),
                 "ram_gib": sum(memory(n["status"]["allocatable"]["memory"]) for n in nodes),
-                "disk_gib": None, "distribution": "cluster", "gpu": "none", "vram_gib": 0}
+                "disk_gib": None, "distribution": "cluster", "gpu": "nvidia" if any(float(n['status']['allocatable'].get('nvidia.com/gpu', 0)) > 0 for n in nodes) else "none", "vram_gib": 0,
+                'gpu_nodes': [n['metadata']['name'] for n in nodes if float(n['status']['allocatable'].get('nvidia.com/gpu', 0)) > 0]}
+        classes = json.loads(kubectl(target, ['get', 'storageclasses', '-o', 'json']))['items']
+        facts['storage_classes'] = [{'name': c['metadata']['name'], 'provisioner': c.get('provisioner', ''),
+            'default': any(c['metadata'].get('annotations', {}).get(k) == 'true' for k in
+                           ('storageclass.kubernetes.io/is-default-class', 'storageclass.beta.kubernetes.io/is-default-class'))} for c in classes]
+        defaults = [c['name'] for c in facts['storage_classes'] if c['default']]
+        facts['default_storage_class'] = defaults[0] if len(defaults) == 1 else ''
+        return facts
     # Only reads. Sudo is tested here but never used on the desktop.
     probe = """import json, os, shutil, platform
 from pathlib import Path
 release = dict(line.split('=', 1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
 mem = int(next(line.split()[1] for line in Path('/proc/meminfo').read_text().splitlines() if line.startswith('MemTotal:'))) / 1024**2
-print(json.dumps(dict(cpu=os.cpu_count(), ram_gib=mem, disk_gib=shutil.disk_usage('/').free / 1024**3, distribution=release['ID'].strip(chr(34)), architecture=platform.machine(), gpu='none', vram_gib=0)))
+gpu, vram = 'none', 0
+if shutil.which('nvidia-smi'):
+ import subprocess
+ result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total', '--format=csv,noheader,nounits'], capture_output=True, text=True)
+ if result.returncode == 0:
+  gpu, vram = 'nvidia', sum(float(v) for v in result.stdout.splitlines())/1024
+print(json.dumps(dict(cpu=os.cpu_count(), ram_gib=mem, disk_gib=shutil.disk_usage('/').free / 1024**3, distribution=release['ID'].strip(chr(34)), architecture=platform.machine(), gpu=gpu, vram_gib=vram)))
 """
     try:
         run(ssh_args(target) + ["sudo -n true"])
@@ -124,6 +151,9 @@ print(json.dumps(dict(cpu=os.cpu_count(), ram_gib=mem, disk_gib=shutil.disk_usag
 
 
 def selection(cat, picked, facts=None):
+    picked = list(dict.fromkeys(list(picked) + list(O.SERVICES)))
+    if 'kubernetes' in picked or (facts and facts.get('distribution') == 'cluster'):
+        picked = list(dict.fromkeys(picked + ['helm']))
     if any(a in picked for a in A.AGENTS):
         picked = list(dict.fromkeys(list(picked) + ["llm-endpoint"]))
     resolved = services.resolve(cat, picked)
@@ -141,16 +171,18 @@ def task(name, module, options, **extra):
     return {"name": name, module: options, **extra}
 
 
-def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient="", domain="", listen_address="127.0.0.1", cat=None, agents=None):
+def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient="", domain="", listen_address="127.0.0.1", cat=None, agents=None, storage_class=""):
     """Pure, deterministic plan. Contains no generated secrets."""
     cat = cat or services.load()
     validate_target(target)
     resolved = selection(cat, picked, facts)
     picked = resolved["services"]
+    if not age_recipient.startswith('age1'):
+        raise ProvisionError('Monitoring needs --age-recipient to protect its stable Grafana credential before Vault is available')
     if "argocd" in picked and not repo_url:
         raise ProvisionError("Argo CD needs --git-url: the address where you will publish this lab repository")
-    if repo_url and (not re.fullmatch(r"https?://[^\s]+", repo_url) or "@" in repo_url.split("://", 1)[1]):
-        raise ProvisionError("Use an HTTP(S) Git URL without credentials")
+    if repo_url and (not re.fullmatch(r"https?://[^\s?#]+", repo_url) or "@" in repo_url.split("://", 1)[1]):
+        raise ProvisionError("Use an HTTP(S) Git URL without credentials, queries or fragments")
     if "restic" in picked and not backup_path:
         raise ProvisionError("Restic needs --backup-path, an existing backup destination on the target")
     if "restic" in picked and target["kind"] == "ssh" and not backup_path.startswith("/"):
@@ -173,6 +205,13 @@ def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient
             raise ProvisionError("Agents need --age-recipient for encrypted credentials collected during plan, even before Vault exists")
     state = dict(format=1, target=target, selected=picked, inventory=facts, git_url=repo_url,
                  backup_path=backup_path, age_recipient=age_recipient, domain=domain, listen_address=listen_address)
+    if target['kind'] == 'cluster':
+        storage_class = storage_class or facts.get('default_storage_class', '')
+        if 'storage_classes' in facts and not any(c['name'] == storage_class for c in facts['storage_classes']):
+            raise ProvisionError('Choose an existing --storage-class; the cluster needs one unambiguous default')
+    if storage_class:
+        if not re.fullmatch(r'[a-z0-9][a-z0-9.-]*', storage_class): raise ProvisionError('Use a Kubernetes storage class name')
+        state['storage_class'] = storage_class
     if any(a in picked for a in A.AGENTS):
         state["agents"] = agents
     files = {"plan.json": dump(state), ".gitignore": ".runtime/\n*.retry\n*.log\n",
@@ -190,6 +229,8 @@ def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient
         hostvars["ansible_ssh_common_args"] = shlex.join(["-o", "UserKnownHostsFile=" + target["known_hosts"]])
     if target.get("identity"):
         hostvars["ansible_ssh_private_key_file"] = target["identity"]
+    if target.get('jump'):
+        hostvars['ansible_ssh_common_args'] = shlex.join(ssh_args(target)[1:-1])
     inventory_doc = {"all": {"hosts": {"lab": hostvars if is_box else {"ansible_connection": "local"}}}}
     files["ansible/inventory/hosts.json"] = dump(inventory_doc)
     roles = []
@@ -216,8 +257,10 @@ def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient
             elif svc == "netdata":
                 cfg.update(volumes=["netdata-data:/var/lib/netdata", "/proc:/host/proc:ro", "/sys:/host/sys:ro"],
                            environment={"DO_NOT_TRACK": "1"})
+                if 'caddy' not in picked: cfg['ports'] = ['127.0.0.1:19999:19999']
             elif svc == "homepage":
                 cfg.update(volumes=["./homepage:/app/config"], environment={"HOMEPAGE_ALLOWED_HOSTS": "*"})
+                if 'caddy' not in picked: cfg['ports'] = ['127.0.0.1:3000:3000']
             elif svc == "restic":
                 cfg.update(entrypoint=["/bin/sh", "-c"], command=["while true; do restic snapshots >/dev/null 2>&1 || restic init; restic backup /data && touch /status/last-success; sleep 86400; done"],
                            environment={"RESTIC_REPOSITORY": "/repository", "RESTIC_PASSWORD_FILE": "/run/secrets/restic"},
@@ -274,7 +317,7 @@ def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient
                     "--namespace", svc, "--create-namespace", "--values", values_path, "--timeout", "10m"]
             if svc != "vault":
                 argv.append("--wait")
-            helm_tasks.append(task(f"Converge {svc}", "ansible.builtin.command", {"argv": argv}, environment=roles_env, changed_when=False))
+            helm_tasks.append(task(f"Converge {svc}", "ansible.builtin.command", {"argv": O.helm_command(argv)}, environment=roles_env, no_log=False, changed_when=False))
             values = {"injector": {"enabled": False}, "server": {"standalone": {"enabled": True, "config": 'ui = true\ndisable_mlock = true\nlistener "tcp" {\n  tls_disable = 1\n  address = "[::]:8200"\n}\nstorage "raft" {\n  path = "/vault/data"\n}\n'}, "dataStorage": {"size": "2Gi"}}, "ui": {"enabled": True}} if svc == "vault" else {"configs": {"params": {"server.insecure": True}}, "server": {"service": {"type": "ClusterIP"}}}
             files[f"helm/{svc}/values.yaml"] = dump(values)
         files["ansible/roles/helm/tasks/main.json"] = dump(helm_tasks)
@@ -293,9 +336,9 @@ def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient
                 "that": ["existing_release.rc != 0 or (existing_release.stdout | from_json).info.description == 'bromigos-lab-provision'"],
                 "fail_msg": "This Helm release belongs to another installer; it will not be replaced"}),
             task("Converge cluster Core", "ansible.builtin.command", {"argv":
-            ["helm", "upgrade", "--install", "lab-core", "{{ playbook_dir }}/../../helm/core", "--description", "bromigos-lab-provision", "--namespace", "lab-core", "--create-namespace",
+            O.helm_command(["helm", "upgrade", "--install", "lab-core", "{{ playbook_dir }}/../../helm/core", "--description", "bromigos-lab-provision", "--namespace", "lab-core", "--create-namespace",
              "--kubeconfig", target["kubeconfig"], "--kube-context", target["context"], "--wait", "--timeout", "10m"] +
-            [part for svc in picked if svc in IMAGES for part in ["--values", "{{ playbook_dir }}/../../helm/" + svc + "/values.yaml"]]}, changed_when=False)])
+            [part for svc in picked if svc in IMAGES for part in ["--values", "{{ playbook_dir }}/../../helm/" + svc + "/values.yaml"]])}, no_log=False, changed_when=False)])
     files["ansible/playbooks/provision.json"] = dump([{ "name": "Converge your lab", "hosts": "all", "become": is_box, "gather_facts": False,
         "roles": roles}])
     files["ansible/requirements.json"] = dump({"collections": [{"name": "community.general", "version": "13.2.0"}]})
@@ -322,6 +365,7 @@ def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient
         # Empty roots must still contain a valid resource.
         files["gitops/argocd-apps/namespace.yaml"] = dump({"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": "lab"}})
     A.plan(files, state, roles)
+    O.plan(files, state, roles)
     files["ansible/playbooks/provision.json"] = dump([{ "name": "Converge your lab", "hosts": "all", "become": is_box, "gather_facts": False, "roles": roles}])
     return files, resolved
 
@@ -353,7 +397,9 @@ def summary(cat, resolved, facts, repo, agents=None):
         if svc == "kubernetes" and facts.get("distribution") == "cluster":
             print("  Kubernetes: provided by the existing target; no server is installed")
             continue
-        print(f"  {row['title']}: ports {row['ports']}; RAM {needs.get('ram_gib', 0)} GiB; disk {needs.get('disk_gib', 0)} GiB")
+        cluster = 'kubernetes' in resolved['services'] or facts.get('distribution') == 'cluster'
+        ports = [O.PORTS[svc]] if cluster and svc in O.SERVICES else row['ports']
+        print(f"  {row['title']}: ports {ports}; RAM {needs.get('ram_gib', 0)} GiB; disk {needs.get('disk_gib', 0)} GiB")
     for _, reason in resolved["added"]:
         print(reason)
     for warning in resolved["warnings"]:
@@ -441,16 +487,21 @@ def reveal_once(keys):
 
 
 @contextlib.contextmanager
-def forward(target, namespace, service, remote_port):
+def forward(target, namespace, service, remote_port, probe_path='/v1/sys/seal-status', ready_key='sealed'):
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
     command = ["kubectl", "--kubeconfig", target.get("kubeconfig", ""), "--context", target.get("context", ""),
                "-n", namespace, "port-forward", "service/" + service, f"{port}:{remote_port}"]
     if target["kind"] == "ssh":
+        remote = shlex.join(["k3s", "kubectl", "-n", namespace, "port-forward", "service/" + service, f"{port}:{remote_port}"])
+        # Keep stdin open for the life of the tunnel. EOF runs the remote shell's
+        # cleanup even when kubectl is idle and would otherwise survive SSH exit.
+        remote += ' & child=$!; trap \'kill "$child" 2>/dev/null; wait "$child" 2>/dev/null\' EXIT HUP INT TERM; cat >/dev/null'
+        remote = shlex.join(['sudo', '-n', 'sh', '-c', remote])
         command = ssh_args(target)[:-1] + ["-L", f"{port}:127.0.0.1:{port}", target["ssh"],
-                    shlex.join(["sudo", "-n", "k3s", "kubectl", "-n", namespace, "port-forward", "service/" + service, f"{port}:{remote_port}"])]
-    proc = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    remote]
+    proc = subprocess.Popen(command, stdin=subprocess.PIPE if target['kind'] == 'ssh' else subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         for _ in range(100):
             if proc.poll() is not None:
@@ -458,10 +509,10 @@ def forward(target, namespace, service, remote_port):
             try:
                 # SSH can accept a local socket before the remote kubectl is ready.
                 # Confirm a read-only HTTP response before allowing Vault initialisation.
-                request = urllib.request.Request(f"http://127.0.0.1:{port}/v1/sys/seal-status")
+                request = urllib.request.Request(f"http://127.0.0.1:{port}" + probe_path)
                 with urllib.request.urlopen(request, timeout=1) as response:
-                    status = json.loads(response.read())
-                if "sealed" in status:
+                    raw = response.read()
+                if ready_key is None or ready_key in json.loads(raw):
                     break
             except (OSError, urllib.error.URLError, ValueError):
                 time.sleep(.2)
@@ -469,7 +520,10 @@ def forward(target, namespace, service, remote_port):
             raise ProvisionError("Service port-forward did not start")
         yield f"http://127.0.0.1:{port}"
     finally:
-        proc.terminate()
+        if proc.stdin is not None:
+            proc.stdin.close()
+        else:
+            proc.terminate()
         try:
             proc.wait(10)
         except subprocess.TimeoutExpired:
@@ -491,24 +545,35 @@ def auto_unseal(target, keys):
     kubectl(target, ["apply", "-f", "-"], dump(cron))
 
 
-def apply(repo, reveal=reveal_once):
+def apply(repo, reveal=reveal_once, prepared=False, approved=False, live_facts=None):
     repo = Path(repo).resolve()
     state = json.loads((repo / "plan.json").read_text())
+    if state.get('infrastructure') and not prepared:
+        from . import infrastructure
+        return infrastructure.apply(repo)
     target, picked = state["target"], state["selected"]
     validate_target(target)
     # Fresh capacity checks and review occur before any writes on the target.
-    facts = inventory(target)
+    facts = live_facts or inventory(target)
     resolved = selection(services.load(), picked, facts)
     A.validate(state.get("agents", {}), picked, target)
     summary(services.load(), resolved, facts, repo, state.get("agents"))
+    if state.get('observability', {}).get('migration_note'): print('Review: ' + state['observability']['migration_note'])
     if any("unknown" not in w for w in resolved["warnings"]):
         raise ProvisionError("Selection does not fit; remove services or provide a larger target")
-    if input("Apply this reviewed repository? Type yes: ").strip() != "yes":
+    if not approved and input("Apply this reviewed repository? Type yes: ").strip() != "yes":
         print("Plan kept. Nothing applied.")
         return 0
     if "vault" in picked and reveal is reveal_once and not sys.stdin.isatty():
         raise ProvisionError("Vault initialisation needs an interactive terminal")
+    if target['kind'] == 'cluster' and state.get('observability'):
+        classes = json.loads(kubectl(target, ['get', 'storageclasses', '-o', 'json']))['items']
+        chosen = next((c for c in classes if c['metadata']['name'] == state.get('storage_class')), None) if state.get('storage_class') else next((c for c in classes if any(c['metadata'].get('annotations', {}).get(k) == 'true' for k in ('storageclass.kubernetes.io/is-default-class', 'storageclass.beta.kubernetes.io/is-default-class'))), None)
+        if not chosen: raise ProvisionError('Monitoring needs an existing local or block storage class; choose --storage-class')
+        if re.search(r'nfs|efs|azurefile|cephfs|smb', chosen.get('provisioner', ''), re.I):
+            raise ProvisionError('Monitoring needs local or block storage; shared filesystem storage is refused')
     values = decrypt(repo) if (repo / "secrets.enc.json").exists() else {}
+    O.credentials(repo, state, values)
     if "restic" in picked and "restic" not in values:
         existing = ""
         if target["kind"] == "ssh":
@@ -537,8 +602,12 @@ def apply(repo, reveal=reveal_once):
     collection_path = repo / ".runtime/collections"
     run(["ansible-galaxy", "collection", "install", "-r", str(repo / "ansible/requirements.json"), "-p", str(collection_path)])
     env = dict(os.environ, ANSIBLE_CONFIG=str(repo / "ansible/ansible.cfg"), ANSIBLE_NO_LOG="true",
-               ANSIBLE_COLLECTIONS_PATH=str(collection_path), ANSIBLE_NOCOWS="1")
+               ANSIBLE_COLLECTIONS_PATH=str(collection_path), ANSIBLE_NOCOWS="1", ANSIBLE_DEBUG='false', ANSIBLE_DISPLAY_ARGS_TO_STDOUT='false')
     print("Applying the reviewed Ansible roles…")
+    if state.get('observability', {}).get('mode') == 'cluster':
+        # Install k3s/Helm first so the runtime Secret exists before Grafana starts.
+        run(["ansible-playbook", "-i", "inventory/hosts.json", "playbooks/bootstrap.json"], cwd=repo / "ansible", env=env)
+        O.cluster_secret(state, values, repo)
     run(["ansible-playbook", "-i", "inventory/hosts.json", "playbooks/provision.json"], cwd=repo / "ansible", env=env)
     if "kubernetes" in picked or target["kind"] == "cluster":
         kubectl(target, ["wait", "--for=condition=Ready", "nodes", "--all", "--timeout=300s"])
@@ -603,7 +672,7 @@ def apply(repo, reveal=reveal_once):
     if "restic" in picked and target["kind"] == "ssh":
         for _ in range(60):
             try:
-                run(ssh_args(target) + ["sudo -n docker exec $(sudo -n docker ps -q --filter label=com.docker.compose.service=restic) test -f /status/last-success"])
+                run(ssh_args(target) + ["sudo -n docker exec $(sudo -n docker ps -q --filter label=com.docker.compose.service=restic --filter label=com.docker.compose.project=bromigos-lab) test -f /status/last-success"])
                 break
             except ProvisionError:
                 time.sleep(2)
@@ -614,6 +683,7 @@ def apply(repo, reveal=reveal_once):
         try:
             verify_services(state)
             A.verify(state)
+            O.verify(state)
             break
         except ProvisionError:
             if attempt == attempts - 1:
@@ -625,6 +695,10 @@ def apply(repo, reveal=reveal_once):
 
 
 def main(argv=None):
+    argv = list(argv if argv is not None else sys.argv[1:])
+    if argv and argv[0] in ('cluster', 'vm', 'storage', 'add-node', 'remove-node', 'capacity'):
+        from . import infrastructure
+        return infrastructure.main(argv)
     parser = argparse.ArgumentParser(prog="bromigos lab provision", description="Review and provision your own Linux box or Kubernetes cluster")
     parser.add_argument("verb", nargs="?", choices=("plan", "apply", "add", "remove"), default="plan")
     parser.add_argument("service", nargs="?")
@@ -645,6 +719,7 @@ def main(argv=None):
     parser.add_argument("--git-url", default="", help="Published URL of your own lab repository")
     parser.add_argument("--backup-path", default="", help="Existing backup destination on the target")
     parser.add_argument("--age-recipient", default="", help="Your age public key for sops encryption")
+    parser.add_argument('--storage-class', default='', help='Existing Kubernetes storage class for monitoring volumes')
     args = parser.parse_args(argv)
     try:
         if args.verb == "apply":
@@ -653,6 +728,20 @@ def main(argv=None):
         credentials = {}
         if args.verb in ("add", "remove"):
             state = json.loads((Path(args.repo) / "plan.json").read_text())
+            if state.get('infrastructure'):
+                from . import infrastructure
+                if args.service not in SUPPORTED: raise ProvisionError('Choose a supported service')
+                spec = state['infrastructure']
+                picked = spec.get('services', [])
+                spec['services'] = list(dict.fromkeys(picked + [args.service])) if args.verb == 'add' else [s for s in picked if s != args.service]
+                if any(a in spec['services'] for a in A.AGENTS):
+                    spec['agents'], credentials = A.configure(spec['services'], spec.get('agents', {}), decrypt(Path(args.repo)))
+                files, _ = infrastructure.plan(spec, state.get('storage_inventory'))
+                repo = generate(args.repo, files)
+                if credentials: encrypt(repo, spec['age_recipient'], credentials)
+                infrastructure.review(json.loads(files['plan.json']))
+                print('Review and commit the plan before apply.')
+                return 0
             picked = state["selected"]
             if args.service not in SUPPORTED:
                 raise ProvisionError("Choose a service with an installer in this slice")
@@ -661,7 +750,7 @@ def main(argv=None):
             else:
                 picked = [p for p in picked if p != args.service]
             target = state["target"]
-            options = {"repo_url": state["git_url"], "backup_path": state["backup_path"], "age_recipient": state["age_recipient"], "domain": state.get("domain", ""), "listen_address": state.get("listen_address", "127.0.0.1"), "agents": state.get("agents", {})}
+            options = {"repo_url": state["git_url"], "backup_path": state["backup_path"], "age_recipient": state["age_recipient"], "domain": state.get("domain", ""), "listen_address": state.get("listen_address", "127.0.0.1"), "agents": state.get("agents", {}), 'storage_class': state.get('storage_class', '')}
         else:
             if bool(args.ssh) == bool(args.kubeconfig):
                 raise ProvisionError("Choose exactly one of --ssh or --kubeconfig")
@@ -670,7 +759,7 @@ def main(argv=None):
             picked = args.services or preset_selection(cat, args.preset)
             if args.custom:
                 picked = checklist(cat, picked)
-            options = dict(repo_url=args.git_url, backup_path=args.backup_path, age_recipient=args.age_recipient, domain=args.domain, listen_address=args.listen_address)
+            options = dict(repo_url=args.git_url, backup_path=args.backup_path, age_recipient=args.age_recipient, domain=args.domain, listen_address=args.listen_address, storage_class=args.storage_class)
         if any(a in picked for a in A.AGENTS):
             existing_repo = Path(args.repo)
             if (existing_repo / ".git").exists() and run(["git", "status", "--porcelain"], cwd=existing_repo).strip():
@@ -844,7 +933,7 @@ def cluster_core(picked, backup_pvc, domain=""):
 
 def preset_selection(cat, name):
     defaults = [sid for sid, row in cat["service"].items() if row.get("default") and sid in SUPPORTED]
-    return list(dict.fromkeys(defaults + services.preset(cat, name)["services"]))
+    return list(dict.fromkeys(defaults + services.preset(cat, name)["services"] + list(O.SERVICES)))
 
 
 def homepage_files(picked):

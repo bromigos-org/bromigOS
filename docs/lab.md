@@ -39,8 +39,8 @@ shows *unreachable*, and nothing crashes.
 
 ## The dashboard
 
-`bromigos lab` with no arguments opens a terminal dashboard built with Textual. It has four
-tabs: STATUS, MODELS, JOBS and DOCTOR. It reads the lab again every 15 seconds. When the
+`bromigos lab` with no arguments opens a terminal dashboard built with Textual. It has five
+tabs: STATUS, MODELS, JOBS, DOCTOR and PROVISION. It reads the lab again every 15 seconds. When the
 output isn't a terminal, it prints the status instead.
 
 | Key | What it does |
@@ -763,3 +763,10 @@ The last run, on 2026-10-09 against a real homelab:
 - a 4.6-second voice line, made in 2 seconds;
 - a 1024-pixel image in 17 seconds, for no credits, peaking at 15.1 GiB of VRAM;
 - both notifications, and ComfyUI back to 64 MiB after the unload.
+
+## VM and cluster provisioning
+
+The Provision tab can review a generated repository, plan a cluster specification,
+apply a plan, add a node, drain a worker or run an owned VM command. Resource changes run in the terminal and
+keep their explicit approval prompts. Capacity and VM cards use read-only adapter data.
+[Infrastructure](lab-infrastructure.md) describes providers, storage and monitoring.

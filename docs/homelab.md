@@ -912,3 +912,12 @@ and `--alpha luma` for a world's loop ([art.md](art.md)).
 - **VECTOR's guard** covers this package, its data layer, `homelab.toml` and the adapter
   plugin folder. He can't write to them, and his guard's audit log records any change.
 - **Nothing is sent anywhere** except the endpoints you configure.
+
+## Provisioned infrastructure
+
+The `provisioned` adapter connects to the generated plan through its explicit target.
+It supplies monitoring queries and Alertmanager alerts. Cluster plans also supply live
+node readiness, cached storage inventory and capacity proposals. The console shows VM
+and capacity cards. VECTOR, the desktop AI assistant, can read proposals with
+`lab_capacity`; this tool cannot create a VM. Provider extensions register a
+`vmproviders.Provider` implementation. See [infrastructure](lab-infrastructure.md).

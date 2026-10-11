@@ -32,6 +32,9 @@ depends=('bromigos-core' 'bromigos-lab-catalog' 'python' 'python-textual')
 conflicts=('bromigos-vector<0.1.0.r33')
 checkdepends=('python-textual' 'desktop-file-utils' 'python-cairo' 'python-gobject' 'pango' 'python-psutil')   # the homelab widgets drawn in their tests
 optdepends=('ansible-core: apply a reviewed lab provision plan'
+            'libvirt-python: manage VMs on a local libvirt host'
+            'qemu-base: run local KVM guests and manage their disks'
+            'cloud-image-utils: make cloud-init seeds for local KVM guests'
             'helm: provision an existing Kubernetes cluster'
             'sops: encrypt generated lab credentials without Vault'
             'age: recipients for encrypted lab credentials'

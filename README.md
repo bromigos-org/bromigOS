@@ -109,7 +109,8 @@ If you run servers at home, bromigOS can show them on the desktop and to VECTOR.
 `bromigos setup homelab` finds your services and writes one config file. It works with
 Prometheus, Kubernetes, Argo CD, Docker, Proxmox, Vault, LiteLLM, Ollama and more.
 `bromigos lab` adds a dashboard, a model manager, a queue for GPU jobs and a health
-check. All of it stays off until you set it up.
+check. Its provisioner creates reviewed VM and Kubernetes plans, with monitoring.
+All of it stays off until you set it up.
 
 ![bromigos lab in a terminal: cards for nodes, GPUs, services, models, GitOps apps,
 storage, alerts and jobs, with the nodes' CPU, memory and disk in a
@@ -251,7 +252,8 @@ Each machine follows a *channel*. The default, `stable`, gets tagged releases.
 
 bromigOS is in early access. Installing on Arch, the ISO, updates with rollback, the
 themes and worlds, VECTOR, the widgets, Settings and the homelab console all work today.
-Next is changing and setting up a homelab from `bromigos lab`. The plan and its decisions
+Lab provisioning now includes Proxmox and KVM VMs, cluster growth and monitoring.
+Further service setup and Git-based changes remain planned. The decisions
 are in [docs/PLAN.md](docs/PLAN.md).
 
 ## The story behind it

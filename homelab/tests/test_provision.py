@@ -4,6 +4,10 @@ import io
 import json
 import os
 from pathlib import Path
+import re
+import shlex
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -13,7 +17,7 @@ from bromigos_homelab import provision as P, services as S
 os.environ["BROMIGOS_LAB_PROFILES"] = str(Path(__file__).resolve().parents[1] / "share/lab/profiles.toml")
 
 TARGET = {"kind": "ssh", "ssh": "tester@lab.example.org", "port": 22, "identity": ""}
-FACTS = {"cpu": 8, "ram_gib": 32, "disk_gib": 100, "distribution": "debian", "gpu": "none", "vram_gib": 0}
+FACTS = {"cpu": 8, "ram_gib": 32, "disk_gib": 500, "distribution": "debian", "gpu": "none", "vram_gib": 0}
 
 
 class PlanTests(unittest.TestCase):
@@ -33,7 +37,7 @@ class PlanTests(unittest.TestCase):
 
     def test_existing_cluster_explicit_context(self):
         target = {"kind": "cluster", "kubeconfig": "/tmp/test-kubeconfig", "context": "throwaway"}
-        files, _ = P.plan_files(target, ["vault", "argocd"], FACTS, repo_url="https://git.example.org/user/lab.git")
+        files, _ = P.plan_files(target, ["vault", "argocd"], FACTS, repo_url="https://git.example.org/user/lab.git", age_recipient="age1example")
         play = json.loads(files["ansible/playbooks/provision.json"])
         self.assertFalse(play[0]["become"])
         self.assertNotIn("k3s", play[0]["roles"])
@@ -41,7 +45,7 @@ class PlanTests(unittest.TestCase):
             P.validate_target({"kind": "cluster", "kubeconfig": "file"})
 
     def test_existing_cluster_does_not_budget_a_second_server(self):
-        facts = dict(FACTS, distribution="cluster", ram_gib=8, disk_gib=None)
+        facts = dict(FACTS, distribution="cluster", ram_gib=16, disk_gib=None)
         result = P.selection(S.load(), ["vault", "argocd"], facts)
         self.assertFalse(any("ram_gib" in w for w in result["warnings"]))
         self.assertTrue(any("unknown" in w for w in result["warnings"]))
@@ -59,23 +63,24 @@ class PlanTests(unittest.TestCase):
         self.assertTrue(all(d["metadata"]["annotations"]["helm.sh/resource-policy"] == "keep" for d in P.cluster_core(["caddy", "netdata", "restic", "homepage"], "backups")))
 
     def test_https_name_uses_local_certificates(self):
-        files, _ = P.plan_files(TARGET, ["caddy"], FACTS, domain="lab.example.org")
+        files, _ = P.plan_files(TARGET, ["caddy"], FACTS, domain="lab.example.org", age_recipient="age1example")
         self.assertIn("lab.example.org {", files["compose/Caddyfile"])
         self.assertIn("tls internal", files["compose/Caddyfile"])
 
     def test_no_public_proxy_bind(self):
         with self.assertRaises(P.ProvisionError):
-            P.plan_files(TARGET, ["caddy"], FACTS, listen_address="0.0.0.0")
+            P.plan_files(TARGET, ["caddy"], FACTS, listen_address="0.0.0.0", age_recipient="age1example")
         with self.assertRaises(P.ProvisionError):
-            P.plan_files(TARGET, ["caddy"], FACTS, listen_address="8.8.8.8")
-        files, _ = P.plan_files(TARGET, ["caddy"], FACTS)
+            P.plan_files(TARGET, ["caddy"], FACTS, listen_address="8.8.8.8", age_recipient="age1example")
+        files, _ = P.plan_files(TARGET, ["caddy"], FACTS, age_recipient="age1example")
         self.assertEqual(json.loads(files["compose/compose.yaml"])["services"]["caddy"]["ports"],
                          ["127.0.0.1:80:80", "127.0.0.1:443:443"])
 
     def test_no_credentials_in_url_or_target(self):
-        for url in ("https://token@git.example.org/lab", "ssh://git.example.org/lab"):
-            with self.assertRaises(P.ProvisionError):
-                P.plan_files(TARGET, ["argocd"], FACTS, repo_url=url)
+        for url in ("https://token@git.example.org/lab", "ssh://git.example.org/lab", "https://git.example.org/lab?access_token=TEST-SECRET", "https://git.example.org/lab#TEST-SECRET"):
+            with self.assertRaises(P.ProvisionError) as error:
+                P.plan_files(TARGET, ["argocd"], FACTS, repo_url=url, age_recipient="age1example")
+            self.assertNotIn('TEST-SECRET', str(error.exception))
         with self.assertRaises(P.ProvisionError):
             P.validate_target({"kind": "ssh", "ssh": "-oProxyCommand=bad"})
 
@@ -120,7 +125,7 @@ class PlanTests(unittest.TestCase):
 class ApplyApprovalTests(unittest.TestCase):
     def test_no_answer_does_not_apply_or_generate_secrets(self):
         with tempfile.TemporaryDirectory() as tmp:
-            files, _ = P.plan_files(TARGET, ["caddy"], FACTS)
+            files, _ = P.plan_files(TARGET, ["caddy"], FACTS, age_recipient="age1example")
             repo = P.generate(tmp, files)
             with mock.patch.object(P, "inventory", return_value=FACTS), mock.patch("builtins.input", return_value="no"), \
                     mock.patch.object(P, "run") as run, mock.patch.object(P.secrets, "token_urlsafe") as generate, \
@@ -208,7 +213,27 @@ class SecretTests(unittest.TestCase):
             for call in http.call_args_list:
                 self.assertEqual(call.args[0].get_method(), "GET")
                 self.assertTrue(call.args[0].full_url.endswith("/v1/sys/seal-status"))
-            proc.terminate.assert_called_once()
+            proc.stdin.close.assert_called_once()
+            proc.terminate.assert_not_called()
+
+    def test_remote_forward_child_exits_when_stdin_closes(self):
+        popen = subprocess.Popen
+        with tempfile.TemporaryDirectory() as tmp:
+            child_file = Path(tmp) / 'child.pid'
+            def remote_process(command, **options):
+                remote = shlex.split(command[-1])
+                self.assertEqual(['sudo', '-n', 'sh', '-c'], remote[:-1])
+                script = remote[-1]
+                port = re.search(r'(\d+):8200', script).group(1)
+                server = shlex.join([sys.executable, '-m', 'http.server', port, '--bind', '127.0.0.1'])
+                script = server + ' &' + script.split(' &', 1)[1]
+                script = script.replace('child=$!;', 'child=$!; echo "$child" > ' + shlex.quote(str(child_file)) + ';')
+                return popen(['sh', '-c', script], **options)
+            with mock.patch.object(P.subprocess, 'Popen', side_effect=remote_process):
+                with P.forward(TARGET, 'vault', 'vault', 8200, probe_path='/', ready_key=None):
+                    pid = int(child_file.read_text())
+                    self.assertTrue(Path('/proc', str(pid)).exists())
+            self.assertFalse(Path('/proc', str(pid)).exists())
 
     def test_only_sops_ciphertext_written(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(P, "run", return_value="ENCRYPTED") as run:

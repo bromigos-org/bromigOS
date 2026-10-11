@@ -26,7 +26,9 @@ process when it runs each command in a fresh shell. A process is identified by i
 its start time, so a reused PID isn't mistaken for it.
 """
 import ctypes
+import fcntl
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -102,6 +104,49 @@ def pdeathsig():
 KEEPER = 0
 
 
+def allocation(argv):
+    """QEMU's configured allocation, including its implicit defaults."""
+    def option(name, default):
+        indices = [i for i, value in enumerate(argv) if value == name]
+        return argv[indices[-1] + 1] if indices else default
+    if any('memory-backend-' in value for value in argv):
+        raise RuntimeError('Test keeper requires RAM declared through -m; separate memory backends are unsupported')
+    memory_options = option('-m', '128').split(',')
+    memory = next((v.removeprefix('maxmem=') for v in memory_options if v.startswith('maxmem=')), memory_options[0].removeprefix('size='))
+    multiplier = 1024 if memory.upper().endswith('G') else 1
+    memory = memory.rstrip('mMgG')
+    cpu_options = option('-smp', '1').split(',')
+    cpus = next((v.removeprefix('maxcpus=') for v in cpu_options if v.startswith('maxcpus=')), cpu_options[0].removeprefix('cpus='))
+    reserved = re.fullmatch(r'bromigos-test-reserved-mib-(\d+)-cpus-(\d+)', option('-name', ''))
+    return (int(memory) * multiplier + (int(reserved[1]) if reserved else 0),
+            int(cpus) + (int(reserved[2]) if reserved else 0))
+
+
+def resource_check(argv):
+    """Called under a shared lock immediately before spawning QEMU."""
+    cap = int(os.environ.get('BROMIGOS_VM_MAX_MEM_GIB', '8'))
+    if not 1 <= cap <= 10:
+        raise RuntimeError('BROMIGOS_VM_MAX_MEM_GIB must be between 1 and 10')
+    memory, cpus = allocation(argv)
+    # Count every QEMU owned by this user, including independently started tests.
+    for entry in os.scandir('/proc'):
+        try:
+            owned = entry.name.isdigit() and entry.stat().st_uid == os.getuid()
+        except FileNotFoundError:
+            continue
+        if owned:
+            args = proc_argv(int(entry.name))
+            if args and os.path.basename(args[0]).startswith('qemu-system-'):
+                used_memory, used_cpus = allocation(args)
+                memory += used_memory; cpus += used_cpus
+    if memory > cap * 1024 or cpus > 4:
+        raise RuntimeError(f'Test VM budget exceeded: {memory} MiB RAM, {cpus} vCPUs; cap {cap} GiB and 4 vCPUs')
+    free = subprocess.check_output(['free', '-g'], text=True)
+    available = int(next(line for line in free.splitlines() if line.startswith('Mem:')).split()[-1])
+    if available < 14:
+        raise RuntimeError(f'Only {available} GiB available; wait until at least 14 GiB is available before starting a test VM')
+
+
 def stop(qemu, logf, why):
     log(logf, f"stopping QEMU (PID {qemu.pid}): {why}")
     if qemu.poll() is None:
@@ -133,7 +178,21 @@ def keep(argv, owner, ready, logf, report):
         except OSError:
             pass
     out = open(logf, "a") if logf else subprocess.DEVNULL
-    qemu = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=out, preexec_fn=pdeathsig)
+    lock_path = f'/tmp/bromigos-test-vm-budget-{os.getuid()}.lock'
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        resource_check(argv)
+        qemu = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=out, preexec_fn=pdeathsig)
+        # Keep the launch lock until the next keeper can count the new QEMU.
+        for _ in range(100):
+            args = proc_argv(qemu.pid)
+            if qemu.poll() is not None or (args and os.path.basename(args[0]).startswith('qemu-system-')):
+                break
+            time.sleep(0.01)
+        else:
+            stop(qemu, logf, 'QEMU did not become visible to shared resource accounting')
+            raise RuntimeError('QEMU launch could not be accounted for; stopped before releasing the test budget lock')
     owner_start = proc_start(owner) if owner else None
     if owner and owner_start is None:
         stop(qemu, logf, f"the owner (PID {owner}) was gone before QEMU started")
@@ -182,6 +241,14 @@ def main():
     else:
         owner = find_owner(os.getppid())
     argv = [x for x in argv if x != "-daemonize"]
+    nested_memory = int(os.environ.get('BROMIGOS_VM_NESTED_MEM_MIB', '0'))
+    nested_cpus = int(os.environ.get('BROMIGOS_VM_NESTED_CPUS', '0'))
+    if nested_memory < 0 or nested_cpus < 0:
+        raise SystemExit('Nested test reservations cannot be negative')
+    if nested_memory or nested_cpus:
+        # The process name makes the reservation visible to other keepers without
+        # reading process environments, which may contain unrelated credentials.
+        argv += ['-name', f'bromigos-test-reserved-mib-{nested_memory}-cpus-{nested_cpus}']
     r, w = os.pipe()
     child = os.fork()
     if child == 0:                          # the keeper: its own session, no terminal

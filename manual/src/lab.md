@@ -449,7 +449,8 @@ ports, RAM and disk needs. Review and commit the files before you apply them.
 bromigos lab provision apply --repo <lab-folder>
 ```
 
-Apply waits for you to type `yes`. It starts Caddy, Netdata, restic backups and Homepage.
+Apply waits for you to type `yes`. It starts Caddy, Netdata, restic backups and Homepage,
+plus Prometheus, Grafana, Loki and Alertmanager.
 Caddy listens on the box itself at first. Forward it to your desktop, then open
 `http://localhost:8080` in your browser. Netdata is under `/netdata/`.
 
@@ -471,7 +472,9 @@ bromigos lab provision --repo <lab-folder> --ssh <user>@<host> \
   --git-url <your-lab-git-url>
 ```
 
-Review, commit and publish the new files at that URL. Then run apply again. Argo CD keeps
+Review, commit and publish the new files at that URL. Then run apply again. Monitoring
+moves to Kubernetes. The old monitoring containers stop, and their volumes stay for
+recovery; historical data is not copied into the new volumes. Argo CD keeps
 its applications in sync with the repository. You can reach its web page with a
 Kubernetes port forward; its service stays inside the cluster.
 
@@ -504,7 +507,85 @@ in place. Repeating apply preserves backup passwords and Vault's recovery shares
 
 After health checks pass, provisioning connects the lab console and runs the doctor.
 Run `bromigos lab` to see it, or `bromigos lab doctor` to check it again.
-Prometheus, Grafana, Loki, GPU setup and NAS mounting are reserved for a later slice.
+Monitoring is connected automatically. Grafana has starter dashboards for nodes,
+Kubernetes, GPUs and apps. Its admin password is encrypted with your other credentials.
+GPU drivers and new storage arrays still need an administrator.
+
+## Creating a cluster
+
+Prepare a cloud-init template on Proxmox, or a qcow2 cloud image and an existing
+file-backed pool on a libvirt host. Include Python and the QEMU guest agent. Libvirt
+also needs its Python bindings, `qemu-img` and `cloud-localds`. Local libvirt access
+must already work; the provisioner never runs desktop sudo.
+
+Allow TCP 6443 from nodes to servers, UDP 8472 between nodes, and TCP 10250
+between nodes for metrics. Three-server clusters also need TCP 2379–2380 between
+the servers. Keep these ports inside your lab network. See the upstream
+[k3s network requirements](https://docs.k3s.io/installation/requirements#networking).
+
+Write a cluster specification. It names the provider, storage pool, bridge or network,
+VM CPU, RAM, disk, static address, public SSH key, and node role. Choose one or three
+`server` nodes and any `worker` or `gpu` nodes. GPU images need prepared NVIDIA drivers
+and the container runtime. The full format and bounded Proxmox token permissions are
+in the [infrastructure reference](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-infrastructure.md).
+
+```bash
+bromigos lab provision cluster --repo <lab-folder> --spec <cluster-json>
+bromigos lab provision apply --repo <lab-folder>
+```
+
+The first command reads storage and generates the plan. Enter provider credentials
+only in its hidden prompt. Review the VM sizes, free space and RAID health, then commit
+the lab repository. Apply refreshes inventory and waits for `yes`. It creates only
+named VMs owned by this plan. It joins the cluster and checks that its nodes are Ready.
+Three control planes on one hypervisor still share that host's failure risk.
+
+`storage_class` chooses Kubernetes volumes. `volume_path` chooses the local-path
+folder. `nas` can name an existing NFS export for other workloads. Monitoring needs
+local or block storage. No command creates RAID arrays, ZFS pools or NAS shares.
+Unknown redundancy is shown as a warning.
+
+To grow or shrink the cluster:
+
+```bash
+bromigos lab provision add-node --repo <lab-folder> --role worker --on <provider>
+bromigos lab provision add-node --repo <lab-folder> --role gpu --node-spec <node-json>
+bromigos lab provision remove-node <worker-name> --repo <lab-folder>
+```
+
+Adding a node prompts for its resources or reads the node file. It shows the new plan
+and requires `yes` before allocating anything. Removal drains the worker first.
+Workload protection or local pod data can block the drain. Deleting the VM disk needs
+a second answer naming it. Control-plane removal is refused.
+
+To inspect storage and manage an owned VM:
+
+```bash
+bromigos lab provision storage list --repo <lab-folder>
+bromigos lab provision vm list --repo <lab-folder> --on <provider>
+bromigos lab provision vm console --repo <lab-folder> --on <provider> --name <vm-id-or-name>
+bromigos lab provision vm snapshot --repo <lab-folder> --on <provider> \
+  --name <vm-id-or-name> --snapshot-name <snapshot>
+```
+
+The VM command also accepts `start`, `stop` and `delete`. Changes ask for its ID or
+name. Shutdown is graceful. Console info returns a link or command. It opens no window.
+KVM snapshots need a stopped VM. Pool support determines Proxmox snapshot support.
+For a VM still listed as a cluster node, use `remove-node` before deletion. The VM
+command refuses to bypass its drain.
+
+The Provision tab has repository and specification fields, a plan view, node actions,
+storage inventory and owned VM commands.
+Commands keep their prompts in your terminal. The capacity card proposes a worker or
+GPU node after fifteen minutes of pressure or resource-starved pending pods. VECTOR,
+the desktop AI assistant, can read the same proposal. Neither creates a VM automatically.
+
+Every plan includes monitoring. Kubernetes uses kube-prometheus-stack and Loki.
+A single box uses Prometheus and node_exporter, Grafana, Loki and Alertmanager.
+Health probes cover the installed web services. Starter alerts cover node loss, disk
+space, crashloops, certificate expiry and stale backups. Monitoring stays private.
+Use SSH forwarding for box endpoints, or Kubernetes port forwarding for cluster services.
+Grafana listens on port 3001 on a box and port 3000 inside the cluster.
 
 ## Setting up agents
 

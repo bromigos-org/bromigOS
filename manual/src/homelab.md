@@ -14,6 +14,10 @@ card for AI. If you have one, bromigOS can put it on your desktop and use it:
 bromigOS works with the services you already run. It doesn't need a particular set-up.
 You don't need a homelab to use bromigOS. Without one, these parts stay hidden.
 
+To create VMs, form a Kubernetes cluster or install services, use
+[Lab provisioning](lab.md#creating-a-cluster). It includes monitoring and waits for
+your approval before allocating resources.
+
 ## Connect your homelab
 
 1. Run:

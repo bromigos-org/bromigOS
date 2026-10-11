@@ -59,6 +59,9 @@ The main modules in `lib/bromigos_homelab/`:
 | `provision.py`, `agentprovision.py` | generate a lab repository, apply its reviewed plan and check service health |
 | `mediatui.py` | The media library and den Channels tab, with shared lab keys and safe quit |
 | `tvchannels.py` | Loads the shared den channel library from bromigos-core |
+| `vmproviders.py`, `vmhost.py` | owned VM lifecycle through Proxmox HTTPS or local and SSH libvirt |
+| `infrastructure.py` | multi-node plans, storage inventory, approved growth and worker draining |
+| `observability.py` | required monitoring, dashboards, alerts and read-only connections |
 | `tui.py` | the `bromigos lab` dashboard, built with Textual |
 
 ## Run the tests
@@ -78,6 +81,11 @@ The tests run against recorded API answers in `tests/fixtures/` and a stand-in l
 `test/vm/lab-agents-e2e.py` provisions real Hermes and OpenClaw containers in a throwaway
 Debian guest against an isolated model stub. It checks replies, tool restrictions,
 repeat apply and the doctor, then removes the guest. It needs no lab or messaging bots.
+
+`test/vm/lab-infrastructure-e2e.py` tests both monitoring deployments and a nested
+libvirt cluster. It creates two VMs, joins a third, checks dashboards and alert delivery,
+then removes the guests. It requires nested KVM and uses no real Proxmox or NAS.
+[Infrastructure notes](../docs/lab-infrastructure.md) cover providers and permissions.
 
 ## Den TV controls
 

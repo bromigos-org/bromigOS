@@ -11,6 +11,18 @@ from .console import _visible, hidden, register_card, worst
 GIB = 1024 ** 3
 
 
+def _capacity(res):
+    return {'columns': ['name', 'role', 'reason', 'approval', 'command'], 'items': res['items'], 'summary': 'Capacity proposals; creating a node always needs your yes'}
+
+
+def _vms(res):
+    return {'columns': ['name', 'role', 'provider', 'cpu', 'ram_mib', 'disk_gib', 'storage', 'state'], 'items': res['items'], 'summary': 'Nodes and storage from the reviewed plan'}
+
+
+register_card('capacity', title='More capacity?', order=12, capability='capacity', needs=('capacity',), covers=('capacity',), hint='Sustained pressure can propose a worker or GPU node. No automatic creation.', build=_capacity)
+register_card('vms', title='Cluster plan', order=13, capability='vms', needs=('vms',), covers=('vms',), hint='VM sizes, providers, roles and disk placement in the generated repository.', build=_vms)
+
+
 def _pct(v):
     return None if v is None else round(float(v), 1)
 
@@ -260,6 +272,10 @@ def _storage(_res):
             if p is None and x.get("used") and x.get("total"):
                 p = 100.0 * x["used"] / x["total"]
             if p is None:
+                if x.get('health'):
+                    items.append({'name': x.get('name'), 'kind': x.get('kind'), 'used_pct': None, 'free_h': 'unknown',
+                        'state': 'crit' if x['health'] == 'degraded' else 'ok' if x['health'] == 'healthy' and x.get('redundancy') else 'warn',
+                        'hint': x['health'] + '; ' + x.get('note', 'unknown redundancy')})
                 continue
             free = x.get("free")
             if free is None and x.get("used") is not None and x.get("total"):

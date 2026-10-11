@@ -20,7 +20,7 @@ As of 2026-10-09:
   beyond the desktop, safety, extensions, hardware, peripherals, accessibility, Settings,
   the shortcut picker and the boot menus.
 - Phase 5, the lab console, has its first part built. Its second part is planned.
-  The first provisioning slice of its third part is built.
+  Its third part now includes service, VM, cluster and monitoring provisioning.
 - No decisions are open.
 
 <!-- site:plan-highlights -->
@@ -402,8 +402,9 @@ doctor. Vault recovery shares are shown once, outside logs. Repeated apply prese
 The terminal checklist and console tree use the existing catalog resolver.
 
 The implementation and remaining approved design are in
-[lab-provision.md](lab-provision.md). GPU setup, additional services, NAS mounting and
-Proxmox creation remain for later slices. Installing an operating system is out of scope.
+[lab-provision.md](lab-provision.md). VM providers, cluster growth, existing NFS mounts
+and mandatory monitoring are in [lab-infrastructure.md](lab-infrastructure.md). GPU
+driver installation, more services and new storage arrays remain for later slices.
 
 ## VECTOR without a homelab
 

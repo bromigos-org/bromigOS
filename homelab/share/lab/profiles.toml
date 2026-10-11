@@ -422,7 +422,7 @@ title = "Prometheus"
 summary = "metrics and alerts for everything (the lab console's richest source)"
 group = "advanced"
 kind = "helm"
-needs = { cpu = 2, ram_gib = 4, disk_gib = 50 }
+needs = { cpu = 2, ram_gib = 4, disk_gib = 20 }
 ports = [9090]
 provides = ["metrics", "alerts"]
 
@@ -431,19 +431,29 @@ title = "Grafana"
 summary = "dashboards over Prometheus and Loki"
 group = "advanced"
 kind = "helm"
-needs = { cpu = 1, ram_gib = 1, disk_gib = 2 }
+needs = { cpu = 1, ram_gib = 1, disk_gib = 5 }
 ports = [3001]
 depends = ["prometheus"]
 exposes = "grafana"
 
 [service.loki]
 title = "Loki"
-summary = "every container's logs, searchable (lab logs reads it)"
+summary = "system journal logs, searchable; persistent storage and Alloy collection"
 group = "advanced"
 kind = "helm"
-needs = { cpu = 2, ram_gib = 2, disk_gib = 50 }
+needs = { cpu = 2, ram_gib = 2, disk_gib = 20 }
 ports = [3100]
 provides = ["logs"]
+
+[service.alertmanager]
+title = "Alertmanager"
+summary = "receives Prometheus alerts for the console and ALERTS widget"
+group = "advanced"
+kind = "compose"
+needs = { cpu = 1, ram_gib = 0.25, disk_gib = 2 }
+ports = [9093]
+depends = ["prometheus"]
+provides = ["alerts"]
 
 [service.vault]
 title = "Vault"
