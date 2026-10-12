@@ -28,6 +28,7 @@ from textual.widgets import (Button, Checkbox, Footer, Input, Label, RichLog, Se
 from . import mediareq as M
 from .tvchannels import channels as CH
 from .tui import HintTable, bromigos_theme
+from .tuiux import Dialog, UXApp
 
 GLYPH = {"tv": "▤", "movie": "▣", "artist": "♫", "album": "◉", "youtube": "▶"}
 SORTS = ("added", "size", "name", "missing", "profile")
@@ -114,12 +115,7 @@ class Live:
 
 
 class MediaInput(Input):
-    """Leave global quit and tab keys available while entering text."""
-
-    def check_consume_key(self, key, character):
-        if key in ("q", "H", "L", "left_square_bracket", "right_square_bracket"):
-            return False
-        return super().check_consume_key(key, character)
+    """Text fields keep printable keys, including app shortcuts."""
 
 
 class MediaTable(HintTable):
@@ -143,7 +139,7 @@ class MediaTable(HintTable):
 
 
 # ------------------------------------------------------------------ dialogs
-class Confirm(ModalScreen):
+class Confirm(Dialog):
     """Show what goes, then ask for Delete or Cancel. Cancel has focus by default."""
 
     BINDINGS = [Binding("escape", "dismiss(None)", "Cancel", tooltip="Close without deleting anything"),
@@ -164,7 +160,7 @@ class Confirm(ModalScreen):
             yield Static(("Only the channel is removed. Its media files stay. Ctrl+Z restores it." if p["scope"] == "channel" else f"It frees {M.human(p['size'])}. The files go from the disk; Jellyfin and Plex rescan."
                          + ("" if p["scope"] != "season" else " The season stops being monitored, so it isn't "
                             "fetched again.")), classes="dim")
-            c = Checkbox("Don't fetch it again (an import exclusion)", id="del-exclude",
+            c = Checkbox("Don't download it again", id="del-exclude",
                          value=False, disabled=p["scope"] not in ("title", "album"))
             c.tooltip = "Sonarr, Radarr or Lidarr won't add it again from a list"
             yield c
@@ -175,7 +171,7 @@ class Confirm(ModalScreen):
                 b = Button("Delete", id="del-yes", variant="error")
                 b.tooltip = "Delete only the files listed above"
                 yield b
-            yield Label("←/→ choose a button · Enter select · ↑/↓ checkbox/buttons · Escape cancel", classes="dim")
+            yield Label("←/→ choose · Enter select · Tab fields · Esc cancel", classes="dim")
 
     def on_mount(self):
         self.query_one("#del-no", Button).focus()
@@ -206,7 +202,7 @@ class Confirm(ModalScreen):
         self.dismiss({"exclude": self.query_one("#del-exclude", Checkbox).value})
 
 
-class PickProfile(ModalScreen):
+class PickProfile(Dialog):
     BINDINGS = [Binding("escape", "dismiss(None)", "Cancel", tooltip="Keep its profile")]
 
     def __init__(self, title, options, current):
@@ -222,7 +218,7 @@ class PickProfile(ModalScreen):
             yield s
             with Horizontal():
                 yield Button("Cancel", id="prof-no")
-                yield Button("Use it", id="prof-yes", variant="primary")
+                yield Button("Apply profile", id="prof-yes", variant="primary")
 
     @on(Button.Pressed, "#prof-no")
     def no(self):
@@ -233,7 +229,7 @@ class PickProfile(ModalScreen):
         self.dismiss(self.query_one("#prof", Select).value)
 
 
-class Request(ModalScreen):
+class Request(Dialog):
     """`media get` as a form: seasons, quality, audio, new episodes; the plan, then Request."""
 
     BINDINGS = [Binding("escape", "dismiss(None)", "Cancel", tooltip="Close without requesting anything")]
@@ -245,7 +241,7 @@ class Request(ModalScreen):
     def compose(self):
         it = self.item
         with Vertical(id="reqbox"):
-            yield Label(M.summary(it), classes="title")
+            yield Static(M.summary(it), classes="title", markup=False)
             if it["kind"] == "tv":
                 s = Select([("All seasons", "all"), ("The latest season", "latest"), ("Only new episodes", "future")],
                            value="all", id="req-seasons", allow_blank=False)
@@ -270,10 +266,10 @@ class Request(ModalScreen):
             yield RichLog(id="req-plan", wrap=True, markup=False)
             with Horizontal():
                 yield Button("Cancel", id="req-no")
-                b = Button("Plan", id="req-planbtn")
+                b = Button("Preview", id="req-planbtn")
                 b.tooltip = "Show what it would do: the profile and why, the size, the free space"
                 yield b
-                b = Button("Request", id="req-yes", variant="primary")
+                b = Button("Request", id="req-yes", variant="primary", disabled=True)
                 b.tooltip = "Request it now"
                 yield b
 
@@ -293,31 +289,92 @@ class Request(ModalScreen):
             kw["audio"] = self.query_one("#req-audio", Select).value or None
         return kw
 
+    def on_mount(self):
+        self._preview_serial = 0
+        self.show_plan()
+
+    @on(Input.Changed, "#req-pick")
+    @on(Select.Changed)
+    @on(Checkbox.Changed)
+    def options_changed(self):
+        if getattr(self, "_submitting", False):
+            return
+        if self.is_mounted and hasattr(self, "_preview_serial"):
+            self.show_plan()
+
     @on(Button.Pressed, "#req-planbtn")
     def show_plan(self):
+        if getattr(self, "_submitting", False):
+            return
+        opts = self._opts()
+        self.plan = None
+        self._preview_serial = getattr(self, "_preview_serial", 0) + 1
+        self.query_one("#req-yes", Button).disabled = True
+        self.query_one("#req-plan", RichLog).clear().write("Reading the request plan…")
+        self.preview_plan(opts, self._preview_serial)
+
+    @work(thread=True, group="request-preview", exclusive=True)
+    def preview_plan(self, opts, serial):
+        try:
+            plan = self.src.plan(self.item, **opts)
+            error = None
+        except M.MediaError as e:
+            plan, error = None, str(e)
+        self.app.call_from_thread(self.show_preview, opts, serial, plan, error)
+
+    def show_preview(self, opts, serial, plan, error):
+        if not self.is_mounted or serial != self._preview_serial or opts != self._opts():
+            return
         log = self.query_one("#req-plan", RichLog)
         log.clear()
-        try:
-            self.plan = self.src.plan(self.item, **self._opts())
-            for ln in M.plan_lines(self.plan):
-                log.write(ln)
-        except M.MediaError as e:
-            log.write(f"Can't: {e}")
+        if error:
+            log.write(f"Can't request: {error}")
+            return
+        self.plan, self._plan_opts = plan, opts
+        for line in M.plan_lines(plan):
+            log.write(line)
+        self.query_one("#req-yes", Button).disabled = False
+
+    def check_action(self, action, parameters):
+        if getattr(self, "_submitting", False):
+            return False
+        return super().check_action(action, parameters)
 
     @on(Button.Pressed, "#req-no")
     def no(self):
-        self.dismiss(None)
+        if not getattr(self, "_submitting", False):
+            self.dismiss(None)
 
     @on(Button.Pressed, "#req-yes")
     def yes(self):
+        if self.plan is None or self._opts() != self._plan_opts:
+            self.show_plan()
+            return
+        self._submitting = True
+        for control in self.query("Button, Input, Select, Checkbox"):
+            control.disabled = True
+        self.query_one("#req-plan", RichLog).write("Requesting… Please wait for the result.")
+        self.submit_request(self.plan)
+
+    @work(thread=True, group="request-submit", exclusive=True)
+    def submit_request(self, plan):
         try:
-            plan = self.src.plan(self.item, **self._opts())
-            self.dismiss(self.src.request(plan))
+            result = self.src.request(plan)
+            if self.is_mounted:
+                self.app.call_from_thread(self.dismiss, result)
         except M.MediaError as e:
-            self.query_one("#req-plan", RichLog).write(f"Not requested: {e}")
+            if self.is_mounted:
+                self.app.call_from_thread(self.request_error, str(e))
+
+    def request_error(self, error):
+        self._submitting = False
+        for control in self.query("Button, Input, Select, Checkbox"):
+            control.disabled = False
+        self.query_one("#req-plan", RichLog).write(f"Not requested: {error}")
+        self.query_one("#req-yes", Button).disabled = False
 
 
-class ChannelForm(ModalScreen):
+class ChannelForm(Dialog):
     """A name, title or new channel source; Escape cancels without writing."""
     BINDINGS = [Binding("escape", "dismiss(None)", "Cancel")]
 
@@ -333,8 +390,9 @@ class ChannelForm(ModalScreen):
                              ("Library", "library"), ("YouTube playlist", "youtube"), ("Folder", "folder"))],
                              value="shows", allow_blank=False, id="channel-kind")
                 yield MediaInput(placeholder="Titles separated by |, library name, URL or folder", id="channel-source")
-            yield Button("Save", id="channel-save", variant="primary")
-            yield Button("Cancel", id="channel-cancel")
+            with Horizontal():
+                yield Button("Cancel", id="channel-cancel")
+                yield Button("Save channel", id="channel-save", variant="primary")
 
     @on(Button.Pressed, "#channel-cancel")
     def cancel(self): self.dismiss(None)
@@ -351,7 +409,7 @@ class ChannelForm(ModalScreen):
         self.dismiss(result)
 
 
-class ChannelPicker(ModalScreen):
+class ChannelPicker(Dialog):
     BINDINGS = [Binding("escape", "dismiss(None)", "Cancel")]
 
     def __init__(self, title, rows):
@@ -374,8 +432,9 @@ class ChannelPicker(ModalScreen):
             yield Select(options, value=options[0][1], allow_blank=False, id="channel-pick")
             if any(r['kind'] == 'library' for r in self.rows):
                 yield Label("Library channels already include everything in their library.")
-            yield Button("Use channel", id="channel-use", variant="primary")
-            yield Button("Cancel", id="channel-cancel")
+            with Horizontal():
+                yield Button("Cancel", id="channel-cancel")
+                yield Button("Apply channel choice", id="channel-use", variant="primary")
 
     @on(Button.Pressed, "#channel-use")
     def choose(self): self.dismiss(self.query_one("#channel-pick", Select).value)
@@ -385,14 +444,26 @@ class ChannelPicker(ModalScreen):
 
 
 # ------------------------------------------------------------------ the app
-class MediaApp(App):
+class MediaApp(UXApp):
     TITLE = "MEDIA"
+    HELP = (
+        ("Library", "1 TV · 2 Movies · 3 Music · / filter · s sort\n"
+         "m toggle monitoring · n new episodes · P quality profile · f search indexers\n"
+         "e episode files · D review deletion · o Jellyfin · O request service"),
+        ("Playback and channels", "p play on a den TV · t full-screen playback · c add/remove channel membership\n"
+         "8 Channels · Ctrl+N new · F2 rename · v order · b bumpers · x remove item\n"
+         "Channels: c tunes a TV · Alt+↑/↓ reorder · Ctrl+Z undo channel edits"),
+        ("Find and download", "4 YouTube · 5 Downloads · 6 Upcoming · 7 / a / Ctrl+F Search\n"
+         "Search finds titles outside your library. Enter on a result reviews its request."),
+    )
     CSS = """
     Screen { background: $background; }
     #tabs { height: 1fr; min-height: 0; }
     #top { height: 1; padding: 0 1; background: $panel; color: $foreground; }
     .list { width: 3fr; }
     .side { width: 2fr; border-left: solid $panel; }
+    MediaTable { border: solid $panel; }
+    MediaTable:focus { border: solid $primary; }
     .detail { height: auto; max-height: 14; padding: 0 1; }
     .filter { display: none; }
     .filter.-on { display: block; }
@@ -404,19 +475,26 @@ class MediaApp(App):
     #nav { height: 2; color: $text-muted; }
     #hint { height: 2; padding: 0 1; color: $text-muted; border-top: solid $panel; }
     #title-actions { height: 3; padding: 0 1; }
+    .channel-actions { height: 3; }
+    .channel-actions Button { width: 1fr; min-width: 10; }
     #title-actions Static { width: 1fr; padding: 1 1; color: $text-muted; }
     .title { text-style: bold; color: $primary; }
     .dim { color: $text-muted; }
-    #channel-box { width: 80; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
+    #channel-box { width: 90%; max-width: 80; max-height: 90%; overflow-y: auto; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
     Confirm, PickProfile, Request, ChannelForm, ChannelPicker, Tune { align: center middle; }
-    #delbox, #profbox, #reqbox { width: 90; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
+    #delbox, #profbox, #reqbox { width: 90%; max-width: 90; max-height: 90%; overflow-y: auto; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
     #delbox { border: solid $error; }
-    #reqbox RichLog { height: 10; }
+    #reqbox RichLog { height: 6; }
+    #reqbox Select, #reqbox Input, #reqbox Checkbox { margin: 0; }
+    #reqbox Button { width: 1fr; min-width: 0; margin: 0; }
+    #reqbox Checkbox { width: 1fr; }
     #delbox Horizontal, #profbox Horizontal, #reqbox Horizontal { height: auto; margin-top: 1; }
     Select, Input, Checkbox { margin: 1 0 0 0; }
     """
     BINDINGS = [
-        Binding("ctrl+c,q", "leave", "Quit", priority=True, tooltip="Cancel any open form and leave"),
+        Binding("question_mark", "help", "Help"),
+        Binding("q", "leave", "Quit", priority=True, show=False),
+        Binding("ctrl+c", "interrupt", "Quit", priority=True, tooltip="Leave the media app"),
         Binding("down,j", "content", "Content", priority=True),
         Binding("h", "tab_bar(-1)", "Previous tab", priority=True, show=False),
         Binding("l", "tab_bar(1)", "Next tab", priority=True, show=False),
@@ -430,28 +508,28 @@ class MediaApp(App):
         Binding("7,a,ctrl+f", "tab('search')", "Search", tooltip="Find something and request it (as bromigos lab media get)"),
         Binding("8", "tab('channels')", "Channels", show=False),
         Binding("c", "channel_picker", "Add to channel…"),
-        Binding("ctrl+n", "channel_new", "New channel"),
+        Binding("ctrl+n", "channel_new", "New channel", show=False),
         Binding("f2", "channel_rename", "Rename channel", show=False),
         Binding("b", "channel_bumpers", "Bumpers", show=False),
         Binding("v", "channel_order", "Order", show=False),
         Binding("x", "channel_remove_item", "Remove item", show=False),
         Binding("alt+up", "channel_move(-1)", "Move up", show=False),
         Binding("alt+down", "channel_move(1)", "Move down", show=False),
-        Binding("ctrl+z", "channel_undo", "Undo"),
+        Binding("ctrl+z", "channel_undo", "Undo", show=False),
         Binding("slash", "filter", "Filter", tooltip="Show only the titles matching what you type"),
         Binding("s", "sort", "Sort", tooltip="Sort by added, size, name, missing or profile"),
         Binding("m", "monitor", "Monitor", tooltip="Monitor or stop monitoring the title, season or album under the cursor"),
-        Binding("n", "new_items", "New eps", tooltip="Pick up new episodes and seasons, or stop (TV, music)"),
-        Binding("P", "profile", "Profile", tooltip="Change the quality profile"),
-        Binding("f", "search_now", "Search now", tooltip="Ask the indexers for it now"),
-        Binding("o", "open('jellyfin')", "Open", tooltip="Open it in Jellyfin (O: in Seerr)"),
+        Binding("n", "new_items", "New eps", tooltip="Pick up new episodes and seasons, or stop (TV, music)", show=False),
+        Binding("P", "profile", "Profile", tooltip="Change the quality profile", show=False),
+        Binding("f", "search_now", "Search now", tooltip="Ask the indexers for it now", show=False),
+        Binding("o", "open('jellyfin')", "Open", tooltip="Open it in Jellyfin (O: in Seerr)", show=False),
         Binding("O", "open('seerr')", "Seerr", show=False, tooltip="Open it in Seerr"),
-        Binding("p", "den_play", "Den TV", tooltip="Play the selected title on a den TV screen"),
-        Binding("t", "play", "Play", tooltip="Play it full screen (a show: its next unwatched episode), from Jellyfin"),
+        Binding("p", "den_play", "Den TV", tooltip="Play the selected title on a den TV screen", show=False),
+        Binding("t", "play", "Play", tooltip="Play it full screen (a show: its next unwatched episode), from Jellyfin", show=False),
         Binding("e", "episodes", "Episodes", show=False, tooltip="Show the season's episode files (TV)"),
         Binding("D", "delete", "Delete", tooltip="Review what goes, then choose Delete or Cancel"),
-        Binding("],L", "tab_step(1)", "Next tab", priority=True),
-        Binding("[,H", "tab_step(-1)", "Previous tab", priority=True),
+        Binding("],L", "tab_step(1)", "Next tab", priority=True, show=False),
+        Binding("[,H", "tab_step(-1)", "Previous tab", priority=True, show=False),
     ]
     TABS = ("tv", "movies", "music", "youtube", "downloads", "upcoming", "search", "channels")
     KIND = {"tv": "tv", "movies": "movies", "music": "music"}
@@ -519,18 +597,19 @@ class MediaApp(App):
                     with Vertical(classes="side"):
                         yield Static("", id="ch-detail", classes="detail")
                         yield MediaTable(id="ch-items", cursor_type="row")
-                with Horizontal(classes="detail"):
-                    for label, ident in (("New", "new"), ("Rename", "rename"), ("Order", "order"),
-                                         ("Bumpers", "bumpers"), ("Remove item", "remove-item"),
-                                         ("Delete", "delete"), ("Undo", "undo"), ("Tune", "tune")):
-                        yield Button(label, id="ch-" + ident)
+                with Vertical(classes="detail"):
+                    for actions in ((("New channel", "new"), ("Rename", "rename"), ("Order", "order"), ("Bumpers", "bumpers")),
+                                    (("Remove item", "remove-item"), ("Delete channel", "delete"), ("Undo", "undo"), ("Tune TV", "tune"))):
+                        with Horizontal(classes="channel-actions"):
+                            for label, ident in actions:
+                                yield Button(label, id="ch-" + ident)
         with Horizontal(id="title-actions"):
             yield Button("Add to channel… (c)", id="title-channel", tooltip="Choose a channel for the selected title")
             yield Static("Select a title to see its channels. Use c or the button to change them.",
                          id="title-membership", markup=False)
         yield Static("", id="hint")
-        yield Static("↑/↓ j/k move · g/G first/last · Ctrl+D/U page · Enter open · ←/→ h/l tabs/panes\n"
-                     "↓/j tabs → list · ↑/k first row → tabs · [/] H/L tabs · Ctrl+C/q quit", id="nav", markup=False)
+        yield Static("↑/↓ j/k move · ←/→ h/l switch pane · Tab next control · Enter open\n"
+                     "[/] previous/next tab · / filter · ? help · Esc cancel · q quit outside text fields", id="nav", markup=False)
         yield Footer()
 
     def on_mount(self):
@@ -586,6 +665,8 @@ class MediaApp(App):
 
     @on(TabbedContent.TabActivated, "#tabs")
     def title_actions(self, event):
+        self.bind("c", "channel_picker", description="Tune TV" if event.pane.id == "channels" else "Add to channel…")
+        self.refresh_bindings()
         try:
             self.query_one("#title-actions").display = event.pane.id != "channels"
             if event.pane.id != "channels":
@@ -1080,6 +1161,8 @@ class MediaApp(App):
             self.notify(f"Sorted by {self.sort[kind]}")
 
     def check_action(self, action, parameters):
+        if super().check_action(action, parameters) is False:
+            return False
         if action in ("content", "tab_bar"):
             return isinstance(self.focused, Tabs) and not isinstance(self.screen, ModalScreen)
         library_actions = ('monitor','new_items','profile','search_now','play','open','episodes','filter','sort')
@@ -1093,12 +1176,12 @@ class MediaApp(App):
             return tab in self.shown or tab == 'channels'
         return True
 
+    def action_interrupt(self):
+        self.action_leave()
+
     def action_leave(self):
-        # No affirmative modal result reaches its callback. A confirmed delete runs
-        # synchronously, so quitting cannot interrupt its multi-step operation.
-        if isinstance(self.screen, ModalScreen):
-            self.screen.dismiss(None)
-        self.exit()
+        if not isinstance(self.screen, ModalScreen):
+            self.exit()
 
     def action_tab_bar(self, step):
         bar = self.query_one("#tabs Tabs", Tabs)
@@ -1129,8 +1212,6 @@ class MediaApp(App):
 
     def action_tab_step(self, step):
         if isinstance(self.screen, ModalScreen):
-            self.screen.dismiss(None)
-            self.call_after_refresh(self.action_tab_step, step)
             return
         cur = self.query_one("#tabs", TabbedContent).active
         self.action_tab(self.TABS[(self.TABS.index(cur) + step) % len(self.TABS)])
@@ -1314,13 +1395,18 @@ class MediaApp(App):
     def action_channel_tune(self):
         row = self.selected_channel()
         if not row: return
-        class Tune(ModalScreen):
+        class Tune(Dialog):
             BINDINGS = [Binding('escape', 'dismiss(None)', 'Cancel')]
             def compose(self):
                 with Vertical(id='channel-box'):
                     yield Select([('Big monitor','big'),('Scope','wave'),('Small monitor','emblem')],
                                  value='big', allow_blank=False, id='channel-screen')
-                    yield Button('Tune',id='channel-tune')
+                    yield Label(f"Tune {row['name']} on…", markup=False)
+                    with Horizontal():
+                        yield Button('Cancel', id='channel-tune-cancel')
+                        yield Button('Tune TV',id='channel-tune', variant='primary')
+            @on(Button.Pressed, '#channel-tune-cancel')
+            def cancel(self): self.dismiss(None)
             @on(Button.Pressed, '#channel-tune')
             def choose(self): self.dismiss(self.query_one('#channel-screen',Select).value)
         self.push_screen(Tune(), lambda screen: self.channel_change(lambda: self.channel_store.tune(row['name'],screen)) if screen else None)

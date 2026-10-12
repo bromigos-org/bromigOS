@@ -63,9 +63,10 @@ The main modules in `lib/bromigos_homelab/`:
 | `infrastructure.py` | multi-node plans, storage inventory, approved growth and worker draining |
 | `observability.py` | required monitoring, dashboards, alerts and read-only connections |
 | `tui.py` | the `bromigos lab` dashboard, built with Textual |
+| `tuiux.py` | shared keyboard dialogs, help and guards against background shortcuts |
 
 The media library shows **Add to channel… (c)** below each title tab. Select a title
-or album, use the button or `c`, choose **Add to** a picked channel, then **Use channel**.
+or album, use the button or `c`, choose **Add to** a picked channel, then **Apply channel choice**.
 The button preserves the selected Music album when it opens the picker. The selected
 row’s channel names stay visible beside it; hovering over a row shows the same names.
 The picker lists current memberships and marks **Already in** entries for removal.
@@ -76,10 +77,19 @@ The Search tab (`7` or `Ctrl+F`) finds titles beyond your library. Type a title,
 a media type, then press Enter or Search. Enter a result to request it. `/` filters
 the titles you already track.
 Delete shows what will go, then asks for Delete or Cancel. Cancel is selected first.
+Request forms preview automatically when options change. Request stays disabled
+until the current plan is ready, then locks the form until the confirmed request
+finishes. Errors stay in the form.
 
 In the delete dialog, `Left`/`Right` chooses Cancel or Delete; Enter activates
 the selected button. `Up`/`Down` moves to or from the exclusion checkbox; Enter
-or Space toggles it. Escape cancels. Cancel is selected when the dialog opens.
+or Space toggles it. `Tab` and `Shift+Tab` also move through controls.
+Escape or `Ctrl+C` cancels. Cancel is selected when the dialog opens.
+
+Media and Lab keep background actions and tabs inactive while a dialog is open.
+Letters such as `q` remain available in inputs. Job cancellation asks first, with
+**Keep job** focused. Their action buttons and footer follow the active tab; `?` opens
+keyboard help. Focused controls use a highlighted border.
 
 Download totals count each client transfer once, even when Sonarr lists every episode
 of a season pack. Client size, remaining bytes and speed take precedence over stale

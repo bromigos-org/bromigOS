@@ -3,11 +3,11 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, Select, Static
 
 from .tvchannels import channels  # locate the packaged/shared library first
 from .tui import HintTable
+from .tuiux import Dialog
 import bromigos_tvplay as TVP
 
 
@@ -16,13 +16,15 @@ class PlayTable(HintTable):
                 Binding("h,left", "screen.back", "Back")]
 
 
-class PlayOnDen(ModalScreen):
+class PlayOnDen(Dialog):
+    AUTO_FOCUS = "#den-results"
     BINDINGS = [Binding("escape", "dismiss(None)", "Cancel"), Binding("enter,l", "choose", "Choose"),
                 Binding("h", "back", "Back")]
     DEFAULT_CSS = """
     PlayOnDen { align: center middle; }
     #den-play-box { width: 86%; height: 88%; border: round $accent; background: $surface; padding: 1 2; }
     #den-play-box Horizontal { height: auto; }
+    #den-play-box Button { width: 1fr; min-width: 0; margin-right: 0; }
     #den-play-box Select { width: 1fr; }
     #den-results { height: 1fr; min-height: 5; }
     #den-note { height: auto; }
@@ -48,9 +50,11 @@ class PlayOnDen(ModalScreen):
             yield Static("Reading your library…", id="den-note")
             yield Checkbox("Resume where you left off", id="den-resume")
             with Horizontal():
-                yield Button("Back", id="den-back")
                 yield Button("Cancel", id="den-cancel")
-                yield Button("Play", id="den-play", variant="primary")
+                yield Button("Back", id="den-back")
+                yield Button("Play on TV", id="den-play", variant="primary")
+            yield Static("↑/↓ or j/k move · Enter choose · h back · Tab controls · Escape cancel",
+                         classes="dialog-keys", markup=False)
 
     def on_mount(self):
         self.fetch(self.title_)
@@ -74,12 +78,12 @@ class PlayOnDen(ModalScreen):
         table.fill(("Title", "Kind", "Source"), [(TVP.TV.label(v), v.get("kind"), v.get("server")) for v in rows],
                    [TVP.TV.label(v) for v in rows], "Enter/l: choose · h: back · arrows/j/k: move")
         self.query_one("#den-note", Static).update(error or (f"{len(rows)} found" if rows else "Nothing found on your media servers. Try another title or check that it is downloaded."))
-        table.focus()
 
     @on(Input.Submitted, "#den-search")
     def search_submitted(self, event):
         event.stop(); self.parents=[]
         self.scope=dict(kind=self.query_one("#den-kind", Select).value)
+        self.query_one("#den-results", HintTable).focus()
         self.fetch(event.value)
 
     @on(Select.Changed, "#den-kind")

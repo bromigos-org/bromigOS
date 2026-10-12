@@ -185,6 +185,10 @@ class DashboardTest(unittest.TestCase):
             seen["log"] = "\n".join(str(x) for x in app.query_one("#joblog").lines)
             await pilot.press("c")
             await pilot.pause(0.1)
+            self.assertIsInstance(app.screen, tui.CancelJob)
+            self.assertEqual(self.fx.cancelled, [])
+            await pilot.press("right", "enter")
+            await pilot.pause(0.1)
             await pilot.press("4")
             await pilot.pause(0.3)
             seen["findings"] = app.query_one("#findings").row_count
@@ -274,6 +278,150 @@ class DashboardTest(unittest.TestCase):
             await pilot.pause(0.2)
         self.run_app(steps)
         self.assertEqual(self.fx.submitted[-1], (None, "voice-line", None, "Lights are on."))
+
+    def test_cancel_defaults_safe_and_blocks_background(self):
+        async def steps(app, pilot):
+            self.fx.cancelled.clear()
+            await pilot.press("3")
+            await pilot.pause(0.2)
+            await pilot.press("c")
+            await pilot.pause(0.1)
+            self.assertIsInstance(app.screen, tui.CancelJob)
+            self.assertEqual(app.focused.id, "keep-job")
+            await pilot.press("n", "4", "q")
+            self.assertIsInstance(app.screen, tui.CancelJob)
+            self.assertEqual(app.query_one("#tabs").active, "jobs")
+            await pilot.press("enter")
+            await pilot.pause(0.1)
+            self.assertEqual(self.fx.cancelled, [])
+            self.assertTrue(app.query_one("#jobtable").has_focus)
+            await pilot.press("c", "right", "escape")
+            await pilot.pause(0.1)
+            self.assertEqual(self.fx.cancelled, [])
+        self.run_app(steps)
+
+    def test_form_keyboard_preserves_typing_and_escape(self):
+        async def steps(app, pilot):
+            before = len(self.fx.submitted)
+            await pilot.press("n")
+            await pilot.pause(0.1)
+            app.screen.query_one("#prompt").focus()
+            await pilot.press("q", "h", "l", "j", "k")
+            self.assertEqual(app.screen.query_one("#prompt").value, "qhljk")
+            await pilot.press("escape")
+            await pilot.pause(0.1)
+            self.assertEqual(len(self.fx.submitted), before)
+            self.assertNotIsInstance(app.screen, tui.RunJob)
+        self.run_app(steps)
+
+    def test_form_and_help_work_without_mouse(self):
+        async def steps(app, pilot):
+            await pilot.press("n")
+            await pilot.pause(0.1)
+            screen = app.screen
+            screen.query_one("#kind").value = "p:voice-line"
+            screen.query_one("#prompt").focus()
+            await pilot.press(*"Hello lab")
+            await pilot.press("down")
+            self.assertEqual(app.focused.id, "no")
+            await pilot.press("right", "enter")
+            await pilot.pause(0.2)
+            self.assertEqual(self.fx.submitted[-1], (None, "voice-line", None, "Hello lab"))
+            await pilot.press("question_mark")
+            await pilot.pause(0.1)
+            self.assertIsInstance(app.screen, tui.HelpDialog)
+            await pilot.press("ctrl+c")
+            await pilot.pause(0.1)
+            self.assertTrue(app.query_one("#jobtable").has_focus)
+        self.run_app(steps)
+
+    def test_pending_cancel_keeps_ui_responsive_and_target_fixed(self):
+        import threading
+        started, release = threading.Event(), threading.Event()
+        original = self.fx.cancel
+        calls = []
+        def delayed(jid):
+            calls.append(jid)
+            started.set()
+            if not release.wait(5):
+                raise RuntimeError("test did not release cancellation")
+            return original(jid)
+
+        async def steps(app, pilot):
+            self.fx.cancelled.clear()
+            await pilot.press("3")
+            await pilot.pause(0.2)
+            target = app._selected_job()["id"]
+            await pilot.press("c", "right", "enter")
+            await pilot.pause(0.1)
+            self.assertTrue(started.is_set())
+            self.assertIn(target, app.pending_jobs)
+            self.assertTrue(app.query_one("#job-cancel").disabled)
+            await pilot.press("c", "R")
+            self.assertEqual(calls, [target])
+            await pilot.press("down", "question_mark")
+            await pilot.pause(0.1)
+            self.assertIsInstance(app.screen, tui.HelpDialog)
+            self.assertNotEqual(app._selected_job()["id"], target)
+            release.set()
+            await pilot.pause(0.2)
+            self.assertEqual(self.fx.cancelled, [target])
+            self.assertNotIn(target, app.pending_jobs)
+            await pilot.press("escape")
+        try:
+            with mock.patch.object(self.fx, "cancel", delayed):
+                self.run_app(steps)
+        finally:
+            release.set()
+            self.fx.cancelled.clear()
+
+    def test_failed_job_command_clears_pending(self):
+        async def steps(app, pilot):
+            await pilot.press("3")
+            await pilot.pause(0.2)
+            await pilot.press("R")
+            await pilot.pause(0.2)
+            self.assertEqual(app.pending_jobs, set())
+            self.assertFalse(app.query_one("#job-retry").disabled)
+        with mock.patch.object(self.fx, "retry", side_effect=ValueError("queue is unavailable")):
+            self.run_app(steps)
+
+    def test_tab_bar_vim_navigation_and_first_row_return(self):
+        async def steps(app, pilot):
+            bar = app.query_one("#tabs Tabs", tui.Tabs)
+            await pilot.press("1")
+            await pilot.pause(0.1)
+            await pilot.press("g", "up")
+            self.assertTrue(bar.has_focus)
+            await pilot.press("l")
+            await pilot.pause(0.2)
+            self.assertEqual(app.query_one("#tabs").active, "models")
+            self.assertTrue(bar.has_focus)
+            await pilot.press("h", "l", "down")
+            await pilot.pause(0.1)
+            self.assertTrue(app.query_one("#modeltable").has_focus)
+            await pilot.press("g", "k")
+            self.assertTrue(bar.has_focus)
+            await pilot.press("l", "j")
+            await pilot.pause(0.1)
+            self.assertTrue(app.query_one("#jobtable").has_focus)
+            await pilot.press("g", "up")
+            self.assertTrue(bar.has_focus)
+            await pilot.press("l", "down")
+            await pilot.pause(0.2)
+            self.assertTrue(app.query_one("#findings").has_focus)
+            class TableDialog(tui.Dialog):
+                def compose(self):
+                    yield tui.HintTable(id="modal-test-table", cursor_type="row")
+            app.push_screen(TableDialog())
+            await pilot.pause(0.1)
+            table = app.screen.query_one("#modal-test-table", tui.HintTable)
+            table.fill(["choice"], [["one"]], ["one"])
+            table.focus()
+            await pilot.press("up", "k")
+            self.assertTrue(table.has_focus, "a modal table must not focus the background tab bar")
+            await pilot.press("escape")
+        self.run_app(steps)
 
     def _snapshot(self, svg):
         ver_file = SNAP[:-4] + ".version"

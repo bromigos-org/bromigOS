@@ -14,13 +14,13 @@ import os
 import time
 
 from textual import on, work
-from textual.app import App, ComposeResult
+from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
+from .tuiux import Dialog, HelpDialog, UXApp
 from textual.theme import Theme
 from textual.widgets import (Button, DataTable, Footer, Input, Label, RichLog, Select, Static, TabbedContent,
-                             TabPane, Tree)
+                             TabPane, Tabs, Tree)
 
 MARK = {"ok": "●", "warn": "▲", "crit": "✖", "unreachable": "?", "empty": "·", "unknown": "·", "fail": "✖",
         "skip": "·"}
@@ -143,6 +143,12 @@ class HintTable(DataTable):
         self.hints = []           # one per row
         self.base_hint = ""
 
+    def action_cursor_up(self):
+        if self.cursor_row == 0 and len(self.app.screen_stack) == 1:
+            self.app.query_one("#tabs Tabs", Tabs).focus()
+        else:
+            super().action_cursor_up()
+
     def watch_hover_coordinate(self, old, new):
         super().watch_hover_coordinate(old, new)
         r = new.row if new is not None else -1
@@ -202,11 +208,10 @@ class CardButton(Static):
         self.app.show_card(self.card["id"])
 
 
-class RunJob(ModalScreen):
+class RunJob(Dialog):
     """The new-job form: a kind (or preset), its prompt or text. Homelab only: the cloud is
     the command line's --cloud, never a default here."""
 
-    BINDINGS = [Binding("escape", "dismiss(None)", "Cancel", tooltip="Close the form without queuing anything")]
 
     def __init__(self, choices):
         super().__init__()
@@ -223,13 +228,11 @@ class RunJob(ModalScreen):
             i = Input(placeholder="prompt (an image, a hologram's subject) or the text to speak", id="prompt")
             i.tooltip = "What to make: the prompt for an image or a hologram, the words for a voice line"
             yield i
-            yield Label("Runs on the lab, for no credits. Results: ~/Pictures/bromigos/lab/<kind>/", classes="dim")
+            yield Static("Runs on the lab, for no credits.\nResults: ~/Pictures/bromigos/lab/<kind>/", classes="dim")
             with Horizontal():
-                b = Button("Queue it", variant="primary", id="go")
+                yield Button("Cancel", id="no")
+                b = Button("Queue job", variant="primary", id="go")
                 b.tooltip = "Add the job to the lab's queue (bromigos lab run)"
-                yield b
-                b = Button("Cancel", id="no")
-                b.tooltip = "Close without queuing anything"
                 yield b
 
     @on(Button.Pressed, "#no")
@@ -251,10 +254,9 @@ QUALITY_WORDS = {"best": "the best there is, up to 8K", "4320p": "8K, where a vi
                  "360p": "under 0.3 GB an hour", "audio": "sound only, about 0.06 GB an hour"}
 
 
-class AddYouTube(ModalScreen):
+class AddYouTube(Dialog):
     """The YouTube card's "Add a channel or playlist…" form: `bromigos lab youtube add`."""
 
-    BINDINGS = [Binding("escape", "dismiss(None)", "Cancel", tooltip="Close the form without adding anything")]
 
     def __init__(self, quality="1080p"):
         super().__init__()
@@ -282,11 +284,9 @@ class AddYouTube(ModalScreen):
             i.tooltip = "The name in Pinchflat, its folder on disk and the playlist in your media server"
             yield i
             with Horizontal():
-                b = Button("Add it", variant="primary", id="yt-go")
+                yield Button("Cancel", id="yt-no")
+                b = Button("Add channel or playlist", variant="primary", id="yt-go")
                 b.tooltip = "Add it to Pinchflat, which starts downloading (bromigos lab youtube add)"
-                yield b
-                b = Button("Cancel", id="yt-no")
-                b.tooltip = "Close without adding anything"
                 yield b
 
     @on(Button.Pressed, "#yt-no")
@@ -313,12 +313,48 @@ class AddYouTube(ModalScreen):
                       "quality": self.query_one("#yt-quality", Select).value})
 
 
-class LabApp(App):
+class CancelJob(Dialog):
+    """Cancel is safe by default; the exact selected job stays fixed during refreshes."""
+    DEFAULT_CSS = """
+    CancelJob { align: center middle; }
+    #cancel-job-box { width: 76; max-width: 96%; height: auto; padding: 1 2;
+        border: solid $warning; background: $surface; }
+    #cancel-job-box Horizontal { height: auto; margin-top: 1; }
+    """
+
+    def __init__(self, job):
+        super().__init__()
+        self.job = job
+
+    def compose(self):
+        with Vertical(id="cancel-job-box"):
+            yield Label("Cancel this job?", classes="title")
+            yield Static(self.job["id"], markup=False)
+            yield Static(self.job.get("prompt") or self.job.get("text") or
+                         self.job.get("preset") or self.job["kind"], markup=False)
+            yield Static("Stops this job or removes it from the queue. Existing results stay on disk.")
+            with Horizontal():
+                yield Button("Keep job", id="keep-job")
+                yield Button("Cancel job", variant="error", id="confirm-cancel-job")
+            yield Static("←/→ choose · Enter activate · Esc go back", classes="dim")
+
+    def on_mount(self):
+        self.query_one("#keep-job", Button).focus()
+
+    @on(Button.Pressed)
+    def choose(self, event):
+        self.dismiss(event.button.id == "confirm-cancel-job")
+
+
+class LabApp(UXApp):
     TITLE = "LAB"
     CSS = """
     Screen { background: $background; }
     #top { height: 1; padding: 0 1; background: $panel; color: $foreground; }
-    #cards { width: 46; border-right: solid $panel; }
+    #cards { width: 34%; min-width: 20; max-width: 46; border-right: solid $panel; }
+    HintTable:focus { border: solid $primary; }
+    #job-actions { height: auto; padding: 0 1; }
+    #job-actions Button { margin-right: 1; }
     CardButton { padding: 0 1; margin: 0 0 1 0; height: auto; border-left: tall $success; }
     CardButton:focus { background: $panel; }
     CardButton.-warn { border-left: tall $warning; }
@@ -329,10 +365,10 @@ class LabApp(App):
     HintTable { height: 1fr; }
     #gpus { height: auto; max-height: 14; }
     #joblog { height: 12; border-top: solid $panel; }
-    #runbox { width: 76; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
+    #runbox { width: 76; max-width: 96%; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
     RunJob { align: center middle; }
     AddYouTube { align: center middle; }
-    #ytbox { width: 84; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
+    #ytbox { width: 84; max-width: 96%; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
     #ytbox Horizontal { height: auto; margin-top: 1; }
     #yt-add { margin: 0 1; }
     .title { text-style: bold; color: $primary; }
@@ -340,12 +376,18 @@ class LabApp(App):
     #runbox Horizontal { height: auto; margin-top: 1; }
     """
     BINDINGS = [
+        Binding("question_mark", "help", "Help"),
+        Binding("down,j", "content", "Content", priority=True),
+        Binding("h", "tab_bar(-1)", "Previous tab", priority=True, show=False),
+        Binding("l", "tab_bar(1)", "Next tab", priority=True, show=False),
+        Binding("ctrl+c", "interrupt", "Quit", show=False),
+        Binding("5", "tab('provision')", "Provision", show=False),
         Binding("q", "quit", "Quit", tooltip="Leave the dashboard"),
         Binding("r", "refresh", "Refresh", tooltip="Read the lab again now (it refreshes every 15 s by itself)"),
-        Binding("1", "tab('status')", "Status", tooltip="Every card: nodes, GPUs, services, apps, storage, alerts, jobs"),
-        Binding("2", "tab('models')", "Models", tooltip="What's installed and loaded where, with VRAM"),
-        Binding("3", "tab('jobs')", "Jobs", tooltip="The lab job queue: progress, logs, cancel, retry"),
-        Binding("4", "tab('doctor')", "Doctor", tooltip="Checks with fixes in plain words"),
+        Binding("1", "tab('status')", "Status", show=False, tooltip="Every card: nodes, GPUs, services, apps, storage, alerts, jobs"),
+        Binding("2", "tab('models')", "Models", show=False, tooltip="What's installed and loaded where, with VRAM"),
+        Binding("3", "tab('jobs')", "Jobs", show=False, tooltip="The lab job queue: progress, logs, cancel, retry"),
+        Binding("4", "tab('doctor')", "Doctor", show=False, tooltip="Checks with fixes in plain words"),
         Binding("n", "new_job", "New job", tooltip="Queue a job on the lab (image, hologram, voice line…)"),
         Binding("c", "cancel_job", "Cancel job", tooltip="Cancel the job under the cursor (Jobs tab)"),
         Binding("R", "retry_job", "Retry", tooltip="Queue the job under the cursor again (Jobs tab)"),
@@ -357,6 +399,22 @@ class LabApp(App):
         Binding("],L", "tab_step(1)", "Next tab", show=False),
         Binding("[,H", "tab_step(-1)", "Previous tab", show=False),
     ]
+    HELP = (
+        ("Navigation", "1–5 switch tabs · [ / ] or H / L previous / next tab\n"
+                       "↑/↓ or j/k move · g/G first / last · Ctrl+U/D page\n"
+                       "Tab / Shift+Tab change focus · first row: ↑/k returns to tabs\n"
+                       "Tab bar: ←/→ or h/l switch · ↓/j enters content\n"
+                       "STATUS: ←/→ or h/l cards / details"),
+        ("Actions", "r refresh · n new lab job · M open Media\n"
+                    "JOBS: c review cancellation · R retry selected job\n"
+                    "DOCTOR: d run checks · YouTube card: a add channel / playlist"),
+        ("Forms and confirmations", "Tab or ↑/↓ moves between fields and buttons\n"
+                                    "←/→ or h/l chooses buttons · Enter activates the focused control\n"
+                                    "Esc / Ctrl+C cancels · job cancellation defaults to Keep job\n"
+                                    "Letter shortcuts stay inactive while you type or a dialog is open"),
+        ("Provision", "Choose services, then run the shown plan command. Apply and destructive\n"
+                      "infrastructure commands keep their explicit approval in your terminal."),
+    )
     TABS = ("status", "models", "jobs", "doctor", "provision")
     MAIN = {"models": "#modeltable", "jobs": "#jobtable", "doctor": "#findings"}
 
@@ -371,6 +429,8 @@ class LabApp(App):
         self.doctor_doc = None
         self.current = None
         self.loaded_at = None
+        self.pending_jobs = set()
+        self.pending_submit = False
         from . import services
         self.provision_cat = services.load()
         from . import provision
@@ -401,6 +461,10 @@ class LabApp(App):
             with TabPane("JOBS", id="jobs"):
                 with Vertical():
                     yield Static("", id="jobsum", classes="dim")
+                    with Horizontal(id="job-actions"):
+                        yield Button("New job (n)", id="job-new", variant="primary")
+                        yield Button("Cancel job… (c)", id="job-cancel", variant="error")
+                        yield Button("Retry job (R)", id="job-retry")
                     yield HintTable(id="jobtable", cursor_type="row", zebra_stripes=True)
                     yield RichLog(id="joblog", wrap=True, markup=False)
             with TabPane("DOCTOR", id="doctor"):
@@ -584,10 +648,21 @@ class LabApp(App):
                          " (c cancels, R retries)")
         t.fill(["", "job", "what", "state", "detail"], rows, hints, "The lab's jobs, newest first")
         self._show_log()
+        self._job_actions()
+        self.refresh_bindings()
 
     @on(DataTable.RowHighlighted, "#jobtable")
     def _job_row(self, _ev):
         self._show_log()
+        self._job_actions()
+        self.refresh_bindings()
+
+    def _job_actions(self):
+        job = self._selected_job()
+        pending = bool(job and job["id"] in self.pending_jobs)
+        self.query_one("#job-cancel", Button).disabled = not job or pending or job["state"] not in ("queued", "waiting", "running")
+        self.query_one("#job-retry", Button).disabled = not job or pending
+        self.query_one("#job-new", Button).disabled = self.pending_submit
 
     def _selected_job(self):
         js = (self.jobsdoc or {}).get("jobs", [])
@@ -720,7 +795,9 @@ class LabApp(App):
     def _tab(self, ev):
         tid = ev.pane.id if ev.pane else None
         if tid:
-            self.call_after_refresh(self._focus_main, tid)
+            if not isinstance(self.focused, Tabs):
+                self.call_after_refresh(self._focus_main, tid)
+            self.refresh_bindings()
         if tid == "models" and self.inv is None:
             self.load_models()
         if tid == "doctor" and self.doctor_doc is None:
@@ -732,6 +809,33 @@ class LabApp(App):
         r = t.cursor_row
         if 0 <= r < len(t.hints):
             self.query_one("#hint", Static).update(t.hints[r])
+
+    def check_action(self, action, parameters):
+        if not super().check_action(action, parameters):
+            return False
+        if action in ("content", "tab_bar"):
+            return isinstance(self.focused, Tabs)
+        tab = self.query_one("#tabs", TabbedContent).active if self.is_mounted else "status"
+        if action in ("cancel_job", "retry_job"):
+            if tab != "jobs":
+                return False
+            job = self._selected_job()
+            return bool(job and job["id"] not in self.pending_jobs and
+                        (action == "retry_job" or job["state"] in ("queued", "waiting", "running")))
+        if action == "new_job":
+            return not self.pending_submit
+        if action == "doctor":
+            return tab == "doctor"
+        if action == "youtube_add":
+            return tab == "status" and self.current == "youtube-downloader"
+        return True
+
+    def action_tab_bar(self, step):
+        bar = self.query_one("#tabs Tabs", Tabs)
+        bar.action_next_tab() if step > 0 else bar.action_previous_tab()
+
+    def action_content(self):
+        self._focus_main(self.query_one("#tabs", TabbedContent).active)
 
     def action_tab(self, tid):
         if self.query_one("#tabs", TabbedContent).active != tid:
@@ -747,7 +851,7 @@ class LabApp(App):
     def _focus_main(self, tid):
         """Put the keyboard where the tab's keys act: the current card, or the tab's table.
         Only for the tab still showing: focusing a widget on a hidden tab would switch to it."""
-        if self.query_one("#tabs", TabbedContent).active != tid:
+        if len(self.screen_stack) > 1 or self.query_one("#tabs", TabbedContent).active != tid:
             return
         try:
             if tid == "status":
@@ -768,6 +872,9 @@ class LabApp(App):
             i = next(n for n, w in enumerate(cards) if w.has_focus)
         except StopIteration:
             i = next((n for n, w in enumerate(cards) if w.card["id"] == self.current), 0)
+        if i == 0 and step == -1:
+            self.query_one("#tabs Tabs", Tabs).focus()
+            return
         w = cards[max(0, min(len(cards) - 1, i + step))]
         w.focus()
         w.scroll_visible()
@@ -823,21 +930,40 @@ class LabApp(App):
         self.call_from_thread(self.load_status)
 
     def action_new_job(self):
-        self.push_screen(RunJob(self.src.kinds()), self._queued)
+        if not self.pending_submit:
+            self.push_screen(RunJob(self.src.kinds()), self._queued)
 
     def _queued(self, choice):
-        if not choice:
+        if not choice or self.pending_submit:
             return
         v, prompt = choice
         kind, preset = (None, v[2:]) if v.startswith("p:") else (v[2:], None)
+        text = prompt if (kind == "voice" or preset == "voice-line") else None
+        self.pending_submit = True
+        self._job_actions()
+        self.refresh_bindings()
+        self.notify("Queuing job…")
+        self.submit_job(kind, preset, None if text else prompt, text)
+
+    @work(thread=True, group="job-submit")
+    def submit_job(self, kind, preset, prompt, text):
         try:
-            text = prompt if (kind == "voice" or preset == "voice-line") else None
-            j = self.src.submit(kind, preset, None if text else prompt, text)
-        except ValueError as e:
-            self.notify(str(e), severity="error", timeout=8)
-            return
-        self.notify(f"queued {j['id']}")
-        self.action_tab("jobs")
+            job = self.src.submit(kind, preset, prompt, text)
+        except Exception as error:
+            self.call_from_thread(self._job_finished, None, None, f"Could not queue job: {error}", True)
+        else:
+            self.call_from_thread(self._job_finished, None, f"Queued {job['id']}", None, True)
+
+    def _job_finished(self, jid, message, error, submit=False):
+        if submit:
+            self.pending_submit = False
+        else:
+            self.pending_jobs.discard(jid)
+        self._job_actions()
+        self.refresh_bindings()
+        self.notify(error or message, severity="error" if error else "information", timeout=8)
+        if submit and not error and len(self.screen_stack) == 1:
+            self.action_tab("jobs")
         self.load_jobs()
 
     def action_media(self):
@@ -851,22 +977,56 @@ class LabApp(App):
             subprocess.run([exe])
         self.load_status()
 
+    @on(Button.Pressed, "#job-new")
+    def _new_pressed(self):
+        self.action_new_job()
+
+    @on(Button.Pressed, "#job-cancel")
+    def _cancel_pressed(self):
+        self.action_cancel_job()
+
+    @on(Button.Pressed, "#job-retry")
+    def _retry_pressed(self):
+        self.action_retry_job()
+
     def action_cancel_job(self):
         j = self._selected_job()
-        if j and self.query_one("#tabs", TabbedContent).active == "jobs":
-            self.src.cancel(j["id"])
-            self.notify(f"cancelling {j['id']}")
-            self.load_jobs()
+        if not j or j["id"] in self.pending_jobs or self.query_one("#tabs", TabbedContent).active != "jobs":
+            return
+        if j["state"] not in ("running", "queued", "waiting"):
+            self.notify("This job has already finished", severity="warning")
+            return
+        jid = j["id"]
+        self.push_screen(CancelJob(j), lambda yes: self._cancel_confirmed(jid, yes))
+
+    def _cancel_confirmed(self, jid, yes):
+        if not yes or jid in self.pending_jobs:
+            return
+        self._start_job_action(jid, "cancel")
+
+    def _start_job_action(self, jid, action):
+        if jid in self.pending_jobs:
+            return
+        self.pending_jobs.add(jid)
+        self._job_actions()
+        self.refresh_bindings()
+        self.notify(f"{'Cancelling' if action == 'cancel' else 'Retrying'} {jid}…")
+        self.change_job(jid, action)
+
+    @work(thread=True, group="job-change")
+    def change_job(self, jid, action):
+        try:
+            result = self.src.cancel(jid) if action == "cancel" else self.src.retry(jid)
+        except Exception as error:
+            self.call_from_thread(self._job_finished, jid, None, f"Could not {action} {jid}: {error}")
+        else:
+            message = f"Cancellation requested for {jid}" if action == "cancel" else f"Queued {result['id']}"
+            self.call_from_thread(self._job_finished, jid, message, None)
 
     def action_retry_job(self):
         j = self._selected_job()
         if j and self.query_one("#tabs", TabbedContent).active == "jobs":
-            try:
-                n = self.src.retry(j["id"])
-                self.notify(f"queued {n['id']}")
-            except ValueError as e:
-                self.notify(str(e), severity="warning")
-            self.load_jobs()
+            self._start_job_action(j["id"], "retry")
 
 
 def _media_bin():

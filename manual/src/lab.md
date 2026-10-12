@@ -54,11 +54,12 @@ Run `bromigos lab` for the live dashboard. It refreshes every 15 seconds.
 | <kbd>3</kbd> | Jobs: the queue of AI jobs. |
 | <kbd>4</kbd> | Doctor: problems, and how to fix them. |
 | <kbd>n</kbd> | Start a new job. |
-| <kbd>c</kbd> | Cancel the job under the cursor. |
+| <kbd>c</kbd> | Review cancellation of the selected job. |
 | <kbd>R</kbd> | Run the job under the cursor again. |
 | <kbd>d</kbd> | Run the doctor's checks now. |
 | <kbd>r</kbd> | Read the lab again now. |
-| <kbd>q</kbd> | Quit. |
+| <kbd>q</kbd>, <kbd>Ctrl+C</kbd> | Quit from the main screen. |
+| <kbd>?</kbd> | Show keyboard help. |
 
 To move around, use the arrow keys or Vim's keys:
 
@@ -69,6 +70,19 @@ To move around, use the arrow keys or Vim's keys:
 | <kbd>g</kbd> <kbd>G</kbd> | Go to the first or last item. |
 | <kbd>Ctrl</kbd>+<kbd>D</kbd> <kbd>Ctrl</kbd>+<kbd>U</kbd> | Move a page down or up in a table. |
 | <kbd>]</kbd> <kbd>[</kbd> or <kbd>L</kbd> <kbd>H</kbd> | Go to the next or previous tab. |
+
+The focused list or control has a highlighted border. The buttons and footer show
+actions for the current tab. Use `Tab` or `Shift+Tab` to move between controls.
+At the tab bar, `h` and `l` switch tabs; `Down` or `j` enters the list. At the
+first row, `Up` or `k` returns to the tab bar.
+
+To cancel a job, press `c` on Jobs and read the question. **Keep job** is selected
+first. Choose **Cancel job** only if you want it stopped. In any dialog, `Escape`
+or `Ctrl+C` closes an unconfirmed dialog without applying the pending change. Arrow keys move between
+controls and Enter activates the selected button. Background tabs stay inactive.
+Letters such as `q` can still be typed into a form.
+
+![The job cancellation question names the selected job and focuses Keep job](images/lab-job-cancel.webp)
 
 Hover over anything for what it is.
 
@@ -370,11 +384,16 @@ and how much space is free.
 ![The media library in a terminal: the TV tab, a show's seasons beside it](images/media-library.webp)
 
 Move with the arrow keys or Vim's (`j`, `k`, `h`, `l`). Pick a show, an artist or a film,
-then press a key:
+then press a key. Request forms show the plan automatically. **Request** becomes
+available when the current preview is ready. Once confirmed, the form shows
+**Requesting…** and waits for the result with its controls locked. Errors stay visible
+in the form.
 
 | Key | Does |
 |---|---|
-| `Ctrl+C`, `q` | Quit from any tab, input or dialog. Cancel an unconfirmed delete |
+| `Ctrl+C`, `q` | Quit from the main screen; `q` types normally in inputs |
+| `Escape`, `Ctrl+C` in a dialog | Cancel an unconfirmed dialog and return to the library |
+| `?` | Show keyboard help |
 | `Down`, `j` on the tab bar | Focus the active tab's first table |
 | `Up`, `k` at a table's first row | Return to the tab bar |
 | `Up`, `Down`, `j`, `k` | Move through rows |
@@ -382,7 +401,7 @@ then press a key:
 | `Ctrl+D`, `Ctrl+U` | Page down or up |
 | `Enter` | Open the selected item |
 | `Left`, `Right`, `h`, `l` | Select tabs on the tab bar; switch between the title list and its side table |
-| `[`, `]`, `H`, `L` | Previous or next tab, including while typing. Cancel an open dialog |
+| `[`, `]`, `H`, `L` | Previous or next tab from the main screen |
 | `7`, `a`, `Ctrl+F` | Search for media, including titles outside your library |
 | `8`, `c` | Channels tab; add or remove a selected title from a channel |
 | `m` | Monitor it, or stop. On a season or an album, just that one |
@@ -396,7 +415,7 @@ then press a key:
 | `/`, `s` | Filter by name, and change the sort: newest, size, name, missing, profile |
 
 **Add to channel… (c)** below the list puts the selected title in a picked channel.
-Choose the channel’s **Add to** entry, then **Use channel**. The selected title’s
+Choose the channel’s **Add to** entry, then **Apply channel choice**. The selected title’s
 channel names stay visible beside the button and in the row’s hover hint. A diamond
 marks a title already in a channel.
 
@@ -406,6 +425,7 @@ covers Channels, its keys and CLI commands.
 **Deleting** removes the files from the disk, and frees the space. First it shows what goes
 and how much space that frees. Choose **Delete** or **Cancel**; Cancel is selected first.
 Use `Left`/`Right` to choose a button and Enter to activate it.
+`Tab` and `Shift+Tab` also move between controls. `Escape` or `Ctrl+C` cancels.
 `Up`/`Down` moves to or from the exclusion checkbox; Enter or Space toggles it.
 On a season, an
 episode file or an album, only that goes, and it stops being monitored. You can tick

@@ -12,6 +12,7 @@ import io
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -157,39 +158,45 @@ class TUI(Stack):
             with open(os.path.join(d, f"media-{name}.svg"), "w") as f:
                 f.write(app.export_screenshot(title=f"bromigos media · {name}"))
 
-    def test_quit_from_every_tab_and_input(self):
-        for key in ("ctrl+c", "q"):
-            for tid in T.MediaApp.TABS:
-                with self.subTest(key=key, tab=tid):
-                    async def fn(app, pilot):
-                        if tid in app.shown:
-                            app.action_filter()
-                        elif tid == "search":
-                            app.query_one("#search-q").focus()
-                        await pilot.press(key)
-                        self.assertTrue(app._exit)
-                        self.assertEqual(self.st.deleted, [])
-                    self.run_app(fn, start=tid)
+    def test_quit_and_text_shortcuts(self):
+        for tid in T.MediaApp.TABS:
+            async def fn(app, pilot):
+                if tid in app.shown:
+                    app.action_filter()
+                elif tid == "search":
+                    app.query_one("#search-q").focus()
+                if isinstance(app.focused, T.Input):
+                    field = app.focused
+                    await pilot.press("q", "H", "L", "left_square_bracket", "right_square_bracket")
+                    self.assertEqual(field.value, "qHL[]")
+                    self.assertFalse(app._exit)
+                    self.assertEqual(app.query_one("#tabs").active, tid)
+                await pilot.press("ctrl+c")
+                self.assertTrue(app._exit)
+                self.assertEqual(self.st.deleted, [])
+            self.run_app(fn, start=tid)
+        async def quit_list(app, pilot):
+            app.query_one("#tv-list").focus()
+            await pilot.press("q")
+            self.assertTrue(app._exit)
+        self.run_app(quit_list)
 
-    def test_quit_cancels_modals_without_deleting(self):
-        for key in ("ctrl+c", "q"):
-            for dialog in ("delete", "profile", "request"):
-                with self.subTest(key=key, dialog=dialog):
-                    async def fn(app, pilot):
-                        if dialog == "delete":
-                            app.action_delete()
-                        elif dialog == "profile":
-                            app.action_profile()
-                        else:
-                            app.push_screen(T.Request(app.src, {"kind": "tv", "title": "Test show"}))
-                        await pilot.pause()
-                        if dialog == "delete":
-                            app.screen.query_one("#del-yes").focus()
-                        await pilot.press(key)
-                        self.assertTrue(app._exit)
-                        self.assertEqual(self.st.deleted, [])
-                        self.assertEqual(self.st.deleted_files, [])
-                    self.run_app(fn)
+    def test_interrupt_cancels_modals_without_quitting(self):
+        for dialog in ("delete", "profile", "request"):
+            async def fn(app, pilot):
+                if dialog == "delete":
+                    app.action_delete()
+                elif dialog == "profile":
+                    app.action_profile()
+                else:
+                    app.push_screen(T.Request(app.src, {"kind": "tv", "title": "Test show"}))
+                await pilot.pause()
+                await pilot.press("ctrl+c")
+                self.assertNotIsInstance(app.screen, T.ModalScreen)
+                self.assertFalse(app._exit)
+                self.assertEqual(self.st.deleted, [])
+                self.assertEqual(self.st.deleted_files, [])
+            self.run_app(fn)
 
     def test_play_picker_drills_into_seasons_and_episodes(self):
         from bromigos_homelab import tvplayui as U
@@ -219,19 +226,51 @@ class TUI(Stack):
             await self.settle(app, pilot)
             self.assertEqual(app.screen.rows[0]["kind"], "movie")
             await pilot.press("ctrl+c")
-            self.assertTrue(app._exit)
+            self.assertFalse(app._exit)
+            self.assertNotIsInstance(app.screen, U.PlayOnDen)
         with mock.patch.object(U.TVP, "search", side_effect=search), mock.patch.object(U.TVP, "play", return_value={"message": "Playing"}) as play:
             self.run_app(fn)
 
-    def test_switching_tabs_cancels_delete_confirmation(self):
+    def test_den_picker_late_results_keep_search_focus(self):
+        from bromigos_homelab import tvplayui as U
+        started, finish = threading.Event(), threading.Event()
+        def search(query="", **scope):
+            started.set()
+            finish.wait(5)
+            return [{"id": "movie", "title": "Lanterns of Kiri", "kind": "movie", "server": "library"}]
+        async def fn(app, pilot):
+            app.push_screen(U.PlayOnDen())
+            await pilot.pause()
+            self.assertTrue(started.is_set())
+            field = app.screen.query_one("#den-search")
+            field.focus()
+            await pilot.press("q", "H", "L")
+            finish.set()
+            await self.settle(app, pilot, 3)
+            self.assertIs(app.focused, field)
+            self.assertEqual(field.value, "qHL")
+            await pilot.press("enter")
+            await self.settle(app, pilot, 3)
+            self.assertEqual(app.focused.id, "den-results")
+        try:
+            with mock.patch.object(U.TVP, "search", side_effect=search):
+                self.run_app(fn)
+        finally:
+            finish.set()
+
+    def test_modal_blocks_background_shortcuts(self):
         async def fn(app, pilot):
             await pilot.press("D")
             await pilot.pause()
             app.screen.query_one("#del-yes").focus()
             await pilot.press("right_square_bracket")
             await pilot.pause()
+            await pilot.press("q", "L", "8", "r", "c")
+            self.assertIsInstance(app.screen, T.Confirm)
+            self.assertEqual(app.query_one("#tabs").active, "tv")
+            self.assertFalse(app._exit)
+            await pilot.press("escape")
             self.assertNotIsInstance(app.screen, T.Confirm)
-            self.assertEqual(app.query_one("#tabs").active, "movies")
             self.assertEqual(self.st.deleted, [])
         self.run_app(fn)
 
@@ -296,6 +335,8 @@ class TUI(Stack):
             await pilot.press("slash")
             await pilot.pause()
             await pilot.press("right_square_bracket")
+            self.assertEqual(app.query_one("#tv-filter").value, "]")
+            await pilot.press("escape", "right_square_bracket")
             await pilot.pause()
             self.assertEqual(app.query_one("#tabs").active, "movies")
             await pilot.press("H")
@@ -457,7 +498,7 @@ class TUI(Stack):
             await pilot.pause()
             await pilot.press("enter", "down", "enter")
             self.shot(app, "channel-picker")
-            await pilot.press("tab", "enter")
+            await pilot.press("tab", "right", "enter")
             await self.settle(app, pilot, 3)
             self.assertIn(title, app.channel_store.load().channels()[0]["shows"])
         self.run_app(fn)
@@ -476,7 +517,7 @@ class TUI(Stack):
             membership = str(app.query_one("#title-membership").render())
             self.assertIn("Night Block", membership)
             self.assertIn("Weekend", membership)
-            await pilot.hover("#tv-list", offset=(10, 1))
+            await pilot.hover("#tv-list", offset=(10, 2))
             await pilot.pause()
             self.assertIn("Night Block", table.tooltip)
             self.assertIn("Weekend", table.tooltip)
@@ -663,6 +704,117 @@ class TUI(Stack):
             tui.assert_called_once_with(["search"])
             self.assertEqual(entry["main"](["search", "Comet Drift"]), 0)
             cli.assert_called_once_with(["search", "Comet Drift"])
+
+    def test_request_preview_tracks_options_before_submission(self):
+        async def fn(app, pilot):
+            item = app.src.search("comet", "movie")[0]
+            request = T.Request(app.src, item)
+            app.push_screen(request)
+            await self.settle(app, pilot, 3)
+            self.assertIsNotNone(request.plan)
+            self.assertFalse(request.query_one("#req-yes").disabled)
+            self.assertEqual(self.st.commands, [])
+            old_plan = request.plan
+            request.query_one("#req-audio").value = "ja"
+            request.show_plan()
+            self.assertIsNone(request.plan)
+            self.assertTrue(request.query_one("#req-yes").disabled)
+            await self.settle(app, pilot, 3)
+            self.assertIsNot(request.plan, old_plan)
+            self.assertEqual(request._plan_opts["audio"], "ja")
+            with mock.patch.object(app.src, "request", return_value={"message": "Requested"}) as submit:
+                request.query_one("#req-yes").focus()
+                approved = request.plan
+                await pilot.press("enter")
+                await self.settle(app, pilot, 3)
+                submit.assert_called_once_with(approved)
+            self.assertNotIsInstance(app.screen, T.Request)
+        self.run_app(fn)
+
+    def test_help_and_channel_forms_keyboard_only_at_small_size(self):
+        async def fn(app, pilot):
+            await pilot.press("question_mark")
+            await pilot.pause()
+            self.assertIsInstance(app.screen, T.Dialog)
+            self.shot(app, "help")
+            await pilot.press("escape")
+            app.push_screen(T.ChannelForm(value="", create=False))
+            await pilot.pause()
+            field = app.screen.query_one("#channel-name")
+            field.focus()
+            await pilot.press(*"qHL test")
+            self.assertEqual(field.value, "qHL test")
+            await pilot.press("tab")
+            self.assertEqual(app.focused.id, "channel-cancel")
+            await pilot.press("right")
+            self.assertEqual(app.focused.id, "channel-save")
+            self.shot(app, "channel-form")
+            await pilot.press("ctrl+c")
+            self.assertFalse(app._exit)
+            self.assertNotIsInstance(app.screen, T.ChannelForm)
+        self.run_app(fn, size=(80, 24))
+
+    def test_request_actions_fit_narrow_terminals(self):
+        for size in ((60, 18), (40, 12)):
+            async def fn(app, pilot):
+                app.push_screen(T.Request(app.src, app.src.search("comet", "movie")[0]))
+                await self.settle(app, pilot, 3)
+                for button in app.screen.query(T.Button):
+                    self.assertGreater(button.region.width, 0)
+                    self.assertLessEqual(button.region.right, app.screen.region.right)
+                self.shot(app, "request-" + str(size[0]))
+                await pilot.press("ctrl+c")
+                self.assertFalse(app._exit)
+            self.run_app(fn, size=size)
+
+    def test_confirmed_request_cannot_cancel_while_committing(self):
+        started, finish = threading.Event(), threading.Event()
+        def submit(plan):
+            started.set()
+            finish.wait(5)
+            return {"message": "Requested"}
+        async def fn(app, pilot):
+            request = T.Request(app.src, app.src.search("comet", "movie")[0])
+            app.push_screen(request)
+            await self.settle(app, pilot, 3)
+            with mock.patch.object(app.src, "request", side_effect=submit):
+                request.query_one("#req-yes").focus()
+                await pilot.press("enter")
+                await pilot.pause()
+                self.assertTrue(started.is_set())
+                self.assertTrue(request._submitting)
+                await pilot.press("escape", "ctrl+c", "q")
+                self.assertIs(app.screen, request)
+                self.assertTrue(request.query_one("#req-no").disabled)
+                finish.set()
+                await self.settle(app, pilot, 3)
+            self.assertNotIsInstance(app.screen, T.Request)
+            self.assertFalse(app._exit)
+        try:
+            self.run_app(fn)
+        finally:
+            finish.set()
+
+    def test_delete_confirmation_buttons_fit_small_terminal(self):
+        async def fn(app, pilot):
+            app.action_delete()
+            await pilot.pause()
+            dialog = app.screen
+            self.assertIsInstance(dialog, T.Confirm)
+            for ident in ("del-no", "del-yes"):
+                button = dialog.query_one("#" + ident)
+                self.assertGreater(button.region.width, 0)
+                self.assertLessEqual(button.region.right, dialog.region.right)
+                self.assertLessEqual(button.region.bottom, dialog.region.bottom)
+            self.shot(app, "delete-small")
+            await pilot.press("l")
+            self.assertEqual(app.focused.id, "del-yes")
+            await pilot.press("h")
+            self.assertEqual(app.focused.id, "del-no")
+            await pilot.press("enter")
+            self.assertEqual(self.st.deleted, [])
+            self.assertNotIsInstance(app.screen, T.Confirm)
+        self.run_app(fn, size=(80, 24))
 
     def test_search_and_add(self):
         async def fn(app, pilot):

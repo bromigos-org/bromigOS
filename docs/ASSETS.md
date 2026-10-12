@@ -17,6 +17,7 @@ the models used.
 | Dictation panel and `dictation.webp` | Drawn for bromigOS; nested render with synthetic speech | yes | No desktop capture, audio, private text or external art |
 | Code: the core, widgets, live layer, VECTOR, scripts | Written for bromigOS, first on the operator's desktop | yes | `MIT OR Apache-2.0` |
 | Lab console test snapshot (`homelab/tests/snapshots/lab-tui.svg`) | Textual render with recorded fake readings | yes | No real desktop or lab data |
+| Lab job cancellation (`lab-job-cancel.webp`) | Offscreen Textual render of the fake job fixture | yes | Drawn from our code; made-up job, no desktop capture |
 | Bromigos palette, emblem ("the burn-in") and lore | Bromigos original | yes, as brand assets | Licensed apart from the code |
 | Bromigos logos, favicons, lockups and house palette (`brand/`) | Traced from the canon `bromigos-logo.png` | yes, as brand assets | Source only, not packaged. No likeness |
 | The canonical burn-in (`theme/emblem/identity.json`, `flame.svg`) | Bromigos original | yes, as a brand asset | In `bromigos-core`. Every emblem kit is drawn from it |
@@ -274,9 +275,10 @@ no likeness and no lab hosts.
   readings (`tools/screenshots/render.py`, `holodeck`); a made-up lab.
 - **`hologram-gallery.webp`**, on the Holograms page. The hologram gallery on Mire's stilt
   shack, rendered offscreen; the lab's name in its corner painted out.
-- **`lab-console.webp`**, on The lab console and Your media pages. `bromigos lab` in a terminal,
-  rendered offscreen with demo readings (`tools/screenshots/render.py`, `lab-console`);
-  the tests' recorded lab, not a real one.
+- **`lab-console.webp`** and **`lab-job-cancel.webp`**, on The lab console and Your media pages.
+  Textual exports from the recorded fake lab (`homelab/tests/test_lab_tui.py`), rendered
+  from SVG. The dashboard and the job cancellation question use made-up readings,
+  never the operator's desktop or live lab data.
 - **`dictation.webp`**, on Dictation. The real dictation panel in a nested Hyprland,
   cropped from `desktop/tests/e2e_dictation_nested.py --shots DIR`, with synthetic audio
   and a made-up transcript. The microphone and audio meter are drawn in code.

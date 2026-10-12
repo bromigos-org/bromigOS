@@ -99,15 +99,24 @@ bromigos media
 ![The media library shows TV titles and their seasons in the terminal](images/media-library.webp)
 
 Choose **Search**, or press `7` or `Ctrl+F`. Search, pick a result and choose its seasons, quality and
-audio. **Plan** shows what would happen. **Request** confirms it.
+audio. The form previews the request automatically and updates it when you change
+an option. Read the title, scope, quality and space estimate, then choose
+**Request**. That button stays unavailable until the current preview is ready.
+**Preview** reads the plan again.
+
+After you confirm, **Requesting…** appears and the form waits for the result. Its
+controls stay locked while your media service handles the request. A successful
+request closes the form. An error stays visible in the form so you can review it.
 
 The **TV**, **Movies** and **Music** tabs show what you have. Use arrows or `j`, `k`, `h`
 and `l` to move. Pick a show to see its seasons, or an artist to see its albums. Press `P`
 to change its profile, `m` to change monitoring, or `f` to search now.
 On the top tabs, `Left`/`Right` or `h`/`l` selects the previous or next tab.
 Press `Down` or `j` to enter the table. At its first row,
-`Up` or `k` takes you back. Press `Ctrl+C` or `q` to quit, even while typing or in a
-dialog. An unconfirmed delete is cancelled.
+`Up` or `k` takes you back. Press `?` for keyboard help.
+Press `Ctrl+C` to quit from the main screen. In a dialog, `Escape` or `Ctrl+C`
+cancels an unconfirmed dialog and returns to the library. Letters such as `q` stay available
+while typing. A dialog keeps the background tabs and actions inactive.
 See the [library's keys](lab.md#your-media-library) for the full list.
 
 ### Ask VECTOR
@@ -158,14 +167,15 @@ removed title or album from being added back by an import list. A removed season
 episode stops being monitored.
 
 In the terminal library, select the title, season or album and press `D`. Read the
-question, then choose **Delete** or **Cancel**. Cancel is selected first; Escape cancels. **Don't fetch it again**
+question, then choose **Delete** or **Cancel**. Cancel is selected first; `Escape` or `Ctrl+C` cancels. **Don't fetch it again**
 adds the import exclusion. To keep files and only stop looking for more, use `m` instead.
 The [delete reference](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab.md#the-media-library)
 explains the scopes.
 
 The delete dialog starts on Cancel. `Left`/`Right` chooses a button and Enter
 activates it. `Up`/`Down` moves to or from the exclusion checkbox; Enter or Space
-toggles it. Escape cancels.
+toggles it. `Tab` and `Shift+Tab` also move between controls.
+`Escape` or `Ctrl+C` cancels.
 
 ## Keep YouTube channels and playlists
 
@@ -227,7 +237,7 @@ holds the shows, movies, YouTube addresses or music you choose.
 From **TV**, **Movies**, **YouTube** or **Music**, select a title and click
 **Add to channel… (c)** below the list, or press `c`. This also works on Search
 results, Downloads and Upcoming titles. In Music, selecting an album adds that album.
-Choose **Add to Night Block** (or another picked channel), then **Use channel**.
+Choose **Add to Night Block** (or another picked channel), then **Apply channel choice**.
 You can also choose **Remove from…** or **New channel…**.
 
 ![The Media channel picker with Add to Night Block selected](images/media-channel-picker.webp)

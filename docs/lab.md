@@ -49,15 +49,23 @@ output isn't a terminal, it prints the status instead.
 | 1, 2, 3, 4 | Switch to Status, Models, Jobs or Doctor. |
 | r | Read the lab again now. |
 | n | Queue a new job. |
-| c | Cancel the job under the cursor. |
+| c | Review cancellation of the selected job. |
 | R | Retry the job under the cursor. |
 | d | Run the doctor now. |
-| q | Quit. |
+| q, Ctrl+C | Quit from the main screen. |
+| ? | Show keyboard help. |
 | ↓ ↑, j k | Move through the cards (each shows as you reach it) or a table's rows. |
 | → ←, l h | On Status, move between the cards and the detail table. |
 | g, G | The first or last item. |
 | Ctrl+D, Ctrl+U | A page down or up in a table. |
 | ], [ or L, H | The next or previous tab. Switching tabs puts the keyboard on that tab's list. |
+
+`tuiux.py` provides dialog navigation, keyboard help and shortcut guards for the
+Media and Lab apps.
+Dialogs keep input and actions inside the modal screen. `Escape` and `Ctrl+C`
+dismiss an unconfirmed dialog without applying the pending change. Letter keys
+remain available in inputs.
+Job cancellation opens a question with **Keep job** focused first.
 
 The dashboard needs `python-textual`. Without it, `bromigos lab` says so and prints the
 status.
@@ -382,29 +390,34 @@ terminal. Without a terminal, both print the Requests card instead.
   the free space.
 - Search (`7`, `a` or `Ctrl+F`) looks up titles in the connected services, including
   titles outside the library. Enter or the Search button runs the lookup; selecting
-  a result opens the request form. The media-type picker narrows the lookup, and
+  a result opens the request form. It previews the plan automatically after each
+  option change. Request stays disabled until the displayed plan matches
+  the selected options. Confirmation locks the form while the request runs. Success
+  dismisses it; an error restores the controls and remains visible. The media-type
+  picker narrows the lookup, and
   the Have it column shows existing library matches. `/` filters tracked titles.
 - A title's side table lists its seasons, its albums, or a season's episode files (`e`).
-- Keys act on the row under the cursor: `m` monitor, `n` new episodes, `p` profile, `f`
+- Keys act on the row under the cursor: `m` monitor, `n` new episodes, `P` profile, `p` den playback, `f`
   search now, `o` and `O` open in Jellyfin and Seerr, `t` play (Jellyfin to mpv full
   screen, as the den TV opens a channel), `D` delete, `/` filter, `s` sort. Vim keys work
   beside the arrows, and every key, tab, row and button has a hint.
 - Delete dialogs bind `Left`/`Right` to their buttons and Enter to the focused
   button or checkbox. `Up`/`Down` follows the focus order, skipping disabled controls.
   Cancel starts focused.
-- `Ctrl+C` and `q` have priority over inputs and modal screens. Quitting dismisses an
-  open confirmation with no result. Confirmed changes run synchronously to completion.
+- `Ctrl+C` quits from the main screen. In an unconfirmed dialog, it cancels alongside `Escape`.
+  `q` quits only outside text inputs and dialogs. Modal screens block background
+  actions and tab changes. Confirmed changes run synchronously to completion.
 - `Left`/`Right` and `h`/`l` select tabs while the tab bar has focus.
   `Down`/`j` enters the active tab's first table from the tab bar. `Up`/`k` at row zero
   returns to the tab bar. The tables share the lab's `HintTable` Vim bindings:
   `j`/`k`, `g`/`G`, `Ctrl+D`/`Ctrl+U`, and `h`/`l` or arrows between panes.
-  `[`/`]` and `H`/`L` switch tabs even from an input. Switching tabs cancels an open dialog.
-  A key strip above the footer shows the navigation keys.
+  `[`/`]` and `H`/`L` switch tabs from the main screen.
+  The footer and action buttons follow the active tab; `?` opens keyboard help.
 - The lab console's `M` opens it, and returns to the console when it closes.
 
 - Channels use `bromigos_tvchannels.Store`, shared with the standalone GTK guide and
   live CLI. **Add to channel… (c)** below the active title tab opens add/remove/new
-  choices; `c` opens the same picker. Choose an **Add to** entry, then **Use channel**.
+  choices; `c` opens the same picker. Choose an **Add to** entry, then **Apply channel choice**.
   The button retains table focus before opening, so a selected album stays selected.
   A diamond marks channel membership. Each row’s hover hint includes the channel
   names, and the selected row’s names stay visible beside the Add button. Membership
@@ -433,7 +446,7 @@ name the title. His terminal can't run `delete` at all.
 **Tests.** `homelab/tests/test_lab_media.py` covers the profile picker, anime detection, the
 languages, seasons and episodes, and every command. `homelab/tests/test_media_tui.py` drives
 the TUI with Textual's pilot: every tab, the delete dialog (default Cancel, Delete and
-a season), quitting from every tab and modal, arrows and Vim keys between tabs
+a season), quitting from every tab, cancelling modals, arrows and Vim keys between tabs
 and content, monitor, profile, open, search and request, and filter and sort. With
 `MEDIA_SCREENSHOTS=DIR` it writes each tab as an SVG; the manual's pictures come from those. It runs them against a fake stack
 (`homelab/tests/mediafake.py`): one local server that answers like Seerr, Sonarr, Radarr,
