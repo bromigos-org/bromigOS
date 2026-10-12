@@ -9,9 +9,9 @@
 # and MTEB leaderboards, OmniDocBench and olmOCR-bench, vendor and community benchmarks (each
 # model's `cite`). Figures marked est. in vram_note are computed, not measured.
 format = 1
-version = 2
+version = 3
 researched = "2026-10-09"
-refreshed = "2026-10-09"
+refreshed = "2026-10-12"
 
 [licence.apache-2]
 hub = ["apache-2.0"]
@@ -10070,4 +10070,69 @@ stack = "needs support: a new voice-service backend (check its runtime)"
 licence = "apache-2.0"
 review = true
 found = "2026-10-09"
+state = "pending review"
+[[pending]]
+id = "hf:AxiomicLabs/GPT-X3-150M"
+kind = "new model"
+capability = "llm"
+title = "AxiomicLabs/GPT-X3-150M: trending text-generation"
+why = "new in the last 60 days (19 days old), 49 likes, 455 downloads"
+repo = "AxiomicLabs/GPT-X3-150M"
+evidence = ["https://huggingface.co/AxiomicLabs/GPT-X3-150M"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+found = "2026-10-12"
+state = "pending review"
+[[pending]]
+id = "hf:openbmb/MiniCPM5-2B"
+kind = "new model"
+capability = "llm"
+title = "openbmb/MiniCPM5-2B: trending text-generation"
+why = "new in the last 60 days (36 days old), 1754 likes, 1278419 downloads"
+repo = "openbmb/MiniCPM5-2B"
+evidence = ["https://huggingface.co/openbmb/MiniCPM5-2B"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+found = "2026-10-12"
+state = "pending review"
+[[pending]]
+id = "hf:tencent/Youtu-Parsing-Omni"
+kind = "new model"
+capability = "llm"
+title = "tencent/Youtu-Parsing-Omni: trending image-text-to-text"
+why = "new in the last 60 days (3 days old), 86 likes, 741 downloads"
+repo = "tencent/Youtu-Parsing-Omni"
+evidence = ["https://huggingface.co/tencent/Youtu-Parsing-Omni"]
+stack = "ready (vllm, sglang)"
+licence = "other"
+review = true
+found = "2026-10-12"
+state = "pending review"
+[[pending]]
+id = "hf:lightonai/LightOnOCR-3-4B"
+kind = "new model"
+capability = "llm"
+title = "lightonai/LightOnOCR-3-4B: trending image-text-to-text"
+why = "new in the last 60 days (6 days old), 75 likes, 3222 downloads"
+repo = "lightonai/LightOnOCR-3-4B"
+evidence = ["https://huggingface.co/lightonai/LightOnOCR-3-4B"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+found = "2026-10-12"
+state = "pending review"
+[[pending]]
+id = "hf:speridlabs/iris-3b"
+kind = "new model"
+capability = "image"
+title = "speridlabs/iris-3b: trending text-to-image"
+why = "new in the last 60 days (7 days old), 189 likes, 706 downloads"
+repo = "speridlabs/iris-3b"
+evidence = ["https://huggingface.co/speridlabs/iris-3b"]
+stack = "needs support: no ComfyUI-native repackage (Comfy-Org) yet"
+licence = "apache-2.0"
+review = true
+found = "2026-10-12"
 state = "pending review"
