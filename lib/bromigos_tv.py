@@ -661,7 +661,7 @@ def rotation_advance(ch, t=None, every=3 * 3600):
     after day. Written when there's none yet or it's older than `every` seconds."""
     if not (ch.get("picks") and ch.get("order") == "in order"):
         return None
-    t = time.time() if t is None else t
+    t = (time.time() if t is None else t) + channel_offset(ch)
     doc = cached_items(ch) or {}
     st = _read(ROTATION)
     old = st.get(ch["key"])
@@ -740,6 +740,26 @@ def unmark_bad(item_ids):
         pass
 
 
+def channel_offset(ch):
+    return float(_read(os.path.join(STATE_DIR, "tv-clocks.json")).get(ch["key"], 0))
+
+
+def channel_step(ch, previous=False, t=None):
+    """Move the channel clock to the adjacent item's start, keeping its schedule."""
+    t = time.time() if t is None else t
+    current = now_next(ch, t)
+    if not current or current.end is None:
+        return None
+    target = now_next(ch, current.start - .001) if previous else now_next(ch, current.end + .001)
+    if not target:
+        return None
+    path = os.path.join(STATE_DIR, "tv-clocks.json")
+    clocks = _read(path)
+    clocks[ch["key"]] = channel_offset(ch) + target.start - t
+    _write_json(path, clocks)
+    return now_next(ch, t)
+
+
 def now_next(ch, t=None):
     """The channel's Slot now, from its cached items (no network), or None."""
     if ch.get("kind") == "live":
@@ -747,10 +767,16 @@ def now_next(ch, t=None):
         return Slot(item=dict(v, kind="live"), offset=None, start=None, end=None, index=0, next=None)
     doc = cached_items(ch) or {}
     t = time.time() if t is None else t
+    shift = channel_offset(ch)
     if ch.get("picks") and ch.get("order") == "in order":
-        return rotation_at(_groups_of(doc), t, rotation_state(ch.get("key")), bad_items())
-    return schedule_at(doc.get("items") or [], t, ch.get("seed", ch.get("key")),
-                       ch.get("order", "shuffle"), bad=bad_items())
+        slot = rotation_at(_groups_of(doc), t + shift, rotation_state(ch.get("key")), bad_items())
+    else:
+        slot = schedule_at(doc.get("items") or [], t + shift, ch.get("seed", ch.get("key")),
+                           ch.get("order", "shuffle"), bad=bad_items())
+    if slot:
+        slot["start"] -= shift
+        slot["end"] -= shift
+    return slot
 
 
 def label(item):

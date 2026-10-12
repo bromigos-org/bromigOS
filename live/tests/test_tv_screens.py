@@ -724,6 +724,21 @@ class PicksTest(unittest.TestCase):
         a = [x for x in self.sequence(ch, TV.EPOCH + 1000, 5)]
         self.assertEqual(a, self.sequence(ch, TV.EPOCH + 1000, 5))   # the same, every time
 
+    def test_skip_picked_rotation_survives_worker_anchor_refresh(self):
+        srv = FM.FakeJellyfin()
+        self.addCleanup(srv.close)
+        ch, _doc = self.make(srv, "in order")
+        t = TV.day_start(time.time()) + 20
+        TV.rotation_advance(ch, t)
+        before = TV.now_next(ch, t)
+        moved = TV.channel_step(ch, t=t)
+        self.assertEqual(moved.item["id"], before.next["id"])
+        self.assertAlmostEqual(moved.offset, 0, places=3)
+        TV.rotation_advance(ch, t + 30, every=0)
+        self.assertEqual(TV.now_next(ch, t + 30).item["id"], moved.item["id"])
+        self.assertAlmostEqual(TV.now_next(ch, t + 30).offset, 30, places=3)
+        self.assertEqual(TV.now_next(ch, moved.end + .01).item["id"], moved.next["id"])
+
     def test_titles_matched_once_and_remembered(self):
         srv = FM.FakeJellyfin()
         self.addCleanup(srv.close)

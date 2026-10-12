@@ -326,7 +326,9 @@ in it. The full format, and how to make a world, are in the developer docs:
 ## Den TV controls
 
 Hover over a TV to open its menu for channels, sound, volume, **SKIP**, **FULL**
-and **GUIDE**. **SKIP** plays the next item on that screen’s channel.
+and **GUIDE**. **SKIP** advances the channel to its next item. Switching away and
+back keeps that progress, including after restarting the live layer. The channel
+continues playing while you watch another channel.
 The menu is on by default. A change shows its volume, channel or crossed-out speaker
 on the TV for about a second and a half. The same feedback appears for commands,
 VECTOR, keys and the MEDIA widget. Reduced motion uses an immediate on/off change.

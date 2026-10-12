@@ -74,7 +74,7 @@ class Controls(unittest.TestCase):
         tv.remote("mute"); self.assertFalse(tv.screens["wave"]["sound"])
         self.assertEqual(tv.decks["wave"].feedback[1],"MUTED")
         tv.remote("sound"); self.assertTrue(tv.screens["wave"]["sound"])
-        tv.remote("skip"); self.assertIn("wave",tv.overrides)
+        tv.remote("skip"); self.assertNotIn("wave",tv.overrides)
         tv.remote_at -= 15.1; tv.controls_tick(); self.assertIsNone(tv.selected)
         tv._submap.assert_called_with("reset")
 
@@ -82,6 +82,24 @@ class Controls(unittest.TestCase):
         self.tv.remote("volume-up","big")
         self.assertEqual(self.tv.screens["big"]["volume"],65)
         self.assertIsNone(self.tv.selected); self.tv._submap.assert_not_called()
+
+    def test_skip_survives_retuning_restart_and_advances_at_item_end(self):
+        tv = self.tv
+        tv.tune_to("big", 2)
+        ch = tv.channel("big")[1]
+        before = tv.slot(ch)
+        tv.skip_item("big")
+        skipped = tv.slot(ch)
+        self.assertEqual(skipped.item["id"], before.next["id"])
+        self.assertLess(skipped.offset, 1)
+        tv.tune_to("big", 1)
+        tv.tune_to("big", 2)
+        self.assertEqual(tv.slot(tv.channel("big")[1]).item["id"], skipped.item["id"])
+        self.assertEqual(S.TV.now_next(ch).item["id"], skipped.item["id"])
+        after = S.TV.now_next(ch, skipped.end + .01)
+        self.assertEqual(after.item["id"], skipped.next["id"])
+        tv.skip_item("big", previous=True)
+        self.assertEqual(tv.slot(ch).item["id"], before.item["id"])
 
     def test_play_from_start_resume_eof_and_channel_change(self):
         tv = self.tv; item = dict(id="episode",title="Episode",server="jellyfin",kind="episode",duration=600,position=80)

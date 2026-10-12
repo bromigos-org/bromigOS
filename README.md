@@ -288,6 +288,8 @@ See [Dictation](manual/src/dictation.md).
 
 ## Den TV controls
 
+Skip advances the channel's saved schedule; switching away and back keeps its progress.
+
 Control each den screen with its hover menu, the MEDIA remote or your number pad.
 Use **SKIP** in the hover menu or MEDIA widget to play the next item.
 The full-screen player has a volume slider that opens when you hover its speaker.

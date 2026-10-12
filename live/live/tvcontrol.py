@@ -89,6 +89,16 @@ class Controls:
 
     def skip_item(self, screen, previous=False):
         ch = self.channel(screen)[1]
+        if not ch.get("override"):
+            moved = TVL.channel_step(ch, previous)
+            if moved:
+                self.last_slot.pop(ch["key"], None)
+                self._unload(self.decks[screen])
+                self.feedback(screen, "PREVIOUS" if previous else "NEXT ITEM")
+                if self.full_session and self.full_session.screen == screen:
+                    self.full_session.retune()
+                self.wake.set()
+                return f"{screen}: {TVL.label(moved.item)}"
         slot = self.slot(ch)
         if previous and self.history[screen]:
             item = self.history[screen].pop()

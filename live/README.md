@@ -702,6 +702,9 @@ channels are the station's radio bands.
 The den screens have a hover menu for channels, sound, volume, skip, full screen and the guide.
 The hover menu is on by default and uses `tv.hover_hint`.
 `bromigos-live tv hint on|off` changes it.
+Skip advances the channel's saved clock, so switching away and back keeps its
+progress. All screens tuned to that channel share it. The clock is stored in
+`$XDG_STATE_HOME/bromigos-live/tv-clocks.json` (default `~/.local/state/`).
 The MEDIA widget has a rotary dial and per-screen sound controls. Full-screen playback
 loads only the den's own `live/tvosc.lua`, with a private palette and IPC connection;
 it leaves global mpv settings alone. The number-pad remote selects a screen with
