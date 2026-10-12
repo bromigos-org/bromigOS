@@ -230,7 +230,7 @@ class RunJob(Dialog):
             yield i
             yield Static("Runs on the lab, for no credits.\nResults: ~/Pictures/bromigos/lab/<kind>/", classes="dim")
             with Horizontal():
-                yield Button("Cancel", id="no")
+                yield Button("Cancel", id="no", tooltip="Close without queuing anything")
                 b = Button("Queue job", variant="primary", id="go")
                 b.tooltip = "Add the job to the lab's queue (bromigos lab run)"
                 yield b
@@ -284,7 +284,7 @@ class AddYouTube(Dialog):
             i.tooltip = "The name in Pinchflat, its folder on disk and the playlist in your media server"
             yield i
             with Horizontal():
-                yield Button("Cancel", id="yt-no")
+                yield Button("Cancel", id="yt-no", tooltip="Close without adding anything")
                 b = Button("Add channel or playlist", variant="primary", id="yt-go")
                 b.tooltip = "Add it to Pinchflat, which starts downloading (bromigos lab youtube add)"
                 yield b
