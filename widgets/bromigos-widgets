@@ -749,6 +749,9 @@ class App:
 
     def shown(self, name):
         w = self.windows.get(name)
+        saved = getattr(self, "game_visible", None)
+        if saved is not None and name in saved:
+            return saved[name]
         return bool(w and (w.visible() or name in self.lost))
 
     def put(self, w, conn, x=None, y=None):
@@ -1154,6 +1157,19 @@ class App:
     def loop(self):
         """100 ms heartbeat: sample each panel on its own interval; redraw at
         10 fps only while a panel runs a short animation (the Lab's sync pulse)."""
+        game = os.path.exists(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "bromigos-game-on.json"))
+        saved = getattr(self, "game_visible", None)
+        if game:
+            if saved is None:
+                self.game_visible = saved = {n: self.shown(n) for n in self.windows}
+            for n, w in self.windows.items():
+                saved.setdefault(n, self.shown(n))
+                w.win.hide()
+        elif saved is not None:
+            self.game_visible = None
+            for n, visible in saved.items():
+                if n in self.windows and visible:
+                    self.windows[n].win.show_all()
         now = time.monotonic()
         if D.T.version() != self.theme_seen:   # `bromigos theme set`: new colours, redraw
             self.theme_seen = D.T.version()

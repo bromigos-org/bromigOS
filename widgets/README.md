@@ -188,3 +188,9 @@ Super+KP 1/2/3 and releases it with Super+KP 0, Escape or a fifteen-second timeo
 `lib/bromigos_tvplay.py` shares media search and on-demand playback between the Den TV
 app, media TUI, CLI and VECTOR. `lib/bromigos_tvremote.py` shares hint, selection and
 remote commands. The media TUI uses `p` to play on a den screen and `P` for a profile.
+
+## Game mode
+
+The panels temporarily hide while the session's game marker exists. Their previous
+visibility stays in memory and is used for layout saves. Removing the marker restores
+that visibility. See [game mode](../docs/desktop.md#game-mode).

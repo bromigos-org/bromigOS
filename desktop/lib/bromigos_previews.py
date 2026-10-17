@@ -1731,6 +1731,7 @@ def bar_modules(cur, waybar_dir):
         "hyprland/window": {"title": "~/projects/drift-atlas"},
     }
     custom = {   # the bar scripts' output (desktop/waybar/scripts), written in the Wick's colours
+        "custom/game": ("", []),
         "custom/idle": (" ", ["normal"]),
         "custom/vector": ("VECTOR", []),
         "custom/vector-switch": ("\uf011", ["on"]),          # VECTOR's emergency switch, on

@@ -133,6 +133,12 @@ The desktop runs these for you. You don't need them day to day.
 |---|---|
 | [`bromigos shell`](#bromigos-shell) | Choose the zsh prompt: mehshell, Starship or a plain prompt. See [Shell and terminal](shell.md). |
 
+### Playing games
+
+| Command | What it does |
+|---|---|
+| [`bromigos game`](#bromigos-game) | Give the game your keys and quiet the desktop. See [Playing games](games.md). |
+
 ### Other commands
 
 | Command | What it does |
@@ -947,6 +953,24 @@ For example:
 ```text
 bromigos extensions
 bromigos extensions --list
+```
+
+From the `bromigos-desktop` package.
+
+### bromigos game
+
+Give games the keyboard, quiet the desktop, and restore it afterwards.
+
+```text
+bromigos game on|off|toggle|status | auto on|off [--json]
+```
+
+For example:
+
+```text
+bromigos game on
+bromigos game off
+bromigos game auto on
 ```
 
 From the `bromigos-desktop` package.

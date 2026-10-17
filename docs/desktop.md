@@ -521,3 +521,57 @@ Updating is described in [update.md](update.md).
 `bromigos settings` (Super+,) is one window for the desktop's settings. Each page drives a
 `bromigos` command and keeps no copy of its rules. Any package, extension or user can add
 a page. See [settings.md](settings.md).
+
+## Legacy tray icons
+
+Waybar's tray reads StatusNotifierItem, the modern tray protocol. Wine and older
+X11 apps use XEmbed instead. `bromigos-desktop` depends on `plasma-workspace` for
+`xembedsniproxy`, which starts at login alongside Waybar, before user autostart commands.
+It owns the XEmbed tray selection and publishes each icon to Waybar, including its
+mouse actions. Wine can then dock its icons instead of creating a floating tray.
+A rule hides only the bridge's `xembedsniproxy` helper window and disables its blur.
+This uses the helper class added in KDE 6.7; app windows and menus keep their own rules.
+Restart an already running Wine app after the next login so it docks again.
+
+`snixembed` is not used. It converts modern tray items into legacy XEmbed icons, which
+is the opposite direction. See its [package description](https://archlinux.org/packages/extra/x86_64/snixembed/).
+
+## Game mode
+
+`desktop/bin/bromigos-game` provides `bromigos game on|off|toggle|status` and
+`bromigos game auto on|off`. Settings › Playing games calls the same command.
+The session helper serialises requests over a private Unix socket. Its mode is per
+session, not a permanent settings change.
+
+The `bromigos-game` Hyprland submap has one binding: Ctrl+Shift+F12. Every other key,
+including the main modifier Alt, goes to the focused client. The escape resets the
+submap directly before asking the helper to restore the desktop. Super+Ctrl+G enters
+from the normal desktop. No compositor reload is needed to toggle it.
+
+While active, the helper holds a separate logind idle inhibitor, pauses dunst, and
+writes `$XDG_RUNTIME_DIR/bromigos-game-on.json`. The live layer stops background frames
+and TV playback while the panels temporarily hide their windows. Panels keep their
+previous visibility in memory and use it when saving their layout. Leaving restores
+that visibility and dunst's previous paused state. Existing stay-awake timers and saved
+wallpaper settings are untouched. Explicit locking remains available from a TTY.
+The bar shows GAME MODE with the escape key in its tooltip.
+
+The helper remembers display routing in the user's state folder so `bromigos game off`
+can recover the desktop from a TTY or SSH. Its inhibitor child exits when its input pipe
+closes, including after a helper crash. A new helper restores any saved notification
+state before accepting requests, and sets the gaming LED to the mode. Leaving the
+submap by another route also restores the desktop. Logging out ends the helper.
+
+Automatic mode is off by default. Its setting lives in
+`~/.config/bromigos/game.json`. When enabled, it follows the focused window's fullscreen
+state and matches `steam_app_<number>`, `*.exe` and gamescope classes, or processes
+started by Lutris. Battle.net, Steam and Lutris launchers are excluded. Native Lutris
+games are recognised through process ancestry; detached games may need manual mode.
+Leaving manually suppresses automatic re-entry until focus or fullscreen state changes. Manual mode remains on across focus changes.
+
+For the Razer button and LED, see [peripherals](peripherals.md#game-mode-key).
+The isolated test is `desktop/tests/e2e_game_nested.py`; the tray test is
+`desktop/tests/e2e_tray_nested.py`. The latter needs `gtk2` for its StatusIcon fixture.
+It exercises the direct XEmbed button path also used by Wine. GTK 3 StatusIcon uses
+the bridge's separate XTest input path; its menu did not open from a simulated Waybar
+click in the nested test, although a direct SNI context-menu request worked.

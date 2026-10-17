@@ -42,13 +42,13 @@ import vkbd  # noqa: E402
 STUB = "#!/bin/sh\nexit 0\n"
 STUBS = {
     "waybar": STUB, "dunst": STUB, "hypridle": STUB, "swaybg": STUB, "bromigos-windows": STUB,
-    "bromigos-live": STUB,
+    "bromigos-live": STUB, "xembedsniproxy": STUB,
     # its monitor hook restarts swaybg: never near the desktop's own (it once found it by name)
     "bromigos-wallpaper": STUB,
     "bromigos-widgets": '#!/bin/sh\necho "$*" >> "$HOME/widgets.log"\n',
     "notify-send": '#!/bin/sh\necho "$*" >> "$HOME/notify.log"\n',
     # the session's own commands stay in the sandbox; the rest is the real CLI
-    "bromigos": '#!/bin/sh\ncase "$1 $2" in "session adopt"|"session import"|"wallpaper "*) exit 0;; esac\n'
+    "bromigos": '#!/bin/sh\ncase "$1 $2" in "session adopt"|"session import"|"game --watch"|"wallpaper "*) exit 0;; esac\n'
                 'exec @BROMIGOS@ "$@"\n',
     # a verify that fails on request (the restore test)
     "Hyprland": '#!/bin/sh\nif [ -n "$BK_FAIL_VERIFY" ] && [ "$1" = "--verify-config" ]; then\n'
@@ -105,7 +105,7 @@ class Nest:
                      "XDG_STATE_HOME": os.path.join(self.home, ".local", "state"),
                      "XDG_DATA_HOME": os.path.join(self.home, ".local", "share"),
                      "BROMIGOS_SHARE_DIR": os.path.join(self.tmp, "share"),
-                     "DBUS_SESSION_BUS_ADDRESS": "disabled:", "LIBSEAT_BACKEND": "seatd"}
+                     "DBUS_SESSION_BUS_ADDRESS": "disabled:", "LIBSEAT_BACKEND": "seatd", "KWIN_COMPOSE": "O2"}
         self.procs = []
 
     def start(self):
@@ -117,6 +117,20 @@ class Nest:
                                      start_new_session=True)
         if not wait_for(lambda: os.path.exists(os.path.join(self.run, "kw")), 15):
             raise RuntimeError("kwin_wayland --virtual didn't start")
+        # The socket appears before KWin finishes initialising EGL. Hyprland needs
+        # dmabuf, so wait for that global rather than racing compositor startup.
+        if shutil.which("wayland-info"):
+            def dmabuf_ready():
+                try:
+                    info = subprocess.run(["wayland-info"], env=dict(env, WAYLAND_DISPLAY="kw"),
+                                          capture_output=True, text=True, timeout=3)
+                    return "zwp_linux_dmabuf_v1" in info.stdout
+                except subprocess.TimeoutExpired:
+                    return False
+            if not wait_for(dmabuf_ready, 15):
+                raise RuntimeError("the virtual compositor did not advertise dmabuf")
+        else:
+            time.sleep(1)
         env = dict(self.base, WAYLAND_DISPLAY="kw", PATH=f"{self.stubs}:/usr/bin", HYPRLAND_NO_SD_VARS="1",
                    AQ_FORCE_LINEAR_BLIT="0")
         self.log = open(os.path.join(self.tmp, "hyprland.out"), "w")

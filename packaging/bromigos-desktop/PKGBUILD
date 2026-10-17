@@ -21,7 +21,7 @@ url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 # bromigos-homelab: the LAB panel and the homelab decks live there (inert with no sources)
 depends=('bromigos-core' 'bromigos-live' 'bromigos-widgets' 'bromigos-settings' 'bromigos-homelab'
-         'hyprland' 'waybar' 'rofi' 'dunst' 'gtklock' 'hypridle' 'hyprlock' 'swaybg'
+         'hyprland' 'waybar' 'plasma-workspace>=6.7' 'rofi' 'dunst' 'gtklock' 'hypridle' 'hyprlock' 'swaybg'
          'zsh' 'mehshell>=0.2.2' 'python' 'libnotify' 'wl-clipboard' 'grim' 'slurp' 'playerctl' 'kitty'
          # the session's plumbing: screen sharing and file pickers, password prompts,
          # sound (the bar's volume: pactl; capture sounds: pw-play), the network (nmtui)
@@ -167,6 +167,7 @@ package() {
   install -Dm0755 startpage/snapshot.py "$lib/desktop/startpage/snapshot.py"
   install -Dm0644 -t "$pkgdir/usr/lib/systemd/user/" systemd/bromigos-startpage.service systemd/bromigos-startpage.timer
   install -Dm0755 bin/bromigos-dispatch "$lib/bin/bromigos-dispatch"
+  install -Dm0755 bin/bromigos-game "$lib/bin/bromigos-game"
   # floating windows put back where they were (bromigos windows …; docs/desktop.md,
   # "Floating windows put back where they were")
   install -Dm0755 bin/bromigos-windows "$lib/desktop/bin/bromigos-windows"

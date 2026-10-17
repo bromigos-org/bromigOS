@@ -318,3 +318,26 @@ Not proven yet:
 - Other vendors' lighting. openrazer is the only backend. An OpenRGB backend would go
   beside it.
 - A keyboard whose dial isn't on its mouse interface.
+
+## Game Mode key
+
+The BlackWidow V4 Pro is USB `1532:028d`. OpenRazer 3.12.4's
+[driver source](https://github.com/openrazer/openrazer/blob/v3.12.4/driver/razerkbd_driver.c)
+selects `chroma_keys_5` for it. With Fn held, F10 becomes `RAZER_GAME_KEY`, defined as
+Linux `KEY_MACRO29` (`0x2ac`). The driver's bitfield report handler tracks Fn, so this
+is an input event in driver mode, rather than only a firmware LED change.
+
+The game helper reads that event from opted-in Razer keyboards without grabbing the
+keyboard. It uses `python-evdev`, already required by the peripheral module, and toggles
+`bromigos game`. Only press events count; release and repeat do not toggle.
+It discovers newly connected devices every ten seconds. It needs the same OpenRazer
+group permissions as the dial. An unreadable input device is skipped.
+
+OpenRazer's `game_mode_led` client property reads and writes `game_led_state` through
+its daemon. The helper lights each supported keyboard while active and turns that
+indicator off on exit. OpenRazer also handles the hardware key, so the helper reconciles the LED
+each second to keep asynchronous writes in sync. It does not poll the LED as an input
+event or change the keyboard's device mode. The escape uses no Super key, since firmware gaming
+mode can disable Super. See the [driver documentation](https://github.com/openrazer/openrazer/wiki/Using-the-keyboard-driver)
+and [game mode](desktop.md#game-mode). Hardware event delivery still depends on firmware
+and the active driver mode; the default shortcut and CLI remain available.

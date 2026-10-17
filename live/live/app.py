@@ -332,6 +332,8 @@ class App:
         self.lock_emblem = LockEmblem() if self.cfg["events"].get("lock_emblem", True) else None
         self._serve()
         GLib.timeout_add_seconds(3, self._watch_config)
+        self._game_mode = False
+        GLib.timeout_add(250, self._watch_game_mode)
         self.output_gone = False
         self.dpms = True
         self.measured = None
@@ -515,7 +517,9 @@ class App:
             covered = set(getattr(self, "_tv_cov", set())) & set(rects)
         saver = "screensaver" in self.overlays
         speaking = bool(getattr(self.codec, "current", None)) or _vector_speaking()
-        t.tick(covered=covered, quiet=self.locked or saver, ducked=speaking, motion=motion.mode(self.cfg),
+        game = os.path.exists(os.path.join(RUNTIME, "bromigos-game-on.json"))
+        t.tick(covered=covered, quiet=self.locked or saver or game, ducked=speaking,
+               motion="still" if game else motion.mode(self.cfg),
                software=bool(self.software))
         if t.hint_expired():
             self._tv_redraw()
@@ -744,12 +748,22 @@ class App:
     # ------------------------------------------------------------------ state
     mode = "starting"
 
+    def _watch_game_mode(self):
+        game = os.path.exists(os.path.join(RUNTIME, "bromigos-game-on.json"))
+        if game != self._game_mode:
+            self._game_mode = game
+            self.refresh_state()
+        return True
+
     def refresh_state(self):
         windows, full, _mon = hypr.monitor_state(self.cfg["general"]["monitor"])
         self.covered, self.fullscreen = windows, full
         g = self.cfg["general"]
         own_full = [k for k in self.overlays if k == "screensaver" or self.is_deck(k)]
-        if self.locked:
+        game = os.path.exists(os.path.join(RUNTIME, "bromigos-game-on.json"))
+        if game:
+            mode, why = "paused", "game mode"
+        elif self.locked:
             mode, why = "paused", "session locked"
         elif full:
             mode, why = "paused", "fullscreen window"

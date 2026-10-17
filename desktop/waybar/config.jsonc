@@ -11,8 +11,15 @@
   "spacing": 0,
   "modules-left": ["custom/launcher", "ext/workspaces", "hyprland/window"],
   "modules-center": ["mpris"],
-  "modules-right": ["custom/idle", "custom/vector-switch", "custom/vector", "cpu", "memory", "custom/gpu", "temperature", "custom/storage",
+  "modules-right": ["custom/game", "custom/idle", "custom/vector-switch", "custom/vector", "cpu", "memory", "custom/gpu", "temperature", "custom/storage",
                     "network", "power-profiles-daemon", "battery", "pulseaudio", "tray", "custom/settings", "clock"],
+
+  "custom/game": {
+    "exec": "bromigos game status --json | python -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps({\"text\": \"GAME MODE\" if d.get(\"on\") else \"\", \"tooltip\": \"Ctrl+Shift+F12: leave game mode\"}))'",
+    "return-type": "json",
+    "interval": 1,
+    "on-click": "bromigos game off"
+  },
 
   "custom/launcher": {
     "format": " ",
