@@ -930,6 +930,8 @@ class App:
             quiet = quiet or app_name in self.cfg["sounds"].get("quiet_apps", [])
             self.history.event("critical" if urgency >= 2 else "notify",
                                f"{app_name}: {summary}" if urgency >= 2 else (app_name or "notification"))
+            if os.path.exists(os.path.join(RUNTIME, "bromigos-game-on.json")):
+                return False
             if not self._world_event("critical" if urgency >= 2 else "notify") and self.bg and self.bg.renderer:
                 self.bg.renderer.burst(2 if urgency >= 2 else 0)
             if urgency >= 2 and self.cfg["events"].get("critical_flash", True) and not self.locked:

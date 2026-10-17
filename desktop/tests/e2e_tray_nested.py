@@ -120,7 +120,8 @@ def main():
         subprocess.run(["grim",str(Path(n.tmp,"tray-after.png"))],env=n.env,capture_output=True)
         r.check("Waybar right-click reaches XEmbed menu",wait_for(lambda:logged("menu")),n.ctl("cursorpos"))
         clients=n.ctl("clients","-j")
-        r.check("no standalone tray client window",'"title": "XEmbed fixture"' not in clients)
+        r.check("no standalone tray client window",all(c.get("class")=="xembedsniproxy"
+                    for c in json.loads(clients) if c.get("mapped",True)),clients)
     finally:
         if pointer: pointer.close()
         n.stop()

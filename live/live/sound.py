@@ -14,6 +14,11 @@ def muted():
     return os.path.exists(MUTE)
 
 
+def game_quiet():
+    runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    return os.path.exists(os.path.join(runtime, "bromigos-game-on.json"))
+
+
 def toggle_mute():
     os.makedirs(STATE, exist_ok=True)
     if muted():
@@ -36,7 +41,7 @@ class Sound:
     def play_file(self, path, delete=False, gain=None):
         """Play an arbitrary wav (codec voice); honours mute and the volume."""
         s = self.cfg.get("sounds", {})
-        if not s.get("enabled", True) or muted() or not self.player:
+        if not s.get("enabled", True) or muted() or game_quiet() or not self.player:
             return
         g = float(self.cfg.get("codec", {}).get("voice_gain", 1.6)) if gain is None else gain
         vol = max(0.0, min(1.0, float(s.get("volume", 0.3)) * g))
@@ -53,7 +58,7 @@ class Sound:
 
     def play(self, cue):
         s = self.cfg.get("sounds", {})
-        if not s.get("enabled", True) or muted() or not self.player:
+        if not s.get("enabled", True) or muted() or game_quiet() or not self.player:
             return
         name = s.get(cue) or f"{cue}.wav"
         path = name if os.path.isabs(name) else os.path.join(SOUNDS, name)

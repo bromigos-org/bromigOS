@@ -194,6 +194,12 @@ def side_effects(n, r):
     game(n,"off")
     r.check("widget visibility restored exactly",wait_for(lambda:count()==before),f"{count()} vs {before}")
     r.check("wallpaper coverage behaviour restored",wait_for(lambda:live_state().split(" measured=",1)[0]==previous_live))
+    settings=Path(n.tmp,"game-settings.png")
+    rendered=subprocess.run([sys.executable,os.path.join(REPO,"desktop/settings/bromigos-settings"),
+                             "--render",str(settings),"--page","game"],env=env,capture_output=True,
+                            text=True,timeout=40)
+    r.check("Settings Playing games page renders",rendered.returncode==0 and settings.exists(),rendered.stderr[-600:])
+
 
 
 def main():

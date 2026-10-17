@@ -554,6 +554,8 @@ and TV playback while the panels temporarily hide their windows. Panels keep the
 previous visibility in memory and use it when saving their layout. Leaving restores
 that visibility and dunst's previous paused state. Existing stay-awake timers and saved
 wallpaper settings are untouched. Explicit locking remains available from a TTY.
+The live layer also holds back notification overlays, sound cues and new spoken codec
+alerts while game mode is on. Its saved mute setting stays intact.
 The bar shows GAME MODE with the escape key in its tooltip.
 
 The helper remembers display routing in the user's state folder so `bromigos game off`

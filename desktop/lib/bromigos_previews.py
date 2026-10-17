@@ -742,7 +742,8 @@ def _demo_bar_files(box):
     d = os.path.join(box.dir, "bar-demo")
     os.makedirs(d, exist_ok=True)
     out = {}
-    for mod, doc in (("custom/gpu", {"text": "23% <span color='#7e927e'>51°</span>", "class": ""}),
+    for mod, doc in (("custom/game", {"text": "", "class": []}),
+                     ("custom/gpu", {"text": "23% <span color='#7e927e'>51°</span>", "class": ""}),
                      ("custom/storage", {"text": "<span color='#7e927e'>/</span> <span color='#9cff8a'>38%</span>",
                                          "class": ""}),
                      ("custom/vector", {"text": "VECTOR", "class": "idle"}),

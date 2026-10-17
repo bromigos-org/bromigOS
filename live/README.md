@@ -729,5 +729,6 @@ the same path.
 ## Game mode
 
 The session's transient game marker pauses background frames and TV playback without
-changing saved wallpaper settings. Removing it restores the usual coverage and playback
+changing saved wallpaper settings. Notification overlays, sound cues and new codec
+calls stay quiet too. Removing it restores the usual coverage and playback
 rules. See [game mode](../docs/desktop.md#game-mode).
