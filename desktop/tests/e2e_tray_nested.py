@@ -111,6 +111,9 @@ def main():
         r.check("bridge publishes a StatusNotifierItem",wait_for(lambda:"StatusNotifierItem" in items()),items())
         r.check("Waybar accepted the tray item",wait_for(lambda:"SNI tray id:" in Path(n.tmp,"waybar.log").read_text()),
                 Path(n.tmp,"waybar.log").read_text()[-800:])
+        clients=n.ctl("clients","-j")
+        r.check("no standalone tray client window",all(c.get("class")=="xembedsniproxy"
+                    for c in json.loads(clients) if c.get("mapped",True)),clients)
         time.sleep(1)  # the bridge captures the first icon paint after 500 ms
         subprocess.run(["grim",str(Path(n.tmp,"tray.png"))],env=n.env,capture_output=True)
         mon=json.loads(n.ctl("monitors","-j"))[0]
@@ -119,9 +122,7 @@ def main():
         pointer.click(RIGHT,at=(size[0]-14,17))
         subprocess.run(["grim",str(Path(n.tmp,"tray-after.png"))],env=n.env,capture_output=True)
         r.check("Waybar right-click reaches XEmbed menu",wait_for(lambda:logged("menu")),n.ctl("cursorpos"))
-        clients=n.ctl("clients","-j")
-        r.check("no standalone tray client window",all(c.get("class")=="xembedsniproxy"
-                    for c in json.loads(clients) if c.get("mapped",True)),clients)
+
     finally:
         if pointer: pointer.close()
         n.stop()
