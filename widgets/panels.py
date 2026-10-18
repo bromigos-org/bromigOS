@@ -894,8 +894,9 @@ class StoragePanel(Panel):
                 if not isinstance(entry, str):
                     continue
                 path, sep, name = entry.partition("=")
-                if sep and path.strip() == mount and name.strip():
-                    return name.strip()
+                name = " ".join(name.split())
+                if sep and path.strip() == mount and name and name.isprintable():
+                    return name
         return mount
 
     def draw(self, cr, w, h):

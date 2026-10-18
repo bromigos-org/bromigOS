@@ -74,9 +74,26 @@ class StorageNames(unittest.TestCase):
                     left, _top, right, _bottom = mark["box"]
                     self.assertGreaterEqual(left, 16)
                     self.assertLessEqual(right, lo[0] - 16)
-        for invalid in ("wrong type", [None, 12, "/mnt/Work = ", "missing separator", "/mnt = Different"]):
+        for invalid in ("wrong type", [None, 12, "/mnt/Work = ", "missing separator", "/mnt = Different",
+                                      "/mnt/Work = Work\x00hidden"]):
             with self.subTest(invalid=invalid), mock.patch.object(self.panel, "setting", return_value=invalid):
                 self.assertEqual(self.panel._display_name("/mnt/Work"), "/mnt/Work")
+
+    def test_multiline_name_uses_one_line_above_usage(self):
+        WS.set_value("storage", P.StoragePanel.settings, "display_names", ["/mnt/Work = Work\n\tArchive"])
+        for _name, lo, _hi, _start in P.StoragePanel.size_classes():
+            lines = []
+            show = D.PangoCairo.show_layout
+
+            def capture(cr, layout):
+                if layout.get_text() == "WORK ARCHIVE":
+                    lines.append(layout.get_line_count())
+                return show(cr, layout)
+
+            with mock.patch.object(D.PangoCairo, "show_layout", side_effect=capture):
+                self.render(lo)
+            self.assertTrue(lines)
+            self.assertEqual(set(lines), {1})
 
 
 if __name__ == "__main__":

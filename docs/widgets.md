@@ -364,6 +364,7 @@ display_names = ["/ = System", "/mnt/Work = Work"]
 
 Matching uses the complete mount path. The first matching entry with a non-empty name
 wins; malformed entries are ignored. An unmatched mount keeps its path as its name.
+Names collapse whitespace onto one line. Entries with other control characters are ignored.
 Names are drawn within the available space at every size. The full mount path stays in
 the tooltip and file-manager action. Readings, grouping and mount configuration are
 unchanged. The [manual](../manual/src/panels.md#storage-names) covers the settings form
