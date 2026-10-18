@@ -26,6 +26,7 @@ modules to the same folder:
 | `bromigos_tvchannels.py` | Shared channel operations and JSON CLI for the guide, media and VECTOR |
 | `bromigos_tvconfig.py` | Writes the den TV's `[[tv.channel]]` tables in place, keeping comments: the channel guide's writer |
 | `bromigos_youtube.py` | YouTube playlists and channels through yt-dlp, cached, with live streams and keeping videos |
+| `bromigos_storage*.py` | Local drive inventory, saved provisioning plans, verified data copies and a separate path switch; [storage reference](../docs/storage.md) |
 
 ### bromigos_account
 

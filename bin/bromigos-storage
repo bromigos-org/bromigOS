@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+# bromigos:summary=Inspect local drives, plan storage and migrate data while keeping the originals
+# bromigos:args=status [--json] | plan --device DEVICE --mount PATH [--roles LIST] [--json] | apply PLAN | migrate plan|run|resume|verify|status … | switch PLAN --writers-stopped | cleanup --preview [--json]
+# bromigos:examples=bromigos storage status; bromigos storage cleanup --preview; bromigos storage migrate plan --source /path/to/data --destination /mnt/Work/data --keep-path /path/to/data
+"""Local storage plans and migrations. Run --help for the complete command list."""
+import os
+import sys
+
+here = os.path.dirname(os.path.realpath(__file__))
+for candidate in reversed((os.path.join(os.path.dirname(here), 'lib'), '/usr/lib/bromigos/lib')):
+    if os.path.isdir(candidate):
+        sys.path.insert(0, candidate)
+
+from bromigos_storage import main
+
+if __name__ == '__main__':
+    sys.exit(main())

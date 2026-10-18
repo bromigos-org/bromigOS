@@ -459,7 +459,13 @@ everything through, so they own their whole group.
 The groups, by purpose: `toggle`, `restart`, `launch`, `capture`, `setup`, `install`,
 `refresh`, `theme`, `anim`, `hw`, `update`, `vector`, `live`, `session`, `lock`,
 `commands`, `profile`, `art`, `channel`, `rollback`, `boot`, `ext`, `peripheral`, `idle`,
-`private`, `secrets` and `emblem`.
+`private`, `secrets`, `emblem` and `storage`.
+
+`bromigos storage` is the core package's Python command in `bin/bromigos-storage`.
+It reads local drive state by default. Its saved plans, journals and migration rules
+live in `lib/bromigos_storage*.py`. Provisioning, copying and switching require explicit
+terminal elevation; the command never opens an authentication window. See
+[the storage reference](../docs/storage.md).
 
 Other packages add commands this way. For example, `bromigos settings` is
 bromigos-desktop's `bromigos-settings`, and `bromigos lab` is bromigos-homelab's

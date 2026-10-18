@@ -36,6 +36,7 @@ manual's [Files and folders](../manual/src/files.md) lists them for users.
 | [menu.md](menu.md) | The desktop menu, and how a command adds itself to it |
 | [webapps.md](webapps.md) | Web apps: a site in its own window, with a shortcut |
 | [apps.md](apps.md) | The optional app bundle: LazyVim, tmux and others, themed |
+| [storage.md](storage.md) | Local data drives, migration journals, verification and path switching |
 | [hardware.md](hardware.md) | GPU drivers, laptops and touchpads, and `bromigos hw` |
 | [peripherals.md](peripherals.md) | Peripheral modules, such as a Razer keyboard's macro keys and dial |
 

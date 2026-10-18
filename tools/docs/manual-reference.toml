@@ -275,6 +275,7 @@ rows = [
   { route = "update", text = "[Update](update-and-rollback.md) everything. `--check` says what it would do; `--rollback` undoes the last update." },
   { route = "whats-new", text = "Read [what's new](whats-new.md) in this release, offline. `--all` shows every release." },
   { route = "channel", text = "See or change the [update channel](update-and-rollback.md#channels) you follow." },
+  { route = "storage", text = "Plan a [data drive](storage.md), copy and verify files, then review a path switch while keeping the originals." },
   { route = "rollback", text = "See whether updates can be undone on this machine, and set that up." },
   { route = "aur", text = "See which [AUR](apps.md#install-an-app-from-the-aur) packages have updates waiting. `bromigos aur off` leaves the AUR out of updates and removes bromigOS's paru; `on` brings it back." },
   { route = "restart", text = "Restart the parts of the desktop that still run old code after an update." },

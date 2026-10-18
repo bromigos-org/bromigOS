@@ -135,6 +135,9 @@ bromigOS comes with nine themes:
 To switch, press **Super+Ctrl+Shift+Space**, or run `bromigos theme set <name>`. You can
 make your own, or install one from a Git repository.
 
+`bromigos storage` plans a separate data drive and verified file migrations. It keeps
+the original data until you review the switch. See [Storage](manual/src/storage.md).
+
 ## What you need
 
 - **A 64-bit x86 PC.** The packages are built for `x86_64`.

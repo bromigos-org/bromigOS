@@ -21,8 +21,12 @@ url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 depends=('gcc-libs' 'glibc' 'openssl' 'git')   # git: bromigos ext (extensions are checkouts)
 makedepends=('cargo' 'git' 'python')
-checkdepends=('desktop-file-utils')
-optdepends=('python: bromigos private, secrets and emblem'
+checkdepends=('desktop-file-utils' 'rsync')
+optdepends=('python: bromigos private, secrets, emblem and local storage'
+            'util-linux: local storage inventory and mounts'
+            'btrfs-progs: provision a Btrfs data drive'
+            'gptfdisk: partition a planned data drive'
+            'rsync: stage and verify local data migrations'
             'sops: the private overlay (bromigos private)'
             'age: the private overlay key (bromigos private)'
             'inkscape: emblem text as outlines (bromigos emblem build)'
@@ -84,6 +88,7 @@ check() {
   # entry needs, their icons (tools/launcher/check.py; CI's launcher.yml runs all of it)
   python -m unittest discover -s "$_root/live/tests" -p test_mehshell.py
   python "$_root/tools/launcher/check.py" --static --only core
+  PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/storage"
 }
 
 package() {
@@ -123,6 +128,7 @@ package() {
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-terminal
   # `bromigos account`: sign in to an account a widget uses (lib/bromigos_account.py)
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-account
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-storage
   # the app launcher's entries (docs/menu.md, "In the app launcher")
   install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_root"/core/applications/*.desktop
   # bromigOS's app icons in the hicolor theme every icon theme inherits (theme/app-icons, drawn
