@@ -2028,18 +2028,19 @@ From the `bromigos-desktop` package.
 
 ### bromigos shell
 
-Choose the zsh prompt: mehshell, starship or none.
+Choose, configure, preview and diagnose the shell prompt.
 
 ```text
-bromigos shell [status] | prompt mehshell|starship|none [--json]
+bromigos shell [status] | prompt mehshell|starship|none [--json] | doctor [--json] [--timings] | preview [--width N] [--style STYLE] | configure KEY VALUE
 ```
 
 For example:
 
 ```text
 bromigos shell prompt mehshell
-bromigos shell prompt starship
-bromigos shell prompt none
+bromigos shell doctor
+bromigos shell preview --width 40
+bromigos shell configure brand bromigos
 ```
 
 From the `bromigos-desktop` package.

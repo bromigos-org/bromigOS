@@ -146,6 +146,10 @@ Text consoles have a [branded login](manual/src/console-login.md), their own
 [power menu](manual/src/power-menu.md). mehshell adapts its symbols and colours when
 you log in there.
 
+The prompt shows bromigOS branding, adapts to narrow terminals and identifies Git
+worktrees and remote sessions. `bromigos shell doctor` checks its configuration;
+`bromigos shell preview` tries a layout without changing your shell.
+
 ## What you need
 
 - **A 64-bit x86 PC.** The packages are built for `x86_64`.

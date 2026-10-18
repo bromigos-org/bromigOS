@@ -364,3 +364,7 @@ models used to split and cut the paintings.
 
 - **Text console login banner** (`settings/console/60-bromigos.issue`): **yes**.
   Original ASCII text and frame, drawn for bromigOS. No outside art or patched font.
+
+- **mehshell prompt wordmark and width data**: **yes**. The `bromigOS` wordmark is
+  plain original text. Unicode 17 East Asian Width ranges use Unicode License V3;
+  mehshell's package includes the upstream `LICENSE-UNICODE` notice.

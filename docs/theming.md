@@ -1190,5 +1190,12 @@ only the marked colour block in `~/.config/mehshell/config`. Other prompt option
 stay in place. It clears the instant prompt cache so old colours cannot return.
 mehshell reads the config again at each prompt.
 
+The prompt's `brand = auto` uses a plain bromigOS wordmark when its packaged shell
+defaults are present. Those defaults also export `MEHSHELL_BROMIGOS=1`. Explicit
+`bromigos`, `os` and `none` choices override detection. No custom font glyph is needed.
+The desktop's `bromigos shell` command forwards `doctor`, `preview` and `configure`
+to mehshell's own validated commands. Preview output is printed, never evaluated.
+User instructions are in [Shell and terminal](../manual/src/shell.md).
+
 The generator uses the same colour roles for Wick, its six colour variants,
 Tidewell and Mire. Its reference files are in `live/tests/golden/mehshell/`.

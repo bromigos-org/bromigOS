@@ -39,6 +39,52 @@ colours. Its startup cache is separate from the desktop's, so desktop icons do n
 appear during console login. Your desktop style and icon settings stay saved.
 Basic terminals (`TERM=dumb`) receive a prompt without colour formatting.
 
+## Configure and check mehshell
+
+Preview the current prompt at the width of a split terminal:
+
+```sh
+bromigos shell preview --width 40
+bromigos shell preview --style rainbow --width 80
+```
+
+Preview changes no settings. To save a style or brand choice:
+
+```sh
+bromigos shell configure style lean
+bromigos shell configure brand bromigos
+```
+
+Styles are `lean`, `classic` and `rainbow`. Brand choices are `auto`, `bromigos`,
+`os` and `none`. Auto shows the bromigOS text badge on bromigOS and the OS icon
+elsewhere. Text consoles use plain text. These commands configure mehshell without
+switching your selected prompt engine. Comments and theme colours are preserved.
+
+The prompt adapts to narrow windows. It shortens paths and removes optional details
+before dropping your current folder or session identity. Git shows changed file
+counts, ahead/behind counts, conflicts and active operations. `wt:` identifies a
+linked worktree. `status?` means Git could not be read within the prompt's time or
+output limit; `upstream?` means the comparison is unavailable. Counts use local
+information and never trigger a fetch.
+
+SSH sessions show the user and host; root shows `ROOT`. A failed command shows
+`exit:N`. A small `GAME` label reflects the local game-mode record. Turn any of
+these off with `bromigos shell configure session false`, `status false` or
+`game false`, respectively. All indicators use local information.
+
+Check configuration and terminal fallback, or measure slow local prompt segments:
+
+```sh
+bromigos shell doctor
+bromigos shell doctor --timings
+```
+
+`--json` gives structured output. The doctor reports configuration issues without
+printing their values. It does not test the installed font's glyph coverage or
+inspect your running shell's hooks. It never queries your lab or prints credentials.
+Style and segment changes appear at the next prompt; open a new shell after changing
+hook options. Reloading mehshell keeps one copy of its hooks.
+
 ## Match the theme
 
 mehshell follows every bromigOS theme. A theme change updates its colours, and

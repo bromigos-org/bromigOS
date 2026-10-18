@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
-# bromigos:summary=Choose the zsh prompt: mehshell, starship or none
-# bromigos:args=[status] | prompt mehshell|starship|none [--json]
-# bromigos:examples=bromigos shell prompt mehshell; bromigos shell prompt starship; bromigos shell prompt none
-"""Choose the prompt used by bromigOS's zsh setup. Open a new shell after changing it."""
+# bromigos:summary=Choose, configure, preview and diagnose the shell prompt
+# bromigos:args=[status] | prompt mehshell|starship|none [--json] | doctor [--json] [--timings] | preview [--width N] [--style STYLE] | configure KEY VALUE
+# bromigos:examples=bromigos shell prompt mehshell; bromigos shell doctor; bromigos shell preview --width 40; bromigos shell configure brand bromigos
+"""Choose the zsh prompt and configure mehshell.
+bromigos shell status | prompt mehshell|starship|none [--json]
+bromigos shell doctor [--json] [--timings]
+bromigos shell preview [--width N] [--style lean|classic|rainbow] [--plain]
+bromigos shell configure KEY VALUE
+Open a new shell after changing the prompt engine or shell-hook settings.
+"""
 import os
 from pathlib import Path
 import sys
+import shutil
+import subprocess
 import tomllib
 sys.path.insert(0, "/usr/lib/bromigos/lib")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
@@ -39,4 +47,16 @@ def prompt(args):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] in ("doctor", "preview", "configure"):
+        tool = shutil.which("mehshell")
+        if not tool:
+            print("Install mehshell to configure or inspect its prompt.", file=sys.stderr)
+            sys.exit(1)
+        route = {"doctor": ["doctor"], "preview": ["preview"], "configure": ["config", "set"]}[sys.argv[1]]
+        # Let mehshell own validation and output. Preview text is never evaluated.
+        try:
+            sys.exit(subprocess.call([tool, *route, *sys.argv[2:]]))
+        except OSError:
+            print("Could not run mehshell.", file=sys.stderr)
+            sys.exit(1)
     sys.exit(C.main({"status": status, "prompt": prompt}, __doc__))

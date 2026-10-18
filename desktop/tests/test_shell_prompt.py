@@ -51,6 +51,24 @@ class PromptChoice(unittest.TestCase):
         self.assertFalse(self.run_cli()['managed'])
         self.assertEqual(self.shell().splitlines()[0], 'none')
 
+    def test_mehshell_tools_forward_arguments_without_shell_evaluation(self):
+        tool = self.bin/'mehshell'
+        tool.write_text('#!/usr/bin/python3\nimport json,os,sys\nprint(json.dumps(sys.argv[1:]))\nsys.exit(int(os.environ.get("TEST_MEHSHELL_EXIT", "0")))\n')
+        for given, expected in [
+            (['doctor', '--json', '--timings'], ['doctor', '--json', '--timings']),
+            (['preview', '--width', '40'], ['preview', '--width', '40']),
+            (['configure', 'brand', 'bromigos'], ['config', 'set', 'brand', 'bromigos']),
+            (['configure', 'style', '$(touch forbidden)'], ['config', 'set', 'style', '$(touch forbidden)']),
+        ]:
+            result = subprocess.run([str(CLI), *given], env=self.env, text=True, capture_output=True, cwd=self.home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout), expected)
+        self.assertFalse((self.home/'forbidden').exists())
+        self.assertFalse((self.home/'.zshrc').exists())
+        self.env['TEST_MEHSHELL_EXIT'] = '2'
+        result = subprocess.run([str(CLI), 'doctor'], env=self.env, capture_output=True)
+        self.assertEqual(result.returncode, 2)
+
     def test_missing_engine_does_not_change_choice(self):
         self.run_cli('prompt', 'none')
         (self.bin/'starship').unlink()

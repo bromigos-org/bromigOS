@@ -23,7 +23,8 @@ if [[ -r ${XDG_CONFIG_HOME:-$HOME/.config}/bromigos/shell.toml && -z $_bromigos_
   local _bromigos_engine
   _bromigos_engine=$(python -c 'import os,pathlib,tomllib; p=pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or pathlib.Path.home()/".config")/"bromigos/shell.toml"; v=tomllib.loads(p.read_text()).get("prompt","none"); print(v if v in ("mehshell","starship","none") else "none")' 2>/dev/null)
   case $_bromigos_engine in
-    mehshell) (( $+commands[mehshell] )) && eval "$(mehshell init zsh)" ;;
+    mehshell) export MEHSHELL_BROMIGOS=1
+      (( $+commands[mehshell] )) && eval "$(mehshell init zsh)" ;;
     starship) (( $+commands[starship] )) && eval "$(starship init zsh)" ;;
     none) PROMPT='%~ %# '; RPROMPT='' ;;
   esac

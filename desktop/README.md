@@ -62,6 +62,11 @@ finds them: `display`, `sound`, `net`, `bluetooth`, `power`, `clock`, `notificat
 in [docs/settings.md](../docs/settings.md#the-commands-behind-the-pages).
 `bromigos-dispatch` goes there too.
 
+`bromigos shell` chooses the prompt engine and forwards mehshell's `doctor`, `preview`
+and `configure` tools. Previews are printed without evaluating shell text. The packaged
+zsh defaults mark the session for bromigOS branding; prompt settings stay in mehshell's
+own config. See [Shell and terminal](../manual/src/shell.md).
+
 `bromigos-peripherals` is the daemon for peripheral modules. It isn't on `PATH`.
 `bromigos commands` lists every command a machine has.
 
