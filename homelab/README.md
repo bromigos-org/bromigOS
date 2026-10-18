@@ -63,6 +63,7 @@ The main modules in `lib/bromigos_homelab/`:
 | `infrastructure.py` | multi-node plans, storage inventory, approved growth and worker draining |
 | `observability.py` | required monitoring, dashboards, alerts and read-only connections |
 | `maintenance.py` | saved shutdown and startup plans, step confirmations and resumable run journals |
+| `power.py` | read-only PDU status and named power plans using private maintenance profiles |
 | `tui.py` | the `bromigos lab` dashboard, built with Textual |
 | `tuiux.py` | shared keyboard dialogs, help and guards against background shortcuts |
 

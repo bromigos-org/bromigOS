@@ -28,6 +28,7 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab media search`, `get`, `status`, `upcoming`, `recent`, `language` | Ask your media stack for films, shows, anime and music at the best quality, in your languages ([below](#media-requests)). |
 | `bromigos media` | Your media library in a terminal: browse, monitor, change quality, play, delete ([below](#media-requests)). |
 | `bromigos lab provision …` | Generate and apply Core or Advanced on your own target ([lab-provision.md](lab-provision.md)). |
+| `bromigos lab power …` | Read supported PDU outlets and plan reviewed changes ([below](#pdu-power)). |
 | `bromigos lab maintenance …` | Plan, follow and resume an ordered shutdown or startup ([below](#rack-maintenance)). |
 | `bromigos lab connect …` | Run `bromigos setup homelab …`: find services and write `homelab.toml`. |
 | `bromigos lab target …` | Run `bromigos target …`: choose where AI runs ([targets.md](targets.md)). |
@@ -35,7 +36,7 @@ shows *unreachable*, and nothing crashes.
 | Settings › Lab | See the status, models, recent jobs, the doctor and the targets in a window. Set your media languages. |
 
 > **Planned.** Changing the lab itself is Phase 2: deploying, restarting, logs, backups,
-> power, and adding or replacing models. Those commands only say they are not built yet.
+> machine waking, GPU power limits, and adding or replacing models. Those commands only say they are not built yet.
 > Setting up Core and Advanced is built in `lab provision`
 > ([lab-provision.md](lab-provision.md)). Ordered rack shutdown and startup are built
 > in `lab maintenance`. See [Planned: changing the lab](#planned-changing-the-lab).
@@ -104,6 +105,62 @@ or failed runbook leaves an uncertain result; resume refuses to repeat it. The
 operator must inspect the hardware and create a new reviewed plan. A paused manual
 checklist can resume and skips its completed steps. A process lock prevents two
 maintenance runs from executing at once.
+
+## PDU power
+
+`power.py` reads a power distribution unit (PDU) and creates named power plans.
+`status [--json]` reads controller data without changing outlets.
+`plan TARGET on|off [--json]` saves a reviewed maintenance plan for a configured target.
+`run PLAN_ID` and `resume RUN_ID` use the maintenance runner and its checkpoints.
+Planning does not switch an outlet.
+
+UniFi status uses the controller’s legacy `stat/device` endpoint over HTTPS, with
+certificate verification and an `X-API-Key` header. Labels, relay state and electrical
+readings come from the controller response. Watts, volts and amps are unavailable
+when the controller does not report them. An unavailable reading is not zero watts.
+Controller API and firmware versions determine which outlet fields are available.
+There is no built-in assumption that every controller exposes a stable outlet-control
+API. Power changes use reviewed playbooks supplied by the private profile.
+
+Configure the controller privately in `homelab.toml`:
+
+```toml
+[power]
+endpoint = "https://console.example.org"
+auth_ref = "@private:power-api-key"
+site = "default"
+device_id = "controller-device-id"
+# tls_ca = "/path/to/private-controller-ca.pem"
+
+[power.targets.compute]
+profile_file = "/path/to/private-power-profile.toml"
+```
+
+`endpoint` is the HTTPS origin, without an API path. The request goes to
+`/proxy/network/api/s/{site}/stat/device`. Redirects are refused. `tls_ca` selects a
+trusted CA file for a private certificate. `auth_ref` uses the existing private
+reference resolver. Never write an API key directly into shared configuration.
+`device_id` selects a device explicitly. Without it, status requires exactly one
+supported PDU. Initial support is limited to the USP-PDU-Pro model codes
+`USPPDUP` and `USP-PDU-Pro`; other models are not assumed compatible. Status parsing
+uses recorded controller data in tests; physical hardware compatibility still needs
+checking after installation.
+
+Each `[power.targets.NAME]` maps a named target to a private maintenance profile.
+`profile_file` supplies both directions; `on_profile_file` and `off_profile_file`
+can select separate files. The profile’s startup list is used for `on`, and shutdown
+for `off`. Include a manual `power-target` step that names the target. An `off` plan
+also requires a manual `power-clean-shutdown` step before cutting power. These
+checkpoints make the operator check the outlet and clean shutdown; they do not
+measure hardware state. Keep actual outlet switching in a reviewed Ansible step.
+Power execution has no `--yes` option; pending manual checks require a terminal.
+Changing the target mapping or profile requires a new reviewed plan.
+
+Read the manual’s [PDU instructions](../manual/src/lab.md#pdu-power) before planning an
+outlet change. Turning an outlet on supplies electricity. Whether the connected
+machine boots depends on its firmware settings. Turning an outlet off requires a
+clean operating-system shutdown first. The command does not infer a shutdown or
+startup order from outlet numbers.
 
 ## The dashboard
 
@@ -822,7 +879,7 @@ applies, and each command will ask you first.
 | `lab logs <app>` | Show an app's logs from Loki, or else from the cluster. |
 | `lab restart <app>` | Restart a Kubernetes rollout, through the repository or the API. |
 | `lab backups` | List, run and restore backups. A restore will show what it overwrites. |
-| `lab power` | Wake a sleeping machine, and set GPU power limits. |
+| Machine waking and GPU power limits | These power features remain planned; PDU status and reviewed outlet plans are built. |
 | `lab models add`, `remove`, `replace` | Change the model set in ComfyUI's or vLLM's values. |
 
 `lab provision` has its first slice built ([lab-provision.md](lab-provision.md)).

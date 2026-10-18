@@ -113,6 +113,7 @@ check. Media and Lab show actions for the current tab, with keyboard help on `?`
 Dialogs support arrows and Enter, with Cancel selected before destructive changes.
 Its provisioner creates reviewed VM and Kubernetes plans, with monitoring.
 `bromigos lab maintenance` guides an ordered shutdown and startup for rack work.
+`bromigos lab power` reads supported PDU outlets and plans reviewed power changes.
 All of it stays off until you set it up.
 
 ![bromigos lab in a terminal: cards for nodes, GPUs, services, models, GitOps apps,

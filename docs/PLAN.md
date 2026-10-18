@@ -383,7 +383,8 @@ first, and VECTOR's terminal will refuse all of them.
   the user allows it. It will never restart the voice service while VECTOR is speaking.
 - `lab backups` will list, run and restore backups. A restore will always ask first and
   show what it overwrites.
-- `lab power` will wake a sleeping machine and set GPU power limits.
+- `lab power` reads configured PDU outlets and follows reviewed Ansible outlet plans.
+  Wake-on-LAN and GPU power limits remain planned.
 - `lab models add|remove|replace` will change the lab's models. `replace` is also how the
   model catalog's auto-upgrade will apply. It will deploy the new model beside the old,
   test it, then switch or revert, and notify with Undo ([lab-models.md](lab-models.md)).

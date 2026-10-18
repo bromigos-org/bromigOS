@@ -112,6 +112,44 @@ If a runbook fails or is interrupted, inspect the hardware before doing anything
 Resume refuses to repeat a step whose result is uncertain. Create a new reviewed
 plan after inspecting that state.
 
+## PDU power
+
+A power distribution unit (PDU) can report and switch individual rack outlets.
+`bromigos lab power status` shows the labels, outlet states and electrical readings
+available from your configured controller, including the reported total load:
+
+```bash
+bromigos lab power status
+```
+
+Missing watt, volt or amp readings show as **unknown**. They do not mean the connected
+equipment uses no electricity. An outlet shared by several devices measures their
+combined load. A new PDU needs to be installed, adopted and configured
+before these readings are available.
+
+**Shut the operating system down cleanly before switching its outlet off.** An outlet
+turning on supplies electricity; the machine only boots automatically if its firmware
+is configured to do so. Outlet numbers do not establish a safe shutdown or startup
+order. Use the [rack maintenance flow](#rack-maintenance) for work on the whole rack.
+
+Power changes require a named target connected to a private maintenance profile.
+To preview an outlet change, replace `<target>` with that configured name:
+
+```bash
+bromigos lab power plan <target> off
+```
+
+Read the plan, verify its outlet and connected equipment, and complete its shutdown
+checkpoints before running it. Replace `<plan-id>` with the displayed plan ID:
+
+```bash
+bromigos lab power run <plan-id>
+```
+
+Use `plan <target> on` for a startup plan. A paused run can continue with
+`bromigos lab power resume <run-id>`. Plans and runs use the same confirmations and
+journals as maintenance. Planning alone never switches power.
+
 ## Look at your lab
 
 Run `bromigos lab` for the live dashboard. It refreshes every 15 seconds.

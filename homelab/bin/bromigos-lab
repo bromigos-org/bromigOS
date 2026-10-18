@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bromigos:summary=Your homelab's console: status, models, jobs, doctor and guided maintenance (no arguments: the live dashboard)
-# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | media search|get|status|upcoming|language … | provision [plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE] --repo PATH … | connect … | target …]
+# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | media search|get|status|upcoming|language … | provision [plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE] --repo PATH … | connect … | target …]
 # bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor; bromigos lab media get "Cowboy Bebop" --seasons all --specials
 # bromigos:menu=LAUNCH:Lab console
 """bromigos lab: the homelab's console (docs/homelab.md, "The lab console"; the manual's Lab chapter).
@@ -40,6 +40,12 @@
                                     saved maintenance plans and execution journals
   bromigos lab maintenance run PLAN_ID | resume RUN_ID
                                     follow the reviewed checklist, confirming each manual step
+  bromigos lab power status [--json]
+                                    configured PDU outlets and available power readings
+  bromigos lab power plan TARGET on|off [--json]
+                                    review a configured outlet plan; no switching during planning
+  bromigos lab power run PLAN_ID | resume RUN_ID
+                                    follow a reviewed private Ansible outlet plan
   bromigos lab youtube              the YouTube downloads card: Pinchflat's sources, newest videos, queue
   bromigos lab youtube add URL [--playlist|--channel] [--since DATE] [--name NAME] [--quality Q]
   bromigos lab youtube list | status | refresh [NAME] | pause NAME | resume NAME
@@ -83,7 +89,7 @@
   bromigos lab provision vm list|start|stop|delete|snapshot|console --on PROVIDER --repo PATH
   bromigos lab provision storage --repo PATH | capacity --repo PATH
                                     read storage choices or proposals; no automatic node creation
-  bromigos lab deploy|restart|logs|backups|power
+  bromigos lab deploy|restart|logs|backups
                                     Phase 2 and 3 (docs/PLAN.md): not built yet
   bromigos lab serve                the job queue's service (bromigos-lab.service runs it)
 
@@ -119,7 +125,6 @@ PHASE2 = {
     "logs": "lab logs (an app's logs from Loki or the cluster) is Phase 2. Until then: kubectl logs, or the "
             "Workloads card's hint.",
     "backups": "lab backups (list, run, restore) is Phase 2. The doctor already checks backup age.",
-    "power": "lab power (Wake-on-LAN, GPU power limits) is Phase 2.",
     "update": "lab update (image versions in your lab repo) comes with provisioning, Phase 3.",
 }
 
@@ -452,6 +457,9 @@ def main(argv):
     if cmd == "maintenance":
         from bromigos_homelab import maintenance
         return maintenance.main(rest)
+    if cmd == "power":
+        from bromigos_homelab import power
+        return power.main(rest)
     if cmd in PHASE2:
         print(PHASE2[cmd], file=sys.stderr)
         return 3
