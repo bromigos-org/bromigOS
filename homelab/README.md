@@ -71,6 +71,9 @@ The alert adapters leave out the monitoring helpers `Watchdog` and `InfoInhibito
 Other alerts, including info-level notices, stay visible. See the
 [capability contract](../docs/homelab.md#capabilities) for the returned records.
 
+The Lab dashboard delivers background reads through Textual's message queue.
+It discards results from cancelled reads and stops updating widgets during shutdown.
+
 The media library shows **Add to channel… (c)** below each title tab. Select a title
 or album, use the button or `c`, choose **Add to** a picked channel, then **Apply channel choice**.
 The button preserves the selected Music album when it opens the picker. The selected

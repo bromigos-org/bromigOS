@@ -17,8 +17,10 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.message import Message
 from .tuiux import Dialog, HelpDialog, UXApp
 from textual.theme import Theme
+from textual.worker import get_current_worker
 from textual.widgets import (Button, DataTable, Footer, Input, Label, RichLog, Select, Static, TabbedContent,
                              TabPane, Tabs, Tree)
 
@@ -347,6 +349,14 @@ class CancelJob(Dialog):
 
 
 class LabApp(UXApp):
+    class ReadReady(Message):
+        """Deliver a completed read through the app's normal message lifecycle."""
+
+        def __init__(self, kind, data):
+            super().__init__()
+            self.kind, self.data = kind, data
+            self.worker = get_current_worker()
+
     TITLE = "LAB"
     CSS = """
     Screen { background: $background; }
@@ -521,22 +531,27 @@ class LabApp(UXApp):
     @work(thread=True, exclusive=True, group="status")
     def load_status(self):
         doc = self.src.status()
-        self.call_from_thread(self.show_status, doc)
+        self.post_message(self.ReadReady("status", doc))
 
     @work(thread=True, exclusive=True, group="models")
     def load_models(self):
         inv = self.src.inventory()
-        self.call_from_thread(self.show_models, inv)
+        self.post_message(self.ReadReady("models", inv))
 
     @work(thread=True, exclusive=True, group="jobs")
     def load_jobs(self):
         d = self.src.jobs()
-        self.call_from_thread(self.show_jobs, d)
+        self.post_message(self.ReadReady("jobs", d))
 
     @work(thread=True, exclusive=True, group="doctor")
     def load_doctor(self):
         d = self.src.doctor()
-        self.call_from_thread(self.show_doctor, d)
+        self.post_message(self.ReadReady("doctor", d))
+
+    @on(ReadReady)
+    def _read_ready(self, event):
+        if self.is_running and not event.worker.is_cancelled:
+            getattr(self, f"show_{event.kind}")(event.data)
 
     # ------------------------------------------------------------------ STATUS
     def show_status(self, doc):

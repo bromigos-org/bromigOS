@@ -154,6 +154,9 @@ journals as maintenance. Planning alone never switches power.
 
 Run `bromigos lab` for the live dashboard. It refreshes every 15 seconds.
 
+You can quit while a refresh is running. Queued and running jobs continue after the
+dashboard closes; use the Jobs tab to cancel a job explicitly.
+
 ![The lab console's Status tab: a card for each part of the lab, and the machines in detail](images/lab-console.webp)
 
 | Key | What it does |

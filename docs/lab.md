@@ -191,6 +191,10 @@ dismiss an unconfirmed dialog without applying the pending change. Letter keys
 remain available in inputs.
 Job cancellation opens a question with **Keep job** focused first.
 
+Status, model, job and doctor reads post results to Textual's message queue.
+The handler ignores cancelled reads and results received during shutdown, so a slow
+response cannot replace a newer reading or update widgets after they are removed.
+
 The dashboard needs `python-textual`. Without it, `bromigos lab` says so and prints the
 status.
 
