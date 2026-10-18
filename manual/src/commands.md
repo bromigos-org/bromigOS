@@ -49,6 +49,7 @@ This page lists the commands by task first, then each one in full.
 | Command | What it does |
 |---|---|
 | [`bromigos theme`](#bromigos-theme) | List the [themes](themes-and-worlds.md), or switch: `bromigos theme set mire`. |
+| [`bromigos console`](#bromigos-console) | Read or save a [text console font](shell.md#make-text-consoles-readable) for the next boot. |
 | [`bromigos theme switcher`](#bromigos-theme-switcher) | Open the theme switcher, with a preview of each theme. |
 | [`bromigos theme previews`](#bromigos-theme-previews) | Draw the theme switcher's previews again. |
 | [`bromigos wallpaper`](#bromigos-wallpaper) | Switch between the den wallpapers you have. |
@@ -645,6 +646,24 @@ Options:
       --all    Include hidden commands
   -h, --help   Print help
 ```
+
+### bromigos console
+
+Read or save the text console font for the next boot.
+
+```text
+bromigos console status [--json] | font small|medium|large|default
+```
+
+For example:
+
+```text
+bromigos console status
+sudo bromigos console font large
+sudo bromigos console font default
+```
+
+From the `bromigos-core` package.
 
 ### bromigos customize
 

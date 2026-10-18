@@ -30,7 +30,7 @@ arch=('any')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 depends=('sddm' 'qt6-declarative' 'weston'
-         'ttf-geist-mono' 'ttf-meslo-nerd' 'noto-fonts' 'noto-fonts-emoji'
+         'ttf-geist-mono' 'ttf-meslo-nerd' 'noto-fonts' 'noto-fonts-emoji' 'terminus-font'
          # Japanese, Chinese and Korean titles (anime, music, YouTube) instead of empty boxes
          'noto-fonts-cjk'
          'breeze-icons' 'adwaita-cursors' 'python'

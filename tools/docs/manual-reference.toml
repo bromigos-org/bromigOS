@@ -221,6 +221,7 @@ rows = [
 title = "Change the look"
 rows = [
   { route = "theme", text = "List the [themes](themes-and-worlds.md), or switch: `bromigos theme set mire`." },
+  { route = "console", text = "Read or save a [text console font](shell.md#make-text-consoles-readable) for the next boot." },
   { route = "theme switcher", text = "Open the theme switcher, with a preview of each theme." },
   { route = "theme previews", text = "Draw the theme switcher's previews again." },
   { route = "wallpaper", text = "Switch between the den wallpapers you have." },

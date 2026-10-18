@@ -141,6 +141,9 @@ shows terminal-aware usage bars, and cleans selected caches or explicitly planne
 originals and local snapshots.
 See [Storage](manual/src/storage.md).
 
+Text consoles have their own [font settings](manual/src/shell.md#make-text-consoles-readable).
+mehshell adapts its symbols and colours when you log in there.
+
 ## What you need
 
 - **A 64-bit x86 PC.** The packages are built for `x86_64`.

@@ -459,7 +459,7 @@ everything through, so they own their whole group.
 The groups, by purpose: `toggle`, `restart`, `launch`, `capture`, `setup`, `install`,
 `refresh`, `theme`, `anim`, `hw`, `update`, `vector`, `live`, `session`, `lock`,
 `commands`, `profile`, `art`, `channel`, `rollback`, `boot`, `ext`, `peripheral`, `idle`,
-`private`, `secrets`, `emblem` and `storage`.
+`private`, `secrets`, `emblem`, `storage` and `console`.
 
 `bromigos storage` is the core package's Python command in `bin/bromigos-storage`.
 It reads local drive state by default. Its saved plans, journals and migration rules
@@ -469,6 +469,13 @@ User cache cleanup runs as its owner. Provisioning, copying, switching, package-
 cleanup and retirement of originals or snapshots require explicit terminal elevation.
 The command never opens an authentication window. See
 [the storage reference](../docs/storage.md).
+
+`bromigos console status` reads the saved text console font. `sudo bromigos console
+font small|medium|large|default` safely changes the `FONT` assignment in
+`/etc/vconsole.conf` for the next boot, preserving keyboard settings. It requires
+an installed Terminus preset and does not change a running console or rebuild the
+initramfs. `default` clears the explicit font choice. See
+[the console reference](../docs/console.md).
 
 Other packages add commands this way. For example, `bromigos settings` is
 bromigos-desktop's `bromigos-settings`, and `bromigos lab` is bromigos-homelab's
@@ -483,6 +490,7 @@ bromigos-core installs these external commands of its own in `/usr/lib/bromigos/
 | `bromigos emblem build --theme DIR` | Builds a theme's emblem kit ([docs/theming.md](../docs/theming.md)) |
 | `bromigos install extension`, `bromigos remove extension` | The menu's rows for installing and removing an extension |
 | `bromigos terminal` | Runs a command in your terminal, for the app launcher's entries |
+| `bromigos console status`, `bromigos console font SIZE` | Reads or saves the text console font for the next boot ([docs/console.md](../docs/console.md)) |
 
 ### Command headers
 

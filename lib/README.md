@@ -27,6 +27,7 @@ modules to the same folder:
 | `bromigos_tvconfig.py` | Writes the den TV's `[[tv.channel]]` tables in place, keeping comments: the channel guide's writer |
 | `bromigos_youtube.py` | YouTube playlists and channels through yt-dlp, cached, with live streams and keeping videos |
 | `bromigos_storage*.py` | Local drive inventory, saved provisioning plans, verified migration, grouped capacity, Snapper/btrbk inventory and logged cache and retirement plans; [storage reference](../docs/storage.md) |
+| `bromigos_console.py` | Reads and safely saves text console font presets for the next boot; [console reference](../docs/console.md) |
 
 ### bromigos_account
 

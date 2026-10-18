@@ -51,7 +51,8 @@ turns it on.
 ### Fonts
 
 The fonts come in as dependencies: Geist Mono (`ttf-geist-mono`, built into bromigOS's
-repository), Meslo Nerd and Noto.
+repository), Meslo Nerd, Noto and Terminus. Terminus supplies the bitmap fonts for
+Linux text consoles; choose their size with [`bromigos console`](../docs/console.md).
 
 ## Tests
 

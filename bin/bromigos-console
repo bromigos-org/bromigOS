@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+# bromigos:summary=Read or save the text console font for the next boot
+# bromigos:args=status [--json] | font small|medium|large|default
+# bromigos:examples=bromigos console status; sudo bromigos console font large; sudo bromigos console font default
+"""Persistent text-console settings; never changes a running console."""
+import os
+import sys
+
+here = os.path.dirname(os.path.realpath(__file__))
+for candidate in reversed((os.path.join(os.path.dirname(here), 'lib'), '/usr/lib/bromigos/lib')):
+    if os.path.isdir(candidate):
+        sys.path.insert(0, candidate)
+
+from bromigos_console import main
+
+if __name__ == '__main__':
+    sys.exit(main())
