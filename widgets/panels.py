@@ -860,6 +860,8 @@ class StoragePanel(Panel):
     name, title = "storage", "STORAGE"
     description = "The mounted filesystems and how full they are"
     category, reads = "system", "your mounted disks and their reads and writes"
+    settings = [{"key": "display_names", "label": "Drive display names", "kind": "list", "default": [],
+                 "hint": "One per line: /mnt/Work = Work. Leave empty to show mount paths."}]
     height = 214
     sizes = {"compact": ((240, 110), (420, 200), (300, 140)),
              "standard": ((320, 210), (640, 300), (470, 214)),
@@ -885,6 +887,17 @@ class StoragePanel(Panel):
             self.mounts = S.storage()
             self._mounts_at = time.monotonic()
 
+    def _display_name(self, mount):
+        names = self.setting("display_names", [])
+        if isinstance(names, list):
+            for entry in names:
+                if not isinstance(entry, str):
+                    continue
+                path, sep, name = entry.partition("=")
+                if sep and path.strip() == mount and name.strip():
+                    return name.strip()
+        return mount
+
     def draw(self, cr, w, h):
         self.drawn = self.size_class(w, h)
         if self.drawn == "compact":
@@ -907,8 +920,8 @@ class StoragePanel(Panel):
                 col = D.level(frac, 0.8, 0.92)
                 D.ring(cr, cx, cy, 38, frac, 7, col)
                 D.text(cr, cx, cy - 10, f"{m['pct']:.0f}%", 16, col, "bold", align="center", glow=True)
-                name = m["mount"]
-                D.label(cr, cx, cy + 50, name if len(name) < 12 else "…" + name[-10:], "phosphor", align="center")
+                name = self._display_name(m["mount"])
+                D.label(cr, cx, cy + 50, name, "phosphor", align="center", width=slot - 8)
                 D.label(cr, cx, cy + 66, S.human(m['used'], digits=0).replace(" ", "") + "/"
                         + S.human(m['size'], digits=0).replace(" ", ""), "soft", size=10, align="center")
                 D.label(cr, cx, cy + 81, f"{S.human(m['free'], digits=0).replace(' ', '')} FREE", "static",
@@ -948,8 +961,10 @@ class StoragePanel(Panel):
             return 20
         frac = m["pct"] / 100
         col = D.level(frac, 0.8, 0.92)
-        D.label(cr, x0, y, m["mount"] if len(m["mount"]) < 22 else "…" + m["mount"][-20:], "phosphor", size=10)
-        D.label(cr, x1, y, f"{m['pct']:.0f}% · {S.human(m['free'], digits=0)} FREE", col, size=10, align="right")
+        summary = f"{m['pct']:.0f}% · {S.human(m['free'], digits=0)} FREE"
+        summary_width, _ = D.label(cr, x1, y, summary, col, size=10, align="right")
+        D.label(cr, x0, y, self._display_name(m["mount"]), "phosphor", size=10,
+                width=max(1, x1 - x0 - summary_width - 12))
         D.cells(cr, x0, y + 15, x1 - x0, 7, frac, n=max(10, int((x1 - x0) / 10)), warn=0.8, crit=0.92)
         hgt = 30
         if detail:
@@ -1014,8 +1029,8 @@ class StoragePanel(Panel):
             col = D.level(frac, 0.8, 0.92)
             D.ring(cr, cx, cy, r, frac, 7, col)
             D.text(cr, cx, cy - 10, f"{m['pct']:.0f}%", 16, col, "bold", align="center", glow=True)
-            D.label(cr, cx, cy + r + 10, m["mount"] if len(m["mount"]) < 14 else "…" + m["mount"][-12:], "phosphor",
-                    align="center")
+            D.label(cr, cx, cy + r + 10, self._display_name(m["mount"]), "phosphor",
+                    align="center", width=slot - 8)
             self.region(cx - slot / 2, top, slot, 2 * r + 30, f"{m['mount']} on {m['device']}: {S.human(m['used'])} used "
                         f"of {S.human(m['size'])}. Click to open it.", self._open(m["mount"]))
         y = top + 2 * r + 40

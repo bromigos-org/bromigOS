@@ -39,6 +39,10 @@ offers **New layout…**, **Save changes…** and **Override…**. Edit mode's
 **Save as layout…** keeps the current arrangement and opens the naming form.
 See [saving layouts](../manual/src/panels.md#save-your-own) for the UI and CLI.
 
+STORAGE offers **Drive display names** in its settings. Names apply to every size;
+tooltips and clicks keep the real mount path. See
+[storage names](../manual/src/panels.md#storage-names) for the format.
+
 ## Commands
 
 ```bash

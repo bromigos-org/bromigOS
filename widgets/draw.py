@@ -104,11 +104,14 @@ def text(cr, x, y, s, size=11, color="soft", weight="medium", spacing=0.0, align
     return w, h
 
 
-def label(cr, x, y, s, color="dim", size=11, align="left", alpha=1.0):
+def label(cr, x, y, s, color="dim", size=11, align="left", alpha=1.0, width=None):
     size = max(size, 10)
     """Small uppercase monospace label, wide tracking (0.18em)."""
+    if width is not None:
+        if layout(cr, s.upper(), size, "semibold", 0.18).get_pixel_size()[0] <= width:
+            width = None
     return text(cr, x, y, s.upper(), size=size, color=color, weight="semibold",
-                spacing=0.18, align=align, alpha=alpha)
+                spacing=0.18, align=align, alpha=alpha, width=width)
 
 
 def first_fit(cr, options, width, size=11, weight="semibold", spacing=0.18, upper=True):

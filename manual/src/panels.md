@@ -57,6 +57,21 @@ can show anything, such as a calendar's address or a sign-in.
   workspaces only work from the keyboard.
 - **CONNECTIONS.** Click a Wi-Fi network to join it.
 
+### Storage names
+
+To give a drive a shorter name, open **Settings › Widgets**, find **STORAGE**, and
+open its **Settings…**. In **Drive display names**, enter one mount path and name per
+line, such as `/mnt/Work = Work`. Clear an entry to show its mount path again.
+
+Names appear at every widget size. Hover still shows the full mount path, and clicking
+opens that folder. This changes the widget's text only; it does not rename the drive.
+
+From a terminal, set the whole list with:
+
+```bash
+bromigos panels set storage display_names '/ = System' '/mnt/Work = Work'
+```
+
 ### Field notes
 
 FIELD NOTES is a notepad on your desktop. It saves as you type.

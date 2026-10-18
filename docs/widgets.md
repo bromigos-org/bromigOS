@@ -353,6 +353,22 @@ Nothing may be drawn past the panel's edges, and no row may be cut by a clip, un
 panel scrolls. `widgets/tests/fitcheck.py NAME` runs the same check and prints what it
 found. `draw.record()` collects what a panel draws for the check, and for measuring.
 
+## Storage display names
+
+STORAGE declares `display_names` as a list of `mount path = name` strings. It uses the
+same settings form and file as other widgets, `~/.config/bromigos/widgets/storage.toml`:
+
+```toml
+display_names = ["/ = System", "/mnt/Work = Work"]
+```
+
+Matching uses the complete mount path. The first matching entry with a non-empty name
+wins; malformed entries are ignored. An unmatched mount keeps its path as its name.
+Names are drawn within the available space at every size. The full mount path stays in
+the tooltip and file-manager action. Readings, grouping and mount configuration are
+unchanged. The [manual](../manual/src/panels.md#storage-names) covers the settings form
+and command.
+
 ## A widget's settings
 
 A widget can have settings of its own, such as a place, a list of hosts or an account to
