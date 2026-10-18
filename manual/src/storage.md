@@ -14,6 +14,8 @@ Status groups the mounted folders under each filesystem, with its used space,
 available space and usage bar. Each filesystem's capacity appears once. Btrfs
 subvolumes and bind mounts share that capacity. RAM-backed swap is not listed as
 a physical drive. Use `--json` for structured output.
+Desktop terminals use smooth block bars. Text consoles and redirected output use
+plain bars so the display stays readable without desktop fonts.
 
 ## Plan a data drive
 

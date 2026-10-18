@@ -77,7 +77,9 @@ A Btrfs filesystem has one capacity row even when many subvolumes and bind mount
 it. RAM-backed swap devices are excluded from the physical-drive list. JSON keeps
 `disks`, `mounts` and `free_space`, and adds `drives` and grouped `filesystems`.
 `bromigos_storage_display.py` handles the terminal output. Control characters in
-external labels and paths are escaped.
+external labels and paths are escaped. Desktop terminals show usage with fractional
+Unicode blocks. Linux text consoles, basic terminals, redirected output and encodings
+without those glyphs use an ASCII bar. The bar needs no patched font or extra library.
 
 Cleanup preview reads Snapper configurations and their snapshot lists. It also reads
 ordinary local btrbk `volume`, `subvolume`, `snapshot_dir` and `snapshot_name` entries.

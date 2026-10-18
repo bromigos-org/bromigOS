@@ -33,6 +33,22 @@ def _heading(value):
     return value
 
 
+def _usage_bar(percentage, width=16):
+    # Linux virtual consoles use small bitmap fonts, not the desktop's Nerd Font.
+    # Pipes and basic terminals get a stable plain-text representation.
+    graphical = getattr(sys.stdout, 'isatty', lambda: False)() and os.environ.get('TERM') not in ('dumb', 'linux')
+    try:
+        '█▏▎▍▌▋▊▉░'.encode(getattr(sys.stdout, 'encoding', None) or 'utf-8')
+    except (UnicodeEncodeError, LookupError):
+        graphical = False
+    if not graphical:
+        filled = round(percentage / 100 * width)
+        return '[' + '=' * filled + '-' * (width - filled) + ']'
+    eighths = round(percentage / 100 * width * 8)
+    whole, fraction = divmod(eighths, 8)
+    return '█' * whole + ('▏▎▍▌▋▊▉'[fraction - 1] if fraction else '') + '░' * (width - whole - bool(fraction))
+
+
 def _line(value, *, indent='  '):
     width = max(36, shutil.get_terminal_size((88, 24)).columns)
     print(textwrap.fill(value, width=width, initial_indent=indent, subsequent_indent=indent,
@@ -48,8 +64,7 @@ def _filesystem(item, *, shared=False):
         # Like df, available space excludes filesystem reservations. A filesystem's
         # advertised total may include reserved blocks, so don't subtract free from it.
         percentage = min(100, max(0, math.ceil(100 * used / (used + free))))
-        filled = round(percentage / 100 * 16)
-        _line(f"[{'#' * filled}{'-' * (16 - filled)}] {percentage}% used · {_size(used)} used · {_size(free)} available", indent='    ')
+        _line(f"{_usage_bar(percentage)} {percentage}% used · {_size(used)} used · {_size(free)} available", indent='    ')
     else:
         _line('Space unavailable', indent='    ')
     paths = list(dict.fromkeys(_path(mount['path']) for mount in mounts))
