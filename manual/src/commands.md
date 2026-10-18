@@ -2068,10 +2068,10 @@ Options:
 
 ### bromigos storage
 
-Inspect drives, migrate data and retire reviewed originals or snapshots.
+Inspect drives, migrate data and clean selected caches, originals or snapshots.
 
 ```text
-bromigos storage status [--json] | plan --device DEVICE --mount PATH [--roles LIST] [--json] | apply PLAN | migrate plan|run|resume|verify|status … | switch PLAN --writers-stopped | cleanup [--preview] [--json] | cleanup plan [--migration PLAN] [--snapshot PATH] [--json] | cleanup apply PLAN [--yes] | cleanup status PLAN [--json]
+bromigos storage status [--json] | plan --device DEVICE --mount PATH [--roles LIST] [--json] | apply PLAN | migrate plan|run|resume|verify|status … | switch PLAN --writers-stopped | cleanup [--preview] [--json] | cleanup plan [--cache NAME] [--keep-versions N] [--migration PLAN] [--snapshot PATH] [--json] | cleanup apply PLAN [--yes] | cleanup status PLAN [--json]
 ```
 
 For example:

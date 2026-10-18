@@ -141,9 +141,9 @@ def lock(plan):
         os.close(fd)
 
 
-def command(argv, *, capture=True, timeout=30, okay=(0,), env=None):
+def command(argv, *, capture=True, timeout=30, okay=(0,), env=None, cwd=None):
     try:
-        result = subprocess.run(argv, capture_output=capture, text=True, timeout=timeout, env=env, stdin=subprocess.DEVNULL)
+        result = subprocess.run(argv, capture_output=capture, text=True, timeout=timeout, env=env, cwd=cwd, stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         raise Error(f'{Path(str(argv[0])).name} timed out; inspect the execution record before continuing') from None
     except OSError:

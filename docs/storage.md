@@ -1,8 +1,8 @@
 # Local storage
 
-`bromigos storage` manages plans for a local data drive and file migrations. Its default
-status command reads devices and journals without changing the machine. User
-instructions are in the manual’s [Storage](../manual/src/storage.md) page.
+`bromigos storage` manages plans for local data drives, file migrations and cleanup.
+Its default status command reads devices and journals without changing the machine.
+User instructions are in the manual’s [Storage](../manual/src/storage.md) page.
 
 ## Drive layout
 
@@ -54,8 +54,8 @@ The old source remains available after switching.
 
 Interrupted copies resume through their saved plan. Recovery must inspect the recorded
 stage rather than infer completion from destination size or a successful copy command.
-Cleanup preview reads storage and snapshots. Deleting retained originals or selected
-snapshots requires a separate explicit cleanup plan and apply step.
+Cleanup preview reads caches and snapshots. Clearing a cache or deleting retained
+originals or selected snapshots requires a separate explicit cleanup plan and apply step.
 
 A multi-move spec uses `[[move]]` records with absolute `source`, `destination` and
 optional `keep_path` strings. If `keep_path` equals the source, switching renames
@@ -89,13 +89,32 @@ Snapshot counts do not estimate physically reclaimable space.
 
 ## Cleanup plans and execution
 
-`bromigos_storage_cleanup.py` plans retirement of originals from this CLI's completed
-switches and explicitly selected local snapshot paths. Planning and applying require
-root so filesystem and snapshot identities can be inspected. Plans and journals use
-the same records as other storage operations. Plans created with sudo normally live
-in root's state directory; always use the printed absolute path with subsequent sudo
-commands. Cleanup does not import arbitrary external migration scripts or select
-snapshot history automatically.
+`bromigos_storage_cleanup.py` plans selected cache cleanup, retirement of originals
+from this CLI's completed switches and explicitly selected local snapshot paths.
+Plans and journals use the same records as other storage operations. Cleanup does
+not import arbitrary external migration scripts or select snapshot history automatically.
+
+The repeatable `cleanup plan --cache` option accepts `npm`, `conda` and
+`package-archives`. npm and Conda cleanup plans and apply operations run as the cache
+owner, without sudo. They cannot share a plan with package archives, retained originals
+or snapshots. A package-archive plan can be created without root; applying it requires
+root. Plans for originals or snapshots require root at both stages so their identities
+can be inspected. Plans created with sudo normally live in root's state directory.
+Use the printed absolute plan path with subsequent sudo commands.
+
+Cache cleanup uses the cache manager's command with a fixed location. npm runs
+`cache clean --force`, with its cache pinned to the owner's `~/.npm`; only downloaded
+package content in `_cacache` is selected. Conda cleans only downloaded archives,
+index data and logs in `~/.conda/pkgs`. Extracted packages and environments stay in
+place. Its resolved package-cache list must contain only that pinned directory; extra
+cache locations or a forced dry-run setting stop the operation. Package archives use
+`paccache` on `/var/cache/pacman/pkg`, retaining three
+versions of each package by default. `--keep-versions` accepts a count from 1 to 100.
+It applies only to package-archive plans. The preview's allocated
+cache size is not the amount these narrower actions will remove.
+Close npm, Conda or package-manager clients before cleaning their caches. Apply
+checks for running clients, changed paths and nested mounts. Native commands run
+in a temporary directory with a minimal environment and explicit cache settings.
 
 An original is eligible only when the completed migration journal identifies it,
 the active bind resolves to the planned destination, and fstab still preserves that

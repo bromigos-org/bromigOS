@@ -21,10 +21,12 @@ url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 depends=('gcc-libs' 'glibc' 'openssl' 'git')   # git: bromigos ext (extensions are checkouts)
 makedepends=('cargo' 'git' 'python')
-checkdepends=('desktop-file-utils' 'rsync')
+checkdepends=('desktop-file-utils' 'rsync' 'npm')
 optdepends=('python: bromigos private, secrets, emblem and local storage'
             'util-linux: local storage inventory and mounts'
             'btrfs-progs: Btrfs drive preparation and reviewed snapshot cleanup'
+            'pacman-contrib: retire selected cached package archives'
+            'npm: clean selected user npm content'
             'snapper: discover and retire explicitly selected local snapshots'
             'gptfdisk: partition a planned data drive'
             'rsync: stage and verify local data migrations'

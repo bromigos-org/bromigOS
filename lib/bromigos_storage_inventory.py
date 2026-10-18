@@ -345,8 +345,8 @@ def cleanup_preview():
     candidates = []
     for name, path, detail in (
         ('npm', home / '.npm/_cacache', 'Downloaded npm package content'),
-        ('conda', home / '.conda/pkgs', 'Conda package cache; environments remain separate'),
-        ('package-archives', Path('/var/cache/pacman/pkg'), 'Downloaded package archives; review retained versions'),
+        ('conda', home / '.conda/pkgs', 'Conda cache total; cleanup removes archives, index and logs only'),
+        ('package-archives', Path('/var/cache/pacman/pkg'), 'Downloaded package archives; cleanup keeps 3 versions by default'),
     ):
         if _safe_local(path, mounts) and path.is_dir():
             measured, error = None, None
@@ -355,7 +355,7 @@ def cleanup_preview():
                 measured = int(output.split()[0])
             except (C.Error, OSError, ValueError, IndexError):
                 error = 'Allocated size unavailable; no cleanup was performed'
-            candidates.append({'kind': name, 'path': str(path), 'action': 'review-only', 'detail': detail,
+            candidates.append({'kind': name, 'path': str(path), 'action': 'plan-cache', 'detail': detail,
                                'allocated_bytes': measured, 'size_error': error, 'estimated_reclaim_bytes': None})
     return {'candidates': candidates, 'deleted': False, 'errors': errors, **snapshot_inventory(mounts=mounts),
             'size_note': 'Allocated cache size is not a promise of physically reclaimable space.',

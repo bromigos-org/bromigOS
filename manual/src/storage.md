@@ -1,8 +1,8 @@
 # Storage
 
-`bromigos storage` helps prepare a local data drive and move files onto it. It separates
-planning, copying, verification and switching paths. The original files stay available
-until you decide how to retire them.
+`bromigos storage` helps prepare a local data drive, move files onto it and free space.
+It separates planning, copying, verification and switching paths. The original files
+stay available until you decide how to retire them.
 
 ## See your drives
 
@@ -135,9 +135,47 @@ bromigos storage cleanup --preview
 
 The preview lists supported cache locations and local snapshots managed by Snapper
 and btrbk. It shows when a provider cannot be inspected; run the preview with sudo
-if it reports access restrictions. Cache entries are informational and are not
-removed by this command. Snapshot counts and file sizes are not promises of space
-reclaimed. Other snapshots can still hold the files after originals are deleted.
+if it reports access restrictions. Preview removes nothing. Snapshot counts and file
+sizes are not promises of space reclaimed. Other snapshots can still hold the files
+after originals are deleted.
+
+## Clean downloaded caches
+
+Create a plan for the npm and Conda caches you want to clear. Repeat `--cache` to
+select both, or include only the cache you need:
+
+```bash
+bromigos storage cleanup plan --cache npm --cache conda
+```
+
+Read the plan, then use its printed absolute path to apply it. Run these user cache
+commands as yourself, without sudo:
+
+```bash
+bromigos storage cleanup apply /absolute/path/to/cache-plan.json
+```
+
+npm cleanup clears downloaded package content in `~/.npm/_cacache`. Conda cleanup
+clears downloaded archives, index data and logs in `~/.conda/pkgs`. Extracted Conda
+packages and environments remain available. The total cache size shown by preview
+can include files these actions keep. If Conda resolves additional cache locations,
+cleanup stops so they can be reviewed.
+
+For downloaded system package archives, make a separate plan:
+
+```bash
+bromigos storage cleanup plan --cache package-archives --keep-versions 3
+sudo bromigos storage cleanup apply /absolute/path/to/package-cache-plan.json
+```
+
+Replace the apply path with the one printed by planning. Package cleanup keeps three
+cached versions of each package by default. You can choose a different count with
+`--keep-versions`, from 1 to 100. It does not uninstall packages.
+
+User caches cannot share a plan with system package archives, retained originals or
+snapshots. Applying any cleanup plan asks you to type `CLEANUP` and its plan ID.
+Add `--yes` when applying an already reviewed plan to skip that prompt. Results and
+errors are logged, with actual available space measured before and after cleanup.
 
 ## Retire migrated originals
 
@@ -192,8 +230,9 @@ while cleanup runs is reported for separate review. It is not automatically dele
 sudo bromigos storage cleanup status /absolute/path/to/cleanup-plan.json
 ```
 
-Each attempt saves a private log beside the plan, including errors. Status shows the
-log path, completed deletions and available-space measurements. Add `--json` for the
+For a user cache plan, run `cleanup status` without sudo. Each attempt saves a private
+log beside the plan, including errors. Status shows the log path, completed actions
+and available-space measurements. Add `--json` for the
 full record. If checks failed before deletion, address the reported problem and retry
 the same plan. If deletion started and then failed or was interrupted, inspect the
 log and completed paths before making a new plan. The command refuses to replay a

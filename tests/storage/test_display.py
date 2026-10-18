@@ -63,7 +63,7 @@ class DisplayTest(unittest.TestCase):
             'after': [{'filesystem_uuid': 'id', 'path': '/', 'free_bytes': 3 * 1024**3}],
             'remaining_snapshots': {'snapshots': [{'provider': 'btrbk', 'source_path': '/data/@home', 'status': 'present', 'count': 1}]},
             'new_snapshot_paths': ['/data/snaps/new']})
-        self.assertIn('1 path removed', output)
+        self.assertIn('1 item processed', output)
         self.assertIn('+1.0 GiB since cleanup', output)
         self.assertIn('/data/snaps/new', output)
         self.assertIn('outside the saved plan', output)

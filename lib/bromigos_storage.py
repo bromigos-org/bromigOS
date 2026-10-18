@@ -51,8 +51,11 @@ def show_plan(plan):
     if plan.get('kind') == 'cleanup':
         for item in plan['items']:
             print('  ' + item['kind'] + ': ' + json.dumps(item['path']))
+            if item.get('scope'):
+                print('    ' + item['scope'])
         print(plan['note'])
-        print('Apply this exact plan: sudo bromigos storage cleanup apply ' + shlex.quote(plan['path']))
+        user_only = all(item['kind'] == 'cache' and item.get('cache') in ('npm', 'conda') for item in plan['items'])
+        print('Apply this exact plan: ' + ('' if user_only else 'sudo ') + 'bromigos storage cleanup apply ' + shlex.quote(plan['path']))
         return
     # All plan fields are local storage metadata, never command stdout or credentials.
     print(json.dumps({key: value for key, value in plan.items() if key not in ('id', 'path', 'digest', 'created', 'schema')}, indent=2))
@@ -92,13 +95,15 @@ def main(argv=None):
     switching = commands.add_parser('switch', help='Final copy, verification and separate path switch as root')
     switching.add_argument('plan')
     switching.add_argument('--writers-stopped', action='store_true', help='Confirm apps and VMs were stopped; active paths are checked again')
-    cleanup = commands.add_parser('cleanup', help='Preview storage or plan and apply explicit retained-copy/snapshot cleanup')
+    cleanup = commands.add_parser('cleanup', help='Preview storage or plan and apply explicit cache/original/snapshot cleanup')
     cleanup.add_argument('--preview', action='store_true', help='Read only; this is also the default')
     cleanup.add_argument('--json', action='store_true')
     cleaning = cleanup.add_subparsers(dest='cleanup_action')
-    clean_plan = cleaning.add_parser('plan', help='Save exact retired originals or snapshot paths; no deletion')
+    clean_plan = cleaning.add_parser('plan', help='Save selected cache scopes, retired originals or snapshots; no deletion')
     clean_plan.add_argument('--migration', help='Completed migration plan with switched paths')
     clean_plan.add_argument('--snapshot', action='append', default=[], help='Exact local snapshot path from preview; repeat to select several')
+    clean_plan.add_argument('--cache', choices=['npm', 'conda', 'package-archives'], action='append', default=[], help='Select a cache; repeat for several. User caches use a separate plan from system cleanup')
+    clean_plan.add_argument('--keep-versions', type=int, default=3, help='Cached package versions to keep, 1–100 (default: 3)')
     clean_plan.add_argument('--json', action='store_true')
     clean_apply = cleaning.add_parser('apply', help='Verify and remove only the items in a saved cleanup plan')
     clean_apply.add_argument('plan')
@@ -133,7 +138,7 @@ def main(argv=None):
             if args.preview and args.cleanup_action:
                 raise C.Error('--preview cannot be combined with a cleanup action')
             if args.cleanup_action == 'plan':
-                record = cleaning.plan(args.migration, args.snapshot)
+                record = cleaning.plan(args.migration, args.snapshot, args.cache, args.keep_versions)
                 print(json.dumps(record, indent=2)) if args.json else show_plan(record)
             elif args.cleanup_action == 'apply':
                 result = cleaning.apply(args.plan, yes=args.yes)

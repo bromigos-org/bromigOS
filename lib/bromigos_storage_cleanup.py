@@ -10,6 +10,7 @@ import tempfile
 
 import bromigos_storage_common as C
 import bromigos_storage_migration as M
+import bromigos_storage_cache as CACHE
 
 
 def _inventory():
@@ -177,14 +178,17 @@ def _original(item, compare=False, check_busy=True):
             raise C.Error('A writer opened a migration path during verification; keep writers stopped')
 
 
-def plan(migration=None, snapshots=()):
-    C.require_root()
-    if not migration and not snapshots:
-        raise C.Error('Select a completed migration and/or exact snapshot paths')
+def plan(migration=None, snapshots=(), caches=(), keep_versions=3):
+    if any(name in CACHE.USER_CACHES for name in caches) and (migration or snapshots or any(name not in CACHE.USER_CACHES for name in caches)):
+        raise C.Error('Use separate plans for user caches and system cleanup')
+    if migration or snapshots or not caches:
+        C.require_root()
+    if not migration and not snapshots and not caches:
+        raise C.Error('Select caches, a completed migration and/or exact snapshot paths')
     if len(snapshots) != len(set(snapshots)):
         raise C.Error('A snapshot path was selected more than once')
     with C.lock({}):
-        items = []
+        items = CACHE.plan_items(caches, keep_versions)
         source = None
         if migration:
             record = M._load(migration)
@@ -207,7 +211,7 @@ def plan(migration=None, snapshots=()):
                 raise C.Error('Cleanup selections overlap')
         return C.store('plans', {'kind': 'cleanup', 'state': 'planned', 'items': items,
                                 'migration': source, 'snapshot_inventory': inventory,
-                                'note': 'Only listed paths will be removed. Snapshot deletion removes their rollback history; shared bytes are not an estimate of reclaim.'})
+                                'note': 'Only selected cleanup scopes will run. Snapshot deletion removes rollback history; cache commands keep the data described in each scope. Shared bytes are not a reclaim estimate.'})
 
 
 def _validate(record):
@@ -230,6 +234,8 @@ def _validate(record):
             matches = [c for c in _candidates(inventory) if c.get('path') == item['path']]
             if len(matches) != 1 or _snapshot(item['path'], matches[0]) != item:
                 raise C.Error('Snapshot identity or manager configuration changed')
+        elif item['kind'] == 'cache':
+            CACHE.validate(item)
         else:
             raise C.Error('Unsupported cleanup item')
 
@@ -248,10 +254,10 @@ def _space(items):
 
 
 def apply(ref, yes=False):
-    C.require_root()
     record = C.read(ref)
     if record.get('kind') != 'cleanup' or not record.get('items'):
         raise C.Error('Use a saved cleanup plan')
+    CACHE.require_access(record['items'])
     with C.lock(record):
         previous = C.read_journal(record)
         if previous and (previous.get('state') not in ('preflight-failed', 'verification-failed') or previous.get('completed')):
@@ -260,7 +266,8 @@ def apply(ref, yes=False):
         fd, filename = tempfile.mkstemp(prefix=Path(record['path']).stem + '.attempt-', suffix='.log', dir=Path(record['path']).parent)
         log_path = Path(filename)
         parent = log_path.parent.stat()
-        os.fchown(fd, parent.st_uid, parent.st_gid)
+        if os.geteuid() == 0:
+            os.fchown(fd, parent.st_uid, parent.st_gid)
         with os.fdopen(fd, 'w') as log:
             def event(message):
                 log.write(C.now() + ' ' + message + '\n'); log.flush(); os.fsync(log.fileno())
@@ -273,7 +280,7 @@ def apply(ref, yes=False):
                 if not yes:
                     if not sys.stdin.isatty():
                         raise C.Error('Review the plan in a terminal or pass --yes for that exact saved plan')
-                    if input('Delete the listed originals and snapshot rollback points? Type CLEANUP ' + record['id'] + ': ').strip() != 'CLEANUP ' + record['id']:
+                    if input('Run the selected cleanup actions? Type CLEANUP ' + record['id'] + ': ').strip() != 'CLEANUP ' + record['id']:
                         raise C.Error('Cleanup cancelled')
                 _validate(record)
                 journal.update(state='verifying', before=_space(record['items']))
@@ -288,12 +295,14 @@ def apply(ref, yes=False):
                 btrfs_roots = set()
                 for item in record['items']:
                     journal['active_path'] = item['path']; C.update_journal(record, journal)
-                    event('Removing ' + json.dumps(item['path']))
+                    event(('Cleaning ' if item['kind'] == 'cache' else 'Removing ') + json.dumps(item['path']))
                     if item['kind'] == 'original':
                         _original(item, compare=True)
                         if not shutil.rmtree.avoids_symlink_attacks:
                             raise C.Error('This Python build cannot safely remove retained directories')
                         shutil.rmtree(item['path'])
+                    elif item['kind'] == 'cache':
+                        journal.setdefault('cache_results', []).append(CACHE.clean(item))
                     else:
                         matches = [c for c in _candidates(_inventory()) if c.get('path') == item['path']]
                         if len(matches) != 1 or _snapshot(item['path'], matches[0]) != item:
@@ -302,7 +311,7 @@ def apply(ref, yes=False):
                             C.command(['snapper', '-c', item['config'], 'delete', str(item['snapshot_id'])], timeout=None)
                         else:
                             C.command(['btrfs', 'subvolume', 'delete', item['path']], timeout=None)
-                    if item['filesystem']['fstype'] == 'btrfs':
+                    if item['kind'] != 'cache' and item['filesystem']['fstype'] == 'btrfs':
                         btrfs_roots.add(item['filesystem']['target'])
                     journal['completed'].append(item['path']); C.update_journal(record, journal)
                 for root in sorted(btrfs_roots):

@@ -127,19 +127,25 @@ def show_cleanup(result):
         _line(_text(result['snapshot_note']), indent='')
     print()
     _line('Plan a cleanup: bromigos storage cleanup plan --help', indent='')
+    _line('Select caches with --cache npm, --cache conda or --cache package-archives.', indent='')
     _line('Select snapshots by repeating --snapshot /absolute/snapshot/path, then run cleanup apply with the saved plan.', indent='')
 
 
 def show_cleanup_result(journal):
     state = _text(journal.get('state', 'unknown'))
     completed = len(journal.get('completed', []))
-    print(_heading('Cleanup ' + state) + f" · {completed} {'path' if completed == 1 else 'paths'} removed")
+    print(_heading('Cleanup ' + state) + f" · {completed} {'item' if completed == 1 else 'items'} processed")
     if journal.get('error'):
         _line('Stopped: ' + _text(journal['error']), indent='')
     if journal.get('active_path'):
         _line('Inspect: ' + _path(journal['active_path']), indent='')
     if journal.get('log'):
         _line('Log: ' + _path(journal['log']), indent='')
+    if journal.get('cache_results'):
+        print('\n' + _heading('Cache allocation'))
+        for item in journal['cache_results']:
+            _line(f"{_text(item['cache'])} · {_size(item.get('allocated_before'))} before · {_size(item.get('allocated_after'))} remaining")
+        _line('Retained cache content may remain. Allocation changes are separate from filesystem free space.', indent='')
     before = {row.get('filesystem_uuid'): row for row in journal.get('before', [])}
     after = journal.get('after', [])
     if after:
