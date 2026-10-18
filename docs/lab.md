@@ -142,7 +142,7 @@ trusted CA file for a private certificate. `auth_ref` uses the existing private
 reference resolver. Never write an API key directly into shared configuration.
 `device_id` selects a device explicitly. Without it, status requires exactly one
 supported PDU. Initial support is limited to the USP-PDU-Pro model codes
-`USPPDUP` and `USP-PDU-Pro`; other models are not assumed compatible. Status parsing
+`USPPDUP`, `USPED18` and `USP-PDU-Pro`; other models are not assumed compatible. Status parsing
 uses recorded controller data in tests; physical hardware compatibility still needs
 checking after installation.
 

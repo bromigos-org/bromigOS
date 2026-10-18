@@ -12,7 +12,8 @@ import urllib.request
 
 from . import config, maintenance as M
 
-SUPPORTED_MODELS = {'USPPDUP', 'USP-PDU-Pro'}
+# NetworkOptimizer's UniFiProductDatabase maps both controller codes to USP-PDU-Pro.
+SUPPORTED_MODELS = {'USPPDUP', 'USPED18', 'USP-PDU-Pro'}
 
 
 class PowerError(Exception):

@@ -102,6 +102,12 @@ class Power(unittest.TestCase):
             self.settings['device_id'] = 'absent'
             self.assertEqual(P.status()['state'], 'not found')
 
+    def test_pro_family_controller_model_variants_are_supported(self):
+        self.configured()
+        for model in ('USPPDUP', 'USPED18', 'USP-PDU-Pro'):
+            with mock.patch.object(P, '_fetch', return_value=[device(model=model)]):
+                self.assertEqual(P.status()['device']['model'], model)
+
     def test_unsupported_models_and_bad_outlet_indices_are_rejected(self):
         self.configured()
         with mock.patch.object(P, '_fetch', return_value=[device(model='UP6')]):
