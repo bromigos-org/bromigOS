@@ -196,6 +196,10 @@ one, the manual still lists it, under "Other keys" or "Other commands".
 
 ## Send a change
 
+New pull requests use the [pull request template](.github/pull_request_template.md).
+Describe the problem, what changes for the user, and the checks you ran. Include rollout
+or rollback steps when needed, and remove that section when it does not apply.
+
 - **Keep commits small,** one area at a time. Commit files by path, not with
   `git add -A`.
 - **Start the subject with the area,** then say what changed in plain words. For example:
