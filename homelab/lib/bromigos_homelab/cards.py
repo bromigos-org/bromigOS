@@ -357,7 +357,7 @@ def _alerts_finish(res):
 
 
 register_card("alerts", title="Alerts", order=70, capability="alerts", needs=("alerts",), covers=("alerts",),
-              hint="Prometheus or Alertmanager alerts firing now (Watchdog left out). Red: critical.",
+              hint="Prometheus or Alertmanager alerts firing now (monitoring helpers left out). Red: critical.",
               build=_alerts_finish)
 
 

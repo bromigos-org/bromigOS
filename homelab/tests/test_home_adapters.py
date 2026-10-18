@@ -204,6 +204,30 @@ class Minecraft(unittest.TestCase):
 
 
 class AlertLinks(unittest.TestCase):
+    def test_monitoring_helpers_are_hidden_but_real_info_alerts_remain(self):
+        alerts = [
+            {"labels": {"alertname": "Watchdog", "severity": "none"}, "state": "firing"},
+            {"labels": {"alertname": "InfoInhibitor", "severity": "none"}, "state": "firing"},
+            {"labels": {"alertname": "QuotaNearlyFull", "severity": "info"}, "state": "firing"},
+            {"labels": {"alertname": "InfoInhibitorCustom", "severity": "info"}, "state": "pending"},
+            {"labels": {"alertname": "WatchdogMissing", "severity": "critical"}, "state": "firing"},
+            {"labels": {"alertname": "BackupNotice", "severity": "none"}, "state": "firing"},
+        ]
+        for cls in (P.Prometheus, P.VictoriaMetrics, P.Alertmanager):
+            with self.subTest(source=cls.type):
+                a = cls({"type": cls.type, "name": "metrics", "endpoint": "https://alerts.example"})
+                if cls is P.Alertmanager:
+                    payload = [dict(x, status={"state": "active" if x["state"] == "firing" else "pending"})
+                               for x in alerts]
+                else:
+                    payload = {"data": {"alerts": alerts}}
+                a.get_json = lambda *args, **kwargs: payload
+                out = a.alerts()
+                self.assertEqual([x["name"] for x in out],
+                                 ["QuotaNearlyFull", "InfoInhibitorCustom", "WatchdogMissing", "BackupNotice"])
+                self.assertEqual([x["severity"] for x in out], ["info", "info", "critical", "none"])
+                self.assertEqual(out[1]["state"], "pending")
+
     def test_prometheus_links_to_its_alerts_page(self):
         a = P.Prometheus({"type": "prometheus", "name": "metrics", "endpoint": "https://prom.example"})
         a.get_json = lambda *x, **k: {"data": {"alerts": [

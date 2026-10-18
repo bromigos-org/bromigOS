@@ -231,6 +231,10 @@ Plex: the den TV and the MEDIA panel read it ([Video libraries](#video-libraries
 Sizes such as `vram_used`, `used` and `total` are in bytes. On unified memory,
 `vram_total` is `None`. `holds` lists what uses a GPU, as `"namespace/app"`.
 
+The Prometheus, VictoriaMetrics and Alertmanager adapters omit alerts named exactly
+`Watchdog` or `InfoInhibitor`. These are monitoring helpers. Other names and severities,
+including `info` and `none`, remain in the `alerts` result and its displayed counts.
+
 Where an adapter judges a record's health, it adds `state`: `ok`, `warn` or `crit`. The
 lab console's cards read it.
 

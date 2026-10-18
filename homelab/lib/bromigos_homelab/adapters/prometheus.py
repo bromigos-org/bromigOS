@@ -5,6 +5,10 @@ import urllib.parse
 
 from ..registry import Adapter, register
 
+# These two rules support monitoring itself, rather than report a problem.
+# Match names exactly: other info-level alerts still belong in the user's list.
+MONITORING_HELPERS = {"Watchdog", "InfoInhibitor"}
+
 
 def _f(x):
     try:
@@ -62,7 +66,7 @@ class Prometheus(Adapter):
         out = []
         for a in (d.get("data") or {}).get("alerts", []):
             lb = a.get("labels") or {}
-            if lb.get("alertname") == "Watchdog":
+            if lb.get("alertname") in MONITORING_HELPERS:
                 continue
             out.append({"name": lb.get("alertname"), "severity": lb.get("severity"), "state": a.get("state"),
                         "summary": (a.get("annotations") or {}).get("summary") or (a.get("annotations") or {}).get("description"),
@@ -107,7 +111,7 @@ class Alertmanager(Adapter):
         out = []
         for a in self.get_json("/api/v2/alerts?active=true&silenced=false&inhibited=false", timeout=6) or []:
             lb = a.get("labels") or {}
-            if lb.get("alertname") == "Watchdog":
+            if lb.get("alertname") in MONITORING_HELPERS:
                 continue
             out.append({"name": lb.get("alertname"), "severity": lb.get("severity"),
                         "state": "firing" if (a.get("status") or {}).get("state") == "active" else "pending",

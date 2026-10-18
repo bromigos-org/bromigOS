@@ -67,6 +67,10 @@ The main modules in `lib/bromigos_homelab/`:
 | `tui.py` | the `bromigos lab` dashboard, built with Textual |
 | `tuiux.py` | shared keyboard dialogs, help and guards against background shortcuts |
 
+The alert adapters leave out the monitoring helpers `Watchdog` and `InfoInhibitor`.
+Other alerts, including info-level notices, stay visible. See the
+[capability contract](../docs/homelab.md#capabilities) for the returned records.
+
 The media library shows **Add to channel… (c)** below each title tab. Select a title
 or album, use the button or `c`, choose **Add to** a picked channel, then **Apply channel choice**.
 The button preserves the selected Music album when it opens the picker. The selected

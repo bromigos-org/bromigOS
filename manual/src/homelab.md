@@ -76,6 +76,10 @@ or with `--kube-context`.
 Many of these need no address of their own. bromigOS finds them through your metrics or
 your cluster, once it knows those.
 
+The ALERTS panel and Lab alert card leave out `Watchdog` and `InfoInhibitor`.
+These are monitoring helpers, not problems to fix. Other info-level notices stay
+visible alongside warnings and critical alerts.
+
 If a service is missing, the parts of the desktop that need it are hidden. If a service
 stops answering, it shows as "unreachable". To check everything, and get plain-words
 advice on what to fix, run:
