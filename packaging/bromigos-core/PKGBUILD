@@ -24,7 +24,8 @@ makedepends=('cargo' 'git' 'python')
 checkdepends=('desktop-file-utils' 'rsync')
 optdepends=('python: bromigos private, secrets, emblem and local storage'
             'util-linux: local storage inventory and mounts'
-            'btrfs-progs: provision a Btrfs data drive'
+            'btrfs-progs: Btrfs drive preparation and reviewed snapshot cleanup'
+            'snapper: discover and retire explicitly selected local snapshots'
             'gptfdisk: partition a planned data drive'
             'rsync: stage and verify local data migrations'
             'sops: the private overlay (bromigos private)'

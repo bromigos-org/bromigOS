@@ -463,7 +463,9 @@ The groups, by purpose: `toggle`, `restart`, `launch`, `capture`, `setup`, `inst
 
 `bromigos storage` is the core package's Python command in `bin/bromigos-storage`.
 It reads local drive state by default. Its saved plans, journals and migration rules
-live in `lib/bromigos_storage*.py`. Provisioning, copying and switching require explicit
+live in `lib/bromigos_storage*.py`. Status groups shared filesystems; cleanup discovers
+Snapper and btrbk snapshots and applies explicit retirement plans with logs.
+Provisioning, copying, switching and cleanup execution require explicit
 terminal elevation; the command never opens an authentication window. See
 [the storage reference](../docs/storage.md).
 

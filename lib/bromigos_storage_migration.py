@@ -55,7 +55,8 @@ def _filesystem(path):
             raise C.Error('Destination has no existing filesystem parent')
         ancestor = ancestor.parent
     result = json.loads(C.command(['findmnt', '--json', '--target', str(ancestor), '-o', 'TARGET,UUID,FSTYPE,FSROOT']))
-    entries = result.get('filesystems', [])
+    # findmnt may include an autofs placeholder alongside the mounted filesystem.
+    entries = [row for row in result.get('filesystems', []) if row.get('fstype') != 'autofs']
     if len(entries) != 1:
         raise C.Error('Cannot identify the migration filesystem')
     entry = entries[0]

@@ -3,6 +3,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+import shlex
 import tomllib
 
 import bromigos_storage_common as C
@@ -39,27 +40,20 @@ def _rows(rows):
 
 
 def show_status(result):
-    print('Local drives:')
-    for disk in _rows(result['disks']):
-        if disk.get('type') == 'disk':
-            print(f"  {disk.get('path') or disk.get('name')} · {disk.get('model') or 'unknown model'} · {_size(disk.get('size'))}")
-    print('Mounted local filesystems:')
-    for space in result['free_space']:
-        print(f"  {space['path']} · {_size(space['used_bytes'])} used · {_size(space['free_bytes'])} available")
-    print(result['space_note'])
-    for error in result['errors']:
-        print('Unavailable: ' + error)
-    print('Saved operations:')
-    for record in result['operations']:
-        print(f"  {record.get('id', record['path'])} · {record.get('kind', 'unknown')} · {record['phase']}")
-    if not result['operations']:
-        print('  None recorded. External scripts and other sessions are not automatically imported.')
+    from bromigos_storage_display import show_status as display
+    display(result)
 
 
 def show_plan(plan):
     print(f"{plan['id']} · {plan.get('kind', 'storage')}")
     print('Saved plan: ' + plan['path'])
     print('Planning has not formatted a disk, copied files or changed any mount.')
+    if plan.get('kind') == 'cleanup':
+        for item in plan['items']:
+            print('  ' + item['kind'] + ': ' + json.dumps(item['path']))
+        print(plan['note'])
+        print('Apply this exact plan: sudo bromigos storage cleanup apply ' + shlex.quote(plan['path']))
+        return
     # All plan fields are local storage metadata, never command stdout or credentials.
     print(json.dumps({key: value for key, value in plan.items() if key not in ('id', 'path', 'digest', 'created', 'schema')}, indent=2))
 
@@ -98,9 +92,20 @@ def main(argv=None):
     switching = commands.add_parser('switch', help='Final copy, verification and separate path switch as root')
     switching.add_argument('plan')
     switching.add_argument('--writers-stopped', action='store_true', help='Confirm apps and VMs were stopped; active paths are checked again')
-    cleanup = commands.add_parser('cleanup', help='Preview known cache locations; never delete files')
+    cleanup = commands.add_parser('cleanup', help='Preview storage or plan and apply explicit retained-copy/snapshot cleanup')
     cleanup.add_argument('--preview', action='store_true', help='Read only; this is also the default')
     cleanup.add_argument('--json', action='store_true')
+    cleaning = cleanup.add_subparsers(dest='cleanup_action')
+    clean_plan = cleaning.add_parser('plan', help='Save exact retired originals or snapshot paths; no deletion')
+    clean_plan.add_argument('--migration', help='Completed migration plan with switched paths')
+    clean_plan.add_argument('--snapshot', action='append', default=[], help='Exact local snapshot path from preview; repeat to select several')
+    clean_plan.add_argument('--json', action='store_true')
+    clean_apply = cleaning.add_parser('apply', help='Verify and remove only the items in a saved cleanup plan')
+    clean_apply.add_argument('plan')
+    clean_apply.add_argument('--yes', action='store_true', help='Apply the exact reviewed plan without a confirmation prompt')
+    clean_status = cleaning.add_parser('status', help='Read a cleanup plan, log path, completed items and measured free space')
+    clean_status.add_argument('plan')
+    clean_status.add_argument('--json', action='store_true')
     migration = commands.add_parser('migrate', help='Plan, stage, resume and verify data copies')
     moving = migration.add_subparsers(dest='action', required=True)
     move_plan = moving.add_parser('plan', help='Save individual or batch moves without copying')
@@ -123,24 +128,31 @@ def main(argv=None):
             result = dict(inventory.status(), operations=records())
             print(json.dumps(result, indent=2)) if getattr(args, 'json', False) else show_status(result)
         elif args.verb == 'cleanup':
-            import bromigos_storage_inventory as inventory
-            result = inventory.cleanup_preview()
-            if args.json:
-                print(json.dumps(result, indent=2))
+            import bromigos_storage_cleanup as cleaning
+            import bromigos_storage_display as display
+            if args.preview and args.cleanup_action:
+                raise C.Error('--preview cannot be combined with a cleanup action')
+            if args.cleanup_action == 'plan':
+                record = cleaning.plan(args.migration, args.snapshot)
+                print(json.dumps(record, indent=2)) if args.json else show_plan(record)
+            elif args.cleanup_action == 'apply':
+                result = cleaning.apply(args.plan, yes=args.yes)
+                display.show_cleanup_result(result)
+            elif args.cleanup_action == 'status':
+                record = C.read(args.plan)
+                if record.get('kind') != 'cleanup':
+                    raise C.Error('Use a saved cleanup plan')
+                result = {'plan': record, 'journal': C.read_journal(record)}
+                if args.json:
+                    print(json.dumps(result, indent=2))
+                elif result['journal']:
+                    display.show_cleanup_result(result['journal'])
+                else:
+                    show_plan(record)
             else:
-                print(result['note'])
-                for item in result['candidates']:
-                    print(f"  {item['kind']} · {item['path']} · {_size(item.get('allocated_bytes'))} allocated · {item['detail']}")
-                if result.get('size_note'):
-                    print(result['size_note'])
-                for snapshot in result.get('snapshots', []):
-                    count = snapshot.get('numeric_directories')
-                    label = 'unknown' if count is None else str(count)
-                    print(f"  Snapshots · {snapshot['path']} · {snapshot['status']} · {label} numbered directories")
-                if result.get('snapshot_note'):
-                    print(result['snapshot_note'])
-                if not result['candidates']:
-                    print('No supported cache locations found.')
+                import bromigos_storage_inventory as inventory
+                result = inventory.cleanup_preview()
+                print(json.dumps(result, indent=2)) if args.json else display.show_cleanup(result)
         elif args.verb in ('plan', 'apply'):
             import bromigos_storage_provision as provision
             if args.verb == 'plan':

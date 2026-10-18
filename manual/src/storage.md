@@ -10,8 +10,10 @@ until you decide how to retire them.
 bromigos storage status
 ```
 
-Status reads local devices, mounts, free capacity and saved operation stages. It does not format a drive or
-move files. Use `--json` for structured output.
+Status groups the mounted folders under each filesystem, with its used space,
+available space and usage bar. Each filesystem's capacity appears once. Btrfs
+subvolumes and bind mounts share that capacity. RAM-backed swap is not listed as
+a physical drive. Use `--json` for structured output.
 
 ## Plan a data drive
 
@@ -125,13 +127,74 @@ or interrupted switch before trying to continue. A switch in progress or marked
 paths and the saved fstab file for manual recovery. Do not delete the old directory
 merely because the destination exists.
 
-## Preview cleanup
+## Review cleanup and snapshots
 
 ```bash
 bromigos storage cleanup --preview
 ```
 
-Cleanup is a preview. It does not delete your originals or home snapshots. Saved
-operation status covers this command’s own plans; it does not adopt copies started
-by other scripts or earlier sessions. Review
-retained data and recovery needs before making a separate cleanup decision.
+The preview lists supported cache locations and local snapshots managed by Snapper
+and btrbk. It shows when a provider cannot be inspected; run the preview with sudo
+if it reports access restrictions. Cache entries are informational and are not
+removed by this command. Snapshot counts and file sizes are not promises of space
+reclaimed. Other snapshots can still hold the files after originals are deleted.
+
+## Retire migrated originals
+
+After a successful switch, create a cleanup plan for its retained originals:
+
+```bash
+sudo bromigos storage cleanup plan --migration /absolute/path/to/migration-plan.json
+```
+
+Planning records the exact directories without deleting them. It accepts completed
+switches made by this CLI. External scripts and their records are not imported.
+Copy-only sources are kept because they may still be in use.
+
+Close applications and services using the affected data before applying the cleanup.
+Keep them stopped until it finishes. The command checks open files, working folders,
+mounts, fstab and checksums. If active files have changed since switching, it keeps
+the original and lists differences for review. It never overwrites the active copy.
+
+Use the absolute **cleanup plan** path printed by planning:
+
+```bash
+sudo bromigos storage cleanup apply /absolute/path/to/cleanup-plan.json
+```
+
+It asks you to type `CLEANUP` followed by the plan ID. For an already reviewed plan,
+add `--yes` to skip that confirmation. Administrative authentication can still be
+required. Original-copy deletion cannot be undone by this command.
+
+## Remove selected snapshot history
+
+Copy an exact snapshot path from the cleanup preview. You can repeat `--snapshot`
+to select several paths in one plan:
+
+```bash
+sudo bromigos storage cleanup plan --snapshot /absolute/path/to/snapshot
+```
+
+Read the plan, then apply it using the same `cleanup apply` command above. Deleting
+a snapshot removes that rollback point. Only the listed local snapshots are selected;
+NAS backup streams and other snapshots are kept. Removing btrbk source snapshots
+can make its next backup send a full copy. Root snapshots are included only
+if you explicitly select their paths. Snapshot cleanup is never inferred from the
+amount of free space.
+
+The command waits for Btrfs to finish removing the selected snapshots, reports actual
+available space before and after, and lists remaining snapshots. A snapshot created
+while cleanup runs is reported for separate review. It is not automatically deleted.
+
+## Read cleanup progress and errors
+
+```bash
+sudo bromigos storage cleanup status /absolute/path/to/cleanup-plan.json
+```
+
+Each attempt saves a private log beside the plan, including errors. Status shows the
+log path, completed deletions and available-space measurements. Add `--json` for the
+full record. If checks failed before deletion, address the reported problem and retry
+the same plan. If deletion started and then failed or was interrupted, inspect the
+log and completed paths before making a new plan. The command refuses to replay a
+partial deletion automatically.

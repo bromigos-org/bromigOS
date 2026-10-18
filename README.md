@@ -136,7 +136,8 @@ To switch, press **Super+Ctrl+Shift+Space**, or run `bromigos theme set <name>`.
 make your own, or install one from a Git repository.
 
 `bromigos storage` plans a separate data drive and verified file migrations. It keeps
-the original data until you review the switch. See [Storage](manual/src/storage.md).
+the original data until you review the switch, groups shared filesystem capacity,
+and retires only explicitly planned originals or local snapshots. See [Storage](manual/src/storage.md).
 
 ## What you need
 

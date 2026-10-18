@@ -2068,10 +2068,10 @@ Options:
 
 ### bromigos storage
 
-Inspect local drives, plan storage and migrate data while keeping the originals.
+Inspect drives, migrate data and retire reviewed originals or snapshots.
 
 ```text
-bromigos storage status [--json] | plan --device DEVICE --mount PATH [--roles LIST] [--json] | apply PLAN | migrate plan|run|resume|verify|status … | switch PLAN --writers-stopped | cleanup --preview [--json]
+bromigos storage status [--json] | plan --device DEVICE --mount PATH [--roles LIST] [--json] | apply PLAN | migrate plan|run|resume|verify|status … | switch PLAN --writers-stopped | cleanup [--preview] [--json] | cleanup plan [--migration PLAN] [--snapshot PATH] [--json] | cleanup apply PLAN [--yes] | cleanup status PLAN [--json]
 ```
 
 For example:
