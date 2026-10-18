@@ -38,6 +38,8 @@ manual's [Files and folders](../manual/src/files.md) lists them for users.
 | [apps.md](apps.md) | The optional app bundle: LazyVim, tmux and others, themed |
 | [storage.md](storage.md) | Local drives, migration journals, grouped capacity, snapshots and cleanup plans |
 | [console.md](console.md) | Text console font presets, persistent settings and safe writes |
+| [tty-login.md](tty-login.md) | Branded text-console login through the ordinary getty prompt |
+| [power-menu.md](power-menu.md) | Keyboard power menu, confirmation and offscreen tests |
 | [hardware.md](hardware.md) | GPU drivers, laptops and touchpads, and `bromigos hw` |
 | [peripherals.md](peripherals.md) | Peripheral modules, such as a Razer keyboard's macro keys and dial |
 
@@ -81,6 +83,7 @@ VECTOR, the desktop's AI assistant, is documented in his own repository,
 | [update.md](update.md) | `bromigos update`, channels, snapshots and rollback, and publishing the manual |
 | [aur.md](aur.md) | The AUR: bromigOS's paru, AUR packages in updates and their snapshots, turning it off, and drivers only the AUR has |
 | [boot.md](boot.md) | The themed boot menu and its snapshot entries |
+| [splash.md](splash.md) | Saved shutdown and restart splash settings, backups and rollback |
 | [iso.md](iso.md) | The live and install ISO, and its installer |
 | [iso-encryption.md](iso-encryption.md) | Full-disk encryption in the ISO's installer |
 | [release.md](release.md) | Cutting a release: versions, release notes, tags and promoting a candidate to stable |

@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+# bromigos:summary=Choose and confirm a power action with the keyboard
+# bromigos:args=[--preview]
+# bromigos:examples=bromigos power menu; bromigos power menu --preview
+"""A power menu for desktop terminals and Linux text consoles."""
+import os
+import sys
+
+here = os.path.dirname(os.path.realpath(__file__))
+for candidate in reversed((os.path.join(os.path.dirname(here), 'lib'), '/usr/lib/bromigos/lib')):
+    if os.path.isdir(candidate):
+        sys.path.insert(0, candidate)
+
+from bromigos_power_menu import main
+
+if __name__ == '__main__':
+    sys.exit(main())

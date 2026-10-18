@@ -141,8 +141,10 @@ shows terminal-aware usage bars, and cleans selected caches or explicitly planne
 originals and local snapshots.
 See [Storage](manual/src/storage.md).
 
-Text consoles have their own [font settings](manual/src/shell.md#make-text-consoles-readable).
-mehshell adapts its symbols and colours when you log in there.
+Text consoles have a [branded login](manual/src/console-login.md), their own
+[font settings](manual/src/shell.md#make-text-consoles-readable), and a keyboard
+[power menu](manual/src/power-menu.md). mehshell adapts its symbols and colours when
+you log in there.
 
 ## What you need
 

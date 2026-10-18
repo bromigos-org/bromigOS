@@ -477,6 +477,16 @@ an installed Terminus preset and does not change a running console or rebuild th
 initramfs. `default` clears the explicit font choice. See
 [the console reference](../docs/console.md).
 
+`bromigos power menu` opens a keyboard menu through `bin/bromigos-power-menu`.
+It confirms each action and restores the terminal before calling systemctl.
+`--preview` exercises the menu without a power action. See
+[the power-menu reference](../docs/power-menu.md).
+
+`bromigos splash status|on|off` checks or saves the graphical shutdown and restart
+settings on GRUB systems. Changes need root, keep backups and validate a temporary
+boot menu before replacing the current one. They take effect after reboot and leave
+the initramfs alone. See [the splash reference](../docs/splash.md).
+
 Other packages add commands this way. For example, `bromigos settings` is
 bromigos-desktop's `bromigos-settings`, and `bromigos lab` is bromigos-homelab's
 `bromigos-lab`.
@@ -491,6 +501,8 @@ bromigos-core installs these external commands of its own in `/usr/lib/bromigos/
 | `bromigos install extension`, `bromigos remove extension` | The menu's rows for installing and removing an extension |
 | `bromigos terminal` | Runs a command in your terminal, for the app launcher's entries |
 | `bromigos console status`, `bromigos console font SIZE` | Reads or saves the text console font for the next boot ([docs/console.md](../docs/console.md)) |
+| `bromigos power menu` | Opens the keyboard power menu; `--preview` never runs an action |
+| `bromigos splash status\|on\|off` | Checks or saves the shutdown and restart splash settings for the next boot |
 
 ### Command headers
 

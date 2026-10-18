@@ -1,0 +1,11 @@
+
+\e{lightgreen}  +------------------------------------------------------+
+  |  \e{bold}bromigOS\e{reset}\e{lightgreen}                               TEXT CONSOLE |
+  +------------------------------------------------------+\e{reset}
+
+  Sign in with your username and password.
+
+  After signing in:
+    bromigos console status   Check the console font
+    bromigos power menu       Restart or shut down
+

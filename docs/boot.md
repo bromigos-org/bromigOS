@@ -285,6 +285,75 @@ ROLL BACK · boot the system as it was, newest first
 - `bromigos update` describes its own pair as "bromigos update". It makes the pair itself
   and tells snap-pac to skip that transaction.
 
+## The boot, shutdown and restart splash
+
+`settings/plymouth/bromigos/bromigos.script` draws the Wick's ring and flame on black.
+It reads `Plymouth.GetMode()` once when the theme starts:
+
+| Plymouth mode | What it draws below the emblem |
+|---|---|
+| `boot` | The existing boot progress line, messages and disk passphrase prompt |
+| `shutdown` | `SHUTTING DOWN` and a moving activity marker |
+| `reboot` | `RESTARTING` and a moving activity marker |
+
+The shutdown marker moves back and forth along the line. It shows activity, not a
+percentage or an estimate of how much work is left. Boot progress callbacks cannot
+fill it. Messages sit below the action label, so a service message does not cover it.
+Other Plymouth modes keep the existing appearance without claiming a power action.
+
+These mode names come from Plymouth's
+[script API implementation](https://gitlab.freedesktop.org/plymouth/plymouth/-/blob/26.134.222/src/plugins/splash/script/script-lib-plymouth.c).
+Its packaged power-off and reboot units start the daemon with `--mode=shutdown` and
+`--mode=reboot`. The theme does not launch or stop any service itself.
+
+### Activate Plymouth on an existing installation
+
+The ISO's installer configures Plymouth already. Installing the theme files on an
+existing system does not select them or change the boot configuration.
+
+For shutdown and restart on GRUB systems, `sudo bromigos splash on` selects the
+theme and saves the kernel flag. `bromigos splash status` reads the saved and running
+settings. `sudo bromigos splash off` undoes its changes. The [splash helper](splash.md)
+documents its backups, validation and supported configurations; the
+[manual](../manual/src/boot-menu.md#the-startup-and-shutdown-splash) has user instructions.
+Reboot once before expecting the new closing visuals. This command does not add
+Plymouth to the initramfs.
+
+For a splash during early startup as well:
+
+1. Install Plymouth if needed: `sudo pacman -S plymouth`.
+2. For a boot splash, add `plymouth` just after `udev` or `systemd` in the effective
+   mkinitcpio `HOOKS` list, before any disk-unlock hook. Preserve the other hooks.
+   Check `/etc/mkinitcpio.conf` and its files in `/etc/mkinitcpio.conf.d/`.
+3. Add `splash` to the kernel command line, preserving its other arguments. With GRUB,
+   edit `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub`, then run
+   `sudo grub-mkconfig -o /boot/grub/grub.cfg`. Other boot loaders have their own way
+   to save kernel arguments. `quiet` reduces kernel text but does not select the splash.
+4. Select the theme and rebuild the initramfs:
+   `sudo plymouth-set-default-theme -R bromigos`.
+5. Reboot when ready. The new kernel arguments apply to that session; subsequent
+   shutdowns and restarts can show the graphical splash too.
+
+Plymouth checks the active kernel arguments when selecting a graphical splash during
+shutdown as well as boot. Choosing `bromigos` without `splash` can still leave text
+output. `plymouth.enable=0`, masked Plymouth services or unavailable graphics can also
+prevent the splash. These controls belong to the installation; package updates leave
+them alone. Press Escape during a splash to see Plymouth's detailed output.
+
+### Test without touching a desktop or console
+
+```bash
+python -m unittest discover -s settings/plymouth/tests
+```
+
+The tests load the installed Plymouth `script.so` parser and interpreter. Window,
+image, sprite and callback functions are in-memory test doubles; only the maths
+library is native. They check the shipped script's syntax and behaviour in boot,
+shutdown and restart modes, including progress, activity bounds, messages and the
+passphrase prompt at several screen sizes. They never start a daemon or open a display,
+console or service. This proves script behaviour; final graphics-driver handover still
+depends on the machine. `bromigos-settings` requires Plymouth for its package checks.
+
 ## The ISO's menu
 
 The ISO has its own title card, `BROMIGOS // RELAY MEDIUM`, over the Wick's den at night.

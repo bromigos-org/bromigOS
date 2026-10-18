@@ -361,3 +361,6 @@ models used to split and cut the paintings.
 - **Den TV launcher icon** (`theme/app-icons/*/apps/bromigos-den-tv.svg`): **yes**.
   Drawn in code by `theme/tools/build-app-icons.py`, like the other launcher icons.
   A TV outline and play glyph; no outside art.
+
+- **Text console login banner** (`settings/console/60-bromigos.issue`): **yes**.
+  Original ASCII text and frame, drawn for bromigOS. No outside art or patched font.

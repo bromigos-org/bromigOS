@@ -28,6 +28,8 @@ modules to the same folder:
 | `bromigos_youtube.py` | YouTube playlists and channels through yt-dlp, cached, with live streams and keeping videos |
 | `bromigos_storage*.py` | Local drive inventory, saved provisioning plans, verified migration, grouped capacity, Snapper/btrbk inventory and logged cache and retirement plans; [storage reference](../docs/storage.md) |
 | `bromigos_console.py` | Reads and safely saves text console font presets for the next boot; [console reference](../docs/console.md) |
+| `bromigos_power_menu.py` | Keyboard power selection and confirmation with a preview mode; [power menu reference](../docs/power-menu.md) |
+| `bromigos_splash.py` | Saved Plymouth and GRUB splash settings, with backups and rollback; [splash reference](../docs/splash.md) |
 
 ### bromigos_account
 

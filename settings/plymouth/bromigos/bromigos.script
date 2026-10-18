@@ -1,9 +1,10 @@
-# The Bromigos boot splash (package bromigos-settings; plymouth's script module).
+# The Bromigos boot and shutdown splash (Plymouth's script module).
 #
 # The burn-in on black, the way the lock screen shows it: the ring (the motto and the
 # tuning marks) turning slowly round the still flame, a thin phosphor line below it that
-# fills with the boot, and plymouth's messages and password prompt (an encrypted disk) in
-# the same light. The ring and the flame are the lock screen's layers, from the emblem kit
+# fills with the boot, and Plymouth's messages and password prompt (an encrypted disk) in
+# the same light. Shutdown and restart use a moving activity marker, without a percentage.
+# The ring and the flame are the lock screen's layers, from the emblem kit
 # (themes/wick/emblem/lock/{ring,flame}.png).
 
 Window.SetBackgroundTopColor(0.000, 0.008, 0.000);     # the void, #000200
@@ -13,6 +14,8 @@ screen_w = Window.GetWidth();
 screen_h = Window.GetHeight();
 cx = Window.GetX() + screen_w / 2;
 cy = Window.GetY() + screen_h / 2;
+mode = Plymouth.GetMode();
+leaving = mode == "shutdown" || mode == "reboot";
 
 # the emblem: a third of the screen's short side
 size = Math.Min(screen_w, screen_h) * 0.34;
@@ -35,12 +38,19 @@ ring.SetZ(9);
 # the ring turns: one revolution a minute (the lock screen's 36 s is for a waiting eye;
 # a boot is short), in steps, like a tuning dial
 angle = 0;
+activity_phase = 0;
 fun refresh_callback () {
     angle += (2 * Math.Pi) / (60 * 50);           # 50 refreshes a second
     turned = ring_img.Rotate(angle);
     ring.SetImage(turned);
     ring.SetX(cx - turned.GetWidth() / 2);
     ring.SetY(cy - turned.GetHeight() / 2);
+    if (leaving) {
+        activity_phase = (activity_phase + 0.012) % 2;
+        sweep = activity_phase;
+        if (sweep > 1) sweep = 2 - sweep;
+        fill.SetX(cx - line_w / 2 + sweep * (line_w - activity_w));
+    }
 }
 Plymouth.SetRefreshFunction(refresh_callback);
 
@@ -54,7 +64,10 @@ track.SetX(cx - line_w / 2); track.SetY(line_y); track.SetZ(5);
 fill_img = Image("line-fill.png");
 fill = Sprite();
 fill.SetX(cx - line_w / 2); fill.SetY(line_y - 1); fill.SetZ(6);
+activity_w = line_w * 0.18;
+if (leaving) fill.SetImage(fill_img.Scale(activity_w, 4));
 fun progress_callback (duration, progress) {
+    if (leaving) return;
     w = Math.Int(line_w * progress);
     if (w > 0) fill.SetImage(fill_img.Scale(w, 4));
 }
@@ -62,13 +75,24 @@ Plymouth.SetBootProgressFunction(progress_callback);
 
 # messages (fsck, a failing unit) and the password prompt, under the line
 phosphor = [0.22, 1.0, 0.08];
+message_y = line_y + size * 0.12;
+action = Sprite(); action.SetZ(20);
+if (leaving) {
+    action_text = "SHUTTING DOWN";
+    if (mode == "reboot") action_text = "RESTARTING";
+    action_img = Image.Text(action_text, phosphor[0], phosphor[1], phosphor[2]);
+    action.SetImage(action_img);
+    action.SetX(cx - action_img.GetWidth() / 2);
+    action.SetY(message_y);
+    message_y += action_img.GetHeight() + 10;
+}
 message = Sprite();
 message.SetZ(20);
 fun show_message (text) {
     img = Image.Text(text, phosphor[0], phosphor[1], phosphor[2]);
     message.SetImage(img);
     message.SetX(cx - img.GetWidth() / 2);
-    message.SetY(line_y + size * 0.12);
+    message.SetY(message_y);
 }
 fun message_callback (text) { show_message(text); }
 Plymouth.SetMessageFunction(message_callback);
@@ -80,13 +104,13 @@ fun password_callback (text, bullets) {
     img = Image.Text("PASSPHRASE", phosphor[0] * 0.6, phosphor[1] * 0.6, phosphor[2] * 0.6);
     prompt.SetImage(img);
     prompt.SetX(cx - img.GetWidth() / 2);
-    prompt.SetY(line_y + size * 0.12);
+    prompt.SetY(message_y);
     s = "";
     for (i = 0; i < bullets; i++) s += "•";
     d = Image.Text(s, phosphor[0], phosphor[1], phosphor[2]);
     dots.SetImage(d);
     dots.SetX(cx - d.GetWidth() / 2);
-    dots.SetY(line_y + size * 0.12 + img.GetHeight() + 6);
+    dots.SetY(message_y + img.GetHeight() + 6);
 }
 Plymouth.SetDisplayPasswordFunction(password_callback);
 fun normal_callback () { prompt.SetImage(Image.Text("", 0, 0, 0)); dots.SetImage(Image.Text("", 0, 0, 0)); }

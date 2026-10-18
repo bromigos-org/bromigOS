@@ -17,17 +17,25 @@ This folder isn't the Settings window. That's `desktop/settings/`
 |---|---|---|
 | `sddm/bromigos/` | `/usr/share/sddm/themes/bromigos/` | The login screen ([its README](sddm/bromigos/README.md)) |
 | `sddm/conf/zz-bromigos.conf` | `/usr/lib/sddm/sddm.conf.d/` | SDDM's settings: this theme, the cursor, the Wayland greeter |
-| `plymouth/bromigos/` | `/usr/share/plymouth/themes/bromigos/` | The boot splash |
+| `plymouth/bromigos/` | `/usr/share/plymouth/themes/bromigos/` | The boot, shutdown and restart splash |
+| `console/` | `/usr/lib/issue.d/60-bromigos.issue` | The text-console login banner ([its README](console/README.md)) |
 | `grub/` | `/usr/share/bromigos/boot/grub/`, `/usr/lib/bromigos/boot/` | The boot menu's theme and its tools |
 | `gtk/` | `/usr/share/themes/Bromigos`, `/usr/share/icons/Bromigos*`, `/usr/lib/bromigos/gtk/` | The GTK theme, icons and cursor, and their builders |
 
 `packaging/bromigos-settings/PKGBUILD` lists every installed path.
 
-### The boot splash
+### The boot, shutdown and restart splash
 
-The splash is the emblem's ring and flame with a progress line. It uses Plymouth's script
-module, and takes the ring and flame from the Wick's lock-screen art. The ISO's installer
-turns it on.
+The splash is the emblem's ring and flame. Plymouth's script module reports whether the
+system is booting, shutting down or restarting. Boot keeps its progress line, messages
+and disk passphrase prompt. Shutdown and restart show their action below the emblem,
+with a moving activity marker instead of a percentage.
+
+The ring and flame come from the Wick's lock-screen art. The ISO's installer turns
+Plymouth on. Existing systems need the theme selected and `splash` on the kernel command
+line; [docs/boot.md](../docs/boot.md#the-boot-shutdown-and-restart-splash) covers activation.
+`plymouth/tests/` runs the real script interpreter with in-memory displays, without a
+daemon, console or service. The package runs those tests in `check()`.
 
 ### The boot menu
 

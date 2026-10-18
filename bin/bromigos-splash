@@ -1,0 +1,17 @@
+#!/usr/bin/python3 -I
+# bromigos:summary=Configure graphical shutdown and restart on GRUB systems
+# bromigos:args=status [--json] | on | off
+# bromigos:examples=bromigos splash status; sudo bromigos splash on; sudo bromigos splash off
+"""Read splash settings or save them for the next boot."""
+import os
+import sys
+
+here = os.path.dirname(os.path.realpath(__file__))
+for candidate in reversed((os.path.join(os.path.dirname(here), 'lib'), '/usr/lib/bromigos/lib')):
+    if os.path.isdir(candidate):
+        sys.path.insert(0, candidate)
+
+from bromigos_splash import main
+
+if __name__ == '__main__':
+    sys.exit(main())

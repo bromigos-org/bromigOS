@@ -1,6 +1,6 @@
 [Plymouth Theme]
 Name=Bromigos
-Description=The burn-in on black: the Wick's ring turning round the flame while the system boots
+Description=The Wick's ring and flame while the system starts, shuts down or restarts
 ModuleName=script
 
 [script]

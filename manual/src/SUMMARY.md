@@ -24,6 +24,8 @@
     - [Idle and lock](idle.md)
     - [Your own shortcuts](shortcuts.md)
 - [Shell and terminal](shell.md)
+    - [Text console login](console-login.md)
+- [Power menu](power-menu.md)
 - [Playing games](games.md)
 - [Storage](storage.md)
 - [Apps](apps.md)

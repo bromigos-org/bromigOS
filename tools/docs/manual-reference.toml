@@ -203,6 +203,7 @@ rows = [
   { route = "net", text = "Turn Wi-Fi on or off, join a network, or connect a VPN." },
   { route = "bluetooth", text = "Turn Bluetooth on or off, and pair or connect devices." },
   { route = "power", text = "Choose a power profile, see batteries, and set what closing the lid does." },
+  { route = "power menu", text = "Open the keyboard [power menu](power-menu.md) in a terminal or text console." },
   { route = "clock", text = "Set the time zone and how the bar's clock looks." },
   { route = "notifications", text = "Turn on do not disturb, and choose where notifications appear and how long they stay." },
   { route = "defaults", text = "Choose the apps that open links, files, pictures and the rest." },
@@ -222,6 +223,7 @@ title = "Change the look"
 rows = [
   { route = "theme", text = "List the [themes](themes-and-worlds.md), or switch: `bromigos theme set mire`." },
   { route = "console", text = "Read or save a [text console font](shell.md#make-text-consoles-readable) for the next boot." },
+  { route = "splash", text = "Check, enable or undo the [shutdown and restart splash](boot-menu.md#the-startup-and-shutdown-splash) on a GRUB system." },
   { route = "theme switcher", text = "Open the theme switcher, with a preview of each theme." },
   { route = "theme previews", text = "Draw the theme switcher's previews again." },
   { route = "wallpaper", text = "Switch between the den wallpapers you have." },

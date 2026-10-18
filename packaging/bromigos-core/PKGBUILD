@@ -22,8 +22,10 @@ license=('MIT OR Apache-2.0')
 depends=('gcc-libs' 'glibc' 'openssl' 'git')   # git: bromigos ext (extensions are checkouts)
 makedepends=('cargo' 'git' 'python')
 checkdepends=('desktop-file-utils' 'rsync' 'npm')
-optdepends=('python: bromigos private, secrets, emblem, console and local storage'
+optdepends=('python: bromigos private, secrets, emblem, console, power menu, splash and local storage'
             'terminus-font: readable text console font sizes'
+            'plymouth: graphical shutdown and restart (bromigos splash)'
+            'grub: save the graphical splash kernel setting'
             'util-linux: local storage inventory and mounts'
             'btrfs-progs: Btrfs drive preparation and reviewed snapshot cleanup'
             'pacman-contrib: retire selected cached package archives'
@@ -94,6 +96,7 @@ check() {
   python "$_root/tools/launcher/check.py" --static --only core
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/storage"
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/console"
+  PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/splash"
 }
 
 package() {
@@ -135,6 +138,8 @@ package() {
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-account
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-storage
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-console
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-power-menu
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-splash
   # the app launcher's entries (docs/menu.md, "In the app launcher")
   install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_root"/core/applications/*.desktop
   # bromigOS's app icons in the hicolor theme every icon theme inherits (theme/app-icons, drawn

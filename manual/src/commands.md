@@ -31,6 +31,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos net`](#bromigos-net) | Turn Wi-Fi on or off, join a network, or connect a VPN. |
 | [`bromigos bluetooth`](#bromigos-bluetooth) | Turn Bluetooth on or off, and pair or connect devices. |
 | [`bromigos power`](#bromigos-power) | Choose a power profile, see batteries, and set what closing the lid does. |
+| [`bromigos power menu`](#bromigos-power-menu) | Open the keyboard [power menu](power-menu.md) in a terminal or text console. |
 | [`bromigos clock`](#bromigos-clock) | Set the time zone and how the bar's clock looks. |
 | [`bromigos notifications`](#bromigos-notifications) | Turn on do not disturb, and choose where notifications appear and how long they stay. |
 | [`bromigos defaults`](#bromigos-defaults) | Choose the apps that open links, files, pictures and the rest. |
@@ -50,6 +51,7 @@ This page lists the commands by task first, then each one in full.
 |---|---|
 | [`bromigos theme`](#bromigos-theme) | List the [themes](themes-and-worlds.md), or switch: `bromigos theme set mire`. |
 | [`bromigos console`](#bromigos-console) | Read or save a [text console font](shell.md#make-text-consoles-readable) for the next boot. |
+| [`bromigos splash`](#bromigos-splash) | Check, enable or undo the [shutdown and restart splash](boot-menu.md#the-startup-and-shutdown-splash) on a GRUB system. |
 | [`bromigos theme switcher`](#bromigos-theme-switcher) | Open the theme switcher, with a preview of each theme. |
 | [`bromigos theme previews`](#bromigos-theme-previews) | Draw the theme switcher's previews again. |
 | [`bromigos wallpaper`](#bromigos-wallpaper) | Switch between the den wallpapers you have. |
@@ -1625,6 +1627,23 @@ bromigos power lid lock --on-power ignore
 
 From the `bromigos-desktop` package.
 
+### bromigos power menu
+
+Choose and confirm a power action with the keyboard.
+
+```text
+bromigos power menu [--preview]
+```
+
+For example:
+
+```text
+bromigos power menu
+bromigos power menu --preview
+```
+
+From the `bromigos-core` package.
+
 ### bromigos private
 
 The private overlay: encrypted values in your dotfiles, decrypted at login.
@@ -2053,6 +2072,24 @@ bromigos sound app-volume 79 50
 ```
 
 From the `bromigos-desktop` package.
+
+### bromigos splash
+
+Configure graphical shutdown and restart on GRUB systems.
+
+```text
+bromigos splash status [--json] | on | off
+```
+
+For example:
+
+```text
+bromigos splash status
+sudo bromigos splash on
+sudo bromigos splash off
+```
+
+From the `bromigos-core` package.
 
 ### bromigos startup
 

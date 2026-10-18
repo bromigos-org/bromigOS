@@ -82,6 +82,42 @@ with another boot loader, such as systemd-boot or Limine, bromigOS leaves its me
 Before it changes anything, bromigOS keeps a copy of your GRUB settings as
 `/etc/default/grub.bromigos-bak`. It checks the new menu before it replaces the old one.
 
+## The startup and shutdown splash
+
+When Plymouth is enabled, the Wick's flame and turning ring stay on screen while the
+system starts. The progress line and any disk passphrase prompt appear underneath.
+On shutdown it says **SHUTTING DOWN**; on restart it says **RESTARTING**. A moving
+marker shows activity, without guessing a percentage. Messages appear below the label.
+Press <kbd>Escape</kbd> to see the detailed output.
+
+The USB installer sets this up. On an existing GRUB system, check the settings and
+enable the shutdown and restart visuals:
+
+```sh
+bromigos splash status
+sudo bromigos splash on
+```
+
+This needs `plymouth` and `bromigos-settings` installed. The command selects the theme,
+adds the saved `splash` kernel setting, and checks the generated boot menu before
+replacing it. It prints where it saved the backups and log. Reboot once to load the
+new kernel setting; subsequent shutdowns and restarts can show the visuals.
+
+To undo the settings this command added:
+
+```sh
+sudo bromigos splash off
+```
+
+Your earlier theme choice and unrelated settings are preserved. Other boot loaders
+and GRUB configurations with extra `.cfg` files need manual setup. The command reports
+these cases without changing them.
+
+An early startup splash also needs Plymouth in the initramfs, the small system loaded
+before the main one. `bromigos splash` leaves that setup alone. The
+[activation steps](https://github.com/bromigos-org/bromigOS/blob/main/docs/boot.md#activate-plymouth-on-an-existing-installation)
+cover it. The [keyboard power menu](power-menu.md) works independently of the splash.
+
 ## The install stick
 
 The bromigOS USB stick has a boot menu of its own, in the same style. Its entries:

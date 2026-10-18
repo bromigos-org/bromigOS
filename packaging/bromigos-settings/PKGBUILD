@@ -10,7 +10,8 @@
 #   /usr/share/themes/Bromigos              GTK 3 and 4, the Wick's colours
 #   /usr/share/icons/Bromigos[-cursor]      icons (Breeze Dark recoloured) and the cursor
 #   /usr/lib/bromigos/gtk/                  build-gtk-theme.py (Bromigos-<theme> into ~/.themes)
-#   /usr/share/plymouth/themes/bromigos     the boot splash (the ring and flame of the emblem kit)
+#   /usr/share/plymouth/themes/bromigos     boot, shutdown and restart splash (ring and flame)
+#   /usr/lib/issue.d/60-bromigos.issue      the text console login banner
 #   /usr/share/bromigos/boot/grub/          the boot menu: a GRUB theme per shipped theme
 #                                           (themes/<name>/, rendered here) and Geist Mono as
 #                                           GRUB fonts (fonts/); docs/boot.md
@@ -29,7 +30,7 @@ pkgdesc='bromigOS system settings: the login screen, the boot splash and menu, t
 arch=('any')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
-depends=('sddm' 'qt6-declarative' 'weston'
+depends=('sddm' 'qt6-declarative' 'weston' 'util-linux>=2.41'
          'ttf-geist-mono' 'ttf-meslo-nerd' 'noto-fonts' 'noto-fonts-emoji' 'terminus-font'
          # Japanese, Chinese and Korean titles (anime, music, YouTube) instead of empty boxes
          'noto-fonts-cjk'
@@ -40,7 +41,8 @@ depends=('sddm' 'qt6-declarative' 'weston'
          'python-pillow')
 # grub: grub-mkfont (the boot menu's fonts) and grub-script-check (check())
 makedepends=('git' 'python' 'python-pillow' 'gtk3' 'gtk4' 'glib2-devel' 'breeze-icons' 'librsvg' 'grub')
-optdepends=('plymouth: the Bromigos boot splash (plymouth-set-default-theme -R bromigos)'
+checkdepends=('plymouth')
+optdepends=('plymouth: the Bromigos boot, shutdown and restart splash'
             'grub: the Bromigos boot menu (bromigos boot theme on)'
             'grub-btrfs: snapshots in the boot menu, titled like bromigOS'"'"'s rollback list')
 # Geist Mono for the boot menu's GRUB fonts: the same release ttf-geist-mono packages
@@ -86,6 +88,8 @@ check() {
   # the boot menu: the generator, grub-btrfs's titles, the root helper in a stand-in root
   cd "$_root"
   python -m unittest discover -s settings/grub/tests
+  python -m unittest discover -s settings/plymouth/tests
+  python -m unittest discover -s settings/console/tests
 }
 
 package() {
@@ -103,7 +107,8 @@ package() {
   ln -s /usr/share/licenses/ttf-geist-mono/OFL.txt "$sddm/fonts/OFL.txt"
   find "$sddm" -type d -exec chmod 0755 {} + ; find "$sddm" -type f -exec chmod 0644 {} +
   install -Dm0644 "$_root/settings/sddm/conf/zz-bromigos.conf" "$pkgdir/usr/lib/sddm/sddm.conf.d/zz-bromigos.conf"
-  # the boot splash (plymouth's script module; the ring and the flame are the lock screen's)
+  install -Dm0644 "$_root/settings/console/60-bromigos.issue" "$pkgdir/usr/lib/issue.d/60-bromigos.issue"
+  # boot, shutdown and restart splash (the ring and flame are the lock screen's)
   local ply="$pkgdir/usr/share/plymouth/themes/bromigos"
   install -Dm0644 -t "$ply/" "$_root"/settings/plymouth/bromigos/bromigos.plymouth \
     "$_root"/settings/plymouth/bromigos/bromigos.script "$_root"/settings/plymouth/bromigos/line-*.png
