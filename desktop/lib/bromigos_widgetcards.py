@@ -160,6 +160,102 @@ def _rgb(h):
     return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)) if len(h) >= 6 else (0.2, 1.0, 0.1)
 
 
+def layout_save_action(item):
+    """Theme defaults are copied; installed presets are overridden in the user's folder."""
+    if item.get("id") == "theme" or item.get("id", "").startswith("theme-") or item.get("made_for"):
+        return "Save as new…", False
+    return ("Save changes…" if item.get("source") == "yours" else "Override…"), True
+
+
+class LayoutSaveForm:
+    """Save the current desktop, with an explicit confirmation when replacing a layout."""
+    def __init__(self, row, item=None):
+        self.row, self.host, self.ctx, self.Gtk = row, row.tab.host, row.ctx, row.Gtk
+        self.item = item if item and layout_save_action(item)[1] else None
+        self.pending = False
+        self.on_close = None
+        self.sheet_size = (640, 360)
+        self.monitor = ((row.doc or {}).get("screen") or {}).get("monitor")
+        Gtk = self.Gtk
+        self.page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        for side in ("start", "end", "bottom"):
+            getattr(self.page, "set_margin_" + side)(14)
+        self.title = "New layout" if not self.item else layout_save_action(self.item)[0].rstrip("…")
+        screen = self.monitor or "this screen"
+        self.page.append(Gtk.Label(label=f"Save the widgets currently on {screen}, with their sizes and positions. "
+                                   "Widget settings stay separate. Saving leaves the desktop as it is; use "
+                                   "Use this layout when you want to apply a saved layout.", wrap=True, max_width_chars=64,
+                                   xalign=0))
+        self.name = self.description = None
+        if self.item:
+            message = f"Replace {self.item['title']!r} with the current arrangement. Its name and description stay the same."
+            if self.item.get("source") != "yours":
+                message += " This saves your own override; the packaged preset stays installed."
+            self.page.append(Gtk.Label(label=message, wrap=True, max_width_chars=64, xalign=0))
+        else:
+            self.name = Gtk.Entry(placeholder_text="My layout", max_length=60)
+            self.description = Gtk.Entry(placeholder_text="What this layout is for")
+            for label, entry, hint in (("Name", self.name, "A name for a new layout; existing names are kept"),
+                                       ("Description (optional)", self.description, "A short description for its card")):
+                lb = Gtk.Label(label=label, xalign=0)
+                self.page.append(lb)
+                entry.set_tooltip_text(hint)
+                self.page.append(entry)
+                entry.connect("activate", lambda *_: self.submit())
+        self.error = Gtk.Label(wrap=True, max_width_chars=64, xalign=0, selectable=True)
+        self.error.add_css_class("status")
+        self.error.set_visible(False)
+        self.page.append(self.error)
+        actions = Gtk.Box(spacing=8, halign=Gtk.Align.END)
+        self.cancel = self.ctx.button("Cancel", self.host.close_sheet, "Leave saved layouts as they are (Esc)")
+        self.save = self.ctx.button("Save layout" if not self.item else self.title,
+                                    self.submit, "Save the current arrangement", primary=True)
+        actions.append(self.cancel)
+        actions.append(self.save)
+        self.page.append(actions)
+        self.initial_focus = self.name or self.cancel
+
+    def _busy(self, busy):
+        self.pending = busy
+        for widget in (self.name, self.description, self.cancel, self.save, getattr(self, "close_button", None)):
+            if widget is not None:
+                widget.set_sensitive(not busy)
+        self.save.set_label("Saving…" if busy else "Save layout" if not self.item else self.title)
+
+    def submit(self):
+        if self.pending:
+            return
+        argv = ["bromigos", "panels", "layout", "save"]
+        if self.item:
+            argv += ["--replace", self.item["id"]]
+        else:
+            name = self.name.get_text().strip()
+            if not name:
+                self.error.set_label("Give the layout a name.")
+                self.error.set_visible(True)
+                self.name.grab_focus()
+                return
+            argv += [name, "--description", self.description.get_text().strip()]
+        if self.monitor:
+            argv += ["--monitor", self.monitor]
+        argv += ["--json"]
+        self.error.set_visible(False)
+        self._busy(True)
+
+        def saved(doc, err):
+            self._busy(False)
+            if not isinstance(doc, dict) or doc.get("ok") is False or err:
+                self.error.set_label((doc or {}).get("error") if isinstance(doc, dict) and doc.get("error")
+                                     else err or "The layout could not be saved. Try again.")
+                self.error.set_visible(True)
+                self.initial_focus.grab_focus()
+                return
+            self.host.close_sheet()
+            self.ctx.toast(doc.get("said") or "Layout saved")
+            self.row.refresh(focus_id=doc.get("id"))
+        self.ctx.json(argv, saved)
+
+
 class LayoutsRow:
     """The Layouts row at the top of the Widgets tab: a card per layout (`bromigos panels
     layouts`), the theme's own first ("Made for <theme>"), each a miniature of the screen
@@ -171,6 +267,7 @@ class LayoutsRow:
         Gtk = tab.Gtk
         self.tab, self.Gtk, self.ctx = tab, Gtk, tab.ctx
         self.doc, self.bg, self.bg_for = None, None, None
+        self.focus_id, self.card_buttons = None, {}
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         head = Gtk.Box(spacing=10)
         head.add_css_class("lhead")
@@ -179,6 +276,11 @@ class LayoutsRow:
         self.title.set_tooltip_text("Ready-made layouts: which widgets are on, their sizes and places, fitted to "
                                     "your screen and kept off the scene's focal points")
         head.append(self.title)
+        self.new_b = self.ctx.button("New layout…", self.new_layout,
+                                     "Save the widgets currently on this screen, with their sizes and positions", primary=True)
+        self.new_b.set_valign(Gtk.Align.END)
+        self.new_b.set_sensitive(False)
+        head.append(self.new_b)
         self.sub = Gtk.Label(xalign=0, hexpand=True, wrap=True)
         self.sub.add_css_class("wmeta")
         self.sub.set_tooltip_text("The theme in force and the screen the layouts are fitted to")
@@ -205,7 +307,8 @@ class LayoutsRow:
         self.strip.append(self.loading)
         self.refresh()
 
-    def refresh(self):
+    def refresh(self, focus_id=None):
+        self.focus_id = focus_id
         self.ctx.json(["bromigos", "panels", "layouts", "--json"], self.got)
 
     def got(self, doc, err):
@@ -219,8 +322,13 @@ class LayoutsRow:
             lb = Gtk.Label(label=f"bromigos panels layouts didn't answer: {(doc or {}).get('error') or err}"[:200])
             lb.add_css_class("empty")
             self.strip.append(lb)
+            self.doc = {"_error": (doc or {}).get("error") or err or "Layouts could not be read"}
+            self.new_b.set_sensitive(False)
+            self.tab.host.maybe_save_layout()
             return
         self.doc = doc
+        self.card_buttons = {}
+        self.new_b.set_sensitive(True)
         scr = doc.get("screen") or {}
         self.title.set_label("PICK A LAYOUT TO START" if doc.get("first_run") else "LAYOUTS")
         self.sub.set_label(f"for {doc.get('scene_title') or doc.get('theme')} on "
@@ -234,9 +342,36 @@ class LayoutsRow:
         fw = scr.get("full_width") or scr.get("width") or 1920
         fh = scr.get("full_height") or scr.get("height") or 1080
         # the miniature, its words, a note and the button, with room for the scrollbar
-        self.strip.set_size_request(-1, int(self.MINI_W * fh / fw) + 186)
+        self.strip.set_size_request(-1, int(self.MINI_W * fh / fw) + 226)
         for item in doc.get("layouts") or []:
             self.strip.append(self.card(item))
+        if self.focus_id in self.card_buttons:
+            button = self.card_buttons[self.focus_id]
+            self.reveal_saved(button)
+        self.focus_id = None
+        self.tab.host.maybe_save_layout()
+
+    def reveal_saved(self, button):
+        """GTK focuses a child of this plain Box without scrolling its surrounding viewport."""
+        attempts = 0
+
+        def reveal():
+            nonlocal attempts
+            attempts += 1
+            if button.get_root() is None:
+                return False
+            card = button.get_parent()
+            ok, bounds = card.compute_bounds(self.strip)
+            adjustment = self.scroller.get_hadjustment()
+            if not ok or not card.get_width() or not adjustment.get_page_size():
+                return attempts < 20
+            button.grab_focus()
+            x, right = bounds.get_x(), bounds.get_x() + bounds.get_width()
+            current, width = adjustment.get_value(), adjustment.get_page_size()
+            if x < current or right > current + width:
+                adjustment.set_value(max(0, min(x, adjustment.get_upper() - width)))
+            return False
+        self.ctx.GLib.timeout_add(25, reveal)
 
     def card(self, item):
         Gtk = self.Gtk
@@ -278,11 +413,25 @@ class LayoutsRow:
         b.set_margin_start(10)
         b.set_halign(Gtk.Align.START)
         card.append(b)
+        label, replace = layout_save_action(item)
+        save = self.ctx.button(label, lambda: self.new_layout(item if replace else None),
+                               "Save the CURRENT desktop arrangement " + (f"over {item['title']}" if replace
+                                                                          else "as a new layout"))
+        save.set_margin_start(10)
+        save.set_halign(Gtk.Align.START)
+        card.append(save)
+        self.card_buttons[item["id"]] = save
         card.set_tooltip_text(f"{item['title']}: {item['description']}" + ("\n" + "\n".join(notes) if notes else ""))
         click = Gtk.GestureClick()
         click.connect("released", lambda *_: self.apply(item))
         da.add_controller(click)
         return card
+
+    def new_layout(self, item=None):
+        if not self.doc or self.doc.get("_error"):
+            return
+        form = LayoutSaveForm(self, item)
+        self.tab.host.sheet(form, form.title)
 
     def background(self, w, h):
         path = (self.doc or {}).get("background")
@@ -449,6 +598,7 @@ class WidgetsTab:
         else:
             self.gallery = {"_error": (doc or {}).get("error") or err}
         self.fill()
+        self.host.maybe_save_layout()
 
     def got_catalog(self, doc, err):
         self.catalog = doc if doc and doc.get("ok", True) is not False else {"_error": err}

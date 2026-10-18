@@ -84,6 +84,8 @@ own config. See [Shell and terminal](../manual/src/shell.md).
   share.
 - `bromigos_previews.py` and `bromigos_themecards.py` draw the theme switcher's previews
   and cards. `bromigos_widgetcards.py` is the Customize window's Widgets tab.
+  Its layout cards create named arrangements, save changes and override presets;
+  `bromigos customize --save-layout` opens the naming form directly.
 - `bromigos_peripherals.py` holds the peripheral modules' logic
   ([docs/peripherals.md](../docs/peripherals.md)).
 

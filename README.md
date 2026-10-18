@@ -77,7 +77,8 @@ Bromigos universe.</p>
 <h3>Widgets with real readings</h3>
 <p>Small dashboards sit between the wallpaper and your windows. bromigOS calls them
 panels. They show your system, network, storage, homelab, recent projects, notes and
-shortcuts. Every number is a live reading.</p>
+shortcuts. Every number is a live reading. Customize lets you save named widget
+layouts, update them and override the supplied presets.</p>
 </td>
 <td width="50%" valign="top">
 <img src="docs/images/menu.webp" alt="The menu over the desktop, with a search for themes typed and every theme listed">

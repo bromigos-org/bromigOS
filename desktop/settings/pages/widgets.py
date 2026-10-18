@@ -183,11 +183,13 @@ class WidgetsPage:
                                                          "and the widget gallery opens beside them")],
             advanced={"runs": "bromigos panels edit", "file": d["user_file"]}))
         self.rows["layout"].append(ctx.row(
-            g, "Layouts", "Ready-made layouts (Minimal, Developer, Homelab, Streamer, Media, Gamer, Everything) and "
-                          "the theme's own, fitted to your screen and kept off the scene. Each theme remembers its own.",
-            key="layouts", hint="Opens Customize › Widgets, where each layout is drawn small: click one to use it",
-            buttons=[("Choose a layout…", lambda: ctx.run(["bromigos", "customize", "--tab", "widgets"]),
-                      "Opens Customize › Widgets at the Layouts row"),
+            g, "Layouts", "Save the current arrangement under a name, update one of your layouts, or choose a "
+                          "ready-made layout. Each theme remembers its arrangement.",
+            key="layouts", hint="Manage layouts in Customize › Widgets: create, save changes or use a preset",
+            buttons=[("New layout…", lambda: ctx.run(["bromigos", "customize", "--tab", "widgets", "--save-layout"]),
+                      "Names and saves the widgets as they are now, as a new layout"),
+                     ("Manage layouts…", lambda: ctx.run(["bromigos", "customize", "--tab", "widgets"]),
+                      "Use a layout, save changes to one of yours, or override a preset in Customize › Widgets"),
                      ("Tidy up", lambda: self._change(["tidy"], "Tidied", ["layout", "undo"]),
                       "Packs the widgets on now so none overlaps, in the same order, off the scene's focal points")],
             advanced={"runs": "bromigos panels layouts | layout apply ID | tidy",

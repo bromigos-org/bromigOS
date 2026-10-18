@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bromigos:summary=The desktop panels: which are on, where they sit, the monitor, the weather's place (your layout.json and weather.toml)
-# bromigos:args=[status] | edit | gallery [--previews DIR] | layouts | layout apply ID [--monitor NAME] [--all-themes] | layout save NAME | layout undo | tidy [--monitor NAME] | show|hide|add NAME | settings NAME | set NAME KEY VALUE… | unset NAME KEY | inspect SOURCE [--path DIR] [--ref REF] | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
+# bromigos:args=[status] | edit | gallery [--previews DIR] | layouts | layout apply ID [--monitor NAME] [--all-themes] | layout save NAME [--description TEXT] [--monitor NAME] | layout save --replace ID [--description TEXT] [--monitor NAME] | layout undo | tidy [--monitor NAME] | show|hide|add NAME | settings NAME | set NAME KEY VALUE… | unset NAME KEY | inspect SOURCE [--path DIR] [--ref REF] | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
 # bromigos:examples=bromigos panels; bromigos panels edit; bromigos panels layouts; bromigos panels layout apply homelab; bromigos panels tidy; bromigos panels add weather; bromigos panels weather place "San Diego"; bromigos panels hide connections
 """bromigos-panels (`bromigos panels`): the desktop panels' layout (bromigos-widgets). The
 panels read your ~/.config/bromigos/widgets/layout.json, else bromigOS's
@@ -21,8 +21,13 @@ reload`). The weather's place is ~/.config/bromigos/weather.toml. Settings › W
                                      one of them: which widgets are on, their sizes and places (each
                                      widget's own settings are kept). For the theme in force; with
                                      --all-themes, for every theme. ID "theme": the theme's own
-  bromigos panels layout save NAME   the widgets as they are now, as a layout of your own
-                                     (~/.config/bromigos/widgets/layouts/)
+  bromigos panels layout save NAME [--description TEXT] [--monitor NAME]
+                                     the widgets as they are now, as a new layout of your own;
+                                     an existing name or ID is refused
+  bromigos panels layout save --replace ID [--description TEXT] [--monitor NAME]
+                                     replace that layout's arrangement, keeping its title and
+                                     description unless --description is given. Packaged layouts
+                                     get an override in ~/.config/bromigos/widgets/layouts/
   bromigos panels layout undo        back to the layout before the last apply or tidy (again: redo)
   bromigos panels layout theme NAME  the theme changed to NAME (its theme-set hook runs this): the
                                      layout is remembered for the old theme's scene, and the new
@@ -865,7 +870,7 @@ def _background(info):
 
 def layout_cmd(args):
     if not args:
-        raise Fail("bromigos panels layout apply ID [--monitor NAME] [--all-themes] | save NAME | undo | theme NAME")
+        raise Fail("bromigos panels layout apply ID [--monitor NAME] [--all-themes] | save NAME | save --replace ID | undo | theme NAME")
     verb, rest = args[0], args[1:]
     if verb == "apply":
         return layout_apply(rest)
@@ -907,11 +912,18 @@ def layout_apply(args):
 
 def layout_save(args):
     import layouts as L
-    desc = C.flag(args, "--description") or ""
+    desc = C.flag(args, "--description")
     monitor = C.flag(args, "--monitor")
+    replace = C.flag(args, "--replace")
+    if any(a.startswith("--") for a in args):
+        raise Fail("layout save accepts --replace ID, --description TEXT and --monitor NAME once each")
     name = " ".join(args).strip()
-    if not name or len(name) > 60 or "\n" in name:
-        raise Fail("bromigos panels layout save NAME (a short name)")
+    if replace is not None:
+        if name or not L.ID.fullmatch(replace) or replace == "theme" or replace.startswith("theme-"):
+            raise Fail("bromigos panels layout save --replace ID (an existing layout ID, without a new name; "
+                       "save the theme's own layout under a new name)")
+    elif not name or len(name) > 60 or any(ord(c) < 32 for c in name):
+        raise Fail("bromigos panels layout save NAME (a short name, at most 60 characters)")
     d, _, _ = load()
     mons = _monitors()
     m = _monitor_of(d, mons, monitor)
@@ -919,13 +931,12 @@ def layout_save(args):
     now = {n: s for n, s in _now(d, mons).items() if (s.get("conn") or "") == conn or not m}
     if not any(s.get("visible") for s in now.values()):
         raise Fail("no widgets on that monitor to save")
-    ident = L.slug(name)
-    if ident in ("theme",) or ident.startswith("theme-"):
-        ident = "my-" + ident
-    path = os.path.join(L.user_dir(), f"{ident}.toml")
-    C.write_file(path, L.from_state(now, _screen_of(m), _catalog(d), name, desc))
-    return {"said": f"Saved as your layout {name!r} (bromigos panels layout apply {ident})", "id": ident,
-            "path": path}
+    try:
+        out = L.save_template(now, _screen_of(m), _catalog(d), name or None, desc, replace)
+    except (OSError, ValueError) as error:
+        raise Fail(str(error)) from None
+    verb = "Saved changes to" if out["replaced"] else "Saved as"
+    return dict(out, said=f"{verb} your layout {out['title']!r} (bromigos panels layout apply {out['id']})")
 
 
 def layout_undo(_args):

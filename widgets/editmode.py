@@ -889,6 +889,10 @@ class Editor:
         self.layouts_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.layouts_box.get_style_context().add_class("card")
         inner.pack_start(self.layouts_box, False, False, 0)
+        inner.pack_start(self.button(
+            "Save as layout…", "Keeps this arrangement, leaves edit mode and opens a form to name a new layout",
+            lambda: self.leave_then(["bromigos", "customize", "--tab", "widgets", "--save-layout"])),
+            False, False, 0)
         self.confirm = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.confirm.get_style_context().add_class("confirm")
         self.confirm.pack_start(self.label("Put every panel back where bromigOS puts it, at its first size? "

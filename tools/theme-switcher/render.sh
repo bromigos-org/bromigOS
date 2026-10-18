@@ -4,7 +4,7 @@
 #
 #   tools/theme-switcher/render.sh OUTDIR [--size WxH]… [--theme NAME] [--previews DIR] [--select NAME]
 #                                  [--filter TEXT] [--catalog FILE] [--name SUFFIX] [--backdrop IMAGE]
-#                                  [--tab themes|widgets]
+#                                  [--tab themes|widgets] [--save-layout]
 #
 # (no --size: 1366x768, 1920x1080, 2560x1440 and 3440x1440; --theme: the theme in force,
 # default wick; --previews: a cache of previews to reuse instead of drawing them, the
@@ -26,7 +26,7 @@ set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/../.." && pwd)
 out=${1:?OUTDIR}; shift
-sizes=() theme=wick previews='' select='' filter='' catalog='' suffix='' backdrop_in='' tab=themes
+sizes=() theme=wick previews='' select='' filter='' catalog='' suffix='' backdrop_in='' tab=themes save_layout=false
 while (($#)); do
   case $1 in
     --size) sizes+=("$2"); shift 2 ;;
@@ -38,6 +38,7 @@ while (($#)); do
     --name) suffix=-$2; shift 2 ;;
     --backdrop) backdrop_in=$(cd "$(dirname "$2")" && pwd)/$(basename "$2"); shift 2 ;;
     --tab) tab=$2; shift 2 ;;
+    --save-layout) save_layout=true; tab=widgets; shift ;;
     *) echo "render: unknown argument $1" >&2; exit 2 ;;
   esac
 done
@@ -102,6 +103,7 @@ for s in "${sizes[@]}"; do
   for _ in $(seq 50); do [[ -S $rt/wl-render ]] && break; sleep 0.1; done
   [[ -S $rt/wl-render ]] || { echo "render: weston didn't start:" >&2; tail -5 "$work/weston-$s.log" >&2; exit 1; }
   args=(--screenshot "$out/switcher-$s$suffix.png" --size "$s" --tab "$tab")
+  [[ $save_layout == true ]] && args+=(--save-layout)
   [[ -n $backdrop ]] && args+=(--backdrop "$backdrop")
   [[ -n $select ]] && args+=(--select "$select")
   [[ -n $filter ]] && args+=(--filter "$filter")

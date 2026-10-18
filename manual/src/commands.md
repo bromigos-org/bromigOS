@@ -672,7 +672,7 @@ From the `bromigos-core` package.
 Customize: the themes and the widget gallery in one window, with tabs (SUPER+CTRL+SHIFT+SPACE).
 
 ```text
-bromigos customize [--tab themes|widgets]
+bromigos customize [--tab themes|widgets] [--save-layout]
 ```
 
 For example:
@@ -680,6 +680,7 @@ For example:
 ```text
 bromigos customize
 bromigos customize --tab widgets
+bromigos customize --save-layout
 ```
 
 From the `bromigos-desktop` package.
@@ -1467,7 +1468,7 @@ From the `bromigos-desktop` package.
 The desktop panels: which are on, where they sit, the monitor, the weather's place (your layout.json and weather.toml).
 
 ```text
-bromigos panels [status] | edit | gallery [--previews DIR] | layouts | layout apply ID [--monitor NAME] [--all-themes] | layout save NAME | layout undo | tidy [--monitor NAME] | show|hide|add NAME | settings NAME | set NAME KEY VALUE… | unset NAME KEY | inspect SOURCE [--path DIR] [--ref REF] | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
+bromigos panels [status] | edit | gallery [--previews DIR] | layouts | layout apply ID [--monitor NAME] [--all-themes] | layout save NAME [--description TEXT] [--monitor NAME] | layout save --replace ID [--description TEXT] [--monitor NAME] | layout undo | tidy [--monitor NAME] | show|hide|add NAME | settings NAME | set NAME KEY VALUE… | unset NAME KEY | inspect SOURCE [--path DIR] [--ref REF] | move NAME X Y | size NAME W H|CLASS | monitor NAME|"" | weather place PLACE | weather coords LAT LON | weather units metric|imperial | weather name TEXT | weather clear | reset  [--json]
 ```
 
 For example:
@@ -2304,7 +2305,7 @@ From the `bromigos-desktop` package.
 Customize: themes from previews of the desktop wearing them, and the widget gallery (SUPER+CTRL+SHIFT+SPACE).
 
 ```text
-bromigos theme switcher [--tab themes|widgets] [--list [--json]] [--render [NAME…]] [--screenshot OUT.png --size WxH [--tab TAB] [--select NAME] [--filter TEXT]]
+bromigos theme switcher [--tab themes|widgets] [--save-layout] [--list [--json]] [--render [NAME…]] [--screenshot OUT.png --size WxH [--tab TAB] [--select NAME] [--filter TEXT]]
 ```
 
 For example:

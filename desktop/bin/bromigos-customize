@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # bromigos:summary=Customize: the themes and the widget gallery in one window, with tabs (SUPER+CTRL+SHIFT+SPACE)
-# bromigos:args=[--tab themes|widgets]
-# bromigos:examples=bromigos customize; bromigos customize --tab widgets
+# bromigos:args=[--tab themes|widgets] [--save-layout]
+# bromigos:examples=bromigos customize; bromigos customize --tab widgets; bromigos customize --save-layout
 """bromigos-customize: the Customize window, on the tab asked for (themes when none is).
 The window is bromigos-theme-switcher's, which `bromigos theme switcher` opens on Themes;
+`--save-layout` opens Widgets and the New layout sheet for the current arrangement.
 `--help` there says the rest."""
 import os
 import runpy

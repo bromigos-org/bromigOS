@@ -508,6 +508,20 @@ more, made for that scene. People apply one from Customize › Widgets, edit mod
 [Panels page](../manual/src/panels.md#layouts) is the user's side. The code is
 `widgets/layouts.py`, with no GTK, so it's tested on its own.
 
+Customize's `LayoutsRow` in `desktop/lib/bromigos_widgetcards.py` exposes creation and
+replacement through a keyboard-accessible sheet. `bromigos customize --save-layout`
+opens that sheet on the Widgets tab. Edit mode saves its in-memory arrangement before
+launching the sheet, through its existing `leave_then()` path. Settings links to the
+same form and layout cards.
+
+`bromigos panels layout save NAME` creates a named layout and refuses an existing ID,
+including an ID whose name differs only in spacing or punctuation. The explicit
+`layout save --replace ID` operation keeps the target's title and description unless
+`--description` is supplied. A packaged preset is overridden in the user's directory.
+The reserved `theme` layout can be saved under a new name. JSON results identify
+whether a layout was replaced or a packaged preset was overridden. Neither save path
+applies the target layout before capturing the current widgets.
+
 | Layout | What it puts on |
 |---|---|
 | `minimal` | SYSTEM, WEATHER, NOW PLAYING |

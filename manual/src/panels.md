@@ -166,9 +166,31 @@ To use one layout on every theme, run `bromigos panels layout apply minimal
 
 ### Save your own
 
-Arrange the panels the way you like, then run `bromigos panels layout save "My desk"`.
-It joins the list as one of yours, and `bromigos panels layout apply my-desk` brings it
-back.
+Arrange the panels the way you like, then choose **Save as layout…** in the edit-mode
+tray. Or open **Customize › Widgets** and click **New layout…** beside **Layouts**.
+Enter a name and, optionally, a description, then save. The form captures the current
+arrangement on the screen it names. Your new layout joins the cards marked **yours**.
+
+To update a saved layout, choose **Save changes…** on its card. The form names the
+layout that will be replaced with your current arrangement. **Override…** does the
+same for a ready-made preset, saving your own version. Packaged preset files stay
+available on disk. The theme's own card offers **Save as new…**.
+
+Saving does not apply the selected card first. Use **Use this layout**, arrange the
+widgets, and then save changes if you want to start from that card. A new name that
+matches an existing layout is rejected; use its save or override action instead.
+These actions are also available from **Settings › Widgets › Layouts**.
+
+From the terminal:
+
+```sh
+bromigos panels layout save "My desk"
+bromigos panels layout save --replace my-desk
+bromigos panels layout apply my-desk
+```
+
+The first command creates a layout, the second updates it, and the third puts it on
+your desktop. Add `--monitor <name>` to choose a screen when saving.
 
 ### Tidy up
 

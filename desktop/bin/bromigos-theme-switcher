@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bromigos:summary=Customize: themes from previews of the desktop wearing them, and the widget gallery (SUPER+CTRL+SHIFT+SPACE)
-# bromigos:args=[--tab themes|widgets] [--list [--json]] [--render [NAME…]] [--screenshot OUT.png --size WxH [--tab TAB] [--select NAME] [--filter TEXT]]
+# bromigos:args=[--tab themes|widgets] [--save-layout] [--list [--json]] [--render [NAME…]] [--screenshot OUT.png --size WxH [--tab TAB] [--select NAME] [--filter TEXT]]
 # bromigos:examples=bromigos theme switcher; bromigos theme switcher --list; bromigos theme previews
 """bromigos-theme-switcher, the Customize window (`bromigos customize`): tabs for the
 looks of the desktop, built so more can follow.
@@ -12,12 +12,14 @@ looks of the desktop, built so more can follow.
            installs it first (in a terminal). Install from URL, Make your own (`bromigos
            theme new --from` the one selected) and Remove (yours and extensions' only).
   Widgets  the widget gallery as cards (lib/bromigos_widgetcards.py): on or off, sizes,
-           Add to desktop, settings, Remove, Install from URL and Get more.
+           Add to desktop, settings, Remove, Install from URL and Get more. New layout…
+           saves the current arrangement; each layout has Save changes… or Override….
 
 Ctrl+Tab (or Ctrl+1, Ctrl+2) changes tab; Esc closes a sheet, then the window.
 
   bromigos theme switcher                      the window, on Themes
   bromigos customize [--tab themes|widgets]    the window, on that tab
+  bromigos customize --save-layout            Widgets and the New layout sheet, to save the current arrangement
   bromigos theme switcher --list [--json]      the themes, their previews and whether each is current
   bromigos theme switcher --render [NAME…]     draw missing or stale previews (bromigos theme previews), no window
   bromigos theme switcher --screenshot OUT.png --size WxH [--select NAME] [--filter TEXT] [--backdrop IMG]
@@ -182,6 +184,8 @@ class Switcher:
         self.Gtk, self.Gdk, self.Gio, self.GLib, self.Pango, self.LS = Gtk, Gdk, Gio, GLib, Pango, LS
         self.tab = tab if tab in dict((t[0], 1) for t in TABS) else "themes"
         self.sheet_box = None
+        self.sheet_form = None
+        self.save_layout_requested = False
         self.app, self.entries, self.shot = app, entries, shot
         self.monitor = monitor
         self.g = Grid(monitor[0], monitor[1], len(entries))
@@ -440,6 +444,29 @@ class Switcher:
     def counted(self):
         self._update_count()
 
+    def request_save_layout(self):
+        from bromigos_widgetcards import LayoutSaveForm
+        self.show_tab("widgets")
+        self.search.set_text("")
+        self.win.present()
+        if isinstance(self.sheet_form, LayoutSaveForm):
+            return
+        self.save_layout_requested = True
+        self.maybe_save_layout()
+
+    def maybe_save_layout(self):
+        """The launch shortcut waits for both layout metadata and the widget gallery."""
+        if not self.save_layout_requested or not hasattr(self, "widgets"):
+            return
+        layouts = self.widgets.layouts
+        if layouts.doc is None or self.widgets.gallery is None:
+            return
+        self.save_layout_requested = False
+        if layouts.doc.get("_error"):
+            self.say("Cannot save a layout: " + layouts.doc["_error"])
+            return
+        layouts.new_layout()
+
     def say(self, text):
         self.status.set_label(text)
         self.status.set_visible(True)
@@ -453,12 +480,15 @@ class Switcher:
         """A form (a bromigos_settings.widgetform Sheet) over the panel: a dialog window would
         open under this one's overlay."""
         Gtk = self.Gtk
-        self.close_sheet()
+        if not self.close_sheet():
+            return
+        self.sheet_focus = self.win.get_focus()
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         box.add_css_class("sheet")
         box.set_halign(Gtk.Align.CENTER)
         box.set_valign(Gtk.Align.CENTER)
-        box.set_size_request(min(760, self.g.w - 80), min(720, self.g.h - 80))
+        width, height = getattr(form, "sheet_size", (760, 720))
+        box.set_size_request(min(width, self.g.w - 80), min(height, self.g.h - 80))
         box.add_controller(Gtk.GestureClick())         # a click inside never reaches the scrim's close
         top = Gtk.Box(spacing=8)
         top.set_margin_start(14)
@@ -468,20 +498,33 @@ class Switcher:
         t.add_css_class("sheettitle")
         t.set_tooltip_text("Esc or Close puts this away")
         top.append(t)
-        top.append(self.ctx.button("Close", self.close_sheet, "Puts this away (Esc)"))
+        form.close_button = self.ctx.button("Close", self.close_sheet, "Puts this away (Esc)")
+        top.append(form.close_button)
         box.append(top)
         form.page.set_vexpand(True)
         box.append(form.page)
         form.on_close = self.close_sheet
         self.sheet_box = box
+        self.sheet_form = form
         self.panel.set_sensitive(False)
+        self.search.set_key_capture_widget(None)
         self.over.add_overlay(box)
+        focus = getattr(form, "initial_focus", None)
+        if focus is not None:
+            self.GLib.idle_add(lambda: (focus.grab_focus(), False)[1])
 
     def close_sheet(self):
+        if getattr(self.sheet_form, "pending", False):
+            return False
         if self.sheet_box is not None:
             self.over.remove_overlay(self.sheet_box)
             self.sheet_box = None
+            self.sheet_form = None
             self.panel.set_sensitive(True)
+            self.search.set_key_capture_widget(self.win)
+            if self.sheet_focus is not None:
+                self.sheet_focus.grab_focus()
+        return True
 
     def confirm(self, heading, body, yes, then):
         Gtk = self.Gtk
@@ -702,6 +745,8 @@ class Switcher:
             else:
                 self.close()
             return True
+        if self.sheet_box is not None:
+            return False
         if ctrl and name in ("Tab", "ISO_Left_Tab", "Page_Down", "Page_Up"):
             self.next_tab(-1 if name in ("ISO_Left_Tab", "Page_Up") or state & Gdk.ModifierType.SHIFT_MASK else 1)
             return True
@@ -769,6 +814,8 @@ class Switcher:
 
     # ---------------------------------------------------------------- applying
     def close(self):
+        if getattr(self.sheet_form, "pending", False):
+            return
         self.closing = True
         if getattr(self, "watch", None):
             self.watch.stop()
@@ -821,18 +868,29 @@ def apply_entry(e):
 
 
 # ------------------------------------------------------------------ running it
-def run_window(shot=None):
+def run_window(shot=None, save_layout=False, tab=None):
     Gtk, Gdk, Gio, GLib, Pango, LS = load_gtk()
     if shot:
         os.environ.setdefault("GSK_RENDERER", "cairo")
-    flags = Gio.ApplicationFlags.NON_UNIQUE if shot else Gio.ApplicationFlags.DEFAULT_FLAGS
+    flags = Gio.ApplicationFlags.NON_UNIQUE if shot else Gio.ApplicationFlags.HANDLES_COMMAND_LINE
     app = Gtk.Application(application_id=APP_ID, flags=flags)
+    if not shot:
+        app.add_main_option("save-layout", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
+                            "Open Widgets and save the current arrangement", None)
+        app.add_main_option("tab", 0, GLib.OptionFlags.NONE, GLib.OptionArg.STRING,
+                            "Open the themes or widgets tab", "TAB")
     app.chosen = None
     state = {}
 
-    def activate(a):
+    def activate(a, requested_save=False, requested_tab=None):
         if state.get("sw"):                       # SUPER+CTRL+SHIFT+SPACE again: close it
-            state["sw"].close()
+            if requested_save:
+                state["sw"].request_save_layout()
+            elif requested_tab in ("themes", "widgets"):
+                state["sw"].show_tab(requested_tab)
+                state["sw"].win.present()
+            else:
+                state["sw"].close()
             return
         entries = installed()
         if not entries:
@@ -848,12 +906,15 @@ def run_window(shot=None):
                 d = Gdk.Display.get_default()
                 g = d.get_monitors().get_item(0).get_geometry() if d.get_monitors().get_n_items() else None
                 mon = (g.width, g.height, None) if g else (1920, 1080, None)
-        sw = Switcher(Gtk, Gdk, Gio, GLib, Pango, LS, a, mon, entries, shot, tab=(shot or {}).get("tab") or TAB[0])
+        sw = Switcher(Gtk, Gdk, Gio, GLib, Pango, LS, a, mon, entries, shot,
+                      tab=requested_tab or (shot or {}).get("tab") or TAB[0])
         state["sw"] = sw
         sw.win.present()
         cur = next((e for e in entries if e.current), entries[0])
         first = shot.get("select") if shot and shot.get("select") else cur.name
         GLib.idle_add(lambda: (sw.fit(), sw.select(first), sw.show_tab(sw.tab), False)[3])
+        if requested_save or save_layout:
+            GLib.idle_add(lambda: (sw.request_save_layout(), False)[1])
         if shot and shot.get("filter"):
             GLib.idle_add(lambda: (sw.search.set_text(shot["filter"]), sw._refilter(), False)[2])
         # once laid out: the selection in view (the filter's first match when it hid it)
@@ -891,7 +952,17 @@ def run_window(shot=None):
         return False
 
     app.connect("activate", activate)
-    app.run([sys.argv[0]])
+    if not shot:
+        def command_line(a, command):
+            options = command.get_options_dict()
+            requested_tab = options.lookup_value("tab", None)
+            activate(a, options.contains("save-layout"), requested_tab.unpack() if requested_tab else None)
+            return 0
+        app.connect("command-line", command_line)
+    launch = [sys.argv[0]]
+    if not shot:
+        launch += (["--tab", tab] if tab else []) + (["--save-layout"] if save_layout else [])
+    app.run(launch)
     if shot:
         return 0 if state.get("ok") else 1
     if app.chosen is not None:
@@ -938,13 +1009,16 @@ def main():
         return 0
     if "--tab" in a:
         TAB[0] = arg(a, "--tab", "themes")
+    save_layout = "--save-layout" in a
+    if save_layout:
+        TAB[0] = "widgets"
     if a and a[0] == "--screenshot":
         size = arg(a, "--size", "1920x1080")
         w, h = (int(x) for x in size.lower().split("x"))
         shot = {"out": a[1], "w": w, "h": h, "select": arg(a, "--select"), "filter": arg(a, "--filter"),
                 "backdrop": arg(a, "--backdrop"), "catalog": "--catalog" in a, "tab": TAB[0]}
-        return run_window(shot)
-    return run_window()
+        return run_window(shot, save_layout=save_layout)
+    return run_window(save_layout=save_layout, tab=arg(a, "--tab") if "--tab" in a else None)
 
 
 if __name__ == "__main__":

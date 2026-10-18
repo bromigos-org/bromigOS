@@ -34,6 +34,10 @@ The package installs:
 - the ready-made layouts in `/usr/share/bromigos/widgets/layouts/`.
 
 A user's own layout goes in `~/.config/bromigos/widgets/layout.json`.
+Named arrangements go in `~/.config/bromigos/widgets/layouts/`. Customize › Widgets
+offers **New layout…**, **Save changes…** and **Override…**. Edit mode's
+**Save as layout…** keeps the current arrangement and opens the naming form.
+See [saving layouts](../manual/src/panels.md#save-your-own) for the UI and CLI.
 
 ## Commands
 

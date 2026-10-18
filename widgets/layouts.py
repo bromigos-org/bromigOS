@@ -57,9 +57,12 @@ for the old scene and puts back the new scene's, or fits its recommended layout 
 time (the theme-set hook runs `bromigos panels layout theme NAME`).
 """
 import copy
+import fcntl
 import json
 import os
 import re
+import stat
+import tempfile
 import time
 
 try:
@@ -777,13 +780,14 @@ def slug(name):
     return s or "mine"
 
 
-def from_state(state, scr, catalog, title, description=""):
+def from_state(state, scr, catalog, title, description=None):
     """The widgets on now as a layout file's text: each at its place as fractions of the
     area, at its size, so it comes back where it was on this screen and near there on
     another."""
     lines = [f"# Saved with `bromigos panels layout save` on {time.strftime('%Y-%m-%d')}, from a "
              f"{scr.W}x{scr.H} area (docs/widgets.md, \"Layouts\")",
-             f"title = {json.dumps(title)}", f"description = {json.dumps(description or 'Your own layout')}",
+             f"title = {json.dumps(title, ensure_ascii=False)}",
+             f"description = {json.dumps('Your own layout' if description is None else description, ensure_ascii=False)}",
              'archetype = "yours"', "budget = 1.0", ""]
     vis = sorted(((n, s) for n, s in state.items() if s.get("visible", True) and s.get("width")),
                  key=lambda kv: (kv[1].get("y", 0), kv[1].get("x", 0)))
@@ -798,6 +802,107 @@ def from_state(state, scr, catalog, title, description=""):
             lines.append(f"size = {json.dumps(cls)}")
         lines += [f"priority = {i + 1}", ""]
     return "\n".join(lines)
+
+
+def _saved_file(path):
+    """Read a small regular template without following a changed link or opening a pipe."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as source:
+        info = os.fstat(source.fileno())
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("The saved layout must be a regular file")
+        content = source.read(1024 * 1024 + 1)
+        if len(content) > 1024 * 1024:
+            raise ValueError("The saved layout is too large (at most 1 MiB)")
+        return content, info
+
+
+def save_template(state, scr, catalog, name=None, description=None, replace=None):
+    """Create a named layout, or explicitly replace an ID in the user's directory.
+
+    Replacement preserves the selected layout's title and description, including an
+    empty description. A packaged layout becomes a user override. Dotfile links are
+    kept; their targets must be user-owned regular files outside packaged layouts.
+    """
+    if replace is not None:
+        if name or not ID.fullmatch(replace) or replace == "theme" or replace.startswith("theme-"):
+            raise ValueError("layout save --replace ID needs an existing layout ID, without a new name; "
+                             "save the theme's own layout under a new name")
+        ident = replace
+    else:
+        if not name or len(name) > 60 or any(ord(c) < 32 for c in name):
+            raise ValueError("layout save NAME needs a short name (at most 60 characters)")
+        ident = slug(name)
+        if ident == "theme" or ident.startswith("theme-"):
+            ident = ("my-" + ident)[:48]
+    directory = os.path.realpath(user_dir())
+    systems = system_dirs()
+    if any(os.path.commonpath((directory, os.path.realpath(d))) == os.path.realpath(d) for d in systems):
+        raise ValueError("Your layouts directory points into packaged layouts; choose a separate user directory")
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, ident + ".toml")
+    fd = os.open(os.path.join(directory, ".save.lock"), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    with os.fdopen(fd, "w") as lock:
+        if not stat.S_ISREG(os.fstat(lock.fileno()).st_mode):
+            raise ValueError("The layout save lock must be a regular file")
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ValueError("Another layout save is in progress; try again") from None
+        candidates = [path] + [os.path.join(d, ident + ".toml") for d in systems]
+        existing = next((p for p in candidates if os.path.lexists(p)), None)
+        if replace is None and existing is not None:
+            raise ValueError(f"A layout already uses the ID {ident!r}; choose another name or run "
+                             f"bromigos panels layout save --replace {ident}")
+        if replace is not None and existing is None:
+            raise ValueError(f"No layout {ident!r} to replace; bromigos panels layouts lists the existing IDs")
+        destination = os.path.realpath(path)
+        if any(os.path.commonpath((destination, os.path.realpath(d))) == os.path.realpath(d) for d in systems):
+            raise ValueError(f"Layout {ident!r} points into packaged layouts; save under a new name instead")
+        original = None
+        if os.path.lexists(path):
+            original, info = _saved_file(destination)
+            if os.path.islink(path) and info.st_uid != os.geteuid():
+                raise ValueError(f"Layout {ident!r} links to a file owned by another user")
+        if replace is not None:
+            content = original if original is not None else _saved_file(os.path.realpath(existing))[0]
+            try:
+                target = parse(tomllib.loads(content.decode("utf-8")), ident, "yours" if existing == path else "bromigos")
+            except (ValueError, TypeError, OverflowError) as error:
+                raise ValueError(f"Layout {ident!r} cannot be read: {error}") from None
+            name = target["title"]
+            if description is None:
+                description = target["description"]
+        if description is None:
+            description = "Your own layout"
+        text = from_state(state, scr, catalog, name, description)
+        # Validate before creating or replacing a file, including an empty arrangement.
+        parse(tomllib.loads(text), ident, "yours")
+        fd, temporary = tempfile.mkstemp(prefix=".layout-", suffix=".tmp", dir=os.path.dirname(destination))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as output:
+                if original is not None:
+                    os.fchmod(output.fileno(), stat.S_IMODE(info.st_mode))
+                output.write(text)
+                output.flush()
+                os.fsync(output.fileno())
+            if original is None:
+                # Atomic creation: another writer cannot turn a new save into replacement.
+                os.link(temporary, path)
+            else:
+                if os.path.realpath(path) != destination:
+                    raise ValueError("The layout changed while saving; try again")
+                current, current_info = _saved_file(destination)
+                attrs = ("st_dev", "st_ino", "st_mode", "st_mtime_ns", "st_ctime_ns")
+                if current != original or any(getattr(current_info, a) != getattr(info, a) for a in attrs):
+                    raise ValueError("The layout changed while saving; try again")
+                os.replace(temporary, destination)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+    return {"id": ident, "path": os.path.join(user_dir(), ident + ".toml"), "title": name,
+            "description": description, "source": "yours", "replaced": replace is not None,
+            "overrode_packaged": replace is not None and existing != path}
 
 
 # ------------------------------------------------------------------ a fit as layout.json's state
