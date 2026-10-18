@@ -160,6 +160,7 @@ remote commands. The media TUI uses `p` to play on a den screen and `P` for a pr
 `bromigos game` runs a session helper. It owns a logind idle inhibitor and keeps a
 recovery record under `$XDG_RUNTIME_DIR`. The live layer and panels read its transient
 marker; their saved settings stay intact. Settings › Playing games controls it.
+On-screen messages confirm entry and exit, and the bar shows GAME MODE while active.
 See [game mode](../docs/desktop.md#game-mode) and the manual's
 [Playing games](../manual/src/games.md).
 

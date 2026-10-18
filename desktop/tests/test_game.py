@@ -79,7 +79,9 @@ class GameTest(unittest.TestCase):
         cmd.side_effect=None
         led=patch.object(mode,"leds").start()
         mode.off()
-        cmd.assert_called_with("dunstctl","set-paused","true")
+        cmd.assert_any_call("dunstctl","set-paused","true")
+        cmd.assert_any_call("hyprctl", "notify", "-1", "4000", "rgb(99dd99)",
+                            "GAME MODE OFF — desktop controls restored", required=False)
         led.assert_called_with(False)
         self.assertFalse(G.marker().exists())
 

@@ -557,6 +557,7 @@ wallpaper settings are untouched. Explicit locking remains available from a TTY.
 The live layer also holds back notification overlays, sound cues and new spoken codec
 alerts while game mode is on. Its saved mute setting stays intact.
 The bar shows GAME MODE with the escape key in its tooltip.
+An on-screen message confirms entry and exit, including when using the keyboard's game key.
 
 The helper remembers display routing in the user's state folder so `bromigos game off`
 can recover the desktop from a TTY or SSH. Its inhibitor child exits when its input pipe

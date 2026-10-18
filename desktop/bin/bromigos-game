@@ -201,6 +201,9 @@ class Mode:
             run("dunstctl", "set-paused", snap["paused"])
             self.leds(False)
         marker().unlink(missing_ok=True)
+        if snap:
+            run("hyprctl", "notify", "-1", "4000", "rgb(99dd99)",
+                "GAME MODE OFF — desktop controls restored", required=False)
         return self.status()
 
     def request(self, command):

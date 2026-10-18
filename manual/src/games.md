@@ -5,7 +5,7 @@ It quiets notifications, stops idle locking and sleep, pauses the live wallpaper
 hides panels (widgets). The bar shows **GAME MODE**.
 
 Press **Super+Ctrl+G** to turn it on. Press **Ctrl+Shift+F12** to leave.
-The escape key appears on screen when you enter. It is the only desktop shortcut that
+An on-screen message confirms entry and exit. The escape key appears when you enter. It is the only desktop shortcut that
 works during game mode. Leaving restores your previous notification state, panels and
 wallpaper behaviour.
 
@@ -22,6 +22,9 @@ If you need to recover from a TTY or SSH, run `bromigos game off` as your normal
 The keyboard escape resets the shortcut mode even if the helper cannot answer.
 
 ## Your keyboard's Game Mode key
+
+After first installing this feature, log out and back in so the session loads its
+shortcuts, bar indicator and keyboard helper. Updating alone does not start the helper.
 
 With the Razer keyboard module enabled, OpenRazer's Game Mode key toggles bromigOS
 game mode. On a BlackWidow V4 Pro this is **Fn+F10**. Its gaming LED follows game mode,
