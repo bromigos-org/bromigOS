@@ -28,6 +28,7 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab media search`, `get`, `status`, `upcoming`, `recent`, `language` | Ask your media stack for films, shows, anime and music at the best quality, in your languages ([below](#media-requests)). |
 | `bromigos media` | Your media library in a terminal: browse, monitor, change quality, play, delete ([below](#media-requests)). |
 | `bromigos lab provision …` | Generate and apply Core or Advanced on your own target ([lab-provision.md](lab-provision.md)). |
+| `bromigos lab maintenance …` | Plan, follow and resume an ordered shutdown or startup ([below](#rack-maintenance)). |
 | `bromigos lab connect …` | Run `bromigos setup homelab …`: find services and write `homelab.toml`. |
 | `bromigos lab target …` | Run `bromigos target …`: choose where AI runs ([targets.md](targets.md)). |
 | Super+Shift+H | Open the Lab deck, a hologram of the rack lit by the same readings. |
@@ -36,7 +37,73 @@ shows *unreachable*, and nothing crashes.
 > **Planned.** Changing the lab itself is Phase 2: deploying, restarting, logs, backups,
 > power, and adding or replacing models. Those commands only say they are not built yet.
 > Setting up Core and Advanced is built in `lab provision`
-> ([lab-provision.md](lab-provision.md)). See [Planned: changing the lab](#planned-changing-the-lab).
+> ([lab-provision.md](lab-provision.md)). Ordered rack shutdown and startup are built
+> in `lab maintenance`. See [Planned: changing the lab](#planned-changing-the-lab).
+
+## Rack maintenance
+
+`maintenance.py` builds an ordered shutdown or startup plan and records completed
+steps in a run journal. The default flow guides the operator through manual checks.
+A private profile can connect reviewed Ansible playbooks for a particular lab.
+Manual steps record an operator’s acknowledgement. An Ansible step records whether
+its process exited successfully. Neither certifies equipment power or health.
+See the manual’s [rack maintenance instructions](../manual/src/lab.md#rack-maintenance).
+
+### Maintenance profiles
+
+The command accepts `plan shutdown|startup [--profile NAME] [--profile-file PATH] [--json]`,
+`check [--json]`, `status [--json]`, `run PLAN_ID [--yes]` and `resume RUN_ID [--yes]`.
+`check` reads the configured doctor checks; it does not verify backups or power.
+With no subcommand,
+it shows status. Planning writes a local record; it does not execute a playbook.
+`--yes` approves the saved plan but never supplies a manual checkpoint answer.
+
+By default, the profile comes from `[maintenance.profile]` in `homelab.toml`. Named
+profiles use `[maintenance.profiles.NAME]`. `[maintenance].profile_file` or the
+`--profile-file` argument can select a separate private TOML file. Its top-level
+fields are `name`, `repo`, `inventory`, `context` and `steps`. For example:
+
+```toml
+name = "rack work"
+repo = "../infrastructure"
+inventory = "inventory/hosts.yml"
+context = "default"
+
+[[steps.shutdown]]
+id = "stop-writers"
+title = "Stop application writes"
+detail = "Use the reviewed procedure and confirm database writes have stopped."
+kind = "manual"
+
+[[steps.shutdown]]
+id = "stop-workers"
+title = "Shut down workers"
+detail = "Run the reviewed worker shutdown playbook after writers have stopped."
+kind = "ansible"
+playbook = "maintenance/shutdown-workers.yml"
+timeout = 600
+```
+
+This example is a format reference, not a complete shutdown plan. A custom mode’s
+steps replace the built-in steps for that mode. Preserve the dependency order and
+physical checks when adapting them. Backup, recovery and protected-workload checks
+are added before the list. A final equipment-state acknowledgement follows it.
+
+Relative `repo` paths in a profile file resolve beside that file. Inventory and
+playbook paths must be files inside the repository. Ansible steps require a clean
+Git repository and an explicit context. Plan creation binds the profile, repository
+commit and referenced files. A changed binding requires a new plan. Use existing
+Ansible authentication; never put credentials in profile fields or journal notes.
+Runbook timeouts default to 600 seconds and must be between 1 and 7200 seconds.
+
+Saved JSON plans and run journals use mode `0600` below
+`$XDG_STATE_HOME/bromigos/lab/maintenance/` (the default is
+`~/.local/state/bromigos/lab/maintenance/`). `BROMIGOS_LAB_STATE` overrides the lab
+state directory. Journals record each step before and after a runbook. An interrupted
+or failed runbook leaves an uncertain result; resume refuses to repeat it. The
+operator must inspect the hardware and create a new reviewed plan. A paused manual
+checklist can resume and skips its completed steps. A process lock prevents two
+maintenance runs from executing at once.
 
 ## The dashboard
 
@@ -759,7 +826,8 @@ applies, and each command will ask you first.
 | `lab models add`, `remove`, `replace` | Change the model set in ComfyUI's or vLLM's values. |
 
 `lab provision` has its first slice built ([lab-provision.md](lab-provision.md)).
-`lab update` remains planned.
+`lab maintenance` provides a separate ordered shutdown and startup flow
+([above](#rack-maintenance)). `lab update` remains planned.
 
 ## Tests
 

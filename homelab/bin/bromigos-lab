@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# bromigos:summary=Your homelab's console: status, GPUs and models, GPU jobs on the lab, doctor (no arguments: the live dashboard)
-# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | media search|get|status|upcoming|language … | provision [plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE] --repo PATH … | connect … | target …]
+# bromigos:summary=Your homelab's console: status, models, jobs, doctor and guided maintenance (no arguments: the live dashboard)
+# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | media search|get|status|upcoming|language … | provision [plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE] --repo PATH … | connect … | target …]
 # bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor; bromigos lab media get "Cowboy Bebop" --seasons all --specials
 # bromigos:menu=LAUNCH:Lab console
 """bromigos lab: the homelab's console (docs/homelab.md, "The lab console"; the manual's Lab chapter).
@@ -32,6 +32,14 @@
   bromigos lab doctor [--json] [--check ID]
                                     checks with fixes in plain words: DNS, TLS, GPUs, disks
                                     and NAS, backups, GitOps drift, expiring tokens, targets
+  bromigos lab maintenance check [--json]
+                                    read-only health checks before maintenance
+  bromigos lab maintenance plan shutdown|startup [--profile-file FILE] [--json]
+                                    review and save a rack maintenance checklist; no power actions
+  bromigos lab maintenance status [--json]
+                                    saved maintenance plans and execution journals
+  bromigos lab maintenance run PLAN_ID | resume RUN_ID
+                                    follow the reviewed checklist, confirming each manual step
   bromigos lab youtube              the YouTube downloads card: Pinchflat's sources, newest videos, queue
   bromigos lab youtube add URL [--playlist|--channel] [--since DATE] [--name NAME] [--quality Q]
   bromigos lab youtube list | status | refresh [NAME] | pause NAME | resume NAME
@@ -441,6 +449,9 @@ def main(argv):
     if cmd == "provision":
         from bromigos_homelab import provision
         return provision.main(rest)
+    if cmd == "maintenance":
+        from bromigos_homelab import maintenance
+        return maintenance.main(rest)
     if cmd in PHASE2:
         print(PHASE2[cmd], file=sys.stderr)
         return 3

@@ -62,6 +62,7 @@ The main modules in `lib/bromigos_homelab/`:
 | `vmproviders.py`, `vmhost.py` | owned VM lifecycle through Proxmox HTTPS or local and SSH libvirt |
 | `infrastructure.py` | multi-node plans, storage inventory, approved growth and worker draining |
 | `observability.py` | required monitoring, dashboards, alerts and read-only connections |
+| `maintenance.py` | saved shutdown and startup plans, step confirmations and resumable run journals |
 | `tui.py` | the `bromigos lab` dashboard, built with Textual |
 | `tuiux.py` | shared keyboard dialogs, help and guards against background shortcuts |
 

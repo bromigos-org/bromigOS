@@ -41,6 +41,77 @@ Its desktop panels, live decks and VECTOR plugins are separate integrations.
 Desktop target commands, art jobs and the Den TV media screen need the optional
 `bromigos-core` package. The main console, adapters and provisioning run without it.
 
+## Rack maintenance
+
+Use `bromigos lab maintenance` when you need to shut the lab down for rack work and
+bring it back afterwards. **Do not unplug a running NAS or a machine writing database
+files.** A machine that stops answering the network is not proof of a clean shutdown.
+Keep power connected until its own management screen or physical indicators confirm
+that shutdown finished.
+
+You can read the configured health checks first:
+
+```bash
+bromigos lab maintenance check
+```
+
+These checks report service problems. They do not verify backups or prove that
+equipment is powered off. Start by saving a plan. Planning does not power anything off:
+
+```bash
+bromigos lab maintenance plan shutdown
+bromigos lab maintenance status
+```
+
+Read the plan and keep its ID. To follow it interactively, replace `<plan-id>`
+with that ID:
+
+```bash
+bromigos lab maintenance run <plan-id>
+```
+
+The default plan is a guided checklist. Read each instruction, complete it yourself,
+then type `done` followed by the displayed step ID. Any other answer pauses the run.
+The run asks for `yes` before it starts. `--yes` can skip that initial question,
+but cannot acknowledge manual steps or make them work without a terminal.
+Acknowledging a manual step records your check; it does
+not turn it into a machine-verified result. Keep recovery instructions and credentials
+available somewhere that remains accessible while the lab is off.
+
+Shutdown follows dependencies. First check backups and recovery access, then finish
+any operator-controlled services. Stop jobs, games and other writers before compute
+workers. Stop the cluster’s control plane before its hypervisor, then the NAS. Keep
+network equipment available until everything that needs it is safely off.
+
+Startup brings the network and storage back first. Wait for storage to be ready before
+starting hypervisors, the cluster, workers and applications. Check each dependency
+before continuing. Restart services that need the operator’s approval yourself.
+
+If you stop partway through, use the run ID to continue from its journal:
+
+```bash
+bromigos lab maintenance resume <run-id>
+```
+
+When the rack is reconnected, create and follow a new startup plan:
+
+```bash
+bromigos lab maintenance plan startup
+bromigos lab maintenance run <plan-id>
+```
+
+An optional private profile supplies instructions and reviewed Ansible playbooks
+for your own hardware. Select a configured profile with `--profile <name>`, or use
+`--profile-file <path>` when planning. Keep machine names, addresses and credentials
+out of shared configuration. [The contributor reference](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab.md#maintenance-profiles)
+explains the profile format.
+
+Plans and run journals stay in `~/.local/state/bromigos/lab/maintenance/`. A completed
+checklist records your confirmations. It does not certify that every device is off.
+If a runbook fails or is interrupted, inspect the hardware before doing anything else.
+Resume refuses to repeat a step whose result is uncertain. Create a new reviewed
+plan after inspecting that state.
+
 ## Look at your lab
 
 Run `bromigos lab` for the live dashboard. It refreshes every 15 seconds.
