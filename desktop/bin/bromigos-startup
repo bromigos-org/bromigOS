@@ -118,7 +118,9 @@ def _guess(cmd):
     w = cmd.split()[0].rsplit("/", 1)[-1]
     if w == "hyprctl" and "setcursor" in cmd:
         return "the cursor theme"
-    return {"waybar": "the bar", "dunst": "notifications", "bromigos-widgets": "the desktop panels",
+    if cmd == "bromigos game --watch":
+        return "game mode: keyboard button and optional fullscreen detection"
+    return {"xembedsniproxy": "legacy tray icons in the bar", "waybar": "the bar", "dunst": "notifications", "bromigos-widgets": "the desktop panels",
             "bromigos-windows": "floating windows put back where they were",
             "bromigos-live": "the live layer: the animated background, the decks, the screensaver",
             "bromigos-holo": "VECTOR"}.get(w, "")

@@ -79,7 +79,12 @@ local function bind(b)
     if opts.submap then
         return hl.define_submap(opts.submap, make)
     end
-    return make()
+    local made = make()
+    -- TV selection works from the desktop and its own remote, never from game mode.
+    if b.kind == "exec" and b.payload:match("^bromigos%-live%s+tv%s+select%s+") then
+        hl.define_submap("bromigos-tv-remote", make)
+    end
+    return made
 end
 
 local function register(keys, kind, payload, source, dispatcher, opts)

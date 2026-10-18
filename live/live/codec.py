@@ -78,6 +78,8 @@ class Desk:
     def offer(self, channel, text, force=False):
         """Returns a short reason string (for the CLI / log)."""
         c = self.cfg
+        if getattr(self.app, "_game_mode", False):
+            return "held: game mode"
         if not c.get("enabled", True):
             return "codec disabled"
         now = time.time()

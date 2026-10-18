@@ -1,0 +1,400 @@
+#!/usr/bin/env python3
+# bromigos:summary=Give games the keyboard, quiet the desktop, and restore it afterwards
+# bromigos:args=on|off|toggle|status | auto on|off [--json]
+# bromigos:examples=bromigos game on; bromigos game off; bromigos game auto on
+"""Playing games: Super+Ctrl+G turns game mode on. Ctrl+Shift+F12 leaves it.
+Run `bromigos game off` from a TTY or SSH to recover the desktop.
+Automatic fullscreen detection is off until `bromigos game auto on`.
+"""
+import argparse
+import fcntl
+import json
+import os
+from pathlib import Path
+import re
+import select
+import signal
+import socket
+import subprocess
+import sys
+import time
+
+ESCAPE = "Ctrl+Shift+F12"
+SUBMAP = "bromigos-game"
+STATE = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "bromigos/game"
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bromigos/game.json"
+# Only display routing is remembered: a TTY/SSH command can reach the same session.
+ENV_KEYS = ("HYPRLAND_INSTANCE_SIGNATURE", "XDG_RUNTIME_DIR", "WAYLAND_DISPLAY", "DISPLAY", "DBUS_SESSION_BUS_ADDRESS")
+
+
+def read(path, default=None):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return default
+
+
+def write(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data))
+    tmp.chmod(0o600)
+    tmp.replace(path)
+
+
+def runtime():
+    return Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+
+
+def marker():
+    return runtime() / "bromigos-game-on.json"
+
+
+def sockpath():
+    return runtime() / "bromigos-game.sock"
+
+
+def run(*args, required=True):
+    try:
+        p = subprocess.run(args, capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        if required:
+            raise RuntimeError(str(e)) from e
+        return ""
+    if required and p.returncode:
+        raise RuntimeError((p.stderr or p.stdout).strip() or f"{args[0]} failed")
+    return p.stdout.strip()
+
+
+def ctl(*args):
+    return run("hyprctl", *args)
+
+
+def dispatch(name):
+    ctl("dispatch", f'hl.dsp.submap("{name}")')
+    want = "default" if name == "reset" else name
+    if ctl("submap") != want:
+        raise RuntimeError(f"Hyprland did not enter {want}")
+
+
+def lutris_ancestor(pid):
+    """Native Lutris games: inspect process names and parent IDs, never environment data."""
+    seen = set()
+    for _ in range(32):
+        if not isinstance(pid, int) or pid <= 1 or pid in seen:
+            return False
+        seen.add(pid)
+        try:
+            root = Path("/proc") / str(pid)
+            name = (root / "comm").read_text().strip().lower()
+            if name in ("lutris", "lutris-wrapper"):
+                return True
+            pid = int((root / "stat").read_text().rsplit(")", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            return False
+    return False
+
+
+def game_window(win):
+    """Opt-in heuristic; fullscreen launchers are deliberately excluded."""
+    cls = str(win.get("class", "")).lower()
+    if not win.get("fullscreen") or cls.startswith("battle.net") or cls in ("lutris", "steam", "launcher.exe"):
+        return False
+    return bool(re.fullmatch(r"steam_app_\d+", cls) or cls.endswith(".exe") or "gamescope" in cls or lutris_ancestor(win.get("pid")))
+
+
+def razer_enabled():
+    import tomllib
+    cfg = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bromigos/peripherals.toml"
+    try:
+        return bool(tomllib.loads(cfg.read_text()).get("razer-keyboard", {}).get("enabled", False))
+    except (OSError, ValueError):
+        return False
+
+
+def enabled():
+    return bool((read(CONFIG, {}) or {}).get("auto", False))
+
+
+class Mode:
+    def __init__(self):
+        self.inhibitor = None
+        self.reason = "manual"
+        self.suppressed = None
+        self.inputs = {}
+        self.last_scan = 0
+        self.last_led_sync = 0
+
+    def status(self):
+        return {"ok": True, "on": marker().exists(), "auto": enabled(), "escape": ESCAPE,
+                "reason": self.reason if marker().exists() else None}
+
+    def leds(self, on):
+        """Only enabled Razer modules; no sysfs writes and no new permissions."""
+        try:
+            if not razer_enabled():
+                return {}
+            from openrazer.client import DeviceManager
+            previous = {}
+            for dev in DeviceManager().devices:
+                if dev.type != "keyboard" or not dev.has("game_mode_led"):
+                    continue
+                key = dev.serial
+                previous[key] = bool(dev.game_mode_led)
+                target = bool(on)
+                if previous[key] != target:
+                    dev.game_mode_led = target
+            return previous
+        except Exception as e:
+            print(f"game mode: Razer LED unavailable: {e}", file=sys.stderr)
+            return {}
+
+    def on(self, reason="manual"):
+        if marker().exists():
+            if reason == "manual":
+                self.reason = reason
+            return self.status()
+        if ctl("submap") != "default":
+            raise RuntimeError("Leave the current keyboard mode before entering game mode")
+        paused = run("dunstctl", "is-paused")
+        if paused not in ("true", "false"):
+            raise RuntimeError("Could not read do-not-disturb state")
+        # stdin closes even on SIGKILL: the child releases logind's inhibitor.
+        self.inhibitor = subprocess.Popen(
+            ["systemd-inhibit", "--what=idle", "--who=bromigOS game mode", "--why=Playing a game",
+             "--mode=block", sys.executable, "-c", "import sys; sys.stdin.buffer.read()"],
+            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(0.15)
+        if self.inhibitor.poll() is not None:
+            self.inhibitor = None
+            raise RuntimeError("Could not inhibit idle; game mode was not enabled")
+        snap = {"paused": paused, "leds": {}}
+        write(marker(), snap)  # recovery record exists before any desktop changes
+        try:
+            ctl("notify", "-1", "12000", "rgb(ffcc66)", f"GAME MODE — {ESCAPE} to leave. TTY/SSH: bromigos game off")
+            run("dunstctl", "set-paused", "true")
+            snap["leds"] = self.leds(True)
+            write(marker(), snap)
+            dispatch(SUBMAP)
+            self.reason = reason
+        except Exception:
+            self.off()
+            raise
+        return self.status()
+
+    def off(self):
+        snap = read(marker(), {}) or {}
+        # Escape works even if another helper fails. Failed DND restoration keeps the
+        # record, so a later `off` can retry it rather than silently losing the snapshot.
+        try:
+            if ctl("submap") == SUBMAP:
+                dispatch("reset")
+        finally:
+            if self.inhibitor:
+                self.inhibitor.stdin.close()
+                try:
+                    self.inhibitor.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    self.inhibitor.terminate()
+                self.inhibitor = None
+        if snap:
+            run("dunstctl", "set-paused", snap["paused"])
+            self.leds(False)
+        marker().unlink(missing_ok=True)
+        if snap:
+            run("hyprctl", "notify", "-1", "4000", "rgb(99dd99)",
+                "GAME MODE OFF — desktop controls restored", required=False)
+        return self.status()
+
+    def request(self, command):
+        if command == "on":
+            return self.on()
+        if command in ("off", "toggle"):
+            if marker().exists():
+                self.suppressed = self.focus_id()
+                return self.off()
+            return self.on() if command == "toggle" else self.off()
+        if command.startswith("auto "):
+            write(CONFIG, {"auto": command == "auto on"})
+            if not enabled() and marker().exists() and self.reason == "automatic":
+                self.off()
+            self.suppressed = None
+        return self.status()
+
+    def focus(self):
+        try:
+            return json.loads(ctl("activewindow", "-j"))
+        except (RuntimeError, ValueError):
+            return {}
+
+    def focus_id(self):
+        w = self.focus()
+        return (w.get("address"), bool(w.get("fullscreen")))
+
+    def tick(self):
+        # Reload/reset/another submap: restore all side effects too.
+        if marker().exists() and ctl("submap") != SUBMAP:
+            self.suppressed = self.focus_id()
+            self.off()
+        if enabled():
+            w = self.focus()
+            focus = (w.get("address"), bool(w.get("fullscreen")))
+            if focus != self.suppressed:
+                self.suppressed = None
+            if game_window(w) and self.suppressed is None:
+                if not marker().exists():
+                    self.on("automatic")
+            elif marker().exists() and self.reason == "automatic":
+                self.off()
+        self.keyboard()
+        # OpenRazer's own key manager also toggles its LED on Fn+F10. Reconcile
+        # afterwards so its asynchronous write cannot leave the indicator inverted.
+        if time.monotonic() - self.last_led_sync > 1:
+            self.last_led_sync = time.monotonic()
+            self.leds(marker().exists())
+
+    def keyboard(self):
+        # Open only opted-in Razer keyboards; never grab them or consume game input.
+        # OpenRazer 3.12.4 translates Fn+F10 to evdev KEY_MACRO29 (0x2ac).
+        if time.monotonic() - self.last_scan > 10:
+            self.last_scan = time.monotonic()
+            try:
+                import evdev
+                opted = razer_enabled()
+                if not opted:
+                    for dev in self.inputs.values():
+                        dev.close()
+                    self.inputs.clear()
+                    return
+                for path in evdev.list_devices():
+                    if path in self.inputs:
+                        continue
+                    try:
+                        dev = evdev.InputDevice(path)
+                    except OSError:
+                        continue
+                    if dev.info.vendor == 0x1532 and 0x2ac in dev.capabilities().get(1, []):
+                        self.inputs[path] = dev
+                    else:
+                        dev.close()
+            except (ImportError, OSError, ValueError, RuntimeError):
+                pass
+        for path, dev in list(self.inputs.items()):
+            try:
+                if not select.select([dev.fd], [], [], 0)[0]:
+                    continue
+                for event in dev.read():
+                    if (event.type, event.code, event.value) == (1, 0x2ac, 1):
+                        self.request("toggle")
+            except OSError:
+                dev.close()
+                del self.inputs[path]
+
+
+def serve():
+    runtime().mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock = open(runtime() / "bromigos-game.lock", "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    hyprsock = runtime() / "hypr" / sig / ".socket.sock"
+    if not sig or not hyprsock.exists():
+        raise RuntimeError("No running Hyprland session")
+    mode = Mode()
+    # An earlier crash: recover its DND/LED snapshot before accepting new requests.
+    mode.off()
+    sockpath().unlink(missing_ok=True)
+    server = socket.socket(socket.AF_UNIX)
+    server.bind(str(sockpath()))
+    os.chmod(sockpath(), 0o600)
+    server.listen(4)
+    server.settimeout(0.2)
+    write(STATE / "session.json", {k: os.environ[k] for k in ENV_KEYS if k in os.environ})
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    try:
+        while hyprsock.exists():
+            try:
+                conn, _ = server.accept()
+            except socket.timeout:
+                mode.tick()
+                continue
+            with conn:
+                conn.settimeout(3)
+                try:
+                    command = conn.recv(128).decode().strip()
+                    if not command:
+                        continue
+                    if command not in ("on", "off", "toggle", "status", "auto on", "auto off"):
+                        raise RuntimeError("Unknown game command")
+                    out = mode.request(command)
+                except Exception as e:
+                    out = {"ok": False, "error": str(e)}
+                try:
+                    conn.sendall(json.dumps(out).encode())
+                except OSError:
+                    pass
+    finally:
+        try:
+            mode.off()
+        finally:
+            server.close()
+            sockpath().unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", nargs="?", default="status", choices=["on", "off", "toggle", "status", "auto"])
+    parser.add_argument("value", nargs="?", choices=["on", "off"])
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--watch", action="store_true", help=argparse.SUPPRESS)
+    args = parser.parse_args()
+    if args.command == "auto" and not args.value:
+        parser.error("auto needs on or off")
+    if args.value and args.command != "auto":
+        parser.error("only auto takes another argument")
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        os.environ.update(read(STATE / "session.json", {}) or {})
+    if args.watch:
+        serve()
+        return 0
+    command = args.command + (" " + args.value if args.value else "")
+    try:
+        with socket.socket(socket.AF_UNIX) as probe:
+            probe.connect(str(sockpath()))
+        alive = True
+    except OSError:
+        alive = False
+    if not alive:
+        if args.command == "status" and not marker().exists():
+            out = Mode().status()
+            print(json.dumps(out) if args.json else "Game mode: off")
+            return 0
+        subprocess.Popen([sys.executable, os.path.realpath(__file__), "--watch"],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    deadline = time.monotonic() + 5
+    while True:
+        try:
+            with socket.socket(socket.AF_UNIX) as conn:
+                conn.settimeout(15)
+                conn.connect(str(sockpath()))
+                conn.sendall(command.encode())
+                out = json.loads(conn.recv(65536))
+            break
+        except (OSError, ValueError):
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Game helper did not answer; is the Hyprland session running?")
+            time.sleep(0.05)
+    print(json.dumps(out) if args.json else (f"Game mode: {'on' if out.get('on') else 'off'}; leave with {ESCAPE}"
+          if out.get("ok") else out["error"]))
+    return 0 if out.get("ok") else 1
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (RuntimeError, OSError) as e:
+        print(f"game mode: {e}", file=sys.stderr)
+        sys.exit(1)

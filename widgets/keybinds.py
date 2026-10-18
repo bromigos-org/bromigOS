@@ -73,6 +73,7 @@ KEYNAMES = {
 # (regex on the exec command, description, section). First match wins; the list
 # order is also the row order inside each section.
 EXEC = [
+    (r"bromigos game toggle\b", "Game mode (leave with Ctrl+Shift+F12)", "DESKTOP"),
     (r"bromigos dictate on\b", "Dictate at the cursor (hold)", "CAPTURE"),
     # Den TV remote: scoped number-pad actions, plus global screen selection.
     (r"bromigos-live tv select big\b", "TV remote: select the big monitor", "LIVE LAYER"),

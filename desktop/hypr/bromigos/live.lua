@@ -45,10 +45,10 @@ K.exec("SUPER + ALT + G", live .. " tv guide")
 -- Physical number-pad codes work with NumLock on or off (KP_1 / KP_End share a code).
 -- The daemon selects the TV, enters the submap and resets it after 15 seconds idle.
 -- Remote actions retain their submap when rebound in Settings (keys.lua).
-K.exec("SUPER + code:90", live .. " tv select none", { submap_universal = true })
-K.exec("SUPER + code:87", live .. " tv select big", { submap_universal = true })
-K.exec("SUPER + code:88", live .. " tv select scope", { submap_universal = true })
-K.exec("SUPER + code:89", live .. " tv select small", { submap_universal = true })
+K.exec("SUPER + code:90", live .. " tv select none")
+K.exec("SUPER + code:87", live .. " tv select big")
+K.exec("SUPER + code:88", live .. " tv select scope")
+K.exec("SUPER + code:89", live .. " tv select small")
 K.exec("code:86", live .. " tv remote volume-up", { repeating = true })
 K.exec("code:82", live .. " tv remote volume-down", { repeating = true })
 K.exec("code:80", live .. " tv remote channel-up")

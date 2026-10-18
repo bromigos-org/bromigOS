@@ -21,6 +21,7 @@ The keys you'll use most. Learn the first one and you can find everything else.
 
 | Keys | What it does |
 |---|---|
+| <span class="keys"><kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>G</kbd></span> | Enter [game mode](games.md). Ctrl+Shift+F12 leaves it. |
 | <span class="keys"><kbd>MENU</kbd></span> | Hold the [Menu key](dictation.md) to dictate into the focused app. Release it to insert your words. |
 | <span class="keys"><kbd>Super</kbd>+<kbd>Space</kbd></span> | Open the [menu](menu.md). Type to find any app or command, or to open Settings. |
 | <span class="keys"><kbd>Alt</kbd>+<kbd>P</kbd></span> | Open the app launcher. |

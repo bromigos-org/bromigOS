@@ -67,6 +67,7 @@ From left to right:
 | Workspaces | Your [workspaces](windows.md) that have windows. | Go to that workspace. |
 | Window title | The window you're in. | |
 | Music | What's playing, in the middle of the bar. | Play or pause. Right-click for the next track. Scroll to jump five seconds forwards or back. |
+| GAME MODE | [Game mode](games.md) is on. | Leave game mode. Ctrl+Shift+F12 also leaves it. |
 | Eye | What happens when you leave the computer. See [Idle and lock](idle.md). | Stay awake for an hour. Middle-click to stay awake until you stop it. Right-click for its settings. |
 | Power mark | VECTOR's [emergency switch](vector.md#the-emergency-switch). A red VECTOR OFF while he's off. | Switch VECTOR off at once. While he's off, click to switch him back on, after a YES. |
 | VECTOR | What [VECTOR](vector.md) is doing, and how many replies you haven't read. | Show him. Right-click to change his voice. Middle-click to mute his voice. |
@@ -82,6 +83,13 @@ From left to right:
 | Clock | The time. Hover for a calendar. | Show the date. |
 
 To hide the bar, press <kbd>Alt</kbd>+<kbd>B</kbd>. Press it again to bring the bar back.
+
+### Wine tray icons
+
+Battle.net, Wine apps and older X11 apps appear in the bar's tray, with their mouse
+menus. bromigOS starts a bridge at login. If an app already has its own floating tray,
+close that app and open it again after logging out and back in following an update.
+
 
 ## Notifications
 

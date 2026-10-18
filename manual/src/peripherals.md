@@ -96,3 +96,10 @@ devices only.
 
 The format is in the developer docs:
 [peripherals.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/peripherals.md).
+
+## Playing games
+
+On a BlackWidow V4 Pro with the Razer module enabled, Fn+F10 toggles
+[game mode](games.md). Its gaming LED follows the mode. Ctrl+Shift+F12 leaves it, even
+if the keyboard has disabled Super. This needs the module's existing OpenRazer and
+input-device permissions. You can always enter with Super+Ctrl+G or `bromigos game on`.

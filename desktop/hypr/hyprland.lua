@@ -135,7 +135,10 @@ fit_outputs()
 hl.on("hyprland.start", function()
     -- this session's display for systemd/D-Bus, and VECTOR's daemon moved off any old session
     hl.exec_cmd("bromigos session adopt")
+    -- XEmbed tray icons in the bar; the bridge needs Wayland click forwarding.
+    hl.exec_cmd("env XDG_SESSION_TYPE=wayland xembedsniproxy")
     hl.exec_cmd("waybar")
+    hl.exec_cmd("bromigos game --watch")
     -- the still wallpaper under the live layer (the theme's painting, or the den's variant)
     hl.exec_cmd("bromigos wallpaper apply")
     hl.exec_cmd("bromigos-widgets")
@@ -308,6 +311,9 @@ end
 
 -- Window rules (applied top to bottom). Find a window's class and title: hyprctl clients.
 hl.window_rule({ match = { class = "kitty" }, tile = true })
+-- KDE's bridge keeps an X11 host window for the embedded icon. Hide only that
+-- helper (KDE >= 6.7 names it), leaving each app's menus alone.
+hl.window_rule({ match = { class = "^xembedsniproxy$" }, opacity = "0.0 override", no_blur = true })
 -- Apps (Chrome especially) ask to open maximized; ignore it so new windows tile.
 hl.window_rule({ match = { class = ".*" }, suppress_event = "maximize" })
 hl.window_rule({ match = { class = "Rofi" }, float = true })
@@ -338,4 +344,12 @@ require("bromigos.binds")
 require("bromigos.live")
 require("bromigos.dictation")
 require("bromigos.vector")
+K.exec("SUPER + CTRL + G", "bromigos game toggle")
+hl.define_submap("bromigos-game", function()
+    hl.bind("CTRL + SHIFT + F12", function()
+        -- Reset first: the escape key works even when the helper cannot answer.
+        hl.dispatch(hl.dsp.submap("reset"))
+        hl.exec_cmd("bromigos game off")
+    end, { description = "Leave game mode", locked = true })
+end)
 K.finish()   -- binds them all: a desktop key a window key would share moves (keys.lua)
