@@ -22,7 +22,7 @@ license=('MIT OR Apache-2.0')
 # bromigos-homelab: the LAB panel and the homelab decks live there (inert with no sources)
 depends=('bromigos-core' 'bromigos-live' 'bromigos-widgets' 'bromigos-settings' 'bromigos-homelab'
          'hyprland' 'waybar' 'plasma-workspace>=6.7' 'rofi' 'dunst' 'gtklock' 'hypridle' 'hyprlock' 'swaybg'
-         'zsh' 'mehshell>=0.2.5' 'python' 'libnotify' 'wl-clipboard' 'grim' 'slurp' 'playerctl' 'kitty'
+         'zsh' 'mehshell>=0.2.6' 'python' 'libnotify' 'wl-clipboard' 'grim' 'slurp' 'playerctl' 'kitty'
          # the session's plumbing: screen sharing and file pickers, password prompts,
          # sound (the bar's volume: pactl; capture sounds: pw-play), the network (nmtui)
          'xdg-desktop-portal-hyprland' 'xdg-desktop-portal-gtk' 'hyprpolkitagent'

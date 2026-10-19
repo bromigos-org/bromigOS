@@ -69,7 +69,13 @@ A few of these need more words:
   renders it for hypridle. See [idle.md](idle.md).
 - **The shell.** bromigOS never edits a shell startup file. The installer tells you the
   line to add: `source /usr/share/bromigos/default/zsh/bromigos.zsh`. It adds the login
-  banner and zoxide.
+  banner and zoxide. mehshell's command status starts clear in each shell. Its hooks
+  record only commands executed there, excluding startup and optional-file checks.
+  Blank Enter and Ctrl+C while editing clear a previous failure. A running command
+  that exits with status 130 shows a grey `interrupted` label; other failures show
+  red `exit:N`. The instant prompt cache never saves a failed command's status.
+  Updated hooks load in a new shell or with `eval "$(mehshell init zsh)"`. See the
+  manual's [Shell and terminal](../manual/src/shell.md) page.
 - **The on-screen display** (swayosd) has no file of yours. Hyprland starts it with the
   theme's `swayosd.css`, and the media keys go through it. See
   [theming.md](theming.md) for the `osd` hook.

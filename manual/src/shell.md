@@ -67,10 +67,16 @@ linked worktree. `status?` means Git could not be read within the prompt's time 
 output limit; `upstream?` means the comparison is unavailable. Counts use local
 information and never trigger a fetch.
 
-SSH sessions show the user and host; root shows `ROOT`. A failed command shows
-`exit:N`. A small `GAME` label reflects the local game-mode record. Turn any of
-these off with `bromigos shell configure session false`, `status false` or
-`game false`, respectively. All indicators use local information.
+SSH sessions show the user and host; root shows `ROOT`. A failed command shows a red
+`exit:N`, where `N` is its exit code. This reports a command run in the current shell.
+Startup checks and the cached prompt do not carry an old failure into a new terminal.
+Pressing Enter on an empty line or Ctrl+C while editing clears the status. Interrupting
+a running command with Ctrl+C normally returns code 130 and shows a grey `interrupted`
+label.
+
+A small `GAME` label reflects the local game-mode record. Turn off session, command
+status or game-mode labels with `bromigos shell configure session false`, `status false`
+or `game false`, respectively. All indicators use local information.
 
 Check configuration and terminal fallback, or measure slow local prompt segments:
 
@@ -83,7 +89,13 @@ bromigos shell doctor --timings
 printing their values. It does not test the installed font's glyph coverage or
 inspect your running shell's hooks. It never queries your lab or prints credentials.
 Style and segment changes appear at the next prompt; open a new shell after changing
-hook options. Reloading mehshell keeps one copy of its hooks.
+hook options or updating mehshell. To load updated hooks in the current zsh shell, run:
+
+```zsh
+eval "$(mehshell init zsh)"
+```
+
+Reloading mehshell keeps one copy of its hooks.
 
 ## Match the theme
 
