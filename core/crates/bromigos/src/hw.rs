@@ -32,6 +32,12 @@ pub struct HwArgs {
 enum HwVerb {
     /// What this machine is and what `bromigos hw setup` would do (the default)
     Detect,
+    /// Show which GPU has the connected displays; read-only, without changing drivers
+    Display {
+        /// Print the automatic GPU order for Hyprland, or nothing when there is no clear choice
+        #[arg(long, conflicts_with = "json")]
+        hyprland: bool,
+    },
     /// Set this machine's hardware up: drivers, early KMS, a hybrid laptop's GPUs, power
     /// profiles, Hyprland's GPU environment (sudo for the system's part)
     Setup {
@@ -54,9 +60,39 @@ enum HwVerb {
 pub fn hw_cmd(paths: &Paths, a: HwArgs) -> Result<i32> {
     let files = RootFs;
     let d = hw::detect(&files);
+    // Startup probes only read hardware. Do not run pacman or systemd, or construct
+    // an installation plan, while the login screen is deciding where to appear.
+    if let Some(HwVerb::Display { hyprland }) = &a.verb {
+        let seat = std::env::var("XDG_SEAT")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "seat0".into());
+        let selection = hw::display_selection_for_seat(&d, &seat);
+        if a.json {
+            println!(
+                "{}",
+                json!({"schema": SCHEMA, "primary_card": selection.primary_card,
+                       "drm_devices": selection.drm_devices, "reason": selection.reason,
+                       "reason_code": selection.reason_code})
+            );
+        } else if *hyprland {
+            if selection.primary_card.is_some() {
+                println!("{}", selection.drm_devices.join(":"));
+            }
+        } else {
+            match &selection.primary_card {
+                Some(card) => println!("Automatic display GPU: /dev/dri/{card}"),
+                None => println!("Automatic display GPU: keep the existing choice"),
+            }
+            println!("{}", selection.reason);
+            println!("Explicit GPU settings take precedence. This check changes nothing.");
+        }
+        return Ok(0);
+    }
     let mut runner = install::System;
     let plan = hw::plan(paths, &d, &mut runner, &files);
     match a.verb {
+        Some(HwVerb::Display { .. }) => unreachable!("display probe returned above"),
         None | Some(HwVerb::Detect) => {
             if a.json {
                 println!(

@@ -314,11 +314,16 @@ the built-in setup instead, which copies the file into place.
 
 - Detection reads files only, never runs a command. `BROMIGOS_FS_ROOT` moves `/`, so a
   folder of fixture files can stand in for a machine.
+- `hw display` reports connected screens and the automatic GPU candidate without
+  changing anything. `--json` is for tools; `--hyprland` supplies the startup device
+  list. The [selection rules](../docs/hardware.md#choosing-the-gpu-with-a-connected-screen)
+  preserve explicit choices and exclude reserved cards.
 - The plan asks `pacman -T` and `systemctl is-enabled` what's already there.
 - `hw setup` changes only what differs. It installs the GPU's packages, but never swaps an
   installed NVIDIA driver. It writes system files with `sudo install`, runs
   `mkinitcpio -P` when the initramfs changes, and enables a laptop's
-  `power-profiles-daemon`. Last, it writes `~/.local/state/bromigos/hw/hyprland.lua`.
+  `power-profiles-daemon`. Last, it updates its generated
+  `~/.local/state/bromigos/hw/hyprland.lua`, preserving a custom file.
 - `--user-only` writes only that last file, with no sudo.
 - Any other word goes to the router as `bromigos-hw-<name>`.
 
@@ -1129,8 +1134,9 @@ relative to the theme folder.
                "virt": null, "batteries": [{"name": "BAT0", "capacity": 82, "status": "Discharging"}], "lid": true,
                "backlight": ["intel_backlight"], "kbd_backlight": [], "touchpads": ["SYNA2393:00 06CB:7E7E Touchpad"]},
    "gpus": [{"slot": "0000:01:00.0", "id": "10de:1f91", "vendor": "NVIDIA", "name": "TU117M [GeForce GTX 1650 Mobile / Max-Q]",
-             "stack": "nvidia-open", "family": "Turing", "driver": "nouveau", "boot_vga": false, "card": "card1",
-             "connectors": [], "panel": false}],
+             "stack": "nvidia-open", "family": "Turing", "driver": "nouveau", "driver_override": null,
+             "boot_vga": false, "card": "card1", "connectors": [], "connected_connectors": [],
+             "drm_ready": true, "seat": "seat0", "panel": false}],
    "kernels": ["linux"], "multilib": false,
    "nvidia": {"loaded": false, "open": null, "version": null, "modeset": null, "fbdev": null},
    "initramfs_modules": [], "initramfs_modules_from": [], "hibernation": false,
@@ -1147,6 +1153,9 @@ relative to the theme folder.
 
 - `stack` is one of `nvidia-open`, `nvidia-580xx`, `nvidia-470xx`, `nvidia-old`,
   `amdgpu`, `radeon`, `intel`, `intel-crocus`, `intel-i915`, `virtual` and `other`.
+- `connected_connectors` lists only outputs whose kernel status is `connected`.
+  `drm_ready` means the card's device node exists. `driver_override` is a requested
+  driver binding or `null`; `seat` is the device's udev seat, defaulting to `seat0`.
 - `want` is what the machine should have. `install`, `enable` and `write` are what
   differs now.
 - `install` is `want.packages` less what `pacman -T` finds. NVIDIA's `module_packages`
@@ -1155,6 +1164,32 @@ relative to the theme folder.
 - `aur` lists the packages only the AUR has, such as NVIDIA's 580.xx driver, and
   `aur_helper` names the helper that would build them. `hw setup` builds them only after
   a yes, or with `--aur`.
+
+### `bromigos hw display --json`
+
+This reads the current devices and connector status without making an installation
+plan or changing the running desktop:
+
+```json
+{
+  "schema": 1,
+  "primary_card": "card1",
+  "drm_devices": ["/dev/dri/card1", "/dev/dri/card0"],
+  "reason_code": "single_connected_gpu",
+  "reason": "Only one usable GPU has a connected monitor."
+}
+```
+
+`primary_card` is the automatic candidate's current card name, or `null` when there is
+no clear choice. `drm_devices` keeps the other usable cards after the candidate. It
+excludes cards on another seat and those bound or reserved for VFIO. `XDG_SEAT` selects
+the seat; an unset or empty value means `seat0`.
+
+`reason_code` is `single_connected_gpu`, `multiple_connected_gpus`,
+`no_connected_monitors` or `no_usable_gpus`. `reason` is its human-readable explanation.
+The report does not read a running compositor's renderer or override explicit settings.
+The internal `--hyprland` mode prints the device paths joined by colons when there is a
+candidate, and otherwise prints nothing. It cannot be combined with `--json`.
 
 ### `bromigos update --check --json`
 

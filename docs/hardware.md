@@ -1,7 +1,7 @@
 # Hardware: GPUs, laptops and touchpads
 
 `bromigos hw` looks at the machine and sets up what its hardware needs. That means the
-graphics driver, NVIDIA's early KMS, the right GPU on a laptop with two, a laptop's
+graphics driver, NVIDIA's early KMS, the GPU that drives the screen, a laptop's
 battery, brightness and power profiles, and the touchpad. It reads the machine from
 files only, and it never swaps an NVIDIA driver you already have.
 
@@ -14,6 +14,8 @@ This page explains what it detects and what it changes. The manual's
 ```bash
 bromigos hw                        # what this machine is, and what setup would do
 bromigos hw --json                 # the same, as JSON (core/README.md describes it)
+bromigos hw display                # connected screens and the automatic GPU choice
+bromigos hw display --json         # the same display check, as JSON
 bromigos hw setup --dry-run        # list the changes without making them
 bromigos hw setup                  # make them; asks for sudo for the system's part
 bromigos hw setup --user-only      # only your part: Hyprland's GPU environment
@@ -30,7 +32,8 @@ You rarely need to run it yourself:
 - `bromigos setup hardware` shows what it found and asks before setting it up.
 - The ISO's installer brings the packages from the medium.
 
-Run `bromigos hw setup` yourself after you change a GPU, say.
+Run `bromigos hw setup` after changing a GPU if its driver needs setting up. Choosing an
+already working card from its connected screens happens at login without running setup.
 
 Other words after `bromigos hw` go to the command router, which runs
 `bromigos-hw-<name>`. So a hardware command of your own fits in the same group.
@@ -44,7 +47,7 @@ faked machines.
 | What | Read from |
 |---|---|
 | The GPUs | `/sys/bus/pci/devices/*/uevent` for display devices, plus `boot_vga`. Names come from `pci.ids`, as `lspci` shows them. |
-| Which outputs a GPU drives | `/sys/class/drm/cardN-*`. An `eDP`, `LVDS` or `DSI` connector is a laptop's built-in screen. |
+| Which outputs a GPU drives | `/sys/class/drm/cardN-*`, including each connector's `status`. An `eDP`, `LVDS` or `DSI` connector is a laptop's built-in screen. |
 | Laptop or desktop | The DMI chassis type, and whether the machine runs on a battery |
 | The battery | `/sys/class/power_supply/*` entries of type `Battery`, leaving out a mouse's or headset's |
 | Lid, backlight, keyboard light | `/proc/acpi/button/lid/*`, `/sys/class/backlight/*`, `/sys/class/leds/*::kbd_backlight` |
@@ -159,6 +162,43 @@ VECTOR and the theme previews, ends with a line asking you to restart, and sends
 notification ([update.md](update.md#when-the-kernel-or-the-graphics-driver-changes)).
 `bromigos restart --check` lists a `driver` line while the halves differ.
 
+### Choosing the GPU with a connected screen
+
+The login screen and Hyprland check the connected screens when they start. If exactly
+one usable host GPU reports a `connected` output, they prefer that GPU. It can have
+several screens. A disconnected GPU marked as the firmware's boot device does not win
+over it. The current card number is read again on each start, so a change from `card0`
+to `card1` does not leave a saved automatic choice pointing at the wrong device.
+
+With no connected GPUs, or with screens connected to several GPUs, this rule makes no
+choice. The existing compositor defaults and laptop policy remain in effect. A card
+bound to VFIO, or reserved for VFIO through a driver override, is excluded from the
+automatic choice. VFIO is the kernel interface used to assign devices to virtual
+machines. The rule does not install drivers, change their bindings or hand a card to a
+VM.
+
+A usable card has a DRM device, a bound host driver and the matching seat. A seat is a
+set of displays and input devices assigned to one login session. The selector reads
+the connector's current `status`; missing and `unknown` values do not count as
+connected. Hyprland's automatic device list puts the selected card first and keeps
+the other usable cards available for their outputs.
+
+Explicit settings take precedence:
+
+- Hyprland keeps an existing `AQ_DRM_DEVICES` value and a valid GPU choice from the saved
+  hardware environment. `bromigos.hw = false` disables its hardware selection.
+- SDDM keeps an administrator's `CompositorCommand` override in `/etc/sddm.conf.d/` or
+  `/etc/sddm.conf`. Its packaged launcher falls back to Weston's usual device choice
+  when the core command is missing or too old.
+
+`bromigos hw display` explains the automatic candidate using read-only checks. It does
+not claim that a running desktop uses that candidate. `--json` gives the same report to
+tools; `--hyprland` supplies the internal device list used at Hyprland startup.
+
+This is a startup choice. Moving a cable during a session does not move its renderer
+to another card. The next login checks again. The greeter checks when its compositor
+next starts. Drivers must already be working for the connected card to be usable.
+
 ### Laptops with two GPUs
 
 A laptop with two GPUs draws the desktop on the one wired to its built-in screen. If
@@ -179,14 +219,14 @@ kept for programs that ask for it. Setup does this:
   `NVreg_DynamicPowerManagement=0x02`. Ampere and newer laptops do this by default.
 - **An AMD second GPU** runs a program with `DRI_PRIME=1 <program>`.
 
-A desktop with two GPUs is left as the firmware set it up, because the monitor cables
-decide. `bromigos hw` says so.
+The connected-screen rule above also applies when no explicit GPU choice is saved.
+The laptop's saved GPU environment takes precedence over that rule.
 
 ## Hyprland's GPU environment
 
 Setup writes `~/.local/state/bromigos/hw/hyprland.lua`, which bromigOS's default
-`hyprland.lua` reads. It's generated, so run setup again rather than editing it. On a
-laptop with two GPUs it looks like this:
+`hyprland.lua` reads. It updates files it generated and preserves a custom file. On a
+laptop with two GPUs a generated file looks like this:
 
 ```lua
 return {
@@ -198,9 +238,10 @@ return {
 }
 ```
 
-A variable is set only while every path in its `when` list exists. So if you swap a GPU
-later, it can't break the session. To ignore the file, set `bromigos = { hw = false }` in
-your `hyprland.lua`. Changes take effect at your next login.
+A variable is set only while every path in its `when` list exists. If a saved GPU choice
+no longer applies, the connected-screen rule can choose the replacement. An inherited
+`AQ_DRM_DEVICES` value is kept. To ignore the file and automatic selection, set
+`bromigos = { hw = false }` in your `hyprland.lua`. Changes take effect at your next login.
 
 ## Laptops
 
@@ -269,11 +310,15 @@ list and `hw.rs` in step. The live session itself runs on Mesa, with nouveau on 
 
 **Proven:**
 
-- **The detection tables.** 26 unit tests in `hw/tests.rs` run on whole machines made of
+- **The detection tables.** Unit tests in `hw/tests.rs` run on whole machines made of
   fixture files with real PCI IDs. They cover NVIDIA's branches, Intel's generations,
   vendors, virtual machines, chassis types, batteries, touchpads, `MODULES` and
   hibernation. CLI tests on a fixture root (`tests/cli.rs`, the `hw_*` tests) cover the
   commands.
+- **Automatic GPU selection.** Hardware fixtures cover connector status, driver
+  readiness, card numbering, seats and VFIO reservations. The greeter's tests use
+  stand-ins for the hardware query and Weston, including late device readiness and
+  fallback when the query is unavailable. These checks do not start the live desktop.
 - **An NVIDIA desktop** with an RTX 5070 (Blackwell) and `nvidia-open` 615, with early KMS
   set up by hand. `bromigos hw` read it correctly, read-only. Its plan keeps the driver,
   writes no system file because `nvidia_drm` already loads early, and adds
@@ -306,6 +351,8 @@ list and `hw.rs` in step. The live session itself runs on Mesa, with nouveau on 
 
 **Not proven without real hardware:**
 
+- automatic startup selection across different multi-GPU machines; fixture and
+  compositor stand-in tests do not establish that every driver combination can render;
 - NVIDIA's open modules and early KMS installed on a machine that doesn't have them yet,
   including from the ISO;
 - the AUR drivers for older NVIDIA cards on real hardware;

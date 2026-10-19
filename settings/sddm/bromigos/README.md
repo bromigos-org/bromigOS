@@ -19,6 +19,7 @@ greeter (`QtVersion=6`). The `bromigos-settings` package installs it:
 | `/usr/share/sddm/themes/bromigos/assets/` | The Wick's lock-screen ring and flame, and the empty den |
 | `/usr/share/sddm/themes/bromigos/fonts/` | Links to Geist Mono and its licence |
 | `/usr/lib/sddm/sddm.conf.d/zz-bromigos.conf` | `../conf/zz-bromigos.conf` |
+| `/usr/lib/bromigos/sddm/bromigos-greeter` | `../bromigos-greeter`, Weston's launcher |
 
 The art comes from elsewhere in the repository:
 
@@ -29,6 +30,18 @@ The art comes from elsewhere in the repository:
 `zz-bromigos.conf` sets `Current=bromigos`, the cursor, and the Wayland greeter. It's named
 `zz-` so it comes after the `sddm` package's own `default.conf`. A machine's own
 `/etc/sddm.conf.d/` and `/etc/sddm.conf` still win.
+
+The packaged compositor launcher reads `bromigos hw display --json` before it starts
+Weston. When exactly one usable host GPU has a screen connected, it passes that card
+through Weston's `--drm-device` option. It allows up to two seconds for devices that
+are still starting. Each query has a one-second timeout.
+
+An administrator's `CompositorCommand` override keeps control, as does an explicit
+`--drm-device` argument to the launcher. If the hardware command is missing, too old,
+fails, or cannot make a single choice, Weston uses its usual device choice. Seats other
+than `seat0` also keep Weston's usual choice. The launcher does not install drivers or
+change a running session. See
+[GPU selection](../../../docs/hardware.md#choosing-the-gpu-with-a-connected-screen).
 
 `bromigos install` enables SDDM unless another display manager is already enabled
 ([docs/install.md](../../../docs/install.md)). Nothing restarts SDDM, so the theme shows at
@@ -111,6 +124,8 @@ none is.
 | `metadata.desktop` | SDDM's theme metadata, for Qt 6 |
 | `theme.conf` | The theme's settings: asset paths, caption, sign-off, the ring's speed, stars |
 | `../conf/zz-bromigos.conf` | The SDDM drop-in, described above |
+| `../bromigos-greeter` | Reads the automatic GPU choice and starts Weston |
+| `../tests/` | Launcher tests with stand-ins for the hardware command and Weston |
 | `packaging/bromigos-settings/PKGBUILD` | Puts it together |
 
 ## Changing it

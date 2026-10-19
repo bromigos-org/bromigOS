@@ -270,11 +270,19 @@ pub struct Gpu {
     pub family: Option<String>,
     /// The kernel driver bound to it now (nvidia, nouveau, amdgpu, i915, xe, virtio-pci …).
     pub driver: Option<String>,
+    /// A requested driver binding, when set (VFIO reserves a GPU even before rebinding).
+    pub driver_override: Option<String>,
     /// The firmware booted on it.
     pub boot_vga: bool,
     /// Its DRM card ("card1") and connectors ("DP-1", "eDP-1").
     pub card: Option<String>,
     pub connectors: Vec<String>,
+    /// Connectors whose current kernel status is exactly `connected`.
+    pub connected_connectors: Vec<String>,
+    /// The DRM device node exists. Discovery never opens it or changes its driver.
+    pub drm_ready: bool,
+    /// The udev seat assignment; an unassigned card belongs to seat0.
+    pub seat: String,
     /// It drives a built-in panel (an eDP, LVDS or DSI connector): a laptop's iGPU.
     pub panel: bool,
 }
@@ -291,6 +299,107 @@ impl Gpu {
             format!("{} {}", self.vendor, self.name)
         }
     }
+}
+
+/// A startup preference, recomputed from the current device nodes and cables. An empty
+/// primary leaves the compositor's native choice in charge. Explicit user settings take
+/// precedence over this recommendation.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DisplaySelection {
+    pub primary_card: Option<String>,
+    /// Usable cards in PCI slot order, with the primary first when there is one. Keep the
+    /// remaining cards available for outputs plugged in after login.
+    pub drm_devices: Vec<String>,
+    /// Stable machine-readable explanation, including startup conditions worth retrying.
+    pub reason_code: String,
+    pub reason: String,
+}
+
+/// Choose for the default seat, without opening devices or changing configuration.
+pub fn display_selection(d: &Detection) -> DisplaySelection {
+    display_selection_for_seat(d, "seat0")
+}
+
+/// Prefer a GPU only when it is the only usable card on this seat with a connected
+/// monitor. No connected monitors or several connected GPUs leave native policy intact.
+pub fn display_selection_for_seat(d: &Detection, seat: &str) -> DisplaySelection {
+    let seat = if seat.is_empty() { "seat0" } else { seat };
+    let mut usable: Vec<&Gpu> = d
+        .gpus
+        .iter()
+        .filter(|g| {
+            g.drm_ready
+                && g.card.as_deref().is_some_and(is_drm_card)
+                && g.driver.as_deref().is_some_and(|driver| !is_vfio(driver))
+                && !g.driver_override.as_deref().is_some_and(is_vfio)
+                && g.seat == seat
+        })
+        .collect();
+    usable.sort_by(|a, b| a.slot.cmp(&b.slot));
+    let connected: Vec<&Gpu> = usable
+        .iter()
+        .copied()
+        .filter(|g| !g.connected_connectors.is_empty())
+        .collect();
+    let (primary_card, reason_code, reason) = match connected.as_slice() {
+        [gpu] => (
+            gpu.card.clone(),
+            "single_connected_gpu",
+            "Only one usable GPU has a connected monitor.".to_string(),
+        ),
+        [] if usable.is_empty() => (
+            None,
+            "no_usable_gpus",
+            "No usable GPU is ready on this seat; keep the native choice.".to_string(),
+        ),
+        [] => (
+            None,
+            "no_connected_monitors",
+            "No usable GPU has a connected monitor; keep the native choice.".to_string(),
+        ),
+        _ => (
+            None,
+            "multiple_connected_gpus",
+            "Several GPUs have connected monitors; keep the native choice.".to_string(),
+        ),
+    };
+    if let Some(primary) = &primary_card {
+        usable.sort_by_key(|g| g.card.as_ref() != Some(primary));
+    }
+    DisplaySelection {
+        primary_card,
+        drm_devices: usable
+            .into_iter()
+            .filter_map(|g| g.card.as_ref().map(|card| format!("/dev/dri/{card}")))
+            .collect(),
+        reason_code: reason_code.into(),
+        reason,
+    }
+}
+
+fn is_drm_card(name: &str) -> bool {
+    name.strip_prefix("card")
+        .is_some_and(|number| !number.is_empty() && number.bytes().all(|c| c.is_ascii_digit()))
+}
+
+fn is_vfio(driver: &str) -> bool {
+    driver == "vfio" || driver.starts_with("vfio-") || driver.starts_with("vfio_")
+}
+
+fn drm_seat(files: &dyn Files, card: &str) -> String {
+    let seat = read_trim(files, &format!("/sys/class/drm/{card}/dev"))
+        .filter(|device| {
+            device.split_once(':').is_some_and(|(major, minor)| {
+                !major.is_empty()
+                    && !minor.is_empty()
+                    && major.bytes().all(|c| c.is_ascii_digit())
+                    && minor.bytes().all(|c| c.is_ascii_digit())
+            })
+        })
+        .and_then(|device| files.read(&format!("/run/udev/data/c{device}")))
+        .and_then(|data| uevent(&data).remove("E:ID_SEAT"))
+        .filter(|seat| !seat.is_empty());
+    seat.unwrap_or_else(|| "seat0".into())
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -551,7 +660,7 @@ pub fn detect(files: &dyn Files) -> Detection {
     let mut cards: BTreeMap<String, (String, Vec<String>)> = BTreeMap::new();
     let drm = files.list("/sys/class/drm");
     for n in &drm {
-        if !n.starts_with("card") || n.contains('-') {
+        if !is_drm_card(n) {
             continue;
         }
         let Some(ue) = files.read(&format!("/sys/class/drm/{n}/device/uevent")) else {
@@ -596,6 +705,29 @@ pub fn detect(files: &dyn Files) -> Detection {
         let panel = connectors
             .iter()
             .any(|c| c.starts_with("eDP") || c.starts_with("LVDS") || c.starts_with("DSI"));
+        let connected_connectors = card
+            .as_ref()
+            .map(|card| {
+                connectors
+                    .iter()
+                    .filter(|connector| {
+                        read_trim(files, &format!("/sys/class/drm/{card}-{connector}/status"))
+                            .as_deref()
+                            == Some("connected")
+                    })
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
+        let drm_ready = card
+            .as_ref()
+            .is_some_and(|card| files.exists(&format!("/dev/dri/{card}")));
+        let seat = card
+            .as_ref()
+            .map(|card| drm_seat(files, card))
+            .unwrap_or_else(|| "seat0".into());
+        let driver_override = read_trim(files, &format!("{base}/driver_override"))
+            .filter(|driver| driver != "(null)");
         gpus.push(Gpu {
             id: format!("{vendor:04x}:{device:04x}"),
             vendor: match vendor {
@@ -614,9 +746,13 @@ pub fn detect(files: &dyn Files) -> Detection {
             name,
             stack,
             driver,
+            driver_override,
             boot_vga: read_trim(files, &format!("{base}/boot_vga")).as_deref() == Some("1"),
             card,
             connectors,
+            connected_connectors,
+            drm_ready,
+            seat,
             panel,
             slot,
         });
@@ -1083,8 +1219,8 @@ pub fn wanted(d: &Detection) -> Want {
         > 1
     {
         w.notes.push(
-            "several GPUs on a desktop: Hyprland renders on the one the firmware booted on (the \
-             monitors' cable decides); set AQ_DRM_DEVICES in your hyprland.lua to change it"
+            "several GPUs on a desktop: login and Hyprland prefer the only GPU with a connected \
+             monitor at startup; explicit AQ_DRM_DEVICES settings take precedence in Hyprland"
                 .into(),
         );
     }
@@ -1143,6 +1279,14 @@ pub fn hyprland_path(paths: &Paths) -> PathBuf {
     paths.state_home.join("bromigos/hw/hyprland.lua")
 }
 
+const HYPRLAND_HEADER: &str = "\
+-- This machine's GPU environment for Hyprland, written by `bromigos hw setup`\n\
+-- (docs/hardware.md). bromigOS's default hyprland.lua reads it; don't edit it, run\n\
+-- `bromigos hw setup` again after changing GPUs. A variable is set only while every\n\
+-- path in its `when` exists, so a GPU swapped since can't break the session.\n\
+-- (NVIDIA alone needs none: libva maps nvidia-drm to its driver, Xwayland picks the\n\
+-- GLX vendor, Hyprland's cursor settings default to what NVIDIA needs.)\n";
+
 fn lua_str(s: &str) -> String {
     format!("{s:?}")
 }
@@ -1155,14 +1299,7 @@ pub fn hyprland_lua(d: &Detection, env: &[EnvVar]) -> String {
         .map(|g| format!("{} ({})", g.title(), g.stack.describe()))
         .collect::<Vec<_>>()
         .join("; ");
-    let mut s = String::from(
-        "-- This machine's GPU environment for Hyprland, written by `bromigos hw setup`\n\
-         -- (docs/hardware.md). bromigOS's default hyprland.lua reads it; don't edit it, run\n\
-         -- `bromigos hw setup` again after changing GPUs. A variable is set only while every\n\
-         -- path in its `when` exists, so a GPU swapped since can't break the session.\n\
-         -- (NVIDIA alone needs none: libva maps nvidia-drm to its driver, Xwayland picks the\n\
-         -- GLX vendor, Hyprland's cursor settings default to what NVIDIA needs.)\n",
-    );
+    let mut s = String::from(HYPRLAND_HEADER);
     s.push_str("return {\n");
     s.push_str(&format!("    gpus = {},\n", lua_str(&gpus)));
     s.push_str(&format!("    laptop = {},\n", d.machine.laptop));
@@ -1182,6 +1319,42 @@ pub fn hyprland_lua(d: &Detection, env: &[EnvVar]) -> String {
     }
     s.push_str("    },\n}\n");
     s
+}
+
+/// Recognise only the complete shape our generator writes, including its sole stock
+/// hybrid preference. A header alone is not proof of ownership: someone may have edited
+/// the AQ value, its guards, or added their own Lua. Never evaluate a user's Lua here.
+fn generated_hyprland_lua(text: &str) -> bool {
+    let Some(body) = text
+        .strip_prefix(HYPRLAND_HEADER)
+        .and_then(|body| body.strip_prefix("return {\n    gpus = "))
+    else {
+        return false;
+    };
+    let Some((metadata, body)) = body.split_once('\n') else {
+        return false;
+    };
+    let Some(quoted) = metadata.strip_suffix(',') else {
+        return false;
+    };
+    if !serde_json::from_str::<String>(quoted).is_ok_and(|value| lua_str(&value) == quoted) {
+        return false;
+    }
+    let Some(body) = body
+        .strip_prefix("    laptop = true,\n    env = {\n")
+        .or_else(|| body.strip_prefix("    laptop = false,\n    env = {\n"))
+    else {
+        return false;
+    };
+    if body == "    },\n}\n" {
+        return true;
+    }
+    let prefix = format!(
+        "        {{ \"AQ_DRM_DEVICES\", \"{IGPU_LINK}:{DGPU_LINK}\", when = {{ \"{IGPU_LINK}\" }} }},   -- "
+    );
+    body.strip_prefix(&prefix)
+        .and_then(|body| body.split_once('\n'))
+        .is_some_and(|(_, rest)| rest == "    },\n}\n")
 }
 
 /// `pacman -T` over the names: the ones not satisfied (not installed, nor provided).
@@ -1306,10 +1479,30 @@ pub fn plan(paths: &Paths, d: &Detection, runner: &mut dyn Runner, files: &dyn F
         );
     }
     let initramfs = write.iter().any(|p| want.initramfs_files.contains(p));
-    let hyprland = hyprland_lua(d, &want.env);
+    let mut hyprland = hyprland_lua(d, &want.env);
     let hyprland_path = hyprland_path(paths);
-    let hyprland_changed =
-        fs::read_to_string(&hyprland_path).ok().as_deref() != Some(hyprland.as_str());
+    let hyprland_is_link =
+        fs::symlink_metadata(&hyprland_path).is_ok_and(|metadata| metadata.is_symlink());
+    let hyprland_changed = match fs::read_to_string(&hyprland_path) {
+        Ok(existing) if existing == hyprland => false,
+        Ok(existing) if !generated_hyprland_lua(&existing) || hyprland_is_link => {
+            notes.push(format!(
+                "{} contains your own GPU configuration; keeping it unchanged",
+                hyprland_path.display()
+            ));
+            hyprland = existing;
+            false
+        }
+        Ok(_) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound && !hyprland_is_link => true,
+        Err(error) => {
+            notes.push(format!(
+                "cannot read {}: {error}; keeping it unchanged",
+                hyprland_path.display()
+            ));
+            false
+        }
+    };
     Plan {
         want,
         install,

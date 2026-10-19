@@ -1,0 +1,124 @@
+#!/usr/bin/python -I
+"""Start SDDM's Weston on the display GPU selected by bromigOS's hardware policy.
+
+This is a launcher, not a second GPU policy. Missing or older bromigos-core packages
+keep Weston's ordinary defaults. No device is opened and no setting is written here.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+
+WESTON = "/usr/bin/weston"
+DISPLAY_QUERY = ["/usr/bin/bromigos", "hw", "display", "--json"]
+READY_WAIT_SECONDS = 2.0
+QUERY_TIMEOUT_SECONDS = 1.0
+POLL_SECONDS = 0.2
+RETRY_REASONS = {"no_connected_monitors", "no_usable_gpus"}
+CARD = re.compile(r"card[0-9]+")
+DEVICE = re.compile(r"/dev/dri/card[0-9]+")
+
+
+def parse_selection(output):
+    """Accept only a complete, internally consistent version 1 policy response."""
+    try:
+        data = json.loads(output)
+    except (ValueError, TypeError, UnicodeError):
+        return None
+    if not isinstance(data, dict) or type(data.get("schema")) is not int:
+        return None
+    if data["schema"] != 1 or not isinstance(data.get("reason"), str):
+        return None
+    if not isinstance(data.get("reason_code"), str):
+        return None
+    if "primary_card" not in data or not isinstance(data.get("drm_devices"), list):
+        return None
+    devices = data["drm_devices"]
+    if any(not isinstance(item, str) or not DEVICE.fullmatch(item) for item in devices):
+        return None
+    if len(set(devices)) != len(devices):
+        return None
+    primary = data["primary_card"]
+    if primary is not None and (
+            not isinstance(primary, str) or not CARD.fullmatch(primary)
+            or not devices or devices[0] != "/dev/dri/" + primary
+            or data["reason_code"] != "single_connected_gpu"):
+        return None
+    if primary is None and data["reason_code"] == "single_connected_gpu":
+        return None
+    return primary, data["reason_code"]
+
+
+def selected_card():
+    """Wait briefly for a late kernel driver, but never hold up login indefinitely."""
+    deadline = time.monotonic() + READY_WAIT_SECONDS
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        try:
+            result = subprocess.run(
+                DISPLAY_QUERY,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                env=dict(os.environ, XDG_SEAT="seat0"),
+                timeout=min(QUERY_TIMEOUT_SECONDS, remaining),
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        if result.returncode:
+            return None
+        selection = parse_selection(result.stdout)
+        if selection is None:
+            return None
+        primary, reason = selection
+        if primary is not None:
+            return primary
+        if reason not in RETRY_REASONS:
+            return None
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        time.sleep(min(POLL_SECONDS, remaining))
+
+
+def has_option(args, name):
+    return any(arg == name or arg.startswith(name + "=") for arg in args)
+
+
+def uses_seat_zero(args, environ):
+    """A custom seat stays with Weston's own selection and command-line precedence."""
+    seat = environ.get("XDG_SEAT") or "seat0"
+    for index, arg in enumerate(args):
+        if arg.startswith("--seat="):
+            seat = arg.partition("=")[2]
+        elif arg == "--seat":
+            if index + 1 >= len(args):
+                return False
+            seat = args[index + 1]
+    return seat == "seat0"
+
+
+def main(args=None):
+    args = list(sys.argv[1:] if args is None else args)
+    command = [WESTON]
+    if not has_option(args, "--shell"):
+        command.append("--shell=kiosk")
+    if not has_option(args, "--drm-device") and uses_seat_zero(args, os.environ):
+        primary = selected_card()
+        if primary is not None:
+            command.append("--drm-device=" + primary)
+            print("bromigos greeter: using " + primary + " for its connected display",
+                  file=sys.stderr)
+    command.extend(args)
+    os.execv(WESTON, command)
+
+
+if __name__ == "__main__":
+    main()

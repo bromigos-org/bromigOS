@@ -7,6 +7,7 @@
 #
 #   /usr/share/sddm/themes/bromigos         the login screen: the den behind the burn-in
 #   /usr/lib/sddm/sddm.conf.d/zz-bromigos.conf Current=bromigos, the Wayland greeter
+#   /usr/lib/bromigos/sddm/bromigos-greeter  Weston launcher using the core GPU policy
 #   /usr/share/themes/Bromigos              GTK 3 and 4, the Wick's colours
 #   /usr/share/icons/Bromigos[-cursor]      icons (Breeze Dark recoloured) and the cursor
 #   /usr/lib/bromigos/gtk/                  build-gtk-theme.py (Bromigos-<theme> into ~/.themes)
@@ -90,6 +91,7 @@ check() {
   python -m unittest discover -s settings/grub/tests
   python -m unittest discover -s settings/plymouth/tests
   python -m unittest discover -s settings/console/tests
+  python -m unittest discover -s settings/sddm/tests
 }
 
 package() {
@@ -107,6 +109,7 @@ package() {
   ln -s /usr/share/licenses/ttf-geist-mono/OFL.txt "$sddm/fonts/OFL.txt"
   find "$sddm" -type d -exec chmod 0755 {} + ; find "$sddm" -type f -exec chmod 0644 {} +
   install -Dm0644 "$_root/settings/sddm/conf/zz-bromigos.conf" "$pkgdir/usr/lib/sddm/sddm.conf.d/zz-bromigos.conf"
+  install -Dm0755 "$_root/settings/sddm/bromigos-greeter" "$pkgdir/usr/lib/bromigos/sddm/bromigos-greeter"
   install -Dm0644 "$_root/settings/console/60-bromigos.issue" "$pkgdir/usr/lib/issue.d/60-bromigos.issue"
   # boot, shutdown and restart splash (the ring and flame are the lock screen's)
   local ply="$pkgdir/usr/share/plymouth/themes/bromigos"

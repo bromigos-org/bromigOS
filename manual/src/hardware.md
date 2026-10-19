@@ -14,10 +14,19 @@ bromigos hw
 This lists your graphics cards and their drivers, whether this is a laptop, and what
 `bromigos hw setup` would change.
 
+To check whether the connected screens give bromigOS a clear automatic GPU choice, run:
+
+```bash
+bromigos hw display
+```
+
+This only checks the hardware. It does not change settings or report which card an
+already running desktop is using.
+
 ## Set up your hardware again
 
-Run this after you change graphics cards, or after an update. Updates don't install
-drivers on their own.
+Run this if a new graphics card needs its driver set up, or if the hardware check shows
+missing setup. Updates don't install drivers on their own.
 
 ```bash
 bromigos hw setup              # asks for your password for the system's part
@@ -45,8 +54,30 @@ Very old AMD and Intel chips get Mesa without Vulkan.
 bromigOS knows a card by its ID, from NVIDIA's and Mesa's own lists, rather than guessing
 from its name.
 
-On a new NVIDIA card the driver loads at the very start, so the start-up screen and the
-login screen already use it.
+On a new NVIDIA card the driver loads at the very start, so it is ready for the start-up
+screen and the login screen.
+
+### More than one graphics card
+
+If only one working graphics card has a screen connected, bromigOS prefers that card
+for the login screen and desktop. You do not need to run setup just to choose it. A card
+with no screen connected does not take priority because the computer booted on it.
+
+If screens are connected to several cards, or none report a connected screen, bromigOS
+keeps the existing GPU policy. Your explicit choices still take precedence, including
+a laptop's saved preference. Cards bound or reserved for a virtual machine through
+VFIO, the kernel's device-assignment interface, are excluded from the automatic choice.
+
+The check happens when the login screen and desktop start. Moving a monitor cable does
+not move a running desktop's renderer. Save your work and log out to start a new session;
+restart the computer if the login screen also needs to choose again.
+
+This chooses among cards whose drivers already work. It does not install a missing
+driver or set up GPU passthrough to a virtual machine.
+
+The default bar follows the available screens. If you pinned your bar or monitor
+settings to a connector name, check those settings after moving the cable. A connector
+on another card can have a different name.
 
 ### NVIDIA's own driver for an older card
 
@@ -102,6 +133,10 @@ your `~/.config/hypr/hyprland.lua`.
 
 - **A black screen after installing an NVIDIA driver.** Restart once: the new driver loads
   when the computer starts. `bromigos hw` says whether the driver is loaded.
+- **A black screen after moving a monitor to another card.** From a text console, run
+  `bromigos hw display` to check the automatic GPU choice. An explicit GPU
+  setting can override the automatic choice. Check your Hyprland hardware settings and
+  any custom SDDM compositor command before changing drivers.
 - **Hibernation.** If you set up hibernation, NVIDIA's driver can't load at the very start.
   `bromigos hw setup` notices this, and loads it a little later instead.
 - **The battery or the power profile doesn't show.** `bromigos hw` lists the battery it

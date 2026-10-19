@@ -17,6 +17,7 @@ This folder isn't the Settings window. That's `desktop/settings/`
 |---|---|---|
 | `sddm/bromigos/` | `/usr/share/sddm/themes/bromigos/` | The login screen ([its README](sddm/bromigos/README.md)) |
 | `sddm/conf/zz-bromigos.conf` | `/usr/lib/sddm/sddm.conf.d/` | SDDM's settings: this theme, the cursor, the Wayland greeter |
+| `sddm/bromigos-greeter` | `/usr/lib/bromigos/sddm/` | Starts Weston with the connected-screen GPU choice |
 | `plymouth/bromigos/` | `/usr/share/plymouth/themes/bromigos/` | The boot, shutdown and restart splash |
 | `console/` | `/usr/lib/issue.d/60-bromigos.issue` | The text-console login banner ([its README](console/README.md)) |
 | `grub/` | `/usr/share/bromigos/boot/grub/`, `/usr/lib/bromigos/boot/` | The boot menu's theme and its tools |
@@ -66,8 +67,10 @@ Linux text consoles; choose their size with [`bromigos console`](../docs/console
 
 ```bash
 python -m unittest discover -s settings/grub/tests
+python -m unittest discover -s settings/sddm/tests
 ```
 
-This covers the boot menu's generator, the snapshots' titles, and the root helper in a
-stand-in root. The package's `check()` runs it. The login screen has its own preview and
-test steps in [its README](sddm/bromigos/README.md#changing-it).
+These cover the boot menu's generator, the snapshots' titles and the root helper in a
+stand-in root. The greeter tests use stand-ins for GPU detection and Weston. The
+package's `check()` runs them. The login screen has its own offscreen preview and test
+steps in [its README](sddm/bromigos/README.md#changing-it).

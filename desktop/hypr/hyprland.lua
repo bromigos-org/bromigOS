@@ -19,7 +19,7 @@
 --   config     a table merged over the hl.config() below (e.g. input = { kb_options = "caps:escape" })
 --   unbind     { "XF86AudioMicMute", ... }: default binds you make yourself instead
 --   polkit     false: don't start bromigOS's polkit agent (hyprpolkitagent)
---   hw         false: ignore this machine's GPU environment (`bromigos hw setup` writes it)
+--   hw         false: skip saved and automatic GPU selection
 --   gestures   false: no touchpad gestures (three fingers sideways switch workspaces)
 --   autostart  { "cmd", ... }: more commands at login, after bromigOS's
 --
@@ -173,31 +173,9 @@ hl.env("XCURSOR_THEME", "Bromigos-cursor")
 hl.env("XCURSOR_SIZE", "24")
 hl.env("QT_QPA_PLATFORMTHEME", "kde")
 
--- This machine's GPU environment, written by `bromigos hw setup` into
--- ~/.local/state/bromigos/hw/hyprland.lua (docs/hardware.md): on a hybrid laptop, the GPU
--- the desktop renders on (AQ_DRM_DEVICES, the integrated one first). A variable is set
--- only while every path in its `when` exists, so a GPU swapped since can't break the
--- session. NVIDIA alone needs none.
-local function exists(path)
-    -- renaming a path to itself changes nothing: no such file is ENOENT (2); anything else
-    -- (done, or not allowed in a root-owned folder) means it's there
-    local ok, _, code = os.rename(path, path)
-    return ok == true or code ~= 2
-end
-if B.hw ~= false then
-    local state = os.getenv("XDG_STATE_HOME")
-    if state == nil or state == "" then state = os.getenv("HOME") .. "/.local/state" end
-    local ok, hw = pcall(dofile, state .. "/bromigos/hw/hyprland.lua")
-    if ok and type(hw) == "table" then
-        for _, e in ipairs(hw.env or {}) do
-            local all = type(e[1]) == "string" and type(e[2]) == "string"
-            for _, p in ipairs(e.when or {}) do
-                if not exists(p) then all = false end
-            end
-            if all then hl.env(e[1], e[2]) end
-        end
-    end
-end
+-- Honour explicit GPU settings, then prefer the only GPU with connected displays.
+-- The probe reads current hardware at login; it never moves a running desktop.
+require("bromigos.gpu").apply(B)
 
 -- Colours: the active bromigOS theme (borders, shadows), rendered by `bromigos theme set`
 -- into ~/.local/state/bromigos/theme/current/hyprland.lua, which returns a table. Read

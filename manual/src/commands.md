@@ -42,7 +42,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos profile`](#bromigos-profile) | Set your name, and what VECTOR calls you. |
 | [`bromigos avatar`](#bromigos-avatar) | Set your picture, saved as `~/.face`. Settings › Account shows it. |
 | [`bromigos private`](#bromigos-private) | Edit the private overlay: settings you keep encrypted in your dotfiles. Needs the `sops` and `age` packages. |
-| [`bromigos hw`](#bromigos-hw) | See what [hardware](hardware.md) bromigOS found, and set up its drivers: `bromigos hw setup`. |
+| [`bromigos hw`](#bromigos-hw) | See what [hardware](hardware.md) bromigOS found, check the display GPU with `bromigos hw display`, or set up drivers with `bromigos hw setup`. |
 | [`bromigos peripheral`](#bromigos-peripheral) | Turn on extra features for a [keyboard](peripherals.md), such as a Razer keyboard's macro keys. |
 
 ### Change the look
@@ -1016,9 +1016,10 @@ This machine's hardware: its GPUs and their drivers, a laptop's battery, backlig
 Usage: bromigos hw [OPTIONS] [COMMAND]
 
 Commands:
-  detect  What this machine is and what `bromigos hw setup` would do (the default)
-  setup   Set this machine's hardware up: drivers, early KMS, a hybrid laptop's GPUs, power profiles, Hyprland's GPU environment (sudo for the system's part)
-  help    Print this message or the help of the given subcommand(s)
+  detect   What this machine is and what `bromigos hw setup` would do (the default)
+  display  Show which GPU has the connected displays; read-only, without changing drivers
+  setup    Set this machine's hardware up: drivers, early KMS, a hybrid laptop's GPUs, power profiles, Hyprland's GPU environment (sudo for the system's part)
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
       --json  Print the JSON document (schema in core/README.md)
@@ -1039,6 +1040,19 @@ Options:
   -h, --help  Print help
 ```
 
+#### bromigos hw display
+
+```text
+Show which GPU has the connected displays; read-only, without changing drivers
+
+Usage: bromigos hw display [OPTIONS]
+
+Options:
+      --hyprland  Print the automatic GPU order for Hyprland, or nothing when there is no clear choice
+      --json      Print the JSON document (schema in core/README.md)
+  -h, --help      Print help
+```
+
 #### bromigos hw setup
 
 ```text
@@ -1049,9 +1063,9 @@ Usage: bromigos hw setup [OPTIONS]
 Options:
       --dry-run    Only say what it would do
       --yes        Answer pacman's questions with their defaults (unattended)
-      --json       Print the JSON document (schema in core/README.md)
       --user-only  Only your own part: Hyprland's GPU environment (no sudo, no packages)
       --aur        Build a driver only the AUR has (NVIDIA's 580.xx or 470.xx) with paru without asking first; paru still shows its recipe for review unless --yes (docs/aur.md)
+      --json       Print the JSON document (schema in core/README.md)
   -h, --help       Print help
 ```
 

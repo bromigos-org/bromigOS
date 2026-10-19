@@ -214,7 +214,7 @@ rows = [
   { route = "profile", text = "Set your name, and what VECTOR calls you." },
   { route = "avatar", text = "Set your picture, saved as `~/.face`. Settings › Account shows it." },
   { route = "private", text = "Edit the private overlay: settings you keep encrypted in your dotfiles. Needs the `sops` and `age` packages." },
-  { route = "hw", text = "See what [hardware](hardware.md) bromigOS found, and set up its drivers: `bromigos hw setup`." },
+  { route = "hw", text = "See what [hardware](hardware.md) bromigOS found, check the display GPU with `bromigos hw display`, or set up drivers with `bromigos hw setup`." },
   { route = "peripheral", text = "Turn on extra features for a [keyboard](peripherals.md), such as a Razer keyboard's macro keys." },
 ]
 

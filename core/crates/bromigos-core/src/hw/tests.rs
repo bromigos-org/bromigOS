@@ -83,6 +83,7 @@ fn gpu(
     if let Some((c, conns)) = card {
         m = m
             .with(&format!("/sys/class/drm/{c}/device/uevent"), &ue)
+            .with(&format!("/dev/dri/{c}"), "")
             .dir(&format!("/sys/class/drm/{c}"));
         for conn in conns {
             m = m.dir(&format!("/sys/class/drm/{c}-{conn}"));
@@ -1048,6 +1049,173 @@ fn a_desktop_with_two_gpus_isnt_a_hybrid() {
     );
 }
 
+fn two_desktop_gpus(first: &str, second: &str) -> Mem {
+    let m = gpu(
+        base(3, "Example", "Desktop"),
+        "0000:01:00.0",
+        "10de:2f04",
+        Some("nvidia"),
+        true,
+        Some((first, &["DP-1", "HDMI-A-1"])),
+    );
+    gpu(
+        m,
+        "0000:02:00.0",
+        "1002:699f",
+        Some("amdgpu"),
+        false,
+        Some((second, &["DP-2", "HDMI-A-2"])),
+    )
+}
+
+#[test]
+fn display_choice_follows_the_cable_without_persisting_card_numbers() {
+    let m = two_desktop_gpus("card1", "card0")
+        .with("/sys/class/drm/card1-DP-1/status", "connected\n")
+        .with("/sys/class/drm/card0-DP-2/status", "disconnected\n");
+    let d = detect(&m);
+    let selected = display_selection(&d);
+    assert_eq!(selected.primary_card.as_deref(), Some("card1"));
+    assert_eq!(selected.reason_code, "single_connected_gpu");
+    assert_eq!(selected.drm_devices, ["/dev/dri/card1", "/dev/dri/card0"]);
+
+    // The firmware still prefers NVIDIA, but the cable moved to AMD.
+    let m = m
+        .with("/sys/class/drm/card1-DP-1/status", "disconnected\n")
+        .with("/sys/class/drm/card0-DP-2/status", "connected\n")
+        .with("/sys/class/drm/card0-HDMI-A-2/status", "connected\n");
+    let before = m.0.clone();
+    let moved = detect(&m);
+    let selected = display_selection(&moved);
+    assert_eq!(selected.primary_card.as_deref(), Some("card0"));
+    assert_eq!(selected.drm_devices, ["/dev/dri/card0", "/dev/dri/card1"]);
+    assert_eq!(moved.gpus[1].connected_connectors, ["DP-2", "HDMI-A-2"]);
+    assert_eq!(m.0, before, "selection only reads its fixture");
+    assert!(wanted(&moved).env.is_empty());
+    assert_eq!(hyprland_lua(&d, &[]), hyprland_lua(&moved, &[]));
+
+    // DRM enumeration changes on another boot. Resolve the live nodes again.
+    let renumbered =
+        two_desktop_gpus("card0", "card3").with("/sys/class/drm/card3-DP-2/status", "connected\n");
+    let selected = display_selection(&detect(&renumbered));
+    assert_eq!(selected.primary_card.as_deref(), Some("card3"));
+    assert_eq!(selected.drm_devices, ["/dev/dri/card3", "/dev/dri/card0"]);
+}
+
+#[test]
+fn multiple_connected_gpus_leave_native_selection_in_charge() {
+    let m = two_desktop_gpus("card0", "card1")
+        .with("/sys/class/drm/card0-DP-1/status", "connected\n")
+        .with("/sys/class/drm/card1-DP-2/status", "connected\n");
+    let selected = display_selection(&detect(&m));
+    assert_eq!(selected.primary_card, None);
+    assert_eq!(selected.reason_code, "multiple_connected_gpus");
+    assert_eq!(selected.drm_devices, ["/dev/dri/card0", "/dev/dri/card1"]);
+}
+
+#[test]
+fn connector_presence_or_unknown_status_is_not_a_connected_monitor() {
+    let m = two_desktop_gpus("card0", "card1")
+        .with("/sys/class/drm/card0-DP-1/status", "disconnected\n")
+        .with("/sys/class/drm/card0-HDMI-A-1/status", "unknown\n")
+        .with("/sys/class/drm/card1-DP-2/status", "not connected\n")
+        .with("/sys/class/drm/card1-Writeback-1/status", "connected\n");
+    // HDMI-A-2 has no readable status; writeback is not a monitor.
+    let d = detect(&m);
+    assert!(d.gpus.iter().all(|g| g.connected_connectors.is_empty()));
+    let selected = display_selection(&d);
+    assert_eq!(selected.primary_card, None);
+    assert_eq!(selected.reason_code, "no_connected_monitors");
+    assert_eq!(selected.drm_devices.len(), 2);
+}
+
+#[test]
+fn vfio_bound_reserved_and_unbound_gpus_are_excluded() {
+    for (driver, override_driver) in [
+        (Some("vfio-pci"), None),
+        (Some("vfio_pci"), None),
+        (Some("nvidia"), Some("vfio-pci\n")),
+        (Some("nvidia"), Some("vfio_pci\n")),
+        (None, None),
+    ] {
+        let mut m = gpu(
+            two_desktop_gpus("card0", "card1"),
+            "0000:01:00.0",
+            "10de:2f04",
+            driver,
+            true,
+            Some(("card0", &["DP-1"])),
+        )
+        .with("/sys/class/drm/card0-DP-1/status", "connected\n")
+        .with("/sys/class/drm/card1-DP-2/status", "connected\n");
+        if let Some(value) = override_driver {
+            m = m.with("/sys/bus/pci/devices/0000:01:00.0/driver_override", value);
+        }
+        let selected = display_selection(&detect(&m));
+        assert_eq!(selected.primary_card.as_deref(), Some("card1"));
+        assert_eq!(selected.drm_devices, ["/dev/dri/card1"]);
+    }
+    let m = two_desktop_gpus("card0", "card1")
+        .with(
+            "/sys/bus/pci/devices/0000:01:00.0/driver_override",
+            "(null)\n",
+        )
+        .with("/sys/class/drm/card0-DP-1/status", "connected\n");
+    assert_eq!(
+        display_selection(&detect(&m)).primary_card.as_deref(),
+        Some("card0")
+    );
+}
+
+#[test]
+fn a_drm_node_must_be_ready_and_known_before_it_is_selected() {
+    let mut m = two_desktop_gpus("card0", "card1")
+        .with("/sys/class/drm/card0-DP-1/status", "connected\n")
+        .with("/sys/class/drm/card1-DP-2/status", "connected\n");
+    m.0.remove("/dev/dri/card0");
+    let selected = display_selection(&detect(&m));
+    assert_eq!(selected.primary_card.as_deref(), Some("card1"));
+    assert_eq!(selected.drm_devices, ["/dev/dri/card1"]);
+    m.0.remove("/dev/dri/card1");
+    let selected = display_selection(&detect(&m));
+    assert_eq!(selected.primary_card, None);
+    assert_eq!(selected.reason_code, "no_usable_gpus");
+    assert!(selected.drm_devices.is_empty());
+    let m = gpu(
+        base(3, "Example", "Desktop"),
+        "0000:01:00.0",
+        "1002:699f",
+        Some("amdgpu"),
+        true,
+        Some(("card-not-a-device", &["DP-1"])),
+    )
+    .with(
+        "/sys/class/drm/card-not-a-device-DP-1/status",
+        "connected\n",
+    );
+    assert_eq!(display_selection(&detect(&m)).reason_code, "no_usable_gpus");
+}
+
+#[test]
+fn display_selection_does_not_claim_another_seats_gpu() {
+    let m = two_desktop_gpus("card0", "card1")
+        .with("/sys/class/drm/card0-DP-1/status", "connected\n")
+        .with("/sys/class/drm/card1-DP-2/status", "connected\n")
+        .with("/sys/class/drm/card1/dev", "226:1\n")
+        .with(
+            "/run/udev/data/c226:1",
+            "E:ID_SEAT=seat1\nE:ID_FOR_SEAT=example\n",
+        );
+    let d = detect(&m);
+    let primary = display_selection(&d);
+    assert_eq!(primary.primary_card.as_deref(), Some("card0"));
+    assert_eq!(primary.drm_devices, ["/dev/dri/card0"]);
+    assert_eq!(display_selection_for_seat(&d, ""), primary);
+    let other = display_selection_for_seat(&d, "seat1");
+    assert_eq!(other.primary_card.as_deref(), Some("card1"));
+    assert_eq!(other.drm_devices, ["/dev/dri/card1"]);
+}
+
 #[test]
 fn another_kernel_takes_the_dkms_modules() {
     let m = base(3, "x", "y");
@@ -1115,6 +1283,95 @@ fn user_only_writes_the_hyprland_file_and_nothing_else() {
     ]);
     let p2 = plan(&paths, &d, &mut r, &fs);
     assert!(!p2.hyprland_changed);
+}
+
+#[test]
+fn hardware_setup_keeps_custom_hyprland_preferences() {
+    let m = turing_laptop();
+    let d = detect(&m);
+    let generated = hyprland_lua(&d, &wanted(&d).env);
+    let files = [
+        "-- My display configuration\nreturn { env = { { 'AQ_DRM_DEVICES', '/dev/dri/my-display' } } }\n".to_string(),
+        generated.replace(
+            "/dev/dri/bromigos-igpu:/dev/dri/bromigos-dgpu",
+            "/dev/dri/my-display",
+        ),
+        format!("{generated}-- My extra setting\n"),
+        generated.replace("when = { \"/dev/dri/bromigos-igpu\" }", "when = {}"),
+    ];
+    for custom in files {
+        let (_t, paths) = test_paths();
+        let target = hyprland_path(&paths);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::write(&target, &custom).unwrap();
+        let mut runner = Fake::new(&[]);
+        let p = plan(&paths, &d, &mut runner, &m);
+        assert!(!p.hyprland_changed, "preserve custom file: {custom}");
+        assert_eq!(p.hyprland, custom);
+        assert!(
+            p.notes
+                .iter()
+                .any(|note| note.contains("your own GPU configuration"))
+        );
+        let out = apply(
+            &paths,
+            &p,
+            &ApplyOpts {
+                user_only: true,
+                ..Default::default()
+            },
+            false,
+            &mut |_, _| panic!("user-only must not run system commands"),
+        );
+        assert!(out.ok);
+        assert_eq!(fs::read_to_string(target).unwrap(), custom);
+    }
+}
+
+#[test]
+fn hardware_setup_refreshes_only_unchanged_generated_files_after_a_gpu_change() {
+    for original in [turing_laptop(), operator_desktop()] {
+        let original = detect(&original);
+        let text = hyprland_lua(&original, &wanted(&original).env);
+        assert!(generated_hyprland_lua(&text));
+        let (_t, paths) = test_paths();
+        let target = hyprland_path(&paths);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::write(&target, &text).unwrap();
+        let m = qemu_vm();
+        let d = detect(&m);
+        let mut runner = Fake::new(&[]);
+        let p = plan(&paths, &d, &mut runner, &m);
+        assert!(p.hyprland_changed);
+        assert_eq!(p.hyprland, hyprland_lua(&d, &wanted(&d).env));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn hardware_setup_keeps_symlinked_and_unreadable_hyprland_files() {
+    let (_t, paths) = test_paths();
+    let target = hyprland_path(&paths);
+    fs::create_dir_all(target.parent().unwrap()).unwrap();
+    let elsewhere = target.with_extension("custom.lua");
+    let old = detect(&turing_laptop());
+    fs::write(&elsewhere, hyprland_lua(&old, &wanted(&old).env)).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, &target).unwrap();
+    let m = qemu_vm();
+    let d = detect(&m);
+    for dangling in [false, true] {
+        if dangling {
+            fs::remove_file(&elsewhere).unwrap();
+        }
+        let mut runner = Fake::new(&[]);
+        let p = plan(&paths, &d, &mut runner, &m);
+        assert!(!p.hyprland_changed, "never replace a user-owned symlink");
+    }
+    fs::remove_file(&target).unwrap();
+    fs::write(&target, [0xff, 0xfe]).unwrap();
+    let mut runner = Fake::new(&[]);
+    let p = plan(&paths, &d, &mut runner, &m);
+    assert!(!p.hyprland_changed, "an unreadable file is preserved");
 }
 
 #[test]
