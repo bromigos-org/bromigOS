@@ -1844,12 +1844,25 @@ The live Hyprland session (prints KEY=value; import, exec or adopt it; hold and 
 Usage: bromigos session [OPTIONS] [COMMAND]
 
 Commands:
-  import   Also push WAYLAND_DISPLAY and HYPRLAND_INSTANCE_SIGNATURE to systemd --user and D-Bus
-  exec     Import, then exec CMD with the session's values
-  adopt    At login: import, and stop VECTOR's daemon if it belongs to another session
-  hold     Hold Hyprland's config reloads: auto-reload off in every running Hyprland (as root, every user's), what it was remembered. pacman runs it before a transaction that changes the desktop's default config (docs/update.md)
-  release  Let go of a hold: each held Hyprland's config verified (Hyprland --verify-config), reloaded once when it verifies, auto-reload back as it was. pacman runs it after the transaction
-  help     Print this message or the help of the given subcommand(s)
+  shell-env  Print missing or stale local shell display settings; leave SSH and working displays alone
+  import     Also push WAYLAND_DISPLAY and HYPRLAND_INSTANCE_SIGNATURE to systemd --user and D-Bus
+  exec       Import, then exec CMD with the session's values
+  adopt      At login: import, and stop VECTOR's daemon if it belongs to another session
+  hold       Hold Hyprland's config reloads: auto-reload off in every running Hyprland (as root, every user's), what it was remembered. pacman runs it before a transaction that changes the desktop's default config (docs/update.md)
+  release    Let go of a hold: each held Hyprland's config verified (Hyprland --verify-config), reloaded once when it verifies, auto-reload back as it was. pacman runs it after the transaction
+  help       Print this message or the help of the given subcommand(s)
+
+Options:
+      --json  Print the JSON document (schema in core/README.md)
+  -h, --help  Print help
+```
+
+#### bromigos session shell-env
+
+```text
+Print missing or stale local shell display settings; leave SSH and working displays alone
+
+Usage: bromigos session shell-env [OPTIONS]
 
 Options:
       --json  Print the JSON document (schema in core/README.md)

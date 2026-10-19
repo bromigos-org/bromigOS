@@ -47,6 +47,91 @@ impl Session {
     }
 }
 
+/// Environment to recover in a local persistent shell. This is read-only: it never
+/// imports into systemd, contacts the compositor, or changes a running process.
+/// Respect SSH, an explicitly selected X display, and any usable Wayland socket,
+/// including a nested compositor. Never fall back to a nested test session.
+pub fn shell_env(paths: &Paths, get: impl Fn(&str) -> Option<String>) -> Vec<(String, String)> {
+    let present = |key: &str| get(key).filter(|value| !value.is_empty());
+    if present("SSH_CONNECTION").is_some()
+        || present("SSH_CLIENT").is_some()
+        || present("SSH_TTY").is_some()
+    {
+        return Vec::new();
+    }
+    let wayland = present("WAYLAND_DISPLAY");
+    if wayland
+        .as_deref()
+        .is_some_and(|name| is_socket(&paths.in_runtime(name)))
+        || (wayland.is_none() && present("DISPLAY").is_some())
+    {
+        return Vec::new();
+    }
+    let Some(session) = discover(paths).session.filter(|session| !session.nested) else {
+        return Vec::new();
+    };
+    let mut env: Vec<_> = session
+        .env()
+        .into_iter()
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect();
+    // Drop the old session's X display/auth path if the new one has none.
+    env.push(("DISPLAY".to_owned(), String::new()));
+    env.push(("XAUTHORITY".to_owned(), String::new()));
+    for (key, value) in xwayland_env(Path::new("/proc"), session.pid) {
+        if let Some(entry) = env.iter_mut().find(|(name, _)| *name == key) {
+            entry.1 = value;
+        }
+    }
+    // The line-oriented shell reader never evaluates these values. Reject line
+    // breaks as well so a malformed lock file cannot add another assignment.
+    env.retain(|(_, value)| !value.contains(['\n', '\r']));
+    env
+}
+
+/// Xwayland is a child of the selected compositor. Read its own display argument
+/// rather than guessing :0 or copying another session's activation environment.
+fn xwayland_env(proc: &Path, compositor: i32) -> Vec<(String, String)> {
+    let children = proc.join(format!("{compositor}/task/{compositor}/children"));
+    let Ok(children) = fs::read_to_string(children) else {
+        return Vec::new();
+    };
+    for pid in children
+        .split_whitespace()
+        .filter_map(|p| p.parse::<u32>().ok())
+    {
+        let Ok(raw) = fs::read(proc.join(pid.to_string()).join("cmdline")) else {
+            continue;
+        };
+        let argv: Vec<_> = raw.split(|b| *b == 0).filter(|b| !b.is_empty()).collect();
+        if argv
+            .first()
+            .and_then(|arg| arg.rsplit(|b| *b == b'/').next())
+            != Some(&b"Xwayland"[..])
+        {
+            continue;
+        }
+        let display = argv.iter().skip(1).find_map(|arg| {
+            let value = std::str::from_utf8(arg).ok()?;
+            let number = value.strip_prefix(':')?;
+            (!number.is_empty() && number.bytes().all(|b| b.is_ascii_digit())).then_some(value)
+        });
+        let Some(display) = display else { continue };
+        let mut env = vec![("DISPLAY".to_owned(), display.to_owned())];
+        if let Some(auth) = argv.windows(2).find_map(|pair| {
+            (pair[0] == b"-auth")
+                .then(|| std::str::from_utf8(pair[1]).ok())
+                .flatten()
+        }) && Path::new(auth).is_absolute()
+            && !auth.contains(['\n', '\r'])
+        {
+            env.push(("XAUTHORITY".to_owned(), auth.to_owned()));
+        }
+        return env;
+    }
+    Vec::new()
+}
+
 /// One instance directory under `$XDG_RUNTIME_DIR/hypr`, newest first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Candidate {
@@ -280,6 +365,37 @@ fn is_vector_cmdline(raw: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn xwayland_display_belongs_to_the_selected_compositor() {
+        let proc = tempfile::tempdir().unwrap();
+        fs::create_dir_all(proc.path().join("12/task/12")).unwrap();
+        fs::write(proc.path().join("12/task/12/children"), "30 31 32").unwrap();
+        for (pid, argv) in [
+            ("30", &b"sh\0-c\0Xwayland :98\0"[..]),
+            (
+                "31",
+                &b"/usr/bin/Xwayland\0:7\0-rootless\0-auth\0/tmp/auth file\0"[..],
+            ),
+            ("32", &b"Xwayland\0:9\0"[..]),
+        ] {
+            fs::create_dir(proc.path().join(pid)).unwrap();
+            fs::write(proc.path().join(pid).join("cmdline"), argv).unwrap();
+        }
+        assert_eq!(
+            xwayland_env(proc.path(), 12),
+            vec![
+                ("DISPLAY".into(), ":7".into()),
+                ("XAUTHORITY".into(), "/tmp/auth file".into()),
+            ]
+        );
+        assert!(xwayland_env(proc.path(), 13).is_empty());
+        fs::write(proc.path().join("31/cmdline"), b"Xwayland\0:bad\0").unwrap();
+        assert_eq!(
+            xwayland_env(proc.path(), 12),
+            vec![("DISPLAY".into(), ":9".into())]
+        );
+    }
 
     #[test]
     fn vector_cmdline() {

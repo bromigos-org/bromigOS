@@ -76,6 +76,12 @@ A few of these need more words:
   red `exit:N`. The instant prompt cache never saves a failed command's status.
   Updated hooks load in a new shell or with `eval "$(mehshell init zsh)"`. See the
   manual's [Shell and terminal](../manual/src/shell.md) page.
+  Local persistent panes also refresh their desktop environment before commands.
+  `bromigos session shell-env` supplies only `WAYLAND_DISPLAY`,
+  `HYPRLAND_INSTANCE_SIGNATURE`, `DISPLAY` and `XAUTHORITY`. Empty values unset an
+  obsolete Xwayland connection. The hook never evaluates helper output, changes
+  systemd's environment or reads the clipboard. A valid inherited Wayland socket
+  avoids a subprocess; SSH and explicit X displays are left alone.
 - **The on-screen display** (swayosd) has no file of yours. Hyprland starts it with the
   theme's `swayosd.css`, and the media keys go through it. See
   [theming.md](theming.md) for the `osd` hook.

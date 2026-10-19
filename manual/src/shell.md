@@ -39,6 +39,26 @@ colours. Its startup cache is separate from the desktop's, so desktop icons do n
 appear during console login. Your desktop style and icon settings stay saved.
 Basic terminals (`TERM=dumb`) receive a prompt without colour formatting.
 
+## Clipboard in persistent terminals
+
+Herdr, tmux and GNU Screen can keep running when you leave a text console or restart
+the desktop. Their old panes may lack the display settings that apps need to paste
+images. The bromigOS zsh setup recovers those settings at shell startup and before
+commands run. It discovers the current Wayland socket and, when present, the matching
+Xwayland display. No display number is hard-coded.
+
+This applies to new commands, including Codex and Claude Code. An already-running
+app keeps its original environment; exit it and resume its conversation after loading
+the updated shell setup:
+
+```zsh
+source /usr/share/bromigos/default/zsh/bromigos.zsh
+```
+
+Working display connections, including nested desktops, are preserved. SSH sessions
+and non-interactive shells are left alone. No clipboard contents are read by the hook.
+Set `BROMIGOS_SESSION_REFRESH=off` before sourcing the setup to disable recovery.
+
 ## Configure and check mehshell
 
 Preview the current prompt at the width of a split terminal:

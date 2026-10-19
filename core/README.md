@@ -54,6 +54,16 @@ output and signals are the target's own. A target that can't be run gives exit 1
 `bromigos session` finds the live Hyprland session. It prints `WAYLAND_DISPLAY=…` and
 `HYPRLAND_INSTANCE_SIGNATURE=…`, and exits 1 when there's no session.
 
+`session shell-env` is the read-only helper for persistent local shells. It prints
+display assignments only when their Wayland connection is missing or stale. SSH,
+a working Wayland socket and an explicit X display are preserved. Recovery requires
+a running top-level compositor; a lone nested test compositor is not adopted. Its
+Xwayland child's arguments supply `DISPLAY` and the optional `XAUTHORITY` path.
+Neither the authority file nor the clipboard is read. Empty assignments remove stale
+X settings. The helper exits 0 when no recovery is needed or no desktop exists.
+`--json` returns `{"schema": 1, "env": {"KEY": "value"}}`, with an empty `env` when
+there is nothing to change. It does not run the import or adopt operations below.
+
 - `session import` also runs `dbus-update-activation-environment --systemd` with those
   two variables.
 - `session exec CMD…` imports, then execs `CMD` with the two variables set. With no

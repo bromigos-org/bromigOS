@@ -421,6 +421,8 @@ struct SessionArgs {
 
 #[derive(Subcommand)]
 enum SessionMode {
+    /// Print missing or stale local shell display settings; leave SSH and working displays alone
+    ShellEnv,
     /// Also push WAYLAND_DISPLAY and HYPRLAND_INSTANCE_SIGNATURE to systemd --user and D-Bus
     Import,
     /// Import, then exec CMD with the session's values
@@ -1054,6 +1056,19 @@ fn session_json(d: &Discovery) -> Value {
 
 fn session_cmd(paths: &Paths, a: SessionArgs) -> Result<i32> {
     match a.mode {
+        Some(SessionMode::ShellEnv) => {
+            let env: BTreeMap<_, _> = session::shell_env(paths, |key| std::env::var(key).ok())
+                .into_iter()
+                .collect();
+            if a.json {
+                println!("{}", json!({"schema": SCHEMA, "env": env}));
+            } else {
+                for (key, value) in env {
+                    println!("{key}={value}");
+                }
+            }
+            return Ok(0);
+        }
         Some(SessionMode::Hold { pacman }) => return hold_cmd(paths, pacman, a.json),
         Some(SessionMode::Release { pacman, after }) => {
             return release_cmd(paths, pacman, after.as_deref(), a.json);
@@ -1095,7 +1110,9 @@ fn session_cmd(paths: &Paths, a: SessionArgs) -> Result<i32> {
             }
         }
         Some(SessionMode::Import) | None => {}
-        Some(SessionMode::Hold { .. } | SessionMode::Release { .. }) => unreachable!(),
+        Some(SessionMode::ShellEnv | SessionMode::Hold { .. } | SessionMode::Release { .. }) => {
+            unreachable!()
+        }
     }
     if a.json {
         println!("{doc}");

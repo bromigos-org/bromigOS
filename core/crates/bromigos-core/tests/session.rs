@@ -155,6 +155,56 @@ fn newest_real_session_wins() {
 }
 
 #[test]
+fn shell_recovery_finds_desktop_but_preserves_explicit_and_remote_displays() {
+    let desktop = Proc::spawn(false);
+    let mut rt = Rt::new();
+    rt.socket("wayland-desktop");
+    rt.socket("wayland-explicit");
+    rt.instance(
+        "desktop",
+        Some(&format!("{}\nwayland-desktop\n", desktop.pid())),
+        1,
+    );
+    let recover = |env: &[(&str, &str)]| {
+        session::shell_env(&rt.paths(), |key| {
+            env.iter()
+                .find(|(name, _)| *name == key)
+                .map(|(_, value)| value.to_string())
+        })
+    };
+    let expected = vec![
+        ("WAYLAND_DISPLAY".into(), "wayland-desktop".into()),
+        ("HYPRLAND_INSTANCE_SIGNATURE".into(), "desktop".into()),
+        ("DISPLAY".into(), String::new()),
+        ("XAUTHORITY".into(), String::new()),
+    ];
+    assert_eq!(recover(&[]), expected);
+    assert_eq!(
+        recover(&[("WAYLAND_DISPLAY", "wayland-gone"), ("DISPLAY", ":88")]),
+        expected
+    );
+    assert!(recover(&[("WAYLAND_DISPLAY", "wayland-explicit")]).is_empty());
+    assert!(recover(&[("DISPLAY", ":88")]).is_empty());
+    for key in ["SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"] {
+        assert!(recover(&[(key, "remote")]).is_empty());
+    }
+}
+
+#[test]
+fn shell_recovery_does_not_adopt_a_lone_nested_compositor() {
+    let nested = Proc::spawn(true);
+    let mut rt = Rt::new();
+    rt.socket("wayland-test");
+    rt.instance(
+        "nested",
+        Some(&format!("{}\nwayland-test\n", nested.pid())),
+        1,
+    );
+    assert!(session::shell_env(&rt.paths(), |_| None).is_empty());
+    assert!(session::shell_env(&Rt::new().paths(), |_| None).is_empty());
+}
+
+#[test]
 fn stale_and_dead_instances_are_skipped() {
     let alive = Proc::spawn(false);
     let mut rt = Rt::new();

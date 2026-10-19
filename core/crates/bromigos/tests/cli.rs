@@ -410,6 +410,42 @@ fn profile_rejects_bad_values() {
 // ------------------------------------------------------------------ session
 
 #[test]
+fn shell_environment_is_read_only_and_empty_without_a_desktop() {
+    use std::os::unix::net::UnixListener;
+    let s = Sandbox::new();
+    s.script(
+        "bin",
+        "dbus-update-activation-environment",
+        "#!/bin/sh\necho unexpected-import\n",
+    );
+    let empty = s.run(&["session", "shell-env", "--json"]);
+    assert!(empty.status.success());
+    assert!(stderr(&empty).is_empty());
+    assert_eq!(
+        serde_json::from_str::<Value>(&stdout(&empty)).unwrap()["env"],
+        serde_json::json!({})
+    );
+    let mut compositor = spawn(Command::new("/bin/sleep").arg("60").env_clear());
+    let dir = s.p("run/hypr/test-desktop");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(
+        dir.join("hyprland.lock"),
+        format!("{}\nwayland-test\n", compositor.id()),
+    )
+    .unwrap();
+    let _socket = UnixListener::bind(s.p("run/wayland-test")).unwrap();
+    let result = s.run(&["session", "shell-env", "--json"]);
+    let _ = compositor.kill();
+    let _ = compositor.wait();
+    assert!(result.status.success(), "{}", stderr(&result));
+    assert!(stderr(&result).is_empty());
+    let doc: Value = serde_json::from_str(&stdout(&result)).unwrap();
+    assert_eq!(doc["env"]["WAYLAND_DISPLAY"], "wayland-test");
+    assert_eq!(doc["env"]["HYPRLAND_INSTANCE_SIGNATURE"], "test-desktop");
+    assert_eq!(doc["env"]["DISPLAY"], "");
+}
+
+#[test]
 fn session_without_hyprland() {
     let s = Sandbox::new();
     let o = s.run(&["session", "--json"]);

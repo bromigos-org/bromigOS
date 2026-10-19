@@ -76,6 +76,13 @@ cached prompts do not show a stale failure. Blank Enter and cancelling an input 
 clear the status; interrupting a running command shows `interrupted`. See
 [Shell and terminal](../manual/src/shell.md).
 
+The zsh setup also refreshes missing or stale desktop settings before commands in
+local Herdr, tmux and GNU Screen panes. It calls the core's read-only
+`bromigos session shell-env` helper and imports only four allowed display variables,
+without evaluating shell text. Working sockets take the fast path without launching
+a helper. SSH, non-interactive shells and explicit working displays are preserved.
+Already-running apps need to be restarted once to receive the recovered environment.
+
 `bromigos-peripherals` is the daemon for peripheral modules. It isn't on `PATH`.
 `bromigos commands` lists every command a machine has.
 

@@ -5,6 +5,45 @@
 #                     always (every interactive shell) | off
 #   bromigos banner   print it now
 
+# A persistent multiplexer can start in a text console before the desktop exists.
+# Its panes inherit that old environment even after a graphical client attaches.
+# Refresh before commands, so an already-open shell also recovers after login.
+# Use the core's session discovery; never eval its output or import it globally.
+_bromigos_session_refresh() {
+  [[ -o interactive && $BROMIGOS_SESSION_REFRESH != off ]] || return 0
+  [[ $HERDR_ENV == 1 || -n $TMUX || -n $STY ]] || return 0
+  [[ -z $SSH_CONNECTION && -z $SSH_CLIENT && -z $SSH_TTY ]] || return 0
+  [[ $TERM != linux && $TERM != dumb && -n $XDG_RUNTIME_DIR ]] || return 0
+  (( $+commands[bromigos] )) || return 0
+  # The common path needs no child process, including an explicit nested display.
+  if [[ -n $WAYLAND_DISPLAY ]]; then
+    local socket=$WAYLAND_DISPLAY
+    [[ $socket == /* ]] || socket=$XDG_RUNTIME_DIR/$socket
+    [[ -S $socket ]] && return 0
+  elif [[ -n $DISPLAY ]]; then
+    return 0
+  fi
+  local entry key value
+  while IFS= read -r entry; do
+    key=${entry%%=*}
+    value=${entry#*=}
+    case $key in
+      WAYLAND_DISPLAY|HYPRLAND_INSTANCE_SIGNATURE|DISPLAY|XAUTHORITY)
+        if [[ $entry == *=* ]]; then
+          if [[ -n $value ]]; then export "$key=$value"
+          else unset "$key"
+          fi
+        fi ;;
+    esac
+  done < <(command bromigos session shell-env 2>/dev/null)
+  return 0
+}
+if [[ -o interactive ]]; then
+  autoload -Uz add-zsh-hook
+  add-zsh-hook preexec _bromigos_session_refresh
+  _bromigos_session_refresh
+fi
+
 # The banner: the theme's emblem beside live readings from /proc.
 if [[ -o interactive && -t 1 && -z $NVIM && $BROMIGOS_BANNER != off ]]; then
   if [[ $BROMIGOS_BANNER == always || -o login ]]; then
