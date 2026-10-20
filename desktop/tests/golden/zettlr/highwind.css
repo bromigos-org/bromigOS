@@ -1,0 +1,309 @@
+/* Zettlr's colours: theme "highwind" (Highwind), written by `bromigos theme set`.
+   Don't edit. The theme-set hook copies this between the bromigOS markers in
+   ~/.config/Zettlr/custom.css and keeps the rest of that file, which is yours.
+   Zettlr reads custom.css when it starts. Rules here use !important so they win over
+   every Zettlr display theme; a rule of yours after the block needs it too. */
+:root {
+  color-scheme: dark !important;
+  accent-color: #f5c76a !important;
+  --bromigos-background: #0a0d1a;
+  --bromigos-void: #05070f;
+  --bromigos-panel: #141a2e;
+  --bromigos-selection: #243052;
+  --bromigos-primary: #f5c76a;
+  --bromigos-soft: #f8e6bf;
+  --bromigos-dim: #8a7540;
+  --bromigos-text: #e4e9f7;
+  --bromigos-muted: #8c94b3;
+  --bromigos-faint: #525a78;
+  --bromigos-warn: #ff9f5a;
+  --bromigos-danger: #ff6670;
+  --bromigos-link: #8ad8ff;
+  --bromigos-font: "Geist Mono", ui-monospace, monospace;
+  --bromigos-code-font: "Geist Mono", ui-monospace, monospace;
+
+  /* Zettlr's own colours: the accent (on Linux, Zettlr's green), its greys and the
+     folder colours */
+  --system-accent-color: #f5c76a !important;
+  --system-accent-color-contrast: #0a0d1a !important;
+  --grey-0: #e4e9f7 !important;
+  --grey-1: #f8e6bf !important;
+  --grey-2: #8c94b3 !important;
+  --grey-3: #525a78 !important;
+  --grey-4: #8a7540 !important;
+  --grey-5: #243052 !important;
+  --grey-6: #141a2e !important;
+  --grey-7: #0a0d1a !important;
+  --accent-blue: #7eaaff !important;
+  --accent-purple: #c99cff !important;
+  --accent-rose: #e0c5ff !important;
+  --accent-red: #ff6670 !important;
+  --accent-orange: #ffe29c !important;
+  --accent-yellow: #ff9f5a !important;
+  --accent-green: #f5c76a !important;
+  --red-2: #ff6670 !important;
+}
+
+/* ---- the window */
+body, body.dark {
+  background-color: #0a0d1a !important;
+  color: #e4e9f7 !important;
+  font-family: var(--bromigos-font) !important;
+
+  /* callouts (> [!NOTE] and the like): Zettlr sets these on the body */
+  --zettlr-note-color: #8c94b3 !important;
+  --zettlr-tip-color: #f5c76a !important;
+  --zettlr-important-color: #c99cff !important;
+  --zettlr-warning-color: #ff9f5a !important;
+  --zettlr-caution-color: #ff6670 !important;
+  --zettlr-note-bg: #141a2e !important;
+  --zettlr-tip-bg: #243052 !important;
+  --zettlr-important-bg: #141a2e !important;
+  --zettlr-warning-bg: #3a2a10 !important;
+  --zettlr-caution-bg: #2a0d12 !important;
+}
+body a, body.dark a { color: #8ad8ff !important; }
+body div#window-content, body.dark div#window-content { background-color: #0a0d1a !important; }
+body ::selection { background-color: #243052 !important; color: #e4e9f7 !important; }
+body label, body input, body select, body textarea, body button { font-family: var(--bromigos-font) !important; }
+
+/* ---- the menu bar and title bar */
+body #menubar, body div#titlebar {
+  background-color: #141a2e !important;
+  color: #f8e6bf !important;
+  border-bottom: 1px solid #243052 !important;
+}
+body #menubar div.top-level-item:hover { background-color: #243052 !important; color: #f5c76a !important; }
+
+/* ---- the toolbar */
+body div#toolbar {
+  background-color: #141a2e !important;
+  color: #f8e6bf !important;
+  border-bottom: 1px solid #243052 !important;
+}
+body div#toolbar button {
+  background-color: transparent !important;
+  color: #f8e6bf !important;
+  border: 1px solid #243052 !important;
+}
+body div#toolbar button:hover, body div#toolbar button.toolbar-overflow, body div#toolbar button.active {
+  background-color: #243052 !important;
+  color: #f5c76a !important;
+  border-color: #8a7540 !important;
+}
+body div#toolbar .toolbar-text, body div#toolbar span.toolbar-label { color: #8c94b3 !important; }
+
+/* ---- the file manager: the tree, the file list and their headers */
+body #file-manager, body #file-tree, body #file-list,
+body div.list-item-wrapper, body div.list-item-wrapper div.list-item, body div.list-item-wrapper div.list-item div.filename div.date {
+  background-color: #141a2e !important;
+  color: #e4e9f7 !important;
+}
+body div.list-item-wrapper div.list-item { border-bottom-color: #243052 !important; }
+body div.list-item-wrapper div.list-item div.date { color: #8c94b3 !important; }
+body div.list-item-wrapper div.list-item.active, body div.list-item-wrapper div.list-item.active div.filename div.date {
+  background-color: #8a7540 !important;
+  color: #0a0d1a !important;
+}
+body div.list-item-wrapper div.list-item.selected, body div.list-item-wrapper div.list-item.selected div.filename div.date {
+  background-color: #243052 !important;
+  color: #f5c76a !important;
+}
+body div.list-item-wrapper div.list-item div.meta-info .badge { background-color: #243052 !important; color: #f8e6bf !important; }
+body #directories-dirs-header, body #directories-files-header {
+  color: #8c94b3 !important;
+  border-bottom: 1px solid #243052 !important;
+}
+body #file-tree .close-all { background-color: #243052 !important; color: #f8e6bf !important; }
+body #file-manager .file-manager-filter { background-color: #141a2e !important; border-color: #243052 !important; }
+body #file-manager .file-manager-filter .file-manager-filter-input {
+  background-color: #05070f !important;
+  color: #e4e9f7 !important;
+  border: 1px solid #243052 !important;
+}
+body #file-manager .file-manager-filter .file-manager-filter-input:focus { border-color: #f5c76a !important; }
+body #file-manager #arrow-button { background-color: #243052 !important; color: #f5c76a !important; }
+body div.tree-item-container .tree-item { color: #e4e9f7 !important; }
+body div.tree-item-container .tree-item.directory:not(.collapsed) { background-color: #141a2e !important; }
+body div.tree-item-container .tree-item.project { color: #ff9f5a !important; }
+body div.tree-item-container .tree-item .display-text.highlight { background-color: #243052 !important; color: #f5c76a !important; }
+body div.tree-item-container .tree-item.active .display-text { background-color: #8a7540 !important; color: #0a0d1a !important; }
+body div.tree-item-container .tree-item.selected .display-text { background-color: #243052 !important; color: #f5c76a !important; }
+body div.tree-item-container .tree-item input.filename-input { background-color: #05070f !important; color: #e4e9f7 !important; }
+body ::placeholder { color: #525a78 !important; }
+
+/* ---- the sidebar: contents, related files, references */
+body div#sidebar, body.dark div#sidebar {
+  background-color: #141a2e !important;
+  color: #e4e9f7 !important;
+}
+body div#sidebar div.toc-level { color: #8a7540 !important; }
+body div#sidebar div.toc-entry-active { color: #f5c76a !important; }
+body div#sidebar div.related-files-container div.related-file:hover { background-color: #243052 !important; }
+body div.split-view div.view.view-border { border-color: #243052 !important; }
+
+/* ---- the tabs */
+body div.document-tablist-wrapper div.scroller,
+body div.tab-container {
+  background-color: #141a2e !important;
+  color: #8c94b3 !important;
+  border-color: #243052 !important;
+}
+body div.tab-container { border-bottom: 1px solid #243052 !important; }
+body div.tab-container div[role="tab"] {
+  background-color: #141a2e !important;
+  color: #8c94b3 !important;
+  border-color: #243052 !important;
+  font-family: var(--bromigos-font) !important;
+}
+body div.tab-container div[role="tab"]:hover, body div.document-tablist-wrapper div.scroller:hover {
+  background-color: #243052 !important;
+  color: #f8e6bf !important;
+}
+body div.tab-container div[role="tab"].active {
+  background-color: #0a0d1a !important;
+  color: #f5c76a !important;
+  border-bottom: 3px solid #f5c76a !important;
+}
+body div.tab-container div[role="tab"].modified .filename::before { color: #ff9f5a !important; }
+body div.tab-container div[role="tab"] .close:hover { background-color: #8a7540 !important; color: #0a0d1a !important; }
+
+/* ---- the editor: Zettlr's editor variables, for every display theme */
+body .cm-editor, body.dark .cm-editor {
+  --zettlr-editor-primary-color: #f5c76a !important;
+  --zettlr-editor-secondary-color: #8ad8ff !important;
+  --zettlr-editor-scroller-color: #e4e9f7 !important;
+  --zettlr-editor-scroller-bg: #0a0d1a !important;
+  --zettlr-editor-selection-color: #243052cc !important;
+  --zettlr-editor-highlight-color: #ff9f5a66 !important;
+  --zettlr-editor-font: var(--bromigos-font) !important;
+  --zettlr-editor-code-font: var(--bromigos-code-font) !important;
+  --zettlr-editor-citation-color: #8c94b3 !important;
+  --zettlr-editor-citation-bg: #141a2e !important;
+  --zettlr-editor-code-color: #f8e6bf !important;
+  --zettlr-editor-code-bg: #141a2e !important;
+  --zettlr-editor-escape-color: #8c94b3 !important;
+  --zettlr-editor-accent-color: #0a0d1a !important;
+  --zettlr-editor-accent-bg: #8a7540 !important;
+  --zettlr-editor-error-color: #ff6670 !important;
+  /* code blocks: the terminal's colours */
+  --zettlr-editor-code-base-0: #8c94b3 !important;
+  --zettlr-editor-code-base-1: #e4e9f7 !important;
+  --zettlr-editor-code-base-2: #f8e6bf !important;
+  --zettlr-editor-code-base-3: #0a0d1a !important;
+  --zettlr-editor-code-base-00: #8c94b3 !important;
+  --zettlr-editor-code-base-01: #525a78 !important;
+  --zettlr-editor-code-base-02: #e4e9f7 !important;
+  --zettlr-editor-code-base-03: #141a2e !important;
+  --zettlr-editor-code-yellow: #ff9f5a !important;
+  --zettlr-editor-code-orange: #ffe29c !important;
+  --zettlr-editor-code-red: #ff6670 !important;
+  --zettlr-editor-code-magenta: #c99cff !important;
+  --zettlr-editor-code-violet: #e0c5ff !important;
+  --zettlr-editor-code-blue: #7eaaff !important;
+  --zettlr-editor-code-cyan: #8ad8ff !important;
+  --zettlr-editor-code-green: #f5c76a !important;
+  background-color: #0a0d1a !important;
+  caret-color: #f5c76a !important;
+}
+body .main-editor-wrapper, body.dark .main-editor-wrapper { background-color: #0a0d1a !important; }
+body .editor-pane .editor-container .empty-pane { background-color: #0a0d1a !important; }
+body .cm-editor .cm-scroller { background-color: #0a0d1a !important; color: #e4e9f7 !important; }
+body .cm-editor .cm-gutters { background-color: #0a0d1a !important; color: #525a78 !important; border-right-color: transparent !important; }
+body .cm-editor .cm-heading-gutter .cm-gutterElement, body .cm-editor .cm-heading-gutter .cm-gutterElement div { color: #525a78 !important; }
+body .cm-editor .cm-cursor, body .cm-editor .cm-cursor-primary { border-left-color: #f5c76a !important; background: #f5c76a !important; }
+body .cm-editor .cm-selectionBackground, body .cm-editor.cm-focused .cm-selectionBackground { background: #243052cc !important; }
+body .cm-editor .cm-activeLine { background-color: transparent !important; }
+/* headings */
+body .cm-editor [class^="cm-header-"], body .cm-editor [class*=" cm-header-"] { color: #f5c76a !important; }
+body .cm-editor .cm-header-3, body .cm-editor .cm-header-4,
+body .cm-editor .cm-header-5, body .cm-editor .cm-header-6 { color: #f8e6bf !important; }
+body .cm-editor .cm-strong { color: #f8e6bf !important; }
+/* links, tags, quotes */
+body .cm-editor .cm-link, body .cm-editor .cm-url, body .cm-editor .cm-zkn-link { color: #8ad8ff !important; }
+body .cm-editor .cm-zkn-tag { color: #f5c76a !important; }
+body .cm-editor .cm-quote { color: #f8e6bf !important; }
+body .cm-editor .blockquote-wrapper { border-left-color: #8a7540 !important; }
+body .cm-editor .cm-hr { color: #8a7540 !important; }
+/* code */
+body .cm-editor .code-block-line-background, body .cm-editor .inline-code-background { background-color: #141a2e !important; }
+body .cm-editor .cm-monospace { color: #f8e6bf !important; font-family: var(--bromigos-code-font) !important; }
+body .cm-editor .code { color: #e4e9f7 !important; }
+/* tables */
+body .cm-editor div.cm-table-editor-widget-wrapper table td,
+body .cm-editor div.cm-table-editor-widget-wrapper table th { color: #e4e9f7 !important; border-color: #243052 !important; }
+body .cm-editor div.cm-table-editor-widget-wrapper table th { background-color: #141a2e !important; color: #f5c76a !important; }
+
+/* ---- the editor's status bar, panels and pop-ups */
+body .cm-editor .cm-statusbar, body .cm-editor .cm-panels, body .cm-editor .cm-tooltip {
+  background-color: #141a2e !important;
+  color: #8c94b3 !important;
+  border-color: #243052 !important;
+}
+body .cm-editor .cm-panels-bottom { border-top: 1px solid #243052 !important; }
+body .cm-editor .cm-statusbar .cm-statusbar-item:not(:first-child) { border-left-color: #243052 !important; }
+body .cm-editor .cm-statusbar button, body .cm-editor .cm-panel .cm-button {
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #f8e6bf !important;
+  border: 1px solid #243052 !important;
+}
+body .cm-editor .cm-tooltip-autocomplete ul li[aria-selected] { background-color: #243052 !important; color: #f5c76a !important; }
+body .cm-editor .cm-formatting-bar { background-color: #141a2e !important; border-color: #243052 !important; }
+body .cm-editor .cm-formatting-bar button.formatting-toolbar-button { color: #f8e6bf !important; }
+body .cm-editor .cm-formatting-bar button.formatting-toolbar-button:hover { background-color: #243052 !important; }
+body div#statusbar { background-color: #141a2e !important; color: #8c94b3 !important; border-top: 1px solid #243052 !important; }
+
+/* ---- dialogs: pop-overs, menus, tooltips, the preferences and other windows */
+body .popover, body.dark .popover {
+  background-color: #141a2e !important;
+  color: #e4e9f7 !important;
+  border: 1px solid #8a7540 !important;
+}
+body .popover hr { border-color: #243052 !important; }
+body .popover-arrow.up { border-bottom-color: #8a7540 !important; }
+body .popover-arrow.down { border-top-color: #8a7540 !important; }
+body .popover-arrow.left { border-right-color: #8a7540 !important; }
+body .popover-arrow.right { border-left-color: #8a7540 !important; }
+body div.application-menu, body.dark div.application-menu {
+  background-color: #141a2e !important;
+  color: #e4e9f7 !important;
+  border: 1px solid #8a7540 !important;
+  font-family: var(--bromigos-font) !important;
+}
+body div.application-menu div.menu-item:not(.separator):not(.disabled):hover { background-color: #243052 !important; color: #f5c76a !important; }
+body div.application-menu div.menu-item.disabled, body div.application-menu div.menu-item div.after-element { color: #525a78 !important; }
+body div.application-menu div.menu-item.separator { background-color: #243052 !important; border-color: #243052 !important; }
+body .tippy-box { background-color: #05070f !important; color: #e4e9f7 !important; border: 1px solid #8a7540 !important; }
+body .tippy-box .tippy-arrow { color: #8a7540 !important; }
+body div.tab-list { background-color: #141a2e !important; color: #8c94b3 !important; border-bottom-color: #243052 !important; }
+body div.tab-list button[role="tab"] { background-color: transparent !important; color: #8c94b3 !important; }
+body div.tab-list button[role="tab"]:hover { background-color: #243052 !important; color: #f8e6bf !important; }
+body div.tab-list button[role="tab"].active { background-color: #243052 !important; color: #f5c76a !important; }
+body input, body select, body textarea, body button,
+body.dark input, body.dark select, body.dark textarea, body.dark button {
+  background-color: #05070f !important;
+  color: #e4e9f7 !important;
+  border-color: #243052 !important;
+}
+body input:focus, body select:focus, body textarea:focus { border-color: #f5c76a !important; }
+body button:hover { background-color: #243052 !important; }
+body button.primary, body div#statusbar button.primary {
+  background-color: #f5c76a !important;
+  background-image: none !important;
+  border-color: #f5c76a !important;
+  color: #0a0d1a !important;
+}
+body div#global-search-pane div.search-result-container { border-bottom-color: #243052 !important; }
+body div#global-search-pane div.search-result-container div.result-line:hover { background-color: #243052 !important; }
+body div#global-search-pane div.search-result-container div.active { background-color: #243052 !important; }
+body div#global-search-pane .filepath { color: #8c94b3 !important; }
+body div#global-search-pane .search-result-highlight { color: #f5c76a !important; }
+body .dragger { background-color: #243052 !important; color: #e4e9f7 !important; }
+
+/* ---- scroll bars */
+body ::-webkit-scrollbar, body.dark ::-webkit-scrollbar { background-color: #0a0d1a !important; }
+body ::-webkit-scrollbar-thumb, body.dark ::-webkit-scrollbar-thumb { background-color: #243052 !important; }
+body ::-webkit-scrollbar-thumb:hover { background-color: #8a7540 !important; }
+body ::-webkit-scrollbar-corner { background-color: #0a0d1a !important; }
+body ::-webkit-scrollbar-button, body.dark ::-webkit-scrollbar-button { display: none !important; }

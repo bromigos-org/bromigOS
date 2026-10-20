@@ -20,6 +20,34 @@ that reacts to what your machine is doing.
 Press <kbd>Esc</kbd> to close the switcher without changing anything. Hover over a card to
 read what the theme is.
 
+## Apps the theme colours
+
+These change as soon as you choose a theme:
+
+- the bar, the window borders, notifications and the on-screen display;
+- the terminal (kitty), tmux and Neovim;
+- the panels (widgets), VECTOR and the decks;
+- GTK apps, and Chromium or Chrome's window frame, if one is open;
+- the shell prompt, at its next line.
+
+These change the next time you open them:
+
+- the app launcher and the lock screen;
+- btop, Qt apps and libadwaita apps;
+- Firefox and LibreWolf, in a profile set up for it ([theming.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/theming.md#hooks));
+- Zettlr, the Markdown notes app.
+
+### Zettlr
+
+If you use [Zettlr](https://www.zettlr.com), every theme colours it, in the desktop's
+font. Close Zettlr and open it again after you change the theme. It only reads its
+colours when it starts.
+
+bromigOS keeps its colours in a marked block in Zettlr's own custom CSS. To see that
+file in Zettlr, choose **File › Preferences › Assets Manager**, then **Custom CSS**. Put your own rules below
+the block, with `!important`, and they stay through every theme change. bromigOS also
+switches Zettlr's dark mode to match the theme. It changes no other setting of Zettlr's.
+
 ## Customize
 
 The window you choose themes in is called Customize. It has two tabs:

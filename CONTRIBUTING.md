@@ -153,6 +153,7 @@ a window:
 | The live layer: the background, a world, a deck, the screensaver | `live/tools/offscreen.py` |
 | The Settings window, one picture per page and theme | `tools/settings/render.sh` |
 | The theme switcher, at several screen sizes | `tools/theme-switcher/render.sh` |
+| Zettlr in a theme | `tools/zettlr/render.sh` |
 | The app launcher | `tools/launcher/render.py` |
 | The boot menu, drawn by GRUB in a headless VM | `settings/grub/preview.py` |
 

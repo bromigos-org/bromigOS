@@ -280,6 +280,7 @@ and nothing is written.
 | `chromium.theme.tpl` | The browser frame colour, as `r,g,b` | the `apps` hook |
 | `userChrome.css.tpl` | Firefox and LibreWolf's window colours | a profile's `chrome/userChrome.css` |
 | `swayosd.css.tpl` | The on-screen display's colours | swayosd's style |
+| `zettlr.css.tpl` | Zettlr's colours and fonts | the `zettlr` hook, into Zettlr's `custom.css` ([Zettlr](#zettlr)) |
 
 A theme can ship a finished file under a template's output name, such as `kitty.conf`.
 Then the theme's file is used as it is, and that template is skipped.
@@ -493,6 +494,7 @@ status 1, but the theme stays set.
 | `gtk` | Builds a GTK theme from the colours and switches GTK apps to it |
 | `osd` | Restarts the on-screen display with its new style |
 | `wallpaper` | Sets the wallpaper and the lock screen's background for the theme |
+| `zettlr` | Puts the theme's colours into Zettlr's custom CSS and sets its dark mode ([Zettlr](#zettlr)) |
 
 A few details:
 
@@ -1154,6 +1156,7 @@ bromigos-live world rollcall               # play the login roll call
 - **The login screen (SDDM) and the boot splash (Plymouth)** keep the Wick's look. Their
   files are in system folders that a user's `theme set` can't write.
 - **libadwaita apps** take a new theme when they next start.
+- **Zettlr** takes a new theme when it next starts. It reads its custom CSS only then.
 - **A deck that's open** when the theme changes recolours its shapes at once. Effects
   built into its shader change when it next opens.
 
@@ -1177,6 +1180,13 @@ bromigos-live world rollcall               # play the login roll call
   hover hint. `--previews DIR` reuses an earlier run's previews.
 - **The den's recolouring.** `live/tests/test_retint.py` and
   `live/tests/offscreen_retint.py`.
+- **Zettlr.** `core/crates/bromigos/tests/theme_cli.rs` renders every theme in a
+  throwaway home and compares Zettlr's CSS with `desktop/tests/golden/zettlr/<name>.css`.
+  A theme without a golden file still has to carry its own colours and mode.
+  `desktop/tests/test_zettlr.py` checks the merge next to a user's own CSS. To draw Zettlr
+  in a theme, run `tools/zettlr/render.sh <outdir> [--theme NAME]…`. It needs zettlr,
+  weston and node. It renders in a throwaway home and a headless weston, so nothing
+  reaches your desktop.
 
 ## The shell prompt
 
@@ -1199,3 +1209,46 @@ User instructions are in [Shell and terminal](../manual/src/shell.md).
 
 The generator uses the same colour roles for Wick, its six colour variants,
 Tidewell and Mire. Its reference files are in `live/tests/golden/mehshell/`.
+
+## Zettlr
+
+[Zettlr](https://www.zettlr.com) is a Markdown editor for notes. When it's installed,
+every theme colours it: the editor, the file tree, the sidebar, the tabs, the toolbar,
+the status bar, headings, links, code blocks, selections, scroll bars, pop-ups and the
+other windows. It uses Geist Mono, the desktop's font, for text and code.
+
+`bromigos theme set` renders `zettlr.css` from `theme/templates/zettlr.css.tpl`. The
+theme-set hook `zettlr` (`desktop/lib/bromigos_zettlr.py`) then changes two files in
+Zettlr's settings folder, `~/.config/Zettlr`:
+
+- **`custom.css`.** This is Zettlr's own place for a user's CSS. The theme's colours go
+  between two markers, `/* >>> bromigOS theme` and `/* <<< bromigOS theme */`.
+  Everything outside the markers is yours and stays as it is. The first time, the block
+  goes at the top, after any `@charset` and `@import` lines, so your own rules come after
+  it. Its rules use `!important` to win over each of Zettlr's display themes, so a rule of
+  yours needs `!important` too. If only one marker is there, the hook changes nothing and
+  reports it.
+- **`config.json`.** Only the `darkMode` key changes, to match the theme's `mode`. The
+  hook leaves this file alone while Zettlr runs, because Zettlr would write its own
+  settings back over it. It never creates the file either, so Zettlr's first-start setup
+  still happens.
+
+Zettlr reads `custom.css` when it starts, and it has no way to reload it from outside.
+So a theme switch reaches Zettlr the next time you open it.
+
+Zettlr's own setting **Automatically switch to dark mode** follows the system when Zettlr
+is first installed. Then Zettlr follows the desktop's colour scheme, which bromigOS sets
+to dark, and its `darkMode` follows that. The colours are the theme's either way. The
+hook leaves that setting and every other one alone, including Zettlr's display theme and
+font size.
+
+If Zettlr is installed but hasn't run yet, the hook creates `~/.config/Zettlr/custom.css`,
+so its first start is already in the theme's colours. A Flatpak Zettlr's folder,
+`~/.var/app/com.zettlr.Zettlr/config/Zettlr`, gets the same treatment when it exists.
+
+To stop bromigOS colouring Zettlr, switch the hook off with an empty file named
+`~/.config/bromigos/hooks/theme-set.d/zettlr` ([Hooks](#hooks)). Then delete the block
+from `custom.css`.
+
+Settings › Default apps has a **Markdown notes** row, which offers Zettlr when it's
+installed. bromigOS doesn't install Zettlr.

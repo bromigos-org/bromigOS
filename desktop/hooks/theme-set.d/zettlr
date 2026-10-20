@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# theme-set hook (bromigos-desktop): Zettlr in the theme's colours. `bromigos theme set`
+# renders zettlr.css (theme/templates/zettlr.css.tpl); this puts it between the bromigOS
+# markers in ~/.config/Zettlr/custom.css, keeping the rest of that file, and sets Zettlr's
+# darkMode to the theme's mode when Zettlr isn't running (lib/bromigos_zettlr.py).
+# Zettlr reads custom.css when it starts. Skipped when Zettlr isn't installed and has no
+# settings folder.
+set -eu
+dir=${BROMIGOS_THEME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/bromigos/theme/current}
+[ -f "$dir/zettlr.css" ] || exit 0
+here=$(dirname "$(readlink -f "$0")")
+lib=$here/../../lib
+[ -f "$lib/bromigos_zettlr.py" ] || lib=/usr/lib/bromigos/lib
+exec python3 "$lib/bromigos_zettlr.py" "$dir"

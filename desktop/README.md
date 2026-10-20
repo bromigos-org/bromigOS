@@ -104,11 +104,14 @@ Already-running apps need to be restarted once to receive the recovered environm
   `bromigos customize --save-layout` opens the naming form directly.
 - `bromigos_peripherals.py` holds the peripheral modules' logic
   ([docs/peripherals.md](../docs/peripherals.md)).
+- `bromigos_zettlr.py` is the `zettlr` hook's work. It puts the theme's colours into a
+  marked block of Zettlr's `custom.css` and sets Zettlr's dark mode
+  ([docs/theming.md](../docs/theming.md#zettlr)).
 
 ### Other parts
 
-- `hooks/theme-set.d/` holds the `apps`, `emblem`, `gtk`, `osd` and `wallpaper` hooks
-  ([docs/theming.md](../docs/theming.md)).
+- `hooks/theme-set.d/` holds the `apps`, `boot`, `emblem`, `gtk`, `osd`, `wallpaper`,
+  `widgets` and `zettlr` hooks ([docs/theming.md](../docs/theming.md)).
 - `waybar/scripts/idle.py` draws the bar's idle module: the eye, and stay awake's cup.
 - `waybar/scripts/vector-switch.py` draws VECTOR's emergency switch on the bar: a power
   mark while he's on, and a red VECTOR OFF while he's off. It reads the switch's own
