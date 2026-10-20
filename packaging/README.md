@@ -81,6 +81,12 @@ Some packages need a closer look.
     depends on `base-devel`, which every AUR build needs.
   - It has no `provides`, `conflicts` or `replaces`, so paru-bin and paru-git are never
     swapped out.
+- **herdr** needs zig 0.16.0 exactly to build: its terminal library, libghostty-vt,
+  refuses any other version. Arch's `zig` has moved on to 0.17.0, so the recipe downloads
+  Zig's own 0.16.0 release from ziglang.org, pinned by checksum like the source, and
+  builds with it. That zig stays in the build folder: it isn't a build dependency and
+  never gets installed. Once a herdr release builds with Arch's zig, the recipe goes back
+  to `makedepends=('zig')`.
 - **bromigos-homelab** installs its library to `/usr/lib/bromigos/lib/bromigos_homelab/`
   and its decks, panels and VECTOR plugin to `/usr/lib/bromigos/homelab/`
   ([homelab/README.md](../homelab/README.md)).

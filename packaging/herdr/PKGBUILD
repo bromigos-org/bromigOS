@@ -5,36 +5,46 @@
 # repositories; built here from the tagged upstream source (pinned by checksum) so an
 # install never needs an AUR helper. Adapted from the AUR's herdr PKGBUILD. AGPL-3.0:
 # unmodified upstream source, linked below.
+#
+# Zig: herdr's vendored libghostty-vt builds with zig 0.16.0 exactly, while Arch's zig
+# has moved on to 0.17.0, and our CI installs makedepends with `pacman -S`,
+# which takes no version. So the build brings its own: Zig's official 0.16.0 release for
+# x86_64 Linux, pinned by checksum, used only inside $srcdir and never installed. When
+# upstream moves to Arch's zig, drop it and put 'zig' back in makedepends.
 
 pkgname=herdr
-pkgver=0.9.3
+pkgver=0.9.5
 pkgrel=1
 pkgdesc='Terminal workspace manager for AI coding agents'
 arch=('x86_64')
 url='https://github.com/ogulcancelik/herdr'
 license=('AGPL-3.0-or-later')
 depends=('gcc-libs' 'glibc')
-# zig 0.16.0 exactly (libghostty-vt): checked in prepare(); our CI installs makedepends
-# with `pacman -S`, which takes no version constraints
-makedepends=('cargo' 'git' 'zig')
+_zigver=0.16.0
+makedepends=('cargo' 'git')
 options=('!debug')
-source=("${pkgname}-${pkgver}.tar.gz::https://github.com/ogulcancelik/herdr/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('e48f6706440c92362773663131ef5b524c62549523e50a03f2b55d315edca100')
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/ogulcancelik/herdr/archive/refs/tags/v${pkgver}.tar.gz"
+        "https://ziglang.org/download/${_zigver}/zig-x86_64-linux-${_zigver}.tar.xz")
+sha256sums=('a2486b09a8153630f6a19e72606ba1c961a6194bce13c09cba67ccce5e4252de'
+            '70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00')
 
+# The pinned zig, first on PATH and named by $ZIG (which libghostty-vt's build.rs reads)
 _env() {
-  export CARGO_HOME="$srcdir/cargo-home" ZIG_GLOBAL_CACHE_DIR="$srcdir/zig-cache" ZIG=/usr/bin/zig
+  export CARGO_HOME="$srcdir/cargo-home" ZIG_GLOBAL_CACHE_DIR="$srcdir/zig-cache"
+  export ZIG="$srcdir/zig-x86_64-linux-$_zigver/zig"
+  export PATH="${ZIG%/*}:$PATH"
 }
 
 prepare() {
-  local zv
-  zv=$(zig version)
-  [[ $zv == 0.16.0 ]] || { echo "herdr needs zig 0.16.0, found $zv" >&2; return 1; }
-  cd "$pkgname-$pkgver"
   _env
+  local zv
+  zv=$("$ZIG" version)
+  [[ $zv == "$_zigver" ]] || { echo "herdr needs zig $_zigver, found $zv" >&2; return 1; }
+  cd "$pkgname-$pkgver"
   cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
   cd vendor/libghostty-vt
   local i
-  for i in 1 2 3; do zig build --fetch=all && return 0; sleep 2; done
+  for i in 1 2 3; do "$ZIG" build --fetch=all && return 0; sleep 2; done
   return 1
 }
 
