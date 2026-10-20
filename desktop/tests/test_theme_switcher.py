@@ -521,6 +521,33 @@ class NestedSizeTest(unittest.TestCase):
         self.assertEqual(rule["wmclassmatch"], "1")               # exactly
         self.assertEqual((rule["fullscreen"], rule["fullscreenrule"]), ("true", "2"))   # forced
 
+    def test_the_rule_is_written_where_kwin_reads_it(self):
+        cfg = os.path.join(self.tmp, "config")              # made if missing
+        PV.write_kwin_rules(cfg)
+        with open(os.path.join(cfg, "kwinrulesrc")) as f:
+            self.assertEqual(f.read(), PV.KWIN_RULES)
+
+    def test_waiting_for_the_size_asked_for(self):
+        """wait_for_size, shared with the hand-run nested tests (e2e_keys_nested.py's Nest)."""
+        answers = [json.dumps([{"name": "WAYLAND-1", "width": 1280, "height": 720}])] * 2 + \
+            [json.dumps([{"name": "WAYLAND-1", "width": 1600, "height": 900}])]
+
+        def ctl(*a):                                         # 1280x720 twice, then the size asked for
+            return answers.pop(0) if len(answers) > 1 else answers[0]
+        self.assertEqual(PV.wait_for_size(ctl, (1600, 900), timeout=5), (1600, 900))
+
+        def small(*a):
+            return json.dumps([{"name": "WAYLAND-1", "width": 1280, "height": 720},
+                               {"name": "WAYLAND-2", "width": 1600, "height": 900}])
+        with self.assertRaises(PV.WrongSize) as e:
+            PV.wait_for_size(small, [1600, 900], timeout=0.3)
+        self.assertIn("1280x720, not 1600x900", str(e.exception))
+        self.assertEqual(PV.wait_for_size(small, (1600, 900), timeout=0, output="WAYLAND-2"), (1600, 900))
+        with self.assertRaises(PV.WrongSize) as e:
+            PV.wait_for_size(lambda *a: "", (1600, 900), timeout=0)
+        self.assertIn("0x0", str(e.exception))
+        self.assertIsNone(PV.monitor_size("not json"))
+
 
 if __name__ == "__main__":
     unittest.main()

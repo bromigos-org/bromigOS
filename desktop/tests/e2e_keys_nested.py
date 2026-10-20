@@ -4,9 +4,12 @@
 kwin_wayland --virtual (a compositor with no screen) hosts a nested Hyprland running the
 template user config over this checkout's defaults, in a runtime directory, HOME and D-Bus
 of its own: nothing reaches the desktop it's run from (no window, no reload, no
-notification, no env). The defaults' autostart programs are stubs; bromigos-widgets logs
-what it was asked, so a bind firing shows. Keys are typed by a virtual keyboard
-(vkbd.py), which Hyprland's binds see like a real one. It checks:
+notification, no env). A kwin window rule keeps the nested Hyprland full screen at
+Nest.SIZE, and the run stops at once (WrongSize) if its screen comes up at another size
+(kwin 6.8 had shrunk it to 1280x720). The rule and the check are the theme previews' own
+(desktop/lib/bromigos_previews.py). The defaults' autostart programs are stubs;
+bromigos-widgets logs what it was asked, so a bind firing shows. Keys are typed by a
+virtual keyboard (vkbd.py), which Hyprland's binds see like a real one. It checks:
 
   - the capture window: Hyprland's binds held back while it listens (SUPER + W reaches it,
     the panels don't toggle), Esc cancels, Backspace clears, a killed window doesn't leave
@@ -37,6 +40,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DESKTOP = os.path.dirname(HERE)
 REPO = os.path.dirname(DESKTOP)
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(DESKTOP, "lib"))
+import bromigos_previews as PV  # noqa: E402
 import vkbd  # noqa: E402
 
 STUB = "#!/bin/sh\nexit 0\n"
@@ -69,7 +74,7 @@ def wait_for(fn, timeout=8.0, step=0.1):
 
 
 class Nest:
-    SIZE = (1600, 900)          # the virtual screen kwin hosts the nested Hyprland in
+    SIZE = (1600, 900)          # the virtual screen kwin hosts the nested Hyprland in; its output is this size
 
     def __init__(self, keep=False, shots=None):
         self.keep, self.shots = keep, shots
@@ -111,6 +116,7 @@ class Nest:
     def start(self):
         env = dict(self.base, PATH="/usr/bin")
         env.pop("DBUS_SESSION_BUS_ADDRESS")
+        PV.write_kwin_rules(self.base["XDG_CONFIG_HOME"])      # full screen: kwin 6.8 would shrink it to 1280x720
         self.kwin = subprocess.Popen(["dbus-run-session", "--", "kwin_wayland", "--virtual", "--width", str(self.SIZE[0]),
                                       "--height", str(self.SIZE[1]), "--socket", "kw", "--no-lockscreen", "--no-global-shortcuts"],
                                      env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -150,6 +156,7 @@ class Nest:
                         PATH=f"{self.stubs}:/usr/bin", GDK_BACKEND="wayland")
         if not wait_for(lambda: "WAYLAND-1" in self.ctl("monitors"), 15):
             raise RuntimeError("the nested Hyprland has no output")
+        PV.wait_for_size(self.ctl, self.SIZE)                   # WrongSize: every check after it would be off
         self.kb = vkbd.VirtualKeyboard(os.path.join(self.run, "wayland-1"))
         time.sleep(0.5)
 

@@ -609,6 +609,10 @@ The picture has to show the whole desktop, so the renderer checks its size twice
   picture is thrown away, the nested desktop is tried once more, and then the preview is
   put together from its pieces instead (see below). A cut-off picture is never cached.
 
+The hand-run nested tests (`desktop/tests/e2e_keys_nested.py` and the tests built on it)
+use the same kwin rule and the same size check. They stop at once if the nested screen
+isn't the size they asked for.
+
 Each preview's `.json` file records the size asked for (`size`) and the size grim
 captured (`captured`).
 
@@ -1199,7 +1203,8 @@ bromigos-live world rollcall               # play the login roll call
   2560×1440 and 3440×1440. It also checks the preview stamps, the still den in a colour
   theme's colours, the bar's modules, the border and shadow, where the terminal sits, and
   what each card says. `NestedSizeTest` checks that a picture of the wrong size is
-  refused, and that the kwin rule keeps the nested desktop full screen.
+  refused, that the kwin rule keeps the nested desktop full screen, and that waiting for
+  the nested screen's size fails when it never reaches it.
 - **The whole desktop in each preview.** `python3 desktop/tests/e2e_previews_nested.py`
   draws the Wick in the nested desktop, in a throwaway home, at 1920×1080 and 1600×900,
   and its cached preview. It fails if a picture isn't the size asked for, or if the

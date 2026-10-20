@@ -125,7 +125,8 @@ Bigger tests run by hand:
 - **End to end in a nested Hyprland.** `desktop/tests/e2e_settings_nested.py`,
   `e2e_keys_nested.py` and `e2e_widgets_nested.py` drive Settings, the shortcut picker and
   the panels' edit mode in a Hyprland session that runs inside a virtual display. Nothing
-  appears on your screen.
+  appears on your screen. A kwin window rule keeps that session full screen, and a run
+  stops at once if its screen isn't the size the test asked for.
 - **A fresh machine.** `test/vm/arch-vm.sh` installs bromigOS on a new virtual machine
   and checks it. It needs KVM and at least 14 GB of available memory before starting.
   [docs/install.md](docs/install.md) explains it.

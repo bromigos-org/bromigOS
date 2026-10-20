@@ -722,7 +722,10 @@ STUB = "#!/bin/sh\nexit 0\n"
 # screen, DESK_W x DESK_H. Without it, kwin 6.8 sends a late "choose your own size" (0x0)
 # after Hyprland has sized its window, and Hyprland's backend reads 0x0 as its built-in
 # 1280x720: the picture was the desktop's top-left corner. kwin 6.7 gives the same picture
-# with the rule as without it (checked with 6.7.5).
+# with the rule as without it (checked with 6.7.5). The hand-run nested tests
+# (desktop/tests/e2e_keys_nested.py and those built on it) use the same rule and size check
+# (write_kwin_rules, wait_for_size). A second nested output (`hyprctl output create`) keeps
+# its own monitor rule's size.
 KWIN_RULES = """[General]
 count=1
 rules=bromigos-preview
@@ -739,6 +742,39 @@ fullscreenrule=2
 class WrongSize(RuntimeError):
     """The nested desktop came up at another size than the one asked for: its picture would
     show only part of the desktop, so it isn't kept."""
+
+
+def write_kwin_rules(config_dir):
+    """KWIN_RULES as kwinrulesrc in `config_dir`: the XDG_CONFIG_HOME the nested kwin is
+    started with, where kwin reads its window rules."""
+    os.makedirs(config_dir, exist_ok=True)
+    with open(os.path.join(config_dir, "kwinrulesrc"), "w") as f:
+        f.write(KWIN_RULES)
+
+
+def monitor_size(monitors_json, output="WAYLAND-1"):
+    """(width, height) in pixels of `output` in `hyprctl monitors -j`'s answer, or None."""
+    try:
+        mons = json.loads(monitors_json or "[]")
+    except ValueError:
+        return None
+    m = next((m for m in mons if isinstance(m, dict) and m.get("name") == output), None)
+    return (m.get("width"), m.get("height")) if m else None
+
+
+def wait_for_size(ctl, size, timeout=10, output="WAYLAND-1"):
+    """Wait until the nested Hyprland's `output` is `size` (width, height) in pixels. `ctl`
+    runs hyprctl with its arguments and returns what it printed. WrongSize if it never is."""
+    want = tuple(size)
+    end = time.time() + timeout
+    got = monitor_size(ctl("monitors", "-j"), output)
+    while got != want and time.time() < end:
+        time.sleep(0.1)
+        got = monitor_size(ctl("monitors", "-j"), output)
+    if got != want:
+        w, h = got or (0, 0)
+        raise WrongSize(f"the nested desktop came up at {w}x{h}, not {want[0]}x{want[1]}")
+    return got
 
 
 def nested_missing():
@@ -958,8 +994,7 @@ class Nested:
         self._start([SYS_PY, __file__, "--child", "mpris"], base, "mpris")
         if shutil.which("playerctld"):          # waybar's media module asks playerctl's daemon
             self._start(["playerctld"], base, "playerctld")
-        with open(os.path.join(cfg, "kwinrulesrc"), "w") as f:       # kwin reads it from XDG_CONFIG_HOME
-            f.write(KWIN_RULES)
+        write_kwin_rules(cfg)                   # kwin reads it from XDG_CONFIG_HOME
         self._start(["kwin_wayland", "--virtual", "--width", str(DESK_W), "--height", str(DESK_H), "--socket", "kw",
                      "--no-lockscreen", "--no-global-shortcuts"], base, "kwin")
         if not self._wait(lambda: os.path.exists(os.path.join(rt, "kw")), 20):
@@ -980,9 +1015,7 @@ class Nested:
         self.env = dict(base, WAYLAND_DISPLAY="wayland-1", HYPRLAND_INSTANCE_SIGNATURE=s, GDK_BACKEND="wayland")
         if not self._wait(lambda: "WAYLAND-1" in self.ctl("monitors"), 25):
             raise RuntimeError("the nested Hyprland has no output")
-        if not self._wait(lambda: self.output_size() == (DESK_W, DESK_H), 10):
-            w, h = self.output_size() or (0, 0)
-            raise WrongSize(f"the nested desktop came up at {w}x{h}, not {DESK_W}x{DESK_H}")
+        wait_for_size(self.ctl, (DESK_W, DESK_H))
         self.wallpaper = self._start(["swaybg", "-o", "WAYLAND-1", "-m", "fill", "-i", background], self.env, "swaybg")
         self.ready_file = None
         if term is not False:
@@ -992,12 +1025,7 @@ class Nested:
 
     def output_size(self):
         """(width, height) of the nested Hyprland's output in pixels, or None."""
-        try:
-            mons = json.loads(self.ctl("monitors", "-j") or "[]")
-        except ValueError:
-            return None
-        m = next((m for m in mons if m.get("name") == "WAYLAND-1"), None)
-        return (m.get("width"), m.get("height")) if m else None
+        return monitor_size(self.ctl("monitors", "-j"))
 
     def layers(self):
         """The namespaces of the layer surfaces mapped now."""

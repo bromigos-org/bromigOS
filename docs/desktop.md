@@ -401,7 +401,8 @@ its own name and section.
   answered in rofi, a failed verify, and a reset that leaves the file byte for byte as it
   was. It also drives the Settings page's Change…, Undo, Remove and Reset… buttons. The
   last run passed 49 of 49 checks. It needs kwin_wayland, Hyprland, rofi and a GPU, so it
-  runs by hand.
+  runs by hand. It stops at once if the nested screen isn't 1600×900. kwin 6.8 had shrunk
+  it to 1280×720, so a window rule now keeps it full screen.
 
 ## Monitors
 

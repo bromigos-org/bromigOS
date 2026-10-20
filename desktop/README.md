@@ -152,7 +152,11 @@ Some tests run by hand, because they need kwin_wayland, Hyprland, rofi and a GPU
 
 - `tests/e2e_keys_nested.py` runs `bromigos keys` end to end in a nested Hyprland nobody
   sees. `vkbd.py`, a virtual keyboard, types into it. It also drives Settings' Shortcuts
-  page with `settings_shortcuts_driver.py`.
+  page with `settings_shortcuts_driver.py`. The other nested tests (Settings, widgets,
+  tray, game, TV and more) reuse its nested Hyprland. A kwin window rule keeps it full
+  screen at the size the test asks for, 1600×900 unless the test says otherwise. If the
+  screen comes up at another size, the run stops with `WrongSize`. The rule and the check
+  are the theme previews' own, from `lib/bromigos_previews.py`.
 - `tests/e2e_settings_nested.py` drives Settings' pages the same way.
 - `tests/e2e_previews_nested.py` draws a theme preview in the nested desktop at two sizes.
   It fails if the picture isn't the whole desktop at the size asked for.
