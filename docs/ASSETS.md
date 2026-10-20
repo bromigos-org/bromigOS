@@ -226,10 +226,12 @@ resized to WebP for the repository.
   - `screensaver.webp`, from `overlay-screensaver`
   - `panels-cinder.webp`, from `widgets-cinder`
 - **Offscreen renders by bromigOS's own test tools.** No faces and no real hostnames.
-  - `theme-switcher.webp`: the Customize window on its Themes tab, with the previews,
-    over the Wick (`tools/screenshots/render.py`, `theme-switcher`: the switcher's own
-    renderer, `tools/theme-switcher/render.sh` with `BROMIGOS_PREVIEWS_HOLD=1`, in a
-    headless weston), 1600 wide
+  - `theme-switcher.webp`: the Customize window on its Themes tab, with all eleven
+    themes' previews (each the whole 1920×1080 desktop, drawn in the nested desktop),
+    Mire chosen, over the Wick (`tools/screenshots/render.py`, `theme-switcher`: the
+    switcher's own renderer, `tools/theme-switcher/render.sh` with
+    `BROMIGOS_PREVIEWS_HOLD=1`, in a headless weston), 1600 wide. Redrawn 2026-10-20,
+    after kwin 6.8 had cut the previews to their top-left corner
   - `customize-widgets.webp`: the Customize window on its Widgets tab, every widget drawn
     with demo readings (`tools/screenshots/render.py`, `customize-widgets`), 1600 wide
   - `edit-mode.webp`: edit mode on the Wick desktop, NETWORK picked, with the tray
@@ -316,8 +318,9 @@ no likeness and no lab hosts.
 - **`theme-cinder.webp`**, on the Themes and worlds page. The desktop in Cinder, rendered
   offscreen with demo readings (`tools/screenshots/render.py`, `theme-cinder`).
 - **`theme-switcher.webp`**, on the Themes and worlds page. The Customize window on its
-  Themes tab over the Wick, rendered offscreen with demo readings
-  (`tools/screenshots/render.py`, `theme-switcher`). The same picture as the docs'.
+  Themes tab over the Wick, with all eleven themes' previews and Mire chosen, rendered
+  offscreen with demo readings (`tools/screenshots/render.py`, `theme-switcher`). The
+  same picture as the docs'.
 - **`customize-widgets.webp`**, on the Themes and worlds page. The Customize window on its
   Widgets tab over the Wick, rendered offscreen with demo readings
   (`tools/screenshots/render.py`, `customize-widgets`). The same picture as the docs'.

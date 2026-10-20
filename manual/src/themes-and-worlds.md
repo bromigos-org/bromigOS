@@ -15,7 +15,7 @@ that reacts to what your machine is doing.
 3. Press <kbd>Enter</kbd>, or click the theme. The desktop changes colour within a second.
    A few apps change the next time you open them.
 
-![The Customize window on its Themes tab: a preview of the desktop in each theme, with Mire chosen](images/theme-switcher.webp)
+![The Customize window on its Themes tab: all eleven themes, each a preview of the whole desktop wearing it, with Mire chosen](images/theme-switcher.webp)
 
 Press <kbd>Esc</kbd> to close the switcher without changing anything. Hover over a card to
 read what the theme is.
