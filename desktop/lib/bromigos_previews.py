@@ -49,8 +49,9 @@ import sys
 import tempfile
 import time
 
-RENDERER = "4"                  # bump when a preview's look changes: every cached one is redrawn
+RENDERER = "5"                  # bump when a preview's look changes: every cached one is redrawn
                                 # (4: kwin 6.8 had shrunk the nested desktop to 1280x720; see KWIN_RULES)
+                                # (5: a nested Hyprland that took a login session drew nothing; see NO_SEAT)
 DESK_W, DESK_H = 1920, 1080     # the desktop a preview shows (logical px)
 SAVE_W, SAVE_H = 1280, 720      # what is kept
 TERM_W, TERM_H = 780, 470       # the terminal window's inside
@@ -739,6 +740,19 @@ fullscreenrule=2
 """
 
 
+# The nested compositors never get a seat. Hyprland asks libseat for one (for its DRM
+# backend) even when it's nested; libseat's logind backend then takes the login session
+# the caller runs in. When that session isn't the one on screen (a terminal multiplexer
+# started from a text console, an ssh login), Hyprland sees an inactive session and
+# draws nothing: its start-up never runs (no bar, no panels) and grim waits for a frame
+# that never comes, every time. When it is the one on screen,
+# the nested Hyprland could reach for the real GPU's outputs. "none" is no libseat
+# backend at all, so opening a seat fails at once, on any machine (with seatd running
+# too), and Hyprland uses only its Wayland backend. The hand-run nested tests
+# (e2e_keys_nested.py and those built on it) start theirs with the same.
+NO_SEAT = {"LIBSEAT_BACKEND": "none"}
+
+
 class WrongSize(RuntimeError):
     """The nested desktop came up at another size than the one asked for: its picture would
     show only part of the desktop, so it isn't kept."""
@@ -982,7 +996,7 @@ class Nested:
                     '<policy context="default"><allow send_destination="*" eavesdrop="true"/>'
                     '<allow eavesdrop="true"/><allow own="*"/></policy></busconfig>\n')
         base = box.env(XDG_RUNTIME_DIR=rt, BROMIGOS_SHARE_DIR=share, DBUS_SESSION_BUS_ADDRESS=f"unix:path={rt}/bus",
-                       PATH=f"{stubs}:{os.path.join(box.dir, 'bin')}:/usr/bin:/bin")
+                       PATH=f"{stubs}:{os.path.join(box.dir, 'bin')}:/usr/bin:/bin", **NO_SEAT)
         if set(names) & HOMELAB_PANELS and homelab_dir():
             base.update(BROMIGOS_HOMELAB=homelab_dir(), BROMIGOS_WIDGETS_DEMO_LAB="1")
         if gtk:
@@ -1059,8 +1073,11 @@ class Nested:
         """grim's picture of the nested output, to `out` (PNG). A picture of another size
         than DESK_W x DESK_H is WrongSize (it would show part of the desktop)."""
         from PIL import Image
-        r = subprocess.run(["grim", "-o", "WAYLAND-1", out], env=self.env, capture_output=True, text=True,
-                           timeout=30)
+        try:
+            r = subprocess.run(["grim", "-o", "WAYLAND-1", out], env=self.env, capture_output=True, text=True,
+                               timeout=30)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("grim got no picture in 30 s: the nested Hyprland drew no frame") from None
         if r.returncode != 0 or not os.path.exists(out):
             raise RuntimeError(f"grim: {r.stderr.strip()[:200]}")
         with Image.open(out) as im:

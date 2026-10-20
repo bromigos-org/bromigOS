@@ -548,6 +548,33 @@ class NestedSizeTest(unittest.TestCase):
         self.assertIn("0x0", str(e.exception))
         self.assertIsNone(PV.monitor_size("not json"))
 
+    def test_a_grim_that_gets_no_frame_says_so(self):
+        from unittest import mock
+
+        def grim(argv, **k):
+            raise subprocess.TimeoutExpired(argv, k.get("timeout"))
+        with mock.patch.object(PV.subprocess, "run", grim), self.assertRaises(RuntimeError) as e:
+            self.nested().grab(os.path.join(self.tmp, "desktop.png"))
+        self.assertIn("drew no frame", str(e.exception))
+
+
+class NoSeatTest(unittest.TestCase):
+    """The nested compositors never take a login session (2026-10-20: started from a text
+    console's session, the nested Hyprland took it, saw it inactive and drew nothing; every
+    preview was composed after grim waited 30 s)."""
+
+    def test_no_libseat_backend_is_named(self):
+        self.assertEqual(set(PV.NO_SEAT), {"LIBSEAT_BACKEND"})
+        self.assertNotIn(PV.NO_SEAT["LIBSEAT_BACKEND"], ("seatd", "logind", "builtin", "noop"))
+
+    def test_the_previews_and_the_hand_run_tests_start_theirs_without_one(self):
+        import inspect
+        self.assertIn("**NO_SEAT", inspect.getsource(PV.Nested.start))
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "e2e_keys_nested.py")) as f:
+            keys = f.read()
+        self.assertIn("**PV.NO_SEAT", keys)
+        self.assertNotIn('"LIBSEAT_BACKEND"', keys)
+
 
 if __name__ == "__main__":
     unittest.main()

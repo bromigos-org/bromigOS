@@ -110,7 +110,8 @@ class Nest:
                      "XDG_STATE_HOME": os.path.join(self.home, ".local", "state"),
                      "XDG_DATA_HOME": os.path.join(self.home, ".local", "share"),
                      "BROMIGOS_SHARE_DIR": os.path.join(self.tmp, "share"),
-                     "DBUS_SESSION_BUS_ADDRESS": "disabled:", "LIBSEAT_BACKEND": "seatd", "KWIN_COMPOSE": "O2"}
+                     "DBUS_SESSION_BUS_ADDRESS": "disabled:", "KWIN_COMPOSE": "O2",
+                     **PV.NO_SEAT}                  # no login session or seat, whatever runs seatd or logind
         self.procs = []
 
     def start(self):

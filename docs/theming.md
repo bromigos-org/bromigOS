@@ -609,9 +609,16 @@ The picture has to show the whole desktop, so the renderer checks its size twice
   picture is thrown away, the nested desktop is tried once more, and then the preview is
   put together from its pieces instead (see below). A cut-off picture is never cached.
 
+The nested Hyprland never takes a login session. It's started with
+`LIBSEAT_BACKEND=none`, so it can't open a seat and draws only into kwin. Without that,
+Hyprland took the login session it was started from. When that session wasn't the one on
+screen (a terminal started from a text console, say), Hyprland drew nothing: no bar, no
+panels, and grim waited 30 seconds for a frame that never came. Every preview was then
+put together from its pieces.
+
 The hand-run nested tests (`desktop/tests/e2e_keys_nested.py` and the tests built on it)
-use the same kwin rule and the same size check. They stop at once if the nested screen
-isn't the size they asked for.
+use the same kwin rule, the same size check and the same `LIBSEAT_BACKEND=none`. They stop
+at once if the nested screen isn't the size they asked for.
 
 Each preview's `.json` file records the size asked for (`size`) and the size grim
 captured (`captured`).
@@ -643,7 +650,8 @@ with a `.json` file beside each. The stamp is a hash of everything the picture s
 
 So when a theme or the live layer changes, the preview is drawn again. A new renderer
 version draws every preview again. Version 4 replaced the previews that kwin 6.8 had cut
-to the top-left corner. Until the new one
+to the top-left corner. Version 5 replaced any that were put together from pieces because
+the nested Hyprland drew nothing. Until the new one
 is ready, the switcher shows the old one with a small spinner in its corner. A theme takes 10 to 20 seconds
 to draw, a world the longest. Only one is drawn at a time, at low priority.
 
