@@ -133,8 +133,8 @@ Four render tests check what the unit tests can't:
 |---|---|
 | `tests/offscreen_motion.py` | Reduced motion and the still mode, for the den, a world and the overlays |
 | `tests/offscreen_sizes.py` | The background at six screen sizes, from 1280×800 to 3440×1440 |
-| `tests/offscreen_retint.py` | The den recoloured for the Wick and the six colour themes |
-| `tests/offscreen_theme_switch.py` | Existing den, pinned scanner and radial surfaces switch Wick → Cinder → Rime → Wick; scanner hues match each palette, and frames match fresh scenes |
+| `tests/offscreen_retint.py` | The den recoloured for the Wick and the eight colour themes |
+| `tests/offscreen_theme_switch.py` | Existing den, pinned scanner and radial surfaces switch Wick → Cinder → Rime → Wick · Tidewell → Wick · Mire → Wick; scanner hues match each palette, and frames match fresh scenes |
 | `tests/software_session.py` | The daemon on a software renderer: a still frame, at low CPU ([No GPU](#no-gpu)) |
 
 ## Decks

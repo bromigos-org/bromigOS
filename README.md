@@ -121,17 +121,18 @@ All of it stays off until you set it up.
 storage, alerts and jobs, with the nodes' CPU, memory and disk in a
 table](docs/images/lab-console.webp)
 
-## Nine themes
+## Eleven themes
 
-![The nine themes as the theme switcher previews them, in a three-by-three grid: the
-Wick, Mire, Tidewell, Cinder, Deepvein, Highwind, Lowtown, Rime and
-Sunder](docs/images/themes-grid.webp)
+![The eleven themes as the theme switcher previews them, in a grid of three across: the
+Wick, Wick · Mire, Wick · Tidewell, Mire, Tidewell, Cinder, Deepvein, Highwind, Lowtown,
+Rime and Sunder](docs/images/themes-grid.webp)
 
-bromigOS comes with nine themes:
+bromigOS comes with eleven themes:
 
 - **The Wick**, phosphor green on black. It's the default.
 - **Two worlds**, Mire (a night bayou) and Tidewell (the sea at night).
-- **Six colour themes**: Rime, Sunder, Cinder, Lowtown, Highwind and Deepvein.
+- **Eight colour themes**: Rime, Sunder, Cinder, Lowtown, Highwind and Deepvein, and the
+  den in the worlds' colours, Wick · Tidewell and Wick · Mire.
 
 To switch, press **Super+Ctrl+Shift+Space**, or run `bromigos theme set <name>`. You can
 make your own, or install one from a Git repository.

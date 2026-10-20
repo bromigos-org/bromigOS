@@ -88,9 +88,9 @@ while the computer starts.
 
 ## The themes
 
-bromigOS comes with nine themes.
+bromigOS comes with eleven themes.
 
-![All nine themes, as the theme switcher previews them: Wick, Mire, Tidewell, Cinder, Deepvein, Highwind, Lowtown, Rime and Sunder](images/themes-grid.webp)
+![All eleven themes, as the theme switcher previews them: Wick, Wick · Mire, Wick · Tidewell, Mire, Tidewell, Cinder, Deepvein, Highwind, Lowtown, Rime and Sunder](images/themes-grid.webp)
 
 | Theme | Kind | Look |
 |---|---|---|
@@ -103,8 +103,15 @@ bromigOS comes with nine themes.
 | Lowtown | colour | Neon on wet asphalt. |
 | Highwind | colour | Lantern gold on a dusk sky. |
 | Deepvein | colour | Amethyst on cavern black. |
+| Wick · Tidewell | colour | The den in Tidewell's colours: cyan on deep water. |
+| Wick · Mire | colour | The den in Mire's colours: firefly green and moss on black water. |
 
 A colour theme shows the den in its own colours.
+
+Wick · Tidewell and Wick · Mire are for when you like a world's colours but want the den
+behind your windows. They're colour themes, not the worlds: the den keeps its screens,
+its glyph rain and your Wick panel layout. To see the sea or the bayou, choose Tidewell
+or Mire.
 
 ![The desktop in Cinder, a colour theme: the den, the bar, the panels and the terminal in ember orange](images/theme-cinder.webp)
 

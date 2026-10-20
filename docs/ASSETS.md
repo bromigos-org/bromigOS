@@ -58,7 +58,7 @@ the models used.
 | bromigOS repository mirrorlist | bromigOS source, with a public package URL | yes | Text only |
 | mehshell theme colour files and test fixtures | Generated from bromigOS theme colours by `lib/bromigos_prompt.py` | yes | Text only; no personal data |
 | Docs images from bromigos.org (six files) | The site's published stills | yes | Offscreen renders with demo data. [List](#docs-and-readme-images) |
-| Docs images rendered offscreen (eleven files) | bromigOS's own test tools | yes | No faces, no real hostnames. [List](#docs-and-readme-images) |
+| Docs images rendered offscreen (twelve files) | bromigOS's own test tools | yes | No faces, no real hostnames. [List](#docs-and-readme-images) |
 
 ## How each was made
 
@@ -207,7 +207,7 @@ resized to WebP for the repository.
   demo readings and a made-up lab, resized to 1600 wide:
   - `hero-wick.webp`: the desktop in the Wick, with the bar, the panels and a terminal
   - `widgets.webp`: the panels, cropped from the hero's master
-  - `themes-grid.webp`: all nine themes as the theme switcher previews them, each named
+  - `themes-grid.webp`: all eleven themes as the theme switcher previews them, each named
   - `mire-desktop.webp`, `cinder-desktop.webp`: the desktop in Mire and in Cinder
   - `vector.webp`: VECTOR answering on the desk
   - `holo-deck.webp`: the holo deck
@@ -239,6 +239,10 @@ resized to WebP for the repository.
     Settings window, with fixture data
   - `boot-menu.webp`, `boot-snapshots.webp`: GRUB's menu and its snapshot list, in QEMU
   - `den-colour-themes.webp`: the den recoloured for the Wick, Cinder and Rime
+  - `den-world-colours.webp`: the desktop in Wick · Tidewell and Wick · Mire, each beside
+    its world, Tidewell and Mire (`bromigos theme previews NAME --size 2560x1440 --out`,
+    drawn from the desktop's pieces with `BROMIGOS_PREVIEWS_NESTED=0`, with demo readings;
+    four pictures in a two-by-two sheet), 1600 wide
   - `den-tv.webp`: the den TV playing a test pattern that ffmpeg generates, with its hint
     (`live/tools/offscreen.py bg` with `OFF_TV`, cropped)
   - `den-tv-guide.webp`: The standalone Den TV app, the channel guide, with made-up channels and
@@ -320,7 +324,7 @@ no likeness and no lab hosts.
 - **`edit-mode.webp`**, on the Panels page. Edit mode on the Wick desktop, NETWORK picked,
   rendered offscreen in the nested desktop with demo readings
   (`tools/screenshots/render.py`, `edit-mode`). The same picture as the docs'.
-- **`themes-grid.webp`**, on the Themes and worlds page. The nine themes as the theme
+- **`themes-grid.webp`**, on the Themes and worlds page. The eleven themes as the theme
   switcher previews them, rendered offscreen with demo readings
   (`tools/screenshots/render.py`, `themes-grid`).
 - **`timeline.webp`**, on the Holograms page. The timeline deck, rendered offscreen with

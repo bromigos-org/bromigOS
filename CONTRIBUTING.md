@@ -32,7 +32,7 @@ belongs to a package, so pacman installs, updates and removes all of it.
 | [`homelab/`](homelab/README.md) | The homelab integrations and `bromigos lab` | `bromigos-lab`, `bromigos-homelab` |
 | [`settings/`](settings/README.md) | The login screen, boot splash, boot menu, and the GTK, icon and cursor themes | `bromigos-settings` |
 | [`theme/`](theme/README.md) | The templates every theme renders into each app's config, the bar's icons and the canonical emblem | `bromigos-core` |
-| `themes/` | The nine themes: colours, art, emblems and the worlds' scenes | `bromigos-core` |
+| `themes/` | The eleven themes: colours, art, emblems and the worlds' scenes | `bromigos-core` |
 | [`lib/`](lib/README.md) | Python libraries shared by the other parts | `bromigos-core` |
 | `bin/` | Small commands that `bromigos` runs, such as `bromigos terminal` | `bromigos-core` |
 | `migrations/` | Scripts that `bromigos update` runs once per user to bring an install forward | `bromigos-core` |

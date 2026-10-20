@@ -59,7 +59,8 @@ SCENES = os.path.join(HERE, "scenes")
 VECTOR = next((d for d in (os.environ.get("BROMIGOS_VECTOR_SRC"), os.path.join(os.path.dirname(ROOT), "vector"),
                            "/usr/lib/bromigos/vector") if d and os.path.isfile(os.path.join(d, "tools", "offscreen.py"))),
               None)
-THEMES = ["wick", "mire", "tidewell", "cinder", "deepvein", "highwind", "lowtown", "rime", "sunder"]
+THEMES = ["wick", "wick-mire", "wick-tidewell", "mire", "tidewell", "cinder", "deepvein", "highwind", "lowtown", "rime",
+          "sunder"]
 
 
 def scene(name):
@@ -131,7 +132,7 @@ class Ctx:
         return out
 
     def previews(self):
-        """A cache of the nine themes' previews (the switcher's, the Theme page's, the grid's)."""
+        """A cache of the themes' previews (the switcher's, the Theme page's, the grid's)."""
         if self._previews:
             return self._previews
         d = os.path.join(self.out, "previews")
@@ -216,9 +217,9 @@ shot("theme-highwind", "Highwind, a colour theme",
      "Highwind: kite-lantern gold on a dusk sky, the den and every panel in its colours.")(_colour("highwind"))
 
 
-@shot("themes-grid", "Nine themes",
-      "Every theme bromigOS ships, as the theme switcher previews them (3x3, each named): the Wick, Mire, "
-      "Tidewell and six colour themes.")
+@shot("themes-grid", "Eleven themes",
+      "Every theme bromigOS ships, as the theme switcher previews them (three across, each named): the Wick, "
+      "the den in the worlds' colours (Wick · Mire, Wick · Tidewell), Mire, Tidewell and six more colour themes.")
 def _grid(ctx, m):
     import glob
     from PIL import Image, ImageDraw
@@ -234,7 +235,10 @@ def _grid(ctx, m):
     font = _font(30, bold=True)
     small = _font(22)
     for i, n in enumerate(names):
-        pics = sorted(glob.glob(os.path.join(cache, f"{n}-*.jpg")), key=os.path.getmtime)
+        # NAME-STAMP.jpg only: wick's preview, never wick-mire's
+        pics = sorted((p for p in glob.glob(os.path.join(cache, f"{glob.escape(n)}-*.jpg"))
+                       if re.fullmatch(re.escape(n) + r"-[0-9a-f]{12}\.jpg", os.path.basename(p))),
+                      key=os.path.getmtime)
         if not pics:
             raise RuntimeError(f"no preview of {n} in {cache}")
         pal = _palette(n)

@@ -172,8 +172,8 @@ the lighthouse and the creatures' water clear. Mire keeps the Sleeper and Hollis
 
 Your desktop remembers a layout for each theme. When you switch theme, your panels switch
 to the layout you last had on that theme. The first time, you get the layout made for
-it. The colour themes (Cinder, Deepvein, Highwind, Lowtown, Rime and Sunder) paint the
-Wick's den in other colours, so they share the Wick's layout. Switching between them
+it. The colour themes (Cinder, Deepvein, Highwind, Lowtown, Rime, Sunder, Wick · Tidewell
+and Wick · Mire) paint the Wick's den in other colours, so they share the Wick's layout. Switching between them
 leaves your panels alone.
 
 To use one layout on every theme, run `bromigos panels layout apply minimal

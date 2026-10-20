@@ -42,7 +42,8 @@ An AI program that writes code for you in a terminal. bromigOS shows agents that
 ## Colour theme
 
 A [theme](#theme) that changes the colours of everything and shows the [den](#den) in
-those colours. bromigOS has six: Rime, Sunder, Cinder, Lowtown, Highwind and Deepvein.
+those colours. bromigOS has eight: Rime, Sunder, Cinder, Lowtown, Highwind, Deepvein, and
+Wick · Tidewell and Wick · Mire, the den in the two worlds' colours.
 
 ## Creation tools
 

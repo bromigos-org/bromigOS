@@ -24,7 +24,8 @@ There are three kinds of theme:
   real readings. The *live layer* draws it. That's the program that draws the animated
   background and the decks.
 - **Colour themes.** A colour theme changes the colours only. The den stays behind it,
-  recoloured in the theme's colours.
+  recoloured in the theme's colours. Two of them, Wick · Tidewell and Wick · Mire, give
+  the den the two worlds' colours.
 
 | Theme | Kind | Look |
 |---|---|---|
@@ -37,6 +38,8 @@ There are three kinds of theme:
 | `lowtown` | colour | Neon on wet asphalt. |
 | `highwind` | colour | Kite-lantern gold on a dusk sky. |
 | `deepvein` | colour | Amethyst on cavern black. |
+| `wick-tidewell` | colour | The den in Tidewell's colours: cyan on deep water. |
+| `wick-mire` | colour | The den in Mire's colours: firefly green and moss on black water. |
 
 `bromigos theme list` shows every theme installed, with its source: `system` (shipped
 with bromigOS), `ext` (an installed extension) or `user` (your own folder).
@@ -764,6 +767,19 @@ stays the Wick's painting, because the live layer recolours it itself.
 Under the Wick nothing changes: the painting comes back bit for bit
 (`live/tests/offscreen_retint.py` checks this). A world keeps its own painting.
 
+### The den in a world's colours
+
+![Four desktops in a two-by-two grid: on the left, the den in Tidewell's cyan and in Mire's
+firefly green; on the right, the Tidewell and Mire worlds they take their colours
+from](images/den-world-colours.webp)
+
+`wick-tidewell` (Wick · Tidewell) and `wick-mire` (Wick · Mire) are colour themes with the
+two worlds' palettes. Choose one to keep the den, its screens and its layout, in the
+world's colours. The worlds themselves, `tidewell` and `mire`, bring their own scenes.
+
+Each one's `colors.toml` is a copy of its world's. `live/tests/test_retint.py` checks that
+the two stay equal, so a change to a world's colours goes into both files.
+
 ## High contrast
 
 `bromigos accessibility contrast high` renders any theme in high contrast. The hues stay
@@ -1207,7 +1223,7 @@ The desktop's `bromigos shell` command forwards `doctor`, `preview` and `configu
 to mehshell's own validated commands. Preview output is printed, never evaluated.
 User instructions are in [Shell and terminal](../manual/src/shell.md).
 
-The generator uses the same colour roles for Wick, its six colour variants,
+The generator uses the same colour roles for Wick, its eight colour variants,
 Tidewell and Mire. Its reference files are in `live/tests/golden/mehshell/`.
 
 ## Zettlr
