@@ -1431,7 +1431,10 @@ def render(names, force=False, dirs=None, out=None, progress=None, wait=True, si
                 if out and os.path.abspath(out) != dest:
                     shutil.copy(dest, out)
                     meta["copied_to"] = out
-                for old in cached(name) + glob.glob(os.path.join(CACHE, f"{glob.escape(name)}-*.failed")):
+                # this theme's older pictures and failures (NAME-STAMP: wick's, never wick-mire's)
+                fails = [p for p in glob.glob(os.path.join(CACHE, f"{glob.escape(name)}-*.failed"))
+                         if re.fullmatch(re.escape(name) + r"-[0-9a-f]{12}\.failed", os.path.basename(p))]
+                for old in cached(name) + fails:
                     if old != dest:                    # the older versions' pictures
                         for p in (old, os.path.splitext(old)[0] + ".json"):
                             try:

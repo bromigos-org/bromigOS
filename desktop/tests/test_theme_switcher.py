@@ -169,6 +169,11 @@ class StampTest(unittest.TestCase):
             self.assertEqual(PV.current("mire", "ffffffffffff"), (os.path.join(cache, "mire-0123456789ab.jpg"), False))
             self.assertEqual(PV.current("mire", "0123456789ab")[1], True)
             self.assertEqual(PV.current("tidewell", "0123456789ab"), (None, False))
+            # the Wick's and its colour variants' (wick-mire, wick-tidewell) never mix
+            for n in ("wick-0123456789ab.jpg", "wick-mire-0123456789ab.jpg", "wick-tidewell-fedcba987654.jpg"):
+                open(os.path.join(cache, n), "w").close()
+            self.assertEqual([os.path.basename(p) for p in PV.cached("wick")], ["wick-0123456789ab.jpg"])
+            self.assertEqual([os.path.basename(p) for p in PV.cached("wick-mire")], ["wick-mire-0123456789ab.jpg"])
         finally:
             PV.CACHE = old
 

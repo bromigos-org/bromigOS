@@ -89,7 +89,10 @@ if [[ -z $previews ]]; then
   echo "drawing the previews (bromigos theme previews) into $out/previews"
   run python3 "$root/desktop/bin/bromigos-theme-previews" || { echo "render: some previews failed" >&2; }
 fi
-backdrop=${backdrop_in:-$(ls -t "$work/cache/bromigos/theme-previews/$theme"-*.jpg 2>/dev/null | head -1 || true)}
+hex12='[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'
+# NAME-STAMP.jpg only: wick's preview, never wick-mire's
+# shellcheck disable=SC2086
+backdrop=${backdrop_in:-$(ls -t "$work/cache/bromigos/theme-previews/$theme"-$hex12.jpg 2>/dev/null | head -1 || true)}
 fails=0
 for s in "${sizes[@]}"; do
   w=${s%x*} h=${s#*x}
