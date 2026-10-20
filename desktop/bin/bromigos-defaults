@@ -11,8 +11,8 @@ it.
 
   bromigos defaults [status]             each kind's app, the apps that can be it, the terminal,
                                          the file manager's key, your web apps
-  bromigos defaults set KIND APP         KIND: browser, files, editor, images, video, music,
-                                         pdf, mail; APP a desktop entry (firefox.desktop)
+  bromigos defaults set KIND APP         KIND: browser, files, editor, notes, images, video,
+                                         music, pdf, mail; APP a desktop entry (firefox.desktop)
   bromigos defaults terminal APP|COMMAND the terminal bromigOS's keys and menus start ($TERMINAL
                                          in the session too; xdg-terminals.list)
   bromigos defaults files APP|COMMAND    the file manager its key starts
@@ -39,6 +39,9 @@ KINDS = {
     "browser": ("Web browser", ["x-scheme-handler/https", "x-scheme-handler/http", "text/html"]),
     "files": ("File manager", ["inode/directory"]),
     "editor": ("Text editor", ["text/plain"]),
+    # Markdown notes: offered to a notes app such as Zettlr when one is installed; nothing
+    # bromigOS installs needs it
+    "notes": ("Markdown notes", ["text/markdown", "text/x-markdown"]),
     "images": ("Image viewer", ["image/png", "image/jpeg", "image/gif", "image/webp"]),
     "video": ("Video player", ["video/mp4", "video/x-matroska", "video/webm"]),
     "music": ("Music player", ["audio/mpeg", "audio/flac", "audio/ogg"]),

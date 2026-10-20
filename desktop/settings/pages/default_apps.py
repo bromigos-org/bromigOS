@@ -1,4 +1,4 @@
-"""Default apps: which app opens links, folders, text, pictures, videos, music, PDFs and
+"""Default apps: which app opens links, folders, text, Markdown notes, pictures, videos, music, PDFs and
 mail (xdg-mime), the terminal and the file manager bromigOS's own keys start, and your web
 apps (docs/settings.md, "Default apps").
 
@@ -14,9 +14,11 @@ from bromigos_settings import Entry, Page  # noqa: E402
 
 CMD = ["bromigos", "defaults"]
 ICONS = {"browser": "web-browser-symbolic", "files": "system-file-manager-symbolic", "editor": "text-editor-symbolic",
+         "notes": "accessories-text-editor-symbolic",
          "images": "image-x-generic-symbolic", "video": "video-x-generic-symbolic", "music": "audio-x-generic-symbolic",
          "pdf": "x-office-document-symbolic", "mail": "mail-unread-symbolic"}
-WHAT = {"browser": "links and web pages", "files": "folders", "editor": "plain text files", "images": "pictures",
+WHAT = {"browser": "links and web pages", "files": "folders", "editor": "plain text files",
+        "notes": "Markdown notes (.md)", "images": "pictures",
         "video": "videos", "music": "music and sound files", "pdf": "PDF documents", "mail": "mailto: links"}
 
 

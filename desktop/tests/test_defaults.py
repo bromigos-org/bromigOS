@@ -53,6 +53,15 @@ class DefaultsTest(CmdTest):
         self.cmd("defaults", "set", "browser", "nope.desktop", ok=False)
         self.cmd("defaults", "set", "toaster", "firefox.desktop", ok=False)
 
+    def test_markdown_notes_offer_zettlr(self):
+        d = self.cmd("defaults")
+        notes = self.kind(d, "notes")
+        self.assertEqual(notes["types"], ["text/markdown", "text/x-markdown"])
+        self.assertIn("zettlr.desktop", [c["id"] for c in notes["candidates"]])
+        d = self.cmd("defaults", "set", "notes", "zettlr.desktop")
+        self.assertIn(["default", "zettlr.desktop", "text/markdown", "text/x-markdown"], self.calls("xdg-mime"))
+        self.assertEqual(d["said"], "Markdown notes: Zettlr")
+
     def test_the_terminal_and_the_file_managers_key(self):
         d = self.cmd("defaults", "terminal", "foot.desktop")
         self.assertEqual(d["terminal"]["command"], "foot")

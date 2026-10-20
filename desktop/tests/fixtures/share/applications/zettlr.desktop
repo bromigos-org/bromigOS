@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Zettlr
+Exec=zettlr %U
+Icon=zettlr
+Categories=Office;
+MimeType=text/markdown;

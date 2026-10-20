@@ -191,7 +191,8 @@ on, and the weather panel's place and units. (`bromigos panels`)
 
 ## Default apps
 
-Which app opens links, folders, text files, pictures, videos, music, PDFs and email. Also
+Which app opens links, folders, text files, Markdown notes, pictures, videos, music, PDFs
+and email. Also
 the terminal and file manager that bromigOS's keys open, and your
 [web apps](webapps.md). (`bromigos defaults`)
 

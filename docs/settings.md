@@ -448,8 +448,8 @@ normal contrast. See [accessibility.md](accessibility.md).
 
 ### Default apps
 
-`bromigos defaults` sets which app opens links, folders, plain text, pictures, videos,
-music, PDFs and mailto: links. There's one dropdown per kind, and each sets every file type
+`bromigos defaults` sets which app opens links, folders, plain text, Markdown notes,
+pictures, videos, music, PDFs and mailto: links. There's one dropdown per kind, and each sets every file type
 of its kind at once with xdg-mime.
 
 The terminal and file manager that bromigOS's keys start are `bromigos.apps`, written in a

@@ -47,8 +47,11 @@ cache, and show it the next time they open.
 ## Choose which apps open your files
 
 Open **Settings › Default apps**. Choose the app that opens links, folders, text files,
-pictures, videos, music, PDFs and email. The same page chooses the terminal and file
-manager that bromigOS's keys open.
+Markdown notes, pictures, videos, music, PDFs and email. The same page chooses the
+terminal and file manager that bromigOS's keys open.
+
+For Markdown notes, a notes app such as Zettlr fits well. bromigOS doesn't install one,
+but every theme colours Zettlr. See [Themes and worlds](themes-and-worlds.md#apps-the-theme-colours).
 
 ## Keep a website as an app
 
