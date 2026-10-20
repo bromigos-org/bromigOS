@@ -372,6 +372,9 @@ class CardTest(unittest.TestCase):
         self.assertEqual(SW.kind_of("wick"), "den")
         self.assertEqual(SW.kind_of("mire"), "world")
         self.assertEqual(SW.kind_of("cinder"), "colour")
+        # the Wick in a world's colours is a colour theme (the den), never that world
+        self.assertEqual(SW.kind_of("wick-tidewell"), "colour")
+        self.assertEqual(SW.kind_of("wick-mire"), "colour")
         self.assertEqual(SW.Entry("wick", "Wick", "", "den").kind_label(), "DEN")
 
     def test_theme_colours_resolve_names(self):

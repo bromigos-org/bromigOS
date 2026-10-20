@@ -1,0 +1,9 @@
+# Wick · Tidewell: the Wick's den in Tidewell's colours (docs/theming.md). A colour theme, not
+# the Tidewell world: the den stays behind it, recoloured.
+name = "Wick · Tidewell"
+description = "The den in Tidewell's colours: the Choir's cyan on deep water, the lamp's amber."
+mode = "dark"
+canon = """
+The Wick's screens can be tuned to any post on the relay. Tuned to Greywater Light, the den \
+glows in the Tidewell's colours: the Choir's cyan on deep water, Maren's lamp for a warning, \
+and a red the sea has never needed."""

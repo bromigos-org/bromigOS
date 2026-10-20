@@ -113,7 +113,10 @@ fn other_theme_words_go_to_the_router() {
 #[test]
 fn mehshell_golden_for_each_theme() {
     let d = tempfile::tempdir().unwrap();
-    for name in ["wick", "rime", "sunder", "cinder", "lowtown", "highwind", "deepvein", "tidewell", "mire"] {
+    for name in [
+        "wick", "rime", "sunder", "cinder", "lowtown", "highwind", "deepvein", "tidewell", "mire", "wick-tidewell",
+        "wick-mire",
+    ] {
         let o = run(d.path(), &["theme", "set", name, "--no-reload"]);
         assert!(o.status.success(), "{name}: {}", String::from_utf8_lossy(&o.stderr));
         let palette = d.path().join(".local/state/bromigos/theme/current/palette.json");

@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
-"""Switch Wick -> Cinder -> Rime -> Wick on den, scanner and radial surfaces, headless EGL.
-Runs the daemon's frame handler in a sandbox; no desktop socket, theme or window.
-The switched frames must equal freshly constructed scenes in the new palette.
+"""Switch Wick -> Cinder -> Rime -> Wick · Tidewell -> Wick · Mire -> Wick on den, scanner and
+radial surfaces, headless EGL. Runs the daemon's frame handler in a sandbox; no desktop
+socket, theme or window. The switched frames must equal freshly constructed scenes in the
+new palette.
+
+    python3 live/tests/offscreen_theme_switch.py [--out DIR]   (default /tmp/bromigos-palette-switch)
 """
 import ast
 import os
 import random
 import shutil
+import sys
 import time
 from types import SimpleNamespace as NS
 
 import offscreen_retint as R
 from OpenGL import GL
 import numpy as np
+
+THEMES = ('wick', 'cinder', 'rime', 'wick-tidewell', 'wick-mire')
 
 
 def main():
@@ -27,7 +33,7 @@ def main():
     exec(compile(ast.Module(body=[node], type_ignores=[]), path, 'exec'), ns)
     draw = ns['_render']
     bromigos = '/usr/bin/bromigos'
-    paths = {t: R.palette_json(t, bromigos) for t in ('wick', 'cinder', 'rime')}
+    paths = {t: R.palette_json(t, bromigos) for t in THEMES}
     cfg = config.load()
     cfg['background']['underlay'] = R.DEN
     cfg['general']['motion'] = 'full'
@@ -38,7 +44,7 @@ def main():
     area = NS(get_scale_factor=lambda: 1, get_allocated_width=lambda: R.W,
               get_allocated_height=lambda: R.H)
     target = glkit.Target(R.W, R.H)
-    out = '/tmp/bromigos-palette-switch'
+    out = sys.argv[sys.argv.index('--out') + 1] if '--out' in sys.argv else '/tmp/bromigos-palette-switch'
     os.makedirs(out, exist_ok=True)
     from PIL import Image
     try:
@@ -58,7 +64,7 @@ def main():
                      app=app, make_renderer=make)
             win._close_renderer = lambda: getattr(win.renderer, 'close', lambda: None)()
             previous = None
-            for theme in ('wick', 'cinder', 'rime', 'wick'):
+            for theme in THEMES + ('wick',):
                 R.use_theme(paths[theme])
                 target.bind()
                 draw(win, area, None)

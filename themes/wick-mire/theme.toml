@@ -1,0 +1,9 @@
+# Wick · Mire: the Wick's den in Mire's colours (docs/theming.md). A colour theme, not the Mire
+# world: the den stays behind it, recoloured.
+name = "Wick · Mire"
+description = "The den in Mire's colours: firefly green and moss on black water, the porch lantern's amber."
+mode = "dark"
+canon = """
+The Wick's screens can be tuned to any post on the relay. Tuned to Hollis's stilt shack, the \
+den takes the Mire's colours: firefly light and moss on black water, the porch lantern for a \
+warning, and the Sleepers' eye-lamps in cyan."""

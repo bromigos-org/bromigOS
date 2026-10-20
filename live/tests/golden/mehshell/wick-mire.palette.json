@@ -1,0 +1,87 @@
+{
+  "colors": {
+    "background": "#05090a",
+    "cyan": "#58e0e8",
+    "danger": "#e0604f",
+    "danger_surface": "#1c0806",
+    "danger_text": "#ffd9d2",
+    "dim": "#5d7a4b",
+    "faint": "#4a5a4c",
+    "gold": "#f0d070",
+    "muted": "#7a8a78",
+    "panel": "#0c1513",
+    "primary": "#b8e05a",
+    "rust": "#4a160e",
+    "selection": "#1c2d27",
+    "soft": "#d6e8b4",
+    "text": "#cfdcc4",
+    "void": "#05090a",
+    "warn": "#e8a040",
+    "warn_surface": "#3e2c0e",
+    "white": "#eef4e0"
+  },
+  "contrast": {
+    "lowest": {
+      "bg": "panel",
+      "fg": "selection",
+      "min": 3.0,
+      "ok": false,
+      "ratio": 1.28
+    },
+    "mode": "normal",
+    "ok": false
+  },
+  "mode": "dark",
+  "motion": "full",
+  "name": "Wick · Mire",
+  "schema": 1,
+  "tables": {
+    "holo": {
+      "glow": "#b8e05a",
+      "highlight": "#eef4e0",
+      "label": "#cfdcc4",
+      "line": "#b8e05a"
+    },
+    "intercept": {
+      "needle": "#f0d070",
+      "static": "#b8e05a"
+    },
+    "qt": {
+      "button": "#16241f",
+      "header": "#08100f",
+      "negative_on_selection": "#4a160e",
+      "neutral_on_selection": "#4a3a10",
+      "view": "#070c0c",
+      "view_alt": "#0a1110",
+      "window_alt": "#0f1a18"
+    },
+    "terminal": {
+      "background": "#05090a",
+      "color0": "#05090a",
+      "color1": "#e0604f",
+      "color10": "#d6e8b4",
+      "color11": "#f0d070",
+      "color12": "#8cc0dc",
+      "color13": "#d8a8e0",
+      "color14": "#9cf0f0",
+      "color15": "#e8f0e0",
+      "color2": "#b8e05a",
+      "color3": "#e8a040",
+      "color4": "#5a9ab8",
+      "color5": "#b07ab8",
+      "color6": "#58e0e8",
+      "color7": "#b4c4b0",
+      "color8": "#4a5a4c",
+      "color9": "#f08a7c",
+      "foreground": "#cfdcc4"
+    },
+    "widgets": {
+      "frame": "#5d7a4b",
+      "graph": "#b8e05a",
+      "header": "#b8e05a",
+      "track": "#1c2d27",
+      "value": "#d6e8b4"
+    }
+  },
+  "theme": "wick-mire"
+}

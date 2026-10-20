@@ -3,6 +3,7 @@
     cd live && python -m unittest discover -s tests
 
 - the Wick: the plate comes back untouched, bit for bit;
+- the Wick in a world's colours (wick-mire, wick-tidewell): the world's palette, whole;
 - every shipped colour theme: OKLab lightness kept (so detail and contrast), the bright
   parts in the theme's hue, the shadows near its background, colours inside sRGB;
 - no banding: no step between neighbouring pixels grows more than 2.5x, smooth parts stay
@@ -37,13 +38,29 @@ except (ImportError, ValueError):
     HAVE = False
 
 DEN = os.path.join(REPO, "desktop/wallpaper/bromigos-den-empty-2560x1440.jpg")
-COLOUR_THEMES = ("cinder", "deepvein", "highwind", "lowtown", "rime", "sunder")
+COLOUR_THEMES = ("cinder", "deepvein", "highwind", "lowtown", "rime", "sunder", "wick-mire", "wick-tidewell")
+# The Wick in a world's colours: each keeps its world's palette, the whole colors.toml.
+WORLD_COLOURS = {"wick-mire": "mire", "wick-tidewell": "tidewell"}
 
 
 def palette(theme):
     with open(os.path.join(REPO, "themes", theme, "colors.toml"), "rb") as f:
         c = tomllib.load(f)
     return dict({r: c[r] for r in R.ROLES}, theme=theme)
+
+
+def colours(theme):
+    with open(os.path.join(REPO, "themes", theme, "colors.toml"), "rb") as f:
+        return tomllib.load(f)
+
+
+class WorldColoursTest(unittest.TestCase):
+    def test_the_wick_in_a_worlds_colours_keeps_its_palette(self):
+        for variant, world in WORLD_COLOURS.items():
+            with self.subTest(theme=variant):
+                self.assertEqual(colours(variant), colours(world), f"{variant}: copy themes/{world}/colors.toml")
+                self.assertFalse(os.path.exists(os.path.join(REPO, "themes", variant, "live", "world.toml")),
+                                 f"{variant} is a colour theme: the den, not {world}'s scene")
 
 
 def lab(img):

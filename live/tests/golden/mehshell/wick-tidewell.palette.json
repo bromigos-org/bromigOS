@@ -1,0 +1,87 @@
+{
+  "colors": {
+    "background": "#02070d",
+    "cyan": "#3fd8e8",
+    "danger": "#ff6b6b",
+    "danger_surface": "#1c0608",
+    "danger_text": "#ffd9d9",
+    "dim": "#2a7488",
+    "faint": "#465868",
+    "gold": "#f0d070",
+    "muted": "#7890a0",
+    "panel": "#08131d",
+    "primary": "#3fd8e8",
+    "rust": "#4a1416",
+    "selection": "#12283a",
+    "soft": "#a6e6f0",
+    "text": "#c6dce6",
+    "void": "#02070d",
+    "warn": "#f0b850",
+    "warn_surface": "#3a2c0c",
+    "white": "#eef6ff"
+  },
+  "contrast": {
+    "lowest": {
+      "bg": "panel",
+      "fg": "selection",
+      "min": 3.0,
+      "ok": false,
+      "ratio": 1.24
+    },
+    "mode": "normal",
+    "ok": false
+  },
+  "mode": "dark",
+  "motion": "full",
+  "name": "Wick · Tidewell",
+  "schema": 1,
+  "tables": {
+    "holo": {
+      "glow": "#3fd8e8",
+      "highlight": "#eef6ff",
+      "label": "#c6dce6",
+      "line": "#3fd8e8"
+    },
+    "intercept": {
+      "needle": "#a6e6f0",
+      "static": "#3fd8e8"
+    },
+    "qt": {
+      "button": "#10243a",
+      "header": "#040c15",
+      "negative_on_selection": "#4a1416",
+      "neutral_on_selection": "#4a3a10",
+      "view": "#030a12",
+      "view_alt": "#050e18",
+      "window_alt": "#0a1622"
+    },
+    "terminal": {
+      "background": "#02070d",
+      "color0": "#02070d",
+      "color1": "#ff6b6b",
+      "color10": "#9af0c0",
+      "color11": "#f0d070",
+      "color12": "#8cc4f5",
+      "color13": "#d0a8f0",
+      "color14": "#a6e6f0",
+      "color15": "#e6f2fa",
+      "color2": "#6ad89a",
+      "color3": "#f0b850",
+      "color4": "#4a90d8",
+      "color5": "#a07ad8",
+      "color6": "#3fd8e8",
+      "color7": "#b0c4d0",
+      "color8": "#465868",
+      "color9": "#ff9a9a",
+      "foreground": "#c6dce6"
+    },
+    "widgets": {
+      "frame": "#2a7488",
+      "graph": "#3fd8e8",
+      "header": "#3fd8e8",
+      "track": "#12283a",
+      "value": "#a6e6f0"
+    }
+  },
+  "theme": "wick-tidewell"
+}

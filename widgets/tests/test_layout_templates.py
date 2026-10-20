@@ -153,6 +153,13 @@ class Fitting(unittest.TestCase):
         self.assertAlmostEqual(r21[0][2] / r16[0][2], 3440 / 2560, places=2)
         self.assertLess(r21[0][1], r16[0][1] * 3440 / 2560)
 
+    def test_the_den_in_a_worlds_colours_keeps_the_wicks_layout(self):
+        wick = L.scene_info("wick", os.path.join(REPO, "themes", "wick"))
+        for name in ("wick-tidewell", "wick-mire"):
+            info = L.scene_info(name, os.path.join(REPO, "themes", name))
+            self.assertEqual((info["scene"], info["kind"]), ("wick", "den"), name)
+            self.assertEqual(info["clear"], wick["clear"], name)
+
 
 class Scenes(unittest.TestCase):
     def setUp(self):

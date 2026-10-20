@@ -144,6 +144,7 @@ fn check_measures_every_repository_theme() {
     let d = tempfile::tempdir().unwrap();
     for name in [
         "wick", "mire", "tidewell", "rime", "sunder", "cinder", "lowtown", "highwind", "deepvein",
+        "wick-tidewell", "wick-mire",
     ] {
         let o = run(d.path(), &["accessibility", "check", name, "--json"]);
         assert!(

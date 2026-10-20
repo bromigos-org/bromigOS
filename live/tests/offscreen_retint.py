@@ -8,9 +8,12 @@ is drawn headless (EGL, as tools/offscreen.py: never a window) at 1920x1080 with
 packaged den, the same fixed clock and data for every theme:
 
   - the Wick: identical pixels to the den drawn with the plate as it is (no recolour);
-  - each colour theme (Cinder, Deepvein, Highwind, Lowtown, Rime, Sunder): the plate
-    texture is the theme's (lightness kept, its hue in the bright parts), and the frame
-    has no Wick-green room left: under 1% of the coloured pixels are the plate's green;
+  - each colour theme (Cinder, Deepvein, Highwind, Lowtown, Rime, Sunder, and the Wick in
+    Mire's and Tidewell's colours): the plate texture is the theme's (lightness kept, its
+    hue in the bright parts), and the frame has no Wick-green room left: under 1% of the
+    coloured pixels are the plate's green. A theme whose own primary is a green within 30°
+    of the Wick's (Wick · Mire) is checked against its own hue instead: under a third of
+    the coloured pixels nearer the Wick's green than its own, and the median nearer its own;
   - no banding: the frame keeps as many lightness levels as the Wick's (90% or more).
 
     python3 live/tests/offscreen_retint.py [--out DIR] [--bromigos PATH]
@@ -46,7 +49,7 @@ import numpy as np  # noqa: E402
 from OpenGL import GL  # noqa: E402
 
 W, H = 1920, 1080
-THEMES = ("wick", "cinder", "deepvein", "highwind", "lowtown", "rime", "sunder")
+THEMES = ("wick", "cinder", "deepvein", "highwind", "lowtown", "rime", "sunder", "wick-mire", "wick-tidewell")
 DEN = os.path.join(REPO, "desktop/wallpaper/bromigos-den-empty-2560x1440.jpg")
 failures, lines = [], []
 
@@ -161,9 +164,22 @@ def main():
             c = np.hypot(fl[:, 1], fl[:, 2])
             h = np.degrees(np.arctan2(fl[:, 2], fl[:, 1])) % 360
             coloured = c > 0.03
-            green = coloured & (np.abs((h - R.GREEN_HUE + 180) % 360 - 180) < 20)
-            share = float(green.sum() / max(coloured.sum(), 1))
-            report(f"{t}: no Wick-green room left", share < 0.01, f"{share:.2%} of coloured pixels are the plate's green")
+            to_wick = np.abs((h - R.GREEN_HUE + 180) % 360 - 180)
+            ph = float(np.degrees(np.arctan2(p[2], p[1])) % 360)
+            if abs((ph - R.GREEN_HUE + 180) % 360 - 180) >= 30:
+                green = coloured & (to_wick < 20)
+                share = float(green.sum() / max(coloured.sum(), 1))
+                report(f"{t}: no Wick-green room left", share < 0.01,
+                       f"{share:.2%} of coloured pixels are the plate's green")
+            else:
+                # a green theme of its own (Wick · Mire's firefly green, 18° from the Wick's): the
+                # room is in its green, not the Wick's: the coloured pixels sit nearer its primary
+                to_own = np.abs((h - ph + 180) % 360 - 180)
+                share = float((coloured & (to_wick < to_own)).sum() / max(coloured.sum(), 1))
+                med = float(np.median(h[coloured])) if coloured.any() else R.GREEN_HUE
+                report(f"{t}: no Wick-green room left", share < 1 / 3 and abs(med - ph) < abs(med - R.GREEN_HUE),
+                       f"{share:.2%} of coloured pixels nearer the Wick's green than its own; "
+                       f"median hue {med:.0f}° (its primary {ph:.0f}°, the Wick's {R.GREEN_HUE:.0f}°)")
             levels = len(np.unique(np.rint(fl[:, 0] * 1000)))
             report(f"{t}: no banding", levels >= 0.9 * wick_levels,
                    f"{levels} lightness levels (the Wick's {wick_levels})")
