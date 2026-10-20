@@ -15,6 +15,8 @@ the screen locking, and how to keep the machine awake for a film or a long downl
 
 ![The screensaver in the Wick theme: the burn-in, the clock and this machine's readings](images/screensaver.webp)
 
+The turning emblem has the same smooth circular edge as the login and unlock animation.
+
 The screen also locks whenever the machine goes to sleep: when it suspends, when you close
 a laptop's lid, or when you choose Suspend in the power menu.
 

@@ -245,6 +245,13 @@ The screensaver is the live layer's own scene, drawn full screen over everything
 input ends it. Its content, a gas giant or a relay station, is set on the Live layer &
 holograms page of Settings.
 
+The emblem uses the same shader as the login and unlock animation
+(`live/shaders/emblem.frag`). It samples the rotating texture before masking the circle,
+so neighbouring pixels use consistent texture filtering. The mask softens the outer rim
+over roughly one pixel. Run `python3 live/tests/offscreen_emblem.py --out <directory>`
+to check the rim through a full turn at screensaver and unlock sizes. The test also
+renders both overlays in a throwaway home without opening a window.
+
 ![The screensaver in phosphor green: a ringed wireframe planet, a relay station, this
 machine's CPU and memory as rings, a clock, and the emblem in the
 middle](images/screensaver.webp)

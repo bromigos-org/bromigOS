@@ -26,7 +26,11 @@ void main() {
     // ring texture, rotated
     float ca = cos(-u_angle), sa = sin(-u_angle);
     vec2 rp = vec2(ca * p.x - sa * p.y, sa * p.x + ca * p.y);
-    vec4 ring = r < 1.0 ? texture(u_ring, rp * 0.5 + 0.5) : vec4(0.0);
+    // Sample before masking: implicit mip derivatives are undefined inside a
+    // per-fragment branch. On some GPUs that breaks the rotating rim into steps.
+    vec4 ring = texture(u_ring, rp * 0.5 + 0.5);
+    float rim_width = max(fwidth(r), 0.000001);
+    ring *= 1.0 - smoothstep(1.0 - rim_width, 1.0, r);
     if (u_ring_t < 1.0) {
         // where the texel sits on the dial, in the ring's own frame
         float ra = mod(atan(rp.x, -rp.y), TAU);

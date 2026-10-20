@@ -231,6 +231,7 @@ The idle policy starts the screensaver, after 8 minutes by default
 ([docs/idle.md](../docs/idle.md)). It shows a wireframe planet lit by the local time of
 day, a relay station whose spokes are the homelab's services, this machine's load and
 the time. Any key, click or real mouse movement ends it.
+Its turning emblem shares the login and unlock renderer, with a smoothed circular rim.
 [ELEMENTS.md](docs/ELEMENTS.md#screensaver-planet-and-station) has the details.
 
 ## The den TV
