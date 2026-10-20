@@ -104,8 +104,12 @@ class Daemon(unittest.TestCase):
         state = os.path.join(tempfile.mkdtemp(), "bromigos-vector.json")
         with open(state, "w") as f:
             json.dump({"state": "off", "switch": "on"}, f)
-        p = PT.make(V.VectorPanel)
-        p.daemon.data, p.daemon.runs = V.daemon_status(path), 1
+        # The panel's poller thread asks the daemon too, at once: point it at the stand-in, or
+        # on a machine without VECTOR (CI) its None can land after the answer set below.
+        ask = V.daemon_status
+        with mock.patch.object(V, "daemon_status", lambda *a, **k: ask(path)):
+            p = PT.make(V.VectorPanel)
+        p.daemon.data, p.daemon.runs = ask(path), 1
         read = V.read_status
         with mock.patch.object(V, "read_status", lambda path=None: read(state)):
             p.tick()
