@@ -5,8 +5,10 @@ A preview is the real desktop, drawn where nobody sees it (Nested): a Hyprland r
 bromigOS's own config nested in a headless kwin, with the real waybar, the real panels
 (demo readings) and kitty, Hyprland's borders and shadow, and the live layer's own frame
 (its offscreen renderer, EGL: a world's scene with its creatures, or the Wick's den) as
-the background, captured by grim inside the nested session. Without kwin, the same
-pieces are drawn one by one and composed:
+the background, captured by grim inside the nested session. A kwin window rule keeps the
+nested Hyprland full screen (KWIN_RULES), and a picture of any other size than the one
+asked for is refused (WrongSize), never cached. Without kwin, the same pieces are drawn
+one by one and composed:
 
   the background  the live layer's offscreen frame
   the panels      the desktop panels' own drawing (bromigos-widgets), SYSTEM and NETWORK
@@ -47,7 +49,8 @@ import sys
 import tempfile
 import time
 
-RENDERER = "3"                  # bump when a preview's look changes: every cached one is redrawn
+RENDERER = "4"                  # bump when a preview's look changes: every cached one is redrawn
+                                # (4: kwin 6.8 had shrunk the nested desktop to 1280x720; see KWIN_RULES)
 DESK_W, DESK_H = 1920, 1080     # the desktop a preview shows (logical px)
 SAVE_W, SAVE_H = 1280, 720      # what is kept
 TERM_W, TERM_H = 780, 470       # the terminal window's inside
@@ -714,6 +717,29 @@ def terminal(box, comp, log, term=None):
 NESTED_TOOLS = ("kwin_wayland", "Hyprland", "hyprctl", "waybar", "grim", "swaybg", "kitty", "dbus-daemon")
 STUB = "#!/bin/sh\nexit 0\n"
 
+# kwin's window rule for the nested Hyprland's window (its app id is "aquamarine", Hyprland's
+# Wayland backend): full screen, forced. Then every size kwin sends it is the whole virtual
+# screen, DESK_W x DESK_H. Without it, kwin 6.8 sends a late "choose your own size" (0x0)
+# after Hyprland has sized its window, and Hyprland's backend reads 0x0 as its built-in
+# 1280x720: the picture was the desktop's top-left corner. kwin 6.7 gives the same picture
+# with the rule as without it (checked with 6.7.5).
+KWIN_RULES = """[General]
+count=1
+rules=bromigos-preview
+
+[bromigos-preview]
+Description=bromigOS preview: the nested desktop fills the screen
+wmclass=aquamarine
+wmclassmatch=1
+fullscreen=true
+fullscreenrule=2
+"""
+
+
+class WrongSize(RuntimeError):
+    """The nested desktop came up at another size than the one asked for: its picture would
+    show only part of the desktop, so it isn't kept."""
+
 
 def nested_missing():
     """Why the nested desktop can't be drawn here (None: it can)."""
@@ -805,6 +831,7 @@ class Nested:
         self.rt = _short_tmp("bpn.")
         self.procs = []
         self.env = None
+        self.captured = None                    # grim's picture's size (grab)
 
     def _start(self, argv, env, name):
         with open(os.path.join(self.box.dir, f"nested-{name}.log"), "w") as lf:
@@ -931,6 +958,8 @@ class Nested:
         self._start([SYS_PY, __file__, "--child", "mpris"], base, "mpris")
         if shutil.which("playerctld"):          # waybar's media module asks playerctl's daemon
             self._start(["playerctld"], base, "playerctld")
+        with open(os.path.join(cfg, "kwinrulesrc"), "w") as f:       # kwin reads it from XDG_CONFIG_HOME
+            f.write(KWIN_RULES)
         self._start(["kwin_wayland", "--virtual", "--width", str(DESK_W), "--height", str(DESK_H), "--socket", "kw",
                      "--no-lockscreen", "--no-global-shortcuts"], base, "kwin")
         if not self._wait(lambda: os.path.exists(os.path.join(rt, "kw")), 20):
@@ -951,12 +980,24 @@ class Nested:
         self.env = dict(base, WAYLAND_DISPLAY="wayland-1", HYPRLAND_INSTANCE_SIGNATURE=s, GDK_BACKEND="wayland")
         if not self._wait(lambda: "WAYLAND-1" in self.ctl("monitors"), 25):
             raise RuntimeError("the nested Hyprland has no output")
+        if not self._wait(lambda: self.output_size() == (DESK_W, DESK_H), 10):
+            w, h = self.output_size() or (0, 0)
+            raise WrongSize(f"the nested desktop came up at {w}x{h}, not {DESK_W}x{DESK_H}")
         self.wallpaper = self._start(["swaybg", "-o", "WAYLAND-1", "-m", "fill", "-i", background], self.env, "swaybg")
         self.ready_file = None
         if term is not False:
             kdir, script, self.ready_file = _kitty_setup(box, term)
             self._start(["kitty", "--class", "bromigos-preview", "--title", term.get("title", "~/projects/drift-atlas"),
                          script], dict(self.env, KITTY_CONFIG_DIRECTORY=kdir, PV_READY=self.ready_file), "kitty")
+
+    def output_size(self):
+        """(width, height) of the nested Hyprland's output in pixels, or None."""
+        try:
+            mons = json.loads(self.ctl("monitors", "-j") or "[]")
+        except ValueError:
+            return None
+        m = next((m for m in mons if m.get("name") == "WAYLAND-1"), None)
+        return (m.get("width"), m.get("height")) if m else None
 
     def layers(self):
         """The namespaces of the layer surfaces mapped now."""
@@ -987,11 +1028,19 @@ class Nested:
         return got
 
     def grab(self, out):
-        """grim's picture of the nested output, to `out` (PNG)."""
+        """grim's picture of the nested output, to `out` (PNG). A picture of another size
+        than DESK_W x DESK_H is WrongSize (it would show part of the desktop)."""
+        from PIL import Image
         r = subprocess.run(["grim", "-o", "WAYLAND-1", out], env=self.env, capture_output=True, text=True,
                            timeout=30)
         if r.returncode != 0 or not os.path.exists(out):
             raise RuntimeError(f"grim: {r.stderr.strip()[:200]}")
+        with Image.open(out) as im:
+            size = im.size
+        if size != (DESK_W, DESK_H):
+            os.unlink(out)
+            raise WrongSize(f"the nested desktop's picture is {size[0]}x{size[1]}, not {DESK_W}x{DESK_H}")
+        self.captured = list(size)
         return out
 
     def shoot(self, background, out, gtk=None, scene=None, hook=None):
@@ -1007,7 +1056,7 @@ class Nested:
         with open(self.log, "a") as lf:
             lf.write(f"nested: layers {got}, terminal {self.term and self.term.get('at')}, config errors {errs!r}\n")
         return {"bar": "waybar" in got, "panels": got.count("bromigos-widgets"), "terminal": self.term is not None,
-                "terminal_at": self.terminal_at, "config_errors": errs}
+                "terminal_at": self.terminal_at, "config_errors": errs, "captured": self.captured}
 
     def close(self):
         for p in reversed(self.procs):
@@ -1297,7 +1346,8 @@ def render_one(name, base, comp_box, log, dirs=None, out=None, full=False, scene
             meta = {"schema": 1, "name": name, "stamp": st, "renderer": RENDERER, "path": out,
                     "background": kind, "desktop": "nested", "pieces": sorted(drawn),
                     "terminal_at": got.get("terminal_at"), "notes": notes, "size": [DESK_W, DESK_H],
-                    "seconds": round(time.time() - t0, 1), "rendered_at": int(time.time())}
+                    "captured": got.get("captured"), "seconds": round(time.time() - t0, 1),
+                    "rendered_at": int(time.time())}
             with open(os.path.splitext(out)[0] + ".json", "w") as f:
                 json.dump(meta, f, indent=1)
             return meta

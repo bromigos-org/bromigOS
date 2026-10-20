@@ -456,5 +456,71 @@ class NoGpuTest(unittest.TestCase):
         self.assertFalse(PV.gpu_trouble("--- hyprland\nConfig error in file binds.lua line 3"))
 
 
+
+class NestedSizeTest(unittest.TestCase):
+    """The nested desktop's picture is the size asked for (2026-10-17: kwin 6.8 shrank the
+    nested Hyprland to 1280x720, and every preview showed the desktop's top-left corner).
+    The whole pipeline at real sizes is tests/e2e_previews_nested.py (kwin, Hyprland, a GPU)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.saved = PV.DESK_W, PV.DESK_H, PV.TERM_W, PV.TERM_H
+
+    def tearDown(self):
+        PV.DESK_W, PV.DESK_H, PV.TERM_W, PV.TERM_H = self.saved
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def nested(self, monitors=None):
+        n = PV.Nested.__new__(PV.Nested)
+        n.env, n.captured = {}, None
+        n.ctl = lambda *a: json.dumps(monitors or [])
+        return n
+
+    def grab_at(self, size):
+        """Nested.grab with a stand-in grim that writes a picture of `size`."""
+        from PIL import Image
+        from unittest import mock
+        out = os.path.join(self.tmp, "desktop.png")
+
+        def grim(argv, **k):
+            Image.new("RGB", size).save(argv[-1])
+            return subprocess.CompletedProcess(argv, 0, "", "")
+        n = self.nested()
+        with mock.patch.object(PV.subprocess, "run", grim):
+            return n, n.grab(out), out
+
+    @unittest.skipUnless(HAVE_PIL, "needs python-pillow")
+    def test_a_picture_of_the_size_asked_for_is_kept(self):
+        for w, h in ((1920, 1080), (2560, 1440)):
+            PV.set_size(w, h)
+            n, got, out = self.grab_at((w, h))
+            self.assertEqual(got, out)
+            self.assertEqual(n.captured, [w, h])
+
+    @unittest.skipUnless(HAVE_PIL, "needs python-pillow")
+    def test_a_picture_of_another_size_is_refused(self):
+        PV.set_size(1920, 1080)
+        with self.assertRaises(PV.WrongSize) as e:
+            self.grab_at((1280, 720))
+        self.assertIn("1280x720, not 1920x1080", str(e.exception))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "desktop.png")), "nothing left to cache")
+
+    def test_the_output_size_is_hyprlands(self):
+        n = self.nested([{"name": "WAYLAND-1", "width": 1280, "height": 720}])
+        self.assertEqual(n.output_size(), (1280, 720))
+        self.assertIsNone(self.nested([]).output_size())
+
+    def test_kwin_keeps_the_nested_desktop_full_screen(self):
+        import configparser
+        c = configparser.ConfigParser()
+        c.optionxform = str
+        c.read_string(PV.KWIN_RULES)
+        self.assertEqual(c["General"]["count"], "1")
+        rule = c[c["General"]["rules"]]
+        self.assertEqual(rule["wmclass"], "aquamarine")          # Hyprland's Wayland backend
+        self.assertEqual(rule["wmclassmatch"], "1")               # exactly
+        self.assertEqual((rule["fullscreen"], rule["fullscreenrule"]), ("true", "2"))   # forced
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -3,7 +3,8 @@
 
   - every shipped theme (themes/* in this checkout) has a preview in OUTDIR/previews,
     1280x720, drawn from every piece (the live layer's frame, the bar, the SYSTEM and
-    NETWORK panels, the terminal) and not blank;
+    NETWORK panels, the terminal) and not blank; a nested one captured at the size it
+    asked for (the whole desktop, not its top-left corner);
   - every preview differs from every other where the theme shows: the bar and the SYSTEM
     panel (the den is the same behind every colour theme, so the whole picture can be
     close between two of them);
@@ -59,6 +60,9 @@ def main():
                 meta = json.load(f)
         except (OSError, ValueError):
             meta = {}
+        if meta.get("desktop") == "nested":     # the whole desktop, not a corner of it
+            check(meta.get("captured") == meta.get("size"),
+                  f"{t}: captured at the size asked for ({meta.get('captured')}, asked {meta.get('size')})")
         missing = PIECES - set(meta.get("pieces", []))
         check(not missing, f"{t}: every piece drawn" + (f" (missing {', '.join(sorted(missing))}; "
                                                         f"{'; '.join(meta.get('notes', []))})" if missing else

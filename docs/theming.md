@@ -11,8 +11,8 @@ This page is for people making or changing themes. To use them, read the manual'
 the designs for future ones, are in [worlds.md](worlds.md). The
 [glossary](../manual/src/glossary.md) defines bromigOS's terms.
 
-![The Customize window on its Themes tab: a grid of nine previews, each showing the
-desktop, a terminal and the panels in a different theme](images/theme-switcher.webp)
+![The Customize window on its Themes tab: a grid of all eleven themes' previews, each the
+whole desktop with a terminal and the panels in that theme, with Mire chosen](images/theme-switcher.webp)
 
 ## The themes bromigOS ships
 
@@ -598,6 +598,20 @@ bromigOS runs a Hyprland with its own config inside a headless kwin
 kitty, and the live layer's own frame is the background. grim captures it. The picture is
 1280×720, of a 1920×1080 desktop.
 
+The picture has to show the whole desktop, so the renderer checks its size twice:
+
+- A kwin window rule keeps the nested Hyprland full screen. The rule is written to
+  `kwinrulesrc` in the throwaway home. Without it, kwin 6.8 sends Hyprland's
+  window a late "choose your own size". Hyprland reads that as 1280×720, and the preview
+  showed only the desktop's top-left corner.
+- Before the picture, the renderer waits for Hyprland's output to be the size asked for.
+  After it, the renderer checks grim's picture is that size too. If either is wrong, the
+  picture is thrown away, the nested desktop is tried once more, and then the preview is
+  put together from its pieces instead (see below). A cut-off picture is never cached.
+
+Each preview's `.json` file records the size asked for (`size`) and the size grim
+captured (`captured`).
+
 kwin comes with KDE Plasma, not with bromigOS. Without it, the same pieces are drawn one at
 a time and put together: kitty and the bar in a headless weston, the panels from their own
 drawing code, and Hyprland's border from the theme. `BROMIGOS_PREVIEWS_NESTED=0` forces
@@ -623,7 +637,9 @@ with a `.json` file beside each. The stamp is a hash of everything the picture s
 - the live layer's drawing code and the colour libraries it reads;
 - the preview renderer's version.
 
-So when a theme or the live layer changes, the preview is drawn again. Until the new one
+So when a theme or the live layer changes, the preview is drawn again. A new renderer
+version draws every preview again. Version 4 replaced the previews that kwin 6.8 had cut
+to the top-left corner. Until the new one
 is ready, the switcher shows the old one with a small spinner in its corner. A theme takes 10 to 20 seconds
 to draw, a world the longest. Only one is drawn at a time, at low priority.
 
@@ -1182,7 +1198,13 @@ bromigos-live world rollcall               # play the login roll call
   `test_theme_switcher.py` with no display. It checks the grid at 1366×768, 1920×1080,
   2560×1440 and 3440×1440. It also checks the preview stamps, the still den in a colour
   theme's colours, the bar's modules, the border and shadow, where the terminal sits, and
-  what each card says.
+  what each card says. `NestedSizeTest` checks that a picture of the wrong size is
+  refused, and that the kwin rule keeps the nested desktop full screen.
+- **The whole desktop in each preview.** `python3 desktop/tests/e2e_previews_nested.py`
+  draws the Wick in the nested desktop, in a throwaway home, at 1920×1080 and 1600×900,
+  and its cached preview. It fails if a picture isn't the size asked for, or if the
+  nested desktop fell back to the pieces. It needs kwin_wayland, Hyprland, grim and a GPU,
+  so it runs by hand. Build `bromigos` first.
 - **The previews and the switcher, drawn.** `tools/theme-switcher/render.sh <outdir>`
   draws every preview with this checkout, in a throwaway home. Build `bromigos` first.
   Then it draws the switcher offscreen at each size, in a headless weston of its own.
@@ -1192,7 +1214,8 @@ bromigos-live world rollcall               # play the login roll call
   theme in force's preview: a full-size `bromigos theme previews … --size WxH --out` picture.
 - **Checking the renders.** `tools/theme-switcher/check.py` then checks that every
   shipped theme has a preview, drawn from every piece and not blank, and different from
-  the others where the theme shows. The switcher fails a render if any part of it has no
+  the others where the theme shows. A preview drawn in the nested desktop must have been
+  captured at the size it asked for. The switcher fails a render if any part of it has no
   hover hint. `--previews DIR` reuses an earlier run's previews.
 - **The den's recolouring.** `live/tests/test_retint.py` and
   `live/tests/offscreen_retint.py`.

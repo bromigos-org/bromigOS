@@ -154,6 +154,8 @@ Some tests run by hand, because they need kwin_wayland, Hyprland, rofi and a GPU
   sees. `vkbd.py`, a virtual keyboard, types into it. It also drives Settings' Shortcuts
   page with `settings_shortcuts_driver.py`.
 - `tests/e2e_settings_nested.py` drives Settings' pages the same way.
+- `tests/e2e_previews_nested.py` draws a theme preview in the nested desktop at two sizes.
+  It fails if the picture isn't the whole desktop at the size asked for.
 
 The app launcher's entries are checked by `tools/launcher/check.py`
 ([docs/menu.md](../docs/menu.md#tests)). Settings' offscreen renders are
