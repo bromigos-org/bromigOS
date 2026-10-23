@@ -22,6 +22,14 @@ import bromigos_homelab as H
 OBJECT_STORE = "rustfs"                  # the object store's service id, and its namespace
 
 
+
+def _pct(v):
+    """A percentage for display: a reading the lab left empty (None) or not a number reads as 0."""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
 def store_share(nas):
     """The NAS share that holds the object store's volumes, found in the snapshot (each share
     lists the claims bound on it, as namespace/name), or None. The share's name is the lab's
@@ -385,7 +393,7 @@ class LabPanel(Panel):
                 cpu, mem = (n.get("cpuPct") or 0) / 100, (n.get("memPct") or 0) / 100
                 col = max(D.level(cpu, 0.85, 0.95), D.level(mem, 0.9, 0.97),
                           key=["phosphor", "amber", "danger", "static"].index)
-                sub = f"CPU {n.get('cpuPct', 0):.0f}%  MEM {n.get('memPct', 0):.0f}%"
+                sub = f"CPU {_pct(n.get('cpuPct')):.0f}%  MEM {_pct(n.get('memPct')):.0f}%"
             r = 4.5 * k
             D.dot(cr, px, py, r, col, glow=True)
             D.src(cr, col, 0.8)
@@ -416,7 +424,7 @@ class LabPanel(Panel):
         return (nd.get("name") or "?").replace("k8s-", "").upper()
 
     def _node_tip(self, nd):
-        return (f"Node {nd.get('name')}: CPU {nd.get('cpuPct', 0):.0f}%, memory {nd.get('memPct', 0):.0f}%, load "
+        return (f"Node {nd.get('name')}: CPU {_pct(nd.get('cpuPct')):.0f}%, memory {_pct(nd.get('memPct')):.0f}%, load "
                 f"{nd.get('load1', 0):.2f} on {nd.get('cores')} cores. Amber: memory past 90% or CPU past 85%.")
 
     @staticmethod
@@ -442,7 +450,7 @@ class LabPanel(Panel):
         cl = d.get("cluster", {})
         if draw:
             D.label(cr, x0, y, "NODE MAP", "dim")
-            D.label(cr, x1, y, f"CLUSTER CPU {cl.get('cpuNow', 0):.0f}%", "static", align="right")
+            D.label(cr, x1, y, f"CLUSTER CPU {_pct(cl.get('cpuNow')):.0f}%", "static", align="right")
         y += 20
         if mode == "fold":
             return self._node_chips(cr, nodes, x0, x1, y, draw)

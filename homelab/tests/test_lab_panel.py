@@ -110,5 +110,39 @@ class StorageRowsTest(unittest.TestCase):
         self.assertIsNone(self.lab.store_share({}))
 
 
+class NoCairo:
+    """A cairo context that draws nothing."""
+
+    def __getattr__(self, name):
+        return lambda *a, **k: None
+
+
+class EmptyReadingsTest(unittest.TestCase):
+    """The lab can send a reading as null (a node or the cluster between scrapes): the panel draws
+    0% instead of failing on it, five failures in a minute switching the whole panel off."""
+
+    def setUp(self):
+        self.lab, self.D = load_lab()
+
+    def test_pct(self):
+        self.assertEqual(self.lab._pct(None), 0.0)
+        self.assertEqual(self.lab._pct("n/a"), 0.0)
+        self.assertEqual(self.lab._pct(42.4), 42.4)
+
+    def test_node_map_header_with_null_cluster_cpu(self):
+        snap = {"cluster": {"cpuNow": None}, "nodes": []}
+        panel = types.SimpleNamespace(pulse_at=0.0, _node_grid=lambda cr, nodes, w: (3, 120),
+                                      _node_chips=lambda cr, nodes, x0, x1, y, draw: y)
+        for mode in ("full", "fold"):
+            self.D.texts.clear()
+            self.lab.LabPanel._nodes(panel, NoCairo(), snap, 0, 440, 0, mode=mode)
+            self.assertIn("CLUSTER CPU 0%", self.D.texts)
+
+    def test_node_hint_with_null_readings(self):
+        src = open(os.path.join(HOMELAB, "widgets", "_lab.py")).read()
+        # every percentage the panel formats goes through _pct, so a null never reaches a format spec
+        import re
+        self.assertEqual(re.findall(r"\.get\('(?:cpuPct|memPct|cpuNow)', 0\):", src), [])
+
 if __name__ == "__main__":
     unittest.main()
