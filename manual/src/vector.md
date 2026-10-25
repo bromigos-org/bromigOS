@@ -38,6 +38,38 @@ his window:
 bromigos vector ask "what's using the most memory?"
 ```
 
+## Give VECTOR files and pictures
+
+You can send VECTOR files and pictures with a message. There are three ways:
+
+- drag them onto VECTOR, or onto the box you type in;
+- copy a picture, or a file in your file manager, then press <kbd>Ctrl</kbd>+<kbd>V</kbd>
+  in the box;
+- click **+ ATTACH** beside the box, and choose one or more files.
+
+Each file appears above the box with its name and size. Click its **×** to take it off.
+Press <kbd>Enter</kbd> to send the files with your message. The conversation shows a line
+for each one, such as `⟐ attached · screenshot.png · 240 KB`.
+
+What he does with each kind:
+
+- **Pictures** go to his vision model, which tells him what they show. Large pictures are
+  made smaller first.
+- **Text, code, logs and PDFs** he reads as text. A very long file is cut short, and he
+  tells you so.
+- **Other files** he gets as a location on your computer. He can open them with his own
+  tools if your question needs it.
+
+He treats what's inside a file as something to read, never as instructions. He won't
+read a secret, such as a key, a password file or a `.env` file. If he refuses a file, the
+conversation says why. Files stay where they are, and his history keeps only their names.
+
+From a terminal, add `--file` before your question, once for each file:
+
+```bash
+bromigos vector ask --file build.log "why did this fail?"
+```
+
 ## Talk to VECTOR
 
 You need a microphone. If his voice is muted, he still hears you, and answers in
