@@ -1,5 +1,11 @@
 """Account: who you are (your name, full name, pronouns, aliases, the forms of address
-VECTOR uses), your picture, and who can see them (docs/settings.md, "Account").
+VECTOR uses), your picture, who can see them, and your Bromigos account (docs/settings.md,
+"Account").
+
+The Bromigos account is optional. Its row reads `bromigos whoami --json`; Sign in… runs
+`bromigos login` (or `bromigos login --ssh`) in a terminal, the same sign-in as on the
+command line, and the row checks again every few seconds until it's done. Sign out runs
+`bromigos logout --json`.
 
 Your profile goes through `bromigos profile … --json` (~/.config/bromigos/profile.toml); the
 picture through `bromigos avatar` (~/.face, which the login screen shows). profile.toml is a
@@ -18,6 +24,9 @@ def _esc(text):
 
 PROFILE = ["bromigos", "profile"]
 AVATAR = ["bromigos", "avatar"]
+WHOAMI = ["bromigos", "whoami", "--json"]
+HOW = {"device": "with a code on the website", "browser": "in the browser", "ssh": "with an SSH key",
+       "token": "with a personal access token", "env": "with the token in BROMIGOS_TOKEN"}
 FIELDS = [("name", "Name", "What you're usually called; VECTOR uses it when no form of address is set"),
           ("full_name", "Full name", "Your full name"),
           ("pronouns", "Pronouns", "e.g. he/him, she/her, they/them; VECTOR uses them")]
@@ -40,9 +49,11 @@ class AccountPage:
         self.page = ctx.page()
         self.page.set_reset(None, hint="Your name and picture are yours: there's no bromigOS default to go back to")
         self.share_rows = []
+        self.watch = None
         self._you()
         self._picture()
         self._sharing()
+        self._bromigos()
         self.refresh()
 
     # ------------------------------------------------------------------ building
@@ -91,10 +102,80 @@ class AccountPage:
                                                                        "run can read it, and so can anyone you share "
                                                                        "it with.", key="sharing")
 
+    def _bromigos(self):
+        ctx = self.ctx
+        g = ctx.group(self.page, "Bromigos account", "Optional. Sign in to use your Bromigos account on this "
+                                                      "computer, such as adding its SSH keys to a new lab box.",
+                      key="bromigos-group")
+        self.signin_button = ctx.button("Sign in…", lambda: self._sign_in([]),
+                                        "Runs bromigos login in a terminal: it shows a code to enter on the website",
+                                        primary=True)
+        self.ssh_button = ctx.button("Sign in with SSH key…", lambda: self._sign_in(["--ssh"]),
+                                     "Runs bromigos login --ssh in a terminal: an SSH key on your account signs you "
+                                     "in, with no browser")
+        self.signout_button = ctx.button("Sign out", self._sign_out, "Forgets the sign-in on this computer "
+                                         "(bromigos logout)", destructive=True)
+        box = Adw.WrapBox(child_spacing=6, line_spacing=6, justify=Adw.JustifyMode.NONE)
+        box.set_halign(Gtk.Align.END)
+        for b in (self.signin_button, self.ssh_button, self.signout_button):
+            box.append(b)
+        self.bromigos_row = ctx.row(g, "Bromigos account", "Reading…", key="bromigos-account", control=box,
+                                    hint="Your Bromigos account: who's signed in here, and how. The sign-in is kept "
+                                         "in your keyring",
+                                    advanced={"runs": "bromigos login · bromigos whoami · bromigos logout",
+                                              "note": "bromigos account token says how to make a personal access token"})
+
     # ------------------------------------------------------------------ state
     def refresh(self):
         self.ctx.json(PROFILE + ["--json"], self._got_profile)
         self.ctx.json(AVATAR + ["--json"], self._got_avatar)
+        self.ctx.json(WHOAMI, self._got_bromigos)
+
+    def _got_bromigos(self, doc, err):
+        if not doc or "signed_in" not in doc:
+            self.bromigos_row.set_subtitle(_esc(f"bromigos whoami didn't answer: {err or 'no reply'}"))
+            for b in (self.signin_button, self.ssh_button, self.signout_button):
+                b.set_visible(False)
+            return
+        signed = bool(doc["signed_in"])
+        if signed:
+            who = doc.get("who") or "your account"
+            if doc.get("email") and doc["email"] != who:
+                who += f" ({doc['email']})"
+            text = f"Signed in as {who}, {HOW.get(doc.get('how'), 'on this computer')}"
+            if doc.get("via") == "env":
+                text = "Using the token in BROMIGOS_TOKEN"
+        else:
+            text = "Not signed in. You don't need an account to use bromigOS"
+        self.bromigos_row.set_subtitle(_esc(text))
+        self.signin_button.set_visible(not signed)
+        self.ssh_button.set_visible(not signed)
+        self.signout_button.set_visible(signed and doc.get("via") != "env")
+        if signed and self.watch:
+            GLib.source_remove(self.watch)
+            self.watch = None
+
+    def _sign_in(self, extra):
+        self.ctx.terminal(["bromigos", "login"] + extra)
+        if self.watch:
+            GLib.source_remove(self.watch)
+        tries = [100]                                        # every 3 s for five minutes
+
+        def check():
+            tries[0] -= 1
+            self.ctx.json(WHOAMI, self._got_bromigos)
+            if tries[0] <= 0:
+                self.watch = None
+                return False
+            return True
+        self.watch = GLib.timeout_add_seconds(3, check)
+
+    def _sign_out(self):
+        self.ctx.confirm("Sign out of your Bromigos account?",
+                         "This computer forgets the sign-in. Your account and its keys stay as they are.",
+                         "Sign out", lambda: self.ctx.change(["bromigos", "logout", "--json"], "Signed out",
+                                                             done=lambda d: self._got_bromigos(d, "")),
+                         destructive=True)
 
     def _got_profile(self, doc, err):
         if not doc or "you" not in doc:
@@ -240,9 +321,9 @@ def refresh(widget):
 
 PAGE = Page(
     id="account", title="Account", group="personal", order=10, build=build, refresh=refresh, docs="settings.md#account",
-    icon="avatar-default-symbolic system-users-symbolic", summary="your name, picture, privacy",
-    intro="Who you are and what VECTOR calls you, your picture, and who can see them.",
-    keywords=["profile", "user", "me", "name", "avatar", "picture", "face", "privacy", "pronouns"],
+    icon="avatar-default-symbolic system-users-symbolic", summary="your name, picture, privacy, sign-in",
+    intro="Who you are and what VECTOR calls you, your picture, who can see them, and your Bromigos account.",
+    keywords=["profile", "user", "me", "name", "avatar", "picture", "face", "privacy", "pronouns", "sign in", "login"],
     entries=[Entry(k, t, [k.replace("_", " ")], "You") for k, t, _ in FIELDS] + [
         Entry("aliases", "Aliases", ["handles", "callsigns", "nicknames"], "You"),
         Entry("address", "Forms of address", ["what vector calls me", "title", "captain"], "You"),
@@ -250,4 +331,6 @@ PAGE = Page(
         Entry("picture", "Your picture (avatar)", ["photo", "face", "login picture"], "Your picture"),
         Entry("profile-file", "Your profile file", ["profile.toml", "dotfiles", "shared"], "Who can see it"),
         Entry("overlay", "The private overlay", ["private", "sops", "encrypted", "secrets"], "Who can see it"),
+        Entry("bromigos-account", "Bromigos account", ["sign in", "login", "log in", "sign out", "ssh key", "token"],
+              "Bromigos account"),
     ])
