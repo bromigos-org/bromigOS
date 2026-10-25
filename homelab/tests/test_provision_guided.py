@@ -138,15 +138,20 @@ class GuidedTests(unittest.TestCase):
         self.box = Box(self.home)
         self.applied = []
         self.repo = root / "lab"
+        self.found, self.boxes = [], []                # Find my lab: its runs, and what it "finds"
 
     def guide(self, term):
         def apply(repo, live_facts=None):
             self.applied.append((repo, live_facts))
             return 0
-        return G.Guide(term=term, home=self.home, inventory=lambda target: facts(), apply=apply)
+        def find():
+            self.found.append(1)
+            return self.boxes
+        return G.Guide(term=term, home=self.home, inventory=lambda target: facts(), apply=apply, find=find)
 
     def fresh_answers(self):
         return ["yes",                              # create the age key
+                "no",                               # don't look for the box (Find my lab)
                 "box.example.org", "tester", "",   # the box, its user, the default port
                 "yes",                              # the host key fingerprint matches
                 "yes",                              # run ssh-copy-id
@@ -212,7 +217,7 @@ class GuidedTests(unittest.TestCase):
         self.assertEqual(len(self.applied), 2)
 
     def test_a_refused_fingerprint_stops_without_trusting_it(self):
-        term = Term(self.box, ["yes", "box.example.org", "tester", "", "no"])
+        term = Term(self.box, ["yes", "no", "box.example.org", "tester", "", "no"])
         with self.assertRaises(G.Stop):
             self.guide(term).run()
         self.assertFalse((self.home / ".ssh/known_hosts").exists())
@@ -222,14 +227,14 @@ class GuidedTests(unittest.TestCase):
     def test_a_changed_host_key_stops(self):
         (self.home / ".ssh/known_hosts").write_text(HOST_KEY + "\n")
         self.box.host_key = "box.example.org ssh-ed25519 AAAADifferent"
-        term = Term(self.box, ["yes", "box.example.org", "tester", ""])
+        term = Term(self.box, ["yes", "no", "box.example.org", "tester", ""])
         with self.assertRaises(G.Stop) as stop:
             self.guide(term).run()
         self.assertIn("CHANGED", str(stop.exception))
 
     def test_declined_ssh_copy_id_and_missing_python(self):
         (self.home / ".ssh/known_hosts").write_text(HOST_KEY + "\n")
-        term = Term(self.box, ["yes", "box.example.org", "tester", "2222", "no"])
+        term = Term(self.box, ["yes", "no", "box.example.org", "tester", "2222", "no"])
         with self.assertRaises(G.Stop) as stop:
             self.guide(term).run()
         self.assertIn("ssh-copy-id -i", str(stop.exception))
@@ -243,7 +248,7 @@ class GuidedTests(unittest.TestCase):
     def test_bad_answers_are_asked_again(self):
         self.box.sudo, self.box.key_installed = True, True
         (self.home / ".ssh/known_hosts").write_text(HOST_KEY + "\n")
-        answers = ["yes", "-oProxyCommand", "tester", "", "box.example.org", "tester", "", "huge", "core", "relative/path", "2", "yes", str(self.repo), "no"]
+        answers = ["yes", "no", "-oProxyCommand", "tester", "", "box.example.org", "tester", "", "huge", "core", "relative/path", "2", "yes", str(self.repo), "no"]
         term = Term(self.box, answers)
         self.assertEqual(self.guide(term).run(), 0)
         self.assertIn("  Use user@host for the SSH target. Try again.", term.out)
@@ -256,7 +261,7 @@ class GuidedTests(unittest.TestCase):
         (self.home / ".ssh/known_hosts").write_text(HOST_KEY + "\n")
         self.repo.mkdir()
         (self.repo / "notes.txt").write_text("someone's notes")
-        term = Term(self.box, ["yes", "box.example.org", "tester", "", "", "1", "yes", str(self.repo)])
+        term = Term(self.box, ["yes", "no", "box.example.org", "tester", "", "", "1", "yes", str(self.repo)])
         with self.assertRaises(G.Stop):
             self.guide(term).run()
         self.assertEqual(sorted(p.name for p in self.repo.iterdir()), ["notes.txt"])
@@ -269,3 +274,36 @@ class GuidedTests(unittest.TestCase):
             self.assertEqual(P.main([]), 0)
         self.assertEqual(run.call_count, 2)
         self.assertFalse(G.state_path().exists())
+
+    # Step 3 offers the machines Find my lab found that answer SSH, after the same yes.
+    def box_step(self, answers):
+        term = Term(self.box, answers)
+        guide = self.guide(term)
+        guide.box()
+        return term, json.loads(G.state_path().read_text())
+
+    def test_a_no_is_todays_step(self):
+        term, state = self.box_step(["no", "box.example.org", "tester", ""])
+        self.assertEqual(self.found, [])                                  # nothing read without the yes
+        self.assertIn("devices that announce themselves", term.text())
+        self.assertEqual(state["host"], "box.example.org")
+
+    def test_pick_a_found_machine(self):
+        self.boxes = [{"ssh": "nas.example.org", "addresses": ["192.0.2.10"], "kind": "lab machine", "sources": ["mdns", "dns"]},
+                      {"ssh": "198.51.100.7", "addresses": ["198.51.100.7"], "kind": "lab machine", "sources": ["mdns"]}]
+        term, state = self.box_step(["yes", "2", "tester", ""])
+        self.assertEqual(self.found, [1])
+        self.assertIn("    1. nas.example.org  192.0.2.10  (lab machine; seen by mDNS, DNS)", term.out)
+        self.assertIn("    3. Type an address", term.out)
+        self.assertEqual((state["host"], state["user"], state["port"]), ("198.51.100.7", "tester", 22))
+        self.assertEqual(term.answers, [])
+
+    def test_type_an_address_instead(self):
+        self.boxes = [{"ssh": "nas.example.org", "addresses": ["192.0.2.10"], "kind": "lab machine", "sources": ["mdns"]}]
+        term, state = self.box_step(["yes", "", "box.example.org", "tester", ""])   # Enter: the last choice
+        self.assertEqual(state["host"], "box.example.org")
+
+    def test_nothing_found_asks_for_the_address(self):
+        term, state = self.box_step(["yes", "box.example.org", "tester", ""])
+        self.assertIn("No machine it found answers SSH", term.text())
+        self.assertEqual(state["host"], "box.example.org")

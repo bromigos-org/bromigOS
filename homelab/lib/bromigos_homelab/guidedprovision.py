@@ -70,8 +70,9 @@ def state_path():
 
 
 class Guide:
-    def __init__(self, term=None, path=None, inventory=None, plan=None, apply=None, home=None):
+    def __init__(self, term=None, path=None, inventory=None, plan=None, apply=None, home=None, find=None):
         self.term = term or Terminal()
+        self.find_boxes = find or find_boxes
         self.path = Path(path or state_path())
         self.home = Path(home or Path.home())
         self.inventory = inventory or P.inventory
@@ -151,8 +152,9 @@ class Guide:
             self.done(f"The box: {self.state['user']}@{self.state['host']} (from last time)")
             return
         self.term.say("  Which spare Linux box should become your lab? It needs Debian, Ubuntu, Fedora or Arch Linux.")
+        picked = self.pick_box()
         while True:
-            host = self.term.ask("  Its hostname or IP address")
+            host, picked = picked or self.term.ask("  Its hostname or IP address"), None
             user = self.term.ask("  Your user name on the box", getpass.getuser())
             port = self.term.ask("  Its SSH port", "22")
             try:
@@ -167,6 +169,32 @@ class Guide:
         self.state.update(host=host, user=user, port=int(port))
         self.save()
         self.done(f"The box: {user}@{host}")
+
+    def pick_box(self):
+        """Find my lab's machines that answer SSH, as a pick list, after the same yes as
+        `bromigos setup homelab --find`. A no, or nothing found, means typing an address."""
+        from . import config, findlab as F
+        self.term.say("  I can look for it. Find my lab reads, on this computer only:")
+        for line in F.plan(lab=bool(config.sources())):
+            self.term.say(f"    - {line}")
+        self.term.say("  Then it checks only the machines it found, to see which answer SSH. It never scans")
+        self.term.say("  address ranges, never signs in, and sends nothing off your network.")
+        if not self.term.yes("  Look for your box this way?"):
+            return None
+        self.term.say("  Looking (a few seconds)…")
+        boxes = self.find_boxes()
+        if not boxes:
+            self.term.say("  No machine it found answers SSH. Type the box's address instead.")
+            return None
+        self.term.say("  These machines answer SSH:")
+        for i, b in enumerate(boxes, 1):
+            seen = ", ".join(F.SOURCES.get(s, s) for s in b.get("sources", []))
+            self.term.say(f"    {i}. {b['ssh']}  {', '.join(b['addresses'][:2])}  ({b['kind']}; seen by {seen})")
+        self.term.say(f"    {len(boxes) + 1}. Type an address")
+        answer = self.term.ask("  Which one", str(len(boxes) + 1))
+        if answer.isdigit() and 1 <= int(answer) <= len(boxes):
+            return boxes[int(answer) - 1]["ssh"]
+        return None
 
     # 4. SSH: the host key and a key login
     def check_ssh(self):
@@ -417,6 +445,14 @@ class Guide:
             self.state["applied"] = True
             self.save()
         return result
+
+
+def find_boxes():
+    """Find my lab's machines that answer SSH (findlab.py): what this computer and the lab's
+    sources already know, then port 22 on those machines only."""
+    from . import config, findlab as F
+    lab = F.find(lab=bool(config.sources()))
+    return F.ssh_boxes(lab["hosts"])
 
 
 def main(argv):
