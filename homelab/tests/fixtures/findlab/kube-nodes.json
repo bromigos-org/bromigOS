@@ -1,0 +1,4 @@
+{"items": [
+ {"metadata": {"name": "control-1"}, "status": {"addresses": [{"type": "InternalIP", "address": "198.51.100.4"}, {"type": "Hostname", "address": "control-1"}]}},
+ {"metadata": {"name": "worker-1"}, "status": {"addresses": [{"type": "InternalIP", "address": "198.51.100.5"}, {"type": "Hostname", "address": "worker-1"}]}}
+]}

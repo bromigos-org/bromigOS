@@ -1,0 +1,7 @@
+{"Version": "1.90.0", "BackendState": "Running",
+ "Self": {"HostName": "desk", "DNSName": "desk.example-tailnet.ts.net.", "TailscaleIPs": ["100.100.0.1", "fd7a:115c:a1e0::1"], "OS": "linux", "Online": true},
+ "Peer": {
+  "nodekey:aaaa": {"HostName": "nas", "DNSName": "nas.example-tailnet.ts.net.", "TailscaleIPs": ["100.100.0.10", "fd7a:115c:a1e0::10"], "OS": "linux", "Online": true},
+  "nodekey:bbbb": {"HostName": "phone", "DNSName": "phone.example-tailnet.ts.net.", "TailscaleIPs": ["100.100.0.20"], "OS": "iOS", "Online": false},
+  "nodekey:cccc": {"HostName": "gpu-box", "DNSName": "gpu-box.example-tailnet.ts.net.", "TailscaleIPs": ["100.100.0.30"], "OS": "linux", "Online": true}
+ }}

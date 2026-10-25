@@ -1,0 +1,4 @@
+# HELP unpoller_client_uptime_seconds Client Uptime
+# TYPE unpoller_client_uptime_seconds gauge
+unpoller_client_uptime_seconds{ip="192.0.2.70",mac="00:00:5e:00:53:46",name="Kitchen Plug",oui="Example",site_name="default"} 3600
+unpoller_client_uptime_seconds{hostname="media-pc",ip="192.0.2.80",mac="00:00:5e:00:53:50",name="media-pc",site_name="default"} 7200

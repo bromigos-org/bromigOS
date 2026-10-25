@@ -13,7 +13,7 @@ depends=('bromigos-core' 'bromigos-lab' 'bromigos-lab-catalog')
 # VECTOR's terminal must know `bromigos lab`'s aliases (target, connect) and refuse what
 # changes the lab before they exist: vector c5f67cb (r33)
 conflicts=('bromigos-vector<0.1.0.r33')
-checkdepends=('python-textual' 'desktop-file-utils' 'python-cairo' 'python-gobject' 'pango' 'python-psutil')   # the homelab widgets drawn in their tests
+checkdepends=('python-textual' 'desktop-file-utils' 'python-cairo' 'python-gobject' 'pango' 'python-psutil' 'python-zeroconf')   # the homelab widgets drawn in their tests; Find my lab's recorded mDNS answer
 optdepends=('ansible-core: apply a reviewed lab provision plan'
             'libvirt-python: manage VMs on a local libvirt host'
             'qemu-base: run local KVM guests and manage their disks'

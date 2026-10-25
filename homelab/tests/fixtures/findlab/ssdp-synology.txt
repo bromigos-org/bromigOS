@@ -1,0 +1,7 @@
+HTTP/1.1 200 OK
+CACHE-CONTROL: max-age=1800
+LOCATION: http://192.0.2.10:5000/ssdp/desc-DSM-eth0.xml
+SERVER: Synology/DSM/192.0.2.10
+ST: urn:schemas-upnp-org:device:Basic:1
+USN: uuid:73796E6F-6473-6D00-0000-00005e005301::urn:schemas-upnp-org:device:Basic:1
+

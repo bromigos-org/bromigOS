@@ -1,0 +1,22 @@
+# a user's ~/.ssh/config, recorded with example names
+Include config.d/*
+
+Host *
+    ServerAliveInterval 30
+
+Host gpu-box gpu
+    HostName 198.51.100.30
+    User tester
+    IdentityFile ~/.ssh/id_ed25519
+
+Host build
+    HostName build.example.org
+
+Host bastion-*
+    User jump
+
+Match host *.example.org
+    User matched
+
+Host cloud
+    HostName=203.0.113.40

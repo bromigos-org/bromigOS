@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 # bromigos:summary=Find the homelab's services and write ~/.config/bromigos/homelab.toml (re-runnable)
+# bromigos:args=[--find [--ssh-config]] [--hosts H,H] [--url URL …] [--yes] [--print] [--json] …
+# bromigos:examples=bromigos setup homelab; bromigos setup homelab --find; bromigos setup homelab --hosts nas,gpu-box; bromigos setup homelab --find --print
 """bromigos setup homelab: connect your homelab to the desktop (docs/homelab.md).
 
-    bromigos setup homelab                       ask for hosts/URLs, probe them, show what was found, write
+    bromigos setup homelab                       offer Find my lab, else ask for hosts/URLs; probe, show, write
+    bromigos setup homelab --find                Find my lab: the devices this computer already knows (asks first)
+    bromigos setup homelab --find --ssh-config   ... and the Host lines of ~/.ssh/config
     bromigos setup homelab --hosts nas,gpu-box   probe these hosts' well-known ports
     bromigos setup homelab --url http://h:9090   probe exact URLs (repeatable)
     bromigos setup homelab --yes                 non-interactive: probe, then write without asking
@@ -22,6 +26,14 @@ detects what runs there by its metrics and its pods: DCGM, UniFi Poller, the *ar
 Pelican, vLLM, Traefik, cert-manager, Loki, Alloy, a DDNS updater, the NAS, ARC runners,
 backups (each adapter's detect()). --ingress probes the cluster's ingress hosts too (their
 names are written into the file: see --print first). --no-detect skips both.
+
+Find my lab (--find; bromigos_homelab/findlab.py) never scans an address range. After one
+yes it reads what already knows your devices: devices that announce themselves (mDNS,
+SSDP, ONVIF WS-Discovery), this computer's neighbour table and its resolver's names for
+them, Tailscale's device list, the sources already in homelab.toml (UniFi's clients,
+Prometheus's targets, Kubernetes nodes, Proxmox VMs) and, after a separate yes,
+~/.ssh/config's Host lines. Then it checks only the hosts found, at private addresses
+only, as --hosts does. --yes answers the first question for scripts; --ssh-config the second.
 
 Re-runnable: it only adds sources whose type and endpoint aren't in homelab.toml already, by
 appending [[source]] blocks; your edits, references and panels are never rewritten. It never
@@ -43,7 +55,7 @@ for p in ("/usr/lib/bromigos/lib", os.path.join(os.path.dirname(HERE), "lib"),
         sys.path.append(p)
 
 import bromigos_homelab as H  # noqa: E402
-from bromigos_homelab import config, registry  # noqa: E402
+from bromigos_homelab import config, findlab as F, registry  # noqa: E402
 
 NEEDS_AUTH = {"argocd": "an Argo CD account token", "litellm": "a LiteLLM key (only for its model list)",
               "gnosis": "the gate's read token", "arr": "its API key (Settings > General)",
@@ -52,6 +64,7 @@ NEEDS_AUTH = {"argocd": "an Argo CD account token", "litellm": "a LiteLLM key (o
 
 
 def port_open(host, port, timeout=0.6):
+    F.PACE.wait()                                # rate-limited: at most 25 new connections a second
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
@@ -114,10 +127,12 @@ def local_finds():
 
 
 def host_finds(host):
-    found = []
+    found, opened = [], {}
     for type_, cls in sorted(registry.ADAPTERS.items()):
         for port in cls.default_ports:
-            if not port_open(host, port):
+            if port not in opened:                   # each port once, however many adapters share it
+                opened[port] = port_open(host, port)
+            if not opened[port]:
                 continue
             for scheme in (("https", "http") if port == 443 else ("http", "https")):
                 url = f"{scheme}://{host}" + ("" if (scheme, port) in (("https", 443), ("http", 80)) else f":{port}")
@@ -267,11 +282,73 @@ def block(src, names):
     return "\n".join(lines) + "\n"
 
 
+def ask(question):
+    try:
+        return input(question).strip().lower() in ("y", "yes")
+    except EOFError:
+        return False
+
+
+def consent(lab):
+    """The one question before Find my lab reads anything: which sources, in plain words."""
+    print("Find my lab looks for your homelab in what this computer already knows. It reads:")
+    for line in F.plan(lab=lab):
+        print(f"  - {line}")
+    print("Then it checks only the devices it found, for the services bromigOS knows. It never scans\n"
+          "address ranges, never signs in to anything, and sends nothing off your network.")
+    return ask("Look for your lab this way? [y/N] ")
+
+
+def show_lab(lab, new):
+    """The devices found, one per host: its kind, where it was seen, and what it has."""
+    hosts, src = lab["hosts"], lab["sources"]
+    print(f"\nFound {len(hosts)} device(s). Read: " + ", ".join(
+        f"{F.SOURCES[k]} {v}" if isinstance(v, int) else f"{F.SOURCES[k]} ({v})" for k, v in src.items()) + ".")
+    keys = {(s["type"], s.get("endpoint")) for s in new}
+    kind = None
+    for h in hosts:
+        if h["kind"] != kind:
+            kind = h["kind"]
+            print(f"\n{kind.upper()}")
+        extra = [x for x in h["labels"] if x != h["name"]][:1]
+        print(f"  {h['name']}  {', '.join(h['addresses'][:3])}" + (f"  ({extra[0]})" if extra else "")
+              + f"  seen by {', '.join(F.SOURCES[x] for x in h['sources'])}" + ("  [tailnet]" if h["tailnet"] else ""))
+        for s in h["services"]:
+            print(f"      {s['type']:<14} {s['endpoint']}" + ("" if (s["type"], s["endpoint"]) in keys
+                                                             else "   (already in homelab.toml)"))
+        missing = F.unsupported(h)
+        if [p for p, ad in missing if not ad]:
+            print("      found, not supported yet: " + ", ".join(p for p, ad in missing if not ad))
+        if [p for p, ad in missing if ad]:
+            print("      found, but its check didn't answer: " + ", ".join(p for p, ad in missing if ad))
+        if h["checked"] and h["checked"] != "checked":
+            print(f"      {h['checked']}")
+    if lab["ignored"]:
+        print(f"\n{lab['ignored']} public address(es) ignored: Find my lab only checks private ones.")
+    print()
+
+
+def choose(new):
+    """The checklist: which of the new sources to add."""
+    try:
+        ans = input(f"Add which to {config.USER}? Numbers (1 3), all or none [all]: ").strip().lower()
+    except EOFError:
+        return []
+    if ans in ("", "all", "a", "y", "yes"):
+        return new
+    picks = {int(x) for x in re.findall(r"\d+", ans)}
+    return [s for i, s in enumerate(new, 1) if i in picks]
+
+
 def main():
     ap = argparse.ArgumentParser(prog="bromigos setup homelab", description=__doc__.split("\n\n")[0])
+    ap.add_argument("--find", action="store_true",
+                    help="Find my lab: the devices this computer and your lab already know, then check those (asks first)")
+    ap.add_argument("--ssh-config", action="store_true", help="with --find: also read the Host lines in ~/.ssh/config")
     ap.add_argument("--hosts", default="", help="comma-separated hosts to probe")
     ap.add_argument("--url", action="append", default=[], help="an exact URL to identify (repeatable)")
-    ap.add_argument("--yes", "-y", action="store_true", help="non-interactive: write without asking")
+    ap.add_argument("--yes", "-y", action="store_true", help="non-interactive: write without asking (with --find: "
+                                                             "you agree to it reading the sources)")
     ap.add_argument("--print", dest="dry", action="store_true", help="show what would be added, write nothing")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--no-local", action="store_true", help="skip this machine's Docker/herdr/gh")
@@ -284,7 +361,24 @@ def main():
     interactive = sys.stdin.isatty() and not (a.yes or a.dry or a.json)
     hosts = [h.strip() for h in a.hosts.split(",") if h.strip()]
     urls = list(a.url)
-    if interactive and not hosts and not urls:
+    # Find my lab: asked first when nothing was named, and never read without a yes
+    find, has_lab = a.find, bool(config.sources())
+    if find or (interactive and not hosts and not urls):
+        if find and a.yes:
+            agreed = True
+        elif sys.stdin.isatty():
+            agreed = consent(has_lab)
+        else:
+            print("bromigos setup homelab --find: it reads your network's devices only after a yes. Run it in a "
+                  "terminal, or add --yes.", file=sys.stderr)
+            return 2
+        if find and not agreed:
+            print("Nothing read, nothing written.")
+            return 1
+        find = agreed
+    ssh = find and (a.ssh_config or (sys.stdin.isatty() and not a.yes and ask(
+        "Also read the Host lines in ~/.ssh/config? Only that file, never your keys. [y/N] ")))
+    if interactive and not hosts and not urls and not find:
         ans = input("Hosts or URLs in your homelab to check (space-separated; Enter for just this machine): ").strip()
         for t in ans.split():
             (urls if "://" in t else hosts).append(t)
@@ -295,6 +389,14 @@ def main():
         found += host_finds(h)
     for u in urls:
         found += url_finds(u)
+    lab = None
+    if find:
+        lab = F.find(ssh=ssh, lab=has_lab, log=lambda m: print(m, file=sys.stderr))
+        n = sum(1 for h in lab["hosts"] if F.checkable(h))
+        print(f"Checking {n} of {len(lab['hosts'])} device(s) for the services bromigOS knows…", file=sys.stderr)
+        F.check(lab["hosts"], host_finds)
+        for h in lab["hosts"]:
+            found += h["services"]
     if not a.no_detect:
         found += detect_finds(found)
         if a.ingress:
@@ -309,21 +411,30 @@ def main():
         seen.add(key)
         new.append(s)
     if a.json:
-        print(json.dumps({"config": config.USER, "found": found, "new": new}, indent=2))
+        out = {"config": config.USER, "found": found, "new": new}
+        if lab is not None:
+            out["lab"] = lab
+        print(json.dumps(out, indent=2))
         return 0
+    if lab is not None:
+        show_lab(lab, new)
     if not new:
         print(f"Nothing new to add to {config.USER}." + ("" if found else " Nothing found; try --hosts or --url."))
         return 0
-    text = "".join(block(s, names) for s in new)
     print(f"Found {len(new)} new source(s):")
-    for s in new:
-        print(f"  {s['type']:<16} {s.get('endpoint') or s.get('context') or ', '.join(s.get('orgs', [])) or 'this machine'}")
+    for i, s in enumerate(new, 1):
+        print(f"  {i:>2}. {s['type']:<16} {s.get('endpoint') or s.get('context') or ', '.join(s.get('orgs', [])) or 'this machine'}")
     if a.dry:
-        print(text)
+        print("".join(block(s, names) for s in new))
         return 0
-    if interactive and input(f"Add them to {config.USER}? [Y/n] ").strip().lower() not in ("", "y", "yes"):
+    if interactive and find:
+        new = choose(new)
+    elif interactive and input(f"Add them to {config.USER}? [Y/n] ").strip().lower() not in ("", "y", "yes"):
+        new = []
+    if not new:
         print("Nothing written.")
         return 1
+    text = "".join(block(s, names) for s in new)
     os.makedirs(os.path.dirname(config.USER), exist_ok=True)
     fresh = not os.path.exists(config.USER)
     with open(config.USER, "a") as f:

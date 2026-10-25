@@ -1,0 +1,8 @@
+[{"dst":"192.0.2.1","dev":"eth0","lladdr":"00:00:5e:00:53:01","state":["REACHABLE"]},
+ {"dst":"192.0.2.10","dev":"eth0","lladdr":"00:00:5e:00:53:0a","state":["STALE"]},
+ {"dst":"192.0.2.99","dev":"eth0","state":["FAILED"]},
+ {"dst":"192.0.2.98","dev":"eth0","state":["INCOMPLETE"]},
+ {"dst":"198.51.100.200","dev":"docker0","lladdr":"00:00:5e:00:53:c8","state":["REACHABLE"]},
+ {"dst":"198.51.100.201","dev":"veth1a2b3c","lladdr":"00:00:5e:00:53:c9","state":["REACHABLE"]},
+ {"dst":"fe80::1","dev":"eth0","lladdr":"00:00:5e:00:53:01","router":null,"state":["STALE"]},
+ {"dst":"203.0.113.5","dev":"eth0","lladdr":"00:00:5e:00:53:05","state":["REACHABLE"]}]
