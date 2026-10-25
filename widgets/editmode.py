@@ -152,7 +152,7 @@ class Editor:
     def __init__(self, app, select=None):
         self.app = app
         self.start = app.state()                  # Cancel goes back to this
-        self.start_fell = {n: (w.fell, w.home) for n, w in app.windows.items()}
+        self.start_fell = {n: (w.fell, w.home, w.was) for n, w in app.windows.items()}
         self.history = A.History()
         self.drag = None
         self.tray_drag = None
@@ -732,9 +732,10 @@ class Editor:
         if self.closed:
             return
         self.app.apply_state(self.start)
-        for n, (fell, home) in self.start_fell.items():
+        for n, (fell, home, was) in self.start_fell.items():
             if n in self.app.windows:
-                self.app.windows[n].fell, self.app.windows[n].home = fell, home
+                w = self.app.windows[n]
+                w.fell, w.home, w.was = fell, home, was
         self.close()
 
     def close(self):

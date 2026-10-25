@@ -30,7 +30,12 @@ lives in a dotfiles repository. A virtual keyboard (vkbd.py) and a virtual point
     puts SYSTEM on the second, saved as its own monitor; unplugged (`hyprctl output
     remove`), SYSTEM shows on the first and layout.json keeps it where it was; plugged in
     again, it goes back. A layout from before each panel had its own monitor is migrated
-    when the panels start, written through the symlink.
+    when the panels start, written through the symlink;
+  - the only monitor switched off and on again: WAYLAND-1 removed with a smaller output
+    (WAYLAND-2, 1920x1080) standing in, as Hyprland does with its FALLBACK output. The
+    panels show inside the stand-in, layout.json keeps their places through a save, and
+    when WAYLAND-1 is back every panel is exactly where it was, the bottom-right one too,
+    on the panels' state and in Hyprland's layers.
 
 With --shots DIR it saves pictures of edit mode (grim, inside the nested session) in two
 themes (set with `bromigos theme set --no-reload` in the sandbox) and with high contrast.
@@ -391,6 +396,64 @@ def monitors_phase(n, r):
     r.check("two monitors: the panels logged no traceback", "Traceback" not in errs, errs[-1500:])
 
 
+def switched_off_phase(n, r):
+    """The only monitor switched off and on again: a smaller stand-in while it's off, and
+    every panel back exactly where it was when it returns."""
+    doc = json.load(open(n.link))
+    for p in doc["panels"]:
+        p.pop("output", None)
+        if p["name"] == "network":                 # bottom right: past the stand-in's edges
+            p.update(x=2056, y=1142, width=470, height=262, visible=True)
+        if p["name"] == "storage":                 # one with a monitor of its own
+            p.update(x=2000, y=600, visible=True, output={"name": "WAYLAND-1"})
+    with open(os.path.realpath(n.link), "w") as f:
+        json.dump(doc, f, indent=2)
+    n.widgets("reload")
+    shown = lambda p: {k: (s["x"], s["y"]) for k, s in p.items() if s.get("visible")}  # noqa: E731
+    r.check("switched off: the panels start on WAYLAND-1, NETWORK at the bottom right",
+            settle(n, lambda p: p.get("network", {}).get("x") == 2056 and p.get("storage", {}).get("x") == 2000
+                   and all(s.get("output") == "WAYLAND-1" for s in p.values()), 15), n.panels())
+    time.sleep(1.0)
+    before = shown(n.panels())
+    sizes = {k: (s["width"], s["height"]) for k, s in n.panels().items()}
+    kept = n.saved()
+
+    # -- off: Hyprland stands a smaller output in for it
+    n.ctl("output", "create", "wayland", "WAYLAND-2")
+    wait_for(lambda: "WAYLAND-2" in (n.health().get("outputs") or []), 12)
+    n.ctl("output", "remove", "WAYLAND-1")
+    r.check("off: every panel shows on the stand-in, inside it",
+            settle(n, lambda p: p and all(s.get("output") == "WAYLAND-2" for s in p.values())
+                   and all(A.fits((s["x"], s["y"], s["width"], s["height"]), [], (1920, 1080))
+                           for s in p.values() if s.get("visible")), 15), n.panels())
+    n.widgets("edit", "on")
+    done = editing(n) and (n.widgets("edit", "done"), editing(n, False))[1]        # a save while it's off
+    r.check("off: a save keeps every panel's place on the monitor that's off", done and n.saved() == kept,
+            {k: (v, n.saved().get(k)) for k, v in kept.items() if n.saved().get(k) != v})
+
+    # -- on again: the stand-in is still there for a moment
+    n.ctl("output", "create", "wayland", "WAYLAND-1")
+    back = settle(n, lambda p: shown(p) == before and all(s.get("output") == "WAYLAND-1" for s in p.values()), 15)
+    r.check("on again: every panel is back on WAYLAND-1, exactly where it was", back,
+            {k: (v, shown(n.panels()).get(k)) for k, v in before.items() if shown(n.panels()).get(k) != v})
+    r.check("…NETWORK at the bottom right, not where it stood in", (n.panels().get("network") or {}).get("x") == 2056,
+            n.panels().get("network"))
+    want = sorted((*xy, *sizes[k]) for k, xy in before.items())
+    r.check("…and Hyprland shows them there",
+            wait_for(lambda: sorted(n.layers_on("WAYLAND-1", "bromigos-widgets")) == want, 8),
+            (sorted(n.layers_on("WAYLAND-1", "bromigos-widgets")), want))
+    n.ctl("output", "remove", "WAYLAND-2")
+    time.sleep(2.0)
+    r.check("the stand-in gone: nothing moves", settle(n, lambda p: shown(p) == before, 5), n.panels())
+    n.widgets("edit", "on")
+    done = editing(n) and (n.widgets("edit", "done"), editing(n, False))[1]        # a save after it's back
+    saved = n.saved()
+    r.check("…and a save after keeps their places", done and all((saved[k]["x"], saved[k]["y"]) == xy
+                                                                  for k, xy in before.items() if k in kept), saved)
+    errs = open(os.path.join(n.home, "widgets.err")).read() if os.path.exists(os.path.join(n.home, "widgets.err")) else ""
+    r.check("switched off: the panels logged no traceback", "Traceback" not in errs, errs[-1500:])
+
+
 TIDE = """from panels import Panel
 import draw as D
 
@@ -663,6 +726,7 @@ def main():
         customize_phase(n, r)
         fit_phase(n, r)
         visibility_phase(n, r)
+        switched_off_phase(n, r)
         if shots_dir:
             shots(n, r)
     finally:

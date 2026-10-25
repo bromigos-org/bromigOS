@@ -26,6 +26,12 @@ puts each panel back on its monitor, or on the primary while its monitor is gone
 standing in on the primary remembers its own place (`fell` and `home`), and
 `arrange.kept_place()` saves that place rather than the stand-in one.
 
+When the primary itself goes away (a monitor switched off, with Hyprland's smaller
+FALLBACK output in its place), `arrange.next_primary()` remembers it and makes it the
+primary again as soon as it's back. Each panel without a monitor of its own remembers its
+place there and that monitor's identity (`home` and `was`), and
+`arrange.on_new_primary()` puts it back exactly there.
+
 The package installs:
 
 - the code in `/usr/lib/bromigos/widgets/`;

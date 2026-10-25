@@ -1,7 +1,8 @@
 """arrange.py: each panel on a monitor of its own. Finding that monitor by make, model and
 serial (else its connector), where a panel shows while its monitor is unplugged and what
-layout.json keeps for it then, and bringing a layout with one monitor for every panel up
-to date, written in one step through a symlink."""
+layout.json keeps for it then, the only monitor switched off and on again (the panels
+back where they were), and bringing a layout with one monitor for every panel up to date,
+written in one step through a symlink."""
 import json
 import os
 import shutil
@@ -100,6 +101,75 @@ class Unplugged(unittest.TestCase):
     def test_a_pinned_panel_gets_its_monitors_make_model_and_serial(self):
         got = A.kept_place(("HDMI-A-1", 40, 50), {"name": "HDMI-A-1"}, None, None, [DESK, SIDE])
         self.assertEqual(got, (A.identity(SIDE), 40, 50))
+
+
+class SwitchedOff(unittest.TestCase):
+    """The only monitor switched off: Hyprland puts a smaller stand-in output in its place
+    (FALLBACK) until it's back. The panels that go on the primary stand in there, and
+    return to exactly where they were."""
+    STAND_IN = {"id": 1, "name": "FALLBACK", "make": "", "model": "", "serial": "", "x": 0, "y": 0,
+                "width": 1920, "height": 1080, "scale": 1, "transform": 0, "reserved": [0, 0, 0, 0]}
+    BACK = moved(DESK, "DP-1")
+    MEDIA = (2156, 880, 380, 150)                 # bottom right of DESK, 2560 wide
+
+    def test_the_primary_that_went_away_is_remembered(self):
+        got = A.next_primary([self.STAND_IN], "DP-1", None, ("", ""), "FALLBACK", A.identity(DESK))
+        self.assertEqual(got, ("FALLBACK", A.identity(DESK)))
+
+    def test_it_is_the_primary_again_as_soon_as_it_is_back(self):
+        # back while the stand-in is still there: no wait for the stand-in to go
+        got = A.next_primary([self.STAND_IN, self.BACK], "FALLBACK", A.identity(DESK), ("", ""), "FALLBACK")
+        self.assertEqual(got, ("DP-1", None))
+        # on another port: found by make, model and serial
+        got = A.next_primary([moved(DESK, "DP-4")], "FALLBACK", A.identity(DESK), ("",), "DP-4")
+        self.assertEqual(got, ("DP-4", None))
+
+    def test_the_first_to_go_is_the_one_waited_for(self):
+        # the stand-in goes too, and another monitor comes: DESK is still the one waited for
+        got = A.next_primary([SIDE], "FALLBACK", A.identity(DESK), (), "HDMI-A-1", A.identity(self.STAND_IN))
+        self.assertEqual(got, ("HDMI-A-1", A.identity(DESK)))
+        self.assertEqual(A.next_primary([DESK, SIDE], "HDMI-A-1", A.identity(DESK), (), "HDMI-A-1"), ("DP-1", None))
+
+    def test_a_primary_chosen_wins(self):
+        # `bromigos setup monitors` (or the layout's "monitor") names SIDE: that's the primary
+        got = A.next_primary([DESK, SIDE], "FALLBACK", A.identity(DESK), ("", "HDMI-A-1"), "HDMI-A-1")
+        self.assertEqual(got, ("HDMI-A-1", None))
+
+    def test_nothing_changes_while_the_primary_is_there(self):
+        self.assertEqual(A.next_primary([DESK, SIDE], "DP-1", None, (), "HDMI-A-1"), ("DP-1", None))
+        self.assertEqual(A.next_primary([DESK], "DP-1", A.identity(DESK), (), "DP-1"), ("DP-1", None))
+        self.assertEqual(A.next_primary([], "DP-1", None, (), None), ("DP-1", None))
+
+    def test_a_panel_stands_in_inside_the_smaller_output(self):
+        self.assertEqual(A.on_new_primary(self.MEDIA, (1920, 1080), home=self.MEDIA[:2]), (1540, 880))
+
+    def test_back_on_its_monitor_it_goes_exactly_where_it_was(self):
+        # it stood in at 1540,880; DESK is back: 2156,880, not 1540
+        self.assertEqual(A.on_new_primary((1540, 880, 380, 150), (2560, 1440), (2156, 880), back=True), (2156, 880))
+
+    def test_on_another_monitor_its_own_place_moved_in_to_fit(self):
+        # plugged into a different monitor: from its own place, not from where it stood in
+        self.assertEqual(A.on_new_primary((1540, 880, 380, 150), (3440, 1440), (2156, 880)), (2156, 880))
+        self.assertEqual(A.on_new_primary((1540, 880, 380, 150), (1280, 720), (2156, 880)), (900, 570))
+        # one that wasn't standing in moves in from where it is, as before
+        self.assertEqual(A.on_new_primary((2156, 880, 380, 150), (1920, 1080)), (1540, 880))
+
+    def test_layout_json_keeps_its_place_while_it_stands_in(self):
+        fell = ("FALLBACK", 1540, 880)
+        self.assertEqual(A.kept_place(fell, None, fell, (2156, 880), [self.STAND_IN]), (None, 2156, 880))
+
+    def test_moved_by_hand_while_standing_in_it_still_goes_on_the_primary(self):
+        got = A.kept_place(("FALLBACK", 600, 16), None, ("FALLBACK", 1540, 880), (2156, 880), [self.STAND_IN])
+        self.assertEqual(got, (None, 600, 16))
+
+    def test_the_toolkits_monitor_by_its_whole_rect(self):
+        # the monitor back and the stand-in share a top left for a moment
+        rects = [(0, 0, 1920, 1080), (0, 0, 2560, 1440)]
+        self.assertEqual(A.gdk_index(rects, DESK), 1)
+        self.assertEqual(A.gdk_index(rects, self.STAND_IN), 0)
+        self.assertEqual(A.gdk_index([(0, 0, 2560, 1439)], DESK), 0)       # a size rounded: its top left
+        self.assertEqual(A.gdk_index([(2560, 0, 1920, 1080)], SIDE), 0)     # scale 2: logical px
+        self.assertIsNone(A.gdk_index([(2560, 0, 1920, 1080)], DESK))
 
 
 class Migrate(unittest.TestCase):

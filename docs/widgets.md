@@ -129,6 +129,14 @@ is kept, even if you save in edit mode meanwhile, and it goes back when you plug
 monitor in again. If you move it by hand while it's on the primary, it stays where you put
 it.
 
+Switching off the primary monitor works the same way, even when it's your only one. While
+it's off, Hyprland puts a stand-in output in its place, which is often smaller. The panels
+show inside the stand-in for the time being, and `layout.json` keeps their real places,
+even if you save in edit mode meanwhile. When the monitor comes back it's the primary
+again, and every panel goes back exactly where it was. If you plug in a different monitor
+instead, each panel keeps its place when that fits, and moves in from the edge just enough
+when it doesn't.
+
 A panel you never put on another monitor goes on the primary monitor
 ([desktop.md](desktop.md#what-goes-on-which-monitor)). `bromigos panels monitor <name>`
 puts every panel on one monitor and forgets each one's own.

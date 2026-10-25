@@ -251,16 +251,17 @@ def resolve_monitor(name, mons=None):
 
 
 def gdk_monitor(name, mons=None, strict=False):
-    """Map a Hyprland output name to the Gdk.Monitor with the same geometry. Not found:
-    None when strict (GTK hasn't heard of it yet: try again later), else GTK's primary."""
+    """Map a Hyprland output name to the Gdk.Monitor with the same geometry (arrange.gdk_index).
+    Not found: None when strict (GTK hasn't heard of it yet: try again later), else GTK's
+    primary."""
     mons = monitors() if mons is None else mons
     m = next((m for m in mons if m["name"] == name), None)
     disp = Gdk.Display.get_default()
     if m:
-        for i in range(disp.get_n_monitors()):
-            g = disp.get_monitor(i).get_geometry()
-            if g.x == m["x"] and g.y == m["y"]:
-                return disp.get_monitor(i)
+        gs = [disp.get_monitor(i).get_geometry() for i in range(disp.get_n_monitors())]
+        i = A.gdk_index([(g.x, g.y, g.width, g.height) for g in gs], m)
+        if i is not None:
+            return disp.get_monitor(i)
     if strict:
         return None
     return disp.get_primary_monitor() or disp.get_monitor(0)
@@ -310,10 +311,12 @@ class Surface:
     """What edit mode needs of a panel's window: where it is, moving and sizing it, the
     layer it's on. monitor: the output it shows on; pin: its own monitor (layout.json's
     "output"), None for one that goes on the primary; fell: (output, x, y) while it shows
-    on the primary because its own monitor isn't connected, home: its saved (x, y) then."""
+    on another output because its own isn't connected, home: its saved (x, y) then; was:
+    for one that goes on the primary, the identity of the primary it stood on then (a
+    monitor switched off), so it goes back to `home` when that's the primary again."""
     x = y = 0
     monitor = ""
-    pin = fell = home = None
+    pin = fell = home = was = None
 
     def rect(self):
         w, h = self.size_now()
@@ -652,7 +655,9 @@ class NotesWindow(Surface):
 # ------------------------------------------------------------------ app
 class App:
     def __init__(self):
-        self.mons = monitors()
+        self.known = {}              # every output seen: name -> identity (for one that's gone)
+        self.lost_primary = None     # the identity of a primary that went away (switched off)
+        self.refresh()
         self.cfg = self.read_layout()
         self.monitor_setting = self.cfg.get("monitor", "")       # the layout's, as written
         self.primary = resolve_monitor(self.monitor_setting, self.mons)
@@ -725,6 +730,13 @@ class App:
         return False
 
     # ------------------------------------------------------------------ monitors
+    def refresh(self):
+        """Hyprland's outputs again, each one's identity remembered for when it's gone."""
+        self.mons = monitors()
+        for m in self.mons:
+            self.known[m["name"]] = A.identity(m)
+        return self.mons
+
     @property
     def monitor_name(self):
         """The panels' primary output (the health file's "monitor")."""
@@ -774,28 +786,34 @@ class App:
         return True
 
     def pick_primary(self):
-        """The primary again, after a hotplug: another when it went away, or the one the
-        layout or `bromigos setup monitors` asks for when that came back. Returns whether it
-        changed."""
+        """The primary again, after a hotplug (arrange.next_primary): another when it went
+        away, and the same monitor again when that comes back (or the one the layout or
+        `bromigos setup monitors` asks for, when that's there). Returns whether it changed."""
         best = resolve_monitor(self.monitor_setting, self.mons)
-        here = self.monitor(self.primary) is not None
-        if best and best != self.primary and (not here or best in (self.monitor_setting, setup_primary())):
-            print(f"bromigos-widgets: primary {self.primary} -> {best}", file=sys.stderr, flush=True)
-            self.primary = best
+        old = self.primary
+        self.primary, self.lost_primary = A.next_primary(
+            self.mons, old, self.lost_primary, (self.monitor_setting, setup_primary()), best, self.known.get(old))
+        if self.primary != old:
+            print(f"bromigos-widgets: primary {old} -> {self.primary}", file=sys.stderr, flush=True)
             return True
         return False
 
     def fall_back(self):
         """Each panel onto its own monitor when that's connected, else onto the primary:
         at its own place when that's free there, else in a free spot; its saved place is
-        kept (arrange.kept_place) for when its monitor comes back. Returns the names moved."""
+        kept (arrange.kept_place) for when its monitor comes back. A panel that goes on
+        the primary follows it; when the primary went away (switched off) it keeps its
+        place there too, and goes back to it when that monitor is the primary again
+        (arrange.on_new_primary). Returns the names moved."""
         moved = set()
         for n, w in self.windows.items():
             own = A.find_output(self.mons, w.pin) if w.pin else None
             if w.fell and (w.monitor, w.x, w.y) != tuple(w.fell):
-                # moved by hand while on the primary: it lives there now
-                w.pin, w.fell, w.home = self.identity(w.monitor), None, None
-                own = w.monitor
+                # moved by hand while it stood in: it lives there now (on the primary still,
+                # or pinned to the monitor it was moved on)
+                w.fell = w.home = w.was = None
+                if w.pin:
+                    w.pin = own = self.identity(w.monitor)
             if own:
                 if w.fell:                        # its monitor is back: its own place again
                     hx, hy = w.home
@@ -814,11 +832,17 @@ class App:
                     w.fell, w.home = (self.primary, w.x, w.y), home
                     moved.add(n)
             elif w.monitor != self.primary:       # the primary changed
-                x, y, ww, hh = w.rect()
-                W, H = self.area(self.primary)
-                if self.put(w, self.primary, min(x, max(0, W - ww)), min(y, max(0, H - hh))):
-                    if w.fell:
-                        w.fell = (self.primary, w.x, w.y)
+                home, was = w.home, w.was
+                if w.pin is None and not w.fell and self.monitor(w.monitor) is None:
+                    # the primary it was on went away: its place there is kept for its return
+                    home, was = (w.x, w.y), self.known.get(w.monitor) or {"name": w.monitor}
+                back = bool(was) and A.find_output(self.mons, was) == self.primary
+                spot = A.on_new_primary(w.rect(), self.area(self.primary), home if w.pin is None else None, back)
+                if self.put(w, self.primary, *spot):
+                    if back:
+                        w.fell = w.home = w.was = None
+                    elif w.fell or was:
+                        w.fell, w.home, w.was = (self.primary, w.x, w.y), home, was
                     moved.add(n)
         if moved:
             print(f"bromigos-widgets: placed {', '.join(sorted(moved))} by their monitors", file=sys.stderr, flush=True)
@@ -1072,7 +1096,7 @@ class App:
     def reattach(self, names=None):
         """After a hotplug: every panel by its monitor (fall_back), and the shown panels
         whose surfaces closed mapped again."""
-        self.mons = monitors()
+        self.refresh()
         if not self.mons:
             return False
         self.pick_primary()
@@ -1100,7 +1124,7 @@ class App:
 
     def check_surfaces(self):
         """Backstop every 30 s: every shown panel must have a surface on its monitor."""
-        self.mons = monitors()
+        self.refresh()
         if not self.mons:
             return True
         data = hypr_request("j/layers") or {}
@@ -1326,7 +1350,7 @@ class App:
             return False
         if not self.put(w, conn):
             return False
-        w.pin, w.fell, w.home = self.identity(conn), None, None
+        w.pin, w.fell, w.home, w.was = self.identity(conn), None, None, None
         if self.editor:
             w.set_layer(True)
         return True

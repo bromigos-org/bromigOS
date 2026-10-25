@@ -9,7 +9,10 @@ GTK, so it's tested on its own (widgets/tests/test_arrange.py).
   * History: undo and redo inside one edit session.
   * Monitors: each panel's own monitor, found by its make, model and serial (else its
     connector's name) with find_output(); where a panel shows while its monitor isn't
-    connected (fallback_spot) and what layout.json keeps for it then (kept_place).
+    connected (fallback_spot) and what layout.json keeps for it then (kept_place). When
+    the primary goes away (switched off), next_primary() remembers it and makes it the
+    primary again when it's back, and on_new_primary() puts each panel that goes on the
+    primary back at its own place there.
   * read() and write(): layout.json. write() replaces the file in one step and, when
     ~/.config/bromigos/widgets/layout.json is a symlink (into a dotfiles repository, say),
     writes through it, so the link stays a link. migrate() brings a layout from before
@@ -420,6 +423,53 @@ def monitor_at(monitors, gx, gy):
     return None
 
 
+def gdk_index(rects, m):
+    """Which of the toolkit's monitors, as rects (x, y, w, h) in logical px, is Hyprland's
+    monitor m: the one with its whole rect, else the first with its top left (a size the
+    toolkit rounds). None when none is. Two monitors can share a top left for a moment: a
+    monitor switched back on, and the stand-in Hyprland made while it was off."""
+    x, y, w, h = (round(v) for v in bounds(m))
+    rects = [tuple(int(v) for v in r) for r in rects]
+    return next((i for i, r in enumerate(rects) if r == (x, y, w, h)),
+                next((i for i, r in enumerate(rects) if r[:2] == (x, y)), None))
+
+
+def next_primary(monitors, current, lost=None, chosen=(), best=None, current_id=None):
+    """The panels' primary after a hotplug: (connector, lost). current is the primary
+    now, current_id its identity; chosen the outputs the layout's "monitor" and `bromigos
+    setup monitors` name; best the one bromigos_monitors.primary picks. lost is the
+    identity of a primary that went away (a monitor switched off): it's the primary again
+    when it's back, so the panels return to it, unless an output chosen is connected. The
+    primary changes only when it went away, or to an output chosen or the one back."""
+    mons = _live(monitors)
+    names = {m["name"] for m in mons}
+    here = current in names
+    explicit = next((n for n in chosen if n and n in names), None)
+    back = find_output(mons, lost) if lost else None
+    pick = explicit or back or best
+    if not pick or pick == current or (here and pick not in (explicit, back)):
+        return current, (None if here and back == current else lost)
+    if back:                                  # what went away is back: nothing to wait for
+        return pick, None
+    if not here and lost is None:             # the first to go is the one waited for
+        lost = current_id or {"name": current}
+    return pick, lost
+
+
+def on_new_primary(rect, area, home=None, back=False):
+    """Where a panel that goes on the primary shows when the primary changes: (x, y).
+    home is its own place while it stands in on another monitor (its own went away). Back
+    on its own monitor, it goes exactly there; on another, its own place (else where it
+    is) moved in just enough to fit that monitor's area."""
+    x, y, w, h = rect
+    if home and back:
+        return int(home[0]), int(home[1])
+    if home:
+        x, y = home
+    W, H = area
+    return int(min(x, max(0, W - w))), int(min(y, max(0, H - h)))
+
+
 def fallback_spot(rect, taken, area, avoid=()):
     """Where a panel shows on the primary monitor while its own isn't connected: its own
     place when that's inside the area and clear of the panels there, else a free spot."""
@@ -432,14 +482,14 @@ def fallback_spot(rect, taken, area, avoid=()):
 def kept_place(now, pin, fell=None, home=None, monitors=()):
     """What layout.json keeps for a panel: (output, x, y). now = (connector, x, y), where
     it shows; pin = its own monitor (its "output"), or None for one that goes on the
-    primary. fell = (connector, x, y) where it was shown on the primary because its own
-    monitor wasn't connected, and home its saved (x, y) then: untouched there, it keeps
-    its own monitor and place. Otherwise it keeps where it is, its monitor by make, model
-    and serial."""
+    primary. fell = (connector, x, y) where it was shown on another monitor because its
+    own wasn't connected, and home its saved (x, y) then: untouched there, it keeps its own
+    monitor and place. Otherwise it keeps where it is: on the primary still, or its monitor
+    by make, model and serial."""
     if fell and home and tuple(now) == tuple(fell):
         return pin, int(home[0]), int(home[1])
     conn, x, y = now
-    if pin is None and not fell:
+    if pin is None:
         return None, int(x), int(y)
     m = next((m for m in _live(monitors) if m["name"] == conn), None)
     return (identity(m) if m else {"name": conn}), int(x), int(y)

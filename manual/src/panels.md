@@ -119,6 +119,9 @@ tray's **Monitor** list. A panel knows its monitor even when you plug it into an
 port. When you unplug a monitor, its panels move to your primary monitor for the time
 being. They go back to their places when you plug it in again.
 
+The same goes for switching your monitor off and on, even when it's your only one. Each
+panel goes back exactly where it was, so you don't need to apply your layout again.
+
 You can do it all from the keyboard. <kbd>Tab</kbd> picks the next panel, the arrow keys
 move it (with <kbd>Shift</kbd>, 10 pixels at a time), <kbd>Ctrl</kbd> and an arrow
 resizes it, and <kbd>H</kbd> hides it. <kbd>F6</kbd> moves to the tray and back.
