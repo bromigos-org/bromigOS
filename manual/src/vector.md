@@ -45,7 +45,7 @@ You can send VECTOR files and pictures with a message. There are three ways:
 - drag them onto VECTOR, or onto the box you type in;
 - copy a picture, or a file in your file manager, then press <kbd>Ctrl</kbd>+<kbd>V</kbd>
   in the box;
-- click **+ ATTACH** beside the box, and choose one or more files.
+- click the paperclip beside the box, and choose one or more files.
 
 Each file appears above the box with its name and size. Click its **×** to take it off.
 Press <kbd>Enter</kbd> to send the files with your message. The conversation shows a line

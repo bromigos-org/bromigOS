@@ -45,7 +45,7 @@ Run `bromigos update` to get them. The next release notes will include these hig
 - **Claude Code sessions.** VECTOR can read local sessions, find past replies and read
   each new reply aloud in follow mode. See [Read a session](vector.md#read-a-claude-code-session).
 - **Files and pictures for VECTOR.** Drag files onto VECTOR, paste a picture, or click
-  **+ ATTACH**, and send them with your message. See
+  the paperclip, and send them with your message. See
   [Give VECTOR files and pictures](vector.md#give-vector-files-and-pictures).
 
 - **Lab provisioning.** Review a generated repository, then apply Core services or k3s,
