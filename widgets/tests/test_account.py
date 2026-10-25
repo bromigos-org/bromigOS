@@ -19,7 +19,7 @@ import bromigos_account as A  # noqa: E402
 class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        self.env = mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": self.tmp})
+        self.env = mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": self.tmp, "XDG_RUNTIME_DIR": self.tmp})
         self.env.start()
         A.KEYRING = A.MemoryKeyring()
         A._cache.clear()

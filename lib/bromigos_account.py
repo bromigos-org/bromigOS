@@ -40,8 +40,12 @@ accounts existed is "default", and nothing about it changed.
                                          .prompt (the on_prompt dict), .error, .cancel()
     A.http_json(url, data=None, headers=None, method=None, timeout=15, form=True)
                                        JSON over HTTPS; HTTPError carries .body (parsed JSON or text)
+    A.authed_json(provider, url, data=None, method=None)
+                                       JSON with the account's token; after a 401 it refreshes
+                                         the token once and tries again. Raises SignInError when
+                                         signed out, or when the sign-in can't be refreshed
     A.gh_token()                       the user's `gh` login token, read when asked, never stored
-    A.PROVIDERS                        {name: {...}}: twitch, github, gitlab (device flow),
+    A.PROVIDERS                        {name: {...}}: bromigos, twitch, github, gitlab (device flow),
                                          spotify (authorization code with PKCE, loopback redirect),
                                          plex (Plex's PIN: a code entered at plex.tv/link)
     A.plex_claim_token()               a claim token for a new Plex Media Server (its PLEX_CLAIM),
@@ -58,6 +62,18 @@ Where things live:
   * Tokens: the login keyring, through libsecret (the Secret Service), one item per
     account: service "bromigos-account:<provider>", account "<name>" ("default" for the
     first), labelled "bromigOS: <Provider> sign-in". Never in a file.
+
+Bromigos, your own account (lib/bromigos_login.py has `bromigos login`, its SSH sign-in and
+the account's SSH keys): an OpenID Connect provider. Its endpoints come from the issuer's
+discovery document (<issuer>/.well-known/openid-configuration), the client is the public
+`bromigos-cli`, and refresh tokens rotate, so a refresh holds a lock and reads the keyring
+again first. Its addresses, client and scopes can change, for a test server:
+
+    env BROMIGOS_AUTH_URL, BROMIGOS_ACCOUNT_URL, BROMIGOS_CLIENT_ID, BROMIGOS_SCOPES
+    accounts.toml [bromigos] issuer = "…", base = "…", client_id = "…", scopes = "openid …"
+
+The environment wins. BROMIGOS_TOKEN, a personal access token (bmg_pat_…), stands in for the
+stored sign-in while it's set, the way gh's login does for GitHub.
 
 No flow here needs a client secret: Twitch and GitLab take a public client through the
 device flow (RFC 8628), GitHub's OAuth apps allow the device flow, and Spotify takes the
@@ -78,8 +94,10 @@ Command line (bin/bromigos-account, which is `bromigos account`):
     bromigos account status|login|logout PROVIDER [--as NAME]
     bromigos account configure PROVIDER [--as NAME] client_id=ID [base=URL] [label=TEXT]
     bromigos account set-token PROVIDER [--as NAME]   (reads the token without echoing it)
+    bromigos account token                (how to make a Bromigos personal access token)
 """
 import base64
+import contextlib
 import hashlib
 import json
 import os
@@ -96,6 +114,23 @@ import urllib.request
 
 # ------------------------------------------------------------------ providers
 PROVIDERS = {
+    "bromigos": {
+        "title": "Bromigos", "flow": "device", "base": "https://account.bromigos.org",
+        # an OpenID Connect issuer: the endpoints come from its discovery document; these
+        # paths are only the fallback when that can't be read
+        "issuer": "https://auth.bromigos.org", "discovery": True,
+        "device_url": "{issuer}/oauth2/device/auth", "token_url": "{issuer}/oauth2/token",
+        "who_url": "{issuer}/userinfo", "revoke_url": "{issuer}/oauth2/revoke",
+        "scopes": ["openid", "offline_access", "profile", "email", "lab:read", "brodec:send", "account:read"],
+        "scope_key": "scope", "who_field": "preferred_username",
+        "who_fields": ["preferred_username", "email", "name", "sub"], "profile": ["email", "name", "sub"],
+        # bromigOS's own public client, the same on any server: a test or staging one has it too
+        "client_id": "bromigos-cli", "any_base": True,
+        "token_prefix": "bmg_pat_", "env_token": "BROMIGOS_TOKEN",
+        "env": {"issuer": "BROMIGOS_AUTH_URL", "base": "BROMIGOS_ACCOUNT_URL", "client_id": "BROMIGOS_CLIENT_ID",
+                "scopes": "BROMIGOS_SCOPES"},
+        "app_help": "Nothing to set up: run bromigos login.",
+    },
     "twitch": {
         "title": "Twitch", "flow": "device", "base": "https://www.twitch.tv",
         "device_url": "https://id.twitch.tv/oauth2/device", "token_url": "https://id.twitch.tv/oauth2/token",
@@ -222,14 +257,28 @@ def config(provider, account=DEFAULT):
         inherit = {k: v for k, v in top.items() if k != "label" and (same or k == "port")}
         got = {**inherit, **got}
     out = {"base": p["base"], "client_id": p.get("client_id")}
-    if "port" in p:
-        out["port"] = p["port"]
+    for k in ("port", "issuer"):
+        if k in p:
+            out[k] = p[k]
     out.update(got)
+    if account == DEFAULT:                          # the environment wins (a test or staging server)
+        out.update({k: os.environ[v].strip() for k, v in p.get("env", {}).items() if os.environ.get(v, "").strip()})
     out["base"] = str(out.get("base") or p["base"]).rstrip("/")
+    if out.get("issuer"):
+        out["issuer"] = str(out["issuer"]).rstrip("/")
     # bromigOS's own app is registered on the provider's public site only
-    if "client_id" not in got and out["base"] != p["base"].rstrip("/"):
+    if "client_id" not in got and out["base"] != p["base"].rstrip("/") and not p.get("any_base"):
         out["client_id"] = None
     return out
+
+
+def scopes(provider, account=DEFAULT):
+    """The scopes a sign-in asks for: accounts.toml's or the environment's `scopes` (spaces
+    or commas between), else the provider's own."""
+    got = config(provider, account).get("scopes")
+    if isinstance(got, str) and got.strip():
+        return [s for s in re.split(r"[\s,]+", got) if s]
+    return list(_p(provider)["scopes"])
 
 
 def base(provider, account=DEFAULT):
@@ -274,8 +323,8 @@ def accounts(provider):
 
 def fields(provider, account=DEFAULT):
     p = _p(provider)
-    if p["flow"] == "plex-pin":
-        return []                                   # no app: the client identifier is made on first use
+    if p["flow"] == "plex-pin" or p.get("any_base"):
+        return []                                   # no app: the client identifier is made on first use, or is bromigOS's own
     out = [{"key": "client_id", "label": f"{p['title']} client ID", "hint": p["app_help"], "required": True}]
     if provider == "gitlab":
         out.append({"key": "base", "label": "GitLab address", "hint": "https://gitlab.com, or your own instance",
@@ -506,10 +555,41 @@ def _save(provider, rec, account=DEFAULT):
     _cache[(provider, account)] = (time.monotonic(), rec)
 
 
-def sign_out(provider, account=DEFAULT):
-    _p(provider)
+def sign_out(provider, account=DEFAULT, revoke=False):
+    """Forget the stored sign-in. revoke: first ask the provider to cancel its refresh token
+    too (when it has a revocation endpoint), quietly; a pasted token is left alone."""
+    p = _p(provider)
+    if revoke and p.get("revoke_url"):
+        rec = _load(provider, fresh=True, account=account) or {}
+        if rec.get("refresh_token") and not rec.get("pasted"):
+            try:
+                http_json(_url(provider, "revoke_url", account),
+                          {"token": rec["refresh_token"], "token_type_hint": "refresh_token",
+                           "client_id": rec.get("client_id") or config(provider, account).get("client_id") or ""})
+            except (OSError, ValueError):
+                pass                                # signing out here never waits on the service
     _ring().delete(_service(provider), account)
     _cache[(provider, account)] = (time.monotonic(), None)
+
+
+@contextlib.contextmanager
+def _refresh_lock(provider, account=DEFAULT):
+    """One refresh at a time for an account, across processes: a provider that rotates its
+    refresh tokens refuses the old one, and may cancel the sign-in when it sees it reused."""
+    import fcntl
+    d = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or os.path.join(os.path.expanduser("~"), ".cache"), "bromigos")
+    try:
+        os.makedirs(d, mode=0o700, exist_ok=True)
+        f = open(os.path.join(d, f"account-{provider}-{account}.lock"), "a")
+    except OSError:
+        yield                                       # no place for a lock: refresh without one
+        return
+    with f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 # ------------------------------------------------------------------ gh
@@ -567,7 +647,42 @@ def http_json(url, data=None, headers=None, method=None, timeout=15, form=True):
 
 
 def _fmt(url, provider, account=DEFAULT):
-    return url.format(base=base(provider, account), api=api(provider, account) if "{api}" in url else "")
+    return url.format(base=base(provider, account), api=api(provider, account) if "{api}" in url else "",
+                      issuer=config(provider, account).get("issuer") or "")
+
+
+_discovered = {}                 # issuer -> (time read, its discovery document), kept an hour
+DISCOVERY = {"device_url": "device_authorization_endpoint", "token_url": "token_endpoint",
+             "who_url": "userinfo_endpoint", "revoke_url": "revocation_endpoint"}
+
+
+def discovery(provider, account=DEFAULT):
+    """The issuer's OpenID Connect discovery document ({} when it can't be read)."""
+    iss = config(provider, account).get("issuer")
+    if not iss:
+        return {}
+    hit = _discovered.get(iss)
+    if hit and time.monotonic() - hit[0] < 3600:
+        return hit[1]
+    try:
+        doc = http_json(iss + "/.well-known/openid-configuration", timeout=10)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(doc, dict):
+        return {}
+    _discovered[iss] = (time.monotonic(), doc)
+    return doc
+
+
+def _url(provider, key, account=DEFAULT):
+    """An endpoint: from the discovery document for a provider that has one, else the
+    provider's own pattern ("device_url", "token_url", "who_url", "revoke_url")."""
+    p = _p(provider)
+    if p.get("discovery"):
+        got = discovery(provider, account).get(DISCOVERY[key])
+        if isinstance(got, str) and got.startswith(("https://", "http://")):
+            return got
+    return _fmt(p[key], provider, account)
 
 
 def _err_code(body):
@@ -578,20 +693,33 @@ def _err_code(body):
     return body.get("error") or body.get("message")
 
 
-def _who(provider, access, account=DEFAULT):
+def _userinfo(provider, access, account=DEFAULT):
+    """Who the token belongs to, as the service says ({} when it can't say)."""
     p = _p(provider)
     if not p.get("who_url"):
-        return None
+        return {}
     try:
         if p.get("who_header"):
             h = {p["who_header"]: access, **_plex_headers(provider)}
         else:
             h = {"Authorization": f"{p.get('who_auth', 'Bearer')} {access}",
                  "Client-Id": config(provider, account).get("client_id") or ""}
-        d = http_json(_fmt(p["who_url"], provider, account), headers=h)
-        return d.get(p["who_field"]) or d.get("login") or d.get("id")
+        d = http_json(_url(provider, "who_url", account), headers=h)
+        return d if isinstance(d, dict) else {}
     except (OSError, ValueError):
-        return None
+        return {}
+
+
+def _pick_who(provider, d):
+    p = _p(provider)
+    for f in p.get("who_fields") or (p.get("who_field"), "login", "id"):
+        if f and d.get(f):
+            return d[f]
+    return None
+
+
+def _who(provider, access, account=DEFAULT):
+    return _pick_who(provider, _userinfo(provider, access, account))
 
 
 def _record(provider, tok, who=None, account=DEFAULT):
@@ -600,26 +728,48 @@ def _record(provider, tok, who=None, account=DEFAULT):
     rec = {"access_token": tok["access_token"], "refresh_token": tok.get("refresh_token"),
            "expires_at": now + float(tok["expires_in"]) if tok.get("expires_in") else None,
            "scope": tok.get("scope"), "client_id": c.get("client_id"), "base": c["base"], "got": now}
-    rec["who"] = who or _who(provider, rec["access_token"], account)
+    if who:
+        rec["who"] = who
+    else:
+        info = _userinfo(provider, rec["access_token"], account)
+        rec["who"] = _pick_who(provider, info)
+        keep = {k: info[k] for k in _p(provider).get("profile", ()) if isinstance(info.get(k), str)}
+        if keep:
+            rec["profile"] = keep
     return rec
 
 
+def _expired(rec):
+    return bool(rec.get("expires_at") and rec["expires_at"] - 60 < time.time())
+
+
 def _refresh(provider, rec, account=DEFAULT):
-    if not rec.get("refresh_token"):
-        return None
-    p = _p(provider)
-    try:
-        tok = http_json(_fmt(p["token_url"], provider, account),
-                        {"grant_type": "refresh_token", "refresh_token": rec["refresh_token"],
-                         "client_id": rec.get("client_id") or config(provider, account)["client_id"]})
-    except (OSError, ValueError):
-        return None
-    if not tok.get("access_token"):
-        return None
-    tok.setdefault("refresh_token", rec["refresh_token"])        # Spotify may not send a new one
-    new = _record(provider, tok, who=rec.get("who"), account=account)
-    _save(provider, new, account)
-    return new
+    with _refresh_lock(provider, account):
+        # Read the keyring again under the lock: another program may have refreshed it while
+        # this one waited, and a rotated refresh token can't be used twice.
+        now = _load(provider, fresh=True, account=account)
+        if not now:
+            return None                             # signed out meanwhile
+        if now.get("access_token") != rec.get("access_token") and not _expired(now):
+            return now
+        rec = now
+        if not rec.get("refresh_token"):
+            return None
+        try:
+            tok = http_json(_url(provider, "token_url", account),
+                            {"grant_type": "refresh_token", "refresh_token": rec["refresh_token"],
+                             "client_id": rec.get("client_id") or config(provider, account)["client_id"]})
+        except (OSError, ValueError):
+            return None
+        if not tok.get("access_token"):
+            return None
+        tok.setdefault("refresh_token", rec["refresh_token"])        # Spotify may not send a new one
+        new = _record(provider, tok, who=rec.get("who"), account=account)
+        for k in ("profile", "how", "ssh_key"):                      # how it was signed in stays
+            if rec.get(k):
+                new[k] = rec[k]
+        _save(provider, new, account)
+        return new
 
 
 def token(provider, account=DEFAULT):
@@ -628,14 +778,25 @@ def token(provider, account=DEFAULT):
     _p(provider)
     if _gh_covers(provider, account):
         return gh_token()
+    env = _env_token(provider, account)
+    if env:
+        return env
     rec = _load(provider, account=account)
     if not rec:
         return None
-    if rec.get("expires_at") and rec["expires_at"] - 60 < time.time():
-        rec = _refresh(provider, _load(provider, fresh=True, account=account) or rec, account)
+    if _expired(rec):
+        rec = _refresh(provider, rec, account)
         if not rec:
             return None
     return rec["access_token"]
+
+
+def _env_token(provider, account=DEFAULT):
+    """A token from the environment (BROMIGOS_TOKEN), which stands in for the stored sign-in."""
+    var = _p(provider).get("env_token")
+    if not var or account != DEFAULT:
+        return None
+    return os.environ.get(var, "").strip() or None
 
 
 def refresh(provider, account=DEFAULT):
@@ -649,23 +810,34 @@ def refresh(provider, account=DEFAULT):
 
 def set_token(provider, tok, who=None, account=DEFAULT):
     """Store a token the user pasted (a personal access token): no expiry, no refresh."""
-    _check(provider, account)
+    p = _check(provider, account)
     tok = (tok or "").strip()
     if not tok:
         raise SignInError("an empty token")
+    if p.get("token_prefix") and not tok.startswith(p["token_prefix"]):
+        raise SignInError(f"that isn't a {p['title']} personal access token: those start with {p['token_prefix']}")
+    if re.search(r"\s", tok):
+        raise SignInError("a token has no spaces or line breaks in it: paste only the token")
     rec = _record(provider, {"access_token": tok}, who=who, account=account)
     rec["pasted"] = True
+    rec["how"] = "token"
     _save(provider, rec, account)
     return status(provider, account)
 
 
 def status(provider, account=DEFAULT):
-    _check(provider, account)
+    p = _check(provider, account)
     if _gh_covers(provider, account):
         return {"signed_in": True, "who": _gh_login(), "needs": [], "via": "gh"}
+    if _env_token(provider, account):
+        return {"signed_in": True, "who": None, "needs": [], "via": "env", "how": "env"}
     rec = _load(provider, account=account)
-    return {"signed_in": bool(rec), "who": (rec or {}).get("who"), "needs": [] if rec else needs(provider, account),
-            "via": "keyring" if rec else None}
+    out = {"signed_in": bool(rec), "who": (rec or {}).get("who"), "needs": [] if rec else needs(provider, account),
+           "via": "keyring" if rec else None}
+    if p.get("profile") and rec:                    # Bromigos: how it was signed in, and the email
+        out.update(how=rec.get("how") or ("token" if rec.get("pasted") else "device"),
+                   email=(rec.get("profile") or {}).get("email"), ssh_key=rec.get("ssh_key"))
+    return out
 
 
 _gh_who = {"login": None}
@@ -689,7 +861,8 @@ def device_start(provider, account=DEFAULT):
     c = config(provider, account)
     if not c.get("client_id"):
         raise NeedsConfig(provider, ["client_id"], account)
-    d = http_json(_fmt(p["device_url"], provider, account), {"client_id": c["client_id"], p["scope_key"]: " ".join(p["scopes"])})
+    d = http_json(_url(provider, "device_url", account),
+                  {"client_id": c["client_id"], p["scope_key"]: " ".join(scopes(provider, account))})
     if not d.get("device_code"):
         raise SignInError(f"{p['title']} gave no device code: {str(d)[:120]}")
     d.setdefault("verification_uri_complete", d.get("verification_uri"))
@@ -708,13 +881,13 @@ def device_poll(provider, start, cancelled=lambda: False, sleep=None, account=DE
     data = {"client_id": c["client_id"], "device_code": start["device_code"],
             "grant_type": "urn:ietf:params:oauth:grant-type:device_code"}
     if provider == "twitch":
-        data["scopes"] = " ".join(p["scopes"])
+        data["scopes"] = " ".join(scopes(provider, account))
     while time.time() < deadline:
         if cancelled():
             raise SignInError("cancelled")
         sleep(interval)
         try:
-            tok = http_json(_fmt(p["token_url"], provider, account), data)
+            tok = http_json(_url(provider, "token_url", account), data)
         except urllib.error.HTTPError as e:
             tok = getattr(e, "body", None) or {}
         code = _err_code(tok) if not (isinstance(tok, dict) and tok.get("access_token")) else None
@@ -807,7 +980,7 @@ def pkce_url(provider, challenge, state, redirect, account=DEFAULT):
     if not c.get("client_id"):
         raise NeedsConfig(provider, ["client_id"], account)
     q = {"client_id": c["client_id"], "response_type": "code", "redirect_uri": redirect, "state": state,
-         "code_challenge_method": "S256", "code_challenge": challenge, p["scope_key"]: " ".join(p["scopes"])}
+         "code_challenge_method": "S256", "code_challenge": challenge, p["scope_key"]: " ".join(scopes(provider, account))}
     return p["auth_url"] + "?" + urllib.parse.urlencode(q)
 
 
@@ -912,8 +1085,33 @@ def sign_in(provider, on_prompt=None, cancelled=None, account=DEFAULT):
         tok = pkce_flow(provider, prompt, cancelled, account=account)
     if not tok.get("access_token"):
         raise SignInError(f"{p['title']} gave no token")
-    _save(provider, _record(provider, tok, account=account), account)
+    rec = _record(provider, tok, account=account)
+    rec["how"] = "browser" if p["flow"] == "pkce" else "device"
+    _save(provider, rec, account)
     return status(provider, account)
+
+
+def authed_json(provider, url, data=None, method=None, account=DEFAULT, form=False, timeout=15):
+    """JSON from a service with the account's token. A 401 refreshes the token once and
+    tries again; SignInError when signed out or when the sign-in can't be renewed."""
+    title = _title(provider, account)
+    tok = token(provider, account)
+    if not tok:
+        raise SignInError(f"not signed in to {title}")
+
+    def call(t):
+        return http_json(url, data, headers={"Authorization": f"Bearer {t}"}, method=method, timeout=timeout,
+                         form=form)
+    try:
+        return call(tok)
+    except urllib.error.HTTPError as e:
+        if e.code != 401:
+            raise
+        e.close()
+    new = None if _env_token(provider, account) else refresh(provider, account)
+    if not new:
+        raise SignInError(f"your {title} sign-in has expired or was cancelled; sign in again")
+    return call(new)
 
 
 class Signin:
@@ -959,8 +1157,27 @@ class Signin:
         self._set(state="idle", prompt=None)
 
 
+def token_help():
+    """What `bromigos account token` prints: personal access tokens are made on the website."""
+    site = base("bromigos")
+    host = urllib.parse.urlparse(site).hostname or site
+    return "\n".join([
+        "A personal access token lets a script or another computer use your Bromigos account",
+        "without signing in. bromigOS can't make one for you: you make it on the website.",
+        "",
+        f"  1. Open {site} and sign in.",
+        f"  2. Go to {host} › Personal access tokens, and create one. Choose what it may do.",
+        "  3. Copy it. It starts with bmg_pat_, and the website shows it only once.",
+        "  4. Store it on this computer:",
+        "       bromigos login --with-token",
+        "     Paste it, then press Enter. Or give it to one script in BROMIGOS_TOKEN.",
+        "",
+        "Treat a token like a password. Delete it on the website when you no longer need it.",
+    ])
+
+
 # ------------------------------------------------------------------ command line
-VERBS = ("status", "login", "logout", "configure", "set-token", "list", "add", "remove")
+VERBS = ("status", "login", "logout", "configure", "set-token", "list", "add", "remove", "token")
 
 
 def _usage():
@@ -996,8 +1213,11 @@ def _list_lines(provider, rows):
 
 def main(argv):
     words, acct, flags = _opts(argv)
-    if not words or words[0] not in VERBS or (words[0] != "list" and len(words) < 2):
+    if not words or words[0] not in VERBS or (words[0] not in ("list", "token") and len(words) < 2):
         return _usage()
+    if words[0] == "token":
+        print(token_help())
+        return 0
     verb, prov = words[0], (words[1] if len(words) > 1 else None)
     kv = dict(a.split("=", 1) for a in words[2:] if "=" in a)
     try:
