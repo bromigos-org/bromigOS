@@ -958,7 +958,10 @@ fn run(paths: &Paths, dirs: &[std::path::PathBuf], cmd: Cmd) -> Result<i32> {
                     model,
                 }),
                 voice: voice.map(|tier| setup::VoiceAnswer { tier }),
-                homelab: homelab.map(|f| setup::HomelabAnswer { file: Some(f) }),
+                homelab: homelab.map(|f| setup::HomelabAnswer {
+                    file: Some(f),
+                    find: false,
+                }),
                 targets: (!targets.is_empty()).then(|| setup::TargetsAnswer {
                     order: targets.clone(),
                     cloud_for: cloud_for.clone(),

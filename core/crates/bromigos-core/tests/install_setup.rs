@@ -604,6 +604,7 @@ fn a_users_homelab_toml_is_kept_unless_replaced() {
     fs::write(&src, "[prometheus]\nurl = \"http://prom:9090\"\n").unwrap();
     let a = HomelabAnswer {
         file: Some(src.display().to_string()),
+        find: false,
     };
     assert!(setup::apply_homelab(&paths, &a, false).ok);
     let dst = setup::homelab_toml(&paths);
@@ -617,6 +618,45 @@ fn a_users_homelab_toml_is_kept_unless_replaced() {
     assert_eq!(fs::read_to_string(&dst).unwrap(), "# mine\n");
     fs::write(&src, "not = [toml").unwrap();
     assert!(!setup::apply_homelab(&paths, &a, true).ok);
+}
+
+#[test]
+fn find_my_lab_runs_the_homelab_detector_and_never_copies() {
+    let d = tempfile::tempdir().unwrap();
+    let root = d.path().to_path_buf();
+    let m: HashMap<&str, PathBuf> = [
+        ("HOME", root.join("home")),
+        ("XDG_CONFIG_HOME", root.join("config")),
+        ("BROMIGOS_LIB_BIN", root.join("lib-bin")),
+    ]
+    .into_iter()
+    .collect();
+    let paths = Paths::from_lookup(|k| m.get(k).cloned());
+    let a = HomelabAnswer {
+        file: None,
+        find: true,
+    };
+    // without bromigos-homelab's detector it says what to install, and writes nothing
+    let r = setup::apply_homelab(&paths, &a, false);
+    assert!(!r.ok);
+    assert!(r.detail.contains("bromigos-homelab"), "{}", r.detail);
+    assert!(!setup::homelab_toml(&paths).exists());
+    // Skip stays Skip
+    let skip = HomelabAnswer {
+        file: None,
+        find: false,
+    };
+    assert!(
+        setup::apply_homelab(&paths, &skip, false)
+            .detail
+            .contains("skipped")
+    );
+    // and an answers file can ask for it
+    let p = root.join("a.toml");
+    fs::write(&p, "[homelab]\nfind = true\n").unwrap();
+    assert!(setup::load_answers(&p).unwrap().homelab.unwrap().find);
+    fs::write(&p, "[homelab]\nfile = \"/x.toml\"\n").unwrap();
+    assert!(!setup::load_answers(&p).unwrap().homelab.unwrap().find);
 }
 
 #[test]

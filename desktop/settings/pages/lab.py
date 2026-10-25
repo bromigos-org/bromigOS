@@ -16,6 +16,14 @@ MARK = {"ok": "●", "warn": "▲", "crit": "✖", "unreachable": "?", "empty": 
         "skip": "·"}
 
 
+def _find_button(ctx):
+    """The Find my lab button: `bromigos lab connect --find` in a terminal, where it asks first."""
+    return ("Find my lab…", lambda: ctx.terminal(["bromigos", "lab", "connect", "--find"]),
+            "Find my lab, in a terminal: it says what it will read (devices that announce themselves, this "
+            "computer's list of nearby devices, your Tailscale devices) and asks first. It checks only the devices "
+            "it found, never an address range, and you pick what to add to homelab.toml")
+
+
 def _waiting(g, text):
     w = Gtk.Label(label=text, xalign=0)
     w.add_css_class("dim-label")
@@ -63,8 +71,10 @@ def build(ctx):
             return
         if not doc.get("configured", True):
             ctx.row(g, "No homelab connected", "bromigos lab connect finds your services and writes homelab.toml",
-                    hint="Opens a terminal: it probes the hosts you name and asks before writing",
-                    buttons=[("Connect…", lambda: ctx.terminal(["bromigos", "lab", "connect"]),
+                    hint="Opens a terminal. Find my lab looks in what this computer already knows; Connect… checks "
+                         "the hosts you name. Both ask before writing",
+                    buttons=[_find_button(ctx),
+                             ("Connect…", lambda: ctx.terminal(["bromigos", "lab", "connect"]),
                               "bromigos lab connect, in a terminal")])
             return
         for c in doc.get("cards", []):
@@ -184,7 +194,8 @@ def build(ctx):
             activate=lambda: ctx.open_page("targets"))
     ctx.row(gt, "Connect services", "find your lab's services again and add them to homelab.toml", key="connect",
             hint="bromigos lab connect (= bromigos setup homelab), in a terminal; it never rewrites your edits",
-            buttons=[("Connect…", lambda: ctx.terminal(["bromigos", "lab", "connect"]), "bromigos lab connect")])
+            buttons=[_find_button(ctx),
+                     ("Connect…", lambda: ctx.terminal(["bromigos", "lab", "connect"]), "bromigos lab connect")])
     return page
 
 
@@ -257,8 +268,8 @@ def _not_installed(ctx, page):
         r.set_sensitive(False)
     gc = ctx.group(page, "Connect your lab", "Install the homelab integrations, then let them find your services "
                                              "(Prometheus, Kubernetes, ComfyUI, the voice service, …).",
-                   hint="bromigos-homelab, then bromigos setup homelab: it probes the hosts you name and asks "
-                        "before writing homelab.toml")
+                   hint="bromigos-homelab, then bromigos setup homelab: it offers Find my lab first, else probes "
+                        "the hosts you name, and asks before writing homelab.toml")
     ctx.row(gc, "Connect your lab", "sudo pacman -S bromigos-homelab, then bromigos setup homelab (in a terminal)",
             key="connect", hint="Opens a terminal: pacman asks for your password, then setup asks for your hosts",
             buttons=[("Install and connect…",
@@ -302,5 +313,6 @@ PAGE = Page(id="lab", title="Lab", icon="network-server-symbolic applications-sc
                      Entry("doctor", "Doctor", ["checks", "certificates", "dns", "disk", "backups", "drift"],
                            "Doctor"),
                      Entry("targets", "Where AI runs", ["targets", "homelab", "cloud"], "Where AI runs"),
-                     Entry("connect", "Connect services", ["setup homelab", "homelab.toml"], "Where AI runs")],
+                     Entry("connect", "Connect services", ["setup homelab", "homelab.toml", "find my lab", "discover",
+                                                            "scan"], "Where AI runs")],
             build=build)

@@ -337,6 +337,10 @@ pub struct HomelabAnswer {
     /// A homelab.toml to use (copied to ~/.config/bromigos/homelab.toml); none: skip.
     #[serde(default)]
     pub file: Option<String>,
+    /// Find my lab: run bromigos-homelab's detector with `--find`, which asks before it
+    /// reads anything (so it needs a terminal). Without a file only.
+    #[serde(default)]
+    pub find: bool,
 }
 
 pub const OLLAMA_URL: &str = "http://localhost:11434/v1";
@@ -981,9 +985,12 @@ pub fn apply_voice(paths: &Paths, a: &VoiceAnswer, run_setup: bool) -> Applied {
 }
 
 /// The homelab section: copies the given homelab.toml into place (never over the user's
-/// own without `replace`).
+/// own without `replace`), or runs Find my lab.
 pub fn apply_homelab(paths: &Paths, a: &HomelabAnswer, replace: bool) -> Applied {
     let Some(src) = a.file.as_deref().filter(|f| !f.is_empty()) else {
+        if a.find {
+            return find_my_lab(paths);
+        }
         return ok("homelab", "skipped (bromigos setup homelab, any time)");
     };
     let dst = homelab_toml(paths);
@@ -999,6 +1006,37 @@ pub fn apply_homelab(paths: &Paths, a: &HomelabAnswer, replace: bool) -> Applied
             Err(e) => err("homelab", format!("{src}: not TOML: {e}")),
         },
         Err(e) => err("homelab", format!("{src}: {e}")),
+    }
+}
+
+/// Find my lab: bromigos-homelab's detector (`bromigos setup homelab --find`), in this
+/// terminal. It says which sources it reads and asks before reading any (docs/homelab.md),
+/// then shows a checklist and only appends to homelab.toml.
+fn find_my_lab(paths: &Paths) -> Applied {
+    let exe = paths.lib_bin.join("bromigos-setup-homelab");
+    if !exe.exists() {
+        return err(
+            "homelab",
+            "Find my lab needs bromigos-homelab (sudo pacman -S bromigos-homelab)",
+        );
+    }
+    if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        return err(
+            "homelab",
+            "Find my lab asks first, so it needs a terminal: run bromigos setup homelab --find",
+        );
+    }
+    match Command::new(&exe).arg("--find").status() {
+        Ok(s) if s.success() => ok("homelab", "Find my lab (bromigos setup homelab --find)"),
+        Ok(s) if s.code() == Some(1) => ok("homelab", "Find my lab: nothing added"),
+        Ok(s) => err(
+            "homelab",
+            format!(
+                "bromigos setup homelab --find exited {}",
+                s.code().unwrap_or(-1)
+            ),
+        ),
+        Err(e) => err("homelab", format!("{}: {e}", exe.display())),
     }
 }
 

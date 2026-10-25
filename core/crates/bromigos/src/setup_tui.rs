@@ -310,8 +310,11 @@ pub fn pages(cx: &Context, sections: &[&str]) -> Vec<Page> {
                 item: String::new(),
                 title: "Homelab",
                 help: if cx.homelab_installed {
-                    "Point bromigOS at your homelab: a homelab.toml (docs/homelab.md) with your Prometheus, \
-                     Argo, model servers and agents. Every integration stays off until its endpoint is set."
+                    "Connect your homelab, so the panels, decks and VECTOR can show it. Find my lab looks in what \
+                     this computer already knows: devices that announce themselves on your network, its list of \
+                     nearby devices and their DNS names, and your Tailscale devices. It asks before it reads \
+                     anything, checks only the devices it found, and you pick what to add. Or use a homelab.toml \
+                     you already have. Every integration stays off until it's connected."
                         .into()
                 } else {
                     "The homelab integrations are optional: sudo pacman -S bromigos-homelab, then \
@@ -320,6 +323,7 @@ pub fn pages(cx: &Context, sections: &[&str]) -> Vec<Page> {
                 },
                 choices: if cx.homelab_installed {
                     vec![
+                        choice("Find my lab (asks before it reads anything)", "find"),
                         Choice {
                             label: "Use a homelab.toml".into(),
                             value: "file".into(),
@@ -331,7 +335,7 @@ pub fn pages(cx: &Context, sections: &[&str]) -> Vec<Page> {
                     vec![choice("Skip", "skip")]
                 },
                 // Skip: Enter goes on (the file's choice needs a path first)
-                sel: if cx.homelab_installed { 1 } else { 0 },
+                sel: if cx.homelab_installed { 2 } else { 0 },
                 focus: None,
             }),
             "targets" => {
@@ -548,6 +552,7 @@ pub fn answers(pages: &[Page], skipped: &[&str]) -> Answers {
             "homelab" => {
                 a.homelab = Some(HomelabAnswer {
                     file: if v == "file" { p.field("file") } else { None },
+                    find: v == "find",
                 })
             }
             "targets" => {
@@ -667,7 +672,14 @@ pub fn summary(a: &Answers) -> Vec<String> {
         out.push(format!("voice     {}", v.tier));
     }
     if let Some(h) = &a.homelab {
-        out.push(format!("homelab   {}", h.file.as_deref().unwrap_or("skip")));
+        out.push(format!(
+            "homelab   {}",
+            h.file.as_deref().unwrap_or(if h.find {
+                "find my lab (asks first)"
+            } else {
+                "skip"
+            })
+        ));
     }
     if let Some(t) = &a.targets {
         out.push(format!(
@@ -970,5 +982,33 @@ mod tests {
             // Enter on it goes on: nothing to fill in first
             assert!(p.chosen().fields.is_empty());
         }
+    }
+
+    #[test]
+    fn find_my_lab_is_a_choice_but_never_the_default() {
+        let mut p = pages(&cx(true), &["homelab"]).remove(0);
+        let values: Vec<_> = p.choices.iter().map(|c| c.value.as_str()).collect();
+        assert_eq!(values, ["find", "file", "skip"]);
+        assert_eq!(
+            answers(&[p.clone()], &[]).homelab.unwrap(),
+            HomelabAnswer {
+                file: None,
+                find: false
+            }
+        );
+        p.sel = 0;
+        assert_eq!(page_problem(&p), None);
+        let a = answers(&[p], &[]);
+        assert_eq!(
+            a.homelab.clone().unwrap(),
+            HomelabAnswer {
+                file: None,
+                find: true
+            }
+        );
+        assert!(summary(&a).iter().any(|l| l.contains("find my lab")));
+        // without bromigos-homelab there's nothing to find with
+        let p = pages(&cx(false), &["homelab"]).remove(0);
+        assert_eq!(p.choices.len(), 1);
     }
 }
