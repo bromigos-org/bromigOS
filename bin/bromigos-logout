@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+# bromigos:summary=Sign out of your Bromigos account on this computer
+# bromigos:args=[--json]
+# bromigos:examples=bromigos logout
+"""bromigos-logout (`bromigos logout`, package bromigos-core): the command line of
+lib/bromigos_login.py, the sign-in to your Bromigos account (docs/bromigos-account.md)."""
+import os
+import sys
+
+for d in (os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "lib"), "/usr/lib/bromigos/lib"):
+    if os.path.isfile(os.path.join(d, "bromigos_login.py")):
+        sys.path.insert(0, d)
+        break
+import bromigos_login  # noqa: E402
+
+sys.exit(bromigos_login.main("logout", sys.argv[1:]))

@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+# bromigos:summary=Sign in to your Bromigos account: a code on the website, an SSH key, or a personal access token; the sign-in stays in your keyring
+# bromigos:args=[--ssh [--key PATH] | --with-token] [--no-browser]
+# bromigos:examples=bromigos login; bromigos login --ssh; bromigos login --ssh --key ~/.ssh/id_ed25519; bromigos login --with-token < token.txt
+"""bromigos-login (`bromigos login`, package bromigos-core): the command line of
+lib/bromigos_login.py, the sign-in to your Bromigos account (docs/bromigos-account.md)."""
+import os
+import sys
+
+for d in (os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "lib"), "/usr/lib/bromigos/lib"):
+    if os.path.isfile(os.path.join(d, "bromigos_login.py")):
+        sys.path.insert(0, d)
+        break
+import bromigos_login  # noqa: E402
+
+sys.exit(bromigos_login.main("login", sys.argv[1:]))

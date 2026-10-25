@@ -21,9 +21,11 @@ url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 depends=('gcc-libs' 'glibc' 'openssl' 'git')   # git: bromigos ext (extensions are checkouts)
 makedepends=('cargo' 'git' 'python')
-checkdepends=('desktop-file-utils' 'rsync' 'npm')
+checkdepends=('desktop-file-utils' 'rsync' 'npm' 'openssh')   # openssh: the SSH sign-in's tests sign for real
 optdepends=('python: bromigos private, secrets, emblem, console, power menu, splash and local storage'
             'terminus-font: readable text console font sizes'
+            'openssh: bromigos login --ssh, and the SSH keys a new lab box gets from your account'
+            'libsecret: keep account sign-ins (bromigos login, bromigos account) in your keyring'
             'plymouth: graphical shutdown and restart (bromigos splash)'
             'grub: save the graphical splash kernel setting'
             'util-linux: local storage inventory and mounts'
@@ -97,6 +99,9 @@ check() {
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/storage"
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/console"
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/splash"
+  # bromigos login: the device flow, SSH sign-in and tokens, against a stand-in service on
+  # 127.0.0.1, with throwaway keys, its own ssh-agent and a keyring in memory
+  PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/account"
 }
 
 package() {
@@ -136,6 +141,8 @@ package() {
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-terminal
   # `bromigos account`: sign in to an account a widget uses (lib/bromigos_account.py)
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-account
+  # `bromigos login`, `logout` and `whoami`: your Bromigos account (lib/bromigos_login.py)
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-{login,logout,whoami}
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-storage
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-console
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-power-menu
