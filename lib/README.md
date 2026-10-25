@@ -22,6 +22,7 @@ modules to the same folder:
 | `emblem_braille.py` | Draws the emblem as coloured braille for the terminal banner |
 | `bromigos_private.py` | Reads the private overlay: values a user keeps encrypted in their dotfiles |
 | `bromigos_account.py` | Signs a widget in to an online account, such as Twitch or GitHub, and keeps the token in the keyring |
+| `bromigos_login.py` | Signs in to your Bromigos account, with a code, an SSH key or a token, and reads the account's SSH keys; [account reference](../docs/bromigos-account.md) |
 | `bromigos_tv.py` | The den TV's channels, their wall-clock schedule, picked shows taking turns, and each screen's remembered channel and sound |
 | `bromigos_tvchannels.py` | Shared channel operations and JSON CLI for the guide, media and VECTOR |
 | `bromigos_tvconfig.py` | Writes the den TV's `[[tv.channel]]` tables in place, keeping comments: the channel guide's writer |
@@ -44,6 +45,12 @@ has a name and its own table and keyring item. For GitHub's default account it u
 `gh` login when there is one. `bromigos account` is its command line, and
 [docs/plugins.md](../docs/plugins.md#a-widget-that-needs-an-account) shows a panel that
 uses it.
+
+Your Bromigos account is its provider `bromigos`, an OpenID Connect sign-in whose refresh
+tokens rotate. `authed_json()` calls a service with an account's token and refreshes it
+once after a 401. `bromigos_login.py` adds the SSH sign-in and the `bromigos login`,
+`logout` and `whoami` commands. [docs/bromigos-account.md](../docs/bromigos-account.md)
+explains both.
 
 ### bromigos_theme
 

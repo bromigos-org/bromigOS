@@ -114,6 +114,7 @@ on their own:
 | The live layer | `live/` | `python -m unittest discover -s tests` |
 | Settings, the menu, keys and other desktop tools | `desktop/` | `PYTHONPATH=lib python -m unittest discover -s tests` |
 | The homelab integrations and `bromigos lab` | `homelab/` | `PYTHONPATH=lib python -m unittest discover -s tests` |
+| The Bromigos account sign-in | the root | `PYTHONPATH=lib python -m unittest discover -s tests/account` |
 | The boot menu theme | the root | `python -m unittest discover -s settings/grub/tests` |
 | The app launcher's entries | the root | `python tools/launcher/check.py --static` |
 

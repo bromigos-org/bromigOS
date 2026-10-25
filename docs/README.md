@@ -32,6 +32,7 @@ manual's [Files and folders](../manual/src/files.md) lists them for users.
 | [desktop.md](desktop.md) | The default configs and how yours sit on top, monitors, windows, keys and the start page |
 | [settings.md](settings.md) | The Settings window, its pages, and how to add a page |
 | [settings-audit.md](settings-audit.md) | The audit that shaped the Settings window |
+| [bromigos-account.md](bromigos-account.md) | Signing in to a Bromigos account: `bromigos login`, SSH keys and tokens |
 | [idle.md](idle.md) | The screensaver, lock and sleep timers, and `idle.toml` |
 | [accessibility.md](accessibility.md) | Reduced motion and high contrast |
 | [menu.md](menu.md) | The desktop menu, and how a command adds itself to it |

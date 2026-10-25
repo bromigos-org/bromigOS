@@ -150,7 +150,7 @@ button between them. On a big screen the content is clamped at 1000 px wide.
 | VECTOR & AI | `vector` | [VECTOR](#vector) | `bromigos-holo`, `bromigos memory`, `keys`, `target` |
 | | `targets` | [Creation targets](#creation-targets) | `bromigos target` |
 | Lab | `lab` | [Lab](#lab) | `bromigos lab` |
-| Personal | `account` | [Account](#account) | `bromigos profile`, `avatar` |
+| Personal | `account` | [Account](#account) | `bromigos profile`, `avatar`, `whoami`, `login`, `logout` |
 | About | `about` | [About](#about) | `bromigos about` |
 
 ### Displays
@@ -576,6 +576,11 @@ which asks before it reads anything ([homelab.md](homelab.md#find-my-lab)).
   and its remote. Dotfiles are often public, so the page points private values at the
   private overlay (`bromigos private`). The overlay's `operator:` section seeds the profile.
   Edit… opens it when it exists.
+- The Bromigos account, which is optional (`bromigos whoami --json`). **Sign in…** runs
+  `bromigos login` in a terminal, and **Sign in with SSH key…** runs `bromigos login --ssh`.
+  The row then checks `bromigos whoami` every three seconds, for up to five minutes, until
+  the sign-in is done. **Sign out** asks, then runs `bromigos logout --json`.
+  [bromigos-account.md](bromigos-account.md) explains the sign-in.
 
 There's nothing to reset on this page.
 

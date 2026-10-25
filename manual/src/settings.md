@@ -232,6 +232,11 @@ If you keep your settings in dotfiles you share, the
 page tells you to keep private values in the
 [private overlay](glossary.md#private-overlay). (`bromigos profile`, `bromigos avatar`)
 
+**Bromigos account** shows whether this computer is signed in to your
+[Bromigos account](bromigos-account.md), and as whom. It's optional. **Sign in…** and
+**Sign in with SSH key…** run the sign-in in a terminal. **Sign out** asks first.
+(`bromigos login`, `bromigos whoami`, `bromigos logout`)
+
 ## About
 
 The bromigOS version and channel, the last update, this computer's hardware, and the

@@ -41,6 +41,9 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos windows`](#bromigos-windows) | See or forget where your floating windows go back to. |
 | [`bromigos profile`](#bromigos-profile) | Set your name, and what VECTOR calls you. |
 | [`bromigos avatar`](#bromigos-avatar) | Set your picture, saved as `~/.face`. Settings › Account shows it. |
+| [`bromigos login`](#bromigos-login) | Sign in to [your Bromigos account](bromigos-account.md): with a code on the website, with `--ssh` and an SSH key on your account, or with `--with-token` and a personal access token. |
+| [`bromigos whoami`](#bromigos-whoami) | Show which [Bromigos account](bromigos-account.md) this computer is signed in to, and how. |
+| [`bromigos logout`](#bromigos-logout) | Sign out of your [Bromigos account](bromigos-account.md) on this computer. |
 | [`bromigos private`](#bromigos-private) | Edit the private overlay: settings you keep encrypted in your dotfiles. Needs the `sops` and `age` packages. |
 | [`bromigos hw`](#bromigos-hw) | See what [hardware](hardware.md) bromigOS found, check the display GPU with `bromigos hw display`, or set up drivers with `bromigos hw setup`. |
 | [`bromigos peripheral`](#bromigos-peripheral) | Turn on extra features for a [keyboard](peripherals.md), such as a Razer keyboard's macro keys. |
@@ -62,7 +65,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos customize`](#bromigos-customize) | Preview themes and choose a panel layout in [Customize](themes-and-worlds.md#customize). |
 | [`bromigos panels`](#bromigos-panels) | Show, hide or move the desktop [panels](panels.md), start edit mode, list every widget, and set the weather's place. |
 | [`bromigos widgets`](#bromigos-widgets) | Show or hide one panel or all of them. |
-| [`bromigos account`](#bromigos-account) | Sign a panel in to an online account, such as Twitch, GitHub, GitLab or Spotify. A service can have several accounts, such as gitlab.com and your company's GitLab. See [Panels that need an account](panels.md#panels-that-need-an-account). |
+| [`bromigos account`](#bromigos-account) | Sign a panel in to an online account, such as Twitch, GitHub, GitLab or Spotify. A service can have several accounts, such as gitlab.com and your company's GitLab. See [Panels that need an account](panels.md#panels-that-need-an-account). `bromigos account token` says how to make a Bromigos personal access token. |
 | [`bromigos mute`](#bromigos-mute) | Mute or unmute the theme's sounds and VECTOR's voice together. |
 | [`bromigos boot`](#bromigos-boot) | Turn the themed [boot menu](boot-menu.md) on or off. |
 | [`bromigos emblem`](#bromigos-emblem) | Draw a theme's emblem pictures. For people making themes. |
@@ -1360,6 +1363,41 @@ Options:
   -h, --help  Print help
 ```
 
+### bromigos login
+
+Sign in to your Bromigos account: a code on the website, an SSH key, or a personal access token; the sign-in stays in your keyring.
+
+```text
+bromigos login [--ssh [--key PATH] | --with-token] [--no-browser]
+```
+
+For example:
+
+```text
+bromigos login
+bromigos login --ssh
+bromigos login --ssh --key ~/.ssh/id_ed25519
+bromigos login --with-token < token.txt
+```
+
+From the `bromigos-core` package.
+
+### bromigos logout
+
+Sign out of your Bromigos account on this computer.
+
+```text
+bromigos logout [--json]
+```
+
+For example:
+
+```text
+bromigos logout
+```
+
+From the `bromigos-core` package.
+
 ### bromigos media
 
 Your media library in a terminal: TV, films, music, YouTube, downloads, releases, search and den TV channels; request, monitor, change quality, play or delete.
@@ -2443,6 +2481,22 @@ Options:
       --all   Every release's notes, newest first
   -h, --help  Print help
 ```
+
+### bromigos whoami
+
+Show who's signed in to a Bromigos account here, and how.
+
+```text
+bromigos whoami [--json]
+```
+
+For example:
+
+```text
+bromigos whoami
+```
+
+From the `bromigos-core` package.
 
 ### bromigos widgets
 

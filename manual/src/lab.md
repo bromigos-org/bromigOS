@@ -627,7 +627,10 @@ bromigos lab provision
 4. **SSH.** The first time, it shows the box's SSH host key fingerprint. To check it, run
    `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` at the box's own screen and
    keyboard. Type `yes` only if the two match. Then it offers to run `ssh-copy-id`, which
-   asks for your password on the box once.
+   asks for your password on the box once. If you're
+   [signed in to your Bromigos account](bromigos-account.md), it first offers to add the
+   SSH keys on your account instead. See
+   [Your account's SSH keys on the box](#your-accounts-ssh-keys-on-the-box).
 5. **Python and sudo on the box.** Provisioning needs Python 3 and sudo without a
    password on the box. If either is missing, it shows the command or the `visudo` line
    to add on the box, and waits for you.
@@ -656,6 +659,34 @@ bromigos lab provision
 If you stop at any step, with `q` or Ctrl+C, run `bromigos lab provision` again. It
 skips the steps already done and carries on. To set up a different box instead, run
 `bromigos lab provision --start-over`.
+
+### Your account's SSH keys on the box
+
+When this computer is signed in to your [Bromigos account](bromigos-account.md),
+provisioning offers to add the SSH keys on your account to the box. Then any computer
+with one of those keys can log in to the box, as the user you set it up with.
+
+It lists each key that isn't on the box yet, with its fingerprint, and adds them only after
+you type `yes`:
+
+```text
+  You're signed in to your Bromigos account as sam. These SSH keys on it aren't on the box yet:
+    SHA256:2pE7Yq0Jm5bYJ8Gk0lO2f2kxq5qkqHq3Lr1QeW7hS1M  ed25519  laptop
+  bromigOS can add them to ~/.ssh/authorized_keys for sam on the box, so these keys can log in.
+  It only adds lines. The keys already there stay as they are.
+  Add this key? Type yes:
+```
+
+- It only adds keys. It never removes or changes a key already on the box.
+- If the box doesn't accept your key yet, adding them asks for your password on the box
+  once. When your own key is one of them, you don't need `ssh-copy-id` as well.
+- If you say no, it doesn't ask about those keys for that box again.
+- Signed out, it offers nothing. If your account can't be read, setup carries on without
+  it.
+
+`bromigos lab provision --ssh …` asks the same question when it runs in a terminal. Add
+`--no-account-keys` to skip it. To manage the keys on your account, go to
+account.bromigos.org › SSH keys.
 
 ### What you get
 

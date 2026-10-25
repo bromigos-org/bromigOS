@@ -107,7 +107,7 @@ acts only after the user answers yes, and it never runs sudo on the desktop.
 | Desktop tools | Ansible, sops, age, Git and SSH | the exact `sudo pacman -S --needed …` line for the user to run |
 | Age key | sops's key file, `SOPS_AGE_KEY_FILE` or `~/.config/sops/age/keys.txt` | to create it with `age-keygen` |
 | The box | a saved answer | after Find my lab's yes, the machines it found that answer SSH; else the address, user name and SSH port |
-| SSH | `ssh` with `StrictHostKeyChecking=yes` and `BatchMode=yes` | the host key fingerprint to confirm, then `ssh-copy-id` in the terminal |
+| SSH | `ssh` with `StrictHostKeyChecking=yes` and `BatchMode=yes` | the host key fingerprint to confirm, then `ssh-copy-id` in the terminal. When signed in to a Bromigos account, its SSH keys first |
 | Python and sudo | `python3` and `sudo -n true` on the box | the install command, and the `visudo` line to add |
 | Hardware | the read-only probe above | nothing; it shows the results |
 | Preset | Core and Advanced against the box's size | a recommendation, and the Git URL for Advanced |
@@ -132,6 +132,35 @@ The box step can look for the box. It shows the same question as `bromigos setup
 yes, it runs that search, then tries port 22 on the machines found, and only on those. The
 ones that answer are a numbered list, with "Type an address" as the last choice. A no, or
 nothing found, asks for the address as before. `findlab.ssh_boxes` does the port check.
+
+## Your account's SSH keys
+
+When the desktop is signed in to a Bromigos account
+([bromigos-account.md](bromigos-account.md)), provisioning offers the account's SSH public
+keys for the box's `~/.ssh/authorized_keys`, for the user it provisions through. The code
+is `accountkeys.py`. Signed out, or without `lib/bromigos_login.py`, which the standalone
+lab package doesn't include, nothing is offered.
+
+1. `bromigos_login.account_ssh_keys()` reads the keys with the sign-in's token. Each key is
+   checked: a known type, no options and no line breaks. Its fingerprint is worked out on
+   the desktop.
+2. Provisioning reads the box's `authorized_keys` and lists only the keys that aren't
+   there, with their fingerprints.
+3. After an exact `yes`, a short POSIX shell script appends those keys, reading them on
+   stdin. It never removes or rewrites a line. It makes `~/.ssh` (mode 0700) and
+   `authorized_keys` (mode 0600) only when they're missing.
+
+In the guided setup, this happens in the SSH step. When the box already takes the
+desktop's key, it runs over the same key login. When it doesn't yet, the setup offers the
+keys before `ssh-copy-id`, over one password login (`BatchMode=no`, still with
+`StrictHostKeyChecking=yes`). If the desktop's own key is among them, SSH then works and
+`ssh-copy-id` isn't needed. The fingerprints added go into the saved answers as
+`account_keys`. The ones the user declines go into `account_keys_declined`, and aren't
+offered for that box again. A failure to read the account is said, and the setup carries
+on.
+
+`bromigos lab provision --ssh …` offers the same after its inventory, when stdin is a
+terminal. `--no-account-keys` turns it off.
 
 ## The box announces itself
 
@@ -269,6 +298,12 @@ fake terminal and a fake box. It checks a first run, a second run that asks noth
 refused or changed host key, missing tools, Python and sudo, bad answers and a folder that
 already holds other files. It also checks the box step's pick list from Find my lab: a no
 reads nothing, a found machine can be picked, and "Type an address" still works.
+
+`homelab/tests/test_provision_accountkeys.py` checks the account's SSH keys on the box. The
+box's `authorized_keys` is a real file in a temporary home, changed by the real script. It
+checks that only missing keys are offered and added, existing lines and modes stay, a no is
+remembered, one password login can replace `ssh-copy-id`, and a signed-out or unreadable
+account changes nothing.
 
 `test/vm/lab-provision-e2e.py` creates a fresh Debian guest through `lab-vm.py` and
 `vm-keeper.py`. It uses a sandbox home, its own SSH key and an isolated Git server. It

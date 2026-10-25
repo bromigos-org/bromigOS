@@ -23,6 +23,7 @@
 - [Settings](settings.md)
     - [Idle and lock](idle.md)
     - [Your own shortcuts](shortcuts.md)
+    - [Your Bromigos account](bromigos-account.md)
 - [Shell and terminal](shell.md)
     - [Text console login](console-login.md)
 - [Power menu](power-menu.md)
