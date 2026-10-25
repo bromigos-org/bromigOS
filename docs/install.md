@@ -229,7 +229,10 @@ so your other keys and comments stay. More about some sections:
 - **voice.** `gpu` is VECTOR's designed voice. `cpu` is Kokoro, a voice that runs on the
   CPU. `off` mutes him. Setup runs `bromigos-holo setup voice` or `voice-cpu` to install
   the voice.
-- **homelab** never overwrites your `homelab.toml` unless you pass `--replace`.
+- **homelab** never overwrites your `homelab.toml` unless you pass `--replace`. Its
+  Find my lab answer (`find = true`) runs `bromigos setup homelab --find` after the
+  questions. That asks before it reads anything, so it needs a terminal. The USB stick's
+  answers leave the homelab out, so it stays Skip.
 - **targets.** Setup looks for a `homelab.toml` with AI services, a GPU on this machine,
   and a nolgia sign-in. The default is your homelab first, then this machine, and never
   the cloud. You can allow the cloud for video loops alone.
@@ -285,7 +288,7 @@ model = "qwen3"
 tier = "off"             # "gpu", "cpu" or "off"
 
 [homelab]
-file = "/home/me/homelab.toml"
+file = "/home/me/homelab.toml"   # or find = true: Find my lab, which asks in the terminal
 
 [targets]
 order = ["homelab", "local"]   # leave "cloud" out to never use it

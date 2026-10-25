@@ -57,6 +57,8 @@ The main modules in `lib/bromigos_homelab/`:
 | `labmodels.py` | what's installed and loaded on the lab's servers; load and unload |
 | `catalog*.py` | the model catalog: picking, planning, serving, upgrades, the refresh and the bench |
 | `provision.py`, `agentprovision.py` | generate a lab repository, apply its reviewed plan and check service health |
+| `findlab.py` | Find my lab: devices this computer and the lab already know, merged per host and checked |
+| `announce.py` | the role that makes a provisioned box announce itself over mDNS |
 | `hardware.py` | read a new box's GPUs, disks, network cards, CPU and USB devices, and describe them in the plan |
 | `guidedprovision.py` | `bromigos lab provision` with no arguments: set up a spare box one checked step at a time |
 | `mediatui.py` | The media library and den Channels tab, with shared lab keys and safe quit |

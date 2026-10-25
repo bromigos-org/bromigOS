@@ -620,7 +620,10 @@ bromigos lab provision
 2. **Your age key.** Your lab's passwords are encrypted with an age key. If you don't have
    one, it offers to create one in `~/.config/sops/age/keys.txt`. Keep that file safe, and
    keep a copy in your password manager. Without it, you can't apply your lab again.
-3. **The box.** Type its hostname or IP address, your user name on it, and its SSH port.
+3. **The box.** It offers to look for the box, the way
+   [Find my lab](homelab.md#find-my-lab) does, and says what it would read. If you type
+   `yes`, it lists the machines it found that answer SSH. Pick one by number, or choose
+   **Type an address**. Then give your user name on the box and its SSH port.
 4. **SSH.** The first time, it shows the box's SSH host key fingerprint. To check it, run
    `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` at the box's own screen and
    keyboard. Type `yes` only if the two match. Then it offers to run `ssh-copy-id`, which

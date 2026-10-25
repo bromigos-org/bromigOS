@@ -26,8 +26,10 @@ your approval before allocating resources.
    bromigos setup homelab
    ```
 
-2. Give it the names or addresses of your homelab's machines when it asks. It checks each
-   one for the services it knows, and only counts a service whose own interface answers.
+2. It offers **Find my lab** first ([below](#find-my-lab)). Type `y` to let it look for
+   your machines. Or type `n`, and give it the names or addresses of your homelab's
+   machines. Either way, it checks each machine for the services it knows, and only
+   counts a service whose own interface answers.
 3. Check what it found:
 
    ```bash
@@ -43,10 +45,51 @@ changes.
 Some useful options:
 
 ```bash
+bromigos setup homelab --find                       # look for your machines first
 bromigos setup homelab --hosts nas,gpu-box          # check these machines
 bromigos setup homelab --url https://prometheus.lan  # add one service by its address
 bromigos setup homelab --print                       # show what it would add; change nothing
 ```
+
+## Find my lab
+
+You don't need to know every machine's name. Find my lab looks in what this computer
+already knows about your network:
+
+```bash
+bromigos setup homelab --find
+```
+
+It first lists what it will read, and asks. Nothing is read until you type `y`:
+
+- devices that announce themselves on your network, such as a NAS, Home Assistant, a
+  printer or a camera;
+- this computer's list of nearby devices, and the names your DNS gives them;
+- your Tailscale devices, if you use Tailscale;
+- what your connected services already know, such as your router's clients (UniFi),
+  Prometheus's targets, Kubernetes nodes and Proxmox VMs. On a first run you haven't
+  connected any, so this part is skipped.
+
+Then it asks separately whether to read the `Host` lines of `~/.ssh/config`. It never
+reads your keys.
+
+It never scans address ranges, never signs in to anything, and sends nothing off your
+network. It checks only the machines it found, at private addresses, for the services
+bromigOS knows.
+
+You see each machine once, grouped by kind: lab machines, smart home, cameras, robots,
+printers, media and other. Each line says where it was seen. Under it are the services
+bromigOS can add, numbered, and what it found but doesn't support yet. Type the numbers
+you want, or press Enter for all of them.
+
+For mDNS, the announcements most devices make, install `python-zeroconf` first:
+
+```bash
+sudo pacman -S python-zeroconf
+```
+
+Machines set up with `bromigos lab provision` announce themselves, so Find my lab always
+finds them. **Settings › Lab** has a **Find my lab…** button too.
 
 If you run Kubernetes, bromigOS never picks a cluster on its own. Name yours when it asks,
 or with `--kube-context`.

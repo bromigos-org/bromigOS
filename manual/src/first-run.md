@@ -3,8 +3,10 @@
 At the end of the install, bromigOS asks a few questions in the terminal: your monitors,
 the theme, where VECTOR's thinking runs, and so on. Most questions have a sensible answer
 already chosen, so you can press <kbd>Enter</kbd>. The Homelab question starts on
-**Skip**. If you have a settings file for your homelab, press <kbd>↑</kbd> to choose it,
-then <kbd>Tab</kbd> to type its path. You can change any answer later.
+**Skip**. To look for your homelab's machines, choose **Find my lab**. It runs after the
+questions, and asks before it reads anything ([Find my lab](homelab.md#find-my-lab)). If
+you have a settings file for your homelab, choose **Use a homelab.toml**, then press
+<kbd>Tab</kbd> to type its path. You can change any answer later.
 
 If you installed from the bromigOS USB stick, these questions were answered for you: the
 Wick theme, with VECTOR's brain, voice and creation tools off. Run `bromigos setup` to
@@ -41,7 +43,7 @@ At the end, a review page lists your answers. Press <kbd>Enter</kbd> to apply th
 | Theme | The look of the whole desktop. The Wick is the default. See [Themes and worlds](themes-and-worlds.md). |
 | VECTOR's brain | The AI model [VECTOR](vector.md) thinks with: a local Ollama, another server, or none for now. |
 | VECTOR's voice | Whether VECTOR speaks, and whether his voice runs on your graphics card or the processor. Setting up a voice downloads it, which takes a few minutes. |
-| Homelab | A settings file that lists [your homelab's](homelab.md) services, or Skip. Later, `bromigos setup homelab` finds them for you. |
+| Homelab | Find my lab, a settings file that lists [your homelab's](homelab.md) services, or Skip. Later, `bromigos setup homelab` finds them for you. |
 | Where AI runs | Whether AI work runs on your homelab, this machine, or the paid cloud, in which order. See [Creating with AI](where-ai-runs.md). |
 | Creation | The tools that make images, cutouts, 3D models and video loops. |
 | Peripherals | Only asked when a supported device is connected, such as a Razer keyboard. See [Keyboards and peripherals](peripherals.md). |

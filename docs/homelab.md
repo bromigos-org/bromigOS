@@ -43,7 +43,9 @@ bromigos restart
 ```
 
 1. `bromigos-homelab` comes with the `bromigos` package, so it's usually installed already.
-2. `bromigos setup homelab` asks for host names or URLs, probes them and writes the file.
+2. `bromigos setup homelab` offers [Find my lab](#find-my-lab) first. If you say no, it
+   asks for host names or URLs instead. It probes what it found or what you named, and
+   writes the file.
 3. `bromigos homelab status` lists each source and the capabilities it provides.
 4. `bromigos homelab check` asks every capability now and lists anything unreachable.
 5. `bromigos restart` makes the panels, the live layer and VECTOR read the new file.
@@ -60,11 +62,13 @@ seen before. It never rewrites your edits.
 
 | Option | What it does |
 |---|---|
+| `--find` | [Find my lab](#find-my-lab): look in what this computer and your lab already know. It asks first. |
+| `--ssh-config` | With `--find`, also read the `Host` lines in `~/.ssh/config`. |
 | `--hosts nas,gpu-box` | Probe these hosts' well-known ports. |
 | `--url https://prometheus.example.org` | Identify one exact URL. Repeat it for more. |
 | `--kube-context homelab` | Use this kubectl context for your cluster. |
 | `--kubeconfig ~/.kube/viewer.yaml` | Use this kubeconfig, preferably a read-only one. |
-| `--yes` | Write without asking, for scripts and the VM test. |
+| `--yes` | Write without asking, for scripts and the VM test. With `--find`, it also answers Find my lab's question. |
 | `--print` | Show the sources it would add, and write nothing. |
 | `--json` | Print the findings as JSON. |
 | `--no-local` | Skip this machine's Docker, herdr and `gh`. |
@@ -74,6 +78,80 @@ seen before. It never rewrites your edits.
 Setup never picks kubectl's *current* context by itself. On many machines that's someone's
 production cluster. Name yours with `--kube-context` or `--kubeconfig`, or pick it from
 the list when setup asks.
+
+### Find my lab
+
+Find my lab connects a homelab you own without you having to know every host name. It
+never scans address ranges and never contacts a host that no source told it about. It
+finds devices only in places that already know them, then checks those devices the same
+way `--hosts` does.
+
+```bash
+bromigos setup homelab --find
+```
+
+First it says which sources it will read, and asks once. Nothing is read before a yes.
+`--yes` answers that question for scripts. Then it reads, all read-only:
+
+| Source | What it reads |
+|---|---|
+| Devices that announce themselves | An mDNS (DNS-SD) browse, an SSDP search and an ONVIF WS-Discovery probe. Each is one question to the local network, answered only by devices that choose to. |
+| This computer's neighbour table | `ip -j neigh`, or `/proc/net/arp`. No root needed. |
+| Your DNS | Reverse lookups of those addresses, through this computer's own resolver. |
+| Tailscale | `tailscale status --json`, when Tailscale is installed. These devices are marked as on your tailnet. |
+| `~/.ssh/config` | Its `Host` and `HostName` lines, only after a separate yes, or with `--ssh-config`. Nothing else under `~/.ssh` is read: no keys, no `known_hosts`, no included files. |
+| The sources already in `homelab.toml` | UniFi Poller's client list, Prometheus's scrape targets, Kubernetes nodes, and Proxmox VMs' guest-agent addresses. Each is read through its adapter, with the credential references you already set. |
+
+The mDNS browse needs `python-zeroconf` (`sudo pacman -S python-zeroconf`). Without it,
+Find my lab says so and reads the other sources. A first-time user has no `homelab.toml`
+yet, so the last row doesn't apply. It starts working once you connect a metrics source,
+a cluster or Proxmox.
+
+Find my lab merges what it hears into one record per host. Sightings that share an
+address or a host name are one host. Each host gets a name, its addresses, the sources
+that saw it, and a kind: lab machine, smart home, camera, robot, printer, media or other.
+It recognises:
+
+- Home Assistant, MQTT, ESPHome, Matter, HomeKit, Hue, Shelly, Chromecast, AirPlay and
+  printers, from what they announce;
+- Synology, TrueNAS, Unraid and OpenMediaVault boxes, file shares, Proxmox, Cockpit,
+  Jellyfin and Plex;
+- ONVIF and RTSP cameras, Frigate, and robots running rosbridge or a Foxglove bridge;
+- boxes set up by `bromigos lab provision`, which announce `_bromigos-lab._tcp`
+  ([lab-provision.md](lab-provision.md#the-box-announces-itself)).
+
+Some of these are recognised by their names, so they're hints only. An adapter's own
+check decides what is added.
+
+Then it checks the hosts it found, and only those. Each check is setup's usual one: every
+adapter's well-known ports, counted only when the service's own API answers. The checks
+follow these rules:
+
+- Only private addresses are checked: RFC 1918, IPv6 unique local, and Tailscale's CGNAT
+  range for tailnet devices. Public addresses are refused and counted.
+- At most 25 new connections a second, with short timeouts.
+- No sign-in attempts and no default passwords, ever. A redirect to another host isn't
+  followed.
+- Smart-home devices, cameras, printers, robots and media players aren't checked. Nothing
+  bromigOS adds runs on them. Offline tailnet devices aren't checked either.
+
+It shows the result as a checklist, grouped by kind. Services that have an adapter can be
+added to `homelab.toml`. Pick them by number. As always, setup only appends, and never
+rewrites what you wrote. Everything else is listed as "found, not supported yet".
+`--print` shows the list and the blocks without writing. `--json` prints the hosts, the
+counts per source and the findings.
+
+Nothing leaves your network. No MAC address or serial number is kept. They never reach
+the output or a file. An endpoint uses a host name only when that name resolves back to
+the same address. Otherwise it uses the address.
+
+> **Planned.** Find my lab will read the client lists of OpenWrt, OPNsense and pfSense
+> routers, and of Pi-hole and AdGuard Home, once bromigOS has adapters for them. VECTOR's
+> homelab tools don't offer Find my lab yet. They run without asking, which would get
+> around its question.
+
+`findlab.py` holds the sources, the merge and the checks. Its tests,
+`homelab/tests/test_findlab.py`, use recorded answers in `homelab/tests/fixtures/findlab/`.
 
 ### Services found through metrics and the cluster
 
@@ -915,7 +993,8 @@ and `--alpha luma` for a world's loop ([art.md](art.md)).
   0600, in the private overlay, or in Vault.
 - **VECTOR's guard** covers this package, its data layer, `homelab.toml` and the adapter
   plugin folder. He can't write to them, and his guard's audit log records any change.
-- **Nothing is sent anywhere** except the endpoints you configure.
+- **Nothing is sent anywhere** except the endpoints you configure. Find my lab asks the
+  local network its questions, and checks only the private addresses it found.
 
 ## Provisioned infrastructure
 

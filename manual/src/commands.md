@@ -2015,7 +2015,16 @@ From the `bromigos-desktop` package.
 Find the homelab's services and write ~/.config/bromigos/homelab.toml (re-runnable).
 
 ```text
+bromigos setup homelab [--find [--ssh-config]] [--hosts H,H] [--url URL …] [--yes] [--print] [--json] …
+```
+
+For example:
+
+```text
 bromigos setup homelab
+bromigos setup homelab --find
+bromigos setup homelab --hosts nas,gpu-box
+bromigos setup homelab --find --print
 ```
 
 From the `bromigos-homelab` package.

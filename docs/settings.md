@@ -561,7 +561,9 @@ This page needs `bromigos-homelab`. It shows:
 - the doctor's findings with their fixes;
 - where AI runs.
 
-The dashboard and the Lab deck are a click away. See [lab.md](lab.md).
+The dashboard and the Lab deck are a click away. See [lab.md](lab.md). **Find my lab…**
+sits beside each **Connect…** button. It runs `bromigos lab connect --find` in a terminal,
+which asks before it reads anything ([homelab.md](homelab.md#find-my-lab)).
 
 ### Account
 
