@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # bromigos:summary=Your homelab's console: status, models, jobs, doctor and guided maintenance (no arguments: the live dashboard)
-# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | media search|get|status|upcoming|language … | provision [plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE] --repo PATH … | connect … | target …]
-# bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor; bromigos lab media get "Cowboy Bebop" --seasons all --specials
+# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | connect … | target …]
+# bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor; bromigos lab provision; bromigos lab media get "Cowboy Bebop" --seasons all --specials
 # bromigos:menu=LAUNCH:Lab console
 """bromigos lab: the homelab's console (docs/homelab.md, "The lab console"; the manual's Lab chapter).
 
@@ -77,6 +77,9 @@
                                     playlists in Jellyfin and Plex (idempotent; docs/homelab.md)
   bromigos lab connect [ARGS]       = bromigos setup homelab [ARGS]: find services, write homelab.toml
   bromigos lab target [ARGS]        = bromigos target [ARGS]: where AI runs
+  bromigos lab provision [--guided] [--start-over]
+                                    set up a spare box step by step: checks each step, asks before
+                                    it acts, and carries on where it stopped (--start-over forgets)
   bromigos lab provision [plan|apply|add SERVICE|remove SERVICE] --repo PATH [options]
                                     review and provision your own box or cluster, including agents
       --llm-url URL --agent-model ID  connect agents to an existing model endpoint

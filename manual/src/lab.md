@@ -598,9 +598,84 @@ plainly asked him to download one thing. When it's in your library, he tells you
 
 ## Setting up a lab
 
-To set up a spare Linux box, install Ansible, sops and age on your desktop first. The
-box needs Python 3, an SSH key login and passwordless sudo. Debian, Ubuntu, Fedora and
-Arch Linux are supported. Check the SSH host key before you accept it.
+`bromigos lab provision` turns a spare Linux box into your lab. It installs a start page,
+live graphs, daily backups and monitoring, and connects the lab console to them. Run it
+with no arguments and it walks you through each step. Each step checks first and asks
+before it changes anything.
+
+You need:
+
+- a spare box running Debian, Ubuntu, Fedora or Arch Linux, on your network, with SSH on;
+- your user account on that box, with its password and the right to use sudo.
+
+```bash
+bromigos lab provision
+```
+
+### What the guided setup asks
+
+1. **Tools on this desktop.** It checks for Ansible, sops, age, Git and SSH. If some are
+   missing, it shows a `sudo pacman -S --needed …` command. Run it yourself in another
+   terminal, then press Enter. The setup never runs sudo on your desktop.
+2. **Your age key.** Your lab's passwords are encrypted with an age key. If you don't have
+   one, it offers to create one in `~/.config/sops/age/keys.txt`. Keep that file safe, and
+   keep a copy in your password manager. Without it, you can't apply your lab again.
+3. **The box.** Type its hostname or IP address, your user name on it, and its SSH port.
+4. **SSH.** The first time, it shows the box's SSH host key fingerprint. To check it, run
+   `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` at the box's own screen and
+   keyboard. Type `yes` only if the two match. Then it offers to run `ssh-copy-id`, which
+   asks for your password on the box once.
+5. **Python and sudo on the box.** Provisioning needs Python 3 and sudo without a
+   password on the box. If either is missing, it shows the command or the `visudo` line
+   to add on the box, and waits for you.
+6. **The hardware check.** It reads the box and lists what it found. It only reads, and
+   never changes a disk. For example:
+
+   ```text
+   GPU: NVIDIA GeForce RTX 3090, 24 GB, driver loaded
+   Spare disk: 4 TB HDD, empty, not mounted
+   Wired network: enp5s0, 2.5 Gb/s, connected
+   USB: Coral Edge TPU. Could be used for fast object detection in Frigate
+   ```
+
+7. **What to install.** Core is a start page (Homepage), live graphs (Netdata), daily
+   backups (restic), a web server in front (Caddy) and monitoring. Advanced adds
+   Kubernetes, Argo CD and Vault. The setup recommends one for your box. Start with Core
+   if you're not sure. You can move to Advanced later.
+8. **Where backups go.** It lists other disks and NAS shares already mounted on the box,
+   and the system disk as a last choice. Backups are safest off the system disk. An
+   empty disk can hold backups once you format and mount it on the box yourself.
+   Provisioning never formats or mounts disks.
+9. **The plan.** Choose a folder for your lab's Git repository, such as `~/lab`. The
+   setup writes the plan there and offers to commit it. Then it shows the services,
+   ports, sizes and hardware, and waits for you to type `yes`.
+
+If you stop at any step, with `q` or Ctrl+C, run `bromigos lab provision` again. It
+skips the steps already done and carries on. To set up a different box instead, run
+`bromigos lab provision --start-over`.
+
+### What you get
+
+Apply starts Caddy, Netdata, restic backups and Homepage, plus Prometheus, Grafana, Loki
+and Alertmanager.
+Caddy listens on the box itself at first. Forward it to your desktop, then open
+`http://localhost:8080` in your browser. Netdata is under `/netdata/`.
+
+```bash
+ssh -L 8080:127.0.0.1:80 <user>@<host>
+```
+
+After health checks pass, provisioning connects the lab console and runs the doctor.
+Run `bromigos lab` to see it, or `bromigos lab doctor` to check it again.
+Monitoring is connected automatically. Grafana has starter dashboards for nodes,
+Kubernetes, GPUs and apps. Its admin password is encrypted with your other credentials.
+GPU drivers and new storage arrays still need an administrator.
+
+### Set it up by hand
+
+The guided setup runs the same commands you can run yourself. Install Ansible, sops and
+age on your desktop first. The box needs Python 3, an SSH key login and passwordless
+sudo. Check the SSH host key before you accept it.
 
 ```bash
 ssh-copy-id <user>@<host>
@@ -618,25 +693,22 @@ bromigos lab provision --repo <lab-folder> --ssh <user>@<host> \
 ```
 
 The command reads the box and generates your own lab Git repository. It lists services,
-ports, RAM and disk needs. Review and commit the files before you apply them.
+ports, RAM and disk needs, and the hardware it found. Notes below the list warn about a
+missing GPU driver or backups on the system disk. Review and commit the files before you
+apply them.
 
 ```bash
 bromigos lab provision apply --repo <lab-folder>
 ```
 
-Apply waits for you to type `yes`. It starts Caddy, Netdata, restic backups and Homepage,
-plus Prometheus, Grafana, Loki and Alertmanager.
-Caddy listens on the box itself at first. Forward it to your desktop, then open
-`http://localhost:8080` in your browser. Netdata is under `/netdata/`.
-
-```bash
-ssh -L 8080:127.0.0.1:80 <user>@<host>
-```
+Apply waits for you to type `yes`.
 
 To let other machines on your local network reach it, add
 `--listen-address <local-network-address>` to the plan. Public addresses are refused. Add
 `--domain <lab-dns-name>` to the plan for local HTTPS. Point that name at the box and
 trust Caddy's local certificate authority on machines that open it.
+
+### Kubernetes, Argo CD and Vault
 
 To add Kubernetes, Helm, Argo CD and Vault, commit the current repository, then generate
 an Advanced plan. Supply the Git URL where you will publish this repository.
@@ -663,10 +735,15 @@ Automatic unseal is a separate choice. Type `yes` only if you want three recover
 stored in a Kubernetes Secret. Cluster administrators can read them. Keep all five in
 your password manager even if you choose this option.
 
+### An existing cluster
+
 For an existing cluster, install Helm and kubectl on the desktop too. Replace `--ssh`
 with `--kubeconfig <file> --context <context>`. Choose the context explicitly. Vault needs
 a default storage class. Core needs an existing backup volume claim in `lab-core`, named
-by `--backup-path`. Its web services stay inside the cluster.
+by `--backup-path`. Its web services stay inside the cluster. The plan lists the GPUs
+that the cluster's node labels report.
+
+### Change the selection
 
 Use `--custom` for the terminal checklist. The dashboard's **Provision** tab has the same
 service tree and gives you the command for your selection. To change one service:
@@ -679,12 +756,6 @@ bromigos lab provision remove restic --repo <lab-folder>
 Commit the repository before changing its plan. These commands only prepare a new plan.
 Apply still needs your `yes`. Removing a selection leaves its running service and data
 in place. Repeating apply preserves backup passwords and Vault's recovery shares.
-
-After health checks pass, provisioning connects the lab console and runs the doctor.
-Run `bromigos lab` to see it, or `bromigos lab doctor` to check it again.
-Monitoring is connected automatically. Grafana has starter dashboards for nodes,
-Kubernetes, GPUs and apps. Its admin password is encrypted with your other credentials.
-GPU drivers and new storage arrays still need an administrator.
 
 ## Creating a cluster
 

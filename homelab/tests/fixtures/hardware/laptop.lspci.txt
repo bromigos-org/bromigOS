@@ -1,0 +1,2 @@
+0000:00:02.0 "VGA compatible controller [0300]" "Intel Corporation [8086]" "Alder Lake-P GT2 [Iris Xe Graphics] [46a6]" -r0c -p00 "Lenovo [17aa]" "Device [22e4]"
+0000:01:00.0 "3D controller [0302]" "NVIDIA Corporation [10de]" "GA107M [GeForce RTX 3050 Mobile] [25a2]" -ra1 -p00 "Lenovo [17aa]" "Device [22e4]"

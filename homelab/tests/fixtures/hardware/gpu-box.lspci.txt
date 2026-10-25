@@ -1,0 +1,4 @@
+0000:00:00.0 "Host bridge [0600]" "Advanced Micro Devices, Inc. [AMD] [1022]" "Starship/Matisse Root Complex [1480]" -p00 "ASUSTeK Computer Inc. [1043]" "Device [87c0]"
+0000:01:00.0 "VGA compatible controller [0300]" "NVIDIA Corporation [10de]" "GA102 [GeForce RTX 3090] [2204]" -ra1 -p00 "NVIDIA Corporation [10de]" "Device [147d]"
+0000:01:00.1 "Audio device [0403]" "NVIDIA Corporation [10de]" "GA102 High Definition Audio Controller [1aef]" -ra1 -p00 "NVIDIA Corporation [10de]" "Device [147d]"
+0000:21:00.0 "VGA compatible controller [0300]" "NVIDIA Corporation [10de]" "GA102 [GeForce RTX 3090] [2204]" -ra1 -p00 "NVIDIA Corporation [10de]" "Device [147d]"

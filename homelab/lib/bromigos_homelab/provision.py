@@ -17,7 +17,7 @@ import time
 import urllib.error
 import urllib.request
 
-from . import services, agentprovision as A, observability as O
+from . import services, agentprovision as A, observability as O, hardware as H
 
 SUPPORTED = ("caddy", "netdata", "restic", "homepage", "kubernetes", "helm", "argocd", "vault", "llm-endpoint") + A.AGENTS + O.SERVICES
 IMAGES = {"caddy": "caddy:2.11.7", "netdata": "netdata/netdata:v2.12.1",
@@ -125,6 +125,7 @@ def inventory(target):
                            ('storageclass.kubernetes.io/is-default-class', 'storageclass.beta.kubernetes.io/is-default-class'))} for c in classes]
         defaults = [c['name'] for c in facts['storage_classes'] if c['default']]
         facts['default_storage_class'] = defaults[0] if len(defaults) == 1 else ''
+        facts['hardware'] = H.from_nodes(nodes)
         return facts
     # Only reads. Sudo is tested here but never used on the desktop.
     probe = """import json, os, shutil, platform
@@ -137,7 +138,8 @@ if shutil.which('nvidia-smi'):
  result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total', '--format=csv,noheader,nounits'], capture_output=True, text=True)
  if result.returncode == 0:
   gpu, vram = 'nvidia', sum(float(v) for v in result.stdout.splitlines())/1024
-print(json.dumps(dict(cpu=os.cpu_count(), ram_gib=mem, disk_gib=shutil.disk_usage('/').free / 1024**3, distribution=release['ID'].strip(chr(34)), architecture=platform.machine(), gpu=gpu, vram_gib=vram)))
+""" + H.SOURCE + """
+print(json.dumps(dict(cpu=os.cpu_count(), ram_gib=mem, disk_gib=shutil.disk_usage('/').free / 1024**3, distribution=release['ID'].strip(chr(34)), architecture=platform.machine(), gpu=gpu, vram_gib=vram, hardware_raw=hardware_raw)))
 """
     try:
         run(ssh_args(target) + ["sudo -n true"])
@@ -147,6 +149,12 @@ print(json.dumps(dict(cpu=os.cpu_count(), ram_gib=mem, disk_gib=shutil.disk_usag
                              "First run ssh-copy-id (with your port and key), then ssh user@host to check access") from None
     if facts["distribution"] not in ("debian", "ubuntu", "fedora", "arch"):
         raise ProvisionError("Supported boxes run Debian, Ubuntu, Fedora or Arch Linux")
+    hw = H.parse(facts.pop("hardware_raw", None))
+    if hw:
+        facts["hardware"] = hw
+        kind, vram = H.legacy(hw)
+        if kind != "none":
+            facts.update(gpu=kind, vram_gib=vram)
     return facts
 
 
@@ -389,7 +397,7 @@ def generate(repo, files):
     return repo
 
 
-def summary(cat, resolved, facts, repo, agents=None):
+def summary(cat, resolved, facts, repo, agents=None, backup_path=""):
     print(f"Plan: {repo}")
     for svc in resolved["services"]:
         row = cat["service"][svc]
@@ -407,6 +415,13 @@ def summary(cat, resolved, facts, repo, agents=None):
     if agents:
         print("  Agent model: " + agents["model"] + " at " + agents["endpoint"])
         print("  Profile: " + agents.get("profile", "assistant") + "; gateways: " + (", ".join(agents.get("gateways", [])) or "none") + "; tools: " + agents.get("tools", "memory"))
+    lines = H.describe(facts) if facts.get("hardware") or facts.get("distribution") != "cluster" else []
+    if lines:
+        print("Hardware:")
+        for line in lines:
+            print("  " + line)
+    for note in H.notes(facts, resolved["services"], cat, backup_path):
+        print("Note: " + note)
     print("Model downloads: none. Removing a selection does not delete resources or data.")
 
 
@@ -557,7 +572,7 @@ def apply(repo, reveal=reveal_once, prepared=False, approved=False, live_facts=N
     facts = live_facts or inventory(target)
     resolved = selection(services.load(), picked, facts)
     A.validate(state.get("agents", {}), picked, target)
-    summary(services.load(), resolved, facts, repo, state.get("agents"))
+    summary(services.load(), resolved, facts, repo, state.get("agents"), state.get("backup_path", ""))
     if state.get('observability', {}).get('migration_note'): print('Review: ' + state['observability']['migration_note'])
     if any("unknown" not in w for w in resolved["warnings"]):
         raise ProvisionError("Selection does not fit; remove services or provide a larger target")
@@ -696,10 +711,14 @@ def apply(repo, reveal=reveal_once, prepared=False, approved=False, live_facts=N
 
 def main(argv=None):
     argv = list(argv if argv is not None else sys.argv[1:])
+    if not argv or argv[0] in ('--guided', '--start-over'):
+        from . import guidedprovision
+        return guidedprovision.main(argv)
     if argv and argv[0] in ('cluster', 'vm', 'storage', 'add-node', 'remove-node', 'capacity'):
         from . import infrastructure
         return infrastructure.main(argv)
-    parser = argparse.ArgumentParser(prog="bromigos lab provision", description="Review and provision your own Linux box or Kubernetes cluster")
+    parser = argparse.ArgumentParser(prog="bromigos lab provision", description="Review and provision your own Linux box or Kubernetes cluster",
+                                     epilog="With no arguments, or --guided, it walks you through setting up a spare box step by step.")
     parser.add_argument("verb", nargs="?", choices=("plan", "apply", "add", "remove"), default="plan")
     parser.add_argument("service", nargs="?")
     parser.add_argument("--repo", required=True, help="Your generated lab Git repository")
@@ -774,7 +793,7 @@ def main(argv=None):
         if credentials:
             encrypt(repo, options["age_recipient"], credentials)
             credentials.clear()
-        summary(cat, resolved, facts, repo, options.get("agents"))
+        summary(cat, resolved, facts, repo, options.get("agents"), options.get("backup_path", ""))
         print("Review and commit the files. Publish them if using Argo CD. Then run: bromigos lab provision apply --repo " + shlex.quote(str(repo)))
         return 0
     except (ProvisionError, OSError, ValueError, KeyError, EOFError, KeyboardInterrupt) as error:

@@ -1,0 +1,1 @@
+0000:03:00.0 "VGA compatible controller [0300]" "ASPEED Technology, Inc. [1a03]" "ASPEED Graphics Family [2000]" -r41 -p00 "Super Micro Computer Inc [15d9]" "Device [1b95]"

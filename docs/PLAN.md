@@ -398,8 +398,9 @@ come from any module.
 Netdata, restic and Homepage. Advanced adds k3s, Helm, Argo CD and Vault. It supports one
 Linux box over SSH and an existing cluster with an explicit kubeconfig and context.
 
-The command takes a read-only inventory, checks the selection, writes the plan and waits
-for `yes` before Ansible applies it. Verification connects the lab console and runs its
+The command takes a read-only inventory, including the box's GPUs, disks and network, checks
+the selection, writes the plan and waits for `yes` before Ansible applies it. With no
+arguments, it guides a new user through each step of setting up a spare box. Verification connects the lab console and runs its
 doctor. Vault recovery shares are shown once, outside logs. Repeated apply preserves data.
 The terminal checklist and console tree use the existing catalog resolver.
 

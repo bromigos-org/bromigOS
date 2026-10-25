@@ -1,7 +1,8 @@
 # Setting up your lab
 
 `bromigos lab provision` generates a Git repository for your lab and applies its Ansible
-roles from the desktop. The first slice installs Core services, or adds k3s, Helm,
+roles from the desktop. Run with no arguments, it guides a new user through setting up a
+spare box, one checked step at a time. The first slice installs Core services, or adds k3s, Helm,
 Argo CD and Vault. It creates Proxmox or KVM VMs and multi-node clusters. Every plan
 includes Prometheus, Grafana, Loki and Alertmanager. It provisions agents against existing model endpoints, as
 explained in [Agents in your lab](lab-agents.md). The [manual](../manual/src/lab.md#setting-up-a-lab) explains how to run it.
@@ -39,6 +40,95 @@ host key file when the default SSH file is unsuitable.
 For an existing cluster, the probe reads nodes and their available CPU and RAM. It cannot
 infer free persistent storage from those numbers. The plan says that disk capacity needs
 checking before approval.
+
+### The hardware check
+
+The same probe also reads the box's hardware. It only reads. It never formats, mounts or
+changes a disk, and it loads no driver. The code is `homelab/lib/bromigos_homelab/hardware.py`.
+Its `collect` function runs on the box. `provision.py` sends its source over SSH with the
+rest of the probe, so the box needs nothing installed beyond Python 3. Every tool is
+optional, and a missing tool falls back to files.
+
+| What | Read from | Without the tool |
+|---|---|---|
+| GPUs and their drivers | `/sys/bus/pci/devices`, names from `lspci -mm -nn -D` | names from the box's `pci.ids` |
+| NVIDIA memory and driver | `nvidia-smi` | the GPU shows "no driver loaded" or the driver it has |
+| AMD memory | `/sys/class/drm/card*/device/mem_info_vram_total` | |
+| Disks | `lsblk -J -b`, with `MOUNTPOINTS` or the older `MOUNTPOINT` column | `/sys/block`, which can't show whether a disk is empty |
+| Mounted folders and NAS shares | `/proc/mounts`, with free space from `statvfs` | |
+| Network cards | `/sys/class/net/*`: speed, link state, and Wi-Fi or wired | |
+| CPU | `/proc/cpuinfo`: model and the `vmx` or `svm` flag; `/dev/kvm` | `lscpu` for ARM model names |
+| Laptop or not | the DMI chassis type and a battery | |
+| Devices of interest | `/sys/bus/usb/devices`; Coral PCIe cards from the PCI list | `lsusb` |
+
+A disk counts as empty only when lsblk shows no partitions, no filesystem and no mount
+point. Empty disks are suggestions only. Disks that are RAID, LVM or ZFS members, swap or
+encrypted say so. Removable disks are listed but never suggested for backups. Disks
+under 1 GB, such as a VM's seed image, are left out. Basic
+display chips, such as a server's management controller or a VM's virtual screen, don't
+count as GPUs. A GPU counts for sizing only when its driver works: `nvidia-smi` answers
+for NVIDIA, and `amdgpu`, `i915` or `xe` is bound for AMD and Intel.
+
+USB sticks are matched by their USB IDs and names. A Zigbee or Z-Wave stick, a Coral Edge
+TPU or a camera gets a "could be used for" hint. The hints never add a service.
+
+The plan prints the results under **Hardware**, in plain words:
+
+```text
+Hardware:
+  Box: Debian, x86-64, 16 CPU threads, 64 GB memory, 429 GB free on the system disk
+  CPU: AMD Ryzen 9 5950X 16-Core Processor, virtualisation available (AMD-V)
+  GPU: 2 × NVIDIA GeForce RTX 3090, 24 GB each, driver loaded
+  System disk: 1 TB NVMe (Samsung SSD 980 1TB)
+  Spare disk: 4 TB HDD (WDC WD40EFRX-68N32N0), empty, not mounted
+  Wired network: enp5s0, 2.5 Gb/s, connected
+  USB: Coral Edge TPU. Could be used for fast object detection in Frigate
+```
+
+Notes follow the hardware. A selected service that needs a GPU warns when the box has
+none, or when its GPU has no working driver. No service in this slice needs a GPU yet. Backups on the system disk get a warning,
+and mounted disks, NAS shares and empty disks are suggested instead. A box with only
+Wi-Fi connected, or a wired link slower than 1 Gb/s, gets a note too. None of these
+notes changes the plan.
+
+On an existing cluster the check reads GPUs from node labels and allocatable resources:
+`nvidia.com/gpu`, `amd.com/gpu` and `gpu.intel.com/i915`, with NVIDIA's product and
+memory labels. A node with a Node Feature Discovery GPU label but no allocatable GPU
+is reported as found but not yet usable, because it has no device plugin.
+
+## The guided setup
+
+`bromigos lab provision` with no arguments, or with `--guided`, runs the guided setup in
+`guidedprovision.py`. It is for a first lab on one spare box. Each step checks first. It
+acts only after the user answers yes, and it never runs sudo on the desktop.
+
+| Step | What it checks | What it offers |
+|---|---|---|
+| Desktop tools | Ansible, sops, age, Git and SSH | the exact `sudo pacman -S --needed …` line for the user to run |
+| Age key | sops's key file, `SOPS_AGE_KEY_FILE` or `~/.config/sops/age/keys.txt` | to create it with `age-keygen` |
+| The box | a saved answer | asks for the address, user name and SSH port |
+| SSH | `ssh` with `StrictHostKeyChecking=yes` and `BatchMode=yes` | the host key fingerprint to confirm, then `ssh-copy-id` in the terminal |
+| Python and sudo | `python3` and `sudo -n true` on the box | the install command, and the `visudo` line to add |
+| Hardware | the read-only probe above | nothing; it shows the results |
+| Preset | Core and Advanced against the box's size | a recommendation, and the Git URL for Advanced |
+| Backups | mounted disks and NAS shares on the box | a folder on one of them, created on the box only after a yes |
+| Plan | `plan.json` in the lab repository | to generate it, commit it, then apply after `yes` |
+
+The host key step runs `ssh-keyscan`, shows the fingerprints, and tells the user how to
+read them on the box itself. Only an exact `yes` adds the key to `~/.ssh/known_hosts`. A
+changed host key stops the setup. The plan's target names that file and the SSH key
+explicitly, so SSH and Ansible check the same host key the user confirmed. When a step needs the user to act on the box, the
+setup prints the command and waits for Enter. Typing `q` stops it.
+
+Answers are kept in `$XDG_STATE_HOME/bromigos/lab-provision.json`, or
+`~/.local/state/bromigos/lab-provision.json`. The file holds the box's address, the
+choices and the lab repository's path. It never holds a private key or password. Running
+the setup again skips every step that is already done. It checks the tools and SSH again,
+which is quick. It reuses saved answers, and it doesn't rewrite an unchanged plan. Apply
+then runs again after `yes`, which converges the lab. `--start-over` forgets the saved answers.
+
+The "Find my lab" search in `bromigos setup homelab` is not used yet. The setup asks for
+the box's address.
 
 ## Selection and sizing
 
@@ -147,6 +237,18 @@ The infrastructure golden tests, fake Proxmox API and nested VM test are describ
 failures, capacity checks and the secret boundaries. The existing catalog and console
 tests cover the rest of the resolver and the terminal dashboard.
 
+`homelab/tests/test_provision_hardware.py` runs the hardware check against fake `/sys`
+trees and recorded tool outputs in `homelab/tests/fixtures/hardware/`. It covers a box
+with two GPUs and every tool, a box with no tools at all, a laptop on Wi-Fi with the
+nouveau driver, and a server with no GPU, RAID members and an old `lsblk`. It checks the
+plan text, the notes and the cluster labels. It also runs the whole probe locally to prove
+it prints facts, and checks that the collector parses as Python 3.6.
+
+`homelab/tests/test_provision_guided.py` drives the guided setup with scripted answers, a
+fake terminal and a fake box. It checks a first run, a second run that asks nothing, a
+refused or changed host key, missing tools, Python and sudo, bad answers and a folder that
+already holds other files.
+
 `test/vm/lab-provision-e2e.py` creates a fresh Debian guest through `lab-vm.py` and
 `vm-keeper.py`. It uses a sandbox home, its own SSH key and an isolated Git server. It
 runs Core and Advanced, repeats apply, checks backup success, k3s readiness, Argo sync,
@@ -159,9 +261,13 @@ in files or captured output. Its cleanup stops the VM and removes its disk.
 The approved design also covers these features. They are not built here:
 
 - Proxmox container creation and additional VM providers.
-- GPU driver installation and model download sizing.
-- New model servers, and games, media, home and network services.
-- Finding a NAS, creating shares, SMB mounting and creating RAID or ZFS pools.
+- GPU driver installation and model download sizing. The hardware check reports GPUs and
+  their drivers, but installs nothing.
+- New model servers, and games, media, home and network services. The hardware check's
+  USB hints name possible uses, but don't add a service.
+- Finding a NAS on the network, creating shares, SMB mounting, and creating RAID or ZFS
+  pools. The hardware check only sees NAS shares already mounted on the box.
+- Formatting and mounting a spare disk. The hardware check only suggests one.
 - The catalog's app-specific configure steps, account sign-in and library setup.
 - Public certificates, DNS and opt-in tunnels.
 - Service removal with a separate data-retention decision.

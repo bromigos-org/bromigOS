@@ -1,0 +1,24 @@
+{
+   "blockdevices": [
+      {"name": "nvme0n1", "size": 1000204886016, "type": "disk", "rota": false, "tran": "nvme", "rm": false, "ro": false,
+       "model": "Samsung SSD 980 1TB", "fstype": null, "mountpoints": [null],
+       "children": [
+          {"name": "nvme0n1p1", "size": 536870912, "type": "part", "rota": false, "tran": "nvme", "rm": false, "ro": false,
+           "model": null, "fstype": "vfat", "mountpoints": ["/boot/efi"]},
+          {"name": "nvme0n1p2", "size": 999666221056, "type": "part", "rota": false, "tran": "nvme", "rm": false, "ro": false,
+           "model": null, "fstype": "ext4", "mountpoints": ["/"]}
+       ]},
+      {"name": "sda", "size": 4000787030016, "type": "disk", "rota": true, "tran": "sata", "rm": false, "ro": false,
+       "model": "WDC WD40EFRX-68N32N0", "fstype": null, "mountpoints": [null]},
+      {"name": "sdb", "size": 2000398934016, "type": "disk", "rota": false, "tran": "sata", "rm": false, "ro": false,
+       "model": "Samsung SSD 870 EVO 2TB", "fstype": null, "mountpoints": [null],
+       "children": [
+          {"name": "sdb1", "size": 2000397795328, "type": "part", "rota": false, "tran": "sata", "rm": false, "ro": false,
+           "model": null, "fstype": "ext4", "mountpoints": ["/srv/data"]}
+       ]},
+      {"name": "sdc", "size": 32017047552, "type": "disk", "rota": true, "tran": "usb", "rm": true, "ro": false,
+       "model": "Flash Disk", "fstype": null, "mountpoints": [null]},
+      {"name": "zram0", "size": 4294967296, "type": "disk", "rota": false, "tran": null, "rm": false, "ro": false,
+       "model": null, "fstype": null, "mountpoints": ["[SWAP]"]}
+   ]
+}

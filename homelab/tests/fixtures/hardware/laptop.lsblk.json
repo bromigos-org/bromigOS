@@ -1,0 +1,12 @@
+{
+   "blockdevices": [
+      {"name": "nvme0n1", "size": 512110190592, "type": "disk", "rota": false, "tran": "nvme", "rm": false, "ro": false,
+       "model": "SAMSUNG MZVL2512HCJQ-00BL7", "fstype": null, "mountpoints": [null],
+       "children": [
+          {"name": "nvme0n1p1", "size": 1073741824, "type": "part", "rota": false, "tran": "nvme", "rm": false, "ro": false,
+           "model": null, "fstype": "vfat", "mountpoints": ["/boot"]},
+          {"name": "nvme0n1p2", "size": 511035375616, "type": "part", "rota": false, "tran": "nvme", "rm": false, "ro": false,
+           "model": null, "fstype": "btrfs", "mountpoints": ["/home", "/"]}
+       ]}
+   ]
+}
