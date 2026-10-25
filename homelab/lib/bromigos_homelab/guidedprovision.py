@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import sys
 
-from . import provision as P, services, hardware as H
+from . import provision as P, services, hardware as H, accountkeys as K
 
 # desktop command → the Arch Linux package that provides it
 TOOLS = {"ansible-playbook": "ansible", "ansible-galaxy": "ansible", "sops": "sops", "age": "age", "age-keygen": "age",
@@ -57,12 +57,22 @@ class Terminal:
             return 127, "", "could not run " + argv[0]
         return result.returncode, result.stdout, result.stderr
 
-    def interactive(self, argv):
-        """Hand the terminal to a command that asks its own questions, such as ssh-copy-id."""
+    def interactive(self, argv, data=None):
+        """Hand the terminal to a command that asks its own questions, such as ssh-copy-id.
+        data goes to its stdin; ssh still reads a password from the terminal itself."""
         try:
-            return subprocess.run(argv).returncode
+            return subprocess.run(argv, input=data, text=True).returncode
         except OSError:
             return 127
+
+    def password_run(self, argv, data):
+        """Run an ssh command that may ask for the box's password on the terminal: data on
+        its stdin, and its output captured. (exit code, stdout, "")."""
+        try:
+            result = subprocess.run(argv, input=data, text=True, stdout=subprocess.PIPE)
+        except OSError:
+            return 127, "", ""
+        return result.returncode, result.stdout, ""
 
 
 def state_path():
@@ -70,9 +80,11 @@ def state_path():
 
 
 class Guide:
-    def __init__(self, term=None, path=None, inventory=None, plan=None, apply=None, home=None, find=None):
+    def __init__(self, term=None, path=None, inventory=None, plan=None, apply=None, home=None, find=None, account=None):
         self.term = term or Terminal()
         self.find_boxes = find or find_boxes
+        self.fetch_account = account or K.fetch
+        self._account = False                      # not read yet
         self.path = Path(path or state_path())
         self.home = Path(home or Path.home())
         self.inventory = inventory or P.inventory
@@ -234,7 +246,44 @@ class Guide:
             stream.write("\n".join(lines) + "\n")
         self.done("Host key saved in " + str(known))
 
+    def account(self):
+        """The signed-in Bromigos account's SSH keys ({"who", "keys"}), read once; None when
+        signed out. A failure to read them is said, and the setup carries on without them."""
+        if self._account is False:
+            try:
+                self._account = self.fetch_account()
+            except Exception as error:             # noqa: BLE001  the account never stops the setup
+                self._account = None
+                self.term.say(f"  Couldn't read the SSH keys on your Bromigos account ({str(error)[:120] or 'no answer'}). "
+                              "Carrying on without them.")
+        return self._account
+
+    def account_keys(self, password=False):
+        """Offer the account's SSH keys for the box's authorized_keys (accountkeys.py)."""
+        account = self.account()
+        if not account:
+            return
+        if password:
+            # The box doesn't take a key yet: one password login adds them.
+            args = P.ssh_args(self.target())
+            argv = ["BatchMode=no" if a == "BatchMode=yes" else a for a in args[:-1]] + \
+                ["-o", "StrictHostKeyChecking=yes", args[-1]]
+            run = lambda command, data: self.term.password_run(argv + [command], data)  # noqa: E731
+        else:
+            run = self.ssh
+        skip = self.state.get("account_keys_declined", [])
+        added, declined = K.offer(self.term.say, self.term.yes, run, self.state["user"], account, skip, password=password)
+        if added or declined:
+            self.state["account_keys"] = sorted(set(self.state.get("account_keys", [])) | set(added))
+            self.state["account_keys_declined"] = sorted(set(skip) | set(declined))
+            self.save()
+
     def key_login(self):
+        if self.account() and self.account()["keys"]:
+            self.term.say("  The box doesn't accept your SSH key yet.")
+            self.account_keys(password=True)
+            if self.check_ssh() == "ok":
+                return
         if not self.key():
             self.term.say("  You need an SSH key to log in to the box without a password. You don't have one yet.")
             if not self.term.yes("  Create one now with ssh-keygen? It asks for a passphrase."):
@@ -257,6 +306,7 @@ class Guide:
             status = self.check_ssh()
             if status == "ok":
                 self.done("SSH works with your key, and the box's host key is trusted")
+                self.account_keys()
                 return
             if status == "changed":
                 raise Stop("The box's host key has CHANGED since you last connected. If you reinstalled it, remove the old key "

@@ -112,11 +112,15 @@ class Term:
         self.ran.append(argv)
         return self.box.handle(argv, data)
 
-    def interactive(self, argv):
+    def interactive(self, argv, data=None):
         self.interactive_ran.append(argv)
         if argv[0] == "ssh-copy-id":
             self.box.key_installed = True
         return 0
+
+    def password_run(self, argv, data):
+        self.interactive_ran.append(argv)
+        return self.box.password_login(argv, data)
 
     def text(self):
         return "\n".join(self.out)
@@ -140,14 +144,15 @@ class GuidedTests(unittest.TestCase):
         self.repo = root / "lab"
         self.found, self.boxes = [], []                # Find my lab: its runs, and what it "finds"
 
-    def guide(self, term):
+    def guide(self, term, account=lambda: None):
         def apply(repo, live_facts=None):
             self.applied.append((repo, live_facts))
             return 0
         def find():
             self.found.append(1)
             return self.boxes
-        return G.Guide(term=term, home=self.home, inventory=lambda target: facts(), apply=apply, find=find)
+        return G.Guide(term=term, home=self.home, inventory=lambda target: facts(), apply=apply, find=find,
+                       account=account)
 
     def fresh_answers(self):
         return ["yes",                              # create the age key

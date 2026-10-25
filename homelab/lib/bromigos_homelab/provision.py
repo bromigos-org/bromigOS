@@ -740,6 +740,8 @@ def main(argv=None):
     parser.add_argument("--backup-path", default="", help="Existing backup destination on the target")
     parser.add_argument("--age-recipient", default="", help="Your age public key for sops encryption")
     parser.add_argument('--storage-class', default='', help='Existing Kubernetes storage class for monitoring volumes')
+    parser.add_argument("--no-account-keys", action="store_true",
+                        help="Don't offer to add your Bromigos account's SSH keys to the box")
     args = parser.parse_args(argv)
     try:
         if args.verb == "apply":
@@ -789,6 +791,8 @@ def main(argv=None):
             agent_opts, credentials = A.configure(picked, agent_opts, saved)
             options["agents"] = agent_opts
         facts = inventory(target)
+        if target["kind"] == "ssh" and args.verb == "plan" and not args.no_account_keys and sys.stdin.isatty():
+            offer_account_keys(target)
         files, resolved = plan_files(target, picked, facts, cat=cat, **options)
         repo = generate(args.repo, files)
         if credentials:
@@ -800,6 +804,29 @@ def main(argv=None):
     except (ProvisionError, OSError, ValueError, KeyError, EOFError, KeyboardInterrupt) as error:
         print("Provisioning stopped: " + (str(error) if isinstance(error, ProvisionError) else "Invalid or missing plan input"), file=sys.stderr)
         return 1
+
+
+def offer_account_keys(target, fetch=None, say=print, yes=None):
+    """When signed in to a Bromigos account, offer its SSH keys for the box's authorized_keys
+    (accountkeys.py). The box already takes this computer's key: inventory just used it."""
+    from . import accountkeys as K
+    try:
+        account = (fetch or K.fetch)()
+    except Exception as error:                     # noqa: BLE001  the account never stops a plan
+        say(f"Couldn't read the SSH keys on your Bromigos account ({str(error)[:120] or 'no answer'}). Carrying on.")
+        return []
+
+    def on_box(command, data):
+        try:
+            return 0, run(ssh_args(target) + [command], data), ""
+        except ProvisionError:
+            return 1, "", ""
+    if not account:
+        return []
+    say("Your Bromigos account:")
+    added, _ = K.offer(say, yes or (lambda q: input(q + " Type yes: ").strip() == "yes"), on_box,
+                       target["ssh"].split("@")[0], account)
+    return added
 
 
 def checklist(cat, picked):
