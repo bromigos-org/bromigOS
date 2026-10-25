@@ -106,7 +106,7 @@ acts only after the user answers yes, and it never runs sudo on the desktop.
 |---|---|---|
 | Desktop tools | Ansible, sops, age, Git and SSH | the exact `sudo pacman -S --needed …` line for the user to run |
 | Age key | sops's key file, `SOPS_AGE_KEY_FILE` or `~/.config/sops/age/keys.txt` | to create it with `age-keygen` |
-| The box | a saved answer | asks for the address, user name and SSH port |
+| The box | a saved answer | after Find my lab's yes, the machines it found that answer SSH; else the address, user name and SSH port |
 | SSH | `ssh` with `StrictHostKeyChecking=yes` and `BatchMode=yes` | the host key fingerprint to confirm, then `ssh-copy-id` in the terminal |
 | Python and sudo | `python3` and `sudo -n true` on the box | the install command, and the `visudo` line to add |
 | Hardware | the read-only probe above | nothing; it shows the results |
@@ -127,8 +127,28 @@ the setup again skips every step that is already done. It checks the tools and S
 which is quick. It reuses saved answers, and it doesn't rewrite an unchanged plan. Apply
 then runs again after `yes`, which converges the lab. `--start-over` forgets the saved answers.
 
-The "Find my lab" search in `bromigos setup homelab` is not used yet. The setup asks for
-the box's address.
+The box step can look for the box. It shows the same question as `bromigos setup homelab
+--find` ([Find my lab](homelab.md#find-my-lab)), listing the sources it reads. After a
+yes, it runs that search, then tries port 22 on the machines found, and only on those. The
+ones that answer are a numbered list, with "Type an address" as the last choice. A no, or
+nothing found, asks for the address as before. `findlab.ssh_boxes` does the port check.
+
+## The box announces itself
+
+Every provisioned box announces itself on the local network, so Find my lab always finds
+it. The plan's `announce` role installs Avahi, the mDNS service, and adds
+`/etc/avahi/services/bromigos-lab.service`. That file announces a `_bromigos-lab._tcp`
+service named "bromigOS lab on" and the box's host name.
+
+- The announced port is the box's SSH port, the one bromigOS provisions it through.
+- Its one TXT record is `txtvers=1`. No service list, version or name of yours goes on the
+  network.
+- A cluster plan's first control node announces itself too. Find my lab finds the other
+  nodes through the Kubernetes source.
+- A box behind a firewall must let mDNS through, which is UDP port 5353.
+
+`announce.py` generates the role. `homelab/tests/test_findlab.py` checks the role and that
+Find my lab recognises the announcement.
 
 ## Selection and sizing
 
@@ -149,7 +169,7 @@ invented capacity number. No models are downloaded by this slice.
 |---|---|
 | `plan.json` | The user's target, selection, inventory and choices |
 | `ansible/inventory/hosts.json` | The Ansible target |
-| `ansible/roles/` | Core containers, k3s and Helm installation tasks |
+| `ansible/roles/` | Core containers, k3s and Helm installation tasks, and the box's mDNS announcement |
 | `ansible/requirements.json` | The pinned Ansible collection installed at apply |
 | `ansible/playbooks/provision.json` | The playbook run from the desktop |
 | `compose/` | Core's container definitions and Caddy and Homepage settings |
@@ -247,7 +267,8 @@ it prints facts, and checks that the collector parses as Python 3.6.
 `homelab/tests/test_provision_guided.py` drives the guided setup with scripted answers, a
 fake terminal and a fake box. It checks a first run, a second run that asks nothing, a
 refused or changed host key, missing tools, Python and sudo, bad answers and a folder that
-already holds other files.
+already holds other files. It also checks the box step's pick list from Find my lab: a no
+reads nothing, a found machine can be picked, and "Type an address" still works.
 
 `test/vm/lab-provision-e2e.py` creates a fresh Debian guest through `lab-vm.py` and
 `vm-keeper.py`. It uses a sandbox home, its own SSH key and an isolated Git server. It

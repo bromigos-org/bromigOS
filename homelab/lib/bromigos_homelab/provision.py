@@ -17,7 +17,7 @@ import time
 import urllib.error
 import urllib.request
 
-from . import services, agentprovision as A, observability as O, hardware as H
+from . import services, agentprovision as A, announce as N, observability as O, hardware as H
 
 SUPPORTED = ("caddy", "netdata", "restic", "homepage", "kubernetes", "helm", "argocd", "vault", "llm-endpoint") + A.AGENTS + O.SERVICES
 IMAGES = {"caddy": "caddy:2.11.7", "netdata": "netdata/netdata:v2.12.1",
@@ -374,6 +374,7 @@ def plan_files(target, picked, facts, repo_url="", backup_path="", age_recipient
         files["gitops/argocd-apps/namespace.yaml"] = dump({"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": "lab"}})
     A.plan(files, state, roles)
     O.plan(files, state, roles)
+    N.plan(files, state, roles)          # a box announces itself over mDNS, for Find my lab
     files["ansible/playbooks/provision.json"] = dump([{ "name": "Converge your lab", "hosts": "all", "become": is_box, "gather_facts": False, "roles": roles}])
     return files, resolved
 

@@ -534,6 +534,32 @@ class Setup(Private):
         self.assertFalse(os.path.exists(self.user))
 
 
+class Announce(unittest.TestCase):
+    """`bromigos lab provision` makes a box announce _bromigos-lab._tcp, which Find my lab knows."""
+
+    def test_a_box_announces_itself(self):
+        from bromigos_homelab import announce as N, provision as P, services as S
+        target = {"kind": "ssh", "ssh": "tester@lab.example.org", "port": 2222, "identity": ""}
+        facts = {"cpu": 8, "ram_gib": 32, "disk_gib": 500, "distribution": "arch", "gpu": "none", "vram_gib": 0}
+        files, _ = P.plan_files(target, P.preset_selection(S.load(), "core"), facts, backup_path="/mnt/backups",
+                                age_recipient="age1example")
+        self.assertIn("announce", json.loads(files["ansible/playbooks/provision.json"])[0]["roles"])
+        xml = files["ansible/roles/announce/files/bromigos-lab.service"]
+        self.assertIn("<type>_bromigos-lab._tcp</type>", xml)
+        self.assertIn("<port>2222</port>", xml)
+        self.assertEqual(xml.count("<txt-record>"), 1)                 # txtvers=1, nothing else on the network
+        tasks = json.loads(files["ansible/roles/announce/tasks/main.json"])
+        self.assertEqual(tasks[0]["ansible.builtin.package"]["name"], ["avahi"])
+        self.assertEqual(tasks[-1]["ansible.builtin.systemd"]["name"], "avahi-daemon")
+        self.assertEqual(F.recognise(N.SERVICE), [("bromigOS lab box", "lab machine")])
+
+    def test_an_existing_cluster_does_not(self):
+        from bromigos_homelab import announce as N
+        files, roles = {}, []
+        N.plan(files, {"target": {"kind": "cluster"}, "inventory": {"distribution": "debian"}}, roles)
+        self.assertEqual((files, roles), ({}, []))
+
+
 class Optional(unittest.TestCase):
     def test_zeroconf_is_optional(self):
         real = builtins.__import__
