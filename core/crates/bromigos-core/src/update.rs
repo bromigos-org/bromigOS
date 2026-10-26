@@ -837,6 +837,25 @@ impl Packages {
     }
 }
 
+/// What to say before the transaction when gnome-keyring is installed and oo7 isn't:
+/// bromigos-desktop now needs oo7, bromigOS's keyring, which takes gnome-keyring's place,
+/// and pacman's question to remove gnome-keyring defaults to no (so `--noconfirm` stops).
+pub fn keyring_note(installed: &BTreeMap<String, Installed>, yes: bool) -> Option<String> {
+    if !installed.contains_key("gnome-keyring") || installed.contains_key("oo7") {
+        return None;
+    }
+    Some(if yes {
+        "note: bromigOS's keyring is now oo7, which takes gnome-keyring's place, and pacman won't \
+         remove gnome-keyring unasked: run bromigos update without --yes and answer y when \
+         pacman asks to remove it. Your saved passwords move to oo7 at your next login."
+            .to_string()
+    } else {
+        "note: bromigOS's keyring is now oo7, which takes gnome-keyring's place: answer y when \
+         pacman asks to remove gnome-keyring. Your saved passwords move to oo7 at your next login."
+            .to_string()
+    })
+}
+
 /// The package step, in order: the pre snapshot; the repositories' transaction (`sudo
 /// pacman -Syu`); the AUR step (after the repositories, only when their transaction
 /// succeeded; [`crate::aur`]), inside the same pair, snap-pac skipping its transactions too;
@@ -868,6 +887,9 @@ pub fn packages(io: &mut dyn PackageIo, o: &PackageOpts) -> Result<Packages, Str
         if o.downgrade { "-Syuu" } else { "-Syu" },
         if o.yes { " --noconfirm" } else { "" }
     ));
+    if let Some(note) = keyring_note(&out.before, o.yes) {
+        io.say(&note);
+    }
     let code = match io.pacman(o.downgrade, skip_snap_pac, o.yes) {
         Ok(c) => c,
         Err(e) => {
@@ -1698,6 +1720,25 @@ mod tests {
             helper: Helper::Paru,
             unattended,
         }
+    }
+
+    #[test]
+    fn gnome_keyring_without_oo7_gets_a_note_before_the_transaction() {
+        let mut f = Fake::new();
+        f.pkgs.insert("gnome-keyring".into(), inst("1:51.1-1", 1));
+        packages(&mut f, &opts(AurPlan::Skip { why: "off".into() })).unwrap();
+        let note = f.said.iter().position(|l| l.contains("answer y when"));
+        let pacman = f.said.iter().position(|l| l.starts_with("== packages:"));
+        assert!(note.is_some() && pacman < note, "{:?}", f.said);
+        let mut with_oo7 = f.pkgs.clone();
+        with_oo7.insert("oo7".into(), inst("0.7.0beta-1", 1));
+        assert_eq!(keyring_note(&with_oo7, false), None);
+        assert!(
+            keyring_note(&f.pkgs, true)
+                .unwrap()
+                .contains("without --yes")
+        );
+        assert_eq!(keyring_note(&Fake::new().pkgs, false), None);
     }
 
     #[test]
