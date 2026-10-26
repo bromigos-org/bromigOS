@@ -9,9 +9,9 @@
 # and MTEB leaderboards, OmniDocBench and olmOCR-bench, vendor and community benchmarks (each
 # model's `cite`). Figures marked est. in vram_note are computed, not measured.
 format = 1
-version = 4
+version = 5
 researched = "2026-10-09"
-refreshed = "2026-10-19"
+refreshed = "2026-10-26"
 
 [licence.apache-2]
 hub = ["apache-2.0"]
@@ -10317,4 +10317,121 @@ stack = "needs support: a new voice-service backend (check its runtime)"
 licence = "apache-2.0"
 review = true
 found = "2026-10-19"
+state = "pending review"
+[[pending]]
+id = "hf:RecursiveSI/flint"
+kind = "new model"
+capability = "llm"
+title = "RecursiveSI/flint: trending text-generation"
+why = "new in the last 60 days (5 days old), 906 likes, 8470 downloads"
+repo = "RecursiveSI/flint"
+evidence = ["https://huggingface.co/RecursiveSI/flint"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+found = "2026-10-26"
+state = "pending review"
+[[pending]]
+id = "hf:InternScience/Sage-A1.5"
+kind = "new model"
+capability = "llm"
+title = "InternScience/Sage-A1.5: trending text-generation"
+why = "new in the last 60 days (11 days old), 308 likes, 5235 downloads"
+repo = "InternScience/Sage-A1.5"
+evidence = ["https://huggingface.co/InternScience/Sage-A1.5"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+found = "2026-10-26"
+state = "pending review"
+[[pending]]
+id = "hf:KRAFTON/Raon-1-mini-preview"
+kind = "new model"
+capability = "llm"
+title = "KRAFTON/Raon-1-mini-preview: trending text-generation"
+why = "new in the last 60 days (5 days old), 194 likes, 1450 downloads"
+repo = "KRAFTON/Raon-1-mini-preview"
+evidence = ["https://huggingface.co/KRAFTON/Raon-1-mini-preview"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+found = "2026-10-26"
+state = "pending review"
+[[pending]]
+id = "hf:ornith-ai/Ornith-1.5-122B"
+kind = "new model"
+capability = "llm"
+title = "ornith-ai/Ornith-1.5-122B: trending text-generation"
+why = "new in the last 60 days (10 days old), 183 likes, 60210 downloads"
+repo = "ornith-ai/Ornith-1.5-122B"
+evidence = ["https://huggingface.co/ornith-ai/Ornith-1.5-122B"]
+stack = "ready (vllm, sglang)"
+licence = "mit"
+review = true
+found = "2026-10-26"
+state = "pending review"
+[[pending]]
+id = "hf:MiniMaxAI/MiniMax-M3.1-Flash"
+kind = "new model"
+capability = "llm"
+title = "MiniMaxAI/MiniMax-M3.1-Flash: trending image-text-to-text"
+why = "new in the last 60 days (9 days old), 381 likes, 8782 downloads"
+repo = "MiniMaxAI/MiniMax-M3.1-Flash"
+evidence = ["https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash"]
+stack = "ready (vllm, sglang)"
+licence = "other"
+review = true
+found = "2026-10-26"
+state = "pending review"
+[[pending]]
+id = "hf:nvidia/Nemotron-3.5-Parse"
+kind = "new model"
+capability = "llm"
+title = "nvidia/Nemotron-3.5-Parse: trending image-text-to-text"
+why = "new in the last 60 days (53 days old), 115 likes, 7657 downloads"
+repo = "nvidia/Nemotron-3.5-Parse"
+evidence = ["https://huggingface.co/nvidia/Nemotron-3.5-Parse"]
+stack = "ready (vllm, sglang)"
+licence = "openmdw-1.1"
+review = true
+found = "2026-10-26"
+state = "pending review"
+[[pending]]
+id = "hf:briaai/Fibo-2.0-dev"
+kind = "new model"
+capability = "image"
+title = "briaai/Fibo-2.0-dev: trending text-to-image"
+why = "new in the last 60 days (8 days old), 165 likes, 1267 downloads"
+repo = "briaai/Fibo-2.0-dev"
+evidence = ["https://huggingface.co/briaai/Fibo-2.0-dev"]
+stack = "ready (ComfyUI: Comfy-Org/Fibo-2.0)"
+licence = "other"
+review = true
+found = "2026-10-26"
+state = "pending review"
+[[pending]]
+id = "hf:inclusionAI/Ming-3.0-asr-tiny"
+kind = "new model"
+capability = "stt"
+title = "inclusionAI/Ming-3.0-asr-tiny: trending automatic-speech-recognition"
+why = "new in the last 60 days (12 days old), 42 likes, 709 downloads"
+repo = "inclusionAI/Ming-3.0-asr-tiny"
+evidence = ["https://huggingface.co/inclusionAI/Ming-3.0-asr-tiny"]
+stack = "needs support: a new voice-service backend (check its runtime)"
+licence = "mit"
+review = true
+found = "2026-10-26"
+state = "pending review"
+[[pending]]
+id = "hf:AuroraAI-Research/AuroraASR-1M"
+kind = "new model"
+capability = "stt"
+title = "AuroraAI-Research/AuroraASR-1M: trending automatic-speech-recognition"
+why = "new in the last 60 days (8 days old), 40 likes, 499 downloads"
+repo = "AuroraAI-Research/AuroraASR-1M"
+evidence = ["https://huggingface.co/AuroraAI-Research/AuroraASR-1M"]
+stack = "needs support: a new voice-service backend (check its runtime)"
+licence = "apache-2.0"
+review = true
+found = "2026-10-26"
 state = "pending review"
