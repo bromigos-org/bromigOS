@@ -110,6 +110,35 @@ class Chart(unittest.TestCase):
         ports = sorted(p["port"] for rule in np["egress"] for p in rule["ports"] if p["protocol"] == "TCP")
         self.assertEqual(ports, [53, 443, 9090, 9093, 11434])
 
+    def test_guests_never_get_the_brain_by_default(self):
+        brain = ["lab.name=r", "brain.url=http://agent.ai.svc:8642/v1", "brain.model=m", "brain.keySecret.name=brain"]
+        # Default: no guest brain at all; guests get a polite no, never `brain`.
+        e = env(render(*brain)[("Deployment", "lab-brodec-lab")])
+        self.assertFalse([k for k in e if k.startswith("BRODEC_GUEST_BRAIN")], e)
+        # A guest brain of its own, with its own key and port.
+        out = render(*brain, "guestBrain.url=http://plain.ai.svc:11434/v1", "guestBrain.model=small",
+                     "guestBrain.keySecret.name=guest-key")
+        dep = out[("Deployment", "lab-brodec-lab")]
+        e = env(dep)
+        self.assertEqual(e["BRODEC_GUEST_BRAIN_URL"], "http://plain.ai.svc:11434/v1")
+        self.assertEqual(e["BRODEC_GUEST_BRAIN_MODEL"], "small")
+        self.assertEqual(e["BRODEC_GUEST_BRAIN_KEY_FILE"], "/run/secrets/guest-brain/key")
+        vols = {v["name"]: v for v in dep["spec"]["template"]["spec"]["volumes"]}
+        self.assertEqual(vols["guest-brain"]["secret"]["secretName"], "guest-key")
+        np = out[("NetworkPolicy", "lab-brodec-lab")]["spec"]
+        ports = sorted(p["port"] for rule in np["egress"] for p in rule["ports"] if p["protocol"] == "TCP")
+        self.assertIn(11434, ports)
+        # sameAsBrain: the owner's say-so that `brain` is a plain model API.
+        e = env(render(*brain, "guestBrain.sameAsBrain=true")[("Deployment", "lab-brodec-lab")])
+        self.assertEqual(e["BRODEC_GUEST_BRAIN_URL"], e["BRODEC_BRAIN_URL"])
+        self.assertEqual(e["BRODEC_GUEST_BRAIN_KEY_FILE"], "/run/secrets/guest-brain/key")
+        # Both, or a URL without a model, is refused.
+        for bad in (["guestBrain.sameAsBrain=true", "guestBrain.url=http://x:1/v1"], ["guestBrain.url=http://x:1/v1"]):
+            args = ["template", "x", str(CHART)]
+            for s in brain[:1] + bad:
+                args += ["--set", s]
+            self.assertNotEqual(helm(*args, ok=False).returncode, 0, bad)
+
     def test_no_network_policy_and_existing_things(self):
         out = render("lab.name=r", "networkPolicy.enabled=false", "persistence.existingClaim=mine",
                      "switch.create=false", "switch.existingSecret=my-switch")

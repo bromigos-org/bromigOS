@@ -4,7 +4,7 @@ description: BRODEC's lab bridge. VECTOR runs in your lab and reports to your BR
 type: application
 # major.minor is the chart's own; CI sets the patch to the bridge's build number when it
 # publishes (packaging/ci/brodec-lab.sh chart-version). Bump the minor when you change the chart.
-version: 0.1.0
+version: 0.2.0
 # CI sets appVersion to the bridge's version, which is also the image tag.
 appVersion: "0.1.0"
 home: https://bromigos.org

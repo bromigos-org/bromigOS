@@ -1,4 +1,5 @@
 {{- $full := include "brodec-lab.fullname" . -}}
+{{- $guest := include "brodec-lab.guestBrain" . | fromYaml -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -62,6 +63,16 @@ spec:
             {{- if and .Values.brain.url .Values.brain.keySecret.name }}
             - { name: BRODEC_BRAIN_KEY_FILE, value: /run/secrets/brain/key }
             {{- end }}
+            {{- with $guest }}
+            {{- if .url }}
+            # Guests' brain: never `brain` unless guestBrain.sameAsBrain says so.
+            - { name: BRODEC_GUEST_BRAIN_URL, value: {{ .url | quote }} }
+            - { name: BRODEC_GUEST_BRAIN_MODEL, value: {{ required "guestBrain.model (or brain.model with sameAsBrain) is needed with a guest brain" .model | quote }} }
+            {{- if .keySecret.name }}
+            - { name: BRODEC_GUEST_BRAIN_KEY_FILE, value: /run/secrets/guest-brain/key }
+            {{- end }}
+            {{- end }}
+            {{- end }}
           # Until it is paired, it waits for its owner: the log shows the pairing code.
           startupProbe:
             exec: { command: ["/usr/local/bin/brodec-lab", "health"] }
@@ -93,6 +104,9 @@ spec:
             {{- if and .Values.brain.url .Values.brain.keySecret.name }}
             - { name: brain, mountPath: /run/secrets/brain, readOnly: true }
             {{- end }}
+            {{- if and $guest.url $guest.keySecret.name }}
+            - { name: guest-brain, mountPath: /run/secrets/guest-brain, readOnly: true }
+            {{- end }}
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -117,6 +131,13 @@ spec:
             secretName: {{ .Values.brain.keySecret.name }}
             defaultMode: 0400
             items: [{ key: {{ .Values.brain.keySecret.key | quote }}, path: key }]
+        {{- end }}
+        {{- if and $guest.url $guest.keySecret.name }}
+        - name: guest-brain
+          secret:
+            secretName: {{ $guest.keySecret.name }}
+            defaultMode: 0400
+            items: [{ key: {{ $guest.keySecret.key | quote }}, path: key }]
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}

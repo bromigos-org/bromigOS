@@ -28,6 +28,23 @@ brain:
     name: ""
     key: key
 
+# The brain for guests: the people you share the lab with as Can ask, in their own chat with
+# VECTOR and when they ask him in a group. VECTOR never answers a guest with `brain`, which may
+# have your tools or your memory: he tells this brain only the lab's latest report (the one the
+# guest already sees). It must have no tools of its own.
+# Empty (the default): guests get a polite "I can't answer questions from guests in this lab
+# just now"; the lab's reports still reach them.
+guestBrain:
+  # true: guests use `brain` too. Only when `brain` is a plain model API (Ollama, vLLM, LiteLLM)
+  # with no tools of its own, never an agent with tools.
+  sameAsBrain: false
+  url: ""
+  model: ""
+  # An existing Secret holding the API's key, if it needs one.
+  keySecret:
+    name: ""
+    key: key
+
 # The homeserver BRODEC uses. Change it only if you were told to.
 homeserver: https://matrix.bromigos.org
 

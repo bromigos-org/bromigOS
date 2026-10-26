@@ -1,6 +1,7 @@
 {{- if .Values.networkPolicy.enabled }}
 {{- $ports := list }}
-{{- range (list .Values.sources.prometheusUrl .Values.sources.alertmanagerUrl .Values.sources.labApi.url .Values.brain.url) }}
+{{- $guest := include "brodec-lab.guestBrain" . | fromYaml }}
+{{- range (list .Values.sources.prometheusUrl .Values.sources.alertmanagerUrl .Values.sources.labApi.url .Values.brain.url $guest.url) }}
 {{- if . }}{{ $ports = append $ports (include "brodec-lab.port" . | int) }}{{ end }}
 {{- end }}
 {{- $ports = without (uniq $ports) 443 }}

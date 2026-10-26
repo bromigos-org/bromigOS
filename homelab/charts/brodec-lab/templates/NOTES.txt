@@ -12,3 +12,10 @@ one follows.
 No source is set, so VECTOR has nothing to report yet. Set sources.prometheusUrl,
 sources.alertmanagerUrl or sources.labApi.url (helm upgrade --reuse-values --set ...).
 {{- end }}
+{{- $guest := include "brodec-lab.guestBrain" . | fromYaml }}
+{{- if and .Values.brain.url (not $guest.url) }}
+
+People you share the lab with as Can ask get a polite "can't answer" from VECTOR: he never
+answers them with your brain. To let him answer them about the lab, set guestBrain (a model
+with no tools of its own), or guestBrain.sameAsBrain=true if your brain is a plain model API.
+{{- end }}

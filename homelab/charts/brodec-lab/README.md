@@ -51,6 +51,22 @@ The first report arrives within a minute. Each BRODEC account can own one lab du
 
 Without a brain, VECTOR still reports. He tells you he has no brain in this lab yet.
 
+## Guests
+
+The people you share the lab with as **Can ask** talk to VECTOR in their own chat, and can ask
+him in a group. He never answers them with `brain`, which may have your tools or your memory.
+He answers them with `guestBrain`, and tells it only the lab's latest report: the one they
+already see.
+
+| Value | What it does |
+|---|---|
+| (unset, the default) | Guests get a polite "I can't answer questions from guests in this lab just now". They still see the lab's reports |
+| `guestBrain.url`, `guestBrain.model`, `guestBrain.keySecret` | A brain for guests, as `brain` above. It must have no tools of its own: a plain model API (Ollama, vLLM, LiteLLM), not an agent |
+| `guestBrain.sameAsBrain: true` | Guests use `brain` too. Only when `brain` is a plain model API with no tools of its own |
+
+If the guest brain fails, the guest hears "I can't answer right now". VECTOR never asks `brain`
+instead. `brodec-lab check` checks both brains.
+
 You choose what he reports, and where he looks, in BRODEC: **Settings › Your lab**.
 
 ## His name

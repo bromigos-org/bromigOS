@@ -36,3 +36,15 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
 {{- $p := regexFind ":[0-9]+$" $u.host | trimPrefix ":" -}}
 {{- if $p -}}{{ $p }}{{- else if eq $u.scheme "https" -}}443{{- else -}}80{{- end -}}
 {{- end -}}
+
+{{/* The guests' brain as {url, model, keySecret}: guestBrain's own, or with sameAsBrain the
+     lab's brain. Empty url: no guest brain (guests get a polite "can't answer"). */}}
+{{- define "brodec-lab.guestBrain" -}}
+{{- $g := .Values.guestBrain | default dict -}}
+{{- if $g.sameAsBrain -}}
+{{- if $g.url -}}{{- fail "guestBrain: set sameAsBrain or url, not both" -}}{{- end -}}
+{{- toYaml (dict "url" .Values.brain.url "model" .Values.brain.model "keySecret" .Values.brain.keySecret) -}}
+{{- else -}}
+{{- toYaml (dict "url" ($g.url | default "") "model" ($g.model | default "") "keySecret" ($g.keySecret | default (dict "name" "" "key" "key"))) -}}
+{{- end -}}
+{{- end -}}
