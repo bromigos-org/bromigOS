@@ -305,7 +305,7 @@ def pkgbuild(path):
               'printf "%s " "${depends[@]}"; printf "\\0"; printf "%s\\n" "${optdepends[@]}"')
     name, desc, deps, opt = run(["bash", "-c", script, "pkgbuild", str(path)],
                                 cwd=path.parent, env={"startdir": str(path.parent), "PATH": "/usr/bin:/bin"}).split("\0")
-    return {"name": name, "desc": desc, "depends": deps.split(),
+    return {"name": name, "desc": desc, "depends": [re.split(r"[<>=]", d)[0] for d in deps.split()],
             "optdepends": {ln.split(":", 1)[0].strip(): ln.split(":", 1)[1].strip() if ":" in ln else ""
                            for ln in opt.splitlines() if ln.strip()}}
 
@@ -354,7 +354,10 @@ def packages_section():
               "- `ttf-geist-mono` packages the fonts from Geist's release.",
               "- `1password` repackages 1Password's own Linux download. It isn't built from source. "
               "Its licence is proprietary, so the public mirror leaves it out: there, "
-              "`bromigos install --with 1password` gets it from the AUR with paru.", ""]
+              "`bromigos install --with 1password` gets it from the AUR with paru.", "",
+              "`oo7`, the keyring, is in Arch's repositories too, but Arch's version can't unlock "
+              "it at a text console login. bromigOS builds a newer one from upstream's source, "
+              "until Arch's catches up.", ""]
     return "\n".join(lines)
 
 

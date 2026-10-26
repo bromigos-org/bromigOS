@@ -28,6 +28,12 @@ depends=('bromigos-core' 'bromigos-live' 'bromigos-widgets' 'bromigos-settings' 
          'xdg-desktop-portal-hyprland' 'xdg-desktop-portal-gtk' 'hyprpolkitagent'
          'pipewire' 'pipewire-pulse' 'pipewire-audio' 'wireplumber' 'libpulse'
          'networkmanager' 'xdg-utils'
+         # the keyring that keeps sign-ins (bromigos login, the widgets' accounts): oo7, the
+         # Secret Service, started in every session (below) and unlocked by the login
+         # (bromigos keyring setup); gcr: the password window it opens when it must ask;
+         # libsecret: what bromigOS reads and stores it with. oo7>=0.7.0beta is bromigOS's
+         # own build (packaging/oo7): Arch's 0.6.0 can't unlock it at a text console login
+         'oo7>=0.7.0beta' 'gcr' 'libsecret'
          # the menu (apps via Gio), the theme switcher's previews, web apps' desktop entries,
          # the on-screen display for volume, brightness and mute
          'python-gobject' 'python-cairo' 'python-pillow' 'desktop-file-utils' 'swayosd'
@@ -169,6 +175,12 @@ package() {
     startpage/style.css startpage/emblem.svg startpage/icon-48.png startpage/icon-128.png startpage/manifest.json
   install -Dm0755 startpage/snapshot.py "$lib/desktop/startpage/snapshot.py"
   install -Dm0644 -t "$pkgdir/usr/lib/systemd/user/" systemd/bromigos-startpage.service systemd/bromigos-startpage.timer
+  # the keyring's daemon in every user session, as oo7 asks of a session: its login helper
+  # holds the password typed at login until the daemon takes it, so the daemon starts with
+  # the session, not on first use (shipped default.target.wants link, as bromigos-core's
+  # private overlay does; docs/bromigos-account.md, "The keyring")
+  install -d "$pkgdir/usr/lib/systemd/user/default.target.wants"
+  ln -s ../oo7-daemon.service "$pkgdir/usr/lib/systemd/user/default.target.wants/oo7-daemon.service"
   install -Dm0755 bin/bromigos-dispatch "$lib/bin/bromigos-dispatch"
   install -Dm0755 bin/bromigos-game "$lib/bin/bromigos-game"
   # floating windows put back where they were (bromigos windows …; docs/desktop.md,

@@ -25,6 +25,8 @@ bromigos install --with bromigos-apps
 | `bromigos-manual` | bromigOS manual: how to use the desktop, as HTML, for reading offline | *with bromigOS* |
 | `bromigos-mirrorlist` | bromigOS package repository mirrors | *with bromigOS* (through `bromigos-keyring`) |
 | `bromigos-homelab` | bromigOS homelab integrations: desktop panels, homelab decks and VECTOR tools | *with bromigOS* (through `bromigos-desktop`) |
+| `mehshell` | Fast parallel zsh prompt engine for bromigOS | *with bromigOS* (through `bromigos-desktop`) |
+| `oo7` | A Secret Service provider | *with bromigOS* (through `bromigos-desktop`) |
 | `ttf-geist-mono` | Geist Mono, a monospaced typeface by Vercel | *with bromigOS* (through `bromigos-settings`) |
 | `bromigos-lab` | Standalone homelab console, adapters, model catalog and reviewed provisioning | *with bromigOS* (through `bromigos-homelab`) |
 | `bromigos-lab-catalog` | bromigOS lab model catalog: the best open models per AI capability and GPU size, with licences | *with bromigOS* (through `bromigos-homelab`) |
@@ -32,7 +34,6 @@ bromigos install --with bromigos-apps
 | `herdr` | Terminal workspace manager for AI coding agents | optional: `bromigos install --with herdr` |
 | `paru` | Feature packed AUR helper | by `bromigos install` (its `aur` step), unless `--no-aur` or `bromigos setup aur` leaves it out |
 | `1password` | Password manager and secure wallet | optional, for `bromigos-apps` |
-| `mehshell` | Fast parallel zsh prompt engine for bromigOS | on its own |
 
 `herdr`, `ttf-geist-mono`, `1password` and `paru` aren't in Arch's own repositories, so bromigOS packages them into its own, each pinned by checksum. Only `1password` needs the AUR, and only on a public install (below).
 
@@ -40,12 +41,15 @@ bromigos install --with bromigos-apps
 - `ttf-geist-mono` packages the fonts from Geist's release.
 - `1password` repackages 1Password's own Linux download. It isn't built from source. Its licence is proprietary, so the public mirror leaves it out: there, `bromigos install --with 1password` gets it from the AUR with paru.
 
+`oo7`, the keyring, is in Arch's repositories too, but Arch's version can't unlock it at a text console login. bromigOS builds a newer one from upstream's source, until Arch's catches up.
+
 <!-- /generated:packages -->
 
 **BRODEC (optional):** `sudo pacman -S brodec-desktop`. BRODEC is a separate Bromigos
 product, an end-to-end encrypted messenger. Its desktop app is in the bromigOS package
 repository, but it isn't installed by default. Once you install it, system updates keep
-it current.
+it current. It keeps its sign-in in your [keyring](bromigos-account.md#your-keyring), as bromigOS
+does.
 
 ## Where your own files go
 
