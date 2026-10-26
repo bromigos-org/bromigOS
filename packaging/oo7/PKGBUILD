@@ -1,0 +1,81 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# oo7, the Secret Service (the keyring that keeps sign-ins and passwords): oo7-daemon,
+# pam_oo7.so, which unlocks it with the login password, oo7-cli and the secret portal.
+# Built here from upstream's source at a pinned commit (checked by its checksum), because
+# Arch's own `oo7` is 0.6.0, whose login unlock doesn't work after a text console login:
+# its PAM module starts the daemon from a path Arch doesn't install it at, and without
+# that it races the daemon's start, so the keyring stays locked. Upstream rebuilt the
+# unlock for 0.7 (the oo7-daemon-login helper holds the password until the daemon takes
+# it), and its 0.7.0 beta still had two faults a console login hits: the daemon could
+# miss the helper, and logging out hung (the PAM module left a thread in `login`). The
+# commit below fixes both ("server: Wait briefly for the login helper socket", "pam:
+# Deliver requests before returning"). Move to 0.7.0 when it's released.
+#
+# One patch of our own, pam-helper-own-session.patch: the PAM module starts the login helper
+# inside the login's session, and a text console login hangs that session up when it hands
+# the terminal to your shell, so the helper died before the daemon took the password. The
+# patch gives the helper a session of its own (setsid), as a daemon should have.
+# Adapted from Arch's oo7 PKGBUILD. MIT: upstream's source and licence, linked below.
+#
+# The version sorts after Arch's 0.6.0 and before 0.7.0, so Arch's package takes over
+# again from its 0.7.0. Until then [bromigos], listed after [extra], has the newer one:
+# bromigos-desktop asks for oo7>=0.7.0beta, which only this package satisfies, and pacman
+# keeps it on later updates (it says "local is newer than extra").
+#
+# Beside upstream's files: the D-Bus activation file Arch's 0.6 shipped (upstream 0.7
+# leaves it to distributions). bromigos-desktop starts the daemon in every user session.
+# Left out: the Python bindings, which nothing in bromigOS uses.
+
+pkgname=oo7
+_commit=e91b98a7235a4971c6cbb7f0533034afc8a8f618   # main, 2026-10-25
+pkgver=0.7.0beta.r20261025.e91b98a
+pkgrel=1
+pkgdesc='A Secret Service provider'
+arch=('x86_64')
+url='https://github.com/linux-credentials/oo7'
+license=('MIT')
+depends=('glibc' 'libgcc')
+makedepends=('cargo' 'meson')
+provides=('org.freedesktop.secrets')
+conflicts=('gnome-keyring')
+options=('!debug')
+source=("oo7-${_commit}.tar.gz::https://github.com/linux-credentials/oo7/archive/${_commit}.tar.gz"
+        'org.freedesktop.secrets.service'
+        'pam-helper-own-session.patch')
+sha256sums=('e74d00748676ae1ac31bc5154370717b4feafefcfca228305877cf841e7c8484'
+            '8a0efd68a5103eb8dede8e0ba5c6131a41e2ead71668dea63da632915b58e8c5'
+            '2372e881ff9a960d856bdb7ab4d4adadf285007614755c4086016ec76232a35d')
+
+prepare() {
+  cd "oo7-$_commit"
+  patch -Np1 -i "$srcdir/pam-helper-own-session.patch"
+  export CARGO_HOME="$srcdir/cargo-home"
+  cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
+}
+
+build() {
+  cd "oo7-$_commit"
+  export CARGO_HOME="$srcdir/cargo-home"
+  cargo build --release --frozen
+  local d
+  for d in server portal pam; do
+    meson setup "build-$d" "$d" --prefix=/usr --libexecdir=lib --buildtype=plain
+    # each meson project builds with `cargo --target-dir <build>/src`: point that at the
+    # workspace's target, so the three share what's built
+    rmdir "build-$d/src"
+    ln -sr target "build-$d/src"
+    CARGO_NET_OFFLINE=true meson compile -C "build-$d"
+  done
+}
+
+package() {
+  cd "oo7-$_commit"
+  local d
+  for d in server portal pam; do
+    meson install -C "build-$d" --destdir="$pkgdir"
+  done
+  install -Dm755 -t "$pkgdir/usr/bin/" target/release/oo7-cli target/release/cargo-credential-oo7
+  install -Dm644 -t "$pkgdir/usr/share/dbus-1/services/" "$srcdir/org.freedesktop.secrets.service"
+  install -Dm644 -t "$pkgdir/usr/share/licenses/$pkgname/" LICENSE
+}

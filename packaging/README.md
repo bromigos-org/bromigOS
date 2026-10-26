@@ -25,6 +25,7 @@ packaging/
   herdr/, ttf-geist-mono/, 1password/, paru/
                            software Arch's repositories don't carry, built from upstream
                            sources pinned by checksum
+  oo7/                     the keyring, newer than Arch's own (below)
   ci/publish.sh            build, sign, add to the database, upload, prune
   ci/prepare-container.sh  sets up the build container for publish.sh
   ci/brodec-desktop.sh     fetches and checks BRODEC's desktop app for publish.sh
@@ -61,6 +62,7 @@ packages. That table is generated from these PKGBUILDs.
 | `bromigos-apps` | The app bundle's default configs and `bromigos apps setup` | `apps/` |
 | `bromigos-manual` | The manual as HTML in `/usr/share/doc/bromigos/manual/`, which Settings opens | `manual/` |
 | `herdr`, `ttf-geist-mono`, `1password`, `paru` | Upstream software, built here so no install needs an AUR helper (`1password` stays off the public mirror) | upstream sources, pinned by checksum |
+| `oo7` | The keyring that keeps sign-ins: the Secret Service and the PAM module that unlocks it at login | upstream's source at a pinned commit, plus one patch |
 
 Some packages need a closer look.
 
@@ -92,6 +94,18 @@ Some packages need a closer look.
   builds with it. That zig stays in the build folder: it isn't a build dependency and
   never gets installed. Once a herdr release builds with Arch's zig, the recipe goes back
   to `makedepends=('zig')`.
+- **oo7** is the keyring ([docs/bromigos-account.md](../docs/bromigos-account.md#the-keyring)).
+  Arch has its own `oo7`, but its 0.6.0 can't unlock the keyring at a text console login.
+  - It's built from upstream's source at a pinned commit after the 0.7.0 beta, which
+    fixes the login unlock, plus `pam-helper-own-session.patch`. Without that patch, a
+    text console login killed the helper that holds the password.
+  - Its version, `0.7.0beta.r<date>.<commit>`, sorts after Arch's 0.6.0 and before 0.7.0.
+    `[bromigos]` comes after `[extra]` in pacman.conf, so pacman would take Arch's `oo7`
+    by name. `bromigos-desktop` asks for `oo7>=0.7.0beta`, which only this one satisfies.
+    Once it's installed, updates keep it, and pacman notes that it's newer than extra's.
+    When Arch ships 0.7.0, Arch's takes over, and this recipe can go.
+  - It conflicts with gnome-keyring, as Arch's does. It adds the D-Bus activation file
+    Arch's 0.6 had, and leaves out the Python bindings.
 - **bromigos-homelab** installs its library to `/usr/lib/bromigos/lib/bromigos_homelab/`
   and its decks, panels and VECTOR plugin to `/usr/lib/bromigos/homelab/`
   ([homelab/README.md](../homelab/README.md)).
