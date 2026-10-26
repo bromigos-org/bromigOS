@@ -19,69 +19,73 @@ are. To change the channel you follow, see [Channels](update-and-rollback.md#cha
 
 Developers can read every change in the repository's `CHANGELOG.md`.
 
-<!-- unreleased: v0.1.2 -->
-## On edge since 0.1.2
 
-These changes are already on the `edge` channel. They are not a new stable release.
-Run `bromigos update` to get them. The next release notes will include these highlights.
-
-### New
-
-- **Panel layouts.** Pick a layout in [Customize](themes-and-worlds.md#customize), keep a
-  different layout for each theme, or save your own. [Tidy up](panels.md#tidy-up) separates
-  overlapping panels. Panels size themselves to their content and the space available.
-- **Accounts.** Sign in to several accounts of the same service. Public GitHub, GitLab
-  and Twitch use bromigOS's built-in apps. See [Accounts](panels.md#several-accounts).
-- **Den TV.** Each of the three screens can play its own channel. The guide lets you pick
-  shows, choose a screen and add short bumpers between items. See
-  [The den TV](themes-and-worlds.md#the-den-tv).
-- **Your media.** Request shows, films and albums with `bromigos lab media` or the
-  `bromigos media` terminal library. Choose seasons, quality and audio, track unreleased
-  titles and confirm deletion. [Your media](media.md) brings the workflow together.
-- **YouTube downloads.** Add channels and playlists to Pinchflat, choose quality and keep
-  downloaded playlists in Jellyfin or Plex. See [YouTube](media.md#keep-youtube-channels-and-playlists).
-- **Calendar releases.** Add tracked TV episodes and film releases to CALENDAR beside
-  your own events. See [Calendar releases](panels.md#calendar-releases).
-- **Claude Code sessions.** VECTOR can read local sessions, find past replies and read
-  each new reply aloud in follow mode. See [Read a session](vector.md#read-a-claude-code-session).
-- **Files and pictures for VECTOR.** Drag files onto VECTOR, paste a picture, or click
-  the paperclip, and send them with your message. See
-  [Give VECTOR files and pictures](vector.md#give-vector-files-and-pictures).
-
-- **Lab provisioning.** Review a generated repository, then apply Core services or k3s,
-  Helm, Argo CD and Vault. See [Setting up a lab](lab.md#setting-up-a-lab) for Linux boxes,
-  existing clusters and the current limits.
-
-- Den TV has its own app, and the media library has a Channels tab. Manage channel picks
-  from the terminal, CLI or VECTOR. The phone can read channels and change individual picks.
-
-### Improved
-
-- The zsh prompt follows your theme. Choose mehshell, Starship or a plain prompt in
-  [Shell and terminal](shell.md), and bromigOS keeps your choice.
-- Japanese, Chinese and Korean titles draw correctly in media, music and YouTube views,
-  using the fonts installed with bromigOS.
-
-### Fixed
-
-- The static wallpaper no longer hides a working live background. Panel toggling restores
-  the visible set, LAB uses the room in its frame, and empty ALERTS stays compact.
-- Colour switches refresh live backgrounds, scanners, overlays and HUD text. A pinned
-  scanner stays visible in the new colours.
-- `bromigos login` works on a computer with no keyring running. bromigOS now brings its
-  own keyring, oo7, and your login password unlocks it, at the text console and the login
-  screen. Sign-in checks the keyring before it shows a code, and says in plain words what
-  to do when it can't keep the sign-in. The update asks for your password once, to let
-  your login unlock the keyring. If you used gnome-keyring, answer **y** when pacman asks
-  to remove it. Your saved passwords move to oo7 at your next sign-in. See
-  [Your keyring](bromigos-account.md#your-keyring).
-<!-- /unreleased -->
 
 **Still planned.** The first provisioning implementation has merged. Its AI, media and
 game installers, NAS share discovery and public DNS setup are not built yet. See the
 [provisioning limits](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-provision.md).
 
 <!-- releases: tools/release/release.py adds each release below this line, newest first -->
+
+## 0.1.3
+<!-- release: 0.1.3-rc1 -->
+
+*26 October 2026 · Release candidate 0.1.3-rc1, on the rc channel. When it's ready, this same build becomes the stable release.*
+
+This release candidate brings a richer Customize window, more desktop panels, dictation and game mode, and moves package updates to the public package server. It also sets up a login-unlocked keyring.
+
+### Before you update
+
+- The update may ask for your password to move your package server to the public package server.
+- If the update asks to remove the old keyring, answer y.
+- Sign out and back in after the update so your login password unlocks the keyring.
+
+### New
+
+- **Panel layouts.** Pick a layout in Customize, keep a different layout for each theme, or save your own. Tidy up separates overlapping panels. Panels size themselves to their content and the space available.
+- **Accounts.** Sign in to several accounts of the same service. Public GitHub, GitLab and Twitch use bromigOS's built-in apps. See Accounts.
+- **Den TV.** Each of the three screens can play its own channel. The guide lets you pick shows, choose a screen and add short bumpers between items. See The den TV.
+- **Your media.** Request shows, films and albums with `bromigos lab media` or the `bromigos media` terminal library. Choose seasons, quality and audio, track unreleased titles and confirm deletion. Your media brings the workflow together.
+- **YouTube downloads.** Add channels and playlists to Pinchflat, choose quality and keep downloaded playlists in Jellyfin or Plex. See YouTube.
+- **Calendar releases.** Add tracked TV episodes and film releases to CALENDAR beside your own events. See Calendar releases.
+- **Claude Code sessions.** VECTOR can read local sessions, find past replies and read each new reply aloud in follow mode. See Read a session.
+- **Files and pictures for VECTOR.** Drag files onto VECTOR, paste a picture, or click the paperclip, and send them with your message. See Give VECTOR files and pictures.
+- **Lab provisioning.** Review a generated repository, then apply Core services or k3s, Helm, Argo CD and Vault. See Setting up a lab for Linux boxes, existing clusters and the current limits.
+- Den TV has its own app, and the media library has a Channels tab. Manage channel picks from the terminal, CLI or VECTOR. The phone can read channels and change individual picks.
+- Customize › Widgets shows panels as cards with sizes, settings, install from URL, and edit mode for dragging, resizing, hiding, snapping, undoing, and keyboard-only editing. New panels include GPU, now playing, updates, media, calendar, account feeds, CI/PRs, VECTOR, and homelab status.
+- The Menu key lets you hold to dictate, with a live transcript shown at the cursor. Game mode gives games their keyboard and quiets notification overlays and sound cues; turn it on from Settings or the command line.
+
+### Improved
+
+- The zsh prompt follows your theme. Choose mehshell, Starship or a plain prompt in Shell and terminal, and bromigOS keeps your choice.
+- Japanese, Chinese and Korean titles draw correctly in media, music and YouTube views, using the fonts installed with bromigOS.
+
+### Fixed
+
+- The static wallpaper no longer hides a working live background. Panel toggling restores the visible set, LAB uses the room in its frame, and empty ALERTS stays compact.
+- Colour switches refresh live backgrounds, scanners, overlays and HUD text. A pinned scanner stays visible in the new colours.
+- `bromigos login` works on a computer with no keyring running. bromigOS now brings its own keyring, oo7, and your login password unlocks it, at the text console and the login screen. Sign-in checks the keyring before it shows a code, and says in plain words what to do when it can't keep the sign-in. The update asks for your password once, to let your login unlock the keyring. If you used gnome-keyring, answer **y** when pacman asks to remove it. Your saved passwords move to oo7 at your next sign-in. See Your keyring.
+- YouTube channels in Den TV no longer show static or a black screen, and screens sharing a channel no longer open extra streams.
+
+### VECTOR
+
+VECTOR 0.1.3 is a release candidate that adds file and image attachments, media library actions, safer reading of recent session history, and TV/media playback. It also fixes the transcript being hidden by the input box.
+
+#### New
+
+- Attachments let you drop files or images onto VECTOR, paste them with Ctrl+V, or use the paperclip button. They are read as data, not instructions, and secret-looking paths are refused.
+- Media actions let VECTOR search your library and request films, shows, anime, or music. It shows a plan first and only starts the request after you confirm.
+- Media controls let you set audio and subtitle languages, check upcoming and recent items, and delete a title, season, episode files, or album you explicitly name. VECTOR shows what will be removed and asks for confirmation.
+- Session reading lets VECTOR look at recent coding-session transcripts, jobs, memory, and logs with secrets removed. It can follow a session and read the latest reply aloud.
+- TV playback lets you ask VECTOR to play a specific media item and use the TV remote.
+
+#### Fixed
+
+- The transcript now ends above the input box, so it is not covered when the box grows.
+
+### Known issues
+
+None known.
 
 ## 0.1.2
 <!-- release: 0.1.2-rc2 -->

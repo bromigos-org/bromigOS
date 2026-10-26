@@ -11,6 +11,308 @@ VECTOR's, `bromigos-org/vector-archive`).
 
 <!-- releases: tools/release/release.py adds each release below this line, newest first -->
 
+## [0.1.3] - 2026-10-26
+<!-- release: 0.1.3-rc1 -->
+
+Release candidate v0.1.3-rc1.
+
+Since v0.1.2. In plain words: the manual's What's new (manual/src/whats-new.md).
+
+### Core (the bromigos command)
+
+- install: a --with package no synced repository has comes from the AUR with the helper (1password on the public mirror) ([9df93cb](https://github.com/bromigos-org/bromigOS/commit/9df93cb74bff601de016bfa6d90b4d987395a21c))
+- setup answers: an [extensions] install entry can be a table, { source, path, ref }, for an extension in a folder of its repository ([079e510](https://github.com/bromigos-org/bromigOS/commit/079e510f3f12c57f9f31a5cd7d5dd21d4df5ae0a))
+- migrations: machines installed from the first v0.1.2 ISO move from the r2.dev address to pkgs.bromigos.org ([2a3b405](https://github.com/bromigos-org/bromigOS/commit/2a3b405d03b0be619eca549a79a62d8933b82187))
+- core: cargo fmt on snapshot.rs (it failed cargo fmt --check) ([516eb26](https://github.com/bromigos-org/bromigOS/commit/516eb26313c38d2b1b7d70588a25e23aeb9f55a9))
+- setup: the first-run Homelab question offers Find my lab, and Settings › Lab has a Find my lab… button ([2b42a31](https://github.com/bromigos-org/bromigOS/commit/2b42a31ff951e0d978ad4d2c5e0d8b3d4cbc3f7c))
+- update: before the transaction, say to answer y when oo7 takes gnome-keyring's place ([6fbac7f](https://github.com/bromigos-org/bromigOS/commit/6fbac7fdd53c5f39346443bcf9054b4209c1f0f0))
+
+### Desktop
+
+- desktop: the den TV's keys (Super+Alt+P full screen, Super+Alt+. and , channel, Super+Alt+M sound), and e2e_tv_nested.py: the TV in a nested Hyprland with a fake Jellyfin and a PipeWire nobody hears ([c2dd6fd](https://github.com/bromigos-org/bromigOS/commit/c2dd6fdcdc201023ded4bb3182918737c17789d5))
+- settings: a widget's sign-in lists each account, with Add another account… and Remove ([8dd3506](https://github.com/bromigos-org/bromigOS/commit/8dd3506cca896fc92d6c3f4dc61e46e89f6d7324))
+- settings: Den TV, the channel guide: every channel on every screen as a TV guide (now, next, poster, progress, on air), Add channel (a library, picked shows, YouTube, a folder, downloaded YouTube), remove with Undo, drag to reorder or onto another screen, rename, Tune now ([9f6fb72](https://github.com/bromigos-org/bromigOS/commit/9f6fb72687489a42d32dc7d6b253f1baaedb7e4b))
+- desktop: add game mode and bridge legacy tray icons ([d1729b1](https://github.com/bromigos-org/bromigOS/commit/d1729b121ab067fd614e10750974f6f590687229))
+- settings: Account has an optional Bromigos account row: sign in, sign in with an SSH key, sign out ([9eb7eca](https://github.com/bromigos-org/bromigOS/commit/9eb7eca402606aac8d36aa722e15fef20a9e04e5))
+- desktop: the keyring comes with the desktop: oo7, gcr's password window and libsecret, oo7's daemon in every session ([db4adf7](https://github.com/bromigos-org/bromigOS/commit/db4adf7a5569a6776440d14f2fb8e0c5e961ea2f))
+
+### Live layer
+
+- live tests: the private-names check no longer flags VECTOR's public tool names (k8s_restart, k8s_scale, k8s_delete_pod, k8s_run_job); k8s_<share> names stay caught ([75058e7](https://github.com/bromigos-org/bromigOS/commit/75058e738775940582ce14b6acaff356562cb43c))
+- live: the den TV: channels from Jellyfin, Plex, YouTube or files on the den's screens after each one's own picture, played by libmpv into a texture in the screen's glass (curve, scanlines, glow, the den's tint), paused when it can't be seen; the hover hint, the wheel, full screen with sound in mpv at the same moment, sound through PipeWire (muted with bromigOS, ducked for VECTOR, silent when locked); bromigos-live tv; the den pixel for pixel as before with no media channel on; a locker only counts for its own Hyprland ([df6b97c](https://github.com/bromigos-org/bromigOS/commit/df6b97c0a2997addfab8c1ee26a751c8ca2f2cb9))
+- live: keep the static wallpaper only as a fallback ([fd704e1](https://github.com/bromigos-org/bromigOS/commit/fd704e14b2ad863b800764afec13d7d1e73a3b50))
+- live: hand over the wallpaper after the first frame and answer ownership promptly ([666be82](https://github.com/bromigos-org/bromigOS/commit/666be82a47fd0ad4d1048567cf296dd1d9cb03cb))
+- live: remove the still as soon as the background paints its first frame ([bf8bdc5](https://github.com/bromigos-org/bromigOS/commit/bf8bdc50ae3c360b5f4657b578340ddafbd895d5))
+- live: refresh every surface when the palette changes ([262369a](https://github.com/bromigos-org/bromigOS/commit/262369a6f340139524bb49f9c747c9a63a42ea5d))
+- live: use palette tokens for scanners, HUDs and shader colours ([fc59106](https://github.com/bromigos-org/bromigOS/commit/fc59106015eafebcc81b81fd40d499d4900721e6))
+- live: read actor colours without importing OpenGL ([3bab68f](https://github.com/bromigos-org/bromigOS/commit/3bab68f43ea0ebff8887a735053c51ce83900a1c))
+- live, media: den TV knobs, on-demand playback and number-pad remote ([bc77971](https://github.com/bromigos-org/bromigOS/commit/bc779713264ed4d3a67dbaac05c6329514c1f1c4))
+- live: install the den controller's headless test dependencies ([64b56e8](https://github.com/bromigos-org/bromigOS/commit/64b56e8dfe307b9a46ca9a75c24f8c9304f982fc))
+- live: clear den knob readouts when the pointer leaves ([163c514](https://github.com/bromigos-org/bromigOS/commit/163c5143152aeecba7491ee9095c0c75f371c060))
+- live: wait for the null player's worker before test cleanup ([c6af216](https://github.com/bromigos-org/bromigOS/commit/c6af216be77b398fb048aef126da15b8cb2e0ee1))
+- live: show the mute glyph on every den TV control path ([08c04c1](https://github.com/bromigos-org/bromigOS/commit/08c04c1da10911a56cbe4264abedf4776dada67a))
+- live: remove the den TV equipment controls ([f2486e0](https://github.com/bromigos-org/bromigOS/commit/f2486e0cf7cbaa310d4c570d790a4de8a979b69f))
+- live, widgets: add Skip to the TV hover menu and MEDIA remote ([670a266](https://github.com/bromigos-org/bromigOS/commit/670a266eb0554f50cae10afe1eeabdd34e74a117))
+- live: keep notification cues quiet during game mode ([88bafec](https://github.com/bromigos-org/bromigOS/commit/88bafecd1f7f13a64f49e6cf4a1c541ff915e9a5))
+
+### Boot and the ISO
+
+- iso: the medium installs with no network; a release's ISO names the public mirror and is checked ([85fc5cf](https://github.com/bromigos-org/bromigOS/commit/85fc5cf64551a303b737fb2733a2a862792e56d3))
+
+### Widgets
+
+- widgets: edit mode (drag to move, a corner to resize, × to hide, snapping to an 8 px grid and the other panels' edges with guides, undo, keyboard-only editing) and the widget gallery in its tray; every panel says its description, category, what it reads and its sizes; layout.json written in one step through a dotfiles symlink ([ff0c197](https://github.com/bromigos-org/bromigOS/commit/ff0c197020bafad79889ec492f7146f5fb70fdd5))
+- widgets: size classes (compact, standard, wide, tall, large): a panel declares sizes and default_size, lays out for size_class(w, h); edit mode resizes freely inside a class and snaps between them; a size picker on the gallery's cards, Add to desktop at the default class, bromigos panels size NAME CLASS, render --size ([59284c0](https://github.com/bromigos-org/bromigOS/commit/59284c00acae3708afca58e2919839c863a1e2b7))
+- widgets: a layout for every size class of every panel: SYSTEM large with each thread's history and the busiest processes, NETWORK wide and large with the last hour and its connections, WEATHER's hourly strip and week, STORAGE's reads and writes, WORKBENCH's commits, SHORTCUTS in columns, CONNECTIONS tall, and LAB large with the constellation hologram (10 fps while shown, still with reduced motion); each reads more only while it's shown ([250f5cf](https://github.com/bromigos-org/bromigOS/commit/250f5cf17cc9840d6eefe26bdc69481301946854))
+- widgets: Panel.available(): a panel that can't show anything here (no source configured) isn't offered in the gallery, and is greyed out with the reason while it's on the desktop; asked once per opening ([88e4507](https://github.com/bromigos-org/bromigOS/commit/88e450730fc13f3abc9d0bb9a19d9e1ff2e94ffe))
+- widgets: a plugin's wake() redraws its panel at once: the window holds a SafePanel around the plugin, which wakes with its own instance (plugins.same_panel) ([8fa0c20](https://github.com/bromigos-org/bromigOS/commit/8fa0c2003b010482c4d02a6d431e938db9d4fb9f))
+- widgets: a widget's own settings: a panel lists its fields (text, list, number, bool, choice, secret-signin), reads them with self.setting(key) from ~/.config/bromigos/widgets/<name>.toml (re-read when it changes; written in one step through a symlink); Settings draws the form, with sign-ins through bromigos_account (the code, Copy, Open the page, a countdown; Connect <service>; a GitLab token); bromigos panels settings|set|unset ([93fe591](https://github.com/bromigos-org/bromigOS/commit/93fe59130691c0fe7d9a1cc66f888b10f458a1d8))
+- widgets tests: SHORTCUTS gets a fixed set of binds in the layout test, so its size classes are checked in a clean home (a package build) too; the whole suite passes with an empty HOME ([a2f7293](https://github.com/bromigos-org/bromigOS/commit/a2f729375eb0485a8cfd590b9b33c5f92bee5fc0))
+- widgets: the built-in plugin panels' kit (settings in widgets/<name>.toml, polling that pauses while a panel is hidden, empty states, buttons, pictures) and lib/bromigos_account.py, the sign-in helper widgets share: the device flow, PKCE on a loopback redirect, tokens in the keyring through libsecret; `bromigos account` ([6e97d45](https://github.com/bromigos-org/bromigOS/commit/6e97d45ff6eab213acd3005646254a24983688af))
+- widgets: GPU, a built-in panel: load, video memory, temperature, power, clocks and each process's use through NVML; AMD and Intel from /sys/class/drm, saying what their drivers don't give; ten minutes of history when large ([ea8b91c](https://github.com/bromigos-org/bromigOS/commit/ea8b91c13019378acac090fb15235c3897eb933a))
+- widgets: NOW PLAYING, a built-in panel: any MPRIS player's track, cover and position, with previous, play/pause, next and seek; a cava visualizer only while something plays, the panel is seen and motion is full ([b9ca2ba](https://github.com/bromigos-org/bromigOS/commit/b9ca2baa78a303f9d8a017d44e6eadc909c74bf4))
+- widgets: SPOTIFY, a built-in panel: what your account plays on any device, the queue and recently played, signed in with PKCE through the account helper; transport through MPRIS when the Spotify app is here, else the Web API ([1a55895](https://github.com/bromigos-org/bromigOS/commit/1a558951a07490d3108ec3710f08d050f4a7c88d))
+- widgets: every built-in plugin panel is checked for its gallery words and size classes that don't overlap; the sign-in empty state opens with what the panel reads ([77e7003](https://github.com/bromigos-org/bromigOS/commit/77e700373cbecc19599230d8f4509f32237fc4b5))
+- widgets: UPDATES, a built-in panel: repository and AUR updates waiting, migrations, what needs a restart or a reboot, and the last updates with their snapshots, from bromigos update --check --json at most every 3 hours while it's seen; Update runs it in a terminal ([a06789c](https://github.com/bromigos-org/bromigOS/commit/a06789c007ae474a43265d26c14e7225617d8040))
+- widgets: VECTOR, a built-in panel: his state, the emergency switch (off at once, on only after a YES), his recent tool calls from his audit log with argument values never shown, and his pull requests waiting for your review ([5dad122](https://github.com/bromigos-org/bromigOS/commit/5dad1227110b33836ca7b819fb494927df6d45a0))
+- widgets: CI & PRs, a built-in panel: the build-status board for the repositories you list (each default branch's checks and recent runs) and the pull requests waiting on you, in one GraphQL query every 3 minutes through gh ([af59d13](https://github.com/bromigos-org/bromigOS/commit/af59d1378441a833231b2a435ba2780ca6f9092a))
+- widgets: TWITCH, a built-in panel: your channel live or not (viewers, title, category) and the channels you follow that are live, each a click away, signed in with the device flow; large adds the stream's picture and chat activity (a count, never the text) from Twitch's anonymous chat; bromigos_account.refresh() ([4ea368f](https://github.com/bromigos-org/bromigOS/commit/4ea368f397a1876b68ec730bbb8ed657713218b7))
+- widgets: DISCORD, a built-in panel: who's online in a server, from its invite or its server widget, with no token; the members, their status and voice channels when the widget is on, and the online count over time ([d5dfa9b](https://github.com/bromigos-org/bromigOS/commit/d5dfa9baedb44ca8b061fa38522db65402d6338a))
+- widgets: YOUTUBE, a built-in panel: a channel's latest videos and whether it's live, with no API key (bromigos_youtube when it's there, else the channel's feed and its live page); thumbnails when large ([6a29cdf](https://github.com/bromigos-org/bromigOS/commit/6a29cdfbe6047701404d46d2aa2903b81e5a2cfe))
+- widgets: a built-in plugin adds its folder after the standard library and installed modules, so a panel's file name never hides one; an account with a pasted token needs no client ID ([052d44e](https://github.com/bromigos-org/bromigOS/commit/052d44ec3c849ddc21bbeabbaddbe9ae1a4a4bd4))
+- widgets: CALENDAR, a built-in panel: today's and the coming days' events from ICS addresses (a CalDAV server's export, webcal), local .ics files and vdirsyncer folders, with repeats expanded; an agenda when tall and a week's hour grid when large; no sign-in ([956b9ec](https://github.com/bromigos-org/bromigOS/commit/956b9ec67820722db1045f519dfbaaeb70da2efc))
+- widgets: GITHUB, a built-in panel: your personal feed (notifications, reviews asked of you, what's assigned to you, your repositories and their stars, their activity) and your contribution graph when large; your gh login, else the device flow ([39f754c](https://github.com/bromigos-org/bromigOS/commit/39f754c2e70f8e1caf88a9a8ce0bb4055d391d32))
+- widgets: GITLAB, a built-in panel: merge requests assigned to you or asking for your review, your to-dos, and your projects' pipelines, on gitlab.com or your own instance; the device flow or a personal access token ([2f72adf](https://github.com/bromigos-org/bromigOS/commit/2f72adf075752fcfaf9683b73ad4e9fe41bab86e))
+- widgets: the built-in panels read their settings through widget_settings (what Settings' form writes); bromigos_account.sign_in takes cancelled as a callable or an Event; the plugin tests decide demo readings themselves ([4b6360e](https://github.com/bromigos-org/bromigOS/commit/4b6360e96bd5a639b8549083e2e89861d9396af8))
+- widgets: MEDIA, a built-in panel: the den TV's now and next, continue watching and recently added with posters; its settings make a TV channel (a library, collection or playlist the servers offer, or YouTube); offered only with a media source ([1eec912](https://github.com/bromigos-org/bromigOS/commit/1eec912078815d26cb96685b8e26a1417add0148))
+- widgets: each panel on any monitor. layout.json keeps a panel's own monitor ("output": make, model and serial, the connector as the fallback) and is version 2; edit mode puts a canvas on every monitor, a drag over a monitor's edge moves the panel there, and the tray's Monitor list sets the picked panel's; an unplugged monitor's panels stand in on the primary (their own place kept and saved) and go back when it returns; an old single-monitor layout is migrated when the panels start, written through its symlink. bromigos panels monitor puts every panel on one and forgets each one's own. Tests: arrange's monitors and migration, the CLI, and the nested e2e with a second output ([db520ca](https://github.com/bromigos-org/bromigOS/commit/db520ca255aecbcb4b1ca4732070ccc926324181))
+- widgets: category buttons from what the widgets declare everywhere. gallery.categories() makes them (bromigOS's in order, then any other a widget names, each with its word, a hint and how many widgets it holds) for edit mode's tray, and `bromigos panels gallery` hands them to Customize's Widgets tab and Settings › Widgets, which draw them with one helper (widgetform.category_buttons); the fixed six lists are gone. Tests: a widget of your own in a new category gets a button ([1518fd8](https://github.com/bromigos-org/bromigOS/commit/1518fd8d5e0e9c98e0cfc11d434c7437c5666845))
+- widgets: one panel shows several accounts, rows merged and tagged ([b53089c](https://github.com/bromigos-org/bromigOS/commit/b53089ca68f3bc37e810b43a520f77625dd45a12))
+- widgets: layouts (Minimal, Developer, Homelab, Streamer, Media, Gamer, Everything, and each theme's own), Tidy up, and never stacking a widget on another ([9988b0f](https://github.com/bromigos-org/bromigOS/commit/9988b0f94d0b050686b2138359182898bd68efb1))
+- widgets: a layout counts an account widget as signed in when any of its accounts is (several accounts per service) ([5e21783](https://github.com/bromigos-org/bromigOS/commit/5e21783d657f69ad86f28e97412ebc6d8aa8b66a))
+- widgets: VECTOR's panel asks his daemon whether he's running, as `bromigos vector status` does ([97e81a1](https://github.com/bromigos-org/bromigOS/commit/97e81a131d501a171c28462f9c0ea88e58d63494))
+- widgets: panels fit their content and never cut it off; a bigger panel pushes its neighbours aside, never onto the scene ([70d4d31](https://github.com/bromigos-org/bromigOS/commit/70d4d3162df477325e2c39d7933131d2b5a65e79))
+- widgets: make the missing calendar dependency test deterministic ([a720167](https://github.com/bromigos-org/bromigOS/commit/a720167a5ae69bed236a5f9539f47ffa5785c9c7))
+- widgets: restore the visible set and fit panels to their actual frames ([b72c234](https://github.com/bromigos-org/bromigOS/commit/b72c234a8dfa804237749bdcf4f476c3ea160023))
+- widgets: open the standalone Den TV app from the media remote ([60cd077](https://github.com/bromigos-org/bromigOS/commit/60cd077ecf6d845f0298d620e3e24ab6e5e0b661))
+- widgets: add optional storage display names ([a4d9959](https://github.com/bromigos-org/bromigOS/commit/a4d99592b61e82ca4376edfbb66b7127e25ac26a))
+- widgets: keep storage display names on one line ([5c9cd5f](https://github.com/bromigos-org/bromigOS/commit/5c9cd5f9277ee67af1d731843bb77b0404ab0d19))
+- widgets: VECTOR panel test no longer races the panel's own daemon poller ([6da8a85](https://github.com/bromigos-org/bromigOS/commit/6da8a85d0cc08815777eb6e531784af8366020ef))
+- widgets: LAB draws a null CPU or memory reading as 0% instead of failing (five failures in a minute had switched the panel off) ([f9f51aa](https://github.com/bromigos-org/bromigOS/commit/f9f51aa15136fd02ad2b49903ccaeaf57c921f48))
+- widgets: a monitor switched off and on again puts every panel back where it was, not where the smaller stand-in squeezed it ([1b8f68c](https://github.com/bromigos-org/bromigOS/commit/1b8f68cb9dda8cdaa985ec84519b59d296706bcf))
+
+### Themes and art
+
+- theme cards: an older preview's hint says "A newer preview is on its way"; with previews held, the finished state; theming.md says how an older preview is marked ([183fb93](https://github.com/bromigos-org/bromigOS/commit/183fb93afd1fee0c59c2ee65f4a05ba955d7c788))
+- theme: colour Zettlr in every theme ([15d2264](https://github.com/bromigos-org/bromigOS/commit/15d2264b4632b71023d95f2fd53a0875158c5287))
+- themes: Wick · Tidewell and Wick · Mire, the den in the two worlds' colours ([c11e973](https://github.com/bromigos-org/bromigOS/commit/c11e973b2b09fde1e7d5e2b4c0a20a2bc1edf0a1))
+
+### Homelab
+
+- homelab: the energy capability and an enphase adapter (an Envoy's production.json, with a token for firmware 7 and later), a minecraft adapter for games (Server List Ping: players, version, message of the day), and a link to each alert's detail ([415c53c](https://github.com/bromigos-org/bromigOS/commit/415c53ca9f01c925933ccaba58e213ebf612d72c))
+- homelab: SOLAR, a widget: what the panels make, what the house uses and what goes to or from the grid and the battery, from the energy capability; a power-flow picture and the day's curve when large ([8f9c5e1](https://github.com/bromigos-org/bromigOS/commit/8f9c5e14c3ca0b4e0bcc6a721a9cb20b8bae150d))
+- homelab: GAME SERVERS, a widget: each game server's status and players (Pelican, Minecraft), with the names of who's on when large ([8ea2e24](https://github.com/bromigos-org/bromigOS/commit/8ea2e24b001f5b6bdcb14662ee13692b671b2003))
+- homelab: ALERTS, a widget: firing and pending alerts, worst first, each a click away from its detail; counts by severity and the last 24 hours when large ([3330706](https://github.com/bromigos-org/bromigOS/commit/33307069b1a47fa35edc78576b893ea04855a2c4))
+- homelab: LAB JOBS, a widget: the lab job queue's running job and its progress, what waits and why, the GPU's free memory, and what finished; the last six hours when large. Each homelab widget appears only when its source is configured ([f0b2c38](https://github.com/bromigos-org/bromigOS/commit/f0b2c381ad4f79de0aa810f79e35e7e6a522176f))
+- homelab: Pinchflat, the YouTube downloader: an adapter (sources, newest videos, the download queue, failed jobs), the youtube-downloader capability, the console's YouTube downloads card, and bromigos lab youtube sync ([357b6d5](https://github.com/bromigos-org/bromigOS/commit/357b6d5b9ed566c49e0994af106060cdf34dd2c1))
+- homelab: the Storage card names the NAS behind each share and shows its free space ([29583f9](https://github.com/bromigos-org/bromigOS/commit/29583f9ad977251b0b34eaf0fd8c481fca3019e0))
+- lab catalog: Plex and Pinchflat in the media group, configure steps, and a Storage step (use the NAS you already have) ([be01340](https://github.com/bromigos-org/bromigOS/commit/be013408cc739d19d22f0d12fe27ebb606c84346))
+- homelab: the video capability: a Jellyfin or Plex server's libraries, collections and playlists, their items, continue watching, recently added, a stream (direct, or an H.264 transcode over direct_max_mbps) with the key in a header, the web page and the poster; tested against fake servers ([756b316](https://github.com/bromigos-org/bromigOS/commit/756b3164e15a77ffc84354527ac42769776431f2))
+- homelab: bromigos lab youtube add|list|remove|pause|resume|refresh|status|quality|cookies: Pinchflat without its web page, driven through its own forms (GET the page, its CSRF token and session, POST it back; pinned to v2025.9.26, and a changed form stops before anything is sent). add picks the profile from the URL, --since, --name, --quality best|2160p…480p|audio (a "<profile> · <quality>" copy made from Pinchflat's own template form, reused after); remove asks first and keeps the files unless --delete-files; quality changes new downloads only; cookies set|clear|status keeps a Netscape cookies.txt in a Vault field or a file and turns each source's Cookie Behaviour to When Needed, never showing a value; [youtube] quality is the lab's default; --json on each. The YouTube card's "Add a channel or playlist…" in the lab dashboard (key a) runs the same code. The adapter takes user_ref beside auth_ref, and reads the route token from the Sources page when the basic auth is set. Tests: a fake Pinchflat built from pages recorded read-only from a real one (no host, tokens or lab names), every command, the CSRF check, the form-changed stop, the dashboard form. Docs: the manual's Lab and Homelab pages (disk space per hour, measured), docs/lab.md and docs/homelab.md ([bef9e84](https://github.com/bromigos-org/bromigOS/commit/bef9e84f3ce6ebb0510e00ddaab0f73da4c64f17))
+- homelab tests: the cert-manager metrics test reads the fixtures' clock, not the real one (it failed once the fixed "now" was two days old) ([8161aa0](https://github.com/bromigos-org/bromigOS/commit/8161aa0a0758a3e71ba5e833aefbc503e7b92a84))
+- homelab: bromigos lab media search|get|status|upcoming|recent|language|calendar: ask the lab's media stack for films, shows, anime and music at the best quality its profiles allow, in your languages ([c41460f](https://github.com/bromigos-org/bromigOS/commit/c41460fe9fbcebc873d8c9bd8280054bf5c159ea))
+- homelab: bromigos media: the media library in a terminal (TV, movies, music, YouTube, downloads, upcoming, add), with monitor, profile, search now, open, play and delete ([b55e30a](https://github.com/bromigos-org/bromigOS/commit/b55e30a1c89f09c81ebce1c8248b3658ddbe6cbd))
+- homelab: media status: a download whose time left is over 30 days is stalled (no seeds or no speed), not "587 d left" ([3580366](https://github.com/bromigos-org/bromigOS/commit/358036600cb8d1b86262cd275e45ad909c00f459))
+- lab: provision Core and Advanced through reviewed repositories ([71bd8eb](https://github.com/bromigos-org/bromigOS/commit/71bd8ebb0b43bb867bc03e9c5e32a7c88b05312e))
+- homelab: provision agents against an existing model endpoint ([7081951](https://github.com/bromigos-org/bromigOS/commit/7081951b578a175377a3c05f5c4679a86bd60651))
+- lab: provision owned VMs, grow k3s clusters and install monitoring ([7d66846](https://github.com/bromigos-org/bromigOS/commit/7d6684624ee837807a2ac293a5131dd4d3f45853))
+- lab: ship the standalone console and publish tested source releases to AUR ([a10f06c](https://github.com/bromigos-org/bromigOS/commit/a10f06c1632ad7a484ca40a26927db59f46e2ba4))
+- lab catalog: weekly refresh 2026-10-12 (metadata and pending review entries) ([acb5e1e](https://github.com/bromigos-org/bromigOS/commit/acb5e1e04cb647f5ade250fe4e831062a2a34b2c))
+- lab: add reviewed rack maintenance checklists and journals ([347512f](https://github.com/bromigos-org/bromigOS/commit/347512fde1b91e4e1b40ea2fc9d1e2e704d0ba06))
+- lab: monitor PDU outlets and review named Ansible power plans ([4633187](https://github.com/bromigos-org/bromigOS/commit/4633187afe035e74e914fb8ecf5ad938c087839d))
+- lab: recognize the alternate PDU Pro model identifier ([b29b61f](https://github.com/bromigos-org/bromigOS/commit/b29b61f42fdf387839413ec3e49a37e3bbc31134))
+- lab catalog: weekly refresh 2026-10-19 (metadata and pending review entries) ([ee2b6a9](https://github.com/bromigos-org/bromigOS/commit/ee2b6a933288a60534a05138e2f4071c275a2cc9))
+- lab: bromigos lab provision with no arguments walks a new user through setting up a spare box, and the plan says what hardware the box has ([c705f8b](https://github.com/bromigos-org/bromigOS/commit/c705f8bb429b04a83b401a3f4822c334674aef5e))
+- lab: Find my lab finds the devices this computer and the lab already know, and checks only those (bromigos setup homelab --find) ([703f77e](https://github.com/bromigos-org/bromigOS/commit/703f77e50412cb360b65548f1a836959d67b2bae))
+- lab: the guided setup's box step offers the machines Find my lab found that answer SSH, with "Type an address" kept ([6a2ab84](https://github.com/bromigos-org/bromigOS/commit/6a2ab84fb331d441a7878ef487c5bbbbf3ed20a0))
+- lab: a provisioned box announces _bromigos-lab._tcp over mDNS, so Find my lab always finds it ([89a61d6](https://github.com/bromigos-org/bromigOS/commit/89a61d6e5999f175616b7d6173ff435776412f60))
+- lab: provisioning offers the Bromigos account's SSH keys for the new box's authorized_keys ([26459fb](https://github.com/bromigos-org/bromigOS/commit/26459fbca17d187f3e823bf61eba752be4e5f5be))
+
+### VECTOR
+
+- vector: SUPER+ALT+C reads Claude Code's replies aloud as they finish (VECTOR's follow mode), with ◉ READING CLAUDE on the bar and a menu entry ([273a485](https://github.com/bromigos-org/bromigOS/commit/273a4853d2c04cd11bb08a4e34b45abc0ba659ac))
+
+### Docs
+
+- docs: CODE_OF_CONDUCT.md (Contributor Covenant 2.1, contact@bromigos.org), linked from the README and CONTRIBUTING.md ([ebea325](https://github.com/bromigos-org/bromigOS/commit/ebea32571140975bfcdec9133b4c5dfa4571a02c))
+- docs: a release's ISO (how it's built, checked, tested, signed and attached), and v0.1.2's run ([ba15dab](https://github.com/bromigos-org/bromigOS/commit/ba15dab4c67b53e18a18fb1ecdff9bacdd040f3b))
+- docs: edit mode, the widget gallery, adding a widget, and what a panel tells the gallery; the manual's Arrange the panels and Choose panels; Super+Alt+W in the key table ([3a2c5ad](https://github.com/bromigos-org/bromigOS/commit/3a2c5ad30c1cfe921321cf90e0d1d0177620d040))
+- docs: a panel's settings in widgets/<name>.toml, the built-in panels' kit, and a widget that needs an account (lib/bromigos_account.py, `bromigos account`); libsecret for the widgets' sign-ins ([1afe746](https://github.com/bromigos-org/bromigOS/commit/1afe746c68eac4a1ead789689dfa704ba1d7e2b0))
+- docs: the built-in widgets (GPU, UPDATES, VECTOR, CI & PRs, GITHUB, GITLAB, CALENDAR, NOW PLAYING, SPOTIFY, TWITCH, YOUTUBE, DISCORD, and the homelab's LAB JOBS, SOLAR, GAME SERVERS, ALERTS), each one's setup; the manual's panels that need an account; the energy capability, the enphase and minecraft adapters; bromigos account in the command reference ([056e305](https://github.com/bromigos-org/bromigOS/commit/056e3057c12d6fe2cd1049587e9d7589606771af))
+- docs: YouTube downloads in the lab console (the card, bromigos lab youtube and its sync, the pinchflat source) and the Storage card's NAS and free space; the manual's Lab and Homelab pages too ([9027921](https://github.com/bromigos-org/bromigOS/commit/9027921251e6f249b61ad3a5f8d8294704ee4459))
+- docs: Customize, its two tabs and their tools (theming.md, widgets.md, desktop.md, menu.md, the manual's Themes and worlds and Panels) ([af42ae3](https://github.com/bromigos-org/bromigOS/commit/af42ae3b0caffdbcc863cc1392b9a604dad95ada))
+- docs: the den TV (live/README.md, ELEMENTS.md, the manual's Themes and worlds, Panels, keys and glossary), the video capability and video libraries (homelab.md), the MEDIA panel (widgets.md), bromigos_tv and bromigos_youtube (lib/README.md) ([2aa26f4](https://github.com/bromigos-org/bromigOS/commit/2aa26f485924d56983b69068a30ff60a06fc73a6))
+- docs: the den TV's measured cost ([db87846](https://github.com/bromigos-org/bromigOS/commit/db878461457448b768a2d551bb9f464cbdd73a1f))
+- docs: pictures of the Customize window on its Themes tab (theme-switcher.webp, docs and manual) and its Widgets tab, and of edit mode, in widgets.md, theming.md and the manual's Panels and Themes and worlds pages; each in ASSETS.md. Drawn offscreen with demo readings by tools/screenshots/render.py (new shots customize-widgets and edit-mode; the switcher's previews held); the switcher's --screenshot waits for its first frame instead of failing now and then ([cd105e1](https://github.com/bromigos-org/bromigOS/commit/cd105e1ad17b7a15e606ce9f337e26f8410455ec))
+- docs: v0.1.2's ISO names pkgs.bromigos.org and is public; when the r2.dev address can go ([b9ba196](https://github.com/bromigos-org/bromigOS/commit/b9ba196fedafa87e8b3d1fc69b41650679e40bae))
+- docs: the secrets command is `bromigos secrets sync` (bromigos-secrets is internal, in /usr/lib/bromigos/bin) ([8283f2d](https://github.com/bromigos-org/bromigOS/commit/8283f2d476229786b5b86ca224d5076387c4b2d8))
+- docs: several accounts per service, in the widgets docs, plugins docs and the manual ([12b78a3](https://github.com/bromigos-org/bromigOS/commit/12b78a338e164a0e9894acbbfc0c45984b8e2c70))
+- docs: layouts, keep-clear areas, a layout per theme and Tidy up, in docs/widgets.md, the theme folder, the manual's Panels page and first run; commands regenerated ([ca1407d](https://github.com/bromigos-org/bromigOS/commit/ca1407d01399b5c5b40e62252331e910075b4ef4))
+- docs: the den TV on every screen at once (sized streams, sound on one screen, covering, max_playing and its measured cost), shows you pick, and the channel guide (live/README.md, the manual's Themes and worlds, keys, panels and glossary, docs/settings.md, widgets.md, homelab.md, lib/README.md) ([be763c9](https://github.com/bromigos-org/bromigOS/commit/be763c91d498a1e63f669c2e55548615f23e8c14))
+- docs: SUPER+ALT+C in the keys page and the SHORTCUTS panel: VECTOR reads Claude's replies aloud as they finish (on/off) ([e1170f5](https://github.com/bromigos-org/bromigOS/commit/e1170f537236a1eafb8b5270f4402eafb66d7d14))
+- docs: bring media tasks together and retain shipped release highlights ([32001fc](https://github.com/bromigos-org/bromigOS/commit/32001fc1ddc4ef29ed6a589c60d9e71f177a627b))
+- docs: include the merged lab provisioner and media title fonts ([aad6e22](https://github.com/bromigos-org/bromigOS/commit/aad6e2203ce12298f07018d3722731c6efadc008))
+- docs: include the themed shell and refresh the command audit ([e0580c1](https://github.com/bromigos-org/bromigOS/commit/e0580c1c9686ddb6b2d6d181f4e9bd404d13747a))
+- docs: describe mirrorlist files and keep AUR package releases in sync ([6d6dc92](https://github.com/bromigos-org/bromigOS/commit/6d6dc92128695312310e54efb1f200295159c9aa))
+- docs: fix agent notes link in the rendered manual ([5ec75f8](https://github.com/bromigos-org/bromigOS/commit/5ec75f8b38ca43cdf065af133f812556b1556e4a))
+- docs: describe agent provisioning in the homelab package README ([9706afd](https://github.com/bromigos-org/bromigOS/commit/9706afd3791453032bdf709b0b59efac5c19713b))
+- docs: distinguish den equipment controls from channel pictures ([9b8ee4e](https://github.com/bromigos-org/bromigOS/commit/9b8ee4eef7eea11cda5c7600315d66ba7125b751))
+- docs: add a concise pull request template ([48983f1](https://github.com/bromigos-org/bromigOS/commit/48983f12d35e7aacabc069e8be7f099147a380c2))
+- docs: Wick · Tidewell and Wick · Mire in theming, the manual, the README and the glossary ([c0767f1](https://github.com/bromigos-org/bromigOS/commit/c0767f1f832d50a256337917c2de065bd32462fb))
+- docs: theme-switcher.webp redrawn with all eleven themes, each preview the whole desktop ([10c0bd7](https://github.com/bromigos-org/bromigOS/commit/10c0bd7efcc9142420b53b82141ffa76d54404a0))
+- docs: give VECTOR files and pictures (drag them on, paste, + ATTACH, ask --file) ([5265c28](https://github.com/bromigos-org/bromigOS/commit/5265c28725120725db1d2e188aa3bea1e9ae96d5))
+- docs: Find my lab, in the homelab pages, first run, Settings and the guided setup ([ac74252](https://github.com/bromigos-org/bromigOS/commit/ac74252901690e2eeb5d8ea0092eab92cf4bbf19))
+- docs: the Bromigos account sign-in, in the manual, the lab setup, Settings and the command reference ([759232a](https://github.com/bromigos-org/bromigOS/commit/759232af74c76757a8eee899aed294ddb6c04fef))
+- docs: your keyring: oo7, the login that unlocks it, bromigos keyring, and what sign-in says when there's none ([c145e67](https://github.com/bromigos-org/bromigOS/commit/c145e67406051873ef837cb87814e960bc42d3b2))
+
+### Packaging and CI
+
+- packaging: every channel is also copied to a private Cloud Storage mirror, ready to go public with tools/release/go-public.sh ([431fe6a](https://github.com/bromigos-org/bromigOS/commit/431fe6af88bc35abf98af03214e04870813bc560))
+- packaging: the public mirror is a Cloudflare R2 bucket, not Cloud Storage (free downloads) ([0e809c3](https://github.com/bromigos-org/bromigOS/commit/0e809c37df119e6520845ebf0c600fe3a6044bf6))
+- packaging: the public mirror leaves out 1password; its databases are repo-removed copies, signed again ([5d0747b](https://github.com/bromigos-org/bromigOS/commit/5d0747bcb5d776781c2d4eec4765fd47628da52c))
+- packaging: on GitHub's runners the R2 bucket is the primary (PKGS_PRIMARY=public), with a test folder (PKGS_ROOT) ([f340f7d](https://github.com/bromigos-org/bromigOS/commit/f340f7d5dbd6f6dc46fbb0c43d6ab0c28287a34d))
+- ci: every workflow can run on GitHub's runner (input hosted), as once the repositories are public ([3be8b2b](https://github.com/bromigos-org/bromigOS/commit/3be8b2b7164e7050635aef551d4070f6ab34b072))
+- packaging: the den TV's player and YouTube support (python-mpv, mpv, yt-dlp, deno) and every built-in panel's tools (playerctl, cava, pacman-contrib, github-cli, python-icalendar, python-dateutil, libsecret, git, zoxide, iputils, …) are installed with bromigos-live and bromigos-widgets instead of left optional ([81d55b4](https://github.com/bromigos-org/bromigOS/commit/81d55b429e93ef24272d3ea99b444de1f00df21f))
+- packaging: noto-fonts-cjk with bromigos-settings, so Japanese, Chinese and Korean titles (anime openings, music, YouTube) draw instead of empty boxes ([2232ede](https://github.com/bromigos-org/bromigOS/commit/2232ede9d090986256954cd6bf3211a4198d8e00))
+- packaging: require mehshell with theme colour support ([9c9a475](https://github.com/bromigos-org/bromigOS/commit/9c9a475795c6ff53843e8943c9fc7e75c855a1c8))
+- packaging: bump mehshell for the package conflict declaration ([50a5260](https://github.com/bromigos-org/bromigOS/commit/50a52601e1d0f3d2a6868b4f5ecb4ca1bfe6f304))
+- packaging: publish the keyring and mirrorlist through the AUR ([6f8c6e3](https://github.com/bromigos-org/bromigOS/commit/6f8c6e3cc345adbb7f1a402f59db05e58148ee76))
+- packaging: pin AUR sources only when bootstrap files change ([6dfbd1f](https://github.com/bromigos-org/bromigOS/commit/6dfbd1f6f00bfc918b6758350369fe4325d4b1d0))
+- packaging: use the release credential for immutable source tags ([3025f08](https://github.com/bromigos-org/bromigOS/commit/3025f0863cc548487b8c3736506ae619f0947047))
+- packaging: reuse verified source tags without moving them ([e62c4fc](https://github.com/bromigos-org/bromigOS/commit/e62c4fcfa954fd0928679954301ac4b9952aae8c))
+- packaging: build herdr with a pinned zig 0.16.0, and move to 0.9.5 ([f166c5d](https://github.com/bromigos-org/bromigOS/commit/f166c5d791132cf2047ffa41615c3dcb5ecd0a71))
+- packaging: brodec-desktop, BRODEC's optional desktop app, signed here and published to every channel ([d662dbf](https://github.com/bromigos-org/bromigOS/commit/d662dbf150fc3c5d8e3dbb824d0faa3226159878))
+- packaging: oo7, the keyring, built from upstream so a text console login unlocks it ([9dc2253](https://github.com/bromigos-org/bromigOS/commit/9dc2253c487fc957f7c1629444a1614c1b7cf4c6))
+
+### Other
+
+- release-tools: go-public.sh compares with sha256sum, not cmp (archlinux:base has no diffutils), and CI installs jq ([62a638c](https://github.com/bromigos-org/bromigOS/commit/62a638c28a3058b4fdf8e64136980ee7ba3b0052))
+- release-tools: go-public.sh checks the prepared branch's address without grep -q in a pipe ([c150b33](https://github.com/bromigos-org/bromigOS/commit/c150b3312bda8115e5434f3c4d84cbf3523e06ea))
+- tests: fixtures use the documentation ranges (RFC 5737 IPv4, RFC 7042 MACs), so the privacy guard is quiet ([b33ec71](https://github.com/bromigos-org/bromigOS/commit/b33ec71b736eba1da16b81188c1b0b0a764f1f7a))
+- tests: each `privacy: allow` in the release tests says why the private shape is needed ([5984a6c](https://github.com/bromigos-org/bromigOS/commit/5984a6c12cef887dd477733fb7de791982086bce))
+- release-tools: go-public.sh --ci moves CI to GitHub's runners (--ci --private moves it back) ([841c3d8](https://github.com/bromigos-org/bromigOS/commit/841c3d817686d96f4399add6ada5ae482341889e))
+- release-tools: go-public.sh --repos makes bromigOS, vector and extensions public; a custom domain keeps r2.dev on ([1207fdc](https://github.com/bromigos-org/bromigOS/commit/1207fdc9f0da88fdcdc6591c2c8145eeb8c483a4))
+- packages: public at https://pub-725f58eecf5c43748779ba6473eb9720.r2.dev (install.sh's default; the docs drop the early-access notes) ([0ddf657](https://github.com/bromigos-org/bromigOS/commit/0ddf6571605254d90f1ef7db65d25d4c81b5936f))
+- packages: the public repository is https://pkgs.bromigos.org ([50dd91d](https://github.com/bromigos-org/bromigOS/commit/50dd91d5f17c13e0a8093fb024ea2ac8506bd073))
+- bromigos panels edit|add|gallery, Super+Alt+W, the menu's Edit widgets, and Settings › Widgets as the widget gallery with Get more widgets from the catalog; reset writes bromigOS's layout through a symlinked layout.json instead of removing the link ([ee61649](https://github.com/bromigos-org/bromigOS/commit/ee61649d2910a063a3a13d3300f5cac370116330))
+- tests: e2e_widgets_nested.py drives edit mode in a nested Hyprland with a virtual pointer (vptr.py) and keyboard; the Settings shortcuts driver passes render as the dict the app reads ([31e5857](https://github.com/bromigos-org/bromigOS/commit/31e585785320527381ec01f0bc243619056b3927))
+- tests: edit mode's resize snaps between size classes, and the pointer arrives before it presses ([51fb75e](https://github.com/bromigos-org/bromigOS/commit/51fb75e2f88fb213a7dadc77cf15771107946311))
+- Install from URL in the widget gallery: a git URL or a folder, checked first (bromigos panels inspect: ext info, and each widget's words read from its code without running it), then Install, the approval, given through an answers file Settings writes and keeps; tested end to end in the nested session with the widget settings form ([b979eec](https://github.com/bromigos-org/bromigOS/commit/b979eece27830f7a4e39ed0494fbdd99b90c744b))
+- manual: Make your own widget: from bromigos ext new widget to a widget others install by its link, and into the catalog ([af1d0a0](https://github.com/bromigos-org/bromigOS/commit/af1d0a085b90f33f566f6bb65a44dc24c71a440e))
+- packages: the checks' own dependencies: bromigos-desktop's tests read the widget gallery and bromigos-widgets' tests draw every panel, so both check with python-cairo, python-gobject, pango and python-psutil ([ab31e6c](https://github.com/bromigos-org/bromigOS/commit/ab31e6ca2cfb19d1fab258dcbc16246b9c8c6de5))
+- tests: e2e_widget_plugins_nested.py: in a nested Hyprland, the gallery lists every built-in plugin widget and the homelab's, each is added and draws without an error, the tray finds them by search, and TWITCH's settings form in its sign-in states (widget_form_driver.py, with a stand-in sign-in that reaches no service) ([6608392](https://github.com/bromigos-org/bromigOS/commit/66083925add7dcabc5356401a0dc3f200c8add42))
+- bromigos_account: Plex, signed in with its PIN (a code entered at plex.tv/link, no app of your own), and plex_claim_token() for a new Plex server's PLEX_CLAIM ([4558097](https://github.com/bromigos-org/bromigOS/commit/4558097a15d6ee4dbec96f2fdd7c52143ca49f8b))
+- widget settings form: the whole title ("Twitch settings"), each text field with its label and hint above its box, the path as ~/…, the device code laid out down the row (the code large with Copy and Open the page, the page's address short), "Waiting for you to approve" once the code shows, the connect help said once; the forms can show in a host's sheet; gallery pictures take demo readings when asked ([9b68593](https://github.com/bromigos-org/bromigOS/commit/9b6859372882ad877235d0ba2130c84f5f86f05c))
+- Customize: the theme switcher and the widget gallery in one window, with tabs (Themes | Widgets; Ctrl+Tab). Themes keeps everything the switcher did and adds Make your own (theme new --from), Remove (yours only), Install from URL and the options in Settings; Widgets is the gallery as cards: on/off, sizes, Add to desktop, settings, Remove, Install from URL, Get more, Arrange on the desktop. bromigos customize [--tab]; the launcher's Customize entry; Settings links to it ([694e910](https://github.com/bromigos-org/bromigOS/commit/694e91023d1536638c7e2b25c3b26adb82aee605))
+- Customize: the Widgets tab four or five cards to a row with pictures that fill them, its category buttons from what the widgets declare, every gallery picture drawn with made-up readings (SHORTCUTS and FIELD NOTES too, never empty on a fresh install); the Themes tab marks an older preview quietly (DRAWING only when there's none), and a held render shows the finished state ([5789d0d](https://github.com/bromigos-org/bromigOS/commit/5789d0d5b28fcce93bbba4f6b196ac7c1f09aff6))
+- lib: bromigos_tv, the den TV's channels and their wall-clock schedule (in order, or shuffled the same all day; each screen's channel, sound and volume remembered), and bromigos_youtube, a playlist or channel through yt-dlp --flat-playlist -J, cached, live now, and keeping videos in the Plex and Jellyfin layout at a low priority, never on battery, under a size cap ([9fc4674](https://github.com/bromigos-org/bromigOS/commit/9fc4674b5ecf24b59523b8b6d02200f81e1b770e))
+- lib: bromigos_youtube.channel_videos() for the YOUTUBE panel, and live_now() says False when a channel isn't live (None only when it can't tell) ([ee440c2](https://github.com/bromigos-org/bromigOS/commit/ee440c2276dd26932e7d4d4f28a98c4eaae363a0))
+- Customize › Widgets: each row of cards as tall as its own cards, so a short last row stays short; the flow boxes aren't homogeneous any more, and each card is a column wide, keeping the grid at four or five to a row ([9f328e7](https://github.com/bromigos-org/bromigOS/commit/9f328e7fae7ea580cca4258072d4d6c272e892cb))
+- accounts: bromigOS's own Twitch app ships as the default, so the TWITCH panel goes straight to Sign in with nothing to register; your own client ID still wins (bromigos account configure) ([9070721](https://github.com/bromigos-org/bromigOS/commit/90707218e395bbe18abca3d3698fff61c356cf75))
+- accounts: bromigOS's own GitHub OAuth app (device flow) ships as the default, used when gh isn't signed in; your own client ID still wins ([cecd9b9](https://github.com/bromigos-org/bromigOS/commit/cecd9b999ec80a81d6074fd52b108f468e8230a0))
+- accounts: bromigOS's own gitlab.com application ships as the default (device grant, no secret); a self-hosted GitLab still asks for an application of its own ([721d73d](https://github.com/bromigos-org/bromigOS/commit/721d73d3630773b9702ab34592166b240a59a914))
+- accounts: several named accounts per service (gitlab.com and your company's GitLab side by side) ([b25ba16](https://github.com/bromigos-org/bromigOS/commit/b25ba164e909ae9197944a6448e6ba26e0e5a8f5))
+- den TV: mpv trusts the system's roots plus the lab's CA (one bundle), not the lab's CA alone, which failed every YouTube stream ("Peer certificate failed verification": static on the den, a black full screen that closed) ([51f6adc](https://github.com/bromigos-org/bromigOS/commit/51f6adc0c0ec913d6c04469dbeb05cc7bdb76d1b))
+- customize: a Layouts row at the top of the Widgets tab (a miniature of the screen per layout over the scene, the theme's own first, Made for <theme>; Use this layout, Undo, Tidy up); Settings › Widgets: Layouts and Tidy up, and overlapping widgets named; previews: a scene's plugin widgets shown, the made-up lab for any homelab widget; tools/widgets/render-layouts.py; the nested e2e applies a layout, undoes it and tidies ([3747fc6](https://github.com/bromigos-org/bromigOS/commit/3747fc6d662f2ad7a339d836848b586b96c6aad8))
+- den TV: every screen plays its own channel at once (a player each, sized streams, sound on one screen at a time), channels of picked shows that shuffle or take turns, YouTube resolved ahead, and a config writer that keeps comments ([05cd7c3](https://github.com/bromigos-org/bromigOS/commit/05cd7c32abfe847b231510f6cdc7bcd8f5aefb56))
+- den TV: the guide's card menu is a popover of buttons (Settings exports no actions: the VECTOR guard), and the TV tests clean their sandboxes (test_tv's kept videos left 764 MB in /tmp per run) ([9d34cdc](https://github.com/bromigos-org/bromigOS/commit/9d34cdc467269898fb7936124b79ff1bdbcd4b8a))
+- den TV: every channel on every screen unless its `screens` says otherwise, [tv.start] for each screen's first channel, one player for two screens on the same channel (the same moment), and `bumpers = true`: a station card opening each item ([677650c](https://github.com/bromigos-org/bromigOS/commit/677650cb8cf456e19086f2ad5e5332e4fd01c553))
+- den TV: the channel guide shows each channel once with a tune button per screen (lit where it's on air), bumpers and screens in its menu; the MEDIA panel is a remote for the three screens (choose one, then channel, sound, full screen, guide); docs ([a613e2c](https://github.com/bromigos-org/bromigOS/commit/a613e2cf1bba3e215e545a761dcaecba143a0964))
+- den TV: no more transcode floods. A screen sharing another's channel never opens a stream of its own (it reloaded every frame); the drift check seeks at most every 10 s (it seeked every frame for a second); files the GPU decodes cheaply play direct; a screen's transcode is ended when it moves on, each screen with its own device id ([449def3](https://github.com/bromigos-org/bromigOS/commit/449def3bab5c7204e2abd4dd009b7b3248ea1db0))
+- tests: give the live wallpaper ownership test a distinct module name ([e28a9fd](https://github.com/bromigos-org/bromigOS/commit/e28a9fdcad640fdc2e082b1dba197457d4cb2c2b))
+- test: fix lab snapshots to a known palette and colour mode ([e3d5f36](https://github.com/bromigos-org/bromigOS/commit/e3d5f36af3994c78c24426c563cb09e9a2397213))
+- shell: add themed mehshell and a saved prompt choice ([cbe7f31](https://github.com/bromigos-org/bromigOS/commit/cbe7f3189ab2b2aa659755b6953b141ab2430244))
+- fix(media): quit safely and navigate between tabs and content ([a0b1fd1](https://github.com/bromigos-org/bromigOS/commit/a0b1fd117ff5e7dd9cd9dd190144828cba2b1947))
+- media: share den TV channels across the media library, guide and CLI ([b982967](https://github.com/bromigos-org/bromigOS/commit/b982967240b59127df39ce36df8ceea9c078df79))
+- tv: refresh channel state and stop playback for emptied picks ([86ffb4e](https://github.com/bromigos-org/bromigOS/commit/86ffb4e34cb18d8b5b8da8716609126758c40cc9))
+- media: let h and l move across the top tabs ([545cff7](https://github.com/bromigos-org/bromigOS/commit/545cff7753dd1d0d27d97dc57b24335661d054b1))
+- media: confirm deletion with Delete and Cancel buttons ([07cbaa8](https://github.com/bromigos-org/bromigOS/commit/07cbaa834cff9d9269bccdb73492615ce29740ac))
+- Add hold-to-dictate with a live transcript at the cursor ([e68047b](https://github.com/bromigos-org/bromigOS/commit/e68047bff958a17dfb86f44d1f11349b60405b11))
+- Install the dictation keymap library for package checks ([404ecb3](https://github.com/bromigos-org/bromigOS/commit/404ecb3914378b0129fbb221899ae56bed624202))
+- Make the dictation idle test independent of runner uptime ([acf7e2d](https://github.com/bromigos-org/bromigOS/commit/acf7e2ddb27e2e194a74a1620434da0286e574a9))
+- Give Media a Search tab and keyboard-operated delete confirmation ([9d268ce](https://github.com/bromigos-org/bromigOS/commit/9d268cea4a1d97459269f81299fd93d7fe135199))
+- Make adding Media titles to channels visible in every title tab ([942609c](https://github.com/bromigos-org/bromigOS/commit/942609ccc67c6eedb9e512acd8cbbfcd679823eb))
+- Show channel memberships on Media selections and hover hints ([c008cd4](https://github.com/bromigos-org/bromigOS/commit/c008cd4187751b924820e3d8e20ff7f12a866216))
+- Report real media transfer totals and stalled torrent states ([1f1b6d3](https://github.com/bromigos-org/bromigOS/commit/1f1b6d3eae8a44c952ac6e52b6868a3cf7190cd7))
+- Keep skipped channel progress when retuning the den TVs ([5ff576b](https://github.com/bromigos-org/bromigOS/commit/5ff576bb0b35a78db04344e7e0f8654ad143353e))
+- Make Media and Lab navigation and confirmations consistent ([bb4aa80](https://github.com/bromigos-org/bromigOS/commit/bb4aa800fff6c390414126bc3db5510094f58a8f))
+- Preserve the lab form cancel button explanations ([fd281fd](https://github.com/bromigos-org/bromigOS/commit/fd281fdff9d5b93b10cb49f096f921570ac9e682))
+- tests: check tray embedding before opening its menu ([6057f5d](https://github.com/bromigos-org/bromigOS/commit/6057f5d76408dac818671c96ec334ebe73f3b516))
+- game: confirm exit visibly and document first-login activation ([3d1ad27](https://github.com/bromigos-org/bromigOS/commit/3d1ad278312883ea8e5ab03850a022c9e088ab37))
+- storage: add local drive planning and verified data migrations ([2aaa1d4](https://github.com/bromigos-org/bromigOS/commit/2aaa1d44489ca2310f95ed494fb74f1459d41b60))
+- storage: group capacity and add reviewed snapshot cleanup ([d7e3bf2](https://github.com/bromigos-org/bromigOS/commit/d7e3bf2ff23f9391512e1884a407f9f43a9670ec))
+- storage: execute planned native cache cleanup ([5d90011](https://github.com/bromigos-org/bromigOS/commit/5d900117c0b3b8953782d19581c858b46a4ee415))
+- storage: draw smooth usage bars in desktop terminals ([22d963f](https://github.com/bromigos-org/bromigOS/commit/22d963f81a94e93750486a1e0c81e8434bf060d4))
+- console: add font presets and ship TTY-aware mehshell ([c9cdd1e](https://github.com/bromigos-org/bromigOS/commit/c9cdd1e2c09038c7a8a19e85d5c0c3dc504a7d3b))
+- console: brand login and add keyboard power and splash controls ([725ba33](https://github.com/bromigos-org/bromigOS/commit/725ba337f830d15191c2cae52510c8ce66d08ce3))
+- feat: add bromigOS shell diagnostics and prompt controls ([1255dbd](https://github.com/bromigos-org/bromigOS/commit/1255dbd99c7715af44c914761db4b2adb3b9a8c9))
+- feat: save and manage widget layouts from Customize ([ff71899](https://github.com/bromigos-org/bromigOS/commit/ff7189977157c87c591d082b1190d1b1fa46cbc6))
+- fix: hide monitoring helpers from lab alerts ([d9041ef](https://github.com/bromigos-org/bromigOS/commit/d9041ef05f326a69dcd955de6adf6bb1d105db91))
+- fix: discard late lab dashboard reads during shutdown ([dccb1ee](https://github.com/bromigos-org/bromigOS/commit/dccb1eedc27428986b3ea146b0f7bfc044019048))
+- hardware: prefer the GPU with connected monitors at login ([d92e3ae](https://github.com/bromigos-org/bromigOS/commit/d92e3aed2aaadde7fa8b67ae073e7019664ed37f))
+- shell: ship the mehshell command status fix ([3f39360](https://github.com/bromigos-org/bromigOS/commit/3f393602e0684bb9b4d1cf79a7532bc16b9920ad))
+- fix(shell): recover desktop access in persistent terminal panes ([c52f271](https://github.com/bromigos-org/bromigOS/commit/c52f271e6602594af8f45632c87b8be25d59be4c))
+- fix(live): smooth the rotating emblem rim across GPUs ([a9aa27d](https://github.com/bromigos-org/bromigOS/commit/a9aa27d37093396cc503dbbc4ac91997b5135567))
+- defaults: a Markdown notes kind, offering Zettlr ([91042cb](https://github.com/bromigos-org/bromigOS/commit/91042cb325f19bb96b1dcd00cdadfdff3bdca52a))
+- previews: NAME-STAMP only, so wick's pictures never take wick-mire's or wick-tidewell's ([933ff3e](https://github.com/bromigos-org/bromigOS/commit/933ff3e7a39a31fbab8922c9d180826d89c6bbe6))
+- previews: the whole desktop again on kwin 6.8, and a wrong-size picture is never kept ([1e3ffdf](https://github.com/bromigos-org/bromigOS/commit/1e3ffdf84b05074ff3ecc577633e7a5b508bf564))
+- tests: the nested harness at the size it asks for on kwin 6.8, and it stops if not ([edba131](https://github.com/bromigos-org/bromigOS/commit/edba131082e412f84c2486764109deb766ceaab4))
+- previews: the nested Hyprland never takes a login session, so it draws and grim gets its picture ([529f193](https://github.com/bromigos-org/bromigOS/commit/529f193c3207493def382676c68381fbfb717623))
+- manual: VECTOR's attach button is a paperclip ([9fde699](https://github.com/bromigos-org/bromigOS/commit/9fde6992b34302a92da9926493e7861ff1e4b297))
+- account: Bromigos is a sign-in provider, with OIDC discovery, rotating refresh under a lock and BROMIGOS_TOKEN ([174460c](https://github.com/bromigos-org/bromigOS/commit/174460ce7d9292bc96f2e61a8f26dea708fab8b3))
+- account: bromigos login, logout and whoami: a code on the website, an SSH key, or a personal access token ([5023094](https://github.com/bromigos-org/bromigOS/commit/50230947bccd92c0118246a224eaf27bd7643034))
+- keyring: bromigos keyring status and setup; your login unlocks the keyring, and an update sets it up once ([df30e1b](https://github.com/bromigos-org/bromigOS/commit/df30e1bf17305b4dacb66396cde8e3627cb89265))
+- login: check the keyring before the code is shown, and say keyring errors in plain words ([333d043](https://github.com/bromigos-org/bromigOS/commit/333d043dac8fc1c7bf54a5aa8a18fcf25f96d04c))
+
+### VECTOR (bromigos-vector)
+
+#### Changed
+
+- Pr_merge never merges a homelab PR until its `validate` check has passed (REQUIRED_CHECKS); a missing check is waited for, not the 150 s "no CI" grace, since Argo CD deploys whatever lands on master ([285835c](https://github.com/bromigos-org/vector/commit/285835cc3f929b4ec51a2a232c87624ac56c936a))
+- VECTOR's dotfiles clone uses his public_repo token; the org's repos his fine-grained one (bromigodev's all-scope token is out of his sandbox) ([b79de0b](https://github.com/bromigos-org/vector/commit/b79de0b3d82444201aea9e71b9ea1821dbe339b2))
+
+#### VECTOR
+
+- holo: the transcript ends above the input box, however tall it grows, instead of at a fixed 78 px that the box covered ([247ba80](https://github.com/bromigos-org/vector/commit/247ba8099a67a18957696e9a30ac00169b3bf741))
+
+#### Docs
+
+- docs: CONTRIBUTING.md (build, test, commit style, how his safety rules affect a change) and CODE_OF_CONDUCT.md (Contributor Covenant 2.1, contact@bromigos.org), linked from the README ([e5f819e](https://github.com/bromigos-org/vector/commit/e5f819ec3c401867d90715d199d62290a0597ee8))
+- docs: the secrets command is `bromigos secrets sync` ([934776c](https://github.com/bromigos-org/vector/commit/934776c8a029952bea43247417466a582a30a21f))
+
+#### Packaging and CI
+
+- packaging: copy each channel to the private Cloud Storage mirror too, like bromigOS's publish.sh ([141b492](https://github.com/bromigos-org/vector/commit/141b492a9125527d6cc113d5ca745b56ecb7c96b))
+- packaging: the public mirror is a Cloudflare R2 bucket (PKGS_PUBLIC_*), like bromigOS's publish.sh ([fc71354](https://github.com/bromigos-org/vector/commit/fc71354fc72253cd0b83836ec00241cd1e1e7fcc))
+- packaging: the public mirror leaves out 1password, as bromigOS's publish.sh does ([b284266](https://github.com/bromigos-org/vector/commit/b284266b4e8e74dceac9aebc08519110d9aa1851))
+- packaging: on GitHub's runners the R2 bucket is the primary (PKGS_PRIMARY=public), as in bromigOS ([dbe7a10](https://github.com/bromigos-org/vector/commit/dbe7a105f030eab94af4c50bf4cb8cd6c66b97e4))
+
+#### Other
+
+- privacy guard: the RFC 7042 documentation MACs (00:00:5E:00:53:xx) pass; test-devflow's LAN address is marked as needed ([cbbe4d2](https://github.com/bromigos-org/vector/commit/cbbe4d29f20f4896941d0c2e53acb0f91eef794c))
+- tests: each `privacy: allow` in test-privacy-guard says why the private shape is needed ([6f9f1f2](https://github.com/bromigos-org/vector/commit/6f9f1f289789e70aefac64f5d4e9d573dda57554))
+- media: media_search, media_get, media_status, media_upcoming, media_recent, media_language: VECTOR asks the homelab's media stack for films, shows, anime and music (bromigOS's `bromigos lab media`) ([2dfe753](https://github.com/bromigos-org/vector/commit/2dfe7536b279a54a08686c5bb532eeeb917278e2))
+- tests: test-media.py brings an empty private-overlay module where bromigos-core isn't installed (CI), as test-devflow.py does ([db85c54](https://github.com/bromigos-org/vector/commit/db85c547173fedfccba8e87a5f8422069a29a816))
+- media: media_delete: a title, a season, episode files or an album, files and all, only when Sir's latest words name it and ask for a delete ([b2a0448](https://github.com/bromigos-org/vector/commit/b2a0448acf4d9387173c5fa67e7f0e4fc04a96d3))
+- claude: claude_sessions, claude_read, claude_search, claude_memory, claude_logs, claude_say_latest, claude_follow: VECTOR reads Claude Code's transcripts, jobs, memory and logs directly, read only and redacted ([cda25bb](https://github.com/bromigos-org/vector/commit/cda25bbb6b37ca034053e51397152ac754e7281d))
+- tv: audited channel tools for the desktop and phone picks ([f530c8c](https://github.com/bromigos-org/vector/commit/f530c8c16a3535eb5716b43f7d04c53efaa52670))
+- tv: resolve legacy channel names consistently ([a32f62e](https://github.com/bromigos-org/vector/commit/a32f62eabf2b731540d6c312e887d19938ec771c))
+- tools: play specific media and use the den TV remote ([c126ff9](https://github.com/bromigos-org/vector/commit/c126ff9137f5c88cc3564f61ba5fd138a5a79bf7))
+- attach: files and images for VECTOR: drop them on him, paste with Ctrl+V, + ATTACH or ask --file; chips by the box, read as data never instructions, never a secret, only references kept ([dd34c38](https://github.com/bromigos-org/vector/commit/dd34c3878ced0cd88c976c29560703952dce835a))
+- attach: the attach button is a paperclip drawn in the button's theme colour, not "+ ATTACH" ([69a188c](https://github.com/bromigos-org/vector/commit/69a188cda4f5fb1251df80874b76150656b04edf))
+- attach: the paperclip is the input box's right end, the box's height and joined to it, with a larger icon centred in it ([eaea66e](https://github.com/bromigos-org/vector/commit/eaea66e4de41f4104cdcde926e94e1ddcf13afdc))
+- portrait: VECTOR's portrait as a stream of frames (holo/portrait.py), so another app shows him live without running his renderer inside it ([1b98754](https://github.com/bromigos-org/vector/commit/1b98754c259b229534be471e6bdd84ff778217c4))
+
 ## [0.1.2] - 2026-10-09
 <!-- release: 0.1.2-rc2 -->
 

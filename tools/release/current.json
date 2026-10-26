@@ -1,17 +1,79 @@
 {
-  "version": "0.1.2",
-  "tag": "v0.1.2-rc2",
+  "version": "0.1.3",
+  "tag": "v0.1.3-rc1",
   "kind": "rc",
-  "since": "v0.1.1",
-  "date": "2026-10-09",
+  "since": "v0.1.2",
+  "date": "2026-10-26",
   "bromigos": {
-    "base": "2d80486f0b2dc74aecea4b88dae94f780987d9cb"
+    "base": "c145e67406051873ef837cb87814e960bc42d3b2"
   },
   "vector": {
-    "base": "8cff3a7983246e1392cc2a546081ddfc4eb85e38",
-    "since": "v0.1.1",
-    "commit": "172967ccc9f86a31d9897936feccc57a4861e4b7",
-    "branch": "release/v0.1.2-rc2"
+    "base": "1b98754c259b229534be471e6bdd84ff778217c4",
+    "since": "v0.1.2",
+    "commit": "bd8d421b98dcdeeb05b2248f944f3fa4ca8d0a41",
+    "branch": "release/v0.1.3-rc1"
   },
-  "drafted_by": "qwen3.8-flash-next"
+  "drafted_by": "qwen3.8-flash-next",
+  "highlights": [
+    {
+      "section": "new",
+      "text": "**Panel layouts.** Pick a layout in Customize, keep a different layout for each theme, or save your own. Tidy up separates overlapping panels. Panels size themselves to their content and the space available."
+    },
+    {
+      "section": "new",
+      "text": "**Accounts.** Sign in to several accounts of the same service. Public GitHub, GitLab and Twitch use bromigOS's built-in apps. See Accounts."
+    },
+    {
+      "section": "new",
+      "text": "**Den TV.** Each of the three screens can play its own channel. The guide lets you pick shows, choose a screen and add short bumpers between items. See The den TV."
+    },
+    {
+      "section": "new",
+      "text": "**Your media.** Request shows, films and albums with `bromigos lab media` or the `bromigos media` terminal library. Choose seasons, quality and audio, track unreleased titles and confirm deletion. Your media brings the workflow together."
+    },
+    {
+      "section": "new",
+      "text": "**YouTube downloads.** Add channels and playlists to Pinchflat, choose quality and keep downloaded playlists in Jellyfin or Plex. See YouTube."
+    },
+    {
+      "section": "new",
+      "text": "**Calendar releases.** Add tracked TV episodes and film releases to CALENDAR beside your own events. See Calendar releases."
+    },
+    {
+      "section": "new",
+      "text": "**Claude Code sessions.** VECTOR can read local sessions, find past replies and read each new reply aloud in follow mode. See Read a session."
+    },
+    {
+      "section": "new",
+      "text": "**Files and pictures for VECTOR.** Drag files onto VECTOR, paste a picture, or click the paperclip, and send them with your message. See Give VECTOR files and pictures."
+    },
+    {
+      "section": "new",
+      "text": "**Lab provisioning.** Review a generated repository, then apply Core services or k3s, Helm, Argo CD and Vault. See Setting up a lab for Linux boxes, existing clusters and the current limits."
+    },
+    {
+      "section": "new",
+      "text": "Den TV has its own app, and the media library has a Channels tab. Manage channel picks from the terminal, CLI or VECTOR. The phone can read channels and change individual picks."
+    },
+    {
+      "section": "improved",
+      "text": "The zsh prompt follows your theme. Choose mehshell, Starship or a plain prompt in Shell and terminal, and bromigOS keeps your choice."
+    },
+    {
+      "section": "improved",
+      "text": "Japanese, Chinese and Korean titles draw correctly in media, music and YouTube views, using the fonts installed with bromigOS."
+    },
+    {
+      "section": "fixed",
+      "text": "The static wallpaper no longer hides a working live background. Panel toggling restores the visible set, LAB uses the room in its frame, and empty ALERTS stays compact."
+    },
+    {
+      "section": "fixed",
+      "text": "Colour switches refresh live backgrounds, scanners, overlays and HUD text. A pinned scanner stays visible in the new colours."
+    },
+    {
+      "section": "fixed",
+      "text": "`bromigos login` works on a computer with no keyring running. bromigOS now brings its own keyring, oo7, and your login password unlocks it, at the text console and the login screen. Sign-in checks the keyring before it shows a code, and says in plain words what to do when it can't keep the sign-in. The update asks for your password once, to let your login unlock the keyring. If you used gnome-keyring, answer **y** when pacman asks to remove it. Your saved passwords move to oo7 at your next sign-in. See Your keyring."
+    }
+  ]
 }
