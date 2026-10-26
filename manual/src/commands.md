@@ -44,6 +44,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos login`](#bromigos-login) | Sign in to [your Bromigos account](bromigos-account.md): with a code on the website, with `--ssh` and an SSH key on your account, or with `--with-token` and a personal access token. |
 | [`bromigos whoami`](#bromigos-whoami) | Show which [Bromigos account](bromigos-account.md) this computer is signed in to, and how. |
 | [`bromigos logout`](#bromigos-logout) | Sign out of your [Bromigos account](bromigos-account.md) on this computer. |
+| [`bromigos keyring`](#bromigos-keyring) | Check [your keyring](bromigos-account.md#your-keyring), where sign-ins are kept, with `status`. `setup` makes your login unlock it. |
 | [`bromigos private`](#bromigos-private) | Edit the private overlay: settings you keep encrypted in your dotfiles. Needs the `sops` and `age` packages. |
 | [`bromigos hw`](#bromigos-hw) | See what [hardware](hardware.md) bromigOS found, check the display GPU with `bromigos hw display`, or set up drivers with `bromigos hw setup`. |
 | [`bromigos peripheral`](#bromigos-peripheral) | Turn on extra features for a [keyboard](peripherals.md), such as a Razer keyboard's macro keys. |
@@ -1275,6 +1276,23 @@ For example:
 ```text
 bromigos install extension https://github.com/you/thing@v1.0
 bromigos install extension hello-deck
+```
+
+From the `bromigos-core` package.
+
+### bromigos keyring
+
+The keyring that keeps your sign-ins (oo7): whether it runs and your login unlocks it, and setting that up.
+
+```text
+bromigos keyring status [--json] | setup [--dry-run]
+```
+
+For example:
+
+```text
+bromigos keyring status
+bromigos keyring setup
 ```
 
 From the `bromigos-core` package.

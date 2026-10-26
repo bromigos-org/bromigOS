@@ -216,6 +216,7 @@ rows = [
   { route = "login", text = "Sign in to [your Bromigos account](bromigos-account.md): with a code on the website, with `--ssh` and an SSH key on your account, or with `--with-token` and a personal access token." },
   { route = "whoami", text = "Show which [Bromigos account](bromigos-account.md) this computer is signed in to, and how." },
   { route = "logout", text = "Sign out of your [Bromigos account](bromigos-account.md) on this computer." },
+  { route = "keyring", text = "Check [your keyring](bromigos-account.md#your-keyring), where sign-ins are kept, with `status`. `setup` makes your login unlock it." },
   { route = "private", text = "Edit the private overlay: settings you keep encrypted in your dotfiles. Needs the `sops` and `age` packages." },
   { route = "hw", text = "See what [hardware](hardware.md) bromigOS found, check the display GPU with `bromigos hw display`, or set up drivers with `bromigos hw setup`." },
   { route = "peripheral", text = "Turn on extra features for a [keyboard](peripherals.md), such as a Razer keyboard's macro keys." },

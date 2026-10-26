@@ -23,6 +23,7 @@ modules to the same folder:
 | `bromigos_private.py` | Reads the private overlay: values a user keeps encrypted in their dotfiles |
 | `bromigos_account.py` | Signs a widget in to an online account, such as Twitch or GitHub, and keeps the token in the keyring |
 | `bromigos_login.py` | Signs in to your Bromigos account, with a code, an SSH key or a token, and reads the account's SSH keys; [account reference](../docs/bromigos-account.md) |
+| `bromigos_keyring.py` | Checks the keyring that keeps sign-ins (oo7), puts its errors in plain words, and adds the PAM lines that let the login unlock it; [the keyring](../docs/bromigos-account.md#the-keyring) |
 | `bromigos_tv.py` | The den TV's channels, their wall-clock schedule, picked shows taking turns, and each screen's remembered channel and sound |
 | `bromigos_tvchannels.py` | Shared channel operations and JSON CLI for the guide, media and VECTOR |
 | `bromigos_tvconfig.py` | Writes the den TV's `[[tv.channel]]` tables in place, keeping comments: the channel guide's writer |

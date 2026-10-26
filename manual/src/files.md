@@ -65,6 +65,17 @@ files, in your editor.
 | `~/Pictures/screenshots/` | Your screenshots. |
 | `~/Videos/recordings/` | Your screen recordings. |
 | `~/Pictures/bromigos/lab/` | What your homelab made for you. |
+| `~/.local/share/keyrings/` | Your keyring, where sign-ins and passwords are kept, encrypted with your login password. See [Your keyring](bromigos-account.md#your-keyring). |
+
+## System files bromigOS changes
+
+| File | What changes |
+|---|---|
+| `/etc/pam.d/login`, `/etc/pam.d/sddm` | A line each for `auth` and `session` that unlocks your keyring when you sign in. |
+| `/etc/pam.d/passwd` | A `password` line, so a new password carries over to your keyring. |
+
+`bromigos keyring setup` adds these lines, and `bromigos update` runs it once. It never
+changes the other lines. See [Your keyring](bromigos-account.md#your-keyring).
 
 ## The package repository
 

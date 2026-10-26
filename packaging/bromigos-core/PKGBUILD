@@ -26,6 +26,7 @@ optdepends=('python: bromigos private, secrets, emblem, console, power menu, spl
             'terminus-font: readable text console font sizes'
             'openssh: bromigos login --ssh, and the SSH keys a new lab box gets from your account'
             'libsecret: keep account sign-ins (bromigos login, bromigos account) in your keyring'
+            'oo7: the keyring itself, unlocked by your login (bromigos-desktop brings it; bromigos keyring)'
             'plymouth: graphical shutdown and restart (bromigos splash)'
             'grub: save the graphical splash kernel setting'
             'util-linux: local storage inventory and mounts'
@@ -102,6 +103,9 @@ check() {
   # bromigos login: the device flow, SSH sign-in and tokens, against a stand-in service on
   # 127.0.0.1, with throwaway keys, its own ssh-agent and a keyring in memory
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/account"
+  # bromigos keyring: the keyring check and the login's PAM lines, on copies in a temporary
+  # root, with a stand-in session bus
+  PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/keyring"
 }
 
 package() {
@@ -143,6 +147,8 @@ package() {
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-account
   # `bromigos login`, `logout` and `whoami`: your Bromigos account (lib/bromigos_login.py)
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-{login,logout,whoami}
+  # `bromigos keyring`: the keyring that keeps them, and the login that unlocks it (lib/bromigos_keyring.py)
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-keyring
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-storage
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-console
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-power-menu
