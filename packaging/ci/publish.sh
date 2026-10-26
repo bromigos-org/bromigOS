@@ -43,6 +43,13 @@
 #                       built from, so the same name is the same build: copied with its
 #                       signature (checked), never rebuilt. That's how an rc promoted to
 #                       stable publishes the very files the rc channel tested.
+#   PKGS_PREBUILT=      a folder of packages built elsewhere: nothing in packaging/ is built,
+#                       and each *.pkg.tar.zst there that the channel doesn't have yet is
+#                       signed and added like a build. A version older than the one in the
+#                       channel's database is refused (versions only go up). With
+#                       PKGS_PRIMARY=public it publishes only while R2 is the primary
+#                       (<repo>/.primary is there): it never writes that note itself. Used by
+#                       brodec-desktop.yml (packaging/README.md, "BRODEC's desktop app").
 export PACKAGER="bromigOS CI <packages@bromigos.org>"   # shown as Packager in pacman -Qi
 set -euo pipefail
 
@@ -78,6 +85,12 @@ for v in "${need[@]}" PKGS_GPG_PRIVATE_KEY PKGS_GPG_PASSPHRASE; do
   [[ -n "${!v:-}" ]] || { echo "publish: $v is not set" >&2; exit 2; }
 done
 [[ "$keep" =~ ^[1-9][0-9]*$ ]] || { echo "publish: PKGS_KEEP must be >= 1" >&2; exit 2; }
+prebuilt=${PKGS_PREBUILT:-}
+if [[ -n $prebuilt ]]; then
+  [[ -d $prebuilt ]] || { echo "publish: PKGS_PREBUILT: no folder $prebuilt" >&2; exit 2; }
+  prebuilt=$(cd "$prebuilt" && pwd)
+  [[ "${PKGS_MIRROR_ONLY:-0}" != 1 ]] || { echo "publish: PKGS_PREBUILT and PKGS_MIRROR_ONLY don't go together" >&2; exit 2; }
+fi
 
 work=$(mktemp -d)
 export GNUPGHOME="$work/gnupg"
@@ -165,7 +178,14 @@ echo "publish: channel $channel -> $prefix"
 # lost, then it removes the note, and the copy stops pulling.
 # (rclone cat of a missing object prints nothing and succeeds: hence the -z tests.)
 marker="$top/.primary"
-if [[ $primary == public ]]; then
+if [[ $primary == public && -n $prebuilt ]]; then
+  # Packages built elsewhere follow the primary; they never choose it. Without the note the
+  # private bucket is the primary, and its next copy to R2 would drop them.
+  if [[ -z $(rcl cat "pkgs:$bucket/$marker" 2>/dev/null) ]]; then
+    echo "publish: $marker isn't in the public bucket, so it isn't the primary: nothing published" >&2
+    exit 1
+  fi
+elif [[ $primary == public ]]; then
   if [[ -z $(rcl cat "pkgs:$bucket/$marker" 2>/dev/null) ]]; then
     printf 'public %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${GITHUB_REPOSITORY:-local}#${GITHUB_RUN_ID:-$$}" \
       | rcl rcat "${meta[@]}" "pkgs:$bucket/$marker"
@@ -231,7 +251,7 @@ reuse_from() {
 # fingerprint is pinned in install.sh itself. Copied on every run (--checksum: only when
 # changed), whatever is built, so a fix to the bootstrap alone goes out too.
 for f in install.sh packaging/keys/bromigos.asc; do
-  [[ -f "$root/$f" ]] || continue
+  [[ -f "$root/$f" && -z $prebuilt ]] || continue   # a prebuilt publish leaves the bootstrap alone
   rcl copyto --checksum "${meta[@]}" "$root/$f" "pkgs:$bucket/$top/$(basename "$f")"
   if (( mirror )); then
     rcl copyto --checksum --header-upload "Cache-Control: no-cache" "$root/$f" "pub:$PKGS_PUBLIC_BUCKET/$top/$(basename "$f")"
@@ -345,7 +365,9 @@ if [[ "${PKGS_MIRROR_ONLY:-0}" == 1 ]]; then
 fi
 
 # ── Build ────────────────────────────────────────────────────────────────────
-if [[ -n "${PKGS_ONLY:-}" ]]; then
+if [[ -n $prebuilt ]]; then
+  dirs=()   # nothing to build: the packages are in $prebuilt
+elif [[ -n "${PKGS_ONLY:-}" ]]; then
   read -r -a dirs <<<"$PKGS_ONLY"
 else
   dirs=()
@@ -393,6 +415,25 @@ for name in "${dirs[@]}"; do
   echo "::endgroup::"
 done
 
+# ── Or: packages built elsewhere (PKGS_PREBUILT) ────────────────────────────
+# Each is copied out of $prebuilt (its signature is made beside the copy), signed, and
+# published like a build. Only package files, one name each.
+if [[ -n $prebuilt ]]; then
+  shopt -s nullglob
+  for f in "$prebuilt"/*.pkg.tar.zst; do
+    base=$(basename "$f")
+    if in_bucket "$base" && (( rebuild != 1 )); then
+      echo "publish: $base is already published"
+      continue
+    fi
+    cp "$f" "$PKGDEST/$base"
+    gpg --batch --quiet --detach-sign --no-armor --use-agent -u "$fpr" "$PKGDEST/$base"
+    built+=("$PKGDEST/$base")
+    echo "publish: $base: built elsewhere, signed here"
+  done
+  shopt -u nullglob
+fi
+
 if (( ${#built[@]} == 0 )); then
   echo "publish: nothing new to publish"
   mirror_if_behind   # catches up after a run whose mirror step failed
@@ -406,6 +447,20 @@ rcl lsf --files-only "$dest" > "$work/listing" 2>/dev/null || : > "$work/listing
 for f in "$repo.db.tar.gz" "$repo.db.tar.gz.sig" "$repo.files.tar.gz" "$repo.files.tar.gz.sig"; do
   if in_bucket "$f"; then rcl copyto "$dest/$f" "$work/repo/$f"; fi   # a failed copy stops the run
 done
+# A prebuilt package's version only goes up: refuse one older than the database's entry.
+if [[ -n $prebuilt && -f $db ]]; then
+  for f in "${built[@]}"; do
+    info=$(bsdtar -xOf "$f" .PKGINFO)
+    name=$(awk -F' = ' '$1 == "pkgname" { print $2; exit }' <<<"$info")
+    ver=$(awk -F' = ' '$1 == "pkgver" { print $2; exit }' <<<"$info")
+    have=$(tar -xzOf "$db" --wildcards "$name-*/desc" 2>/dev/null \
+      | awk -v n="$name" '/^%NAME%$/ { getline; m = ($0 == n) } m && /^%VERSION%$/ { getline; print; exit }' || true)
+    if [[ -n $have ]] && (( $(vercmp "$ver" "$have") < 0 )); then
+      echo "publish: $name $ver is older than the $have in $prefix: refused (versions only go up)" >&2
+      exit 1
+    fi
+  done
+fi
 # --verify checks the current database's signature before touching it;
 # --sign signs the new one. repo-add replaces an older entry of the same name.
 repo-add --verify --sign --key "$fpr" "$db" "${built[@]}"

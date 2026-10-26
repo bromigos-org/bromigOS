@@ -42,6 +42,11 @@ bromigos install --with bromigos-apps
 
 <!-- /generated:packages -->
 
+**BRODEC (optional):** `sudo pacman -S brodec-desktop`. BRODEC is a separate Bromigos
+product, an end-to-end encrypted messenger. Its desktop app is in the bromigOS package
+repository, but it isn't installed by default. Once you install it, system updates keep
+it current.
+
 ## Where your own files go
 
 Updates replace the packages' files, not yours. The full list of folders is on

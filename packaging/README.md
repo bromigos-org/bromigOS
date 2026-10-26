@@ -27,6 +27,7 @@ packaging/
                            sources pinned by checksum
   ci/publish.sh            build, sign, add to the database, upload, prune
   ci/prepare-container.sh  sets up the build container for publish.sh
+  ci/brodec-desktop.sh     fetches and checks BRODEC's desktop app for publish.sh
   dev-repo.sh              your own build as a local repository, for the dev channel
   setup-repo.sh            adds [bromigos] to a machine by hand (install.sh does this now)
 ```
@@ -34,6 +35,10 @@ packaging/
 `bromigos-vector`, which holds VECTOR, the desktop's AI assistant, is built the same way
 in the `bromigos-org/vector` repository. It's published into the same `[bromigos]`
 repository.
+
+`brodec-desktop`, BRODEC's desktop app, is in `[bromigos]` too, but it isn't part of
+bromigOS: nothing installs it unless you ask. See
+[BRODEC's desktop app](#brodecs-desktop-app).
 
 For users, the manual's [What gets installed](../manual/src/packages.md) page lists the
 packages. That table is generated from these PKGBUILDs.
@@ -317,6 +322,56 @@ gh workflow run packages -R bromigos-org/bromigOS -f hosted=true -f prefix=ci-te
 gh workflow run manual -R bromigos-org/bromigOS -f hosted=true -f prefix=ci-test
 ```
 
+### BRODEC's desktop app
+
+BRODEC is a separate Bromigos product, an end-to-end encrypted messenger. Its desktop app,
+`brodec-desktop`, is published in `[bromigos]` so any bromigOS machine can add it:
+
+```bash
+sudo pacman -S brodec-desktop
+```
+
+It's optional. No bromigOS package depends on it, and a system update only updates it once
+it's installed.
+
+BRODEC's source is in its own private repository, so this repository never builds it.
+The work is split so the signing key stays here:
+
+1. BRODEC's CI builds the package on every change to its desktop app or engine. It runs
+   the package's tests, then stages the package, unsigned, as the only file of a commit at
+   the git ref `refs/brodec-desktop/package` in BRODEC's repository. The commit's message
+   names the file, the commit it was built from and the file's SHA-256.
+2. The workflow `.github/workflows/brodec-desktop.yml` looks for a new staged package every
+   20 minutes. It reads the ref with a deploy key that can only read BRODEC's repository.
+   A run that finds nothing new stops after a few seconds.
+3. `ci/brodec-desktop.sh fetch` checks the package before anything is signed:
+   - the commit holds that one file, and its SHA-256 matches;
+   - the commit it was built from is on BRODEC's `main` branch;
+   - that commit no longer has `desktop/brodec_desktop/`, BRODEC's old Python desktop app,
+     and the package doesn't carry it either. Until BRODEC's Rust app replaces it, nothing
+     is published;
+   - the package is `brodec-desktop` for `x86_64`, and its version names that commit.
+4. `ci/publish.sh` signs the package and adds it to the `edge`, `rc` and `stable`
+   channels, one after the other. It runs with `PKGS_PREBUILT` set, so it builds nothing
+   from `packaging/`. It takes each channel's lease like any other publish, so it never
+   races this repository's or VECTOR's.
+
+With `PKGS_PREBUILT`, `publish.sh` also does this:
+
+- It refuses a version older than the one already in the channel. Versions only go up.
+- It publishes only while the public bucket is the primary, with `bromigos/.primary`
+  there. It never writes that note itself.
+- It leaves `install.sh` and the key alone.
+
+BRODEC's version is `<version>.r<commits on BRODEC's main>.g<commit>`. It doesn't follow
+bromigOS's release tags, so each new build goes to all three channels at once.
+
+To publish the staged package again, even where a channel already has it, run:
+
+```bash
+gh workflow run brodec-desktop -R bromigos-org/bromigOS -f rebuild=true
+```
+
 ### What CI needs
 
 These repository secrets hold the publishing credentials. Their values live in the
@@ -331,6 +386,7 @@ deployment's secret store, never in this repository.
 | `PKGS_PUBLIC_ENDPOINT` | The public mirror's S3 endpoint, `https://<account>.r2.cloudflarestorage.com` |
 | `PKGS_PUBLIC_BUCKET` | The public mirror's bucket, `bromigos-pkgs` |
 | `PKGS_PUBLIC_ACCESS_KEY_ID`, `PKGS_PUBLIC_SECRET_ACCESS_KEY` | The S3 key of an R2 API token that may read and write that bucket only |
+| `BRODEC_DEPLOY_KEY` | An SSH private key whose public half is a read-only deploy key on BRODEC's repository. Only `brodec-desktop.yml` uses it. Without it, that workflow does nothing |
 
 The secrets are only ever environment variables. `publish.sh` never prints them and never
 passes them as arguments. It keeps the key in a temporary `GNUPGHOME` that it deletes on

@@ -1,0 +1,112 @@
+# BRODEC's desktop app, brodec-desktop, in [bromigos] (packaging/README.md, "BRODEC's desktop
+# app"). It's optional: nothing depends on it, and `sudo pacman -S brodec-desktop` installs it.
+#
+# BRODEC's repository is private. Its CI builds the package and stages it, unsigned, at a git
+# ref there. This workflow reads that ref with a read-only deploy key, checks the package
+# (packaging/ci/brodec-desktop.sh), signs it with this repository's key and adds it to every
+# channel's database (packaging/ci/publish.sh, PKGS_PREBUILT), under the same lease as every
+# other publish. The signing key never leaves this repository.
+#
+# Every 20 minutes it looks for a new build; a run with nothing new stops after a few seconds.
+name: brodec-desktop
+
+on:
+  schedule:
+    - cron: "7,27,47 * * * *"
+  workflow_dispatch:
+    inputs:
+      rebuild:
+        description: "Sign and add the staged package again, even where a channel has it"
+        type: boolean
+        default: false
+
+# One at a time: each run reads, extends and rewrites three databases. A newer run waits.
+concurrency:
+  group: brodec-desktop
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Look for a new build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      file: ${{ steps.staged.outputs.file }}
+      channels: ${{ steps.missing.outputs.channels }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: packaging/ci
+      - name: Configured
+        id: configured
+        env:
+          BRODEC_DEPLOY_KEY: ${{ secrets.BRODEC_DEPLOY_KEY }}
+        run: |
+          if [ -n "$BRODEC_DEPLOY_KEY" ]; then echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else echo "::notice::No BRODEC_DEPLOY_KEY secret: nothing to read"; fi
+      - name: The staged build
+        id: staged
+        if: steps.configured.outputs.ready == 'true'
+        env:
+          BRODEC_DEPLOY_KEY: ${{ secrets.BRODEC_DEPLOY_KEY }}
+        run: packaging/ci/brodec-desktop.sh staged
+      - name: The channels that don't have it
+        id: missing
+        if: steps.staged.outputs.file != ''
+        env:
+          FILE: ${{ steps.staged.outputs.file }}
+          REBUILD: ${{ inputs.rebuild && 'true' || 'false' }}
+        run: |
+          if [ "$REBUILD" = true ]; then
+            echo 'channels=edge rc stable' >> "$GITHUB_OUTPUT"
+          else
+            packaging/ci/brodec-desktop.sh missing "$FILE"
+          fi
+
+  publish:
+    name: Check, sign and publish
+    needs: check
+    if: needs.check.outputs.channels != ''
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    timeout-minutes: 45
+    steps:
+      - name: git
+        run: pacman -Syu --noconfirm --needed git openssh >/dev/null
+      - uses: actions/checkout@v5
+      - name: Prepare the container
+        run: packaging/ci/prepare-container.sh "$GITHUB_WORKSPACE"
+      - name: Fetch and check the package
+        env:
+          BRODEC_DEPLOY_KEY: ${{ secrets.BRODEC_DEPLOY_KEY }}
+        run: |
+          install -d -o builder -g builder /tmp/brodec-desktop
+          packaging/ci/brodec-desktop.sh fetch /tmp/brodec-desktop
+          chown -R builder:builder /tmp/brodec-desktop
+      - name: Sign and publish to each channel
+        env:
+          PKGS_GPG_PRIVATE_KEY: ${{ secrets.PKGS_GPG_PRIVATE_KEY }}
+          PKGS_GPG_PASSPHRASE: ${{ secrets.PKGS_GPG_PASSPHRASE }}
+          PKGS_PUBLIC_ENDPOINT: ${{ secrets.PKGS_PUBLIC_ENDPOINT }}
+          PKGS_PUBLIC_BUCKET: ${{ secrets.PKGS_PUBLIC_BUCKET }}
+          PKGS_PUBLIC_ACCESS_KEY_ID: ${{ secrets.PKGS_PUBLIC_ACCESS_KEY_ID }}
+          PKGS_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.PKGS_PUBLIC_SECRET_ACCESS_KEY }}
+          PKGS_PRIMARY: public
+          PKGS_PREBUILT: /tmp/brodec-desktop
+          PKGS_KEEP: "3"
+          PKGS_REBUILD: ${{ inputs.rebuild && '1' || '0' }}
+          CHANNELS: ${{ needs.check.outputs.channels }}
+        # sudo keeps only what --preserve-env names: the secrets reach publish.sh through its
+        # environment, never its command line.
+        run: |
+          for ch in $CHANNELS; do
+            echo "::group::$ch"
+            PKGS_CHANNEL=$ch sudo -u builder \
+              --preserve-env=PKGS_GPG_PRIVATE_KEY,PKGS_GPG_PASSPHRASE,PKGS_PUBLIC_ENDPOINT,PKGS_PUBLIC_BUCKET,PKGS_PUBLIC_ACCESS_KEY_ID,PKGS_PUBLIC_SECRET_ACCESS_KEY,PKGS_PRIMARY,PKGS_PREBUILT,PKGS_KEEP,PKGS_REBUILD,PKGS_CHANNEL,GITHUB_REPOSITORY,GITHUB_RUN_ID \
+              packaging/ci/publish.sh
+            echo "::endgroup::"
+          done

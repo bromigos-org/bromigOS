@@ -193,6 +193,11 @@ Then it runs `bromigos setup`, unless you gave `--no-setup`.
 
 <!-- /generated:packages -->
 
+**BRODEC (optional):** `sudo pacman -S brodec-desktop`. BRODEC is a separate Bromigos
+product, an end-to-end encrypted messenger. Its desktop app is in the bromigOS package
+repository, but it isn't installed by default. Once you install it, system updates keep
+it current.
+
 ## bromigos setup
 
 `bromigos setup` asks the first-run questions, one page per section. You can run it again
