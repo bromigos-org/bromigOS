@@ -337,7 +337,7 @@ def ssh_sign_in(key, say=print, sign_with=None, cancelled=None):
         raise A.SignInError("the account gave no token")
     rec = A._record(PROVIDER, tok)
     rec.update(how="ssh", ssh_key=key.fingerprint)
-    A._save(PROVIDER, rec)
+    _keep(rec, "bromigos login --ssh")
     return A.status(PROVIDER)
 
 
@@ -383,6 +383,32 @@ def open_browser(url):
         return True
     except OSError:
         return False
+
+
+# ------------------------------------------------------------------ the keyring
+def _keep(rec, again):
+    """Store an approved sign-in in the keyring, or say plainly that it wasn't kept and why."""
+    try:
+        A._save(PROVIDER, rec)
+    except RuntimeError as e:
+        raise LoginError(f"You approved the sign-in, but this computer couldn't keep it, so you're not signed in "
+                         f"here. {_plain(e)} Then run {again} again.") from None
+
+
+def _plain(e):
+    """A keyring error in plain words: KeyringError already is; anything else (a GLib error
+    from libsecret) goes through bromigos_keyring.explain, never printed raw."""
+    if isinstance(e, A.KeyringError):
+        return str(e)
+    import bromigos_keyring
+    return bromigos_keyring.explain(e)
+
+
+def _keyring_first():
+    """Before a sign-in starts: a keyring that can keep it, so the approval isn't wasted."""
+    why = A.keyring_ready()
+    if why:
+        raise LoginError(why)
 
 
 # ------------------------------------------------------------------ command line
@@ -451,7 +477,7 @@ def _browser_login(say, no_browser, stdin, opener):
         raise A.SignInError("the account gave no token")
     rec = A._record(PROVIDER, tok)
     rec["how"] = "device"
-    A._save(PROVIDER, rec)
+    _keep(rec, "bromigos login")
     return A.status(PROVIDER)
 
 
@@ -464,6 +490,7 @@ def _read_token(stdin):
 def login(args, say=print, stdin=None, opener=None):
     stdin = stdin if stdin is not None else sys.stdin
     opener = opener or open_browser
+    _keyring_first()
     if args.with_token:
         try:
             st = A.set_token(PROVIDER, _read_token(stdin))
@@ -548,8 +575,8 @@ def main(verb, argv):
     except (LoginError, A.SignInError, A.NeedsConfig) as e:
         print(f"bromigos {verb}: {e}", file=sys.stderr)
         return 1
-    except RuntimeError as e:                      # no keyring
-        print(f"bromigos {verb}: {e}", file=sys.stderr)
+    except RuntimeError as e:                      # the keyring (a GLib error is a RuntimeError too)
+        print(f"bromigos {verb}: {_plain(e)}", file=sys.stderr)
         return 1
     except urllib.error.HTTPError as e:
         print(f"bromigos {verb}: the account service said HTTP {e.code}. {_said(e)}".strip(), file=sys.stderr)

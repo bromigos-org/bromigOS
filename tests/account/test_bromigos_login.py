@@ -370,5 +370,53 @@ class Tokens(Base):
         self.assertIn("can't make one for you", text)
 
 
+class BrokenKeyring(A.MemoryKeyring):
+    """A keyring that fails to store, the way libsecret does when no Secret Service runs:
+    a GLib error is a RuntimeError, and str() of it is its raw D-Bus words."""
+
+    RAW = "g-dbus-error-quark: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name is not activatable (2)"
+
+    def set(self, service, account, label, value):
+        raise RuntimeError(self.RAW)
+
+
+class Keyring(Base):
+    """No keyring, or one that fails after the approval: plain words, never a D-Bus error."""
+
+    def test_no_keyring_stops_before_the_code_is_shown(self):
+        import bromigos_keyring as K
+        with mock.patch.object(A, "keyring_ready", return_value=K.NO_KEYRING):
+            code, out, err = self.cli("login")
+        self.assertEqual(code, 1)
+        self.assertIn("No keyring is running", err)
+        self.assertIn("sudo pacman -S bromigos/oo7", err)
+        self.assertNotIn("enter this code", out)                     # no approval wasted
+        self.assertNotIn(("POST", "/auth/device/code"), self.acct.requests)
+        with mock.patch.object(A, "keyring_ready", return_value=K.NO_KEYRING):
+            self.assertEqual(self.cli("login", "--with-token", stdin=Pipe("bmg_pat_x"))[0], 1)
+
+    def test_a_store_that_fails_after_approval_says_what_happened(self):
+        self.acct.auto_approve_after = 1
+        A.KEYRING = BrokenKeyring()
+        with mock.patch.object(A, "keyring_ready", return_value=None):
+            code, out, err = self.cli("login")
+        self.assertEqual(code, 1)
+        self.assertIn("You approved the sign-in, but this computer couldn't keep it", err)
+        self.assertIn("No keyring is running", err)
+        self.assertIn("Then run bromigos login again.", err)
+        self.assertNotIn("quark", err + out)
+        self.assertNotIn("org.freedesktop.DBus.Error", err + out)
+
+    def test_a_raw_glib_error_anywhere_is_put_in_plain_words(self):
+        with mock.patch.object(L, "login", side_effect=RuntimeError(BrokenKeyring.RAW)):
+            code, out, err = self.cli("login")
+        self.assertEqual(code, 1)
+        self.assertTrue(err.startswith("bromigos login: No keyring is running"), err)
+        self.assertNotIn("quark", err)
+
+    def test_the_stand_in_keyring_is_always_ready(self):
+        self.assertIsNone(A.keyring_ready())
+
+
 if __name__ == "__main__":
     unittest.main()

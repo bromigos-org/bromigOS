@@ -454,16 +454,30 @@ def remove_account(provider, name):
 
 
 # ------------------------------------------------------------------ the keyring (libsecret)
+class KeyringError(RuntimeError):
+    """The keyring couldn't be reached or refused, in plain words (bromigos_keyring.explain):
+    never a raw D-Bus error."""
+
+
+def _plain(e):
+    import bromigos_keyring
+    return KeyringError(bromigos_keyring.explain(e))
+
+
 class _SecretService:
-    """The login keyring through libsecret's GObject bindings, else the secret-tool command."""
+    """The login keyring through libsecret's GObject bindings, else the secret-tool command.
+    Errors come out as KeyringError, in plain words. Storing gives up after STORE_TIMEOUT
+    seconds, so a password window nobody can see never hangs a sign-in."""
+
+    STORE_TIMEOUT = 120
 
     def __init__(self):
         self.lib = None
         try:
             import gi
             gi.require_version("Secret", "1")
-            from gi.repository import Secret
-            self.lib = Secret
+            from gi.repository import Gio, GLib, Secret
+            self.lib, self.gio, self.glib = Secret, Gio, GLib
             self.schema = Secret.Schema.new("org.bromigos.Account", Secret.SchemaFlags.NONE,
                                             {"service": Secret.SchemaAttributeType.STRING,
                                              "account": Secret.SchemaAttributeType.STRING})
@@ -473,34 +487,68 @@ class _SecretService:
     def get(self, service, account):
         attrs = {"service": service, "account": account}
         if self.lib:
-            return self.lib.password_lookup_sync(self.schema, attrs, None)
+            try:
+                return self.lib.password_lookup_sync(self.schema, attrs, None)
+            except self.glib.Error as e:
+                raise _plain(e) from None
         if shutil.which("secret-tool"):
             r = subprocess.run(["secret-tool", "lookup", "service", service, "account", account],
                                capture_output=True, text=True, timeout=10)
+            if r.returncode and r.stderr.strip():
+                raise _plain(r.stderr.strip())
             return r.stdout if r.returncode == 0 and r.stdout else None
-        raise RuntimeError("no keyring: install libsecret (and a Secret Service such as gnome-keyring)")
+        raise KeyringError(NO_KEYRING)
 
     def set(self, service, account, label, value):
         attrs = {"service": service, "account": account}
         if self.lib:
-            if not self.lib.password_store_sync(self.schema, attrs, self.lib.COLLECTION_DEFAULT, label, value, None):
-                raise RuntimeError("the keyring refused to store it")
+            cancel = self.gio.Cancellable()
+            timer = threading.Timer(self.STORE_TIMEOUT, cancel.cancel)
+            timer.daemon = True
+            timer.start()
+            try:
+                ok = self.lib.password_store_sync(self.schema, attrs, self.lib.COLLECTION_DEFAULT, label, value, cancel)
+            except self.glib.Error as e:
+                raise _plain("timed out" if cancel.is_cancelled() else e) from None
+            finally:
+                timer.cancel()
+            if not ok:
+                raise KeyringError("The keyring refused to store it. bromigos keyring status checks the keyring.")
             return
         if shutil.which("secret-tool"):
-            r = subprocess.run(["secret-tool", "store", "--label", label, "service", service, "account", account],
-                               input=value, capture_output=True, text=True, timeout=30)
+            try:
+                r = subprocess.run(["secret-tool", "store", "--label", label, "service", service, "account", account],
+                                   input=value, capture_output=True, text=True, timeout=self.STORE_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                raise _plain("timed out") from None
             if r.returncode:
-                raise RuntimeError("secret-tool: " + (r.stderr.strip() or "failed"))
+                raise _plain(r.stderr.strip() or "secret-tool failed")
             return
-        raise RuntimeError("no keyring: install libsecret (and a Secret Service such as gnome-keyring)")
+        raise KeyringError(NO_KEYRING)
 
     def delete(self, service, account):
         attrs = {"service": service, "account": account}
         if self.lib:
-            self.lib.password_clear_sync(self.schema, attrs, None)
+            try:
+                self.lib.password_clear_sync(self.schema, attrs, None)
+            except self.glib.Error as e:
+                raise _plain(e) from None
         elif shutil.which("secret-tool"):
             subprocess.run(["secret-tool", "clear", "service", service, "account", account],
                            capture_output=True, timeout=10)
+
+
+NO_KEYRING = ("No keyring here: install libsecret and oo7, bromigOS's keyring (sudo pacman -S libsecret bromigos/oo7), "
+              "then run bromigos keyring setup. The manual explains it under Your Bromigos account › Your keyring.")
+
+
+def keyring_ready():
+    """None when a sign-in can be kept here, else why not, in plain words (asked before a
+    sign-in starts, so an approval isn't wasted). A stand-in keyring (tests) is always ready."""
+    if not isinstance(_ring(), _SecretService):
+        return None
+    import bromigos_keyring
+    return bromigos_keyring.ready()
 
 
 class MemoryKeyring:
@@ -1076,6 +1124,9 @@ def sign_in(provider, on_prompt=None, cancelled=None, account=DEFAULT):
     missing = needs(provider, account)
     if missing:
         raise NeedsConfig(provider, missing, account)
+    why = keyring_ready()
+    if why:
+        raise SignInError(why)
     prompt = on_prompt or _default_prompt(provider, account)
     if p["flow"] in ("device", "plex-pin"):
         start = (plex_start if p["flow"] == "plex-pin" else device_start)(provider, account=account)
