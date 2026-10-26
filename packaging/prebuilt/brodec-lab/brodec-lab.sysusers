@@ -1,0 +1,2 @@
+# The lab bridge's own user: it owns /var/lib/brodec-lab and nothing else.
+u brodec-lab - "BRODEC lab bridge" /var/lib/brodec-lab

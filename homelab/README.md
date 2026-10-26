@@ -25,6 +25,7 @@ How it works, how to connect a homelab and how to write an adapter:
 | `share/homelab.toml` | `/usr/share/bromigos/default/homelab.toml` | the packaged default: every key documented, no sources |
 | `share/lab/` | `/usr/share/bromigos/homelab/lab/` | the lab's data (below) |
 | `holo/` | `/usr/share/bromigos/homelab/holo/` | the rack hologram ([holo/README.md](holo/README.md)) |
+| `charts/brodec-lab/` | not installed: published as a Helm chart | the optional lab bridge's chart, for Kubernetes ([its README](charts/brodec-lab/README.md)) |
 | `tests/` | not installed | unit tests against recorded API answers, and an end-to-end test |
 
 `share/lab/` holds three data files:

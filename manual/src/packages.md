@@ -51,6 +51,11 @@ repository, but it isn't installed by default. Once you install it, system updat
 it current. It keeps its sign-in in your [keyring](bromigos-account.md#your-keyring), as bromigOS
 does.
 
+BRODEC's lab bridge is optional too: `sudo pacman -S brodec-lab` lets this machine report
+to your BRODEC account as your lab. It only reads. Nothing starts until you run
+`sudo systemctl enable --now brodec-lab`, then `sudo brodec-lab pair`, and scan the code it
+shows in BRODEC.
+
 ## Where your own files go
 
 Updates replace the packages' files, not yours. The full list of folders is on

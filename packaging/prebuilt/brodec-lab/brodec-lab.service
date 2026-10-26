@@ -1,0 +1,51 @@
+# BRODEC's lab bridge: VECTOR in this lab, reporting to its owner's BRODEC account, end to end
+# encrypted. Opt-in: nothing enables it. `sudo systemctl enable --now brodec-lab`, then
+# `sudo brodec-lab pair`. It only reads: it needs no rights beyond its own folder and the network.
+[Unit]
+Description=BRODEC lab bridge (VECTOR in your lab)
+Documentation=https://bromigos.org
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=brodec-lab
+Group=brodec-lab
+EnvironmentFile=-/etc/brodec-lab/brodec-lab.env
+Environment=BRODEC_DATA_DIR=/var/lib/brodec-lab
+Environment=BRODEC_SWITCH_ON_FILE=/var/lib/brodec-lab/switch-on
+ExecStart=/usr/lib/brodec-lab/brodec-lab run
+Restart=on-failure
+RestartSec=10s
+
+StateDirectory=brodec-lab
+StateDirectoryMode=0700
+UMask=0077
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

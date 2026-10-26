@@ -1,0 +1,31 @@
+# Maintainer: BROMIGOS INC
+#
+# brodec-lab: BRODEC's lab bridge, built from BRODEC's private source by BRODEC's CI and
+# checked here (packaging/ci/brodec-lab.sh fetch). Not built by publish.sh's normal run: this
+# folder sits under packaging/prebuilt/, which has no PKGBUILD of its own. The brodec-lab
+# workflow puts the checked binary next to this file as brodec-lab.bin, sets pkgver, and runs
+# makepkg (packaging/README.md, "BRODEC's lab bridge").
+
+pkgname=brodec-lab
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
+pkgdesc="BRODEC's lab bridge: VECTOR in your own lab, reporting to your BRODEC account (opt-in)"
+arch=('x86_64')
+url='https://brodec.ai'
+license=('LicenseRef-Proprietary')
+depends=('glibc' 'gcc-libs' 'ca-certificates' 'util-linux')
+optdepends=('ffmpeg: voice messages to VECTOR'
+            'poppler: PDFs sent to VECTOR')
+backup=('etc/brodec-lab/brodec-lab.env')
+install=brodec-lab.install
+options=('!debug' '!strip')
+
+package() {
+  cd "$startdir"
+  install -Dm755 brodec-lab.bin "$pkgdir/usr/lib/brodec-lab/brodec-lab"
+  install -Dm755 brodec-lab.sh "$pkgdir/usr/bin/brodec-lab"
+  install -Dm644 brodec-lab.service "$pkgdir/usr/lib/systemd/system/brodec-lab.service"
+  install -Dm644 brodec-lab.sysusers "$pkgdir/usr/lib/sysusers.d/brodec-lab.conf"
+  install -Dm644 brodec-lab.tmpfiles "$pkgdir/usr/lib/tmpfiles.d/brodec-lab.conf"
+  install -Dm644 brodec-lab.env "$pkgdir/etc/brodec-lab/brodec-lab.env"
+}

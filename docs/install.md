@@ -202,6 +202,11 @@ repository, but it isn't installed by default. Once you install it, system updat
 it current. It keeps its sign-in in your [keyring](bromigos-account.md#the-keyring), as bromigOS
 does.
 
+BRODEC's lab bridge is optional too: `sudo pacman -S brodec-lab` lets this machine report
+to your BRODEC account as your lab. It only reads. Nothing starts until you run
+`sudo systemctl enable --now brodec-lab`, then `sudo brodec-lab pair`, and scan the code it
+shows in BRODEC.
+
 ## bromigos setup
 
 `bromigos setup` asks the first-run questions, one page per section. You can run it again

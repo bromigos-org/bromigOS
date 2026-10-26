@@ -1,0 +1,255 @@
+# BRODEC's lab bridge, brodec-lab, published three ways from one checked binary (packaging/README.md,
+# "BRODEC's lab bridge"):
+#
+#   - the image  ghcr.io/bromigos-org/brodec-lab:<version> and :latest, signed with cosign
+#   - the chart  oci://ghcr.io/bromigos-org/charts/brodec-lab (homelab/charts/brodec-lab)
+#   - the package  brodec-lab in [bromigos], every channel (opt-in: nothing depends on it)
+#
+# BRODEC's repository is private. Its CI builds the bridge and stages a tarball at a git ref
+# there. This workflow reads that ref with the read-only deploy key brodec-desktop.yml uses,
+# checks it (packaging/ci/brodec-lab.sh), and publishes what isn't published yet. Nothing is
+# compiled here. Every 20 minutes it looks for a new build; a run with nothing new stops after a
+# few seconds. A change to the chart, the image's Dockerfile or the package's files publishes
+# them again for the staged build.
+name: brodec-lab
+
+on:
+  schedule:
+    - cron: "17,37,57 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "homelab/charts/brodec-lab/**"
+      - "packaging/prebuilt/brodec-lab/**"
+      - "packaging/ci/brodec-lab.sh"
+      - ".github/workflows/brodec-lab.yml"
+  pull_request:
+    paths:
+      - "homelab/charts/brodec-lab/**"
+      - "packaging/prebuilt/brodec-lab/**"
+      - "packaging/ci/brodec-lab.sh"
+      - ".github/workflows/brodec-lab.yml"
+  workflow_dispatch:
+    inputs:
+      rebuild:
+        description: "Publish the staged build again: image, chart and package"
+        type: boolean
+        default: false
+
+# One at a time: each run may rewrite three package databases. A newer run waits.
+concurrency:
+  group: brodec-lab-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  HELM_VERSION: v3.19.0
+
+jobs:
+  chart-tests:
+    name: Chart tests
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: homelab/charts/brodec-lab
+      - uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+      - run: python3 -m pip install --quiet pyyaml
+      - run: python3 homelab/charts/brodec-lab/tests/test_chart.py
+
+  check:
+    name: Look for a new build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      version: ${{ steps.staged.outputs.version }}
+      image: ${{ steps.missing.outputs.image }}
+      chart: ${{ steps.missing.outputs.chart }}
+      channels: ${{ steps.missing.outputs.channels }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            packaging/ci
+            homelab/charts/brodec-lab
+      - name: Configured
+        id: configured
+        env:
+          BRODEC_DEPLOY_KEY: ${{ secrets.BRODEC_DEPLOY_KEY }}
+        run: |
+          if [ -n "$BRODEC_DEPLOY_KEY" ]; then echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else echo "::notice::No BRODEC_DEPLOY_KEY secret: nothing to read"; fi
+      - name: The staged build
+        id: staged
+        if: steps.configured.outputs.ready == 'true'
+        env:
+          BRODEC_DEPLOY_KEY: ${{ secrets.BRODEC_DEPLOY_KEY }}
+        run: packaging/ci/brodec-lab.sh staged
+      - name: What isn't published yet
+        id: missing
+        if: steps.staged.outputs.version != ''
+        env:
+          VERSION: ${{ steps.staged.outputs.version }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REBUILD: ${{ inputs.rebuild && 'true' || 'false' }}
+        run: |
+          if [ "$REBUILD" = true ]; then
+            {
+              echo "image=$VERSION"
+              GITHUB_OUTPUT='' packaging/ci/brodec-lab.sh chart-version "$VERSION" | sed 's/^chart_version=/chart=/'
+              echo 'channels=edge rc stable'
+            } >> "$GITHUB_OUTPUT"
+          else
+            packaging/ci/brodec-lab.sh missing "$VERSION" | tee /tmp/missing
+            if [ "$GITHUB_EVENT_NAME" = push ] && grep -qx 'chart=' /tmp/missing; then
+              echo "::notice::The chart for this build is already published. To publish a chart change, bump the minor version in homelab/charts/brodec-lab/Chart.yaml."
+            fi
+          fi
+
+  image:
+    name: Image
+    needs: check
+    if: needs.check.outputs.image != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write   # cosign's keyless signature
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            packaging
+            homelab/charts/brodec-lab
+      - name: Fetch and check the bridge
+        env:
+          BRODEC_DEPLOY_KEY: ${{ secrets.BRODEC_DEPLOY_KEY }}
+        run: |
+          packaging/ci/brodec-lab.sh fetch /tmp/bridge
+          cp packaging/prebuilt/brodec-lab/Dockerfile /tmp/bridge/
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: /tmp/bridge
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/bromigos-org/brodec-lab:${{ needs.check.outputs.version }}
+            ghcr.io/bromigos-org/brodec-lab:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/bromigos-org/bromigOS
+            org.opencontainers.image.title=brodec-lab
+            org.opencontainers.image.description=BRODEC's lab bridge: VECTOR in your own lab, reporting to your BRODEC account
+            org.opencontainers.image.version=${{ needs.check.outputs.version }}
+            org.opencontainers.image.licenses=LicenseRef-Proprietary
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "ghcr.io/bromigos-org/brodec-lab@$DIGEST"
+
+  chart:
+    name: Chart
+    needs: [check, image]
+    if: >-
+      always() && needs.check.result == 'success' && needs.check.outputs.chart != '' &&
+      (needs.image.result == 'success' || needs.image.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: homelab/charts/brodec-lab
+      - uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+      - name: Package and push
+        id: push
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          CHART_VERSION: ${{ needs.check.outputs.chart }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          helm registry login ghcr.io -u "$ACTOR" --password-stdin <<<"$GHCR_TOKEN"
+          helm package homelab/charts/brodec-lab --version "$CHART_VERSION" --app-version "$VERSION" -d /tmp/chart
+          helm push "/tmp/chart/brodec-lab-$CHART_VERSION.tgz" oci://ghcr.io/bromigos-org/charts 2>&1 | tee /tmp/push.log
+          echo "digest=$(sed -n 's/^Digest: //p' /tmp/push.log)" >> "$GITHUB_OUTPUT"
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          cosign login ghcr.io -u "$ACTOR" --password-stdin <<<"$GHCR_TOKEN"
+          cosign sign --yes "ghcr.io/bromigos-org/charts/brodec-lab@$DIGEST"
+
+  package:
+    name: Package
+    needs: check
+    if: needs.check.outputs.channels != ''
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    timeout-minutes: 30
+    steps:
+      - name: git
+        run: pacman -Syu --noconfirm --needed git openssh >/dev/null
+      - uses: actions/checkout@v5
+      - name: Prepare the container
+        run: packaging/ci/prepare-container.sh "$GITHUB_WORKSPACE"
+      - name: Fetch, check and package the bridge
+        env:
+          BRODEC_DEPLOY_KEY: ${{ secrets.BRODEC_DEPLOY_KEY }}
+        run: |
+          install -d -o builder -g builder /tmp/bridge /tmp/brodec-lab
+          packaging/ci/brodec-lab.sh fetch /tmp/bridge
+          chown -R builder:builder /tmp/bridge
+          sudo -u builder packaging/ci/brodec-lab.sh package /tmp/bridge /tmp/brodec-lab
+      - name: Sign and publish to each channel
+        env:
+          PKGS_GPG_PRIVATE_KEY: ${{ secrets.PKGS_GPG_PRIVATE_KEY }}
+          PKGS_GPG_PASSPHRASE: ${{ secrets.PKGS_GPG_PASSPHRASE }}
+          PKGS_PUBLIC_ENDPOINT: ${{ secrets.PKGS_PUBLIC_ENDPOINT }}
+          PKGS_PUBLIC_BUCKET: ${{ secrets.PKGS_PUBLIC_BUCKET }}
+          PKGS_PUBLIC_ACCESS_KEY_ID: ${{ secrets.PKGS_PUBLIC_ACCESS_KEY_ID }}
+          PKGS_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.PKGS_PUBLIC_SECRET_ACCESS_KEY }}
+          PKGS_PRIMARY: public
+          PKGS_PREBUILT: /tmp/brodec-lab
+          PKGS_KEEP: "3"
+          PKGS_REBUILD: ${{ inputs.rebuild && '1' || '0' }}
+          CHANNELS: ${{ needs.check.outputs.channels }}
+        # sudo keeps only what --preserve-env names: the secrets reach publish.sh through its
+        # environment, never its command line.
+        run: |
+          for ch in $CHANNELS; do
+            echo "::group::$ch"
+            PKGS_CHANNEL=$ch sudo -u builder \
+              --preserve-env=PKGS_GPG_PRIVATE_KEY,PKGS_GPG_PASSPHRASE,PKGS_PUBLIC_ENDPOINT,PKGS_PUBLIC_BUCKET,PKGS_PUBLIC_ACCESS_KEY_ID,PKGS_PUBLIC_SECRET_ACCESS_KEY,PKGS_PRIMARY,PKGS_PREBUILT,PKGS_KEEP,PKGS_REBUILD,PKGS_CHANNEL,GITHUB_REPOSITORY,GITHUB_RUN_ID \
+              packaging/ci/publish.sh
+            echo "::endgroup::"
+          done

@@ -166,9 +166,10 @@ Check every command, flag, path and key against the code before you write it dow
 - **Line length.** Wrap prose at about 90 characters, as the existing files do.
 - **Nothing private.** No hostnames, LAN addresses, tokens, Vault paths or personal
   names. Examples use `example.org` and made-up names.
-- **Other products.** BRODEC is a separate product; don't mention it here. The one
-  exception is its optional desktop app in the package repository: the "BRODEC (optional)"
-  line on the package pages, and how it's published in packaging/README.md. Don't name
+- **Other products.** BRODEC is a separate product; don't mention it here. The exceptions
+  are its optional desktop app and its optional lab bridge, which bromigOS publishes: the
+  "BRODEC (optional)" lines on the package pages, how they're published in
+  packaging/README.md, and the lab bridge's chart in `homelab/charts/brodec-lab/`. Don't name
   other distributions as models or comparisons in user-facing pages.
 
 ## Before you commit

@@ -1,0 +1,6 @@
+post_install() {
+  echo "brodec-lab is installed but not running. To connect this machine as your lab:"
+  echo "  1. set its name and sources in /etc/brodec-lab/brodec-lab.env"
+  echo "  2. sudo systemctl enable --now brodec-lab"
+  echo "  3. sudo brodec-lab pair, then scan the code in BRODEC: LAB > CONNECT YOUR LAB"
+}

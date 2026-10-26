@@ -1,0 +1,16 @@
+apiVersion: v2
+name: brodec-lab
+description: BRODEC's lab bridge. VECTOR runs in your lab and reports to your BRODEC account, end to end encrypted. Read only.
+type: application
+# major.minor is the chart's own; CI sets the patch to the bridge's build number when it
+# publishes (packaging/ci/brodec-lab.sh chart-version). Bump the minor when you change the chart.
+version: 0.1.0
+# CI sets appVersion to the bridge's version, which is also the image tag.
+appVersion: "0.1.0"
+home: https://bromigos.org
+sources:
+  - https://github.com/bromigos-org/bromigOS/tree/main/homelab/charts/brodec-lab
+icon: https://bromigos.org/favicon.svg
+keywords: [homelab, monitoring, prometheus, alertmanager, encrypted]
+annotations:
+  licenses: Chart Apache-2.0 OR MIT; image proprietary

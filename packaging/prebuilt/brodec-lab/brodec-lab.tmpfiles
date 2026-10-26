@@ -1,0 +1,2 @@
+# The bridge's data: its pairing, its sealed session and its state. Only its user reads it.
+d /var/lib/brodec-lab 0700 brodec-lab brodec-lab -

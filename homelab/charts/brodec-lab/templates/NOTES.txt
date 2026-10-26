@@ -1,0 +1,14 @@
+BRODEC's lab bridge is starting in {{ .Release.Namespace }} as lab {{ include "brodec-lab.labName" . | quote }}.
+
+Pair it with your BRODEC account. Show its pairing code and QR code:
+
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "brodec-lab.fullname" . }} -- brodec-lab pair
+
+(It's in the log too: kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "brodec-lab.fullname" . }})
+Then in BRODEC: LAB > CONNECT YOUR LAB, and scan the code. It works for 10 minutes; a new
+one follows.
+{{- if not (or .Values.sources.prometheusUrl .Values.sources.alertmanagerUrl .Values.sources.labApi.url) }}
+
+No source is set, so VECTOR has nothing to report yet. Set sources.prometheusUrl,
+sources.alertmanagerUrl or sources.labApi.url (helm upgrade --reuse-values --set ...).
+{{- end }}

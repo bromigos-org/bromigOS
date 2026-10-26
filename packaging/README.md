@@ -29,6 +29,8 @@ packaging/
   ci/publish.sh            build, sign, add to the database, upload, prune
   ci/prepare-container.sh  sets up the build container for publish.sh
   ci/brodec-desktop.sh     fetches and checks BRODEC's desktop app for publish.sh
+  ci/brodec-lab.sh         fetches and checks BRODEC's lab bridge, and packages it
+  prebuilt/brodec-lab/     the lab bridge's package files and image (no build here)
   dev-repo.sh              your own build as a local repository, for the dev channel
   setup-repo.sh            adds [bromigos] to a machine by hand (install.sh does this now)
 ```
@@ -39,7 +41,8 @@ repository.
 
 `brodec-desktop`, BRODEC's desktop app, is in `[bromigos]` too, but it isn't part of
 bromigOS: nothing installs it unless you ask. See
-[BRODEC's desktop app](#brodecs-desktop-app).
+[BRODEC's desktop app](#brodecs-desktop-app). The same goes for `brodec-lab`, BRODEC's
+lab bridge: see [BRODEC's lab bridge](#brodecs-lab-bridge).
 
 For users, the manual's [What gets installed](../manual/src/packages.md) page lists the
 packages. That table is generated from these PKGBUILDs.
@@ -386,6 +389,67 @@ To publish the staged package again, even where a channel already has it, run:
 gh workflow run brodec-desktop -R bromigos-org/bromigOS -f rebuild=true
 ```
 
+### BRODEC's lab bridge
+
+`brodec-lab` is BRODEC's lab bridge. It runs in someone's own lab, reads the lab's
+monitoring and reports to its owner's BRODEC account, end to end encrypted. It only reads.
+It is published three ways, all from one binary:
+
+| What | Where | For |
+|---|---|---|
+| The image | `ghcr.io/bromigos-org/brodec-lab:<version>` and `:latest`, signed with cosign | Docker, Podman, Kubernetes |
+| The Helm chart | `oci://ghcr.io/bromigos-org/charts/brodec-lab`, from `homelab/charts/brodec-lab/` | Kubernetes |
+| The package | `brodec-lab` in `[bromigos]`, every channel | a bromigOS machine |
+
+The package is opt-in like `brodec-desktop`: nothing depends on it. It installs a system
+service, `brodec-lab.service`, which isn't enabled. Its files are in
+`prebuilt/brodec-lab/`, a folder `publish.sh` doesn't build on its normal run.
+
+The bridge's source is in BRODEC's private repository, so this repository never compiles it:
+
+1. BRODEC's CI builds the bridge on every change to its engine and runs the bridge's unit
+   tests. It stages a tarball as the only file of a commit at the git ref
+   `refs/brodec-lab/build` in BRODEC's repository. The tarball holds the binary, a README and
+   a VERSION file. The commit's message names the file, the commit it was built from, the
+   version and the file's SHA-256.
+2. The workflow `.github/workflows/brodec-lab.yml` looks for a new staged build every
+   20 minutes, with the same read-only deploy key as `brodec-desktop.yml`. It asks what isn't
+   published yet: the image tag, the chart version, and each channel's database.
+3. `ci/brodec-lab.sh fetch` checks the tarball before anything is published:
+   - the commit holds that one file, and its SHA-256 matches;
+   - the commit it was built from is on BRODEC's `main` branch, and the version names it;
+   - the tarball holds exactly `brodec-lab`, `README` and `VERSION`, and `brodec-lab` is an
+     x86-64 Linux program.
+4. Then, in parallel:
+   - the image job builds `prebuilt/brodec-lab/Dockerfile` around the binary (Debian, user
+     10001, nothing compiled), pushes it and signs it with cosign's keyless signing;
+   - the package job runs `ci/brodec-lab.sh package`, which makes the pacman package with
+     makepkg, and `ci/publish.sh` signs it and adds it to each channel, as for
+     `brodec-desktop`.
+5. Once the image is pushed, the chart job packages the chart and pushes it, signed too.
+
+**Versions.** The bridge's version is `<version>.r<commits on BRODEC's main>.g<commit>`,
+and only goes up. The chart's version is its own `major.minor` from `Chart.yaml` with the
+bridge's build number as the patch, such as `0.1.512`, and its `appVersion` is the bridge's
+version. So every new bridge is a new chart. To publish a change to the chart itself, bump
+the minor in `Chart.yaml`: a chart version that is already published is never replaced.
+
+**The image and chart are public.** GitHub makes a new package private. Once, after the
+first publish, an organisation owner opens each package's settings on GitHub
+(`brodec-lab`, and `charts/brodec-lab`) and changes its visibility to public.
+
+To publish the staged build again, image, chart and package, run:
+
+```bash
+gh workflow run brodec-lab -R bromigos-org/bromigOS -f rebuild=true
+```
+
+The chart's tests run on every pull request that touches it:
+
+```bash
+python3 homelab/charts/brodec-lab/tests/test_chart.py
+```
+
 ### What CI needs
 
 These repository secrets hold the publishing credentials. Their values live in the
@@ -400,7 +464,7 @@ deployment's secret store, never in this repository.
 | `PKGS_PUBLIC_ENDPOINT` | The public mirror's S3 endpoint, `https://<account>.r2.cloudflarestorage.com` |
 | `PKGS_PUBLIC_BUCKET` | The public mirror's bucket, `bromigos-pkgs` |
 | `PKGS_PUBLIC_ACCESS_KEY_ID`, `PKGS_PUBLIC_SECRET_ACCESS_KEY` | The S3 key of an R2 API token that may read and write that bucket only |
-| `BRODEC_DEPLOY_KEY` | An SSH private key whose public half is a read-only deploy key on BRODEC's repository. Only `brodec-desktop.yml` uses it. Without it, that workflow does nothing |
+| `BRODEC_DEPLOY_KEY` | An SSH private key whose public half is a read-only deploy key on BRODEC's repository. Only `brodec-desktop.yml` and `brodec-lab.yml` use it. Without it, those workflows do nothing |
 
 The secrets are only ever environment variables. `publish.sh` never prints them and never
 passes them as arguments. It keeps the key in a temporary `GNUPGHOME` that it deletes on

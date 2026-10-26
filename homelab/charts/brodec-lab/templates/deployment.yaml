@@ -1,0 +1,129 @@
+{{- $full := include "brodec-lab.fullname" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $full }}
+  labels: {{- include "brodec-lab.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # One Matrix device, one store: never two pods at once.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {{- include "brodec-lab.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "brodec-lab.labels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      # It reads; it never talks to the Kubernetes API.
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bridge
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["run"]
+          env:
+            - { name: BRODEC_LAB_NAME, value: {{ include "brodec-lab.labName" . | quote }} }
+            - { name: BRODEC_HOMESERVER, value: {{ .Values.homeserver | quote }} }
+            # A folder of its own: some volumes' root belongs to root, and the bridge keeps
+            # its folders owner-only.
+            - { name: BRODEC_DATA_DIR, value: /data/bridge }
+            # Not subPath: the kubelet refreshes the file when the Secret changes.
+            - { name: BRODEC_SWITCH_ON_FILE, value: /run/switch/on }
+            {{- with .Values.sources.prometheusUrl }}
+            - { name: BRODEC_LAB_PROMETHEUS_URL, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.sources.alertmanagerUrl }}
+            - { name: BRODEC_LAB_ALERTMANAGER_URL, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.sources.labApi.url }}
+            - { name: BRODEC_LAB_API_URL, value: {{ . | quote }} }
+            {{- end }}
+            {{- if and .Values.sources.labApi.url .Values.sources.labApi.tokenSecret.name }}
+            - { name: BRODEC_LAB_API_TOKEN_FILE, value: /run/secrets/lab-api/token }
+            {{- end }}
+            {{- with .Values.brain.url }}
+            - { name: BRODEC_BRAIN_URL, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.brain.model }}
+            - { name: BRODEC_BRAIN_MODEL, value: {{ . | quote }} }
+            {{- end }}
+            {{- if and .Values.brain.url .Values.brain.keySecret.name }}
+            - { name: BRODEC_BRAIN_KEY_FILE, value: /run/secrets/brain/key }
+            {{- end }}
+          # Until it is paired, it waits for its owner: the log shows the pairing code.
+          startupProbe:
+            exec: { command: ["/usr/local/bin/brodec-lab", "health"] }
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            exec: { command: ["/usr/local/bin/brodec-lab", "health"] }
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 4
+          readinessProbe:
+            exec: { command: ["/usr/local/bin/brodec-lab", "health", "--ready"] }
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: tmp, mountPath: /tmp }
+            - { name: switch, mountPath: /run/switch, readOnly: true }
+            {{- if and .Values.sources.labApi.url .Values.sources.labApi.tokenSecret.name }}
+            - { name: lab-api, mountPath: /run/secrets/lab-api, readOnly: true }
+            {{- end }}
+            {{- if and .Values.brain.url .Values.brain.keySecret.name }}
+            - { name: brain, mountPath: /run/secrets/brain, readOnly: true }
+            {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-data" $full) }}
+        - name: tmp
+          emptyDir: { sizeLimit: 256Mi }
+        - name: switch
+          secret:
+            secretName: {{ include "brodec-lab.switchSecret" . }}
+            defaultMode: 0400
+            items: [{ key: "on", path: "on" }]
+        {{- if and .Values.sources.labApi.url .Values.sources.labApi.tokenSecret.name }}
+        - name: lab-api
+          secret:
+            secretName: {{ .Values.sources.labApi.tokenSecret.name }}
+            defaultMode: 0400
+            items: [{ key: {{ .Values.sources.labApi.tokenSecret.key | quote }}, path: token }]
+        {{- end }}
+        {{- if and .Values.brain.url .Values.brain.keySecret.name }}
+        - name: brain
+          secret:
+            secretName: {{ .Values.brain.keySecret.name }}
+            defaultMode: 0400
+            items: [{ key: {{ .Values.brain.keySecret.key | quote }}, path: key }]
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}

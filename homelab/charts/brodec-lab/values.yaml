@@ -1,0 +1,72 @@
+# BRODEC's lab bridge. Every value is optional except lab.name. See README.md.
+
+lab:
+  # The lab's name, as BRODEC shows it (letters, digits, - and _). Empty: the release name.
+  name: ""
+
+# Where VECTOR looks. Leave a URL empty to skip that source.
+sources:
+  # Prometheus, e.g. http://prometheus-operated.monitoring.svc:9090
+  prometheusUrl: ""
+  # Alertmanager, e.g. http://alertmanager-operated.monitoring.svc:9093
+  alertmanagerUrl: ""
+  # A lab status page with the lab status API (GET /api/status).
+  labApi:
+    url: ""
+    # An existing Secret holding its read-only token. Empty: no token is sent.
+    tokenSecret:
+      name: ""
+      key: token
+
+# VECTOR's brain: any OpenAI-compatible API in your lab (Ollama, vLLM, LiteLLM), ending in /v1.
+# Empty: he still reports, and says he has no brain in this lab yet.
+brain:
+  url: ""
+  model: ""
+  # An existing Secret holding the API's key, if it needs one.
+  keySecret:
+    name: ""
+    key: key
+
+# The homeserver BRODEC uses. Change it only if you were told to.
+homeserver: https://matrix.bromigos.org
+
+image:
+  repository: ghcr.io/bromigos-org/brodec-lab
+  # Empty: the chart's appVersion, the bridge this chart was published with.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# The on-switch. VECTOR can be switched off from BRODEC, but only switched back on here: give
+# the Secret's `on` key a new value (README.md, "Switching VECTOR back on").
+switch:
+  # The chart makes the Secret once and keeps its value on upgrades and uninstall.
+  create: true
+  # Use this Secret instead (key `on`) when create is false.
+  existingSecret: ""
+
+persistence:
+  # The bridge's identity and state. Lose it and the lab must be paired again.
+  existingClaim: ""
+  storageClass: ""
+  size: 1Gi
+
+# Egress only to what the bridge needs: DNS, HTTPS (BRODEC's servers are on public cloud
+# addresses, so they can't be pinned to an IP range) and the ports of the sources and brain
+# above. Needs a CNI that enforces NetworkPolicy.
+networkPolicy:
+  enabled: true
+  # More egress rules, as NetworkPolicy egress entries.
+  extraEgress: []
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 96Mi
+  limits:
+    memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
