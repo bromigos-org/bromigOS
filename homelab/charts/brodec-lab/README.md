@@ -53,6 +53,16 @@ Without a brain, VECTOR still reports. He tells you he has no brain in this lab 
 
 You choose what he reports, and where he looks, in BRODEC: **Settings › Your lab**.
 
+## His name
+
+VECTOR is his name until you give him another: **Settings › Your lab › NAME** in BRODEC.
+A name has up to 24 characters: letters, digits, spaces, hyphens and basic punctuation. It
+can't look like BRODEC, BROMIGOS or anyone's callsign, and you can rename him five times a
+day. Going back to VECTOR is always allowed.
+
+The bridge checks the name too, then uses it as his name on BRODEC. The people you share
+your lab with see it. Only his name changes: he looks, sounds and works the same.
+
 ## Switching VECTOR back on
 
 You can switch VECTOR off from anywhere: **Settings › Your lab › SWITCH VECTOR OFF** in
