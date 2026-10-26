@@ -428,17 +428,34 @@ def _env_note(say):
         say("Note: BROMIGOS_TOKEN is set, so bromigOS uses that token while it stays set.")
 
 
-def _browser_login(say, no_browser, stdin, opener):
+def complete_url(start):
+    """The sign-in page with the code filled in: the account service's own complete link
+    (verification_uri_complete), or the account site's /device?user_code=<code> when it
+    gave none."""
+    code = start.get("user_code") or ""
+    full = start.get("verification_uri_complete") or ""
+    if code and urllib.parse.parse_qs(urllib.parse.urlparse(full).query).get("user_code") == [code]:
+        return full
+    return site() + "/device?user_code=" + urllib.parse.quote(code)
+
+
+def _browser_login(say, no_browser, stdin, opener, out=None):
     """The device flow in plain words. In a desktop session, Enter opens the page; the
-    sign-in finishes either way, from this computer or another one."""
+    sign-in finishes either way, from this computer or another one. On a terminal (out,
+    sys.stdout) big enough, a QR code of the page with the code filled in, for a phone."""
     start = A.device_start(PROVIDER)
     url = start.get("verification_uri") or site() + "/device"
-    full = start.get("verification_uri_complete") or url
+    full = complete_url(start)
     minutes = max(1, int(float(start.get("expires_in") or 900)) // 60)
     say("To sign in to your Bromigos account, open this page on any device:")
     say(f"    {url}")
     say("and enter this code:")
     say(f"    {start['user_code']}")
+    qr = A.qr_lines(full, out)
+    if qr:
+        say("Or point your phone's camera at this QR code. It opens the page with the code filled in:")
+        for line in qr:
+            say(line)
     say(f"The code works for {minutes} minutes.")
     result, stop = {}, threading.Event()
 

@@ -50,6 +50,9 @@ accounts existed is "default", and nothing about it changed.
                                          plex (Plex's PIN: a code entered at plex.tv/link)
     A.plex_claim_token()               a claim token for a new Plex Media Server (its PLEX_CLAIM),
                                          from the signed-in Plex account; valid a few minutes
+    A.qr_lines(text, out=None)         a QR code of text to print in a terminal (half blocks, black
+                                         on white), or None when out isn't a terminal big enough
+                                         or python-qrcode isn't installed
 
 Where things live:
 
@@ -954,6 +957,66 @@ def device_poll(provider, start, cancelled=lambda: False, sleep=None, account=DE
     raise SignInError("the code expired before it was approved; start again")
 
 
+# ------------------------------------------------------------------ a QR code in the terminal
+QR_QUIET = 2          # light modules around the code: phone cameras find it on a dark terminal
+_QR_DARK = {(True, True): "\u2588", (True, False): "\u2580", (False, True): "\u2584", (False, False): " "}
+
+
+def qr_matrix(text):
+    """The QR code of `text` as rows of True (dark) / False, with its quiet zone, or None
+    when python-qrcode isn't installed. Error correction M: still reads off a glossy screen."""
+    try:
+        import qrcode
+        import qrcode.constants
+    except ImportError:
+        return None
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, border=QR_QUIET)
+    qr.add_data(text)
+    qr.make(fit=True)
+    return [[bool(m) for m in row] for row in qr.get_matrix()]
+
+
+def qr_render(matrix, truecolor=False, indent="    "):
+    """Text lines that draw `matrix` two rows per line with half blocks, dark modules black
+    on white whatever the terminal's own colours are (a light-on-dark code doesn't scan
+    everywhere). truecolor: exact black and white, else the terminal's palette black and
+    white."""
+    on = "\x1b[38;2;0;0;0;48;2;255;255;255m" if truecolor else "\x1b[30;47m"
+    rows = [list(r) for r in matrix]
+    if len(rows) % 2:
+        rows.append([False] * len(rows[0]))
+    return [indent + on + "".join(_QR_DARK[(a, b)] for a, b in zip(top, bottom)) + "\x1b[0m"
+            for top, bottom in zip(rows[0::2], rows[1::2])]
+
+
+def qr_lines(text, out=None, size=None):
+    """A QR code of `text` to print on `out` (sys.stdout), or None when it shouldn't be
+    drawn: out isn't a terminal, TERM is dumb, NO_COLOR is set (the code needs its colours),
+    python-qrcode isn't installed, or the terminal is too small to show all of it. size:
+    (columns, lines), the terminal's own when not given."""
+    out = out or sys.stdout
+    try:
+        if not out.isatty():
+            return None
+    except (AttributeError, ValueError):
+        return None
+    if os.environ.get("TERM", "dumb") == "dumb" or os.environ.get("NO_COLOR"):
+        return None
+    matrix = qr_matrix(text)
+    if matrix is None:
+        return None
+    if size is None:
+        try:
+            size = tuple(os.get_terminal_size(out.fileno()))
+        except (AttributeError, OSError, ValueError):
+            size = tuple(shutil.get_terminal_size((0, 0)))
+    indent = "    "
+    if size[0] < len(indent) + len(matrix[0]) or size[1] < (len(matrix) + 1) // 2 + 8:
+        return None
+    truecolor = os.environ.get("COLORTERM", "").lower() in ("truecolor", "24bit")
+    return qr_render(matrix, truecolor, indent)
+
+
 # ------------------------------------------------------------------ Plex's PIN (plex.tv/link)
 def _plex_headers(provider="plex"):
     """The headers plex.tv wants from a client: its product name and a stable identifier
@@ -1325,6 +1388,12 @@ def main(argv):
             def show(d):
                 if d.get("user_code"):
                     print(f"Go to {d['verification_uri']} and enter {d['user_code']}")
+                    full = d.get("verification_uri_complete")
+                    qr = qr_lines(full) if full and full != d.get("verification_uri") else None
+                    if qr:
+                        print("Or point your phone's camera at this QR code. It opens the page with the code "
+                              "filled in:")
+                        print("\n".join(qr))
                 else:
                     print(f"Opening {d['auth_url']}")
                 _default_prompt(prov, acct)(d)

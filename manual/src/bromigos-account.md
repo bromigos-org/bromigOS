@@ -18,15 +18,24 @@ It shows a web address and a short code:
 
 ```text
 To sign in to your Bromigos account, open this page on any device:
-    https://account.bromigos.org/device
+    https://auth.bromigos.org/oauth2/device/verify
 and enter this code:
-    WDJB-MJHT
-The code works for 15 minutes.
+    WDJBMJHT
+Or point your phone's camera at this QR code. It opens the page with the code filled in:
+    (a QR code)
+The code works for 10 minutes.
 Press Enter to open it in your browser, or approve it from another device. Waiting… (Ctrl+C stops)
 ```
 
 Open the page on this computer or on your phone, sign in there, and enter the code. The
 terminal says who you're signed in as once you approve it.
+
+To use your phone, point its camera at the QR code. It opens the same page with the code
+already filled in, so you only sign in and approve. The QR code shows when the terminal
+is big enough for all of it: about 45 columns and 30 lines. In a smaller window, make it
+bigger and run `bromigos login` again, or type the address and the code. There's no QR
+code when the output goes to a file or a pipe, or when `NO_COLOR` is set, because the
+code needs its black and white to scan.
 
 On your desktop, pressing Enter opens the page in your browser with the code filled in.
 Over SSH, or with `--no-browser`, bromigOS only prints the address and the code, and

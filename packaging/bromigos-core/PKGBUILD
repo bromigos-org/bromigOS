@@ -21,11 +21,13 @@ url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 depends=('gcc-libs' 'glibc' 'openssl' 'git')   # git: bromigos ext (extensions are checkouts)
 makedepends=('cargo' 'git' 'python')
-checkdepends=('desktop-file-utils' 'rsync' 'npm' 'openssh')   # openssh: the SSH sign-in's tests sign for real
+# openssh: the SSH sign-in's tests sign for real; python-qrcode: bromigos login's QR code
+checkdepends=('desktop-file-utils' 'rsync' 'npm' 'openssh' 'python-qrcode')
 optdepends=('python: bromigos private, secrets, emblem, console, power menu, splash and local storage'
             'terminus-font: readable text console font sizes'
             'openssh: bromigos login --ssh, and the SSH keys a new lab box gets from your account'
             'libsecret: keep account sign-ins (bromigos login, bromigos account) in your keyring'
+            'python-qrcode: a QR code of the sign-in page in the terminal (bromigos login, bromigos account login)'
             'oo7: the keyring itself, unlocked by your login (bromigos-desktop brings it; bromigos keyring)'
             'plymouth: graphical shutdown and restart (bromigos splash)'
             'grub: save the graphical splash kernel setting'

@@ -32,8 +32,9 @@ depends=('bromigos-core' 'bromigos-live' 'bromigos-widgets' 'bromigos-settings' 
          # Secret Service, started in every session (below) and unlocked by the login
          # (bromigos keyring setup); gcr: the password window it opens when it must ask;
          # libsecret: what bromigOS reads and stores it with. oo7>=0.7.0beta is bromigOS's
-         # own build (packaging/oo7): Arch's 0.6.0 can't unlock it at a text console login
-         'oo7>=0.7.0beta' 'gcr' 'libsecret'
+         # own build (packaging/oo7): Arch's 0.6.0 can't unlock it at a text console login;
+         # python-qrcode: the QR code bromigos login shows, so a phone can open the sign-in page
+         'oo7>=0.7.0beta' 'gcr' 'libsecret' 'python-qrcode'
          # the menu (apps via Gio), the theme switcher's previews, web apps' desktop entries,
          # the on-screen display for volume, brightness and mute
          'python-gobject' 'python-cairo' 'python-pillow' 'desktop-file-utils' 'swayosd'

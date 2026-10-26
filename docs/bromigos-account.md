@@ -54,6 +54,23 @@ in. Polling carries on meanwhile, so approving from a phone works too. It never 
 browser when `SSH_CONNECTION`, `SSH_CLIENT` or `SSH_TTY` is set, when there's no
 `WAYLAND_DISPLAY` or `DISPLAY`, when stdin isn't a terminal, or with `--no-browser`.
 
+The complete link is the server's `verification_uri_complete`
+(`https://auth.bromigos.org/oauth2/device/verify?user_code=<code>`, which forwards to the
+account site's device page with the code filled in). When a server gives none, it's
+`<base>/device?user_code=<code>` (`complete_url` in `lib/bromigos_login.py`).
+
+Under the code, `bromigos login` prints that link as a QR code, so a phone's camera opens
+it. `A.qr_lines` in `lib/bromigos_account.py` draws it with `python-qrcode`: error
+correction M, a quiet zone of two modules, two rows a line in half blocks (`▀ ▄ █`). It's
+always black on white, `\e[30;47m`, or exact RGB when `COLORTERM` is `truecolor` or
+`24bit`, because a light-on-dark code doesn't scan with every camera. It isn't drawn when
+stdout isn't a terminal, `TERM` is `dumb` or unset, `NO_COLOR` is set, `python-qrcode`
+isn't installed, or the terminal is too small for the whole code (narrower than the code
+plus its indent, or fewer lines than the code's rows plus eight). The plain address and
+code are always printed. `bromigos account login` prints the same QR code for the other
+device-flow services. `python-qrcode` comes with `bromigos-desktop`, and is an optional
+dependency of `bromigos-core`.
+
 ### With an SSH key
 
 `bromigos login --ssh` signs in without a browser:

@@ -10,6 +10,7 @@ socket in a temporary folder. Nothing opens a window: the browser is a stand-in.
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -165,6 +166,110 @@ class DeviceFlow(Base):
         with mock.patch.object(A, "http_json", side_effect=OSError("down")):
             self.assertEqual(A.discovery("bromigos"), {})
             self.assertEqual(A._url("bromigos", "token_url"), self.srv.issuer + "/oauth2/token")
+
+
+def _have_qrcode():
+    try:
+        import qrcode  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+HAVE_QRCODE = _have_qrcode()
+QR_HALF = {"\u2588": (True, True), "\u2580": (True, False), "\u2584": (False, True), " ": (False, False)}
+
+
+def unrender(lines):
+    """The modules a printed QR code shows: its half blocks read back into rows."""
+    rows = []
+    for line in lines:
+        cells = re.sub(r"\x1b\[[0-9;]*m", "", line).strip("\n")[4:]
+        rows.append([QR_HALF[c][0] for c in cells])
+        rows.append([QR_HALF[c][1] for c in cells])
+    return rows
+
+
+@unittest.skipUnless(HAVE_QRCODE, "python-qrcode isn't installed")
+class QrCode(Base):
+    TERMINAL = {"TERM": "xterm-256color", "COLORTERM": "", "NO_COLOR": "", "COLUMNS": "100", "LINES": "50"}
+
+    def login_on(self, tty=True, **env):
+        self.acct.auto_approve_after = 2
+        A.sign_out("bromigos")
+        out = Pipe(tty=tty)
+        with mock.patch.dict(os.environ, {**self.TERMINAL, **env}), mock.patch.object(sys, "stdout", out), \
+                mock.patch.object(sys, "stderr", io.StringIO()), mock.patch.object(sys, "stdin", Pipe()):
+            self.assertEqual(L.main("login", []), 0)
+        return out.getvalue()
+
+    def qr_of(self, text):
+        return [line for line in text.splitlines() if "\x1b[" in line]
+
+    def test_a_terminal_shows_a_qr_code_of_the_page_with_the_code_filled_in(self):
+        text = self.login_on()
+        self.assertIn(f"    {self.srv.base}/device\n", text)                     # the plain page and code stay
+        self.assertRegex(text, r"and enter this code:\n    WDJB-[0-9A-F]{4}\n")
+        self.assertIn("Or point your phone's camera at this QR code. It opens the page with the code filled in:",
+                      text)
+        code = re.search(r"WDJB-[0-9A-F]{4}", text).group(0)
+        lines = self.qr_of(text)
+        self.assertTrue(lines)
+        matrix = A.qr_matrix(f"{self.srv.base}/device?user_code={code}")
+        self.assertEqual(unrender(lines)[:len(matrix)], matrix)                  # it draws that link, exactly
+        self.assertTrue(all(line.startswith("    \x1b[30;47m") and line.endswith("\x1b[0m") for line in lines))
+        self.assertTrue(all(not any(r) for r in matrix[:A.QR_QUIET]))           # a light quiet zone
+        self.assertLess(text.index("WDJB-"), text.index(lines[0]))
+        self.assertLess(text.index(lines[-1]), text.index("The code works for"))
+
+    def test_truecolor_terminals_get_exact_black_and_white(self):
+        lines = self.qr_of(self.login_on(COLORTERM="truecolor"))
+        self.assertTrue(lines and all(line.startswith("    \x1b[38;2;0;0;0;48;2;255;255;255m") for line in lines))
+
+    def test_no_qr_code_where_it_would_not_show_whole_or_scan(self):
+        for tty, env in ((False, {}), (True, {"COLUMNS": "30"}), (True, {"LINES": "20"}), (True, {"TERM": "dumb"}),
+                         (True, {"NO_COLOR": "1"})):
+            text = self.login_on(tty=tty, **env)
+            self.assertEqual(self.qr_of(text), [], (tty, env))
+            self.assertNotIn("QR code", text)
+            self.assertRegex(text, r"and enter this code:\n    WDJB-[0-9A-F]{4}\n")   # always the page and code
+        with mock.patch.dict(sys.modules, {"qrcode": None}):                     # python-qrcode not installed
+            self.assertEqual(self.qr_of(self.login_on()), [])
+
+    def test_bromigos_account_login_shows_it_too(self):
+        self.acct.auto_approve_after = 2
+        out = Pipe(tty=True)
+        with mock.patch.dict(os.environ, self.TERMINAL), mock.patch.object(sys, "stdout", out), \
+                mock.patch.object(A, "_default_prompt", lambda *a: (lambda d: None)):
+            self.assertEqual(A.main(["login", "bromigos"]), 0)
+        text = out.getvalue()
+        code = re.search(r"enter (WDJB-[0-9A-F]{4})", text).group(1)
+        matrix = A.qr_matrix(f"{self.srv.base}/device?user_code={code}")
+        self.assertEqual(unrender(self.qr_of(text))[:len(matrix)], matrix)
+        self.assertIn("signed in to Bromigos", text)
+
+    def test_the_link_is_built_when_the_service_gives_no_complete_one(self):
+        start = {"user_code": "BCDF GHJK", "verification_uri": "https://auth.example.org/oauth2/device/verify"}
+        self.assertEqual(L.complete_url(start), self.srv.base + "/device?user_code=BCDF%20GHJK")
+        start["verification_uri_complete"] = start["verification_uri"]          # A.device_start's stand-in
+        self.assertEqual(L.complete_url(start), self.srv.base + "/device?user_code=BCDF%20GHJK")
+        start["verification_uri_complete"] = start["verification_uri"] + "?user_code=BCDF%20GHJK"
+        self.assertEqual(L.complete_url(start), start["verification_uri_complete"])
+
+    @unittest.skipUnless(shutil.which("zbarimg"), "zbar's zbarimg isn't installed")
+    def test_a_camera_reads_the_printed_code(self):
+        text = self.login_on()
+        code = re.search(r"WDJB-[0-9A-F]{4}", text).group(0)
+        rows = unrender(self.qr_of(text))
+        scale = 8                                                               # a PGM, 8 pixels a module
+        path = os.path.join(self.tmp, "qr.pgm")
+        with open(path, "wb") as f:
+            f.write(b"P5 %d %d 255\n" % (len(rows[0]) * scale, len(rows) * scale))
+            for row in rows:
+                line = bytes(0 if dark else 255 for dark in row for _ in range(scale))
+                f.write(line * scale)
+        got = subprocess.run(["zbarimg", "--quiet", "--raw", path], capture_output=True, text=True)
+        self.assertEqual(got.stdout.strip(), f"{self.srv.base}/device?user_code={code}", got.stderr)
 
 
 @unittest.skipUnless(HAVE_SSH, "OpenSSH's ssh-keygen, ssh-agent and ssh-add aren't installed")
