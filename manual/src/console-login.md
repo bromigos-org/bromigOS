@@ -22,6 +22,10 @@ If the text is too small, see
 After signing in, `bromigos power menu` opens a keyboard menu for restarting or
 shutting down. It asks you to confirm the selected action.
 
+Your password also unlocks your keyring, where bromigOS keeps your sign-ins. So a desktop
+you start from the console doesn't ask for it again. See
+[Your keyring](bromigos-account.md#your-keyring).
+
 The `bromigos-settings` package supplies the banner. It appears the next time the
 console login starts, including after a reboot. Your existing issue message may
 also appear above it. A custom getty configuration can hide or replace issue

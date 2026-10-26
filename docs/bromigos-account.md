@@ -16,6 +16,9 @@ and how other bromigOS code uses it. The manual's
 | `lib/bromigos_account.py` | The sign-in helper every account uses. Bromigos is its provider `bromigos`: the device flow, the keyring item, refresh and personal access tokens |
 | `lib/bromigos_login.py` | What only the Bromigos account has: the SSH sign-in, the account's SSH keys, and the `login`, `logout` and `whoami` commands |
 | `bin/bromigos-login`, `bin/bromigos-logout`, `bin/bromigos-whoami` | The commands `bromigos login`, `logout` and `whoami`, in `bromigos-core` |
+| `lib/bromigos_keyring.py`, `bin/bromigos-keyring` | The keyring the sign-in is kept in: its check, its errors in plain words, and `bromigos keyring status` and `setup` ([below](#the-keyring)) |
+| `migrations/20261026120000-keyring-unlock.sh` | Runs `bromigos keyring setup` once per user, on update |
+| `packaging/oo7/` | bromigOS's build of oo7, the keyring ([packaging/README.md](../packaging/README.md#the-packages)) |
 | `homelab/lib/bromigos_homelab/accountkeys.py` | Adds the account's SSH keys to a new lab box ([lab-provision.md](lab-provision.md#your-accounts-ssh-keys)) |
 | `desktop/settings/pages/account.py` | The **Bromigos account** row in Settings › Account ([settings.md](settings.md#account)) |
 
@@ -92,6 +95,84 @@ userinfo, and how the sign-in was made: `device`, `ssh` (with the key's fingerpr
 `bromigos logout` sends the refresh token to the revocation endpoint, then deletes the
 item. It doesn't wait for the service, and it never revokes a pasted token.
 
+## The keyring
+
+The sign-in is only as good as the keyring that keeps it. bromigOS's keyring is oo7, the
+`oo7` package: `oo7-daemon` answers to the Secret Service's D-Bus name,
+`org.freedesktop.secrets`, and `pam_oo7.so` hands it the login password.
+
+- **It starts with the session.** `bromigos-desktop` depends on `oo7>=0.7.0beta`, `gcr` and
+  `libsecret`. It ships a `default.target.wants` link for `oo7-daemon.service`. oo7's login
+  helper holds the password for up to two minutes, until the daemon takes it, so the daemon
+  must start with the session, not on first use.
+- **The login unlocks it.** `bromigos keyring setup` adds these lines, after the last line
+  of the same kind, to `/etc/pam.d/login`, `/etc/pam.d/sddm` and `/etc/pam.d/passwd`:
+
+  ```text
+  -auth      optional     pam_oo7.so
+  -session   optional     pam_oo7.so auto_start
+  -password  optional     pam_oo7.so
+  ```
+
+  `login` and `sddm` get the first two, and `passwd` the third. The `-` makes PAM skip a
+  line whose module isn't installed, and `optional` means it never decides whether someone
+  gets in. A file that already runs `pam_oo7.so` for that kind, written any way, is left
+  alone. Other lines, such as a hand-added `pam_gnome_keyring.so`, are never touched.
+- **It writes safely.** The edit runs as root through sudo
+  (`bromigos keyring pam`). It checks that the new text is the old text plus its own lines
+  and nothing else, then writes a file beside the old one with the same owner and mode and
+  renames it over. A file it can't place a line in, one with no line of that kind, is
+  reported and left as it is.
+- **One keyring answers.** KWallet ships its own Secret Service, `ksecretd`, which takes the
+  name when it starts first, for example from `pam_kwallet5.so` at the login screen. Then
+  oo7 can't start. `setup` sets `apiEnabled=false` under `[org.freedesktop.secrets]` in
+  `~/.config/kwalletrc`. KWallet's own interface, which KDE apps use, keeps working.
+- **The update runs it.** `migrations/20261026120000-keyring-unlock.sh` runs
+  `bromigos keyring setup` once per user. It asks for sudo on the terminal. Without a
+  terminal, as in the ISO's installer, it uses sudo only when sudo needs no password.
+  When sudo doesn't run, or oo7 isn't installed yet, it exits 75, and the next update
+  tries again.
+- **gnome-keyring makes way.** oo7 conflicts with gnome-keyring. pacman asks to remove it,
+  and its answer defaults to no. So `bromigos update` says beforehand to answer y. With
+  `--yes`, it says to run the update without it. oo7 moves gnome-keyring's
+  `~/.local/share/keyrings/*.keyring` into its own keyring the first time the login
+  password unlocks it.
+
+### Checks before a sign-in
+
+`bromigos_keyring.ready()` asks the session bus, through `busctl --user`, whether
+`org.freedesktop.secrets` is running or can start, and whether the default keyring is
+locked. It never starts the service to find out. `bromigos login` and
+`bromigos_account.sign_in()` ask it before the device flow starts, so a person never
+approves a sign-in this computer can't keep. A sign-in is refused up front when:
+
+- libsecret isn't installed;
+- there's no session bus;
+- no keyring runs and none can start;
+- the keyring is locked, or not started yet, and no window can ask for its password.
+  oo7 shows that window, through gcr's prompter, only to an app in a graphical session.
+  So a terminal over SSH, or one with no desktop in its session's environment, can't
+  unlock it.
+
+A stand-in keyring, as the tests use, is always ready.
+
+### Errors in plain words
+
+libsecret raises a GLib error, whose text is a D-Bus error name, such as
+`g-dbus-error-quark: The name is not activatable (2)`. `_SecretService` turns every
+keyring error into `KeyringError`, a `RuntimeError`, worded by
+`bromigos_keyring.explain()`. Storing gives up after two minutes, so a password window
+nobody can see never hangs a sign-in. If storing fails after the person approved,
+`bromigos login` says the sign-in wasn't kept, why, and what to do. A raw GLib error is
+never printed.
+
+### `bromigos keyring`
+
+| Command | What it does |
+|---|---|
+| `bromigos keyring status [--json]` | Which keyring runs, locked or not, each PAM file's lines and KWallet's setting. Each problem comes with its fix. It exits 1 when something needs fixing |
+| `bromigos keyring setup [--dry-run]` | The PAM lines, through sudo, and KWallet's Secret Service off. It exits 75 when it can't finish yet |
+
 ## Using it from bromigOS code
 
 ```python
@@ -145,6 +226,17 @@ access tokens, `BROMIGOS_TOKEN`, refresh under the lock, a 401 and logout.
 
 ```bash
 PYTHONPATH=lib python -m unittest discover -s tests/account
+```
+
+The account tests also cover the keyring's side of a sign-in: no keyring stops it before
+the code is shown, and a store that fails after approval is reported in plain words.
+`tests/keyring/test_keyring.py` tests the keyring module on copies. PAM files are edited in
+a temporary root, with Arch's own files and a hand-edited one. `kwalletrc` sits in a
+temporary home, and the session bus is a stand-in. Nothing reads or changes the machine's
+`/etc`, starts a keyring or runs sudo.
+
+```bash
+PYTHONPATH=lib python -m unittest discover -s tests/keyring
 ```
 
 `bromigos-core`'s `check()` runs them. `homelab/tests/test_provision_accountkeys.py` covers

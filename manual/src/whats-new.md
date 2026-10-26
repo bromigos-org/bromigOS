@@ -68,6 +68,13 @@ Run `bromigos update` to get them. The next release notes will include these hig
   the visible set, LAB uses the room in its frame, and empty ALERTS stays compact.
 - Colour switches refresh live backgrounds, scanners, overlays and HUD text. A pinned
   scanner stays visible in the new colours.
+- `bromigos login` works on a computer with no keyring running. bromigOS now brings its
+  own keyring, oo7, and your login password unlocks it, at the text console and the login
+  screen. Sign-in checks the keyring before it shows a code, and says in plain words what
+  to do when it can't keep the sign-in. The update asks for your password once, to let
+  your login unlock the keyring. If you used gnome-keyring, answer **y** when pacman asks
+  to remove it. Your saved passwords move to oo7 at your next sign-in. See
+  [Your keyring](bromigos-account.md#your-keyring).
 <!-- /unreleased -->
 
 **Still planned.** The first provisioning implementation has merged. Its AI, media and

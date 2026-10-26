@@ -123,6 +123,16 @@ on the bar.
 3. To put every key back as bromigOS set them, run `bromigos keys reset`. It also removes
    your own shortcuts, and asks first.
 
+## Signing in says there's no keyring, or it's locked
+
+bromigOS keeps sign-ins in your keyring, and your login password unlocks it.
+
+1. Run `bromigos keyring status`. It says what's wrong and what to run.
+2. Run `bromigos keyring setup`, then sign out and in again.
+3. If oo7 isn't installed, run `sudo pacman -S bromigos/oo7` first.
+
+[Your keyring](bromigos-account.md#your-keyring) explains the rest.
+
 ## Where to look
 
 | What | Where |

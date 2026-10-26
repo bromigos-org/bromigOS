@@ -5,8 +5,8 @@ Everything on the desktop works without one. Sign in when you want bromigOS to u
 account, for example to put the SSH keys on your account on a new lab box.
 
 You make and manage the account on the website, account.bromigos.org. bromigOS keeps the
-sign-in in your keyring, the same place it keeps your other passwords. It's never written
-to a file.
+sign-in in your [keyring](#your-keyring), the same place it keeps your other passwords.
+It's never written to a file.
 
 ## Sign in
 
@@ -105,6 +105,57 @@ keys and its tokens stay as they are. If `BROMIGOS_TOKEN` is set, unset it too.
 A sign-in lasts until you sign out. bromigOS renews it in the background when it's used, so
 you don't sign in again each day. If you end the sign-in on the website, the next thing
 that uses your account says so. Run `bromigos login` again.
+
+## Your keyring
+
+Your keyring is where bromigOS keeps sign-ins and passwords. It's encrypted with your login
+password. bromigOS's keyring is oo7. It starts with your session, and your login password
+unlocks it, so nothing asks you for a password. Other apps that keep passwords in a
+keyring use the same one, such as web browsers and Git.
+
+To check it, run:
+
+```bash
+bromigos keyring status
+```
+
+It says whether the keyring is running and unlocked, and whether your login unlocks it.
+When something needs fixing, it says what to run.
+
+### Let your login unlock it
+
+`bromigos keyring setup` makes your login unlock the keyring. `bromigos update` runs it
+once for you, and asks for your password through sudo. It adds oo7's lines to these login
+settings in `/etc/pam.d`:
+
+- `login`, the [text console login](console-login.md);
+- `sddm`, the login screen;
+- `passwd`, so a new password carries over to the keyring.
+
+Lines that are already there stay as they are. The setup also turns off KWallet's own
+keyring service, so it can't take oo7's place. KWallet itself keeps working.
+
+Sign out and in again afterwards. From then on, your login unlocks the keyring.
+
+### If sign-in says there's no keyring
+
+`bromigos login` checks the keyring before it shows a code, so you never approve a
+sign-in that can't be kept. If it says **No keyring is running**, install oo7 from
+bromigOS's repository, set it up, then sign out and in again:
+
+```bash
+sudo pacman -S bromigos/oo7
+bromigos keyring setup
+```
+
+`bromigos update` installs oo7 too, because the desktop needs it.
+
+If you used gnome-keyring before, pacman asks whether to remove it. Answer **y**, because
+oo7 takes its place. The next time you sign in, oo7 moves your saved passwords over.
+
+If it says **Your keyring is locked**, the keyring is waiting for its password and there's
+no desktop here to ask for it. This happens when you sign in some other way, such as over
+SSH. On your desktop, apps show a password window instead. Type your login password there.
 
 ## What uses your account
 
