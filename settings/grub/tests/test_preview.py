@@ -35,8 +35,9 @@ preview = load("grub_preview", os.path.join(GRUB, "preview.py"))
 
 # the stand-in: answers to the name qemu-system-x86_64 (the keeper counts it as a VM),
 # writes -pidfile, opens the -qmp socket (the keeper's "up") and waits to be stopped
-FAKE_QEMU = r"""#!/bin/sh
-exec -a qemu-system-x86_64 python3 -c '
+# (this interpreter itself, by its path: a shim such as pyenv's would exec again, renamed)
+FAKE_QEMU = r"""#!/bin/bash
+exec -a qemu-system-x86_64 "%s" -c '
 import os, socket, sys, time
 a = sys.argv[1:]
 sock = a[a.index("-qmp") + 1].split("unix:", 1)[1].split(",")[0]
@@ -137,7 +138,7 @@ class KilledPreview(unittest.TestCase):
         os.mkdir(bin_)
         fake = os.path.join(bin_, "qemu-system-x86_64")
         with open(fake, "w") as f:
-            f.write(FAKE_QEMU)
+            f.write(FAKE_QEMU % sys.executable)
         os.chmod(fake, 0o755)
         self.work = os.path.join(self.dir, "work")
         os.mkdir(self.work)
@@ -149,7 +150,7 @@ class KilledPreview(unittest.TestCase):
         if line != "up":
             self.owner.wait(10)
             err = self.owner.stderr.read()
-            if "budget" in err or "available" in err:
+            if "Test VM budget exceeded" in err or "GiB available; wait" in err:
                 self.skipTest(f"the keeper refused a test VM: {err.strip()}")
             self.fail(f"the preview didn't start its stand-in QEMU: {err}")
         with open(os.path.join(self.work, "qemu.pid")) as f:
