@@ -132,5 +132,21 @@ class Controls(unittest.TestCase):
         self.assertEqual(tv.sound_screen(), "wave")
         tv.full_session = None
 
+    def test_back_to_den_and_back_to_channel_from_a_command(self):
+        tv = self.tv
+        self.assertEqual(tv.command("close --screen big"), "Already in the den")
+        session = mock.Mock(screen="big"); session.proc.poll.return_value = None
+        tv.full_session = session
+        self.assertEqual(tv.command("close --screen wave"), "Already in the den")
+        self.assertEqual(tv.command("close --screen big"), "big: back to the den")
+        session.close.assert_called_once()
+        self.assertEqual(tv.decks["big"].feedback[1], "BACK TO DEN")
+        tv.full_session = None
+        self.assertEqual(tv.command("live --screen big"), "Already on the channel")
+        tv.override("big", dict(id="a", title="Movie", server="jellyfin", kind="movie"))
+        self.assertEqual(tv.command("live --screen big"), "big: back to the channel")
+        self.assertNotIn("big", tv.overrides)
+        self.assertFalse(tv.describe()["screens"]["big"]["on_demand"])
+
 
 if __name__ == "__main__": unittest.main()

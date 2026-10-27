@@ -73,6 +73,62 @@ class Play(unittest.TestCase):
         self.assertTrue(json.loads(out.getvalue())["ok"])
         ctl.assert_called_with("tv remote volume-up --screen wave")
 
+    def test_volume_sound_close_live_answer_one_json_object(self):
+        cases = ((["volume", "40", "--screen", "scope"], "big: sound on, volume 40%", "tv volume 40 --screen wave"),
+                 (["sound", "off", "--screen", "big"], "big: sound off, volume 40% (your desktop is muted)",
+                  "tv sound off --screen big"),
+                 (["close", "--screen", "big"], "big: back to the den", "tv close --screen big"),
+                 (["live"], "Already on the channel", "tv live"))
+        for argv, answer, sent in cases:
+            with mock.patch.object(R, "control", return_value=answer) as ctl, \
+                    contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(R.main(argv + ["--json"]), 0, argv)
+            ctl.assert_called_with(sent)
+            doc = json.loads(out.getvalue())
+            self.assertTrue(doc["ok"])
+            if argv[0] in ("volume", "sound"):
+                self.assertEqual((doc["screen"], doc["volume"]), ("big", 40))
+                self.assertEqual(doc["sound"], argv[0] == "volume")
+        for argv, answer, code in ((["volume", "400"], None, 2), (["volume", "up"], None, 3),
+                                   (["close"], "no screen called x: big, wave (the scope) or emblem", 4),
+                                   (["remote", "explode"], None, 2)):
+            with mock.patch.object(R, "control", return_value=answer), \
+                    contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(R.main(argv + ["--json"]), code, argv)
+            doc = json.loads(out.getvalue())
+            self.assertEqual((doc["ok"], doc["code"]), (False, code))
+
+    def test_poster_is_a_small_jpeg_and_never_the_address(self):
+        from PIL import Image
+        state = {"screens": {"big": {"item": dict(id="ep5", title="Part 5", server="library", poster="/Items/ep5/Images/Primary"),
+                                     "source": "library"}}}
+        big = Image.new("RGB", (900, 1350), (40, 200, 90))
+        seen = []
+
+        class Server:
+            def video_poster(self, item):
+                return "https://media.example/Items/ep5/Images/Primary?quality=85", {"Authorization": "test-only"}
+
+        def fetch(item, size, source):
+            a = Server()
+            url, headers = a.video_poster(item)
+            seen.append((url, headers))
+            return P.encode_poster(big, item["id"], size)
+
+        with mock.patch.object(R, "live_state", return_value=state), mock.patch.object(P, "poster", side_effect=fetch), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(R.main(["poster", "--screen", "big", "--size", "200", "--json"]), 0)
+        doc = json.loads(out.getvalue())
+        self.assertEqual((doc["id"], doc["mime"], doc["h"]), ("ep5", "image/jpeg", 200))
+        self.assertLessEqual(len(doc["data"]), P.POSTER_BYTES)
+        self.assertNotIn("media.example", out.getvalue()); self.assertNotIn("test-only", out.getvalue())
+        noisy = Image.effect_noise((320, 320), 100).convert("RGB")
+        self.assertLessEqual(len(P.encode_poster(noisy, "x", 320)["data"]), P.POSTER_BYTES)
+        with mock.patch.object(R, "live_state", return_value={"screens": {"big": {}}}), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(R.main(["poster", "--json"]), 4)
+        self.assertEqual(json.loads(out.getvalue())["error"], "No poster")
+
     def test_hint_atomic_through_symlink_and_uses_sandbox_config(self):
         sys.path.insert(0,os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),"desktop","lib"))
         target=self.tmp.name+"/tracked.toml"

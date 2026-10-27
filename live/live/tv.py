@@ -1372,6 +1372,16 @@ class TV(Controls):
         self.log(f"tv: full screen: {s['title']}")
         return f"full screen: {s['title']}"
 
+    def close_full(self, screen=None):
+        """Back to the den: the full-screen player closes (on that screen, when one is named)."""
+        fs = self.full_session
+        if fs is None or fs.proc.poll() is not None or (screen and fs.screen != screen):
+            return "Already in the den"
+        fs.close()
+        self.feedback(fs.screen, "BACK TO DEN")
+        self.log("tv: full screen closed from a command; back to the den")
+        return f"{fs.screen}: back to the den"
+
     def open_web(self, screen=None):
         screen = self._pick(screen)
         n, ch = self.channel(screen)
@@ -1568,6 +1578,10 @@ class TV(Controls):
             return self.open_web(screen)
         if verb == "guide":
             return self.open_guide(screen)
+        if verb == "close":
+            return self.close_full(screen)
+        if verb == "live":
+            return self.back_to_channel(self._pick(screen))
         if verb == "sound":
             s = self._pick(screen)
             w = (rest or ["toggle"])[0]
@@ -1603,7 +1617,7 @@ class TV(Controls):
         if verb == "state":
             import json
             return json.dumps(self.describe(), indent=None if "--json" in rest else 1)
-        return ("bromigos-live tv next|prev|set N|open|web|guide|sound on|off|toggle|volume up|down|N|list|state "
+        return ("bromigos-live tv next|prev|set N|open|close|live|web|guide|sound on|off|toggle|volume up|down|N|list|state "
                 "[--screen big|wave|emblem]")
 
     def _playing(self, s):

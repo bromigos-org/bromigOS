@@ -157,6 +157,104 @@ def play(screen="big", title=None, id_=None, url=None, source=None, resume=False
     return result
 
 
+POSTER_MAX = 320            # the longest side a poster is sent at, in pixels
+POSTER_BYTES = 16 * 1024    # its base64 at most: it travels in small encrypted messages
+
+
+def poster(item, size=160, source=None):
+    """An item's poster as a small JPEG, for remotes that show what's on (the phone's).
+
+    The same sources the den's screens use: a YouTube thumbnail, else the item's media
+    server through its adapter, whose credentials never leave it. Neither the image's URL
+    nor any token is returned: only {id, mime, w, h, data (base64)}.
+    """
+    import io
+    import ssl
+    import urllib.request
+    if not item or not item.get("id"):
+        raise ChannelError("No poster", 4)
+    size = max(32, min(POSTER_MAX, int(size or 160)))
+    url, headers, ca = None, {}, None
+    if item.get("server") == "youtube" or item.get("kind") == "video" and item.get("thumbnail"):
+        url = item.get("thumbnail") or item.get("poster")
+        if url and not url.startswith("https://"):
+            url = None
+    elif item.get("server") not in (None, "files"):
+        H = TV._homelab()
+        a = None
+        if H is not None:
+            for name in (item.get("server"), source):
+                try:
+                    a = H.video_source(name) if name else None
+                except Exception:                                   # noqa: BLE001
+                    a = None
+                if a is not None:
+                    break
+            try:
+                ca = H.config.expand(H.config.setting("tls", "ca_file", "")) or None
+            except Exception:                                       # noqa: BLE001
+                ca = None
+        if a is not None and hasattr(a, "video_poster"):
+            try:
+                url, headers = a.video_poster(item)
+            except Exception:                                       # noqa: BLE001
+                url = None
+    if not url:
+        raise ChannelError("No poster", 4)
+    try:
+        from PIL import Image
+    except ImportError:
+        raise ChannelError("No poster: python-pillow isn't installed", 4)
+    try:
+        ctx = ssl.create_default_context()
+        if ca and __import__("os").path.isfile(ca):
+            ctx.load_verify_locations(cafile=ca)
+        req = urllib.request.Request(url, headers=headers or {})
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as r:
+            raw = r.read(4 << 20)
+        im = Image.open(io.BytesIO(raw)).convert("RGB")
+    except Exception as e:                                          # noqa: BLE001
+        raise ChannelError(f"No poster: {type(e).__name__}", 4)
+    return encode_poster(im, item["id"], size)
+
+
+def encode_poster(im, item_id, size=160):
+    """A PIL image as {id, mime, w, h, data}: JPEG, longest side <= size, base64 <= POSTER_BYTES."""
+    import base64
+    import io
+    side = max(32, min(POSTER_MAX, int(size or 160)))
+    quality = 70
+    while True:
+        copy = im.copy()
+        copy.thumbnail((side, side))
+        buf = io.BytesIO()
+        copy.save(buf, "JPEG", quality=quality, optimize=True)
+        data = base64.b64encode(buf.getvalue()).decode()
+        if len(data) <= POSTER_BYTES or side <= 32:
+            return dict(id=str(item_id), mime="image/jpeg", w=copy.width, h=copy.height, data=data)
+        if quality > 45:
+            quality -= 10
+        else:
+            side = int(side * 0.8)
+
+
+def json_args(parser, argv):
+    """parse_args that answers a bad command line with one JSON line when --json is asked."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if "--json" not in argv:
+        return parser.parse_args(argv)
+    import contextlib
+    import io
+    with contextlib.redirect_stderr(io.StringIO()) as err:
+        try:
+            return parser.parse_args(argv)
+        except SystemExit as e:
+            if e.code:
+                why = (err.getvalue().strip().splitlines() or ["Invalid arguments"])[-1]
+                print(json.dumps(dict(ok=False, error=why.split(": error: ", 1)[-1], code=2)))
+            raise
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="Find and play an item now on a den TV screen")
     sub = p.add_subparsers(dest="verb", required=True)
@@ -168,7 +266,10 @@ def main(argv=None):
     q.add_argument("--resume", action="store_true")
     for parser in (s, q):
         parser.add_argument("--source"); parser.add_argument("--json", action="store_true")
-    args = p.parse_args(argv)
+    try:
+        args = json_args(p, argv)
+    except SystemExit as e:
+        return e.code
     try:
         result = (dict(ok=True, items=search(args.query, args.kind, args.id, args.source, args.season))
                   if args.verb == "search" else play(args.screen, args.title, args.id, args.url, args.source, args.resume))
