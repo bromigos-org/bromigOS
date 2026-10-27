@@ -26,8 +26,8 @@
 #   bromigos-live world [verb …]   the theme's world: state, event notify|critical|fill win|lab_alert,
 #                                  set <signal> <value> (hold one, to try it), clear, rollcall
 #   bromigos-live tv [verb …]      the den TV (live/live/tv.py; `bromigos-live tv help`): next, prev,
-#                                  set N, open, web, guide, sound on|off|toggle, volume up|down|N, list,
-#                                  state; --screen big|wave|emblem
+#                                  set N, open, close, live, web, guide, sound on|off|toggle,
+#                                  volume up|down|N, poster, list, state; --screen big|wave|emblem
 #   bromigos-live ctl <cmd>        raw control command (burst, transmission, reload, state, theme, activity idle|active)
 #   bromigos-live status
 set -u
@@ -251,12 +251,15 @@ bromigos-live tv: the den TV, channels on the den's screens (live/README.md, "Th
   bromigos-live tv next|prev              change channel
   bromigos-live tv set N                  go to channel N; channel 1 is the screen's own picture
   bromigos-live tv open                   full screen with sound in mpv, at the same moment
+  bromigos-live tv close                  back to the den: close the full-screen player
+  bromigos-live tv live                   back to the channel after something played on demand
   bromigos-live tv web                    what's on, in Jellyfin's, Plex's or YouTube's web page
   bromigos-live tv guide                  the channel guide: every channel, add, remove, reorder
                                           (the standalone Den TV app)
   bromigos-live tv sound on|off|toggle    the screen's sound (off until you turn it on; on one
                                           screen at a time: turning it on here turns it off there)
   bromigos-live tv volume up|down|N       5% steps, or a level from 0 to 100
+  bromigos-live tv poster [--next] [--size PX] [--json]   what's on as a small JPEG (base64 with --json)
   bromigos-live tv hint on|off [--json]    show or hide the floating controls
   bromigos-live tv select big|scope|small|none [--json]   enter or leave number-pad remote mode
   bromigos-live tv remote ACTION [--screen S] [--json]   one remote action; --help lists actions
@@ -268,6 +271,8 @@ bromigos-live tv: the den TV, channels on the den's screens (live/README.md, "Th
   bromigos-live tv channels [--json]      contents, order, screens and now/next (works while off)
   bromigos-live tv channel --help         add, rename, order, bumpers, move, items, remove, undo
   bromigos-live tv state [--json]         what's on each screen, the sound, what mpv is doing
+
+volume, sound, close and live take --json too: one JSON object, ok or an error.
 
 Each takes --screen big|wave|emblem (the big monitor, the scope, the small monitor; scope
 and small work too). Without it: the screen under the pointer, else the one with the
@@ -287,6 +292,15 @@ HELP
             hint|select|remote)
                 export PYTHONPATH="$HERE/../lib:$HERE/../desktop/lib:/usr/lib/bromigos/lib:${PYTHONPATH:-}"
                 exec "$PY" -m bromigos_tvremote "$@" ;;
+            poster)
+                export PYTHONPATH="$HERE/../lib:$HERE/../homelab/lib:/usr/lib/bromigos/lib:${PYTHONPATH:-}"
+                exec "$PY" -m bromigos_tvremote "$@" ;;
+            volume|sound|close|live)
+                # --json: one JSON object, for remotes (BRODEC's, through brodec-machine) and scripts
+                if [[ " $* " == *" --json "* ]]; then
+                    export PYTHONPATH="$HERE/../lib:$HERE/../homelab/lib:/usr/lib/bromigos/lib:${PYTHONPATH:-}"
+                    exec "$PY" -m bromigos_tvremote "$@"
+                fi ;;
             channels|channel)
                 if [[ -f "$HERE/../lib/bromigos_tvchannels.py" ]]; then
                     export PYTHONPATH="$HERE/../lib:$HERE/../homelab/lib:${PYTHONPATH:-}"
@@ -305,7 +319,9 @@ HELP
                 fi ;;
 
         esac
-        ctl "tv ${*:-state}" || { echo "not running (bromigos-live start)"; exit 1; } ;;
+        ctl "tv ${*:-state}" || {
+            if [[ " $* " == *" --json "* ]]; then echo '{"ok": false, "error": "The live layer is not running", "code": 3}'; exit 3; fi
+            echo "not running (bromigos-live start)"; exit 1; } ;;
     status)
         if running; then echo "daemon up (daemon $(inst daemon), supervisor $(inst supervisor))"; ctl state; else echo "stopped"; fi
         [ -f "$STATE/muted" ] && echo "sounds: muted" || echo "sounds: on"

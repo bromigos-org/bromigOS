@@ -87,6 +87,18 @@ class Controls:
         return TVL.Slot(item=o["item"], offset=offset, start=start,
                         end=start + duration if duration else None, index=0, next=None)
 
+    def back_to_channel(self, screen):
+        """End on-demand playback on a screen: its channel again, where the channel is now."""
+        if screen not in self.overrides:
+            return "Already on the channel"
+        self.overrides.pop(screen, None)
+        self._unload(self.decks[screen])
+        self.feedback(screen, "BACK TO CHANNEL")
+        if self.full_session and self.full_session.screen == screen:
+            self.full_session.retune()
+        self.wake.set()
+        return f"{screen}: back to the channel"
+
     def skip_item(self, screen, previous=False):
         ch = self.channel(screen)[1]
         if not ch.get("override"):

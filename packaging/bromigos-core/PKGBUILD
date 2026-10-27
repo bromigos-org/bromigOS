@@ -46,7 +46,9 @@ optdepends=('python: bromigos private, secrets, emblem, console, power menu, spl
             'python-cairo: emblem PNGs (bromigos emblem build)'
             'python-pillow: the banner braille (bromigos emblem build)'
             'python-numpy: a world loop from a raw clip (bromigos art make video.loop --alpha)'
-            'ffmpeg: a world loop from a raw clip (bromigos art make video.loop --alpha)')
+            'ffmpeg: a world loop from a raw clip (bromigos art make video.loop --alpha)'
+            'python-pychromecast: cast to Chromecasts and Google TVs (bromigos media cast)'
+            'python-async-upnp-client: cast to DLNA TVs (bromigos media cast; from the AUR)')
 # The release profile already strips (core/Cargo.toml); no -debug package.
 options=('!debug')
 

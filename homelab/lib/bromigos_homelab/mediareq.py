@@ -2721,6 +2721,9 @@ def parser():
     c.add_argument("which", choices=("tv", "movies"))
     c.add_argument("--past", type=int, default=7)
     c.add_argument("--future", type=int, default=90)
+    c = cmd("cast", "play on a Chromecast, a DLNA TV, AirPlay, a Jellyfin app or the den: targets, play, "
+                    "control, status, handback (bromigos media cast --help)")
+    c.add_argument("rest", nargs=argparse.REMAINDER)
     c = cmd("channel", "add or remove a library title from a den TV channel")
     c.add_argument("action", choices=("add", "remove", "list"))
     c.add_argument("title", nargs="?")
@@ -2729,7 +2732,30 @@ def parser():
     return p
 
 
+def cast_main(argv):
+    """`bromigos media cast …`: the shared casting library (lib/bromigos_cast.py, bromigos-core)."""
+    try:
+        import bromigos_cast
+    except ModuleNotFoundError:
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        local = os.path.join(root, "lib")
+        if os.path.isfile(os.path.join(local, "bromigos_cast.py")):
+            sys.path.insert(0, local)
+        elif "/usr/lib/bromigos/lib" not in sys.path:
+            sys.path.append("/usr/lib/bromigos/lib")
+        try:
+            import bromigos_cast
+        except ModuleNotFoundError:
+            msg = "Casting comes with bromigOS (bromigos-core)"
+            print(json.dumps({"ok": False, "error": msg, "code": 2}) if "--json" in argv else msg)
+            return 2
+    return bromigos_cast.main(argv)
+
+
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["cast"]:
+        return cast_main(argv[1:])
     p = parser()
     a = p.parse_args(argv)
     if not a.cmd:

@@ -397,7 +397,7 @@ def main(argv=None):
         try:
             a = parser().parse_args(argv)
         except SystemExit as e:
-            if e.code and js: print(json.dumps({'error':'Invalid arguments; see --help','code':2}))
+            if e.code and js: print(json.dumps({'ok':False,'error':'Invalid arguments; see --help','code':2}))
             return e.code
         store = Store()
         if a.verb == 'channels':
@@ -422,7 +422,7 @@ def main(argv=None):
                 if not sys.stdin.isatty() or input(f"Remove channel {row['name']}? Type its name: ").strip() != row['name']:
                     raise ChannelError('Nothing removed; use --yes to confirm',2)
             result = store.remove(a.channel)
-        if js: print(json.dumps(result,ensure_ascii=False))
+        if js: print(json.dumps(dict(result, ok=True) if isinstance(result, dict) else result,ensure_ascii=False))
         elif 'channels' in result:
             for r in result['channels']:
                 print(f"{r['number']:>2} {r['name']} ({r['kind']}, {r['order']}, bumpers {'on' if r['bumpers'] else 'off'})")
@@ -433,7 +433,7 @@ def main(argv=None):
         return 0
     except (ChannelError,C.ConfigError,OSError,ValueError) as e:
         code = getattr(e,'code',1)
-        if js: print(json.dumps({'error':str(e),'code':code}))
+        if js: print(json.dumps({'ok':False,'error':str(e),'code':code}))
         else: print(str(e),file=sys.stderr)
         return code
 

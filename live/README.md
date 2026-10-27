@@ -462,12 +462,21 @@ bromigos-live tv list                       # every screen's channels; * marks t
 bromigos-live tv set 2 --screen big         # channel 2 on the big monitor
 bromigos-live tv next --screen scope        # the next channel (prev: the previous)
 bromigos-live tv open                       # full screen with sound
+bromigos-live tv close                      # back to the den: close full screen
+bromigos-live tv live                       # back to the channel after something played on demand
 bromigos-live tv web                        # what's on, in the server's or YouTube's web page
 bromigos-live tv guide                      # the channel guide (the Den TV app)
 bromigos-live tv sound on --screen small    # on, off or toggle; on one screen at a time
 bromigos-live tv volume up                  # up, down, or a level: volume 40
 bromigos-live tv state --json               # what's on each screen, the sound, what mpv is doing
+bromigos-live tv poster --screen big --json # what's on as a small JPEG, base64
 ```
+
+`volume`, `sound`, `close`, `live` and `poster` take `--json`, as `remote`, `set`, `play`
+and `channels` do: one JSON object, `"ok": true` with the result, or `"ok": false` with
+`error` and a non-zero exit. Remotes use them: BRODEC's den remote calls them through the
+machine agent. `poster` fetches the picture through the media server's adapter, so its
+address and key never leave it.
 
 `--screen` takes `big`, `wave` or `emblem`, and `scope` and `small` too. Without it, a
 command acts on the screen under the pointer, as the keys do. `bromigos-live tv help` has

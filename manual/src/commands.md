@@ -1418,10 +1418,10 @@ From the `bromigos-core` package.
 
 ### bromigos media
 
-Your media library in a terminal: TV, films, music, YouTube, downloads, releases, search and den TV channels; request, monitor, change quality, play or delete.
+Your media library in a terminal: TV, films, music, YouTube, downloads, releases, search and den TV channels; request, monitor, change quality, play, cast or delete.
 
 ```text
-bromigos media [tv|movies|music|youtube|downloads|upcoming|search|channels] | search|get|status|upcoming|recent|library|language|monitor|profile|refresh|delete|channel …
+bromigos media [tv|movies|music|youtube|downloads|upcoming|search|channels] | search|get|status|upcoming|recent|library|language|monitor|profile|refresh|delete|channel|cast …
 ```
 
 For example:
@@ -1431,6 +1431,7 @@ bromigos media
 bromigos media movies
 bromigos media get "Cowboy Bebop"
 bromigos media status
+bromigos media cast targets
 ```
 
 From the `bromigos-homelab` package.

@@ -69,6 +69,7 @@ TICKS = 10_000_000                         # Jellyfin's RunTimeTicks: 100 ns
 HEIGHTS = {"240p": (240, 450), "360p": (360, 900), "480p": (480, 1500), "576p": (576, 2000), "720p": (720, 3000),
            "1080p": (1080, 8000)}          # height, video kbit/s
 DEVICE = "bromigos-den-tv"
+CAST_DEVICE = "bromigos-cast"              # streams for cast targets (bromigos_cast)
 
 
 def fit_height(height):
@@ -130,6 +131,27 @@ class VideoServer:
         """The server's video playlists: the `video` records whose kind is playlist."""
         return [v for v in self.video() if v["kind"] == "playlist"]
 
+    def cast_base(self):
+        """The server's address for cast targets (Chromecasts, TVs): `cast_url` when they must
+        reach it by another address than the desktop does (one without the lab's own CA, say),
+        else the endpoint."""
+        return (self.opts.get("cast_url") or self.endpoint or "").rstrip("/")
+
+    def video_cast_url(self, item, hls=True):
+        """(url, mime) a cast target fetches the item from itself. It can't send headers, so
+        the token rides in the address: give it only to the target, never print or log it.
+        hls: an H.264/AAC HLS stream at up to 1080p (Cast, AirPlay); else the file as it is
+        (DLNA TVs, which seek in it by themselves)."""
+        stream = self.video_stream(item, quality="1080p" if hls else "direct", device=CAST_DEVICE)
+        url = stream["url"]
+        if self.endpoint and url.startswith(self.endpoint):
+            url = self.cast_base() + url[len(self.endpoint):]
+        sep = "&" if "?" in url else "?"
+        url += sep + urllib.parse.urlencode({self.TOKEN_PARAM: self._token()})
+        if not stream.get("direct"):
+            return url, "application/x-mpegURL"
+        return url, "audio/mpeg" if item.get("kind") == "audio" else "video/mp4"
+
     def web_base(self):
         """The server's address for a browser: `web_url` when the desktop reaches it by
         another name (a public host name), else the endpoint."""
@@ -139,6 +161,29 @@ class VideoServer:
 # ------------------------------------------------------------------ Jellyfin
 class JellyfinVideo(VideoServer):
     FIELDS = "RunTimeTicks,ProductionYear,DateCreated,MediaSources,ParentId,SeriesName,ChildCount,RecursiveItemCount"
+    TOKEN_PARAM = "api_key"
+
+    # Jellyfin's own apps that let the server steer them (bromigos_cast's "jellyfin" targets)
+    def remote_sessions(self):
+        """Sessions active in the last 15 minutes that the server can steer."""
+        q = urllib.parse.urlencode({"ControllableByUserId": self._user(), "ActiveWithinSeconds": "960"})
+        return [s for s in (self.fetch(f"/Sessions?{q}", timeout=6) or []) if s.get("SupportsRemoteControl")]
+
+    def remote_play(self, session_id, item_id, start=0):
+        q = urllib.parse.urlencode({"playCommand": "PlayNow", "itemIds": item_id,
+                                    "startPositionTicks": str(int(float(start or 0) * TICKS))})
+        self.request(f"/Sessions/{urllib.parse.quote(session_id)}/Playing?{q}", method="POST", timeout=8, raw=True)
+
+    def remote_playstate(self, session_id, command, seconds=None):
+        """Pause, Unpause, Stop or Seek (to seconds)."""
+        q = "?" + urllib.parse.urlencode({"seekPositionTicks": str(int(seconds * TICKS))}) if seconds is not None else ""
+        self.request(f"/Sessions/{urllib.parse.quote(session_id)}/Playing/{command}{q}", method="POST", timeout=8,
+                     raw=True)
+
+    def remote_command(self, session_id, name, arguments=None):
+        """A general command: SetVolume (Arguments Volume), VolumeUp, VolumeDown, Mute, Unmute."""
+        self.request(f"/Sessions/{urllib.parse.quote(session_id)}/Command", method="POST", timeout=8, raw=True,
+                     data={"Name": name, "Arguments": arguments or {}})
 
     def auth_headers(self):
         from .. import config
@@ -317,6 +362,11 @@ class JellyfinVideo(VideoServer):
 # ------------------------------------------------------------------ Plex
 class PlexVideo(VideoServer):
     JSON = {"Accept": "application/json"}
+    TOKEN_PARAM = "X-Plex-Token"
+
+    def _token(self):
+        from .. import config
+        return config.resolve(self.opts.get("auth_ref") or "")
 
     def auth_headers(self):
         from .. import config
