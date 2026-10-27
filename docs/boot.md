@@ -420,13 +420,20 @@ settings/grub/preview.py --theme /tmp/t --menu snapshots --mode 1920x1080 --keys
 Its menus are samples of what `grub-mkconfig`, grub-btrfs (with these titles) and the
 ISO write.
 
+QEMU runs through `test/vm/vm-keeper.py`, like the other test VMs. The VM stops when
+`preview.py` does, even if it's killed, and the keeper's limits apply: 8 GiB for all your
+test VMs together (`BROMIGOS_VM_MAX_MEM_GIB`, at most 10), and at least 14 GiB free in
+`free -g` before one starts.
+
 ## Tests
 
 `settings/grub/tests` runs in the package's `check()`. It covers:
 
 - the theme generator;
 - the snapshot titles, checked with the real `grub-script-check`;
-- the root helper, in a stand-in root with a stand-in `grub-mkconfig`.
+- the root helper, in a stand-in root with a stand-in `grub-mkconfig`;
+- `preview.py`'s VM: a stand-in QEMU stops when the preview or its keeper is killed.
+  These checks are skipped when `free -g` shows less than 14 GiB free.
 
 ## Test runs
 
