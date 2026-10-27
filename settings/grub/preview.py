@@ -10,6 +10,12 @@ standard VGA driver set to each mode. BIOS: grub-mkrescue's BIOS image, VBE. The
 samples of what grub-mkconfig, grub-btrfs (with bromigOS's titles) and the ISO write, and
 nothing they boot does anything. Each shot is <out>/<menu>-<firmware>-<mode>.png, taken
 `--at` seconds after GRUB starts (the timeout meter part way through its count).
+
+QEMU runs through test/vm/vm-keeper.py, owned by this process: if the preview is killed
+(SIGKILL, a closed terminal, a stopped session), the keeper stops the VM, and if the keeper
+itself is killed, the kernel stops QEMU (PR_SET_PDEATHSIG). The keeper's test-VM budget
+applies too: at most BROMIGOS_VM_MAX_MEM_GIB (8 GiB by default) for all your test VMs, and
+at least 14 GiB of free memory before one starts.
 """
 
 import argparse
@@ -23,6 +29,9 @@ import tempfile
 import time
 
 from PIL import Image
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+KEEPER = os.path.join(REPO, "test", "vm", "vm-keeper.py")
 
 OVMF_CODE = "/usr/share/edk2/x64/OVMF_CODE.4m.fd"
 OVMF_VARS = "/usr/share/edk2/x64/OVMF_VARS.4m.fd"
@@ -138,6 +147,18 @@ def build_root(work, theme_dir, mode, menu, timeout, firmware):
     return iso
 
 
+def launch(work, argv):
+    """Start QEMU (argv) through vm-keeper.py, owned by this process, and return once its
+    monitor (work/qmp.sock) is up. The keeper stops QEMU when this process is gone."""
+    keeper_log = os.path.join(work, "keeper.log")
+    argv = [a for a in argv if a != "-daemonize"]
+    result = subprocess.run([sys.executable, KEEPER, "--ready", os.path.join(work, "qmp.sock"),
+                             "--owner", str(os.getpid()), "--log", keeper_log, "--", *argv],
+                            cwd=work, stderr=subprocess.PIPE, text=True)
+    if result.returncode != 0:
+        raise SystemExit(f"preview: QEMU didn't start\n{result.stderr.strip()}")
+
+
 def shoot(work, target, firmware, mode, out_png, at, keys, device="VGA"):
     # the monitor's socket by a relative name: a socket's path may not be longer than 107
     os.chdir(work)
@@ -151,7 +172,7 @@ def shoot(work, target, firmware, mode, out_png, at, keys, device="VGA"):
     args = ["qemu-system-x86_64", "-enable-kvm", "-machine", "q35", "-m", "512",
             "-vga", "none", "-device", f"{device},xres={w},yres={h},edid=on",
             "-display", "none", "-qmp", f"unix:{sock},server,nowait", "-serial", f"file:{serial}",
-            "-daemonize", "-pidfile", pid]
+            "-pidfile", pid]
     if firmware == "uefi":
         vars_ = os.path.join(work, "vars.fd")
         shutil.copyfile(OVMF_VARS, vars_)
@@ -160,7 +181,7 @@ def shoot(work, target, firmware, mode, out_png, at, keys, device="VGA"):
                  "-drive", f"file=fat:{target},format=raw,if=virtio,readonly=on"]
     else:
         args += ["-drive", f"file={target},media=cdrom,readonly=on,if=ide", "-boot", "d"]
-    subprocess.run(args, check=True)
+    launch(work, args)
     try:
         # GRUB says when it's up; the shot is `at` seconds after
         deadline = time.time() + 60
@@ -186,8 +207,12 @@ def shoot(work, target, firmware, mode, out_png, at, keys, device="VGA"):
         Image.open(ppm).save(out_png)
         os.unlink(ppm)
     finally:
-        with open(pid) as f:
-            os.kill(int(f.read().strip()), 15)
+        # QEMU's keeper sees it go and exits too
+        try:
+            with open(pid) as f:
+                os.kill(int(f.read().strip()), 15)
+        except (OSError, ValueError):
+            pass
         time.sleep(0.5)
 
 
