@@ -374,3 +374,49 @@ ambiguous. Search with `--kind seasons --id SHOW_ID`, then `--kind episodes --id
 --season 1` to list episodes. Ask VECTOR to “play Cowboy Bebop episode 5 on the big TV.”
 See [the den controls](themes-and-worlds.md#the-den-tv) for sound, full screen and the
 number-pad remote.
+
+## Cast to another screen
+
+`bromigos media cast` plays a title, or what a den screen shows, on another screen in the
+house: a Chromecast or Google TV, a smart TV that is a DLNA player, an Apple TV or AirPlay
+TV, or a TV or phone running Jellyfin's app. The den's own screens are on the same list.
+
+```bash
+bromigos media cast targets                                   # every screen it finds, and what each plays
+bromigos media cast play --target "living room" --title "Cowboy Bebop S01E05"
+bromigos media cast play --target "living room" --screen big  # what the big den screen shows, from the same moment
+bromigos media cast control --target "living room" pause      # play, pause, stop, seek 600, volume 40, mute
+bromigos media cast status --target "living room"
+bromigos media cast handback --target "living room" --screen big   # back to the den, from where it was
+```
+
+`--target` takes a target's id from the list, or words from its name, room or kind, such
+as `living room`, `bedroom tv` or `chromecast`. Each command takes `--json`.
+`bromigos media cast targets --dry-run` only lists what it finds and keeps nothing.
+
+| Kind | Finds it by | Plays | Needs |
+|---|---|---|---|
+| Google Cast (Chromecast, Google TV, Nest screens) | mDNS | your media server's titles, YouTube links | `python-pychromecast` |
+| DLNA (most smart TVs) | SSDP | your media server's titles | `python-async-upnp-client` (from the AUR) |
+| AirPlay (Apple TV, AirPlay 2 TVs) | mDNS | your media server's titles | `pyatv`, which no Arch repository packages yet; a device that asks for a PIN is paired once with pyatv's `atvremote` |
+| Jellyfin apps | your Jellyfin server | that server's titles | a Jellyfin source in your media settings |
+| The den's screens | the den TV | everything Den TV plays | nothing more |
+
+- **Where it looks.** Only your own network: mDNS and SSDP ask the devices nearby, and
+  Jellyfin lists the apps it can steer. A firewall on this computer must let mDNS
+  (UDP 5353) and SSDP (UDP 1900) answers in.
+- **How a TV gets the video.** The TV fetches it from your media server itself. If the
+  server's address uses your lab's own certificate authority, which TVs don't trust, set
+  `cast_url` on the source to an address they can reach (see
+  [the media sources](https://github.com/bromigos-org/bromigOS/blob/main/docs/homelab.md)).
+  That address carries the server's key, so
+  it's given only to the TV, never shown or logged.
+- **What can't be cast.** Files only on this computer, and streaming apps' protected video
+  (Netflix, Disney+, Prime Video and the like): start those from the app on the TV.
+- **A record.** Every play, control and hand back is a line in
+  `~/.local/state/bromigos/cast-audit.jsonl`: when, who asked, which screen, what played.
+  Addresses and keys are never in it.
+
+Ask VECTOR to "play Cowboy Bebop on the living room Chromecast", or "move it back to the
+den". BRODEC's den remote on your phone picks targets from the same list, through the
+machine agent on this computer.

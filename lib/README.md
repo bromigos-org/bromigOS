@@ -27,6 +27,8 @@ modules to the same folder:
 | `bromigos_tv.py` | The den TV's channels, their wall-clock schedule, picked shows taking turns, and each screen's remembered channel and sound |
 | `bromigos_tvchannels.py` | Shared channel operations and JSON CLI for the guide, media and VECTOR |
 | `bromigos_tvconfig.py` | Writes the den TV's `[[tv.channel]]` tables in place, keeping comments: the channel guide's writer |
+| `bromigos_tvplay.py`, `bromigos_tvremote.py` | Search and play on a den screen, its remote's actions, and their JSON command line |
+| `bromigos_cast.py` | Casting: Chromecasts, DLNA TVs, AirPlay, Jellyfin's apps and the den's screens as one list of targets (`bromigos media cast`) |
 | `bromigos_youtube.py` | YouTube playlists and channels through yt-dlp, cached, with live streams and keeping videos |
 | `bromigos_storage*.py` | Local drive inventory, saved provisioning plans, verified migration, grouped capacity, Snapper/btrbk inventory and logged cache and retirement plans; [storage reference](../docs/storage.md) |
 | `bromigos_console.py` | Reads and safely saves text console font presets for the next boot; [console reference](../docs/console.md) |
@@ -154,6 +156,27 @@ The MEDIA widget has a rotary dial and per-screen sound controls. Full-screen pl
 loads only the den's own `live/tvosc.lua`, with a private palette and IPC connection;
 it leaves global mpv settings alone. The number-pad remote selects a screen with
 Super+KP 1/2/3 and releases it with Super+KP 0, Escape or a fifteen-second timeout.
+
+### bromigos_cast
+
+`bromigos_cast.py` puts every screen something can be cast to in one list: Google Cast
+devices (python-pychromecast), DLNA renderers (python-async-upnp-client), AirPlay
+receivers (pyatv), the apps Jellyfin can steer, and the den's own screens. `targets()`
+finds them in parallel and keeps their addresses in a private cache
+(`~/.cache/bromigos/cast-targets.json`, 0600); `find()` takes an id or words from a name
+or room; `play()`, `control()`, `status()` and `handback()` act on one. `bromigos media
+cast`, VECTOR's tools and BRODEC's den remote all call it. Each protocol is optional, and
+`protocols` in `targets()` says why one isn't there. It was tested against
+pychromecast 14.0.10, async-upnp-client 0.40.0 and pyatv 0.18.0.
+
+A target fetches the stream from the media server itself, with the server's key in the
+address (`video_cast_url()` in the media server's adapter). That address goes only to the
+target. Every play, control and hand back is a line in
+`~/.local/state/bromigos/cast-audit.jsonl`, without addresses or keys.
+`BROMIGOS_CAST_CALLER` names who asked (VECTOR sets `vector`). AirPlay video plays while its
+sender stays connected, so a small helper process holds the connection until the video
+ends or is stopped. The tests (`homelab/tests/test_cast.py`) use stand-ins for every
+library and device.
 
 `lib/bromigos_tvplay.py` shares media search and on-demand playback between the Den TV
 app, media TUI, CLI and VECTOR. `lib/bromigos_tvremote.py` shares hint, selection and

@@ -458,8 +458,8 @@ Their options:
 | `pbs` | `endpoint`, `auth_ref` (a token, sent as `PBSAPIToken=`) |
 | `enphase` | `endpoint`, `auth_ref` (an owner token, for firmware 7 and later), `tls_verify = false` or `tls_ca`; `history_metric` |
 | `minecraft` | `endpoint` (`minecraft://host:25565`), or `servers = [{ name, address }]` for several; `timeout` (4 s) |
-| `jellyfin` | `endpoint`, `auth_ref` (an API key); `user` (whose continue watching; default the first administrator); `web_url`; `direct_max_mbps` (20) |
-| `plex` | `endpoint`, `auth_ref` (a Plex token); `web_url`; `direct_max_mbps` (20) |
+| `jellyfin` | `endpoint`, `auth_ref` (an API key); `user` (whose continue watching; default the first administrator); `web_url`; `cast_url`; `direct_max_mbps` (20) |
+| `plex` | `endpoint`, `auth_ref` (a Plex token); `web_url`; `cast_url`; `direct_max_mbps` (20) |
 
 Numbers in brackets are the defaults.
 
@@ -523,8 +523,15 @@ auth_ref = "@file:~/.local/share/bromigos/plex-token"
   id, and `video_stop(stream)` ends a transcode when its screen moves on. Without a size, a
   file plays as it is unless it's over `direct_max_mbps`. Full screen plays the file.
 - **The key** goes in a request header, never in an address, so it never shows in a
-  command line or a log.
-- **Read-only.** Nothing marks anything watched or changes a library.
+  command line or a log. Casting is the one exception: a Chromecast or a TV fetches the
+  stream itself and can't send headers, so the address it is given carries the key. That
+  address goes only to the device, never to the output, a log or the cache.
+- **`cast_url`** is the server's address for cast targets, when they must reach it by
+  another one than the desktop does: a plain `http://` address on your network, say, when
+  the endpoint uses the lab's own certificate authority, which a Chromecast doesn't trust.
+  Without it, cast targets use the endpoint.
+- **Read-only.** Nothing marks anything watched or changes a library. Casting to one of
+  Jellyfin's own apps asks the server to steer that app (play, pause, seek, volume).
 
 Without a key, the source still reports the server's health, and the den TV and the MEDIA
 panel say the key is missing and where it goes.
@@ -536,8 +543,10 @@ haven't downloaded.
 
 In Python, `H.video()` is the capability, and `H.video_source(name)` gives one server's
 adapter, with `playlists()`, `video_items(kind, id)`, `video_resume()`, `video_latest()`,
-`video_stream(item, quality, height)`, `video_web(item)` and `video_poster(item)`
-(`adapters/labvideo.py`). For channels of shows you pick, it also lists `video_shows()`
+`video_stream(item, quality, height)`, `video_web(item)`, `video_poster(item)` and
+`video_cast_url(item, hls)` (`adapters/labvideo.py`). Jellyfin's adapter also lists and
+steers its own apps for casting: `remote_sessions()`, `remote_play()`, `remote_playstate()`
+and `remote_command()`. For channels of shows you pick, it also lists `video_shows()`
 and `video_movies()`, gives a show's episodes with `video_show_items(id)`, and one item
 with `video_item(id)`.
 
