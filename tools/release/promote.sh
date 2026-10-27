@@ -31,7 +31,15 @@ echo "release: promote $rc (${rc_sha:0:7}) to $tag"
 newest=$(git tag -l "$tag-rc*" --sort=-version:refname | head -1)
 [[ $newest == "$rc" ]] || fail "$rc isn't $tag's newest release candidate ($newest is)"
 git merge-base --is-ancestor "$rc_sha" origin/main || fail "$rc isn't on main"
-if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then fail "$tag exists in bromigOS already"; fi
+# a run that stopped after tagging (e.g. a flaky packages job, re-run since) resumes: the
+# tag stays when it's on the candidate's commit, and the rest runs again
+tagged() {  # repo-dir: the remote's $tag is on $2's commit (0), elsewhere (fail), or absent (1)
+  local at  # the commit an annotated tag points at (its ^{} line sorts last), or a plain tag's
+  at=$(git -C "$1" ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}" | sort -k2 | tail -1 | cut -f1)
+  [[ -n $at ]] || return 1
+  [[ $at == "$2" ]] || fail "$tag exists in $(basename "$(git -C "$1" rev-parse --show-toplevel)") on ${at:0:7}, not $rc's ${2:0:7}"
+}
+have_tag=; if tagged . "$rc_sha"; then have_tag=1; echo "release: $tag is on $rc already: resuming"; fi
 gh release view "$rc" -R bromigos-org/bromigOS >/dev/null 2>&1 || fail "$rc has no GitHub Release: was it released?"
 rel ci-green --repo bromigos-org/bromigOS || fail "bromigOS's main CI isn't green"
 rel body --tag "$tag" --ref "$rc" --promoted-from "$rc" > "$out/body.md"
@@ -42,18 +50,20 @@ if [[ -n $vdir ]]; then
   git -C "$vdir" fetch -q --tags origin main
   vrc=$(git -C "$vdir" rev-parse -q --verify "refs/tags/$rc^{commit}") || fail "vector has no $rc"
   [[ -z $vrc ]] || git -C "$vdir" merge-base --is-ancestor "$vrc" origin/main || fail "vector's $rc isn't on main"
-  if git -C "$vdir" ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then fail "$tag exists in vector already"; fi
+  have_vtag=; [[ -n $vrc ]] && tagged "$vdir" "$vrc" && have_vtag=1
   GH_TOKEN=$vtoken rel ci-green --repo bromigos-org/vector || fail "vector's main CI isn't green"
 else
   fail "no VECTOR checkout: VECTOR is promoted with bromigOS"
 fi
 
-if [[ -n $vrc ]]; then
+if [[ -n $vrc && -z ${have_vtag:-} ]]; then
   act git -C "$vdir" tag -a "$tag" -m "bromigos-vector $version: $rc, promoted to stable" "$vrc"
   act git -C "$vdir" push -q origin "refs/tags/$tag"
 fi
-act git tag -a "$tag" -m "bromigOS $version: $rc, promoted to stable" "$rc_sha"
-act git push -q origin "refs/tags/$tag"
+if [[ -z $have_tag ]]; then
+  act git tag -a "$tag" -m "bromigOS $version: $rc, promoted to stable" "$rc_sha"
+  act git push -q origin "refs/tags/$tag"
+fi
 
 wait_for() {
   local deadline=$(( $(date +%s) + 7200 )) state=
@@ -78,9 +88,11 @@ fi
 
 sig=()
 [[ -f $out/SHA256SUMS.sig ]] && sig=("$out/SHA256SUMS.sig")
+released() { GH_TOKEN=${2:-${GH_TOKEN:-}} gh release view "$tag" -R "$1" >/dev/null 2>&1; }
+released bromigos-org/bromigOS && echo "release: bromigOS's $tag GitHub Release exists" ||
 act gh release create "$tag" -R bromigos-org/bromigOS --verify-tag --latest --title "bromigOS $version" \
   --notes-file "$out/body.md" "$out/SHA256SUMS" "${sig[@]}"
-if [[ -n $vrc ]]; then
+if [[ -n $vrc ]] && ! released bromigos-org/vector "$vtoken"; then
   GH_TOKEN=$vtoken act gh release create "$tag" -R bromigos-org/vector --verify-tag --latest \
     --title "VECTOR $version" --notes-file "$out/vector-body.md"
 fi

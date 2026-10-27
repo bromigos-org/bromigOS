@@ -53,6 +53,11 @@ their date line still says "Release candidate 0.1.2-rc2", which the page explain
 
 Only the newest candidate of a version can be promoted.
 
+If a promotion stops after tagging (say the stable publish failed and you re-ran its failed
+job until it went green), run **release-promote** again with the same candidate: a stable tag
+already on the candidate's commits is kept, and it carries on from there, skipping any GitHub
+Release that exists. A stable tag on any other commit still stops it.
+
 ## Releasing straight to stable
 
 release-prepare with **kind** `stable` makes a `v0.1.2` PR; merging it publishes the stable
