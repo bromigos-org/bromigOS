@@ -280,7 +280,7 @@ pub struct Running {
     pub started: Option<i64>,
 }
 
-fn boot_time(proc: &Path) -> Option<i64> {
+pub(crate) fn boot_time(proc: &Path) -> Option<i64> {
     fs::read_to_string(proc.join("stat"))
         .ok()?
         .lines()
@@ -289,7 +289,7 @@ fn boot_time(proc: &Path) -> Option<i64> {
 
 /// When a process started (Unix seconds): /proc/<pid>/stat's starttime, in clock ticks
 /// since boot. Linux reports them in USER_HZ, which is 100 on every architecture.
-fn proc_start(proc: &Path, pid: i32, btime: i64) -> Option<i64> {
+pub(crate) fn proc_start(proc: &Path, pid: i32, btime: i64) -> Option<i64> {
     let stat = fs::read_to_string(proc.join(pid.to_string()).join("stat")).ok()?;
     let rest = stat.rsplit_once(") ")?.1;
     let ticks: i64 = rest.split_whitespace().nth(19)?.parse().ok()?;
@@ -393,6 +393,15 @@ pub enum Need {
     /// Installed but not running: a session service the login starts, added by an update
     /// (only the OSD: the others can be switched off on purpose, so they're never started).
     Start,
+    /// A package's `restart.d` drop-in asks first: a desktop notification, whose "Restart
+    /// now" restarts the unit ([`crate::restartd`]); for an app, only the notice.
+    Notify,
+    /// A declared app that restarts itself when it can (`policy = "self"`).
+    #[serde(rename = "self")]
+    Itself,
+    /// A user service no drop-in declares runs a program that was replaced: reported, never
+    /// restarted from here.
+    Stale,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -402,6 +411,12 @@ pub struct Plan {
     pub need: Need,
     pub why: String,
     pub pids: Vec<i32>,
+    /// The systemd --user unit it is ([`crate::restartd`]); None for bromigOS's pieces.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
+    /// The package a `restart.d` drop-in names for it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package: Option<String>,
 }
 
 /// What each running piece needs, given what's installed (and which packages this update
@@ -465,6 +480,8 @@ pub fn plan(
             need,
             why,
             pids: r.pids.clone(),
+            unit: None,
+            package: None,
         });
     }
     if inst.contains_key(Piece::Osd.package()) && !runs.iter().any(|r| r.piece == Piece::Osd) {
@@ -473,6 +490,8 @@ pub fn plan(
             need: Need::Start,
             why: "installed, not running (the session starts it at login)".to_owned(),
             pids: vec![],
+            unit: None,
+            package: None,
         });
     }
     if let Some(k) = &pending.kernel {
@@ -485,6 +504,8 @@ pub fn plan(
                 k.installed.join(", ")
             ),
             pids: vec![],
+            unit: None,
+            package: None,
         });
     }
     if let Some(d) = &pending.driver {
@@ -501,6 +522,8 @@ pub fn plan(
                 d.running
             ),
             pids: vec![],
+            unit: None,
+            package: None,
         });
     }
     out
@@ -718,6 +741,28 @@ pub fn execute(paths: &Paths, plans: &[Plan]) -> Vec<Done> {
                         _ => ("restarted", stop(&p.pids).and_then(|_| go())),
                     }
                 }
+                // a package's restart.d drop-in: its units and apps (crate::restartd)
+                (None, Need::Restart | Need::Notify) if p.package.is_some() || p.unit.is_some() => {
+                    match crate::restartd::command(p) {
+                        Some(argv) => (
+                            match p.need {
+                                Need::Notify => "asked to restart (a notification)",
+                                _ => "restarted",
+                            },
+                            run_quiet(
+                                Command::new(&argv[0])
+                                    .args(&argv[1..])
+                                    .envs(envs()),
+                            ),
+                        ),
+                        None => ("nothing to do", Ok(String::new())),
+                    }
+                }
+                (_, Need::Itself) => ("restarts itself when it can", Ok(String::new())),
+                (_, Need::Stale) => (
+                    "left running: restart it yourself (systemctl --user restart)",
+                    Ok(String::new()),
+                ),
                 (_, Need::Relogin) => ("log out and back in to run it", Ok(String::new())),
                 // a piece held back: it keeps running on the libraries it loaded
                 (Some(_), Need::Reboot) => (
@@ -744,15 +789,47 @@ pub fn execute(paths: &Paths, plans: &[Plan]) -> Vec<Done> {
 /// The restarts the running pieces need now (no package step): what `bromigos restart`
 /// and an update's step 4 do. `only`: just these pieces, restarted whether stale or not.
 pub fn restart_plan(paths: &Paths, only: &[Piece], changed: &[String]) -> Vec<Plan> {
-    let runs = running(Path::new("/proc"));
-    if only.is_empty() {
+    restart_plan_for(paths, only, &[], changed)
+}
+
+/// The packages' `restart.d` drop-ins ([`crate::restartd`]); the ones that don't read are
+/// left out.
+pub fn declared(paths: &Paths) -> Vec<crate::restartd::Declared> {
+    crate::restartd::load(&paths.share_dir.join("restart.d")).0
+}
+
+/// [`restart_plan`], with the packages' declared units (`restart.d`) after the pieces, and
+/// then the other user services running a replaced program (reported only). `units`:
+/// declared units asked for by name (with `only`: just those and these).
+pub fn restart_plan_for(
+    paths: &Paths,
+    only: &[Piece],
+    units: &[String],
+    changed: &[String],
+) -> Vec<Plan> {
+    let proc = Path::new("/proc");
+    let runs = running(proc);
+    let uid = rustix::process::getuid().as_raw();
+    if only.is_empty() && units.is_empty() {
         let inst = installed(paths);
         let pending = crate::reboot::here(&inst);
         let mut p = plan(&runs, &inst, changed, &pending);
         // hypridle's config is a file of the user's and a rendered one, not a package's
         p.extend(crate::idle::stale(paths, &runs, &p));
+        let pieces: BTreeSet<i32> = runs.iter().flat_map(|r| r.pids.iter().copied()).collect();
+        p.extend(crate::restartd::plan(
+            &declared(paths),
+            &crate::restartd::procs(proc, uid),
+            &inst,
+            &pieces,
+        ));
         return p;
     }
+    let named = if units.is_empty() {
+        vec![]
+    } else {
+        crate::restartd::plan_named(&declared(paths), &crate::restartd::procs(proc, uid), units)
+    };
     runs.iter()
         .filter(|r| only.contains(&r.piece) && r.piece != Piece::Hyprland)
         .map(|r| Plan {
@@ -760,6 +837,8 @@ pub fn restart_plan(paths: &Paths, only: &[Piece], changed: &[String]) -> Vec<Pl
             need: Need::Restart,
             why: "asked for".to_owned(),
             pids: r.pids.clone(),
+            unit: None,
+            package: None,
         })
         .chain(only.iter().filter(|p| **p == Piece::Hyprland).map(|_| {
             Plan {
@@ -768,8 +847,11 @@ pub fn restart_plan(paths: &Paths, only: &[Piece], changed: &[String]) -> Vec<Pl
                 why: "asked for (its config; the compositor itself restarts only with a new login)"
                     .to_owned(),
                 pids: vec![],
+                unit: None,
+                package: None,
             }
         }))
+        .chain(named)
         .collect()
 }
 

@@ -27,7 +27,10 @@ Update now button, the last update, and what an update would do now](images/sett
 6. It renders the theme again. Where bromigOS's boot menu theme is on, it brings `/boot`
    up to date too ([boot.md](boot.md)).
 7. It restarts whatever still runs older code than is installed (`bromigos restart`).
-   When a new kernel or graphics driver waits for a restart of the computer, it leaves
+   That includes the user services other packages declare in
+   `/usr/share/bromigos/restart.d/`, so an app's background services restart with the
+   desktop's. Other user services still running a replaced program are listed, not
+   restarted. When a new kernel or graphics driver waits for a restart of the computer, it leaves
    alone what needs the GPU, and says so last
    ([below](#when-the-kernel-or-the-graphics-driver-changes)).
 

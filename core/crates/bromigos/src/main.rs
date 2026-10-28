@@ -210,8 +210,8 @@ enum Cmd {
     Boot(BootArgs),
     /// Restart what runs stale (its package is newer than the process), or the pieces named
     Restart {
-        /// live, widgets, waybar, dunst, vector, hyprland (its config), osd, idle (hypridle);
-        /// none: whatever is stale
+        /// live, widgets, waybar, dunst, vector, hyprland (its config), osd, idle (hypridle),
+        /// or a user unit a package's restart.d drop-in declares; none: whatever is stale
         pieces: Vec<String>,
         /// Only say what would restart
         #[arg(long)]
@@ -2331,6 +2331,9 @@ fn print_plans(plans: &[update::Plan]) {
             Need::Relogin => "log out and back in",
             Need::Reboot => "reboot",
             Need::Start => "start",
+            Need::Notify => "ask (notification)",
+            Need::Itself => "restarts itself",
+            Need::Stale => "stale (restart it yourself)",
         };
         println!("  {:<9} {need}: {}", p.what, p.why);
     }
@@ -2673,18 +2676,23 @@ fn whats_new_cmd(paths: &Paths, release: Option<&str>, all: bool) -> Result<i32>
 
 fn restart_cmd(paths: &Paths, pieces: &[String], check: bool, json: bool) -> Result<i32> {
     let mut only = Vec::new();
+    let mut units = Vec::new();
+    let declared = update::declared(paths);
     for p in pieces {
         match Piece::parse(p) {
             Some(x) => only.push(x),
+            None if bromigos_core::restartd::find_unit(&declared, p).is_some() => {
+                units.push(p.clone())
+            }
             None => {
-                eprintln!(
-                    "bromigos restart: unknown: {p} (live, widgets, waybar, dunst, vector, hyprland, osd, idle)"
-                );
+                let mut known: Vec<String> = Piece::ALL.iter().map(|p| p.name().to_owned()).collect();
+                known.extend(declared.iter().flat_map(|d| d.units.iter().map(|u| u.name.clone())));
+                eprintln!("bromigos restart: unknown: {p} ({})", known.join(", "));
                 return Ok(2);
             }
         }
     }
-    let plans = update::restart_plan(paths, &only, &[]);
+    let plans = update::restart_plan_for(paths, &only, &units, &[]);
     if check {
         if json {
             println!("{}", json!({"schema": SCHEMA, "plan": plans}));

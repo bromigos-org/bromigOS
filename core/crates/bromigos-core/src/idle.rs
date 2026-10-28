@@ -1264,6 +1264,8 @@ pub fn apply(paths: &Paths) -> Result<Applied, String> {
                 need: crate::update::Need::Restart,
                 why: "the idle policy changed".to_owned(),
                 pids,
+                unit: None,
+                package: None,
             }],
         );
         // the compositor starts the new one a moment later: wait for it (2 s at most), so
@@ -1336,6 +1338,8 @@ pub fn stale(
         need: Need::Reload,
         why: why.to_owned(),
         pids,
+        unit: None,
+        package: None,
     })
 }
 
