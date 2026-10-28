@@ -1841,7 +1841,7 @@ Restart what runs stale (its package is newer than the process), or the pieces n
 Usage: bromigos restart [OPTIONS] [PIECES]...
 
 Arguments:
-  [PIECES]...  live, widgets, waybar, dunst, vector, hyprland (its config), osd, idle (hypridle); none: whatever is stale
+  [PIECES]...  live, widgets, waybar, dunst, vector, hyprland (its config), osd, idle (hypridle), or a user unit a package's restart.d drop-in declares; none: whatever is stale
 
 Options:
       --check  Only say what would restart

@@ -217,7 +217,46 @@ theme previews, ends with a line asking for the restart, and sends one notificat
 
 `bromigos restart NAME…` restarts the named pieces, stale or not. The names are `live`,
 `widgets`, `waybar`, `dunst`, `osd`, `vector`, `idle` and `hyprland`. For `hyprland` it
-runs `hyprctl reload`.
+runs `hyprctl reload`. A user unit a package declares (below) may be named too, with or
+without `.service`.
+
+#### What other packages restart: `restart.d`
+
+Any package can say what of its own restarts after it upgrades, with a drop-in at
+`/usr/share/bromigos/restart.d/<name>.toml` (`bromigos-core/src/restartd.rs`):
+
+```toml
+package = "brodec-desktop"          # optional; the file's name when left out
+[[unit]]                            # systemd --user units, restarted in this order
+name = "brodecd.service"
+# policy = "restart"                # the default; "notify" asks first
+[[unit]]
+name = "brodec-machine.service"
+[[app]]
+name = "BRODEC"
+exe = "/usr/bin/brodec-desktop"
+policy = "self"                     # "self" or "notify" (the default)
+```
+
+Files are read in name order. A file that doesn't read (an unknown key, a name that
+isn't a unit's, a relative `exe`) is left out, and the others still count.
+
+A unit is stale when it has processes, and its package was installed after the oldest of
+them started, or one of them runs a program that was replaced (its `/proc/<pid>/exe`
+ends in ` (deleted)`). A unit's processes are found by their cgroup, under
+`user@<uid>.service`.
+
+| Policy | What happens |
+|---|---|
+| unit, `restart` | `systemctl --user try-restart`, after bromigOS's own pieces, in the files' order |
+| unit, `notify` | A desktop notification, "PACKAGE updated — restart now?". Its **Restart now** button runs `systemctl --user restart`. Use it for a service that may be in the middle of something, such as a call. |
+| app, `self` | Reported only. The app watches its own program and restarts itself when it's idle. |
+| app, `notify` | A notification asks you to quit the app and open it again. Nothing is stopped. |
+
+Any other user service whose processes run a replaced program is reported with the need
+`stale`, never restarted: you restart it yourself with `systemctl --user restart`.
+Services that hold one of bromigOS's pieces are left to the piece, and a declared app's
+processes don't count.
 
 ### Themes and the look
 
@@ -1226,7 +1265,12 @@ candidate, and otherwise prints nothing. It cannot be combined with `--json`.
   It's `[]` when everything is up to date.
 - `need` is `restart`, `reload` when only the default config is newer, `relogin` for
   Hyprland itself, `reboot` for the kernel, the graphics driver and a piece held back
-  until the restart, or `start` for the OSD when an update added it.
+  until the restart, or `start` for the OSD when an update added it. A `restart.d`
+  drop-in adds `notify` (a notification asks first) and `self` (the app restarts itself),
+  and `stale` is a user service no drop-in declares that runs a replaced program.
+- A declared unit's or app's restart also has `unit` (the systemd --user unit, for a
+  unit and a `stale` service) and `package` (the drop-in's). bromigOS's own pieces have
+  neither.
 - `channel` is `stable`, `rc`, `edge`, `dev` or `null`.
 - `boot` is the boot menu's state in one line, as `bromigos boot theme status` says it.
 - `aur` is `{enabled, found, packages, note}`. `found` is
@@ -1284,7 +1328,9 @@ candidate, and otherwise prints nothing. It cannot be combined with `--json`.
 - `boot` is the boot menu brought up to the theme, with the same `status` values as
   `bromigos boot theme --json`. It's `null` when the update stopped before that step.
 - A restart's `action` is `restarted`, `reloaded`, or what you must do, such as
-  `log out and back in to run it` or `reboot to run it`.
+  `log out and back in to run it` or `reboot to run it`. A `notify` restart's is
+  `asked to restart (a notification)`, a `self` one's `restarts itself when it can`, and a
+  `stale` one's `left running: restart it yourself (systemctl --user restart)`.
 - `snapshot` is the pre and post pair around the package step. It's `null` when this
   machine has no snapshots, or with `--no-packages`.
 - `channel` is the channel the packages came from.

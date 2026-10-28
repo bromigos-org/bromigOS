@@ -34,8 +34,11 @@ bromigos update --check
    the old one.
 3. It applies your theme again.
 4. It restarts the parts of the desktop that still run old code: the background, the
-   panels, the bar, notifications, the volume display, VECTOR and his voice. Your apps keep
-   running.
+   panels, the bar, notifications, the volume display, VECTOR and his voice. Apps that
+   ask for it, such as BRODEC, get their background services restarted too. Your apps keep
+   running: an app that can restart itself does so when you aren't using it, and one that
+   might be busy, such as in a call, shows a notification with a **Restart now** button
+   instead.
 
 ### When the update asks you to restart
 

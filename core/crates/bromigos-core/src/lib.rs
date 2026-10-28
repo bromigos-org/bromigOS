@@ -47,6 +47,7 @@ pub mod peripheral;
 pub mod previews;
 pub mod profile;
 pub mod reboot;
+pub mod restartd;
 pub mod session;
 pub mod setup;
 pub mod snapshot;
