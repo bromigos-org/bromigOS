@@ -1,0 +1,18 @@
+# Xbox Wireless Controllers over Bluetooth (the Xbox One S and later pads, the Elite Series 2,
+# the Series X|S pads): xpadneo, their full driver. The kernel's own driver gives buttons
+# and sticks; xpadneo adds rumble (the triggers' too), the battery, and the button layout
+# games expect. A DKMS module: enable installs it with every installed kernel's headers.
+# bromigOS builds xpadneo-dkms from its tagged source (packaging/xpadneo-dkms).
+# docs/peripherals.md, "The Xbox controller module".
+format = 1
+name = "Xbox Wireless Controller"
+description = "xpadneo: rumble, the battery and the right button layout over Bluetooth"
+kind = "controller"
+
+[match]
+usb_vendor = "045e"          # Microsoft (a Bluetooth pad reports it too); a gamepad only
+hid_drivers = []
+
+[needs]
+packages = ["xpadneo-dkms"]
+kernel_headers = true

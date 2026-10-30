@@ -42,6 +42,10 @@ const GENERIC_DRIVERS: &[&str] = &["hid-generic", "usbhid", "hid-multitouch"];
 pub const DIAL_TURNS: &[&str] = &["vector-voice"];
 /// What `dial.roller` can do.
 pub const DIAL_ROLLERS: &[&str] = &["volume"];
+/// What a module can be for.
+pub const KINDS: &[&str] = &["keyboard", "controller"];
+/// A gamepad's south face button (BTN_SOUTH, BTN_A): a controller module's devices have it.
+const BTN_SOUTH: u32 = 0x130;
 /// Lighting backends.
 pub const RGB_BACKENDS: &[&str] = &["openrazer"];
 /// What the lighting follows: VECTOR (his voice's colour and mood) or the theme's primary.
@@ -54,7 +58,8 @@ pub struct Manifest {
     pub format: u32,
     pub name: String,
     pub description: String,
-    /// What it is: "keyboard" (its keyboard interfaces get the keymap and the binds).
+    /// What it is: "keyboard" (its keyboard interfaces get the keymap and the binds) or
+    /// "controller" (a gamepad: a driver to install and nothing else; no keys, no daemon).
     #[serde(default = "default_kind")]
     pub kind: String,
     #[serde(rename = "match")]
@@ -111,6 +116,10 @@ pub struct Needs {
     /// User services `enable` enables and starts.
     #[serde(default)]
     pub user_services: Vec<String>,
+    /// A DKMS driver is among the packages: `enable` installs the headers of every kernel
+    /// installed (`<pkgbase>-headers`), so DKMS can build it for each.
+    #[serde(default)]
+    pub kernel_headers: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
@@ -179,8 +188,17 @@ impl Manifest {
                 self.format
             ));
         }
-        if self.kind != "keyboard" {
-            return Err(format!("kind {:?} (only \"keyboard\")", self.kind));
+        if !KINDS.contains(&self.kind.as_str()) {
+            return Err(format!("kind {:?} ({})", self.kind, KINDS.join(", ")));
+        }
+        if self.kind == "controller"
+            && (!self.keys.is_empty()
+                || self.dial.is_some()
+                || self.rgb.is_some()
+                || !self.keymap.options.is_empty()
+                || !self.keymap.exclusive.is_empty())
+        {
+            return Err("a controller module has no keys, keymap, dial or lighting".into());
         }
         let v = &self.matcher.usb_vendor;
         if v.len() != 4 || !v.chars().all(|c| c.is_ascii_hexdigit()) {
@@ -558,6 +576,15 @@ impl InputDev {
     /// interfaces group together; else its `phys` up to the interface.
     pub fn usb_device(&self) -> String {
         let segs: Vec<&str> = self.sysfs.split('/').collect();
+        // a Bluetooth device: its connection (`hci0:3585`), not the adapter's USB interface,
+        // which every device paired to it shares
+        if let Some(i) = segs.iter().position(|s| *s == "bluetooth")
+            && let Some(j) = segs[i..]
+                .iter()
+                .position(|s| s.starts_with("hci") && s.contains(':'))
+        {
+            return segs[..=i + j].join("/");
+        }
         // the interface is `<bus>-<port…>:<config>.<interface>`; its parent is the device
         if let Some(i) = segs.iter().position(|s| {
             s.contains(':') && s.contains('-') && !s.starts_with("0000") && s.contains('.')
@@ -705,6 +732,9 @@ pub fn detect(
         if m.kind == "keyboard" && keyboards.is_empty() {
             continue;
         }
+        if m.kind == "controller" && !ifaces.iter().any(|d| d.has_key(BTN_SOUTH)) {
+            continue; // the vendor's mouse or keyboard, not a gamepad
+        }
         let dial = ifaces
             .iter()
             .find(|d| d.has_rel(REL_HWHEEL) && d.has_rel(REL_X))
@@ -774,6 +804,8 @@ pub struct Bind {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Resolved {
     pub id: String,
+    /// "keyboard" or "controller" (no Hyprland part, no daemon).
+    pub kind: String,
     pub name: String,
     pub tag: String,
     pub found: Vec<Found>,
@@ -854,6 +886,7 @@ pub fn resolve(m: &Manifest, c: &Choice, found: Vec<Found>, holo: Option<&str>) 
     };
     Resolved {
         id: m.id.clone(),
+        kind: m.kind.clone(),
         name: m.name.clone(),
         tag: m.tag(),
         devices,
@@ -911,7 +944,7 @@ pub fn hypr_lua(mods: &[Resolved]) -> String {
          -- Read by bromigOS's default Hyprland config (bromigos/peripherals.lua).\n\
          return {\n",
     );
-    for m in mods {
+    for m in mods.iter().filter(|m| m.kind == "keyboard") {
         s.push_str(&format!(
             "    {{\n        id = {},\n        tag = {},\n        devices = {},\n        kb_options = {},\n        exclusive = {},\n        binds = {{\n",
             lua_str(&m.id),
@@ -1034,7 +1067,10 @@ pub fn write_hypr(paths: &Paths, mods: &[Resolved], reload: bool) -> Written {
 fn write_hypr_file(paths: &Paths, mods: &[Resolved], reload: bool) -> Written {
     let file = hypr_file(paths);
     let old = fs::read_to_string(&file).ok();
-    let new = (!mods.is_empty()).then(|| hypr_lua(mods));
+    let new = mods
+        .iter()
+        .any(|m| m.kind == "keyboard")
+        .then(|| hypr_lua(mods));
     let changed = old != new;
     let done = |reload: &str, ok: bool| Written {
         file: file.clone(),
@@ -1139,13 +1175,20 @@ pub fn enable_plan(
     m: &Manifest,
     user: &str,
     yes: bool,
+    kernels: &[String],
     runner: &mut dyn Runner,
 ) -> (Vec<Vec<String>>, Vec<String>) {
     let mut cmds: Vec<Vec<String>> = vec![];
     let mut notes = vec![];
-    let missing: Vec<String> = m
-        .needs
-        .packages
+    let mut wanted = m.needs.packages.clone();
+    if m.needs.kernel_headers {
+        // DKMS builds the driver for every kernel whose headers are installed
+        if kernels.is_empty() {
+            wanted.push("linux-headers".into());
+        }
+        wanted.extend(kernels.iter().map(|k| format!("{k}-headers")));
+    }
+    let missing: Vec<String> = wanted
         .iter()
         .filter(|p| runner.query(&["pacman", "-Qq", p.as_str()]).0 != 0)
         .cloned()
@@ -1166,6 +1209,12 @@ pub fn enable_plan(
                     .into(),
             );
         }
+        if m.kind == "controller" {
+            notes.push(
+                "switch the controller off and on again (or reconnect it) so the new driver takes it"
+                    .into(),
+            );
+        }
     }
     let (_, ids) = runner.query(&["id", "-nG", user]);
     let mine: Vec<&str> = ids.split_whitespace().collect();
@@ -1182,12 +1231,14 @@ pub fn enable_plan(
             ));
         }
     }
+    // the daemon runs keyboards' dials and lighting: a controller module needs none
+    let daemon = (m.kind == "keyboard").then_some(DAEMON_UNIT);
     for u in m
         .needs
         .user_services
         .iter()
         .map(String::as_str)
-        .chain([DAEMON_UNIT])
+        .chain(daemon)
     {
         let enabled = runner
             .query(&["systemctl", "--user", "is-enabled", u])
@@ -1217,6 +1268,22 @@ pub fn enable_plan(
         }
     }
     (cmds, notes)
+}
+
+/// The kernels installed (their pkgbase: linux, linux-zen, linux-cachyos …), from
+/// `<root>/usr/lib/modules/*/pkgbase`.
+pub fn kernels(root: &Path) -> Vec<String> {
+    let mut out: Vec<String> = fs::read_dir(root.join("usr/lib/modules"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| fs::read_to_string(e.path().join("pkgbase")).ok())
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .collect();
+    out.sort();
+    out.dedup();
+    out
 }
 
 /// The user's login name (for the group step).
@@ -1314,7 +1381,7 @@ pub fn enable(
     }
     let (cmds, notes) = if o.system {
         let user = user_name(runner);
-        enable_plan(m, &user, o.yes, runner)
+        enable_plan(m, &user, o.yes, &kernels(root), runner)
     } else {
         (vec![], vec![])
     };
@@ -1367,7 +1434,7 @@ pub fn disable(
     set_enabled(paths, id, false)?;
     let (resolved, problems) = enabled(paths, root)?;
     let w = write_hypr(paths, &resolved, reload);
-    let verb = if resolved.is_empty() {
+    let verb = if !resolved.iter().any(|r| r.kind == "keyboard") {
         "disable"
     } else {
         "try-restart"
@@ -1769,6 +1836,148 @@ hint = "lighting"
         let mut m = manifest();
         m.keymap.options.push("a,b".into());
         assert!(m.validate().is_err());
+    }
+
+    // An Xbox pad and a Microsoft mouse, both over Bluetooth on one adapter, and a
+    // Microsoft keyboard on USB.
+    const XBOX: &str = "\
+I: Bus=0005 Vendor=045e Product=0b13 Version=0509
+N: Name=\"Xbox Wireless Controller\"
+P: Phys=00:00:5e:00:53:01
+S: Sysfs=/devices/pci0000:00/0000:00:14.0/usb1/1-10/1-10:1.0/bluetooth/hci0/hci0:3585/0005:045E:0B13.0009/input/input42
+H: Handlers=event26 js0
+B: KEY=7fff000000000000 0 0 0 0
+
+I: Bus=0005 Vendor=045e Product=0916 Version=0001
+N: Name=\"Microsoft Bluetooth Mouse\"
+P: Phys=00:00:5e:00:53:01
+S: Sysfs=/devices/pci0000:00/0000:00:14.0/usb1/1-10/1-10:1.0/bluetooth/hci0/hci0:3586/0005:045E:0916.000A/input/input43
+H: Handlers=mouse2 event27
+B: KEY=1f0000 0 0 0 0
+B: REL=1943
+
+I: Bus=0003 Vendor=045e Product=0750 Version=0111
+N: Name=\"Microsoft Wired Keyboard 600\"
+P: Phys=usb-0000:00:14.0-3/input0
+S: Sysfs=/devices/pci0000:00/0000:00:14.0/usb1/1-3/1-3:1.0/0003:045E:0750.0002/input/input5
+H: Handlers=sysrq kbd event4
+B: KEY=1000000000007 ff9f207ac14057ff febeffdfffefffff fffffffffffffffe
+";
+
+    fn xbox() -> Manifest {
+        let m: Manifest = toml::from_str(include_str!(
+            "../../../../peripherals/xbox-controller/peripheral.toml"
+        ))
+        .unwrap();
+        m.validate().unwrap();
+        m
+    }
+
+    #[test]
+    fn the_controller_module_finds_the_pad_only() {
+        let devs = parse_input_devices(XBOX);
+        // each Bluetooth device is its own, though they share the adapter's USB interface
+        assert!(devs[0].usb_device().ends_with("/hci0:3585"));
+        assert_ne!(devs[0].usb_device(), devs[1].usb_device());
+        let generic = |_: &str| Some("microsoft".to_string());
+        let f = detect(&xbox(), &devs, &generic);
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert_eq!(f[0].name, "Xbox Wireless Controller");
+        assert_eq!(f[0].usb, "045e:0b13");
+        // the keyboard module kind still wants a keyboard: the pad isn't one
+        let mut kb = xbox();
+        kb.kind = "keyboard".into();
+        assert!(
+            detect(&kb, &devs, &generic)
+                .iter()
+                .all(|f| f.name.contains("Keyboard"))
+        );
+    }
+
+    #[test]
+    fn a_controller_module_has_no_keys_and_no_hyprland_part() {
+        let mut m = xbox();
+        m.keymap.options.push("fkeys:basic_13-24".into());
+        assert!(m.validate().unwrap_err().contains("controller"));
+        let mut m = xbox();
+        m.kind = "toaster".into();
+        assert!(m.validate().unwrap_err().contains("keyboard, controller"));
+        let devs = parse_input_devices(XBOX);
+        let r = resolve(
+            &xbox(),
+            &Choice::default(),
+            detect(&xbox(), &devs, &|_| None),
+            None,
+        );
+        assert_eq!(r.kind, "controller");
+        let lua = hypr_lua(&[r]);
+        assert!(!lua.contains("xbox"), "{lua}");
+    }
+
+    struct Pacman(Vec<&'static str>);
+    impl Runner for Pacman {
+        fn query(&mut self, argv: &[&str]) -> (i32, String) {
+            match argv {
+                ["pacman", "-Qq", p] => (if self.0.contains(p) { 0 } else { 1 }, String::new()),
+                ["id", ..] => (0, "wheel".into()),
+                _ => (0, "enabled".into()),
+            }
+        }
+        fn run(&mut self, _: &[String], _: bool) -> std::io::Result<(i32, String)> {
+            Ok((0, String::new()))
+        }
+    }
+
+    #[test]
+    fn the_controller_driver_comes_with_each_kernels_headers_and_no_daemon() {
+        let kernels = vec!["linux".to_string(), "linux-cachyos".to_string()];
+        let (cmds, notes) = enable_plan(
+            &xbox(),
+            "me",
+            false,
+            &kernels,
+            &mut Pacman(vec!["linux-headers"]),
+        );
+        assert_eq!(
+            cmds,
+            vec![
+                vec![
+                    "sudo",
+                    "pacman",
+                    "-S",
+                    "--needed",
+                    "xpadneo-dkms",
+                    "linux-cachyos-headers"
+                ]
+                .into_iter()
+                .map(String::from)
+                .collect::<Vec<_>>()
+            ]
+        );
+        assert!(notes.iter().any(|n| n.contains("DKMS")));
+        // no kernel found (a container): the stock kernel's headers
+        let (cmds, _) = enable_plan(&xbox(), "me", true, &[], &mut Pacman(vec![]));
+        assert!(
+            cmds[0].contains(&"linux-headers".to_string())
+                && cmds[0].contains(&"--noconfirm".to_string())
+        );
+    }
+
+    #[test]
+    fn kernels_come_from_their_module_folders() {
+        let t = tempfile::tempdir().unwrap();
+        for (rel, base) in [
+            ("7.2.11-arch1-1", "linux"),
+            ("7.2.9-1-cachyos", "linux-cachyos"),
+            ("old", ""),
+        ] {
+            let d = t.path().join("usr/lib/modules").join(rel);
+            fs::create_dir_all(&d).unwrap();
+            if !base.is_empty() {
+                fs::write(d.join("pkgbase"), format!("{base}\n")).unwrap();
+            }
+        }
+        assert_eq!(kernels(t.path()), ["linux", "linux-cachyos"]);
     }
 
     #[test]

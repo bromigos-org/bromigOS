@@ -386,7 +386,7 @@ fn enable(
         let found = pm::found_here(m, root);
         let user = pm::user_name(&mut runner);
         let (cmds, notes) = if o.system {
-            pm::enable_plan(m, &user, o.yes, &mut runner)
+            pm::enable_plan(m, &user, o.yes, &pm::kernels(root), &mut runner)
         } else {
             (vec![], vec![])
         };
