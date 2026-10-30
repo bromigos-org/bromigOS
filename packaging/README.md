@@ -67,7 +67,7 @@ packages. That table is generated from these PKGBUILDs.
 | `bromigos-apps` | The app bundle's default configs and `bromigos apps setup` | `apps/` |
 | `bromigos-manual` | The manual as HTML in `/usr/share/doc/bromigos/manual/`, which Settings opens | `manual/` |
 | `herdr`, `ttf-geist-mono`, `1password`, `paru`, `xpadneo-dkms` | Upstream software, built here so no install needs an AUR helper (`1password` stays off the public mirror) | upstream sources, pinned by checksum |
-| `oo7` | The keyring that keeps sign-ins: the Secret Service and the PAM module that unlocks it at login | upstream's source at a pinned commit, plus one patch |
+| `oo7` | The keyring that keeps sign-ins: the Secret Service and the PAM module that unlocks it at login | upstream's source at a pinned commit |
 
 Some packages need a closer look.
 
@@ -112,8 +112,9 @@ Some packages need a closer look.
 - **oo7** is the keyring ([docs/bromigos-account.md](../docs/bromigos-account.md#the-keyring)).
   Arch has its own `oo7`, but its 0.6.0 can't unlock the keyring at a text console login.
   - It's built from upstream's source at a pinned commit after the 0.7.0 beta, which
-    fixes the login unlock, plus `pam-helper-own-session.patch`. Without that patch, a
-    text console login killed the helper that holds the password.
+    fixes the login unlock, with no patches. The last fix, which keeps a text console
+    login from killing the helper that holds the password, began as a patch here and is
+    upstream now.
   - Its version, `0.7.0beta.r<date>.<commit>`, sorts after Arch's 0.6.0 and before 0.7.0.
     `[bromigos]` comes after `[extra]` in pacman.conf, so pacman would take Arch's `oo7`
     by name. `bromigos-desktop` asks for `oo7>=0.7.0beta`, which only this one satisfies.
