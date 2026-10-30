@@ -365,15 +365,27 @@ case $cmd in
         # btrfs on LUKS2 (the passphrase: the password), GRUB, snapper; sshd for the checks
         "${SCP[@]}" "$key.pub" "live@127.0.0.1:"
         enc=(); (( encrypt )) || enc=(--no-encrypt)
-        side=(); (( alongside )) && side=(--alongside)
-        "${SSH[@]}" "python3 /usr/local/lib/bromigos-iso/answers.py --disk /dev/vda --firmware $firmware --user tester --password tester --hostname bromigos-test --ssh ${enc[*]} ${side[*]} --out /home/live/answers"
+        "${SSH[@]}" "python3 /usr/local/lib/bromigos-iso/answers.py --disk /dev/vda --firmware $firmware --user tester --password tester --hostname bromigos-test --ssh ${enc[*]} --out /home/live/answers"
+        # beside another system: the installers' own answers (the backend's format), so the
+        # installer does what it does for them (the other system in GRUB's menu, /boot's type)
+        if (( alongside )); then
+            python3 -c 'import json, sys; print(json.dumps({"schema": 1, "edition": "desktop", "answers_toml": "", "edition_file": None,
+                "desktop": True, "disk": "/dev/vda", "mode": "alongside", "esp": "/dev/vda1", "shrink": None, "user": "tester",
+                "full_name": "Test Er", "password": "tester", "hostname": "bromigos-test", "encrypt": sys.argv[1] == "1",
+                "old_passphrase": None, "passphrase": None, "keymap": "us", "xkb_layout": "us", "xkb_variant": "", "locale": "en_US",
+                "timezone": "UTC", "ssh": True, "online": False, "ssh_password": False, "ssh_keys": [open(sys.argv[2]).read().strip()],
+                "firewall": False, "auto_updates": False, "auto_update_units": [], "advanced": {}, "user_commands": [],
+                "default_target": "graphical.target", "other_os": True}))' "$encrypt" "$key.pub" > "$dir/answers.json"
+            "${SCP[@]}" "$dir/answers.json" "live@127.0.0.1:answers.json"
+        fi
         printf '%s\n' "$((encrypt ? 1 : 0))" > "$dir/encrypted"
         # the medium's channel: the installed system follows it (the checks look for it)
         "${SSH[@]}" "cat /etc/bromigos-iso/channel 2>/dev/null || echo stable" > "$dir/channel"
         extra=(); [[ -n $repo ]] && extra+=(--repo "$repo")
         if [[ -n $ca ]]; then "${SCP[@]}" "$ca" "live@127.0.0.1:repo-ca.crt"; extra+=(--ca /home/live/repo-ca.crt); fi
         rc=0
-        "${SSH[@]}" "sudo bromigos-iso-install --config /home/live/answers/config.json --creds /home/live/answers/creds.json --ssh-key /home/live/id_ed25519.pub --no-reboot ${extra[*]}" 2>&1 | tee "$dir/install.out" || rc=$?
+        how=(--config /home/live/answers/config.json --creds /home/live/answers/creds.json); (( alongside )) && how=(--answers /home/live/answers.json)
+        "${SSH[@]}" "sudo bromigos-iso-install ${how[*]} --ssh-key /home/live/id_ed25519.pub --no-reboot ${extra[*]}" 2>&1 | tee "$dir/install.out" || rc=$?
         # Secure Boot set up (docs/secureboot.md): the code that approves the key at the first start
         sed -n 's/^::secureboot \([0-9]*\)$/\1/p' "$dir/install.out" | tail -1 > "$dir/secureboot-code"
         # what the new system got, while it's still mounted at /mnt (install-state.out)

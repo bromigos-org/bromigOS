@@ -196,7 +196,7 @@ sb_checks() {       # sb_checks WHAT: Secure Boot on, the key enrolled, everythi
 secureboot_installed() {
     local d=$1 code
     step "secure boot, installed: this ref's bromigos-secureboot in the medium's store" sb_store || return 1
-    T ssh 'compgen -G "/var/lib/bromigos/repo/bromigos/x86_64/bromigos-secureboot-*.pkg.tar.zst" >/dev/null' \
+    T ssh 'ls /var/lib/bromigos/repo/bromigos/x86_64/bromigos-secureboot-*.pkg.tar.zst >/dev/null 2>&1' \
         || { echo "SKIP secure boot, installed: the medium carries no bromigos-secureboot (--secureboot-package)"; return 0; }
     step "secure boot, installed: the installer's checks say it can stay on" T ssh 'bromigos-iso-secureboot check' || true
     step "secure boot, installed: the install sets it up" T install || return 1
@@ -250,7 +250,7 @@ secureboot_dualboot() {
     step "secure boot, beside Windows: a stand-in Windows, and its firmware entry" T windows --free-gib 24 || return 1
     T ssh 'sudo efibootmgr --quiet --create --disk /dev/vda --part 1 --label "Windows Boot Manager" --loader "\\EFI\\Microsoft\\Boot\\bootmgfw.efi"' || true
     sb_store || true
-    step "secure boot, beside Windows: the install sets it up" T tui-install --mode alongside || return 1
+    step "secure boot, beside Windows: the install sets it up" T install --alongside || return 1
     code=$(cat "$w/secureboot-code" 2>/dev/null)
     [[ $code =~ ^[0-9]{4,8}$ ]] || { echo "FAIL secure boot, beside Windows: the installer gave no code"; fails=$((fails + 1)); return 1; }
     step "secure boot, beside Windows: MokManager, then the themed boot menu" T mok-enroll "$code" || return 1
