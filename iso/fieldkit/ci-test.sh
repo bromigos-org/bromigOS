@@ -92,6 +92,10 @@ PY" || return 1
         arch-chroot $t pacman -Q bromigos-server bromigos-boot bromigos-fieldkit-tools kmscon
         arch-chroot $t systemctl get-default
         arch-chroot $t systemctl is-enabled bromigos-server-update.timer
+        # the welcome tour waits for the first sign-in (its screens are checked by its own
+        # --render); the harness signs in on the serial console, so it goes now
+        ls $t/home/tester/.local/state/bromigos/welcome-pending
+        rm -f $t/home/tester/.local/state/bromigos/welcome-pending
         sed -i -E "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"([^\"]*)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\1 console=tty0 console=ttyS0,115200\"/" $t/etc/default/grub
         arch-chroot $t grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
         sync; umount -R $t; echo INSTALLED' || return 1
