@@ -201,7 +201,8 @@ rows = [
   { route = "dictate", text = "[Dictate at your cursor](dictation.md): start, finish, cancel or check a recording." },
   { route = "sound", text = "Choose speakers and microphone, and set volumes." },
   { route = "net", text = "Turn Wi-Fi on or off, join a network, or connect a VPN." },
-  { route = "bluetooth", text = "Turn Bluetooth on or off, and pair or connect devices." },
+  { route = "bluetooth", text = "Turn [Bluetooth](bluetooth.md) on or off, pair or connect devices, and choose a headset's sound: hi-fi, or headset with the microphone." },
+  { route = "bluetooth tui", text = "Bluetooth in the terminal: pair step by step, test a controller, switch a headset's sound. `--window` opens it in its own window." },
   { route = "power", text = "Choose a power profile, see batteries, and set what closing the lid does." },
   { route = "power menu", text = "Open the keyboard [power menu](power-menu.md) in a terminal or text console." },
   { route = "clock", text = "Set the time zone and how the bar's clock looks." },
@@ -218,8 +219,8 @@ rows = [
   { route = "logout", text = "Sign out of your [Bromigos account](bromigos-account.md) on this computer." },
   { route = "keyring", text = "Check [your keyring](bromigos-account.md#your-keyring), where sign-ins are kept, with `status`. `setup` makes your login unlock it." },
   { route = "private", text = "Edit the private overlay: settings you keep encrypted in your dotfiles. Needs the `sops` and `age` packages." },
-  { route = "hw", text = "See what [hardware](hardware.md) bromigOS found, check the display GPU with `bromigos hw display`, or set up drivers with `bromigos hw setup`." },
-  { route = "peripheral", text = "Turn on extra features for a [keyboard](peripherals.md), such as a Razer keyboard's macro keys." },
+  { route = "hw", text = "See what [hardware](hardware.md) bromigOS found, or set up drivers with `bromigos hw setup`. `hw graphics`, `hw display`, `hw games`, `hw run` and `hw vfio` [choose what each graphics card is for](hardware.md#choose-what-each-card-is-for): the desktop, games, or virtual machines." },
+  { route = "peripheral", text = "Turn on extra features for a [keyboard](peripherals.md), such as a Razer keyboard's macro keys, or an Xbox controller's driver: `bromigos peripheral enable xbox-controller`." },
 ]
 
 [[commands]]

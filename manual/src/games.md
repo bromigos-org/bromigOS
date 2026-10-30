@@ -17,8 +17,8 @@ what would stop a game from starting.
 2. Log out and back in.
 3. Start Steam, sign in, install a game and press **Play**.
 
-The first time Steam starts, bromigOS downloads the newest GE-Proton in the background
-and makes it the Proton every game uses. GE-Proton is a community build of Proton with
+The first time Steam starts, bromigOS downloads the newest GE-Proton in the background.
+When you quit Steam, it makes it the Proton every game uses. GE-Proton is a community build of Proton with
 extra fixes for games and video. It's checked against the checksum its makers publish
 before it's installed.
 
@@ -72,12 +72,19 @@ PROTON_DLSS_UPGRADE=1 %command%
 Use it per game. Some games check their DLSS files and refuse to start when they change.
 
 With two graphics cards, a game may start on the wrong one. Then DLSS isn't there and
-the game may crash. `bromigos hw` lists each card with its ID, such as `10de:2f04`.
-To keep a game on one card, add this to its Launch Options, with that card's ID:
+the game may crash. To keep games on one card, choose **Games and heavy apps** on it in
+**Settings › Graphics**, and turn on **Start Steam on the games card**. For one game
+only, set its Launch Options to:
 
 ```text
-MESA_VK_DEVICE_SELECT=10de:2f04 %command%
+bromigos hw run -- %command%
 ```
+
+[Run games on another card](hardware.md#run-games-on-another-card) explains both.
+Underneath, `bromigos hw run` sets `MESA_VK_DEVICE_SELECT=vendor:device`, the card's ID
+from `bromigos hw graphics`, such as `10de:2f04`. That puts the card first in Vulkan's
+list, and DXVK and vkd3d-proton use the first device. `bromigos hw run --print` shows
+what it sets.
 
 If you changed the file that holds your session's graphics settings,
 `~/.local/state/bromigos/hw/hyprland.lua`, bromigOS leaves it alone and doesn't turn
@@ -147,12 +154,20 @@ A Lutris shortcut can launch StarCraft II through an existing Battle.net install
 Set its Wine prefix and executable to the ones used by Battle.net and its arguments to
 `--exec="launch S2"`. This uses that installation without creating another Wine prefix.
 
-## Doing it by hand
+## For power users
 
-You don't need any of this: bromigOS does it for you. It's here for when you want to see
-or change what it does.
+Everything above as commands, files and rules: to see exactly what bromigOS does, to
+script it, or to change it.
 
-### The commands
+### Every button, as a command
+
+| In Settings › Playing games | The command |
+|---|---|
+| **Set up Steam** | `bromigos game setup` |
+| The status at the top | `bromigos game check` |
+| **Fix** | `bromigos game check --fix` |
+| **Log** | `journalctl --user -u bromigos-game-maintain` |
+| Game mode, automatic mode | `bromigos game on`, `off`, `toggle`, `status`; `bromigos game auto on|off` |
 
 ```bash
 bromigos game setup               # install Steam, GameMode and your GPUs' 32-bit drivers
@@ -163,6 +178,7 @@ bromigos game proton              # the Proton versions here
 bromigos game proton install      # the latest GE-Proton
 bromigos game proton install GE-Proton10-25   # one version
 bromigos game proton remove GE-Proton10-25    # remove one (close Steam first)
+bromigos game maintain            # the upkeep now: the newest GE-Proton, and Steam's files if Steam is closed
 ```
 
 `game setup --dry-run` shows what setup would install. Steam needs the multilib
@@ -182,6 +198,64 @@ journalctl --user -u bromigos-game-maintain
 ```
 
 Settings › Playing games › **Log** opens the same list.
+
+### Script it
+
+- `bromigos game check` exits 0 when games are ready, 1 when something needs fixing and
+  2 when it couldn't check. `--json` gives each finding, with `auto: true` on those the
+  upkeep repairs by itself.
+- `bromigos game setup`, `game proton` and `game maintain` take `--json` too.
+  `game setup --yes` doesn't ask before it installs.
+- `game maintain` looks for a new GE-Proton at most once an hour. `--refresh` looks now,
+  `--no-download` doesn't look. `--wait` waits for Steam to exit first, and `--notify`
+  sends one notification for each new problem only you can fix. The service runs
+  `bromigos game maintain --wait --notify`.
+
+### When the upkeep runs
+
+- **After `bromigos update`**: its last step starts the upkeep in the background.
+- **Each time Steam starts or exits**: the systemd user unit
+  `bromigos-game-maintain.path` watches `~/.steam/steam.pid`, which Steam writes as it
+  starts, and `~/.local/share/Steam/config/config.vdf`, which it writes as it exits.
+  Either starts `bromigos-game-maintain.service`, at `Nice=10` with idle I/O.
+- The GE-Proton download starts at once. Steam's files change only after Steam has
+  exited and stayed closed for 15 seconds, because Steam restarts itself after its own
+  updates.
+
+### How it decides
+
+Steam keeps its tool choices in `CompatToolMapping`, in `config/config.vdf` under Steam's
+folder (`~/.steam/root`, else `~/.local/share/Steam`). Each entry maps a game's app ID to
+a tool, a name and a priority. The entry `"0"` is the default for every game.
+
+- **The default.** It becomes the newest GE-Proton when it names a tool that isn't
+  installed, is unset, or is an older GE-Proton. Any other tool that's installed stays,
+  such as `proton_experimental`, `proton_9` or a TKG build. With no GE-Proton installed,
+  a missing default becomes `proton_experimental`.
+- **The default's priority** goes back to 75. A higher one makes Steam run its own Linux
+  runtimes through Proton, and installing them fails with "Invalid platform".
+- **A game set to a missing tool** loses its entry, so it follows the default. That's what
+  unticking "Force the use of a specific Steam Play compatibility tool" does. A game set
+  to a GE-Proton or TKG build that's gone gets the newest GE-Proton instead. Steam's own
+  tools count as present, since Steam downloads them itself.
+- **Old builds.** GE-Proton and TKG folders in `compatibilitytools.d` that nothing uses
+  move aside. The newest GE-Proton and the one before it stay. Links, a package's tools in
+  `/usr/share/steam` and other kinds of tool are never touched.
+- **Versions** compare across GE's naming schemes:
+  `Proton-6.21-GE-2` < `GE-Proton7-43` < `GE-Proton11-11-x86_64`.
+
+### The files it touches
+
+| File or folder | What |
+|---|---|
+| `~/.steam/root/compatibilitytools.d/` | GE-Proton and other tools Steam doesn't ship |
+| `~/.steam/root/config/config.vdf` | Steam's settings, with `CompatToolMapping` |
+| `~/.local/state/bromigos/game/backup/` | a copy of `config.vdf` before each change |
+| `bromigos-backup/` in a Steam library | runtimes and old Proton builds moved aside, for 14 days |
+| `~/.local/state/bromigos/hw/hyprland.lua` | the session's graphics settings, with `PROTON_ENABLE_NVAPI=1` on NVIDIA |
+
+The developers' version, with Steam's file formats, is
+[Steam and Proton](https://github.com/bromigos-org/bromigOS/blob/main/docs/desktop.md#steam-and-proton).
 
 ### What the check says
 

@@ -29,7 +29,8 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos dictate`](#bromigos-dictate) | [Dictate at your cursor](dictation.md): start, finish, cancel or check a recording. |
 | [`bromigos sound`](#bromigos-sound) | Choose speakers and microphone, and set volumes. |
 | [`bromigos net`](#bromigos-net) | Turn Wi-Fi on or off, join a network, or connect a VPN. |
-| [`bromigos bluetooth`](#bromigos-bluetooth) | Turn Bluetooth on or off, and pair or connect devices. |
+| [`bromigos bluetooth`](#bromigos-bluetooth) | Turn [Bluetooth](bluetooth.md) on or off, pair or connect devices, and choose a headset's sound: hi-fi, or headset with the microphone. |
+| [`bromigos bluetooth tui`](#bromigos-bluetooth-tui) | Bluetooth in the terminal: pair step by step, test a controller, switch a headset's sound. `--window` opens it in its own window. |
 | [`bromigos power`](#bromigos-power) | Choose a power profile, see batteries, and set what closing the lid does. |
 | [`bromigos power menu`](#bromigos-power-menu) | Open the keyboard [power menu](power-menu.md) in a terminal or text console. |
 | [`bromigos clock`](#bromigos-clock) | Set the time zone and how the bar's clock looks. |
@@ -46,8 +47,8 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos logout`](#bromigos-logout) | Sign out of your [Bromigos account](bromigos-account.md) on this computer. |
 | [`bromigos keyring`](#bromigos-keyring) | Check [your keyring](bromigos-account.md#your-keyring), where sign-ins are kept, with `status`. `setup` makes your login unlock it. |
 | [`bromigos private`](#bromigos-private) | Edit the private overlay: settings you keep encrypted in your dotfiles. Needs the `sops` and `age` packages. |
-| [`bromigos hw`](#bromigos-hw) | See what [hardware](hardware.md) bromigOS found, check the display GPU with `bromigos hw display`, or set up drivers with `bromigos hw setup`. |
-| [`bromigos peripheral`](#bromigos-peripheral) | Turn on extra features for a [keyboard](peripherals.md), such as a Razer keyboard's macro keys. |
+| [`bromigos hw`](#bromigos-hw) | See what [hardware](hardware.md) bromigOS found, or set up drivers with `bromigos hw setup`. `hw graphics`, `hw display`, `hw games`, `hw run` and `hw vfio` [choose what each graphics card is for](hardware.md#choose-what-each-card-is-for): the desktop, games, or virtual machines. |
+| [`bromigos peripheral`](#bromigos-peripheral) | Turn on extra features for a [keyboard](peripherals.md), such as a Razer keyboard's macro keys, or an Xbox controller's driver: `bromigos peripheral enable xbox-controller`. |
 
 ### Change the look
 
@@ -155,7 +156,6 @@ The desktop runs these for you. You don't need them day to day.
 
 | Command | What it does |
 |---|---|
-| [`bromigos bluetooth tui`](#bromigos-bluetooth-tui) | Bluetooth in the terminal: pair step by step, connect, test a controller, switch a headset's sound |
 | [`bromigos tv guide`](#bromigos-tv-guide) |  |
 
 ## Every command in full

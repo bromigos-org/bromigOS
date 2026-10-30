@@ -68,7 +68,8 @@ ENABLE XBOX CONTROLLER SUPPORT** under it. Choose it, or run:
 bromigos peripheral enable xbox-controller
 ```
 
-That installs xpadneo and your kernel's headers, so the driver builds for your kernel. It
+That installs xpadneo and the headers of every kernel you have installed, so the driver
+builds for each of them. It
 asks for your password. Then switch the controller off and on again.
 [Keyboards and peripherals](peripherals.md) has more about peripheral modules.
 
@@ -114,7 +115,9 @@ From a terminal: `bromigos bluetooth profile <address> hifi` or `headset`.
 for. **MORE…** in the panel opens it in a window of its own, and so does **Bluetooth
 Devices** in the app launcher (search for bluetooth, devices or controller).
 
-- **Pairing step by step.** Press <kbd>p</kbd>. Choose what you're pairing, and it says how
+- **Pairing step by step.** Press <kbd>a</kbd>, or <kbd>p</kbd> with no new device
+  selected. With a device found by <kbd>s</kbd> (scan) selected, <kbd>p</kbd> pairs it
+  straight away. Choose what you're pairing, and it says how
   to put that kind of device in pairing mode, with the steps for an Xbox controller. It
   scans, with devices appearing on a radar as they're found. Pick yours, answer any code
   it asks for, and it ends on **READY**.
@@ -132,7 +135,9 @@ Devices** in the app launcher (search for bluetooth, devices or controller).
     (<kbd>R</kbd>).
 - **Troubleshooting** (<kbd>x</kbd>) shows whether the Bluetooth service runs and the radio
   is blocked, resets the adapter (<kbd>a</kbd>), and lists what went wrong lately in plain
-  words.
+  words. <kbd>e</kbd> clears that list.
+- <kbd>c</kbd> connects or disconnects the selected device, and <kbd>o</kbd> turns
+  Bluetooth on or off.
 
 <kbd>j</kbd>, <kbd>k</kbd> and the arrow keys move, <kbd>Esc</kbd> goes back,
 <kbd>?</kbd> lists every key, and <kbd>q</kbd> quits. The mouse works too: click a device
@@ -161,3 +166,58 @@ Use the arrow keys and <kbd>Enter</kbd>, or the mouse.
   again.
 
 (`bromigos bluetooth`)
+
+## For power users
+
+Everything the icon, the panel, Settings › Bluetooth and the terminal app do, as commands,
+files and rules.
+
+### Every action, as a command
+
+`MAC` is a device's address, such as `AA:BB:CC:DD:EE:FF`. `bromigos bluetooth` lists them.
+
+| To | The command |
+|---|---|
+| See the adapter and every known device, with battery | `bromigos bluetooth` (or `status`) |
+| Turn Bluetooth on, off or over | `bromigos bluetooth power on`, `off`, `toggle` (a soft rfkill block is lifted first) |
+| Be visible to devices nearby | `bromigos bluetooth discoverable on`, `off` |
+| Look for devices | `bromigos bluetooth scan [SECONDS]` (8 by default) |
+| Pair and trust a device | `bromigos bluetooth pair MAC` (one that asks for a PIN or passkey pairs from the panel: `bromigos bluetooth panel pair MAC`) |
+| Connect, disconnect | `bromigos bluetooth connect MAC`, `disconnect MAC` |
+| Auto-reconnect | `bromigos bluetooth trust MAC on`, `off` |
+| Forget | `bromigos bluetooth remove MAC` |
+| **HI-FI** or **HEADSET + MIC** | `bromigos bluetooth profile MAC hifi`, `headset` |
+| **Switch the sound over on connect** | `bromigos bluetooth audio-default on`, `off` |
+| **ENABLE XBOX CONTROLLER SUPPORT** | `bromigos peripheral enable xbox-controller` |
+| The panel, the quick menu | `bromigos bluetooth panel [scan]`, `bromigos bluetooth menu` |
+| The terminal app, in its own window | `bromigos bluetooth tui --window` |
+
+### Script it
+
+- Every `bromigos bluetooth` command takes `--json`. `status --json` is the whole state as
+  one document. A change answers with the state after it, with `ok` and `said`. A refusal
+  or a failure is `{"ok": false, "error": "…"}` with exit status 1.
+- `bromigos bluetooth session` is bluez as JSON lines on standard input and output: the
+  state on every change, requests and their replies, the pairing steps and any code a
+  device asks for, a controller's live input and rumble, and a microphone's level. The
+  terminal app is built on it, and so can your own tools be.
+
+### Files and rules
+
+- **`~/.config/bromigos/bluetooth.toml`** holds `audio_default = true` or `false`.
+- **Pairing** goes through bluez's D-Bus API with bromigOS's own agent
+  (`org.bluez.Agent1`), which puts any PIN, passkey or "does it show 123456?" question in
+  the panel, Settings or the terminal app. Pairing trusts the device, then connects it.
+- **The bar icon** follows bluez's D-Bus signals, so it never polls.
+- **A controller's layout** in the tester is SDL_GameControllerDB's mapping for that pad,
+  by its SDL GUID, as Steam and most games read it. That's why the right stick and the
+  triggers show where they really are whether xpadneo, xpad or hid-microsoft drives the
+  pad. A mapping in `SDL_GAMECONTROLLERCONFIG` comes first, as in SDL, so you can fix a
+  pad's layout there. A pad the database doesn't know is laid out from its driver's axes.
+- **Xbox controllers.** xpadneo and xpad put the right stick on `ABS_RX`/`ABS_RY` and the
+  triggers on `ABS_Z`/`ABS_RZ`. hid-microsoft, Linux's own driver for an Xbox pad over
+  Bluetooth, puts the right stick on `ABS_Z`/`ABS_RZ` and the triggers on
+  `ABS_BRAKE`/`ABS_GAS`. [Keyboards and peripherals](peripherals.md) has the module.
+
+The developers' version is
+[Bluetooth in the terminal](https://github.com/bromigos-org/bromigOS/blob/main/docs/desktop.md#bluetooth-in-the-terminal).

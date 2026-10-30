@@ -20,8 +20,9 @@ To see which graphics card the login screen and desktop will use at the next log
 bromigos hw display
 ```
 
-This only checks the hardware. It does not change settings or report which card an
-already running desktop is using. `bromigos hw graphics` lists every card and what it's
+It also says whether you chose that card in Settings, are trying it, or bromigOS chose
+it. It changes nothing, and it doesn't report which card an already running desktop is
+using. `bromigos hw graphics` lists every card and what it's
 for.
 
 ## Set up your hardware again
@@ -131,11 +132,12 @@ keep` keeps it. A card is its PCI address, such as `0000:03:00.0`, or its name i
 
 #### Run games on another card
 
-Choose **Games and heavy apps** on a card. It's yours alone, so it needs no password,
-and it applies to programs you start from then on.
+Choose **Games and heavy apps** on a card. It's yours alone, so it needs no password.
+Programs use it when you start them one of these ways:
 
 - **Steam.** Turn on **Start Steam on the games card**. Steam and every game it starts,
-  Proton's included, then run on that card.
+  Proton's included, then run on that card. It applies when you start Steam from the app
+  launcher, so restart Steam after you turn it on.
 - **Any other program.** Start it with `bromigos hw run` in front:
 
   ```bash
@@ -158,7 +160,8 @@ The checks are:
 - no screen is connected to it, the desktop doesn't use it, and another card with a
   screen stays for the desktop;
 - the computer doesn't start on it. Choose the other card in the firmware settings if it
-  does.
+  does;
+- the start-up files can hold the card. The row says what to add if they can't.
 
 When they all pass, choose **Virtual machines** on the card. A terminal opens and asks
 for your password, then rebuilds the start-up files. Restart the computer. From then on,
@@ -198,12 +201,14 @@ On a laptop, bromigOS also sets up:
 - **Two graphics cards.** On a laptop with a built-in graphics chip and an NVIDIA or AMD
   card, the desktop runs on the built-in one to save the battery. The other card sleeps
   until something needs it. To run a game or a heavy program on the other card, start it
-  with `prime-run` (NVIDIA) or `DRI_PRIME=1` (AMD) in front:
+  with `bromigos hw run --` in front, or turn on **Start Steam on the games card** in
+  Settings › Graphics. [Run games on another card](#run-games-on-another-card) has more.
 
   ```bash
-  prime-run steam
-  DRI_PRIME=1 blender
+  bromigos hw run -- blender
   ```
+
+  `prime-run` (NVIDIA) and `DRI_PRIME=1` (AMD) work too.
 
 ## The touchpad
 
@@ -239,3 +244,74 @@ your `~/.config/hypr/hyprland.lua`.
   it up.
 
 More in [Troubleshooting](troubleshooting.md).
+
+## For power users
+
+Everything Settings › Graphics does, as commands, files and rules.
+
+### Every button, as a command
+
+`CARD` is a PCI address, such as `0000:03:00.0`, or a name in `/dev/dri`, such as `card1`.
+
+| In Settings › Graphics | The command | Asks for |
+|---|---|---|
+| The page itself | `bromigos hw graphics` (`--json` for scripts) | nothing |
+| **Desktop** on a card | `bromigos hw display use CARD` (or `auto`) | your password |
+| **Keep**, **Go back** | `bromigos hw display keep`, `bromigos hw display cancel` | your password |
+| Back to Automatic, from a text console | `sudo bromigos hw display reset` | sudo |
+| **Games and heavy apps** | `bromigos hw games use CARD` (or `auto`) | nothing |
+| **Start Steam on the games card** | `bromigos hw games steam on`, `off` | nothing |
+| One program on the games card | `bromigos hw run -- PROGRAM` (`--print` lists what it sets) | nothing |
+| The checks for virtual machines | `bromigos hw vfio` | nothing |
+| **Virtual machines** on, off | `bromigos hw vfio reserve CARD`, `release CARD` or `release all` (`--dry-run` for either) | sudo |
+
+### Where the choices live
+
+| File | What |
+|---|---|
+| `/var/lib/bromigos/hw/graphics.json` | the desktop's card and the cards kept for VMs (root's) |
+| `~/.config/bromigos/graphics.json` | your games card |
+| `~/.local/share/applications/steam.desktop` | your copy of Steam's launcher, from **Start Steam on the games card**: each `Exec=` line starts through `bromigos hw run --` |
+| `~/.local/state/bromigos/hw/hyprland.lua` | the session's graphics settings, written by `bromigos hw setup`. Edit it and bromigOS leaves it alone. `bromigos = { hw = false }` in your `hyprland.lua` ignores it |
+| `/etc/bromigos/hw/vfio-pci-override.sh` | sets `driver_override` to `vfio-pci` on a reserved card and its functions |
+| `/etc/modprobe.d/bromigos-vfio.conf` | runs that script when vfio-pci loads; its `softdep` lines load vfio-pci before `drm`, `nvidia` and the card's other drivers |
+| `/etc/mkinitcpio.conf.d/bromigos-vfio.conf` | puts vfio-pci and the script in the initramfs |
+
+A choice names a card by its PCI address and its vendor and device ID together. Every
+start reads the cards again. A use whose card is gone, or has another card in its slot,
+goes back to Automatic.
+
+### How it works
+
+- **A trial.** `hw display use` saves the card with this boot's ID, from
+  `/proc/sys/kernel/random/boot_id`. The login screen's launcher and Hyprland read the
+  choice through `bromigos hw display`. A new boot has a new ID, so a trial nobody kept
+  ends by itself.
+- **`hw run`.** It sets nothing when the games card draws the desktop too, and nothing for
+  the whole session, so your other apps stay where they are. Per program:
+  - `MESA_VK_DEVICE_SELECT=vendor:device` puts the card first in Vulkan's list. DXVK and
+    vkd3d-proton take the first device, so Proton games follow it on any make of card.
+    Two identical cards share an ID, so then it sets `DRI_PRIME=pci-0000_03_00_0`, the
+    card's PCI address, instead;
+  - AMD, Intel and nouveau, for OpenGL, get `DRI_PRIME=pci-…`;
+  - NVIDIA's driver, while another card draws the desktop, gets PRIME render offload:
+    `__NV_PRIME_RENDER_OFFLOAD=1`, `__VK_LAYER_NV_optimus=NVIDIA_only` and
+    `__GLX_VENDOR_LIBRARY_NAME=nvidia`.
+- **Automatic for games** picks a card of its own over one built into the processor, then
+  the newer chip family, then more video memory, then the desktop's card on a tie.
+- **Virtual machines.** The card is reserved by PCI address, never by vendor and device
+  ID, so one of two identical cards can be reserved. `vfio reserve` writes the three
+  files above, then runs `mkinitcpio -P`. It needs the `base` and `modconf` hooks in your
+  initramfs. bromigOS never edits the kernel's command line: on Intel, add
+  `intel_iommu=on` yourself, as the checks say. Handing a card over only while a VM runs
+  isn't built: a reserved card stays reserved from start to start.
+
+### Script it
+
+`bromigos hw graphics --json` gives every card, its driver, its screens, its uses and its
+VM checks in one document. `bromigos hw --json` gives what `bromigos hw` prints. Every
+`bromigos hw` command takes `--json`, and the document's schema is in
+[core/README.md](https://github.com/bromigos-org/bromigOS/blob/main/core/README.md).
+
+The developers' version is
+[What each card is for](https://github.com/bromigos-org/bromigOS/blob/main/docs/hardware.md#what-each-card-is-for).
