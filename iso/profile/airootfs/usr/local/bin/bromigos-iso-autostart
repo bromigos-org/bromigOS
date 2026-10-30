@@ -1,12 +1,29 @@
 #!/usr/bin/env bash
 # The live session's autostart (the live user's Hyprland runs it at login; docs/boot.md):
-# booted from the boot menu's "Install bromigOS" channel (`bromigos.install` on the kernel's
-# command line), the installer opens in a terminal, ready for its questions; when it's done
-# (or left), the terminal stays, so its last words can be read. Any other boot: nothing.
+# booted from the boot menu's "Install bromigOS" (`bromigos.install` on the kernel's command
+# line), the graphical installer opens full screen; any other live boot, the welcome card
+# (Try bromigOS or Install bromigOS). If the graphical installer can't start, the text one
+# opens in a terminal instead. "Install bromigOS (text mode)" (bromigos.install=text) has
+# no desktop: bromigos-iso-text-console runs on the console.
 set -u
 # Secure Boot on: a notification, once, that the installed system needs it off (docs/secureboot.md)
 /usr/local/bin/bromigos-iso-secureboot notify &
-grep -qw 'bromigos.install' /proc/cmdline || exit 0
+cmd=$(cat /proc/cmdline)
 sleep 2                                # the desktop first: the bar, the widgets, the den
-exec kitty --class bromigos-iso-install --title "Install bromigOS" --hold \
-    sudo /usr/local/bin/bromigos-iso-install
+# the welcome card floats in the middle, small (rules for this session only)
+hyprctl eval 'hl.window_rule({ match = { class = "org.bromigos.InstallerWelcome" }, float = true })' >/dev/null 2>&1 || true
+hyprctl eval 'hl.window_rule({ match = { class = "org.bromigos.InstallerWelcome" }, center = true })' >/dev/null 2>&1 || true
+hyprctl eval 'hl.window_rule({ match = { class = "org.bromigos.InstallerWelcome" }, size = "760 470" })' >/dev/null 2>&1 || true
+# the text installer was asked for (text mode, bromigos.text, a bromigOS Server entry): it has
+# the console (bromigos-iso-text-console), nothing opens here
+grep -qwE 'bromigos\.install=text|bromigos\.text|bromigos\.edition=(server|fieldkit)' <<<"$cmd" && exit 0
+if grep -qwE 'bromigos\.install(=gui)?' <<<"$cmd"; then
+    start=$(date +%s)
+    /usr/local/bin/bromigos-installer && exit 0
+    # it stopped at once (no GTK, no display it could use): the text installer, in a terminal
+    if (( $(date +%s) - start < 10 )); then
+        exec kitty --class bromigos-iso-install --title "Install bromigOS" --hold sudo /usr/local/bin/bromigos-iso-install --text
+    fi
+    exit 0
+fi
+PYTHONPATH=/usr/local/lib/bromigos-iso exec python3 -m bromigos_installer.welcome

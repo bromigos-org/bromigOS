@@ -1,0 +1,14 @@
+{
+  "_comment": "bromigOS Server, the edition with no desktop. The installer reads /usr/share/bromigos/editions/server.json first (the bromigos-server package's, the Field Kit job's), then this one. Fields: id, title, summary, hint, desktop (false: no desktop steps, splash, bromigos install/setup), meta (the meta package: when it's on the medium it is the whole package set, in place of packages), packages (this stand-in's set until the meta package ships; the boot, disk and snapshot packages are always added), services, check_packages (what must be on the medium for an offline install), download_size, auto_update_units (systemd units the Automatic updates choice enables when the system has them). docs/iso.md, \"Editions\".",
+  "id": "server",
+  "title": "bromigOS Server",
+  "summary": "No desktop, for servers and lab machines: a text console, SSH, the lab console, and updates with snapshots.",
+  "hint": "For a computer that runs on its own, often without a screen. You manage it at its console or from another computer.",
+  "desktop": false,
+  "meta": "bromigos-server",
+  "packages": ["bromigos-core", "bromigos-keyring", "bromigos-lab", "openssh", "nftables", "btop", "zoxide", "tmux", "less", "man-db", "terminus-font"],
+  "services": [],
+  "check_packages": ["bromigos-core", "bromigos-lab"],
+  "download_size": "400 MB",
+  "auto_update_units": ["bromigos-update.timer", "bromigos-auto-update.timer"]
+}

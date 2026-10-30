@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# Install bromigOS from the live medium (docs/iso.md): a few questions, then archinstall
-# builds the Arch system (btrfs on LUKS2, GRUB with snapper's snapshots in its menu) and
-# bromigOS's own installer runs in it, all from the medium's offline repository.
+# Install bromigOS from the live medium (docs/iso.md): archinstall builds the Arch system
+# (btrfs on LUKS2, GRUB with snapper's snapshots in its menu) and bromigOS's own installer
+# runs in it, all from the medium's offline repository.
 #
-#   bromigos-iso-install                      guided: the disk, your user and password, the
-#                                             hostname, the disk's passphrase (encrypted by
-#                                             default), keyboard, timezone, locale
+#   bromigos-iso-install                      the installer, in this terminal (the text
+#                                             installer: the same steps as the graphical one)
+#   bromigos-iso-install --answers FILE       what the installers run: their answers (JSON;
+#                                             bromigos_installer.common.backend_answers):
+#                                             the disk (erased, or bromigOS beside what's
+#                                             there, shrinking it first when asked), the user,
+#                                             the edition, encryption, keyboard, time zone
 #   bromigos-iso-install --config C --creds K unattended: archinstall's config and credentials
 #                                             (answers.py writes them: /usr/local/lib/bromigos-iso)
-#   options  --no-encrypt    a plain btrfs root, no LUKS (guided; the default encrypts)
-#            --menu          after the questions, archinstall's menu, prefilled, to change
-#                            anything there before it installs
+#   options  --menu          with --config: archinstall's menu, prefilled, to change anything
+#                            there before it installs
 #            --repo URL      the package repository the installed system updates from
 #                            (default: the medium's, /etc/bromigos-iso/repo.url)
 #            --channel NAME  stable (default: the medium's), rc or edge: which of the
@@ -20,6 +23,8 @@
 #            --ssh-key FILE  authorize this public key for the new user and enable sshd
 #            --no-reboot     stay here when it's done
 #            --dry-run       say what it would do
+# Progress goes to stdout as `::stage PERCENT plain words` lines and a failure's reason as
+# one `::error plain words` line (the installers show them); everything else is detail.
 set -euo pipefail
 
 lib=/usr/local/lib/bromigos-iso
@@ -27,13 +32,14 @@ repo_dir=/var/lib/bromigos/repo
 target=/mnt                      # where archinstall mounts the new system (4.x; older: /mnt/archinstall)
 log=/var/log/bromigos-iso-install.log
 
-config='' creds='' repo='' ca='' channel='' sshkey='' reboot=1 dry=0 encrypt=1 menu=0 extras=()
-disk='' user='' password='' hostname='' passphrase='' keymap='' timezone='' locale=''   # the questions' answers
+config='' creds='' answers='' repo='' ca='' channel='' sshkey='' reboot=1 dry=0 menu=0 extras=()
+desktop=1 mode=erase other_os=0 online=0 full_name='' xkb_layout='' xkb_variant=''   # from --answers
+(($#)) || PYTHONPATH=$lib exec python3 -m bromigos_installer.tui
 while (($#)); do
     case $1 in
+        --answers) answers=$2; shift 2 ;;
         --config) config=$2; shift 2 ;;
         --creds) creds=$2; shift 2 ;;
-        --no-encrypt) encrypt=0; shift ;;
         --menu) menu=1; shift ;;
         --repo) repo=$2; shift 2 ;;
         --channel) channel=$2; shift 2 ;;
@@ -42,11 +48,13 @@ while (($#)); do
         --ssh-key) sshkey=$2; shift 2 ;;
         --no-reboot) reboot=0; shift ;;
         --dry-run) dry=1; shift ;;
-        -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --text|--plain) PYTHONPATH=$lib exec python3 -m bromigos_installer.tui "$@" ;;
+        -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "bromigos-iso-install: unknown option $1" >&2; exit 2 ;;
     esac
 done
 [[ $EUID -eq 0 ]] || { echo "bromigos-iso-install: run it with sudo" >&2; exit 2; }
+[[ -n $config || -n $answers ]] || { echo "bromigos-iso-install: --answers FILE, or --config and --creds" >&2; exit 2; }
 [[ -z $config || -n $creds ]] || { echo "bromigos-iso-install: --config needs --creds" >&2; exit 2; }
 [[ -n $repo ]] || repo=$(cat /etc/bromigos-iso/repo.url 2>/dev/null || true)
 [[ -n $repo ]] || repo="https://pkgs.example.invalid"        # no repository known: updates wait for one
@@ -58,64 +66,80 @@ case $channel in edge) sub='' ;; stable|rc) sub="/$channel" ;; *) echo "bromigos
 say() { printf '%s\n' "$*" | tee -a "$log"; }
 run() { say "+ $*"; (( dry )) || "$@"; }
 in_target() { run arch-chroot "$target" "$@"; }
+# stage PERCENT "plain words": the installers' progress bar and status line
+now_stage='Starting'
+stage() { now_stage=$2; printf '::stage %s %s\n' "$1" "$2"; printf '[%s%%] %s\n' "$1" "$2" >> "$log"; }
+# a failure, in plain words, with what to do (the installers show it; the log keeps the rest)
+fail_words() {
+    printf '::error %s stopped and the install didn'"'"'t finish. %s The details are in %s on the live system.\n' \
+        "$now_stage" "$1" "$log"
+}
+on_error() {
+    local rc=$?
+    case $now_stage in
+        Making\ room*) fail_words "The other system's files are as they were." ;;
+        Checking*|Reading*) fail_words "Nothing on the disk was changed." ;;
+        *) fail_words "Restart and try again. If it happens again, choose Erase the whole disk, or install on another disk." ;;
+    esac
+    exit "$rc"
+}
+trap on_error ERR
 
 say "== bromigos-iso-install $(date -Is)"
 
-# ── 0. the questions (guided) ───────────────────────────────────────────────────────────
-# shellcheck disable=SC2034  # ref is a nameref: the caller's variable
-ask() {   # ask VAR "prompt" [default]
-    local -n ref=$1; local prompt=$2 def=${3:-} v
-    if [[ -n $def ]]; then read -r -p "$prompt [$def]: " v; ref=${v:-$def}; else while :; do read -r -p "$prompt: " v; [[ -n $v ]] && { ref=$v; break; }; done; fi
-}
-# shellcheck disable=SC2034  # ref is a nameref: the caller's variable
-ask_secret() {   # ask_secret VAR "prompt": twice, hidden
-    local -n ref=$1; local a b
-    while :; do
-        read -r -s -p "$2: " a; echo; read -r -s -p "$2 (again): " b; echo
-        [[ -n $a && $a == "$b" ]] && { ref=$a; return; }
-        echo "they differ, or it's empty; once more"
-    done
-}
-if [[ -z $config ]]; then
-    echo
-    echo "bromigOS: the install. The disk is wiped, made btrfs on LUKS2 (a passphrase at boot),"
-    echo "GRUB boots it with snapper's snapshots in its menu. Ctrl+C leaves at any question."
-    echo
-    echo "Disks:"
-    lsblk -dno NAME,SIZE,MODEL,TYPE | awk '$NF=="disk" && $1 !~ /^(loop|sr|zram)/ { printf "  /dev/%-10s %8s  %s\n", $1, $2, $3 }'
-    ask disk "Install to (the whole disk)"
-    [[ -b $disk ]] || { echo "bromigos-iso-install: $disk isn't a block device" >&2; exit 2; }
-    ask user "Your user name"
-    ask_secret password "Its password"
-    ask hostname "Hostname" bromigos
-    if (( encrypt )); then
-        read -r -p "Encrypt the disk? (typed at every boot; it can't be recovered) [Y/n]: " yn; [[ ${yn,,} == n* ]] && encrypt=0
+# ── 0. the installers' answers: the room made, archinstall's files written ──────────────
+ans() { python3 -c 'import json,sys; v = json.load(open(sys.argv[1])).get(sys.argv[2]); print("" if v is None else (int(v) if isinstance(v, bool) else v))' "$answers" "$1"; }
+if [[ -n $answers ]]; then
+    stage 2 "Checking your choices"
+    mode=$(ans mode); desktop=$(ans desktop); other_os=$(ans other_os); online=$(ans online)
+    full_name=$(ans full_name); xkb_layout=$(ans xkb_layout); xkb_variant=$(ans xkb_variant)
+    [[ -n $(ans disk) && -b $(ans disk) ]] || { now_stage="Checking your choices"; printf '::error The disk chosen (%s) is gone. Plug it back in and start the installer again.\n' "$(ans disk)"; exit 1; }
+    say "answers: $(python3 -c 'import json,sys; d = json.load(open(sys.argv[1])); [d.pop(k, None) for k in ("password", "passphrase")]; print(json.dumps(d))' "$answers")"
+    if (( ! dry )) && [[ $mode == reinstall ]]; then
+        # the old system kept as a snapshot, a fresh root, your home as it is: mounted at /mnt
+        now_stage="Opening your bromigOS"
+        PYTHONPATH=$lib python3 "$lib/bromigos_installer/reinstall.py" prepare --answers "$answers" | tee -a "$log"
+        (( PIPESTATUS[0] == 0 )) || { trap - ERR; exit 1; }
+    elif (( ! dry )); then
+        now_stage="Making room"
+        python3 "$lib/bromigos_installer/disks.py" shrink --answers "$answers" | tee -a "$log"
+        (( PIPESTATUS[0] == 0 )) || { trap - ERR; exit 1; }
     fi
-    passphrase=''
-    if (( encrypt )); then
-        read -r -p "A passphrase of its own for the disk, or Enter to use the password: " -s pp; echo
-        if [[ -n $pp ]]; then read -r -s -p "The passphrase (again): " pp2; echo; [[ $pp == "$pp2" ]] || { echo "they differ" >&2; exit 2; }; passphrase=$pp; fi
-    fi
-    ask keymap "Keyboard layout" us
-    ask timezone "Timezone" "$(timedatectl show -p Timezone --value 2>/dev/null || echo UTC)"
-    ask locale "Locale" en_US
-    echo
-    echo "  disk $disk  user $user  host $hostname  encrypted: $([[ $encrypt == 1 ]] && echo yes || echo no)  keymap $keymap  tz $timezone  locale $locale"
-    read -r -p "Go ahead and wipe $disk? [y/N]: " yn; [[ ${yn,,} == y* ]] || { echo "nothing done"; exit 0; }
-    answers=$(mktemp -d)
-    args=(--disk "$disk" --user "$user" --password "$password" --hostname "$hostname" --keymap "$keymap" --timezone "$timezone" --locale "$locale" --out "$answers")
-    (( encrypt )) || args+=(--no-encrypt)
-    [[ -n $passphrase ]] && args+=(--passphrase "$passphrase")
-    [[ -n $sshkey ]] && args+=(--ssh)
-    python3 "$lib/answers.py" "${args[@]}" >/dev/null
-    config=$answers/config.json; creds=$answers/creds.json
-    unset password passphrase pp pp2
+    now_stage="Preparing the installation"
+    out=$(mktemp -d)
+    python3 "$lib/answers.py" --answers "$answers" --out "$out" >/dev/null
+    config=$out/config.json; creds=$out/creds.json
+    stage 10 "Your choices are ready"
+fi
+
+# ── 0a. an online install (an edition this medium doesn't carry): Arch's mirrors and
+# bromigOS's repository first in the live system's pacman.conf, the databases synced
+if (( online && ! dry )); then
+    stage 10 "Connecting to the package servers"
+    python3 - /etc/pacman.conf "$repo" "$sub" <<'PY'
+import re, sys
+path, repo, sub = sys.argv[1:4]
+out, sect = [], ""
+for line in open(path).read().split("\n"):
+    if line.startswith("["):
+        sect = line.strip()
+        out.append(line)
+        if sect in ("[core]", "[extra]"):
+            out.append("Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch")
+        elif sect == "[bromigos]":
+            out.append(f"Server = {repo}/$repo{sub}/$arch")
+        continue
+    out.append(line)
+open(path, "w").write("\n".join(out))
+PY
+    pacman -Sy >/dev/null 2>&1 || { printf '::error The package servers can'"'"'t be reached, so what you chose can'"'"'t be downloaded. Check the network (cable or Wi-Fi), or choose Field Kit, which is on this USB stick.\n'; exit 1; }
 fi
 
 # ── 0b. the hardware: what this machine's GPU and kind need (`bromigos hw`, read here: the
 # live system's /sys is the machine's), added to archinstall's packages and services so they
 # come from the medium too; `bromigos install`'s hardware step writes the rest in step 2
-if hwjson=$(bromigos hw detect --json 2>/dev/null) && [[ -n $hwjson ]]; then
+# (the desktop's: Field Kit has no desktop to draw)
+if (( desktop )) && hwjson=$(bromigos hw detect --json 2>/dev/null) && [[ -n $hwjson ]]; then
     hwconfig=$(mktemp --suffix=.json)
     if line=$(python3 "$lib/hardware.py" "$config" "$hwconfig" <<<"$hwjson"); then
         say "hardware: $line"
@@ -126,7 +150,8 @@ if hwjson=$(bromigos hw detect --json 2>/dev/null) && [[ -n $hwjson ]]; then
 fi
 
 # ── 1. archinstall: the Arch system ─────────────────────────────────────────────────────
-args=(--config "$config" --creds "$creds" --offline --skip-ntp --skip-wkd --skip-version-check --skip-wifi-check)
+args=(--config "$config" --creds "$creds" --skip-ntp --skip-wkd --skip-version-check --skip-wifi-check)
+(( online )) || args+=(--offline)
 (( menu )) || args+=(--silent)
 say "archinstall ${args[*]}"
 if (( ! dry )); then
@@ -134,10 +159,28 @@ if (( ! dry )); then
     # fills it after time-sync.target (30 s at most with no network, the medium's
     # systemd-time-wait-sync drop-in); started here, it waits for that, or returns at once
     systemctl start pacman-init.service || { say "pacman's keyring isn't ready (systemctl status pacman-init)"; exit 1; }
-    archinstall "${args[@]}"
+    stage 11 "Preparing the disk"
+    # its output, read for the progress bar (progress.py: partitions, encryption, each
+    # package, the boot loader), lands in the log as it is
+    if (( menu )); then
+        archinstall "${args[@]}"
+    else
+        archinstall "${args[@]}" 2>&1 | python3 "$lib/bromigos_installer/progress.py" | tee -a "$log"
+        (( PIPESTATUS[0] == 0 )) || { now_stage="Installing the system"; false; }
+    fi
     [[ -d $target/etc/pacman.d ]] || target=/mnt/archinstall
     [[ -d $target/etc/pacman.d ]] || { say "archinstall didn't leave a system at /mnt (nor /mnt/archinstall)"; exit 1; }
     say "the new system is at $target"
+fi
+
+# ── 1b'. a reinstall: the old system's people back (their user IDs and passwords), the
+# disk's unlocking and GRUB (archinstall had a pre-mounted root: no boot loader of its own)
+if (( ! dry )) && [[ $mode == reinstall ]]; then
+    now_stage="Bringing back your files and people"
+    PYTHONPATH=$lib python3 "$lib/bromigos_installer/reinstall.py" finish --answers "$answers" | tee -a "$log"
+    (( PIPESTATUS[0] == 0 )) || { trap - ERR; exit 1; }
+    PYTHONPATH=$lib python3 "$lib/bromigos_installer/reinstall.py" boot --answers "$answers" | tee -a "$log"
+    (( PIPESTATUS[0] == 0 )) || { trap - ERR; exit 1; }
 fi
 
 # ── 1b. snapper's configuration for /home ───────────────────────────────────────────────
@@ -153,11 +196,33 @@ if (( ! dry )) && [[ $(findmnt -no FSTYPE "$target") == btrfs ]]; then
     fi
 fi
 
+# ── 1c. installed beside another system: /boot a plain Linux partition again (on GPT
+# archinstall's boot flag made it an EFI system partition's type; the disk keeps one ESP,
+# Windows'), and the other systems in GRUB's menu (os-prober, read at every grub-mkconfig)
+if (( ! dry )) && [[ $mode == alongside ]]; then
+    bootdev=$(findmnt -no SOURCE "$target/boot")
+    disk=/dev/$(lsblk -no PKNAME "$bootdev")
+    if [[ $(lsblk -dno PTTYPE "$disk") == gpt ]]; then
+        run sfdisk --part-type "$disk" "$(cat "/sys/class/block/$(basename "$bootdev")/partition")" 0FC63DAF-8483-4772-8E79-3D69D8477DE4
+    fi
+fi
+if (( ! dry )) && (( other_os )) && [[ -f $target/etc/default/grub ]]; then
+    if grep -qE '^#?GRUB_DISABLE_OS_PROBER=' "$target/etc/default/grub"; then
+        sed -i -E 's/^#?GRUB_DISABLE_OS_PROBER=.*/GRUB_DISABLE_OS_PROBER=false/' "$target/etc/default/grub"
+    else
+        echo 'GRUB_DISABLE_OS_PROBER=false' >> "$target/etc/default/grub"
+    fi
+    # the menu waits for a choice a little longer when there's more than one system
+    sed -i -E 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=10/' "$target/etc/default/grub"
+fi
+
 # ── 2. bromigOS in the new system ───────────────────────────────────────────────────────
+stage 76 "Setting up your account"
 user=''
 if (( ! dry )); then
     user=$(awk -F: '$3 >= 1000 && $3 < 60000 && $7 !~ /nologin|false/ { print $1; exit }' "$target/etc/passwd")
     [[ -n $user ]] || { say "no user in the new system (archinstall's user step)"; exit 1; }
+    [[ -z $full_name ]] || in_target usermod -c "$full_name" "$user"
 fi
 say "the new system's user: ${user:-<dry run>}"
 
@@ -204,14 +269,43 @@ if (( ! dry )); then
     chmod 440 "$target/etc/sudoers.d/90-bromigos-iso-install"
 fi
 with=(); for e in "${extras[@]}"; do with+=(--with "$e"); done
-in_target sudo -u "${user:-user}" -H bromigos install --yes --no-services --no-setup "${with[@]}"
-# the first-run answers a fresh install can give here: the outputs as they are now (the
-# machine's own: /sys is the target's), the Wick, VECTOR's brain and voice off (bromigos
-# setup, any time, for a brain, a voice, a homelab)
-in_target sudo -u "${user:-user}" -H bromigos setup --monitors auto --theme wick --vector none --voice off --create none
+# an edition with no desktop: its own first steps as the new user (user_commands), and it
+# starts to the text console
+if (( ! desktop )) && [[ -n $answers ]] && (( ! dry )); then
+    while IFS= read -r c; do
+        [[ -n $c ]] || continue
+        in_target sudo -u "${user:-user}" -H bash -lc "$c" || say "the edition's step '$c' reported a problem"
+    done < <(python3 -c 'import json, sys; print("\n".join(json.load(open(sys.argv[1])).get("user_commands") or []))' "$answers")
+    in_target systemctl set-default "$(ans default_target)"
+    # its name in GRUB's menu, until its boot package names it (the desktop's boot theme does)
+    if [[ -f $target/etc/default/grub ]] && ! grep -q '^GRUB_DISTRIBUTOR="bromigOS' "$target/etc/default/grub"; then
+        sed -i -E 's/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="bromigOS Server"/' "$target/etc/default/grub"
+        grep -q '^GRUB_DISTRIBUTOR=' "$target/etc/default/grub" || echo 'GRUB_DISTRIBUTOR="bromigOS Server"' >> "$target/etc/default/grub"
+    fi
+    # the welcome tour at the first sign-in (bromigos welcome-console: the network, SSH, the lab)
+    in_target sudo -u "${user:-user}" -H sh -c 'mkdir -p ~/.local/state/bromigos && touch ~/.local/state/bromigos/welcome-pending'
+fi
+if (( desktop )); then
+    stage 78 "Setting up the desktop"
+    in_target sudo -u "${user:-user}" -H bromigos install --yes --no-services --no-setup "${with[@]}"
+    # the first-run answers a fresh install can give here: the outputs as they are now (the
+    # machine's own: /sys is the target's), the Wick, VECTOR's brain and voice off (bromigos
+    # setup, any time, for a brain, a voice, a homelab)
+    in_target sudo -u "${user:-user}" -H bromigos setup --monitors auto --theme wick --vector none --voice off --create none
+    # the welcome tour at the first login (bromigos welcome --if-pending: Wi-Fi, screens, a
+    # world, VECTOR, the homelab, the keys; the answers above are its starting point)
+    in_target sudo -u "${user:-user}" -H sh -c 'mkdir -p ~/.local/state/bromigos && touch ~/.local/state/bromigos/welcome-pending'
+    # the keyboard chosen, for the desktop too (the console's is archinstall's vconsole.conf)
+    if [[ -n $xkb_layout ]]; then
+        kb=(--set kb_layout "$xkb_layout"); [[ -n $xkb_variant ]] && kb+=(--set kb_variant "$xkb_variant")
+        in_target sudo -u "${user:-user}" -H bromigos setup input "${kb[@]}" \
+            || say "the desktop's keyboard layout wasn't set (Settings › Keyboard & input sets it)"
+    fi
+fi
 
 # ── 3. the splash, the snapshots in GRUB's menu, SSH ───────────────────────────────────
-if (( ! dry )); then
+stage 86 "Setting up the boot menu and snapshots"
+if (( ! dry && desktop )); then
     # the plymouth hook, right after udev (or systemd) and before encrypt, which asks for the
     # passphrase through Plymouth when it runs; in every file that sets HOOKS (archinstall
     # 4.5 writes /etc/mkinitcpio.conf's; a drop-in in mkinitcpio.conf.d would override it)
@@ -219,10 +313,14 @@ if (( ! dry )); then
         [[ -f $conf ]] && grep -qE '^HOOKS=' "$conf" || continue
         grep -qE '^HOOKS=.*\bplymouth\b' "$conf" || sed -i -E 's/^(HOOKS=\([^)]*\b(udev|systemd)\b)/\1 plymouth/' "$conf"
     done
-    # `splash quiet` on the kernel line: GRUB's default (archinstall's choice here), or
-    # systemd-boot's entries if a config chose that
+fi
+# `splash quiet` on the kernel line (the desktop's; Field Kit keeps the boot's text): GRUB's
+# default (archinstall's choice here), or systemd-boot's entries if a config chose that.
+# grub-mkconfig after it, which also lists the other systems found (os-prober, step 1c)
+if (( ! dry )); then
     if [[ -f $target/etc/default/grub ]]; then
-        for w in splash quiet; do
+        words=(quiet); (( desktop )) && words=(splash quiet)
+        for w in "${words[@]}"; do
             grep -qE "^GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*\b$w\b" "$target/etc/default/grub" && continue
             sed -i -E "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"([^\"]*)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\1 $w\"/" "$target/etc/default/grub"
         done
@@ -230,10 +328,11 @@ if (( ! dry )); then
         in_target grub-mkconfig -o /boot/grub/grub.cfg
     fi
     for f in "$target"/boot/loader/entries/*.conf; do
+        (( desktop )) || continue
         [[ -f $f ]] && grep -q '^options' "$f" && ! grep -q 'splash' "$f" && sed -i 's/^options .*/& splash quiet/' "$f"
     done
 fi
-in_target plymouth-set-default-theme bromigos
+(( ! desktop )) || in_target plymouth-set-default-theme bromigos
 # the snapshots and the boot menu: `bromigos rollback setup`, as on any machine (`bromigos
 # install` skipped its rollback step under --no-services). It sees the chroot (its root mount
 # isn't PID 1's) and runs snapper with --no-dbus (the bus arch-chroot binds in is the live
@@ -242,13 +341,18 @@ in_target plymouth-set-default-theme bromigos
 # update` records each update for --rollback as the user), grub-btrfs-overlayfs last in HOOKS
 # (a snapshot booted from GRUB's menu is read-only; the hook lays a writable overlay on it)
 # and the initramfs made again. snap-pac, grub-btrfs and its daemon are archinstall's.
-in_target sudo -u "${user:-user}" -H bromigos rollback setup --yes
+root_fs=btrfs; (( dry )) || root_fs=$(findmnt -no FSTYPE "$target")
+if [[ $root_fs == btrfs ]]; then
+    in_target sudo -u "${user:-user}" -H bromigos rollback setup --yes
+else
+    say "the root is $root_fs: no snapshots (they need btrfs)"
+fi
 # the initramfs with the splash theme: setup made it again when it added the hook; if it had
 # nothing to add, now
-if (( ! dry )) && ! lsinitcpio "$target/boot/initramfs-linux.img" 2>/dev/null | grep -q 'usr/share/plymouth/themes/bromigos/'; then
+if (( ! dry && desktop )) && ! lsinitcpio "$target/boot/initramfs-linux.img" 2>/dev/null | grep -q 'usr/share/plymouth/themes/bromigos/'; then
     in_target mkinitcpio -P
 fi
-in_target sudo -u "${user:-user}" -H bromigos rollback status
+[[ $root_fs != btrfs ]] || in_target sudo -u "${user:-user}" -H bromigos rollback status
 
 run rm -f "$target/etc/sudoers.d/90-bromigos-iso-install"
 
@@ -261,7 +365,78 @@ if [[ -n $sshkey ]]; then
     fi
     in_target systemctl enable sshd.service
 fi
+# the installers' SSH answers (archinstall enabled sshd): the keys chosen, key-only unless a
+# password login was asked for; a server's firewall and automatic updates
+if [[ -n $answers ]] && (( ! dry )); then
+    keys=$(python3 -c 'import json, sys; print("\n".join(json.load(open(sys.argv[1])).get("ssh_keys") or []))' "$answers")
+    if [[ -n $keys ]]; then
+        home=$(awk -F: -v u="$user" '$1 == u { print $6 }' "$target/etc/passwd")
+        install -d -m 700 "$target$home/.ssh"
+        printf '%s\n' "$keys" >> "$target$home/.ssh/authorized_keys"
+        chmod 600 "$target$home/.ssh/authorized_keys"
+        in_target chown -R "$user:$user" "$home/.ssh"
+    fi
+    # bromigOS Server's own package, when it's there, applies its settings (its firewall, SSH
+    # and updates: /etc/bromigos/server.toml, `bromigos-server setup`); else the installer's
+    server_pkg=0; [[ -x $target/usr/bin/bromigos-server ]] && server_pkg=1
+    if (( server_pkg )); then
+        install -d "$target/etc/bromigos"
+        {
+            echo "# bromigOS Server's settings, from the installer (bromigos-server: docs/server.md)"
+            echo "[ssh]"; echo "password = $([[ $(ans ssh_password) == 1 ]] && echo true || echo false)"
+            echo "[updates]"; echo "auto = $([[ $(ans auto_updates) == 1 ]] && echo true || echo false)"
+        } > "$target/etc/bromigos/server.toml"
+        in_target bromigos-server setup || say "bromigos-server setup reported a problem (sudo bromigos-server setup runs it again)"
+    fi
+    if (( ! server_pkg )) && [[ $(ans ssh) == 1 && $(ans ssh_password) != 1 ]]; then
+        install -d "$target/etc/ssh/sshd_config.d"
+        printf '# bromigOS installer: keys only (docs/iso.md)\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n' \
+            > "$target/etc/ssh/sshd_config.d/01-bromigos-keys-only.conf"
+    fi
+    if (( ! server_pkg )) && [[ $(ans firewall) == 1 ]]; then
+        ssh_rule=''; [[ $(ans ssh) == 1 ]] && ssh_rule='        tcp dport 22 accept comment "SSH"'
+        cat > "$target/etc/nftables.conf" <<NFT
+#!/usr/bin/nft -f
+# bromigOS Server's firewall (the installer's; docs/iso.md): nothing comes in but replies to
+# this computer's own connections, ping, and SSH when it's on. Edit and reload it with
+# systemctl reload nftables.
+flush ruleset
+table inet filter {
+    chain input {
+        type filter hook input priority filter; policy drop;
+        ct state invalid drop
+        ct state { established, related } accept
+        iif lo accept
+        meta l4proto { icmp, ipv6-icmp } accept
+$ssh_rule
+    }
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+    }
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}
+NFT
+        in_target systemctl enable nftables.service
+    fi
+    if (( ! server_pkg )) && [[ $(ans auto_updates) == 1 ]]; then
+        enabled=0
+        for u in $(python3 -c 'import json, sys; print(" ".join(json.load(open(sys.argv[1])).get("auto_update_units") or []))' "$answers"); do
+            if [[ -e $target/usr/lib/systemd/system/$u ]]; then in_target systemctl enable "$u"; enabled=1; fi
+        done
+        (( enabled )) || say "automatic updates: no update timer in this system yet (the bromigos-server package brings it)"
+    fi
+fi
+# Field Kit, the repair toolkit, in the boot menu: bromigos-boot's own step (its pacman hook
+# ran while the packages went in; again now that GRUB is set up), copying Field Kit to /boot,
+# which is 2 GiB for it, and adding its GRUB and firmware entries
+if (( ! dry )) && [[ -x $target/usr/lib/bromigos/boot/bromigos-fieldkit-boot ]]; then
+    in_target /usr/lib/bromigos/boot/bromigos-fieldkit-boot sync --menu \
+        || say "Field Kit isn't in the boot menu yet (bromigos-fieldkit-boot status says why)"
+fi
 
+stage 96 "Finishing"
 # the sync databases are the offline copy's, newer than the repositories' own: the first
 # `pacman -Sy` would keep them (it asks "modified since?", the server says no) and check
 # the server's signature against the wrong file. Dated 1970, they're all fetched afresh.
@@ -270,6 +445,15 @@ run touch -d @0 "$target"/var/lib/pacman/sync/*.db
 # leaves /mnt mounted, for a look round)
 run sync
 say "== bromigOS is installed. Sign in at the Bromigos login screen after the reboot."
+# the answers, without the password, kept for a repeat (an answer file: docs/iso.md)
+if [[ -n $answers ]] && (( ! dry )); then
+    install -d -m 0755 "$target/var/log/bromigos"
+    python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get("answers_toml") or "", end="")' "$answers" \
+        > "$target/var/log/bromigos/install-answers.toml"
+    chmod 0644 "$target/var/log/bromigos/install-answers.toml"
+fi
+[[ -z $answers ]] || rm -f "$answers" "$creds"
+stage 100 "bromigOS is installed"
 if (( reboot && ! dry )); then
     cleanup; trap - EXIT
     sleep 3

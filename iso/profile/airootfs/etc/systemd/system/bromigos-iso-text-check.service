@@ -1,0 +1,15 @@
+# Whether this boot runs the text installer, and on which consoles (bromigos-iso-text-console
+# --start): tty1 for the boot menu's "Install bromigOS (text mode)" or "Install bromigOS" on a
+# machine with no graphics, a serial console when the kernel's console is on it. It has no
+# console of its own, so deciding never disturbs the desktop's.
+[Unit]
+Description=bromigOS installer: text mode where it's wanted
+ConditionKernelCommandLine=bromigos.install
+After=systemd-udev-settle.service systemd-user-sessions.service
+
+[Service]
+Type=exec
+ExecStart=/usr/local/bin/bromigos-iso-text-console --start
+
+[Install]
+WantedBy=multi-user.target

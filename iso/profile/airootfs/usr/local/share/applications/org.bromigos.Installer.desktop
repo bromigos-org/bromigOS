@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Install bromigOS
+GenericName=Installer
+Comment=Put bromigOS on this computer's disk, on its own or beside Windows
+Exec=/usr/local/bin/bromigos-installer
+Icon=system-software-install
+Terminal=false
+Categories=System;
+StartupWMClass=org.bromigos.Installer

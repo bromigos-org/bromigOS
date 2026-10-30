@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# The text installer on a console (bromigos-iso-text-install@.service; docs/iso.md):
+#
+#   bromigos-iso-text-console --check TTY   whether it runs on TTY this boot: tty1 when the boot
+#                                           menu's "Install bromigOS (text mode)" was chosen
+#                                           (bromigos.install=text), or "Install bromigOS" on a
+#                                           machine with no graphics; a serial console (ttyS*)
+#                                           when the kernel's console is on it
+#   bromigos-iso-text-console TTY           runs it there (a readable console font first)
+#   bromigos-iso-text-console --start       starts bromigos-iso-text-install@TTY for each console
+#                                           --check says yes to (bromigos-iso-text-check.service)
+set -u
+cmd=$(cat /proc/cmdline)
+graphics() { compgen -G '/dev/dri/card*' >/dev/null; }
+if [[ ${1:-} == --check ]]; then
+    tty=${2:?TTY}
+    grep -qwE 'bromigos\.install(=text|=gui)?' <<<"$cmd" || exit 1
+    # text wanted: text mode, bromigos.text, or a bromigOS Server entry (bromigos.edition=server)
+    text=0
+    grep -qwE 'bromigos\.install=text|bromigos\.text|bromigos\.edition=(server|fieldkit)' <<<"$cmd" && text=1
+    case $tty in
+        tty1) (( text )) && exit 0
+              # a medium with no login screen (the small Field Kit stick): the console's
+              systemctl -q is-enabled display-manager.service 2>/dev/null || exit 0
+              # "Install bromigOS" with no graphics: wait for udev, then look again
+              udevadm settle -t 20 2>/dev/null; sleep 3; graphics && exit 1; exit 0 ;;
+        ttyS*) grep -qE "console=$tty([, ]|$)" <<<"$cmd" && exit 0; exit 1 ;;
+    esac
+    exit 1
+fi
+if [[ ${1:-} == --start ]]; then         # bromigos-iso-text-check.service: start it where it's wanted
+    for t in tty1 ttyS0; do
+        "$0" --check "$t" || continue
+        if [[ $t == tty1 ]]; then
+            # the desktop's login screen has tty1 on a graphical boot: not this boot (the text
+            # installer was asked for), so it steps aside first
+            systemctl mask --runtime --now display-manager.service sddm.service >/dev/null 2>&1 || true
+        fi
+        systemctl start --no-block "bromigos-iso-text-install@$t.service"
+    done
+    exit 0
+fi
+tty=${1:-tty1}
+if [[ $tty == tty* && $tty != ttyS* ]]; then
+    setfont ter-v24b 2>/dev/null || setfont ter-v20b 2>/dev/null || true
+    export TERM=linux
+else
+    export TERM=vt220
+    stty rows 40 cols 120 2>/dev/null || true
+fi
+# the screen reader's boot (accessibility=on): the plain questions, read in order
+grep -qw 'accessibility=on' <<<"$cmd" && exec /usr/local/bin/bromigos-iso-install --plain
+exec /usr/local/bin/bromigos-iso-install --text

@@ -142,6 +142,8 @@ bromigos
 # optional pieces the installer offers (they're on the medium either way)
 bromigos-homelab
 herdr
+# Field Kit, the edition with no desktop (its packages: the edition file, editions/fieldkit.json)
+bromigos-lab
 # the live desktop's and the installed system's extras bromigOS's defaults expect
 btop
 pavucontrol
@@ -163,6 +165,12 @@ btrfs-progs
 cryptsetup
 snapper
 snap-pac
+# the installer: the graphical one (GTK 4 and libadwaita come with the desktop), the text one
+# (Textual), and installing beside another system: other systems found for the boot menu,
+# Windows' NTFS read and shrunk
+python-textual
+os-prober
+ntfs-3g
 # graphics: every open driver, so the live desktop renders on whatever is there
 mesa
 vulkan-radeon

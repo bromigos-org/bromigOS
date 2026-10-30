@@ -25,6 +25,10 @@ def main():
     # the medium has no multilib: its 32-bit packages wait for the installed system
     pkgs = [p for p in want.get("packages", []) if not p.startswith("lib32-")]
     services = [s.removesuffix(".service") for s in want.get("services", [])]
+    # a kernel other than Arch's own: NVIDIA's open modules built for it (DKMS) and its headers
+    kernels = [k for k in cfg.get("kernels", ["linux"]) if k != "linux"]
+    if kernels and "nvidia-open" in pkgs:
+        pkgs = [p for p in pkgs if p != "nvidia-open"] + ["nvidia-open-dkms"] + [f"{k}-headers" for k in kernels]
     cfg["packages"] = sorted(set(cfg.get("packages", [])) | set(pkgs))
     cfg["services"] = sorted(set(cfg.get("services", [])) | set(services))
     json.dump(cfg, open(sys.argv[2], "w"), indent=2)

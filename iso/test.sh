@@ -10,6 +10,20 @@
 #   iso/test.sh install [--repo URL] [--ca FILE] [--no-encrypt]
 #                       the unattended install onto the VM's disk, over SSH (btrfs on
 #                       LUKS2 by default; --no-encrypt: plain btrfs)
+#   iso/test.sh windows [--free-gib N] [--hibernated]
+#                       a stand-in Windows on the VM's disk (test/fake-windows.sh: Windows'
+#                       partitions, its boot files where os-prober looks, files with their
+#                       checksums), to install alongside
+#   iso/test.sh tui-install --mode erase|alongside [--no-encrypt] [--edition ID] [--gib N]
+#   iso/test.sh gui-install --mode erase|alongside [--no-encrypt] [--edition ID] [--gib N]
+#                       the text or the graphical installer, driven like a person would (keys:
+#                       test/installer/tuidrive.py; the graphical one's own script mode, with
+#                       a screenshot of each step from the VM's screen) onto the VM's disk,
+#                       with the real install; then as `install` after it
+#   iso/test.sh keep-files | verify-reinstall   a file in the installed home before `tui-install --mode
+#                       reinstall`, then it, the user's ID and the old root's snapshot after
+#   iso/test.sh verify-windows   in the installed system: the stand-in Windows' files and its
+#                       boot files unchanged, NTFS consistent, Windows in GRUB's menu
 #   iso/test.sh boot-disk [--firmware uefi|bios] [--update-channel NAME] [--update-repo URL [--ca FILE]]
 #                       boots the installed system, signs in at the login screen (QMP keys),
 #                       screenshots it, runs test/vm/checks.sh in it, then the first update
@@ -18,8 +32,11 @@
 #                       channels (and trusts --ca), when the system's own repository isn't
 #                       reachable yet (a public medium before go-live, docs/iso.md)
 #   iso/test.sh menu ENTRY  the medium's boot menu (UEFI GRUB or BIOS syslinux) saved, then one
-#                       channel booted and checked: live, install (the installer opens),
-#                       safe (nomodeset), memtest, disk (the installed system's GRUB), speech
+#                       channel booted and checked: live, install (the graphical installer
+#                       opens), text (the text installer on tty1, no desktop), safe
+#                       (nomodeset), memtest, disk (the installed system's GRUB), speech
+#   iso/test.sh param "PARAMS"  "Install bromigOS" with PARAMS added to its kernel line (GRUB's
+#                       editor, syslinux's Tab): which installer opened, and the edition chosen
 #   iso/test.sh grub NAME [KEYS]   boots the installed disk and saves its GRUB menu as
 #                       shots/grub-NAME.png (KEYS first, e.g. down,down,ret: the snapshots);
 #                       the VM stays at the menu
@@ -30,8 +47,10 @@
 # networking with SSH on localhost:2223. UEFI boots use edk2-ovmf's firmware (a private
 # copy of its variables); BIOS boots use SeaBIOS. Everything lives in DIR (default
 # ~/.cache/bromigos-isotest): the key, the disk, the console log, shots/. Beside another
-# run: BROMIGOS_ISOTEST_DIR, _PORT (SSH), _VNC (display) and _MEM (MiB, 6144); BROMIGOS_ISOTEST_QEMU adds QEMU
+# run: BROMIGOS_ISOTEST_DIR, _PORT (SSH), _VNC (display), _MEM (MiB, 6144) and _SMP (vCPUs, 4; the
+# test VMs' budget is 4 vCPUs and 8 GiB together: test/vm/vm-keeper.py); BROMIGOS_ISOTEST_QEMU adds QEMU
 # arguments (a faked laptop: -smbios file=… from test/vm/smbios-chassis.py; docs/hardware.md),
+# BROMIGOS_ISOTEST_PASS_WAIT waits that many seconds for the passphrase prompt (25; a 2-vCPU VM needs more),
 # BROMIGOS_ISOTEST_OFFLINE=1 cuts the VM off from the network (the SSH forward stays), and
 # BROMIGOS_ISOTEST_OVMF_CODE another UEFI firmware (Secure Boot's: iso/ci-test.sh), BROMIGOS_ISOTEST_VGA the
 # display device (default virtio-vga; e.g. virtio-vga,xres=1024,yres=768
@@ -47,12 +66,14 @@ ovmf_code=${BROMIGOS_ISOTEST_OVMF_CODE:-/usr/share/edk2/x64/OVMF_CODE.4m.fd}
 ovmf_vars=/usr/share/edk2/x64/OVMF_VARS.4m.fd
 
 cmd=${1:-}; shift || true
-iso='' firmware='' hosts='' repo='' ca='' encrypt=1 update_channel='' update_repo=''
+iso='' firmware='' hosts='' repo='' ca='' encrypt=1 update_channel='' update_repo='' mode=erase edition=desktop gib='' free_gib=0 hibernated=0
 while (($#)); do
     case $1 in
         --iso) iso=$2; shift 2 ;; --firmware) firmware=$2; shift 2 ;; --hosts) hosts=$2; shift 2 ;;
         --repo) repo=$2; shift 2 ;; --ca) ca=$2; shift 2 ;; --dir) dir=$2; shift 2 ;; --no-encrypt) encrypt=0; shift ;;
-        --update-channel) update_channel=$2; shift 2 ;; --update-repo) update_repo=$2; shift 2 ;; *) break ;;
+        --update-channel) update_channel=$2; shift 2 ;; --update-repo) update_repo=$2; shift 2 ;;
+        --mode) mode=$2; shift 2 ;; --edition) edition=$2; shift 2 ;; --gib) gib=$2; shift 2 ;;
+        --free-gib) free_gib=$2; shift 2 ;; --hibernated) hibernated=1; shift ;; *) break ;;
     esac
 done
 mkdir -p "$dir/shots"
@@ -106,7 +127,7 @@ start_vm() {        # start_vm medium|disk
     # (BROMIGOS_VM_OWNER=none keeps it until down)
     # shellcheck disable=SC2086  # BROMIGOS_ISOTEST_QEMU is words (a faked laptop: -smbios file=…)
     "$root/test/vm/vm-keeper.py" --ready "$dir/qmp.sock" --log "$dir/keeper.log" -- \
-        qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -m "${BROMIGOS_ISOTEST_MEM:-6144}" -smp 4 "${fw[@]}" ${BROMIGOS_ISOTEST_QEMU:-} \
+        qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -m "${BROMIGOS_ISOTEST_MEM:-6144}" -smp "${BROMIGOS_ISOTEST_SMP:-4}" "${fw[@]}" ${BROMIGOS_ISOTEST_QEMU:-} \
         -drive "file=$dir/disk.qcow2,if=virtio" "${cd[@]}" "${boot[@]}" \
         -nic "user,model=virtio-net-pci${net_restrict},hostfwd=tcp:127.0.0.1:$port-:22" \
         -device "${BROMIGOS_ISOTEST_VGA:-virtio-vga}" -device qemu-xhci -device usb-tablet -display none -vnc "127.0.0.1:${BROMIGOS_ISOTEST_VNC:-48}" \
@@ -156,6 +177,7 @@ type_text() {       # type_text "text": one QMP send-key per character (no Retur
         case $c in
             [a-z0-9]) q=$c ;; [A-Z]) q="shift-${c,,}" ;; -) q="minus" ;; _) q="shift-minus" ;; .) q="dot" ;; " ") q="spc" ;;
             /) q="slash" ;; :) q="shift-semicolon" ;; \;) q="semicolon" ;; "~") q="shift-grave_accent" ;; \|) q="shift-backslash" ;; "'") q="apostrophe" ;; \$) q="shift-4" ;;
+            =) q="equal" ;;
             *) echo "type_text: no key for '$c'" >&2; return 1 ;;
         esac
         press "$q"
@@ -170,13 +192,105 @@ menu_wait() {       # menu_wait NAME [KEYS] [--coloured]: a boot menu on screen,
 
 passphrase_then_ssh() {     # after GRUB: the disk's passphrase at the splash, then SSH
     if (( $(cat "$dir/encrypted" 2>/dev/null || echo 1) )); then
-        sleep 25
+        sleep "${BROMIGOS_ISOTEST_PASS_WAIT:-25}"
         type_keys "tester"
     fi
     wait_ssh 60
 }
 
+finish_install() {   # finish_install RC: what the new system got, then a clean power-off
+    local rc=$1
+    # what the new system got, while it's still mounted at /mnt (install-state.out)
+    : > "$dir/install-state.out"
+    # beside a stand-in Windows: its C: checked where the tools are (the medium), after the resize
+    "${SSH[@]}" 'c=$(lsblk -rno PATH,LABEL /dev/vda | awk "\$2 == \"Windows\" { print \$1 }"); [ -n "$c" ] && sudo ntfsresize --info --force --no-progress-bar "$c" | grep "You might resize at" | sed "s/^/ntfs-check: /"' >> "$dir/install-state.out" 2>&1 || true
+    "${SSH[@]}" 'sudo bash -c "findmnt -R /mnt; lsblk -o NAME,TYPE,FSTYPE,PARTTYPENAME,MOUNTPOINTS /dev/vda; ls -la /mnt/home/*/.ssh; grep -h ^HOOKS= /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.d/*.conf; lsinitcpio /mnt/boot/initramfs-linux.img | grep -c plymouth; grep -E ^GRUB_CMDLINE /mnt/etc/default/grub; grep -c snapshots /mnt/boot/grub/grub.cfg; grep -E \"^menuentry\" /mnt/boot/grub/grub.cfg; grep -A2 bromigos\\] /mnt/etc/pacman.conf; arch-chroot /mnt snapper --no-dbus list-configs; arch-chroot /mnt sshd -T 2>/dev/null | grep -iE \"^(pubkeyauthentication|authorizedkeysfile|passwordauthentication)\"; [ -d /sys/firmware/efi ] && efibootmgr"' 2>&1 | tee "$dir/install-state.out.main" || true
+    cat "$dir/install-state.out.main" >> "$dir/install-state.out"; rm -f "$dir/install-state.out.main"
+    # a clean shutdown: the new system's file systems unmounted, LUKS closed, then
+    # poweroff (killing QEMU would lose what's still in the page cache)
+    "${SSH[@]}" 'sudo sync; sudo umount -R /mnt; sudo cryptsetup close root 2>/dev/null; sudo systemctl poweroff' 2>/dev/null || true
+    for _ in $(seq 90); do [[ -z $(vm_pids) ]] && break; sleep 1; done
+    "$0" down --dir "$dir"
+    return "$rc"
+}
+
+plan_json() {      # the installers' test plan: the harness's account (tester), the choices given
+    python3 -c 'import json, sys; m, e, ed, g = sys.argv[1:5]; print(json.dumps({"mode": m, "encrypt": e == "1", "edition": ed,
+        "gib": int(g) if g else None, "full_name": "Test Er", "user": "tester", "password": "tester",
+        "hostname": "bromigos-test", "ssh": True, "disk_index": 0, "ssh_key": open(sys.argv[5]).read().strip()}))' \
+        "$mode" "$encrypt" "$edition" "$gib" "$key.pub"
+}
+
 case $cmd in
+    windows)
+        "${SCP[@]}" "$here/test/fake-windows.sh" "live@127.0.0.1:"
+        extra=(--files-mib 256 --free-gib "$free_gib"); (( hibernated )) && extra+=(--hibernated)
+        "${SSH[@]}" "sudo bash fake-windows.sh $firmware /dev/vda ${extra[*]}"
+        mkdir -p "$dir/windows"
+        "${SSH[@]}" "sudo cat /root/fake-windows.sha256" > "$dir/windows/c.sha256"
+        if [[ $firmware == uefi ]]; then "${SSH[@]}" "sudo cat /root/fake-windows-esp.sha256" > "$dir/windows/esp.sha256"; fi
+        ;;
+    tui-install|gui-install)
+        "${SCP[@]}" "$key.pub" "live@127.0.0.1:"
+        printf '%s\n' "$((encrypt ? 1 : 0))" > "$dir/encrypted"
+        printf '%s\n' "$edition" > "$dir/edition"
+        "${SSH[@]}" "cat /etc/bromigos-iso/channel 2>/dev/null || echo stable" > "$dir/channel"
+        plan_json > "$dir/plan.json"
+        "${SCP[@]}" "$dir/plan.json" "live@127.0.0.1:plan.json"
+        rc=0
+        if [[ $cmd == tui-install ]]; then
+            "${SCP[@]}" "$here/test/installer/tuidrive.py" "live@127.0.0.1:"
+            "${SSH[@]}" "sudo BROMIGOS_ISO_INSTALL_EXTRA='--ssh-key /home/live/id_ed25519.pub' python3 tuidrive.py plan.json" 2>&1 | tee "$dir/install.out" || rc=$?
+        else
+            # the graphical installer in the live session, as the live user, on its own script
+            # (--script): each step filled in and shown, "::page NAME" when it's on screen
+            : > "$dir/install.out"
+            "${SSH[@]}" "export XDG_RUNTIME_DIR=/run/user/\$(id -u); export WAYLAND_DISPLAY=\$(basename \$(ls \$XDG_RUNTIME_DIR/wayland-* | grep -v lock | head -1)); BROMIGOS_ISO_INSTALL_EXTRA='--ssh-key /home/live/id_ed25519.pub' bromigos-installer --script plan.json" >> "$dir/install.out" 2>&1 &
+            gui=$!
+            seen=0
+            while kill -0 "$gui" 2>/dev/null; do
+                n=$(grep -c '^::page ' "$dir/install.out" || true)
+                while (( seen < n )); do
+                    seen=$((seen + 1))
+                    page=$(grep '^::page ' "$dir/install.out" | sed -n "${seen}p" | awk '{print $2}')
+                    shot "gui-$firmware-$mode-$page" >/dev/null
+                    "${SSH[@]}" "touch /tmp/bromigos-installer-next" || true
+                done
+                sleep 1
+            done
+            wait "$gui" || rc=$?
+            grep -E '^(::page|::result|  )' "$dir/install.out" | tail -25
+        fi
+        finish_install "$rc" || exit $?
+        ;;
+    keep-files)     # before a reinstall: a file in the installed system's home, to find after it
+        "${SSH[@]}" 'echo "kept across the reinstall" > ~/keepme.txt && sha256sum ~/keepme.txt' | tee "$dir/keepme.sha256"
+        ;;
+    verify-reinstall)   # after it: the file, the user's ID, the old system kept as a snapshot
+        out=$dir/verify-reinstall-$firmware.out; : > "$out"
+        result() { local what=$1; shift; if "$@"; then echo "PASS $what"; else echo "FAIL $what"; fi | tee -a "$out"; }
+        result "the home folder's file is still there, unchanged" "${SSH[@]}" "echo '$(awk '{print $1}' "$dir/keepme.sha256")  /home/tester/keepme.txt' | sha256sum -c --quiet"
+        result "the user keeps user ID 1000" "${SSH[@]}" "[ \$(id -u) -eq 1000 ]"
+        result "the old system is kept as a snapshot (@old-root-…)" "${SSH[@]}" "sudo mount -o subvolid=5 \$(findmnt -no SOURCE / | sed 's/\\[.*//') /mnt && ls /mnt | grep -q '^@old-root-'; r=\$?; sudo umount /mnt; exit \$r"
+        if grep -q FAIL "$out"; then exit 1; fi
+        ;;
+    verify-windows)
+        out=$dir/verify-windows-$firmware.out; : > "$out"
+        result() { local what=$1; shift; if "$@"; then echo "PASS $what"; else echo "FAIL $what"; fi | tee -a "$out"; }
+        "${SCP[@]}" "$dir/windows/c.sha256" "$user@127.0.0.1:c.sha256"
+        c=$("${SSH[@]}" "lsblk -rno PATH,LABEL /dev/vda | awk '\$2 == \"Windows\" { print \$1 }'")
+        result "Windows' C: is still there ($c)" test -n "$c"
+        result "every file on C: is as it was (sha256)" "${SSH[@]}" "sudo mkdir -p /run/win && sudo mount -t ntfs3 -o ro $c /run/win && cd /run/win && sha256sum -c --quiet ~/c.sha256; r=\$?; cd /; sudo umount /run/win; exit \$r"
+        result "C:'s NTFS is consistent after the resize (ntfsresize --info, on the medium)" grep -q '^ntfs-check: You might resize at' "$dir/install-state.out"
+        result "GRUB's menu has bromigOS and Windows" "${SSH[@]}" "sudo grep -q '^menuentry .bromigOS' /boot/grub/grub.cfg && sudo grep -qE '^menuentry .Windows' /boot/grub/grub.cfg"
+        if [[ $firmware == uefi ]]; then
+            "${SCP[@]}" "$dir/windows/esp.sha256" "$user@127.0.0.1:esp.sha256"
+            result "Windows' boot files on the shared ESP are as they were" "${SSH[@]}" "sudo sh -c 'cd /boot/efi && sha256sum -c --quiet' < ~/esp.sha256"
+            result "GRUB in its own folder on the ESP, and the firmware boots it first" "${SSH[@]}" "sudo test -f /boot/efi/EFI/GRUB/grubx64.efi && sudo efibootmgr | grep -q '^BootOrder: '\$(sudo efibootmgr | awk '/GRUB/ { sub(/^Boot/, \"\"); sub(/\\*.*/, \"\"); print; exit }')"
+            result "one EFI system partition on the disk (bromigOS's /boot isn't one)" "${SSH[@]}" "[ \$(lsblk -no PARTTYPE /dev/vda | grep -ci c12a7328-f81f-11d2-ba4b-00a0c93ec93b) -eq 1 ]"
+        fi
+        if grep -q FAIL "$out"; then exit 1; fi
+        ;;
     boot)
         [[ -n $iso ]] || iso=$(cat "$dir/iso.path" 2>/dev/null || true)
         [[ -f $iso ]] || { echo "iso/test.sh boot: --iso FILE" >&2; exit 2; }
@@ -219,9 +333,19 @@ case $cmd in
         start_vm disk
         encrypted=$(cat "$dir/encrypted" 2>/dev/null || echo 1)
         if (( encrypted )); then
-            sleep 25                             # the splash asks for the disk's passphrase
+            sleep "${BROMIGOS_ISOTEST_PASS_WAIT:-25}"   # the splash asks for the disk's passphrase (a slow VM: longer)
             shot "passphrase-$firmware"
             type_keys "tester"
+        fi
+        if [[ $(cat "$dir/edition" 2>/dev/null || echo desktop) == server ]]; then
+            # bromigOS Server: the text console, then its checks over SSH (no desktop, no update run)
+            wait_ssh 60
+            sleep 5; shot "server-console-$firmware"
+            "${SSH[@]}" "echo tester | sudo -S -p '' sh -c 'echo \"tester ALL=(ALL) NOPASSWD: ALL\" > /etc/sudoers.d/99-isotest && chmod 440 /etc/sudoers.d/99-isotest'"
+            "${SCP[@]}" "$here/test/live-checks.sh" "tester@127.0.0.1:"
+            rc=0
+            "${SSH[@]}" "bash live-checks.sh server $( (( encrypted )) && echo encrypted || echo plain)" 2>&1 | tee "$dir/checks-$firmware.out" || rc=$?
+            exit "$rc"
         fi
         sleep 40                                 # the system comes up to the login screen
         shot "login-$firmware"                   # the Bromigos login screen
@@ -242,6 +366,9 @@ case $cmd in
         if grep -q "^FAIL the theme switcher" "$dir/checks-$firmware.out"; then
             "${SSH[@]}" 'tail -n 80 ~/.cache/bromigos/theme-previews/render.log 2>/dev/null; ls -la /dev/dri 2>&1' > "$dir/previews-render-$firmware.log" 2>&1 || true
         fi
+        # BROMIGOS_ISOTEST_NO_UPDATE=1: the installed system's checks only (the installers' own
+        # tests: the update and the rollback are the same whichever installer made the system)
+        if [[ ${BROMIGOS_ISOTEST_NO_UPDATE:-0} == 1 ]]; then exit "$rc"; fi
         # the first update, from the network (Enter at each of pacman's questions: its
         # defaults), then what it left: snapshots around it, in GRUB's menu, recorded for
         # --rollback. It moves to the other channel (a transaction is what makes snapshots,
@@ -292,8 +419,8 @@ PY
         # the medium's boot menu, then one channel booted (docs/boot.md): the same six first
         # entries on UEFI's GRUB and BIOS's vesamenu
         entry=${1:-live}
-        case $entry in live) n=0 ;; install) n=1 ;; safe) n=2 ;; memtest) n=3 ;; disk) n=4 ;; speech) n=5 ;;
-            *) echo "iso/test.sh menu: live, install, safe, memtest, disk or speech" >&2; exit 2 ;; esac
+        case $entry in live) n=0 ;; install) n=1 ;; text) n=2 ;; safe) n=3 ;; memtest) n=4 ;; disk) n=5 ;; speech) n=6 ;;
+            *) echo "iso/test.sh menu: live, install, text, safe, memtest, disk or speech" >&2; exit 2 ;; esac
         [[ -n $iso ]] || iso=$(cat "$dir/iso.path" 2>/dev/null || true)
         [[ -f $iso ]] || { echo "iso/test.sh menu: --iso FILE (once)" >&2; exit 2; }
         iso=$(realpath "$iso"); printf '%s\n' "$iso" > "$dir/iso.path"
@@ -308,7 +435,7 @@ PY
         menu_wait "menu-$firmware-$entry" "$keys" >/dev/null || true
         press ret
         case $entry in
-            live|install|safe|speech)
+            live|install|text|safe|speech)
                 result "$entry boots (SSH)" wait_ssh 60
                 sleep 20; shot "$entry-$firmware" >/dev/null
                 cmdline=$("${SSH[@]}" cat /proc/cmdline)
@@ -316,8 +443,11 @@ PY
                     live) result "live: the desktop (Hyprland)" running '^Hyprland'
                           result "live: no installer on the kernel line" bash -c "! grep -qw bromigos.install <<<'$cmdline'" ;;
                     install) result "install: bromigos.install on the kernel line" on_line bromigos.install
-                             result "install: the installer's terminal" running 'kitty --class bromigos-iso-install'
-                             result "install: the installer, asking" running '^bash /usr/local/bin/bromigos-iso-install' ;;
+                             result "install: the graphical installer, full screen" running 'bromigos_installer.gui' ;;
+                    text) result "text: bromigos.install=text on the kernel line" on_line bromigos.install=text
+                          result "text: no desktop (no login screen)" bash -c "! ssh ${sshopts[*]} live@127.0.0.1 pgrep -x sddm >/dev/null"
+                          result "text: the text installer on tty1" running 'bromigos_installer.tui'
+                          shot "text-$firmware-tty1" >/dev/null ;;
                     safe) result "safe: nomodeset on the kernel line" on_line nomodeset ;;
                     speech) result "speech: accessibility=on on the kernel line" on_line accessibility=on ;;
                 esac
@@ -328,6 +458,42 @@ PY
                   result "disk: the installed system's GRUB menu (its theme's bar)" menu_wait "disk-$firmware" "" --coloured ;;
         esac
         "$0" down --dir "$dir"
+        if grep -q FAIL "$out"; then exit 1; fi
+        ;;
+    param)
+        # the boot menu's "Install bromigOS" with more on its kernel line (GRUB's editor on UEFI,
+        # syslinux's Tab on BIOS), as the direct install entries pass them: then which installer
+        # opened, and with what (docs/iso.md, "Boot parameters")
+        params=${1:?iso/test.sh param "PARAMETERS"}; shift || true
+        [[ -n $iso ]] || iso=$(cat "$dir/iso.path" 2>/dev/null || true)
+        iso=$(realpath "$iso"); printf '%s\n' "$iso" > "$dir/iso.path"
+        echo live > "$dir/user"; user=live; SSH=(ssh "${sshopts[@]}" "live@127.0.0.1")
+        tag=$(tr -c 'a-z0-9' '-' <<<"$params" | sed 's/-*$//')
+        out=$dir/param-$tag-$firmware.out; : > "$out"
+        result() { local what=$1; shift; if "$@"; then echo "PASS $what"; else echo "FAIL $what"; fi | tee -a "$out"; }
+        running() { "${SSH[@]}" "pgrep -f '$1'" >/dev/null; }
+        start_vm medium
+        menu_wait "param-$tag-$firmware" "down" >/dev/null || true
+        if [[ $firmware == uefi ]]; then
+            sleep 1; press e; sleep 2; shot "param-$tag-$firmware-editor" >/dev/null
+            press down; press end; type_text " $params"; sleep 1; shot "param-$tag-$firmware-edited" >/dev/null; press ctrl-x
+        else
+            press tab; sleep 1; type_text " $params"; press ret
+        fi
+        result "boots (SSH)" wait_ssh 60
+        sleep 30; shot "param-$tag-$firmware" >/dev/null
+        cmdline=$("${SSH[@]}" cat /proc/cmdline)
+        for w in $params; do result "$w on the kernel line" grep -qw -- "$w" <<<"$cmdline"; done
+        case " $params " in
+            *" bromigos.edition=server "*|*" bromigos.text "*)
+                result "the text installer on tty1" running 'bromigos_installer.tui'
+                result "no graphical installer" bash -c "! ssh ${sshopts[*]} live@127.0.0.1 pgrep -f bromigos_installer.gui >/dev/null" ;;
+            *) result "the graphical installer" running 'bromigos_installer.gui' ;;
+        esac
+        case " $params " in
+            *" bromigos.edition=server "*) result "bromigOS Server preselected" "${SSH[@]}" "PYTHONPATH=/usr/local/lib/bromigos-iso python3 -c 'from bromigos_installer import common; import sys; sys.exit(common.defaults()[\"edition\"] != \"server\")'" ;;
+        esac
+        [[ ${BROMIGOS_ISOTEST_KEEP:-0} == 1 ]] || "$0" down --dir "$dir"      # _KEEP=1: it stays up (an answer file's install)
         if grep -q FAIL "$out"; then exit 1; fi
         ;;
     grub)

@@ -6,7 +6,10 @@ installs and sets up the desktop, and `bromigos setup` asks the first-run questi
 
 This page explains each step, its options and its files, for contributors. For users,
 the manual's [Install](../manual/src/install.md) page is shorter. To install from the
-ISO instead, see [iso.md](iso.md).
+ISO instead, see [iso.md](iso.md): its graphical and text installers (Erase, Install
+alongside Windows, Reinstall keeping files; the desktop or bromigOS Server) end by running
+the same `bromigos install` and `bromigos setup` described here, in the new system. Users'
+guide: [The installer](../manual/src/installer.md).
 
 ## Standalone lab package
 

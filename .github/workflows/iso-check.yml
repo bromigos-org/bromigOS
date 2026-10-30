@@ -38,6 +38,9 @@ jobs:
             iso/profile/airootfs/usr/local/bin/bromigos-iso-install \
             iso/profile/airootfs/usr/local/bin/bromigos-iso-autostart \
             iso/profile/airootfs/usr/local/bin/bromigos-iso-secureboot \
+            iso/profile/airootfs/usr/local/bin/bromigos-installer \
+            iso/profile/airootfs/usr/local/bin/bromigos-iso-text-console \
+            iso/test/fake-windows.sh iso/test/installer/render-gui.sh \
             iso/ci-test.sh iso/publish.sh iso/secureboot/medium.sh
           python -m py_compile iso/release-notes.py
       - name: the profile's files are where profiledef.sh says
@@ -112,6 +115,31 @@ jobs:
           printf '%s' '{"detection":{"machine":{"kind":"laptop"},"gpus":[{"vendor":"NVIDIA","name":"TU117M"}]},"plan":{"want":{"packages":["nvidia-open","nvidia-utils","lib32-nvidia-utils","power-profiles-daemon"],"services":["power-profiles-daemon.service"]}}}' \
             | python iso/profile/airootfs/usr/local/lib/bromigos-iso/hardware.py /tmp/a/config.json /tmp/a/hw.json
           python -c 'import json; c = json.load(open("/tmp/a/hw.json")); assert {"nvidia-open", "nvidia-utils", "power-profiles-daemon", "bromigos"} <= set(c["packages"]) and "lib32-nvidia-utils" not in c["packages"]; assert "power-profiles-daemon" in c["services"] and "grub-btrfsd" in c["services"]; print("hardware merge ok")'
+      - name: the installers (both, on recorded disks; an alongside layout archinstall parses)
+        run: |
+          pacman -S --noconfirm --needed python-textual >/dev/null
+          python -m unittest discover -s iso/test/installer -v
+          python - <<'EOF'
+          import json, subprocess
+          table = {"partitiontable": {"label": "gpt", "sectorsize": 512, "firstlba": 34, "lastlba": 83886046, "partitions": [
+              {"node": "/dev/vda1", "start": 2048, "size": 204800, "type": "C12A7328-F81F-11D2-BA4B-00A0C93EC93B"},
+              {"node": "/dev/vda2", "start": 206848, "size": 32768, "type": "E3C9E316-0B5C-4DB8-817D-F92DF00215AE"},
+              {"node": "/dev/vda3", "start": 239616, "size": 40000000, "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7"}]}}
+          json.dump(table, open("/tmp/table.json", "w"))
+          subprocess.run(["python", "iso/profile/airootfs/usr/local/lib/bromigos-iso/answers.py", "--template",
+                          "iso/profile/airootfs/usr/local/share/bromigos-iso/archinstall.json", "--disk", "/dev/vda", "--firmware", "uefi",
+                          "--user", "t", "--password", "t", "--alongside", "--esp", "/dev/vda1", "--sfdisk-json", "/tmp/table.json",
+                          "--disk-bytes", str(83886080 * 512), "--out", "/tmp/c"], check=True, stdout=subprocess.DEVNULL)
+          cfg = json.load(open("/tmp/c/config.json"))
+          mod = cfg["disk_config"]["device_modifications"][0]
+          assert mod["wipe"] is False
+          esp, boot, root = mod["partitions"]
+          assert esp["status"] == "existing" and esp["mountpoint"] == "/boot/efi" and esp["dev_path"] == "/dev/vda1"
+          assert boot["mountpoint"] == "/boot" and boot["fs_type"] == "ext4" and root["fs_type"] == "btrfs"
+          assert cfg["bootloader_config"] == {"bootloader": "Grub", "uki": False, "removable": False}
+          assert boot["start"]["value"] * 1024 ** 2 >= (239616 + 40000000) * 512
+          print("alongside layout ok")
+          EOF
       - name: the package list resolves
         shell: bash
         env:

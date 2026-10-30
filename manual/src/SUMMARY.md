@@ -6,6 +6,7 @@
 # Getting started
 
 - [Install](install.md)
+    - [The installer](installer.md)
 - [First run](first-run.md)
 - [Getting around](desktop.md)
     - [The menu](menu.md)

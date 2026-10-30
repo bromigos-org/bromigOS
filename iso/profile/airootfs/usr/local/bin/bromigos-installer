@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# The installer (docs/iso.md, "Installing from it"): the graphical one on the live desktop,
+# the text one anywhere else (a console, SSH, no graphics). Every way in comes here: the boot
+# menu's entries, the welcome card, the desktop's Install icon, the app launcher.
+#
+#   bromigos-installer [--text] [--windowed] [--script PLAN.json]
+set -u
+lib=/usr/local/lib/bromigos-iso
+text=0; [[ ${1:-} == --text ]] && { text=1; shift; }
+if (( ! text )) && [[ -n ${WAYLAND_DISPLAY:-} ]] &&
+    PYTHONPATH=$lib python3 -c 'import gi; gi.require_version("Gtk", "4.0"); gi.require_version("Adw", "1")' 2>/dev/null; then
+    # one installer at a time: a second start brings the first forward (GTK's own)
+    PYTHONPATH=$lib exec python3 -m bromigos_installer.gui "$@"
+fi
+if [[ -t 0 ]]; then
+    if [[ $EUID -eq 0 ]]; then exec /usr/local/bin/bromigos-iso-install --text "$@"; fi
+    exec sudo /usr/local/bin/bromigos-iso-install --text "$@"
+fi
+# no terminal and no graphics toolkit: the text installer in a terminal window
+exec kitty --class bromigos-iso-install --title "Install bromigOS" sudo /usr/local/bin/bromigos-iso-install --text

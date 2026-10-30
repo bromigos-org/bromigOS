@@ -157,6 +157,7 @@ The desktop runs these for you. You don't need them day to day.
 | Command | What it does |
 |---|---|
 | [`bromigos tv guide`](#bromigos-tv-guide) |  |
+| [`bromigos welcome console`](#bromigos-welcome-console) | The welcome tour in the terminal (bromigOS Server's first sign-in): the network, SSH, joining your lab, and what's here |
 
 ## Every command in full
 
@@ -2652,6 +2653,22 @@ bromigos webapp list
 ```
 
 From the `bromigos-desktop` package.
+
+### bromigos welcome console
+
+The welcome tour in the terminal (bromigOS Server's first sign-in): the network, SSH, joining your lab, and what's here.
+
+```text
+bromigos welcome console [--if-pending] [--render DIR [--size WxH]]
+```
+
+For example:
+
+```text
+bromigos welcome-console
+```
+
+From the `bromigos-core` package.
 
 ### bromigos whats-new
 

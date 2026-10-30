@@ -10,20 +10,21 @@ manual's [Install](../manual/src/install.md) page covers it.
 
 ## What you're asked
 
-`sudo bromigos-iso-install` asks, after the disk, your user and the hostname:
+The installers' **Encryption** step (graphical and text alike, [iso.md](iso.md#the-steps)):
 
-1. **"Encrypt the disk? (typed at every boot; it can't be recovered) [Y/n]"** The default
-   is yes.
-2. **"A passphrase of its own for the disk, or Enter to use the password"** If you type
-   one, it asks for it again. If you press Enter, your user's password becomes the
-   passphrase.
+1. **Encrypt the disk.** On by default, with what it means in plain words: the disk can
+   only be read after its passphrase is typed at start, and a forgotten passphrase can't
+   be recovered.
+2. **Use a different passphrase from my password.** Off by default: your password unlocks
+   the disk. On, it asks for a passphrase of its own, twice.
 
-`--no-encrypt` skips the question and installs without encryption.
+Installing beside another system encrypts bromigOS's part the same way; the other system's
+partitions and the shared EFI system partition aren't touched.
 
 An unattended install (`--config` and `--creds`) follows its config. With
 `disk_encryption` in the config and `encryption_password` in the credentials, the root is
 encrypted. Without them, it's plain btrfs. So an unattended install is always explicit
-about it.
+about it. An [answer file](iso.md#answer-files) says `encrypt = true` or `false`.
 
 ## How it's set up
 
@@ -32,7 +33,7 @@ support, from the config `answers.py` writes.
 
 | Part | Encrypted? | Why |
 |---|---|---|
-| `/boot` (1 GiB, FAT32) | No | GRUB and the firmware read the kernel and initramfs from it. On UEFI it's the EFI system partition. |
+| `/boot` (2 GiB, FAT32; ext4 beside another system) | No | GRUB and the firmware read the kernel and initramfs from it. On UEFI it's the EFI system partition. |
 | The rest of the disk | Yes, LUKS2 | It holds the btrfs root: `/`, `/home`, the logs, the package cache and the snapshots |
 
 `answers.py` (`iso/profile/airootfs/usr/local/lib/bromigos-iso/answers.py`) writes two

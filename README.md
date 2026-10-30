@@ -224,8 +224,10 @@ never needs it. To leave paru out, run `bash install.sh -- --no-aur`, or
 choose "Off" on the setup's AUR page.
 
 **From the ISO.** The ISO boots straight into a live bromigOS desktop, so you can try it
-first. From there, `sudo bromigos-iso-install` installs it to a disk, encrypted by
-default, with no network needed. Download it from the
+first. Its installer is a few plain steps, graphical or in text mode: install
+**alongside Windows** (it makes room for you, and you pick which system at every start)
+or **erase the whole disk**, as the **desktop** or as **bromigOS Server**. The disk is
+encrypted by default, and no network is needed. Download it from the
 [Download page](https://bromigos.org/download), which also says how to make the USB stick
 and start from it. Each release's ISO is one signed file at
 `https://pkgs.bromigos.org/iso/<version>/`, built and tested by CI
