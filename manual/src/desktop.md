@@ -75,14 +75,33 @@ From left to right:
 | Temperature | The processor's temperature. | |
 | Disk | How full your disk is. | Open your home folder. |
 | Network | Your connection, and how fast data is moving. | Copy your address. Right-click to edit connections in a terminal. |
+| Bluetooth | Whether Bluetooth is on, how many devices are connected, and the main one's battery. See [Bluetooth](bluetooth.md). | Open the Bluetooth panel. Right-click for the quick menu. Middle-click to turn Bluetooth on or off. |
 | Power profile | Laptops only. Saver, balanced or performance. | Switch to the next profile. |
 | Battery | Laptops only. The charge: `+` while charging, `=` when plugged in but not charging. | |
-| Volume | The speakers' volume. | Open the volume mixer. Right-click to mute. Scroll to change the volume. |
+| Volume | The speakers' volume. Rest the pointer on it for the sound popup. | Keep the sound popup open. Right- or middle-click to mute. Scroll to change the volume. |
 | Tray | Icons that some apps add. | Depends on the app. |
 | Gear | Settings. | Open [Settings](settings.md). Right-click for Idle & lock. |
 | Clock | The time. Hover for a calendar. | Show the date. |
 
 To hide the bar, press <kbd>Alt</kbd>+<kbd>B</kbd>. Press it again to bring the bar back.
+
+### The sound popup
+
+Rest the pointer on the volume for a moment and the sound popup opens under it. It closes
+when the pointer has left both the volume and the popup. Click the volume, or anywhere in
+the popup, to keep it open. Then <kbd>Esc</kbd> or a click elsewhere closes it.
+
+- **OUTPUT** lists your speakers, headphones, screens with speakers (HDMI or DisplayPort)
+  and Bluetooth headphones. The one in use says **IN USE**. Click another to switch to it:
+  what's playing moves there.
+- **INPUT** lists your microphones the same way.
+- Each has a volume slider and **MUTE**.
+- Bluetooth headphones show whether they're in **HI-FI** or **HEADSET + MIC**, and the
+  codec. [Bluetooth](bluetooth.md#pair-headphones-or-a-speaker) explains both.
+- **OPEN AUDIO SETTINGS →** opens **Settings › Sound**, with each app's volume and the
+  desktop's own sounds.
+
+(`bromigos sound popup`)
 
 ### Wine tray icons
 

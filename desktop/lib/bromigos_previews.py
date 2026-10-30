@@ -1855,6 +1855,9 @@ def bar_modules(cur, waybar_dir):
             if base == "tray":
                 out.append((side, "tray", "tray", None, []))
                 continue
+            if base.startswith("cffi/"):        # bromigos-hover and the like: they draw nothing
+                out.append((side, "label", "bromigos-hover", "", []))
+                continue
             if base in custom:
                 text, cls = custom[base]
                 out.append((side, "label", css, T.retint(text), cls))

@@ -2157,7 +2157,7 @@ From the `bromigos-desktop` package.
 Sound: the output and input device, their volumes, each app's volume, the theme's sounds and the desktop's mute.
 
 ```text
-bromigos sound [status] | output|input DEVICE | volume output|input|DEVICE PERCENT | mute output|input on|off|toggle | app-volume ID PERCENT | app-mute ID on|off | app-output ID DEVICE | port output|input DEVICE PORT | all-mute on|off|toggle | sounds on|off | sounds-volume PERCENT | test [DEVICE]  [--json]
+bromigos sound [status] | output|input DEVICE | volume output|input|DEVICE PERCENT | mute output|input on|off|toggle | app-volume ID PERCENT | app-mute ID on|off | app-output ID DEVICE | port output|input DEVICE PORT | all-mute on|off|toggle | sounds on|off | sounds-volume PERCENT | test [DEVICE] | popup [pin|hover X|leave|close]  [--json]
 ```
 
 For example:

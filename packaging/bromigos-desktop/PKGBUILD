@@ -21,6 +21,8 @@ url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 # bromigos-homelab: the LAB panel and the homelab decks live there (inert with no sources)
 depends=('bromigos-core' 'bromigos-live' 'bromigos-widgets' 'bromigos-settings' 'bromigos-homelab'
+         # the bar's hover popups (the volume's sound popup): a waybar CFFI module, compiled
+         'bromigos-bar-hover'
          'hyprland' 'waybar' 'plasma-workspace>=6.7' 'rofi' 'dunst' 'gtklock' 'hypridle' 'hyprlock' 'swaybg'
          'zsh' 'mehshell>=0.2.6' 'python' 'libnotify' 'wl-clipboard' 'grim' 'slurp' 'playerctl' 'kitty'
          # the session's plumbing: screen sharing and file pickers, password prompts,
@@ -109,7 +111,8 @@ check() {
   python -m py_compile bin/bromigos-windows
   python -m py_compile settings/bromigos-settings settings/bromigos-tv-guide settings/bromigos_tvguide.py settings/bromigos_settings/*.py settings/pages/*.py waybar/scripts/idle.py bin/bromigos-peripherals lib/bromigos_peripherals.py
   python -m py_compile bin/bromigos-keys lib/bromigos_keys.py lib/bromigos_keycapture.py lib/bromigos_cli.py lib/bromigos_extlist.py
-  python -m py_compile lib/bromigos_bluez.py lib/bromigos_btpanel.py lib/bromigos_driftglass.py waybar/scripts/bluetooth.py
+  python -m py_compile lib/bromigos_bluez.py lib/bromigos_btpanel.py lib/bromigos_driftglass.py waybar/scripts/bluetooth.py \
+    lib/bromigos_popup.py lib/bromigos_soundpopup.py
   local c
   for c in "${_settings_cmds[@]}"; do python -m py_compile "bin/bromigos-$c"; done
   luac -p lib/bromigos_keys_eval.lua 2>/dev/null || lua -e "assert(loadfile('lib/bromigos_keys_eval.lua'))"
@@ -212,6 +215,8 @@ package() {
   # Bluetooth: bluez over D-Bus (the bar's module, its panel and menu, bromigos bluetooth's
   # kinds and sound profiles), the panel, and the DRIFTGLASS drawing it uses
   install -Dm0644 -t "$lib/lib/" lib/bromigos_bluez.py lib/bromigos_btpanel.py lib/bromigos_driftglass.py
+  # the DRIFTGLASS popups' shared parts, and the bar's sound popup (bromigos sound popup)
+  install -Dm0644 -t "$lib/lib/" lib/bromigos_popup.py lib/bromigos_soundpopup.py
   for f in "${_settings_cmds[@]}"; do
     install -Dm0755 "bin/bromigos-$f" "$lib/bin/bromigos-$f"
   done

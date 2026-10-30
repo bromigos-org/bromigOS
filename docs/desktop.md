@@ -284,8 +284,38 @@ by the module, the panel and `bromigos bluetooth` is in `lib/bromigos_bluez.py`.
 explains bluez's errors in plain words.
 
 Tests run against `tests/fake_bluez.py`, a stand-in bluez on a private D-Bus that pairs
-the way real devices do. `tools/bluetooth/render.py` draws the icon's states, the panel and
+the way real devices do. `tools/popups/render.py` draws the icon's states, the panel and
 the menu offscreen, in any theme.
+
+### Hover popups on the bar
+
+waybar has no hover action. `waybar/hover/bromigos-hover.c` adds one: a waybar CFFI module
+(a library waybar loads, package `bromigos-bar-hover`) that draws nothing. It finds another
+module of its own bar by its widget name (`target`) and watches the pointer over it:
+
+1. The pointer rests on the target for `open-delay` milliseconds (350). The module asks the
+   popup app for its `hover` action, with the target's centre on the screen. It asks over
+   D-Bus (`org.gtk.Actions.Activate` on the app's id), so a running app answers at once.
+   If the app isn't running, the module runs `command hover X` instead.
+2. The pointer leaves the target. The module asks for `leave`.
+
+A quick pass over the target asks nothing. Each bar, on each monitor, runs its own copy.
+
+The default bar gives the volume (`pulseaudio`) the sound popup this way:
+`lib/bromigos_soundpopup.py`, `bromigos sound popup`. The popup is GLOW, built from the
+same parts as the Bluetooth panel (`lib/bromigos_popup.py`). It works like this:
+
+- **Opened by a hover**, it takes no keys. It closes 0.4 seconds after the pointer has
+  left both the volume and the popup.
+- **Pinned**, by a click on the volume (`bromigos sound popup pin`) or inside the popup, it
+  takes the keys and closes on <kbd>Esc</kbd> or a click elsewhere.
+- **It does everything through `bromigos sound`**: `output|input DEVICE` (which also moves
+  what's playing), `volume`, `mute` and `status --light`.
+- **It follows `pactl subscribe`** while it's open.
+- **It keeps running** for ten minutes after it closes, so the next hover opens at once.
+
+`tests/e2e_hover_nested.py` runs the module in a real waybar in a private nested session,
+with a virtual pointer.
 
 ## Shortcuts you set by pressing the keys
 

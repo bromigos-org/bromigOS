@@ -228,3 +228,6 @@ window#waybar.empty #window {
 #custom-bluetooth.spark    { animation: bt-spark 1s ease-out 1; }
 @keyframes bt-blink        { from { opacity: 1; } to { opacity: 0.4; } }
 #custom-bluetooth.scanning { animation: bt-blink 0.9s ease-in-out infinite alternate; }
+
+/* the volume's hover (cffi/sound-hover): an empty module, taking no room */
+#bromigos-hover            { min-width: 0; padding: 0; margin: 0; border: none; }

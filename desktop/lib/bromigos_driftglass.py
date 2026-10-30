@@ -5,7 +5,7 @@ them. Pure drawing: the colours come in as a palette (the theme's roles, hex), t
 a number, and nothing here moves by itself.
 
   glyph(cr, kind, x, y, size, pal, t=0, live=False, fx=None, still=False)
-      kind: controller, headset, earbuds, keyboard, mouse, phone, speaker, device.
+      kind: controller, headset, earbuds, keyboard, mouse, phone, speaker, monitor, mic, device.
       live: connected (it turns slowly and glows); otherwise dim and still at a fixed angle.
       fx: ("pulse", age) breathes while connecting, ("spark", age) glows once on success,
       ("fade", age) dims on a disconnect.
@@ -78,6 +78,15 @@ MODELS = {
     "speaker": {
         "hull": [_rect(-0.48, -0.78, 0.48, 0.78, 0.1)],
         "detail": [_ellipse(0.0, 0.3, 0.3, 0.3), _ellipse(0.0, 0.3, 0.12, 0.12, 12), _ellipse(0.0, -0.4, 0.13, 0.13, 12)],
+    },
+    "monitor": {    # a screen that plays sound (HDMI, DisplayPort)
+        "hull": [_rect(-0.9, -0.62, 0.9, 0.44, 0.04)],
+        "detail": [_rect(-0.78, -0.5, 0.78, 0.32), [(0.0, 0.44), (0.0, 0.66)], [(-0.36, 0.7), (0.36, 0.7)]],
+    },
+    "mic": {        # a microphone on its stand
+        "hull": [_rect(-0.24, -0.84, 0.24, 0.14, 0.24)],
+        "detail": [_ellipse(0.0, -0.02, 0.42, 0.42, 16, 0.0, math.pi), [(0.0, 0.4), (0.0, 0.66)],
+                   [(-0.34, 0.7), (0.34, 0.7)], [(-0.12, -0.52), (0.12, -0.52)], [(-0.12, -0.34), (0.12, -0.34)]],
     },
     "device": {     # the Bluetooth rune
         "hull": [[(-0.36, -0.36), (0.36, 0.36), (0.0, 0.72), (0.0, -0.72), (0.36, -0.36), (-0.36, 0.36)]],
