@@ -113,6 +113,15 @@ def wifi_list():
 
 
 def monitors():
+    # started outside the session (a terminal over SSH, a test): Hyprland's instance from its
+    # runtime folder, so hyprctl still finds it
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        base = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "hypr")
+        try:
+            newest = max((os.path.join(base, d) for d in os.listdir(base)), key=os.path.getmtime)
+            os.environ["HYPRLAND_INSTANCE_SIGNATURE"] = os.path.basename(newest)
+        except (OSError, ValueError):
+            pass
     code, out, _ = run(["hyprctl", "monitors", "-j"], timeout=5)
     try:
         return [{"name": m["name"], "desc": " ".join(x for x in (m.get("make"), m.get("model")) if x) or m["name"],
@@ -316,6 +325,9 @@ def main(argv):
             g = self.group(page, "Main screen")
             self.primary = None
             first = None
+            if not mons:
+                g.add(Adw.ActionRow(title="This computer's screen",
+                                    subtitle="The panels and the live background are on it. Arrange and sizes… sets its size."))
             for m in mons:
                 r = Adw.ActionRow(title=GLib.markup_escape_text(m["desc"]), subtitle=f"{m['name']} · {m['size']}")
                 chk = Gtk.CheckButton(valign=Gtk.Align.CENTER, active=m["focused"])
