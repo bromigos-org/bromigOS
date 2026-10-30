@@ -37,6 +37,14 @@ firmware (Microsoft's keys in db)
 - **The certificate** is at the medium's root, `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`, on the
   EFI system partition as well as the ISO, where MokManager's file list finds it.
 
+**The menu looks plainer with Secure Boot on.** In lockdown GRUB loads no font file unless
+a verifier vouches for it (fonts are among the files its lockdown verifier defers), and
+shim's verifier vouches only for kernels. Without a font the boot theme can't draw, so
+`grub.cfg` falls back to the text menu: the same entries, in the firmware's console. With
+Secure Boot off the theme shows as always. Bringing it back under Secure Boot would mean
+GRUB's own signature checking (`--pubkey`, a `.sig` beside every file GRUB opens),
+which would also stop "Boot from disk" from starting another system's unsigned loader.
+
 Not signed, so refused with Secure Boot on: Memtest86+, the UEFI shell, and the 32-bit
 UEFI GRUB. With Secure Boot off, everything starts as before: shim then hands over without
 checking.
@@ -50,14 +58,20 @@ Secure Boot off.
 
 ### Enrolling the key, once per PC
 
-What a person sees, with Secure Boot on, the first time:
+What a person sees, with Secure Boot on, the first time (the screens' own words in bold;
+`iso/ci-test.sh` walks through them and saves each one):
 
-1. A blue screen says the verification failed. Press Enter.
-2. **Shim UEFI key management** waits ten seconds for a key. Press any key.
-3. Choose **Enroll key from disk**.
-4. Choose the USB stick, then `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`.
-5. Choose **Continue**, then **Yes**.
-6. Choose **Reboot**, and choose the stick again in the boot menu.
+1. A blue screen titled **ERROR**: **Verification failed: (0x1A) Security Violation**.
+   Press Enter (**OK**).
+2. **Shim UEFI key management**: **Press any key to perform MOK management**, with a
+   ten-second countdown. Press any key.
+3. **Perform MOK management**: choose **Enroll key from disk**.
+4. **Select Key**: choose the stick, **ARCHISO_EFI**.
+5. Choose **ENROLL_THIS_KEY_IN_MOKMANAGER.cer**.
+6. **[Enroll MOK]**: choose **Continue** (**View key 0** shows the certificate first).
+7. **Enroll the key(s)?**: choose **Yes**.
+8. **Perform MOK management**: choose **Reboot**. The PC starts the stick again (choose it
+   in the boot menu if it starts Windows), and the bromigOS menu comes up.
 
 The key stays in the PC's MOK list. Removing it: `sudo mokutil --delete` with the
 certificate, from any Linux, then confirm in MokManager at the next start.
@@ -109,7 +123,8 @@ the owner's, made at install; bromigOS's key signs only what bromigOS builds.
 
 `iso/ci-test.sh ISO --out DIR --secureboot-cert CERT` boots the medium in QEMU with OVMF's
 Secure Boot build and the variables of a Windows PC (Microsoft's PK, KEK and db, from
-`virt-fw-vars --enroll-microsoft`), with the medium's certificate added to db where a
-person's PC has it in the MOK list, and Secure Boot on. It must reach the live desktop,
-pass the live checks, and the firmware must say Secure Boot is on. The ISO workflow runs it
+`virt-fw-vars --enroll-microsoft`), Secure Boot on, nothing of bromigOS's enrolled. It
+goes through MokManager's enrollment as above, keystroke by keystroke, saving each screen
+(`shots/mok-*.png`), then must reach the live desktop and pass the live checks, with the
+firmware saying Secure Boot is on and the key in the MOK list. The ISO workflow runs it
 for every medium it builds.

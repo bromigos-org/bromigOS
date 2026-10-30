@@ -15,9 +15,10 @@
 #            (the Field Kit's, say), after the menu test
 #   none     nothing but the Secure Boot test below
 #
-#   --secureboot-cert FILE   as well: a medium signed for Secure Boot (its certificate, PEM or
-#            DER) boots with Secure Boot on, through shim, to the live desktop (OVMF with a
-#            Windows PC's Microsoft keys, and the certificate in db)
+#   --secureboot-cert FILE   as well: a medium signed for Secure Boot (its certificate) boots
+#            on a Windows PC's firmware with Secure Boot on (OVMF, Microsoft's keys only):
+#            MokManager, the key enrolled from the medium as a person does it, then the live
+#            desktop through shim
 #
 # DIR gets each run's directory (shots/, the checks' output, the console log). The disks
 # are removed at the end. BROMIGOS_ISOTEST_MEM sets each VM's memory (MiB, default 6144);
@@ -108,24 +109,43 @@ menu_run() {        # menu_run FIRMWARE: the medium boots to its menu; the menu 
     return "$rc"
 }
 
-# Secure Boot: OVMF's Secure Boot build, its variables with Microsoft's keys (virt-firmware's
-# --enroll-microsoft, as distributions' OVMF ships them) and the medium's certificate in db,
-# Secure Boot on. Then the live desktop, as `boot` checks it
+# Secure Boot, as on a Windows PC: OVMF's Secure Boot build with Microsoft's PK, KEK and db
+# (virt-firmware's --enroll-microsoft) and Secure Boot on, nothing of bromigOS's. shim can't
+# verify GRUB, so MokManager starts, and the test enrolls the medium's key the way a person
+# does (docs/secureboot.md), each screen saved. Then the live desktop, and the firmware
+# saying Secure Boot is on
+mok_keys() {        # the enrollment, keystroke by keystroke, a screenshot after each screen
+    local q=$1 shots=$2 n=0
+    key() { printf '%s\n' '{"execute":"qmp_capabilities"}' "{\"execute\":\"send-key\",\"arguments\":{\"keys\":[{\"type\":\"qcode\",\"data\":\"$1\"}]}}" | socat - "UNIX-CONNECT:$q" >/dev/null; sleep 0.7; }
+    snap() { n=$((n + 1)); printf '%s\n' '{"execute":"qmp_capabilities"}' "{\"execute\":\"screendump\",\"arguments\":{\"filename\":\"$shots/mok-$n-$1.ppm\"}}" | socat - "UNIX-CONNECT:$q" >/dev/null; sleep 1
+             magick "$shots/mok-$n-$1.ppm" "$shots/mok-$n-$1.png" 2>/dev/null && rm -f "$shots/mok-$n-$1.ppm"; }
+    sleep 12; snap verification-failed; key ret                  # "Verification failed": OK
+    sleep 2; snap press-any-key; key spc                          # "Press any key to perform MOK management"
+    sleep 2; snap mok-menu; key down; key ret                     # Enroll key from disk
+    sleep 2; snap volume; key ret                                 # the stick's volume, ARCHISO_EFI
+    sleep 2; snap file; key down; key ret                         # ENROLL_THIS_KEY_IN_MOKMANAGER.cer
+    sleep 2; snap enroll-mok; key down; key ret                   # Continue
+    sleep 2; snap enroll-the-keys; key down; key ret              # Yes
+    sleep 2; snap reboot; key ret                                 # Reboot
+}
 secureboot_run() {
     local d=$out/secureboot
-    mkdir -p "$d"
+    mkdir -p "$d/shots"
     pacman -S --noconfirm --needed virt-firmware >/dev/null 2>&1 || { echo "virt-firmware didn't install"; return 1; }
-    # a Windows PC's keys (Microsoft's PK, KEK and db), and the medium's certificate in db where a
-    # person's PC would have it in shim's MOK list (MokManager puts it there: docs/secureboot.md)
     virt-fw-vars --input /usr/share/edk2/x64/OVMF_VARS.4m.fd --output "$d/OVMF_VARS.fd" \
-        --enroll-microsoft --add-db 6b3c2a1e-0b70-4b1e-9a4e-62726f6d6967 "$sbcert" --secure-boot >/dev/null 2>&1
+        --enroll-microsoft --secure-boot >/dev/null 2>&1
     BROMIGOS_ISOTEST_PORT=$(free_port 2241); BROMIGOS_ISOTEST_VNC=$(vnc_display 51)
     export BROMIGOS_ISOTEST_DIR=$d BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC BROMIGOS_ISOTEST_OFFLINE=0
     export BROMIGOS_ISOTEST_OVMF_CODE=/usr/share/edk2/x64/OVMF_CODE.secboot.4m.fd
     # the Secure Boot firmware needs SMM, and its variables kept from the OS
     export BROMIGOS_ISOTEST_QEMU="-machine smm=on -global driver=cfi.pflash01,property=secure,value=on"
-    step "secure boot: the live desktop, Secure Boot on" T boot --iso "$iso" --firmware uefi \
-        && step "secure boot: the firmware says it's on" T ssh 'od -An -t u1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c | awk "{exit !(\$NF == 1)}"'
+    rm -f "$d/qmp.sock"
+    ( for _ in $(seq 120); do [[ -S $d/qmp.sock ]] && break; sleep 1; done; mok_keys "$d/qmp.sock" "$d/shots" ) &
+    local keys=$!
+    step "secure boot: MokManager enrolls the key, then the live desktop, Secure Boot on" T boot --iso "$iso" --firmware uefi || true
+    wait "$keys" 2>/dev/null || true
+    step "secure boot: the firmware says it's on" T ssh 'od -An -t u1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c | awk "{exit !(\$NF == 1)}"'
+    step "secure boot: the key is in the MOK list" T ssh 'test -s /sys/firmware/efi/mok-variables/MokListRT || ls /sys/firmware/efi/efivars/ | grep -q "^MokListRT-"'
     T destroy >/dev/null 2>&1 || true
     rm -f "$d/disk.qcow2"
 }
