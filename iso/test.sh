@@ -238,6 +238,10 @@ case $cmd in
         rc=0
         medium_channel=$(cat "$dir/channel" 2>/dev/null || echo stable)
         "${SSH[@]}" "CHANNEL=$medium_channel bash live-checks.sh desktop $( (( encrypted )) && echo encrypted || echo plain); r=\$?; bash checks.sh; exit \$((r + \$?))" 2>&1 | tee "$dir/checks-$firmware.out" || rc=$?
+        # the theme previews' render log, when their check failed (it names what the nested desktop said)
+        if grep -q "^FAIL the theme switcher" "$dir/checks-$firmware.out"; then
+            "${SSH[@]}" 'tail -n 80 ~/.cache/bromigos/theme-previews/render.log 2>/dev/null; ls -la /dev/dri 2>&1' > "$dir/previews-render-$firmware.log" 2>&1 || true
+        fi
         # the first update, from the network (Enter at each of pacman's questions: its
         # defaults), then what it left: snapshots around it, in GRUB's menu, recorded for
         # --rollback. It moves to the other channel (a transaction is what makes snapshots,
