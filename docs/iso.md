@@ -561,7 +561,30 @@ gives another UEFI firmware: `ci-test.sh`'s Secure Boot test uses OVMF's Secure 
 
 ## Test runs
 
-Newest first. All runs were on a workstation with KVM.
+Newest first. Until 2026-10-30 all runs were on a workstation with KVM; since then CI runs
+them on GitHub's hosted runner (`iso.yml`).
+
+### 2026-10-30, 13:14 to 13:40 Pacific: the first ISO built and tested by CI
+
+`iso.yml` on its pull request, on GitHub's hosted runner (4 CPUs, 16 GB, KVM): the stable
+channel at v0.1.3 with main's `iso/`, signed for Secure Boot with a throwaway key. 5.0 GB
+(5,333,149,696 bytes; 1,007 packages, a 2.4 GB offline repository). The build took
+5 min 53 s with a cold cache, `check-medium.sh` 3 min 41 s, the tests 16 min.
+
+| | Live | Install | Installed system | First update and rollback |
+|---|---|---|---|---|
+| UEFI, encrypted (LUKS2) | 16/16 | passed | all passed, 1 skipped | passed |
+| BIOS, `--no-encrypt`, with no network for the live session and the install | 16/16 | passed | all passed, 1 skipped | passed |
+| Secure Boot on, Microsoft's keys only: MokManager, the key enrolled from the medium | 16/16 | | | |
+
+- The skipped check is the theme switcher's preview: the nested desktop it draws can't
+  start on a VM display with no 3D (QEMU's virtio-vga), with Hyprland 0.57 and Mesa 26.2.
+  It reproduced the same way on the workstation. On a VM it's now a SKIP with that reason.
+- The guard's one finding in bromigOS's files, Docker's default bridge address in the
+  widgets' demo data, is accepted for v0.1.3's package and fixed at the source.
+- With Secure Boot on, the menu is GRUB's plain one: lockdown loads no font
+  ([secureboot.md](secureboot.md#the-medium)). The firmware said Secure Boot was on, and
+  the key was in the MOK list.
 
 ### 2026-10-10, 00:48 to 01:01 Pacific: v0.1.2's ISO, naming pkgs.bromigos.org
 
