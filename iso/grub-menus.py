@@ -163,9 +163,9 @@ HELP_FK = [
     "Install bromigOS Server",
     "  The text installer, for a server or lab machine with no desktop. Everything it",
     "  needs is on this stick: no network. It asks before it changes a disk.",
-    "Start Field Kit, then unplug the stick (runs from memory)",
+    "Start Field Kit · then unplug the stick",
     "  Reads all of Field Kit into memory first: a minute, and 4 GB of memory.",
-    "Start Field Kit with remote help",
+    "Start Field Kit · remote help over SSH",
     "  SSH on, so someone you trust can help over the network. The screen shows the",
     "  address and a one-time password. It's off in every other entry.",
     "Start with basic graphics (if the screen stays black)",
@@ -202,8 +202,8 @@ def fieldkit(text, loop):
     out += linux("Start Field Kit", "fieldkit", "fieldkit", " %KERNEL_PARAMS%", loop) + "\n"
     out += install("server", "Install bromigOS Server", "install", "install-server",
                    " %KERNEL_PARAMS% bromigos.install bromigos.edition=server", loop)
-    out += linux("Start Field Kit, then unplug the stick (runs from memory)", "fieldkit", "fieldkit-ram", " %KERNEL_PARAMS% copytoram=y", loop) + "\n"
-    out += linux("Start Field Kit with remote help (SSH, details shown on screen)", "fieldkit", "fieldkit-remote", " %KERNEL_PARAMS% bromigos.remote=on", loop) + "\n"
+    out += linux("Start Field Kit · then unplug the stick", "fieldkit", "fieldkit-ram", " %KERNEL_PARAMS% copytoram=y", loop) + "\n"
+    out += linux("Start Field Kit · remote help over SSH", "fieldkit", "fieldkit-remote", " %KERNEL_PARAMS% bromigos.remote=on", loop) + "\n"
     out += linux("Start with basic graphics (if the screen stays black)", "safe", "fieldkit-nomodeset", " %KERNEL_PARAMS% nomodeset", loop) + "\n"
     out += p["memtest"] + "\n"
     more = p["disk"] + "\n" + linux("Start with the screen reader (speech)", "speech", "archlinux-accessibility",
@@ -308,9 +308,9 @@ def syslinux(kind):
                 + sl("install-server", "Install bromigOS Server", " %KERNEL_PARAMS% bromigos.install bromigos.edition=server", [
                     "The text installer, for a server or lab machine with no desktop.",
                     "Everything it needs is on this stick: no network."])
-                + sl("fieldkit-ram", "Start Field Kit, then unplug the stick (runs from memory)", " %KERNEL_PARAMS% copytoram=y", [
+                + sl("fieldkit-ram", "Start Field Kit @DOT@ then unplug the stick", " %KERNEL_PARAMS% copytoram=y", [
                     "Reads all of Field Kit into memory first: a minute, and 4 GB of memory."])
-                + sl("fieldkit-remote", "Start Field Kit with remote help (SSH)", " %KERNEL_PARAMS% bromigos.remote=on", [
+                + sl("fieldkit-remote", "Start Field Kit @DOT@ remote help over SSH", " %KERNEL_PARAMS% bromigos.remote=on", [
                     "SSH on, so someone you trust can help. The screen shows the address",
                     "and a one-time password."])
                 + sl("nomodeset", "Start with basic graphics (if the screen stays black)", " %KERNEL_PARAMS% nomodeset", [

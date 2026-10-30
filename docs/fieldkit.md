@@ -39,8 +39,8 @@ GRUB on UEFI and syslinux on BIOS, both with the boot theme's medium variant tit
 |---|---|
 | Start Field Kit | The default |
 | Install bromigOS Server | The text installer, Server preselected (`bromigos.install bromigos.edition=server`); with `/fieldkit/install-server.toml` on the stick (an [answer file](iso.md#answer-files) with `edition = "server"`) it says "unattended", becomes the default and counts down |
-| Start Field Kit, then unplug the stick (runs from memory) | archiso's `copytoram=y`: the whole system is read into memory first |
-| Start Field Kit with remote help (SSH, details shown on screen) | `bromigos.remote=on`: see [Remote help](#remote-help) |
+| Start Field Kit · then unplug the stick | archiso's `copytoram=y`: the whole system is read into memory first |
+| Start Field Kit · remote help over SSH | `bromigos.remote=on`: see [Remote help](#remote-help) |
 | Start with basic graphics (if the screen stays black) | `nomodeset` |
 | Test this computer's memory | Memtest86+ |
 | More options › | The system on this computer's disk, the screen reader (S), the UEFI shell, the firmware settings, power |
