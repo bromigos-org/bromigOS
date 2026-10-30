@@ -20,6 +20,8 @@ can go back and change anything.
 On a computer with no working graphics, "Install bromigOS" opens the text installer by
 itself.
 
+![The text installer's Where step: three disks, Install alongside Windows, and the room for each](images/installer-text-mode-where.webp)
+
 ## The steps
 
 1. **Welcome.** The language your new system uses, your time zone, and whether you're
@@ -30,8 +32,14 @@ itself.
    of them stops you. With Secure Boot on, install as usual, then turn Secure Boot off in
    the computer's setup before you start bromigOS from the disk: the installed system
    can't start with it on yet ([Download page](https://bromigos.org/download#secure-boot)).
+
+   ![Before you start: Secure Boot is on, with what it means and how to turn it off](images/installer-before-you-start-secure-boot.webp)
+
 3. **What kind of computer is this?** **bromigOS (desktop)** for a computer you sit at.
    **bromigOS Server** has no desktop, for servers and lab machines.
+
+   ![What kind of computer is this? bromigOS (desktop) or bromigOS Server](images/installer-kind-of-computer.webp)
+
 4. **Your keyboard.** Pick the layout that matches your keys. Try it in the box.
 5. **Where to install.** Every disk, with its size, model and what's on it. Pick one, then
    choose how:
@@ -44,6 +52,9 @@ itself.
      that is.
    - **Reinstall bromigOS and keep my files**, when bromigOS is already on the disk. You
      get a fresh system, and your home folder stays as it is.
+
+   ![Where to install: Install alongside Windows, with the slider for each system's share](images/installer-where-alongside-windows.webp)
+
 6. **Save Windows' recovery key**, only when Windows uses BitLocker (below).
 7. **About you.** Your name, a user name for signing in, a password, and a name for the
    computer. The user name and computer name are suggested from your name.
@@ -58,9 +69,14 @@ itself.
    another computer), the firewall, and automatic updates. See [bromigOS Server](#bromigos-server).
 10. **Summary.** Every choice in plain words. The button says **Install**, or **Erase disk
     and install** when the disk is erased.
+
+    ![Ready to install: every choice in plain words, and Install](images/installer-summary.webp)
+
 11. **Installing.** A progress bar and a line saying what's happening. **Details** shows
     every step. It takes about ten minutes.
 12. **Done.** Press **Restart now**. Take out the stick when the screen goes dark.
+
+    ![bromigOS is installed: what happens at the next start, and Restart now](images/installer-done.webp)
 
 ## Installing alongside Windows
 

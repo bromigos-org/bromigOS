@@ -18,6 +18,8 @@ BRODEC for iPhone is coming.
 3. **Confirm on your phone.** BRODEC shows this computer's name and asks you to confirm.
    When it's done, the step ticks ✓.
 
+![Pair your phone: Google Play's QR code, the pairing code and what the phone can do](images/welcome-tour-phone.webp)
+
 If your lab has a VECTOR bridge that isn't paired yet, the step offers to pair it too, the
 same way.
 
