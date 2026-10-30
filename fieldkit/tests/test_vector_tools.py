@@ -226,7 +226,7 @@ class Vector(unittest.TestCase):
                 mock.patch.object(vt.system, "live_medium", return_value=True):
             q = vt.suggest()
         self.assertEqual(q, ["Make this computer a lab node", "Help me get online", "Make an image of the USB drive",
-                             "What's in this computer?"])
+                             "What's in this computer?", "Make a Field Kit USB stick with my settings"])
 
     def test_embedded_persona_names_its_source(self):
         text, source = vt.persona()

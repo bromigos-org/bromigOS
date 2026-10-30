@@ -340,6 +340,8 @@ def suggest():
     if any(i.get("kind") == "usb" for i in found) and not t:
         out.append("Make an image of the USB drive")
     out.append("What's in this computer?")
+    if system.live_medium():
+        out.append("Make a Field Kit USB stick with my settings")
     return list(dict.fromkeys(out))[:6]
 
 

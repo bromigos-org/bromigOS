@@ -1350,14 +1350,14 @@ fn top_bar(f: &mut Frame, area: Rect, app: &App) {
             layout::display_width(crumb) as u16
         }
         + 2;
-    // the same chips as every Field Kit screen, then the switch; the first ones go when the row
-    // is short, the switch never does
+    // the same chips as every Field Kit screen, then the switch; when the row is short the
+    // last ones go first (the clock, the stick), the network and the switch stay longest
     let mut chips = crate::fieldkit::bar_chips(look, &app.status["bar"]);
     chips.push(switch);
     while chips.len() > 1
         && crate::fieldkit::chips_width(look, &chips) + 1 > area.width.saturating_sub(used)
     {
-        chips.remove(0);
+        chips.remove(chips.len() - 2);
     }
     let mut cs = crate::fieldkit::chip_spans(look, &chips);
     cs.push(Span::raw(" "));
