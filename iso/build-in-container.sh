@@ -122,7 +122,15 @@ echo "${#closure[@]} packages"
 # version can differ byte for byte from another's under the same file name (edge and
 # stable both build r73), and pacman would find the cached one "corrupted" and give up
 printf '%s\n' "${closure[@]}" | awk '$1 == "bromigos" { print $3 }' | while read -r f; do rm -f "$cache/pkg/$f" "$cache/pkg/$f.sig"; done
-if ! pacman -r "$empty" -Sw --noconfirm --noprogressbar --cachedir "$cache/pkg" "${names[@]}" > "$work/download.log" 2>&1; then
+# three tries: a reset connection on one of ~1000 downloads shouldn't fail a release's build
+# (what's already downloaded stays in the cache)
+ok=0
+for try in 1 2 3; do
+    if pacman -r "$empty" -Sw --noconfirm --noprogressbar --cachedir "$cache/pkg" "${names[@]}" > "$work/download.log" 2>&1; then ok=1; break; fi
+    echo "the download failed (try $try of 3): $(grep -m1 '^error:' "$work/download.log")" >&2
+    sleep $((try * 15))
+done
+if (( ! ok )); then
     grep -vE '^(:: |  |$)' "$work/download.log" | tail -30 >&2
     echo "the download failed (the whole of it: $work/download.log in the work dir)" >&2; exit 1
 fi
