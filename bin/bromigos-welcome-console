@@ -396,6 +396,8 @@ def main(argv):
             elif e == "paired":
                 self.qr.update("")
                 self.pair_line.set(f"✓ Paired with {ev.get('owner') or 'your phone'}", "ok")
+                if self.screen.has_class("-qr-tight"):
+                    self.query_one("#top", Static).update("PAIR YOUR PHONE  ·  ✓ PAIRED")
                 page = self.query_one("#page")
                 page.mount(Static("To let it restart, update and open terminals here too: in BRODEC, LAB › MACHINES › this "
                                   "server › ALLOW THIS PHONE, then choose Allow this phone (sudo asks, then shows the "
