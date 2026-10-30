@@ -106,11 +106,22 @@ def owner():
     return str(os.getppid())
 
 
+def free_port(port):
+    with socket.socket() as s:
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
+
+
 def up(a):
     d = vmdir(a.name)
     ok, avail, total = memory_ok(a.mem) if os.environ.get("BROMIGOS_FIELDKIT_HOST_RULES") != "0" else (True, 0, 0)
     if not ok:
         sys.exit(f"test.py: not now: {avail} GiB available (needs 14), test VMs use {total} MiB (+{a.mem} > 10240)")
+    if not a.vnc:
+        a.vnc = next(str(n) for n in range(61, 200) if free_port(5900 + n))
     args = ["qemu-system-x86_64", "-enable-kvm", "-machine", "q35", "-cpu", "host", "-m", str(a.mem), "-smp", str(a.smp),
             "-display", "none", "-vnc", f"127.0.0.1:{a.vnc}", "-device", a.vga,
             "-qmp", f"unix:{d}/qmp.sock,server=on,wait=off",
@@ -302,7 +313,7 @@ def main(argv=None):
     p.add_argument("--smp", type=int, default=2)
     p.add_argument("--boot", choices=["cd", "disk"], default="cd")
     p.add_argument("--vga", default="virtio-vga")
-    p.add_argument("--vnc", default="61")
+    p.add_argument("--vnc", help="the VNC display (default: the first free one from 61)")
     p.add_argument("--direct", action="store_true")
     p.add_argument("--entry", default="Start Field Kit")
     p.add_argument("--append", default="")
