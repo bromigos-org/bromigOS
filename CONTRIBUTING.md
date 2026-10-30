@@ -157,6 +157,7 @@ a window:
 | The theme switcher, at several screen sizes | `tools/theme-switcher/render.sh` |
 | Zettlr in a theme | `tools/zettlr/render.sh` |
 | The app launcher | `tools/launcher/render.py` |
+| The bar's Bluetooth icon, panel and menu | `tools/bluetooth/render.py` |
 | The boot menu, drawn by GRUB in a headless VM | `settings/grub/preview.py` |
 
 Each tool's header explains its options. `tools/screenshots/render.py` uses demo readings

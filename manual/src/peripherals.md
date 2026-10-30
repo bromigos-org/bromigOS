@@ -5,7 +5,8 @@ and the holograms, its dial can change VECTOR's voice, and its lighting can take
 colour. Each device's extras come in a *peripheral module*, which is off until you turn it
 on.
 
-bromigOS has a module for Razer keyboards. You can write one for a similar keyboard.
+bromigOS has a module for Razer keyboards, and one for Xbox Wireless Controllers. You can
+write one for a similar keyboard.
 
 ## Turn a module on
 
@@ -67,6 +68,21 @@ The keyboard lights up in the colour of the voice VECTOR is using:
 
 To use your theme's colour all the time, set **Lighting follows** to the theme in
 **Settings › Peripherals**, or set `rgb_follow = "theme"` in the file below.
+
+## An Xbox controller
+
+The `xbox-controller` module installs xpadneo, the full driver for Xbox Wireless
+Controllers over Bluetooth. It adds rumble, the battery and the button layout games
+expect. Pair the controller first: [Bluetooth](bluetooth.md#pair-a-controller) has the
+steps. Then:
+
+```bash
+bromigos peripheral enable xbox-controller
+```
+
+It installs `xpadneo-dkms` and the headers of each kernel you have installed, so the
+driver builds for every one of them. Switch the controller off and on again afterwards.
+The module has no keys and nothing to set.
 
 ## Change what a key does
 

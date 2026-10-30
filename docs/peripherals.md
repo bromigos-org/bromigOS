@@ -1,9 +1,12 @@
 # Peripheral modules
 
-A peripheral module makes a device part of the desktop. bromigOS ships one, for Razer
-keyboards that openrazer drives. It binds the macro keys on that keyboard only, turns the
-command dial into a switch for VECTOR's voice, and makes the lighting follow VECTOR.
-VECTOR is the desktop's AI assistant.
+A peripheral module makes a device part of the desktop. bromigOS ships two:
+
+- one for Razer keyboards that openrazer drives. It binds the macro keys on that keyboard
+  only, turns the command dial into a switch for VECTOR's voice, and makes the lighting
+  follow VECTOR. VECTOR is the desktop's AI assistant.
+- one for Xbox Wireless Controllers over Bluetooth. It installs their full driver,
+  xpadneo, and nothing else.
 
 Modules are optional, and each is off until you turn it on. A module for a similar
 keyboard is a folder with one TOML file. The manual's
@@ -96,6 +99,29 @@ switch. The daemon picks up the change within 10 seconds.
 
 The lighting covers every device openrazer drives, such as the keyboard and a Razer mouse
 together. Set `rgb = "device"` for the keyboard only, or `rgb = "off"`.
+
+## The Xbox controller module
+
+The `xbox-controller` module is in `peripherals/xbox-controller/peripheral.toml`. Its kind
+is `controller`: a driver to install, with no keys, keymap, dial or lighting.
+
+- It matches a Microsoft (`045e`) input device with a gamepad's south button (`BTN_SOUTH`).
+  So a Microsoft mouse or keyboard paired on the same adapter doesn't count. Each
+  Bluetooth device is grouped by its own connection (`hci0:3585` in its sysfs path), not
+  by the adapter's USB interface, which they all share.
+- `enable` installs `xpadneo-dkms` and, because the module sets `kernel_headers = true`,
+  `<pkgbase>-headers` for every kernel in `/usr/lib/modules/*/pkgbase`. DKMS builds the
+  driver for each: `linux`, `linux-zen`, `linux-cachyos` alike.
+- It writes no Hyprland part and starts no daemon.
+
+`xpadneo-dkms` is built into bromigOS's repository from the tagged upstream source
+(`packaging/xpadneo-dkms`), so it needs no AUR helper. The bar's Bluetooth panel shows
+**BASIC DRIVER · SET UP** under an Xbox controller while `hid_xpadneo` isn't loaded, and
+`bromigos bluetooth status` reports the controller's `driver` as `xpadneo` or `basic`.
+
+The Xbox Wireless Adapter, a USB dongle, isn't Bluetooth. Its driver is xone, in the AUR
+(`xone-dkms`). It isn't packaged here, because its build downloads the adapter's firmware
+from Microsoft.
 
 ## Change the keys and the lighting
 
@@ -230,7 +256,7 @@ it marked `(yours)`, or `BROKEN` with the reason.
 format = 1
 name = "My macro pad"
 description = "Twelve macro keys sending F13-F24"
-kind = "keyboard"
+kind = "keyboard"                  # or "controller": a gamepad's driver, with no keys
 
 [match]
 usb_vendor = "feed"                # its USB vendor id, from lsusb
@@ -241,6 +267,7 @@ name_hints = []
 packages = []                      # installed by enable
 groups = []
 user_services = []
+kernel_headers = false             # true: each installed kernel's headers too (a DKMS driver)
 
 [keymap]
 options = ["fkeys:basic_13-24"]    # XKB options for this device only, after the user's

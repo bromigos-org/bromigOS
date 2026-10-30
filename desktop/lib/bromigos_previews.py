@@ -824,7 +824,9 @@ def _demo_bar_files(box):
                                          "class": ""}),
                      ("custom/vector", {"text": "VECTOR", "class": "idle"}),
                      ("custom/vector-switch", {"text": "\uf011", "class": ["on"]}),
-                     ("custom/idle", {"text": " ", "class": ["normal"]})):
+                     ("custom/idle", {"text": " ", "class": ["normal"]}),
+                     ("custom/bluetooth", {"text": "<span size='x-small' rise='4500'>1</span>",
+                                           "class": ["connected", "c4"]})):
         p = os.path.join(d, mod.split("/")[1] + ".json")
         with open(p, "w") as f:
             f.write(T.retint(json.dumps(doc)) + "\n")
@@ -1836,6 +1838,7 @@ def bar_modules(cur, waybar_dir):
         "custom/vector-switch": ("\uf011", ["on"]),          # VECTOR's emergency switch, on
         "custom/gpu": ("23% <span color='#7e927e'>51°</span>", []),
         "custom/storage": ("<span color='#7e927e'>/</span> <span color='#9cff8a'>38%</span>", []),
+        "custom/bluetooth": ("<span size='x-small' rise='4500'>1</span>", ["connected", "c4"]),
     }
     skip = {"power-profiles-daemon", "battery"}          # a laptop's: not on this desktop
     out = []

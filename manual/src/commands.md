@@ -556,7 +556,7 @@ From the `bromigos-desktop` package.
 Bluetooth: the adapter (on, off, visible), paired devices, pairing new ones, through bluez.
 
 ```text
-bromigos bluetooth [status] | power on|off | discoverable on|off | scan [SECONDS] | pair MAC | connect MAC | disconnect MAC | trust MAC on|off | remove MAC  [--json]
+bromigos bluetooth [status] | power on|off|toggle | discoverable on|off | scan [SECONDS] | pair MAC | connect MAC | disconnect MAC | trust MAC on|off | remove MAC | profile MAC hifi|headset | audio-default on|off | panel [pair MAC|scan] | menu  [--json]
 ```
 
 For example:
@@ -566,6 +566,8 @@ bromigos bluetooth
 bromigos bluetooth power on
 bromigos bluetooth scan
 bromigos bluetooth pair 00:00:5E:00:53:10
+bromigos bluetooth profile 00:00:5E:00:53:10 headset
+bromigos bluetooth panel
 ```
 
 From the `bromigos-desktop` package.

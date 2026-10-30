@@ -104,6 +104,12 @@ Already-running apps need to be restarted once to receive the recovered environm
   `bromigos customize --save-layout` opens the naming form directly.
 - `bromigos_peripherals.py` holds the peripheral modules' logic
   ([docs/peripherals.md](../docs/peripherals.md)).
+- `bromigos_bluez.py` is bluez over D-Bus, for the bar's Bluetooth module, its panel and
+  `bromigos bluetooth`: the state from bluez's signals, the actions, the pairing agent,
+  PipeWire's Bluetooth cards and bluez's errors in plain words.
+  `bromigos_btpanel.py` is the panel and the quick menu (`bromigos bluetooth panel|menu`),
+  and `bromigos_driftglass.py` draws their DRIFTGLASS parts: device holograms, the Sweep,
+  battery cells ([docs/desktop.md](../docs/desktop.md#the-bars-bluetooth)).
 - `bromigos_zettlr.py` is the `zettlr` hook's work. It puts the theme's colours into a
   marked block of Zettlr's `custom.css` and sets Zettlr's dark mode
   ([docs/theming.md](../docs/theming.md#zettlr)).
@@ -112,6 +118,9 @@ Already-running apps need to be restarted once to receive the recovered environm
 
 - `hooks/theme-set.d/` holds the `apps`, `boot`, `emblem`, `gtk`, `osd`, `wallpaper`,
   `widgets` and `zettlr` hooks ([docs/theming.md](../docs/theming.md)).
+- `waybar/scripts/bluetooth.py` is the bar's Bluetooth module: the rune, the devices
+  connected and the main one's battery, following bluez's signals
+  ([docs/desktop.md](../docs/desktop.md#the-bars-bluetooth)).
 - `waybar/scripts/idle.py` draws the bar's idle module: the eye, and stay awake's cup.
 - `waybar/scripts/vector-switch.py` draws VECTOR's emergency switch on the bar: a power
   mark while he's on, and a red VECTOR OFF while he's off. It reads the switch's own

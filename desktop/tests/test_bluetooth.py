@@ -66,6 +66,43 @@ class BluetoothTest(CmdTest):
         self.cmd("bluetooth", "connect", "not-a-mac", ok=False)
         self.cmd("bluetooth", "connect", "00:00:5E:00:53:FE", ok=False)
 
+    def test_power_toggles(self):
+        self.assertFalse(self.cmd("bluetooth", "power", "toggle")["powered"])
+        self.assertTrue(self.cmd("bluetooth", "power", "toggle")["powered"])
+
+    def test_a_headsets_sound_profile(self):
+        d = self.cmd("bluetooth")
+        wh = d["devices"][0]
+        self.assertEqual((wh["audio"]["mode"], wh["audio"]["codec"]), ("hifi", "LDAC"))
+        self.assertTrue(d["audio_default"])
+        d = self.cmd("bluetooth", "profile", "00:00:5E:00:53:10", "headset")
+        self.assertEqual(d["devices"][0]["audio"]["mode"], "headset")
+        self.assertIn(["set-card-profile", "bluez_card.00_00_5E_00_53_10", "headset-head-unit"], self.calls("pactl"))
+        self.assertEqual(self.cmd("bluetooth", "profile", "00:00:5E:00:53:10", "hifi")["devices"][0]["audio"]["mode"],
+                         "hifi")
+        self.assertIn("isn't connected", self.cmd("bluetooth", "profile", "00:00:5E:00:53:11", "hifi", ok=False)["error"])
+        self.cmd("bluetooth", "profile", "00:00:5E:00:53:10", "loud", ok=False)
+
+    def test_audio_default_is_the_users(self):
+        self.assertFalse(self.cmd("bluetooth", "audio-default", "off")["audio_default"])
+        self.assertFalse(self.cmd("bluetooth")["audio_default"])
+        with open(os.path.join(self.home, ".config", "bromigos", "bluetooth.toml")) as f:
+            self.assertIn("audio_default = false", f.read())
+
+    def test_an_xbox_pad_says_which_driver(self):
+        root = os.path.join(self.tmp, "root")
+        os.makedirs(root)
+        pad = lambda d: next(x for x in d["devices"] if x["kind"] == "game controller")  # noqa: E731
+        d = self.cmd("bluetooth", env={"BROMIGOS_PERIPHERAL_ROOT": root})
+        self.assertEqual((pad(d)["glyph"], pad(d)["driver"]), ("controller", "basic"))
+        os.makedirs(os.path.join(root, "sys", "module", "hid_xpadneo"))
+        self.assertEqual(pad(self.cmd("bluetooth", env={"BROMIGOS_PERIPHERAL_ROOT": root}))["driver"], "xpadneo")
+
+    def test_a_code_asking_device_goes_to_the_panel(self):
+        self.cmd("bluetooth", "scan", "2")
+        d = self.cmd("bluetooth", "pair", "00:00:5E:00:53:21", ok=False)
+        self.assertIn("bromigos bluetooth panel pair 00:00:5E:00:53:21", d["error"])
+
     def test_no_adapter(self):
         self.set_state(lambda st: st.update(adapter=None))
         d = self.cmd("bluetooth")

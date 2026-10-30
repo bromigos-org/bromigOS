@@ -315,6 +315,10 @@ BY_INSTALL = {
     "paru": "by `bromigos install` (its `aur` step), unless `--no-aur` or `bromigos setup aur` "
             "leaves it out",
 }
+# installed by something else than the meta-package or `bromigos install`
+BY_OTHER = {
+    "xpadneo-dkms": "by `bromigos peripheral enable xbox-controller`, for an Xbox controller",
+}
 
 
 def packages_section():
@@ -339,7 +343,8 @@ def packages_section():
         order.append(d)
         needs = sorted(p["name"] for p in pkgs.values() if d in p["depends"])
         wants = sorted(p["name"] for p in pkgs.values() if d in p["optdepends"])
-        how[d] = ("with " + ", ".join(f"`{u}`" for u in needs) if needs
+        how[d] = (BY_OTHER[d] if d in BY_OTHER
+                  else "with " + ", ".join(f"`{u}`" for u in needs) if needs
                   else "optional, for " + ", ".join(f"`{u}`" for u in wants) if wants
                   else "on its own")
 
@@ -347,10 +352,10 @@ def packages_section():
     for n in order:
         desc = pkgs[n]["desc"] if n in pkgs else ELSEWHERE[n][0] + f" (from {ELSEWHERE[n][1]})"
         lines.append(f"| `{n}` | {_cell(desc)} | {how[n]} |")
-    lines += ["", "`herdr`, `ttf-geist-mono`, `1password` and `paru` aren't in Arch's own repositories, "
-              "so bromigOS packages them into its own, each pinned by checksum. Only `1password` "
-              "needs the AUR, and only on a public install (below).", "",
-              "- `herdr` and `paru` are built from their upstream source.",
+    lines += ["", "`herdr`, `ttf-geist-mono`, `1password`, `paru` and `xpadneo-dkms` aren't in Arch's own "
+              "repositories, so bromigOS packages them into its own, each pinned by checksum. Only "
+              "`1password` needs the AUR, and only on a public install (below).", "",
+              "- `herdr`, `paru` and `xpadneo-dkms` are built from their upstream source.",
               "- `ttf-geist-mono` packages the fonts from Geist's release.",
               "- `1password` repackages 1Password's own Linux download. It isn't built from source. "
               "Its licence is proprietary, so the public mirror leaves it out: there, "

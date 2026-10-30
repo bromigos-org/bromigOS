@@ -240,6 +240,53 @@ Two of the bar's modules appear only where they mean something.
 
 `bromigos hw setup` installs the daemon on laptops. See [hardware.md](hardware.md).
 
+### The bar's Bluetooth
+
+The bar's Bluetooth module is `waybar/scripts/bluetooth.py`. It runs as long as the bar,
+and prints a line each time bluez's D-Bus signals say something changed: no polling. It
+hides on a machine with no adapter. The manual's [Bluetooth](../manual/src/bluetooth.md)
+page is the user's guide.
+
+Its look follows [DRIFTGLASS](DRIFTGLASS.md). The icon is EMBER:
+
+- the rune dim while Bluetooth is off and lit while it's on, with the number of devices
+  connected beside it;
+- the main device's battery as five cells under the rune (classes `c0` to `c5`), and amber
+  at 15% or less (`low`);
+- one Spark on a connect or disconnect (`spark`), and a slow blink while bluez scans or
+  pairs (`scanning`).
+
+Under reduced motion, the module leaves `spark` and `scanning` out and sets `busy`, which
+doesn't move. The images are the theme's (`bt`, `btcell-N` in `theme/icons`), set by its
+`waybar.css`.
+
+One copy of the module, whichever takes a lock in `$XDG_RUNTIME_DIR` first, sends the
+"connected" and "disconnected" notifications. It also makes a headset or speaker the sound
+output when it connects, unless `audio_default = false` in
+`~/.config/bromigos/bluetooth.toml`.
+
+A click runs `bromigos bluetooth panel`, a right-click `bromigos bluetooth menu`, and a
+middle-click `bromigos bluetooth power toggle`. The panel and the menu are
+`lib/bromigos_btpanel.py`: GTK 4 on a gtk4-layer-shell surface, placed under the pointer.
+A clear surface behind it closes it on a click elsewhere. Both are GLOW:
+
+- Glass with faint Scanlines;
+- each device a hologram on its Emitter (`lib/bromigos_driftglass.py`), turning slowly
+  while connected;
+- a Pulse while it connects, a Spark when that works, and the Sweep while scanning.
+
+They move only while open, and not at all under reduced motion. High contrast makes the
+glass opaque.
+
+The panel pairs over bluez's D-Bus API with its own agent (`org.bluez.Agent1`). The agent
+puts any PIN, passkey or "does it show 123456?" question in the panel. bluez code shared
+by the module, the panel and `bromigos bluetooth` is in `lib/bromigos_bluez.py`. It also
+explains bluez's errors in plain words.
+
+Tests run against `tests/fake_bluez.py`, a stand-in bluez on a private D-Bus that pairs
+the way real devices do. `tools/bluetooth/render.py` draws the icon's states, the panel and
+the menu offscreen, in any theme.
+
 ## Shortcuts you set by pressing the keys
 
 `bromigos keys` rebinds a key without editing Lua. You pick what to bind, press the new

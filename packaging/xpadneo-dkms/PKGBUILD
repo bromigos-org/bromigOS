@@ -1,0 +1,51 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# xpadneo, the driver for Xbox Wireless Controllers over Bluetooth (the Xbox One S and later
+# pads, the Elite Series 2, the Series X|S pads): rumble (the triggers' too), the battery,
+# and the button layout games expect. A DKMS module: DKMS builds it for every installed
+# kernel that has its headers. bromigOS's `xbox-controller` peripheral module installs it
+# with those headers (`bromigos peripheral enable xbox-controller`; docs/peripherals.md),
+# and the bar's Bluetooth panel offers that when a pad runs on the kernel's basic driver.
+# Built here from the tagged upstream source, pinned by checksum, so that needs no AUR
+# helper.
+#
+# Adapted from the AUR's xpadneo-dkms PKGBUILD (0.10.5-1; marmis and its contributors), with
+# the same pkgver-pkgrel, so one built from the AUR's recipe is the same version and pacman
+# leaves it as it is. Two differences: no check() (it builds the module against the build
+# machine's kernel, which CI's container doesn't have), and the checksum is SHA-256 like the
+# other recipes here. GPL-2.0-only (the module) and GPL-3.0-or-later (the rest): unmodified
+# upstream source, linked below; the licence files ship with the package.
+
+pkgname=xpadneo-dkms
+pkgver=0.10.5
+pkgrel=1
+pkgdesc='Advanced Linux Driver for Xbox One Wireless Gamepad'
+arch=('any')
+url='https://github.com/atar-axis/xpadneo'
+license=('GPL-2.0-only AND GPL-3.0-or-later')
+depends=('dkms' 'bluez' 'bluez-utils')
+source=("xpadneo-v${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
+sha256sums=('084c1ef57b4567c54cb4e4c01c9ae47b180c59a001457ad1e0ed574fdd09b59b')
+
+build() {
+  cd "xpadneo-${pkgver}"
+  make VERSION="v${pkgver}" build
+}
+
+package() {
+  cd "xpadneo-${pkgver}"
+
+  # the modprobe and udev files (to /usr/lib, not /etc: they're the package's)
+  make VERSION="v${pkgver}" PREFIX="${pkgdir}" ETC_PREFIX='/usr/lib' install
+
+  local license_dir="${pkgdir}/usr/share/licenses/${pkgname}"
+  install -vD -t "${license_dir}/" -m644 LICENSE.md LICENSES/*.txt
+
+  # the DKMS source tree
+  local target_dir="${pkgdir}/usr/src/hid-xpadneo-v${pkgver}"
+  install -vD -t "${target_dir}" -m644 hid-xpadneo/{Makefile,dkms.conf}
+  install -vD -t "${target_dir}" -m755 hid-xpadneo/dkms.post_{install,remove}
+  cd hid-xpadneo
+  find src/ -type f -not -name '.*' -not -name 'AGENTS.md' \
+    -exec install -vD -m644 {} -T "${target_dir}/{}" \;
+}

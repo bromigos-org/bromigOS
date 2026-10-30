@@ -115,9 +115,10 @@ To pair a new device:
 2. Choose **Scan**.
 3. When the device appears, choose **Pair**.
 
-If the device asks for a code, Settings says what to type, and **Open bluetoothctl**
-opens a terminal to type it in. Paired devices show
-their battery, and you can connect, disconnect or forget each one.
+If the device asks for a code, **Pair in the panel** pairs it in the bar's Bluetooth panel,
+which asks you for the code. Paired devices show their battery, and you can connect,
+disconnect or forget each one. **Switch the sound over on connect** makes headphones the
+sound output when they connect. [Bluetooth](bluetooth.md) covers the bar's icon and panel.
 (`bromigos bluetooth`)
 
 ## Power

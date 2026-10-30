@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
 # bromigos:summary=Bluetooth: the adapter (on, off, visible), paired devices, pairing new ones, through bluez
-# bromigos:args=[status] | power on|off | discoverable on|off | scan [SECONDS] | pair MAC | connect MAC | disconnect MAC | trust MAC on|off | remove MAC  [--json]
-# bromigos:examples=bromigos bluetooth; bromigos bluetooth power on; bromigos bluetooth scan; bromigos bluetooth pair 00:00:5E:00:53:10
+# bromigos:args=[status] | power on|off|toggle | discoverable on|off | scan [SECONDS] | pair MAC | connect MAC | disconnect MAC | trust MAC on|off | remove MAC | profile MAC hifi|headset | audio-default on|off | panel [pair MAC|scan] | menu  [--json]
+# bromigos:examples=bromigos bluetooth; bromigos bluetooth power on; bromigos bluetooth scan; bromigos bluetooth pair 00:00:5E:00:53:10; bromigos bluetooth profile 00:00:5E:00:53:10 headset; bromigos bluetooth panel
 """bromigos-bluetooth (`bromigos bluetooth`): Bluetooth, through bluez (`bluetoothctl`, one
 command at a time). Settings › Bluetooth drives it.
 
   bromigos bluetooth [status]          the adapter (powered, visible, blocked) and the devices it
                                        knows: paired, connected, trusted, battery
-  bromigos bluetooth power on|off      the adapter (a soft block from rfkill is lifted first)
+  bromigos bluetooth power on|off|toggle   the adapter (a soft block from rfkill is lifted first)
   bromigos bluetooth discoverable on|off   whether other devices can find this one
   bromigos bluetooth scan [SECONDS]    look for devices nearby (8 s), and list them
   bromigos bluetooth pair MAC          pair a device, then trust it (so it reconnects by itself);
-                                       one that asks for a PIN or a passkey is paired in
-                                       bluetoothctl itself (it says so)
+                                       one that asks for a PIN or a passkey is paired from the
+                                       panel, which asks for the code (it says so)
   bromigos bluetooth connect|disconnect MAC
   bromigos bluetooth trust MAC on|off  a trusted device connects without asking
   bromigos bluetooth remove MAC        forget a device (unpairs it)
+  bromigos bluetooth profile MAC hifi|headset   a headset's sound: hifi (music quality, no
+                                       microphone) or headset (the microphone on, phone-call quality)
+  bromigos bluetooth audio-default on|off   a headset or speaker becomes the sound output when
+                                       it connects (on by default)
+  bromigos bluetooth panel [pair MAC|scan]   the bar's Bluetooth panel (a click on its icon):
+                                       pairing there asks for any PIN or passkey in the panel
+  bromigos bluetooth menu              the bar icon's quick menu (a right-click)
 """
 import json
 import os
@@ -24,16 +31,13 @@ import sys
 
 sys.path.insert(0, "/usr/lib/bromigos/lib")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_bluez as B  # noqa: E402
 import bromigos_cli as C  # noqa: E402
 from bromigos_cli import Fail  # noqa: E402
 
 USAGE = __doc__.split("\n\n", 1)[1]
-MAC = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+MAC = B.MAC
 DEV = re.compile(r"^Device ([0-9A-Fa-f:]{17}) ?(.*)$")
-KIND = {"audio-headset": "headset", "audio-headphones": "headphones", "audio-card": "speaker",
-        "input-keyboard": "keyboard", "input-mouse": "mouse", "input-gaming": "game controller",
-        "input-tablet": "tablet", "phone": "phone", "computer": "computer", "camera-photo": "camera",
-        "printer": "printer", "modem": "modem", "network-wireless": "network"}
 AGENT = re.compile(r"passkey|pin code|request pin|confirm passkey|authorize|AuthenticationFailed|"
                    r"AuthenticationCanceled|AuthenticationRejected", re.I)
 
@@ -101,11 +105,27 @@ def device(mac, name=""):
     _, out, _ = btctl("info", mac)
     p = props(out)
     icon = p.get("Icon", "")
-    return {"mac": mac, "name": p.get("Alias") or p.get("Name") or name or mac, "icon": icon,
-            "kind": KIND.get(icon, icon.split("-")[-1] if icon else "device"),
-            "paired": _yes(p.get("Paired")), "connected": _yes(p.get("Connected")),
-            "trusted": _yes(p.get("Trusted")), "blocked": _yes(p.get("Blocked")),
-            "battery": _battery(p.get("Battery Percentage"))}
+    name = p.get("Alias") or p.get("Name") or name or mac
+    k = B.kind(icon, name)
+    out = {"mac": mac, "name": name, "icon": icon, "kind": k, "glyph": B.glyph(k),
+           "paired": _yes(p.get("Paired")), "connected": _yes(p.get("Connected")),
+           "trusted": _yes(p.get("Trusted")), "blocked": _yes(p.get("Blocked")),
+           "battery": _battery(p.get("Battery Percentage"))}
+    if B.is_xbox(name, icon):
+        # xpadneo: the full driver (rumble, battery, the button layout); else the kernel's basic one
+        out["driver"] = "xpadneo" if B.xpadneo_loaded() else "basic"
+    return out
+
+
+def audio():
+    """PipeWire's Bluetooth cards by address (bromigos_bluez.audio_cards), {} without pactl."""
+    if not C.have("pactl"):
+        return {}
+    rc, out, _ = C.run(["pactl", "--format=json", "list", "cards"], timeout=8)
+    try:
+        return B.audio_cards(json.loads(out)) if rc == 0 else {}
+    except ValueError:
+        return {}
 
 
 def status(_args=None):
@@ -120,7 +140,11 @@ def status(_args=None):
                "alias": p.get("Alias", "")}
     devs = [device(mac, name) for mac, name in _devices()]
     devs.sort(key=lambda d: (not d["connected"], not d["paired"], d["name"].lower()))
-    return {"adapter": adapter, "powered": _yes(p.get("Powered")), "discoverable": _yes(p.get("Discoverable")),
+    cards = audio()
+    for d in devs:
+        if d["mac"] in cards:
+            d["audio"] = cards[d["mac"]]
+    return {"adapter": adapter, "audio_default": B.settings()["audio_default"], "powered": _yes(p.get("Powered")), "discoverable": _yes(p.get("Discoverable")),
             "pairable": _yes(p.get("Pairable")), "discovering": _yes(p.get("Discovering")),
             "blocked": soft or hard, "hard_blocked": hard, "devices": devs,
             "paired": [d for d in devs if d["paired"]], "nearby": [d for d in devs if not d["paired"]]}
@@ -147,8 +171,8 @@ def _ok(out, *words):
 
 def power(args):
     if len(args) != 1:
-        raise Fail("bromigos bluetooth power on|off")
-    on = C.on_off(args[0])
+        raise Fail("bromigos bluetooth power on|off|toggle")
+    on = (not status()["powered"]) if args[0] == "toggle" else C.on_off(args[0])
     soft, hard = rfkill()
     if on and hard:
         raise Fail("Bluetooth is switched off by a hardware switch or key")
@@ -207,8 +231,8 @@ def pair(args):
     if not _ok(text, "Pairing successful"):
         if AGENT.search(text):
             return dict(status(), ok=False, needs_agent=True,
-                        error=f"{d['name']} asks for a PIN or a passkey: pair it in bluetoothctl "
-                              f"(type: pair {mac}, then the code it shows or asks for)")
+                        error=f"{d['name']} asks for a PIN or a passkey: pair it from the bar's Bluetooth "
+                              f"panel, which asks for the code (bromigos bluetooth panel pair {mac})")
         last = [x for x in text.strip().splitlines() if x.strip()]
         raise Fail(f"couldn't pair {d['name']}: {last[-1] if last else 'no answer'}")
     btctl("trust", mac)
@@ -254,6 +278,38 @@ def remove(args):
     return dict(status(), said=f"Forgot {d['name']}")
 
 
+def profile(args):
+    if len(args) != 2 or args[1] not in ("hifi", "headset"):
+        raise Fail("bromigos bluetooth profile MAC hifi|headset")
+    mac = _mac(args, "bromigos bluetooth profile MAC hifi|headset")
+    _, d = _known(mac)
+    if not d["connected"]:
+        raise Fail(f"{d['name']} isn't connected")
+    card = audio().get(mac)
+    if card is None:
+        raise Fail(f"{d['name']} has no sound device in PipeWire (is pipewire-pulse running?)")
+    want = card[args[1]]
+    if want is None:
+        raise Fail(f"{d['name']} has no {B.MODE_LABEL[args[1]].lower()} profile")
+    C.must(["pactl", "set-card-profile", card["card"], want], what="pactl set-card-profile")
+    return dict(status(), said=f"{d['name']}: {B.MODE_LABEL[args[1]]}")
+
+
+def audio_default(args):
+    if len(args) != 1:
+        raise Fail("bromigos bluetooth audio-default on|off")
+    on = C.on_off(args[0])
+    s = B.settings()
+    s["audio_default"] = on
+    B.save_settings(s)
+    return {"audio_default": on, "said": "Headsets and speakers become the sound output when they connect" if on
+            else "Connecting a headset leaves the sound output as it is"}
+
+
 if __name__ == "__main__":
-    sys.exit(C.main({"status": status, "power": power, "discoverable": discoverable, "scan": scan, "pair": pair,
+    if sys.argv[1:2] in (["panel"], ["menu"]):
+        import bromigos_btpanel as P
+        rest = sys.argv[2:] if sys.argv[1] == "panel" else []
+        sys.exit(P.main(["menu"] if sys.argv[1] == "menu" else (rest or ["panel"])))
+    sys.exit(C.main({"profile": profile, "audio-default": audio_default, "status": status, "power": power, "discoverable": discoverable, "scan": scan, "pair": pair,
                      "connect": connect, "disconnect": disconnect, "trust": trust, "remove": remove}, USAGE))

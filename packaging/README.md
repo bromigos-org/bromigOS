@@ -22,7 +22,7 @@ packaging/
   bromigos-lab-catalog/    the lab model catalog (homelab/share/lab/models.toml)
   bromigos-apps/           the app bundle's configs (apps/)
   bromigos-manual/         the manual (manual/), built as HTML to read offline
-  herdr/, ttf-geist-mono/, 1password/, paru/
+  herdr/, ttf-geist-mono/, 1password/, paru/, xpadneo-dkms/
                            software Arch's repositories don't carry, built from upstream
                            sources pinned by checksum
   oo7/                     the keyring, newer than Arch's own (below)
@@ -64,7 +64,7 @@ packages. That table is generated from these PKGBUILDs.
 | `bromigos-lab-catalog` | The lab model catalog, `/usr/share/bromigos/homelab/lab/models.toml` | `homelab/share/lab/` |
 | `bromigos-apps` | The app bundle's default configs and `bromigos apps setup` | `apps/` |
 | `bromigos-manual` | The manual as HTML in `/usr/share/doc/bromigos/manual/`, which Settings opens | `manual/` |
-| `herdr`, `ttf-geist-mono`, `1password`, `paru` | Upstream software, built here so no install needs an AUR helper (`1password` stays off the public mirror) | upstream sources, pinned by checksum |
+| `herdr`, `ttf-geist-mono`, `1password`, `paru`, `xpadneo-dkms` | Upstream software, built here so no install needs an AUR helper (`1password` stays off the public mirror) | upstream sources, pinned by checksum |
 | `oo7` | The keyring that keeps sign-ins: the Secret Service and the PAM module that unlocks it at login | upstream's source at a pinned commit, plus one patch |
 
 Some packages need a closer look.
@@ -91,6 +91,16 @@ Some packages need a closer look.
     depends on `base-devel`, which every AUR build needs.
   - It has no `provides`, `conflicts` or `replaces`, so paru-bin and paru-git are never
     swapped out.
+- **xpadneo-dkms** is the driver for Xbox Wireless Controllers over Bluetooth. Nothing
+  installs it but `bromigos peripheral enable xbox-controller`
+  ([docs/peripherals.md](../docs/peripherals.md#the-xbox-controller-module)).
+  - It's the AUR's recipe at the AUR's version, 0.10.5-1, so one built from the AUR stays
+    in place.
+  - It has no `check()`: the AUR's builds the module against the build machine's kernel,
+    which CI's container doesn't have. The module was built against Linux 7.2 when the
+    recipe was added.
+  - Its licences are GPL-2.0-only (the module) and GPL-3.0-or-later (the rest), installed
+    in `/usr/share/licenses/xpadneo-dkms/`.
 - **herdr** needs zig 0.16.0 exactly to build: its terminal library, libghostty-vt,
   refuses any other version. Arch's `zig` has moved on to 0.17.0, so the recipe downloads
   Zig's own 0.16.0 release from ziglang.org, pinned by checksum like the source, and
