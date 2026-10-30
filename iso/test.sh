@@ -37,10 +37,18 @@
 #                       (nomodeset), memtest, disk (the installed system's GRUB), speech
 #   iso/test.sh param "PARAMS"  "Install bromigOS" with PARAMS added to its kernel line (GRUB's
 #                       editor, syslinux's Tab): which installer opened, and the edition chosen
-#   iso/test.sh grub NAME [KEYS]   boots the installed disk and saves its GRUB menu as
-#                       shots/grub-NAME.png (KEYS first, e.g. down,down,ret: the snapshots);
-#                       the VM stays at the menu
+#   iso/test.sh grub NAME [KEYS] [--coloured]   boots the installed disk and saves its GRUB
+#                       menu as shots/grub-NAME.png (KEYS first, e.g. down,down,ret: the
+#                       snapshots; --coloured: it must be the theme's); the VM stays at the menu
 #   iso/test.sh up      from that menu: boots the default entry, the passphrase, SSH
+#   iso/test.sh mok-enroll CODE   boots the installed disk with Secure Boot on (its key asked for
+#                       at this start: docs/secureboot.md) and goes through MokManager as a
+#                       person does (Enroll MOK, Continue, Yes, the code, Reboot; a screen saved
+#                       at each, shots/mokm-*), then the boot menu (saved as shots/grub-secureboot.png,
+#                       which must be the theme's), the passphrase and SSH
+#   iso/test.sh install --alongside   bromigOS into the disk's free space beside what's there
+#                       (a stand-in Windows: `windows --free-gib N` first), sharing its EFI
+#                       system partition
 #   iso/test.sh shot NAME | ssh [cmd…] | down | destroy
 #
 # The VM: 6 GB, 4 CPUs, virtio-gpu (Mesa's software renderer), a 40 GB disk, user
@@ -66,14 +74,14 @@ ovmf_code=${BROMIGOS_ISOTEST_OVMF_CODE:-/usr/share/edk2/x64/OVMF_CODE.4m.fd}
 ovmf_vars=/usr/share/edk2/x64/OVMF_VARS.4m.fd
 
 cmd=${1:-}; shift || true
-iso='' firmware='' hosts='' repo='' ca='' encrypt=1 update_channel='' update_repo='' mode=erase edition=desktop gib='' free_gib=0 hibernated=0
+iso='' firmware='' hosts='' repo='' ca='' encrypt=1 update_channel='' update_repo='' mode=erase edition=desktop gib='' free_gib=0 hibernated=0 alongside=0
 while (($#)); do
     case $1 in
         --iso) iso=$2; shift 2 ;; --firmware) firmware=$2; shift 2 ;; --hosts) hosts=$2; shift 2 ;;
         --repo) repo=$2; shift 2 ;; --ca) ca=$2; shift 2 ;; --dir) dir=$2; shift 2 ;; --no-encrypt) encrypt=0; shift ;;
         --update-channel) update_channel=$2; shift 2 ;; --update-repo) update_repo=$2; shift 2 ;;
         --mode) mode=$2; shift 2 ;; --edition) edition=$2; shift 2 ;; --gib) gib=$2; shift 2 ;;
-        --free-gib) free_gib=$2; shift 2 ;; --hibernated) hibernated=1; shift ;; *) break ;;
+        --free-gib) free_gib=$2; shift 2 ;; --hibernated) hibernated=1; shift ;; --alongside) alongside=1; shift ;; *) break ;;
     esac
 done
 mkdir -p "$dir/shots"
@@ -190,6 +198,37 @@ menu_wait() {       # menu_wait NAME [KEYS] [--coloured]: a boot menu on screen,
     python3 "$here/test/screen-wait.py" --qmp "$dir/qmp.sock" --out "$dir/shots/$1.png" --keys "${2:-}" --timeout 150 ${3:-}
 }
 
+blue_wait() {       # blue_wait [SECONDS]: shim's blue screens (MokManager) on screen
+    python3 - "$dir/qmp.sock" "$dir/blue.ppm" "${1:-120}" <<'PY2'
+import json, os, socket, sys, time
+from PIL import Image
+sock, ppm, timeout = sys.argv[1], sys.argv[2], float(sys.argv[3])
+def dump():
+    s = socket.socket(socket.AF_UNIX); s.settimeout(10)
+    here = os.getcwd(); os.chdir(os.path.dirname(sock))
+    try:
+        s.connect(os.path.basename(sock))
+    finally:
+        os.chdir(here)
+    f = s.makefile("rw"); f.readline()
+    for c in ({"execute": "qmp_capabilities"}, {"execute": "screendump", "arguments": {"filename": ppm}}):
+        f.write(json.dumps(c) + "\n"); f.flush(); f.readline()
+    s.close()
+end = time.time() + timeout
+while time.time() < end:
+    try:
+        dump(); time.sleep(0.3)
+        im = Image.open(ppm).convert("RGB").resize((64, 40))
+        px = list(im.getdata())
+        if sum(1 for r, g, b in px if b > 120 and r < 60 and g < 60) > len(px) * 0.6:
+            sys.exit(0)
+    except (OSError, ValueError):
+        pass
+    time.sleep(0.5)
+sys.exit(1)
+PY2
+}
+
 passphrase_then_ssh() {     # after GRUB: the disk's passphrase at the splash, then SSH
     if (( $(cat "$dir/encrypted" 2>/dev/null || echo 1) )); then
         sleep "${BROMIGOS_ISOTEST_PASS_WAIT:-25}"
@@ -200,6 +239,9 @@ passphrase_then_ssh() {     # after GRUB: the disk's passphrase at the splash, t
 
 finish_install() {   # finish_install RC: what the new system got, then a clean power-off
     local rc=$1
+    # Secure Boot set up (docs/secureboot.md): the code that approves the key at the first start
+    "${SSH[@]}" "sudo grep -oE -- 'setup --fresh-install --code [0-9]+' /var/log/bromigos-iso-install.log | tail -1 | awk '{print \$NF}'" \
+        > "$dir/secureboot-code" 2>/dev/null || true
     # what the new system got, while it's still mounted at /mnt (install-state.out)
     : > "$dir/install-state.out"
     # beside a stand-in Windows: its C: checked where the tools are (the medium), after the resize
@@ -293,7 +335,13 @@ case $cmd in
         if [[ $firmware == uefi ]]; then
             "${SCP[@]}" "$dir/windows/esp.sha256" "$user@127.0.0.1:esp.sha256"
             result "Windows' boot files on the shared ESP are as they were" "${SSH[@]}" "sudo sh -c 'cd /boot/efi && sha256sum -c --quiet' < ~/esp.sha256"
-            result "GRUB in its own folder on the ESP, and the firmware boots it first" "${SSH[@]}" "sudo test -f /boot/efi/EFI/GRUB/grubx64.efi && sudo efibootmgr | grep -q '^BootOrder: '\$(sudo efibootmgr | awk '/GRUB/ { sub(/^Boot/, \"\"); sub(/\\*.*/, \"\"); print; exit }')"
+            if "${SSH[@]}" "test -d /boot/efi/EFI/bromigos-secureboot"; then
+                # Secure Boot set up (docs/secureboot.md): shim, then GRUB, in their own folder
+                result "shim and GRUB in their own folder on the ESP, and the firmware boots it first" "${SSH[@]}" "sudo test -f /boot/efi/EFI/bromigos-secureboot/grubx64.efi && sudo efibootmgr | grep -q '^BootOrder: '\$(sudo efibootmgr -v | awk 'tolower(\$0) ~ /bromigos-secureboot.shimx64.efi/ && \$0 !~ /Field Kit/ { sub(/^Boot/, \"\"); sub(/\\*.*/, \"\"); print; exit }')"
+                result "Windows' fallback loader (EFI/Boot/bootx64.efi) isn't shim's" "${SSH[@]}" "! sudo test -f /boot/efi/EFI/Boot/grubx64.efi"
+            else
+                result "GRUB in its own folder on the ESP, and the firmware boots it first" "${SSH[@]}" "sudo test -f /boot/efi/EFI/GRUB/grubx64.efi && sudo efibootmgr | grep -q '^BootOrder: '\$(sudo efibootmgr | awk '/GRUB/ { sub(/^Boot/, \"\"); sub(/\\*.*/, \"\"); print; exit }')"
+            fi
             result "one EFI system partition on the disk (bromigOS's /boot isn't one)" "${SSH[@]}" "[ \$(lsblk -no PARTTYPE /dev/vda | grep -ci c12a7328-f81f-11d2-ba4b-00a0c93ec93b) -eq 1 ]"
         fi
         if grep -q FAIL "$out"; then exit 1; fi
@@ -317,7 +365,8 @@ case $cmd in
         # btrfs on LUKS2 (the passphrase: the password), GRUB, snapper; sshd for the checks
         "${SCP[@]}" "$key.pub" "live@127.0.0.1:"
         enc=(); (( encrypt )) || enc=(--no-encrypt)
-        "${SSH[@]}" "python3 /usr/local/lib/bromigos-iso/answers.py --disk /dev/vda --firmware $firmware --user tester --password tester --hostname bromigos-test --ssh ${enc[*]} --out /home/live/answers"
+        side=(); (( alongside )) && side=(--alongside)
+        "${SSH[@]}" "python3 /usr/local/lib/bromigos-iso/answers.py --disk /dev/vda --firmware $firmware --user tester --password tester --hostname bromigos-test --ssh ${enc[*]} ${side[*]} --out /home/live/answers"
         printf '%s\n' "$((encrypt ? 1 : 0))" > "$dir/encrypted"
         # the medium's channel: the installed system follows it (the checks look for it)
         "${SSH[@]}" "cat /etc/bromigos-iso/channel 2>/dev/null || echo stable" > "$dir/channel"
@@ -325,6 +374,8 @@ case $cmd in
         if [[ -n $ca ]]; then "${SCP[@]}" "$ca" "live@127.0.0.1:repo-ca.crt"; extra+=(--ca /home/live/repo-ca.crt); fi
         rc=0
         "${SSH[@]}" "sudo bromigos-iso-install --config /home/live/answers/config.json --creds /home/live/answers/creds.json --ssh-key /home/live/id_ed25519.pub --no-reboot ${extra[*]}" 2>&1 | tee "$dir/install.out" || rc=$?
+        # Secure Boot set up (docs/secureboot.md): the code that approves the key at the first start
+        sed -n 's/^::secureboot \([0-9]*\)$/\1/p' "$dir/install.out" | tail -1 > "$dir/secureboot-code"
         # what the new system got, while it's still mounted at /mnt (install-state.out)
         "${SSH[@]}" 'sudo bash -c "findmnt -R /mnt; lsblk -o NAME,TYPE,FSTYPE,MOUNTPOINTS /dev/vda; ls -la /mnt/home/*/.ssh; grep -h ^HOOKS= /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.d/*.conf; lsinitcpio /mnt/boot/initramfs-linux.img | grep -c plymouth; grep -E ^GRUB_CMDLINE /mnt/etc/default/grub; grep -c snapshots /mnt/boot/grub/grub.cfg; grep -A2 bromigos\\] /mnt/etc/pacman.conf; arch-chroot /mnt snapper --no-dbus list-configs; arch-chroot /mnt sshd -T 2>/dev/null | grep -iE \"^(pubkeyauthentication|authorizedkeysfile|passwordauthentication)\""' 2>&1 | tee "$dir/install-state.out" || true
         # a clean shutdown: the new system's file systems unmounted, LUKS closed, then
@@ -509,12 +560,32 @@ PY
         # the installed system's GRUB menu (docs/boot.md), waited for and saved; the VM stays
         echo tester > "$dir/user"
         [[ -n $(vm_pids) ]] || start_vm disk
-        menu_wait "grub-${1:-menu}" "${2:-down,up}"
+        menu_wait "grub-${1:-menu}" "${2:-down,up}" ${3:-}
         ;;
     up)
         echo tester > "$dir/user"; user=tester; SSH=(ssh "${sshopts[@]}" "tester@127.0.0.1")
         press ret
         passphrase_then_ssh
+        ;;
+    mok-enroll)
+        # the installed system's first start with Secure Boot on (docs/secureboot.md): MokManager
+        # asks to enroll its key; a person presses a key, Enroll MOK, Continue, Yes, the code, Reboot
+        code=${1:?iso/test.sh mok-enroll CODE}
+        echo tester > "$dir/user"; user=tester; SSH=(ssh "${sshopts[@]}" "tester@127.0.0.1")
+        [[ -n $(vm_pids) ]] || start_vm disk
+        rc=0
+        blue_wait 120 || { echo "iso/test.sh mok-enroll: no MokManager screen"; shot mokm-none >/dev/null; exit 1; }
+        shot mokm-1-press-any-key >/dev/null; press spc
+        sleep 2; shot mokm-2-menu >/dev/null; press down; press ret                # Enroll MOK
+        sleep 2; shot mokm-3-enroll-mok >/dev/null; press down; press ret          # Continue
+        sleep 2; shot mokm-4-enroll-the-keys >/dev/null; press down; press ret     # Yes
+        sleep 2; shot mokm-5-password >/dev/null; type_text "$code"; press ret     # the code
+        sleep 2; shot mokm-6-reboot >/dev/null; press ret                          # Reboot
+        # then the boot menu, which must be the theme's (its fonts are inside the signed GRUB)
+        menu_wait grub-secureboot "" --coloured || rc=1
+        press ret
+        passphrase_then_ssh || rc=1
+        exit "$rc"
         ;;
     shot) shot "${1:-screen}" ;;
     press) press "$1" ;;                          # a key, e.g. shift-tab, meta_l-ret

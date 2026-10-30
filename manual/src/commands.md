@@ -70,6 +70,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos account`](#bromigos-account) | Sign a panel in to an online account, such as Twitch, GitHub, GitLab or Spotify. A service can have several accounts, such as gitlab.com and your company's GitLab. See [Panels that need an account](panels.md#panels-that-need-an-account). `bromigos account token` says how to make a Bromigos personal access token. |
 | [`bromigos mute`](#bromigos-mute) | Mute or unmute the theme's sounds and VECTOR's voice together. |
 | [`bromigos boot`](#bromigos-boot) | Turn the themed [boot menu](boot-menu.md) on or off. |
+| [`bromigos secureboot`](#bromigos-secureboot) | Start bromigOS with Secure Boot on: `setup` signs it with a key of this computer's own, which you approve once at the next start. See [Secure Boot](install.md#secure-boot). |
 | [`bromigos emblem`](#bromigos-emblem) | Draw a theme's emblem pictures. For people making themes. |
 
 ### VECTOR and AI
@@ -2062,6 +2063,23 @@ bromigos secrets sync [--quiet]|status
 ```
 
 From the `bromigos-core` package.
+
+### bromigos secureboot
+
+```text
+Secure Boot (docs/secureboot.md): `status` (where it stands), `setup` (this computer's own key, GRUB and the kernels signed with it, shim first in the boot order, and the key's enrollment asked for at the next start, approved there with a code), `resign` (everything signed again: the pacman hooks do it after updates), `remove` (back as before setup). Needs the bromigos-secureboot package
+
+Usage: bromigos secureboot [OPTIONS] [ACTION]
+
+Arguments:
+  [ACTION]  status (default), setup, resign or remove
+
+Options:
+      --dry-run      setup, resign, remove: only say what it would do
+      --code <CODE>  setup: the 4 to 8 digits that approve the key at the next start (default: four made up, and shown)
+      --json         status: print the JSON document
+  -h, --help         Print help
+```
 
 ### bromigos session
 

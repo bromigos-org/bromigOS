@@ -1038,6 +1038,9 @@ class Window(Adw.ApplicationWindow):
             page.prepend(emb)
             ed = common.edition(self.a["edition"])
             lines = ["When the screen goes dark, take out the USB stick."]
+            sb = common.secureboot_done(backend.SECUREBOOT_CODE)
+            if sb:
+                lines.append(sb)
             if self.a["encrypt"]:
                 lines.append("At start, type the disk's passphrase" + ("." if self.a.get("separate_passphrase") else " (your password)."))
             if self.a["mode"] == "alongside":

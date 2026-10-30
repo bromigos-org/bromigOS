@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 # Secure Boot on the live medium (docs/secureboot.md): the medium starts with Secure Boot on
-# (shim, then bromigOS's signed GRUB and kernel), but an installed system can't yet, so a
-# machine with it on must have it turned off before it starts the installed system.
+# (shim, then bromigOS's signed GRUB and kernel), and the installer sets the installed
+# system up to start with it on too (bromigos-secureboot, from the medium's offline store):
+# its own key, enrolled at its first start in the same blue screens as the stick's.
 #
 #   bromigos-iso-secureboot state    on, off, or none (a BIOS boot, or no such variable)
-#   bromigos-iso-secureboot check    says it in plain words when it's on; exits 1 then, else 0
-#                                    (the installer asks it before it installs)
-#   bromigos-iso-secureboot notify   the same as a desktop notification, once a session
+#   bromigos-iso-secureboot check    says what happens, in plain words, when it's on; exits 0
+#                                    when the installer can set it up, 1 when the medium
+#                                    can't (no bromigos-secureboot in its store: Secure Boot
+#                                    must be turned off before the installed system starts)
+#   bromigos-iso-secureboot notify   the same as a desktop notification, once a session, when
+#                                    Secure Boot is on and the medium can't set it up
 set -u
 HOW=https://bromigos.org/download#secure-boot
+STORE=${BROMIGOS_ISO_REPO_DIR:-/var/lib/bromigos/repo}/bromigos/x86_64
 
 state() {
     local v
@@ -16,21 +21,30 @@ state() {
     # four bytes of attributes, then the value: 1 on, 0 off
     if [[ $(od -An -t u1 -j 4 -N 1 "$v" 2>/dev/null | tr -d ' ') == 1 ]]; then echo on; else echo off; fi
 }
+# the medium's store carries bromigos-secureboot: the installer sets Secure Boot up
+supported() { compgen -G "$STORE/bromigos-secureboot-*.pkg.tar.zst" >/dev/null; }
+
 TITLE="Secure Boot is on"
-TEXT="bromigOS runs from this stick with Secure Boot on. The installed system can't start with it on yet: after installing, turn Secure Boot off in your PC's setup before you start it. How: $HOW"
+OK_TEXT="Secure Boot can stay on. The installed system starts with it, through the same steps as this stick: at its first start, a blue screen asks you to approve bromigOS once (Enroll MOK, Continue, Yes, then a code the installer shows at the end). How: $HOW"
+OLD_TEXT="bromigOS runs from this stick with Secure Boot on, but this stick can't set the installed system up for it: after installing, turn Secure Boot off in your PC's setup before you start it (a newer stick sets it up). How: $HOW"
 
 case ${1:-state} in
     state) state ;;
     check)
         [[ $(state) == on ]] || exit 0
-        printf '%s\n\n%s\n' "$TITLE." "$TEXT" | fold -s -w 78
+        if supported; then
+            printf '%s\n\n%s\n' "$TITLE." "$OK_TEXT" | fold -s -w 78
+            exit 0
+        fi
+        printf '%s\n\n%s\n' "$TITLE." "$OLD_TEXT" | fold -s -w 78
         exit 1 ;;
     notify)
         [[ $(state) == on ]] || exit 0
+        supported && exit 0
         f=${XDG_RUNTIME_DIR:-/tmp}/bromigos-iso-secureboot.notified
         [[ -e $f ]] && exit 0
         sleep 8                       # the notification daemon first
-        notify-send -a bromigOS -u critical -t 0 "$TITLE" "$TEXT" 2>/dev/null && : > "$f"
+        notify-send -a bromigOS -u critical -t 0 "$TITLE" "$OLD_TEXT" 2>/dev/null && : > "$f"
         ;;
-    -h|--help|*) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' ;;
+    -h|--help|*) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac

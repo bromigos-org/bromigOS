@@ -21,7 +21,8 @@ on:
   schedule:
     - cron: "23 10 * * 1"          # Mondays, 03:23 Pacific: the edge ISO
   pull_request:
-    paths: [".github/workflows/iso.yml", "iso/ci-test.sh", "iso/publish.sh", "iso/release-notes.py", "iso/secureboot/**"]
+    paths: [".github/workflows/iso.yml", "iso/ci-test.sh", "iso/test.sh", "iso/publish.sh", "iso/release-notes.py", "iso/secureboot/**",
+            "secureboot/**", "packaging/bromigos-secureboot/**"]
   workflow_dispatch:
     inputs:
       channel:
@@ -245,17 +246,38 @@ jobs:
           sudo rm -rf "$W/check" 2>/dev/null || rm -rf "$W/check"
           exit "$rc"
 
+      # Secure Boot on the installed system (docs/secureboot.md): bromigos-secureboot as this ref
+      # builds it, which the Secure Boot test puts in the medium's store before it installs (a
+      # channel may not carry it yet, or an older one)
+      - name: bromigos-secureboot from this ref
+        id: sbpkg
+        if: needs.plan.outputs.tests == 'true' && steps.sbkey.outputs.dir != '' && matrix.profile.suite == 'desktop'
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -f src/packaging/bromigos-secureboot/PKGBUILD ]] || { echo "this ref has no bromigos-secureboot"; exit 0; }
+          mkdir -p "$W/sbpkg"
+          docker run --rm -v "$PWD/src:/src:ro" -v "$W/sbpkg:/out" archlinux:latest bash -c '
+            set -e
+            pacman -Syu --noconfirm --needed base-devel git python grub openssl sbsigntools libarchive >/dev/null
+            useradd -m b && cp -r /src /tmp/src && chown -R b /tmp/src /out
+            su b -c "git config --global --add safe.directory \"*\" && cd /tmp/src/packaging/bromigos-secureboot && PKGDEST=/out makepkg --noconfirm"'
+          ls -la "$W/sbpkg"
+          echo "pkg=$(ls "$W"/sbpkg/bromigos-secureboot-*.pkg.tar.zst | head -1)" >> "$GITHUB_OUTPUT"
+
       - name: Boot and install tests
         if: needs.plan.outputs.tests == 'true'
         shell: bash
         env:
           SB: ${{ steps.sbkey.outputs.dir }}
+          SBPKG: ${{ steps.sbpkg.outputs.pkg }}
         run: |
           set -euo pipefail
           # the tests of the ref the medium was built from, when it has them (older tags don't)
           t=src; [[ -x src/iso/ci-test.sh ]] || t=ci
           args=(--out "$W/tests" --suite "${{ matrix.profile.suite }}" --profile "src/iso/$PROFILE")
           [[ -n $SB ]] && args+=(--secureboot-cert "$SB/sb.cer")
+          [[ -n $SBPKG ]] && args+=(--secureboot-package "$SBPKG")
           $t/iso/ci-test.sh "${{ steps.build.outputs.iso }}" "${args[@]}"
 
       - name: The tests' screenshots and output

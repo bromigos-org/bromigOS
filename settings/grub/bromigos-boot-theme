@@ -59,6 +59,9 @@ DEFAULT = "/etc/default/grub"
 STATE = "/var/lib/bromigos/boot/state.json"
 PACKAGED = "/usr/share/bromigos/boot/grub/themes"
 FONTS = "/usr/share/bromigos/boot/grub/fonts"
+# bromigos-secureboot's state: with Secure Boot set up, GRUB carries these fonts itself
+# (docs/secureboot.md), so the theme in /boot has none
+SECUREBOOT_STATE = "/var/lib/bromigos/secureboot/state.json"
 TITLES = "/usr/lib/bromigos/boot/grub-btrfs-titles"
 LOADER_INFO = "/sys/firmware/efi/efivars/LoaderInfo-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
 MKCONFIG = os.environ.get("BROMIGOS_GRUB_MKCONFIG", "grub-mkconfig")
@@ -329,6 +332,18 @@ def fonts_in_theme():
     return sorted(n for n in os.listdir(d) if n.endswith(".pf2")) if os.path.isdir(d) else []
 
 
+def fonts_in_grub():
+    """Secure Boot's GRUB (bromigos-secureboot) has the fonts inside its signed image: with
+    Secure Boot on, GRUB loads no font from /boot, and grub.cfg's loadfont line for each of
+    the theme's would fail. Then the theme in /boot leaves them out."""
+    try:
+        with open(at(SECUREBOOT_STATE)) as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        return False
+    return st.get("fonts_embedded") is True and st.get("status") in ("ready", "failed")
+
+
 def install_theme(theme, src):
     if src:
         files, manifest = from_user(src)
@@ -336,8 +351,9 @@ def install_theme(theme, src):
     else:
         files, manifest = from_package(theme)
         source = "package"
-    for name, data in fonts().items():
-        files[name] = data
+    if not fonts_in_grub():
+        for name, data in fonts().items():
+            files[name] = data
     before = fonts_in_theme()
     write_theme(files)
     name = manifest.get("theme") or theme or "?"

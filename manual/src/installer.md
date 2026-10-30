@@ -29,11 +29,11 @@ itself.
 2. **Before you start.** Shown only when there's something to know: running on battery
    (plug in the charger), less than 4 GB of memory, a disk that reports it's failing, a
    graphics card bromigOS can't drive well, Secure Boot. Each line says what to do. None
-   of them stops you. With Secure Boot on, install as usual, then turn Secure Boot off in
-   the computer's setup before you start bromigOS from the disk: the installed system
-   can't start with it on yet ([Download page](https://bromigos.org/download#secure-boot)).
+   of them stops you. Secure Boot needs nothing here: the install sets bromigOS up to start
+   with it on ([Secure Boot](install.md#secure-boot)). Only a stick from before that warns
+   you to turn Secure Boot off before you start bromigOS from the disk:
 
-   ![Before you start: Secure Boot is on, with what it means and how to turn it off](images/installer-before-you-start-secure-boot.webp)
+   ![Before you start, on a stick from before: Secure Boot is on, with what it means and how to turn it off](images/installer-before-you-start-secure-boot.webp)
 
 3. **What kind of computer is this?** **bromigOS (desktop)** for a computer you sit at.
    **bromigOS Server** has no desktop, for servers and lab machines.
@@ -74,7 +74,10 @@ itself.
 
 11. **Installing.** A progress bar and a line saying what's happening. **Details** shows
     every step. It takes about ten minutes.
-12. **Done.** Press **Restart now**. Take out the stick when the screen goes dark.
+12. **Done.** Press **Restart now**. Take out the stick when the screen goes dark. On a
+    computer that starts the newer way (UEFI), this page also shows a four-digit code:
+    note it. At the first start, a blue screen asks you to approve bromigOS once, with that
+    code ([Secure Boot](install.md#secure-boot)). Secure Boot can stay on.
 
     ![bromigOS is installed: what happens at the next start, and Restart now](images/installer-done.webp)
 

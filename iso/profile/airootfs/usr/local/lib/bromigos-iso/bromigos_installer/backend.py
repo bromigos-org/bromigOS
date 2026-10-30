@@ -31,6 +31,10 @@ DISKS = os.path.join(os.path.dirname(os.path.realpath(__file__)), "disks.py")
 FAKE = bool(os.environ.get("BROMIGOS_INSTALLER_FAKE"))
 STAGE = re.compile(r"^::stage (\d+) (.*)$")
 ERROR = re.compile(r"^::error (.*)$")
+# Secure Boot set up for the new system (bromigos-secureboot): the code that approves its key
+# at the first start, for the last page
+SECUREBOOT = re.compile(r"^::secureboot ([0-9]{4,8})$")
+SECUREBOOT_CODE = None
 
 
 def as_root(argv):
@@ -100,6 +104,11 @@ class Install:
                 m = ERROR.match(line)
                 if m:
                     self.error = self.error or m.group(1)       # the first is the cause
+                    continue
+                m = SECUREBOOT.match(line)
+                if m:
+                    global SECUREBOOT_CODE
+                    SECUREBOOT_CODE = m.group(1)
                     continue
                 self.on_line(line)
             rc = self.proc.wait()

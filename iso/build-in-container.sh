@@ -102,6 +102,11 @@ want+=(base-devel linux-headers grub efibootmgr os-prober systemd-ukify pacman-m
        grub-btrfs inotify-tools snapper snap-pac cryptsetup btrfs-progs zram-generator
        pipewire pipewire-alsa pipewire-pulse pipewire-jack wireplumber gst-plugin-pipewire
        networkmanager dhcpcd iwd xdg-user-dirs)
+# Secure Boot on the installed system (docs/secureboot.md): bromigos-secureboot and what it
+# runs, so the installer sets it up with no network (the package only where the channel has it)
+want+=(sbsigntools mokutil)
+# (the medium's Secure Boot step then also puts SECURE_BOOT.txt on it, which publish.sh reads)
+if pacman -Si bromigos-secureboot >/dev/null 2>&1; then want+=(bromigos-secureboot); export ISO_SECUREBOOT_INSTALLED=1; fi
 # bromigos hw: what `bromigos hw setup` may install for this machine's GPU and kind (hw.rs's
 # ALL_PACKAGES, a test keeps the two in step; not -lts/-dkms: the medium installs the stock
 # kernel), so the installer can hand this machine's to archinstall from the medium

@@ -792,6 +792,9 @@ class Installer(App):
             self.heading(box, "done")
             ed = common.edition(self.a["edition"])
             lines = ["When the screen goes dark, take out the USB stick."]
+            sb = common.secureboot_done(backend.SECUREBOOT_CODE)
+            if sb:
+                lines.append(sb)
             if self.a["encrypt"]:
                 lines.append("At start, type the disk's passphrase" + (" (your password)." if not self.a.get("separate_passphrase") else "."))
             if self.a["mode"] == "alongside":

@@ -455,6 +455,23 @@ if (( ! dry )) && [[ -x $target/usr/lib/bromigos/boot/bromigos-fieldkit-boot ]];
         || say "Field Kit isn't in the boot menu yet (bromigos-fieldkit-boot status says why)"
 fi
 
+# Secure Boot (docs/secureboot.md): the new system starts with it on, through shim, with a key
+# of its own (bromigos-secureboot setup: the key, GRUB built with its fonts inside and signed,
+# the kernels and Field Kit signed, the firmware's "bromigOS" entry first, the installer's own
+# GRUB entry gone, and the key's enrollment asked for at the first start). The code approves
+# it there; the installers show it on their last page (::secureboot CODE). Never stops the
+# install: without it, the system starts as before, with Secure Boot off.
+if (( ! dry )) && [[ -d /sys/firmware/efi ]] && [[ -x $target/usr/lib/bromigos/secureboot/bromigos-secureboot ]]; then
+    stage 94 "Setting up Secure Boot"
+    sbcode=''; [[ -n $answers ]] && sbcode=$(ans secureboot_code)
+    [[ $sbcode =~ ^[0-9]{4,8}$ ]] || sbcode=$(printf '%04d' $(( $(od -An -N2 -tu2 /dev/urandom) % 10000 )))
+    if in_target /usr/lib/bromigos/secureboot/bromigos-secureboot setup --fresh-install --code "$sbcode"; then
+        printf '::secureboot %s\n' "$sbcode"
+    else
+        say "Secure Boot wasn't set up (sudo bromigos secureboot setup tries again); until it is, start bromigOS with Secure Boot off"
+    fi
+fi
+
 stage 96 "Finishing"
 # the sync databases are the offline copy's, newer than the repositories' own: the first
 # `pacman -Sy` would keep them (it asks "modified since?", the server says no) and check

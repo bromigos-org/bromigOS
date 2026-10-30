@@ -50,8 +50,9 @@ REQUIRED = ["amd-ucode", "intel-ucode", "linux-firmware", "btrfs-progs", "crypts
 REQUIRED_SERVICES = ["NetworkManager", "snapper-timeline.timer", "snapper-cleanup.timer", "grub-btrfsd"]
 ONLINE_MIRROR = "https://geo.mirror.pkgbuild.com/$repo/os/$arch"
 # the boot menu's own entries and Field Kit on /boot (bromigos-boot's pacman hook copies it
-# there when it fits: /boot is 2 GiB for it), when the medium carries them
-OPTIONAL = ["bromigos-boot", "bromigos-fieldkit"]
+# there when it fits: /boot is 2 GiB for it), and Secure Boot's signing (bromigos-secureboot:
+# bromigos-iso-install sets it up), when the medium carries them
+OPTIONAL = ["bromigos-boot", "bromigos-fieldkit", "bromigos-secureboot"]
 OFFLINE_REPO = os.environ.get("BROMIGOS_ISO_REPO_DIR", "/var/lib/bromigos/repo")
 
 

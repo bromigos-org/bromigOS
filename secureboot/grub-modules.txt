@@ -1,0 +1,34 @@
+# The GRUB modules built into bromigOS's GRUB for Secure Boot (docs/secureboot.md): the
+# medium's (iso/secureboot/medium.sh) and the installed system's (bromigos-secureboot).
+# With Secure Boot on, GRUB loads no module from the disk, so every command a menu may use
+# is built in: grub-mkconfig's scripts (00_header, 10_linux, 25_bli, 30_os-prober,
+# 30_uefi-firmware, 31_efi_bootnext), grub-btrfs's snapshots, bromigOS's boot theme and
+# entries, and the medium's menus. A module this GRUB doesn't have is left out (the builds
+# check each one). Words after # are comments.
+
+# partition tables, file systems, compression
+part_gpt part_msdos part_apple
+fat exfat ext2 btrfs xfs f2fs ntfs ntfscomp iso9660 udf hfsplus squash4
+gzio xzio lzopio zstd
+# encrypted, RAID and LVM disks (GRUB_ENABLE_CRYPTODISK, a /boot on mdraid or LVM)
+cryptodisk luks luks2 argon2 pbkdf2 gcry_rijndael gcry_sha1 gcry_sha256 gcry_sha512
+diskfilter lvm mdraid09 mdraid1x raid5rec raid6rec
+# finding and reading the configuration
+search search_fs_uuid search_fs_file search_label configfile normal loadenv
+test regexp echo eval true read sleep keystatus probe cat ls help minicmd
+halt reboot gettext terminal extcmd datetime smbios cpuid
+# starting systems: Linux, another loader (Windows), the firmware's own boot entries and
+# setup, systemd's boot loader interface
+linux chain boot connectefi efifwsetup efibootnext bli lsefi lsefimmap lsmmap tpm
+# the boot menu: the theme, its pictures and fonts
+all_video video video_fb efi_gop efi_uga video_bochs video_cirrus videoinfo
+font gfxterm gfxterm_background gfxmenu png jpeg tga
+# the fonts inside the image (a memdisk), and procfs
+memdisk tar procfs
+# a password on the boot menu (GRUB_PASSWORD's password_pbkdf2)
+password password_pbkdf2
+# keyboards and the serial console
+at_keyboard usb_keyboard keylayouts serial usb usbserial_common usbserial_ftdi
+usbserial_pl2303 usbserial_usbdebug
+# the medium's menus
+loopback play sleep_test efinet

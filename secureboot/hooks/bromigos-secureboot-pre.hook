@@ -1,0 +1,12 @@
+# bromigOS (bromigos-secureboot): before a kernel upgrade, each kernel signed for Secure Boot
+# is kept with its initramfs and modules, so one the update can't sign is put back and the
+# computer still starts (docs/secureboot.md). Nothing when Secure Boot isn't set up.
+[Trigger]
+Operation = Upgrade
+Type = Path
+Target = usr/lib/modules/*/vmlinuz
+
+[Action]
+Description = Keeping the signed kernels for Secure Boot...
+When = PreTransaction
+Exec = /usr/lib/bromigos/secureboot/bromigos-secureboot hook-pre

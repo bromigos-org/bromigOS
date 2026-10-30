@@ -189,6 +189,7 @@ Then it runs `bromigos setup`, unless you gave `--no-setup`.
 | `herdr` | Terminal workspace manager for AI coding agents | optional: `bromigos install --with herdr` |
 | `paru` | Feature packed AUR helper | by `bromigos install` (its `aur` step), unless `--no-aur` or `bromigos setup aur` leaves it out |
 | `1password` | Password manager and secure wallet | optional, for `bromigos-apps` |
+| `bromigos-secureboot` | bromigOS on Secure Boot: shim, a GRUB built and signed on the computer, kernels signed after every update | by the installer, on a computer that starts the newer way (UEFI); elsewhere by `sudo pacman -S bromigos-secureboot` (docs/secureboot.md) |
 | `xpadneo-dkms` | Advanced Linux Driver for Xbox One Wireless Gamepad | by `bromigos peripheral enable xbox-controller`, for an Xbox controller |
 
 `herdr`, `ttf-geist-mono`, `1password`, `paru` and `xpadneo-dkms` aren't in Arch's own repositories, so bromigOS packages them into its own, each pinned by checksum. Only `1password` needs the AUR, and only on a public install (below).

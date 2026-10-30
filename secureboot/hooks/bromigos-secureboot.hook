@@ -1,0 +1,28 @@
+# bromigOS (bromigos-secureboot): after anything Secure Boot's chain is made of changes, it's
+# signed again with this computer's key: the kernels (mkinitcpio's hook copied them to /boot
+# just before: hooks run in their files' name order), GRUB built again (a new grub, the boot
+# theme's fonts), shim (a new bromigos-secureboot), and Field Kit's copy on /boot
+# (bromigos-boot-menu.hook put it there just before). Where a kernel can't be signed, the one
+# from before the update goes back and it says so. Never fails the transaction; nothing when
+# Secure Boot isn't set up (docs/secureboot.md).
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/lib/modules/*/vmlinuz
+Target = usr/lib/grub/x86_64-efi/*
+Target = usr/share/bromigos/boot/grub/fonts/*
+Target = usr/share/bromigos/secureboot/*
+Target = usr/share/bromigos/fieldkit/boot/*
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = bromigos-fieldkit
+Target = bromigos-boot
+
+[Action]
+Description = Signing for Secure Boot...
+When = PostTransaction
+Exec = /usr/lib/bromigos/secureboot/bromigos-secureboot hook-post

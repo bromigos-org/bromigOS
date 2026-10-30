@@ -242,6 +242,7 @@ rows = [
   { route = "account", text = "Sign a panel in to an online account, such as Twitch, GitHub, GitLab or Spotify. A service can have several accounts, such as gitlab.com and your company's GitLab. See [Panels that need an account](panels.md#panels-that-need-an-account). `bromigos account token` says how to make a Bromigos personal access token." },
   { route = "mute", text = "Mute or unmute the theme's sounds and VECTOR's voice together." },
   { route = "boot", text = "Turn the themed [boot menu](boot-menu.md) on or off." },
+  { route = "secureboot", text = "Start bromigOS with Secure Boot on: `setup` signs it with a key of this computer's own, which you approve once at the next start. See [Secure Boot](install.md#secure-boot)." },
   { route = "emblem", text = "Draw a theme's emblem pictures. For people making themes." },
 ]
 

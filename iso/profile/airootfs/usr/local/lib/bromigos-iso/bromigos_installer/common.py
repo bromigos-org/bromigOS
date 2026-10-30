@@ -472,9 +472,10 @@ def checks(probe=None):
 
 def secure_boot():
     """Secure Boot, in the medium's own words (the release pipeline's bromigos-iso-secureboot
-    check, docs/secureboot.md): exit 1 means it's on and the installed system can't start
-    with it on yet, so a warning with its words and what to do; exit 0 (off, a BIOS start)
-    or no reader: nothing to say."""
+    check, docs/secureboot.md). Exit 1: it's on and this medium can't set the installed system
+    up for it, so a warning with its words and how to turn it off. Exit 0 with words: it's on,
+    and the install sets bromigOS up to start with it (bromigos-secureboot), so a note. Exit 0
+    without words (off, a BIOS start), or no reader: nothing to say."""
     tool = os.environ.get("BROMIGOS_ISO_SECUREBOOT", "/usr/local/bin/bromigos-iso-secureboot")
     if not os.access(tool, os.X_OK):
         return None
@@ -482,14 +483,29 @@ def secure_boot():
         r = subprocess.run([tool, "check"], capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired):
         return None
+    paras = [" ".join(p.split()) for p in r.stdout.split("\n\n") if p.strip()]
+    if r.returncode == 0 and paras:
+        what = paras[1] if len(paras) > 1 else "Secure Boot can stay on."
+        what, _, how = what.partition(" How: ")
+        return {"id": "secureboot", "level": "info", "title": paras[0].rstrip("."), "what": what,
+                "fix": f"What the first start shows, step by step: {how.strip()}" if how.strip() else ""}
     if r.returncode != 1:
         return None
-    paras = [" ".join(p.split()) for p in r.stdout.split("\n\n") if p.strip()]
     what = paras[1] if len(paras) > 1 else "The installed system can't start with Secure Boot on yet."
     what, _, how = what.partition(" How: ")     # its words already say what to do; the link, how
     fix = f"How to turn it off, step by step: {how.strip()}" if how.strip() else ""
     return {"id": "secureboot", "level": "warn", "title": (paras[0].rstrip(".") if paras else "Secure Boot is on"),
             "what": what, "fix": fix}
+
+
+def secureboot_done(code):
+    """The last page's line when the install set up Secure Boot (backend.SECUREBOOT_CODE):
+    what the first start asks, in the order it asks it, before the disk's passphrase."""
+    if not code:
+        return None
+    return (f"At the first start, a blue screen asks you to approve bromigOS once: press any key, then choose "
+            f"Enroll MOK, Continue and Yes, type {code}, and choose Reboot. (Lost the code? Choose Enroll key from "
+            f"disk instead, then the file ENROLL_THIS_KEY_FOR_THIS_PC.cer.)")
 
 
 def gpu_checks():

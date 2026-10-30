@@ -1,0 +1,13 @@
+# bromigOS (bromigos-secureboot): its removal stops while Secure Boot is on and this
+# computer starts through it, since the next kernel update wouldn't be signed and wouldn't
+# start. `sudo bromigos secureboot remove` first, and Secure Boot off (docs/secureboot.md).
+[Trigger]
+Operation = Remove
+Type = Package
+Target = bromigos-secureboot
+
+[Action]
+Description = Checking that Secure Boot doesn't need bromigos-secureboot...
+When = PreTransaction
+Exec = /usr/lib/bromigos/secureboot/bromigos-secureboot hook-remove
+AbortOnFail
