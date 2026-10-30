@@ -130,8 +130,9 @@ def up(a):
         fmt = "qcow2" if f.endswith(".qcow2") else "raw"
         args += ["-drive", f"file={f},if=none,id=usb{i},format={fmt}", "-device", f"usb-storage,drive=usb{i},removable=on"]
     if a.iso:
-        bi = "0" if a.boot == "cd" else "2"
-        args += ["-drive", f"file={a.iso},if=none,id=medium,media=cdrom,readonly=on", "-device", f"ide-cd,drive=medium,bootindex={bi}"]
+        # --direct: QEMU starts the kernel itself, which takes boot index 0; the medium is just a disc
+        bi = "" if a.direct else ",bootindex=" + ("0" if a.boot == "cd" else "2")
+        args += ["-drive", f"file={a.iso},if=none,id=medium,media=cdrom,readonly=on", "-device", f"ide-cd,drive=medium{bi}"]
     if a.boot == "disk" and a.disk:
         fmt = "qcow2" if a.disk.endswith(".qcow2") else "raw"
         args[args.index(f"file={a.disk},if=virtio,format={fmt}")] = f"file={a.disk},if=none,id=hd,format={fmt}"
@@ -141,6 +142,11 @@ def up(a):
     open(os.path.join(d, "serial.log"), "w").close()
     keeper = os.path.join(REPO, "test", "vm", "vm-keeper.py")
     subprocess.run([keeper, "--ready", f"{d}/qmp.sock", "--log", f"{d}/keeper.log", "--owner", owner(), "--", *args], check=True)
+    time.sleep(2)
+    try:
+        qmp(a.name, {"execute": "query-status"})
+    except OSError:
+        sys.exit(f"test.py: the VM didn't stay up; {d}/keeper.log says why")
     print(f"up: {a.name} ({a.firmware}, {a.mem} MiB, {'network' if a.net else 'no network'})")
 
 

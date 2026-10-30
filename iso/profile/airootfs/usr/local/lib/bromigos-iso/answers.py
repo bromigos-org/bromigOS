@@ -263,6 +263,9 @@ def main(argv=None):
         ed = json.loads(_read(a.edition))
         cfg["packages"] = sorted(set(REQUIRED) | set(ed.get("packages", [])))
         cfg["services"] = sorted(set(REQUIRED_SERVICES) | set(ed.get("services", [])))
+        # an edition's sound is its own (bromigOS Server's: none): archinstall would otherwise
+        # add the desktop's PipeWire, which isn't on a medium that carries only the edition
+        cfg["audio_config"] = {"audio": ed["audio"]} if ed.get("audio") else None
     else:
         cfg["packages"] = sorted(set(cfg.get("packages", [])) | {"os-prober", "ntfs-3g"})
     extra = [p for p in OPTIONAL if a.online or in_store(p)]
