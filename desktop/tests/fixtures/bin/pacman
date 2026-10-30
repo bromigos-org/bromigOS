@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""A stand-in pacman (tests, offscreen renders): -Q and -Qi from fixtures' pacman.json; nothing
-else (it never installs)."""
+"""A stand-in pacman (tests, offscreen renders): -Q, -Qi and -T from fixtures' pacman.json;
+nothing else (it never installs)."""
 import os
 import sys
 
@@ -26,5 +26,10 @@ if a[:1] == ["-Qi"]:
         if n in inst:
             print(f"Name            : {n}\nVersion         : {inst[n]}\nLicenses        : {st['licenses'].get(n, 'unknown')}\n")
     sys.exit(0)
-print("pacman stand-in: only -Q and -Qi are pretended", file=sys.stderr)
+if a[:1] == ["-T"]:
+    missing = [n for n in a[1:] if n not in inst]
+    for n in missing:
+        print(n)
+    sys.exit(127 if missing else 0)
+print("pacman stand-in: only -Q, -Qi and -T are pretended", file=sys.stderr)
 sys.exit(1)

@@ -5,6 +5,8 @@
 """Playing games: Super+Ctrl+G turns game mode on. Ctrl+Shift+F12 leaves it.
 Run `bromigos game off` from a TTY or SSH to recover the desktop.
 Automatic fullscreen detection is off until `bromigos game auto on`.
+Steam: `bromigos game setup` installs it, `bromigos game proton` manages Proton versions,
+and `bromigos game check` finds what stops games from starting.
 """
 import argparse
 import fcntl

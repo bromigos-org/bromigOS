@@ -1,0 +1,340 @@
+#!/usr/bin/env python3
+# bromigos:summary=Check Steam, Proton and the desktop for what stops games starting; --fix repairs your own files
+# bromigos:args=[--fix] [--json]
+# bromigos:examples=bromigos game check; bromigos game check --fix
+"""bromigos-game-check (`bromigos game check`): finds what stops games from starting.
+
+  bromigos game check           read-only: each check with what it found and how to fix it
+  bromigos game check --fix     also repair what's yours to repair, keeping a backup.
+                                Steam must be closed
+
+What it checks:
+  runtime      every Steam Linux Runtime and Proton in every Steam library is whole: its
+               toolmanifest.vdf, its entry point and, for a container runtime, pressure-vessel
+  default      Steam's default compatibility tool has Steam's own priority, 75
+  required     each Proton's runtime is installed
+  mapping      no game is set to a Proton that isn't there any more
+  nvapi        on NVIDIA's driver, Proton games get NVAPI (PROTON_ENABLE_NVAPI, for DLSS)
+  login        no leftover file in /etc/sddm.conf.d overrides the login screen
+  bar          no second bar: waybar isn't also enabled as a user service
+  initramfs    mkinitcpio's MODULES names kernel modules, not packages
+
+--fix repairs only your own files: it moves a broken runtime aside (Steam reinstalls it
+when you next press Play), sets the default's priority back to 75 (config.vdf is backed
+up first) and disables your waybar.service. Files in /etc are never changed: the check
+prints the commands to run.
+
+Exit status: 0 when nothing needs fixing, 1 when something does, 2 when it couldn't check.
+"""
+import glob
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+import bromigos_steam as S  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+
+# what bromigOS's login screen sets (settings/sddm/conf/zz-bromigos.conf): a file in /etc
+# that sets one of these overrides it
+SDDM_KEYS = {"displayserver", "compositorcommand", "current", "cursortheme"}
+# names of packages people put in MODULES by mistake: the kernel module is `nvidia`
+PACKAGE_NAMES = re.compile(r"nvidia-(open|open-dkms|open-lts|dkms|lts|utils|beta|beta-dkms|\d+xx-dkms|\d+xx-utils)"
+                           r"|.+-dkms")
+
+
+def finding(check, level, title, detail="", fix="", fixable=None, **extra):
+    """level: ok, info, warn (worth a look) or problem (stops games or the desktop)."""
+    return dict({"check": check, "level": level, "title": title, "detail": detail, "fix": fix,
+                 "fixable": fixable}, **extra)
+
+
+# ------------------------------------------------------------------ Steam
+
+def check_steam(root):
+    out = []
+    installed = S.apps(root)
+    tools = S.custom_tools(root) + S.steam_tools(root, installed)
+    # runtimes: the ones Steam knows, any a tool requires, and Proton itself
+    wanted = set(S.RUNTIMES) | {t.requires for t in tools if t.requires}
+    for appid in sorted(wanted, key=int):
+        app = installed.get(appid)
+        if app is None:
+            continue
+        name = app.name or S.RUNTIMES.get(appid, f"app {appid}")
+        if not app.installed or app.busy:
+            out.append(finding("runtime", "info", f"{name}: Steam is installing or updating it",
+                               f"In {app.library}. Let the download finish before starting a game."))
+            continue
+        problems = S.runtime_problems(app)
+        if problems:
+            out.append(finding(
+                "runtime", "problem", f"{name} is broken",
+                f"In {app.path}: {'; '.join(problems)}. Games that run in it quit within a second or "
+                "two, and Steam's Verify doesn't notice.",
+                "Close Steam, then run `bromigos game check --fix`. It moves the runtime aside, and Steam "
+                "reinstalls it when you next press Play on a game that uses it.",
+                fixable="runtime", appid=appid, library=app.library))
+        else:
+            out.append(finding("runtime", "ok", f"{name} is whole", app.path))
+    for t in tools:
+        if t.kind == "steam":
+            continue
+        if t.manifest is None:
+            out.append(finding("runtime", "problem", f"{t.display}: no toolmanifest.vdf",
+                               f"{t.path} isn't a complete Proton. Steam can't start games with it.",
+                               f"Remove it (`bromigos game proton remove {t.name}`) and install it again."))
+    # the default's priority
+    text, doc, block = S.compat_mapping(root)
+    entries = S.mapping_entries(block)
+    if text is not None and doc is None:
+        out.append(finding("default", "warn", "Steam's config.vdf couldn't be read",
+                           S.config_path(root), "Start Steam once and close it, so it writes the file again."))
+    default = entries.get("0")
+    if default is not None:
+        pr = default["priority"]
+        if pr != S.DEFAULT_PRIORITY:
+            out.append(finding(
+                "default", "problem",
+                f"The default compatibility tool has priority {pr or '(none)'}, not 75",
+                "Steam's own value for the default (\"0\" in CompatToolMapping) is 75. A higher one "
+                "makes Steam use Proton for its own Linux runtimes too, and they fail to install with "
+                "\"Invalid platform\".",
+                "Close Steam, then run `bromigos game check --fix`. It sets the priority back to 75 and "
+                "backs up config.vdf first.",
+                fixable="default"))
+        else:
+            out.append(finding("default", "ok", f"The default compatibility tool ({default['name'] or 'none'}) "
+                               "has Steam's own priority"))
+    # each tool's runtime
+    for t in tools:
+        req = t.requires
+        if not req:
+            continue
+        app = installed.get(req)
+        rname = (app and app.name) or S.RUNTIMES.get(req, f"app {req}")
+        if app is None:
+            out.append(finding(
+                "required", "warn", f"{t.display} needs {rname}, which isn't installed",
+                f"{t.display}'s toolmanifest.vdf asks for app {req}.",
+                f"Press Play on a game that uses {t.display}: Steam installs {rname} first. (Steam's "
+                f"steam://install/{req} doesn't work for runtimes: it says \"Invalid platform\".) If "
+                "that fails with \"Invalid platform\", fix the default's priority first."))
+    # games set to a tool that isn't there
+    names = {t.name for t in tools}
+    for appid, e in sorted(entries.items(), key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0):
+        n = e["name"]
+        if not n or n in names or re.fullmatch(r"[a-z0-9_]+", n):   # Steam's own tools: proton_9, …
+            continue
+        who = "every game (the default)" if appid == "0" else f"app {appid}"
+        ge = re.match(r"GE-Proton\d+-\d+", n)
+        out.append(finding(
+            "mapping", "warn", f"{who} is set to {n}, which isn't installed",
+            "Steam can't start the game with it.",
+            f"Install it (`bromigos game proton install {ge.group(0)}`) or choose another in the game's "
+            "Properties › Compatibility." if ge else
+            "Choose another in the game's Properties › Compatibility."))
+    return out
+
+
+# ------------------------------------------------------------------ the session
+
+def check_nvapi():
+    hw = C.bromigos("hw", "--json", timeout=60)
+    gpus = ((hw or {}).get("detection") or {}).get("gpus") or []
+    if not any(g.get("driver") == "nvidia" for g in gpus):
+        return []
+    if os.environ.get("PROTON_ENABLE_NVAPI") == "1":
+        return [finding("nvapi", "ok", "Proton games get NVAPI on NVIDIA (PROTON_ENABLE_NVAPI=1)")]
+    state = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.join(S.HOME, ".local/state"),
+                         "bromigos/hw/hyprland.lua")
+    written = "PROTON_ENABLE_NVAPI" in (C.read_file(state) or "")
+    return [finding(
+        "nvapi", "warn", "Proton games don't get NVAPI here",
+        "Without PROTON_ENABLE_NVAPI=1, DLSS and Reflex are missing on NVIDIA, and some games crash.",
+        "Log out and back in: your session sets it." if written else
+        "Run `bromigos hw setup --user-only`, then log out and back in. Or set it for one game: "
+        "PROTON_ENABLE_NVAPI=1 %command% in its Launch Options.")]
+
+
+def check_sddm():
+    out = []
+    d = S.sys_path("/etc/sddm.conf.d")
+    for f in sorted(glob.glob(os.path.join(d, "*"))):
+        if not os.path.isfile(f):
+            continue
+        name = "/etc/sddm.conf.d/" + os.path.basename(f)
+        if not f.endswith(".conf"):
+            out.append(finding(
+                "login", "problem", f"{name} is still read by the login screen",
+                "SDDM reads every file in /etc/sddm.conf.d, whatever its name, so renaming a file "
+                "there doesn't turn it off. A leftover setting can leave a black screen at login.",
+                f"Move it out of the folder: sudo mv '{name}' /root/"))
+            continue
+        keys, section = [], ""
+        for line in (C.read_file(f) or "").splitlines():
+            line = line.strip()
+            if line.startswith("[") and line.endswith("]"):
+                section = line[1:-1]
+            elif "=" in line and not line.startswith(("#", ";")):
+                k = line.split("=", 1)[0].strip()
+                if k.lower() in SDDM_KEYS:
+                    keys.append(f"[{section}] {line}")
+        if keys:
+            out.append(finding(
+                "login", "warn", f"{name} overrides bromigOS's login screen",
+                "It sets " + ", ".join(keys) + ". Files in /etc/sddm.conf.d win over bromigOS's.",
+                f"If you didn't set this on purpose, move it out: sudo mv '{name}' /root/"))
+    if not out:
+        out.append(finding("login", "ok", "Nothing in /etc/sddm.conf.d overrides the login screen"))
+    return out
+
+
+def check_waybar():
+    cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.join(S.HOME, ".config")
+    user = glob.glob(os.path.join(cfg, "systemd/user/*.wants/waybar.service"))
+    system = glob.glob(S.sys_path("/etc/systemd/user/*.wants/waybar.service"))
+    out = []
+    if user:
+        out.append(finding(
+            "bar", "problem", "waybar is enabled as a user service",
+            "bromigOS starts its bar with the desktop, so this one makes a second bar on top of it.",
+            "Run `bromigos game check --fix` (or systemctl --user disable waybar.service), then log "
+            "out and back in.", fixable="bar"))
+    if system:
+        out.append(finding(
+            "bar", "problem", "waybar is enabled for every user",
+            "bromigOS starts its bar with the desktop, so this one makes a second bar on top of it.",
+            "Run: sudo systemctl --global disable waybar.service, then log out and back in."))
+    if not out:
+        out.append(finding("bar", "ok", "One bar: waybar isn't a user service"))
+    return out
+
+
+def _modules(text):
+    """MODULES=(…) and MODULES+=(…) in a mkinitcpio file, comments left out."""
+    names = []
+    text = "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+    for m in re.finditer(r"^\s*MODULES\+?=\(([^)]*)\)", text, re.M):
+        names += [w.strip("\"'") for w in m.group(1).split()]
+    return names
+
+
+def check_initramfs():
+    out = []
+    files = [S.sys_path("/etc/mkinitcpio.conf")] + sorted(glob.glob(S.sys_path("/etc/mkinitcpio.conf.d/*.conf")))
+    for f in files:
+        text = C.read_file(f)
+        if text is None:
+            continue
+        shown = "/" + os.path.relpath(f, S.fs_root())
+        for name in _modules(text):
+            if PACKAGE_NAMES.fullmatch(name):
+                out.append(finding(
+                    "initramfs", "problem", f"mkinitcpio's MODULES names {name}, a package",
+                    f"In {shown}. MODULES takes kernel modules. {name} is a package, so mkinitcpio warns "
+                    "on every kernel update, and the module it means may not load early.",
+                    f"Replace {name} with nvidia in {shown}, then run: sudo mkinitcpio -P"))
+    if not out:
+        out.append(finding("initramfs", "ok", "mkinitcpio's MODULES are kernel modules"))
+    return out
+
+
+# ------------------------------------------------------------------ fixes
+
+def fix(findings, root):
+    """Repairs the fixable findings; what it did, as lines. Steam's must wait for it to close."""
+    did = []
+    steam = [f for f in findings if f.get("fixable") in ("runtime", "default")]
+    if steam and S.steam_running():
+        did.append("Steam is running: close it (Steam › Exit), then run `bromigos game check --fix` again. "
+                   "Steam writes its config back when it exits, so changes made now would be undone.")
+        steam = []
+    for f in steam:
+        if f["fixable"] == "runtime":
+            app = S.apps(root).get(f["appid"])
+            if app is None:
+                continue
+            dest = S.move_aside(app.library, S.runtime_paths(app))
+            if dest:
+                did.append(f"Moved {app.name or app.appid} aside to {dest}. Press Play on a game that uses it: "
+                           "Steam reinstalls it first. Delete the backup once games start.")
+        elif f["fixable"] == "default":
+            text, _, block = S.compat_mapping(root)
+            zero = block and block.get("0")
+            if not isinstance(zero, S.Block):
+                continue
+            backup = S.backup_file(S.config_path(root))
+            C.write_file(S.config_path(root), S.set_value(text, zero, "priority", S.DEFAULT_PRIORITY))
+            did.append(f"Set the default compatibility tool's priority to 75 (config.vdf backed up to {backup}).")
+    for f in findings:
+        if f.get("fixable") == "bar":
+            rc, _, err = C.run(["systemctl", "--user", "disable", "waybar.service"])
+            did.append("Disabled your waybar.service: log out and back in for one bar. "
+                       "(`systemctl --user enable waybar.service` undoes it.)" if rc == 0 else
+                       f"Couldn't disable waybar.service: {err.strip() or f'exit {rc}'}")
+    return did
+
+
+# ------------------------------------------------------------------ main
+
+def run_checks(root):
+    findings = []
+    if root is None:
+        findings.append(finding("steam", "info", "Steam hasn't run here yet",
+                                fix="`bromigos game setup` installs it. Start it once, then check again."))
+    else:
+        findings += check_steam(root)
+    findings += check_nvapi() + check_sddm() + check_waybar() + check_initramfs()
+    return findings
+
+
+MARK = {"ok": "ok  ", "info": "note", "warn": "warn", "problem": "FIX "}
+
+
+def main(argv):
+    as_json = "--json" in argv
+    args = [a for a in argv if a != "--json"]
+    if any(a in ("-h", "--help", "help") for a in args):
+        print(USAGE)
+        return 0
+    do_fix = "--fix" in args
+    bad = [a for a in args if a != "--fix"]
+    if bad:
+        print(f"bromigos game check: unknown argument {bad[0]!r}\n{USAGE}", file=sys.stderr)
+        return 2
+    root = S.steam_root()
+    findings = run_checks(root)
+    did = []
+    if do_fix:
+        did = fix(findings, root)
+        findings = run_checks(S.steam_root())
+    problems = [f for f in findings if f["level"] == "problem"]
+    if as_json:
+        print(json.dumps({"schema": 1, "ok": True, "healthy": not problems, "steam_root": root,
+                          "findings": findings, "fixed": did}))
+    else:
+        for f in findings:
+            print(f"{MARK[f['level']]}  {f['title']}")
+            if f["level"] != "ok":
+                if f["detail"]:
+                    print(f"      {f['detail']}")
+                if f["fix"]:
+                    print(f"      Fix: {f['fix']}")
+        for line in did:
+            print(f"\n{line}")
+        print("\n" + ("Nothing stops games here." if not problems else
+                      f"{len(problems)} thing{'s' if len(problems) != 1 else ''} to fix."))
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except (OSError, S.VdfError) as e:
+        print(f"bromigos game check: {e}", file=sys.stderr)
+        sys.exit(2)

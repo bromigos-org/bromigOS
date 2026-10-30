@@ -633,6 +633,12 @@ pub const GPU_RULES: &str = "/etc/udev/rules.d/61-bromigos-gpu.rules";
 pub const NVIDIA_PM_RULES: &str = "/etc/udev/rules.d/80-bromigos-nvidia-pm.rules";
 pub const NVIDIA_PM_CONF: &str = "/etc/modprobe.d/bromigos-nvidia-pm.conf";
 pub const NVIDIA_KMS_CONF: &str = "/etc/modprobe.d/bromigos-nvidia-kms.conf";
+/// Proton's NVAPI for games on NVIDIA's driver: DLSS, Reflex (docs/hardware.md, NVIDIA).
+pub const NVAPI_ENV: &str = "PROTON_ENABLE_NVAPI";
+/// Present while NVIDIA's kernel module is loaded: the variable's guard.
+pub const NVIDIA_MODULE_DIR: &str = "/sys/module/nvidia";
+const NVAPI_WHY: &str =
+    "Proton games get NVIDIA's NVAPI (DLSS, Reflex) while NVIDIA's driver is loaded";
 pub const IGPU_LINK: &str = "/dev/dri/bromigos-igpu";
 pub const DGPU_LINK: &str = "/dev/dri/bromigos-dgpu";
 
@@ -1225,6 +1231,18 @@ pub fn wanted(d: &Detection) -> Want {
         );
     }
 
+    // games through Proton on NVIDIA's own driver: Proton leaves NVAPI off unless asked,
+    // and without it DLSS and Reflex are missing and some games crash. Guarded by the
+    // loaded module, so a GPU swapped since leaves the variable out. Not set on nouveau.
+    if proprietary {
+        w.env.push(EnvVar {
+            name: NVAPI_ENV.into(),
+            value: "1".into(),
+            when: vec![NVIDIA_MODULE_DIR.into()],
+            why: NVAPI_WHY.into(),
+        });
+    }
+
     // laptops: the brightness keys' tool, the battery in the bar (waybar finds it), power
     // profiles; a touchpad is libinput's in Hyprland already (tap, gestures: the defaults)
     if m.laptop {
@@ -1284,6 +1302,16 @@ const HYPRLAND_HEADER: &str = "\
 -- (docs/hardware.md). bromigOS's default hyprland.lua reads it; don't edit it, run\n\
 -- `bromigos hw setup` again after changing GPUs. A variable is set only while every\n\
 -- path in its `when` exists, so a GPU swapped since can't break the session.\n\
+-- (NVIDIA's driver needs no variables: libva maps nvidia-drm to its driver, Xwayland\n\
+-- picks the GLX vendor, Hyprland's cursor settings default to what NVIDIA needs. Only\n\
+-- Proton games get one, PROTON_ENABLE_NVAPI, for DLSS.)\n";
+
+/// The header before PROTON_ENABLE_NVAPI: a file written then is still ours to refresh.
+const HYPRLAND_HEADER_V1: &str = "\
+-- This machine's GPU environment for Hyprland, written by `bromigos hw setup`\n\
+-- (docs/hardware.md). bromigOS's default hyprland.lua reads it; don't edit it, run\n\
+-- `bromigos hw setup` again after changing GPUs. A variable is set only while every\n\
+-- path in its `when` exists, so a GPU swapped since can't break the session.\n\
 -- (NVIDIA alone needs none: libva maps nvidia-drm to its driver, Xwayland picks the\n\
 -- GLX vendor, Hyprland's cursor settings default to what NVIDIA needs.)\n";
 
@@ -1327,6 +1355,7 @@ pub fn hyprland_lua(d: &Detection, env: &[EnvVar]) -> String {
 fn generated_hyprland_lua(text: &str) -> bool {
     let Some(body) = text
         .strip_prefix(HYPRLAND_HEADER)
+        .or_else(|| text.strip_prefix(HYPRLAND_HEADER_V1))
         .and_then(|body| body.strip_prefix("return {\n    gpus = "))
     else {
         return false;
@@ -1346,15 +1375,21 @@ fn generated_hyprland_lua(text: &str) -> bool {
     else {
         return false;
     };
-    if body == "    },\n}\n" {
-        return true;
-    }
+    // the stock hybrid preference (its comment names the GPUs), then the stock NVAPI line
     let prefix = format!(
         "        {{ \"AQ_DRM_DEVICES\", \"{IGPU_LINK}:{DGPU_LINK}\", when = {{ \"{IGPU_LINK}\" }} }},   -- "
     );
-    body.strip_prefix(&prefix)
-        .and_then(|body| body.split_once('\n'))
-        .is_some_and(|(_, rest)| rest == "    },\n}\n")
+    let body = match body.strip_prefix(&prefix) {
+        Some(rest) => match rest.split_once('\n') {
+            Some((_, rest)) => rest,
+            None => return false,
+        },
+        None => body,
+    };
+    let nvapi = format!(
+        "        {{ \"{NVAPI_ENV}\", \"1\", when = {{ \"{NVIDIA_MODULE_DIR}\" }} }},   -- {NVAPI_WHY}\n"
+    );
+    body.strip_prefix(&nvapi).unwrap_or(body) == "    },\n}\n"
 }
 
 /// `pacman -T` over the names: the ones not satisfied (not installed, nor provided).
