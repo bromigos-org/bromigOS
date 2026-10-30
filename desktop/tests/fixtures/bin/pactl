@@ -68,6 +68,11 @@ elif cmd in ("set-sink-port", "set-source-port"):
     if a[2] not in [p["name"] for p in o["ports"]]:
         F.die("Failure: No such entity")
     o["active_port"] = a[2]
+elif cmd == "set-card-profile":
+    o = next((c for c in st.get("cards", []) if c["name"] == a[1] or str(c["index"]) == a[1]), None)
+    if o is None or a[2] not in o["profiles"]:
+        F.die("Failure: No such entity")
+    o["active_profile"] = a[2]
 elif cmd == "move-sink-input":
     o = find("sink_inputs", a[1])
     o["sink"] = find("sinks", a[2])["index"]

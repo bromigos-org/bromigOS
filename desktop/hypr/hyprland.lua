@@ -283,9 +283,12 @@ hl.animation({ leaf = "workspaces", enabled = true, speed = 3, bezier = "crisp",
 -- panels (ignore_alpha keeps it off their fully transparent pixels), and VECTOR's console
 -- and hologram gallery.
 for _, namespace in ipairs({ "waybar", "rofi", "notifications", "bromigos-widgets",
-                             "bromigos-vector", "bromigos-holo-gallery" }) do
+                             "bromigos-vector", "bromigos-holo-gallery", "bromigos-bluetooth" }) do
     hl.layer_rule({ match = { namespace = namespace }, blur = true, ignore_alpha = 0.2 })
 end
+-- The bar's popups (bromigos bluetooth panel and menu, and the clear surface behind them that
+-- closes them on a click) appear at once: no fade.
+hl.layer_rule({ match = { namespace = "^(bromigos-bluetooth.*)$" }, no_anim = true })
 
 -- Window rules (applied top to bottom). Find a window's class and title: hyprctl clients.
 hl.window_rule({ match = { class = "kitty" }, tile = true })

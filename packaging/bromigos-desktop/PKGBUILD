@@ -52,6 +52,7 @@ optdepends=('starship: optional zsh prompt'
             'wf-recorder: screen recording (bromigos-rec)'
             'brightnessctl: the brightness keys'
             'pavucontrol: the bar volume click'
+            'bluez: Bluetooth (the bar icon and its panel need only bluetoothd)'
             'bluez-utils: Settings › Bluetooth (bluetoothctl)'
             'nm-connection-editor: Settings › Network › More settings (802.1X, WEP, proxies)'
             'btop: the bar CPU/memory click'
@@ -65,7 +66,9 @@ checkdepends=('desktop-file-utils'
              # the widget gallery's tests (bromigos panels gallery reads the panels: cairo, psutil)
              'python-cairo' 'python-psutil' 'python-gobject' 'pango'
              # compile dictation's literal Unicode keyboard map without a desktop
-             'libxkbcommon')
+             'libxkbcommon'
+             # the bar's Bluetooth against a stand-in bluez on a private bus (tests/fake_bluez.py)
+             'dbus')
 options=('!debug')
 
 _root="${startdir%/packaging/*}"
@@ -106,6 +109,7 @@ check() {
   python -m py_compile bin/bromigos-windows
   python -m py_compile settings/bromigos-settings settings/bromigos-tv-guide settings/bromigos_tvguide.py settings/bromigos_settings/*.py settings/pages/*.py waybar/scripts/idle.py bin/bromigos-peripherals lib/bromigos_peripherals.py
   python -m py_compile bin/bromigos-keys lib/bromigos_keys.py lib/bromigos_keycapture.py lib/bromigos_cli.py lib/bromigos_extlist.py
+  python -m py_compile lib/bromigos_bluez.py lib/bromigos_btpanel.py lib/bromigos_driftglass.py waybar/scripts/bluetooth.py
   local c
   for c in "${_settings_cmds[@]}"; do python -m py_compile "bin/bromigos-$c"; done
   luac -p lib/bromigos_keys_eval.lua 2>/dev/null || lua -e "assert(loadfile('lib/bromigos_keys_eval.lua'))"
@@ -130,7 +134,8 @@ package() {
              dunst gtklock zsh user -type f -print0)
   # the tools the defaults call
   install -Dm0755 -t "$lib/desktop/waybar/" waybar/scripts/gpu.py waybar/scripts/storage.py \
-    waybar/scripts/vector.py waybar/scripts/vector-switch.py waybar/scripts/copy-ip waybar/scripts/idle.py
+    waybar/scripts/vector.py waybar/scripts/vector-switch.py waybar/scripts/copy-ip waybar/scripts/idle.py \
+    waybar/scripts/bluetooth.py
   install -Dm0755 -t "$lib/desktop/rofi/" rofi/scripts/power-menu rofi/scripts/quick-note
   install -Dm0755 -t "$lib/desktop/bin/" bin/bromigos-shot bin/bromigos-rec bin/bromigos-banner \
     bin/bromigos-wallpaper bin/bromigos-menu bin/bromigos-webapp bin/bromigos-theme-switcher \
@@ -204,6 +209,9 @@ package() {
   install -Dm0644 -t "$lib/settings/bromigos_settings/" settings/bromigos_settings/*.py
   install -Dm0644 -t "$lib/settings/pages/" settings/pages/*.py
   install -Dm0644 -t "$lib/lib/" lib/bromigos_cli.py lib/bromigos_extlist.py
+  # Bluetooth: bluez over D-Bus (the bar's module, its panel and menu, bromigos bluetooth's
+  # kinds and sound profiles), the panel, and the DRIFTGLASS drawing it uses
+  install -Dm0644 -t "$lib/lib/" lib/bromigos_bluez.py lib/bromigos_btpanel.py lib/bromigos_driftglass.py
   for f in "${_settings_cmds[@]}"; do
     install -Dm0755 "bin/bromigos-$f" "$lib/bin/bromigos-$f"
   done

@@ -1,0 +1,23 @@
+{
+ "adapter": {"path": "/org/bluez/hci0", "address": "00:00:5E:00:53:01", "name": "workstation", "powered": true,
+             "discoverable": false, "pairable": true},
+ "devices": [
+  {"mac": "00:00:5E:00:53:10", "name": "WH-1000XM5", "icon": "audio-headset", "paired": true, "connected": true,
+   "trusted": true, "battery": 70, "uuids": ["0000110b-0000-1000-8000-00805f9b34fb", "0000111e-0000-1000-8000-00805f9b34fb"]},
+  {"mac": "00:00:5E:00:53:12", "name": "Xbox Wireless Controller", "icon": "input-gaming", "paired": true,
+   "connected": true, "trusted": true, "battery": 12, "uuids": ["00001812-0000-1000-8000-00805f9b34fb"]},
+  {"mac": "00:00:5E:00:53:11", "name": "MX Master 3S", "icon": "input-mouse", "paired": true, "connected": false,
+   "trusted": true, "battery": 35},
+  {"mac": "00:00:5E:00:53:13", "name": "Galaxy Buds2 Pro", "icon": "audio-headphones", "paired": true,
+   "connected": false, "trusted": true, "battery": null,
+   "uuids": ["0000110b-0000-1000-8000-00805f9b34fb", "0000111e-0000-1000-8000-00805f9b34fb"]}
+ ],
+ "nearby": [
+  {"mac": "00:00:5E:00:53:20", "name": "JBL Flip 6", "icon": "audio-card", "pairing": "just-works", "rssi": -58,
+   "uuids": ["0000110b-0000-1000-8000-00805f9b34fb"]},
+  {"mac": "00:00:5E:00:53:21", "name": "Pixel 9", "icon": "phone", "pairing": "confirm", "rssi": -71,
+   "uuids": ["0000110a-0000-1000-8000-00805f9b34fb"]},
+  {"mac": "00:00:5E:00:53:22", "name": "Keychron K3", "icon": "input-keyboard", "pairing": "type", "rssi": -64},
+  {"mac": "00:00:5E:00:53:23", "name": "Car kit", "icon": "audio-card", "pairing": "pin", "rssi": -80}
+ ]
+}

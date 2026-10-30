@@ -94,8 +94,10 @@ VECTOR's voice. Your apps keep their sound.
 ### Pair a Bluetooth device
 
 1. Put the device in pairing mode.
-2. Open **Settings › Bluetooth** and choose **Scan**.
-3. Choose the device when it appears, then **Pair**.
+2. Click the Bluetooth icon on the bar and choose **SCAN**.
+3. Choose **PAIR** beside the device when it appears.
+
+[Bluetooth](bluetooth.md) has the steps for an Xbox controller and for headphones.
 
 ### Set up your monitors
 

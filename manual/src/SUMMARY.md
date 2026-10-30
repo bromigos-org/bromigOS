@@ -40,6 +40,7 @@
     - [Make your own widget](make-a-widget.md)
 - [Updating and rolling back](update-and-rollback.md)
 - [Hardware](hardware.md)
+    - [Bluetooth](bluetooth.md)
     - [Keyboards and peripherals](peripherals.md)
 - [Accessibility](accessibility.md)
 - [Troubleshooting](troubleshooting.md)

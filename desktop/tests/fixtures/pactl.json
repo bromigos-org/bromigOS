@@ -234,5 +234,62 @@
     "application.icon_name": "spotify-client"
    }
   }
+ ],
+ "cards": [
+  {
+   "index": 50,
+   "name": "bluez_card.00_00_5E_00_53_10",
+   "driver": "module-bluez5-device.c",
+   "properties": {
+    "api.bluez5.address": "00:00:5E:00:53:10",
+    "device.description": "WH-1000XM5"
+   },
+   "profiles": {
+    "off": {
+     "description": "Off",
+     "sinks": 0,
+     "sources": 0,
+     "priority": 0,
+     "available": true
+    },
+    "a2dp-sink": {
+     "description": "High Fidelity Playback (A2DP Sink, codec LDAC)",
+     "sinks": 1,
+     "sources": 0,
+     "priority": 18,
+     "available": true
+    },
+    "a2dp-sink-sbc": {
+     "description": "High Fidelity Playback (A2DP Sink, codec SBC)",
+     "sinks": 1,
+     "sources": 0,
+     "priority": 1,
+     "available": true
+    },
+    "a2dp-sink-aac": {
+     "description": "High Fidelity Playback (A2DP Sink, codec AAC)",
+     "sinks": 1,
+     "sources": 0,
+     "priority": 2,
+     "available": true
+    },
+    "headset-head-unit": {
+     "description": "Headset Head Unit (HSP/HFP, codec mSBC)",
+     "sinks": 1,
+     "sources": 1,
+     "priority": 2,
+     "available": true
+    },
+    "headset-head-unit-cvsd": {
+     "description": "Headset Head Unit (HSP/HFP, codec CVSD)",
+     "sinks": 1,
+     "sources": 1,
+     "priority": 1,
+     "available": true
+    }
+   },
+   "active_profile": "a2dp-sink",
+   "ports": {}
+  }
  ]
 }

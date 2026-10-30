@@ -236,9 +236,19 @@ password leaves nothing saved.
 - Paired devices show their kind, connection and battery. Each has Connect or Disconnect,
   which Undo reverses, and Forget…, which asks first.
 - Scan looks for devices in pairing mode for 8 seconds. Pair pairs, trusts and connects.
+- "Switch the sound over on connect" is `bromigos bluetooth audio-default on|off`, kept in
+  `~/.config/bromigos/bluetooth.toml`. On, the bar's module makes a headset or speaker the
+  sound output when it connects.
 
-A device that asks for a PIN or passkey needs an agent. The page says so and opens
-`bluetoothctl` in a terminal. There you type `pair <MAC>` and answer the code.
+A device that asks for a PIN or passkey needs an agent, a program that answers bluez's
+questions. `bluetoothctl` run one command at a time has none, so the page offers
+**Pair in the panel**: `bromigos bluetooth panel pair <MAC>` pairs it in the bar's panel,
+whose agent asks for the code ([desktop.md](desktop.md#the-bars-bluetooth)).
+
+`bromigos bluetooth status` also gives each headset's sound profile and codec, from
+PipeWire's cards (`pactl list cards`), and an Xbox controller's driver: `xpadneo` or
+`basic`. `bromigos bluetooth profile <MAC> hifi|headset` switches a headset between A2DP
+(music quality, no microphone) and HFP (the microphone, at call quality).
 
 ### Power
 
@@ -618,7 +628,7 @@ tests give it stand-ins.
 | `bromigos sound` | `pactl` | PipeWire's state |
 | `bromigos scene` | nothing | `~/.config/bromigos/live/overrides.toml` |
 | `bromigos net` | `nmcli` | NetworkManager's connections |
-| `bromigos bluetooth` | `bluetoothctl`, `rfkill` | bluez's devices |
+| `bromigos bluetooth` | `bluetoothctl`, `rfkill`, `pactl` | bluez's devices, the headsets' sound profiles |
 | `bromigos power` | `powerprofilesctl`, sysfs, `pkexec` | the profile, the lid's logind drop-in |
 | `bromigos setup input` | `Hyprland --verify-config`, `hyprctl` | `input.toml`, the input block of `hyprland.lua` |
 | `bromigos clock` | `timedatectl` | timedated, `~/.config/bromigos/waybar/settings.jsonc` |

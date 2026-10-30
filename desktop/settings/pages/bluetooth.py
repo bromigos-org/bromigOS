@@ -2,8 +2,8 @@
 disconnect, battery, forget), and finding and pairing new ones (docs/settings.md, "Bluetooth").
 
 Everything goes through `bromigos bluetooth … --json` (bluez through bluetoothctl). A device
-that asks for a PIN or a passkey is paired in bluetoothctl itself, in a terminal: the page
-says so and opens it, rather than pretending."""
+that asks for a PIN or a passkey is paired in the bar's Bluetooth panel (`bromigos bluetooth
+panel pair MAC`), which asks for the code: the page says so and opens it."""
 import json
 
 from gi.repository import GLib
@@ -48,6 +48,14 @@ class BluetoothPage:
             key="discoverable", on_toggle=self._visible,
             hint="Lets other devices find this machine (bluez turns it off again after 3 minutes)",
             advanced={"runs": "bromigos bluetooth discoverable on|off"})
+        self.audio_row = ctx.switch_row(
+            self.ad_group, "Switch the sound over on connect",
+            "Bluetooth headphones become the sound output as they connect", key="audio-default",
+            on_toggle=self._audio_default,
+            hint="On: connecting Bluetooth headphones makes them the sound output (Settings › Sound shows it). "
+                 "Off: the output stays as it is",
+            advanced={"runs": "bromigos bluetooth audio-default on|off",
+                      "note": "~/.config/bromigos/bluetooth.toml: audio_default"})
         self.ad_notes = []
         self.paired_group = ctx.group(self.page, "Paired devices", "Devices this machine knows: connect one, or forget "
                                       "it.", key="paired")
@@ -60,7 +68,7 @@ class BluetoothPage:
                                 advanced={"runs": "bromigos bluetooth scan 8", "note": "bluetoothctl --timeout 8 scan on"})
         self.near_rows = []
         g = ctx.group(self.page, "By hand")
-        ctx.row(g, "bluetoothctl", "bluez's own console: for a device that asks for a PIN or a passkey",
+        ctx.row(g, "bluetoothctl", "bluez's own console, for anything the panel can't do",
                 key="console", hint="Opens bluetoothctl in a terminal (type `help` there)",
                 buttons=[("Open", lambda: ctx.terminal(["bluetoothctl"]), "Opens bluetoothctl in a terminal")],
                 advanced={"runs": "bluetoothctl"})
@@ -96,6 +104,7 @@ class BluetoothPage:
             f"{d['adapter']['alias']} ({d['adapter']['mac']})" if has else "No adapter"))
         self.vis_row.set_sensitive(has and d.get("powered", False))
         self.vis_row.set_quiet(d.get("discoverable", False))
+        self.audio_row.set_quiet(d.get("audio_default", True))
         self.scan_row.set_sensitive(has and d.get("powered", False) and not self.scanning)
         sig = json.dumps([has, d.get("powered"), d.get("blocked"), d.get("hard_blocked"),
                           [(x["mac"], x["paired"], x["connected"], x["trusted"], x["battery"]) for x in d["devices"]]])
@@ -160,6 +169,10 @@ class BluetoothPage:
         self._do(["discoverable", "on" if on else "off"], "Visible nearby" if on else "Hidden",
                  ["discoverable", "off" if on else "on"])
 
+    def _audio_default(self, on):
+        self._do(["audio-default", "on" if on else "off"], "Sound follows headphones" if on else
+                 "Sound stays put", ["audio-default", "off" if on else "on"])
+
     def _scan(self):
         ctx = self.ctx
         self.scanning = True
@@ -194,9 +207,9 @@ class BluetoothPage:
                     ["remove", x["mac"]], f"Forgot {x['name']}"))
             elif doc and doc.get("needs_agent"):
                 ctx.confirm(f"{x['name']} asks for a code",
-                            f"{x['name']} wants a PIN or a passkey confirmed. Pair it in bluetoothctl: type "
-                            f"`pair {x['mac']}`, then answer the code it shows (or type the one the device shows).",
-                            "Open bluetoothctl", lambda: ctx.terminal(["bluetoothctl"]))
+                            f"{x['name']} wants a PIN or a passkey. The Bluetooth panel pairs it and asks you "
+                            "for the code there.",
+                            "Pair in the panel", lambda: ctx.launch(["bromigos", "bluetooth", "panel", "pair", x["mac"]]))
             else:
                 ctx.toast(f"Not paired: {(doc or {}).get('error') or err}"[:200], timeout=8)
         ctx.toast(f"Pairing with {x['name']}…", timeout=3)
@@ -229,5 +242,7 @@ PAGE = Page(
               "Paired devices"),
         Entry("scan", "Look for devices", ["scan", "search devices", "add device"], "Nearby"),
         Entry("nearby", "Pair a new device", ["pair", "pairing", "add bluetooth device"], "Nearby"),
+        Entry("audio-default", "Switch the sound over on connect",
+              ["audio switch", "bluetooth audio", "follow"], "Adapter"),
         Entry("console", "bluetoothctl", ["pin", "passkey", "pairing code"], "By hand"),
     ])

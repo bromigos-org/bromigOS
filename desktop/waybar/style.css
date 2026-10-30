@@ -208,3 +208,23 @@ window#waybar.empty #window {
                              background-position: center; background-repeat: no-repeat;
                              border-left: 1px solid alpha(@dim, 0.35); }
 #custom-settings:hover     { background-color: alpha(@primary, 0.12); }
+
+/* Bluetooth (bromigos bluetooth): the rune, with the connected devices' count beside it and
+   the main device's battery as a sliver under it (the theme's waybar.css sets the images).
+   DRIFTGLASS EMBER (docs/DRIFTGLASS.md): a connect or disconnect gives one Spark; a scan or a
+   pairing blinks slowly until it ends. The module leaves both classes out under reduced
+   motion ("busy" is the still version). */
+#custom-bluetooth          { color: @soft; font-size: 11px; font-weight: 700; min-width: 8px;
+                             padding: 0 8px 0 30px; border-left: 1px solid alpha(@dim, 0.35);
+                             background-size: 16px 16px, 16px 3px;
+                             background-position: 10px center, 10px 27px;
+                             background-repeat: no-repeat; }
+#custom-bluetooth.off      { color: @muted; }
+#custom-bluetooth.low      { color: @warn; }
+#custom-bluetooth.busy     { color: @primary; }
+#custom-bluetooth:hover    { background-color: alpha(@primary, 0.10); }
+@keyframes bt-spark        { from { background-color: alpha(@primary, 0.30); }
+                             to { background-color: alpha(@primary, 0.0); } }
+#custom-bluetooth.spark    { animation: bt-spark 1s ease-out 1; }
+@keyframes bt-blink        { from { opacity: 1; } to { opacity: 0.4; } }
+#custom-bluetooth.scanning { animation: bt-blink 0.9s ease-in-out infinite alternate; }
