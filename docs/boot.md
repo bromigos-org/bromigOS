@@ -369,7 +369,8 @@ Both menus have the same entries, in plain words:
 | Entry | What it boots |
 |---|---|
 | Start bromigOS (try it live) | The live desktop. This is the default. |
-| Install bromigOS | The live desktop, which opens the installer in a terminal |
+| Install bromigOS | The live desktop, with the graphical installer open full screen |
+| Install bromigOS (text mode) | No desktop (`multi-user.target`): the text installer on the first console, and on the serial console when the kernel's console is there |
 | Start with safe graphics (nomodeset) | The live desktop on the firmware's framebuffer |
 | Memory test (Memtest86+) | Memtest86+ |
 | Boot from disk | The installed system on another disk |
@@ -380,7 +381,15 @@ Both menus have the same entries, in plain words:
 Some entries need more than archiso gives:
 
 - **Install bromigOS** adds `bromigos.install` to the kernel line. The live user's
-  Hyprland autostart, `bromigos-iso-autostart`, sees it and opens the installer.
+  Hyprland autostart, `bromigos-iso-autostart`, sees it and opens the graphical installer;
+  any other live boot shows the welcome card instead ([iso.md](iso.md#installing-from-it)).
+- **Install bromigOS (text mode)** adds `bromigos.install=text systemd.unit=multi-user.target`.
+  `bromigos-iso-text-check.service` decides, with no console of its own, and starts
+  `bromigos-iso-text-install@tty1.service` (and `@ttyS0`, when the kernel's console is
+  there), which runs the text installer in place of the login prompt. On "Install bromigOS"
+  with no graphics (`/dev/dri` empty), it takes tty1 the same way. The console unit is
+  never started otherwise: its TTY settings hang the console up, which would end a desktop
+  session running there.
 - **Memory test on UEFI.** memtest86+-efi 8 names its binary `memtest86x64.efi`, which
   mkarchiso 91 doesn't copy. The build puts it in `grub/` and the menu finds it there.
 - **Boot from disk on UEFI** reads the installed system's own `grub.cfg` from another

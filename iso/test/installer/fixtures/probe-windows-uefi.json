@@ -1,0 +1,199 @@
+{
+ "firmware": "uefi",
+ "disks": [
+  {
+   "path": "/dev/nvme0n1",
+   "size": 550594692096,
+   "size_text": "551 GB",
+   "model": "Samsung SSD 980 PRO 512GB",
+   "kind": "NVMe",
+   "removable": false,
+   "table": "gpt",
+   "partitions": [
+    {
+     "path": "/dev/nvme0n1p1",
+     "size": 104857600,
+     "fstype": "vfat",
+     "label": "SYSTEM",
+     "parttype": "c12a7328-f81f-11d2-ba4b-00a0c93ec93b",
+     "mounted": false,
+     "start": 1048576,
+     "bootable": false,
+     "esp": true,
+     "esp_free": 73400320,
+     "has_microsoft": true,
+     "bitlocker": false,
+     "what": "EFI system partition, 105 MB (Windows' boot manager)"
+    },
+    {
+     "path": "/dev/nvme0n1p2",
+     "size": 16777216,
+     "fstype": null,
+     "label": null,
+     "parttype": "e3c9e316-0b5c-4db8-817d-f92df00215ae",
+     "mounted": false,
+     "start": 105906176,
+     "bootable": false,
+     "esp": false,
+     "bitlocker": false,
+     "what": "Microsoft reserved, 17 MB"
+    },
+    {
+     "path": "/dev/nvme0n1p3",
+     "size": 548682072064,
+     "fstype": "ntfs",
+     "label": "Windows",
+     "parttype": "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7",
+     "mounted": false,
+     "start": 122683392,
+     "bootable": false,
+     "esp": false,
+     "windows": true,
+     "hibernated": false,
+     "dirty": false,
+     "min_bytes": 103079215104,
+     "used_bytes": 102005473280,
+     "unreadable": false,
+     "bios_boot": false,
+     "bitlocker": false,
+     "what": "Windows, 549 GB"
+    },
+    {
+     "path": "/dev/nvme0n1p4",
+     "size": 629145600,
+     "fstype": "ntfs",
+     "label": "Recovery",
+     "parttype": "de94bba4-06d1-4d40-a16a-bfd50179d6ac",
+     "mounted": false,
+     "start": 548804755456,
+     "bootable": false,
+     "esp": false,
+     "windows": false,
+     "hibernated": false,
+     "dirty": false,
+     "min_bytes": 3624960,
+     "used_bytes": 4000000,
+     "unreadable": false,
+     "bios_boot": false,
+     "bitlocker": false,
+     "what": "Windows recovery, 629 MB"
+    }
+   ],
+   "free": [
+    {
+     "start": 549433901056,
+     "size": 1160773632
+    }
+   ],
+   "free_bytes": 1160773632,
+   "oses": [
+    "Windows"
+   ],
+   "medium": false,
+   "summary": "Windows \u00b7 4 partitions",
+   "options": {
+    "erase": {
+     "ok": true,
+     "loses": "Windows"
+    },
+    "alongside": {
+     "ok": true,
+     "mode": "shrink",
+     "name": "Windows",
+     "label": "Install alongside Windows",
+     "esp": "/dev/nvme0n1p1",
+     "partition": "/dev/nvme0n1p3",
+     "fs": "ntfs",
+     "part_size": 548682072064,
+     "keep_min": 113816633344,
+     "free_after": 0,
+     "min": 21474836480,
+     "max": 434865438720,
+     "default": 64424509440,
+     "who": "Windows",
+     "warn": null
+    }
+   }
+  },
+  {
+   "path": "/dev/sda",
+   "size": 1000000000000,
+   "size_text": "1.0 TB",
+   "model": "WDC WD10EZEX",
+   "kind": "SATA",
+   "removable": false,
+   "table": null,
+   "partitions": [],
+   "free": [],
+   "free_bytes": 0,
+   "oses": [],
+   "medium": false,
+   "summary": "Empty",
+   "options": {
+    "erase": {
+     "ok": true,
+     "loses": "nothing: it's empty"
+    },
+    "alongside": {
+     "ok": false,
+     "code": "empty",
+     "why": "The disk is empty: there's nothing to install beside.",
+     "fix": "Choose Erase the whole disk: nothing is lost.",
+     "name": null,
+     "label": "Install alongside what's on it"
+    }
+   }
+  },
+  {
+   "path": "/dev/sdb",
+   "size": 16000000000,
+   "size_text": "16 GB",
+   "model": "SanDisk Ultra",
+   "kind": "USB",
+   "removable": true,
+   "table": "dos",
+   "partitions": [
+    {
+     "path": "/dev/sdb1",
+     "size": 5000000000,
+     "fstype": "iso9660",
+     "label": "BROMIGOS",
+     "parttype": "0",
+     "mounted": true,
+     "start": 0,
+     "bootable": false,
+     "esp": false,
+     "bitlocker": false,
+     "what": "iso9660, 5.0 GB"
+    }
+   ],
+   "free": [
+    {
+     "start": 5000658944,
+     "size": 10998513664
+    }
+   ],
+   "free_bytes": 10998513664,
+   "oses": [],
+   "medium": true,
+   "summary": "the USB stick bromigOS started from",
+   "options": {
+    "erase": {
+     "ok": false,
+     "code": "medium",
+     "why": "This is the USB stick bromigOS started from.",
+     "fix": "Choose another disk. To install onto a USB stick, start bromigOS from a different one."
+    },
+    "alongside": {
+     "ok": false,
+     "code": "medium",
+     "why": "This is the USB stick bromigOS started from.",
+     "fix": "Choose another disk. To install onto a USB stick, start bromigOS from a different one.",
+     "name": null,
+     "label": "Install alongside what's on it"
+    }
+   }
+  }
+ ],
+ "other_os": true
+}

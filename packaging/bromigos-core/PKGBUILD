@@ -161,6 +161,10 @@ package() {
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-console
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-power-menu
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-splash
+  # bromigOS Server's welcome tour (Textual, lib/bromigos_textual.py): `bromigos welcome-console`,
+  # and once at the first console or SSH sign-in after an install (profile.d)
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-welcome-console
+  install -Dm0644 "$_root"/bin/profile.d/bromigos-welcome.sh "$pkgdir/etc/profile.d/bromigos-welcome.sh"
   # the app launcher's entries (docs/menu.md, "In the app launcher")
   install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_root"/core/applications/*.desktop
   # bromigOS's app icons in the hicolor theme every icon theme inherits (theme/app-icons, drawn

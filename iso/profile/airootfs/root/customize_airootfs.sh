@@ -36,6 +36,12 @@ sed -i 's|^\( *\)-- autostart = { },|\1autostart = { "/usr/local/bin/bromigos-is
 grep -q '^ *autostart = { "/usr/local/bin/bromigos-iso-autostart" },' /home/live/.config/hypr/hyprland.lua \
     || { echo "customize_airootfs: the installer's autostart isn't in the live user's hyprland.lua" >&2; exit 1; }
 
+# the installer's ways in on the live desktop: its Install icon (a panel of the live user's:
+# a click opens the installer) and the app launcher's entry (/usr/local/share/applications)
+install -Dm0644 -o live -g live /usr/local/share/bromigos-iso/install-panel.py \
+    /home/live/.config/bromigos/plugins/widgets/install.py
+chown -R live:live /home/live/.config/bromigos
+
 # ── the splash: bromigos-settings' Plymouth theme on the live boot (the hook is in
 #    /etc/mkinitcpio.conf.d/archiso.conf; mkarchiso builds the initramfs after this script)
 if command -v plymouth-set-default-theme >/dev/null; then

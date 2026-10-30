@@ -22,6 +22,24 @@ if [[ $mode == updated ]]; then
     exit $fails
 fi
 
+if [[ $mode == server ]]; then         # bromigOS Server: no desktop, the disk as the desktop's, its protection
+    check "no desktop: no Hyprland, no login screen" bash -c "! pgrep -x Hyprland && ! systemctl is-enabled -q sddm 2>/dev/null"
+    check "starts to the text console (multi-user.target)" bash -c "systemctl get-default | grep -qx multi-user.target"
+    check "the root is btrfs" bash -c "findmnt -no FSTYPE / | grep -qx btrfs"
+    if [[ ${2:-encrypted} == encrypted ]]; then
+        check "the root is on LUKS2" bash -c "sudo cryptsetup status root | grep -qE 'type: +LUKS2'"
+    fi
+    check "snapper's root config (bromigos rollback setup)" bash -c "sudo snapper --no-dbus list-configs | grep -q '^root '"
+    check "GRUB lists the snapshots (grub-btrfs)" bash -c "pacman -Q grub-btrfs && systemctl is-enabled grub-btrfsd"
+    check "no splash on the kernel line" bash -c "! grep -qw splash /proc/cmdline"
+    check "SSH is on and lets the key in" test -s "$HOME/.ssh/authorized_keys"
+    check "SSH: keys only (no passwords)" bash -c "sudo sshd -T | grep -qx 'passwordauthentication no'"
+    check "the firewall is on (nftables), SSH open" bash -c "systemctl is-active -q nftables || systemctl is-active -q bromigos-server-firewall; sudo nft list ruleset | grep -q 'dport 22'"
+    check "the lab console is installed" command -v bromigos-lab
+    check "the install's answers kept, without the password" bash -c "test -s /var/log/bromigos/install-answers.toml && ! grep -qE '^(password|passphrase) ' /var/log/bromigos/install-answers.toml"
+    exit $fails
+fi
+
 check "Hyprland is running" pgrep -x Hyprland
 check "the bar (waybar)" pgrep -x waybar
 check "the widgets" pgrep -f 'python3? /usr/bin/bromigos-widgets'
@@ -59,6 +77,10 @@ if [[ $mode == desktop ]]; then       # the installed system (docs/iso-encryptio
     check "the boot menu lists snapshots (rollback status as the user; $boot_seen)" bash -c "bromigos rollback status | grep -qE '^snapshots: .*boot menu: GRUB lists them \(grub-btrfs\)\$'"
     check "rollback status: nothing left to set up" bash -c "! bromigos rollback status | grep -q 'setup: bromigos rollback setup'"
     check "sshd let the test key in (the installer's --ssh-key)" test -s "$HOME/.ssh/authorized_keys"
+    # the installers keep their answers (an unattended --config install has none to keep)
+    if [[ -e /var/log/bromigos/install-answers.toml ]]; then
+        check "the install's answers kept, without the password" bash -c "! grep -qE '^(password|passphrase)' /var/log/bromigos/install-answers.toml"
+    fi
     check "the repository: [bromigos] on the ${CHANNEL:=stable} channel" channel_is "$CHANNEL"
     check "no offline-copy servers left (file://)" bash -c "! grep -q 'file:///var/lib/bromigos' /etc/pacman.conf /etc/pacman.d/mirrorlist"
     check "one [bromigos] section" bash -c "[ \$(grep -c '^\[bromigos\]' /etc/pacman.conf) -eq 1 ]"

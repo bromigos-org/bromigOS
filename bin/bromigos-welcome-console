@@ -1,0 +1,366 @@
+#!/usr/bin/env python3
+# bromigos:summary=The welcome tour in the terminal (bromigOS Server's first sign-in): the network, SSH, joining your lab, and what's here
+# bromigos:args=[--if-pending] [--render DIR [--size WxH]]
+# bromigos:examples=bromigos welcome-console
+"""bromigos-welcome-console: bromigOS Server's welcome tour, at the first sign-in on its console
+(docs/iso.md, "Editions"; /etc/profile.d/bromigos-welcome.sh starts it once, when the installer
+left ~/.local/state/bromigos/welcome-pending). Textual, in DRIFTGLASS (lib/bromigos_textual.py:
+the theme's palette, truecolour or the console's 16 colours). Every step can be skipped, and
+each one changes things the usual way, so nothing here keeps a setting of its own:
+
+  The network      what's connected and its address; Wi-Fi through nmtui
+  SSH              on or off (systemctl), keys only or passwords too (bromigOS Server's settings,
+                   /etc/bromigos/server.toml and `bromigos-server setup` when it's installed; else
+                   an sshd drop-in), a key pasted in (~/.ssh/authorized_keys)
+  Join your lab    `bromigos setup homelab --find`, which asks before it reads anything
+  What's here      the lab console, updates and rollback, Field Kit, the server's status
+  Done
+
+  bromigos welcome-console                 open it (again)
+  bromigos welcome-console --if-pending    only when the install left it pending (the console's sign-in)
+  bromigos welcome-console --render DIR [--size WxH]
+                                           each step to DIR/server-welcome-STEP.svg (checked to
+                                           fit at that size), and exit
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+
+STATE = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "bromigos")
+PENDING = os.path.join(STATE, "welcome-pending")
+SERVER_TOML = "/etc/bromigos/server.toml"
+KEYS_ONLY = "/etc/ssh/sshd_config.d/01-bromigos-keys-only.conf"
+
+STEPS = [
+    ("network", "Network", "The network",
+     "This server's connection and its address on your network. Other computers reach it there."),
+    ("ssh", "SSH", "Sign in from another computer",
+     "SSH lets you manage this server from your own computer. Keys only is safest: nobody can guess a key."),
+    ("lab", "Lab", "Join your lab",
+     "If you run a homelab, this server can join it: the lab console then shows it, and VECTOR can use it."),
+    ("tour", "What's here", "What's on this server",
+     "The few things worth knowing. Type any of them at the prompt; each says more with --help."),
+    ("done", "Done", "You're set",
+     "This tour opens again with: bromigos welcome-console."),
+]
+TOUR = [
+    ("bromigos-lab", "The lab console: your machines, their GPUs and services, and the jobs they run"),
+    ("bromigos update", "Updates, with a snapshot before each one"),
+    ("bromigos update --rollback", "Undo the last update, or start an older snapshot from the boot menu"),
+    ("bromigos-server status", "This server in plain words: SSH, the firewall, updates, the lab"),
+    ("fieldkit", "Field Kit's repair and lab tools, when they're installed"),
+    ("bromigos settings --help", "Everything bromigOS can set, from the command line"),
+]
+
+
+def run(argv, timeout=20):
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        return r.returncode, r.stdout, r.stderr
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return 127, "", str(e)
+
+
+def network():
+    """[(device, kind, state, connection, addresses)]"""
+    code, out, _ = run(["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "dev"])
+    rows = []
+    for line in out.splitlines():
+        f = line.split(":")
+        if len(f) < 4 or f[1] in ("loopback", "bridge", "wifi-p2p") or f[0].startswith(("veth", "docker", "virbr")):
+            continue
+        code, a, _ = run(["ip", "-brief", "addr", "show", f[0]])
+        addrs = " ".join(x.split("/")[0] for x in a.split()[2:] if not x.startswith("fe80"))
+        rows.append((f[0], f[1], f[2], f[3], addrs))
+    return rows
+
+
+def ssh_state():
+    on = run(["systemctl", "is-enabled", "sshd"])[1].strip() == "enabled"
+    keys_only = os.path.exists(KEYS_ONLY)
+    if os.path.exists(SERVER_TOML):
+        m = re.search(r"^\s*password\s*=\s*(true|false)", open(SERVER_TOML).read(), re.M)
+        keys_only = not (m and m.group(1) == "true")
+    try:
+        keys = [l for l in open(os.path.expanduser("~/.ssh/authorized_keys")) if l.strip() and not l.startswith("#")]
+    except OSError:
+        keys = []
+    return on, keys_only, len(keys)
+
+
+def main(argv):
+    if "--if-pending" in argv and not os.path.exists(PENDING):
+        return 0
+    if any(a in ("-h", "--help") for a in argv):
+        print(__doc__.strip())
+        return 0
+    try:
+        import bromigos_textual as BT
+        from rich.table import Table
+        from rich.text import Text
+        from textual import on
+        from textual.app import App
+        from textual.binding import Binding
+        from textual.containers import Horizontal, Vertical, VerticalScroll
+        from textual.widgets import Button, Input, Label, Static, Switch
+    except ImportError:
+        print("The welcome tour needs Textual (python-textual) and bromigos-core's bromigos_textual.")
+        return 1
+    BT.prepare_terminal()
+    render = argv[argv.index("--render") + 1] if "--render" in argv else None
+
+    class Welcome(App):
+        CSS = BT.CSS + """
+        Screen { background: $background; }
+        #top { height: 1; padding: 0 1; background: $surface; color: $primary; text-style: bold; }
+        #body { height: 1fr; }
+        #rail { width: 22; height: 1fr; padding: 1 1; border-right: solid $primary 30%; background: $surface; }
+        #page { padding: 1 2; }
+        .intro { color: $text-muted; margin-bottom: 1; }
+        .muted { color: $text-muted; }
+        .row { height: auto; margin-top: 1; width: 1fr; }
+        Input { width: 1fr; }
+        .glass { margin-top: 1; }
+        #nav { height: 3; padding: 0 2; align-horizontal: right; }
+        #nav Button { margin-left: 2; min-width: 12; }
+        #msg { height: auto; padding: 0 2; color: $warning; }
+        #hint { height: 1; padding: 0 2; color: $text-muted; }
+        Screen.-compact #rail { width: 18; }
+        Screen.-narrow #rail { display: none; }
+        Screen.-narrow #page, Screen.-narrow #nav, Screen.-narrow #msg, Screen.-narrow #hint { padding: 0 1; }
+        Screen.-narrow #nav { height: 1; }
+        Screen.-narrow #nav Button { min-width: 8; margin-left: 1; height: 1; border: none; padding: 0 1; }
+        """
+        BINDINGS = [Binding("escape", "back", "Back"), Binding("ctrl+n", "next", "Continue"), Binding("ctrl+q", "quit", "Leave")]
+
+        def __init__(self):
+            super().__init__()
+            self.i = 0
+
+        def compose(self):
+            yield Static(BT.TOO_SMALL_WORDS, id="too-small")
+            yield Static("", id="top")
+            with Horizontal(id="body"):
+                yield Static("", id="rail")
+                yield VerticalScroll(id="page")
+            yield Static("", id="msg")
+            with Horizontal(id="nav"):
+                b = Button("Back", id="back")
+                b.tooltip = "The step before"
+                yield b
+                b = Button("Skip", id="skip")
+                b.tooltip = "Leave this as it is and go on"
+                yield b
+                b = Button("Continue", id="next", variant="primary")
+                b.tooltip = "Use what's chosen here and go on (Ctrl+N)"
+                yield b
+            yield Static("Tab moves · Enter picks · Esc goes back · Ctrl+Q leaves", id="hint")
+
+        async def on_mount(self):
+            self.register_theme(BT.theme())
+            self.theme = "bromigos"
+            if BT.motion() != "full":
+                self.animation_level = "none"
+            await self.show(0)
+
+        def on_resize(self, event):
+            self.bp = BT.apply_breakpoint(self.screen, event.size.width, event.size.height)
+            try:
+                self._top()
+            except Exception:
+                pass
+
+        def on_descendant_focus(self, event):
+            self.call_after_refresh(event.widget.scroll_visible, animate=False)
+
+        def _top(self):
+            narrow = getattr(self, "bp", "normal") in ("narrow", "too-small")
+            self.query_one("#top", Static).update(f"SERVER  {self.i + 1}/{len(STEPS)}  {STEPS[self.i][1].upper()}" if narrow
+                                                  else f"BROMIGOS SERVER // WELCOME    STEP {self.i + 1} OF {len(STEPS)}")
+
+        async def show(self, i):
+            self.i = i
+            sid, short, head, intro = STEPS[i]
+            self._top()
+            rail = Text()
+            for j, s in enumerate(STEPS):
+                rail.append(("▸ " if j == i else ("■ " if j < i else "□ ")) + s[1] + "\n", style="bold" if j == i else ("" if j < i else "dim"))
+            self.query_one("#rail", Static).update(rail)
+            page = self.query_one("#page", VerticalScroll)
+            await page.remove_children()
+            if i == 0 and self.size.height >= 30 and getattr(self, "bp", "normal") not in ("narrow", "too-small"):
+                text, ansi = BT.emblem()
+                page.mount(Static(Text.from_ansi(text) if ansi else text))
+            page.mount(BT.Emitter(head), Static(intro, classes="intro"))
+            getattr(self, f"build_{sid}")(page)
+            self.query_one("#msg", Static).update("")
+            self.query_one("#back").display = i > 0
+            self.query_one("#skip").display = sid != "done"
+            self.query_one("#next", Button).label = "Finish" if sid == "done" else "Continue"
+
+        def build_network(self, page):
+            t = Table.grid(padding=(0, 2))
+            rows = [] if render else network()
+            if render:
+                rows = [("enp3s0", "ethernet", "connected", "Wired connection 1", "192.0.2.24"), ("wlan0", "wifi", "disconnected", "--", "")]
+            for dev, kind, state, conn, addrs in rows:
+                t.add_row(Text(dev, style="bold"), kind, state, addrs or "no address")
+            page.mount(Static(t, classes="glass"))
+            on_ = any(r[2] == "connected" for r in rows)
+            page.mount(BT.Reading("Connected" if on_ else "Not connected: plug in a cable, or connect to Wi-Fi", "ok" if on_ else "warn"))
+            b = Button("Connect to Wi-Fi…", id="wifi")
+            b.tooltip = "Open the Wi-Fi settings (nmtui) to join a network"
+            page.mount(b)
+
+        def build_ssh(self, page):
+            on_, keys_only, nkeys = (True, True, 1) if render else ssh_state()
+            row = Horizontal(classes="glass row")
+            page.mount(row)
+            sw = Switch(on_, id="ssh-on")
+            sw.tooltip = "On: other computers can sign in with SSH. Off: only this console"
+            row.mount(sw, Label("  SSH is " + ("on" if on_ else "off")))
+            row2 = Horizontal(classes="glass row")
+            page.mount(row2)
+            ko = Switch(keys_only, id="keys-only")
+            ko.tooltip = "On: keys only (safest). Off: your password works over SSH too"
+            row2.mount(ko, Label("  Keys only"))
+            page.mount(Static(f"{nkeys} key{'s' if nkeys != 1 else ''} can sign in as you.", classes="muted"))
+            page.mount(Label("Add a key (one line from your other computer's .pub file)", classes="row"))
+            inp = Input(id="key", placeholder="ssh-ed25519 AAAA… you@laptop")
+            inp.tooltip = "Your other computer's public key, for example ~/.ssh/id_ed25519.pub there"
+            page.mount(inp)
+
+        def build_lab(self, page):
+            page.mount(Static("Find my lab looks for your lab's machines on the network. It asks before it reads anything, "
+                              "and you choose what to add.", classes="glass"))
+            b = Button("Find my lab…", id="findlab")
+            b.tooltip = "Runs bromigos setup homelab --find here, then comes back"
+            page.mount(b)
+
+        def build_tour(self, page):
+            t = Table.grid(padding=(0, 2))
+            for cmd, what in TOUR:
+                t.add_row(Text(cmd, style="bold"), what)
+            page.mount(Static(t, classes="glass"))
+
+        def build_done(self, page):
+            page.mount(BT.Reading("This server is ready. Sign in from another computer with: ssh " +
+                                  os.environ.get("USER", "you") + "@" + os.uname().nodename, "ok"))
+
+        async def action_next(self):
+            if render:
+                return
+            sid = STEPS[self.i][0]
+            if sid == "ssh":
+                problem = self.apply_ssh()
+                if problem:
+                    self.query_one("#msg", Static).update("▲ " + problem)
+                    return
+            if sid == "done":
+                return self.finish()
+            await self.show(self.i + 1)
+
+        async def action_back(self):
+            if self.i > 0:
+                await self.show(self.i - 1)
+
+        def apply_ssh(self):
+            want_on = self.query_one("#ssh-on", Switch).value
+            keys_only = self.query_one("#keys-only", Switch).value
+            key = self.query_one("#key", Input).value.strip()
+            if key:
+                if not re.match(r"^(ssh-(ed25519|rsa)|ecdsa-sha2-nistp\d+|sk-\S+@openssh\.com) [A-Za-z0-9+/=]{20,}", key):
+                    return "That isn't an SSH public key: it's one line starting ssh-ed25519 or ssh-rsa."
+                d = os.path.expanduser("~/.ssh")
+                os.makedirs(d, mode=0o700, exist_ok=True)
+                with open(os.path.join(d, "authorized_keys"), "a") as f:
+                    f.write(key + "\n")
+                os.chmod(os.path.join(d, "authorized_keys"), 0o600)
+            on_, was_keys_only, nkeys = ssh_state()
+            if want_on and keys_only and nkeys == 0:
+                return "Keys only needs a key: paste one above, or turn Keys only off."
+            cmds = []
+            if want_on != on_:
+                cmds.append(["systemctl", "enable" if want_on else "disable", "--now", "sshd"])
+            if keys_only != was_keys_only:
+                if os.path.exists("/usr/bin/bromigos-server"):
+                    cmds.append(["sh", "-c", f"mkdir -p /etc/bromigos && touch {SERVER_TOML} && "
+                                 f"(grep -q '^\\[ssh\\]' {SERVER_TOML} || printf '[ssh]\\npassword = false\\n' >> {SERVER_TOML}) && "
+                                 f"sed -i -E 's/^(\\s*password\\s*=\\s*).*/\\1{'false' if keys_only else 'true'}/' {SERVER_TOML} && "
+                                 "bromigos-server setup"])
+                elif keys_only:
+                    cmds.append(["sh", "-c", f"printf 'PasswordAuthentication no\\nKbdInteractiveAuthentication no\\n' > {KEYS_ONLY} "
+                                 "&& systemctl reload sshd"])
+                else:
+                    cmds.append(["sh", "-c", f"rm -f {KEYS_ONLY} && systemctl reload sshd"])
+            if cmds:
+                with self.suspend():
+                    print("Changing SSH (sudo asks for your password):")
+                    for c in cmds:
+                        if subprocess.run(["sudo", *c]).returncode != 0:
+                            return "That didn't work (see above). Nothing else was changed."
+            return None
+
+        def finish(self):
+            try:
+                os.unlink(PENDING)
+            except OSError:
+                pass
+            self.exit()
+
+        @on(Button.Pressed)
+        async def pressed(self, ev):
+            b = ev.button.id
+            if b == "next":
+                await self.action_next()
+            elif b == "back":
+                await self.action_back()
+            elif b == "skip":
+                await self.show(self.i + 1)
+            elif b == "wifi":
+                with self.suspend():
+                    subprocess.run(["nmtui", "connect"])
+                await self.show(self.i)
+            elif b == "findlab":
+                with self.suspend():
+                    subprocess.run(["bromigos", "setup", "homelab", "--find"])
+                    input("Press Enter to go back to the tour.")
+                await self.show(self.i)
+
+    if render:
+        import asyncio
+
+        size = tuple(int(x) for x in argv[argv.index("--size") + 1].split("x")) if "--size" in argv else (110, 36)
+
+        async def shots():
+            app = Welcome()
+            os.makedirs(render, exist_ok=True)
+            problems = []
+            async with app.run_test(size=size) as pilot:
+                await pilot.pause(0.2)
+                for k, s in enumerate(STEPS):
+                    await app.show(k)
+                    await pilot.pause(0.3)
+                    app.save_screenshot(os.path.join(render, f"server-welcome-{s[0]}.svg"))
+                    # it fits: nothing off the side, the buttons on screen
+                    if app.query_one("#page").max_scroll_x:
+                        problems.append(f"{s[0]}: runs off the side")
+                    for b in app.query("#nav Button"):
+                        if b.display and b.region.right > size[0]:
+                            problems.append(f"{s[0]}: {b.id} cut off")
+            return problems
+        problems = asyncio.run(shots())
+        for p in problems:
+            print("does not fit:", p)
+        return 1 if problems else 0
+    Welcome().run()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

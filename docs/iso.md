@@ -120,68 +120,147 @@ there (`packages.x86_64`).
 
 ## Installing from it
 
-From a terminal on the live desktop (Alt+Shift+Enter), run:
+There are three ways in, and they all lead to the same installer:
 
-```bash
-sudo bromigos-iso-install
-```
+- **"Install bromigOS"** in the boot menu starts the live desktop with the graphical
+  installer open, full screen.
+- **"Install bromigOS (text mode)"** in the boot menu starts no desktop. The text installer
+  opens on the screen, and on the serial console when the kernel's console is on one. It's
+  also used by itself when "Install bromigOS" finds no graphics.
+- **On the live desktop**, the welcome card's **Install bromigOS**, the desktop's INSTALL
+  panel, or "Install bromigOS" in the app launcher. `sudo bromigos-iso-install` in a
+  terminal opens the text installer.
 
-It asks:
+The graphical installer (GTK 4 and libadwaita, in the Settings window's style) and the text
+installer (Textual) show the same steps, with the same words and the same checks. Both
+follow [DRIFTGLASS](DRIFTGLASS.md): GLOW panels and steps, the emblem as the one FLARE on
+the first step, and no motion when motion is reduced. Every control has a hover hint, and
+in the text installer the hint line at the bottom says what the focused control does.
+Nothing on any disk changes until **Install** is pressed on the summary.
 
-- **the disk**, from a list. The whole disk is wiped.
-- **your user name and password**, and the **hostname** (default `bromigos`).
-- **"Encrypt the disk?"** The default is yes ([iso-encryption.md](iso-encryption.md)).
-  If yes, it asks whether the disk gets its own passphrase or uses your password. The
-  passphrase is typed at every boot, and it can't be recovered.
-- **keyboard layout, timezone and locale.**
-- a last **"Go ahead and wipe it?"**
+### The steps
 
-Then it installs with nothing more to type:
+1. **Welcome.** The language for the new system, the time zone, and whether there's a
+   network. The install doesn't need one: everything is on the USB stick. **Connect to
+   Wi-Fi…** is there for the one case that downloads (below).
+2. **Before you start**, shown only when there's something to say: running on battery,
+   less than 4 GB of memory, a disk whose own health check says it's failing, a graphics
+   card bromigOS can't drive well, and whether the machine started the UEFI or the BIOS
+   way. Each says what to do. None of them stops the install, except that installing onto a
+   failing disk needs **Install on it anyway** on the next step.
+3. **What kind of computer is this?** **bromigOS (desktop)**, the default, or **bromigOS
+   Server**: no desktop, for servers and lab machines ([Editions](#editions)).
+4. **Keyboard.** The layout changes at once, so the box under it tries it.
+5. **Where to install.** Every disk, with its size, model and what's on it: Windows, another
+   system, files, or empty. The USB stick bromigOS started from is shown but can't be
+   chosen. For the chosen disk:
+   - **Install alongside Windows** (or the system found) keeps it and its files. If the
+     disk has 20 GB or more free, bromigOS goes there. Otherwise the installer makes room
+     by shrinking Windows' partition, and a slider sets the split. Windows keeps what it
+     uses now plus 10 GB to grow; bromigOS gets at least 20 GB. When it can't be offered,
+     the step says why and what to do ([Beside Windows](#beside-windows)).
+   - **Erase the whole disk** deletes everything on it and says what will be lost.
+6. **BitLocker**, only when Windows on the chosen disk is locked with BitLocker: how to
+   save the recovery key, and **I've saved the BitLocker recovery key** before going on.
+   Changing how the computer starts can make Windows ask for that key once.
+7. **About you.** Your name, user name, password (twice, with a strength hint) and the
+   computer's name. The user name and computer name are suggested from your name.
+8. **Encryption.** On by default. Your password unlocks the disk, or it gets a passphrase of
+   its own ([iso-encryption.md](iso-encryption.md)).
+9. **Remote access and protection**, bromigOS Server only: SSH (off by default; keys only
+   when on, with keys read from the stick's `fieldkit/` folder or pasted, and a password
+   login only when chosen), the firewall (on), and automatic updates with a snapshot before
+   each (on).
+10. **Summary.** Every choice in plain words, and what the disk loses. The button says
+    **Erase disk and install** when the disk is erased.
+11. **Installing.** A progress bar and one plain status line (Making room, Encrypting the
+    disk, Copying bromigOS onto the disk with a package count, Installing the boot menu,
+    Setting up the desktop, Finishing). **Details** shows every line of the install.
+12. **Done.** What happens next (take out the stick, the passphrase, the boot menu) and
+    **Restart now**. If the install stopped, the screen says where and what to do, and
+    **Save a problem report** puts the logs, a hardware summary and the answers (without
+    passwords) on a USB drive, and says where it went.
 
-1. **The hardware.** It runs `bromigos hw detect --json` on the live system, whose `/sys`
+With the speech boot entry (`accessibility=on`), the text installer asks the same questions
+one at a time as plain lines (`bromigos-iso-install --plain`), which the screen reader reads
+in order. The graphical installer gives every control an accessible name and description
+for Orca, works with the keyboard alone (Tab, the arrows, Enter, Esc to go back), and
+follows high contrast.
+
+### What it does
+
+The installers write their answers to a file only root can read and run
+`bromigos-iso-install --answers FILE`. That script prints `::stage PERCENT words` lines for
+the progress bar and one `::error words` line if it stops. Everything else it prints is the
+**Details**. Then:
+
+1. **Making room** (alongside, when it shrinks): `disks.py shrink` checks the partition again
+   (not BitLocker, not hibernated, clean), shrinks the file system with `ntfsresize` (or
+   `resize2fs` for ext4), then the partition with `sfdisk`, and checks the file system
+   reads whole. Windows checks its drive once at its next start; that's normal.
+2. **The hardware.** It runs `bromigos hw detect --json` on the live system, whose `/sys`
    is the real machine's ([hardware.md](hardware.md)). `hardware.py` adds that plan's
    packages and services to archinstall's config, so they come from the medium too. For
    example: NVIDIA's open modules for a Turing-or-newer GPU, Intel's or AMD's video
    decoding, a hybrid laptop's `nvidia-prime`, and a laptop's `brightnessctl` and
    `power-profiles-daemon`. The live session itself runs on Mesa, or nouveau on NVIDIA.
-2. **archinstall** builds the Arch system, silently, from the config. The layout is
-   below. `--menu` opens archinstall's menu instead, filled in with all of it, so you can
-   change anything before it installs.
-3. **snapper's configuration for `/home`.** The installer creates it, because archinstall
+3. **archinstall** builds the Arch system, silently, from the config `answers.py` wrote.
+   The layout is below. Its output goes through `progress.py`, which turns pacman's
+   "(n/N) installing" lines and archinstall's own steps into the progress bar.
+   `--menu` (with `--config`) opens archinstall's menu instead, filled in with all of it.
+   Beside another system, `/boot` is set back to a plain Linux partition (archinstall's
+   boot flag made it an ESP's type on GPT) and `GRUB_DISABLE_OS_PROBER=false` goes in
+   `/etc/default/grub`, so every `grub-mkconfig` lists the other systems; the menu then
+   waits 10 seconds.
+4. **snapper's configuration for `/home`.** The installer creates it, because archinstall
    4.5 can't on this layout. It reads a config file's subvolume names as plain strings,
    so it never finds `@` on `/`.
-4. **pacman for updates.** `/etc/pacman.conf` gets Arch's geo mirror plus the stock list,
+5. **pacman for updates.** `/etc/pacman.conf` gets Arch's geo mirror plus the stock list,
    and a `[bromigos]` section at the repository the medium was built from, on its
    channel. If the repository has its own CA, the certificate goes into the system's
    trust store. The medium's offline copy isn't carried over.
-5. **bromigOS in the new system.** In the new system's chroot, as your user, it runs
+6. **bromigOS in the new system** (the desktop). In the new system's chroot, as your user, it runs
    `bromigos install --yes --no-services --no-setup`. That seeds the thin configs, sets
    the desktop settings and the theme, and writes the hardware's system files, such as
    NVIDIA's early KMS. Then `bromigos setup --monitors auto --theme wick --vector none
    --voice off --create none` gives the first-run answers a fresh install can give. You
-   can change all of them later with `bromigos setup`.
-6. **The splash and the snapshots.** It adds the `plymouth` hook after `udev` and before
+   can change all of them later with `bromigos setup`. The keyboard chosen goes to the
+   desktop too (`bromigos setup input --set kb_layout …`), and your name to the account.
+   bromigOS Server instead runs its edition's `user_commands` as you and starts to the
+   text console (`multi-user.target`).
+7. **The splash and the snapshots.** It adds the `plymouth` hook after `udev` and before
    `encrypt`, which asks for the passphrase through Plymouth. It adds `splash quiet` to
    GRUB's kernel line and runs `grub-mkconfig`. Then it runs
    `bromigos rollback setup --yes` as your user, the same command as on any machine
    ([update.md](update.md#how-setup-creates-snappers-configuration)). That creates
    snapper's `root` configuration, lets `wheel` list it, and adds the overlay hook that
    lets a snapshot boot from GRUB's menu.
-7. **SSH,** with `--ssh-key FILE`: the key is authorised for your user and sshd is
-   enabled, for a headless install.
-8. **Loose ends.** The sync databases are dated 1970, so the first `pacman -Sy` fetches
+8. **SSH and a server's protection.** With `--ssh-key FILE` the key is authorised for your
+   user and sshd is enabled, for a headless install. The installers' SSH answer enables
+   sshd too, adds the keys chosen, and, unless a password login was chosen, allows keys
+   only. For bromigOS Server, when its `bromigos-server` package is installed, the
+   installer writes `/etc/bromigos/server.toml` (`[ssh] password`, `[updates] auto`) and
+   runs `bromigos-server setup`, which owns the firewall and the updates. Without that
+   package, the installer writes an nftables firewall (replies, ping, and SSH when it's on)
+   and enables the edition's update timer if the system has one. When the medium carries
+   `bromigos-boot` and `bromigos-fieldkit`, they're installed, and
+   `bromigos-fieldkit-boot sync --menu` puts Field Kit on `/boot` with its GRUB and firmware
+   entries (Field Kit's own docs); `/boot` is 2 GiB so it fits.
+9. **Loose ends.** The sync databases are dated 1970, so the first `pacman -Sy` fetches
    them afresh. The medium's copies are newer than the servers', so pacman would keep them
    and check the server's signature against the wrong file ("signature is invalid").
-   Then it runs `sync`, so everything is on disk before a reboot.
-9. **Reboot,** unless you gave `--no-reboot`. Type the disk's passphrase at the splash,
-   then sign in at the Bromigos login screen.
+   The answers, without the password and passphrase, are kept in
+   `/var/log/bromigos/install-answers.toml`, an [answer file](#answer-files) that repeats
+   the install. Then it runs `sync`, so everything is on disk before a reboot.
+10. **Reboot,** unless you gave `--no-reboot` (the installers always do, and restart from
+    their last step). Type the disk's passphrase at the splash, then sign in.
 
 ### The disk layout
 
 | Part | What archinstall makes |
 |---|---|
 | Partition table | GPT on UEFI, MBR on BIOS. archinstall 4.5 chooses by the firmware it runs on. On BIOS, GRUB's core image goes in the gap after the MBR. |
-| `/boot` | 1 GiB, FAT32, unencrypted. It's the EFI system partition on UEFI. |
+| `/boot` | 2 GiB, FAT32, unencrypted. It's the EFI system partition on UEFI. Beside another system: 2 GiB, ext4, in the free space, with the disk's own EFI system partition at `/boot/efi` |
 | The rest | btrfs, on LUKS2 unless `--no-encrypt` |
 | btrfs subvolumes | `@` for `/`, `@home`, `@log`, `@pkg` and `@.snapshots` |
 | Boot loader | GRUB, which boots BIOS and UEFI alike and lists the snapshots |
@@ -192,12 +271,115 @@ snapper, snap-pac, grub-btrfs, inotify-tools and Plymouth. It enables SDDM, Blue
 NetworkManager, snapper's timers and `grub-btrfsd`. There's no desktop profile, because
 bromigOS is the desktop.
 
+### Beside Windows
+
+`disks.py probe` reads every disk (as root: `lsblk`, `sfdisk --json`, `blkid`, `os-prober`,
+`smartctl`, and for NTFS `ntfscat`, `ntfsls` and `ntfsresize --info`) and decides, per
+disk, whether **Install alongside** can be offered:
+
+| On the disk | What it does |
+|---|---|
+| 20 GB or more unallocated | bromigOS goes in the largest free stretch; nothing is resized |
+| An NTFS (or ext4) partition with room to spare | It's shrunk to what it uses plus 10 GB for Windows (5 GB for another system); the slider picks the split, bromigOS at least 20 GB |
+| BitLocker on Windows' partition | Never resized. The step says how to turn BitLocker off, or to shrink C: in Windows' Disk Management, which leaves free space bromigOS can use. Free space beside a BitLocker drive is used, after the BitLocker step |
+| Windows paused (Fast Startup or hibernation: `hiberfil.sys` says HIBR) | Not resized. The step says how to turn Fast Startup off and shut down fully |
+| A file system that wants a check (dirty) | Not resized. Windows' own check first |
+| UEFI machine, MBR disk (or BIOS machine, GPT disk) | Not offered: the two couldn't share a boot menu. The step says which boot-menu entry to start the stick from |
+| BIOS machine, MBR disk with three or more partitions | Not offered: MBR holds four, and bromigOS needs two |
+| No EFI system partition, or one with under 16 MB free | Not offered, with what to do |
+
+On UEFI, GRUB goes in its own folder on the shared EFI system partition (`EFI/GRUB`) with a
+firmware boot entry first in the boot order (`removable: false` in archinstall's
+`bootloader_config`): Windows' own files, the fallback `EFI/BOOT/BOOTX64.EFI` among them,
+are left alone. On BIOS, GRUB goes in the MBR, as for any second system there; os-prober's
+entry chainloads Windows' boot sector.
+
+### Editions
+
+**bromigOS (desktop)** installs `archinstall.json`'s packages and sets up the desktop.
+**bromigOS Server** has no desktop. Its packages come from its edition file: the
+`bromigos-server` package's `/usr/share/bromigos/fieldkit/edition.json` (from Field Kit's
+`iso/fieldkit/packages.toml`), else `/usr/share/bromigos/editions/*.json`, else the
+medium's stand-in, `/usr/local/share/bromigos-iso/editions/server.json`. The installer
+reads `id` (or `name`), `title`, `summary`, `packages`, `services`, `default_target`,
+`user_commands`, `skip_desktop_install` (or `desktop: false`), `meta` (a meta package that
+replaces `packages` when it's on the medium) and `check_packages`. The boot, disk and
+snapshot packages (`answers.py`'s `REQUIRED`) are always added.
+
+A server's first sign-in, at its console or over SSH, opens its welcome tour
+(`bromigos welcome-console`, bromigos-core's; Textual in DRIFTGLASS): the network and its
+address, SSH (on or off, keys only, a key pasted in), joining the lab
+(`bromigos setup homelab --find`), and what's on the server. The installer leaves
+`~/.local/state/bromigos/welcome-pending`; `/etc/profile.d/bromigos-welcome.sh` opens the tour
+while it's there. The desktop's own tour is `bromigos welcome`.
+
+Each edition installs offline when its packages are in the medium's offline repository:
+the full ISO carries both, the small Field Kit stick carries Server. Only the desktop chosen
+on the Field Kit stick downloads: the step says how much, offers Wi-Fi, and with no network
+explains it and suggests Server or the full stick. `answers.py --online` points archinstall
+at Arch's mirrors and `bromigos-iso-install` puts the repositories first in the live
+system's `pacman.conf`.
+
+### Boot parameters
+
+The installers read these from the kernel line, so a boot menu entry can go straight to one
+(the menus' direct install entries are Field Kit's and the release's; `iso/test.sh param`
+tests each):
+
+| Parameters | What opens |
+|---|---|
+| `bromigos.install` (or `bromigos.edition=desktop` with it) | The graphical installer on the live desktop, the desktop preselected. On a medium with no login screen (the Field Kit stick), the text installer |
+| `bromigos.install bromigos.edition=server` | The text installer on the console, bromigOS Server preselected. The edition step still shows, so it can be changed |
+| `bromigos.install bromigos.text`, or `bromigos.install=text` | The text installer, whichever edition |
+| `bromigos.answers=PATH` | The [answer file](#answer-files) to use: the install runs by itself after a 10-second countdown with **Cancel** |
+| `accessibility=on` | The text installer asks its questions one at a time, for the screen reader |
+
+When the text installer is asked for on a medium with a desktop, the login screen steps
+aside for that boot (`systemctl mask --runtime display-manager.service`), so it has the
+console. The desktop edition chosen on the small Field Kit stick downloads what isn't on it
+([Editions](#editions)).
+
+### Answer files
+
+An answer file installs with no questions. The installer looks for one at
+`bromigos.answers=PATH` on the kernel line (a file, or a path on the stick), else at
+`bromigos/install.toml` or `fieldkit/install.toml` on a USB partition. It shows a
+10-second countdown with **Cancel** first (`countdown = 0` skips it). Every install keeps its
+own answers, without secrets, in `/var/log/bromigos/install-answers.toml`: add the password
+and it's an answer file.
+
+```toml
+[install]
+edition = "desktop"          # or "server"
+locale = "en_US"
+timezone = "America/Los_Angeles"
+keyboard = "us"              # an id from bromigos_installer/common.py's KEYBOARDS
+disk = "/dev/nvme0n1"
+mode = "alongside"           # or "erase"
+bromigos_bytes = 68719476736 # alongside, when it shrinks: bromigOS's share
+full_name = "Alex Rivera"
+user = "alex"
+hostname = "alex-pc"
+password = "…"               # never written back out
+encrypt = true
+separate_passphrase = false
+passphrase = "…"             # with separate_passphrase
+ssh = false                  # Server: ssh, ssh_password, ssh_keys = ["ssh-ed25519 …"],
+firewall = true              # firewall, auto_updates
+auto_updates = true
+countdown = 10
+```
+
+The same keys work as flat YAML (`install.yaml`, `key: value` per line).
+`common.read_answer_file` checks it and says, in plain words, what's wrong.
+
 ### Installer options
 
 | Option | What it does |
 |---|---|
-| `--no-encrypt` | A plain btrfs root, with no LUKS |
-| `--menu` | Opens archinstall's menu, filled in, before it installs |
+| `--answers FILE` | The installers' answers (JSON): what the graphical and text installers run |
+| `--text`, `--plain` | The text installer, or its plain questions (a screen reader's) |
+| `--menu` | With `--config`: opens archinstall's menu, filled in, before it installs |
 | `--repo URL` | The repository the installed system updates from. The default is the medium's. |
 | `--channel NAME` | `stable`, `rc` or `edge`. The default is the medium's. |
 | `--ca FILE` | That repository's CA certificate, if it has its own |
@@ -221,7 +403,8 @@ python3 /usr/local/lib/bromigos-iso/answers.py --disk /dev/sda --user <name> \
 ```
 
 It also takes `--no-encrypt`, `--passphrase`, `--hostname`, `--keymap`, `--timezone`,
-`--locale`, `--firmware uefi|bios`, `--ssh` and `--root-gib N`.
+`--locale`, `--firmware uefi|bios`, `--ssh`, `--root-gib N`, `--alongside [--esp DEV]`,
+`--edition FILE`, `--online`, and `--answers FILE` (the installers' JSON).
 
 Encryption follows the config. With `disk_encryption` in the config and
 `encryption_password` in the credentials, the root is LUKS. Without them, it's plain
@@ -231,7 +414,13 @@ btrfs. So an unattended install is always explicit about it.
 
 archinstall already handles disks, LUKS, btrfs, boot loaders, locales and users well,
 and it's maintained alongside Arch. `bromigos install` already does everything bromigOS
-needs. So the medium only joins the two, and asks a few questions in plain words.
+needs. So the medium only joins the two, and asks its questions in plain words. Its code
+is `/usr/local/lib/bromigos-iso/bromigos_installer/`: `common.py` (the steps, words and
+checks both installers share), `disks.py` (the disks and making room), `backend.py` (running
+the install), `gui.py`, `tui.py`, `plain.py`, `welcome.py` (the live desktop's card) and
+`progress.py`. The text installer's DRIFTGLASS look is bromigos-core's
+`lib/bromigos_textual.py` (the theme's palette in truecolour, a 16-colour mapping on a bare
+console, and the Emitter, Sweep and Reading widgets).
 archinstall's own menu offers encryption only inside its own disk flow, and a silent run
 from a filled-in config keeps the install to what was answered.
 

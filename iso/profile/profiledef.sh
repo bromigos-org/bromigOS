@@ -30,6 +30,8 @@ file_permissions=(
   ["/usr/local/bin/bromigos-iso-install"]="0:0:755"
   ["/usr/local/bin/bromigos-iso-autostart"]="0:0:755"
   ["/usr/local/bin/bromigos-iso-secureboot"]="0:0:755"
+  ["/usr/local/bin/bromigos-installer"]="0:0:755"
+  ["/usr/local/bin/bromigos-iso-text-console"]="0:0:755"
   ["/usr/local/bin/choose-mirror"]="0:0:755"
   ["/usr/local/bin/livecd-sound"]="0:0:755"
 )

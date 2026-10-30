@@ -128,6 +128,7 @@ The bromigOS USB stick has a boot menu of its own, in the same style. Its entrie
 |---|---|
 | Start bromigOS (try it live) | Start the full desktop from the stick. Nothing is installed. |
 | Install bromigOS | Start the desktop with the installer already open. See [Install](install.md#install-from-the-usb-stick). |
+| Install bromigOS (text mode) | The same installer in text, with no desktop: for a computer whose picture doesn't come up, a serial console, or a screen reader. |
 | Start with safe graphics (nomodeset) | Use this if the screen stays black with the first entry. |
 | Memory test (Memtest86+) | Test the computer's memory. |
 | Boot from disk | Start whatever is installed on the disk instead. |

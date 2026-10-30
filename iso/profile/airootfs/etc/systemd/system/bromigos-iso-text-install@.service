@@ -1,0 +1,20 @@
+# The text installer on a console (bromigos-iso-text-console; docs/iso.md). Started only by
+# bromigos-iso-text-check.service, when this boot wants it there: its TTY settings hang up and
+# take over the console, so it must never even start where the desktop's session runs.
+[Unit]
+Description=bromigOS installer (text mode) on %I
+After=systemd-user-sessions.service plymouth-quit-wait.service systemd-vconsole-setup.service
+Conflicts=getty@%i.service serial-getty@%i.service
+
+[Service]
+Type=idle
+ExecStart=/usr/local/bin/bromigos-iso-text-console %I
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/%I
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+Restart=always
+RestartSec=1

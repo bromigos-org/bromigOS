@@ -259,31 +259,52 @@ has the details.
 
 ![The live desktop from the stick: the bar, the system and network panels, the Wick's den](images/live-desktop-stick.webp)
 
-1. In the boot menu, choose **Start bromigOS (try it live)**. You're on the full desktop,
-   and nothing is installed yet. Try the keys and look around.
-2. To install, open a terminal with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> and
-   run:
+1. In the boot menu, choose **Install bromigOS**. Or choose **Start bromigOS (try it
+   live)** to look around first: a welcome card offers **Try bromigOS** or **Install
+   bromigOS**, and the desktop's INSTALL panel opens the installer whenever you're ready.
+2. Follow the installer. You can go back and change anything until you press
+   **Install**. It asks:
+   - **your language and time zone.** No network is needed: everything is on the stick.
+   - **what kind of computer this is:** **bromigOS (desktop)** for a computer you sit at,
+     or **bromigOS Server**, with no desktop, for servers and lab machines.
+   - **your keyboard,** with a box to try it in.
+   - **where to install.** Choose the disk, then either:
+     - **Install alongside Windows** (or the other system it found). Windows and its files
+       stay. If there isn't free space, the installer makes Windows' part of the disk
+       smaller; a slider sets how much each gets. Every time the computer starts, you
+       choose which system to use. If it can't be offered, the screen says why and what to
+       do, for example turning off Windows' Fast Startup.
+     - **Erase the whole disk.** Everything on the disk is deleted, and the screen says
+       what that is.
+   - **your name, user name, password, and a name for the computer.**
+   - **whether to encrypt the disk.** It's on by default. Your password unlocks it when
+     the computer starts, or you can give it a passphrase of its own.
 
-   ```bash
-   sudo bromigos-iso-install
-   ```
+     > **Remember the password or passphrase.** Nobody can recover it. Without it, the
+     > disk can't be read.
 
-   Or choose **Install bromigOS** in the boot menu, which opens the desktop with the
-   installer already running.
-3. Choose the disk to install on. **Everything on it is erased.**
-4. Type your user name, your password, and a name for the computer.
-5. Choose whether to encrypt the disk. It's on by default. Type a passphrase for the disk,
-   or press <kbd>Enter</kbd> to use your password. You'll type it every time the computer
-   starts.
+   - for bromigOS Server: whether to turn on **SSH** (signing in from another computer),
+     the **firewall**, and **automatic updates**.
+3. Check the summary, then press **Install** (or **Erase disk and install**). A progress
+   bar shows how far it has got. It takes about ten minutes.
+4. Press **Restart now**, and take out the stick when the screen goes dark. Type the
+   disk's passphrase if you chose encryption, then sign in.
 
-   > **Remember the passphrase.** Nobody can recover it. Without it, the disk can't be
-   > read.
+If Windows on the disk uses **BitLocker**, the installer first asks you to save its
+recovery key, because Windows may ask for it once after the install. If something goes
+wrong, the installer says what to do, and **Save a problem report** puts the details on a
+USB drive for whoever helps you.
 
-6. Choose the keyboard layout, the time zone and the language.
-7. Check the summary, and type `y` to go ahead. Pressing <kbd>Enter</kbd> on its own
-   cancels.
-8. Wait while it installs. It needs no network: everything is on the stick. The computer
-   restarts into your new system when it's done.
+**No picture, or a computer with only a text screen?** Choose **Install bromigOS (text
+mode)** in the stick's menu. It's the same installer, with the same steps, in text. With
+**Start with the screen reader (speech)**, the installer asks its questions one at a time,
+read aloud.
+
+Every step, alongside Windows, reinstalling and the text installer are explained in
+[The installer](installer.md).
+
+**Installing many computers?** An answer file on the stick installs with no questions
+([answer files](installer.md#answer-files)).
 
 The stick answers the first-run questions for you: the Wick theme, with VECTOR's brain,
 voice and creation tools off. After your first login, run `bromigos setup` to change them.
