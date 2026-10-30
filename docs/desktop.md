@@ -693,6 +693,50 @@ games are recognised through process ancestry; detached games may need manual mo
 Leaving manually suppresses automatic re-entry until focus or fullscreen state changes. Manual mode remains on across focus changes.
 
 For the Razer button and LED, see [peripherals](peripherals.md#game-mode-key).
+
+### Steam and Proton
+
+Three commands set up and check Steam. The manual's
+[Playing games](../manual/src/games.md#steam-and-proton) page is the user's guide.
+
+| Command | File | What it does |
+|---|---|---|
+| `bromigos game setup` | `desktop/bin/bromigos-game-setup` | Installs `steam`, `gamemode` and `lib32-gamemode`, with the `lib32-` and `vulkan-` packages `bromigos hw --json` wants for this machine's GPUs, in one `sudo pacman -S --needed`. Adds the user to `gamemode`, and runs `bromigos hw setup --user-only` when the GPU environment changed. Without multilib it stops and says how to turn it on. |
+| `bromigos game proton` | `desktop/bin/bromigos-game-proton` | Lists Steam's Proton apps and the tools in `compatibilitytools.d`. `install` takes GE-Proton's GitHub release, checks the tarball against the release's `.sha512sum`, unpacks it into a temporary folder beside the others, then renames it into place. `remove` refuses while Steam runs, and for a version games are set to unless `--force`. |
+| `bromigos game check` | `desktop/bin/bromigos-game-check` | Read-only checks, with `--fix` for the user's own files. Exit status 0 means healthy, 1 means something needs fixing, and 2 means it couldn't check. |
+
+`desktop/lib/bromigos_steam.py` reads Steam's files for all three:
+
+- **VDF.** Steam keeps its state in Valve's text KeyValues format. The parser records
+  where each value sits in the text. A change rewrites that one value, so the rest of the
+  file stays byte for byte. A key that appears twice keeps its first value, as in Steam,
+  and a change never adds a second copy. (The `vdf` package from PyPI appends a duplicate
+  key when you assign to one, so it isn't used.)
+- **Where Steam is.** The root is `~/.steam/root`, else `$XDG_DATA_HOME/Steam`. The
+  libraries come from `steamapps/libraryfolders.vdf`, and each app from its
+  `appmanifest_<id>.acf`.
+- **Runtimes.** A runtime or tool is whole when its `toolmanifest.vdf` exists and the
+  entry point its `commandline` names is there. The container runtimes, soldier (1391110),
+  sniper (1628350) and Steam Linux Runtime 4.0 (4183110), also need `_v2-entry-point` and
+  a non-empty `pressure-vessel/`. A runtime whose `StateFlags` show a download or update
+  in progress is reported, not judged.
+- **The default tool.** `CompatToolMapping` in `config/config.vdf` maps app IDs to tools.
+  Its `"0"` entry is the default for every game, and its priority must be 75, Steam's own.
+  Per-game entries use 250.
+- **Steam running.** Steam is running when a process in `/proc` is `steam` or
+  `steamwebhelper`, or a shell running `steam.sh`. Nothing that changes Steam's files runs
+  then, because Steam writes `config.vdf` back when it exits.
+
+`--fix` moves a broken runtime's folder, its `downloading/<id>` and `temp/<id>` folders
+and its manifest into `<library>/bromigos-backup/<time>/`, on the same drive. It copies
+`config.vdf` to `~/.local/state/bromigos/game/backup/<time>/` before setting the priority,
+and runs `systemctl --user disable waybar.service`. The checks of `/etc/sddm.conf.d`,
+`/etc/systemd/user` and `/etc/mkinitcpio.conf` only print commands.
+
+`BROMIGOS_FS_ROOT` moves `/` for `/proc`, `/etc` and `/usr`, and
+`BROMIGOS_PROTON_RELEASES` replaces GitHub's API with a folder of recorded releases.
+`desktop/tests/test_steam.py` runs all three commands on a fake Steam in a throwaway home,
+with the VDF files in `desktop/tests/fixtures/steam/`.
 The isolated test is `desktop/tests/e2e_game_nested.py`; the tray test is
 `desktop/tests/e2e_tray_nested.py`. The latter needs `gtk2` for its StatusIcon fixture.
 It exercises the direct XEmbed button path also used by Wine. GTK 3 StatusIcon uses

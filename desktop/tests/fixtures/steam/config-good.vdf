@@ -1,0 +1,29 @@
+"InstallConfigStore"
+{
+	"Software"
+	{
+		"Valve"
+		{
+			"Steam"
+			{
+				"AutoUpdateWindowEnabled"		"0"
+				"CompatToolMapping"
+				{
+					"0"
+					{
+						"name"		"proton_experimental"
+						"config"		""
+						"priority"		"75"
+					}
+					"1091500"
+					{
+						"name"		"GE-Proton99-1"
+						"config"		""
+						"priority"		"250"
+					}
+				}
+				"BaseInstallFolder_1"		"C:\\Games\\Steam"
+			}
+		}
+	}
+}

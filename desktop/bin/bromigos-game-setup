@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+# bromigos:summary=Install Steam with the 32-bit graphics drivers for this machine's GPUs, and GameMode
+# bromigos:args=[--dry-run] [--yes] [--json]
+# bromigos:examples=bromigos game setup --dry-run; bromigos game setup
+"""bromigos-game-setup (`bromigos game setup`): Steam, ready for games.
+
+  bromigos game setup             install what's missing, asking sudo on the terminal
+  bromigos game setup --dry-run   only say what it would do
+  bromigos game setup --yes       pacman takes its defaults (unattended)
+
+It installs Steam, GameMode, and the 32-bit Vulkan and graphics driver packages for this
+machine's GPUs, as `bromigos hw` finds them. Installing the drivers in the same step stops
+pacman from picking a 32-bit Vulkan driver for the wrong GPU. Steam needs the multilib
+repository. If it's off, setup says how to turn it on and stops.
+
+Then it adds you to the gamemode group and writes your session's GPU environment
+(`bromigos hw setup --user-only`), which turns on NVAPI for Proton games on NVIDIA.
+Log out and back in afterwards. Next: `bromigos game proton install`, then
+`bromigos game check`.
+"""
+import grp
+import os
+import pwd
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+BASE = ["steam", "gamemode", "lib32-gamemode"]
+MULTILIB = """Steam needs the multilib repository (32-bit packages), and it's off here. To turn it on:
+
+  1. In /etc/pacman.conf, remove the # in front of these two lines:
+       [multilib]
+       Include = /etc/pacman.d/mirrorlist
+  2. Run: sudo pacman -Syu
+  3. Run bromigos game setup again."""
+
+
+def user():
+    try:
+        return pwd.getpwuid(os.getuid()).pw_name
+    except KeyError:
+        return os.environ.get("USER") or ""
+
+
+def in_group(name):
+    """(the group exists, you're in it)."""
+    try:
+        g = grp.getgrnam(name)
+    except KeyError:
+        return False, False
+    me = user()
+    return True, me in g.gr_mem or os.getgid() == g.gr_gid or g.gr_gid in os.getgroups()
+
+
+def plan():
+    hw = C.bromigos("hw", "--json", timeout=60)
+    if not hw or "detection" not in hw:
+        raise Fail("`bromigos hw` didn't answer, so the GPUs' drivers aren't known. Run it to see why")
+    if not hw["detection"].get("multilib"):
+        raise Fail(MULTILIB)
+    want = ((hw.get("plan") or {}).get("want") or {}).get("packages") or []
+    # the GPUs' 32-bit and Vulkan packages first: pacman then takes them as Steam's
+    # lib32-vulkan-driver, instead of asking or choosing another GPU's
+    drivers = [p for p in want if p.startswith(("lib32-", "vulkan-"))]
+    pkgs = drivers + [p for p in BASE if p not in drivers]
+    rc, out, err = C.run(["pacman", "-T", *pkgs])
+    if rc not in (0, 127):
+        raise Fail(f"pacman -T: {(err or out).strip() or f'exit {rc}'}")
+    missing = [p for p in pkgs if p in out.split()]
+    gpus = [g.get("vendor", "") + " " + (g.get("name") or g.get("id", "")) for g in hw["detection"].get("gpus") or []]
+    return {"gpus": gpus, "packages": pkgs, "missing": missing,
+            "hyprland_changed": bool((hw.get("plan") or {}).get("hyprland_changed"))}
+
+
+def steps(p, yes):
+    cmds = []
+    if p["missing"]:
+        cmds.append(["sudo", "pacman", "-S", "--needed", *(["--noconfirm"] if yes else []), *p["missing"]])
+    exists, member = in_group("gamemode")
+    if not member and (exists or "gamemode" in p["missing"]):
+        cmds.append(["sudo", "gpasswd", "-a", user(), "gamemode"])
+    if p["hyprland_changed"]:
+        cmds.append(["bromigos", "hw", "setup", "--user-only"])
+    return cmds
+
+
+def setup(args):
+    dry = C.flag(args, "--dry-run", takes=False, default=False)
+    yes = C.flag(args, "--yes", takes=False, default=False)
+    if args:
+        raise Fail(f"unknown argument {args[0]!r}\n{USAGE}")
+    p = plan()
+    cmds = steps(p, yes)
+    lines = [f"GPUs: {', '.join(p['gpus']) or 'none found'}",
+             f"Packages: {', '.join(p['packages'])}" +
+             (f" ({', '.join(p['missing'])} to install)" if p["missing"] else " (all installed)")]
+    if dry:
+        lines += ["Would run:"] + ["  " + " ".join(c) for c in cmds] if cmds else ["Nothing to do."]
+        return dict(p, commands=[" ".join(c) for c in cmds], dry_run=True, said="\n".join(lines))
+    ran = []
+    as_json = "--json" in sys.argv
+    for c in cmds:
+        if c[:2] == ["sudo", "gpasswd"] and not in_group("gamemode")[0]:
+            continue                                   # gamemode's package didn't make the group
+        if not as_json:
+            print("$ " + " ".join(c), flush=True)
+        # sudo keeps the terminal (the password, pacman's questions); with --json their
+        # output goes to stderr so the document stays alone on stdout
+        r = subprocess.run(c, stdout=sys.stderr if as_json else None)
+        if r.returncode != 0:
+            raise Fail(f"`{' '.join(c)}` exited {r.returncode}; nothing after it ran")
+        ran.append(" ".join(c))
+    lines += ["Done." if ran else "Everything is in place already."]
+    if ran:
+        lines.append("Log out and back in, so the gamemode group and the session's GPU settings apply.")
+    lines.append("Next: `bromigos game proton install` for GE-Proton, then `bromigos game check`.")
+    return dict(p, commands=ran, dry_run=False, said="\n".join(lines))
+
+
+if __name__ == "__main__":
+    sys.exit(C.main({"setup": setup}, USAGE, default="setup"))

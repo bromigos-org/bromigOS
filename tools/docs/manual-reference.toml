@@ -317,4 +317,7 @@ rows = [
 title = "Playing games"
 rows = [
   { route = "game", text = "Give the game your keys and quiet the desktop. See [Playing games](games.md)." },
+  { route = "game setup", text = "Install Steam with your graphics cards' 32-bit drivers. See [Steam and Proton](games.md#steam-and-proton)." },
+  { route = "game proton", text = "List, install or remove Proton versions, such as GE-Proton." },
+  { route = "game check", text = "Find what stops games from starting, and fix your own files with `--fix`." },
 ]

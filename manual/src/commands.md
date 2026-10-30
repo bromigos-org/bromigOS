@@ -146,6 +146,9 @@ The desktop runs these for you. You don't need them day to day.
 | Command | What it does |
 |---|---|
 | [`bromigos game`](#bromigos-game) | Give the game your keys and quiet the desktop. See [Playing games](games.md). |
+| [`bromigos game setup`](#bromigos-game-setup) | Install Steam with your graphics cards' 32-bit drivers. See [Steam and Proton](games.md#steam-and-proton). |
+| [`bromigos game proton`](#bromigos-game-proton) | List, install or remove Proton versions, such as GE-Proton. |
+| [`bromigos game check`](#bromigos-game-check) | Find what stops games from starting, and fix your own files with `--fix`. |
 
 ### Other commands
 
@@ -1018,6 +1021,58 @@ For example:
 bromigos game on
 bromigos game off
 bromigos game auto on
+```
+
+From the `bromigos-desktop` package.
+
+### bromigos game check
+
+Check Steam, Proton and the desktop for what stops games starting; --fix repairs your own files.
+
+```text
+bromigos game check [--fix] [--json]
+```
+
+For example:
+
+```text
+bromigos game check
+bromigos game check --fix
+```
+
+From the `bromigos-desktop` package.
+
+### bromigos game proton
+
+Proton versions for Steam: list them, install the latest GE-Proton (checksum verified), remove one.
+
+```text
+bromigos game proton [list] | install [VERSION] | remove VERSION [--force]  [--json]
+```
+
+For example:
+
+```text
+bromigos game proton
+bromigos game proton install
+bromigos game proton remove GE-Proton10-25
+```
+
+From the `bromigos-desktop` package.
+
+### bromigos game setup
+
+Install Steam with the 32-bit graphics drivers for this machine's GPUs, and GameMode.
+
+```text
+bromigos game setup [--dry-run] [--yes] [--json]
+```
+
+For example:
+
+```text
+bromigos game setup --dry-run
+bromigos game setup
 ```
 
 From the `bromigos-desktop` package.

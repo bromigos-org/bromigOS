@@ -1,0 +1,13 @@
+"compatibilitytools"
+{
+  "compat_tools"
+  {
+    "GE-Proton99-1" // Internal name of this tool
+    {
+      "install_path" "."
+      "display_name" "GE-Proton99-1"
+      "from_oslist"  "windows"
+      "to_oslist"    "linux"
+    }
+  }
+}
