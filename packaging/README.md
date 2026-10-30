@@ -14,6 +14,7 @@ packaging/
   bromigos-keyring/        puts that key in pacman's keyring
   bromigos-core/           the bromigos command (core/), themes/, theme/, lib/, migrations/, bin/
   bromigos-desktop/        the desktop's default configs and their tools (desktop/)
+  bromigos-bar-hover/      the bar's hover popups: a waybar module in C (desktop/waybar/hover/)
   bromigos-settings/       the login screen, boot splash, boot menu, GTK, icon and cursor themes (settings/)
   bromigos-live/           the live layer (live/)
   bromigos-widgets/        the desktop panels (widgets/)
@@ -56,6 +57,7 @@ packages. That table is generated from these PKGBUILDs.
 | `bromigos-keyring` | The signing key in `/usr/share/pacman/keyrings/` | `keys/bromigos.asc` |
 | `bromigos-core` | `/usr/bin/bromigos`, the themes, the theme templates, the shared Python libraries, the migrations and three pacman hooks | `core/`, `themes/`, `theme/`, `lib/`, `migrations/`, `bin/` |
 | `bromigos-desktop` | The desktop's default configs in `/usr/share/bromigos/default/`, and the tools they call | `desktop/`, `peripherals/` |
+| `bromigos-bar-hover` | `/usr/lib/bromigos/waybar/bromigos-hover.so`, the waybar module that opens a popup when the pointer rests on another module | `desktop/waybar/hover/` |
 | `bromigos-settings` | The SDDM login theme, the Plymouth splash, the GRUB boot theme, and the GTK, icon and cursor themes | `settings/`, the Wick's emblem kit, the den |
 | `bromigos-live` | The live layer in `/usr/lib/bromigos/live/`, `/usr/bin/bromigos-live` and its default config | `live/` |
 | `bromigos-widgets` | The panels in `/usr/lib/bromigos/widgets/`, `/usr/bin/bromigos-widgets` and the default layout | `widgets/` |
