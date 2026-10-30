@@ -53,7 +53,7 @@ if [[ ${BROMIGOS_ISOTEST_IN_CONTAINER:-0} != 1 ]]; then
 fi
 
 # ── in the container ───────────────────────────────────────────────────────────────────
-pacman -Syu --noconfirm --needed qemu-base edk2-ovmf socat openssh libisoburn python python-pillow \
+pacman -Syu --noconfirm --needed qemu-desktop edk2-ovmf socat openssh libisoburn python python-pillow \
     python-pip imagemagick procps-ng >/dev/null 2>&1
 export BROMIGOS_VM_OWNER=none
 fails=0
@@ -63,11 +63,27 @@ step() {            # step NAME CMD…: runs it, says PASS or FAIL, goes on
     if "$@"; then echo "::endgroup::"; echo "PASS $name"; else echo "::endgroup::"; echo "FAIL $name"; fails=$((fails + 1)); return 1; fi
 }
 T() { "$root/iso/test.sh" "$@"; }
+# a free TCP port on 127.0.0.1 at or above $1 (the host's network: other VMs may hold some)
+free_port() {
+    python3 - "$1" <<'PY'
+import socket, sys
+for p in range(int(sys.argv[1]), 65000):
+    with socket.socket() as s:
+        try:
+            s.bind(("127.0.0.1", p))
+        except OSError:
+            continue
+        print(p)
+        break
+PY
+}
+vnc_display() { echo $(( $(free_port $((5900 + $1))) - 5900 )); }
 
 desktop_run() {     # desktop_run NAME FIRMWARE PORT VNC OFFLINE ENCRYPT
     local name=$1 fw=$2 enc=()
     (( $6 )) || enc=(--no-encrypt)
-    export BROMIGOS_ISOTEST_DIR=$out/$name BROMIGOS_ISOTEST_PORT=$3 BROMIGOS_ISOTEST_VNC=$4 BROMIGOS_ISOTEST_OFFLINE=$5
+    BROMIGOS_ISOTEST_PORT=$(free_port "$3"); BROMIGOS_ISOTEST_VNC=$(vnc_display "$4")
+    export BROMIGOS_ISOTEST_DIR=$out/$name BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC BROMIGOS_ISOTEST_OFFLINE=$5
     step "$name: the live desktop" T boot --iso "$iso" --firmware "$fw" \
         && step "$name: the install" T install "${enc[@]}" \
         && { BROMIGOS_ISOTEST_OFFLINE=0 step "$name: the installed system, its first update and rollback" T boot-disk --firmware "$fw" || true; }
@@ -103,7 +119,8 @@ secureboot_run() {
     # person's PC would have it in shim's MOK list (MokManager puts it there: docs/secureboot.md)
     virt-fw-vars --input /usr/share/edk2/x64/OVMF_VARS.4m.fd --output "$d/OVMF_VARS.fd" \
         --enroll-microsoft --add-db 6b3c2a1e-0b70-4b1e-9a4e-62726f6d6967 "$sbcert" --secure-boot >/dev/null 2>&1
-    export BROMIGOS_ISOTEST_DIR=$d BROMIGOS_ISOTEST_PORT=2241 BROMIGOS_ISOTEST_VNC=51 BROMIGOS_ISOTEST_OFFLINE=0
+    BROMIGOS_ISOTEST_PORT=$(free_port 2241); BROMIGOS_ISOTEST_VNC=$(vnc_display 51)
+    export BROMIGOS_ISOTEST_DIR=$d BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC BROMIGOS_ISOTEST_OFFLINE=0
     export BROMIGOS_ISOTEST_OVMF_CODE=/usr/share/edk2/x64/OVMF_CODE.secboot.4m.fd
     # the Secure Boot firmware needs SMM, and its variables kept from the OS
     export BROMIGOS_ISOTEST_QEMU="-machine smm=on -global driver=cfi.pflash01,property=secure,value=on"
