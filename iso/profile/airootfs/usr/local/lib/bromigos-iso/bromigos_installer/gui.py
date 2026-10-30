@@ -80,13 +80,131 @@ def installer_css(c, high_contrast=False):
 .bi-status {{ font-size: 1.15em; color: {c['soft']}; }}
 .bi-big {{ font-size: 1.15em; padding: 10px 26px; letter-spacing: 0.08em; }}
 .bi-split {{ font-weight: 700; letter-spacing: 0.06em; }}
-.bi-split.them {{ color: {c['soft']}; }}
+.bi-split.them {{ color: {c.get('cyan', c['soft'])}; }}
 .bi-split.us {{ color: {c['primary']}; }}
+.bi-limit {{ font-size: 0.85em; }}
+.bi-limit.them {{ color: {c.get('cyan', c['soft'])}; }}
+.bi-limit.us {{ color: {c['primary']}; }}
+.bi-splitbar:focus-visible {{ outline: 2px solid {c['primary']}; outline-offset: 2px; }}
 progressbar > trough {{ min-height: 10px; background-color: {a(c['dim'], .3)}; border-radius: 0; }}
 progressbar > trough > progress {{ min-height: 10px; background-color: {c['primary']}; border-radius: 0;
   box-shadow: 0 0 8px {a(c['primary'], .45 if not hc else 0)}; }}
 textview, textview text {{ background-color: {c['void']}; color: {c['muted']}; font-size: 0.85em; }}
 """
+
+
+class SplitBar(Gtk.DrawingArea):
+    """Install alongside's split, drawn as the partition it divides: the other system from the
+    left (its colour), bromigOS from the right (the primary), the handle at the split, and
+    each side's minimum striped at its end, so it's plain why the handle stops there. Arrow
+    keys move it 1 GB, Page Up/Down 10 GB, Home/End to the limits; it shows when it has the
+    focus. `value` is the other system's share, GB (as the bar reads, left to right)."""
+
+    def __init__(self, total, lo, hi, value, who, c):
+        super().__init__(accessible_role=Gtk.AccessibleRole.SLIDER)
+        self.total, self.lo, self.hi, self.who, self.c = total, lo, hi, who, c
+        self.value = max(lo, min(hi, value))
+        self.on_change = None
+        self.set_focusable(True)
+        self.set_can_focus(True)
+        self.set_hexpand(True)
+        self.set_content_height(46)
+        self.add_css_class("bi-splitbar")
+        self.set_draw_func(self._draw)
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._key)
+        self.add_controller(keys)
+        click = Gtk.GestureClick()
+        click.connect("pressed", lambda g, n, x, y: (self.grab_focus(), self._at(x)))
+        self.add_controller(click)
+        drag = Gtk.GestureDrag()
+        drag.connect("drag-update", lambda g, dx, dy: self._at(g.get_start_point()[1] + dx))
+        self.add_controller(drag)
+        focus = Gtk.EventControllerFocus()
+        focus.connect("enter", lambda *_: self.queue_draw())
+        focus.connect("leave", lambda *_: self.queue_draw())
+        self.add_controller(focus)
+        self._a11y()
+
+    def _a11y(self):
+        try:
+            self.update_property(
+                [Gtk.AccessibleProperty.LABEL, Gtk.AccessibleProperty.VALUE_MIN, Gtk.AccessibleProperty.VALUE_MAX,
+                 Gtk.AccessibleProperty.VALUE_NOW, Gtk.AccessibleProperty.VALUE_TEXT],
+                [f"Room for {self.who}, in gigabytes", float(self.lo), float(self.hi), float(self.value),
+                 f"{self.who} {self.value:.0f} GB, bromigOS {self.total - self.value:.0f} GB"])
+        except Exception:
+            pass
+
+    def set_value(self, v):
+        v = max(self.lo, min(self.hi, round(v)))
+        if v != self.value:
+            self.value = v
+            self._a11y()
+            self.queue_draw()
+            if self.on_change:
+                self.on_change(v)
+
+    def _at(self, x):
+        w = max(1, self.get_width() - 12)
+        self.set_value((x - 6) / w * self.total)
+
+    def _key(self, ctl, keyval, code, state):
+        step = {Gdk.KEY_Left: -1, Gdk.KEY_KP_Left: -1, Gdk.KEY_Right: 1, Gdk.KEY_KP_Right: 1,
+                Gdk.KEY_Page_Down: -10, Gdk.KEY_Page_Up: 10}.get(keyval)
+        if step:
+            self.set_value(self.value + step)
+            return True
+        if keyval in (Gdk.KEY_Home, Gdk.KEY_End):
+            self.set_value(self.lo if keyval == Gdk.KEY_Home else self.hi)
+            return True
+        return False
+
+    def _draw(self, area, cr, width, height):
+        def rgb(h, a=1.0):
+            h = h.lstrip("#")
+            cr.set_source_rgba(int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255, a)
+        c = self.c
+        x0, x1, y0, y1 = 6, width - 6, 12, height - 12
+        span = x1 - x0
+        at = lambda gb: x0 + span * gb / self.total        # noqa: E731
+        split = at(self.value)
+        rgb(c.get("cyan", c["soft"]), 0.55)                # the other system's share, its own colour
+        cr.rectangle(x0, y0, split - x0, y1 - y0)
+        cr.fill()
+        rgb(c["primary"], 0.85)                            # bromigOS's
+        cr.rectangle(split, y0, x1 - split, y1 - y0)
+        cr.fill()
+        # each side's minimum, striped: the handle can't go into them
+        for a, b in ((x0, at(self.lo)), (at(self.hi), x1)):
+            cr.save()
+            cr.rectangle(a, y0, b - a, y1 - y0)
+            cr.clip()
+            rgb(c["void"], 0.55)
+            cr.set_line_width(2)
+            x = a - (y1 - y0)
+            while x < b:
+                cr.move_to(x, y1)
+                cr.line_to(x + (y1 - y0), y0)
+                x += 7
+            cr.stroke()
+            cr.restore()
+            rgb(c["text"], 0.75)                           # the limit itself
+            cr.rectangle(b - 1 if a == x0 else a, y0 - 4, 2, y1 - y0 + 8)
+            cr.fill()
+        rgb(c["dim"], 0.9)                                 # the frame
+        cr.set_line_width(1)
+        cr.rectangle(x0 + 0.5, y0 + 0.5, span - 1, y1 - y0 - 1)
+        cr.stroke()
+        focused = self.is_focus()
+        rgb(c["text"])                                     # the handle
+        cr.rectangle(split - 4, y0 - 9, 8, y1 - y0 + 18)
+        cr.fill()
+        if focused:                                        # the focus: a ring around the handle
+            rgb(c["primary"])
+            cr.set_line_width(2)
+            cr.rectangle(split - 8, y0 - 12, 16, y1 - y0 + 24)
+            cr.stroke()
 
 
 def hint(widget, text):
@@ -689,26 +807,31 @@ class Window(Adw.ApplicationWindow):
         top.append(them)
         top.append(us)
         card.append(top)
-        # the scale is the other system's share, left to right, as the bar reads
-        adj = Gtk.Adjustment(value=(total - v) / GiB, lower=(total - al["max"]) / GiB, upper=(total - al["min"]) / GiB,
-                             step_increment=1, page_increment=10)
-        scale = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL, adjustment=adj, draw_value=False, digits=0)
-        scale.set_hexpand(True)
-        hint(scale, f"Drag, or use ← and →: left gives bromigOS more room, right gives {al['who']} more. "
-                    f"{al['who']} keeps at least {plain_size(al['keep_min'])}: what it uses now and room to grow.")
-        scale.update_property([Gtk.AccessibleProperty.LABEL], [f"Room for {al['who']}, in gigabytes"])
-        card.append(scale)
+        # the bar is the whole partition: the other system's share from the left, bromigOS's
+        # from the right, the handle where they meet, each side's minimum marked on it
+        lo, hi = (total - al["max"]) / GiB, (total - al["min"]) / GiB
+        bar = SplitBar(total / GiB, lo, hi, (total - v) / GiB, al["who"], common.theme()[0])
+        hint(bar, f"The split: drag the handle, or use ← and → (Page Up and Page Down by 10 GB, Home and End to the "
+                  f"limits). ← gives bromigOS more room, → gives {al['who']} more. The striped ends are what each needs.")
+        card.append(bar)
+        lims = Gtk.Box(spacing=12)
+        left = label(f"◂ {al['who']} needs {plain_size(al['keep_min'])}: what it uses now and room to grow",
+                     ("bi-limit", "them"), xalign=0.0)
+        right = label(f"bromigOS needs {plain_size(al['min'])} ▸", ("bi-limit", "us"), wrap=False, xalign=1.0)
+        left.set_hexpand(True)
+        lims.append(left)
+        lims.append(right)
+        card.append(lims)
 
-        def moved(*_):
-            them_b = int(adj.get_value()) * GiB
-            self.a["bromigos_bytes"] = max(al["min"], min(al["max"], total - them_b))
+        def moved(value):
+            self.a["bromigos_bytes"] = max(al["min"], min(al["max"], total - int(round(value)) * GiB))
             them.set_label(f"{al['who'].upper()}  {plain_size(total - self.a['bromigos_bytes'])}")
             us.set_label(f"BROMIGOS  {plain_size(self.a['bromigos_bytes'])}")
-        adj.connect("value-changed", moved)
-        moved()
+        bar.on_change = moved
+        moved(bar.value)
         card.append(label(f"{al['who']} is made smaller to make room; its files stay where they are. bromigOS needs at least "
                           f"{plain_size(al['min'])}; {plain_size(common_good())} or more leaves room for apps and games.", ("bi-intro",)))
-        self.split_adj = adj
+        self.split_bar = bar
         box.append(card)
 
     def build_bitlocker(self, page):
@@ -1087,10 +1210,10 @@ class Window(Adw.ApplicationWindow):
             usable = [d for d in self.probe["disks"]]
             self.pick_disk(usable[plan.get("disk_index", 0)]["path"])
             self.pick_mode(plan["mode"])
-            if plan.get("gib") and hasattr(self, "split_adj"):
+            if plan.get("gib") and hasattr(self, "split_bar"):
                 total = self.disk()["options"]["alongside"]
                 total = total["part_size"] + total["free_after"]
-                self.split_adj.set_value((total - plan["gib"] * GiB) / GiB)
+                self.split_bar.set_value((total - plan["gib"] * GiB) / GiB)
         elif sid == "user":
             self.f["full_name"].set_text(plan.get("full_name", "Test Er"))
             self.f["user"].set_text(plan.get("user", "tester"))
