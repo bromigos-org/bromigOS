@@ -13,7 +13,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::canvas::{Canvas, Circle, Line as CLine, Points};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
 
-use crate::app::{App, Edit, KINDS, Screen, Step, plain_kind};
+use crate::app::{App, Edit, Screen, Step, fits, plain_kind};
 use crate::proto::Device;
 use crate::theme::Pal;
 
@@ -917,7 +917,19 @@ fn wizard(f: &mut Frame, r: Rect, app: &App) {
         }
     }
     f.render_widget(Paragraph::new(Line::from(s)), crumbs);
-    let (_, glyph, how) = KINDS[w.kind.min(KINDS.len() - 1)];
+    let Some(kind) = app
+        .kinds
+        .get(w.kind.min(app.kinds.len().saturating_sub(1)))
+        .cloned()
+    else {
+        f.render_widget(
+            Paragraph::new("Waiting for bromigos bluetooth session…").style(st(p.muted)),
+            body,
+        );
+        return;
+    };
+    let glyph = kind.glyph.as_str();
+    let how: Vec<String> = kind.steps.clone();
     match &w.step {
         Step::Kind => {
             let mut lines = vec![
@@ -927,7 +939,8 @@ fn wizard(f: &mut Frame, r: Rect, app: &App) {
                 )),
                 Line::from(""),
             ];
-            for (i, (name, _, _)) in KINDS.iter().enumerate() {
+            for (i, k) in app.kinds.iter().enumerate() {
+                let name = &k.name;
                 let sel = i == w.kind;
                 lines.push(Line::from(vec![
                     Span::styled(if sel { " ▌ " } else { "   " }, st(p.primary)),
@@ -978,7 +991,7 @@ fn wizard(f: &mut Frame, r: Rect, app: &App) {
             ))];
             for (i, d) in found.iter().enumerate() {
                 let sel = i == w.pick;
-                let fits = d.glyph == glyph || (glyph == "headset" && d.glyph == "earbuds");
+                let fits = fits(&d.glyph, glyph);
                 let mut line = Line::from(vec![
                     Span::styled(if sel { "▌" } else { " " }, st(p.primary)),
                     Span::styled(

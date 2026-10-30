@@ -9,57 +9,8 @@ use ratatui::crossterm::event::{
 use ratatui::layout::{Position, Rect};
 use serde_json::{Value, json};
 
-use crate::proto::{self, Axes, Device, Msg, State};
+use crate::proto::{self, Axes, Device, Kind, Msg, State};
 use crate::theme::Pal;
-
-/// The kinds the pairing wizard asks about, with how to put each in pairing mode.
-pub const KINDS: &[(&str, &str, &[&str])] = &[
-    (
-        "Game controller",
-        "controller",
-        &[
-            "Xbox Wireless Controller (One S and later, Elite Series 2, Series X|S):",
-            "1. Switch it on with the Xbox button.",
-            "2. Hold the small pair button on its top edge until the Xbox logo flashes fast.",
-            "Other pads: hold their pairing button (often Share + PS, or Home) until the light flashes.",
-        ],
-    ),
-    (
-        "Headphones or earbuds",
-        "headset",
-        &[
-            "Headphones: hold the power or Bluetooth button for about 5 seconds, until the light",
-            "flashes or a voice says pairing.",
-            "Earbuds: put them in the case, open the lid, then hold the case's button.",
-        ],
-    ),
-    (
-        "Keyboard",
-        "keyboard",
-        &[
-            "Switch it on, then hold its Bluetooth or connect key (often Fn + a number) until the",
-            "light flashes. It may ask you to type a 6-digit code on it, then Enter.",
-        ],
-    ),
-    (
-        "Mouse",
-        "mouse",
-        &["Switch it on, then hold the button underneath until its light flashes."],
-    ),
-    (
-        "Phone",
-        "phone",
-        &[
-            "Open Bluetooth in the phone's settings: it's visible while that screen is open.",
-            "Both screens show a code: say yes on both if they match. It connects for its sound.",
-        ],
-    ),
-    (
-        "Something else",
-        "device",
-        &["Put it in pairing mode: its manual says how (often a long press on its button)."],
-    ),
-];
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Step {
@@ -118,6 +69,8 @@ pub struct Input {
 
 pub struct App {
     pub state: State,
+    /// What the pairing wizard offers (the session's `kinds`).
+    pub kinds: Vec<Kind>,
     pub screen: Screen,
     pub sel: usize,
     pub filter: String,
@@ -144,6 +97,12 @@ pub struct App {
     pub quit: bool,
 }
 
+/// A found device is of the kind asked for (earbuds and speakers count as headphones),
+/// as bromigos_bluez.fits says.
+pub fn fits(device: &str, kind: &str) -> bool {
+    device == kind || (kind == "headset" && (device == "earbuds" || device == "speaker"))
+}
+
 pub fn plain_kind(k: &str) -> &str {
     if k.is_empty() { "device" } else { k }
 }
@@ -152,6 +111,7 @@ impl App {
     pub fn new(pal: Pal, motion: &str) -> App {
         App {
             state: State::default(),
+            kinds: vec![],
             screen: Screen::Devices,
             sel: 0,
             filter: String::new(),
@@ -241,7 +201,11 @@ impl App {
 
     /// The nearby devices the wizard offers, the chosen kind first, strongest first.
     pub fn found(&self, kind: usize) -> Vec<Device> {
-        let want = KINDS.get(kind).map(|k| k.1).unwrap_or("device");
+        let want = self
+            .kinds
+            .get(kind)
+            .map(|k| k.glyph.as_str())
+            .unwrap_or("device");
         let mut v: Vec<Device> = self
             .state
             .devices
@@ -249,16 +213,14 @@ impl App {
             .filter(|d| !d.paired && (!d.alias.is_empty() || d.rssi.is_some()))
             .cloned()
             .collect();
-        v.sort_by_key(|d| {
-            let fits = d.glyph == want || (want == "headset" && d.glyph == "earbuds");
-            (!fits, -(d.rssi.unwrap_or(-200)))
-        });
+        v.sort_by_key(|d| (!fits(&d.glyph, want), -(d.rssi.unwrap_or(-200))));
         v
     }
 
     // ------------------------------------------------------------ the session's messages
     pub fn handle(&mut self, m: Msg) {
         match m {
+            Msg::Kinds { kinds } => self.kinds = kinds,
             Msg::State { state } => {
                 for d in state.devices.iter().filter(|d| !d.paired) {
                     self.seen.entry(d.mac.clone()).or_insert(self.tick);
@@ -482,10 +444,7 @@ impl App {
     }
 
     fn pair(&mut self, d: &Device) {
-        let kind = KINDS
-            .iter()
-            .position(|k| k.1 == d.glyph)
-            .unwrap_or(KINDS.len() - 1);
+        let kind = self.kind_of(&d.glyph);
         let mut w = Wizard {
             step: Step::Pairing,
             kind,
@@ -550,6 +509,14 @@ impl App {
         }
     }
 
+    /// The wizard's kind for a device's glyph (else the last: something else).
+    fn kind_of(&self, glyph: &str) -> usize {
+        self.kinds
+            .iter()
+            .position(|k| fits(glyph, &k.glyph))
+            .unwrap_or(self.kinds.len().saturating_sub(1))
+    }
+
     pub fn start_wizard(&mut self) {
         self.screen = Screen::Wizard(Wizard {
             step: Step::Kind,
@@ -597,10 +564,7 @@ impl App {
                 // re-pair: forget it, then pair it again from the wizard
                 self.req("forget", Some(mac), json!({}));
                 self.stop_tests();
-                let kind = KINDS
-                    .iter()
-                    .position(|x| x.1 == d.glyph)
-                    .unwrap_or(KINDS.len() - 1);
+                let kind = self.kind_of(&d.glyph);
                 self.screen = Screen::Wizard(Wizard {
                     step: Step::Kind,
                     kind,
@@ -680,7 +644,7 @@ impl App {
             }
             (Step::Kind, KeyCode::Up | KeyCode::Char('k')) => w.kind = w.kind.saturating_sub(1),
             (Step::Kind, KeyCode::Down | KeyCode::Char('j')) => {
-                w.kind = (w.kind + 1).min(KINDS.len() - 1)
+                w.kind = (w.kind + 1).min(self.kinds.len().saturating_sub(1))
             }
             (Step::Kind, KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right) => {
                 w.step = Step::Scan;

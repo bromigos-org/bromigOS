@@ -110,10 +110,22 @@ pub struct Axes {
     pub dy: i32,
 }
 
+/// A kind of device the pairing wizard offers, and how to put it in pairing mode.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Kind {
+    pub name: String,
+    pub glyph: String,
+    pub steps: Vec<String>,
+}
+
 /// What the session says.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(tag = "t", rename_all = "kebab-case")]
 pub enum Msg {
+    Kinds {
+        kinds: Vec<Kind>,
+    },
     State {
         state: State,
     },

@@ -61,6 +61,11 @@ fn app(world: &str, scanning: bool) -> App {
             .collect();
         doc["devices"] = devs.into();
     }
+    let kinds = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/kinds.json"),
+    )
+    .unwrap();
+    a.handle(proto::parse(&kinds.replace('\n', " ")).expect("the session's kinds"));
     a.handle(Msg::State {
         state: serde_json::from_value(doc).unwrap(),
     });
@@ -93,7 +98,9 @@ fn text(b: &Buffer) -> String {
 
 /// SNAPSHOT_CELLS_DIR=DIR: each screen's cells as JSON lines (text, fg, bg), for pictures.
 fn cells_out(name: &str, b: &Buffer) {
-    let Some(dir) = std::env::var_os("SNAPSHOT_CELLS_DIR") else { return };
+    let Some(dir) = std::env::var_os("SNAPSHOT_CELLS_DIR") else {
+        return;
+    };
     let col = |c: Color| match c {
         Color::Rgb(r, g, b) => format!("#{r:02x}{g:02x}{b:02x}"),
         _ => String::new(),
@@ -103,7 +110,12 @@ fn cells_out(name: &str, b: &Buffer) {
         let row: Vec<serde_json::Value> = (0..b.area.width)
             .map(|x| {
                 let c = &b[(x, y)];
-                serde_json::json!([c.symbol(), col(c.fg), col(c.bg), c.modifier.contains(ratatui::style::Modifier::BOLD)])
+                serde_json::json!([
+                    c.symbol(),
+                    col(c.fg),
+                    col(c.bg),
+                    c.modifier.contains(ratatui::style::Modifier::BOLD)
+                ])
             })
             .collect();
         out.push_str(&serde_json::to_string(&row).unwrap());

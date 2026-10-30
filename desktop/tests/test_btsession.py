@@ -151,6 +151,12 @@ class Live(unittest.TestCase):
 
     def test_state_then_scan_pair_with_a_code(self):
         self.wait(lambda: any(m["t"] == "state" for m in self.out))
+        kinds = next(m for m in self.out if m["t"] == "kinds")
+        self.assertEqual(self.out[0], kinds, "the kinds come first")
+        # the TUI's tests draw the session's own kinds
+        with open(os.path.join(DESKTOP, "..", "core", "crates", "bromigos-bt", "tests", "fixtures", "kinds.json")) as f:
+            self.assertEqual(json.load(f), kinds)
+        self.assertIn("Xbox", kinds["kinds"][0]["steps"][0])
         self.assertEqual(self.state()["adapter"]["alias"], "workstation")
         self.send({"id": 1, "do": "scan", "on": True})
         self.assertTrue(self.reply(1)["ok"])

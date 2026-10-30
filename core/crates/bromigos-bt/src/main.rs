@@ -44,7 +44,14 @@ fn session() -> std::io::Result<Child> {
 /// `bromigos terminal` (kitty, else $TERMINAL), with the class Hyprland floats.
 fn window() -> ExitCode {
     let r = Command::new("bromigos")
-        .args(["terminal", "--class", "bromigos-bluetooth", "--title", "Bluetooth", "--"])
+        .args([
+            "terminal",
+            "--class",
+            "bromigos-bluetooth",
+            "--title",
+            "Bluetooth",
+            "--",
+        ])
         .args(["bromigos", "bluetooth", "tui"])
         .spawn();
     match r {

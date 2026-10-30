@@ -4,6 +4,8 @@ another language, one JSON document per line on stdin and stdout (package bromig
 bar, the panel, the TUI and Settings share one bluez code.
 
 Out, each a line:
+  {"t": "kinds", "kinds": [{"name", "glyph", "steps"}]}   first: what the pairing wizard
+                                           offers and each kind's pair-mode steps
   {"t": "state", "state": {…}}            whenever bluez or PipeWire change: bromigos_bluez's
                                            state, plus "audio" (PipeWire's Bluetooth cards, by
                                            address), "sound" (each device's output and input,
@@ -33,7 +35,6 @@ import json
 import math
 import os
 import struct
-import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.realpath(__file__))
@@ -253,12 +254,7 @@ class Session:
         self.send({"t": "cancel"})
 
     def reset(self, back):
-        """Power off, lift any rfkill soft block, power on: what fixes most stuck adapters."""
-        def on(ok, err):
-            subprocess.run(["rfkill", "unblock", "bluetooth"], capture_output=True, timeout=5)
-            self.GLib.timeout_add(800, lambda: self.bz.power(True, lambda ok2, err2: back(
-                ok2, err2, "The adapter was switched off and on again" if ok2 else None)) and False)
-        self.bz.power(False, on)
+        self.bz.reset(lambda ok, err: back(ok, err, "The adapter was switched off and on again" if ok else None))
 
     # -- a controller's input and rumble
     def input(self, mac, back):
@@ -360,6 +356,7 @@ class Session:
     # -- the loop
     def run(self, stdin=None):
         self.loop = self.GLib.MainLoop()
+        self.send({"t": "kinds", "kinds": [{"name": n, "glyph": g, "steps": st} for n, g, st in B.PAIR_KINDS]})
         try:
             self.bz.start()
         except Exception:
