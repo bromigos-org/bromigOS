@@ -252,13 +252,21 @@ fn keys_for(app: &App) -> Vec<(&'static str, &'static str)> {
 
 // ------------------------------------------------------------------ Home
 
-/// The Home screen's parts, for a screen this size: drawing and mouse clicks share it.
+/// The Home screen's parts, for a screen this size: drawing and mouse clicks share it. Everything
+/// is anchored under the top bar, in this order: the emblem, this computer and what's on it, the
+/// lab, the seven sections, the suggestion, the recent repairs. When rows are short, the sections
+/// come first, then the suggestion, the lab and the recent repairs, then the boxes, then the emblem.
 pub struct HomeLayout {
     pub head: Rect,
     pub computer: Rect,
     pub found: Rect,
+    pub lab: Option<Rect>,
     pub suggest: Option<Rect>,
+    pub recent: Option<Rect>,
     pub tiles: [Rect; 7],
+    /// a tile's height: 4 (name and a line about it), 3 (the name), 2 (a list row and its line
+    /// about it, on a tiny screen) or 1 (a list row)
+    pub tile_h: u16,
     pub body: Rect,
     pub top: Rect,
     pub bottom: Rect,
@@ -268,51 +276,163 @@ fn tall_emblem(look: &Look, rows: u16) -> bool {
     look.mode == bromigos_tui::Mode::Truecolor && !look.ascii && rows >= 44
 }
 
+/// The lab strip's words, when Field Kit knows a lab (its homelab.toml).
+fn lab_text(app: &App) -> Option<String> {
+    let lab = &app.overview["lab"];
+    if !lab.is_object() {
+        return None;
+    }
+    let n = lab["sources"].as_u64().unwrap_or(0);
+    let kinds: Vec<&str> = lab["kinds"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|k| k.as_str())
+        .collect();
+    let mut t = format!("Lab: {}", s(lab, "name"));
+    if n > 0 {
+        t.push_str(&format!(
+            "{}{n} service{}",
+            dot(&app.look),
+            if n == 1 { "" } else { "s" }
+        ));
+    }
+    if !kinds.is_empty() {
+        t.push_str(&format!(" ({})", kinds.join(", ")));
+    }
+    let net = app.overview["network"]["kind"].as_str().unwrap_or("none");
+    t.push_str(&format!(
+        "{}{}",
+        dot(&app.look),
+        if net == "none" {
+            "no network link here yet"
+        } else {
+            "network link up"
+        }
+    ));
+    Some(t)
+}
+
+/// The recent row's words: Field Kit's last repairs on the opened install.
+fn recent_text(app: &App) -> Option<String> {
+    let v: Vec<String> = app.overview["recent"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|r| format!("{} {}", s(r, "what"), s(r, "when")))
+        .collect();
+    (!v.is_empty()).then(|| format!("Recent: {}", v.join(dot(&app.look))))
+}
+
+/// A section's line about it in `width` columns, the same kind for every section on a screen:
+/// the whole lines when all of them fit, else the short ones; never cut mid-word (None: they
+/// don't fit).
+fn tile_about(name: &str, server_home: bool, width: usize) -> Option<&'static str> {
+    let fits = |f: fn(&str, bool) -> &'static str| {
+        SECTIONS
+            .iter()
+            .all(|n| f(n, server_home).chars().count() <= width)
+    };
+    if fits(|n, h| section_tile(n, h).1) {
+        Some(section_tile(name, server_home).1)
+    } else if fits(section_tagline) {
+        Some(section_tagline(name, server_home))
+    } else {
+        None
+    }
+}
+
 pub fn home_layout(app: &App, area: Rect) -> HomeLayout {
     let (top, body, bottom) = frame_parts(area);
     let inner = body.inner(Margin::new(1, 0));
     let bp = Breakpoint::of_area(area);
     let cols = home_cols_for(area.width);
     let n = SECTIONS.len();
-    // the sections come first: tiles (3 rows each) or, on a tiny screen, a list (1 row each)
-    let tile_h: u16 = if cols == 1 { 1 } else { 3 };
-    let tiles_h = tile_h * n.div_ceil(cols) as u16;
+    let rows = n.div_ceil(cols) as u16;
+    let lab_h = u16::from(lab_text(app).is_some());
     let sugg_h = u16::from(!app.suggestions().is_empty());
-    let mut room = inner.height.saturating_sub(tiles_h + 2 * sugg_h);
-    // then this computer and what's on it, side by side on wide screens, else stacked
+    let recent_h = u16::from(recent_text(app).is_some());
+    // the sections first: tiles with a line about each when there's room, else their names; on
+    // a tiny screen a list, with its line about each under it when there's room
+    let mut room = inner.height;
+    let tile_h: u16 = if cols == 1 {
+        let wide = inner.width.saturating_sub(4) as usize;
+        let fits_one = SECTIONS.iter().all(|nm| {
+            section_tile(nm, app.server_home()).1.chars().count() + nm.chars().count() + 6
+                <= inner.width as usize
+        });
+        let fits_two = SECTIONS
+            .iter()
+            .all(|nm| tile_about(nm, app.server_home(), wide).is_some());
+        if !fits_one && fits_two && room >= 2 * n as u16 + sugg_h + lab_h {
+            2
+        } else {
+            1
+        }
+    } else if room >= 4 * rows + 6 {
+        4
+    } else {
+        3
+    };
+    let tiles_h = tile_h * rows;
+    room = room.saturating_sub(tiles_h);
+    // then the suggestion, the lab and the recent repairs: a line each, a blank line before them
+    let mut take = |h: u16| {
+        if h > 0 && room > h {
+            room -= h + 1;
+            h
+        } else {
+            0
+        }
+    };
+    let sugg_h = take(sugg_h);
+    let lab_h = take(lab_h);
+    let recent_h = take(recent_h);
+    // this computer and what's on it: side by side on wide screens, else stacked; each box
+    // needs 3 rows (its border and a line), and grows with what it has to say
     let info_lines = computer_lines(app).len().max(found_lines(app).len()) as u16;
     let side = bp.side_by_side();
-    let one = (info_lines + 2).clamp(3, if side { 9 } else { 6 });
-    let want_info = if side { one + 1 } else { 2 * one + 2 };
-    let info_h = if room >= want_info {
-        want_info
-    } else if room >= 4 {
-        room
+    let want_one = (info_lines + 2).clamp(3, if side { 10 } else { 7 });
+    let info_h = if side {
+        if room > want_one {
+            want_one
+        } else if room > 3 {
+            room - 1
+        } else {
+            0
+        }
+    } else if room > 2 * want_one {
+        2 * want_one
+    } else if room > 6 {
+        room - 1
     } else {
         0
     };
-    room = room.saturating_sub(info_h);
+    room = room.saturating_sub(info_h + u16::from(info_h > 0));
     // last, the emblem and the edition's name, when there's room for them
-    let head_h = if tall_emblem(&app.look, area.height) && room >= 12 {
+    let head_h = if tall_emblem(&app.look, area.height) && room > 12 {
         bromigos_tui::emblem::emblem_rows().len() as u16
-    } else if room >= 4 && bp != Breakpoint::Tiny {
+    } else if room > 3 && bp != Breakpoint::Tiny {
         3
     } else {
         0
     };
-    let [head, _, info, grid, _, sugg] = Layout::vertical([
+    let gap = |h: u16| u16::from(h > 0);
+    let [head, _, info, _, lab, _, grid, _, sugg, _, recent] = Layout::vertical([
         Constraint::Length(head_h),
-        Constraint::Length(u16::from(head_h > 0)),
+        Constraint::Length(gap(head_h)),
         Constraint::Length(info_h),
+        Constraint::Length(gap(info_h)),
+        Constraint::Length(lab_h),
+        Constraint::Length(gap(lab_h)),
         Constraint::Length(tiles_h),
+        Constraint::Length(gap(sugg_h)),
         Constraint::Length(sugg_h),
-        Constraint::Length(sugg_h),
+        Constraint::Length(gap(recent_h)),
+        Constraint::Length(recent_h),
     ])
+    .flex(ratatui::layout::Flex::Start)
     .areas(inner);
-    let info = Rect {
-        height: info.height.saturating_sub(1),
-        ..info
-    };
     let (computer, found) = if info.height < 3 {
         (Rect::default(), Rect::default())
     } else if side {
@@ -333,8 +453,11 @@ pub fn home_layout(app: &App, area: Rect) -> HomeLayout {
         head,
         computer,
         found,
+        lab: (lab_h > 0).then_some(lab),
         suggest: (sugg_h > 0).then_some(sugg),
+        recent: (recent_h > 0).then_some(recent),
         tiles,
+        tile_h,
         body,
         top,
         bottom,
@@ -347,41 +470,44 @@ fn draw_home(f: &mut Frame, app: &App, area: Rect) -> Rect {
     let l = home_layout(app, area);
     top_bar(f, l.top, app);
     // the screen's one FLARE: the emblem (or the wordmark) beside the edition's name
-    let art: Vec<&str> = if look.ascii {
-        bromigos_tui::emblem::WORDMARK_ASCII.to_vec()
-    } else if tall_emblem(look, area.height) {
-        bromigos_tui::emblem::emblem_rows()
-    } else {
-        bromigos_tui::emblem::WORDMARK.to_vec()
-    };
-    let mut aw = art.iter().map(|r| r.chars().count()).max().unwrap_or(0) as u16 + 3;
-    if aw + 30 > l.head.width {
-        aw = 0; // too narrow for the art beside the words: the words alone
+    if l.head.height > 0 {
+        let art: Vec<&str> = if look.ascii {
+            bromigos_tui::emblem::WORDMARK_ASCII.to_vec()
+        } else if tall_emblem(look, area.height) && l.head.height > 3 {
+            bromigos_tui::emblem::emblem_rows()
+        } else {
+            bromigos_tui::emblem::WORDMARK.to_vec()
+        };
+        let mut aw = art.iter().map(|r| r.chars().count()).max().unwrap_or(0) as u16 + 3;
+        if aw + 30 > l.head.width {
+            aw = 0; // too narrow for the art beside the words: the words alone
+        }
+        let [a, w] =
+            Layout::horizontal([Constraint::Length(aw), Constraint::Min(10)]).areas(l.head);
+        f.render_widget(
+            Paragraph::new(
+                art.iter()
+                    .map(|r| Line::from(Span::styled(r.to_string(), st(p.primary))))
+                    .collect::<Vec<_>>(),
+            ),
+            a,
+        );
+        let mid = w.height.saturating_sub(3) / 2;
+        let mut words: Vec<Line> = (0..mid).map(|_| Line::from("")).collect();
+        words.push(Line::from(Span::styled(
+            "FIELD KIT",
+            st(p.primary).add_modifier(Modifier::BOLD),
+        )));
+        words.push(Line::from(Span::styled(
+            "bromigOS without the desktop",
+            st(p.soft),
+        )));
+        words.push(Line::from(Span::styled(
+            format!("repair{d}lab{d}server{d}works offline", d = dot(look)),
+            st(p.muted),
+        )));
+        f.render_widget(Paragraph::new(words), w);
     }
-    let [a, w] = Layout::horizontal([Constraint::Length(aw), Constraint::Min(10)]).areas(l.head);
-    f.render_widget(
-        Paragraph::new(
-            art.iter()
-                .map(|r| Line::from(Span::styled(r.to_string(), st(p.primary))))
-                .collect::<Vec<_>>(),
-        ),
-        a,
-    );
-    let mid = w.height.saturating_sub(3) / 2;
-    let mut words: Vec<Line> = (0..mid).map(|_| Line::from("")).collect();
-    words.push(Line::from(Span::styled(
-        "FIELD KIT",
-        st(p.primary).add_modifier(Modifier::BOLD),
-    )));
-    words.push(Line::from(Span::styled(
-        "bromigOS without the desktop",
-        st(p.soft),
-    )));
-    words.push(Line::from(Span::styled(
-        format!("repair{d}lab{d}server{d}works offline", d = dot(look)),
-        st(p.muted),
-    )));
-    f.render_widget(Paragraph::new(words), w);
     // this computer, and what's on its drives (when there's room for them)
     if l.computer.height >= 3 {
         let inner = boxed(f, l.computer, look, Icon::Computer, "This computer", false);
@@ -389,7 +515,7 @@ fn draw_home(f: &mut Frame, app: &App, area: Rect) -> Rect {
         for (icon, text) in computer_lines(app) {
             lines.extend(icon_line(look, icon, &text, "", inner.width));
         }
-        f.render_widget(Paragraph::new(lines), inner);
+        bromigos_tui::layout::scroll_view(f, inner, look, lines, 0);
         let inner = boxed(
             f,
             l.found,
@@ -416,59 +542,86 @@ fn draw_home(f: &mut Frame, app: &App, area: Rect) -> Rect {
         }
         bromigos_tui::layout::scroll_view(f, inner, look, lines, 0);
     }
+    // the lab Field Kit knows (from the stick's folder), on one line
+    if let (Some(r), Some(text)) = (l.lab, lab_text(app)) {
+        let words =
+            bromigos_tui::layout::truncate(&text, (r.width as usize).saturating_sub(3), look.ascii);
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(format!(" {} ", Icon::Lab.of(look)), st(p.primary)),
+                Span::styled(words, st(p.soft)),
+            ])),
+            r,
+        );
+    }
     // the seven sections: tiles, or on a tiny screen a list
     let list = home_cols_for(area.width) == 1;
     for (i, r) in l.tiles.iter().enumerate() {
         if r.height == 0 {
             continue;
         }
-        if list {
-            let sel = app.home == HomeSel::Tile(i);
-            let name = SECTIONS[i];
-            let (icon, about) = section_tile(name, app.server_home());
-            let mark = if look.ascii { ">" } else { "▌" };
-            let style = if sel {
-                widgets::sel_text(look)
-            } else {
-                st(p.soft)
-            };
-            let line = format!("{}  {name}", icon.of(look));
-            let rest = bromigos_tui::layout::truncate(
-                &format!("  {about}"),
-                (r.width as usize).saturating_sub(line.chars().count() + 2),
-                look.ascii,
-            );
-            f.render_widget(
-                Paragraph::new(Line::from(vec![
-                    Span::styled(if sel { mark } else { " " }, st(p.primary)),
-                    Span::styled(line, style),
-                    Span::styled(rest, st(p.muted)),
-                ])),
-                *r,
-            );
-            continue;
-        }
         let sel = app.home == HomeSel::Tile(i);
         let name = SECTIONS[i];
-        let (icon, _) = section_tile(name, app.server_home());
+        let (icon, about) = section_tile(name, app.server_home());
+        let style = if sel {
+            widgets::sel_text(look)
+        } else {
+            st(p.soft)
+        };
+        if list {
+            let mark = if look.ascii { ">" } else { "▌" };
+            let line = format!("{}  {name}", icon.of(look));
+            let mut first = vec![
+                Span::styled(if sel { mark } else { " " }, st(p.primary)),
+                Span::styled(line.clone(), style),
+            ];
+            let one = (r.width as usize).saturating_sub(line.chars().count() + 3);
+            let mut lines = Vec::new();
+            if l.tile_h == 1 {
+                // the lines about them only when all of them fit; the hint bar has them anyway
+                let all = SECTIONS.iter().all(|nm| {
+                    section_tile(nm, app.server_home()).1.chars().count() + nm.chars().count() + 6
+                        <= r.width as usize
+                });
+                if all && about.chars().count() <= one {
+                    first.push(Span::styled(format!("  {about}"), st(p.muted)));
+                }
+                lines.push(Line::from(first));
+            } else {
+                lines.push(Line::from(first));
+                if let Some(t) = tile_about(
+                    name,
+                    app.server_home(),
+                    (r.width as usize).saturating_sub(4),
+                ) {
+                    lines.push(Line::from(vec![
+                        Span::styled(if sel { mark } else { " " }, st(p.primary)),
+                        Span::styled(format!("   {t}"), st(p.faint)),
+                    ]));
+                }
+            }
+            f.render_widget(Paragraph::new(lines), *r);
+            continue;
+        }
         let mut block = widgets::glass(look, "", sel);
         if sel {
             block = block.style(widgets::sel_surface(look));
         }
         let inner = block.inner(*r).inner(Margin::new(1, 0));
         f.render_widget(block, *r);
-        let style = if sel {
-            widgets::sel_text(look)
-        } else {
-            st(p.soft)
-        };
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(format!("{}  ", icon.of(look)), style),
-                Span::styled(name.to_string(), style),
-            ])),
-            inner,
-        );
+        let mut lines = vec![Line::from(vec![
+            Span::styled(format!("{}  ", icon.of(look)), style),
+            Span::styled(name.to_string(), style.add_modifier(Modifier::BOLD)),
+        ])];
+        if l.tile_h >= 4
+            && let Some(t) = tile_about(name, app.server_home(), inner.width as usize)
+        {
+            lines.push(Line::from(Span::styled(
+                t.to_string(),
+                if sel { style } else { st(p.muted) },
+            )));
+        }
+        f.render_widget(Paragraph::new(lines), inner);
     }
     // a suggestion, only when the engine found one
     if let (Some(r), Some((text, _))) = (l.suggest, app.suggestions().first()) {
@@ -485,7 +638,19 @@ fn draw_home(f: &mut Frame, app: &App, area: Rect) -> Rect {
             Paragraph::new(Line::from(vec![
                 Span::styled(format!(" {} Suggested: ", Icon::Alert.of(look)), style),
                 Span::styled(format!("{text} "), if sel { style } else { st(p.text) }),
-                Span::styled("  (press s)", st(p.faint)),
+                Span::styled("  (press f)", st(p.faint)),
+            ])),
+            r,
+        );
+    }
+    // the last repairs on the opened install, each with its backup
+    if let (Some(r), Some(text)) = (l.recent, recent_text(app)) {
+        let words =
+            bromigos_tui::layout::truncate(&text, (r.width as usize).saturating_sub(3), look.ascii);
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(format!(" {} ", Icon::Update.of(look)), st(p.muted)),
+                Span::styled(words, st(p.muted)),
             ])),
             r,
         );
@@ -1434,13 +1599,28 @@ fn clock() -> String {
 /// The status chips: the network, SSH, the stick's settings, remote help, the clock (Reading:
 /// a chip glows only when it means something).
 pub fn chips(app: &App) -> Vec<(Icon, String, Tone)> {
-    let o = &app.overview;
+    let mut o = app.overview.clone();
+    if !o["network"]["state"].is_string() {
+        o["network"]["state"] = Value::from(app.net());
+    }
+    if let Some(on) = app.server["ssh"].as_bool() {
+        o["ssh"]["on"] = Value::from(on);
+    }
+    if o["remote"]["on"].as_bool().is_none() {
+        o["remote"] = app.status["remote"].clone();
+    }
+    if s(&o, "stick").is_empty() {
+        o["stick"] = app.status["stick"].clone();
+    }
+    bar_chips(&app.look, &o)
+}
+
+/// The chips from the engine's facts (overview's, or VECTOR's status "bar"): every Field Kit
+/// screen shows the same ones.
+pub fn bar_chips(look: &Look, o: &Value) -> Vec<(Icon, String, Tone)> {
     let mut v = Vec::new();
     let kind = o["network"]["kind"].as_str().unwrap_or("");
-    let state = o["network"]["state"]
-        .as_str()
-        .map(String::from)
-        .unwrap_or_else(|| app.net());
+    let state = o["network"]["state"].as_str().unwrap_or("").to_string();
     let name = s(&o["network"], "name");
     let (icon, base) = match kind {
         "wifi" => (
@@ -1456,15 +1636,12 @@ pub fn chips(app: &App) -> Vec<(Icon, String, Tone)> {
         _ => (Icon::Network, "network".to_string()),
     };
     let (word, tone) = match state.as_str() {
-        "internet" => (format!("{base}{}online", dot(&app.look)), Tone::Good),
-        "lan" => (format!("{base}{}local only", dot(&app.look)), Tone::Calm),
+        "internet" => (format!("{base}{}online", dot(look)), Tone::Good),
+        "lan" => (format!("{base}{}local only", dot(look)), Tone::Calm),
         _ => (base, Tone::Calm),
     };
     v.push((icon, word, tone));
-    let ssh = app.server["ssh"]
-        .as_bool()
-        .or(o["ssh"]["on"].as_bool())
-        .unwrap_or(false);
+    let ssh = o["ssh"]["on"].as_bool().unwrap_or(false);
     v.push((
         Icon::Key,
         if ssh {
@@ -1474,19 +1651,10 @@ pub fn chips(app: &App) -> Vec<(Icon, String, Tone)> {
         },
         if ssh { Tone::Good } else { Tone::Calm },
     ));
-    let remote = o["remote"]["on"]
-        .as_bool()
-        .or(app.status["remote"]["on"].as_bool())
-        .unwrap_or(false);
-    if remote {
+    if o["remote"]["on"].as_bool().unwrap_or(false) {
         v.push((Icon::Remote, "REMOTE HELP ON".into(), Tone::Warn));
     }
     let stick = s(o, "stick");
-    let stick = if stick.is_empty() {
-        s(&app.status, "stick")
-    } else {
-        stick
-    };
     if !stick.is_empty() {
         v.push((
             Icon::Usb,
@@ -1501,7 +1669,7 @@ pub fn chips(app: &App) -> Vec<(Icon, String, Tone)> {
     v
 }
 
-fn chip_spans(look: &Look, chips: &[(Icon, String, Tone)]) -> Vec<Span<'static>> {
+pub fn chip_spans(look: &Look, chips: &[(Icon, String, Tone)]) -> Vec<Span<'static>> {
     let p = &look.pal;
     let mut spans = Vec::new();
     for (i, (icon, text, tone)) in chips.iter().enumerate() {
@@ -1524,7 +1692,7 @@ fn chip_spans(look: &Look, chips: &[(Icon, String, Tone)]) -> Vec<Span<'static>>
     spans
 }
 
-fn chips_width(look: &Look, chips: &[(Icon, String, Tone)]) -> u16 {
+pub fn chips_width(look: &Look, chips: &[(Icon, String, Tone)]) -> u16 {
     chip_spans(look, chips)
         .iter()
         .map(|s| s.content.chars().count() as u16)

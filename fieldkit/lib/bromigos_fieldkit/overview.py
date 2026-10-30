@@ -135,6 +135,42 @@ def suggestions(items, computer_doc):
     return out
 
 
+def lab():
+    """The lab Field Kit knows: root's homelab.toml (from the stick's folder, or written here),
+    its name and the services it names. None when there's none: no strip on Home."""
+    from . import medium
+    path = os.path.join(medium.ROOT_HOME, ".config", "bromigos", "homelab.toml")
+    try:
+        import tomllib
+        with open(path, "rb") as f:
+            doc = tomllib.load(f)
+    except (OSError, ValueError):
+        return None
+    sources = [x for x in doc.get("source", []) if isinstance(x, dict) and x.get("enabled", True)]
+    name = doc.get("name") if isinstance(doc.get("name"), str) and not doc["name"].startswith("@") else ""
+    kinds = sorted({str(x.get("type", "")) for x in sources if x.get("type")})
+    return {"name": name or "your lab", "sources": len(sources), "kinds": kinds[:6]}
+
+
+def recent(limit=3):
+    """Field Kit's last repairs on the opened install: its backups folder, newest first
+    (<YYYYmmdd-HHMMSS>-<what>). Empty when no install is open or nothing was changed."""
+    target = system.Target.load()
+    if not target or target.is_live_root:
+        return []
+    d = target.path(system.BACKUPS)
+    try:
+        names = sorted((n for n in os.listdir(d) if re.match(r"\d{8}-\d{6}-", n)), reverse=True)
+    except OSError:
+        return []
+    out = []
+    for n in names[:limit]:
+        stamp, what = n[:15], n[16:]
+        when = f"{stamp[:4]}-{stamp[4:6]}-{stamp[6:8]} {stamp[9:11]}:{stamp[11:13]}"
+        out.append({"when": when, "what": what.replace("-", " "), "backup": os.path.join(system.BACKUPS, n)})
+    return out
+
+
 def overview():
     from . import medium
     c = computer()
@@ -147,7 +183,7 @@ def overview():
     ssh_on = system.run(["systemctl", "is-active", "--quiet", "sshd.service"], check=False).returncode == 0
     return {"ok": True, "version": version, "clock": time.strftime("%H:%M"), "network": network(),
             "ssh": {"on": ssh_on}, "remote": st, "stick": medium.stick_summary(), "live": system.live_medium(),
-            "computer": c, "found": items, "suggestions": suggestions(items, c)}
+            "computer": c, "found": items, "suggestions": suggestions(items, c), "lab": lab(), "recent": recent()}
 
 
 if __name__ == "__main__":

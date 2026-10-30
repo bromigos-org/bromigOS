@@ -41,7 +41,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFo
 
 # Bumped when the layout or the files change: a theme rendered by an older generator is
 # rendered again (the manifest carries it).
-VERSION = 2
+VERSION = 3
 
 # The canvas: 16:9 at 1440 rows. GRUB scales it to the screen's height and crops or pads
 # the sides (desktop-image-scale-method fitheight), so everything placed by height lands
@@ -585,7 +585,7 @@ def theme_txt(p, heading, medium, plate):
         "",
         "# the channel list, under the meter",
         "+ boot_menu {",
-        f"    left = 50%-290  top = {line}%+40  width = 580  height = {100 - line - 5}%-40",
+        f"    left = 50%-380  top = {line}%+40  width = 760  height = {100 - line - 5}%-40",
         f'    item_font = "{font("Regular", 16)}"  item_color = "{c["text"]}"',
         f'    selected_item_font = "{font("Bold", 16)}"  selected_item_color = "{c["background"]}"',
         "    icon_width = 22  icon_height = 22  item_icon_space = 12",

@@ -1328,14 +1328,14 @@ fn top_bar(f: &mut Frame, area: Rect, app: &App) {
     // the engine's switch_off: one of the switch's markers is there (vector repo, switch.py),
     // so the emergency switch is ON and he only talks
     let off = app.status["switch_off"].as_bool() == Some(true);
-    let chip = format!(
-        "{} {} ",
-        Icon::Shield.of(look),
+    let switch = (
+        Icon::Shield,
         if off {
-            "EMERGENCY SWITCH ON · he only talks"
+            "EMERGENCY SWITCH ON · he only talks".to_string()
         } else {
-            "emergency switch: off · he can act"
-        }
+            "emergency switch: off · he can act".to_string()
+        },
+        if off { Tone::Warn } else { Tone::Calm },
     );
     let tiny = Breakpoint::of(area.width) == Breakpoint::Tiny;
     let left = if tiny {
@@ -1343,20 +1343,32 @@ fn top_bar(f: &mut Frame, area: Rect, app: &App) {
     } else {
         format!(" {mark} BROMIGOS // FIELD KIT   ")
     };
-    let cw = (layout::display_width(&chip) as u16).min(area.width / 2);
+    let used = layout::display_width(&left) as u16
+        + if tiny {
+            0
+        } else {
+            layout::display_width(crumb) as u16
+        }
+        + 2;
+    // the same chips as every Field Kit screen, then the switch; the first ones go when the row
+    // is short, the switch never does
+    let mut chips = crate::fieldkit::bar_chips(look, &app.status["bar"]);
+    chips.push(switch);
+    while chips.len() > 1
+        && crate::fieldkit::chips_width(look, &chips) + 1 > area.width.saturating_sub(used)
+    {
+        chips.remove(0);
+    }
+    let mut cs = crate::fieldkit::chip_spans(look, &chips);
+    cs.push(Span::raw(" "));
+    let cw = (crate::fieldkit::chips_width(look, &chips) + 1).min(area.width.saturating_sub(used));
     let [l, r] = Layout::horizontal([Constraint::Min(1), Constraint::Length(cw)]).areas(row);
     let mut spans = vec![Span::styled(left.clone(), bold(p.primary))];
     if !tiny {
         spans.push(Span::styled(crumb, st(p.muted)));
     }
     f.render_widget(Paragraph::new(Line::from(spans)), l);
-    f.render_widget(
-        Paragraph::new(Span::styled(
-            layout::truncate(&chip, cw as usize, look.ascii),
-            if off { bold(p.warn) } else { st(p.muted) },
-        )),
-        r,
-    );
+    f.render_widget(Paragraph::new(Line::from(cs)), r);
     f.render_widget(
         Paragraph::new(Span::styled(
             (if look.ascii { "=" } else { "━" }).repeat(rule.width as usize),

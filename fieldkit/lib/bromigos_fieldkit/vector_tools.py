@@ -334,6 +334,12 @@ def suggest():
         out.insert(0, "Why did the last start go wrong?")
     if os.path.exists(machine_link.SERVER) or system.live_medium():
         out.append("Make this computer a lab node")
+    # then what fits any computer Field Kit is on, so there are always a few to choose from
+    if (o.get("network") or {}).get("kind") == "none":
+        out.append("Help me get online")
+    if any(i.get("kind") == "usb" for i in found) and not t:
+        out.append("Make an image of the USB drive")
+    out.append("What's in this computer?")
     return list(dict.fromkeys(out))[:6]
 
 
@@ -781,7 +787,14 @@ def status():
         brodec = machine_link.state()["state"]
     except Exception:
         brodec = "missing"
-    return {"ok": True, "brain": public(brain), "switch_off": switch_off(), "persona": source,
+    # the same status chips as Field Kit's other screens: the network, SSH, remote help, the stick
+    try:
+        from . import medium, overview as ov
+        bar = {"network": ov.network(), "remote": medium.remote_state(), "stick": medium.stick_summary(),
+               "ssh": {"on": system.run(["systemctl", "is-active", "--quiet", "sshd.service"], check=False).returncode == 0}}
+    except Exception:
+        bar = {}
+    return {"ok": True, "bar": bar, "brain": public(brain), "switch_off": switch_off(), "persona": source,
             "candidates": [c["source"] for c in candidates()], "pending": len(pending()), "brodec": brodec,
             "no_internet": (brain is None) or lan_only(brain["url"]),
             "context": [{"key": k, "label": label, "on": on} for k, label, on in context_items()]}

@@ -218,7 +218,15 @@ class Vector(unittest.TestCase):
                 mock.patch.object(vt.repairs, "disks", return_value=[]), \
                 mock.patch.object(vt.system, "live_medium", return_value=False), \
                 mock.patch.object(vt.machine_link, "SERVER", str(self.d / "none")):
-            self.assertEqual(vt.suggest(), [])
+            self.assertEqual(vt.suggest(), ["What's in this computer?"])
+        with mock.patch.object(vt, "_target", return_value=None), \
+                mock.patch("bromigos_fieldkit.overview.overview",
+                           return_value={"found": [{"kind": "usb", "state": ""}], "network": {"kind": "none"}}), \
+                mock.patch.object(vt.repairs, "disks", return_value=[]), \
+                mock.patch.object(vt.system, "live_medium", return_value=True):
+            q = vt.suggest()
+        self.assertEqual(q, ["Make this computer a lab node", "Help me get online", "Make an image of the USB drive",
+                             "What's in this computer?"])
 
     def test_embedded_persona_names_its_source(self):
         text, source = vt.persona()

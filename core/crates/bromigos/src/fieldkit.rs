@@ -158,6 +158,20 @@ pub fn section_tile(name: &str, server_home: bool) -> (Icon, &'static str) {
     }
 }
 
+/// A section's short line about it, for a tile too narrow for section_tile's (17 columns at most).
+pub fn section_tagline(name: &str, server_home: bool) -> &'static str {
+    match name {
+        "Repair" => "fix what's broken",
+        "Lab" => "your homelab",
+        "VECTOR" => "ask, he explains",
+        "Tools" => "disks and images",
+        "Server" if server_home => "this server",
+        "Server" => "bromigOS Server",
+        "Install" => "Server or desktop",
+        _ => "a command line",
+    }
+}
+
 /// Every item of a section, before the ones that don't apply here are left out.
 pub fn section_items(section: &str) -> Vec<Item> {
     use Act::*;
@@ -1102,6 +1116,11 @@ impl App {
 
     /// An item's badge: a count or a state, only when it's known (never filler).
     pub fn badge(&self, i: &Item) -> Option<(String, Tone)> {
+        // what it needs first, the same on every item (mount your install first, the network)
+        let why = self.blocked(i);
+        if !why.is_empty() {
+            return Some((why, Tone::Warn));
+        }
         match &i.act {
             Act::Black => self.black_count.map(|n| {
                 if n == 0 {
@@ -1132,14 +1151,8 @@ impl App {
                     ("off".into(), Tone::Calm)
                 }
             }),
-            Act::InstallEdition("desktop") if self.net() != "internet" => {
-                Some(("needs internet".into(), Tone::Warn))
-            }
             Act::InstallEdition("server") => Some(("no internet needed".into(), Tone::Good)),
-            _ => {
-                let why = self.blocked(i);
-                (!why.is_empty()).then_some((why, Tone::Warn))
-            }
+            _ => None,
         }
     }
 
@@ -1849,13 +1862,10 @@ impl App {
     pub fn choose(&mut self, i: &Item) -> Vec<Effect> {
         let why = self.blocked(i);
         match i.need {
+            // it needs the install open: open it right here (the same steps as Mount my
+            // bromigOS install), then choose it again
             Need::Mounted if !why.is_empty() => {
-                self.message(
-                    i.label,
-                    "Mount your bromigOS install first: Repair › Mount my bromigOS install.",
-                    false,
-                );
-                return vec![];
+                return self.call("Looking for installs", Then::Installs, &["installs"]);
             }
             Need::Internet if !why.is_empty() => {
                 self.message(i.label, "This needs the internet, and this machine isn't online. Connect in Lab › Network settings, then try again. Everything else in Field Kit works without it.", false);
@@ -3685,7 +3695,7 @@ fn installer() -> String {
 mod view;
 #[cfg(test)]
 pub use view::facts;
-pub use view::{draw, home_layout, item_at};
+pub use view::{bar_chips, chip_spans, chips_width, draw, home_layout, item_at};
 
 // ------------------------------------------------------------------ the run loop
 
@@ -4260,7 +4270,10 @@ esac
             .into_iter()
             .find(|i| i.label == "bromigOS desktop")
             .unwrap();
-        assert_eq!(a.badge(&desk), Some(("needs internet".into(), Tone::Warn)));
+        assert_eq!(
+            a.badge(&desk),
+            Some(("needs the internet".into(), Tone::Warn))
+        );
         let s = screen(&a, 100, 30);
         save("install", &s);
         assert!(
@@ -4657,6 +4670,36 @@ esac
         save("section-repair", &screen(&a, 100, 30));
         a.look = console_look();
         save("section-repair-console", &screen(&a, 100, 30));
+    }
+
+    #[test]
+    fn home_uses_its_rows_from_the_top() {
+        let mut a = app();
+        // wide: each tile has its line about it; the lab and the recent repairs when known
+        a.overview["lab"] =
+            json!({"name": "LAB", "sources": 3, "kinds": ["kubernetes", "prometheus"]});
+        a.overview["recent"] =
+            json!([{"when": "2026-10-30 14:02", "what": "black screen", "backup": "/x"}]);
+        let s = screen(&a, 150, 45);
+        save("home-150-lab", &s);
+        assert!(
+            s.contains("fix what's broken") || s.contains("fix an install"),
+            "{s}"
+        );
+        assert!(s.contains("Lab: LAB · 3 services"), "{s}");
+        assert!(s.contains("Recent: black screen 2026-10-30 14:02"), "{s}");
+        // tiny: the list starts under the top bar, and no line about a section is cut mid-word
+        let a = app();
+        let s = screen(&a, 60, 17);
+        save("home-60x17", &s);
+        let rows: Vec<&str> = s.lines().collect();
+        assert!(
+            rows[2].contains("Repair")
+                || rows[3].contains("Repair")
+                || rows[2].contains("THIS COMPUTER"),
+            "{s}"
+        );
+        assert!(!s.lines().skip(2).take(13).any(|r| r.contains('…')), "{s}");
     }
 
     #[test]
