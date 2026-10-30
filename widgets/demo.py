@@ -143,7 +143,7 @@ def demo_interfaces():
     return [{"name": "enp7s0", "up": True, "speed": 2500, "addrs": ["198.51.100.12", "2001:db8::12"], "mac": None},
             {"name": "wlan0", "up": True, "speed": 0, "addrs": ["192.0.2.41"], "mac": None},
             {"name": "wg0", "up": False, "speed": 0, "addrs": [], "mac": None},
-            {"name": "docker0", "up": False, "speed": 0, "addrs": ["172.17.0.1"], "mac": None}]
+            {"name": "docker0", "up": False, "speed": 0, "addrs": ["203.0.113.1"], "mac": None}]
 
 
 S.interfaces = demo_interfaces

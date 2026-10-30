@@ -209,7 +209,7 @@ jobs:
           elif [[ $PUBLISH == true ]]; then
             echo "::error::publishing needs ISO_SECUREBOOT_KEY and ISO_SECUREBOOT_CERT"; exit 1
           else
-            openssl req -quiet -new -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=bromigOS CI throwaway Secure Boot key/" \
+            openssl req -new -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=bromigOS CI throwaway Secure Boot key/" \
               -keyout "$d/sb.key" -out "$d/sb.crt" 2>/dev/null
           fi
           chmod 600 "$d"/*

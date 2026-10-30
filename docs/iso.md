@@ -433,7 +433,9 @@ iso/check-medium.sh <iso> --keep <dir>
 
 The repository it must name is `install.sh`'s `PUBLIC_REPO` (`--repo` gives another).
 A finding in bromigOS's files is fixed where it comes from, then the ISO is built
-again.
+again. A finding in a package that's already published (a release's, which can't change)
+and judged harmless goes in `iso/test/privacy-accepted.txt`, exactly as the guard prints
+it, with why. Its path names the package's version, so it never covers a later build.
 
 ### Making one by hand
 
