@@ -12,7 +12,7 @@
   "modules-left": ["custom/launcher", "ext/workspaces", "hyprland/window"],
   "modules-center": ["mpris"],
   "modules-right": ["custom/game", "custom/idle", "custom/vector-switch", "custom/vector", "cpu", "memory", "custom/gpu", "temperature", "custom/storage",
-                    "network", "custom/bluetooth", "power-profiles-daemon", "battery", "pulseaudio", "tray", "custom/settings", "clock"],
+                    "network", "custom/bluetooth", "power-profiles-daemon", "battery", "pulseaudio", "cffi/sound-hover", "tray", "custom/settings", "clock"],
 
   "custom/game": {
     "exec": "bromigos game status --json | python -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps({\"text\": \"GAME MODE\" if d.get(\"on\") else \"\", \"tooltip\": \"Ctrl+Shift+F12: leave game mode\"}))'",
@@ -179,14 +179,30 @@
     "tooltip-format-charging": "Charging: {capacity}%, full in about {time} ({power:0.1f} W)\nhealth {health}%"
   },
 
+  // The volume. Resting the pointer on it opens the sound popup (cffi/sound-hover, below):
+  // the outputs and microphones, their volumes, OPEN AUDIO SETTINGS. A click keeps the popup
+  // open; it used to open pavucontrol, which the popup's OPEN AUDIO SETTINGS reaches through
+  // Settings › Sound. Right- and middle-click mute; scroll changes the volume.
   "pulseaudio": {
     "scroll-step": 5,
     "format": "{volume:>2}%",
     "format-muted": "MUTED",
     "format-bluetooth": "{volume:>2}% BT",
-    "tooltip-format": "{desc}: {volume}%\nclick: mixer · right-click: mute · scroll: ±5%",
-    "on-click": "pavucontrol",
-    "on-click-right": "pactl set-sink-mute @DEFAULT_SINK@ toggle"
+    "tooltip": false,
+    "on-click": "bromigos sound popup pin",
+    "on-click-right": "pactl set-sink-mute @DEFAULT_SINK@ toggle",
+    "on-click-middle": "pactl set-sink-mute @DEFAULT_SINK@ toggle"
+  },
+
+  // The volume's hover (package bromigos-bar-hover): draws nothing; when the pointer rests
+  // on the volume for 350 ms it asks the sound popup to open under it, and to close soon
+  // after the pointer leaves. waybar has no hover action of its own.
+  "cffi/sound-hover": {
+    "module_path": "/usr/lib/bromigos/waybar/bromigos-hover.so",
+    "target": "pulseaudio",
+    "app": "org.bromigos.SoundPopup",
+    "command": "bromigos sound popup",
+    "open-delay": 350
   },
 
   "tray": { "icon-size": 16, "spacing": 8 },

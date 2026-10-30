@@ -84,7 +84,9 @@ show, open **Settings › Widgets**. See [Panels](panels.md).
 ### Change the volume, or switch speakers
 
 - Use your keyboard's volume keys, or scroll over the volume on the bar.
-- To switch speakers or headphones, open **Settings › Sound** and choose the output.
+- To switch speakers or headphones, rest the pointer on the volume on the bar and choose
+  one in the [sound popup](desktop.md#the-sound-popup). **Settings › Sound** has the same
+  choice.
 
 ### Mute the desktop's own sounds
 

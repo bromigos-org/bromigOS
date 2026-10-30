@@ -118,6 +118,10 @@ Already-running apps need to be restarted once to receive the recovered environm
 
 - `hooks/theme-set.d/` holds the `apps`, `boot`, `emblem`, `gtk`, `osd`, `wallpaper`,
   `widgets` and `zettlr` hooks ([docs/theming.md](../docs/theming.md)).
+- `waybar/hover/` is `bromigos-hover`, a waybar CFFI module in C that gives a module a hover
+  popup (package `bromigos-bar-hover`); `lib/bromigos_soundpopup.py` is the volume's sound
+  popup, and `lib/bromigos_popup.py` the parts the DRIFTGLASS popups share
+  ([docs/desktop.md](../docs/desktop.md#hover-popups-on-the-bar)).
 - `waybar/scripts/bluetooth.py` is the bar's Bluetooth module: the rune, the devices
   connected and the main one's battery, following bluez's signals
   ([docs/desktop.md](../docs/desktop.md#the-bars-bluetooth)).

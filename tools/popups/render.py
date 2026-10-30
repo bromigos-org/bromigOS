@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Offscreen pictures of the bar's Bluetooth: its icon in each state, the panel and the
-quick menu, in each theme asked for. Nothing appears on a screen and nothing touches the
+"""Offscreen pictures of the bar's popups: the Bluetooth icon in each state, its panel and
+quick menu, and the sound popup, in each theme asked for. Nothing appears on a screen and nothing touches the
 machine's Bluetooth or desktop:
 
   - a sandbox HOME, whose theme is set with `bromigos theme set NAME --no-reload` (from
@@ -9,13 +9,13 @@ machine's Bluetooth or desktop:
     pactl (desktop/tests/fixtures/bin), so the devices are the fixtures' made-up ones;
   - a headless weston of its own for GTK to draw in.
 
-  tools/bluetooth/render.py OUT_DIR [--themes wick,mire,tidewell,wick+hc] [--bromigos PATH]
+  tools/popups/render.py OUT_DIR [--themes wick,mire,tidewell,wick+hc] [--bromigos PATH]
 
 A theme named NAME+hc is drawn with high contrast and reduced motion
 (`bromigos accessibility contrast high --no-reload` and `motion reduced --no-reload`, in the
 sandbox).
 
-Writes OUT_DIR/<theme>-icons.png, -panel.png, -scan.png, -pair.png, -menu.png. Needs weston,
+Writes OUT_DIR/<theme>-icons.png, -panel.png, -scan.png, -pair.png, -menu.png, -sound.png. Needs weston,
 dbus-daemon, GTK 3 and 4, and gtk4-layer-shell's typelib (only its loader, nothing shown).
 """
 import argparse
@@ -184,6 +184,19 @@ def panel(env, out, view="panel", scan=False, prompt=None):
         raise RuntimeError(f"the {view} render failed: " + r.stderr[-600:])
 
 
+SOUND_CHILD = r"""
+import sys
+import bromigos_soundpopup as S
+print(S.render(sys.argv[1]))
+"""
+
+
+def sound(env, out):
+    r = subprocess.run([sys.executable, "-c", SOUND_CHILD, out], env=env, capture_output=True, text=True, timeout=90)
+    if r.returncode != 0 or not os.path.exists(out):
+        raise RuntimeError("the sound popup render failed: " + r.stderr[-600:])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
@@ -204,7 +217,8 @@ def main():
             panel(env, base + "-scan.png", scan=True)
             panel(env, base + "-pair.png", scan=True, prompt=["confirm", "00:00:5E:00:53:21"])
             panel(env, base + "-menu.png", view="menu")
-            print(f"{theme}: icons, panel, scan, pair, menu")
+            sound(env, base + "-sound.png")
+            print(f"{theme}: icons, panel, scan, pair, menu, sound")
     finally:
         w.close()
         shutil.rmtree(tmp, ignore_errors=True)

@@ -1,0 +1,46 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# bromigos-hover, the bar's hover popups: a waybar CFFI module (desktop/waybar/hover/, C and
+# GTK 3, built here) that watches the pointer over another module of the bar and asks that
+# module's popup app to show itself, over D-Bus. waybar itself has no hover action. The
+# default bar uses it for the volume's sound popup (`bromigos sound popup`;
+# docs/desktop.md, "Hover popups on the bar"). bromigos-desktop depends on it. Compiled code,
+# so it's its own package: bromigos-desktop stays arch=any.
+
+pkgname=bromigos-bar-hover
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='bromigOS bar hover popups: a waybar module that opens a popup when the pointer rests on another'
+arch=('x86_64')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+depends=('waybar' 'gtk3' 'glib2')
+makedepends=('git' 'gcc' 'pkgconf')
+options=('!debug')
+
+_root="${startdir%/packaging/*}"
+_paths=(desktop/waybar/hover packaging/bromigos-bar-hover)
+
+# <workspace version>.r<commits touching the package>.g<last such commit> (as bromigos-core)
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$(git rev-list --count HEAD -- "${_paths[@]}")" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+build() {
+  cd "$_root/desktop/waybar/hover"
+  # shellcheck disable=SC2046
+  cc ${CFLAGS} -Wall -Wextra -Wno-unused-parameter -Werror -shared -fPIC ${LDFLAGS} \
+    -o "$srcdir/bromigos-hover.so" bromigos-hover.c $(pkg-config --cflags --libs gtk+-3.0)
+}
+
+package() {
+  install -Dm0755 "$srcdir/bromigos-hover.so" "$pkgdir/usr/lib/bromigos/waybar/bromigos-hover.so"
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+  # waybar's CFFI header (waybar_cffi_module.h) is MIT, from waybar 0.15.0
+  install -Dm0644 "$_root/desktop/waybar/hover/LICENSE-waybar" "$pkgdir/usr/share/licenses/$pkgname/LICENSE-waybar"
+}

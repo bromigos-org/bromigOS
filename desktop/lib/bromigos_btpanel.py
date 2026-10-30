@@ -128,274 +128,8 @@ def menu_items(state, audio=None):
     return items
 
 
-# ------------------------------------------------------------------ GTK
-def load_gtk():
-    import bromigos_keycapture as K        # gtk4-layer-shell before anything else loads GTK
-    return K.load_gtk()
-
-
-def palette():
-    import bromigos_keycapture as K
-    return K.palette()
-
-
-def motion():
-    for p in (os.path.join(HERE, "..", "..", "lib"), "/usr/lib/bromigos/lib"):
-        if os.path.isdir(p) and p not in sys.path:
-            sys.path.append(p)
-    try:
-        import bromigos_theme as T
-        return T.motion()
-    except Exception:
-        return "full"
-
-
-def css(p, hc=False):
-    colours = "".join(f"@define-color bt_{k} {v};\n" for k, v in p.items())
-    glass = ("background-color: @bt_panel; border: 2px solid @bt_soft;" if hc else
-             "background-color: alpha(@bt_panel, 0.94); border: 1px solid alpha(@bt_dim, 0.9);"
-             "background-image: repeating-linear-gradient(to bottom, transparent 0px, transparent 2px, "
-             "alpha(@bt_primary, 0.035) 2px, alpha(@bt_primary, 0.035) 3px);")
-    return colours + """
-window.bt-win { background: transparent; }
-window.bt-catcher { background: transparent; }
-.bt-frame { """ + glass + """ padding: 12px 14px 12px 14px; }
-.bt-frame * { font-family: "Geist Mono", monospace; }
-.bt-eyebrow { color: @bt_primary; font-weight: 700; font-size: 11px; letter-spacing: 3px; }
-.bt-adapter { color: @bt_muted; font-size: 11px; }
-.bt-section { color: @bt_muted; font-size: 10px; font-weight: 700; letter-spacing: 2px; margin-top: 8px; }
-.bt-rule { background-color: alpha(@bt_dim, 0.45); min-height: 1px; margin-top: 8px; }
-.bt-row { padding: 6px 4px; border-bottom: 1px solid alpha(@bt_dim, 0.18); }
-.bt-name { color: @bt_white; font-size: 14px; font-weight: 600; }
-.bt-row.bt-idle .bt-name { color: @bt_text; }
-.bt-status { color: @bt_soft; font-size: 10px; letter-spacing: 1px; }
-.bt-row.bt-idle .bt-status { color: @bt_muted; }
-.bt-pct { color: @bt_soft; font-size: 10px; }
-.bt-pct.bt-low { color: @bt_warn; }
-.bt-pct.bt-critical { color: @bt_danger; }
-button.bt-act { background: alpha(@bt_primary, 0.10); color: @bt_primary; border: 1px solid @bt_primary;
-                border-radius: 0; box-shadow: none; font-size: 11px; font-weight: 700; letter-spacing: 2px;
-                padding: 8px 10px; min-width: 104px; min-height: 0; }
-button.bt-act:hover, button.bt-act:focus-visible { background: alpha(@bt_primary, 0.24); color: @bt_white; }
-button.bt-act.bt-off { background: transparent; color: @bt_soft; border-color: @bt_dim; }
-button.bt-act.bt-off:hover, button.bt-act.bt-off:focus-visible { border-color: @bt_soft; color: @bt_white; }
-button.bt-act:disabled { color: @bt_faint; border-color: @bt_faint; background: transparent; }
-button.bt-btn, menubutton.bt-more > button { background: transparent; color: @bt_soft; border: 1px solid @bt_dim;
-                border-radius: 0; box-shadow: none; font-size: 11px; font-weight: 600; letter-spacing: 2px;
-                padding: 6px 12px; min-height: 0; }
-menubutton.bt-more > button { padding: 6px 8px; letter-spacing: 0; }
-button.bt-btn:hover, button.bt-btn:focus-visible, menubutton.bt-more > button:hover,
-menubutton.bt-more > button:focus-visible { border-color: @bt_primary; color: @bt_primary; }
-button.bt-btn:disabled { color: @bt_faint; border-color: @bt_faint; }
-button.bt-btn.bt-danger { color: @bt_danger; border-color: alpha(@bt_danger, 0.6); }
-button.bt-seg { background: transparent; color: @bt_muted; border: 1px solid alpha(@bt_dim, 0.7); border-radius: 0;
-                box-shadow: none; font-size: 9px; font-weight: 700; letter-spacing: 1px; padding: 2px 8px;
-                min-height: 0; }
-button.bt-seg:checked { background: alpha(@bt_primary, 0.18); color: @bt_primary; border-color: @bt_primary; }
-button.bt-seg:hover, button.bt-seg:focus-visible { color: @bt_white; }
-button.bt-note { background: transparent; color: @bt_warn; border: none; box-shadow: none; padding: 0;
-                 font-size: 9px; font-weight: 700; letter-spacing: 1px; min-height: 0; }
-button.bt-note:hover, button.bt-note:focus-visible { color: @bt_white; }
-switch { background: @bt_selection; border: 1px solid @bt_dim; border-radius: 0; }
-switch:checked { background: alpha(@bt_primary, 0.35); border-color: @bt_primary; }
-switch slider { background: @bt_soft; border-radius: 0; min-width: 18px; min-height: 18px; border: none;
-                box-shadow: none; }
-switch:checked slider { background: @bt_primary; }
-.bt-msg { color: @bt_muted; font-size: 11px; margin-top: 6px; }
-.bt-msg.bt-error { color: @bt_danger; }
-.bt-msg.bt-ok { color: @bt_primary; }
-.bt-empty { color: @bt_muted; font-size: 11px; padding: 6px 4px; }
-.bt-prompt { background-color: alpha(@bt_selection, 0.85); border: 1px solid @bt_primary; padding: 10px 12px;
-             margin-top: 8px; }
-.bt-prompt-title { color: @bt_primary; font-size: 11px; font-weight: 700; letter-spacing: 2px; }
-.bt-prompt-text { color: @bt_white; font-size: 13px; margin-top: 4px; margin-bottom: 8px; }
-entry.bt-entry { background: @bt_void; color: @bt_white; border: 1px solid @bt_dim; border-radius: 0;
-                 box-shadow: none; font-size: 15px; letter-spacing: 3px; margin-bottom: 8px; }
-.bt-scan-words { color: @bt_soft; font-size: 11px; letter-spacing: 1px; }
-popover.background > contents, popover > contents { background-color: @bt_void; border: 1px solid @bt_dim;
-                 border-radius: 0; padding: 6px; }
-popover button.bt-btn { margin: 2px 0; }
-tooltip { background-color: @bt_void; color: @bt_soft; border: 1px solid @bt_dim; border-radius: 0; }
-tooltip label { color: @bt_soft; font-family: "Geist Mono"; font-size: 12px; }
-button.bt-item { background: transparent; border: none; border-radius: 0; box-shadow: none; padding: 7px 10px;
-                 min-height: 0; }
-button.bt-item:hover, button.bt-item:focus-visible { background: alpha(@bt_primary, 0.16); }
-button.bt-item:disabled .bt-item-label { color: @bt_faint; }
-.bt-item-label { color: @bt_text; font-size: 12px; }
-.bt-item-right { color: @bt_primary; font-size: 10px; font-weight: 700; letter-spacing: 2px; }
-.bt-item-right.bt-dimmed { color: @bt_muted; }
-"""
-
-
-class Shell:
-    """What the panel and the menu share: GTK, bluez, the theme, the clock."""
-
-    def __init__(self, Gtk, Gdk, GLib, LS, bz=None, now=time.monotonic):
-        self.Gtk, self.Gdk, self.GLib, self.LS = Gtk, Gdk, GLib, LS
-        self.pal, self.hc = palette()
-        self.still = motion() != "full"
-        self.now = now
-        self.t0 = now()
-        self.bz = bz
-        self.audio = {}
-        self._prov = None
-
-    def t(self):
-        return self.now() - self.t0
-
-    def style(self, display):
-        if self._prov is not None:
-            return
-        prov = self.Gtk.CssProvider()
-        text = css(self.pal, self.hc)
-        prov.load_from_string(text) if hasattr(prov, "load_from_string") else prov.load_from_data(text.encode())
-        self.Gtk.StyleContext.add_provider_for_display(display, prov, self.Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
-        self._prov = prov
-
-    def label(self, text, cls, tip=None, xalign=0.0, **kw):
-        lab = self.Gtk.Label(label=text, xalign=xalign, **kw)
-        for c in cls.split():
-            lab.add_css_class(c)
-        if tip:
-            lab.set_tooltip_text(tip)
-        return lab
-
-    def button(self, text, cls, tip, fn):
-        b = self.Gtk.Button(label=text)
-        for c in cls.split():
-            b.add_css_class(c)
-        b.set_tooltip_text(tip)
-        b.connect("clicked", lambda *_: fn())
-        return b
-
-    def refresh_audio(self, then=None):
-        """PipeWire's Bluetooth cards (the profile and codec of each headset), async."""
-        from gi.repository import Gio
-        try:
-            p = Gio.Subprocess.new(["pactl", "--format=json", "list", "cards"],
-                                   Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE)
-        except Exception:
-            return
-
-        def done(proc, res):
-            try:
-                _, out, _ = proc.communicate_utf8_finish(res)
-                self.audio = B.audio_cards(json.loads(out or "[]"))
-            except Exception:
-                self.audio = {}
-            if then:
-                then()
-        p.communicate_utf8_async(None, None, done)
-
-    def place(self, win, width, height_guess=380):
-        """The surface just under the bar, centred on where the pointer clicked (Hyprland's
-        cursor), kept on the screen; top right without Hyprland."""
-        LS = self.LS
-        LS.set_anchor(win, LS.Edge.TOP, True)
-        try:
-            cur = subprocess.run(["hyprctl", "cursorpos", "-j"], capture_output=True, text=True, timeout=2)
-            mons = subprocess.run(["hyprctl", "monitors", "-j"], capture_output=True, text=True, timeout=2)
-            c = json.loads(cur.stdout)
-            cx, cy = c["x"], c["y"]
-            mon = next(m for m in json.loads(mons.stdout)
-                       if m["x"] <= cx < m["x"] + m["width"] / m["scale"] and m["y"] <= cy < m["y"] + m["height"] / m["scale"])
-        except Exception:
-            LS.set_anchor(win, LS.Edge.RIGHT, True)
-            LS.set_margin(win, LS.Edge.RIGHT, 8)
-            LS.set_margin(win, LS.Edge.TOP, 6)
-            return
-        mw = mon["width"] / mon["scale"]
-        left = int(min(max(8, cx - mon["x"] - width / 2), mw - width - 8))
-        LS.set_anchor(win, LS.Edge.LEFT, True)
-        LS.set_margin(win, LS.Edge.LEFT, left)
-        LS.set_margin(win, LS.Edge.TOP, 6)
-        display = win.get_display()
-        mons_g = display.get_monitors()
-        for i in range(mons_g.get_n_items()):
-            gm = mons_g.get_item(i)
-            if gm.get_connector() == mon.get("name"):
-                LS.set_monitor(win, gm)
-                break
-
-    def layer(self, win, keyboard=True):
-        LS = self.LS
-        if LS is None or not LS.is_supported():
-            return False
-        LS.init_for_window(win)
-        LS.set_namespace(win, NAMESPACE)
-        LS.set_layer(win, LS.Layer.OVERLAY)
-        LS.set_keyboard_mode(win, LS.KeyboardMode.EXCLUSIVE if keyboard else LS.KeyboardMode.NONE)
-        return True
-
-    def catcher(self, on_click):
-        """A clear surface over everything under the panel: a click on it closes the panel."""
-        Gtk, LS = self.Gtk, self.LS
-        if LS is None or not LS.is_supported():
-            return None
-        w = Gtk.Window(title="Bluetooth")
-        w.add_css_class("bt-catcher")
-        w.set_decorated(False)
-        LS.init_for_window(w)
-        LS.set_namespace(w, NAMESPACE + "-outside")
-        LS.set_layer(w, LS.Layer.TOP)
-        LS.set_keyboard_mode(w, LS.KeyboardMode.NONE)
-        LS.set_exclusive_zone(w, -1)
-        for e in (LS.Edge.TOP, LS.Edge.BOTTOM, LS.Edge.LEFT, LS.Edge.RIGHT):
-            LS.set_anchor(w, e, True)
-        g = Gtk.GestureClick()
-        g.set_button(0)
-        g.connect("pressed", lambda *_: on_click())
-        w.add_controller(g)
-        w.set_child(Gtk.Box())
-        return w
-
-    def frame_overlay(self, child):
-        """The panel's frame: its child, and the targeting brackets at the corners."""
-        Gtk = self.Gtk
-        ov = Gtk.Overlay()
-        ov.set_child(child)
-        da = Gtk.DrawingArea()
-        da.set_can_target(False)
-
-        def draw(area, cr, w, h):
-            H._src(cr, self.pal, "primary", 1.0)
-            cr.set_line_width(2)
-            n = 12
-            for (px, py, dx, dy) in ((1, 1, 1, 1), (w - 1, 1, -1, 1), (1, h - 1, 1, -1), (w - 1, h - 1, -1, -1)):
-                cr.move_to(px, py + dy * n)
-                cr.line_to(px, py)
-                cr.line_to(px + dx * n, py)
-            cr.stroke()
-        da.set_draw_func(draw)
-        ov.add_overlay(da)
-        return ov
-
-    def open_settings(self):
-        _spawn(["bromigos", "settings", "bluetooth"])
-
-
-def _spawn(argv):
-    try:
-        subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         start_new_session=True)
-    except OSError:
-        pass
-
-
-def _terminal(argv, title):
-    helper = next((p for p in ("/usr/lib/bromigos/bin/bromigos-terminal",) if os.access(p, os.X_OK)), None)
-    if helper:
-        _spawn([helper, "--hold", "--title", title, "--"] + argv)
-    else:
-        _spawn(["kitty", "--hold", "-e"] + argv)
-
-
-def _clear(box):
-    child = box.get_first_child()
-    while child is not None:
-        nxt = child.get_next_sibling()
-        box.remove(child)
-        child = nxt
+# ------------------------------------------------------------------ GTK (bromigos_popup's)
+from bromigos_popup import Shell, clear as _clear, load_gtk, spawn as _spawn, terminal as _terminal  # noqa: E402,F401
 
 
 class Row:
@@ -406,16 +140,16 @@ class Row:
         sh, Gtk = panel.sh, panel.sh.Gtk
         self.d = d
         self.box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        self.box.add_css_class("bt-row")
+        self.box.add_css_class("dg-row")
         self.holo = Gtk.DrawingArea()
         self.holo.set_size_request(50, 50)
         self.holo.set_valign(Gtk.Align.CENTER)
         self.holo.set_draw_func(self.draw_holo)
         self.box.append(self.holo)
         mid = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, hexpand=True, valign=Gtk.Align.CENTER)
-        self.name = sh.label(d["name"], "bt-name", wrap=True, ellipsize=3, lines=2, max_width_chars=24,
+        self.name = sh.label(d["name"], "dg-name", wrap=True, ellipsize=3, lines=2, max_width_chars=24,
                              width_chars=14)
-        self.status = sh.label("", "bt-status", wrap=True, max_width_chars=26)
+        self.status = sh.label("", "dg-status", wrap=True, max_width_chars=26)
         mid.append(self.name)
         mid.append(self.status)
         self.batt_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -423,7 +157,7 @@ class Row:
         self.cells.set_size_request(84, 7)
         self.cells.set_valign(Gtk.Align.CENTER)
         self.cells.set_draw_func(lambda a, cr, w, h: H.cells(cr, 0, 0, w, h, self.d.get("battery"), sh.pal))
-        self.pct = sh.label("", "bt-pct")
+        self.pct = sh.label("", "dg-pct")
         self.batt_row.append(self.cells)
         self.batt_row.append(self.pct)
         mid.append(self.batt_row)
@@ -432,7 +166,7 @@ class Row:
         group = None
         for mode in ("hifi", "headset"):
             b = Gtk.ToggleButton(label=B.MODE_LABEL[mode])
-            b.add_css_class("bt-seg")
+            b.add_css_class("dg-seg")
             b.set_tooltip_text(B.MODE_HINT[mode])
             if group is not None:
                 b.set_group(group)
@@ -442,7 +176,7 @@ class Row:
             self.prof.append(b)
         mid.append(self.prof)
         self.note = Gtk.Button(label="")
-        self.note.add_css_class("bt-note")
+        self.note.add_css_class("dg-note")
         self.note.set_halign(Gtk.Align.START)
         self.note.connect("clicked", lambda *_: _terminal(["bromigos", "peripheral", "enable", "xbox-controller"],
                                                           "Xbox controller driver"))
@@ -450,18 +184,18 @@ class Row:
         self.box.append(mid)
         right = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4, valign=Gtk.Align.CENTER)
         self.act = Gtk.Button(label="")
-        self.act.add_css_class("bt-act")
+        self.act.add_css_class("dg-act")
         self.act.connect("clicked", lambda *_: self.p.act(self.d))
         right.append(self.act)
         self.more = Gtk.MenuButton()
         self.more.set_child(Gtk.Label(label="⋯"))
-        self.more.add_css_class("bt-more")
+        self.more.add_css_class("dg-more")
         self.more.set_tooltip_text("More: auto-reconnect, forget")
         pop = Gtk.Popover()
         pv = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        self.trust_b = sh.button("", "bt-btn", "", lambda: self.p.trust(self.d))
-        self.forget_b = sh.button("FORGET…", "bt-btn bt-danger", "", lambda: self.forget())
-        self.settings_b = sh.button("IN SETTINGS", "bt-btn", "Opens Settings › Bluetooth",
+        self.trust_b = sh.button("", "dg-btn", "", lambda: self.p.trust(self.d))
+        self.forget_b = sh.button("FORGET…", "dg-btn dg-danger", "", lambda: self.forget())
+        self.settings_b = sh.button("IN SETTINGS", "dg-btn", "Opens Settings › Bluetooth",
                                     lambda: (pop.popdown(), sh.open_settings(), self.p.close()))
         for b in (self.trust_b, self.forget_b, self.settings_b):
             pv.append(b)
@@ -490,15 +224,15 @@ class Row:
         self.status.set_text(status_words(d, audio, op))
         self.status.set_tooltip_text("Its state" + (", the sound profile and the codec in use" if audio else ""))
         live = d["connected"] or not d["paired"]
-        (self.box.remove_css_class if live else self.box.add_css_class)("bt-idle")
+        (self.box.remove_css_class if live else self.box.add_css_class)("dg-idle")
         b = d.get("battery")
         self.batt_row.set_visible(b is not None)
         self.pct.set_text(f"{b}%" if b is not None else "")
-        for c in ("bt-low", "bt-critical"):
+        for c in ("dg-low", "dg-critical"):
             self.pct.remove_css_class(c)
         lv = B.level(b)
         if lv in ("low", "critical"):
-            self.pct.add_css_class("bt-" + lv)
+            self.pct.add_css_class("dg-" + lv)
         self.cells.set_tooltip_text(f"Battery {b}%" + (" (low)" if lv != "ok" else "") if b is not None else None)
         self.cells.queue_draw()
         show_prof = bool(audio and audio.get("hifi") and audio.get("headset") and audio.get("mode") in ("hifi", "headset"))
@@ -516,7 +250,7 @@ class Row:
         self.act.set_label(label)
         self.act.set_tooltip_text(hint)
         self.act.set_sensitive(verb is not None and p.powered())
-        (self.act.add_css_class if verb == "disconnect" else self.act.remove_css_class)("bt-off")
+        (self.act.add_css_class if verb == "disconnect" else self.act.remove_css_class)("dg-off")
         self.more.set_visible(d["paired"])
         self.trust_b.set_label("AUTO-RECONNECT: " + ("ON" if d["trusted"] else "OFF"))
         self.trust_b.set_tooltip_text("On: it connects by itself when it's switched on (trusted). Off: it asks "
@@ -558,7 +292,7 @@ class Panel:
         self.pairing = None
         self.timer = None
         self.win = Gtk.Window(title="Bluetooth")
-        self.win.add_css_class("bt-win")
+        self.win.add_css_class("dg-win")
         self.win.set_decorated(False)
         self.win.set_resizable(False)
         sh.style(self.win.get_display())
@@ -572,11 +306,11 @@ class Panel:
     def _build(self):
         sh, Gtk = self.sh, self.sh.Gtk
         frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        frame.add_css_class("bt-frame")
+        frame.add_css_class("dg-frame")
         frame.set_size_request(WIDTH, -1)
         top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        top.append(sh.label("BLUETOOTH", "bt-eyebrow", "Bluetooth: this computer's adapter and its devices"))
-        self.adapter = sh.label("", "bt-adapter", "This computer's name as other devices see it", hexpand=True,
+        top.append(sh.label("BLUETOOTH", "dg-eyebrow", "Bluetooth: this computer's adapter and its devices"))
+        self.adapter = sh.label("", "dg-adapter", "This computer's name as other devices see it", hexpand=True,
                                 ellipsize=3)
         top.append(self.adapter)
         self.power = Gtk.Switch(valign=Gtk.Align.CENTER)
@@ -585,27 +319,27 @@ class Panel:
         top.append(self.power)
         frame.append(top)
         rule = Gtk.Box()
-        rule.add_css_class("bt-rule")
+        rule.add_css_class("dg-rule")
         frame.append(rule)
         self.prompt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.prompt_box.add_css_class("bt-prompt")
+        self.prompt_box.add_css_class("dg-prompt")
         self.prompt_box.set_visible(False)
         self.prompt_box.set_tooltip_text("bluez is waiting for this answer to pair")
         frame.append(self.prompt_box)
-        frame.append(sh.label("PAIRED", "bt-section", "Devices this computer knows"))
+        frame.append(sh.label("PAIRED", "dg-section", "Devices this computer knows"))
         self.paired = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.nearby_head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self.radar = Gtk.DrawingArea()
         self.radar.set_size_request(56, 56)
         self.radar.set_draw_func(self.draw_radar)
         self.radar.set_tooltip_text("The scan: each dot is a device found nearby, further out the weaker its signal")
-        self.scan_words = sh.label("", "bt-scan-words", wrap=True, hexpand=True, valign=Gtk.Align.CENTER)
+        self.scan_words = sh.label("", "dg-scan-words", wrap=True, hexpand=True, valign=Gtk.Align.CENTER)
         self.nearby_head.append(self.radar)
         self.nearby_head.append(self.scan_words)
         self.nearby = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         lists = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         lists.append(self.paired)
-        self.near_title = sh.label("NEARBY", "bt-section", "Devices in pairing mode near this computer")
+        self.near_title = sh.label("NEARBY", "dg-section", "Devices in pairing mode near this computer")
         lists.append(self.near_title)
         lists.append(self.nearby_head)
         lists.append(self.nearby)
@@ -615,15 +349,15 @@ class Panel:
         scroll.set_max_content_height(540)
         scroll.set_child(lists)
         frame.append(scroll)
-        self.msg = sh.label("", "bt-msg", wrap=True, max_width_chars=44)
+        self.msg = sh.label("", "dg-msg", wrap=True, max_width_chars=44)
         self.msg.set_tooltip_text("What happened last")
         frame.append(self.msg)
         foot = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, margin_top=10)
-        self.scan_b = sh.button("SCAN", "bt-btn", f"Looks for devices nearby for {SCAN_SECS} seconds: put the "
+        self.scan_b = sh.button("SCAN", "dg-btn", f"Looks for devices nearby for {SCAN_SECS} seconds: put the "
                                 "device in pairing mode first", self.toggle_scan)
         foot.append(self.scan_b)
         foot.append(Gtk.Box(hexpand=True))
-        foot.append(sh.button("OPEN SETTINGS", "bt-btn", "Opens Settings › Bluetooth (SUPER+, then Bluetooth)",
+        foot.append(sh.button("OPEN SETTINGS", "dg-btn", "Opens Settings › Bluetooth (SUPER+, then Bluetooth)",
                               lambda: (sh.open_settings(), self.close())))
         frame.append(foot)
         self.frame = frame
@@ -716,7 +450,7 @@ class Panel:
                 box.append(r.box)
                 keep.append(d["mac"])
             if not devs and empty:
-                box.append(self.sh.label(empty, "bt-empty", wrap=True, max_width_chars=44))
+                box.append(self.sh.label(empty, "dg-empty", wrap=True, max_width_chars=44))
             if focus is not None and focus.get_root() is None:
                 self.win.set_focus(None)
         for d in devs:
@@ -754,10 +488,10 @@ class Panel:
     # -- messages
     def say(self, text, kind=None):
         self.msg.set_text(text or "")
-        for c in ("bt-error", "bt-ok"):
+        for c in ("dg-error", "dg-ok"):
             self.msg.remove_css_class(c)
         if kind:
-            self.msg.add_css_class("bt-" + kind)
+            self.msg.add_css_class("dg-" + kind)
 
     def done(self, mac, ok_words):
         def back(ok, err):
@@ -855,12 +589,12 @@ class Panel:
         name = d["name"] if d else B.mac_of(path)
         title, text, buttons, entry_kind = prompt_words(what, name, value)
         _clear(self.prompt_box)
-        self.prompt_box.append(sh.label(title, "bt-prompt-title"))
-        self.prompt_box.append(sh.label(text, "bt-prompt-text", wrap=True, max_width_chars=40))
+        self.prompt_box.append(sh.label(title, "dg-prompt-title"))
+        self.prompt_box.append(sh.label(text, "dg-prompt-text", wrap=True, max_width_chars=40))
         entry = None
         if entry_kind:
             entry = Gtk.Entry()
-            entry.add_css_class("bt-entry")
+            entry.add_css_class("dg-entry")
             entry.set_tooltip_text("The code, then Enter")
             if entry_kind == "passkey":
                 entry.set_input_purpose(Gtk.InputPurpose.DIGITS)
@@ -881,7 +615,7 @@ class Panel:
             if value_ in (None, False) and self.pairing is not None:
                 self.sh.bz.cancel_pair(self.pairing["path"])
         for label, val in buttons:
-            row.append(sh.button(label, "bt-act" if val not in (None, False) else "bt-btn",
+            row.append(sh.button(label, "dg-act" if val not in (None, False) else "dg-btn",
                                  {True: "Answer yes", False: "Answer no: pairing stops", None: "Stop pairing",
                                   "entry": "Send the code"}.get(val, label), lambda v=val: answer(v)))
         self.prompt_box.append(row)
@@ -927,17 +661,17 @@ class Menu:
         Gtk = sh.Gtk
         self.state = B.unavailable()
         self.win = Gtk.Window(title="Bluetooth")
-        self.win.add_css_class("bt-win")
+        self.win.add_css_class("dg-win")
         self.win.set_decorated(False)
         self.win.set_resizable(False)
         sh.style(self.win.get_display())
         self.frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.frame.add_css_class("bt-frame")
+        self.frame.add_css_class("dg-frame")
         self.frame.set_size_request(300, -1)
         self.list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.frame.append(sh.label("BLUETOOTH", "bt-eyebrow", "Bluetooth's quick menu: ↑ ↓ and Enter, or click"))
+        self.frame.append(sh.label("BLUETOOTH", "dg-eyebrow", "Bluetooth's quick menu: ↑ ↓ and Enter, or click"))
         rule = Gtk.Box()
-        rule.add_css_class("bt-rule")
+        rule.add_css_class("dg-rule")
         self.frame.append(rule)
         self.frame.append(self.list)
         self.win.set_child(sh.frame_overlay(self.frame))
@@ -956,18 +690,18 @@ class Menu:
             return
         self.sig = sig
         sh, Gtk = self.sh, self.sh.Gtk
-        focus_id = getattr(self.win.get_focus(), "_bt_id", None)
+        focus_id = getattr(self.win.get_focus(), "_dg_id", None)
         _clear(self.list)
         first = None
         for iid, label, right, hint, ok in items:
-            if iid.startswith("dev:") and not any(c._bt_id.startswith("dev:") for c in self._children()):
-                self.list.append(sh.label("DEVICES", "bt-section", "Paired devices: click to connect or disconnect"))
+            if iid.startswith("dev:") and not any(c._dg_id.startswith("dev:") for c in self._children()):
+                self.list.append(sh.label("DEVICES", "dg-section", "Paired devices: click to connect or disconnect"))
             b = Gtk.Button()
-            b.add_css_class("bt-item")
-            b._bt_id = iid
+            b.add_css_class("dg-item")
+            b._dg_id = iid
             box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-            box.append(sh.label(label, "bt-item-label", hexpand=True, ellipsize=3, max_width_chars=26))
-            r = sh.label(right, "bt-item-right" + (" bt-dimmed" if right in ("OFF", "CONNECT") else ""))
+            box.append(sh.label(label, "dg-item-label", hexpand=True, ellipsize=3, max_width_chars=26))
+            r = sh.label(right, "dg-item-right" + (" dg-dimmed" if right in ("OFF", "CONNECT") else ""))
             box.append(r)
             b.set_child(box)
             b.set_tooltip_text(hint)
@@ -984,7 +718,7 @@ class Menu:
     def _children(self):
         c = self.list.get_first_child()
         while c is not None:
-            if hasattr(c, "_bt_id"):
+            if hasattr(c, "_dg_id"):
                 yield c
             c = c.get_next_sibling()
 
@@ -996,7 +730,7 @@ class Menu:
             def back(ok, err):
                 self.pending -= 1
                 if not ok:
-                    B.notify("Bluetooth", f"{what}: {err}", "bt", tag="bt-menu", urgency="normal", timeout=6000)
+                    B.notify("Bluetooth", f"{what}: {err}", "bt", tag="dg-menu", urgency="normal", timeout=6000)
                 if self.pending <= 0:
                     self.on_close()
             self.pending += 1
@@ -1079,7 +813,7 @@ class App:
     def ensure(self):
         if self.sh is not None:
             return
-        self.sh = Shell(self.Gtk, self.Gdk, self.GLib, self.LS)
+        self.sh = Shell(self.Gtk, self.Gdk, self.GLib, self.LS, namespace=NAMESPACE)
         self.sh.bz = B.Bluez(self.changed)
         try:
             self.sh.bz.start()
@@ -1165,7 +899,7 @@ def render(path, view="panel", scan=False, prompt=None, t=1.4, settle=1.5):
     if not Gtk.init_check():
         raise RuntimeError("no display to render on")
     clock = {"t": 100.0}
-    sh = Shell(Gtk, Gdk, GLib, None, now=lambda: clock["t"])
+    sh = Shell(Gtk, Gdk, GLib, None, now=lambda: clock["t"], namespace=NAMESPACE)
     sh.t0 = clock["t"] - t
     loop = GLib.MainLoop()
     holder = {}

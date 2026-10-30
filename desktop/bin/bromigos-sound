@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # bromigos:summary=Sound: the output and input device, their volumes, each app's volume, the theme's sounds and the desktop's mute
-# bromigos:args=[status] | output|input DEVICE | volume output|input|DEVICE PERCENT | mute output|input on|off|toggle | app-volume ID PERCENT | app-mute ID on|off | app-output ID DEVICE | port output|input DEVICE PORT | all-mute on|off|toggle | sounds on|off | sounds-volume PERCENT | test [DEVICE]  [--json]
+# bromigos:args=[status] | output|input DEVICE | volume output|input|DEVICE PERCENT | mute output|input on|off|toggle | app-volume ID PERCENT | app-mute ID on|off | app-output ID DEVICE | port output|input DEVICE PORT | all-mute on|off|toggle | sounds on|off | sounds-volume PERCENT | test [DEVICE] | popup [pin|hover X|leave|close]  [--json]
 # bromigos:examples=bromigos sound; bromigos sound volume output 40; bromigos sound output alsa_output.usb-headset; bromigos sound app-volume 79 50
 """bromigos-sound (`bromigos sound`): the desktop's sound, through PipeWire's PulseAudio
 server (`pactl`; wpctl's devices are the same nodes). Settings › Sound drives it.
 
   bromigos sound [status]                  the devices, the defaults, volumes, the apps playing
-  bromigos sound output|input DEVICE       make DEVICE the default (playing apps follow it)
+  bromigos sound output|input DEVICE       make DEVICE the default; what's playing (or
+                                           recording) moves to it
   bromigos sound volume output|input|DEVICE PERCENT   0 to 150
   bromigos sound mute output|input|DEVICE on|off|toggle
   bromigos sound port output|input DEVICE PORT        e.g. headphones or speakers on one card
@@ -18,6 +19,11 @@ server (`pactl`; wpctl's devices are the same nodes). Settings › Sound drives 
   bromigos sound sounds on|off             the theme's sound cues (bromigos anim sounds)
   bromigos sound sounds-volume PERCENT     how loud they are (bromigos scene sounds.volume)
   bromigos sound test [DEVICE]             a short cue on the default output, or DEVICE
+  bromigos sound popup [pin]               the bar's sound popup, kept open (a click on the
+                                           volume); `hover X` opens it as resting the pointer
+                                           there does (X: the icon's centre), `leave` closes it
+                                           soon after the pointer goes, `close` at once
+  bromigos sound status --light            the devices only: no mute or theme sounds (faster)
 """
 import json
 import os
@@ -95,6 +101,7 @@ def _sounds():
 
 
 def status(_args=None, light=False):
+    light = light or "--light" in (_args or [])
     C.need("pactl", "libpulse")
     info = pjson("info")
     if not isinstance(info, dict):
@@ -164,6 +171,13 @@ def set_default(side):
             raise Fail(f"bromigos sound {side} DEVICE")
         dev = _find(side, args[0])
         pactl("set-default-sink" if side == "output" else "set-default-source", dev["name"])
+        # what's playing (or recording) moves too, even a stream an app pinned to the old device
+        streams, verb = ("sink-inputs", "move-sink-input") if side == "output" else ("source-outputs",
+                                                                                     "move-source-output")
+        on = "sink" if side == "output" else "source"
+        for st in pjson("list", streams) or []:
+            if st.get(on) != dev.get("index"):
+                C.run(["pactl", verb, str(st.get("index")), dev["name"]], timeout=5)
         return dict(status(), said=f"{side.title()}: {dev['description']}", previous=None)
     return fn
 
@@ -279,6 +293,9 @@ def test(args):
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["popup"]:
+        import bromigos_soundpopup as P
+        sys.exit(P.main([a for a in sys.argv[2:] if a != "--json"] or ["pin"]))
     sys.exit(C.main({"status": status, "output": set_default("output"), "input": set_default("input"),
                      "volume": volume, "mute": mute, "port": port, "app-volume": app_volume,
                      "app-mute": app_mute, "app-output": app_output, "all-mute": all_mute,

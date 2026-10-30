@@ -176,6 +176,7 @@ Then it runs `bromigos setup`, unless you gave `--no-setup`.
 | `bromigos-manual` | bromigOS manual: how to use the desktop, as HTML, for reading offline | *with bromigOS* |
 | `bromigos-mirrorlist` | bromigOS package repository mirrors | *with bromigOS* (through `bromigos-keyring`) |
 | `bromigos-homelab` | bromigOS homelab integrations: desktop panels, homelab decks and VECTOR tools | *with bromigOS* (through `bromigos-desktop`) |
+| `bromigos-bar-hover` | bromigOS bar hover popups: a waybar module that opens a popup when the pointer rests on another | *with bromigOS* (through `bromigos-desktop`) |
 | `mehshell` | Fast parallel zsh prompt engine for bromigOS | *with bromigOS* (through `bromigos-desktop`) |
 | `oo7` | A Secret Service provider | *with bromigOS* (through `bromigos-desktop`) |
 | `ttf-geist-mono` | Geist Mono, a monospaced typeface by Vercel | *with bromigOS* (through `bromigos-settings`) |
