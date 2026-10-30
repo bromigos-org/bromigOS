@@ -83,6 +83,17 @@ if [[ $edition == fieldkit ]]; then
     cp -r "$profile_src"/{profiledef.sh,grub,syslinux,airootfs} "$profile"/
     # the medium's packages: iso/fieldkit/packages.toml (docs/fieldkit-packages.md)
     { echo "# made by iso/fieldkit/manifest.py from iso/fieldkit/packages.toml"; python3 /src/iso/fieldkit/manifest.py live; } > "$profile/packages.x86_64"
+    # if_available: on the medium once a repository has it (brodec-machine before its first
+    # publish, say); its store-only ones join the offline store below
+    fk_optional=()
+    while read -r name where; do
+        if pacman -Si "$name" >/dev/null 2>&1; then
+            [[ $where == live ]] && echo "$name" >> "$profile/packages.x86_64"
+            fk_optional+=("$name"); echo "   $name: in the repositories, on the medium"
+        else
+            echo "   $name: not in the repositories yet, left out"
+        fi
+    done < <(python3 /src/iso/fieldkit/manifest.py optional)
     # releng's services Field Kit leaves off: one network stack (NetworkManager, not iwd and
     # networkd), no cloud-init, no virtual machine guest tools, no smartcards, SSH off until
     # remote help or a test build turns it on (docs/fieldkit.md)
@@ -154,6 +165,7 @@ if [[ $edition == fieldkit ]]; then
     # and what archinstall straps by itself (base, sudo, linux-firmware, mkinitcpio, the
     # microcode, zram swap, the mirrorlist): installing from Field Kit needs no network
     mapfile -t -O "${#want[@]}" want < <(python3 /src/iso/fieldkit/manifest.py store)
+    want+=("${fk_optional[@]}")
     want+=(base sudo linux-firmware mkinitcpio linux amd-ucode intel-ucode zram-generator pacman-mirrorlist
            grub efibootmgr btrfs-progs cryptsetup snapper snap-pac grub-btrfs inotify-tools networkmanager openssh)
 else
