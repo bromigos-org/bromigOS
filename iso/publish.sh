@@ -25,7 +25,8 @@
 # Environment (never printed, never on a command line): PKGS_PUBLIC_ENDPOINT,
 # PKGS_PUBLIC_BUCKET, PKGS_PUBLIC_ACCESS_KEY_ID, PKGS_PUBLIC_SECRET_ACCESS_KEY (the R2 bucket,
 # as packaging/ci/publish.sh uses it); PKGS_GPG_PRIVATE_KEY, PKGS_GPG_PASSPHRASE (sign);
-# ISO_PUBLIC_URL (default: install.sh's PUBLIC_REPO).
+# ISO_PUBLIC_URL (default: install.sh's PUBLIC_REPO); ISO_PREFIX, the bucket's folder (default
+# iso; a test publishes under another and removes it after).
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/.." && pwd)
@@ -59,8 +60,9 @@ remote() {
     unset PKGS_PUBLIC_ACCESS_KEY_ID PKGS_PUBLIC_SECRET_ACCESS_KEY
     B="pub:$PKGS_PUBLIC_BUCKET"
 }
-channel_dir() {         # where a channel's versions live in the bucket
-    case $channel in stable) echo iso ;; edge) echo iso/edge ;; *) die "--channel is stable or edge" ;; esac
+channel_dir() {         # where a channel's versions live in the bucket (ISO_PREFIX: a test's own folder)
+    local top=${ISO_PREFIX:-iso}
+    case $channel in stable) echo "$top" ;; edge) echo "$top/edge" ;; *) die "--channel is stable or edge" ;; esac
 }
 # bromigos-0.1.3-x86_64.iso -> its edition (bromigos, bromigos-fieldkit) and version
 parse_name() {
@@ -114,11 +116,11 @@ json.dump({
 print()
 PY
         echo "==> $name to $path/ ($(du -h "$iso" | cut -f1))"
-        # one object, in parts of 64 MiB (R2 takes up to 10,000 parts); the version's files
-        # never change once published, so they may be cached for good
+        # one object, in parts of 64 MiB (R2 takes up to 10,000 parts); cached for an hour at
+        # most, so a version published again (a rebuild) is what people get
         rcl copyto --s3-chunk-size 64M --s3-upload-concurrency 8 \
             --header-upload "Content-Type: application/x-iso9660-image" \
-            --header-upload "Cache-Control: public, max-age=31536000, immutable" \
+            --header-upload "Cache-Control: public, max-age=3600" \
             "$iso" "$B/$path/$name"
         rcl copyto --header-upload "Content-Type: text/plain; charset=utf-8" "$iso.sha256" "$B/$path/$name.sha256"
         rcl copyto --header-upload "Content-Type: application/pgp-signature" "$iso.sig" "$B/$path/$name.sig"
