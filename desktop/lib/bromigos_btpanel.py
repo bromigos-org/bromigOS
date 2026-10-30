@@ -84,10 +84,10 @@ def driver_note(d):
     """A hint for an Xbox controller on the kernel's basic driver, or None."""
     if not d.get("xbox") or B.xpadneo_loaded():
         return None
-    return ("BASIC DRIVER · SET UP",
-            "This controller runs on the kernel's basic driver. xpadneo adds rumble, the battery and the right "
-            "button layout: SET UP runs `bromigos peripheral enable xbox-controller` in a terminal (it asks for "
-            "your password; reboot or reconnect after)")
+    return ("BASIC DRIVER · ENABLE XBOX CONTROLLER SUPPORT",
+            "Basic driver: rumble and battery are limited. ENABLE XBOX CONTROLLER SUPPORT runs `bromigos "
+            "peripheral enable xbox-controller` in a terminal, which installs xpadneo, the Xbox controllers' full "
+            "driver (it asks for your password; switch the controller off and on after)")
 
 
 def prompt_words(what, name, value):

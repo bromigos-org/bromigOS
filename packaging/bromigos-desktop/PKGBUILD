@@ -224,8 +224,9 @@ package() {
   # the DRIFTGLASS popups' shared parts (a click outside one handed on by bromigos_vptr), and
   # the bar's sound popup (bromigos sound popup)
   install -Dm0644 -t "$lib/lib/" lib/bromigos_popup.py lib/bromigos_vptr.py lib/bromigos_soundpopup.py
-  # bromigos bluetooth session (the TUI's bluez core) and a controller's evdev input and rumble
-  install -Dm0644 -t "$lib/lib/" lib/bromigos_btsession.py lib/bromigos_gamepad.py
+  # bromigos bluetooth session (the TUI's bluez core), a controller's evdev input and rumble,
+  # and its layout: SDL_GameControllerDB's Linux mappings (zlib licence)
+  install -Dm0644 -t "$lib/lib/" lib/bromigos_btsession.py lib/bromigos_gamepad.py lib/gamecontrollerdb.txt
   for f in "${_settings_cmds[@]}"; do
     install -Dm0755 "bin/bromigos-$f" "$lib/bin/bromigos-$f"
   done
@@ -233,5 +234,6 @@ package() {
   python -m compileall -q -o 0 -o 1 -s "$pkgdir" -p / "$lib/settings" >/dev/null
   # the app launcher's entries (docs/menu.md, "In the app launcher")
   install -Dm0644 -t "$pkgdir/usr/share/applications/" "$_root"/desktop/applications/*.desktop
-  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE" \
+    lib/gamecontrollerdb.LICENSE
 }

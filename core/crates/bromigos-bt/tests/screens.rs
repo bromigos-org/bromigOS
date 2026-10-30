@@ -242,6 +242,27 @@ fn a_controller_page_with_its_input() {
 }
 
 #[test]
+fn a_controller_on_the_basic_driver() {
+    let mut a = app("wick", false);
+    a.open("00:00:5E:00:53:12");
+    a.handle(proto::parse(r#"{"t":"input","mac":"00:00:5E:00:53:12","buttons":[],"axes":{"lx":0,"ly":0,"rx":0.8,"ry":0,"lt":0,"rt":0,"dx":0,"dy":0},"driver":"hid-microsoft","basic":true,"layout":"SDL GameControllerDB","id":"045e:0b13"}"#).unwrap());
+    let t = text(&draw(&mut a));
+    assert!(
+        t.contains("driver hid-microsoft · layout: SDL GameControllerDB"),
+        "{t}"
+    );
+    assert!(t.contains("ENABLE XBOX CONTROLLER SUPPORT"), "{t}");
+    assert!(
+        t.contains("RS  +0.80 +0.00"),
+        "the right stick moves, not a trigger: {t}"
+    );
+    // on xpadneo: no hint in the tester
+    a.handle(proto::parse(r#"{"t":"input","mac":"00:00:5E:00:53:12","buttons":[],"axes":{"lx":0,"ly":0,"rx":0,"ry":0,"lt":0,"rt":0,"dx":0,"dy":0},"driver":"xpadneo","basic":false,"layout":"SDL GameControllerDB"}"#).unwrap());
+    let t = text(&draw(&mut a));
+    assert!(!t.contains("ENABLE XBOX CONTROLLER SUPPORT"), "{t}");
+}
+
+#[test]
 fn the_pairing_wizard() {
     for w in WORLDS {
         let mut a = app(w, true);

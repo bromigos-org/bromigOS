@@ -145,18 +145,32 @@ pub fn peripheral_cmd(paths: &Paths, a: PeripheralArgs) -> Result<i32> {
     }
 }
 
+/// `NAME (vendor:product, what it is)`: each module's kind says it its own way.
 fn found_line(f: &pm::Found) -> String {
-    format!(
-        "{} ({}, {}{})",
-        f.name,
-        f.usb,
-        match f.how.as_str() {
-            "driver" => f.driver.clone().unwrap_or_default(),
-            "name" => "by its name: its driver isn't installed yet".into(),
-            other => other.into(),
-        },
-        if f.dial.is_some() { "; a dial" } else { "" }
-    )
+    let what = if f.kind == "controller" {
+        // a gamepad: which driver runs it is what matters
+        match f.driver.as_deref() {
+            Some("xpadneo") => "a gamepad; xpadneo".to_string(),
+            Some(d) => format!("a gamepad; basic driver ({})", hid_driver_name(d)),
+            None => "a gamepad; basic driver".to_string(),
+        }
+    } else {
+        format!(
+            "{}{}",
+            match f.how.as_str() {
+                "driver" => f.driver.clone().unwrap_or_default(),
+                "name" => "by its name: its driver isn't installed yet".into(),
+                other => other.into(),
+            },
+            if f.dial.is_some() { "; a dial" } else { "" }
+        )
+    };
+    format!("{} ({}, {what})", f.name, f.usb)
+}
+
+/// The kernel's HID driver names as people know them (`microsoft` is hid-microsoft).
+fn hid_driver_name(d: &str) -> &str {
+    if d == "microsoft" { "hid-microsoft" } else { d }
 }
 
 fn needs_json(m: &Manifest, runner: &mut dyn Runner) -> Value {
@@ -506,4 +520,42 @@ fn refresh(paths: &Paths, root: &Path, reload: bool, json_out: bool) -> Result<i
         .collect::<Vec<_>>(),
     )?;
     Ok(if w.ok { 0 } else { 1 })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn found(kind: &str, how: &str, driver: Option<&str>, dial: bool) -> pm::Found {
+        pm::Found {
+            name: "Xbox Wireless Controller".into(),
+            usb: "045e:0b13".into(),
+            kind: kind.into(),
+            how: how.into(),
+            driver: driver.map(str::to_string),
+            hypr_names: vec![],
+            keyboards: vec![],
+            dial: dial.then(|| "/dev/input/event32".to_string()),
+        }
+    }
+
+    #[test]
+    fn each_kind_says_what_it_found_its_own_way() {
+        assert_eq!(
+            found_line(&found("controller", "vendor", Some("xpadneo"), false)),
+            "Xbox Wireless Controller (045e:0b13, a gamepad; xpadneo)"
+        );
+        assert_eq!(
+            found_line(&found("controller", "vendor", Some("microsoft"), false)),
+            "Xbox Wireless Controller (045e:0b13, a gamepad; basic driver (hid-microsoft))"
+        );
+        // a keyboard's dial is still a dial
+        let mut kb = found("keyboard", "driver", Some("razerkbd"), true);
+        kb.name = "Razer Razer BlackWidow V4 Pro".into();
+        kb.usb = "1532:028d".into();
+        assert_eq!(
+            found_line(&kb),
+            "Razer Razer BlackWidow V4 Pro (1532:028d, razerkbd; a dial)"
+        );
+    }
 }

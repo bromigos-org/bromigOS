@@ -15,7 +15,9 @@ Out, each a line:
   {"t": "prompt", "pid": "p1", "what": …, "mac": …, "name": …, "value": …}   the pairing
                                            agent's question (bromigos_bluez.Agent's whats)
   {"t": "cancel"}                          the device gave up pairing
-  {"t": "input", "mac": …, "buttons": […], "axes": {…}}     a controller's input, live
+  {"t": "input", "mac": …, "buttons": […], "axes": {…},     a controller's input, live, with its
+   "driver": …, "basic": bool, "layout": …, "id": "045e:0b13"}   driver (basic: an Xbox pad without
+                                                              xpadneo) and where its layout came from
   {"t": "mic", "level": 0..1}             a microphone's level, live
 
 In, each a line:
@@ -290,7 +292,8 @@ class Session:
         return True
 
     def _send_pad(self, force=False):
-        doc = {"t": "input", "mac": self.pad.mac, "buttons": self.pad.buttons, "axes": self.pad.axes}
+        doc = {"t": "input", "mac": self.pad.mac, "buttons": self.pad.buttons, "axes": self.pad.axes,
+               **self.pad.describe()}
         key = json.dumps(doc, sort_keys=True)
         if force or key != self.pad_last:
             self.pad_last = key

@@ -153,6 +153,15 @@ pub enum Msg {
         mac: String,
         buttons: Vec<String>,
         axes: Axes,
+        /// The controller's driver (xpadneo, hid-microsoft, xpad…), when sysfs says.
+        #[serde(default)]
+        driver: Option<String>,
+        /// An Xbox controller on the kernel's basic driver: rumble and battery are limited.
+        #[serde(default)]
+        basic: bool,
+        /// Where its layout came from: SDL GameControllerDB, or its axes.
+        #[serde(default)]
+        layout: Option<String>,
     },
     InputError {
         error: String,

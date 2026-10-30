@@ -234,7 +234,7 @@ polling. It has four parts:
 - **My devices**: a card per paired device, with its hologram, state, battery and signal.
   A card opens the device's page, an `Adw.Dialog`:
   - a controller has a live input test (`bromigos_gamepad` reads its evdev device),
-    rumble, and **Set up…** while xpadneo isn't loaded;
+    rumble, and **Enable Xbox controller support** while it runs on the basic driver;
   - headphones have the HI-FI / HEADSET + MIC switch (`bromigos bluetooth profile`), the
     codec, **Sound output** and **Microphone** (`bromigos sound`), and a microphone test
     (`parec`'s level);

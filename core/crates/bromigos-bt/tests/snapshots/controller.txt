@@ -9,8 +9,8 @@
 │game controller · CONNECTED             ││                                                        │
 │battery ▮▯▯▯▯▯▯▯▯▯  12%                 ││Press anything: it lights up here.                      │
 │auto-reconnect: on                      ││LT ▮▮▮▮▮▮▯▯   RT ▯▯▯▯▯▯▯▯                               │
-│basic driver: rumble and battery need   ││ LB    VIEW  XBOX  MENU    RB                           │
-│xpadneo                                 ││ UP           Y     SHARE                               │
+│basic driver: rumble and battery are    ││ LB    VIEW  XBOX  MENU    RB                           │
+│limited                                 ││ UP           Y     SHARE                               │
 │  bromigos peripheral enable            ││ LEFT  RIGHT    X  B                                    │
 │xbox-controller                         ││ DOWN           A                                       │
 │00:00:5E:00:53:12                       ││ LS  +0.50 -0.25    RS  +0.00 +0.00                     │
