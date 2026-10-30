@@ -138,6 +138,9 @@ mok_keys() {        # the enrollment, keystroke by keystroke, a screenshot after
     sleep 2; snap enroll-mok; key down; key ret                   # Continue
     sleep 2; snap enroll-the-keys; key down; key ret              # Yes
     sleep 2; snap reboot; key ret                                 # Reboot
+    # then the medium's menu, which keeps its theme with Secure Boot on (its fonts are in GRUB's memdisk)
+    python3 "$root/iso/test/screen-wait.py" --qmp "$q" --out "$shots/menu-secureboot.png" --timeout 90 --coloured >/dev/null 2>&1 \
+        && : > "$shots/.menu-themed"
 }
 secureboot_run() {
     local d=$out/secureboot
@@ -160,6 +163,7 @@ secureboot_run() {
     local keys=$!
     step "secure boot: MokManager enrolls the key, then the live desktop, Secure Boot on" T boot --iso "$iso" --firmware uefi || true
     wait "$keys" 2>/dev/null || true
+    step "secure boot: the medium's menu keeps its theme" test -e "$d/shots/.menu-themed" || true
     cp "$d/OVMF_VARS.fd" "$d/vars-medium.fd" 2>/dev/null || true
     step "secure boot: the firmware says it's on" T ssh 'od -An -t u1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c | awk "{exit !(\$NF == 1)}"'
     step "secure boot: the key is in the MOK list" T ssh 'test -s /sys/firmware/efi/mok-variables/MokListRT || ls /sys/firmware/efi/efivars/ | grep -q "^MokListRT-"'
