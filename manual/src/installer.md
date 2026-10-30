@@ -100,7 +100,8 @@ When the disk already has bromigOS, **Reinstall bromigOS and keep my files** giv
 fresh system and keeps your home folder: your documents, pictures, settings and
 everything else in it. The old system is kept as a snapshot, so nothing is lost. If the
 disk is encrypted, type the passphrase you use when the computer starts. The disk keeps
-it.
+it. If the reinstall stops partway, your old bromigOS is put back as it was, and the
+computer starts as before.
 
 ## bromigOS Server
 
@@ -359,7 +360,12 @@ next start.
 4. The people from the old system come back with the same user IDs, groups and passwords
    (from the old `/etc/passwd` and `/etc/shadow`); you get the new password. `/home`'s
    snapper configuration comes back too.
-5. The disk's unlocking and GRUB are set up again.
+5. The disk's unlocking and GRUB are set up again. Only then are the old kernels, kept
+   aside on `/boot` until now, removed.
+
+If the install stops before step 5 finishes, the old system is put back: `@` again from
+`@old-root-DATE` (its `fstab` naming the subvolume by name), its snapshots and its kernels.
+The computer starts as it did before, and the installer says so.
 
 To look at the old system later, mount the btrfs volume with `subvolid=5` and open
 `@old-root-DATE`. Delete it with `btrfs subvolume delete` when you no longer need it.

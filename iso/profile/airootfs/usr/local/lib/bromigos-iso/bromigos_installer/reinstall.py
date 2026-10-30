@@ -5,13 +5,19 @@ bromigos-iso-install for mode = "reinstall":
 
   reinstall.py prepare --answers FILE   unlock the root (LUKS: the passphrase in the answers),
                                         keep the old root (@ becomes @old-root-DATE, read-only)
-                                        and its snapshots, make a fresh @ and @.snapshots, clear
-                                        the old kernels from /boot, mount it all at /mnt for
+                                        and its snapshots, make a fresh @ and @.snapshots, move
+                                        the old kernels aside on /boot, mount it all at /mnt for
                                         archinstall (its pre-mounted layout); writes what it
                                         found to /run/bromigos-iso/reinstall.json
   reinstall.py finish --answers FILE    in the new system: the old system's people again, with
                                         their user IDs, groups and passwords (yours with the new
-                                        password), unlocking at start (LUKS), and GRUB
+                                        password)
+  reinstall.py boot --answers FILE      unlocking at start (LUKS), and GRUB
+  reinstall.py undo --answers FILE      the install stopped before the new system could start:
+                                        the old system back as @ (from @old-root-DATE), its
+                                        snapshots and kernels back, so the computer starts as
+                                        it did before
+  reinstall.py tidy --answers FILE      the new system starts: the old kernels' copy goes
 Prints ::stage lines; a problem is one ::error line in plain words.
 """
 import json
@@ -28,6 +34,7 @@ def _read(path):
 STATE = "/run/bromigos-iso/reinstall.json"
 TOP = "/run/bromigos-iso/top"
 TARGET = "/mnt"
+STASH = ".bromigos-old-kernels"       # on /boot, while a reinstall runs
 SUBVOLS = [("@home", "home"), ("@log", "var/log"), ("@pkg", "var/cache/pacman/pkg"), ("@.snapshots", ".snapshots")]
 
 
@@ -77,6 +84,12 @@ def prepare(a):
                     "keeping your files. Nothing was changed. Copy your files off it, then choose Erase the whole disk.")
     print(f"::stage 6 Keeping the old system as a snapshot (@old-root-{stamp})", flush=True)
     sh("btrfs", "subvolume", "snapshot", "-r", f"{TOP}/@", f"{TOP}/@old-root-{stamp}")
+    old = "/run/bromigos-iso/old-root"
+    state = {"stamp": stamp, "encrypted": b["encrypted"], "luks_uuid": luks_uuid, "root": b["root"], "boot": b["boot"],
+             "esp": b.get("esp"), "boot_is_esp": b.get("boot_is_esp"), "old_root": old, "disk": disk, "dev": dev,
+             "had_snapshots": "@.snapshots" in names}
+    with open(STATE, "w") as f:            # from here on, `undo` can put everything back
+        json.dump(state, f)
     if "@.snapshots" in names:
         os.rename(f"{TOP}/@.snapshots", f"{TOP}/@old-snapshots-{stamp}")
     sh("btrfs", "subvolume", "delete", "--recursive", f"{TOP}/@")
@@ -91,19 +104,18 @@ def prepare(a):
         sh("mount", "-o", f"subvol={sv}", dev, f"{TARGET}/{where}")
     os.makedirs(f"{TARGET}/boot", exist_ok=True)
     sh("mount", b["boot"], f"{TARGET}/boot")
-    # the old kernels and GRUB's files go; Field Kit's image and anything else stays
+    # the old kernels move aside (`undo` puts them back, `tidy` removes them); Field Kit's
+    # image and anything else stays
+    stash = f"{TARGET}/boot/{STASH}"
+    os.makedirs(stash, exist_ok=True)
     for f in os.listdir(f"{TARGET}/boot"):
         if f.startswith(("vmlinuz-", "initramfs-", "intel-ucode", "amd-ucode")):
-            os.remove(f"{TARGET}/boot/{f}")
+            os.rename(f"{TARGET}/boot/{f}", f"{stash}/{f}")
     if b.get("esp") and not b.get("boot_is_esp"):
         os.makedirs(f"{TARGET}/boot/efi", exist_ok=True)
         sh("mount", b["esp"], f"{TARGET}/boot/efi")
-    old = f"/run/bromigos-iso/old-root"
     os.makedirs(old, exist_ok=True)
     sh("mount", "-o", f"ro,subvol=@old-root-{stamp}", dev, old)
-    state = {"stamp": stamp, "encrypted": b["encrypted"], "luks_uuid": luks_uuid, "root": b["root"], "boot": b["boot"],
-             "esp": b.get("esp"), "boot_is_esp": b.get("boot_is_esp"), "old_root": old, "disk": disk}
-    json.dump(state, open(STATE, "w"))
     print("::stage 9 Your files are safe; the new system goes in beside them", flush=True)
     return 0
 
@@ -204,6 +216,63 @@ def boot_loader(a):
     return 0
 
 
+def undo(a):
+    """The install stopped before the new system could start: the old one back, as it was."""
+    try:
+        st = json.loads(_read(STATE))
+    except (OSError, ValueError):
+        return 0                                   # prepare stopped before it changed anything
+    stamp, dev = st["stamp"], st["dev"]
+    print("::stage 0 Putting your old bromigOS back", flush=True)
+    sh("umount", "-R", TARGET, check=False)
+    sh("umount", st["old_root"], check=False)
+    if not os.path.ismount(TOP):
+        os.makedirs(TOP, exist_ok=True)
+        sh("mount", "-o", "subvolid=5", dev, TOP)
+    if not os.path.isdir(f"{TOP}/@old-root-{stamp}"):
+        return fail("The old system's snapshot isn't there, so it can't be put back. Your home folder wasn't touched.")
+    if os.path.isdir(f"{TOP}/@"):
+        sh("btrfs", "subvolume", "delete", "--recursive", f"{TOP}/@")
+    sh("btrfs", "subvolume", "snapshot", f"{TOP}/@old-root-{stamp}", f"{TOP}/@")
+    if os.path.isdir(f"{TOP}/@old-snapshots-{stamp}"):
+        if os.path.isdir(f"{TOP}/@.snapshots"):
+            sh("btrfs", "subvolume", "delete", "--recursive", f"{TOP}/@.snapshots")
+        os.rename(f"{TOP}/@old-snapshots-{stamp}", f"{TOP}/@.snapshots")
+    # the restored @ is a new subvolume: an fstab line that names the old one by its ID
+    # would no longer find it; by name (subvol=/@) it does
+    fstab = f"{TOP}/@/etc/fstab"
+    if os.path.isfile(fstab):
+        import re
+        s = _read(fstab)
+        s2 = re.sub(r",?subvolid=\d+", "", s)
+        if s2 != s:
+            with open(fstab, "w") as f:
+                f.write(s2)
+    sh("btrfs", "subvolume", "delete", f"{TOP}/@old-root-{stamp}", check=False)
+    sh("umount", TOP, check=False)
+    boot = "/run/bromigos-iso/boot"
+    os.makedirs(boot, exist_ok=True)
+    sh("mount", st["boot"], boot)
+    for f in os.listdir(boot):                     # whatever the new system put there first
+        if f.startswith(("vmlinuz-", "initramfs-", "intel-ucode", "amd-ucode")):
+            os.remove(f"{boot}/{f}")
+    if os.path.isdir(f"{boot}/{STASH}"):
+        for f in os.listdir(f"{boot}/{STASH}"):
+            os.rename(f"{boot}/{STASH}/{f}", f"{boot}/{f}")
+        os.rmdir(f"{boot}/{STASH}")
+    sh("umount", boot, check=False)
+    os.remove(STATE)
+    print("Your old bromigOS is back as it was, and your files weren't touched.", flush=True)
+    return 0
+
+
+def tidy(a):
+    """The new system starts: the old kernels' copy goes."""
+    import shutil
+    shutil.rmtree(f"{TARGET}/boot/{STASH}", ignore_errors=True)
+    return 0
+
+
 def main(argv):
     if len(argv) < 3 or argv[1] != "--answers":
         print(__doc__.strip())
@@ -211,7 +280,7 @@ def main(argv):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
     a = json.loads(_read(argv[2]))
     try:
-        return {"prepare": prepare, "finish": finish, "boot": boot_loader}[argv[0]](a)
+        return {"prepare": prepare, "finish": finish, "boot": boot_loader, "undo": undo, "tidy": tidy}[argv[0]](a)
     except RuntimeError as e:
         return fail(f"Reinstalling stopped: {e}. Your home folder wasn't touched.")
 
