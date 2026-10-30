@@ -63,7 +63,10 @@ key=$dir/id_ed25519
 sshopts=(-i "$key" -p "$port" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5)
 user=$(cat "$dir/user" 2>/dev/null || echo live)
 SSH=(ssh "${sshopts[@]}" "$user@127.0.0.1")
-SCP=(scp "${sshopts[@]/-p/-P}")
+# scp names the port -P; every other option as ssh's (a substitution over the array would
+# also change any path with "-p" in it)
+scpopts=(); for o in "${sshopts[@]}"; do [[ $o == -p ]] && o=-P; scpopts+=("$o"); done
+SCP=(scp "${scpopts[@]}")
 qmp() { printf '%s\n' '{"execute":"qmp_capabilities"}' "$1" | socat - "UNIX-CONNECT:$dir/qmp.sock" >/dev/null; }
 
 wait_ssh() {
