@@ -65,6 +65,8 @@ These pages have chapters of their own:
 - **Shortcuts**: see [Your own shortcuts](shortcuts.md).
 - **Accessibility**: see [Accessibility](accessibility.md).
 - **Lab**: see [The lab console](lab.md#in-settings).
+- **Playing games**: see [Playing games](games.md). It sets up Steam, says whether games
+  are ready, fixes what isn't, and turns game mode on. (`bromigos game`)
 
 ## Displays
 
@@ -131,6 +133,9 @@ for its page:
   the **Microphone**, and a **Microphone test**.
 - Rename it, turn **Auto-reconnect** on or off, **Re-pair** it, or **Forget** it.
 
+A controller on Linux's basic driver shows **Enable Xbox controller support**, which
+installs xpadneo for rumble and the battery ([Pair a controller](bluetooth.md#pair-a-controller)).
+
 To pair a new device, choose **Pair a new device…**:
 
 1. Choose what you're pairing. Settings says how to put that kind in pairing mode.
@@ -167,7 +172,8 @@ When the machine sleeps by itself is set on the Idle & lock page. (`bromigos pow
 
 ## Peripherals
 
-For a keyboard with macro keys, a dial or lighting: turn its module on or off, choose what
+For a keyboard with macro keys, a dial or lighting, or an Xbox controller's driver: turn
+its module on or off, choose what
 its lighting follows, VECTOR or the theme, and see what each key and the dial do. See
 [Keyboards and peripherals](peripherals.md). (`bromigos peripheral`)
 

@@ -19,6 +19,42 @@ are. To change the channel you follow, see [Channels](update-and-rollback.md#cha
 
 Developers can read every change in the repository's `CHANGELOG.md`.
 
+<!-- unreleased: v0.1.3 -->
+## On edge since 0.1.3
+
+These changes are already on the `edge` channel. They are not a new stable release.
+Run `bromigos update` to get them. The next release notes will include these highlights.
+
+### New
+
+- **Steam and Proton keep themselves ready.** **Settings › Playing games** sets up Steam
+  and the drivers your graphics cards need. bromigOS installs the newest GE-Proton,
+  keeps it current, and repairs what would stop a game, after each update and whenever
+  you quit Steam. The page says **Games are ready** or what needs you, with **Fix**.
+  DLSS works in Proton games on NVIDIA. See [Playing games](games.md).
+- **Choose what each graphics card is for.** **Settings › Graphics** lists every card.
+  Pick the one that draws the desktop (tried first, with a way back), the one games and
+  heavy apps run on, and one kept for virtual machines. From a terminal: `bromigos hw
+  graphics`, `hw display`, `hw games`, `hw run` and `hw vfio`. See
+  [Choose what each card is for](hardware.md#choose-what-each-card-is-for).
+- **Bluetooth devices.** **Settings › Bluetooth** has a page for each device and pairs
+  new ones step by step. A controller tester shows each button and stick live, by the
+  pad's real layout, and makes it rumble. Headphones switch between hi-fi and headset
+  with a microphone. `bromigos bluetooth tui` is the same in a terminal. See
+  [Bluetooth](bluetooth.md).
+
+### Improved
+
+- Bar popups, such as the Bluetooth panel and the sound popup, close on a click anywhere
+  else, and that click still does what it does.
+- An Xbox controller on Linux's basic driver offers one button that installs xpadneo
+  for its rumble and battery.
+- The keyring, oo7, is now built from oo7's own source, unchanged. The fix that keeps a
+  text console login from stopping the keyring is part of oo7 itself now, so bromigOS
+  no longer carries its own patch.
+
+<!-- /unreleased -->
+
 
 
 **Still planned.** The first provisioning implementation has merged. Its AI, media and

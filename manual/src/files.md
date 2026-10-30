@@ -31,6 +31,8 @@ All in `~/.config/bromigos/`:
 | `create.toml` | The tools that make pictures and 3D models. | `bromigos setup create` |
 | `homelab.toml` | Your homelab's services. | [Your homelab](homelab.md) |
 | `peripherals.toml` | Your keyboard's extra keys and lighting. | [Keyboards and peripherals](peripherals.md) |
+| `graphics.json` | The card games and heavy apps run on. | **Settings › Graphics**, `bromigos hw games` |
+| `bluetooth.toml` | Whether headphones take over the sound when they connect. | **Settings › Bluetooth**, `bromigos bluetooth audio-default` |
 | `keys.toml` | Your own shortcuts. | [Your own shortcuts](shortcuts.md) |
 | `monitors.toml` | Your primary monitor. | **Settings › Displays** |
 | `input.toml` | The keyboard layout, key repeat, the mouse and the touchpad. | **Settings › Keyboard & input** |
@@ -65,6 +67,9 @@ files, in your editor.
 | `~/Pictures/screenshots/` | Your screenshots. |
 | `~/Videos/recordings/` | Your screen recordings. |
 | `~/Pictures/bromigos/lab/` | What your homelab made for you. |
+| `~/.local/state/bromigos/hw/hyprland.lua` | Your session's graphics settings, from `bromigos hw setup`. Edit it and bromigOS leaves it alone. See [Hardware](hardware.md#for-power-users). |
+| `~/.local/state/bromigos/game/backup/` | A copy of Steam's `config.vdf` before each change bromigOS makes. See [Playing games](games.md#the-files-it-touches). |
+| `~/.local/share/applications/steam.desktop` | Your copy of Steam's launcher, while **Start Steam on the games card** is on. |
 | `~/.local/share/keyrings/` | Your keyring, where sign-ins and passwords are kept, encrypted with your login password. See [Your keyring](bromigos-account.md#your-keyring). |
 
 ## System files bromigOS changes
@@ -76,6 +81,18 @@ files, in your editor.
 
 `bromigos keyring setup` adds these lines, and `bromigos update` runs it once. It never
 changes the other lines. See [Your keyring](bromigos-account.md#your-keyring).
+
+Choosing graphics cards in **Settings › Graphics** changes these:
+
+| File | What changes |
+|---|---|
+| `/var/lib/bromigos/hw/graphics.json` | The desktop's card and the cards kept for virtual machines. |
+| `/etc/bromigos/hw/vfio-pci-override.sh` | Hands a card kept for virtual machines to vfio-pci at start, by its PCI address. |
+| `/etc/modprobe.d/bromigos-vfio.conf` | Runs that script when vfio-pci loads, before the card's own drivers. |
+| `/etc/mkinitcpio.conf.d/bromigos-vfio.conf` | Puts vfio-pci and the script in the start-up files. |
+
+The last three exist only while a card is kept for virtual machines. See
+[Keep a card for virtual machines](hardware.md#keep-a-card-for-virtual-machines).
 
 ## The package repository
 

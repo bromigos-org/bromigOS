@@ -105,6 +105,33 @@ run `bromigos scene set general.allow_software on`. It can take several processo
 
 See [Hardware](hardware.md).
 
+## A black screen after choosing another desktop card
+
+Restart the computer: a card you haven't kept yet goes back by itself. Or press
+Ctrl+Alt+F3, log in, and run:
+
+```bash
+sudo bromigos hw display reset
+sudo systemctl restart display-manager
+```
+
+See [Move the desktop to another card](hardware.md#move-the-desktop-to-another-card).
+
+## A game won't start
+
+Open **Settings › Playing games**. It says what stops games, and **Fix** fixes what
+bromigOS can: close Steam first. From a terminal, `bromigos game check` says the same,
+and `bromigos game check --fix` fixes it. See [Playing games](games.md#what-the-check-says).
+
+A game with DLSS that crashes on a computer with two graphics cards may be on the wrong
+card. See [DLSS on NVIDIA](games.md#dlss-on-nvidia).
+
+## A Bluetooth device won't pair or connect
+
+Choose **FORGET…** under **⋯** in the Bluetooth panel, put the device in pairing mode, and
+pair it again. **Settings › Bluetooth › Troubleshooting** resets the adapter and lists what
+went wrong lately. See [When it doesn't work](bluetooth.md#when-it-doesnt-work).
+
 ## The lock screen crashed
 
 It restarts by itself, and the screen stays locked. Your password still opens it.

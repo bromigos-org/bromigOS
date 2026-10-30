@@ -91,8 +91,8 @@ all in one list.</p>
 <td width="50%" valign="top">
 <img src="docs/images/settings-theme.webp" alt="The Settings window on its Theme page, with a picture of the desktop in each theme">
 <h3>Settings in one window</h3>
-<p>Displays, sound, network, Bluetooth, power, idle and lock, themes, shortcuts,
-accessibility and updates, in one searchable window. You can undo every change.</p>
+<p>Displays, graphics cards, sound, network, Bluetooth, games, power, idle and lock,
+themes, shortcuts, accessibility and updates, in one searchable window. You can undo every change.</p>
 </td>
 <td width="50%" valign="top">
 <img src="docs/images/boot-snapshots.webp" alt="The boot menu's list of snapshots taken before and after an update">
@@ -120,6 +120,25 @@ All of it stays off until you set it up.
 ![bromigos lab in a terminal: cards for nodes, GPUs, services, models, GitOps apps,
 storage, alerts and jobs, with the nodes' CPU, memory and disk in a
 table](docs/images/lab-console.webp)
+
+### Games, graphics cards and controllers
+
+**Settings › Playing games** sets up Steam and the drivers your graphics cards need. Then
+press Play. bromigOS installs a current GE-Proton and keeps it up to date. It repairs what
+would stop a game from starting, after each update and whenever you quit Steam, and says
+**Games are ready** or what needs you, with a **Fix** button. On NVIDIA, DLSS works in
+Proton games with nothing to set per game. **Settings › Graphics** shows every graphics
+card and what it's for: the one that draws the desktop, the one games run on, and one
+kept for virtual machines (GPU passthrough). **Settings › Bluetooth** pairs controllers,
+headphones and keyboards step by step. It has a controller tester that reads each pad by
+its real layout, and one button for an Xbox controller's rumble and battery.
+
+For power users, every button is a command, and each command takes `--json`:
+`bromigos game setup|check|maintain|proton`, `bromigos hw graphics|display|games|run|vfio`
+and `bromigos bluetooth` (with `bromigos bluetooth tui` in the terminal). See
+[Playing games](manual/src/games.md#for-power-users),
+[Hardware](manual/src/hardware.md#for-power-users) and
+[Bluetooth](manual/src/bluetooth.md#for-power-users).
 
 ## Eleven themes
 
