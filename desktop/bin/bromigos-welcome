@@ -142,6 +142,13 @@ def main(argv):
     if any(a in ("-h", "--help") for a in argv):
         print(__doc__.strip())
         return 0
+    if not os.environ.get("WAYLAND_DISPLAY") and "--render" not in argv:
+        # no desktop here (a server, a console, SSH): the tour in the terminal, bromigos-core's
+        console = "/usr/lib/bromigos/bin/bromigos-welcome-console"
+        if os.access(console, os.X_OK):
+            os.execv(console, [console, *argv])
+        print("The welcome tour needs the desktop. Run it from a terminal on the desktop.")
+        return 1
     import gi
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
