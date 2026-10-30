@@ -49,6 +49,7 @@ manual's [Files and folders](../manual/src/files.md) lists them for users.
 
 | Page | What it covers |
 |---|---|
+| [DRIFTGLASS.md](DRIFTGLASS.md) | The design language: the levels (EMBER, GLOW, FLARE) and the building blocks every surface uses |
 | [theming.md](theming.md) | How themes work: colours, templates, hooks, emblems, and making your own |
 | [worlds.md](worlds.md) | The worlds, Mire and Tidewell: what each thing on screen shows |
 | [art.md](art.md) | The art pipeline that makes a world's paintings and animations |
