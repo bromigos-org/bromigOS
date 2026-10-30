@@ -72,8 +72,20 @@ assert not b['online'], 'bromigOS Server should install with no network from thi
 json.dump(b, open('/root/answers.json', 'w'))
 print('answers:', b['edition'], b['default_target'], b['auto_update_units'])
 PY" || return 1
-    TIMEOUT=3600 run install 'bromigos-iso-install --answers /root/answers.json --no-reboot > /root/install.log 2>&1; rc=$?; grep -E "^::(stage|error)" /root/install.log | tail -5; echo "installer: $rc"; exit $rc' || {
-        run install 'tail -60 /root/install.log; tail -40 /var/log/bromigos-iso-install.log' || true; return 1; }
+    # the installer runs on its own (setsid), so a console that hangs up can't stop it; this
+    # looks in every 30 s, signing in again if it must, for an hour at most
+    run install 'setsid nohup bash -c "bromigos-iso-install --answers /root/answers.json --no-reboot > /root/install.log 2>&1; echo \$? > /root/install.rc" >/dev/null 2>&1 < /dev/null & echo started' || return 1
+    local rc='' out
+    for _ in $(seq 120); do
+        sleep 30
+        out=$(TIMEOUT=40 run install 'echo "S:$(grep -E "^::(stage|error)" /root/install.log | tail -1)"; echo "R:$(cat /root/install.rc 2>/dev/null)"' 2>&1) \
+            || { "$T" login --name install --timeout 60 >/dev/null 2>&1; continue; }
+        echo "  $(sed -n 's/^S://p' <<<"$out")"
+        rc=$(sed -n 's/^R://p' <<<"$out" | tr -dc 0-9)
+        [[ -n $rc ]] && break
+    done
+    echo "installer: ${rc:-no answer after an hour}"
+    [[ $rc == 0 ]] || { run install 'tail -60 /root/install.log; tail -40 /var/log/bromigos-iso-install.log' || true; return 1; }
     # what the harness needs from the installed system: the console on the serial port too
     run install 'set -e
         t=/mnt; findmnt $t >/dev/null
