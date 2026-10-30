@@ -1,0 +1,10 @@
+#!/bin/sh
+# bromigos:summary=Bluetooth in the terminal: pair step by step, connect, test a controller, switch a headset's sound
+# bromigos:args=[--window]
+# bromigos:examples=bromigos bluetooth tui; bromigos bluetooth tui --window
+#
+# `bromigos bluetooth tui` (docs/desktop.md, "Bluetooth in the terminal"): the TUI is the
+# Rust binary /usr/lib/bromigos/bromigos-bt (core/crates/bromigos-bt). It talks to
+# `bromigos bluetooth session`, the desktop's bluez core. --window opens it in a floating
+# terminal window of its own. ? inside it lists the keys.
+exec "${BROMIGOS_BT_BIN:-/usr/lib/bromigos/bromigos-bt}" "$@"

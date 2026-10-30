@@ -151,6 +151,7 @@ The desktop runs these for you. You don't need them day to day.
 
 | Command | What it does |
 |---|---|
+| [`bromigos bluetooth tui`](#bromigos-bluetooth-tui) | Bluetooth in the terminal: pair step by step, connect, test a controller, switch a headset's sound |
 | [`bromigos tv guide`](#bromigos-tv-guide) |  |
 
 ## Every command in full
@@ -556,7 +557,7 @@ From the `bromigos-desktop` package.
 Bluetooth: the adapter (on, off, visible), paired devices, pairing new ones, through bluez.
 
 ```text
-bromigos bluetooth [status] | power on|off|toggle | discoverable on|off | scan [SECONDS] | pair MAC | connect MAC | disconnect MAC | trust MAC on|off | remove MAC | profile MAC hifi|headset | audio-default on|off | panel [pair MAC|scan] | menu  [--json]
+bromigos bluetooth [status] | power on|off|toggle | discoverable on|off | scan [SECONDS] | pair MAC | connect MAC | disconnect MAC | trust MAC on|off | remove MAC | profile MAC hifi|headset | audio-default on|off | panel [pair MAC|scan] | menu | tui [--window] | session  [--json]
 ```
 
 For example:
@@ -571,6 +572,23 @@ bromigos bluetooth panel
 ```
 
 From the `bromigos-desktop` package.
+
+### bromigos bluetooth tui
+
+Bluetooth in the terminal: pair step by step, connect, test a controller, switch a headset's sound.
+
+```text
+bromigos bluetooth tui [--window]
+```
+
+For example:
+
+```text
+bromigos bluetooth tui
+bromigos bluetooth tui --window
+```
+
+From the `bromigos-core` package.
 
 ### bromigos boot
 

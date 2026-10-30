@@ -82,6 +82,7 @@ EXPECT = {
     "org.bromigos.PowerMenu": ("ran", "rofi", "-dmenu"),
     "org.bromigos.Extensions": ("ran", "rofi", "-dmenu"),
     "org.bromigos.Update": ("ran", "kitty", "--hold --title bromigos update -e bromigos update"),
+    "org.bromigos.Bluetooth": ("ran", "kitty", "--class bromigos-bluetooth --title Bluetooth -e bromigos bluetooth tui"),
     "org.bromigos.HoloDeck": ("live", "holodeck open"),
     "org.bromigos.DriftMap": ("live", "driftmap open"),
     "org.bromigos.Timeline": ("live", "timeline open"),

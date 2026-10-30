@@ -240,6 +240,11 @@ def g_notes():
         [stroke(P((3.6, y), (6.4, y))) for y in (4.3, 5.9, 7.5)]
 
 
+def g_bluetooth():
+    # the Bluetooth rune
+    return [stroke(P((3.1, 3.4), (6.9, 6.8), (5, 8.7), (5, 1.3), (6.9, 3.2), (3.1, 6.6)))]
+
+
 def g_power():
     return [stroke(arc(5, 5.3, 3.75, 38, 322)), stroke(P((5, 0.8), (5, 4.6)))]
 
@@ -290,6 +295,7 @@ ICONS = {
     "bromigos-power": (g_power, "the power menu"),
     "bromigos-extensions": (g_extensions, "the extension catalog"),
     "bromigos-update": (g_update, "Update bromigOS"),
+    "bromigos-bluetooth": (g_bluetooth, "Bluetooth in the terminal"),
     "bromigos-holodeck": (g_holodeck, "the holo deck"),
     "bromigos-timeline": (g_timeline, "the timeline deck"),
     "bromigos-driftmap": (g_driftmap, "the Drift map"),

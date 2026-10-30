@@ -1,0 +1,30 @@
+ BLUETOOTH   workstation  ON  2 connected
+┌ DEVICE ────────────────────────────────┐┌ SOUND ─────────────────────────────────────────────────┐
+│  ▄▀▀▀▀▀▀▀▄                             ││ c  disconnect                                          │
+│ █         █                            ││ m  switch to HEADSET + MIC (calls: lower quality)      │
+│▐█▌       ▐█▌                           ││ o  make it the sound output                            │
+│▐█▌       ▐█▌                           ││ i  make it the microphone                              │
+│                                        ││ v  test the mic                                        │
+│WH-1000XM5                              ││ t  auto-reconnect: on → off                            │
+│headset · CONNECTED                     ││ r  rename                                              │
+│battery ▮▮▮▮▮▮▮▯▯▯  70%                 ││ f  forget (unpair)                                     │
+│sound   HI-FI · LDAC                    ││ R  re-pair: forget it, then pair again                 │
+│auto-reconnect: on                      ││                                                        │
+│00:00:5E:00:53:10                       ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+│                                        ││                                                        │
+└────────────────────────────────────────┘└────────────────────────────────────────────────────────┘
+
+ c  connect   t  auto   r  rename   f  forget   R  re-pair   esc  back   ?  help

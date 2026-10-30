@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Bluetooth Devices
+GenericName=Bluetooth
+Comment=Pair a controller, headphones or a keyboard step by step, connect, test a controller, switch a headset's sound, in a terminal window
+Icon=bromigos-bluetooth
+TryExec=bromigos
+Exec=bromigos terminal --class bromigos-bluetooth --title Bluetooth -- bromigos bluetooth tui
+X-Bromigos-Menu=-
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=bluetooth;devices;pair;pairing;controller;gamepad;xbox;headset;headphones;earbuds;keyboard;mouse;bromigos;
+StartupNotify=false

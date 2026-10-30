@@ -1,0 +1,30 @@
+ BLUETOOTH   workstation  ON  2 connected
+┌ TROUBLESHOOT ────────────────────────────────────────────────────────────────────────────────────┐
+│bluetoothd running      yes                                                                       │
+│an adapter              yes                                                                       │
+│switched on             yes                                                                       │
+│blocked (rfkill)        no                                                                        │
+│hardware switch off     no                                                                        │
+│xpadneo (Xbox driver)   no                                                                        │
+│                                                                                                  │
+│a  reset the adapter: off, the rfkill block lifted, on again                                      │
+│R  on a device's page: forget it and pair it again                                                │
+│                                                                                                  │
+│WHAT WENT WRONG LATELY                                                                            │
+│· Couldn't reach it: is it switched on and nearby?                                                │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ Couldn't reach it: is it switched on and nearby?
+ a  reset adapter   o  on/off   e  clear errors   esc  back

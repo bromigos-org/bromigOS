@@ -1,0 +1,30 @@
+ BLUETOOTH   workstation  ON  SCANNING  2 connected
+┌ PAIR A DEVICE ───────────────────────────────────────────────────────────────────────────────────┐
+│ 1 KIND › 2 PAIRING MODE + SCAN › 3 PAIR › 4 READY                                                │
+│                                                                                                  │
+│     ⣀⡤⠴⠒⠒⡖⠒⠦⢤⣀       SCANNING · 4 FOUND                                                          │
+│  ⢀⡴⠊⠁  ⢀⣀⣇⡀  ⠈⣵⢦⡀    Put the device in pairing mode, then pick it.                               │
+│ ⢠⠎  ⣠⠖⠋⠉ ⡇⠉⠙⢲⣾⣕⡵⠵⡄                                                                               │
+│⢀⡏  ⡼⠄ ⢀⡤⠖⡷⢤⣴⣿⠟⢯  ⢹⡀  Pairing mode:                                                               │
+│⢸  ⢰⠃ ⢠⠏  ⣧⡾⠻⡅ ⠘⡆  ⡇  Xbox Wireless Controller (One S and later, Elite Series 2, Series X|S):     │
+│⢸⠉⠉⠂⡍⠉⠙⣏⠉⠉⡏⠉⣹⠋⠂⢩⠏⠉⠉⡇  1. Switch it on with the Xbox button.                                       │
+│⠈⣇  ⢳⡀ ⠈⠓⠦⡷⠚⠂ ⢀⡞  ⣸⠁  2. Hold the small pair button on its top edge until the Xbox logo flashes   │
+│ ⠘⢆  ⠙⠦⣄⣀ ⡇⣀⣠⠴⠋  ⡰⠃   fast.                                                                       │
+│  ⠈⠳⢄⡀  ⠈⠉⡏⠁  ⢀⡠⠞⠁    Other pads: hold their pairing button (often Share + PS, or Home) until the │
+│     ⠉⠓⠲⠤⠤⠧⠤⠖⠚⠉       light flashes.                                                              │
+│Found 4: pick it, then enter                                                                      │
+│▌SPEAKER  JBL Flip 6                  ▂▄▆█                                                        │
+│ KEYBOARD Keychron K3                 ▂▄▆·                                                        │
+│ PHONE    Pixel 9                     ▂▄··                                                        │
+│ SPEAKER  Car kit                     ▂▄··                                                        │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+ j/k  choose   enter  next   s  scan   esc  back

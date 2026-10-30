@@ -297,6 +297,10 @@ hl.window_rule({ match = { class = "kitty" }, tile = true })
 hl.window_rule({ match = { class = "^xembedsniproxy$" }, opacity = "0.0 override", no_blur = true })
 -- Apps (Chrome especially) ask to open maximized; ignore it so new windows tile.
 hl.window_rule({ match = { class = ".*" }, suppress_event = "maximize" })
+-- Bluetooth in the terminal (bromigos bluetooth tui --window): a floating window, centred
+hl.window_rule({ match = { class = "bromigos-bluetooth" }, float = true })
+hl.window_rule({ match = { class = "bromigos-bluetooth" }, size = "960 640" })
+hl.window_rule({ match = { class = "bromigos-bluetooth" }, center = true })
 hl.window_rule({ match = { class = "Rofi" }, float = true })
 hl.window_rule({ match = { class = "Rofi" }, move = "25% 40%" })
 hl.window_rule({ match = { class = "Rofi" }, size = "50% 20%" })

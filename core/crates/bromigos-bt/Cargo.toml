@@ -1,0 +1,23 @@
+[package]
+name = "bromigos-bt"
+description = "bromigOS's Bluetooth in the terminal: `bromigos bluetooth tui`"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "bromigos-bt"
+path = "src/main.rs"
+
+[dependencies]
+ratatui.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+bromigos-core.workspace = true

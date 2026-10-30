@@ -1,0 +1,30 @@
+ BLUETOOTH   workstation  ON  2 connected
+┌ DEVICES ─────────────────────────────────────────────────┐┌ DEVICE ──────────────────────────────┐
+│▌HEADSET  WH-1000XM5               CONNECTED    ▮▮▮▮▯  70%││  ▄▀▀▀▀▀▀▀▄                           │
+│ PAD      Xbox Wireless Controller CONNECTED    ▮▯▯▯▯  12%││ █         █                          │
+│ EARBUDS  Galaxy Buds2 Pro         PAIRED       ·····     ││▐█▌       ▐█▌                         │
+│ MOUSE    MX Master 3S             PAIRED       ▮▮▯▯▯  35%││▐█▌       ▐█▌                         │
+│                                                          ││                                      │
+│                                                          ││WH-1000XM5                            │
+│                                                          ││headset · CONNECTED                   │
+│                                                          ││battery ▮▮▮▮▮▮▮▯▯▯  70%               │
+│                                                          ││sound   HI-FI · LDAC                  │
+│                                                          ││auto-reconnect: on                    │
+│                                                          ││00:00:5E:00:53:10                     │
+│                                                          ││                                      │
+│                                                          ││                                      │
+│                                                          ││                                      │
+│                                                          ││                                      │
+│                                                          ││                                      │
+│                                                          ││                                      │
+│                                                          ││                                      │
+│                                                          ││                                      │
+│                                                          ││                                      │
+│                                                          ││                                      │
+│                                                          ││                                      │
+│                                                          ││                                      │
+│                                                          ││                                      │
+│                                                          ││                                      │
+└──────────────────────────────────────────────────────────┘└──────────────────────────────────────┘
+
+ j/k  move   enter  open   c  connect   s  scan   p  pair   /  search   ?  help   q  quit   o  on/of

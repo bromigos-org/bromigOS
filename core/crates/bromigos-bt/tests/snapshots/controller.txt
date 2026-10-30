@@ -1,0 +1,30 @@
+ BLUETOOTH   workstation  ON  2 connected
+┌ DEVICE ────────────────────────────────┐┌ INPUT TEST ────────────────────────────────────────────┐
+│ ▄▄▄▄▄▄▄▄▄▄▄▄▄                          ││ c  disconnect                                          │
+│█ ○  ▪ ▪   ∘  █                         ││ u  rumble                                              │
+│█ ┼      ○ ∘ ∘█                         ││ t  auto-reconnect: on → off                            │
+│ ▀▀▀▘     ▝▀▀▀                          ││ r  rename                                              │
+│                                        ││ f  forget (unpair)                                     │
+│Xbox Wireless Controller                ││ R  re-pair: forget it, then pair again                 │
+│game controller · CONNECTED             ││                                                        │
+│battery ▮▯▯▯▯▯▯▯▯▯  12%                 ││Press anything: it lights up here.                      │
+│auto-reconnect: on                      ││LT ▮▮▮▮▮▮▯▯   RT ▯▯▯▯▯▯▯▯                               │
+│basic driver: rumble and battery need   ││ LB    VIEW  XBOX  MENU    RB                           │
+│xpadneo                                 ││ UP           Y     SHARE                               │
+│  bromigos peripheral enable            ││ LEFT  RIGHT    X  B                                    │
+│xbox-controller                         ││ DOWN           A                                       │
+│00:00:5E:00:53:12                       ││ LS  +0.50 -0.25    RS  +0.00 +0.00                     │
+│                                        ││     ⣀⡤⠤⠤⢤⣀            ⣀⡤⠤⠤⢤⣀                           │
+│                                        ││   ⡰⠊⠁    ⠈⠑⢆        ⡰⠊⠁    ⠈⠑⢆                         │
+│                                        ││ ⢀⡞⠁        ⠈⢳⡀    ⢀⡞⠁        ⠈⢳⡀                       │
+│                                        ││ ⡼        ⢀⣤⡀ ⢧    ⡼            ⢧                       │
+│                                        ││⢀⡇        ⡸⣔⡇ ⢸⡀  ⢀⡇     ⢀⡀     ⢸⡀                      │
+│                                        ││⢸       ⠔⠊     ⡇  ⢸      ⣏⣽      ⡇                      │
+│                                        ││⠈⡇            ⢸⠁  ⠈⡇     ⠈⠁     ⢸⠁                      │
+│                                        ││ ⢳            ⡞    ⢳            ⡞                       │
+│                                        ││ ⠈⢧⡀        ⢀⡼⠁    ⠈⢧⡀        ⢀⡼⠁                       │
+│                                        ││   ⠱⢄⡀    ⢀⡠⠎        ⠱⢄⡀    ⢀⡠⠎                         │
+│                                        ││     ⠉⠓⠒⠒⠚⠉            ⠉⠓⠒⠒⠚⠉                           │
+└────────────────────────────────────────┘└────────────────────────────────────────────────────────┘
+
+ c  connect   t  auto   r  rename   f  forget   R  re-pair   esc  back   ?  help
