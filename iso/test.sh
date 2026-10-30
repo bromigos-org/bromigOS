@@ -483,9 +483,9 @@ PY
         menu_wait "param-$tag-$firmware" "down" >/dev/null || true
         if [[ $firmware == uefi ]]; then
             sleep 1; press e; sleep 2; shot "param-$tag-$firmware-editor" >/dev/null
-            # GRUB's editor: setparams, set gfxpayload, then the linux line; Ctrl+E is its end
-            # of line (QEMU's "end" key isn't GRUB's)
-            press down; press down; press ctrl-e; type_text " $params"; sleep 1; shot "param-$tag-$firmware-edited" >/dev/null; press ctrl-x
+            # GRUB's editor: setparams, a blank line, set gfxpayload, then the linux line; Ctrl+E
+            # is its end of line
+            press down; press down; press down; press ctrl-e; type_text " $params"; sleep 1; shot "param-$tag-$firmware-edited" >/dev/null; press ctrl-x
         else
             press tab; sleep 1; type_text " $params"; press ret
         fi
