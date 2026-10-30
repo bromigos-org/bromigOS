@@ -468,7 +468,7 @@ if (( ! dry )) && [[ -d /sys/firmware/efi ]] && [[ -x $target/usr/lib/bromigos/s
     if in_target /usr/lib/bromigos/secureboot/bromigos-secureboot setup --fresh-install --code "$sbcode"; then
         printf '::secureboot %s\n' "$sbcode"
     else
-        say "Secure Boot wasn't set up (sudo bromigos secureboot setup tries again); until it is, start bromigOS with Secure Boot off"
+        say "Secure Boot isn't fully set up (bromigos secureboot, on the new system, says why; sudo bromigos secureboot setup tries again); until it is, start bromigOS with Secure Boot off"
     fi
 fi
 

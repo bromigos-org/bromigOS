@@ -812,27 +812,30 @@ def cmd_setup(args):
             say("would ask for this computer's key to be enrolled at the next start (a 4-digit code approves it)")
             say("would take the boot theme's fonts out of /boot (GRUB carries them)")
             return 0
+        if "boot_order_before" not in st and not args.dry_run:
+            st["boot_order_before"] = efi_entries()[1]
+        # GRUB, shim and the kernels first: when that fails, nothing is marked set up
+        problems = resign(st, args.dry_run, first=True, fresh=args.fresh_install)
         if not args.dry_run:
             st.update({"status": "ready", "since": st.get("since") or now(), "fingerprint": cert_fingerprint(),
                        "fonts_embedded": True})
-            if "boot_order_before" not in st:
-                st["boot_order_before"] = efi_entries()[1]
             save_state(st)
-        problems = resign(st, args.dry_run, first=True, fresh=args.fresh_install)
-        if not args.dry_run:
-            theme_fonts(True, False)
-        else:
-            theme_fonts(True, True)
+        theme_fonts(True, args.dry_run)
         mok = mok_state()
         code = saved_code() if mok == "pending" else None
-        if mok == "pending" and args.code and args.code != code:
-            # a new code for the request already made: that one withdrawn, this one asked
-            if not args.dry_run:
-                run([tool("mokutil"), "--revoke-import"], check=False)
-            mok = "missing"
-        if mok in ("missing", "unknown"):
-            code = args.code or make_code()
-            request_enrollment(code, args.dry_run)
+        try:
+            if mok == "pending" and args.code and args.code != code:
+                # a new code for the request already made: that one withdrawn, this one asked
+                if not args.dry_run:
+                    run([tool("mokutil"), "--revoke-import"], check=False)
+                mok = "missing"
+            if mok in ("missing", "unknown"):
+                code = args.code or make_code()
+                request_enrollment(code, args.dry_run)
+        except Refused as e:
+            code = None
+            problems.append(f"the key's enrollment couldn't be asked for ({e}): at the next start, choose "
+                            f"Enroll key from disk and {LOADER_DIR}/{CER}")
         if args.dry_run:
             return 0
         st.update({"status": "failed" if problems else "ready", "last_resign": now(), "problems": problems})
