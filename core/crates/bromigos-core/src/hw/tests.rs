@@ -525,7 +525,13 @@ fn the_operators_desktop() {
         "early KMS is in mkinitcpio.conf already: {:?}",
         w.files
     );
-    assert!(w.env.is_empty(), "NVIDIA alone needs no environment");
+    // the driver needs no variables; Proton games get NVAPI while the module is loaded
+    assert_eq!(w.env.len(), 1, "{:?}", w.env);
+    assert_eq!(
+        (w.env[0].name.as_str(), w.env[0].value.as_str()),
+        ("PROTON_ENABLE_NVAPI", "1")
+    );
+    assert_eq!(w.env[0].when, vec!["/sys/module/nvidia"]);
     assert!(
         w.notes
             .iter()
@@ -553,7 +559,14 @@ fn the_operators_desktop() {
         r.asked
     );
     assert!(p.hyprland_changed);
-    assert!(p.hyprland.contains("env = {\n    },"), "{}", p.hyprland);
+    assert!(
+        p.hyprland.contains(
+            "env = {\n        { \"PROTON_ENABLE_NVAPI\", \"1\", when = { \"/sys/module/nvidia\" } },"
+        ),
+        "{}",
+        p.hyprland
+    );
+    assert!(generated_hyprland_lua(&p.hyprland));
 }
 
 #[test]
@@ -628,8 +641,9 @@ fn a_turing_laptop_with_intel_graphics() {
             .contains("NVreg_DynamicPowerManagement=0x02")
     );
     assert_eq!(w.initramfs_files, vec![NVIDIA_INITRAMFS, NVIDIA_PM_CONF]);
-    assert_eq!(w.env.len(), 1);
+    assert_eq!(w.env.len(), 2);
     assert_eq!(w.env[0].name, "AQ_DRM_DEVICES");
+    assert_eq!(w.env[1].name, "PROTON_ENABLE_NVAPI");
     assert_eq!(
         w.env[0].value,
         "/dev/dri/bromigos-igpu:/dev/dri/bromigos-dgpu"
@@ -832,6 +846,52 @@ fn an_amd_desktop_with_multilib() {
         ]
     );
     assert!(w.files.is_empty() && w.env.is_empty() && w.notes.is_empty());
+}
+
+#[test]
+fn nvapi_is_only_for_nvidias_own_driver_and_old_generated_files_stay_ours() {
+    // nouveau (a Pascal card before its AUR driver): no NVAPI
+    let m = base(3, "x", "y");
+    let m = gpu(
+        m,
+        "0000:01:00.0",
+        "10de:1b80",
+        Some("nouveau"),
+        true,
+        Some(("card0", &["DP-1"])),
+    );
+    let d = detect(&m);
+    assert!(wanted(&d).env.is_empty(), "{:?}", wanted(&d).env);
+
+    // a file written before PROTON_ENABLE_NVAPI (the old header, no env) is refreshed
+    let d = detect(&operator_desktop());
+    let old = format!(
+        "{HYPRLAND_HEADER_V1}return {{\n    gpus = {},\n    laptop = false,\n    env = {{\n    }},\n}}\n",
+        lua_str(
+            &d.gpus
+                .iter()
+                .map(|g| format!("{} ({})", g.title(), g.stack.describe()))
+                .collect::<Vec<_>>()
+                .join("; ")
+        )
+    );
+    assert!(generated_hyprland_lua(&old));
+    let (_t, paths) = test_paths();
+    let target = hyprland_path(&paths);
+    fs::create_dir_all(target.parent().unwrap()).unwrap();
+    fs::write(&target, &old).unwrap();
+    let p = plan(&paths, &d, &mut Fake::new(&[]), &operator_desktop());
+    assert!(p.hyprland_changed);
+    assert!(p.hyprland.contains("PROTON_ENABLE_NVAPI"));
+
+    // the hybrid laptop's file, AQ_DRM_DEVICES then NVAPI, is recognised as ours too; an
+    // edited NVAPI line is the user's
+    let d = detect(&turing_laptop());
+    let lua = hyprland_lua(&d, &wanted(&d).env);
+    assert!(generated_hyprland_lua(&lua));
+    assert!(!generated_hyprland_lua(
+        &lua.replace("\"1\", when", "\"0\", when")
+    ));
 }
 
 #[test]
@@ -1041,7 +1101,11 @@ fn a_desktop_with_two_gpus_isnt_a_hybrid() {
     let d = detect(&m);
     assert_eq!(d.hybrid, None);
     let w = wanted(&d);
-    assert!(w.env.is_empty());
+    assert!(
+        w.env.iter().all(|e| e.name != "AQ_DRM_DEVICES"),
+        "{:?}",
+        w.env
+    );
     assert!(
         w.notes
             .iter()
@@ -1091,7 +1155,12 @@ fn display_choice_follows_the_cable_without_persisting_card_numbers() {
     assert_eq!(selected.drm_devices, ["/dev/dri/card0", "/dev/dri/card1"]);
     assert_eq!(moved.gpus[1].connected_connectors, ["DP-2", "HDMI-A-2"]);
     assert_eq!(m.0, before, "selection only reads its fixture");
-    assert!(wanted(&moved).env.is_empty());
+    assert!(
+        wanted(&moved)
+            .env
+            .iter()
+            .all(|e| e.name != "AQ_DRM_DEVICES")
+    );
     assert_eq!(hyprland_lua(&d, &[]), hyprland_lua(&moved, &[]));
 
     // DRM enumeration changes on another boot. Resolve the live nodes again.

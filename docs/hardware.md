@@ -154,6 +154,13 @@ needed any more, and some do harm:
 
 Hyprland's wiki sends NVIDIA users to the Arch wiki, which sets none of them for Wayland.
 
+**One variable for games.** On NVIDIA's own driver, the session sets
+`PROTON_ENABLE_NVAPI=1`. Proton leaves NVIDIA's NVAPI off unless asked, and without it
+DLSS and Reflex are missing and some games crash. The variable is set only while
+`/sys/module/nvidia` exists, so it goes away with the driver. nouveau doesn't get it.
+`PROTON_DLSS_UPGRADE` stays a per-game choice, because some games refuse changed DLSS
+files. The manual's [Playing games](../manual/src/games.md#dlss-on-nvidia) page covers it.
+
 **After a driver update, restart the computer.** An update replaces NVIDIA's libraries at
 once, but the kernel module only loads at the next start. Until then the two halves
 differ, and a program that starts can't use the GPU. It falls back to Mesa's software
@@ -234,11 +241,13 @@ return {
     laptop = true,
     env = {
         { "AQ_DRM_DEVICES", "/dev/dri/bromigos-igpu:/dev/dri/bromigos-dgpu", when = { "/dev/dri/bromigos-igpu" } },
+        { "PROTON_ENABLE_NVAPI", "1", when = { "/sys/module/nvidia" } },
     },
 }
 ```
 
-A variable is set only while every path in its `when` list exists. If a saved GPU choice
+A variable is set only while every path in its `when` list exists. Each line also ends
+with a comment saying why it's there. If a saved GPU choice
 no longer applies, the connected-screen rule can choose the replacement. An inherited
 `AQ_DRM_DEVICES` value is kept. To ignore the file and automatic selection, set
 `bromigos = { hw = false }` in your `hyprland.lua`. Changes take effect at your next login.
@@ -301,6 +310,9 @@ Add more gestures with `hl.gesture({ … })` after the defaults.
   details.
 - **An existing install** isn't changed by an update, because installing drivers needs
   sudo and a decision. Run `bromigos hw setup` once. `bromigos hw` shows what it would do.
+  An update rewrites your own part, Hyprland's GPU environment, once. The migration
+  `20261030120000-hw-proton-nvapi.sh` runs `bromigos hw setup --user-only`, which adds
+  `PROTON_ENABLE_NVAPI` on NVIDIA. It applies from your next login.
 
 The ISO's offline repository carries every package a plan can install, except the
 `-lts` and DKMS ones, since the ISO installs the stock kernel. A unit test keeps that
@@ -349,7 +361,14 @@ list and `hw.rs` in step. The live session itself runs on Mesa, with nouveau on 
   and the update's held restarts were tested on llvmpipe and in a VM
   ([update.md](update.md#test-runs)).
 
+- **Proton's NVAPI variable.** Unit tests cover which machines get it, its guard, and
+  that a file written before it existed is refreshed while a user's own file is kept. On
+  the RTX 5070 desktop, `PROTON_ENABLE_NVAPI=1` as a game's launch option, with
+  GE-Proton, made DLSS games start that had crashed.
+
 **Not proven without real hardware:**
+
+- the session-wide `PROTON_ENABLE_NVAPI` reaching Steam's games after a login;
 
 - automatic startup selection across different multi-GPU machines; fixture and
   compositor stand-in tests do not establish that every driver combination can render;
