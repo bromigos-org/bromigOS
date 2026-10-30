@@ -41,6 +41,9 @@ async def drive(app, pilot, plan):
     assert app.step == "welcome"
     await shot("welcome")
     await pilot.press("ctrl+n")
+    if app.step == "checks":                 # only when this computer has something to say
+        await shot("checks")
+        await pilot.press("ctrl+n")
     if "edition" in app.steps():
         assert app.step == "edition", app.step
         if plan.get("edition", "desktop") != "desktop":

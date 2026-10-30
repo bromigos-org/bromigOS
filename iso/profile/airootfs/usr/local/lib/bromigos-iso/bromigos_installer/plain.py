@@ -91,6 +91,9 @@ def main():
         say(doc["error"])
         raise SystemExit(1)
     a["other_os"] = doc.get("other_os", False)
+    for c in common.checks(doc):
+        if c["level"] == "warn":
+            say("Worth knowing: " + c["title"] + ". " + c["what"] + (" What to do: " + c["fix"] if c.get("fix") else ""))
     disks = doc["disks"]
     usable = {i for i, d in enumerate(disks) if not d["medium"]}
     if not usable:

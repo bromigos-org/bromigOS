@@ -138,6 +138,12 @@ the first step, and no motion when motion is reduced. Every control has a hover 
 in the text installer the hint line at the bottom says what the focused control does.
 Nothing on any disk changes until **Install** is pressed on the summary.
 
+The **Before you start** step (`common.checks`; the plain prompts print the same lines)
+asks the medium's `bromigos-iso-secureboot check` ([secureboot.md](secureboot.md)): exit 1
+means Secure Boot is on, and its words become a warning (its first paragraph the title, the
+second what it means, its link in what to do). Exit 0, a BIOS start, or a medium without
+the reader: nothing is shown. The warning never stops the install.
+
 ### The steps
 
 1. **Welcome.** The language for the new system, the time zone, and whether there's a
