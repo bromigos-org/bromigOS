@@ -197,6 +197,7 @@ def main(argv):
                                                   else f"BROMIGOS SERVER // WELCOME    STEP {self.i + 1} OF {len(STEPS)}")
 
         async def show(self, i):
+            self.stop_pairing()              # the phone step's watching ends with it
             self.i = i
             sid, short, head, intro = STEPS[i]
             self._top()
@@ -361,41 +362,61 @@ def main(argv):
             page.mount(self.qr)
             self.pair_line = BT.Reading("Waiting for the pairing code…", "busy")
             page.mount(self.pair_line)
-            if not render and not F.machine_installed():
-                page.mount(Static("Pairing needs BRODEC's helper (brodec-machine, from the brodec-desktop package). "
-                                  "It runs only what your phone signs; STOP ALL halts it.", classes="muted"))
-                self.button(page, "Install it", "machine-install", "Install brodec-desktop (sudo asks for your password)")
-            elif not render:
-                F.machine_start()
+            if render:
+                self._qr({"qr": "https://accounts.bromigos.org/device#machine=k1.example&n=server", "user_code_display": "KPGG-ZFVT"})
+            elif not F.machine_installed():
+                self.pair_line.set("Pairing needs BRODEC's helper (brodec-machine). It runs only what your phone signs; "
+                                   "STOP ALL halts it.", "warn")
+                self.button(page, "Install it", "machine-install", "Install BRODEC's helper (sudo asks for your password)")
+            elif not F.machine_config_ready():
+                self.pair_line.set("BRODEC's helper starts once this server allows it (a settings file only root writes).", "warn")
+                self.button(page, "Allow pairing", "machine-allow", "Let BRODEC's helper run here (sudo asks for your password)")
+            else:
+                self.start_pairing()
+            if not render and F.lab_bridge_available():
+                self.button(page, "Pair the lab's bridge", "bridge-pair", "Show the lab VECTOR bridge's pairing code (sudo asks)")
             page.mount(Static("Then your phone can: " + "; ".join(c[0].lower() + c[1:] if not c.startswith("VECTOR") else c
                                                               for c in F.PHONE_CAN) + ".", classes="muted"))
-            if render:
-                self._qr({"qr": "https://accounts.bromigos.org/device#machine=k1.example&n=server", "pretty": "KPGG-ZFVT"})
+
+        def start_pairing(self, argv=None):
+            self.stop_pairing()
+            self.pairing = F.Pairing(argv or F.machine_pair_argv(), lambda ev: self.call_from_thread(self._pair_event, ev))
+
+        def stop_pairing(self):
+            if getattr(self, "pairing", None):
+                self.pairing.cancel()
+                self.pairing = None
+
+        def _pair_event(self, ev):
+            if STEPS[self.i][0] != "phone":
+                return
+            e = ev.get("event")
+            if e == "code":
+                self._qr(ev)
+            elif e == "paired":
+                self.qr.update("")
+                self.pair_line.set(f"✓ Paired with {ev.get('owner') or 'your phone'}", "ok")
+                page = self.query_one("#page")
+                page.mount(Static("To let it restart, update and open terminals here too: in BRODEC, LAB › MACHINES › this "
+                                  "server › ALLOW THIS PHONE, then choose Allow this phone (sudo asks, then shows the "
+                                  "phone's key to compare).", classes="muted"), after=self.pair_line)
+                self.button(page, "Allow this phone", "machine-enroll",
+                            "Allow the phone that asked (sudo brodec-machine enroll: compare the key, then y)")
             else:
-                self.set_interval(2, self.watch_pairing, name="pairing")
+                words = F.pairing_words(ev).replace("press Allow pairing (it asks for your password)", "choose Allow pairing")
+                self.pair_line.set(words or "…", "warn" if e in ("failed", "cancelled", "expired") else "busy")
 
         def _qr(self, code):
-            text = F.qr_text(code["qr"]) if self.size.width >= 50 and self.size.height >= 24 else None
+            shown = code.get("user_code_display") or code.get("user_code") or ""
+            text = (code.get("qr_text") or F.qr_text(code["qr"])) if self.size.width >= 50 and self.size.height >= 24 else None
             if text:
                 self.qr.update(text)
             else:
                 self.qr.styles.width = "1fr"
                 self.qr.update(Text("Make the window bigger to show the QR code (80×24 or more).", overflow="fold"))
-            self.pair_line.set(f"In BRODEC: LAB › MACHINES › ADD MACHINE, then scan it, or type {code['pretty']}", "busy")
+            self.pair_line.set(f"In BRODEC: LAB › MACHINES › ADD MACHINE, then scan it, or type {shown}", "busy")
             if self.screen.has_class("-qr-tight"):      # the code where it's always seen
-                self.query_one("#top", Static).update(f"PAIR YOUR PHONE  ·  CODE {code['pretty']}")
-            self.shown = code.get("user_code") or code["pretty"]
-
-        def watch_pairing(self):
-            if STEPS[self.i][0] != "phone":
-                return
-            p = F.machine_paired()
-            if p:
-                self.pair_line.set(f"✓ Paired with {p.get('owner') or 'your phone'}", "ok")
-                return
-            c = F.machine_code()
-            if c and c.get("user_code") != getattr(self, "shown", None):
-                self._qr(c)
+                self.query_one("#top", Static).update(f"PAIR YOUR PHONE  ·  CODE {shown}")
 
         def build_tour(self, page):
             t = Table.grid(padding=(0, 2))
@@ -464,7 +485,11 @@ def main(argv):
                             return "That didn't work (see above). Nothing else was changed."
             return None
 
+        def on_unmount(self):
+            self.stop_pairing()
+
         def finish(self):
+            self.stop_pairing()
             try:
                 os.unlink(PENDING)
             except OSError:
@@ -494,9 +519,21 @@ def main(argv):
                 self.lab_action("plan")
             elif b == "machine-install":
                 with self.suspend():          # pacman asks for the password here (a server has no password window)
-                    subprocess.run(["sudo", "pacman", "-S", "--needed", "brodec-desktop"])
-                F.machine_start()
+                    subprocess.run(["sudo", "pacman", "-S", "--needed", F.machine_package()])
+                    subprocess.run(F.machine_config_sudo_cmd())
                 await self.show(self.i)
+            elif b == "machine-allow":
+                with self.suspend():
+                    subprocess.run(F.machine_config_sudo_cmd())
+                await self.show(self.i)
+            elif b == "machine-enroll":
+                with self.suspend():          # it shows the phone's key to compare, and asks y/N
+                    subprocess.run(["sudo", "brodec-machine", "enroll"])
+                    input("Press Enter to go back to the tour. ")
+            elif b == "bridge-pair":
+                with self.suspend():          # sudo asks here, then the bridge's code comes as events
+                    subprocess.run(["sudo", "-v"])
+                self.start_pairing(F.lab_pair_argv(gui=False))
 
     if render:
         import asyncio
@@ -524,6 +561,25 @@ def main(argv):
         for p in problems:
             print("does not fit:", p)
         return 1 if problems else 0
+    if "--live-shots" in argv:          # tests: one step, live, pictures at the seconds given
+        import asyncio
+        out, step, at = argv[argv.index("--live-shots") + 1: argv.index("--live-shots") + 4]
+        size = tuple(int(x) for x in argv[argv.index("--size") + 1].split("x")) if "--size" in argv else (110, 36)
+
+        async def live():
+            app = Welcome()
+            os.makedirs(out, exist_ok=True)
+            async with app.run_test(size=size) as pilot:
+                await pilot.pause(0.2)
+                await app.show([s[0] for s in STEPS].index(step))
+                done = 0.0
+                for t in (float(x) for x in at.split(",")):
+                    await pilot.pause(t - done)
+                    done = t
+                    app.save_screenshot(os.path.join(out, f"server-welcome-{step}-{t:g}s.svg"))
+                app.stop_pairing()
+        asyncio.run(live())
+        return 0
     Welcome().run()
     return 0
 

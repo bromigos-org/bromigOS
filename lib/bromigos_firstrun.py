@@ -15,8 +15,9 @@ files. Nothing here opens a terminal.
   set_brain(kind, …)            bromigos setup vector …
   hello(name)                   VECTOR's first words through his brain (and his voice, when he has one)
   run_lines(argv, on_line)      a long step (a package, a model, a voice), line by line
-  machine_*                     BRODEC's machine agent (brodec-machine, in brodec-desktop): installed,
-                                install, start, pair code, paired
+  machine_*, Pairing, Enroll     BRODEC's machine agent (brodec-machine): its package and root's
+                                machine.toml through polkit; `brodec-machine pair --json` (and a lab
+                                bridge's `brodec-lab pair --json`) as events; enroll's question
   qr_png(text, path) / qr_text(text)   a QR code as a picture (the window) or half-blocks (a terminal)
 """
 import glob
@@ -28,7 +29,6 @@ import subprocess
 import time
 
 HOME = os.path.expanduser("~")
-MACHINE_DATA = os.environ.get("BRODEC_MACHINE_DATA") or os.path.join(HOME, ".local/share/brodec-machine")
 PLAY_STORE = "https://play.google.com/store/apps/details?id=org.bromigos.brodec"
 CATALOG = "/usr/share/bromigos/homelab/lab/models.toml"
 LLM_TYPES = ("litellm", "ollama", "openai", "vllm", "llamacpp", "llama.cpp")
@@ -245,54 +245,161 @@ def voice(tier, on_line):
     return ok, ("" if ok else "His voice couldn't be set up: " + plain_error(tail))
 
 
-# ── the phone (BRODEC's machine agent) ──────────────────────────────────────────────────
+# ── the phone (BRODEC's machine agent: brodec-machine; docs/MACHINE_JOBS.md in brodec,
+#    "Pairing from a setup screen") ────────────────────────────────────────────────────
+MACHINE_TOML = os.environ.get("BRODEC_MACHINE_TOML") or "/etc/brodec-machine/machine.toml"   # tests: elsewhere
+MACHINE_EXAMPLE = "/usr/share/brodec-machine/machine.toml.example"
+
+
 def machine_installed():
     return bool(shutil.which("brodec-machine"))
 
 
-def machine_install(on_line):
-    """brodec-desktop (it carries the agent), the usual package way: polkit asks for the password."""
-    ok, tail = run_lines(["pkexec", "pacman", "-S", "--noconfirm", "--needed", "brodec-desktop"], on_line)
+def machine_package():
+    """The package that carries the agent: brodec-machine on its own (no GTK) when the
+    repositories have it, else brodec-desktop, which carries it on a desktop."""
+    code, _, _ = run(["pacman", "-Si", "brodec-machine"], timeout=20)
+    return "brodec-machine" if code == 0 else "brodec-desktop"
+
+
+def machine_config_ready():
+    return os.path.exists(MACHINE_TOML)
+
+
+def _config_cmd():
+    """root's machine.toml from the package's example (the agent runs only once it exists)."""
+    return (f"[ -e {MACHINE_TOML} ] || install -D -m 0644 {MACHINE_EXAMPLE} {MACHINE_TOML}")
+
+
+def machine_install(on_line, package=None):
+    """The agent's package and root's machine.toml, the usual way: polkit asks for the
+    password once, in its own window."""
+    pkg = package or machine_package()
+    ok, tail = run_lines(["pkexec", "sh", "-c", f"pacman -S --noconfirm --needed {pkg} && {_config_cmd()}"], on_line)
     return ok, ("" if ok else "BRODEC's helper couldn't be installed: " + plain_error(tail))
 
 
-def machine_start():
-    code, out, err = run(["systemctl", "--user", "enable", "--now", "brodec-machine.service"], timeout=60)
-    return code == 0, ("" if code == 0 else "BRODEC's helper didn't start: " + plain_error(err or out))
+def machine_config(on_line):
+    """Only root's machine.toml (the package is there already), through polkit."""
+    ok, tail = run_lines(["pkexec", "sh", "-c", _config_cmd()], on_line)
+    return ok, ("" if ok else "Pairing couldn't be allowed on this computer: " + plain_error(tail))
 
 
-def _read(path):
-    try:
-        with open(path) as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return None
+def machine_config_sudo_cmd():
+    """The same for a terminal (the console tour, where sudo asks)."""
+    return ["sudo", "sh", "-c", _config_cmd()]
 
 
-def machine_code():
-    """The pairing code the agent shows while it waits ({user_code, qr, expires_at_ms, …}), or None."""
-    c = _read(os.path.join(MACHINE_DATA, "pair-code.json"))
-    if not c or c.get("expires_at_ms", 0) < time.time() * 1000:
-        return None
-    c["pretty"] = "-".join(re.findall(".{1,4}", re.sub(r"[^A-Za-z0-9]", "", c.get("user_code", "")).upper()))
-    return c
+class Pairing:
+    """`brodec-machine pair --json --start` (or `pkexec brodec-lab pair --json` for a lab's
+    VECTOR bridge), its JSON events handed to on_event(dict) from a reader thread:
+    code (qr, qr_svg, qr_text, user_code_display), expired, waiting, paired, failed,
+    cancelled. cancel() stops the watching (SIGTERM); the agent keeps its code."""
+
+    def __init__(self, argv, on_event):
+        import threading
+        self.argv, self.on_event, self.proc = argv, on_event, None
+        self.done = False
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        try:
+            self.proc = subprocess.Popen(self.argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
+        except OSError as e:
+            self._emit({"event": "failed", "code": "agent_failed", "message": str(e)})
+            return
+        for line in self.proc.stdout:
+            try:
+                ev = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(ev, dict) and ev.get("event"):
+                self._emit(ev)
+        rc = self.proc.wait()
+        if not self.done:          # it ended without saying how
+            err = (self.proc.stderr.read() or "").strip()
+            self._emit({"event": "cancelled"} if rc == 130 else
+                       {"event": "failed", "code": "agent_failed", "message": err or f"it stopped ({rc})"})
+
+    def _emit(self, ev):
+        if ev["event"] in ("paired", "failed", "cancelled"):
+            self.done = True
+        self.on_event(ev)
+
+    def cancel(self):
+        import signal
+        if self.proc and self.proc.poll() is None:
+            self.proc.send_signal(signal.SIGTERM)
 
 
-def machine_paired():
-    """The pairing, once the phone confirmed it ({name, owner, …}), or None."""
-    p = _read(os.path.join(MACHINE_DATA, "pairing.json"))
-    return p if p and not p.get("revoked_at") else None
+def machine_pair_argv(timeout=900):
+    return ["brodec-machine", "pair", "--json", "--start", "--timeout", str(timeout)]
 
 
-def lab_bridge_code():
-    """The lab's VECTOR bridge's pairing code, when the lab says it's waiting for one
-    (bromigos lab bridge pair-code --json; a lab without it: None)."""
-    code, out, _ = run(["bromigos", "lab", "bridge", "pair-code", "--json"], timeout=20)
-    try:
-        c = json.loads(out) if code == 0 else None
-    except ValueError:
-        c = None
-    return c if c and c.get("qr") else None
+def lab_bridge_available():
+    """This computer runs a lab's VECTOR bridge (brodec-lab): it can be paired too."""
+    return bool(shutil.which("brodec-lab"))
+
+
+def lab_pair_argv(gui=True):
+    return [("pkexec" if gui else "sudo"), "brodec-lab", "pair", "--json"]
+
+
+def pairing_words(ev):
+    """An event in plain words, for the status line (code and paired are drawn instead)."""
+    e = ev.get("event")
+    if e == "expired":
+        return "That code ran out. A new one is coming…"
+    if e == "waiting":
+        return ev.get("message") or "Waiting for BRODEC's helper…"
+    if e == "failed":
+        if ev.get("code") == "no_capability_file":
+            return "Pairing isn't allowed on this computer yet: press Allow pairing (it asks for your password)."
+        if ev.get("code") == "timeout":
+            return "No phone paired in time. Press Try again to show a new code."
+        return "Pairing stopped: " + plain_error(ev.get("message") or "") + " Press Try again."
+    if e == "cancelled":
+        return "Pairing stopped. Press Try again to show the code."
+    return ""
+
+
+class Enroll:
+    """`brodec-machine enroll` through root (pkexec in the window): it describes each phone
+    that asked (In BRODEC: ALLOW THIS PHONE) and asks [y/N]. ask(text) -> bool answers it
+    (called from the reader thread: the window waits on its own dialog); done(ok, words)."""
+
+    def __init__(self, ask, done, user=None):
+        import threading
+        self.ask, self.done_cb = ask, done
+        self.user = user or os.environ.get("USER") or ""
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        try:
+            p = subprocess.Popen(["pkexec", "brodec-machine", "enroll", "--user", self.user], stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=0)
+        except OSError as e:
+            self.done_cb(False, str(e))
+            return
+        buf, said, since = "", [], []
+        while True:
+            ch = p.stdout.read(1)
+            if not ch:
+                break
+            buf += ch
+            if buf.endswith("[y/N] "):          # the phone's description, then the question
+                yes = bool(self.ask("\n".join(since + [buf[:-len("[y/N] ")].strip()]).strip()))
+                p.stdin.write("y\n" if yes else "n\n")
+                p.stdin.flush()
+                buf, since = "", []
+            elif ch == "\n":
+                if buf.strip():
+                    said.append(buf.strip())
+                    since.append(buf.strip())
+                buf = ""
+        rc = p.wait()
+        words = " ".join(said[-3:])
+        self.done_cb(rc == 0, words or ("Done." if rc == 0 else "It didn't work (the password window was closed?)."))
 
 
 def qr_png(text, path, scale=8):

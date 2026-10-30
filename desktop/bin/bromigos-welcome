@@ -196,6 +196,7 @@ def main(argv):
     class Win(Adw.ApplicationWindow):
         def __init__(self, app, start, render):
             super().__init__(application=app, title="Welcome to bromigOS")
+            self.connect("close-request", lambda *_: (self.stop_pairing(), False)[1])
             self.set_default_size(1280, 800)
             self.render = render
             self.steps = [s[0] for s in STEPS if s[0] != "network" or render or not online()]
@@ -249,6 +250,8 @@ def main(argv):
             self.show_step(self.step)
 
         def show_step(self, sid):
+            if hasattr(self, "stop_pairing"):
+                self.stop_pairing()          # the phone step's watching ends with it
             self.step = sid
             while (ch := self.rail.get_first_child()):
                 self.rail.remove(ch)
@@ -545,20 +548,32 @@ def main(argv):
             g.add(ios)
             g2 = self.group(page, "Pair this computer", "In BRODEC: LAB › MACHINES › ADD MACHINE, then scan this code. "
                                                          "It ticks here when your phone confirms.")
+            self.pair_group = g2
             self.pair_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             page.append(self.pair_box)
-            if not self.render and not F.machine_installed():
-                r = Adw.ActionRow(title="BRODEC's helper for this computer",
-                                  subtitle="Pairing needs brodec-machine, from the brodec-desktop package. It runs only what "
-                                           "your phone signs, and STOP ALL halts it. Installing asks for your password.")
-                r.set_subtitle_lines(0)
-                ib = hint(Gtk.Button(label="Install it", valign=Gtk.Align.CENTER), "Install brodec-desktop (it carries the helper)")
-                ib.connect("clicked", lambda *_: self.install_machine())
-                r.add_suffix(ib)
-                hint(r, "brodec-machine: BRODEC's agent on this computer")
-                g2.add(r)
+            if self.render:
+                self.start_pairing()
+            elif not F.machine_installed():
+                self.helper_row(g2, "BRODEC's helper for this computer",
+                                "Pairing needs brodec-machine, BRODEC's helper. It runs only what your phone signs, and "
+                                "STOP ALL halts it. Installing asks for your password.",
+                                "Install it", "Install BRODEC's helper (brodec-machine), the usual package way",
+                                self.install_machine)
+            elif not F.machine_config_ready():
+                self.helper_row(g2, "Allow pairing on this computer",
+                                "BRODEC's helper starts once this computer allows it (a settings file only the system "
+                                "can write). It asks for your password.",
+                                "Allow pairing", "Let BRODEC's helper run here (writes its settings as root)",
+                                self.allow_machine)
             else:
                 self.start_pairing()
+            if not self.render and F.lab_bridge_available():
+                g4 = self.group(page, "Your lab's VECTOR bridge", "This computer runs your lab's bridge to VECTOR. "
+                                                                  "Pair it too and your phone talks to the lab's VECTOR.")
+                self.bridge_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+                self.helper_row(g4, "Pair the bridge", "It asks for your password, then shows its own code.",
+                                "Pair it", "Show the lab bridge's pairing code (brodec-lab pair)", self.start_bridge)
+                page.append(self.bridge_box)
             g3 = self.group(page, "Then your phone can")
             for c in F.PHONE_CAN:
                 r = Adw.ActionRow(title=c)
@@ -566,62 +581,160 @@ def main(argv):
                 g3.add(r)
             self.progress(page)
 
-        def qr_picture(self, text, size):
+        def helper_row(self, group, title, sub, label, tip, fn):
+            r = Adw.ActionRow(title=title, subtitle=sub)
+            r.set_subtitle_lines(0)
+            b = hint(Gtk.Button(label=label, valign=Gtk.Align.CENTER), tip)
+            b.connect("clicked", lambda *_: fn())
+            r.add_suffix(b)
+            hint(r, tip)
+            group.add(r)
+            return r
+
+        def qr_picture(self, text, size, svg=None):
             import tempfile
-            path = os.path.join(tempfile.mkdtemp(prefix="bw-qr-"), "qr.png")
-            if not F.qr_png(text, path):
+            d = tempfile.mkdtemp(prefix="bw-qr-")
+            path = None
+            if svg:                                   # the agent's own drawing of it
+                path = os.path.join(d, "qr.svg")
+                with open(path, "w") as f:
+                    f.write(svg)
+            elif F.qr_png(text, os.path.join(d, "qr.png")):
+                path = os.path.join(d, "qr.png")
+            if not path:
                 return None
             p = Gtk.Picture.new_for_filename(path)
             p.set_size_request(size, size)
             p.set_can_shrink(True)
+            p.add_css_class("bw-qr")
             return p
 
         def install_machine(self):
             def work():
                 ok, why = F.machine_install(self.say)
                 if ok:
-                    return (lambda: (self.start_pairing(), False)[1],)
+                    return (lambda: (self.show_step("phone"), False)[1],)
                 return (self.say, why)
-            self.say("Installing BRODEC's helper (a password prompt opens)…")
+            self.say("Installing BRODEC's helper (a password window opens)…")
             self.later(work)
 
+        def allow_machine(self):
+            def work():
+                ok, why = F.machine_config(self.say)
+                if ok:
+                    return (lambda: (self.show_step("phone"), False)[1],)
+                return (self.say, why)
+            self.say("Allowing pairing (a password window opens)…")
+            self.later(work)
+
+        def stop_pairing(self):
+            for k in ("pairing", "bridge_pairing"):
+                if getattr(self, k, None):
+                    getattr(self, k).cancel()
+                    setattr(self, k, None)
+
+        def _clear(self, box):
+            while (ch := box.get_first_child()):
+                box.remove(ch)
+
         def start_pairing(self):
-            while (ch := self.pair_box.get_first_child()):
-                self.pair_box.remove(ch)
-            if self.render:
-                code = {"qr": "https://accounts.bromigos.org/device#machine=k1.example&n=desk", "pretty": "KPGG-ZFVT"}
-            else:
-                F.machine_start()
-                code = None
+            self._clear(self.pair_box)
             self.code_label = lab("Waiting for the pairing code…", "bw-key")
             self.pair_box.append(self.code_label)
-            if code:
-                self._show_code(code)
-            if not self.render:
-                GLib.timeout_add_seconds(2, self.watch_pairing)
+            if self.render:
+                self._show_code({"event": "code", "qr": "https://accounts.bromigos.org/device#machine=k1.example&n=desk",
+                                 "user_code_display": "KPGG-ZFVT"}, self.pair_box, self.code_label)
+                return False
+            self.pairing = F.Pairing(F.machine_pair_argv(),
+                                     lambda ev: GLib.idle_add(self._pair_event, ev, self.pair_box, "code_label", False))
             return False
 
-        def _show_code(self, code):
-            pic = self.qr_picture(code["qr"], 260)
+        def start_bridge(self):
+            self._clear(self.bridge_box)
+            self.bridge_label = lab("Waiting for the bridge's code (a password window opens)…", "bw-key")
+            self.bridge_box.append(self.bridge_label)
+            self.bridge_pairing = F.Pairing(F.lab_pair_argv(gui=True),
+                                            lambda ev: GLib.idle_add(self._pair_event, ev, self.bridge_box, "bridge_label", True))
+
+        def _show_code(self, ev, box, label):
+            old = getattr(box, "qr_pic", None)
+            if old:
+                box.remove(old)
+            pic = self.qr_picture(ev.get("qr", ""), 260, ev.get("qr_svg"))
             if pic:
                 pic.set_halign(Gtk.Align.START)
                 hint(pic, "Scan this in BRODEC: LAB › MACHINES › ADD MACHINE")
-                self.pair_box.prepend(pic)
-            self.code_label.set_label(f"Or type the code: {code['pretty']}")
-            self.shown_code = code.get("user_code") or code["pretty"]
+                box.prepend(pic)
+                box.qr_pic = pic
+            label.set_label(f"Or type the code: {ev.get('user_code_display') or ev.get('user_code', '')}")
 
-        def watch_pairing(self):
-            if self.step != "phone":
-                return False
-            p = F.machine_paired()
-            if p:
-                self.code_label.set_label(f"✓ Paired with {p.get('owner') or 'your phone'}")
-                self.done_steps["phone"] = "Your phone is paired"
-                return False
-            c = F.machine_code()
-            if c and c.get("user_code") != getattr(self, "shown_code", None):
-                self._show_code(c)
-            return True
+        def _pair_event(self, ev, box, label_attr, bridge):
+            label = getattr(self, label_attr)
+            e = ev.get("event")
+            if e == "code":
+                self._show_code(ev, box, label)
+            elif e == "paired":
+                old = getattr(box, "qr_pic", None)
+                if old:
+                    box.remove(old)
+                    box.qr_pic = None
+                who = ev.get("owner") or "your phone"
+                label.set_label(f"✓ {'The bridge is paired' if bridge else 'Paired'} with {who}")
+                if bridge:
+                    self.done_steps["bridge"] = "Your lab's bridge is paired"
+                else:
+                    self.done_steps["phone"] = "Your phone is paired"
+                    self.offer_enroll()
+            else:
+                label.set_label(F.pairing_words(ev) or label.get_label())
+                if e in ("failed", "cancelled") and self.step == "phone":
+                    if not bridge and ev.get("code") == "no_capability_file":
+                        b = hint(Gtk.Button(label="Allow pairing", halign=Gtk.Align.START),
+                                 "Let BRODEC's helper run here (writes its settings as root)")
+                        b.connect("clicked", lambda *_: self.allow_machine())
+                    else:
+                        b = hint(Gtk.Button(label="Try again", halign=Gtk.Align.START), "Show a pairing code again")
+                        b.connect("clicked", lambda *_: (self.start_bridge() if bridge else self.start_pairing()))
+                    box.append(b)
+            return False
+
+        def offer_enroll(self):
+            """After pairing: the phone may also run jobs and controls here, once the owner allows
+            it at this computer (brodec-machine enroll, through root)."""
+            g = self.group(self.pair_box, "Let your phone run things here")
+            r = self.helper_row(g, "Allow this phone",
+                                "For restart, update and terminal sessions from your phone. In BRODEC: LAB › MACHINES › "
+                                "this computer › ALLOW THIS PHONE, then press Allow here. It asks for your password and "
+                                "shows the phone's key to compare.",
+                                "Allow…", "Allow the phone that asked (brodec-machine enroll)", self.enroll)
+            self.enroll_row = r
+
+        def enroll(self):
+            import threading
+
+            def ask(text):
+                answer = {}
+                ev = threading.Event()
+
+                def dialog():
+                    d = Adw.AlertDialog(heading="Allow this phone?", body=text)
+                    d.add_response("no", "Not now")
+                    d.add_response("yes", "Allow")
+                    d.set_response_appearance("yes", Adw.ResponseAppearance.SUGGESTED)
+                    d.set_default_response("no")
+                    d.connect("response", lambda _d, r: (answer.update(yes=(r == "yes")), ev.set()))
+                    d.present(self)
+                    return False
+                GLib.idle_add(dialog)
+                ev.wait()
+                return answer.get("yes", False)
+
+            def done(ok, words):
+                GLib.idle_add(lambda: (self.enroll_row.set_subtitle(("✓ " if ok and "now send" in words else "") + words), False)[1])
+                if ok and "now send" in words:
+                    self.done_steps["enroll"] = "Your phone may run things here"
+            self.enroll_row.set_subtitle("A password window opens…")
+            F.Enroll(ask, done, user=os.environ.get("USER"))
 
         def build_keys(self, page):
             grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=2, homogeneous=True,
@@ -666,8 +779,9 @@ def main(argv):
         def build_done(self, page):
             g = self.group(page, "What you chose")
             for k, v in self.done_steps.items():
-                r = Adw.ActionRow(title=GLib.markup_escape_text(v), subtitle=STEP[k][1].upper())
-                hint(r, f"{STEP[k][1]}: {v}")
+                st = STEP[k if k in STEP else "phone"]          # the bridge and allowing: the phone step's
+                r = Adw.ActionRow(title=GLib.markup_escape_text(v), subtitle=st[1].upper())
+                hint(r, f"{st[1]}: {v}")
                 g.add(r)
             if not self.done_steps:
                 g.add(Adw.ActionRow(title="Nothing changed: everything stays as it was installed"))
@@ -765,6 +879,7 @@ def main(argv):
             return True, None
 
         def finish(self):
+            self.stop_pairing()
             os.makedirs(STATE, exist_ok=True)
             try:
                 os.unlink(PENDING)
@@ -784,7 +899,20 @@ def main(argv):
                 GLib.timeout_add(800, render_all, w, self.render)
             else:
                 w.fullscreen()
+                # tests: BROMIGOS_WELCOME_SNAPS="SECONDS:PATH,…" draws the live window to each PATH
+                for item in filter(None, os.environ.get("BROMIGOS_WELCOME_SNAPS", "").split(",")):
+                    secs, _, path = item.partition(":")
+                    GLib.timeout_add(int(float(secs) * 1000), lambda p=path: (snap(w, p), False)[1])
             w.present()
+
+    def snap(win, path):
+        paint = Gtk.WidgetPaintable.new(win)
+        sn = Gtk.Snapshot()
+        paint.snapshot(sn, win.get_width(), win.get_height())
+        node = sn.to_node()
+        if node:
+            win.get_renderer().render_texture(node, None).save_to_png(path)
+            print("rendered", path, flush=True)
 
     def render_all(w, out):
         os.makedirs(out, exist_ok=True)
@@ -799,14 +927,6 @@ def main(argv):
             GLib.timeout_add(700, lambda: (snap(w, os.path.join(out, f"welcome-{s}.png")), False)[1])
             return True
 
-        def snap(win, path):
-            paint = Gtk.WidgetPaintable.new(win)
-            sn = Gtk.Snapshot()
-            paint.snapshot(sn, win.get_width(), win.get_height())
-            node = sn.to_node()
-            if node:
-                win.get_renderer().render_texture(node, None).save_to_png(path)
-                print("rendered", path, flush=True)
         GLib.timeout_add(1200, one)
         return False
 

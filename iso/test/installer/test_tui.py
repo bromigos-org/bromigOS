@@ -370,6 +370,30 @@ class ServerWelcome(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr[-800:])
         self.assertEqual(sorted(os.listdir(out)), sorted(f"server-welcome-{s}.svg" for s in ("network", "ssh", "vector", "lab", "phone", "tour", "done")))
 
+    def test_phone_pairs_from_the_agents_events(self):
+        """Pair your phone shows brodec-machine pair --json's code, then ticks when it's paired."""
+        if not HAVE:
+            self.skipTest("textual isn't installed")
+        import subprocess
+        tmp = tempfile.mkdtemp()
+        os.makedirs(os.path.join(tmp, "bin"))
+        with open(os.path.join(tmp, "bin", "brodec-machine"), "w") as f:
+            f.write("#!/bin/sh\n[ \"$1\" = pair ] || exit 2\n"
+                    "echo '{\"event\":\"code\",\"qr\":\"https://example.org/p\",\"qr_text\":\"QRQR\",\"user_code_display\":\"KPGG-ZFVT\"}'\n"
+                    "sleep 2\necho '{\"event\":\"paired\",\"owner\":\"@alex:example.org\"}'\n")
+        os.chmod(os.path.join(tmp, "bin", "brodec-machine"), 0o755)
+        open(os.path.join(tmp, "machine.toml"), "w").close()
+        env = dict(os.environ, PYTHONPATH=os.path.join(HERE, "../../../lib"), PATH=os.path.join(tmp, "bin") + ":" + os.environ["PATH"],
+                   BRODEC_MACHINE_TOML=os.path.join(tmp, "machine.toml"))
+        r = subprocess.run([sys.executable, self.BIN, "--live-shots", tmp, "phone", "1,4", "--size", "100x40"], env=env,
+                           capture_output=True, text=True, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stderr[-800:])
+        first = open(os.path.join(tmp, "server-welcome-phone-1s.svg")).read()
+        then = open(os.path.join(tmp, "server-welcome-phone-4s.svg")).read()
+        self.assertIn("KPGG-ZFVT", first)
+        self.assertIn("Paired", then)
+        self.assertIn("Allow", then)
+
 
 class Words(unittest.TestCase):
     def test_secure_boot_from_the_medium(self):
