@@ -33,7 +33,7 @@ if [[ $mode == server ]]; then         # bromigOS Server: no desktop, the disk a
     check "GRUB lists the snapshots (grub-btrfs)" bash -c "pacman -Q grub-btrfs && systemctl is-enabled grub-btrfsd"
     check "no splash on the kernel line" bash -c "! grep -qw splash /proc/cmdline"
     check "SSH is on and lets the key in" test -s "$HOME/.ssh/authorized_keys"
-    check "SSH: keys only (no passwords)" bash -c "sudo sshd -T | grep -qx 'passwordauthentication no'"
+    check "SSH: keys only (no passwords)" bash -c "sudo sshd -T | grep -qix 'passwordauthentication no'"   # OpenSSH 10 prints it capitalised
     check "the firewall is on (nftables), SSH open" bash -c "systemctl is-active -q nftables || systemctl is-active -q bromigos-server-firewall; sudo nft list ruleset | grep -q 'dport 22'"
     check "the lab console is installed" command -v bromigos-lab
     check "the install's answers kept, without the password" bash -c "test -s /var/log/bromigos/install-answers.toml && ! grep -qE '^(password|passphrase) ' /var/log/bromigos/install-answers.toml"

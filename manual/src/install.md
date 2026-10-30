@@ -269,6 +269,9 @@ has the details.
      or **bromigOS Server**, with no desktop, for servers and lab machines.
    - **your keyboard,** with a box to try it in.
    - **where to install.** Choose the disk, then either:
+
+     ![Where to install: a disk with Windows, Install alongside Windows chosen, and the slider: Windows 20 GB, bromigOS 22 GB](images/installer-where-alongside-windows.webp)
+
      - **Install alongside Windows** (or the other system it found). Windows and its files
        stay. If there isn't free space, the installer makes Windows' part of the disk
        smaller; a slider sets how much each gets. Every time the computer starts, you
@@ -287,8 +290,13 @@ has the details.
      the **firewall**, and **automatic updates**.
 3. Check the summary, then press **Install** (or **Erase disk and install**). A progress
    bar shows how far it has got. It takes about ten minutes.
+
+   ![Installing bromigOS: the progress bar and what it's doing, here making Windows smaller](images/installer-installing.webp)
+
 4. Press **Restart now**, and take out the stick when the screen goes dark. Type the
-   disk's passphrase if you chose encryption, then sign in.
+   disk's passphrase if you chose encryption, then sign in. With Secure Boot on, turn it
+   off first (above): the installed system can't start with it on yet. The installer's
+   **Before you start** step reminds you.
 
 If Windows on the disk uses **BitLocker**, the installer first asks you to save its
 recovery key, because Windows may ask for it once after the install. If something goes
@@ -306,9 +314,13 @@ Every step, alongside Windows, reinstalling and the text installer are explained
 **Installing many computers?** An answer file on the stick installs with no questions
 ([answer files](installer.md#answer-files)).
 
-The stick answers the first-run questions for you: the Wick theme, with VECTOR's brain,
-voice and creation tools off. After your first login, run `bromigos setup` to change them.
-See [First run](first-run.md).
+At your first sign-in, the [welcome tour](welcome-tour.md) opens: Wi-Fi, your screens, a
+world, VECTOR, your lab, your phone and the keys worth knowing. Every step has **Skip**.
+
+![The welcome tour's world step: the themes as pictures of the desktop wearing them](images/welcome-tour-world.webp)
+
+**For power users:** each tour step writes the same answers as `bromigos setup`; see
+[First run](first-run.md).
 
 The installed system updates from the package repository the stick was made for. The boot
 menu's other entries are described in [The boot menu](boot-menu.md#the-install-stick).

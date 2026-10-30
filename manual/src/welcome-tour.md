@@ -13,6 +13,9 @@ To take the tour again: Settings › About › **Welcome tour**, or run `bromigo
    there. **Arrange and sizes…** opens Settings › Displays.
 3. **A world.** The themes, as pictures of the desktop wearing them. Click one to put it
    on.
+
+   ![Choose a world: the themes as pictures of the desktop, the Wick in use](images/welcome-tour-world.webp)
+
 4. **VECTOR**, your desk's AI. Choose where his brain runs:
    - **Your lab**: your homelab's model server, found on the next step (or the one you
      already connected).
@@ -28,6 +31,9 @@ To take the tour again: Settings › About › **Welcome tour**, or run `bromigo
    His **voice** is the second choice: off, Kokoro (runs on the processor), or the
    designed voice (needs a graphics card). A voice downloads its model once; the window
    shows how far it's got.
+
+   ![VECTOR, your desk's AI: his brain (your lab, this computer, a service, not now) and his voice](images/welcome-tour-vector.webp)
+
 5. **Your lab**, all in the window:
    - **Find** looks for your lab on your network. It only reads what this computer
      already knows (devices that announce themselves, its list of nearby devices, your
@@ -40,6 +46,9 @@ To take the tour again: Settings › About › **Welcome tour**, or run `bromigo
    - **Skip.**
 
    Problems are said in plain words, with what to do.
+
+   ![Your lab: two machines found, with what each offers, and Connect](images/welcome-tour-lab.webp)
+
 6. **Pair your phone** with the BRODEC app: see [Pair your phone](phone.md).
 7. **The keys.** Super+Space, Super+Enter, Super+, and a few more. Press one and its card
    lights up.
