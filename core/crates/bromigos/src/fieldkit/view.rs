@@ -80,10 +80,6 @@ fn crumb(app: &App) -> String {
     match app.screen {
         Screen::Home => {}
         Screen::Section => c.push(SECTIONS[app.section].to_string()),
-        Screen::InstallDisk => {
-            c.push("Install".into());
-            c.push("bromigOS Server".into());
-        }
     }
     if let Some(Overlay::Findings { title, .. }) = app.overlays.last() {
         c.push(title.clone());
@@ -1344,90 +1340,6 @@ fn draw_install(f: &mut Frame, area: Rect, app: &App) {
     }
 }
 
-fn draw_install_disk(f: &mut Frame, area: Rect, app: &App) {
-    let look = &app.look;
-    let p = &look.pal;
-    let inner_area = area.inner(Margin::new(1, 0));
-    let [steps, _, rest] = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Min(3),
-    ])
-    .areas(inner_area);
-    let names = ["Edition", "Disk", "You", "Encryption", "Summary"];
-    let mut spans = vec![Span::raw(" ")];
-    for (i, n) in names.iter().enumerate() {
-        let (m, style) = match i.cmp(&1) {
-            std::cmp::Ordering::Less => (if look.ascii { "*" } else { "●" }, st(p.muted)),
-            std::cmp::Ordering::Equal => (
-                if look.ascii {
-                    "@"
-                } else if look.mode == bromigos_tui::Mode::Truecolor {
-                    "◉"
-                } else {
-                    "●"
-                },
-                st(p.primary).add_modifier(Modifier::BOLD),
-            ),
-            std::cmp::Ordering::Greater => (if look.ascii { "o" } else { "○" }, st(p.faint)),
-        };
-        spans.push(Span::styled(format!("{m} {n}   "), style));
-    }
-    f.render_widget(Paragraph::new(Line::from(spans)), steps);
-    let inner = boxed(
-        f,
-        rest,
-        look,
-        Icon::Disk,
-        "Where to install bromigOS Server",
-        true,
-    );
-    let mut lines = Vec::new();
-    let mut last = String::new();
-    let choices = app.disk_choices();
-    if choices.is_empty() {
-        lines.push(Line::from(Span::styled("reading the drives…", st(p.muted))));
-    }
-    let mark = if look.ascii { ">" } else { "▌" };
-    for (i, (dev, label, choice, ok, note)) in choices.iter().enumerate() {
-        if *dev != last {
-            if !last.is_empty() {
-                lines.push(Line::from(""));
-            }
-            last = dev.clone();
-            lines.push(Line::from(vec![
-                Span::styled(format!("{} ", Icon::Disk.of(look)), st(p.primary)),
-                Span::styled(label.clone(), st(p.white).add_modifier(Modifier::BOLD)),
-            ]));
-        }
-        let sel = i == app.sel;
-        let c = if !ok {
-            p.faint
-        } else if sel {
-            p.primary
-        } else {
-            p.soft
-        };
-        let nc = if !ok {
-            p.warn
-        } else if note.contains("deleted") {
-            p.danger
-        } else {
-            p.muted
-        };
-        let mut style = st(c);
-        if sel {
-            style = style.add_modifier(Modifier::BOLD);
-        }
-        lines.push(Line::from(vec![
-            Span::styled(format!("  {}", if sel { mark } else { " " }), st(p.primary)),
-            Span::styled(choice.clone(), style),
-            Span::styled(format!("  {note}"), st(nc)),
-        ]));
-    }
-    f.render_widget(Paragraph::new(lines), inner);
-}
-
 fn draw_section(f: &mut Frame, app: &App, area: Rect) -> Rect {
     let l = section_layout(app, area);
     top_bar(f, l.top, app);
@@ -1495,18 +1407,6 @@ pub fn draw(f: &mut Frame, app: &App) {
     let body = match app.screen {
         Screen::Home => draw_home(f, app, area),
         Screen::Section => draw_section(f, app, area),
-        Screen::InstallDisk => {
-            let (top, body, bottom) = frame_parts(area);
-            top_bar(f, top, app);
-            draw_install_disk(f, body, app);
-            let hint = app
-                .disk_choices()
-                .get(app.sel)
-                .map(|c| c.4.clone())
-                .unwrap_or_default();
-            bottom_bar(f, bottom, app, &keys_for(app), &hint);
-            body
-        }
     };
     for o in &app.overlays {
         draw_overlay(f, body, app, o);

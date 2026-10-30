@@ -361,8 +361,9 @@ catalog is on the medium, so recommending models works offline.
 
 ### Install
 
-- **bromigOS Server (no desktop)** runs the medium's installer with
-  `--edition server`. It reads `/usr/share/bromigos/fieldkit/edition.json` (package
+- **bromigOS Server (no desktop)** opens the medium's text installer
+  (`bromigos-iso-install --text`), with its own edition and disk steps. The Field Kit stick
+  puts `bromigos.edition=server` on every kernel line, so Server is preselected. It reads `/usr/share/bromigos/fieldkit/edition.json` (package
   `bromigos-fieldkit-tools`, made from `packages.toml`) for the packages and services.
   Everything comes from the offline store. [server.md](server.md#for-the-installer) lists
   what the installer honours.

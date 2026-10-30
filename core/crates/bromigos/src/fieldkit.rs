@@ -988,8 +988,6 @@ pub struct App {
     pub overlays: Vec<Overlay>,
     pub spark_until: Option<Instant>,
     pub tick: u64,
-    /// `bromigos-iso-install --help` mentions --edition (Install section)
-    pub installer_editions: Option<bool>,
     /// Home, or a section's own screen
     pub screen: Screen,
     /// the Home screen's chosen tile (0..6) or suggestion
@@ -1019,8 +1017,6 @@ pub struct App {
 pub enum Screen {
     Home,
     Section,
-    /// Install › bromigOS Server: where to install it
-    InstallDisk,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1051,7 +1047,6 @@ impl App {
             overlays: Vec::new(),
             spark_until: None,
             tick: 0,
-            installer_editions: None,
             screen: Screen::Home,
             home: HomeSel::Tile(0),
             overview: Value::Null,
@@ -1336,7 +1331,6 @@ impl App {
         match self.screen {
             Screen::Home => self.home_key(k),
             Screen::Section => self.section_key(k),
-            Screen::InstallDisk => self.disk_key(k),
         }
     }
 
@@ -1549,10 +1543,14 @@ impl App {
                 "",
             ),
             Act::InstallEdition(e) => local(
-                &[&format!("bromigos-iso-install --edition {e}")],
+                &["bromigos-iso-install --text"],
                 &["the disk you choose in the installer"],
-                &format!("bromigos-iso-install --edition {e}"),
-                "",
+                "bromigos-iso-install --text",
+                if *e == "server" {
+                    "the installer's edition step: bromigOS Server (preselected on the Field Kit stick)"
+                } else {
+                    "the installer's edition step: the desktop (downloaded while it installs)"
+                },
             ),
             Act::MakeStick => local(
                 &["bromigos fieldkit make-stick DEVICE"],
@@ -1673,11 +1671,6 @@ impl App {
                 ("Esc, q, Backspace", "back to Home"),
                 ("click", "an action does it"),
             ],
-            Screen::InstallDisk => vec![
-                ("up, down", "move between the choices"),
-                ("Enter", "install there"),
-                ("Esc", "back to Install"),
-            ],
         };
         rows.extend(
             screen
@@ -1689,7 +1682,6 @@ impl App {
         let title = match self.screen {
             Screen::Home => "Keys · Home".to_string(),
             Screen::Section => format!("Keys · {}", SECTIONS[self.section]),
-            Screen::InstallDisk => "Keys · where to install".to_string(),
         };
         if self.screen == Screen::Section && SECTIONS[self.section] == "Shell" {
             rows.push((String::new(), String::new()));
@@ -1763,120 +1755,6 @@ impl App {
         vec![]
     }
 
-    /// Install › bromigOS Server › where: each disk's choices, then the installer.
-    pub fn disk_choices(&self) -> Vec<(String, String, String, bool, String)> {
-        // (device, what it is, the choice's label, available, the note), in the disks' order
-        let mut out = Vec::new();
-        let found: Vec<Value> = self.overview["found"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
-        for d in self.disks["disks"].as_array().into_iter().flatten() {
-            let dev = s(d, "path");
-            let name = dev_name(&dev);
-            let on: Vec<&Value> = found
-                .iter()
-                .filter(|f| {
-                    let x = s(f, "device");
-                    !x.is_empty() && x.starts_with(&name)
-                })
-                .collect();
-            let what = if on.is_empty() {
-                "nothing found on it".to_string()
-            } else {
-                on.iter()
-                    .map(|f| {
-                        [s(f, "title"), s(f, "state")]
-                            .into_iter()
-                            .filter(|w| !w.is_empty())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    })
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            };
-            let label = format!("{dev} · {} · {}", s(d, "size"), s(d, "model"));
-            let has = |k: &str| on.iter().any(|f| f["kind"] == k);
-            let bitlocker = on.iter().any(|f| s(f, "state").contains("BitLocker"));
-            if has("bromigos") {
-                out.push((
-                    dev.clone(),
-                    label.clone(),
-                    "Reinstall as bromigOS Server, keep my files".into(),
-                    true,
-                    "your home folder stays; the old system is kept as a snapshot".into(),
-                ));
-            }
-            if has("windows") {
-                out.push((
-                    dev.clone(),
-                    label.clone(),
-                    "Install alongside Windows".into(),
-                    !bitlocker,
-                    if bitlocker {
-                        "unavailable: turn off BitLocker in Windows first".into()
-                    } else {
-                        "Windows keeps its share of the disk".into()
-                    },
-                ));
-            }
-            if on.is_empty() {
-                out.push((
-                    dev.clone(),
-                    label.clone(),
-                    "Use this whole disk".into(),
-                    true,
-                    "nothing to lose".into(),
-                ));
-            } else {
-                out.push((
-                    dev.clone(),
-                    label.clone(),
-                    "Erase this disk and install".into(),
-                    true,
-                    format!("everything on it is deleted ({what})"),
-                ));
-            }
-        }
-        out
-    }
-
-    fn disk_key(&mut self, k: KeyEvent) -> Vec<Effect> {
-        let n = self.disk_choices().len();
-        match k.code {
-            KeyCode::Up | KeyCode::Char('k') if n > 0 => self.sel = (self.sel + n - 1) % n,
-            KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab if n > 0 => {
-                self.sel = (self.sel + 1) % n
-            }
-            KeyCode::Enter => {
-                if let Some((dev, _, label, ok, note)) = self.disk_choices().get(self.sel).cloned()
-                {
-                    if !ok {
-                        self.message(&label, &note, false);
-                        return vec![];
-                    }
-                    let help = installer_help();
-                    let mut argv = vec![installer(), "--edition".into(), "server".into()];
-                    if help.contains("--disk") {
-                        argv.push("--disk".into());
-                        argv.push(dev);
-                    }
-                    if label.starts_with("Reinstall") && help.contains("--keep-home") {
-                        argv.push("--keep-home".into());
-                    }
-                    return vec![Effect::Exec(argv)];
-                }
-            }
-            KeyCode::Esc | KeyCode::Backspace | KeyCode::Left | KeyCode::Char('q') => {
-                self.screen = Screen::Section;
-                self.sel = 0;
-            }
-            _ => {}
-        }
-        vec![]
-    }
-
-    /// A section's screen: its list; Esc goes back Home.
     fn section_key(&mut self, k: KeyEvent) -> Vec<Effect> {
         let n = self.items().len();
         if SECTIONS[self.section] == "Tools" && n > 0 {
@@ -1964,7 +1842,6 @@ impl App {
                 }
                 vec![]
             }
-            Screen::InstallDisk => vec![],
         }
     }
 
@@ -2100,34 +1977,9 @@ impl App {
                 "-nopause",
                 "/usr/share/doc/bromigos/manual/index.html",
             ]))],
-            Act::InstallEdition("server")
-                if *self
-                    .installer_editions
-                    .get_or_insert_with(installer_has_editions) =>
-            {
-                self.screen = Screen::InstallDisk;
-                self.sel = 0;
-                vec![Effect::Call {
-                    then: Then::DisksQuiet,
-                    args: args(&["disks"]),
-                    stdin: None,
-                }]
-            }
-            Act::InstallEdition(edition) => {
-                let ok = *self
-                    .installer_editions
-                    .get_or_insert_with(installer_has_editions);
-                if ok {
-                    vec![Effect::Exec(vec![
-                        installer(),
-                        "--edition".into(),
-                        edition.to_string(),
-                    ])]
-                } else {
-                    self.message(i.label, "This medium's installer doesn't offer editions yet. A newer Field Kit medium does.", false);
-                    vec![]
-                }
-            }
+            // bromigos-iso-install's text installer: its own edition and disk steps (the edition
+            // preselected from bromigos.edition= on the kernel line: Server on the Field Kit stick)
+            Act::InstallEdition(_) => vec![Effect::Exec(vec![installer(), "--text".into()])],
             Act::Shell => vec![Effect::Exec(vec![
                 std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".into()),
                 "-l".into(),
@@ -3828,32 +3680,6 @@ fn installer() -> String {
         .unwrap_or_else(|_| "/usr/local/bin/bromigos-iso-install".into())
 }
 
-/// The installer's --help (what it offers: --edition, --disk, --keep-home).
-fn installer_help() -> String {
-    Command::new(installer())
-        .arg("--help")
-        .output()
-        .map(|o| {
-            format!(
-                "{}{}",
-                String::from_utf8_lossy(&o.stdout),
-                String::from_utf8_lossy(&o.stderr)
-            )
-        })
-        .unwrap_or_default()
-}
-
-fn installer_has_editions() -> bool {
-    Command::new(installer())
-        .arg("--help")
-        .output()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout).contains("--edition")
-                || String::from_utf8_lossy(&o.stderr).contains("--edition")
-        })
-        .unwrap_or(false)
-}
-
 // ------------------------------------------------------------------ drawing (view.rs)
 
 mod view;
@@ -4954,17 +4780,6 @@ esac
                 );
                 save(&format!("{}-{name}", sec.to_lowercase()), &s);
             }
-            // the install's disk step
-            let fx = a.open_section(5);
-            drive(&mut a, fx);
-            a.screen = Screen::InstallDisk;
-            a.sel = 0;
-            let s = screen(&a, w, h);
-            save(&format!("install-disk-{name}"), &s);
-            assert!(
-                s.contains("Erase this disk and install") || s.contains("Use this whole disk"),
-                "{s}"
-            );
             // a finding, over Repair
             let fx = a.open_section(0);
             drive(&mut a, fx);
@@ -5254,12 +5069,6 @@ esac
                 drive(&mut x, fx);
                 screens.push((sec.to_lowercase(), x));
             }
-            let mut x = app();
-            x.look = a.look;
-            let fx = x.open_section(5);
-            drive(&mut x, fx);
-            x.screen = Screen::InstallDisk;
-            screens.push(("install-disk".into(), x));
             let mut x = app();
             x.look = a.look;
             let fx = x.open_section(0);
