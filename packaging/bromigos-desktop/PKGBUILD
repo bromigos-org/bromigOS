@@ -112,7 +112,8 @@ check() {
   python -m py_compile settings/bromigos-settings settings/bromigos-tv-guide settings/bromigos_tvguide.py settings/bromigos_settings/*.py settings/pages/*.py waybar/scripts/idle.py bin/bromigos-peripherals lib/bromigos_peripherals.py
   python -m py_compile bin/bromigos-keys lib/bromigos_keys.py lib/bromigos_keycapture.py lib/bromigos_cli.py lib/bromigos_extlist.py
   python -m py_compile lib/bromigos_bluez.py lib/bromigos_btpanel.py lib/bromigos_driftglass.py waybar/scripts/bluetooth.py \
-    lib/bromigos_popup.py lib/bromigos_soundpopup.py lib/bromigos_btsession.py lib/bromigos_gamepad.py
+    lib/bromigos_popup.py lib/bromigos_vptr.py lib/bromigos_soundpopup.py lib/bromigos_btsession.py \
+    lib/bromigos_gamepad.py
   local c
   for c in "${_settings_cmds[@]}"; do python -m py_compile "bin/bromigos-$c"; done
   luac -p lib/bromigos_keys_eval.lua 2>/dev/null || lua -e "assert(loadfile('lib/bromigos_keys_eval.lua'))"
@@ -220,8 +221,9 @@ package() {
   # Bluetooth: bluez over D-Bus (the bar's module, its panel and menu, bromigos bluetooth's
   # kinds and sound profiles), the panel, and the DRIFTGLASS drawing it uses
   install -Dm0644 -t "$lib/lib/" lib/bromigos_bluez.py lib/bromigos_btpanel.py lib/bromigos_driftglass.py
-  # the DRIFTGLASS popups' shared parts, and the bar's sound popup (bromigos sound popup)
-  install -Dm0644 -t "$lib/lib/" lib/bromigos_popup.py lib/bromigos_soundpopup.py
+  # the DRIFTGLASS popups' shared parts (a click outside one handed on by bromigos_vptr), and
+  # the bar's sound popup (bromigos sound popup)
+  install -Dm0644 -t "$lib/lib/" lib/bromigos_popup.py lib/bromigos_vptr.py lib/bromigos_soundpopup.py
   # bromigos bluetooth session (the TUI's bluez core) and a controller's evdev input and rumble
   install -Dm0644 -t "$lib/lib/" lib/bromigos_btsession.py lib/bromigos_gamepad.py
   for f in "${_settings_cmds[@]}"; do

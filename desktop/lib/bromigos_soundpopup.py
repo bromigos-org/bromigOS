@@ -10,8 +10,10 @@ opens it pinned.
   (Settings › Sound).
 
 A hover popup takes no keys and closes about 0.4 s after the pointer leaves both the icon
-and the popup. A click on the icon, or inside the popup, pins it: then it takes the keys
-(Tab, the arrows, Esc) and closes with Esc or a click anywhere else.
+and the popup. A click on the icon, or inside the popup, pins it: then it takes the keys on
+demand (Tab, the arrows, Esc) and closes with Esc, a second click on the icon, or a click
+anywhere else (any screen, the bar too), which still reaches what it was on
+(bromigos_popup.Outside). It never holds the keyboard.
 
 The bar's hover comes from bromigos-hover (waybar/hover/, a waybar CFFI module): it asks
 this app, over D-Bus, for its "hover" (with the icon's centre) and "leave" actions.
@@ -36,7 +38,7 @@ if HERE not in sys.path:
 
 import bromigos_bluez as B  # noqa: E402
 import bromigos_driftglass as H  # noqa: E402
-from bromigos_popup import Shell, clear, load_gtk  # noqa: E402
+from bromigos_popup import Outside, Shell, clear, load_gtk  # noqa: E402
 
 APP_ID = "org.bromigos.SoundPopup"
 NAMESPACE = "bromigos-sound"
@@ -482,6 +484,7 @@ class App:
         self.watch = None
         self.held = False
         self.idle = None
+        self.opener = None
 
     def on_startup(self, app):
         G = self.GLib
@@ -533,8 +536,8 @@ class App:
         pop, sh = self.pop, self.sh
         pop.pinned = False
         if sh.LS is not None and sh.LS.is_layer_window(pop.win):
-            sh.place(pop.win, WIDTH, at_x=at_x)
-        sh.keyboard(pop.win, False)
+            self.opener = sh.place(pop.win, WIDTH, at_x=at_x)
+        sh.keyboard(pop.win, pinned)          # pinned: the keys on demand from the start
         if self.watch is None:
             self.watch = Watch(self.GLib, pop.refresh)
         sh.refresh_audio(lambda: pop.changed(pop.doc) if pop.doc else None)
@@ -568,11 +571,8 @@ class App:
 
     def pinned(self):
         if self.catch is None:
-            self.catch = self.sh.catcher(lambda: self.pop.close())
-            if self.catch is not None:
-                self.catch.set_application(self.app)
-                self.catch.present()
-                self.pop.win.present()
+            self.catch = Outside(self.sh, lambda: self.pop.close(), self.opener, self.app)
+            self.catch.present()
 
     def closed(self):
         if self.catch is not None:

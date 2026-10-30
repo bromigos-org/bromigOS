@@ -30,7 +30,9 @@ glows, and nothing in the panel moves.
 
 ## The panel
 
-The panel opens under the icon. Press <kbd>Esc</kbd> or click anywhere else to close it.
+The panel opens under the icon. To close it, press <kbd>Esc</kbd>, click the icon again, or
+click anywhere else. A click on something else still does what it does: a click on another
+icon on the bar both closes the panel and opens that icon's menu.
 <kbd>Tab</kbd> and the arrow keys move between its buttons.
 
 - **The switch** at the top turns Bluetooth on or off.

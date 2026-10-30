@@ -4,9 +4,19 @@ bar, Glass with faint Scanlines in the theme's colours, the targeting brackets, 
 rows, and the clear surface that closes a pinned popup on a click elsewhere. The Bluetooth
 panel (bromigos_btpanel) and the sound popup (bromigos_soundpopup) are built from these.
 
+Closing, the same for every popup: Esc; a second click on the icon that opened it; a click
+anywhere else, on any screen, the bar included. That click isn't lost: the popup closes and
+the click is given again to whatever was under the pointer (bromigos_vptr), so a click on
+another bar module both closes the popup and does that module's job. An open popup never
+holds the keyboard on its own (on demand: the keys reach it while it has the focus), only
+while a PIN or passkey is being typed into it.
+
   Shell(Gtk, Gdk, GLib, LS)   the theme (palette, high contrast, motion), the stylesheet,
                               widget helpers, placing a surface under the pointer or a point
                               on the bar, and the clock the holograms move by
+  Outside(shell, on_click)    the clear surfaces, one on each screen, that see a click
+                              elsewhere: on_click() closes the popup, then the click is
+                              handed on, unless it was on the popup's own icon
 """
 import json
 import os
@@ -51,7 +61,7 @@ def css(p, hc=False):
              "alpha(@dg_primary, 0.035) 2px, alpha(@dg_primary, 0.035) 3px);")
     return colours + """
 window.dg-win { background: transparent; }
-window.dg-catcher { background: transparent; }
+window.dg-catcher { background: rgba(0, 0, 0, 0.01); }
 .dg-frame { """ + glass + """ padding: 12px 14px 12px 14px; }
 .dg-frame * { font-family: "Geist Mono", monospace; }
 .dg-eyebrow { color: @dg_primary; font-weight: 700; font-size: 11px; letter-spacing: 3px; }
@@ -192,7 +202,9 @@ class Shell:
     def place(self, win, width, at_x=None):
         """The surface just under the bar, centred on at_x (a point on the bar, in the
         screen's logical pixels) or else where the pointer is (Hyprland's cursor), kept on
-        the screen; top right without Hyprland."""
+        the screen; top right without Hyprland. Returns where the pointer is, which is on
+        the icon that opened it: {"monitor": connector, "x", "y"} in that screen's logical
+        pixels (None without Hyprland), so Outside can tell a click on that icon."""
         LS = self.LS
         LS.set_anchor(win, LS.Edge.TOP, True)
         try:
@@ -206,7 +218,7 @@ class Shell:
             LS.set_anchor(win, LS.Edge.RIGHT, True)
             LS.set_margin(win, LS.Edge.RIGHT, 8)
             LS.set_margin(win, LS.Edge.TOP, 6)
-            return
+            return None
         mw = mon["width"] / mon["scale"]
         centre = cx if at_x is None else at_x
         left = int(min(max(8, centre - mon["x"] - width / 2), mw - width - 8))
@@ -220,10 +232,11 @@ class Shell:
             if gm.get_connector() == mon.get("name"):
                 LS.set_monitor(win, gm)
                 break
+        return {"monitor": mon.get("name"), "x": cx - mon["x"], "y": cy - mon["y"]}
 
     def layer(self, win, keyboard=True):
-        """win on the overlay layer. keyboard: True takes the keys at once (a pinned popup:
-        Esc, arrows), False leaves them where they are (a hover popup)."""
+        """win on the overlay layer. keyboard: True gives it the keys on demand (a pinned
+        popup: Esc, Tab, the arrows, while it has the focus); False never (a hover popup)."""
         LS = self.LS
         if LS is None or not LS.is_supported():
             return False
@@ -234,31 +247,13 @@ class Shell:
         return True
 
     def keyboard(self, win, on):
+        """No keys (False), the keys on demand (True), or all of them ("exclusive"), only
+        while a PIN or passkey is typed into it: exclusive holds the whole desktop's keys."""
         LS = self.LS
         if LS is not None and LS.is_supported() and LS.is_layer_window(win):
-            LS.set_keyboard_mode(win, LS.KeyboardMode.EXCLUSIVE if on else LS.KeyboardMode.NONE)
-
-    def catcher(self, on_click):
-        """A clear surface over everything under the panel: a click on it closes the panel."""
-        Gtk, LS = self.Gtk, self.LS
-        if LS is None or not LS.is_supported():
-            return None
-        w = Gtk.Window(title="Bluetooth")
-        w.add_css_class("dg-catcher")
-        w.set_decorated(False)
-        LS.init_for_window(w)
-        LS.set_namespace(w, self.namespace + "-outside")
-        LS.set_layer(w, LS.Layer.TOP)
-        LS.set_keyboard_mode(w, LS.KeyboardMode.NONE)
-        LS.set_exclusive_zone(w, -1)
-        for e in (LS.Edge.TOP, LS.Edge.BOTTOM, LS.Edge.LEFT, LS.Edge.RIGHT):
-            LS.set_anchor(w, e, True)
-        g = Gtk.GestureClick()
-        g.set_button(0)
-        g.connect("pressed", lambda *_: on_click())
-        w.add_controller(g)
-        w.set_child(Gtk.Box())
-        return w
+            mode = LS.KeyboardMode.EXCLUSIVE if on == "exclusive" else (
+                LS.KeyboardMode.ON_DEMAND if on else LS.KeyboardMode.NONE)
+            LS.set_keyboard_mode(win, mode)
 
     def frame_overlay(self, child):
         """The panel's frame: its child, and the targeting brackets at the corners."""
@@ -283,6 +278,85 @@ class Shell:
 
     def open_settings(self, page="bluetooth"):
         spawn(["bromigos", "settings", page])
+
+
+class Outside:
+    """A click anywhere but the popup: a clear surface over each screen, under the popup and
+    over everything else (the bar too). A click on one (when its button comes back up)
+    calls on_click(), which closes the popup; then the same button is clicked again where
+    the pointer is (bromigos_vptr), so what was under it gets its click. Not when it was on
+    the popup's own icon (opener, from Shell.place): that click is the toggle, it closes."""
+
+    ICON = 28           # px either side of where the pointer was on the icon: still the icon
+
+    def __init__(self, sh, on_click, opener=None, app=None):
+        self.sh, self.on_click, self.opener = sh, on_click, opener
+        self.wins = []
+        self.done = False
+        if sh.LS is None or not sh.LS.is_supported():
+            return
+        mons = sh.Gdk.Display.get_default().get_monitors()
+        for i in range(mons.get_n_items()):
+            self.wins.append(self._one(mons.get_item(i), app))
+
+    def _one(self, mon, app):
+        Gtk, LS = self.sh.Gtk, self.sh.LS
+        w = Gtk.Window(title="outside")
+        w.add_css_class("dg-catcher")        # all but clear: a surface with nothing drawn is never shown
+        w.set_decorated(False)
+        if app is not None:
+            w.set_application(app)
+        LS.init_for_window(w)
+        LS.set_namespace(w, self.sh.namespace + "-outside")
+        LS.set_layer(w, LS.Layer.TOP)
+        LS.set_keyboard_mode(w, LS.KeyboardMode.NONE)
+        LS.set_exclusive_zone(w, -1)          # over the bar as well
+        LS.set_monitor(w, mon)
+        for e in (LS.Edge.TOP, LS.Edge.BOTTOM, LS.Edge.LEFT, LS.Edge.RIGHT):
+            LS.set_anchor(w, e, True)
+        g = Gtk.GestureClick()
+        g.set_button(0)
+        g.connect("released", lambda gest, n, x, y: self.clicked(gest.get_current_button(), mon, x, y))
+        w.add_controller(g)
+        w.set_child(Gtk.Box())
+        return w
+
+    def present(self):
+        for w in self.wins:
+            w.present()
+
+    def on_icon(self, mon, x, y):
+        o = self.opener
+        if not o or mon is None or mon.get_connector() != o.get("monitor"):
+            return False
+        return abs(x - o["x"]) <= self.ICON and y <= o["y"] + self.ICON
+
+    def clicked(self, button, mon, x, y):
+        if self.done:
+            return
+        self.done = True
+        again = not self.on_icon(mon, x, y)
+        self.destroy()
+        self.on_click()
+        if again:
+            display = self.sh.Gdk.Display.get_default()
+            if display is not None:
+                display.flush()
+            # a moment for the compositor to take the surfaces away, so the click lands on
+            # what was under them
+            self.sh.GLib.timeout_add(60, lambda: click_again(button))
+
+    def destroy(self):
+        for w in self.wins:
+            w.destroy()
+        self.wins = []
+
+
+def click_again(button):
+    """The pointer's button (GDK's 1, 2, 3) clicked again where it is."""
+    import bromigos_vptr as V
+    V.click({1: V.BTN_LEFT, 2: V.BTN_MIDDLE, 3: V.BTN_RIGHT}.get(button, V.BTN_LEFT))
+    return False
 
 
 def spawn(argv):
