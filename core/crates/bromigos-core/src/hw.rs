@@ -62,6 +62,8 @@ pub const ALL_PACKAGES: &[&str] = &[
     "linux-firmware-intel",
     "brightnessctl",
     "power-profiles-daemon",
+    "vulkan-mesa-implicit-layers",
+    "lib32-vulkan-mesa-implicit-layers",
 ];
 
 // ---------------------------------------------------------------------------- the tables
@@ -285,6 +287,9 @@ pub struct Gpu {
     pub seat: String,
     /// It drives a built-in panel (an eDP, LVDS or DSI connector): a laptop's iGPU.
     pub panel: bool,
+    /// Its video memory in bytes, where the driver reports it (amdgpu's
+    /// `mem_info_vram_total`); None elsewhere (NVIDIA's driver doesn't say in sysfs).
+    pub vram: Option<u64>,
 }
 
 impl Gpu {
@@ -324,17 +329,7 @@ pub fn display_selection(d: &Detection) -> DisplaySelection {
 /// monitor. No connected monitors or several connected GPUs leave native policy intact.
 pub fn display_selection_for_seat(d: &Detection, seat: &str) -> DisplaySelection {
     let seat = if seat.is_empty() { "seat0" } else { seat };
-    let mut usable: Vec<&Gpu> = d
-        .gpus
-        .iter()
-        .filter(|g| {
-            g.drm_ready
-                && g.card.as_deref().is_some_and(is_drm_card)
-                && g.driver.as_deref().is_some_and(|driver| !is_vfio(driver))
-                && !g.driver_override.as_deref().is_some_and(is_vfio)
-                && g.seat == seat
-        })
-        .collect();
+    let mut usable: Vec<&Gpu> = d.gpus.iter().filter(|g| usable_on(g, seat)).collect();
     usable.sort_by(|a, b| a.slot.cmp(&b.slot));
     let connected: Vec<&Gpu> = usable
         .iter()
@@ -377,12 +372,22 @@ pub fn display_selection_for_seat(d: &Detection, seat: &str) -> DisplaySelection
     }
 }
 
+/// A card the desktop can render on: its DRM device is there, a host driver is bound (not
+/// VFIO, nor reserved for it) and it belongs to `seat`.
+pub fn usable_on(g: &Gpu, seat: &str) -> bool {
+    g.drm_ready
+        && g.card.as_deref().is_some_and(is_drm_card)
+        && g.driver.as_deref().is_some_and(|driver| !is_vfio(driver))
+        && !g.driver_override.as_deref().is_some_and(is_vfio)
+        && g.seat == seat
+}
+
 fn is_drm_card(name: &str) -> bool {
     name.strip_prefix("card")
         .is_some_and(|number| !number.is_empty() && number.bytes().all(|c| c.is_ascii_digit()))
 }
 
-fn is_vfio(driver: &str) -> bool {
+pub fn is_vfio(driver: &str) -> bool {
     driver == "vfio" || driver.starts_with("vfio-") || driver.starts_with("vfio_")
 }
 
@@ -760,6 +765,8 @@ pub fn detect(files: &dyn Files) -> Detection {
             drm_ready,
             seat,
             panel,
+            vram: read_trim(files, &format!("{base}/mem_info_vram_total"))
+                .and_then(|v| v.parse().ok()),
             slot,
         });
     }
@@ -892,6 +899,8 @@ pub fn hybrid(m: &Machine, gpus: &[Gpu]) -> Option<Hybrid> {
         discrete: discrete.slot.clone(),
     })
 }
+
+pub mod graphics;
 
 // ---------------------------------------------------------------------------- the plan
 
@@ -1067,6 +1076,18 @@ pub fn wanted(d: &Detection) -> Want {
             Stack::Virtual | Stack::Other => push(&mut w.packages, &["mesa"]),
         }
     }
+    // several GPUs: Mesa's device-select layer puts the games card first for Vulkan
+    // (`bromigos hw run`, DRI_PRIME=pci-…), NVIDIA's driver included; Mesa's Vulkan
+    // drivers bring it, two NVIDIA cards alone don't
+    let real = d
+        .gpus
+        .iter()
+        .filter(|g| !matches!(g.stack, Stack::Virtual | Stack::Other))
+        .count();
+    if real > 1 {
+        push(&mut w.packages, &["vulkan-mesa-implicit-layers"]);
+        lib32(&mut w, &["lib32-vulkan-mesa-implicit-layers"]);
+    }
     if !w.aur.is_empty() {
         // the DKMS module builds against each installed kernel's headers (repositories')
         let headers: Vec<String> = if d.kernels.is_empty() {
@@ -1226,7 +1247,8 @@ pub fn wanted(d: &Detection) -> Want {
     {
         w.notes.push(
             "several GPUs on a desktop: login and Hyprland prefer the only GPU with a connected \
-             monitor at startup; explicit AQ_DRM_DEVICES settings take precedence in Hyprland"
+             monitor at startup, or the one chosen in Settings › Graphics (bromigos hw display \
+             use); explicit AQ_DRM_DEVICES settings take precedence in Hyprland"
                 .into(),
         );
     }

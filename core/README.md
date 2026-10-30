@@ -364,10 +364,17 @@ the built-in setup instead, which copies the file into place.
 
 - Detection reads files only, never runs a command. `BROMIGOS_FS_ROOT` moves `/`, so a
   folder of fixture files can stand in for a machine.
-- `hw display` reports connected screens and the automatic GPU candidate without
-  changing anything. `--json` is for tools; `--hyprland` supplies the startup device
-  list. The [selection rules](../docs/hardware.md#choosing-the-gpu-with-a-connected-screen)
+- `hw display` reports the card the next login draws on without changing anything.
+  `--json` is for tools; `--hyprland` and `--hyprland-chosen` supply the startup device
+  lists. The [selection rules](../docs/hardware.md#choosing-the-gpu-with-a-connected-screen)
   preserve explicit choices and exclude reserved cards.
+- `hw graphics`, `hw display use|keep|cancel|reset`, `hw games`, `hw run` and `hw vfio`
+  say and change what each card is for: the desktop, games and heavy apps, virtual
+  machines. Settings › Graphics runs them
+  ([docs/hardware.md](../docs/hardware.md#what-each-card-is-for)). The desktop's choice is
+  root's, in `/var/lib/bromigos/hw/graphics.json`; without root, the command runs itself
+  again through sudo at a terminal, or pkexec. `hw vfio reserve|release` writes its files
+  with `sudo install` and runs `mkinitcpio -P`, like `hw setup`.
 - The plan asks `pacman -T` and `systemctl is-enabled` what's already there.
 - `hw setup` changes only what differs. It installs the GPU's packages, but never swaps an
   installed NVIDIA driver. It writes system files with `sudo install`, runs
@@ -1186,7 +1193,7 @@ relative to the theme folder.
    "gpus": [{"slot": "0000:01:00.0", "id": "10de:1f91", "vendor": "NVIDIA", "name": "TU117M [GeForce GTX 1650 Mobile / Max-Q]",
              "stack": "nvidia-open", "family": "Turing", "driver": "nouveau", "driver_override": null,
              "boot_vga": false, "card": "card1", "connectors": [], "connected_connectors": [],
-             "drm_ready": true, "seat": "seat0", "panel": false}],
+             "drm_ready": true, "seat": "seat0", "panel": false, "vram": null}],
    "kernels": ["linux"], "multilib": false,
    "nvidia": {"loaded": false, "open": null, "version": null, "modeset": null, "fbdev": null},
    "initramfs_modules": [], "initramfs_modules_from": [], "hibernation": false,
@@ -1226,20 +1233,66 @@ plan or changing the running desktop:
   "primary_card": "card1",
   "drm_devices": ["/dev/dri/card1", "/dev/dri/card0"],
   "reason_code": "single_connected_gpu",
-  "reason": "Only one usable GPU has a connected monitor."
+  "reason": "Only one usable GPU has a connected monitor.",
+  "source": "automatic",
+  "slot": "0000:0a:00.0",
+  "note": null
 }
 ```
 
-`primary_card` is the automatic candidate's current card name, or `null` when there is
-no clear choice. `drm_devices` keeps the other usable cards after the candidate. It
+`primary_card` is the preferred card's current card name, or `null` when there is no
+clear choice. `drm_devices` keeps the other usable cards after the candidate. It
 excludes cards on another seat and those bound or reserved for VFIO. `XDG_SEAT` selects
 the seat; an unset or empty value means `seat0`.
 
 `reason_code` is `single_connected_gpu`, `multiple_connected_gpus`,
-`no_connected_monitors` or `no_usable_gpus`. `reason` is its human-readable explanation.
-The report does not read a running compositor's renderer or override explicit settings.
+`no_connected_monitors` or `no_usable_gpus` for the automatic rule. It's `chosen_gpu` for a
+card chosen in Settings › Graphics, and `trial_gpu` for one being tried during this boot.
+`source` says the same in a word: `automatic`, `chosen` or `trial`. `slot` is the
+preferred card's PCI address. `note` says why a saved card isn't used, such as a card
+that's gone or has no monitor, else it's `null`. `reason` is the human-readable
+explanation. The report does not read a running compositor's renderer.
+
 The internal `--hyprland` mode prints the device paths joined by colons when there is a
-candidate, and otherwise prints nothing. It cannot be combined with `--json`.
+preferred card, and otherwise prints nothing. `--hyprland-chosen` prints `chosen` or
+`trial`, a space and the paths, only for a card chosen in Settings. Neither can be
+combined with `--json`.
+
+### `bromigos hw graphics --json`
+
+Everything Settings › Graphics shows, read again on each run:
+
+```json
+{"schema": 1, "ok": true,
+ "cards": [{"slot": "0000:0a:00.0", "id": "10de:2f04", "title": "NVIDIA GB205 [GeForce RTX 5070]",
+            "driver": "nvidia", "connected_connectors": ["DP-1"], "…": "every field of a detection's gpus entry",
+            "integrated": false, "desktop_ready": true, "game_ready": true,
+            "desktop_next": true, "desktop_now": true, "games": true,
+            "vfio": {"ready": false, "reserved": false, "bound": false, "group": "20",
+                     "group_devices": ["0000:0a:00.0", "0000:0a:00.1"], "functions": ["0000:0a:00.1"],
+                     "checks": [{"id": "iommu", "ok": true, "text": "The IOMMU is on", "hint": "…"}],
+                     "reset": null}}],
+ "laptop": false, "hybrid": null,
+ "desktop": {"choice": null, "trial": null, "trial_in_force": false,
+             "next": {"primary_card": "card1", "…": "as hw display --json"},
+             "automatic": "0000:0a:00.0", "running": "0000:0a:00.0"},
+ "games": {"choice": null, "source": "automatic", "slot": "0000:0a:00.0", "automatic": "0000:0a:00.0",
+           "desktop": "0000:0a:00.0", "env": {}, "notes": [], "steam": false, "steam_installed": true},
+ "iommu": {"on": true, "cpu": "amd", "bootloader": "grub", "param": null, "steps": []},
+ "reserved": [],
+ "system_file": "/var/lib/bromigos/hw/graphics.json", "user_file": "/home/user/.config/bromigos/graphics.json"}
+```
+
+- A choice (`desktop.choice`, `desktop.trial`, `games.choice`, each `reserved[].card`) is
+  `{"slot", "id", "name"}`: a card by its PCI address and ID together.
+- `desktop.running` is the card this session draws on, from its `AQ_DRM_DEVICES`.
+- `games.env` is what `bromigos hw run` sets for a program.
+- `vfio.checks` ids are `iommu`, `group`, `monitor`, `desktop`, `other`, `boot` and
+  `initramfs`. `ready` means every one passed.
+
+Each change (`hw display use|keep|cancel|reset`, `hw games use`, `hw games steam`,
+`hw vfio reserve|release`) answers `{"schema": 1, "ok": true, "said": "…", "note": "…"}`
+with `--json`. A refusal answers `{"ok": false, "error": "…"}` and exits 1.
 
 ### `bromigos update --check --json`
 

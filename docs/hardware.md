@@ -14,8 +14,13 @@ This page explains what it detects and what it changes. The manual's
 ```bash
 bromigos hw                        # what this machine is, and what setup would do
 bromigos hw --json                 # the same, as JSON (core/README.md describes it)
-bromigos hw display                # connected screens and the automatic GPU choice
+bromigos hw display                # which card draws the login screen and the desktop
 bromigos hw display --json         # the same display check, as JSON
+bromigos hw graphics               # every card and what it's for (Settings › Graphics)
+bromigos hw display use CARD|auto  # choose the desktop's card (tried first)
+bromigos hw games use CARD|auto    # choose the card for games and heavy apps
+bromigos hw run -- PROGRAM         # run a program on the games card
+bromigos hw vfio                   # each card's checks for virtual machines
 bromigos hw setup --dry-run        # list the changes without making them
 bromigos hw setup                  # make them; asks for sudo for the system's part
 bromigos hw setup --user-only      # only your part: Hyprland's GPU environment
@@ -177,6 +182,9 @@ several screens. A disconnected GPU marked as the firmware's boot device does no
 over it. The current card number is read again on each start, so a change from `card0`
 to `card1` does not leave a saved automatic choice pointing at the wrong device.
 
+A card chosen in Settings › Graphics comes first, while it has a connected monitor. The
+next section explains it.
+
 With no connected GPUs, or with screens connected to several GPUs, this rule makes no
 choice. The existing compositor defaults and laptop policy remain in effect. A card
 bound to VFIO, or reserved for VFIO through a driver override, is excluded from the
@@ -192,19 +200,157 @@ the other usable cards available for their outputs.
 
 Explicit settings take precedence:
 
-- Hyprland keeps an existing `AQ_DRM_DEVICES` value and a valid GPU choice from the saved
-  hardware environment. `bromigos.hw = false` disables its hardware selection.
+- Hyprland keeps an existing `AQ_DRM_DEVICES` value. Then a card chosen in Settings ›
+  Graphics wins, then a valid GPU choice from the saved hardware environment.
+  `bromigos.hw = false` disables its hardware selection.
 - SDDM keeps an administrator's `CompositorCommand` override in `/etc/sddm.conf.d/` or
   `/etc/sddm.conf`. Its packaged launcher falls back to Weston's usual device choice
   when the core command is missing or too old.
 
-`bromigos hw display` explains the automatic candidate using read-only checks. It does
-not claim that a running desktop uses that candidate. `--json` gives the same report to
-tools; `--hyprland` supplies the internal device list used at Hyprland startup.
+`bromigos hw display` explains the card the next login uses, with read-only checks. It
+does not claim that a running desktop uses that card. `--json` gives the same report to
+tools. `--hyprland` and `--hyprland-chosen` supply the device lists Hyprland reads when it
+starts.
 
 This is a startup choice. Moving a cable during a session does not move its renderer
 to another card. The next login checks again. The greeter checks when its compositor
 next starts. Drivers must already be working for the connected card to be usable.
+
+### What each card is for
+
+Settings › Graphics lists every graphics card in the computer, from any vendor and in any
+number. Each card has a **Use for** choice with three uses. The page is
+`desktop/settings/pages/graphics.py`. It runs the commands below, and the code behind them
+is `core/crates/bromigos-core/src/hw/graphics.rs`.
+
+| Use | What it means | Automatic | Saved in |
+|---|---|---|---|
+| Desktop | The card the login screen and Hyprland draw on | The connected-screen rule above. A laptop keeps its built-in card. | `/var/lib/bromigos/hw/graphics.json` (root's) |
+| Games and heavy apps | The card `bromigos hw run` starts a program on | The strongest card | `~/.config/bromigos/graphics.json` (yours) |
+| Virtual machines | A card reserved for VFIO passthrough | None | `/var/lib/bromigos/hw/graphics.json` and three files in `/etc` |
+
+`bromigos hw graphics --json` gives the page everything at once. core/README.md describes
+the document.
+
+A choice names a card by its PCI address and its vendor and device ID together. Every
+start reads the cards again. If a saved card is gone, or a different card sits in its
+slot, that use goes back to Automatic. A note says why.
+
+#### The desktop's card
+
+Only a card with a working driver and a connected monitor can be chosen. Choosing one
+asks for your password, through pkexec, because the login screen reads the choice too.
+The login screen's launcher (`/usr/lib/bromigos/sddm/bromigos-greeter`) and Hyprland's
+`gpu.lua` both read it through `bromigos hw display`.
+
+A new card is a trial first, so a card that shows nothing can't lock you out:
+
+1. `bromigos hw display use CARD` saves the card as a trial. The trial records this
+   boot's ID, from `/proc/sys/kernel/random/boot_id`.
+2. You log out. The login screen and the next session draw on the card being tried.
+   Settings opens on the trial, with Keep and Go back.
+3. `bromigos hw display keep` saves it for good. `bromigos hw display cancel` drops the
+   trial.
+4. A restart ends a trial that wasn't kept. The new boot has another ID, so the old
+   choice is back by itself.
+
+From a text console, `sudo bromigos hw display reset` sets the desktop back to Automatic.
+Then `sudo systemctl restart display-manager` brings the login screen back, or restart
+the computer. Neither needs the boot menu.
+
+Choosing the card the next login uses anyway saves it straight away, with no trial.
+Choosing Automatic is never a trial either, because Automatic is the rule above.
+
+#### Games and heavy apps
+
+`bromigos hw run -- PROGRAM` starts a program on the games card. It sets nothing when the
+desktop's card is the games card too. Otherwise it uses each vendor's own switches:
+
+| The games card | What `hw run` sets |
+|---|---|
+| Any, for Vulkan | `MESA_VK_DEVICE_SELECT=vendor:device`, which puts the card first in Vulkan's list. Two identical cards share an ID, so then it sets `DRI_PRIME=pci-0000_03_00_0`, the card's PCI address. |
+| AMD, Intel or nouveau, for OpenGL | `DRI_PRIME=pci-…`. If NVIDIA's driver draws the desktop, it also points GLVND at Mesa: `__GLX_VENDOR_LIBRARY_NAME=mesa` and `__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json`. |
+| NVIDIA's driver, while another card draws the desktop | PRIME render offload, as `prime-run` does: `__NV_PRIME_RENDER_OFFLOAD=1`, `__VK_LAYER_NV_optimus=NVIDIA_only` and `__GLX_VENDOR_LIBRARY_NAME=nvidia` |
+
+`bromigos hw run --print` lists them. Why these work:
+
+- **Proton** runs Direct3D 9 to 11 games through DXVK and Direct3D 12 games through
+  vkd3d-proton. Both run on Vulkan. DXVK sorts the Vulkan devices it's given, discrete
+  cards before built-in ones, and keeps the order within each kind. Games take the first
+  one. So putting the card first in Vulkan's list moves Proton games, on any vendor.
+- **Mesa's device-select layer** does that reordering. It's a Vulkan layer that loads
+  for every program, and it orders NVIDIA's devices too. Mesa's Vulkan drivers bring
+  it, in `vulkan-mesa-implicit-layers`. A machine with two NVIDIA cards alone doesn't
+  have it, so `bromigos hw setup` installs it on any machine with several cards. The page
+  says when it's missing.
+- **`DXVK_FILTER_DEVICE_NAME` isn't used.** It matches the Vulkan device's name. That
+  name isn't in `pci.ids` in the same words, and a filter that matches nothing leaves a
+  game with no device at all. It can't tell identical cards apart either.
+- **Nothing is set for the whole session.** Session-wide `DRI_PRIME` or
+  `MESA_VK_DEVICE_SELECT` would move every GTK 4 app, which draws with Vulkan, onto the
+  games card. Session-wide `__GLX_VENDOR_LIBRARY_NAME` has broken logins.
+- **Two NVIDIA cards.** Vulkan games follow the choice. NVIDIA's OpenGL can't be pointed
+  at one of two NVIDIA cards on Wayland, so OpenGL programs stay on the desktop's card.
+
+To run Steam and everything it starts on the games card, turn on **Start Steam on the
+games card**, or run `bromigos hw games steam on`. It writes your own copy of Steam's
+launcher, `~/.local/share/applications/steam.desktop`. Each `Exec=` line there starts
+through `bromigos hw run --`. `off` removes the copy, and leaves a copy of your own alone.
+For one game instead, set its launch options to `bromigos hw run -- %command%`.
+
+Automatic picks the strongest card in this order:
+
+1. A card of its own over one built into the processor. A built-in card drives a laptop's
+   panel, or it's Intel's but not Arc, or AMD's with under 2 GiB of video memory or an
+   APU's chip name.
+2. The newer architecture, from the chip family in `pci.ids`.
+3. More video memory, where the driver reports it (amdgpu does).
+4. On a tie, the desktop's card, since nothing then has to be copied between cards.
+
+#### Virtual machines
+
+A card reserved for virtual machines goes to vfio-pci at start, before its own driver can
+take it. VFIO is the kernel's interface for handing a device to a virtual machine. The
+reservation is by PCI address, never by vendor and device ID, so one of two identical
+cards can be reserved. The card's other functions go with it, such as its HDMI audio or
+USB-C controller.
+
+`bromigos hw vfio` shows each card's checks. Reserving needs every one to pass:
+
+| Check | Why |
+|---|---|
+| The IOMMU is on | It keeps a VM's card to the VM's own memory. Without groups in `/sys/kernel/iommu_groups`, the check says how to turn it on. That's a firmware setting, plus `intel_iommu=on` on Intel, with the steps for GRUB, systemd-boot or Limine. bromigOS doesn't edit the kernel's command line itself. |
+| Its IOMMU group holds only the card | A VM gets a whole group. The card's own functions and PCI bridges are fine. Anything else is named. |
+| No monitor is connected to it | A reserved card shows nothing until a VM starts. |
+| The desktop doesn't use it | The desktop needs its own card. |
+| Another card with a monitor stays | The computer must never start to a black screen. |
+| The firmware doesn't start on it | Taking the boot card from the screen while the computer starts freezes it. |
+| The initramfs has the `base` and `modconf` hooks | The reservation runs there, as a shell script, with modprobe's settings. |
+
+`bromigos hw vfio reserve CARD` asks sudo to write three files, then runs `mkinitcpio -P`.
+The reservation takes effect at the next start:
+
+- `/etc/bromigos/hw/vfio-pci-override.sh` sets `driver_override` to `vfio-pci` on the
+  card and its functions, then loads vfio-pci. It's the Arch wiki's script for identical
+  cards, with guards. It leaves a card alone when the IOMMU is off, when another card now
+  sits at its address, when the firmware started on it, or when no other display device
+  would be left.
+- `/etc/modprobe.d/bromigos-vfio.conf` runs the script whenever vfio-pci loads. Its
+  `softdep` lines load vfio-pci before `drm`, `nvidia` and the drivers of the card's other
+  functions, such as `snd_hda_intel`.
+- `/etc/mkinitcpio.conf.d/bromigos-vfio.conf` puts vfio-pci and the script in the
+  initramfs.
+
+`bromigos hw vfio release CARD` (or `all`) gives a card back. It rewrites the files, or
+removes them when nothing is left reserved, and makes the initramfs again. Restart
+afterwards. `--dry-run` lists the commands for either.
+
+Some AMD cards have the reset bug: Polaris, Vega, Navi 10, 12 and 14. After a VM shuts
+down, the card may not start again until the computer restarts. The checks name the
+`vendor-reset` kernel module for these cards, from the AUR, and say whether it's loaded.
+
+Handing a card over only while a VM runs, through libvirt hooks, isn't built. A reserved
+card stays reserved from start to start.
 
 ### Laptops with two GPUs
 
@@ -366,12 +512,36 @@ list and `hw.rs` in step. The live session itself runs on Mesa, with nouveau on 
   the RTX 5070 desktop, `PROTON_ENABLE_NVAPI=1` as a game's launch option, with
   GE-Proton, made DLSS games start that had crashed.
 
+- **What each card is for.** Unit tests in `hw/graphics/tests.rs` cover the desktop's
+  choice and trial, a swapped or gone card, the strongest card, each vendor's switches,
+  identical twins, the VFIO checks and the IOMMU's steps. The reservation script runs in
+  `sh` against a fixture `/sys`, including its guards. CLI tests (`tests/hw_graphics.rs`)
+  drive every command on a fixture root, with a stand-in `sudo`. The greeter's tests cover
+  the chosen and trial answers, and `gpu.lua`'s tests the chosen card's precedence.
+- **The games card's switches, on the RTX 5070 desktop with an RX 550 beside it.**
+  `bromigos hw run` with the RX 550 chosen put it first in `vulkaninfo`'s list, and made
+  `eglinfo` draw on radeonsi, while the desktop ran on NVIDIA. With the RTX 5070 as the
+  games card for a desktop on the RX 550, its PRIME offload put NVIDIA first and made
+  `eglinfo` and `glxinfo` draw on it.
+- **A VFIO reservation in a VM.** QEMU's q35 machine with an emulated Intel IOMMU, a
+  virtio-vga card and a bochs-display card, on the Arch cloud image (systemd and base
+  hooks). The IOMMU was off, and `bromigos hw vfio` printed the GRUB steps. They turned
+  it on. `bromigos hw vfio reserve` then bound the bochs card to vfio-pci at the next
+  start, by its address, while the virtio card kept the desktop. With the IOMMU off the
+  script left the card to its driver. `release` gave it back.
+- **The desktop's trial in the same VM**, with SDDM and the greeter. `hw display use`
+  started the login screen on the bochs card being tried. A restart went back by itself.
+  A kept card stayed after a restart, and `hw display reset` went back to Automatic.
+
 **Not proven without real hardware:**
 
 - the session-wide `PROTON_ENABLE_NVAPI` reaching Steam's games after a login;
 
 - automatic startup selection across different multi-GPU machines; fixture and
   compositor stand-in tests do not establish that every driver combination can render;
+- a desktop moved to another real card through Settings › Graphics, and a game in Proton
+  on the chosen games card;
+- a VFIO reservation on a real card, and a VM using it;
 - NVIDIA's open modules and early KMS installed on a machine that doesn't have them yet,
   including from the ISO;
 - the AUR drivers for older NVIDIA cards on real hardware;

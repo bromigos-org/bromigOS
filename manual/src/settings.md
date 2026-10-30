@@ -84,6 +84,17 @@ If a screen goes dark and you can't answer, the old settings come back by themse
 15 seconds. **Reset to defaults** puts every monitor back to what it prefers.
 (`bromigos display`)
 
+## Graphics
+
+Every graphics card in your computer, and what each one is for: drawing the **Desktop**,
+running **Games and heavy apps**, or **Virtual machines**. Choose a use with the buttons
+on the card's **Use for** row. Each use is Automatic until you choose.
+
+A new desktop card is tried first. Log out and back in on it, then choose **Keep**. If the
+screen stays dark, restart the computer and the old card comes back by itself.
+[Choose what each card is for](hardware.md#choose-what-each-card-is-for) explains each
+use. (`bromigos hw graphics`)
+
 ## Sound
 
 Choose your speakers or headphones and your microphone, and set their volume. Each app

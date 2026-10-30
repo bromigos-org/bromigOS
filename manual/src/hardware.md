@@ -14,14 +14,15 @@ bromigos hw
 This lists your graphics cards and their drivers, whether this is a laptop, and what
 `bromigos hw setup` would change.
 
-To check whether the connected screens give bromigOS a clear automatic GPU choice, run:
+To see which graphics card the login screen and desktop will use at the next login, run:
 
 ```bash
 bromigos hw display
 ```
 
 This only checks the hardware. It does not change settings or report which card an
-already running desktop is using.
+already running desktop is using. `bromigos hw graphics` lists every card and what it's
+for.
 
 ## Set up your hardware again
 
@@ -59,6 +60,10 @@ screen and the login screen.
 
 ### More than one graphics card
 
+**Settings › Graphics** lists every graphics card in your computer, whatever its make,
+and what each one is for. [Choose what each card is for](#choose-what-each-card-is-for)
+explains it. Until you choose, bromigOS decides by itself, as below.
+
 If only one working graphics card has a screen connected, bromigOS prefers that card
 for the login screen and desktop. You do not need to run setup just to choose it. A card
 with no screen connected does not take priority because the computer booted on it.
@@ -73,11 +78,98 @@ not move a running desktop's renderer. Save your work and log out to start a new
 restart the computer if the login screen also needs to choose again.
 
 This chooses among cards whose drivers already work. It does not install a missing
-driver or set up GPU passthrough to a virtual machine.
+driver.
 
 The default bar follows the available screens. If you pinned your bar or monitor
 settings to a connector name, check those settings after moving the cable. A connector
 on another card can have a different name.
+
+### Choose what each card is for
+
+Open **Settings › Graphics**. Each card shows its driver and the screens connected to it,
+and a **Use for** row with three buttons:
+
+- **Desktop**: the card that draws the login screen and your desktop. Only a card with
+  a screen connected can be chosen.
+- **Games and heavy apps**: the card games and demanding programs run on, even when the
+  desktop draws on another card. One card can do both.
+- **Virtual machines**: a card kept for virtual machines only, so a VM can use it as its
+  own graphics card. This is called GPU passthrough.
+
+Hover over anything on the page to see what it does. Each use is **Automatic** until you
+choose. Automatic for the desktop is the rule above. For games, it's the strongest card:
+a card of its own over one built into the processor, then the newest.
+
+If you add, swap or remove a card, bromigOS notices at the next start. A use whose card
+is gone goes back to Automatic.
+
+#### Move the desktop to another card
+
+1. Connect a screen to the card.
+2. In Settings › Graphics, choose **Desktop** on that card, then **Try it**.
+3. Enter your password.
+4. Log out and log back in. The login screen and the desktop now use that card.
+5. Settings opens by itself. Choose **Keep**.
+
+Until you choose Keep, the old card is still your choice. If the screen stays dark,
+restart the computer and the old card comes back by itself. You never need the boot
+menu for this.
+
+You can also go back from a text console. Press Ctrl+Alt+F3, log in, and run:
+
+```bash
+sudo bromigos hw display reset
+sudo systemctl restart display-manager
+```
+
+The first command sets the desktop's card back to Automatic. The second brings the login
+screen back. It ends any open session, so restarting the computer works too.
+
+From a terminal, `bromigos hw display use CARD` chooses a card and `bromigos hw display
+keep` keeps it. A card is its PCI address, such as `0000:03:00.0`, or its name in
+`/dev/dri`, such as `card1`.
+
+#### Run games on another card
+
+Choose **Games and heavy apps** on a card. It's yours alone, so it needs no password,
+and it applies to programs you start from then on.
+
+- **Steam.** Turn on **Start Steam on the games card**. Steam and every game it starts,
+  Proton's included, then run on that card.
+- **Any other program.** Start it with `bromigos hw run` in front:
+
+  ```bash
+  bromigos hw run -- blender
+  ```
+
+- **One Steam game.** Set its launch options to `bromigos hw run -- %command%`.
+
+`bromigos hw run` sets the switches each maker's driver expects, and nothing when the
+games card also draws the desktop. `bromigos hw run --print` shows what it sets.
+
+#### Keep a card for virtual machines
+
+A card for a virtual machine must pass a few checks first. Open the card's **Virtual
+machines** row in Settings › Graphics to see them. Hover over one to see why it matters.
+The checks are:
+
+- the IOMMU is on. It's a firmware setting, and the row says how to turn it on;
+- the card doesn't share its IOMMU group with other devices;
+- no screen is connected to it, the desktop doesn't use it, and another card with a
+  screen stays for the desktop;
+- the computer doesn't start on it. Choose the other card in the firmware settings if it
+  does.
+
+When they all pass, choose **Virtual machines** on the card. A terminal opens and asks
+for your password, then rebuilds the start-up files. Restart the computer. From then on,
+your virtual machines can use the card, and the desktop and programs can't.
+
+To give the card back, choose **Virtual machines** again, or run
+`bromigos hw vfio release CARD`, then restart.
+
+bromigOS keeps the card by its PCI address, so it works with two identical cards. The
+card's own sound device goes with it. Some older AMD cards need an extra kernel module,
+`vendor-reset`, to restart a VM. The checks say when yours does.
 
 ### NVIDIA's own driver for an older card
 
@@ -133,10 +225,13 @@ your `~/.config/hypr/hyprland.lua`.
 
 - **A black screen after installing an NVIDIA driver.** Restart once: the new driver loads
   when the computer starts. `bromigos hw` says whether the driver is loaded.
+- **A black screen after choosing another desktop card.** Restart the computer: a card
+  you haven't kept yet goes back by itself. Or press Ctrl+Alt+F3 and run
+  `sudo bromigos hw display reset`, then `sudo systemctl restart display-manager`.
 - **A black screen after moving a monitor to another card.** From a text console, run
-  `bromigos hw display` to check the automatic GPU choice. An explicit GPU
-  setting can override the automatic choice. Check your Hyprland hardware settings and
-  any custom SDDM compositor command before changing drivers.
+  `bromigos hw display` to check which card the login screen uses. A card chosen in
+  Settings › Graphics wins while it has a monitor. Check your Hyprland hardware settings
+  and any custom SDDM compositor command before changing drivers.
 - **Hibernation.** If you set up hibernation, NVIDIA's driver can't load at the very start.
   `bromigos hw setup` notices this, and loads it a little later instead.
 - **The battery or the power profile doesn't show.** `bromigos hw` lists the battery it

@@ -106,7 +106,7 @@ want+=(base-devel linux-headers grub efibootmgr os-prober systemd-ukify pacman-m
 want+=(nvidia-open nvidia-utils libva-nvidia-driver nvidia-prime mesa vulkan-radeon vulkan-intel
        vulkan-nouveau intel-media-driver libva-intel-driver linux-firmware-nvidia
        linux-firmware-amdgpu linux-firmware-radeon linux-firmware-intel brightnessctl
-       power-profiles-daemon)
+       power-profiles-daemon vulkan-mesa-implicit-layers)
 # resolved against an empty root: what's installed in this container is no reason to
 # leave a package out (pacman -Sp lists only what it would add), so every dependency
 # down to glibc is a target there

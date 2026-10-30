@@ -128,6 +128,7 @@ button between them. On a big screen the content is clamped at 1000 px wide.
 | Group | id | Page | Command behind it |
 |---|---|---|---|
 | System | `displays` | [Displays](#displays) | `bromigos display` |
+| | `graphics` | [Graphics](#graphics) | `bromigos hw graphics`, `hw display`, `hw games`, `hw vfio` |
 | | `sound` | [Sound](#sound) | `bromigos sound`, `mute`, `scene` |
 | | `network` | [Network](#network) | `bromigos net` |
 | | `bluetooth` | [Bluetooth](#bluetooth) | `bromigos bluetooth` |
@@ -184,6 +185,36 @@ bromigos display keep          # or: bromigos display revert
 ```
 
 A scale that Hyprland would round is refused, and every file is put back.
+
+### Graphics
+
+The page lists every graphics card from `bromigos hw graphics --json`, read again each
+time the page is shown. It has three parts:
+
+- **In use**: the desktop's card, the games card, Start Steam on the games card, and how
+  to run a program on the games card. A trial shows here with Keep and Go back.
+- **One group per card**: its PCI address, driver and connected screens, and a **Use for**
+  row. The row's three toggle buttons are Desktop, Games and heavy apps, and Virtual
+  machines. A use that's on is lit. The card's hologram (DRIFTGLASS's `gpu` glyph, still)
+  is lit while the card draws the desktop or runs games. Under it, the card's checks for
+  virtual machines each carry their reason as a hover hint.
+- **Virtual machines**: the IOMMU, with its steps to turn it on, and the cards reserved.
+
+Each button runs a command, and the page reads the cards again after it answers:
+
+| Button | Command | Asks for |
+|---|---|---|
+| Desktop on a card | `bromigos hw display use CARD`, after a confirmation that names the way back | your password, through pkexec |
+| Keep, Go back | `bromigos hw display keep`, `cancel` | your password |
+| Games and heavy apps | `bromigos hw games use CARD` | nothing: it's yours |
+| Start Steam on the games card | `bromigos hw games steam on|off` | nothing |
+| Virtual machines | `bromigos hw vfio reserve CARD` or `release CARD`, in a terminal | sudo, in the terminal |
+
+Turning off Desktop or Games on the card Automatic picked explains instead of acting.
+Choose the use on another card to move it. A button whose use isn't possible says why in
+its hover hint and in a toast, such as "connect a monitor to it first". After a trial's
+login, Hyprland opens Settings on the trial (`bromigos settings graphics#trial`).
+[hardware.md](hardware.md#what-each-card-is-for) has the rules behind each use.
 
 ### Sound
 

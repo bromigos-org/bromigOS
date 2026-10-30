@@ -1095,16 +1095,20 @@ This machine's hardware: its GPUs and their drivers, a laptop's battery, backlig
 Usage: bromigos hw [OPTIONS] [COMMAND]
 
 Commands:
-  detect   What this machine is and what `bromigos hw setup` would do (the default)
-  display  Show which GPU has the connected displays; read-only, without changing drivers
-  setup    Set this machine's hardware up: drivers, early KMS, a hybrid laptop's GPUs, power profiles, Hyprland's GPU environment (sudo for the system's part)
-  help     Print this message or the help of the given subcommand(s)
+  detect    What this machine is and what `bromigos hw setup` would do (the default)
+  display   Which card draws the login screen and the desktop (read-only), or change it: `use CARD|auto`, `keep`, `cancel`, `reset` (Settings › Graphics)
+  setup     Set this machine's hardware up: drivers, early KMS, a hybrid laptop's GPUs, power profiles, Hyprland's GPU environment (sudo for the system's part)
+  graphics  Every graphics card and what it's for: the desktop, games and heavy apps, virtual machines (what Settings › Graphics shows)
+  games     The card games and heavy apps use (Automatic: the strongest), or change it
+  run       Run a program on the games card: bromigos hw run -- PROGRAM [ARGS] (a Steam game's launch options: bromigos hw run -- %command%)
+  vfio      Virtual machines: each card's checks for VFIO passthrough, or `reserve CARD` and `release CARD|all` (by PCI address; sudo, then a restart)
+  help      Print this message or the help of the given subcommand(s)
 
 Options:
       --json  Print the JSON document (schema in core/README.md)
   -h, --help  Print help
 
-What it reads: the PCI display devices (NVIDIA's own supported-chips list and Mesa's tables say which driver), the DMI chassis type, batteries, the lid, backlights, touchpads, the kernels, mkinitcpio's MODULES. What setup does, only where it differs: the GPU's packages (never swapping an installed NVIDIA driver), NVIDIA's early KMS, a hybrid laptop's render GPU (udev names, AQ_DRM_DEVICES for Hyprland), runtime power management for its NVIDIA GPU, and on a laptop brightnessctl and power-profiles-daemon. A driver only the AUR has (NVIDIA's 580.xx and 470.xx branches) is offered through paru, after a question. docs/hardware.md.
+What it reads: the PCI display devices (NVIDIA's own supported-chips list and Mesa's tables say which driver), the DMI chassis type, batteries, the lid, backlights, touchpads, the kernels, mkinitcpio's MODULES. What setup does, only where it differs: the GPU's packages (never swapping an installed NVIDIA driver), NVIDIA's early KMS, a hybrid laptop's render GPU (udev names, AQ_DRM_DEVICES for Hyprland), runtime power management for its NVIDIA GPU, and on a laptop brightnessctl and power-profiles-daemon. A driver only the AUR has (NVIDIA's 580.xx and 470.xx branches) is offered through paru, after a question. What each card is for (the desktop, games and heavy apps, virtual machines): hw graphics, hw display, hw games, hw run, hw vfio, and Settings › Graphics. docs/hardware.md.
 ```
 
 #### bromigos hw detect
@@ -1122,14 +1126,22 @@ Options:
 #### bromigos hw display
 
 ```text
-Show which GPU has the connected displays; read-only, without changing drivers
+Which card draws the login screen and the desktop (read-only), or change it: `use CARD|auto`, `keep`, `cancel`, `reset` (Settings › Graphics)
 
-Usage: bromigos hw display [OPTIONS]
+Usage: bromigos hw display [OPTIONS] [COMMAND]
+
+Commands:
+  use     Draw the desktop on CARD (a PCI address such as 0000:03:00.0, or card1), or `auto`. A new card is tried first: log out and in, then `keep` it; a restart goes back
+  keep    Keep the card being tried (after a login on it worked)
+  cancel  Stop trying a card: the desktop stays where it was
+  reset   Back to Automatic, from a text console too (sudo); then restart the login screen
+  help    Print this message or the help of the given subcommand(s)
 
 Options:
-      --hyprland  Print the automatic GPU order for Hyprland, or nothing when there is no clear choice
-      --json      Print the JSON document (schema in core/README.md)
-  -h, --help      Print help
+      --hyprland         Print the GPU order for Hyprland (the chosen card's, else the automatic one), or nothing when there is no clear choice
+      --hyprland-chosen  Print "trial DEVICES" or "chosen DEVICES" for a card chosen in Settings, else nothing (Hyprland's startup asks this first)
+      --json             Print the JSON document (schema in core/README.md)
+  -h, --help             Print help
 ```
 
 #### bromigos hw setup
@@ -1146,6 +1158,68 @@ Options:
       --aur        Build a driver only the AUR has (NVIDIA's 580.xx or 470.xx) with paru without asking first; paru still shows its recipe for review unless --yes (docs/aur.md)
       --json       Print the JSON document (schema in core/README.md)
   -h, --help       Print help
+```
+
+#### bromigos hw graphics
+
+```text
+Every graphics card and what it's for: the desktop, games and heavy apps, virtual machines (what Settings › Graphics shows)
+
+Usage: bromigos hw graphics [OPTIONS]
+
+Options:
+      --json  Print the JSON document (schema in core/README.md)
+  -h, --help  Print help
+```
+
+#### bromigos hw games
+
+```text
+The card games and heavy apps use (Automatic: the strongest), or change it
+
+Usage: bromigos hw games [OPTIONS] [COMMAND]
+
+Commands:
+  use    Run games and heavy apps on CARD (a PCI address, or card1), or `auto` (the strongest)
+  steam  Start Steam on the games card (your copy of Steam's launcher), or stop
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+      --json  Print the JSON document (schema in core/README.md)
+  -h, --help  Print help
+```
+
+#### bromigos hw run
+
+```text
+Run a program on the games card: bromigos hw run -- PROGRAM [ARGS] (a Steam game's launch options: bromigos hw run -- %command%)
+
+Usage: bromigos hw run [OPTIONS] [COMMAND]...
+
+Arguments:
+  [COMMAND]...  The program and its arguments, after `--`
+
+Options:
+      --print  Print the environment it sets (NAME=VALUE lines), and run nothing without a program
+      --json   Print the JSON document (schema in core/README.md)
+  -h, --help   Print help
+```
+
+#### bromigos hw vfio
+
+```text
+Virtual machines: each card's checks for VFIO passthrough, or `reserve CARD` and `release CARD|all` (by PCI address; sudo, then a restart)
+
+Usage: bromigos hw vfio [OPTIONS] [COMMAND]
+
+Commands:
+  reserve  Reserve CARD for virtual machines (vfio-pci, by PCI address, from the next start): writes three files, makes the initramfs again (sudo)
+  release  Give CARD (or `all`) back to its own driver, from the next start (sudo)
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --json  Print the JSON document (schema in core/README.md)
+  -h, --help  Print help
 ```
 
 ### bromigos idle

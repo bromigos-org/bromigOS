@@ -1,5 +1,6 @@
 #!/usr/bin/python -I
-"""Start SDDM's Weston on the display GPU selected by bromigOS's hardware policy.
+"""Start SDDM's Weston on the display GPU selected by bromigOS's hardware policy: the card
+chosen in Settings › Graphics while it has a monitor, else the only card with one.
 
 This is a launcher, not a second GPU policy. Missing or older bromigos-core packages
 keep Weston's ordinary defaults. No device is opened and no setting is written here.
@@ -19,6 +20,9 @@ READY_WAIT_SECONDS = 2.0
 QUERY_TIMEOUT_SECONDS = 1.0
 POLL_SECONDS = 0.2
 RETRY_REASONS = {"no_connected_monitors", "no_usable_gpus"}
+# a card preferred by the connected-screen rule, or chosen (or being tried) in Settings ›
+# Graphics: the core command checks the chosen card has a monitor and a working driver
+CHOSEN_REASONS = {"single_connected_gpu", "chosen_gpu", "trial_gpu"}
 CARD = re.compile(r"card[0-9]+")
 DEVICE = re.compile(r"/dev/dri/card[0-9]+")
 
@@ -46,9 +50,9 @@ def parse_selection(output):
     if primary is not None and (
             not isinstance(primary, str) or not CARD.fullmatch(primary)
             or not devices or devices[0] != "/dev/dri/" + primary
-            or data["reason_code"] != "single_connected_gpu"):
+            or data["reason_code"] not in CHOSEN_REASONS):
         return None
-    if primary is None and data["reason_code"] == "single_connected_gpu":
+    if primary is None and data["reason_code"] in CHOSEN_REASONS:
         return None
     return primary, data["reason_code"]
 
@@ -114,7 +118,7 @@ def main(args=None):
         primary = selected_card()
         if primary is not None:
             command.append("--drm-device=" + primary)
-            print("bromigos greeter: using " + primary + " for its connected display",
+            print("bromigos greeter: using " + primary + " for the login screen",
                   file=sys.stderr)
     command.extend(args)
     os.execv(WESTON, command)

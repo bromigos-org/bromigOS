@@ -34,6 +34,7 @@ mod art_make;
 mod aur;
 mod ext;
 mod hw;
+mod hw_graphics;
 mod idle;
 mod mute;
 mod peripheral;
