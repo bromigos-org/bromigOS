@@ -107,19 +107,29 @@ sounds and VECTOR's voice together, and the theme's sound cues and their volume.
 
 ## Bluetooth
 
-Turn Bluetooth on or off, and make this computer visible to devices nearby.
+Turn Bluetooth on or off, make this computer visible to devices nearby, and choose
+whether headphones take over the sound when they connect.
 
-To pair a new device:
+**My devices** shows a card for each device you've paired, with its battery. Click one
+for its page:
 
-1. Put the device in pairing mode. This is often a long press on its button.
-2. Choose **Scan**.
-3. When the device appears, choose **Pair**.
+- **Connect** or **Disconnect**.
+- A controller: press its buttons and move its sticks to see them light up, and
+  **Rumble**.
+- Headphones: **Hi-fi** or **Headset + mic**, the codec, make them the **Sound output** or
+  the **Microphone**, and a **Microphone test**.
+- Rename it, turn **Auto-reconnect** on or off, **Re-pair** it, or **Forget** it.
 
-If the device asks for a code, **Pair in the panel** pairs it in the bar's Bluetooth panel,
-which asks you for the code. Paired devices show their battery, and you can connect,
-disconnect or forget each one. **Switch the sound over on connect** makes headphones the
-sound output when they connect. [Bluetooth](bluetooth.md) covers the bar's icon and panel.
-(`bromigos bluetooth`)
+To pair a new device, choose **Pair a new device…**:
+
+1. Choose what you're pairing. Settings says how to put that kind in pairing mode.
+2. Do that. Settings scans, and the device appears in the list.
+3. Choose **Pair**. If the device shows or asks for a code, Settings asks you right there.
+4. **Ready**: it's paired, connected, and reconnects by itself next time.
+
+**Troubleshooting** resets the adapter, re-pairs a device, and lists what went wrong
+lately. [Bluetooth](bluetooth.md) covers the bar's icon, its panel and the terminal
+version. (`bromigos bluetooth`)
 
 ## Power
 

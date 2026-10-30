@@ -226,24 +226,45 @@ password leaves nothing saved.
 
 ### Bluetooth
 
-`bromigos bluetooth` talks to bluez through `bluetoothctl`, one command at a time, and to
-`rfkill`.
+The page is built on `bromigos_bluez`, the desktop's one bluez core, which the bar's panel
+and `bromigos bluetooth session` also use. bluez's own D-Bus signals keep it current: no
+polling. It has four parts:
 
-- The power switch lifts an rfkill soft block first. A hardware switch can't be
-  overridden, and the page says so.
-- "Visible to devices nearby" makes the machine discoverable. bluez turns that off again
-  after three minutes.
-- Paired devices show their kind, connection and battery. Each has Connect or Disconnect,
-  which Undo reverses, and Forget…, which asks first.
-- Scan looks for devices in pairing mode for 8 seconds. Pair pairs, trusts and connects.
-- "Switch the sound over on connect" is `bromigos bluetooth audio-default on|off`, kept in
+- **Adapter**: on or off, visible, and whether headphones take over the sound.
+- **My devices**: a card per paired device, with its hologram, state, battery and signal.
+  A card opens the device's page, an `Adw.Dialog`:
+  - a controller has a live input test (`bromigos_gamepad` reads its evdev device),
+    rumble, and **Set up…** while xpadneo isn't loaded;
+  - headphones have the HI-FI / HEADSET + MIC switch (`bromigos bluetooth profile`), the
+    codec, **Sound output** and **Microphone** (`bromigos sound`), and a microphone test
+    (`parec`'s level);
+  - every device can be renamed, set to auto-reconnect (trust), re-paired or forgotten.
+- **Pair a new device…** is a wizard in a dialog. It asks what you're pairing, shows that
+  kind's pair-mode steps (`bromigos_bluez.PAIR_KINDS`, the same list the TUI shows), scans
+  with the Sweep, then pairs. The page's own agent asks for any PIN or passkey in the
+  dialog. It ends on **Ready**.
+- **Troubleshooting**: reset the adapter (off, rfkill unblock, on), re-pair, the TUI,
+  bluetoothctl, and the last problems in plain words (`bromigos_bluez.explain`).
+
+The holograms, cells and Sweep come from `bromigos_driftglass`. One timer drives them, and
+only while something shown moves; under reduced motion there's none.
+`tools/settings/render.sh --page bluetooth --fixtures` draws the page against the stand-in
+bluez, and `--bt-open device:MAC`, `wizard`, `wizard:KIND` or `wizard:pair:MAC` draws its
+dialogs.
+
+`bromigos bluetooth` itself talks to bluez through `bluetoothctl`, one command at a time,
+and to `rfkill`. The page uses it for the settings it keeps and for sound:
+
+- `bromigos bluetooth audio-default on|off` is "Switch the sound over on connect", kept in
   `~/.config/bromigos/bluetooth.toml`. On, the bar's module makes a headset or speaker the
   sound output when it connects.
+- `bromigos bluetooth profile <MAC> hifi|headset` switches a headset's profile.
 
 A device that asks for a PIN or passkey needs an agent, a program that answers bluez's
-questions. `bluetoothctl` run one command at a time has none, so the page offers
-**Pair in the panel**: `bromigos bluetooth panel pair <MAC>` pairs it in the bar's panel,
-whose agent asks for the code ([desktop.md](desktop.md#the-bars-bluetooth)).
+questions. `bluetoothctl` run one command at a time has none, so `bromigos bluetooth pair`
+says to pair it where there is one: this page, the bar's panel
+(`bromigos bluetooth panel pair <MAC>`; [desktop.md](desktop.md#the-bars-bluetooth)), or
+the TUI.
 
 `bromigos bluetooth status` also gives each headset's sound profile and codec, from
 PipeWire's cards (`pactl list cards`), and an Xbox controller's driver: `xpadneo` or

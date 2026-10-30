@@ -40,7 +40,8 @@ The panel opens under the icon. Press <kbd>Esc</kbd> or click anywhere else to c
   switch it on, and **FORGET…**, which unpairs it. Forget asks you to click twice.
 - **SCAN** looks for devices in pairing mode for 30 seconds. They appear under
   **Nearby** as they're found, strongest signal first, each with **PAIR**.
-- **OPEN SETTINGS** opens **Settings › Bluetooth**.
+- **OPEN SETTINGS** opens **Settings › Bluetooth**, which has a page for each device and
+  pairing step by step ([Settings](settings.md#bluetooth)).
 
 Pairing trusts the device, so it reconnects by itself next time, and then connects it. If
 something goes wrong, the panel says what, in plain words.

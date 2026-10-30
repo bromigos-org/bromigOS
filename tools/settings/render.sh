@@ -3,6 +3,7 @@
 #
 #   tools/settings/render.sh OUTDIR [--page PAGE]… [--size WxH] [--idle "ARGS"] [--name SUFFIX] [--interact]
 #                            [--path DIR] [--previews DIR] [--fixtures] [--audit] [--search WORDS] [--advanced]
+#                            [--bt-open WHAT]
 #                            [THEME…]
 #
 # (no theme: every one; --idle: `bromigos idle ARGS` first, e.g. "preset screensaver-only";
@@ -15,7 +16,8 @@
 # own copy of its state); --audit: each page's
 # controls without a hover hint, its search entries without a row and rows wider than the
 # window, to OUTDIR/audit.jsonl; --search: the sidebar's results for WORDS; --advanced:
-# every row's Advanced line open)
+# every row's Advanced line open; --bt-open: the Bluetooth page opens a dialog first:
+# device:MAC, wizard, wizard:KIND or wizard:pair:MAC, from the stand-in bluez of --fixtures)
 #
 # A headless weston (kiosk shell, pixman) in a runtime directory of its own, so nothing
 # reaches the desktop you're on: no window, no screenshot of your screen. A throwaway home
@@ -40,6 +42,7 @@ while (($#)); do
     --audit) extra+=(--audit); audit=1; shift ;;
     --search) extra+=(--search "$2"); shift 2 ;;
     --advanced) extra+=(--advanced); shift ;;
+    --bt-open) bt_open=$2; shift 2 ;;
     *) themes+=("$1"); shift ;;
   esac
 done
@@ -56,7 +59,11 @@ rt=$(mktemp -d /tmp/bsr.XXXX)
 work=$(mktemp -d "${TMPDIR:-/tmp}/bromigos-settings-render.XXXX")
 chmod 700 "$rt"
 # shellcheck disable=SC2329  # run by the trap
-cleanup() { [[ -n ${wpid:-} ]] && kill "$wpid" 2>/dev/null; rm -rf "$rt" "$work"; }
+cleanup() {
+  [[ -n ${wpid:-} ]] && kill "$wpid" 2>/dev/null
+  [[ -n ${bzpid:-} ]] && kill "$bzpid" "$buspid" 2>/dev/null
+  rm -rf "$rt" "$work"
+}
 trap cleanup EXIT
 w=${size%x*} h=${size#*x}
 env -i HOME="$work/home" XDG_RUNTIME_DIR="$rt" PATH=/usr/bin \
@@ -83,6 +90,19 @@ ln -s "$root/core/crates/bromigos-art/targets.default.toml" "$share/default/targ
 ln -s "$root/core/crates/bromigos-art/create.default.toml" "$share/default/create.toml"
 ln -s "$root/homelab/share/homelab.toml" "$share/default/homelab.toml"
 ln -s "$root/widgets/layout.json" "$share/widgets/layout.json"
+# --fixtures: a stand-in bluez on a private D-Bus (desktop/tests/fake_bluez.py: the made-up
+# devices; the machine's Bluetooth is never asked)
+bluez_bus=
+if [[ -n ${fixtures:-} ]]; then
+  dbus-daemon --session --nofork --nopidfile --address="unix:path=$rt/bluez-bus" --print-address=1 \
+    >"$work/bluez-bus.addr" 2>/dev/null &
+  buspid=$!
+  for _ in $(seq 50); do [[ -s $work/bluez-bus.addr ]] && break; sleep 0.1; done
+  bluez_bus=$(head -1 "$work/bluez-bus.addr")
+  python3 "$root/desktop/tests/fake_bluez.py" --address "$bluez_bus" >"$work/bluez.log" 2>&1 &
+  bzpid=$!
+  for _ in $(seq 50); do grep -q ready "$work/bluez.log" 2>/dev/null && break; sleep 0.1; done
+fi
 fails=0
 for t in "${themes[@]}"; do
   home=$work/home-$t
@@ -96,6 +116,7 @@ for t in "${themes[@]}"; do
       ${fixtures:+BROMIGOS_SYSFS=$root/desktop/tests/fixtures/sysfs/sys BROMIGOS_PROC=$root/desktop/tests/fixtures/sysfs/proc} \
       ${fixtures:+BROMIGOS_PACMAN_LOG=$root/desktop/tests/fixtures/pacman.log} \
       DBUS_SESSION_BUS_ADDRESS=disabled: DBUS_SYSTEM_BUS_ADDRESS=unix:path=/nonexistent \
+      ${bluez_bus:+BROMIGOS_BLUEZ_BUS=$bluez_bus} ${bt_open:+BROMIGOS_SETTINGS_BT_OPEN=$bt_open} \
       BROMIGOS_SETTINGS_PAGES="${BROMIGOS_SETTINGS_PAGES:-}" GSK_RENDERER="${GSK_RENDERER:-cairo}" "$@"
   }
   # the thin hyprland.lua a new user starts from (the Shortcuts page reads it)
