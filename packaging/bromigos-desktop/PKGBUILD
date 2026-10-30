@@ -123,7 +123,8 @@ check() {
   PYTHONPATH=lib python -m unittest discover -s tests
   zsh -n bin/bromigos-banner zsh/bromigos.zsh
   python -m py_compile bin/bromigos-extensions
-  python -m py_compile bin/bromigos-game-setup bin/bromigos-game-proton bin/bromigos-game-check lib/bromigos_steam.py
+  python -m py_compile bin/bromigos-game-setup bin/bromigos-game-proton bin/bromigos-game-check \
+    bin/bromigos-game-maintain lib/bromigos_steam.py lib/bromigos_gamefix.py
   # the app launcher's entries (desktop/applications): desktop-file-validate, the keys every
   # entry needs, their icons (tools/launcher/check.py; CI's launcher.yml runs all of it)
   python "$_root/tools/launcher/check.py" --static --only desktop
@@ -194,10 +195,17 @@ package() {
   ln -s ../oo7-daemon.service "$pkgdir/usr/lib/systemd/user/default.target.wants/oo7-daemon.service"
   install -Dm0755 bin/bromigos-dispatch "$lib/bin/bromigos-dispatch"
   install -Dm0755 bin/bromigos-game "$lib/bin/bromigos-game"
-  # Steam and Proton (bromigos game setup, proton, check; manual/src/games.md): the commands
-  # and their reader for Steam's files
-  install -Dm0755 -t "$lib/bin/" bin/bromigos-game-setup bin/bromigos-game-proton bin/bromigos-game-check
-  install -Dm0644 lib/bromigos_steam.py "$lib/lib/bromigos_steam.py"
+  # Steam and Proton (bromigos game setup, proton, check, maintain; manual/src/games.md): the
+  # commands, their reader for Steam's files and the repairs bromigOS makes by itself, and
+  # the user service that makes them after an update and each time Steam exits (its .path
+  # unit enabled for every user, as oo7-daemon is below)
+  install -Dm0755 -t "$lib/bin/" bin/bromigos-game-setup bin/bromigos-game-proton bin/bromigos-game-check \
+    bin/bromigos-game-maintain
+  install -Dm0644 -t "$lib/lib/" lib/bromigos_steam.py lib/bromigos_gamefix.py
+  install -Dm0644 -t "$pkgdir/usr/lib/systemd/user/" systemd/bromigos-game-maintain.service \
+    systemd/bromigos-game-maintain.path
+  install -d "$pkgdir/usr/lib/systemd/user/default.target.wants"
+  ln -s ../bromigos-game-maintain.path "$pkgdir/usr/lib/systemd/user/default.target.wants/bromigos-game-maintain.path"
   # floating windows put back where they were (bromigos windows …; docs/desktop.md,
   # "Floating windows put back where they were")
   install -Dm0755 bin/bromigos-windows "$lib/desktop/bin/bromigos-windows"

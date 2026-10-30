@@ -1,0 +1,59 @@
+"InstallConfigStore"
+{
+	"Software"
+	{
+		"Valve"
+		{
+			"Steam"
+			{
+				"AutoUpdateWindowEnabled"		"0"
+				"CompatToolMapping"
+				{
+					"0"
+					{
+						"name"		"GE-Proton99-1"
+						"config"		""
+						"priority"		"75"
+					}
+					"100"
+					{
+						"name"		"TKG-proton-experimental.bleeding.edge.8.0.41901.20230428"
+						"config"		""
+						"priority"		"250"
+					}
+					"200"
+					{
+						"name"		"Proton-GE"
+						"config"		""
+						"priority"		"250"
+					}
+					"300"
+					{
+						"name"		"proton_9"
+						"config"		""
+						"priority"		"250"
+					}
+					"400"
+					{
+						"name"		"GE-Proton98-1"
+						"config"		""
+						"priority"		"250"
+					}
+					"500"
+					{
+						"name"		""
+						"config"		""
+						"priority"		"250"
+					}
+					"600"
+					{
+						"name"		"Luxtorpeda-Gone"
+						"config"		""
+						"priority"		"250"
+					}
+				}
+				"BaseInstallFolder_1"		"C:\\Games\\Steam"
+			}
+		}
+	}
+}

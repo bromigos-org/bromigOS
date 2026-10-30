@@ -10,7 +10,10 @@
 //!    kept on it where bromigOS's GRUB theme is on ([`crate::boot`]);
 //! 4. restarts: each running piece whose package was installed after the process started
 //!    (pacman's install date) is restarted, or reloaded when only its config changed. What
-//!    can't be restarted from here (Hyprland itself, the kernel) is reported instead.
+//!    can't be restarted from here (Hyprland itself, the kernel) is reported instead;
+//! 5. Steam and Proton kept ready: the bromigos-game-maintain user service started in the
+//!    background ([`games_in_background`]; the latest GE-Proton, and Steam's files repaired
+//!    once Steam is closed).
 //!
 //! Step 4 compares the running processes with what's installed, not just what this update
 //! changed, so `bromigos restart` (or the next `bromigos update`) also catches code left
@@ -1099,6 +1102,8 @@ pub struct Report {
     pub theme_error: Option<String>,
     /// The switcher's previews started in the background (None: no renderer here).
     pub previews: Option<String>,
+    /// Steam and Proton kept ready in the background (None: not here, or no session bus).
+    pub games: Option<String>,
     /// The boot menu brought to the theme (None: the update stopped before it).
     pub boot: Option<crate::boot::Outcome>,
     pub restarts: Vec<Done>,
@@ -1222,6 +1227,7 @@ pub fn finish(
         theme: None,
         theme_error: None,
         previews: None,
+        games: None,
         boot: None,
         restarts: vec![],
         snapshot,
@@ -1261,6 +1267,7 @@ pub fn finish(
     let changed: Vec<String> = report.packages.iter().map(|c| c.name.clone()).collect();
     let plans = restart_plan(paths, &[], &changed);
     report.restarts = execute(paths, &plans);
+    report.games = games_in_background();
     let background = running(Path::new("/proc"))
         .iter()
         .any(|r| r.piece == Piece::Live);
@@ -1269,6 +1276,50 @@ pub fn finish(
         n
     });
     report
+}
+
+/// The user unit that keeps Steam and Proton ready (package bromigos-desktop).
+const GAME_UNIT: &str = "bromigos-game-maintain.service";
+
+/// Steam and Proton kept ready after an update: `bromigos game maintain`'s user service
+/// started without waiting (it installs the latest GE-Proton, then waits for Steam to be
+/// closed before it touches Steam's files), with its .path unit, which starts it again each
+/// time Steam exits. A package that just arrived is new to the user's systemd: one
+/// daemon-reload, then once more. None when it isn't installed or there's no session bus.
+fn games_in_background() -> Option<String> {
+    if !Path::new("/usr/lib/systemd/user").join(GAME_UNIT).exists() {
+        return None;
+    }
+    let start = || {
+        Command::new("systemctl")
+            .args([
+                "--user",
+                "start",
+                "--no-block",
+                "bromigos-game-maintain.path",
+                GAME_UNIT,
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    };
+    let started = start() || {
+        let _ = Command::new("systemctl")
+            .args(["--user", "daemon-reload"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        start()
+    };
+    started.then(|| {
+        format!(
+            "Steam and Proton checked in the background, after Steam closes if it's open \
+             (journalctl --user -u {GAME_UNIT})"
+        )
+    })
 }
 
 /// The theme in force rendered again by the bromigos that is installed now. When this

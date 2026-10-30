@@ -20,6 +20,7 @@ import platform
 import re
 import shutil
 import tarfile
+import tempfile
 import time
 import urllib.request
 
@@ -68,11 +69,12 @@ class VdfError(ValueError):
 
 class Entry:
     """One key and its value: a string, or a Block. `span` is the value token's place in
-    the text: the quoted string with its quotes, or a block from `{` to `}` inclusive."""
-    __slots__ = ("key", "value", "span")
+    the text: the quoted string with its quotes, or a block from `{` to `}` inclusive;
+    `kstart` is where its key starts."""
+    __slots__ = ("key", "value", "span", "kstart")
 
-    def __init__(self, key, value, span):
-        self.key, self.value, self.span = key, value, span
+    def __init__(self, key, value, span, kstart=None):
+        self.key, self.value, self.span, self.kstart = key, value, span, kstart
 
 
 class Block:
@@ -168,13 +170,13 @@ def parse(text):
             if key is None:
                 key = (value, start)
             else:
-                stack[-1].entries.append(Entry(key[0], value, (start, end)))
+                stack[-1].entries.append(Entry(key[0], value, (start, end), key[1]))
                 key = None
         elif kind == "{":
             if key is None:
                 raise VdfError(f"a block with no key at {start}")
             b = Block([start, None])
-            stack[-1].entries.append(Entry(key[0], b, b.span))
+            stack[-1].entries.append(Entry(key[0], b, b.span, key[1]))
             stack.append(b)
             key = None
         else:
@@ -217,6 +219,39 @@ def set_value(text, block, key, value):
     if indent.strip():                                # } shares a line with something
         return text[:close] + f" {quote(key)} {quote(value)} " + text[close:]
     return text[:line_start] + f"{indent}\t{quote(key)}\t\t{quote(value)}\n" + text[line_start:]
+
+
+def remove_entry(text, entry):
+    """`text` without `entry` (parsed from that same text): its key, its value or block,
+    and the lines they were on when nothing else shares them."""
+    a, b = entry.kstart, entry.span[1]
+    line_start = text.rfind("\n", 0, a) + 1
+    if not text[line_start:a].strip():
+        a = line_start
+    nl = text.find("\n", b)
+    end = len(text) if nl < 0 else nl + 1
+    if not text[b:end].strip():
+        b = end
+    return text[:a] + text[b:]
+
+
+def add_block(text, block, key, items):
+    """`text` with a new block `key` holding `items` (key -> string, or a dict for a block
+    inside it) as `block`'s last entry, in the file's own indentation (Steam's tabs)."""
+    if block.span is None or text[block.span[1] - 1:block.span[1]] != "}":
+        raise VdfError("the block isn't in this text")
+    close = block.span[1] - 1
+    line_start = text.rfind("\n", 0, close) + 1
+    indent = text[line_start:close]
+    if indent.strip():
+        raise VdfError("the block's } shares its line")
+
+    def render(k, v, ind):
+        if isinstance(v, dict):
+            inner = "".join(render(kk, vv, ind + "\t") for kk, vv in v.items())
+            return f"{ind}{quote(k)}\n{ind}{{\n{inner}{ind}}}\n"
+        return f"{ind}{quote(k)}\t\t{quote(v)}\n"
+    return text[:line_start] + render(key, items, indent + "\t") + text[line_start:]
 
 
 # ------------------------------------------------------------------ libraries and apps
@@ -346,8 +381,9 @@ def runtime_problems(app):
 class Tool:
     """A compatibility tool: Proton from Steam (an app), or one of the user's own."""
 
-    def __init__(self, name, display, path, kind, appid=None):
+    def __init__(self, name, display, path, kind, appid=None, folder=None):
         self.name, self.display, self.path, self.kind, self.appid = name, display, path, kind, appid
+        self.folder = folder or path                   # the folder that holds compatibilitytool.vdf
         self.manifest = tool_manifest(path)
 
     @property
@@ -379,7 +415,7 @@ def custom_tools(root):
                     continue
                 inst = v.get("install_path") or "."
                 path = os.path.normpath(os.path.join(here, inst))
-                out.append(Tool(name, v.get("display_name") or name, path, kind))
+                out.append(Tool(name, v.get("display_name") or name, path, kind, folder=here))
     return out
 
 
@@ -426,6 +462,37 @@ def mapping_entries(block):
 
 # Steam's own value for the default tool ("0"): per-game choices use 250, which is higher.
 DEFAULT_PRIORITY = "75"
+# A game's own choice, as Steam writes it from Properties › Compatibility.
+GAME_PRIORITY = "250"
+
+_GE_NEW = re.compile(r"GE-Proton(\d+)-(\d+)")
+_GE_OLD = re.compile(r"Proton-(\d+)\.(\d+)-GE-(\d+)")
+
+
+def ge_version(name):
+    """A GE-Proton build's version as a comparable tuple (GE-Proton10-25, its per-architecture
+    GE-Proton11-11-x86_64, the older Proton-6.21-GE-2), else None."""
+    m = _GE_NEW.search(name or "")
+    if m:
+        return (int(m.group(1)), 0, int(m.group(2)))
+    m = _GE_OLD.search(name or "")
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
+
+
+def is_ge(name):
+    """GE-Proton, by version or by the generic name a package gave it ("Proton-GE")."""
+    n = (name or "").lower()
+    return ge_version(name) is not None or n.replace("_", "-") in ("proton-ge", "proton-ge-custom", "ge-proton")
+
+
+def is_tkg(name):
+    return "tkg" in (name or "").lower()
+
+
+def steam_own(name):
+    """One of Steam's own tools by its internal name (proton_experimental, proton_9, …):
+    Steam downloads it itself when a game needs it."""
+    return bool(re.fullmatch(r"[a-z0-9_]+", name or "")) and not is_tkg(name) and not is_ge(name)
 
 
 # ------------------------------------------------------------------ Steam running
@@ -589,3 +656,68 @@ def extract(tarball, dest, top):
             if os.path.isabs(name) or (name != top and not name.startswith(top + "/")):
                 raise ValueError(f"the archive holds {m.name!r}, outside {top}/")
         t.extractall(dest, filter="data")
+
+
+class InstallError(Exception):
+    """GE-Proton couldn't be installed: the message says why, in plain words."""
+
+
+def install_ge(root, tag=None, say=None):
+    """Downloads GE-Proton (the latest, or `tag`) into compatibilitytools.d, checked against
+    its published SHA-512 checksum and unpacked safely into a temporary folder first, so a
+    failed or interrupted install leaves nothing behind. {tag, top, path, already}: `already`
+    when that version was here. `say(text)` reports progress. InstallError says why not."""
+    say = say or (lambda _t: None)
+    try:
+        rel = ge_release(tag)
+    except ValueError as e:
+        raise InstallError(str(e))
+    except OSError as e:
+        raise InstallError(f"couldn't reach GE-Proton's releases on GitHub: {getattr(e, 'reason', e)}")
+    name, top = rel["tag"], rel["top"]
+    dest_root = compat_dir(root)
+    final = os.path.join(dest_root, top)
+    have = next((t.path for t in custom_tools(root) if t.kind == "user" and t.name in (name, top)), None)
+    for d in (have, final, os.path.join(dest_root, name)):
+        if d and os.path.exists(d):
+            return {"tag": name, "top": top, "path": d, "already": True}
+    size = rel.get("size") or 0
+    os.makedirs(dest_root, exist_ok=True)
+    if size and shutil.disk_usage(dest_root).free < size * 4:
+        raise InstallError(f"not enough free space for {name} in {dest_root} "
+                           f"(it needs about {size * 3 / 1e9:.1f} GB unpacked)")
+    work = tempfile.mkdtemp(prefix=f".bromigos-{name}-", dir=dest_root)
+    try:
+        say(f"Downloading {name}" + (f" ({size / 1e6:.0f} MB)" if size else "") + " …")
+        shown = [0]
+
+        def progress(done, total):
+            total = total or size
+            if total and done * 10 // total > shown[0]:
+                shown[0] = done * 10 // total
+                say(f"  {shown[0] * 10}%")
+        tarball = os.path.join(work, f"{top}.tar.gz")
+        try:
+            with _open(rel["sha512sum"]) as r:
+                published = published_sha512(r.read().decode("utf-8", "replace"), f"{top}.tar.gz")
+            got = download(rel["tarball"], tarball, progress)
+        except OSError as e:
+            raise InstallError(f"the download failed: {getattr(e, 'reason', e)}")
+        except ValueError as e:
+            raise InstallError(str(e))
+        if got != published:
+            raise InstallError(f"{top}.tar.gz doesn't match its published SHA-512 checksum: nothing was "
+                               "installed. Try again; if it keeps failing, tell GE-Proton's maintainers")
+        say("Checksum matches. Unpacking …")
+        unpacked = os.path.join(work, "unpacked")
+        os.makedirs(unpacked)
+        try:
+            extract(tarball, unpacked, top)
+        except (ValueError, OSError, tarfile.TarError) as e:
+            raise InstallError(f"{top}.tar.gz couldn't be unpacked safely: {e}")
+        if not os.path.isfile(os.path.join(unpacked, top, "compatibilitytool.vdf")):
+            raise InstallError(f"{top}.tar.gz has no {top}/compatibilitytool.vdf: not a Proton build")
+        os.rename(os.path.join(unpacked, top), final)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return {"tag": name, "top": top, "path": final, "already": False}

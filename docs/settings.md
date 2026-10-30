@@ -148,6 +148,7 @@ button between them. On a big screen the content is clamped at 1000 px wide.
 | | `default-apps` | [Default apps](#default-apps) | `bromigos defaults`, `webapp` |
 | | `startup` | [Startup](#startup) | `bromigos startup` |
 | | `extensions` | [Extensions](#extensions) | `bromigos ext` |
+| | `game` | [Playing games](#playing-games) | `bromigos game`, `game check`, `game maintain`, `game setup` |
 | VECTOR & AI | `vector` | [VECTOR](#vector) | `bromigos-holo`, `bromigos memory`, `keys`, `target` |
 | | `targets` | [Creation targets](#creation-targets) | `bromigos target` |
 | Lab | `lab` | [Lab](#lab) | `bromigos lab` |
@@ -547,6 +548,37 @@ Anything that runs code, and any update, opens a terminal running the command sh
 terminal shows the extension's permissions or changes, and you answer yes there. See
 [extensions.md](extensions.md).
 
+### Playing games
+
+The page opens on **Ready to play**, a GLOW status card ([DRIFTGLASS](DRIFTGLASS.md)).
+A controller's hologram stands on its Emitter. It turns slowly while games are ready and
+is dim and still while something needs you. It Pulses while a check or fix runs, and
+Sparks once when a fix lands. It moves only while the page is shown, and never under
+reduced motion. Beside it are:
+
+- the headline: **Games are ready**, **Almost ready**, **N things need you**,
+  **Steam isn't installed** or **Start Steam once**;
+- a line saying what bromigOS is doing about the rest, and when;
+- **Proton in use**, the default Proton every game uses unless you chose another for a
+  game;
+- **Fix**, shown when there's something to fix. It runs `bromigos game maintain
+  --refresh`, then `bromigos game check --fix`, then, if a leftover login screen file
+  still repeats bromigOS's settings, `pkexec /usr/lib/bromigos/sddm/bromigos-sddm-tidy
+  --apply`, which asks for your password;
+- **Set up Steam**, shown when Steam isn't installed. It opens `bromigos game setup` in a
+  terminal, which asks for your password;
+- **Check again**.
+
+Under the card is a list. First come the things only you can do, each with its fix and a
+hover hint. Then come the things bromigOS fixes by itself, each saying when. Notes,
+such as a runtime Steam installs on **Play**, aren't listed. **Kept ready by itself**
+explains the upkeep, and its **Log** button opens the upkeep's journal in a terminal.
+
+The page reads `bromigos game check --json` when it's shown. `bromigos_gamefix.readiness()`
+turns that into the words above. Below it, **Game mode** has the game mode switch and
+automatic mode, as before. See [Steam and Proton](desktop.md#steam-and-proton) for what
+the upkeep does.
+
 ### VECTOR
 
 VECTOR is the desktop's AI assistant. The page reads his state without starting him.
@@ -690,6 +722,7 @@ tests give it stand-ins.
 | `bromigos panels` | `bromigos-widgets reload` | `~/.config/bromigos/widgets/layout.json`, `weather.toml` |
 | `bromigos memory` | `sqlite3` | VECTOR's chat log and memory, archived first |
 | `bromigos about` | `pacman`, `bromigos hw`, `bromigos channel` | nothing |
+| `bromigos game check`, `game maintain` | Steam's files, GE-Proton's GitHub releases, `notify-send` | Steam's `config.vdf` (backed up), `compatibilitytools.d` |
 | `bromigos avatar` | Pillow | `~/.face`, `~/.face.icon` |
 
 A trial of `bromigos display` keeps its state in `~/.local/state/bromigos/display/`. Each

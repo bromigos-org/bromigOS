@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+# bromigos:summary=Keep Steam and Proton ready by itself: the latest GE-Proton, games set to a removed Proton, broken runtimes
+# bromigos:args=[--wait] [--refresh] [--no-download] [--dry-run] [--notify] [--json]
+# bromigos:examples=bromigos game maintain --dry-run; bromigos game maintain
+"""bromigos-game-maintain (`bromigos game maintain`): keeps Steam and Proton ready.
+
+You don't need to run it: it runs by itself after `bromigos update` and each time Steam
+exits (the bromigos-game-maintain user service, started by its .path unit).
+
+  bromigos game maintain             do it now. What needs Steam closed waits for the next
+                                     time Steam exits
+  bromigos game maintain --wait      wait for Steam to exit first (what the service does)
+  bromigos game maintain --dry-run   only say what it would do: nothing is downloaded or changed
+  --refresh       look for a new GE-Proton now (otherwise at most once an hour)
+  --no-download   don't look for a new GE-Proton
+  --notify        a desktop notification when something is left that needs you
+
+What it does:
+  - installs the latest GE-Proton, checked against its published SHA-512 checksum
+  - makes it the default for every game when the default is missing, unset or an older
+    GE-Proton (a choice of another tool, such as Proton Experimental, stays)
+  - a game set to a Proton that isn't installed any more follows the default again (one
+    set to a removed GE-Proton or TKG build gets the newest GE-Proton)
+  - the default's priority back to Steam's own 75
+  - a broken Steam Linux Runtime moved aside, so Steam reinstalls it on Play
+  - GE-Proton and TKG builds no game uses moved aside, keeping the newest two
+
+Everything is reversible: Steam's config.vdf is backed up first, to
+~/.local/state/bromigos/game/backup/, and what's moved aside goes to a bromigos-backup
+folder in the same Steam library (deleted after 14 days). It never starts or stops Steam,
+and changes Steam's files only while Steam is closed. It logs to the journal
+(journalctl --user -u bromigos-game-maintain). To turn it off:
+systemctl --user mask bromigos-game-maintain.service
+"""
+import fcntl
+import json
+import os
+import subprocess
+import sys
+import time
+
+sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import bromigos_cli as C  # noqa: E402
+import bromigos_gamefix as F  # noqa: E402
+import bromigos_steam as S  # noqa: E402
+from bromigos_cli import Fail  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+JSON = "--json" in sys.argv
+CHECK_EVERY = 3600                     # seconds between looks for a new GE-Proton
+POLL = float(os.environ.get("BROMIGOS_GAME_POLL") or 5)
+SETTLE = float(os.environ.get("BROMIGOS_GAME_SETTLE") or 15)   # Steam restarts itself after its updates
+
+
+def log(text):
+    """Progress: on stderr with --json (stdout is the document's), else stdout. The
+    service's output is its journal."""
+    print(text, file=sys.stderr if JSON else sys.stdout, flush=True)
+
+
+class Lock:
+    """One run at a time (the service, Settings' Fix, a terminal). A dry run takes none:
+    it writes nothing, not even the lock."""
+
+    def __init__(self, dry=False):
+        self.dry = dry
+        self.f = None
+
+    def __enter__(self):
+        if self.dry:
+            return self
+        os.makedirs(S.state_dir(), exist_ok=True)
+        self.f = open(os.path.join(S.state_dir(), "maintain.lock"), "w")
+        fcntl.flock(self.f, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *_):
+        if self.f:
+            self.f.close()
+
+
+def wait_for_steam():
+    """Returns once Steam has exited and stayed closed for SETTLE seconds."""
+    while True:
+        pid = S.steam_running()
+        if pid is None:
+            time.sleep(SETTLE)
+            if S.steam_running() is None:
+                return
+            continue
+        while os.path.exists(S.sys_path(f"/proc/{pid}")):
+            time.sleep(POLL)
+
+
+def latest_ge(root, refresh, dry):
+    """Installs the latest GE-Proton when it's new; a line saying what happened, or None."""
+    stamp = os.path.join(S.state_dir(), "ge-latest.json")
+    try:
+        with open(stamp) as f:
+            last = json.load(f)
+    except (OSError, ValueError):
+        last = {}
+    if not refresh and time.time() - float(last.get("checked") or 0) < CHECK_EVERY:
+        return None
+    if dry:
+        return "Would look for a new GE-Proton and install it (checked against its SHA-512 checksum)."
+    try:
+        got = S.install_ge(root, None, log)
+    except S.InstallError as e:
+        return f"GE-Proton wasn't updated: {e}. It's tried again later."
+    C.write_file(stamp, json.dumps({"checked": time.time(), "tag": got["tag"]}))
+    if got["already"]:
+        return None
+    return f"Installed {got['tag']} (checked against its published SHA-512 checksum)."
+
+
+def check_findings():
+    """`bromigos game check`'s findings (the one beside this command)."""
+    here = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bromigos-game-check")
+    try:
+        r = subprocess.run([sys.executable, here, "--json"], capture_output=True, text=True, timeout=180)
+        return json.loads(r.stdout).get("findings") or []
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return []
+
+
+def notify(findings):
+    """A notification for each problem that needs the person and wasn't told before."""
+    need = [f for f in findings if f["level"] == "problem" and not f.get("auto")]
+    path = os.path.join(S.state_dir(), "notified.json")
+    try:
+        with open(path) as f:
+            told = set(json.load(f))
+    except (OSError, ValueError):
+        told = set()
+    new = [f for f in need if f["title"] not in told]
+    C.write_file(path, json.dumps(sorted(f["title"] for f in need)))
+    if not new:
+        return None
+    body = new[0]["title"] + "." + (f" And {len(new) - 1} more." if len(new) > 1 else "") + \
+        " Open Settings › Playing games to see what to do."
+    C.run(["notify-send", "-a", "bromigOS", "-i", "input-gaming", "Games need you", body], timeout=10)
+    return body
+
+
+def maintain(args):
+    wait = C.flag(args, "--wait", takes=False, default=False)
+    refresh = C.flag(args, "--refresh", takes=False, default=False)
+    no_download = C.flag(args, "--no-download", takes=False, default=False)
+    dry = C.flag(args, "--dry-run", takes=False, default=False)
+    want_notify = C.flag(args, "--notify", takes=False, default=False)
+    if args:
+        raise Fail(f"unknown argument {args[0]!r}\n{USAGE}")
+    root = S.steam_root()
+    if root is None:
+        return {"steam_root": None, "done": [], "waiting": False,
+                "said": "Steam hasn't run here yet: there's nothing to keep ready. After Steam's first start, "
+                        "bromigOS installs GE-Proton and makes it the default by itself."}
+    lines, did = [], []
+    if not no_download:
+        with Lock(dry):
+            line = latest_ge(root, refresh, dry)
+        if line:
+            (lines if dry else did).append(line)
+    waiting = False
+    if S.steam_running():
+        if wait and not dry:
+            log("Steam is running: waiting for it to exit.")
+            wait_for_steam()
+        else:
+            waiting = True
+    p = None
+    if not waiting:
+        with Lock(dry):
+            p = F.plan(root)
+            if dry:
+                lines += F.describe(p)
+            else:
+                try:
+                    did += F.apply(root, p, log=lambda _line: None)    # said once, at the end
+                except F.SteamRunning:
+                    waiting = True
+    elif dry:
+        lines += F.describe(F.plan(root))
+    told = None
+    if want_notify and not dry:
+        told = notify(check_findings())
+    if dry:
+        said = "\n".join(["Would do:"] + [f"  {x}" for x in lines]) if lines else "Nothing to do: games are ready."
+    else:
+        said = "\n".join(did) if did else "Nothing to do: games are ready."
+    if waiting:
+        said += ("\n" if said else "") + ("Steam is running: what needs it closed is done the next time it exits."
+                                          if not dry else "(Steam is running: those wait until it exits.)")
+    return {"steam_root": root, "done": did, "would": lines if dry else [], "waiting": waiting,
+            "plan": p, "notified": told, "said": said}
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(C.main({"run": maintain}, USAGE, default="run"))
+    except (OSError, S.VdfError) as e:
+        print(f"bromigos game maintain: {e}", file=sys.stderr)
+        sys.exit(2)

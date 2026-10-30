@@ -1,0 +1,18 @@
+# Steam and Proton kept ready (bromigos game maintain; manual: Playing games). Started by
+# bromigos-game-maintain.path when Steam starts or writes its config, and by `bromigos
+# update` after its restarts. It installs the latest GE-Proton (checked against its
+# SHA-512), then waits for Steam to exit before it touches Steam's files: games set to a
+# removed Proton, the default Proton, broken runtimes, unused old builds. Its output is
+# this unit's journal (journalctl --user -u bromigos-game-maintain). It never starts or
+# stops Steam. Off: systemctl --user mask bromigos-game-maintain.service
+[Unit]
+Description=bromigOS: keep Steam and Proton ready
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/manual/src/games.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/bin/bromigos-game-maintain --wait --notify
+Nice=10
+IOSchedulingClass=idle
+# it waits for Steam to exit, however long a session lasts
+TimeoutStartSec=infinity

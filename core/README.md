@@ -112,6 +112,8 @@ Hold, release and the watcher take turns on a `.lock` file beside the records.
 6. It renders the theme in force again. It also starts redrawing any out-of-date theme
    switcher previews in the background, and runs `bromigos boot theme apply`.
 7. It restarts whatever runs older code than is installed, as `bromigos restart` does.
+8. It starts `bromigos game maintain`'s user service in the background, which keeps Steam
+   and Proton ready ([manual: Playing games](../manual/src/games.md)).
 
 If pacman fails, the update stops there with pacman's exit code. A failed migration stops
 it with exit 1. A failed AUR step makes it exit 1 too, but only after every other step
@@ -1363,6 +1365,7 @@ with `--json`. A refusal answers `{"ok": false, "error": "…"}` and exits 1.
     "previews": "drawing the switcher's previews in the background: …",
     "boot": {"status": "ok", "detail": "…", "commands": []},
     "restarts": [{"what": "live", "action": "restarted", "ok": true, "detail": null}],
+    "games": "Steam and Proton checked in the background, after Steam closes if it's open (…)",
     "snapshot": {"pre": 188, "post": 189},
     "channel": "edge",
     "reboot": null
@@ -1379,6 +1382,8 @@ with `--json`. A refusal answers `{"ok": false, "error": "…"}` and exits 1.
   lines of output. After a failed one, `theme` and `restarts` are empty.
 - `previews` says the theme switcher's previews started in the background. It's `null`
   where there's no renderer.
+- `games` says `bromigos-game-maintain.service` started (Steam and Proton kept ready). It's
+  `null` where bromigos-desktop isn't installed or there's no user session bus.
 - `boot` is the boot menu brought up to the theme, with the same `status` values as
   `bromigos boot theme --json`. It's `null` when the update stopped before that step.
 - A restart's `action` is `restarted`, `reloaded`, or what you must do, such as

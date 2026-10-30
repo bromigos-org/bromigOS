@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""bromigos-sddm-tidy (package bromigos-settings, /usr/lib/bromigos/sddm/): leftover login
+screen settings in /etc/sddm.conf.d that only repeat bromigOS's own.
+
+  bromigos-sddm-tidy             read-only: each file in /etc/sddm.conf.d, whether it only
+                                 repeats /usr/lib/sddm/sddm.conf.d/zz-bromigos.conf, and what
+                                 the others change
+  bromigos-sddm-tidy --apply     as root: move the ones that only repeat it to
+                                 /var/lib/bromigos/sddm-backup/<time>/
+  --json                         the report as JSON; --quiet: say nothing when nothing moves
+
+SDDM reads /etc/sddm.conf.d after the package's folder, so a file there wins even when it
+says the same thing: left in place, it would silently override the next change bromigOS
+makes to its login screen. Earlier bromigOS set-ups wrote such files (10-wayland.conf,
+and 20-bromigos.conf from ~/.config/bromigos/sddm/install.sh).
+
+A file is moved only when it sets something and every setting in it is one zz-bromigos.conf
+sets, to the same value; or when it's empty apart from comments and carries the old
+installer's header. A file with any setting of its own stays, whatever its name: the
+report says what it changes. Each move is recorded in /var/lib/bromigos/sddm-tidy.json,
+which `bromigos game check` reads.
+
+The package runs `--apply --quiet` when it's installed or upgraded (its .install file).
+BROMIGOS_FS_ROOT moves `/` (tests).
+"""
+import json
+import os
+import shutil
+import sys
+import time
+
+LEGACY = "# Written by ~/.config/bromigos/sddm/install.sh"
+PACKAGE = "usr/lib/sddm/sddm.conf.d/zz-bromigos.conf"
+CONF_D = "etc/sddm.conf.d"
+STATE = "var/lib/bromigos"
+
+
+def root():
+    return os.environ.get("BROMIGOS_FS_ROOT") or "/"
+
+
+def at(rel):
+    return os.path.join(root(), rel)
+
+
+def settings(text):
+    """[(section, key, value)] of an SDDM ini file (QSettings: keys are case-sensitive)."""
+    out, section = [], "General"
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+        elif "=" in line:
+            k, v = line.split("=", 1)
+            out.append((section, k.strip(), v.strip()))
+    return out
+
+
+def read(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def report():
+    """{package, files: [{file, path, duplicate, legacy, settings, differs}]}"""
+    pkg_text = read(at(PACKAGE))
+    pkg = {(s, k): v for s, k, v in settings(pkg_text or "")}
+    files = []
+    d = at(CONF_D)
+    try:
+        names = sorted(os.listdir(d))
+    except OSError:
+        names = []
+    for name in names:
+        path = os.path.join(d, name)
+        if not os.path.isfile(path):
+            continue
+        text = read(path)
+        if text is None:
+            continue
+        sets = settings(text)
+        legacy = LEGACY in text
+        differs = [{"section": s, "key": k, "value": v, "package": pkg.get((s, k))}
+                   for s, k, v in sets if pkg.get((s, k)) != v]
+        duplicate = pkg_text is not None and not differs and (bool(sets) or legacy)
+        files.append({"file": "/" + os.path.join(CONF_D, name), "path": path, "duplicate": duplicate,
+                      "legacy": legacy, "settings": [f"[{s}] {k}={v}" for s, k, v in sets], "differs": differs})
+    return {"package": "/" + PACKAGE if pkg_text is not None else None, "files": files}
+
+
+def record_path():
+    return at(os.path.join(STATE, "sddm-tidy.json"))
+
+
+def records():
+    try:
+        with open(record_path()) as f:
+            return json.load(f).get("removed") or []
+    except (OSError, ValueError, AttributeError):
+        return []
+
+
+def apply(rep):
+    """Moves each duplicate to the backup folder; the records of what moved."""
+    moved = []
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    backup = at(os.path.join(STATE, "sddm-backup", stamp))
+    for f in rep["files"]:
+        if not f["duplicate"]:
+            continue
+        os.makedirs(backup, mode=0o755, exist_ok=True)
+        dest = os.path.join(backup, os.path.basename(f["path"]))
+        shutil.copy2(f["path"], dest, follow_symlinks=False)
+        os.unlink(f["path"])
+        moved.append({"file": f["file"], "backup": "/" + os.path.relpath(dest, root()),
+                      "at": time.strftime("%Y-%m-%d %H:%M"),
+                      "why": "the old installer's file" if f["legacy"] else "it only repeated zz-bromigos.conf"})
+    if moved:
+        os.makedirs(os.path.dirname(record_path()), mode=0o755, exist_ok=True)
+        tmp = record_path() + ".new"
+        with open(tmp, "w") as fh:
+            json.dump({"removed": records() + moved}, fh, indent=1)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, record_path())
+    return moved
+
+
+def main(argv):
+    if any(a in ("-h", "--help") for a in argv):
+        print(__doc__)
+        return 0
+    bad = [a for a in argv if a not in ("--apply", "--json", "--quiet")]
+    if bad:
+        print(f"bromigos-sddm-tidy: unknown argument {bad[0]!r}", file=sys.stderr)
+        return 2
+    rep = report()
+    moved = []
+    if "--apply" in argv:
+        try:
+            moved = apply(rep)
+        except OSError as e:
+            if "--json" in argv:
+                print(json.dumps({"ok": False, "error": str(e)}))
+            else:
+                print(f"bromigos-sddm-tidy: {e}", file=sys.stderr)
+            return 1
+        if moved:
+            rep = report()
+    gone = {r["file"] for r in records()}
+    here = {f["file"] for f in rep["files"]}
+    doc = dict(rep, ok=True, moved=moved, removed=[r for r in records() if r["file"] in gone - here])
+    if "--json" in argv:
+        for f in doc["files"]:
+            f.pop("path", None)
+        print(json.dumps(doc))
+        return 0
+    for r in moved:
+        print(f"bromigOS: moved {r['file']} to {r['backup']} ({r['why']}): the login screen now follows bromigOS's "
+              "own settings")
+    if "--quiet" in argv:
+        return 0
+    for f in rep["files"]:
+        if f["duplicate"]:
+            print(f"{f['file']}: only repeats bromigOS's login settings (--apply moves it)")
+        else:
+            print(f"{f['file']}: changes " + "; ".join(
+                f"[{d['section']}] {d['key']}={d['value']}" for d in f["differs"]) if f["differs"] else
+                f"{f['file']}: sets nothing")
+    if not rep["files"]:
+        print("Nothing in /etc/sddm.conf.d: the login screen follows bromigOS's settings.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

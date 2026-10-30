@@ -8,6 +8,8 @@
 #   /usr/share/sddm/themes/bromigos         the login screen: the den behind the burn-in
 #   /usr/lib/sddm/sddm.conf.d/zz-bromigos.conf Current=bromigos, the Wayland greeter
 #   /usr/lib/bromigos/sddm/bromigos-greeter  Weston launcher using the core GPU policy
+#   /usr/lib/bromigos/sddm/bromigos-sddm-tidy  moves leftover /etc/sddm.conf.d files that only
+#                                           repeat zz-bromigos.conf aside (the .install runs it)
 #   /usr/share/themes/Bromigos              GTK 3 and 4, the Wick's colours
 #   /usr/share/icons/Bromigos[-cursor]      icons (Breeze Dark recoloured) and the cursor
 #   /usr/lib/bromigos/gtk/                  build-gtk-theme.py (Bromigos-<theme> into ~/.themes)
@@ -51,6 +53,7 @@ _geist=1.7.2
 source=("geist-font-v${_geist}.zip::https://github.com/vercel/geist-font/releases/download/v${_geist}/geist-font-v${_geist}.zip")
 sha256sums=('7fc800d2ac6b92844895196e5041aca55d814c15db70c44f79b3b83ab82b04e2')
 options=('!debug')
+install=$pkgname.install
 
 _root="${startdir%/packaging/*}"
 # themes/: every shipped theme's boot menu is rendered here, from its colours, art and emblem
@@ -110,6 +113,7 @@ package() {
   find "$sddm" -type d -exec chmod 0755 {} + ; find "$sddm" -type f -exec chmod 0644 {} +
   install -Dm0644 "$_root/settings/sddm/conf/zz-bromigos.conf" "$pkgdir/usr/lib/sddm/sddm.conf.d/zz-bromigos.conf"
   install -Dm0755 "$_root/settings/sddm/bromigos-greeter" "$pkgdir/usr/lib/bromigos/sddm/bromigos-greeter"
+  install -Dm0755 "$_root/settings/sddm/bromigos-sddm-tidy" "$pkgdir/usr/lib/bromigos/sddm/bromigos-sddm-tidy"
   install -Dm0644 "$_root/settings/console/60-bromigos.issue" "$pkgdir/usr/lib/issue.d/60-bromigos.issue"
   # boot, shutdown and restart splash (the ring and flame are the lock screen's)
   local ply="$pkgdir/usr/share/plymouth/themes/bromigos"

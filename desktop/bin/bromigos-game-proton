@@ -22,7 +22,6 @@ Playing games page explains which to use.
 import os
 import shutil
 import sys
-import tempfile
 
 sys.path.insert(0, "/usr/lib/bromigos/lib")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
@@ -87,55 +86,13 @@ def install(args):
     tag = args[0] if args else None
     root = root_or_fail()
     try:
-        rel = S.ge_release(tag)
-    except ValueError as e:
+        got = S.install_ge(root, tag, say)
+    except S.InstallError as e:
         raise Fail(str(e))
-    except OSError as e:
-        raise Fail(f"couldn't reach GE-Proton's releases on GitHub: {getattr(e, 'reason', e)}")
-    name, top = rel["tag"], rel["top"]
-    dest_root = S.compat_dir(root)
-    final = os.path.join(dest_root, top)
-    have = next((t.path for t in S.custom_tools(root) if t.kind == "user" and t.name in (name, top)), None)
-    for d in (have, final, os.path.join(dest_root, name)):
-        if d and os.path.exists(d):
-            return dict(status([]), installed=name, said=f"{name} is installed already ({d})")
-    os.makedirs(dest_root, exist_ok=True)
-    work = tempfile.mkdtemp(prefix=f".bromigos-{name}-", dir=dest_root)
-    try:
-        size = rel.get("size") or 0
-        say(f"Downloading {name}" + (f" ({size / 1e6:.0f} MB)" if size else "") + " …")
-        shown = [0]
-
-        def progress(done, total):
-            total = total or size
-            if total and done * 10 // total > shown[0]:
-                shown[0] = done * 10 // total
-                say(f"  {shown[0] * 10}%")
-        tarball = os.path.join(work, f"{top}.tar.gz")
-        try:
-            with S._open(rel["sha512sum"]) as r:
-                published = S.published_sha512(r.read().decode("utf-8", "replace"), f"{top}.tar.gz")
-            got = S.download(rel["tarball"], tarball, progress)
-        except OSError as e:
-            raise Fail(f"the download failed: {getattr(e, 'reason', e)}")
-        except ValueError as e:
-            raise Fail(str(e))
-        if got != published:
-            raise Fail(f"{top}.tar.gz doesn't match its published SHA-512 checksum: nothing was "
-                       "installed. Try again; if it keeps failing, tell GE-Proton's maintainers")
-        say("Checksum matches. Unpacking …")
-        unpacked = os.path.join(work, "unpacked")
-        os.makedirs(unpacked)
-        try:
-            S.extract(tarball, unpacked, top)
-        except (ValueError, OSError, S.tarfile.TarError) as e:
-            raise Fail(f"{top}.tar.gz couldn't be unpacked safely: {e}")
-        if not os.path.isfile(os.path.join(unpacked, top, "compatibilitytool.vdf")):
-            raise Fail(f"{top}.tar.gz has no {top}/compatibilitytool.vdf: not a Proton build")
-        os.rename(os.path.join(unpacked, top), final)
-    finally:
-        shutil.rmtree(work, ignore_errors=True)
-    shown = next((t.display for t in S.custom_tools(root) if t.path == final), top)
+    name, final = got["tag"], got["path"]
+    if got["already"]:
+        return dict(status([]), installed=name, said=f"{name} is installed already ({final})")
+    shown = next((t.display for t in S.custom_tools(root) if t.path == final), got["top"])
     said = f"Installed {name} in {final}, checked against its published SHA-512 checksum."
     said += (" Restart Steam to see it." if S.steam_running() else "") + \
         f" Pick it for a game in Steam: Properties › Compatibility › {shown}."

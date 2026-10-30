@@ -1,0 +1,15 @@
+# Starts bromigos-game-maintain.service when Steam starts (it writes ~/.steam/steam.pid) or
+# writes its config (as it exits). The service waits for Steam to exit, then keeps Steam
+# and Proton ready. Enabled for every user by the package (default.target.wants);
+# off: systemctl --user mask bromigos-game-maintain.service
+[Unit]
+Description=bromigOS: notice Steam starting and exiting, to keep Steam and Proton ready
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/manual/src/games.md
+
+[Path]
+PathChanged=%h/.steam/steam.pid
+PathChanged=%h/.local/share/Steam/config/config.vdf
+Unit=bromigos-game-maintain.service
+
+[Install]
+WantedBy=default.target
