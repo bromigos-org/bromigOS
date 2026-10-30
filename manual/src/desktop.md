@@ -89,7 +89,8 @@ To hide the bar, press <kbd>Alt</kbd>+<kbd>B</kbd>. Press it again to bring the 
 
 Rest the pointer on the volume for a moment and the sound popup opens under it. It closes
 when the pointer has left both the volume and the popup. Click the volume, or anywhere in
-the popup, to keep it open. Then <kbd>Esc</kbd> or a click elsewhere closes it.
+the popup, to keep it open. Then <kbd>Esc</kbd>, a second click on the volume, or a click
+anywhere else closes it. A click elsewhere still reaches what you clicked.
 
 - **OUTPUT** lists your speakers, headphones, screens with speakers (HDMI or DisplayPort)
   and Bluetooth headphones. The one in use says **IN USE**. Click another to switch to it:

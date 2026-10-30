@@ -10,7 +10,10 @@ bar's icon, in the theme's colours.
           disconnect, and Bluetooth settings
 
 One process holds both (Gtk.Application): a second click on the icon closes what's open.
-Escape or a click anywhere else closes it too. Every part explains itself on hover.
+Escape or a click anywhere else (any screen, the bar too) closes it too, and that click still
+reaches what it was on (bromigos_popup.Outside). Neither holds the keyboard: the keys reach
+them on demand, and all of them only while a PIN or passkey is typed. Every part explains
+itself on hover.
 
 DRIFTGLASS (docs/DRIFTGLASS.md): the panel is GLOW. Glass with faint Scanlines; each device
 a hologram on its Emitter that turns slowly while connected; a Pulse while connecting, a
@@ -129,7 +132,7 @@ def menu_items(state, audio=None):
 
 
 # ------------------------------------------------------------------ GTK (bromigos_popup's)
-from bromigos_popup import Shell, clear as _clear, load_gtk, spawn as _spawn, terminal as _terminal  # noqa: E402,F401
+from bromigos_popup import Outside, Shell, clear as _clear, load_gtk, spawn as _spawn, terminal as _terminal  # noqa: E402,F401
 
 
 class Row:
@@ -624,6 +627,8 @@ class Panel:
                                   "entry": "Send the code"}.get(val, label), lambda v=val: answer(v)))
         self.prompt_box.append(row)
         self.prompt_box.set_visible(True)
+        if entry is not None:
+            sh.keyboard(self.win, "exclusive")     # the code goes here, wherever the pointer is
         (entry or row.get_first_child()).grab_focus()
 
     def cancel(self):
@@ -634,6 +639,7 @@ class Panel:
     def hide_prompt(self):
         self.prompt_box.set_visible(False)
         _clear(self.prompt_box)
+        self.sh.keyboard(self.win, True)
 
     # -- keys and closing
     def on_key(self, ctrl, keyval, keycode, state):
@@ -810,6 +816,7 @@ class App:
         self.sh = None
         self.view = None
         self.catch = None
+        self.quitting = None
 
     def run(self, argv):
         return self.app.run(argv)
@@ -847,11 +854,9 @@ class App:
     def open(self, what, rest):
         sh = self.sh
         self.app.hold()
-        if self.catch is None:
-            self.catch = sh.catcher(lambda: self.view and self.view.close())
-            if self.catch is not None:
-                self.catch.set_application(self.app)
-                self.catch.present()
+        if self.quitting is not None:
+            self.GLib.source_remove(self.quitting)
+            self.quitting = None
         if what == "menu":
             v = Menu(sh, self.closed, lambda: self.switch("panel"))
             width = 300
@@ -859,8 +864,11 @@ class App:
             v = Panel(sh, self.closed)
             width = WIDTH
         v.win.set_application(self.app)
-        if sh.layer(v.win):
-            sh.place(v.win, width)
+        opener = sh.place(v.win, width) if sh.layer(v.win) else None
+        if self.catch is not None:
+            self.catch.destroy()
+        self.catch = Outside(sh, lambda: self.view and self.view.close(), opener, self.app)
+        self.catch.present()
         self.view = v
         v.changed(sh.bz.state())
         v.win.present()
@@ -886,7 +894,15 @@ class App:
             self.catch.destroy()
             self.catch = None
         self.app.release()
-        self.GLib.idle_add(lambda: self.app.quit() or False)
+        # not at once: a click elsewhere is still being handed on (Outside), and a click on
+        # the icon that closed it mustn't find no one here and open it again
+        self.quitting = self.GLib.timeout_add(1500, self._quit)
+
+    def _quit(self):
+        self.quitting = None
+        if self.view is None:
+            self.app.quit()
+        return False
 
 
 def main(argv=None):

@@ -268,7 +268,8 @@ output when it connects, unless `audio_default = false` in
 A click runs `bromigos bluetooth panel`, a right-click `bromigos bluetooth menu`, and a
 middle-click `bromigos bluetooth power toggle`. The panel and the menu are
 `lib/bromigos_btpanel.py`: GTK 4 on a gtk4-layer-shell surface, placed under the pointer.
-A clear surface behind it closes it on a click elsewhere. Both are GLOW:
+Esc, a second click on the icon, or a click anywhere else closes it (see "Closing a bar
+popup" below). Both are GLOW:
 
 - Glass with faint Scanlines;
 - each device a hologram on its Emitter (`lib/bromigos_driftglass.py`), turning slowly
@@ -338,7 +339,8 @@ same parts as the Bluetooth panel (`lib/bromigos_popup.py`). It works like this:
 - **Opened by a hover**, it takes no keys. It closes 0.4 seconds after the pointer has
   left both the volume and the popup.
 - **Pinned**, by a click on the volume (`bromigos sound popup pin`) or inside the popup, it
-  takes the keys and closes on <kbd>Esc</kbd> or a click elsewhere.
+  takes the keys on demand and closes on <kbd>Esc</kbd>, a second click on the volume, or a
+  click elsewhere.
 - **It does everything through `bromigos sound`**: `output|input DEVICE` (which also moves
   what's playing), `volume`, `mute` and `status --light`.
 - **It follows `pactl subscribe`** while it's open.
@@ -346,6 +348,30 @@ same parts as the Bluetooth panel (`lib/bromigos_popup.py`). It works like this:
 
 `tests/e2e_hover_nested.py` runs the module in a real waybar in a private nested session,
 with a virtual pointer.
+
+### Closing a bar popup
+
+The Bluetooth panel, its quick menu and the pinned sound popup close the same way
+(`Outside` in `lib/bromigos_popup.py`):
+
+- **A click anywhere else**, on any screen, the bar included. While a popup is open, a
+  nearly clear layer-shell surface covers each screen, under the popup and over the bar.
+  When a click on it ends, the popup closes and the same button is clicked again where the
+  pointer is (`lib/bromigos_vptr.py`, the compositor's virtual pointer). The click still
+  reaches the bar module, window or desktop it was on.
+- **A second click on its own icon.** That click closes the popup and isn't passed on, so
+  the icon's command doesn't open the popup again.
+- **<kbd>Esc</kbd>.** A popup takes the keys on demand: they reach it while it has the
+  focus, and it never holds them. The only exception is while a PIN or passkey is typed
+  into the Bluetooth panel. Then it takes them all, so the code can't go to another
+  window.
+
+The surface can't be fully transparent. A GTK 4 surface with nothing drawn on it is never
+shown, so a click would go straight through it.
+
+`tests/e2e_popups_nested.py` opens each popup from a real waybar in a private nested session.
+It clicks another module, the desktop, the popup's own icon and <kbd>Esc</kbd>, and checks
+that the popup closes and the other click still lands.
 
 ## Shortcuts you set by pressing the keys
 
