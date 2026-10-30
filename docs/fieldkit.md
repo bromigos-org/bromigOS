@@ -38,7 +38,7 @@ GRUB on UEFI and syslinux on BIOS, both with the boot theme's medium variant tit
 | Entry | What it does |
 |---|---|
 | Start Field Kit | The default |
-| Install bromigOS Server | The text installer, Server preselected (`bromigos.install bromigos.edition=server`); with `/fieldkit/install-server.toml` on the stick it says "unattended", becomes the default and counts down |
+| Install bromigOS Server | The text installer, Server preselected (`bromigos.install bromigos.edition=server`); with `/fieldkit/install-server.toml` on the stick (an [answer file](iso.md#answer-files) with `edition = "server"`) it says "unattended", becomes the default and counts down |
 | Start Field Kit, then unplug the stick (runs from memory) | archiso's `copytoram=y`: the whole system is read into memory first |
 | Start Field Kit with remote help (SSH, details shown on screen) | `bromigos.remote=on`: see [Remote help](#remote-help) |
 | Start with basic graphics (if the screen stays black) | `nomodeset` |
@@ -303,7 +303,7 @@ of `fieldkit/lib/bromigos_fieldkit/engine.py`.
 | `bromigos.fieldkit=disk` | Started from an install's `/boot`: the menu suggests opening that install |
 | `bromigos.remote=on` | Remote help from the start |
 | `bromigos.install bromigos.edition=server|desktop` | Start the installer with that edition (the installer's) |
-| `bromigos.answers=auto` | An answer file was found on the stick: install unattended (the installer's) |
+| `bromigos.answers=/fieldkit/install-server.toml` | The answer file the menu found on the stick: the installer runs it unattended, after its own countdown with **Cancel** ([iso.md](iso.md#answer-files)) |
 | `bromigos.motion=reduced` | No animation anywhere |
 | `copytoram=y` | archiso: read the whole system into memory first |
 | `module_blacklist=nouveau`, `vt.default_*` | Field Kit's defaults: the firmware's display for NVIDIA, DRIFTGLASS's colours |

@@ -10,7 +10,8 @@ test it. For users, the manual's [Install](../manual/src/install.md) page and th
 [Download page](https://bromigos.org/download) cover it. Every release's ISO is built,
 checked, tested, signed and published by CI, as one file at
 `https://pkgs.bromigos.org/iso/<version>/` ([A release's ISO](#a-releases-iso)). It
-starts with Secure Boot on, and so does the system it installs ([secureboot.md](secureboot.md)).
+starts with Secure Boot on, and so does the system it installs ([secureboot.md](secureboot.md)). The
+same build makes Field Kit with `--edition fieldkit` ([fieldkit.md](fieldkit.md)).
 
 ![The ISO's boot menu: the title BROMIGOS // RELAY MEDIUM over the den at night, the
 burn-in emblem, a countdown, and the entries Start bromigOS, Install bromigOS, safe
@@ -65,8 +66,9 @@ The important files in `airootfs/`:
 ### The boot menus
 
 GRUB on UEFI and syslinux on BIOS both show bromigOS's boot theme, with the same entries:
-Start bromigOS (try it live), Install bromigOS, safe graphics, a memory test, boot from
-disk, and archiso's own screen reader, firmware and power entries. [boot.md](boot.md#the-isos-menu)
+Start bromigOS (try it live), Install bromigOS, Field Kit (the same system without the
+desktop, for repairs: [fieldkit.md](fieldkit.md#the-full-isos-entry)), safe graphics, a
+memory test, boot from disk, and archiso's own screen reader, firmware and power entries. [boot.md](boot.md#the-isos-menu)
 describes each one.
 
 ### The live desktop
@@ -475,6 +477,8 @@ machine. The medium remembers it as the installed system's repository, unless
 | `--secureboot-key FILE`, `--secureboot-cert FILE` | Signs the medium for Secure Boot with this key ([secureboot.md](secureboot.md)). Without them, the medium starts only with Secure Boot off. |
 | `--test-key FILE` | Makes a test build (below) |
 | `--keep-work` | Keeps mkarchiso's work directory, to look inside the image |
+| `--edition E` | `desktop` (the default) or `fieldkit`: Field Kit, bromigOS without the desktop ([fieldkit.md](fieldkit.md#building-it)) |
+| `--local-repo DIR` | A dev build: this checkout's own packages (`packaging/dev-repo.sh`'s, unsigned) in place of `[bromigos]`'s. For tests only; `check-medium.sh` refuses it |
 
 The result is `<out>/bromigos-<version>-x86_64.iso` and its `.sha256`, owned by whoever
 ran the build. Package downloads are cached in `<out>/cache`, so a rebuild downloads only
