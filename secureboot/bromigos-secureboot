@@ -206,8 +206,10 @@ def loader_in(rest, loader):
 
 
 def ours(entries):
-    """Our entries: shim on its own (not with Field Kit's image as its option)."""
-    return [n for n, label, rest in entries if loader_in(rest, LOADER) and FK_UKI.lower() not in rest.replace("/", "\\")]
+    """Our entries: shim on its own, labelled bromigOS (Field Kit's starts shim too, with its
+    image as shim's option, which efibootmgr may print as hex)."""
+    return [n for n, label, rest in entries if loader_in(rest, LOADER) and label != FK_LABEL
+            and FK_UKI.lower() not in rest.replace("/", "\\")]
 
 
 # ------------------------------------------------------------------ the disks
