@@ -469,8 +469,8 @@ def put(src_bytes_or_path, dst):
 
 def removable_ok(espmp, st):
     """EFI/BOOT/BOOTX64.EFI, the fallback path every firmware tries: ours to fill only on a
-    disk with no Windows, where it's empty, ours already, or a copy of a GRUB the installer put
-    there. Never Windows' (or another system's) fallback loader."""
+    disk with no Windows, where it's empty, ours already, or a GRUB the installer put there.
+    Never Windows' (or another system's) fallback loader."""
     e = at(espmp)
     if os.path.isdir(os.path.join(e, "EFI", "Microsoft")) or os.path.isdir(os.path.join(e, "EFI", "microsoft")):
         return False
@@ -482,7 +482,12 @@ def removable_ok(espmp, st):
     for g in glob.glob(os.path.join(e, "EFI", "*", "grubx64.efi")):
         if same(g, boot):
             return True
-    return False
+    # a GRUB the installer put there itself (grub-install --removable): its core's EFI disk code
+    try:
+        with open(boot, "rb") as f:
+            return b"grub_efidisk_open" in f.read()
+    except OSError:
+        return False
 
 
 def install_loaders(espmp, grub_img, st, dry):

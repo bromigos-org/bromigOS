@@ -298,6 +298,15 @@ class TestSetUp(Base):
         finally:
             del os.environ["BROMIGOS_BOOT_ROOT"]
 
+    def test_installers_removable_grub_replaced(self):
+        # grub-install --removable: GRUB itself at the fallback path, no Windows on the disk
+        grub = os.path.join(self.tmp, "removable.efi")
+        subprocess.run(["grub-mkimage", "-O", "x86_64-efi", "-d", GRUB_LIB, "-o", grub, "-p", "/x", "normal"], check=True)
+        write(self.at("/boot/EFI/BOOT/BOOTX64.EFI"), rb(grub))
+        self.sb("setup", "--code", "1234")
+        self.assertEqual(rb(self.at("/boot/EFI/BOOT/BOOTX64.EFI")), b"shim stand-in")
+        self.assertTrue(self.verify(self.at("/boot/EFI/BOOT/grubx64.efi")))
+
     def test_windows_esp_untouched(self):
         win = self.at("/boot/EFI/Microsoft/Boot/bootmgfw.efi")
         write(win, b"Windows boot manager")
