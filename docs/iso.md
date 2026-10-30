@@ -779,6 +779,51 @@ gives another UEFI firmware: `ci-test.sh`'s Secure Boot test uses OVMF's Secure 
 Newest first. Until 2026-10-30 all runs were on a workstation with KVM; since then CI runs
 them on GitHub's hosted runner (`iso.yml`).
 
+### 2026-10-30, 11:40 to 16:20 Pacific: the graphical and text installers
+
+The installers of [#27](https://github.com/bromigos-org/bromigOS/pull/27) and their fixes
+since, on the workstation's KVM: an ISO built from #27's branch (5.3 GB, 13:52), each run
+with the installer copied in from the checkout. The VMs had 2 CPUs and 4 GB, so that two
+fit the shared test-VM budget. The stand-in Windows is `iso/test/fake-windows.sh`: an
+NTFS partition with 256 MB of files, an EFI system partition with a Microsoft boot stub,
+and a recovery partition.
+
+| Scenario | Install | Installed system | Beside Windows |
+|---|---|---|---|
+| UEFI, graphical, alongside Windows, encrypted (1280×800) | installed | 75 passed, 2 failed (VM) | 7/7 |
+| UEFI, graphical, alongside Windows, encrypted (1920×1080) | installed | not run (the sign-in's clicks are for 1280×800) | 7/7 |
+| BIOS, text, alongside Windows, plain | installed | GRUB lists Windows 11; desktop checks lost to a slow first session | files unchanged |
+| UEFI, text, erase, encrypted | installed | 90 passed, 3 failed (VM) | |
+| BIOS, graphical, erase, encrypted (1280×800) | installed | 91 passed, 2 failed (VM) | |
+| BIOS, graphical, erase, plain | installed | 89 passed, 3 failed (VM) | |
+| UEFI, text, reinstall keeping files, encrypted | installed | 79 passed, 1 skipped | |
+| UEFI, a hibernated Windows | refused, in plain words | | |
+
+- **Beside Windows, 7 checks:** Windows' files unchanged (SHA-256), its NTFS consistent
+  after the resize, GRUB lists bromigOS and Windows Boot Manager, the EFI system
+  partition's files unchanged, GRUB in its own folder with a firmware entry first, one
+  EFI system partition.
+- **(VM):** the wallpaper check (swaybg, which the live layer replaces on a VM) and the theme
+  switcher's preview (no 3D; main now SKIPs it there).
+- **Reinstall:** a file in the home folder kept unchanged, the user's ID 1000 kept, the old
+  system kept as `@old-root-…`. The first runs found that archinstall 4.5 wants
+  `--skip-boot` for "No bootloader" ([#34](https://github.com/bromigos-org/bromigOS/pull/34)). A
+  reinstall stopped that way put the old system back, which then passed 77 of 77.
+- **Boot parameters**, typed into each firmware's boot menu editor: BIOS
+  `bromigos.edition=server` and `bromigos.text`, all passed; UEFI `bromigos.edition=server`,
+  `bromigos.text`, `bromigos.edition=desktop`, 12 of 12 once the test typed on the linux line.
+- **The menu's Install bromigOS (text mode)**, on BIOS and UEFI: the text installer on tty1
+  and on the serial console, no login screen.
+- **The welcome tour** on the reinstalled desktop, each step opened in the session:
+  pictures of all of them, and it opens by itself when the installer left it pending. With
+  the network up it starts at Your screens; VECTOR's "This computer" isn't offered with no
+  graphics card; Pair your phone offers to install BRODEC's helper.
+- **An answer file** (`bromigos/install.toml` on a second USB stick: bromigOS Server,
+  encrypted, SSH with a key) and `bromigos.edition=server`, with no network: the countdown,
+  then the install by itself, in about 3 minutes. The installed server's 12 checks passed.
+  One of them only after a fix to the test: OpenSSH 10's `sshd -T` capitalises its keywords
+  (`PasswordAuthentication no`), and the check compared them in lower case.
+
 ### 2026-10-30, 13:14 to 13:40 Pacific: the first ISO built and tested by CI
 
 `iso.yml` on its pull request, on GitHub's hosted runner (4 CPUs, 16 GB, KVM): the stable
