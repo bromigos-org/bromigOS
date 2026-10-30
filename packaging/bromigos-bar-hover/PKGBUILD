@@ -15,7 +15,8 @@ arch=('x86_64')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 depends=('waybar' 'gtk3' 'glib2')
-makedepends=('git' 'gcc' 'pkgconf')
+# gtk3's headers: CI builds with --nodeps, installing only these
+makedepends=('git' 'gcc' 'pkgconf' 'gtk3' 'glib2')
 options=('!debug')
 
 _root="${startdir%/packaging/*}"
