@@ -168,6 +168,9 @@ if [[ $edition == fieldkit ]]; then
     want+=("${fk_optional[@]}")
     want+=(base sudo linux-firmware mkinitcpio linux amd-ucode intel-ucode zram-generator pacman-mirrorlist
            grub efibootmgr btrfs-progs cryptsetup snapper snap-pac grub-btrfs inotify-tools networkmanager openssh)
+    # and what the installer adds to every install, whatever the edition (answers.py's REQUIRED)
+    mapfile -t -O "${#want[@]}" want < <(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import answers; print("\n".join(answers.REQUIRED))' \
+        /src/iso/profile/airootfs/usr/local/lib/bromigos-iso)
 else
 # what an install adds that the live list may not have: archinstall's configuration's
 # packages, the boot loaders archinstall may pick, the kernel's headers, pacman's mirrorlist
