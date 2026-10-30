@@ -259,7 +259,7 @@ jobs:
           mkdir -p "$W/sbpkg"
           docker run --rm -v "$PWD/src:/src:ro" -v "$W/sbpkg:/out" archlinux:latest bash -c '
             set -e
-            pacman -Syu --noconfirm --needed base-devel git python grub openssl sbsigntools libarchive >/dev/null
+            pacman -Syu --noconfirm --needed base-devel git python grub openssl sbsigntools libarchive efibootmgr mokutil >/dev/null
             useradd -m b && cp -r /src /tmp/src && chown -R b /tmp/src /out
             su b -c "git config --global --add safe.directory \"*\" && cd /tmp/src/packaging/bromigos-secureboot && PKGDEST=/out makepkg --noconfirm"'
           ls -la "$W/sbpkg"
