@@ -157,6 +157,7 @@ The desktop runs these for you. You don't need them day to day.
 | Command | What it does |
 |---|---|
 | [`bromigos tv guide`](#bromigos-tv-guide) |  |
+| [`bromigos welcome`](#bromigos-welcome) | The welcome tour after an install: Wi-Fi, your screens, a world, VECTOR and his voice, your homelab, the keys; every step skippable |
 | [`bromigos welcome console`](#bromigos-welcome-console) | The welcome tour in the terminal (bromigOS Server's first sign-in): the network, SSH, joining your lab, and what's here |
 
 ## Every command in full
@@ -2650,6 +2651,23 @@ For example:
 ```text
 bromigos webapp add gmail https://mail.google.com --hotkey "SUPER + SHIFT + G"
 bromigos webapp list
+```
+
+From the `bromigos-desktop` package.
+
+### bromigos welcome
+
+The welcome tour after an install: Wi-Fi, your screens, a world, VECTOR and his voice, your homelab, the keys; every step skippable.
+
+```text
+bromigos welcome [--if-pending] [--step STEP] [--render DIR]
+```
+
+For example:
+
+```text
+bromigos welcome
+bromigos welcome --step world
 ```
 
 From the `bromigos-desktop` package.

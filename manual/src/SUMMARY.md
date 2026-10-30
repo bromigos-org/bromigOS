@@ -8,6 +8,8 @@
 - [Install](install.md)
     - [The installer](installer.md)
 - [First run](first-run.md)
+    - [The welcome tour](welcome-tour.md)
+    - [Pair your phone](phone.md)
 - [Getting around](desktop.md)
     - [The menu](menu.md)
     - [Windows and workspaces](windows.md)

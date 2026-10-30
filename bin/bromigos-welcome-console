@@ -41,8 +41,12 @@ STEPS = [
      "This server's connection and its address on your network. Other computers reach it there."),
     ("ssh", "SSH", "Sign in from another computer",
      "SSH lets you manage this server from your own computer. Keys only is safest: nobody can guess a key."),
+    ("vector", "VECTOR", "VECTOR, this server's AI",
+     "Where his brain runs. Nothing leaves this server unless you choose a service."),
     ("lab", "Lab", "Join your lab",
      "If you run a homelab, this server can join it: the lab console then shows it, and VECTOR can use it."),
+    ("phone", "Phone", "Pair your phone",
+     "With BRODEC on your phone: talk to VECTOR, approve his fixes, restart, shut down or update this server."),
     ("tour", "What's here", "What's on this server",
      "The few things worth knowing. Type any of them at the prompt; each says more with --help."),
     ("done", "Done", "You're set",
@@ -100,6 +104,7 @@ def main(argv):
         print(__doc__.strip())
         return 0
     try:
+        import bromigos_firstrun as F
         import bromigos_textual as BT
         from rich.table import Table
         from rich.text import Text
@@ -107,7 +112,8 @@ def main(argv):
         from textual.app import App
         from textual.binding import Binding
         from textual.containers import Horizontal, Vertical, VerticalScroll
-        from textual.widgets import Button, Input, Label, Static, Switch
+        from textual import work
+        from textual.widgets import Button, Input, Label, RadioButton, RadioSet, Static, Switch
     except ImportError:
         print("The welcome tour needs Textual (python-textual) and bromigos-core's bromigos_textual.")
         return 1
@@ -134,6 +140,13 @@ def main(argv):
         Screen.-narrow #rail { display: none; }
         Screen.-narrow #page, Screen.-narrow #nav, Screen.-narrow #msg, Screen.-narrow #hint { padding: 0 1; }
         Screen.-narrow #nav { height: 1; }
+        #qr { width: auto; height: auto; }
+        Screen.-narrow #page Button { width: 1fr; }
+        /* the pairing QR on a short screen (80×24): it gets the whole page */
+        Screen.-qr-tight #page Emitter, Screen.-qr-tight #page .intro, Screen.-qr-tight #hint { display: none; }
+        Screen.-qr-tight #page { padding: 0 1; }
+        Screen.-qr-tight #nav { height: 1; }
+        Screen.-qr-tight #nav Button { height: 1; border: none; padding: 0 1; min-width: 8; }
         Screen.-narrow #nav Button { min-width: 8; margin-left: 1; height: 1; border: none; padding: 0 1; }
         """
         BINDINGS = [Binding("escape", "back", "Back"), Binding("ctrl+n", "next", "Continue"), Binding("ctrl+q", "quit", "Leave")]
@@ -197,6 +210,7 @@ def main(argv):
                 text, ansi = BT.emblem()
                 page.mount(Static(Text.from_ansi(text) if ansi else text))
             page.mount(BT.Emitter(head), Static(intro, classes="intro"))
+            self.screen.set_class(sid == "phone" and self.size.height < 34, "-qr-tight")
             getattr(self, f"build_{sid}")(page)
             self.query_one("#msg", Static).update("")
             self.query_one("#back").display = i > 0
@@ -235,12 +249,153 @@ def main(argv):
             inp.tooltip = "Your other computer's public key, for example ~/.ssh/id_ed25519.pub there"
             page.mount(inp)
 
-        def build_lab(self, page):
-            page.mount(Static("Find my lab looks for your lab's machines on the network. It asks before it reads anything, "
-                              "and you choose what to add.", classes="glass"))
-            b = Button("Find my lab…", id="findlab")
-            b.tooltip = "Runs bromigos setup homelab --find here, then comes back"
+        def button(self, page, label, bid, tip):
+            b = Button(label, id=bid)
+            b.tooltip = tip
             page.mount(b)
+            return b
+
+        def build_vector(self, page):
+            vram = 0.0 if render else F.gpu_vram_gib()
+            self.model = None if render else F.local_model(vram)
+            have = [] if render else F.lab_brains()
+            self.brains = [("lab", "Your lab", have[0]["name"] if have else "found on the next step")]
+            if self.model:
+                self.brains.append(("local", "This server", f"{self.model['name']}, {self.model['disk_gib']:.0f} GB to download"))
+            self.brains += [("service", "A service", "an OpenAI-compatible server you name"), ("none", "Not now", "")]
+            rs = RadioSet(id="brain")
+            rs.tooltip = "Where VECTOR thinks"
+            page.mount(rs)
+            for k, t, sub in self.brains:
+                rb = RadioButton(f"{t}" + (f": {sub}" if sub else ""), value=k == getattr(self, "brain_pick", "lab"), id=f"brain-{k}")
+                rb.tooltip = f"{t}. {sub}"
+                rs.mount(rb)
+            for iid, ph, tip in (("svc-url", "https://…/v1", "The service's OpenAI-compatible address"),
+                                 ("svc-model", "model (blank: VECTOR's default)", "Which model he uses"),
+                                 ("svc-key", "a file holding its API key (blank: none)", "The key stays in that file")):
+                w = Input(placeholder=ph, id=iid)
+                w.tooltip = tip
+                page.mount(w)
+            self.vec_line = BT.Reading("", "idle")
+            page.mount(self.vec_line)
+
+        @on(RadioSet.Changed, "#brain")
+        def brain_changed(self, ev):
+            self.brain_pick = ev.pressed.id.removeprefix("brain-")
+
+        @work(thread=True)
+        def apply_vector(self):
+            pick = getattr(self, "brain_pick", "lab")
+            say = lambda t, st="busy": self.call_from_thread(self.vec_line.set, t, st)  # noqa: E731
+            if pick == "local":
+                ok, why = F.install_local_brain(self.model, lambda l: say(l))
+                if not ok:
+                    return say(why, "fail")
+            elif pick == "service":
+                url = self.call_from_thread(lambda: self.query_one("#svc-url", Input).value.strip())
+                if not url:
+                    return say("Type the service's address, or choose another place for his brain.", "warn")
+                code, out, err = F.set_brain("service", url=url,
+                                             model=self.call_from_thread(lambda: self.query_one("#svc-model", Input).value.strip()) or None,
+                                             key_file=self.call_from_thread(lambda: self.query_one("#svc-key", Input).value.strip()) or None)
+                if code:
+                    return say("VECTOR's brain couldn't be set: " + F.plain_error(err or out), "fail")
+            elif pick == "none":
+                F.set_brain("none")
+            if pick in ("local", "service"):
+                ok, words = F.hello()
+                say(("VECTOR: " + words) if ok else words, "ok" if ok else "fail")
+                if not ok:
+                    return
+            self.call_from_thread(self.show, self.i + 1)
+
+        def build_lab(self, page):
+            page.mount(Static("Find my lab reads what this server already knows of your network (it never scans), "
+                              "checks those devices, and changes nothing until you press Connect.", classes="glass"))
+            self.button(page, "Look for it", "findlab", "Find the lab's machines and what they offer")
+            self.lab_out = Static("", classes="muted")
+            page.mount(self.lab_out)
+            self.button(page, "Connect it", "connectlab", "Add what was found to this server's homelab settings").display = False
+            page.mount(Label("Or a lab connection file (homelab.toml, or one from a Field Kit stick):", classes="row"))
+            f = Input(placeholder="/path/to/homelab.toml", id="labfile")
+            f.tooltip = "The path of a homelab.toml to use"
+            page.mount(f)
+            self.button(page, "Use the file", "labfile-use", "Connect the lab in that file")
+            if render or F.gpu_vram_gib() >= 8:
+                self.button(page, "Make this server my lab: show the plan", "labplan",
+                            "bromigos-lab's reviewed plan for this server; nothing changes")
+
+        @work(thread=True)
+        def lab_action(self, what):
+            out = self.lab_out
+            put = lambda t: self.call_from_thread(out.update, t)  # noqa: E731
+            if what == "find":
+                put("Looking…")
+                r = F.find_lab()
+                if r["error"] or not r["hosts"]:
+                    return put(r["error"] or "No lab found. Use its connection file, or connect it later (bromigos setup homelab).")
+                put("\n".join(f"{h['name']}: {', '.join(h['offers'])}" for h in r["hosts"]))
+                self.lab_found = r
+                self.call_from_thread(lambda: setattr(self.query_one("#connectlab"), "display", True))
+            elif what == "connect":
+                ok, why = F.connect_lab()
+                brains = (getattr(self, "lab_found", {}) or {}).get("brains") or F.lab_brains()
+                if ok and getattr(self, "brain_pick", "lab") == "lab" and brains:
+                    F.set_brain("lab", url=brains[0]["url"])
+                    ok2, words = F.hello()
+                    return put(("Connected. VECTOR: " + words) if ok2 else "Connected. " + words)
+                put("Connected." if ok else why)
+            elif what == "file":
+                ok, why = F.use_lab_file(self.call_from_thread(lambda: self.query_one("#labfile", Input).value.strip()))
+                put("Your lab is connected." if ok else why)
+            elif what == "plan":
+                ok, text = F.provision_plan()
+                put(("The plan (nothing has changed):\n" + text[-1500:]) if ok else "The plan couldn't be made: " + F.plain_error(text))
+
+        def build_phone(self, page):
+            short = self.size.height < 34
+            if not short:
+                page.mount(Static(Text(f"Get BRODEC: Google Play, {F.PLAY_STORE} (iPhone: coming).", overflow="fold"),
+                                  classes="muted"))
+            self.qr = Static("", id="qr")
+            page.mount(self.qr)
+            self.pair_line = BT.Reading("Waiting for the pairing code…", "busy")
+            page.mount(self.pair_line)
+            if not render and not F.machine_installed():
+                page.mount(Static("Pairing needs BRODEC's helper (brodec-machine, from the brodec-desktop package). "
+                                  "It runs only what your phone signs; STOP ALL halts it.", classes="muted"))
+                self.button(page, "Install it", "machine-install", "Install brodec-desktop (sudo asks for your password)")
+            elif not render:
+                F.machine_start()
+            page.mount(Static("Then your phone can: " + "; ".join(c[0].lower() + c[1:] if not c.startswith("VECTOR") else c
+                                                              for c in F.PHONE_CAN) + ".", classes="muted"))
+            if render:
+                self._qr({"qr": "https://accounts.bromigos.org/device#machine=k1.example&n=server", "pretty": "KPGG-ZFVT"})
+            else:
+                self.set_interval(2, self.watch_pairing, name="pairing")
+
+        def _qr(self, code):
+            text = F.qr_text(code["qr"]) if self.size.width >= 50 and self.size.height >= 24 else None
+            if text:
+                self.qr.update(text)
+            else:
+                self.qr.styles.width = "1fr"
+                self.qr.update(Text("Make the window bigger to show the QR code (80×24 or more).", overflow="fold"))
+            self.pair_line.set(f"In BRODEC: LAB › MACHINES › ADD MACHINE, then scan it, or type {code['pretty']}", "busy")
+            if self.screen.has_class("-qr-tight"):      # the code where it's always seen
+                self.query_one("#top", Static).update(f"PAIR YOUR PHONE  ·  CODE {code['pretty']}")
+            self.shown = code.get("user_code") or code["pretty"]
+
+        def watch_pairing(self):
+            if STEPS[self.i][0] != "phone":
+                return
+            p = F.machine_paired()
+            if p:
+                self.pair_line.set(f"✓ Paired with {p.get('owner') or 'your phone'}", "ok")
+                return
+            c = F.machine_code()
+            if c and c.get("user_code") != getattr(self, "shown", None):
+                self._qr(c)
 
         def build_tour(self, page):
             t = Table.grid(padding=(0, 2))
@@ -256,6 +411,9 @@ def main(argv):
             if render:
                 return
             sid = STEPS[self.i][0]
+            if sid == "vector":
+                self.apply_vector()
+                return
             if sid == "ssh":
                 problem = self.apply_ssh()
                 if problem:
@@ -327,9 +485,17 @@ def main(argv):
                     subprocess.run(["nmtui", "connect"])
                 await self.show(self.i)
             elif b == "findlab":
-                with self.suspend():
-                    subprocess.run(["bromigos", "setup", "homelab", "--find"])
-                    input("Press Enter to go back to the tour.")
+                self.lab_action("find")
+            elif b == "connectlab":
+                self.lab_action("connect")
+            elif b == "labfile-use":
+                self.lab_action("file")
+            elif b == "labplan":
+                self.lab_action("plan")
+            elif b == "machine-install":
+                with self.suspend():          # pacman asks for the password here (a server has no password window)
+                    subprocess.run(["sudo", "pacman", "-S", "--needed", "brodec-desktop"])
+                F.machine_start()
                 await self.show(self.i)
 
     if render:

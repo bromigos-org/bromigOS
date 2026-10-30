@@ -8,9 +8,32 @@ questions, and asks before it reads anything ([Find my lab](homelab.md#find-my-l
 you have a settings file for your homelab, choose **Use a homelab.toml**, then press
 <kbd>Tab</kbd> to type its path. You can change any answer later.
 
-If you installed from the bromigOS USB stick, these questions were answered for you: the
-Wick theme, with VECTOR's brain, voice and creation tools off. Run `bromigos setup` to
-answer them yourself.
+If you installed from the bromigOS USB stick, the questions were answered for you (the
+Wick theme, with VECTOR's brain, voice and creation tools off), and your first login opens
+the **welcome tour** instead.
+
+## The welcome tour
+
+A full-screen walk through the things worth setting first. Every step has **Skip**, and
+nothing changes until you press **Continue** on it:
+
+1. **Wi-Fi**, only when you're not connected: pick a network and type its password.
+2. **Your screens**: which one is the main screen. **Arrange and sizes…** opens Settings ›
+   Displays.
+3. **A world**: the themes as pictures. Click one and **Continue** puts it on.
+4. **VECTOR**: where his brain runs (not yet, a local Ollama on this computer, or a service
+   you name) and his voice (off, Kokoro on the processor, or the designed voice on the
+   graphics card). A voice downloads its model once, in a window that shows how far it's
+   got.
+5. **Your homelab**, if you have one: **Find…** looks for it and asks before it reads
+   anything, or **Choose…** a `homelab.toml` you already have.
+6. **The keys**: Super+Space, Super+Enter, Super+, and a few more. Press one and its card
+   lights up.
+7. **Done**: what you chose.
+
+Each step runs the same `bromigos setup` section you could run yourself, so the tour and
+`bromigos setup` never disagree. To take the tour again, open Settings › About › **Welcome
+tour**, or run `bromigos welcome`.
 
 The first time you log in, a notification offers ready-made layouts for your panels:
 Minimal, Developer, Homelab and more, each fitted to your screen and your theme. They're
