@@ -15,8 +15,11 @@ repository. If it's off, setup says how to turn it on and stops.
 
 Then it adds you to the gamemode group and writes your session's GPU environment
 (`bromigos hw setup --user-only`), which turns on NVAPI for Proton games on NVIDIA.
-Log out and back in afterwards. Next: `bromigos game proton install`, then
-`bromigos game check`.
+Log out and back in afterwards.
+
+From then on bromigOS keeps Steam and Proton ready by itself (`bromigos game maintain`):
+once Steam has started, it installs the latest GE-Proton and makes it the default, and
+after each update and each time Steam exits it repairs what would stop games starting.
 """
 import grp
 import os
@@ -27,6 +30,7 @@ import sys
 sys.path.insert(0, "/usr/lib/bromigos/lib")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
 import bromigos_cli as C  # noqa: E402
+import bromigos_steam as S  # noqa: E402
 from bromigos_cli import Fail  # noqa: E402
 
 USAGE = __doc__.split("\n\n", 1)[1]
@@ -86,6 +90,10 @@ def steps(p, yes):
         cmds.append(["sudo", "gpasswd", "-a", user(), "gamemode"])
     if p["hyprland_changed"]:
         cmds.append(["bromigos", "hw", "setup", "--user-only"])
+    # Steam and Proton kept ready from now on; GE-Proton now, once Steam has made its folder
+    cmds.append(["systemctl", "--user", "start", "--no-block", "bromigos-game-maintain.path"])
+    if S.steam_root():
+        cmds.append(["bromigos", "game", "maintain", "--refresh"])
     return cmds
 
 
@@ -112,13 +120,20 @@ def setup(args):
         # sudo keeps the terminal (the password, pacman's questions); with --json their
         # output goes to stderr so the document stays alone on stdout
         r = subprocess.run(c, stdout=sys.stderr if as_json else None)
+        if r.returncode != 0 and c[0] in ("systemctl", "bromigos") and c[1] in ("--user", "game"):
+            lines.append(f"`{' '.join(c)}` didn't finish (exit {r.returncode}): bromigOS tries again after the "
+                         "next update or Steam's next exit.")
+            continue
         if r.returncode != 0:
             raise Fail(f"`{' '.join(c)}` exited {r.returncode}; nothing after it ran")
         ran.append(" ".join(c))
-    lines += ["Done." if ran else "Everything is in place already."]
-    if ran:
+    lines += ["Done."]
+    if any(c.startswith(("sudo", "bromigos hw")) for c in ran):
         lines.append("Log out and back in, so the gamemode group and the session's GPU settings apply.")
-    lines.append("Next: `bromigos game proton install` for GE-Proton, then `bromigos game check`.")
+    if not S.steam_root():
+        lines.append("Start Steam once: bromigOS then installs the newest GE-Proton and makes it the default "
+                     "by itself.")
+    lines.append("bromigOS keeps Steam and Proton ready from now on. `bromigos game check` shows what it found.")
     return dict(p, commands=ran, dry_run=False, said="\n".join(lines))
 
 

@@ -1,0 +1,15 @@
+# bromigOS's login screen follows the package's own settings
+# (/usr/lib/sddm/sddm.conf.d/zz-bromigos.conf): a leftover file in /etc/sddm.conf.d that
+# only repeats them would silently override the package's next change, so it's moved to
+# /var/lib/bromigos/sddm-backup/. A file with any setting of its own stays
+# (settings/sddm/bromigos-sddm-tidy; `bromigos game check` reports both).
+
+post_install() {
+  if [ -x usr/lib/bromigos/sddm/bromigos-sddm-tidy ]; then
+    usr/lib/bromigos/sddm/bromigos-sddm-tidy --apply --quiet || true
+  fi
+}
+
+post_upgrade() {
+  post_install
+}

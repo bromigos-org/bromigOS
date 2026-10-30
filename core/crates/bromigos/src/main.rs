@@ -2502,6 +2502,7 @@ fn update_cmd(paths: &Paths, f: &UpdateFlags, channel: Option<&str>) -> Result<i
                     theme: None,
                     theme_error: None,
                     previews: None,
+                    games: None,
                     boot: None,
                     restarts: vec![],
                     snapshot: pair,
@@ -2599,6 +2600,9 @@ fn update_cmd(paths: &Paths, f: &UpdateFlags, channel: Option<&str>) -> Result<i
     }
     println!("== restarts:");
     let ok = print_done(&r.restarts);
+    if let Some(g) = &r.games {
+        println!("== games: {g}");
+    }
     // a new release came with this update: say once where its notes are
     if let Some(n) = bromigos_core::whats_new::announce(paths) {
         println!("== what's new: bromigOS {} (bromigos whats-new)", n.version);

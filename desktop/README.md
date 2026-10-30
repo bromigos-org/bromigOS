@@ -215,9 +215,11 @@ See [game mode](../docs/desktop.md#game-mode) and the manual's
 [Playing games](../manual/src/games.md).
 
 `bromigos game setup`, `bromigos game proton` and `bromigos game check` set up Steam,
-manage GE-Proton and find what stops games from starting. They share
-`lib/bromigos_steam.py`, which reads Steam's files. See
-[Steam and Proton](../docs/desktop.md#steam-and-proton).
+manage GE-Proton and find what stops games from starting. `bromigos game maintain`
+keeps Steam and Proton ready by itself, after each update and each time Steam exits
+(`systemd/bromigos-game-maintain.{path,service}`). They share `lib/bromigos_steam.py`,
+which reads Steam's files, and `lib/bromigos_gamefix.py`, which works out the repairs.
+See [Steam and Proton](../docs/desktop.md#steam-and-proton).
 
 `xembedsniproxy` starts with the bar to put legacy XEmbed tray icons into Waybar.
 It comes from `plasma-workspace`; `snixembed` bridges in the opposite direction.

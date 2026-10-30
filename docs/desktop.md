@@ -730,22 +730,98 @@ For the Razer button and LED, see [peripherals](peripherals.md#game-mode-key).
 
 ### Steam and Proton
 
-Three commands set up and check Steam. The manual's
-[Playing games](../manual/src/games.md#steam-and-proton) page is the user's guide.
+bromigOS keeps Steam and Proton ready by itself, so someone who doesn't know Proton never
+has to. Four commands do the work. The manual's
+[Playing games](../manual/src/games.md) page is the user's guide, and Settings ›
+Playing games shows the result in plain words.
 
 | Command | File | What it does |
 |---|---|---|
-| `bromigos game setup` | `desktop/bin/bromigos-game-setup` | Installs `steam`, `gamemode` and `lib32-gamemode`, with the `lib32-` and `vulkan-` packages `bromigos hw --json` wants for this machine's GPUs, in one `sudo pacman -S --needed`. Adds the user to `gamemode`, and runs `bromigos hw setup --user-only` when the GPU environment changed. Without multilib it stops and says how to turn it on. |
+| `bromigos game setup` | `desktop/bin/bromigos-game-setup` | Installs `steam`, `gamemode` and `lib32-gamemode`, with the `lib32-` and `vulkan-` packages `bromigos hw --json` wants for this machine's GPUs, in one `sudo pacman -S --needed`. Adds the user to `gamemode`, runs `bromigos hw setup --user-only` when the GPU environment changed, starts the upkeep's `.path` unit and, once Steam has run, `bromigos game maintain --refresh`. Without multilib it stops and says how to turn it on. |
 | `bromigos game proton` | `desktop/bin/bromigos-game-proton` | Lists Steam's Proton apps and the tools in `compatibilitytools.d`. `install` takes GE-Proton's GitHub release, checks the tarball against the release's `.sha512sum`, unpacks it into a temporary folder beside the others, then renames it into place. `remove` refuses while Steam runs, and for a version games are set to unless `--force`. |
-| `bromigos game check` | `desktop/bin/bromigos-game-check` | Read-only checks, with `--fix` for the user's own files. Exit status 0 means healthy, 1 means something needs fixing, and 2 means it couldn't check. |
+| `bromigos game check` | `desktop/bin/bromigos-game-check` | Read-only checks. `--fix` does now what the upkeep does when Steam next closes, and disables a user `waybar.service`. Exit status 0 means healthy, 1 means something needs fixing, and 2 means it couldn't check. Each `--json` finding has `auto: true` when the upkeep repairs it. |
+| `bromigos game maintain` | `desktop/bin/bromigos-game-maintain` | The upkeep. Installs the latest GE-Proton, at most once an hour unless `--refresh`. With Steam closed, it applies `bromigos_gamefix`'s plan. `--wait` waits for Steam to exit first, `--dry-run` downloads and changes nothing, and `--notify` sends one notification for each new problem only the person can fix. |
 
-`desktop/lib/bromigos_steam.py` reads Steam's files for all three:
+#### What runs it, and when
+
+- **After `bromigos update`.** The update's last step (`games_in_background` in
+  `core/crates/bromigos-core/src/update.rs`) runs `systemctl --user start --no-block` on
+  `bromigos-game-maintain.path` and `.service`. If systemd doesn't know them yet, it runs
+  one `daemon-reload` and tries again. The report's `games` field says it started.
+- **Each time Steam starts or exits.** `bromigos-game-maintain.path` watches
+  `~/.steam/steam.pid`, which Steam writes as it starts, and
+  `~/.local/share/Steam/config/config.vdf`, which it writes as it exits. Either one
+  starts `bromigos-game-maintain.service`, which runs `bromigos game maintain --wait
+  --notify` at `Nice=10` with idle I/O. The GE-Proton download happens at once. Steam's
+  files change only after Steam has exited and stayed closed for 15 seconds, because
+  Steam restarts itself after its own updates. The package enables the `.path` unit for
+  every user with a `default.target.wants` link. `systemctl --user mask
+  bromigos-game-maintain.service` turns it all off, the update's start included.
+- **Logs.** The service's output is its journal: `journalctl --user -u
+  bromigos-game-maintain`. Settings' **Log** button opens it.
+
+#### What it repairs
+
+`desktop/lib/bromigos_gamefix.py` has the logic. `plan(root)` reads Steam's files and
+returns the changes. `apply()` makes them, and `readiness()` turns `game check --json`
+into the page's plain words.
+
+| Part | Rule |
+|---|---|
+| A game set to a missing tool | Its `CompatToolMapping` entry is removed, so it follows the default. That's what unticking "Force the use of a specific Steam Play compatibility tool" does. A game set to a GE-Proton or TKG build that's gone gets the newest GE-Proton instead, when the default isn't already that. Those builds carry game fixes Valve's Proton lacks, so the newest GE is the nearest match. Steam's own tools (`proton_9`, `proton_experimental`) count as present, because Steam downloads them itself. |
+| The default (`"0"`) | It becomes the newest GE-Proton when it names a tool that isn't installed, is unset, or is an older GE-Proton. A choice of another tool that is installed stays, such as Proton Experimental, `proton_9` or a TKG build. With no GE-Proton here, a missing default becomes `proton_experimental`. A missing `"0"` or `CompatToolMapping` is added in Steam's own layout. |
+| Priority | The default's priority goes back to 75. |
+| Runtimes | A broken Steam Linux Runtime moves aside, as `--fix` always did. One that is downloading or updating is left alone. |
+| Old builds | GE-Proton and TKG folders that no game or default uses move aside. The newest GE-Proton and the newest one before it stay. Pruning happens only when a GE-Proton is installed. It covers only folders directly in `compatibilitytools.d`, never a link, a package's tools in `/usr/share/steam`, or another kind of tool such as Luxtorpeda. |
+
+Versions compare across GE's naming schemes: `Proton-6.21-GE-2` < `GE-Proton7-43` <
+`GE-Proton11-11-x86_64` (`ge_version`).
+
+Everything is reversible:
+
+- `config.vdf` is copied to `~/.local/state/bromigos/game/backup/<time>/`. Then it is
+  rewritten through a temporary file and a rename. An edit that doesn't parse back is
+  never written.
+- Runtimes and old builds are renamed into `<library>/bromigos-backup/<time>/`, on the
+  same drive. Those folders are deleted after 14 days.
+- The changes to `config.vdf` are checked again just before the write, and nothing is
+  written if Steam has started.
+
+A lock file in `~/.local/state/bromigos/game/` keeps the service, Settings' Fix and a
+terminal from running at once. The upkeep never starts or stops Steam.
+
+#### The login screen's leftovers
+
+Earlier set-ups left files in `/etc/sddm.conf.d` that repeat the package's
+`/usr/lib/sddm/sddm.conf.d/zz-bromigos.conf`: `10-wayland.conf`, and `20-bromigos.conf`
+from the old `~/.config/bromigos/sddm/install.sh`. SDDM reads `/etc` last, so such a file
+would quietly override the package's next change to the login screen.
+
+`settings/sddm/bromigos-sddm-tidy`, installed to `/usr/lib/bromigos/sddm/`, reports each
+file read-only. With `--apply` it moves the files that only repeat the package to
+`/var/lib/bromigos/sddm-backup/<time>/`, and records each move in
+`/var/lib/bromigos/sddm-tidy.json`. A file counts as a repeat when it sets something and
+every setting matches the package's value, or when it holds only comments and the old
+installer's header. A file with any setting of its own stays.
+
+`bromigos-settings.install` runs `--apply --quiet` in `post_install` and `post_upgrade`.
+Nobody types sudo. Settings › Playing games › Fix runs it through `pkexec` when a repeat
+is still there.
+
+`game check` reports a moved file as `ok`. It warns only when a file overrides one of
+bromigOS's own settings, and says what it changes. A file that only adds settings, such
+as autologin, is an `info` note.
+
+#### Reading Steam's files
+
+`desktop/lib/bromigos_steam.py` reads Steam's files for all four commands:
 
 - **VDF.** Steam keeps its state in Valve's text KeyValues format. The parser records
-  where each value sits in the text. A change rewrites that one value, so the rest of the
-  file stays byte for byte. A key that appears twice keeps its first value, as in Steam,
-  and a change never adds a second copy. (The `vdf` package from PyPI appends a duplicate
-  key when you assign to one, so it isn't used.)
+  where each key and value sits in the text. A change rewrites that one value, removes
+  one block with its lines, or adds one block in the file's own tab layout. The rest of
+  the file stays byte for byte. A key that appears twice keeps its first value, as in
+  Steam, and a change never adds a second copy. The `vdf` package from PyPI appends a
+  duplicate key when you assign to one, so it isn't used.
 - **Where Steam is.** The root is `~/.steam/root`, else `$XDG_DATA_HOME/Steam`. The
   libraries come from `steamapps/libraryfolders.vdf`, and each app from its
   `appmanifest_<id>.acf`.
@@ -753,24 +829,26 @@ Three commands set up and check Steam. The manual's
   entry point its `commandline` names is there. The container runtimes, soldier (1391110),
   sniper (1628350) and Steam Linux Runtime 4.0 (4183110), also need `_v2-entry-point` and
   a non-empty `pressure-vessel/`. A runtime whose `StateFlags` show a download or update
-  in progress is reported, not judged.
+  in progress is reported, not judged. A Proton whose runtime isn't installed is only a
+  note, because Steam installs it when you press **Play**.
 - **The default tool.** `CompatToolMapping` in `config/config.vdf` maps app IDs to tools.
   Its `"0"` entry is the default for every game, and its priority must be 75, Steam's own.
   Per-game entries use 250.
 - **Steam running.** Steam is running when a process in `/proc` is `steam` or
   `steamwebhelper`, or a shell running `steam.sh`. Nothing that changes Steam's files runs
   then, because Steam writes `config.vdf` back when it exits.
+- **GE-Proton.** `install_ge` downloads, checks the SHA-512 and unpacks. It needs four
+  times the tarball's size free first. `game proton install` and the upkeep share it.
 
-`--fix` moves a broken runtime's folder, its `downloading/<id>` and `temp/<id>` folders
-and its manifest into `<library>/bromigos-backup/<time>/`, on the same drive. It copies
-`config.vdf` to `~/.local/state/bromigos/game/backup/<time>/` before setting the priority,
-and runs `systemctl --user disable waybar.service`. The checks of `/etc/sddm.conf.d`,
-`/etc/systemd/user` and `/etc/mkinitcpio.conf` only print commands.
-
-`BROMIGOS_FS_ROOT` moves `/` for `/proc`, `/etc` and `/usr`, and
+`BROMIGOS_FS_ROOT` moves `/` for `/proc`, `/etc`, `/usr` and `/var`, and
 `BROMIGOS_PROTON_RELEASES` replaces GitHub's API with a folder of recorded releases.
-`desktop/tests/test_steam.py` runs all three commands on a fake Steam in a throwaway home,
-with the VDF files in `desktop/tests/fixtures/steam/`.
+`BROMIGOS_GAME_POLL` and `BROMIGOS_GAME_SETTLE` shorten the upkeep's wait for Steam.
+`desktop/tests/test_steam.py` runs all four commands on a fake Steam in a throwaway home,
+with the VDF files in `desktop/tests/fixtures/steam/`. `config-stale.vdf` copies a real
+install's leftovers, and `config-stale-fixed.vdf` is the byte-exact result. The tests
+cover the plan, applying it, the deferral while Steam runs, the GE download and its hourly
+limit, pruning and notifications. `settings/sddm/tests/test_tidy.py` runs the SDDM tidy,
+and the package scriptlet itself, against fixture `/etc` trees.
 The isolated test is `desktop/tests/e2e_game_nested.py`; the tray test is
 `desktop/tests/e2e_tray_nested.py`. The latter needs `gtk2` for its StatusIcon fixture.
 It exercises the direct XEmbed button path also used by Wine. GTK 3 StatusIcon uses

@@ -1,69 +1,60 @@
 # Playing games
 
-Game mode gives the focused game your keys, including Alt, Ctrl, letters and F-keys.
-It quiets notifications, stops idle locking and sleep, pauses the live wallpaper and
-hides panels (widgets). The bar shows **GAME MODE**.
-
-Press **Super+Ctrl+G** to turn it on. Press **Ctrl+Shift+F12** to leave.
-An on-screen message confirms entry and exit. The escape key appears when you enter. It is the only desktop shortcut that
-works during game mode. Leaving restores your previous notification state, panels and
-wallpaper behaviour.
-
-You can also use Settings › Playing games or these commands:
-
-```bash
-bromigos game on
-bromigos game off
-bromigos game toggle
-bromigos game status
-```
-
-If you need to recover from a TTY or SSH, run `bromigos game off` as your normal user.
-The keyboard escape resets the shortcut mode even if the helper cannot answer.
+Install Steam, then press **Play**. bromigOS keeps everything a game needs to start ready
+by itself, and tells you only when something needs you.
 
 ## Steam and Proton
 
-Steam runs Windows games through Proton, a compatibility layer built on Wine. Proton runs
-inside a Steam Linux Runtime, a small container that Steam downloads. bromigOS has three
-commands for this:
+Steam runs Windows games through Proton, a compatibility layer built on Wine. You don't
+need to know how Proton works: bromigOS chooses a good one, keeps it current and repairs
+what would stop a game from starting.
 
-```bash
-bromigos game setup             # install Steam, GameMode and your GPUs' 32-bit drivers
-bromigos game proton install    # get the latest GE-Proton
-bromigos game check             # find what stops games from starting
-```
+### Get started
 
-### Set up Steam
+1. Open **Settings › Playing games** and press **Set up Steam**. A terminal opens and asks
+   for your password once. It installs Steam, GameMode, and the graphics drivers games
+   need for the graphics cards in this computer.
+2. Log out and back in.
+3. Start Steam, sign in, install a game and press **Play**.
 
-Run `bromigos game setup`. It installs Steam and GameMode, plus the 32-bit Vulkan and
-graphics drivers for the GPUs `bromigos hw` finds. GameMode is a small service that gives
-a running game more of the computer's attention. Getting the drivers in the same step
-stops pacman from picking a 32-bit driver for the wrong card. It asks for your password
-on the terminal. `--dry-run` shows what it would do first.
+The first time Steam starts, bromigOS downloads the newest GE-Proton in the background
+and makes it the Proton every game uses. GE-Proton is a community build of Proton with
+extra fixes for games and video. It's checked against the checksum its makers publish
+before it's installed.
 
-Steam needs the multilib repository, which holds 32-bit packages. If it's off, setup
-says how to turn it on and stops.
+### What bromigOS does for you
 
-Setup also adds you to the `gamemode` group. Log out and back in afterwards.
+After every `bromigos update`, and each time you quit Steam, bromigOS:
 
-### Choose a Proton version
+- installs the newest GE-Proton, and makes it the default when the default is missing
+  or an older GE-Proton;
+- points a game set to a Proton that isn't installed any more back at one that is;
+- puts the setting that lets Steam install its own runtimes back to Steam's own value;
+- moves a broken Steam Linux Runtime aside, so Steam installs a fresh one the next time
+  you press **Play**;
+- moves old GE-Proton versions that no game uses aside, keeping the newest two.
 
-Steam comes with its own Proton. GE-Proton is a community build with more fixes for
-games and video codecs. Some games run only with it.
+It never changes Steam's files while Steam is open, because Steam would write its own
+settings back when it quits. It never starts or stops Steam. Everything it changes can be
+undone. Steam's settings file is copied first, and anything it moves aside is kept for
+14 days.
 
-```bash
-bromigos game proton                         # the Proton versions here
-bromigos game proton install                 # the latest GE-Proton
-bromigos game proton install GE-Proton10-25  # one version
-bromigos game proton remove GE-Proton10-25   # remove one (close Steam first)
-```
+Your choices stay. If you picked another Proton as the default, such as Valve's Proton
+Experimental, bromigOS keeps it. A game you set to a Proton that's installed keeps it too.
 
-`install` downloads GE-Proton from its GitHub releases and checks it against the
-SHA-512 checksum published with it. A download that doesn't match is thrown away. Then
-restart Steam, and pick the version for a game in its **Properties › Compatibility**.
+### Is everything ready?
 
-`remove` won't remove a version that games are still set to. Choose another version for
-them first, or pass `--force`.
+Open **Settings › Playing games**. The top of the page says **Games are ready**, or lists
+what needs you, each with what to do. Hover over anything on the page to see what it is
+and does. The page also shows which Proton your games use.
+
+Things bromigOS fixes by itself are listed with when it will fix them. To fix them now,
+close Steam and press **Fix**. If a leftover file from an older bromigOS set-up still
+changes your login screen, **Fix** asks for your password to remove it. Updates remove
+those files too.
+
+When something needs you, such as a setting outside your home folder, you get one
+notification that says so. You get it once, not every time you quit Steam.
 
 ### DLSS on NVIDIA
 
@@ -88,37 +79,39 @@ To keep a game on one card, add this to its Launch Options, with that card's ID:
 MESA_VK_DEVICE_SELECT=10de:2f04 %command%
 ```
 
-### When games won't start
+If you changed the file that holds your session's graphics settings,
+`~/.local/state/bromigos/hw/hyprland.lua`, bromigOS leaves it alone and doesn't turn
+NVAPI on. Settings › Playing games says so. To hand the file back to bromigOS, run:
 
-Run `bromigos game check`. It looks for each problem below and says how to fix it.
-`bromigos game check --fix` fixes the ones in your own files. Close Steam first. Steam
-writes its settings back when it quits, which would undo the fix. `--fix` never changes
-files in `/etc`. For those, it prints the commands to run.
+```bash
+mv ~/.local/state/bromigos/hw/hyprland.lua ~/hyprland.lua.mine
+bromigos hw setup --user-only
+```
 
-| What it says | What it means | What `--fix` does |
-|---|---|---|
-| A Steam Linux Runtime is broken | Files are missing from it, such as `_v2-entry-point` or `toolmanifest.vdf`. Every game that uses it quits within a second or two. Steam's **Verify** doesn't notice. | Moves the runtime aside, into a `bromigos-backup` folder in that Steam library. Steam installs it again when you next press **Play**. |
-| The default compatibility tool has the wrong priority | Steam's setting for all games should have priority 75. A higher number makes Steam run its own Linux runtimes through Proton, and installing them fails with "Invalid platform". | Sets it back to 75. It saves a copy of Steam's `config.vdf` first, in `~/.local/state/bromigos/game/backup/`. |
-| A Proton needs a runtime that isn't installed | The runtime downloads the first time you play a game with that Proton. | Nothing. Press **Play**. |
-| A game is set to a Proton that isn't installed | You removed a Proton that a game still uses. | Nothing. Install it again, or choose another. |
-| Proton games don't get NVAPI | DLSS is missing on NVIDIA. | Nothing. Log out and back in. |
-| A file in `/etc/sddm.conf.d` is still read | The login screen reads every file in that folder, whatever its name. So renaming a file to `.disabled` doesn't turn it off. A leftover setting can leave a black screen at login. | Nothing. It prints the `sudo mv` command that moves the file out. |
-| waybar is enabled as a user service | bromigOS starts its bar with the desktop. A second bar appears on top of it. | Disables your `waybar.service`. Log out and back in. |
-| mkinitcpio's MODULES names a package | `/etc/mkinitcpio.conf` lists a package, such as `nvidia-open`, where a kernel module belongs. The module is `nvidia`. | Nothing. It prints what to change, then `sudo mkinitcpio -P`. |
+Then log out and back in. Your own version stays in `~/hyprland.lua.mine`.
 
-### Reinstall a broken runtime by hand
+## Game mode
 
-If games quit at once and `bromigos game check` isn't at hand:
+Game mode gives the focused game your keys, including Alt, Ctrl, letters and F-keys.
+It quiets notifications, stops idle locking and sleep, pauses the live wallpaper and
+hides panels (widgets). The bar shows **GAME MODE**.
 
-1. Quit Steam (**Steam › Exit**).
-2. In the Steam library that holds the runtime, delete the runtime's folder in
-   `steamapps/common`, for example `SteamLinuxRuntime_4`.
-3. Delete `steamapps/appmanifest_<id>.acf`, `steamapps/downloading/<id>` and
-   `steamapps/temp/<id>`. The ID of Steam Linux Runtime 4.0 is 4183110.
-4. Start Steam and press **Play** on the game. Steam installs the runtime first.
+Press **Super+Ctrl+G** to turn it on. Press **Ctrl+Shift+F12** to leave.
+An on-screen message confirms entry and exit. The escape key appears when you enter. It is the only desktop shortcut that
+works during game mode. Leaving restores your previous notification state, panels and
+wallpaper behaviour.
 
-Installing a runtime from a `steam://install/` link doesn't work. It fails with "Invalid
-platform".
+You can also use Settings › Playing games or these commands:
+
+```bash
+bromigos game on
+bromigos game off
+bromigos game toggle
+bromigos game status
+```
+
+If you need to recover from a TTY or SSH, run `bromigos game off` as your normal user.
+The keyboard escape resets the shortcut mode even if the helper cannot answer.
 
 ## Your keyboard's Game Mode key
 
@@ -153,3 +146,81 @@ tray-bridge update, log out and back in, then reopen Battle.net.
 A Lutris shortcut can launch StarCraft II through an existing Battle.net installation.
 Set its Wine prefix and executable to the ones used by Battle.net and its arguments to
 `--exec="launch S2"`. This uses that installation without creating another Wine prefix.
+
+## Doing it by hand
+
+You don't need any of this: bromigOS does it for you. It's here for when you want to see
+or change what it does.
+
+### The commands
+
+```bash
+bromigos game setup               # install Steam, GameMode and your GPUs' 32-bit drivers
+bromigos game check               # find what stops games from starting
+bromigos game check --fix         # fix it now (close Steam first)
+bromigos game maintain --dry-run  # what bromigOS would change by itself, changing nothing
+bromigos game proton              # the Proton versions here
+bromigos game proton install      # the latest GE-Proton
+bromigos game proton install GE-Proton10-25   # one version
+bromigos game proton remove GE-Proton10-25    # remove one (close Steam first)
+```
+
+`game setup --dry-run` shows what setup would install. Steam needs the multilib
+repository, which holds 32-bit packages. If it's off, setup says how to turn it on and
+stops.
+
+`game proton install` downloads GE-Proton from its GitHub releases. It checks the
+download against the SHA-512 checksum published with it, and throws away a download
+that doesn't match. Pick a version for one game in Steam: the game's
+**Properties › Compatibility**. `remove` won't remove a version games are still set to,
+unless you pass `--force`.
+
+To see what bromigOS did and when, run:
+
+```bash
+journalctl --user -u bromigos-game-maintain
+```
+
+Settings › Playing games › **Log** opens the same list.
+
+### What the check says
+
+| What it says | What it means | Who fixes it |
+|---|---|---|
+| A Steam Linux Runtime is broken | Files are missing from it, such as `_v2-entry-point` or `toolmanifest.vdf`. Every game that uses it quits within a second or two. Steam's **Verify** doesn't notice. | bromigOS moves it aside, into a `bromigos-backup` folder in that Steam library. Steam installs it again when you next press **Play**. |
+| The default compatibility tool has the wrong priority | Steam's setting for all games should have priority 75. A higher number makes Steam run its own Linux runtimes through Proton, and installing them fails with "Invalid platform". | bromigOS sets it back to 75, after copying Steam's `config.vdf` to `~/.local/state/bromigos/game/backup/`. |
+| The Proton every game uses isn't installed, isn't set or is older | The default for all games points at a Proton that's gone, or at an older GE-Proton. | bromigOS makes the newest GE-Proton the default. |
+| A game is set to a Proton that isn't installed | You removed a Proton that a game still uses. | bromigOS sets the game back to the default. A game set to an old GE-Proton or TKG build gets the newest GE-Proton instead. |
+| Old Proton versions no game uses | GE-Proton or TKG builds that nothing uses take up space. | bromigOS moves them aside, keeping the newest two GE-Proton versions. |
+| A Proton needs a runtime Steam installs on Play | The runtime downloads the first time you play a game with that Proton. | Nobody: press **Play**. |
+| Proton games don't get NVAPI | DLSS is missing on NVIDIA. | You: log out and back in. See [DLSS on NVIDIA](#dlss-on-nvidia). |
+| A login screen file only repeats bromigOS's settings | A file in `/etc/sddm.conf.d` from an older set-up. Left there, it would override future changes to the login screen. | bromigOS moves it to `/var/lib/bromigos/sddm-backup/` when it updates. **Fix** in Settings does it now. |
+| A login screen file changes bromigOS's login screen | A file in `/etc/sddm.conf.d` sets something differently, such as another theme. The check says what it changes. | You, if you didn't set it on purpose. It prints the `sudo mv` command that moves the file out. |
+| A file in `/etc/sddm.conf.d` is still read | The login screen reads every file in that folder, whatever its name. So renaming a file to `.disabled` doesn't turn it off. A leftover setting can leave a black screen at login. | You. It prints the `sudo mv` command that moves the file out. |
+| waybar is enabled as a user service | bromigOS starts its bar with the desktop. A second bar appears on top of it. | **Fix** disables your `waybar.service`. Log out and back in. |
+| mkinitcpio's MODULES names a package | `/etc/mkinitcpio.conf` lists a package, such as `nvidia-open`, where a kernel module belongs. The module is `nvidia`. | You. It prints what to change, then `sudo mkinitcpio -P`. |
+
+### Reinstall a broken runtime by hand
+
+If games quit at once and `bromigos game check` isn't at hand:
+
+1. Quit Steam (**Steam › Exit**).
+2. In the Steam library that holds the runtime, delete the runtime's folder in
+   `steamapps/common`, for example `SteamLinuxRuntime_4`.
+3. Delete `steamapps/appmanifest_<id>.acf`, `steamapps/downloading/<id>` and
+   `steamapps/temp/<id>`. The ID of Steam Linux Runtime 4.0 is 4183110.
+4. Start Steam and press **Play** on the game. Steam installs the runtime first.
+
+Installing a runtime from a `steam://install/` link doesn't work. It fails with "Invalid
+platform".
+
+### Turn off the automatic upkeep
+
+To stop bromigOS from keeping Steam and Proton ready by itself, run:
+
+```bash
+systemctl --user mask bromigos-game-maintain.service
+```
+
+Updates then leave Steam and Proton alone too. `systemctl --user unmask
+bromigos-game-maintain.service` turns it back on.

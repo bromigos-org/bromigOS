@@ -148,7 +148,8 @@ The desktop runs these for you. You don't need them day to day.
 | [`bromigos game`](#bromigos-game) | Give the game your keys and quiet the desktop. See [Playing games](games.md). |
 | [`bromigos game setup`](#bromigos-game-setup) | Install Steam with your graphics cards' 32-bit drivers. See [Steam and Proton](games.md#steam-and-proton). |
 | [`bromigos game proton`](#bromigos-game-proton) | List, install or remove Proton versions, such as GE-Proton. |
-| [`bromigos game check`](#bromigos-game-check) | Find what stops games from starting, and fix your own files with `--fix`. |
+| [`bromigos game check`](#bromigos-game-check) | Find what stops games from starting. `--fix` repairs it now. |
+| [`bromigos game maintain`](#bromigos-game-maintain) | Keep Steam and Proton ready. It runs by itself after each update and each time Steam exits. |
 
 ### Other commands
 
@@ -1027,7 +1028,7 @@ From the `bromigos-desktop` package.
 
 ### bromigos game check
 
-Check Steam, Proton and the desktop for what stops games starting; --fix repairs your own files.
+Check Steam, Proton and the desktop for what stops games starting; --fix repairs it now.
 
 ```text
 bromigos game check [--fix] [--json]
@@ -1038,6 +1039,23 @@ For example:
 ```text
 bromigos game check
 bromigos game check --fix
+```
+
+From the `bromigos-desktop` package.
+
+### bromigos game maintain
+
+Keep Steam and Proton ready by itself: the latest GE-Proton, games set to a removed Proton, broken runtimes.
+
+```text
+bromigos game maintain [--wait] [--refresh] [--no-download] [--dry-run] [--notify] [--json]
+```
+
+For example:
+
+```text
+bromigos game maintain --dry-run
+bromigos game maintain
 ```
 
 From the `bromigos-desktop` package.
