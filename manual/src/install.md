@@ -5,9 +5,10 @@ On an existing system, use the script below or [start from the AUR](#start-from-
 
 
 - **On an Arch Linux system you already have.** A short script adds bromigOS's packages
-  and sets everything up. This is the way to install today.
+  and sets everything up.
 - **From the bromigOS USB stick.** It boots straight into the desktop, and installs from
-  there. The stick image isn't published yet.
+  there. Download it from the [Download page](https://bromigos.org/download), then see
+  [Install from the USB stick](#install-from-the-usb-stick).
 
 ## Install only the lab console
 
@@ -124,11 +125,18 @@ prints these steps without changing anything.
 
 ## Install from the USB stick
 
-> **Not published yet.** The bromigOS install image works, but there's no download yet.
-> Until there is, install on Arch Linux as above.
+Download the newest image from the [Download page](https://bromigos.org/download). It's
+one file of about 5 GB, with its checksum and signature beside it. The page walks through
+each step below on Windows, macOS and Linux.
 
-1. Write the image to a USB stick with your usual tool, such as `dd`.
-2. Start the computer from the stick. Both UEFI and older BIOS machines work.
+1. Write the image to a USB stick of 8 GB or more, with balenaEtcher, Rufus (in DD
+   Image mode) or `dd`. Everything on the stick is erased.
+2. Start the computer from the stick: tap its boot menu key as it starts (often F12, F11,
+   F9 or Esc) and choose the stick. Both UEFI and older BIOS machines work. With Secure
+   Boot on, the first start asks you once to enroll bromigOS's key (Enroll key from disk,
+   then `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). The installed system needs Secure Boot off
+   for now: turn it off in the computer's setup before you start it. See
+   [Secure Boot](https://bromigos.org/download#secure-boot).
 3. In the boot menu, choose **Start bromigOS (try it live)**. You're on the full desktop,
    and nothing is installed yet. Try the keys and look around.
 4. To install, open a terminal with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> and

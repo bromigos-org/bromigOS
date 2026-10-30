@@ -1,0 +1,375 @@
+# The ISO, built, checked, tested, signed and published by CI (docs/iso.md, "What CI does
+# with it"):
+# - every stable release: once packages.yml has published a vX.Y.Z tag's stable channel,
+#   from the tag, to https://pkgs.bromigos.org/iso/X.Y.Z/, and onto the GitHub Release's text;
+# - every week, and by hand: the edge channel's, to iso/edge/ (the newest only);
+# - by hand: any stable release again (a backfill), from its tag or another ref, or a
+#   build of any branch that publishes nothing (publish: false);
+# - on pull requests that change this pipeline: the build, its checks and tests, nothing
+#   published.
+# Every profile under iso/ (a directory with profiledef.sh: the desktop medium, the Field
+# Kit) is built the same way, side by side. GitHub's hosted runner (free for a public
+# repository) has the disk, Docker and KVM it needs. CI_RUNNER_ISO can name another, which
+# must be one only this workflow may use: a public repository's pull requests must never
+# reach a homelab runner (docs/public.md).
+name: iso
+
+on:
+  workflow_run:
+    workflows: [packages]
+    types: [completed]
+  schedule:
+    - cron: "23 10 * * 1"          # Mondays, 03:23 Pacific: the edge ISO
+  pull_request:
+    paths: [".github/workflows/iso.yml", "iso/ci-test.sh", "iso/publish.sh", "iso/release-notes.py", "iso/secureboot/**"]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "stable (a release's ISO) or edge"
+        type: choice
+        options: [stable, edge]
+        default: stable
+      tag:
+        description: "stable: the release (e.g. v0.1.3); empty: the newest"
+        type: string
+        default: ""
+      ref:
+        description: "Build from this ref's iso/ instead of the tag's (e.g. main: a fix made after the release); the packages are still the channel's"
+        type: string
+        default: ""
+      publish:
+        description: "Publish it (stable: also onto the Release's text). Off: build, check and test only"
+        type: boolean
+        default: true
+      tests:
+        description: "Run the boot and install tests (only skip them to re-publish a medium already tested)"
+        type: boolean
+        default: true
+      import_release_parts:
+        description: "Instead of building: move the ISO attached in parts to the tag's GitHub Release (v0.1.2) to the bucket"
+        type: boolean
+        default: false
+
+concurrency:
+  group: iso-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || inputs.channel || (github.event_name == 'schedule' && 'edge') || 'stable' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: What to build
+    # a release: packages.yml's run for a vX.Y.Z tag (not an rc), green
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
+       startsWith(github.event.workflow_run.head_branch, 'v') && !contains(github.event.workflow_run.head_branch, '-'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      channel: ${{ steps.plan.outputs.channel }}
+      tag: ${{ steps.plan.outputs.tag }}
+      ref: ${{ steps.plan.outputs.ref }}
+      version: ${{ steps.plan.outputs.version }}
+      publish: ${{ steps.plan.outputs.publish }}
+      tests: ${{ steps.plan.outputs.tests }}
+      import: ${{ steps.plan.outputs.import }}
+      profiles: ${{ steps.profiles.outputs.profiles }}
+    steps:
+      - name: Plan
+        id: plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          RUN_TAG: ${{ github.event.workflow_run.head_branch }}
+          IN_CHANNEL: ${{ inputs.channel }}
+          IN_TAG: ${{ inputs.tag }}
+          IN_REF: ${{ inputs.ref }}
+          IN_PUBLISH: ${{ inputs.publish }}
+          IN_TESTS: ${{ inputs.tests }}
+          IN_IMPORT: ${{ inputs.import_release_parts }}
+          PR: ${{ github.event.number }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          tests=true import=false
+          case $EVENT in
+            workflow_run) channel=stable tag=$RUN_TAG ref=$RUN_TAG publish=true ;;
+            schedule) channel=edge tag='' ref=main publish=true ;;
+            pull_request) channel=stable tag='' ref=$PR_SHA publish=false ;;
+            workflow_dispatch)
+              channel=$IN_CHANNEL publish=$IN_PUBLISH tests=$IN_TESTS import=$IN_IMPORT tag=''
+              if [[ $channel == stable ]]; then
+                tag=${IN_TAG:-$(gh release list -R "$GITHUB_REPOSITORY" --exclude-pre-releases --exclude-drafts --limit 30 \
+                        --json tagName --jq '[.[].tagName | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))][0]')}
+              fi
+              ref=${IN_REF:-${tag:-main}} ;;
+          esac
+          if [[ $channel == stable && $EVENT != pull_request ]]; then
+            [[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$tag isn't a stable release's tag"; exit 1; }
+            version=${tag#v}
+          elif [[ $EVENT == pull_request ]]; then
+            version=pr$PR
+          else
+            version=$(date -u +%Y.%m.%d)
+          fi
+          [[ $import == true && $channel != stable ]] && { echo "::error::import_release_parts is for a stable release"; exit 1; }
+          for k in channel tag ref version publish tests import; do echo "$k=${!k}" | tee -a "$GITHUB_OUTPUT"; done
+      - uses: actions/checkout@v5
+        if: steps.plan.outputs.import != 'true'
+        with:
+          ref: ${{ steps.plan.outputs.ref }}
+          sparse-checkout: iso
+      - name: The profiles
+        id: profiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ${{ steps.plan.outputs.import }} == true ]]; then echo 'profiles=[]' >> "$GITHUB_OUTPUT"; exit 0; fi
+          # every directory of iso/ with a profiledef.sh; the desktop medium's tests are the
+          # whole install, a profile with its own ci-test.sh runs that, any other boots to its menu
+          json=$(for f in iso/*/profiledef.sh; do
+              d=$(basename "$(dirname "$f")")
+              if [[ -e iso/$d/airootfs/usr/local/bin/bromigos-iso-install ]]; then s=desktop
+              elif [[ -x iso/$d/ci-test.sh ]]; then s=hook; else s=menu; fi
+              printf '{"dir":"%s","suite":"%s"}\n' "$d" "$s"
+            done | jq -sc .)
+          echo "profiles=$json" | tee -a "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.profile.dir }}
+    needs: plan
+    if: needs.plan.outputs.import != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJSON(needs.plan.outputs.profiles) }}
+    runs-on: ${{ vars.CI_RUNNER_ISO || 'ubuntu-latest' }}
+    timeout-minutes: 300
+    outputs:
+      secureboot: ${{ steps.build.outputs.secureboot }}
+    env:
+      CHANNEL: ${{ needs.plan.outputs.channel }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      PROFILE: ${{ matrix.profile.dir }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: ci
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          path: src
+
+      - name: The runner (disk, KVM, tools)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ runner.environment }}" == github-hosted ]]; then
+            # ~30 GB back from toolchains this job never uses: the build, its checks and a test
+            # VM's disk need about that much at once
+            sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+              /usr/share/swift /usr/local/share/boost /usr/local/share/powershell /opt/microsoft /opt/google /usr/lib/jvm &
+            sudo docker image prune -af >/dev/null 2>&1 || true
+            wait
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules >/dev/null
+            sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+            sudo apt-get update -qq && sudo apt-get install -y -qq xorriso libarchive-tools rclone >/dev/null
+          fi
+          # the work goes where there's the most room
+          best=$(df --output=avail,target -B1 / /mnt 2>/dev/null | tail -n +2 | sort -rn | head -1 | awk '{print $2}')
+          W=${best%/}/iso-work; sudo mkdir -p "$W"; sudo chown "$(id -u):$(id -g)" "$W"
+          echo "W=$W" >> "$GITHUB_ENV"
+          df -h / /mnt 2>/dev/null || df -h /
+          free -g; nproc; ls -l /dev/kvm
+
+      # Secure Boot (docs/secureboot.md): a published medium is signed with bromigOS's key,
+      # from the repository's secrets, in memory only; any other build with a throwaway key,
+      # so its Secure Boot test still runs
+      - name: The Secure Boot key
+        id: sbkey
+        shell: bash
+        env:
+          SB_KEY: ${{ needs.plan.outputs.publish == 'true' && secrets.ISO_SECUREBOOT_KEY || '' }}
+          SB_CERT: ${{ needs.plan.outputs.publish == 'true' && secrets.ISO_SECUREBOOT_CERT || '' }}
+          PUBLISH: ${{ needs.plan.outputs.publish }}
+        run: |
+          set -euo pipefail
+          grep -q -- '--secureboot-key' src/iso/build.sh || { echo "this ref's build has no Secure Boot"; exit 0; }
+          d=/dev/shm/iso-sb; mkdir -p "$d"; chmod 700 "$d"
+          if [[ -n $SB_KEY && -n $SB_CERT ]]; then
+            printf '%s\n' "$SB_KEY" > "$d/sb.key"; printf '%s\n' "$SB_CERT" > "$d/sb.crt"
+            # the certificate people enroll is the one in the repository, and the key is its own
+            cmp -s <(openssl x509 -in "$d/sb.crt" -outform DER) <(openssl x509 -in ci/iso/secureboot/bromigos-secureboot.crt -outform DER) \
+              || { echo "::error::ISO_SECUREBOOT_CERT isn't iso/secureboot/bromigos-secureboot.crt"; exit 1; }
+            cmp -s <(openssl x509 -in "$d/sb.crt" -noout -pubkey) <(openssl pkey -in "$d/sb.key" -pubout) \
+              || { echo "::error::ISO_SECUREBOOT_KEY isn't the certificate's key"; exit 1; }
+          elif [[ $PUBLISH == true ]]; then
+            echo "::error::publishing needs ISO_SECUREBOOT_KEY and ISO_SECUREBOOT_CERT"; exit 1
+          else
+            openssl req -quiet -new -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=bromigOS CI throwaway Secure Boot key/" \
+              -keyout "$d/sb.key" -out "$d/sb.crt" 2>/dev/null
+          fi
+          chmod 600 "$d"/*
+          openssl x509 -in "$d/sb.crt" -outform DER -out "$d/sb.cer"
+          echo "dir=$d" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        id: build
+        shell: bash
+        env:
+          SB: ${{ steps.sbkey.outputs.dir }}
+        run: |
+          set -euo pipefail
+          public=$(sed -n "s/^PUBLIC_REPO=\([^ ]*\).*/\1/p" src/install.sh | tr -d "'\"")
+          args=(--repo "$public" --medium-repo "$public" --channel "$CHANNEL" --version "$VERSION" --out "$W/out")
+          [[ $PROFILE == profile ]] || args+=(--profile "$PROFILE")
+          if [[ -n $SB ]]; then args+=(--secureboot-key "$SB/sb.key" --secureboot-cert "$SB/sb.crt"); echo "secureboot=true" >> "$GITHUB_OUTPUT"; fi
+          time src/iso/build.sh "${args[@]}"
+          iso=$(ls "$W"/out/bromigos-*"$VERSION"-x86_64.iso)
+          echo "iso=$iso" >> "$GITHUB_OUTPUT"
+          rm -rf "$W/out/cache" "$W/out/work"
+          ls -la "$W/out"; df -h "$W"
+
+      - name: What's on it
+        shell: bash
+        env:
+          PRIVACY_PATTERNS: ${{ secrets.PRIVACY_PATTERNS }}
+        run: |
+          set -euo pipefail
+          rc=0
+          src/iso/check-medium.sh "${{ steps.build.outputs.iso }}" --keep "$W/check" 2>&1 | tee "$W/check-medium.out" || rc=$?
+          sudo rm -rf "$W/check" 2>/dev/null || rm -rf "$W/check"
+          exit "$rc"
+
+      - name: Boot and install tests
+        if: needs.plan.outputs.tests == 'true'
+        shell: bash
+        env:
+          SB: ${{ steps.sbkey.outputs.dir }}
+        run: |
+          set -euo pipefail
+          # the tests of the ref the medium was built from, when it has them (older tags don't)
+          t=src; [[ -x src/iso/ci-test.sh ]] || t=ci
+          args=(--out "$W/tests" --suite "${{ matrix.profile.suite }}" --profile "src/iso/$PROFILE")
+          [[ -n $SB ]] && args+=(--secureboot-cert "$SB/sb.cer")
+          $t/iso/ci-test.sh "${{ steps.build.outputs.iso }}" "${args[@]}"
+
+      - name: The tests' screenshots and output
+        if: always() && needs.plan.outputs.tests == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: iso-tests-${{ matrix.profile.dir }}
+          path: |
+            ${{ env.W }}/tests/
+            ${{ env.W }}/check-medium.out
+            !${{ env.W }}/tests/**/*.qcow2
+            !${{ env.W }}/tests/**/*.fd
+            !${{ env.W }}/tests/**/id_ed25519
+          if-no-files-found: ignore
+
+      - name: Sign and publish
+        if: needs.plan.outputs.publish == 'true'
+        shell: bash
+        env:
+          PKGS_PUBLIC_ENDPOINT: ${{ secrets.PKGS_PUBLIC_ENDPOINT }}
+          PKGS_PUBLIC_BUCKET: ${{ secrets.PKGS_PUBLIC_BUCKET }}
+          PKGS_PUBLIC_ACCESS_KEY_ID: ${{ secrets.PKGS_PUBLIC_ACCESS_KEY_ID }}
+          PKGS_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.PKGS_PUBLIC_SECRET_ACCESS_KEY }}
+          PKGS_GPG_PRIVATE_KEY: ${{ secrets.PKGS_GPG_PRIVATE_KEY }}
+          PKGS_GPG_PASSPHRASE: ${{ secrets.PKGS_GPG_PASSPHRASE }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          iso=${{ steps.build.outputs.iso }}
+          ci/iso/publish.sh sign "$iso"
+          ci/iso/publish.sh upload "$iso" --channel "$CHANNEL" ${TAG:+--tag "$TAG"}
+
+      - name: Forget the Secure Boot key
+        if: always()
+        run: rm -rf /dev/shm/iso-sb
+
+  import:
+    name: Move a Release's ISO parts to the bucket
+    needs: plan
+    if: needs.plan.outputs.import == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Join, verify, publish, then remove the parts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          PKGS_PUBLIC_ENDPOINT: ${{ secrets.PKGS_PUBLIC_ENDPOINT }}
+          PKGS_PUBLIC_BUCKET: ${{ secrets.PKGS_PUBLIC_BUCKET }}
+          PKGS_PUBLIC_ACCESS_KEY_ID: ${{ secrets.PKGS_PUBLIC_ACCESS_KEY_ID }}
+          PKGS_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.PKGS_PUBLIC_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq rclone >/dev/null
+          d=$RUNNER_TEMP/import; mkdir -p "$d"; cd "$d"
+          name=bromigos-$VERSION-x86_64.iso
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "$name.part*" -p "$name.sha256" -p "$name.sig"
+          ls -la
+          cat $(ls "$name".part* | sort -V) > "$name"
+          rm -f "$name".part*
+          sha256sum -c "$name.sha256"
+          export GNUPGHOME=$(mktemp -d); gpg --batch --quiet --import "$GITHUB_WORKSPACE/packaging/keys/bromigos.asc"
+          gpg --batch --status-fd 1 --verify "$name.sig" "$name" 2>/dev/null | grep -q '^\[GNUPG:\] VALIDSIG 393E7D54F7DE58FE75B97214947C9D6193D3DD8B '
+          touch -d "$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets --jq ".assets[] | select(.name == \"$name.sha256\") | .createdAt")" "$name"
+          "$GITHUB_WORKSPACE/iso/publish.sh" upload "$d/$name" --channel stable --tag "$TAG"
+          # the bucket has it, checked as a stranger downloads it: the parts go
+          for p in $(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets --jq ".assets[].name | select(startswith(\"$name.part\"))"); do
+            gh release delete-asset "$TAG" "$p" -R "$GITHUB_REPOSITORY" --yes
+          done
+
+  finish:
+    name: Pointers, retention, the Release's text
+    needs: [plan, build, import]
+    if: >-
+      always() && needs.plan.outputs.publish == 'true' && needs.plan.result == 'success' &&
+      (needs.build.result == 'success' || needs.import.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: latest.json, and the versions kept
+        id: pointers
+        shell: bash
+        env:
+          PKGS_PUBLIC_ENDPOINT: ${{ secrets.PKGS_PUBLIC_ENDPOINT }}
+          PKGS_PUBLIC_BUCKET: ${{ secrets.PKGS_PUBLIC_BUCKET }}
+          PKGS_PUBLIC_ACCESS_KEY_ID: ${{ secrets.PKGS_PUBLIC_ACCESS_KEY_ID }}
+          PKGS_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.PKGS_PUBLIC_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq rclone >/dev/null
+          iso/publish.sh pointers --channel "${{ needs.plan.outputs.channel }}" --out "$RUNNER_TEMP/index"
+      - name: The Release's text
+        if: needs.plan.outputs.channel == 'stable'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          # the Release is made by release-promote alongside the packages; wait for it a while
+          for _ in $(seq 60); do gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 && break; sleep 30; done
+          iso/release-notes.py --tag "$TAG" --index "$RUNNER_TEMP/index/$VERSION/index.json" --repo "$GITHUB_REPOSITORY"
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          f=$RUNNER_TEMP/index/latest.json
+          [[ -f $f ]] || exit 0
+          { echo "## The ${{ needs.plan.outputs.channel }} ISO"; echo; echo '```json'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

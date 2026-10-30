@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The ISO build proper, run by iso/build.sh inside a privileged archlinux container:
 # /src is the bromigOS checkout (read-only), /out the output and cache volume,
-# $ISO_REPO the package repository, $ISO_MEDIUM_REPO the one the medium names (default
+# $ISO_PROFILE the profile (a directory of iso/), $ISO_REPO the package repository, $ISO_MEDIUM_REPO the one the medium names (default
 # $ISO_REPO), $ISO_VERSION the medium's version, /in/repo-ca.crt the CA of $ISO_REPO,
-# /in/test_key.pub a test key, $ISO_OWNER (uid:gid) the owner of what it makes.
+# /in/test_key.pub a test key, /in/sb.key and /in/sb.crt the Secure Boot key and certificate, $ISO_OWNER (uid:gid) the owner of what it makes.
 set -euo pipefail
 repo=${ISO_REPO:?}
 medium_repo=${ISO_MEDIUM_REPO:-$repo}
@@ -12,7 +12,8 @@ medium_repo=${ISO_MEDIUM_REPO:-$repo}
 medium_ca=0; [[ -f /in/repo-ca.crt && $medium_repo == "$repo" ]] && medium_ca=1
 channel=${ISO_CHANNEL:-stable}
 case $channel in edge) sub='' ;; *) sub="/$channel" ;; esac        # as install.sh lays the channels out
-profile_src=/src/iso/profile
+profile_src=/src/iso/${ISO_PROFILE:-profile}
+secureboot=0; [[ -f /in/sb.key && -f /in/sb.crt ]] && secureboot=1
 work=/out/work
 cache=/out/cache
 mkdir -p "$work" "$cache/pkg"
@@ -23,6 +24,7 @@ say() { printf '\n==> %s\n' "$*"; }
 say "the build tools"
 # python-pillow and grub (grub-mkfont): the boot menus' theme (docs/boot.md)
 pacman -Syu --noconfirm --needed archiso arch-install-scripts git python python-pillow grub >/dev/null
+(( secureboot )) && pacman -S --noconfirm --needed sbsigntools openssl libarchive >/dev/null
 if [[ -f /in/repo-ca.crt ]]; then
     install -Dm0644 /in/repo-ca.crt /etc/ca-certificates/trust-source/anchors/bromigos-repo-ca.crt
     update-ca-trust
@@ -163,12 +165,42 @@ Server = file://$offline/\$repo/\$arch
 EOF
 
 # ── 5. mkarchiso ───────────────────────────────────────────────────────────────────────
+mkarchiso=mkarchiso
+if (( secureboot )); then
+    # Secure Boot (docs/secureboot.md): mkarchiso has no step for it, so a copy of it calls
+    # iso/secureboot/medium.sh where it needs to: once the kernels are out of the image (they
+    # are signed before they are copied onto the medium), and once GRUB's EFI binary is made
+    # (shim goes in front of it, before the EFI system partition is written). Each anchor
+    # must be there exactly once, or the build stops: a new archiso needs a look first.
+    say "Secure Boot"
+    /src/iso/secureboot/medium.sh shim "$cache/shim"
+    mkarchiso=$work/mkarchiso-secureboot
+    python3 - /usr/bin/mkarchiso "$mkarchiso" <<'PY'
+import sys
+src, dst = sys.argv[1:3]
+s = open(src).read()
+hook = "/src/iso/secureboot/medium.sh"
+for anchor, add in (
+    ("    _run_once _copy_boot_out_of_pacstrap_dir\n",
+     f'    _run_once _copy_boot_out_of_pacstrap_dir\n    "{hook}" kernel "${{boot_dir}}" || _msg_error "Secure Boot: signing the kernel failed" 1\n'),
+    ('    efiboot_files=("${isofs_dir}/EFI")\n',
+     f'    "{hook}" grub "${{isofs_dir}}" "${{work_dir}}/grub-embed.cfg" || _msg_error "Secure Boot: shim and GRUB failed" 1\n'
+     '    efiboot_files=("${isofs_dir}/EFI" "${isofs_dir}/ENROLL_THIS_KEY_IN_MOKMANAGER.cer")\n'),
+):
+    n = s.count(anchor)
+    if n != 1:
+        sys.exit(f"mkarchiso: the Secure Boot anchor {anchor.strip()!r} is there {n} times, not once")
+    s = s.replace(anchor, add)
+open(dst, "w").write(s)
+PY
+    chmod +x "$mkarchiso"
+fi
 say "mkarchiso"
 iso_work=$work/mkarchiso
 rm -rf "$iso_work"                 # mkarchiso skips every stage a kept work dir has stamped
 mkdir -p "$iso_work" /out/iso
 rm -f /out/iso/bromigos-*.iso
-mkarchiso -v -w "$iso_work" -o /out/iso "$profile" 2>&1 | grep -vE '^\[mkarchiso\] INFO: (Adding|Creating|Installing)' | tail -40
+"$mkarchiso" -v -w "$iso_work" -o /out/iso "$profile" 2>&1 | grep -vE '^\[mkarchiso\] INFO: (Adding|Creating|Installing)' | tail -40
 iso=$(ls /out/iso/bromigos-*.iso | tail -1)
 (cd /out/iso && sha256sum "$(basename "$iso")" > "$(basename "$iso").sha256")
 mv -f "$iso" "$iso.sha256" /out/

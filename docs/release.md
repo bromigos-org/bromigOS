@@ -214,30 +214,33 @@ Every workflow has a **dry run** switch, on by default.
 
 ## The ISO
 
-Each release's installer image goes on its GitHub Release, for anyone to download. It's
-built from the stable channel once the release workflow has published it. It's built and tested by hand, on a
-workstation: it needs a privileged container, about 15 GB of disk and KVM, more than the
-shared runners give. [iso.md](iso.md#a-releases-iso) has every step and command:
+Each stable release's installer image is built, checked, tested, signed and published by
+CI (`.github/workflows/iso.yml`), with nobody at a workstation. [iso.md](iso.md#a-releases-iso)
+has the details:
 
-1. build it from the tag, from the public repository, which the medium names for updates
-   (`iso/build.sh --repo https://pkgs.bromigos.org --medium-repo https://pkgs.bromigos.org
-   --version X.Y.Z`);
-2. check what's on it (`iso/check-medium.sh`: the repository it names, no keys or CA,
-   no proprietary packages, the privacy guard, the pictures);
-3. test it in the harness, UEFI and BIOS, one of them with no network: the live session,
-   an install, the first boot, the first update and its rollback;
-4. sign it with the package signing key (a detached, armoured `.sig`);
-5. attach it in parts, because GitHub takes files under 2 GiB and the ISO is about
-   4.3 GB, with the whole ISO's `.sha256` and `.sig`, and add the download steps to the
-   Release's text.
+1. When `packages.yml` has published a `vX.Y.Z` tag's stable channel, the workflow builds
+   the ISO from the tag, from the public repository, which the medium names for updates,
+   signed for Secure Boot ([secureboot.md](secureboot.md)).
+2. It checks what's on it (`iso/check-medium.sh`: the repository it names, no keys or CA,
+   no proprietary packages, the privacy guard, the pictures).
+3. It tests it in QEMU with KVM, UEFI and BIOS, one of them with no network: the live
+   session, an install, the first boot, the first update and its rollback; and the medium
+   with Secure Boot on.
+4. It signs it with the package signing key (a detached, armoured `.sig`).
+5. It publishes it as one file to `https://pkgs.bromigos.org/iso/X.Y.Z/`, with its
+   `.sha256`, `.sig` and `.json`, moves `iso/latest.json` to it, keeps the newest three
+   releases' ISOs, and puts the links and checksum on the GitHub Release's `ISO:` line.
+   The [Download page](https://bromigos.org/download) follows `latest.json`.
 
-Downloading it is putting the parts together, then checking the checksum and the
-signature against `packaging/keys/bromigos.asc`:
+A release candidate gets no ISO. The edge channel gets one every week. Building one
+again, or from a fix made after the tag: `gh workflow run iso -f channel=stable -f
+tag=vX.Y.Z -f ref=main`.
+
+Downloading it is one file, checked against its checksum and `packaging/keys/bromigos.asc`:
 
 ```bash
-cat bromigos-0.1.2-x86_64.iso.part? > bromigos-0.1.2-x86_64.iso
-sha256sum -c bromigos-0.1.2-x86_64.iso.sha256
-gpg --verify bromigos-0.1.2-x86_64.iso.sig bromigos-0.1.2-x86_64.iso
+sha256sum -c bromigos-0.1.3-x86_64.iso.sha256
+gpg --verify bromigos-0.1.3-x86_64.iso.sig bromigos-0.1.3-x86_64.iso
 ```
 
 Installing needs no network. An installed system updates from `https://pkgs.bromigos.org`.
@@ -246,6 +249,8 @@ v0.1.2 was the first release with an ISO. The first one, attached on 2026-10-09,
 bucket's r2.dev address. It was replaced on 2026-10-10 with one that names
 `pkgs.bromigos.org`, and a migration moves machines installed from the first one
 ([public.md](public.md#the-r2dev-address)). [iso.md](iso.md#test-runs) has both runs.
+Until v0.1.3 the ISO was made by hand and attached to the GitHub Release in parts, because
+GitHub takes files under 2 GiB; v0.1.2's moved to the bucket on 2026-10-30.
 
 ## The public repository
 
@@ -293,7 +298,7 @@ no PRs.
 | `tools/release/guard.py`, `privacy_guard.py` | the privacy check |
 | `tools/release/checksums.sh` | SHA256SUMS from the channel's signed database, signed |
 | `tools/release/go-public.sh`, `test_go_public.py` | making the package repository public ([public.md](public.md)), and its tests |
-| `iso/build.sh`, `iso/check-medium.sh`, `iso/test.sh` | a release's ISO: built, checked and tested by hand ([iso.md](iso.md#a-releases-iso)) |
+| `.github/workflows/iso.yml`, `iso/build.sh`, `iso/check-medium.sh`, `iso/ci-test.sh`, `iso/publish.sh` | a release's ISO: built, checked, tested, signed and published by CI ([iso.md](iso.md#a-releases-iso)) |
 | `tools/release/current.json` | written by each release PR: the release its commit prepares |
 | `CHANGELOG.md`, `manual/src/whats-new.md` | the technical log, and the notes for users |
 

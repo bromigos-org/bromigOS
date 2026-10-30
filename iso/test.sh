@@ -33,7 +33,8 @@
 # run: BROMIGOS_ISOTEST_DIR, _PORT (SSH), _VNC (display) and _MEM (MiB, 6144); BROMIGOS_ISOTEST_QEMU adds QEMU
 # arguments (a faked laptop: -smbios file=… from test/vm/smbios-chassis.py; docs/hardware.md),
 # BROMIGOS_ISOTEST_OFFLINE=1 cuts the VM off from the network (the SSH forward stays), and
-# BROMIGOS_ISOTEST_VGA the display device (default virtio-vga; e.g. virtio-vga,xres=1024,yres=768
+# BROMIGOS_ISOTEST_OVMF_CODE another UEFI firmware (Secure Boot's: iso/ci-test.sh), BROMIGOS_ISOTEST_VGA the
+# display device (default virtio-vga; e.g. virtio-vga,xres=1024,yres=768
 # offers the firmware that mode, which GRUB's GFXMODE=auto takes).
 # The VM stops when the session that started it ends (test/vm/vm-keeper.py):
 # BROMIGOS_VM_OWNER=PID ties it to another process, BROMIGOS_VM_OWNER=none keeps it until down.
@@ -42,7 +43,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/.." && pwd)
 dir=${BROMIGOS_ISOTEST_DIR:-$HOME/.cache/bromigos-isotest}
 port=${BROMIGOS_ISOTEST_PORT:-2223}
-ovmf_code=/usr/share/edk2/x64/OVMF_CODE.4m.fd
+ovmf_code=${BROMIGOS_ISOTEST_OVMF_CODE:-/usr/share/edk2/x64/OVMF_CODE.4m.fd}
 ovmf_vars=/usr/share/edk2/x64/OVMF_VARS.4m.fd
 
 cmd=${1:-}; shift || true

@@ -206,8 +206,12 @@ choose "Off" on the setup's AUR page.
 
 **From the ISO.** The ISO boots straight into a live bromigOS desktop, so you can try it
 first. From there, `sudo bromigos-iso-install` installs it to a disk, encrypted by
-default, with no network needed. During early access the ISO isn't published. You can
-build it from this repository with `iso/build.sh`.
+default, with no network needed. Download it from the
+[Download page](https://bromigos.org/download), which also says how to make the USB stick
+and start from it. Each release's ISO is one signed file at
+`https://pkgs.bromigos.org/iso/<version>/`, built and tested by CI
+([docs/iso.md](docs/iso.md#a-releases-iso)). It starts with Secure Boot on, after a
+one-time key enrollment ([docs/secureboot.md](docs/secureboot.md)).
 
 ![The ISO's boot menu: BROMIGOS // RELAY MEDIUM over the den, the burn-in emblem, and the
 entries to start bromigOS live, install it, start with safe graphics, test memory or

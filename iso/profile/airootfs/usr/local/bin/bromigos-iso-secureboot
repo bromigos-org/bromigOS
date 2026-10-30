@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Secure Boot on the live medium (docs/secureboot.md): the medium starts with Secure Boot on
+# (shim, then bromigOS's signed GRUB and kernel), but an installed system can't yet, so a
+# machine with it on must have it turned off before it starts the installed system.
+#
+#   bromigos-iso-secureboot state    on, off, or none (a BIOS boot, or no such variable)
+#   bromigos-iso-secureboot check    says it in plain words when it's on; exits 1 then, else 0
+#                                    (the installer asks it before it installs)
+#   bromigos-iso-secureboot notify   the same as a desktop notification, once a session
+set -u
+HOW=https://bromigos.org/download#secure-boot
+
+state() {
+    local v
+    v=$(ls /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c 2>/dev/null) || { echo none; return; }
+    # four bytes of attributes, then the value: 1 on, 0 off
+    if [[ $(od -An -t u1 -j 4 -N 1 "$v" 2>/dev/null | tr -d ' ') == 1 ]]; then echo on; else echo off; fi
+}
+TITLE="Secure Boot is on"
+TEXT="bromigOS runs from this stick with Secure Boot on. The installed system can't start with it on yet: after installing, turn Secure Boot off in your PC's setup before you start it. How: $HOW"
+
+case ${1:-state} in
+    state) state ;;
+    check)
+        [[ $(state) == on ]] || exit 0
+        printf '%s\n\n%s\n' "$TITLE." "$TEXT" | fold -s -w 78
+        exit 1 ;;
+    notify)
+        [[ $(state) == on ]] || exit 0
+        f=${XDG_RUNTIME_DIR:-/tmp}/bromigos-iso-secureboot.notified
+        [[ -e $f ]] && exit 0
+        sleep 8                       # the notification daemon first
+        notify-send -a bromigOS -u critical -t 0 "$TITLE" "$TEXT" 2>/dev/null && : > "$f"
+        ;;
+    -h|--help|*) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' ;;
+esac
