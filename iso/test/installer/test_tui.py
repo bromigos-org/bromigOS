@@ -341,7 +341,7 @@ class ServerWelcome(unittest.TestCase):
         env = dict(os.environ, PYTHONPATH=os.path.join(HERE, "../../../lib"))
         r = subprocess.run([sys.executable, self.BIN, "--render", out], env=env, capture_output=True, text=True, timeout=120)
         self.assertEqual(r.returncode, 0, r.stderr[-800:])
-        self.assertEqual(sorted(os.listdir(out)), sorted(f"server-welcome-{s}.svg" for s in ("network", "ssh", "lab", "tour", "done")))
+        self.assertEqual(sorted(os.listdir(out)), sorted(f"server-welcome-{s}.svg" for s in ("network", "ssh", "vector", "lab", "phone", "tour", "done")))
 
 
 class Words(unittest.TestCase):

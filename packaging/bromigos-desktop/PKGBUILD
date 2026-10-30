@@ -20,7 +20,7 @@ arch=('any')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 # bromigos-homelab: the LAB panel and the homelab decks live there (inert with no sources)
-depends=('bromigos-core' 'bromigos-live' 'bromigos-widgets' 'bromigos-settings' 'bromigos-homelab'
+depends=('qrencode' 'bromigos-core' 'bromigos-live' 'bromigos-widgets' 'bromigos-settings' 'bromigos-homelab'
          # the bar's hover popups (the volume's sound popup): a waybar CFFI module, compiled
          'bromigos-bar-hover'
          'hyprland' 'waybar' 'plasma-workspace>=6.7' 'rofi' 'dunst' 'gtklock' 'hypridle' 'hyprlock' 'swaybg'

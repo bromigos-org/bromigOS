@@ -117,7 +117,7 @@ class ServerTourSizes(unittest.TestCase):
                 r = subprocess.run([sys.executable, tour, "--render", out, "--size", f"{w}x{h}"], env=env,
                                    capture_output=True, text=True, timeout=180)
                 self.assertEqual(r.returncode, 0, r.stdout[-600:] + r.stderr[-600:])
-                self.assertEqual(len([f for f in os.listdir(out) if f.endswith(".svg")]), 5)
+                self.assertEqual(len([f for f in os.listdir(out) if f.endswith(".svg")]), 7)
 
 
 if __name__ == "__main__":

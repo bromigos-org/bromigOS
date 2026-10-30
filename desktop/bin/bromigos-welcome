@@ -10,16 +10,20 @@ so there is no second config path:
   Wi-Fi (only when offline)   nmcli
   Your screens                bromigos setup monitors --monitors auto --primary OUTPUT
   A world                     bromigos setup theme --theme NAME (the theme switcher's cards)
-  VECTOR                      bromigos setup vector --vector none|ollama|openai [--base-url … --model …]
-                              bromigos setup voice --voice off|cpu|gpu (built in a terminal: it downloads)
-  Your homelab                bromigos setup homelab --find (in a terminal: it asks first) or --homelab FILE
+  VECTOR                      your lab, this computer (the lab catalog's model, through Ollama), a service,
+                              or not now: bromigos setup vector …; his voice: bromigos setup voice …;
+                              then he says hello
+  Your lab                    find it (bromigos setup homelab --find, in the background), a connection
+                              file (--homelab FILE), or bromigos-lab's plan for making this computer it
+  Pair your phone             BRODEC's machine helper (brodec-desktop, installed with consent): its QR
+                              and code, ticked when the phone confirms
   The keys                    a short tour: each key's card lights when you press it
   Done
 
   bromigos welcome                 open it (again: Settings › About › Welcome tour opens it too)
   bromigos welcome --if-pending    the session's autostart: only when the installer left
                                    ~/.local/state/bromigos/welcome-pending (a new install)
-  bromigos welcome --step STEP     open it on one step (network, screens, world, vector, homelab, keys)
+  bromigos welcome --step STEP     open it on one step (network, screens, world, vector, lab, phone, keys)
   bromigos welcome --render DIR    each step drawn to DIR/welcome-STEP.png and exit (a Wayland display
                                    is needed: tests use a headless one)
 """
@@ -52,8 +56,12 @@ STEPS = [
      "machine. Change it any time in Settings › Theme."),
     ("vector", "VECTOR", "VECTOR, your desk's AI",
      "Where his brain runs, and whether he speaks. Nothing leaves this computer unless you choose a service."),
-    ("homelab", "Homelab", "Connect your homelab",
-     "Optional. If you run servers at home, the panels, decks and VECTOR can show them."),
+    ("lab", "Your lab", "Your lab",
+     "Optional. If you run servers at home, this computer can use them: the panels show them, and VECTOR can "
+     "think on their graphics cards. Everything happens here; nothing opens elsewhere."),
+    ("phone", "Phone", "Pair your phone",
+     "With BRODEC on your phone you can talk to VECTOR from anywhere, approve his fixes, and restart, shut down "
+     "or update this computer."),
     ("keys", "Keys", "The keys worth knowing",
      "Try each one now: its card lights up when it works. Super is the key with the Windows logo."),
     ("done", "Done", "You're all set",
@@ -82,11 +90,6 @@ def run(argv, timeout=60):
 def setup(*args):
     """One `bromigos setup` section with its flags (the only way the tour changes anything)."""
     return run(["bromigos", "setup", *args], timeout=600)
-
-
-def in_terminal(argv, title):
-    """A command that asks or downloads, in a terminal window that stays open (bromigos terminal)."""
-    subprocess.Popen(["bromigos", "terminal", "--hold", "--title", title, "--", *argv], start_new_session=True)
 
 
 def online():
@@ -157,6 +160,7 @@ def main(argv):
         from bromigos_settings import style
     except ImportError:
         style = None
+    import bromigos_firstrun as F
 
     def hint(w, text):
         if text:
@@ -359,67 +363,253 @@ def main(argv):
             hint(flow, "The themes: click one to wear it")
             page.append(flow)
 
+        # ── long steps: their lines shown on the page as they come ─────────────────
+        def progress(self, page):
+            self.prog = lab("", "bw-intro")
+            self.prog.set_selectable(True)
+            page.append(self.prog)
+
+        def say(self, line):
+            GLib.idle_add(lambda: (getattr(self, "prog", None) and self.prog.set_label(line[-220:]), False)[1])
+
         def build_vector(self, page):
-            g = self.group(page, "His brain", "VECTOR talks to a model server. A local one keeps everything on this computer.")
-            self.brain = Adw.ComboRow(title="Where he thinks", model=Gtk.StringList.new(
-                ["Not now (he waits for one)", "On this computer (a local Ollama)", "A service (any OpenAI-compatible server)"]))
-            hint(self.brain, "None: VECTOR answers once a brain is set. Ollama: runs models on this machine. A service: "
-                             "your homelab's or a hosted one")
-            g.add(self.brain)
+            hw = {} if self.render else F.hardware()
+            vram = 12.0 if self.render else F.gpu_vram_gib(hw)
+            self.model = None if self.render else F.local_model(vram)
+            if self.render:
+                self.model = {"name": "Qwen3.6-35B-A3B", "disk_gib": 20.6, "pull": "hf.co/…", "speed": "~34 tok/s"}
+            have_lab = [] if self.render else F.lab_brains()
+            self.brains = [("lab", "Your lab", (f"Already connected: {have_lab[0]['name']}" if have_lab else
+                                                 "Found and connected on the next step"))]
+            if self.model:
+                self.brains.append(("local", "This computer",
+                                    f"{self.model['name']}, {self.model['disk_gib']:.0f} GB to download "
+                                    f"({self.model.get('speed') or ''}). Your lab, when you have one, is the better place."))
+            self.brains += [("service", "A service", "Any OpenAI-compatible server you name, with its key in a file."),
+                            ("none", "Not now", "VECTOR waits for a brain. Settings › VECTOR gives him one later.")]
+            g = self.group(page, "His brain", "Where VECTOR thinks. Nothing leaves this computer unless you choose a service.")
+            first = Gtk.CheckButton()
+            self.brain_pick = getattr(self, "brain_pick", self.brains[0][0])
+            for key, title, sub in self.brains:
+                r = Adw.ActionRow(title=title, subtitle=GLib.markup_escape_text(sub))
+                r.set_subtitle_lines(0)
+                c = Gtk.CheckButton(valign=Gtk.Align.CENTER, active=key == self.brain_pick)
+                c.set_group(first)
+                c.connect("toggled", lambda b, k=key: b.get_active() and self._brain(k))
+                r.add_prefix(c)
+                r.set_activatable_widget(c)
+                hint(r, f"{title}: {sub}")
+                g.add(r)
+            self.svc = self.group(page, "The service")
             self.base = Adw.EntryRow(title="Its address (…/v1)")
-            self.model = Adw.EntryRow(title="Model (blank: VECTOR's default)")
+            self.model_row = Adw.EntryRow(title="Model (blank: VECTOR's default)")
             self.keyfile = Adw.EntryRow(title="A file holding its API key (blank: none)")
             for w, t in ((self.base, "The server's OpenAI-compatible address, ending in /v1"),
-                         (self.model, "Which model he uses"), (self.keyfile, "The key stays in that file; it's never copied")):
+                         (self.model_row, "Which model he uses"), (self.keyfile, "The key stays in that file; it's never copied")):
                 hint(w, t)
-                g.add(w)
-
-            def sync(*_):
-                k = self.brain.get_selected()
-                self.base.set_visible(k == 2)
-                self.keyfile.set_visible(k == 2)
-                self.model.set_visible(k != 0)
-            self.brain.connect("notify::selected", sync)
-            sync()
-            sizes = {} if self.render else voice_sizes()
-            gpu = False if self.render else has_gpu()
-            g2 = self.group(page, "His voice", "Either voice is downloaded once, then works without the internet.")
+                self.svc.add(w)
+            self._brain(self.brain_pick)
+            g2 = self.group(page, "His voice", "A voice is downloaded once, then works without the internet.")
             self.voice = Adw.ComboRow(title="Voice", model=Gtk.StringList.new([
-                "Off: he writes, he doesn't speak",
-                "Kokoro, on the processor" + (f" ({sizes['cpu']} to download)" if sizes.get("cpu") else " (downloads its model)"),
-                "The designed voice, on the graphics card" + (f" ({sizes['gpu']} to download)" if sizes.get("gpu") else
-                                                              " (downloads its model)") + ("" if gpu else ": no graphics card found")]))
-            hint(self.voice, "Off needs nothing. Kokoro runs anywhere. The designed voice needs an NVIDIA or AMD graphics card")
+                "Off: he writes, he doesn't speak", "Kokoro, on the processor (downloads its model)",
+                "The designed voice, on the graphics card (downloads its model)"]))
+            hint(self.voice, "Off needs nothing. Kokoro runs anywhere. The designed voice needs an NVIDIA or AMD card")
             g2.add(self.voice)
+            self.hello_card = lab("", "bw-key")
+            page.append(self.hello_card)
+            self.progress(page)
 
-        def build_homelab(self, page):
-            g = self.group(page, "Your homelab")
-            find = Adw.ActionRow(title="Find my lab", subtitle="Looks for your servers on the network. It asks before it reads "
-                                                                "anything, and you pick what to add.")
-            find.set_subtitle_lines(0)
-            b = hint(Gtk.Button(label="Find…", valign=Gtk.Align.CENTER), "Open the lab finder in a window: it asks before each step")
-            b.connect("clicked", lambda *_: in_terminal(["bromigos", "setup", "homelab", "--find"], "Find my lab"))
-            find.add_suffix(b)
-            hint(find, "bromigos setup homelab --find")
-            g.add(find)
-            fr = Adw.ActionRow(title="Use a homelab.toml I have", subtitle="A file from another bromigOS computer, or your own.")
-            b2 = hint(Gtk.Button(label="Choose…", valign=Gtk.Align.CENTER), "Pick the file")
-            b2.connect("clicked", lambda *_: self.pick_homelab())
-            fr.add_suffix(b2)
+        def _brain(self, key):
+            self.brain_pick = key
+            self.svc.set_visible(key == "service")
+
+        def build_lab(self, page):
+            g = self.group(page, "Find your lab", "It reads what this computer already knows of your network (it never "
+                                                 "scans), checks those devices, and changes nothing until you press Connect.")
+            self.lab_list = g
+            b = hint(Gtk.Button(label="Look for it", halign=Gtk.Align.START), "Find the lab's machines and what they offer")
+            b.connect("clicked", lambda *_: self.find_lab())
+            page.append(b)
+            g2 = self.group(page, "Other ways")
+            fr = Adw.ActionRow(title="I have a lab connection file",
+                               subtitle="A homelab.toml, or the lab connection on a Field Kit USB stick.")
+            fb = hint(Gtk.Button(label="Choose…", valign=Gtk.Align.CENTER), "Pick the file")
+            fb.connect("clicked", lambda *_: self.pick_lab_file())
+            fr.add_suffix(fb)
             hint(fr, "bromigos setup homelab --homelab FILE")
-            g.add(fr)
+            g2.add(fr)
+            if self.render or F.gpu_vram_gib() >= 8:
+                mr = Adw.ActionRow(title="Make this computer my lab",
+                                   subtitle="Its graphics card runs models for your other devices. Shows bromigos-lab's "
+                                            "reviewed plan first; nothing changes until you agree.")
+                mr.set_subtitle_lines(0)
+                mb = hint(Gtk.Button(label="Show the plan", valign=Gtk.Align.CENTER), "bromigos lab provision plan: read-only")
+                mb.connect("clicked", lambda *_: self.lab_plan())
+                mr.add_suffix(mb)
+                hint(mr, "Turn this computer into the lab: bromigos-lab's provisioning, reviewed first")
+                g2.add(mr)
+            self.progress(page)
+            if self.render:
+                self._lab_found({"hosts": [{"name": "gpu-box", "address": "192.0.2.24",
+                                            "offers": ["Ollama", "LiteLLM", "Prometheus"]},
+                                           {"name": "nas", "address": "192.0.2.10", "offers": ["Docker", "Jellyfin"]}],
+                                 "brains": [{"name": "litellm", "url": "http://192.0.2.24:4000/v1"}], "error": None, "new": 5})
 
-        def pick_homelab(self):
-            dlg = Gtk.FileDialog(title="Your homelab.toml")
+        def find_lab(self):
+            self.say("Looking at the devices this computer already knows…")
+            self.later(lambda: (self._lab_found, F.find_lab()))
+
+        def _lab_found(self, r):
+            if r.get("error"):
+                self.say(r["error"])
+                return False
+            if not r["hosts"]:
+                self.say("No lab found. If you have one, use its connection file, or connect it later in Settings › Lab.")
+                return False
+            for h in r["hosts"]:
+                row = Adw.ActionRow(title=GLib.markup_escape_text(h["name"] or "?"),
+                                    subtitle=GLib.markup_escape_text(", ".join(h["offers"])))
+                hint(row, f"{h['name']}: what it offers")
+                self.lab_list.add(row)
+            c = Adw.ActionRow(title=f"Connect it ({r.get('new', 0)} services)",
+                              subtitle="Adds them to your homelab settings. Your own edits there are never rewritten.")
+            cb = hint(Gtk.Button(label="Connect", valign=Gtk.Align.CENTER), "Connect this lab to this computer")
+            cb.add_css_class("suggested-action")
+            cb.connect("clicked", lambda *_: self.connect_lab(r))
+            c.add_suffix(cb)
+            self.lab_list.add(c)
+            self.say(f"Found {len(r['hosts'])} machine(s) offering services.")
+            return False
+
+        def connect_lab(self, r):
+            def work():
+                ok, why = (True, "") if self.render else F.connect_lab()
+                if ok:
+                    self.done_steps["lab"] = "Your lab is connected"
+                    brains = r.get("brains") or ([] if self.render else F.lab_brains())
+                    if self.brain_pick == "lab" and brains:
+                        code, out, err = F.set_brain("lab", url=brains[0]["url"])
+                        if code == 0:
+                            ok2, words = F.hello()
+                            return (self.say, ("VECTOR: " + words) if ok2 else words)
+                return (self.say, "Connected." if ok else why)
+            self.say("Connecting…")
+            self.later(work)
+
+        def pick_lab_file(self):
+            dlg = Gtk.FileDialog(title="Your lab connection")
 
             def done(d, res):
                 try:
                     f = d.open_finish(res)
                 except GLib.Error:
                     return
-                code, out, err = setup("homelab", "--homelab", f.get_path())
-                self.msg.set_label("Your homelab is connected." if code == 0 else "That file didn't work: " + (err or out).strip()[-200:])
+                ok, why = F.use_lab_file(f.get_path())
+                self.say("Your lab is connected." if ok else why)
+                if ok:
+                    self.done_steps["lab"] = "Your lab is connected (from a file)"
             dlg.open(self, None, done)
+
+        def lab_plan(self):
+            self.say("Asking bromigos-lab for its plan…")
+
+            def work():
+                ok, text = F.provision_plan()
+                return (self.say, ("The plan (nothing has changed):\n" + text[-1800:]) if ok else
+                        "The plan couldn't be made: " + F.plain_error(text) + ". Settings › Lab can do it later.")
+            self.later(work)
+
+        def build_phone(self, page):
+            g = self.group(page, "Get BRODEC on your phone")
+            gp = Adw.ActionRow(title="Android: Google Play", subtitle=F.PLAY_STORE)
+            gp.set_subtitle_selectable(True)
+            pic = self.qr_picture(F.PLAY_STORE, 120)
+            if pic:
+                gp.add_suffix(pic)
+            hint(gp, "Scan this with your phone's camera to open BRODEC on Google Play")
+            g.add(gp)
+            ios = Adw.ActionRow(title="iPhone", subtitle="Coming: BRODEC for iPhone isn't out yet.")
+            hint(ios, "BRODEC for iPhone isn't released yet")
+            g.add(ios)
+            g2 = self.group(page, "Pair this computer", "In BRODEC: LAB › MACHINES › ADD MACHINE, then scan this code. "
+                                                         "It ticks here when your phone confirms.")
+            self.pair_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            page.append(self.pair_box)
+            if not self.render and not F.machine_installed():
+                r = Adw.ActionRow(title="BRODEC's helper for this computer",
+                                  subtitle="Pairing needs brodec-machine, from the brodec-desktop package. It runs only what "
+                                           "your phone signs, and STOP ALL halts it. Installing asks for your password.")
+                r.set_subtitle_lines(0)
+                ib = hint(Gtk.Button(label="Install it", valign=Gtk.Align.CENTER), "Install brodec-desktop (it carries the helper)")
+                ib.connect("clicked", lambda *_: self.install_machine())
+                r.add_suffix(ib)
+                hint(r, "brodec-machine: BRODEC's agent on this computer")
+                g2.add(r)
+            else:
+                self.start_pairing()
+            g3 = self.group(page, "Then your phone can")
+            for c in F.PHONE_CAN:
+                r = Adw.ActionRow(title=c)
+                hint(r, c)
+                g3.add(r)
+            self.progress(page)
+
+        def qr_picture(self, text, size):
+            import tempfile
+            path = os.path.join(tempfile.mkdtemp(prefix="bw-qr-"), "qr.png")
+            if not F.qr_png(text, path):
+                return None
+            p = Gtk.Picture.new_for_filename(path)
+            p.set_size_request(size, size)
+            p.set_can_shrink(True)
+            return p
+
+        def install_machine(self):
+            def work():
+                ok, why = F.machine_install(self.say)
+                if ok:
+                    return (lambda: (self.start_pairing(), False)[1],)
+                return (self.say, why)
+            self.say("Installing BRODEC's helper (a password prompt opens)…")
+            self.later(work)
+
+        def start_pairing(self):
+            while (ch := self.pair_box.get_first_child()):
+                self.pair_box.remove(ch)
+            if self.render:
+                code = {"qr": "https://accounts.bromigos.org/device#machine=k1.example&n=desk", "pretty": "KPGG-ZFVT"}
+            else:
+                F.machine_start()
+                code = None
+            self.code_label = lab("Waiting for the pairing code…", "bw-key")
+            self.pair_box.append(self.code_label)
+            if code:
+                self._show_code(code)
+            if not self.render:
+                GLib.timeout_add_seconds(2, self.watch_pairing)
+            return False
+
+        def _show_code(self, code):
+            pic = self.qr_picture(code["qr"], 260)
+            if pic:
+                pic.set_halign(Gtk.Align.START)
+                hint(pic, "Scan this in BRODEC: LAB › MACHINES › ADD MACHINE")
+                self.pair_box.prepend(pic)
+            self.code_label.set_label(f"Or type the code: {code['pretty']}")
+            self.shown_code = code.get("user_code") or code["pretty"]
+
+        def watch_pairing(self):
+            if self.step != "phone":
+                return False
+            p = F.machine_paired()
+            if p:
+                self.code_label.set_label(f"✓ Paired with {p.get('owner') or 'your phone'}")
+                self.done_steps["phone"] = "Your phone is paired"
+                return False
+            c = F.machine_code()
+            if c and c.get("user_code") != getattr(self, "shown_code", None):
+                self._show_code(c)
+            return True
 
         def build_keys(self, page):
             grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=2, homogeneous=True,
@@ -491,6 +681,9 @@ def main(argv):
 
         def _applied(self, s, ok, said):
             self.next.set_sensitive(True)
+            if ok == "stay":                       # VECTOR said hello: read it, then Continue
+                self.msg.set_label(said)
+                return False
             if ok:
                 if said:
                     self.done_steps[s] = said
@@ -521,28 +714,42 @@ def main(argv):
                 code, out, err = setup("theme", "--theme", self.world)
                 return (code == 0, f"World: {self.world}" if code == 0 else "The world couldn't be put on: " + (err or out).strip()[-200:])
             if s == "vector":
-                said = []
-                k = self.brain.get_selected()
-                args = ["vector", "--vector", ["none", "ollama", "openai"][k]]
-                if k == 2:
+                if getattr(self, "hello_done", False):
+                    return True, self.done_steps.get("vector")
+                pick, said = self.brain_pick, ""
+                if pick == "local":
+                    ok, why = F.install_local_brain(self.model, self.say)
+                    if not ok:
+                        return False, why
+                    said = f"Brain: this computer ({self.model['name']})"
+                elif pick == "service":
                     if not self.base.get_text().strip():
-                        return False, "Type the service's address, or choose Not now."
-                    args += ["--base-url", self.base.get_text().strip()]
-                    if self.keyfile.get_text().strip():
-                        args += ["--api-key-file", self.keyfile.get_text().strip()]
-                if k and self.model.get_text().strip():
-                    args += ["--model", self.model.get_text().strip()]
-                code, out, err = setup(*args)
-                if code != 0:
-                    return False, "VECTOR's brain couldn't be set: " + (err or out).strip()[-200:]
-                said.append(["No brain yet", "Brain: this computer (Ollama)", "Brain: " + self.base.get_text().strip()][k])
-                v = ["off", "cpu", "gpu"][self.voice.get_selected()]
-                if v == "off":
-                    setup("voice", "--voice", "off")
+                        return False, "Type the service's address, or choose another place for his brain."
+                    code, out, err = F.set_brain("service", url=self.base.get_text().strip(),
+                                                 key_file=self.keyfile.get_text().strip() or None,
+                                                 model=self.model_row.get_text().strip() or None)
+                    if code != 0:
+                        return False, "VECTOR's brain couldn't be set: " + F.plain_error(err or out)
+                    said = "Brain: " + self.base.get_text().strip()
+                elif pick == "none":
+                    F.set_brain("none")
+                    said = "No brain yet"
                 else:
-                    in_terminal(["bromigos", "setup", "voice", "--voice", v], "VECTOR's voice")
-                said.append({"off": "voice off", "cpu": "voice: Kokoro (downloading)", "gpu": "the designed voice (downloading)"}[v])
-                return True, ", ".join(said)
+                    said = "Brain: your lab (connected on the next step)"
+                v = ["off", "cpu", "gpu"][self.voice.get_selected()]
+                ok, why = F.voice(v, self.say)
+                if not ok:
+                    return False, why
+                said += ", " + {"off": "voice off", "cpu": "voice: Kokoro", "gpu": "the designed voice"}[v]
+                if pick in ("local", "service"):
+                    ok, words = F.hello()
+                    if not ok:
+                        return False, words
+                    self.hello_done = True
+                    self.done_steps["vector"] = said
+                    GLib.idle_add(lambda: (self.hello_card.set_label("VECTOR: " + words), False)[1])
+                    return "stay", "VECTOR says hello. Continue when you're ready."
+                return True, said
             return True, None
 
         def finish(self):

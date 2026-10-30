@@ -6,7 +6,7 @@
   "hint": "For a computer that runs on its own, often without a screen. You manage it at its console or from another computer.",
   "desktop": false,
   "meta": "bromigos-server",
-  "packages": ["bromigos-core", "bromigos-keyring", "bromigos-lab", "openssh", "nftables", "btop", "zoxide", "tmux", "less", "man-db", "terminus-font"],
+  "packages": ["bromigos-core", "bromigos-keyring", "bromigos-lab", "openssh", "nftables", "btop", "zoxide", "tmux", "less", "man-db", "terminus-font", "qrencode"],
   "services": [],
   "check_packages": ["bromigos-core", "bromigos-lab"],
   "download_size": "400 MB",

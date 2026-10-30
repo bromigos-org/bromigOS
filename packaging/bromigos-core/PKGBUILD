@@ -24,6 +24,7 @@ makedepends=('cargo' 'git' 'python')
 # openssh: the SSH sign-in's tests sign for real; python-qrcode: bromigos login's QR code
 checkdepends=('desktop-file-utils' 'rsync' 'npm' 'openssh' 'python-qrcode')
 optdepends=('python: bromigos private, secrets, emblem, console, power menu, splash and local storage'
+            'qrencode: the pairing QR in the console welcome tour (bromigos welcome-console)'
             'terminus-font: readable text console font sizes'
             'openssh: bromigos login --ssh, and the SSH keys a new lab box gets from your account'
             'libsecret: keep account sign-ins (bromigos login, bromigos account) in your keyring'
