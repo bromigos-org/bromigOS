@@ -1,0 +1,30 @@
+ BLUETOOTH   workstation  ON  2 connected
+┌ DEVICES ─────────────────────────────────────────────────┐┌ DEVICE ──────────────────────────────┐
+│▌HEADSET  WH-1000XM5               CONNECTED    ▮▮▮▮▯  70%││  ▄▀▀▀▀▀▀▀▄                           │
+│ PAD      Xbox Wireless Controller CONNECTED    ▮▯▯▯▯  12%││ █         █                          │
+│ EARBUDS  Galaxy ┌ KEYS ────────────────────────────────────────────────────────┐                 │
+│ MOUSE    MX Mast│j k  ↑ ↓    move                                              │                 │
+│                 │enter  l    open a device (pair one that's nearby)            │                 │
+│                 │esc  h  q   back; q on the list quits                         │                 │
+│                 │/           search by name or kind                            │                 │
+│                 │s           scan for devices nearby                           │0%               │
+│                 │p  a        pair: step by step                                │                 │
+│                 │c           connect or disconnect                             │                 │
+│                 │o           Bluetooth on or off                               │                 │
+│                 │x           troubleshoot                                      │                 │
+│                 │t  r  f  R  on a device: auto-reconnect, rename, forget, re-pa│                 │
+│                 │u           a controller: rumble                              │                 │
+│                 │m  o  i  v  headphones: profile, output, microphone, mic test │                 │
+│                 │mouse       click selects, a second click opens; scroll moves │                 │
+│                 │?           this help (any key closes it)                     │                 │
+│                 │                                                              │                 │
+│                 │                                                              │                 │
+│                 │                                                              │                 │
+│                 │                                                              │                 │
+│                 │                                                              │                 │
+│                 │                                                              │                 │
+│                 └──────────────────────────────────────────────────────────────┘                 │
+│                                                          ││                                      │
+└──────────────────────────────────────────────────────────┘└──────────────────────────────────────┘
+ Couldn't reach it: is it switched on and nearby?
+ j/k  move   enter  open   c  connect   s  scan   p  pair   /  search   ?  help   q  quit   o  on/of

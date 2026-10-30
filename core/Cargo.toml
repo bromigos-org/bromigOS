@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/bromigos-core", "crates/bromigos-art", "crates/bromigos"]
+members = ["crates/bromigos-core", "crates/bromigos-art", "crates/bromigos", "crates/bromigos-bt"]
 
 [workspace.package]
 version = "0.1.3"

@@ -1,0 +1,30 @@
+ BLUETOOTH   workstation  ON  SCANNING  2 connected
+┌ PAIR A DEVICE ───────────────────────────────────────────────────────────────────────────────────┐
+│ 1 KIND › 2 PAIRING MODE + SCAN › 3 PAIR › 4 READY                                                │
+│                                                                                                  │
+│What are you pairing?                                                                             │
+│                                                                                                  │
+│ ▌ Game controller                                                                                │
+│   Headphones or earbuds                                                                          │
+│   Keyboard                                                                                       │
+│   Mouse                                                                                          │
+│   Phone                                                                                          │
+│   Something else                                                                                 │
+│                                                                                                  │
+│How to put it in pairing mode:                                                                    │
+│Xbox Wireless Controller (One S and later, Elite Series 2, Series X|S):                           │
+│1. Switch it on with the Xbox button.                                                             │
+│2. Hold the small pair button on its top edge until the Xbox logo flashes fast.                   │
+│Other pads: hold their pairing button (often Share + PS, or Home) until the light flashes.        │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+ j/k  choose   enter  next   s  scan   esc  back

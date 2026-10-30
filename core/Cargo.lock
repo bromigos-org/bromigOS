@@ -232,6 +232,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bromigos-bt"
+version = "0.1.3"
+dependencies = [
+ "bromigos-core",
+ "ratatui",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "bromigos-core"
 version = "0.1.3"
 dependencies = [

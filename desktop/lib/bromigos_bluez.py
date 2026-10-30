@@ -122,6 +122,41 @@ def has_adapter_hw(root=None):
         return False
 
 
+# ------------------------------------------------------------------ pairing, kind by kind
+# What the pairing wizards (the TUI's and Settings') offer, and how to put each kind in
+# pairing mode: (name, glyph, steps). One list: the TUI gets it from `bromigos bluetooth
+# session`.
+PAIR_KINDS = [
+    ("Game controller", "controller", [
+        "Xbox Wireless Controller (One S and later, Elite Series 2, Series X|S):",
+        "1. Switch it on with the Xbox button.",
+        "2. Hold the small pair button on its top edge until the Xbox logo flashes fast.",
+        "Other pads: hold their pairing button (often Share + PS, or Home) until the light flashes.",
+    ]),
+    ("Headphones or earbuds", "headset", [
+        "Headphones: hold the power or Bluetooth button for about 5 seconds, until the light "
+        "flashes or a voice says pairing.",
+        "Earbuds: put them in the case, open the lid, then hold the case's button.",
+    ]),
+    ("Keyboard", "keyboard", [
+        "Switch it on, then hold its Bluetooth or connect key (often Fn and a number) until the "
+        "light flashes.",
+        "It may ask you to type a 6-digit code on it, then Enter.",
+    ]),
+    ("Mouse", "mouse", ["Switch it on, then hold the button underneath until its light flashes."]),
+    ("Phone", "phone", [
+        "Open Bluetooth in the phone's settings: it's visible while that screen is open.",
+        "Both screens show a code: say yes on both if they match. It connects for its sound.",
+    ]),
+    ("Something else", "device", ["Put it in pairing mode: its manual says how (often a long press on its button)."]),
+]
+
+
+def fits(glyph_of_device, kind_glyph):
+    """A found device is of the kind the wizard asked for (earbuds count as headphones)."""
+    return glyph_of_device == kind_glyph or (kind_glyph == "headset" and glyph_of_device in ("earbuds", "speaker"))
+
+
 # ------------------------------------------------------------------ errors in plain words
 ERRORS = [
     (r"AuthenticationFailed", "The codes didn't match, or the device turned pairing down. Put it in pairing "
@@ -601,6 +636,13 @@ class Bluez:
         d = next((x for x in self.state()["devices"] if x["path"] == path), None)
         adapter = (d or {}).get("adapter") or path.rsplit("/", 1)[0]
         self._call(adapter, ADAPTER, "RemoveDevice", self.GLib.Variant("(o)", (path,)), 10000, done)
+
+    def reset(self, done=None):
+        """Off, any rfkill soft block lifted, on again: what fixes most stuck adapters."""
+        def on(ok, err):
+            subprocess.run(["rfkill", "unblock", "bluetooth"], capture_output=True, timeout=5)
+            self.GLib.timeout_add(800, lambda: self.power(True, done) and False)
+        self.power(False, on)
 
     def register_agent(self, agent, done=None):
         """Our agent answers the pairings this process starts (not the system's default)."""

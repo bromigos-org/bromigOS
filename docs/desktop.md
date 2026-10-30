@@ -287,6 +287,36 @@ Tests run against `tests/fake_bluez.py`, a stand-in bluez on a private D-Bus tha
 the way real devices do. `tools/popups/render.py` draws the icon's states, the panel and
 the menu offscreen, in any theme.
 
+### Bluetooth in the terminal
+
+`bromigos bluetooth tui` (`core/crates/bromigos-bt`, ratatui) is Bluetooth in the terminal.
+It's DRIFTGLASS GLOW like the panel:
+
+- box frames in the theme's colours, read from `palette.json`;
+- device glyphs that brighten when connected, and segmented battery bars;
+- a braille radar Sweep while scanning, with new devices blipping in;
+- no motion under reduced motion.
+
+`--window` runs it through `bromigos terminal --class bromigos-bluetooth`, which Hyprland
+floats and centres (`hypr/hyprland.lua`). The app launcher's entry and the panel's
+**MORE…** do that.
+
+It has no bluez code of its own. It runs `bromigos bluetooth session`
+(`lib/bromigos_btsession.py`), which speaks JSON lines on stdin and stdout over the same
+`bromigos_bluez` the bar and the panel use:
+
+- the state on every change, with PipeWire's cards and each device's sound devices;
+- requests and their replies, the pairing steps, and the agent's questions and their
+  answers;
+- a controller's live input and rumble, from `lib/bromigos_gamepad.py`, which reads and
+  drives evdev directly;
+- a microphone's level, from `parec`.
+
+`core/crates/bromigos-bt/tests/screens.rs` draws every screen in ratatui's TestBackend in
+the Wick, Mire and Tidewell. It compares the text with `tests/snapshots/` and checks the
+colours against each world's palette. The state it draws is a real session document,
+recorded against the stand-in bluez.
+
 ### Hover popups on the bar
 
 waybar has no hover action. `waybar/hover/bromigos-hover.c` adds one: a waybar CFFI module

@@ -1,0 +1,30 @@
+ BLUETOOTH   workstation  ON  SCANNING  2 connected
+┌ PAIR A DEVICE ───────────────────────────────────────────────────────────────────────────────────┐
+│ 1 KIND › 2 PAIRING MODE + SCAN › 3 PAIR › 4 READY                                                │
+│                                                                                                  │
+│Pairing with JBL Flip 6                                                                           │
+│                                                                                                  │
+│Pairing.                                                                                          │
+│                                                                                                  │
+│If it asks for a code, a box opens here. esc stops.                                               │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                       ┌ PAIR Pixel 9 ────────────────────────────────────┐                       │
+│                       │                 Does Pixel 9 show                │                       │
+│                       │                      123 456                     │                       │
+│                       │                                                  │                       │
+│                       │         y: yes, pair · n: no · esc: stop         │                       │
+│                       └──────────────────────────────────────────────────┘                       │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+ j/k  choose   enter  next   s  scan   esc  back

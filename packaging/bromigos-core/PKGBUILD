@@ -114,6 +114,10 @@ check() {
 
 package() {
   install -Dm0755 -t "$pkgdir/usr/bin/" "$(_target)/release/bromigos"
+  # Bluetooth in the terminal (bromigos bluetooth tui; core/crates/bromigos-bt) and the
+  # command that runs it; it talks to bromigos-desktop's `bromigos bluetooth session`
+  install -Dm0755 "$(_target)/release/bromigos-bt" "$pkgdir/usr/lib/bromigos/bromigos-bt"
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-bluetooth-tui
   # themes/<name>/…, theme/templates/*.tpl and theme/icons/*.svg, as read-only defaults; not the
   # art pipeline's recipe, log and local sources (art.toml, art.log.jsonl, art/). A hologram
   # collection (themes/<name>/holo/, theme/holo/) ships as VECTOR's and the homelab's do: the

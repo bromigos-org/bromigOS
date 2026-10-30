@@ -105,6 +105,41 @@ From a terminal: `bromigos bluetooth profile <address> hifi` or `headset`.
 - **Older devices** may ask for a PIN instead. It's often `0000` or `1234`. The device's
   manual says.
 
+## In a terminal
+
+`bromigos bluetooth tui` is Bluetooth in the terminal, with more than the panel has room
+for. **MORE…** in the panel opens it in a window of its own, and so does **Bluetooth
+Devices** in the app launcher (search for bluetooth, devices or controller).
+
+- **Pairing step by step.** Press <kbd>p</kbd>. Choose what you're pairing, and it says how
+  to put that kind of device in pairing mode, with the steps for an Xbox controller. It
+  scans, with devices appearing on a radar as they're found. Pick yours, answer any code
+  it asks for, and it ends on **READY**.
+- **Your devices**, with their battery, signal strength, and a headset's sound profile and
+  codec. <kbd>/</kbd> searches them.
+- **A device's page** (<kbd>Enter</kbd>):
+  - a controller shows its buttons, sticks and triggers live as you press them, and
+    <kbd>u</kbd> makes it rumble;
+  - headphones switch between HI-FI and HEADSET + MIC with <kbd>m</kbd>; <kbd>o</kbd> and
+    <kbd>i</kbd> make them the sound output and the microphone; <kbd>v</kbd> shows the
+    microphone's level as you speak;
+  - every device can be renamed (<kbd>r</kbd>), set to reconnect by itself or not
+    (<kbd>t</kbd>), forgotten (<kbd>f</kbd>), or forgotten and paired again
+    (<kbd>R</kbd>).
+- **Troubleshooting** (<kbd>x</kbd>) shows whether the Bluetooth service runs and the radio
+  is blocked, resets the adapter (<kbd>a</kbd>), and lists what went wrong lately in plain
+  words.
+
+<kbd>j</kbd>, <kbd>k</kbd> and the arrow keys move, <kbd>Esc</kbd> goes back,
+<kbd>?</kbd> lists every key, and <kbd>q</kbd> quits. The mouse works too: click a device
+to select it, click again to open it, and scroll to move. To open it with a key of your
+own, for example <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>, add a line after the
+`dofile()` line of `~/.config/hypr/hyprland.lua`:
+
+```lua
+require("bromigos.keys").exec("SUPER + SHIFT + B", "bromigos bluetooth tui --window")
+```
+
 ## The quick menu
 
 Right-click the icon for the quick menu. It turns Bluetooth on or off, makes this computer

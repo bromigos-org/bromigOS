@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bromigos:summary=Bluetooth: the adapter (on, off, visible), paired devices, pairing new ones, through bluez
-# bromigos:args=[status] | power on|off|toggle | discoverable on|off | scan [SECONDS] | pair MAC | connect MAC | disconnect MAC | trust MAC on|off | remove MAC | profile MAC hifi|headset | audio-default on|off | panel [pair MAC|scan] | menu  [--json]
+# bromigos:args=[status] | power on|off|toggle | discoverable on|off | scan [SECONDS] | pair MAC | connect MAC | disconnect MAC | trust MAC on|off | remove MAC | profile MAC hifi|headset | audio-default on|off | panel [pair MAC|scan] | menu | tui [--window] | session  [--json]
 # bromigos:examples=bromigos bluetooth; bromigos bluetooth power on; bromigos bluetooth scan; bromigos bluetooth pair 00:00:5E:00:53:10; bromigos bluetooth profile 00:00:5E:00:53:10 headset; bromigos bluetooth panel
 """bromigos-bluetooth (`bromigos bluetooth`): Bluetooth, through bluez (`bluetoothctl`, one
 command at a time). Settings › Bluetooth drives it.
@@ -23,6 +23,11 @@ command at a time). Settings › Bluetooth drives it.
   bromigos bluetooth panel [pair MAC|scan]   the bar's Bluetooth panel (a click on its icon):
                                        pairing there asks for any PIN or passkey in the panel
   bromigos bluetooth menu              the bar icon's quick menu (a right-click)
+  bromigos bluetooth tui [--window]    Bluetooth in the terminal: pairing step by step, the
+                                       devices, a controller's input test, a headset's sound
+                                       (bromigos-bluetooth-tui); --window opens it in its own
+                                       floating terminal
+  bromigos bluetooth session           bluez as JSON lines on stdin and stdout, for the TUI
 """
 import json
 import os
@@ -307,6 +312,15 @@ def audio_default(args):
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["session"]:
+        import bromigos_btsession as S
+        sys.exit(S.Session().run())
+    if sys.argv[1:2] == ["tui"]:            # `bromigos bluetooth tui` routes there itself
+        for d in ("/usr/lib/bromigos/bin", os.path.dirname(os.path.realpath(__file__))):
+            tui = os.path.join(d, "bromigos-bluetooth-tui")
+            if os.access(tui, os.X_OK):
+                os.execv(tui, [tui] + sys.argv[2:])
+        sys.exit("bromigos bluetooth tui: bromigos-bluetooth-tui isn't installed (package bromigos-core)")
     if sys.argv[1:2] in (["panel"], ["menu"]):
         import bromigos_btpanel as P
         rest = sys.argv[2:] if sys.argv[1] == "panel" else []

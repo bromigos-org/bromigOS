@@ -356,6 +356,10 @@ class Panel:
         self.scan_b = sh.button("SCAN", "dg-btn", f"Looks for devices nearby for {SCAN_SECS} seconds: put the "
                                 "device in pairing mode first", self.toggle_scan)
         foot.append(self.scan_b)
+        foot.append(sh.button("MORE…", "dg-btn", "Bluetooth in a terminal window: pairing step by step, a "
+                              "controller's input test, a headset's microphone test, troubleshooting "
+                              "(bromigos bluetooth tui)", lambda: (_spawn(["bromigos", "bluetooth", "tui",
+                                                                           "--window"]), self.close())))
         foot.append(Gtk.Box(hexpand=True))
         foot.append(sh.button("OPEN SETTINGS", "dg-btn", "Opens Settings › Bluetooth (SUPER+, then Bluetooth)",
                               lambda: (sh.open_settings(), self.close())))

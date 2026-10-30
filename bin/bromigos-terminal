@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bromigos:summary=Run a command in your terminal ($TERMINAL, else kitty); --hold keeps the window after it ends
-# bromigos:args=[--hold] [--title TITLE] [--] COMMAND [ARG…]
+# bromigos:args=[--hold] [--title TITLE] [--class CLASS] [--] COMMAND [ARG…]
 # bromigos:examples=bromigos terminal --hold -- bromigos update
 # bromigos:hidden=true
 #
@@ -8,14 +8,16 @@
 # console; docs/menu.md, "In the app launcher"): the terminal the menu opens
 # (desktop/lib/bromigos_hypr.py, terminal_run): $TERMINAL, else kitty. --hold keeps the
 # window open after the command ends, so what it said last can be read: kitty's own
-# --hold, any other terminal a line asking for Enter.
+# --hold, any other terminal a line asking for Enter. --class sets kitty's window class, which
+# Hyprland's window rules match (bromigos-bluetooth floats; desktop/hypr/hyprland.lua).
 set -euo pipefail
-usage() { echo "usage: bromigos terminal [--hold] [--title TITLE] [--] COMMAND [ARG…]"; }
-hold=0 title=''
+usage() { echo "usage: bromigos terminal [--hold] [--title TITLE] [--class CLASS] [--] COMMAND [ARG…]"; }
+hold=0 title='' class=''
 while (($#)); do
   case $1 in
     --hold) hold=1; shift ;;
     --title) title=${2:?--title needs a value}; shift 2 ;;
+    --class) class=${2:?--class needs a value}; shift 2 ;;
     --) shift; break ;;
     -h|--help) usage; echo "Runs COMMAND in \$TERMINAL (else kitty); --hold keeps the window after it ends."; exit 0 ;;
     -*) echo "bromigos terminal: unknown option $1" >&2; usage >&2; exit 2 ;;
@@ -28,6 +30,7 @@ read -ra term <<<"${TERMINAL:-kitty}"
 ((${#term[@]})) || term=(kitty)
 if [[ ${term[0]##*/} == kitty ]]; then
   args=(--title "$title")
+  [[ -n $class ]] && args=(--class "$class" "${args[@]}")
   ((hold)) && args=(--hold "${args[@]}")
   exec "${term[@]}" "${args[@]}" -e "$@"
 fi
