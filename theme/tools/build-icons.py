@@ -86,11 +86,55 @@ ICONS = {
       <circle cx="8" cy="8" r="4.5"/>
       <circle cx="8" cy="8" r="1.5"/>
       <path d="M8 0.5v3M8 12.5v3M0.5 8h3M12.5 8h3M2.7 2.7l2.1 2.1M11.2 11.2l2.1 2.1M2.7 13.3l2.1-2.1M11.2 4.8l2.1-2.1"/>""",
+    # Bluetooth: the rune (the bar's module)
+    "bt": """
+      <path d="M4.5 4.5l7 7-3.5 3.5v-14l3.5 3.5-7 7"/>""",
+    # the kinds of Bluetooth device (the toasts and the panel's fallbacks): a game controller
+    "bt-pad": """
+      <path d="M4.5 4.5h7l2 1.5 1.5 6-1 1.5h-1.5l-2.5-3h-4l-2.5 3h-1.5l-1-1.5 1.5-6z"/>
+      <path d="M4.5 7.5v2M3.5 8.5h2"/>
+      <rect x="10" y="7" width="1" height="1" fill="currentColor" stroke="none"/>
+      <rect x="12" y="8" width="1" height="1" fill="currentColor" stroke="none"/>""",
+    # headphones: the band and two cups
+    "bt-headset": """
+      <path d="M2.5 9.5v-2a5.5 5.5 0 0 1 11 0v2"/>
+      <rect x="1.5" y="9.5" width="3" height="5"/>
+      <rect x="11.5" y="9.5" width="3" height="5"/>""",
+    # earbuds: two buds with stems
+    "bt-buds": """
+      <circle cx="4.5" cy="5.5" r="2.5"/><circle cx="11.5" cy="5.5" r="2.5"/>
+      <path d="M3.5 8.5v5h2v-5M10.5 8.5v5h2v-5"/>""",
+    # a speaker: the box, a woofer and a tweeter
+    "bt-speaker": """
+      <rect x="3.5" y="0.5" width="9" height="15"/>
+      <circle cx="8" cy="10" r="3"/>
+      <circle cx="8" cy="4" r="1.5"/>""",
+    # a keyboard
+    "bt-kbd": """
+      <rect x="0.5" y="3.5" width="15" height="9"/>
+      <path d="M2.5 5.5h1M5.5 5.5h1M8.5 5.5h1M11.5 5.5h2M2.5 7.5h2M6.5 7.5h1M9.5 7.5h1M12.5 7.5h1M4.5 10.5h7"/>""",
+    # a mouse
+    "bt-mouse": """
+      <rect x="3.5" y="1.5" width="9" height="13" rx="4.5"/>
+      <path d="M8 1.5v5M3.5 6.5h9"/>""",
+    # a phone
+    "bt-phone": """
+      <rect x="3.5" y="0.5" width="9" height="15" rx="1.5"/>
+      <path d="M6.5 2.5h3M3.5 12.5h9"/>""",
+    # any other device: the rune in a frame
+    "bt-dev": """
+      <rect x="0.5" y="0.5" width="15" height="15"/>
+      <path d="M5.5 5.5l5 5-2.5 2.5v-10l2.5 2.5-5 5"/>""",
 }
 
+# The battery sliver under the bar's Bluetooth glyph: 16×3, five cells, N lit (btcell-N).
+SLIVER = {f"btcell-{n}": "".join(
+    f'<rect x="{1 + i * 3}" y="0" width="2" height="3" fill="currentColor" stroke="none"'
+    + ("" if i < n else ' fill-opacity="0.28"') + "/>" for i in range(5)) for n in range(6)}
 
-def svg(body, color):
-    return ('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" '
+
+def svg(body, color, w=16, h=16):
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" '
             f'fill="none" stroke="{color}" stroke-width="1" stroke-linecap="square" '
             f'stroke-linejoin="miter" color="{color}">{body.strip()}</svg>\n')
 
@@ -100,4 +144,8 @@ if __name__ == "__main__":
         for suffix, color in COLORS.items():
             with open(os.path.join(HERE, f"{name}{suffix}.svg"), "w") as f:
                 f.write(svg(body, color))
-    print(f"{len(ICONS)} icons x {len(COLORS)} colours -> {HERE}")
+    for name, body in SLIVER.items():
+        for suffix, color in COLORS.items():
+            with open(os.path.join(HERE, f"{name}{suffix}.svg"), "w") as f:
+                f.write(svg(body, color, 16, 3))
+    print(f"{len(ICONS) + len(SLIVER)} icons x {len(COLORS)} colours -> {HERE}")

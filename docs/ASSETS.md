@@ -25,6 +25,8 @@ the models used.
 | Icons and cursor | Generated or recoloured from Breeze Dark (LGPL) | **yes** (operator, 2026-10-08) | Keep Breeze's attribution where derived |
 | The bar's battery and power-profile icons (`theme/icons/{bat,power}*.svg`) | Drawn for bromigOS | yes | Recoloured per theme |
 | The bar's idle and Settings icons (`theme/icons/{eye,cup,gear}*.svg`) | Drawn in code by `theme/tools/build-icons.py` | yes | Recoloured per theme |
+| The bar's Bluetooth icons: the rune, the battery cells and the kinds of device (`theme/icons/{bt,btcell}*.svg`) | Drawn in code by `theme/tools/build-icons.py` | yes | Recoloured per theme |
+| The Bluetooth panel's device holograms (`desktop/lib/bromigos_driftglass.py`) | Drawn in code, at run time | yes | Wireframes in the theme's colours; no image files |
 | The app launcher's icons (`theme/app-icons/`) | Drawn in code by `theme/tools/build-app-icons.py` | yes | Brand style, no generated art |
 | The GPU device table (`core/crates/bromigos-core/data/gpu-ids.tsv`) | Read from NVIDIA's and Mesa's lists by `tools/hw/gpu-tables.py` | yes | Facts only, none of their text |
 | Den wallpaper with the chair empty, and its lock twin | Generated with nolgia, 2026-10-04 | **yes** (operator, 2026-10-08) | On bromigos.org |
