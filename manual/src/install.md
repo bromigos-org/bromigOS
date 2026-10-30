@@ -125,21 +125,143 @@ prints these steps without changing anything.
 
 ## Install from the USB stick
 
-Download the newest image from the [Download page](https://bromigos.org/download). It's
-one file of about 5 GB, with its checksum and signature beside it. The page walks through
-each step below on Windows, macOS and Linux.
+The stick starts the whole bromigOS desktop before anything is installed, and installs it
+from there with no network. The [Download page](https://bromigos.org/download) has these
+same steps with pictures. Each step starts with the plain way; **From a terminal** is the
+same step by hand.
 
-1. Write the image to a USB stick of 8 GB or more, with balenaEtcher, Rufus (in DD
-   Image mode) or `dd`. Everything on the stick is erased.
-2. Start the computer from the stick: tap its boot menu key as it starts (often F12, F11,
-   F9 or Esc) and choose the stick. Both UEFI and older BIOS machines work. With Secure
-   Boot on, the first start asks you once to enroll bromigOS's key (Enroll key from disk,
-   then `ENROLL_THIS_KEY_IN_MOKMANAGER.cer`). The installed system needs Secure Boot off
-   for now: turn it off in the computer's setup before you start it. See
-   [Secure Boot](https://bromigos.org/download#secure-boot).
-3. In the boot menu, choose **Start bromigOS (try it live)**. You're on the full desktop,
+### 1. Download it
+
+Download the newest image from the [Download page](https://bromigos.org/download). It's
+one file of about 5 GB.
+
+**From a terminal.** Every release's image is at
+`https://pkgs.bromigos.org/iso/<version>/bromigos-<version>-x86_64.iso`, beside its
+`.sha256`, `.sig` and `.json`. `https://pkgs.bromigos.org/iso/latest.json` names the
+newest; `https://pkgs.bromigos.org/iso/edge/latest.json` the weekly edge build. The
+newest three releases are kept.
+
+```bash
+url=$(curl -fsSL https://pkgs.bromigos.org/iso/latest.json | jq -r '.isos[] | select(.edition == "bromigos") | .url')
+curl -fLO "$url" -fLO "$url.sha256" -fLO "$url.sig"
+```
+
+### 2. Check it (optional)
+
+The Download page shows the image's SHA-256 checksum. On Windows, PowerShell's
+`Get-FileHash .\bromigos-<version>-x86_64.iso` prints it; on a Mac,
+`shasum -a 256 bromigos-<version>-x86_64.iso`. The two must match.
+
+**From a terminal.** The checksum, then the signature by bromigOS's key, whose fingerprint
+is `393E 7D54 F7DE 58FE 75B9 7214 947C 9D61 93D3 DD8B`:
+
+```bash
+sha256sum -c bromigos-<version>-x86_64.iso.sha256
+curl -fsSLO https://pkgs.bromigos.org/bromigos/bromigos.asc
+gpg --show-keys --with-fingerprint bromigos.asc
+gpg --import bromigos.asc
+gpg --verify bromigos-<version>-x86_64.iso.sig bromigos-<version>-x86_64.iso
+```
+
+### 3. Make the USB stick
+
+You need a USB stick of 8 GB or more. **Everything on it is erased.**
+
+- **Windows:** [Rufus](https://rufus.ie). Choose the stick, then SELECT the image. Keep
+  the partition scheme GPT and the target system UEFI. Press START, and when Rufus asks
+  how to write an "ISOHybrid image", choose **Write in DD Image mode**.
+  [balenaEtcher](https://etcher.balena.io) works too: Flash from file, Select target,
+  Flash.
+- **macOS:** balenaEtcher, the same three steps. When it's done, macOS may say the disk
+  isn't readable: that's expected, choose Eject.
+- **Linux:** balenaEtcher, or GNOME Disks (Restore Disk Image).
+- **Ventoy:** copy the `.iso` onto a Ventoy stick, like any other image.
+
+**From a terminal.** It's an isohybrid image, for BIOS and UEFI alike, so it goes on the
+whole device as it is. Find the stick with `lsblk` (here `/dev/sdX`; the wrong device
+erases that disk):
+
+```bash
+sudo dd if=bromigos-<version>-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync
+# or: sudo cp bromigos-<version>-x86_64.iso /dev/sdX && sync
+```
+
+There's no netboot image: the medium carries an offline copy of every package an install
+needs, which is most of its size.
+
+### 4. Start the computer from the stick
+
+Plug it in, restart, and tap the computer's boot menu key as it starts, then choose the
+stick (on UEFI computers, "UEFI: " and its name). Common keys: Dell F12; HP Esc, then F9;
+Lenovo F12; ASUS F8 or Esc; Acer F12; MSI F11; Gigabyte F12; ASRock F11; Microsoft
+Surface: hold Volume Down while you press Power. From Windows, any brand: Settings, System,
+Recovery, Advanced startup, Restart now, then Use a device.
+
+The stick's boot menu comes up:
+
+![The stick's boot menu: Start bromigOS (try it live), Install bromigOS, safe graphics, the
+memory test, boot from disk](images/boot-menu-stick.webp)
+
+**From a terminal**, or rather the menu's own editor: press <kbd>e</kbd> on an entry in
+GRUB (UEFI), or <kbd>Tab</kbd> in the BIOS menu, to change its kernel line. The entries
+share archiso's line (`archisobasedir=arch archisosearchuuid=… splash quiet`); **Install
+bromigOS** adds `bromigos.install`, which opens the installer at login, safe graphics adds
+`nomodeset`, the screen reader `accessibility=on`. archiso's own options work too, such
+as `copytoram` to run from memory and free the stick, or `cow_spacesize=4G` for more room
+for changes in the live session. [The boot menu](boot-menu.md#the-install-stick) describes
+every entry.
+
+### Secure Boot
+
+Most Windows computers have Secure Boot on. The stick starts with it on: the first time,
+on each computer, you enroll bromigOS's key once, in a blue screen called MokManager. Use
+the arrow keys and <kbd>Enter</kbd>; the mouse doesn't work there.
+
+1. **ERROR: Verification failed: (0x1A) Security Violation.** Press <kbd>Enter</kbd>.
+
+   ![Verification failed: (0x1A) Security Violation, with an OK button](images/secure-boot-mok-1-verification-failed.webp)
+
+2. **Shim UEFI key management: Press any key to perform MOK management.** Press any key
+   within ten seconds.
+3. Choose **Enroll key from disk**.
+
+   ![Perform MOK management: Continue boot, Enroll key from disk, Enroll hash from disk](images/secure-boot-mok-3-mok-menu.webp)
+
+4. Choose the stick, **ARCHISO_EFI**.
+5. Choose **ENROLL_THIS_KEY_IN_MOKMANAGER.cer**.
+
+   ![Select Key: EFI/, ENROLL_THIS_KEY_IN_MOKMANAGER.cer, shellx64.efi](images/secure-boot-mok-5-file.webp)
+
+6. Choose **Continue** (**View key 0** shows the certificate first).
+7. **Enroll the key(s)?** Choose **Yes**.
+8. Choose **Reboot**, and choose the stick again in the boot menu if Windows starts.
+
+With Secure Boot on, the stick's menu is plain text instead of the themed one; the entries
+are the same. **The installed system can't start with Secure Boot on yet**: after
+installing, turn Secure Boot off in the computer's setup (often F2, F10, F1 or Del as it
+starts; from Windows: Advanced startup, Troubleshoot, Advanced options, UEFI Firmware
+Settings), under Boot or Security, then save and exit. If Windows uses BitLocker, have
+its recovery key ready first ([aka.ms/myrecoverykey](https://aka.ms/myrecoverykey)).
+
+**From a terminal.** The chain is firmware (Microsoft's keys) → shim 16.1, Fedora's
+Microsoft-signed build, pinned by checksum → GRUB, signed with bromigOS's key → the
+kernel, signed with the same key. GRUB runs in lockdown, which is why its theme's fonts
+don't load. The certificate is at the stick's root and in the repository
+(`iso/secureboot/bromigos-secureboot.crt`; SHA-1 `5F:EC:1D:6C:E1:8B:6B:D3:B9:6E:ED:E9:87:AE:B4:E9:EE:62:49:86`,
+as MokManager's **View key 0** shows it). Memtest86+ and the UEFI shell are unsigned, so
+they don't start with Secure Boot on. If you run your own keys with `sbctl`, enroll
+bromigOS's certificate in `db` instead of MokManager, or sign the installed system
+yourself. The project's
+[docs/secureboot.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/secureboot.md)
+has the details.
+
+### 5. Try it, then install
+
+![The live desktop from the stick: the bar, the system and network panels, the Wick's den](images/live-desktop-stick.webp)
+
+1. In the boot menu, choose **Start bromigOS (try it live)**. You're on the full desktop,
    and nothing is installed yet. Try the keys and look around.
-4. To install, open a terminal with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> and
+2. To install, open a terminal with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> and
    run:
 
    ```bash
@@ -148,20 +270,20 @@ each step below on Windows, macOS and Linux.
 
    Or choose **Install bromigOS** in the boot menu, which opens the desktop with the
    installer already running.
-5. Choose the disk to install on. **Everything on it is erased.**
-6. Type your user name, your password, and a name for the computer.
-7. Choose whether to encrypt the disk. It's on by default. Type a passphrase for the disk,
+3. Choose the disk to install on. **Everything on it is erased.**
+4. Type your user name, your password, and a name for the computer.
+5. Choose whether to encrypt the disk. It's on by default. Type a passphrase for the disk,
    or press <kbd>Enter</kbd> to use your password. You'll type it every time the computer
    starts.
 
    > **Remember the passphrase.** Nobody can recover it. Without it, the disk can't be
    > read.
 
-8. Choose the keyboard layout, the time zone and the language.
-9. Check the summary, and type `y` to go ahead. Pressing <kbd>Enter</kbd> on its own
+6. Choose the keyboard layout, the time zone and the language.
+7. Check the summary, and type `y` to go ahead. Pressing <kbd>Enter</kbd> on its own
    cancels.
-10. Wait while it installs. It needs no network: everything is on the stick. The computer
-    restarts into your new system when it's done.
+8. Wait while it installs. It needs no network: everything is on the stick. The computer
+   restarts into your new system when it's done.
 
 The stick answers the first-run questions for you: the Wick theme, with VECTOR's brain,
 voice and creation tools off. After your first login, run `bromigos setup` to change them.
@@ -169,6 +291,23 @@ See [First run](first-run.md).
 
 The installed system updates from the package repository the stick was made for. The boot
 menu's other entries are described in [The boot menu](boot-menu.md#the-install-stick).
+
+### How the image is made
+
+Every release's image is built by CI from the release's tag: archiso's releng profile with
+bromigOS laid over it, and an offline repository of every package an install needs. It's
+checked (the privacy guard, no keys, no proprietary packages), tested in QEMU with KVM (an
+encrypted UEFI install with its first update and rollback, an offline BIOS install, and
+Secure Boot with the MokManager enrollment), signed and published
+([iso.yml](https://github.com/bromigos-org/bromigOS/blob/main/.github/workflows/iso.yml),
+[docs/iso.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/iso.md)). To build
+one yourself, with Docker and about 20 GB free:
+
+```bash
+git clone https://github.com/bromigos-org/bromigOS && cd bromigOS
+iso/build.sh --repo https://pkgs.bromigos.org --channel stable --out ~/bromigos-iso
+iso/ci-test.sh ~/bromigos-iso/bromigos-*-x86_64.iso --out ~/bromigos-iso/tests   # needs /dev/kvm
+```
 
 ## Next
 
