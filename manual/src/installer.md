@@ -27,7 +27,9 @@ itself.
 2. **Before you start.** Shown only when there's something to know: running on battery
    (plug in the charger), less than 4 GB of memory, a disk that reports it's failing, a
    graphics card bromigOS can't drive well, Secure Boot. Each line says what to do. None
-   of them stops you.
+   of them stops you. With Secure Boot on, install as usual, then turn Secure Boot off in
+   the computer's setup before you start bromigOS from the disk: the installed system
+   can't start with it on yet ([Download page](https://bromigos.org/download#secure-boot)).
 3. **What kind of computer is this?** **bromigOS (desktop)** for a computer you sit at.
    **bromigOS Server** has no desktop, for servers and lab machines.
 4. **Your keyboard.** Pick the layout that matches your keys. Try it in the box.

@@ -432,13 +432,23 @@ class Installer(App):
     @work(thread=True)
     def load_disks(self):
         doc = backend.probe()
-        self.call_from_thread(self._disks_loaded, doc)
+        found = [c for c in common.checks(doc) if c["level"] == "warn"]
+        self.call_from_thread(self._disks_loaded, doc, found)
 
-    def _disks_loaded(self, doc):
+    def _disks_loaded(self, doc, found=()):
         self.probe = doc
         self.a["other_os"] = doc.get("other_os", False)
-        if self.step == "disk":
-            self.call_later(self.show, "disk")
+        self.a["checks"] = list(found)
+        if self.step in ("disk", "welcome"):
+            self.call_later(self.show, self.step)
+
+    def build_checks(self, box):
+        self.heading(box, "checks")
+        for c in self.a.get("checks") or []:
+            box.mount(Static(Text.assemble(("! ", "bold"), (c["title"], "bold")), classes="warn"),
+                      Static(c["what"], classes="muted"))
+            if c.get("fix"):
+                box.mount(Static(Text.assemble(("What to do: ", "bold"), c["fix"]), classes="fix"))
 
     def disk(self):
         return next((d for d in (self.probe or {}).get("disks", []) if d["path"] == self.a["disk"]), None)

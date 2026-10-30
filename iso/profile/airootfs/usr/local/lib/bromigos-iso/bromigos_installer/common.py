@@ -443,7 +443,8 @@ def checks(probe=None):
                     "what": "If the battery runs out during the install, the disk is left half done.",
                     "fix": "Plug in the charger before you start."})
     try:
-        mem = int(next(l for l in open("/proc/meminfo") if l.startswith("MemTotal")).split()[1]) * 1024
+        with open("/proc/meminfo") as f:
+            mem = int(next(l for l in f if l.startswith("MemTotal")).split()[1]) * 1024
     except (OSError, StopIteration, ValueError):
         mem = None
     if mem and mem < 4 * 10 ** 9 - 300 * 10 ** 6:
@@ -470,23 +471,25 @@ def checks(probe=None):
 
 
 def secure_boot():
-    """Secure Boot's state, from the medium's own reader when it has one (the release
-    pipeline's bromigos-iso-secureboot: state, and check's words; docs/secureboot.md). On:
-    a warning with what to do. Off, a BIOS start, or no reader: nothing to say."""
+    """Secure Boot, in the medium's own words (the release pipeline's bromigos-iso-secureboot
+    check, docs/secureboot.md): exit 1 means it's on and the installed system can't start
+    with it on yet, so a warning with its words and what to do; exit 0 (off, a BIOS start)
+    or no reader: nothing to say."""
     tool = os.environ.get("BROMIGOS_ISO_SECUREBOOT", "/usr/local/bin/bromigos-iso-secureboot")
     if not os.access(tool, os.X_OK):
         return None
     try:
-        state = subprocess.run([tool, "state"], capture_output=True, text=True, timeout=10).stdout.strip()
-        if state != "on":
-            return None
-        words = subprocess.run([tool, "check"], capture_output=True, text=True, timeout=10).stdout.strip()
+        r = subprocess.run([tool, "check"], capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired):
         return None
-    paras = [" ".join(p.split()) for p in words.split("\n\n") if p.strip()]
+    if r.returncode != 1:
+        return None
+    paras = [" ".join(p.split()) for p in r.stdout.split("\n\n") if p.strip()]
+    what = paras[1] if len(paras) > 1 else "The installed system can't start with Secure Boot on yet."
+    what, _, how = what.partition(" How: ")     # its words already say what to do; the link, how
+    fix = f"How to turn it off, step by step: {how.strip()}" if how.strip() else ""
     return {"id": "secureboot", "level": "warn", "title": (paras[0].rstrip(".") if paras else "Secure Boot is on"),
-            "what": paras[1] if len(paras) > 1 else "The installed system can't start with Secure Boot on yet.",
-            "fix": "Install now, then turn Secure Boot off in the computer's setup before you start it."}
+            "what": what, "fix": fix}
 
 
 def gpu_checks():
@@ -497,7 +500,9 @@ def gpu_checks():
         return []
     out = []
     plan = hw.get("plan") or {}
-    for note in plan.get("warnings") or plan.get("notes") or []:
+    # warnings only: the plan's notes are for Settings › Graphics (how several cards share the
+    # screens), not something to stop and read before an install
+    for note in plan.get("warnings") or []:
         text = note.get("text") if isinstance(note, dict) else str(note)
         if text:
             out.append({"id": "gpu", "level": "warn", "title": "Graphics", "what": text,

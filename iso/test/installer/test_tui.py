@@ -159,6 +159,33 @@ class TUI(unittest.TestCase):
         rows = dict(c.summary(a, d)[0])
         self.assertIn("home folder", rows["Disk"])
 
+    def test_checks_step_says_secure_boot(self):
+        """The medium's Secure Boot reader (exit 1: on) becomes the Checks step, in its own words."""
+        tool = os.path.join(tempfile.mkdtemp(), "sb")
+        with open(tool, "w") as f:
+            f.write("#!/bin/sh\n[ \"$1\" = check ] || exit 0\nprintf 'Secure Boot is on.\\n\\nThe installed system can\\047t start with it on yet. How: https://bromigos.org/download#secure-boot\\n'; exit 1\n")
+        os.chmod(tool, 0o755)
+        os.environ["BROMIGOS_ISO_SECUREBOOT"] = tool
+        self.addCleanup(os.environ.pop, "BROMIGOS_ISO_SECUREBOOT", None)
+
+        async def go():
+            app = tui.Installer()
+            async with app.run_test(size=(120, 42)) as pilot:
+                for _ in range(100):
+                    if app.probe is not None:
+                        break
+                    await pilot.pause(0.05)
+                await pilot.pause(0.3)
+                await pilot.press("ctrl+n")
+                await pilot.pause(0.3)
+                words = " ".join(str(w.render()) for w in app.query("#step-checks Static"))
+                return app.step, words
+        step, words = asyncio.run(go())
+        self.assertEqual(step, "checks")
+        self.assertIn("Secure Boot is on", words)
+        self.assertIn("can't start with it on yet", words)
+        self.assertIn("bromigos.org/download#secure-boot", words)
+
     def test_disks_arriving_mid_draw(self):
         """The disks can arrive while the Where step is drawn: two redraws at once must not collide."""
         async def go():
@@ -349,7 +376,7 @@ class Words(unittest.TestCase):
         from bromigos_installer import common as c
         tool = os.path.join(tempfile.mkdtemp(), "sb")
         with open(tool, "w") as f:
-            f.write("#!/bin/sh\ncase $1 in state) echo on ;; check) printf 'Secure Boot is on.\\n\\nTurn it off after installing.\\n'; exit 1 ;; esac\n")
+            f.write("#!/bin/sh\ncase $1 in check) [ -e \"$0.off\" ] && exit 0; printf 'Secure Boot is on.\\n\\nTurn it off after installing. How: https://bromigos.org/download#secure-boot\\n'; exit 1 ;; esac\n")
         os.chmod(tool, 0o755)
         os.environ["BROMIGOS_ISO_SECUREBOOT"] = tool
         try:
@@ -357,7 +384,14 @@ class Words(unittest.TestCase):
         finally:
             del os.environ["BROMIGOS_ISO_SECUREBOOT"]
         self.assertEqual((got["level"], got["title"]), ("warn", "Secure Boot is on"))
-        self.assertIn("Turn it off", got["what"])
+        self.assertEqual(got["what"], "Turn it off after installing.")
+        self.assertIn("bromigos.org/download#secure-boot", got["fix"])
+        open(tool + ".off", "w").close()            # check exits 0: off, or a BIOS start
+        os.environ["BROMIGOS_ISO_SECUREBOOT"] = tool
+        try:
+            self.assertIsNone(c.secure_boot())
+        finally:
+            del os.environ["BROMIGOS_ISO_SECUREBOOT"]
 
     def test_boot_parameters(self):
         from bromigos_installer import common as c
