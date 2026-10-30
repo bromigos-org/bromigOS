@@ -5,6 +5,7 @@
 # for everything it needs, and bromigOS's), so an install needs no network.
 #
 #   iso/build.sh --repo URL [--medium-repo URL] [--version V] [--ca FILE] [--out DIR]
+#                [--profile DIR] [--secureboot-key FILE --secureboot-cert FILE]
 #                [--test-key FILE] [--keep-work]
 #
 #   --repo URL      bromigOS's package repository (https://…; it must be reachable from
@@ -24,6 +25,11 @@
 #   --out DIR       where the ISO lands (default: a scratch dir, printed)
 #   --test-key FILE a test build: this SSH public key signs in as the live user, sshd is
 #                   on, and the kernel console is on the serial port too (iso/test.sh)
+#   --profile DIR   the profile, a directory of iso/ (default: profile, the desktop medium)
+#   --secureboot-key FILE, --secureboot-cert FILE
+#                   Secure Boot (docs/secureboot.md): the medium boots through shim, with GRUB
+#                   and the kernel signed with this key (PEM); the certificate goes on the
+#                   medium to enroll. Without them, the medium boots only with Secure Boot off
 #   --keep-work     keep mkarchiso's work dir after the build (the image's root, to look
 #                   into); every build starts it afresh
 #
@@ -33,12 +39,13 @@ set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/.." && pwd)
 
-repo='' medium_repo='' version='' ca='' hosts='' out='' testkey='' keep=0 channel=stable
+repo='' medium_repo='' version='' ca='' hosts='' out='' testkey='' keep=0 channel=stable profile=profile sbkey='' sbcert=''
 while (($#)); do
     case $1 in
         --repo) repo=$2; shift 2 ;; --medium-repo) medium_repo=$2; shift 2 ;; --version) version=$2; shift 2 ;; --ca) ca=$2; shift 2 ;; --hosts) hosts=$2; shift 2 ;; --channel) channel=$2; shift 2 ;;
         --out) out=$2; shift 2 ;; --test-key) testkey=$2; shift 2 ;; --keep-work) keep=1; shift ;;
-        -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --profile) profile=$2; shift 2 ;; --secureboot-key) sbkey=$2; shift 2 ;; --secureboot-cert) sbcert=$2; shift 2 ;;
+        -h|--help) sed -n '2,39p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "iso/build.sh: unknown option $1" >&2; exit 2 ;;
     esac
 done
@@ -51,9 +58,12 @@ out=$(cd "$out" && pwd)
 mounts=(-v "$root:/src:ro" -v "$out:/out")
 case $channel in stable|rc|edge) ;; *) echo "iso/build.sh: --channel is stable, rc or edge" >&2; exit 2 ;; esac
 [[ -z $version || $version =~ ^[0-9A-Za-z._+-]+$ ]] || { echo "iso/build.sh: --version is letters, digits and . _ + -" >&2; exit 2; }
-env=(-e "ISO_REPO=$repo" -e "ISO_MEDIUM_REPO=$medium_repo" -e "ISO_VERSION=$version" -e "ISO_CHANNEL=$channel" -e "ISO_KEEP_WORK=$keep" -e "ISO_OWNER=$(id -u):$(id -g)")
+[[ $profile =~ ^[A-Za-z0-9_-]+$ && -f $here/$profile/profiledef.sh ]] || { echo "iso/build.sh: --profile is a directory of iso/ with a profiledef.sh" >&2; exit 2; }
+[[ -z $sbkey && -z $sbcert ]] || [[ -f $sbkey && -f $sbcert ]] || { echo "iso/build.sh: --secureboot-key and --secureboot-cert go together" >&2; exit 2; }
+env=(-e "ISO_PROFILE=$profile" -e "ISO_REPO=$repo" -e "ISO_MEDIUM_REPO=$medium_repo" -e "ISO_VERSION=$version" -e "ISO_CHANNEL=$channel" -e "ISO_KEEP_WORK=$keep" -e "ISO_OWNER=$(id -u):$(id -g)")
 if [[ -n $ca ]]; then mounts+=(-v "$(realpath "$ca"):/in/repo-ca.crt:ro"); fi
 if [[ -n $testkey ]]; then mounts+=(-v "$(realpath "$testkey"):/in/test_key.pub:ro"); fi
+if [[ -n $sbkey ]]; then mounts+=(-v "$(realpath "$sbkey"):/in/sb.key:ro" -v "$(realpath "$sbcert"):/in/sb.crt:ro"); fi
 addhost=(); [[ -n $hosts ]] && addhost=(--add-host "${hosts#* }:${hosts%% *}")
 
 # --privileged: pacstrap and arch-chroot mount proc/sys/dev in the work dir; mksquashfs

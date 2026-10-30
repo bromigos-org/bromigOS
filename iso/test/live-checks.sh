@@ -26,7 +26,8 @@ check "Hyprland is running" pgrep -x Hyprland
 check "the bar (waybar)" pgrep -x waybar
 check "the widgets" pgrep -f 'python3? /usr/bin/bromigos-widgets'
 check "the live layer" pgrep -f 'python3? -m live.app'
-check "the wallpaper (swaybg)" pgrep -x swaybg
+# swaybg is the fallback: a working live background removes it (desktop/bin/bromigos-wallpaper)
+check "the background (the live layer, or swaybg in its place)" bash -c "pgrep -x swaybg || pgrep -f 'python3? -m live.app'"
 check "the login screen's service (sddm)" pgrep -x sddm
 check "the theme is wick" bash -c "bromigos theme current | grep -qx wick"
 check "the splash theme is bromigos" bash -c "plymouth-set-default-theme | grep -qx bromigos"

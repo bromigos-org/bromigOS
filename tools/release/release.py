@@ -640,11 +640,9 @@ def body_cmd(a):
                   "bromigOS's and VECTOR's; `SHA256SUMS.sig` is its signature by the repository's key "
                   "(`gpg --verify SHA256SUMS.sig SHA256SUMS`, with `packaging/keys/bromigos.asc`).",
                   ("- **ISO:** the installer image is made for stable releases (docs/iso.md)." if rc else
-                   f"- **ISO:** the installer image is built and tested by hand after the release (docs/iso.md, "
-                   f"\"A release's ISO\"), then attached here in parts, because GitHub takes files under 2 GiB, "
-                   f"with the whole image's `.sha256` and `.sig`: `cat bromigos-{version}-x86_64.iso.part? > "
-                   f"bromigos-{version}-x86_64.iso`, then `sha256sum -c bromigos-{version}-x86_64.iso.sha256` and "
-                   f"`gpg --verify bromigos-{version}-x86_64.iso.sig bromigos-{version}-x86_64.iso`.")]
+                   "- **ISO:** the installer image is built, tested and signed by CI once the stable channel is "
+                   "published, then linked here (docs/iso.md, \"A release's ISO\"); "
+                   "[the Download page](https://bromigos.org/download) has the newest.")]
     print("\n".join(lines).strip())
 
 

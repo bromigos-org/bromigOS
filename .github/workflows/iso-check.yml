@@ -36,7 +36,10 @@ jobs:
           shellcheck -S warning iso/build.sh iso/build-in-container.sh iso/check-medium.sh iso/test.sh iso/test/live-checks.sh \
             iso/profile/profiledef.sh iso/profile/airootfs/root/customize_airootfs.sh \
             iso/profile/airootfs/usr/local/bin/bromigos-iso-install \
-            iso/profile/airootfs/usr/local/bin/bromigos-iso-autostart
+            iso/profile/airootfs/usr/local/bin/bromigos-iso-autostart \
+            iso/profile/airootfs/usr/local/bin/bromigos-iso-secureboot \
+            iso/ci-test.sh iso/publish.sh iso/secureboot/medium.sh
+          python -m py_compile iso/release-notes.py
       - name: the profile's files are where profiledef.sh says
         shell: bash
         run: |

@@ -4,6 +4,8 @@
 # command line), the installer opens in a terminal, ready for its questions; when it's done
 # (or left), the terminal stays, so its last words can be read. Any other boot: nothing.
 set -u
+# Secure Boot on: a notification, once, that the installed system needs it off (docs/secureboot.md)
+/usr/local/bin/bromigos-iso-secureboot notify &
 grep -qw 'bromigos.install' /proc/cmdline || exit 0
 sleep 2                                # the desktop first: the bar, the widgets, the den
 exec kitty --class bromigos-iso-install --title "Install bromigOS" --hold \

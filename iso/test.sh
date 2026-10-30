@@ -33,7 +33,8 @@
 # run: BROMIGOS_ISOTEST_DIR, _PORT (SSH), _VNC (display) and _MEM (MiB, 6144); BROMIGOS_ISOTEST_QEMU adds QEMU
 # arguments (a faked laptop: -smbios file=… from test/vm/smbios-chassis.py; docs/hardware.md),
 # BROMIGOS_ISOTEST_OFFLINE=1 cuts the VM off from the network (the SSH forward stays), and
-# BROMIGOS_ISOTEST_VGA the display device (default virtio-vga; e.g. virtio-vga,xres=1024,yres=768
+# BROMIGOS_ISOTEST_OVMF_CODE another UEFI firmware (Secure Boot's: iso/ci-test.sh), BROMIGOS_ISOTEST_VGA the
+# display device (default virtio-vga; e.g. virtio-vga,xres=1024,yres=768
 # offers the firmware that mode, which GRUB's GFXMODE=auto takes).
 # The VM stops when the session that started it ends (test/vm/vm-keeper.py):
 # BROMIGOS_VM_OWNER=PID ties it to another process, BROMIGOS_VM_OWNER=none keeps it until down.
@@ -42,7 +43,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/.." && pwd)
 dir=${BROMIGOS_ISOTEST_DIR:-$HOME/.cache/bromigos-isotest}
 port=${BROMIGOS_ISOTEST_PORT:-2223}
-ovmf_code=/usr/share/edk2/x64/OVMF_CODE.4m.fd
+ovmf_code=${BROMIGOS_ISOTEST_OVMF_CODE:-/usr/share/edk2/x64/OVMF_CODE.4m.fd}
 ovmf_vars=/usr/share/edk2/x64/OVMF_VARS.4m.fd
 
 cmd=${1:-}; shift || true
@@ -62,7 +63,10 @@ key=$dir/id_ed25519
 sshopts=(-i "$key" -p "$port" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5)
 user=$(cat "$dir/user" 2>/dev/null || echo live)
 SSH=(ssh "${sshopts[@]}" "$user@127.0.0.1")
-SCP=(scp "${sshopts[@]/-p/-P}")
+# scp names the port -P; every other option as ssh's (a substitution over the array would
+# also change any path with "-p" in it)
+scpopts=(); for o in "${sshopts[@]}"; do [[ $o == -p ]] && o=-P; scpopts+=("$o"); done
+SCP=(scp "${scpopts[@]}")
 qmp() { printf '%s\n' '{"execute":"qmp_capabilities"}' "$1" | socat - "UNIX-CONNECT:$dir/qmp.sock" >/dev/null; }
 
 wait_ssh() {
@@ -234,6 +238,10 @@ case $cmd in
         rc=0
         medium_channel=$(cat "$dir/channel" 2>/dev/null || echo stable)
         "${SSH[@]}" "CHANNEL=$medium_channel bash live-checks.sh desktop $( (( encrypted )) && echo encrypted || echo plain); r=\$?; bash checks.sh; exit \$((r + \$?))" 2>&1 | tee "$dir/checks-$firmware.out" || rc=$?
+        # the theme previews' render log, when their check failed (it names what the nested desktop said)
+        if grep -q "^FAIL the theme switcher" "$dir/checks-$firmware.out"; then
+            "${SSH[@]}" 'tail -n 80 ~/.cache/bromigos/theme-previews/render.log 2>/dev/null; ls -la /dev/dri 2>&1' > "$dir/previews-render-$firmware.log" 2>&1 || true
+        fi
         # the first update, from the network (Enter at each of pacman's questions: its
         # defaults), then what it left: snapshots around it, in GRUB's menu, recorded for
         # --rollback. It moves to the other channel (a transaction is what makes snapshots,

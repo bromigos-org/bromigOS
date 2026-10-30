@@ -6,9 +6,11 @@ disk, encrypted by default, with snapshots in the boot menu. Every package an in
 needs is on the medium, so installing needs no network.
 
 This page explains how the ISO is built, what's on it, what the installer does and how to
-test it. For users, the manual's [Install](../manual/src/install.md) page covers it.
-Each release's ISO is attached to its GitHub Release, signed, for anyone to download ([A
-release's ISO](#a-releases-iso)).
+test it. For users, the manual's [Install](../manual/src/install.md) page and the
+[Download page](https://bromigos.org/download) cover it. Every release's ISO is built,
+checked, tested, signed and published by CI, as one file at
+`https://pkgs.bromigos.org/iso/<version>/` ([A release's ISO](#a-releases-iso)). It
+starts with Secure Boot on ([secureboot.md](secureboot.md)).
 
 ![The ISO's boot menu: the title BROMIGOS // RELAY MEDIUM over the den at night, the
 burn-in emblem, a countdown, and the entries Start bromigOS, Install bromigOS, safe
@@ -27,6 +29,10 @@ iso/
   build-in-container.sh     the build itself: the offline repository, the profile, mkarchiso
   check-medium.sh           unpacks a built ISO and checks what it carries (a release's)
   test.sh                   boots the medium and the installed system in QEMU, headless
+  ci-test.sh                CI's tests of a built medium, in a container with KVM
+  publish.sh                signs an ISO and publishes it to the bucket; latest.json; what's kept
+  release-notes.py          puts a release's ISO on its GitHub Release's text
+  secureboot/               shim, and GRUB and the kernel signed (secureboot.md)
   test/live-checks.sh       what the live desktop, and the installed system, must have
   test/screen-wait.py       waits for a boot menu on the VM's screen and saves it
   test/medium-privacy.py    the privacy guard over an unpacked medium
@@ -249,7 +255,9 @@ machine. The medium remembers it as the installed system's repository, unless
 | `--channel NAME` | Which channel's packages go on the medium, and which channel the installed system follows. The default is `stable`. |
 | `--ca FILE` | The repository's CA certificate, if it has its own. It goes on the medium too, unless `--medium-repo` names another repository. |
 | `--hosts "IP NAME"` | The repository host's address, when DNS doesn't give it |
-| `--out DIR` | Where the ISO goes. The default is `~/.cache/bromigos-iso`. |
+| `--out DIR` | Where the ISO goes. The default is `~/.cache/bromigos-iso`; on a workstation, give a directory on a disk with room (about 20 GB). |
+| `--profile DIR` | Another profile, a directory of `iso/` with its own `profiledef.sh`, such as the Field Kit's. The default is `profile`, the desktop medium. |
+| `--secureboot-key FILE`, `--secureboot-cert FILE` | Signs the medium for Secure Boot with this key ([secureboot.md](secureboot.md)). Without them, the medium starts only with Secure Boot off. |
 | `--test-key FILE` | Makes a test build (below) |
 | `--keep-work` | Keeps mkarchiso's work directory, to look inside the image |
 
@@ -272,7 +280,10 @@ What the build does, in the container:
    in `packages.x86_64`, and a test keeps it in step with `hw.rs`.
 5. Downloads and verifies them all, lays them out as the offline repository with
    `repo-add`, and points the build's `pacman.conf` at it.
-6. Runs `mkarchiso`.
+6. With a Secure Boot key: fetches shim and checks it against its pins, and makes a copy
+   of `mkarchiso` that signs the kernel and puts shim, the signed GRUB and the
+   certificate on the medium ([secureboot.md](secureboot.md#the-medium)).
+7. Runs `mkarchiso`.
 
 The squashfs is compressed with zstd, not releng's xz. The offline repository is most of
 the image and is already zstd, so xz would gain little and cost minutes.
@@ -295,14 +306,13 @@ and `root` have empty passwords, which sshd refuses, and only a test build has a
 - the package list resolving against Arch's repositories, and bromigOS's when the runner
   has `ISO_REPO_URL` and `ISO_REPO_CA`.
 
-CI doesn't build or boot the image. mkarchiso needs a privileged container and around
-20 GB of disk, and the boot test needs KVM and 6 GB of memory. That's more than the
-shared runners have to spare, so those run by hand.
+`iso-check` doesn't build the image. `.github/workflows/iso.yml` does, for every release,
+every week and by hand ([A release's ISO](#a-releases-iso)).
 
 ## A release's ISO
 
-A release's ISO is built by hand from the release's tag, checked, tested, signed, and
-attached to its GitHub Release. It's an ordinary build with three differences: it carries
+Every stable release gets its ISO from CI, with nobody at a workstation:
+`.github/workflows/iso.yml`. It's an ordinary build with three differences: it carries
 the `stable` channel, it names the public repository, and it has no test key.
 
 ### Where it finds packages
@@ -314,99 +324,152 @@ the `stable` channel, it names the public repository, and it has no test key.
   `https://pkgs.bromigos.org`, as `install.sh`'s `PUBLIC_REPO` ([public.md](public.md)).
   The build downloads from the same address, so it needs no CA and no private access.
 
-The first v0.1.2 ISO, attached on 2026-10-09 before the repository went public, named
+The first v0.1.2 ISO, published on 2026-10-09 before the repository went public, named
 the bucket's r2.dev address instead. It was replaced on 2026-10-10. Machines installed
 from it move to `pkgs.bromigos.org` on an update, through a migration
 ([public.md](public.md#the-r2dev-address)).
 
-The repository and its Releases are public, so anyone can download the ISO.
+### What CI does with it
 
-### Making it
+The workflow starts when `packages.yml` has published a `vX.Y.Z` tag's stable channel
+(`release-promote` pushes the tag; [release.md](release.md)), so the ISO takes the
+release's packages. For each profile under `iso/` (a directory with a `profiledef.sh`:
+the desktop medium, and the Field Kit once it's there), side by side:
 
-1. **Wait for the release.** The release workflow publishes the stable channel
-   ([Releasing](release.md)). The ISO takes that channel's packages.
-2. **Build it** from a checkout of the tag, from the public repository. With a warm cache
-   it takes about five minutes; a cold one downloads 2 GB first.
+1. **Build** from the tag, from the public repository, with `iso/build.sh`, signed for
+   Secure Boot with bromigOS's key.
+2. **Check what's on it** with `iso/check-medium.sh` (below).
+3. **Test it** with `iso/ci-test.sh`, in an archlinux container with KVM. The desktop
+   medium: UEFI with the network, an encrypted install, the installed system, its first
+   update and rollback; then BIOS with no network and a plain install. Then the medium
+   once more with Secure Boot on. A profile with no installer boots to its menu on UEFI and
+   BIOS, then runs its own `ci-test.sh` if it has one.
+4. **Sign it** with the package signing key (a detached, armoured `.sig`), and check the
+   signature against `packaging/keys/bromigos.asc` alone.
+5. **Publish it**: the ISO as one file, its `.sha256`, `.sig` and `.json`, into the
+   version's folder of the public bucket. Then it downloads it back from
+   `https://pkgs.bromigos.org`, as anyone would, and checks the checksum.
+6. **Point at it**: `iso/latest.json` names the newest version's ISOs, the versions past
+   the newest three are removed, and the GitHub Release's `ISO:` line gets the links, sizes
+   and checksums (`iso/release-notes.py`). The Download page reads `latest.json` and
+   follows it within the hour.
 
-   ```bash
-   git worktree add ../bromigos-v0.1.3 v0.1.3
-   ../bromigos-v0.1.3/iso/build.sh --repo https://pkgs.bromigos.org \
-       --medium-repo https://pkgs.bromigos.org --channel stable --version 0.1.3 \
-       --out ~/.cache/bromigos-iso-0.1.3
-   ```
+The tests' screenshots and output are the run's artifact, `iso-tests-<profile>`. Nothing
+is published unless every step before it passed.
 
-   A fix to `iso/` made after the tag can go in, as 0.1.2's did: build from main, whose
-   `iso/` is newer, with the same options. The packages are still the tag's: they come
-   from the stable channel.
-3. **Check what's on it** with `iso/check-medium.sh`. It unpacks the ISO (the squashfs in
-   an unprivileged container, as you) and checks:
-   - the repository the medium names and its channel;
-   - no CA, no test key, no `authorized_keys`, no serial console, no `BROMIGOS_TEST` label;
-   - no package with a proprietary licence in the offline repository;
-   - the privacy guard (`iso/test/medium-privacy.py`), with the repository's own rules.
-     Every text file and file name is checked for the lab's own names (the private
-     overlay, `PRIVACY_PATTERNS`, the hashed internal words). bromigOS's files also get
-     the whole guard: private addresses, internal host names, MAC addresses and token
-     shapes. Arch's packages hit a few everyday words; the report shows those apart;
-   - the pictures bromigOS puts on it, listed for you to look at: no likeness
-     ([ASSETS.md](ASSETS.md)).
+It runs on GitHub's hosted runner: the repository is public, so it costs nothing, and the
+runner has Docker, KVM and, once the job clears its unused toolchains, the ~30 GB the
+build and a test VM need at once. `CI_RUNNER_ISO` can name another runner; it must be one
+that only this workflow can use, because a public repository's pull requests must never
+reach a homelab runner ([public.md](public.md)).
 
-   ```bash
-   iso/check-medium.sh ~/.cache/bromigos-iso-0.1.3/bromigos-0.1.3-x86_64.iso
-   ```
+**By hand** (Actions, iso, Run workflow):
 
-   The repository it must name is `install.sh`'s `PUBLIC_REPO` (`--repo` gives another).
-   A finding in bromigOS's files is fixed where it comes from, then the ISO is built
-   again.
-4. **Test it** in the harness ([Testing it](#testing-it)), UEFI and BIOS. The medium has
-   no test key, so the harness brings its own through cloud-init. Run one firmware with
-   no network, which is how the medium is meant to install:
+| Input | What it does |
+|---|---|
+| `channel` | `stable`, a release's ISO; or `edge`, the edge channel's |
+| `tag` | The release, for `stable`. Empty: the newest |
+| `ref` | Build from this ref's `iso/` instead of the tag's: a fix made after the release, as v0.1.2's was. The packages are still the channel's |
+| `publish` | Off: build, check and test only, for any branch |
+| `tests` | Off only to publish again a medium already tested |
+| `import_release_parts` | Moves an ISO attached to a GitHub Release in parts (v0.1.2's) into the bucket, verified, and removes the parts |
 
-   ```bash
-   iso/test.sh boot --iso <iso> --firmware uefi
-   iso/test.sh install
-   iso/test.sh boot-disk
-   BROMIGOS_ISOTEST_OFFLINE=1 iso/test.sh boot --iso <iso> --firmware bios   # in another BROMIGOS_ISOTEST_DIR
-   BROMIGOS_ISOTEST_OFFLINE=1 iso/test.sh install --no-encrypt
-   iso/test.sh boot-disk
-   ```
+```bash
+gh workflow run iso -R bromigos-org/bromigOS -f channel=stable -f tag=v0.1.3 -f ref=main
+gh workflow run iso -R bromigos-org/bromigOS -f channel=edge -f publish=false -f ref=<branch>
+```
 
-   `install` takes no `--repo`, so the installed system names the public address, as a
-   user's does, and its first update reads from it.
-5. **Sign it** with the package signing key, from the deployment's secret store, in a
-   throwaway GnuPG home. Then verify it with `packaging/keys/bromigos.asc` alone:
+**Edge** is built every Monday from main, from the edge channel, and kept alone: each one
+replaces the last. **Pull requests** that change the pipeline build, check and test it, and
+publish nothing.
 
-   ```bash
-   export GNUPGHOME=$(mktemp -d); chmod 700 "$GNUPGHOME"
-   <the key> | gpg --batch --import
-   <the passphrase> | gpg --batch --pinentry-mode loopback --passphrase-fd 0 \
-       --local-user 393E7D54F7DE58FE75B97214947C9D6193D3DD8B --armor --detach-sign \
-       --output <iso>.sig <iso>
-   gpgconf --kill all; rm -rf "$GNUPGHOME"
-   ```
+### Where the ISO lives
 
-6. **Attach it.** GitHub takes files under 2 GiB, and the ISO is about 4.3 GB, so it goes
-   up in parts. The checksum and the signature are for the whole ISO.
+In the public bucket, `bromigos-pkgs`, beside the packages
+([public.md](public.md)). R2 charges nothing for downloads, and takes the 5 GB ISO as one
+object, which GitHub's Releases (2 GiB a file) couldn't.
 
-   ```bash
-   cd ~/.cache/bromigos-iso-0.1.3
-   split -b 1500M -d -a 1 --numeric-suffixes=1 bromigos-0.1.3-x86_64.iso bromigos-0.1.3-x86_64.iso.part
-   gh release upload v0.1.3 -R bromigos-org/bromigOS bromigos-0.1.3-x86_64.iso.part? \
-       bromigos-0.1.3-x86_64.iso.sha256 bromigos-0.1.3-x86_64.iso.sig
-   rm bromigos-0.1.3-x86_64.iso.part?
-   ```
+```text
+https://pkgs.bromigos.org/iso/
+  latest.json                                  the newest stable version's index.json
+  0.1.3/
+    bromigos-0.1.3-x86_64.iso                  the desktop medium (live and installer)
+    bromigos-0.1.3-x86_64.iso.sha256 .sig .json
+    bromigos-fieldkit-0.1.3-x86_64.iso         the Field Kit, from the release it first ships in
+    index.json                                 every ISO of the version
+  edge/
+    latest.json
+    2026.11.02/bromigos-2026.11.02-x86_64.iso  the newest edge build only
+```
 
-   Add the download steps below to the Release's text (`gh release edit --notes-file`).
-7. **Clean up.** Keep the ISO, its `.sha256` and `.sig` in `~/.cache/bromigos-iso-<version>`.
-   Remove its `cache/` and `work/`, the test VMs' directories, and the checkout.
+Each ISO's `.json`, and the `isos` of `index.json` and `latest.json`, give its `edition`
+(`bromigos`, `bromigos-fieldkit`), `file`, `version`, `tag`, `size`, `sha256`, `url`,
+`sha256_url`, `sig_url`, `secure_boot` and when it was built and published.
+
+**What's kept:** the newest three stable versions, and the newest edge build. Older
+releases' ISOs are removed from the bucket when a fourth is published. At 5 GB each that's
+about 20 GB, well under a dollar a month of R2 storage. To keep a version longer, copy it
+elsewhere first, or give `iso/publish.sh pointers --keep N`.
+
+### Checking what's on it
+
+`iso/check-medium.sh` unpacks the ISO (the squashfs in an unprivileged container, as
+you) and checks:
+
+- the repository the medium names and its channel;
+- no CA, no test key, no `authorized_keys`, no serial console, no `BROMIGOS_TEST` label;
+- no package with a proprietary licence in the offline repository;
+- the privacy guard (`iso/test/medium-privacy.py`), with the repository's own rules.
+  Every text file and file name is checked for the lab's own names (the private
+  overlay, `PRIVACY_PATTERNS`, the hashed internal words). bromigOS's files also get
+  the whole guard: private addresses, internal host names, MAC addresses and token
+  shapes. Arch's packages hit a few everyday words; the report shows those apart;
+- the pictures bromigOS puts on it, listed for you to look at: no likeness
+  ([ASSETS.md](ASSETS.md)).
+
+```bash
+iso/check-medium.sh <iso> --keep <dir>
+```
+
+The repository it must name is `install.sh`'s `PUBLIC_REPO` (`--repo` gives another).
+A finding in bromigOS's files is fixed where it comes from, then the ISO is built
+again. A finding in a package that's already published (a release's, which can't change)
+and judged harmless goes in `iso/test/privacy-accepted.txt`, exactly as the guard prints
+it, with why. Its path names the package's version, so it never covers a later build.
+
+### Making one by hand
+
+The same steps, on a workstation with Docker and KVM, if CI can't:
+
+```bash
+git worktree add ../bromigos-v0.1.3 v0.1.3
+../bromigos-v0.1.3/iso/build.sh --repo https://pkgs.bromigos.org \
+    --medium-repo https://pkgs.bromigos.org --channel stable --version 0.1.3 \
+    --out <dir> [--secureboot-key <key> --secureboot-cert <cert>]
+iso/check-medium.sh <dir>/bromigos-0.1.3-x86_64.iso --keep <dir>/check
+iso/ci-test.sh <dir>/bromigos-0.1.3-x86_64.iso --out <dir>/tests [--secureboot-cert <cert>]
+iso/publish.sh sign <dir>/bromigos-0.1.3-x86_64.iso
+iso/publish.sh upload <dir>/bromigos-0.1.3-x86_64.iso --channel stable --tag v0.1.3
+iso/publish.sh pointers --channel stable --out <dir>/index
+iso/release-notes.py --tag v0.1.3 --index <dir>/index/0.1.3/index.json
+```
+
+`publish.sh` reads the bucket's and the signing key's secrets from the environment
+(its header lists them); the Secure Boot key is in the deployment's secret store
+([secureboot.md](secureboot.md#the-key)).
 
 ### Downloading it
 
+The [Download page](https://bromigos.org/download) has the newest one, with the steps to
+put it on a USB stick from Windows, macOS or Linux and to start a PC from it. Checking it:
+
 ```bash
-cat bromigos-0.1.2-x86_64.iso.part? > bromigos-0.1.2-x86_64.iso
-sha256sum -c bromigos-0.1.2-x86_64.iso.sha256
+curl -fLO https://pkgs.bromigos.org/iso/0.1.3/bromigos-0.1.3-x86_64.iso
+curl -fLO https://pkgs.bromigos.org/iso/0.1.3/bromigos-0.1.3-x86_64.iso.sha256
+curl -fLO https://pkgs.bromigos.org/iso/0.1.3/bromigos-0.1.3-x86_64.iso.sig
+sha256sum -c bromigos-0.1.3-x86_64.iso.sha256
 gpg --import bromigos.asc        # packaging/keys/bromigos.asc
-gpg --verify bromigos-0.1.2-x86_64.iso.sig bromigos-0.1.2-x86_64.iso
+gpg --verify bromigos-0.1.3-x86_64.iso.sig bromigos-0.1.3-x86_64.iso
 ```
 
 The key's fingerprint is `393E 7D54 F7DE 58FE 75B9 7214 947C 9D61 93D3 DD8B`
@@ -493,11 +556,35 @@ To fake a laptop or another machine, `BROMIGOS_ISOTEST_QEMU` adds QEMU arguments
 
 To run a second VM beside another, give it its own directory, SSH port and display with
 `BROMIGOS_ISOTEST_DIR`, `BROMIGOS_ISOTEST_PORT` and `BROMIGOS_ISOTEST_VNC`.
-`BROMIGOS_ISOTEST_MEM` sets its memory in MiB, 6144 by default.
+`BROMIGOS_ISOTEST_MEM` sets its memory in MiB, 6144 by default. `BROMIGOS_ISOTEST_OVMF_CODE`
+gives another UEFI firmware: `ci-test.sh`'s Secure Boot test uses OVMF's Secure Boot build.
 
 ## Test runs
 
-Newest first. All runs were on a workstation with KVM.
+Newest first. Until 2026-10-30 all runs were on a workstation with KVM; since then CI runs
+them on GitHub's hosted runner (`iso.yml`).
+
+### 2026-10-30, 13:14 to 13:40 Pacific: the first ISO built and tested by CI
+
+`iso.yml` on its pull request, on GitHub's hosted runner (4 CPUs, 16 GB, KVM): the stable
+channel at v0.1.3 with main's `iso/`, signed for Secure Boot with a throwaway key. 5.0 GB
+(5,333,149,696 bytes; 1,007 packages, a 2.4 GB offline repository). The build took
+5 min 53 s with a cold cache, `check-medium.sh` 3 min 41 s, the tests 16 min.
+
+| | Live | Install | Installed system | First update and rollback |
+|---|---|---|---|---|
+| UEFI, encrypted (LUKS2) | 16/16 | passed | all passed, 1 skipped | passed |
+| BIOS, `--no-encrypt`, with no network for the live session and the install | 16/16 | passed | all passed, 1 skipped | passed |
+| Secure Boot on, Microsoft's keys only: MokManager, the key enrolled from the medium | 16/16 | | | |
+
+- The skipped check is the theme switcher's preview: the nested desktop it draws can't
+  start on a VM display with no 3D (QEMU's virtio-vga), with Hyprland 0.57 and Mesa 26.2.
+  It reproduced the same way on the workstation. On a VM it's now a SKIP with that reason.
+- The guard's one finding in bromigOS's files, Docker's default bridge address in the
+  widgets' demo data, is accepted for v0.1.3's package and fixed at the source.
+- With Secure Boot on, the menu is GRUB's plain one: lockdown loads no font
+  ([secureboot.md](secureboot.md#the-medium)). The firmware said Secure Boot was on, and
+  the key was in the MOK list.
 
 ### 2026-10-10, 00:48 to 01:01 Pacific: v0.1.2's ISO, naming pkgs.bromigos.org
 

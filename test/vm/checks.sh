@@ -21,7 +21,20 @@ sddm_theme() {
   [ "$cur" = Current=bromigos ]
 }
 check "the desktop menu's tree (bromigos-menu --dump)" bash -c "bromigos-menu --dump | grep -q '^STYLE'"
-check "the theme switcher's preview of the Wick is drawn offscreen" bash -c "bromigos theme previews wick --force --json | grep -q '\"pieces\"'"
+# The previews draw the real desktop nested on the GPU. A VM whose display has no 3D (QEMU's
+# virtio-vga, as the ISO's tests and CI give it) can't start that desktop, and the previews
+# say so (GpuLost) and try again later: on a virtual machine that's a SKIP, not a failure;
+# anywhere else it fails.
+previews=$(bromigos theme previews wick --force --json 2>&1)
+if grep -q '"pieces"' <<<"$previews"; then
+  echo "PASS the theme switcher's preview of the Wick is drawn offscreen"
+elif grep -q 'GpuLost' <<<"$previews" && systemd-detect-virt -q --vm; then
+  echo "SKIP the theme switcher's preview of the Wick is drawn offscreen (a VM with no 3D: the nested desktop can't start)"
+else
+  echo "FAIL the theme switcher's preview of the Wick is drawn offscreen"
+  tail -4 <<<"$previews" | sed 's/^/     /'
+  fails=$((fails + 1))
+fi
 check "web apps: the catalog" bash -c "bromigos-webapp catalog | grep -q chatgpt"
 check "the on-screen display is installed" command -v swayosd-server
 check "the OSD's style is rendered by theme set" test -f "$HOME/.local/state/bromigos/theme/current/swayosd.css"

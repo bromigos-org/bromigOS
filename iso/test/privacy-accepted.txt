@@ -1,0 +1,6 @@
+# Privacy-guard findings in bromigOS's files on a medium, judged harmless, in packages that
+# are already published and can't change (iso/test/medium-privacy.py; docs/iso.md,
+# "Checking what's on it"). One finding per line, exactly as the guard prints it, then
+# " # " and why. The path carries the package's version, so an entry never covers a later
+# build: fix the source as well.
+pkgs:/bromigos-widgets-0.1.3.r90.g174460c-1-any/usr/lib/bromigos/widgets/demo.py:146: private IPv4 address  # Docker's default bridge address, in the widgets' demo data; widgets/demo.py uses a documentation address since

@@ -33,6 +33,17 @@ import privacy_guard as G  # noqa: E402
 import private_words as P  # noqa: E402
 
 SKIP_DIRS = {"proc", "sys", "dev", "run"}
+
+
+def _accepted():
+    path = os.path.join(HERE, "privacy-accepted.txt")
+    if not os.path.exists(path):
+        return set()
+    lines = (l.split(" #", 1)[0].strip() for l in open(path, encoding="utf-8"))
+    return {l for l in lines if l and not l.startswith("#")}
+
+
+ACCEPTED = _accepted()
 MAXSIZE = 8 << 20
 FINDER = PRIV = FULL = LAB_AS_LAB = None
 
@@ -160,10 +171,19 @@ def main():
             bad.extend(res)
     ours = [b for mine, b in bad if mine]
     theirs = [b for mine, b in bad if not mine]
+    # findings judged harmless in a package already published (its file can't change any
+    # more): ACCEPTED lists each one exactly, with the package's version in its path, so it
+    # never covers the next build; the source is fixed for that
+    accepted = [b for b in ours if b in ACCEPTED]
+    ours = [b for b in ours if b not in ACCEPTED]
     print(f"{len(jobs)} text files, {sum(1 for j in jobs if j[1])} of them bromigOS's")
     if theirs:
         print(f"\nin Arch's packages ({len(theirs)}; everyday words in someone else's data, check by eye):")
         for b in theirs[:60]:
+            print("  " + b)
+    if accepted:
+        print(f"\naccepted (iso/test/privacy-accepted.txt): {len(accepted)}")
+        for b in accepted:
             print("  " + b)
     print(f"\nin bromigOS's files: {len(ours)}")
     for b in ours[:200]:
