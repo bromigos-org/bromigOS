@@ -39,7 +39,9 @@ depends=(# bromigOS without the desktop (Field Kit's pieces, the lab, the termin
          'prometheus-node-exporter'
          # the themed console: kmscon with Geist Mono and the screens' icons (bromigos-boot's settings)
          'kmscon' 'pango' 'ttf-geist-mono' 'ttf-nerd-fonts-symbols-mono')
-optdepends=('bromigos-fieldkit: Field Kit in the boot menu, for repairs when the server won'"'"'t start')
+# brodec-machine moves to depends once it's published (packaging/README.md, "BRODEC's machine agent")
+optdepends=('bromigos-fieldkit: Field Kit in the boot menu, for repairs when the server won'"'"'t start'
+            'brodec-machine: this server in BRODEC on your phone: pairing, its console, restart and update with your fingerprint')
 checkdepends=('python' 'nftables')
 backup=('etc/ssh/sshd_config.d/10-bromigos-server.conf')
 install=$pkgname.install

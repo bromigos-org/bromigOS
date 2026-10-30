@@ -30,6 +30,7 @@ packaging/
   ci/publish.sh            build, sign, add to the database, upload, prune
   ci/prepare-container.sh  sets up the build container for publish.sh
   ci/brodec-desktop.sh     fetches and checks BRODEC's desktop app for publish.sh
+  ci/brodec-machine.sh     the same for BRODEC's machine agent on its own (brodec-machine)
   ci/brodec-lab.sh         fetches and checks BRODEC's lab bridge, and packages it
   prebuilt/brodec-lab/     the lab bridge's package files and image (no build here)
   dev-repo.sh              your own build as a local repository, for the dev channel
@@ -401,6 +402,31 @@ To publish the staged package again, even where a channel already has it, run:
 ```bash
 gh workflow run brodec-desktop -R bromigos-org/bromigOS -f rebuild=true
 ```
+
+### BRODEC's machine agent
+
+`brodec-machine` is BRODEC's machine agent without the desktop app: pairing with BRODEC on the
+phone, machine jobs, the remote terminal and machine controls (BRODEC's docs/MACHINE_JOBS.md,
+"What a machine needs"). It has no GTK, so a Field Kit stick and bromigOS Server can carry it.
+It takes the same path as `brodec-desktop`:
+
+- BRODEC's CI stages it at `refs/brodec-machine/package`, one file per ref.
+- `.github/workflows/brodec-machine.yml` looks for it every 20 minutes.
+- `ci/brodec-machine.sh` runs `ci/brodec-desktop.sh` with `BRODEC_PACKAGE=brodec-machine`: the
+  same checks, for a package named `brodec-machine`.
+- `ci/publish.sh` signs it and adds it to each channel.
+
+The order keeps every machine installable:
+
+1. BRODEC splits its PKGBUILD into `brodec-desktop` and `brodec-machine`, and stages
+   `brodec-machine` first.
+2. This repository publishes it (this workflow).
+3. `brodec-desktop` drops the agent's files and depends on `brodec-machine`.
+4. The Field Kit stick takes it: `iso/fieldkit/packages.toml` lists it with `if_available`, so a
+   medium built before it's published leaves it out. `bromigos-server` lists it in `optdepends`
+   until it's published, then in `depends`.
+5. Field Kit's capability file (`fieldkit/lib/bromigos_fieldkit/machine_link.py`) turns on
+   machine controls (restart and shut down; update on Server) and the phone's own shells.
 
 ### BRODEC's lab bridge
 

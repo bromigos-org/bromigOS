@@ -54,11 +54,43 @@ class Link(unittest.TestCase):
         self.assertNotIn("owner", st["paired"])           # only what the screen needs
 
     def test_capability_file_is_tight_and_parses(self):
-        doc = tomllib.loads(ml.capability_file("box"))
+        doc = tomllib.loads(ml.capability_file("box", server=False))
         self.assertEqual(doc["jobs"]["engines"], [])
         self.assertEqual(doc["remote_terminal"]["workspaces"], ["fieldkit"])
+        self.assertTrue(doc["remote_terminal"]["phone_shells"])
+        self.assertTrue(doc["system"]["enabled"])
+        self.assertEqual(doc["system"]["actions"], ["restart", "shutdown"])        # a stick never updates itself
         self.assertFalse(doc["sessions"]["enabled"])
         self.assertFalse(doc["den"]["enabled"])
+        server = tomllib.loads(ml.capability_file("box", server=True))
+        self.assertEqual(server["system"]["actions"], ["restart", "shutdown", "update"])
+
+    def test_write_capability_keeps_the_operators_file(self):
+        self.assertTrue(ml.write_capability())
+        Path(ml.CONFIG).write_text("# mine\n")
+        self.assertFalse(ml.write_capability())
+        self.assertEqual(Path(ml.CONFIG).read_text(), "# mine\n")
+
+    def test_state_from_the_agents_pair_command(self):
+        ev = {"event": "code", "kind": "machine", "name": "box", "user_code": "KPGGZFVT", "user_code_display": "KPGG-ZFVT",
+              "verification_uri": "https://auth.bromigos.org/device", "qr": "https://x#machine=k1.ab&n=box",
+              "qr_svg": "<svg/>", "qr_text": "##", "fingerprint": "ab", "expires_at_ms": 1}
+        agent = self.d / "bin" / "brodec-machine"
+        agent.write_text("#!/bin/sh\necho '" + json.dumps({"event": "waiting", "reason": "starting", "message": "m"}) + "'\n"
+                         "echo '" + json.dumps(ev) + "'\n")
+        st = ml.state()
+        self.assertEqual(st["state"], "waiting")
+        self.assertEqual(st["code"]["user_code_display"], "KPGG-ZFVT")
+        self.assertEqual(st["code"]["lab_name"], "box")
+        self.assertNotIn("qr_svg", st["code"])
+        agent.write_text("#!/bin/sh\necho '" + json.dumps({"event": "paired", "kind": "machine", "name": "box", "id": "m1",
+                                                           "owner": "@o:brodec.ai", "paired_at": 5}) + "'\n")
+        st = ml.state()
+        self.assertEqual(st["state"], "paired")
+        self.assertNotIn("owner", st["paired"])
+        agent.write_text("#!/bin/sh\necho '" + json.dumps({"event": "failed", "code": "no_capability_file", "message": "no file"}) + "'\n")
+        st = ml.state()
+        self.assertEqual((st["state"], st["configured"]), ("stopped", False))
 
     def test_pairing_starts_only_once_approved(self):
         p = vt.propose("pair_start", {})

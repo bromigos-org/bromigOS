@@ -236,6 +236,23 @@ and turns off `getty@tty1`. If kmscon can't start, for example with no graphics 
 its unit starts the plain console's login instead. That one still has bromigOS's colours
 and font ([console.md](console.md)).
 
+## BRODEC on your phone
+
+With the `brodec-machine` package (BRODEC's machine agent), the server pairs with BRODEC on
+your phone: the welcome tour's "Pair your phone" step, Field Kit's Server › Pair with BRODEC, or
+VECTOR › CTRL+P shows a
+code to scan in LAB › MACHINES › ADD MACHINE. Field Kit then writes root's
+`/etc/brodec-machine/machine.toml`, unless one is already there:
+
+- no jobs;
+- the console's Herdr workspace and the phone's own shells;
+- machine controls: restart, shut down and update, each with your fingerprint. The update is
+  `bromigos-server update --now`, with its snapshot, health check and rollback.
+
+Then allow your phone at the server once ("Allow this phone", `brodec-machine enroll`).
+[fieldkit-vector.md](fieldkit-vector.md#pair-with-brodec) has the details, and BRODEC's
+`docs/MACHINE_JOBS.md` the rules.
+
 ## `bromigos server`
 
 ```text

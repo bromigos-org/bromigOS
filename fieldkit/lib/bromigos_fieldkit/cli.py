@@ -324,8 +324,18 @@ def main(argv=None):
     sub.add_parser("console", help=argparse.SUPPRESS)
     p = sub.add_parser("edition", help="what the Field Kit edition installs (for installers)")
     p.add_argument("--json", action="store_true")
+    sub.add_parser("brodec-setup", help="as root, before pairing with BRODEC: BRODEC's capability file for this machine, when there's none")
     a = ap.parse_args(argv)
     verb = a.verb or "menu"
+    if verb == "brodec-setup":
+        # a setup screen's root step (pkexec) before `brodec-machine pair --json --start`
+        from . import machine_link
+        if os.geteuid() != 0:
+            print("brodec-setup writes root's /etc/brodec-machine/machine.toml: run it as root.", file=sys.stderr)
+            return 1
+        wrote = machine_link.write_capability()
+        print(("wrote " if wrote else "kept (the operator's) ") + machine_link.CONFIG)
+        return 0
     if verb == "status":
         if os.path.exists(BOOT_HELPER):
             return subprocess.call([BOOT_HELPER, "status"])

@@ -204,39 +204,71 @@ never remote), runs STOP ALL, keeps a hash-chained audit log, and streams Herdr 
 phone (the remote terminal). Field Kit reuses all of it and reimplements none of it.
 
 **On the screen.** VECTOR › CTRL+P, or the Server section (`crate::fieldkit_vector::pair(&look,
-engine)`), opens PAIR WITH BRODEC:
+engine)`), opens PAIR WITH BRODEC; so does Server › Pair with BRODEC. bromigOS Server's
+first-boot tour (`bromigos welcome-console`) pairs too, in its "Pair your phone" step.
 
 - Not paired: P starts BRODEC's agent, after the person approves (the proposal `pair_start`). With
-  no `/etc/brodec-machine/machine.toml` yet, it writes Field Kit's (root's, 0644, here at the
-  machine): no jobs, no NEW SESSION, no den, and the remote terminal for Herdr's `fieldkit`
-  workspace only. On a stick the agent runs as root (`systemd-run`, unit
-  `brodec-machine-fieldkit`); on an install, the sudo caller's `brodec-machine` user service.
-- Waiting: the agent's own pairing code (its `pair-code.json`) as a QR, with the code to type
-  (`KPGG-ZFVT`), as `brodec-machine pair` shows it. Half blocks, black on white, the standard's
-  four-module quiet zone, error correction M; each module takes 1 to 3 cells, the most that fit,
-  so it scans on a 1080p and a 4K console. The `qrcode` crate is the one BRODEC uses (0.14.1,
-  MIT or Apache-2.0).
-- Paired: the name BRODEC gave it. When the phone asks (this machine › ALLOW THIS PHONE), E runs
-  `brodec-machine enroll` in the terminal: BRODEC's own enrolment, which shows the phone's key to
-  compare.
+  no `/etc/brodec-machine/machine.toml` yet, Field Kit writes its own (root's, 0644, here at the
+  machine; an existing one is the operator's and stays):
+  - no jobs, no NEW SESSION, no den;
+  - the remote terminal for Herdr's `fieldkit` workspace, and the phone's own shells
+    (`phone_shells = true`);
+  - machine controls (`[system] enabled = true`): restart and shut down on a stick, update too
+    on bromigOS Server.
 
-The engine's verbs: `vector pair` (the agent's state, read from its own files: installed, its
-capability file, running, waiting with the code, paired with the name), `vector pair-start`
-(the proposal), `vector controls`, `vector control ACTION`.
+  On a stick the agent runs as root (`systemd-run`, unit `brodec-machine-fieldkit`); on an
+  install, the user's `brodec-machine` service.
+- Waiting: the agent's pairing code as a QR, with the code to type (`KPGG-ZFVT`). Half blocks,
+  black on white, the standard's four-module quiet zone, error correction M; each module takes
+  1 to 3 cells, the most that fit, so it scans on a 1080p and a 4K console. The `qrcode` crate
+  is the one BRODEC uses (0.14.1, MIT or Apache-2.0).
+- Paired: the name BRODEC gave it. When the phone asks (this machine › ALLOW THIS PHONE), E runs
+  `brodec-machine enroll`: BRODEC's own enrolment, which shows the phone's key to compare. On
+  Field Kit's root console it runs as is; anywhere else through polkit (`pkexec`), never a
+  command to type.
+
+**Where the state comes from.** BRODEC's own setup-screen command (its `docs/MACHINE_JOBS.md`,
+"Pairing from a setup screen"):
+
+- `brodec-machine pair --json --once`, as the agent's user, is what the engine's `vector pair`
+  reads. Its last event says where pairing is: `code` (with `qr`, `qr_text`,
+  `user_code_display`), `waiting`, `paired`, `failed` (`no_capability_file`, …).
+- An older agent without the command: its own files (`pair-code.json`, `pairing.json`).
+- The welcome tours' "Pair your phone" step (`lib/bromigos_firstrun.py`) keeps
+  `brodec-machine pair --json --start` running while it's open and closes it with SIGTERM: only
+  the watching stops, the code keeps working. The exit codes are 0 paired, 1 failed or timed
+  out, and 130 cancelled. On bromigOS Server and a Field Kit stick, the root file it writes
+  first is Field Kit's (`fieldkit-engine brodec-setup`); elsewhere the package's example. After
+  `paired` it offers "Allow this phone" (`brodec-machine enroll`, with sudo).
+- A lab's VECTOR bridge pairs the same way with `sudo brodec-lab pair --json`.
+
+The engine's verbs: `vector pair` (the state above), `vector pair-start` (the proposal),
+`vector controls`, `vector control ACTION`. `fieldkit-engine brodec-setup` is root's file alone.
 
 ### What the phone may do here
 
-Each is a proposal, approved on the phone (BRODEC's signed request, a fingerprint) or here:
+The phone's **Restart**, **Shut down** and **Update bromigOS** are BRODEC's own machine controls
+(its `docs/MACHINE_JOBS.md`, "Machine controls"):
 
-| The phone's control | On Field Kit and Server | Confirmed by typing |
+- The agent checks the phone's fingerprint and `[system]` in root's file.
+- A fixed system unit acts.
+- A restart counts down 30 seconds and can be cancelled from the phone.
+- On Server, the update is `bromigos-server update --now`, with its snapshot, health check and
+  rollback.
+- A Field Kit stick never updates itself.
+
+Field Kit doesn't queue these a second time: `vector controls` names BRODEC as the phone's path
+for each.
+
+Field Kit's own approvals (the queue: here, or one day from BRODEC) are for what VECTOR proposes:
+
+| VECTOR's control | On Field Kit and Server | Confirmed by typing |
 |---|---|---|
 | Restart | `systemctl reboot` (a mounted install is unmounted first) | `reboot` |
 | Shut down | `systemctl poweroff` (the same) | `poweroff` |
-| Update bromigOS | bromigOS Server: `bromigos-server update --now` (snapshot first, health check, rollback). A stick: refused, "a Field Kit stick doesn't update itself" | `update` |
+| Update bromigOS | bromigOS Server: `bromigos-server update --now`. A stick: refused, "a Field Kit stick doesn't update itself" | `update` |
 | New terminal tab | `herdr tab create --label "Field Kit shell"`, else a tmux window in the `fieldkit` session | |
-| Run-command buttons | `run_command`: the exact command shown, refused for money, secrets and the kill switch | `run` |
-
-VECTOR can propose the first four too (his `control` tool), approved the same way.
+| Run a command | `run_command`: the exact command shown, refused for money, secrets and the kill switch | `run` |
 
 ### Herdr, now
 
@@ -253,16 +285,16 @@ same way, signed by the enrolled phone.
 
 ### What's still to build
 
-**On the medium and on Server: a `brodec-machine` package.** Today the agent ships inside
-`brodec-desktop`, which needs GTK and the desktop. The agent itself is headless (its own
-identity, no keyring; it runs on lab nodes). A split package in BRODEC's
-`desktop/packaging/brodec-desktop/PKGBUILD` (`pkgname=(brodec-desktop brodec-machine)`):
-`/usr/bin/brodec-machine`, `/usr/lib/systemd/user/brodec-machine.service`,
-`/usr/share/brodec-machine/machine.toml.example` and MACHINE_JOBS.md; depends `bubblewrap`,
-`git`; optdepends `herdr`, `openai-codex`, `github-cli`; `brodec-desktop` depends on it. Built and
-staged by BRODEC's CI with the desktop package, published into `[bromigos]` by this repo's
-`brodec-desktop` workflow (`packaging/ci/brodec-desktop.sh` then accepts the two files). Then the
-Field Kit list and bromigOS Server add `brodec-machine`.
+**On the medium and on Server: the `brodec-machine` package.** BRODEC splits its PKGBUILD into
+`brodec-desktop` and a GTK-free `brodec-machine`, staged at `refs/brodec-machine/package`. This
+repository publishes it with `.github/workflows/brodec-machine.yml` (`packaging/ci/brodec-machine.sh`,
+the desktop package's checks for `brodec-machine`). Until that first publish:
+
+- the Field Kit stick lists it `if_available` (`iso/fieldkit/packages.toml`): a build leaves it
+  out while no repository has it, and every stick built after has it;
+- `bromigos-server` offers it in `optdepends`, and moves it to `depends` once it's published.
+
+[packaging/README.md](../packaging/README.md#brodecs-machine-agent) has the order.
 
 **In BRODEC (app, protocol and agent), for VECTOR's approvals and chat in the app.** Field Kit's
 side is ready: the queue and its verbs. BRODEC's machine room would carry, following its own

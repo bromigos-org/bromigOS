@@ -6,13 +6,19 @@ remote terminal. Field Kit doesn't reimplement any of it: this reads the agent's
 (`pair-code.json` while a code waits, `pairing.json` once paired, in its data folder), writes
 the root-owned capability file Field Kit needs when there's none, and starts the agent.
 
-  state()            installed, configured, running, paired (with whom), the code waiting
-  capability_file()  /etc/brodec-machine/machine.toml for Field Kit or Server: no jobs, the
-                     remote terminal on for the `fieldkit` Herdr workspace only, no sessions,
-                     no den
-  start()            writes that file if there's none (root, here at the machine), starts the agent
-  controls()         what the phone (and VECTOR) may ask this machine to do: restart, shut down,
-                     update (bromigOS Server only), a new terminal tab, a command (approved)
+  state()            installed, configured, running, paired (with whom), the code waiting: the
+                     agent's own `brodec-machine pair --json --once` when it has it, else its files
+  capability_file()  /etc/brodec-machine/machine.toml for Field Kit or Server: no jobs; the
+                     remote terminal on for the `fieldkit` Herdr workspace only, with the phone's
+                     shells; machine controls on (restart and shut down; update on Server); no
+                     sessions, no den
+  write_capability() that file, when there's none (root, here at the machine): what a setup screen
+                     does before `brodec-machine pair --json --start` (`fieldkit-engine brodec-setup`)
+  start()            writes that file if there's none, starts the agent
+  controls()         what may be asked of this machine, and who carries it out: restart, shut
+                     down and update are BRODEC's own machine controls ([system], with the phone's
+                     fingerprint); VECTOR's proposals for them, a new terminal tab and a command
+                     go through Field Kit's approvals here
 """
 
 import json
@@ -73,9 +79,60 @@ def running():
     return r.returncode == 0
 
 
+def _as_agent(argv):
+    """argv run as the agent's user (root runs it through runuser for someone else)."""
+    user = agent_user()
+    if os.geteuid() == 0 and user != "root":
+        return ["runuser", "-u", user, "--", *argv]
+    return argv
+
+
+def pair_once():
+    """The agent's own word on pairing (`brodec-machine pair --json --once`, BRODEC's
+    docs/MACHINE_JOBS.md "Pairing from a setup screen"): its last event, or None when this
+    agent doesn't have the command."""
+    if not binary():
+        return None
+    r = system.run(_as_agent([binary(), "pair", "--json", "--once"]), check=False)
+    for line in reversed(r.stdout.strip().splitlines()):
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(ev, dict) and ev.get("event"):
+            return ev
+    return None
+
+
 def state():
-    """Where pairing stands, in the agent's own words (its files), never a secret: the
-    pairing code is shown on this screen anyway, and the bot's tokens stay in its store."""
+    """Where pairing stands, in the agent's own words, never a secret: the pairing code is
+    shown on this screen anyway, and the bot's tokens stay in its store."""
+    ev = pair_once() if os.environ.get("BROMIGOS_BRODEC_PAIR_FILES") != "1" else None
+    if ev:
+        doc = {"ok": True, "installed": True, "configured": os.path.isfile(CONFIG), "running": running(),
+               "user": agent_user(), "state": "stopped", "code": None, "paired": None}
+        kind = ev["event"]
+        if kind == "code":
+            doc["state"] = "waiting"
+            doc["code"] = {k: ev.get(k) for k in ("user_code", "user_code_display", "verification_uri", "qr", "qr_text",
+                                                  "fingerprint", "expires_at_ms")}
+            doc["code"]["lab_name"] = ev.get("name", "")
+            doc["message"] = "In BRODEC: LAB › MACHINES › ADD MACHINE, then scan this code."
+        elif kind == "paired":
+            doc["state"] = "paired"
+            doc["paired"] = {"name": ev.get("name", ""), "machine_id": ev.get("id", ""), "paired_at": ev.get("paired_at", 0)}
+            doc["message"] = f"Paired with BRODEC as {ev.get('name') or 'this machine'}."
+        elif kind == "waiting":
+            doc["state"] = "starting" if ev.get("reason") in ("starting", "disconnected") else "stopped"
+            doc["message"] = ev.get("message") or "BRODEC's agent isn't running."
+        elif kind == "failed":
+            doc["state"] = "stopped"
+            doc["message"] = ev.get("message") or "Pairing can't go on."
+            if ev.get("code") == "no_capability_file":
+                doc["configured"] = False
+        else:
+            doc["message"] = ev.get("message", "")
+        return doc
     d = data_dir()
     doc = {"ok": True, "installed": bool(binary()), "configured": os.path.isfile(CONFIG), "running": running(),
            "user": agent_user(), "state": "missing", "code": None, "paired": None}
@@ -105,11 +162,16 @@ def state():
     return doc
 
 
-def capability_file(name=None):
+def capability_file(name=None, server=None):
     """What a Field Kit or Server machine allows from the phone: nothing runs jobs (no engines),
     the remote terminal sees and steers only the `fieldkit` Herdr workspace (the Field Kit
-    console and VECTOR), no NEW SESSION, no den. Root's, like every machine's."""
+    console and VECTOR) and the phone's own shells, machine controls (restart and shut down;
+    update too on bromigOS Server: never on a live stick), no NEW SESSION, no den. Root's,
+    like every machine's."""
     name = (name or socket.gethostname() or "fieldkit").replace('"', "")
+    if server is None:
+        server = os.path.exists(SERVER) and not system.live_medium()
+    actions = '["restart", "shutdown", "update"]' if server else '["restart", "shutdown"]'
     return f"""# BRODEC machine jobs: what this machine allows (written by Field Kit; BRODEC's docs/MACHINE_JOBS.md).
 # Root's file: change it only with sudo, here at the machine. The agent reloads it by itself.
 
@@ -125,12 +187,20 @@ network = "never"
 
 [remote_terminal]
 # The phone watches and steers the Field Kit console (Herdr's "fieldkit" workspace), signed by
-# the phone you enrol here with sudo; STOP ALL ends it.
+# the phone you enrol here with sudo; STOP ALL ends it. phone_shells: the phone's own shells
+# (its terminal buttons) work here too.
 enabled = true
 agent_panes = "listed"
 workspaces = ["fieldkit"]
 control = ["fieldkit"]
 one_tap_answers = []
+phone_shells = true
+
+[system]
+# Machine controls from the phone: each takes its fingerprint, a restart or shutdown counts down
+# and can be cancelled, STOP ALL cancels it.{" A Field Kit stick never updates itself." if not server else ""}
+enabled = true
+actions = {actions}
 
 [sessions]
 enabled = false
@@ -140,18 +210,27 @@ enabled = false
 """
 
 
+def write_capability():
+    """The capability file, when there's none (an existing one is the operator's and stays):
+    root's, 0644, in a root folder. What a setup screen runs with root before
+    `brodec-machine pair --json --start` (`fieldkit-engine brodec-setup`). True when written."""
+    if os.path.isfile(CONFIG):
+        return False
+    os.makedirs(os.path.dirname(CONFIG), mode=0o755, exist_ok=True)
+    tmp = CONFIG + ".fieldkit-new"
+    with open(tmp, "w") as f:
+        f.write(capability_file())
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, CONFIG)
+    return True
+
+
 def start():
     """The capability file (if there's none: written here, at the machine, as root) and the
     agent started as its user."""
     if not binary():
         raise system.Failed("BRODEC's machine agent isn't on this system (package brodec-machine).")
-    if not os.path.isfile(CONFIG):
-        os.makedirs(os.path.dirname(CONFIG), mode=0o755, exist_ok=True)
-        tmp = CONFIG + ".fieldkit-new"
-        with open(tmp, "w") as f:
-            f.write(capability_file())
-        os.chmod(tmp, 0o644)
-        os.replace(tmp, CONFIG)
+    write_capability()
     user = agent_user()
     if running():
         return "BRODEC's agent is already running."
@@ -168,19 +247,26 @@ def start():
 # ------------------------------------------------------------------ what the phone may ask
 
 def controls():
-    """Each control the phone's machine page (and VECTOR) may ask for, mapped to Field Kit. Every
-    one goes through the approval flow (vector_tools' queue); a phone's answer is signed by its
-    enrolled key, as BRODEC defines."""
+    """Each control that may be asked of this machine, and who carries it out (`by`). The phone's
+    Restart, Shut down and Update are BRODEC's own machine controls: the agent checks the
+    phone's fingerprint and [system] in root's capability file, and a fixed system unit acts
+    (BRODEC's docs/MACHINE_JOBS.md, "Machine controls"); Field Kit doesn't queue them a second
+    time. VECTOR's proposals for the same three, a new terminal tab and a command go through
+    Field Kit's approvals at this screen (vector_tools' queue)."""
     live = system.live_medium()
     server = os.path.exists(SERVER)
     tab = bool(shutil.which("herdr") or shutil.which("tmux"))
+    brodec = bool(binary())
+    phone = "the phone: BRODEC's machine controls ([system])" if brodec else ""
     return [
-        {"id": "reboot", "title": "Restart", "available": True, "why": ""},
-        {"id": "poweroff", "title": "Shut down", "available": True, "why": ""},
+        {"id": "reboot", "title": "Restart", "available": True, "why": "", "phone": phone},
+        {"id": "poweroff", "title": "Shut down", "available": True, "why": "", "phone": phone},
         {"id": "update", "title": "Update bromigOS", "available": server and not live,
-         "why": "" if server and not live else ("a Field Kit stick doesn't update itself" if live else "only on bromigOS Server")},
-        {"id": "new_tab", "title": "New terminal tab", "available": tab, "why": "" if tab else "no herdr or tmux here"},
-        {"id": "run_command", "title": "Run a command", "available": True, "why": "approved with the command shown in full"},
+         "why": "" if server and not live else ("a Field Kit stick doesn't update itself" if live else "only on bromigOS Server"),
+         "phone": phone if server and not live else ""},
+        {"id": "new_tab", "title": "New terminal tab", "available": tab, "why": "" if tab else "no herdr or tmux here", "phone": ""},
+        {"id": "run_command", "title": "Run a command", "available": True, "why": "approved with the command shown in full",
+         "phone": ""},
     ]
 
 

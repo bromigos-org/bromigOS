@@ -5,6 +5,9 @@
   manifest.py store                 what else the offline store must hold: the edition's and
                                     the installer's hardware extras, one per line
   manifest.py edition               the edition's packages, as JSON (fieldkit/edition.json's)
+  manifest.py optional              the packages marked if_available ("NAME live|store"): the
+                                    build adds each one a repository has (a package not yet
+                                    published, such as brodec-machine before its first release)
   manifest.py docs --sizes FILE [--closure FILE] --out docs/fieldkit-packages.md
                                     the manifest page: every package by section with its
                                     installed size and reason, the largest, and what was left
@@ -38,6 +41,7 @@ def load(path=os.path.join(HERE, "packages.toml")):
         p.setdefault("live", True)
         p.setdefault("edition", False)
         p.setdefault("store", False)
+        p.setdefault("if_available", False)
         if p["name"] in seen:                        # listed twice: one row, either's flags
             q = seen[p["name"]]
             for k in ("live", "edition", "store"):
@@ -113,19 +117,24 @@ def read_sizes(path):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("what", choices=["live", "store", "edition", "docs"])
+    ap.add_argument("what", choices=["live", "store", "edition", "optional", "docs"])
     ap.add_argument("--sizes", help="name<TAB>installed bytes, for every package of the closure")
     ap.add_argument("--live-closure", help="the medium's closure: name<TAB>installed bytes")
     ap.add_argument("--store-closure", help="the offline store: name<TAB>file bytes")
     ap.add_argument("--out")
     a = ap.parse_args(argv)
     pkgs, left = load()
+    sure = [p for p in pkgs if not p["if_available"]]
     if a.what == "live":
-        print("\n".join(p["name"] for p in pkgs if p["live"]))
+        print("\n".join(p["name"] for p in sure if p["live"]))
     elif a.what == "store":
-        print("\n".join(p["name"] for p in pkgs if p["edition"] or p["store"]))
+        print("\n".join(p["name"] for p in sure if p["edition"] or p["store"]))
     elif a.what == "edition":
-        print(json.dumps([p["name"] for p in pkgs if p["edition"]]))
+        print(json.dumps([p["name"] for p in sure if p["edition"]]))
+    elif a.what == "optional":
+        # if_available: on the medium once a repository has it (iso/build-in-container.sh asks
+        # pacman), so a build before its first publish leaves it out: "NAME live|store" lines
+        print("\n".join(f"{p['name']} {'live' if p['live'] else 'store'}" for p in pkgs if p["if_available"]))
     else:
         sizes = read_sizes(a.sizes)
         closure = {"live": read_sizes(a.live_closure), "store": read_sizes(a.store_closure)}

@@ -386,8 +386,17 @@ pub fn pair_in(terminal: &mut DefaultTerminal, look: &Look, engine: &Path) -> io
         if app.enroll {
             app.enroll = false;
             ratatui::restore();
-            // BRODEC's own enrolment, at the machine: it shows the phone's key to compare
-            let _ = Command::new("brodec-machine").arg("enroll").status();
+            // BRODEC's own enrolment, at the machine: it shows the phone's key to compare. It
+            // needs root: Field Kit's console is root's; anyone else goes through polkit
+            // (pkexec asks for the password), never a command to type
+            let root = unsafe { libc::geteuid() } == 0;
+            let _ = if root {
+                Command::new("brodec-machine").arg("enroll").status()
+            } else {
+                Command::new("pkexec")
+                    .args(["brodec-machine", "enroll"])
+                    .status()
+            };
             *terminal = ratatui::init();
             app.refresh();
         }
