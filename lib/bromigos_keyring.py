@@ -363,7 +363,9 @@ def libsecret():
         gi.require_version("Secret", "1")
         from gi.repository import Secret  # noqa: F401
         return True
-    except (ImportError, ValueError):
+    # AttributeError: a `gi` with no PyGObject, only another package's overrides in it
+    # (at-spi2-core's Atspi.py makes one)
+    except (ImportError, ValueError, AttributeError):
         return bool(shutil.which("secret-tool"))
 
 

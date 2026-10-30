@@ -484,7 +484,7 @@ class _SecretService:
             self.schema = Secret.Schema.new("org.bromigos.Account", Secret.SchemaFlags.NONE,
                                             {"service": Secret.SchemaAttributeType.STRING,
                                              "account": Secret.SchemaAttributeType.STRING})
-        except (ImportError, ValueError):
+        except (ImportError, ValueError, AttributeError):    # AttributeError: a gi without PyGObject
             self.lib = None
 
     def get(self, service, account):
