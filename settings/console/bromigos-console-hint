@@ -1,0 +1,58 @@
+#!/bin/sh
+# bromigOS's text console when there's no desktop (docs/console.md; package bromigos-boot).
+#
+#   bromigos-console-hint text-mode      booted from the boot menu's text mode: the login
+#                                        prompt says so, and how to start the desktop
+#   bromigos-console-hint graphics-ready the login screen's start condition (sddm.service
+#                                        ExecCondition): exits 1, so the login screen isn't
+#                                        started, when no graphics device appeared; the text
+#                                        console takes its place, with a note saying why
+#   bromigos-console-hint no-graphics    the login screen failed (sddm's OnFailure): the same
+#                                        note, and the text login on the first console
+#
+# Notes go in /run/issue.d (agetty shows them above the login prompt); /run is gone at the
+# next boot, so a note never outlives the boot it describes.
+set -u
+run=${BROMIGOS_RUN:-/run}
+dri=${BROMIGOS_DRI:-/dev/dri}
+wait_s=${BROMIGOS_GRAPHICS_WAIT:-15}
+
+note() {    # note NAME HEADLINE LINE…
+    name=$1 head=$2; shift 2
+    mkdir -p "$run/issue.d"
+    { printf '\\e{yellow}  %s\\e{reset}\n' "$head"; for l in "$@"; do printf '  %s\n' "$l"; done; echo; } \
+        > "$run/issue.d/40-bromigos-$name.issue.tmp" && mv "$run/issue.d/40-bromigos-$name.issue.tmp" "$run/issue.d/40-bromigos-$name.issue"
+}
+
+graphics_note() {
+    note graphics "The desktop didn't start: the graphics didn't come up." \
+        "Sign in here. To try the desktop again:  sudo systemctl restart sddm" \
+        "To see why:  bromigos fieldkit why   (What went wrong on the last boot?)" \
+        "To repair it:  restart and choose bromigOS Field Kit in the boot menu."
+}
+
+case ${1:-} in
+    text-mode)
+        note text "Text mode: no desktop this time (chosen in the boot menu)." \
+            "Sign in here. To start the desktop now:  sudo systemctl start graphical.target" \
+            "Restarting normally brings the desktop back."
+        ;;
+    graphics-ready)
+        i=0
+        while [ "$i" -lt "$wait_s" ]; do
+            for c in "$dri"/card*; do [ -e "$c" ] && exit 0; done
+            sleep 1; i=$((i + 1))
+        done
+        graphics_note
+        # the first console's login, once the login screen's start is over (it conflicts with it)
+        command -v systemd-run >/dev/null && systemd-run --quiet --no-block --on-active=2 \
+            --unit=bromigos-console-login systemctl start getty@tty1.service >/dev/null 2>&1
+        exit 1
+        ;;
+    no-graphics)
+        graphics_note
+        command -v systemctl >/dev/null && systemctl start --no-block getty@tty1.service >/dev/null 2>&1
+        ;;
+    *) echo "usage: bromigos-console-hint text-mode|graphics-ready|no-graphics" >&2; exit 2 ;;
+esac
+exit 0

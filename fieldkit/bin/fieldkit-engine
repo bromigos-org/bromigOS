@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+"""Field Kit's engine (docs/fieldkit.md, "How it's built"): the jobs behind `bromigos fieldkit`'s
+screens. `fieldkit-engine engine VERB …` answers them in JSON; `fieldkit-engine VERB …` is the
+same jobs as plain text (bromigos fieldkit why, black-screen, make-stick, remote, usb)."""
+import os
+import sys
+
+for d in (os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "lib"), "/usr/lib/bromigos/lib"):
+    if os.path.isdir(os.path.join(d, "bromigos_fieldkit")):
+        sys.path.insert(0, d)
+        break
+from bromigos_fieldkit.cli import main  # noqa: E402
+
+sys.exit(main())

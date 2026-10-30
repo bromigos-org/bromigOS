@@ -1,0 +1,9 @@
+#!/bin/sh
+# bromigOS Field Kit (docs/fieldkit.md): the first console's login on a Field Kit medium, or on
+# the full medium's Field Kit entry (bromigos.fieldkit on the kernel's command line): root,
+# signed in, straight into the menu (root's .zlogin runs `fieldkit console`). Anywhere else the
+# usual login prompt. getty@tty1's drop-in on the media runs this.
+if [ -e /etc/bromigos-fieldkit/medium ] || grep -qw 'bromigos.fieldkit' /proc/cmdline; then
+    exec /usr/bin/agetty --noreset --noclear --autologin root - "${1:-linux}"
+fi
+exec /usr/bin/agetty -o '-- \u' --noreset --noclear - "${1:-linux}"

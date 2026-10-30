@@ -1,0 +1,20 @@
+{
+ "_comment": "The bromigOS Field Kit edition, for installers (docs/fieldkit.md, \"Installing Field Kit\"). bromigos-iso-install reads it from /usr/share/bromigos/fieldkit/edition.json. packages comes from iso/fieldkit/packages.toml (edition = true). Everything here is in the Field Kit medium's offline store, so an install needs no network.",
+ "name": "fieldkit",
+ "title": "bromigOS Field Kit",
+ "summary": "bromigOS without the desktop: repair, lab and server. Boots to the text console.",
+ "packages": @PACKAGES@,
+ "services": ["NetworkManager", "snapper-timeline.timer", "snapper-cleanup.timer", "grub-btrfsd", "bluetooth"],
+ "auto_update_units": ["bromigos-server-update.timer"],
+ "check_packages": ["bromigos-server", "bromigos-fieldkit-tools"],
+ "default_target": "multi-user.target",
+ "display_manager": null,
+ "audio": null,
+ "ssh": {"default": "off", "ask": "Turn on SSH, so you can sign in from another computer?", "service": "sshd"},
+ "hardware": "compute only: when bromigos hw finds an NVIDIA card, nvidia-open, nvidia-utils and linux-firmware-nvidia (all in the offline store); no desktop graphics (mesa, Vulkan, VA-API) and no laptop desktop tools",
+ "snapshots": "as the desktop: snapper's root and home configurations, snap-pac, grub-btrfs (bromigos rollback setup --yes)",
+ "boot": "GRUB with bromigos-boot's theme (root_commands turns it on) and its More ways to start; no splash (no plymouth); the Field Kit entry when bromigos-fieldkit is added and /boot has room",
+ "root_commands": ["/usr/lib/bromigos/boot/bromigos-boot-theme on --theme wick --auto"],
+ "user_commands": ["bromigos-apps-setup"],
+ "skip_desktop_install": "don't run `bromigos install` or `bromigos setup` (they set up the desktop); run user_commands as the new user instead"
+}

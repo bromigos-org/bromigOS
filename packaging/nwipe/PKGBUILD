@@ -1,0 +1,39 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# nwipe, the disk eraser Field Kit's secure erase uses for drives without a firmware erase
+# of their own (docs/fieldkit.md, "Erase a drive"). Not in Arch's repositories; built here
+# from the tagged upstream source (pinned by checksum) so Field Kit's offline store needs no
+# AUR. Adapted from the AUR's nwipe PKGBUILD. GPL-2.0-or-later: unmodified upstream source.
+
+pkgname=nwipe
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='Securely erase disks using a variety of recognised methods (a fork of dwipe)'
+arch=('x86_64')
+url='https://github.com/martijnvanbrummelen/nwipe'
+license=('GPL-2.0-or-later')
+depends=('hdparm' 'libconfig' 'ncurses' 'parted')
+makedepends=('autoconf' 'automake')
+optdepends=('dmidecode: the machine in its reports' 'smartmontools: the drive'"'"'s serial and health in its reports')
+options=('!debug')
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
+sha256sums=('134169dc2b0e11c1d3d6ea9c3d03b2dd0a69151cfb612e39ab17a81fd64eb02f')
+
+build() {
+  cd "${pkgname}-${pkgver}"
+  ./autogen.sh
+  ./configure --prefix=/usr
+  make
+}
+
+check() {
+  # nwipe refuses to run without root, even for --version: check the build is this release
+  cd "${pkgname}-${pkgver}"
+  [[ -x src/nwipe ]] && grep -qF "${pkgver}" src/version.c
+}
+
+package() {
+  cd "${pkgname}-${pkgver}"
+  make DESTDIR="${pkgdir}" install
+  install -Dm0644 COPYING "${pkgdir}/usr/share/licenses/${pkgname}/COPYING"
+}

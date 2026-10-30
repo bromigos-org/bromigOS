@@ -1,0 +1,9 @@
+#! /bin/sh
+# bromigOS Field Kit in the installed system's boot menu (package bromigos-boot; docs/fieldkit.md):
+# bromigOS without the desktop, for repairs, the lab and tools, started from the copy of
+# its medium on /boot (bromigos-fieldkit-boot puts it there when it fits). Nothing when
+# there's no copy.
+set -e
+lib=${BROMIGOS_BOOT_LIB:-/usr/lib/bromigos/boot}
+[ -x "$lib/bromigos-fieldkit-boot" ] || exit 0
+exec "$lib/bromigos-fieldkit-boot" grub-entry

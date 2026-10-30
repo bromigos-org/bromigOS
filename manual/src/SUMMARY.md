@@ -42,6 +42,8 @@
 - [Extensions](extensions.md)
     - [Make your own widget](make-a-widget.md)
 - [Updating and rolling back](update-and-rollback.md)
+- [Field Kit](fieldkit.md)
+    - [bromigOS Server](server.md)
 - [Hardware](hardware.md)
     - [Bluetooth](bluetooth.md)
     - [Keyboards and peripherals](peripherals.md)

@@ -1,0 +1,433 @@
+#!/usr/bin/python3 -I
+# bromigos:hidden=true
+"""Field Kit on an installed system's boot menus (docs/fieldkit.md, "In the boot menu";
+package bromigos-boot).
+
+The package bromigos-fieldkit carries Field Kit for /boot in /usr/share/bromigos/fieldkit/boot/:
+
+  fieldkit/boot/x86_64/{vmlinuz-linux,initramfs-linux.img}   what GRUB starts
+  fieldkit/x86_64/airootfs.sfs                               the system, without the offline store
+  fieldkit/boot-<id>.id, fieldkit/cmdline                    how its initramfs finds it
+  EFI/bromigos-fieldkit/fieldkit.efi                         a Unified Kernel Image of the same
+
+GRUB can't read an encrypted root but can always read /boot, so they're copied there. Two
+ways in, so Field Kit starts even when GRUB itself is broken:
+
+- GRUB's menu: "bromigOS Field Kit" (42_bromigos-fieldkit) and in "More ways to start".
+- The firmware's own boot menu (F8, F11, F12…): a UEFI boot entry "bromigOS Field Kit" for
+  the UKI, where /boot is the EFI system partition. It's added at the end of the boot
+  order: bromigOS stays first.
+
+  bromigos-fieldkit-boot sync [--menu] [--no-mkconfig]   the copy and both entries made current
+                                                (or removed when the package is gone)
+  bromigos-fieldkit-boot remove                 the copy and both entries gone
+  bromigos-fieldkit-boot status [--json]        where it stands, in plain words
+  bromigos-fieldkit-boot grub-entry [--indent N] [--id ID]   the GRUB entry (grub.d's scripts)
+
+The copy goes on /boot only with room to spare: what's free must hold it and still leave
+space for the next kernel update (the biggest kernel or initramfs there, again, and 32 MiB).
+When it doesn't fit, nothing is copied, the pacman hook says so in one line, and `status`
+says how much room it needs. The UKI alone is tried then, for the firmware's menu, when it
+fits. The pacman hook runs `sync` as root; it never fails a transaction.
+"""
+
+import argparse
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+ROOT = os.environ.get("BROMIGOS_BOOT_ROOT", "/")
+HERE = os.path.dirname(os.path.abspath(__file__))
+IMAGE = "/usr/share/bromigos/fieldkit/boot"
+VERSION = "/usr/share/bromigos/fieldkit/version"
+BOOT = "/boot"
+DIR = "/boot/fieldkit"                                  # fieldkit/ on /boot's file system
+EFI_DIR = "/boot/EFI/bromigos-fieldkit"                 # the UKI, where /boot is the ESP
+UKI_LOADER = r"\EFI\bromigos-fieldkit\fieldkit.efi"
+LABEL = "bromigOS Field Kit"
+COPY = "/boot/fieldkit/x86_64/airootfs.sfs"
+KERNEL = "/fieldkit/boot/x86_64/vmlinuz-linux"          # as GRUB sees /boot's file system
+INITRD = "/fieldkit/boot/x86_64/initramfs-linux.img"
+GRUB_CFG = "/boot/grub/grub.cfg"
+STATE = "/var/lib/bromigos/boot/fieldkit.json"
+EFIBOOTMGR = os.environ.get("BROMIGOS_EFIBOOTMGR", "efibootmgr")
+SYS_EFI = os.environ.get("BROMIGOS_SYS_EFI", "/sys/firmware/efi")
+SPARE = 32 << 20
+MIB = 1 << 20
+
+
+def at(path):
+    return os.path.join(ROOT, path.lstrip("/"))
+
+
+def say(msg):
+    print(f"bromigos-fieldkit-boot: {msg}")
+
+
+def load_state():
+    try:
+        with open(at(STATE)) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(st):
+    os.makedirs(os.path.dirname(at(STATE)), mode=0o755, exist_ok=True)
+    tmp = at(STATE) + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(st, f, indent=1, sort_keys=True)
+        f.write("\n")
+    os.replace(tmp, at(STATE))
+
+
+def files(top):
+    out = []
+    for d, _, names in os.walk(top):
+        out += [os.path.relpath(os.path.join(d, n), top) for n in names]
+    return sorted(out)
+
+
+def sha256(top):
+    """One digest over every file's name and bytes."""
+    h = hashlib.sha256()
+    for rel in files(top):
+        h.update(rel.encode() + b"\0")
+        with open(os.path.join(top, rel), "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+    return h.hexdigest()
+
+
+def size_of(top):
+    return sum(os.path.getsize(os.path.join(top, rel)) for rel in files(top)) if os.path.isdir(top) else 0
+
+
+def biggest_boot_file():
+    big = 0
+    try:
+        for n in os.listdir(at(BOOT)):
+            if n.startswith(("initramfs-", "vmlinuz-")):
+                try:
+                    big = max(big, os.path.getsize(os.path.join(at(BOOT), n)))
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return big
+
+
+def free_on_boot():
+    st = os.statvfs(at(BOOT))
+    return st.f_bavail * st.f_frsize + size_of(at(DIR)) + size_of(at(EFI_DIR))
+
+
+def version():
+    try:
+        with open(at(VERSION)) as f:
+            return "".join(c for c in f.read().strip() if c.isalnum() or c in "._+-")[:32]
+    except OSError:
+        return ""
+
+
+def cmdline():
+    """The kernel's command line the build made (fieldkit/cmdline): it finds the system by
+    its .id file, the same on every machine."""
+    try:
+        with open(at(os.path.join(DIR, "cmdline"))) as f:
+            words = f.read().split()
+    except OSError:
+        return ""
+    ok = re.compile(r"^[A-Za-z0-9_.,:/=+-]+$")
+    return " ".join(w for w in words if ok.match(w))
+
+
+# ------------------------------------------------------------------ GRUB
+
+def grub_here():
+    return os.path.isfile(at(GRUB_CFG))
+
+
+def boot_theme_helper():
+    path = os.path.join(HERE, "bromigos-boot-theme")
+    loader = importlib.machinery.SourceFileLoader("bromigos_boot_theme", path)
+    spec = importlib.util.spec_from_loader("bromigos_boot_theme", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def mkconfig():
+    if not grub_here():
+        return False
+    boot_theme_helper().mkconfig()
+    return True
+
+
+def entry_in_cfg():
+    try:
+        with open(at(GRUB_CFG), errors="replace") as f:
+            return "bromigos-fieldkit" in f.read()
+    except OSError:
+        return False
+
+
+# ------------------------------------------------------------------ the firmware's entry
+
+def uefi():
+    return os.path.isdir(SYS_EFI)
+
+
+def boot_is_esp():
+    """/boot is the EFI system partition (archinstall's layout), so the UKI can go there."""
+    return os.path.isdir(at("/boot/EFI"))
+
+
+def efi_entries():
+    """{number: label} from efibootmgr, and the boot order."""
+    r = subprocess.run([EFIBOOTMGR], capture_output=True, text=True)
+    entries, order = {}, []
+    for line in r.stdout.splitlines():
+        m = re.match(r"^Boot([0-9A-Fa-f]{4})\*?\s+(.*?)(\t|\s{2,}|$)", line)
+        if m:
+            entries[m.group(1).upper()] = m.group(2).strip()
+        if line.startswith("BootOrder:"):
+            order = [x.strip().upper() for x in line.split(":", 1)[1].split(",") if x.strip()]
+    return entries, order
+
+
+def boot_partition():
+    """(disk, partition number) holding /boot."""
+    src = subprocess.run(["findmnt", "-no", "SOURCE", "--target", at(BOOT)], capture_output=True, text=True).stdout.strip()
+    name = os.path.basename(src)
+    try:
+        with open(f"/sys/class/block/{name}/partition") as f:
+            part = f.read().strip()
+        disk = os.path.basename(os.path.dirname(os.path.realpath(f"/sys/class/block/{name}")))
+        return f"/dev/{disk}", part
+    except OSError:
+        return None, None
+
+
+def efi_add():
+    """The firmware's "bromigOS Field Kit" entry, added once, at the end of the boot order."""
+    entries, order = efi_entries()
+    if any(label == LABEL for label in entries.values()):
+        return False
+    disk, part = boot_partition()
+    if not disk:
+        raise OSError("couldn't tell which disk holds /boot")
+    r = subprocess.run([EFIBOOTMGR, "--create", "--disk", disk, "--part", part, "--label", LABEL,
+                        "--loader", UKI_LOADER], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise OSError(f"efibootmgr: {(r.stderr or r.stdout).strip()}")
+    new_entries, _ = efi_entries()
+    new = [n for n, label in new_entries.items() if label == LABEL and n not in entries]
+    if new and order:
+        # --create put it first: the order as it was, with Field Kit last
+        subprocess.run([EFIBOOTMGR, "--bootorder", ",".join(order + new)], capture_output=True, text=True)
+    return True
+
+
+def efi_remove():
+    entries, _ = efi_entries()
+    gone = False
+    for n, label in entries.items():
+        if label == LABEL:
+            subprocess.run([EFIBOOTMGR, "--bootnum", n, "--delete-bootnum"], capture_output=True, text=True)
+            gone = True
+    return gone
+
+
+# ------------------------------------------------------------------ the copy
+
+def copy_tree(src, dst):
+    """src copied to dst: written beside it, checked, then swapped in."""
+    new, old = dst + ".new", dst + ".old"
+    for d in (new, old):
+        if os.path.isdir(d):
+            shutil.rmtree(d)
+    for rel in files(src):
+        os.makedirs(os.path.dirname(os.path.join(new, rel)), exist_ok=True)
+        with open(os.path.join(src, rel), "rb") as a, open(os.path.join(new, rel), "wb") as b:
+            shutil.copyfileobj(a, b, 1 << 20)
+            b.flush()
+            os.fsync(b.fileno())
+    if sha256(new) != sha256(src):
+        shutil.rmtree(new)
+        raise OSError("the copy on /boot doesn't match the package's (a failing disk?)")
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    if os.path.isdir(dst):
+        os.rename(dst, old)
+    os.rename(new, dst)
+    if os.path.isdir(old):
+        shutil.rmtree(old)
+
+
+def remove_copy():
+    gone = False
+    for d in (DIR, EFI_DIR):
+        if os.path.isdir(at(d)):
+            shutil.rmtree(at(d))
+            gone = True
+    if uefi() and efi_remove():
+        gone = True
+    return gone
+
+
+def cmd_sync(args):
+    st = load_state()
+    image = at(IMAGE)
+    src_fk, src_efi = os.path.join(image, "fieldkit"), os.path.join(image, "EFI", "bromigos-fieldkit")
+    if not os.path.isdir(src_fk) or not files(src_fk):
+        changed = remove_copy()
+        save_state({"status": "no-image"})
+        if (changed or entry_in_cfg() or args.menu) and not args.no_mkconfig:
+            mkconfig()
+        if changed:
+            say("Field Kit is gone from the boot menus (its package isn't installed)")
+        return 0
+    want_efi = uefi() and boot_is_esp() and os.path.isdir(src_efi)
+    if not grub_here() and not want_efi:
+        save_state({"status": "not-grub"})
+        say("the boot menu isn't GRUB's here: Field Kit isn't added to it (start it from a USB stick: bromigos fieldkit make-stick)")
+        return 0
+    digest = sha256(image)
+    size = size_of(src_fk) + (size_of(src_efi) if want_efi else 0)
+    current = os.path.isfile(at(COPY)) and st.get("sha256") == digest
+    notes = []
+    if not current:
+        need = size + biggest_boot_file() + SPARE
+        free = free_on_boot()
+        if free < need:
+            remove_copy()
+            save_state({"status": "no-room", "need": need, "free": free, "size": size})
+            say(f"not enough room on /boot for Field Kit: it needs {need // MIB} MiB free, there's {free // MIB} MiB. "
+                "Start it from a USB stick instead (bromigos fieldkit make-stick).")
+            if (entry_in_cfg() or args.menu) and not args.no_mkconfig:
+                mkconfig()
+            return 0
+        copy_tree(src_fk, at(DIR))
+        if want_efi:
+            copy_tree(src_efi, at(EFI_DIR))
+        os.sync()
+        say(f"Field Kit is on /boot ({size // MIB} MiB)")
+    efi_entry = False
+    if want_efi:
+        try:
+            efi_add()
+            efi_entry = True
+        except OSError as e:
+            notes.append(f"the firmware's boot menu entry wasn't added: {e}")
+    elif uefi() and not boot_is_esp():
+        notes.append("/boot isn't the EFI system partition: Field Kit is in GRUB's menu only")
+    ver = version()
+    save_state({"status": "ready", "sha256": digest, "size": size, "version": ver, "efi_entry": efi_entry, "notes": notes})
+    for n in notes:
+        say(n)
+    if (args.menu or not entry_in_cfg() or st.get("version") != ver) and not args.no_mkconfig and grub_here():
+        mkconfig()
+        say("in the boot menu: bromigOS Field Kit" + (" (and the firmware's boot menu)" if efi_entry else ""))
+    return 0
+
+
+def cmd_remove(args):
+    changed = remove_copy()
+    save_state({"status": "removed"})
+    if changed or entry_in_cfg():
+        mkconfig()
+    say("Field Kit is off /boot and out of the boot menus")
+    return 0
+
+
+def describe(st):
+    s = st.get("status")
+    if s == "ready":
+        where = "GRUB's boot menu" + (" and the firmware's boot menu" if st.get("efi_entry") else "")
+        return f"ready: bromigOS Field Kit {st.get('version', '')} is in {where}".replace("  ", " ")
+    if s == "no-room":
+        return (f"not in the boot menu: /boot needs {st.get('need', 0) // MIB} MiB free and has "
+                f"{st.get('free', 0) // MIB} MiB. Use a USB stick (bromigos fieldkit make-stick).")
+    if s == "not-grub":
+        return "not in the boot menu: GRUB doesn't start this machine. Use a USB stick (bromigos fieldkit make-stick)."
+    if s == "no-image":
+        return "not installed: sudo pacman -S bromigos-fieldkit adds it to the boot menu"
+    if s == "removed":
+        return "removed from the boot menu (sudo bromigos-fieldkit-boot sync puts it back)"
+    return "not set up yet"
+
+
+def cmd_status(args):
+    st = load_state()
+    doc = {"status": st.get("status", "unknown"), "summary": describe(st), "image": os.path.isdir(at(IMAGE)),
+           "on_boot": os.path.isfile(at(COPY)), "in_menu": entry_in_cfg(), "efi_entry": bool(st.get("efi_entry")),
+           "version": st.get("version", ""), "notes": st.get("notes", [])}
+    for k in ("need", "free", "size"):
+        if k in st:
+            doc[k] = st[k]
+    if args.json:
+        print(json.dumps(doc, indent=1, sort_keys=True))
+    else:
+        print(doc["summary"])
+        for n in doc["notes"]:
+            print(f"  {n}")
+    return 0
+
+
+def cmd_grub_entry(args):
+    """GRUB's entry: the copy's kernel and initramfs; the initramfs finds the system by its .id
+    file (archisosearchfilename, in fieldkit/cmdline)."""
+    if not os.path.isfile(at(COPY)):
+        return 0
+    words = cmdline()
+    if "archisosearchfilename=" not in words:
+        return 0
+    ver = version()
+    pad = " " * args.indent
+    lines = [
+        f"menuentry 'bromigOS Field Kit{' ' + ver if ver else ''} (repair, lab and tools)' --class fieldkit --id '{args.id}' {{",
+        "    insmod part_gpt",
+        "    insmod part_msdos",
+        "    insmod fat",
+        "    insmod ext2",
+        f"    search --no-floppy --file --set=root {KERNEL}",
+        "    set gfxpayload=keep",
+        f"    linux {KERNEL} {words}",
+        f"    initrd {INITRD}",
+        "}",
+    ]
+    print("\n".join(pad + line for line in lines))
+    return 0
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="bromigos-fieldkit-boot", description=__doc__.split("\n")[0])
+    sub = ap.add_subparsers(dest="verb", required=True)
+    p = sub.add_parser("sync")
+    p.add_argument("--no-mkconfig", action="store_true")
+    p.add_argument("--menu", action="store_true", help="make grub.cfg again in any case (bromigos-boot's own entries changed)")
+    sub.add_parser("remove")
+    p = sub.add_parser("status")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("grub-entry")
+    p.add_argument("--indent", type=int, default=0)
+    p.add_argument("--id", default="bromigos-fieldkit")
+    args = ap.parse_args(argv)
+    if args.verb in ("sync", "remove") and ROOT == "/" and os.geteuid() != 0:
+        print("bromigos-fieldkit-boot: run it as root (the pacman hook does)", file=sys.stderr)
+        return 2
+    try:
+        return {"sync": cmd_sync, "remove": cmd_remove, "status": cmd_status, "grub-entry": cmd_grub_entry}[args.verb](args)
+    except Exception as e:        # never fails a pacman transaction: says why instead
+        print(f"bromigos-fieldkit-boot: {e}", file=sys.stderr)
+        return 0 if args.verb in ("sync", "grub-entry") else 3
+
+
+if __name__ == "__main__":
+    sys.exit(main())

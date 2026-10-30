@@ -1,0 +1,15 @@
+# bromigOS's text console: its colours and font (bromigos-console-setup; docs/console.md).
+[Unit]
+Description=bromigOS text console colours and font
+DefaultDependencies=no
+After=systemd-vconsole-setup.service
+Before=getty-pre.target sysinit.target
+ConditionPathExists=/dev/tty0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/bromigos/console/bromigos-console-setup
+
+[Install]
+WantedBy=sysinit.target

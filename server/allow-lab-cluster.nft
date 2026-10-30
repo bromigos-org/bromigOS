@@ -1,0 +1,6 @@
+# The lab's k3s cluster, from the local network only (bromigos-server firewall allow lab-cluster):
+# the API (6443), the kubelet (10250), etcd between servers (2379-2380), flannel's VXLAN (8472/udp)
+add rule inet bromigos-server input ip saddr @lan tcp dport { 6443, 10250, 2379-2380 } accept comment "lab cluster"
+add rule inet bromigos-server input ip6 saddr @lan6 tcp dport { 6443, 10250, 2379-2380 } accept comment "lab cluster"
+add rule inet bromigos-server input ip saddr @lan udp dport 8472 accept comment "lab cluster (flannel)"
+add rule inet bromigos-server input ip6 saddr @lan6 udp dport 8472 accept comment "lab cluster (flannel)"

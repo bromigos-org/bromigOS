@@ -1,0 +1,45 @@
+#!/bin/sh
+# bromigOS's text console (docs/console.md; package bromigos-boot): the console's 16 colours
+# become bromigOS's (DRIFTGLASS on the Wick's phosphor, the same colours as the terminal),
+# and, unless you chose a font (`bromigos console font`, FONT= in /etc/vconsole.conf),
+# Geist Mono at a size that suits the screen. Run at boot by bromigos-console.service, and
+# by udev whenever a console appears (a graphics driver taking over the screen resets it).
+#
+#   bromigos-console-setup [--print]     --print: say what it would do, change nothing
+#
+# Never fails the boot: anything missing (no console, no font file) is skipped.
+set -u
+share=${BROMIGOS_CONSOLE_SHARE:-/usr/share/bromigos/console}
+fonts=${BROMIGOS_CONSOLE_FONTS:-/usr/share/kbd/consolefonts}
+vconsole=${BROMIGOS_VCONSOLE:-/etc/vconsole.conf}
+sysfs=${BROMIGOS_SYSFS:-/sys}
+print=0; [ "${1:-}" = --print ] && print=1
+
+run() { if [ $print = 1 ]; then echo "$*"; else "$@" >/dev/null 2>&1 || true; fi; }
+
+# the colours: setvtrgb changes every console's palette at once, and the kernel's defaults,
+# so consoles made later start in them too
+if [ -r "$share/palette.vtrgb" ] && { [ -e /dev/tty0 ] || [ $print = 1 ]; }; then run setvtrgb "$share/palette.vtrgb"; fi
+
+# the font: only where nobody chose one (vconsole.conf's FONT, or vconsole.font= on the
+# kernel's command line, are systemd-vconsole-setup's and win)
+chosen=$(sed -n 's/^[[:space:]]*FONT=["'\'']\{0,1\}\([^"'\'' ]*\).*/\1/p' "$vconsole" 2>/dev/null | tail -1)
+grep -qs 'vconsole.font=' /proc/cmdline && chosen=cmdline
+[ -n "$chosen" ] && exit 0
+
+# the screen's width in pixels: the framebuffer the console draws on
+width=0
+if [ -r "$sysfs/class/graphics/fb0/virtual_size" ]; then
+    width=$(cut -d, -f1 "$sysfs/class/graphics/fb0/virtual_size" 2>/dev/null || echo 0)
+fi
+case $width in ''|*[!0-9]*) width=0 ;; esac
+if [ "$width" -ge 3000 ]; then size=32
+elif [ "$width" -ge 1800 ]; then size=24
+else size=16; fi
+font=$fonts/bromigos-geist-$size.psf.gz
+[ -r "$font" ] || exit 0
+for tty in /dev/tty[1-9] /dev/tty1[0-2]; do
+    [ -e "$tty" ] || continue
+    run setfont -C "$tty" "$font"
+done
+exit 0

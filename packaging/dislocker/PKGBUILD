@@ -1,0 +1,38 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# dislocker, which reads a BitLocker-encrypted Windows volume with its recovery key: Field
+# Kit's Windows repair opens one read-only (docs/fieldkit.md, "Windows repair"). Not in Arch's
+# repositories; built here from the tagged upstream source (pinned by checksum). Adapted from
+# the AUR's dislocker PKGBUILD, with two changes: OpenSSL as the crypto backend (0.7.4 offers
+# it; Arch's mbedtls 4 dropped the API 0.7.3 used), and no Ruby bindings (nothing here uses
+# them, and Ruby is a large dependency). GPL-2.0-or-later: unmodified upstream source.
+
+pkgname=dislocker
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='Read BitLocker-encrypted volumes (FUSE)'
+arch=('x86_64')
+url='https://github.com/Aorimn/dislocker'
+license=('GPL-2.0-or-later')
+depends=('fuse2' 'openssl')
+makedepends=('cmake')
+optdepends=('ntfs-3g: mount the NTFS file system inside')
+options=('!debug')
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
+sha256sums=('c39261727a4993af13f90beec5ce1b56932f8a6d813df26e437ed0a668cf4141')
+
+build() {
+  cmake -S "${pkgname}-${pkgver}" -B build \
+    -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release -Dlibdir=/usr/lib \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DWITH_RUBY=OFF -DCRYPTO_BACKEND=openssl
+  cmake --build build
+}
+
+check() {
+  ./build/src/dislocker-fuse -h 2>&1 | grep -q dislocker
+}
+
+package() {
+  DESTDIR="${pkgdir}" cmake --install build
+  install -Dm0644 "${pkgname}-${pkgver}/LICENSE.txt" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

@@ -1,0 +1,15 @@
+# Early at each start: counts the starts since an update, so one that hangs before the health
+# check gets rolled back at the next (docs/server.md).
+[Unit]
+Description=bromigOS Server: count starts since an update
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target
+ConditionPathExists=/var/lib/bromigos/server/update.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/server/bromigos-server mark-boot
+
+[Install]
+WantedBy=sysinit.target

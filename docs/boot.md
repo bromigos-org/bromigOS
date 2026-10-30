@@ -107,7 +107,7 @@ enough for a snapshot's title at 800x600.
 
 ## Where the themes come from
 
-**Shipped themes are rendered when the package is built.** `bromigos-settings` runs
+**Shipped themes are rendered when the package is built.** `bromigos-boot` runs
 `settings/grub/build-grub-theme.py --theme-dir themes/<name>` for every theme bromigOS
 ships. The results go into `/usr/share/bromigos/boot/grub/themes/<name>/`, and the fonts
 into `/usr/share/bromigos/boot/grub/fonts/`.
@@ -150,7 +150,7 @@ The helper runs at these times:
 - **`bromigos theme set`, or the theme switcher,** runs the `boot` theme-set hook in the
   background: `bromigos boot theme apply --no-prompt`. If sudo would ask for a password,
   the hook waits for the next `bromigos update`, and a notification says so.
-- **An upgrade of `bromigos-settings`** runs its pacman hook, `bromigos-boot-theme.hook`,
+- **An upgrade of `bromigos-boot`** runs its pacman hook, `bromigos-boot-theme.hook`,
   which refreshes a shipped theme in `/boot`. A theme rendered as you waits for
   `bromigos update`. The hook also brings bromigOS's block in `/etc/default/grub` up to
   date when an older package wrote it, whichever theme is in `/boot`. If that fails, the
@@ -259,6 +259,60 @@ reinstall GRUB and want to keep the old name, give `--bootloader-id`.
 If either `grub-mkconfig` or the check fails, `/etc/default/grub` goes back as it was,
 and `grub.cfg` isn't touched.
 
+## More ways to start, and the help page
+
+bromigos-boot adds two things to an installed system's boot menu, so the editor (E) is
+rarely needed, and every entry explains itself:
+
+- **"More ways to start ›"**, a submenu. Each entry is a plain sentence:
+
+  | Entry | Kernel parameters |
+  |---|---|
+  | Start without the desktop (text mode) | `systemd.unit=multi-user.target`, without `quiet` and `splash` |
+  | Start with basic graphics (if the screen stays black) | `nomodeset` |
+  | Start without the NVIDIA driver (another card or basic graphics) | `module_blacklist=nvidia,nvidia_drm,nvidia_modeset,nvidia_uvm,nouveau` |
+  | Start without the AMD driver (…) | `module_blacklist=amdgpu,radeon` |
+  | Start without the Intel driver (…) | `module_blacklist=i915,xe` |
+  | Start and show every message (for finding a problem) | `loglevel=7 systemd.show_status=1 plymouth.enable=0`, without `quiet`, `splash` and `loglevel` |
+  | Start an older snapshot (as it was before an update) › | grub-btrfs's list (`grub-btrfs.cfg`), when it's there |
+  | bromigOS Field Kit | Field Kit on `/boot`, when it's there ([fieldkit.md](fieldkit.md#in-the-installed-systems-boot-menu)) |
+
+  A "Start without the … driver" entry is there only for a maker whose graphics card is in
+  the machine (PCI class 03 in `/sys`, read when `grub-mkconfig` runs).
+- **"Help: what do these do?"** (hotkey H): a page with a paragraph per entry, then Enter
+  goes back. GRUB's theme can't show a description for the highlighted entry (gfxmenu has
+  no such component), so the titles say what they do and the help page says the rest.
+
+`/etc/grub.d/11_bromigos-options` writes both. It runs GRUB's own `10_linux` with a marker in
+place of the kernel parameters and `GRUB_DISABLE_SUBMENU=true`, takes its newest kernel's
+entry, and repeats it with each preset's parameters. So every entry has the same root, LUKS,
+btrfs subvolume, microcode and initramfs lines as the normal one. The pacman hook
+`bromigos-boot-menu.hook` makes `grub.cfg` again when bromigos-boot changes, the same safe
+way as the theme (aside, checked, swapped in). The installed menu never has install entries.
+
+### The editor's and the console's colours
+
+A GRUB theme colours the menu, but not the editor (E) or the console (C). Those take
+`color_normal` and `color_highlight`, and GRUB knows only the 16 VGA colour names there. So
+each boot theme carries `colors.cfg`, made by `build-grub-theme.py` from the theme's text and
+`primary` colours, matched to the nearest names (light green on the Wick):
+
+```text
+set color_normal=light-green/black
+set color_highlight=black/light-green
+set menu_color_normal=light-green/black
+set menu_color_highlight=black/light-green
+```
+
+Black backgrounds are see-through in GRUB's graphical terminal, so the theme's terminal box
+shows behind the text. `11_bromigos-options` sources it from `/boot/grub/themes/bromigos/`
+when it's there; the media's `grub.cfg` sources theirs. Switching themes changes the file,
+not `grub.cfg`. The font is Geist Mono, as for the menu.
+
+GRUB's editor can't highlight syntax. Upstream GRUB has no colouring for the editor beyond
+those two colour pairs, and adding it would mean patching GRUB, which bromigOS doesn't do.
+"More ways to start" covers what people use the editor for.
+
 ## The snapshots in the boot menu
 
 ![The boot menu's snapshot list: "Roll back: boot the system as it was, newest first",
@@ -364,6 +418,7 @@ depends on the machine. `bromigos-settings` requires Plymouth for its package ch
 ## The ISO's menu
 
 The ISO has its own title card, `BROMIGOS // RELAY MEDIUM`, over the Wick's den at night.
+The Field Kit ISO's says `BROMIGOS // FIELD KIT` ([fieldkit.md](fieldkit.md#the-mediums-boot-menu)).
 It shows the same emblem and meter. [iso.md](iso.md) has a picture of it.
 
 | Firmware | Boot loader | How the menu is made |
@@ -371,26 +426,35 @@ It shows the same emblem and meter. [iso.md](iso.md) has a picture of it.
 | UEFI | GRUB (archiso's `uefi.grub`) | `iso/profile/grub/grub.cfg`, with the boot theme's medium variant rendered into `grub/themes/bromigos/` by `iso/build-in-container.sh` |
 | BIOS | syslinux (`bios.syslinux`) | vesamenu at 1024x768. `iso/syslinux-theme.py` makes `splash.png` (the same title card) and `bromigos.psf` (Geist Mono as an 8x16 console font). `iso/profile/syslinux/archiso_head.cfg` places the list. |
 
-Both menus have the same entries, in plain words:
+Both menus are written by `iso/grub-menus.py` from one description, in plain sentences, with
+the rest under "More options ›" and a help page (H on UEFI). On BIOS, vesamenu shows a line of
+help under the list for the highlighted entry. The full medium's top level:
 
 | Entry | What it boots |
 |---|---|
-| Start bromigOS (try it live) | The live desktop. This is the default. |
-| Install bromigOS | The live desktop, with the graphical installer open full screen |
-| Install bromigOS (text mode) | No desktop (`multi-user.target`): the text installer on the first console, and on the serial console when the kernel's console is there |
-| Start with safe graphics (nomodeset) | The live desktop on the firmware's framebuffer |
-| Memory test (Memtest86+) | Memtest86+ |
-| Boot from disk | The installed system on another disk |
-| Start with the screen reader (speech) | archiso's accessibility entry, with the hotkey `s` |
-| UEFI shell, UEFI firmware settings, or Hardware information (HDT) | archiso's own entries |
-| Shut down, Restart | archiso's own entries |
+| Start bromigOS (try it first) | The live desktop. This is the default. |
+| Install bromigOS | The live desktop with the graphical installer open full screen, the desktop preselected (`bromigos.install bromigos.edition=desktop`) |
+| Install bromigOS Server | The text installer, Server preselected (`bromigos.install bromigos.edition=server`, no desktop) |
+| Field Kit (repair, lab and tools) | The same system without the desktop, in the Field Kit menu ([fieldkit.md](fieldkit.md#the-full-isos-entry)) |
+| Start with basic graphics (if the screen stays black) | `nomodeset`: the live desktop on the firmware's framebuffer |
+| More options › | The text installer (`bromigos.install=text`, no desktop), the memory test, the system on this computer's disk, the screen reader (S), the UEFI shell, the firmware settings, power |
+| Help: what do these do? | The help page |
+
+An install entry whose answer file is on the stick (`/fieldkit/install-desktop.toml` or
+`install-server.toml`, found with `search --file`) says "(answers found on the stick:
+unattended)", passes it to the installer as `bromigos.answers=PATH`, becomes the default and
+counts down 15 seconds; the installer then shows its own countdown with **Cancel**
+([iso.md](iso.md#answer-files)). The screen reader moved into "More options": its S hotkey
+works there. The Field Kit medium's menu is in
+[fieldkit.md](fieldkit.md#the-mediums-boot-menu).
 
 Some entries need more than archiso gives:
 
-- **Install bromigOS** adds `bromigos.install` to the kernel line. The live user's
+- **Install bromigOS** adds `bromigos.install` (and the edition) to the kernel line. The live user's
   Hyprland autostart, `bromigos-iso-autostart`, sees it and opens the graphical installer;
   any other live boot shows the welcome card instead ([iso.md](iso.md#installing-from-it)).
-- **Install bromigOS (text mode)** adds `bromigos.install=text systemd.unit=multi-user.target`.
+- **The text installer** (More options, and Install bromigOS Server) adds
+  `bromigos.install=text systemd.unit=multi-user.target`, or the Server edition.
   `bromigos-iso-text-check.service` decides, with no console of its own, and starts
   `bromigos-iso-text-install@tty1.service` (and `@ttyS0`, when the kernel's console is
   there), which runs the text installer in place of the login prompt. On "Install bromigOS"
@@ -443,7 +507,10 @@ test VMs together (`BROMIGOS_VM_MAX_MEM_GIB`, at most 10), and at least 14 GiB f
 
 ## Tests
 
-`settings/grub/tests` runs in the package's `check()`. It covers:
+`settings/grub/tests` runs in bromigos-boot's `check()`. It covers:
+
+- "More ways to start" and the help page, with a stand-in `10_linux`, checked by `grub-script-check`;
+- the Field Kit entry, its copy on `/boot`, the room check and the firmware's entry, in a stand-in root;
 
 - the theme generator;
 - the snapshot titles, checked with the real `grub-script-check`;

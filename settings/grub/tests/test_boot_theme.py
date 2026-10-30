@@ -342,7 +342,7 @@ class Helper(unittest.TestCase):
 
     def test_the_name_goes_with_the_package(self):
         self.run_helper("on", "--theme", "wick")
-        # bromigos-settings removed: its files go, the block stays (pacman doesn't edit
+        # bromigos-boot removed: its files go, the block stays (pacman doesn't edit
         # /etc/default/grub), and the next grub-mkconfig names the entries as before
         os.unlink(f"{self.root}/usr/lib/bromigos/boot/grub-btrfs-titles")
         subprocess.run([self.mk, "-o", f"{self.root}/boot/grub/grub.cfg"], check=True,

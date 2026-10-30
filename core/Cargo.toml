@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/bromigos-core", "crates/bromigos-art", "crates/bromigos", "crates/bromigos-bt"]
+members = ["crates/bromigos-core", "crates/bromigos-art", "crates/bromigos", "crates/bromigos-bt", "crates/bromigos-tui"]
 
 [workspace.package]
 version = "0.1.3"
@@ -12,6 +12,7 @@ repository = "https://github.com/bromigos-org/bromigOS"
 [workspace.dependencies]
 bromigos-core = { path = "crates/bromigos-core" }
 bromigos-art = { path = "crates/bromigos-art" }
+bromigos-tui = { path = "crates/bromigos-tui" }
 anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 libc = "0.2"
@@ -19,6 +20,8 @@ minijinja = "2"
 # colour spaces (OKLCH) and WCAG 2.1 contrast for the high-contrast palettes (accessibility.rs)
 palette = { version = "0.7", default-features = false, features = ["std"] }
 ratatui = "0.30"
+# QR codes in the terminal (Field Kit pairing with BRODEC; the same crate and version BRODEC uses)
+qrcode = { version = "0.14.1", default-features = false }
 nolgia = { version = "0.1", default-features = false, features = ["native-tls"] }
 # the homelab ComfyUI backend of bromigos-art: the same reqwest and TLS stack nolgia uses
 reqwest = { version = "0.13", default-features = false, features = ["json", "multipart", "native-tls"] }

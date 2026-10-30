@@ -1,0 +1,11 @@
+# Every night, between 04:00 and 05:00, and at the next start after a night it was off.
+[Unit]
+Description=bromigOS Server automatic update, nightly
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

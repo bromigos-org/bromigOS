@@ -157,6 +157,7 @@ The desktop runs these for you. You don't need them day to day.
 
 | Command | What it does |
 |---|---|
+| [`bromigos fieldkit`](#bromigos-fieldkit) | Field Kit, bromigOS without the desktop: the menu (Repair, Lab, Tools, Install, Shell), or one job: why, black-screen, status, make-stick, remote, usb (docs/fieldkit.md) |
 | [`bromigos tv guide`](#bromigos-tv-guide) |  |
 | [`bromigos welcome`](#bromigos-welcome) | The welcome tour after an install: Wi-Fi, your screens, a world, VECTOR and his voice, your homelab, the keys; every step skippable |
 | [`bromigos welcome console`](#bromigos-welcome-console) | The welcome tour in the terminal (bromigOS Server's first sign-in): the network, SSH, joining your lab, and what's here |
@@ -1011,6 +1012,17 @@ bromigos extensions --list
 ```
 
 From the `bromigos-desktop` package.
+
+### bromigos fieldkit
+
+```text
+Field Kit, bromigOS without the desktop: the menu (Repair, Lab, Tools, Install, Shell), or one job: why, black-screen, status, make-stick, remote, usb (docs/fieldkit.md)
+
+Usage: bromigos fieldkit [ARGS]...
+
+Arguments:
+  [ARGS]...
+```
 
 ### bromigos game
 

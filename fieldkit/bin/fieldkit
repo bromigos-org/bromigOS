@@ -1,0 +1,4 @@
+#!/bin/sh
+# Field Kit's menu (docs/fieldkit.md): `fieldkit` is `bromigos fieldkit`, a shorter name for the
+# Field Kit medium's console and for people who type it from memory.
+exec bromigos fieldkit "$@"

@@ -125,6 +125,9 @@ package() {
   # command that runs it; it talks to bromigos-desktop's `bromigos bluetooth session`
   install -Dm0755 "$(_target)/release/bromigos-bt" "$pkgdir/usr/lib/bromigos/bromigos-bt"
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-bluetooth-tui
+  # DRIFTGLASS for other TUIs: the theme in force as a Textual theme (the lab console matches
+  # the Rust screens with it; core/crates/bromigos-tui)
+  install -Dm0755 "$(_target)/release/bromigos-tui-theme" "$pkgdir/usr/lib/bromigos/bromigos-tui-theme"
   # themes/<name>/…, theme/templates/*.tpl and theme/icons/*.svg, as read-only defaults; not the
   # art pipeline's recipe, log and local sources (art.toml, art.log.jsonl, art/). A hologram
   # collection (themes/<name>/holo/, theme/holo/) ships as VECTOR's and the homelab's do: the

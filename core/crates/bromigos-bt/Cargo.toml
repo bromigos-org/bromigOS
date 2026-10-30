@@ -15,6 +15,7 @@ name = "bromigos-bt"
 path = "src/main.rs"
 
 [dependencies]
+bromigos-tui.workspace = true
 ratatui.workspace = true
 serde.workspace = true
 serde_json.workspace = true

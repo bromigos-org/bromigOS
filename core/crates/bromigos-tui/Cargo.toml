@@ -1,0 +1,14 @@
+[package]
+name = "bromigos-tui"
+description = "bromigOS's DRIFTGLASS terminal widgets: the palette, the console's colour modes, Glass, Emitter, Sweep, Reading, menus, dialogs, the log viewer and the emblem (docs/DRIFTGLASS.md)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ratatui.workspace = true
+serde_json.workspace = true
+# what ratatui measures text with (already in the lockfile through it)
+unicode-width = "0.2"

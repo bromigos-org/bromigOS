@@ -1,0 +1,10 @@
+#!/bin/sh
+# The login kmscon starts on a console (kmsconvt-bromigos.conf; docs/console.md): true colour
+# for the programs in it, then login. On a Field Kit medium's first console (or the full medium's
+# Field Kit entry), root is signed in straight into the menu, as releng's getty does.
+tty=${1:-}
+export COLORTERM=truecolor BROMIGOS_CONSOLE="$tty"
+if [ "$tty" = tty1 ] && { [ -e /etc/bromigos-fieldkit/medium ] || grep -qw 'bromigos.fieldkit' /proc/cmdline; }; then
+    exec /bin/login -p -f root
+fi
+exec /bin/login -p

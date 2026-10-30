@@ -1,0 +1,995 @@
+# Field Kit's packages: the one list (docs/fieldkit.md, "What's on it"). A package is here only
+# when (a) a Field Kit menu item, (b) booting and hardware support on unknown machines,
+# (c) bromigOS Server, the installed edition, or (d) a documented server or lab job needs it.
+# Server: what bromigOS Server (the installed edition) adds; in the offline store, not running
+# on the medium (live = false) unless the medium needs it too.
+# iso/fieldkit/manifest.py makes packages.x86_64 (the medium), the edition's list
+# (fieldkit/edition.json) and docs/fieldkit-packages.md (with sizes) from it.
+#
+#   live     on the running medium            (default true)
+#   edition  installed by bromigOS Server, the edition (default false)
+#   store    in the offline store only, for the installer's hardware plan (default false)
+# Every live, edition and store package, with all its dependencies, is in the medium's
+# offline store, so installing needs no network.
+
+[[package]]
+name = "base"
+section = "Boot & hardware"
+reason = "the base system: systemd, pacman, coreutils, the shell"
+edition = true
+
+[[package]]
+name = "linux"
+section = "Boot & hardware"
+reason = "the kernel and its drivers"
+edition = true
+
+[[package]]
+name = "linux-firmware-intel"
+section = "Boot & hardware"
+reason = "Intel Wi-Fi, Bluetooth and graphics"
+edition = true
+
+[[package]]
+name = "linux-firmware-amdgpu"
+section = "Boot & hardware"
+reason = "AMD graphics (Radeon RX and newer)"
+edition = true
+
+[[package]]
+name = "linux-firmware-radeon"
+section = "Boot & hardware"
+reason = "older AMD/ATI graphics"
+edition = true
+
+[[package]]
+name = "linux-firmware-realtek"
+section = "Boot & hardware"
+reason = "Realtek Ethernet, Wi-Fi and Bluetooth"
+edition = true
+
+[[package]]
+name = "linux-firmware-atheros"
+section = "Boot & hardware"
+reason = "Qualcomm/Atheros Wi-Fi and Bluetooth"
+edition = true
+
+[[package]]
+name = "linux-firmware-mediatek"
+section = "Boot & hardware"
+reason = "MediaTek Wi-Fi and Bluetooth"
+edition = true
+
+[[package]]
+name = "linux-firmware-broadcom"
+section = "Boot & hardware"
+reason = "Broadcom Ethernet, Wi-Fi and Bluetooth"
+edition = true
+
+[[package]]
+name = "linux-firmware-other"
+section = "Boot & hardware"
+reason = "other network and storage controllers (server NICs and HBAs among them)"
+edition = true
+
+[[package]]
+name = "amd-ucode"
+section = "Boot & hardware"
+reason = "processor fixes loaded at startup"
+live = false
+edition = true
+
+[[package]]
+name = "intel-ucode"
+section = "Boot & hardware"
+reason = "processor fixes loaded at startup"
+live = false
+edition = true
+
+[[package]]
+name = "mkinitcpio"
+section = "Boot & hardware"
+reason = "the medium's startup files (finding the medium, copy to memory)"
+
+[[package]]
+name = "mkinitcpio-archiso"
+section = "Boot & hardware"
+reason = "the medium's startup files (finding the medium, copy to memory)"
+
+[[package]]
+name = "syslinux"
+section = "Boot & hardware"
+reason = "the BIOS boot menu (mkarchiso's bios.syslinux)"
+
+[[package]]
+name = "grub"
+section = "Boot & hardware"
+reason = "the UEFI boot menu; Repair the boot menu reinstalls it on an install"
+edition = true
+
+[[package]]
+name = "efibootmgr"
+section = "Boot & hardware"
+reason = "the firmware's boot entries: Repair the boot menu, Windows boot repair"
+edition = true
+
+[[package]]
+name = "edk2-shell"
+section = "Boot & hardware"
+reason = "the boot menu's UEFI shell entry"
+
+[[package]]
+name = "memtest86+"
+section = "Boot & hardware"
+reason = "the boot menu's memory test"
+
+[[package]]
+name = "memtest86+-efi"
+section = "Boot & hardware"
+reason = "the boot menu's memory test"
+
+[[package]]
+name = "kmscon"
+section = "Boot & hardware"
+reason = "the console: true colour, Geist Mono at a readable size, DRIFTGLASS (the plain console when there's no KMS)"
+edition = true
+
+[[package]]
+name = "ttf-geist-mono"
+section = "Boot & hardware"
+reason = "Geist Mono for kmscon (bromigOS's font)"
+edition = true
+
+[[package]]
+name = "ttf-nerd-fonts-symbols-mono"
+section = "Boot & hardware"
+reason = "the icons in Field Kit's screens (kmscon falls back to it for them; MIT)"
+edition = true
+
+[[package]]
+name = "pango"
+section = "Boot & hardware"
+reason = "kmscon's font engine: Geist Mono with a fallback for icons"
+edition = true
+
+[[package]]
+name = "sof-firmware"
+section = "Boot & hardware"
+reason = "sound on current laptops, for the screen reader"
+
+[[package]]
+name = "alsa-utils"
+section = "Boot & hardware"
+reason = "sound on current laptops, for the screen reader"
+
+[[package]]
+name = "espeakup"
+section = "Boot & hardware"
+reason = "the screen reader (speech): the boot menu's speech entry"
+
+[[package]]
+name = "brltty"
+section = "Boot & hardware"
+reason = "braille displays"
+
+[[package]]
+name = "livecd-sounds"
+section = "Boot & hardware"
+reason = "the screen reader's cue sounds (releng's livecd-talk)"
+
+[[package]]
+name = "bolt"
+section = "Boot & hardware"
+reason = "Thunderbolt docks and their Ethernet"
+
+[[package]]
+name = "networkmanager"
+section = "Boot & hardware"
+reason = "networking: Lab › Network settings (nmtui), wired DHCP by itself"
+edition = true
+
+[[package]]
+name = "wpa_supplicant"
+section = "Boot & hardware"
+reason = "Wi-Fi for NetworkManager, the country rules, iw for diagnosis"
+
+[[package]]
+name = "wireless-regdb"
+section = "Boot & hardware"
+reason = "Wi-Fi for NetworkManager, the country rules, iw for diagnosis"
+
+[[package]]
+name = "iw"
+section = "Boot & hardware"
+reason = "Wi-Fi for NetworkManager, the country rules, iw for diagnosis"
+
+[[package]]
+name = "modemmanager"
+section = "Boot & hardware"
+reason = "mobile broadband (USB and built-in modems) through nmtui"
+
+[[package]]
+name = "usb_modeswitch"
+section = "Boot & hardware"
+reason = "mobile broadband (USB and built-in modems) through nmtui"
+
+[[package]]
+name = "ppp"
+section = "Boot & hardware"
+reason = "mobile broadband (USB and built-in modems) through nmtui"
+
+[[package]]
+name = "usbutils"
+section = "Boot & hardware"
+reason = "lsusb and lspci: the graphics diagnosis and the hardware report"
+edition = true
+
+[[package]]
+name = "pciutils"
+section = "Boot & hardware"
+reason = "lsusb and lspci: the graphics diagnosis and the hardware report"
+edition = true
+
+[[package]]
+name = "kitty-terminfo"
+section = "Boot & hardware"
+reason = "correct keys and colours over SSH from bromigOS's terminals"
+edition = true
+
+[[package]]
+name = "ghostty-terminfo"
+section = "Boot & hardware"
+reason = "correct keys and colours over SSH from bromigOS's terminals"
+edition = true
+
+[[package]]
+name = "btrfs-progs"
+section = "Repair"
+reason = "bromigOS's file system: mounting, snapshots, rollback, scrub"
+edition = true
+
+[[package]]
+name = "cryptsetup"
+section = "Repair"
+reason = "unlocking the encrypted install"
+edition = true
+
+[[package]]
+name = "arch-install-scripts"
+section = "Repair"
+reason = "arch-chroot into an install; pacstrap for the installer"
+
+[[package]]
+name = "dosfstools"
+section = "Repair"
+reason = "checking and making the /boot (EFI) partition"
+
+[[package]]
+name = "exfatprogs"
+section = "Repair"
+reason = "USB drives formatted exFAT, for backups"
+
+[[package]]
+name = "ntfs-3g"
+section = "Repair"
+reason = "Windows repair: ntfsfix; NTFS backup drives"
+
+[[package]]
+name = "chntpw"
+section = "Repair"
+reason = "Windows repair: reset a local account's password"
+
+[[package]]
+name = "parted"
+section = "Repair"
+reason = "partition tables: Tools › Partition a drive (cfdisk is util-linux's)"
+
+[[package]]
+name = "gptfdisk"
+section = "Repair"
+reason = "partition tables: Tools › Partition a drive (cfdisk is util-linux's)"
+
+[[package]]
+name = "smartmontools"
+section = "Repair"
+reason = "Check disks: the drives' own health; NVMe secure erase"
+edition = true
+
+[[package]]
+name = "nvme-cli"
+section = "Repair"
+reason = "Check disks: the drives' own health; NVMe secure erase"
+edition = true
+
+[[package]]
+name = "nwipe"
+section = "Repair"
+reason = "Erase a disk securely: the overwrite method for drives without their own secure erase (bromigOS's build: not in Arch's repositories)"
+
+[[package]]
+name = "dislocker"
+section = "Repair"
+reason = "Windows repair: reading a BitLocker drive with its recovery key (bromigOS's build: not in Arch's repositories)"
+
+[[package]]
+name = "hdparm"
+section = "Repair"
+reason = "ATA secure erase"
+
+[[package]]
+name = "partclone"
+section = "Repair"
+reason = "disk images and clones, in Clonezilla's format"
+
+[[package]]
+name = "testdisk"
+section = "Repair"
+reason = "Recover deleted files (PhotoRec), Repair a partition table (TestDisk)"
+
+[[package]]
+name = "ddrescue"
+section = "Repair"
+reason = "Copy a failing drive"
+
+[[package]]
+name = "rsync"
+section = "Repair"
+reason = "Back up my files to a USB drive"
+edition = true
+
+[[package]]
+name = "cifs-utils"
+section = "Repair"
+reason = "disk images to and from a network share (LAN)"
+
+[[package]]
+name = "nfs-utils"
+section = "Repair"
+reason = "disk images to and from a network share (LAN)"
+
+[[package]]
+name = "micro"
+section = "Repair"
+reason = "Edit a file on my install, with highlighting"
+
+[[package]]
+name = "lynx"
+section = "Repair"
+reason = "the bromigOS manual, readable offline"
+
+[[package]]
+name = "archinstall"
+section = "Repair"
+reason = "Install Field Kit on this computer (the installer)"
+
+[[package]]
+name = "btop"
+section = "Tools"
+reason = "Tools › System monitor (bromigos-apps-terminal needs it too)"
+edition = true
+
+[[package]]
+name = "htop"
+section = "Tools"
+reason = "Tools › Processes"
+edition = true
+
+[[package]]
+name = "nvtop"
+section = "Tools"
+reason = "Tools › Graphics card monitor"
+edition = true
+
+[[package]]
+name = "gdu"
+section = "Tools"
+reason = "Tools › Disk usage"
+edition = true
+
+[[package]]
+name = "inxi"
+section = "Tools"
+reason = "Tools › Hardware report"
+
+[[package]]
+name = "dmidecode"
+section = "Tools"
+reason = "the hardware report's board and memory details"
+edition = true
+
+[[package]]
+name = "ethtool"
+section = "Tools"
+reason = "network diagnosis: link speed and cable"
+edition = true
+
+[[package]]
+name = "mtr"
+section = "Tools"
+reason = "Tools › Network: trace a route, measure speed, scan the local network, watch traffic"
+
+[[package]]
+name = "iperf3"
+section = "Tools"
+reason = "Tools › Network: trace a route, measure speed, scan the local network, watch traffic"
+
+[[package]]
+name = "nmap"
+section = "Tools"
+reason = "Tools › Network: trace a route, measure speed, scan the local network, watch traffic"
+
+[[package]]
+name = "tcpdump"
+section = "Tools"
+reason = "Tools › Network: trace a route, measure speed, scan the local network, watch traffic"
+
+[[package]]
+name = "bluez"
+section = "Tools"
+reason = "Tools › Bluetooth (bromigos bluetooth tui)"
+edition = true
+
+[[package]]
+name = "bluez-utils"
+section = "Tools"
+reason = "Tools › Bluetooth (bromigos bluetooth tui)"
+edition = true
+
+[[package]]
+name = "tmux"
+section = "Tools"
+reason = "Tools › Terminal sessions; Remote help's shared session"
+edition = true
+
+[[package]]
+name = "herdr"
+section = "Tools"
+reason = "Tools › Herdr; Remote help"
+edition = true
+
+[[package]]
+name = "zsh"
+section = "Tools"
+reason = "the shell and bromigOS's prompt (TTY-aware)"
+edition = true
+
+[[package]]
+name = "mehshell"
+section = "Tools"
+reason = "the shell and bromigOS's prompt (TTY-aware)"
+edition = true
+
+[[package]]
+name = "nano"
+section = "Tools"
+reason = "a plain editor for guides that say nano"
+edition = true
+
+[[package]]
+name = "less"
+section = "Tools"
+reason = "the pager journalctl and git use"
+edition = true
+
+[[package]]
+name = "bromigos-lab"
+section = "Lab"
+reason = "Lab › Lab console, Provision a machine, Model catalog (works offline)"
+edition = true
+
+[[package]]
+name = "bromigos-lab-catalog"
+section = "Lab"
+reason = "Lab › Lab console, Provision a machine, Model catalog (works offline)"
+edition = true
+
+[[package]]
+name = "bromigos-homelab"
+section = "Lab"
+reason = "Lab › Media library (bromigos media) and the lab's adapters"
+edition = true
+
+[[package]]
+name = "openssh"
+section = "Lab"
+reason = "Remote help; provisioning lab machines over SSH; the edition's SSH (off until turned on)"
+edition = true
+
+[[package]]
+name = "ansible-core"
+section = "Lab"
+reason = "Lab › Provision a machine: applies a reviewed plan"
+edition = true
+
+[[package]]
+name = "python-zeroconf"
+section = "Lab"
+reason = "finding lab machines that announce themselves (mDNS)"
+edition = true
+
+[[package]]
+name = "sops"
+section = "Lab"
+reason = "encrypted lab credentials without Vault"
+edition = true
+
+[[package]]
+name = "age"
+section = "Lab"
+reason = "encrypted lab credentials without Vault"
+edition = true
+
+[[package]]
+name = "bromigos-fieldkit-tools"
+section = "Server"
+reason = "the Field Kit menu's engine: the repairs, the stick's settings, remote help, make-stick (the menu's screens are bromigos-core's)"
+edition = true
+
+[[package]]
+name = "bromigos-server"
+section = "Server"
+reason = "bromigOS Server, the installed edition: SSH, the firewall, safe automatic updates, containers, the lab's cluster and monitoring"
+live = false
+edition = true
+
+[[package]]
+name = "bromigos-keyring"
+section = "Server"
+reason = "bromigOS's signing key: updates are verified"
+edition = true
+
+[[package]]
+name = "bromigos-core"
+section = "Server"
+reason = "the bromigos command: update, rollback, hw, console, bluetooth tui"
+edition = true
+
+[[package]]
+name = "bromigos-boot"
+section = "Server"
+reason = "the boot menu's theme and options, the console's font and colours"
+edition = true
+
+[[package]]
+name = "bromigos-apps-terminal"
+section = "Server"
+reason = "LazyVim, tmux, lazygit and mise, configured; LazyVim's plugins fetched at build, so Neovim works offline"
+edition = true
+
+[[package]]
+name = "neovim"
+section = "Tools"
+reason = "Tools › Neovim, for people who know it"
+
+[[package]]
+name = "lazygit"
+section = "Tools"
+reason = "Tools › lazygit, for people who know it"
+
+[[package]]
+name = "bromigos-manual"
+section = "Server"
+reason = "the manual, offline"
+edition = true
+
+[[package]]
+name = "sudo"
+section = "Server"
+reason = "the edition's administrator rights"
+edition = true
+
+[[package]]
+name = "snapper"
+section = "Server"
+reason = "snapshots before every update, and rollback from the boot menu"
+live = false
+edition = true
+
+[[package]]
+name = "snap-pac"
+section = "Server"
+reason = "snapshots before every update, and rollback from the boot menu"
+live = false
+edition = true
+
+[[package]]
+name = "grub-btrfs"
+section = "Server"
+reason = "snapshots before every update, and rollback from the boot menu"
+live = false
+edition = true
+
+[[package]]
+name = "inotify-tools"
+section = "Server"
+reason = "snapshots before every update, and rollback from the boot menu"
+live = false
+edition = true
+
+[[package]]
+name = "fzf"
+section = "Tools"
+reason = "finding and reading: fuzzy finder: Ctrl+R history, Ctrl+T files, Alt+C folders, in DRIFTGLASS colours"
+
+[[package]]
+name = "ripgrep"
+section = "Tools"
+reason = "finding and reading: search file contents fast (rg)"
+
+[[package]]
+name = "fd"
+section = "Tools"
+reason = "finding and reading: find files by name"
+
+[[package]]
+name = "bat"
+section = "Tools"
+reason = "finding and reading: read a file with highlighting (cat)"
+
+[[package]]
+name = "eza"
+section = "Tools"
+reason = "finding and reading: list files, with icons and git state (ls)"
+
+[[package]]
+name = "zoxide"
+section = "Tools"
+reason = "finding and reading: jump to folders you use (z)"
+
+[[package]]
+name = "tree"
+section = "Tools"
+reason = "finding and reading: a folder as a tree"
+
+[[package]]
+name = "jq"
+section = "Tools"
+reason = "finding and reading: read and change JSON"
+
+[[package]]
+name = "yq"
+section = "Tools"
+reason = "finding and reading: the same for YAML and TOML (jq's wrapper)"
+
+[[package]]
+name = "file"
+section = "Tools"
+reason = "finding and reading: what kind of file this is"
+
+[[package]]
+name = "tealdeer"
+section = "Tools"
+reason = "finding and reading: tldr: short examples for a command, its pages pre-filled at build so it works offline"
+
+[[package]]
+name = "man-db"
+section = "Tools"
+reason = "finding and reading: manual pages (man)"
+
+[[package]]
+name = "man-pages"
+section = "Tools"
+reason = "finding and reading: the manual pages of Linux and its C library"
+
+[[package]]
+name = "curl"
+section = "Tools"
+reason = "network: fetch a URL"
+
+[[package]]
+name = "wget"
+section = "Tools"
+reason = "network: download a file"
+
+[[package]]
+name = "aria2"
+section = "Tools"
+reason = "network: download with resume and several connections"
+
+[[package]]
+name = "mosh"
+section = "Tools"
+reason = "network: a remote shell that survives a bad network"
+
+[[package]]
+name = "sshfs"
+section = "Tools"
+reason = "network: a remote folder over SSH"
+
+[[package]]
+name = "socat"
+section = "Tools"
+reason = "network: connect two streams (serial ports, sockets)"
+
+[[package]]
+name = "openbsd-netcat"
+section = "Tools"
+reason = "network: test a port (nc)"
+
+[[package]]
+name = "iproute2"
+section = "Tools"
+reason = "network: addresses and routes (ip)"
+
+[[package]]
+name = "iputils"
+section = "Tools"
+reason = "network: ping"
+
+[[package]]
+name = "bind"
+section = "Tools"
+reason = "network: DNS lookups (dig)"
+
+[[package]]
+name = "traceroute"
+section = "Tools"
+reason = "network: the route to a host"
+
+[[package]]
+name = "iwd"
+section = "Tools"
+reason = "network: Wi-Fi without NetworkManager, for impala (off unless started)"
+
+[[package]]
+name = "impala"
+section = "Tools"
+reason = "network: Wi-Fi in the terminal, on iwd"
+
+[[package]]
+name = "wireguard-tools"
+section = "Tools"
+reason = "network: WireGuard VPN (wg)"
+
+[[package]]
+name = "tailscale"
+section = "Tools"
+reason = "network: a tailnet, to reach a lab from anywhere (off unless started)"
+
+[[package]]
+name = "smbclient"
+section = "Tools"
+reason = "network: Windows and NAS shares (smbclient)"
+
+[[package]]
+name = "lvm2"
+section = "Tools"
+reason = "disks and files: LVM volumes"
+
+[[package]]
+name = "mdadm"
+section = "Tools"
+reason = "disks and files: software RAID"
+
+[[package]]
+name = "xfsprogs"
+section = "Tools"
+reason = "disks and files: XFS"
+
+[[package]]
+name = "f2fs-tools"
+section = "Tools"
+reason = "disks and files: F2FS (phones, SD cards)"
+
+[[package]]
+name = "fsarchiver"
+section = "Tools"
+reason = "disks and files: file-system archives"
+
+[[package]]
+name = "squashfs-tools"
+section = "Tools"
+reason = "disks and files: squashfs images"
+
+[[package]]
+name = "7zip"
+section = "Tools"
+reason = "disks and files: 7z, zip and most archives"
+
+[[package]]
+name = "unzip"
+section = "Tools"
+reason = "disks and files: zip archives"
+
+[[package]]
+name = "zip"
+section = "Tools"
+reason = "disks and files: make zip archives"
+
+[[package]]
+name = "pigz"
+section = "Tools"
+reason = "disks and files: gzip on every core"
+
+[[package]]
+name = "xz"
+section = "Tools"
+reason = "disks and files: xz archives"
+
+[[package]]
+name = "zstd"
+section = "Tools"
+reason = "disks and files: zstd archives"
+
+[[package]]
+name = "iotop"
+section = "Tools"
+reason = "system and debugging: what's using the disk"
+
+[[package]]
+name = "sysstat"
+section = "Tools"
+reason = "system and debugging: iostat, sar, mpstat"
+
+[[package]]
+name = "lsof"
+section = "Tools"
+reason = "system and debugging: what has a file open"
+
+[[package]]
+name = "strace"
+section = "Tools"
+reason = "system and debugging: what a program asks the kernel"
+
+[[package]]
+name = "ltrace"
+section = "Tools"
+reason = "system and debugging: what a program asks its libraries"
+
+[[package]]
+name = "gdb"
+section = "Tools"
+reason = "system and debugging: the debugger"
+
+[[package]]
+name = "lm_sensors"
+section = "Tools"
+reason = "system and debugging: temperatures and fans (sensors)"
+
+[[package]]
+name = "lshw"
+section = "Tools"
+reason = "system and debugging: every device, in detail"
+
+[[package]]
+name = "hwinfo"
+section = "Tools"
+reason = "system and debugging: hardware probe"
+
+[[package]]
+name = "mokutil"
+section = "Tools"
+reason = "system and debugging: Secure Boot's machine owner keys"
+
+[[package]]
+name = "sbctl"
+section = "Tools"
+reason = "system and debugging: Secure Boot keys and signing"
+
+[[package]]
+name = "fwupd"
+section = "Tools"
+reason = "system and debugging: firmware versions; updates from a file on the stick (offline)"
+
+[[package]]
+name = "memtester"
+section = "Tools"
+reason = "system and debugging: test memory from a running system"
+
+[[package]]
+name = "stress-ng"
+section = "Tools"
+reason = "system and debugging: load the machine to find faults"
+
+[[package]]
+name = "powertop"
+section = "Tools"
+reason = "system and debugging: what uses power"
+
+[[package]]
+name = "wimlib"
+section = "Tools"
+reason = "Windows and security: Windows images (.wim)"
+
+[[package]]
+name = "gnupg"
+section = "Tools"
+reason = "Windows and security: signatures and encryption (gpg)"
+
+# Left out on purpose (docs/fieldkit-packages.md lists them with these reasons)
+
+[[left_out]]
+names = "linux-firmware (the whole set)"
+reason = "its split parts above cover common Wi-Fi, Ethernet, Bluetooth and graphics; the rest is below"
+
+[[left_out]]
+names = "nvidia-open nvidia-utils (in the offline store)"
+reason = "NVIDIA's driver for a lab machine's compute: about 400 MiB with what it pulls in (Mesa, LLVM). bromigOS Server installs it once online (an open question: carry it?)"
+
+[[left_out]]
+names = "linux-firmware-nvidia"
+reason = "only for nouveau on the live system, which Field Kit doesn't load (the basic display instead); in the offline store for lab GPU installs"
+
+[[left_out]]
+names = "linux-firmware-marvell"
+reason = "Marvell Wi-Fi (Surface devices) and some server NICs: 79 MiB for rare hardware (an open question)"
+
+[[left_out]]
+names = "linux-firmware-cirrus linux-firmware-ti linux-firmware-amd"
+reason = "laptop audio codecs, TI chips, AMD's security processor: not needed to boot, network or repair"
+
+[[left_out]]
+names = "archlinux releng: clonezilla partimage"
+reason = "Field Kit's own imaging (partclone, in Clonezilla's format) replaces them"
+
+[[left_out]]
+names = "archlinux releng: cloud-init"
+reason = "for cloud images; the test harness uses a test build's key instead"
+
+[[left_out]]
+names = "archlinux releng: hyperv open-vm-tools qemu-guest-agent virtualbox-guest-utils-nox"
+reason = "guest tools for virtual machines; Field Kit is for real machines (an open question for VM servers)"
+
+[[left_out]]
+names = "archlinux releng: wireless_tools dhcpcd wvdial"
+reason = "NetworkManager covers Wi-Fi, wired DHCP and modems; one network stack"
+
+[[left_out]]
+names = "archlinux releng: openvpn openconnect vpnc pptpclient xl2tpd systemd-resolvconf"
+reason = "VPN clients: no menu item or lab job uses them yet"
+
+[[left_out]]
+names = "archlinux releng: nbd open-iscsi mkinitcpio-nfs-utils"
+reason = "network block devices and PXE boot hooks: Field Kit boots from a stick or /boot"
+
+[[left_out]]
+names = "archlinux releng: bcachefs-tools jfsutils nilfs-utils udftools fatresize gpart mtools"
+reason = "file systems bromigOS doesn't use"
+
+[[left_out]]
+names = "archlinux releng: dmraid"
+reason = "fake RAID (BIOS RAID): mdadm reads the formats that matter"
+
+[[left_out]]
+names = "archlinux releng: tpm2-tools tpm2-tss libfido2 pcsclite openpgp-card-tools sequoia-sq"
+reason = "TPM, FIDO2 and smartcard unlocking and signing: bromigOS unlocks with a passphrase"
+
+[[left_out]]
+names = "archlinux releng: ldns ndisc6 darkhttpd lftp irssi mc pv screen vim"
+reason = "duplicates of kept tools (nmap, curl, tmux, micro, neovim) or nothing on the menu"
+
+[[left_out]]
+names = "archlinux releng: refind syslinux-hdt b43-fwcutter linux-atm usbmuxd mmc-utils sdparm sg3_utils lsscsi"
+reason = "other boot loaders, old Broadcom firmware cutting, ADSL, iPhone tethering, SCSI and MMC tools"
+
+[[left_out]]
+names = "archlinux releng: grml-zsh-config terminus-font"
+reason = "bromigOS's own prompt (mehshell) and console font (Geist Mono)"
+
+[[left_out]]
+names = "archlinux releng: reflector xdg-utils dnsmasq gpm"
+reason = "mirror ranking (Field Kit is offline-first), image building (the build machine's), desktop helpers, a DHCP server, the console mouse"
+
+[[left_out]]
+names = "helm libvirt-python qemu-base cloud-image-utils"
+reason = "the lab's Kubernetes and local-VM provisioning: large, and only for labs that use them (installable later, with a network)"
+
+[[left_out]]
+names = "base-devel paru"
+reason = "building AUR packages: not an offline job"
+
+[[left_out]]
+names = "mesa vulkan-* libva-* and the desktop"
+reason = "Field Kit has no desktop: Install › the full bromigOS desktop downloads it"
+
+[[left_out]]
+names = "ncdu"
+reason = "gdu does the same job"
+
+[[left_out]]
+names = "p7zip dislocker (Arch)"
+reason = "not in Arch's repositories: 7zip replaces p7zip; dislocker is bromigOS's own build"
+
+[[left_out]]
+names = "go-yq"
+reason = "yq (the jq wrapper) reads YAML and TOML in 0.3 MiB; go-yq is 14 MiB"

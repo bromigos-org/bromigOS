@@ -1,0 +1,9 @@
+# The login screen failed to start (sddm.service's OnFailure, bromigos-graphics.conf): the
+# text console's login on the first screen, with a note saying why and how to get back
+# (bromigos-console-hint; docs/console.md).
+[Unit]
+Description=bromigOS text console after the login screen failed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/console/bromigos-console-hint no-graphics

@@ -1,0 +1,593 @@
+#!/usr/bin/python3 -I
+# bromigos:summary=bromigOS Server: its status (SSH, firewall, updates and their health, containers, the lab's cluster, monitoring), and its safe automatic updates
+# bromigos:args=status [--json] | update [--now] | health | firewall [status|apply|allow NAME|deny NAME] | setup
+# bromigos:examples=bromigos server; bromigos server status --json; sudo bromigos server update --now; sudo bromigos server firewall allow lab-cluster
+"""bromigOS Server (docs/server.md): the installed edition without a desktop.
+
+  bromigos-server status [--json]   what this server is doing, in plain words (or JSON for the
+                                    Server home screen)
+  bromigos-server update [--now]    the automatic update (bromigos-server-update.timer): a
+                                    snapshot pair around it (bromigos update), then the health
+                                    check, after a restart when the kernel or a driver changed
+  bromigos-server health            at startup (bromigos-server-health.service): after an
+                                    update, checks the system came back healthy; if it didn't,
+                                    rolls the update back and restarts, once
+  bromigos-server mark-boot         early at startup: counts the starts since the update, so a
+                                    start that never reaches the check rolls back the next time
+  bromigos-server firewall [status|apply|allow NAME|deny NAME]
+                                    the firewall (nftables): SSH, ping and the lab's monitoring
+                                    in, the rest dropped; NAME: lab-cluster (k3s), web (80, 443)
+  bromigos-server setup             what the package's install runs (idempotent): the settings
+                                    in /etc/bromigos/server.toml applied
+
+Settings: /etc/bromigos/server.toml (the installer writes it; every key is optional):
+
+  [ssh]
+  password = false        # true only when chosen at install: password sign-in allowed too
+  [firewall]
+  allow = []              # extra rule sets: "lab-cluster", "web"
+  tcp = []                # more TCP ports open to the local network
+  [updates]
+  auto = true             # the timer updates by itself
+  reboot = true           # restart by itself when a new kernel or driver needs it
+  [health]
+  minutes = 10            # how long the system has to come back healthy
+  ignore_units = []       # failed units that don't count against it
+
+State: /var/lib/bromigos/server/ (update.json, history.jsonl). Nothing here needs the internet
+except the update itself, which reads the machine's own package repository.
+"""
+
+import argparse
+import datetime
+import ipaddress
+import json
+import os
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import time
+import tomllib
+
+ROOT = os.environ.get("BROMIGOS_SERVER_ROOT", "/")
+SHARE = os.environ.get("BROMIGOS_SERVER_SHARE", "/usr/share/bromigos/server")
+
+
+def at(path):
+    return os.path.join(ROOT, path.lstrip("/"))
+
+
+CONFIG = "/etc/bromigos/server.toml"
+STATE = "/var/lib/bromigos/server/update.json"
+HISTORY = "/var/lib/bromigos/server/history.jsonl"
+TEXTFILE = "/opt/bromigos-monitoring/textfile/bromigos-server.prom"
+SSHD_PASSWORD = "/etc/ssh/sshd_config.d/05-bromigos-server-password.conf"
+NFT_EXTRA = "/etc/bromigos/server/nftables.d"
+LAN = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7", "fe80::/10")
+RULESETS = {"lab-cluster": "the lab's k3s cluster (6443, 10250, 2379-2380, flannel 8472/udp)", "web": "a web server (80, 443)"}
+# the units every healthy Server runs; sshd only when it's enabled
+MUST_RUN = ("NetworkManager.service", "bromigos-server-firewall.service")
+
+
+def run(cmd, check=False, timeout=None, input=None):
+    """(exit code, stdout, stderr); a missing command is exit 127."""
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, input=input)
+        return r.returncode, r.stdout, r.stderr
+    except FileNotFoundError:
+        return 127, "", f"{cmd[0]}: not installed"
+    except subprocess.TimeoutExpired:
+        return 124, "", f"{cmd[0]}: timed out"
+
+
+def config():
+    try:
+        with open(at(CONFIG), "rb") as f:
+            c = tomllib.load(f)
+    except FileNotFoundError:
+        c = {}
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        print(f"bromigos-server: {CONFIG} can't be read ({e}); using the defaults", file=sys.stderr)
+        c = {}
+    c.setdefault("ssh", {}).setdefault("password", False)
+    fw = c.setdefault("firewall", {})
+    fw.setdefault("allow", [])
+    fw.setdefault("tcp", [])
+    up = c.setdefault("updates", {})
+    up.setdefault("auto", True)
+    up.setdefault("reboot", True)
+    h = c.setdefault("health", {})
+    h.setdefault("minutes", 10)
+    h.setdefault("ignore_units", [])
+    return c
+
+
+def now():
+    return datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def load_state():
+    try:
+        with open(at(STATE)) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(st):
+    os.makedirs(os.path.dirname(at(STATE)), mode=0o755, exist_ok=True)
+    tmp = at(STATE) + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(st, f, indent=1, sort_keys=True)
+        f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, at(STATE))
+    metrics(st)
+
+
+def remember(event):
+    os.makedirs(os.path.dirname(at(HISTORY)), mode=0o755, exist_ok=True)
+    with open(at(HISTORY), "a") as f:
+        f.write(json.dumps(dict(event, at=now())) + "\n")
+
+
+def history(n=20):
+    try:
+        with open(at(HISTORY)) as f:
+            rows = [json.loads(line) for line in f if line.strip()]
+    except (OSError, ValueError):
+        rows = []
+    return rows[-n:]
+
+
+def metrics(st):
+    """Prometheus's text format, for node-exporter's textfile collector: the lab's dashboards
+    and alerts read the updates' health from there."""
+    d = os.path.dirname(at(TEXTFILE))
+    if not os.path.isdir(d):
+        return
+    verdict = {"ok": 1, "verify": 0.5}.get(st.get("phase"), 0)
+    rollbacks = sum(1 for e in history(10_000) if e.get("event") == "rolled-back")
+    when = st.get("finished_ts") or st.get("started_ts") or 0
+    text = ("# HELP bromigos_server_update_healthy 1: the last update came back healthy; 0.5: being checked; 0: rolled back or needs attention\n"
+            "# TYPE bromigos_server_update_healthy gauge\n"
+            f"bromigos_server_update_healthy {verdict}\n"
+            "# HELP bromigos_server_update_timestamp_seconds When the last automatic update ran\n"
+            "# TYPE bromigos_server_update_timestamp_seconds gauge\n"
+            f"bromigos_server_update_timestamp_seconds {int(when)}\n"
+            "# HELP bromigos_server_rollbacks_total Updates rolled back because the system didn't come back healthy\n"
+            "# TYPE bromigos_server_rollbacks_total counter\n"
+            f"bromigos_server_rollbacks_total {rollbacks}\n")
+    tmp = at(TEXTFILE) + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(text)
+    os.replace(tmp, at(TEXTFILE))
+
+
+# ------------------------------------------------------------------ status
+
+def addresses():
+    rc, out, _ = run(["ip", "-j", "addr", "show", "scope", "global"])
+    if rc != 0:
+        return []
+    try:
+        rows = json.loads(out or "[]")
+    except ValueError:
+        return []
+    return [f"{a['local']}" for r in rows for a in r.get("addr_info", []) if a.get("local")]
+
+
+def unit_state(unit):
+    rc, out, _ = run(["systemctl", "is-active", unit])
+    return out.strip() or ("unknown" if rc == 127 else "inactive")
+
+
+def unit_enabled(unit):
+    rc, out, _ = run(["systemctl", "is-enabled", unit])
+    return out.strip() or "unknown"
+
+
+def containers():
+    if not shutil.which("podman"):
+        return {"installed": False, "running": 0}
+    rc, out, _ = run(["podman", "ps", "--format", "json"], timeout=15)
+    try:
+        n = len(json.loads(out or "[]")) if rc == 0 else 0
+    except ValueError:
+        n = 0
+    return {"installed": True, "running": n}
+
+
+def cluster():
+    """The lab's k3s, as bromigos lab provision installs it (docs/server.md, "The lab's cluster")."""
+    owned = [n for n in (os.listdir(at("/etc/rancher/k3s")) if os.path.isdir(at("/etc/rancher/k3s")) else [])
+             if n.startswith("bromigos-")]
+    role = "server" if os.path.exists(at("/etc/systemd/system/k3s.service")) else \
+        "agent" if os.path.exists(at("/etc/systemd/system/k3s-agent.service")) else None
+    return {"joined": bool(role), "role": role, "owner": owned[0][len("bromigos-"):] if owned else None,
+            "state": unit_state("k3s.service" if role == "server" else "k3s-agent.service") if role else None}
+
+
+def last_update():
+    st = load_state()
+    return {"phase": st.get("phase", "never"), "started": st.get("started"), "finished": st.get("finished"),
+            "pre": st.get("pre"), "post": st.get("post"), "packages": len(st.get("packages", [])),
+            "reason": st.get("reason", ""), "kernel": st.get("kernel", False)}
+
+
+PHASE_WORDS = {
+    "never": "no automatic update has run yet",
+    "updating": "an update is running now",
+    "reboot": "updated; restarting to check it",
+    "verify": "updated; checking the system came back healthy",
+    "ok": "the last update came back healthy",
+    "nothing": "the last check found nothing to update",
+    "rolled-back": "the last update was rolled back: the system didn't come back healthy",
+    "attention": "needs attention: an update and its rollback both failed the health check",
+    "failed": "the last update didn't finish",
+}
+
+
+def status_doc():
+    c = config()
+    ssh_on = unit_enabled("sshd.service") == "enabled"
+    return {
+        "hostname": socket.gethostname(),
+        "addresses": addresses(),
+        "ssh": {"enabled": ssh_on, "running": unit_state("sshd.service"),
+                "passwords": bool(c["ssh"]["password"]), "how": "keys and a password" if c["ssh"]["password"] else "keys only"},
+        "firewall": {"running": unit_state("bromigos-server-firewall.service"), "allow": c["firewall"]["allow"],
+                     "tcp": c["firewall"]["tcp"]},
+        "updates": dict(last_update(), auto=bool(c["updates"]["auto"]), timer=unit_state("bromigos-server-update.timer")),
+        "rollbacks": [e for e in history() if e.get("event") == "rolled-back"],
+        "containers": containers(),
+        "cluster": cluster(),
+        "monitoring": {"node_exporter": unit_state("prometheus-node-exporter.service"), "port": 9100},
+    }
+
+
+def print_status(d):
+    u = d["updates"]
+    print(f"bromigOS Server · {d['hostname']} · {', '.join(d['addresses']) or 'no network address'}")
+    print(f"  SSH          {'on' if d['ssh']['enabled'] else 'off'} ({d['ssh']['how']})" if d["ssh"]["enabled"] else
+          "  SSH          off (sudo systemctl enable --now sshd turns it on, keys only)")
+    print(f"  Firewall     {d['firewall']['running']}" + (f", also open: {', '.join(d['firewall']['allow'])}" if d["firewall"]["allow"] else ""))
+    print(f"  Updates      {PHASE_WORDS.get(u['phase'], u['phase'])}" + (f" ({u['finished'] or u['started']})" if u.get("started") else "")
+          + ("" if u["auto"] else "; automatic updates are off"))
+    if u.get("reason"):
+        print(f"               {u['reason']}")
+    if d["rollbacks"]:
+        print(f"  Rollbacks    {len(d['rollbacks'])}, the last on {d['rollbacks'][-1]['at']}")
+    ct = d["containers"]
+    print(f"  Containers   {ct['running']} running (podman)" if ct["installed"] else "  Containers   podman isn't installed")
+    cl = d["cluster"]
+    print(f"  Lab cluster  {cl['role']} of {cl['owner'] or 'a cluster'}, {cl['state']}" if cl["joined"] else
+          "  Lab cluster  not joined (bromigos lab provision add-node, from the lab's workstation)")
+    print(f"  Monitoring   node exporter {d['monitoring']['node_exporter']} on port 9100 (local network only)")
+
+
+# ------------------------------------------------------------------ the firewall
+
+def ruleset(c):
+    """The nftables ruleset: the base (share/nftables.nft), the chosen extras, ports from the
+    settings, and anything in /etc/bromigos/server/nftables.d/*.nft."""
+    with open(os.path.join(SHARE, "nftables.nft")) as f:
+        text = f.read()
+    extra = []
+    for name in c["firewall"]["allow"]:
+        if name not in RULESETS:
+            print(f"bromigos-server: no rule set {name!r} (there's {', '.join(RULESETS)})", file=sys.stderr)
+            continue
+        with open(os.path.join(SHARE, f"allow-{name}.nft")) as f:
+            extra.append(f.read())
+    ports = [int(p) for p in c["firewall"]["tcp"] if str(p).isdigit() and 0 < int(p) < 65536]
+    if ports:
+        extra.append("add rule inet bromigos-server input ip saddr @lan tcp dport { "
+                     + ", ".join(map(str, ports)) + " } accept\n"
+                     "add rule inet bromigos-server input ip6 saddr @lan6 tcp dport { "
+                     + ", ".join(map(str, ports)) + " } accept\n")
+    d = at(NFT_EXTRA)
+    if os.path.isdir(d):
+        for n in sorted(os.listdir(d)):
+            if n.endswith(".nft"):
+                with open(os.path.join(d, n)) as f:
+                    extra.append(f.read())
+    return text + "\n".join(extra) + "\n# the rest, dropped (the base chain's policy)\n"
+
+
+def cmd_firewall(a):
+    c = config()
+    verb = a.verb or "status"
+    if verb == "status":
+        rc, out, err = run(["nft", "list", "table", "inet", "bromigos-server"])
+        print(out if rc == 0 else f"the firewall isn't loaded ({err.strip() or 'nft failed'})")
+        return 0
+    if verb in ("allow", "deny"):
+        if a.name not in RULESETS:
+            sys.exit(f"bromigos-server: no rule set {a.name!r}: {', '.join(f'{k} ({v})' for k, v in RULESETS.items())}")
+        allow = [n for n in c["firewall"]["allow"] if n != a.name] + ([a.name] if verb == "allow" else [])
+        set_toml_list(["firewall", "allow"], allow)
+        c = config()
+    text = ruleset(c)
+    if a.print:
+        print(text)
+        return 0
+    rc, _, err = run(["nft", "-c", "-f", "-"], input=text)
+    if rc != 0:
+        sys.exit(f"bromigos-server: the firewall rules don't load ({err.strip()}); the old ones stay")
+    rc, _, err = run(["nft", "-f", "-"], input=text)
+    if rc != 0:
+        sys.exit(f"bromigos-server: loading the firewall failed: {err.strip()}")
+    print("firewall: loaded" + (f" (also open: {', '.join(c['firewall']['allow'])})" if c["firewall"]["allow"] else ""))
+    return 0
+
+
+def set_toml_list(path, values):
+    """One list in server.toml rewritten (the file stays otherwise as it is)."""
+    section, key = path
+    p = at(CONFIG)
+    text = open(p).read() if os.path.exists(p) else ""
+    line = f"{key} = [" + ", ".join(json.dumps(v) for v in values) + "]"
+    m = re.search(rf"^\[{section}\]\s*$", text, re.M)
+    if not m:
+        text = text.rstrip("\n") + ("\n\n" if text else "") + f"[{section}]\n{line}\n"
+    else:
+        start = m.end()
+        nxt = re.search(r"^\[", text[start:], re.M)
+        end = start + (nxt.start() if nxt else len(text) - start)
+        body = text[start:end]
+        if re.search(rf"^{key}\s*=.*$", body, re.M):
+            body = re.sub(rf"^{key}\s*=.*$", line, body, count=1, flags=re.M)
+        else:
+            body = "\n" + line + body
+        text = text[:start] + body + text[end:]
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w") as f:
+        f.write(text)
+
+
+# ------------------------------------------------------------------ setup
+
+def cmd_setup(a):
+    """The settings applied: SSH's password rule, the firewall, the exporter's folder, the
+    timers and the consoles. Safe to run again; the package's install runs it."""
+    c = config()
+    done = []
+    pw = at(SSHD_PASSWORD)
+    if c["ssh"]["password"]:
+        os.makedirs(os.path.dirname(pw), exist_ok=True)
+        with open(pw, "w") as f:
+            f.write("# bromigOS Server: password sign-in was chosen at install (/etc/bromigos/server.toml, [ssh] password)\n"
+                    "PasswordAuthentication yes\nKbdInteractiveAuthentication yes\n")
+        done.append("SSH: keys and passwords")
+    else:
+        if os.path.exists(pw):
+            os.unlink(pw)
+        done.append("SSH: keys only")
+    os.makedirs(at("/opt/bromigos-monitoring/textfile"), mode=0o755, exist_ok=True)
+    units = ["bromigos-server-firewall.service", "bromigos-server-health.service", "bromigos-server-mark-boot.service",
+             "prometheus-node-exporter.service", "podman.socket", "kmsconvt@tty1.service"]
+    if c["updates"]["auto"]:
+        units.append("bromigos-server-update.timer")
+    if ROOT == "/":
+        rc, _, err = run(["systemctl", "enable", *units])
+        done.append("enabled: " + ", ".join(units) if rc == 0 else f"systemctl enable: {err.strip()}")
+        if not c["updates"]["auto"]:
+            run(["systemctl", "disable", "bromigos-server-update.timer"])
+        # kmscon takes the first console (getty@tty1 conflicts with it, and comes back on its
+        # own when kmscon can't start: kmsconvt@'s OnFailure, the plain console's fallback)
+        run(["systemctl", "disable", "getty@tty1.service"])
+        # running now (not in an installer's chroot): the firewall loads at once
+        if os.path.isdir("/run/systemd/system") and not chrooted():
+            run(["systemctl", "restart", "bromigos-server-firewall.service"])
+            if unit_state("sshd.service") == "active":
+                run(["systemctl", "reload", "sshd.service"])
+    for line in done:
+        print(f"bromigos-server: {line}")
+    return 0
+
+
+def chrooted():
+    try:
+        return os.stat("/").st_ino != os.stat("/proc/1/root/.").st_ino
+    except OSError:
+        return True
+
+
+# ------------------------------------------------------------------ updates and their health
+
+def gateway():
+    rc, out, _ = run(["ip", "-j", "route", "show", "default"])
+    try:
+        rows = json.loads(out or "[]") if rc == 0 else []
+    except ValueError:
+        rows = []
+    return rows[0].get("gateway") if rows else None
+
+
+def cmd_update(a):
+    c = config()
+    if not c["updates"]["auto"] and not a.now:
+        print("bromigos-server: automatic updates are off (/etc/bromigos/server.toml, [updates] auto)")
+        return 0
+    st = load_state()
+    if st.get("phase") in ("verify", "reboot", "updating") and not a.now:
+        print(f"bromigos-server: the last update is still being checked ({st['phase']}); not starting another")
+        return 0
+    st = {"phase": "updating", "started": now(), "started_ts": time.time(), "gateway": gateway(),
+          "sshd": unit_state("sshd.service") == "active", "boots": 0}
+    save_state(st)
+    rc, out, err = run(["bromigos", "update", "--yes", "--no-aur", "--json"], timeout=3 * 3600)
+    try:
+        doc = json.loads(out.strip().splitlines()[-1]) if out.strip() else {}
+    except ValueError:
+        doc = {}
+    rep = doc.get("report") or {}
+    st["packages"] = [p.get("name") for p in rep.get("packages", [])]
+    pair = rep.get("snapshot") or {}
+    st["pre"], st["post"] = pair.get("pre"), pair.get("post")
+    st["kernel"] = bool((rep.get("reboot") or {}).get("kernel") or (rep.get("reboot") or {}).get("driver"))
+    if not st["packages"]:
+        st.update(phase="nothing" if rc == 0 else "failed", finished=now(), finished_ts=time.time(),
+                  reason="" if rc == 0 else (err.strip().splitlines() or ["bromigos update failed"])[-1])
+        save_state(st)
+        remember({"event": st["phase"]})
+        print(f"bromigos-server: {PHASE_WORDS[st['phase']]}")
+        return 0 if rc == 0 else 1
+    remember({"event": "updated", "packages": len(st["packages"]), "pre": st["pre"], "post": st["post"],
+              "kernel": st["kernel"]})
+    if st["kernel"] and c["updates"]["reboot"]:
+        st["phase"] = "reboot"
+        save_state(st)
+        print("bromigos-server: updated; the new kernel or driver needs a restart: restarting to check it")
+        run(["systemctl", "reboot"])
+        return 0
+    st["phase"] = "verify"
+    save_state(st)
+    return cmd_health(a, booted=False)
+
+
+def failed_units(ignore):
+    rc, out, _ = run(["systemctl", "list-units", "--state=failed", "--plain", "--no-legend", "--no-pager"])
+    units = [line.split()[0] for line in out.splitlines() if line.strip()]
+    return [u for u in units if u not in ignore]
+
+
+def check_health(st, c):
+    """(healthy, reasons). Healthy means, all of these:
+      - startup finished (the system manager is "running", or "degraded" only by ignored units);
+      - no unit failed, except those in [health] ignore_units;
+      - NetworkManager and the firewall run, and sshd runs if it ran before the update;
+      - the network is back: an address, and the gateway it had before answers (when it had one)."""
+    reasons = []
+    rc, out, _ = run(["systemctl", "is-system-running"])
+    state = out.strip()
+    failed = failed_units(set(c["health"]["ignore_units"]))
+    if state in ("initializing", "starting"):
+        reasons.append(f"startup hasn't finished ({state})")
+    if failed:
+        reasons.append("failed to start: " + ", ".join(failed[:8]))
+    must = list(MUST_RUN) + (["sshd.service"] if st.get("sshd") else [])
+    down = [u for u in must if unit_state(u) != "active"]
+    if down:
+        reasons.append("not running: " + ", ".join(down))
+    if not addresses():
+        reasons.append("no network address")
+    elif st.get("gateway"):
+        rc, _, _ = run(["ping", "-c", "1", "-W", "2", st["gateway"]])
+        if rc != 0:
+            reasons.append(f"the gateway {st['gateway']} doesn't answer")
+    return not reasons, reasons
+
+
+def cmd_mark_boot(a):
+    st = load_state()
+    if st.get("phase") in ("reboot", "verify"):
+        st["boots"] = int(st.get("boots", 0)) + 1
+        st["phase"] = "verify"
+        save_state(st)
+    return 0
+
+
+def cmd_health(a, booted=True):
+    """After an update: wait up to [health] minutes for the system to be healthy. Not healthy:
+    the update rolled back (bromigos update --rollback PRE --yes), the kernel in /boot put back
+    to match, a restart. Only once: a second failure stops and asks for attention."""
+    st = load_state()
+    if st.get("phase") != "verify":
+        return 0
+    c = config()
+    # a start that never reached this check (it hung, someone pressed reset): roll back now
+    hung = booted and int(st.get("boots", 0)) > 1
+    deadline = time.time() + 60 * float(c["health"]["minutes"])
+    ok, reasons = False, ["it never reached the check"] if hung else []
+    while not hung:
+        ok, reasons = check_health(st, c)
+        if ok or time.time() >= deadline:
+            break
+        time.sleep(float(os.environ.get("BROMIGOS_SERVER_HEALTH_POLL", "15")))
+    if ok:
+        st.update(phase="ok", finished=now(), finished_ts=time.time(), reason="")
+        save_state(st)
+        remember({"event": "healthy", "pre": st.get("pre")})
+        print("bromigos-server: the update came back healthy")
+        return 0
+    reason = "; ".join(reasons)
+    if st.get("rolled_back") or not st.get("pre"):
+        st.update(phase="attention", finished=now(), finished_ts=time.time(),
+                  reason=("after rolling back: " if st.get("rolled_back") else "no snapshot to roll back to: ") + reason)
+        save_state(st)
+        remember({"event": "attention", "reason": reason})
+        print(f"bromigos-server: needs attention: {st['reason']}", file=sys.stderr)
+        return 1
+    print(f"bromigos-server: not healthy after the update ({reason}): rolling it back", file=sys.stderr)
+    rc, out, err = run(["bromigos", "update", "--rollback", str(st["pre"]), "--yes"], timeout=3600)
+    if rc != 0:
+        st.update(phase="attention", finished=now(), finished_ts=time.time(),
+                  reason=f"the rollback failed: {(err or out).strip().splitlines()[-1:] or ['?']}")
+        save_state(st)
+        remember({"event": "attention", "reason": st["reason"]})
+        return 1
+    if st.get("kernel"):
+        kernel_back()
+    st.update(phase="verify", rolled_back=True, boots=0, reason=f"rolled back: {reason}")
+    save_state(st)
+    remember({"event": "rolled-back", "pre": st["pre"], "post": st.get("post"), "reason": reason})
+    print("bromigos-server: rolled back; restarting into it")
+    run(["systemctl", "reboot"])
+    return 0
+
+
+def kernel_back():
+    """/boot isn't in the snapshots: after rolling back a kernel update, the rolled-back
+    system's own kernel goes back into /boot, and its initramfs is made again (offline)."""
+    for d in sorted(os.listdir(at("/usr/lib/modules"))) if os.path.isdir(at("/usr/lib/modules")) else []:
+        base = os.path.join(at("/usr/lib/modules"), d)
+        try:
+            pkgbase = open(os.path.join(base, "pkgbase")).read().strip()
+        except OSError:
+            continue
+        src = os.path.join(base, "vmlinuz")
+        if os.path.isfile(src):
+            shutil.copyfile(src, at(f"/boot/vmlinuz-{pkgbase}"))
+            run(["mkinitcpio", "-p", pkgbase], timeout=900)
+    os.sync()
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="bromigos-server", description=__doc__.split("\n")[0])
+    sub = ap.add_subparsers(dest="cmd")
+    p = sub.add_parser("status")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("update")
+    p.add_argument("--now", action="store_true", help="even when automatic updates are off, or one is being checked")
+    sub.add_parser("health")
+    sub.add_parser("mark-boot")
+    p = sub.add_parser("firewall")
+    p.add_argument("verb", nargs="?", choices=["status", "apply", "allow", "deny"])
+    p.add_argument("name", nargs="?")
+    p.add_argument("--print", action="store_true", help="print the rules instead of loading them")
+    sub.add_parser("setup")
+    a = ap.parse_args(argv)
+    cmd = a.cmd or "status"
+    if cmd == "status":
+        d = status_doc()
+        if getattr(a, "json", False):
+            print(json.dumps(d, indent=1))
+        else:
+            print_status(d)
+        return 0
+    if ROOT == "/" and os.geteuid() != 0 and not (cmd == "firewall" and (a.print or a.verb in (None, "status"))):
+        sudo = shutil.which("sudo")
+        if sudo:
+            os.execv(sudo, [sudo, sys.executable, "-I", os.path.realpath(__file__), *(argv if argv is not None else sys.argv[1:])])
+        sys.exit("bromigos-server: run it as root")
+    return {"update": cmd_update, "health": cmd_health, "mark-boot": cmd_mark_boot,
+            "firewall": cmd_firewall, "setup": cmd_setup}[cmd](a)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

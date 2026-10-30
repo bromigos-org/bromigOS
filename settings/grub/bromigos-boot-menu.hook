@@ -1,0 +1,16 @@
+# bromigOS (bromigos-boot): the boot menu's own entries (More ways to start, the help page, the Field Kit)
+# made current when bromigos-boot or the Field Kit's image change: the Field Kit copied to
+# /boot when it fits (or taken off), and grub.cfg made again (docs/boot.md, docs/fieldkit.md).
+# Never fails the transaction; says in one line when the Field Kit doesn't fit.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = bromigos-boot
+Target = bromigos-fieldkit
+
+[Action]
+Description = Updating the bromigOS boot menu's entries...
+When = PostTransaction
+Exec = /usr/lib/bromigos/boot/bromigos-fieldkit-boot sync --menu

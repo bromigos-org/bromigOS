@@ -39,7 +39,7 @@ manual's [Files and folders](../manual/src/files.md) lists them for users.
 | [webapps.md](webapps.md) | Web apps: a site in its own window, with a shortcut |
 | [apps.md](apps.md) | The optional app bundle: LazyVim, tmux and others, themed |
 | [storage.md](storage.md) | Local drives, migration journals, grouped capacity, snapshots and cleanup plans |
-| [console.md](console.md) | Text console font presets, persistent settings and safe writes |
+| [console.md](console.md) | The text console: kmscon, Geist Mono, DRIFTGLASS colours, font presets, and the notes when the desktop doesn't start |
 | [tty-login.md](tty-login.md) | Branded text-console login through the ordinary getty prompt |
 | [power-menu.md](power-menu.md) | Keyboard power menu, confirmation and offscreen tests |
 | [hardware.md](hardware.md) | GPU drivers, laptops and touchpads, and `bromigos hw` |
@@ -85,10 +85,13 @@ VECTOR, the desktop's AI assistant, is documented in his own repository,
 | [install.md](install.md) | `install.sh`, `bromigos install`, `bromigos setup`, the packages and the fresh-machine test |
 | [update.md](update.md) | `bromigos update`, channels, snapshots and rollback, and publishing the manual |
 | [aur.md](aur.md) | The AUR: bromigOS's paru, AUR packages in updates and their snapshots, turning it off, and drivers only the AUR has |
-| [boot.md](boot.md) | The themed boot menu and its snapshot entries |
+| [boot.md](boot.md) | The themed boot menu, its "More ways to start", help page and snapshot entries |
 | [splash.md](splash.md) | Saved shutdown and restart splash settings, backups and rollback |
 | [wake-on-lan.md](wake-on-lan.md) | Wake-on-LAN kept on for wired network cards: the NetworkManager default, the udev rule, `bromigos wol` |
 | [iso.md](iso.md) | The live and install ISO, and its installer |
+| [fieldkit.md](fieldkit.md) | Field Kit: bromigOS without the desktop, for repair, the lab and servers |
+| [fieldkit-packages.md](fieldkit-packages.md) | Every package on Field Kit, its size and why it's there |
+| [server.md](server.md) | bromigOS Server, the headless edition: SSH, firewall, safe automatic updates, containers |
 | [iso-encryption.md](iso-encryption.md) | Full-disk encryption in the ISO's installer |
 | [release.md](release.md) | Cutting a release: versions, release notes, tags and promoting a candidate to stable |
 | [public.md](public.md) | Making the package repository public: the R2 mirror and `go-public.sh` |
