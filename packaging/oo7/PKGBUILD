@@ -71,7 +71,9 @@ package() {
   cd "oo7-$_commit"
   local d
   for d in server portal pam; do
-    meson install -C "build-$d" --destdir="$pkgdir"
+    # --no-rebuild: build() has built everything; a rebuild here would run cargo again
+    # under fakeroot, where git can't read the cargo cache of the git dependency (ashpd)
+    meson install -C "build-$d" --destdir="$pkgdir" --no-rebuild
   done
   install -Dm755 -t "$pkgdir/usr/bin/" target/release/oo7-cli target/release/cargo-credential-oo7
   install -Dm644 -t "$pkgdir/usr/share/dbus-1/services/" "$srcdir/org.freedesktop.secrets.service"
