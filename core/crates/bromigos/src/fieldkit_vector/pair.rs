@@ -519,8 +519,8 @@ mod tests {
         app.refresh();
         settle(&mut app, "waiting");
         let s = render(&app, 160, 45);
-        if Path::new("/mnt/Dev/build/fieldkit/shots").is_dir() {
-            let _ = std::fs::write("/mnt/Dev/build/fieldkit/shots/tui-vector-pair.txt", &s);
+        if let Some(dir) = std::env::var_os("BROMIGOS_FIELDKIT_SHOTS") {
+            let _ = std::fs::write(Path::new(&dir).join("tui-vector-pair.txt"), &s);
         }
         assert!(s.contains("KPGG-ZFVT"), "{s}");
         assert!(s.contains('▀') || s.contains('▄'), "{s}");

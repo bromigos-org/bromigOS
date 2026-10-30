@@ -104,10 +104,10 @@ fn render(app: &App, w: u16, h: u16) -> String {
     rows(app, w, h).join("\n") + "\n"
 }
 
+/// The screens as text, for looking at: into $BROMIGOS_FIELDKIT_SHOTS when it's set.
 fn shot(name: &str, text: &str) {
-    let dir = Path::new("/mnt/Dev/build/fieldkit/shots");
-    if dir.is_dir() {
-        let _ = std::fs::write(dir.join(name), text);
+    if let Some(dir) = std::env::var_os("BROMIGOS_FIELDKIT_SHOTS") {
+        let _ = std::fs::write(Path::new(&dir).join(name), text);
     }
 }
 

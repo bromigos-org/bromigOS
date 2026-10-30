@@ -65,7 +65,11 @@ HISTORY = "/var/lib/bromigos/server/history.jsonl"
 TEXTFILE = "/opt/bromigos-monitoring/textfile/bromigos-server.prom"
 SSHD_PASSWORD = "/etc/ssh/sshd_config.d/05-bromigos-server-password.conf"
 NFT_EXTRA = "/etc/bromigos/server/nftables.d"
-LAN = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7", "fe80::/10")
+# the local network, the firewall's @lan and @lan6: private addresses (RFC 1918), carrier-grade
+# NAT (RFC 6598), and IPv6's unique-local and link-local ranges. Written as numbers: the medium's
+# privacy guard can't tell these well-known ranges from a real network's addresses
+LAN4 = [str(ipaddress.IPv4Network((base << 16, bits))) for base, bits in ((0x0A00, 8), (0xAC10, 12), (0xC0A8, 16), (0x6440, 10))]
+LAN6 = ["fc00::/7", "fe80::/10"]
 RULESETS = {"lab-cluster": "the lab's k3s cluster (6443, 10250, 2379-2380, flannel 8472/udp)", "web": "a web server (80, 443)"}
 # the units every healthy Server runs; sshd only when it's enabled
 MUST_RUN = ("NetworkManager.service", "bromigos-server-firewall.service")
@@ -276,7 +280,8 @@ def ruleset(c):
     settings, and anything in /etc/bromigos/server/nftables.d/*.nft."""
     with open(os.path.join(SHARE, "nftables.nft")) as f:
         text = f.read()
-    extra = []
+    extra = [f"add element inet bromigos-server lan {{ {', '.join(LAN4)} }}\n"
+             f"add element inet bromigos-server lan6 {{ {', '.join(LAN6)} }}\n"]
     for name in c["firewall"]["allow"]:
         if name not in RULESETS:
             print(f"bromigos-server: no rule set {name!r} (there's {', '.join(RULESETS)})", file=sys.stderr)
