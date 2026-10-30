@@ -76,6 +76,7 @@ pub enum Act {
     /// what it runs with the screen handed over
     Card(Icon, &'static [&'static str], &'static [&'static str]),
     AboutServer,
+    PairBrodec,
     ServerUpdate,
     /// bromigos-server firewall ACTION SET: allow or deny, web or lab-cluster
     Firewall(&'static str, &'static str),
@@ -307,6 +308,12 @@ pub fn section_items(section: &str) -> Vec<Item> {
                 "What bromigOS Server is",
                 "bromigOS without the desktop: what it runs and how it looks after itself",
                 AboutServer,
+                Any,
+            ),
+            it(
+                "Pair with BRODEC",
+                "this machine in BRODEC on your phone: its console, restart and update, with your fingerprint",
+                PairBrodec,
                 Any,
             ),
             it(
@@ -779,6 +786,8 @@ pub enum Effect {
     Lab,
     /// VECTOR's screen (fieldkit_vector), the menu's handed over to it until it ends
     Vector,
+    /// PAIR WITH BRODEC (fieldkit_vector::pair), the menu's handed over to it until it ends
+    Pair,
     /// leave the menu: "shell", "reboot", "poweroff", or nothing
     Quit(Option<String>),
 }
@@ -2005,6 +2014,7 @@ impl App {
                     vec![Effect::Exec(vec!["arch-chroot".into(), root])]
                 }
             }
+            Act::PairBrodec => vec![Effect::Pair],
             Act::AboutServer => {
                 self.message(
                     "What bromigOS Server is",
@@ -3932,12 +3942,16 @@ pub fn run_menu() -> Result<Option<String>> {
                     ratatui::restore();
                     return Ok(r);
                 }
-                Effect::Vector => {
+                Effect::Vector | Effect::Pair => {
                     let _ = execute!(std::io::stdout(), DisableMouseCapture);
                     ratatui::restore();
-                    if let Err(e) =
-                        crate::fieldkit_vector::run(&app.look, Path::new(&engine_path()))
-                    {
+                    let engine = std::path::PathBuf::from(engine_path());
+                    let r = if e == Effect::Pair {
+                        crate::fieldkit_vector::pair::pair(&app.look, &engine)
+                    } else {
+                        crate::fieldkit_vector::run(&app.look, &engine)
+                    };
+                    if let Err(e) = r {
                         eprintln!("VECTOR: {e}");
                         std::thread::sleep(Duration::from_secs(2));
                     }

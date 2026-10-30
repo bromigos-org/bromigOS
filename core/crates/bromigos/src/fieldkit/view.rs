@@ -1822,6 +1822,7 @@ pub fn act_icon(a: &Act) -> Icon {
         Act::Shell | Act::Chroot => Icon::Shell,
         Act::Power(_) => Icon::Power,
         Act::AboutServer => Icon::Info,
+        Act::PairBrodec => Icon::Remote,
         Act::ServerUpdate => Icon::Update,
         Act::Firewall(..) => Icon::Shield,
         Act::ServerSsh => Icon::Key,
