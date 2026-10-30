@@ -10,12 +10,13 @@
 # it), and its 0.7.0 beta still had two faults a console login hits: the daemon could
 # miss the helper, and logging out hung (the PAM module left a thread in `login`). The
 # commit below fixes both ("server: Wait briefly for the login helper socket", "pam:
-# Deliver requests before returning"). Move to 0.7.0 when it's released.
+# Deliver requests before returning"), and a third: the PAM module started the login
+# helper inside the login's session, and a text console login hangs that session up when
+# it hands the terminal to your shell, so the helper died before the daemon took the
+# password. The helper now leaves that session ("pam: Detach the login helper from the
+# login's terminal", upstream PR #624, which began as a patch here). No patches of our
+# own. Move to 0.7.0 when it's released.
 #
-# One patch of our own, pam-helper-own-session.patch: the PAM module starts the login helper
-# inside the login's session, and a text console login hangs that session up when it hands
-# the terminal to your shell, so the helper died before the daemon took the password. The
-# patch gives the helper a session of its own (setsid), as a daemon should have.
 # Adapted from Arch's oo7 PKGBUILD. MIT: upstream's source and licence, linked below.
 #
 # The version sorts after Arch's 0.6.0 and before 0.7.0, so Arch's package takes over
@@ -28,8 +29,8 @@
 # Left out: the Python bindings, which nothing in bromigOS uses.
 
 pkgname=oo7
-_commit=e91b98a7235a4971c6cbb7f0533034afc8a8f618   # main, 2026-10-25
-pkgver=0.7.0beta.r20261025.e91b98a
+_commit=e55a1b10fc16c252811b4c7f7cf3603f743679e0   # main, 2026-10-29
+pkgver=0.7.0beta.r20261029.e55a1b1
 pkgrel=1
 pkgdesc='A Secret Service provider'
 arch=('x86_64')
@@ -41,15 +42,12 @@ provides=('org.freedesktop.secrets')
 conflicts=('gnome-keyring')
 options=('!debug')
 source=("oo7-${_commit}.tar.gz::https://github.com/linux-credentials/oo7/archive/${_commit}.tar.gz"
-        'org.freedesktop.secrets.service'
-        'pam-helper-own-session.patch')
-sha256sums=('e74d00748676ae1ac31bc5154370717b4feafefcfca228305877cf841e7c8484'
-            '8a0efd68a5103eb8dede8e0ba5c6131a41e2ead71668dea63da632915b58e8c5'
-            '2372e881ff9a960d856bdb7ab4d4adadf285007614755c4086016ec76232a35d')
+        'org.freedesktop.secrets.service')
+sha256sums=('d32223f24d8494bb2d5d824537cd6717a69c169bc13ea41b17f5e1bd86c7eeb9'
+            '8a0efd68a5103eb8dede8e0ba5c6131a41e2ead71668dea63da632915b58e8c5')
 
 prepare() {
   cd "oo7-$_commit"
-  patch -Np1 -i "$srcdir/pam-helper-own-session.patch"
   export CARGO_HOME="$srcdir/cargo-home"
   cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
 }
