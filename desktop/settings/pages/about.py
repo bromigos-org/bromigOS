@@ -57,6 +57,9 @@ class AboutPage:
         if not d or d.get("ok") is False:
             ctx.failed(g, ABOUT + ["--json"], (d or {}).get("error") or err)
             return
+        ctx.row(g, "Welcome tour", "Wi-Fi, your screens, a world, VECTOR, your homelab and the keys, step by step",
+                hint="The tour a new install opens with (bromigos welcome): every step can be skipped", key="welcome",
+                buttons=[("Open", self._welcome, "Opens the welcome tour, full screen")])
         ctx.row(g, "Version", f"bromigOS {d.get('version') or '?'}", key="version",
                 hint="The bromigos command's version (bromigos --version)",
                 buttons=[("Copy system info", self._copy, "Copies the version, the hardware and the packages as "
@@ -141,6 +144,10 @@ class AboutPage:
                 hint="bromigOS's repository: the code, the developer docs, the issues",
                 buttons=[("Open", lambda: ctx.open_url(links.get("repository")), "Opens the repository in your browser")])
 
+    def _welcome(self, *_):
+        import subprocess
+        subprocess.Popen(["bromigos", "welcome"], start_new_session=True)
+
     def _copy(self):
         def done(doc, err):
             if doc and doc.get("text"):
@@ -161,6 +168,7 @@ PAGE = Page(
           "the manual is.",
     keywords=["version", "system info", "hardware", "specs", "licence", "license", "packages", "kernel"],
     entries=[
+        Entry("welcome", "Welcome tour", ["first run", "walkthrough", "tour", "onboarding", "setup"], "bromigOS"),
         Entry("version", "bromigOS version", ["version", "release", "copy system info"], "bromigOS"),
         Entry("channel", "Update channel", ["edge", "stable"], "bromigOS"),
         Entry("last-update", "Last update", ["updated", "pacman -Syu"], "bromigOS"),

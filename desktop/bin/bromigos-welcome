@@ -1,0 +1,593 @@
+#!/usr/bin/env python3
+# bromigos:summary=The welcome tour after an install: Wi-Fi, your screens, a world, VECTOR and his voice, your homelab, the keys; every step skippable
+# bromigos:args=[--if-pending] [--step STEP] [--render DIR]
+# bromigos:examples=bromigos welcome; bromigos welcome --step world
+"""bromigos-welcome: the first login's walkthrough (docs/first-run.md), a full-screen window in
+the Settings window's style (DRIFTGLASS: GLOW steps, the emblem as the one FLARE, no motion
+when motion is reduced). Each step is one section of `bromigos setup`, run with its flags,
+so there is no second config path:
+
+  Wi-Fi (only when offline)   nmcli
+  Your screens                bromigos setup monitors --monitors auto --primary OUTPUT
+  A world                     bromigos setup theme --theme NAME (the theme switcher's cards)
+  VECTOR                      bromigos setup vector --vector none|ollama|openai [--base-url … --model …]
+                              bromigos setup voice --voice off|cpu|gpu (built in a terminal: it downloads)
+  Your homelab                bromigos setup homelab --find (in a terminal: it asks first) or --homelab FILE
+  The keys                    a short tour: each key's card lights when you press it
+  Done
+
+  bromigos welcome                 open it (again: Settings › About › Welcome tour opens it too)
+  bromigos welcome --if-pending    the session's autostart: only when the installer left
+                                   ~/.local/state/bromigos/welcome-pending (a new install)
+  bromigos welcome --step STEP     open it on one step (network, screens, world, vector, homelab, keys)
+  bromigos welcome --render DIR    each step drawn to DIR/welcome-STEP.png and exit (a Wayland display
+                                   is needed: tests use a headless one)
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+import threading
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+for p in ("/usr/lib/bromigos/lib", "/usr/lib/bromigos/settings", os.path.join(HERE, "../lib"),
+          os.path.join(HERE, "../../lib"), os.path.join(HERE, "../settings")):
+    if os.path.isdir(p) and p not in sys.path:
+        sys.path.append(p)
+
+STATE = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "bromigos")
+PENDING = os.path.join(STATE, "welcome-pending")
+DONE = os.path.join(STATE, "welcome.json")
+
+STEPS = [
+    ("network", "Wi-Fi", "Connect to the internet",
+     "Updates, VECTOR's online brains and the voice download need it. Pick a network, or skip: you can connect "
+     "from the bar any time."),
+    ("screens", "Screens", "Your screens",
+     "Which screen is the main one: the live background and the panels go there. Arrange them and set their "
+     "sizes in Settings › Displays."),
+    ("world", "World", "Choose a world",
+     "The whole desktop's look. The Wick is the phosphor console; the worlds are living scenes that read your "
+     "machine. Change it any time in Settings › Theme."),
+    ("vector", "VECTOR", "VECTOR, your desk's AI",
+     "Where his brain runs, and whether he speaks. Nothing leaves this computer unless you choose a service."),
+    ("homelab", "Homelab", "Connect your homelab",
+     "Optional. If you run servers at home, the panels, decks and VECTOR can show them."),
+    ("keys", "Keys", "The keys worth knowing",
+     "Try each one now: its card lights up when it works. Super is the key with the Windows logo."),
+    ("done", "Done", "You're all set",
+     "Everything here can be changed again in Settings, and this tour opens from Settings › About."),
+]
+STEP = {s[0]: s for s in STEPS}
+
+KEY_TOUR = [   # (keys, what it does, how we see it worked: a window class appearing, or None)
+    ("Super + Space", "The app launcher: type to find any app", "Rofi"),
+    ("Super + Enter", "A terminal", "kitty"),
+    ("Super + ,", "Settings", "org.bromigos.Settings"),
+    ("Super + K", "Every shortcut, searchable", None),
+    ("Super + W", "Show or hide the desktop's panels", None),
+    ("Super + Q", "Close the window in front", None),
+]
+
+
+def run(argv, timeout=60):
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        return r.returncode, r.stdout, r.stderr
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return 127, "", str(e)
+
+
+def setup(*args):
+    """One `bromigos setup` section with its flags (the only way the tour changes anything)."""
+    return run(["bromigos", "setup", *args], timeout=600)
+
+
+def in_terminal(argv, title):
+    """A command that asks or downloads, in a terminal window that stays open (bromigos terminal)."""
+    subprocess.Popen(["bromigos", "terminal", "--hold", "--title", title, "--", *argv], start_new_session=True)
+
+
+def online():
+    code, out, _ = run(["nmcli", "-t", "networking", "connectivity"], timeout=5)
+    return code == 0 and out.strip() == "full"
+
+
+def wifi_list():
+    code, out, _ = run(["nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "dev", "wifi", "list", "--rescan", "auto"], timeout=20)
+    nets, seen = [], set()
+    for line in out.splitlines():
+        parts = line.replace("\\:", "\0").split(":")
+        if len(parts) < 4:
+            continue
+        inuse, ssid, signal, sec = (p.replace("\0", ":") for p in parts[:4])
+        if not ssid or ssid in seen:
+            continue
+        seen.add(ssid)
+        nets.append({"ssid": ssid, "signal": int(signal or 0), "secure": bool(sec and sec != "--"), "connected": inuse == "*"})
+    return sorted(nets, key=lambda n: -n["signal"])
+
+
+def monitors():
+    code, out, _ = run(["hyprctl", "monitors", "-j"], timeout=5)
+    try:
+        return [{"name": m["name"], "desc": " ".join(x for x in (m.get("make"), m.get("model")) if x) or m["name"],
+                 "size": f"{m['width']}×{m['height']}", "focused": m.get("focused", False)} for m in json.loads(out)]
+    except (ValueError, KeyError, TypeError):
+        return []
+
+
+def voice_sizes():
+    """What each voice downloads, when VECTOR's setup can say (bromigos-holo setup --sizes --json)."""
+    code, out, _ = run(["bromigos-holo", "setup", "--sizes", "--json"], timeout=15)
+    try:
+        d = json.loads(out)
+        return {k: v for k, v in d.items() if isinstance(v, str)}
+    except ValueError:
+        return {}
+
+
+def has_gpu():
+    code, out, _ = run(["bromigos", "hw", "detect", "--json"], timeout=30)
+    try:
+        return any(g.get("vendor") in ("NVIDIA", "AMD") for g in json.loads(out).get("detection", {}).get("gpus", []))
+    except ValueError:
+        return False
+
+
+def main(argv):
+    if "--if-pending" in argv and not os.path.exists(PENDING):
+        return 0
+    if any(a in ("-h", "--help") for a in argv):
+        print(__doc__.strip())
+        return 0
+    import gi
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw, Gdk, GLib, Gtk, Pango
+    try:
+        from bromigos_settings import style
+    except ImportError:
+        style = None
+
+    def hint(w, text):
+        if text:
+            w.set_tooltip_text(text)
+            try:
+                w.update_property([Gtk.AccessibleProperty.DESCRIPTION], [text])
+            except Exception:
+                pass
+        return w
+
+    def lab(text, *classes, wrap=True):
+        l_ = Gtk.Label(label=text, wrap=wrap, xalign=0)
+        for c in classes:
+            l_.add_css_class(c)
+        return l_
+
+    def reduced():
+        try:
+            import bromigos_theme as T
+            return T.motion() != "full"
+        except Exception:
+            return False
+
+    class Win(Adw.ApplicationWindow):
+        def __init__(self, app, start, render):
+            super().__init__(application=app, title="Welcome to bromigOS")
+            self.set_default_size(1280, 800)
+            self.render = render
+            self.steps = [s[0] for s in STEPS if s[0] != "network" or render or not online()]
+            self.step = start if start in self.steps else self.steps[0]
+            self.done_steps = {}
+            css = Gtk.CssProvider()
+            c = dict(style.WICK) if style else {}
+            if style:
+                c, _, _ = style.colors()
+            css.load_from_string((style.css(c) if style else "") + f"""
+.bw-rail {{ background-color: {c.get('panel', '#001300')}; padding: 18px 0; min-width: 200px; }}
+.bw-step {{ padding: 7px 22px; letter-spacing: 0.08em; color: {c.get('faint', '#4e6b4e')}; }}
+.bw-step.done {{ color: {c.get('soft', '#9cff8a')}; }}
+.bw-step.now {{ color: {c.get('primary', '#39ff14')}; font-weight: 700; box-shadow: inset 3px 0 {c.get('primary', '#39ff14')}; }}
+.bw-heading {{ font-size: 1.9em; font-weight: 700; letter-spacing: 0.14em; color: {c.get('primary', '#39ff14')}; }}
+.bw-intro {{ color: {c.get('muted', '#7e927e')}; font-size: 1.05em; }}
+.bw-key {{ font-size: 1.2em; font-weight: 700; letter-spacing: 0.08em; color: {c.get('soft', '#9cff8a')}; }}
+.bw-keycard {{ border: 1px solid {c.get('dim', '#159b09')}; padding: 14px 18px; }}
+.bw-keycard.lit {{ border-color: {c.get('primary', '#39ff14')}; box-shadow: 0 0 10px {c.get('primary', '#39ff14')}; }}
+.bw-bar {{ padding: 12px 24px; border-top: 1px solid {c.get('dim', '#159b09')}; }}
+""")
+            Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            root = Gtk.Box()
+            self.rail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            self.rail.add_css_class("bw-rail")
+            root.append(self.rail)
+            right = Adw.ToolbarView(hexpand=True)
+            hb = Adw.HeaderBar(show_end_title_buttons=False, show_start_title_buttons=False)
+            hb.set_title_widget(hint(lab("BROMIGOS // WELCOME", "title", wrap=False), "The welcome tour: every step can be skipped"))
+            right.add_top_bar(hb)
+            self.scroll = Gtk.ScrolledWindow(vexpand=True)
+            self.clamp = Adw.Clamp(maximum_size=920)
+            self.scroll.set_child(self.clamp)
+            right.set_content(self.scroll)
+            bar = Gtk.Box(spacing=12)
+            bar.add_css_class("bw-bar")
+            self.msg = lab("")
+            self.msg.set_hexpand(True)
+            self.back = hint(Gtk.Button(label="Back"), "The step before")
+            self.skip = hint(Gtk.Button(label="Skip"), "Leave this as it is and go on: nothing changes")
+            self.next = hint(Gtk.Button(label="Continue"), "Use what's chosen here and go on")
+            self.next.add_css_class("suggested-action")
+            self.back.connect("clicked", lambda *_: self.go(-1))
+            self.skip.connect("clicked", lambda *_: self.go(1))
+            self.next.connect("clicked", lambda *_: self.apply_and_go())
+            for b in (self.msg, self.back, self.skip, self.next):
+                bar.append(b)
+            right.add_bottom_bar(bar)
+            root.append(right)
+            self.set_content(root)
+            self.show_step(self.step)
+
+        def show_step(self, sid):
+            self.step = sid
+            while (ch := self.rail.get_first_child()):
+                self.rail.remove(ch)
+            here = self.steps.index(sid)
+            for i, s in enumerate(self.steps):
+                w = lab(("▸ " if s == sid else ("■ " if i < here else "□ ")) + STEP[s][1], "bw-step",
+                        "now" if s == sid else ("done" if i < here else "todo"), wrap=False)
+                hint(w, STEP[s][2])
+                self.rail.append(w)
+            page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, margin_top=28, margin_bottom=28, margin_start=24, margin_end=24)
+            _, _, head, intro = STEP[sid]
+            page.append(lab(head.upper(), "bw-heading"))
+            page.append(lab(intro, "bw-intro"))
+            getattr(self, f"build_{sid}")(page)
+            self.clamp.set_child(page)
+            self.msg.set_label("")
+            self.back.set_visible(here > 0)
+            self.skip.set_visible(sid != "done")
+            self.next.set_label("Finish" if sid == "done" else "Continue")
+
+        def group(self, page, title, desc=None):
+            g = Adw.PreferencesGroup(title=GLib.markup_escape_text(title.upper()))
+            if desc:
+                g.set_description(GLib.markup_escape_text(desc))
+            page.append(g)
+            return g
+
+        def later(self, fn, *a):
+            threading.Thread(target=lambda: GLib.idle_add(*fn(*a)), daemon=True).start()
+
+        # ── the steps ──────────────────────────────────────────────────────────────
+        def build_network(self, page):
+            g = self.group(page, "Wi-Fi networks")
+            self.wifi_group = g
+            self.wifi_pw = Adw.PasswordEntryRow(title="Password for the network chosen")
+            hint(self.wifi_pw, "The Wi-Fi password, if the network has one")
+            self.wifi_choice = None
+            spinner = Adw.ActionRow(title="Looking for networks…")
+            g.add(spinner)
+
+            def found():
+                nets = [] if self.render else wifi_list()
+                return (self._wifi_rows, nets, spinner)
+            self.later(found)
+            g2 = self.group(page, "Its password")
+            g2.add(self.wifi_pw)
+
+        def _wifi_rows(self, nets, spinner):
+            self.wifi_group.remove(spinner)
+            first = None
+            if not nets:
+                r = Adw.ActionRow(title="No Wi-Fi networks found", subtitle="Plug in a network cable, or skip this step.")
+                hint(r, "No wireless networks are in range, or this computer has no Wi-Fi")
+                self.wifi_group.add(r)
+            for n in nets[:12]:
+                r = Adw.ActionRow(title=GLib.markup_escape_text(n["ssid"]),
+                                  subtitle=f"Signal {n['signal']} %" + (" · needs a password" if n["secure"] else " · open"))
+                chk = Gtk.CheckButton(valign=Gtk.Align.CENTER, active=n["connected"])
+                if first:
+                    chk.set_group(first)
+                first = first or chk
+                chk.connect("toggled", lambda b, s=n["ssid"]: b.get_active() and setattr(self, "wifi_choice", s))
+                r.add_prefix(chk)
+                r.set_activatable_widget(chk)
+                hint(r, f"Join {n['ssid']}")
+                self.wifi_group.add(r)
+            return False
+
+        def build_screens(self, page):
+            mons = [] if self.render else monitors()
+            if self.render:
+                mons = [{"name": "DP-1", "desc": "Dell U2723QE", "size": "3840×2160", "focused": True},
+                        {"name": "HDMI-A-1", "desc": "LG 24MP59G", "size": "1920×1080", "focused": False}]
+            g = self.group(page, "Main screen")
+            self.primary = None
+            first = None
+            for m in mons:
+                r = Adw.ActionRow(title=GLib.markup_escape_text(m["desc"]), subtitle=f"{m['name']} · {m['size']}")
+                chk = Gtk.CheckButton(valign=Gtk.Align.CENTER, active=m["focused"])
+                if m["focused"]:
+                    self.primary = m["name"]
+                if first:
+                    chk.set_group(first)
+                first = first or chk
+                chk.connect("toggled", lambda b, n=m["name"]: b.get_active() and setattr(self, "primary", n))
+                r.add_prefix(chk)
+                r.set_activatable_widget(chk)
+                hint(r, f"Make {m['desc']} the main screen")
+                g.add(r)
+            more = hint(Gtk.Button(label="Arrange and sizes…", halign=Gtk.Align.START), "Open Settings › Displays")
+            more.connect("clicked", lambda *_: subprocess.Popen(["bromigos", "settings", "displays"], start_new_session=True))
+            page.append(more)
+
+        def build_world(self, page):
+            import bromigos_themecards as TC
+            kit = TC.CardKit(Gtk, Pango, still=bool(self.render) or reduced(), verb="Click")
+            flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.SINGLE, homogeneous=True, max_children_per_line=3,
+                               row_spacing=12, column_spacing=12)
+            self.world = None
+            try:
+                entries = TC.installed()
+            except Exception:
+                entries = []
+            css = Gtk.CssProvider()
+            c = TC.WICK
+            css.load_from_string(TC.card_css(c))
+            Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            for e in entries:
+                card = kit.card(e, 260, 146)
+                flow.append(card)
+                if e.current:
+                    flow.select_child(card)
+            missing = [e.name for e in entries if not getattr(e, "fresh", True)]
+            if missing and not self.render:
+                TC.render_background(missing)          # drawn offscreen, as the theme switcher does
+            flow.connect("child-activated", lambda f, ch: setattr(self, "world", ch.entry.name))
+            flow.connect("selected-children-changed", lambda f: setattr(self, "world", (f.get_selected_children() or [None])[0].entry.name
+                                                                         if f.get_selected_children() else None))
+            if not entries:
+                page.append(lab("No themes found. bromigos-core brings them; Settings › Theme lists them once they're in.", "bw-intro"))
+            hint(flow, "The themes: click one to wear it")
+            page.append(flow)
+
+        def build_vector(self, page):
+            g = self.group(page, "His brain", "VECTOR talks to a model server. A local one keeps everything on this computer.")
+            self.brain = Adw.ComboRow(title="Where he thinks", model=Gtk.StringList.new(
+                ["Not now (he waits for one)", "On this computer (a local Ollama)", "A service (any OpenAI-compatible server)"]))
+            hint(self.brain, "None: VECTOR answers once a brain is set. Ollama: runs models on this machine. A service: "
+                             "your homelab's or a hosted one")
+            g.add(self.brain)
+            self.base = Adw.EntryRow(title="Its address (…/v1)")
+            self.model = Adw.EntryRow(title="Model (blank: VECTOR's default)")
+            self.keyfile = Adw.EntryRow(title="A file holding its API key (blank: none)")
+            for w, t in ((self.base, "The server's OpenAI-compatible address, ending in /v1"),
+                         (self.model, "Which model he uses"), (self.keyfile, "The key stays in that file; it's never copied")):
+                hint(w, t)
+                g.add(w)
+
+            def sync(*_):
+                k = self.brain.get_selected()
+                self.base.set_visible(k == 2)
+                self.keyfile.set_visible(k == 2)
+                self.model.set_visible(k != 0)
+            self.brain.connect("notify::selected", sync)
+            sync()
+            sizes = {} if self.render else voice_sizes()
+            gpu = False if self.render else has_gpu()
+            g2 = self.group(page, "His voice", "Either voice is downloaded once, then works without the internet.")
+            self.voice = Adw.ComboRow(title="Voice", model=Gtk.StringList.new([
+                "Off: he writes, he doesn't speak",
+                "Kokoro, on the processor" + (f" ({sizes['cpu']} to download)" if sizes.get("cpu") else " (downloads its model)"),
+                "The designed voice, on the graphics card" + (f" ({sizes['gpu']} to download)" if sizes.get("gpu") else
+                                                              " (downloads its model)") + ("" if gpu else ": no graphics card found")]))
+            hint(self.voice, "Off needs nothing. Kokoro runs anywhere. The designed voice needs an NVIDIA or AMD graphics card")
+            g2.add(self.voice)
+
+        def build_homelab(self, page):
+            g = self.group(page, "Your homelab")
+            find = Adw.ActionRow(title="Find my lab", subtitle="Looks for your servers on the network. It asks before it reads "
+                                                                "anything, and you pick what to add.")
+            find.set_subtitle_lines(0)
+            b = hint(Gtk.Button(label="Find…", valign=Gtk.Align.CENTER), "Open the lab finder in a window: it asks before each step")
+            b.connect("clicked", lambda *_: in_terminal(["bromigos", "setup", "homelab", "--find"], "Find my lab"))
+            find.add_suffix(b)
+            hint(find, "bromigos setup homelab --find")
+            g.add(find)
+            fr = Adw.ActionRow(title="Use a homelab.toml I have", subtitle="A file from another bromigOS computer, or your own.")
+            b2 = hint(Gtk.Button(label="Choose…", valign=Gtk.Align.CENTER), "Pick the file")
+            b2.connect("clicked", lambda *_: self.pick_homelab())
+            fr.add_suffix(b2)
+            hint(fr, "bromigos setup homelab --homelab FILE")
+            g.add(fr)
+
+        def pick_homelab(self):
+            dlg = Gtk.FileDialog(title="Your homelab.toml")
+
+            def done(d, res):
+                try:
+                    f = d.open_finish(res)
+                except GLib.Error:
+                    return
+                code, out, err = setup("homelab", "--homelab", f.get_path())
+                self.msg.set_label("Your homelab is connected." if code == 0 else "That file didn't work: " + (err or out).strip()[-200:])
+            dlg.open(self, None, done)
+
+        def build_keys(self, page):
+            grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=2, homogeneous=True,
+                               row_spacing=12, column_spacing=12)
+            self.cards = []
+            for keys, what, cls in KEY_TOUR:
+                box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+                box.add_css_class("bw-keycard")
+                box.append(lab(keys.upper(), "bw-key", wrap=False))
+                box.append(lab(what, "bw-intro"))
+                state = lab("Try it" if cls else "", "bw-intro")
+                box.append(state)
+                hint(box, f"{keys}: {what}")
+                grid.append(box)
+                self.cards.append((box, state, cls))
+            page.append(grid)
+            page.append(lab("Every shortcut is in Settings › Shortcuts, and Super + K shows them on the desktop.", "bw-intro"))
+            if not self.render:
+                self.seen = {c["class"] for c in self.clients()}
+                GLib.timeout_add(500, self.watch_keys)
+
+        def clients(self):
+            code, out, _ = run(["hyprctl", "clients", "-j"], timeout=3)
+            try:
+                return json.loads(out)
+            except ValueError:
+                return []
+
+        def watch_keys(self):
+            if self.step != "keys":
+                return False
+            now = {c["class"] for c in self.clients()}
+            code, out, _ = run(["hyprctl", "layers", "-j"], timeout=3)
+            if "rofi" in out.lower():
+                now.add("Rofi")
+            for box, state, cls in self.cards:
+                if cls and cls in now and not box.has_css_class("lit"):
+                    box.add_css_class("lit")
+                    state.set_label("✓ That's it")
+            return True
+
+        def build_done(self, page):
+            g = self.group(page, "What you chose")
+            for k, v in self.done_steps.items():
+                r = Adw.ActionRow(title=GLib.markup_escape_text(v), subtitle=STEP[k][1].upper())
+                hint(r, f"{STEP[k][1]}: {v}")
+                g.add(r)
+            if not self.done_steps:
+                g.add(Adw.ActionRow(title="Nothing changed: everything stays as it was installed"))
+
+        # ── moving on ──────────────────────────────────────────────────────────────
+        def go(self, d):
+            i = self.steps.index(self.step) + d
+            if i >= len(self.steps):
+                return self.finish()
+            self.show_step(self.steps[max(0, i)])
+
+        def apply_and_go(self):
+            s = self.step
+            if s == "done":
+                return self.finish()
+            self.next.set_sensitive(False)
+            self.msg.set_label("Setting it up…")
+
+            def work():
+                ok, said = self.apply(s)
+                return (self._applied, s, ok, said)
+            self.later(work)
+
+        def _applied(self, s, ok, said):
+            self.next.set_sensitive(True)
+            if ok:
+                if said:
+                    self.done_steps[s] = said
+                self.go(1)
+            else:
+                self.msg.set_label("▲ " + said)
+            return False
+
+        def apply(self, s):
+            if self.render:
+                return True, "rendered"
+            if s == "network":
+                if not getattr(self, "wifi_choice", None):
+                    return True, None
+                pw = self.wifi_pw.get_text()
+                argv = ["nmcli", "dev", "wifi", "connect", self.wifi_choice] + (["password", pw] if pw else [])
+                code, out, err = run(argv, timeout=60)
+                return (True, f"Connected to {self.wifi_choice}") if code == 0 else \
+                    (False, f"Couldn't join {self.wifi_choice}: " + ("check the password." if "password" in (err + out).lower() else (err or out).strip()[-160:]))
+            if s == "screens":
+                if not self.primary:
+                    return True, None
+                code, out, err = setup("monitors", "--monitors", "auto", "--primary", self.primary)
+                return (code == 0, f"Main screen: {self.primary}" if code == 0 else "The screens couldn't be set: " + (err or out).strip()[-200:])
+            if s == "world":
+                if not self.world:
+                    return True, None
+                code, out, err = setup("theme", "--theme", self.world)
+                return (code == 0, f"World: {self.world}" if code == 0 else "The world couldn't be put on: " + (err or out).strip()[-200:])
+            if s == "vector":
+                said = []
+                k = self.brain.get_selected()
+                args = ["vector", "--vector", ["none", "ollama", "openai"][k]]
+                if k == 2:
+                    if not self.base.get_text().strip():
+                        return False, "Type the service's address, or choose Not now."
+                    args += ["--base-url", self.base.get_text().strip()]
+                    if self.keyfile.get_text().strip():
+                        args += ["--api-key-file", self.keyfile.get_text().strip()]
+                if k and self.model.get_text().strip():
+                    args += ["--model", self.model.get_text().strip()]
+                code, out, err = setup(*args)
+                if code != 0:
+                    return False, "VECTOR's brain couldn't be set: " + (err or out).strip()[-200:]
+                said.append(["No brain yet", "Brain: this computer (Ollama)", "Brain: " + self.base.get_text().strip()][k])
+                v = ["off", "cpu", "gpu"][self.voice.get_selected()]
+                if v == "off":
+                    setup("voice", "--voice", "off")
+                else:
+                    in_terminal(["bromigos", "setup", "voice", "--voice", v], "VECTOR's voice")
+                said.append({"off": "voice off", "cpu": "voice: Kokoro (downloading)", "gpu": "the designed voice (downloading)"}[v])
+                return True, ", ".join(said)
+            return True, None
+
+        def finish(self):
+            os.makedirs(STATE, exist_ok=True)
+            try:
+                os.unlink(PENDING)
+            except OSError:
+                pass
+            json.dump({"done": True, "chose": self.done_steps}, open(DONE, "w"))
+            self.get_application().quit()
+
+    class App(Adw.Application):
+        def __init__(self, start, render):
+            super().__init__(application_id="org.bromigos.Welcome")
+            self.start, self.render = start, render
+
+        def do_activate(self):
+            w = self.get_active_window() or Win(self, self.start, self.render)
+            if self.render:
+                GLib.timeout_add(800, render_all, w, self.render)
+            else:
+                w.fullscreen()
+            w.present()
+
+    def render_all(w, out):
+        os.makedirs(out, exist_ok=True)
+        todo = list(w.steps)
+
+        def one():
+            if not todo:
+                w.get_application().quit()
+                return False
+            s = todo.pop(0)
+            w.show_step(s)
+            GLib.timeout_add(700, lambda: (snap(w, os.path.join(out, f"welcome-{s}.png")), False)[1])
+            return True
+
+        def snap(win, path):
+            paint = Gtk.WidgetPaintable.new(win)
+            sn = Gtk.Snapshot()
+            paint.snapshot(sn, win.get_width(), win.get_height())
+            node = sn.to_node()
+            if node:
+                win.get_renderer().render_texture(node, None).save_to_png(path)
+                print("rendered", path, flush=True)
+        GLib.timeout_add(1200, one)
+        return False
+
+    start = argv[argv.index("--step") + 1] if "--step" in argv else "network"
+    render = argv[argv.index("--render") + 1] if "--render" in argv else None
+    return App(start, render).run([])
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -76,7 +76,7 @@ options=('!debug')
 _root="${startdir%/packaging/*}"
 # the small commands Settings drives (bromigos sound, …; desktop/bin/bromigos-<name>), installed
 # to /usr/lib/bromigos/bin where `bromigos <name>` finds them (docs/settings.md)
-_settings_cmds=(shell sound scene dictate display net bluetooth power clock notifications defaults startup panels memory about avatar)
+_settings_cmds=(shell sound scene dictate display net bluetooth power clock notifications defaults startup panels memory about avatar welcome)
 _paths=(desktop peripherals packaging/bromigos-desktop LICENSE-MIT LICENSE-APACHE)
 
 # <workspace version>.r<commits touching the package>.g<last such commit> (as bromigos-core)

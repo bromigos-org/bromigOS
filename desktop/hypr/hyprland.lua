@@ -148,6 +148,9 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("dunst")
     -- floating windows put back where they were (opt-in: ~/.config/bromigos/windows.toml; exits otherwise)
     hl.exec_cmd("bromigos-windows")
+    -- the welcome tour, once, after an install (it exits at once unless the installer left
+    -- ~/.local/state/bromigos/welcome-pending; Settings › About opens it again)
+    hl.exec_cmd("bromigos welcome --if-pending")
     -- the on-screen display (volume, brightness, mute), in the theme's colours
     -- (hooks/theme-set.d/osd starts it again on a theme switch)
     local osd = io.open("/usr/bin/swayosd-server", "r")
