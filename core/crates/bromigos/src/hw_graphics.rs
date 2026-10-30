@@ -331,8 +331,13 @@ pub fn display_cmd(a: DisplayArgs, json: bool) -> Result<i32> {
                 );
             }
             let r = CardRef::of(g);
-            if now.slot.as_deref() == Some(g.slot.as_str()) && now.source != "trial" {
-                // what the next login uses already: saved as it is, nothing to try
+            let kept = choice
+                .desktop
+                .as_ref()
+                .is_some_and(|c| c.slot == g.slot && c.id == g.id);
+            if kept || (now.slot.as_deref() == Some(g.slot.as_str()) && now.source != "trial") {
+                // what the next login uses already, or the kept card while another is
+                // tried: saved as it is, nothing to try
                 new.desktop = Some(r);
                 new.trial = None;
                 let said = format!("{} draws the desktop", g.title());

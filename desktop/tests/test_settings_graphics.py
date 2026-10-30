@@ -97,6 +97,13 @@ class UseFor(unittest.TestCase):
         self.assertIn("sudo bromigos hw display reset", body)
         self.assertEqual(self.ctx.changes, [["bromigos", "hw", "display", "use", "0000:0a:00.0", "--json"]])
 
+    def test_the_kept_card_during_a_try_goes_back_without_asking(self):
+        self.p.doc["desktop"]["choice"] = {"slot": "0000:0a:00.0"}
+        self.p.doc["desktop"]["next"] = {"slot": "0000:03:00.0", "source": "trial"}
+        self.press(self.b, "desktop", True)
+        self.assertEqual(self.ctx.asked, [])
+        self.assertEqual(self.ctx.changes, [["bromigos", "hw", "display", "use", "0000:0a:00.0", "--json"]])
+
     def test_a_card_without_a_monitor_is_refused_with_its_reason(self):
         c = card("0000:0c:00.0", desktop_ready=False)
         self.press(c, "desktop", True)

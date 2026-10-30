@@ -136,6 +136,12 @@ fn a_new_desktop_card_is_tried_kept_or_dropped_and_reset_from_a_console() {
     assert_eq!(chosen(root), "trial /dev/dri/card1:/dev/dri/card0\n");
     json(&run(root, &["display", "cancel", "--json"], &[]));
     assert_eq!(chosen(root), "chosen /dev/dri/card0:/dev/dri/card1\n");
+    // choosing the kept card while another is tried ends the try
+    json(&run(root, &["display", "use", "card1", "--json"], &[]));
+    assert!(chosen(root).starts_with("trial "));
+    let v = json(&run(root, &["display", "use", "card0", "--json"], &[]));
+    assert!(v["trial"].is_null());
+    assert_eq!(chosen(root), "chosen /dev/dri/card0:/dev/dri/card1\n");
     // the console's way back: Automatic
     let o = run(root, &["display", "reset"], &[]);
     assert!(o.status.success());

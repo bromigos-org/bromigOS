@@ -333,6 +333,9 @@ class GraphicsPage:
             if v.get("reserved") or not c.get("desktop_ready"):
                 ctx.toast(self._use_hint(c, "desktop", False))
                 return
+            if (dk.get("choice") or {}).get("slot") == c["slot"]:
+                self.desktop(c["slot"])         # the kept card, while another is tried: back to it
+                return
             current = self._name((dk.get("next") or {}).get("slot") or dk.get("automatic"), "the automatic choice")
             ctx.confirm(f"Try {c['title']} for the desktop?",
                         "The login screen and the desktop move to it from your next login. bromigOS asks for your "
