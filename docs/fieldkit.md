@@ -27,7 +27,7 @@ for people using it, and [server.md](server.md) covers bromigOS Server.
 | From | How | What's there |
 |---|---|---|
 | Its own medium | `bromigos-fieldkit-<version>-x86_64.iso` on a USB stick, or through Ventoy | Everything, with the offline store |
-| The full ISO's boot menu | "Field Kit · repair, lab and tools, no desktop" | The full medium's own system, started without the desktop |
+| The full ISO's boot menu | "Field Kit (repair, lab and tools)" | The full medium's own system, started without the desktop |
 | An installed system's boot menu | "bromigOS Field Kit" (package `bromigos-fieldkit`) | Everything but the offline store, started from `/boot` |
 
 ### The medium's boot menu

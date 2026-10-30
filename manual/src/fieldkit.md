@@ -10,7 +10,7 @@ You can start it three ways:
   boot menu (often <kbd>F8</kbd>, <kbd>F11</kbd> or <kbd>F12</kbd> as it starts), so it
   works even when the bromigOS boot menu itself is broken.
 - **From a USB stick.** Write the Field Kit ISO to a stick, or put it on a Ventoy stick.
-- **From the bromigOS ISO.** Choose **Field Kit · repair, lab and tools, no desktop**.
+- **From the bromigOS ISO.** Choose **Field Kit (repair, lab and tools)**.
 
 Field Kit opens on its Home screen: what's in this computer, what it found on the drives
 (bromigOS, Windows, USB sticks), and seven sections: Repair, Lab, VECTOR, Tools, Server,
