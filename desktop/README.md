@@ -110,6 +110,9 @@ Already-running apps need to be restarted once to receive the recovered environm
   `bromigos_btpanel.py` is the panel and the quick menu (`bromigos bluetooth panel|menu`),
   and `bromigos_driftglass.py` draws their DRIFTGLASS parts: device holograms, the Sweep,
   battery cells ([docs/desktop.md](../docs/desktop.md#the-bars-bluetooth)).
+- `bromigos_btsession.py` is `bromigos bluetooth session`, the bluez core as JSON lines for
+  the TUI (`bromigos bluetooth tui`), and `bromigos_gamepad.py` a controller's evdev input
+  and rumble ([docs/desktop.md](../docs/desktop.md#bluetooth-in-the-terminal)).
 - `bromigos_zettlr.py` is the `zettlr` hook's work. It puts the theme's colours into a
   marked block of Zettlr's `custom.css` and sets Zettlr's dark mode
   ([docs/theming.md](../docs/theming.md#zettlr)).
