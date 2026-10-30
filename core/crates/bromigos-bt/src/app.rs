@@ -64,6 +64,9 @@ pub struct Input {
     pub mac: String,
     pub buttons: Vec<String>,
     pub axes: Axes,
+    pub driver: Option<String>,
+    pub basic: bool,
+    pub layout: Option<String>,
     pub error: Option<String>,
 }
 
@@ -304,11 +307,21 @@ impl App {
                     true,
                 );
             }
-            Msg::Input { mac, buttons, axes } => {
+            Msg::Input {
+                mac,
+                buttons,
+                axes,
+                driver,
+                basic,
+                layout,
+            } => {
                 self.input = Some(Input {
                     mac,
                     buttons,
                     axes,
+                    driver,
+                    basic,
+                    layout,
                     error: None,
                 });
             }

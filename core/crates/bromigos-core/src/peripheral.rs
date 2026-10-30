@@ -673,8 +673,12 @@ pub fn hypr_name(kernel_name: &str) -> String {
 pub struct Found {
     /// The kernel's name ("Razer Razer BlackWidow V4 Pro").
     pub name: String,
-    /// "1532:028d".
+    /// The device's own vendor:product ("1532:028d"), from its HID device: a driver may
+    /// show another (xpadneo shows an Xbox pad as 045e:028e, the Xbox 360 pad, so games
+    /// treat it as one).
     pub usb: String,
+    /// The module's kind ("keyboard", "controller"): what the device is.
+    pub kind: String,
     /// How it was recognised: "driver" (bound to the module's HID driver) or "name" (a
     /// name hint; the driver isn't installed yet).
     pub how: String,
@@ -735,16 +739,31 @@ pub fn detect(
         if m.kind == "controller" && !ifaces.iter().any(|d| d.has_key(BTN_SOUTH)) {
             continue; // the vendor's mouse or keyboard, not a gamepad
         }
-        let dial = ifaces
+        // a controller has no dial (xpadneo's mouse mode is a wheel and a pointer too)
+        let dial = (m.kind != "controller")
+            .then(|| {
+                ifaces
+                    .iter()
+                    .find(|d| d.has_rel(REL_HWHEEL) && d.has_rel(REL_X))
+                    .and_then(|d| d.event().map(|e| format!("/dev/input/{e}")))
+            })
+            .flatten();
+        // the HID device's own ids (`0005:045E:0B13.0011`), else what the input device says
+        let usb = ifaces
             .iter()
-            .find(|d| d.has_rel(REL_HWHEEL) && d.has_rel(REL_X))
-            .and_then(|d| d.event().map(|e| format!("/dev/input/{e}")));
+            .find_map(|d| d.hid())
+            .and_then(|h| {
+                let p: Vec<&str> = h.split(['.', ':']).collect();
+                (p.len() >= 3).then(|| format!("{}:{}", p[1], p[2]).to_lowercase())
+            })
+            .unwrap_or_else(|| format!("{}:{}", ifaces[0].vendor, ifaces[0].product));
         let base = hypr_name(&name);
         let mut hypr_names = vec![base.clone()];
         hypr_names.extend((1..=NAME_SUFFIXES).map(|i| format!("{base}-{i}")));
         out.push(Found {
             name,
-            usb: format!("{}:{}", ifaces[0].vendor, ifaces[0].product),
+            usb,
+            kind: m.kind.clone(),
             how: how.into(),
             driver: drivers.first().cloned(),
             hypr_names,
@@ -1892,6 +1911,40 @@ B: KEY=1000000000007 ff9f207ac14057ff febeffdfffefffff fffffffffffffffe
                 .iter()
                 .all(|f| f.name.contains("Keyboard"))
         );
+    }
+
+    // The same pad on xpadneo: it shows itself as 045e:028e (the Xbox 360 pad, so games
+    // treat it as one), and adds a mouse (its mouse mode: a pointer and a wheel)
+    const XPADNEO: &str = "\
+I: Bus=0005 Vendor=045e Product=028e Version=1130
+N: Name=\"Xbox Wireless Controller\"
+P: Phys=00:00:5e:00:53:01
+S: Sysfs=/devices/virtual/misc/uhid/0005:045E:0B13.0011/input/input77
+H: Handlers=event31 js0
+B: KEY=7cdb000000000000 0 0 0 0
+B: ABS=20003003f
+
+I: Bus=0005 Vendor=045e Product=028e Version=1130
+N: Name=\"Xbox Wireless Controller Mouse\"
+P: Phys=00:00:5e:00:53:01
+S: Sysfs=/devices/virtual/misc/uhid/0005:045E:0B13.0011/input/input78
+H: Handlers=mouse3 event32
+B: KEY=1f0000 0 0 0 0
+B: REL=1943
+";
+
+    #[test]
+    fn a_pad_on_xpadneo_is_its_own_ids_and_has_no_dial() {
+        let devs = parse_input_devices(XPADNEO);
+        let f = detect(&xbox(), &devs, &|_| Some("xpadneo".to_string()));
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert_eq!(
+            f[0].usb, "045e:0b13",
+            "the pad's own ids, not xpadneo's 028e"
+        );
+        assert_eq!(f[0].kind, "controller");
+        assert_eq!(f[0].driver.as_deref(), Some("xpadneo"));
+        assert_eq!(f[0].dial, None, "its mouse mode isn't a dial");
     }
 
     #[test]

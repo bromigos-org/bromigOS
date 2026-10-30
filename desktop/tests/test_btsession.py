@@ -71,13 +71,15 @@ class Gamepad(unittest.TestCase):
 
     def test_events_become_buttons_and_axes(self):
         data = (ev(G.EV_KEY, 0x130, 1) + ev(G.EV_KEY, 0x136, 1) + ev(G.EV_ABS, 0x00, 65535) +
-                ev(G.EV_ABS, 0x02, 512) + ev(G.EV_ABS, 0x10, -1) + ev(G.EV_KEY, 0x132, 1))
+                ev(G.EV_ABS, 0x02, 512) + ev(G.EV_ABS, 0x10, -1) + ev(G.EV_KEY, 0x133, 1))
         p = G.Pad.__new__(G.Pad)
-        p.ranges = {0x00: (0, 65535), 0x02: (0, 1023)}
+        p.info = {}
+        p.layout = G.layout(p.info)                  # nothing known: xpad's layout
+        p.ranges = {0x00: (0, 65535, 0), 0x02: (0, 1023, 0)}
         p.held, p.effect = set(), None
         p.axes = {"lx": 0.0, "ly": 0.0, "rx": 0.0, "ry": 0.0, "lt": 0.0, "rt": 0.0, "dx": 0, "dy": 0}
         p.feed(G.parse(data))
-        self.assertEqual(p.buttons, ["A", "LB", "LEFT", "X"])      # the basic driver's X too
+        self.assertEqual(p.buttons, ["A", "LB", "LEFT", "X"])
         self.assertEqual(p.axes["lx"], 1.0)
         self.assertAlmostEqual(p.axes["lt"], 0.5, places=2)
         p.feed(G.parse(ev(G.EV_KEY, 0x130, 0) + ev(G.EV_ABS, 0x10, 0)))

@@ -60,9 +60,9 @@ later, the Elite Series 2 and the Series X|S pads.
 
 The controller reconnects by itself whenever you switch it on.
 
-Linux's own driver gives you the buttons and sticks. Rumble, the battery and the button
-layout games expect come from a driver called xpadneo. When a controller runs without it,
-the panel shows **BASIC DRIVER · SET UP** under it. Choose it, or run:
+Linux's own driver gives you the buttons and sticks. Rumble and the battery come from a
+driver called xpadneo. When a controller runs without it, the panel shows **BASIC DRIVER ·
+ENABLE XBOX CONTROLLER SUPPORT** under it. Choose it, or run:
 
 ```bash
 bromigos peripheral enable xbox-controller
@@ -122,7 +122,8 @@ Devices** in the app launcher (search for bluetooth, devices or controller).
   codec. <kbd>/</kbd> searches them.
 - **A device's page** (<kbd>Enter</kbd>):
   - a controller shows its buttons, sticks and triggers live as you press them, and
-    <kbd>u</kbd> makes it rumble;
+    <kbd>u</kbd> makes it rumble. It also names the controller's driver. Each stick and
+    trigger is shown where it really is, whichever driver runs the controller;
   - headphones switch between HI-FI and HEADSET + MIC with <kbd>m</kbd>; <kbd>o</kbd> and
     <kbd>i</kbd> make them the sound output and the microphone; <kbd>v</kbd> shows the
     microphone's level as you speak;

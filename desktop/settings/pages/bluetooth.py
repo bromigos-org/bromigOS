@@ -549,6 +549,17 @@ class BluetoothPage:
 
 
 # ------------------------------------------------------------------ a device's page
+def pad_words(path, about):
+    """The tester's line under the buttons: what it reads, its driver, where its layout came
+    from (bromigos_gamepad.Pad.describe)."""
+    words = f"Reading {path}"
+    if about.get("driver"):
+        words += f" · driver {about['driver']}" + (" (basic)" if about.get("basic") else "")
+    if about.get("layout"):
+        words += f" · layout: {about['layout']}"
+    return words
+
+
 class DeviceDialog:
     def __init__(self, page, mac):
         self.p, self.mac = page, mac
@@ -731,20 +742,23 @@ class DeviceDialog:
         self.holo.queue_draw()
         self.meter.queue_draw()
         if self.ctl is not None:
-            ctx.clear_group(self.ctl, self.driver_rows)
-            if d.get("xbox") and not B.xpadneo_loaded():
-                r = ctx.row(self.ctl, "Basic driver", "Rumble, the battery and the right button layout need xpadneo, "
-                            "the Xbox controllers' full driver", hint="bromigos peripheral enable xbox-controller",
-                            buttons=[("Set up…", lambda: ctx.terminal(["bromigos", "peripheral", "enable",
-                                                                         "xbox-controller"]),
-                                      "Installs xpadneo for your kernels in a terminal (it asks for your password); "
-                                      "switch the controller off and on after")])
-                self.driver_rows.append(r)
             if d["connected"] and self.pad is None:
                 self.start_pad()
             if not d["connected"]:
                 self.stop_pad()
                 self.pad_msg.set_text("Connect it to test its buttons and sticks.")
+            ctx.clear_group(self.ctl, self.driver_rows)
+            # the open controller's own driver when it's being read; else whether xpadneo is loaded
+            basic = self.pad.basic if self.pad is not None else (d.get("xbox") and not B.xpadneo_loaded())
+            if basic:
+                r = ctx.row(self.ctl, "Basic driver", "Rumble and battery are limited",
+                            hint="The kernel's basic driver runs this controller. xpadneo, the Xbox controllers' full "
+                                 "driver, adds rumble and the battery (bromigos peripheral enable xbox-controller)",
+                            buttons=[("Enable Xbox controller support",
+                                      lambda: ctx.terminal(["bromigos", "peripheral", "enable", "xbox-controller"]),
+                                      "Installs xpadneo for your kernels in a terminal (it asks for your password); "
+                                      "switch the controller off and on after")])
+                self.driver_rows.append(r)
         if self.snd is not None:
             on = d["connected"] and audio is not None
             self.prof.set_sensitive(on and bool(audio and audio.get("hifi") and audio.get("headset")))
@@ -818,7 +832,7 @@ class DeviceDialog:
         if temp is not None:
             GLib.timeout_add(600, lambda: temp.close() and False)
         if not ok:
-            self.p.problem("Its driver doesn't rumble: xpadneo does (Set up… above)")
+            self.p.problem("Its driver doesn't rumble: xpadneo does (Enable Xbox controller support, above)")
 
     def start_pad(self):
         if self.pad is not None:
@@ -832,7 +846,7 @@ class DeviceDialog:
         except OSError as e:
             self.pad_msg.set_text(f"Can't read {path}: {e.strerror}")
             return
-        self.pad_msg.set_text(f"Reading {path}")
+        self.pad_msg.set_text(pad_words(path, self.pad.describe()))
         self.pad_watch = GLib.io_add_watch(self.pad.fd, GLib.PRIORITY_DEFAULT, GLib.IOCondition.IN |
                                            GLib.IOCondition.HUP | GLib.IOCondition.ERR, self._pad)
 

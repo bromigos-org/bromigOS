@@ -116,8 +116,15 @@ is `controller`: a driver to install, with no keys, keymap, dial or lighting.
 
 `xpadneo-dkms` is built into bromigOS's repository from the tagged upstream source
 (`packaging/xpadneo-dkms`), so it needs no AUR helper. The bar's Bluetooth panel shows
-**BASIC DRIVER · SET UP** under an Xbox controller while `hid_xpadneo` isn't loaded, and
-`bromigos bluetooth status` reports the controller's `driver` as `xpadneo` or `basic`.
+**BASIC DRIVER · ENABLE XBOX CONTROLLER SUPPORT** under an Xbox controller while
+`hid_xpadneo` isn't loaded, and `bromigos bluetooth status` reports the controller's
+`driver` as `xpadneo` or `basic`.
+
+`bromigos peripheral list` shows a found controller as a gamepad and names its driver:
+`Xbox Wireless Controller (045e:0b13, a gamepad; xpadneo)`. The ids are the controller's
+own, read from its HID device. xpadneo shows every pad as `045e:028e`, the Xbox 360 pad,
+so games treat it as one. A controller never has a dial: xpadneo's mouse mode adds a
+pointer and a wheel, which isn't one.
 
 The Xbox Wireless Adapter, a USB dongle, isn't Bluetooth. Its driver is xone, in the AUR
 (`xone-dkms`). It isn't packaged here, because its build downloads the adapter's firmware

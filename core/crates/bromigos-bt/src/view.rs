@@ -491,7 +491,7 @@ fn facts(app: &App, d: &Device) -> Vec<Line<'static>> {
     }
     if d.xbox && d.paired && !app.state.xpadneo {
         v.push(Line::from(Span::styled(
-            "basic driver: rumble and battery need xpadneo",
+            "basic driver: rumble and battery are limited",
             st(p.warn),
         )));
         v.push(Line::from(Span::styled(
@@ -837,6 +837,31 @@ fn tester(f: &mut Frame, r: Rect, app: &App, d: &Device) {
             Span::styled(format!(" {:+.2} {:+.2}", a.rx, a.ry), st(p.soft)),
         ]),
     ];
+    let mut lines = lines;
+    let about: Vec<String> = [
+        inp.driver.as_ref().map(|d| format!("driver {d}")),
+        inp.layout.as_ref().map(|l| format!("layout: {l}")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if !about.is_empty() {
+        lines.push(Line::from(Span::styled(about.join(" · "), st(p.muted))));
+    }
+    if inp.basic {
+        lines.push(Line::from(Span::styled(
+            "Basic driver: rumble and battery are limited.",
+            st(p.warn),
+        )));
+        lines.push(Line::from(Span::styled(
+            "ENABLE XBOX CONTROLLER SUPPORT:",
+            st(p.primary),
+        )));
+        lines.push(Line::from(Span::styled(
+            "  bromigos peripheral enable xbox-controller",
+            st(p.soft),
+        )));
+    }
     let [words, sticks] =
         Layout::vertical([Constraint::Length(lines.len() as u16), Constraint::Min(4)]).areas(r);
     f.render_widget(Paragraph::new(lines).style(st(p.text)), words);

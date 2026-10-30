@@ -310,7 +310,15 @@ It has no bluez code of its own. It runs `bromigos bluetooth session`
 - requests and their replies, the pairing steps, and the agent's questions and their
   answers;
 - a controller's live input and rumble, from `lib/bromigos_gamepad.py`, which reads and
-  drives evdev directly;
+  drives evdev directly. Which axis is which stick or trigger depends on the driver:
+  xpadneo and xpad put the right stick on `ABS_RX`/`ABS_RY` and the triggers on
+  `ABS_Z`/`ABS_RZ`; hid-microsoft (an Xbox pad over Bluetooth without xpadneo) puts the
+  right stick on `ABS_Z`/`ABS_RZ` and the triggers on `ABS_BRAKE`/`ABS_GAS`. So the layout
+  is SDL_GameControllerDB's mapping for the device, by SDL's GUID and SDL's numbering of
+  its buttons and axes, as Steam and most games read it (`lib/gamecontrollerdb.txt`, the
+  Linux lines; `tools/gamecontrollerdb/update.sh` refreshes it). `SDL_GAMECONTROLLERCONFIG`
+  comes first, as in SDL. A device the database doesn't know gets its layout from which
+  axes its driver has. Each input message names the driver and where the layout came from;
 - a microphone's level, from `parec`.
 
 `core/crates/bromigos-bt/tests/screens.rs` draws every screen in ratatui's TestBackend in
