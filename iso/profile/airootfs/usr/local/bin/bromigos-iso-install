@@ -74,8 +74,22 @@ fail_words() {
     printf '::error %s stopped and the install didn'"'"'t finish. %s The details are in %s on the live system.\n' \
         "$now_stage" "$1" "$log"
 }
+# a reinstall that stops before its new system can start puts the old one back
+# (reinstall.py undo: @ again from @old-root-DATE, its kernels back on /boot)
+reinstall_open=0
+reinstall_undo() {
+    (( reinstall_open )) || return 1
+    reinstall_open=0
+    PYTHONPATH=$lib python3 "$lib/bromigos_installer/reinstall.py" undo --answers "$answers" 2>&1 | grep -v '^::error' | tee -a "$log" >/dev/null
+    (( PIPESTATUS[0] == 0 ))
+}
 on_error() {
     local rc=$?
+    trap - ERR
+    if [[ ${mode:-} == reinstall ]] && reinstall_undo; then
+        fail_words "Your old bromigOS was put back as it was, and your files weren't touched. Restart and try again."
+        exit "$rc"
+    fi
     case $now_stage in
         Making\ room*) fail_words "The other system's files are as they were." ;;
         Checking*|Reading*) fail_words "Nothing on the disk was changed." ;;
@@ -98,8 +112,9 @@ if [[ -n $answers ]]; then
     if (( ! dry )) && [[ $mode == reinstall ]]; then
         # the old system kept as a snapshot, a fresh root, your home as it is: mounted at /mnt
         now_stage="Opening your bromigOS"
+        reinstall_open=1
         PYTHONPATH=$lib python3 "$lib/bromigos_installer/reinstall.py" prepare --answers "$answers" | tee -a "$log"
-        (( PIPESTATUS[0] == 0 )) || { trap - ERR; exit 1; }
+        (( PIPESTATUS[0] == 0 )) || { trap - ERR; reinstall_undo || true; exit 1; }
     elif (( ! dry )); then
         now_stage="Making room"
         python3 "$lib/bromigos_installer/disks.py" shrink --answers "$answers" | tee -a "$log"
@@ -152,6 +167,8 @@ fi
 # ── 1. archinstall: the Arch system ─────────────────────────────────────────────────────
 args=(--config "$config" --creds "$creds" --skip-ntp --skip-wkd --skip-version-check --skip-wifi-check)
 (( online )) || args+=(--offline)
+# a reinstall's boot loader is reinstall.py's (archinstall reads "No bootloader" only with this)
+[[ ${mode:-} != reinstall ]] || args+=(--skip-boot)
 (( menu )) || args+=(--silent)
 say "archinstall ${args[*]}"
 if (( ! dry )); then
@@ -178,9 +195,11 @@ fi
 if (( ! dry )) && [[ $mode == reinstall ]]; then
     now_stage="Bringing back your files and people"
     PYTHONPATH=$lib python3 "$lib/bromigos_installer/reinstall.py" finish --answers "$answers" | tee -a "$log"
-    (( PIPESTATUS[0] == 0 )) || { trap - ERR; exit 1; }
+    (( PIPESTATUS[0] == 0 )) || { trap - ERR; reinstall_undo || true; exit 1; }
     PYTHONPATH=$lib python3 "$lib/bromigos_installer/reinstall.py" boot --answers "$answers" | tee -a "$log"
-    (( PIPESTATUS[0] == 0 )) || { trap - ERR; exit 1; }
+    (( PIPESTATUS[0] == 0 )) || { trap - ERR; reinstall_undo || true; exit 1; }
+    reinstall_open=0                    # the new system starts now: no going back
+    PYTHONPATH=$lib python3 "$lib/bromigos_installer/reinstall.py" tidy --answers "$answers" | tee -a "$log"
 fi
 
 # ── 1b. snapper's configuration for /home ───────────────────────────────────────────────

@@ -300,6 +300,26 @@ firmware boot entry first in the boot order (`removable: false` in archinstall's
 are left alone. On BIOS, GRUB goes in the MBR, as for any second system there; os-prober's
 entry chainloads Windows' boot sector.
 
+### Reinstalling
+
+`mode = "reinstall"` (**Reinstall bromigOS and keep my files**) is `reinstall.py`'s, around
+archinstall's pre-mounted layout:
+
+1. `prepare` unlocks the root, snapshots `@` read-only as `@old-root-DATE`, moves
+   `@.snapshots` to `@old-snapshots-DATE`, makes a fresh `@` and `@.snapshots`, moves the
+   old kernels aside on `/boot` (`.bromigos-old-kernels/`), and mounts it all at `/mnt`.
+   From the snapshot on, `/run/bromigos-iso/reinstall.json` says what it did.
+2. archinstall installs into `/mnt` with no boot loader of its own (`--skip-boot`, which
+   lets its configuration say `No bootloader`).
+3. `finish` brings back the old system's people (user IDs, groups, passwords) and
+   `/home`'s snapper configuration; `boot` sets up the disk's unlocking and GRUB; `tidy`
+   removes the old kernels' copy.
+
+If anything stops it between 1 and the end of 3, `bromigos-iso-install` runs `undo`: `@`
+is made again from `@old-root-DATE` (the restored `fstab` names it by `subvol=`, since its
+ID changed), the old snapshots and kernels go back, and the error says the old system is
+back. The installed system starts as it did before.
+
 ### Editions
 
 **bromigOS (desktop)** installs `archinstall.json`'s packages and sets up the desktop.

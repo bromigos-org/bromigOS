@@ -206,6 +206,12 @@ finish_install() {   # finish_install RC: what the new system got, then a clean 
     "${SSH[@]}" 'c=$(lsblk -rno PATH,LABEL /dev/vda | awk "\$2 == \"Windows\" { print \$1 }"); [ -n "$c" ] && sudo ntfsresize --info --force --no-progress-bar "$c" | grep "You might resize at" | sed "s/^/ntfs-check: /"' >> "$dir/install-state.out" 2>&1 || true
     "${SSH[@]}" 'sudo bash -c "findmnt -R /mnt; lsblk -o NAME,TYPE,FSTYPE,PARTTYPENAME,MOUNTPOINTS /dev/vda; ls -la /mnt/home/*/.ssh; grep -h ^HOOKS= /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.d/*.conf; lsinitcpio /mnt/boot/initramfs-linux.img | grep -c plymouth; grep -E ^GRUB_CMDLINE /mnt/etc/default/grub; grep -c snapshots /mnt/boot/grub/grub.cfg; grep -E \"^menuentry\" /mnt/boot/grub/grub.cfg; grep -A2 bromigos\\] /mnt/etc/pacman.conf; arch-chroot /mnt snapper --no-dbus list-configs; arch-chroot /mnt sshd -T 2>/dev/null | grep -iE \"^(pubkeyauthentication|authorizedkeysfile|passwordauthentication)\"; [ -d /sys/firmware/efi ] && efibootmgr"' 2>&1 | tee "$dir/install-state.out.main" || true
     cat "$dir/install-state.out.main" >> "$dir/install-state.out"; rm -f "$dir/install-state.out.main"
+    if (( rc != 0 )); then     # a failed install: the live system's logs, before it powers off
+        "${SSH[@]}" 'sudo cat /var/log/bromigos-iso-install.log' > "$dir/failed-install.log" 2>&1 || true
+        "${SSH[@]}" 'sudo cat /var/log/archinstall/install.log' > "$dir/failed-archinstall.log" 2>&1 || true
+        echo "the live system's logs: $dir/failed-install.log, $dir/failed-archinstall.log"
+        tail -25 "$dir/failed-install.log"
+    fi
     # a clean shutdown: the new system's file systems unmounted, LUKS closed, then
     # poweroff (killing QEMU would lose what's still in the page cache)
     "${SSH[@]}" 'sudo sync; sudo umount -R /mnt; sudo cryptsetup close root 2>/dev/null; sudo systemctl poweroff' 2>/dev/null || true
@@ -264,7 +270,8 @@ case $cmd in
         finish_install "$rc" || exit $?
         ;;
     keep-files)     # before a reinstall: a file in the installed system's home, to find after it
-        "${SSH[@]}" 'echo "kept across the reinstall" > ~/keepme.txt && sha256sum ~/keepme.txt' | tee "$dir/keepme.sha256"
+        # synced: the VM is stopped next, and btrfs would otherwise still hold it in memory
+        "${SSH[@]}" 'echo "kept across the reinstall" > ~/keepme.txt && sync && sha256sum ~/keepme.txt' | tee "$dir/keepme.sha256"
         ;;
     verify-reinstall)   # after it: the file, the user's ID, the old system kept as a snapshot
         out=$dir/verify-reinstall-$firmware.out; : > "$out"
@@ -476,7 +483,9 @@ PY
         menu_wait "param-$tag-$firmware" "down" >/dev/null || true
         if [[ $firmware == uefi ]]; then
             sleep 1; press e; sleep 2; shot "param-$tag-$firmware-editor" >/dev/null
-            press down; press end; type_text " $params"; sleep 1; shot "param-$tag-$firmware-edited" >/dev/null; press ctrl-x
+            # GRUB's editor: setparams, set gfxpayload, then the linux line; Ctrl+E is its end
+            # of line (QEMU's "end" key isn't GRUB's)
+            press down; press down; press ctrl-e; type_text " $params"; sleep 1; shot "param-$tag-$firmware-edited" >/dev/null; press ctrl-x
         else
             press tab; sleep 1; type_text " $params"; press ret
         fi
