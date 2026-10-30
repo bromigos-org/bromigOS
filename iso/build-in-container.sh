@@ -71,7 +71,12 @@ if [[ $edition == fieldkit ]]; then
     mkdir -p "$a/usr/local/bin" "$a/usr/local/lib" "$a/usr/local/share" "$a/etc/systemd/system"
     cp /src/iso/profile/airootfs/etc/pacman.conf "$a/etc/pacman.conf"
     cp -r /src/iso/profile/airootfs/etc/systemd/system/systemd-time-wait-sync.service.d "$a/etc/systemd/system/"
-    cp /src/iso/profile/airootfs/usr/local/bin/bromigos-iso-install "$a/usr/local/bin/"
+    cp /src/iso/profile/airootfs/usr/local/bin/{bromigos-iso-install,bromigos-iso-text-console} "$a/usr/local/bin/"
+    # the text installer on the console for the menu's "Install bromigOS Server" (on tty1 Field
+    # Kit's own console runs it: iso/fieldkit/airootfs/root/.zlogin)
+    mkdir -p "$a/etc/systemd/system/multi-user.target.wants"
+    cp /src/iso/profile/airootfs/etc/systemd/system/bromigos-iso-text-{check,install@}.service "$a/etc/systemd/system/"
+    ln -sf ../bromigos-iso-text-check.service "$a/etc/systemd/system/multi-user.target.wants/bromigos-iso-text-check.service"
     cp -r /src/iso/profile/airootfs/usr/local/lib/bromigos-iso "$a/usr/local/lib/"
     cp -r /src/iso/profile/airootfs/usr/local/share/bromigos-iso "$a/usr/local/share/"
     rm -f "$a/usr/local/share/bromigos-iso/live-answers.toml"

@@ -290,6 +290,15 @@ btrfs subvolume, microcode and initramfs lines as the normal one. The pacman hoo
 `bromigos-boot-menu.hook` makes `grub.cfg` again when bromigos-boot changes, the same safe
 way as the theme (aside, checked, swapped in). The installed menu never has install entries.
 
+### One directory per theme
+
+Everything a boot theme needs is in its own directory: `theme.txt`, its fonts (`.pf2`), its
+pictures and `colors.cfg`. On an installed system that's `/boot/grub/themes/bromigos/`; on
+both media it's `/boot/grub/themes/bromigos/` too (`iso/grub-menus.py`'s `THEME_DIR`). Nothing
+outside it is loaded, so a signed GRUB image can carry the directory whole for Secure Boot,
+where GRUB won't read fonts from the disk. Without the fonts, the menus fall back to GRUB's text
+mode in the same `colors.cfg` colours.
+
 ### The editor's and the console's colours
 
 A GRUB theme colours the menu, but not the editor (E) or the console (C). Those take

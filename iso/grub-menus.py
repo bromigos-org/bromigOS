@@ -21,6 +21,9 @@ MARK = "# Set default menu entry"
 # DRIFTGLASS's 16 colours on the kernel's console from its first message (the Wick's terminal
 # colours, as bromigos-boot's palette.vtrgb): the full medium's Field Kit entry
 VT = "vt.default_red=0,255,57,212,90,201,63,180,78,255,156,240,140,227,138,230 vt.default_grn=5,118,255,175,169,123,224,200,107,157,255,211,202,168,245,245 vt.default_blu=0,111,20,55,230,219,197,180,78,151,138,106,245,239,226,230"
+# the boot theme, all in one directory: theme.txt, its fonts (.pf2), pictures and colors.cfg (the
+# menu colours GRUB's text mode uses too), so a signed GRUB image can carry it whole (Secure Boot)
+THEME_DIR = "/boot/grub/themes/bromigos"
 ANSWERS = {"server": "/fieldkit/install-server.toml", "desktop": "/fieldkit/install-desktop.toml"}
 
 
@@ -53,7 +56,7 @@ def help_page(lines):
             "menuentry \"Help: what do these do?\" --hotkey h --class info --id 'help' {\n"
             "    insmod read\n"
             "    # an entry starts with only exported variables: the theme's text colours again\n"
-            "    if [ -f /boot/grub/themes/bromigos/colors.cfg ]; then source /boot/grub/themes/bromigos/colors.cfg; fi\n"
+            f"    if [ -f {THEME_DIR}/colors.cfg ]; then source {THEME_DIR}/colors.cfg; fi\n"
             "    clear\n" + body + "\n    read\n}\n\n")
 
 

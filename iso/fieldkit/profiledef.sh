@@ -21,14 +21,16 @@ bootstrap_tarball_compression=('zstd' '-c' '-T0' '--auto-threads=logical' '--lon
 # no splash: the console from the first line, in DRIFTGLASS's 16 colours from the kernel's first
 # message (vt.default_*: the Wick's terminal colours, as bromigos-boot's palette.vtrgb).
 # nouveau stays off (the firmware's display, or kmscon on it, instead of a driver that needs
-# NVIDIA's large firmware)
-kernel_params_x86_64="module_blacklist=nouveau vt.default_red=0,255,57,212,90,201,63,180,78,255,156,240,140,227,138,230 vt.default_grn=5,118,255,175,169,123,224,200,107,157,255,211,202,168,245,245 vt.default_blu=0,111,20,55,230,219,197,180,78,151,138,106,245,239,226,230"
+# NVIDIA's large firmware). bromigos.edition=server: the installer, from any entry or Home,
+# preselects bromigOS Server, the edition this stick carries
+kernel_params_x86_64="bromigos.edition=server module_blacklist=nouveau vt.default_red=0,255,57,212,90,201,63,180,78,255,156,240,140,227,138,230 vt.default_grn=5,118,255,175,169,123,224,200,107,157,255,211,202,168,245,245 vt.default_blu=0,111,20,55,230,219,197,180,78,151,138,106,245,239,226,230"
 kernel_params_aarch64="clk_ignore_unused pd_ignore_unused arm64.nopauth"
 file_permissions=(
   ["/etc/shadow"]="0:0:400"
   ["/root"]="0:0:750"
   ["/root/customize_airootfs.sh"]="0:0:755"
   ["/usr/local/bin/bromigos-iso-install"]="0:0:755"
+  ["/usr/local/bin/bromigos-iso-text-console"]="0:0:755"
   ["/usr/local/bin/choose-mirror"]="0:0:755"
   ["/usr/local/bin/livecd-sound"]="0:0:755"
 )

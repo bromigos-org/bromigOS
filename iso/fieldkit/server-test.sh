@@ -17,7 +17,7 @@
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 T=$here/test.py
-base=${BROMIGOS_FIELDKIT_TEST_DIR:-/mnt/Dev/build/fieldkit/vm}
+base=${BROMIGOS_FIELDKIT_TEST_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/bromigos-fieldkit-test/vm}
 disk=$base/server/server.qcow2
 name=server
 

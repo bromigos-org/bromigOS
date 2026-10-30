@@ -5,9 +5,15 @@ monitor. Never a window, never the host's network or disks.
 
   iso/fieldkit/test.py up --iso ISO [--firmware uefi|bios] [--disk FILE [--disk-size 24G]]
                           [--attach FILE …] [--net] [--mem MiB] [--boot cd|disk] [--name N]
+                          [--direct [--entry TITLE] [--append PARAMS]]
+                          --direct: the medium's kernel and initramfs started by QEMU itself, with
+                          the kernel line of its GRUB menu's entry TITLE (default "Start Field
+                          Kit") and the console on the serial port too: how a medium that isn't a
+                          test build is tested as built (iso/fieldkit/ci-test.sh)
   iso/fieldkit/test.py run [--name N] [--timeout S] -- COMMAND…   a command as root, over the
                           serial console; prints its output, exits with its status
-  iso/fieldkit/test.py login [--name N]      wait for the serial login and sign in as root
+  iso/fieldkit/test.py login [--name N] [--user U --password P]   wait for the serial login and
+                          sign in (default root, no password: the medium)
   iso/fieldkit/test.py keys [--name N] KEY…  QMP send-key, e.g. down ret, ctrl-alt-f2, a b c
   iso/fieldkit/test.py type [--name N] TEXT  types TEXT (letters, digits, space, -._/)
   iso/fieldkit/test.py shot [--name N] NAME  the screen as shots/NAME.png
@@ -15,9 +21,11 @@ monitor. Never a window, never the host's network or disks.
   iso/fieldkit/test.py down [--name N]
 
 The VM runs through test/vm/vm-keeper.py like every test VM (it stops with whoever started
-it). Its folder: $BROMIGOS_FIELDKIT_TEST_DIR (default /mnt/Dev/build/fieldkit/vm)/NAME. A test
+it). Its folder: $BROMIGOS_FIELDKIT_TEST_DIR (default ~/.cache/bromigos-fieldkit-test/vm)/NAME. A test
 medium (iso/build.sh --test-key) has the kernel's console on the serial port too, which this
-harness signs in on. The serial log is NAME/serial.log.
+harness signs in on; any other medium is started with --direct. The serial log is
+NAME/serial.log. BROMIGOS_FIELDKIT_HOST_RULES=0 skips the workstation's memory rules (CI's own
+machine, iso/fieldkit/ci-test.sh).
 """
 
 import argparse
@@ -32,8 +40,9 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
-BASE = os.environ.get("BROMIGOS_FIELDKIT_TEST_DIR", "/mnt/Dev/build/fieldkit/vm")
-SHOTS = os.environ.get("BROMIGOS_FIELDKIT_SHOTS", "/mnt/Dev/build/fieldkit/shots")
+CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "bromigos-fieldkit-test")
+BASE = os.environ.get("BROMIGOS_FIELDKIT_TEST_DIR", os.path.join(CACHE, "vm"))
+SHOTS = os.environ.get("BROMIGOS_FIELDKIT_SHOTS", os.path.join(CACHE, "shots"))
 OVMF_CODE = "/usr/share/edk2/x64/OVMF_CODE.4m.fd"
 OVMF_VARS = "/usr/share/edk2/x64/OVMF_VARS.4m.fd"
 
@@ -99,7 +108,7 @@ def owner():
 
 def up(a):
     d = vmdir(a.name)
-    ok, avail, total = memory_ok(a.mem)
+    ok, avail, total = memory_ok(a.mem) if os.environ.get("BROMIGOS_FIELDKIT_HOST_RULES") != "0" else (True, 0, 0)
     if not ok:
         sys.exit(f"test.py: not now: {avail} GiB available (needs 14), test VMs use {total} MiB (+{a.mem} > 10240)")
     args = ["qemu-system-x86_64", "-enable-kvm", "-machine", "q35", "-cpu", "host", "-m", str(a.mem), "-smp", str(a.smp),
@@ -127,10 +136,31 @@ def up(a):
         fmt = "qcow2" if a.disk.endswith(".qcow2") else "raw"
         args[args.index(f"file={a.disk},if=virtio,format={fmt}")] = f"file={a.disk},if=none,id=hd,format={fmt}"
         args += ["-device", "virtio-blk-pci,drive=hd,bootindex=0"]
+    if a.direct:
+        args += direct_boot(d, a.iso, a.entry, a.append)
     open(os.path.join(d, "serial.log"), "w").close()
     keeper = os.path.join(REPO, "test", "vm", "vm-keeper.py")
     subprocess.run([keeper, "--ready", f"{d}/qmp.sock", "--log", f"{d}/keeper.log", "--owner", owner(), "--", *args], check=True)
     print(f"up: {a.name} ({a.firmware}, {a.mem} MiB, {'network' if a.net else 'no network'})")
+
+
+def direct_boot(d, iso, entry, append):
+    """QEMU's -kernel, -initrd and -append for the medium: its kernel and initramfs, and the
+    kernel line of its GRUB menu's ENTRY as built (archisosearchuuid and all), plus the serial
+    console."""
+    subprocess.run(["xorriso", "-osirrox", "on", "-indev", iso,
+                    "-extract", "/fieldkit/boot/x86_64/vmlinuz-linux", f"{d}/vmlinuz",
+                    "-extract", "/fieldkit/boot/x86_64/initramfs-linux.img", f"{d}/initramfs.img",
+                    "-extract", "/boot/grub/grub.cfg", f"{d}/grub.cfg"], check=True, capture_output=True)
+    for f in ("vmlinuz", "initramfs.img", "grub.cfg"):
+        os.chmod(f"{d}/{f}", 0o644)
+    cfg = open(f"{d}/grub.cfg").read()
+    m = re.search(r'menuentry "' + re.escape(entry) + r'".*?\n\s*linux\s+\S+\s+([^\n]*)', cfg, re.S)
+    if not m:
+        sys.exit(f"test.py: no menu entry {entry!r} in the medium's grub.cfg")
+    line = f"{m.group(1).strip()} console=tty0 console=ttyS0,115200 {append}".strip()
+    open(f"{d}/cmdline", "w").write(line + "\n")
+    return ["-kernel", f"{d}/vmlinuz", "-initrd", f"{d}/initramfs.img", "-append", line]
 
 
 def serial(name):
@@ -165,7 +195,10 @@ def login(a):
         except socket.timeout:
             pass
         if b"login: " in buf[-300:]:
-            s.sendall(b"root\r")
+            s.sendall(f"{a.user}\r".encode())
+            if a.password:
+                read_until(s, rb"[Pp]assword: ?", 30)
+                s.sendall(f"{a.password}\r".encode())
             time.sleep(4)
             break
         if buf.strip() and time.time() > end - a.timeout + 3:
@@ -264,6 +297,9 @@ def main(argv=None):
     p.add_argument("--boot", choices=["cd", "disk"], default="cd")
     p.add_argument("--vga", default="virtio-vga")
     p.add_argument("--vnc", default="61")
+    p.add_argument("--direct", action="store_true")
+    p.add_argument("--entry", default="Start Field Kit")
+    p.add_argument("--append", default="")
     for v in ("run", "login", "keys", "type", "shot", "wait-serial", "down"):
         q = sub.add_parser(v)
         q.add_argument("--timeout", type=int, default=600)
@@ -273,6 +309,9 @@ def main(argv=None):
             q.add_argument("keys", nargs="+")
         elif v in ("type", "shot", "wait-serial"):
             q.add_argument("text")
+        elif v == "login":
+            q.add_argument("--user", default="root")
+            q.add_argument("--password", default="")
     for q in sub.choices.values():
         q.add_argument("--name", default="fk")
     a = ap.parse_args(argv)

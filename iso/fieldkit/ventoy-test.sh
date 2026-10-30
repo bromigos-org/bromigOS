@@ -10,13 +10,13 @@
 #                                                     boot the Nth ISO in Ventoy's menu (default 1)
 #
 # Ventoy is downloaded from its GitHub release and checked against the release's sha256.txt,
-# into $BROMIGOS_VENTOY_DIR (default /mnt/Dev/build/fieldkit/ventoy). The exFAT partition is
+# into $BROMIGOS_VENTOY_DIR (default ~/.cache/bromigos-fieldkit-test/ventoy). The exFAT partition is
 # made and filled in a privileged archlinux container (a loop device over the image file), as
 # iso/build.sh builds; nothing is installed on this machine.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 version=${BROMIGOS_VENTOY_VERSION:-1.1.18}
-vdir=${BROMIGOS_VENTOY_DIR:-/mnt/Dev/build/fieldkit/ventoy}
+vdir=${BROMIGOS_VENTOY_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/bromigos-fieldkit-test/ventoy}
 ventoy=$vdir/ventoy-$version
 SECTORS=65536                       # Ventoy's EFI partition: 32 MiB
 
