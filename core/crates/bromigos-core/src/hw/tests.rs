@@ -7,14 +7,14 @@ use std::collections::BTreeMap;
 
 /// A machine's file system in memory.
 #[derive(Default, Clone)]
-struct Mem(BTreeMap<String, String>);
+pub(crate) struct Mem(pub(crate) BTreeMap<String, String>);
 
 impl Mem {
-    fn with(mut self, path: &str, text: &str) -> Self {
+    pub(crate) fn with(mut self, path: &str, text: &str) -> Self {
         self.0.insert(path.to_string(), text.to_string());
         self
     }
-    fn dir(self, path: &str) -> Self {
+    pub(crate) fn dir(self, path: &str) -> Self {
         self.with(&format!("{path}/.dir"), "")
     }
 }
@@ -62,7 +62,7 @@ const PCI_IDS_SNIPPET: &str = "\
 ";
 
 /// A PCI display device, its DRM card and connectors.
-fn gpu(
+pub(crate) fn gpu(
     m: Mem,
     slot: &str,
     id: &str,

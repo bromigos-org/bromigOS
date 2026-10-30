@@ -19,7 +19,9 @@ kernels, mkinitcpio's MODULES. What setup does, only where it differs: the GPU's
 (never swapping an installed NVIDIA driver), NVIDIA's early KMS, a hybrid laptop's render GPU \
 (udev names, AQ_DRM_DEVICES for Hyprland), runtime power management for its NVIDIA GPU, and \
 on a laptop brightnessctl and power-profiles-daemon. A driver only the AUR has (NVIDIA's \
-580.xx and 470.xx branches) is offered through paru, after a question. docs/hardware.md.")]
+580.xx and 470.xx branches) is offered through paru, after a question. What each card is for \
+(the desktop, games and heavy apps, virtual machines): hw graphics, hw display, hw games, hw \
+run, hw vfio, and Settings › Graphics. docs/hardware.md.")]
 pub struct HwArgs {
     #[command(subcommand)]
     verb: Option<HwVerb>,
@@ -32,12 +34,9 @@ pub struct HwArgs {
 enum HwVerb {
     /// What this machine is and what `bromigos hw setup` would do (the default)
     Detect,
-    /// Show which GPU has the connected displays; read-only, without changing drivers
-    Display {
-        /// Print the automatic GPU order for Hyprland, or nothing when there is no clear choice
-        #[arg(long, conflicts_with = "json")]
-        hyprland: bool,
-    },
+    /// Which card draws the login screen and the desktop (read-only), or change it: `use
+    /// CARD|auto`, `keep`, `cancel`, `reset` (Settings › Graphics)
+    Display(crate::hw_graphics::DisplayArgs),
     /// Set this machine's hardware up: drivers, early KMS, a hybrid laptop's GPUs, power
     /// profiles, Hyprland's GPU environment (sudo for the system's part)
     Setup {
@@ -55,44 +54,61 @@ enum HwVerb {
         #[arg(long)]
         aur: bool,
     },
+    /// Every graphics card and what it's for: the desktop, games and heavy apps, virtual
+    /// machines (what Settings › Graphics shows)
+    Graphics,
+    /// The card games and heavy apps use (Automatic: the strongest), or change it
+    Games {
+        #[command(subcommand)]
+        action: Option<crate::hw_graphics::GamesAction>,
+    },
+    /// Run a program on the games card: bromigos hw run -- PROGRAM [ARGS] (a Steam game's
+    /// launch options: bromigos hw run -- %command%)
+    Run {
+        /// Print the environment it sets (NAME=VALUE lines), and run nothing without a program
+        #[arg(long)]
+        print: bool,
+        /// The program and its arguments, after `--`
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        command: Vec<String>,
+    },
+    /// Virtual machines: each card's checks for VFIO passthrough, or `reserve CARD` and
+    /// `release CARD|all` (by PCI address; sudo, then a restart)
+    Vfio {
+        #[command(subcommand)]
+        action: Option<crate::hw_graphics::VfioAction>,
+    },
 }
 
 pub fn hw_cmd(paths: &Paths, a: HwArgs) -> Result<i32> {
-    let files = RootFs;
-    let d = hw::detect(&files);
     // Startup probes only read hardware. Do not run pacman or systemd, or construct
     // an installation plan, while the login screen is deciding where to appear.
-    if let Some(HwVerb::Display { hyprland }) = &a.verb {
-        let seat = std::env::var("XDG_SEAT")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| "seat0".into());
-        let selection = hw::display_selection_for_seat(&d, &seat);
-        if a.json {
-            println!(
-                "{}",
-                json!({"schema": SCHEMA, "primary_card": selection.primary_card,
-                       "drm_devices": selection.drm_devices, "reason": selection.reason,
-                       "reason_code": selection.reason_code})
-            );
-        } else if *hyprland {
-            if selection.primary_card.is_some() {
-                println!("{}", selection.drm_devices.join(":"));
-            }
-        } else {
-            match &selection.primary_card {
-                Some(card) => println!("Automatic display GPU: /dev/dri/{card}"),
-                None => println!("Automatic display GPU: keep the existing choice"),
-            }
-            println!("{}", selection.reason);
-            println!("Explicit GPU settings take precedence. This check changes nothing.");
+    match a.verb {
+        Some(HwVerb::Display(d)) => return crate::hw_graphics::display_cmd(d, a.json),
+        Some(HwVerb::Graphics) => return crate::hw_graphics::graphics_cmd(paths, a.json),
+        Some(HwVerb::Games { action }) => {
+            return crate::hw_graphics::games_cmd(paths, action, a.json);
         }
-        return Ok(0);
+        Some(HwVerb::Run { print, command }) => {
+            return crate::hw_graphics::run_cmd(paths, print, command);
+        }
+        Some(HwVerb::Vfio { action }) => {
+            return crate::hw_graphics::vfio_cmd(paths, action, a.json);
+        }
+        _ => {}
     }
+    let files = RootFs;
+    let d = hw::detect(&files);
     let mut runner = install::System;
     let plan = hw::plan(paths, &d, &mut runner, &files);
     match a.verb {
-        Some(HwVerb::Display { .. }) => unreachable!("display probe returned above"),
+        Some(
+            HwVerb::Display(_)
+            | HwVerb::Graphics
+            | HwVerb::Games { .. }
+            | HwVerb::Run { .. }
+            | HwVerb::Vfio { .. },
+        ) => unreachable!("answered above"),
         None | Some(HwVerb::Detect) => {
             if a.json {
                 println!(

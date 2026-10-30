@@ -164,7 +164,7 @@ impl Runner for System {
     }
 }
 
-pub(crate) fn shell_line(argv: &[String]) -> String {
+pub fn shell_line(argv: &[String]) -> String {
     argv.iter()
         .map(|a| {
             if a.chars()

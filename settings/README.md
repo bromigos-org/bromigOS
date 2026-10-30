@@ -17,7 +17,7 @@ This folder isn't the Settings window. That's `desktop/settings/`
 |---|---|---|
 | `sddm/bromigos/` | `/usr/share/sddm/themes/bromigos/` | The login screen ([its README](sddm/bromigos/README.md)) |
 | `sddm/conf/zz-bromigos.conf` | `/usr/lib/sddm/sddm.conf.d/` | SDDM's settings: this theme, the cursor, the Wayland greeter |
-| `sddm/bromigos-greeter` | `/usr/lib/bromigos/sddm/` | Starts Weston with the connected-screen GPU choice |
+| `sddm/bromigos-greeter` | `/usr/lib/bromigos/sddm/` | Starts Weston on the card chosen in Settings › Graphics, else the connected-screen GPU choice |
 | `plymouth/bromigos/` | `/usr/share/plymouth/themes/bromigos/` | The boot, shutdown and restart splash |
 | `console/` | `/usr/lib/issue.d/60-bromigos.issue` | The text-console login banner ([its README](console/README.md)) |
 | `grub/` | `/usr/share/bromigos/boot/grub/`, `/usr/lib/bromigos/boot/` | The boot menu's theme and its tools |

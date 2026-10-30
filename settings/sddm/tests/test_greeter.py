@@ -74,6 +74,19 @@ class GreeterLauncher(unittest.TestCase):
         self.assertEqual(options["stdin"], subprocess.DEVNULL)
         self.assertEqual(options["env"]["XDG_SEAT"], "seat0")
 
+    def test_a_card_chosen_or_being_tried_in_settings_draws_the_login_screen(self):
+        for code in ("chosen_gpu", "trial_gpu"):
+            with self.subTest(code=code):
+                self.execute.reset_mock()
+                self.query.return_value = response("card2", code, source=code.split("_")[0],
+                                                  drm_devices=["/dev/dri/card2", "/dev/dri/card0"])
+                greeter.main([])
+                self.assert_weston("--drm-device=card2")
+        # a chosen code without a card is not a valid answer
+        self.assertIsNone(greeter.parse_selection(json.dumps({
+            "schema": 1, "primary_card": None, "drm_devices": [], "reason": "x",
+            "reason_code": "chosen_gpu"})))
+
     def test_late_driver_can_appear_after_the_boot_gpu(self):
         self.query.side_effect = [
             response(reason_code="no_usable_gpus"),

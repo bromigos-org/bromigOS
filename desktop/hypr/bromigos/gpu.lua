@@ -1,6 +1,7 @@
 -- GPU selection at login. The Rust hardware probe owns connector/driver policy.
--- Explicit environment and saved hardware settings win; automatic selection runs
--- once per compositor, never moving a running desktop when cables change.
+-- Explicit environment wins, then a card chosen in Settings › Graphics (or being tried
+-- there), then saved hardware settings; automatic selection runs once per compositor,
+-- never moving a running desktop when cables change.
 local M = {}
 local automatic_checked = false
 
@@ -20,6 +21,18 @@ local function card_list(value)
     return value
 end
 
+-- Absolute commands keep login independent of shell startup. A partial package
+-- update, unavailable probe or unclear hardware leaves Hyprland's default intact.
+local function probe(flag)
+    local opened, pipe = pcall(io.popen,
+        "/usr/bin/timeout 2s /usr/bin/bromigos hw display " .. flag .. " 2>/dev/null", "r")
+    if not opened or not pipe then return nil end
+    local output = pipe:read("*a") or ""
+    local success = pipe:close()
+    if not success then return nil end
+    return output:match("^%s*(.-)%s*$")
+end
+
 function M.apply(B)
     local first = not automatic_checked
     automatic_checked = true
@@ -27,6 +40,20 @@ function M.apply(B)
 
     local inherited = os.getenv("AQ_DRM_DEVICES")
     local selected = inherited ~= nil and inherited ~= ""
+    -- a card chosen in Settings › Graphics wins over a laptop's saved preference; one being
+    -- tried opens Settings after login, to keep it (a restart goes back by itself)
+    if first and not selected then
+        local how, list = (probe("--hyprland-chosen") or ""):match("^(%a+) (%S+)$")
+        local devices = list and card_list(list)
+        if devices and (how == "chosen" or how == "trial") then
+            hl.env("AQ_DRM_DEVICES", devices)
+            selected = true
+            if how == "trial" then
+                B.autostart = B.autostart or {}
+                table.insert(B.autostart, "sh -c 'sleep 3; exec bromigos settings graphics#trial'")
+            end
+        end
+    end
     local state = os.getenv("XDG_STATE_HOME")
     if state == nil or state == "" then state = os.getenv("HOME") .. "/.local/state" end
     local ok, hw = pcall(dofile, state .. "/bromigos/hw/hyprland.lua")
@@ -44,15 +71,7 @@ function M.apply(B)
     end
     if selected or not first then return end
 
-    -- Absolute commands keep login independent of shell startup. A partial package
-    -- update, unavailable probe or unclear hardware leaves Hyprland's default intact.
-    local opened, pipe = pcall(io.popen,
-        "/usr/bin/timeout 2s /usr/bin/bromigos hw display --hyprland 2>/dev/null", "r")
-    if not opened or not pipe then return end
-    local output = pipe:read("*a") or ""
-    local success = pipe:close()
-    if not success then return end
-    local devices = card_list(output:match("^%s*(.-)%s*$"))
+    local devices = card_list(probe("--hyprland") or "")
     if devices then hl.env("AQ_DRM_DEVICES", devices) end
 end
 

@@ -5,7 +5,7 @@ them. Pure drawing: the colours come in as a palette (the theme's roles, hex), t
 a number, and nothing here moves by itself.
 
   glyph(cr, kind, x, y, size, pal, t=0, live=False, fx=None, still=False)
-      kind: controller, headset, earbuds, keyboard, mouse, phone, speaker, monitor, mic, device.
+      kind: controller, headset, earbuds, keyboard, mouse, phone, speaker, monitor, gpu, mic, device.
       live: connected (it turns slowly and glows); otherwise dim and still at a fixed angle.
       fx: ("pulse", age) breathes while connecting, ("spark", age) glows once on success,
       ("fade", age) dims on a disconnect.
@@ -82,6 +82,13 @@ MODELS = {
     "monitor": {    # a screen that plays sound (HDMI, DisplayPort)
         "hull": [_rect(-0.9, -0.62, 0.9, 0.44, 0.04)],
         "detail": [_rect(-0.78, -0.5, 0.78, 0.32), [(0.0, 0.44), (0.0, 0.66)], [(-0.36, 0.7), (0.36, 0.7)]],
+    },
+    "gpu": {        # a graphics card: the shroud, two fans, the bracket and the PCIe contacts
+        "hull": [_rect(-0.78, -0.4, 0.92, 0.3, 0.06)],
+        "detail": [_ellipse(-0.3, -0.05, 0.25, 0.25), _ellipse(-0.3, -0.05, 0.07, 0.07, 10),
+                   _ellipse(0.42, -0.05, 0.25, 0.25), _ellipse(0.42, -0.05, 0.07, 0.07, 10),
+                   [(-0.92, -0.58), (-0.92, 0.48)], [(-0.92, -0.58), (-0.82, -0.58)],
+                   [(-0.5, 0.3), (-0.5, 0.42), (0.36, 0.42), (0.36, 0.3)]],
     },
     "mic": {        # a microphone on its stand
         "hull": [_rect(-0.24, -0.84, 0.24, 0.14, 0.24)],

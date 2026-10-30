@@ -37,8 +37,10 @@ How the defaults and a user's own files fit together is in
   rendered from `idle.toml` by `bromigos idle` ([docs/idle.md](../docs/idle.md)).
 - `hypr/hyprlock.conf` is the fallback lock screen. gtklock is the main one.
 
-At startup, Hyprland asks `bromigos hw display` whether exactly one usable GPU has a
-connected screen. It prefers that card unless an explicit GPU setting already applies.
+At startup, Hyprland asks `bromigos hw display` for a card chosen in Settings › Graphics,
+then whether exactly one usable GPU has a connected screen. It prefers that card unless an
+explicit GPU setting already applies. After a login on a card being tried, it opens
+Settings on the trial, to keep it.
 This choice is made again at each login. It does not move a running renderer when a
 cable is unplugged. See [GPU selection](../docs/hardware.md#choosing-the-gpu-with-a-connected-screen)
 for the rules and overrides.
