@@ -46,6 +46,7 @@ The first report arrives within a minute. Each BRODEC account can own one lab du
 |---|---|
 | `sources.prometheusUrl` | Machines, disks, GPUs and services, from Prometheus |
 | `sources.alertmanagerUrl` | The alerts firing now |
+| `network.loginServer` | Your lab's private network ([lab-network](../../../manual/src/lab-network.md)), such as `https://net.example.org`. BRODEC then offers "Connect this phone to my lab network". The bridge only passes the address on. `network.name` is what BRODEC calls it |
 | `sources.labApi.url` | A status page with the lab status API (`GET /api/status`). Put its read-only token in a Secret and name it in `sources.labApi.tokenSecret` |
 | `brain.url`, `brain.model` | A language model in your lab, so VECTOR can answer questions. Any OpenAI-compatible API, such as Ollama, vLLM or LiteLLM, ending in `/v1`. Put its key, if it has one, in a Secret named in `brain.keySecret` |
 

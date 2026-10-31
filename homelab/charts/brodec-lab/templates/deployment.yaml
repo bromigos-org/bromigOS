@@ -54,6 +54,12 @@ spec:
             {{- if and .Values.sources.labApi.url .Values.sources.labApi.tokenSecret.name }}
             - { name: BRODEC_LAB_API_TOKEN_FILE, value: /run/secrets/lab-api/token }
             {{- end }}
+            {{- with .Values.network.loginServer }}
+            - { name: BRODEC_LAB_NETWORK_URL, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.network.name }}
+            - { name: BRODEC_LAB_NETWORK_NAME, value: {{ . | quote }} }
+            {{- end }}
             {{- with .Values.brain.url }}
             - { name: BRODEC_BRAIN_URL, value: {{ . | quote }} }
             {{- end }}

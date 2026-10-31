@@ -84,6 +84,13 @@ aliases = []
 show_prefixes = []
 show_hosts = []
 
+# [network]              # your lab's private network: bromigos lab network setup writes this block
+# login_server = ""      # its address; BRODEC's lab bridge chart takes the same (network.loginServer)
+# name = ""
+# plan = ""              # the lab repository's network/network.json (how the console reaches it)
+# join_bundle = ""       # only after `join --stick`: one join code the next Field Kit stick carries
+#                        # (docs/lab-network.md)
+
 # Panels with no code (docs/homelab.md, "Panels without code"): a [[panel]] is a desktop widget built
 # from a capability. kind = gauge | sparkline | stat | status | table.
 #

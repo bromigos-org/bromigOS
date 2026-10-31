@@ -18,6 +18,14 @@ sources:
       name: ""
       key: token
 
+# Your lab's private network (bromigos lab network setup): its address, such as
+# https://net.example.org. BRODEC then offers "Connect this phone to my lab network" in LAB.
+# The bridge only reports the address; it never connects to it. Empty: not offered.
+network:
+  loginServer: ""
+  # What BRODEC calls it. Empty: "your lab network".
+  name: ""
+
 # VECTOR's brain: any OpenAI-compatible API in your lab (Ollama, vLLM, LiteLLM), ending in /v1.
 # Empty: he still reports, and says he has no brain in this lab yet.
 brain:

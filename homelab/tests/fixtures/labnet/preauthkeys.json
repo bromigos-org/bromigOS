@@ -1,0 +1,48 @@
+[
+ {
+  "id": 1,
+  "key": "hskey-auth-FIXTURE0000-***",
+  "expiration": {
+   "seconds": 1793500224,
+   "nanos": 641800520
+  },
+  "created_at": {
+   "seconds": 1793413824,
+   "nanos": 642390177
+  },
+  "acl_tags": [
+   "tag:server"
+  ]
+ },
+ {
+  "id": 2,
+  "key": "hskey-auth-FIXTURE0000-***",
+  "used": true,
+  "expiration": {
+   "seconds": 1793500247,
+   "nanos": 99030976
+  },
+  "created_at": {
+   "seconds": 1793413847,
+   "nanos": 99532452
+  },
+  "acl_tags": [
+   "tag:server"
+  ]
+ },
+ {
+  "id": 3,
+  "key": "hskey-auth-FIXTURE0000-***",
+  "expiration": {
+   "seconds": 1794018661,
+   "nanos": 862403344
+  },
+  "created_at": {
+   "seconds": 1793413861,
+   "nanos": 863749631
+  },
+  "acl_tags": [
+   "tag:lab"
+  ]
+ }
+]

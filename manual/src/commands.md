@@ -1506,7 +1506,7 @@ From the `bromigos-desktop` package.
 Your homelab's console: status, models, jobs, doctor and guided maintenance (no arguments: the live dashboard).
 
 ```text
-bromigos lab [status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | connect … | target …]
+bromigos lab [status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | network [setup|join|connect|status|approve|remove|rotate] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | connect … | target …]
 ```
 
 For example:
@@ -1520,6 +1520,8 @@ bromigos lab run voice --text "Lights are on."
 bromigos lab jobs watch
 bromigos lab doctor
 bromigos lab provision
+bromigos lab network setup --on quadlet --node you@labbox --endpoint lan --lan-address 192.168.1.20
+bromigos lab network join
 bromigos lab media get "Cowboy Bebop" --seasons all --specials
 ```
 

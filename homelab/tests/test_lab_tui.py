@@ -265,7 +265,7 @@ class DashboardTest(unittest.TestCase):
         self.assertEqual(seen["row_up"], 1)
         self.assertEqual(seen["row_G"], seen["rows"] - 1)
         self.assertEqual(seen["tab2"], "jobs")
-        self.assertEqual(seen["tab_wrap"], "provision")
+        self.assertEqual(seen["tab_wrap"], "network")
 
     def test_new_job_form(self):
         async def steps(app, pilot):

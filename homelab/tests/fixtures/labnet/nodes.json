@@ -1,0 +1,51 @@
+[
+ {
+  "id": 1,
+  "machine_key": "mkey:0000000000000000000000000000000000000000000000000000000000000000",
+  "node_key": "nodekey:0000000000000000000000000000000000000000000000000000000000000000",
+  "disco_key": "discokey:0000000000000000000000000000000000000000000000000000000000000000",
+  "ip_addresses": [
+   "100.64.0.1",
+   "fd7a:115c:a1e0::1"
+  ],
+  "name": "box1",
+  "user": {
+   "id": 2147455555,
+   "name": "tagged-devices",
+   "created_at": {
+    "seconds": -62135596800
+   },
+   "display_name": "Tagged Devices"
+  },
+  "last_seen": {
+   "seconds": 1793413852,
+   "nanos": 469185535
+  },
+  "pre_auth_key": {
+   "id": 2,
+   "key": "hskey-auth-FIXTURE0000-***",
+   "used": true,
+   "expiration": {
+    "seconds": 1793500247,
+    "nanos": 99030976
+   },
+   "created_at": {
+    "seconds": 1793413847,
+    "nanos": 99532452
+   },
+   "acl_tags": [
+    "tag:server"
+   ]
+  },
+  "created_at": {
+   "seconds": 1793413849,
+   "nanos": 676058829
+  },
+  "register_method": 1,
+  "given_name": "box1",
+  "online": true,
+  "tags": [
+   "tag:server"
+  ]
+ }
+]

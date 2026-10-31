@@ -1,0 +1,15 @@
+{
+ "id": 4,
+ "key": "hskey-auth-FIXTUREfixtureFIXTUREfixture_0123456789",
+ "expiration": {
+  "seconds": 1793417468,
+  "nanos": 133719897
+ },
+ "created_at": {
+  "seconds": 1793413868,
+  "nanos": 134292904
+ },
+ "acl_tags": [
+  "tag:server"
+ ]
+}

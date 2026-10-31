@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # bromigos:summary=Your homelab's console: status, models, jobs, doctor and guided maintenance (no arguments: the live dashboard)
-# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | connect … | target …]
-# bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor; bromigos lab provision; bromigos lab media get "Cowboy Bebop" --seasons all --specials
+# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | network [setup|join|connect|status|approve|remove|rotate] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | connect … | target …]
+# bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor; bromigos lab provision; bromigos lab network setup --on quadlet --node you@labbox --endpoint lan --lan-address 192.168.1.20; bromigos lab network join; bromigos lab media get "Cowboy Bebop" --seasons all --specials
 # bromigos:menu=LAUNCH:Lab console
 """bromigos lab: the homelab's console (docs/homelab.md, "The lab console"; the manual's Lab chapter).
 
@@ -75,6 +75,15 @@
   bromigos lab youtube sync [--dry-run] [--server jellyfin|plex] [--json]
                                     turn Pinchflat's downloaded YouTube playlists into ordered
                                     playlists in Jellyfin and Plex (idempotent; docs/homelab.md)
+  bromigos lab network setup [--on k3s|quadlet] [--node user@host] [--endpoint relay|router|lan] …
+                                    your lab's own private network (Headscale): reviewed, then applied
+                                    after yes (docs/lab-network.md)
+  bromigos lab network join [--tag server|lab] [--expires 24h] [--stick]
+                                    a one-time join code for a machine, with its QR code
+  bromigos lab network connect [CODE] | reach
+                                    join THIS machine; reach: the four "Reach it from anywhere" choices
+  bromigos lab network status | approve CODE | remove DEVICE | rotate [--device DEVICE]
+                                    devices and when they were last seen; each takes --json
   bromigos lab connect [ARGS]       = bromigos setup homelab [ARGS]: find services, write homelab.toml
   bromigos lab target [ARGS]        = bromigos target [ARGS]: where AI runs
   bromigos lab provision [--guided] [--start-over]
@@ -457,6 +466,9 @@ def main(argv):
     if cmd == "provision":
         from bromigos_homelab import provision
         return provision.main(rest)
+    if cmd == "network":
+        from bromigos_homelab import labnet
+        return labnet.main(rest)
     if cmd == "maintenance":
         from bromigos_homelab import maintenance
         return maintenance.main(rest)
