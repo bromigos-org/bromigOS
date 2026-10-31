@@ -1910,7 +1910,24 @@ fn channel_cmd(
     if let Some(name) = name {
         let ch = channel::Channel::parse(name)
             .ok_or_else(|| anyhow::anyhow!("no such channel: {name} (stable, rc, edge, dev)"))?;
+        if repo.is_none()
+            && let Err(lack) = channel::ready(paths, ch)
+        {
+            let from = channel::current(paths).channel;
+            channel::set_wanted(paths, Some(ch));
+            let words = channel::waiting_words(from, ch, &lack);
+            if json {
+                println!(
+                    "{}",
+                    json!({"schema": SCHEMA, "waiting": {"channel": ch, "lacks": lack, "words": words}})
+                );
+            } else {
+                println!("{words}");
+            }
+            return Ok(0);
+        }
         let c = channel::set(paths, ch, repo, dev_dir).map_err(anyhow::Error::msg)?;
+        channel::set_wanted(paths, None);
         if json {
             println!("{}", json!({"schema": SCHEMA, "channel": c}));
             return Ok(0);
@@ -1937,7 +1954,10 @@ fn channel_cmd(
     }
     let cur = channel::current(paths);
     if json {
-        println!("{}", json!({"schema": SCHEMA, "channel": cur}));
+        println!(
+            "{}",
+            json!({"schema": SCHEMA, "channel": cur, "wanted": channel::wanted(paths).filter(|w| Some(*w) != cur.channel)})
+        );
         return Ok(0);
     }
     match cur.channel {
@@ -1949,6 +1969,11 @@ fn channel_cmd(
     }
     if let Some(s) = &cur.server {
         println!("  Server = {s}");
+    }
+    if let Some(w) = channel::wanted(paths).filter(|w| Some(*w) != cur.channel) {
+        println!(
+            "  moving to {w} by itself at an update, once it has every bromigOS package here (after its next release)"
+        );
     }
     println!("channels:");
     for ch in channel::Channel::ALL {
@@ -2477,10 +2502,45 @@ fn update_cmd(paths: &Paths, f: &UpdateFlags, channel: Option<&str>) -> Result<i
         return Ok(0);
     }
     let mut downgrade = f.downgrade;
-    if let Some(name) = channel {
-        let ch = bromigos_core::channel::Channel::parse(name)
-            .ok_or_else(|| anyhow::anyhow!("no such channel: {name} (stable, rc, edge, dev)"))?;
-        let c = bromigos_core::channel::set(paths, ch, None, None).map_err(anyhow::Error::msg)?;
+    use bromigos_core::channel as chan;
+    let mut asked =
+        match channel {
+            Some(name) => Some(chan::Channel::parse(name).ok_or_else(|| {
+                anyhow::anyhow!("no such channel: {name} (stable, rc, edge, dev)")
+            })?),
+            None => None,
+        };
+    // a channel asked for earlier that wasn't ready: the move happens now, once it is
+    if asked.is_none()
+        && let Some(w) = chan::wanted(paths)
+    {
+        if chan::current(paths).channel == Some(w) {
+            chan::set_wanted(paths, None);
+        } else if chan::ready(paths, w).is_ok() {
+            if !json {
+                println!("== channel: {w} has everything this computer needs now: moving to it");
+            }
+            asked = Some(w);
+        }
+    }
+    if let Some(ch) = asked
+        && let Err(lack) = chan::ready(paths, ch)
+    {
+        // a move to an older channel that lacks a package here would stop on a file conflict:
+        // it waits instead, and happens by itself at a later update
+        let from = chan::current(paths).channel;
+        chan::set_wanted(paths, Some(ch));
+        let words = chan::waiting_words(from, ch, &lack);
+        if json {
+            eprintln!("{words}");
+        } else {
+            println!("== channel: {words}");
+        }
+        asked = None;
+    }
+    if let Some(ch) = asked {
+        let c = chan::set(paths, ch, None, None).map_err(anyhow::Error::msg)?;
+        chan::set_wanted(paths, None);
         if !json {
             println!(
                 "== channel: {} (was {}){}",
