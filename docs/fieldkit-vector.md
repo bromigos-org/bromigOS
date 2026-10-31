@@ -247,9 +247,14 @@ first-boot tour (`bromigos welcome-console`) pairs too, in its "Pair your phone"
   `paired` it offers "Allow this phone" (`brodec-machine enroll`, with sudo).
 - A lab's VECTOR bridge pairs the same way with `sudo brodec-lab pair --json`.
 
-`bromigos fieldkit qr TEXT` draws any text with the same widget, full screen. Field Kit's CI
+`bromigos fieldkit pair` opens the pairing screen on its own, and `bromigos fieldkit qr TEXT`
+draws any text with the same widget, full screen. The code is half blocks and spaces with both
+colours set in every cell, so no line between rows can show. Where no QR a phone can read
+fits (80x24), the screen shows the code to type, in big block letters, instead. Field Kit's CI
 test decodes it with zbarimg from kmscon and from the bare kernel console
-(`iso/fieldkit/ci-test.sh`).
+(`iso/fieldkit/ci-test.sh`). `iso/fieldkit/term-capture.sh` runs the pairing screen and Home in
+real kitty and Alacritty windows (each in a headless weston of its own) at 120x35 and 80x24.
+It decodes the QR at 100%, 50% and 33%, and keeps Home's pictures to look at.
 
 The engine's verbs: `vector pair` (the state above), `vector pair-start` (the proposal),
 `vector controls`, `vector control ACTION`. `fieldkit-engine brodec-setup` is root's file alone.

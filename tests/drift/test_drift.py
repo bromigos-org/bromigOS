@@ -77,6 +77,11 @@ class Drift(unittest.TestCase):
         for w in (1, 3, 7, 40, 61):
             self.assertEqual(sum(D.cells(D.segments(DISK), w)), w)
         self.assertEqual(D.cells(D.segments(DISK), 40)[1], 24)
+        # background-coloured cells only: a block glyph's height varies by font, which made
+        # part of the bar look thicker (the Linux console keeps its own font's blocks)
+        self.assertFalse(set(t.plain) & set("█░▒"), t.plain)
+        if DOC["palette"].get("mode", "truecolor") == "truecolor":
+            self.assertTrue(all(" on " in f" {sp.style}" for sp in t.spans), t.spans)
 
     def test_without_bromigos(self):
         D.BROMIGOS = os.path.join(self.tmp.name, "nothing-here")

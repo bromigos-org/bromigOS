@@ -4255,6 +4255,11 @@ pub fn fieldkit_cmd(words: Vec<OsString>) -> Result<i32> {
             crate::fieldkit_vector::run(&Look::detect(), Path::new(&engine_path()))?;
             Ok(0)
         }
+        "pair" => {
+            // the pairing screen on its own (Pair with BRODEC: VECTOR's screen opens the same)
+            crate::fieldkit_vector::pair::pair(&Look::detect(), Path::new(&engine_path()))?;
+            Ok(0)
+        }
         "qr" => {
             let text = words
                 .get(1)
@@ -4307,6 +4312,8 @@ pub fn fieldkit_cmd(words: Vec<OsString>) -> Result<i32> {
                  bromigos fieldkit status      whether Field Kit is in this machine's boot menu\n  \
                  bromigos fieldkit make-stick [DEVICE]    a Field Kit USB stick with your settings\n  \
                  bromigos fieldkit remote on|off|status   remote help over SSH\n  \
+                 bromigos fieldkit pair        pair this machine with BRODEC (its QR, or its code big)\n  \
+                 bromigos fieldkit qr TEXT     TEXT as a QR code on the screen\n  \
                  bromigos fieldkit usb [DEVICE]           write Field Kit onto a USB drive\n  \
                  bromigos fieldkit shapes --json [--orb WxH] [--frames N]\n  \
                                                DRIFTGLASS's shapes for the Python TUIs"

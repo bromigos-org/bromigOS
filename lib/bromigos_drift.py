@@ -128,8 +128,10 @@ RULES = {
                                                                   "bcachefs"], "parttype_words": ["Linux"]},
         {"kind": "other", "role": "dim", "label": "", "fstypes": [], "parttype_words": []},
     ],
-    "free": {"role": "faint", "label": "free", "fill": "░"},
-    "fill": "█",
+    "free": {"role": "faint", "label": "free", "fill": " "},
+    "fill": " ",
+    "background": True,
+    "console_fill": {"part": "█", "free": "░"},
     "ascii_fill": {"efi": ":", "bromigos": "#", "windows": "=", "swap": "~", "linux": "+", "other": "%", "free": "."},
 }
 
@@ -201,7 +203,12 @@ def disk_map_text(disk, width):
         if not w:
             continue
         free = kind == "free"
-        fill = rules["ascii_fill"].get(kind, "%") if ascii_ else (rules["free"]["fill"] if free else rules["fill"])
+        # background-coloured cells (one thickness in every font), but the Linux console's own
+        # blocks there (its font fills the cell; it has only 8 backgrounds)
+        console = pal.get("mode") == "ansi16" and "console_fill" in rules
+        fill = (rules["ascii_fill"].get(kind, "%") if ascii_ else
+                rules["console_fill"]["free" if free else "part"] if console else
+                (rules["free"]["fill"] if free else rules["fill"]))
         if label and len(label) + 2 <= w:
             head, rest = f" {label} ", fill * (w - len(label) - 2)
         else:
@@ -210,12 +217,14 @@ def disk_map_text(disk, width):
             plain.append(head + rest)
             continue
         c = colour(rules["free"]["role"] if free else roles.get(kind, "dim"), doc)
+        bg = rules.get("background") and not console
+        fill_style = (f"on {c}" if bg else c) if c else None
         if free:
-            out.append(head, style=colour("muted", doc))
-            out.append(rest, style=c)
+            out.append(head, style=(f"{colour('text', doc)} on {c}" if bg else colour("muted", doc)) if c else None)
+            out.append(rest, style=fill_style)
         else:
             out.append(head, style=f"bold {colour('void', doc)} on {c}" if c else "bold")
-            out.append(rest, style=c)
+            out.append(rest, style=fill_style)
     if plain:
         return _text("".join(plain))
     return out
