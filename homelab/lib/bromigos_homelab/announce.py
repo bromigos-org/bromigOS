@@ -17,7 +17,7 @@ def service_xml(port):
     """Avahi's static service file (/etc/avahi/services/bromigos-lab.service)."""
     return ('<?xml version="1.0" standalone="no"?>\n'
             '<!DOCTYPE service-group SYSTEM "avahi-service.dtd">\n'
-            '<!-- bromigos lab provision: so bromigos setup homelab --find finds this box -->\n'
+            '<!-- bromigos lab provision: so Find my lab (bromigos setup homelab, its find option) finds this box -->\n'
             '<service-group>\n'
             '  <name replace-wildcards="yes">bromigOS lab on %h</name>\n'
             '  <service>\n'
