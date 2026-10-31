@@ -187,8 +187,8 @@ On the live ISO it's the live session's file: the graphical installer's user, or
 the text installer. The installer copies it to the new user's
 `~/.local/state/bromigos/voice-guide.json`, so the welcome tour remembers the choice.
 
-The guide is on and unmuted when there's no file. On the kernel command line,
-`bromigos.voice=off` (or `0`) turns it off for that boot, over the file.
-`bromigos.voice=on` turns it on.
+The guide is off when there's no file: it speaks once someone turns it on, on the
+installer's first step or with Ctrl+Alt+V. On the kernel command line, `bromigos.voice=on`
+turns it on for that boot, over the file, and `bromigos.voice=off` (or `0`) turns it off.
 
 `BROMIGOS_GUIDE_DIR` points the reader at another guide folder, such as a test's.

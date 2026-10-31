@@ -137,12 +137,13 @@ from another computer. The installer asks three more things:
 ## VECTOR's voice
 
 VECTOR, bromigOS's AI assistant, guides you through the install. Each step shows a short
-line from him beside his orb, and he reads it aloud. This is the voice guide. It works
+line from him beside his orb, and he can read it aloud. This is the voice guide. It works
 offline: his lines are recorded on the stick.
 
-- It's on when the computer has a sound device.
-- Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> to mute him. Press it again to turn
-  his voice back on. The installer remembers, and your new system's welcome tour does too.
+- It's off until you turn it on, on the first step or with
+  <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd>. It needs a sound device.
+- Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> again to mute him, and again to
+  unmute. The installer remembers, and your new system's welcome tour does too.
 - <kbd>Esc</kbd> or the next step cuts off his line.
 - He stays quiet while a screen reader talks, such as Orca or the stick's speech entry.
   His words are still on screen.
@@ -169,7 +170,7 @@ Every step works with the keyboard alone:
 | <kbd>←</kbd> <kbd>→</kbd> | Move the split between Windows and bromigOS (<kbd>Shift</kbd>: 10 GB at a time) |
 | <kbd>Ctrl</kbd>+<kbd>N</kbd> | Continue (text installer) |
 | <kbd>F2</kbd> | Show or hide the install's details (text installer) |
-| <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> | Mute or unmute VECTOR's voice |
+| <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> | Turn VECTOR's voice on, then mute or unmute it |
 | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd> | A terminal (graphical installer) |
 | <kbd>F12</kbd> | A shell (text installer) |
 
@@ -345,6 +346,7 @@ countdown = 10
 | `bromigos.install bromigos.text`, or `bromigos.install=text` | The text installer, whichever edition |
 | `bromigos.answers=PATH` | That answer file |
 | `accessibility=on` | The text installer's plain questions, for a screen reader |
+| `bromigos.voice=on` | VECTOR's voice on from the start, for that boot |
 | `bromigos.voice=off` | VECTOR's voice off, for that boot. His words are still on screen |
 
 When the text installer is asked for on the full stick, the login screen steps aside for

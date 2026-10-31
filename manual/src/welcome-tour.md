@@ -60,10 +60,11 @@ reads too.
 
 ## VECTOR's voice
 
-VECTOR reads each step's line aloud, as he did in the installer. This is the voice guide.
+VECTOR can read each step's line aloud, as in the installer. This is the voice guide.
 
-- Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> to mute him, and again to unmute.
-  The tour remembers, and it starts as you left it in the installer.
+- It starts as you left it in the installer: off unless you turned it on there.
+- Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> to turn it on, then to mute and
+  unmute him. The tour remembers.
 - <kbd>Esc</kbd> or the next step cuts off his line.
 - He stays quiet while a screen reader talks (Orca on the desktop, speech on the server's
   console). His words are still on screen.

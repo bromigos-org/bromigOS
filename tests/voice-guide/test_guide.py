@@ -107,7 +107,26 @@ class Settings(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_off_until_turned_on(self):
+        g = G.Guide("gui", folder=GUIDE, state=self.state, root=self.root, env={})
+        self.assertFalse(g.enabled)
+        self.assertEqual(g.status(), "off")
+        self.assertFalse(g.play("installer.welcome"))
+
+    def test_the_hotkey_turns_it_on_when_off(self):
+        g = G.Guide("gui", folder=GUIDE, state=self.state, root=self.root, env={})
+        self.assertFalse(g.toggle())          # not quiet any more: on, unmuted
+        g = G.Guide("console", folder=GUIDE, state=self.state, root=self.root, env={})
+        self.assertTrue(g.enabled)
+        self.assertFalse(g.muted)
+
+    def test_the_boot_option_turns_it_on(self):
+        with open(os.path.join(self.root, "proc", "cmdline"), "w") as f:
+            f.write("quiet splash bromigos.voice=on\n")
+        self.assertTrue(G.Guide("gui", folder=GUIDE, state=self.state, root=self.root, env={}).enabled)
+
     def test_mute_is_remembered(self):
+        G.Guide("gui", folder=GUIDE, state=self.state, root=self.root, env={}).set_enabled(True)
         g = G.Guide("gui", folder=GUIDE, state=self.state, root=self.root, env={})
         self.assertFalse(g.muted)
         self.assertTrue(g.toggle())
@@ -188,6 +207,7 @@ class Player(unittest.TestCase):
 
     def guide(self, ui="gui", **kw):
         g = G.Guide(ui, folder=GUIDE, state=self.state, root=self.root, env=self.env, tty=kw.pop("tty", "/dev/tty1"), **kw)
+        g.enabled = True                   # as after "How would you like to be guided?"
         self.guides.append(g)
         return g
 

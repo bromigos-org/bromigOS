@@ -200,7 +200,8 @@ the [voice guide](voice-guide.md). The live session keeps its mute and on or off
 `~/.local/state/bromigos/voice-guide.json`, and the installer copies that file to the new
 user. On the console it plays through `aplay`, with `ffmpeg` (on the medium for it)
 decoding the Opus. It stays quiet while Orca or speakup talks, and on a serial console.
-`bromigos.voice=off` on the kernel line turns it off for that boot.
+It's off until it's turned on: on the first step, with Ctrl+Alt+V, or with
+`bromigos.voice=on` on the kernel line (`bromigos.voice=off` turns it off for that boot).
 
 ### What it does
 
@@ -368,7 +369,8 @@ tests each):
 | `bromigos.install bromigos.text`, or `bromigos.install=text` | The text installer, whichever edition |
 | `bromigos.answers=PATH` | The [answer file](#answer-files) to use: the install runs by itself after a 10-second countdown with **Cancel** |
 | `accessibility=on` | The text installer asks its questions one at a time, for the screen reader |
-| `bromigos.voice=off` | VECTOR's voice guide off for that boot ([VECTOR's voice](#vectors-voice)) |
+| `bromigos.voice=on` | VECTOR's voice guide on from the start, for that boot ([VECTOR's voice](#vectors-voice)) |
+| `bromigos.voice=off` | VECTOR's voice guide off for that boot |
 
 When the text installer is asked for on a medium with a desktop, the login screen steps
 aside for that boot (`systemctl mask --runtime display-manager.service`), so it has the

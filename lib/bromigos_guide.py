@@ -23,7 +23,8 @@ running, else ALSA (aplay), with ffmpeg or opusdec decoding the Opus first.
 The guide's settings, on or off and muted, are one small JSON file:
 $BROMIGOS_GUIDE_STATE, else $XDG_STATE_HOME/bromigos/voice-guide.json
 (~/.local/state/bromigos/voice-guide.json). The boot option bromigos.voice=off turns the
-guide off for that boot.
+guide off for that boot, bromigos.voice=on on. With neither, it's off until the person
+turns it on (the installer's first step, or Ctrl+Alt+V).
 """
 import hashlib
 import json
@@ -41,7 +42,7 @@ except ImportError:          # Python before 3.11
 HERE = os.path.dirname(os.path.realpath(__file__))
 SHARE = "/usr/share/bromigos/guide"
 
-HOTKEY = "Ctrl+Alt+V"                      # mutes and unmutes the guide, in every surface
+HOTKEY = "Ctrl+Alt+V"                      # turns the guide on, then mutes and unmutes it, everywhere
 GTK_ACCEL = "<Control><Alt>v"
 # Textual reads Ctrl+Alt+V as ctrl+v on terminals without the kitty keyboard protocol (the
 # Linux console, most SSH clients); a focused Input takes ctrl+v as paste first
@@ -234,7 +235,7 @@ def problems(folder=None):
 
 # ------------------------------------------------------------------ settings
 
-DEFAULTS = {"enabled": True, "muted": False}
+DEFAULTS = {"enabled": False, "muted": False}   # off until the person turns it on
 
 
 def state_path():
@@ -444,7 +445,7 @@ class Guide:
     def describe(self):
         """The status in plain words, for a hover hint or a status line."""
         return {
-            "off": "VECTOR's voice guide is off.",
+            "off": f"VECTOR's voice guide is off. {HOTKEY} turns it on.",
             "muted": f"VECTOR's voice is muted. {HOTKEY} turns it back on.",
             "screen-reader": "VECTOR stays quiet while your screen reader talks.",
             "no-sound": self.notice or "No sound device, so VECTOR's voice stays quiet.",
@@ -516,7 +517,12 @@ class Guide:
         save_settings({"muted": self.muted}, self.state)
 
     def toggle(self):
-        """Ctrl+Alt+V: mute or unmute, remembered. Returns whether it's muted now."""
+        """Ctrl+Alt+V: turns the guide on (and unmuted) when it's off, else mutes or unmutes.
+        Remembered. Returns whether he's quiet now."""
+        if not self.enabled:
+            self.enabled, self.muted = True, False
+            save_settings({"enabled": True, "muted": False}, self.state)
+            return False
         self.set_muted(not self.muted)
         return self.muted
 
