@@ -35,6 +35,7 @@ manual's [Files and folders](../manual/src/files.md) lists them for users.
 | [bromigos-account.md](bromigos-account.md) | Signing in to a Bromigos account: `bromigos login`, SSH keys and tokens |
 | [idle.md](idle.md) | The screensaver, lock and sleep timers, and `idle.toml` |
 | [accessibility.md](accessibility.md) | Reduced motion and high contrast |
+| [voice-guide.md](voice-guide.md) | VECTOR's spoken guide in the installers and tours: the line catalogue, its clips and the player |
 | [menu.md](menu.md) | The desktop menu, and how a command adds itself to it |
 | [webapps.md](webapps.md) | Web apps: a site in its own window, with a shortcut |
 | [apps.md](apps.md) | The optional app bundle: LazyVim, tmux and others, themed |

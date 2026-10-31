@@ -58,6 +58,37 @@ Every step works with the keyboard alone: <kbd>Tab</kbd> moves, <kbd>Enter</kbd>
 continues, <kbd>Esc</kbd> goes back. Every control has a hover hint, which a screen reader
 reads too.
 
+## How you're guided
+
+The tour starts the way you chose on the installer's first step, **How would you like to be
+guided?**: VECTOR's voice on or off, and larger text, high contrast and reduced motion if
+you chose them. The first time it opens, it also sets your desktop to match, and starts
+the screen reader (Orca) if you chose one. Change any of it later in Settings.
+
+## VECTOR's voice
+
+VECTOR can read each step's line aloud, as in the installer. This is the voice guide.
+
+- It starts as you left it in the installer: off unless you turned it on there.
+- Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> to turn it on, then to mute and
+  unmute him. The bar at the bottom shows whether he's on, and clicking it does the same.
+  On the server's own console, <kbd>Ctrl</kbd>+<kbd>V</kbd> does it too. The tour
+  remembers.
+- **Back**, <kbd>Esc</kbd> or the next step cuts off his line.
+- He stays quiet while a screen reader talks (Orca on the desktop, speech on the server's
+  console). His words are still on screen.
+- On a computer with no sound device, such as a server reached over SSH, the tour says so
+  once and shows his words only.
+
+## Ask VECTOR
+
+Once VECTOR has a brain (the VECTOR step, or one he already had), he says hello, and every
+step gets an **Ask VECTOR** box. Type a question about the step and press
+<kbd>Enter</kbd>: his answer appears under it. With the voice guide on and his voice set
+up, he says it aloud too. Without a brain, the box isn't there and his lines stay the
+written ones. If he takes too long, the box says so: ask again, or ask him later from the
+desktop.
+
 ## bromigOS Server
 
 bromigOS Server's tour runs in the terminal at your first sign-in, at its console or over
@@ -93,3 +124,27 @@ the session's autostart runs `bromigos welcome --if-pending`, which does nothing
 it. Finishing removes the file and writes what you chose to
 `~/.local/state/bromigos/welcome.json`. `bromigos welcome --step STEP` opens it on one
 step; `bromigos welcome --render DIR` draws every step to pictures and exits.
+
+The voice guide keeps its setting in `~/.local/state/bromigos/voice-guide.json`
+(`enabled` and `muted`). Its lines and clips are in `/usr/share/bromigos/guide/`. The
+repository's `docs/voice-guide.md` explains the catalogue, how the clips are made, and the
+check.
+
+The installer's other choices are in `~/.local/state/bromigos/accessibility.json`
+(`screen_reader`, `large_text`, `high_contrast`, `reduce_motion`, `console_font`). The
+desktop tour applies them once and then sets `applied` to true. What it sets:
+
+| Choice | On the desktop |
+|---|---|
+| Larger text | `gsettings set org.gnome.desktop.interface text-scaling-factor 1.25` |
+| High contrast | `gsettings set org.gnome.desktop.a11y.interface high-contrast true` (bromigOS's own: `bromigos accessibility contrast high`, set by the installer) |
+| Reduce motion | `gsettings set org.gnome.desktop.interface enable-animations false` (bromigOS's own: `bromigos accessibility motion reduced`) |
+| Screen reader | `gsettings set org.gnome.desktop.a11y.applications screen-reader-enabled true`, and Orca started |
+
+Ask VECTOR sends your question and the step's own words to VECTOR's brain, the
+OpenAI-compatible server his settings name (`~/.config/bromigos/vector/vector.toml`'s
+`[llm]`, or his fallbacks), and nothing else. An answer is spoken through his running
+voice service (`$XDG_RUNTIME_DIR/bromigos-holo-voice.sock`) when there is one; the
+greeting has a recorded clip for when there isn't. Orca's own keys work as usual:
+<kbd>Insert</kbd>+<kbd>S</kbd> (<kbd>Caps Lock</kbd>+<kbd>S</kbd> on a laptop layout)
+stops it talking for a moment.

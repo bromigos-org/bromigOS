@@ -149,7 +149,7 @@ settings) stays as it is. The old system is kept as a snapshot, so nothing is lo
 
 If the screen stays black or the desktop doesn't start, choose **Install bromigOS (text
 mode)** in the stick's menu. It's the same installer, with the same questions, on a plain
-text screen. It also works with a screen reader: choose **Start with the screen reader
+text screen. It also works with a screen reader: choose **Install with the screen reader
 (speech)**, and the installer asks its questions one at a time, read aloud.
 
 ![The text installer](https://bromigos.org/images/installing/16-text-mode.png)

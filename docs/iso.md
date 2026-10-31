@@ -148,18 +148,22 @@ the reader: nothing is shown. The warning never stops the install.
 
 ### The steps
 
-1. **Welcome.** The language for the new system, the time zone, and whether there's a
+1. **How would you like to be guided?** Before anything else: VECTOR's voice guide (off
+   until turned on, with **Play a sample**), a screen reader, larger text, high contrast,
+   reduced motion, and the language for the new system. Each takes effect at once, and the
+   new system starts the same way ([How you're guided](#how-youre-guided)).
+2. **Welcome.** The time zone, and whether there's a
    network. The install doesn't need one: everything is on the USB stick. **Connect to
    Wi-Fi…** is there for the one case that downloads (below).
-2. **Before you start**, shown only when there's something to say: running on battery,
+3. **Before you start**, shown only when there's something to say: running on battery,
    less than 4 GB of memory, a disk whose own health check says it's failing, a graphics
    card bromigOS can't drive well, and whether the machine started the UEFI or the BIOS
    way. Each says what to do. None of them stops the install, except that installing onto a
    failing disk needs **Install on it anyway** on the next step.
-3. **What kind of computer is this?** **bromigOS (desktop)**, the default, or **bromigOS
+4. **What kind of computer is this?** **bromigOS (desktop)**, the default, or **bromigOS
    Server**: no desktop, for servers and lab machines ([Editions](#editions)).
-4. **Keyboard.** The layout changes at once, so the box under it tries it.
-5. **Where to install.** Every disk, with its size, model and what's on it: Windows, another
+5. **Keyboard.** The layout changes at once, so the box under it tries it.
+6. **Where to install.** Every disk, with its size, model and what's on it: Windows, another
    system, files, or empty. The USB stick bromigOS started from is shown but can't be
    chosen. For the chosen disk:
    - **Install alongside Windows** (or the system found) keeps it and its files. If the
@@ -168,32 +172,69 @@ the reader: nothing is shown. The warning never stops the install.
      uses now plus 10 GB to grow; bromigOS gets at least 20 GB. When it can't be offered,
      the step says why and what to do ([Beside Windows](#beside-windows)).
    - **Erase the whole disk** deletes everything on it and says what will be lost.
-6. **BitLocker**, only when Windows on the chosen disk is locked with BitLocker: how to
+7. **BitLocker**, only when Windows on the chosen disk is locked with BitLocker: how to
    save the recovery key, and **I've saved the BitLocker recovery key** before going on.
    Changing how the computer starts can make Windows ask for that key once.
-7. **About you.** Your name, user name, password (twice, with a strength hint) and the
+8. **About you.** Your name, user name, password (twice, with a strength hint) and the
    computer's name. The user name and computer name are suggested from your name.
-8. **Encryption.** On by default. Your password unlocks the disk, or it gets a passphrase of
+9. **Encryption.** On by default. Your password unlocks the disk, or it gets a passphrase of
    its own ([iso-encryption.md](iso-encryption.md)).
-9. **Remote access and protection**, bromigOS Server only: SSH (off by default; keys only
+10. **Remote access and protection**, bromigOS Server only: SSH (off by default; keys only
    when on, with keys read from the stick's `fieldkit/` folder or pasted, and a password
    login only when chosen), the firewall (on), and automatic updates with a snapshot before
    each (on).
-10. **Summary.** Every choice in plain words, and what the disk loses. The button says
+11. **Summary.** Every choice in plain words, and what the disk loses. The button says
     **Erase disk and install** when the disk is erased.
-11. **Installing.** A progress bar and one plain status line (Making room, Encrypting the
+12. **Installing.** A progress bar and one plain status line (Making room, Encrypting the
     disk, Copying bromigOS onto the disk with a package count, Installing the boot menu,
     Setting up the desktop, Finishing). **Details** shows every line of the install.
-12. **Done.** What happens next (take out the stick, the passphrase, the boot menu) and
+13. **Done.** What happens next (take out the stick, the passphrase, the boot menu) and
     **Restart now**. If the install stopped, the screen says where and what to do, and
     **Save a problem report** puts the logs, a hardware summary and the answers (without
     passwords) on a USB drive, and says where it went.
 
-With the speech boot entry (`accessibility=on`), the text installer asks the same questions
-one at a time as plain lines (`bromigos-iso-install --plain`), which the screen reader reads
-in order. The graphical installer gives every control an accessible name and description
-for Orca, works with the keyboard alone (Tab, the arrows, Enter, Esc to go back), and
-follows high contrast.
+With the speech boot entry (**Install with the screen reader (speech)**: `accessibility=on
+bromigos.install=text bromigos.voice=off systemd.unit=multi-user.target`), the medium starts
+straight into the text installer on the first console. Releng's `livecd-talk` starts
+`espeakup` for that boot, and the installer asks the same questions one at a time as plain
+lines (`bromigos-iso-install --plain`), which speakup reads in order. Its first questions
+are the guidance step's: keep the screen reader in the new system, reduce motion, high
+contrast. The voice guide is off for that boot, so speakup is the only voice. The graphical
+installer gives every control an accessible name and description for Orca, works with the
+keyboard alone (Tab, the arrows, Enter, Esc to go back), and follows high contrast.
+
+### How you're guided
+
+The first step's choices take effect at once and are kept for the new system:
+
+| Choice | Graphical installer | Text installer | The new system |
+|---|---|---|---|
+| VECTOR's voice guide | `bromigos_guide.Guide("gui")`, PipeWire | `Guide("console")`, PipeWire or `aplay` | `~/.local/state/bromigos/voice-guide.json` |
+| Screen reader | Orca (`orca --replace`, `gsettings … screen-reader-enabled`), as the live user | `systemctl start espeakup.service`, as root | Orca on a desktop; `espeakup.service` enabled on a server |
+| Larger text | `gtk-xft-dpi` × 1.25 | The console's `setfont ter-v32n` (a terminal window or SSH: its own setting, said plainly) | `text-scaling-factor 1.25` (the desktop tour); `FONT=ter-v32n` in `/etc/vconsole.conf` |
+| High contrast | DRIFTGLASS's high-contrast colours | A white-on-black theme | `bromigos setup --contrast high` |
+| Reduce motion | `BROMIGOS_REDUCED_MOTION`: every animation still | No animation | `bromigos setup --motion reduced` |
+
+`common.backend_answers` puts them in the answers' `guidance` (`voice_guide` and
+`accessibility`); `bromigos-iso-install` writes them as the new user's
+`~/.local/state/bromigos/voice-guide.json` and `accessibility.json`, and `answers.py` adds
+the packages (`orca`, `espeakup`, `terminus-font`). Orca is on the medium for this
+(`packages.x86_64`). The welcome tours read both files when they start
+([manual: the welcome tour](../manual/src/welcome-tour.md#how-youre-guided)).
+
+### VECTOR's voice
+
+Both installers speak each step's line from VECTOR, from clips recorded at build time:
+the [voice guide](voice-guide.md). Their captions are the catalogue's words
+(`bromigos_guide.line`), so the caption and the clip always match. The live session keeps
+its mute and on or off in `~/.local/state/bromigos/voice-guide.json`, and the install
+writes the same to the new user. Each step's line plays once when the step opens; Esc and
+Back stop it, and going back doesn't read the step again. The bottom bar (graphical) and
+the hint line (text) show the voice's state beside Ctrl+Alt+V. `--fake` and `--render`
+never make a sound. On the console it plays through `aplay`, with `ffmpeg` (on the medium for it)
+decoding the Opus. It stays quiet while Orca or speakup talks, and on a serial console.
+It's off until it's turned on: on the first step, with Ctrl+Alt+V, or with
+`bromigos.voice=on` on the kernel line (`bromigos.voice=off` turns it off for that boot).
 
 ### What it does
 
@@ -360,7 +401,9 @@ tests each):
 | `bromigos.install bromigos.edition=server` | The text installer on the console, bromigOS Server preselected. The edition step still shows, so it can be changed |
 | `bromigos.install bromigos.text`, or `bromigos.install=text` | The text installer, whichever edition |
 | `bromigos.answers=PATH` | The [answer file](#answer-files) to use: the install runs by itself after a 10-second countdown with **Cancel** |
-| `accessibility=on` | The text installer asks its questions one at a time, for the screen reader |
+| `accessibility=on` | The text installer asks its questions one at a time, for the screen reader (the speech entry adds `bromigos.install=text bromigos.voice=off systemd.unit=multi-user.target`) |
+| `bromigos.voice=on` | VECTOR's voice guide on from the start, for that boot ([VECTOR's voice](#vectors-voice)) |
+| `bromigos.voice=off` | VECTOR's voice guide off for that boot |
 
 When the text installer is asked for on a medium with a desktop, the login screen steps
 aside for that boot (`systemctl mask --runtime display-manager.service`), so it has the
@@ -522,6 +565,8 @@ and `root` have empty passwords, which sshd refuses, and only a test build has a
 - `answers.py`'s layouts (BIOS encrypted and UEFI plain) parsing as archinstall's
   `DiskLayoutConfiguration`;
 - `hardware.py` merging a hardware plan into a config;
+- the voice guide: every line has a clip that says its words, and the player's choices
+  (`tests/voice-guide`, `tools/voice/make-clips.py --check`);
 - the package list resolving against Arch's repositories, and bromigOS's when the runner
   has `ISO_REPO_URL` and `ISO_REPO_CA`.
 

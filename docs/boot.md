@@ -446,7 +446,7 @@ help under the list for the highlighted entry. The full medium's top level:
 | Install bromigOS Server | The text installer, Server preselected (`bromigos.install bromigos.edition=server`, no desktop) |
 | Field Kit (repair, lab and tools) | The same system without the desktop, in the Field Kit menu ([fieldkit.md](fieldkit.md#the-full-isos-entry)) |
 | Start with basic graphics (if the screen stays black) | `nomodeset`: the live desktop on the firmware's framebuffer |
-| More options › | The text installer (`bromigos.install=text`, no desktop), the memory test, the system on this computer's disk, the screen reader (S), the UEFI shell, the firmware settings, power |
+| More options › | The text installer (`bromigos.install=text`, no desktop), the memory test, the system on this computer's disk, **Install with the screen reader (speech)** (S: `accessibility=on bromigos.install=text bromigos.voice=off`, straight into the text installer read aloud by speakup, VECTOR's voice guide off), the UEFI shell, the firmware settings, power |
 | Help: what do these do? | The help page |
 
 An install entry whose answer file is on the stick (`/fieldkit/install-desktop.toml` or

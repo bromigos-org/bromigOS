@@ -30,7 +30,8 @@ EMBLEMS = ["/usr/share/bromigos/themes/wick/emblem", os.path.join(HERE, "../them
 
 # each step's icon (Adwaita's symbolic set, drawn in the theme's colours)
 STEP_ICONS = {
-    "auto": "media-playlist-repeat-symbolic", "welcome": "preferences-desktop-locale-symbolic",
+    "auto": "media-playlist-repeat-symbolic", "guide": "preferences-desktop-accessibility-symbolic",
+    "welcome": "preferences-desktop-locale-symbolic",
     "checks": "security-high-symbolic", "edition": "computer-symbolic", "keyboard": "input-keyboard-symbolic",
     "disk": "drive-harddisk-symbolic", "bitlocker": "dialog-password-symbolic", "user": "avatar-default-symbolic",
     "encryption": "system-lock-screen-symbolic", "ssh": "network-server-symbolic",

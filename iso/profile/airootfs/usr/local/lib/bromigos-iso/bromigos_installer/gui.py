@@ -34,6 +34,10 @@ from . import backend, common  # noqa: E402
 
 sys.path.append("/usr/lib/bromigos/lib")
 import bromigos_glass as glass  # noqa: E402
+try:                          # VECTOR's lines and his voice (docs/voice-guide.md), bromigos-core's
+    import bromigos_guide as guide  # noqa: E402
+except ImportError:           # an older bromigos-core: no captions, no voice
+    guide = None
 from .disks import GiB, plain_size  # noqa: E402
 
 
@@ -274,26 +278,10 @@ class Emblem(Gtk.DrawingArea):
             cr.restore()
 
 
-# VECTOR's one line per step: what it does, in plain words (the guide in the rail's corner)
-VECTOR_LINES = {
-    "auto": "An answer file has every answer. I'll install by myself unless you cancel.",
-    "welcome": "I'm VECTOR. I'll walk you through it. Nothing changes until you say Install.",
-    "checks": "A few things about this computer worth knowing first. None of them stops us.",
-    "edition": "Pick what this computer is for. A server can get the desktop later.",
-    "keyboard": "Pick your layout and try it in the box.",
-    "disk": "Pick a disk, then how bromigOS goes on it.",
-    "disk:alongside": "{who} keeps its files. I'll make room beside it.",
-    "disk:erase": "Everything on this disk goes. Copy off what you need first.",
-    "disk:reinstall": "A fresh system. Your home folder stays exactly as it is.",
-    "bitlocker": "Save Windows' recovery key first. Windows may ask for it once.",
-    "user": "Who you are on this computer, and its name on your network.",
-    "encryption": "Locked, your files stay private even if the computer is lost.",
-    "ssh": "How you'll reach this server from your other computers.",
-    "summary": "Check it over. Nothing on the disk changes until you press Install.",
-    "install": "Sit back. I'll say if anything needs you.",
-    "done": "All set. Restart, and take out the stick when the screen goes dark.",
-    "failed": "It stopped before the end. Save a report, then we can try again.",
-}
+# VECTOR's one line per step, in the rail's corner: the voice guide's catalogue
+# (lib/guide/lines.toml, installer.*), so the caption and his clip say the same words
+def caption(line_id, **values):
+    return guide.line(line_id, **values) if guide else ""
 
 
 class Window(Adw.ApplicationWindow):
@@ -302,11 +290,26 @@ class Window(Adw.ApplicationWindow):
         self.opts = opts
         self.a = common.defaults()
         self.probe = None
-        self.step = "welcome"
+        self.step = "guide"
         self.done = None
         self.running = None
         self.lines = []
         self.reduced = common.reduced_motion()
+        self.hc_forced = False               # the first step's High contrast, over the system's
+        self._dpi = None                     # the first step's Larger text: the screen's own size, to go back to
+        # VECTOR's voice: one player for this window, quiet in pictures (--render); its on and
+        # muted are the live session's (voice-guide.json), copied to the new user at the end
+        self.voice = guide.Guide("gui", notify=self._voice_notice) if guide and not opts.get("render") else None
+        if self.voice and backend.FAKE:      # --fake (pictures, tests): it never makes a sound
+            self.voice._out = (None, "The fake installer makes no sound.")
+        if guide and opts.get("render"):     # pictures: a player that never makes a sound, its settings nobody's
+            self.voice = guide.Guide("gui", state=os.devnull, root="/nonexistent")
+            self.voice._out = ("pw-play", None)
+            self.voice.play = self.voice.say = lambda *a, **k: False
+        self._spoken = None
+        g = self.a["guidance"]
+        if self.voice:
+            g.update(voice=self.voice.enabled, voice_muted=self.voice.muted)
         self.zones = common.timezones()
         self.eds = common.editions()
         self.set_default_size(*opts.get("size", (1280, 800)))
@@ -347,6 +350,11 @@ class Window(Adw.ApplicationWindow):
         self.next.add_css_class("suggested-action")
         self.back.connect("clicked", lambda *_: self.go_back())
         self.next.connect("clicked", lambda *_: self.go_next())
+        # VECTOR's voice, one key away everywhere: what it's doing now, and a click to change it
+        self.voice_btn = Gtk.Button(valign=Gtk.Align.CENTER)
+        self.voice_btn.add_css_class("flat")
+        self.voice_btn.connect("clicked", lambda *_: self.toggle_voice())
+        bar.append(self.voice_btn)
         bar.append(self.err)
         bar.append(self.back)
         bar.append(self.next)
@@ -368,6 +376,12 @@ class Window(Adw.ApplicationWindow):
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", self.on_key)
         self.add_controller(keys)
+        if guide:                            # Ctrl+Alt+V: the voice guide on, then muted and back, anywhere
+            sc = Gtk.ShortcutController(scope=Gtk.ShortcutScope.GLOBAL)
+            sc.add_shortcut(Gtk.Shortcut.new(Gtk.ShortcutTrigger.parse_string(guide.GTK_ACCEL),
+                                             Gtk.CallbackAction.new(lambda *_: (self.toggle_voice(), True)[1])))
+            self.add_controller(sc)
+        self.connect("close-request", lambda *_: (self.voice and self.voice.stop(), False)[1])
         self.answer_file, problems = None, []
         path = None if opts.get("render") or opts.get("script") else common.find_answer_file()
         if path:
@@ -377,7 +391,7 @@ class Window(Adw.ApplicationWindow):
             if not problems:
                 self.a["auto"] = True
                 self.countdown = int(a.get("countdown", 10))
-        self.show_step("auto" if self.a.get("auto") else "welcome")
+        self.show_step("auto" if self.a.get("auto") else self.first_step())
         if problems:
             self.err.set_label(f"▲ The answer file {path} has problems, so the installer asks instead: " + " ".join(problems))
         if not opts.get("render"):
@@ -386,7 +400,7 @@ class Window(Adw.ApplicationWindow):
     # ── look ────────────────────────────────────────────────────────────────────────
     def restyle(self):
         c, _ = common.theme()
-        hc = Adw.StyleManager.get_default().get_high_contrast()
+        hc = self.hc_forced or Adw.StyleManager.get_default().get_high_contrast()
         if hc:
             c = dict(c, muted=c["text"], faint=c["soft"], dim=c["primary"])
         self.c = c
@@ -398,9 +412,78 @@ class Window(Adw.ApplicationWindow):
             backend.open_shell()                 # a shell, one keystroke away (the installer stays open)
             return True
         if keyval == Gdk.KEY_Escape and self.step not in ("install", "done"):
+            if self.voice:
+                self.voice.stop()                # Esc first quiets him
             self.go_back()
             return True
         return False
+
+    # ── VECTOR's voice ──────────────────────────────────────────────────────────────
+    def first_step(self):
+        return self.steps()[0]
+
+    def _voice_notice(self, words):
+        """No sound device: said once, where problems are said."""
+        GLib.idle_add(lambda: (self.err.set_label("▲ " + words), self._voice_shown(), False)[-1])
+
+    def _voice_shown(self):
+        """The bar's voice button and the first step's line say what the voice guide is doing."""
+        if not hasattr(self, "voice_btn"):
+            return
+        if not self.voice:
+            self.voice_btn.set_visible(False)
+            return
+        st = self.voice.status()
+        icon = {"on": "audio-volume-high-symbolic", "muted": "audio-volume-muted-symbolic",
+                "screen-reader": "audio-volume-muted-symbolic", "no-sound": "audio-volume-muted-symbolic"}.get(
+                    st, "audio-volume-muted-symbolic")
+        word = {"on": "Voice on", "muted": "Voice muted", "off": "Voice off", "screen-reader": "Voice quiet",
+                "no-sound": "No sound"}[st]
+        box = Gtk.Box(spacing=6)
+        box.append(Gtk.Image.new_from_icon_name(icon))
+        box.append(Gtk.Label(label=f"{word} · {guide.HOTKEY}"))
+        self.voice_btn.set_child(box)
+        hint(self.voice_btn, self.voice.describe() + " Click, or press " + guide.HOTKEY + ", to change it.")
+        if getattr(self, "voice_state", None) is not None and self.step == "guide":
+            self.voice_state.set_label(self.voice.describe())
+            if self.voice_switch.get_active() != self.voice.enabled:
+                self._voice_sync = True
+                self.voice_switch.set_active(self.voice.enabled)
+                self._voice_sync = False
+
+    def toggle_voice(self):
+        """Ctrl+Alt+V, or the bar's button: on when it's off, then muted and back."""
+        if not self.voice:
+            return
+        self.voice.toggle()
+        self.a["guidance"].update(voice=self.voice.enabled, voice_muted=self.voice.muted)
+        self._spoken = None
+        if self.voice.status() == "on":
+            self.speak_step()
+        self._voice_shown()
+
+    def line_id(self, sid):
+        """The catalogue's id for a step's line, and its {values}."""
+        if sid == "done" and self.done is not True:
+            return "installer.failed", {}
+        if sid == "disk" and self.a.get("mode"):
+            d = self.disk()
+            who = ((d or {}).get("options", {}).get("alongside", {}).get("who")) or "Windows"
+            lid = f"installer.disk.{self.a['mode']}"
+            return (lid, {"who": who}) if guide and guide.has(lid) else ("installer.disk", {})
+        return f"installer.{sid}", {}
+
+    def speak_step(self, lid=None, values=None):
+        """VECTOR says the step's line, once: a redraw of the same step doesn't repeat it."""
+        if not self.voice:
+            return
+        if lid is None:
+            lid, values = self.line_id(self.step)
+        key = (lid, tuple(sorted((values or {}).items())))
+        if key == self._spoken:
+            return
+        self._spoken = key
+        self.voice.play(lid, **(values or {}))
 
     # ── the disks, read in the background ───────────────────────────────────────────
     def _probe_async(self):
@@ -417,7 +500,10 @@ class Window(Adw.ApplicationWindow):
         found = common.checks(doc)
         self.a["checks"] = [c for c in found if c["level"] == "warn"]
         self.a["checks_info"] = [c for c in found if c["level"] != "warn"]
-        if self.step in ("disk", "welcome"):
+        if self.step == "guide":              # the rail only (a Checks step may come in): the switches keep the focus
+            self.draw_rail()
+            self._retitle()
+        elif self.step in ("disk", "welcome"):
             self.show_step(self.step)
         return False
 
@@ -431,17 +517,11 @@ class Window(Adw.ApplicationWindow):
         self.a["bitlocker"] = bool(d and d.get("bitlocker"))
         return common.steps_for(self.a)
 
-    def show_step(self, sid):
+    def show_step(self, sid, speak=True):
         self.step = sid
         steps = self.steps()
-        # the rail: where you are, each step's icon, the progress line, VECTOR in the corner
         here = steps.index(sid) if sid in steps else 0
-        # VECTOR is the screen's one FLARE, except while installing (the ring) and when it's done
-        # (the burn-in): then he stays still
-        self.guide = glass.guide(self.vector_line(sid), "idle" if sid == "install" else "speaking",
-                                 still=self.reduced or sid in ("install", "done") or bool(self.opts.get("render")),
-                                 size=(90, 126) if self.screen_h() < 700 else (120, 178))
-        glass.rail(self.rail, steps, here, common.STEP, self.c, self.guide)
+        self.draw_rail(steps, here)
         self._retitle()
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, margin_top=28, margin_bottom=28,
                        margin_start=24, margin_end=24)
@@ -449,7 +529,7 @@ class Window(Adw.ApplicationWindow):
         self.clamp.set_child(page)
         self.scroll.get_vadjustment().set_value(0)      # a new step starts at its top
         self.err.set_label("")
-        self.back.set_visible(sid not in ("welcome", "install", "done", "auto"))
+        self.back.set_visible(sid not in ("guide", "install", "done", "auto"))
         self.next.set_visible(sid not in ("install", "done", "auto"))
         self.next.set_label("Continue")
         self.next.remove_css_class("destructive-action")
@@ -469,15 +549,27 @@ class Window(Adw.ApplicationWindow):
         GLib.idle_add(self.next.grab_focus if sid not in ("install", "done") else (lambda: False))
         if self.opts.get("script") and sid != "auto":
             GLib.timeout_add(300, self.script_step)
+        if speak:
+            self.speak_step()
+        else:
+            self._spoken = self.line_id(sid)[0], tuple(sorted(self.line_id(sid)[1].items()))
+        self._voice_shown()
+
+    def draw_rail(self, steps=None, here=None):
+        """The rail: where you are, each step's icon, the progress line, VECTOR in the corner."""
+        steps = steps or self.steps()
+        sid = self.step
+        here = here if here is not None else (steps.index(sid) if sid in steps else 0)
+        # VECTOR is the screen's one FLARE, except while installing (the ring) and when it's done
+        # (the burn-in): then he stays still
+        self.guide = glass.guide(self.vector_line(sid), "idle" if sid == "install" else "speaking",
+                                 still=self.reduced or sid in ("install", "done") or bool(self.opts.get("render")),
+                                 size=(90, 126) if self.screen_h() < 700 else (120, 178))
+        glass.rail(self.rail, steps, here, common.STEP, self.c, self.guide)
 
     def vector_line(self, sid):
-        if sid == "done" and self.done is not True:
-            return VECTOR_LINES["failed"]
-        if sid == "disk" and self.a.get("mode"):
-            d = self.disk()
-            who = ((d or {}).get("options", {}).get("alongside", {}).get("who")) or "Windows"
-            return VECTOR_LINES.get(f"disk:{self.a['mode']}", VECTOR_LINES["disk"]).format(who=who)
-        return VECTOR_LINES.get(sid, "")
+        lid, values = self.line_id(sid)
+        return caption(lid, **values)
 
     def _retitle(self):
         steps = self.steps()
@@ -558,7 +650,7 @@ class Window(Adw.ApplicationWindow):
         """The summary's rows for glass.briefing: each with its icon and the step that sets it."""
         steps = self.steps() if edit else []
         d = self.disk() or {}
-        look = {"Kind": ("computer-symbolic", "edition"), "Language": ("preferences-desktop-locale-symbolic", "welcome"),
+        look = {"Kind": ("computer-symbolic", "edition"), "Language": ("preferences-desktop-locale-symbolic", "guide"),
                 "Time zone": ("preferences-system-time-symbolic", "welcome"), "Keyboard": ("input-keyboard-symbolic", "keyboard"),
                 "Disk": (glass.drive_icon(d) if d else "drive-harddisk-symbolic", "disk"),
                 "Boot menu": ("system-reboot-symbolic", "disk"), "Name": ("avatar-default-symbolic", "user"),
@@ -611,7 +703,7 @@ class Window(Adw.ApplicationWindow):
                       "Stop the automatic install and answer the questions yourself. Nothing has changed yet.")
         cancel.add_css_class("destructive-action")
         cancel.add_css_class("bi-big")
-        cancel.connect("clicked", lambda *_: (self.a.update(auto=False), self.show_step("welcome")))
+        cancel.connect("clicked", lambda *_: (self.a.update(auto=False), self.show_step(self.first_step())))
         left.append(cancel)
         body.append(left)
         right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, hexpand=True)
@@ -638,7 +730,7 @@ class Window(Adw.ApplicationWindow):
         problem = common.auto_check(self.a, self.probe)
         if problem:
             self.a["auto"] = False
-            self.show_step("welcome")
+            self.show_step(self.first_step())
             self.err.set_label("▲ " + problem + " The installer asks instead.")
             return False
         self._auto_fill()
@@ -652,6 +744,158 @@ class Window(Adw.ApplicationWindow):
         self.auto_line.set_label(f"Installing in {self.countdown} s." + (f" {warn}" if warn else ""))
         return True
 
+
+    def build_guide(self, page):
+        """How would you like to be guided? VECTOR's voice (off until it's turned on, with a
+        sample), the screen reader, larger text, high contrast, less motion; and the language.
+        Each takes effect at once, and the new system starts the same way."""
+        g = self.a["guidance"]
+        self.heading(page, "guide")
+        # the voice guide: the big switch, a sample, what it's doing now
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        card.add_css_class("dg-panel")
+        top = Gtk.Box(spacing=16, margin_top=16, margin_bottom=6, margin_start=18, margin_end=18)
+        top.append(glass.icon("audio-speakers-symbolic", 40, "dg-row-icon"))
+        words = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, hexpand=True, valign=Gtk.Align.CENTER)
+        words.append(label("VECTOR's voice guide", ("dg-strong", "bi-status")))
+        words.append(label("He reads each step aloud, in his own voice. " + (guide.HOTKEY + " turns him on, then mutes him, "
+                           "anywhere." if guide else ""), ("dg-muted",)))
+        top.append(words)
+        self.voice_switch = Gtk.Switch(valign=Gtk.Align.CENTER, active=bool(self.voice and self.voice.enabled))
+        self.voice_switch.set_size_request(72, 36)
+        self.voice_switch.update_property([Gtk.AccessibleProperty.LABEL], ["VECTOR's voice guide"])
+        hint(self.voice_switch, "On: VECTOR reads each step aloud. Off: his words stay on screen only. " +
+             (guide.HOTKEY + " does the same from anywhere." if guide else ""))
+        self.voice_switch.connect("notify::active", self.on_voice_switch)
+        self.voice_switch.set_sensitive(bool(self.voice))
+        top.append(self.voice_switch)
+        card.append(top)
+        low = Gtk.Box(spacing=12, margin_bottom=16, margin_start=18 + 56, margin_end=18)
+        sample = hint(Gtk.Button(label="Play a sample", valign=Gtk.Align.CENTER),
+                      "Hear VECTOR's voice now, once, before you decide")
+        sample.set_sensitive(bool(self.voice))
+        sample.connect("clicked", lambda *_: self.play_sample())
+        low.append(sample)
+        self.voice_state = label(self.voice.describe() if self.voice else
+                                 "VECTOR's voice isn't on this USB stick: his words are on screen.", ("dg-muted",))
+        self.voice_state.set_hexpand(True)
+        self.voice_state.update_property([Gtk.AccessibleProperty.LABEL], ["The voice guide's state"])
+        low.append(self.voice_state)
+        card.append(low)
+        page.append(card)
+        # the other help: each switch works at once
+        grp = self.group(page, "More help")
+        self.guidance_rows = {}
+        for key, icon, title, sub, tip in (
+                ("screen_reader", "preferences-desktop-accessibility-symbolic", "Screen reader",
+                 "Orca reads everything on the screen aloud. VECTOR stays quiet while it talks.",
+                 "Start or stop Orca. Insert+S stops it talking for a moment; Insert+Q quits it."),
+                ("large_text", "format-text-larger-symbolic", "Larger text", "Bigger letters everywhere.",
+                 "Makes all the text a quarter bigger, here and on your new system"),
+                ("high_contrast", "display-brightness-symbolic", "High contrast", "Stronger colours: solid panels, no glow.",
+                 "Raises the colours' contrast, here and on your new system"),
+                ("reduce_motion", "media-playback-pause-symbolic", "Reduce motion", "Nothing moves or pulses on its own.",
+                 "Holds the animations still, here and on your new system")):
+            row = Adw.ActionRow(title=title, subtitle=sub)
+            row.set_subtitle_lines(0)
+            row.add_prefix(glass.icon(icon, 22, "dg-row-icon"))
+            sw = Gtk.Switch(valign=Gtk.Align.CENTER, active=bool(g.get(key)))
+            sw.update_property([Gtk.AccessibleProperty.LABEL], [title])
+            hint(sw, tip)
+            sw.connect("notify::active", lambda w, _p, k=key: self.on_guidance(k, w.get_active()))
+            row.add_suffix(sw)
+            row.set_activatable_widget(sw)
+            hint(row, tip)
+            grp.add(row)
+            self.guidance_rows[key] = (row, sw)
+        self.guidance_said = label("", ("dg-muted",))
+        self.guidance_said.update_property([Gtk.AccessibleProperty.LABEL], ["What changed"])
+        page.append(self.guidance_said)
+        # the language: the first thing anyone chooses, so it's here too
+        g2 = self.group(page, "Language")
+        langs = Gtk.StringList.new([n for _, n, _ in common.LANGUAGES])
+        row = Adw.ComboRow(title="Language for your new system", model=langs)
+        row.add_prefix(glass.icon("preferences-desktop-locale-symbolic", 20, "dg-row-icon"))
+        row.set_selected([loc for loc, _, _ in common.LANGUAGES].index(self.a["locale"]))
+        hint(row, "The language bromigOS uses once it's installed: menus, dates and numbers. The installer itself is in English.")
+        row.connect("notify::selected", self.on_language)
+        g2.add(row)
+        self.lang_row = row
+        self.set_default_widget(self.next)
+        GLib.idle_add(self.voice_switch.grab_focus)
+
+    def on_voice_switch(self, sw, _p):
+        if getattr(self, "_voice_sync", False) or not self.voice:
+            return
+        on = sw.get_active()
+        self.voice.set_enabled(on)
+        if on and self.voice.muted:
+            self.voice.set_muted(False)
+        self.a["guidance"].update(voice=on, voice_muted=self.voice.muted)
+        self._spoken = None
+        if on:
+            self.speak_step()
+        self._voice_shown()
+
+    def play_sample(self):
+        if not self.voice:
+            return
+        if not self.voice.play("installer.guide.sample", force=True):
+            st = self.voice.status()
+            self.voice_state.set_label("VECTOR stays quiet while your screen reader talks." if st == "screen-reader"
+                                       else self.voice.notice or self.voice.describe())
+        else:
+            self.voice_state.set_label("Playing a sample of VECTOR's voice.")
+
+    def on_guidance(self, key, on):
+        """One of the first step's switches: it takes effect here at once."""
+        if getattr(self, "_guidance_sync", False):
+            return
+        self.a["guidance"][key] = on
+        said = ""
+        if key == "screen_reader":
+            import threading
+
+            def work():
+                ok, words = backend.screen_reader(on, "wayland")
+                GLib.idle_add(self._guidance_done, key, ok, words)
+            threading.Thread(target=work, daemon=True).start()
+            said = "Starting Orca…" if on else "Stopping Orca…"
+        elif key == "large_text":
+            st = Gtk.Settings.get_default()
+            if self._dpi is None:
+                self._dpi = st.get_property("gtk-xft-dpi")
+            base = self._dpi if self._dpi and self._dpi > 0 else 96 * 1024
+            st.set_property("gtk-xft-dpi", int(base * 1.25) if on else base)
+            said = "Larger text is on." if on else "Larger text is off."
+        elif key == "high_contrast":
+            self.hc_forced = on
+            self.restyle()
+            said = "High contrast is on." if on else "High contrast is off."
+        elif key == "reduce_motion":
+            if on:
+                os.environ["BROMIGOS_REDUCED_MOTION"] = "1"      # the widgets drawn from now on hold still too
+            else:
+                os.environ.pop("BROMIGOS_REDUCED_MOTION", None)
+            self.reduced = common.reduced_motion()
+            self.draw_rail()
+            said = "Reduced motion is on: nothing moves on its own." if on else "Reduced motion is off."
+        self.guidance_said.set_label(said)
+        if hasattr(self.guidance_said, "announce"):
+            self.guidance_said.announce(said, Gtk.AccessibleAnnouncementPriority.MEDIUM)
+
+    def _guidance_done(self, key, ok, words):
+        if not ok:
+            self.a["guidance"][key] = False
+        if self.step != "guide":
+            return False
+        self.guidance_said.set_label(("" if ok else "▲ ") + words)
+        if not ok:                           # it didn't start: the switch says so, and what to do is under it
+            self._guidance_sync = True
+            self.guidance_rows[key][1].set_active(False)
+            self._guidance_sync = False
+        self._voice_shown()
+        return False
 
     def build_welcome(self, page):
         hero = Gtk.Box(spacing=24)
@@ -679,15 +923,7 @@ class Window(Adw.ApplicationWindow):
             hint(f, tip)
             facts.append(f)
         page.append(facts)
-        g = self.group(page, "Language and time")
-        langs = Gtk.StringList.new([n for _, n, _ in common.LANGUAGES])
-        row = Adw.ComboRow(title="Language for your new system", model=langs)
-        row.add_prefix(glass.icon("preferences-desktop-locale-symbolic", 20, "dg-row-icon"))
-        row.set_selected([loc for loc, _, _ in common.LANGUAGES].index(self.a["locale"]))
-        hint(row, "The language bromigOS uses once it's installed: menus, dates and numbers. The installer itself is in English.")
-        row.connect("notify::selected", self.on_language)
-        g.add(row)
-        self.lang_row = row
+        g = self.group(page, "Time")      # the language is on the first step, with how you're guided
         zones = Gtk.StringList.new(self.zones)
         tz = Adw.ComboRow(title="Time zone", model=zones, enable_search=True)
         tz.add_prefix(glass.icon("preferences-system-time-symbolic", 20, "dg-row-icon"))
@@ -721,7 +957,7 @@ class Window(Adw.ApplicationWindow):
         if loc != self.a["locale"]:
             self.a["locale"] = loc
             self.a["timezone"] = common.tz_guess(loc)
-            if self.a["timezone"] in self.zones:
+            if self.a["timezone"] in self.zones and self.step == "welcome":
                 self.tz_row.set_selected(self.zones.index(self.a["timezone"]))
 
     def refresh_network(self):
@@ -943,6 +1179,8 @@ class Window(Adw.ApplicationWindow):
         if not d:
             return
         self.guide.line.set_label(self.vector_line("disk"))
+        if self.step == "disk":
+            self.speak_step()                # a way picked: his line for it (erase's warning, alongside's)
         if (d.get("health") or {}).get("state") == "failing":
             g = self.group(box, "This disk may be failing", d["health"]["why"])
             sw = Adw.SwitchRow(title="Install on it anyway", subtitle="Only if you've copied off what you need: it may stop working.")
@@ -1670,8 +1908,10 @@ class Window(Adw.ApplicationWindow):
 
     def go_back(self):
         steps = self.steps()
+        if self.voice:
+            self.voice.stop()                    # back quiets him: the step before isn't read again
         if self.step in steps and steps.index(self.step) > 0 and self.step not in ("install", "done"):
-            self.show_step(steps[steps.index(self.step) - 1])
+            self.show_step(steps[steps.index(self.step) - 1], speak=False)
 
     def start_install(self):
         self.lines = []
@@ -1697,9 +1937,10 @@ class Window(Adw.ApplicationWindow):
         self.pct.set_label(f"{pct} %")
         self.status.set_label(text)
         self._phases(text, pct)
-        line = {True: "Nearly there. Then a restart, and it's yours."}.get(pct >= 85) or \
-            ("Copying bromigOS over. This is the long part." if pct >= 15 else VECTOR_LINES["install"])
-        self.guide.line.set_label(line)
+        lid = "installer.install.nearly" if pct >= 85 else ("installer.install.copying" if pct >= 15 else "installer.install")
+        self.guide.line.set_label(caption(lid))
+        if pct < 100:
+            self.speak_step(lid)
         if self.opts.get("script"):
             print(f"  {pct:3d}%  {text}", flush=True)
         return False
@@ -1827,7 +2068,7 @@ def snapshot(win, path):
 def render_all(win, out):
     """Each step, drawn with the fake back end (the recorded disks), to OUT/gui-STEP.png."""
     os.makedirs(out, exist_ok=True)
-    plan = [("welcome", {}), ("checks", {}), ("edition", {}), ("keyboard", {}), ("disk", {}), ("disk-erase", {}),
+    plan = [("guide", {}), ("guide-on", {}), ("welcome", {}), ("checks", {}), ("edition", {}), ("keyboard", {}), ("disk", {}), ("disk-erase", {}),
             ("disk-advanced", {}), ("bitlocker", {}), ("user-problems", {}),
             ("user", {"full_name": "Alex Rivera", "password": "correct-horse-battery"}), ("encryption", {}),
             ("encryption-own", {}), ("encryption-off", {}), ("ssh", {}), ("summary", {}), ("summary-what", {}),
@@ -1850,7 +2091,16 @@ def render_all(win, out):
             return False
         sid, fill = plan[state["i"]]
         state["i"] += 1
-        if sid == "disk-erase":
+        if sid == "guide-on":                     # the voice guide and high contrast on, as someone chose them
+            win.show_step("guide")
+            win.voice_switch.set_active(True)
+            win.guidance_rows["high_contrast"][1].set_active(True)
+
+            def undo():
+                win.guidance_rows["high_contrast"][1].set_active(False)
+                return False
+            GLib.timeout_add(900, undo)
+        elif sid == "disk-erase":
             win.a["mode"] = "erase"
             win.show_step("disk")
             GLib.idle_add(lambda: (win.scroll.get_vadjustment().set_value(400), False)[1])

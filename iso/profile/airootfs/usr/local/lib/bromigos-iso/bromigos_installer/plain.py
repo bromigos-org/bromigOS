@@ -64,6 +64,14 @@ def heading(sid):
 def main():
     a = common.defaults()
     say("bromigOS installer. Questions come one at a time; press Enter to keep the answer in brackets.")
+    # how you'd like to be guided: here the screen reader is already talking (the speech boot),
+    # so VECTOR's voice stays quiet; what the new system starts with
+    heading("guide")
+    g = a["guidance"]
+    if g["screen_reader"]:
+        g["screen_reader"] = yes("The screen reader is on. Keep it on in your new system?", True)
+    g["reduce_motion"] = yes("Reduce motion in your new system, so nothing moves on its own?", g["reduce_motion"])
+    g["high_contrast"] = yes("High contrast in your new system: white on black, nothing faded?", g["high_contrast"])
     heading("welcome")
     a["locale"] = choose("Language for your new system:", [(loc, n) for loc, n, _ in common.LANGUAGES])
     zones = common.timezones()
