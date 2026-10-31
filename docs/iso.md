@@ -586,7 +586,9 @@ changes. Those go in as a local repository (`iso/build.sh --local-repo`), ahead 
 a package that doesn't build there falls back to edge's, if edge has it. So a pull request
 that adds a package and puts it on a medium is tested with it, instead of failing because
 the channel doesn't have it yet. Such a medium is a dev build, and `check-medium.sh
---dev-build` says so instead of failing; every other check still runs. A build by hand that
+--dev-build` says so instead of failing; every other check still runs. Its tests
+(`ci-test.sh --dev-build`) are the same but for the installed system's first update and
+rollback: no channel is sure to be newer than a pull request's packages. A build by hand that
 publishes nothing does the same with its channel. A published medium never does: it only
 carries the channel's signed packages.
 

@@ -25,6 +25,10 @@
 #            again beside a stand-in Windows, whose EFI files and boot entry stay as they were
 #   --secureboot-package FILE   bromigos-secureboot as built from this ref, put in the medium's
 #            store for the install (a channel may not have it, or have an older one)
+#   --dev-build  the medium is a pull request's (iso/ci-local-packages.sh: the channel's packages
+#            and its own): the installed system's first update and rollback are skipped, as no
+#            channel is sure to be newer than its packages (a move to an older channel can
+#            meet packages it doesn't know). Every published medium runs them
 #
 # DIR gets each run's directory (shots/, the checks' output, the console log). The disks
 # are removed at the end. BROMIGOS_ISOTEST_MEM sets each VM's memory (MiB, default 6144);
@@ -32,12 +36,12 @@
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/.." && pwd)
-iso='' out='' suite=desktop profile='' sbcert='' sbpkg=''
+iso='' out='' suite=desktop profile='' sbcert='' sbpkg='' devbuild=0
 while (($#)); do
     case $1 in
         --out) out=$2; shift 2 ;; --suite) suite=$2; shift 2 ;; --profile) profile=$2; shift 2 ;;
-        --secureboot-cert) sbcert=$2; shift 2 ;; --secureboot-package) sbpkg=$2; shift 2 ;;
-        -h|--help) sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --secureboot-cert) sbcert=$2; shift 2 ;; --secureboot-package) sbpkg=$2; shift 2 ;; --dev-build) devbuild=1; shift ;;
+        -h|--help) sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*) echo "iso/ci-test.sh: unknown option $1" >&2; exit 2 ;;
         *) iso=$1; shift ;;
     esac
@@ -58,7 +62,7 @@ if [[ ${BROMIGOS_ISOTEST_IN_CONTAINER:-0} != 1 ]]; then
     exec docker run --rm --device /dev/kvm --network host "${mounts[@]}" \
         -e BROMIGOS_ISOTEST_IN_CONTAINER=1 -e BROMIGOS_ISOTEST_MEM -e BROMIGOS_VM_OWNER=none \
         archlinux:latest "$here/ci-test.sh" "$iso" --out "$out" --suite "$suite" \
-        ${profile:+--profile "$profile"} ${sbcert:+--secureboot-cert "$sbcert"} ${sbpkg:+--secureboot-package "$sbpkg"}
+        ${profile:+--profile "$profile"} ${sbcert:+--secureboot-cert "$sbcert"} ${sbpkg:+--secureboot-package "$sbpkg"} $( ((devbuild)) && echo --dev-build)
 fi
 
 # ── in the container (or, with BROMIGOS_ISOTEST_IN_CONTAINER=1 as a user, on a workstation
@@ -98,7 +102,12 @@ desktop_run() {     # desktop_run NAME FIRMWARE PORT VNC OFFLINE ENCRYPT
     export BROMIGOS_ISOTEST_DIR=$out/$name BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC BROMIGOS_ISOTEST_OFFLINE=$5
     step "$name: the live desktop" T boot --iso "$iso" --firmware "$fw" \
         && step "$name: the install" T install "${enc[@]}" \
-        && { BROMIGOS_ISOTEST_OFFLINE=0 step "$name: the installed system, its first update and rollback" T boot-disk --firmware "$fw" || true; }
+        && if (( devbuild )); then
+            BROMIGOS_ISOTEST_OFFLINE=0 BROMIGOS_ISOTEST_NO_UPDATE=1 step "$name: the installed system" T boot-disk --firmware "$fw" || true
+            echo "SKIP $name: the first update and rollback (a pull request's medium, --dev-build)"
+        else
+            BROMIGOS_ISOTEST_OFFLINE=0 step "$name: the installed system, its first update and rollback" T boot-disk --firmware "$fw" || true
+        fi
     T destroy >/dev/null 2>&1 || true
     rm -f "$out/$name/disk.qcow2"
 }
@@ -184,7 +193,9 @@ sb_store() {        # this ref's bromigos-secureboot into the live medium's stor
     [[ -n $sbpkg ]] || return 0
     local f; f=$(basename "$sbpkg")
     T ssh "cat > $f" < "$sbpkg"
-    T ssh "sudo install -m0644 $f /var/lib/bromigos/repo/bromigos/x86_64/ && sudo repo-add -q /var/lib/bromigos/repo/bromigos/x86_64/bromigos.db.tar.gz /var/lib/bromigos/repo/bromigos/x86_64/$f \
+    # its own build replaces the store's, so a signature of the store's goes (the same version,
+    # when the channel has this ref's: not the same file)
+    T ssh "sudo rm -f /var/lib/bromigos/repo/bromigos/x86_64/$f.sig && sudo install -m0644 $f /var/lib/bromigos/repo/bromigos/x86_64/ && sudo repo-add -q /var/lib/bromigos/repo/bromigos/x86_64/bromigos.db.tar.gz /var/lib/bromigos/repo/bromigos/x86_64/$f \
         && sudo sed -i '/^\[bromigos\]$/a SigLevel = Optional TrustAll' /etc/pacman.conf && sudo pacman -Sy >/dev/null"
 }
 sb_checks() {       # sb_checks WHAT: Secure Boot on, the key enrolled, everything signed (as tester)

@@ -292,6 +292,7 @@ jobs:
         env:
           SB: ${{ steps.sbkey.outputs.dir }}
           SBPKG: ${{ steps.sbpkg.outputs.pkg }}
+          LOCALREPO: ${{ steps.localpkgs.outputs.dir }}
         run: |
           set -euo pipefail
           # the tests of the ref the medium was built from, when it has them (older tags don't)
@@ -299,6 +300,7 @@ jobs:
           args=(--out "$W/tests" --suite "${{ matrix.profile.suite }}" --profile "src/iso/$PROFILE")
           [[ -n $SB ]] && args+=(--secureboot-cert "$SB/sb.cer")
           [[ -n $SBPKG ]] && args+=(--secureboot-package "$SBPKG")
+          [[ -n $LOCALREPO ]] && args+=(--dev-build)
           $t/iso/ci-test.sh "${{ steps.build.outputs.iso }}" "${args[@]}"
 
       - name: The tests' screenshots and output
