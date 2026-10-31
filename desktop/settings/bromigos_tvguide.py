@@ -23,7 +23,7 @@ import time
 import tomllib
 import urllib.request
 
-from gi.repository import Adw, Gdk, GLib, Gtk, Pango
+from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk, Pango
 
 from bromigos_settings import Entry, Page
 
@@ -43,6 +43,10 @@ try:
     import bromigos_tvchannels as CHANNELS
 except ImportError:                        # an older bromigos-core: no guide
     TVL = C = None
+try:
+    import bromigos_static as STATIC           # the mascot, drawn in code (lib/bromigos_static.py)
+except ImportError:                        # an older bromigos-core: the guide without him
+    STATIC = None
 
 SCREENS = [("big", "The big monitor"), ("wave", "The scope"), ("emblem", "The small monitor")]
 SCREEN_NAME = dict(SCREENS)
@@ -81,6 +85,15 @@ progressbar.tv-progress > trough > progress {{ min-height: 3px; background-color
 .tv-pick {{ border: 1px solid {a(c['dim'], .45)}; padding: 4px; }}
 .tv-pick.picked {{ border-color: {c['primary']}; background-color: {a(c['primary'], .12)}; }}
 .tv-pick-title {{ font-size: 0.85em; color: {c['soft']}; }}
+.tv-host {{ border: 1px solid {a(c['dim'], .6)}; background-color: {a(c['panel'], .8)}; padding: 10px 18px 10px 10px;
+  background-image: repeating-linear-gradient(to bottom, transparent 0px, transparent 2px,
+  {a(c['primary'], .035)} 2px, {a(c['primary'], .035)} 3px); }}
+.tv-host.hc {{ background-image: none; border: 2px solid {c['soft']}; }}
+.tv-host-eyebrow {{ color: {c['primary']}; font-weight: 700; font-size: 0.8em; letter-spacing: 0.22em; }}
+.tv-host-eyebrow.warn {{ color: {c['warn']}; }}
+.tv-host-title {{ color: {c['soft']}; font-weight: 700; font-size: 1.35em; }}
+.tv-host-sub {{ color: {c['muted']}; }}
+.tv-watcher {{ margin: 4px; padding: 3px 4px 0 4px; background-color: {a(c['void'], .82)}; border: 1px solid {a(c['dim'], .7)}; border-radius: 6px; }}
 """
 
 
@@ -116,6 +129,151 @@ def _order_text(ch):
     return "shuffled"
 
 
+def _theme(name, default):
+    """bromigos_theme's motion() or high_contrast(), or the default without bromigos-core."""
+    try:
+        import bromigos_theme as T
+        return getattr(T, name)()
+    except Exception:                                         # noqa: BLE001
+        return default
+
+
+class Static(Gtk.Picture):
+    """STATIC, the mascot, drawn from his rig (lib/bromigos_static.py) in the theme's colours:
+    a pose's short loop at about 6 frames a second while he's on screen, frame 0 only under
+    reduced motion, flat (EMBER) or glowing (GLOW), white-lined under high contrast. He's
+    decoration: the text beside him says everything he does."""
+
+    def __init__(self, ctx, pose, height, level="glow", face=None, animate=True, hint=None):
+        super().__init__(can_shrink=False, content_fit=Gtk.ContentFit.CONTAIN)
+        self.ctx, self.height, self.level, self.animate = ctx, height, level, animate
+        self.pose, self.face, self.frame, self.timer, self.cache = pose, face, 0, None, {}
+        self.add_css_class("tv-static")
+        self.set_valign(Gtk.Align.END)
+        self.set_accessible_role(Gtk.AccessibleRole.PRESENTATION)
+        ctx.hint(self, hint or "STATIC, the den's host")
+        self.connect("map", lambda *_: self._start())
+        self.connect("unmap", lambda *_: self._stop())
+        ctx.on_restyle(lambda _c: (self.cache.clear(), self._show()))
+        self._show()
+
+    def set_pose(self, pose, face=None, hint=None):
+        if hint:
+            self.ctx.hint(self, hint)
+        if (pose, face) == (self.pose, self.face):
+            return
+        self.pose, self.face, self.frame = pose, face, 0
+        self._show()
+        self._stop()
+        if self.get_mapped():
+            self._start()
+
+    def _still(self):
+        return not self.animate or _theme("motion", "full") != "full" or STATIC.frames(self.pose) < 2
+
+    def _texture(self):
+        hc = bool(_theme("high_contrast", False))
+        scale = max(1, self.get_scale_factor())
+        key = (self.pose, self.face, self.frame, scale, hc, tuple(sorted((self.ctx.colors or {}).items())))
+        if key not in self.cache:
+            doc = STATIC.svg(self.pose, face=self.face, frame=self.frame, pal=self.ctx.colors or None,
+                             level="ember" if hc else self.level, hc=hc, size=self.height * scale)
+            loader = GdkPixbuf.PixbufLoader.new_with_type("svg")
+            loader.write(doc.encode())
+            loader.close()
+            self.cache[key] = Gdk.Texture.new_for_pixbuf(loader.get_pixbuf())
+        return self.cache[key]
+
+    def _show(self):
+        try:
+            tex = self._texture()
+        except GLib.Error:                                    # no SVG loader: he stays away
+            self.set_visible(False)
+            return
+        self.set_paintable(tex)
+        self.set_size_request(round(tex.get_width() / max(1, self.get_scale_factor())), self.height)
+
+    def _start(self):
+        if self.timer is None and not self._still():
+            self.timer = GLib.timeout_add(166, self._tick)
+
+    def _stop(self):
+        if self.timer is not None:
+            GLib.source_remove(self.timer)
+            self.timer = None
+        if self.frame:
+            self.frame = 0
+            self._show()
+
+    def _tick(self):
+        self.frame = (self.frame + 1) % STATIC.frames(self.pose)
+        self._show()
+        return True
+
+
+class Host:
+    """The guide's host card: STATIC and one line of what's happening. Coming up next (at his
+    little desk, ON AIR), tuning in while the channels are read (snow), nothing on yet (the
+    antenna), the den asleep (the live layer off) and trouble (he whacks the set)."""
+    STATES = {
+        "loading": ("snow", None, "TUNING IN", False),
+        "next": ("host", None, "COMING UP NEXT", False),
+        "empty": ("antenna", None, "NO SIGNAL", False),
+        "asleep": ("asleep", None, "THE DEN'S ASLEEP", True),
+        "error": ("whack", None, "TROUBLE ON THE LINE", True),
+    }
+
+    def __init__(self, ctx, page, on_add, on_refresh):
+        self.ctx = ctx
+        g = ctx.group(page, "Tonight", None, key="tonight",
+                      hint="STATIC hosts the guide: what comes on next, or what's wrong")
+        box = Gtk.Box(spacing=16)
+        box.add_css_class("tv-host")
+        if _theme("high_contrast", False):
+            box.add_css_class("hc")
+        self.sprite = Static(ctx, "snow", 168, hint="STATIC, the den's host: he shows what the guide is doing")
+        box.append(self.sprite)
+        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, valign=Gtk.Align.CENTER, hexpand=True)
+        self.eyebrow = Gtk.Label(xalign=0)
+        self.eyebrow.add_css_class("tv-host-eyebrow")
+        self.title = Gtk.Label(xalign=0, wrap=True, ellipsize=Pango.EllipsizeMode.END, lines=2)
+        self.title.add_css_class("tv-host-title")
+        self.sub = Gtk.Label(xalign=0, wrap=True)
+        self.sub.add_css_class("tv-host-sub")
+        for w in (self.eyebrow, self.title, self.sub):
+            col.append(w)
+        acts = Gtk.Box(spacing=6, margin_top=4)
+        self.add = ctx.button("Add channel…", on_add, "Makes a new channel: a library, shows you pick, YouTube or a "
+                                                      "folder", primary=True)
+        self.retry = ctx.button("Read again", on_refresh, "Reads the channels and what's on again")
+        acts.append(self.add)
+        acts.append(self.retry)
+        col.append(acts)
+        box.append(col)
+        g.add(box)
+        self.group, self.box = g, box
+        self.set("loading", "Reading the channels…", "The guide fills in as each channel's list is read.")
+
+    def set(self, state, title, sub="", hint=None):
+        pose, face, eyebrow, warn = self.STATES[state]
+        self.state = state
+        self.sprite.set_pose(pose, face, hint=hint or {
+            "loading": "STATIC tunes in while the channels are read",
+            "next": "STATIC, on air: what comes on next",
+            "empty": "STATIC fiddles with the antenna: there's nothing on yet",
+            "asleep": "STATIC dozes: the den's live layer isn't running",
+            "error": "STATIC whacks the set: something can't be read"}[state])
+        self.eyebrow.set_label(eyebrow)
+        (self.eyebrow.add_css_class if warn else self.eyebrow.remove_css_class)("warn")
+        self.title.set_label(title)
+        self.sub.set_label(sub)
+        self.sub.set_visible(bool(sub))
+        self.ctx.hint(self.title, title)
+        self.ctx.hint(self.sub, sub or title)
+        self.add.set_visible(state == "empty")
+        self.retry.set_visible(state in ("error", "asleep"))
+
+
 class Guide:
     def __init__(self, ctx):
         self.ctx = ctx
@@ -137,6 +295,9 @@ class Guide:
             ctx.placeholder(self.page, "The den TV", "This needs bromigOS's den TV library (bromigos-core 0.1.2 or "
                                                      "newer).")
             return
+        self.error = None                         # the channels file doesn't read: its message
+        self.host = (Host(ctx, self.page, self.add_dialog, self.refresh)
+                     if STATIC is not None and STATIC.mode() != "off" else None)
         playback = ctx.group(self.page, "The screens", "Play something now, or return to a channel. Only one screen has sound.", key="playback")
         self.screen_rows = {}
         for screen, title in SCREEN_NAME.items():
@@ -195,11 +356,13 @@ class Guide:
         """The channels from the file, what's on from the cache, what's tuned from the live layer."""
         if TVL is None:
             return
+        self.error = None
         try:
             doc = C.load()
             tables = doc.channels()
         except Exception as e:                                # noqa: BLE001  (a file that doesn't parse)
-            self.status.set_subtitle(GLib.markup_escape_text(f"{C.path()}: {e}"[:300]))
+            self.error = (str(e).replace(C.path(), _home(C.path())) if C.path() in str(e) else f"{_home(C.path())}: {e}")[:300]
+            self.status.set_subtitle(GLib.markup_escape_text(self.error))
             tables = []
         tv = self._cfg().get("tv") or {}
         default = TVL.screens_of(tv.get("screens"), TVL.DEFAULT_SCREENS) if tv.get("screens") else TVL.DEFAULT_SCREENS
@@ -219,6 +382,48 @@ class Guide:
                              str(state.get("now") or state.get("name") or "Its own picture"))
         self._draw()
         self._fetch_missing()
+
+    def _hosted(self):
+        """What STATIC hosts: trouble first, then nothing on, the den asleep, coming up next."""
+        if self.host is None:
+            return
+        if os.environ.get("BROMIGOS_DEN_TV_HOST") == "loading":       # the tests' renders: still tuning in
+            return self.host.set("loading", "Reading the channels…", "The guide fills in as each channel's list is "
+                                                                    "read.")
+        n = sum(1 for _i, ch, _t in self.entries if ch)
+        if self.error:
+            return self.host.set("error", "The channels file doesn't read", self.error)
+        if not n:
+            return self.host.set("empty", "Nothing's on yet", "STATIC is fiddling with the antenna. Add a channel: a "
+                                                              "library, shows you pick, YouTube or a folder.")
+        ch, screen, num = self._featured()
+        cached = (TVL.cached_items(ch) or {}) if ch else {}
+        slot = TVL.now_next(ch) if ch else None
+        if ch and not (slot and slot.item) and cached.get("error"):
+            return self.host.set("error", f"{ch['name']} can't play", str(cached["error"])[:200])
+        if self.live is None:
+            return self.host.set("asleep", "Tuning waits for the live layer",
+                                 "It isn't running, so the screens can't change channel yet: bromigos-live start")
+        if ch is None:
+            return self.host.set("next", "Every screen is on its own picture",
+                                 "Tune a screen below and STATIC will tell you what's next on it.")
+        if not (slot and slot.next):
+            return self.host.set("loading", f"Reading what's on CH {num} {ch['name']}…",
+                                 "The guide fills in as each channel's list is read.")
+        at = time.strftime("%H:%M", time.localtime(slot.end)) if slot.end else "soon"
+        self.host.set("next", TVL.label(slot.next),
+                      f"At {at} on {SCREEN_NAME[screen].lower()}, CH {num} {ch['name']}"
+                      + (f" · now: {TVL.label(slot.item)}" if slot.item else ""))
+
+    def _featured(self):
+        """The channel worth hosting: the one with the sound, else the first screen on a channel."""
+        snd = (self.live or {}).get("sound_from")
+        order = ([snd] if snd in SCREEN_NAME else []) + [s for s, _t in SCREENS if s != snd]
+        for s in order:
+            for num, ch, _i in self.lineup(s):
+                if ch["key"] == self._tuned(s) and ch["key"] != "own" and ch.get("kind") != "own":
+                    return ch, s, num
+        return None, None, None
 
     def _tuned(self, s):
         """The key of the channel a screen is on (the live layer's, else its remembered state)."""
@@ -262,6 +467,7 @@ class Guide:
                 self.flow.append(self._card(ch, idx, tuned, snd))
         if self.panel:
             self.flow.append(self._card(self.panel, "panel", tuned, snd))
+        self._hosted()
 
     # ------------------------------------------------------------------ a card
     def _card(self, ch, idx, tuned, snd):
@@ -288,6 +494,16 @@ class Guide:
             self._set_poster(pic, ch, item)
         frame = Gtk.Overlay()
         frame.set_child(pic)
+        watched = snd if snd in airing else ("big" if "big" in airing and not snd else None)
+        if watched and not own and STATIC is not None and STATIC.mode() != "off":
+            # the now-playing corner: STATIC in his armchair, watching it (still, EMBER)
+            who = Static(ctx, "armchair", 62, level="ember", animate=False,
+                         hint=f"STATIC is watching this one: it's on {SCREEN_NAME[watched].lower()}"
+                              + (" with the sound" if snd == watched else ""))
+            who.set_halign(Gtk.Align.END)
+            who.set_valign(Gtk.Align.END)
+            who.add_css_class("tv-watcher")
+            frame.add_overlay(who)
         if own:
             lab = Gtk.Label(label="RELAY MAP · SCOPE · BURN-IN", wrap=True, justify=Gtk.Justification.CENTER)
             lab.add_css_class("tv-chnum")

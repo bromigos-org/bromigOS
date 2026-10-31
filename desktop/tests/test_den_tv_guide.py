@@ -7,6 +7,8 @@ headless weston of its own (no window anywhere), against a stand-in Jellyfin
   hover hint (`--audit`);
 - Add channel, and the show picker (the server's shows with their posters, picked ones
   marked);
+- STATIC, the mascot, hosting the guide (asleep here: the live layer isn't running; tuning
+  in while it reads), and gone with the mascot off;
 - the PNGs land in $BROMIGOS_TEST_SHOTS when it's set (to look at them).
 
     python3 -m unittest desktop/tests/test_den_tv_guide.py
@@ -113,6 +115,34 @@ class GuideRender(unittest.TestCase):
             shutil.copy(out, os.path.join(self.shots, f"den-tv-{name}.png"))
         from PIL import Image
         return Image.open(out).convert("RGB"), r
+
+    def _host_pixels(self, im):
+        """Bright pixels in the host card's corner, where STATIC stands (the sprite's box)."""
+        px = im.load()
+        return sum(1 for x in range(130, 260, 2) for y in range(225, 400, 2)
+                   if px[x, y][1] > 180 and px[x, y][0] < 140)
+
+    def test_static_hosts_the_guide(self):
+        """STATIC, the mascot, hosts: drawn at the top of the guide in every state (here: the
+        live layer isn't running, so he's asleep), and nowhere with the mascot off."""
+        im, _r = self.render("host")
+        self.assertGreater(self._host_pixels(im), 60, "STATIC isn't drawn in the host card")
+        im, _r = self.render("host-reduced", env={"BROMIGOS_REDUCED_MOTION": "1"})
+        self.assertGreater(self._host_pixels(im), 60)
+        im, _r = self.render("host-loading", env={"BROMIGOS_DEN_TV_HOST": "loading"})
+        self.assertGreater(self._host_pixels(im), 60)
+
+    def test_the_mascot_off(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("static_rig", os.path.join(REPO, "lib", "bromigos_static.py"))
+        rig = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rig)
+        self.assertEqual(rig.mode({"BROMIGOS_MASCOT": "off"}), "off")
+        r = subprocess.run([sys.executable, os.path.join(DESKTOP, "settings", "bromigos-tv-guide"), "--audit",
+                            "--page", "den-tv", "--size", "1180x980"], env=dict(self.env, BROMIGOS_MASCOT="off"),
+                           capture_output=True, text=True, timeout=120)
+        doc = json.loads(r.stdout.strip().splitlines()[-1])
+        self.assertEqual(doc["unhinted"], [], doc)
 
     def test_play_picker_and_its_hints(self):
         image, result = self.render("play", extra=("--audit",), env={"BROMIGOS_DEN_TV_OPEN":"play"})

@@ -558,6 +558,16 @@ terminal. Without a terminal, both print the Requests card instead.
   its controls edit picks, reorder, tune, rename and confirm deletion, with undo.
   A cache-only poll updates screens and now/next every five seconds without cancelling
   slower content fetches. Reordering keeps the selected channel or pick.
+- STATIC, the mascot (`lib/bromigos_static_term.py`), hosts CHANNELS and the den play
+  picker. The big figure shows snow while the list loads and the antenna when there are no
+  channels. Beside the selected channel, his head watches when it's on air and whacks the
+  set when it can't play. The picker's status line starts with his face, for example
+  `[▒▒▒]` while reading. In kitty he's a picture: the kitty graphics protocol's Unicode
+  placeholders, sent once per frame. Elsewhere he's half-block pixel art in the theme's
+  colours, and on a 16-colour console or with `BROMIGOS_ICONS=ascii` he's plain text.
+  `BROMIGOS_STATIC_TERM=kitty|blocks|text` picks one look. Frames are drawn in a worker
+  thread at about 4 a second, never under reduced motion. `BROMIGOS_MASCOT=off` removes
+  him.
   All channel tests use sandbox config and stub control sockets.
 
 The same changes are CLI verbs too: `library`, `monitor`, `profile`, `refresh` and `delete`.

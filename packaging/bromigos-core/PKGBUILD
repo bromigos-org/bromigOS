@@ -135,6 +135,9 @@ check() {
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/alerts"
   # lib/bromigos_qr.py: themed QR codes in every world and style, each decoded by zbar and ZXing
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/qr"
+  # STATIC, the mascot (lib/bromigos_static*.py): every pose and frame as SVG in any theme's
+  # colours, the faces, the rig's parts, mascot off, and the terminal looks (kitty, half-blocks, text)
+  PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/mascot"
   # the voice guide: every line of lib/guide/lines.toml has a clip that says its words, and
   # the player's choices, with stand-in players (no sound plays)
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/voice-guide"

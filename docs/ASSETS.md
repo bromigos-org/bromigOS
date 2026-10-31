@@ -14,6 +14,7 @@ the models used.
 | Asset | Source | Ships? | Notes |
 |---|---|---|---|
 | Den TV controller (`live/live/tvosc.lua`) and MEDIA rotary dial | Drawn and written for bromigOS | yes | `MIT OR Apache-2.0`; no vendored mpv scripts or art |
+| STATIC, the mascot: his rig, faces, poses and terminal sprites (`lib/bromigos_static.py`, `lib/bromigos_static_term.py`) | Drawn in code for bromigOS, from lab concept sheets | yes, as a brand asset | No generated pixels ship. The concepts were Qwen-Image 2.1 (non-commercial); [see the notes](#static-the-mascot) |
 | Dictation panel and `dictation.webp` | Drawn for bromigOS; nested render with synthetic speech | yes | No desktop capture, audio, private text or external art |
 | Code: the core, widgets, live layer, VECTOR, scripts | Written for bromigOS, first on the operator's desktop | yes | `MIT OR Apache-2.0` |
 | Lab console test snapshot (`homelab/tests/snapshots/lab-tui.svg`) | Textual render with recorded fake readings | yes | No real desktop or lab data |
@@ -194,6 +195,22 @@ needs its own row.
 - **The bar's icons** use 1-pixel strokes, in the style of the rest of the bar's set.
 - **The peripheral modules** need openrazer, python-evdev and xkeyboard-config's `fkeys`
   option. These are dependencies, not vendored ([peripherals.md](peripherals.md)).
+
+### STATIC, the mascot
+
+- **What ships.** STATIC's rig, his faces, his Den TV poses and their loops, and his
+  terminal sprites. Every shape, colour and pixel is written in `lib/bromigos_static.py`
+  and `lib/bromigos_static_term.py`. They are drawn at run time in the theme's colours, and
+  no image file or generated pixel ships. The Den TV guide, the media TUI and BRODEC's Den
+  remote draw him from this rig. BRODEC ships PNG frames rendered from it.
+- **Where the design came from.** The character was designed from concept sheets made on
+  the lab with Qwen-Image 2.1 (2026-10-30). The six screen faces BLACKFLAME approved
+  (2026-10-31) were redrawn here as pixel grids. Those sheets are under the Qwen Research
+  License (non-commercial). They are lab material and are not in this repository.
+- **Before anything with STATIC is sold.** The rig is hand-written, but its look follows
+  the non-commercial concepts closely. Before a commercial use, such as merchandise, a paid
+  app or a store listing, have the character reviewed. If needed, redraw him from a brief
+  rather than from the concepts.
 
 ### The Drift map's lore catalogue
 
