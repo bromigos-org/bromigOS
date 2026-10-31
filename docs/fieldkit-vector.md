@@ -218,8 +218,11 @@ first-boot tour (`bromigos welcome-console`) pairs too, in its "Pair your phone"
 
   On a stick the agent runs as root (`systemd-run`, unit `brodec-machine-fieldkit`); on an
   install, the user's `brodec-machine` service.
-- Waiting: the agent's pairing code as a QR, with the code to type (`KPGG-ZFVT`). Half blocks,
-  black on white, the standard's four-module quiet zone, error correction M; each module takes
+- Waiting: the agent's pairing code as a QR, with the code to type (`KPGG-ZFVT`). Dark on
+  light with both colours set in every cell: a cell that is all dark or all light is a space on
+  that colour, and only a cell split between two modules draws a half block, so no font's block
+  that falls short of its cell leaves a seam between rows. The standard's four-module quiet zone,
+  error correction M; each module takes
   1 to 3 cells, the most that fit, so it scans on a 1080p and a 4K console. The `qrcode` crate
   is the one BRODEC uses (0.14.1, MIT or Apache-2.0).
 - Paired: the name BRODEC gave it. When the phone asks (this machine › ALLOW THIS PHONE), E runs
@@ -241,6 +244,10 @@ first-boot tour (`bromigos welcome-console`) pairs too, in its "Pair your phone"
   first is Field Kit's (`fieldkit-engine brodec-setup`); elsewhere the package's example. After
   `paired` it offers "Allow this phone" (`brodec-machine enroll`, with sudo).
 - A lab's VECTOR bridge pairs the same way with `sudo brodec-lab pair --json`.
+
+`bromigos fieldkit qr TEXT` draws any text with the same widget, full screen. Field Kit's CI
+test decodes it with zbarimg from kmscon and from the bare kernel console
+(`iso/fieldkit/ci-test.sh`).
 
 The engine's verbs: `vector pair` (the state above), `vector pair-start` (the proposal),
 `vector controls`, `vector control ACTION`. `fieldkit-engine brodec-setup` is root's file alone.

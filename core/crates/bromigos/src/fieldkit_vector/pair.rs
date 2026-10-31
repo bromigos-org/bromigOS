@@ -61,19 +61,78 @@ pub fn qr_lines(look: &Look, w: usize, dark: &[bool], k: usize) -> Vec<Line<'sta
     };
     let px = w * k;
     let at = |x: usize, y: usize| y < px && dark[(y / k) * w + x / k];
+    // Every cell sets both colours, and a cell that is all dark or all light is a space on that
+    // background: no glyph, so no font's block that falls short of the cell can leave a light
+    // seam between rows (the gaps that make a terminal QR unscannable). Only a cell split
+    // between two modules draws a half block, dark over light.
     (0..px.div_ceil(2))
         .map(|row| {
-            let s: String = (0..px)
-                .map(|x| match (at(x, 2 * row), at(x, 2 * row + 1)) {
-                    (true, true) => '█',
-                    (true, false) => '▀',
-                    (false, true) => '▄',
-                    (false, false) => ' ',
-                })
-                .collect();
-            Line::from(Span::styled(s, Style::new().fg(fg).bg(bg)))
+            let mut spans: Vec<Span<'static>> = Vec::new();
+            let mut run = String::new();
+            let mut style: Option<Style> = None;
+            for x in 0..px {
+                let (ch, s) = match (at(x, 2 * row), at(x, 2 * row + 1)) {
+                    (true, true) => (' ', Style::new().fg(fg).bg(fg)),
+                    (false, false) => (' ', Style::new().fg(bg).bg(bg)),
+                    (true, false) => ('▀', Style::new().fg(fg).bg(bg)),
+                    (false, true) => ('▄', Style::new().fg(fg).bg(bg)),
+                };
+                if style != Some(s) {
+                    if let Some(prev) = style.take() {
+                        spans.push(Span::styled(std::mem::take(&mut run), prev));
+                    }
+                    style = Some(s);
+                }
+                run.push(ch);
+            }
+            if let Some(prev) = style {
+                spans.push(Span::styled(run, prev));
+            }
+            Line::from(spans)
         })
         .collect()
+}
+
+/// `bromigos fieldkit qr TEXT`: TEXT as a QR code filling the screen, with the pairing screen's
+/// own rendering (for a decode test on a real console, or to hand a phone a URL); any key ends it.
+pub fn show_qr(look: &Look, text: &str) -> io::Result<()> {
+    let Some((w, dark)) = qr_modules(text) else {
+        eprintln!("bromigos fieldkit qr: too long for a QR code");
+        return Ok(());
+    };
+    let mut terminal = ratatui::init();
+    let r = (|| -> io::Result<()> {
+        loop {
+            terminal.draw(|f| {
+                let area = f.area();
+                f.render_widget(
+                    Paragraph::new("").style(Style::new().bg(look.pal.void)),
+                    area,
+                );
+                let k = qr_scale(w, area.width, area.height.saturating_sub(1));
+                if k == 0 {
+                    f.render_widget(Paragraph::new("The QR needs a bigger screen."), area);
+                    return;
+                }
+                let lines = qr_lines(look, w, &dark, k);
+                let h = lines.len() as u16;
+                let x = area.x + (area.width.saturating_sub((w * k) as u16)) / 2;
+                let y = area.y + (area.height.saturating_sub(h)) / 2;
+                f.render_widget(
+                    Paragraph::new(lines),
+                    Rect::new(x, y, (w * k) as u16, h.min(area.height)),
+                );
+            })?;
+            if event::poll(Duration::from_millis(500))?
+                && let Event::Key(k) = event::read()?
+                && k.kind == KeyEventKind::Press
+            {
+                return Ok(());
+            }
+        }
+    })();
+    ratatui::restore();
+    r
 }
 
 /// `KPGGZFVT` as `KPGG-ZFVT`, as BRODEC shows it.
@@ -463,6 +522,13 @@ mod tests {
         let lines = qr_lines(&Look::wick(), w, &qr_modules(URL).unwrap().1, 2);
         assert_eq!(lines.len(), (w * 2).div_ceil(2));
         assert_eq!(lines[0].width(), w * 2);
+        // no full block, and every cell with both colours set: no seam between rows
+        for l in &lines {
+            for sp in &l.spans {
+                assert!(!sp.content.contains('█'));
+                assert!(sp.style.fg.is_some() && sp.style.bg.is_some());
+            }
+        }
     }
 
     #[test]

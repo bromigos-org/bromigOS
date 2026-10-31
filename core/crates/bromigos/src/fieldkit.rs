@@ -4243,6 +4243,18 @@ pub fn fieldkit_cmd(words: Vec<OsString>) -> Result<i32> {
             crate::fieldkit_vector::run(&Look::detect(), Path::new(&engine_path()))?;
             Ok(0)
         }
+        "qr" => {
+            let text = words
+                .get(1)
+                .map(|w| w.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            if text.is_empty() {
+                eprintln!("bromigos fieldkit qr TEXT: TEXT as a QR code on the screen");
+                return Ok(2);
+            }
+            crate::fieldkit_vector::pair::show_qr(&Look::detect(), &text)?;
+            Ok(0)
+        }
         "console" => {
             ensure_root(&words);
             let shell = if which("zsh") { "zsh" } else { "bash" };
