@@ -23,13 +23,16 @@ depends=('gcc-libs' 'glibc' 'openssl' 'git'   # git: bromigos ext (extensions ar
          'ethtool')                         # Wake-on-LAN on for wired cards (the udev rule; docs/wake-on-lan.md)
 makedepends=('cargo' 'git' 'python')
 # openssh: the SSH sign-in's tests sign for real; python-qrcode: bromigos login's QR code
-checkdepends=('desktop-file-utils' 'rsync' 'npm' 'openssh' 'python-qrcode')
+checkdepends=('desktop-file-utils' 'rsync' 'npm' 'openssh' 'python-qrcode' 'python-pillow' 'python-numpy'
+              'zbar' 'zxing-cpp')
 optdepends=('python: bromigos private, secrets, emblem, console, power menu, splash and local storage'
             'qrencode: the pairing QR in the console welcome tour (bromigos welcome-console)'
             'terminus-font: readable text console font sizes'
             'openssh: bromigos login --ssh, and the SSH keys a new lab box gets from your account'
             'libsecret: keep account sign-ins (bromigos login, bromigos account) in your keyring'
             'python-qrcode: a QR code of the sign-in page in the terminal (bromigos login, bromigos account login)'
+            'python-pillow: themed QR codes (bromigos qr, lib/bromigos_qr.py), with python-qrcode'
+            'zxing-cpp: themed QR codes checked by decoding them before they are shown (bromigos qr)'
             'oo7: the keyring itself, unlocked by your login (bromigos-desktop brings it; bromigos keyring)'
             'plymouth: graphical shutdown and restart (bromigos splash)'
             'grub: save the graphical splash kernel setting'
@@ -126,6 +129,8 @@ check() {
   # bromigos alerts: every check against stand-in commands and a stand-in root, the custom
   # checks' rules and the desktop notification's dedup (fake notify-send; nothing shown)
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/alerts"
+  # lib/bromigos_qr.py: themed QR codes in every world and style, each decoded by zbar and ZXing
+  PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/qr"
 }
 
 package() {
@@ -155,9 +160,9 @@ package() {
   # Textual) and bromigos_drift (the orb, the emblem and the disk map from `bromigos fieldkit
   # shapes`, for the installer's TUI)
   install -Dm0644 -t "$pkgdir/usr/lib/bromigos/lib/" "$_root"/lib/*.py
-  # `bromigos private|secrets|emblem …`: the CLI routes to bromigos-<group> here
+  # `bromigos private|secrets|emblem|qr …`: the CLI routes to bromigos-<group> here
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-private \
-    "$_root"/bin/bromigos-secrets "$_root"/bin/bromigos-emblem
+    "$_root"/bin/bromigos-secrets "$_root"/bin/bromigos-emblem "$_root"/bin/bromigos-qr
   # the private overlay decrypted at login, and again when it changes: on for every user
   # (shipped default.target.wants links, as pipewire ships its own), doing nothing for one
   # without the encrypted file or the age key

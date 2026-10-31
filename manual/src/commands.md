@@ -159,6 +159,7 @@ The desktop runs these for you. You don't need them day to day.
 | Command | What it does |
 |---|---|
 | [`bromigos fieldkit`](#bromigos-fieldkit) | Field Kit (Repair. Recon. Deploy.): the menu (Repair, Lab, Tools, Install, Shell), or one job: why, black-screen, status, make-stick, remote, usb (docs/fieldkit.md) |
+| [`bromigos qr`](#bromigos-qr) | Themed QR codes: a world's colours, its emblem, an art mode for BRODEC; checked by decoding |
 | [`bromigos tv guide`](#bromigos-tv-guide) |  |
 | [`bromigos welcome`](#bromigos-welcome) | The welcome tour after an install: Wi-Fi, your screens, a world, VECTOR and his voice, your homelab, the keys; every step skippable |
 | [`bromigos welcome console`](#bromigos-welcome-console) | The welcome tour in the terminal (bromigOS Server's first sign-in): the network, SSH, joining your lab, and what's here |
@@ -2008,6 +2009,23 @@ Options:
       --json  Print the JSON document (after any change; schema in core/README.md)
   -h, --help  Print help
 ```
+
+### bromigos qr
+
+Themed QR codes: a world's colours, its emblem, an art mode for BRODEC; checked by decoding.
+
+```text
+bromigos qr show TEXT | png TEXT FILE | gallery DIR  [--style camera|brodec|art] [--world NAME]
+```
+
+For example:
+
+```text
+bromigos qr show https://bromigos.org
+bromigos qr png https://bromigos.org code.png --style brodec
+```
+
+From the `bromigos-core` package.
 
 ### bromigos rec
 

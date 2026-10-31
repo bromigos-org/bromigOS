@@ -54,11 +54,7 @@ pub fn qr_scale(modules: usize, cols: u16, rows: u16) -> usize {
 /// whatever the theme: black on white in 24-bit colour, the console's own black and bright
 /// white on the Linux console.
 pub fn qr_lines(look: &Look, w: usize, dark: &[bool], k: usize) -> Vec<Line<'static>> {
-    let (fg, bg) = if look.mode == Mode::Truecolor {
-        (Color::Rgb(0, 0, 0), Color::Rgb(255, 255, 255))
-    } else {
-        (Color::Black, Color::White)
-    };
+    let (fg, bg) = qr_inks(look);
     let px = w * k;
     let at = |x: usize, y: usize| y < px && dark[(y / k) * w + x / k];
     // Every cell sets both colours, and a cell that is all dark or all light is a space on that
@@ -91,6 +87,46 @@ pub fn qr_lines(look: &Look, w: usize, dark: &[bool], k: usize) -> Vec<Line<'sta
             Line::from(spans)
         })
         .collect()
+}
+
+/// The code's dark and light ink: the world's camera-safe pair, as lib/bromigos_qr.py's `inks`
+/// (its selection darkened, its text lightened, pushed apart until they reach a contrast of 7);
+/// black and white on the console's 16 colours.
+pub fn qr_inks(look: &Look) -> (Color, Color) {
+    if look.mode != Mode::Truecolor {
+        return (Color::Black, Color::White);
+    }
+    use bromigos_tui::palette::mix;
+    let (mut dark, mut light) = (
+        mix(look.pal.selection, Color::Rgb(0, 0, 0), 0.35),
+        mix(look.pal.text, Color::Rgb(255, 255, 255), 0.55),
+    );
+    for _ in 0..20 {
+        if contrast(dark, light) >= 7.0 {
+            break;
+        }
+        dark = mix(dark, Color::Rgb(0, 0, 0), 0.25);
+        light = mix(light, Color::Rgb(255, 255, 255), 0.25);
+    }
+    (dark, light)
+}
+
+/// WCAG's contrast ratio of two colours.
+pub fn contrast(a: Color, b: Color) -> f64 {
+    fn lum(c: Color) -> f64 {
+        let Color::Rgb(r, g, b) = c else { return 0.0 };
+        let ch = |v: u8| {
+            let v = v as f64 / 255.0;
+            if v <= 0.03928 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
+    }
+    let (x, y) = (lum(a), lum(b));
+    (x.max(y) + 0.05) / (x.min(y) + 0.05)
 }
 
 /// `bromigos fieldkit qr TEXT`: TEXT as a QR code filling the screen, with the pairing screen's
@@ -522,6 +558,9 @@ mod tests {
         let lines = qr_lines(&Look::wick(), w, &qr_modules(URL).unwrap().1, 2);
         assert_eq!(lines.len(), (w * 2).div_ceil(2));
         assert_eq!(lines[0].width(), w * 2);
+        // the world's inks, far enough apart for any camera
+        let (d, l) = qr_inks(&Look::wick());
+        assert!(contrast(d, l) >= 7.0);
         // no full block, and every cell with both colours set: no seam between rows
         for l in &lines {
             for sp in &l.spans {
