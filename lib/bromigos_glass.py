@@ -1068,13 +1068,15 @@ class HoloLock(Gtk.DrawingArea):
                 self.spark_at = None
         cx = w / 2
         s = min(w, h / 1.15)
+        oy = (h - s * 1.15) / 2                       # drawn in its own box, centred, however tall the area
         bw, bh = s * 0.56, s * 0.42                   # the body
-        bx, by = cx - bw / 2, h * 0.42
-        _emitter(cr, c, cx, h * 0.93, s * 0.42, glow)
+        bx, by = cx - bw / 2, oy + s * 1.15 * 0.42
+        ey = oy + s * 1.15 * 0.93
+        _emitter(cr, c, cx, ey, s * 0.42, glow)
         # light rising from the Emitter
         for i in range(9):
             cr.set_source_rgba(*rgba(c["primary"], 0.05 * glow))
-            cr.rectangle(bx + bw * 0.06 + i * bw * 0.11, by + bh, 3, h * 0.93 - by - bh)
+            cr.rectangle(bx + bw * 0.06 + i * bw * 0.11, by + bh, 3, ey - by - bh)
             cr.fill()
         depth = s * 0.05
 
@@ -1552,7 +1554,7 @@ class KeyboardHolo(Gtk.DrawingArea):
         ch = Gdk.keyval_to_unicode(keyval)
         if ch and chr(ch).isprintable() and not chr(ch).isspace() and code not in KB_NAMES:
             self.typed[code] = chr(ch).upper() if chr(ch).isalpha() else chr(ch)
-        self.lit = {code: time.monotonic()} if self.still else dict(self.lit, **{code: time.monotonic()})
+        self.lit = {code: time.monotonic()} if self.still else {**self.lit, code: time.monotonic()}
         if not self.still and not self.ticking:
             self.ticking = True
             self.add_tick_callback(self._tick)
