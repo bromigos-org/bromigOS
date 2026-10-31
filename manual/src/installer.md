@@ -75,11 +75,11 @@ itself.
 11. **Installing.** A progress bar and a line saying what's happening. **Details** shows
     every step. It takes about ten minutes.
 12. **Done.** Press **Restart now**. Take out the stick when the screen goes dark. On a
-    computer that starts the newer way (UEFI), this page also shows a four-digit code:
-    note it. At the first start, a blue screen asks you to approve bromigOS once, with that
+    computer that starts the newer way (UEFI), this page also shows a four-digit code in large
+    letters, with the blue screen's steps beside it: note it. At the first start, a blue screen asks you to approve bromigOS once, with that
     code ([Secure Boot](install.md#secure-boot)). Secure Boot can stay on.
 
-    ![bromigOS is installed: what happens at the next start, and Restart now](images/installer-done.webp)
+    ![bromigOS is installed: what happens at the next start, the code for the blue screen with its steps, and Restart now](images/installer-done.webp)
 
 ## Installing alongside Windows
 
