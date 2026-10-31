@@ -712,6 +712,9 @@ def apply(repo, reveal=reveal_once, prepared=False, approved=False, live_facts=N
 
 def main(argv=None):
     argv = list(argv if argv is not None else sys.argv[1:])
+    if '--local' in argv or (argv and argv[0] == '--check'):
+        from . import localprovision
+        return localprovision.main(argv)
     if not argv or argv[0] in ('--guided', '--start-over'):
         from . import guidedprovision
         return guidedprovision.main(argv)
