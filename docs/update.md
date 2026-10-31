@@ -199,6 +199,16 @@ Moving to an older channel, such as from `edge` to `stable`, leaves packages tha
 newer than the channel's in place. `bromigos update --downgrade` brings them back to the
 channel's versions with `pacman -Syuu`. `bromigos update --channel` does this by itself.
 
+A move to an older channel waits when that channel doesn't have a bromigOS package that's
+installed here yet: one added since its release, or split from another (bromigos-boot from
+bromigos-settings before v0.1.4). pacman would meet the other package's files and stop.
+`bromigos update --channel stable` and `bromigos channel stable` read the channel's
+database first. If a package is missing, they say "Stable will be available after the next
+bromigOS release …", keep the machine on its channel, and remember the wish
+(`~/.local/state/bromigos/channel.toml`, `wanted`). Each `bromigos update` after that looks
+again and moves by itself once the channel has everything. `bromigos channel` shows the
+wish. When the channel's database can't be read, the move goes ahead as before.
+
 The `dev` channel sets `SigLevel = Optional`, because your own build is unsigned. The
 other channels keep `SigLevel = Required DatabaseOptional`.
 
