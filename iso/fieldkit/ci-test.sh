@@ -63,13 +63,13 @@ qr() {
     sleep 10
     "$T" login --name qr --timeout 60 >/dev/null || return 1
     local rc=0 got
-    run qr "kmscon --vt=5 --switchvt --configdir /usr/share/bromigos/console/kmscon --login -- /usr/bin/bromigos fieldkit qr '$QR_URL' >/dev/null 2>&1 & sleep 8; echo kmscon" || return 1
+    run qr "kmscon --vt=7 --switchvt --configdir /usr/share/bromigos/console/kmscon --login -- /usr/bin/bromigos fieldkit qr '$QR_URL' >/dev/null 2>&1 & sleep 8; echo kmscon" || return 1
     "$T" shot --name qr qr-kmscon >/dev/null
     got=$(zbarimg -q --raw "$BROMIGOS_FIELDKIT_SHOTS/qr-kmscon.png" 2>/dev/null | head -1)
     echo "kmscon: ${got:-nothing decoded}"; [[ $got == "$QR_URL" ]] || rc=1
-    # the bare console: no kmscon holding the screen, the QR on VT 6 and VT 6 shown
-    run qr "pkill -f 'kmscon --vt=5'; systemctl stop kmsconvt@tty1.service; sleep 2
-        openvt -c 6 -f -- env TERM=linux /usr/bin/bromigos fieldkit qr '$QR_URL'; sleep 2; chvt 6; sleep 5; echo vt" || return 1
+    # the bare console: no kmscon holding the screen, the QR on VT 8 (past logind's six login VTs) and VT 8 shown
+    run qr "pkill -f 'kmscon --vt=7'; systemctl stop kmsconvt@tty1.service; sleep 2
+        openvt -c 8 -f -- env TERM=linux /usr/bin/bromigos fieldkit qr '$QR_URL'; sleep 2; chvt 8; sleep 5; echo vt" || return 1
     "$T" shot --name qr qr-vt >/dev/null
     got=$(zbarimg -q --raw "$BROMIGOS_FIELDKIT_SHOTS/qr-vt.png" 2>/dev/null | head -1)
     echo "bare console: ${got:-nothing decoded}"; [[ $got == "$QR_URL" ]] || rc=1
