@@ -130,6 +130,25 @@ class Helper(unittest.TestCase):
         wol.apply(self.paths, self.runner)
         self.assertEqual(wakeup.stat().st_mtime_ns, before)
 
+    def test_apply_records_the_cards_for_the_user(self):
+        self.ethtool_out = ETHTOOL_ON
+        wol.apply(self.paths, self.runner)
+        rec_path = self.paths.at(wol.RECORD)
+        rec = json.loads(rec_path.read_text())
+        self.assertEqual(rec['schema'], 1)
+        self.assertEqual([c['name'] for c in rec['cards']], ['enp6s0'])
+        self.assertEqual((rec['cards'][0]['supports'], rec['cards'][0]['wake_on']), ('pumbg', 'g'))
+        self.assertTrue(rec['cards'][0]['on'])
+        self.assertEqual(rec_path.stat().st_mode & 0o777, 0o644)
+        self.assertNotIn('sopass', rec_path.read_text())
+
+    def test_record_needs_root_and_the_rule_runs_it(self):
+        if os.geteuid() != 0:
+            self.assertEqual(wol.main(['record'], self.paths, self.runner), 1)
+        rule = (PKG / '81-bromigos-wake-on-lan.rules').read_text()
+        self.assertIn('RUN+="/usr/lib/bromigos/bin/bromigos-wol record"', rule)
+        self.assertLess(rule.index('wol g"'), rule.index('bromigos-wol record'))
+
     def test_a_masked_rule_turns_it_off(self):
         etc = self.paths.at(wol.RULE_ETC)
         etc.parent.mkdir(parents=True)
