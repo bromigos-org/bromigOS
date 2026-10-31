@@ -295,6 +295,15 @@ class Installer(App):
     #hint { height: 2; padding: 0 2; color: $text-muted; border-top: solid $primary 25%; }
     Input, Select, RadioSet { margin-top: 0; width: 100%; max-width: 90; }
     RadioSet { height: auto; }
+    #mok { height: auto; margin-top: 1; }
+    #mok-row { height: auto; }
+    #mok-code { width: auto; height: auto; margin: 1 3 0 1; }
+    #mok-steps { width: 1fr; height: auto; }
+    Screen.-narrow #mok-row, Screen.-compact #mok-row { layout: vertical; }
+    /* the chosen row lit, its words still readable: Textual's cursor colours put the label in
+       the same green as its highlight */
+    RadioSet:focus > RadioButton.-selected > .toggle--label { background: $primary 28%; color: $foreground; text-style: bold; }
+    RadioSet:blur > RadioButton.-selected > .toggle--label { background: $primary 12%; color: $foreground; }
     ProgressBar { margin-top: 1; }
     ProgressBar Bar { width: 1fr; }
     #log { height: 1fr; min-height: 6; border: round $primary 30%; display: none; }
@@ -474,6 +483,27 @@ class Installer(App):
             self._redraw = asyncio.Lock()
         return self._redraw
 
+    async def _mount_all(self, box, build):
+        """Run build(), then wait until everything it mounted into box is mounted, before the
+        redraw lock lets the next redraw remove it: a Select torn down mid-mount fails inside
+        Textual ("No nodes match '#label'"), and a slow console (the stick's VT, a serial
+        line) widens that window."""
+        pending = []
+
+        def mount(*widgets, **kw):
+            aw = type(box).mount(box, *widgets, **kw)
+            pending.append(aw)
+            return aw
+        box.mount = mount
+        try:
+            r = build()
+            if hasattr(r, "__await__"):
+                await r
+        finally:
+            del box.mount
+        for aw in pending:
+            await aw
+
     async def show(self, sid):
         async with self.redraw:
             await self._show(sid)
@@ -485,7 +515,7 @@ class Installer(App):
             self.from_summary = False
         box = self.query_one(f"#step-{sid}", Vertical)
         await box.remove_children()
-        getattr(self, f"build_{sid}")(box)
+        await self._mount_all(box, lambda: getattr(self, f"build_{sid}")(box))
         self.query_one("#steps", ContentSwitcher).current = f"step-{sid}"
         steps = self.steps()
         self._top()
@@ -575,15 +605,25 @@ class Installer(App):
     def _focus_first(self, box):
         for w in box.query("Choice.-on, Input, Select, RadioSet, Switch, Checkbox, Split, Button"):
             if w.focusable:
-                w.focus()
-                self.call_after_refresh(w.scroll_visible, animate=False)
+                self._arriving = w
+                w.focus(scroll_visible=False)
+                self.call_after_refresh(self._first_view, w)
                 return
         self.query_one("#next", Button).focus()
+
+    def _first_view(self, w):
+        """A step opens at its top, heading first; it scrolls only when the first choice
+        wouldn't be in view from there (a small screen)."""
+        self._arriving = None
+        page = self.query_one("#page", VerticalScroll)
+        page.scroll_home(animate=False, immediate=True)
+        if w.is_mounted and w.region.y + min(w.region.height, 3) > page.region.bottom:
+            w.scroll_visible(animate=False)
 
     def on_descendant_focus(self, event):
         # the selection stays in view, whatever the size: the page scrolls to what has the focus
         w = event.widget
-        if w is not None and w.id not in ("next", "back"):
+        if w is not None and w.id not in ("next", "back") and w is not getattr(self, "_arriving", None):
             self.call_after_refresh(w.scroll_visible, animate=False)
 
     def error(self, text):
@@ -902,7 +942,7 @@ class Installer(App):
 
     async def fill_disk_detail(self):
         async with self.redraw:
-            await self._fill_disk_detail()
+            await self._mount_all(self.disk_detail, self._fill_disk_detail)
 
     async def _fill_disk_detail(self):
         box = self.disk_detail
@@ -1519,9 +1559,10 @@ class Installer(App):
                                              for w in box.query("#hero-art")])
             ed = common.edition(self.a["edition"])
             lines = [("usb", "When the screen goes dark, take out the USB stick.")]
-            sb = common.secureboot_done(backend.SECUREBOOT_CODE)
+            sb = common.secureboot_steps(backend.SECUREBOOT_CODE)
             if sb:
-                lines.append(("shield", sb))
+                lines.append(("shield", f"At the first start, approve bromigOS on the blue screen with the code {sb['code']} "
+                                        "(the steps are below)."))
             if self.a["encrypt"]:
                 lines.append(("lock", "At start, type the disk's passphrase" +
                               (" (your password)." if not self.a.get("separate_passphrase") else ".")))
@@ -1532,6 +1573,20 @@ class Installer(App):
             side.mount(Static(icon_rows(lines), classes="card"))
             side.mount(Horizontal(hint(Button("Restart now", id="reboot", variant="primary"), "Restart the computer into bromigOS."),
                                   classes="buttons"))
+            if sb:
+                # Secure Boot's one-time approval: the code big, the blue screen's steps in order
+                code = BT.big_code(sb["code"]) if BT is not None else Text(sb["code"], style="bold")
+                steps = Text()
+                steps.append(sb["intro"] + "\n\n")
+                for i, t in enumerate(sb["steps"], 1):
+                    steps.append(f" {i} ", style="bold reverse " + col("primary"))
+                    steps.append(f"  {t}\n")
+                steps.append("\n" + sb["lost"], style=col("muted"))
+                card = Vertical(id="mok", classes="card")
+                box.mount(card)
+                card.mount(Static(Text.assemble((ic("shield") + "  " + sb["title"].upper(), "bold " + col("primary"))), id="mok-head"),
+                           Horizontal(hint(Static(code, id="mok-code"), "Type this on the blue screen at the first start. It's needed once."),
+                                      Static(steps, id="mok-steps"), id="mok-row"))
         else:
             pct = int(getattr(self, "last_pct", 0) or 0)
             row = Horizontal(id="count-row")

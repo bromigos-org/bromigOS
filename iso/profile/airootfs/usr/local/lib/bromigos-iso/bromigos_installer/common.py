@@ -508,6 +508,27 @@ def secureboot_done(code):
             f"disk instead, then the file ENROLL_THIS_KEY_FOR_THIS_PC.cer.)")
 
 
+def secureboot_steps(code):
+    """The last page's Secure Boot card: the code big, then the blue screen's steps in the
+    order it asks them (the same facts as secureboot_done, laid out to follow along)."""
+    if not code:
+        return None
+    return {
+        "title": "Approve bromigOS at the first start",
+        "code": str(code),
+        "intro": "Secure Boot stays on. The first time this computer starts bromigOS, a blue screen "
+                 "asks you to approve it. This happens once, and you'll need this code:",
+        "steps": [
+            "When the blue screen appears, press any key. It waits about 10 seconds.",
+            "Choose Enroll MOK, then Continue, then Yes.",
+            f"Type {code} and press Enter.",
+            "Choose Reboot. bromigOS starts, now with Secure Boot on.",
+        ],
+        "lost": "Lost the code? On the blue screen, choose Enroll key from disk, then the file "
+                "ENROLL_THIS_KEY_FOR_THIS_PC.cer.",
+    }
+
+
 def gpu_checks():
     try:
         r = subprocess.run(["bromigos", "hw", "detect", "--json"], capture_output=True, text=True, timeout=30)

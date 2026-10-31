@@ -1529,9 +1529,10 @@ class Window(Adw.ApplicationWindow):
             ed = common.edition(self.a["edition"])
             lines = [("system-reboot-symbolic", "Press Restart now."),
                      ("media-removable-symbolic", "When the screen goes dark, take out the USB stick.")]
-            sb = common.secureboot_done(backend.SECUREBOOT_CODE)
+            sb = common.secureboot_steps(backend.SECUREBOOT_CODE)
             if sb:
-                lines.append(("security-high-symbolic", sb))
+                lines.append(("security-high-symbolic", f"At the first start, approve bromigOS on the blue screen with "
+                                                        f"the code {sb['code']} (the steps are below)."))
             if self.a["encrypt"]:
                 lines.append(("system-lock-screen-symbolic", "At start, type the disk's passphrase" +
                               ("." if self.a.get("separate_passphrase") else " (your password).")))
@@ -1542,6 +1543,10 @@ class Window(Adw.ApplicationWindow):
                           else "Then sign in at the text console."))
             page.append(glass.section("What happens next"))
             page.append(glass.numbered(lines))
+            if sb:          # beside Restart now, which has the focus: the code is on screen with it
+                card = glass.secureboot_card(sb)
+                card.set_margin_top(8)
+                page.append(card)
             btn = hint(Gtk.Button(label="Restart now", halign=Gtk.Align.START), "Restart the computer into bromigOS.")
             btn.add_css_class("suggested-action")
             btn.add_css_class("bi-big")
@@ -1823,7 +1828,7 @@ def render_all(win, out):
             ("disk-advanced", {}), ("bitlocker", {}), ("user-problems", {}),
             ("user", {"full_name": "Alex Rivera", "password": "correct-horse-battery"}), ("encryption", {}),
             ("encryption-own", {}), ("encryption-off", {}), ("ssh", {}), ("summary", {}), ("summary-what", {}),
-            ("install", {}), ("done", {}), ("failed", {}), ("auto", {})]
+            ("install", {}), ("done", {}), ("done-secureboot", {}), ("failed", {}), ("auto", {})]
     win.probe = backend.probe()
     win._probed(win.probe)
     win.a.update(disk=win.probe["disks"][0]["path"], mode=None)
@@ -1901,6 +1906,11 @@ def render_all(win, out):
         elif sid == "done":
             win.done = True
             win.show_step("done")
+        elif sid == "done-secureboot":      # the install set up Secure Boot: its code on the last page
+            backend.SECUREBOOT_CODE = "4821"
+            win.done = True
+            win.show_step("done")
+            backend.SECUREBOOT_CODE = None
         elif sid == "failed":
             win.done = "Making room stopped and the install didn't finish. The other system's files are as they were."
             win.lines = ["ntfsresize: …"]

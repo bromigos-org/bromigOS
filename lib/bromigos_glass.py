@@ -183,6 +183,9 @@ button.dg-edit {{ color: {c['soft']}; padding: 2px 12px; min-height: 0; border: 
   background: none; box-shadow: none; font-size: 0.85em; letter-spacing: 0.1em; }}
 button.dg-edit:hover {{ color: {p}; border-color: {p}; background-color: {a(p, .08)}; }}
 button.dg-edit:focus-visible {{ outline: 2px solid {c['soft']}; outline-offset: 2px; }}
+.dg-mok-code {{ font-family: monospace; font-size: 3.4em; font-weight: 800; letter-spacing: 0.28em; color: {p};
+  border: 2px solid {a(p, .8)}; background-color: {a(p, .08)}; padding: 4px 22px; }}
+.dg-mok-cap {{ color: {c['muted'] if not hc else c['text']}; font-size: 0.76em; letter-spacing: 0.16em; font-weight: 700; }}
 .dg-note {{ border-left: 3px solid {c['warn']}; padding: 8px 14px; background-color: {a(c['warn'], .07)}; color: {c['text']}; }}
 .dg-note.danger {{ border-left-color: {c['danger']}; background-color: {a(c['danger'], .07)}; }}
 /* Before you start: one card per thing worth knowing */
@@ -1478,6 +1481,41 @@ def numbered(lines):
         row.append(t)
         box.append(row)
     return box
+
+
+def secureboot_card(sb):
+    """The Done page's Secure Boot card (common.secureboot_steps): the code big enough to
+    read from across the room, then the blue screen's steps, numbered, in the order it asks."""
+    card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    card.add_css_class("dg-brief")
+    head = Gtk.Box(spacing=8)
+    head.add_css_class("dg-brief-head")
+    head.append(icon("security-high-symbolic", 16))
+    head.append(Gtk.Label(label=sb["title"].upper(), xalign=0, hexpand=True))
+    card.append(head)
+    body = Gtk.Box(spacing=26)
+    body.set_margin_top(14); body.set_margin_bottom(14); body.set_margin_start(16); body.set_margin_end(16)
+    left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, valign=Gtk.Align.CENTER)
+    cap = Gtk.Label(label="YOUR CODE", xalign=0)
+    cap.add_css_class("dg-mok-cap")
+    code = Gtk.Label(label=sb["code"], xalign=0.5, selectable=True)
+    code.add_css_class("dg-mok-code")
+    code.set_tooltip_text("Type this on the blue screen at the first start. It's needed once.")
+    left.append(cap)
+    left.append(code)
+    body.append(left)
+    right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, hexpand=True)
+    intro = Gtk.Label(label=sb["intro"], xalign=0, wrap=True)
+    intro.set_wrap_mode(2)
+    right.append(intro)
+    right.append(numbered([(None, t) for t in sb["steps"]]))
+    lost = Gtk.Label(label=sb["lost"], xalign=0, wrap=True)
+    lost.set_wrap_mode(2)
+    lost.add_css_class("dg-muted")
+    right.append(lost)
+    body.append(right)
+    card.append(body)
+    return card
 
 
 def keycaps(keys):
