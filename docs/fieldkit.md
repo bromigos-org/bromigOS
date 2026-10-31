@@ -612,4 +612,6 @@ noted:
 | GRUB deleted | The firmware's Field Kit entry (BootNext) starts; "Repair the boot menu" puts GRUB back |
 | Ventoy 1.1.18 | Normal and GRUB2 modes, UEFI and BIOS: Field Kit and the full medium both boot |
 | The full medium's Field Kit entry | Boots the same system without the desktop, into Field Kit |
+| Field Kit's CI test (`iso/fieldkit/ci-test.sh`) on a medium built as CI builds it (no test key) | Passes: Field Kit starts offline; the pairing QR decodes (zbarimg) from kmscon and from the bare kernel console; bromigOS Server installs offline through the installer's backend; the installed Server boots to its console with its firewall, update timer and snapshots |
+| A plain "Start Field Kit" boot | SSH off: only the remote-help entry, the stick's settings or a test build turn it on |
 | The medium's checks (`check-medium.sh`) | Pass for Field Kit, the privacy guard and licence check included. A dev build (`--local-repo`) fails only its own dev-build check, as it should |
