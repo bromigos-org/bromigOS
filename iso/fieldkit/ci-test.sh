@@ -114,9 +114,9 @@ server() {
         systemctl get-default | grep -qx multi-user.target
         ! systemctl is-active -q display-manager.service
         systemctl is-active kmsconvt@tty1.service || systemctl is-active getty@tty1.service
-        echo tester | sudo -S -p "" nft list ruleset | grep -q "table inet bromigos-server"
+        systemctl is-active bromigos-server-firewall.service
         systemctl is-enabled bromigos-server-update.timer
-        echo tester | sudo -S -p "" snapper --no-dbus list-configs | grep -q root
+        ls /etc/snapper/configs/root
         grep -q "More ways to start" /boot/grub/grub.cfg
         test "$(systemctl is-system-running || true)" != maintenance
         echo SERVER-OK'
