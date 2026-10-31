@@ -99,7 +99,8 @@ class TUI(unittest.TestCase):
         self.assertEqual(doc["ssh_keys"], [key])
         self.assertTrue(doc["firewall"] and doc["auto_updates"])
         self.assertEqual(doc["passphrase"], "disk-pass")
-        self.assertEqual(doc["hostname"], "alex-server")
+        self.assertEqual(doc["hostname"], "bromigos-server")      # Just a server's name, as the Network step offered it
+        self.assertEqual(doc["server"]["role"], "plain")
         self.assertTrue(doc["edition_file"].endswith("server.json"))
         self.assertIn('ssh_keys = ["ssh-ed25519', doc["answers_toml"])
         self.assertNotIn("disk-pass", doc["answers_toml"])
@@ -108,14 +109,13 @@ class TUI(unittest.TestCase):
         async def go():
             app = tui.Installer()
             async with app.run_test(size=(120, 42)) as pilot:
-                app.a["edition"] = "server"
-                await app.show("ssh")
-                app.query_one("#ssh").value = True
+                app.a.update(edition="server", password="tester-pass", password2="tester-pass", found_keys=[])
+                await app.show("access")
                 await pilot.pause(0.3)
                 await pilot.press("ctrl+n")
                 return app.step, str(app.query_one("#error").render())
         step, msg = asyncio.run(go())
-        self.assertEqual(step, "ssh")
+        self.assertEqual(step, "access")
         self.assertIn("needs a key", msg)
 
     def test_reinstall_keeps_files(self):
@@ -557,8 +557,12 @@ class Plain(unittest.TestCase):
         from unittest import mock
         from bromigos_installer import plain
         key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTheInstallerTestsOnly x"
-        # the first two: how you'd like to be guided (reduce motion: Enter keeps it; high contrast: yes)
-        answers = iter(["", "yes", "", "", "2", "", "2", "", "Test Er", "tester", "", "", "", "yes", "", key, "", "", "yes", "no"])
+        # how you'd like to be guided (reduce motion: Enter keeps it; high contrast: yes), then Welcome to Where,
+        # About you and Encryption, then bromigOS Server's own: Just a server, the first port by DHCP with
+        # Wake-on-LAN, keys only (none on the stick, no GitHub, one pasted), no WireGuard or Tailscale, no data disk,
+        # the security chip, automatic updates in the first window, the eight services as they are
+        answers = iter(["", "yes", "", "", "2", "", "2", "", "Test Er", "tester", "", "", "", "", "", "", "", "", "", key, "", "", "",
+                        "", "", "", *[""] * 8, "", "", "", "yes", "no"])      # the keys' store, the lab, the plan as suggested
         sent = []
         real = backend.Install.__init__
 
@@ -599,7 +603,7 @@ class ServerWelcome(unittest.TestCase):
         env = dict(os.environ, PYTHONPATH=os.path.join(HERE, "../../../lib"))
         r = subprocess.run([sys.executable, self.BIN, "--render", out], env=env, capture_output=True, text=True, timeout=120)
         self.assertEqual(r.returncode, 0, r.stderr[-800:])
-        self.assertEqual(sorted(os.listdir(out)), sorted(f"server-welcome-{s}.svg" for s in ("network", "ssh", "vector", "lab", "phone", "tour", "done")))
+        self.assertEqual(sorted(os.listdir(out)), sorted(f"server-welcome-{s}.svg" for s in ("network", "ssh", "vector", "lab", "provision", "phone", "tour", "done")))
         # pictures with a brain (the sample one): the lab step again, at its Ask VECTOR box
         out = tempfile.mkdtemp()
         env.pop("BROMIGOS_VECTOR_BRAIN", None)

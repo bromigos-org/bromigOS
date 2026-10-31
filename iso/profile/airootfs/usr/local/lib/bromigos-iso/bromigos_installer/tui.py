@@ -19,6 +19,7 @@ if __package__ in (None, ""):
 
 from . import backend, common  # noqa: E402
 from .disks import GiB, plain_size  # noqa: E402
+from . import server, server_tui  # noqa: E402  (bromigOS Server's steps)
 
 
 def _read(path):
@@ -273,7 +274,7 @@ class Choice(Widget, can_focus=True):
             nxt.focus()
 
 
-class Installer(App):
+class Installer(server_tui.ServerPages, App):
     TITLE = "Install bromigOS"
     CSS = (BT.CSS if BT is not None else "") + """
     Screen { background: $background; }
@@ -396,7 +397,7 @@ class Installer(App):
     .g-sample-row .g-text { padding-top: 1; }
     .g-sub { color: $text-muted; }
     #g-said { margin-top: 1; }
-    """
+    """ + server_tui.CSS
     BINDINGS = [Binding("escape", "back", "Back"), Binding("ctrl+n", "next", "Continue"),
                 Binding("f12", "shell", "Shell", show=False),
                 Binding("f2", "details", "Details", show=False), Binding("ctrl+c", "quit_ask", "Quit", show=False)] + \
@@ -1604,6 +1605,8 @@ class Installer(App):
     BRIEF_TITLE = {"guide": ("Language", "language"), "welcome": ("Time zone", "clock"), "edition": ("Kind", "edition"), "keyboard": ("Keyboard", "keyboard"),
                    "disk": ("Where", "disk"), "user": ("You", "user"), "encryption": ("Encryption", "encryption"),
                    "ssh": ("Remote access", "ssh"), None: ("Packages", "copy")}
+    BRIEF_STEP.update(server_tui.BRIEF_STEP)          # bromigOS Server's rows and steps
+    BRIEF_TITLE.update(server_tui.BRIEF_TITLE)
 
     def briefing(self):
         """The summary's rows, grouped by the step that changes them: [(step or None, [(label, value)])]."""
@@ -1665,6 +1668,8 @@ class Installer(App):
             panel.mount(Horizontal(*parts, classes="brief-row"))
         if warn:
             box.mount(Static(Text.assemble((ic("alert") + "  ", "bold"), warn), classes="danger" if self.a["mode"] == "erase" else "warn"))
+        if server.is_server(self.a):
+            self.server_summary_extra(box)        # the Server briefing: ssh admin@address, and its QR
         self.what = Static("Open this to see the commands and archinstall's configuration.", classes="muted")
         box.mount(hint(Collapsible(self.what, title="Show what will run", collapsed=True, id="what"),
                        "The exact commands, and the configuration archinstall gets (passwords hidden)."))
@@ -1790,6 +1795,7 @@ class Installer(App):
                 lines.append(("boot", "The boot menu lets you choose bromigOS or "
                               f"{(self.disk() or {}).get('options', {}).get('alongside', {}).get('name') or 'the other system'} each time."))
             lines.append(("user", "Then sign in at the login screen." if ed.get("desktop", True) else "Then sign in at the text console."))
+            lines += [({"key": "key", "recover": "rollback", "run": "settings"}[k], w) for k, w in server.done_lines(self.a)]
             side.mount(Static(icon_rows(lines), classes="card"))
             side.mount(Horizontal(hint(Button("Restart now", id="reboot", variant="primary"), "Restart the computer into bromigOS."),
                                   classes="buttons"))
@@ -1854,6 +1860,8 @@ class Installer(App):
         """The step's answers read and checked: None, or what to fix, in plain words."""
         s = self.step
         q = self.query_one
+        if s in server_tui.STEP_IDS:
+            return self.server_check(s)
         if s == "welcome":
             tz = q("#timezone", Input).value.strip()
             match = next((z for z in self.zones if z.lower() == tz.lower()), None)

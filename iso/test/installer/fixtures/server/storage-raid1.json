@@ -1,0 +1,2 @@
+{"role": "storage", "data_disks": ["/dev/vdb", "/dev/vdc"], "data_layout": "raid1", "unlock": "none",
+ "update_mode": "download"}

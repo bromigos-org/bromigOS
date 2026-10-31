@@ -18,7 +18,10 @@ each one changes things the usual way, so nothing here keeps a setting of its ow
 
   bromigos welcome-console                 open it (again)
   bromigos welcome-console --if-pending    only when the install left it pending (the console's sign-in)
-  bromigos welcome-console --step STEP    open it on one step (network, ssh, vector, lab, phone, tour, done)
+  bromigos welcome-console --step STEP    open it on one step (network, ssh, vector, lab, provision, phone, tour, done)
+  bromigos welcome-console --provision plan|apply
+                                           the Run step without the screen: the plan for what was chosen at
+                                           install, or setting it up, with each step printed
   bromigos welcome-console --render DIR [--size WxH]
                                            each step to DIR/server-welcome-STEP.svg (checked to
                                            fit at that size), and exit
@@ -57,6 +60,9 @@ STEPS = [
      "Where his brain runs. Nothing leaves this server unless you choose a service."),
     ("lab", "Lab", "Join your lab",
      "If you run a homelab, this server can join it: the lab console then shows it, and VECTOR can use it."),
+    ("provision", "Run", "Set up what it runs",
+     "What you chose at install, as a plan to check first: services, ports, sizes, what it downloads. Nothing runs until "
+     "you press Apply."),
     ("phone", "Phone", "Pair your phone",
      "With BRODEC on your phone: talk to VECTOR, approve his fixes, restart, shut down or update this server."),
     ("tour", "What's here", "What's on this server",
@@ -72,6 +78,146 @@ TOUR = [   # (command, what it's for, its icon)
     ("fieldkit", "Field Kit's repair and lab tools, when they're installed", "fieldkit"),
     ("bromigos settings --help", "Everything bromigOS can set, from the command line", "settings"),
 ]
+
+
+# ── bromigOS Server's own facts: its role, its network and its updates, as the installer
+# set them (/etc/bromigos/server.toml; server.py's server_toml) ─────────────────────────────
+ROLE_TITLES = {"lab": "Lab node", "storage": "Storage", "home": "Home services", "games": "Game server", "plain": "Just a server"}
+SAMPLE_SERVER = {"roles": {"enabled": ["home"]}, "network": {"interface": "enp3s0", "method": "static",
+                 "address": "192.0.2.24", "prefix": 24, "wake_on_lan": True},
+                 "updates": {"mode": "auto", "window": "03:00-05:00", "notify": True},
+                 "storage": {"disks": ["/dev/sda", "/dev/sdb"], "layout": "raid1", "shares": []},
+                 "apps": {"enabled": ["homepage", "uptime-kuma"]}, "kernel": {"default": "linux-lts", "installed": ["linux-lts", "linux"]}}
+# per role: what's worth knowing in "What's here" (command, words, icon); {host} is this server's name
+ROLE_TOUR = {
+    "lab": [("bromigos lab provision add-node {host}", "On your lab's workstation: joins this server to the cluster", "lab")],
+    "storage": [("\\\\{host}.local\\shares", "The shared folder, from Windows; smb://{host}.local/shares from a Mac", "people"),
+                ("bromigos storage", "The data disks: their health, the copies, the snapshots", "disk")],
+    "home": [("http://start.{host}.local", "Every app on this server, on one page", "desktop"),
+             ("bromigos server apps", "Add, remove and update the apps", "settings")],
+    "games": [("bromigos server apps", "The game servers: start, stop, back up the worlds", "power")],
+}
+
+
+def server_settings(sample=False):
+    """/etc/bromigos/server.toml as the installer wrote it ({} on a server set up another way)."""
+    if sample:
+        return SAMPLE_SERVER
+    try:
+        import tomllib
+        with open(SERVER_TOML, "rb") as f:
+            return tomllib.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def server_facts(c):
+    """[(icon, words)]: the role, the network, the updates and the disks, in plain words."""
+    out = []
+    role = ((c.get("roles") or {}).get("enabled") or [None])[0]
+    if role:
+        out.append(("server", f"Role: {ROLE_TITLES.get(role, role)}"))
+    n = c.get("network") or {}
+    if n.get("interface"):
+        out.append(("wired", f"{n['interface']}: " + (f"a fixed address, {n.get('address')}/{n.get('prefix')}"
+                                                         if n.get("method") == "static" else "its address from your router")
+                    + ("; Wake-on-LAN on" if n.get("wake_on_lan") else "")))
+    u = c.get("updates") or {}
+    if u.get("mode"):
+        w = u.get("window", "03:00-05:00")
+        out.append(("update", {"auto": f"Updates by itself, {w}: a snapshot first, a rollback if it isn't healthy",
+                               "download": f"Downloads updates {w}, then asks your phone",
+                               "off": "Updates only when you run bromigos update"}.get(u["mode"], u["mode"])))
+    st = c.get("storage") or {}
+    if st.get("disks"):
+        out.append(("disk", f"Data at /srv/data: {len(st['disks'])} disk{'s' if len(st['disks']) != 1 else ''}, "
+                    + ("two copies (RAID1)" if st.get("layout") == "raid1" else "one copy")))
+    return out
+
+
+# ── what it runs: the lab provisioning engine's plan for what was chosen at install
+# (`bromigos lab provision --local --from-answers … --plan`, then `--apply`; its stand-in in tests,
+# BROMIGOS_PROVISION_CMD) ─────────────────────────────────────────────────────────────────────
+ANSWERS = "/var/log/bromigos/install-answers.toml"
+SAMPLE_PLAN = {"items": [
+    {"id": "kubernetes", "name": "Kubernetes (k3s)", "ports": [6443, 10250], "size_text": "about 300 MB", "internet": True},
+    {"id": "jellyfin", "name": "Jellyfin", "ports": [8096], "size_text": "about 800 MB", "internet": True},
+    {"id": "vpn", "name": "VPN for downloads (Gluetun)", "ports": [], "size_text": "about 40 MB", "internet": True},
+    {"id": "brodec-machine", "name": "This server on your phone", "ports": [], "size_text": "about 20 MB", "internet": False}],
+    "download_text": "about 1.2 GB", "store": "local"}
+
+
+def provision_cmd():
+    return os.environ.get("BROMIGOS_PROVISION_CMD", "bromigos").split() + ["lab", "provision", "--local", "--from-answers",
+                                                                           os.environ.get("BROMIGOS_INSTALL_ANSWERS", ANSWERS)]
+
+
+def provision_plan(sample=False):
+    """(plan or None, words): the engine's reviewed plan for what was chosen at install."""
+    if sample:
+        return SAMPLE_PLAN, ""
+    if not os.path.exists(os.environ.get("BROMIGOS_INSTALL_ANSWERS", ANSWERS)):
+        return None, "Nothing was chosen to run at install. bromigos lab provision --local adds services any time."
+    code, out, err = run(provision_cmd() + ["--plan", "--json"], timeout=120)
+    try:
+        return json.loads(out), ""
+    except ValueError:
+        return None, ("This server's lab tools can't make the plan yet (" + ((err or out).strip().splitlines() or ["no answer"])[-1]
+                      + "). It's made after the next update: bromigos lab provision --local --plan.")
+
+
+def provision_apply(on_line):
+    """Run the plan: on_line(kind, pct or id, words) for each ::stage / ::item / ::error line; returns the exit code."""
+    try:
+        p = subprocess.Popen(provision_cmd() + ["--apply", "--json"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    except OSError as e:
+        on_line("error", None, str(e))
+        return 127
+    for line in p.stdout:
+        line = line.rstrip("\n")
+        m = re.match(r"^::stage (\d+) (.*)$", line)
+        if m:
+            on_line("stage", int(m.group(1)), m.group(2))
+            continue
+        m = re.match(r"^::item (\S+) (\S+)(?: (.*))?$", line)
+        if m:
+            on_line("item", m.group(1), m.group(2) + (f" {m.group(3)}" if m.group(3) else ""))
+            continue
+        m = re.match(r"^::note (\S+) (.*)$", line)          # something the person must do
+        if m:
+            on_line("note", m.group(1), m.group(2))
+            continue
+        m = re.match(r"^::error (.*)$", line)
+        if m:
+            on_line("error", None, m.group(1))
+        # any other line: the engine's detail, not shown
+    return p.wait()
+
+
+def keys_where(sample=False):
+    """(where the keys live, how to recover them): the lab's secret store says (localprovision.where_keys_live),
+    else from the install's choice."""
+    if not sample:
+        try:
+            from bromigos_homelab import localprovision as L, secretstore as S
+            doc = L.where_keys_live(S.open_store())
+            return doc.get("summary") or "", doc.get("recovery") or ""
+        except Exception:
+            pass
+    store = "local"
+    if not sample:
+        try:
+            import tomllib
+            with open(os.environ.get("BROMIGOS_INSTALL_ANSWERS", ANSWERS), "rb") as f:
+                store = ((tomllib.load(f).get("server") or {}).get("store") or {}).get("kind", "local")
+        except (OSError, ValueError):
+            pass
+    return {"vault": ("In your lab's Vault, under this server's own path.", "Your lab's Vault and its backups recover them."),
+            "openbao": ("In this server's Vault (OpenBao).", "With the unseal and recovery keys shown once below: keep them offline."),
+            "sops": ("In your lab's repository, sops-encrypted to this server's age key.", "With your lab's own age keys."),
+            "local": ("On this server, encrypted and sealed to its security chip.",
+                      "With the recovery bundle: bromigos server secrets recovery-bundle saves it, or shows it as a QR code.")
+            }.get(store, ("On this server, encrypted.", "With the recovery bundle."))
 
 
 def run(argv, timeout=20):
@@ -112,6 +258,13 @@ def ssh_state():
 def main(argv):
     if "--if-pending" in argv and not os.path.exists(PENDING):
         return 0
+    if "--provision" in argv:          # the Run step without the screen: --provision plan | apply (power users, tests)
+        what = argv[argv.index("--provision") + 1] if len(argv) > argv.index("--provision") + 1 else "plan"
+        plan, words = provision_plan()
+        if what == "plan" or plan is None:
+            print(json.dumps(plan, indent=1) if plan else words)
+            return 0 if plan else 1
+        return provision_apply(lambda kind, a, w: print(f"{kind} {a if a is not None else ''} {w}".strip(), flush=True))
     if any(a in ("-h", "--help") for a in argv):
         print(__doc__.strip())
         return 0
@@ -376,7 +529,8 @@ def main(argv):
             self._top()
             c = BT.palette()
             rail = Text()
-            icons = {"network": "network", "ssh": "ssh", "vector": "vector", "lab": "lab", "phone": "phone", "tour": "tour",
+            icons = {"network": "network", "ssh": "ssh", "vector": "vector", "lab": "lab", "provision": "settings",
+                     "phone": "phone", "tour": "tour",
                      "done": "done"}
             for j, s in enumerate(STEPS):
                 g = ic(icons.get(s[0], "done"))
@@ -427,6 +581,16 @@ def main(argv):
                 page.mount(Static(icon_rows([("shell", Text.assemble(("From another computer on your network:  ", col("muted")),
                                                                      (f"ssh {user}@{addr}", "bold " + col("text"))))])))
             page.mount(BT.Reading("Connected" if on_ else "Not connected: plug in a cable, or connect to Wi-Fi", "ok" if on_ else "warn"))
+            facts = server_facts(server_settings(sample))          # the role, the network and the updates chosen at install
+            if facts:
+                page.mount(Static(icon_rows(facts), classes="glass"))
+            c = server_settings(sample)
+            if hasattr(BT, "net_map") and addr:                    # the installer's network map, as it is now
+                gw = next((r[4] for r in rows if r[2] == "connected"), "")
+                page.mount(Static(BT.net_map({"address": addr, "name": name, "gateway": (c.get("network") or {}).get("gateway") or "",
+                                              "how": "FIXED ADDRESS" if (c.get("network") or {}).get("method") == "static"
+                                              else "FROM YOUR ROUTER (DHCP)", "lab": []},
+                                             max(30, min(64, self.size.width - 30))), classes="glass"))
             t = Table.grid(padding=(0, 2))
             for dev, kind, state, conn, addrs in rows:
                 g = ic("wired" if kind == "ethernet" else "wifi" if kind == "wifi" else "network")
@@ -720,6 +884,60 @@ def main(argv):
                     t.add_row(Text.assemble((ic(icon_name), "bold " + col("primary"))),
                               Text.assemble((cmd, "bold " + col("text")), "\n", (what, col("muted"))))
             page.mount(Static(t, classes="glass"))
+            c = server_settings(sample)                             # this server's role: what's worth knowing for it
+            role = ((c.get("roles") or {}).get("enabled") or [None])[0]
+            if ROLE_TOUR.get(role):
+                host = who()[1]
+                page.mount(Static(icon_rows([(i, Text.assemble((cmd.format(host=host), "bold " + col("text")), "\n",
+                                                               (w.format(host=host), col("muted"))))
+                                             for cmd, w, i in ROLE_TOUR[role]]), classes="glass"))
+
+        def build_provision(self, page):
+            plan, words = provision_plan(sample)
+            self.prov_out = Static("", classes="muted")
+            if plan is None:
+                page.mount(BT.Reading(words, "idle"))
+                return
+            t = Table.grid(padding=(0, 2), expand=True)
+            t.add_column(no_wrap=True, width=1)
+            t.add_column(ratio=2)
+            t.add_column(ratio=1)
+            t.add_column(no_wrap=True)
+            for it in plan.get("items", []):
+                t.add_row(Text(ic("settings"), style="bold " + col("primary")), Text(it["name"], style="bold " + col("text")),
+                          Text(", ".join(map(str, it.get("ports", []))) or "no ports", style=col("muted")),
+                          Text(it.get("size_text", "") + ("  · needs the internet" if it.get("internet") else ""),
+                               style=col("warn") if it.get("internet") else col("muted")))
+            page.mount(Static(t, classes="glass"))
+            page.mount(Static(f"Downloads {plan.get('download_text', 'what it needs')}. What needs the internet waits for a "
+                              "network, and says so.", classes="muted"))
+            where, recover = keys_where(sample)
+            page.mount(Static(icon_rows([("key", "Your keys: " + where), ("rollback", "To recover them: " + recover)]),
+                              classes="glass"))
+            self.prov_line = BT.Reading("Nothing has run yet.", "idle")
+            page.mount(self.prov_line, self.prov_out)
+            row = Horizontal(classes="buttons")
+            page.mount(row)
+            self.button(row, "Apply the plan", "prov-apply", "Set up everything in the plan now (it shows each step)")
+
+        @work(thread=True)
+        def provision_go(self):
+            done = []
+
+            def line(kind, a, words):
+                if kind == "stage":
+                    self.call_from_thread(self.prov_line.set, f"{a} % · {words}", "busy")
+                elif kind == "note":
+                    done.append(f"▲ {a}: {words}")
+                    self.call_from_thread(self.prov_out.update, "\n".join(done[-8:]))
+                elif kind == "item":
+                    done.append(f"{a}: {words}")
+                    self.call_from_thread(self.prov_out.update, "\n".join(done[-8:]))
+                else:
+                    self.call_from_thread(self.prov_line.set, words, "fail")
+            rc = provision_apply(line)
+            self.call_from_thread(self.prov_line.set, "Done: everything in the plan is set up." if rc == 0 else
+                                  "It stopped: what's above says where. Apply again once it's fixed.", "ok" if rc == 0 else "fail")
 
         def build_done(self, page):
             user, name, addr = who()
@@ -729,6 +947,9 @@ def main(argv):
                      ("check" if nkeys else "cross", f"{nkeys} key{'s' if nkeys != 1 else ''} can sign in as {user}"),
                      ("check" if lab else "info", "Your lab is connected" if lab else "No lab yet: bromigos setup homelab, any time"),
                      ("info", "Updates take a snapshot first: bromigos update --rollback undoes one")]
+            facts += [f for f in server_facts(server_settings(sample)) if f[0] in ("server", "update", "disk")]
+            where, recover = keys_where(sample)
+            facts += [("key", "Your keys: " + where), ("rollback", "To recover them: " + recover)]
             page.mount(Static(icon_rows(facts), classes="glass"))
             page.mount(BT.Reading("This server is ready. Sign in from another computer with: ssh " + user + "@" + (addr or name), "ok"))
 
@@ -828,6 +1049,8 @@ def main(argv):
                 self.lab_action("file")
             elif b == "labplan":
                 self.lab_action("plan")
+            elif b == "prov-apply":
+                self.provision_go()
             elif b == "machine-install":
                 with self.suspend():          # pacman asks for the password here (a server has no password window)
                     subprocess.run(["sudo", "pacman", "-S", "--needed", F.machine_package()])

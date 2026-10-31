@@ -20,6 +20,10 @@
 #                       test/installer/tuidrive.py; the graphical one's own script mode, with
 #                       a screenshot of each step from the VM's screen) onto the VM's disk,
 #                       with the real install; then as `install` after it
+#   iso/test.sh tui-install|gui-install … --server PLAN.json   bromigOS Server: its steps answered from
+#                       PLAN (an answer file's [server] keys, as JSON: role, method, address, data_disks, …)
+#   iso/test.sh answer-install FILE   an answer file (bromigos/install.toml's form) installed by itself:
+#                       the text installer's countdown, then the install, as from a USB stick
 #   iso/test.sh data-rollback   on the installed system (after boot-disk or up): an update's rollback
 #                       undoes the system, and a container volume's data written after it stays
 #   iso/test.sh keep-files | verify-reinstall   a file in the installed home before `tui-install --mode
@@ -76,14 +80,15 @@ ovmf_code=${BROMIGOS_ISOTEST_OVMF_CODE:-/usr/share/edk2/x64/OVMF_CODE.4m.fd}
 ovmf_vars=/usr/share/edk2/x64/OVMF_VARS.4m.fd
 
 cmd=${1:-}; shift || true
-iso='' firmware='' hosts='' repo='' ca='' encrypt=1 update_channel='' update_repo='' mode=erase edition=desktop gib='' free_gib=0 hibernated=0 alongside=0
+iso='' firmware='' hosts='' repo='' ca='' encrypt=1 update_channel='' update_repo='' mode=erase edition=desktop gib='' free_gib=0 hibernated=0 alongside=0 server_plan=''
 while (($#)); do
     case $1 in
         --iso) iso=$2; shift 2 ;; --firmware) firmware=$2; shift 2 ;; --hosts) hosts=$2; shift 2 ;;
         --repo) repo=$2; shift 2 ;; --ca) ca=$2; shift 2 ;; --dir) dir=$2; shift 2 ;; --no-encrypt) encrypt=0; shift ;;
         --update-channel) update_channel=$2; shift 2 ;; --update-repo) update_repo=$2; shift 2 ;;
         --mode) mode=$2; shift 2 ;; --edition) edition=$2; shift 2 ;; --gib) gib=$2; shift 2 ;;
-        --free-gib) free_gib=$2; shift 2 ;; --hibernated) hibernated=1; shift ;; --alongside) alongside=1; shift ;; *) break ;;
+        --free-gib) free_gib=$2; shift 2 ;; --hibernated) hibernated=1; shift ;; --alongside) alongside=1; shift ;;
+        --server) server_plan=$2; shift 2 ;; *) break ;;
     esac
 done
 mkdir -p "$dir/shots"
@@ -250,8 +255,10 @@ finish_install() {   # finish_install RC: what the new system got, then a clean 
     "${SSH[@]}" 'c=$(lsblk -rno PATH,LABEL /dev/vda | awk "\$2 == \"Windows\" { print \$1 }"); [ -n "$c" ] && sudo ntfsresize --info --force --no-progress-bar "$c" | grep "You might resize at" | sed "s/^/ntfs-check: /"' >> "$dir/install-state.out" 2>&1 || true
     "${SSH[@]}" 'sudo bash -c "findmnt -R /mnt; lsblk -o NAME,TYPE,FSTYPE,PARTTYPENAME,MOUNTPOINTS /dev/vda; ls -la /mnt/home/*/.ssh; grep -h ^HOOKS= /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.d/*.conf; lsinitcpio /mnt/boot/initramfs-linux.img | grep -c plymouth; grep -E ^GRUB_CMDLINE /mnt/etc/default/grub; grep -c snapshots /mnt/boot/grub/grub.cfg; grep -E \"^menuentry\" /mnt/boot/grub/grub.cfg; grep -A2 bromigos\\] /mnt/etc/pacman.conf; arch-chroot /mnt snapper --no-dbus list-configs; arch-chroot /mnt sshd -T 2>/dev/null | grep -iE \"^(pubkeyauthentication|authorizedkeysfile|passwordauthentication)\"; [ -d /sys/firmware/efi ] && efibootmgr"' 2>&1 | tee "$dir/install-state.out.main" || true
     cat "$dir/install-state.out.main" >> "$dir/install-state.out"; rm -f "$dir/install-state.out.main"
+    # the live system's install log, kept beside the VM (install.log), whatever the outcome
+    "${SSH[@]}" 'sudo cat /var/log/bromigos-iso-install.log' > "$dir/install.log" 2>&1 || true
     if (( rc != 0 )); then     # a failed install: the live system's logs, before it powers off
-        "${SSH[@]}" 'sudo cat /var/log/bromigos-iso-install.log' > "$dir/failed-install.log" 2>&1 || true
+        cp "$dir/install.log" "$dir/failed-install.log"
         "${SSH[@]}" 'sudo cat /var/log/archinstall/install.log' > "$dir/failed-archinstall.log" 2>&1 || true
         echo "the live system's logs: $dir/failed-install.log, $dir/failed-archinstall.log"
         tail -25 "$dir/failed-install.log"
@@ -267,8 +274,9 @@ finish_install() {   # finish_install RC: what the new system got, then a clean 
 plan_json() {      # the installers' test plan: the harness's account (tester), the choices given
     python3 -c 'import json, sys; m, e, ed, g = sys.argv[1:5]; print(json.dumps({"mode": m, "encrypt": e == "1", "edition": ed,
         "gib": int(g) if g else None, "full_name": "Test Er", "user": "tester", "password": "tester",
-        "hostname": "bromigos-test", "ssh": True, "disk_index": 0, "ssh_key": open(sys.argv[5]).read().strip()}))' \
-        "$mode" "$encrypt" "$edition" "$gib" "$key.pub"
+        "hostname": "bromigos-test", "ssh": True, "disk_index": 0, "ssh_key": open(sys.argv[5]).read().strip(),
+        **({"server": json.load(open(sys.argv[6]))} if sys.argv[6] else {})}))' \
+        "$mode" "$encrypt" "$edition" "$gib" "$key.pub" "$server_plan"
 }
 
 case $cmd in
@@ -311,6 +319,16 @@ case $cmd in
             wait "$gui" || rc=$?
             grep -E '^(::page|::result|  )' "$dir/install.out" | tail -25
         fi
+        finish_install "$rc" || exit $?
+        ;;
+    answer-install)     # an answer file, installed by itself (the text installer's countdown, then the install)
+        file=${1:?answer-install FILE}
+        "${SCP[@]}" "$key.pub" "$file" "$here/test/installer/autodrive.py" "live@127.0.0.1:"
+        printf '%s\n' "$( (( encrypt )) && echo 1 || echo 0)" > "$dir/encrypted"
+        printf '%s\n' server > "$dir/edition"
+        "${SSH[@]}" "cat /etc/bromigos-iso/channel 2>/dev/null || echo stable" > "$dir/channel"
+        rc=0
+        "${SSH[@]}" "sudo BROMIGOS_ANSWERS=/home/live/$(basename "$file") BROMIGOS_ISO_INSTALL_EXTRA='--ssh-key /home/live/id_ed25519.pub' python3 autodrive.py" 2>&1 | tee "$dir/install.out" || rc=$?
         finish_install "$rc" || exit $?
         ;;
     keep-files)     # before a reinstall: a file in the installed system's home, to find after it
