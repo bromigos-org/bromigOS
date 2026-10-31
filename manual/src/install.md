@@ -270,7 +270,7 @@ has the details.
    - **your keyboard,** with a box to try it in.
    - **where to install.** Choose the disk, then either:
 
-     ![Where to install: a disk with Windows, Install alongside Windows chosen, and the slider: Windows 20 GB, bromigOS 22 GB](images/installer-where-alongside-windows.webp)
+     ![Where to install: a disk with Windows, Install alongside Windows chosen, and the split: Windows 20 GB, bromigOS 22 GB, each side's minimum striped](images/installer-where-alongside-windows.webp)
 
      - **Install alongside Windows** (or the other system it found). Windows and its files
        stay. If there isn't free space, the installer makes Windows' part of the disk

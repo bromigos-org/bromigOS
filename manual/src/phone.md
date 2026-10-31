@@ -25,7 +25,7 @@ BRODEC for iPhone is coming.
    asks for your password and shows the phone's key: compare it with the one on the
    phone, then **Allow**.
 
-![Pair your phone: Google Play's QR code, the pairing code and what the phone can do](images/welcome-tour-phone.webp)
+![Pair your phone: Google Play as one row, then the pairing QR beside its steps, the code to type and the live status](images/welcome-tour-phone.webp)
 
 If this computer runs your lab's VECTOR bridge (`brodec-lab`), the step offers to pair it
 too: **Pair it** asks for your password and shows the bridge's own code.
