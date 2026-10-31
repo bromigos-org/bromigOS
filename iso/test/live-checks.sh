@@ -69,6 +69,8 @@ if [[ $mode == desktop ]]; then       # the installed system (docs/iso-encryptio
     check "the root is btrfs" bash -c "findmnt -no FSTYPE / | grep -qx btrfs"
     check "the subvolumes (@, @home, @.snapshots)" bash -c "sudo btrfs subvolume list / | grep -qE 'path @\$' && sudo btrfs subvolume list / | grep -q 'path @home' && findmnt -no FSTYPE /.snapshots | grep -qx btrfs"
     data_subvolumes
+    # how the installer's first step left the guidance, for the welcome tour (docs/voice-guide.md)
+    check "the guidance choices kept for the new user" bash -c "test -s \$HOME/.local/state/bromigos/voice-guide.json && test -s \$HOME/.local/state/bromigos/accessibility.json"
     if [[ ${2:-encrypted} == encrypted ]]; then
         check "the root is on LUKS (crypt under the partition)" bash -c "lsblk -no TYPE | grep -qx crypt"
         check "LUKS2 under the root (cryptsetup status root)" bash -c "sudo cryptsetup status root | grep -qE 'type: +LUKS2'"
