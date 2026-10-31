@@ -14,8 +14,9 @@ pkgdesc='Read BitLocker-encrypted volumes (FUSE)'
 arch=('x86_64')
 url='https://github.com/Aorimn/dislocker'
 license=('GPL-2.0-or-later')
-depends=('fuse2' 'openssl')
-makedepends=('cmake')
+depends=('fuse3' 'openssl')
+# CI builds with --nodeps: the libraries cmake looks for are makedepends too
+makedepends=('cmake' 'fuse3' 'openssl')
 optdepends=('ntfs-3g: mount the NTFS file system inside')
 options=('!debug')
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
