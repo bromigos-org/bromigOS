@@ -473,7 +473,7 @@ pub fn home_layout(app: &App, area: Rect) -> HomeLayout {
     };
     room = room.saturating_sub(head_h + u16::from(head_h > 0));
     // last, rows still left make the tiles bigger: an icon line over the name, then the whole
-    // line about each section on up to three rows
+    // line about each section on up to four rows
     if cols > 1 && tile_h == 4 {
         let tw = (inner.width / cols as u16).saturating_sub(4) as usize;
         let long = SECTIONS
@@ -482,7 +482,7 @@ pub fn home_layout(app: &App, area: Rect) -> HomeLayout {
             .max()
             .unwrap_or(0) as u16;
         for extra in [long, 1] {
-            if (1..=3).contains(&extra) && extra * rows <= room {
+            if (1..=4).contains(&extra) && extra * rows <= room {
                 tile_h += extra;
                 break;
             }
