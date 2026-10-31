@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -340,14 +341,30 @@ class Connection(unittest.TestCase):
 
 
 class QR(unittest.TestCase):
+    TEXT = R.encode("https://net.example.org", "hskey-auth-" + "a" * 40)
+
+    def square(self, lines):
+        visible = [re.sub(r"\x1b\[[0-9;]*m", "", x) for x in lines]     # the themed component colours each cell
+        self.assertGreater(len(visible), 10)
+        self.assertEqual(len({len(x) for x in visible}), 1, "a square of half blocks")
+
     def test_qr_lines(self):
+        """The shared themed component (bromigos_qr) when it's installed, else plain half blocks."""
         try:
             import qrcode  # noqa: F401
         except ImportError:
             self.skipTest("needs python-qrcode")
-        lines = L.qr_lines(R.encode("https://net.example.org", "hskey-auth-" + "a" * 40))
-        self.assertGreater(len(lines), 10)
-        self.assertEqual(len({len(x) for x in lines}), 1, "a square of half blocks")
+        self.square(L.qr_lines(self.TEXT))
+
+    def test_plain_half_blocks_without_the_themed_component(self):
+        try:
+            import qrcode  # noqa: F401
+        except ImportError:
+            self.skipTest("needs python-qrcode")
+        with mock.patch.dict(sys.modules, {"bromigos_qr": None}):
+            lines = L.qr_lines(self.TEXT)
+        self.square(lines)
+        self.assertFalse(any("\x1b" in x for x in lines))
 
 
 if __name__ == "__main__":
