@@ -3,7 +3,8 @@
 //! thing's hint), Home (this computer, what's on it, the seven sections), and each section
 //! with what's there on the left and what to do on the right, badges on the actions. The
 //! dialogs go over the space between the bars. DRIFTGLASS: Glass panels, one FLARE (Home's
-//! emblem), Reading glows on the chips and badges; the console and ASCII looks fall back.
+//! orb, a hologram), Reading glows on the chips and badges, the highlighted tile glowing; the
+//! console and ASCII looks fall back.
 
 use ratatui::layout::Margin;
 
@@ -253,9 +254,10 @@ fn keys_for(app: &App) -> Vec<(&'static str, &'static str)> {
 // ------------------------------------------------------------------ Home
 
 /// The Home screen's parts, for a screen this size: drawing and mouse clicks share it. Everything
-/// is anchored under the top bar, in this order: the emblem, this computer and what's on it, the
+/// is anchored under the top bar, in this order: the orb, this computer and what's on it, the
 /// lab, the seven sections, the suggestion, the recent repairs. When rows are short, the sections
-/// come first, then the suggestion, the lab and the recent repairs, then the boxes, then the emblem.
+/// come first, then the suggestion, the lab and the recent repairs, then the boxes, then the orb;
+/// rows still left make the tiles bigger.
 pub struct HomeLayout {
     pub head: Rect,
     pub computer: Rect,
@@ -264,16 +266,34 @@ pub struct HomeLayout {
     pub suggest: Option<Rect>,
     pub recent: Option<Rect>,
     pub tiles: [Rect; 7],
-    /// a tile's height: 4 (name and a line about it), 3 (the name), 2 (a list row and its line
-    /// about it, on a tiny screen) or 1 (a list row)
+    /// a tile's height: 5 or more (an icon line, the name, its line about it on the rows
+    /// left), 4 (name and a line about it), 3 (the name), 2 (a list row and its line about it,
+    /// on a tiny screen) or 1 (a list row)
     pub tile_h: u16,
     pub body: Rect,
     pub top: Rect,
     pub bottom: Rect,
 }
 
-fn tall_emblem(look: &Look, rows: u16) -> bool {
-    look.mode == bromigos_tui::Mode::Truecolor && !look.ascii && rows >= 44
+/// The orb's size in the head for a head this tall: braille (w, h) cells where it shows,
+/// else the plain ring; (0, 0) for none (the wordmark instead).
+fn head_orb(look: &Look, rows: u16) -> (usize, usize) {
+    match (bromigos_tui::orb::fine(look), rows) {
+        (true, 11..) => (22, 11),
+        (true, 5..) => (10, 5),
+        (true, 3..) => (6, 3),
+        (false, 5..) => bromigos_tui::orb::PLAIN,
+        _ => (0, 0),
+    }
+}
+
+/// The orb's time: still under reduced motion.
+fn orb_t(app: &App) -> f64 {
+    if app.look.motion {
+        app.tick as f64 * 0.12
+    } else {
+        0.0
+    }
 }
 
 /// The lab strip's words, when Field Kit knows a lab (its homelab.toml).
@@ -342,6 +362,18 @@ fn tile_about(name: &str, server_home: bool, width: usize) -> Option<&'static st
     }
 }
 
+/// The same on up to `rows` rows: the whole lines, wrapped by words, when every section's fits
+/// in them; else tile_about's one line.
+fn tile_about_rows(name: &str, server_home: bool, width: usize, rows: usize) -> Vec<String> {
+    let long = |n: &str| bromigos_tui::layout::wrap(section_tile(n, server_home).1, width);
+    if rows > 1 && SECTIONS.iter().all(|n| long(n).len() <= rows) {
+        return long(name);
+    }
+    tile_about(name, server_home, width)
+        .map(|t| vec![t.to_string()])
+        .unwrap_or_default()
+}
+
 pub fn home_layout(app: &App, area: Rect) -> HomeLayout {
     let (top, body, bottom) = frame_parts(area);
     let inner = body.inner(Margin::new(1, 0));
@@ -355,7 +387,7 @@ pub fn home_layout(app: &App, area: Rect) -> HomeLayout {
     // the sections first: tiles with a line about each when there's room, else their names; on
     // a tiny screen a list, with its line about each under it when there's room
     let mut room = inner.height;
-    let tile_h: u16 = if cols == 1 {
+    let mut tile_h: u16 = if cols == 1 {
         let wide = inner.width.saturating_sub(4) as usize;
         let fits_one = SECTIONS.iter().all(|nm| {
             section_tile(nm, app.server_home()).1.chars().count() + nm.chars().count() + 6
@@ -374,8 +406,7 @@ pub fn home_layout(app: &App, area: Rect) -> HomeLayout {
     } else {
         3
     };
-    let tiles_h = tile_h * rows;
-    room = room.saturating_sub(tiles_h);
+    room = room.saturating_sub(tile_h * rows);
     // then the suggestion, the lab and the recent repairs: a line each, a blank line before them
     let mut take = |h: u16| {
         if h > 0 && room > h {
@@ -390,33 +421,74 @@ pub fn home_layout(app: &App, area: Rect) -> HomeLayout {
     let recent_h = take(recent_h);
     // this computer and what's on it: side by side on wide screens, else stacked; each box
     // needs 3 rows (its border and a line), and grows with what it has to say
-    let info_lines = computer_lines(app).len().max(found_lines(app).len()) as u16;
     let side = bp.side_by_side();
-    let want_one = (info_lines + 2).clamp(3, if side { 10 } else { 7 });
+    let (cw, fw) = if side {
+        let [c, f] = Layout::horizontal([Constraint::Percentage(45), Constraint::Percentage(55)])
+            .areas(Rect::new(0, 0, inner.width, 1));
+        (c.width, f.width)
+    } else {
+        (inner.width, inner.width)
+    };
+    let c_lines = computer_view(app, cw.saturating_sub(4)).len() as u16;
+    let f_lines = found_view(app, fw.saturating_sub(4)).len() as u16;
+    let (mut c_h, mut f_h) = if side {
+        let h = (c_lines.max(f_lines) + 2).clamp(3, 14);
+        (h, h)
+    } else {
+        ((c_lines + 2).clamp(3, 10), (f_lines + 2).clamp(3, 7))
+    };
     let info_h = if side {
-        if room > want_one {
-            want_one
+        if room > c_h {
+            c_h
         } else if room > 3 {
             room - 1
         } else {
             0
         }
-    } else if room > 2 * want_one {
-        2 * want_one
+    } else if room > c_h + f_h {
+        c_h + f_h
     } else if room > 6 {
         room - 1
     } else {
         0
     };
+    if !side && info_h < c_h + f_h {
+        // short of rows: the two boxes share what there is
+        c_h = info_h / 2;
+        f_h = info_h - c_h;
+    }
     room = room.saturating_sub(info_h + u16::from(info_h > 0));
-    // last, the emblem and the edition's name, when there's room for them
-    let head_h = if tall_emblem(&app.look, area.height) && room > 12 {
-        bromigos_tui::emblem::emblem_rows().len() as u16
-    } else if room > 3 && bp != Breakpoint::Tiny {
+    // then the orb and the edition's name, when there's room for them
+    let fine = bromigos_tui::orb::fine(&app.look);
+    let head_h = if bp == Breakpoint::Tiny {
+        0
+    } else if fine && area.height >= 44 && room > 12 {
+        11
+    } else if room > 6 {
+        5
+    } else if room > 3 {
         3
     } else {
         0
     };
+    room = room.saturating_sub(head_h + u16::from(head_h > 0));
+    // last, rows still left make the tiles bigger: an icon line over the name, then the whole
+    // line about each section on up to three rows
+    if cols > 1 && tile_h == 4 {
+        let tw = (inner.width / cols as u16).saturating_sub(4) as usize;
+        let long = SECTIONS
+            .iter()
+            .map(|nm| bromigos_tui::layout::wrap(section_tile(nm, app.server_home()).1, tw).len())
+            .max()
+            .unwrap_or(0) as u16;
+        for extra in [long, 1] {
+            if (1..=3).contains(&extra) && extra * rows <= room {
+                tile_h += extra;
+                break;
+            }
+        }
+    }
+    let tiles_h = tile_h * rows;
     let gap = |h: u16| u16::from(h > 0);
     let [head, _, info, _, lab, _, grid, _, sugg, _, recent] = Layout::vertical([
         Constraint::Length(head_h),
@@ -440,8 +512,8 @@ pub fn home_layout(app: &App, area: Rect) -> HomeLayout {
             .areas(info);
         (c, f)
     } else {
-        let h = info.height / 2;
-        let [c, f] = Layout::vertical([Constraint::Length(h), Constraint::Min(0)]).areas(info);
+        let [c, f] =
+            Layout::vertical([Constraint::Length(c_h), Constraint::Length(f_h)]).areas(info);
         (c, f)
     };
     let cells = bromigos_tui::layout::grid(grid, n, cols, tile_h, 0, 0, 0);
@@ -464,58 +536,142 @@ pub fn home_layout(app: &App, area: Rect) -> HomeLayout {
     }
 }
 
+/// Home's FLARE: the orb (a hologram, the same as VECTOR's) beside the edition's name; the
+/// wordmark where a head is too short for the plain ring.
+fn draw_head(f: &mut Frame, app: &App, head: Rect) {
+    let look = &app.look;
+    let p = &look.pal;
+    let size = head_orb(look, head.height);
+    let art: Vec<Line> = if size.1 > 0 {
+        bromigos_tui::orb::lines(look, orb_t(app), size)
+    } else {
+        let rows: Vec<&str> = if look.ascii {
+            bromigos_tui::emblem::WORDMARK_ASCII.to_vec()
+        } else {
+            bromigos_tui::emblem::WORDMARK.to_vec()
+        };
+        rows.iter()
+            .map(|r| Line::from(Span::styled(r.to_string(), st(p.primary))))
+            .collect()
+    };
+    let mut aw = art.iter().map(|l| l.width()).max().unwrap_or(0) as u16 + 3;
+    if aw + 30 > head.width {
+        aw = 0; // too narrow for the art beside the words: the words alone
+    }
+    let [a, w] = Layout::horizontal([Constraint::Length(aw), Constraint::Min(10)]).areas(head);
+    let art: Vec<Line> = art
+        .into_iter()
+        .map(|mut l| {
+            l.spans.insert(0, Span::raw(" "));
+            l
+        })
+        .collect();
+    f.render_widget(Paragraph::new(art), a);
+    let mid = w.height.saturating_sub(3) / 2;
+    let mut words: Vec<Line> = (0..mid).map(|_| Line::from("")).collect();
+    words.push(Line::from(Span::styled(
+        "FIELD KIT",
+        st(p.primary).add_modifier(Modifier::BOLD),
+    )));
+    words.push(Line::from(Span::styled(
+        "bromigOS without the desktop",
+        st(p.soft),
+    )));
+    words.push(Line::from(Span::styled(
+        format!("repair{d}lab{d}server{d}works offline", d = dot(look)),
+        st(p.muted),
+    )));
+    f.render_widget(Paragraph::new(words), w);
+}
+
+/// A Home tile: Glass, the highlighted one glowing. Five rows and more: an icon line, the name,
+/// its line about it; four: the icon and name, its line; three: the icon and name.
+fn draw_tile(f: &mut Frame, app: &App, r: Rect, i: usize, tile_h: u16) {
+    let look = &app.look;
+    let p = &look.pal;
+    let sel = app.home == HomeSel::Tile(i);
+    let name = SECTIONS[i];
+    let (icon, _) = section_tile(name, app.server_home());
+    let style = if sel {
+        widgets::sel_text(look)
+    } else {
+        st(p.soft)
+    };
+    let block = widgets::glow(look, "", sel);
+    let inner = block.inner(r).inner(Margin::new(1, 0));
+    f.render_widget(block, r);
+    let w = inner.width as usize;
+    if tile_h < 5 {
+        let mut lines = vec![Line::from(vec![
+            Span::styled(format!("{}  ", icon.of(look)), style),
+            Span::styled(name.to_string(), style.add_modifier(Modifier::BOLD)),
+        ])];
+        if tile_h >= 4
+            && let Some(t) = tile_about(name, app.server_home(), w)
+        {
+            lines.push(Line::from(Span::styled(
+                t.to_string(),
+                if sel { style } else { st(p.muted) },
+            )));
+        }
+        f.render_widget(Paragraph::new(lines), inner);
+        return;
+    }
+    // the icon between two short rules, the name, then its line about it: centred
+    let rule = if look.ascii { "-" } else { "─" };
+    let side = (w.saturating_sub(3) / 2).min(6);
+    let edge = if sel && look.mode == bromigos_tui::Mode::Truecolor {
+        st(p.primary)
+    } else if sel {
+        style
+    } else {
+        st(p.dim)
+    };
+    let icon_style = if sel { style } else { st(p.primary) };
+    let mut lines = vec![
+        Line::from(vec![
+            Span::styled(format!("{} ", rule.repeat(side)), edge),
+            Span::styled(icon.of(look).to_string(), icon_style),
+            Span::styled(format!(" {}", rule.repeat(side)), edge),
+        ]),
+        Line::from(Span::styled(
+            name.to_string(),
+            style.add_modifier(Modifier::BOLD),
+        )),
+    ];
+    let about = tile_about_rows(
+        name,
+        app.server_home(),
+        w,
+        tile_h.saturating_sub(4).max(1) as usize,
+    );
+    for t in about {
+        lines.push(Line::from(Span::styled(
+            t,
+            if sel { style } else { st(p.muted) },
+        )));
+    }
+    f.render_widget(
+        Paragraph::new(lines).alignment(ratatui::layout::Alignment::Center),
+        inner,
+    );
+}
+
 fn draw_home(f: &mut Frame, app: &App, area: Rect) -> Rect {
     let look = &app.look;
     let p = &look.pal;
     let l = home_layout(app, area);
     top_bar(f, l.top, app);
-    // the screen's one FLARE: the emblem (or the wordmark) beside the edition's name
+    // the screen's one FLARE: the orb beside the edition's name
     if l.head.height > 0 {
-        let art: Vec<&str> = if look.ascii {
-            bromigos_tui::emblem::WORDMARK_ASCII.to_vec()
-        } else if tall_emblem(look, area.height) && l.head.height > 3 {
-            bromigos_tui::emblem::emblem_rows()
-        } else {
-            bromigos_tui::emblem::WORDMARK.to_vec()
-        };
-        let mut aw = art.iter().map(|r| r.chars().count()).max().unwrap_or(0) as u16 + 3;
-        if aw + 30 > l.head.width {
-            aw = 0; // too narrow for the art beside the words: the words alone
-        }
-        let [a, w] =
-            Layout::horizontal([Constraint::Length(aw), Constraint::Min(10)]).areas(l.head);
-        f.render_widget(
-            Paragraph::new(
-                art.iter()
-                    .map(|r| Line::from(Span::styled(r.to_string(), st(p.primary))))
-                    .collect::<Vec<_>>(),
-            ),
-            a,
-        );
-        let mid = w.height.saturating_sub(3) / 2;
-        let mut words: Vec<Line> = (0..mid).map(|_| Line::from("")).collect();
-        words.push(Line::from(Span::styled(
-            "FIELD KIT",
-            st(p.primary).add_modifier(Modifier::BOLD),
-        )));
-        words.push(Line::from(Span::styled(
-            "bromigOS without the desktop",
-            st(p.soft),
-        )));
-        words.push(Line::from(Span::styled(
-            format!("repair{d}lab{d}server{d}works offline", d = dot(look)),
-            st(p.muted),
-        )));
-        f.render_widget(Paragraph::new(words), w);
+        draw_head(f, app, l.head);
     }
     // this computer, and what's on its drives (when there's room for them)
     if l.computer.height >= 3 {
         let inner = boxed(f, l.computer, look, Icon::Computer, "This computer", false);
-        let mut lines = Vec::new();
-        for (icon, text) in computer_lines(app) {
-            lines.extend(icon_line(look, icon, &text, "", inner.width));
-        }
-        bromigos_tui::layout::scroll_view(f, inner, look, lines, 0);
+        bromigos_tui::layout::scroll_view(f, inner, look, computer_view(app, inner.width), 0);
+    }
+    if l.found.height >= 3 {
         let inner = boxed(
             f,
             l.found,
@@ -524,23 +680,7 @@ fn draw_home(f: &mut Frame, app: &App, area: Rect) -> Rect {
             "Found on this computer",
             false,
         );
-        let mut lines = Vec::new();
-        let found = found_lines(app);
-        if found.is_empty() {
-            lines.push(Line::from(Span::styled(
-                "No installed system and no USB drives found.",
-                st(p.muted),
-            )));
-        }
-        for (icon, title, state) in found {
-            let rest = if state.is_empty() {
-                String::new()
-            } else {
-                format!("{}{state}", dot(look))
-            };
-            lines.extend(icon_line(look, icon, &title, &rest, inner.width));
-        }
-        bromigos_tui::layout::scroll_view(f, inner, look, lines, 0);
+        bromigos_tui::layout::scroll_view(f, inner, look, found_view(app, inner.width), 0);
     }
     // the lab Field Kit knows (from the stick's folder), on one line
     if let (Some(r), Some(text)) = (l.lab, lab_text(app)) {
@@ -560,6 +700,10 @@ fn draw_home(f: &mut Frame, app: &App, area: Rect) -> Rect {
         if r.height == 0 {
             continue;
         }
+        if !list {
+            draw_tile(f, app, *r, i, l.tile_h);
+            continue;
+        }
         let sel = app.home == HomeSel::Tile(i);
         let name = SECTIONS[i];
         let (icon, about) = section_tile(name, app.server_home());
@@ -568,60 +712,38 @@ fn draw_home(f: &mut Frame, app: &App, area: Rect) -> Rect {
         } else {
             st(p.soft)
         };
-        if list {
-            let mark = if look.ascii { ">" } else { "▌" };
-            let line = format!("{}  {name}", icon.of(look));
-            let mut first = vec![
-                Span::styled(if sel { mark } else { " " }, st(p.primary)),
-                Span::styled(line.clone(), style),
-            ];
-            let one = (r.width as usize).saturating_sub(line.chars().count() + 3);
-            let mut lines = Vec::new();
-            if l.tile_h == 1 {
-                // the lines about them only when all of them fit; the hint bar has them anyway
-                let all = SECTIONS.iter().all(|nm| {
-                    section_tile(nm, app.server_home()).1.chars().count() + nm.chars().count() + 6
-                        <= r.width as usize
-                });
-                if all && about.chars().count() <= one {
-                    first.push(Span::styled(format!("  {about}"), st(p.muted)));
-                }
-                lines.push(Line::from(first));
-            } else {
-                lines.push(Line::from(first));
-                if let Some(t) = tile_about(
-                    name,
-                    app.server_home(),
-                    (r.width as usize).saturating_sub(4),
-                ) {
-                    lines.push(Line::from(vec![
-                        Span::styled(if sel { mark } else { " " }, st(p.primary)),
-                        Span::styled(format!("   {t}"), st(p.faint)),
-                    ]));
-                }
+        let mark = if look.ascii { ">" } else { "▌" };
+        let line = format!("{}  {name}", icon.of(look));
+        let mut first = vec![
+            Span::styled(if sel { mark } else { " " }, st(p.primary)),
+            Span::styled(line.clone(), style),
+        ];
+        let one = (r.width as usize).saturating_sub(line.chars().count() + 3);
+        let mut lines = Vec::new();
+        if l.tile_h == 1 {
+            // the lines about them only when all of them fit; the hint bar has them anyway
+            let all = SECTIONS.iter().all(|nm| {
+                section_tile(nm, app.server_home()).1.chars().count() + nm.chars().count() + 6
+                    <= r.width as usize
+            });
+            if all && about.chars().count() <= one {
+                first.push(Span::styled(format!("  {about}"), st(p.muted)));
             }
-            f.render_widget(Paragraph::new(lines), *r);
-            continue;
+            lines.push(Line::from(first));
+        } else {
+            lines.push(Line::from(first));
+            if let Some(t) = tile_about(
+                name,
+                app.server_home(),
+                (r.width as usize).saturating_sub(4),
+            ) {
+                lines.push(Line::from(vec![
+                    Span::styled(if sel { mark } else { " " }, st(p.primary)),
+                    Span::styled(format!("   {t}"), st(p.faint)),
+                ]));
+            }
         }
-        let mut block = widgets::glass(look, "", sel);
-        if sel {
-            block = block.style(widgets::sel_surface(look));
-        }
-        let inner = block.inner(*r).inner(Margin::new(1, 0));
-        f.render_widget(block, *r);
-        let mut lines = vec![Line::from(vec![
-            Span::styled(format!("{}  ", icon.of(look)), style),
-            Span::styled(name.to_string(), style.add_modifier(Modifier::BOLD)),
-        ])];
-        if l.tile_h >= 4
-            && let Some(t) = tile_about(name, app.server_home(), inner.width as usize)
-        {
-            lines.push(Line::from(Span::styled(
-                t.to_string(),
-                if sel { style } else { st(p.muted) },
-            )));
-        }
-        f.render_widget(Paragraph::new(lines), inner);
+        f.render_widget(Paragraph::new(lines), *r);
     }
     // a suggestion, only when the engine found one
     if let (Some(r), Some((text, _))) = (l.suggest, app.suggestions().first()) {
@@ -1699,8 +1821,141 @@ pub fn chips_width(look: &Look, chips: &[(Icon, String, Tone)]) -> u16 {
         .sum()
 }
 
-/// "This computer": board, processor, memory, graphics, temperatures.
-fn computer_lines(app: &App) -> Vec<(Icon, String)> {
+/// A size in bytes, the way a person reads it: 512 MB, 64 GB, 2.0 TB.
+fn human(bytes: u64) -> String {
+    let b = bytes as f64;
+    let (gb, tb) = (1e9, 1e12);
+    if b >= tb {
+        format!("{:.1} TB", b / tb)
+    } else if b >= gb {
+        format!("{:.0} GB", b / gb)
+    } else {
+        format!("{:.0} MB", b / 1e6)
+    }
+}
+
+/// A share's Reading tone: calm, a warning from `warn` up.
+fn share_tone(pct: f64, warn: f64) -> Tone {
+    if pct >= warn { Tone::Warn } else { Tone::Calm }
+}
+
+/// The readings line: how busy the processor is and how much memory is in use, each a small
+/// meter and its share; meters shrink to fit, and on a short line it's only the shares.
+fn readings_line(look: &Look, load: &Value, width: u16) -> Option<Line<'static>> {
+    let p = &look.pal;
+    let parts: Vec<(&str, f64)> = [("busy", "cpu_pct"), ("memory", "mem_pct")]
+        .into_iter()
+        .filter_map(|(label, k)| Some((label, load[k].as_f64()?)))
+        .collect();
+    if parts.is_empty() {
+        return None;
+    }
+    // "  busy ████░░ 31%   memory ██████░ 62%": the words and shares take about 16 a part
+    let words: usize = 2 + parts.iter().map(|(l, _)| l.len() + 9).sum::<usize>();
+    let mw = ((width as usize).saturating_sub(words) / parts.len()).min(14);
+    let mut spans = vec![Span::raw("  ")];
+    for (i, (label, pct)) in parts.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw("   "));
+        }
+        let tone = share_tone(*pct, 90.0);
+        spans.push(Span::styled(format!("{label} "), st(p.muted)));
+        if mw >= 4 {
+            spans.extend(widgets::meter(look, pct / 100.0, mw as u16, tone));
+            spans.push(Span::raw(" "));
+        }
+        let c = if tone == Tone::Warn { p.warn } else { p.soft };
+        spans.push(Span::styled(format!("{pct:.0}%"), st(c)));
+    }
+    Some(Line::from(spans))
+}
+
+/// The temperatures line: each sensor's reading and, once there are a few, its recent ones as
+/// a sparkline (a warning from 90 °C). Too long for the line: the readings alone, wrapped.
+fn temps_line(app: &App, width: u16) -> Vec<Line<'static>> {
+    let look = &app.look;
+    let p = &look.pal;
+    let deg = if look.ascii { " C" } else { "°C" };
+    let temps: Vec<(String, f64)> = app.overview["computer"]["temps"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|t| Some((s(t, "label"), t["celsius"].as_f64()?)))
+        .collect();
+    if temps.is_empty() {
+        return vec![];
+    }
+    let hist = |label: &str| -> &[f64] {
+        app.temps
+            .iter()
+            .find(|(l, _)| l == label)
+            .map(|(_, h)| h.as_slice())
+            .unwrap_or(&[])
+    };
+    let mut spans = vec![Span::styled(
+        format!("{} ", Icon::Thermometer.of(look)),
+        st(p.primary),
+    )];
+    for (i, (label, c)) in temps.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled(dot(look), st(p.faint)));
+        }
+        let warn = *c >= 90.0;
+        spans.push(Span::styled(format!("{label} "), st(p.soft)));
+        spans.push(Span::styled(
+            format!("{c:.0}{deg}"),
+            if warn {
+                st(p.warn).add_modifier(Modifier::BOLD)
+            } else {
+                st(p.text)
+            },
+        ));
+        let h = hist(label);
+        if h.len() >= 2 {
+            spans.push(Span::styled(
+                format!(" {}", widgets::sparkline(look, h, 25.0, 100.0, 8)),
+                st(if warn { p.warn } else { p.dim }),
+            ));
+        }
+    }
+    let line = Line::from(spans);
+    if line.width() <= width as usize {
+        return vec![line];
+    }
+    let text: Vec<String> = temps
+        .iter()
+        .map(|(l, c)| format!("{l} {c:.0}{deg}"))
+        .collect();
+    icon_line(look, Icon::Thermometer, &text.join(dot(look)), "", width)
+}
+
+/// A disk's line: its name and size, then its partitions as a disk map (bromigos-tui's
+/// diskmap), the rest of the line wide.
+fn disk_line(look: &Look, d: &Value, width: u16) -> Line<'static> {
+    let p = &look.pal;
+    let failing = s(d, "health") == "failing";
+    let head = format!(
+        "{} {:<8}{:>7}  ",
+        Icon::Disk.of(look),
+        s(d, "name"),
+        human(d["size"].as_u64().unwrap_or(0))
+    );
+    let hw = bromigos_tui::layout::display_width(&head) as u16;
+    let mut spans = vec![Span::styled(
+        head,
+        st(if failing { p.danger } else { p.soft }),
+    )];
+    if width > hw + 8 {
+        spans.extend(bromigos_tui::diskmap::bar(look, d, width - hw));
+    }
+    Line::from(spans)
+}
+
+/// "This computer" as lines `width` wide: the board, the processor and memory with how busy
+/// and full they are, the graphics, the temperatures with their recent readings, and each
+/// disk as a map of its partitions.
+fn computer_view(app: &App, width: u16) -> Vec<Line<'static>> {
+    let look = &app.look;
     let c = &app.overview["computer"];
     let mut v = Vec::new();
     for (icon, key) in [
@@ -1710,72 +1965,99 @@ fn computer_lines(app: &App) -> Vec<(Icon, String)> {
     ] {
         let x = s(c, key);
         if !x.is_empty() {
-            v.push((icon, x));
+            v.extend(icon_line(look, icon, &x, "", width));
         }
     }
+    v.extend(readings_line(look, &app.overview["load"], width));
     for g in c["gpus"]
         .as_array()
         .into_iter()
         .flatten()
         .filter_map(|g| g.as_str())
     {
-        v.push((Icon::Gpu, g.to_string()));
+        v.extend(icon_line(look, Icon::Gpu, g, "", width));
     }
-    let temps: Vec<String> = c["temps"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|t| {
-            t["celsius"].as_f64().map(|deg| {
-                format!(
-                    "{} {:.0}{}",
-                    s(t, "label"),
-                    deg,
-                    if app.look.ascii { " C" } else { "°C" }
-                )
-            })
-        })
-        .collect();
-    if !temps.is_empty() {
-        v.push((Icon::Thermometer, temps.join(dot(&app.look))));
+    v.extend(temps_line(app, width));
+    for d in app.overview["disks"].as_array().into_iter().flatten() {
+        v.push(disk_line(look, d, width));
     }
     if v.is_empty() {
-        v.push((Icon::Info, "reading this computer…".into()));
+        v.extend(icon_line(
+            look,
+            Icon::Info,
+            "reading this computer…",
+            "",
+            width,
+        ));
     }
     v
 }
 
-/// "Found on this computer": each install, Windows, other Linux, USB sticks, the Field Kit stick.
-fn found_lines(app: &App) -> Vec<(Icon, String, String)> {
-    let v: Vec<(Icon, String, String)> = app.overview["found"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(|x| {
-            let icon = match x["kind"].as_str().unwrap_or("") {
-                "bromigos" => Icon::Bromigos,
-                "windows" => Icon::Windows,
-                "linux" => Icon::Linux,
-                "usb" => Icon::Usb,
-                "fieldkit" => Icon::FieldKit,
-                _ => Icon::Disk,
-            };
-            let mut title = s(x, "title");
-            if !s(x, "device").is_empty() {
-                title = format!("{title} on {}", s(x, "device"));
+/// "Found on this computer": each install, Windows, other Linux, USB sticks, the Field Kit
+/// stick, each with its system's logo, and its drive's own health verdict when it gave one.
+fn found_view(app: &App, width: u16) -> Vec<Line<'static>> {
+    let look = &app.look;
+    let p = &look.pal;
+    let mut out = Vec::new();
+    for x in app.overview["found"].as_array().into_iter().flatten() {
+        let (icon, colour) = match x["kind"].as_str().unwrap_or("") {
+            "bromigos" => (Icon::Arch, p.primary),
+            "windows" => (Icon::Windows, p.accent),
+            "linux" => (Icon::Linux, p.soft),
+            "usb" => (Icon::Usb, p.muted),
+            "fieldkit" => (Icon::FieldKit, p.primary),
+            _ => (Icon::Disk, p.muted),
+        };
+        // the engine's titles name the device already ("bromigOS on sda2"); else it's added
+        let mut title = s(x, "title");
+        let dev = dev_name(&s(x, "device"));
+        if !dev.is_empty() && !title.contains(&dev) {
+            title = format!("{title} on {dev}");
+        }
+        let state = [s(x, "state"), s(x, "detail")]
+            .into_iter()
+            .filter(|w| !w.is_empty())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let rest = if state.is_empty() {
+            String::new()
+        } else {
+            format!("{}{state}", dot(look))
+        };
+        let mut lines = icon_line(look, icon, &title, &rest, width);
+        if let Some(first) = lines.first_mut()
+            && let Some(m) = first.spans.first_mut()
+        {
+            m.style = st(colour).add_modifier(Modifier::BOLD);
+        }
+        // the drive's verdict, a Reading: it glows only when it's failing
+        let badge = match (s(x, "health").as_str(), look.ascii) {
+            ("ok", false) => Some(("● healthy", st(p.primary))),
+            ("ok", true) => Some(("+ healthy", st(p.primary))),
+            ("failing", false) => Some(("✕ FAILING", st(p.danger).add_modifier(Modifier::BOLD))),
+            ("failing", true) => Some(("x FAILING", st(p.danger).add_modifier(Modifier::BOLD))),
+            _ => None,
+        };
+        if let Some((b, style)) = badge {
+            let bw = bromigos_tui::layout::display_width(b) + 2;
+            match lines.last_mut() {
+                Some(last) if last.width() + bw <= width as usize => {
+                    last.spans.push(Span::styled(format!("  {b}"), style));
+                }
+                _ => lines.push(Line::from(Span::styled(format!("   {b}"), style))),
             }
-            let state = [s(x, "state"), s(x, "detail")]
-                .into_iter()
-                .filter(|w| !w.is_empty())
-                .collect::<Vec<_>>()
-                .join(", ");
-            (icon, title, state)
-        })
-        .collect();
-    if v.is_empty() && !app.overview.is_object() {
-        return vec![(Icon::Search, "looking at the drives…".into(), String::new())];
+        }
+        out.extend(lines);
     }
-    v
+    if out.is_empty() {
+        let text = if app.overview.is_object() {
+            "No installed system and no USB drives found."
+        } else {
+            "looking at the drives…"
+        };
+        out.push(Line::from(Span::styled(text, st(p.muted))));
+    }
+    out
 }
 
 /// A server's own facts (bromigos-server status --json), for the Server section.

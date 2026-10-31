@@ -174,15 +174,22 @@ highlighted item. State is on the left, actions on the right.
 
 - chips: the network (wired, Wi-Fi or none), SSH on or off, REMOTE HELP ON in the warning
   colour while it's on, the stick's settings, the clock;
-- "This computer": the board, processor, memory, graphics cards and temperatures;
-- "Found on this computer": each install and system on the drives (bromigOS, encrypted and
-  locked or open; Windows, with BitLocker on or off), USB sticks and Field Kit sticks;
+- the orb, VECTOR's hologram, beside "FIELD KIT": the screen's one FLARE;
+- "This computer": the board, the processor and how busy it is, the memory and how much is in
+  use (small meters), the graphics cards, the temperatures with their last few readings as a
+  tiny line, and each disk as one bar of its partitions (bromigOS, Windows, EFI…, the free
+  space dim);
+- "Found on this computer": each install and system on the drives with its logo (bromigOS,
+  encrypted and locked or open; Windows, with BitLocker on or off), USB sticks and Field Kit
+  sticks, and the drive's own health verdict when it gives one (healthy, or FAILING);
 - "Suggested", only when something real was found (a last boot that didn't finish, a hot
   processor), with the action that helps;
-- seven tiles: Repair, Lab, VECTOR, Tools, Server, Install, Shell.
+- seven tiles: Repair, Lab, VECTOR, Tools, Server, Install, Shell. With room they grow: an
+  icon line, the name, and the line about it. The highlighted one glows.
 
 The facts come from `fieldkit-engine engine overview`, read at start and every 15 seconds in
-the background. Nothing is mounted or unlocked to find them.
+the background. Nothing is mounted or unlocked to find them. The drives' verdicts are a quick
+`smartctl -H` each, asked once every ten minutes.
 
 **Keys.** R, L, V, T, S, I and X open Repair, Lab, VECTOR, Tools, Server, Install and Shell
 from anywhere, except while typing in a text field, where Alt+letter does the same
@@ -194,10 +201,11 @@ the bottom bar shows an item's shortcut when it's highlighted or under the mouse
 Geist Mono draws the text. On the kernel's console, and in ASCII mode, each icon has a
 plain character instead.
 
-**DRIFTGLASS:** the title band is the screen's one FLARE; sections and items are Glass panels
+**DRIFTGLASS:** the orb on Home is the screen's one FLARE; sections and items are Glass panels
 (GLOW); the status line and chips are EMBER, with a Reading glow for a state. A finished job
 gives one Spark. Under reduced motion (`bromigos.motion=reduced` on the kernel's command
-line, or the install's own setting) nothing moves.
+line, or the install's own setting) nothing moves: the orb holds still. On the kernel's
+console and in ASCII, the orb is a ring of plain characters and the meters are plain blocks.
 
 On the medium's first console, `fieldkit-engine console` runs the menu, then a shell when you
 leave it, then the menu again. A menu that's missing or fails at once is never retried in a

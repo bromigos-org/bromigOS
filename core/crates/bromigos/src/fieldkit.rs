@@ -1017,6 +1017,9 @@ pub struct App {
     pub home: HomeSel,
     /// `engine overview`: the network, SSH, this computer, what's on its drives, suggestions
     pub overview: Value,
+    /// each temperature's recent readings (by its label, oldest first), kept across the
+    /// overview's refreshes for Home's sparklines
+    pub temps: Vec<(String, Vec<f64>)>,
     /// the last frame's size (mouse clicks find the tiles in it)
     pub size: Rect,
     /// `engine disks`, for the Repair screen's DISKS panel and the install's disk step
@@ -1073,6 +1076,7 @@ impl App {
             screen: Screen::Home,
             home: HomeSel::Tile(0),
             overview: Value::Null,
+            temps: Vec::new(),
             size: Rect::new(0, 0, 100, 30),
             disks: Value::Null,
             snap_count: None,
@@ -2860,6 +2864,7 @@ impl App {
             }
             Then::Overview => {
                 if v.is_object() {
+                    self.keep_temps(&v);
                     self.overview = v;
                     let n = self.suggestions().len();
                     if let HomeSel::Suggestion(i) = self.home
@@ -3482,6 +3487,41 @@ impl App {
         self.server = v;
     }
 
+    /// The overview's temperatures, added to their recent readings (the last 24, about six
+    /// minutes at one every 15 seconds); a sensor that's gone drops out.
+    fn keep_temps(&mut self, v: &Value) {
+        let now: Vec<(String, f64)> = v["computer"]["temps"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|t| Some((s(t, "label"), t["celsius"].as_f64()?)))
+            .collect();
+        let mut kept = Vec::new();
+        for (label, c) in now {
+            let mut hist = self
+                .temps
+                .iter()
+                .find(|(l, _)| *l == label)
+                .map(|(_, h)| h.clone())
+                .unwrap_or_default();
+            hist.push(c);
+            let skip = hist.len().saturating_sub(24);
+            kept.push((label, hist.split_off(skip)));
+        }
+        self.temps = kept;
+    }
+
+    /// Something on screen moves on its own: Home's orb, the Lab's scan (never under reduced
+    /// motion, never under a dialog). The run loop redraws about every 120 ms for it.
+    pub fn animating(&self) -> bool {
+        self.look.motion
+            && self.overlays.is_empty()
+            && (self.screen == Screen::Home
+                || (self.screen == Screen::Section
+                    && SECTIONS[self.section] == "Lab"
+                    && self.lab["cards"].as_array().is_some_and(|c| !c.is_empty())))
+    }
+
     pub fn moving(&self) -> bool {
         self.look.motion
             && (self.spark_until.is_some_and(|t| Instant::now() < t)
@@ -3997,6 +4037,8 @@ pub fn run_menu() -> Result<Option<String>> {
         }
         let wait = if app.moving() {
             Duration::from_millis(80)
+        } else if app.animating() {
+            Duration::from_millis(120)
         } else {
             Duration::from_millis(1000)
         };
@@ -4132,7 +4174,7 @@ mod tests {
 shift
 case "$1 $2" in
   "plan grub-repair") echo '{"ok":true,"action":"grub-repair","commands":["arch-chroot /mnt/bromigos grub-install --target=x86_64-efi --efi-directory=/boot --removable","arch-chroot /mnt/bromigos grub-mkconfig -o /boot/grub/grub.cfg.fieldkit-new"],"touches":["/boot/EFI/BOOT/BOOTX64.EFI","/boot/grub/grub.cfg"]}' ;;
-  "overview "*) echo '{"ok":true,"version":"2026.10.30","network":{"kind":"wired","state":"lan","name":"enp1s0"},"ssh":{"on":false},"stick":"stick settings: 1 SSH key(s)","remote":{"on":false},"computer":{"board":"QEMU Standard PC (Q35 + ICH9, 2009)","cpu":"AMD Ryzen 9 7950X 16-Core Processor (4 threads)","ram":"4.0 GB","gpus":["Red Hat Virtio 1.0 GPU (virtio_gpu)"],"temps":[{"label":"CPU","celsius":41.0}]},"found":[{"kind":"bromigos","title":"bromigOS","device":"vda2","state":"encrypted, locked","detail":""},{"kind":"windows","title":"Windows 11","device":"vda4","state":"BitLocker on","detail":""},{"kind":"fieldkit","title":"Field Kit stick","device":"sr0","state":"","detail":"this medium"}],"suggestions":[]}' ;;
+  "overview "*) echo '{"ok":true,"version":"2026.10.30","network":{"kind":"wired","state":"lan","name":"enp1s0"},"ssh":{"on":false},"stick":"stick settings: 1 SSH key(s)","remote":{"on":false},"computer":{"board":"QEMU Standard PC (Q35 + ICH9, 2009)","cpu":"AMD Ryzen 9 7950X 16-Core Processor (4 threads)","ram":"4.0 GB","gpus":["Red Hat Virtio 1.0 GPU (virtio_gpu)"],"temps":[{"label":"CPU","celsius":41.0},{"label":"GPU","celsius":55.0}]},"load":{"cpu_pct":31.0,"mem_pct":62.5},"disks":[{"name":"vda","path":"/dev/vda","size":256060514304,"model":"","tran":"","health":"ok","parts":[{"name":"vda1","path":"/dev/vda1","size":1073741824,"fstype":"vfat","label":"","parttypename":"EFI System"},{"name":"vda2","path":"/dev/vda2","size":137438953472,"fstype":"crypto_LUKS","label":"","parttypename":"Linux filesystem"},{"name":"vda3","path":"/dev/vda3","size":16777216,"fstype":"","label":"","parttypename":"Microsoft reserved"},{"name":"vda4","path":"/dev/vda4","size":85899345920,"fstype":"BitLocker","label":"","parttypename":"Microsoft basic data"}]}],"found":[{"kind":"bromigos","title":"bromigOS","device":"vda2","state":"encrypted, locked","detail":"","health":"ok"},{"kind":"windows","title":"Windows 11","device":"vda4","state":"BitLocker on","detail":"","health":"ok"},{"kind":"fieldkit","title":"Field Kit stick","device":"sr0","state":"","detail":"this medium"}],"suggestions":[]}' ;;
   "status "*) echo '{"ok":true,"live":true,"network":"none","remote":{"on":false},"remote_words":"","stick":"stick settings: 1 SSH key(s)","target":{"root":"/mnt/bromigos","hostname":"echo","mounted_by_fieldkit":true,"users":["tester"]}}' ;;
   "check black-screen") echo '{"ok":true,"findings":[{"id":"0","title":"The login screen starts: sddm.service","detail":"","fix":"","ok":true},{"id":"1","title":"A login screen setting left in /etc/sddm.conf.d/10-gpu.conf.disabled","detail":"It is named 10-gpu.conf.disabled, which looks switched off, but SDDM reads every file in that folder.","fix":"Move it out (kept in a backup)","ok":false,"commands":["mkdir -p /mnt/bromigos/var/lib/bromigos/fieldkit-backups/x/etc/sddm.conf.d","mv /mnt/bromigos/etc/sddm.conf.d/10-gpu.conf.disabled /mnt/bromigos/var/lib/bromigos/fieldkit-backups/x/etc/sddm.conf.d/"],"touches":["/etc/sddm.conf.d/10-gpu.conf.disabled"]},{"id":"2","title":"The startup files module list is wrong (/etc/mkinitcpio.conf)","detail":"nvidia-open is a package, not a module (the module is nvidia).","fix":"Correct it and rebuild the startup files","ok":false}]}' ;;
   "fix black-screen") echo "{\"ok\":true,\"message\":\"Fixed finding $3. The old file is in /var/lib/bromigos/fieldkit-backups/x.\"}" ;;
@@ -4641,6 +4683,62 @@ esac
         let s = screen(&a, 100, 30);
         save("home-ascii", &s);
         assert!(s.lines().all(|l| l.is_ascii()), "{s}");
+        let s = screen(&a, 150, 45);
+        save("home-ascii-150x45", &s);
+        assert!(s.lines().all(|l| l.is_ascii()), "{s}");
+        assert!(s.contains("(@)"), "the plain ring:\n{s}");
+    }
+
+    /// Home's live parts: the meters, the temperatures' recent readings, the disk map, the
+    /// drives' verdicts, and the orb, which moves only while motion is allowed.
+    #[test]
+    fn home_shows_readings_disks_and_the_orb() {
+        let mut a = app();
+        // four refreshes: the temperatures have a history
+        for c in [44.0, 52.0, 61.0, 93.0] {
+            let mut v = a.overview.clone();
+            v["computer"]["temps"][0]["celsius"] = json!(c);
+            a.reply(Then::Overview, v);
+        }
+        assert_eq!(a.temps[0].1, vec![41.0, 44.0, 52.0, 61.0, 93.0]);
+        let s = screen(&a, 150, 45);
+        save("home-150-live", &s);
+        for want in [
+            "busy",
+            "31%",
+            "memory",
+            "62%",
+            "CPU 93°C",
+            "▂▃▄▄▇",
+            " bromigOS ",
+            " Windows ",
+            "● healthy",
+        ] {
+            assert!(s.contains(want), "{want}:\n{s}");
+        }
+        // a failing drive says so, in the found list and on its disk
+        a.overview["found"][0]["health"] = json!("failing");
+        assert!(screen(&a, 150, 45).contains("FAILING"));
+        // the orb: still under reduced motion, moving with it; Home asks for redraws only then
+        assert!(!a.animating());
+        let still = screen(&a, 150, 45);
+        a.tick = 40;
+        assert_eq!(still, screen(&a, 150, 45), "reduced motion holds it still");
+        a.look.motion = true;
+        assert!(a.animating());
+        assert_ne!(still, screen(&a, 150, 45), "the scan goes round");
+        a.overlays.push(Overlay::Busy { title: "x".into() });
+        assert!(!a.animating(), "not under a dialog");
+        // the console's look: the plain ring, no braille
+        a.overlays.clear();
+        a.look = console_look();
+        let s = screen(&a, 150, 45);
+        save("home-console-150-live", &s);
+        assert!(s.contains("(@)") || s.contains("(o)"), "{s}");
+        assert!(
+            !s.chars().any(|c| ('\u{2801}'..='\u{28ff}').contains(&c)),
+            "{s}"
+        );
     }
 
     #[test]
