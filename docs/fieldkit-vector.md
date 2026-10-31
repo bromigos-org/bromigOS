@@ -214,7 +214,9 @@ first-boot tour (`bromigos welcome-console`) pairs too, in its "Pair your phone"
   - the remote terminal for Herdr's `fieldkit` workspace, and the phone's own shells
     (`phone_shells = true`);
   - machine controls (`[system] enabled = true`): restart and shut down on a stick, update too
-    on bromigOS Server.
+    on bromigOS Server;
+  - power on (`[wake]`): both off on a stick; on bromigOS Server `send = true`, so the
+    always-on server sends wake-ups for the owner's other machines, and `enabled = false`.
 
   On a stick the agent runs as root (`systemd-run`, unit `brodec-machine-fieldkit`); on an
   install, the user's `brodec-machine` service.

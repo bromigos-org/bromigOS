@@ -1,0 +1,20 @@
+# bromigOS Server's Storage role (docs/server.md, "Roles"): the format is described there.
+schema = 1
+id = "storage"
+kind = "role"
+order = 20
+title = "Storage"
+summary = "Keep files for everyone in the house, and backups for the lab."
+hint = "Windows, Mac and Linux computers on your network see this server's shares as a normal network drive. Nothing is shared until you add a share; your local network only."
+offline = true
+packages = ["samba", "nfs-utils", "btrbk", "hdparm"]
+services = ["smb.service", "nfs-server.service"]
+firewall = ["smb", "nfs"]
+health = ["smb.service", "nfs-server.service"]
+health_optional = []
+requires = []
+conflicts = []
+
+[files]
+# Samba starts with no shares (Arch's package has no smb.conf); never replaced once there
+"/etc/samba/smb.conf" = "storage/smb.conf"

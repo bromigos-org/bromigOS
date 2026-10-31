@@ -1,0 +1,16 @@
+# bromigOS Server's Home services role (docs/server.md, "Roles"): the format is described there.
+schema = 1
+id = "home-services"
+kind = "role"
+order = 30
+title = "Home services"
+summary = "Run apps for the household: photos, media, passwords, documents."
+hint = "Each app gets its own name on your network and updates at night with the system. Caddy answers on the web ports, from your local network only."
+offline = true
+packages = ["caddy"]
+services = ["caddy.service"]
+firewall = ["web-lan"]
+health = ["caddy.service"]
+health_optional = []
+requires = []
+conflicts = []

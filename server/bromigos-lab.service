@@ -1,0 +1,12 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- bromigOS Server (docs/server.md, "Find my lab"): the same announcement bromigos lab provision
+     writes, so Find my lab lists this server before the lab has provisioned it -->
+<service-group>
+  <name replace-wildcards="yes">bromigOS lab on %h</name>
+  <service>
+    <type>_bromigos-lab._tcp</type>
+    <port>22</port>
+    <txt-record>txtvers=1</txt-record>
+  </service>
+</service-group>

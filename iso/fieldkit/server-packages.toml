@@ -1,6 +1,12 @@
 # bromigOS Server's own packages (docs/server.md): in the Field Kit medium's offline store,
 # so Server installs with no network, but not running on the medium (live = false).
-# Same format as packages.toml; iso/fieldkit/manifest.py reads both.
+# Same format as packages.toml (its rule (c) and (d)); iso/fieldkit/manifest.py reads both.
+#
+#   edition = true   the base every Server gets (bromigos-server's depends)
+#   store = true     a role's packages (server/roles/*.toml, offline = true): on the stick, so
+#                    the installer's role cards install with no network; installed only when
+#                    the role is chosen
+# Docker (Game server with a lab's Pelican panel) and Cockpit need the network: left out below.
 
 [[package]]
 name = "bromigos-server"
@@ -107,3 +113,94 @@ reason = "grub-btrfsd: the boot menu's snapshot list kept current"
 live = false
 edition = true
 
+[[package]]
+name = "linux-lts"
+section = "Server"
+reason = "Server's kernel: the boot menu's first entry; the newest (linux) stays as the second"
+live = false
+edition = true
+
+[[package]]
+name = "sshguard"
+section = "Server"
+reason = "blocks an address that keeps guessing at SSH, through nftables"
+live = false
+edition = true
+
+[[package]]
+name = "apparmor"
+section = "Server"
+reason = "AppArmor's tools and profiles: on at every start (the kernel's lsm=); Podman confines containers with it"
+live = false
+edition = true
+
+[[package]]
+name = "restic"
+section = "Server"
+reason = "the nightly backup, encrypted, to the lab's S3, any S3 or SFTP, or a USB disk (off until a destination is set)"
+live = false
+edition = true
+
+[[package]]
+name = "avahi"
+section = "Server"
+reason = "mDNS: the _bromigos-lab._tcp announcement, so Find my lab sees the server"
+live = false
+edition = true
+
+[[package]]
+name = "nss-mdns"
+section = "Server"
+reason = ".local names, from the server and to it"
+live = false
+edition = true
+
+[[package]]
+name = "nut"
+section = "Server"
+reason = "a clean shutdown before a UPS's battery runs out; set up only when a UPS is plugged in"
+live = false
+edition = true
+
+[[package]]
+name = "samba"
+section = "Server"
+reason = "the Storage role: Windows and Mac file shares"
+live = false
+store = true
+
+[[package]]
+name = "btrbk"
+section = "Server"
+reason = "the Storage role: snapshots copied to a second btrfs machine"
+live = false
+store = true
+
+[[package]]
+name = "caddy"
+section = "Server"
+reason = "the Home services role: one HTTPS name per app, on 80 and 443 (local network)"
+live = false
+store = true
+
+[[package]]
+name = "nvidia-open-dkms"
+section = "Server"
+reason = "a lab GPU node on Server's LTS kernel (the installer's hardware plan): the open driver built for each kernel"
+live = false
+store = true
+
+[[package]]
+name = "linux-lts-headers"
+section = "Server"
+reason = "nvidia-open-dkms's build for the LTS kernel"
+live = false
+store = true
+
+[[left_out]]
+names = "docker (Server's Game server role with a lab's Pelican panel)"
+reason = "Docker's engine, for Pelican's Wings only: that choice needs the lab, so it needs the network; it downloads then"
+
+[[left_out]]
+names = "cockpit cockpit-podman cockpit-storaged cockpit-files (Server's Cockpit extra)"
+reason = "an opt-in web admin, added later with the network (bromigos server role add cockpit); cockpit-packagekit never"

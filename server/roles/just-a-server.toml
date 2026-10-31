@@ -1,0 +1,16 @@
+# bromigOS Server's Just a server role (docs/server.md, "Roles"): the format is described there.
+schema = 1
+id = "just-a-server"
+kind = "role"
+order = 50
+title = "Just a server"
+summary = "The safe base and nothing else, for a box you'll fill yourself."
+hint = "Still locked down, snapshotted before every update, checked and rolled back by itself, backed up when you choose where to, and on your phone."
+offline = true
+packages = []
+services = []
+firewall = []
+health = []
+health_optional = []
+requires = []
+conflicts = []

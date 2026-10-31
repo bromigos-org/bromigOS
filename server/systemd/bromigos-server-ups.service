@@ -1,0 +1,15 @@
+# bromigOS Server (docs/server.md, "Power"): at each start, looks for a UPS on USB (nut-scanner).
+# When there's one, it writes NUT's settings and turns NUT on, so the server shuts down
+# cleanly before the battery runs out. With none, NUT stays off and this does nothing else.
+[Unit]
+Description=bromigOS Server: NUT when a UPS is plugged in
+After=local-fs.target systemd-udevd.service
+Before=nut-driver-enumerator.service nut-server.service nut-monitor.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/bromigos/server/bromigos-server ups detect
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,29 @@
+# bromigOS Server's Lab node role (docs/server.md, "Roles"): the format is described there.
+schema = 1
+id = "lab-node"
+kind = "role"
+order = 10
+title = "Lab node"
+summary = "Join your lab and run what it gives this computer."
+hint = "Your lab sets this computer up from your desktop and adds it to its cluster. You don't type anything on it. Its cluster's ports open to your local network only."
+offline = true
+# (Python, which the lab's Ansible needs, comes with every Server)
+packages = ["nfs-utils"]
+services = []
+firewall = ["lab-cluster"]
+health = []
+# k3s comes from the lab when it adds this node (bromigos lab provision add-node)
+health_optional = ["k3s.service", "k3s-agent.service"]
+requires = []
+conflicts = []
+# the lab workstation's key gets an account of its own (the lab's provisioning signs in with
+# it and needs sudo), when /etc/bromigos/server.toml has [lab] ssh_key
+lab_account = true
+
+[sysctl]
+# container-dense nodes ran out of inotify watches; half-open tunnels broke kubectl logs
+"fs.inotify.max_user_instances" = "512"
+"fs.inotify.max_user_watches" = "524288"
+"net.ipv4.tcp_keepalive_time" = "60"
+"net.ipv4.tcp_keepalive_intvl" = "10"
+"net.ipv4.tcp_keepalive_probes" = "6"

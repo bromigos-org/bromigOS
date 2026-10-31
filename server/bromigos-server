@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -I
-# bromigos:summary=bromigOS Server: its status (SSH, firewall, updates and their health, containers, the lab's cluster, monitoring), and its safe automatic updates
-# bromigos:args=status [--json] | update [--now] | health | firewall [status|apply|allow NAME|deny NAME] | setup
-# bromigos:examples=bromigos server; bromigos server status --json; sudo bromigos server update --now; sudo bromigos server firewall allow lab-cluster
+# bromigos:summary=bromigOS Server: its status (SSH, firewall, updates and their health, roles, backups, disks, the lab's cluster), its roles, backups and safe automatic updates
+# bromigos:args=status [--json] | update [--now] | health | firewall [status|apply|allow NAME|deny NAME] | roles [--json] | role add|remove ROLE | backup [status|run|check|key] | ups [status|detect] | setup
+# bromigos:examples=bromigos server; bromigos server status --json; bromigos server roles; sudo bromigos server role add storage; sudo bromigos server update --now; sudo bromigos server firewall allow lab-cluster
 """bromigOS Server (docs/server.md): the installed edition without a desktop.
 
   bromigos-server status [--json]   what this server is doing, in plain words (or JSON for the
@@ -15,18 +15,33 @@
   bromigos-server mark-boot         early at startup: counts the starts since the update, so a
                                     start that never reaches the check rolls back the next time
   bromigos-server firewall [status|apply|allow NAME|deny NAME]
-                                    the firewall (nftables): SSH, ping and the lab's monitoring
-                                    in, the rest dropped; NAME: lab-cluster (k3s), web (80, 443)
+                                    the firewall (nftables): SSH, ping, mDNS and the lab's
+                                    monitoring in, the rest dropped; NAME: a rule set
+                                    (/usr/share/bromigos/server/allow-NAME.nft)
+  bromigos-server roles [--json]    the roles (/usr/share/bromigos/server/roles/*.toml), and
+                                    which are on
+  bromigos-server role add|remove ROLE[/VARIANT]
+                                    a role on or off: its packages, firewall rule sets,
+                                    services, settings and health checks
+  bromigos-server backup [status|run|check|key]
+                                    the nightly restic backup ([backup] to); run, check, or
+                                    show the backup's key (root)
+  bromigos-server ups [status|detect]
+                                    NUT, set up when a UPS is on USB (bromigos-server-ups.service)
+  bromigos-server disk-alert        smartd's warning hook (bromigos-server-disk-alert)
   bromigos-server setup             what the package's install runs (idempotent): the settings
-                                    in /etc/bromigos/server.toml applied
+                                    in /etc/bromigos/server.toml applied, the roles included
 
 Settings: /etc/bromigos/server.toml (the installer writes it; every key is optional):
 
   [ssh]
   password = false        # true only when chosen at install: password sign-in allowed too
   [firewall]
-  allow = []              # extra rule sets: "lab-cluster", "web"
+  allow = []              # extra rule sets: "lab-cluster", "web", ... (the roles add theirs)
   tcp = []                # more TCP ports open to the local network
+  udp = []                # more UDP ports open to the local network
+  public_tcp = []         # TCP ports open to everyone (a game's port)
+  public_udp = []         # UDP ports open to everyone
   [updates]
   auto = true             # the timer updates by itself
   reboot = true           # restart by itself when a new kernel or driver needs it
@@ -34,6 +49,22 @@ Settings: /etc/bromigos/server.toml (the installer writes it; every key is optio
   [health]
   minutes = 10            # how long the system has to come back healthy
   ignore_units = []       # failed units that don't count against it
+  [roles]
+  enabled = []            # "storage", "game-server/pelican-wings", ... (role add writes it)
+  [backup]
+  to = ""                 # restic's repository: "s3:https://...", "sftp:...", "/mnt/backup"; "" is off
+  paths = [...]           # what's backed up (BACKUP_PATHS)
+  exclude = [...]         # what's left out (BACKUP_EXCLUDE)
+  keep_daily = 7          # how many backups are kept: daily, weekly, monthly
+  keep_weekly = 4
+  keep_monthly = 6
+  env_file = "/etc/bromigos/server/backup.env"   # root-only: S3 or SFTP credentials
+  [boot]
+  kernel = "linux-lts"    # the boot menu's first entry; "linux" (the newest) stays in it
+  apparmor = true         # AppArmor on (the kernel's lsm= line)
+  [lab]
+  ssh_key = ""            # the lab workstation's public key: the Lab node role's lab account
+  pelican_panel = ""      # the lab's Pelican panel: the Game server role's Wings variant
 
 The Arch news hold: before an automatic update, the timer reads Arch Linux's news feed. An item
 published since the last update holds the update (`hold` in update.json, with each item's title
@@ -41,16 +72,22 @@ and link; `bromigos alerts` and BRODEC's phone raise it as update.held) until a 
 it and updates with `update --now`, which also clears the hold. A feed that can't be read holds
 nothing.
 
-State: /var/lib/bromigos/server/ (update.json, history.jsonl). Nothing here needs the internet
-except the update itself, which reads the machine's own package repository, and the news feed.
+State: /var/lib/bromigos/server/ (update.json, history.jsonl, backup.json, ups.json,
+disk-alerts.jsonl). Nothing here needs the internet except the update itself, which reads
+the machine's own package repository, the news feed, a backup to another machine, and a role
+whose packages aren't installed yet.
 """
 
 import argparse
 import datetime
+import filecmp
+import grp
 import ipaddress
 import json
 import os
+import pwd
 import re
+import secrets
 import shutil
 import socket
 import subprocess
@@ -79,9 +116,26 @@ NFT_EXTRA = "/etc/bromigos/server/nftables.d"
 # privacy guard can't tell these well-known ranges from a real network's addresses
 LAN4 = [str(ipaddress.IPv4Network((base << 16, bits))) for base, bits in ((0x0A00, 8), (0xAC10, 12), (0xC0A8, 16), (0x6440, 10))]
 LAN6 = ["fc00::/7", "fe80::/10"]
-RULESETS = {"lab-cluster": "the lab's k3s cluster (6443, 10250, 2379-2380, flannel 8472/udp)", "web": "a web server (80, 443)"}
 # the units every healthy Server runs; sshd only when it's enabled
 MUST_RUN = ("NetworkManager.service", "bromigos-server-firewall.service")
+# the server's own background jobs: one that failed (a backup with its destination away, a
+# scrub that found errors) is reported in `bromigos server`, and never makes an update unhealthy
+NOT_THE_UPDATE = ("bromigos-server-backup.service", "bromigos-server-backup-check.service",
+                  "btrfs-scrub@-.service", "podman-auto-update.service")
+BACKUP_STATE = "/var/lib/bromigos/server/backup.json"
+BACKUP_KEY = "/etc/bromigos/server/backup.key"
+BACKUP_PATHS = ["/etc", "/var/lib/bromigos", "/etc/containers/systemd", "/var/lib/containers/storage/volumes",
+                "/srv", "/home", "/root"]
+BACKUP_EXCLUDE = ["/home/*/.cache", "/root/.cache", "/var/lib/bromigos/repo", "**/node_modules"]
+UPS_STATE = "/var/lib/bromigos/server/ups.json"
+DISK_ALERTS = "/var/lib/bromigos/server/disk-alerts.jsonl"
+WOL_RECORD = "/run/bromigos/wake-on-lan.json"
+GRUB_DEFAULT = "/etc/default/grub"
+GRUB_CFG = "/boot/grub/grub.cfg"
+NSSWITCH = "/etc/nsswitch.conf"
+LAB_SUDOERS = "/etc/sudoers.d/50-bromigos-lab"
+ROLE_SYSCTL = "/etc/sysctl.d/60-bromigos-role-{}.conf"
+LSM = "landlock,lockdown,yama,integrity,apparmor,bpf"
 
 
 def run(cmd, check=False, timeout=None, input=None):
@@ -106,8 +160,8 @@ def config():
         c = {}
     c.setdefault("ssh", {}).setdefault("password", False)
     fw = c.setdefault("firewall", {})
-    fw.setdefault("allow", [])
-    fw.setdefault("tcp", [])
+    for k in ("allow", "tcp", "udp", "public_tcp", "public_udp"):
+        fw.setdefault(k, [])
     up = c.setdefault("updates", {})
     up.setdefault("auto", True)
     up.setdefault("reboot", True)
@@ -115,6 +169,21 @@ def config():
     h = c.setdefault("health", {})
     h.setdefault("minutes", 10)
     h.setdefault("ignore_units", [])
+    c.setdefault("roles", {}).setdefault("enabled", [])
+    b = c.setdefault("backup", {})
+    b.setdefault("to", "")
+    b.setdefault("paths", list(BACKUP_PATHS))
+    b.setdefault("exclude", list(BACKUP_EXCLUDE))
+    b.setdefault("keep_daily", 7)
+    b.setdefault("keep_weekly", 4)
+    b.setdefault("keep_monthly", 6)
+    b.setdefault("env_file", "/etc/bromigos/server/backup.env")
+    bo = c.setdefault("boot", {})
+    bo.setdefault("kernel", "linux-lts")
+    bo.setdefault("apparmor", True)
+    lab = c.setdefault("lab", {})
+    lab.setdefault("ssh_key", "")
+    lab.setdefault("pelican_panel", "")
     return c
 
 
@@ -253,13 +322,26 @@ def status_doc():
         "addresses": addresses(),
         "ssh": {"enabled": ssh_on, "running": unit_state("sshd.service"),
                 "passwords": bool(c["ssh"]["password"]), "how": "keys and a password" if c["ssh"]["password"] else "keys only"},
-        "firewall": {"running": unit_state("bromigos-server-firewall.service"), "allow": c["firewall"]["allow"],
-                     "tcp": c["firewall"]["tcp"]},
+        "firewall": {"running": unit_state("bromigos-server-firewall.service"), "allow": chosen_rulesets(c),
+                     "tcp": c["firewall"]["tcp"], "udp": c["firewall"]["udp"],
+                     "public_tcp": c["firewall"]["public_tcp"], "public_udp": c["firewall"]["public_udp"]},
+        "roles": {"enabled": c["roles"]["enabled"],
+                  "titles": [r["title"] + (f" ({r['variant']})" if r["variant"] and r["entry"] != r["id"] else "")
+                             for _, r in enabled_roles(c, quiet=True)]},
         "updates": dict(last_update(), auto=bool(c["updates"]["auto"]), timer=unit_state("bromigos-server-update.timer")),
         "rollbacks": [e for e in history() if e.get("event") == "rolled-back"],
         "containers": containers(),
         "cluster": cluster(),
         "monitoring": {"node_exporter": unit_state("prometheus-node-exporter.service"), "port": 9100},
+        "backup": backup_doc(c),
+        "disks": {"btrfs_errors": btrfs_errors()["total"], "scrub": unit_state("btrfs-scrub@-.timer"),
+                  "smartd": unit_state("smartd.service"), "alerts": disk_alerts()},
+        "ups": ups_doc(),
+        "security": {"sshguard": unit_state("sshguard.service"), "apparmor": apparmor_on(),
+                     "apparmor_next": bool(c["boot"]["apparmor"]) and grub_has_block()},
+        "mdns": unit_state("avahi-daemon.service"),
+        "wake_on_lan": wake_on_lan(),
+        "kernel": {"running": os.uname().release, "first": c["boot"]["kernel"]},
     }
 
 
@@ -285,29 +367,75 @@ def print_status(d):
     print(f"  Lab cluster  {cl['role']} of {cl['owner'] or 'a cluster'}, {cl['state']}" if cl["joined"] else
           "  Lab cluster  not joined (bromigos lab provision add-node, from the lab's workstation)")
     print(f"  Monitoring   node exporter {d['monitoring']['node_exporter']} on port 9100 (local network only)")
+    print(f"  Roles        {', '.join(d['roles']['titles'])}" if d["roles"]["titles"] else
+          "  Roles        none (bromigos server roles lists them)")
+    print(f"  Backups      {backup_words(d['backup'])}")
+    dk = d["disks"]
+    disk = "no errors" if not dk["btrfs_errors"] else f"{dk['btrfs_errors']} btrfs errors (sudo btrfs device stats / says where)"
+    if dk["alerts"]:
+        last = dk["alerts"][-1]
+        disk += f"; the last warning: {last['name'] or last['device']}: {last['message']} ({last['at']})"
+    print(f"  Disks        {disk}; SMART watch {dk['smartd']}, monthly scrub {dk['scrub']}")
+    print(f"  Power        UPS: {ups_words(d['ups'])}")
+    sec = d["security"]
+    print(f"  Protection   sshguard {sec['sshguard']}, AppArmor "
+          + ("on" if sec["apparmor"] else "on from the next start" if sec["apparmor_next"] else "off"))
+    wol = d["wake_on_lan"]
+    if wol:
+        print("  Wake-on-LAN  " + ", ".join(f"{n} {'on' if on else 'off'}" for n, on in sorted(wol.items())))
 
 
 # ------------------------------------------------------------------ the firewall
 
+def rulesets():
+    """{name: what it opens}: every /usr/share/bromigos/server/allow-NAME.nft, from its first line."""
+    out = {}
+    for n in sorted(os.listdir(SHARE)):
+        m = re.fullmatch(r"allow-([a-z0-9][a-z0-9-]*)\.nft", n)
+        if m:
+            with open(os.path.join(SHARE, n)) as f:
+                first = f.readline()
+            out[m.group(1)] = first.lstrip("# ").strip()
+    return out
+
+
+def chosen_rulesets(c):
+    """The rule sets that are open: [firewall] allow, then each enabled role's, in that order."""
+    names = list(c["firewall"]["allow"])
+    for _, r in enabled_roles(c, quiet=True):
+        names += r["firewall"]
+    return list(dict.fromkeys(names))
+
+
+def ports(values):
+    return [int(p) for p in values if str(p).isdigit() and 0 < int(p) < 65536]
+
+
 def ruleset(c):
-    """The nftables ruleset: the base (share/nftables.nft), the chosen extras, ports from the
-    settings, and anything in /etc/bromigos/server/nftables.d/*.nft."""
+    """The nftables ruleset: the base (share/nftables.nft), the chosen rule sets and the roles',
+    ports from the settings, and anything in /etc/bromigos/server/nftables.d/*.nft."""
     with open(os.path.join(SHARE, "nftables.nft")) as f:
         text = f.read()
     extra = [f"add element inet bromigos-server lan {{ {', '.join(LAN4)} }}\n"
              f"add element inet bromigos-server lan6 {{ {', '.join(LAN6)} }}\n"]
-    for name in c["firewall"]["allow"]:
-        if name not in RULESETS:
-            print(f"bromigos-server: no rule set {name!r} (there's {', '.join(RULESETS)})", file=sys.stderr)
+    known = rulesets()
+    for name in chosen_rulesets(c):
+        if name not in known:
+            print(f"bromigos-server: no rule set {name!r} (there's {', '.join(known)})", file=sys.stderr)
             continue
         with open(os.path.join(SHARE, f"allow-{name}.nft")) as f:
             extra.append(f.read())
-    ports = [int(p) for p in c["firewall"]["tcp"] if str(p).isdigit() and 0 < int(p) < 65536]
-    if ports:
-        extra.append("add rule inet bromigos-server input ip saddr @lan tcp dport { "
-                     + ", ".join(map(str, ports)) + " } accept\n"
-                     "add rule inet bromigos-server input ip6 saddr @lan6 tcp dport { "
-                     + ", ".join(map(str, ports)) + " } accept\n")
+    for proto in ("tcp", "udp"):
+        lan = ports(c["firewall"][proto])
+        if lan:
+            extra.append(f"add rule inet bromigos-server input ip saddr @lan {proto} dport {{ "
+                         + ", ".join(map(str, lan)) + " } accept\n"
+                         f"add rule inet bromigos-server input ip6 saddr @lan6 {proto} dport {{ "
+                         + ", ".join(map(str, lan)) + " } accept\n")
+        public = ports(c["firewall"][f"public_{proto}"])
+        if public:
+            extra.append(f"add rule inet bromigos-server input {proto} dport {{ " + ", ".join(map(str, public))
+                         + f" }} accept comment \"open to everyone ([firewall] public_{proto})\"\n")
     d = at(NFT_EXTRA)
     if os.path.isdir(d):
         for n in sorted(os.listdir(d)):
@@ -325,8 +453,12 @@ def cmd_firewall(a):
         print(out if rc == 0 else f"the firewall isn't loaded ({err.strip() or 'nft failed'})")
         return 0
     if verb in ("allow", "deny"):
-        if a.name not in RULESETS:
-            sys.exit(f"bromigos-server: no rule set {a.name!r}: {', '.join(f'{k} ({v})' for k, v in RULESETS.items())}")
+        known = rulesets()
+        if not a.name:
+            print("\n".join(f"  {k:12} {v}" for k, v in known.items()))
+            return 0
+        if a.name not in known:
+            sys.exit(f"bromigos-server: no rule set {a.name!r}: {'; '.join(f'{k} ({v})' for k, v in known.items())}")
         allow = [n for n in c["firewall"]["allow"] if n != a.name] + ([a.name] if verb == "allow" else [])
         set_toml_list(["firewall", "allow"], allow)
         c = config()
@@ -340,7 +472,8 @@ def cmd_firewall(a):
     rc, _, err = run(["nft", "-f", "-"], input=text)
     if rc != 0:
         sys.exit(f"bromigos-server: loading the firewall failed: {err.strip()}")
-    print("firewall: loaded" + (f" (also open: {', '.join(c['firewall']['allow'])})" if c["firewall"]["allow"] else ""))
+    sets = chosen_rulesets(c)
+    print("firewall: loaded" + (f" (also open: {', '.join(sets)})" if sets else ""))
     return 0
 
 
@@ -368,11 +501,912 @@ def set_toml_list(path, values):
         f.write(text)
 
 
+# ------------------------------------------------------------------ roles
+
+# docs/server.md, "Roles": a role file's keys, with their types and what they default to
+ROLE_KEYS = {
+    "schema": (int, 1), "id": (str, None), "kind": (str, "role"), "order": (int, 100),
+    "title": (str, None), "summary": (str, None), "hint": (str, ""), "offline": (bool, True),
+    "packages": (list, []), "services": (list, []), "firewall": (list, []), "health": (list, []),
+    "health_optional": (list, []), "sysctl": (dict, {}), "requires": (list, []), "conflicts": (list, []),
+    "files": (dict, {}), "lab_account": (bool, False), "variant": (list, []),
+}
+# a variant changes these: its lists add to the role's, its offline replaces the role's
+VARIANT_KEYS = {
+    "id": (str, None), "title": (str, None), "hint": (str, ""), "default": (bool, False), "offline": (bool, None),
+    "packages": (list, []), "services": (list, []), "firewall": (list, []), "health": (list, []),
+    "health_optional": (list, []), "sysctl": (dict, {}), "requires": (list, []), "conflicts": (list, []),
+    "files": (dict, {}),
+}
+LISTS = ("packages", "services", "firewall", "health", "health_optional", "requires", "conflicts")
+ROLE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+UNIT = re.compile(r"^[A-Za-z0-9@_.:-]+\.(service|socket|timer|target|path|mount)$")
+PACKAGE = re.compile(r"^[a-z0-9@._+-]+$")
+SYSCTL_KEY = re.compile(r"^[a-z0-9_.*-]+$")
+
+
+class RoleError(Exception):
+    """A role can't be added or removed: the reason, in plain words."""
+
+
+def check_keys(doc, keys, where):
+    problems = []
+    for k in doc:
+        if k not in keys:
+            problems.append(f"{where}: unknown key {k!r}")
+    for k, (kind, default) in keys.items():
+        if k not in doc:
+            if default is None and k != "offline":
+                problems.append(f"{where}: {k} is missing")
+            continue
+        v = doc[k]
+        if not isinstance(v, kind) or (kind is int and isinstance(v, bool)):
+            problems.append(f"{where}: {k} should be {kind.__name__}")
+        elif kind is list and k != "variant" and not all(isinstance(x, str) for x in v):
+            problems.append(f"{where}: {k} should be a list of strings")
+    return problems
+
+
+def check_lists(doc, where, known_sets):
+    problems = []
+    for p in doc.get("packages", []) + [x for x in doc.get("conflicts", []) if not x.startswith("role:")]:
+        if not PACKAGE.match(p):
+            problems.append(f"{where}: {p!r} isn't a package name")
+    for u in doc.get("services", []) + doc.get("health", []) + doc.get("health_optional", []):
+        if not UNIT.match(u):
+            problems.append(f"{where}: {u!r} isn't a unit name (NAME.service, .socket, .timer ...)")
+    for n in doc.get("firewall", []):
+        if n not in known_sets:
+            problems.append(f"{where}: no firewall rule set {n!r}")
+    for r in doc.get("requires", []):
+        if not re.match(r"^(role:[a-z0-9-]+|setting:[a-z_]+\.[a-z_]+)$", r):
+            problems.append(f"{where}: requires {r!r}: role:ID or setting:SECTION.KEY")
+    for k, v in doc.get("sysctl", {}).items():
+        if not SYSCTL_KEY.match(k) or not isinstance(v, str) or "\n" in v:
+            problems.append(f"{where}: sysctl {k!r} = {v!r}: a kernel setting and its value as a string")
+    for dest, src in doc.get("files", {}).items():
+        if not (isinstance(src, str) and dest.startswith("/etc/") and ".." not in dest and ".." not in src):
+            problems.append(f"{where}: files {dest!r}: a file under /etc and its source in roles/files/")
+        elif not os.path.isfile(os.path.join(SHARE, "roles", "files", src)):
+            problems.append(f"{where}: files {dest!r}: no roles/files/{src}")
+    return problems
+
+
+def load_roles():
+    """{id: role}, in their order, from /usr/share/bromigos/server/roles/*.toml. A file with a
+    problem is left out, and the problem said."""
+    d = os.path.join(SHARE, "roles")
+    roles, known_sets = [], rulesets()
+    for n in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if not n.endswith(".toml"):
+            continue
+        try:
+            with open(os.path.join(d, n), "rb") as f:
+                doc = tomllib.load(f)
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            print(f"bromigos-server: roles/{n} can't be read ({e})", file=sys.stderr)
+            continue
+        problems = role_problems(doc, n, known_sets)
+        if problems:
+            print("bromigos-server: " + "; ".join(problems), file=sys.stderr)
+            continue
+        for k, (_, default) in ROLE_KEYS.items():
+            doc.setdefault(k, default if not isinstance(default, (list, dict)) else type(default)(default))
+        for v in doc["variant"]:
+            for k, (_, default) in VARIANT_KEYS.items():
+                v.setdefault(k, default if not isinstance(default, (list, dict)) else type(default)(default))
+        roles.append(doc)
+    roles.sort(key=lambda r: (r["order"], r["id"]))
+    return {r["id"]: r for r in roles}
+
+
+def role_problems(doc, name, known_sets=None):
+    known_sets = rulesets() if known_sets is None else known_sets
+    problems = check_keys(doc, ROLE_KEYS, name)
+    if problems:
+        return problems
+    if doc.get("schema", 1) != 1:
+        problems.append(f"{name}: schema {doc['schema']} (this bromigos-server reads 1)")
+    if not ROLE_ID.match(doc["id"]) or name != f"{doc['id']}.toml":
+        problems.append(f"{name}: id {doc['id']!r} should be the file's name, in lower case")
+    if doc.get("kind", "role") not in ("role", "extra"):
+        problems.append(f"{name}: kind is \"role\" or \"extra\"")
+    problems += check_lists(doc, name, known_sets)
+    variants = doc.get("variant", [])
+    for v in variants:
+        if not isinstance(v, dict):
+            problems.append(f"{name}: [[variant]] should be a table")
+            continue
+        where = f"{name} variant {v.get('id', '?')}"
+        problems += check_keys(v, VARIANT_KEYS, where) or check_lists(v, where, known_sets)
+        if not ROLE_ID.match(str(v.get("id", ""))):
+            problems.append(f"{where}: its id should be lower case")
+    if variants and sum(1 for v in variants if isinstance(v, dict) and v.get("default")) != 1:
+        problems.append(f"{name}: one variant has default = true")
+    return problems
+
+
+def resolve(role, variant=None):
+    """A role as it's applied: its variant's lists added to its own. variant None: the default."""
+    vs = role["variant"]
+    if variant and not any(v["id"] == variant for v in vs):
+        raise RoleError(f"{role['title']} has no variant {variant!r}"
+                        + (f" (there's {', '.join(v['id'] for v in vs)})" if vs else ""))
+    v = next((v for v in vs if v["id"] == variant), None) or next((v for v in vs if v["default"]), None)
+    r = {k: (list(role[k]) if isinstance(role[k], list) else dict(role[k]) if isinstance(role[k], dict) else role[k])
+         for k in ROLE_KEYS if k != "variant"}
+    r["variant"] = v["id"] if v else None
+    r["entry"] = role["id"] if not v or v["default"] else f"{role['id']}/{v['id']}"
+    if v:
+        for k in LISTS:
+            r[k] = list(dict.fromkeys(r[k] + v[k]))
+        r["sysctl"].update(v["sysctl"])
+        r["files"].update(v["files"])
+        if v["offline"] is not None:
+            r["offline"] = v["offline"]
+    return r
+
+
+def split_entry(entry):
+    rid, _, variant = str(entry).partition("/")
+    return rid, variant or None
+
+
+def enabled_roles(c, quiet=False):
+    """[(entry, resolved role)] for [roles] enabled; an unknown one is said and skipped."""
+    catalogue = load_roles()
+    out = []
+    for entry in c["roles"]["enabled"]:
+        rid, variant = split_entry(entry)
+        if rid not in catalogue:
+            if not quiet:
+                print(f"bromigos-server: [roles] enabled has {entry!r}, which isn't a role here", file=sys.stderr)
+            continue
+        try:
+            out.append((entry, resolve(catalogue[rid], variant)))
+        except RoleError as e:
+            if not quiet:
+                print(f"bromigos-server: {e}", file=sys.stderr)
+    return out
+
+
+def roles_doc(c):
+    on = {split_entry(e)[0]: split_entry(e)[1] for e in c["roles"]["enabled"]}
+    out = []
+    for rid, role in load_roles().items():
+        d = {k: role[k] for k in ROLE_KEYS if k != "variant"}
+        d["variants"] = [dict(v) for v in role["variant"]]
+        d["enabled"] = rid in on
+        d["enabled_variant"] = resolve(role, on[rid])["variant"] if rid in on and role["variant"] else None
+        out.append(d)
+    return {"schema": 1, "enabled": c["roles"]["enabled"], "roles": out}
+
+
+def cmd_roles(a):
+    d = roles_doc(config())
+    if a.json:
+        print(json.dumps(d, indent=1))
+        return 0
+    for r in d["roles"]:
+        mark = "on " if r["enabled"] else "   "
+        extra = " (an extra)" if r["kind"] == "extra" else ""
+        print(f"  {mark} {r['title']}{extra} · {r['id']}")
+        print(f"       {r['summary']}")
+        for v in r["variants"]:
+            here = " (on)" if r["enabled_variant"] == v["id"] else ""
+            print(f"       {r['id']}/{v['id']}: {v['title']}{here}")
+    print("\nsudo bromigos server role add ID (or ID/VARIANT) turns one on; role remove ID turns it off")
+    return 0
+
+
+def installed(pkg):
+    return run(["pacman", "-Q", pkg])[0] == 0
+
+
+def live():
+    """Running on this machine now, not in a test's stand-in root or an installer's chroot."""
+    return ROOT == "/" and os.path.isdir("/run/systemd/system") and not chrooted()
+
+
+def systemctl(*args):
+    return run(["systemctl", *([f"--root={ROOT}"] if ROOT != "/" else []), *args])
+
+
+def setting(c, dotted):
+    section, key = dotted.split(".", 1)
+    return c.get(section, {}).get(key)
+
+
+def check_requires(r, c, others):
+    """others: the ids of the other roles that are on."""
+    for need in r["requires"]:
+        kind, _, what = need.partition(":")
+        if kind == "role" and what not in others:
+            raise RoleError(f"{r['title']} needs the {what} role: sudo bromigos server role add {what}")
+        if kind == "setting" and not setting(c, what):
+            section, key = what.split(".", 1)
+            raise RoleError(f"{r['title']} needs [{section}] {key} in {CONFIG}"
+                            + (": your lab's Pelican panel address, such as https://panel.example"
+                               if what == "lab.pelican_panel" else ""))
+    for no in r["conflicts"]:
+        kind, _, what = no.partition(":")
+        if kind == "role" and what in others:
+            raise RoleError(f"{r['title']} can't be on with the {what} role")
+
+
+def apply_packages(r):
+    """The role's packages, installed when they aren't; its conflicting packages removed first,
+    and put back when the install fails."""
+    clash = [p for p in r["conflicts"] if not p.startswith("role:") and installed(p)]
+    missing = [p for p in r["packages"] if not installed(p)]
+    if not missing:
+        return []
+    done = []
+    if clash:
+        rc, out, err = run(["pacman", "-R", "--noconfirm", *clash], timeout=600)
+        if rc != 0:
+            raise RoleError(f"couldn't remove {', '.join(clash)}, which {r['title']} replaces: {(err or out).strip()[-300:]}")
+        done.append("removed " + ", ".join(clash))
+    rc, out, err = run(["pacman", "-S", "--needed", "--noconfirm", *missing], timeout=3600)
+    if rc != 0:
+        if clash:
+            run(["pacman", "-S", "--needed", "--noconfirm", *clash], timeout=3600)
+        why = "" if r["offline"] else " (it needs the internet)"
+        raise RoleError(f"couldn't install {', '.join(missing)}{why}: {(err or out).strip()[-300:]}")
+    return done + ["installed " + ", ".join(missing)]
+
+
+def role_files(r):
+    """A role's files, written when they aren't there: never over one that is."""
+    done = []
+    for dest, src in r["files"].items():
+        if os.path.lexists(at(dest)):
+            continue
+        os.makedirs(os.path.dirname(at(dest)), exist_ok=True)
+        shutil.copyfile(os.path.join(SHARE, "roles", "files", src), at(dest))
+        done.append(dest)
+        if dest.startswith("/etc/tmpfiles.d/") and live():
+            run(["systemd-tmpfiles", "--create", dest])
+    return done
+
+
+def role_sysctl(r):
+    path = at(ROLE_SYSCTL.format(r["id"]))
+    if not r["sysctl"]:
+        return False
+    text = (f"# bromigOS Server's {r['title']} role (bromigos server role remove {r['id']} takes it out)\n"
+            + "".join(f"{k} = {v}\n" for k, v in r["sysctl"].items()))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.exists(path) and open(path).read() == text:
+        return False
+    with open(path, "w") as f:
+        f.write(text)
+    if live():
+        run(["sysctl", "-q", "-p", path])
+    return True
+
+
+SSH_KEY = re.compile(r"^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) [A-Za-z0-9+/=]+( [^\n]*)?$")
+
+
+def lab_account(c):
+    """The Lab node role's lab account: the lab workstation's key ([lab] ssh_key) signs in to
+    it, in bromigos-ssh, with sudo needing no password (what bromigos lab provision needs from
+    an SSH target). Without a key, nothing is made."""
+    key = str(c["lab"]["ssh_key"]).strip()
+    if not key:
+        return []
+    if not SSH_KEY.match(key):
+        raise RoleError("[lab] ssh_key isn't an SSH public key (one line: ssh-ed25519 AAAA... name)")
+    done = []
+    if ROOT == "/":
+        try:
+            pwd.getpwnam("lab")
+        except KeyError:
+            rc, _, err = run(["useradd", "--create-home", "--user-group", "--groups", "bromigos-ssh",
+                              "--comment", "the lab workstation (bromigos server role lab-node)", "lab"])
+            if rc != 0:
+                raise RoleError(f"couldn't make the lab account: {err.strip()}")
+            run(["passwd", "--lock", "lab"])
+            done.append("made the lab account")
+        run(["usermod", "--append", "--groups", "bromigos-ssh", "lab"])
+        home = pwd.getpwnam("lab").pw_dir
+    else:
+        home = "/home/lab"
+    ssh = at(os.path.join(home, ".ssh"))
+    os.makedirs(ssh, mode=0o700, exist_ok=True)
+    with open(os.path.join(ssh, "authorized_keys"), "w") as f:
+        f.write("# bromigOS Server's Lab node role: the lab workstation's key ([lab] ssh_key)\n" + key + "\n")
+    os.chmod(os.path.join(ssh, "authorized_keys"), 0o600)
+    if ROOT == "/":
+        run(["chown", "-R", "lab:lab", ssh])
+    sudoers = at(LAB_SUDOERS)
+    os.makedirs(os.path.dirname(sudoers), exist_ok=True)
+    tmp = sudoers + ".tmp"
+    with open(tmp, "w") as f:
+        f.write("# bromigOS Server's Lab node role (docs/server.md, \"Roles\"): the lab workstation's\n"
+                "# provisioning signs in as lab and needs sudo with no password. Removed with the role.\n"
+                "lab ALL=(ALL:ALL) NOPASSWD: ALL\n")
+    os.chmod(tmp, 0o440)
+    if shutil.which("visudo") and ROOT == "/" and run(["visudo", "-cqf", tmp])[0] != 0:
+        os.unlink(tmp)
+        raise RoleError("the lab account's sudo rule didn't check (visudo)")
+    os.replace(tmp, sudoers)
+    return done + ["the lab workstation's key can sign in as lab"]
+
+
+def apply_role(r, c, others):
+    """One role on: requires, packages, files, settings, the lab account, services. The
+    firewall's rule sets and the health checks follow [roles] enabled by themselves."""
+    check_requires(r, c, others)
+    done = apply_packages(r)
+    done += [f"wrote {f}" for f in role_files(r)]
+    if role_sysctl(r):
+        done.append("kernel settings: " + ", ".join(r["sysctl"]))
+    if r["lab_account"]:
+        done += lab_account(c)
+    if r["services"]:
+        rc, _, err = systemctl("enable", *(["--now"] if live() else []), *r["services"])
+        if rc != 0:
+            raise RoleError(f"couldn't turn on {', '.join(r['services'])}: {err.strip()}")
+        done.append("on: " + ", ".join(r["services"]))
+    return done
+
+
+def unapply_role(r, others):
+    """One role off: its services (unless another role that's on needs them), its settings, its
+    files when they're still as it wrote them, the lab account's key and sudo. Its packages stay."""
+    still = {s for o in others for s in o["services"]}
+    done = []
+    off = [s for s in r["services"] if s not in still]
+    if off:
+        systemctl("disable", *(["--now"] if live() else []), *off)
+        done.append("off: " + ", ".join(off))
+    path = at(ROLE_SYSCTL.format(r["id"]))
+    if os.path.exists(path):
+        os.unlink(path)
+        done.append("its kernel settings removed (they go at the next restart)")
+    for dest, src in r["files"].items():
+        mine = os.path.join(SHARE, "roles", "files", src)
+        if os.path.isfile(at(dest)) and filecmp.cmp(at(dest), mine, shallow=False):
+            os.unlink(at(dest))
+            done.append(f"removed {dest}")
+    if r["lab_account"]:
+        if os.path.exists(at(LAB_SUDOERS)):
+            os.unlink(at(LAB_SUDOERS))
+        home = "/home/lab"
+        if ROOT == "/":
+            try:
+                home = pwd.getpwnam("lab").pw_dir
+            except KeyError:
+                home = None
+        if home and os.path.exists(at(os.path.join(home, ".ssh/authorized_keys"))):
+            os.unlink(at(os.path.join(home, ".ssh/authorized_keys")))
+            done.append("the lab account can't sign in any more (its key and sudo removed)")
+    if r["packages"]:
+        done.append(f"its packages stay (sudo pacman -Rs {' '.join(r['packages'])} removes them)")
+    return done
+
+
+def reload_firewall():
+    if live():
+        run(["systemctl", "restart", "bromigos-server-firewall.service"])
+
+
+def cmd_role(a):
+    c = config()
+    catalogue = load_roles()
+    rid, variant = split_entry(a.name)
+    if rid not in catalogue:
+        sys.exit(f"bromigos-server: no role {rid!r} (there's {', '.join(catalogue)}; bromigos server roles lists them)")
+    current = [e for e in c["roles"]["enabled"] if split_entry(e)[0] != rid]
+    was = [e for e in c["roles"]["enabled"] if split_entry(e)[0] == rid]
+    others = {split_entry(e)[0] for e in current}
+    try:
+        if a.verb == "add":
+            r = resolve(catalogue[rid], variant)
+            old = None
+            if was and was[0] != r["entry"]:
+                old = resolve(catalogue[rid], split_entry(was[0])[1])
+                for line in unapply_role(old, [x for _, x in enabled_roles(dict(c, roles={"enabled": current}), quiet=True)]):
+                    print(f"bromigos-server: {old['title']}: {line}")
+            try:
+                done = apply_role(r, c, others)
+            except RoleError:
+                if old:                         # the way it was before stays on
+                    apply_role(old, c, others)
+                raise
+            set_toml_list(["roles", "enabled"], current + [r["entry"]])
+            print(f"bromigos-server: {r['title']} is on" + (f" ({r['variant']})" if r["variant"] else ""))
+        else:
+            if not was:
+                print(f"bromigos-server: {catalogue[rid]['title']} isn't on")
+                return 0
+            r = resolve(catalogue[rid], split_entry(was[0])[1])
+            done = unapply_role(r, [x for _, x in enabled_roles(dict(c, roles={"enabled": current}), quiet=True)])
+            set_toml_list(["roles", "enabled"], current)
+            print(f"bromigos-server: {r['title']} is off")
+    except RoleError as e:
+        sys.exit(f"bromigos-server: {e}")
+    for line in done:
+        print(f"  {line}")
+    reload_firewall()
+    return 0
+
+
+def role_health(c):
+    """(must be active, active once installed): the units the roles that are on check."""
+    must, optional = [], []
+    for _, r in enabled_roles(c, quiet=True):
+        must += r["health"]
+        optional += r["health_optional"]
+    return list(dict.fromkeys(must)), list(dict.fromkeys(optional))
+
+
+def unit_exists(unit):
+    rc, out, _ = run(["systemctl", "show", "-P", "LoadState", unit])
+    return rc == 0 and out.strip() == "loaded"
+
+
+# ------------------------------------------------------------------ backups (restic)
+
+def read_json(path, default=None):
+    try:
+        with open(at(path)) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {} if default is None else default
+
+
+def write_json(path, doc, mode=0o644):
+    os.makedirs(os.path.dirname(at(path)), mode=0o755, exist_ok=True)
+    tmp = at(path) + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(doc, f, indent=1, sort_keys=True)
+        f.write("\n")
+    os.chmod(tmp, mode)
+    os.replace(tmp, at(path))
+
+
+def backup_key():
+    """The backup's key: made once, root-only. Without it the backup can't be read, so
+    `bromigos server backup key` shows it, to keep somewhere safe."""
+    path = at(BACKUP_KEY)
+    if not os.path.exists(path):
+        os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(secrets.token_urlsafe(32) + "\n")
+    return path
+
+
+def restic_env(b):
+    """restic's environment: the destination, the key file, and the credentials file's
+    KEY=VALUE lines (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, ...)."""
+    env = dict(os.environ)
+    env.update(RESTIC_REPOSITORY=b["to"], RESTIC_PASSWORD_FILE=backup_key(),
+               RESTIC_CACHE_DIR="/var/cache/restic", RESTIC_PROGRESS_FPS="0")
+    try:
+        with open(at(b["env_file"])) as f:
+            for line in f:
+                k, eq, v = line.strip().partition("=")
+                if eq and re.match(r"^[A-Z][A-Z0-9_]*$", k):
+                    env[k] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return env
+
+
+def restic(env, *args, timeout=12 * 3600):
+    try:
+        r = subprocess.run(["restic", *args], capture_output=True, text=True, timeout=timeout, env=env)
+        return r.returncode, r.stdout, r.stderr
+    except FileNotFoundError:
+        return 127, "", "restic: not installed"
+    except subprocess.TimeoutExpired:
+        return 124, "", "restic: timed out"
+
+
+def last_line(text, fallback):
+    return (text.strip().splitlines() or [fallback])[-1][:300]
+
+
+def cmd_backup(a):
+    c = config()
+    b = c["backup"]
+    st = read_json(BACKUP_STATE)
+    verb = a.verb or "status"
+    if verb == "status":
+        d = backup_doc(c)
+        print(json.dumps(d, indent=1) if a.json else backup_words(d))
+        return 0
+    if verb == "key":
+        print(open(backup_key()).read().strip())
+        print("The backup's key: without it, no one can read the backup, you included. Keep it "
+              "somewhere safe, away from this server.", file=sys.stderr)
+        return 0
+    if not b["to"]:
+        st[verb] = {"phase": "off", "at": now()}
+        write_json(BACKUP_STATE, st)
+        print("bromigos-server: backups are off: no destination ([backup] to in /etc/bromigos/server.toml)")
+        return 0
+    env = restic_env(b)
+    if verb == "run":
+        rc, _, err = restic(env, "cat", "config", timeout=600)
+        if rc == 10 or (rc != 0 and "does not exist" in err):
+            rc, _, err = restic(env, "init", timeout=600)
+            if rc != 0:
+                return backup_failed(st, verb, f"the destination couldn't be set up: {last_line(err, 'restic init failed')}")
+        elif rc != 0:
+            return backup_failed(st, verb, f"the destination can't be reached: {last_line(err, 'restic failed')}")
+        paths = [p for p in b["paths"] if os.path.exists(at(p))]
+        args = ["backup", "--json", "--tag", "bromigos-server", "--exclude-caches"]
+        for x in b["exclude"]:
+            args += ["--exclude", x]
+        rc, out, err = restic(env, *args, *paths)
+        summary = {}
+        for line in out.splitlines():
+            try:
+                m = json.loads(line)
+            except ValueError:
+                continue
+            if m.get("message_type") == "summary":
+                summary = m
+        # 3: some files couldn't be read, the rest was backed up
+        if rc not in (0, 3) or not summary:
+            return backup_failed(st, verb, last_line(err, "restic backup failed"))
+        restic(env, "forget", "--tag", "bromigos-server", "--prune", "--keep-daily", str(b["keep_daily"]),
+               "--keep-weekly", str(b["keep_weekly"]), "--keep-monthly", str(b["keep_monthly"]))
+        st["run"] = {"phase": "ok" if rc == 0 else "partial", "at": now(), "ts": time.time(),
+                     "snapshot": summary.get("snapshot_id", "")[:8], "files": summary.get("total_files_processed"),
+                     "bytes": summary.get("total_bytes_processed"), "added": summary.get("data_added"),
+                     "reason": "" if rc == 0 else "some files couldn't be read: " + last_line(err, "")}
+        write_json(BACKUP_STATE, st)
+        print(f"bromigos-server: backed up ({st['run']['snapshot']})")
+        return 0
+    # check: what's there can be read back; in a month's first week, 5 % of the data too
+    data = a.data or datetime.date.today().day <= 7
+    rc, out, err = restic(env, "check", *(["--read-data-subset=5%"] if data else []))
+    if rc != 0:
+        return backup_failed(st, verb, last_line(err or out, "restic check failed"))
+    st["check"] = {"phase": "ok", "at": now(), "ts": time.time(), "data": bool(data), "reason": ""}
+    write_json(BACKUP_STATE, st)
+    print("bromigos-server: the backup checks out" + (" (5 % of its data read back)" if data else ""))
+    return 0
+
+
+def backup_failed(st, verb, reason):
+    st[verb] = {"phase": "failed", "at": now(), "ts": time.time(), "reason": reason}
+    write_json(BACKUP_STATE, st)
+    print(f"bromigos-server: the backup {'check ' if verb == 'check' else ''}failed: {reason}", file=sys.stderr)
+    return 1
+
+
+def backup_doc(c):
+    st = read_json(BACKUP_STATE)
+    to = c["backup"]["to"]
+    # where, without a password someone put in the address
+    where = re.sub(r"//[^/@]*@", "//", to) if to else ""
+    return {"on": bool(to), "to": where, "timer": unit_state("bromigos-server-backup.timer"),
+            "last": st.get("run") if to else None, "check": st.get("check") if to else None}
+
+
+def backup_words(d):
+    if not d["on"]:
+        return "off: no destination yet ([backup] to in /etc/bromigos/server.toml)"
+    last = d["last"] or {}
+    if not last:
+        return f"to {d['to']}; none yet (the first runs tonight)"
+    words = {"ok": "the last backup worked", "partial": "the last backup left some files out",
+             "failed": "the last backup failed", "off": "none yet"}.get(last.get("phase"), last.get("phase"))
+    return f"{words} ({last.get('at')}), to {d['to']}" + (f": {last['reason']}" if last.get("reason") else "")
+
+
+# ------------------------------------------------------------------ disks: btrfs and SMART
+
+def btrfs_errors():
+    """{"total": n, "devices": [...]}: each btrfs device's error counters (write, read, flush,
+    corruption, generation), from /sys/fs/btrfs/FSID/devinfo/N/error_stats (no root needed)."""
+    base = at("/sys/fs/btrfs")
+    devices = []
+    for fsid in sorted(os.listdir(base)) if os.path.isdir(base) else []:
+        info = os.path.join(base, fsid, "devinfo")
+        for dev in sorted(os.listdir(info)) if os.path.isdir(info) else []:
+            try:
+                with open(os.path.join(info, dev, "error_stats")) as f:
+                    counts = {k: int(v) for k, v in (line.split() for line in f if len(line.split()) == 2)}
+            except (OSError, ValueError):
+                continue
+            devices.append({"fs": fsid, "device": dev, "errors": counts, "total": sum(counts.values())})
+    return {"total": sum(d["total"] for d in devices), "devices": devices}
+
+
+def disk_alerts(n=5):
+    try:
+        with open(at(DISK_ALERTS)) as f:
+            rows = [json.loads(line) for line in f if line.strip()]
+    except (OSError, ValueError):
+        rows = []
+    return rows[-n:]
+
+
+def cmd_disk_alert(a):
+    """smartd's warning (-M exec): kept for `bromigos server` and the journal."""
+    e = os.environ
+    row = {"at": now(), "device": e.get("SMARTD_DEVICE", ""), "name": e.get("SMARTD_DEVICESTRING", ""),
+           "type": e.get("SMARTD_FAILTYPE", ""), "message": e.get("SMARTD_MESSAGE", "")[:500]}
+    os.makedirs(os.path.dirname(at(DISK_ALERTS)), mode=0o755, exist_ok=True)
+    with open(at(DISK_ALERTS), "a") as f:
+        f.write(json.dumps(row) + "\n")
+    print(f"bromigos-server: disk warning: {row['name'] or row['device']}: {row['message']}", file=sys.stderr)
+    return 0
+
+
+def root_fstype():
+    try:
+        with open(at("/proc/self/mountinfo")) as f:
+            for line in f:
+                left, _, right = line.partition(" - ")
+                if left.split()[4:5] == ["/"]:
+                    return right.split()[0]
+    except (OSError, IndexError):
+        pass
+    return None
+
+
+# ------------------------------------------------------------------ the UPS (NUT)
+
+NUT_MARK = "# bromigOS Server (bromigos-server ups; docs/server.md, \"Power\"): written because a UPS was found"
+# what NUT's own files hold untouched: one of these may be replaced, one with more may not
+NUT_STOCK = {
+    "nut.conf": {"MODE=none"},
+    "ups.conf": {"maxretry = 3"},
+    "upsd.conf": set(),
+    "upsd.users": set(),
+    "upsmon.conf": {"MINSUPPLIES 1", 'SHUTDOWNCMD "/sbin/shutdown -h +0"', "POLLFREQ 5", "POLLFREQALERT 5",
+                    "HOSTSYNC 15", "DEADTIME 15", 'POWERDOWNFLAG "/etc/killpower"', "OFFDURATION 30",
+                    "OVERDURATION -1", "RBWARNTIME 43200", "NOCOMMWARNTIME 300", "FINALDELAY 5", "ALARMCRITICAL 1"},
+}
+NUT_UNITS = ["nut.target", "nut-driver-enumerator.service", "nut-server.service", "nut-monitor.service"]
+
+
+def nut_scan():
+    """The UPSes on USB, as nut-scanner -U lists them: [{"driver": ..., "port": ..., ...}]."""
+    rc, out, _ = run(["nut-scanner", "-U", "-q"], timeout=90)
+    found, cur = [], None
+    for line in out.splitlines() if rc == 0 else []:
+        line = line.strip()
+        if re.match(r"^\[.+\]$", line):
+            cur = {}
+            found.append(cur)
+        elif cur is not None and "=" in line:
+            k, _, v = line.partition("=")
+            cur[k.strip()] = v.strip().strip('"')
+    return [u for u in found if u.get("driver")]
+
+
+def nut_writable(name):
+    path = at(f"/etc/nut/{name}")
+    try:
+        with open(path) as f:
+            text = f.read()
+    except FileNotFoundError:
+        return True
+    if NUT_MARK in text:
+        return True
+    active = {line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")}
+    return active <= NUT_STOCK[name]
+
+
+def nut_write(name, text, mode=0o640):
+    path = at(f"/etc/nut/{name}")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(NUT_MARK + "\n" + text)
+    os.chmod(path, mode)
+    if ROOT == "/":
+        try:
+            os.chown(path, 0, grp.getgrnam("nut").gr_gid)
+        except (KeyError, PermissionError):
+            pass
+
+
+def cmd_ups(a):
+    st = read_json(UPS_STATE)
+    if (a.verb or "status") == "status":
+        print(json.dumps(st, indent=1) if a.json else ups_words(st))
+        return 0
+    found = nut_scan()
+    if not found:
+        if st.get("configured"):
+            # it was here before: NUT off, so a missing UPS isn't a failing service
+            systemctl("disable", *(["--now"] if live() else []), *NUT_UNITS)
+            st.update(found=False, configured=False, checked=now(), note="the UPS isn't connected any more: NUT is off")
+        else:
+            st = {"found": False, "configured": False, "checked": now()}
+        write_json(UPS_STATE, st)
+        print("bromigos-server: no UPS on USB: NUT stays off")
+        return 0
+    u = found[0]
+    names = [n for n in NUT_STOCK if not nut_writable(n)]
+    if names:
+        st = {"found": True, "configured": False, "checked": now(), "driver": u.get("driver"),
+              "note": f"NUT's own settings were changed by hand ({', '.join(names)}): left as they are"}
+        write_json(UPS_STATE, st)
+        print(f"bromigos-server: a UPS is here, but {st['note']}")
+        return 0
+    # the monitor's password: the one already in upsd.users when it's ours, else a new one
+    try:
+        m = re.search(r"^\s*password = (\S+)$", open(at("/etc/nut/upsd.users")).read(), re.M)
+    except OSError:
+        m = None
+    password = m.group(1) if m and nut_writable("upsd.users") else secrets.token_hex(16)
+    device = "".join(f"    {k} = \"{v}\"\n" for k, v in u.items() if re.match(r"^[a-z_]+$", k) and '"' not in v)
+    nut_write("nut.conf", "MODE=standalone\n", 0o644)
+    nut_write("ups.conf", "maxretry = 3\n\n[ups]\n" + device)
+    nut_write("upsd.conf", "# this machine only\nLISTEN 127.0.0.1 3493\nLISTEN ::1 3493\n")
+    nut_write("upsd.users", f"[bromigos]\n    password = {password}\n    upsmon primary\n")
+    nut_write("upsmon.conf", f"MONITOR ups@localhost 1 bromigos {password} primary\n"
+              "MINSUPPLIES 1\nSHUTDOWNCMD \"/usr/bin/systemctl poweroff\"\nPOLLFREQ 5\nPOLLFREQALERT 5\n"
+              "HOSTSYNC 15\nDEADTIME 15\nPOWERDOWNFLAG \"/etc/killpower\"\nFINALDELAY 5\n")
+    rc, _, err = systemctl("enable", *(["--now"] if live() else []), *NUT_UNITS)
+    st = {"found": True, "configured": rc == 0, "checked": now(), "driver": u.get("driver"),
+          "vendorid": u.get("vendorid"), "productid": u.get("productid"),
+          "note": "" if rc == 0 else f"NUT didn't start: {err.strip()}"}
+    write_json(UPS_STATE, st)
+    print(f"bromigos-server: a UPS ({u.get('driver')}): NUT is on, and shuts the server down before the battery runs out")
+    return 0 if rc == 0 else 1
+
+
+def ups_words(st):
+    if not st:
+        return "not looked for yet"
+    if not st.get("found"):
+        return st.get("note") or "none on USB (NUT is off)"
+    return ("on battery watch, through NUT" if st.get("configured") else "found, not set up") + \
+        (f": {st['note']}" if st.get("note") else "")
+
+
+def ups_doc():
+    return read_json(UPS_STATE)
+
+
+# ------------------------------------------------------------------ the boot menu and the name service
+
+GRUB_BEGIN = "# >>> bromigOS Server (bromigos server setup; docs/server.md, \"The kernel\")"
+GRUB_END = "# <<< bromigOS Server"
+KERNEL = re.compile(r"^linux[a-z0-9-]*$")
+
+
+def grub_block(c):
+    """The kernel line's AppArmor, and the boot menu's first entry: [boot] kernel (linux-lts),
+    when it's in /boot; the other kernels stay under Advanced options."""
+    lines = [GRUB_BEGIN]
+    if c["boot"]["apparmor"]:
+        lines += ['case " ${GRUB_CMDLINE_LINUX_DEFAULT} ${GRUB_CMDLINE_LINUX} " in',
+                  '    *" lsm="*) ;;',
+                  f'    *) GRUB_CMDLINE_LINUX_DEFAULT="${{GRUB_CMDLINE_LINUX_DEFAULT}} lsm={LSM}" ;;',
+                  'esac']
+    k = str(c["boot"]["kernel"] or "")
+    if KERNEL.match(k):
+        lines += [f"if [ -f /boot/vmlinuz-{k} ]; then", f"    GRUB_TOP_LEVEL=/boot/vmlinuz-{k}", "fi"]
+    return "\n".join(lines + [GRUB_END]) + "\n"
+
+
+def strip_block(text, begin, end):
+    out, inside = [], False
+    for line in text.split("\n"):
+        if line.strip() == begin:
+            inside = True
+            continue
+        if inside:
+            if line.strip() == end:
+                inside = False
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def grub_mkconfig():
+    """grub.cfg made again, replaced only by one grub-mkconfig made and grub-script-check passed."""
+    cfg = at(GRUB_CFG)
+    new = cfg + ".bromigos-new"
+    rc, out, err = run(["grub-mkconfig", "-o", new], timeout=600)
+    if rc != 0 or not os.path.isfile(new):
+        if os.path.exists(new):
+            os.unlink(new)
+        return f"grub-mkconfig failed ({last_line(err or out, '?')})"
+    if run(["grub-script-check", new])[0] != 0:
+        os.unlink(new)
+        return "grub-script-check refused the new grub.cfg"
+    shutil.copy2(cfg, cfg + ".bromigos-bak")
+    fd = os.open(new, os.O_RDONLY)
+    os.fsync(fd)
+    os.close(fd)
+    os.replace(new, cfg)
+    os.sync()
+    return ""
+
+
+def setup_boot(c):
+    path = at(GRUB_DEFAULT)
+    if not os.path.isfile(path):
+        return "boot menu: no /etc/default/grub (not GRUB): AppArmor and the kernel choice left to you"
+    before = open(path).read()
+    after = strip_block(before, GRUB_BEGIN, GRUB_END).rstrip("\n") + "\n\n" + grub_block(c)
+    if after == before:
+        return "boot menu: as it should be"
+    shutil.copy2(path, path + ".bromigos-bak")
+    with open(path, "w") as f:
+        f.write(after)
+    if ROOT != "/" or not os.path.isfile(at(GRUB_CFG)):
+        return "boot menu: /etc/default/grub set (grub.cfg is made at the next grub-mkconfig)"
+    why = grub_mkconfig()
+    if why:
+        with open(path, "w") as f:
+            f.write(before)
+        return f"boot menu: left as it was: {why}"
+    return f"boot menu: {c['boot']['kernel']} first" + (", AppArmor on from the next start" if c["boot"]["apparmor"] else "")
+
+
+def grub_has_block():
+    try:
+        return GRUB_BEGIN in open(at(GRUB_DEFAULT)).read()
+    except OSError:
+        return False
+
+
+def setup_nsswitch():
+    """.local names (nss-mdns): mdns_minimal before the resolver on the hosts line."""
+    path = at(NSSWITCH)
+    try:
+        text = open(path).read()
+    except OSError:
+        return None
+    m = re.search(r"^hosts:(.*)$", text, re.M)
+    if not m or "mdns" in m.group(1):
+        return None
+    words = m.group(1).split()
+    at_ = next((i for i, w in enumerate(words) if w in ("resolve", "dns")), len(words))
+    words[at_:at_] = ["mdns_minimal", "[NOTFOUND=return]"]
+    text = text[:m.start()] + "hosts: " + " ".join(words) + text[m.end():]
+    with open(path, "w") as f:
+        f.write(text)
+    return ".local names: on (nss-mdns)"
+
+
+def wake_on_lan():
+    """bromigos-core's Wake-on-LAN record (bromigos wol): each wired card's state."""
+    d = read_json(WOL_RECORD)
+    cards = d.get("cards", d) if isinstance(d, dict) else {}
+    if isinstance(cards, list):
+        cards = {x.get("name", str(i)): x for i, x in enumerate(cards)}
+    return {n: bool(v.get("on")) for n, v in cards.items() if isinstance(v, dict)}
+
+
+def apparmor_on():
+    try:
+        with open(at("/sys/module/apparmor/parameters/enabled")) as f:
+            return f.read().strip() == "Y"
+    except OSError:
+        return False
+
+
 # ------------------------------------------------------------------ setup
+
+# the base every Server runs (docs/server.md, "The base"); WireGuard, Tailscale, NUT and
+# Cockpit are installed but stay off (NUT turns on by itself when a UPS is found)
+BASE_UNITS = ["bromigos-server-firewall.service", "bromigos-server-health.service", "bromigos-server-mark-boot.service",
+              "prometheus-node-exporter.service", "podman.socket", "kmsconvt@tty1.service",
+              "sshguard.service", "smartd.service", "avahi-daemon.service", "apparmor.service",
+              "systemd-timesyncd.service", "podman-auto-update.timer", "bromigos-server-backup.timer",
+              "bromigos-server-backup-check.timer", "bromigos-server-ups.service"]
+
 
 def cmd_setup(a):
     """The settings applied: SSH's password rule, the firewall, the exporter's folder, the
-    timers and the consoles. Safe to run again; the package's install runs it."""
+    timers and the consoles, the boot menu, .local names, and every role that's on. Safe to
+    run again; the package's install runs it."""
     c = config()
     done = []
     pw = at(SSHD_PASSWORD)
@@ -387,10 +1421,12 @@ def cmd_setup(a):
             os.unlink(pw)
         done.append("SSH: keys only")
     os.makedirs(at("/opt/bromigos-monitoring/textfile"), mode=0o755, exist_ok=True)
-    units = ["bromigos-server-firewall.service", "bromigos-server-health.service", "bromigos-server-mark-boot.service",
-             "prometheus-node-exporter.service", "podman.socket", "kmsconvt@tty1.service"]
+    units = list(BASE_UNITS)
     if c["updates"]["auto"]:
         units.append("bromigos-server-update.timer")
+    # the monthly scrub of /, only where / is btrfs (elsewhere it would fail every month)
+    if root_fstype() == "btrfs":
+        units.append("btrfs-scrub@-.timer")
     if ROOT == "/":
         rc, _, err = run(["systemctl", "enable", *units])
         done.append("enabled: " + ", ".join(units) if rc == 0 else f"systemctl enable: {err.strip()}")
@@ -399,11 +1435,23 @@ def cmd_setup(a):
         # kmscon takes the first console (getty@tty1 conflicts with it, and comes back on its
         # own when kmscon can't start: kmsconvt@'s OnFailure, the plain console's fallback)
         run(["systemctl", "disable", "getty@tty1.service"])
+    done.append(setup_boot(c))
+    line = setup_nsswitch()
+    if line:
+        done.append(line)
+    # the roles that are on, again (the installer writes [roles] enabled, then runs setup)
+    others = {split_entry(e)[0] for e in c["roles"]["enabled"]}
+    for entry, r in enabled_roles(c):
+        try:
+            for line in apply_role(r, c, others - {r["id"]}):
+                done.append(f"{r['title']}: {line}")
+        except RoleError as e:
+            done.append(f"{r['title']}: not applied: {e}")
+    if ROOT == "/" and live():
         # running now (not in an installer's chroot): the firewall loads at once
-        if os.path.isdir("/run/systemd/system") and not chrooted():
-            run(["systemctl", "restart", "bromigos-server-firewall.service"])
-            if unit_state("sshd.service") == "active":
-                run(["systemctl", "reload", "sshd.service"])
+        run(["systemctl", "restart", "bromigos-server-firewall.service"])
+        if unit_state("sshd.service") == "active":
+            run(["systemctl", "reload", "sshd.service"])
     for line in done:
         print(f"bromigos-server: {line}")
     return 0
@@ -502,7 +1550,7 @@ def cmd_update(a):
     if a.now:
         carry["news_seen_ts"] = time.time()
     st = dict(carry, phase="updating", started=now(), started_ts=time.time(), gateway=gateway(),
-              sshd=unit_state("sshd.service") == "active", boots=0)
+              sshd=unit_state("sshd.service") == "active", boots=0, btrfs_errors=btrfs_errors()["total"])
     save_state(st)
     rc, out, err = run(["bromigos", "update", "--yes", "--no-aur", "--json"], timeout=3 * 3600)
     try:
@@ -539,7 +1587,7 @@ def cmd_update(a):
 def failed_units(ignore):
     rc, out, _ = run(["systemctl", "list-units", "--state=failed", "--plain", "--no-legend", "--no-pager"])
     units = [line.split()[0] for line in out.splitlines() if line.strip()]
-    return [u for u in units if u not in ignore]
+    return [u for u in units if u not in ignore and u not in NOT_THE_UPDATE]
 
 
 def check_health(st, c):
@@ -547,6 +1595,9 @@ def check_health(st, c):
       - startup finished (the system manager is "running", or "degraded" only by ignored units);
       - no unit failed, except those in [health] ignore_units;
       - NetworkManager and the firewall run, and sshd runs if it ran before the update;
+      - each role that's on has its units running (health), and those it gets later
+        (health_optional, such as k3s) once they're installed;
+      - no btrfs device counted a new error since the update began;
       - the network is back: an address, and the gateway it had before answers (when it had one)."""
     reasons = []
     rc, out, _ = run(["systemctl", "is-system-running"])
@@ -556,10 +1607,15 @@ def check_health(st, c):
         reasons.append(f"startup hasn't finished ({state})")
     if failed:
         reasons.append("failed to start: " + ", ".join(failed[:8]))
-    must = list(MUST_RUN) + (["sshd.service"] if st.get("sshd") else [])
-    down = [u for u in must if unit_state(u) != "active"]
+    roles_must, roles_later = role_health(c)
+    must = list(MUST_RUN) + (["sshd.service"] if st.get("sshd") else []) + roles_must
+    must += [u for u in roles_later if unit_exists(u)]
+    down = [u for u in dict.fromkeys(must) if unit_state(u) != "active"]
     if down:
         reasons.append("not running: " + ", ".join(down))
+    errors = btrfs_errors()["total"]
+    if errors > int(st.get("btrfs_errors", errors)):
+        reasons.append(f"the disks counted {errors - int(st['btrfs_errors'])} new btrfs errors")
     if not addresses():
         reasons.append("no network address")
     elif st.get("gateway"):
@@ -656,6 +1712,20 @@ def main(argv=None):
     p.add_argument("verb", nargs="?", choices=["status", "apply", "allow", "deny"])
     p.add_argument("name", nargs="?")
     p.add_argument("--print", action="store_true", help="print the rules instead of loading them")
+    p = sub.add_parser("roles")
+    p.add_argument("--json", action="store_true")
+    for name in ("role", "extra"):
+        p = sub.add_parser(name)
+        p.add_argument("verb", choices=["add", "remove"])
+        p.add_argument("name", metavar="ROLE[/VARIANT]")
+    p = sub.add_parser("backup")
+    p.add_argument("verb", nargs="?", choices=["status", "run", "check", "key"])
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--data", action="store_true", help="check: read back 5 %% of the data too")
+    p = sub.add_parser("ups")
+    p.add_argument("verb", nargs="?", choices=["status", "detect"])
+    p.add_argument("--json", action="store_true")
+    sub.add_parser("disk-alert")
     sub.add_parser("setup")
     a = ap.parse_args(argv)
     cmd = a.cmd or "status"
@@ -666,13 +1736,18 @@ def main(argv=None):
         else:
             print_status(d)
         return 0
-    if ROOT == "/" and os.geteuid() != 0 and not (cmd == "firewall" and (a.print or a.verb in (None, "status"))):
+    if cmd == "roles":
+        return cmd_roles(a)
+    reading = (cmd == "firewall" and (a.print or a.verb in (None, "status") or not a.name)) or \
+        (cmd in ("backup", "ups") and a.verb in (None, "status"))
+    if ROOT == "/" and os.geteuid() != 0 and not reading:
         sudo = shutil.which("sudo")
         if sudo:
             os.execv(sudo, [sudo, sys.executable, "-I", os.path.realpath(__file__), *(argv if argv is not None else sys.argv[1:])])
         sys.exit("bromigos-server: run it as root")
     return {"update": cmd_update, "health": cmd_health, "mark-boot": cmd_mark_boot,
-            "firewall": cmd_firewall, "setup": cmd_setup}[cmd](a)
+            "firewall": cmd_firewall, "setup": cmd_setup, "role": cmd_role, "extra": cmd_role,
+            "backup": cmd_backup, "ups": cmd_ups, "disk-alert": cmd_disk_alert}[cmd](a)
 
 
 if __name__ == "__main__":

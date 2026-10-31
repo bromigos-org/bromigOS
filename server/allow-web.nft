@@ -1,2 +1,2 @@
-# A web server, open to everyone (bromigos-server firewall allow web)
+# a web server (80, 443), open to everyone (bromigos-server firewall allow web)
 add rule inet bromigos-server input tcp dport { 80, 443 } accept comment "web"

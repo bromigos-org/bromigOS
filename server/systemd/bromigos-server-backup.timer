@@ -1,0 +1,12 @@
+# Every night after the update and the containers' update, and at the next start after a
+# night the server was off.
+[Unit]
+Description=bromigOS Server backup, nightly
+
+[Timer]
+OnCalendar=*-*-* 06:00:00
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

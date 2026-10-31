@@ -1,8 +1,14 @@
 # bromigOS Server (docs/server.md): the settings in /etc/bromigos/server.toml applied on install
-# and every upgrade (SSH's password rule, the firewall, the timers, the node exporter, kmscon on
-# the first console). sshd itself is the installer's choice: never enabled here.
+# and every upgrade, through bromigos-server setup: SSH's password rule, the firewall, the boot
+# menu (linux-lts first, AppArmor's lsm=), .local names, the roles that are on, and what must
+# be on: the update and its health check, the firewall, sshguard, smartd, the monthly btrfs
+# scrub of / (on btrfs), the backup and its weekly check (they do nothing until [backup] to is
+# set), podman-auto-update.timer, avahi-daemon, AppArmor, timesyncd, the node exporter, kmscon
+# on the first console, and the UPS check (NUT turns on only when a UPS is plugged in).
+# Left off: sshd (the installer's choice), WireGuard, Tailscale, NUT itself and Cockpit.
 
 post_install() {
+  systemd-sysusers /usr/lib/sysusers.d/bromigos-server.conf >/dev/null 2>&1 || true
   systemd-tmpfiles --create /usr/lib/tmpfiles.d/bromigos-server.conf >/dev/null 2>&1 || true
   usr/lib/bromigos/server/bromigos-server setup || true
 }
@@ -13,6 +19,8 @@ post_upgrade() {
 
 pre_remove() {
   systemctl disable --now bromigos-server-update.timer bromigos-server-health.service \
-    bromigos-server-mark-boot.service bromigos-server-firewall.service >/dev/null 2>&1 || true
+    bromigos-server-mark-boot.service bromigos-server-firewall.service \
+    bromigos-server-backup.timer bromigos-server-backup-check.timer \
+    bromigos-server-ups.service >/dev/null 2>&1 || true
   rm -f etc/ssh/sshd_config.d/05-bromigos-server-password.conf
 }

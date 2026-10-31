@@ -1,0 +1,17 @@
+# bromigOS Server's Cockpit extra (docs/server.md, "Roles"): the format is described there.
+schema = 1
+id = "cockpit"
+kind = "extra"
+order = 90
+title = "Cockpit"
+summary = "A web page for looking after this server, from your local network."
+hint = "Cockpit shows the server's disks, containers, logs and files in a browser on port 9090, from your local network only. You sign in with your password. Updates stay with bromigOS (no Cockpit update page). Needs the internet."
+offline = false
+packages = ["cockpit", "cockpit-podman", "cockpit-storaged", "cockpit-files"]
+services = ["cockpit.socket"]
+firewall = ["cockpit"]
+health = ["cockpit.socket"]
+health_optional = []
+requires = []
+# its update page would update outside the snapshot, health check and rollback
+conflicts = ["cockpit-packagekit"]

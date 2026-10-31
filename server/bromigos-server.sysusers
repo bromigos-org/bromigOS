@@ -1,0 +1,2 @@
+# bromigOS Server: besides wheel, the people allowed to sign in over SSH (AllowGroups)
+g bromigos-ssh - -

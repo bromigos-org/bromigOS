@@ -4,27 +4,47 @@
 # machines. The edition's meta-package: every non-desktop piece of bromigOS (Field Kit's
 # repairs, the lab console, the terminal apps, herdr), plus what a server needs:
 #
-#   SSH, keys only          /etc/ssh/sshd_config.d/10-bromigos-server.conf; sshd runs only
-#                           when chosen at install (the installer enables it)
-#   a firewall              nftables, its own table: SSH, ping and the lab's monitoring in
-#                           (bromigos-server-firewall.service, /usr/share/bromigos/server/*.nft)
+#   SSH, keys only          /etc/ssh/sshd_config.d/10-bromigos-server.conf (MaxAuthTries 3,
+#                           LoginGraceTime 30, AllowGroups wheel bromigos-ssh); sshd runs only
+#                           when chosen at install (the installer enables it); sshguard blocks
+#                           an address that keeps guessing, through nftables
+#   a firewall              nftables, its own table: SSH, ping, mDNS and the lab's monitoring
+#                           in (bromigos-server-firewall.service, /usr/share/bromigos/server/*.nft)
 #   safe automatic updates  bromigos-server-update.timer: bromigos update with its snapshot pair,
 #                           a health check after it, an automatic rollback when it fails
-#   containers              Podman, with the docker command and compose
+#   the kernel              linux-lts first in the boot menu, linux kept as the second;
+#                           AppArmor on (the kernel's lsm=, bromigos-server setup)
+#   hardening               /usr/lib/sysctl.d/60-bromigos-server.conf
+#   logs                    journald persistent, at most 1 GiB and a month
+#                           (/usr/lib/systemd/journald.conf.d/60-bromigos-server.conf)
+#   disks                   smartd watching every disk (short test nightly, long weekly,
+#                           temperatures), a monthly btrfs scrub of /, errors in the health check
+#   power                   NUT, set up only when a UPS is on USB (bromigos-server-ups.service)
+#   backups                 restic, nightly after the update (bromigos-server-backup.timer),
+#                           checked weekly; off until [backup] to is set
+#   containers              Podman, with the docker command and compose; Quadlet for services
+#                           (/etc/containers/systemd), podman-auto-update.timer after the update
+#   the network             mDNS (avahi, nss-mdns: the _bromigos-lab._tcp announcement, .local
+#                           names); Wake-on-LAN (bromigos-core's); WireGuard and Tailscale
+#                           installed, off
+#   roles                   /usr/share/bromigos/server/roles/*.toml: Lab node, Storage, Home
+#                           services, Game server, Just a server, and the Cockpit extra
+#                           (bromigos server role add NAME)
 #   the lab's monitoring    prometheus-node-exporter on 9100 (the local network only), with
 #                           the lab's textfile folder
 #   the lab's cluster       joined from the lab's workstation (bromigos lab provision add-node)
 #   themed local consoles   kmscon on the first console (bromigos-boot's settings)
 #   `bromigos server`       /usr/lib/bromigos/server/bromigos-server: status, update, health,
-#                           firewall, setup
+#                           firewall, roles, role, backup, ups, setup
 #
 # Settings: /etc/bromigos/server.toml (the installer writes it). The install script applies
-# them (bromigos-server setup); nothing here needs the internet.
+# them (bromigos-server setup); nothing here needs the internet. Everything in depends is on
+# the Field Kit stick (iso/fieldkit/server-packages.toml), so Server installs offline.
 
 pkgname=bromigos-server
 pkgver=0.0.0
 pkgrel=1
-pkgdesc='bromigOS Server: bromigOS without a desktop for servers and lab machines (SSH, firewall, safe automatic updates, containers, the lab)'
+pkgdesc='bromigOS Server: bromigOS without a desktop for servers and lab machines (SSH, firewall, safe automatic updates, roles, backups, disk watch, containers, the lab)'
 arch=('any')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
@@ -32,18 +52,28 @@ depends=(# bromigOS with no desktop (Field Kit's pieces, the lab, the terminal a
          'bromigos-core' 'bromigos-boot' 'bromigos-keyring' 'bromigos-fieldkit-tools'
          'bromigos-lab' 'bromigos-lab-catalog' 'bromigos-homelab' 'bromigos-apps-terminal'
          'herdr' 'mehshell' 'bromigos-manual'
-         # the system: network, SSH, snapshots and rollback from the boot menu
+         # the system: network, SSH, snapshots and rollback from the boot menu; the LTS kernel
+         # first in it (linux, the newest, comes with the base and stays as the second)
          'networkmanager' 'openssh' 'snapper' 'snap-pac' 'grub-btrfs' 'python' 'iproute2' 'iputils'
-         # the server's own
-         'nftables' 'podman' 'podman-docker' 'podman-compose' 'crun' 'netavark'
+         'linux-lts' 'btrfs-progs'
+         # the server's own: the firewall, sshguard, AppArmor, containers (podman-docker isn't
+         # here: the edition installs it, and the Game server role's Wings swaps it for docker)
+         'nftables' 'sshguard' 'apparmor' 'podman' 'podman-compose' 'crun' 'netavark'
          'prometheus-node-exporter'
+         # disks, power and backups: smartd, NUT (on only with a UPS), restic
+         'smartmontools' 'nut' 'restic'
+         # the network: mDNS and .local names, Wake-on-LAN, WireGuard and Tailscale (both off)
+         'avahi' 'nss-mdns' 'ethtool' 'wireguard-tools' 'tailscale'
          # the themed console: kmscon with Geist Mono and the screens' icons (bromigos-boot's settings)
          'kmscon' 'pango' 'ttf-geist-mono' 'ttf-nerd-fonts-symbols-mono')
 # brodec-machine moves to depends once it's published (packaging/README.md, "BRODEC's machine agent")
 optdepends=('bromigos-fieldkit: Field Kit in the boot menu, for repairs when the server won'"'"'t start'
-            'brodec-machine: this server in BRODEC on your phone: pairing, its console, restart and update with your fingerprint')
+            'brodec-machine: this server in BRODEC on your phone: pairing, its console, restart and update with your fingerprint'
+            'podman-docker: the docker command, run by Podman (the edition installs it)'
+            'docker: Docker'"'"'s engine, only for the Game server role with a lab'"'"'s Pelican panel (Wings needs it; it replaces podman-docker)'
+            'cockpit: a web admin on port 9090, local network only (bromigos server role add cockpit)')
 checkdepends=('python' 'nftables')
-backup=('etc/ssh/sshd_config.d/10-bromigos-server.conf')
+backup=('etc/ssh/sshd_config.d/10-bromigos-server.conf' 'etc/avahi/services/bromigos-lab.service')
 install=$pkgname.install
 options=('!debug')
 
@@ -62,7 +92,8 @@ pkgver() {
 
 check() {
   cd "$_root"
-  python -m unittest discover -s server/tests
+  # (the tests also run shellcheck on the shell files where it's installed)
+  PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s server/tests
 }
 
 package() {
@@ -70,11 +101,24 @@ package() {
   install -Dm0755 "$s/bromigos-server" "$pkgdir/usr/lib/bromigos/server/bromigos-server"
   install -d "$pkgdir/usr/lib/bromigos/bin"
   ln -s ../server/bromigos-server "$pkgdir/usr/lib/bromigos/bin/bromigos-server"
-  install -Dm0644 -t "$pkgdir/usr/share/bromigos/server/" "$s/nftables.nft" "$s"/allow-*.nft
+  install -Dm0755 "$s/bromigos-server-disk-alert" "$pkgdir/usr/lib/bromigos/server/bromigos-server-disk-alert"
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/server/" "$s/nftables.nft" "$s"/allow-*.nft \
+    "$s/sshguard.conf" "$s/smartd.conf"
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/server/roles/" "$s"/roles/*.toml
+  local f
+  for f in "$s"/roles/files/*/*; do
+    install -Dm0644 "$f" "$pkgdir/usr/share/bromigos/server/roles/files/${f#"$s"/roles/files/}"
+  done
   install -Dm0644 "$s/10-bromigos-server.conf" "$pkgdir/etc/ssh/sshd_config.d/10-bromigos-server.conf"
   install -Dm0644 -t "$pkgdir/usr/lib/systemd/system/" "$s"/systemd/*.service "$s"/systemd/*.timer
-  install -Dm0644 "$s/systemd/prometheus-node-exporter-bromigos.conf" \
-    "$pkgdir/usr/lib/systemd/system/prometheus-node-exporter.service.d/bromigos-server.conf"
+  local unit
+  for unit in prometheus-node-exporter.service sshguard.service smartd.service podman-auto-update.timer; do
+    install -Dm0644 "$s/systemd/${unit%.*}-bromigos.conf" "$pkgdir/usr/lib/systemd/system/$unit.d/bromigos-server.conf"
+  done
+  install -Dm0644 "$s/journald.conf" "$pkgdir/usr/lib/systemd/journald.conf.d/60-bromigos-server.conf"
+  install -Dm0644 "$s/sysctl.conf" "$pkgdir/usr/lib/sysctl.d/60-bromigos-server.conf"
+  install -Dm0644 "$s/bromigos-lab.service" "$pkgdir/etc/avahi/services/bromigos-lab.service"
   install -Dm0644 "$s/bromigos-server.tmpfiles" "$pkgdir/usr/lib/tmpfiles.d/bromigos-server.conf"
+  install -Dm0644 "$s/bromigos-server.sysusers" "$pkgdir/usr/lib/sysusers.d/bromigos-server.conf"
   install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
 }

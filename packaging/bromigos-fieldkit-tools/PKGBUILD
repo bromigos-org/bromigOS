@@ -38,7 +38,7 @@ makedepends=('git' 'python')
 options=('!debug')
 
 _root="${startdir%/packaging/*}"
-_paths=(fieldkit iso/fieldkit/packages.toml iso/fieldkit/manifest.py packaging/bromigos-fieldkit-tools LICENSE-MIT LICENSE-APACHE)
+_paths=(fieldkit iso/fieldkit/packages.toml iso/fieldkit/server-packages.toml iso/fieldkit/manifest.py server/roles server/bromigos-server packaging/bromigos-fieldkit-tools LICENSE-MIT LICENSE-APACHE)
 _archived=0
 
 pkgver() {
@@ -61,8 +61,14 @@ package() {
   install -Dm0755 "$fk/bin/fieldkit-engine" "$pkgdir/usr/lib/bromigos/fieldkit/fieldkit-engine"
   install -Dm0644 -t "$pkgdir/usr/lib/bromigos/lib/bromigos_fieldkit/" "$fk"/lib/bromigos_fieldkit/*.py
   install -d "$pkgdir/usr/share/bromigos/fieldkit"
-  sed "s|@PACKAGES@|$(python "$_root/iso/fieldkit/manifest.py" edition)|" "$fk/share/edition.json.in" \
-    > "$pkgdir/usr/share/bromigos/fieldkit/edition.json"
+  # the packages from Field Kit's list; bromigOS Server's roles from server/roles/ (bromigos-server
+  # roles --json, read from the source with no settings: none is on)
+  PACKAGES=$(python -B "$_root/iso/fieldkit/manifest.py" edition) \
+  ROLES=$(BROMIGOS_SERVER_ROOT="$srcdir/no-server" BROMIGOS_SERVER_SHARE="$_root/server" \
+          python -I "$_root/server/bromigos-server" roles --json) \
+  python -c 'import json, os, sys; d = json.loads(os.environ["ROLES"])
+text = open(sys.argv[1]).read().replace("@PACKAGES@", os.environ["PACKAGES"]).replace("@ROLES@", json.dumps(d["roles"]))
+open(sys.argv[2], "w").write(text)' "$fk/share/edition.json.in" "$pkgdir/usr/share/bromigos/fieldkit/edition.json"
   python -c 'import json,sys; json.load(open(sys.argv[1]))' "$pkgdir/usr/share/bromigos/fieldkit/edition.json"
   install -Dm0644 "$fk/share/micro/driftglass.micro" "$pkgdir/usr/share/bromigos/fieldkit/micro/driftglass.micro"
   install -Dm0755 "$fk/share/fieldkit-getty" "$pkgdir/usr/lib/bromigos/fieldkit/fieldkit-getty"
