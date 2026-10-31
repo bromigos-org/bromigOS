@@ -202,6 +202,12 @@ phone_shells = true
 enabled = true
 actions = {actions}
 
+[wake]
+# Power on from BRODEC: a Field Kit stick neither wakes nor is woken; an always-on bromigOS
+# Server can send wake-ups for your other machines on its network ("Power on", MACHINE_JOBS.md).
+enabled = false
+send = {"true" if server else "false"}
+
 [sessions]
 enabled = false
 

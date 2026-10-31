@@ -699,7 +699,10 @@ code to scan in LAB › MACHINES › ADD MACHINE. Field Kit then writes root's
 - no jobs;
 - the console's Herdr workspace and the phone's own shells;
 - machine controls: restart, shut down and update, each with your fingerprint. The update is
-  `bromigos-server update --now`, with its snapshot, health check and rollback.
+  `bromigos-server update --now`, with its snapshot, health check and rollback;
+- power on (`[wake]`): the server isn't woken (it's always on), but it sends wake-ups for your
+  other machines on its network when you press Power on in BRODEC (`enabled = false`,
+  `send = true`).
 
 Then allow your phone at the server once ("Allow this phone", `brodec-machine enroll`).
 [fieldkit-vector.md](fieldkit-vector.md#pair-with-brodec) has the details, and BRODEC's

@@ -62,8 +62,10 @@ class Link(unittest.TestCase):
         self.assertEqual(doc["system"]["actions"], ["restart", "shutdown"])        # a stick never updates itself
         self.assertFalse(doc["sessions"]["enabled"])
         self.assertFalse(doc["den"]["enabled"])
+        self.assertEqual(doc["wake"], {"enabled": False, "send": False})            # a stick: both off
         server = tomllib.loads(ml.capability_file("box", server=True))
         self.assertEqual(server["system"]["actions"], ["restart", "shutdown", "update"])
+        self.assertEqual(server["wake"], {"enabled": False, "send": True})         # sends for the others
 
     def test_write_capability_keeps_the_operators_file(self):
         self.assertTrue(ml.write_capability())
