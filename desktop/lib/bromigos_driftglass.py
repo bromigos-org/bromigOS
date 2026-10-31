@@ -5,7 +5,8 @@ them. Pure drawing: the colours come in as a palette (the theme's roles, hex), t
 a number, and nothing here moves by itself.
 
   glyph(cr, kind, x, y, size, pal, t=0, live=False, fx=None, still=False)
-      kind: controller, headset, earbuds, keyboard, mouse, phone, speaker, monitor, gpu, mic, device.
+      kind: controller, headset, earbuds, keyboard, mouse, phone, speaker, monitor, gpu, mic, rack, cloud,
+      tower, pause, device.
       live: connected (it turns slowly and glows); otherwise dim and still at a fixed angle.
       fx: ("pulse", age) breathes while connecting, ("spark", age) glows once on success,
       ("fade", age) dims on a disconnect.
@@ -94,6 +95,29 @@ MODELS = {
         "hull": [_rect(-0.24, -0.84, 0.24, 0.14, 0.24)],
         "detail": [_ellipse(0.0, -0.02, 0.42, 0.42, 16, 0.0, math.pi), [(0.0, 0.4), (0.0, 0.66)],
                    [(-0.34, 0.7), (0.34, 0.7)], [(-0.12, -0.52), (0.12, -0.52)], [(-0.12, -0.34), (0.12, -0.34)]],
+    },
+    "rack": {       # a server rack: four units, their lights (the welcome tour's lab)
+        "hull": [_rect(-0.5, -0.86, 0.5, 0.78, 0.04)],
+        "detail": ([_rect(-0.4, -0.74 + 0.38 * i, 0.4, -0.46 + 0.38 * i) for i in range(4)] +
+                   [[(-0.3, -0.6 + 0.38 * i), (0.05, -0.6 + 0.38 * i)] for i in range(4)]),
+        "dots": [(0.28, -0.6 + 0.38 * i) for i in range(4)],
+    },
+    "cloud": {      # a service somewhere else
+        "hull": [_ellipse(-0.36, 0.08, 0.36, 0.3, 14, math.pi * 0.5, math.pi * 1.5) +
+                 _ellipse(-0.06, -0.22, 0.38, 0.4, 16, math.pi * 1.05, math.pi * 1.9) +
+                 _ellipse(0.42, 0.02, 0.34, 0.36, 14, math.pi * 1.35, math.pi * 2.5) +
+                 [(-0.36, 0.38)]],
+        "detail": [[(-0.5, 0.56), (0.5, 0.56)], [(0.0, 0.38), (0.0, 0.56)]],
+    },
+    "tower": {      # this computer: a screen on its stand, a tower beside it
+        "hull": [_rect(-0.92, -0.56, 0.42, 0.34, 0.04), _rect(0.56, -0.62, 0.92, 0.62, 0.04)],
+        "detail": [_rect(-0.82, -0.46, 0.32, 0.24), [(-0.25, 0.34), (-0.25, 0.54)], [(-0.55, 0.6), (0.05, 0.6)],
+                   [(0.64, -0.44), (0.84, -0.44)], [(0.64, -0.32), (0.84, -0.32)]],
+        "dots": [(0.74, 0.44)],
+    },
+    "pause": {      # not now: two bars, waiting
+        "hull": [_rect(-0.42, -0.6, -0.12, 0.6, 0.04), _rect(0.12, -0.6, 0.42, 0.6, 0.04)],
+        "detail": [],
     },
     "device": {     # the Bluetooth rune
         "hull": [[(-0.36, -0.36), (0.36, 0.36), (0.0, 0.72), (0.0, -0.72), (0.36, -0.36), (-0.36, 0.36)]],

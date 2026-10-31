@@ -88,6 +88,18 @@ KEY_TOUR = [   # (keys, what it does, how we see it worked: a window class appea
     ("Super + W", "Show or hide the desktop's panels", None),
     ("Super + Q", "Close the window in front", None),
 ]
+KEY_ICONS = {"Super + Space": "system-search-symbolic", "Super + Enter": "utilities-terminal-symbolic",
+             "Super + ,": "preferences-system-symbolic", "Super + K": "input-keyboard-symbolic",
+             "Super + W": "view-reveal-symbolic", "Super + Q": "window-close-symbolic"}
+
+# the renders' sample data (--render): no real network, screen or choice is read
+SAMPLE_WIFI = [{"ssid": "Rivera Home", "signal": 86, "secure": True, "connected": True},
+               {"ssid": "Rivera Home 5G", "signal": 71, "secure": True, "connected": False},
+               {"ssid": "Corner Cafe Guest", "signal": 44, "secure": False, "connected": False},
+               {"ssid": "Upstairs", "signal": 22, "secure": True, "connected": False}]
+SAMPLE_CHOSE = {"network": "Connected to Rivera Home", "screens": "Main screen: DP-1", "world": "World: mire",
+                "vector": "Brain: your lab (connected on the next step), voice: Kokoro", "lab": "Your lab is connected",
+                "phone": "Your phone is paired"}
 
 
 def run(argv, timeout=60):
@@ -199,6 +211,8 @@ def main(argv):
         return l_
 
     def reduced():
+        if os.environ.get("BROMIGOS_REDUCED_MOTION"):
+            return True
         try:
             import bromigos_theme as T
             return T.motion() != "full"
@@ -290,6 +304,10 @@ def main(argv):
             self.skip.set_visible(sid != "done")
             self.next.set_label("Finish" if sid == "done" else "Continue")
 
+        def still(self):
+            """No motion: the renders, and reduced motion."""
+            return bool(self.render) or reduced()
+
         def group(self, page, title, desc=None):
             g = Adw.PreferencesGroup(title=GLib.markup_escape_text(title.upper()))
             if desc:
@@ -302,28 +320,43 @@ def main(argv):
 
         # ── the steps ──────────────────────────────────────────────────────────────
         def build_network(self, page):
+            head = Gtk.Box(spacing=14)
+            self.wifi_sweep = glass.MiniSweep(self.c, 46, still=self.still())
+            hint(self.wifi_sweep, "The Sweep: it turns while it looks for networks")
+            head.append(self.wifi_sweep)
+            self.wifi_state = lab("Looking for networks…", "bw-status", wrap=False)
+            self.wifi_state.set_valign(Gtk.Align.CENTER)
+            head.append(self.wifi_state)
+            page.append(head)
             g = self.group(page, "Wi-Fi networks")
             self.wifi_group = g
             self.wifi_pw = Adw.PasswordEntryRow(title="Password for the network chosen")
+            self.wifi_pw.add_prefix(glass.icon("dialog-password-symbolic", 18, "dg-row-icon"))
             hint(self.wifi_pw, "The Wi-Fi password, if the network has one")
             self.wifi_choice = None
             spinner = Adw.ActionRow(title="Looking for networks…")
             g.add(spinner)
 
             def found():
-                nets = [] if self.render else wifi_list()
+                nets = SAMPLE_WIFI if self.render else wifi_list()
                 return (self._wifi_rows, nets, spinner)
             self.later(found)
-            g2 = self.group(page, "Its password")
-            g2.add(self.wifi_pw)
+            self.wifi_pw_group = self.group(page, "Its password")
+            self.wifi_pw_group.add(self.wifi_pw)
+
 
         def _wifi_rows(self, nets, spinner):
             self.wifi_group.remove(spinner)
+            self.wifi_sweep.stop()
+            self.wifi_state.set_label(f"{len(nets)} network{'s' if len(nets) != 1 else ''} in range" if nets
+                                      else "No Wi-Fi networks in range")
             first = None
             if not nets:
                 r = Adw.ActionRow(title="No Wi-Fi networks found", subtitle="Plug in a network cable, or skip this step.")
+                r.add_prefix(glass.icon("network-offline-symbolic", 20, "dg-row-icon"))
                 hint(r, "No wireless networks are in range, or this computer has no Wi-Fi")
                 self.wifi_group.add(r)
+            secure = {}
             for n in nets[:12]:
                 r = Adw.ActionRow(title=GLib.markup_escape_text(n["ssid"]),
                                   subtitle=f"Signal {n['signal']} %" + (" · needs a password" if n["secure"] else " · open"))
@@ -331,24 +364,58 @@ def main(argv):
                 if first:
                     chk.set_group(first)
                 first = first or chk
-                chk.connect("toggled", lambda b, s=n["ssid"]: b.get_active() and setattr(self, "wifi_choice", s))
+                secure[n["ssid"]] = n["secure"]
+
+                def chose(b, s=n["ssid"]):
+                    if b.get_active():
+                        self.wifi_choice = s
+                        self.wifi_pw_group.set_visible(secure.get(s, True))
+                chk.connect("toggled", chose)
+                if n["connected"]:
+                    self.wifi_choice = n["ssid"]
                 r.add_prefix(chk)
+                r.add_prefix(glass.SignalBars(self.c, n["signal"]))
+                if n["connected"]:
+                    chip = Gtk.Label(label="● CONNECTED", valign=Gtk.Align.CENTER)
+                    chip.add_css_class("dg-chip")
+                    hint(chip, "This computer is on this network now")
+                    r.add_suffix(chip)
+                if n["secure"]:
+                    lock = glass.icon("network-wireless-encrypted-symbolic", 16, "dg-row-icon")
+                    hint(lock, "Needs a password")
+                    r.add_suffix(lock)
                 r.set_activatable_widget(chk)
                 hint(r, f"Join {n['ssid']}")
                 self.wifi_group.add(r)
             return False
+
 
         def build_screens(self, page):
             mons = [] if self.render else monitors()
             if self.render:
                 mons = [{"name": "DP-1", "desc": "Dell U2723QE", "size": "3840×2160", "focused": True},
                         {"name": "HDMI-A-1", "desc": "LG 24MP59G", "size": "1920×1080", "focused": False}]
-            g = self.group(page, "Main screen")
             self.primary = None
+            self.mon_checks = {}
+            if mons:
+                box = Gtk.Box()
+                box.add_css_class("dg-panel")
+                self.smap = glass.ScreensMap(self.c, mons, 150 if self.screen_h() < 760 else 190)
+                self.smap.set_margin_top(10)
+                self.smap.set_margin_bottom(4)
+                self.smap.set_margin_start(10)
+                self.smap.set_margin_end(10)
+                hint(self.smap, "Your screens, side by side: click one to make it the main screen (the lit one)")
+                self.smap.on_pick = lambda name: self.mon_checks[name].set_active(True)
+                box.append(self.smap)
+                page.append(box)
+            g = self.group(page, "Main screen")
             first = None
             if not mons:
-                g.add(Adw.ActionRow(title="This computer's screen",
-                                    subtitle="The panels and the live background are on it. Arrange and sizes… sets its size."))
+                r = Adw.ActionRow(title="This computer's screen",
+                                  subtitle="The panels and the live background are on it. Arrange and sizes… sets its size.")
+                r.add_prefix(glass.icon("video-display-symbolic", 20, "dg-row-icon"))
+                g.add(r)
             for m in mons:
                 r = Adw.ActionRow(title=GLib.markup_escape_text(m["desc"]), subtitle=f"{m['name']} · {m['size']}")
                 chk = Gtk.CheckButton(valign=Gtk.Align.CENTER, active=m["focused"])
@@ -357,20 +424,30 @@ def main(argv):
                 if first:
                     chk.set_group(first)
                 first = first or chk
-                chk.connect("toggled", lambda b, n=m["name"]: b.get_active() and setattr(self, "primary", n))
+
+                def chose(b, n=m["name"]):
+                    if b.get_active():
+                        self.primary = n
+                        if getattr(self, "smap", None):
+                            self.smap.pick(n)
+                chk.connect("toggled", chose)
                 r.add_prefix(chk)
+                r.add_prefix(glass.icon("video-display-symbolic", 20, "dg-row-icon"))
                 r.set_activatable_widget(chk)
                 hint(r, f"Make {m['desc']} the main screen")
                 g.add(r)
+                self.mon_checks[m["name"]] = chk
             more = hint(Gtk.Button(label="Arrange and sizes…", halign=Gtk.Align.START), "Open Settings › Displays")
             more.connect("clicked", lambda *_: subprocess.Popen(["bromigos", "settings", "displays"], start_new_session=True))
             page.append(more)
 
+
         def build_world(self, page):
             import bromigos_themecards as TC
-            kit = TC.CardKit(Gtk, Pango, still=bool(self.render) or reduced(), verb="Click")
-            flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.SINGLE, homogeneous=True, max_children_per_line=3,
-                               row_spacing=12, column_spacing=12)
+            kit = TC.CardKit(Gtk, Pango, still=self.still(), verb="Click")
+            tight = self.screen_h() < 760
+            flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.SINGLE, homogeneous=True, max_children_per_line=4,
+                               min_children_per_line=2, row_spacing=12, column_spacing=12)
             self.world = None
             try:
                 entries = TC.installed()
@@ -380,8 +457,41 @@ def main(argv):
             c = TC.WICK
             css.load_from_string(TC.card_css(c))
             Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            # the Hero: the world chosen (or the one under the pointer) large, its name over it
+            hero = None
+            if not tight and entries:
+                hero = Gtk.Overlay()
+                hero.add_css_class("dg-hero")
+                pic = Gtk.Picture()
+                pic.set_content_fit(Gtk.ContentFit.COVER)
+                pic.set_can_shrink(True)
+                pic.set_size_request(-1, 250)
+                hero.set_child(pic)
+                cap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, valign=Gtk.Align.END, halign=Gtk.Align.START)
+                cap.add_css_class("dg-hero-cap")
+                hname = lab("", "dg-hero-name", wrap=False)
+                htag = lab("", "dg-hero-tag", wrap=False)
+                cap.append(hname)
+                cap.append(htag)
+                hero.add_overlay(cap)
+                page.append(hero)
+
+                def show(e):
+                    if e is None:
+                        return
+                    if e.preview and os.path.exists(e.preview):
+                        pic.set_filename(e.preview)
+                    else:
+                        pic.set_paintable(None)
+                    hname.set_label(e.display.upper() + ("  ·  IN USE" if e.current else ""))
+                    htag.set_label(e.desc or e.tagline())
+                    hint(hero, f"{e.display}: {e.desc}" if e.desc else e.display)
+                self.world_show = show
+            chosen = lambda: next((ch.entry for ch in flow.get_selected_children()), None)  # noqa: E731
+            w, h = (200, 112) if not tight else (190, 104)
             for e in entries:
-                card = kit.card(e, 260, 146)
+                card = kit.card(e, w, h, on_hover=(lambda e_: self.world_show(e_)) if hero else None,
+                                on_leave=(lambda: self.world_show(chosen())) if hero else None)
                 flow.append(card)
                 if e.current:
                     flow.select_child(card)
@@ -389,12 +499,22 @@ def main(argv):
             if missing and not self.render:
                 TC.render_background(missing)          # drawn offscreen, as the theme switcher does
             flow.connect("child-activated", lambda f, ch: setattr(self, "world", ch.entry.name))
-            flow.connect("selected-children-changed", lambda f: setattr(self, "world", (f.get_selected_children() or [None])[0].entry.name
-                                                                         if f.get_selected_children() else None))
+
+            def picked(f):
+                e = chosen()
+                self.world = e.name if e else None
+                if hero:
+                    self.world_show(e)
+            flow.connect("selected-children-changed", picked)
+            if hero:
+                self.world_show(chosen() or entries[0])
             if not entries:
                 page.append(lab("No themes found. bromigos-core brings them; Settings › Theme lists them once they're in.", "bw-intro"))
-            hint(flow, "The themes: click one to wear it")
+            hint(flow, "The themes: click one to wear it; the picture above shows the one under the pointer")
             page.append(flow)
+            if self.render:                            # the renders: the top of the page, where the Hero is
+                GLib.idle_add(lambda: (self.scroll.get_vadjustment().set_value(0), False)[1])
+
 
         # ── long steps: their lines shown on the page as they come ─────────────────
         def progress(self, page):
@@ -420,19 +540,26 @@ def main(argv):
                                     f"({self.model.get('speed') or ''}). Your lab, when you have one, is the better place."))
             self.brains += [("service", "A service", "Any OpenAI-compatible server you name, with its key in a file."),
                             ("none", "Not now", "VECTOR waits for a brain. Settings › VECTOR gives him one later.")]
-            g = self.group(page, "His brain", "Where VECTOR thinks. Nothing leaves this computer unless you choose a service.")
-            first = Gtk.CheckButton()
+            tight = self.screen_h() < 760
+            page.append(lab("HIS BRAIN", "bw-group-title", wrap=False))
+            page.append(lab("Where VECTOR thinks. Nothing leaves this computer unless you choose a service.", "bw-intro"))
             self.brain_pick = getattr(self, "brain_pick", self.brains[0][0])
-            for key, title, sub in self.brains:
-                r = Adw.ActionRow(title=title, subtitle=GLib.markup_escape_text(sub))
-                r.set_subtitle_lines(0)
-                c = Gtk.CheckButton(valign=Gtk.Align.CENTER, active=key == self.brain_pick)
-                c.set_group(first)
-                c.connect("toggled", lambda b, k=key: b.get_active() and self._brain(k))
-                r.add_prefix(c)
-                r.set_activatable_widget(c)
-                hint(r, f"{title}: {sub}")
-                g.add(r)
+            look = {"lab": ("rack", "network-workgroup-symbolic"), "local": ("tower", "computer-symbolic"),
+                    "service": ("cloud", "network-server-symbolic"), "none": ("pause", "media-playback-pause-symbolic")}
+            wide = (self.get_width() or 1280) - 232 - 48 >= 820
+            grid = Gtk.Grid(column_spacing=12, row_spacing=12, column_homogeneous=True)
+            grid.update_property([Gtk.AccessibleProperty.LABEL], ["Where VECTOR's brain runs"])
+            first = None
+            for i, (key, title, sub) in enumerate(self.brains):
+                kind, ic = look[key]
+                card = glass.glyph_card(kind, self.c, ic, title, [sub], key == self.brain_pick, first,
+                                        still=self.still(), size=64 if tight else 84)
+                first = first or card
+                card.connect("toggled", lambda b, k=key: b.get_active() and self._brain(k))
+                hint(card, f"{title}: {sub}")
+                cols = 4 if wide else 2
+                grid.attach(card, i % cols, i // cols, 1, 1)
+            page.append(grid)
             self.svc = self.group(page, "The service")
             self.base = Adw.EntryRow(title="Its address (…/v1)")
             self.model_row = Adw.EntryRow(title="Model (blank: VECTOR's default)")
@@ -442,30 +569,56 @@ def main(argv):
                 hint(w, t)
                 self.svc.add(w)
             self._brain(self.brain_pick)
-            g2 = self.group(page, "His voice", "A voice is downloaded once, then works without the internet.")
-            self.voice = Adw.ComboRow(title="Voice", model=Gtk.StringList.new([
-                "Off: he writes, he doesn't speak", "Kokoro, on the processor (downloads its model)",
-                "The designed voice, on the graphics card (downloads its model)"]))
-            hint(self.voice, "Off needs nothing. Kokoro runs anywhere. The designed voice needs an NVIDIA or AMD card")
-            g2.add(self.voice)
+            page.append(lab("HIS VOICE", "bw-group-title", wrap=False))
+            page.append(lab("A voice is downloaded once, then works without the internet.", "bw-intro"))
+            self.voice_pick = getattr(self, "voice_pick", 0)
+            voices = Gtk.Box(spacing=12, homogeneous=True)
+            voices.update_property([Gtk.AccessibleProperty.LABEL], ["VECTOR's voice"])
+            first = None
+            for i, (ic, title, sub, tip) in enumerate((
+                    ("audio-volume-muted-symbolic", "Off", "He writes, he doesn't speak.", "Off needs nothing"),
+                    ("audio-speakers-symbolic", "Kokoro", "On the processor. Downloads its model.", "Kokoro runs on any computer"),
+                    ("audio-card-symbolic", "The designed voice", "On the graphics card. Downloads its model.",
+                     "The designed voice needs an NVIDIA or AMD card"))):
+                card = glass.holo_card(None, ic, title, [sub], i == self.voice_pick, first)
+                first = first or card
+                card.connect("toggled", lambda b, n=i: b.get_active() and setattr(self, "voice_pick", n))
+                hint(card, f"{title}: {sub} {tip}.")
+                voices.append(card)
+            page.append(voices)
             self.hello_card = lab("", "bw-key")
             page.append(self.hello_card)
             self.progress(page)
+
 
         def _brain(self, key):
             self.brain_pick = key
             self.svc.set_visible(key == "service")
 
         def build_lab(self, page):
-            g = self.group(page, "Find your lab", "It reads what this computer already knows of your network (it never "
-                                                 "scans), checks those devices, and changes nothing until you press Connect.")
+            tight = self.screen_h() < 760
+            top = Gtk.Box(spacing=22)
+            self.radar = glass.LabRadar(self.c, 200 if tight else 260, still=self.still())
+            self.radar.set_valign(Gtk.Align.START)
+            hint(self.radar, "The lab radar: it sweeps while it looks; each dot is a machine found. Click one to see it.")
+            self.radar.on_pick = lambda i: self.lab_checks[i].set_active(True) if i < len(self.lab_checks) else None
+            top.append(self.radar)
+            right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, hexpand=True)
+            g = Adw.PreferencesGroup(title="FIND YOUR LAB")
+            g.set_description("It reads what this computer already knows of your network (it never scans), checks those "
+                              "devices, and changes nothing until you press Connect.")
+            right.append(g)
             self.lab_list = g
+            self.lab_rows, self.lab_checks = [], []
             b = hint(Gtk.Button(label="Look for it", halign=Gtk.Align.START), "Find the lab's machines and what they offer")
             b.connect("clicked", lambda *_: self.find_lab())
-            page.append(b)
+            right.append(b)
+            top.append(right)
+            page.append(top)
             g2 = self.group(page, "Other ways")
             fr = Adw.ActionRow(title="I have a lab connection file",
                                subtitle="A homelab.toml, or the lab connection on a Field Kit USB stick.")
+            fr.add_prefix(glass.icon("document-open-symbolic", 20, "dg-row-icon"))
             fb = hint(Gtk.Button(label="Choose…", valign=Gtk.Align.CENTER), "Pick the file")
             fb.connect("clicked", lambda *_: self.pick_lab_file())
             fr.add_suffix(fb)
@@ -476,6 +629,7 @@ def main(argv):
                                    subtitle="Its graphics card runs models for your other devices. Shows bromigos-lab's "
                                             "reviewed plan first; nothing changes until you agree.")
                 mr.set_subtitle_lines(0)
+                mr.add_prefix(glass.icon("computer-symbolic", 20, "dg-row-icon"))
                 mb = hint(Gtk.Button(label="Show the plan", valign=Gtk.Align.CENTER), "bromigos lab provision plan: read-only")
                 mb.connect("clicked", lambda *_: self.lab_plan())
                 mr.add_suffix(mb)
@@ -485,34 +639,57 @@ def main(argv):
             if self.render:
                 self._lab_found({"hosts": [{"name": "gpu-box", "address": "192.0.2.24",
                                             "offers": ["Ollama", "LiteLLM", "Prometheus"]},
-                                           {"name": "nas", "address": "192.0.2.10", "offers": ["Docker", "Jellyfin"]}],
-                                 "brains": [{"name": "litellm", "url": "http://192.0.2.24:4000/v1"}], "error": None, "new": 5})
+                                           {"name": "nas", "address": "192.0.2.10", "offers": ["Docker", "Jellyfin"]},
+                                           {"name": "pi-hole", "address": "192.0.2.53", "offers": ["DNS"]}],
+                                 "brains": [{"name": "litellm", "url": "http://192.0.2.24:4000/v1"}], "error": None, "new": 6})
+
 
         def find_lab(self):
             self.say("Looking at the devices this computer already knows…")
+            self.radar.set_searching(True)
             self.later(lambda: (self._lab_found, F.find_lab()))
 
+
         def _lab_found(self, r):
+            self.radar.set_searching(False)
             if r.get("error"):
                 self.say(r["error"])
                 return False
             if not r["hosts"]:
                 self.say("No lab found. If you have one, use its connection file, or connect it later in Settings › Lab.")
                 return False
-            for h in r["hosts"]:
+            for row in self.lab_rows:                   # looked again: the new answer replaces the old
+                self.lab_list.remove(row)
+            self.lab_rows, self.lab_checks = [], []
+            self.radar.set_hosts(r["hosts"])
+            first = None
+            for i, h in enumerate(r["hosts"]):
                 row = Adw.ActionRow(title=GLib.markup_escape_text(h["name"] or "?"),
                                     subtitle=GLib.markup_escape_text(", ".join(h["offers"])))
-                hint(row, f"{h['name']}: what it offers")
+                chk = Gtk.CheckButton(valign=Gtk.Align.CENTER, active=i == 0)
+                if first:
+                    chk.set_group(first)
+                first = first or chk
+                chk.connect("toggled", lambda b, n=i: b.get_active() and self.radar.pick(n))
+                row.add_prefix(chk)
+                row.add_prefix(glass.icon("network-server-symbolic", 18, "dg-row-icon"))
+                row.set_activatable_widget(chk)
+                hint(row, f"{h['name']}: what it offers. Picking it marks it on the radar.")
                 self.lab_list.add(row)
+                self.lab_rows.append(row)
+                self.lab_checks.append(chk)
             c = Adw.ActionRow(title=f"Connect it ({r.get('new', 0)} services)",
                               subtitle="Adds them to your homelab settings. Your own edits there are never rewritten.")
+            c.set_subtitle_lines(0)
             cb = hint(Gtk.Button(label="Connect", valign=Gtk.Align.CENTER), "Connect this lab to this computer")
             cb.add_css_class("suggested-action")
             cb.connect("clicked", lambda *_: self.connect_lab(r))
             c.add_suffix(cb)
             self.lab_list.add(c)
-            self.say(f"Found {len(r['hosts'])} machine(s) offering services.")
+            self.lab_rows.append(c)
+            self.say(f"Found {len(r['hosts'])} machine{'s' if len(r['hosts']) != 1 else ''} offering services.")
             return False
+
 
         def connect_lab(self, r):
             def work():
@@ -790,24 +967,36 @@ def main(argv):
             F.Enroll(ask, done, user=os.environ.get("USER"))
 
         def build_keys(self, page):
-            grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=2, homogeneous=True,
-                               row_spacing=12, column_spacing=12)
+            grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=3, min_children_per_line=2,
+                               homogeneous=True, row_spacing=12, column_spacing=12)
             self.cards = []
             for keys, what, cls in KEY_TOUR:
-                box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-                box.add_css_class("bw-keycard")
-                box.append(lab(keys.upper(), "bw-key", wrap=False))
+                box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+                box.add_css_class("dg-keycard")
+                top = Gtk.Box(spacing=10)
+                top.append(glass.keycaps(keys))
+                sp = Gtk.Box(hexpand=True)
+                top.append(sp)
+                top.append(glass.icon(KEY_ICONS.get(keys, "input-keyboard-symbolic"), 22, "dg-keycard-icon"))
+                box.append(top)
                 box.append(lab(what, "bw-intro"))
-                state = lab("Try it" if cls else "", "bw-intro")
+                state = lab("Try it" if cls else "", "dg-keycard-state")
                 box.append(state)
                 hint(box, f"{keys}: {what}")
                 grid.append(box)
+                ch = box.get_parent()
+                if ch:
+                    ch.set_focusable(False)
                 self.cards.append((box, state, cls))
             page.append(grid)
             page.append(lab("Every shortcut is in Settings › Shortcuts, and Super + K shows them on the desktop.", "bw-intro"))
-            if not self.render:
+            if self.render:                            # the renders: one tried, as it looks when it works
+                self.cards[0][0].add_css_class("lit")
+                self.cards[0][1].set_label("✓ That's it")
+            else:
                 self.seen = {c["class"] for c in self.clients()}
                 GLib.timeout_add(500, self.watch_keys)
+
 
         def clients(self):
             code, out, _ = run(["hyprctl", "clients", "-j"], timeout=3)
@@ -830,14 +1019,35 @@ def main(argv):
             return True
 
         def build_done(self, page):
-            g = self.group(page, "What you chose")
-            for k, v in self.done_steps.items():
+            head = page.get_first_child()
+            intro = head.get_next_sibling()
+            page.remove(head)
+            page.remove(intro)
+            hero = Gtk.Box(spacing=24)
+            burn = glass.BurnIn(self.c, 120 if self.screen_h() < 760 else 150, still=self.still())
+            hint(burn, "bromigOS's emblem")
+            burn.set_valign(Gtk.Align.CENTER)
+            hero.append(burn)
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, valign=Gtk.Align.CENTER, hexpand=True)
+            col.append(head)
+            col.append(intro)
+            hero.append(col)
+            page.append(hero)
+            chose = dict(self.done_steps)
+            if self.render and not chose:
+                chose = SAMPLE_CHOSE
+            rows = []
+            for k, v in chose.items():
                 st = STEP[k if k in STEP else "phone"]          # the bridge and allowing: the phone step's
-                r = Adw.ActionRow(title=GLib.markup_escape_text(v), subtitle=st[1].upper())
-                hint(r, f"{st[1]}: {v}")
-                g.add(r)
-            if not self.done_steps:
+                rows.append((glass.STEP_ICONS.get(st[0], "object-select-symbolic"), st[1], v,
+                             st[0] if st[0] in self.steps else None, False))
+            if rows:
+                page.append(glass.briefing("What you chose", rows, self.show_step,
+                                           lambda k, t: f"Go back to {k} to change it"))
+            else:
+                g = self.group(page, "What you chose")
                 g.add(Adw.ActionRow(title="Nothing changed: everything stays as it was installed"))
+
 
         # ── moving on ──────────────────────────────────────────────────────────────
         def go(self, d):
@@ -915,7 +1125,7 @@ def main(argv):
                     said = "No brain yet"
                 else:
                     said = "Brain: your lab (connected on the next step)"
-                v = ["off", "cpu", "gpu"][self.voice.get_selected()]
+                v = ["off", "cpu", "gpu"][getattr(self, "voice_pick", 0)]
                 ok, why = F.voice(v, self.say)
                 if not ok:
                     return False, why
