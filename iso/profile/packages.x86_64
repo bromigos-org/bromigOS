@@ -187,6 +187,9 @@ ntfs-3g
 # VECTOR's voice guide in the text installer, where no PipeWire session runs: ffmpeg decodes
 # its Opus clips for aplay (alsa-utils, above); the desktop already brings it
 ffmpeg
+# the graphical installer's screen reader (its first step's Screen reader switch: Orca); on the
+# medium, so the new system can have it too. The console's is releng's espeakup (above)
+orca
 # graphics: every open driver, so the live desktop renders on whatever is there
 mesa
 vulkan-radeon
