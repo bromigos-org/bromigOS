@@ -411,6 +411,19 @@ def held(ctx):
                                 "from": "bromigos", "root": True,
                                 "note": "Only after doing what the news item asks."},
                            link=first.get("link")))
+    waiting = st.get("waiting") or {}
+    if st.get("phase") == "waiting" and waiting.get("notify", True):
+        pkgs = waiting.get("packages") or []
+        found.append(alert("update.held", "server-update-waiting", "needs_you",
+                           f"{len(pkgs)} update{'s' if len(pkgs) != 1 else ''} downloaded, waiting for you",
+                           "This server downloads its updates and waits for you ([updates] mode = \"download\"). "
+                           "Update now: a snapshot pair around it, the health check after, and a rollback if it "
+                           "doesn't come back healthy.", "Updates",
+                           actions=[{"kind": "update", "label": "Update now"}, {"kind": "snooze"}],
+                           evidence=evidence(pkgs[:40], since=waiting.get("since", ""), packages=len(pkgs)),
+                           fix={"commands": ["sudo bromigos server update --now"],
+                                "touches": ["the installed packages (a snapshot pair around it, then the health check)"],
+                                "from": "bromigos", "root": True}))
     if st.get("phase") in ("rolled-back", "attention", "failed"):
         words = {"rolled-back": "The last automatic update was rolled back",
                  "attention": "An update and its rollback both failed the health check",

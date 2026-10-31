@@ -45,12 +45,19 @@ Settings: /etc/bromigos/server.toml (the installer writes it; every key is optio
   public_tcp = []         # TCP ports open to everyone (a game's port)
   public_udp = []         # UDP ports open to everyone
   [updates]
-  auto = true             # the timer updates by itself
+  mode = "auto"           # auto (update, check, roll back), download (fetch, wait for you), off
+  window = ""             # "03:00-05:00": a restart only inside it
+  channel = "live"        # live Arch (a tested snapshot channel comes later)
+  notify = true           # what waits is an alert (BRODEC's phone)
+  cluster_reboots = false # a lab node: the lab restarts it (kured's /run/reboot-required)
+  auto = true             # before mode: true is auto, false is off
   reboot = true           # restart by itself when a new kernel or driver needs it
   news_hold = true        # Arch Linux news since the last update holds the automatic one
   [health]
   minutes = 10            # how long the system has to come back healthy
   ignore_units = []       # failed units that don't count against it
+  checks = []             # the installer's: startup, units, network, sshd, or a health.d script's name
+                          # (every script in /etc/bromigos/server/health.d must exit 0)
   [roles]
   enabled = []            # "storage", "game-server/pelican-wings", ... (role add writes it)
   picked = []             # the installer's own ids ("media", "home", ...): they count too
@@ -115,6 +122,13 @@ FIRST_START = {"bromigos-server-pending.service": "the packages that waited for 
                "bromigos-server-tpm-enroll.service": "the security chip (TPM) unlocking the disk",
                "bromigos-server-secrets.service": "the install's keys and passwords, into the secret store"}
 PENDING = "/etc/bromigos/server/pending-packages"
+UPDATE_MODES = ("auto", "download", "off")
+CHANNELS = ("live",)
+HEALTH_D = "/etc/bromigos/server/health.d"
+# the checks every update gets anyway (check_health); any other name in [health] checks is a
+# script in health.d (50-NAME.sh), which runs whatever its name
+BUILTIN_CHECKS = ("startup", "units", "network", "sshd")
+REBOOT_REQUIRED = "/run/reboot-required"     # what a lab's kured watches: it restarts its nodes one at a time
 STATE = "/var/lib/bromigos/server/update.json"
 HISTORY = "/var/lib/bromigos/server/history.jsonl"
 TEXTFILE = "/opt/bromigos-monitoring/textfile/bromigos-server.prom"
@@ -176,10 +190,23 @@ def config():
     up = c.setdefault("updates", {})
     up.setdefault("auto", True)
     up.setdefault("reboot", True)
-    up.setdefault("news_hold", True)
+    # the installer's name for the news hold
+    up.setdefault("news_hold", up.get("arch_news_hold", True))
+    # mode: auto (update, check, roll back by itself), download (fetch, then wait for a person:
+    # BRODEC's Update on the phone, or update --now), off (the timer off). Older files: auto
+    mode = up.get("mode") or ("auto" if up["auto"] else "off")
+    if mode not in UPDATE_MODES:
+        print(f"bromigos-server: [updates] mode {mode!r} isn't one of {', '.join(UPDATE_MODES)}; using auto", file=sys.stderr)
+        mode = "auto"
+    up["mode"], up["auto"] = mode, mode == "auto"
+    up.setdefault("window", "")             # "03:00-05:00": restarts only inside it (the timer runs in it)
+    up.setdefault("channel", "live")        # live Arch; a tested snapshot of it comes later
+    up.setdefault("notify", True)           # alerts (and BRODEC's phone) hear of what waits
+    up.setdefault("cluster_reboots", False)  # a lab node: the lab restarts its machines one at a time
     h = c.setdefault("health", {})
     h.setdefault("minutes", 10)
     h.setdefault("ignore_units", [])
+    h.setdefault("checks", [])
     ro = c.setdefault("roles", {})
     ro.setdefault("enabled", [])
     ro.setdefault("picked", [])
@@ -316,7 +343,8 @@ def cluster():
 
 def last_update():
     st = load_state()
-    return {"hold": st.get("hold"), "phase": st.get("phase", "never"), "started": st.get("started"), "finished": st.get("finished"),
+    return {"hold": st.get("hold"), "waiting": st.get("waiting"), "phase": st.get("phase", "never"),
+            "started": st.get("started"), "finished": st.get("finished"),
             "pre": st.get("pre"), "post": st.get("post"), "packages": len(st.get("packages", [])),
             "reason": st.get("reason", ""), "kernel": st.get("kernel", False)}
 
@@ -331,6 +359,8 @@ PHASE_WORDS = {
     "rolled-back": "the last update was rolled back: the system didn't come back healthy",
     "attention": "needs attention: an update and its rollback both failed the health check",
     "failed": "the last update didn't finish",
+    "waiting": "updates are downloaded and waiting for you (BRODEC's Update, or sudo bromigos server update --now)",
+    "reboot-waiting": "updated; the restart it needs waits for the window",
 }
 
 
@@ -348,7 +378,13 @@ def status_doc():
         "roles": {"enabled": c["roles"]["enabled"],
                   "titles": [r["title"] + (f" ({r['variant']})" if r["variant"] and r["entry"] != r["id"] else "")
                              for _, r in enabled_roles(c, quiet=True)]},
-        "updates": dict(last_update(), auto=bool(c["updates"]["auto"]), timer=unit_state("bromigos-server-update.timer")),
+        "updates": dict(last_update(), auto=bool(c["updates"]["auto"]), mode=c["updates"]["mode"],
+                        window=c["updates"]["window"], channel=c["updates"]["channel"], notify=bool(c["updates"]["notify"]),
+                        cluster_reboots=bool(c["updates"]["cluster_reboots"]),
+                        timer=unit_state("bromigos-server-update.timer")),
+        "health": {"checks": c["health"]["checks"],
+                   "scripts": sorted(n for n in (os.listdir(at(HEALTH_D)) if os.path.isdir(at(HEALTH_D)) else [])
+                                     if not n.startswith("."))},
         "rollbacks": [e for e in history() if e.get("event") == "rolled-back"],
         "containers": containers(),
         "cluster": cluster(),
@@ -439,7 +475,8 @@ def print_status(d):
           "  SSH          off (sudo systemctl enable --now sshd turns it on, keys only)")
     print(f"  Firewall     {d['firewall']['running']}" + (f", also open: {', '.join(d['firewall']['allow'])}" if d["firewall"]["allow"] else ""))
     print(f"  Updates      {PHASE_WORDS.get(u['phase'], u['phase'])}" + (f" ({u['finished'] or u['started']})" if u.get("started") else "")
-          + ("" if u["auto"] else "; automatic updates are off"))
+          + {"auto": "", "download": "; it downloads, then waits for you", "off": "; automatic updates are off"}[u["mode"]]
+          + (f"; restarts {u['window']}" if u.get("window") else ""))
     if u.get("reason"):
         print(f"               {u['reason']}")
     if u.get("hold"):
@@ -1541,7 +1578,7 @@ def cmd_setup(a):
         done.append("SSH: keys only" if ours is not False else "SSH: the installer's own rule kept")
     os.makedirs(at("/opt/bromigos-monitoring/textfile"), mode=0o755, exist_ok=True)
     units = list(BASE_UNITS)
-    if c["updates"]["auto"]:
+    if c["updates"]["mode"] != "off":
         units.append("bromigos-server-update.timer")
     # the monthly scrub of /, only where / is btrfs (elsewhere it would fail every month)
     if root_fstype() == "btrfs":
@@ -1549,7 +1586,7 @@ def cmd_setup(a):
     if ROOT == "/":
         rc, _, err = run(["systemctl", "enable", *units])
         done.append("enabled: " + ", ".join(units) if rc == 0 else f"systemctl enable: {err.strip()}")
-        if not c["updates"]["auto"]:
+        if c["updates"]["mode"] == "off":
             run(["systemctl", "disable", "bromigos-server-update.timer"])
         # kmscon takes the first console (getty@tty1 conflicts with it, and comes back on its
         # own when kmscon can't start: kmsconvt@'s OnFailure, the plain console's fallback)
@@ -1644,13 +1681,96 @@ def news_hold(prev):
     return [{k: i[k] for k in ("title", "link", "published")} for i in items if i["ts"] > since][:5]
 
 
+def window_of(c):
+    """[updates] window as (start, end) minutes after midnight, or None (any time)."""
+    m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*", str(c["updates"].get("window") or ""))
+    if not m:
+        return None
+    a, b, x, y = (int(v) for v in m.groups())
+    return (a * 60 + b) % 1440, (x * 60 + y) % 1440
+
+
+def in_window(c, t=None):
+    """Whether now (or t, a struct_time) is inside [updates] window; no window: always."""
+    w = window_of(c)
+    if not w:
+        return True
+    t = t or time.localtime(float(os.environ.get("BROMIGOS_SERVER_NOW", time.time())))
+    m = t.tm_hour * 60 + t.tm_min
+    start, end = w
+    return start <= m < end if start < end else (m >= start or m < end)
+
+
+def restart_for_update(st, c, a):
+    """A new kernel or driver needs a restart: now, when a person asked (--now) or the window
+    is open; else it waits for the window (the timer's next run in it). A lab node whose lab
+    restarts its machines one at a time (cluster_reboots) leaves it to the lab: kured's
+    /run/reboot-required."""
+    if c["updates"]["cluster_reboots"] and cluster()["joined"]:
+        try:
+            open(at(REBOOT_REQUIRED), "w").close()
+        except OSError:
+            pass
+        st.update(phase="reboot-waiting", reason="the lab restarts its machines one at a time; it restarts this one")
+        save_state(st)
+        print("bromigos-server: updated; the lab restarts this server when its turn comes, then it's checked")
+        return 0
+    if not a.now and not in_window(c):
+        st.update(phase="reboot-waiting", reason=f"the restart waits for the window ({c['updates']['window']})")
+        save_state(st)
+        print(f"bromigos-server: updated; the restart it needs waits for the window ({c['updates']['window']})")
+        return 0
+    st["phase"] = "reboot"
+    save_state(st)
+    print("bromigos-server: updated; the new kernel or driver needs a restart: restarting to check it")
+    run(["systemctl", "reboot"])
+    return 0
+
+
+def download_only(st, c):
+    """[updates] mode = download: fetch what the update would install, then wait for a person
+    (BRODEC's Update on the phone, or update --now). Nothing is installed."""
+    rc, out, err = run(["pacman", "-Syuw", "--noconfirm"], timeout=3 * 3600)
+    if rc != 0:
+        st.update(phase="failed", finished=now(), finished_ts=time.time(),
+                  reason="the download didn't finish: " + last_line(err or out, "pacman -Syuw failed"))
+        save_state(st)
+        remember({"event": "failed", "reason": st["reason"]})
+        print(f"bromigos-server: {st['reason']}", file=sys.stderr)
+        return 1
+    _, out, _ = run(["pacman", "-Qu"])
+    pkgs = [line.split()[0] for line in out.splitlines() if line.strip()]
+    if not pkgs:
+        st.update(phase="nothing", finished=now(), finished_ts=time.time(), reason="", last_success_ts=time.time())
+        st.pop("waiting", None)
+        save_state(st)
+        print(f"bromigos-server: {PHASE_WORDS['nothing']}")
+        return 0
+    st.update(phase="waiting", waiting={"since": now(), "packages": pkgs, "notify": bool(c["updates"]["notify"])})
+    save_state(st)
+    remember({"event": "downloaded", "packages": len(pkgs)})
+    print(f"bromigos-server: {len(pkgs)} update(s) downloaded, waiting for you: BRODEC's Update on your phone, "
+          "or sudo bromigos server update --now")
+    return 0
+
+
 def cmd_update(a):
     c = config()
-    if not c["updates"]["auto"] and not a.now:
-        print("bromigos-server: automatic updates are off (/etc/bromigos/server.toml, [updates] auto)")
+    if c["updates"]["mode"] == "off" and not a.now:
+        print("bromigos-server: automatic updates are off (/etc/bromigos/server.toml, [updates] mode)")
         return 0
+    if c["updates"]["channel"] not in CHANNELS:
+        print(f"bromigos-server: the {c['updates']['channel']!r} channel isn't here yet: updating from live Arch",
+              file=sys.stderr)
     st = load_state()
-    if st.get("phase") in ("verify", "reboot", "updating") and not a.now:
+    # an update that waited for the window to restart: the window is open now
+    if st.get("phase") == "reboot-waiting" and not c["updates"]["cluster_reboots"] and (a.now or in_window(c)):
+        st["phase"] = "reboot"
+        save_state(st)
+        print("bromigos-server: restarting for the update that waited for the window")
+        run(["systemctl", "reboot"])
+        return 0
+    if st.get("phase") in ("verify", "reboot", "updating", "reboot-waiting") and not a.now:
         print(f"bromigos-server: the last update is still being checked ({st['phase']}); not starting another")
         return 0
     prev = st
@@ -1668,6 +1788,8 @@ def cmd_update(a):
     carry = {k: prev[k] for k in ("last_success_ts", "news_seen_ts") if k in prev}
     if a.now:
         carry["news_seen_ts"] = time.time()
+    if c["updates"]["mode"] == "download" and not a.now:
+        return download_only(dict(carry, started=now(), started_ts=time.time()), c)
     st = dict(carry, phase="updating", started=now(), started_ts=time.time(), gateway=gateway(),
               sshd=unit_state("sshd.service") == "active", boots=0, btrfs_errors=btrfs_errors()["total"])
     save_state(st)
@@ -1693,11 +1815,7 @@ def cmd_update(a):
     remember({"event": "updated", "packages": len(st["packages"]), "pre": st["pre"], "post": st["post"],
               "kernel": st["kernel"]})
     if st["kernel"] and c["updates"]["reboot"]:
-        st["phase"] = "reboot"
-        save_state(st)
-        print("bromigos-server: updated; the new kernel or driver needs a restart: restarting to check it")
-        run(["systemctl", "reboot"])
-        return 0
+        return restart_for_update(st, c, a)
     st["phase"] = "verify"
     save_state(st)
     return cmd_health(a, booted=False)
@@ -1732,6 +1850,9 @@ def check_health(st, c):
     down = [u for u in dict.fromkeys(must) if unit_state(u) != "active"]
     if down:
         reasons.append("not running: " + ", ".join(down))
+    for name, ok_, words in health_scripts():
+        if not ok_:
+            reasons.append(f"the health check {name} failed" + (f": {words}" if words else ""))
     errors = btrfs_errors()["total"]
     if errors > int(st.get("btrfs_errors", errors)):
         reasons.append(f"the disks counted {errors - int(st['btrfs_errors'])} new btrfs errors")
@@ -1742,6 +1863,25 @@ def check_health(st, c):
         if rc != 0:
             reasons.append(f"the gateway {st['gateway']} doesn't answer")
     return not reasons, reasons
+
+
+def health_scripts():
+    """[(name, healthy, its last line)] for each script in /etc/bromigos/server/health.d (the
+    installer's per-role checks, and any you add): exit 0 is healthy. Run with sh unless it's
+    executable; a minute each."""
+    d = at(HEALTH_D)
+    out = []
+    for name in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        p = os.path.join(d, name)
+        if not os.path.isfile(p) or name.startswith(".") or name.endswith(("~", ".disabled", ".pacnew", ".pacsave")):
+            continue
+        cmd = [p] if os.access(p, os.X_OK) else ["sh", p]
+        try:
+            rc, o, e = run(cmd, timeout=60)
+        except subprocess.TimeoutExpired:
+            rc, o, e = 1, "", "it took longer than a minute"
+        out.append((name, rc == 0, last_line(e or o, "") if rc != 0 else ""))
+    return out
 
 
 def cmd_mark_boot(a):

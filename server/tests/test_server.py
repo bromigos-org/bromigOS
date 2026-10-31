@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -47,6 +48,8 @@ esac
 echo "pacman $*" >> "$FAKE/log"
 case "$1" in
   -Q) grep -qx "$2" "$FAKE/installed" 2>/dev/null ;;
+  -Qu) cat "$FAKE/qu" 2>/dev/null ;;
+  -Syuw) exit "$(cat "$FAKE/syuw.rc" 2>/dev/null || echo 0)" ;;
   -S) shift; for p in "$@"; do case "$p" in -*) continue ;; esac
         if grep -qx "$p" "$FAKE/unavailable" 2>/dev/null; then echo "error: target not found: $p" >&2; exit 1; fi
         echo "$p" >> "$FAKE/installed"; done ;;
@@ -97,12 +100,13 @@ class Rig(unittest.TestCase):
     def run_server(self, *args):
         env = dict(os.environ, PATH=f"{self.bin}:/usr/bin:/bin", FAKE=str(self.fake),
                    BROMIGOS_SERVER_ROOT=str(self.root), BROMIGOS_SERVER_SHARE=str(HERE),
-                   BROMIGOS_SERVER_HEALTH_POLL="0",
+                   BROMIGOS_SERVER_HEALTH_POLL="0", TZ="UTC", **self.extra_env,
                    # never the network: no feed unless a test gives one
                    BROMIGOS_SERVER_NEWS_FEED=self.news)
         return subprocess.run([sys.executable, "-I", str(SCRIPT), *args], env=env, capture_output=True, text=True)
 
     news = "file:///nonexistent/arch-news.xml"
+    extra_env = {}
 
     # ---- the Arch news hold
 
@@ -259,6 +263,65 @@ class Server(Rig):
         self.run_server("health")
         self.assertIn("--rollback 10", self.log())
         self.assertIn("never reached the check", self.state()["reason"])
+
+    # ---- the update modes, the window and health.d (the installer's [updates] and checks)
+
+    def test_download_mode_fetches_then_waits_for_a_person(self):
+        self.config('[health]\nminutes = 0\n[updates]\nmode = "download"\n')
+        (self.fake / "qu").write_text("bash 5.2-1 -> 5.3-1\nlinux 6.1-1 -> 6.2-1\n")
+        (self.fake / "update.json").write_text(report(["bash", "linux"]))
+        r = self.run_server("update")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("pacman -Syuw --noconfirm", self.log())
+        self.assertNotIn("bromigos update", self.log())
+        st = self.state()
+        self.assertEqual((st["phase"], st["waiting"]["packages"]), ("waiting", ["bash", "linux"]))
+        self.assertIn("waiting for you", self.run_server("status").stdout)
+        r = self.run_server("update", "--now")                 # BRODEC's Update, or a person at the console
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("bromigos update --yes --no-aur --json", self.log())
+        self.assertEqual(self.state()["phase"], "ok")
+
+    def test_off_mode_and_the_installers_keys(self):
+        self.config('[health]\nminutes = 0\n[updates]\nmode = "off"\nauto = false\narch_news_hold = false\n')
+        r = self.run_server("update")
+        self.assertIn("automatic updates are off", r.stdout)
+        self.assertNotIn("bromigos update", self.log())
+        d = json.loads(self.run_server("status", "--json").stdout)["updates"]
+        self.assertEqual((d["mode"], d["channel"], d["notify"]), ("off", "live", True))
+
+    def test_a_restart_waits_for_the_window(self):
+        self.config('[health]\nminutes = 0\n[updates]\nwindow = "03:00-05:00"\n')
+        (self.fake / "update.json").write_text(report(["linux"], kernel=True))
+        self.extra_env = {"BROMIGOS_SERVER_NOW": "1793019600"}       # 2026-10-26 13:00 UTC
+        self.run_server("update")
+        self.assertEqual(self.state()["phase"], "reboot-waiting")
+        self.assertNotIn("systemctl reboot", self.log())
+        self.extra_env = {"BROMIGOS_SERVER_NOW": "1793070000"}       # 2026-10-27 03:00 UTC: the window
+        self.run_server("update")
+        self.assertEqual(self.state()["phase"], "reboot")
+        self.assertIn("systemctl reboot", self.log())
+        self.assertEqual(self.log().count("bromigos update --yes"), 1, "no second update, only the restart")
+
+    def test_a_window_across_midnight(self):
+        m = __import__("test_base_roles").module()
+        c = {"updates": {"window": "22:00-00:00"}}
+        at = lambda h, mi: time.struct_time((2026, 10, 26, h, mi, 0, 0, 299, 0))   # noqa: E731
+        self.assertTrue(m.in_window(c, at(23, 30)))
+        self.assertFalse(m.in_window(c, at(0, 30)))
+        self.assertTrue(m.in_window({"updates": {"window": ""}}, at(12, 0)))
+
+    def test_a_failing_health_d_script_rolls_the_update_back(self):
+        d = self.root / "etc/bromigos/server/health.d"
+        d.mkdir(parents=True)
+        (d / "50-apps.sh").write_text("echo 'jellyfin is down' >&2\nexit 1\n")
+        (d / "40-fine.sh").write_text("exit 0\n")
+        (self.fake / "update.json").write_text(report(["bash"]))
+        self.run_server("update")
+        st = self.state()
+        self.assertTrue(st["rolled_back"])
+        self.assertIn("the health check 50-apps.sh failed: jellyfin is down", st["reason"])
+        self.assertNotIn("40-fine.sh", st["reason"])
 
     def test_sshd_down_after_update_is_unhealthy(self):
         (self.fake / "update.json").write_text(report(["openssh"]))

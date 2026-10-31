@@ -99,6 +99,21 @@ class EveryCheck(Machine):
         self.assertEqual(system["alerts"] + user["alerts"], [])
         self.assertTrue(all(s == "ran" for s in states(system).values()), states(system))
 
+    def test_updates_downloaded_and_waiting(self):
+        """bromigOS Server's [updates] mode = "download": what it fetched waits for a person,
+        and says so (BRODEC's phone hears it), unless [updates] notify is off."""
+        self.m.clear()
+        st = {"phase": "waiting", "waiting": {"since": "2026-10-30T03:10:00-07:00", "packages": ["bash", "linux"],
+                                              "notify": True}}
+        self.m.rootfile("/var/lib/bromigos/server/update.json", json.dumps(st))
+        doc = {a["id"]: a for a in self.m.run("system")["alerts"]}
+        w = doc["update.held:server-update-waiting"]
+        self.assertEqual(w["title"], "2 updates downloaded, waiting for you")
+        self.assertIn({"kind": "update", "label": "Update now"}, w["actions"])
+        st["waiting"]["notify"] = False
+        self.m.rootfile("/var/lib/bromigos/server/update.json", json.dumps(st))
+        self.assertNotIn("update.held:server-update-waiting", {a["id"] for a in self.m.run("system")["alerts"]})
+
     def test_the_fixes_come_from_bromigos_own_logic(self):
         self.m.broken()
         doc = {a["id"]: a for a in self.m.run("system", boot=True)["alerts"]}
