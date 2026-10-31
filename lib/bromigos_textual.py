@@ -481,17 +481,17 @@ def lock_plain(on=True, lit=True, look=None):
 STRENGTH_COLOR = {1: "danger", 2: "warn", 3: "primary"}
 
 
-def meter(level, levels=3, width=24, look=None):
+def meter(level, levels=3, width=24, look=None, role=None):
     """A meter of `levels` segments in one row, built of background-coloured cells so it keeps
     one thickness in every terminal (the disk map's rule): the first `level` lit in what the
-    level means (1 danger, 2 warn, 3 or more the primary), the rest a dark track (░ on the
+    level means (1 danger, 2 warn, 3 or more the primary; or `role`'s colour), the rest a dark track (░ on the
     Linux console, . in ASCII, where a dark background wouldn't show)."""
     look = look or icon_look()
     level = max(0, min(levels, level))
     seg = max(2, (width - (levels - 1)) // levels)
     sixteen = color_mode() == "16"
     c = palette()
-    role = STRENGTH_COLOR.get(min(level, 3), "primary")
+    role = role or STRENGTH_COLOR.get(min(level, 3), "primary")      # what it means, unless the caller says
     if sixteen:
         lit = {"danger": "red", "warn": "yellow", "primary": rich16("secondary")}[role]
     else:
