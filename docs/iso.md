@@ -268,7 +268,7 @@ the progress bar and one `::error words` line if it stops. Everything else it pr
 | Partition table | GPT on UEFI, MBR on BIOS. archinstall 4.5 chooses by the firmware it runs on. On BIOS, GRUB's core image goes in the gap after the MBR. |
 | `/boot` | 2 GiB, FAT32, unencrypted. It's the EFI system partition on UEFI. Beside another system: 2 GiB, ext4, in the free space, with the disk's own EFI system partition at `/boot/efi` |
 | The rest | btrfs, on LUKS2 unless `--no-encrypt` |
-| btrfs subvolumes | `@` for `/`, `@home`, `@log`, `@pkg` and `@.snapshots` |
+| btrfs subvolumes | `@` for `/`, `@home`, `@log`, `@pkg` and `@.snapshots`; and the data an update's rollback must never touch: `@containers` (`/var/lib/containers`), `@k3s` (`/var/lib/rancher`), `@srv` (`/srv`) and `@bromigos-state` (`/var/lib/bromigos/server`, the update history) |
 | Boot loader | GRUB, which boots BIOS and UEFI alike and lists the snapshots |
 | Kernel | `linux` |
 

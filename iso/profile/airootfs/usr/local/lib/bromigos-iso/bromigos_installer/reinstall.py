@@ -35,7 +35,10 @@ STATE = "/run/bromigos-iso/reinstall.json"
 TOP = "/run/bromigos-iso/top"
 TARGET = "/mnt"
 STASH = ".bromigos-old-kernels"       # on /boot, while a reinstall runs
-SUBVOLS = [("@home", "home"), ("@log", "var/log"), ("@pkg", "var/cache/pacman/pkg"), ("@.snapshots", ".snapshots")]
+SUBVOLS = [("@home", "home"), ("@log", "var/log"), ("@pkg", "var/cache/pacman/pkg"), ("@.snapshots", ".snapshots"),
+           # the data a reinstall keeps, as it keeps /home (made empty if the old system had none)
+           ("@containers", "var/lib/containers"), ("@k3s", "var/lib/rancher"), ("@srv", "srv"),
+           ("@bromigos-state", "var/lib/bromigos/server")]
 
 
 def sh(*argv, input=None, check=True):
@@ -95,9 +98,11 @@ def prepare(a):
     sh("btrfs", "subvolume", "delete", "--recursive", f"{TOP}/@")
     sh("btrfs", "subvolume", "create", f"{TOP}/@")
     sh("btrfs", "subvolume", "create", f"{TOP}/@.snapshots")
-    for sv in ("@log", "@pkg"):
+    fresh = []
+    for sv in ("@log", "@pkg", "@containers", "@k3s", "@srv", "@bromigos-state"):
         if sv not in names:
             sh("btrfs", "subvolume", "create", f"{TOP}/{sv}")
+            fresh.append(sv)
     sh("mount", "-o", "subvol=@", dev, TARGET)
     for sv, where in SUBVOLS:
         os.makedirs(f"{TARGET}/{where}", exist_ok=True)
@@ -116,6 +121,13 @@ def prepare(a):
         sh("mount", b["esp"], f"{TARGET}/boot/efi")
     os.makedirs(old, exist_ok=True)
     sh("mount", "-o", f"ro,subvol=@old-root-{stamp}", dev, old)
+    # a system from before the data subvolumes kept containers, k3s and /srv inside its root:
+    # their data comes along into the new subvolumes (reflinked: instant, no extra space)
+    for sv, where in SUBVOLS:
+        src = f"{old}/{where}"
+        if sv in fresh and os.path.isdir(src) and os.listdir(src):
+            print(f"::stage 8 Bringing {('/' + where)} along", flush=True)
+            sh("cp", "-a", "--reflink=auto", f"{src}/.", f"{TARGET}/{where}/")
     print("::stage 9 Your files are safe; the new system goes in beside them", flush=True)
     return 0
 
