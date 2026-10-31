@@ -1,0 +1,18 @@
+[Unit]
+Description=Home automation (Home Assistant)
+
+[Container]
+Image={{image:homeassistant}}
+ContainerName=home-assistant
+# the host's network, so it finds devices on the local network (mDNS, SSDP)
+Network=host
+Volume={{data}}/config:/config:Z
+Volume=/etc/localtime:/etc/localtime:ro
+Volume=/run/dbus:/run/dbus:ro
+Environment=TZ={{tz}}
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

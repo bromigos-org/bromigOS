@@ -97,6 +97,8 @@ def css(c, hc=False):
 .bi-rail {{ padding: 16px 0 0 0; }}
 .bi-rail-title {{ color: {c['dim']}; font-size: 0.78em; font-weight: 700; letter-spacing: 0.2em; margin: 6px 22px 14px 22px; }}
 .dg-railrow {{ padding: 6px 18px 6px 14px; }}
+.dg-railrow.snug {{ padding-top: 3px; padding-bottom: 3px; }}
+.dg-railrow.tight {{ padding-top: 1px; padding-bottom: 1px; }}
 .dg-railrow image {{ color: {c['faint']}; }}
 .dg-railrow label {{ color: {c['faint'] if not hc else c['text']}; letter-spacing: 0.08em; }}
 .dg-railrow.done image, .dg-railrow.done label {{ color: {c['soft']}; }}
@@ -249,9 +251,10 @@ class RailLine(Gtk.DrawingArea):
         cr.fill()
 
 
-def rail(box, steps, here, STEP, c, guide=None, title="INSTALL BROMIGOS"):
+def rail(box, steps, here, STEP, c, guide=None, title="INSTALL BROMIGOS", height=None):
     """Fill the rail: an icon and a word per step (the current one glowing, finished ones
-    ticked), a progress line beside them, VECTOR at the foot."""
+    ticked), a progress line beside them, VECTOR at the foot. Given the window's height, a
+    long list of steps (bromigOS Server's) packs its rows closer so VECTOR still fits."""
     while (ch := box.get_first_child()):
         box.remove(ch)
     box.set_hexpand(False)          # its rows expand inside it; the rail itself keeps its width
@@ -264,10 +267,18 @@ def rail(box, steps, here, STEP, c, guide=None, title="INSTALL BROMIGOS"):
     line.set_margin_start(14)
     body.append(line)
     col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
+    dense = None
+    if height and len(steps) > 15:              # rows of about 30, 24 or 20 px; the title, VECTOR and his line
+        room = height - 60 - ((getattr(guide, "vector", guide).get_size_request()[1] if guide else 0) + 110)
+        dense = None if len(steps) * 30 <= room else ("snug" if len(steps) * 24 <= room else "tight")
+    if len(steps) > 15 and not dense:
+        dense = "snug"
     for i, s in enumerate(steps):
         row = Gtk.Box(spacing=10)
         row.add_css_class("dg-railrow")
         row.add_css_class("now" if i == here else ("done" if i < here else "todo"))
+        if dense:
+            row.add_css_class(dense)
         row.append(icon(STEP_ICONS.get(s, "media-record-symbolic"), 16))
         lab = Gtk.Label(label=STEP[s][1], xalign=0, hexpand=True)
         row.append(lab)
@@ -1944,3 +1955,638 @@ class MiniSweep(Gtk.DrawingArea):
         if DG is None:
             return
         DG.radar(cr, 0, 0, min(w, h), self.c, time.monotonic() - self.t0, (), still=self.still or not self.on)
+
+
+# ── bromigOS Server's heroes: one live picture per server step (the installer's Network,
+# Access, Storage, Encryption, Updates and Services, the Server briefing; the Server tour).
+# Each draws the state it's given (set_state) and redraws when it changes; motion (a Pulse
+# along a link, the Sweep, a Spark when a key arrives) only follows state and stops under
+# reduced motion (still=True), where each draws its resting frame ───────────────────────
+class _Holo(Gtk.DrawingArea):
+    """A hero's frame: its size, the clock, the Glass panel behind it and the Scanline."""
+
+    def __init__(self, c, width, height, still=False, name=""):
+        super().__init__()
+        self.c, self.still, self.state = c, still, {}
+        self.t0 = time.monotonic()
+        self.set_content_width(width)
+        self.set_content_height(height)
+        self.set_draw_func(self._draw)
+        self.update_property([Gtk.AccessibleProperty.LABEL], [name])
+        if not still:
+            self.add_tick_callback(lambda *_: (self.queue_draw(), True)[1])
+
+    def t(self):
+        return 0.0 if self.still else time.monotonic() - self.t0
+
+    def set_state(self, **kw):
+        self.state.update(kw)
+        self.queue_draw()
+
+    def col(self, role, a=1.0):
+        return rgba(self.c.get(role) or self.c["primary"], a)
+
+    def _draw(self, area, cr, w, h):
+        cr.set_source_rgba(*self.col("panel", 0.55))
+        cr.rectangle(0, 0, w, h)
+        cr.fill()
+        cr.set_source_rgba(*self.col("primary", 0.35))
+        cr.set_line_width(1)
+        cr.rectangle(0.5, 0.5, w - 1, h - 1)
+        cr.stroke()
+        self.draw(cr, w, h, self.t())
+        _scanlines(cr, 0, 0, w, h, 0.10)
+
+    # shapes
+    def text(self, cr, s, x, y, pt, role="text", a=1.0, align="left", weight=Pango.Weight.BOLD):
+        return _text(self, cr, s, x, y, pt, self.col(role, a), weight=weight, align=align)
+
+    def glyph(self, cr, kind, x, y, size, live=True, t=0.0):
+        if DG is not None:
+            DG.glyph(cr, kind, x, y, size, self.c, t, live=live, still=self.still)
+        else:
+            cr.set_source_rgba(*self.col("primary" if live else "dim"))
+            cr.rectangle(x + size * 0.2, y + size * 0.15, size * 0.6, size * 0.6)
+            cr.stroke()
+
+    def link(self, cr, a, b, kind="cable", live=True, t=0.0, warn=False, pct=None):
+        """A link: a cable (solid), or Wi-Fi (dashed, with its signal), a Pulse running along it while live."""
+        role = "warn" if warn else ("primary" if live else "dim")
+        (x1, y1), (x2, y2) = a, b
+        cr.set_line_width(2 if kind == "cable" else 1.6)
+        cr.set_dash([6, 5] if kind == "wifi" else [])
+        cr.set_source_rgba(*self.col(role, 0.85 if live else 0.45))
+        cr.move_to(x1, y1)
+        cr.line_to(x2, y2)
+        cr.stroke()
+        cr.set_dash([])
+        if live and not self.still:
+            for k in range(3):
+                f = ((t * 0.6) + k / 3) % 1
+                cr.arc(x1 + (x2 - x1) * f, y1 + (y2 - y1) * f, 2.6, 0, 2 * math.pi)
+                cr.set_source_rgba(*self.col("soft", 0.9))
+                cr.fill()
+        if kind == "wifi":
+            mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+            for r in (6, 11, 16):
+                cr.arc(mx, my + 6, r, math.pi * 1.2, math.pi * 1.8)
+                cr.set_source_rgba(*self.col(role, 0.7))
+                cr.stroke()
+            if DG is not None and pct is not None:
+                DG.bars(cr, mx + 14, my - 14, 14, -100 + pct * 0.6, self.c)
+
+    def node(self, cr, x, y, r, role="primary", fill=0.18):
+        cr.arc(x, y, r, 0, 2 * math.pi)
+        cr.set_source_rgba(*self.col(role, fill))
+        cr.fill_preserve()
+        cr.set_source_rgba(*self.col(role, 0.9))
+        cr.set_line_width(1.4)
+        cr.stroke()
+
+    def card(self, cr, x, y, w, h, role="primary", lit=True):
+        r = 6
+        cr.new_sub_path()
+        for cx, cy, a0 in ((x + w - r, y + r, -math.pi / 2), (x + w - r, y + h - r, 0), (x + r, y + h - r, math.pi / 2),
+                           (x + r, y + r, math.pi)):
+            cr.arc(cx, cy, r, a0, a0 + math.pi / 2)
+        cr.close_path()
+        cr.set_source_rgba(*self.col(role, 0.14 if lit else 0.05))
+        cr.fill_preserve()
+        cr.set_source_rgba(*self.col(role, 0.9 if lit else 0.35))
+        cr.set_line_width(1.2)
+        cr.stroke()
+
+    def ring(self, cr, cx, cy, r, frac, role="primary", width=7):
+        cr.set_line_width(width)
+        cr.arc(cx, cy, r, 0, 2 * math.pi)
+        cr.set_source_rgba(*self.col("selection", 0.9))
+        cr.stroke()
+        if frac > 0:
+            cr.arc(cx, cy, r, -math.pi / 2, -math.pi / 2 + 2 * math.pi * min(1.0, frac))
+            cr.set_source_rgba(*self.col(role, 1.0))
+            cr.stroke()
+
+    def lock(self, cr, cx, cy, s, shut=True, role="primary"):
+        cr.set_line_width(max(2, s * 0.12))
+        cr.set_source_rgba(*self.col(role))
+        lift = 0 if shut else s * 0.25
+        cr.arc(cx, cy - s * 0.15 - lift, s * 0.28, math.pi, 0)
+        cr.stroke()
+        cr.rectangle(cx - s * 0.4, cy - s * 0.15, s * 0.8, s * 0.6)
+        cr.set_source_rgba(*self.col(role, 0.25))
+        cr.fill_preserve()
+        cr.set_source_rgba(*self.col(role))
+        cr.set_line_width(1.5)
+        cr.stroke()
+        cr.arc(cx, cy + s * 0.08, s * 0.07, 0, 2 * math.pi)
+        cr.fill()
+
+    def draw(self, cr, w, h, t):
+        pass
+
+
+class NetworkMap(_Holo):
+    """The network as a hologram: the internet, the router, this server (its address on it, big)
+    and the lab machines found, all linked; a cable or Wi-Fi with its signal; the Sweep round
+    the router while it's looked for; Wi-Fi only said on the link."""
+
+    def __init__(self, c, width=380, height=290, still=False):
+        super().__init__(c, width, height, still, "The network, and this server's place on it")
+        self.state = {"address": "…", "how": "", "kind": "wired", "connected": True, "signal": None, "gateway": "",
+                      "lab": [], "looking": False, "wifi_only": False, "name": "server"}
+
+    def draw(self, cr, w, h, t):
+        s = self.state
+        inet, rtr, srv = (w * 0.17, h * 0.2), (w * 0.17, h * 0.62), (w * 0.66, h * 0.42)
+        live = s["connected"]
+        self.link(cr, inet, rtr, "cable", live and bool(s["gateway"]), t)
+        self.link(cr, rtr, srv, "wifi" if s["kind"] == "wifi" else "cable", live, t, warn=s["wifi_only"], pct=s.get("signal"))
+        for i, name in enumerate(s["lab"][:4]):
+            p = (w * (0.42 + 0.17 * i), h * 0.86)
+            self.link(cr, rtr, p, "cable", True, t + i * 0.3)
+            self.glyph(cr, "rack", p[0] - 15, p[1] - 22, 30, live=True, t=t)
+            self.text(cr, name[:10], p[0], p[1] + 8, 7, "muted", align="center", weight=Pango.Weight.NORMAL)
+        self.glyph(cr, "cloud", inet[0] - 24, inet[1] - 26, 48, live=bool(s["gateway"]), t=t)
+        self.text(cr, "INTERNET", inet[0], inet[1] + 18, 7, "muted", align="center")
+        if s["looking"] and DG is not None:
+            DG.radar(cr, rtr[0] - 26, rtr[1] - 26, 52, self.c, t, (), still=self.still)
+        else:
+            self.node(cr, rtr[0], rtr[1], 15)
+            self.text(cr, "⌂", rtr[0], rtr[1] - 9, 11, "primary", align="center")
+        self.text(cr, "ROUTER", rtr[0], rtr[1] + 19, 7, "muted", align="center")
+        if s["gateway"]:
+            self.text(cr, s["gateway"], rtr[0], rtr[1] + 31, 7, "soft", align="center", weight=Pango.Weight.NORMAL)
+        self.glyph(cr, "rack", srv[0] - 34, srv[1] - 62, 68, live=live, t=t)
+        self.text(cr, s["name"].upper()[:18], srv[0], srv[1] + 12, 8, "soft", align="center")
+        pt = 17 if len(s["address"]) <= 15 else 12
+        self.text(cr, s["address"], srv[0], srv[1] + 26, pt, "primary", align="center")
+        self.text(cr, s["how"], srv[0], srv[1] + 30 + pt * 1.6, 7, "muted", align="center", weight=Pango.Weight.NORMAL)
+        if s["wifi_only"]:
+            mx, my = (rtr[0] + srv[0]) / 2, (rtr[1] + srv[1]) / 2
+            self.text(cr, "▲ WI-FI ONLY", mx, my + 14, 7, "warn", align="center")
+        if s.get("reach"):                      # Reach it from anywhere: the tailnet (or BRODEC) link to your devices
+            far = (w * 0.9, h * 0.1)
+            self.link(cr, (srv[0] + 20, srv[1] - 50), far, "wifi", True, t, pct=None)
+            self.glyph(cr, "phone", far[0] - 18, far[1] - 4, 34, live=True, t=t)
+            self.text(cr, s["reach"].upper(), far[0] - 6, far[1] + 30, 6.5, "cyan", align="right")
+
+
+class AccessMap(_Holo):
+    """Who can get in: the server's console (a door), your key cards linked in (fingerprints
+    short), the lab account only on a Lab node, the password crossed out (or lit, with its
+    warning, when chosen). A key arriving from GitHub slides in with a Spark."""
+
+    def __init__(self, c, width=380, height=290, still=False):
+        super().__init__(c, width, height, still, "Who can sign in to this server")
+        self.state = {"keys": [], "lab": None, "password": False, "ssh": True, "arrived": {}}
+
+    def keys_arrived(self, labels):
+        now = time.monotonic()
+        for k in labels:
+            self.state["arrived"][k] = now
+        self.queue_draw()
+
+    def draw(self, cr, w, h, t):
+        s = self.state
+        door = (w * 0.74, h * 0.46)
+        dw, dh = 62, 92
+        self.card(cr, door[0] - dw / 2, door[1] - dh / 2, dw, dh, "primary", s["ssh"] or True)
+        cr.rectangle(door[0] - dw / 2 + 8, door[1] - dh / 2 + 8, dw - 16, 30)
+        cr.set_source_rgba(*self.col("primary", 0.5))
+        cr.stroke()
+        self.text(cr, ">_", door[0], door[1] - dh / 2 + 13, 10, "primary", align="center")
+        self.lock(cr, door[0], door[1] + 18, 26, True)
+        self.text(cr, "THIS SERVER", door[0], door[1] + dh / 2 + 6, 7, "muted", align="center")
+        rows = [(k, "primary", "key") for k in s["keys"][:4]]
+        if len(s["keys"]) > 4:
+            rows.append((f"+{len(s['keys']) - 4} more", "primary", "key"))
+        if not rows:
+            rows.append(("no key yet", "warn", "key"))
+        rows.append(("password", "warn" if s["password"] else "dim", "pw"))
+        if s["lab"] is not None:
+            rows.append(("lab: workstation key", "cyan", "lab"))
+        y0 = h * 0.5 - len(rows) * 21
+        now = time.monotonic()
+        for i, (label, role, kind) in enumerate(rows):
+            arrived = s["arrived"].get(label)
+            slide = 0 if self.still or arrived is None else max(0.0, 1 - (now - arrived) / 0.6) * 40
+            x, y = 12 - slide, y0 + i * 42
+            on = kind != "pw" or s["password"]
+            if not s["ssh"]:
+                on, role = False, "dim"
+            self.card(cr, x, y, w * 0.48, 32, role, on)
+            self.text(cr, {"key": "⚿", "pw": "∗∗∗", "lab": "⚙"}[kind], x + 14, y + 7, 10, role, align="center")
+            self.text(cr, label[:30], x + 28, y + 9, 7.5, "text" if on else "muted", weight=Pango.Weight.NORMAL)
+            self.link(cr, (x + w * 0.48, y + 16), (door[0] - dw / 2, door[1]), "cable", on and kind != "pw" or
+                      (kind == "pw" and s["password"]), t, warn=kind == "pw")
+            if kind == "pw" and not s["password"]:
+                cr.set_source_rgba(*self.col("danger", 0.9))
+                cr.set_line_width(2)
+                cr.move_to(x + 6, y + 6)
+                cr.line_to(x + w * 0.48 - 6, y + 26)
+                cr.stroke()
+            if arrived is not None and not self.still and now - arrived < 0.9:
+                cr.arc(x + 14, y + 16, 18 * (now - arrived) / 0.9 + 4, 0, 2 * math.pi)
+                cr.set_source_rgba(*self.col("soft", max(0, 0.9 - (now - arrived))))
+                cr.stroke()
+        if not s["ssh"]:
+            self.text(cr, "SSH OFF · THIS CONSOLE ONLY", w / 2, h - 18, 7.5, "warn", align="center")
+        elif s["password"]:
+            self.text(cr, "▲ PASSWORDS CAN BE GUESSED", w / 2, h - 18, 7.5, "warn", align="center")
+
+
+class PoolMap(_Holo):
+    """The data disks: a drive hologram each, mirrored Pulses between them for two copies
+    (RAID1), the pool's capacity ring, and on a Storage server the shares as folders with
+    their Previous versions stacked behind them."""
+
+    def __init__(self, c, width=380, height=290, still=False):
+        super().__init__(c, width, height, still, "The data disks and what they hold")
+        self.state = {"disks": [], "layout": "single", "usable": "", "frac": 0.0, "shares": [], "system": ""}
+
+    def draw(self, cr, w, h, t):
+        s = self.state
+        disks = s["disks"][:4]
+        if not disks:
+            self.glyph(cr, "drive", w * 0.18, h * 0.12, 90, live=True, t=t)
+            self.text(cr, "THE SYSTEM DISK HOLDS IT ALL", w * 0.5, h * 0.62, 8, "soft", align="center")
+            self.text(cr, "/srv on " + (s["system"] or "the system disk"), w * 0.5, h * 0.7, 7.5, "muted", align="center",
+                      weight=Pango.Weight.NORMAL)
+            return
+        n = len(disks)
+        size = min(76, (w * 0.6) / max(n, 1))
+        xs = [w * 0.06 + i * (w * 0.6 / n) for i in range(n)]
+        for i, (name, sz) in enumerate(disks):
+            self.glyph(cr, "drive", xs[i], h * 0.08, size, live=True, t=t + i)
+            self.text(cr, sz, xs[i] + size / 2, h * 0.08 + size + 2, 7.5, "soft", align="center")
+            self.text(cr, name, xs[i] + size / 2, h * 0.08 + size + 14, 7, "muted", align="center", weight=Pango.Weight.NORMAL)
+        if s["layout"] == "raid1" and n >= 2:
+            a = (xs[0] + size * 0.8, h * 0.08 + size * 0.45)
+            b = (xs[1] + size * 0.2, h * 0.08 + size * 0.45)
+            self.link(cr, a, b, "cable", True, t)
+            self.link(cr, (b[0], b[1] + 8), (a[0], a[1] + 8), "cable", True, t + 0.5)
+            self.text(cr, "MIRRORED", (a[0] + b[0]) / 2, a[1] - 22, 7, "cyan", align="center")
+        cx, cy, r = w * 0.84, h * 0.3, min(w, h) * 0.13
+        self.ring(cr, cx, cy, r, s["frac"])
+        self.text(cr, s["usable"], cx, cy - 9, 9, "primary", align="center")
+        self.text(cr, "TWO COPIES" if s["layout"] == "raid1" and n >= 2 else "ONE COPY", cx, cy + r + 10, 7, "muted",
+                  align="center")
+        if s["shares"]:
+            for i, name in enumerate(s["shares"][:3]):
+                fx, fy = w * 0.1 + i * w * 0.3, h * 0.7
+                for k in (3, 2, 1):           # Previous versions: ghost copies behind
+                    self._folder(cr, fx + k * 5, fy - k * 5, 0.12 * (4 - k))
+                self._folder(cr, fx, fy, 1.0)
+                self.text(cr, name, fx + 26, fy + 36, 7.5, "soft", align="center")
+            self.text(cr, "PREVIOUS VERSIONS KEPT HOURLY", w * 0.5, h - 16, 7, "muted", align="center")
+        else:
+            self.text(cr, "/srv/data", w * 0.5, h * 0.78, 12, "primary", align="center")
+
+    def _folder(self, cr, x, y, a):
+        cr.move_to(x, y + 6)
+        cr.line_to(x + 18, y + 6)
+        cr.line_to(x + 22, y + 10)
+        cr.line_to(x + 52, y + 10)
+        cr.line_to(x + 52, y + 32)
+        cr.line_to(x, y + 32)
+        cr.close_path()
+        cr.set_source_rgba(*self.col("primary", 0.15 * a))
+        cr.fill_preserve()
+        cr.set_source_rgba(*self.col("primary", 0.9 * a))
+        cr.set_line_width(1.2)
+        cr.stroke()
+
+
+class UnlockHolo(_Holo):
+    """How the disk opens: with a TPM, the chip with the lock seated in it; without one, the two
+    choices side by side, the keyboard at every restart and the unlocked disk, the chosen lit."""
+
+    def __init__(self, c, width=380, height=250, still=False):
+        super().__init__(c, width, height, still, "How the disk unlocks")
+        self.state = {"tpm": False, "choice": None}
+
+    def draw(self, cr, w, h, t):
+        s = self.state
+        if s["tpm"] and s["choice"] in ("tpm", None):
+            cx, cy, a = w / 2, h * 0.45, min(w, h) * 0.24
+            pulse = 0.6 + 0.4 * (0.5 + 0.5 * math.sin(t * 2.4)) if s["choice"] == "tpm" else 0.6
+            for i in range(6):                      # the chip's pins
+                for side in (-1, 1):
+                    y = cy - a + 10 + i * (2 * a - 20) / 5
+                    cr.move_to(cx + side * a, y)
+                    cr.line_to(cx + side * (a + 12), y)
+                    x = cx - a + 10 + i * (2 * a - 20) / 5
+                    cr.move_to(x, cy + side * a)
+                    cr.line_to(x, cy + side * (a + 12))
+            cr.set_source_rgba(*self.col("primary", 0.8))
+            cr.set_line_width(2)
+            cr.stroke()
+            cr.rectangle(cx - a, cy - a, 2 * a, 2 * a)
+            cr.set_source_rgba(*self.col("primary", 0.12 * pulse))
+            cr.fill_preserve()
+            cr.set_source_rgba(*self.col("primary", pulse))
+            cr.stroke()
+            self.lock(cr, cx, cy, a * 1.1, True)
+            self.text(cr, "TPM 2.0", cx, cy - a + 6, 7, "soft", align="center")
+            self.text(cr, "OPENS BY ITSELF AT EVERY START", cx, h - 30, 7.5, "primary", align="center")
+            self.text(cr, "the passphrase stays the spare key", cx, h - 17, 7, "muted", align="center", weight=Pango.Weight.NORMAL)
+            return
+        for i, (key, title, line) in enumerate((("passphrase", "TYPE IT AT EVERY RESTART", "safest; restarts wait for you"),
+                                                ("none", "UNLOCKED DISK", "restarts by itself; anyone can read it"))):
+            x0 = 10 + i * (w / 2)
+            on = s["choice"] == key
+            self.card(cr, x0, 10, w / 2 - 20, h - 20, "primary" if on else "dim", on)
+            if key == "passphrase":
+                self.glyph(cr, "keyboard", x0 + w / 4 - 46, 26, 72, live=on, t=t)
+                self.lock(cr, x0 + w / 4 + 26, 120, 30, True, "primary" if on else "dim")
+                cr.arc(x0 + w / 4 - 20, 122, 14, 0.3, math.pi * 1.7)
+                cr.set_source_rgba(*self.col("primary" if on else "dim"))
+                cr.stroke()
+            else:
+                self.glyph(cr, "drive", x0 + w / 4 - 40, 22, 72, live=on, t=t)
+                self.lock(cr, x0 + w / 4 + 22, 122, 30, False, "warn" if on else "dim")
+            self.text(cr, title, x0 + w / 4 - 10, h - 64, 7.5, "primary" if on else "muted", align="center")
+            self.text(cr, line, x0 + w / 4 - 10, h - 48, 6.5, "text" if on else "muted", align="center",
+                      weight=Pango.Weight.NORMAL)
+
+
+class UpdateDial(Gtk.Box):
+    """The updates: a 24-hour dial with the maintenance window's arc (drag it round; the hour
+    snaps), and beside it the pipeline every update runs, snapshot → update → health check →
+    (rollback), its Pulse running through it; the modes are its states (auto runs it all,
+    download stops at the phone, off holds still)."""
+
+    def __init__(self, c, window="03:00-05:00", mode="auto", still=False, on_change=None, size=200, flow=True):
+        super().__init__(spacing=10)
+        self.c, self.still, self.window, self.mode, self.on_change = c, still, window, mode, on_change
+        self.dial = _Holo(c, size, size, still, "The maintenance window on a 24-hour dial: drag the arc to move it")
+        self.dial.draw = self._dial
+        self.append(self.dial)
+        if flow:
+            self.flow = _Holo(c, 210, size, still, "What every update does")
+            self.flow.draw = self._flow
+            self.append(self.flow)
+        drag = Gtk.GestureDrag()
+        drag.connect("drag-update", self._drag)
+        drag.connect("drag-begin", lambda g, x, y: setattr(self, "_from", (x, y)))
+        self.dial.add_controller(drag)
+        self.dial.set_focusable(True)
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._key)
+        self.dial.add_controller(keys)
+
+    def set_state(self, window=None, mode=None):
+        self.window = window or self.window
+        self.mode = mode or self.mode
+        self.queue_draw()
+        self.dial.queue_draw()
+        if hasattr(self, "flow"):
+            self.flow.queue_draw()
+
+    def _hours(self):
+        a, b = self.window.split("-")
+        h0 = int(a[:2]) + int(a[3:]) / 60
+        h1 = int(b[:2]) + int(b[3:]) / 60
+        return h0, (h1 - h0) % 24 or 24
+
+    def _move(self, start):
+        h0, dur = self._hours()
+        start = int(round(start)) % 24
+        end = (start + dur) % 24
+        self.window = f"{start:02d}:00-{int(end):02d}:{int(round((end % 1) * 60)):02d}"
+        self.set_state()
+        if self.on_change:
+            self.on_change(self.window)
+
+    def _drag(self, g, dx, dy):
+        x, y = self._from[0] + dx, self._from[1] + dy
+        w = self.dial.get_width()
+        ang = math.atan2(y - w / 2, x - w / 2) + math.pi / 2
+        self._move((ang % (2 * math.pi)) / (2 * math.pi) * 24)
+
+    def _key(self, ctl, keyval, code, state):
+        if keyval in (Gdk.KEY_Left, Gdk.KEY_Down):
+            self._move(self._hours()[0] - 1)
+            return True
+        if keyval in (Gdk.KEY_Right, Gdk.KEY_Up):
+            self._move(self._hours()[0] + 1)
+            return True
+        return False
+
+    def _dial(self, cr, w, h, t):
+        d = self.dial
+        cx, cy, r = w / 2, h / 2, min(w, h) / 2 - 22
+        cr.set_line_width(10)
+        cr.arc(cx, cy, r, 0, 2 * math.pi)
+        cr.set_source_rgba(*d.col("selection", 0.9))
+        cr.stroke()
+        for hr in range(24):
+            a = hr / 24 * 2 * math.pi - math.pi / 2
+            k = 0.82 if hr % 6 else 0.74
+            cr.move_to(cx + math.cos(a) * r * k, cy + math.sin(a) * r * k)
+            cr.line_to(cx + math.cos(a) * r * 0.9, cy + math.sin(a) * r * 0.9)
+            if hr % 6 == 0:
+                d.text(cr, f"{hr:02d}", cx + math.cos(a) * (r + 13), cy + math.sin(a) * (r + 13) - 6, 6.5, "muted",
+                       align="center", weight=Pango.Weight.NORMAL)
+        cr.set_source_rgba(*d.col("dim"))
+        cr.set_line_width(1)
+        cr.stroke()
+        h0, dur = self._hours()
+        off = self.mode == "off"
+        a0 = h0 / 24 * 2 * math.pi - math.pi / 2
+        a1 = a0 + dur / 24 * 2 * math.pi
+        cr.set_line_width(12)
+        cr.arc(cx, cy, r, a0, a1)
+        glow = 1.0 if self.still else 0.75 + 0.25 * math.sin(t * 2)
+        cr.set_source_rgba(*d.col("dim" if off else "primary", glow))
+        cr.stroke()
+        for a in (a0, a1):
+            cr.arc(cx + math.cos(a) * r, cy + math.sin(a) * r, 5, 0, 2 * math.pi)
+            cr.set_source_rgba(*d.col("soft" if not off else "dim"))
+            cr.fill()
+        d.text(cr, "OFF" if off else self.window.replace("-", "–"), cx, cy - 12, 10, "dim" if off else "primary", align="center")
+        d.text(cr, "MANUAL" if off else "WINDOW", cx, cy + 6, 6.5, "muted", align="center")
+
+    def _flow(self, cr, w, h, t):
+        f = self.flow
+        steps = [("SNAPSHOT", "camera"), ("UPDATE", "dl"), ("HEALTH CHECK", "ok"), ("ROLLBACK IF NOT", "undo")]
+        if self.mode == "download":
+            steps = [("DOWNLOAD", "dl"), ("ASK YOUR PHONE", "phone"), ("SNAPSHOT", "camera"), ("UPDATE + CHECK", "ok")]
+        y0, gap = 18, (h - 36) / len(steps)
+        lit_upto = {"auto": len(steps), "download": 2, "off": 0}[self.mode]
+        for i, (label, _) in enumerate(steps):
+            y = y0 + i * gap
+            on = i < lit_upto
+            last = i == len(steps) - 1 and self.mode == "auto"
+            f.card(cr, 14, y, w - 28, gap - 12, "warn" if last else ("primary" if on else "dim"), on)
+            f.text(cr, label, w / 2, y + (gap - 12) / 2 - 7, 7.5, ("warn" if last else "primary") if on else "muted",
+                   align="center")
+            if i < len(steps) - 1:
+                f.link(cr, (w / 2, y + gap - 12), (w / 2, y + gap), "cable", on and i + 1 < lit_upto, t + i * 0.2)
+        if self.mode == "off":
+            f.text(cr, "Ⅱ  YOU RUN IT", w / 2, h - 16, 7.5, "muted", align="center")
+
+
+class Constellation(_Holo):
+    """Services as a constellation round this server: each one a star, lit when on. For a Lab
+    node, the cluster's machines; for a Game server with a lab, Pelican's panel ↔ Wings ↔ this
+    server."""
+
+    def __init__(self, c, width=380, height=260, still=False):
+        super().__init__(c, width, height, still, "What this server runs")
+        self.state = {"centre": "rack", "items": [], "kind": "services", "title": ""}
+
+    def draw(self, cr, w, h, t):
+        s = self.state
+        cx, cy = w / 2, h / 2 + 4
+        if s["kind"] == "pelican":
+            pts = [(w * 0.16, cy, "PELICAN PANEL", "cloud", "your lab"), (w * 0.5, cy, "WINGS", "gamepad", "on Docker"),
+                   (w * 0.84, cy, "THIS SERVER", "rack", s.get("title", ""))]
+            for (x1, y1, *_), (x2, y2, *_) in zip(pts, pts[1:]):
+                self.link(cr, (x1 + 24, y1), (x2 - 24, y2), "cable", True, t)
+            for x, y, label, g, sub in pts:
+                self.glyph(cr, g, x - 30, y - 50, 60, live=True, t=t)
+                self.text(cr, label, x, y + 14, 7.5, "soft", align="center")
+                self.text(cr, sub, x, y + 27, 7, "muted", align="center", weight=Pango.Weight.NORMAL)
+            return
+        items = s["items"][:10]
+        R = min(w, h) * 0.38
+        for i, (label, on) in enumerate(items):
+            a = -math.pi / 2 + i * 2 * math.pi / max(1, len(items)) + (0 if self.still else t * 0.05)
+            x, y = cx + math.cos(a) * R * 1.25, cy + math.sin(a) * R
+            self.link(cr, (cx, cy), (x, y), "cable", on, t + i * 0.13)
+            self.node(cr, x, y, 7 if on else 5, "primary" if on else "dim", 0.6 if on else 0.1)
+            self.text(cr, label[:16], x, y + 9, 6.5, "text" if on else "muted", align="center", weight=Pango.Weight.NORMAL)
+        self.glyph(cr, s["centre"], cx - 30, cy - 40, 60, live=True, t=t)
+        if s["kind"] == "cluster":
+            self.text(cr, "YOUR LAB'S CLUSTER", cx, 8, 7.5, "cyan", align="center")
+
+
+class ServerDeck(_Holo):
+    """The Server briefing's strip: the step pictures in miniature (the node and its address, the
+    keys, the pool ring, the update dial)."""
+
+    def __init__(self, c, width=760, height=120, still=False):
+        super().__init__(c, width, height, still, "This server at a glance")
+        self.state = {"address": "", "name": "", "keys": 0, "password": False, "pool": "", "frac": 0.0, "copies": "",
+                      "window": "03:00-05:00", "mode": "auto", "role": ""}
+
+    def draw(self, cr, w, h, t):
+        s = self.state
+        q = w / 4
+        # the node
+        self.glyph(cr, "rack", 10, 14, 64, live=True, t=t)
+        self.text(cr, s["address"], 80, 30, 11 if len(s["address"]) < 16 else 8, "primary")
+        self.text(cr, (s["name"] or "") + (" · " + s["role"] if s["role"] else ""), 80, 52, 7, "muted",
+                  weight=Pango.Weight.NORMAL)
+        # the keys
+        x = q * 1.25
+        for i in range(min(4, max(1, s["keys"]))):
+            self.card(cr, x + i * 8, 26 + i * 6, 54, 30, "primary" if s["keys"] else "warn", True)
+        self.text(cr, f"{s['keys']} KEY{'S' if s['keys'] != 1 else ''}", x + 30, 84, 7.5, "soft", align="center")
+        if s["password"]:
+            self.text(cr, "+ PASSWORD", x + 30, 96, 6.5, "warn", align="center")
+        # the pool
+        x = q * 2.3
+        self.ring(cr, x + 30, 52, 26, s["frac"], width=6)
+        self.text(cr, s["pool"] or "/srv", x + 30, 45, 7, "primary", align="center")
+        self.text(cr, s["copies"], x + 30, 88, 7, "muted", align="center")
+        # the dial
+        x = q * 3.25
+        cx, cy, r = x + 34, 52, 28
+        cr.set_line_width(6)
+        cr.arc(cx, cy, r, 0, 2 * math.pi)
+        cr.set_source_rgba(*self.col("selection"))
+        cr.stroke()
+        a, b = s["window"].split("-")
+        h0 = int(a[:2]) + int(a[3:]) / 60
+        dur = ((int(b[:2]) + int(b[3:]) / 60) - h0) % 24 or 24
+        a0 = h0 / 24 * 2 * math.pi - math.pi / 2
+        cr.arc(cx, cy, r, a0, a0 + dur / 24 * 2 * math.pi)
+        cr.set_source_rgba(*self.col("dim" if s["mode"] == "off" else "primary"))
+        cr.stroke()
+        self.text(cr, s["mode"].upper(), cx, cy - 6, 7, "primary", align="center")
+        self.text(cr, s["window"], cx, 88, 7, "muted", align="center")
+
+
+class BudgetHolo(_Holo):
+    """What the chosen services ask of this computer: processor, memory, disk and graphics card,
+    each a meter that fills as you pick (a Reading under it), amber past what's there."""
+
+    def __init__(self, c, width=380, height=230, still=False):
+        super().__init__(c, width, height, still, "What the chosen services need, against this computer")
+        self.state = {"need": {}, "have": {}, "fits": True, "count": 0, "auto": []}
+
+    def draw(self, cr, w, h, t):
+        s = self.state
+        need, have = s["need"], s["have"]
+        rows = [("PROCESSOR", need.get("cpu", 0), have.get("cpu", 0), "cores"),
+                ("MEMORY", need.get("ram_gb", 0), have.get("ram_gb", 0), "GB"),
+                ("DISK", need.get("disk_gb", 0), have.get("disk_gb", 0), "GB"),
+                ("GRAPHICS", need.get("gpu_vram_gb", 0), have.get("gpu_vram_gb", 0), "GB")]
+        self.text(cr, f"{s['count']} SERVICE{'S' if s['count'] != 1 else ''} CHOSEN", 16, 12, 8, "soft")
+        self.text(cr, "FITS THIS SERVER" if s["fits"] else "▲ MORE THAN IT HAS", w - 16, 12, 8,
+                  "primary" if s["fits"] else "warn", align="right")
+        y = 38
+        bw = w - 32
+        for name, n, hv, unit in rows:
+            frac = (n / hv) if hv else (1.0 if n else 0.0)
+            over = n > hv
+            self.text(cr, name, 16, y, 7, "muted")
+            self.text(cr, f"{n} / {hv} {unit}" if hv or n else "none needed", w - 16, y, 7, "warn" if over else "text",
+                      align="right", weight=Pango.Weight.NORMAL)
+            cells, gap = 20, 3
+            cw = (bw - gap * (cells - 1)) / cells
+            lit = round(min(1.0, frac) * cells)
+            for k in range(cells):
+                cr.rectangle(16 + k * (cw + gap), y + 14, cw, 12)
+                if k < lit:
+                    cr.set_source_rgba(*self.col("warn" if over else "primary", 0.9))
+                else:
+                    cr.set_source_rgba(*self.col("selection", 0.9))
+                cr.fill()
+            y += (h - 60) / 4
+        if s["auto"]:
+            self.text(cr, "+ " + ", ".join(s["auto"])[:60] + " added: the others need them", w / 2, h - 16, 6.5, "cyan",
+                      align="center", weight=Pango.Weight.NORMAL)
+
+
+class VaultHolo(_Holo):
+    """Where the keys go: a vault door (the lab's Vault, a new one, or this server's own sealed
+    store), the keys flowing into it as each is stored (a Pulse each; still under reduced
+    motion), the count, and which are typed and which made for you."""
+
+    def __init__(self, c, width=380, height=260, still=False):
+        super().__init__(c, width, height, still, "Where this server keeps its keys and passwords")
+        self.state = {"kind": "local", "typed": 0, "generated": 0, "where": "", "tpm": False}
+
+    def draw(self, cr, w, h, t):
+        s = self.state
+        cx, cy, r = w * 0.62, h * 0.46, min(w, h) * 0.3
+        role = {"vault": "cyan", "openbao": "primary", "local": "soft"}.get(s["kind"], "primary")
+        for k, a in ((1.0, 0.9), (0.78, 0.5), (0.5, 0.35)):
+            cr.arc(cx, cy, r * k, 0, 2 * math.pi)
+            cr.set_source_rgba(*self.col(role, a))
+            cr.set_line_width(2 if k == 1.0 else 1.2)
+            cr.stroke()
+        spin = 0 if self.still else t * 0.6
+        for i in range(6):                              # the door's bolts, turning
+            a = spin + i * math.pi / 3
+            cr.move_to(cx + math.cos(a) * r * 0.5, cy + math.sin(a) * r * 0.5)
+            cr.line_to(cx + math.cos(a) * r * 0.78, cy + math.sin(a) * r * 0.78)
+        cr.set_source_rgba(*self.col(role, 0.8))
+        cr.stroke()
+        self.lock(cr, cx, cy + 2, r * 0.55, True, role)
+        n = s["typed"] + s["generated"]
+        lanes = max(1, min(5, n))
+        for i in range(lanes):                          # keys flowing in
+            y = cy - r * 0.6 + i * (r * 1.2 / max(1, lanes - 1 or 1))
+            f = 0.5 if self.still else ((t * 0.35) + i / lanes) % 1
+            x = 18 + (cx - r - 30) * f
+            self.card(cr, x, y - 9, 34, 18, "primary" if i < s["typed"] else "cyan", True)
+            self.text(cr, "⚿", x + 17, y - 8, 9, "primary", align="center")
+        if s["tpm"] and s["kind"] == "local":
+            self.text(cr, "SEALED TO THE TPM", cx, cy + r + 8, 7, "soft", align="center")
+        self.text(cr, s["where"].upper(), cx, 10, 8, role, align="center")
+        self.text(cr, f"{n} KEY{'S' if n != 1 else ''}", 16, h - 34, 11, "primary")
+        self.text(cr, f"{s['typed']} typed · {s['generated']} made for you", 16, h - 16, 7, "muted", weight=Pango.Weight.NORMAL)

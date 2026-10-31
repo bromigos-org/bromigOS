@@ -791,6 +791,166 @@ Commit the repository before changing its plan. These commands only prepare a ne
 Apply still needs your `yes`. Removing a selection leaves its running service and data
 in place. Repeating apply preserves backup passwords and Vault's recovery shares.
 
+## Choosing what a server runs
+
+A bromigOS Server can set itself up. When you install it, you pick its jobs (the roles:
+Lab node, Storage, Home services, Media, Game server, or Just a server), and the installer
+ticks the items each job needs. You can untick anything, or tick more. The server installs
+them the first time it starts, and the welcome tour shows the progress.
+
+The items come in groups:
+
+| Group | What's in it |
+|---|---|
+| Lab core | Kubernetes (k3s), Argo CD, Vault (OpenBao), External Secrets, monitoring (Prometheus and Grafana), backups, Caddy, a start page |
+| AI | VECTOR's lab bridge, the LiteLLM gateway, model serving (Ollama or vLLM) with the models for your graphics card, voice |
+| Network | Your lab's private network, ad blocking (AdGuard Home) |
+| Storage | Windows and Mac shares, Linux shares, an S3 bucket server, a backup place for other machines |
+| Games | Pelican's panel, a Wings game node, a Minecraft server |
+| Home apps | Photos (Immich), passwords (Vaultwarden), documents (Paperless-ngx), home automation (Home Assistant), file sync (Syncthing), uptime checks (Uptime Kuma) |
+| Media | Your media library, Jellyfin, Plex, Navidrome, Audiobookshelf, requests (Seerr), the library automation, downloaders, a VPN for downloads, YouTube, the Den TV hookup |
+| BRODEC | This server on BRODEC, on your phone |
+
+Each item shows what it does when you hover over it, what it downloads, the ports it
+opens and the memory and disk it needs. The list adds up the memory and disk for you and
+says plainly when something won't fit, such as model serving on a server with no graphics
+card. When an item needs another one, that one is ticked too, and the list says why.
+
+Most items download something. Without a network, the server installs what it can and
+waits for the rest. Nothing is lost if it restarts in the middle: it carries on.
+
+To change what a server runs later, run the same command on the server (below).
+
+### Media
+
+The Media items are tools for media you own or have rights to. bromigOS doesn't set up any
+sources: no indexers, trackers or sites are configured, anywhere. You add the ones you have
+access to in Prowlarr ("Open Prowlarr" in the setup).
+
+The Media role ticks Jellyfin, requests (Seerr), the library automation (Sonarr, Radarr,
+Lidarr, Bazarr, Prowlarr, Recyclarr, Unpackerr, Autoscan) and the Den TV hookup. The
+downloaders and the VPN are never ticked for you.
+
+- **The media library** is one folder tree every media app shares: on this server (under
+  `/srv/media`) or on a NAS share. Its audio language (English unless you change it) and
+  "Prefer dual audio" set the quality rules in Sonarr and Radarr.
+- **Jellyfin** is recommended: it's free and needs no account. **Plex** needs a Plex account.
+  Its basic use is free; some features need a paid Plex Pass.
+- **Downloads.** SABnzbd downloads from a Usenet provider, qBittorrent is a torrent client,
+  and slskd is a Soulseek client. Downloads are filed by category for Sonarr, Radarr and
+  Lidarr, in the library's `downloads` folder.
+- **The VPN for downloads** (Gluetun) sends the downloaders' traffic through your VPN
+  provider, and only through it: if the VPN drops, they go offline.
+
+Some items need an account with a company. bromigOS isn't linked to any of them, and their
+prices change; at the time of writing, roughly:
+
+| Account | What it's for | Roughly |
+|---|---|---|
+| A VPN provider (Private Internet Access, Proton VPN, Mullvad, …) | Hides your downloads behind the VPN's address | $2 to $12 a month |
+| A Usenet provider | The servers SABnzbd downloads from | $3 to $15 a month |
+| Plex | Signing in to Plex; Plex Pass for its paid features | Free, or a few dollars a month for Plex Pass |
+| Soulseek | slskd's network | Free |
+
+Private Internet Access and Proton VPN support port forwarding, which works better for
+torrents. Mullvad stopped offering port forwarding in 2023.
+
+**Den TV.** With the Den TV hookup, this server announces its Jellyfin and Plex on your
+local network, so your bromigOS desktops can add them to Den TV and cast from them.
+
+### Where your keys live
+
+Servers need passwords and keys: your VPN login, your Usenet provider's, the backup
+password, the keys the media apps use to talk to each other. You never manage them by hand.
+The ones nobody needs to type are made for you, each one random and different. The ones you
+type, such as your VPN password, are saved the moment you type them. None of them is ever
+written into a settings file, a log or the installer's answer file.
+
+The installer asks where to keep them:
+
+- **On this server.** Encrypted with the server's TPM chip and its own key. You get a
+  recovery key, as text and a QR code, and a recovery bundle to download. Keep the recovery
+  key in your password manager or on paper: with it, a new or repaired server gets every key
+  back.
+- **In your lab's Vault.** An existing Vault or OpenBao. This server gets its own policy and
+  its own folder there, and can read nothing else.
+- **In a new Vault on this server**, when you start a new lab with the Vault item. It's
+  OpenBao, compatible with HashiCorp Vault. The welcome tour shows its unseal keys once: save
+  them.
+- **In your lab repository**, encrypted with sops and your age key, for labs kept in Git.
+
+The last screen says how many keys were stored and where, and how to get them back.
+
+### For power users
+
+**The command.** The installer and the welcome tour call this on the server; you can too:
+
+```bash
+bromigos lab provision --local --roles media,storage --plan
+bromigos lab provision --local --select jellyfin,seerr,backups --plan --json
+sudo bromigos lab provision --local --from-answers /var/log/bromigos/install-answers.toml --apply
+bromigos lab provision --check gluetun
+```
+
+- `--plan` shows what each item installs, its services, ports, memory, disk and downloads,
+  and which items need the internet. Nothing changes. `--json` gives the same as data.
+- `--apply` installs. It prints progress lines: `::stage PCT words`, `::item ID STATE`
+  (`waiting`, `downloading`, `installing`, `done`, `failed`, `skipped-offline`),
+  `::note ID words` and `::error ID words`. It waits for a network for the items that need
+  one; `--no-wait` stops instead, with exit code 75. Running it again changes only what's
+  new.
+- `--select` names items; without it, `--roles` (or the answer file's roles) choose.
+  `--lab new|join|none` says whether this server starts a lab, joins one, or stands alone.
+  `--preset core|advanced` is the remote setup's Core or Advanced, as items.
+- `--set ITEM.FIELD=VALUE` sets a setup field, such as `--set gluetun.provider=mullvad`.
+- `--check ITEM` tests one item live: the VPN's connection, the Usenet server's sign-in, or
+  that the item's services run.
+
+**The answer file.** The installer writes `/var/log/bromigos/install-answers.toml`:
+
+```toml
+[server]
+roles = ["media", "storage"]
+lab = "join"                         # new | join | none
+lab_join = { bundle = "/path/to/join-bundle" }    # or { pair = true }
+provision = ["jellyfin", "seerr", "gluetun", "qbittorrent"]
+models = []                          # ids from the plan's model suggestions
+
+[server.settings.gluetun]
+provider = "pia"
+username = "p1234567"
+password = { secret = "vault:kv/bromigos/servers/media-box/gluetun/password#value" }
+```
+
+A secret field is always a reference, never the value: `local:NAME`,
+`vault:MOUNT/PATH#FIELD`, `sops:NAME` or `bitwarden:ITEM#FIELD`. A plain value is refused.
+Without `provision`, the roles choose.
+
+**The keys.** `bromigos lab secrets` manages them: `status`, `list`, `set NAME` (reads the
+value from standard input), `generate NAME`, `rotate NAME` (a new value, and the services
+using it restart), `recovery`, `test`, `policy`, `scan FOLDER` and `import-bitwarden`.
+Keys are named `ITEM/FIELD`, such as `gluetun/password`.
+
+- On this server, they're systemd credentials in `/etc/credstore.encrypted/`, encrypted
+  with `systemd-creds` and its default key (the TPM2 chip and the host key). Host services
+  read them with `LoadCredentialEncrypted=`. Containers read them as files in
+  `/run/secrets/`, through Podman's shell secret driver, which decrypts the same way.
+- With a Vault, they're under `kv/bromigos/servers/<hostname>/` (or the lab's own layout
+  when it has one), and the server signs in with its own AppRole.
+- The Gluetun container gets `VPN_SERVICE_PROVIDER`, `VPN_TYPE`, `OPENVPN_USER` and the
+  password as `/run/secrets/openvpn_password` (Mullvad: the WireGuard key as
+  `/run/secrets/wireguard_private_key` and `WIREGUARD_ADDRESSES`).
+- The media apps' ports: Jellyfin 8096, Seerr 5055, Sonarr 8989, Radarr 7878, Lidarr 8686,
+  Bazarr 6767, Prowlarr 9696, SABnzbd 8085, qBittorrent 8081 (torrents on 6881), slskd 5030.
+
+**The catalogue.** The items are in `/usr/share/bromigos/lab/provision-catalogue.toml`, and
+their Podman Quadlet templates in `/usr/share/bromigos/lab/quadlet/`. To add an item, add an
+`[[item]]` with its group, name, one-line description, hover hint, icon, needs, ports,
+requirements and how it installs (`pacman`, `quadlet` or `step`), pin its images by digest,
+and add its template folder. The file's header describes every key.
+[docs/lab-provision.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-provision.md#the-local-target)
+has the details.
+
 ## Creating a cluster
 
 Prepare a cloud-init template on Proxmox, or a qcow2 cloud image and an existing

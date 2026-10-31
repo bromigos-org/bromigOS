@@ -1,0 +1,503 @@
+# bromigOS Server's roles, services and packages: the installer's Role, Services and Ready to
+# install steps read this file and nothing else (docs/server.md, "The presets file").
+#
+# The installer looks for it at /usr/share/bromigos/server/presets.toml (the bromigos-server
+# package's, once it ships one), then here (/usr/local/share/bromigos-iso/server/presets.toml,
+# the medium's), or at $BROMIGOS_SERVER_PRESETS. Every package named here is in Arch's own
+# repositories ([core] or [extra]) or bromigOS's; none is from the AUR. A package that isn't
+# on the medium is installed from the network during the install when there is one, else
+# by the server itself at its first update with a network (/etc/bromigos/server/pending-packages).
+#
+#   [base]          what every Server gets
+#   [updates]       the update window, mode and channel offered
+#   [firewall.*]    named rule sets: the ports a role or service opens
+#   [[roles]]       the role cards: each one's packages, services, firewall, health checks
+#                   and the service toggles it turns on
+#   [[services]]    the Services step's toggles
+#   [[apps]]        the app catalogue's cards (the Quadlet templates and their pinned image
+#                   digests are the bromigos-server package's: /usr/share/bromigos/server/apps/)
+schema = 1
+
+[base]
+packages = [
+  "bromigos-core", "bromigos-keyring", "bromigos-lab", "openssh", "mosh", "nftables", "sshguard",
+  "smartmontools", "prometheus-node-exporter", "prometheus-smartctl-exporter", "restic", "avahi",
+  "nss-mdns", "ethtool", "wakeonlan", "wireguard-tools", "tailscale", "apparmor", "arch-audit",
+  "podman", "podman-docker", "podman-compose", "crun", "netavark", "python", "qrencode", "btop",
+  "tmux", "zoxide", "less", "man-db", "terminus-font",
+]
+# enabled on every Server, when the system has them
+services = [
+  "sshguard.service", "smartd.service", "avahi-daemon.service", "apparmor.service",
+  "prometheus-node-exporter.service", "prometheus-smartctl-exporter.service",
+  "systemd-timesyncd.service", "btrfs-scrub@-.timer", "podman.socket",
+]
+# installed, but off until you turn them on (the Access step, or later)
+off_services = ["tailscaled.service", "wg-quick@wg0.service"]
+kernel = "linux-lts"           # the default boot entry
+fallback_kernel = "linux"      # a second entry, for when the LTS series has a regression
+firewall = ["ssh", "mdns", "node-exporter"]
+health = ["startup", "units", "network", "sshd", "disks"]
+# the kernel's security modules: AppArmor on, the rest as Arch has them
+lsm = "landlock,lockdown,yama,integrity,apparmor,bpf"
+# a UPS on USB: NUT is installed and set up only when one of these makers' devices is found
+ups_usb_vendors = ["051d", "0764", "0463", "09ae", "10af", "0d9f", "06da", "0665"]
+ups_packages = ["nut", "prometheus-nut-exporter"]
+
+[base.sysctl]
+"kernel.kptr_restrict" = 2
+"kernel.dmesg_restrict" = 1
+"kernel.unprivileged_bpf_disabled" = 1
+"net.ipv4.conf.all.accept_redirects" = 0
+"net.ipv4.conf.default.accept_redirects" = 0
+"net.ipv6.conf.all.accept_redirects" = 0
+"net.ipv4.conf.all.send_redirects" = 0
+"net.ipv4.conf.all.rp_filter" = 2
+"net.ipv4.tcp_syncookies" = 1
+"fs.protected_hardlinks" = 1
+"fs.protected_symlinks" = 1
+"fs.protected_fifos" = 2
+"fs.protected_regular" = 2
+
+[base.journald]
+Storage = "persistent"
+SystemMaxUse = "1G"
+MaxRetentionSec = "1month"
+
+[base.ssh]
+MaxAuthTries = 3
+LoginGraceTime = 30
+AllowGroups = "wheel bromigos-ssh"
+
+[updates]
+window = "03:00-05:00"
+windows = ["03:00-05:00", "01:00-03:00", "05:00-07:00", "22:00-00:00"]
+mode = "auto"                  # auto, download or off
+modes = ["auto", "download", "off"]
+# live Arch, protected by the snapshot, the health check and the rollback. "tested" (a dated
+# copy of Arch that CI has installed and booted) comes in v1.1: this field leaves room for it
+channel = "live"
+notify = true                  # alerts to BRODEC on your phone, once it's paired
+arch_news_hold = true          # an Arch news item asking for manual steps pauses the update
+
+# ── firewall rule sets: "lan" is the private ranges (bromigos-server's), "any" the world ─
+[firewall.ssh]
+tcp = [22]
+from = "any"
+[firewall.mdns]
+udp = [5353]
+from = "lan"
+[firewall.node-exporter]
+tcp = [9100]
+from = "lan"
+[firewall.lab-cluster]
+tcp = [6443, 10250, 2379, 2380]
+udp = [8472]
+from = "lan"
+[firewall.smb]
+tcp = [445]
+from = "lan"
+[firewall.nfs]
+tcp = [2049]
+from = "lan"
+[firewall.web]
+tcp = [80, 443]
+from = "lan"
+[firewall.games]
+tcp = [25565]
+udp = [25565]
+from = "any"
+[firewall.wings]
+tcp = [8080, 2022]
+from = "lan"
+[firewall.cockpit]
+tcp = [9090]
+from = "lan"
+[firewall.s3]
+tcp = [9000]
+from = "lan"
+
+# ── the roles ───────────────────────────────────────────────────────────────────────────
+[[roles]]
+id = "lab"
+title = "Lab node"
+summary = "Compute and GPUs for your lab: it joins the lab's cluster (k3s), with monitoring on."
+hint = "Your lab's workstation sets it up from your desktop. You don't type anything on it."
+glyph = "gpu"
+icon = "lab"
+packages = ["nfs-utils"]
+# NVIDIA on the LTS kernel, only when an NVIDIA card is found
+gpu_packages = ["nvidia-open-dkms", "nvidia-utils", "nvidia-container-toolkit", "linux-lts-headers", "linux-headers"]
+gpu_services = ["nvidia-persistenced.service"]
+services = []
+firewall = ["lab-cluster"]
+health = ["k3s"]
+lab_account = true             # the `lab` account, passwordless sudo, the lab workstation's key only
+services_on = ["monitoring", "nfs-client", "gpu"]
+[roles.sysctl]
+"fs.inotify.max_user_instances" = 512
+"fs.inotify.max_user_watches" = 524288
+"net.ipv4.tcp_keepalive_time" = 60
+"net.ipv4.tcp_keepalive_intvl" = 10
+"net.ipv4.tcp_keepalive_probes" = 6
+
+[[roles]]
+id = "storage"
+title = "Storage"
+summary = "Files and backups for the house and the lab: shared folders, snapshots, backups."
+hint = "Last hour's and last week's versions of every file stay in the share's Previous versions."
+glyph = "drive"
+icon = "disk"
+packages = ["samba", "nfs-utils", "btrbk", "hdparm"]
+services = []
+firewall = []
+health = ["arrays", "shares"]
+services_on = ["smb", "nfs", "timeline"]
+
+[[roles]]
+id = "home"
+title = "Home services"
+summary = "Apps for the household: photos, media, passwords, documents, home automation."
+hint = "Each app gets a name like photos-<server>.local, backs itself up, and updates at night."
+glyph = "house"
+icon = "people"
+packages = ["caddy"]
+services = ["caddy.service"]
+firewall = ["web"]
+health = ["apps"]
+services_on = ["front-door"]
+apps_on = ["homepage", "uptime-kuma"]
+
+[[roles]]
+id = "games"
+title = "Game server"
+summary = "Game servers for your friends, started and stopped from your phone."
+hint = "With a lab, it joins your lab's Pelican panel. Without one, the games run here."
+glyph = "gamepad"
+icon = "power"
+packages = ["cpupower"]
+services = ["cpupower.service"]
+firewall = ["games"]
+health = ["apps"]
+services_on = ["performance"]
+apps_on = ["minecraft"]
+# with your lab's Pelican panel: this server becomes one of its Wings nodes. Wings needs
+# Docker's engine (Arch's own docker package: no Docker account, no Docker Desktop; images
+# from public registries, or your lab's cache), so podman-docker's `docker` command goes
+[roles.with_lab]
+packages = ["docker", "docker-compose", "docker-buildx"]
+drop = ["podman-docker"]
+services = ["docker.service"]
+firewall = ["wings"]
+health = ["wings"]
+services_on = ["pelican-wings"]
+apps_on = []
+
+[[roles]]
+id = "media"
+title = "Media"
+summary = "Your own movies, shows, music and Den TV for every screen."
+hint = "Jellyfin, requests and the library's upkeep, for media you own or have rights to."
+glyph = "monitor"
+icon = "desktop"
+packages = []
+services = []
+firewall = ["web"]
+health = ["apps"]
+services_on = ["front-door"]
+
+[[roles]]
+id = "plain"
+title = "Just a server"
+summary = "The safe base and nothing more, for a box you'll fill yourself or a VPS."
+hint = "Still snapshotted, health-checked, backed up once you set where, and on your phone."
+glyph = "rack"
+icon = "server"
+packages = []
+services = []
+firewall = []
+health = []
+services_on = []
+
+# ── roles together: what a combination means, plainly, and what it wants of the machine
+# (the Role step shows the note, and says when this computer has less) ───────────────────
+[[combos]]
+roles = ["games", "lab"]
+note = "Game server + Lab node: the games get their own processor and memory budget, so the cluster's jobs never make them lag."
+needs = { cpu = 8, ram_gb = 32 }
+
+[[combos]]
+roles = ["storage", "lab"]
+note = "Storage + Lab node: the shares stay on this server's own data disks; the cluster's volumes come from them too."
+needs = { ram_gb = 16 }
+
+[[combos]]
+roles = ["home", "lab"]
+note = "Home services + Lab node: the apps run in the lab's cluster here, and move to another machine if this one is busy."
+needs = { ram_gb = 16 }
+
+[[combos]]
+roles = ["games", "storage"]
+note = "Game server + Storage: the worlds are backed up to the data disks every night."
+
+[[combos]]
+roles = ["games", "home"]
+note = "Game server + Home services: a busy game can slow the apps; give the server 16 GB of memory or more."
+needs = { ram_gb = 16 }
+
+# ── the Services step's toggles. roles: which roles show it ("*": every role); on: on by
+# default for those roles (else only when the role's services_on names it); locked: shown,
+# always on. packages, units and firewall are what turning it on adds ───────────────────
+[[services]]
+id = "snapshots"
+title = "Snapshots and rollback"
+words = "A snapshot before each update; if the server doesn't come back healthy, it goes back by itself."
+roles = ["*"]
+on = true
+locked = true
+
+[[services]]
+id = "firewall"
+title = "Firewall"
+words = "Only SSH, ping and what this server's role needs can come in."
+roles = ["*"]
+on = true
+locked = true
+
+[[services]]
+id = "sshguard"
+title = "Brute-force blocking"
+words = "Blocks an address that keeps guessing at SSH, so the logs and the processor stay quiet."
+roles = ["*"]
+on = true
+units = ["sshguard.service"]
+
+[[services]]
+id = "disk-health"
+title = "Disk health"
+words = "Watches every disk (SMART) and checks the data each month (a btrfs scrub). Your phone hears first."
+roles = ["*"]
+on = true
+units = ["smartd.service", "btrfs-scrub@-.timer"]
+
+[[services]]
+id = "monitoring"
+title = "Monitoring for your lab"
+words = "The numbers your lab's Prometheus reads (the node and disk exporters), on your network only."
+roles = ["*"]
+on = true
+units = ["prometheus-node-exporter.service", "prometheus-smartctl-exporter.service"]
+
+[[services]]
+id = "mdns"
+title = "Find my lab"
+words = "Announces this server on your network, so Find my lab and .local names see it."
+roles = ["*"]
+on = true
+units = ["avahi-daemon.service"]
+
+[[services]]
+id = "backups"
+title = "Nightly backups"
+words = "restic, after the night's update, once you choose where: your lab's S3, any S3, SFTP or a USB disk."
+roles = ["*"]
+on = true
+packages = ["restic"]
+
+[[services]]
+id = "ups"
+title = "Shut down safely with a UPS"
+words = "When a UPS is plugged in by USB, the server shuts itself down before the battery runs out."
+roles = ["*"]
+on = true
+
+[[services]]
+id = "apparmor"
+title = "AppArmor"
+words = "Keeps each program, and every container, to what it's meant to touch."
+roles = ["*"]
+on = true
+units = ["apparmor.service"]
+
+[[services]]
+id = "cockpit"
+title = "Web admin (Cockpit)"
+words = "A web page for this server, on your network only, at port 9090. Off by default: your phone and the console do the same, and Cockpit's own update page is left out, so updates always take a snapshot first."
+roles = ["*"]
+on = false
+packages = ["cockpit", "cockpit-podman", "cockpit-storaged", "cockpit-files"]
+never = ["cockpit-packagekit"]
+units = ["cockpit.socket"]
+firewall = ["cockpit"]
+
+[[services]]
+id = "nfs-client"
+title = "Your lab's NAS (NFS)"
+words = "Mounts your lab's shared storage, with time limits so a missing NAS never hangs the server."
+roles = ["lab"]
+packages = ["nfs-utils"]
+
+[[services]]
+id = "gpu"
+title = "NVIDIA graphics for jobs"
+words = "NVIDIA's open driver for the LTS kernel and the container toolkit, when an NVIDIA card is found."
+roles = ["lab"]
+needs = "nvidia"
+
+[[services]]
+id = "smb"
+title = "Shared folders for Windows and Mac (SMB)"
+words = "A network drive for every computer in the house, with Windows' Previous versions and Time Machine."
+roles = ["storage"]
+packages = ["samba"]
+units = ["smb.service"]
+firewall = ["smb"]
+
+[[services]]
+id = "nfs"
+title = "Shared folders for Linux (NFS)"
+words = "The same folders for Linux machines and your lab, on your network only."
+roles = ["storage"]
+packages = ["nfs-utils"]
+units = ["nfs-server.service"]
+firewall = ["nfs"]
+
+[[services]]
+id = "timeline"
+title = "Hourly versions of the data disks"
+words = "Snapshots of /srv/data: 24 hourly, 14 daily, 8 weekly, 6 monthly. Undo for people, not just updates."
+roles = ["storage"]
+
+[[services]]
+id = "replication"
+title = "Copy to a second storage server"
+words = "btrbk sends the data's snapshots to another btrfs server each night."
+roles = ["storage"]
+on = false
+packages = ["btrbk"]
+
+[[services]]
+id = "spindown"
+title = "Spin idle hard disks down"
+words = "Quieter and cheaper; the first file after a pause takes a few seconds."
+roles = ["storage"]
+on = false
+packages = ["hdparm"]
+
+[[services]]
+id = "front-door"
+title = "One web address per app (Caddy)"
+words = "Each app at its own name, like photos-<server>.local, with HTTPS from your server's own certificate authority."
+roles = ["home", "media"]
+packages = ["caddy"]
+units = ["caddy.service"]
+firewall = ["web"]
+
+[[services]]
+id = "performance"
+title = "Smoother game ticks"
+words = "The processor stays at full speed while games run (the performance governor)."
+roles = ["games"]
+packages = ["cpupower"]
+units = ["cpupower.service"]
+
+[[services]]
+id = "pelican-wings"
+title = "Join your lab's Pelican panel"
+words = "This server becomes a Wings node of your lab's Pelican panel. Wings runs on Docker's engine, which this choice installs from Arch's own packages (no Docker account)."
+roles = ["games"]
+on = false
+lab = true
+
+# ── the app catalogue (about ten, one per job). image: where it comes from; the digest
+# that's installed is pinned in the catalogue's Quadlet templates, which CI updates and
+# tests (bromigos-server's /usr/share/bromigos/server/apps/<id>/) ───────────────────────
+[[apps]]
+id = "photos"
+title = "Photos (Immich)"
+words = "Your phone's photos, backed up and searchable."
+roles = ["home"]
+image = "ghcr.io/immich-app/immich-server"
+name = "photos"
+
+[[apps]]
+id = "media"
+title = "Media (Jellyfin)"
+words = "Your films, shows and music on every screen."
+roles = ["home"]
+image = "docker.io/jellyfin/jellyfin"
+name = "media"
+
+[[apps]]
+id = "passwords"
+title = "Passwords (Vaultwarden)"
+words = "A password manager for the household, with the Bitwarden apps."
+roles = ["home"]
+image = "docker.io/vaultwarden/server"
+name = "passwords"
+
+[[apps]]
+id = "documents"
+title = "Documents (Paperless-ngx)"
+words = "Scan letters and bills once; find them by any word."
+roles = ["home"]
+image = "ghcr.io/paperless-ngx/paperless-ngx"
+name = "documents"
+
+[[apps]]
+id = "home-assistant"
+title = "Home automation (Home Assistant)"
+words = "Lights, heating and sensors, run in your house, not a cloud."
+roles = ["home"]
+image = "ghcr.io/home-assistant/home-assistant"
+name = "home"
+
+[[apps]]
+id = "adblock"
+title = "Ad blocking (AdGuard Home)"
+words = "Blocks ads and trackers for every device on your network."
+roles = ["home"]
+image = "docker.io/adguard/adguardhome"
+name = "adblock"
+
+[[apps]]
+id = "sync"
+title = "File sync (Syncthing)"
+words = "Folders kept the same on your computers and phone."
+roles = ["home", "storage"]
+package = "syncthing"
+name = "sync"
+
+[[apps]]
+id = "uptime-kuma"
+title = "Uptime (Uptime Kuma)"
+words = "Watches your sites and services and says when one is down."
+roles = ["home"]
+image = "docker.io/louislam/uptime-kuma"
+name = "status"
+
+[[apps]]
+id = "homepage"
+title = "A start page (Homepage)"
+words = "One page with every app on this server and your lab."
+roles = ["home"]
+image = "ghcr.io/gethomepage/homepage"
+name = "start"
+
+[[apps]]
+id = "s3"
+title = "S3 storage (RustFS)"
+words = "An S3 bucket service for backups from your other servers and apps that want S3."
+roles = ["storage", "home"]
+image = "docker.io/rustfs/rustfs"
+name = "s3"
+firewall = ["s3"]
+
+[[apps]]
+id = "minecraft"
+title = "Minecraft"
+words = "A Minecraft server for your friends, started and stopped from your phone."
+roles = ["games"]
+image = "docker.io/itzg/minecraft-server"
+name = "minecraft"
+firewall = ["games"]

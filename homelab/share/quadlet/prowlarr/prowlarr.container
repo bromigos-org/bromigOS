@@ -1,0 +1,20 @@
+[Unit]
+Description=Prowlarr (sources)
+
+[Container]
+Image={{image:prowlarr}}
+ContainerName=prowlarr
+Network=bromigos-lab.network
+PublishPort=9696:9696
+Secret={{secret:api-key}},type=mount,target=/run/secrets/api-key,mode=0400
+Environment=FILE__PROWLARR__AUTH__APIKEY=/run/secrets/api-key
+Environment=PUID={{puid}}
+Environment=PGID={{pgid}}
+Environment=TZ={{tz}}
+Volume={{data}}/config:/config:Z
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,26 @@
+# bromigOS Server as a Lab node, unattended (docs/server.md, "Answer files"). Put it on the
+# USB stick as bromigos/install.toml (or name it with bromigos.answers=PATH on the kernel line).
+[install]
+edition = "server"
+locale = "en_US"
+timezone = "UTC"
+keyboard = "us"
+disk = "/dev/nvme0n1"
+mode = "erase"
+user = "admin"
+hostname = "lab-node-1"
+password = "used at the console and for sudo"
+ssh_keys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTheDocsOnlyReplaceIt you@laptop"]
+countdown = 10
+
+[server]
+role = "lab"
+interface = "auto"            # the first wired port with a cable
+method = "dhcp"
+wake_on_lan = true
+ssh_mode = "keys"
+# the lab workstation's key for the `lab` account (passwordless sudo): leave it out to use ssh_keys
+lab_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleLabWorkstationKeyForTheDocs lab@workstation"
+unlock = "tpm"                # the security chip opens the disk; "passphrase" or "none" without one
+update_mode = "auto"
+update_window = "03:00-05:00"

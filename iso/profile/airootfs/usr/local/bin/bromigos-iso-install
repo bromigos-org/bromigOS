@@ -429,7 +429,7 @@ if [[ -n $answers ]] && (( ! dry )); then
     fi
     # bromigOS Server's own package, when it's there, applies its settings (its firewall, SSH
     # and updates: /etc/bromigos/server.toml, `bromigos-server setup`); else the installer's
-    server_pkg=0; [[ -x $target/usr/bin/bromigos-server ]] && server_pkg=1
+    server_pkg=0; [[ -x $target/usr/bin/bromigos-server || -x $target/usr/lib/bromigos/server/bromigos-server ]] && server_pkg=1
     if (( server_pkg )); then
         install -d "$target/etc/bromigos"
         {
@@ -478,6 +478,24 @@ NFT
         done
         (( enabled )) || say "automatic updates: no update timer in this system yet (the bromigos-server package brings it)"
     fi
+fi
+# bromigOS Server's role, network, sign-in, data disks, updates and the rest (server_apply.py:
+# the installers' "server" answers; docs/server.md, "What the installer sets up")
+if [[ -n $answers ]] && (( ! dry && ! desktop )) && [[ -n $(ans server) ]]; then
+    stage 90 "Setting up the server"
+    PYTHONPATH=$lib python3 "$lib/bromigos_installer/server_apply.py" --answers "$answers" --target "$target" --user "$user" \
+        | tee -a "$log"
+    (( PIPESTATUS[0] == 0 )) || { now_stage="Setting up the server"; false; }
+fi
+# Reach it from anywhere (docs/lab-network.md, "For the installer"): the choice staged into the new
+# system by bromigos_homelab.reach (its key root-only; /etc/bromigos/reach.json records the choice)
+if [[ -n $answers ]] && (( ! dry )) && [[ -n $(ans reach) ]]; then
+    reach_json=$(mktemp); chmod 600 "$reach_json"
+    python3 -c 'import json, sys; json.dump(json.load(open(sys.argv[1]))["reach"], open(sys.argv[2], "w"))' "$answers" "$reach_json"
+    rlib=$target/usr/lib/bromigos/lib; [[ -d $rlib/bromigos_homelab ]] || rlib=/usr/lib/bromigos/lib
+    PYTHONPATH=$rlib python3 -m bromigos_homelab.reach stage --root "$target" --answer "$reach_json" --hostname "$(ans hostname)" \
+        --json | tee -a "$log" || say "reach: not staged (bromigos lab network reach sets it up after the first start)"
+    rm -f "$reach_json"
 fi
 # Field Kit, the repair toolkit, in the boot menu: bromigos-boot's own step (its pacman hook
 # ran while the packages went in; again now that GRUB is set up), copying Field Kit to /boot,

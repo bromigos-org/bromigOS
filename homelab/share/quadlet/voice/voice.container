@@ -1,0 +1,16 @@
+[Unit]
+Description=Voice (Speaches: Whisper and Kokoro)
+
+[Container]
+Image={{image:voice}}
+ContainerName=voice
+Network=bromigos-lab.network
+PublishPort=8001:8000
+#ifgpu:nvidia AddDevice=nvidia.com/gpu=all
+Volume={{data}}/cache:/home/ubuntu/.cache/huggingface:Z
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

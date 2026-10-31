@@ -1,0 +1,1288 @@
+# What a bromigOS Server (or any lab machine) can run, as items to tick: the provisioning
+# catalogue (docs/lab-provision.md, "The local target"; manual/src/lab.md, "Choosing what a
+# server runs"). `bromigos lab provision --local` reads it, and so do the Server installer's
+# and the first-boot tour's checklists, through bromigos_homelab.provcatalog.
+#
+# Installed as /usr/share/bromigos/lab/provision-catalogue.toml (bromigos-lab).
+#
+# [[group]]   id, name, icon (an Adwaita symbolic icon), glyph (a key of bromigos_textual's ICONS)
+# [[item]]
+#   id, group, name    the item, the group it's listed in, its name on the card
+#   line               one plain sentence under the name
+#   hint               the hover text: what it does and why you'd want it
+#   icon, glyph        as for groups
+#   needs              items it can't run without; "a|b" means either (the first is ticked for you)
+#   conflicts          items it can't run beside
+#   roles              the Server roles that tick it: lab-node, storage, home-services,
+#                      game-server, media, base
+#   default            false: listed under its role but never ticked for you (default true)
+#   lab                ticked for these lab answers only: new, join, none (default: all three)
+#   requires           { cpu, ram_gb, disk_gb, gpu = bool, gpu_vram_gb, gpu_vendor }
+#   size_text          what it downloads, in words
+#   ports              host ports it listens on
+#   internet           true: it needs a download (packages, images or models)
+#   modes              k3s only: server, agent
+#   install            how: { pacman = [...] } (with nvidia = [...] / amd = [...] in place of
+#                      pacman on that GPU), { quadlet = "<template>" } (share/quadlet/<template>),
+#                      or { step = "<step>" } (localprovision.STEPS)
+#   enable             systemd units started after a pacman install
+#   images             { name = "registry/image:tag@sha256:…" }: a quadlet template's images,
+#                      always pinned by digest
+#   secrets            names generated for it the first time (database passwords, API keys);
+#                      they live in the secret store, never in a config file
+#   note               a plain sentence the plan shows
+#   [item.setup]       a small form the UIs render: title, intro, check (the --check name),
+#                      [[item.setup.field]] {id, label, kind = text|number|bool|choice|secret|path,
+#                      default, help, choices = [{id, label, note, url}], show_if = {field = [values]},
+#                      secret_for = [choice ids that need it]}, [[item.setup.action]] {label, url}
+#
+# Images are pinned by digest; CI moves the digests (the same job as the lab's charts).
+format = 1
+
+[[group]]
+id = "lab-core"
+name = "Lab core"
+icon = "network-server-symbolic"
+glyph = "lab"
+
+[[group]]
+id = "ai"
+name = "AI"
+icon = "applications-science-symbolic"
+glyph = "vector"
+
+[[group]]
+id = "network"
+name = "Network"
+icon = "network-workgroup-symbolic"
+glyph = "network"
+
+[[group]]
+id = "storage"
+name = "Storage"
+icon = "drive-multidisk-symbolic"
+glyph = "disk"
+
+[[group]]
+id = "games"
+name = "Games"
+icon = "input-gaming-symbolic"
+glyph = "server"
+
+[[group]]
+id = "home"
+name = "Home apps"
+icon = "go-home-symbolic"
+glyph = "people"
+
+[[group]]
+id = "media"
+name = "Media"
+icon = "applications-multimedia-symbolic"
+glyph = "computer"
+
+[[group]]
+id = "brodec"
+name = "BRODEC"
+icon = "phone-symbolic"
+glyph = "phone"
+
+# ------------------------------------------------------------------ Lab core
+[[item]]
+id = "k3s"
+group = "lab-core"
+name = "Kubernetes (k3s)"
+line = "Runs your lab's apps across its machines."
+hint = "k3s is a small Kubernetes. Starting a new lab makes this server the cluster's first machine; joining a lab makes it a worker your lab can give jobs to. Its version is the lab's pinned one, fetched from k3s's own site."
+icon = "network-server-symbolic"
+glyph = "lab"
+needs = []
+conflicts = []
+roles = ["lab-node"]
+requires = { cpu = 2, ram_gb = 2, disk_gb = 10 }
+size_text = "about 70 MB download"
+ports = [6443, 10250]
+internet = true
+modes = ["server", "agent"]
+install = { step = "k3s" }
+note = "Joining a lab: your lab adds this server to its cluster from your desktop (bromigos lab provision add-node), unless you give its join address and token here."
+[item.setup]
+title = "Join a cluster"
+intro = "Only when joining a lab's cluster from here. Leave it empty and your lab adds this server from your desktop."
+[[item.setup.field]]
+id = "server_url"
+label = "The cluster's address"
+kind = "text"
+default = ""
+help = "Such as https://192.0.2.10:6443. Your lab's desktop shows it."
+[[item.setup.field]]
+id = "token"
+label = "The cluster's join token"
+kind = "secret"
+help = "Kept in the secret store; never written to a file in plain text."
+
+[[item]]
+id = "argocd"
+group = "lab-core"
+name = "Argo CD"
+line = "Keeps the lab's apps the way your lab's Git repository says."
+hint = "Argo CD watches your lab repository and applies every change to the cluster, so the repository is the single place your lab is described. It needs Kubernetes."
+icon = "emblem-system-symbolic"
+glyph = "update"
+needs = ["k3s"]
+conflicts = []
+roles = ["lab-node"]
+lab = ["new"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 2 }
+size_text = "about 400 MB of images"
+ports = []
+internet = true
+install = { step = "helm-chart" }
+note = "Point it at your lab repository afterwards (bromigos lab provision --git-url on your desktop)."
+
+[[item]]
+id = "vault"
+group = "lab-core"
+name = "Vault (OpenBao)"
+line = "Keeps the lab's passwords and keys in one locked place."
+hint = "OpenBao is the open-source Vault, compatible with HashiCorp Vault's apps and tools. It stores the lab's secrets, encrypted, and other servers in the lab keep their keys there too. It starts sealed: the welcome tour shows its unseal and recovery keys once, as text and a QR code."
+icon = "dialog-password-symbolic"
+glyph = "key"
+needs = []
+conflicts = []
+roles = ["lab-node"]
+lab = ["new"]
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 2 }
+size_text = "about 60 MB download"
+ports = [8200]
+internet = true
+install = { step = "openbao" }
+note = "Its audit log is on, and this server gets its own policy and key path."
+
+[[item]]
+id = "external-secrets"
+group = "lab-core"
+name = "External Secrets"
+line = "Gives the cluster's apps their keys from Vault, never from files in Git."
+hint = "The External Secrets Operator copies each app's keys from the lab's Vault (or OpenBao) into the cluster when the app needs them, so your lab repository holds only references."
+icon = "channel-secure-symbolic"
+glyph = "lock"
+needs = ["k3s"]
+conflicts = []
+roles = ["lab-node"]
+lab = ["new", "join"]
+requires = { cpu = 1, ram_gb = 0.25, disk_gb = 1 }
+size_text = "about 100 MB of images"
+ports = []
+internet = true
+install = { step = "helm-chart" }
+
+[[item]]
+id = "monitoring"
+group = "lab-core"
+name = "Monitoring"
+line = "Graphs and alerts for this server: Prometheus and Grafana."
+hint = "Prometheus collects the numbers (the node exporter every Server has already serves them) and Grafana draws them. If your lab already has monitoring, leave this off: the lab's own Prometheus reads this server."
+icon = "preferences-system-details-symbolic"
+glyph = "info"
+needs = []
+conflicts = []
+roles = ["lab-node"]
+lab = ["new", "none"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 5 }
+size_text = "about 170 MB download"
+ports = [9090, 3005]
+internet = true
+install = { step = "monitoring" }
+secrets = ["grafana-admin"]
+
+[[item]]
+id = "backups"
+group = "lab-core"
+name = "Backups"
+line = "Nightly encrypted backups of this server's apps and settings."
+hint = "restic copies /etc, the apps' data under /srv and bromigOS's state to a folder, a USB disk or an S3 bucket, encrypted and deduplicated. A snapshot isn't a backup: it lives on the same disk."
+icon = "media-tape-symbolic"
+glyph = "rollback"
+needs = []
+conflicts = []
+roles = ["lab-node", "storage", "home-services", "game-server", "media", "base"]
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 1 }
+size_text = "about 11 MB download"
+ports = []
+internet = true
+install = { step = "backups" }
+secrets = ["restic-password"]
+[item.setup]
+title = "Where backups go"
+[[item.setup.field]]
+id = "repository"
+label = "Backup place"
+kind = "text"
+default = "/srv/backups/restic"
+help = "A folder (best on another disk), sftp:user@host:/path, or s3:https://host/bucket."
+
+[[item]]
+id = "caddy"
+group = "lab-core"
+name = "Caddy"
+line = "One front door with HTTPS for every web app here."
+hint = "Caddy answers on ports 80 and 443 and sends each name (photos-<server>.local, …) to the right app, with a certificate from its own local authority. Only your local network can reach it."
+icon = "web-browser-symbolic"
+glyph = "shield"
+needs = []
+conflicts = []
+roles = ["home-services", "media"]
+requires = { cpu = 1, ram_gb = 0.25, disk_gb = 1 }
+size_text = "about 15 MB download"
+ports = [80, 443]
+internet = true
+install = { step = "caddy" }
+
+[[item]]
+id = "start-page"
+group = "lab-core"
+name = "Start page"
+line = "One page with a link to everything this server runs."
+hint = "Homepage lists every app you ticked, with whether it's up. Open it first when you don't remember an app's address."
+icon = "view-grid-symbolic"
+glyph = "bromigos"
+needs = []
+conflicts = []
+roles = ["home-services", "media"]
+requires = { cpu = 1, ram_gb = 0.25, disk_gb = 1 }
+size_text = "about 90 MB image"
+ports = [3010]
+internet = true
+install = { quadlet = "start-page" }
+images = { homepage = "ghcr.io/gethomepage/homepage:v2.7.0@sha256:19c5c09184458a41b7b5915e71463a39f36cd33540f41bdbed008791b8182d5f" }
+
+# ------------------------------------------------------------------ AI
+[[item]]
+id = "vector-bridge"
+group = "ai"
+name = "VECTOR's lab bridge"
+line = "Lets VECTOR on your phone see and talk to this lab."
+hint = "brodec-lab reads the lab's monitoring and reports to your BRODEC account, end to end encrypted. It only reads. It stays off until you pair it in the welcome tour."
+icon = "chat-message-new-symbolic"
+glyph = "vector"
+needs = []
+conflicts = []
+roles = ["lab-node"]
+lab = ["new"]
+requires = { cpu = 1, ram_gb = 0.25, disk_gb = 1 }
+size_text = "about 28 MB download"
+ports = []
+internet = true
+install = { pacman = ["brodec-lab"] }
+note = "Pair it in the welcome tour (brodec-lab pair); its service starts after that."
+
+[[item]]
+id = "litellm"
+group = "ai"
+name = "LiteLLM gateway"
+line = "One OpenAI-style address, with keys, in front of your model servers."
+hint = "VECTOR's brain and your apps ask LiteLLM, and it passes each request to the model server that has the model. Keys for cloud providers, if you add any, stay in the secret store."
+icon = "network-transmit-receive-symbolic"
+glyph = "remote"
+needs = ["ollama|vllm"]
+conflicts = []
+roles = ["lab-node"]
+lab = ["new", "none"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 2, gpu = true }
+size_text = "about 600 MB image"
+ports = [4000]
+internet = true
+install = { quadlet = "litellm" }
+images = { litellm = "ghcr.io/berriai/litellm:main-v1.83.14-stable@sha256:c81eb79cd4333c6cfe374c0ec929110fd23f0ee5f7fd198855a6fbddc77b83ba" }
+secrets = ["master-key"]
+
+[[item]]
+id = "ollama"
+group = "ai"
+name = "Model serving (Ollama)"
+line = "Runs open AI models on this server's GPU, or slowly on its processor."
+hint = "Ollama loads the models you pick below and answers on port 11434. It works on NVIDIA and AMD cards, and on the processor alone for small models. The models come from the lab's model catalogue, sized to this server."
+icon = "applications-science-symbolic"
+glyph = "chip"
+needs = []
+conflicts = ["vllm"]
+roles = ["lab-node"]
+lab = ["new", "none"]
+requires = { cpu = 4, ram_gb = 8, disk_gb = 20, gpu = true }
+size_text = "about 20 MB download, 780 MB with NVIDIA's CUDA, 980 MB with AMD's ROCm"
+ports = [11434]
+internet = true
+install = { pacman = ["ollama"], nvidia = ["ollama-cuda"], amd = ["ollama-rocm"] }
+enable = ["ollama.service"]
+
+[[item]]
+id = "vllm"
+group = "ai"
+name = "Model serving (vLLM)"
+line = "Fast model serving for NVIDIA cards with 16 GB or more."
+hint = "vLLM serves one model to many users at once, with long contexts. Pick it over Ollama for a big NVIDIA card that VECTOR and your apps share."
+icon = "applications-science-symbolic"
+glyph = "chip"
+needs = []
+conflicts = ["ollama"]
+roles = []
+default = false
+requires = { cpu = 8, ram_gb = 32, disk_gb = 80, gpu = true, gpu_vram_gb = 16, gpu_vendor = "nvidia" }
+size_text = "about 10 GB image"
+ports = [8000]
+internet = true
+install = { quadlet = "vllm" }
+images = { vllm = "docker.io/vllm/vllm-openai:v0.32.0@sha256:befccf0e7e4089aa23926bb6f887a85c0d46c2a99e6de5c5ffdf5cb7957c5b34" }
+note = "Needs NVIDIA's container toolkit (nvidia-container-toolkit); it's installed with it."
+
+[[item]]
+id = "models"
+group = "ai"
+name = "Models"
+line = "Downloads the models you picked for the model server."
+hint = "The list comes from the lab's model catalogue, sized to this server's GPU. Models are big downloads, so they wait for the internet."
+icon = "folder-download-symbolic"
+glyph = "copy"
+needs = ["ollama|vllm"]
+conflicts = []
+roles = ["lab-node"]
+lab = ["new", "none"]
+requires = { gpu = true }
+size_text = "depends on the models: 2 to 40 GB"
+ports = []
+internet = true
+install = { step = "models" }
+
+[[item]]
+id = "voice"
+group = "ai"
+name = "Voice (speech in and out)"
+line = "Speech to text and text to speech for VECTOR and your apps."
+hint = "Speaches serves Whisper (hearing) and Kokoro (speaking) behind an OpenAI-style address on port 8001. It uses the GPU when there's an NVIDIA card, the processor otherwise."
+icon = "audio-input-microphone-symbolic"
+glyph = "vector"
+needs = []
+conflicts = []
+roles = ["lab-node"]
+default = false
+requires = { cpu = 2, ram_gb = 4, disk_gb = 10 }
+size_text = "about 1.5 GB image (4 GB with CUDA), plus the voice models"
+ports = [8001]
+internet = true
+install = { quadlet = "voice" }
+images = { voice = "ghcr.io/speaches-ai/speaches:0.8.3-cpu@sha256:21e3df06d842fb7802ab470dd77c25f0e8c0d22950e8d8c6ae886e851af53ef8", voice-nvidia = "ghcr.io/speaches-ai/speaches:0.8.3-cuda@sha256:9abc6968a883e77ead9286c38a6ccf3139dcad518b783deeebb7be2ced50e972" }
+
+# ------------------------------------------------------------------ Network
+[[item]]
+id = "lab-network"
+group = "network"
+name = "Lab's private network"
+line = "Reach this server from anywhere, privately, on your lab's own network."
+hint = "Your lab runs Headscale (bromigos lab network). With a join code from the lab, this server joins now; starting a new lab, the welcome tour sets the network up. No ports are opened to the internet."
+icon = "network-vpn-symbolic"
+glyph = "remote"
+needs = []
+conflicts = []
+roles = ["lab-node"]
+lab = ["new", "join"]
+requires = {}
+size_text = "nothing new: Tailscale's client comes with every Server"
+ports = []
+internet = true
+install = { step = "lab-network" }
+
+[[item]]
+id = "adblock"
+group = "network"
+name = "Ad blocking (AdGuard Home)"
+line = "Blocks ads and trackers for every device in the house."
+hint = "AdGuard Home answers your network's DNS questions and drops the ones for ads and trackers. Point your router's DNS at this server afterwards. Its setup page opens on port 3000 the first time."
+icon = "security-high-symbolic"
+glyph = "shield"
+needs = []
+conflicts = []
+roles = ["home-services"]
+default = false
+requires = { cpu = 1, ram_gb = 0.25, disk_gb = 1 }
+size_text = "about 9 MB download"
+ports = [53, 3000]
+internet = true
+install = { step = "adblock" }
+
+# ------------------------------------------------------------------ Storage
+[[item]]
+id = "smb-shares"
+group = "storage"
+name = "Windows and Mac shares (SMB)"
+line = "Folders that Windows, Mac and Linux see as a network drive."
+hint = "Samba serves your shares with Windows' Previous versions from the snapshots. Nothing is shared until you add a share; your local network only."
+icon = "folder-publicshare-symbolic"
+glyph = "disk"
+needs = []
+conflicts = []
+roles = ["storage"]
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 1 }
+size_text = "about 9 MB download"
+ports = [445]
+internet = true
+install = { step = "smb" }
+
+[[item]]
+id = "nfs-shares"
+group = "storage"
+name = "Linux shares (NFS)"
+line = "Folders for Linux machines and your lab's cluster."
+hint = "NFS is how Linux machines and Kubernetes mount network storage. Exports are for your local network only."
+icon = "folder-remote-symbolic"
+glyph = "disk"
+needs = []
+conflicts = []
+roles = ["storage"]
+requires = { cpu = 1, ram_gb = 0.25, disk_gb = 1 }
+size_text = "under 1 MB download"
+ports = [2049]
+internet = true
+install = { pacman = ["nfs-utils"] }
+enable = ["nfs-server.service"]
+
+[[item]]
+id = "s3"
+group = "storage"
+name = "S3 bucket server (RustFS)"
+line = "An S3-compatible store for backups and apps that want buckets."
+hint = "RustFS speaks Amazon's S3 protocol, the same as your lab's. Other servers back up into it, and apps that store files in buckets use it."
+icon = "drive-harddisk-symbolic"
+glyph = "cloud"
+needs = []
+conflicts = []
+roles = ["storage"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 5 }
+size_text = "about 80 MB image"
+ports = [9000, 9001]
+internet = true
+install = { quadlet = "s3" }
+images = { rustfs = "docker.io/rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2" }
+secrets = ["access-key", "secret-key"]
+
+[[item]]
+id = "backup-target"
+group = "storage"
+name = "Backup place for other machines"
+line = "Other computers and servers back up here over SSH."
+hint = "Makes a backup-only account that can reach /srv/backups over SFTP and nothing else. restic on any machine uses it with no extra software here."
+icon = "media-tape-symbolic"
+glyph = "rollback"
+needs = []
+conflicts = []
+roles = ["storage"]
+requires = { disk_gb = 50 }
+size_text = "nothing to download"
+ports = [22]
+internet = false
+install = { step = "backup-target" }
+
+# ------------------------------------------------------------------ Games
+[[item]]
+id = "pelican-panel"
+group = "games"
+name = "Pelican panel"
+line = "Start, stop and look after game servers from a web page."
+hint = "Pelican's panel manages game servers on one or more machines running Wings. Run it here when this server starts your lab's games; a lab that has a panel already only needs Wings."
+icon = "input-gaming-symbolic"
+glyph = "server"
+needs = ["wings"]
+conflicts = []
+roles = ["game-server"]
+lab = ["new"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 4 }
+size_text = "about 300 MB image"
+ports = [8090]
+internet = true
+install = { quadlet = "pelican-panel" }
+images = { panel = "ghcr.io/pelican/panel:v1.0.0-rc.2@sha256:cb717c15da9bcdc93f22a22a02d5460a1ce51fd03f2975b4ce53d745f4cc9ac8" }
+
+[[item]]
+id = "wings"
+group = "games"
+name = "Wings game node"
+line = "Runs the game servers a Pelican panel gives this machine."
+hint = "Wings is Pelican's game daemon. It needs Docker's engine, which takes the place of Podman's docker command on this server only. The panel gives it its token when you add this node."
+icon = "input-gaming-symbolic"
+glyph = "server"
+needs = []
+conflicts = ["minecraft"]
+roles = ["game-server"]
+lab = ["new", "join"]
+requires = { cpu = 2, ram_gb = 4, disk_gb = 20 }
+size_text = "about 50 MB download"
+ports = [8080, 2022]
+internet = true
+install = { step = "wings" }
+[item.setup]
+title = "Your Pelican panel"
+[[item.setup.field]]
+id = "panel_url"
+label = "The panel's address"
+kind = "text"
+default = ""
+help = "Such as https://games.example.org. Leave it empty when the panel runs on this server."
+[[item.setup.field]]
+id = "token"
+label = "The node's token from the panel"
+kind = "secret"
+help = "From the panel's Nodes › this node › Configuration. Kept in the secret store."
+
+[[item]]
+id = "minecraft"
+group = "games"
+name = "Minecraft server"
+line = "A Minecraft Java server for friends, started from your phone."
+hint = "The community's itzg image, run as a Podman service. Its world is backed up with the rest of the server. For more games, use the Pelican panel."
+icon = "input-gaming-symbolic"
+glyph = "server"
+needs = []
+conflicts = ["wings"]
+roles = ["game-server"]
+lab = ["none"]
+requires = { cpu = 2, ram_gb = 4, disk_gb = 10 }
+size_text = "about 500 MB image, plus the game"
+ports = [25565]
+internet = true
+install = { quadlet = "minecraft" }
+images = { minecraft = "docker.io/itzg/minecraft-server:2026.10.1@sha256:d12aed7e35981dfe259b60fbfee77d23a19b5898a7a31dca298d18b47b7b5776" }
+secrets = ["rcon-password"]
+
+# ------------------------------------------------------------------ Home apps
+[[item]]
+id = "photos"
+group = "home"
+name = "Photos (Immich)"
+line = "Your family's photos and videos, backed up from your phones."
+hint = "Immich is a private Google Photos: the phone app uploads, it finds faces and places, and everything stays on this server. It needs about 4 GB of memory."
+icon = "camera-photo-symbolic"
+glyph = "people"
+needs = []
+conflicts = []
+roles = ["home-services"]
+requires = { cpu = 2, ram_gb = 4, disk_gb = 20 }
+size_text = "about 2.5 GB of images"
+ports = [2283]
+internet = true
+install = { quadlet = "photos" }
+images = { server = "ghcr.io/immich-app/immich-server:v3.3.5@sha256:485d546a2e31d6a8b4db8423fcba5c109de8c218d93410af115fd1ccfc4352a6", ml = "ghcr.io/immich-app/immich-machine-learning:v3.3.5@sha256:5b28c9352c8374b8a1ed96fbdd8d6755fea6e43510ec43fdf6538aa02ea40f56", valkey = "docker.io/valkey/valkey:9@sha256:c123e3715db63d06d4ad6964884037aa0d5d4d703939b9929954112889708e1d", postgres = "ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23" }
+secrets = ["db-password"]
+
+[[item]]
+id = "passwords"
+group = "home"
+name = "Passwords (Vaultwarden)"
+line = "A password manager for the household, using the Bitwarden apps."
+hint = "Vaultwarden is a small server for Bitwarden's apps and browser extensions, from Arch's own packages. Browsers need HTTPS for it, so Caddy is ticked too."
+icon = "dialog-password-symbolic"
+glyph = "key"
+needs = ["caddy"]
+conflicts = []
+roles = ["home-services"]
+requires = { cpu = 1, ram_gb = 0.25, disk_gb = 1 }
+size_text = "about 33 MB download"
+ports = [8222]
+internet = true
+install = { step = "passwords" }
+
+[[item]]
+id = "documents"
+group = "home"
+name = "Documents (Paperless-ngx)"
+line = "Scans and PDFs, read and filed so you can search them."
+hint = "Paperless-ngx reads each document's text, tags it and keeps the original. Drop files in its folder or upload from the phone."
+icon = "folder-documents-symbolic"
+glyph = "book"
+needs = []
+conflicts = []
+roles = ["home-services"]
+default = false
+requires = { cpu = 2, ram_gb = 2, disk_gb = 10 }
+size_text = "about 1.3 GB image"
+ports = [8010]
+internet = true
+install = { quadlet = "documents" }
+images = { paperless = "ghcr.io/paperless-ngx/paperless-ngx:3.4.0@sha256:7c1d98afd200def9e2bad3a377d30829e8d486554b3c818995af5860114ea17f", valkey = "docker.io/valkey/valkey:9.1.3-alpine@sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b" }
+secrets = ["secret-key", "admin-password"]
+
+[[item]]
+id = "home-automation"
+group = "home"
+name = "Home automation (Home Assistant)"
+line = "Lights, sensors and routines for the house, run at home."
+hint = "Home Assistant talks to thousands of devices without a cloud. It uses the host's network so it can find devices; plug a Zigbee or Z-Wave stick in and it sees it."
+icon = "go-home-symbolic"
+glyph = "settings"
+needs = []
+conflicts = []
+roles = ["home-services"]
+default = false
+requires = { cpu = 1, ram_gb = 1, disk_gb = 5 }
+size_text = "about 1.8 GB image"
+ports = [8123]
+internet = true
+install = { quadlet = "home-automation" }
+images = { homeassistant = "ghcr.io/home-assistant/home-assistant:2026.10.4@sha256:23f4dfbb69ce76315dbc4de7915504f1c2dcecd7ca2648113a493a385972e133" }
+
+[[item]]
+id = "file-sync"
+group = "home"
+name = "File sync (Syncthing)"
+line = "Keeps folders the same on your computers and this server."
+hint = "Syncthing copies changes between devices directly, encrypted, with no cloud account. From Arch's own packages."
+icon = "folder-symbolic"
+glyph = "copy"
+needs = []
+conflicts = []
+roles = ["home-services"]
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 1 }
+size_text = "about 11 MB download"
+ports = [8384, 22000]
+internet = true
+install = { step = "file-sync" }
+
+[[item]]
+id = "uptime"
+group = "home"
+name = "Uptime (Uptime Kuma)"
+line = "Checks your sites and apps and tells you when one goes down."
+hint = "Uptime Kuma pings what you list and keeps a history. Its alerts can go to your phone through ntfy, email or many chat apps."
+icon = "emblem-important-symbolic"
+glyph = "alert"
+needs = []
+conflicts = []
+roles = ["home-services"]
+requires = { cpu = 1, ram_gb = 0.25, disk_gb = 1 }
+size_text = "about 200 MB image"
+ports = [3001]
+internet = true
+install = { quadlet = "uptime" }
+images = { kuma = "docker.io/louislam/uptime-kuma:2.5.8@sha256:20abea8c48a163cf0a7a5d5936ab418e4b742d908704e1f58f6c06e56a9c6b67" }
+
+# ------------------------------------------------------------------ Media
+# Ship the tools neutral: no indexers, trackers or sources are set up anywhere, and the
+# downloaders and the VPN are never ticked for you. For media you own or have rights to.
+[[item]]
+id = "media-library"
+group = "media"
+name = "Media library"
+line = "Where your films, shows, music and books live."
+hint = "One folder tree that every media app shares: on this server's storage pool, or on a NAS share. The audio language you choose here sets the quality profiles."
+icon = "folder-videos-symbolic"
+glyph = "disk"
+needs = []
+conflicts = []
+roles = ["media"]
+requires = { disk_gb = 1 }
+size_text = "nothing to download"
+ports = []
+internet = false
+install = { step = "media-library" }
+[item.setup]
+title = "Your media library"
+intro = "For media you own or have rights to."
+[[item.setup.field]]
+id = "where"
+label = "Where the library lives"
+kind = "choice"
+default = "pool"
+choices = [
+  { id = "pool", label = "On this server", note = "The storage pool, under /srv/media" },
+  { id = "nfs", label = "On a NAS (NFS)", note = "A share on your NAS, mounted here" },
+  { id = "smb", label = "On a NAS (SMB)", note = "A Windows-style share on your NAS, mounted here" },
+]
+[[item.setup.field]]
+id = "path"
+label = "Folder on this server"
+kind = "path"
+default = "/srv/media"
+show_if = { where = ["pool"] }
+[[item.setup.field]]
+id = "share"
+label = "The share"
+kind = "text"
+default = ""
+help = "NFS: 192.0.2.20:/volume1/media. SMB: //192.0.2.20/media."
+show_if = { where = ["nfs", "smb"] }
+[[item.setup.field]]
+id = "smb_user"
+label = "The share's user name"
+kind = "text"
+default = ""
+show_if = { where = ["smb"] }
+[[item.setup.field]]
+id = "smb_password"
+label = "The share's password"
+kind = "secret"
+show_if = { where = ["smb"] }
+[[item.setup.field]]
+id = "language"
+label = "Audio language"
+kind = "choice"
+default = "English"
+choices = [{ id = "English", label = "English" }, { id = "any", label = "Any language" }]
+help = "Releases without this language are passed over."
+[[item.setup.field]]
+id = "dual_audio"
+label = "Prefer dual audio"
+kind = "bool"
+default = true
+help = "Ranks releases with two audio languages (such as English and Japanese) first."
+
+[[item]]
+id = "jellyfin"
+group = "media"
+name = "Jellyfin"
+line = "Your films, shows and music, streamed to any screen. Open, no account."
+hint = "Jellyfin is a free media server with apps for TVs, phones and browsers. It uses the GPU for transcoding when there is one. Recommended: nothing to sign up for."
+icon = "video-display-symbolic"
+glyph = "computer"
+needs = ["media-library"]
+conflicts = []
+roles = ["media"]
+requires = { cpu = 2, ram_gb = 2, disk_gb = 10 }
+size_text = "about 900 MB image"
+ports = [8096]
+internet = true
+install = { quadlet = "jellyfin" }
+images = { jellyfin = "ghcr.io/linuxserver/jellyfin:12.4ubu2604-ls57@sha256:3894d9eae88418d3cf9ac6349392d2c4dad818365a59565d19edc38098897044" }
+
+[[item]]
+id = "plex"
+group = "media"
+name = "Plex"
+line = "A media server with polished apps. Needs a Plex account."
+hint = "Plex streams your library to its apps. You sign in with a Plex account (free; some features need a paid Plex Pass). The claim code from plex.tv/claim links this server to your account."
+icon = "video-display-symbolic"
+glyph = "computer"
+needs = ["media-library"]
+conflicts = []
+roles = ["media"]
+default = false
+requires = { cpu = 2, ram_gb = 2, disk_gb = 10 }
+size_text = "about 400 MB image"
+ports = [32400]
+internet = true
+install = { quadlet = "plex" }
+images = { plex = "ghcr.io/linuxserver/plex:1.43.3.10861-07dfddaeb-ls319@sha256:d5ee6068a20ae57f95060038eaef292cdfd4285efb213ea4daaccdc184e45d1b" }
+[item.setup]
+title = "Link Plex to your account"
+[[item.setup.field]]
+id = "claim"
+label = "Claim code"
+kind = "secret"
+help = "From plex.tv/claim, signed in. It works for four minutes."
+[[item.setup.action]]
+label = "Get a claim code"
+url = "https://www.plex.tv/claim/"
+
+[[item]]
+id = "navidrome"
+group = "media"
+name = "Navidrome (music)"
+line = "Your music collection, streamed to your phone and browser."
+hint = "Navidrome serves music to Subsonic apps on any phone, and in the browser."
+icon = "audio-x-generic-symbolic"
+glyph = "computer"
+needs = ["media-library"]
+conflicts = []
+roles = ["media"]
+default = false
+requires = { cpu = 1, ram_gb = 0.25, disk_gb = 1 }
+size_text = "about 60 MB image"
+ports = [4533]
+internet = true
+install = { quadlet = "navidrome" }
+images = { navidrome = "docker.io/deluan/navidrome:0.64.2@sha256:38dc2727bfcfd5ede290f8ada114fc90368146f265ae4701ddddbcbe2a44ee52" }
+
+[[item]]
+id = "audiobookshelf"
+group = "media"
+name = "Audiobookshelf"
+line = "Audiobooks and podcasts, with your place kept on every device."
+hint = "Audiobookshelf streams audiobooks and podcasts to its phone apps and remembers where you stopped."
+icon = "audio-headphones-symbolic"
+glyph = "book"
+needs = ["media-library"]
+conflicts = []
+roles = ["media"]
+default = false
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 1 }
+size_text = "about 300 MB image"
+ports = [13378]
+internet = true
+install = { quadlet = "audiobookshelf" }
+images = { audiobookshelf = "ghcr.io/advplyr/audiobookshelf:2.37.2@sha256:b897c33f05972fb1bf484f7487bc878fa91ec8691335c1db6e2929c3a7658efa" }
+
+[[item]]
+id = "seerr"
+group = "media"
+name = "Requests (Seerr)"
+line = "The household asks for films and shows; the library automation finds them."
+hint = "Seerr is a request page: people search, ask, and see when something's ready. It sends requests to Sonarr and Radarr."
+icon = "starred-symbolic"
+glyph = "search"
+needs = ["jellyfin|plex"]
+conflicts = []
+roles = ["media"]
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 1 }
+size_text = "about 400 MB image"
+ports = [5055]
+internet = true
+install = { quadlet = "seerr" }
+images = { seerr = "ghcr.io/seerr-team/seerr:v3.5.1@sha256:d8fab675b55ad293ded98fd71efcfd46054cbad9746534ae1cc4794a88c0b3be" }
+
+[[item]]
+id = "sonarr"
+group = "media"
+name = "Sonarr (shows)"
+line = "Keeps track of your shows and files new episodes into the library."
+hint = "Sonarr watches the shows you follow, renames and files each episode, and asks a download client for missing ones from the sources you add yourself."
+icon = "video-x-generic-symbolic"
+glyph = "update"
+needs = ["media-library", "prowlarr"]
+conflicts = []
+roles = ["media"]
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 1 }
+size_text = "about 200 MB image"
+ports = [8989]
+internet = true
+install = { quadlet = "sonarr" }
+images = { sonarr = "ghcr.io/linuxserver/sonarr:4.0.19.2979-ls321@sha256:373159ba768e23a3a1c497d9f2b936addf8fd5b1fdce7dd6a14080ac928bfda0" }
+secrets = ["api-key"]
+
+[[item]]
+id = "radarr"
+group = "media"
+name = "Radarr (films)"
+line = "Keeps track of your films and files them into the library."
+hint = "Radarr does for films what Sonarr does for shows: it names, files and upgrades them, using the sources you add yourself."
+icon = "video-x-generic-symbolic"
+glyph = "update"
+needs = ["media-library", "prowlarr"]
+conflicts = []
+roles = ["media"]
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 1 }
+size_text = "about 200 MB image"
+ports = [7878]
+internet = true
+install = { quadlet = "radarr" }
+images = { radarr = "ghcr.io/linuxserver/radarr:6.3.0.10514-ls313@sha256:a45b5ab0f850f39edb4cc9c95bbd967b52ddc3d4574a4dfb45561177db6c88f4" }
+secrets = ["api-key"]
+
+[[item]]
+id = "lidarr"
+group = "media"
+name = "Lidarr (music)"
+line = "Keeps track of your artists and files albums into the library."
+hint = "Lidarr is Sonarr for music: it names and files albums and fills gaps from the sources you add yourself."
+icon = "audio-x-generic-symbolic"
+glyph = "update"
+needs = ["media-library", "prowlarr"]
+conflicts = []
+roles = ["media"]
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 1 }
+size_text = "about 200 MB image"
+ports = [8686]
+internet = true
+install = { quadlet = "lidarr" }
+images = { lidarr = "ghcr.io/linuxserver/lidarr:3.1.0.4875-ls38@sha256:bfec0ec2dc351fa5928379d785b08be395886f109393b9040ed7973bd1008060" }
+secrets = ["api-key"]
+
+[[item]]
+id = "bazarr"
+group = "media"
+name = "Bazarr (subtitles)"
+line = "Finds subtitles for your films and shows in the languages you read."
+hint = "Bazarr follows Sonarr's and Radarr's libraries and fetches subtitles from the subtitle sites you choose."
+icon = "media-view-subtitles-symbolic"
+glyph = "language"
+needs = ["sonarr|radarr"]
+conflicts = []
+roles = ["media"]
+requires = { cpu = 1, ram_gb = 0.25, disk_gb = 1 }
+size_text = "about 200 MB image"
+ports = [6767]
+internet = true
+install = { quadlet = "bazarr" }
+images = { bazarr = "ghcr.io/linuxserver/bazarr:v1.6.0-ls357@sha256:e464484e7e6cff8ee189036c9ba96977ab054104ea18067ecf6171d0f3f3f8f2" }
+
+[[item]]
+id = "prowlarr"
+group = "media"
+name = "Prowlarr (sources)"
+line = "One place to add the sources you have access to, shared by Sonarr, Radarr and Lidarr."
+hint = "Prowlarr keeps your list of sources and hands it to the library apps. None are set up for you: add the ones you have access to."
+icon = "system-search-symbolic"
+glyph = "search"
+needs = []
+conflicts = []
+roles = ["media"]
+requires = { cpu = 1, ram_gb = 0.25, disk_gb = 1 }
+size_text = "about 200 MB image"
+ports = [9696]
+internet = true
+install = { quadlet = "prowlarr" }
+images = { prowlarr = "ghcr.io/linuxserver/prowlarr:2.5.2.5491-ls156@sha256:1295cff29d10b486c0d8324d1559a552140a5932bf8b3d87e398654414f63f92" }
+secrets = ["api-key"]
+[item.setup]
+title = "Your sources"
+intro = "Add the indexers you have access to in Prowlarr. None are set up for you."
+[[item.setup.action]]
+label = "Open Prowlarr"
+url = "http://{host}:9696"
+
+[[item]]
+id = "recyclarr"
+group = "media"
+name = "Quality profiles (Recyclarr)"
+line = "Sets Sonarr's and Radarr's quality rules from the TRaSH guides."
+hint = "Recyclarr keeps the community's TRaSH quality profiles in Sonarr and Radarr, with your audio language from the media library's settings. It runs once a day."
+icon = "preferences-system-details-symbolic"
+glyph = "settings"
+needs = ["sonarr|radarr"]
+conflicts = []
+roles = ["media"]
+requires = { ram_gb = 0.25 }
+size_text = "about 100 MB image"
+ports = []
+internet = true
+install = { quadlet = "recyclarr" }
+images = { recyclarr = "ghcr.io/recyclarr/recyclarr:8.7.1@sha256:73303ba5ee647b6492fee917d3a781c6e59b6cab08f9dfce9482a950846f564f" }
+
+[[item]]
+id = "unpackerr"
+group = "media"
+name = "Unpackerr"
+line = "Unpacks downloaded archives so the library apps can file them."
+hint = "Some downloads arrive as archives. Unpackerr extracts them for Sonarr, Radarr and Lidarr, and tidies up afterwards."
+icon = "package-x-generic-symbolic"
+glyph = "copy"
+needs = ["sonarr|radarr"]
+conflicts = []
+roles = ["media"]
+requires = { ram_gb = 0.25 }
+size_text = "about 20 MB image"
+ports = []
+internet = true
+install = { quadlet = "unpackerr" }
+images = { unpackerr = "docker.io/golift/unpackerr:0.15.2@sha256:057e34740d26c34d81ec8e2faf8ec11f8dbfc77489b7a42826f52b37e5ee1b6c" }
+
+[[item]]
+id = "autoscan"
+group = "media"
+name = "Autoscan"
+line = "Tells the media servers the moment something new is filed."
+hint = "Instead of scanning the whole library on a timer, Jellyfin and Plex rescan just the folder Sonarr or Radarr changed."
+icon = "view-refresh-symbolic"
+glyph = "update"
+needs = ["sonarr|radarr", "jellyfin|plex"]
+conflicts = []
+roles = ["media"]
+requires = { ram_gb = 0.25 }
+size_text = "about 30 MB image"
+ports = [3030]
+internet = true
+install = { quadlet = "autoscan" }
+images = { autoscan = "docker.io/cloudb0x/autoscan:1.4.0@sha256:4a53ff1925c3362da3ad9c53f3930153c08a0d487ad2ee2a74e05cd8764d9902" }
+
+[[item]]
+id = "tautulli"
+group = "media"
+name = "Tautulli"
+line = "Who watched what on Plex, and when."
+hint = "Tautulli keeps Plex's history and statistics, and can notify you of new plays."
+icon = "x-office-presentation-symbolic"
+glyph = "info"
+needs = ["plex"]
+conflicts = []
+roles = []
+default = false
+requires = { ram_gb = 0.25 }
+size_text = "about 150 MB image"
+ports = [8181]
+internet = true
+install = { quadlet = "tautulli" }
+images = { tautulli = "ghcr.io/linuxserver/tautulli:v2.17.2-ls239@sha256:5a6501710790b545693de2938bdfd279d52291f986b6f7273716783b2b080cc6" }
+
+[[item]]
+id = "beets"
+group = "media"
+name = "Beets"
+line = "Tidies your music: tags, artwork and file names."
+hint = "Beets matches albums against MusicBrainz and fixes their tags and names."
+icon = "audio-x-generic-symbolic"
+glyph = "edit"
+needs = ["media-library"]
+conflicts = []
+roles = []
+default = false
+requires = { ram_gb = 0.25 }
+size_text = "about 200 MB image"
+ports = [8337]
+internet = true
+install = { quadlet = "beets" }
+images = { beets = "ghcr.io/linuxserver/beets:2.14.1-ls358@sha256:acef8a6ea96a0e2a391504aaae361f27fe77eac8e448cf14b675b3b64c50465a" }
+
+[[item]]
+id = "sabnzbd"
+group = "media"
+name = "SABnzbd (Usenet downloads)"
+line = "Downloads from a Usenet provider you subscribe to."
+hint = "SABnzbd fetches files from your own Usenet provider's servers, over SSL. You need an account with a provider. For media you own or have rights to."
+icon = "folder-download-symbolic"
+glyph = "copy"
+needs = ["media-library"]
+conflicts = []
+roles = ["media"]
+default = false
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 20 }
+size_text = "about 150 MB image"
+ports = [8085]
+internet = true
+install = { quadlet = "sabnzbd" }
+images = { sabnzbd = "ghcr.io/linuxserver/sabnzbd:5.1.0-ls266@sha256:b0f9755d795913bd26ae3f3a12805668ab0681ab847a7624568559c573fc7cae" }
+[item.setup]
+title = "Your Usenet provider"
+intro = "A Usenet provider is a paid service; bromigOS isn't linked to any of them. These are some well-known providers, for reference."
+check = "usenet"
+[[item.setup.field]]
+id = "provider"
+label = "Usenet provider"
+kind = "choice"
+default = "other"
+choices = [
+  { id = "newshosting", label = "Newshosting", url = "https://www.newshosting.com/" },
+  { id = "eweka", label = "Eweka", url = "https://www.eweka.nl/en" },
+  { id = "frugal", label = "Frugal Usenet", url = "https://frugalusenet.com/" },
+  { id = "usenetserver", label = "UsenetServer", url = "https://www.usenetserver.com/" },
+  { id = "other", label = "Another provider" },
+]
+[[item.setup.field]]
+id = "server"
+label = "Server address"
+kind = "text"
+default = ""
+help = "From your provider's account page."
+[[item.setup.field]]
+id = "port"
+label = "Port"
+kind = "number"
+default = 563
+[[item.setup.field]]
+id = "ssl"
+label = "SSL"
+kind = "bool"
+default = true
+[[item.setup.field]]
+id = "connections"
+label = "Connections"
+kind = "number"
+default = 20
+help = "Your plan says how many you may use."
+[[item.setup.field]]
+id = "username"
+label = "User name"
+kind = "text"
+default = ""
+[[item.setup.field]]
+id = "password"
+label = "Password"
+kind = "secret"
+
+[[item]]
+id = "qbittorrent"
+group = "media"
+name = "qBittorrent (torrent downloads)"
+line = "A torrent client, for media you own or have rights to."
+hint = "qBittorrent downloads into the media library's downloads folder, filed by category for Sonarr, Radarr and Lidarr. With the VPN item it only ever uses the VPN."
+icon = "folder-download-symbolic"
+glyph = "copy"
+needs = ["media-library"]
+conflicts = []
+roles = ["media"]
+default = false
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 20 }
+size_text = "about 150 MB image"
+ports = [8081, 6881]
+internet = true
+install = { quadlet = "qbittorrent" }
+images = { qbittorrent = "ghcr.io/linuxserver/qbittorrent:5.2.3_v2.0.14-ls471@sha256:6816d2b144b1eb97665f886e41e18a14d026ba78c9d0953fc68a1211ea819433" }
+
+[[item]]
+id = "slskd"
+group = "media"
+name = "slskd (Soulseek)"
+line = "A Soulseek client for music, for media you own or have rights to."
+hint = "slskd runs the Soulseek network's client as a web app. You need a Soulseek account, which is free."
+icon = "folder-download-symbolic"
+glyph = "copy"
+needs = ["media-library"]
+conflicts = []
+roles = ["media"]
+default = false
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 5 }
+size_text = "about 100 MB image"
+ports = [5030]
+internet = true
+install = { quadlet = "slskd" }
+images = { slskd = "ghcr.io/slskd/slskd:0.26.0@sha256:ecd4026d4f8fb504e2cc55323efa2c1f5b56d20d3686b018249cc36b48ea17a6" }
+[item.setup]
+title = "Your Soulseek account"
+[[item.setup.field]]
+id = "username"
+label = "Soulseek user name"
+kind = "text"
+default = ""
+[[item.setup.field]]
+id = "password"
+label = "Soulseek password"
+kind = "secret"
+
+[[item]]
+id = "gluetun"
+group = "media"
+name = "VPN for downloads (Gluetun)"
+line = "Sends the downloaders' traffic through your VPN provider, and only through it."
+hint = "Gluetun connects to your VPN provider; qBittorrent, SABnzbd and slskd use its connection and nothing else, so they go offline if the VPN drops (a kill switch). You need an account with a VPN provider."
+icon = "network-vpn-symbolic"
+glyph = "lock"
+needs = []
+conflicts = []
+roles = ["media"]
+default = false
+requires = { ram_gb = 0.25 }
+size_text = "about 40 MB image"
+ports = []
+internet = true
+install = { quadlet = "gluetun" }
+images = { gluetun = "docker.io/qmcgaw/gluetun:v3.41.3@sha256:fa19cc76b2af13d57a8d3dc3066f2ada061b1c761b8aecf989b3877c0486e027" }
+[item.setup]
+title = "Your VPN provider"
+intro = "A VPN provider is a paid service; bromigOS isn't linked to any of them."
+check = "vpn"
+[[item.setup.field]]
+id = "provider"
+label = "VPN provider"
+kind = "choice"
+default = "pia"
+choices = [
+  { id = "pia", label = "Private Internet Access", note = "Supports port forwarding (better for torrents)", url = "https://www.privateinternetaccess.com/" },
+  { id = "protonvpn", label = "Proton VPN", note = "Supports port forwarding (better for torrents)", url = "https://protonvpn.com/" },
+  { id = "mullvad", label = "Mullvad", note = "No port forwarding since 2023", url = "https://mullvad.net/" },
+]
+[[item.setup.field]]
+id = "username"
+label = "OpenVPN user name"
+kind = "text"
+default = ""
+help = "Private Internet Access: your account's user name. Proton VPN: the OpenVPN user name from account.protonvpn.com (not your email)."
+show_if = { provider = ["pia", "protonvpn"] }
+[[item.setup.field]]
+id = "password"
+label = "OpenVPN password"
+kind = "secret"
+show_if = { provider = ["pia", "protonvpn"] }
+[[item.setup.field]]
+id = "wireguard_key"
+label = "WireGuard private key"
+kind = "secret"
+help = "From Mullvad's WireGuard configuration page."
+show_if = { provider = ["mullvad"] }
+[[item.setup.field]]
+id = "wireguard_address"
+label = "WireGuard address"
+kind = "text"
+default = ""
+help = "The Address line of the same configuration, such as 10.64.0.2/32."  # privacy: allow (an example WireGuard address)
+show_if = { provider = ["mullvad"] }
+[[item.setup.field]]
+id = "country"
+label = "Server country"
+kind = "text"
+default = ""
+help = "Leave empty for the provider's default."
+[[item.setup.field]]
+id = "kill_switch"
+label = "Kill switch"
+kind = "bool"
+default = true
+help = "On: the downloaders use only the VPN's connection, so they stop when it drops. Off: they don't use the VPN at all."
+
+[[item]]
+id = "pinchflat"
+group = "media"
+name = "YouTube (Pinchflat)"
+line = "Keeps the YouTube channels and playlists you choose on this server."
+hint = "Pinchflat downloads new videos from the channels you add (bromigos lab youtube add) into the library's youtube folder."
+icon = "camera-video-symbolic"
+glyph = "copy"
+needs = ["media-library"]
+conflicts = []
+roles = ["media"]
+default = false
+requires = { cpu = 1, ram_gb = 0.5, disk_gb = 10 }
+size_text = "about 400 MB image"
+ports = [8945]
+internet = true
+install = { quadlet = "pinchflat" }
+images = { pinchflat = "ghcr.io/kieraneglin/pinchflat:latest@sha256:01b4f98aabaf3f5fe394213f7a32578c9e84e42080f52e2f8334021a4473b202" }
+
+[[item]]
+id = "youtube-library"
+group = "media"
+name = "YouTube library"
+line = "Shows your YouTube downloads as a YouTube library in Jellyfin."
+hint = "Adds the youtube folder as a Shows library, one show per channel, and points bromigos lab youtube at Pinchflat here."
+icon = "folder-videos-symbolic"
+glyph = "computer"
+needs = ["pinchflat", "jellyfin"]
+conflicts = []
+roles = []
+default = false
+requires = {}
+size_text = "nothing to download"
+ports = []
+internet = false
+install = { step = "youtube-library" }
+
+[[item]]
+id = "den-tv"
+group = "media"
+name = "Den TV hookup"
+line = "Your desktops find this server's media servers for Den TV and casting."
+hint = "Announces Jellyfin and Plex here on your local network, so bromigOS desktops can add them as Den TV sources and cast from them."
+icon = "video-joined-displays-symbolic"
+glyph = "computer"
+needs = ["jellyfin|plex"]
+conflicts = []
+roles = ["media"]
+requires = {}
+size_text = "nothing new: Avahi comes with every Server"
+ports = []
+internet = false
+install = { step = "den-tv" }
+
+# ------------------------------------------------------------------ BRODEC
+[[item]]
+id = "brodec-machine"
+group = "brodec"
+name = "This server on BRODEC"
+line = "See, restart and update this server from BRODEC on your phone."
+hint = "BRODEC's machine agent pairs with your phone, end to end encrypted: status, alerts, restart and update with your fingerprint, and a terminal. You pair it in the welcome tour."
+icon = "phone-symbolic"
+glyph = "phone"
+needs = []
+conflicts = []
+roles = ["lab-node", "storage", "home-services", "game-server", "media", "base"]
+requires = { ram_gb = 0.1 }
+size_text = "about 20 MB download"
+ports = []
+internet = true
+install = { pacman = ["brodec-machine"] }
+note = "Pair it in the welcome tour."

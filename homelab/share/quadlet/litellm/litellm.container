@@ -1,0 +1,18 @@
+[Unit]
+Description=LiteLLM gateway
+
+[Container]
+Image={{image:litellm}}
+ContainerName=litellm
+Network=bromigos-lab.network
+PublishPort=4000:4000
+Volume={{data}}/config.yaml:/app/config.yaml:ro,Z
+Exec=--config /app/config.yaml --port 4000
+Secret={{secret:master-key}},type=env,target=LITELLM_MASTER_KEY
+HealthCmd=python3 -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness')"
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

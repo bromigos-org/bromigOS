@@ -179,10 +179,9 @@ the reader: nothing is shown. The warning never stops the install.
    computer's name. The user name and computer name are suggested from your name.
 9. **Encryption.** On by default. Your password unlocks the disk, or it gets a passphrase of
    its own ([iso-encryption.md](iso-encryption.md)).
-10. **Remote access and protection**, bromigOS Server only: SSH (off by default; keys only
-   when on, with keys read from the stick's `fieldkit/` folder or pasted, and a password
-   login only when chosen), the firewall (on), and automatic updates with a snapshot before
-   each (on).
+10. **bromigOS Server's own steps**, in place of About you, Encryption and Remote access:
+   Role and Keys (right after the edition), then Network, Access, Reach, Storage,
+   Encryption, Updates and Run after Where ([bromigOS Server's steps](#bromigos-servers-steps)).
 11. **Summary.** Every choice in plain words, and what the disk loses. The button says
     **Erase disk and install** when the disk is erased.
 12. **Installing.** A progress bar and one plain status line (Making room, Encrypting the
@@ -313,7 +312,7 @@ the progress bar and one `::error words` line if it stops. Everything else it pr
 | The rest | btrfs, on LUKS2 unless `--no-encrypt` |
 | btrfs subvolumes | `@` for `/`, `@home`, `@log`, `@pkg` and `@.snapshots`; and the data an update's rollback must never touch: `@containers` (`/var/lib/containers`), `@k3s` (`/var/lib/rancher`), `@srv` (`/srv`) and `@bromigos-state` (`/var/lib/bromigos/server`, the update history) |
 | Boot loader | GRUB, which boots BIOS and UEFI alike and lists the snapshots |
-| Kernel | `linux` |
+| Kernel | `linux`. bromigOS Server: `linux-lts` first in the boot menu, `linux` beside it (`GRUB_TOP_LEVEL`, `GRUB_DISABLE_SUBMENU`) |
 
 archinstall also installs NetworkManager, PipeWire, zram swap, the bromigOS packages,
 snapper, snap-pac, grub-btrfs, inotify-tools and Plymouth. It enables SDDM, Bluetooth,
@@ -389,6 +388,106 @@ explains it and suggests Server or the full stick. `answers.py --online` points 
 at Arch's mirrors and `bromigos-iso-install` puts the repositories first in the live
 system's `pacman.conf`.
 
+### bromigOS Server's steps
+
+After **What kind of computer is this?** → bromigOS Server, `server.py` splices the
+server's own steps into `common.steps_for`'s list: **Role** after the edition, then
+**Network**, **Access**, **Storage**, **Encryption** (`unlock`), **Updates** and
+**Services** after Where, and no About you, Encryption or Remote access. The graphical
+installer's pages are `server_gui.py` (a mixin of `gui.Window`), the text installer's
+`server_tui.py` (a mixin of `tui.Installer`), and both read the same model, checks and
+words from `server.py`. The plain questions (`plain.py`) ask the same through
+`server.plain_steps`.
+
+| Step | What it asks | What it checks |
+|---|---|---|
+| Role | Lab node, Storage, Home services, Game server, Just a server: hologram cards from the presets file | one is picked |
+| Network | the port (wired and connected first; Wi-Fi only is said plainly), DHCP or a fixed address, the server's name, Wake-on-LAN (wired ports whose card supports it), VLAN and bonding under Advanced; the address it will have, big | the address, the prefix (or a netmask), the gateway inside the subnet, each name server, the hostname, the VLAN, a bond of two or more, as you type |
+| Access | the admin (`admin` by default) and password; SSH keys only (default), keys or the password (with a warning), or none; keys from the stick's `fieldkit/` folder, pasted, or from `https://github.com/USER.keys` with their fingerprints, used only once confirmed; the `lab` account's key on a Lab node; WireGuard and Tailscale (installed, off unless chosen) | a key for keys only; GitHub's keys confirmed |
+| Storage | the other disks (what each loses), one copy or two (RAID1), the shares on a Storage server | RAID1 needs two or more |
+| Encryption | the security chip (TPM 2.0, read from `/sys/class/tpm`) unlocking the disk; without one, a passphrase after each restart or no encryption | one is picked |
+| Updates | by itself, download and ask, or off; the window (3 to 5 AM by default); notices to the phone | the window's form |
+| Services | the role's toggles and extras (Cockpit off), the apps, a Game server's Pelican panel and image cache | the panel's address |
+
+Since then the server path has grown (`server.py`'s `STEPS`): **Role** takes several roles at
+once (Lab node, Storage, Home services, Game server, Media; Just a server alone), merging
+their presets, with `[[combos]]` notes from `presets.toml` checked against the hardware;
+**Keys** (`secrets`, right after the roles) asks where keys and passwords go; **Reach**
+(after Access) asks how the server is reached from anywhere; and **Run** (`services`) is
+"What should this server run?". Each step has one live picture beside its controls, or above
+them on a narrow screen: `bromigos_glass.py`'s `NetworkMap`, `AccessMap`, `PoolMap`,
+`UnlockHolo`, `UpdateDial`, `VaultHolo`, `BudgetHolo`, `Constellation` and `ServerDeck`, and
+`bromigos_textual.py`'s `net_map`, `key_cards`, `drives`, `dial`, `pipeline`, `vault` and
+`budget`, with plain-character fallbacks for the Linux console.
+
+| Step | What it reads and writes |
+|---|---|
+| Keys | `bromigos_homelab.secretstore` (bromigos-lab's; `secretstore_stub.py` stands in without it): the lab's Vault (address, then OIDC, AppRole or a one-time wrapped token, never a root token; the policy preview and the server's path; a test), a new OpenBao (the `vault` item; it means a new lab), this server encrypted (systemd-creds, TPM2, a recovery bundle), or sops + age. The choice goes in `/etc/bromigos/secrets.toml` (no values) |
+| Reach | `bromigos_homelab.reach` (docs/lab-network.md, "For the installer"): `reach.CHOICES`, `decode()` and `check_wireguard()` before Install, the choice's packages; `bromigos-iso-install` runs `python3 -m bromigos_homelab.reach stage --root /mnt` after the copy. The desktop installer asks it too, before its summary |
+| Run | `bromigos_homelab.provcatalog` (bromigos-lab's: `groups`, `resolve`, `conflicts`, `budget`, `recommend(roles, hw, lab)`, `suggest_models`, `fits_item`) over `/usr/share/bromigos/lab/provision-catalogue.toml`, and `localprovision.detect()` for the hardware; `provision.py` keeps the same rules for a medium without it. The lab choice (new, join with the pairing, a join bundle or the connection file, none), the catalogue by group with the roles' picks and what they need added, each item's `[item.setup]` as a guided form (show_if, choices with their notes and links, a live `--check`, Bitwarden import beside secret fields), the model, the budget meter |
+
+Secrets never leave memory except into the store: `server_apply.py` stages the typed ones
+root-only in `/var/lib/bromigos/secrets/staged.json`, and `bromigos-server-secrets.service`
+puts them in the store at the first start (`bromigos lab secrets set ITEM/FIELD`, and
+`generate` for the items' own) and shreds the file. The answer file names each one as a
+reference, `{secret = "local:gluetun/password"}` (or `vault:`, `sops:`), under
+`[server.settings.ITEM]`; a plain value there is refused.
+
+At the first sign-in the Server tour's **Run** step shows the engine's plan
+(`bromigos lab provision --local --from-answers /var/log/bromigos/install-answers.toml --plan
+--json`) and applies it on **Apply** (`--apply --json`, following `::stage`, `::item`,
+`::note` and `::error`). Done and the tour's last page say where the keys live and how to
+recover them.
+
+**Ready to install** shows the server's rows (Roles, Server name, Network, Admin, Sign-in,
+Remote access, Data disks, Disk encryption, Updates, Services, Lab, Runs, Keys and
+passwords, Reach, Kernel) and the Server briefing: a strip of the steps' pictures in
+miniature, then `ssh ADMIN@ADDRESS`, big, and its QR (`ssh://ADMIN@ADDRESS`).
+
+**The presets file.** The roles, the service toggles, the apps and every package list are
+data: `/usr/share/bromigos/server/presets.toml` (the `bromigos-server` package's, when it
+ships one), else the medium's `/usr/local/share/bromigos-iso/server/presets.toml`, or
+`BROMIGOS_SERVER_PRESETS`. The manual's [Setting up bromigOS
+Server](../manual/src/server-setup.md#the-presets-file) lists its keys.
+
+**What the install does with it.** `common.backend_answers` adds `server.plan()` as the
+answers' `server` part: every package, unit, firewall rule set, health check, sysctl and
+choice, resolved. `answers.py` gives archinstall `linux-lts` and `linux` and the plan's
+packages the medium carries (all of them online), and swaps `podman-docker` for Docker's
+engine on a Game server joined to a lab. After archinstall and `bromigos rollback setup`,
+`bromigos-iso-install` runs `server_apply.py` ("Setting up the server"), which:
+
+- installs what the medium lacked from Arch's mirrors when it can reach them, else lists
+  it in `/etc/bromigos/server/pending-packages` for `bromigos-server-pending.service`;
+- writes `/etc/bromigos/server.toml` (bromigos-server's keys and the installer's
+  `[roles]`, `[network]`, `[storage]`, `[unlock]`, `[services]`, `[apps]`, `[kernel]`,
+  `[remote]`, `[lab]`, `[games]`, `[packages]`);
+- writes the NetworkManager profile (DHCP or fixed, Wake-on-LAN, a VLAN or a bond);
+- sets sshd's limits (keys only, `MaxAuthTries 3`, `LoginGraceTime 30`, `AllowGroups wheel
+  bromigos-ssh`), locks root, and on a Lab node only makes the `lab` account (its key,
+  passwordless sudo);
+- opens the role's rule sets: bromigos-server's by name, and the ones it doesn't carry in
+  `/etc/bromigos/server/nftables.d/50-installer.nft`; without the package, its own table in
+  `/etc/nftables.conf`;
+- writes the sysctl list, journald's limits and AppArmor on the kernel line; puts
+  `linux-lts` first in GRUB;
+- makes the data disks btrfs (`mkfs.btrfs -d raid1 -m raid1` for two copies) at
+  `/srv/data`, with `shares`, `apps` and `backups` subvolumes, a monthly scrub, hourly
+  snapshots and the SMB and NFS shares on a Storage server;
+- enables the role's units the system has (the rest wait in `pending-units`), and leaves
+  Tailscale and WireGuard off unless chosen;
+- moves the update timer into the window (`bromigos-server-update.timer.d/10-window.conf`)
+  or turns it off;
+- writes the role's health checks to `/etc/bromigos/server/health.d/`;
+- announces `_bromigos-lab._tcp` over mDNS (Find my lab);
+- with the security chip: systemd's initramfs (`sd-encrypt`, `rd.luks.options=tpm2-device=auto`),
+  no snapshot entries in GRUB (Field Kit rolls back instead), and
+  `bromigos-server-tpm-enroll.service`, which enrols the chip at the first start with a
+  one-time key in LUKS slot 31 and wipes it.
+
+The Server tour (`bromigos welcome-console`) reads `server.toml` to show the role, the
+network and the update facts on its Network, What's here and Done steps.
+
 ### Boot parameters
 
 The installers read these from the kernel line, so a boot menu entry can go straight to one
@@ -440,6 +539,16 @@ firewall = true              # firewall, auto_updates
 auto_updates = true
 countdown = 10
 ```
+
+bromigOS Server's steps go in a `[server]` table (in the flat YAML form, `server.KEY:`
+lines): `role`, `interface`, `method`, `address`, `prefix`, `gateway`, `dns`,
+`wake_on_lan`, `vlan`, `bond`, `ssh_mode`, `github` (fetched during the countdown) or
+`github_keys`, `lab_key`, `tailscale`, `wireguard`, `data_disks`, `data_layout`, `unlock`,
+`update_mode`, `update_window`, `notify_phone`, `services`, `services_off`, `apps`,
+`pelican_url`, `registry_mirror`. `server.from_answer_file` checks them the way the steps
+do. The medium carries an example per role in
+`/usr/local/share/bromigos-iso/server/examples/`; the manual's [Setting up bromigOS
+Server](../manual/src/server-setup.md#answer-files) shows them.
 
 The same keys work as flat YAML (`install.yaml`, `key: value` per line).
 `common.read_answer_file` checks it and says, in plain words, what's wrong.
@@ -835,6 +944,31 @@ The harness gives the test user sudo without a password for the checks, in
 
 To fake a laptop or another machine, `BROMIGOS_ISOTEST_QEMU` adds QEMU arguments, such as
 `-smbios file=…` from `test/vm/smbios-chassis.py` ([hardware.md](hardware.md)).
+
+bromigOS Server's steps have their own tests and runs:
+
+- `iso/test/installer/test_server.py`: the presets come from the data file (a role added
+  to it shows up), every check (address, prefix, gateway, DNS, hostname, VLAN), GitHub's
+  keys from a stub HTTP server on the machine (never the network) with their fingerprints,
+  keys only by default, RAID1 needing two disks, each role's plan, the window and mode in
+  `server.toml`, every example answer file, `answers.py`'s configuration, `server_apply.py`'s
+  files in a stand-in root (`--dry-run`), every new step driven by keys and drawn at
+  120×35 and 80×24, and the graphical steps drawn offscreen (`render-gui.sh` with
+  `BROMIGOS_INSTALLER_RENDER_ONLY=server-` and `fixtures/probe-server.json`).
+- `iso/test.sh tui-install|gui-install --edition server --server PLAN.json` answers the
+  server steps from PLAN (`fixtures/server/*.json`), and `iso/test.sh answer-install FILE`
+  installs an answer file by itself (`autodrive.py`: the countdown, then the install).
+- `iso/test/server-checks.sh ROLE [key=value…]` checks the installed server: the role, the
+  window and mode, the LTS kernel running with `linux` beside it, sshguard, AppArmor,
+  WireGuard and Tailscale off, mDNS, smartd and the scrub, journald, the sysctls, sshd's
+  limits, root locked, the firewall, the health checks, a fixed address and Wake-on-LAN,
+  the lab account only on a Lab node, `/srv/data`'s RAID1 and shares, and Docker's engine
+  only on a Game server joined to a lab.
+
+Extra disks and a second network port come through `BROMIGOS_ISOTEST_QEMU`, with explicit
+PCI addresses after the harness's own (so the system disk stays `/dev/vda` and the second
+port is `enp0s18`); a second, small VM on a QEMU socket network reaches the server's fixed
+address there.
 
 To run a second VM beside another, give it its own directory, SSH port and display with
 `BROMIGOS_ISOTEST_DIR`, `BROMIGOS_ISOTEST_PORT` and `BROMIGOS_ISOTEST_VNC`.

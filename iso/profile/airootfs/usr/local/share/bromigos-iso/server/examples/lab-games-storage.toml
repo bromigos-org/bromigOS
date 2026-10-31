@@ -1,0 +1,21 @@
+# One server with three jobs: a Lab node that also runs game servers and keeps the lab's files,
+# starting a new lab, its keys in a new Vault (OpenBao), everything it runs set up at the first start
+# (the model is the one the plan suggests for the graphics card; models = ["…"] picks another).
+[install]
+edition = "server"
+disk = "/dev/nvme0n1"
+mode = "erase"
+user = "admin"
+hostname = "lab-core"
+password = "used at the console and for sudo"
+ssh_keys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTheDocsOnlyReplaceIt you@laptop"]
+reach = "brodec"
+
+[server]
+roles = ["lab", "games", "storage"]
+lab = "new"
+provision = ["k3s", "argocd", "monitoring", "vault", "ollama", "models", "pelican-panel", "wings", "s3", "backup-target"]
+store = { kind = "openbao" }
+data_disks = ["/dev/sda", "/dev/sdb"]
+data_layout = "raid1"
+unlock = "tpm"

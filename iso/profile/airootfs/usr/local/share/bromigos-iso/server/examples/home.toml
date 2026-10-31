@@ -1,0 +1,23 @@
+# bromigOS Server for the household's apps, with a fixed address.
+[install]
+edition = "server"
+timezone = "America/Chicago"
+keyboard = "us"
+disk = "/dev/sda"
+mode = "erase"
+user = "admin"
+hostname = "home-server"
+password = "used at the console and for sudo"
+
+[server]
+role = "home"
+method = "static"
+address = "192.0.2.40"
+prefix = 24
+gateway = "192.0.2.1"
+dns = ["192.0.2.1", "9.9.9.9"]
+github = "your-github-name"   # its public keys, fetched during the countdown (needs the internet)
+apps = ["photos", "media", "passwords", "homepage", "uptime-kuma"]
+services_off = ["cockpit"]
+unlock = "none"
+update_window = "01:00-03:00"

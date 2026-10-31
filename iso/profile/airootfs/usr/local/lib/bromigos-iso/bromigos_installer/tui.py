@@ -19,6 +19,7 @@ if __package__ in (None, ""):
 
 from . import backend, common  # noqa: E402
 from .disks import GiB, plain_size  # noqa: E402
+from . import server, server_tui  # noqa: E402  (bromigOS Server's steps)
 
 
 def _read(path):
@@ -273,7 +274,7 @@ class Choice(Widget, can_focus=True):
             nxt.focus()
 
 
-class Installer(App):
+class Installer(server_tui.ServerPages, App):
     TITLE = "Install bromigOS"
     CSS = (BT.CSS if BT is not None else "") + """
     Screen { background: $background; }
@@ -283,7 +284,12 @@ class Installer(App):
     #rail-steps { height: auto; }
     #orb { height: auto; margin-top: 1; content-align: center top; width: 100%; }
     #vector-line { height: auto; color: $text; margin-top: 0; }
-    Screen.-compact #orb, Screen.-compact #vector-line { display: none; }
+    /* VECTOR's line always shows whole (_fit_rail): a smaller orb, no orb, or the line under the heading */
+    #orb.-away, #vector-line.-away { display: none; }
+    #main { width: 1fr; height: 1fr; }
+    #vector-top { display: none; height: auto; padding: 1 2 0 2; }
+    #vector-top.-here { display: block; }
+    Screen.-narrow #vector-top { padding: 0 1; }
     #editions, #modes { height: auto; width: 100%; max-width: 200; }
     Screen.-narrow #editions, Screen.-narrow #modes { layout: vertical; }
     #phases { height: auto; margin-top: 1; }
@@ -396,7 +402,7 @@ class Installer(App):
     .g-sample-row .g-text { padding-top: 1; }
     .g-sub { color: $text-muted; }
     #g-said { margin-top: 1; }
-    """
+    """ + server_tui.CSS
     BINDINGS = [Binding("escape", "back", "Back"), Binding("ctrl+n", "next", "Continue"),
                 Binding("f12", "shell", "Shell", show=False),
                 Binding("f2", "details", "Details", show=False), Binding("ctrl+c", "quit_ask", "Quit", show=False)] + \
@@ -433,10 +439,14 @@ class Installer(App):
                 yield Static("", id="rail-steps")
                 yield Static("", id="orb")
                 yield Static("", id="vector-line")
-            with VerticalScroll(id="page"):
-                with ContentSwitcher(initial="step-guide", id="steps"):
-                    for sid, *_ in common.STEPS:
-                        yield Vertical(id=f"step-{sid}")
+            with Vertical(id="main"):
+                # VECTOR's line over the page, when the rail has no room for it (_fit_rail): it
+                # stays put while the page scrolls
+                yield Static("", id="vector-top")
+                with VerticalScroll(id="page"):
+                    with ContentSwitcher(initial="step-guide", id="steps"):
+                        for sid, *_ in common.STEPS:
+                            yield Vertical(id=f"step-{sid}")
         yield Static("", id="error")
         with Horizontal(id="nav"):
             yield hint(Button("Back", id="back"), "Go back one step. Nothing changes on any disk until you press Install.")
@@ -480,6 +490,7 @@ class Installer(App):
                 self._top()
             except Exception:           # before the first step is drawn
                 pass
+        self.call_after_refresh(self._fit_rail)
 
     def narrow(self):
         return getattr(self, "bp", "normal") in ("narrow", "too-small")
@@ -682,14 +693,56 @@ class Installer(App):
         # his line: the voice guide's catalogue (lib/guide/lines.toml), the caption his clip says
         lid, values = self.line_id(sid) if guide else (None, {})
         line = guide.line(lid, **values) if guide else ""
-        self.query_one("#vector-line", Static).update(Text.assemble(("VECTOR  ", "bold " + c["primary"]), line) if line else "")
+        self._vline = line
+        self.query_one("#vector-line", Static).update(self._vector_words())
+        self.call_after_refresh(self._fit_rail)
+
+    ORB_SIZES = {"full": (12, 6), "small": (10, 3)}
+
+    def _vector_words(self):
+        line = getattr(self, "_vline", "")
+        return Text.assemble(("VECTOR  ", "bold " + common.theme()[0]["primary"]), line) if line else Text("")
+
+    def _fit_rail(self):
+        """VECTOR's line always shows whole. When the steps leave the rail too little room, in
+        this order: a smaller orb, no orb, then his line over the page (under the step's title
+        bar), where it stays while the page scrolls."""
+        import textwrap
+        try:
+            rail, steps_w = self.query_one("#rail"), self.query_one("#rail-steps", Static)
+            orb, vl = self.query_one("#orb", Static), self.query_one("#vector-line", Static)
+        except Exception:
+            return
+        line = getattr(self, "_vline", "")
+        width = max(8, rail.content_size.width)
+        rows = len(textwrap.wrap("VECTOR  " + line, width)) if line else 0
+        room = rail.content_size.height - steps_w.size.height
+        nerd = BT is not None and BT.icon_look() == "nerd"
+        plain_rows = len(getattr(BT, "RING", [])) if BT is not None else 0
+        fits = {"full": (6 if nerd else plain_rows) + 1, "small": 4 if nerd else None, "none": 0}
+        mode = "under"
+        if rail.display and not self.narrow() and BT is not None and hasattr(BT, "orb"):
+            mode = next((m for m in ("full", "small", "none") if fits[m] is not None and fits[m] + rows <= room), "under")
+        elif rail.display and not self.narrow() and rows <= room:
+            mode = "none"
+        self._orb_mode = mode
+        orb.set_class(mode not in ("full", "small"), "-away")
+        vl.set_class(mode == "under", "-away")
+        if mode in ("full", "small") and BT is not None:
+            orb.update(BT.orb(getattr(self, "orb_t", 0.0), *self.ORB_SIZES[mode]))
+        try:
+            top = self.query_one("#vector-top", Static)
+        except Exception:                       # the app is closing
+            return
+        top.update(self._vector_words())
+        top.set_class(mode == "under" and bool(line), "-here")
 
     def _orb_tick(self):
         if self.step in self.FLARE_STEPS or self.reduced:      # one FLARE a screen: the ring, the emblem, the countdown
             return
         self.orb_t = getattr(self, "orb_t", 0.0) + 0.15
         try:
-            self.query_one("#orb", Static).update(BT.orb(self.orb_t, 12, 6))
+            self.query_one("#orb", Static).update(BT.orb(self.orb_t, *self.ORB_SIZES.get(getattr(self, "_orb_mode", "full"), (12, 6))))
         except Exception:
             pass
 
@@ -1604,6 +1657,8 @@ class Installer(App):
     BRIEF_TITLE = {"guide": ("Language", "language"), "welcome": ("Time zone", "clock"), "edition": ("Kind", "edition"), "keyboard": ("Keyboard", "keyboard"),
                    "disk": ("Where", "disk"), "user": ("You", "user"), "encryption": ("Encryption", "encryption"),
                    "ssh": ("Remote access", "ssh"), None: ("Packages", "copy")}
+    BRIEF_STEP.update(server_tui.BRIEF_STEP)          # bromigOS Server's rows and steps
+    BRIEF_TITLE.update(server_tui.BRIEF_TITLE)
 
     def briefing(self):
         """The summary's rows, grouped by the step that changes them: [(step or None, [(label, value)])]."""
@@ -1665,6 +1720,8 @@ class Installer(App):
             panel.mount(Horizontal(*parts, classes="brief-row"))
         if warn:
             box.mount(Static(Text.assemble((ic("alert") + "  ", "bold"), warn), classes="danger" if self.a["mode"] == "erase" else "warn"))
+        if server.is_server(self.a):
+            self.server_summary_extra(box)        # the Server briefing: ssh admin@address, and its QR
         self.what = Static("Open this to see the commands and archinstall's configuration.", classes="muted")
         box.mount(hint(Collapsible(self.what, title="Show what will run", collapsed=True, id="what"),
                        "The exact commands, and the configuration archinstall gets (passwords hidden)."))
@@ -1790,6 +1847,7 @@ class Installer(App):
                 lines.append(("boot", "The boot menu lets you choose bromigOS or "
                               f"{(self.disk() or {}).get('options', {}).get('alongside', {}).get('name') or 'the other system'} each time."))
             lines.append(("user", "Then sign in at the login screen." if ed.get("desktop", True) else "Then sign in at the text console."))
+            lines += [({"key": "key", "recover": "rollback", "run": "settings"}[k], w) for k, w in server.done_lines(self.a)]
             side.mount(Static(icon_rows(lines), classes="card"))
             side.mount(Horizontal(hint(Button("Restart now", id="reboot", variant="primary"), "Restart the computer into bromigOS."),
                                   classes="buttons"))
@@ -1854,6 +1912,8 @@ class Installer(App):
         """The step's answers read and checked: None, or what to fix, in plain words."""
         s = self.step
         q = self.query_one
+        if s in server_tui.STEP_IDS:
+            return self.server_check(s)
         if s == "welcome":
             tz = q("#timezone", Input).value.strip()
             match = next((z for z in self.zones if z.lower() == tz.lower()), None)

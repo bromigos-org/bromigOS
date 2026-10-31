@@ -1,0 +1,35 @@
+# A Media server: your own movies, shows and music for every screen, with the VPN for downloads.
+# Secrets (the VPN login) are never in this file: they go into the store when typed, or are
+# referenced by their store path, as here.
+[install]
+edition = "server"
+disk = "/dev/sda"
+mode = "erase"
+user = "admin"
+hostname = "media-server"
+password = "used at the console and for sudo"
+ssh_keys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTheDocsOnlyReplaceIt you@laptop"]
+
+[server]
+roles = ["media"]
+lab = "none"
+provision = ["media-library", "jellyfin", "seerr", "sonarr", "radarr", "den-tv", "gluetun", "sabnzbd", "prowlarr"]
+store = { kind = "local" }
+unlock = "none"
+
+[server.settings.gluetun]
+provider = "pia"
+country = "Netherlands"
+kill_switch = true
+password = { secret = "local:gluetun/password" }
+
+[server.settings.media-library]
+language = "English"
+dual_audio = true
+
+[server.settings.sabnzbd]
+server = "news.example.net"
+port = 563
+ssl = true
+connections = 20
+password = { secret = "local:sabnzbd/password" }

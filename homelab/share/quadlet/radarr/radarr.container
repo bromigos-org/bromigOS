@@ -1,0 +1,21 @@
+[Unit]
+Description=Radarr (films)
+
+[Container]
+Image={{image:radarr}}
+ContainerName=radarr
+Network=bromigos-lab.network
+PublishPort=7878:7878
+Secret={{secret:api-key}},type=mount,target=/run/secrets/api-key,mode=0400
+Environment=FILE__RADARR__AUTH__APIKEY=/run/secrets/api-key
+Environment=PUID={{puid}}
+Environment=PGID={{pgid}}
+Environment=TZ={{tz}}
+Volume={{data}}/config:/config:Z
+Volume={{media}}:/media
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

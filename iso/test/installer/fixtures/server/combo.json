@@ -1,0 +1,3 @@
+{"roles": ["lab", "games", "storage"], "data_disks": ["/dev/vdb", "/dev/vdc"], "data_layout": "raid1", "unlock": "none",
+ "lab": "new", "provision": ["k3s", "monitoring", "wings", "s3", "backup-target"], "store": {"kind": "local"},
+ "settings_secrets": {"wings": {"token": "hunter2-node-token"}}}

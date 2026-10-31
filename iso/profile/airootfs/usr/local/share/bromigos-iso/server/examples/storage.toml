@@ -1,0 +1,25 @@
+# bromigOS Server for files and backups: two data disks as RAID1, shared over SMB and NFS.
+[install]
+edition = "server"
+locale = "en_GB"
+timezone = "Europe/London"
+keyboard = "gb"
+disk = "/dev/nvme0n1"
+mode = "erase"
+user = "admin"
+hostname = "storage"
+password = "used at the console, for sudo and for the shares"
+ssh_keys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTheDocsOnlyReplaceIt you@laptop"]
+
+[server]
+role = "storage"
+method = "static"
+address = "192.0.2.10"
+prefix = 24
+gateway = "192.0.2.1"
+dns = ["192.0.2.1"]
+data_disks = ["/dev/sda", "/dev/sdb"]   # erased: every file on them is deleted
+data_layout = "raid1"                    # or "single"
+services = ["smb", "nfs", "timeline"]
+unlock = "passphrase"
+update_mode = "download"                 # fetch at night, then ask your phone

@@ -79,8 +79,10 @@ itself.
    > **Remember it.** Nobody can recover a forgotten passphrase, and the disk can't be read
    > without it.
 
-10. **Remote access and protection**, for bromigOS Server only: SSH (signing in from
-   another computer), the firewall, and automatic updates. See [bromigOS Server](#bromigos-server).
+10. **bromigOS Server's own steps**, for a server only: what it will do, where its keys and
+   passwords live, its network, who can sign in, how to reach it from anywhere, data disks,
+   how its disk unlocks, how it updates, and what it runs. A server has no About you or
+   Encryption step: these replace them. See [bromigOS Server](#bromigos-server).
 11. **Summary.** Every choice in plain words. The button says **Install**, or **Erase disk
     and install** when the disk is erased.
 
@@ -138,18 +140,39 @@ computer starts as before.
 
 ## bromigOS Server
 
-bromigOS Server has no desktop. It starts to a text screen and you manage it there or
-from another computer. The installer asks three more things:
+bromigOS Server has no desktop. It starts to a text screen, and you look after it from your
+phone, your desktop, or another computer. After **What kind of computer is this?** you pick
+**bromigOS Server**, and the installer asks what a server needs instead of About you:
 
-- **SSH** lets you sign in from another computer on your network. It's off by default.
-  When it's on, **Keys only** is the safe choice: you sign in with a key file from your
-  other computer, which nobody can guess. The installer reads keys from the stick's
-  `fieldkit` folder (any `.pub` file), or you can paste one. **Keys or my password** also
-  allows your password, which anyone on the network can try to guess.
-- **Firewall.** On by default. It blocks connections from other computers, except SSH when
-  it's on.
-- **Automatic updates.** On by default. Security fixes install by themselves, each after a
-  snapshot, so a bad update can be undone from the boot menu.
+1. **What will this server do?** Five cards: **Lab node** (computing and graphics cards for
+   your lab), **Storage** (shared folders and backups), **Home services** (apps for the
+   household), **Game server**, or **Just a server** (the safe base and nothing more). The
+   card sets what's installed and switched on. You can change any of it on the Services
+   step.
+2. **Your keyboard** and **Where to install**, as for the desktop.
+3. **Its network.** The network port (a cable, if it has one), whether your router gives it
+   its address or it keeps a fixed one, and its name. The address other computers will use
+   is shown big. **Wake-on-LAN** lets your phone switch it on over the cable.
+4. **Who can sign in.** The admin's name and password, and how you sign in from your own
+   computer. **Keys only** is the safe choice: the installer reads keys from the stick's
+   `fieldkit` folder, you can paste one, or it fetches your public keys from GitHub and
+   shows them so you can check them. A password login is offered too, with a warning.
+   WireGuard and Tailscale are installed and stay off unless you turn them on.
+5. **Data disks.** Other disks for your files and apps, at `/srv/data`. With two or more
+   you can keep **two copies** of everything (RAID1), so one disk can fail.
+6. **Lock the disk.** If the computer has a security chip (TPM 2.0), the chip unlocks the
+   disk at every start, so updates can restart it at night. Without one, you choose: type
+   the passphrase after every restart, or leave the disk unlocked.
+7. **How it updates.** By itself (the default), download and ask your phone, or only when
+   you say. It updates in a window at night, 3 to 5 AM unless you pick another, and restarts
+   only in that window and only when it has to.
+8. **What it runs.** The services the role switched on, and the apps for Home services or a
+   Game server. Change any of them.
+
+**Ready to install** then shows every choice, and how you'll sign in once it's installed:
+`ssh admin@` and the server's address, with a QR code an SSH app on your phone can scan.
+
+What each step means, and what it sets up, is in [Setting up bromigOS Server](server-setup.md).
 
 ## VECTOR's voice
 
@@ -333,6 +356,7 @@ Flat YAML (`install.yaml`, one `key: value` per line) works too.
 | `firewall` | true/false | `true` | bromigOS Server's firewall |
 | `auto_updates` | true/false | `true` | bromigOS Server's automatic updates |
 | `countdown` | number | `10` | Seconds before it starts; `0` starts at once |
+| `[server]` | table | | bromigOS Server's steps: `role`, the network, sign-in, data disks, unlock, updates, services ([Setting up bromigOS Server](server-setup.md#answer-files)) |
 | `failing_ok` | true/false | `false` | Install on a disk that reports it's failing |
 | `bitlocker_saved` | true/false | `false` | Required beside a BitLocker Windows: you saved its key |
 
@@ -374,7 +398,7 @@ bitlocker_saved = true
 countdown = 30
 ```
 
-bromigOS Server, keys only:
+bromigOS Server as a Lab node, keys only:
 
 ```toml
 [install]
@@ -384,17 +408,19 @@ timezone = "UTC"
 keyboard = "us"
 disk = "/dev/sda"
 mode = "erase"
-user = "ops"
-hostname = "rack-01"
+user = "admin"
+hostname = "lab-node-1"
 password = "used at the console and for sudo"
-encrypt = true
-ssh = true
-ssh_password = false
 ssh_keys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI…your-key… you@laptop"]
-firewall = true
-auto_updates = true
 countdown = 10
+
+[server]
+role = "lab"
+unlock = "tpm"
+update_window = "03:00-05:00"
 ```
+
+There's an example for every role in [Setting up bromigOS Server](server-setup.md#answer-files).
 
 ### Boot parameters
 

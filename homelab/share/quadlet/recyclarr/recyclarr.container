@@ -1,0 +1,18 @@
+[Unit]
+Description=Quality profiles (Recyclarr)
+
+[Container]
+Image={{image:recyclarr}}
+ContainerName=recyclarr
+Network=bromigos-lab.network
+Volume={{data}}/config:/config:Z
+Environment=TZ={{tz}}
+Environment=CRON_SCHEDULE=@daily
+#if:sonarr Secret={{secret:sonarr/api-key}},type=env,target=SONARR_API_KEY
+#if:radarr Secret={{secret:radarr/api-key}},type=env,target=RADARR_API_KEY
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

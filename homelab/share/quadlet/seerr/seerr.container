@@ -1,0 +1,16 @@
+[Unit]
+Description=Requests (Seerr)
+
+[Container]
+Image={{image:seerr}}
+ContainerName=seerr
+Network=bromigos-lab.network
+PublishPort=5055:5055
+Volume={{data}}/config:/app/config:Z
+Environment=TZ={{tz}}
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
