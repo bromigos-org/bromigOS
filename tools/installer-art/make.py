@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""The installers' and welcome tours' art (iso/profile/airootfs/usr/local/share/bromigos-iso/art/),
+"""The installers' and welcome tours' art (desktop/art/, packaged by bromigos-desktop into
+/usr/share/bromigos/art),
 made from bromigOS's own renders, never stock art:
 
   vector-{idle,speaking,thinking}.png   VECTOR's hologram, cut out of the vector repository's
@@ -20,7 +21,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
-OUT = os.path.join(ROOT, "iso/profile/airootfs/usr/local/share/bromigos-iso/art")
+OUT = os.path.join(ROOT, "desktop/art")
 
 
 def light_alpha(im, floor=14):

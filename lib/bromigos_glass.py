@@ -19,8 +19,7 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gdk, GdkPixbuf, GLib, Gtk  # noqa: E402
 
 HERE = os.path.dirname(os.path.realpath(__file__))
-ART_DIRS = ["/usr/share/bromigos/art", "/usr/local/share/bromigos-iso/art",
-            os.path.join(HERE, "../iso/profile/airootfs/usr/local/share/bromigos-iso/art")]
+ART_DIRS = [os.path.join(HERE, "../desktop/art"), "/usr/share/bromigos/art"]     # a checkout's, then bromigos-desktop's
 EMBLEMS = ["/usr/share/bromigos/themes/wick/emblem", os.path.join(HERE, "../themes/wick/emblem")]
 
 # each step's icon (Adwaita's symbolic set, drawn in the theme's colours)
