@@ -28,6 +28,7 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab media search`, `get`, `status`, `upcoming`, `recent`, `language` | Ask your media stack for films, shows, anime and music at the best quality, in your languages ([below](#media-requests)). |
 | `bromigos media` | Your media library in a terminal: browse, monitor, change quality, play, delete ([below](#media-requests)). |
 | `bromigos lab provision …` | Generate and apply Core or Advanced on your own target ([lab-provision.md](lab-provision.md)). |
+| `bromigos lab network setup`, `join`, `connect`, `status`, `approve`, `remove`, `rotate` | Run the lab's own private network, Headscale, and join machines to it ([lab-network.md](lab-network.md)). |
 | `bromigos lab power …` | Read supported PDU outlets and plan reviewed changes ([below](#pdu-power)). |
 | `bromigos lab maintenance …` | Plan, follow and resume an ordered shutdown or startup ([below](#rack-maintenance)). |
 | `bromigos lab connect …` | Run `bromigos setup homelab …`: find services and write `homelab.toml`. |
@@ -164,18 +165,21 @@ startup order from outlet numbers.
 
 ## The dashboard
 
-`bromigos lab` with no arguments opens a terminal dashboard built with Textual. It has five
-tabs: STATUS, MODELS, JOBS, DOCTOR and PROVISION. It reads the lab again every 15 seconds. When the
+`bromigos lab` with no arguments opens a terminal dashboard built with Textual. It has six
+tabs: STATUS, MODELS, JOBS, DOCTOR, PROVISION and NETWORK. It reads the lab again every 15 seconds. When the
 output isn't a terminal, it prints the status instead.
 
 | Key | What it does |
 |---|---|
-| 1, 2, 3, 4 | Switch to Status, Models, Jobs or Doctor. |
+| 1, 2, 3, 4, 5, 6 | Switch to Status, Models, Jobs, Doctor, Provision or Network. |
 | r | Read the lab again now. |
 | n | Queue a new job. |
 | c | Review cancellation of the selected job. |
 | R | Retry the job under the cursor. |
 | d | Run the doctor now. |
+| A | Network: make a join code for a machine, and show it with its QR code. |
+| p | Network: approve a phone or laptop that shows a code. |
+| x | Network: review removing the device under the cursor. **Keep it** is focused first. |
 | q, Ctrl+C | Quit from the main screen. |
 | ? | Show keyboard help. |
 | ↓ ↑, j k | Move through the cards (each shows as you reach it) or a table's rows. |

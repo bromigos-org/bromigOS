@@ -149,6 +149,14 @@ class Chart(unittest.TestCase):
         r = helm("template", "x", str(CHART), "--set", "lab.name=r", "--set", "switch.create=false", ok=False)
         self.assertNotEqual(r.returncode, 0)
 
+    def test_lab_network_address(self):
+        e = env(render("lab.name=r")[("Deployment", "lab-brodec-lab")])
+        self.assertNotIn("BRODEC_LAB_NETWORK_URL", e, "not offered unless set")
+        e = env(render("lab.name=r", "network.loginServer=https://net.example.org", "network.name=Home")[
+            ("Deployment", "lab-brodec-lab")])
+        self.assertEqual(e["BRODEC_LAB_NETWORK_URL"], "https://net.example.org")
+        self.assertEqual(e["BRODEC_LAB_NETWORK_NAME"], "Home")
+
     def test_values_carry_no_private_defaults(self):
         text = (CHART / "values.yaml").read_text() + "".join(p.read_text() for p in (CHART / "templates").iterdir())
         for word in ("vault", "secret/", "10.", "192.168.", ".lan", ".local", "hermes", "@b"):

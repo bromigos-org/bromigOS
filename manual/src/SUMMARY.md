@@ -38,6 +38,7 @@
 - [Your homelab](homelab.md)
     - [The lab console](lab.md)
     - [Lab models](lab-models.md)
+    - [Your lab's private network](lab-network.md)
 - [Creating with AI](where-ai-runs.md)
 - [Extensions](extensions.md)
     - [Make your own widget](make-a-widget.md)

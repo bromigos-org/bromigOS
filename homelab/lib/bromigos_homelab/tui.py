@@ -1,8 +1,9 @@
 """`bromigos lab` with no arguments: the live terminal dashboard (Textual).
 
-Five tabs use the command data and reviewed plans: STATUS (every card `bromigos lab status` has),
-MODELS (`lab models`), JOBS (`lab jobs`, with a log, cancel, retry and a new-job form) and
-DOCTOR (`lab doctor`, each finding's fix) and PROVISION (services, VMs and cluster plans).
+Six tabs use the command data and reviewed plans: STATUS (every card `bromigos lab status` has),
+MODELS (`lab models`), JOBS (`lab jobs`, with a log, cancel, retry and a new-job form),
+DOCTOR (`lab doctor`, each finding's fix), PROVISION (services, VMs and cluster plans) and
+NETWORK (`lab network`: the lab's private network, its members, add with a join QR, remove).
 Everything has a hover hint: a card says what it
 shows, a row what it is (the table's tooltip follows the row under the pointer), a key in
 the footer what it does. Reads run in worker threads: the screen never waits on the lab.
@@ -81,6 +82,27 @@ class Live:
     def youtube_quality(self):
         from . import pinchflat
         return pinchflat.settings().get("quality") or pinchflat.DEFAULT_QUALITY
+
+    def network_status(self):
+        from . import labnet
+        try:
+            return labnet.status()
+        except labnet.NetError as e:
+            return {"configured": True, "error": str(e), "devices": [], "codes": []}
+
+    def network_join(self, tag, expires):
+        from . import labnet
+        doc = labnet.join(tag, expires)
+        doc["qr"] = labnet.qr_lines(doc["bundle"])
+        return doc
+
+    def network_remove(self, device_id):
+        from . import labnet
+        return labnet.remove(str(device_id))
+
+    def network_approve(self, code):
+        from . import labnet
+        return labnet.approve(code)
 
     def now(self):
         return time.time()
@@ -348,6 +370,131 @@ class CancelJob(Dialog):
         self.dismiss(event.button.id == "confirm-cancel-job")
 
 
+class AddMachine(Dialog):
+    """NETWORK's "Add a machine…": which kind of machine and how long the code lasts. The code is
+    made after this (`bromigos lab network join`), then shown with its QR code."""
+
+    def compose(self):
+        with Vertical(id="netbox"):
+            yield Label("ADD A MACHINE TO THE LAB NETWORK", classes="title")
+            s = Select([("A server (bromigOS Server, a VPS, a NAS): reached by you and the lab", "server"),
+                        ("A lab machine (a cluster node, a GPU box): reaches the other lab machines", "lab")],
+                       value="server", allow_blank=False, id="net-tag")
+            s.tooltip = ("What the machine is. Servers are reached by your devices and the lab, and reach nothing "
+                         "on their own. Lab machines also reach each other.")
+            yield s
+            e = Select([("Good for a day", "24h"), ("Good for an hour", "1h"), ("Good for a week (a Field Kit stick)", "7d")],
+                       value="24h", allow_blank=False, id="net-expires")
+            e.tooltip = "How long the code works if it isn't used. It works once either way."
+            yield e
+            yield Static("The code works once. Paste it into the installer, Field Kit or bromigOS Server, or "
+                         "scan its QR code with BRODEC.", classes="dim")
+            with Horizontal():
+                yield Button("Cancel", id="net-no", tooltip="Close without making a code")
+                yield Button("Make a join code", variant="primary", id="net-go",
+                             tooltip="Make a one-time join code (bromigos lab network join)")
+
+    @on(Button.Pressed, "#net-no")
+    def no(self):
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#net-go")
+    def go(self):
+        self.dismiss((self.query_one("#net-tag", Select).value, self.query_one("#net-expires", Select).value))
+
+
+class JoinCode(Dialog):
+    """A join code just made: its QR code, the code to paste and the plain Tailscale command."""
+
+    def __init__(self, doc):
+        super().__init__()
+        self.doc = doc
+
+    def compose(self):
+        from rich.text import Text
+        d = self.doc
+        with VerticalScroll(id="joinbox"):
+            yield Label("JOIN CODE", classes="title")
+            yield Static(f"Good once, until {d.get('expires', '')[:16].replace('T', ' ')} UTC, for a "
+                         f"{', '.join(t.removeprefix('tag:') for t in d.get('tags') or [])} machine.", classes="dim")
+            if d.get("qr"):
+                q = Static(Text.from_ansi("\n".join(d["qr"])), id="join-qr")
+                q.tooltip = "Scan with BRODEC, or with the installer's camera step. It holds the code below."
+                yield q
+            b = Static(d["bundle"], id="join-bundle", markup=False)
+            b.tooltip = "The join code. Paste it into the installer, Field Kit or bromigOS Server's setup."
+            yield b
+            c = Static("On any Linux machine with Tailscale: " + d.get("command", ""), id="join-command", markup=False,
+                       classes="dim")
+            c.tooltip = "The same join, as Tailscale's own command (no exit node, no routes)"
+            yield c
+            with Horizontal():
+                yield Button("Done", variant="primary", id="join-done", tooltip="Close. The code stays valid until used or expired.")
+
+    @on(Button.Pressed, "#join-done")
+    def done(self):
+        self.dismiss(None)
+
+
+class ApproveDevice(Dialog):
+    """A phone or laptop that signed in through the Tailscale app shows a code: approve it here."""
+
+    def compose(self):
+        with Vertical(id="netbox"):
+            yield Label("APPROVE A DEVICE", classes="title")
+            yield Static("In the Tailscale app, choose your lab's server; it shows a code. Type it here to add the "
+                         "device as yours.", classes="dim")
+            i = Input(placeholder="the code the device shows", id="approve-code")
+            i.tooltip = "The code from the device's sign-in page (bromigos lab network approve CODE)"
+            yield i
+            with Horizontal():
+                yield Button("Cancel", id="approve-no", tooltip="Close without approving")
+                yield Button("Approve", variant="primary", id="approve-go", tooltip="Add the device to the lab network as yours")
+
+    @on(Button.Pressed, "#approve-no")
+    def no(self):
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#approve-go")
+    def go(self):
+        code = self.query_one("#approve-code", Input).value.strip()
+        if not code:
+            self.notify("Type the code the device shows first", severity="warning")
+            return
+        self.dismiss(code)
+
+
+class RemoveDevice(Dialog):
+    """Remove is a choice you make twice: Keep is focused first."""
+    DEFAULT_CSS = """
+    RemoveDevice { align: center middle; }
+    #remove-box { width: 76; max-width: 96%; height: auto; padding: 1 2; border: solid $warning; background: $surface; }
+    #remove-box Horizontal { height: auto; margin-top: 1; }
+    """
+
+    def __init__(self, device):
+        super().__init__()
+        self.device = device
+
+    def compose(self):
+        d = self.device
+        with Vertical(id="remove-box"):
+            yield Label(f"Take {d['name']} off the lab network?", classes="title")
+            yield Static(", ".join(d.get("ips") or []) or "no address yet", markup=False)
+            yield Static("It can't reach your lab or be reached until it joins again with a new code.")
+            with Horizontal():
+                yield Button("Keep it", id="keep-device")
+                yield Button("Remove", variant="error", id="confirm-remove-device")
+            yield Static("←/→ choose · Enter activate · Esc go back", classes="dim")
+
+    def on_mount(self):
+        self.query_one("#keep-device", Button).focus()
+
+    @on(Button.Pressed)
+    def choose(self, event):
+        self.dismiss(event.button.id == "confirm-remove-device")
+
+
 class LabApp(UXApp):
     class ReadReady(Message):
         """Deliver a completed read through the app's normal message lifecycle."""
@@ -384,6 +531,14 @@ class LabApp(UXApp):
     .title { text-style: bold; color: $primary; }
     Select, Input { margin: 1 0 0 0; }
     #runbox Horizontal { height: auto; margin-top: 1; }
+    AddMachine, ApproveDevice, JoinCode { align: center middle; }
+    #netbox { width: 84; max-width: 96%; height: auto; padding: 1 2; border: solid $primary; background: $surface; }
+    #netbox Horizontal, #joinbox Horizontal { height: auto; margin-top: 1; }
+    #joinbox { width: 96; max-width: 98%; height: 90%; padding: 1 2; border: solid $primary; background: $surface; }
+    #join-qr { width: auto; margin: 1 0; }
+    #join-bundle { margin: 1 0; }
+    #net-actions { height: auto; padding: 0 1; }
+    #net-actions Button { margin-right: 1; }
     """
     BINDINGS = [
         Binding("question_mark", "help", "Help"),
@@ -392,6 +547,8 @@ class LabApp(UXApp):
         Binding("l", "tab_bar(1)", "Next tab", priority=True, show=False),
         Binding("ctrl+c", "interrupt", "Quit", show=False),
         Binding("5", "tab('provision')", "Provision", show=False),
+        Binding("6", "tab('network')", "Network", show=False,
+                tooltip="Your lab's private network: its members, add a machine, remove one"),
         Binding("q", "quit", "Quit", tooltip="Leave the dashboard"),
         Binding("r", "refresh", "Refresh", tooltip="Read the lab again now (it refreshes every 15 s by itself)"),
         Binding("1", "tab('status')", "Status", show=False, tooltip="Every card: nodes, GPUs, services, apps, storage, alerts, jobs"),
@@ -404,13 +561,16 @@ class LabApp(UXApp):
         Binding("d", "doctor", "Run doctor", tooltip="Run every check now (Doctor tab)"),
         Binding("M", "media", "Media", tooltip="Your media library: TV, films, music, downloads, requests "
                                                 "(bromigos media)"),
+        Binding("A", "net_add", "Add machine", tooltip="Make a join code for a machine, with its QR code (Network tab)"),
+        Binding("x", "net_remove", "Remove device", tooltip="Take the device under the cursor off the lab network (Network tab)"),
+        Binding("p", "net_approve", "Approve device", tooltip="Approve a phone or laptop that shows a code (Network tab)"),
         Binding("a", "youtube_add", "Add YouTube", show=False,
                 tooltip="Add a YouTube channel or playlist to Pinchflat (the YouTube downloads card)"),
         Binding("],L", "tab_step(1)", "Next tab", show=False),
         Binding("[,H", "tab_step(-1)", "Previous tab", show=False),
     ]
     HELP = (
-        ("Navigation", "1–5 switch tabs · [ / ] or H / L previous / next tab\n"
+        ("Navigation", "1–6 switch tabs · [ / ] or H / L previous / next tab\n"
                        "↑/↓ or j/k move · g/G first / last · Ctrl+U/D page\n"
                        "Tab / Shift+Tab change focus · first row: ↑/k returns to tabs\n"
                        "Tab bar: ←/→ or h/l switch · ↓/j enters content\n"
@@ -422,11 +582,13 @@ class LabApp(UXApp):
                                     "←/→ or h/l chooses buttons · Enter activates the focused control\n"
                                     "Esc / Ctrl+C cancels · job cancellation defaults to Keep job\n"
                                     "Letter shortcuts stay inactive while you type or a dialog is open"),
+        ("Network", "A add a machine (a join code and its QR) · p approve a device's code\n"
+                    "x review removing the device under the cursor (Keep is the default)"),
         ("Provision", "Choose services, then run the shown plan command. Apply and destructive\n"
                       "infrastructure commands keep their explicit approval in your terminal."),
     )
-    TABS = ("status", "models", "jobs", "doctor", "provision")
-    MAIN = {"models": "#modeltable", "jobs": "#jobtable", "doctor": "#findings"}
+    TABS = ("status", "models", "jobs", "doctor", "provision", "network")
+    MAIN = {"models": "#modeltable", "jobs": "#jobtable", "doctor": "#findings", "network": "#nettable"}
 
     def __init__(self, source=None, clock=None, interval=15.0):
         super().__init__()
@@ -437,6 +599,8 @@ class LabApp(UXApp):
         self.inv = None
         self.jobsdoc = None
         self.doctor_doc = None
+        self.net_doc = None
+        self.pending_net = False
         self.current = None
         self.loaded_at = None
         self.pending_jobs = set()
@@ -509,6 +673,18 @@ class LabApp(UXApp):
                     with Horizontal():
                         yield Button('Read storage', id='infra-storage')
                         yield Button('VM command', id='infra-vm')
+            with TabPane("NETWORK", id="network"):
+                with Vertical():
+                    yield Static("reading the lab network…", id="netsum", classes="dim")
+                    with Horizontal(id="net-actions"):
+                        yield Button("Add a machine… (A)", id="net-add", variant="primary",
+                                     tooltip="Make a one-time join code with its QR code (bromigos lab network join)")
+                        yield Button("Approve a device… (p)", id="net-approve",
+                                     tooltip="A phone or laptop signed in through the Tailscale app and shows a code")
+                        yield Button("Remove… (x)", id="net-remove", variant="error",
+                                     tooltip="Take the device under the cursor off the network, after you confirm")
+                    yield HintTable(id="nettable", cursor_type="row", zebra_stripes=True)
+                    yield Static("", id="net-hint", classes="dim")
         yield Static("", id="hint")
         yield Footer()
 
@@ -516,7 +692,8 @@ class LabApp(UXApp):
         self.register_theme(bromigos_theme())
         self.theme = "bromigos"
         for tid, hint in (("status", "Every part of the lab, one card each"), ("models", "Installed and loaded models"),
-                          ("jobs", "The lab job queue"), ("doctor", "Checks with fixes")):
+                          ("jobs", "The lab job queue"), ("doctor", "Checks with fixes"),
+                          ("network", "Your lab's private network: who's on it, add and remove")):
             try:
                 self.query_one(f"#tabs Tab#--content-tab-{tid}").tooltip = hint
             except Exception:
@@ -547,6 +724,12 @@ class LabApp(UXApp):
     def load_doctor(self):
         d = self.src.doctor()
         self.post_message(self.ReadReady("doctor", d))
+
+    @work(thread=True, exclusive=True, group="network")
+    def load_network(self):
+        read = getattr(self.src, "network_status", None)        # a source without a network: none yet
+        d = read() if read else {"configured": False}
+        self.post_message(self.ReadReady("network", d))
 
     @on(ReadReady)
     def _read_ready(self, event):
@@ -805,6 +988,140 @@ class LabApp(UXApp):
         self.provision_selected = provision.preset_selection(self.provision_cat, event.button.id.removeprefix("provision-"))
         self.show_provision_tree()
 
+    # ------------------------------------------------------------------ NETWORK
+    def show_network(self, d):
+        self.net_doc = d
+        from . import labnet
+        summary = self.query_one("#netsum", Static)
+        t = self.query_one("#nettable", HintTable)
+        if not d.get("configured"):
+            summary.update("No lab network yet. In a terminal: bromigos lab network setup (it shows the plan "
+                           "before it changes anything).")
+            t.fill(["", "device"], [], [], "")
+        elif d.get("error"):
+            summary.update(marked("crit", "The lab network didn't answer: " + d["error"]))
+        else:
+            summary.update(f"{d.get('name')} · {d.get('login_server')} · {d.get('summary')}")
+            rows, hints = [], []
+            for x in d.get("devices", []):
+                what = {"lab": "lab machine", "server": "server", "device": f"{x['user']}'s device"}[x["kind"]]
+                seen = "online" if x["online"] else ("seen " + labnet.ago(x["seen_ago"]) if x["seen_ago"] is not None
+                                                     else "never seen")
+                rows.append([marked("ok" if x["online"] else "unknown"), x["name"], what,
+                             ", ".join(x["ips"][:1]) or "-", seen, ", ".join(t_.removeprefix("tag:") for t_ in x["tags"]) or "-"])
+                hints.append(f"{x['name']}: {what}, {seen}. Addresses: {', '.join(x['ips']) or 'none'}."
+                             + (" Its key expired: it must sign in again." if x["expired"] else "") + " (x removes it)")
+            for k in d.get("codes", []):
+                rows.append([marked("warn"), f"join code {k['id']}", "unused join code", "-",
+                             "until " + k["expires"][:16].replace("T", " "),
+                             ", ".join(t_.removeprefix("tag:") for t_ in k["tags"]) or "-"])
+                hints.append("A join code nobody has used yet. bromigos lab network rotate expires every unused one.")
+            t.fill(["", "name", "what", "address", "seen", "tags"], rows, hints,
+                   "Everything on your lab's private network, online first")
+        self._net_actions()
+        self.refresh_bindings()
+
+    def _selected_device(self):
+        devs = (self.net_doc or {}).get("devices", [])
+        tables = self.screen_stack[0].query("#nettable") if self.screen_stack else []
+        if not tables:
+            return None
+        r = tables.first().cursor_row
+        return devs[r] if 0 <= r < len(devs) else None
+
+    def _net_actions(self):
+        from textual.css.query import NoMatches
+        try:
+            self._net_buttons()
+        except NoMatches:                                # the dashboard is closing
+            pass
+
+    def _net_buttons(self):
+        ok = bool(self.net_doc and self.net_doc.get("configured") and not self.net_doc.get("error"))
+        self.query_one("#net-add", Button).disabled = not ok or self.pending_net
+        self.query_one("#net-approve", Button).disabled = not ok or self.pending_net
+        self.query_one("#net-remove", Button).disabled = not ok or self.pending_net or not self._selected_device()
+
+    @on(DataTable.RowHighlighted, "#nettable")
+    def _net_row(self, _ev):
+        if not self.is_running or not self.query("#nettable"):
+            return
+        t = self.query_one("#nettable", HintTable)
+        r = t.cursor_row
+        self.query_one("#net-hint", Static).update(t.hints[r] if 0 <= r < len(t.hints) else "")
+        self._net_actions()
+        self.refresh_bindings()
+
+    @on(Button.Pressed, "#net-add")
+    def _net_add_pressed(self):
+        self.action_net_add()
+
+    @on(Button.Pressed, "#net-remove")
+    def _net_remove_pressed(self):
+        self.action_net_remove()
+
+    @on(Button.Pressed, "#net-approve")
+    def _net_approve_pressed(self):
+        self.action_net_approve()
+
+    def action_net_add(self):
+        self.push_screen(AddMachine(), self._net_add_chosen)
+
+    def _net_add_chosen(self, choice):
+        if choice and not self.pending_net:
+            self.pending_net = True
+            self._net_actions()
+            self.notify("Making a join code…")
+            self.net_join(*choice)
+
+    @work(thread=True, group="network-change")
+    def net_join(self, tag, expires):
+        try:
+            doc = self.src.network_join(tag, expires)
+        except Exception as e:
+            self.call_from_thread(self._net_done, f"Couldn't make a join code: {e}", True)
+            return
+        self.call_from_thread(self._net_done, None, False)
+        self.call_from_thread(self.push_screen, JoinCode(doc))
+
+    def action_net_remove(self):
+        d = self._selected_device()
+        if d and not self.pending_net:
+            did = d["id"]
+            self.push_screen(RemoveDevice(d), lambda yes: self._net_remove_confirmed(did, yes))
+
+    def _net_remove_confirmed(self, did, yes):
+        if yes and not self.pending_net:
+            self.pending_net = True
+            self._net_actions()
+            self.net_change("remove", did)
+
+    def action_net_approve(self):
+        if not self.pending_net:
+            self.push_screen(ApproveDevice(), lambda code: code and self._net_approve_typed(code))
+
+    def _net_approve_typed(self, code):
+        self.pending_net = True
+        self._net_actions()
+        self.net_change("approve", code)
+
+    @work(thread=True, group="network-change")
+    def net_change(self, what, arg):
+        try:
+            doc = self.src.network_remove(arg) if what == "remove" else self.src.network_approve(arg)
+        except Exception as e:
+            self.call_from_thread(self._net_done, f"Couldn't {what}: {e}", True)
+            return
+        self.call_from_thread(self._net_done, doc.get("words") or "Done", False)
+
+    def _net_done(self, words, error):
+        self.pending_net = False
+        self._net_actions()
+        self.refresh_bindings()
+        if words:
+            self.notify(words, severity="error" if error else "information", timeout=10)
+        self.load_network()
+
     # ------------------------------------------------------------------ actions
     @on(TabbedContent.TabActivated)
     def _tab(self, ev):
@@ -817,6 +1134,8 @@ class LabApp(UXApp):
             self.load_models()
         if tid == "doctor" and self.doctor_doc is None:
             self.load_doctor()
+        if tid == "network" and self.net_doc is None:
+            self.load_network()
 
     @on(DataTable.RowHighlighted, "#detail")
     def _item_row(self, ev):
@@ -843,6 +1162,10 @@ class LabApp(UXApp):
             return tab == "doctor"
         if action == "youtube_add":
             return tab == "status" and self.current == "youtube-downloader"
+        if action in ("net_add", "net_approve", "net_remove"):
+            ready = bool(tab == "network" and self.net_doc and self.net_doc.get("configured")
+                         and not self.net_doc.get("error") and not self.pending_net)
+            return ready and (action != "net_remove" or bool(self._selected_device()))
         return True
 
     def action_tab_bar(self, step):
@@ -912,6 +1235,8 @@ class LabApp(UXApp):
             self.load_models()
         if tab == "doctor":
             self.load_doctor()
+        if tab == "network":
+            self.load_network()
 
     def action_doctor(self):
         self.action_tab("doctor")
