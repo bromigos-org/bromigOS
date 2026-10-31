@@ -407,6 +407,43 @@ this:
 `reboot = false` in the settings stops the restart. The new kernel then runs after the
 next restart you make, and the check waits for it.
 
+### Update modes, the window and the channel
+
+The installer writes how updates go, under `[updates]`:
+
+```toml
+[updates]
+mode = "auto"           # auto, download or off
+window = "03:00-05:00"  # the server's own time zone
+channel = "live"        # Arch as it is today; a tested snapshot of it comes later
+notify = true
+arch_news_hold = true   # the same as news_hold
+cluster_reboots = false
+```
+
+| `mode` | What the nightly run does |
+|---|---|
+| `auto` | Updates, checks and rolls back by itself (above) |
+| `download` | Downloads what the update would install (`pacman -Syuw`) and stops. `bromigos server` says how many wait, and the alert `update.held` tells your phone (unless `notify = false`). BRODEC's Update, or `sudo bromigos server update --now`, then installs them with the snapshot, the check and the rollback |
+| `off` | Nothing: the timer is off. `sudo bromigos server update --now` runs the whole update when you want it |
+
+A file from before the modes has `auto = true` or `false`: that's `auto` or `off`.
+
+**The window.** The installer moves the timer into the window
+(`/etc/systemd/system/bromigos-server-update.timer.d/10-window.conf`), each server at its
+own moment in it. A restart the update needs happens only inside the window: an update
+approved from your phone at noon installs at once, and the restart waits for the window's
+next opening (status says "the restart it needs waits for the window"). `--now` at the
+console restarts at once. No window: any time.
+
+**Cluster reboots.** A Lab node with `cluster_reboots = true`, joined to the lab's cluster,
+never restarts by itself: it leaves `/run/reboot-required` for the lab, which restarts its
+machines one at a time and moves their work away first. The check runs after that restart.
+
+**The channel.** `live` is Arch as it is today, protected by the snapshot, the check and the
+rollback. A tested channel (a dated copy of Arch that CI has installed and booted) comes
+later; until then any other value updates from `live`, and says so.
+
 ### The Arch news hold
 
 Some Arch Linux news asks for manual steps before an update, such as editing a config file.
@@ -441,6 +478,14 @@ all of these are true:
   update began. Errors from before don't count; `bromigos server` shows them.
 - **The network is back.** The server has an address, and the gateway it had before the
   update answers a ping.
+- **Every script in `/etc/bromigos/server/health.d/` exits 0.** The installer writes each
+  role's (`50-disks.sh`, `50-k3s.sh`, `50-arrays.sh`, `50-shares.sh`, `50-apps.sh`,
+  `50-wings.sh`), and any script you add counts too. Each has a minute; one that isn't
+  executable runs with `sh`. Its last line of output is the reason a failure gives.
+
+`[health] checks` lists the checks the installer chose: `startup`, `units`, `network` and
+`sshd` are the built-in ones above; any other name is its `health.d` script. `bromigos
+server status --json` shows both.
 
 The check looks every 15 seconds until it's healthy or the time runs out.
 
