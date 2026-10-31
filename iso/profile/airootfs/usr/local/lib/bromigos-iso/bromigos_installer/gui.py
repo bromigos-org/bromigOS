@@ -1738,6 +1738,9 @@ class Window(Adw.ApplicationWindow):
             usable = [d for d in self.probe["disks"]]
             self.pick_disk(usable[plan.get("disk_index", 0)]["path"])
             self.pick_mode(plan["mode"])
+            if plan["mode"] == "reinstall" and getattr(self, "old_pp", None) is not None:
+                # an encrypted install being replaced: its passphrase opens it, as a person types it
+                self.old_pp.set_text(plan.get("old_passphrase") or plan.get("password", "tester"))
             if plan.get("gib") and hasattr(self, "split_bar"):
                 total = self.disk()["options"]["alongside"]
                 total = total["part_size"] + total["free_after"]
