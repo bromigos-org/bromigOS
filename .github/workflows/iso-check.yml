@@ -43,7 +43,7 @@ jobs:
             iso/test/fake-windows.sh iso/test/installer/render-gui.sh \
             iso/ci-test.sh iso/ci-local-packages.sh iso/publish.sh iso/secureboot/medium.sh \
             iso/fieldkit/profiledef.sh iso/fieldkit/package.sh iso/fieldkit/server-test.sh iso/fieldkit/ventoy-test.sh \
-            iso/fieldkit/ci-test.sh iso/fieldkit/airootfs/root/customize_airootfs.sh
+            iso/fieldkit/ci-test.sh iso/fieldkit/term-capture.sh iso/fieldkit/airootfs/root/customize_airootfs.sh
           python -m py_compile iso/release-notes.py iso/grub-menus.py iso/fieldkit/manifest.py iso/fieldkit/test.py
       - name: the profile's files are where profiledef.sh says
         shell: bash

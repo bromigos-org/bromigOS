@@ -206,7 +206,12 @@ fn seg_text(label: &str, w: usize, fill: char) -> (String, usize) {
 }
 
 /// The disk's bar, `width` cells: each partition in its kind's colour, its label on it where
-/// there's room, the free space in faint shade. ASCII tells kinds apart by their fill.
+/// there's room, the free space in faint shade. Built only of background-coloured cells
+/// (spaces, and the labels' letters on the same background), never block glyphs: a font's
+/// █ or ░ can be taller or shorter than the cell, which made a labelled part of the bar look
+/// thicker than the rest. The Linux console's own font draws its blocks to the cell, and has
+/// only 8 background colours, so there it's the blocks (█ in the kind's colour, free ░).
+/// ASCII tells kinds apart by their fill.
 pub fn bar(look: &Look, disk: &Value, width: u16) -> Vec<Span<'static>> {
     let segs = segments(disk);
     let n = cells(&segs, width as usize);
@@ -228,14 +233,34 @@ pub fn bar(look: &Look, disk: &Value, width: u16) -> Vec<Span<'static>> {
             continue;
         }
         let free = s.kind == "free";
-        let (t, lw) = seg_text(&s.label, w, if free { '░' } else { '█' });
+        if look.mode == Mode::Ansi16 {
+            let (t, lw) = seg_text(&s.label, w, if free { '░' } else { '█' });
+            let end = t.char_indices().nth(lw).map_or(t.len(), |(i, _)| i);
+            let (label, fill) = if free {
+                (Style::new().fg(p.muted), Style::new().fg(p.faint))
+            } else {
+                (
+                    Style::new().bg(c).fg(p.void).add_modifier(Modifier::BOLD),
+                    Style::new().fg(c),
+                )
+            };
+            if lw > 0 {
+                out.push(Span::styled(t[..end].to_string(), label));
+            }
+            out.push(Span::styled(t[end..].to_string(), fill));
+            continue;
+        }
+        let (t, lw) = seg_text(&s.label, w, ' ');
         let end = t.char_indices().nth(lw).map_or(t.len(), |(i, _)| i);
         let (label, fill) = if free {
-            (Style::new().fg(p.muted), Style::new().fg(p.faint))
+            (
+                Style::new().bg(p.faint).fg(p.text),
+                Style::new().bg(p.faint),
+            )
         } else {
             (
                 Style::new().bg(c).fg(p.void).add_modifier(Modifier::BOLD),
-                Style::new().fg(c),
+                Style::new().bg(c),
             )
         };
         if lw > 0 {
@@ -253,13 +278,15 @@ pub fn rules() -> Value {
             "kind": k.kind, "role": k.role, "label": k.label, "fstypes": k.fstypes,
             "parttype_words": k.parttype_words,
         })).collect::<Vec<_>>(),
-        "free": {"role": FREE.0, "label": FREE.1, "fill": "░"},
-        "fill": "█",
+        "free": {"role": FREE.0, "label": FREE.1, "fill": " "},
+        "fill": " ",
+        "background": true,
+        "console_fill": {"part": "█", "free": "░"},
         "ascii_fill": ASCII_FILL.iter().map(|(k, c)| (k.to_string(), Value::from(c.to_string()))).collect::<serde_json::Map<_, _>>(),
         "label": "a segment shows \" label \" when the label and a space each side fit; else only its fill. A kind's label left empty is the filesystem's name, then the partition's label.",
         "match": "first kind whose fstypes has the filesystem, or one of whose parttype_words is in the partition type (any case); else other",
         "cells": "each segment's share of the width, floored; a partition gets at least one cell, free space can get none; cells over the width come off the biggest, cells left over go to the largest remainders; the first of equals first both ways",
-        "colours": "a partition: its role's colour; its label in the void colour, bold, on that colour. Free space: its label muted, its fill faint.",
+        "colours": "background-coloured cells only (the fill is a space on the colour; no block glyphs, whose height varies by font): a partition's cells on its role's colour, its label in the void colour, bold; free space's on the faint colour, its label in the text colour. On the Linux console (16 colours: its font's blocks fill the cell, and it has 8 backgrounds) the fill is console_fill in the colour instead, free space's label muted.",
     })
 }
 
@@ -317,5 +344,28 @@ mod tests {
             .map(|s| s.content.to_string())
             .collect();
         assert!(t.is_ascii() && t.contains('#') && t.contains('='), "{t}");
+    }
+
+    #[test]
+    fn the_bar_is_background_cells_of_one_thickness() {
+        // the operator's report: a block glyph's height differs from a cell's, so a part of the
+        // bar drawn with █ (or an icon) looked thicker than the rest
+        let look = Look::wick();
+        let spans = bar(&look, &disk(), 40);
+        for s in &spans {
+            assert!(!s.content.contains(['█', '░', '▒']), "{:?}", s.content);
+            assert!(s.style.bg.is_some(), "every cell has its background: {s:?}");
+        }
+        let mut console = Look::wick();
+        console.mode = Mode::Ansi16;
+        console.pal = crate::palette::Pal::ansi16();
+        let t: String = bar(&console, &disk(), 40)
+            .iter()
+            .map(|s| s.content.to_string())
+            .collect();
+        assert!(
+            t.contains('█'),
+            "the Linux console's font draws its blocks to the cell: {t}"
+        );
     }
 }
