@@ -1541,7 +1541,7 @@ bromigos lab run voice --text "Lights are on."
 bromigos lab jobs watch
 bromigos lab doctor
 bromigos lab provision
-bromigos lab network setup --on quadlet --node you@labbox --endpoint lan --lan-address 192.168.1.20
+bromigos lab network setup --on quadlet --node you@labbox --endpoint lan --lan-address 192.0.2.20
 bromigos lab network join
 bromigos lab media get "Cowboy Bebop" --seasons all --specials
 ```

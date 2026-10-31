@@ -36,7 +36,7 @@ bromigos lab network setup --on quadlet --node you@your-relay --endpoint relay -
 bromigos lab network setup --on quadlet --node you@labbox --endpoint router --domain net.example.org
 
 # Your network only
-bromigos lab network setup --on quadlet --node you@labbox --endpoint lan --lan-address 192.168.1.20
+bromigos lab network setup --on quadlet --node you@labbox --endpoint lan --lan-address 192.0.2.20
 ```
 
 If your lab runs Kubernetes (k3s), use `--on k3s` instead. It installs the network as a Helm
