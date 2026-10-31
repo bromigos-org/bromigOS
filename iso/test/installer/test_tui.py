@@ -20,7 +20,12 @@ for name in ("bromigos-1-1-x86_64", "bromigos-desktop-1-1-x86_64", "bromigos-cor
     open(os.path.join(STORE, "bromigos", "x86_64", name + ".pkg.tar.zst"), "w").close()
 os.environ.update(BROMIGOS_INSTALLER_FAKE="1", BROMIGOS_NO_USB="1", BROMIGOS_INSTALLER_FAKE_DELAY="0.01", BROMIGOS_ISO_REPO_DIR=STORE,
                   BROMIGOS_INSTALLER_PROBE=os.environ.get("BROMIGOS_INSTALLER_PROBE") or os.path.join(HERE, "fixtures/probe-windows-uefi.json"),
-                  BROMIGOS_EDITION_DIRS=os.path.join(SHARE, "editions"), BROMIGOS_REDUCED_MOTION="1")
+                  BROMIGOS_EDITION_DIRS=os.path.join(SHARE, "editions"), BROMIGOS_REDUCED_MOTION="1",
+                  # the voice guide's settings: a test's own, never the person's running the tests
+                  BROMIGOS_GUIDE_STATE=os.path.join(STORE, "voice-guide.json"),
+                  BROMIGOS_ACCESS_STATE=os.path.join(STORE, "accessibility.json"),
+                  # and no brain of VECTOR's: the tours stay scripted unless a test gives them a stand-in
+                  BROMIGOS_VECTOR_BRAIN="none")
 sys.path.insert(0, LIB)
 sys.path.insert(0, os.path.join(HERE, "../../../lib"))
 
@@ -175,6 +180,8 @@ class TUI(unittest.TestCase):
                     if app.probe is not None:
                         break
                     await pilot.pause(0.05)
+                await pilot.pause(0.3)
+                await pilot.press("ctrl+n")          # how you'd like to be guided, then Welcome
                 await pilot.pause(0.3)
                 await pilot.press("ctrl+n")
                 await pilot.pause(0.3)
@@ -473,6 +480,8 @@ class TUI(unittest.TestCase):
             app = tui.Installer()
             async with app.run_test(size=(120, 42)) as pilot:
                 await pilot.pause(0.3)
+                await pilot.press("ctrl+n")          # past how you'd like to be guided
+                await pilot.pause(0.2)
                 app.query_one("#timezone").value = "Mars/Olympus"
                 await pilot.press("ctrl+n")
                 tz = str(app.query_one("#error").render())
@@ -526,7 +535,7 @@ class AnswerFile(unittest.TestCase):
     def test_wrong_file_asks_instead(self):
         (step, err, done), sent = self.run_file('[install]\ndisk = "/dev/sdz"\nmode = "erase"\nuser = "tester"\n'
                                                 'password = "x1234"\ncountdown = 0\n')
-        self.assertEqual(step, "welcome")
+        self.assertEqual(step, "guide")
         self.assertIn("/dev/sdz", err)
         self.assertEqual(sent, [])
 
@@ -542,7 +551,8 @@ class Plain(unittest.TestCase):
         from unittest import mock
         from bromigos_installer import plain
         key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTheInstallerTestsOnly x"
-        answers = iter(["", "", "2", "", "2", "", "Test Er", "tester", "", "", "", "yes", "", key, "", "", "yes", "no"])
+        # the first two: how you'd like to be guided (reduce motion: Enter keeps it; high contrast: yes)
+        answers = iter(["", "yes", "", "", "2", "", "2", "", "Test Er", "tester", "", "", "", "yes", "", key, "", "", "yes", "no"])
         sent = []
         real = backend.Install.__init__
 
@@ -561,6 +571,8 @@ class Plain(unittest.TestCase):
         self.assertEqual(doc["ssh_keys"], [key])
         self.assertTrue(doc["firewall"] and doc["auto_updates"] and doc["encrypt"])
         self.assertTrue(any("percent" in line for line in out))
+        self.assertTrue(doc["guidance"]["accessibility"]["high_contrast"])
+        self.assertFalse(doc["guidance"]["voice_guide"]["enabled"])
 
 
 class ServerWelcome(unittest.TestCase):
@@ -582,6 +594,12 @@ class ServerWelcome(unittest.TestCase):
         r = subprocess.run([sys.executable, self.BIN, "--render", out], env=env, capture_output=True, text=True, timeout=120)
         self.assertEqual(r.returncode, 0, r.stderr[-800:])
         self.assertEqual(sorted(os.listdir(out)), sorted(f"server-welcome-{s}.svg" for s in ("network", "ssh", "vector", "lab", "phone", "tour", "done")))
+        # pictures with a brain (the sample one): the lab step again, at its Ask VECTOR box
+        out = tempfile.mkdtemp()
+        env.pop("BROMIGOS_VECTOR_BRAIN", None)
+        r = subprocess.run([sys.executable, self.BIN, "--render", out], env=env, capture_output=True, text=True, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stderr[-800:])
+        self.assertIn("server-welcome-lab-ask.svg", os.listdir(out))
 
     def test_phone_pairs_from_the_agents_events(self):
         """Pair your phone shows brodec-machine pair --json's code, then ticks when it's paired."""

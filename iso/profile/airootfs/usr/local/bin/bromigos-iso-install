@@ -103,6 +103,10 @@ say "== bromigos-iso-install $(date -Is)"
 
 # ── 0. the installers' answers: the room made, archinstall's files written ──────────────
 ans() { python3 -c 'import json,sys; v = json.load(open(sys.argv[1])).get(sys.argv[2]); print("" if v is None else (int(v) if isinstance(v, bool) else v))' "$answers" "$1"; }
+# how the person chose to be guided (the installers' first step): guidance voice_guide|accessibility
+# prints that file's JSON; acc KEY prints 1 or 0 for one accessibility choice
+guidance() { [[ -n $answers ]] && python3 -c 'import json,sys; g = (json.load(open(sys.argv[1])).get("guidance") or {}).get(sys.argv[2]); print(json.dumps(g, indent=2) if g else "")' "$answers" "$1"; }
+acc() { [[ -n $answers ]] && python3 -c 'import json,sys; print(int(bool(((json.load(open(sys.argv[1])).get("guidance") or {}).get("accessibility") or {}).get(sys.argv[2]))))' "$answers" "$1" || echo 0; }
 if [[ -n $answers ]]; then
     stage 2 "Checking your choices"
     mode=$(ans mode); desktop=$(ans desktop); other_os=$(ans other_os); online=$(ans online)
@@ -310,7 +314,10 @@ if (( desktop )); then
     # the first-run answers a fresh install can give here: the outputs as they are now (the
     # machine's own: /sys is the target's), the Wick, VECTOR's brain and voice off (bromigos
     # setup, any time, for a brain, a voice, a homelab)
-    in_target sudo -u "${user:-user}" -H bromigos setup --monitors auto --theme wick --vector none --voice off --create none
+    a11y=()          # the first step's Reduce motion and High contrast (bromigos accessibility)
+    [[ $(acc reduce_motion) == 1 ]] && a11y+=(--motion reduced)
+    [[ $(acc high_contrast) == 1 ]] && a11y+=(--contrast high)
+    in_target sudo -u "${user:-user}" -H bromigos setup --monitors auto --theme wick --vector none --voice off --create none "${a11y[@]}"
     # the welcome tour at the first login (bromigos welcome --if-pending: Wi-Fi, screens, a
     # world, VECTOR, the homelab, the keys; the answers above are its starting point)
     in_target sudo -u "${user:-user}" -H sh -c 'mkdir -p ~/.local/state/bromigos && touch ~/.local/state/bromigos/welcome-pending'
@@ -319,6 +326,29 @@ if (( desktop )); then
         kb=(--set kb_layout "$xkb_layout"); [[ -n $xkb_variant ]] && kb+=(--set kb_variant "$xkb_variant")
         in_target sudo -u "${user:-user}" -H bromigos setup input "${kb[@]}" \
             || say "the desktop's keyboard layout wasn't set (Settings › Keyboard & input sets it)"
+    fi
+fi
+
+# how the person chose to be guided (the installers' first step; docs/voice-guide.md): the voice
+# guide's on and muted, and the other choices (screen reader, larger text, high contrast, less
+# motion), in the new user's ~/.local/state/bromigos, where the welcome tour reads them first
+if [[ -n $answers ]] && (( ! dry )); then
+    for pair in voice_guide:voice-guide accessibility:accessibility; do
+        doc=$(guidance "${pair%%:*}")
+        [[ -n $doc ]] || continue
+        printf '%s\n' "$doc" | in_target sudo -u "${user:-user}" -H sh -c \
+            "mkdir -p ~/.local/state/bromigos && cat > ~/.local/state/bromigos/${pair#*:}.json" \
+            || say "how you chose to be guided wasn't saved (${pair#*:}.json); the welcome tour starts as usual"
+    done
+    # the console's bigger letters (terminus-font, from answers.py when it was chosen)
+    if [[ $(acc console_font) == 1 ]]; then
+        if [[ -f $target/usr/share/kbd/consolefonts/ter-v32n.psf.gz ]]; then
+            touch "$target/etc/vconsole.conf"
+            sed -i '/^FONT=/d' "$target/etc/vconsole.conf"
+            echo 'FONT=ter-v32n' >> "$target/etc/vconsole.conf"
+        else
+            say "the console's bigger font isn't installed (terminus-font): the console keeps its letters"
+        fi
     fi
 fi
 

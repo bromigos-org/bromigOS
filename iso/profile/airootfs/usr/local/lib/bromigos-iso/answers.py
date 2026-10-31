@@ -179,6 +179,11 @@ def from_answers(path):
         argv.append("--no-zram")
     if d.get("online"):
         argv.append("--online")
+    acc = (d.get("guidance") or {}).get("accessibility") or {}
+    if acc.get("screen_reader"):               # the first step's Screen reader: one in the new system too
+        argv += ["--screen-reader", "desktop" if d.get("desktop", True) else "console"]
+    if acc.get("console_font"):
+        argv.append("--console-font")
     return argv
 
 
@@ -197,6 +202,10 @@ def main(argv=None):
     ap.add_argument("--timezone", default="UTC")
     ap.add_argument("--locale", default="en_US")
     ap.add_argument("--ssh", action="store_true", help="sshd enabled on the installed system")
+    ap.add_argument("--screen-reader", choices=["desktop", "console"], default=None,
+                    help="a screen reader in the new system: Orca on the desktop; speakup's espeakup, started at boot, "
+                         "on a console")
+    ap.add_argument("--console-font", action="store_true", help="the console's bigger font (terminus-font)")
     ap.add_argument("--root-gib", type=int, default=None, help="the root's size (default: the disk's, less the boot partition)")
     ap.add_argument("--alongside", action="store_true", help="keep what's on the disk; use its largest free stretch")
     ap.add_argument("--esp", default=None, help="--alongside on UEFI: the EFI system partition to share")
@@ -270,6 +279,14 @@ def main(argv=None):
         cfg["packages"] = sorted(set(cfg.get("packages", [])) | {"os-prober", "ntfs-3g"})
     extra = [p for p in OPTIONAL if a.online or in_store(p)]
     cfg["packages"] = sorted(set(cfg["packages"]) | set(extra))
+    if a.screen_reader:                        # from the medium (it carries them), or the mirrors when online
+        want = ["espeakup", "alsa-utils"] + (["orca"] if a.screen_reader == "desktop" else [])
+        got = [p for p in want if a.online or in_store(p)]
+        cfg["packages"] = sorted(set(cfg["packages"]) | set(got))
+        if a.screen_reader == "console" and "espeakup" in got:
+            cfg["services"] = sorted(set(cfg.get("services", [])) | {"espeakup"})
+    if a.console_font and (a.online or in_store("terminus-font")):
+        cfg["packages"] = sorted(set(cfg["packages"]) | {"terminus-font"})
     if a.ssh:
         cfg["services"] = sorted(set(cfg.get("services", [])) | {"sshd"})
         cfg["packages"] = sorted(set(cfg.get("packages", [])) | {"openssh"})

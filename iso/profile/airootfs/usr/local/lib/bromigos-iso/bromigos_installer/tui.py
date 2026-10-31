@@ -30,6 +30,11 @@ try:                         # DRIFTGLASS for Textual, bromigos-core's (lib/brom
     import bromigos_textual as BT
 except ImportError:          # an older bromigos-core: the theme's colours, plainer widgets
     BT = None
+try:                         # VECTOR's lines and his voice (docs/voice-guide.md), bromigos-core's
+    import bromigos_guide as guide
+except ImportError:          # an older bromigos-core: no captions, no voice
+    guide = None
+HIGH_CONTRAST = False        # the first step's High contrast: col() gives every muted role the text's colour
 
 try:
     from rich.text import Text
@@ -61,10 +66,14 @@ WORDMARK = """\
 EMBLEM_PATHS = ["/usr/share/bromigos/themes/wick/emblem/emblem.braille", "/usr/local/share/bromigos-iso/emblem.braille"]
 
 
-def textual_theme():
+def textual_theme(high_contrast=False):
     if BT is not None:
-        return BT.theme()
+        return BT.theme(name="bromigos-hc" if high_contrast else "bromigos", high_contrast=high_contrast)
     c, _ = common.theme()
+    if high_contrast:        # the first step's High contrast: white on black, nothing faded
+        return Theme(name="bromigos-hc", primary=c["primary"], secondary=c["primary"], accent=c["cyan"], warning=c["warn"],
+                     error=c["danger"], success=c["primary"], foreground="#ffffff", background="#000000",
+                     surface="#000000", panel="#000000", dark=True, variables={"text-muted": "#ffffff"})
     return Theme(name="bromigos", primary=c["primary"], secondary=c["soft"], accent=c["cyan"], warning=c["warn"],
                  error=c["danger"], success=c["primary"], foreground=c["text"], background=c["background"],
                  surface=c["panel"], panel=c["selection"], dark=True)
@@ -80,6 +89,8 @@ def sixteen():
 
 def col(role):
     """A palette role as a Rich colour: the theme's hex, or its 16-colour console name."""
+    if HIGH_CONTRAST and role in ("muted", "faint", "dim", "soft"):
+        role = "text"
     if sixteen():
         return {"primary": BT.rich16("primary"), "soft": BT.rich16("primary"), "dim": BT.rich16("secondary"),
                 "faint": "bright_black", "muted": "white", "text": "white", "danger": "bright_red", "warn": "bright_yellow",
@@ -378,17 +389,26 @@ class Installer(App):
     BINDINGS = [Binding("escape", "back", "Back"), Binding("ctrl+n", "next", "Continue"),
                 Binding("f12", "shell", "Shell", show=False),
                 Binding("f2", "details", "Details", show=False), Binding("ctrl+c", "quit_ask", "Quit", show=False)] + \
-        [Binding(str(n), f"brief('{n}')", show=False) for n in range(1, 10)]    # the summary's Change keys
+        [Binding(str(n), f"brief('{n}')", show=False) for n in range(1, 10)] + \
+        ([Binding(guide.TEXTUAL_KEYS, "voice", "Voice", show=False)] if guide else [])   # Ctrl+Alt+V
 
     def __init__(self, fake=False):
         super().__init__()
         self.a = common.defaults()
         self.probe = None
-        self.step = "welcome"
+        self.step = "guide"
         self.running = None
         self.done = False
         self.reduced = common.reduced_motion()
         self.on_console = os.environ.get("TERM", "") == "linux"
+        # VECTOR's voice: one player (the console's: aplay when no PipeWire runs); its on and
+        # muted are root's on the live system, copied to the new user at the end
+        self.voice = guide.Guide("console", notify=self._voice_notice) if guide else None
+        if self.voice and backend.FAKE:      # --fake (pictures, tests): it never makes a sound
+            self.voice._out = (None, "The fake installer makes no sound.")
+        self._spoken = None
+        if self.voice:
+            self.a["guidance"].update(voice=self.voice.enabled, voice_muted=self.voice.muted)
         self.zones = common.timezones()
         self.eds = common.editions()
 
@@ -403,7 +423,7 @@ class Installer(App):
                 yield Static("", id="orb")
                 yield Static("", id="vector-line")
             with VerticalScroll(id="page"):
-                with ContentSwitcher(initial="step-welcome", id="steps"):
+                with ContentSwitcher(initial="step-guide", id="steps"):
                     for sid, *_ in common.STEPS:
                         yield Vertical(id=f"step-{sid}")
         yield Static("", id="error")
@@ -414,6 +434,7 @@ class Installer(App):
 
     async def on_mount(self):
         self.register_theme(textual_theme())
+        self.register_theme(textual_theme(high_contrast=True))
         self.theme = "bromigos"
         # the Linux console's 16 colours can't mix a tint: a chosen card keeps the plain surface
         self.screen.set_class(sixteen(), "-c16")
@@ -430,7 +451,7 @@ class Installer(App):
             if not problems:
                 self.a["auto"] = True
                 self.countdown = int(a.get("countdown", 10))
-        await self.show("auto" if self.a.get("auto") else "welcome")
+        await self.show("auto" if self.a.get("auto") else self.first_step())
         if problems:
             self.error(f"▲ The answer file {path} has problems, so the installer asks instead: " + " ".join(problems))
 
@@ -464,9 +485,81 @@ class Installer(App):
             text = f"BROMIGOS // INSTALL{' ' * 4}STEP {n} OF {len(steps)}  ·  {common.STEP[sid][1].upper()}"
         self.query_one("#top", Static).update(text)
 
+    HINT = "Tab moves between choices · Enter picks · Esc goes back"
+
     def _focused(self, w):
         tip = getattr(w, "tooltip", None) if w else None
-        self.query_one("#hint", Static).update(str(tip) if tip else "Tab moves between choices · Enter picks · Esc goes back")
+        if tip and self.voice and not self.narrow():      # the voice key stays in sight beside the hint
+            tip = f"{tip}  ·  {self.voice_word()}"
+        self.query_one("#hint", Static).update(str(tip) if tip else self.default_hint())
+
+    def default_hint(self):
+        """The hint line with nothing focused: the keys, and VECTOR's voice key with its state."""
+        if not self.voice:
+            return self.HINT
+        return f"{self.HINT} · {self.voice_word()}"
+
+    def voice_word(self):
+        word = {"on": "voice on", "muted": "voice muted", "off": "voice off", "screen-reader": "voice quiet",
+                "no-sound": "no sound"}[self.voice.status()]
+        return f"{guide.HOTKEY} {word}"
+
+    def first_step(self):
+        return self.steps()[0]
+
+    # ── VECTOR's voice ──────────────────────────────────────────────────────────────
+    def _voice_notice(self, words):
+        """No sound device (a serial console, SSH): said once, where problems are said."""
+        try:
+            self.error("▲ " + words)
+        except Exception:
+            pass
+
+    def line_id(self, sid):
+        """The catalogue's id for a step's line (its .short form where there is one: the
+        rail is narrow), and its {values}."""
+        if sid == "done" and self.done is not True:
+            return guide.pick("installer.failed", short=True), {}
+        if sid == "disk" and self.a.get("mode") in ("alongside", "erase", "reinstall"):
+            al = (self.disk() or {}).get("options", {}).get("alongside", {})
+            return guide.pick(f"installer.disk.{self.a['mode']}", short=True), {"who": al.get("who") or "Windows"}
+        return guide.pick(f"installer.{sid}", short=True), {}
+
+    def speak_step(self, sid=None):
+        """VECTOR says the step's line, once: a redraw of the same step doesn't repeat it."""
+        if not self.voice:
+            return
+        lid, values = self.line_id(sid or self.step)
+        key = (lid, tuple(sorted(values.items())))
+        if key == self._spoken:
+            return
+        self._spoken = key
+        self.voice.play(lid, **values)
+
+    def action_voice(self):
+        """Ctrl+Alt+V (ctrl+v on the Linux console): on when it's off, then muted and back."""
+        if not self.voice:
+            return
+        self.voice.toggle()
+        self.a["guidance"].update(voice=self.voice.enabled, voice_muted=self.voice.muted)
+        self._spoken = None
+        if self.voice.status() == "on":
+            self.speak_step()
+        self._voice_shown()
+
+    def _voice_shown(self):
+        try:
+            self._focused(self.focused)
+        except Exception:
+            return
+        if self.step == "guide":
+            for sw in self.query("#g-voice"):
+                if sw.value != self.voice.enabled:
+                    self._voice_sync = True
+                    sw.value = self.voice.enabled
+            for st in self.query("#g-voice-state"):
+                (st.set(self.voice.describe(), "ok" if self.voice.status() == "on" else "idle") if BT is not None
+                 else st.update(self.voice.describe()))
 
     def steps(self):
         self.a["edition_info"] = common.edition(self.a["edition"])
@@ -529,7 +622,7 @@ class Installer(App):
         self._rail(steps, sid)
         self.error("")
         back, nxt = self.query_one("#back", Button), self.query_one("#next", Button)
-        back.display = sid not in ("welcome", "install", "done", "auto")
+        back.display = sid not in ("guide", "install", "done", "auto")
         nxt.display = sid not in ("install", "done", "auto")
         nxt.label = "Continue"
         nxt.variant = "primary"
@@ -544,26 +637,9 @@ class Installer(App):
         else:
             hint(nxt, "Go on to the next step (Ctrl+N).")
         self.call_after_refresh(self._focus_first, box)
+        self.speak_step(sid)
+        self._focused(self.focused)
 
-    VECTOR_LINES = {
-        "auto": "An answer file has it all. Cancel if you'd rather choose.",
-        "welcome": "I'm VECTOR. Nothing changes until you say Install.",
-        "checks": "Worth knowing first. None of it stops us.",
-        "edition": "Pick what this computer is for. A server can get the desktop later.",
-        "keyboard": "Pick your layout and try a few keys.",
-        "disk": "Pick a disk, then how bromigOS goes on it.",
-        "disk:alongside": "{who} keeps its files. I'll make room beside it.",
-        "disk:erase": "Everything on this disk goes. Copy off what you need first.",
-        "disk:reinstall": "A fresh system. Your home folder stays as it is.",
-        "bitlocker": "Save Windows' recovery key first. Windows may ask for it once.",
-        "user": "Who you are here, and this computer's name.",
-        "encryption": "Locked, your files stay private if it's lost.",
-        "ssh": "How you'll reach this server from your other computers.",
-        "summary": "Check it over. Nothing changes until you press Install.",
-        "install": "Sit back. I'll say if anything needs you.",
-        "done": "All set. Restart, and take out the stick.",
-        "failed": "It stopped. Your answers are kept: try again, or save a report.",
-    }
     FLARE_STEPS = ("welcome", "install", "done", "auto")     # the screen has its own FLARE: the orb holds still
 
     def _rail(self, steps, sid):
@@ -592,12 +668,9 @@ class Installer(App):
             self.query_one("#orb", Static).update(BT.orb(0.0, 12, 6))
             if not self.reduced and not getattr(self, "_orb_timer", None):
                 self._orb_timer = self.set_interval(0.15, self._orb_tick)
-        line = self.VECTOR_LINES.get("failed" if sid == "done" and self.done is not True else sid, "")
-        if sid == "disk" and self.a.get("mode") == "reinstall":
-            line = self.VECTOR_LINES["disk:reinstall"]
-        elif sid == "disk" and self.a.get("mode") in ("alongside", "erase"):
-            al = (self.disk() or {}).get("options", {}).get("alongside", {})
-            line = self.VECTOR_LINES[f"disk:{self.a['mode']}"].format(who=al.get("who") or "Windows")
+        # his line: the voice guide's catalogue (lib/guide/lines.toml), the caption his clip says
+        lid, values = self.line_id(sid) if guide else (None, {})
+        line = guide.line(lid, **values) if guide else ""
         self.query_one("#vector-line", Static).update(Text.assemble(("VECTOR  ", "bold " + c["primary"]), line) if line else "")
 
     def _orb_tick(self):
@@ -695,7 +768,7 @@ class Installer(App):
         problem = common.auto_check(self.a, self.probe)
         if problem:
             self.a["auto"] = False
-            await self.show("welcome")
+            await self.show(self.first_step())
             self.error("▲ " + problem + " The installer asks instead.")
             return
         rows, warn = common.summary(self.a, self.disk())
@@ -738,6 +811,116 @@ class Installer(App):
         lab.words, lab.icon_name = words, icon_name
         return lab
 
+    def build_guide(self, box):
+        """How would you like to be guided? VECTOR's voice (off until it's turned on, with a
+        sample), the console's screen reader, bigger letters (the console's font: a terminal
+        can't make its own text bigger), high contrast, no motion; and the language."""
+        g = self.a["guidance"]
+        self.heading(box, "guide")
+        voice = Vertical(classes="panel", id="g-voice-panel")
+        box.mount(voice)
+        row = Horizontal(classes="row")
+        voice.mount(row)
+        sw = hint(Switch(bool(self.voice and self.voice.enabled), id="g-voice", disabled=not self.voice),
+                  "On: VECTOR reads each step aloud. Off: his words stay on screen.")
+        row.mount(sw, Vertical(Static(Text.assemble((ic("voice") + "  ", "bold " + col("primary")),
+                                                     ("VECTOR'S VOICE GUIDE", "bold " + col("primary")))),
+                               Static("He reads each step aloud, in his own voice." +
+                                      (f" {guide.HOTKEY} turns him on, then mutes him." if guide else ""), classes="muted"),
+                               classes="brief-text"),
+                  hint(Button("Play a sample", id="g-sample", disabled=not self.voice), "Hear VECTOR's voice now, once"))
+        words = self.voice.describe() if self.voice else "VECTOR's voice isn't on this USB stick: his words are on screen."
+        voice.mount(BT.Reading(words, "idle", id="g-voice-state") if BT is not None else Static(words, id="g-voice-state"))
+        more = Vertical(classes="panel", id="g-more")
+        box.mount(more)
+        more.mount(Static(Text.assemble((ic("guide") + "  ", "bold " + col("primary")), ("MORE HELP", "bold " + col("soft"))),
+                          classes="panel-head"))
+        big_ok = self.on_console
+        for key, icon_name, title, tip in (
+                ("screen_reader", "reader", "Screen reader: speech reads the console aloud",
+                 "Start or stop the console's screen reader (espeakup). VECTOR stays quiet while it talks."),
+                ("console_font", "text", "Bigger letters on this screen" if big_ok else
+                 "Bigger letters: a terminal can't change its own; use its settings (often Ctrl and +)",
+                 "The console's bigger font." if big_ok else "This terminal's text size is the terminal's own setting."),
+                ("high_contrast", "contrast", "High contrast: white on black, nothing faded",
+                 "Stronger colours here and on your new system"),
+                ("reduce_motion", "motion", "Reduce motion: nothing moves on its own", "No animation here or on your new system")):
+            r = Horizontal(classes="row")
+            more.mount(r)
+            r.mount(hint(Switch(bool(g.get(key)), id=f"g-{key}", disabled=key == "console_font" and not big_ok), tip),
+                    Static(Text.assemble((ic(icon_name) + "  ", col("primary")), title), classes="brief-text"))
+        self.guide_said = BT.Reading("", "idle", id="g-said") if BT is not None else Static("", id="g-said")
+        more.mount(self.guide_said)
+        lang = Vertical(self.flabel("language", "Language for your new system"),
+                        hint(Select([(n, loc) for loc, n, _ in common.LANGUAGES], value=self.a["locale"], allow_blank=False,
+                                    id="locale"),
+                             "The language bromigOS uses once it's installed: menus, dates and numbers. The installer itself is in English."),
+                        classes="field")
+        box.mount(lang)
+
+    def _guide_said(self, words, state="idle"):
+        if BT is not None:
+            self.guide_said.set(words, state)
+        else:
+            self.guide_said.update(words)
+
+    @on(Switch.Changed, "#g-voice")
+    def voice_switched(self, ev):
+        if getattr(self, "_voice_sync", False):
+            self._voice_sync = False
+            return
+        if not self.voice:
+            return
+        self.voice.set_enabled(ev.value)
+        if ev.value and self.voice.muted:
+            self.voice.set_muted(False)
+        self.a["guidance"].update(voice=ev.value, voice_muted=self.voice.muted)
+        self._spoken = None
+        if ev.value:
+            self.speak_step()
+        self._voice_shown()
+
+    @on(Switch.Changed, "#g-screen_reader, #g-console_font, #g-high_contrast, #g-reduce_motion")
+    def guidance_switched(self, ev):
+        key = ev.switch.id.removeprefix("g-")
+        if getattr(self, "_guidance_sync", None) == key:
+            self._guidance_sync = None
+            return
+        self.a["guidance"][key] = ev.value
+        if key in ("screen_reader", "console_font"):
+            self.guidance_work(key, ev.value)
+        elif key == "high_contrast":
+            global HIGH_CONTRAST
+            HIGH_CONTRAST = ev.value
+            self.theme = "bromigos-hc" if ev.value else "bromigos"
+            self._rail(self.steps(), self.step)
+            self._guide_said("High contrast is on." if ev.value else "High contrast is off.", "ok")
+        elif key == "reduce_motion":
+            if ev.value:
+                os.environ["BROMIGOS_REDUCED_MOTION"] = "1"     # the widgets drawn from now on hold still too
+            else:
+                os.environ.pop("BROMIGOS_REDUCED_MOTION", None)
+            self.reduced = common.reduced_motion()
+            self.animation_level = "none" if self.reduced else "full"
+            self._guide_said("Reduced motion is on: nothing moves on its own." if self.reduced else "Reduced motion is off.", "ok")
+
+    @work(thread=True)
+    def guidance_work(self, key, on):
+        """The screen reader (systemctl, as root) and the console's font (setfont): off the UI's thread."""
+        self.call_from_thread(self._guide_said, "Starting the screen reader…" if key == "screen_reader" and on else "…", "busy")
+        ok, words = backend.screen_reader(on, "console") if key == "screen_reader" else backend.console_font(on)
+
+        def done():
+            if not ok:
+                self.a["guidance"][key] = False
+                for sw in self.query(f"#g-{key}"):
+                    if sw.value:
+                        self._guidance_sync = key
+                        sw.value = False
+            self._guide_said(("▲ " if not ok else "") + words, "ok" if ok else "warn")
+            self._voice_shown()
+        self.call_from_thread(done)
+
     def build_welcome(self, box):
         art = None
         if BT is not None:
@@ -752,18 +935,13 @@ class Installer(App):
                                      ("shell", "F12 opens a shell, any time")), style=col("muted")), classes="notes"))
         panel = Vertical(classes="panel", id="welcome-panel")
         box.mount(panel)
-        # Language first: a "how would you like to be guided?" choice belongs beside it later
-        lang = Vertical(self.flabel("language", "Language for your new system"),
-                        hint(Select([(n, loc) for loc, n, _ in common.LANGUAGES], value=self.a["locale"], allow_blank=False,
-                                    id="locale"),
-                             "The language bromigOS uses once it's installed: menus, dates and numbers. The installer itself is in English."),
-                        classes="field")
+        # the language is on the first step, with how you're guided
         tz = Vertical(self.flabel("clock", "Time zone"),
                       hint(Input(self.a["timezone"], id="timezone", suggester=SuggestFromList(self.zones, case_sensitive=False),
                                  placeholder="Region/City, for example Europe/Berlin"),
                            "Where you are, for the clock. Start typing a city or region; → takes the suggestion."),
                       classes="field")
-        panel.mount(Horizontal(lang, tz, classes="fields"))
+        panel.mount(Horizontal(tz, classes="fields"))
         panel.mount(self.flabel("wifi", "Network"))
         self.net_line = BT.Reading("Checking the network…", "busy") if BT is not None else Static("", classes="muted")
         tool = common.wifi_tool()
@@ -856,7 +1034,7 @@ class Installer(App):
     def locale_changed(self, ev):
         if ev.value != self.a["locale"]:
             self.a["locale"] = ev.value
-            self.query_one("#timezone", Input).value = common.tz_guess(ev.value)
+            self.a["timezone"] = common.tz_guess(ev.value)       # the next step's time zone starts from it
 
     @work(thread=True)
     def load_disks(self):
@@ -868,8 +1046,17 @@ class Installer(App):
         self.probe = doc
         self.a["other_os"] = doc.get("other_os", False)
         self.a["checks"] = list(found)
-        if self.step in ("disk", "welcome"):
-            self.call_later(self.show, self.step)
+        if self.step == "guide":              # the rail only (a Checks step may come in): the switches keep the focus
+            self._rail(self.steps(), "guide")
+            self._top()
+        elif self.step in ("disk", "welcome"):
+            self.call_later(self._reshow, self.step)
+
+    async def _reshow(self, sid):
+        """Draw a step again for what just arrived, if it's still the one on screen."""
+        async with self.redraw:
+            if self.step == sid:
+                await self._show(sid)
 
     def build_checks(self, box):
         self.heading(box, "checks")
@@ -1394,10 +1581,10 @@ class Installer(App):
             self.a["ssh_keys"] = keys + ([key] if ev.value else [])
 
     # ── Ready to install: the briefing ─────────────────────────────────────────────────
-    BRIEF_STEP = {"Kind": "edition", "Language": "welcome", "Time zone": "welcome", "Keyboard": "keyboard", "Disk": "disk",
+    BRIEF_STEP = {"Kind": "edition", "Language": "guide", "Time zone": "welcome", "Keyboard": "keyboard", "Disk": "disk",
                   "Boot menu": "disk", "Name": "user", "User name": "user", "Computer name": "user", "Encryption": "encryption",
                   "Remote access (SSH)": "ssh", "Firewall": "ssh", "Automatic updates": "ssh", "Packages": "edition"}
-    BRIEF_TITLE = {"welcome": ("Language", "language"), "edition": ("Kind", "edition"), "keyboard": ("Keyboard", "keyboard"),
+    BRIEF_TITLE = {"guide": ("Language", "language"), "welcome": ("Time zone", "clock"), "edition": ("Kind", "edition"), "keyboard": ("Keyboard", "keyboard"),
                    "disk": ("Where", "disk"), "user": ("You", "user"), "encryption": ("Encryption", "encryption"),
                    "ssh": ("Remote access", "ssh"), None: ("Packages", "copy")}
 
@@ -1452,7 +1639,7 @@ class Installer(App):
                 tb.add_row(*(([head if i == 0 else ""] if wide else []) + cells))
             parts = [Static(tb, classes="brief-text")]
             if sid:
-                what = {"welcome": "the language and the time zone", "edition": "what kind of computer this is",
+                what = {"guide": "the language", "welcome": "the time zone", "edition": "what kind of computer this is",
                         "keyboard": "the keyboard layout", "disk": "the disk and how bromigOS goes on it",
                         "user": "your name, user name, password or the computer's name", "encryption": "the disk's encryption",
                         "ssh": "remote access, the firewall and updates"}.get(sid, title)
@@ -1715,8 +1902,13 @@ class Installer(App):
 
     async def action_back(self):
         steps = self.steps()
+        if self.voice:
+            self.voice.stop()                    # Esc and Back quiet him: the step before isn't read again
         if self.step in steps and steps.index(self.step) > 0 and self.step not in ("install", "done"):
-            await self.show(steps[steps.index(self.step) - 1])
+            prev = steps[steps.index(self.step) - 1]
+            lid, values = self.line_id(prev)
+            self._spoken = (lid, tuple(sorted(values.items())))
+            await self.show(prev)
 
     def action_details(self):
         if hasattr(self, "log_view"):
@@ -1726,6 +1918,8 @@ class Installer(App):
         if self.running:
             self.error("▲ The install is running. Leaving now would leave the disk half done: wait for it to finish.")
             return
+        if self.voice:
+            self.voice.stop()
         self.exit()
 
     @on(Button.Pressed)
@@ -1737,6 +1931,12 @@ class Installer(App):
             await self.action_back()
         elif bid == "details":
             self.action_details()
+        elif bid == "g-sample":
+            if self.voice and not self.voice.play("installer.guide.sample", force=True):
+                self._guide_said("VECTOR stays quiet while your screen reader talks." if self.voice.screen_reader()
+                                 else self.voice.notice or self.voice.describe(), "warn")
+            elif self.voice:
+                self._guide_said("Playing a sample of VECTOR's voice.", "ok")
         elif bid == "wifi":
             tool = common.wifi_tool()
             with self.suspend():
@@ -1747,7 +1947,7 @@ class Installer(App):
             self.exit()
         elif bid == "auto-cancel":
             self.a["auto"] = False
-            await self.show("welcome")
+            await self.show(self.first_step())
         elif bid == "adv-menu":
             await self.partition_myself()
         elif bid == "rescan-keys":

@@ -27,6 +27,9 @@ STEPS = [
     ("auto", "Automatic", "Installing from an answer file",
      "An answer file on the USB stick has every answer, so bromigOS installs by itself. Cancel "
      "to answer the questions yourself."),
+    ("guide", "Guidance", "How would you like to be guided?",
+     "Choose what helps you: VECTOR reading each step aloud, a screen reader, bigger text, "
+     "stronger colours or less motion. Change any of it later in Settings."),
     ("welcome", "Welcome", "Install bromigOS",
      "This puts bromigOS on this computer's disk. It takes about ten minutes, and you can go "
      "back and change anything until you press Install."),
@@ -772,8 +775,33 @@ def wants_text(words=None):
             or any(w in ("bromigos.edition=server", "bromigos.edition=fieldkit") for w in words))
 
 
+# ── how the person is guided (the first step) ──────────────────────────────────────────
+GUIDANCE = ("voice", "screen_reader", "large_text", "high_contrast", "reduce_motion", "console_font")
+
+
+def speech_boot(words=None):
+    """The boot menu's "Install with the screen reader (speech)" (accessibility=on)."""
+    words = cmdline() if words is None else words
+    return "accessibility=on" in words
+
+
+def guidance_defaults():
+    """The first step's choices before anyone touches them: all off, except what this boot
+    already has (the speech entry's screen reader; reduced motion when it's set)."""
+    return {"voice": False, "voice_muted": False, "screen_reader": speech_boot(), "large_text": False,
+            "high_contrast": False, "reduce_motion": reduced_motion(), "console_font": False}
+
+
+def guidance_files(g):
+    """The two small files the new user starts with (docs/voice-guide.md, "The settings
+    files"): voice-guide.json (the voice guide's on and muted) and accessibility.json."""
+    g = dict(guidance_defaults(), **(g or {}))
+    return ({"enabled": bool(g["voice"]), "muted": bool(g.get("voice_muted"))},
+            {k: bool(g[k]) for k in GUIDANCE if k != "voice"} | {"applied": False})
+
+
 def defaults():
-    return {"edition": boot_edition() or "desktop", "locale": "en_US", "keyboard": "us", "timezone": tz_guess("en_US"),
+    return {"guidance": guidance_defaults(), "edition": boot_edition() or "desktop", "locale": "en_US", "keyboard": "us", "timezone": tz_guess("en_US"),
             "disk": None, "mode": None, "bromigos_bytes": None, "full_name": "", "user": "",
             "password": "", "hostname": "", "encrypt": True, "separate_passphrase": False,
             "passphrase": "", "ssh": False, "ssh_password": False, "ssh_keys": [], "firewall": True,
@@ -804,6 +832,8 @@ def backend_answers(a, disk):
         ("graphical.target" if ed.get("desktop", True) else "multi-user.target"),
         "other_os": a["mode"] == "alongside" or bool(a.get("other_os")),
     }
+    voice, acc = guidance_files(a.get("guidance"))
+    out["guidance"] = {"voice_guide": voice, "accessibility": acc}
     if a["mode"] == "alongside" and opt.get("mode") == "shrink":
         out["shrink"] = {"partition": opt["partition"], "fs": opt["fs"], "who": opt.get("who"),
                          "bromigos_bytes": int(a.get("bromigos_bytes") or opt["default"])}
@@ -891,8 +921,10 @@ def what_will_run(doc):
     lines.append("# then in the new system, as you:")
     if desktop:
         kb = f" --set kb_layout {doc.get('xkb_layout')}" + (f" --set kb_variant {doc['xkb_variant']}" if doc.get("xkb_variant") else "")
+        acc = (doc.get("guidance") or {}).get("accessibility") or {}
         lines += ["bromigos install --yes --no-services --no-setup",
-                  "bromigos setup --monitors auto --theme wick --vector none --voice off --create none",
+                  "bromigos setup --monitors auto --theme wick --vector none --voice off --create none"
+                  + (" --motion reduced" if acc.get("reduce_motion") else "") + (" --contrast high" if acc.get("high_contrast") else ""),
                   "bromigos setup input" + kb]
     else:
         lines += [c for c in doc.get("user_commands") or []]
@@ -901,6 +933,8 @@ def what_will_run(doc):
         lines.append("bromigos rollback setup --yes")
     if doc.get("other_os"):
         lines.append("GRUB_DISABLE_OS_PROBER=false in /etc/default/grub; grub-mkconfig -o /boot/grub/grub.cfg")
+    if doc.get("guidance"):
+        lines.append("~/.local/state/bromigos/voice-guide.json and accessibility.json: how you chose to be guided")
     lines.append("# what you chose is kept, without passwords, in /var/log/bromigos/install-answers.toml")
     return lines
 
