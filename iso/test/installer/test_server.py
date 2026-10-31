@@ -34,7 +34,9 @@ def setUpModule():
     for k, v in ENV.items():
         _SAVED[k] = os.environ.get(k)
         os.environ[k] = v
-    from bromigos_installer import provision
+    from bromigos_installer import provision, server as _server
+    provision._ENGINE = None              # another module may have looked first, without these paths
+    _server._STORE = None
     provision.load(reload=True)
 
 
