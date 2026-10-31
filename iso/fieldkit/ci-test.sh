@@ -67,7 +67,9 @@ qr() {
     "$T" shot --name qr qr-kmscon >/dev/null
     got=$(zbarimg -q --raw "$BROMIGOS_FIELDKIT_SHOTS/qr-kmscon.png" 2>/dev/null | head -1)
     echo "kmscon: ${got:-nothing decoded}"; [[ $got == "$QR_URL" ]] || rc=1
-    run qr "pkill -f 'kmscon --vt=5'; sleep 2; openvt -c 6 -s -- env TERM=linux /usr/bin/bromigos fieldkit qr '$QR_URL'; sleep 6; echo vt" || return 1
+    # the bare console: no kmscon holding the screen, the QR on VT 6 and VT 6 shown
+    run qr "pkill -f 'kmscon --vt=5'; systemctl stop kmsconvt@tty1.service; sleep 2
+        openvt -c 6 -f -- env TERM=linux /usr/bin/bromigos fieldkit qr '$QR_URL'; sleep 2; chvt 6; sleep 5; echo vt" || return 1
     "$T" shot --name qr qr-vt >/dev/null
     got=$(zbarimg -q --raw "$BROMIGOS_FIELDKIT_SHOTS/qr-vt.png" 2>/dev/null | head -1)
     echo "bare console: ${got:-nothing decoded}"; [[ $got == "$QR_URL" ]] || rc=1
