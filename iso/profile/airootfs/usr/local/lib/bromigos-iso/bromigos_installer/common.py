@@ -916,3 +916,36 @@ def check_key(line):
         return None
     return ("That isn't an SSH public key. It's one line that starts with ssh-ed25519 or ssh-rsa, then a long run of "
             "letters: the .pub file from your other computer.")
+
+
+
+def disk_segments(d):
+    """The disk in order, for the maps: [(role, bytes, words, partition or None)], role one
+    of efi, msr, windows, recovery, linux, other, free."""
+    out, pos = [], 0
+    parts = sorted(d.get("partitions") or [], key=lambda p: p.get("start", 0))
+    frees = sorted(d.get("free") or [], key=lambda f: f["start"])
+    big = 64 * 2 ** 20
+    for p in parts:
+        for f in frees:
+            if pos <= f["start"] < p.get("start", 0) and f["size"] > big:
+                out.append(("free", f["size"], "Free space", None))
+        what = p.get("what") or p["path"]
+        if p.get("esp"):
+            role = "efi"
+        elif "Microsoft reserved" in what:
+            role = "msr"
+        elif p.get("windows"):
+            role = "windows"
+        elif "recovery" in what.lower():
+            role = "recovery"
+        elif p.get("fstype") in ("btrfs", "ext4", "crypto_LUKS", "xfs"):
+            role = "linux"
+        else:
+            role = "other"
+        out.append((role, p["size"], what, p))
+        pos = p.get("start", 0) + p["size"]
+    for f in frees:
+        if f["start"] >= pos and f["size"] > big:
+            out.append(("free", f["size"], "Free space", None))
+    return out

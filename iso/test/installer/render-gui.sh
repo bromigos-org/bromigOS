@@ -26,4 +26,4 @@ for _ in $(seq 50); do [[ -S $rt/wl-render ]] && break; sleep 0.1; done
 [[ -S $rt/wl-render ]] || { echo "render-gui: weston didn't start" >&2; cat "$rt/weston.log" >&2; exit 1; }
 env -u DISPLAY XDG_RUNTIME_DIR=$rt WAYLAND_DISPLAY=wl-render GDK_BACKEND=wayland GSK_RENDERER=cairo \
     BROMIGOS_INSTALLER_PROBE="$probe" BROMIGOS_EDITION_DIRS="$lib/../../share/bromigos-iso/editions" \
-    BROMIGOS_REDUCED_MOTION=1 BROMIGOS_ISO_REPO_DIR="$store" BROMIGOS_NO_USB=1 PYTHONPATH="$lib" timeout 120 python3 -m bromigos_installer.gui --render "$out" --size "$size"
+    BROMIGOS_REDUCED_MOTION=1 BROMIGOS_ISO_REPO_DIR="$store" BROMIGOS_NO_USB=1 PYTHONPATH="$lib:$here/../../../lib" timeout 120 python3 -m bromigos_installer.gui --render "$out" --size "$size"
