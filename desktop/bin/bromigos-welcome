@@ -15,6 +15,8 @@ so there is no second config path:
                               then he says hello
   Your lab                    find it (bromigos setup homelab --find, in the background), a connection
                               file (--homelab FILE), or bromigos-lab's plan for making this computer it
+  Ask VECTOR                  once his brain answers: a box on every step for a question about it, his
+                              answer shown (and spoken, with the voice guide on and his voice running)
   Pair your phone             BRODEC's machine helper (brodec-desktop, installed with consent): its QR
                               and code, ticked when the phone confirms
   The keys                    a short tour: each key's card lights when you press it
@@ -26,6 +28,11 @@ so there is no second config path:
   bromigos welcome --step STEP     open it on one step (network, screens, world, vector, lab, phone, keys)
   bromigos welcome --render DIR    each step drawn to DIR/welcome-STEP.png and exit (a Wayland display
                                    is needed: tests use a headless one)
+
+It starts the way the installer's first step left it (docs/voice-guide.md): VECTOR's voice guide
+(voice-guide.json; Ctrl+Alt+V turns it on, then mutes it) reads each step's line, and
+accessibility.json's larger text, high contrast and reduced motion apply here, and once, the
+first time, to the session's own settings (and Orca, for the screen reader).
 """
 import json
 import os
@@ -69,16 +76,8 @@ STEPS = [
 ]
 STEP = {s[0]: s for s in STEPS}
 
-GUIDE = {   # VECTOR's one line per step, in the rail's corner
-    "network": "Get online and I can fetch updates, my brains and my voice.",
-    "screens": "Pick the screen in front of you. The panels go there.",
-    "world": "Pick a world. Every one reads this machine, live.",
-    "vector": "Where should I think? Your lab is best, if you have one.",
-    "lab": "I'll look for your lab. I only read what this computer already knows.",
-    "phone": "Scan it with BRODEC and I'm on your phone too.",
-    "keys": "Try a few keys. Each card lights up when it works.",
-    "done": "That's it. Settings has all of this, any time.",
-}
+# VECTOR's one line per step, in the rail's corner: the voice guide's catalogue (tour.STEP in
+# lib/guide/lines.toml), so the caption and his clip say the same words
 
 KEY_TOUR = [   # (keys, what it does, how we see it worked: a window class appearing, or None)
     ("Super + Space", "The app launcher: type to find any app", "Rofi"),
@@ -97,6 +96,9 @@ SAMPLE_WIFI = [{"ssid": "Rivera Home", "signal": 86, "secure": True, "connected"
                {"ssid": "Rivera Home 5G", "signal": 71, "secure": True, "connected": False},
                {"ssid": "Corner Cafe Guest", "signal": 44, "secure": False, "connected": False},
                {"ssid": "Upstairs", "signal": 22, "secure": True, "connected": False}]
+SAMPLE_BRAIN = {"url": "http://192.0.2.24:4000/v1", "model": "sample", "key": "none"}
+SAMPLE_ASK = ("What does my lab give me?", "Your lab's graphics card runs my brain and the models, so this computer stays "
+              "cool and quiet. The panels show its machines, and you can send it jobs from here.")
 SAMPLE_CHOSE = {"network": "Connected to Rivera Home", "screens": "Main screen: DP-1", "world": "World: mire",
                 "vector": "Brain: your lab (connected on the next step), voice: Kokoro", "lab": "Your lab is connected",
                 "phone": "Your phone is paired"}
@@ -190,6 +192,13 @@ def main(argv):
     from gi.repository import Adw, Gdk, GLib, Gtk, Pango
     import bromigos_firstrun as F          # this command's own lib first: the settings' import below
     import bromigos_glass as glass
+    try:                                   # VECTOR's lines and voice, the installer's choices (bromigos-core's)
+        import bromigos_guide as guide
+    except ImportError:
+        guide = None
+    render_dir = argv[argv.index("--render") + 1] if "--render" in argv else None
+    # how the installer's first step left it (accessibility.json); pictures use the defaults
+    acc = guide.access() if guide and not render_dir else {}
     try:                                   # may put the installed one ahead of it
         from bromigos_settings import style
     except ImportError:
@@ -211,7 +220,7 @@ def main(argv):
         return l_
 
     def reduced():
-        if os.environ.get("BROMIGOS_REDUCED_MOTION"):
+        if os.environ.get("BROMIGOS_REDUCED_MOTION") or acc.get("reduce_motion"):
             return True
         try:
             import bromigos_theme as T
@@ -225,6 +234,21 @@ def main(argv):
             self.connect("close-request", lambda *_: (self.stop_pairing(), False)[1])
             self.set_default_size(1280, 800)
             self.render = render
+            self.connect("close-request", lambda *_: (self.voice and self.voice.stop(), False)[1])
+            # VECTOR's voice: quiet in pictures; its on and muted are voice-guide.json's
+            self.voice = guide.Guide("gui", notify=lambda w: GLib.idle_add(lambda: (self.msg.set_label("▲ " + w), False)[1])) \
+                if guide and not render else None
+            if guide and render:                 # pictures: a player that never makes a sound, its settings nobody's
+                self.voice = guide.Guide("gui", state=os.devnull, root="/nonexistent")
+                self.voice._out = ("pw-play", None)
+                self.voice.play = self.voice.say = lambda *a, **k: False
+            self.spoken = None
+            # his brain: looked for in the background; until it answers, he's scripted and the
+            # Ask VECTOR box stays hidden. Pictures: a sample one, unless BROMIGOS_VECTOR_BRAIN says otherwise
+            forced = os.environ.get("BROMIGOS_VECTOR_BRAIN")
+            self.brain = (SAMPLE_BRAIN if render and not forced else None)
+            self.greeted = bool(render)
+            self.asks = {}
             self.steps = [s[0] for s in STEPS if s[0] != "network" or render or not online()]
             self.step = start if start in self.steps else self.steps[0]
             self.done_steps = {}
@@ -249,8 +273,13 @@ def main(argv):
 .bw-code {{ font-size: 1.9em; font-weight: 700; letter-spacing: 0.18em; color: {c.get('primary', '#39ff14')}; }}
 .bw-status {{ font-size: 1.05em; color: {c.get('soft', '#9cff8a')}; }}
 .bw-tick {{ font-size: 5em; color: {c.get('primary', '#39ff14')}; }}
-""" + glass.css(c))
+""" + glass.css(c, bool(acc.get("high_contrast"))))
             self.c = glass.palette(c)
+            if acc.get("large_text"):            # unless the session's text is already bigger (applied below)
+                st = Gtk.Settings.get_default()
+                dpi = st.get_property("gtk-xft-dpi")
+                if 0 < dpi < int(96 * 1024 * 1.2):
+                    st.set_property("gtk-xft-dpi", int(dpi * 1.25))
             glass.use_icon_theme()
             Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
             root = Gtk.Box()
@@ -276,19 +305,145 @@ def main(argv):
             self.back.connect("clicked", lambda *_: self.go(-1))
             self.skip.connect("clicked", lambda *_: self.go(1))
             self.next.connect("clicked", lambda *_: self.apply_and_go())
-            for b in (self.msg, self.back, self.skip, self.next):
+            # VECTOR's voice, one key away: what it's doing now, and a click to change it
+            self.voice_btn = Gtk.Button(valign=Gtk.Align.CENTER)
+            self.voice_btn.add_css_class("flat")
+            self.voice_btn.connect("clicked", lambda *_: self.toggle_voice())
+            self.voice_btn.set_visible(bool(guide))
+            for b in (self.voice_btn, self.msg, self.back, self.skip, self.next):
                 bar.append(b)
+            if guide:
+                sc = Gtk.ShortcutController(scope=Gtk.ShortcutScope.GLOBAL)
+                sc.add_shortcut(Gtk.Shortcut.new(Gtk.ShortcutTrigger.parse_string(guide.GTK_ACCEL),
+                                                 Gtk.CallbackAction.new(lambda *_: (self.toggle_voice(), True)[1])))
+                self.add_controller(sc)
             right.add_bottom_bar(bar)
             root.append(right)
             self.set_content(root)
             self.show_step(self.step)
+            if not render:
+                threading.Thread(target=self.find_brain, daemon=True).start()
+                if acc and not acc.get("applied"):
+                    threading.Thread(target=self.apply_access, daemon=True).start()
+            elif forced:
+                threading.Thread(target=self.find_brain, daemon=True).start()
+
+        # ── VECTOR: his voice, his brain, the installer's choices ──────────────────
+        def apply_access(self):
+            """Once, the first time: the session's own settings as the installer's first step
+            chose (bromigOS's own motion and contrast were set while it installed)."""
+            sets = []
+            if acc.get("large_text"):
+                sets.append(("org.gnome.desktop.interface", "text-scaling-factor", "1.25"))
+            if acc.get("high_contrast"):
+                sets.append(("org.gnome.desktop.a11y.interface", "high-contrast", "true"))
+            if acc.get("reduce_motion"):
+                sets.append(("org.gnome.desktop.interface", "enable-animations", "false"))
+            if acc.get("screen_reader"):
+                sets.append(("org.gnome.desktop.a11y.applications", "screen-reader-enabled", "true"))
+            for schema, key, value in sets:
+                run(["gsettings", "set", schema, key, value], timeout=10)
+            if acc.get("screen_reader") and shutil.which("orca") and run(["pgrep", "-x", "orca"], timeout=5)[0] != 0:
+                try:
+                    subprocess.Popen(["orca"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                except OSError:
+                    pass
+            guide.save_access({"applied": True})
+
+        def find_brain(self):
+            b = F.brain()
+            GLib.idle_add(self._brain_found, b)
+
+        def _brain_found(self, b):
+            was = self.brain
+            self.brain = b
+            for box in self.asks.values():
+                box.set_visible(bool(b))
+            if b and not was and not self.greeted and guide:      # he's arrived: he says hello, aloud with the guide on
+                self.greeted = True
+                if self.voice and self.voice.status() == "on":
+                    self.spoken = ("tour.hello",)
+                    self.voice.say(guide.line("tour.hello"), fallback="tour.hello")
+                self.guide.line.set_label(guide.line("tour.hello"))
+            return False
+
+        def toggle_voice(self):
+            if not self.voice:
+                return
+            self.voice.toggle()
+            self.spoken = None
+            if self.voice.status() == "on":
+                self.speak()
+            self.voice_shown()
+
+        def voice_shown(self):
+            if not self.voice:
+                self.voice_btn.set_visible(False)
+                return
+            st = self.voice.status()
+            word = {"on": "Voice on", "muted": "Voice muted", "off": "Voice off", "screen-reader": "Voice quiet",
+                    "no-sound": "No sound"}[st]
+            box = Gtk.Box(spacing=6)
+            box.append(Gtk.Image.new_from_icon_name("audio-volume-high-symbolic" if st == "on" else "audio-volume-muted-symbolic"))
+            box.append(Gtk.Label(label=f"{word} · {guide.HOTKEY}"))
+            self.voice_btn.set_child(box)
+            hint(self.voice_btn, self.voice.describe() + " Click, or press " + guide.HOTKEY + ", to change it.")
+
+        def speak(self):
+            """The step's line, once: going back, or drawing the step again, doesn't repeat it."""
+            if self.voice and self.spoken != self.step:
+                self.spoken = self.step
+                self.voice.play(f"tour.{self.step}")
+
+        def ask_box(self, sid):
+            """Ask VECTOR: a question about this step, his answer under it. Hidden until his brain answers."""
+            g = Adw.PreferencesGroup(title="ASK VECTOR")
+            g.set_description("A question about this step: he answers here.")
+            row = Adw.EntryRow(title="Your question")
+            row.set_show_apply_button(True)
+            hint(row, "Type a question about this step and press Enter: VECTOR answers below")
+            row.add_prefix(glass.icon("dialog-question-symbolic", 18, "dg-row-icon"))
+            g.add(row)
+            ans = lab("", "bw-intro")
+            ans.set_selectable(True)
+            ans.set_margin_top(8)
+            ans.update_property([Gtk.AccessibleProperty.LABEL], ["VECTOR's answer"])
+            g.add(ans)
+            row.connect("entry-activated", lambda r: self.ask(sid, r, ans))
+            row.connect("apply", lambda r: self.ask(sid, r, ans))
+            g.set_visible(bool(self.brain))
+            g.answer, g.entry = ans, row
+            self.asks = {sid: g}
+            return g
+
+        def ask(self, sid, row, ans):
+            q = row.get_text().strip()
+            if not q:
+                ans.set_label("Type a question first, then press Enter.")
+                return
+            ans.set_label("VECTOR is thinking…")
+            row.set_sensitive(False)
+            _, _, head, intro = STEP[sid]
+            ctx = f"{head}. {intro}"
+
+            def work():
+                ok, words = F.ask(q, ctx, self.brain)
+                return (self._answered, sid, row, ans, ok, words)
+            self.later(work)
+
+        def _answered(self, sid, row, ans, ok, words):
+            row.set_sensitive(True)
+            ans.set_label(("VECTOR: " + words) if ok else "▲ " + words)
+            if ok and self.voice and self.step == sid:
+                self.voice.say(words)           # aloud only through his running voice: no clip says this
+            return False
 
         def show_step(self, sid):
             if hasattr(self, "stop_pairing"):
                 self.stop_pairing()          # the phone step's watching ends with it
             self.step = sid
             here = self.steps.index(sid)
-            self.guide = glass.guide(GUIDE.get(sid, ""), "speaking", still=bool(self.render) or reduced(),
+            self.guide = glass.guide(guide.line(f"tour.{sid}") if guide else "", "speaking", still=bool(self.render) or reduced(),
                                      size=(100, 150) if self.screen_h() < 760 else (120, 178))
             glass.rail(self.rail, self.steps, here, STEP, self.c, self.guide, title="WELCOME")
             tight = self.screen_h() < 760     # 1024×600 and the like: less air, the same content
@@ -298,11 +453,17 @@ def main(argv):
             page.append(lab(head.upper(), "bw-heading"))
             page.append(lab(intro, "bw-intro"))
             getattr(self, f"build_{sid}")(page)
+            page.append(self.ask_box(sid))
+            if self.render and self.brain and sid == "lab":      # the pictures: a question asked, as it looks
+                self.asks[sid].entry.set_text(SAMPLE_ASK[0])
+                self.asks[sid].answer.set_label("VECTOR: " + SAMPLE_ASK[1])
             self.clamp.set_child(page)
             self.msg.set_label("")
             self.back.set_visible(here > 0)
             self.skip.set_visible(sid != "done")
             self.next.set_label("Finish" if sid == "done" else "Continue")
+            self.speak()
+            self.voice_shown()
 
         def still(self):
             """No motion: the renders, and reduced motion."""
@@ -1052,6 +1213,9 @@ def main(argv):
 
         # ── moving on ──────────────────────────────────────────────────────────────
         def go(self, d):
+            if d < 0 and self.voice:
+                self.voice.stop()               # back quiets him: the step before isn't read again
+                self.spoken = self.steps[max(0, self.steps.index(self.step) + d)]
             i = self.steps.index(self.step) + d
             if i >= len(self.steps):
                 return self.finish()
@@ -1072,11 +1236,14 @@ def main(argv):
         def _applied(self, s, ok, said):
             self.next.set_sensitive(True)
             if ok == "stay":                       # VECTOR said hello: read it, then Continue
+                threading.Thread(target=self.find_brain, daemon=True).start()
                 self.msg.set_label(said)
                 return False
             if ok:
                 if said:
                     self.done_steps[s] = said
+                if s == "vector" and not self.render:     # a brain chosen: look for it again (Ask VECTOR, his hello)
+                    threading.Thread(target=self.find_brain, daemon=True).start()
                 self.go(1)
             else:
                 self.msg.set_label("▲ " + said)
@@ -1144,6 +1311,8 @@ def main(argv):
 
         def finish(self):
             self.stop_pairing()
+            if self.voice:
+                self.voice.stop()
             os.makedirs(STATE, exist_ok=True)
             try:
                 os.unlink(PENDING)
@@ -1182,12 +1351,20 @@ def main(argv):
         os.makedirs(out, exist_ok=True)
         todo = list(w.steps)
 
+        if "lab" in todo and w.brain:          # the lab step again, scrolled to its Ask VECTOR box
+            todo.insert(todo.index("lab") + 1, "lab-ask")
+
         def one():
             if not todo:
                 w.get_application().quit()
                 return False
             s = todo.pop(0)
-            w.show_step(s)
+            if s == "lab-ask":
+                w.show_step("lab")
+                GLib.timeout_add(300, lambda: (w.scroll.get_vadjustment().set_value(w.scroll.get_vadjustment().get_upper()),
+                                               False)[1])
+            else:
+                w.show_step(s)
             GLib.timeout_add(700, lambda: (snap(w, os.path.join(out, f"welcome-{s}.png")), False)[1])
             return True
 
@@ -1195,8 +1372,7 @@ def main(argv):
         return False
 
     start = argv[argv.index("--step") + 1] if "--step" in argv else "network"
-    render = argv[argv.index("--render") + 1] if "--render" in argv else None
-    return App(start, render).run([])
+    return App(start, render_dir).run([])
 
 
 if __name__ == "__main__":

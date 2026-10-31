@@ -22,6 +22,11 @@ each one changes things the usual way, so nothing here keeps a setting of its ow
   bromigos welcome-console --render DIR [--size WxH]
                                            each step to DIR/server-welcome-STEP.svg (checked to
                                            fit at that size), and exit
+
+It starts the way the installer's first step left it (docs/voice-guide.md): VECTOR's voice guide
+(voice-guide.json; Ctrl+Alt+V, or Ctrl+V on the console, turns it on, then mutes it) reads each
+step's line, and accessibility.json's high contrast and reduced motion apply here. Once his
+brain answers, every step has an Ask VECTOR box: a question about the step, his answer under it.
 """
 import json
 import os
@@ -37,15 +42,11 @@ PENDING = os.path.join(STATE, "welcome-pending")
 SERVER_TOML = "/etc/bromigos/server.toml"
 KEYS_ONLY = "/etc/ssh/sshd_config.d/01-bromigos-keys-only.conf"
 
-GUIDE = {   # VECTOR's one line per step, under the rail
-    "network": "This server's address on your network.",
-    "ssh": "Keys only is safest. Nobody can guess a key.",
-    "vector": "Where should I think? Your lab is best.",
-    "lab": "Join your lab and I can use it.",
-    "phone": "Scan it with BRODEC and I'm on your phone.",
-    "tour": "The commands worth knowing.",
-    "done": "All set. Sign in from anywhere with SSH.",
-}
+# VECTOR's one line per step, under the rail: the voice guide's catalogue (server-tour.STEP in
+# lib/guide/lines.toml), so the caption and his clip say the same words
+SAMPLE_BRAIN = {"url": "http://192.0.2.24:4000/v1", "model": "sample", "key": "none"}
+SAMPLE_ASK = ("Do I need my lab?", "No. This server works on its own. Your lab adds graphics cards for my brain, and "
+              "the lab console then shows this server beside your other machines.")
 
 STEPS = [
     ("network", "Network", "The network",
@@ -128,10 +129,18 @@ def main(argv):
     except ImportError:
         print("The welcome tour needs Textual (python-textual) and bromigos-core's bromigos_textual.")
         return 1
+    try:                    # VECTOR's lines and voice, the installer's choices (bromigos-core's)
+        import bromigos_guide as guide
+    except ImportError:
+        guide = None
     BT.prepare_terminal()
     render = argv[argv.index("--render") + 1] if "--render" in argv else None
     # pictures and tests: sample data, never this machine's own (its user, name, network, lab)
     sample = bool(render) or bool(os.environ.get("BROMIGOS_WELCOME_SAMPLE"))
+    # how the installer's first step left it (accessibility.json); pictures use the defaults
+    acc = guide.access() if guide and not sample else {}
+    if acc.get("reduce_motion"):
+        os.environ["BROMIGOS_REDUCED_MOTION"] = "1"
     look = BT.icon_look() if hasattr(BT, "icon_look") else "ascii"
     ic = (lambda n: BT.icon(n)) if hasattr(BT, "icon") else (lambda n: "*")      # noqa: E731
 
@@ -187,6 +196,8 @@ def main(argv):
         #nav Button { margin-left: 2; min-width: 12; }
         #msg { height: auto; padding: 0 2; color: $warning; }
         #hint { height: 1; padding: 0 2; color: $text-muted; }
+        #ask-box { height: auto; margin-top: 1; border: round $primary 40%; padding: 0 1; }
+        #ask-answer { height: auto; margin-top: 1; }
         Screen.-compact #rail { width: 18; }
         Screen.-narrow #rail { display: none; }
         Screen.-narrow #page, Screen.-narrow #nav, Screen.-narrow #msg, Screen.-narrow #hint { padding: 0 1; }
@@ -203,11 +214,110 @@ def main(argv):
         Screen.-qr-tight #nav Button { height: 1; border: none; padding: 0 1; min-width: 8; }
         Screen.-narrow #nav Button { min-width: 8; margin-left: 1; height: 1; border: none; padding: 0 1; }
         """
-        BINDINGS = [Binding("escape", "back", "Back"), Binding("ctrl+n", "next", "Continue"), Binding("ctrl+q", "quit", "Leave")]
+        BINDINGS = [Binding("escape", "back", "Back"), Binding("ctrl+n", "next", "Continue"), Binding("ctrl+q", "quit", "Leave")] + \
+            ([Binding(guide.TEXTUAL_KEYS, "voice", "Voice", show=False)] if guide else [])      # Ctrl+Alt+V
+        HINT = "Tab moves · Enter picks · Esc goes back · Ctrl+Q leaves"
 
         def __init__(self):
             super().__init__()
             self.i = 0
+            # VECTOR's voice: quiet in pictures and with sample data; on and muted are voice-guide.json's
+            self.voice = guide.Guide("console", notify=self._voice_notice) if guide and not sample else None
+            if guide and sample:                 # a player that never makes a sound, its settings nobody's
+                self.voice = guide.Guide("console", state=os.devnull, root="/nonexistent")
+                self.voice._out = ("pw-play", None)
+                self.voice.play = self.voice.say = lambda *a, **k: False
+            self.spoken = None
+            # his brain: looked for in the background; until it answers, he's scripted and the
+            # Ask VECTOR box stays hidden. Pictures: a sample one, unless BROMIGOS_VECTOR_BRAIN says otherwise
+            self.brain = SAMPLE_BRAIN if sample and not os.environ.get("BROMIGOS_VECTOR_BRAIN") else None
+            self.greeted = sample
+
+        # ── VECTOR: his voice, his brain ────────────────────────────────────────────
+        def _voice_notice(self, words):
+            try:
+                self.query_one("#msg", Static).update("▲ " + words)
+            except Exception:
+                pass
+
+        def hint_line(self):
+            if not self.voice:
+                return self.HINT
+            word = {"on": "voice on", "muted": "voice muted", "off": "voice off", "screen-reader": "voice quiet",
+                    "no-sound": "no sound"}[self.voice.status()]
+            return f"{self.HINT} · {guide.HOTKEY} {word}"
+
+        def action_voice(self):
+            if not self.voice:
+                return
+            self.voice.toggle()
+            self.spoken = None
+            if self.voice.status() == "on":
+                self.speak()
+            self.query_one("#hint", Static).update(self.hint_line())
+
+        def speak(self):
+            """The step's line, once: going back, or drawing the step again, doesn't repeat it."""
+            sid = STEPS[self.i][0]
+            if self.voice and self.spoken != sid:
+                self.spoken = sid
+                self.voice.play(f"server-tour.{sid}")
+
+        @work(thread=True)
+        def find_brain(self):
+            b = F.brain()
+            self.call_from_thread(self._brain_found, b)
+
+        def _brain_found(self, b):
+            was, self.brain = self.brain, b
+            for box in self.query("#ask-box"):
+                box.display = bool(b)
+            if b and not was and not self.greeted and guide:     # he's arrived: hello, aloud with the guide on
+                self.greeted = True
+                if self.voice and self.voice.status() == "on":
+                    self.spoken = STEPS[self.i][0]
+                    self.voice.say(guide.line("server-tour.hello"), fallback="server-tour.hello")
+                self.query_one("#msg", Static).update("VECTOR: " + guide.line("server-tour.hello"))
+
+        def ask_box(self, page, sid):
+            box = Vertical(id="ask-box")
+            page.mount(box)
+            box.mount(Static(Text.assemble((ic("vector") + "  ", "bold " + col("primary")), ("ASK VECTOR", "bold " + col("soft")))))
+            inp = Input(id="ask", placeholder="A question about this step, then Enter")
+            inp.tooltip = "Type a question about this step and press Enter: VECTOR answers below"
+            box.mount(inp)
+            shown = render and self.brain and sid == "lab"     # the pictures: a question asked, as it looks
+            box.mount(Static(Text.assemble(("VECTOR  ", "bold " + col("primary")), SAMPLE_ASK[1]) if shown else "", id="ask-answer"))
+            if shown:
+                inp.value = SAMPLE_ASK[0]
+            box.display = bool(self.brain)
+
+        @on(Input.Submitted, "#ask")
+        def asked(self, ev):
+            q = ev.value.strip()
+            out = self.query_one("#ask-answer", Static)
+            if not q:
+                out.update("Type a question first, then press Enter.")
+                return
+            out.update(Text("VECTOR is thinking…", style=col("muted")))
+            ev.input.disabled = True
+            sid, _, head, intro = STEPS[self.i]
+            self.ask_work(sid, q, f"{head}. {intro}")
+
+        @work(thread=True)
+        def ask_work(self, sid, q, ctx):
+            ok, words = F.ask(q, ctx, self.brain)
+
+            def put():
+                if STEPS[self.i][0] != sid:          # moved on meanwhile
+                    return
+                for inp in self.query("#ask"):
+                    inp.disabled = False
+                self.query_one("#ask-answer", Static).update(
+                    Text.assemble(("VECTOR  ", "bold " + col("primary")), words) if ok else Text("▲ " + words, style=col("warn")))
+                if ok and self.voice:
+                    self.voice.say(words)           # aloud only through his running voice: no clip says this
+            self.call_from_thread(put)
 
         def compose(self):
             yield Static(BT.TOO_SMALL_WORDS, id="too-small")
@@ -226,13 +336,18 @@ def main(argv):
                 b = Button("Continue", id="next", variant="primary")
                 b.tooltip = "Use what's chosen here and go on (Ctrl+N)"
                 yield b
-            yield Static("Tab moves · Enter picks · Esc goes back · Ctrl+Q leaves", id="hint")
+            yield Static(self.HINT, id="hint")
 
         async def on_mount(self):
             self.register_theme(BT.theme())
-            self.theme = "bromigos"
+            hc = bool(acc.get("high_contrast"))
+            if hc:                            # the installer's High contrast: white on black, nothing faded
+                self.register_theme(BT.theme(name="bromigos-hc", high_contrast=True))
+            self.theme = "bromigos-hc" if hc else "bromigos"
             if BT.motion() != "full":
                 self.animation_level = "none"
+            if not sample or os.environ.get("BROMIGOS_VECTOR_BRAIN"):
+                self.find_brain()
             start = argv[argv.index("--step") + 1] if "--step" in argv else None
             ids = [st[0] for st in STEPS]
             await self.show(ids.index(start) if start in ids else 0)
@@ -274,7 +389,7 @@ def main(argv):
             if hasattr(BT, "orb") and self.size.height >= 30 and getattr(self, "bp", "normal") not in ("compact", "narrow"):
                 rail.append("\n")
                 rail.append_text(BT.orb(0.0, 12, 6))
-                line = GUIDE.get(sid, "")
+                line = guide.line(f"server-tour.{sid}") if guide else ""
                 if line:
                     rail.append("\n")
                     rail.append("VECTOR  ", style="bold " + col("primary"))
@@ -286,7 +401,10 @@ def main(argv):
             page.mount(BT.Emitter(head), Static(intro, classes="intro"))
             self.screen.set_class(sid == "phone" and self.size.height < 34, "-qr-tight")
             getattr(self, f"build_{sid}")(page)
+            self.ask_box(page, sid)
             self.query_one("#msg", Static).update("")
+            self.speak()
+            self.query_one("#hint", Static).update(self.hint_line())
             self.query_one("#back").display = i > 0
             self.query_one("#skip").display = sid != "done"
             self.query_one("#next", Button).label = "Finish" if sid == "done" else "Continue"
@@ -409,6 +527,8 @@ def main(argv):
                 say(("VECTOR: " + words) if ok else words, "ok" if ok else "fail")
                 if not ok:
                     return
+            if pick != "none":                 # a brain chosen: look for it (Ask VECTOR, his hello)
+                self.call_from_thread(self.find_brain)
             self.call_from_thread(self.show, self.i + 1)
 
         def build_lab(self, page):
@@ -629,7 +749,10 @@ def main(argv):
             await self.show(self.i + 1)
 
         async def action_back(self):
+            if self.voice:
+                self.voice.stop()               # back quiets him: the step before isn't read again
             if self.i > 0:
+                self.spoken = STEPS[self.i - 1][0]
                 await self.show(self.i - 1)
 
         def apply_ssh(self):
@@ -671,9 +794,13 @@ def main(argv):
 
         def on_unmount(self):
             self.stop_pairing()
+            if self.voice:
+                self.voice.stop()
 
         def finish(self):
             self.stop_pairing()
+            if self.voice:
+                self.voice.stop()
             try:
                 os.unlink(PENDING)
             except OSError:
@@ -734,6 +861,10 @@ def main(argv):
                     await app.show(k)
                     await pilot.pause(0.3)
                     app.save_screenshot(os.path.join(render, f"server-welcome-{s[0]}.svg"))
+                    if s[0] == "lab" and app.brain:      # again, scrolled to its Ask VECTOR box
+                        app.query_one("#page").scroll_end(animate=False)
+                        await pilot.pause(0.2)
+                        app.save_screenshot(os.path.join(render, "server-welcome-lab-ask.svg"))
                     # it fits: nothing off the side, the buttons on screen
                     if app.query_one("#page").max_scroll_x:
                         problems.append(f"{s[0]}: runs off the side")

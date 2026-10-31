@@ -14,6 +14,8 @@ files. Nothing here opens a terminal.
   provision_plan()              bromigos-lab's reviewed plan for making this computer the lab (text)
   set_brain(kind, …)            bromigos setup vector …
   hello(name)                   VECTOR's first words through his brain (and his voice, when he has one)
+  brain()                       his brain when it answers: {url, model, key} (his own settings), or None
+  ask(question, context, b)     one question to his brain about a tour step: (ok, his answer, or why not)
   run_lines(argv, on_line)      a long step (a package, a model, a voice), line by line
   machine_*, Pairing, Enroll     BRODEC's machine agent (brodec-machine): its package and root's
                                 machine.toml through polkit; `brodec-machine pair --json` (and a lab
@@ -238,6 +240,96 @@ def hello(name=""):
     if code == 0 and text:
         return True, text.splitlines()[-1][:300]
     return False, "VECTOR couldn't reach his brain: " + plain_error(err or out)
+
+
+VECTOR_ROOT = os.environ.get("BROMIGOS_VECTOR_ROOT") or "/usr/lib/bromigos/vector"
+
+
+def _vector_toml():
+    c = os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")
+    for p in (os.path.join(c, "bromigos/vector/vector.toml"), os.path.join(c, "bromigos/holo/vector.toml"),
+              "/etc/bromigos/vector/vector.toml", os.path.join(VECTOR_ROOT, "vector.toml")):
+        try:
+            import tomllib
+            with open(p, "rb") as f:
+                return tomllib.load(f).get("llm") or {}
+        except (OSError, ValueError):
+            continue
+    return {}
+
+
+def brain(timeout=3):
+    """VECTOR's brain, when it answers: {"url", "model", "key"}, or None. Where it is comes from
+    his own settings, read his way (bromigos-vector's holo/vector/llm.py: vector.toml's [llm],
+    then targets.toml and his fallbacks), else vector.toml alone. BROMIGOS_VECTOR_BRAIN names a
+    base URL instead (tests: a stand-in), or "none". The key is only ever sent to that server."""
+    import urllib.request
+    forced = os.environ.get("BROMIGOS_VECTOR_BRAIN")
+    if forced == "none":
+        return None
+    url = model = key = None
+    if forced:
+        url, model, key = forced.rstrip("/"), os.environ.get("BROMIGOS_VECTOR_MODEL") or "vector", "none"
+    else:
+        try:
+            import sys
+            if VECTOR_ROOT not in sys.path:
+                sys.path.append(VECTOR_ROOT)
+            from holo.vector import llm
+            url, model, key = llm.base(), llm.model(), llm.key()
+        except Exception:
+            cfg = _vector_toml()
+            url = (cfg.get("base_url") or "").rstrip("/") or None
+            model = cfg.get("model") or "qwen3:8b"
+            try:
+                with open(os.path.expanduser(cfg.get("api_key_file") or "~/.local/share/bromigos/litellm-key")) as f:
+                    key = f.read().strip() or "none"
+            except OSError:
+                key = "none"
+    if not url:
+        return None
+    try:
+        req = urllib.request.Request(url + "/models", headers={"Authorization": f"Bearer {key}"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            if r.status != 200:
+                return None
+    except Exception:
+        return None
+    return {"url": url, "model": model, "key": key}
+
+
+def ask(question, context="", b=None, timeout=45):
+    """Ask VECTOR's brain one question about the tour's step (context: the step, in words).
+    (True, his answer) or (False, what went wrong and what to do), never an exception."""
+    import urllib.error
+    import urllib.request
+    b = b or brain()
+    if not b:
+        return False, "VECTOR has no brain connected yet. Give him one on the VECTOR step, or later in Settings › VECTOR."
+    system = ("You are VECTOR, the AI of bromigOS, helping someone through the welcome tour on their new computer. "
+              "Answer in two or three short, plain sentences, kindly, without jargon. Only give a command if they ask "
+              "for one. The step they're on: " + (context or "the welcome tour"))
+    body = json.dumps({"model": b["model"], "messages": [{"role": "system", "content": system},
+                                                         {"role": "user", "content": question.strip()[:1000]}],
+                       "max_tokens": 400, "temperature": 0.4, "stream": False}).encode()
+    req = urllib.request.Request(b["url"] + "/chat/completions", data=body, method="POST",
+                                 headers={"Content-Type": "application/json", "Authorization": f"Bearer {b['key']}"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            doc = json.loads(r.read().decode("utf-8", "replace"))
+        text = (doc.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+    except TimeoutError:
+        return False, f"VECTOR didn't answer in {timeout} seconds. Ask again, or ask him later from the desktop."
+    except urllib.error.HTTPError as e:
+        return False, f"VECTOR's brain said no ({e.code}). Check his brain in Settings › VECTOR, then ask again."
+    except Exception as e:
+        if "timed out" in str(e):
+            return False, f"VECTOR didn't answer in {timeout} seconds. Ask again, or ask him later from the desktop."
+        return False, "VECTOR couldn't reach his brain. Check the network, or his brain in Settings › VECTOR."
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+    if not text:
+        return False, "VECTOR had nothing to say to that. Ask it another way."
+    return True, text[:1200]
 
 
 def voice(tier, on_line):
