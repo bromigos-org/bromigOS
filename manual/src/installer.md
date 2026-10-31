@@ -24,9 +24,23 @@ itself.
 
 ## The steps
 
-1. **Welcome.** The language your new system uses, your time zone, and whether you're
-   online. You don't need the internet: everything is on the stick.
-2. **Before you start.** Shown only when there's something to know: running on battery
+1. **How would you like to be guided?** Choose what helps you, before anything else. Each
+   choice works at once, and your new system starts the same way:
+   - **VECTOR's voice guide.** VECTOR reads each step aloud. It's off until you turn it on
+     here. **Play a sample** lets you hear him first.
+   - **Screen reader.** Reads everything on the screen aloud: Orca in the graphical
+     installer, the console's speech in the text installer. VECTOR stays quiet while it
+     talks, so you never hear two voices.
+   - **Larger text.** Bigger letters everywhere. In the text installer this is
+     **Bigger letters on this screen**, which works on the computer's own screen. A
+     terminal window or SSH can't change its own letters: make them bigger in that
+     terminal's settings, often with <kbd>Ctrl</kbd> and <kbd>+</kbd>.
+   - **High contrast.** Stronger colours: solid panels, white text, no glow.
+   - **Reduce motion.** Nothing moves or pulses on its own.
+   - **Language.** The language your new system uses.
+2. **Welcome.** Your time zone, and whether you're online. You don't need the internet:
+   everything is on the stick.
+3. **Before you start.** Shown only when there's something to know: running on battery
    (plug in the charger), less than 4 GB of memory, a disk that reports it's failing, a
    graphics card bromigOS can't drive well, Secure Boot. Each line says what to do. None
    of them stops you. Secure Boot needs nothing here: the install sets bromigOS up to start
@@ -35,13 +49,13 @@ itself.
 
    ![Before you start, on a stick from before: Secure Boot is on, with what it means and how to turn it off](images/installer-before-you-start-secure-boot.webp)
 
-3. **What kind of computer is this?** **bromigOS (desktop)** for a computer you sit at.
+4. **What kind of computer is this?** **bromigOS (desktop)** for a computer you sit at.
    **bromigOS Server** has no desktop, for servers and lab machines.
 
    ![What kind of computer is this? bromigOS (desktop) or bromigOS Server](images/installer-kind-of-computer.webp)
 
-4. **Your keyboard.** Pick the layout that matches your keys. Try it in the box.
-5. **Where to install.** Every disk, with its size, model and what's on it. Pick one, then
+5. **Your keyboard.** Pick the layout that matches your keys. Try it in the box.
+6. **Where to install.** Every disk, with its size, model and what's on it. Pick one, then
    choose how:
    - **Install alongside Windows** (or the other system it found). Windows and its files
      stay. You choose which system to start each time the computer starts. If there isn't
@@ -55,26 +69,26 @@ itself.
 
    ![Where to install: Install alongside Windows, with the bar that splits the disk and each side's minimum](images/installer-where-alongside-windows.webp)
 
-6. **Save Windows' recovery key**, only when Windows uses BitLocker (below).
-7. **About you.** Your name, a user name for signing in, a password, and a name for the
+7. **Save Windows' recovery key**, only when Windows uses BitLocker (below).
+8. **About you.** Your name, a user name for signing in, a password, and a name for the
    computer. The user name and computer name are suggested from your name.
-8. **Encryption.** On by default. The disk can only be read after the passphrase is typed
+9. **Encryption.** On by default. The disk can only be read after the passphrase is typed
    when the computer starts. By default your password is the passphrase. You can give the
    disk its own instead.
 
    > **Remember it.** Nobody can recover a forgotten passphrase, and the disk can't be read
    > without it.
 
-9. **Remote access and protection**, for bromigOS Server only: SSH (signing in from
+10. **Remote access and protection**, for bromigOS Server only: SSH (signing in from
    another computer), the firewall, and automatic updates. See [bromigOS Server](#bromigos-server).
-10. **Summary.** Every choice in plain words. The button says **Install**, or **Erase disk
+11. **Summary.** Every choice in plain words. The button says **Install**, or **Erase disk
     and install** when the disk is erased.
 
     ![Ready to install: every choice in plain words, and Install](images/installer-summary.webp)
 
-11. **Installing.** A progress bar and a line saying what's happening. **Details** shows
+12. **Installing.** A progress bar and a line saying what's happening. **Details** shows
     every step. It takes about ten minutes.
-12. **Done.** Press **Restart now**. Take out the stick when the screen goes dark. On a
+13. **Done.** Press **Restart now**. Take out the stick when the screen goes dark. On a
     computer that starts the newer way (UEFI), this page also shows a four-digit code in large
     letters, with the blue screen's steps beside it: note it. At the first start, a blue screen asks you to approve bromigOS once, with that
     code ([Secure Boot](install.md#secure-boot)). Secure Boot can stay on.
@@ -146,8 +160,12 @@ offline: his lines are recorded on the stick.
 - It's off until you turn it on, on the first step or with
   <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd>. It needs a sound device.
 - Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> again to mute him, and again to
-  unmute. The installer remembers, and your new system's welcome tour does too.
-- <kbd>Esc</kbd> or the next step cuts off his line.
+  unmute. The bar at the bottom says whether he's on, and clicking it does the same. The
+  installer remembers, and your new system's welcome tour does too.
+- On the computer's own text screen, <kbd>Ctrl</kbd>+<kbd>V</kbd> does the same, except
+  while you're typing in a box.
+- <kbd>Esc</kbd>, **Back** or the next step cuts off his line. Going back doesn't read the
+  step again.
 - He stays quiet while a screen reader talks, such as Orca or the stick's speech entry.
   His words are still on screen.
 - With no sound device, such as on a serial console, the installer says so once. Then the
@@ -181,8 +199,23 @@ Every control has a hint. In the graphical installer it shows when you hover ove
 control, and a screen reader (Orca) reads it. In the text installer the line at the
 bottom of the screen says what the focused control does.
 
-With the stick's **Start with the screen reader (speech)** entry, the text installer asks
-its questions one at a time as plain lines, which the screen reader reads in order.
+With the stick's **Install with the screen reader (speech)** entry (press <kbd>S</kbd> in
+the stick's menu), the installer starts straight away with the screen reader on. It asks
+its questions one at a time as plain lines, which the screen reader reads in order. The
+first questions are how you'd like to be guided: whether your new system keeps the screen
+reader, reduces motion, or uses high contrast. VECTOR's voice stays off there, so the
+screen reader is the only voice.
+
+Screen reader keys, if you need them:
+
+| Keys | What they do |
+|---|---|
+| <kbd>Insert</kbd>+<kbd>S</kbd> (or <kbd>Caps Lock</kbd>+<kbd>S</kbd> on a laptop layout) | Orca: stop or start speech for a moment |
+| <kbd>Insert</kbd>+<kbd>Q</kbd> | Orca: quit Orca |
+| <kbd>Insert</kbd>+<kbd>Space</kbd> | Orca: its settings |
+| <kbd>Keypad Enter</kbd> | Console speech (speakup): be quiet until there's something new |
+| <kbd>Keypad 8</kbd> | Console speech: read the current line again |
+| <kbd>Keypad 7</kbd>, <kbd>Keypad 9</kbd> | Console speech: read the line above or below |
 
 ## For power users
 
@@ -232,8 +265,32 @@ are beside it in `clips/`, with `clips/manifest.json` saying which clip speaks w
 The clips are made when bromigOS is built, so the stick needs no voice model.
 
 Mute and on or off are kept in `~/.local/state/bromigos/voice-guide.json`, as
-`{"enabled": true, "muted": false}`. On the live system that's the installer's own user.
-The installer copies it to your new account.
+`{"enabled": true, "muted": false}`. On the live system that's the installer's own user
+(the live user for the graphical installer, root for the text one). The first step's other
+choices go in `~/.local/state/bromigos/accessibility.json`:
+
+```json
+{
+  "screen_reader": false,
+  "large_text": true,
+  "high_contrast": true,
+  "reduce_motion": false,
+  "console_font": false,
+  "applied": false
+}
+```
+
+The install writes both files into your new account (`bromigos-iso-install`, from the
+answers' `guidance`), and the welcome tour reads them when it starts. Reduce motion and
+high contrast are also passed to `bromigos setup` as `--motion reduced` and
+`--contrast high` (the same as `bromigos accessibility`). A screen reader adds Orca to a
+desktop and `espeakup` (started at every boot) to bromigOS Server. The console's bigger
+letters add `terminus-font` and `FONT=ter-v32n` in `/etc/vconsole.conf`. The desktop's
+welcome tour sets the session's own settings to match, once (`applied` turns true).
+
+Boot options: `bromigos.voice=on` or `bromigos.voice=off` turns the voice guide on or off
+for that boot. The speech entry is `accessibility=on bromigos.install=text
+bromigos.voice=off`.
 
 To change a line or make the clips again, see `docs/voice-guide.md` in the repository. It
 covers the catalogue's format, `tools/voice/make-clips.py`, and the check CI runs
