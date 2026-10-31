@@ -442,7 +442,7 @@ class Setup(Rig):
 
 
 class Backup(Rig):
-    def state(self):
+    def backup_state(self):
         return json.loads((self.root / "var/lib/bromigos/server/backup.json").read_text())
 
     def summary(self):
@@ -475,7 +475,7 @@ class Backup(Rig):
         self.assertIn("restic forget --tag bromigos-server --prune --keep-daily 7 --keep-weekly 4 --keep-monthly 6", log)
         key = self.root / "etc/bromigos/server/backup.key"
         self.assertEqual(key.stat().st_mode & 0o777, 0o600)
-        self.assertEqual(self.state()["run"]["snapshot"], "1234abcd")
+        self.assertEqual(self.backup_state()["run"]["snapshot"], "1234abcd")
         d = json.loads(self.run_server("status", "--json").stdout)["backup"]
         self.assertEqual(d["to"], "s3:https://s3.example/bucket/srv", "no password in the status")
         self.assertEqual(d["last"]["phase"], "ok")
@@ -486,15 +486,15 @@ class Backup(Rig):
         (self.fake / "restic-cat-config.err").write_text("Fatal: unable to open repository: permission denied\n")
         r = self.run_server("backup", "run")
         self.assertEqual(r.returncode, 1)
-        self.assertEqual(self.state()["run"]["phase"], "failed")
-        self.assertIn("can't be reached", self.state()["run"]["reason"])
+        self.assertEqual(self.backup_state()["run"]["phase"], "failed")
+        self.assertIn("can't be reached", self.backup_state()["run"]["reason"])
         self.assertIn("the last backup failed", self.run_server("status").stdout)
 
     def test_check_reads_some_data_back_when_asked(self):
         self.config('[health]\nminutes = 0\n[backup]\nto = "/mnt/backup"\n')
         self.run_server("backup", "check", "--data")
         self.assertIn("restic check --read-data-subset=5%", self.log())
-        self.assertEqual(self.state()["check"]["phase"], "ok")
+        self.assertEqual(self.backup_state()["check"]["phase"], "ok")
 
 
 class Ups(Rig):
