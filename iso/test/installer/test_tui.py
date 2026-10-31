@@ -324,6 +324,12 @@ class TUI(unittest.TestCase):
                     self.assertTrue(plain.rstrip().endswith("]"), plain)
                     self.assertLessEqual(cell_len(plain) + 3, width, plain)   # the radio, its gap
 
+    def test_a_blank_disk_is_one_empty_segment(self):
+        """A disk with no partitions (and no free area listed) still draws: one empty segment,
+        so the erase map shows bromigOS over the whole disk."""
+        segs = common.disk_segments({"size": 43 * 1024 ** 3, "partitions": [], "free": []})
+        self.assertEqual([(s[0], s[1]) for s in segs], [("free", 43 * 1024 ** 3)])
+
     def test_a_step_opens_at_its_heading(self):
         """On a small screen the page doesn't scroll past a step's heading to its first choice."""
         async def go():

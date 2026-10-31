@@ -985,4 +985,6 @@ def disk_segments(d):
     for f in frees:
         if f["start"] >= pos and f["size"] > big:
             out.append(("free", f["size"], "Free space", None))
+    if not out:             # a blank disk: no partitions, and no free area listed either
+        out.append(("free", d.get("size") or 1, "Empty", None))
     return out

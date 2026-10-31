@@ -415,6 +415,8 @@ def segments(d):
     for f in frees:
         if f["start"] >= pos and f["size"] > 64 * 2**20:
             out.append(("free", f["size"], "Free space"))
+    if not out:             # a blank disk: no partitions, and no free area listed either
+        out.append(("free", d.get("size") or 1, "Empty"))
     return [s if len(s) == 4 else s + (None,) for s in out]
 
 
@@ -606,7 +608,7 @@ class DiskMap(Gtk.DrawingArea):
         lay = self._layout(width)
         erase = self.mode == "erase"
         if erase:
-            x0, x1 = lay[0][1], lay[-1][2]
+            x0, x1 = (lay[0][1], lay[-1][2]) if lay else (4, width - 4)
             for s, a, b in lay:                       # what's there now, fading under bromigOS
                 self._fill(cr, s[0])
                 cr.rectangle(a, y0, b - a, y1 - y0)
