@@ -3,11 +3,14 @@
 # checks it before it's published. Nothing runs as root on this machine: the squashfs is
 # unpacked in an unprivileged archlinux container (Docker), as the caller's user.
 #
-#   iso/check-medium.sh ISO [--repo URL] [--keep DIR]
+#   iso/check-medium.sh ISO [--repo URL] [--keep DIR] [--dev-build]
 #
 #   --repo URL   the repository the medium must name (default: install.sh's PUBLIC_REPO,
 #                and fails if that's empty)
 #   --keep DIR   unpack into DIR and leave it (default: a directory in ~/.cache, removed)
+#   --dev-build  the medium is a dev build on purpose (a pull request's, built with its own
+#                packages: iso/ci-local-packages.sh): that's said, not failed; every other
+#                check still runs. Never for a medium that's published
 #
 # Checks: the repository it names and its channel; no CA, no test key, no serial console,
 # not labelled BROMIGOS_TEST; no package with a proprietary licence in the offline repository;
@@ -17,10 +20,10 @@ set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/.." && pwd)
 
-iso='' want_repo='' keep=''
+iso='' want_repo='' keep='' devbuild=0
 while (($#)); do
     case $1 in
-        --repo) want_repo=$2; shift 2 ;; --keep) keep=$2; shift 2 ;;
+        --repo) want_repo=$2; shift 2 ;; --keep) keep=$2; shift 2 ;; --dev-build) devbuild=1; shift ;;
         -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*) echo "iso/check-medium.sh: unknown option $1" >&2; exit 2 ;;
         *) iso=$1; shift ;;
@@ -58,7 +61,11 @@ check "names the repository $want_repo" test "$(cat "$R/etc/bromigos-iso/repo.ur
 echo "     its channel: $(cat "$R/etc/bromigos-iso/channel" 2>/dev/null || echo '(none)')"
 check "no repository CA" bash -c "! ls '$R/etc/bromigos-iso/repo-ca.crt' '$R'/etc/ca-certificates/trust-source/anchors/* >/dev/null 2>&1"
 check "no test key" test ! -e "$R/etc/bromigos-iso/test_authorized_keys"
-check "not a dev build (iso/build.sh --local-repo)" test ! -e "$R/etc/bromigos-iso/dev-build"
+if (( devbuild )); then
+    echo "     a dev build on purpose (--dev-build): $([[ -e $R/etc/bromigos-iso/dev-build ]] && echo marked || echo 'not marked: none of its packages were needed')"
+else
+    check "not a dev build (iso/build.sh --local-repo)" test ! -e "$R/etc/bromigos-iso/dev-build"
+fi
 check "no authorized_keys for live or root" bash -c "! ls '$R'/home/*/.ssh/authorized_keys '$R'/root/.ssh/authorized_keys >/dev/null 2>&1"
 check "no serial console on the kernel line" bash -c "! grep -qs 'console=ttyS0' '$w'/iso/boot/grub/*.cfg '$w'/iso/boot/syslinux/*.cfg"
 check "not a test build's label" bash -c "! grep -qrs BROMIGOS_TEST '$w'/iso/boot '$w'/iso/EFI"
