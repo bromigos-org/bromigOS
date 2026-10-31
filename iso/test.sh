@@ -170,6 +170,11 @@ press() {           # press KEY[-KEY…]: one QMP send-key of qcodes, e.g. shift
     sleep 0.3
 }
 
+park() {            # the pointer to the top right corner, over nothing with a hint, so a capture has no tooltip
+    qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"abs","data":{"axis":"x","value":32767}},{"type":"abs","data":{"axis":"y","value":0}}]}}'
+    sleep 0.8
+}
+
 click() {           # click X Y: the pointer there (the tablet's absolute axes, 0..32767 over 1280x800), a left click
     local x=$(( $1 * 32767 / 1280 )) y=$(( $2 * 32767 / 800 ))
     qmp "{\"execute\":\"input-send-event\",\"arguments\":{\"events\":[{\"type\":\"abs\",\"data\":{\"axis\":\"x\",\"value\":$x}},{\"type\":\"abs\",\"data\":{\"axis\":\"y\",\"value\":$y}}]}}"
@@ -303,6 +308,7 @@ case $cmd in
                 while (( seen < n )); do
                     seen=$((seen + 1))
                     page=$(grep '^::page ' "$dir/install.out" | sed -n "${seen}p" | awk '{print $2}')
+                    park
                     shot "gui-$firmware-$mode-$page" >/dev/null
                     "${SSH[@]}" "touch /tmp/bromigos-installer-next" || true
                 done
