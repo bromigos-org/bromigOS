@@ -158,7 +158,7 @@ services_on = ["smb", "nfs", "timeline"]
 id = "home"
 title = "Home services"
 summary = "Apps for the household: photos, media, passwords, documents, home automation."
-hint = "Each app gets a name like photos.<server>.local, backs itself up, and updates at night."
+hint = "Each app gets a name like photos-<server>.local, backs itself up, and updates at night."
 glyph = "house"
 icon = "people"
 packages = ["caddy"]
@@ -387,7 +387,7 @@ packages = ["hdparm"]
 [[services]]
 id = "front-door"
 title = "One web address per app (Caddy)"
-words = "Each app at its own name, like photos.<server>.local, with HTTPS from your server's own certificate authority."
+words = "Each app at its own name, like photos-<server>.local, with HTTPS from your server's own certificate authority."
 roles = ["home", "media"]
 packages = ["caddy"]
 units = ["caddy.service"]

@@ -51,9 +51,10 @@ WINGS = ("v1.0.0-rc.1", {"x86_64": ("wings_linux_amd64", "19dda386e02041da1f1fbc
                          "aarch64": ("wings_linux_arm64", "ed7deafe0aef2acd3adae73103d2a01b57e8a7eaa56950194bdff11f87f37ff3")})
 GLUETUN = {"pia": ("private internet access", "openvpn", "on"), "protonvpn": ("protonvpn", "openvpn", "on"),
            "mullvad": ("mullvad", "wireguard", "off")}
-# the web apps Caddy names (<sub>.<host>.local → the app's port)
+# the web apps' names (app_name: <name>-<host>.local, one label, so every mDNS resolver answers
+# it; mdnsnames.py publishes them and Caddy serves them)
 WEB = {"start-page": "home", "photos": "photos", "passwords": "passwords", "documents": "documents",
-       "home-automation": "home", "uptime": "uptime", "jellyfin": "media", "seerr": "requests", "monitoring": "graphs",
+       "home-automation": "automation", "uptime": "uptime", "jellyfin": "media", "seerr": "requests", "monitoring": "graphs",
        "navidrome": "music", "audiobookshelf": "books", "file-sync": "sync", "s3": "s3", "pelican-panel": "games"}
 MEDIA_FOLDERS = ("movies", "tv", "music", "books", "podcasts", "youtube", "downloads", "downloads/tv-sonarr",
                  "downloads/radarr", "downloads/lidarr", "downloads/soulseek", "downloads/incomplete")
@@ -696,21 +697,54 @@ def step_backups(host, it):
     enable(host, ["bromigos-lab-backup.timer"])
 
 
+def app_name(host, i):
+    """A web app's name on the local network: photos-myserver.local (one label: see mdnsnames.py)."""
+    return f"{WEB[i]}-{host.hostname}.local"
+
+
+def web_apps(host):
+    """(item, name, port) for each chosen web app that Caddy serves."""
+    out = []
+    for i in host.selected:
+        it = host.cat[i]
+        if i in WEB and it["ports"]:
+            out.append((i, app_name(host, i), it["ports"][0] if i != "monitoring" else 3005))
+    return out
+
+
 def caddy_routes(host):
     blocks = ["# bromigos lab provision --local: one name per web app (tls internal: Caddy's own authority)"]
-    for i in host.selected:
-        sub = WEB.get(i)
-        it = host.cat[i]
-        if not sub or not it["ports"]:
-            continue
-        port = it["ports"][0] if i != "monitoring" else 3005
-        blocks.append(f"{i}.{host.hostname}.local {{\n  tls internal\n  reverse_proxy 127.0.0.1:{port}\n}}")
+    for _, name, port in web_apps(host):
+        blocks.append(f"{name} {{\n  tls internal\n  reverse_proxy 127.0.0.1:{port}\n}}")
     return "\n\n".join(blocks) + "\n"
+
+
+MDNS_UNIT = """[Unit]
+Description=bromigOS: the web apps' names on the local network (mDNS)
+Documentation=file:///usr/share/doc/bromigos/lab-provision.md
+After=avahi-daemon.service network-online.target
+Wants=network-online.target
+Requires=avahi-daemon.service
+
+[Service]
+ExecStart=/usr/lib/bromigos/bin/bromigos-lab mdns-names publish
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+"""
 
 
 def step_caddy(host, it):
     pacman(host, ["caddy"])
     host.write("etc/caddy/conf.d/bromigos-lab.caddy", caddy_routes(host))
+    # each name published over mDNS, so phones and computers on the network find it
+    pacman(host, ["avahi"])
+    host.write("etc/bromigos/lab/mdns-names", "".join(f"{name}\n" for _, name, _ in web_apps(host)))
+    host.write("etc/systemd/system/bromigos-lab-mdns-names.service", MDNS_UNIT)
+    host.must(["systemctl", "daemon-reload"], "reload systemd")
+    enable(host, ["avahi-daemon.service", "bromigos-lab-mdns-names.service"], restart=True)
     main = host.path("etc/caddy/Caddyfile")
     text = main.read_text() if main.exists() else ""
     if "import /etc/caddy/conf.d/*" not in text:
@@ -723,7 +757,7 @@ def step_passwords(host, it):
     host.write("etc/systemd/system/vaultwarden.service.d/50-bromigos.conf",
                "[Service]\nEnvironment=ROCKET_ADDRESS=127.0.0.1\nEnvironment=ROCKET_PORT=8222\n"
                "Environment=WEB_VAULT_ENABLED=true\nEnvironment=WEB_VAULT_FOLDER=/usr/share/webapps/vaultwarden-web\n"
-               f"Environment=DOMAIN=https://passwords.{host.hostname}.local\n")
+               f"Environment=DOMAIN=https://{WEB['passwords']}-{host.hostname}.local\n")
     host.must(["systemctl", "daemon-reload"], "reload systemd")
     enable(host, ["vaultwarden.service"], restart=True)
 

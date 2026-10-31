@@ -475,6 +475,9 @@ def main(argv):
     if cmd == "secrets":
         from bromigos_homelab import secretstore
         return secretstore.main(rest)
+    if cmd == "mdns-names":                                       # the web apps' names: mdnsnames.py
+        from bromigos_homelab import mdnsnames
+        return mdnsnames.main(rest)
     if cmd == "network":
         from bromigos_homelab import labnet
         return labnet.main(rest)

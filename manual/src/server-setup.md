@@ -27,7 +27,7 @@ others. The roles suggest what the server runs, and you can change any of it on 
 |---|---|
 | **Lab node** | Computing and graphics cards for your lab. It joins your lab's cluster, and your lab's workstation sets it up from your desktop: you don't type anything on it. |
 | **Storage** | Files and backups for the house and the lab: shared folders for Windows, Mac and Linux, hourly versions of every file, and backups. |
-| **Home services** | Apps for the household: photos, media, passwords, documents, home automation. Each app gets a name like `photos.<server>.local`, backs itself up, and updates at night. |
+| **Home services** | Apps for the household: photos, media, passwords, documents, home automation. Each app gets a name like `photos-<server>.local`, backs itself up, and updates at night. |
 | **Game server** | Game servers for your friends, started and stopped from your phone. With a lab, it joins your lab's Pelican panel. Without one, the games run on the server itself. |
 | **Media** | Your own movies, shows, music and Den TV for every screen, for media you own or have rights to. |
 | **Just a server** | The safe base and nothing more, for a box you'll fill yourself. |

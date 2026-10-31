@@ -419,6 +419,25 @@ Media items get wired together after they install: qBittorrent and SABnzbd as do
 clients in Sonarr, Radarr and Lidarr, with their categories, and the root folders. No source
 is ever added.
 
+### App names
+
+Each web app Caddy serves gets one name on the local network, `<app>-<server>.local` (for
+example `photos-myserver.local`, `media-myserver.local`), with HTTPS from Caddy's own authority
+(`tls internal`). The names are one label on purpose. Every mDNS resolver answers a one-label
+`.local` name: Linux's nss-mdns and systemd-resolved, Apple's mDNSResponder, Android's resolver
+(November 2021 on) and Windows' DNS client. A subdomain such as `photos.<server>.local` is
+answered by some of them and not others.
+
+avahi announces only the host's own name, so `bromigos-lab-mdns-names.service`
+(`bromigos lab mdns-names publish`, `bromigos_homelab/mdnsnames.py`) publishes each app's name.
+It reads `/etc/bromigos/lab/mdns-names`, which the Caddy step writes, and points each name at
+the address the default route leaves from. When that address changes, the names follow it
+within 15 seconds. `bromigos lab mdns-names list` shows them.
+
+Tested between two VMs on one network (avahi publishing, a client with nss-mdns as bromigOS sets
+it up, and a client with systemd-resolved's mDNS): both shapes resolve on Linux, the one-label
+shape being the one every other platform documents.
+
 ### The answer file
 
 The installer writes `[server]` in `/var/log/bromigos/install-answers.toml`:
