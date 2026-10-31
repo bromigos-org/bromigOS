@@ -4,7 +4,7 @@
 # which overlays this directory on it) with bromigOS on top. docs/iso.md, docs/boot.md.
 
 iso_name="bromigos"
-iso_label="BROMIGOS_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"
+iso_label="BROMIGOS"
 iso_publisher="bromigOS <https://github.com/bromigos-org/bromigOS>"
 iso_application="bromigOS live and install medium"
 iso_version="$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)"

@@ -58,9 +58,11 @@ check "names the repository $want_repo" test "$(cat "$R/etc/bromigos-iso/repo.ur
 echo "     its channel: $(cat "$R/etc/bromigos-iso/channel" 2>/dev/null || echo '(none)')"
 check "no repository CA" bash -c "! ls '$R/etc/bromigos-iso/repo-ca.crt' '$R'/etc/ca-certificates/trust-source/anchors/* >/dev/null 2>&1"
 check "no test key" test ! -e "$R/etc/bromigos-iso/test_authorized_keys"
+check "not a dev build (iso/build.sh --local-repo)" test ! -e "$R/etc/bromigos-iso/dev-build"
 check "no authorized_keys for live or root" bash -c "! ls '$R'/home/*/.ssh/authorized_keys '$R'/root/.ssh/authorized_keys >/dev/null 2>&1"
 check "no serial console on the kernel line" bash -c "! grep -qs 'console=ttyS0' '$w'/iso/boot/grub/*.cfg '$w'/iso/boot/syslinux/*.cfg"
 check "not a test build's label" bash -c "! grep -qrs BROMIGOS_TEST '$w'/iso/boot '$w'/iso/EFI"
+check "no root SSH key (Field Kit)" test ! -e "$R/root/.ssh/authorized_keys"
 prop=$(for f in "$offline"/*/os/x86_64/*.pkg.tar.zst "$offline"/bromigos/x86_64/*.pkg.tar.zst; do
            bsdtar -xOf "$f" .PKGINFO 2>/dev/null | grep -qiE '^license = .*(proprietary|custom:commercial)' && basename "$f"; true
        done | sort -u || true)

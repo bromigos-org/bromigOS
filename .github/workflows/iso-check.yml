@@ -41,8 +41,10 @@ jobs:
             iso/profile/airootfs/usr/local/bin/bromigos-installer \
             iso/profile/airootfs/usr/local/bin/bromigos-iso-text-console \
             iso/test/fake-windows.sh iso/test/installer/render-gui.sh \
-            iso/ci-test.sh iso/publish.sh iso/secureboot/medium.sh
-          python -m py_compile iso/release-notes.py
+            iso/ci-test.sh iso/publish.sh iso/secureboot/medium.sh \
+            iso/fieldkit/profiledef.sh iso/fieldkit/package.sh iso/fieldkit/server-test.sh iso/fieldkit/ventoy-test.sh \
+            iso/fieldkit/ci-test.sh iso/fieldkit/airootfs/root/customize_airootfs.sh
+          python -m py_compile iso/release-notes.py iso/grub-menus.py iso/fieldkit/manifest.py iso/fieldkit/test.py
       - name: the profile's files are where profiledef.sh says
         shell: bash
         run: |
@@ -64,14 +66,20 @@ jobs:
         shell: bash
         run: |
           set -e
-          for f in iso/profile/grub/*.cfg; do
+          # both media's menus are generated (iso/grub-menus.py, docs/boot.md): what's here is what it writes
+          python iso/grub-menus.py --check
+          for f in iso/profile/grub/*.cfg iso/fieldkit/grub/*.cfg; do
             sed 's/%[A-Z_]*%/x/g' "$f" > /tmp/menu.cfg && grub-script-check /tmp/menu.cfg && echo "grub-script-check: $f ok"
           done
-          for l in Start Install "safe graphics" "Memory test" "Boot from disk" "speech" "Shut down" Restart; do
+          for l in Start Install "Install bromigOS Server" "Field Kit" "basic graphics" "memory" "on this computer.s disk" "speech" "Shut down" Restart; do
             grep -qE "^ *menuentry .*$l" iso/profile/grub/grub.cfg && grep -qiE "^MENU LABEL .*$l" iso/profile/syslinux/archiso_*.cfg \
               || { echo "no '$l' entry"; exit 1; }
           done
           grep -q 'bromigos.install' iso/profile/grub/grub.cfg iso/profile/syslinux/archiso_sys-linux.cfg
+          for l in "Start Field Kit" "Install bromigOS Server" "basic graphics" "Shut down" Restart; do
+            grep -qE "^ *menuentry .*$l" iso/fieldkit/grub/grub.cfg && grep -qiE "^MENU LABEL .*$l" iso/fieldkit/syslinux/archiso_*.cfg \
+              || { echo "Field Kit: no '$l' entry"; exit 1; }
+          done
           # the fonts the theme needs: Geist Mono, as ttf-geist-mono ships it
           curl -fsSL -o /tmp/geist.zip https://github.com/vercel/geist-font/releases/download/v1.7.2/geist-font-v1.7.2.zip
           echo "7fc800d2ac6b92844895196e5041aca55d814c15db70c44f79b3b83ab82b04e2  /tmp/geist.zip" | sha256sum -c

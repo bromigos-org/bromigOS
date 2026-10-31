@@ -35,7 +35,7 @@ def grub_theme():
     return mod
 
 
-def splash(gen, font_dir, out):
+def splash(gen, font_dir, out, heading=None):
     """The GRUB theme's medium background, at vesamenu's size, with the heading and the meter
     drawn in (vesamenu has no images of its own but the one)."""
     p = gen.Palette(gen.resolve_colors_toml(os.path.join(REPO, "themes", "wick", "colors.toml")), "Wick")
@@ -54,8 +54,9 @@ def splash(gen, font_dir, out):
     # the heading, where the GRUB theme puts it: 34 px above the emblem's top, 34 px tall
     head = ImageFont.truetype(os.path.join(font_dir, "GeistMono-SemiBold.ttf"), 26)
     top = round(SH * 0.33) - 68
-    tw = d.textlength(gen.HEADING_MEDIUM, font=head)
-    d.text(((SW - tw) / 2, top + 4), gen.HEADING_MEDIUM, font=head, fill=(*p.primary, 255))
+    heading = heading or gen.HEADING_MEDIUM
+    tw = d.textlength(heading, font=head)
+    d.text(((SW - tw) / 2, top + 4), heading, font=head, fill=(*p.primary, 255))
     # the signal meter on Plymouth's progress line, waiting: its bars dim (the track's colour
     # through the GRUB theme's mask, cut in the background's own colour there)
     y = round(SH * 0.72) - gen.METER_H // 2
@@ -98,10 +99,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", required=True)
     ap.add_argument("--font-dir", default="/usr/share/fonts/TTF")
+    ap.add_argument("--heading", help="the title (default: BROMIGOS // RELAY MEDIUM)")
     args = ap.parse_args(argv)
     os.makedirs(args.out, exist_ok=True)
     gen = grub_theme()
-    splash(gen, args.font_dir, args.out)
+    splash(gen, args.font_dir, args.out, args.heading)
     psf(args.font_dir, args.out)
     print(f"{args.out}: splash.png, bromigos.psf")
 

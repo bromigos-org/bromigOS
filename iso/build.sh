@@ -5,9 +5,16 @@
 # for everything it needs, and bromigOS's), so an install needs no network.
 #
 #   iso/build.sh --repo URL [--medium-repo URL] [--version V] [--ca FILE] [--out DIR]
-#                [--profile DIR] [--secureboot-key FILE --secureboot-cert FILE]
-#                [--test-key FILE] [--keep-work]
+#                [--profile DIR | --edition desktop|fieldkit] [--secureboot-key FILE --secureboot-cert FILE]
+#                [--test-key FILE] [--local-repo DIR] [--keep-work]
 #
+#   --edition E     desktop (default): the live desktop and install medium (iso/profile);
+#                   fieldkit: Field Kit (Repair. Recon. Deploy.), the small medium for
+#                   repairs, the lab and installing bromigOS Server (iso/fieldkit,
+#                   docs/fieldkit.md). Its file is bromigos-fieldkit-<version>-x86_64.iso
+#   --local-repo DIR  a dev build: the packages in DIR (packaging/dev-repo.sh's, unsigned)
+#                   take the place of [bromigos]'s, and the medium trusts them. For tests only:
+#                   check-medium.sh refuses such a medium
 #   --repo URL      bromigOS's package repository (https://…; it must be reachable from
 #                   here; the medium remembers it as the installed system's repository,
 #                   unless --medium-repo names another)
@@ -39,13 +46,16 @@ set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/.." && pwd)
 
-repo='' medium_repo='' version='' ca='' hosts='' out='' testkey='' keep=0 channel=stable profile=profile sbkey='' sbcert=''
+repo='' medium_repo='' version='' ca='' hosts='' out='' testkey='' keep=0 channel=stable profile=profile sbkey='' sbcert='' localrepo=''
 while (($#)); do
     case $1 in
         --repo) repo=$2; shift 2 ;; --medium-repo) medium_repo=$2; shift 2 ;; --version) version=$2; shift 2 ;; --ca) ca=$2; shift 2 ;; --hosts) hosts=$2; shift 2 ;; --channel) channel=$2; shift 2 ;;
         --out) out=$2; shift 2 ;; --test-key) testkey=$2; shift 2 ;; --keep-work) keep=1; shift ;;
         --profile) profile=$2; shift 2 ;; --secureboot-key) sbkey=$2; shift 2 ;; --secureboot-cert) sbcert=$2; shift 2 ;;
-        -h|--help) sed -n '2,39p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --edition) case $2 in desktop) profile=profile ;; fieldkit) profile=fieldkit ;;
+            *) echo "iso/build.sh: --edition is desktop or fieldkit" >&2; exit 2 ;; esac; shift 2 ;;
+        --local-repo) localrepo=$2; shift 2 ;;
+        -h|--help) sed -n '2,49p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "iso/build.sh: unknown option $1" >&2; exit 2 ;;
     esac
 done
@@ -64,10 +74,11 @@ env=(-e "ISO_PROFILE=$profile" -e "ISO_REPO=$repo" -e "ISO_MEDIUM_REPO=$medium_r
 if [[ -n $ca ]]; then mounts+=(-v "$(realpath "$ca"):/in/repo-ca.crt:ro"); fi
 if [[ -n $testkey ]]; then mounts+=(-v "$(realpath "$testkey"):/in/test_key.pub:ro"); fi
 if [[ -n $sbkey ]]; then mounts+=(-v "$(realpath "$sbkey"):/in/sb.key:ro" -v "$(realpath "$sbcert"):/in/sb.crt:ro"); fi
+if [[ -n $localrepo ]]; then mounts+=(-v "$(realpath "$localrepo"):/in/local-repo:ro"); fi
 addhost=(); [[ -n $hosts ]] && addhost=(--add-host "${hosts#* }:${hosts%% *}")
 
 # --privileged: pacstrap and arch-chroot mount proc/sys/dev in the work dir; mksquashfs
 # and xorriso need nothing special. The work dir is a volume (tmpfs would eat RAM).
 docker run --rm --privileged "${addhost[@]}" "${mounts[@]}" "${env[@]}" \
     -w /src/iso archlinux:latest /src/iso/build-in-container.sh
-ls -la "$out"/bromigos-*.iso 2>/dev/null | tail -1
+ls -la "$out"/*.iso 2>/dev/null | tail -2

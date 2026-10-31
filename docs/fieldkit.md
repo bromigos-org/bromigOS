@@ -27,7 +27,7 @@ for people using it, and [server.md](server.md) covers bromigOS Server.
 | From | How | What's there |
 |---|---|---|
 | Its own medium | `bromigos-fieldkit-<version>-x86_64.iso` on a USB stick, or through Ventoy | Everything, with the offline store |
-| The full ISO's boot menu | "Field Kit · repair, lab and tools, no desktop" | The full medium's own system, started without the desktop |
+| The full ISO's boot menu | "Field Kit (repair, lab and tools)" | The full medium's own system, started without the desktop |
 | An installed system's boot menu | "bromigOS Field Kit" (package `bromigos-fieldkit`) | Everything but the offline store, started from `/boot` |
 
 ### The medium's boot menu
@@ -38,9 +38,9 @@ GRUB on UEFI and syslinux on BIOS, both with the boot theme's medium variant tit
 | Entry | What it does |
 |---|---|
 | Start Field Kit | The default |
-| Install bromigOS Server | The text installer, Server preselected (`bromigos.install bromigos.edition=server`); with `/fieldkit/install-server.toml` on the stick it says "unattended", becomes the default and counts down |
-| Start Field Kit, then unplug the stick (runs from memory) | archiso's `copytoram=y`: the whole system is read into memory first |
-| Start Field Kit with remote help (SSH, details shown on screen) | `bromigos.remote=on`: see [Remote help](#remote-help) |
+| Install bromigOS Server | The text installer, Server preselected (`bromigos.install bromigos.edition=server`); with `/fieldkit/install-server.toml` on the stick (an [answer file](iso.md#answer-files) with `edition = "server"`) it says "unattended", becomes the default and counts down |
+| Start Field Kit · then unplug the stick | archiso's `copytoram=y`: the whole system is read into memory first |
+| Start Field Kit · remote help over SSH | `bromigos.remote=on`: see [Remote help](#remote-help) |
 | Start with basic graphics (if the screen stays black) | `nomodeset` |
 | Test this computer's memory | Memtest86+ |
 | More options › | The system on this computer's disk, the screen reader (S), the UEFI shell, the firmware settings, power |
@@ -303,7 +303,7 @@ of `fieldkit/lib/bromigos_fieldkit/engine.py`.
 | `bromigos.fieldkit=disk` | Started from an install's `/boot`: the menu suggests opening that install |
 | `bromigos.remote=on` | Remote help from the start |
 | `bromigos.install bromigos.edition=server|desktop` | Start the installer with that edition (the installer's) |
-| `bromigos.answers=auto` | An answer file was found on the stick: install unattended (the installer's) |
+| `bromigos.answers=/fieldkit/install-server.toml` | The answer file the menu found on the stick: the installer runs it unattended, after its own countdown with **Cancel** ([iso.md](iso.md#answer-files)) |
 | `bromigos.motion=reduced` | No animation anywhere |
 | `copytoram=y` | archiso: read the whole system into memory first |
 | `module_blacklist=nouveau`, `vt.default_*` | Field Kit's defaults: the firmware's display for NVIDIA, DRIFTGLASS's colours |
@@ -567,20 +567,51 @@ trusts them). `check-medium.sh` refuses a dev build.
 ## Testing it
 
 `iso/fieldkit/test.py` runs a VM with no network device (`-nic none`) unless `--net` is
-given, signs in on the serial console of a test build, runs commands and saves the screen.
+given, signs in on the serial console, runs commands as root there and saves the screen. A
+test build (`iso/build.sh --test-key`) has its console on the serial port. Any other medium
+starts with `--direct`: QEMU starts the medium's own kernel and initramfs with the kernel line
+of its menu's entry, plus the serial console, so a medium is tested exactly as built.
 
 ```bash
-iso/fieldkit/test.py up --iso bromigos-fieldkit-0.1.3-x86_64.iso --firmware uefi --disk /mnt/Dev/build/fieldkit/vm/disk.qcow2
+iso/fieldkit/test.py up --iso bromigos-fieldkit-0.1.3-x86_64.iso --firmware uefi --direct
+iso/fieldkit/test.py wait-serial "login:"
 iso/fieldkit/test.py login
-iso/fieldkit/test.py run -- fieldkit-engine engine status
-iso/fieldkit/test.py shot fieldkit-menu-uefi
+iso/fieldkit/test.py run -- fieldkit overview --json
+iso/fieldkit/test.py shot fieldkit-home
 iso/fieldkit/test.py down
 ```
 
-The tests that need no VM: `fieldkit/tests` (the engine, with stand-in installs and
-tools), `settings/grub/tests` (the boot options and the Field Kit entry), and
-`settings/console/tests` (the console's fonts, colours and notes).
+Its VMs and screenshots go in `~/.cache/bromigos-fieldkit-test/` (`BROMIGOS_FIELDKIT_TEST_DIR`,
+`BROMIGOS_FIELDKIT_SHOTS`).
+
+- **In CI**, the ISO workflow's menu test boots the medium to its menus (UEFI and BIOS), then
+  runs `iso/fieldkit/ci-test.sh ISO DIR` (`iso/ci-test.sh --suite hook`). Field Kit starts with
+  no network: its console, Home, the engine and the scripted CLI, the offline store. Then the
+  installer's own backend installs bromigOS Server onto the VM's disk with no network, and the
+  installed Server boots to its console and passes its checks: firewall, update timer,
+  snapshots, the boot menu's "More ways to start".
+- `iso/fieldkit/server-test.sh` installs Server encrypted and adds the `bromigos-fieldkit`
+  package to it, for the tests below that need Field Kit in an installed boot menu.
+- `iso/fieldkit/ventoy-test.sh` puts a medium on a Ventoy disk image and boots it in Ventoy's
+  normal and GRUB2 modes, on UEFI and BIOS.
+- The tests that need no VM: `fieldkit/tests` (the engine, with stand-in installs and tools),
+  `settings/grub/tests` (the boot options and the Field Kit entry), `settings/console/tests`
+  (the console's fonts, colours and notes), `server/tests`, and the Rust screens' tests at
+  every size (`cargo test -p bromigos fieldkit`).
 
 ## Test runs
 
-TEST_RUNS
+On a dev build of 0.1.3 (2026-10-30), in QEMU with KVM, headless, with no network unless
+noted:
+
+| What | Result |
+|---|---|
+| Field Kit, UEFI and BIOS | Boots to the console's Home. The plain console (VT) fallback works; with the menu's program missing, the console shows one panel and doesn't restart in a loop |
+| bromigOS Server, installed offline from the stick | Installs (LUKS2, 70 packages) and boots to its console. Through the installer's own backend (`ci-test.sh`), it found two things the stick lacked, both fixed: the desktop's PipeWire in an edition's install, and the installer's own required packages (os-prober, vim and the rest) in the stick's store |
+| Field Kit on an installed system's `/boot` | The copy (about 1.1 to 1.4 GB), its GRUB entry, and a UEFI entry added last in the boot order. Field Kit starts from the installed menu, mounts the install, and rolls back a snapshot (bromigos-boot r10 to r9) |
+| GRUB deleted | The firmware's Field Kit entry (BootNext) starts; "Repair the boot menu" puts GRUB back |
+| Ventoy 1.1.18 | Normal and GRUB2 modes, UEFI and BIOS: Field Kit and the full medium both boot |
+| The full medium's Field Kit entry | Boots the same system without the desktop, into Field Kit |
+| Field Kit's CI test (`iso/fieldkit/ci-test.sh`) on a medium built as CI builds it (no test key) | Passes: Field Kit starts offline; the pairing QR decodes (zbarimg) from kmscon and from the bare kernel console; bromigOS Server installs offline through the installer's backend; the installed Server boots to its console with its firewall, update timer and snapshots |
+| A plain "Start Field Kit" boot | SSH off: only the remote-help entry, the stick's settings or a test build turn it on |
+| The medium's checks (`check-medium.sh`) | Pass for Field Kit, the privacy guard and licence check included. A dev build (`--local-repo`) fails only its own dev-build check, as it should |

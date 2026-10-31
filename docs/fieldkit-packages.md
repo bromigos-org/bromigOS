@@ -10,8 +10,8 @@ job. [fieldkit.md](fieldkit.md) describes Field Kit.
 Sizes are each package's own installed size. Their dependencies come with them; the
 totals below count those too.
 
-- The running medium: 414 packages with their dependencies, 2081.2 MiB installed.
-- The offline store: 457 package files, 1106.7 MiB (compressed, as downloaded).
+- The running medium: 552 packages with their dependencies, 2691.7 MiB installed.
+- The offline store: 585 package files, 1205.3 MiB (compressed, as downloaded).
 
 ## Boot & hardware
 
@@ -39,7 +39,8 @@ totals below count those too.
 | `memtest86+-efi` | 405 KiB | medium | the boot menu's memory test |
 | `kmscon` | 1.7 MiB | medium, Server | the console: true colour, Geist Mono at a readable size, DRIFTGLASS (the plain console when there's no KMS) |
 | `ttf-geist-mono` | 2.6 MiB | medium, Server | Geist Mono for kmscon (bromigOS's font) |
-| `pango` | 2.4 MiB | medium, Server | kmscon's font rendering and fontconfig |
+| `ttf-nerd-fonts-symbols-mono` | 2.5 MiB | medium, Server | the icons in Field Kit's screens (kmscon falls back to it for them; MIT) |
+| `pango` | 2.4 MiB | medium, Server | kmscon's font engine: Geist Mono with a fallback for icons |
 | `sof-firmware` | 55.1 MiB | medium | sound on current laptops, for the screen reader |
 | `alsa-utils` | 2.5 MiB | medium | sound on current laptops, for the screen reader |
 | `espeakup` | 32 KiB | medium | the screen reader (speech): the boot menu's speech entry |
@@ -57,6 +58,7 @@ totals below count those too.
 | `pciutils` | 418 KiB | medium, Server | lsusb and lspci: the graphics diagnosis and the hardware report |
 | `kitty-terminfo` | 4 KiB | medium, Server | correct keys and colours over SSH from bromigOS's terminals |
 | `ghostty-terminfo` | 4 KiB | medium, Server | correct keys and colours over SSH from bromigOS's terminals |
+| `terminus-font` | 3.0 MiB | medium, Server | the text installer's console font on the plain console (ter-v24b), and bromigOS Server's |
 
 ## Repair
 
@@ -84,7 +86,7 @@ totals below count those too.
 | `nfs-utils` | 1.4 MiB | medium | disk images to and from a network share (LAN) |
 | `micro` | 13.1 MiB | medium | Edit a file on my install, with highlighting |
 | `lynx` | 5.2 MiB | medium | the bromigOS manual, readable offline |
-| `archinstall` | 7.9 MiB | medium | Install Field Kit on this computer (the installer) |
+| `archinstall` | 7.9 MiB | medium | Install bromigOS Server on this computer (the installer's engine) |
 
 ## Lab
 
@@ -124,18 +126,77 @@ totals below count those too.
 | `less` | 338 KiB | medium, Server | the pager journalctl and git use |
 | `neovim` | 30.5 MiB | medium | Tools › Neovim, for people who know it |
 | `lazygit` | 20.4 MiB | medium | Tools › lazygit, for people who know it |
+| `fzf` | 5.5 MiB | medium | finding and reading: fuzzy finder: Ctrl+R history, Ctrl+T files, Alt+C folders, in DRIFTGLASS colours |
+| `ripgrep` | 4.3 MiB | medium | finding and reading: search file contents fast (rg) |
+| `fd` | 3.4 MiB | medium | finding and reading: find files by name |
+| `bat` | 5.1 MiB | medium | finding and reading: read a file with highlighting (cat) |
+| `eza` | 1.8 MiB | medium | finding and reading: list files, with icons and git state (ls) |
+| `zoxide` | 1.1 MiB | medium | finding and reading: jump to folders you use (z) |
+| `tree` | 94 KiB | medium | finding and reading: a folder as a tree |
+| `jq` | 481 KiB | medium | finding and reading: read and change JSON |
+| `yq` | 289 KiB | medium | finding and reading: the same for YAML and TOML (jq's wrapper) |
+| `file` | 10.5 MiB | medium | finding and reading: what kind of file this is |
+| `tealdeer` | 3.2 MiB | medium | finding and reading: tldr: short examples for a command, its pages pre-filled at build so it works offline |
+| `man-db` | 2.4 MiB | medium | finding and reading: manual pages (man) |
+| `man-pages` | 5.7 MiB | medium | finding and reading: the manual pages of Linux and its C library |
+| `curl` | 2.3 MiB | medium | network: fetch a URL |
+| `wget` | 5.7 MiB | medium | network: download a file |
+| `aria2` | 5.4 MiB | medium | network: download with resume and several connections |
+| `mosh` | 655 KiB | medium | network: a remote shell that survives a bad network |
+| `sshfs` | 90 KiB | medium | network: a remote folder over SSH |
+| `socat` | 580 KiB | medium | network: connect two streams (serial ports, sockets) |
+| `openbsd-netcat` | 47 KiB | medium | network: test a port (nc) |
+| `iproute2` | 3.1 MiB | medium, Server | network: addresses and routes (ip) |
+| `iputils` | 665 KiB | medium, Server | network: ping |
+| `bind` | 7.1 MiB | medium | network: DNS lookups (dig) |
+| `traceroute` | 79 KiB | medium | network: the route to a host |
+| `iwd` | 2.2 MiB | medium | network: Wi-Fi without NetworkManager, for impala (off unless started) |
+| `impala` | 5.1 MiB | medium | network: Wi-Fi in the terminal, on iwd |
+| `wireguard-tools` | 267 KiB | medium | network: WireGuard VPN (wg) |
+| `tailscale` | 51.7 MiB | medium | network: a tailnet, to reach a lab from anywhere (off unless started) |
+| `smbclient` | 29.0 MiB | medium | network: Windows and NAS shares (smbclient) |
+| `lvm2` | 5.3 MiB | medium | disks and files: LVM volumes |
+| `mdadm` | 1.0 MiB | medium | disks and files: software RAID |
+| `xfsprogs` | 4.6 MiB | medium | disks and files: XFS |
+| `f2fs-tools` | 727 KiB | medium | disks and files: F2FS (phones, SD cards) |
+| `fsarchiver` | 255 KiB | medium | disks and files: file-system archives |
+| `squashfs-tools` | 939 KiB | medium | disks and files: squashfs images |
+| `7zip` | 6.5 MiB | medium | disks and files: 7z, zip and most archives |
+| `unzip` | 308 KiB | medium | disks and files: zip archives |
+| `zip` | 567 KiB | medium | disks and files: make zip archives |
+| `pigz` | 176 KiB | medium | disks and files: gzip on every core |
+| `xz` | 2.9 MiB | medium | disks and files: xz archives |
+| `zstd` | 1.5 MiB | medium | disks and files: zstd archives |
+| `iotop` | 247 KiB | medium | system and debugging: what's using the disk |
+| `sysstat` | 1.6 MiB | medium | system and debugging: iostat, sar, mpstat |
+| `lsof` | 381 KiB | medium | system and debugging: what has a file open |
+| `strace` | 1.7 MiB | medium | system and debugging: what a program asks the kernel |
+| `ltrace` | 444 KiB | medium | system and debugging: what a program asks its libraries |
+| `gdb` | 32.2 MiB | medium | system and debugging: the debugger |
+| `lm_sensors` | 487 KiB | medium | system and debugging: temperatures and fans (sensors) |
+| `lshw` | 8.1 MiB | medium | system and debugging: every device, in detail |
+| `hwinfo` | 3.9 MiB | medium | system and debugging: hardware probe |
+| `mokutil` | 62 KiB | medium | system and debugging: Secure Boot's machine owner keys |
+| `sbctl` | 10.3 MiB | medium | system and debugging: Secure Boot keys and signing |
+| `fwupd` | 19.1 MiB | medium | system and debugging: firmware versions; updates from a file on the stick (offline) |
+| `memtester` | 33 KiB | medium | system and debugging: test memory from a running system |
+| `stress-ng` | 19.1 MiB | medium | system and debugging: load the machine to find faults |
+| `powertop` | 846 KiB | medium | system and debugging: what uses power |
+| `wimlib` | 878 KiB | medium | Windows and security: Windows images (.wim) |
+| `gnupg` | 10.4 MiB | medium | Windows and security: signatures and encryption (gpg) |
 
 ## Server
 
 | Package | Size | On | Why |
 |---|---:|---|---|
-| `bromigos-fieldkit-tools` | 152 KiB | medium, Server | the Field Kit menu's engine: the repairs, the stick's settings, remote help, make-stick (the menu's screens are bromigos-core's) |
+| `python-textual` | 10.0 MiB | medium, Server | the text installer's screens, and bromigOS Server's welcome tour after an install (bromigos welcome-console) |
+| `bromigos-fieldkit-tools` | 229 KiB | medium, Server | the Field Kit menu's engine: the repairs, the stick's settings, remote help, make-stick (the menu's screens are bromigos-core's) |
 | `bromigos-server` | 44 KiB | Server | bromigOS Server, the installed edition: SSH, the firewall, safe automatic updates, containers, the lab's cluster and monitoring |
 | `bromigos-keyring` | 12 KiB | medium, Server | bromigOS's signing key: updates are verified |
-| `bromigos-core` | 78.0 MiB | medium, Server | the bromigos command: update, rollback, hw, console, bluetooth tui |
+| `bromigos-core` | 78.1 MiB | medium, Server | the bromigos command: update, rollback, hw, console, bluetooth tui |
 | `bromigos-boot` | 9.2 MiB | medium, Server | the boot menu's theme and options, the console's font and colours |
-| `bromigos-apps-terminal` | 22 KiB | Server | LazyVim, tmux, lazygit and mise, configured (on the medium: Neovim, tmux and lazygit themselves, not mise) |
-| `bromigos-manual` | 8.8 MiB | medium, Server | the manual, offline |
+| `bromigos-apps-terminal` | 22 KiB | medium, Server | LazyVim, tmux, lazygit and mise, configured; LazyVim's plugins fetched at build, so Neovim works offline |
+| `bromigos-manual` | 9.4 MiB | medium, Server | the manual, offline |
 | `sudo` | 7.9 MiB | medium, Server | the edition's administrator rights |
 | `snapper` | 3.7 MiB | Server | snapshots before every update, and rollback from the boot menu |
 | `snap-pac` | 36 KiB | Server | snapshots before every update, and rollback from the boot menu |
@@ -148,8 +209,6 @@ totals below count those too.
 | `crun` | 828 KiB | Server | the container runtime Podman starts containers with |
 | `netavark` | 10.4 MiB | Server | containers' networking for Podman |
 | `prometheus-node-exporter` | 17.5 MiB | Server | the metrics the lab's Prometheus reads, on port 9100 (local network only) |
-| `iproute2` | 3.1 MiB | Server | addresses and the gateway, for the health check after an update |
-| `iputils` | 665 KiB | Server | ping: the health check asks the gateway |
 
 ## The largest
 
@@ -158,12 +217,16 @@ The 20 largest packages on the medium, dependencies included:
 | Package | Size |
 |---|---:|
 | `linux` | 161.6 MiB |
+| `mise` | 153.2 MiB |
 | `linux-firmware-intel` | 138.0 MiB |
-| `bromigos-core` | 78.0 MiB |
+| `bromigos-core` | 78.1 MiB |
 | `python` | 73.8 MiB |
 | `perl` | 72.3 MiB |
 | `sof-firmware` | 55.1 MiB |
+| `guile` | 54.5 MiB |
 | `linux-firmware-atheros` | 53.3 MiB |
+| `tailscale` | 51.7 MiB |
+| `boost-libs` | 51.1 MiB |
 | `glibc` | 50.7 MiB |
 | `sops` | 49.9 MiB |
 | `binutils` | 43.8 MiB |
@@ -173,10 +236,6 @@ The 20 largest packages on the medium, dependencies included:
 | `glib2` | 38.4 MiB |
 | `linux-firmware-mediatek` | 37.0 MiB |
 | `git` | 33.5 MiB |
-| `neovim` | 30.5 MiB |
-| `linux-firmware-amdgpu` | 28.1 MiB |
-| `nmap` | 26.5 MiB |
-| `ansible-core` | 24.0 MiB |
 
 ## Left out
 
@@ -189,21 +248,22 @@ Arch's own live medium (archiso's releng profile) carries these; Field Kit doesn
 | linux-firmware-nvidia | only for nouveau on the live system, which Field Kit doesn't load (the basic display instead); in the offline store for lab GPU installs |
 | linux-firmware-marvell | Marvell Wi-Fi (Surface devices) and some server NICs: 79 MiB for rare hardware (an open question) |
 | linux-firmware-cirrus linux-firmware-ti linux-firmware-amd | laptop audio codecs, TI chips, AMD's security processor: not needed to boot, network or repair |
-| archlinux releng: clonezilla partimage fsarchiver | Field Kit's own imaging (partclone, in Clonezilla's format) replaces them |
+| archlinux releng: clonezilla partimage | Field Kit's own imaging (partclone, in Clonezilla's format) replaces them |
 | archlinux releng: cloud-init | for cloud images; the test harness uses a test build's key instead |
 | archlinux releng: hyperv open-vm-tools qemu-guest-agent virtualbox-guest-utils-nox | guest tools for virtual machines; Field Kit is for real machines (an open question for VM servers) |
-| archlinux releng: iwd wireless_tools dhcpcd wvdial | NetworkManager covers Wi-Fi, wired DHCP and modems; one network stack |
+| archlinux releng: wireless_tools dhcpcd wvdial | NetworkManager covers Wi-Fi, wired DHCP and modems; one network stack |
 | archlinux releng: openvpn openconnect vpnc pptpclient xl2tpd systemd-resolvconf | VPN clients: no menu item or lab job uses them yet |
 | archlinux releng: nbd open-iscsi mkinitcpio-nfs-utils | network block devices and PXE boot hooks: Field Kit boots from a stick or /boot |
-| archlinux releng: bcachefs-tools f2fs-tools jfsutils nilfs-utils xfsprogs udftools fatresize gpart mtools | file systems bromigOS doesn't use |
-| archlinux releng: lvm2 mdadm dmraid | LVM and software RAID: bromigOS installs on btrfs (an open question for servers with RAID) |
+| archlinux releng: bcachefs-tools jfsutils nilfs-utils udftools fatresize gpart mtools | file systems bromigOS doesn't use |
+| archlinux releng: dmraid | fake RAID (BIOS RAID): mdadm reads the formats that matter |
 | archlinux releng: tpm2-tools tpm2-tss libfido2 pcsclite openpgp-card-tools sequoia-sq | TPM, FIDO2 and smartcard unlocking and signing: bromigOS unlocks with a passphrase |
-| archlinux releng: bind ldns ndisc6 darkhttpd lftp irssi mc pv screen vim | duplicates of kept tools (nmap, curl, tmux, micro, neovim) or nothing on the menu |
-| archlinux releng: man-db man-pages | manual pages: the bromigOS manual is on it; 8 MiB of pages nothing on the menu opens |
+| archlinux releng: ldns ndisc6 darkhttpd lftp irssi mc pv screen vim | duplicates of kept tools (nmap, curl, tmux, micro, neovim) or nothing on the menu |
 | archlinux releng: refind syslinux-hdt b43-fwcutter linux-atm usbmuxd mmc-utils sdparm sg3_utils lsscsi | other boot loaders, old Broadcom firmware cutting, ADSL, iPhone tethering, SCSI and MMC tools |
 | archlinux releng: grml-zsh-config terminus-font | bromigOS's own prompt (mehshell) and console font (Geist Mono) |
-| archlinux releng: reflector squashfs-tools xdg-utils dnsmasq gpm | mirror ranking (Field Kit is offline-first), image building (the build machine's), desktop helpers, a DHCP server, the console mouse |
-| lshw ncdu wget impala | inxi, gdu, curl and nmtui do the same jobs |
+| archlinux releng: reflector xdg-utils dnsmasq gpm | mirror ranking (Field Kit is offline-first), image building (the build machine's), desktop helpers, a DHCP server, the console mouse |
 | helm libvirt-python qemu-base cloud-image-utils | the lab's Kubernetes and local-VM provisioning: large, and only for labs that use them (installable later, with a network) |
 | base-devel paru | building AUR packages: not an offline job |
 | mesa vulkan-* libva-* and the desktop | Field Kit has no desktop: Install › the full bromigOS desktop downloads it |
+| ncdu | gdu does the same job |
+| p7zip dislocker (Arch) | not in Arch's repositories: 7zip replaces p7zip; dislocker is bromigOS's own build |
+| go-yq | yq (the jq wrapper) reads YAML and TOML in 0.3 MiB; go-yq is 14 MiB |

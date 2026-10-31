@@ -154,6 +154,19 @@ brightnessctl
 zoxide
 bluez
 bluez-utils
+# Field Kit, the boot menu's "Field Kit (repair, lab and tools)" (docs/fieldkit.md): its engine
+# and the tools its menu runs that releng's list doesn't have
+bromigos-fieldkit-tools
+partclone
+chntpw
+ntfs-3g
+micro
+htop
+nvtop
+gdu
+inxi
+iperf3
+mtr
 # the installed system: network, boot (GRUB), the disk (btrfs on LUKS2) and its snapshots
 networkmanager
 plymouth

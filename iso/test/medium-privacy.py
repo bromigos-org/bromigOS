@@ -33,6 +33,10 @@ import privacy_guard as G  # noqa: E402
 import private_words as P  # noqa: E402
 
 SKIP_DIRS = {"proc", "sys", "dev", "run"}
+# someone else's data that no package owns, fetched as it is while the image is built (Field Kit's
+# iso/fieldkit/airootfs/root/customize_airootfs.sh): tldr-pages' offline copy and LazyVim's
+# plugins. Their example addresses are checked by eye, like Arch's packages'
+FETCHED = ("/root/.cache/tealdeer/", "/root/.local/share/nvim/lazy/")
 
 
 def _accepted():
@@ -164,7 +168,7 @@ def main():
                 continue
             # in the live system, bromigOS's are the files no package owns (the overlay and
             # what customize_airootfs.sh made); its packages' are in PKGS
-            mine = ours or (rel not in own and not rel.startswith(("/var/lib/pacman/", "/var/lib/bromigos/repo/")))
+            mine = ours or (rel not in own and not rel.startswith(("/var/lib/pacman/", "/var/lib/bromigos/repo/") + FETCHED))
             jobs.append((p, mine, shown))
     with ProcessPoolExecutor(min(12, os.cpu_count() or 1), initializer=init) as ex:
         for res in ex.map(scan, jobs, chunksize=64):
@@ -178,7 +182,7 @@ def main():
     ours = [b for b in ours if b not in ACCEPTED]
     print(f"{len(jobs)} text files, {sum(1 for j in jobs if j[1])} of them bromigOS's")
     if theirs:
-        print(f"\nin Arch's packages ({len(theirs)}; everyday words in someone else's data, check by eye):")
+        print(f"\nin Arch's packages and fetched data ({len(theirs)}; everyday words in someone else's data, check by eye):")
         for b in theirs[:60]:
             print("  " + b)
     if accepted:

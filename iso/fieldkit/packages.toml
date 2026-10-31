@@ -361,7 +361,19 @@ reason = "the bromigOS manual, readable offline"
 [[package]]
 name = "archinstall"
 section = "Repair"
-reason = "Install Field Kit on this computer (the installer)"
+reason = "Install bromigOS Server on this computer (the installer's engine)"
+
+[[package]]
+name = "python-textual"
+section = "Server"
+reason = "the text installer's screens, and bromigOS Server's welcome tour after an install (bromigos welcome-console)"
+edition = true
+
+[[package]]
+name = "terminus-font"
+section = "Boot & hardware"
+reason = "the text installer's console font on the plain console (ter-v24b), and bromigOS Server's"
+edition = true
 
 [[package]]
 name = "btop"
