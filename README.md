@@ -239,7 +239,7 @@ the installed system: each asks you to approve bromigOS once, at its first start
 entries to start bromigOS live, install it, start with safe graphics, test memory or
 boot from disk](docs/images/iso-menu.webp)
 
-**Field Kit: bromigOS without the desktop.** A smaller ISO for repair, the lab and servers.
+**Field Kit: Repair. Recon. Deploy.** Fix any computer, run your lab, install a server. No internet needed. A smaller ISO for repair, the lab and servers.
 It boots to a themed text console with a menu: fix a bromigOS install that won't start (a
 black screen, a broken boot menu, a bad update), image or erase disks, run the lab console,
 or install **bromigOS Server**, the headless edition, with no network. Every bromigOS

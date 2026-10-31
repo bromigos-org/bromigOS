@@ -90,7 +90,7 @@ struct Cli {
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum Cmd {
-    /// Field Kit, bromigOS without the desktop: the menu (Repair, Lab, Tools, Install,
+    /// Field Kit (Repair. Recon. Deploy.): the menu (Repair, Lab, Tools, Install,
     /// Shell), or one job: why, black-screen, status, make-stick, remote, usb (docs/fieldkit.md)
     #[command(disable_help_flag = true)]
     Fieldkit {
@@ -2108,7 +2108,10 @@ fn booted_rollback_cmd(
         println!("{}", json!({"schema": SCHEMA, "rollback": r}));
         return Ok(0);
     }
-    println!("rolled back: snapshot {} is the root ({}) now", r.snapshot, r.root);
+    println!(
+        "rolled back: snapshot {} is the root ({}) now",
+        r.snapshot, r.root
+    );
     for n in &r.notes {
         println!("  {n}");
     }
@@ -2732,8 +2735,13 @@ fn restart_cmd(paths: &Paths, pieces: &[String], check: bool, json: bool) -> Res
                 units.push(p.clone())
             }
             None => {
-                let mut known: Vec<String> = Piece::ALL.iter().map(|p| p.name().to_owned()).collect();
-                known.extend(declared.iter().flat_map(|d| d.units.iter().map(|u| u.name.clone())));
+                let mut known: Vec<String> =
+                    Piece::ALL.iter().map(|p| p.name().to_owned()).collect();
+                known.extend(
+                    declared
+                        .iter()
+                        .flat_map(|d| d.units.iter().map(|u| u.name.clone())),
+                );
                 eprintln!("bromigos restart: unknown: {p} ({})", known.join(", "));
                 return Ok(2);
             }

@@ -298,7 +298,7 @@ def main(argv=None):
         return engine(argv[1:])
     if argv[:1] and argv[0] in SCRIPTABLE:
         return scripted(argv)
-    ap = argparse.ArgumentParser(prog="bromigos fieldkit", description="bromigOS without the desktop: repair, lab and server (docs/fieldkit.md)")
+    ap = argparse.ArgumentParser(prog="bromigos fieldkit", description="Field Kit. Repair. Recon. Deploy.: fix any computer, run your lab, install a server (docs/fieldkit.md)")
     sub = ap.add_subparsers(dest="verb")
     sub.add_parser("menu", help="the Field Kit menu (the default): bromigos fieldkit's screens")
     p = sub.add_parser("why", help="what went wrong on the last boot, in plain words")

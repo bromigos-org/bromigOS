@@ -1,6 +1,6 @@
 # Field Kit
 
-Field Kit is bromigOS without the desktop. It's a small medium for a USB stick, and an entry
+Field Kit: Repair. Recon. Deploy. Fix any computer, run your lab, install a server. No internet needed. It's a small medium for a USB stick, and an entry
 in every bromigOS boot menu. It boots to a themed text console and opens on a Home screen
 with seven sections:
 

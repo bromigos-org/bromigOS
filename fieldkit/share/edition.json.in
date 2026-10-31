@@ -2,7 +2,7 @@
  "_comment": "The bromigOS Field Kit edition, for installers (docs/fieldkit.md, \"Installing Field Kit\"). bromigos-iso-install reads it from /usr/share/bromigos/fieldkit/edition.json. packages comes from iso/fieldkit/packages.toml (edition = true). Everything here is in the Field Kit medium's offline store, so an install needs no network.",
  "name": "fieldkit",
  "title": "bromigOS Server",
- "summary": "bromigOS without the desktop, for servers and lab machines: the text console, SSH, the lab console, and updates with snapshots.",
+ "summary": "bromigOS with no desktop, for servers and lab machines: the text console, SSH, the lab console, and updates with snapshots.",
  "packages": @PACKAGES@,
  "services": ["NetworkManager", "snapper-timeline.timer", "snapper-cleanup.timer", "grub-btrfsd", "bluetooth"],
  "auto_update_units": ["bromigos-server-update.timer"],

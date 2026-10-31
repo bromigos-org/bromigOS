@@ -1,6 +1,6 @@
 //! `bromigos fieldkit`: Field Kit's screens (docs/fieldkit.md), in DRIFTGLASS (bromigos-tui).
 //!
-//! bromigOS without the desktop: Repair, Lab, Tools, Install and Shell, on the Field Kit
+//! Field Kit (Repair. Recon. Deploy.): Repair, Lab, Tools, Install and Shell, on the Field Kit
 //! medium's console, the full medium's Field Kit entry, bromigOS Server's console and any
 //! install. The screens are ours; the jobs behind them are Field Kit's engine
 //! (`fieldkit-engine engine VERB`, bromigos-fieldkit-tools, JSON on standard output), which
@@ -146,7 +146,7 @@ pub fn section_tile(name: &str, server_home: bool) -> (Icon, &'static str) {
         ),
         "Server" => (
             Icon::Server,
-            "bromigOS Server: bromigOS without the desktop, for servers",
+            "bromigOS Server: no desktop, for servers and lab machines",
         ),
         "Install" => (
             Icon::Install,
@@ -306,7 +306,7 @@ pub fn section_items(section: &str) -> Vec<Item> {
             ),
             it(
                 "What bromigOS Server is",
-                "bromigOS without the desktop: what it runs and how it looks after itself",
+                "no desktop: what it runs and how it looks after itself",
                 AboutServer,
                 Any,
             ),
@@ -2024,7 +2024,7 @@ impl App {
             Act::AboutServer => {
                 self.message(
                     "What bromigOS Server is",
-                    "bromigOS Server is bromigOS without the desktop, for servers and lab machines. It starts to this console, in the same colours, with Field Kit's tools on it.\n\nWhat it runs: SSH (with your key, if you turned it on), a firewall that lets only SSH in until you open more, Podman for containers, the lab's monitoring, and herdr.\n\nHow it looks after itself: security updates install on their own, each after a snapshot; if the server doesn't come back healthy, it rolls itself back to that snapshot.\n\nInstall it from Install › bromigOS Server: everything it needs is on this stick, so no network is needed.",
+                    "bromigOS Server is bromigOS with no desktop, for servers and lab machines. It starts to this console, in the same colours, with Field Kit's tools on it.\n\nWhat it runs: SSH (with your key, if you turned it on), a firewall that lets only SSH in until you open more, Podman for containers, the lab's monitoring, and herdr.\n\nHow it looks after itself: security updates install on their own, each after a snapshot; if the server doesn't come back healthy, it rolls itself back to that snapshot.\n\nInstall it from Install › bromigOS Server: everything it needs is on this stick, so no network is needed.",
                     false,
                 );
                 vec![]
@@ -4285,7 +4285,7 @@ pub fn fieldkit_cmd(words: Vec<OsString>) -> Result<i32> {
         }
         "-h" | "--help" | "help" => {
             println!(
-                "bromigos fieldkit: Field Kit, bromigOS without the desktop (docs/fieldkit.md)\n\n  \
+                "bromigos fieldkit: Field Kit. Repair. Recon. Deploy. (docs/fieldkit.md)\n\n  \
                  bromigos fieldkit             the menu: Repair, Lab, Tools, Install, Shell\n  \
                  bromigos fieldkit repair black-screen|last-boot|rollback N|boot-menu|boot-options [--set …]\n  \
                  bromigos fieldkit mount DEV | unmount | disks | scrub | backup DEV | overview\n  \

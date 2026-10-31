@@ -1,1 +1,1 @@
-"""bromigOS Field Kit: bromigOS without the desktop (docs/fieldkit.md)."""
+"""bromigOS Field Kit: Repair. Recon. Deploy. (docs/fieldkit.md)."""

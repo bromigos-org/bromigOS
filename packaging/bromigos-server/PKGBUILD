@@ -28,7 +28,7 @@ pkgdesc='bromigOS Server: bromigOS without a desktop for servers and lab machine
 arch=('any')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
-depends=(# bromigOS without the desktop (Field Kit's pieces, the lab, the terminal apps)
+depends=(# bromigOS with no desktop (Field Kit's pieces, the lab, the terminal apps)
          'bromigos-core' 'bromigos-boot' 'bromigos-keyring' 'bromigos-fieldkit-tools'
          'bromigos-lab' 'bromigos-lab-catalog' 'bromigos-homelab' 'bromigos-apps-terminal'
          'herdr' 'mehshell' 'bromigos-manual'

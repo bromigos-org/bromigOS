@@ -580,11 +580,17 @@ fn draw_head(f: &mut Frame, app: &App, head: Rect) {
         st(p.primary).add_modifier(Modifier::BOLD),
     )));
     words.push(Line::from(Span::styled(
-        "bromigOS without the desktop",
+        "Repair. Recon. Deploy.",
         st(p.soft),
     )));
+    // the plain subline, whole when it fits, else in the words' own short form
+    let sub = "Fix any computer, run your lab, install a server. No internet needed.";
     words.push(Line::from(Span::styled(
-        format!("repair{d}lab{d}server{d}works offline", d = dot(look)),
+        if (w.width as usize) >= sub.chars().count() {
+            sub.to_string()
+        } else {
+            format!("fix{d}lab{d}server{d}no internet needed", d = dot(look))
+        },
         st(p.muted),
     )));
     f.render_widget(Paragraph::new(words), w);
@@ -1320,7 +1326,7 @@ fn left_panels(f: &mut Frame, area: Rect, app: &App) {
         }
         "Server" => {
             let l = widgets::wrap_hanging(
-                "bromigOS Server is bromigOS without the desktop, for servers and lab machines: SSH with your key, a firewall, updates that snapshot first and roll back if the server doesn't come back, Podman, the lab's cluster and monitoring, herdr.",
+                "bromigOS Server is bromigOS with no desktop, for servers and lab machines: SSH with your key, a firewall, updates that snapshot first and roll back if the server doesn't come back, Podman, the lab's cluster and monitoring, herdr.",
                 w,
                 "",
                 "",

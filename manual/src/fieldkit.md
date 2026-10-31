@@ -1,6 +1,6 @@
 # Field Kit
 
-Field Kit is bromigOS without the desktop. Use it when bromigOS won't start properly, to
+Field Kit: Repair. Recon. Deploy. Fix any computer, run your lab, install a server. No internet needed. Use it when bromigOS won't start properly, to
 look after your lab's machines, or to install bromigOS Server on a machine with no screen.
 It works with no internet connection.
 

@@ -89,7 +89,7 @@ VECTOR, the desktop's AI assistant, is documented in his own repository,
 | [splash.md](splash.md) | Saved shutdown and restart splash settings, backups and rollback |
 | [wake-on-lan.md](wake-on-lan.md) | Wake-on-LAN kept on for wired network cards: the NetworkManager default, the udev rule, `bromigos wol` |
 | [iso.md](iso.md) | The live and install ISO, and its installer |
-| [fieldkit.md](fieldkit.md) | Field Kit: bromigOS without the desktop, for repair, the lab and servers |
+| [fieldkit.md](fieldkit.md) | Field Kit (Repair. Recon. Deploy.): fix any computer, run your lab, install a server |
 | [fieldkit-packages.md](fieldkit-packages.md) | Every package on Field Kit, its size and why it's there |
 | [server.md](server.md) | bromigOS Server, the headless edition: SSH, firewall, safe automatic updates, containers |
 | [iso-encryption.md](iso-encryption.md) | Full-disk encryption in the ISO's installer |
