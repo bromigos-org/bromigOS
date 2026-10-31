@@ -184,6 +184,9 @@ snap-pac
 python-textual
 os-prober
 ntfs-3g
+# VECTOR's voice guide in the text installer, where no PipeWire session runs: ffmpeg decodes
+# its Opus clips for aplay (alsa-utils, above); the desktop already brings it
+ffmpeg
 # graphics: every open driver, so the live desktop renders on whatever is there
 mesa
 vulkan-radeon

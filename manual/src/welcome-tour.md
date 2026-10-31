@@ -58,6 +58,19 @@ Every step works with the keyboard alone: <kbd>Tab</kbd> moves, <kbd>Enter</kbd>
 continues, <kbd>Esc</kbd> goes back. Every control has a hover hint, which a screen reader
 reads too.
 
+## VECTOR's voice
+
+VECTOR can read each step's line aloud, as in the installer. This is the voice guide.
+
+- It starts as you left it in the installer: off unless you turned it on there.
+- Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> to turn it on, then to mute and
+  unmute him. The tour remembers.
+- <kbd>Esc</kbd> or the next step cuts off his line.
+- He stays quiet while a screen reader talks (Orca on the desktop, speech on the server's
+  console). His words are still on screen.
+- On a computer with no sound device, such as a server reached over SSH, the tour says so
+  once and shows his words only.
+
 ## bromigOS Server
 
 bromigOS Server's tour runs in the terminal at your first sign-in, at its console or over
@@ -93,3 +106,8 @@ the session's autostart runs `bromigos welcome --if-pending`, which does nothing
 it. Finishing removes the file and writes what you chose to
 `~/.local/state/bromigos/welcome.json`. `bromigos welcome --step STEP` opens it on one
 step; `bromigos welcome --render DIR` draws every step to pictures and exits.
+
+The voice guide keeps its setting in `~/.local/state/bromigos/voice-guide.json`
+(`enabled` and `muted`). Its lines and clips are in `/usr/share/bromigos/guide/`. The
+repository's `docs/voice-guide.md` explains the catalogue, how the clips are made, and the
+check.

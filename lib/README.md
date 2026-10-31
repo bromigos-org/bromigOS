@@ -35,6 +35,7 @@ modules to the same folder:
 | `bromigos_console.py` | Reads and safely saves text console font presets for the next boot; [console reference](../docs/console.md) |
 | `bromigos_power_menu.py` | Keyboard power selection and confirmation with a preview mode; [power menu reference](../docs/power-menu.md) |
 | `bromigos_splash.py` | Saved Plymouth and GRUB splash settings, with backups and rollback; [splash reference](../docs/splash.md) |
+| `bromigos_guide.py` | VECTOR's voice guide: the scripted lines of the installers and tours (`guide/lines.toml`), their clips (`guide/clips/`) and the player; [voice guide](../docs/voice-guide.md) |
 
 ### bromigos_account
 

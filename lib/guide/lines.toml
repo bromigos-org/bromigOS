@@ -1,0 +1,177 @@
+# VECTOR's scripted lines: the one place the installers' and the welcome tours' guide lines
+# live, with the clips that speak them (docs/voice-guide.md).
+#
+# Each table is one line. Its quoted name is the line's id, `<surface>.<step>`, and never
+# changes once code uses it:
+#
+#   installer.*     the installers (graphical and text); `.short` is the text installer's
+#                   narrower rail, where it says less
+#   tour.*          the desktop's welcome tour (bromigos-welcome)
+#   server-tour.*   bromigOS Server's welcome tour (bromigos welcome-console)
+#
+# Keys:
+#   text   what VECTOR says, word for word: the caption and the clip's script. {name}
+#          fills in at run time (bromigos_guide.line(id, who="Windows")).
+#   where  where it's said, for whoever reads this file
+#   say    for a line with a {name}: the values that get a clip of their own. A value the
+#          list doesn't have plays the clip of `fallback` (the caption still says the real
+#          one). A value whose first word is in the list, such as "Windows 11", plays that
+#          word's clip.
+#
+# After changing a text, run tools/voice/make-clips.py: it speaks the new and changed lines
+# in VECTOR's voice and removes the clips nothing uses. `make-clips.py --check` (CI) fails
+# when a line has no clip, or its clip says older words.
+
+format = 1
+
+# ---------------------------------------------------------------- the installers
+
+["installer.auto"]
+text = "An answer file has every answer. I'll install by myself unless you cancel."
+where = "both installers: an answer file's countdown"
+
+["installer.welcome"]
+text = "I'm VECTOR. I'll walk you through it. Nothing changes until you say Install."
+where = "the graphical installer: welcome"
+
+["installer.welcome.short"]
+text = "I'm VECTOR. Nothing changes until you say Install."
+where = "the text installer: welcome"
+
+["installer.checks"]
+text = "A few things about this computer worth knowing first. None of them stops us."
+where = "the graphical installer: this computer's checks"
+
+["installer.edition"]
+text = "Pick what this computer is for. A server can get the desktop later."
+where = "both installers: the edition"
+
+["installer.keyboard"]
+text = "Pick your layout and try it in the box."
+where = "the graphical installer: the keyboard"
+
+["installer.disk"]
+text = "Pick a disk, then how bromigOS goes on it."
+where = "both installers: the disk, before a way is picked"
+
+["installer.disk.alongside"]
+text = "{who} keeps its files. I'll make room beside it."
+where = "both installers: the disk, installing beside another system ({who} is its name)"
+say = { who = ["Windows", "the other system"] }
+fallback = { who = "the other system" }
+
+["installer.disk.erase"]
+text = "Everything on this disk goes. Copy off what you need first."
+where = "both installers: the disk, erasing it"
+
+["installer.disk.reinstall"]
+text = "A fresh system. Your home folder stays exactly as it is."
+where = "the graphical installer: the disk, reinstalling bromigOS"
+
+["installer.bitlocker"]
+text = "Save Windows' recovery key first. Windows may ask for it once."
+where = "the graphical installer: BitLocker's recovery key"
+
+["installer.user"]
+text = "Who you are on this computer, and its name on your network."
+where = "the graphical installer: your account"
+
+["installer.encryption"]
+text = "Locked, your files stay private even if the computer is lost."
+where = "the graphical installer: encryption"
+
+["installer.ssh"]
+text = "How you'll reach this server from your other computers."
+where = "the graphical installer: SSH (bromigOS Server)"
+
+["installer.summary"]
+text = "Check it over. Nothing on the disk changes until you press Install."
+where = "the graphical installer: the summary"
+
+["installer.summary.short"]
+text = "Check it over. Nothing changes until you press Install."
+where = "the text installer: the summary"
+
+["installer.install"]
+text = "Sit back. I'll say if anything needs you."
+where = "both installers: installing, the start"
+
+["installer.install.copying"]
+text = "Copying bromigOS over. This is the long part."
+where = "the graphical installer: installing, from 15 %"
+
+["installer.install.nearly"]
+text = "Nearly there. Then a restart, and it's yours."
+where = "the graphical installer: installing, from 85 %"
+
+["installer.done"]
+text = "All set. Restart, and take out the stick when the screen goes dark."
+where = "the graphical installer: done"
+
+["installer.done.short"]
+text = "All set. Restart, and take out the stick."
+where = "the text installer: done"
+
+# ---------------------------------------------------------------- the desktop's welcome tour
+
+["tour.network"]
+text = "Get online and I can fetch updates, my brains and my voice."
+where = "bromigos-welcome: the network"
+
+["tour.screens"]
+text = "Pick the screen in front of you. The panels go there."
+where = "bromigos-welcome: the screens"
+
+["tour.world"]
+text = "Pick a world. Every one reads this machine, live."
+where = "bromigos-welcome: the world"
+
+["tour.vector"]
+text = "Where should I think? Your lab is best, if you have one."
+where = "bromigos-welcome: where VECTOR thinks"
+
+["tour.lab"]
+text = "I'll look for your lab. I only read what this computer already knows."
+where = "bromigos-welcome: the lab"
+
+["tour.phone"]
+text = "Scan it with BRODEC and I'm on your phone too."
+where = "bromigos-welcome: pairing a phone"
+
+["tour.keys"]
+text = "Try a few keys. Each card lights up when it works."
+where = "bromigos-welcome: the keys"
+
+["tour.done"]
+text = "That's it. Settings has all of this, any time."
+where = "bromigos-welcome: done"
+
+# ---------------------------------------------------------------- bromigOS Server's welcome tour
+
+["server-tour.network"]
+text = "This server's address on your network."
+where = "bromigos welcome-console: the network"
+
+["server-tour.ssh"]
+text = "Keys only is safest. Nobody can guess a key."
+where = "bromigos welcome-console: SSH"
+
+["server-tour.vector"]
+text = "Where should I think? Your lab is best."
+where = "bromigos welcome-console: where VECTOR thinks"
+
+["server-tour.lab"]
+text = "Join your lab and I can use it."
+where = "bromigos welcome-console: the lab"
+
+["server-tour.phone"]
+text = "Scan it with BRODEC and I'm on your phone."
+where = "bromigos welcome-console: pairing a phone"
+
+["server-tour.tour"]
+text = "The commands worth knowing."
+where = "bromigos welcome-console: what's on this server"
+
+["server-tour.done"]
+text = "All set. Sign in from anywhere with SSH."
+where = "bromigos welcome-console: done"

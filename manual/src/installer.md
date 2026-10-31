@@ -137,6 +137,22 @@ from another computer. The installer asks three more things:
 - **Automatic updates.** On by default. Security fixes install by themselves, each after a
   snapshot, so a bad update can be undone from the boot menu.
 
+## VECTOR's voice
+
+VECTOR, bromigOS's AI assistant, guides you through the install. Each step shows a short
+line from him beside his orb, and he can read it aloud. This is the voice guide. It works
+offline: his lines are recorded on the stick.
+
+- It's off until you turn it on, on the first step or with
+  <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd>. It needs a sound device.
+- Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> again to mute him, and again to
+  unmute. The installer remembers, and your new system's welcome tour does too.
+- <kbd>Esc</kbd> or the next step cuts off his line.
+- He stays quiet while a screen reader talks, such as Orca or the stick's speech entry.
+  His words are still on screen.
+- With no sound device, such as on a serial console, the installer says so once. Then the
+  words are on screen only.
+
 ## When something goes wrong
 
 The installer says what stopped and what to do, in plain words. **Save a problem report**
@@ -157,6 +173,7 @@ Every step works with the keyboard alone:
 | <kbd>←</kbd> <kbd>→</kbd> | Move the split between Windows and bromigOS (<kbd>Shift</kbd>: 10 GB at a time) |
 | <kbd>Ctrl</kbd>+<kbd>N</kbd> | Continue (text installer) |
 | <kbd>F2</kbd> | Show or hide the install's details (text installer) |
+| <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> | Turn VECTOR's voice on, then mute or unmute it |
 | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd> | A terminal (graphical installer) |
 | <kbd>F12</kbd> | A shell (text installer) |
 
@@ -206,6 +223,21 @@ default), the kernel (`linux`, `linux-lts` or `linux-zen`) and the boot loader. 
 key (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd> in the graphical installer,
 <kbd>F12</kbd> in the text installer) gives you a root shell on the live system at any
 step.
+
+### The voice guide's files
+
+VECTOR's lines are in one catalogue, `/usr/share/bromigos/guide/lines.toml`. Each line has
+an id, such as `installer.edition`, and its words. His clips, one small Opus file per line,
+are beside it in `clips/`, with `clips/manifest.json` saying which clip speaks which words.
+The clips are made when bromigOS is built, so the stick needs no voice model.
+
+Mute and on or off are kept in `~/.local/state/bromigos/voice-guide.json`, as
+`{"enabled": true, "muted": false}`. On the live system that's the installer's own user.
+The installer copies it to your new account.
+
+To change a line or make the clips again, see `docs/voice-guide.md` in the repository. It
+covers the catalogue's format, `tools/voice/make-clips.py`, and the check CI runs
+(`tools/voice/make-clips.py --check`).
 
 ### Answer files
 
@@ -317,6 +349,8 @@ countdown = 10
 | `bromigos.install bromigos.text`, or `bromigos.install=text` | The text installer, whichever edition |
 | `bromigos.answers=PATH` | That answer file |
 | `accessibility=on` | The text installer's plain questions, for a screen reader |
+| `bromigos.voice=on` | VECTOR's voice on from the start, for that boot |
+| `bromigos.voice=off` | VECTOR's voice off, for that boot. His words are still on screen |
 
 When the text installer is asked for on the full stick, the login screen steps aside for
 that boot so the installer has the screen.
