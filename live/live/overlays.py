@@ -1,8 +1,15 @@
 """Event overlays and summoned gadgets, each a short-lived layer-shell surface.
 
-  intercept     login/unlock: the burn-in's canonical intercept sequence
+  intercept     login/unlock: the burn-in's canonical intercept sequence, full screen and
+                opaque from the first frame to the cut back to the desktop
   transmission  critical notification: interference + targeting brackets
-  screensaver   idle: the live scene full screen, ends on any input
+  screensaver   idle: the live scene full screen and opaque, ends on any input
+
+The full-screen ones (intercept, screensaver) never sit over a working window at partial
+opacity: they're a deliberate screen of their own, or nothing. Effects that share the
+screen with windows belong on the background layer, under them (docs/DRIFTGLASS.md,
+"Calm by default"). Each also has a deadline(): the window watchdog closes it then even if
+its last frames never drew (a starved software renderer), so none can be left on screen.
   holodeck      SUPER+H: arc rings, cluster constellation, machine hologram
   radial        SUPER+A: holographic quick-launch ring
 
@@ -179,6 +186,11 @@ class Base:
         if self.closing_at is None:
             self.closing_at = self.now()
 
+    def deadline(self):
+        """The overlay's time (now()) by which it has finished, or None while it runs until
+        closed. The window's watchdog closes it then, drawn to the end or not."""
+        return None
+
 
 # ======================================================================== intercept
 TEAR_STYLES = {"scanlines": 0.0, "ripple": 1.0, "swell": 2.0}
@@ -198,10 +210,18 @@ def tear_style():
 
 
 class Intercept(Base):
-    """Hold - tear - ring - flame - turn - sign-off - ghost (the burn-in spec)."""
+    """Hold - tear - ring - flame - turn - sign-off - cut (the burn-in spec).
+
+    Opaque until it ends: the captured screen, then the void. Full motion ends on one frame
+    of black and a cut back to the desktop. Reduced and still motion can't cut (a cut is a
+    flash): the card fades out over the opaque void, then the empty void lifts in CALM_CLEAR,
+    a plain dimming with nothing drawn in it. Never an afterimage or a fading card over the
+    windows it uncovers: the live layer draws nothing over a working window at partial
+    opacity."""
     name = "intercept"
     rebuild_every = 1e9
     HOLD, TEAR, RING, FLAME = 0.25, 0.40, 0.50, 0.40
+    BLACK = 1 / 30                                # full motion: the one frame of black at the cut
     CAPTION = "TRANSMISSION INTERCEPTED"
     SIGN = "STILL LIT."
 
@@ -218,7 +238,7 @@ class Intercept(Base):
         self.t_turn = self.t_flame + self.FLAME
         self.t_sign = self.t_turn + 0.12 + len(self.CAPTION) * 0.028 + 0.25
         self.t_cut = self.t_sign + len(self.SIGN) * 0.045 + 0.45
-        self.t_end = self.t_cut + 3.0
+        self.t_end = self.t_cut + (self.CALM_OUT + self.CALM_CLEAR if self.reduced else self.BLACK)
         self.cued = set()
         self.skip_to = None
         self.lines = self._syslines()
@@ -271,6 +291,11 @@ class Intercept(Base):
         if self.skip_to is None and self.now() < self.t_cut:
             self.skip_to = self.now()
 
+    def deadline(self):
+        if self.skip_to is not None:
+            return self.skip_to + (self.t_end - self.t_cut)
+        return self.t_end
+
     def key(self, name):
         self.skip()
         return True
@@ -300,21 +325,14 @@ class Intercept(Base):
         if self.still:
             return self._still_frame(t, rect)
         if self.reduced and t >= self.t_cut:      # reduced motion: no black frame; the card fades out
-            k = min(1.0, (t - self.t_cut) / self.CALM_OUT)
+            k = min(1.0, (t - self.t_cut) / self.CALM_OUT)       # over the void, then the void lifts
             if k >= 1.0:
-                return {"finished": True, "backdrop": 0.0, "fade": 0.0}
-            u.update(backdrop=1.0 - k, gadget_fade=1.0 - k, glow=0.6 * (1.0 - k),
+                return self._clear_frame(t)
+            u.update(backdrop=1.0, gadget_fade=1.0 - k, glow=0.6 * (1.0 - k),
                      emblems=[{"rect": rect, "angle": 0.0, "alpha": 1.0 - k}])
             return u
-        if t >= self.t_cut:                       # one frame of black, then the ghost
-            k = (t - self.t_cut)
-            if k < 1 / 30:
-                return {"backdrop": 1.0, "gadget_fade": 0.0}
-            ghost = 0.15 * (1 - (k / 3.0))
-            u.update(backdrop=0.0, gadget_fade=0.0, glow=0.0,
-                     emblems=[{"rect": rect, "angle": -(t - self.t_turn) * TAU / 24 * (0 if self.reduced else 1),
-                               "alpha": max(ghost, 0.0), "bloom": False}])
-            return u
+        if t >= self.t_cut:                       # one frame of black, then the cut to the desktop
+            return {"backdrop": 1.0, "gadget_fade": 0.0}
         # hold + tear: the captured frame
         if t < self.t_ring:
             tear = 0.0 if (t < self.t_tear or self.reduced) else min((t - self.t_tear) / self.TEAR * 1.6, 1.0)
@@ -343,21 +361,27 @@ class Intercept(Base):
         return u
 
     CALM_IN, CALM_OUT = 1.0, 1.0
+    CALM_CLEAR = 0.5                              # reduced and still: the empty void lifting (s)
     CALM_FADE = 0.9                               # reduced: the frozen screen's crossfade (s)
+
+    def _clear_frame(self, t):
+        """Reduced and still, after the card: only the void, lifting off the desktop."""
+        k = min(1.0, max(0.0, (t - self.t_cut - self.CALM_OUT) / self.CALM_CLEAR))
+        return {"backdrop": 1.0 - k, "gadget_fade": 0.0, "glow": 0.0}
 
     def _calm_frozen(self, t):
         return max(0.0, 1.0 - max(0.0, t - self.t_tear) / self.CALM_FADE)
 
     def _still_frame(self, t, rect):
         """Still: the frozen screen crossfades into the finished card (the burn-in whole, the
-        caption and the sign-off written out), which holds, then fades away. Only opacity
-        changes: nothing turns, tears, types or flashes."""
+        caption and the sign-off written out), which holds, then fades into the void, and the
+        empty void lifts. Only opacity changes: nothing turns, tears, types or flashes."""
         k_in = min(1.0, t / self.CALM_IN)
         k_out = min(1.0, max(0.0, (t - self.t_cut) / self.CALM_OUT))
         if k_out >= 1.0:
-            return {"finished": True, "backdrop": 0.0, "fade": 0.0}
+            return self._clear_frame(t)
         a = k_in * (1.0 - k_out)
-        return {"glow": 0.6, "backdrop": 1.0 - k_out, "frozen": 1.0 - k_in, "tear": 0.0,
+        return {"glow": 0.6, "backdrop": 1.0, "frozen": 1.0 - k_in, "tear": 0.0,
                 "gadget_fade": a,
                 "emblems": [{"rect": rect, "angle": 0.0, "ring_t": 1.0, "flame_t": 1.0, "mast_t": 1.0,
                              "alpha": a, "gain": 1.0}]}
@@ -609,6 +633,9 @@ class HoloDeck(Base):
             u["finished"] = True
         return u
 
+    def deadline(self):
+        return None if self.closing_at is None else self.closing_at + 0.26
+
     # ---- interaction
     def _pick(self, x, y):
         p = self.stage.painter
@@ -812,6 +839,9 @@ class Screensaver(Base):
         if self.closing_at is not None and t - self.closing_at > 0.26:
             u["finished"] = True
         return u
+
+    def deadline(self):
+        return None if self.closing_at is None else self.closing_at + 0.26
 
     def key(self, name):
         self.close()
@@ -1198,25 +1228,14 @@ def make(app, kind, **kw):
         r = holder.get("r")
         if handle.closed:
             return False
-        if win.failed or win.dead or (r and r.done):      # dead: the output went away under it
+        # dead: the output went away under it. Past its deadline: its last frames never drew
+        # (a software renderer starved of CPU draws a frame a second or less), and a
+        # half-faded frame must not stay over the windows
+        due = r.deadline() if r is not None else None
+        if win.failed or win.dead or (r and r.done) or (due is not None and r.now() >= due + 0.3):
             handle.finish()
             return False
         return True
     GLib.timeout_add(100, watchdog)
     win.set_fps(30)
-    # the ghost phase of the intercept must never take input
-    if kind == "intercept":
-        def ghost_passthrough():
-            r = holder.get("r")
-            if handle.closed:
-                return False
-            if r and (r.now() >= r.t_cut or r.skip_to is not None):
-                import cairo
-                gw = w.get_window()
-                if gw:
-                    gw.input_shape_combine_region(cairo.Region(), 0, 0)
-                GtkLayerShell.set_keyboard_mode(w, GtkLayerShell.KeyboardMode.NONE)
-                return False
-            return True
-        GLib.timeout_add(50, ghost_passthrough)
     return handle

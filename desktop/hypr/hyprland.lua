@@ -300,6 +300,13 @@ hl.window_rule({ match = { class = "kitty" }, tile = true })
 hl.window_rule({ match = { class = "^xembedsniproxy$" }, opacity = "0.0 override", no_blur = true })
 -- Apps (Chrome especially) ask to open maximized; ignore it so new windows tile.
 hl.window_rule({ match = { class = ".*" }, suppress_event = "maximize" })
+-- Nothing idles (no screensaver, lock or dark screens) while a window is full screen, or
+-- while bromigOS walks you through something: the installer, the live medium's welcome
+-- card and the welcome tour. A player's own inhibitor (mpv, a browser playing video) still
+-- counts too. docs/idle.md
+hl.window_rule({ match = { class = ".*" }, idle_inhibit = "fullscreen" })
+hl.window_rule({ match = { class = "^(org\\.bromigos\\.(Installer|InstallerWelcome|Welcome))$" },
+    idle_inhibit = "always" })
 -- Bluetooth in the terminal (bromigos bluetooth tui --window): a floating window, centred
 hl.window_rule({ match = { class = "bromigos-bluetooth" }, float = true })
 hl.window_rule({ match = { class = "bromigos-bluetooth" }, size = "960 640" })

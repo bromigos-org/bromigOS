@@ -92,10 +92,12 @@ Some of these need more detail:
   there's no beam and no periodic pass. `scan` fades the schematic in for a few seconds.
 - **The intercept** plays when you unlock or sign in. At full motion it holds the screen,
   tears it, draws the ring, lights the flame, turns it, types the text, shows one black
-  frame and leaves a ghost. Under reduced motion it crossfades from the frozen screen. The
-  emblem fades in whole and doesn't turn, there's no black frame, and the card fades out.
-  Under still motion, the finished card fades in over the frozen screen, holds and fades
-  out.
+  frame and cuts back to the desktop. Under reduced motion it crossfades from the frozen
+  screen. The emblem fades in whole and doesn't turn, there's no black frame, and the card
+  fades into the dark, which then lifts off the desktop in half a second. Under still
+  motion, the finished card fades in over the frozen screen, holds, fades into the dark,
+  and the dark lifts. At every setting, nothing of it is drawn over your windows while
+  they show through.
 - **A critical notification** at full motion shows brackets, a 150 ms interference band
   and a pulsing red edge. Under reduced motion it shows brackets and a steady red edge,
   faded in and out.

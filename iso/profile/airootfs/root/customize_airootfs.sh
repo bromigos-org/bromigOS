@@ -28,6 +28,13 @@ test -f /home/live/.config/hypr/hyprland.lua -a -f /home/live/.config/waybar/con
     || { echo "customize_airootfs: the live user's configs weren't seeded" >&2; exit 1; }
 sudo -u live -H bromigos theme current | grep -qx wick \
     || { echo "customize_airootfs: the theme isn't set" >&2; exit 1; }
+# nothing idles over someone trying or installing bromigOS (docs/idle.md): no screensaver
+# and no lock on the live session (the live user has no password to unlock with). The
+# displays still go dark after a while, and any input wakes them. The welcome card, the
+# installer and full-screen windows hold idle off too (hyprland.lua's idle_inhibit rules).
+sudo -u live -H bromigos idle set screensaver off lock off --no-restart >/dev/null
+grep -qzE '\[screensaver\]\s*enabled = false.*\[lock\]\s*enabled = false' /home/live/.config/bromigos/idle.toml \
+    || { echo "customize_airootfs: the live user's idle policy isn't set" >&2; exit 1; }
 # `bromigos update` would nudge the live user after the install step's pacman: no need
 rm -f /home/live/.local/state/bromigos/restart-* 2>/dev/null || true
 # the boot menu's "Install bromigOS" (bromigos.install): the live session opens the installer

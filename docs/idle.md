@@ -239,11 +239,37 @@ Its tooltip gives the policy in words.
 The menu's TOGGLE group has "Lock on idle" and "Stay awake", each with its state. See
 [menu.md](menu.md).
 
+## What holds idle off
+
+hypridle runs no timer while something holds an idle inhibitor. These do:
+
+| What | How |
+|---|---|
+| A full-screen window (a film, a game) | `hyprland.lua`: `idle_inhibit = "fullscreen"` on every window |
+| The welcome tour, the installer, the live medium's welcome card | `hyprland.lua`: `idle_inhibit = "always"` on `org.bromigos.Welcome`, `org.bromigos.Installer` and `org.bromigos.InstallerWelcome` |
+| A player playing video (mpv, a browser) | its own Wayland idle inhibitor |
+| Stay awake, a download, any `systemd-inhibit --what=idle` | a logind inhibitor |
+
+`hyprctl clients` shows `inhibitingIdle: 1` on a window that holds it.
+
+The live medium goes further. `customize_airootfs.sh` turns its user's screensaver and lock
+off (`bromigos idle set screensaver off lock off`): someone trying or installing bromigOS
+is at the machine, and the live user has no password to unlock with. Its displays still go
+off at 15 minutes. `iso/test/live-checks.sh` checks both.
+
 ## The screensaver
 
 The screensaver is the live layer's own scene, drawn full screen over everything. Any
 input ends it. Its content, a gas giant or a relay station, is set on the Live layer &
 holograms page of Settings.
+
+It's a screen of its own, opaque once it has faded in (0.8 s), never a translucent layer
+over a window. The same goes for the intercept at sign-in and unlock: opaque until it ends,
+then a cut back to the desktop, or under reduced and still motion the empty void lifting
+in half a second. Nothing of either stays over a window: each overlay has a deadline, and
+the live layer closes it then even if its last frames never drew, as on a software renderer
+starved of CPU. Effects that share the screen with windows belong on the background layer,
+under them ([DRIFTGLASS.md](DRIFTGLASS.md), "Calm by default").
 
 The emblem uses the same shader as the login and unlock animation
 (`live/shaders/emblem.frag`). It samples the rotating texture before masking the circle,
@@ -273,6 +299,20 @@ and `restarts`. The schema is in [core/README.md](../core/README.md).
   nothing is restarted.
 - **`tools/settings/render.sh --interact`** drives Settings' controls through the real
   command. See [settings.md](settings.md#tests).
+- **`live/tests/test_overlay_opacity.py`**, in the live package's `check()`, steps the
+  intercept and the screensaver through time at each motion setting. It checks that
+  nothing is drawn unless the void or the captured screen is opaque, that only the empty
+  void ever lifts over the desktop, and the deadlines.
+- **`desktop/tests/e2e_overlay_nested.py`** runs a nested Hyprland nobody sees, with this
+  checkout's live layer and a real hypridle. A window of one plain colour sits under each
+  overlay, and grim's frames of it are sorted into clear, covered, dimmed (the empty void)
+  and translucent. It checks:
+  - the intercept at full, reduced and still motion is covered while it plays and clear
+    after, never translucent;
+  - the screensaver, started after a few idle seconds, is covered for as long as it runs,
+    and input ends it;
+  - the live medium's welcome card, the installer's and the welcome tour's classes and a
+    full-screen window each hold an inhibitor, and no screensaver starts past the timeout.
 - **`test/vm/idle-e2e.sh`** runs in a real session in the fresh-machine VM, after
   `test/vm/arch-vm.sh`. It checks:
   - Screensaver only, rendered, with hypridle restarted inside the graphical session;

@@ -33,7 +33,8 @@ A world may still set its own art colours in `live/world.toml`.
 - **Decks.** Full-screen holograms such as the holo deck and the timeline. A deck sits
   over your windows while it's open. [Decks](#decks) lists them.
 - **Event animations.** *The intercept* plays at login and unlock: the screen tears and
-  the burn-in emblem draws itself. A critical notification gets targeting brackets.
+  the burn-in emblem draws itself, full screen and opaque, then cuts back to the desktop.
+  A critical notification gets targeting brackets.
 - **Codec calls.** A *codec call* is a short spoken message in VECTOR's voice, shown as a
   small card in the bottom-right corner. Notable real events trigger them, such as a lab
   alert or a long command finishing.

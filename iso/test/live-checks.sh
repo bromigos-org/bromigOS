@@ -112,5 +112,9 @@ if [[ $mode == live ]]; then
     check "the installer is there" test -x /usr/local/bin/bromigos-iso-install
     check "archinstall is there" command -v archinstall
     check "the live user has no password and sudo" bash -c "sudo -n true"
+    # nothing idles over someone trying or installing bromigOS (docs/idle.md): the live user's
+    # policy has no screensaver and no lock, and the welcome card holds idle off as well
+    check "the live session never starts a screensaver or locks on idle" bash -c "f=\$HOME/.local/state/bromigos/idle/hypridle.conf; test -s \$f && ! grep -qE 'on-timeout = (bromigos-live ctl screensaver open|loginctl lock-session)' \$f"
+    check "the welcome card holds an idle inhibitor (Hyprland's idle_inhibit)" bash -c "bromigos session exec hyprctl -j clients | python3 -c 'import json, sys; sys.exit(not any(c.get(\"class\") == \"org.bromigos.InstallerWelcome\" and c.get(\"inhibitingIdle\") for c in json.load(sys.stdin)))'"
 fi
 exit $fails
