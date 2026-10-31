@@ -508,6 +508,27 @@ def secureboot_done(code):
             f"disk instead, then the file ENROLL_THIS_KEY_FOR_THIS_PC.cer.)")
 
 
+def secureboot_steps(code):
+    """The last page's Secure Boot card: the code big, then the blue screen's steps in the
+    order it asks them (the same facts as secureboot_done, laid out to follow along)."""
+    if not code:
+        return None
+    return {
+        "title": "Approve bromigOS at the first start",
+        "code": str(code),
+        "intro": "Secure Boot stays on. The first time this computer starts bromigOS, a blue screen "
+                 "asks you to approve it. This happens once, and you'll need this code:",
+        "steps": [
+            "When the blue screen appears, press any key. It waits about 10 seconds.",
+            "Choose Enroll MOK, then Continue, then Yes.",
+            f"Type {code} and press Enter.",
+            "Choose Reboot. bromigOS starts, now with Secure Boot on.",
+        ],
+        "lost": "Lost the code? On the blue screen, choose Enroll key from disk, then the file "
+                "ENROLL_THIS_KEY_FOR_THIS_PC.cer.",
+    }
+
+
 def gpu_checks():
     try:
         r = subprocess.run(["bromigos", "hw", "detect", "--json"], capture_output=True, text=True, timeout=30)
@@ -932,3 +953,38 @@ def check_key(line):
         return None
     return ("That isn't an SSH public key. It's one line that starts with ssh-ed25519 or ssh-rsa, then a long run of "
             "letters: the .pub file from your other computer.")
+
+
+
+def disk_segments(d):
+    """The disk in order, for the maps: [(role, bytes, words, partition or None)], role one
+    of efi, msr, windows, recovery, linux, other, free."""
+    out, pos = [], 0
+    parts = sorted(d.get("partitions") or [], key=lambda p: p.get("start", 0))
+    frees = sorted(d.get("free") or [], key=lambda f: f["start"])
+    big = 64 * 2 ** 20
+    for p in parts:
+        for f in frees:
+            if pos <= f["start"] < p.get("start", 0) and f["size"] > big:
+                out.append(("free", f["size"], "Free space", None))
+        what = p.get("what") or p["path"]
+        if p.get("esp"):
+            role = "efi"
+        elif "Microsoft reserved" in what:
+            role = "msr"
+        elif p.get("windows"):
+            role = "windows"
+        elif "recovery" in what.lower():
+            role = "recovery"
+        elif p.get("fstype") in ("btrfs", "ext4", "crypto_LUKS", "xfs"):
+            role = "linux"
+        else:
+            role = "other"
+        out.append((role, p["size"], what, p))
+        pos = p.get("start", 0) + p["size"]
+    for f in frees:
+        if f["start"] >= pos and f["size"] > big:
+            out.append(("free", f["size"], "Free space", None))
+    if not out:             # a blank disk: no partitions, and no free area listed either
+        out.append(("free", d.get("size") or 1, "Empty", None))
+    return out

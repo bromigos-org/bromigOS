@@ -2748,7 +2748,7 @@ From the `bromigos-desktop` package.
 The welcome tour in the terminal (bromigOS Server's first sign-in): the network, SSH, joining your lab, and what's here.
 
 ```text
-bromigos welcome console [--if-pending] [--render DIR [--size WxH]]
+bromigos welcome console [--if-pending] [--step STEP] [--render DIR [--size WxH]]
 ```
 
 For example:

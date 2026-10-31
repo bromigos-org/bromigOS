@@ -20,6 +20,15 @@ for lib in (os.path.join(HERE, "../../profile/airootfs/usr/local/lib/bromigos-is
         break
 
 
+async def wait_for(app, pilot, selector, seconds=30):
+    """Until selector is on screen: redraws are asynchronous, and a VM can be slow."""
+    for _ in range(int(seconds * 10)):
+        if app.query(selector):
+            return app.query_one(selector)
+        await pilot.pause(0.1)
+    raise AssertionError(f"{selector} never appeared (step {app.step})")
+
+
 async def type_text(pilot, text):
     for ch in text:
         await pilot.press({" ": "space", "-": "minus", "_": "underscore", ".": "full_stop", "/": "slash"}.get(ch, ch))
@@ -57,18 +66,26 @@ async def drive(app, pilot, plan):
     await shot("keyboard")
     await pilot.press("ctrl+n")
     assert app.step == "disk", app.step
-    for _ in range(50):
+    for _ in range(300):                       # os-prober takes seconds; a busy VM, longer
         if app.probe is not None:
             break
         await pilot.pause(0.1)
+    assert app.probe is not None, "the disks never arrived"
     await app.show("disk")
     await pilot.pause()
     disks = app.probe["disks"]
     target = disks[plan.get("disk_index", 0)]
     app.query_one(f"#disk-{plan.get('disk_index', 0)}").value = True
     await pilot.pause()
+    # picking a disk redraws its choices: wait until they're there (a slow VM takes longer
+    # than one pause), then until the redraw is done
+    await wait_for(app, pilot, f"#mode-{plan['mode']}")
+    async with app.redraw:
+        pass
     app.query_one(f"#mode-{plan['mode']}").value = True
     await pilot.pause(0.3)
+    async with app.redraw:
+        pass
     if plan["mode"] == "reinstall" and app.query("#old_passphrase"):
         app.query_one("#old_passphrase").value = plan.get("old_passphrase") or plan.get("password", "")
     if plan.get("gib") and plan["mode"] == "alongside":

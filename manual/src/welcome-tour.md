@@ -47,7 +47,7 @@ To take the tour again: Settings › About › **Welcome tour**, or run `bromigo
 
    Problems are said in plain words, with what to do.
 
-   ![Your lab: two machines found, with what each offers, and Connect](images/welcome-tour-lab.webp)
+   ![Your lab: the machines found on the radar, with what each offers, and Connect](images/welcome-tour-lab.webp)
 
 6. **Pair your phone** with the BRODEC app: see [Pair your phone](phone.md).
 7. **The keys.** Super+Space, Super+Enter, Super+, and a few more. Press one and its card

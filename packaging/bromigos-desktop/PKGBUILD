@@ -138,6 +138,10 @@ package() {
     install -Dm0644 "$f" "$share/$f"
   done < <(find hypr waybar/config.jsonc waybar/style.css rofi/config.rasi rofi/bromigos.rasi \
              dunst gtklock zsh user -type f -print0)
+  # DRIFTGLASS art for the installer and the welcome tour (lib/bromigos_glass.py): VECTOR's
+  # hologram cut out of his render, the choice cards' holograms, the slideshow's pictures
+  # (tools/installer-art/make.py)
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/art/" art/*.png art/*.jpg
   # the tools the defaults call
   install -Dm0755 -t "$lib/desktop/waybar/" waybar/scripts/gpu.py waybar/scripts/storage.py \
     waybar/scripts/vector.py waybar/scripts/vector-switch.py waybar/scripts/copy-ip waybar/scripts/idle.py \

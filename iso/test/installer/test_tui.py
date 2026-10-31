@@ -49,10 +49,10 @@ class TUI(unittest.TestCase):
         backend.Install.__init__ = spy
         self.addCleanup(setattr, backend.Install, "__init__", real)
 
-    def run_plan(self, plan, finish=True):
+    def run_plan(self, plan, finish=True, size=(120, 42)):
         async def go():
             app = tui.Installer()
-            async with app.run_test(size=(120, 42)) as pilot:
+            async with app.run_test(size=size) as pilot:
                 target, shots = await drive(app, pilot, plan)
                 if finish:
                     await pilot.press("ctrl+n")
@@ -219,6 +219,132 @@ class TUI(unittest.TestCase):
                 return app.step, len(app.query("#disks"))
         self.assertEqual(asyncio.run(go()), ("disk", 1))
 
+    def test_picking_disks_fast(self):
+        """Picking disk after disk with no pause between (a person on a slow console, the VM's
+        driver): each pick redraws the choices and Advanced (its Select), and a redraw must
+        never tear down one still mounting ("No nodes match '#label'")."""
+        async def go():
+            app = tui.Installer()
+            errors = []
+            app._handle_exception = lambda e: errors.append(e)
+            async with app.run_test() as pilot:          # 80x24, as tuidrive runs in the VM
+                await pilot.pause(0.5)
+                for _ in range(50):
+                    if app.probe is not None:
+                        break
+                    await pilot.pause(0.1)
+                await app.show("disk")
+                app.query_one("#disks").focus()
+                for key in ("down", "enter", "up", "enter", "down", "enter", "up", "enter", "down", "enter", "up", "enter"):
+                    await pilot.press(key)      # no pause: each pick redraws while the last still mounts
+                for mode in ("erase", "alongside", "erase", "alongside"):
+                    for _ in range(100):
+                        if app.query(f"#mode-{mode}"):
+                            break
+                        await pilot.pause(0.02)
+                    async with app.redraw:      # the card on screen, not one being replaced
+                        pass
+                    app.query_one(f"#mode-{mode}").value = True
+                    await pilot.pause(0)
+                async with app.redraw:
+                    pass
+                await pilot.pause(0.3)
+                return errors, app.a["mode"], len(app.query("#adv-fs")), len(app.query("#modes"))
+        errors, mode, fs, modes = asyncio.run(go())
+        self.assertEqual(errors, [])
+        self.assertEqual((mode, fs, modes), ("alongside", 1, 1))
+
+    def test_every_step_at_80x24_and_on_the_console(self):
+        """The whole walk, key by key, at the VM driver's 80x24 and as the stick's console
+        draws it (TERM=linux: its icons and 16 colours) and a serial line (vt220): a widget id
+        that's missing on any step fails here."""
+        plans = [{"mode": "alongside", "gib": 40}, {"mode": "erase", "disk_index": 1, "encrypt": False},
+                 {"edition": "server", "mode": "erase", "disk_index": 1, "separate": True,
+                  "ssh_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTheInstallerTestsOnly tester@lab"}]
+        for term in ("xterm-256color", "linux", "vt220"):
+            for plan in plans:
+                with self.subTest(term=term, plan=plan["mode"], edition=plan.get("edition", "desktop")):
+                    old = {k: os.environ.get(k) for k in ("TERM", "COLORTERM")}
+                    os.environ["TERM"] = term
+                    os.environ.pop("COLORTERM", None)
+                    try:
+                        app, _ = self.run_plan(dict(plan), size=(80, 24))
+                    finally:
+                        for k, v in old.items():
+                            if v is None:
+                                os.environ.pop(k, None)
+                            else:
+                                os.environ[k] = v
+                    self.assertEqual(app.step, "done")
+                    self.assertIs(app.done, True)
+
+    def test_done_shows_the_secure_boot_code_big(self):
+        """When the install set up Secure Boot, the last page carries its code in block letters
+        and the blue screen's steps in order."""
+        self.addCleanup(setattr, backend, "SECUREBOOT_CODE", backend.SECUREBOOT_CODE)
+        backend.SECUREBOOT_CODE = "4821"
+
+        async def go():
+            app = tui.Installer()
+            async with app.run_test(size=(120, 42)) as pilot:
+                app.done = True
+                await app.show("done")
+                await pilot.pause(0.3)
+                if SHOTS:
+                    app.save_screenshot(os.path.join(SHOTS, "tui-done-secureboot.svg"))
+                return (str(app.query_one("#mok-code").render()), str(app.query_one("#mok-steps").render()))
+        code, steps = asyncio.run(go())
+        self.assertIn("█", code)
+        self.assertIn("Enroll MOK", steps)
+        self.assertIn("Type 4821", steps)
+        self.assertLess(steps.index("Enroll MOK"), steps.index("Type 4821"))
+
+    def test_disk_badges_fit_whole(self):
+        """Each disk's badge ([● HEALTHY], [THIS STICK]) is shown in full at 120x35 and 80x24:
+        the description gives way first, then the model."""
+        from rich.cells import cell_len
+
+        async def go(size):
+            app = tui.Installer()
+            async with app.run_test(size=size) as pilot:
+                for _ in range(100):
+                    if app.probe is not None:
+                        break
+                    await pilot.pause(0.05)
+                await app.show("disk")
+                for _ in range(100):            # laid out (a busy machine takes a moment)
+                    await pilot.pause(0.05)
+                    rows = [(rb.label.plain, rb.size.width) for rb in app.query("#disks RadioButton")]
+                    if rows and all(w > 0 for _, w in rows):
+                        break
+                return rows
+        for size in ((120, 35), (80, 24)):
+            for plain, width in asyncio.run(go(size)):
+                with self.subTest(size=size, row=plain[:30]):
+                    self.assertTrue(plain.rstrip().endswith("]"), plain)
+                    self.assertLessEqual(cell_len(plain) + 3, width, plain)   # the radio, its gap
+
+    def test_a_blank_disk_is_one_empty_segment(self):
+        """A disk with no partitions (and no free area listed) still draws: one empty segment,
+        so the erase map shows bromigOS over the whole disk."""
+        segs = common.disk_segments({"size": 43 * 1024 ** 3, "partitions": [], "free": []})
+        self.assertEqual([(s[0], s[1]) for s in segs], [("free", 43 * 1024 ** 3)])
+
+    def test_a_step_opens_at_its_heading(self):
+        """On a small screen the page doesn't scroll past a step's heading to its first choice."""
+        async def go():
+            app = tui.Installer()
+            async with app.run_test(size=(80, 24)) as pilot:
+                await pilot.pause(0.5)
+                for _ in range(50):
+                    if app.probe is not None:
+                        break
+                    await pilot.pause(0.1)
+                await app.show("disk")
+                await pilot.pause(0.5)
+                return app.query_one("#page").scroll_y
+        self.assertEqual(asyncio.run(go()), 0)
+
     def test_advanced_and_what_will_run(self):
         async def go():
             app = tui.Installer()
@@ -276,6 +402,77 @@ class TUI(unittest.TestCase):
                             missing.append(f"{sid}: {w!r}")
                 return missing
         self.assertEqual(asyncio.run(go()), [])
+
+    def test_strength_meter_levels(self):
+        """The strength meter: none lit before anything's typed, then one, two or three segments
+        for weak, fair and strong, always the same width (one thickness, like the disk map)."""
+        import bromigos_textual as BT
+        self.assertEqual([tui.strength_level(p) for p in ("", "abc", "correct-horse", "Correct-Horse-9!")], [0, 1, 2, 3])
+        widths = set()
+        for level in range(4):
+            m = BT.meter(level, 3, 17)
+            widths.add(m.cell_len)
+            lit = [s for s in m.spans if str(s.style).startswith("on ") and m.plain[s.start:s.end].strip() == ""
+                   and "on " + BT._dim(BT.palette()["muted"]) != str(s.style)]
+            self.assertEqual(len(lit), level, f"level {level}")
+            self.assertNotIn("\n", m.plain)
+        self.assertEqual(len(widths), 1)
+
+    def test_briefing_changes_jump_to_their_step(self):
+        """Ready to install: each Change (its button or its number key) opens that step, and
+        Continue comes straight back to the summary."""
+        async def go():
+            app = tui.Installer()
+            async with app.run_test(size=(120, 42)) as pilot:
+                await drive(app, pilot, {"mode": "alongside"})
+                keys = dict(app.brief_keys)
+                got = []
+                for n, sid in sorted(keys.items()):
+                    await pilot.press(n)
+                    await pilot.pause(0.2)
+                    got.append((sid, app.step, str(app.query_one("#next").label)))
+                    await pilot.press("ctrl+n")
+                    await pilot.pause(0.2)
+                    got.append(("summary", app.step, ""))
+                app.query_one("#edit-user").press()
+                await pilot.pause(0.3)
+                got.append(("user", app.step, ""))
+                return keys, got
+        keys, got = asyncio.run(go())
+        self.assertEqual(set(keys.values()) >= {"welcome", "keyboard", "disk", "user", "encryption"}, True, keys)
+        for want, step, label in got:
+            self.assertEqual(want, step)
+            if want != "summary" and label:
+                self.assertEqual(label, "Back to summary")
+
+    def test_bitlocker_asks_for_the_key_first(self):
+        """Windows with BitLocker, kept alongside: a step that asks for its recovery key to be
+        saved, and won't go on until it's said to be."""
+        async def go():
+            app = tui.Installer()
+            async with app.run_test(size=(120, 42)) as pilot:
+                for _ in range(60):
+                    if app.probe is not None:
+                        break
+                    await pilot.pause(0.05)
+                app.probe["disks"][0]["bitlocker"] = True
+                app.a.update(disk="/dev/nvme0n1", mode="alongside")
+                steps = app.steps()
+                await app.show("bitlocker")
+                await pilot.pause(0.2)
+                await pilot.press("ctrl+n")
+                first = (app.step, str(app.query_one("#error").render()))
+                app.query_one("#bitlocker-saved").value = True
+                await pilot.pause(0.1)
+                await pilot.press("ctrl+n")
+                app.a["mode"] = "erase"
+                return steps, first, app.step, app.steps()
+        steps, first, then, erase_steps = asyncio.run(go())
+        self.assertIn("bitlocker", steps)
+        self.assertEqual(first[0], "bitlocker")
+        self.assertIn("recovery key", first[1])
+        self.assertEqual(then, "user")
+        self.assertNotIn("bitlocker", erase_steps)
 
     def test_wrong_input_says_what_to_do(self):
         async def go():
