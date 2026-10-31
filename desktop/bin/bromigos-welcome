@@ -356,6 +356,7 @@ def main(argv):
                 r.add_prefix(glass.icon("network-offline-symbolic", 20, "dg-row-icon"))
                 hint(r, "No wireless networks are in range, or this computer has no Wi-Fi")
                 self.wifi_group.add(r)
+                self.wifi_pw_group.set_visible(False)
             secure = {}
             for n in nets[:12]:
                 r = Adw.ActionRow(title=GLib.markup_escape_text(n["ssid"]),
@@ -557,7 +558,7 @@ def main(argv):
                 first = first or card
                 card.connect("toggled", lambda b, k=key: b.get_active() and self._brain(k))
                 hint(card, f"{title}: {sub}")
-                cols = 4 if wide else 2
+                cols = len(self.brains) if wide else 2
                 grid.attach(card, i % cols, i // cols, 1, 1)
             page.append(grid)
             self.svc = self.group(page, "The service")
