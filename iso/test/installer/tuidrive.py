@@ -66,10 +66,11 @@ async def drive(app, pilot, plan):
     await shot("keyboard")
     await pilot.press("ctrl+n")
     assert app.step == "disk", app.step
-    for _ in range(50):
+    for _ in range(300):                       # os-prober takes seconds; a busy VM, longer
         if app.probe is not None:
             break
         await pilot.pause(0.1)
+    assert app.probe is not None, "the disks never arrived"
     await app.show("disk")
     await pilot.pause()
     disks = app.probe["disks"]

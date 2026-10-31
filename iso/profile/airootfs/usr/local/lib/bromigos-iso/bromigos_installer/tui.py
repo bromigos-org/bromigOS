@@ -37,6 +37,7 @@ try:
     from textual.app import App, ComposeResult
     from textual.binding import Binding
     from textual.containers import Horizontal, Vertical, VerticalScroll
+    from textual.css.query import NoMatches
     from textual.reactive import reactive
     from textual.suggester import SuggestFromList
     from textual.theme import Theme
@@ -506,7 +507,13 @@ class Installer(App):
 
     async def show(self, sid):
         async with self.redraw:
-            await self._show(sid)
+            if not self.is_running:         # quitting: nothing left to draw into
+                return
+            try:
+                await self._show(sid)
+            except NoMatches:
+                if self.is_running:
+                    raise
 
     async def _show(self, sid):
         self.step = sid
@@ -615,9 +622,15 @@ class Installer(App):
         """A step opens at its top, heading first; it scrolls only when the first choice
         wouldn't be in view from there (a small screen)."""
         self._arriving = None
+        self.query_one("#page", VerticalScroll).scroll_home(animate=False, immediate=True)
+        self.call_after_refresh(self._peek, w)
+
+    def _peek(self, w):
+        """After the layout: the first choice's first lines in view, or scroll to it."""
+        if not w.is_mounted:
+            return
         page = self.query_one("#page", VerticalScroll)
-        page.scroll_home(animate=False, immediate=True)
-        if w.is_mounted and w.region.y + min(w.region.height, 3) > page.region.bottom:
+        if w.region.y + min(w.region.height, 3) > page.region.bottom or not page.region.overlaps(w.region):
             w.scroll_visible(animate=False)
 
     def on_descendant_focus(self, event):
