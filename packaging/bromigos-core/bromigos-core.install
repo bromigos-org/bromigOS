@@ -1,0 +1,15 @@
+# Wake-on-LAN on for this machine's wired network cards now, not only from the next boot
+# (docs/wake-on-lan.md): the udev rule and NetworkManager's default ship with this
+# package; this turns it on for the cards that are already there and has NetworkManager
+# read its default again. Nothing here stops a transaction: a machine without a wired card,
+# without NetworkManager, or in a chroot (the installer's) just skips it.
+
+post_install() {
+  if [ -x usr/lib/bromigos/bin/bromigos-wol ] && [ -x usr/bin/python3 ]; then
+    usr/lib/bromigos/bin/bromigos-wol apply --quiet || true
+  fi
+}
+
+post_upgrade() {
+  post_install
+}

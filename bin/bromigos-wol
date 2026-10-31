@@ -1,0 +1,17 @@
+#!/usr/bin/python3 -I
+# bromigos:summary=Keep Wake-on-LAN on for wired network cards
+# bromigos:args=status [--json] | apply [--quiet] [CARD...]
+# bromigos:examples=bromigos wol status; sudo bromigos wol apply
+"""Read or turn on Wake-on-LAN for this machine's wired network cards (docs/wake-on-lan.md)."""
+import os
+import sys
+
+here = os.path.dirname(os.path.realpath(__file__))
+for candidate in reversed((os.path.join(os.path.dirname(here), 'lib'), '/usr/lib/bromigos/lib')):
+    if os.path.isdir(candidate):
+        sys.path.insert(0, candidate)
+
+from bromigos_wol import main
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -45,6 +45,7 @@
 - [Hardware](hardware.md)
     - [Bluetooth](bluetooth.md)
     - [Keyboards and peripherals](peripherals.md)
+    - [Wake-on-LAN](wake-on-lan.md)
 - [Accessibility](accessibility.md)
 - [Troubleshooting](troubleshooting.md)
 

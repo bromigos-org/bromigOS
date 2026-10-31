@@ -19,7 +19,8 @@ pkgdesc='bromigos: one command for the bromigOS desktop'
 arch=('x86_64')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
-depends=('gcc-libs' 'glibc' 'openssl' 'git')   # git: bromigos ext (extensions are checkouts)
+depends=('gcc-libs' 'glibc' 'openssl' 'git'   # git: bromigos ext (extensions are checkouts)
+         'ethtool')                         # Wake-on-LAN on for wired cards (the udev rule; docs/wake-on-lan.md)
 makedepends=('cargo' 'git' 'python')
 # openssh: the SSH sign-in's tests sign for real; python-qrcode: bromigos login's QR code
 checkdepends=('desktop-file-utils' 'rsync' 'npm' 'openssh' 'python-qrcode')
@@ -52,6 +53,8 @@ optdepends=('python: bromigos private, secrets, emblem, console, power menu, spl
             'python-async-upnp-client: cast to DLNA TVs (bromigos media cast; from the AUR)')
 # The release profile already strips (core/Cargo.toml); no -debug package.
 options=('!debug')
+# Wake-on-LAN on now for the wired cards already there (bromigos wol apply)
+install=$pkgname.install
 
 # Built in-tree from the checkout this PKGBUILD lives in; cargo's output
 # goes to $srcdir, so the source tree is only read.
@@ -111,6 +114,9 @@ check() {
   # bromigos keyring: the keyring check and the login's PAM lines, on copies in a temporary
   # root, with a stand-in session bus
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/keyring"
+  # Wake-on-LAN: the shipped NetworkManager default and udev rule, and bromigos wol
+  # against a fake /sys with ethtool and nmcli stood in
+  PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/wake-on-lan"
 }
 
 package() {
@@ -198,6 +204,16 @@ package() {
   install -Dm0644 "$_root/core/crates/bromigos-core/idle/idle.toml" "$pkgdir/usr/share/bromigos/default/idle.toml"
   install -Dm0644 "$_root/core/crates/bromigos-core/idle/hypridle.conf.tpl" "$pkgdir/usr/share/bromigos/idle/hypridle.conf.tpl"
   install -Dm0644 "$startdir/bromigos-update.hook" "$pkgdir/usr/share/libalpm/hooks/bromigos-update.hook"
+  # Wake-on-LAN kept on for wired network cards, on the desktop, bromigOS Server and the
+  # Field Kit's installed Server alike (docs/wake-on-lan.md): NetworkManager's default for
+  # wired connections, and a udev rule for each wired card as it appears (systemd-networkd
+  # and bare consoles too). BRODEC's machine agent takes the rule's presence as "bromigOS
+  # keeps Wake-on-LAN on here". `bromigos wol` reads it and turns it on now.
+  install -Dm0644 "$startdir/50-bromigos-wake-on-lan.conf" \
+    "$pkgdir/usr/lib/NetworkManager/conf.d/50-bromigos-wake-on-lan.conf"
+  install -Dm0644 "$startdir/81-bromigos-wake-on-lan.rules" \
+    "$pkgdir/usr/lib/udev/rules.d/81-bromigos-wake-on-lan.rules"
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-wol
   # Hyprland's auto-reload held off while a transaction replaces the desktop's default
   # config, then one verified reload (bromigos session hold|release; docs/update.md)
   install -Dm0644 -t "$pkgdir/usr/share/libalpm/hooks/" \
