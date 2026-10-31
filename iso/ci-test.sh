@@ -60,11 +60,12 @@ if [[ ${BROMIGOS_ISOTEST_IN_CONTAINER:-0} != 1 ]]; then
     [[ -z $profile ]] || mounts+=(-v "$profile:$profile:ro")
     [[ -z $sbcert ]] || mounts+=(-v "$sbcert:$sbcert:ro")
     [[ -z $sbpkg ]] || mounts+=(-v "$sbpkg:$sbpkg:ro")
+    dev=(); if (( devbuild )); then dev=(--dev-build); fi
     # the host's network: the SSH forwards are on its 127.0.0.1
     exec docker run --rm --device /dev/kvm --network host "${mounts[@]}" \
         -e BROMIGOS_ISOTEST_IN_CONTAINER=1 -e BROMIGOS_ISOTEST_MEM -e BROMIGOS_VM_OWNER=none \
         archlinux:latest "$here/ci-test.sh" "$iso" --out "$out" --suite "$suite" \
-        ${profile:+--profile "$profile"} ${sbcert:+--secureboot-cert "$sbcert"} ${sbpkg:+--secureboot-package "$sbpkg"} $( ((devbuild)) && echo --dev-build)
+        ${profile:+--profile "$profile"} ${sbcert:+--secureboot-cert "$sbcert"} ${sbpkg:+--secureboot-package "$sbpkg"} "${dev[@]}"
 fi
 
 # ── in the container (or, with BROMIGOS_ISOTEST_IN_CONTAINER=1 as a user, on a workstation
