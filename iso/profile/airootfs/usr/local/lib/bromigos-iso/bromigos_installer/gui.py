@@ -565,8 +565,8 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
         # (the burn-in): then he stays still
         self.guide = glass.guide(self.vector_line(sid), "idle" if sid == "install" else "speaking",
                                  still=self.reduced or sid in ("install", "done") or bool(self.opts.get("render")),
-                                 size=(90, 126) if self.screen_h() < 700 else (120, 178))
-        glass.rail(self.rail, steps, here, common.STEP, self.c, self.guide)
+                                 size=((70, 98) if len(steps) > 15 else (90, 126)) if self.screen_h() < 700 else (120, 178))
+        glass.rail(self.rail, steps, here, common.STEP, self.c, self.guide, height=self.screen_h())
 
     def vector_line(self, sid):
         lid, values = self.line_id(sid)

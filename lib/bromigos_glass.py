@@ -97,6 +97,8 @@ def css(c, hc=False):
 .bi-rail {{ padding: 16px 0 0 0; }}
 .bi-rail-title {{ color: {c['dim']}; font-size: 0.78em; font-weight: 700; letter-spacing: 0.2em; margin: 6px 22px 14px 22px; }}
 .dg-railrow {{ padding: 6px 18px 6px 14px; }}
+.dg-railrow.snug {{ padding-top: 3px; padding-bottom: 3px; }}
+.dg-railrow.tight {{ padding-top: 1px; padding-bottom: 1px; }}
 .dg-railrow image {{ color: {c['faint']}; }}
 .dg-railrow label {{ color: {c['faint'] if not hc else c['text']}; letter-spacing: 0.08em; }}
 .dg-railrow.done image, .dg-railrow.done label {{ color: {c['soft']}; }}
@@ -249,9 +251,10 @@ class RailLine(Gtk.DrawingArea):
         cr.fill()
 
 
-def rail(box, steps, here, STEP, c, guide=None, title="INSTALL BROMIGOS"):
+def rail(box, steps, here, STEP, c, guide=None, title="INSTALL BROMIGOS", height=None):
     """Fill the rail: an icon and a word per step (the current one glowing, finished ones
-    ticked), a progress line beside them, VECTOR at the foot."""
+    ticked), a progress line beside them, VECTOR at the foot. Given the window's height, a
+    long list of steps (bromigOS Server's) packs its rows closer so VECTOR still fits."""
     while (ch := box.get_first_child()):
         box.remove(ch)
     box.set_hexpand(False)          # its rows expand inside it; the rail itself keeps its width
@@ -264,10 +267,18 @@ def rail(box, steps, here, STEP, c, guide=None, title="INSTALL BROMIGOS"):
     line.set_margin_start(14)
     body.append(line)
     col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
+    dense = None
+    if height and len(steps) > 15:              # rows of about 30, 24 or 20 px; the title, VECTOR and his line
+        room = height - 60 - ((getattr(guide, "vector", guide).get_size_request()[1] if guide else 0) + 110)
+        dense = None if len(steps) * 30 <= room else ("snug" if len(steps) * 24 <= room else "tight")
+    if len(steps) > 15 and not dense:
+        dense = "snug"
     for i, s in enumerate(steps):
         row = Gtk.Box(spacing=10)
         row.add_css_class("dg-railrow")
         row.add_css_class("now" if i == here else ("done" if i < here else "todo"))
+        if dense:
+            row.add_css_class(dense)
         row.append(icon(STEP_ICONS.get(s, "media-record-symbolic"), 16))
         lab = Gtk.Label(label=STEP[s][1], xalign=0, hexpand=True)
         row.append(lab)
