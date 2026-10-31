@@ -63,13 +63,13 @@ STEPS = [
     ("done", "Done", "You're set",
      "This tour opens again with: bromigos welcome-console."),
 ]
-TOUR = [
-    ("bromigos-lab", "The lab console: your machines, their GPUs and services, and the jobs they run"),
-    ("bromigos update", "Updates, with a snapshot before each one"),
-    ("bromigos update --rollback", "Undo the last update, or start an older snapshot from the boot menu"),
-    ("bromigos-server status", "This server in plain words: SSH, the firewall, updates, the lab"),
-    ("fieldkit", "Field Kit's repair and lab tools, when they're installed"),
-    ("bromigos settings --help", "Everything bromigOS can set, from the command line"),
+TOUR = [   # (command, what it's for, its icon)
+    ("bromigos-lab", "The lab console: your machines, their GPUs and services, and the jobs they run", "lab"),
+    ("bromigos update", "Updates, with a snapshot before each one", "update"),
+    ("bromigos update --rollback", "Undo the last update, or start an older snapshot from the boot menu", "rollback"),
+    ("bromigos-server status", "This server in plain words: SSH, the firewall, updates, the lab", "server"),
+    ("fieldkit", "Field Kit's repair and lab tools, when they're installed", "fieldkit"),
+    ("bromigos settings --help", "Everything bromigOS can set, from the command line", "settings"),
 ]
 
 
@@ -130,6 +130,35 @@ def main(argv):
         return 1
     BT.prepare_terminal()
     render = argv[argv.index("--render") + 1] if "--render" in argv else None
+    # pictures and tests: sample data, never this machine's own (its user, name, network, lab)
+    sample = bool(render) or bool(os.environ.get("BROMIGOS_WELCOME_SAMPLE"))
+    look = BT.icon_look() if hasattr(BT, "icon_look") else "ascii"
+    ic = (lambda n: BT.icon(n)) if hasattr(BT, "icon") else (lambda n: "*")      # noqa: E731
+
+    def col(role):
+        """A palette role as a Rich colour: hex, or the 16-colour console's name."""
+        if BT.color_mode() == "16":
+            return {"primary": BT.rich16("primary"), "soft": BT.rich16("primary"), "dim": BT.rich16("secondary"),
+                    "faint": "bright_black", "muted": "white", "text": "white", "danger": "bright_red",
+                    "warn": "bright_yellow", "cyan": BT.rich16("accent")}.get(role, "white")
+        return BT.palette().get(role) or BT.palette()["text"]
+
+    def icon_rows(items, style=None):
+        """Lines that each start with an icon, wrapped under their own words."""
+        t = Table.grid(padding=(0, 2), expand=True)
+        t.add_column(no_wrap=True, width=1)
+        t.add_column(ratio=1)
+        for name, words in items:
+            t.add_row(Text.assemble((ic(name), "bold " + col("primary"))), words if isinstance(words, Text) else
+                      Text.assemble((words, style or "")))
+        return t
+
+    def who():
+        """(user, this server's name, its address on the network): sample ones for pictures."""
+        if sample:
+            return "alex", "alex-server", "192.0.2.24"
+        addr = next((a for r in network() if r[2] == "connected" for a in r[4].split() if "." in a), "")
+        return os.environ.get("USER", "you"), os.uname().nodename, addr
 
     class Welcome(App):
         CSS = BT.CSS + """
@@ -143,6 +172,17 @@ def main(argv):
         .row { height: auto; margin-top: 1; width: 1fr; }
         Input { width: 1fr; }
         .glass { margin-top: 1; }
+        .panel-head { height: 1; }
+        #addr { height: auto; margin: 1 0; }
+        .switch-row { height: auto; margin-top: 1; border: round $secondary 60%; background: $surface 85%; padding: 0 1; }
+        .switch-row Label { padding: 1 0 0 0; }
+        #svc { height: auto; }
+        #lab-sweep { height: 1; margin: 1 0 0 0; }
+        #lab-sweep, #lab-reading { display: none; }
+        #lab-sweep.-on, #lab-reading.-on { display: block; }
+        .buttons { height: auto; margin-top: 1; }
+        .buttons Button { margin-right: 2; }
+        Screen.-narrow .buttons { layout: vertical; }
         #nav { height: 3; padding: 0 2; align-horizontal: right; }
         #nav Button { margin-left: 2; min-width: 12; }
         #msg { height: auto; padding: 0 2; color: $warning; }
@@ -224,12 +264,12 @@ def main(argv):
             icons = {"network": "network", "ssh": "ssh", "vector": "vector", "lab": "lab", "phone": "phone", "tour": "tour",
                      "done": "done"}
             for j, s in enumerate(STEPS):
-                ic = BT.icon(icons.get(s[0], "done")) if hasattr(BT, "icon") else "•"
+                g = ic(icons.get(s[0], "done"))
                 if j == i:
-                    rail.append("▌" + ic + " " + s[1] + "\n", style="bold " + c["primary"])
+                    rail.append((">" if look == "ascii" else "▌") + g + " " + s[1] + "\n", style="bold " + col("primary"))
                 else:
-                    rail.append(" " + ic + " " + s[1], style="" if j < i else "dim")
-                    rail.append((" " + (BT.icon("check") if hasattr(BT, "icon") else "✓")) if j < i else "", style=c["primary"])
+                    rail.append(" " + g + " " + s[1], style="" if j < i else "dim")
+                    rail.append((" " + ic("check")) if j < i else "", style=col("primary"))
                     rail.append("\n")
             if hasattr(BT, "orb") and self.size.height >= 30 and getattr(self, "bp", "normal") not in ("compact", "narrow"):
                 rail.append("\n")
@@ -237,14 +277,12 @@ def main(argv):
                 line = GUIDE.get(sid, "")
                 if line:
                     rail.append("\n")
-                    rail.append("VECTOR  ", style="bold " + c["primary"])
+                    rail.append("VECTOR  ", style="bold " + col("primary"))
                     rail.append(line)
             self.query_one("#rail", Static).update(rail)
             page = self.query_one("#page", VerticalScroll)
             await page.remove_children()
-            if i == 0 and self.size.height >= 30 and getattr(self, "bp", "normal") not in ("narrow", "too-small"):
-                text, ansi = BT.emblem()
-                page.mount(Static(Text.from_ansi(text) if ansi else text))
+            # (the network step's address is its hero now: no emblem above it, one FLARE a screen)
             page.mount(BT.Emitter(head), Static(intro, classes="intro"))
             self.screen.set_class(sid == "phone" and self.size.height < 34, "-qr-tight")
             getattr(self, f"build_{sid}")(page)
@@ -254,32 +292,52 @@ def main(argv):
             self.query_one("#next", Button).label = "Finish" if sid == "done" else "Continue"
 
         def build_network(self, page):
-            t = Table.grid(padding=(0, 2))
-            rows = [] if render else network()
-            if render:
-                rows = [("enp3s0", "ethernet", "connected", "Wired connection 1", "192.0.2.24"), ("wlan0", "wifi", "disconnected", "--", "")]
-            for dev, kind, state, conn, addrs in rows:
-                t.add_row(Text(dev, style="bold"), kind, state, addrs or "no address")
-            page.mount(Static(t, classes="glass"))
+            rows = [("enp3s0", "ethernet", "connected", "Wired connection 1", "192.0.2.24"),
+                    ("wlan0", "wifi", "disconnected", "--", "")] if sample else network()
+            user, name, addr = who()
             on_ = any(r[2] == "connected" for r in rows)
+            if addr:
+                # the address big enough to read from across the room, and how to reach it from there
+                page.mount(Static(Text.assemble((ic("network") + "  ", col("primary")), ("THIS SERVER'S ADDRESS", "bold " + col("soft"))),
+                                  classes="panel-head"))
+                rail = {"narrow": 0, "too-small": 0, "compact": 18}.get(getattr(self, "bp", "normal"), 22)
+                room = self.size.width - rail - 6
+                big = BT.big_code(addr) if hasattr(BT, "big_code") else None
+                if big is None or max(len(x) for x in str(big).split("\n")) > room:
+                    big = Text.assemble((addr, "bold " + col("primary")))
+                page.mount(Static(big, id="addr"))
+                page.mount(Static(icon_rows([("shell", Text.assemble(("From another computer on your network:  ", col("muted")),
+                                                                     (f"ssh {user}@{addr}", "bold " + col("text"))))])))
             page.mount(BT.Reading("Connected" if on_ else "Not connected: plug in a cable, or connect to Wi-Fi", "ok" if on_ else "warn"))
+            t = Table.grid(padding=(0, 2))
+            for dev, kind, state, conn, addrs in rows:
+                g = ic("wired" if kind == "ethernet" else "wifi" if kind == "wifi" else "network")
+                up = state == "connected"
+                t.add_row(Text.assemble((g, "bold " + col("primary" if up else "faint"))), Text.assemble((dev, "bold")), kind,
+                          Text.assemble((state, col("primary") if up else col("muted"))), addrs or "no address")
+            page.mount(Static(t, classes="glass"))
             b = Button("Connect to Wi-Fi…", id="wifi")
             b.tooltip = "Open the Wi-Fi settings (nmtui) to join a network"
-            page.mount(b)
+            page.mount(Horizontal(b, classes="buttons"))
 
         def build_ssh(self, page):
-            on_, keys_only, nkeys = (True, True, 1) if render else ssh_state()
-            row = Horizontal(classes="glass row")
+            on_, keys_only, nkeys = (True, True, 1) if sample else ssh_state()
+            user, name, addr = who()
+            row = Horizontal(classes="switch-row")
             page.mount(row)
             sw = Switch(on_, id="ssh-on")
             sw.tooltip = "On: other computers can sign in with SSH. Off: only this console"
-            row.mount(sw, Label("  SSH is " + ("on" if on_ else "off")))
-            row2 = Horizontal(classes="glass row")
+            row.mount(sw, Label(Text.assemble(("  " + ic("shell") + "  ", col("primary")), "SSH: sign in from another computer")))
+            row2 = Horizontal(classes="switch-row")
             page.mount(row2)
             ko = Switch(keys_only, id="keys-only")
             ko.tooltip = "On: keys only (safest). Off: your password works over SSH too"
-            row2.mount(ko, Label("  Keys only"))
-            page.mount(Static(f"{nkeys} key{'s' if nkeys != 1 else ''} can sign in as you.", classes="muted"))
+            row2.mount(ko, Label(Text.assemble(("  " + ic("key") + "  ", col("primary")), "Keys only (recommended)")))
+            page.mount(BT.Reading(f"{nkeys} key{'s' if nkeys != 1 else ''} can sign in as {user}." if nkeys else
+                                  "No key can sign in yet: paste one below, or turn Keys only off.", "ok" if nkeys else "warn"))
+            if addr:
+                page.mount(Static(icon_rows([("shell", Text.assemble(("Then, from your computer:  ", col("muted")),
+                                                                     (f"ssh {user}@{addr}", "bold " + col("text"))))])))
             page.mount(Label("Add a key (one line from your other computer's .pub file)", classes="row"))
             inp = Input(id="key", placeholder="ssh-ed25519 AAAA… you@laptop")
             inp.tooltip = "Your other computer's public key, for example ~/.ssh/id_ed25519.pub there"
@@ -292,32 +350,40 @@ def main(argv):
             return b
 
         def build_vector(self, page):
-            vram = 0.0 if render else F.gpu_vram_gib()
-            self.model = None if render else F.local_model(vram)
-            have = [] if render else F.lab_brains()
-            self.brains = [("lab", "Your lab", have[0]["name"] if have else "found on the next step")]
+            vram = 0.0 if sample else F.gpu_vram_gib()
+            self.model = None if sample else F.local_model(vram)
+            have = [] if sample else F.lab_brains()
+            self.brains = [("lab", "Your lab", have[0]["name"] if have else "found on the next step", "lab")]
             if self.model:
-                self.brains.append(("local", "This server", f"{self.model['name']}, {self.model['disk_gib']:.0f} GB to download"))
-            self.brains += [("service", "A service", "an OpenAI-compatible server you name"), ("none", "Not now", "")]
-            rs = RadioSet(id="brain")
+                self.brains.append(("local", "This server", f"{self.model['name']}, {self.model['disk_gib']:.0f} GB to download", "chip"))
+            self.brains += [("service", "A service", "an OpenAI-compatible server you name", "cloud"),
+                            ("none", "Not now", "choose later: VECTOR waits until you do", "power")]
+            pick = getattr(self, "brain_pick", "lab")
+            rs = RadioSet(id="brain", classes="glass")
             rs.tooltip = "Where VECTOR thinks"
             page.mount(rs)
-            for k, t, sub in self.brains:
-                rb = RadioButton(f"{t}" + (f": {sub}" if sub else ""), value=k == getattr(self, "brain_pick", "lab"), id=f"brain-{k}")
+            for k, t, sub, icon_name in self.brains:
+                label = Text.assemble((ic(icon_name) + "  ", col("primary")), (t, "bold"), (f"  {sub}" if sub else "", col("muted")))
+                rb = RadioButton(label, value=k == pick, id=f"brain-{k}")
                 rb.tooltip = f"{t}. {sub}"
                 rs.mount(rb)
+            svc = Vertical(id="svc")
+            page.mount(svc)
             for iid, ph, tip in (("svc-url", "https://…/v1", "The service's OpenAI-compatible address"),
                                  ("svc-model", "model (blank: VECTOR's default)", "Which model he uses"),
                                  ("svc-key", "a file holding its API key (blank: none)", "The key stays in that file")):
                 w = Input(placeholder=ph, id=iid)
                 w.tooltip = tip
-                page.mount(w)
-            self.vec_line = BT.Reading("", "idle")
+                svc.mount(w)
+            svc.display = pick == "service"            # only asked for when it's the choice
+            self.vec_line = BT.Reading("Nothing leaves this server unless you choose a service.", "idle")
             page.mount(self.vec_line)
 
         @on(RadioSet.Changed, "#brain")
         def brain_changed(self, ev):
             self.brain_pick = ev.pressed.id.removeprefix("brain-")
+            for svc in self.query("#svc"):
+                svc.display = self.brain_pick == "service"
 
         @work(thread=True)
         def apply_vector(self):
@@ -346,47 +412,86 @@ def main(argv):
             self.call_from_thread(self.show, self.i + 1)
 
         def build_lab(self, page):
-            page.mount(Static("Find my lab reads what this server already knows of your network (it never scans), "
-                              "checks those devices, and changes nothing until you press Connect.", classes="glass"))
-            self.button(page, "Look for it", "findlab", "Find the lab's machines and what they offer")
+            page.mount(Static(icon_rows([("search", "Find my lab reads what this server already knows of your network (it never "
+                                                    "scans), checks those devices, and changes nothing until you press Connect.")]),
+                              classes="glass"))
+            self.lab_sweep = BT.Sweep(looking=True, id="lab-sweep")
+            self.lab_reading = BT.Reading("", "busy", id="lab-reading")
+            page.mount(self.lab_sweep, self.lab_reading)
             self.lab_out = Static("", classes="muted")
             page.mount(self.lab_out)
-            self.button(page, "Connect it", "connectlab", "Add what was found to this server's homelab settings").display = False
+            row = Horizontal(classes="buttons")
+            page.mount(row)
+            self.button(row, "Look for it", "findlab", "Find the lab's machines and what they offer")
+            self.button(row, "Connect it", "connectlab", "Add what was found to this server's homelab settings").display = False
             page.mount(Label("Or a lab connection file (homelab.toml, or one from a Field Kit stick):", classes="row"))
             f = Input(placeholder="/path/to/homelab.toml", id="labfile")
             f.tooltip = "The path of a homelab.toml to use"
             page.mount(f)
-            self.button(page, "Use the file", "labfile-use", "Connect the lab in that file")
-            if render or F.gpu_vram_gib() >= 8:
-                self.button(page, "Make this server my lab: show the plan", "labplan",
+            row2 = Horizontal(classes="buttons")
+            page.mount(row2)
+            self.button(row2, "Use the file", "labfile-use", "Connect the lab in that file")
+            if sample or F.gpu_vram_gib() >= 8:
+                self.button(row2, "Make this server my lab: show the plan", "labplan",
                             "bromigos-lab's reviewed plan for this server; nothing changes")
+            if sample:                       # pictures: the Sweep while it looks, then what it found
+                self.lab_action("find")
+
+        def lab_looking(self, on, words="", state="busy"):
+            """The Sweep runs while it looks (still with reduced motion), the Reading says what's happening."""
+            self.lab_sweep.set_class(on, "-on")
+            self.lab_reading.set_class(bool(words), "-on")
+            if words:
+                self.lab_reading.set(words, state)
 
         @work(thread=True)
         def lab_action(self, what):
             out = self.lab_out
             put = lambda t: self.call_from_thread(out.update, t)  # noqa: E731
+            look_ = lambda on, w="", st="busy": self.call_from_thread(self.lab_looking, on, w, st)  # noqa: E731
             if what == "find":
-                put("Looking…")
-                r = F.find_lab()
+                look_(True, "Looking at what this server already knows of your network…")
+                put("")
+                if sample:
+                    import time
+                    time.sleep(2.5)
+                    if STEPS[self.i][0] != "lab":          # moved on meanwhile
+                        return
+                    r = {"error": None, "brains": [], "hosts": [{"name": "gpu-box", "offers": ["models (vLLM)", "chat (Open WebUI)"]},
+                                                                {"name": "nas", "offers": ["storage (SMB)", "backups"]}]}
+                else:
+                    r = F.find_lab()
                 if r["error"] or not r["hosts"]:
-                    return put(r["error"] or "No lab found. Use its connection file, or connect it later (bromigos setup homelab).")
-                put("\n".join(f"{h['name']}: {', '.join(h['offers'])}" for h in r["hosts"]))
+                    look_(False, r["error"] or "No lab found. Use its connection file, or connect it later (bromigos setup homelab).",
+                          "warn")
+                    return
+                n = len(r["hosts"])
+                look_(False, f"Found {n} machine{'s' if n != 1 else ''} in your lab. Nothing has changed yet.", "ok")
+                self.call_from_thread(out.update, icon_rows([("server", Text.assemble((h["name"], "bold " + col("text")), "   ",
+                                                                                     (", ".join(h["offers"]), col("muted"))))
+                                                             for h in r["hosts"]]))
                 self.lab_found = r
-                self.call_from_thread(lambda: setattr(self.query_one("#connectlab"), "display", True))
+                self.call_from_thread(lambda: [setattr(b, "display", True) for b in self.query("#connectlab")])
             elif what == "connect":
+                look_(True, "Connecting your lab…")
                 ok, why = F.connect_lab()
                 brains = (getattr(self, "lab_found", {}) or {}).get("brains") or F.lab_brains()
                 if ok and getattr(self, "brain_pick", "lab") == "lab" and brains:
                     F.set_brain("lab", url=brains[0]["url"])
                     ok2, words = F.hello()
-                    return put(("Connected. VECTOR: " + words) if ok2 else "Connected. " + words)
-                put("Connected." if ok else why)
+                    look_(False, ("Connected. VECTOR: " + words) if ok2 else "Connected. " + words, "ok" if ok2 else "warn")
+                    return
+                look_(False, "Connected." if ok else why, "ok" if ok else "fail")
             elif what == "file":
+                look_(True, "Reading the file…")
                 ok, why = F.use_lab_file(self.call_from_thread(lambda: self.query_one("#labfile", Input).value.strip()))
-                put("Your lab is connected." if ok else why)
+                look_(False, "Your lab is connected." if ok else why, "ok" if ok else "fail")
             elif what == "plan":
+                look_(True, "Making the plan…")
                 ok, text = F.provision_plan()
-                put(("The plan (nothing has changed):\n" + text[-1500:]) if ok else "The plan couldn't be made: " + F.plain_error(text))
+                look_(False, "The plan (nothing has changed):" if ok else "The plan couldn't be made: " + F.plain_error(text),
+                      "ok" if ok else "fail")
+                put(text[-1500:] if ok else "")
 
         def build_phone(self, page):
             # the QR on the left (half blocks, dark on light, its quiet zone; nothing touching
@@ -480,14 +585,32 @@ def main(argv):
                 self.query_one("#top", Static).update(f"PAIR YOUR PHONE  ·  CODE {shown}")
 
         def build_tour(self, page):
-            t = Table.grid(padding=(0, 2))
-            for cmd, what in TOUR:
-                t.add_row(Text(cmd, style="bold"), what)
+            t = Table.grid(padding=(0, 2), expand=True)
+            t.add_column(no_wrap=True, width=1)
+            t.add_column(no_wrap=True)
+            t.add_column(ratio=1)
+            for cmd, what, icon_name in TOUR:
+                t.add_row(Text.assemble((ic(icon_name), "bold " + col("primary"))), Text.assemble((cmd, "bold " + col("text"))),
+                          Text.assemble((what, col("muted"))))
+            if getattr(self, "bp", "normal") in ("compact", "narrow", "too-small"):       # each command over its words
+                t = Table.grid(padding=(0, 2), expand=True)
+                t.add_column(no_wrap=True, width=1)
+                t.add_column(ratio=1)
+                for cmd, what, icon_name in TOUR:
+                    t.add_row(Text.assemble((ic(icon_name), "bold " + col("primary"))),
+                              Text.assemble((cmd, "bold " + col("text")), "\n", (what, col("muted"))))
             page.mount(Static(t, classes="glass"))
 
         def build_done(self, page):
-            page.mount(BT.Reading("This server is ready. Sign in from another computer with: ssh " +
-                                  os.environ.get("USER", "you") + "@" + os.uname().nodename, "ok"))
+            user, name, addr = who()
+            on_, keys_only, nkeys = (True, True, 1) if sample else ssh_state()
+            lab = sample or os.path.exists(F.homelab_toml())
+            facts = [("check" if on_ else "cross", "SSH is " + ("on" if on_ else "off") + (", keys only" if on_ and keys_only else "")),
+                     ("check" if nkeys else "cross", f"{nkeys} key{'s' if nkeys != 1 else ''} can sign in as {user}"),
+                     ("check" if lab else "info", "Your lab is connected" if lab else "No lab yet: bromigos setup homelab, any time"),
+                     ("info", "Updates take a snapshot first: bromigos update --rollback undoes one")]
+            page.mount(Static(icon_rows(facts), classes="glass"))
+            page.mount(BT.Reading("This server is ready. Sign in from another computer with: ssh " + user + "@" + (addr or name), "ok"))
 
         async def action_next(self):
             if render:

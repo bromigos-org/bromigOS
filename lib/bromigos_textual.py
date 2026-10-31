@@ -38,7 +38,8 @@ WORDMARK = """\
  ██   ██ ██   ██ ██    ██ ██  ██  ██ ██ ██    ██ ██    ██      ██
  ██████  ██   ██  ██████  ██      ██ ██  ██████   ██████  ███████"""
 EMBLEMS = ["/usr/share/bromigos/themes/{theme}/emblem/emblem.braille", "/usr/share/bromigos/themes/wick/emblem/emblem.braille",
-           "/usr/local/share/bromigos-iso/emblem.braille"]
+           "/usr/local/share/bromigos-iso/emblem.braille",
+           os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "themes", "wick", "emblem", "emblem.braille")]
 TRUECOLOR_TERMS = ("xterm-kitty", "kitty", "foot", "foot-extra", "alacritty", "wezterm", "xterm-ghostty", "ghostty",
                    "xterm-direct", "tmux-direct", "kmscon")
 
@@ -201,6 +202,13 @@ ICONS = {
     "alert": ("\uf071", "‼", "!"), "erase": ("\uf12d", "×", "e"), "split": ("\uf0db", "║", "|"),
     "recovery": ("\uf1da", "←", "<"), "free": ("\uf067", "+", "+"), "power": ("\uf011", "Ø", "0"),
     "boot": ("\uf0e7", "↑", "b"), "people": ("\uf0c0", "☺", "u"), "copy": ("\uf019", "↓", "v"),
+    # the same glyphs as Field Kit's icons.rs for the same things
+    "key": ("\uf084", "§", "k"), "lock": ("\uf023", "§", "L"), "unlock": ("\uf09c", "○", "U"), "clock": ("\uf017", "°", ":"),
+    "info": ("\uf05a", "•", "i"), "edit": ("\uf040", "±", "e"), "shell": ("\uf120", "»", ">"), "wired": ("\uf1e6", "↔", "="),
+    "wifi": ("\uf1eb", "≈", "~"), "nonet": ("\uf05e", "×", "x"), "remote": ("\uf1cd", "∞", "r"), "update": ("\uf021", "↕", "u"),
+    "settings": ("\uf013", "*", "s"), "search": ("\uf002", "?", "?"), "shield": ("\uf132", "Θ", "s"),
+    "language": ("\uf1ab", "α", "a"), "idcard": ("\uf2c2", "■", "#"), "computer": ("\uf108", "◘", "@"),
+    "cloud": ("\uf0c2", "≈", "~"), "book": ("\uf02d", "¶", "?"), "rollback": ("\uf1da", "←", "<"), "fieldkit": ("\uf0b1", "►", "*"),
 }
 
 
@@ -328,7 +336,7 @@ def orb(t=0.0, w=14, h=7):
     return d.text(styles())
 
 
-def ring(pct, w=18, h=9, t=0.0):
+def ring(pct, w=18, h=9, t=0.0, colors=None):
     """The install's progress as the emblem's ring in braille: a faint track all round, the
     part done thick and lit, ticks every 30°, the flame at its heart."""
     d = Dots(w, h)
@@ -347,11 +355,14 @@ def ring(pct, w=18, h=9, t=0.0):
     k = rad / 16
     for (x0, y0, x1, y1) in ((0, -7, 4, 1), (4, 1, 0, 7), (0, 7, -4, 1), (-4, 1, 0, -7), (0, -2, 0, 5), (-2, 2, 2, 2)):
         d.line(cx + x0 * k, cy + y0 * k, cx + x1 * k, cy + y1 * k, 1)
-    return d.text(styles())
+    return d.text(colors or styles())
 
 
 def holo(kind, w=20, h=8):
-    """A hologram on its Emitter, drawn in braille: a desktop's monitor, or a server rack."""
+    """A hologram on its Emitter, drawn in braille: a desktop's monitor, or a server rack (in box
+    lines where braille can't show: holo_plain)."""
+    if icon_look() != "nerd":
+        return holo_plain(kind)
     d = Dots(w, h)
     W, H = w * 2, h * 4
     cx = W / 2
@@ -378,6 +389,182 @@ def holo(kind, w=20, h=8):
     d.ellipse(cx, H * 0.86, W * 0.32, H * 0.08, 2, 3)     # the Emitter
     d.ellipse(cx, H * 0.86, W * 0.2, H * 0.045, 1, 5)
     return d.text(styles())
+
+
+def holo_plain(kind, look=None):
+    """The hologram for the Linux console and ASCII (no braille in its font): a monitor or a
+    server rack in box lines over its Emitter, the same size as holo()'s small one."""
+    look = look or icon_look()
+    a = look == "ascii"
+    if kind == "server":
+        top, mid, bot = ("+--------+", "+--------+", "+--------+") if a else ("╭────────╮", "├────────┤", "╰────────╯")
+        unit = "| o o == |" if a else "│ ■ ■ ══ │"
+        rows = [top, unit, mid, unit, mid, unit, bot]
+    else:
+        rows = (["+------------+", "| ~~~~~~~~~~ |", "| ~~~~~~~~~~ |", "+-----++-----+", "    --++--"] if a else
+                ["╭────────────╮", "│ ≈≈≈≈≈≈≈≈≈≈ │", "│ ≈≈≈≈≈≈≈≈≈≈ │", "╰─────┬┬─────╯", "    ──┴┴──"])
+    base = ("=" if a else "═") * 10
+    rows.append(" " * ((max(len(r) for r in rows) - len(base)) // 2) + base)
+    lit, cold = ("bold " + rich16("primary"), rich16("secondary")) if color_mode() == "16" else \
+        ("bold " + palette()["primary"], palette()["dim"])
+    out = Text()
+    w = max(len(r) for r in rows)
+    for i, r in enumerate(rows):
+        pad = " " * ((w - len(r)) // 2) if i < len(rows) - 1 else ""
+        out.append(pad + r, style=lit if i == len(rows) - 1 or r[:1] in "╭╰├+" else cold)
+        if i < len(rows) - 1:
+            out.append("\n")
+    return out
+
+
+def lock(on=True, lit=True, w=10, h=6):
+    """The disk's lock in braille: the shackle shut and the body glowing while encryption is on
+    (lit toggles: the Pulse), the shackle lifted open and dim when it's off. The Linux console
+    and ASCII get lock_plain()."""
+    if icon_look() != "nerd":
+        return lock_plain(on, lit)
+    d = Dots(w, h)
+    W, H = w * 2, h * 4
+    cx = W / 2 - 0.5
+    body_top = H * 0.46
+    lift = 0 if on else H * 0.16
+    r = W * 0.24
+    heat = 2 if (on and lit) else 1 if on else 0
+    arc_y = H * 0.06 + r * 0.9 + 1 - lift
+    for i in range(180, 361, 4):                       # the shackle's arc
+        a = math.radians(i)
+        for dd in (0, 1):
+            d.put(cx + (r - dd) * math.cos(a), arc_y + (r - dd) * 0.9 * math.sin(a), heat)
+    for side in (-1, 1):                               # its legs (the right one clear of the body when open)
+        x = cx + side * (r - 0.5)
+        end = body_top if (on or side < 0) else body_top - H * 0.12
+        d.line(x, arc_y, x, end, heat)
+    x0, x1, y1 = cx - W * 0.4, cx + W * 0.4, H - 1
+    d.rect(x0, body_top, x1, y1, heat)
+    d.rect(x0 + 1, body_top + 1, x1 - 1, y1 - 1, 1 if on else 0)
+    ky = body_top + (y1 - body_top) * 0.42
+    d.ellipse(cx, ky, 1.6, 1.6, 2 if on else 0, 30)
+    d.line(cx, ky + 1.5, cx, ky + 5, 2 if on else 0)
+    c = palette()
+    st = styles() if on else (c["faint"], c["muted"], c["muted"])
+    if on and not lit:
+        st = (st[0], st[1], st[1])
+    return d.text(st)
+
+
+def lock_plain(on=True, lit=True, look=None):
+    """The lock in box lines for the Linux console (and in ASCII): shut while encryption is on,
+    open when it's off; the frame breathes (lit) while it's on."""
+    look = look or icon_look()
+    a = look == "ascii"
+    if on:
+        rows = ["         ", "  ╭───╮  ", "  │   │  ", "╭─┴───┴─╮", "│   •   │", "│   │   │", "╰───────╯"]
+    else:
+        rows = ["  ╭───╮  ", "  │   │  ", "  │      ", "╭─┴─────╮", "│   •   │", "│   │   │", "╰───────╯"]
+    if a:
+        tr = str.maketrans("╭╮╰╯─│┴•", "++++-|+o")
+        rows = [r.translate(tr) for r in rows]
+    sixteen = color_mode() == "16"
+    c = palette()
+    if on:
+        frame = ("bold " + (rich16("primary") if sixteen else c["primary"])) if lit else (rich16("secondary") if sixteen else c["dim"])
+    else:
+        frame = "bright_black" if sixteen else c["faint"]
+    out = Text()
+    for i, r in enumerate(rows):
+        out.append(r, style=frame)
+        if i < len(rows) - 1:
+            out.append("\n")
+    return out
+
+
+STRENGTH_COLOR = {1: "danger", 2: "warn", 3: "primary"}
+
+
+def meter(level, levels=3, width=24, look=None):
+    """A meter of `levels` segments in one row, built of background-coloured cells so it keeps
+    one thickness in every terminal (the disk map's rule): the first `level` lit in what the
+    level means (1 danger, 2 warn, 3 or more the primary), the rest a dark track (░ on the
+    Linux console, . in ASCII, where a dark background wouldn't show)."""
+    look = look or icon_look()
+    level = max(0, min(levels, level))
+    seg = max(2, (width - (levels - 1)) // levels)
+    sixteen = color_mode() == "16"
+    c = palette()
+    role = STRENGTH_COLOR.get(min(level, 3), "primary")
+    if sixteen:
+        lit = {"danger": "red", "warn": "yellow", "primary": rich16("secondary")}[role]
+    else:
+        lit = c[role]
+    out = Text(no_wrap=True)
+    for i in range(levels):
+        if i:
+            out.append(" ")
+        if i < level:
+            out.append(" " * seg, style="on " + lit)
+        elif look == "nerd" and not sixteen:
+            out.append(" " * seg, style="on " + _dim(c["muted"]))
+        else:
+            out.append(("." if look == "ascii" else "░") * seg, style=rich16("secondary") if sixteen else c["faint"])
+    return out
+
+
+# the letter keys of the layouts the installer offers, by (xkb layout, variant): the strip on
+# the keyboard step shows the right one and lights the key just typed
+KEYROWS = {
+    "qwerty": ("QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"), "qwertz": ("QWERTZUIOP", "ASDFGHJKL", "YXCVBNM"),
+    "azerty": ("AZERTYUIOP", "QSDFGHJKLM", "WXCVBN"), "dvorak": ("',.PYFGCRL", "AOEUIDHTNS", ";QJKXBMWVZ"),
+    "colemak": ("QWFPGJLUY;", "ARSTDHNEIO", "ZXCVBKM"),
+}
+
+
+def keyrows(layout, variant=""):
+    """The letter rows for an xkb layout and variant, or None where they aren't Latin letters."""
+    if variant in ("dvorak", "colemak"):
+        return KEYROWS[variant]
+    if layout in ("de", "ch", "at", "cz", "hu") and variant != "fr":
+        return KEYROWS["qwertz"]
+    if layout in ("fr", "be") or (layout == "ch" and variant == "fr"):
+        return KEYROWS["azerty"]
+    if layout in ("gr", "ru", "ua"):
+        return None
+    return KEYROWS["qwerty"]
+
+
+def keycaps(rows, lit=None):
+    """The letter keys as caps of background-coloured cells, each row set in like a keyboard's;
+    `lit` (a letter) glows: the key just typed."""
+    sixteen = color_mode() == "16"
+    c = palette()
+    cap, cap_lit = (("bold black on " + rich16("secondary")), "bold black on white") if sixteen else \
+        (f"{c['text']} on {_dim(c['dim'])}", f"bold {c['background']} on {c['primary']}")
+    out = Text(no_wrap=True)
+    for r, keys in enumerate(rows):
+        out.append(" " * (r * 2))
+        for i, k in enumerate(keys):
+            if i:
+                out.append(" ")
+            out.append(f" {k} ", style=cap_lit if lit and k == lit.upper() else cap)
+        if r < len(rows) - 1:
+            out.append("\n")
+    return out
+
+
+def emblem_text(spark=False, wide=True):
+    """The emblem as Rich Text for a hero spot: the braille art where braille shows, else the
+    wordmark (or, on a narrow screen, Field Kit's plain ring); `spark` lights all of it in the
+    soft glow (the Spark: about a second after a success, never under reduced motion)."""
+    text, ansi = emblem()
+    sixteen = color_mode() == "16"
+    c = palette()
+    t = Text()
+    if ansi:
+        t = Text.from_ansi(text)
+    else:
+        t.append(text if wide else "\n".join(RING), style="bold " + (rich16("primary") if sixteen else c["primary"]))
+    if spark:
+        t.stylize("bold " + ("bright_white" if sixteen else c["soft"]))
+    return t
 
 
 def _dim(colour):
@@ -427,7 +614,7 @@ def disk_map(segs, width, colors, split=None, erase=False, look=None):
                     else:
                         cells.append(_dim(colors["bromigos"]) if i >= hi_c else colors["bromigos"])
                 marks.append((x + cut // 2, icon("windows", look), colors["windows"]))
-                marks.append((x + cut, "▲", colors["text"]))
+                marks.append((x + cut, "^" if look == "ascii" else "▲", colors["text"]))
                 marks.append((x + (cut + n) // 2, icon("bromigos", look), colors["bromigos"]))
             else:
                 col = colors.get(role, colors["other"])
@@ -555,21 +742,24 @@ BIG = {   # a 3×5 block font for the pairing code, when the QR can't fit
     "1": [" █ ", "██ ", " █ ", " █ ", "███"], "2": ["███", "  █", "███", "█  ", "███"], "3": ["███", "  █", "███", "  █", "███"],
     "4": ["█ █", "█ █", "███", "  █", "  █"], "5": ["███", "█  ", "███", "  █", "███"], "6": ["███", "█  ", "███", "█ █", "███"],
     "7": ["███", "  █", "  █", "  █", "  █"], "8": ["███", "█ █", "███", "█ █", "███"], "9": ["███", "█ █", "███", "  █", "███"],
-    "-": ["   ", "   ", "███", "   ", "   "], " ": ["   "] * 5,
+    "-": ["   ", "   ", "███", "   ", "   "], " ": ["   "] * 5, ".": [" ", " ", " ", " ", "█"],
+    "%": ["█ █", "  █", " █ ", "█  ", "█ █"], ":": [" ", "█", " ", "█", " "],
 }
 
 
-def big_code(code, style=None):
-    """The pairing code in 3×5 block letters, for when the QR doesn't fit; None if it's too
-    wide for `width`."""
+def big_code(code, style=None, scale=1):
+    """A code (the pairing code, an address, a countdown) in 3×5 block letters, for when it
+    must be read from across the room; `scale` 2 doubles each block's width."""
     c = palette()
     style = style or ("bold " + (rich16("primary") if color_mode() == "16" else c["primary"]))
     rows = ["", "", "", "", ""]
     for ch in code.upper():
         g = BIG.get(ch, BIG[" "])
         for i in range(5):
-            rows[i] += g[i] + " "
-    return Text("\n".join(r.rstrip() for r in rows), style=style)
+            rows[i] += "".join(x * scale for x in g[i]) + " " * scale
+    out = Text()                     # the style on the spans: a Text's base style loses ANSI colours in Textual
+    out.append("\n".join(r.rstrip() for r in rows), style=style)
+    return out
 
 
 CSS = """
@@ -600,15 +790,17 @@ try:
             c = palette()
             w = max(len(self.words) + 4, self.size.width or 40)
             sixteen = color_mode() == "16"
-            t = Text(self.words.upper(), style="bold " + (rich16("primary") if sixteen else c["primary"]))
+            t = Text()          # styles on the spans: a base style loses ANSI colours in Textual
+            t.append(self.words.upper(), style="bold " + (rich16("primary") if sixteen else c["primary"]))
             t.append("\n")
             n = len(self.words)
+            heavy, light = ("=", "-") if icon_look() == "ascii" else ("━", "─")
             if sixteen:
-                t.append("━" * n, style="bold " + rich16("primary"))
-                t.append("─" * max(0, min(w - n, 24)), style=rich16("secondary"))
+                t.append(heavy * n, style="bold " + rich16("primary"))
+                t.append(light * max(0, min(w - n, 24)), style=rich16("secondary"))
             else:
-                t.append("━" * n, style=c["primary"])
-                for i, ch in enumerate("━━──────────────────────"[: max(0, w - n)]):
+                t.append(heavy * n, style=c["primary"])
+                for i, ch in enumerate((heavy * 2 + light * 22)[: max(0, w - n)]):
                     t.append(ch, style=c["dim"] if i < 6 else c["faint"])
             return t
 
@@ -617,10 +809,12 @@ try:
         while the work goes on (still with reduced motion)."""
         progress = reactive(0.0)
         phase = reactive(0)
+        looking = reactive(False)
 
-        def __init__(self, total=100, **kw):
+        def __init__(self, total=100, looking=False, **kw):
             super().__init__(**kw)
             self.total = total
+            self.looking = looking
             self.still = motion() != "full"
 
         def on_mount(self):
@@ -628,7 +822,7 @@ try:
                 self.set_interval(0.08, self._tick)
 
         def _tick(self):
-            if 0 < self.progress < self.total:
+            if 0 < self.progress < self.total or self.looking:
                 self.phase = (self.phase + 1) % 1000
 
         def update(self, progress=None, total=None):
@@ -640,16 +834,28 @@ try:
         def render(self):
             c = palette()
             sixteen = color_mode() == "16"
+            ascii_ = icon_look() == "ascii"
+            full, shades = ("#", ("=", "-", ".")) if ascii_ else ("█", ("▓", "▒", "░"))
+            if self.looking:            # searching: no amount, the band runs the whole way along
+                w = max(10, self.size.width or 60)
+                band = (self.phase % (w + 8)) - 4 if not self.still else -99
+                t = Text(no_wrap=True)
+                for i in range(w):
+                    d = abs(i - band)
+                    ch, st = (full, c["primary"]) if d <= 1 else ((shades[0], c["soft"]) if d == 2 else
+                                                                  ((shades[1], c["dim"]) if d <= 4 else (shades[2], c["faint"])))
+                    t.append(ch, style=(("bold " + rich16("primary")) if d <= 2 else rich16("secondary")) if sixteen else st)
+                return t
             w = max(10, (self.size.width or 60) - 7)
             frac = max(0.0, min(1.0, self.progress / (self.total or 1)))
             done = int(w * frac)
             t = Text()
-            t.append("█" * done, style=("bold " + rich16("primary")) if sixteen else c["primary"])
+            t.append(full * done, style=("bold " + rich16("primary")) if sixteen else c["primary"])
             rest = w - done
             band = (self.phase % max(1, rest + 6)) - 3 if not self.still and 0 < frac < 1 else -99
             for i in range(rest):
                 d = abs(i - band)
-                ch, st = ("▓", c["soft"]) if d == 0 else (("▒", c["dim"]) if d == 1 else ("░", c["faint"]))
+                ch, st = (shades[0], c["soft"]) if d == 0 else ((shades[1], c["dim"]) if d == 1 else (shades[2], c["faint"]))
                 t.append(ch, style=rich16("secondary") if sixteen else st)
             t.append(f" {frac * 100:3.0f}%", style="bold")
             return t
@@ -684,10 +890,12 @@ try:
             if sixteen:
                 col16 = {"ok": rich16("primary"), "busy": rich16("accent"), "warn": "bright_yellow",
                          "fail": "bright_red"}.get(self.state, "white")
-                t = Text(dot + " ", style="bold " + col16)
+                t = Text()
+                t.append(dot + " ", style="bold " + col16)
                 t.append(self.words, style=col16 if self.state != "busy" else "white")
                 return t
-            t = Text(dot + " ", style="bold " + col)
+            t = Text()
+            t.append(dot + " ", style="bold " + col)
             t.append(self.words, style=col if self.state != "busy" else c["text"])
             return t
 except ImportError:      # no Textual: the colours and the emblem still work

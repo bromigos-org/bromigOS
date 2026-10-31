@@ -69,6 +69,46 @@ def textual_theme():
                  surface=c["panel"], panel=c["selection"], dark=True)
 
 
+def look():
+    return BT.icon_look() if BT is not None else "ascii"
+
+
+def sixteen():
+    return BT is not None and BT.color_mode() == "16"
+
+
+def col(role):
+    """A palette role as a Rich colour: the theme's hex, or its 16-colour console name."""
+    if sixteen():
+        return {"primary": BT.rich16("primary"), "soft": BT.rich16("primary"), "dim": BT.rich16("secondary"),
+                "faint": "bright_black", "muted": "white", "text": "white", "danger": "bright_red", "warn": "bright_yellow",
+                "cyan": BT.rich16("accent"), "gold": "yellow", "background": "black"}.get(role, "white")
+    c = common.theme()[0]
+    return c.get(role) or c["text"]
+
+
+def ic(name):
+    return BT.icon(name) if BT is not None else "*"
+
+
+def icon_rows(items, style=None, icon_style=None):
+    """Lines that each start with an icon, wrapped under their own words (not under the icon)."""
+    from rich.table import Table
+    t = Table.grid(padding=(0, 2), expand=True)
+    t.add_column(no_wrap=True, width=1)
+    t.add_column(ratio=1)
+    for name, words in items:
+        t.add_row(Text(ic(name), style=icon_style or "bold " + col("primary")), Text(words, style=style or ""))
+    return t
+
+
+def strength_level(pw):
+    """0 (nothing typed) to 3: how many of the strength meter's segments light."""
+    if not pw:
+        return 0
+    return {"weak": 1, "fair": 2, "strong": 3}[common.strength(pw)[0]]
+
+
 def hint(widget, text):
     """Every control says what it is and what it does: on hover (a tooltip) and, for the
     keyboard, in the hint line when it has the focus."""
@@ -272,10 +312,60 @@ class Installer(App):
     Screen.-narrow #error, Screen.-narrow #hint { padding: 0 1; }
     Screen.-narrow #hint { height: 1; border-top: none; }
     Screen.-narrow .fix { margin: 0 0 1 0; }
+    /* the hero row: the emblem (the screen's FLARE) beside the heading */
+    #hero { height: auto; }
+    #hero-art { width: auto; height: auto; margin-right: 3; }
+    #hero-side { width: 1fr; height: auto; }
+    /* fields two to a row where there's room, one under another where there isn't */
+    .fields { height: auto; }
+    .field { width: 1fr; height: auto; margin-right: 2; }
+    .field:last-of-type { margin-right: 0; }
+    Screen.-compact .fields, Screen.-narrow .fields { layout: vertical; }
+    Screen.-compact .field, Screen.-narrow .field { margin-right: 0; }
+    .field Input, .field Select { max-width: 100%; }
+    .panel { border: round $secondary 60%; background: $surface 85%; padding: 0 1 1 1; height: auto; margin-top: 1; }
+    .panel-head { height: 1; margin-bottom: 0; }
+    .row { height: auto; }
+    .row Button { margin-left: 2; }
+    Screen.-narrow .row { layout: vertical; }
+    Screen.-narrow .row Button { margin-left: 0; }
+    .check { border: round $warning 60%; background: $surface 85%; padding: 0 1; height: auto; margin-bottom: 1; }
+    /* About you: an operator ID card */
+    #idcard { border: round $primary 70%; background: $surface 85%; padding: 0 1 1 1; height: auto; }
+    #id-head { height: 1; margin: 0 -1 0 -1; padding: 0 1; }
+    #id-body { height: auto; }
+    #portrait { width: 17; height: auto; border: round $secondary 60%; padding: 0 1; margin: 1 2 0 0; content-align: center top; }
+    Screen.-compact #portrait, Screen.-narrow #portrait { display: none; }
+    #id-fields { width: 1fr; height: auto; }
+    #id-foot { height: auto; margin-top: 1; color: $text-muted; }
+    .vlabel { height: 1; margin-top: 1; }
+    .meter { height: auto; margin-top: 1; }
+    /* Lock the disk: the lock beside its switch */
+    #lock-row { height: auto; }
+    #lock { width: auto; height: auto; margin: 1 3 0 1; }
+    Screen.-narrow #lock { display: none; }
+    #lock-side { width: 1fr; height: auto; }
+    /* Ready to install: the briefing, one row a step, each with its Change button */
+    #briefing { border: round $primary 60%; background: $surface 85%; padding: 0 1; height: auto; }
+    .brief-row { height: auto; margin-top: 1; }
+    #briefing.-tight .brief-row { margin-top: 0; }
+    .brief-text { width: 1fr; height: auto; }
+    .brief-row Button { height: 1; min-width: 10; border: none; padding: 0 1; margin: 0 0 0 1; }
+    /* the countdown, the failure's frozen ring */
+    #count-row { height: auto; margin-bottom: 1; }
+    #count { width: auto; height: auto; margin-right: 3; }
+    #count-side { width: 1fr; height: auto; }
+    .buttons { height: auto; margin-top: 1; }
+    .buttons Button { margin-right: 2; }
+    Screen.-narrow .buttons { layout: vertical; }
+    .fail-head { color: $error; text-style: bold; }
+    #ssh-box, #pp { height: auto; }
+    .vlabel.-top { margin-top: 0; }
     """
     BINDINGS = [Binding("escape", "back", "Back"), Binding("ctrl+n", "next", "Continue"),
                 Binding("f12", "shell", "Shell", show=False),
-                Binding("f2", "details", "Details", show=False), Binding("ctrl+c", "quit_ask", "Quit", show=False)]
+                Binding("f2", "details", "Details", show=False), Binding("ctrl+c", "quit_ask", "Quit", show=False)] + \
+        [Binding(str(n), f"brief('{n}')", show=False) for n in range(1, 10)]    # the summary's Change keys
 
     def __init__(self, fake=False):
         super().__init__()
@@ -351,7 +441,9 @@ class Installer(App):
         steps = self.steps()
         sid = self.step
         n = steps.index(sid) + 1 if sid in steps else 1
-        if self.narrow():
+        if sid == "done" and self.done is not True:
+            text = f"BROMIGOS // INSTALL{' ' * 4}STOPPED  ·  THE INSTALL DIDN'T FINISH" if not self.narrow() else "INSTALL  STOPPED"
+        elif self.narrow():
             text = f"INSTALL  {n}/{len(steps)}  {common.STEP[sid][1].upper()}"
         else:
             text = f"BROMIGOS // INSTALL{' ' * 4}STEP {n} OF {len(steps)}  ·  {common.STEP[sid][1].upper()}"
@@ -363,6 +455,9 @@ class Installer(App):
 
     def steps(self):
         self.a["edition_info"] = common.edition(self.a["edition"])
+        d = self.disk()
+        # BitLocker matters only when Windows stays: erasing the disk takes it with it
+        self.a["bitlocker"] = bool(d and d.get("bitlocker") and self.a.get("mode") not in ("erase", "reinstall"))
         return common.steps_for(self.a)
 
     @property
@@ -380,6 +475,9 @@ class Installer(App):
 
     async def _show(self, sid):
         self.step = sid
+        self.visited = getattr(self, "visited", set()) | {sid}
+        if sid in ("summary", "install", "done", "auto"):
+            self.from_summary = False
         box = self.query_one(f"#step-{sid}", Vertical)
         await box.remove_children()
         getattr(self, f"build_{sid}")(box)
@@ -398,20 +496,33 @@ class Installer(App):
             nxt.label = "Erase and install" if erase else "Install"
             nxt.variant = "error" if erase else "primary"
             hint(nxt, "Start the install. " + ("Everything on the disk is deleted." if erase else "Nothing you have is deleted."))
+        elif getattr(self, "from_summary", False):
+            nxt.label = "Back to summary"
+            hint(nxt, "Keep this and go back to the summary (Ctrl+N).")
         else:
             hint(nxt, "Go on to the next step (Ctrl+N).")
         self.call_after_refresh(self._focus_first, box)
 
     VECTOR_LINES = {
+        "auto": "An answer file has it all. Cancel if you'd rather choose.",
         "welcome": "I'm VECTOR. Nothing changes until you say Install.",
+        "checks": "Worth knowing first. None of it stops us.",
         "edition": "Pick what this computer is for. A server can get the desktop later.",
+        "keyboard": "Pick your layout and try a few keys.",
         "disk": "Pick a disk, then how bromigOS goes on it.",
         "disk:alongside": "{who} keeps its files. I'll make room beside it.",
         "disk:erase": "Everything on this disk goes. Copy off what you need first.",
-        "install": "Sit back. I'll say if anything needs you.",
+        "disk:reinstall": "A fresh system. Your home folder stays as it is.",
+        "bitlocker": "Save Windows' recovery key first. Windows may ask for it once.",
+        "user": "Who you are here, and this computer's name.",
+        "encryption": "Locked, your files stay private if it's lost.",
+        "ssh": "How you'll reach this server from your other computers.",
         "summary": "Check it over. Nothing changes until you press Install.",
+        "install": "Sit back. I'll say if anything needs you.",
         "done": "All set. Restart, and take out the stick.",
+        "failed": "It stopped. Your answers are kept: try again, or save a report.",
     }
+    FLARE_STEPS = ("welcome", "install", "done", "auto")     # the screen has its own FLARE: the orb holds still
 
     def _rail(self, steps, sid):
         """The rail: each step's icon, a ✓ on the finished ones, the current one lit; VECTOR's
@@ -424,7 +535,7 @@ class Installer(App):
             ic = BT.icon(s) if BT is not None else "•"
             done = i < here
             if i == here:
-                rail.append("▌", style="bold " + (BT.rich16("primary") if sixteen else c["primary"]))
+                rail.append(">" if look() == "ascii" else "▌", style="bold " + (BT.rich16("primary") if sixteen else c["primary"]))
                 rail.append(f"{ic} {common.STEP[s][1]}", style="bold " + (BT.rich16("primary") if sixteen else c["primary"]))
             else:
                 rail.append(" ")
@@ -439,14 +550,16 @@ class Installer(App):
             self.query_one("#orb", Static).update(BT.orb(0.0, 12, 6))
             if not self.reduced and not getattr(self, "_orb_timer", None):
                 self._orb_timer = self.set_interval(0.15, self._orb_tick)
-        line = self.VECTOR_LINES.get(sid, "")
-        if sid == "disk" and self.a.get("mode") in ("alongside", "erase"):
+        line = self.VECTOR_LINES.get("failed" if sid == "done" and self.done is not True else sid, "")
+        if sid == "disk" and self.a.get("mode") == "reinstall":
+            line = self.VECTOR_LINES["disk:reinstall"]
+        elif sid == "disk" and self.a.get("mode") in ("alongside", "erase"):
             al = (self.disk() or {}).get("options", {}).get("alongside", {})
             line = self.VECTOR_LINES[f"disk:{self.a['mode']}"].format(who=al.get("who") or "Windows")
         self.query_one("#vector-line", Static).update(Text.assemble(("VECTOR  ", "bold " + c["primary"]), line) if line else "")
 
     def _orb_tick(self):
-        if self.step == "install" or self.reduced:      # one FLARE: the ring, while installing
+        if self.step in self.FLARE_STEPS or self.reduced:      # one FLARE a screen: the ring, the emblem, the countdown
             return
         self.orb_t = getattr(self, "orb_t", 0.0) + 0.15
         try:
@@ -478,14 +591,36 @@ class Installer(App):
     # ── the steps ───────────────────────────────────────────────────────────────────
     def build_auto(self, box):
         self.heading(box, "auto")
-        box.mount(Static(f"From {self.answer_file}", classes="muted"))
-        self.auto_rows = Static("", classes="card")
-        box.mount(self.auto_rows)
+        box.mount(Static(Text.assemble((ic("book") + "  ", col("primary")), ("From ", col("muted")), (str(self.answer_file), "bold")),
+                         classes="vlabel"))
+        row = Horizontal(id="count-row")
+        box.mount(row)
+        self.count_art = Static("", id="count")
+        side = Vertical(id="count-side")
+        row.mount(self.count_art, side)
         self.auto_line = BT.Reading("Looking at the disks…", "busy") if BT is not None else Static("Looking at the disks…")
-        box.mount(self.auto_line)
-        box.mount(hint(Button("Cancel", id="auto-cancel", variant="error"),
-                       "Stop the automatic install and answer the questions yourself. Nothing has changed yet."))
+        side.mount(self.auto_line)
+        side.mount(Horizontal(hint(Button("Cancel", id="auto-cancel", variant="error"),
+                                   "Stop the automatic install and answer the questions yourself. Nothing has changed yet."),
+                              classes="buttons"))
+        self.auto_rows = Static("", id="briefing")
+        box.mount(self.auto_rows)
+        self.auto_total = max(1, int(getattr(self, "countdown", 10)))
+        self._count(None)
         self.set_interval(1, self.auto_tick, name="auto")
+
+    def _count(self, n):
+        """The countdown in big digits (the screen's FLARE), the time left as a meter under it."""
+        t = Text()
+        if n is None:
+            t.append("· · ·", style=col("faint"))
+        elif BT is not None and hasattr(BT, "big_code"):
+            t.append_text(BT.big_code(str(n), style="bold " + col("warn" if self.a.get("mode") == "erase" else "primary"), scale=2))
+            t.append("\n")
+            t.append_text(BT.meter(n, self.auto_total, self.auto_total * 3) if hasattr(BT, "meter") else Text(""))
+        else:
+            t.append(str(n), style="bold")
+        self.count_art.update(t)
 
     def _auto_say(self, text, state="busy"):
         if BT is not None:
@@ -504,14 +639,14 @@ class Installer(App):
             await self.show("welcome")
             self.error("▲ " + problem + " The installer asks instead.")
             return
-        from rich.table import Table
         rows, warn = common.summary(self.a, self.disk())
-        t = Table.grid(padding=(0, 2))
-        t.add_column(style="bold")
-        t.add_column()
-        for k, v in rows:
-            t.add_row(k.upper(), v)
+        t = Text()
+        t.append(ic("summary") + "  WHAT IT WILL DO\n", style="bold " + col("primary"))
+        for i, (k, v) in enumerate(rows):
+            t.append(("\n" if i else "") + k.upper().ljust(20), style="bold " + col("soft"))
+            t.append(v, style=col("text"))
         self.auto_rows.update(t)
+        self._count(max(0, self.countdown))
         if self.countdown <= 0:
             self.a["auto"] = False
             self.a["auto_started"] = True
@@ -520,39 +655,80 @@ class Installer(App):
         self._auto_say(f"Installing in {self.countdown} s. " + (warn or ""), "warn" if self.a["mode"] == "erase" else "busy")
         self.countdown -= 1
 
+    def hero(self, box, sid, art=None):
+        """The heading, with the emblem beside it when the screen has the room (the FLARE)."""
+        if art is not None and self.size.height >= 30 and not self.narrow():
+            if max(len(line) for line in str(art).split("\n")) > 40:      # the wordmark: above the heading
+                box.mount(Static(art, id="hero-art", classes="flare"))
+                self.heading(box, sid)
+                return box
+            row, side = Horizontal(id="hero"), Vertical(id="hero-side")
+            box.mount(row)
+            row.mount(Static(art, id="hero-art"), side)
+            self.heading(side, sid)
+            return side
+        self.heading(box, sid)
+        return box
+
+    def flabel(self, icon_name, words, key=None, top=False):
+        """A field's label: its icon and words; with `key`, the live check glyph after them."""
+        t = Text()
+        t.append(ic(icon_name) + " ", style=col("primary"))
+        t.append(words, style=col("soft"))
+        lab = Static(t, classes="vlabel -top" if top else "vlabel", id=f"lab-{key}" if key else None)
+        lab.words, lab.icon_name = words, icon_name
+        return lab
+
     def build_welcome(self, box):
         art = None
         if BT is not None:
-            text, ansi = BT.emblem()
-            art = Text.from_ansi(text) if ansi else (text if not self.narrow() else Text("BROMIGOS", style="bold"))
+            art = BT.emblem_text(wide=not self.narrow() and getattr(self, "bp", "normal") != "compact")
         elif not self.on_console:
             for p in EMBLEM_PATHS:
                 if os.path.exists(p):
                     art = Text.from_ansi(_read(p))
                     break
-        if self.size.height >= 30:          # the FLARE needs the room; a short screen goes straight to the words
-            box.mount(Static(art if art is not None else WORDMARK, classes="flare"))
-        self.heading(box, "welcome")
-        box.mount(Label("Language for your new system", classes="label"))
-        box.mount(hint(Select([(n, loc) for loc, n, _ in common.LANGUAGES], value=self.a["locale"], allow_blank=False, id="locale"),
-                       "The language bromigOS uses once it's installed: menus, dates and numbers. The installer itself is in English."))
-        box.mount(Label("Time zone", classes="label"))
-        box.mount(hint(Input(self.a["timezone"], id="timezone", suggester=SuggestFromList(self.zones, case_sensitive=False),
-                             placeholder="Region/City, for example Europe/Berlin"),
-                       "Where you are, for the clock. Start typing a city or region; → takes the suggestion."))
-        self.net_line = Static("", classes="muted")
-        box.mount(Label("Network", classes="label"), self.net_line)
+        side = self.hero(box, "welcome", art if art is not None else Text(WORDMARK))
+        side.mount(Static(icon_rows((("clock", "About ten minutes"), ("shield", "Nothing changes until you press Install"),
+                                     ("shell", "F12 opens a shell, any time")), style=col("muted")), classes="notes"))
+        panel = Vertical(classes="panel", id="welcome-panel")
+        box.mount(panel)
+        # Language first: a "how would you like to be guided?" choice belongs beside it later
+        lang = Vertical(self.flabel("language", "Language for your new system"),
+                        hint(Select([(n, loc) for loc, n, _ in common.LANGUAGES], value=self.a["locale"], allow_blank=False,
+                                    id="locale"),
+                             "The language bromigOS uses once it's installed: menus, dates and numbers. The installer itself is in English."),
+                        classes="field")
+        tz = Vertical(self.flabel("clock", "Time zone"),
+                      hint(Input(self.a["timezone"], id="timezone", suggester=SuggestFromList(self.zones, case_sensitive=False),
+                                 placeholder="Region/City, for example Europe/Berlin"),
+                           "Where you are, for the clock. Start typing a city or region; → takes the suggestion."),
+                      classes="field")
+        panel.mount(Horizontal(lang, tz, classes="fields"))
+        panel.mount(self.flabel("wifi", "Network"))
+        self.net_line = BT.Reading("Checking the network…", "busy") if BT is not None else Static("", classes="muted")
         tool = common.wifi_tool()
-        if tool:
-            box.mount(hint(Button("Connect to Wi-Fi…", id="wifi"), "Open the Wi-Fi settings to join a network. Only needed to download "
-                                                                     "something that isn't on this USB stick."))
+        wifi = [hint(Button("Connect to Wi-Fi…", id="wifi"), "Open the Wi-Fi settings to join a network. Only needed to download "
+                                                              "something that isn't on this USB stick.")] if tool else []
+        panel.mount(Horizontal(Vertical(self.net_line, classes="brief-text"), *wifi, classes="row"))
         self.refresh_network()
 
     @work(thread=True)
     def refresh_network(self):
         ed = common.edition(self.a["edition"])
-        words = common.network_words(common.needs_download(ed), common.online())
-        self.call_from_thread(lambda: getattr(self, "net_line", None) and self.net_line.update(words))
+        download, is_online = common.needs_download(ed), common.online()
+        words = common.network_words(download, is_online)
+        state = "ok" if is_online else ("warn" if download else "idle")
+
+        def put():
+            line = getattr(self, "net_line", None)
+            if line is None:
+                return
+            if BT is not None:
+                line.set(words, state)
+            else:
+                line.update(words)
+        self.call_from_thread(put)
 
     def build_edition(self, box):
         self.heading(box, "edition")
@@ -579,19 +755,43 @@ class Installer(App):
         self.heading(box, "keyboard")
         if not self.a.get("keyboard_chosen"):
             self.a["keyboard"] = common.LANG_KEYBOARD.get(self.a["locale"], "us")
+        box.mount(self.flabel("keyboard", "Layout"))
         box.mount(hint(Select([(k[1], k[0]) for k in common.KEYBOARDS], value=self.a["keyboard"], allow_blank=False, id="kb"),
                        "Your keyboard's layout. It changes here at once, so you can try it below."))
-        box.mount(Label("Try your keyboard here", classes="label"))
-        box.mount(hint(Input(placeholder="Type a few letters, numbers and symbols…", id="kbtest"),
-                       "A box to try the layout in: what you type here isn't kept."))
+        panel = Vertical(classes="panel")
+        box.mount(panel)
+        self.caps = Static("", id="keycaps")
+        panel.mount(self.flabel("edit", "Try your keyboard here", top=True))
+        panel.mount(hint(Input(placeholder="Type a few letters, numbers and symbols…", id="kbtest"),
+                         "A box to try the layout in: what you type here isn't kept. The key you type lights up on the keys below."))
+        panel.mount(self.caps)
+        self._caps()
         if not self.on_console:
             box.mount(Static("In this window the layout follows the terminal's; your new system uses the one chosen here.", classes="muted"))
 
+    def _caps(self, lit=None):
+        """The chosen layout's letter keys, the one just typed lit (none for a non-Latin layout)."""
+        if BT is None or not hasattr(BT, "keycaps") or not getattr(self, "caps", None):
+            return
+        k = common.KEYBOARD.get(self.a["keyboard"], common.KEYBOARDS[0])
+        rows = BT.keyrows(k[3], k[4])
+        self.caps.display = rows is not None
+        if rows:
+            t = Text("\n")
+            t.append_text(BT.keycaps(rows, lit))
+            self.caps.update(t)
+
+    @on(Input.Changed, "#kbtest")
+    def kb_typed(self, ev):
+        self._caps(ev.value[-1:] or None)
+
     @on(Select.Changed, "#kb")
     def kb_changed(self, ev):
+        if ev.value != self.a["keyboard"]:
+            self.a["keyboard_chosen"] = True
         self.a["keyboard"] = ev.value
-        self.a["keyboard_chosen"] = True
         backend.keyboard_live(ev.value, "console" if self.on_console else "")
+        self._caps()
 
     @on(Select.Changed, "#locale")
     def locale_changed(self, ev):
@@ -614,11 +814,18 @@ class Installer(App):
 
     def build_checks(self, box):
         self.heading(box, "checks")
-        for c in self.a.get("checks") or []:
-            box.mount(Static(Text.assemble(("! ", "bold"), (c["title"], "bold")), classes="warn"),
-                      Static(c["what"], classes="muted"))
+        found = self.a.get("checks") or []
+        for c in found:
+            card = Vertical(classes="check")
+            box.mount(card)
+            card.mount(Static(Text.assemble((ic("alert") + "  ", "bold " + col("warn")), (c["title"], "bold " + col("warn")))),
+                       Static(c["what"], classes="muted"))
             if c.get("fix"):
-                box.mount(Static(Text.assemble(("What to do: ", "bold"), c["fix"]), classes="fix"))
+                card.mount(Static(Text.assemble((ic("info") + "  ", col("primary")), ("What to do: ", "bold"), c["fix"])))
+        if BT is not None:
+            n = len(found)
+            box.mount(BT.Reading(f"{n} thing{'s' if n != 1 else ''} worth knowing. None of them stops the install: "
+                                 "Continue when you're ready.", "ok"))
 
     def disk(self):
         return next((d for d in (self.probe or {}).get("disks", []) if d["path"] == self.a["disk"]), None)
@@ -800,24 +1007,152 @@ class Installer(App):
     def on_split_changed(self, ev):  # SplitChanged
         self.a["bromigos_bytes"] = ev.split.value
 
+    def build_bitlocker(self, box):
+        self.heading(box, "bitlocker")
+        panel = Vertical(classes="panel")
+        box.mount(panel)
+        head = Text()
+        head.append(ic("key") + "  ", style="bold " + col("warn"))
+        head.append("WINDOWS' BITLOCKER RECOVERY KEY", style="bold " + col("warn"))
+        sample = "-".join(["000000"] * 8)
+        panel.mount(Static(head, classes="panel-head"),
+                    Static("It's 48 digits in eight groups, like this:", classes="muted"),
+                    Static(Text.assemble((sample, "bold " + col("soft"))), classes="notes"),
+                    Static(common.BITLOCKER_WORDS, classes="muted"))
+        row = Horizontal(classes="card")
+        box.mount(row)
+        row.mount(hint(Switch(bool(self.a.get("bitlocker_saved")), id="bitlocker-saved"),
+                       "Turn this on once the key is saved. bromigOS never changes Windows' BitLocker drive."),
+                  Label("  I've saved the BitLocker recovery key, somewhere that isn't this computer"))
+
+    @on(Switch.Changed, "#bitlocker-saved")
+    def bitlocker_ticked(self, ev):
+        self.a["bitlocker_saved"] = ev.value
+
+    # ── About you: an operator ID card ─────────────────────────────────────────────────
+    USER_FIELDS = [("full_name", "Your name", "user", "Your name, as the login screen shows it. Optional.", False, "Alex Rivera"),
+                   ("user", "User name", "idcard", "What you type to sign in: small letters and digits, no spaces.", False, "alex"),
+                   ("password", "Password", "key", "The password for signing in and for changes that need your permission.", True, ""),
+                   ("password2", "Password again", "key", "The same password once more, to be sure it's typed right.", True, ""),
+                   ("hostname", "Computer's name", "computer", "How this computer shows up to other devices on your network.", False,
+                    "alex-pc")]
+
     def build_user(self, box):
         self.heading(box, "user")
-        fields = [("full_name", "Your name", "Your name, as the login screen shows it. Optional.", False, "Alex Rivera"),
-                  ("user", "User name", "What you type to sign in: small letters and digits, no spaces.", False, "alex"),
-                  ("password", "Password", "The password for signing in and for changes that need your permission.", True, ""),
-                  ("password2", "Password again", "The same password once more, to be sure it's typed right.", True, ""),
-                  ("hostname", "Computer's name", "How this computer shows up to other devices on your network.", False, "alex-pc")]
-        for key, label, tip, pw, ph in fields:
-            box.mount(Label(label, classes="label"))
-            box.mount(hint(Input(self.a.get(key, ""), password=pw, id=key, placeholder=ph), tip))
-        self.strength_line = Static("", classes="muted")
-        box.mount(self.strength_line)
+        card = Vertical(id="idcard")
+        box.mount(card)
+        self.id_head = Static("", id="id-head")
+        self.portrait = Static("", id="portrait")
+        fields = Vertical(id="id-fields")
+        self.id_foot = Static("", id="id-foot")
+        body = Horizontal(id="id-body")
+        card.mount(self.id_head, body, self.id_foot)
+        body.mount(self.portrait, fields)
+
+        def field(key):
+            k, label, icon_name, tip, pw, ph = next(f for f in self.USER_FIELDS if f[0] == key)
+            return Vertical(self.flabel(icon_name, label, key), hint(Input(self.a.get(k, ""), password=pw, id=k, placeholder=ph), tip),
+                            classes="field")
+        fields.mount(Horizontal(field("full_name"), field("user"), classes="fields"),
+                     Horizontal(field("password"), field("password2"), classes="fields"))
+        self.strength_line = Static("", classes="meter")
+        fields.mount(Horizontal(field("hostname"), Vertical(self.strength_line, classes="field"), classes="fields"))
+        self.call_after_refresh(self._id_refresh)
+
+    def field_state(self, key):
+        """(state, words) for one About-you field as it's typed: ok, bad (and why), or empty."""
+        q = lambda k: self.query_one(f"#{k}", Input).value      # noqa: E731
+        v = q(key)
+        if key == "full_name":
+            why = common.check_full_name(v)
+            return ("bad", why) if why else (("ok", "") if v.strip() else ("empty", "optional"))
+        if not v:
+            return "empty", ""
+        if key == "user":
+            why = common.check_username(v.strip())
+        elif key == "password":
+            why = "at least 4 characters" if len(v) < 4 else None
+        elif key == "password2":
+            why = "not the same as the password yet" if v != q("password") else None
+        else:
+            why = common.check_hostname(v.strip())
+        return ("bad", why) if why else ("ok", "")
+
+    def _id_refresh(self):
+        """The card follows what's typed: each field's ✓ or ✗, the portrait's initials, the line at its foot."""
+        if self.step != "user" or not self.query("#user"):
+            return
+        for key, label, icon_name, *_ in self.USER_FIELDS:
+            state, why = self.field_state(key)
+            t = Text()
+            t.append(ic(icon_name) + " ", style=col("primary"))
+            t.append(label, style=col("soft"))
+            glyph, style = {"ok": (ic("check"), "bold " + col("primary")), "bad": (ic("cross"), "bold " + col("danger")),
+                            "empty": ("." if look() == "ascii" else "·", col("faint"))}[state]
+            t.append("  " + glyph, style=style)
+            if why:
+                t.append(" " + why, style=col("danger") if state == "bad" else col("faint"))
+            t.truncate(80, overflow="ellipsis")
+            for lab in self.query(f"#lab-{key}"):
+                lab.update(t)
+        name = self.query_one("#full_name", Input).value.strip()
+        user = self.query_one("#user", Input).value.strip()
+        host = self.query_one("#hostname", Input).value.strip()
+        head = Text(no_wrap=True, overflow="ellipsis")
+        on = "black" if sixteen() else col("primary")
+        head.append(ic("idcard") + "  OPERATOR ID", style="bold " + on)
+        right = "BROMIGOS · ADMIN"
+        w = max(len(right) + 16, (self.id_head.size.width or 60) - 2)
+        head.append(" " * max(2, w - 14 - len(right)))
+        head.append(right, style="bold " + on)
+        self.id_head.update(head)
+        self.id_head.styles.background = BT.rich16("secondary") if sixteen() else common.theme()[0]["selection"]
+        initials = "".join(w[0] for w in name.split()[:2]).upper() or (user[:1].upper() or "?")
+        initials = "".join(ch for ch in common._ascii(initials) if ch.isalnum()) or "?"
+        p = BT.big_code(initials) if BT is not None and hasattr(BT, "big_code") else Text(initials, style="bold")
+        p.append("\n\n")
+        p.append((name or "Your name")[:13] + "\n", style="bold " + col("text") if name else col("faint"))
+        p.append((user or "user")[:13], style=col("primary") if user else col("faint"))
+        self.portrait.update(p)
+        foot = Text()
+        foot.append("SIGNS IN AS ", style=col("muted"))
+        foot.append(user or "…", style="bold " + col("primary"))
+        foot.append("   ON ", style=col("muted"))
+        foot.append(host or "…", style="bold " + col("primary"))
+        foot.append("   ·   admin: may install apps and change the system", style=col("faint"))
+        self.id_foot.update(foot)
+        self._strength(self.strength_line, self.query_one("#password", Input).value, "password")
+
+    def _strength(self, where, pw, what):
+        """The strength meter: three segments of block cells (one thickness, like the disk map),
+        lit by how hard the password is to guess, and what that means in words."""
+        level = strength_level(pw)
+        t = Text()
+        t.append("Strength", style=col("muted"))
+        if pw:
+            word, advice = common.strength(pw)
+            t.append(f"  {word}", style="bold " + col({1: "danger", 2: "warn", 3: "primary"}[level]))
+        t.append("\n")
+        # the meter on a line of its own, narrower than the field: its cells are spaces with a
+        # background, which wrapping would trim
+        if BT is not None and hasattr(BT, "meter"):
+            t.append_text(BT.meter(level, 3, 17))
+        else:
+            t.append("#" * (level * 5) + "." * ((3 - level) * 5))
+        t.append("\n")
+        t.append(advice if pw else f"Type a {what} to see how strong it is.", style=col("muted") if pw else col("faint"))
+        where.update(t)
+
+    @on(Input.Changed, "#password, #password2, #hostname")
+    def id_typed(self, ev):
+        self._id_refresh()
 
     @on(Input.Changed, "#full_name")
     def name_typed(self, ev):
         u = self.query_one("#user", Input)
         if not self.a.get("user_edited"):
             u.value = common.suggest_username(ev.value)
+        self._id_refresh()
 
     @on(Input.Changed, "#user")
     def user_typed(self, ev):
@@ -826,29 +1161,59 @@ class Installer(App):
         h = self.query_one("#hostname", Input)
         if not self.a.get("host_edited"):
             h.value = common.suggest_hostname(ev.value, self.a["edition"])
+        self._id_refresh()
 
     @on(Input.Changed, "#hostname")
     def host_typed(self, ev):
         if self.focused is ev.input:
             self.a["host_edited"] = True
 
-    @on(Input.Changed, "#password")
-    def pw_typed(self, ev):
-        word, advice = common.strength(ev.value)
-        self.strength_line.update(f"Strength: {word}. {advice}" if ev.value else "")
 
     def build_encryption(self, box):
         self.heading(box, "encryption")
+        self.lock_art = Static("", id="lock")
+        side, lock_row = Vertical(id="lock-side"), Horizontal(id="lock-row")
+        box.mount(lock_row)
+        lock_row.mount(self.lock_art, side)
         row = Horizontal(classes="card")
-        box.mount(row)
+        side.mount(row)
         row.mount(hint(Switch(self.a["encrypt"], id="encrypt"), "On: the disk is locked until its passphrase is typed at start. Off: no passphrase."))
         row.mount(Label("  Encrypt the disk (recommended)"))
-        box.mount(Static(common.ENCRYPT_WORDS, classes="muted"))
+        self.lock_line = BT.Reading("", "ok") if BT is not None else Static("")
+        side.mount(self.lock_line)
+        side.mount(Static(common.ENCRYPT_WORDS, classes="muted"))
         box.mount(hint(Checkbox("Use a different passphrase from my password", self.a.get("separate_passphrase", False), id="separate"),
                        "Off: your password unlocks the disk too, one less thing to remember. On: the disk gets a passphrase of its own."))
         self.pp = Vertical(id="pp")
         box.mount(self.pp)
+        self.lock_lit = True
+        self._lock()
+        if not self.reduced and not getattr(self, "_lock_timer", None):
+            self._lock_timer = self.set_interval(1.1, self._lock_pulse)     # the Pulse: a slow breath while it's on
         self.call_later(self.fill_pp)
+
+    def _lock(self):
+        """The lock: shut and glowing while encryption is on, open and dim when it's off."""
+        on = bool(self.a["encrypt"])
+        if BT is not None and hasattr(BT, "lock"):
+            self.lock_art.update(BT.lock(on, self.lock_lit, 14, 8))
+        else:
+            self.lock_art.display = False
+        words = (("On. The disk opens only with its passphrase, typed at every start.", "ok") if on else
+                 ("Off. Anyone with this disk in hand can read its files.", "warn"))
+        if BT is not None:
+            self.lock_line.set(*words)
+        else:
+            self.lock_line.update(words[0])
+
+    def _lock_pulse(self):
+        if self.step != "encryption" or not self.a["encrypt"] or self.reduced:
+            return
+        self.lock_lit = not getattr(self, "lock_lit", True)
+        try:
+            self._lock()
+        except Exception:
+            pass
 
     async def fill_pp(self):
         async with self.redraw:
@@ -856,15 +1221,33 @@ class Installer(App):
 
     async def _fill_pp(self):
         await self.pp.remove_children()
-        if self.a["encrypt"] and self.a.get("separate_passphrase"):
-            self.pp.mount(Label("Disk passphrase", classes="label"),
-                          hint(Input(self.a.get("passphrase", ""), password=True, id="passphrase"), "The passphrase you'll type at every start."),
-                          Label("Passphrase again", classes="label"),
-                          hint(Input(self.a.get("passphrase", ""), password=True, id="passphrase2"), "The same passphrase once more."))
+        if not self.a["encrypt"]:
+            return
+        self.pp_meter = Static("", classes="meter")
+        if self.a.get("separate_passphrase"):
+            self.pp.mount(Horizontal(Vertical(self.flabel("key", "Disk passphrase"),
+                                              hint(Input(self.a.get("passphrase", ""), password=True, id="passphrase"),
+                                                   "The passphrase you'll type at every start."), classes="field"),
+                                     Vertical(self.flabel("key", "Passphrase again"),
+                                              hint(Input(self.a.get("passphrase", ""), password=True, id="passphrase2"),
+                                                   "The same passphrase once more."), classes="field"), classes="fields"),
+                          self.pp_meter)
+            self._strength(self.pp_meter, self.a.get("passphrase", ""), "passphrase")
+        else:
+            self.pp.mount(Static(Text.assemble((ic("key") + "  ", col("primary")), "Your password unlocks the disk. How strong it is:"),
+                                 classes="vlabel"), self.pp_meter)
+            self._strength(self.pp_meter, self.a.get("password", ""), "password")
+
+    @on(Input.Changed, "#passphrase")
+    def pp_typed(self, ev):
+        if getattr(self, "pp_meter", None):
+            self._strength(self.pp_meter, ev.value, "passphrase")
 
     @on(Switch.Changed, "#encrypt")
     def enc_changed(self, ev):
         self.a["encrypt"] = ev.value
+        self.lock_lit = True
+        self._lock()
         self.call_later(self.fill_pp)
 
     @on(Checkbox.Changed, "#separate")
@@ -948,21 +1331,93 @@ class Installer(App):
             keys = [k for k in self.a["ssh_keys"] if k != key]
             self.a["ssh_keys"] = keys + ([key] if ev.value else [])
 
+    # ── Ready to install: the briefing ─────────────────────────────────────────────────
+    BRIEF_STEP = {"Kind": "edition", "Language": "welcome", "Time zone": "welcome", "Keyboard": "keyboard", "Disk": "disk",
+                  "Boot menu": "disk", "Name": "user", "User name": "user", "Computer name": "user", "Encryption": "encryption",
+                  "Remote access (SSH)": "ssh", "Firewall": "ssh", "Automatic updates": "ssh", "Packages": "edition"}
+    BRIEF_TITLE = {"welcome": ("Language", "language"), "edition": ("Kind", "edition"), "keyboard": ("Keyboard", "keyboard"),
+                   "disk": ("Where", "disk"), "user": ("You", "user"), "encryption": ("Encryption", "encryption"),
+                   "ssh": ("Remote access", "ssh"), None: ("Packages", "copy")}
+
+    def briefing(self):
+        """The summary's rows, grouped by the step that changes them: [(step or None, [(label, value)])]."""
+        rows, warn = common.summary(self.a, self.disk())
+        steps = self.steps()
+        groups = []
+        for k, v in rows:
+            sid = self.BRIEF_STEP.get(k)
+            if sid == "encryption" and "encryption" not in steps:
+                sid = "disk"                      # a reinstall keeps the disk's encryption: the Where step decides
+            if sid not in steps:
+                sid = None
+            g = next((g for g in groups if g[0] == sid), None)
+            if g is None:
+                groups.append((sid, [(k, v)]))
+            else:
+                g[1].append((k, v))
+        return groups, warn
+
     def build_summary(self, box):
         self.heading(box, "summary")
+        groups, warn = self.briefing()
+        panel = Vertical(id="briefing")
+        box.mount(panel)
+        head = Text(no_wrap=True, overflow="ellipsis")
+        head.append(ic("summary") + "  BRIEFING", style="bold " + col("primary"))
+        head.append(f"   {len(groups)} parts · Change any of them, or press Install", style=col("muted"))
+        panel.mount(Static(head, classes="panel-head"))
+        self.brief_keys = {}
+        wide = getattr(self, "bp", "normal") in ("wide", "normal")     # the title beside its rows; else above them
+        n = 0
         from rich.table import Table
-        rows, warn = common.summary(self.a, self.disk())
-        t = Table.grid(padding=(0, 2))
-        t.add_column(style="bold " + common.theme()[0]["dim"], no_wrap=True)
-        t.add_column()
-        for k, v in rows:
-            t.add_row(k.upper(), v)
-        box.mount(Static(t, classes="card"))
+        keyw = max(len(k) for _, items in groups for k, _ in items)
+        panel.set_class(self.size.height < 40, "-tight")       # a short screen: the rows close up
+        for sid, items in groups:
+            title, icon_name = self.BRIEF_TITLE.get(sid, (sid or "Packages", "copy"))
+            if sid:
+                n += 1
+                self.brief_keys[str(n)] = sid
+            head = Text.assemble((ic(icon_name) + " ", "bold " + col("primary")), (title.upper(), "bold " + col("soft")))
+            tb = Table.grid(padding=(0, 2), expand=True)
+            if wide:
+                tb.add_column(width=15, no_wrap=True)
+            tb.add_column(no_wrap=True, width=keyw if wide else None)
+            tb.add_column(ratio=1)
+            if not wide:
+                tb.add_row(head, "")
+            for i, (k, v) in enumerate(items):
+                cells = [Text(k if k.lower() != title.lower() else "", style=col("muted")), Text(v, style=col("text"))]
+                tb.add_row(*(([head if i == 0 else ""] if wide else []) + cells))
+            parts = [Static(tb, classes="brief-text")]
+            if sid:
+                what = {"welcome": "the language and the time zone", "edition": "what kind of computer this is",
+                        "keyboard": "the keyboard layout", "disk": "the disk and how bromigOS goes on it",
+                        "user": "your name, user name, password or the computer's name", "encryption": "the disk's encryption",
+                        "ssh": "remote access, the firewall and updates"}.get(sid, title)
+                parts.append(hint(Button("Change" if self.narrow() else f"Change {n}", id=f"edit-{sid}"),
+                                  f"Go back and change {what} (or press {n}). Continue brings you back here."))
+            panel.mount(Horizontal(*parts, classes="brief-row"))
         if warn:
-            box.mount(Static(warn, classes="danger" if self.a["mode"] == "erase" else "warn"))
+            box.mount(Static(Text.assemble((ic("alert") + "  ", "bold"), warn), classes="danger" if self.a["mode"] == "erase" else "warn"))
         self.what = Static("Open this to see the commands and archinstall's configuration.", classes="muted")
         box.mount(hint(Collapsible(self.what, title="Show what will run", collapsed=True, id="what"),
                        "The exact commands, and the configuration archinstall gets (passwords hidden)."))
+
+    async def jump(self, sid):
+        """From the summary to one step, to change it; Continue comes back (through any step
+        the change brought in that hasn't been seen yet)."""
+        if self.step != "summary" or sid not in self.steps():
+            return
+        await self.show(sid)
+        self.from_summary = True
+        nxt = self.query_one("#next", Button)
+        nxt.label = "Back to summary"
+        hint(nxt, "Keep this and go back to the summary (Ctrl+N).")
+
+    async def action_brief(self, key):
+        sid = getattr(self, "brief_keys", {}).get(key)
+        if self.step == "summary" and sid:
+            await self.jump(sid)
 
     @on(Collapsible.Expanded, "#what")
     def what_opened(self, ev):
@@ -1010,10 +1465,9 @@ class Installer(App):
         """The ring fills as the install goes (the screen's FLARE), the phases beside it."""
         c = common.theme()[0]
         small = getattr(self, "bp", "normal") in ("compact", "narrow", "too-small")
+        self.last_pct = pct
         if BT is not None and hasattr(BT, "ring") and getattr(self, "bp", "normal") != "narrow":
-            r = BT.ring(pct, 10 if small else 16, 5 if small else 8)
-            r.append(f"\n{pct:>{(10 if small else 16) // 2 + 2}} %", style="bold " + c["primary"])
-            self.ring.update(r)
+            self.ring.update(self.ring_art(pct, small))
         else:
             self.ring.display = False
         al = (self.disk() or {}).get("options", {}).get("alongside", {})
@@ -1036,29 +1490,80 @@ class Installer(App):
                 t.append(f"{glyph} {words}\n", style=c["faint"])
         self.phases.update(t)
 
+    def ring_art(self, pct, small, failed=False):
+        """The emblem's ring filled to `pct` in braille, the number under it; where braille can't
+        show (the Linux console, ASCII), the number in block letters. Red when it stopped."""
+        if look() == "nerd":
+            colors = (col("dim"), col("danger"), "bold " + col("danger")) if failed else None
+            r = BT.ring(pct, 10 if small else 16, 5 if small else 8, colors=colors)
+            r.append(f"\n{pct:>{(10 if small else 16) // 2 + 2}} %", style="bold " + col("danger" if failed else "primary"))
+            return r
+        r = BT.big_code(f"{pct}%", style="bold " + col("danger" if failed else "primary"))
+        r.append("\n" + ("stopped" if failed else "done").center(len(str(r).split("\n")[0])), style=col("muted"))
+        return r
+
     def build_done(self, box):
         if self.done is True:
-            self.heading(box, "done")
+            art = BT.emblem_text(spark=not self.reduced, wide=getattr(self, "bp", "normal") not in ("compact", "narrow")) \
+                if BT is not None else Text(WORDMARK)
+            side = self.hero(box, "done", art)
+            if not self.reduced and BT is not None:
+                # the Spark: the emblem glows once, about a second, then holds still
+                self.set_timer(1.0, lambda: [w.update(BT.emblem_text(wide=getattr(self, "bp", "normal") not in ("compact", "narrow")))
+                                             for w in box.query("#hero-art")])
             ed = common.edition(self.a["edition"])
-            lines = ["When the screen goes dark, take out the USB stick."]
+            lines = [("usb", "When the screen goes dark, take out the USB stick.")]
             if self.a["encrypt"]:
-                lines.append("At start, type the disk's passphrase" + (" (your password)." if not self.a.get("separate_passphrase") else "."))
+                lines.append(("lock", "At start, type the disk's passphrase" +
+                              (" (your password)." if not self.a.get("separate_passphrase") else ".")))
             if self.a["mode"] == "alongside":
-                lines.append(f"The boot menu lets you choose bromigOS or {self.disk()['options']['alongside'].get('name') or 'the other system'} each time.")
-            lines.append("Then sign in at the login screen." if ed.get("desktop", True) else "Then sign in at the text console.")
-            box.mount(Static("✓ " + "\n  ".join(lines), classes="card"))
-            box.mount(hint(Button("Restart now", id="reboot", variant="primary"), "Restart the computer into bromigOS."))
+                lines.append(("boot", "The boot menu lets you choose bromigOS or "
+                              f"{(self.disk() or {}).get('options', {}).get('alongside', {}).get('name') or 'the other system'} each time."))
+            lines.append(("user", "Then sign in at the login screen." if ed.get("desktop", True) else "Then sign in at the text console."))
+            side.mount(Static(icon_rows(lines), classes="card"))
+            side.mount(Horizontal(hint(Button("Restart now", id="reboot", variant="primary"), "Restart the computer into bromigOS."),
+                                  classes="buttons"))
         else:
-            box.mount(Static("THE INSTALL DIDN'T FINISH", classes="heading danger"))
-            box.mount(Static(self.done or "The install stopped.", classes="card"))
+            pct = int(getattr(self, "last_pct", 0) or 0)
+            row = Horizontal(id="count-row")
+            box.mount(row)
+            if BT is not None and hasattr(BT, "ring") and not self.narrow():
+                row.mount(Static(self.ring_art(pct, getattr(self, "bp", "normal") == "compact", failed=True), id="count"))
+            side = Vertical(id="count-side")
+            row.mount(side)
+            head = Text.assemble((ic("alert") + "  THE INSTALL DIDN'T FINISH", "bold " + col("danger")))
+            side.mount(Static(head, classes="fail-head"),
+                       Static(Text.assemble(("━" * 26 if look() != "ascii" else "=" * 26, col("danger")))))
+            side.mount(Static(self.done or "The install stopped.", classes="card"))
+            side.mount(Static(icon_rows((("summary", "Back to the summary: change something if you like, and try again."),
+                                         ("usb", "Save a problem report: the logs on a USB drive, to send when you ask for help."),
+                                         ("shell", "F12 opens a shell, to look around yourself.")), style=col("muted"))))
             box.mount(Horizontal(hint(Button("Back to the summary", id="retry", variant="primary"),
                                       "Go back, change something if you like, and try the install again."),
-                                 hint(Button("Show details", id="details"), "Every step the install took, and where it stopped."),
-                                 classes="card"))
+                                 hint(Button("Save a problem report", id="report"),
+                                      "Put the install's logs, a hardware summary and your answers (without passwords) on a USB "
+                                      "drive, to send when you ask for help."),
+                                 hint(Button("Show details", id="details"), "Every step the install took, and where it stopped (F2)."),
+                                 classes="buttons"))
+            self.report_line = BT.Reading("", "idle") if BT is not None else Static("")
+            self.report_line.display = False
+            box.mount(self.report_line)
             self.log_view = RichLog(id="log", wrap=True, max_lines=4000)
             box.mount(self.log_view)
             for line in getattr(self, "lines", [])[-400:]:
                 self.log_view.write(line)
+
+    @work(thread=True)
+    def save_report(self):
+        def say(words, state):
+            self.report_line.display = True
+            if BT is not None:
+                self.report_line.set(words, state)
+            else:
+                self.report_line.update(words)
+        self.call_from_thread(say, "Saving the report…", "busy")
+        path, words = common.save_report(self.a)
+        self.call_from_thread(say, words, "ok" if path else "warn")
 
     # ── moving between steps ────────────────────────────────────────────────────────
     def check(self):
@@ -1081,6 +1586,8 @@ class Installer(App):
                 self.a["old_passphrase"] = q("#old_passphrase", Input).value
                 if not self.a["old_passphrase"]:
                     return "Type the disk's passphrase: the one you type when the computer starts."
+        elif s == "bitlocker" and not self.a.get("bitlocker_saved"):
+            return "Save the BitLocker recovery key first, then turn on I've saved the BitLocker recovery key."
         elif s == "user":
             for k in ("full_name", "user", "password", "password2", "hostname"):
                 self.a[k] = q(f"#{k}", Input).value.strip() if k not in ("password", "password2") else q(f"#{k}", Input).value
@@ -1116,6 +1623,14 @@ class Installer(App):
         if self.step == "summary":
             return await self.start_install()
         steps = self.steps()
+        if getattr(self, "from_summary", False):
+            # back to the summary, unless the change brought in a step not seen yet
+            ahead = steps[steps.index(self.step) + 1: steps.index("summary")] if "summary" in steps else []
+            new = [s for s in ahead if s not in getattr(self, "visited", set())]
+            await self.show(new[0] if new else "summary")
+            if new:
+                self.from_summary = True
+            return
         await self.show(steps[steps.index(self.step) + 1])
 
     async def action_back(self):
@@ -1160,7 +1675,12 @@ class Installer(App):
             self.a["ssh_keys"] = sorted(set(self.a["ssh_keys"]) | {k for _, k in self.a["found_keys"]})
             self.call_later(self.fill_ssh)
         elif bid == "retry":
+            self.done = False
             await self.show("summary")
+        elif bid == "report":
+            self.save_report()
+        elif bid and bid.startswith("edit-"):
+            await self.jump(bid.removeprefix("edit-"))
 
     async def on_input_submitted(self, ev):
         if ev.input.id != "kbtest":
