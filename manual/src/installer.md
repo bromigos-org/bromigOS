@@ -341,7 +341,31 @@ On a BIOS computer the disk must use MBR (GPT needs UEFI), and MBR holds four pa
 alongside needs two free slots. On a UEFI computer the disk must use GPT.
 
 **btrfs subvolumes:** `@` (`/`), `@home` (`/home`), `@log` (`/var/log`), `@pkg`
-(`/var/cache/pacman/pkg`) and `@.snapshots` (`/.snapshots`). snapper keeps snapshots of
+(`/var/cache/pacman/pkg`) and `@.snapshots` (`/.snapshots`). The data that isn't the system
+has its own too, so rolling back an update never rolls it back: `@containers`
+(`/var/lib/containers`: Podman's images and volumes, databases included), `@k3s`
+(`/var/lib/rancher`: a lab node's cluster data), `@srv` (`/srv`: apps' data and shares) and
+`@bromigos-state` (`/var/lib/bromigos/server`: the update history, so a rollback keeps the
+record of what it rolled back). None of them is in root's snapshots.
+
+**Installed before these subvolumes?** Your containers' data is inside `/`, so a rollback
+would roll it back too. A reinstall that keeps your files moves it into its own subvolume by
+itself. To move it by hand instead, with the containers stopped:
+
+```bash
+sudo systemctl stop podman.socket podman.service; podman stop --all
+dev=$(findmnt -no SOURCE / | sed 's/\[.*//')
+sudo mount -o subvolid=5 "$dev" /mnt
+sudo btrfs subvolume create /mnt/@containers
+sudo cp -a --reflink=always /var/lib/containers/. /mnt/@containers/
+sudo mv /var/lib/containers /var/lib/containers.old && sudo mkdir /var/lib/containers
+echo "$(findmnt -no SOURCE / | sed 's/\[.*//') /var/lib/containers btrfs $(findmnt -no OPTIONS / | sed 's/subvolid=[0-9]*,\?//; s/subvol=[^,]*/subvol=\/@containers/') 0 0" | sudo tee -a /etc/fstab
+sudo umount /mnt && sudo mount /var/lib/containers   # check, then: sudo rm -rf /var/lib/containers.old
+```
+
+The same goes for `/var/lib/rancher` (`@k3s`) and `/srv` (`@srv`). bromigOS doesn't do it
+for you on an update: moving a running system's data is the one thing that's safer done by
+hand, with the services stopped, than by a package. snapper keeps snapshots of
 `/` and `/home`; GRUB lists the root's snapshots (grub-btrfs).
 
 **LUKS:** LUKS2 around the root partition only. The passphrase is your password unless you

@@ -54,6 +54,11 @@ check "VECTOR is installed" pacman -Q bromigos-vector
 if [[ $mode == desktop ]]; then       # the installed system (docs/iso-encryption.md's checks)
     check "the root is btrfs" bash -c "findmnt -no FSTYPE / | grep -qx btrfs"
     check "the subvolumes (@, @home, @.snapshots)" bash -c "sudo btrfs subvolume list / | grep -qE 'path @\$' && sudo btrfs subvolume list / | grep -q 'path @home' && findmnt -no FSTYPE /.snapshots | grep -qx btrfs"
+    # the data a rollback mustn't touch, each in its own subvolume, outside root's snapshots
+    for sv in "@containers /var/lib/containers" "@k3s /var/lib/rancher" "@srv /srv" "@bromigos-state /var/lib/bromigos/server"; do
+        set -- $sv
+        check "$2 is its own subvolume ($1), outside root's snapshots" bash -c "findmnt -no SOURCE $2 | grep -qF '[/$1]'"
+    done
     if [[ ${2:-encrypted} == encrypted ]]; then
         check "the root is on LUKS (crypt under the partition)" bash -c "lsblk -no TYPE | grep -qx crypt"
         check "LUKS2 under the root (cryptsetup status root)" bash -c "sudo cryptsetup status root | grep -qE 'type: +LUKS2'"

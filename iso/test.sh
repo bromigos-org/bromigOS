@@ -20,6 +20,8 @@
 #                       test/installer/tuidrive.py; the graphical one's own script mode, with
 #                       a screenshot of each step from the VM's screen) onto the VM's disk,
 #                       with the real install; then as `install` after it
+#   iso/test.sh data-rollback   on the installed system (after boot-disk or up): an update's rollback
+#                       undoes the system, and a container volume's data written after it stays
 #   iso/test.sh keep-files | verify-reinstall   a file in the installed home before `tui-install --mode
 #                       reinstall`, then it, the user's ID and the old root's snapshot after
 #   iso/test.sh verify-windows   in the installed system: the stand-in Windows' files and its
@@ -272,6 +274,22 @@ case $cmd in
     keep-files)     # before a reinstall: a file in the installed system's home, to find after it
         # synced: the VM is stopped next, and btrfs would otherwise still hold it in memory
         "${SSH[@]}" 'echo "kept across the reinstall" > ~/keepme.txt && sync && sha256sum ~/keepme.txt' | tee "$dir/keepme.sha256"
+        ;;
+    data-rollback)      # an update's rollback undoes the system, never the data: a file in a
+                        # container volume written after the update's snapshot survives it
+        out=$dir/data-rollback-$firmware.out; : > "$out"
+        result() { local what=$1; shift; if "$@"; then echo "PASS $what"; else echo "FAIL $what"; fi | tee -a "$out"; }
+        vol=/var/lib/containers/storage/volumes/isotest/_data
+        "${SSH[@]}" "sudo mkdir -p $vol && echo before | sudo tee $vol/rows >/dev/null && sudo sync"
+        pre=$("${SSH[@]}" "sudo snapper -c root create -t pre -p -d 'isotest: an update'" | tr -dc 0-9)
+        "${SSH[@]}" "echo an-update | sudo tee /etc/bromigos-isotest-update >/dev/null; echo after | sudo tee -a $vol/rows >/dev/null; sudo sync"
+        post=$("${SSH[@]}" "sudo snapper -c root create -t post --pre-number $pre -p -d 'isotest: an update'" | tr -dc 0-9)
+        echo "pre $pre, post $post" | tee -a "$out"
+        "${SSH[@]}" "sudo snapper -c root undochange $pre..$post" >> "$out" 2>&1
+        result "the rollback undid the system's change" "${SSH[@]}" "! test -e /etc/bromigos-isotest-update"
+        result "the container volume kept what was written after the snapshot" "${SSH[@]}" "grep -qx after $vol/rows"
+        result "root's snapshot doesn't hold the container data" "${SSH[@]}" "! sudo test -e /.snapshots/$pre/snapshot$vol"
+        if grep -q FAIL "$out"; then exit 1; fi
         ;;
     verify-reinstall)   # after it: the file, the user's ID, the old system kept as a snapshot
         out=$dir/verify-reinstall-$firmware.out; : > "$out"

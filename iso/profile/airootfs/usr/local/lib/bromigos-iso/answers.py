@@ -20,7 +20,8 @@ mounted at /boot/efi, unformatted, for GRUB's EFI files beside Windows' boot man
 
 The rest is btrfs, on LUKS2 unless --no-encrypt (the passphrase is asked at boot; it
 defaults to the user's password), with the subvolumes archinstall lays out (@ for /,
-@home, @log, @pkg, @.snapshots). snapper's configurations of / and /home are
+@home, @log, @pkg, @.snapshots, and the data a rollback must not touch: @containers,
+@k3s, @srv, @bromigos-state). snapper's configurations of / and /home are
 bromigos-iso-install's, after archinstall; grub-btrfs and its daemon put the snapshots in
 GRUB's menu.
 
@@ -73,9 +74,20 @@ def part(start_mib, size_unit, size_value, fs, mountpoint, flags, btrfs=(), stat
             "status": status, "type": "primary"}
 
 
+# @ is what a snapshot and an update's rollback cover; everything below that must survive a
+# rollback has a subvolume of its own (none of them is in root's snapshots): the home folders,
+# the logs, the package cache, the snapshots themselves, and the data that isn't the system's
+# (docs/iso.md, "The disk layout"): containers' images and volumes (Podman, on the desktop
+# too), k3s's cluster data, /srv's app data and shares, and bromigOS Server's update history,
+# so a rollback never erases the record of what it rolled back
 SUBVOLS = [{"name": "@", "mountpoint": "/"}, {"name": "@home", "mountpoint": "/home"},
            {"name": "@log", "mountpoint": "/var/log"}, {"name": "@pkg", "mountpoint": "/var/cache/pacman/pkg"},
-           {"name": "@.snapshots", "mountpoint": "/.snapshots"}]
+           {"name": "@.snapshots", "mountpoint": "/.snapshots"},
+           {"name": "@containers", "mountpoint": "/var/lib/containers"},
+           {"name": "@k3s", "mountpoint": "/var/lib/rancher"},
+           {"name": "@srv", "mountpoint": "/srv"},
+           {"name": "@bromigos-state", "mountpoint": "/var/lib/bromigos/server"}]
+DATA_SUBVOLS = [(v["name"], v["mountpoint"].lstrip("/")) for v in SUBVOLS[5:]]
 
 
 def sfdisk_json(disk):

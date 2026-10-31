@@ -108,7 +108,7 @@ jobs:
               parts = cfg["disk_config"]["device_modifications"][0]["partitions"]
               assert all(p["fs_type"] for p in parts), f      # archinstall 4.5 partitions nothing without one
               root = parts[-1]
-              assert {v["name"] for v in root["btrfs"]} == {"@", "@home", "@log", "@pkg", "@.snapshots"}, f
+              assert {v["name"] for v in root["btrfs"]} == {"@", "@home", "@log", "@pkg", "@.snapshots", "@containers", "@k3s", "@srv", "@bromigos-state"}, f
           print("answers ok: encrypted and plain layouts parse")
           EOF
           # the hardware packages and services `bromigos hw` plans, merged into the config
