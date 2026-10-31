@@ -1,6 +1,6 @@
 #!/usr/bin/python3 -I
 # bromigos:summary=bromigOS Server: its status (SSH, firewall, updates and their health, roles, backups, disks, the lab's cluster), its roles, backups and safe automatic updates
-# bromigos:args=status [--json] | update [--now] | health | firewall [status|apply|allow NAME|deny NAME] | roles [--json] | role add|remove ROLE | backup [status|run|check|key] | ups [status|detect] | setup
+# bromigos:args=status [--json] | update [--now] | health | firewall [status|apply|allow NAME|deny NAME] | roles [--json] | role add|remove ROLE | backup [status|run|check|key] | ups [status|detect] | secrets … | setup
 # bromigos:examples=bromigos server; bromigos server status --json; bromigos server roles; sudo bromigos server role add storage; sudo bromigos server update --now; sudo bromigos server firewall allow lab-cluster
 """bromigOS Server (docs/server.md): the installed edition without a desktop.
 
@@ -29,6 +29,8 @@
   bromigos-server ups [status|detect]
                                     NUT, set up when a UPS is on USB (bromigos-server-ups.service)
   bromigos-server disk-alert        smartd's warning hook (bromigos-server-disk-alert)
+  bromigos-server secrets …         the secret store: bromigos lab secrets (status, set, generate,
+                                    rotate, recovery)
   bromigos-server setup             what the package's install runs (idempotent): the settings
                                     in /etc/bromigos/server.toml applied, the roles included
 
@@ -51,6 +53,7 @@ Settings: /etc/bromigos/server.toml (the installer writes it; every key is optio
   ignore_units = []       # failed units that don't count against it
   [roles]
   enabled = []            # "storage", "game-server/pelican-wings", ... (role add writes it)
+  picked = []             # the installer's own ids ("media", "home", ...): they count too
   [backup]
   to = ""                 # restic's repository: "s3:https://...", "sftp:...", "/mnt/backup"; "" is off
   paths = [...]           # what's backed up (BACKUP_PATHS)
@@ -104,6 +107,14 @@ def at(path):
 
 
 CONFIG = "/etc/bromigos/server.toml"
+# the installer's role ids ([roles] picked) as this package's (docs/server.md, "Roles")
+PICKED = {"lab": "lab-node", "storage": "storage", "home": "home-services", "games": "game-server",
+          "media": "media", "plain": "just-a-server"}
+# what the installer leaves to the first start (docs/server.md, "What the installer leaves for the first start")
+FIRST_START = {"bromigos-server-pending.service": "the packages that waited for a network",
+               "bromigos-server-tpm-enroll.service": "the security chip (TPM) unlocking the disk",
+               "bromigos-server-secrets.service": "the install's keys and passwords, into the secret store"}
+PENDING = "/etc/bromigos/server/pending-packages"
 STATE = "/var/lib/bromigos/server/update.json"
 HISTORY = "/var/lib/bromigos/server/history.jsonl"
 TEXTFILE = "/opt/bromigos-monitoring/textfile/bromigos-server.prom"
@@ -169,7 +180,16 @@ def config():
     h = c.setdefault("health", {})
     h.setdefault("minutes", 10)
     h.setdefault("ignore_units", [])
-    c.setdefault("roles", {}).setdefault("enabled", [])
+    ro = c.setdefault("roles", {})
+    ro.setdefault("enabled", [])
+    ro.setdefault("picked", [])
+    # the installer's own picks ([roles] picked: its ids) count too, as this package's roles
+    have = {split_entry(e)[0] for e in ro["enabled"]}
+    for pick in ro["picked"]:
+        rid = PICKED.get(pick, pick)
+        if rid and rid not in have:
+            ro["enabled"].append(rid)
+            have.add(rid)
     b = c.setdefault("backup", {})
     b.setdefault("to", "")
     b.setdefault("paths", list(BACKUP_PATHS))
@@ -342,7 +362,74 @@ def status_doc():
         "mdns": unit_state("avahi-daemon.service"),
         "wake_on_lan": wake_on_lan(),
         "kernel": {"running": os.uname().release, "first": c["boot"]["kernel"]},
+        "install": install_doc(c),
     }
+
+
+INSTALLER_SECTIONS = ("network", "storage", "unlock", "services", "apps", "lab", "games", "remote", "boot", "kernel",
+                      "packages")
+
+
+def install_doc(c):
+    """What the installer chose ([network], [storage], [unlock], [services], [apps], [lab],
+    [games], [remote], [boot], [kernel], [packages] and [roles] picked), as it wrote them, and
+    what it left for the first start: each unit's state, and the packages still waiting."""
+    doc = {k: c[k] for k in INSTALLER_SECTIONS if isinstance(c.get(k), dict) and c[k]}
+    doc["picked"] = list(c["roles"].get("picked", []))
+    first = {}
+    for unit, what in FIRST_START.items():
+        if unit_exists(unit):
+            first[unit] = {"what": what, "enabled": unit_enabled(unit), "state": unit_state(unit)}
+    doc["first_start"] = first
+    try:
+        doc["pending_packages"] = open(at(PENDING)).read().split()
+    except OSError:
+        doc["pending_packages"] = []
+    return doc
+
+
+def install_lines(d):
+    """The installer's choices in a few plain lines (status)."""
+    out = []
+    n = d.get("network") or {}
+    if n:
+        how = (f"fixed {n.get('address')}/{n.get('prefix')}, router {n.get('gateway') or '?'}" if n.get("method") == "static"
+               else "address from the router (DHCP)")
+        extra = [w for w in (f"VLAN {n['vlan']}" if n.get("vlan") else "",
+                             "bonded: " + " + ".join(n["bond"]) if n.get("bond") else "",
+                             "Wake-on-LAN on" if n.get("wake_on_lan") else "") if w]
+        out.append(f"Network      {n.get('interface') or 'auto'}: {how}" + (f"; {', '.join(extra)}" if extra else ""))
+    st = d.get("storage") or {}
+    if st.get("disks"):
+        out.append(f"Data disks   {', '.join(st['disks'])}: " + ("two copies (RAID1)" if st.get("layout") == "raid1" else "one copy")
+                   + f" at {st.get('mount') or '/srv/data'}" + (f"; shares: {', '.join(st['shares'])}" if st.get("shares") else ""))
+    u = (d.get("unlock") or {}).get("mode")
+    if u:
+        out.append("Unlocking    " + {"tpm": "the security chip (TPM) opens the disk at each start",
+                                      "passphrase": "the passphrase at each start",
+                                      "none": "not encrypted"}.get(u, u))
+    sv = d.get("services") or {}
+    if sv.get("on"):
+        out.append(f"Services     {', '.join(sv['on'])}")
+    apps = (d.get("apps") or {}).get("enabled")
+    if apps:
+        out.append(f"Apps         {', '.join(apps)} (containers, their images pinned)")
+    g = d.get("games") or {}
+    if g:
+        out.append("Games        " + ", ".join(w for w in (f"Pelican panel {g['pelican_url']}" if g.get("pelican_url") else "",
+                                                          f"registry mirror {g['registry_mirror']}" if g.get("registry_mirror") else "",
+                                                          "Docker" if g.get("docker") else "") if w))
+    r = d.get("remote") or {}
+    if r:
+        on = [w for w, k in (("Tailscale", "tailscale"), ("WireGuard", "wireguard")) if r.get(k)]
+        out.append("Remote       " + (", ".join(on) + " on" if on else "Tailscale and WireGuard off"))
+    for unit, f in d.get("first_start", {}).items():
+        if f["enabled"] == "enabled" or f["state"] not in ("inactive", "unknown"):
+            out.append(f"First start  {f['what']}: {f['state']}")
+    if d.get("pending_packages"):
+        out.append(f"Waiting      {len(d['pending_packages'])} package(s) for a network: {' '.join(d['pending_packages'][:6])}"
+                   + (" …" if len(d["pending_packages"]) > 6 else ""))
+    return out
 
 
 def print_status(d):
@@ -383,6 +470,8 @@ def print_status(d):
     wol = d["wake_on_lan"]
     if wol:
         print("  Wake-on-LAN  " + ", ".join(f"{n} {'on' if on else 'off'}" for n, on in sorted(wol.items())))
+    for line in install_lines(d["install"]):
+        print("  " + line)
 
 
 # ------------------------------------------------------------------ the firewall
@@ -918,6 +1007,7 @@ def cmd_role(a):
                 raise
             set_toml_list(["roles", "enabled"], current + [r["entry"]])
             print(f"bromigos-server: {r['title']} is on" + (f" ({r['variant']})" if r["variant"] else ""))
+            done += lab_provision(rid)
         else:
             if not was:
                 print(f"bromigos-server: {catalogue[rid]['title']} isn't on")
@@ -925,6 +1015,9 @@ def cmd_role(a):
             r = resolve(catalogue[rid], split_entry(was[0])[1])
             done = unapply_role(r, [x for _, x in enabled_roles(dict(c, roles={"enabled": current}), quiet=True)])
             set_toml_list(["roles", "enabled"], current)
+            picked = [x for x in c["roles"]["picked"] if PICKED.get(x, x) != rid]
+            if picked != c["roles"]["picked"]:
+                set_toml_list(["roles", "picked"], picked)
             print(f"bromigos-server: {r['title']} is off")
     except RoleError as e:
         sys.exit(f"bromigos-server: {e}")
@@ -932,6 +1025,23 @@ def cmd_role(a):
         print(f"  {line}")
     reload_firewall()
     return 0
+
+
+def lab_provision(rid):
+    """A role just added: what the lab's engine adds for it on this server (its apps, their
+    names and checks: `bromigos lab provision --local --roles ROLE --apply`, which only adds).
+    Skipped, and said, where the engine has no --local yet."""
+    if ROOT != "/" or not live():
+        return []
+    rc, out, _ = run(["bromigos", "lab", "provision", "--help"], timeout=60)
+    if rc != 0 or "--local" not in out:
+        return ["the lab's engine can't set up this server's apps yet (bromigos lab provision --local): "
+                "update bromigOS, then run sudo bromigos server role add " + rid + " again"]
+    rc, out, err = run(["bromigos", "lab", "provision", "--local", "--roles", rid, "--apply"], timeout=3 * 3600)
+    if rc != 0:
+        return ["the lab's engine stopped: " + last_line(err or out, "bromigos lab provision --local failed")
+                + f" (sudo bromigos lab provision --local --roles {rid} --plan shows what it would do)"]
+    return ["the lab's engine added its items: " + last_line(out, "done")]
 
 
 def role_health(c):
@@ -1409,17 +1519,26 @@ def cmd_setup(a):
     run again; the package's install runs it."""
     c = config()
     done = []
+    # SSH's password rule: this file is setup's own only when it says so; one the installer wrote
+    # (the same name, its own words) is left as it is, as are its other drop-ins (01-keys-only,
+    # 20-limits), its sysctl and journald files (90-…, after the package's 60-…) and
+    # /etc/bromigos/server/nftables.d
     pw = at(SSHD_PASSWORD)
+    mine = "# bromigOS Server: password sign-in was chosen at install (/etc/bromigos/server.toml, [ssh] password)"
+    try:
+        ours = open(pw).read().startswith(mine)
+    except OSError:
+        ours = None                             # not there
     if c["ssh"]["password"]:
-        os.makedirs(os.path.dirname(pw), exist_ok=True)
-        with open(pw, "w") as f:
-            f.write("# bromigOS Server: password sign-in was chosen at install (/etc/bromigos/server.toml, [ssh] password)\n"
-                    "PasswordAuthentication yes\nKbdInteractiveAuthentication yes\n")
+        if ours is not False:
+            os.makedirs(os.path.dirname(pw), exist_ok=True)
+            with open(pw, "w") as f:
+                f.write(mine + "\nPasswordAuthentication yes\nKbdInteractiveAuthentication yes\n")
         done.append("SSH: keys and passwords")
     else:
-        if os.path.exists(pw):
+        if ours:
             os.unlink(pw)
-        done.append("SSH: keys only")
+        done.append("SSH: keys only" if ours is not False else "SSH: the installer's own rule kept")
     os.makedirs(at("/opt/bromigos-monitoring/textfile"), mode=0o755, exist_ok=True)
     units = list(BASE_UNITS)
     if c["updates"]["auto"]:
@@ -1727,6 +1846,8 @@ def main(argv=None):
     p.add_argument("--json", action="store_true")
     sub.add_parser("disk-alert")
     sub.add_parser("setup")
+    p = sub.add_parser("secrets", help="this server's secret store: bromigos lab secrets (status, set, generate, rotate …)")
+    p.add_argument("rest", nargs=argparse.REMAINDER)
     a = ap.parse_args(argv)
     cmd = a.cmd or "status"
     if cmd == "status":
@@ -1738,6 +1859,12 @@ def main(argv=None):
         return 0
     if cmd == "roles":
         return cmd_roles(a)
+    if cmd == "secrets":
+        # the same store and words as the lab's (bromigos_homelab.secretstore): rotate included
+        lab = shutil.which("bromigos-lab") or "/usr/lib/bromigos/bin/bromigos-lab"
+        if not os.path.exists(lab):
+            sys.exit("bromigos-server: the secret store is the lab's (bromigos-lab), which isn't installed")
+        os.execv(lab, [lab, "secrets", *a.rest])
     reading = (cmd == "firewall" and (a.print or a.verb in (None, "status") or not a.name)) or \
         (cmd in ("backup", "ups") and a.verb in (None, "status"))
     if ROOT == "/" and os.geteuid() != 0 and not reading:

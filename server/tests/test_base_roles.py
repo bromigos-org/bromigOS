@@ -129,7 +129,10 @@ class Roles(unittest.TestCase):
     def test_the_roles(self):
         roles = self.roles()
         self.assertEqual([r["id"] for r in roles],
-                         ["lab-node", "storage", "home-services", "game-server", "just-a-server", "cockpit"])
+                         ["lab-node", "storage", "home-services", "media", "game-server", "just-a-server", "cockpit"])
+        media = next(r for r in roles if r["id"] == "media")
+        self.assertEqual(media["firewall"], ["web-lan", "media"])
+        self.assertIn("/etc/avahi/services/bromigos-media.service", media["files"])
         self.assertEqual({r["id"]: r["kind"] for r in roles}["cockpit"], "extra")
         game = next(r for r in roles if r["id"] == "game-server")
         wings = next(v for v in game["variants"] if v["id"] == "pelican-wings")
@@ -330,6 +333,86 @@ class Apply(Rig):
         r = self.run_server("role", "add", "minecraft")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("no role 'minecraft'", r.stderr)
+
+    def test_the_installers_picks_count_as_roles(self):
+        """[roles] picked holds the installer's ids (media, home, ...): they're this package's
+        roles too, and removing one takes it out of both lists."""
+        self.config('[health]\nminutes = 0\n[roles]\nenabled = ["storage"]\npicked = ["storage", "media"]\n')
+        d = json.loads(self.run_server("status", "--json").stdout)
+        self.assertEqual(d["roles"]["enabled"], ["storage", "media"])
+        self.assertEqual(d["install"]["picked"], ["storage", "media"])
+        r = self.run_server("role", "remove", "media")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.toml()["roles"]["picked"], ["storage"])
+        self.assertEqual(json.loads(self.run_server("status", "--json").stdout)["roles"]["enabled"], ["storage"])
+
+    def test_media_announces_itself_and_opens_its_ports_to_the_lan(self):
+        r = self.run_server("role", "add", "media")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        svc = (self.root / "etc/avahi/services/bromigos-media.service").read_text()
+        self.assertIn("<type>_bromigos-media._tcp</type>", svc)
+        ET.fromstring(svc)
+        rules = self.run_server("firewall", "apply", "--print").stdout
+        self.assertIn("ip saddr @lan tcp dport 8096", rules)
+        self.assertIn("ip saddr @lan udp dport 7359", rules)
+
+    def test_s3_is_a_rule_set(self):
+        self.run_server("firewall", "allow", "s3")
+        self.assertIn("ip saddr @lan tcp dport 9000", self.run_server("firewall", "apply", "--print").stdout)
+
+    def test_role_add_asks_the_labs_engine_for_its_items(self):
+        m = module()
+        calls = []
+        m.ROOT, m.live = "/", lambda: True
+        m.run = lambda cmd, **k: (calls.append(cmd), (0, "usage: --local --roles", "") if "--help" in cmd
+                                  else (0, "added jellyfin", ""))[1]
+        self.assertEqual(m.lab_provision("media"), ["the lab's engine added its items: added jellyfin"])
+        self.assertIn(["bromigos", "lab", "provision", "--local", "--roles", "media", "--apply"], calls)
+        m.run = lambda cmd, **k: (0, "usage: plan apply", "")
+        self.assertIn("can't set up this server's apps yet", m.lab_provision("media")[0])
+
+    def test_the_installers_choices_show_in_the_status(self):
+        self.config('[health]\nminutes = 0\n[network]\ninterface = "enp1s0"\nmethod = "static"\naddress = "192.0.2.20"\n'
+                    'prefix = 24\ngateway = "192.0.2.1"\nwake_on_lan = true\n[storage]\ndisks = ["/dev/sdb", "/dev/sdc"]\n'
+                    'layout = "raid1"\nmount = "/srv/data"\nshares = ["smb"]\n[unlock]\nmode = "tpm"\n'
+                    '[apps]\nenabled = ["jellyfin"]\n[games]\npelican_url = "https://panel.lab.example"\n'
+                    '[remote]\ntailscale = false\nwireguard = false\n[packages]\npending = ["nvidia-utils"]\n')
+        pend = self.root / "etc/bromigos/server/pending-packages"
+        pend.parent.mkdir(parents=True, exist_ok=True)
+        pend.write_text("nvidia-utils\n")
+        unit = self.root / "etc/systemd/system/bromigos-server-tpm-enroll.service"
+        unit.parent.mkdir(parents=True, exist_ok=True)
+        unit.write_text("[Unit]\n")
+        (self.fake / "units").write_text("bromigos-server-tpm-enroll.service\n")
+        d = json.loads(self.run_server("status", "--json").stdout)["install"]
+        self.assertEqual(d["network"]["address"], "192.0.2.20")
+        self.assertEqual(d["pending_packages"], ["nvidia-utils"])
+        self.assertIn("bromigos-server-tpm-enroll.service", d["first_start"])
+        out = self.run_server("status").stdout
+        for words in ("fixed 192.0.2.20/24", "two copies (RAID1) at /srv/data", "security chip (TPM) opens the disk",
+                      "jellyfin (containers", "Pelican panel https://panel.lab.example", "Tailscale and WireGuard off",
+                      "1 package(s) for a network: nvidia-utils", "First start  the security chip"):
+            self.assertIn(words, out)
+
+    def test_setup_keeps_the_installers_ssh_password_rule(self):
+        f = self.root / "etc/ssh/sshd_config.d/05-bromigos-server-password.conf"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("# the installer's own\nPasswordAuthentication yes\n")
+        self.config("[health]\nminutes = 0\n[ssh]\npassword = false\n")
+        r = self.run_server("setup")
+        self.assertTrue(f.exists(), r.stdout)
+        self.assertIn("the installer's own rule kept", r.stdout)
+        self.config("[health]\nminutes = 0\n[ssh]\npassword = true\n")
+        self.run_server("setup")
+        self.assertEqual(f.read_text(), "# the installer's own\nPasswordAuthentication yes\n")
+
+    def test_secrets_is_the_labs_store(self):
+        lab = self.bin / "bromigos-lab"
+        lab.write_text('#!/bin/sh\necho "bromigos-lab $*" >> "$FAKE/log"\n')
+        lab.chmod(0o755)
+        r = self.run_server("secrets", "rotate", "jellyfin-api-key")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("bromigos-lab secrets rotate jellyfin-api-key", self.log())
 
     def test_setup_applies_the_roles_the_installer_chose(self):
         self.config('[health]\nminutes = 0\n[roles]\nenabled = ["home-services", "nope"]\n')

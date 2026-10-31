@@ -1,0 +1,12 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- bromigOS Server's Media role (docs/server.md, "Roles"): desktops on the network add this
+     server's media as a Den TV source by themselves (Find my lab) -->
+<service-group>
+  <name replace-wildcards="yes">%h</name>
+  <service>
+    <type>_bromigos-media._tcp</type>
+    <port>8096</port>
+    <txt-record>kind=jellyfin</txt-record>
+  </service>
+</service-group>

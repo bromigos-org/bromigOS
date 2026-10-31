@@ -1,0 +1,20 @@
+# bromigOS Server's Media role (docs/server.md, "Roles"): the format is described there.
+schema = 1
+id = "media"
+kind = "role"
+order = 35
+title = "Media"
+summary = "Your own movies, shows, music and Den TV for every screen."
+hint = "Jellyfin, requests and the library's upkeep, for media you own or have rights to. They run as containers the lab's engine sets up (bromigos lab provision --local). Your local network only; desktops find it as a Den TV source by themselves."
+offline = true
+packages = ["avahi"]
+services = ["avahi-daemon.service"]
+firewall = ["web-lan", "media"]
+health = []
+health_optional = []
+requires = []
+conflicts = []
+
+[files]
+# the announcement Den TV listens for: _bromigos-media._tcp
+"/etc/avahi/services/bromigos-media.service" = "media/bromigos-media.service"
