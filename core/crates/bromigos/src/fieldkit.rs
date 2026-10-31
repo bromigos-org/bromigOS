@@ -290,6 +290,12 @@ pub fn section_items(section: &str) -> Vec<Item> {
                 Lan,
             ),
             it(
+                "Join my lab network",
+                "your lab's private network: paste a join code, or use the one on this stick",
+                Tool(vec!["bromigos", "lab", "network", "connect"]),
+                Any,
+            ),
+            it(
                 "Network settings",
                 "Wi-Fi and wired connections",
                 Tool(vec!["nmtui"]),
@@ -358,6 +364,12 @@ pub fn section_items(section: &str) -> Vec<Item> {
                 "become a node of your lab's k3s",
                 Cluster,
                 Lan,
+            ),
+            it(
+                "Network",
+                "reach it from anywhere: through BRODEC, your lab's private network, WireGuard or Tailscale",
+                Tool(vec!["bromigos", "lab", "network", "reach"]),
+                Any,
             ),
         ],
         "Install" => vec![

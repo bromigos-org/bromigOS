@@ -53,7 +53,11 @@ on your install.
 ## Lab, Tools and Shell
 
 - **Lab** opens the [lab console](lab.md) and its step-by-step provisioning. These talk to
-  your other machines over your local network; they don't need the internet.
+  your other machines over your local network; they don't need the internet. **Join my lab
+  network** puts this machine on [your lab's private network](lab-network.md), with a join
+  code you paste or the one on the stick.
+- **Server › Network** asks how a server is reached from anywhere: through BRODEC only, your
+  lab's private network, WireGuard, or Tailscale's own service.
 - **VECTOR** explains what Field Kit found and proposes fixes. Nothing runs until you
   approve it. He uses your lab's model when the lab is on the network.
 - **Tools** has the toolbelt: a system monitor, disk usage, temperatures, a hardware
