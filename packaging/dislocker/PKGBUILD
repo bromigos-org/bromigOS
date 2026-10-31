@@ -8,7 +8,7 @@
 # them, and Ruby is a large dependency). GPL-2.0-or-later: unmodified upstream source.
 
 pkgname=dislocker
-pkgver=0.0.0
+pkgver=0.7.4
 pkgrel=1
 pkgdesc='Read BitLocker-encrypted volumes (FUSE)'
 arch=('x86_64')
