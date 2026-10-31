@@ -6,7 +6,7 @@
 # AUR. Adapted from the AUR's nwipe PKGBUILD. GPL-2.0-or-later: unmodified upstream source.
 
 pkgname=nwipe
-pkgver=0.0.0
+pkgver=0.43.1
 pkgrel=1
 pkgdesc='Securely erase disks using a variety of recognised methods (a fork of dwipe)'
 arch=('x86_64')
