@@ -462,7 +462,7 @@ pub fn home_layout(app: &App, area: Rect) -> HomeLayout {
     let fine = bromigos_tui::orb::fine(&app.look);
     let head_h = if bp == Breakpoint::Tiny {
         0
-    } else if fine && area.height >= 44 && room > 12 {
+    } else if fine && room > 12 {
         11
     } else if room > 6 {
         5
@@ -503,7 +503,13 @@ pub fn home_layout(app: &App, area: Rect) -> HomeLayout {
         Constraint::Length(gap(recent_h)),
         Constraint::Length(recent_h),
     ])
-    .flex(ratatui::layout::Flex::Start)
+    // anchored under the top bar on narrow screens (a list reads from the top); on wide ones
+    // the rows nothing needs go above and below the whole, not in a block at the bottom
+    .flex(if side {
+        ratatui::layout::Flex::Center
+    } else {
+        ratatui::layout::Flex::Start
+    })
     .areas(inner);
     let (computer, found) = if info.height < 3 {
         (Rect::default(), Rect::default())

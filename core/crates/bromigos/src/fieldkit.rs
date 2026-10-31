@@ -4982,6 +4982,28 @@ esac
     }
 
     #[test]
+    fn home_with_nothing_found_leaves_no_block_of_empty_rows() {
+        let mut a = app();
+        a.overview["found"] = json!([]);
+        a.overview["disks"] = json!([]);
+        let s = screen(&a, 150, 42);
+        save("home-150-nothing-found", &s);
+        let rows: Vec<&str> = s.lines().collect();
+        // between the bars, no run of blank rows longer than a quarter of the body
+        let mut run = 0;
+        let mut worst = 0;
+        for r in &rows[2..rows.len() - 2] {
+            if r.trim().is_empty() {
+                run += 1;
+                worst = worst.max(run);
+            } else {
+                run = 0;
+            }
+        }
+        assert!(worst <= 38 / 4, "{worst} blank rows in a row:\n{s}");
+    }
+
+    #[test]
     fn home_uses_its_rows_from_the_top() {
         let mut a = app();
         // wide: each tile has its line about it; the lab and the recent repairs when known
