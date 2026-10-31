@@ -1,0 +1,24 @@
+[Unit]
+Description=bromigOS: the live layer (the animated background, the decks, the screensaver)
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/live/README.md
+# Started at login (bromigos-live start --login, from the defaults' live.lua) and stopped with
+# the Hyprland session (it stops graphical-session.target when it exits). Its own supervisor
+# restarts a crashed daemon (4 crashes in 2 minutes: it gives up and says so); this unit
+# keeps the supervisor itself in its own place: not in a terminal's or an update's cgroup,
+# whose end would take it down, and back if it's killed.
+PartOf=graphical-session.target
+After=graphical-session.target
+StartLimitIntervalSec=120
+StartLimitBurst=4
+
+[Service]
+Type=exec
+ExecCondition=/usr/bin/bromigos session
+# the supervisor in the foreground: the daemon, restarted on a crash (live/bin/bromigos-live)
+ExecStart=/usr/bin/bromigos-live supervise
+# the still wallpaper back under where the live layer was
+ExecStopPost=-/usr/bin/bromigos-wallpaper apply
+# A stop (bromigos-live stop, the session's end) or the supervisor's own giving up exits
+# cleanly and stays stopped; a supervisor killed any other way comes back.
+Restart=on-failure
+RestartSec=2

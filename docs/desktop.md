@@ -229,6 +229,45 @@ The defaults follow the user's accessibility settings, which the theme's rendere
 Your own `hl.animation(…)` after the defaults, or `bromigos.config`, still wins. See
 [accessibility.md](accessibility.md).
 
+### The bar and the live layer come back by themselves
+
+The bar and the live layer each run as a systemd user service: `bromigos-bar.service`
+(`desktop/systemd`, started by `bromigos-bar start` from the defaults' `hyprland.lua`) and
+`bromigos-live.service` (`live/systemd`, started by `bromigos-live start --login` from
+`bromigos/live.lua`). That gives them two things a plain login command doesn't have:
+
+- **They come back.** systemd starts the bar again whenever it stops: a crash, a kill, its
+  monitor going away and coming back. The live layer's own supervisor restarts a crashed
+  daemon, and the unit brings the supervisor back if it's killed. Each gives up after a few
+  starts in a row (no crash loop); `bromigos restart waybar live` gives it a fresh try.
+- **Nothing else's end takes them down.** A program started from a terminal, or from
+  `bromigos update`, lives in that terminal's or update's cgroup, and systemd kills what's
+  left in a unit when the unit ends. BRODEC's phone update runs in a transient unit, so
+  before this its end took the bar and the live layer with it. A service lives on its own.
+
+Both end with the session: Hyprland stops `graphical-session.target` when it exits, and
+they're part of it. Each one starts only while a Hyprland session runs (`ExecCondition`:
+`bromigos session`), so a restart after the session has gone is skipped, not looped.
+
+Where a runtime directory has no user manager of its own, as in a nested test desktop or
+the theme previews, or with `BROMIGOS_NO_UNITS=1`, they start the old way, through the
+compositor. They never reach a user manager over a borrowed D-Bus.
+
+The rest of the session's programs that an update starts again (the panels,
+notifications, the on-screen display, the idle policy, the wallpaper's `swaybg`) start
+through the compositor (Hyprland's exec), the way login starts them. So they live in the
+session too, not in whatever ran the update.
+
+`bromigos status` says whether the bar and the live layer run, and how. When one doesn't,
+it names the command that starts it again, and Settings › Startup has a **Fix** button that
+runs it.
+
+```bash
+bromigos bar status        # running or not, and how (exit 0 running, 3 not)
+bromigos bar restart       # a new bar
+bromigos restart waybar live   # the bar and the live layer, started if they aren't running
+```
+
 ### The bar on a laptop
 
 Two of the bar's modules appear only where they mean something.

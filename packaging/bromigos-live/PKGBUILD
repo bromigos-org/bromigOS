@@ -65,6 +65,8 @@ package() {
   done < <(cd "$_root/live" && find live shaders sounds models tools -type f \
     -not -path '*/__pycache__/*' -print0)
   install -Dm0755 "$_root/live/bin/bromigos-live" "$lib/bin/bromigos-live"
+  # its user service: the supervisor out of whatever started it, back if it's killed
+  install -Dm0644 "$_root/live/systemd/bromigos-live.service" "$pkgdir/usr/lib/systemd/user/bromigos-live.service"
   chmod 0755 "$lib/tools/offscreen.py" "$lib/tools/lock-emblem.py" "$lib/tools/make-starship.py"
   install -d "$pkgdir/usr/bin"
   ln -s /usr/lib/bromigos/live/bin/bromigos-live "$pkgdir/usr/bin/bromigos-live"

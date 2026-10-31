@@ -47,7 +47,7 @@ import vkbd  # noqa: E402
 STUB = "#!/bin/sh\nexit 0\n"
 STUBS = {
     "waybar": STUB, "dunst": STUB, "hypridle": STUB, "swaybg": STUB, "bromigos-windows": STUB,
-    "bromigos-live": STUB, "xembedsniproxy": STUB,
+    "bromigos-live": STUB, "xembedsniproxy": STUB, "bromigos-bar": STUB,
     # its monitor hook restarts swaybg: never near the desktop's own (it once found it by name)
     "bromigos-wallpaper": STUB,
     "bromigos-widgets": '#!/bin/sh\necho "$*" >> "$HOME/widgets.log"\n',

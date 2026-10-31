@@ -1,0 +1,25 @@
+[Unit]
+Description=bromigOS: the bar (Waybar), back by itself after it stops
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/docs/desktop.md
+# The bar of the Hyprland session: started at login (bromigos-bar start, from the defaults'
+# hyprland.lua), stopped with the session (Hyprland stops graphical-session.target when it
+# exits). Waybar's own waybar.service, if someone enabled it, would be a second bar.
+PartOf=graphical-session.target
+After=graphical-session.target
+Conflicts=waybar.service
+# a bar that can't stay up gives up after 5 starts in a minute (no crash loop); `bromigos
+# restart waybar` (Settings › Startup's Fix) starts it again
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=exec
+# only while a Hyprland session runs (bromigos session exits 1 without one): after the
+# session ends a restart is skipped, not looped
+ExecCondition=/usr/bin/bromigos session
+# with the live session's display and instance, whatever this manager was told before
+ExecStart=/usr/bin/bromigos session exec /usr/bin/waybar
+# Back after any exit: a crash, a kill, its output going away. Only `systemctl --user stop`
+# (bromigos-bar stop, the session's end) keeps it stopped.
+Restart=always
+RestartSec=2

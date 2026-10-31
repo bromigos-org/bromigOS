@@ -60,3 +60,78 @@ class Wallpaper(unittest.TestCase):
             finally:
                 if proc.poll() is None: proc.terminate(); proc.wait()
                 stop.set(); thread.join(); srv.close()
+
+
+class SavedChoice(unittest.TestCase):
+    """The saved den variant is the user's: apply (login, every theme switch, every update)
+    never replaces it, even with a user's own art in ~/.config/wallpaper and many applies at
+    once (an update's theme step, the live layer's restart and its daemon all apply)."""
+
+    def sandbox(self, tmp, own_art=True):
+        home = Path(tmp)
+        (home / 'run').mkdir()
+        bins = home / 'bin'; bins.mkdir()
+        share = home / 'share/wallpaper'; share.mkdir(parents=True)
+        for name in ('bromigos-den-empty-2560x1440.jpg', 'bromigos-lock-empty-2560x1440.jpg'):
+            (share / name).write_bytes(b'shipped')
+        if own_art:     # a user's own art: den, masked (never picked by itself)
+            wp = home / '.config/wallpaper'; wp.mkdir(parents=True)
+            for name in ('bromigos-den-operator-2560x1440.jpg', 'bromigos-lock-operator-2560x1440.jpg',
+                         'bromigos-den-masked-2560x1440.jpg'):
+                (wp / name).write_bytes(b'own')
+        for name in ('hyprctl', 'swaybg', 'hyprpaper', 'notify-send'):
+            p = bins / name; p.write_text('#!/bin/sh\nexit 0\n'); p.chmod(0o755)
+        env = dict(os.environ, HOME=tmp, XDG_CONFIG_HOME=str(home / '.config'),
+                   XDG_STATE_HOME=str(home / 'state'), XDG_RUNTIME_DIR=str(home / 'run'),
+                   WAYLAND_DISPLAY='wayland-test', PATH=f'{bins}:/usr/bin', BROMIGOS_SHARE_DIR=str(home / 'share'))
+        env.pop('HYPRLAND_INSTANCE_SIGNATURE', None)
+        state = home / 'state/bromigos/wallpaper'
+        return env, state, share
+
+    def wp(self, env, *args):
+        return subprocess.run([str(ROOT / 'desktop/bin/bromigos-wallpaper'), *args], env=env,
+                              capture_output=True, text=True, timeout=30)
+
+    def test_nothing_saved_is_the_shipped_den_never_own_art(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env, state, share = self.sandbox(tmp)
+            r = self.wp(env, 'apply')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(os.readlink(state / 'den.jpg'), str(share / 'bromigos-den-empty-2560x1440.jpg'))
+            self.assertEqual(self.wp(env, 'status').stdout.split()[1], 'empty')
+            self.assertFalse((state / 'variant').exists(), 'apply wrote a choice nobody made')
+
+    def test_concurrent_applies_keep_the_saved_choice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env, state, share = self.sandbox(tmp)
+            self.assertEqual(self.wp(env, 'empty').returncode, 0)
+            self.assertEqual((state / 'variant').read_text().strip(), 'empty')
+            for _ in range(3):
+                procs = [subprocess.Popen([str(ROOT / 'desktop/bin/bromigos-wallpaper'), 'apply'], env=env,
+                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) for _ in range(12)]
+                for p in procs:
+                    self.assertEqual(p.wait(timeout=60), 0)
+                self.assertEqual((state / 'variant').read_text().strip(), 'empty')
+                self.assertEqual(os.readlink(state / 'den.jpg'), str(share / 'bromigos-den-empty-2560x1440.jpg'))
+
+    def test_a_chosen_variant_without_its_art_is_kept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env, state, share = self.sandbox(tmp, own_art=False)
+            state.mkdir(parents=True)
+            (state / 'variant').write_text('den\n')
+            r = self.wp(env, 'apply')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(os.readlink(state / 'den.jpg'), str(share / 'bromigos-den-empty-2560x1440.jpg'))
+            self.assertEqual((state / 'variant').read_text().strip(), 'den', 'the choice was replaced')
+
+    def test_choosing_own_art_is_kept_by_apply(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env, state, _share = self.sandbox(tmp)
+            self.assertEqual(self.wp(env, 'masked').returncode, 0)
+            self.assertEqual(self.wp(env, 'apply').returncode, 0)
+            self.assertEqual((state / 'variant').read_text().strip(), 'masked')
+            self.assertTrue(os.readlink(state / 'den.jpg').endswith('bromigos-den-masked-2560x1440.jpg'))
+
+
+if __name__ == '__main__':
+    unittest.main()

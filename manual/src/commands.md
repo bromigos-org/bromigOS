@@ -159,6 +159,7 @@ The desktop runs these for you. You don't need them day to day.
 | Command | What it does |
 |---|---|
 | [`bromigos fieldkit`](#bromigos-fieldkit) | Field Kit (Repair. Recon. Deploy.): the menu (Repair, Lab, Tools, Install, Shell), or one job: why, black-screen, status, make-stick, remote, usb (docs/fieldkit.md) |
+| [`bromigos bar`](#bromigos-bar) | The bar: start, restart or stop it (a user service that comes back by itself) |
 | [`bromigos qr`](#bromigos-qr) | Themed QR codes: a world's colours, its emblem, an art mode for BRODEC; checked by decoding |
 | [`bromigos tv guide`](#bromigos-tv-guide) |  |
 | [`bromigos welcome`](#bromigos-welcome) | The welcome tour after an install: Wi-Fi, your screens, a world, VECTOR and his voice, your homelab, the keys; every step skippable |
@@ -578,6 +579,23 @@ The login banner: the emblem beside live readings (kernel, uptime, load, memory,
 
 ```text
 bromigos banner
+```
+
+From the `bromigos-desktop` package.
+
+### bromigos bar
+
+The bar: start, restart or stop it (a user service that comes back by itself).
+
+```text
+bromigos bar start|restart|stop|status [--json]
+```
+
+For example:
+
+```text
+bromigos bar status
+bromigos bar restart
 ```
 
 From the `bromigos-desktop` package.
@@ -2064,7 +2082,7 @@ Restart what runs stale (its package is newer than the process), or the pieces n
 Usage: bromigos restart [OPTIONS] [PIECES]...
 
 Arguments:
-  [PIECES]...  live, widgets, waybar, dunst, vector, hyprland (its config), osd, idle (hypridle), or a user unit a package's restart.d drop-in declares; none: whatever is stale
+  [PIECES]...  live, widgets, waybar, dunst, vector, hyprland (its config), osd, idle (hypridle), or a user unit a package's restart.d drop-in declares; none: whatever is stale. A named live, widgets, waybar or dunst that isn't running is started
 
 Options:
       --check  Only say what would restart
