@@ -565,8 +565,13 @@ def route_fieldkit(espmp, dry):
             return
         disk, part = partition_of(espmp)
         idx = order.index(n) if n in order else len(order)
-        run([tool("efibootmgr"), "--quiet", "--create", "--disk", disk, "--part", part, "--label", FK_LABEL,
-             "--loader", LOADER, "--index", str(idx), "--unicode", FK_UKI])
+        # shim's second stage: the image's path in UCS-2, ending in a NUL (shim takes the path
+        # up to a NUL or a space, and efibootmgr --unicode writes neither)
+        with tempfile.NamedTemporaryFile(suffix=".opt") as opt:
+            opt.write(FK_UKI.encode("utf-16-le") + b"\0\0")
+            opt.flush()
+            run([tool("efibootmgr"), "--quiet", "--create", "--disk", disk, "--part", part, "--label", FK_LABEL,
+                 "--loader", LOADER, "--index", str(idx), "--append-binary-args", opt.name])
         run([tool("efibootmgr"), "--quiet", "--bootnum", n, "--delete-bootnum"], check=False)
         say(f"\"{FK_LABEL}\" starts through shim now")
 

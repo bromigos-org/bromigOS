@@ -31,12 +31,16 @@ def opt(name):
     return a[a.index(name) + 1] if name in a else None
 if "--create" in a:
     n = "%04X" % (max([int(k, 16) for k in st["entries"]] or [0]) + 1)
-    flags = {"--disk", "--part", "--label", "--loader", "--index"}
+    flags = {"--disk", "--part", "--label", "--loader", "--index", "--append-binary-args"}
     extra, i = [], 0
     while i < len(a):
         if a[i] in flags: i += 2; continue
         if a[i].startswith("-"): i += 1; continue
         extra.append(a[i]); i += 1
+    if "--append-binary-args" in a:
+        raw = open(opt("--append-binary-args"), "rb").read()
+        assert raw.endswith(b"\0\0"), "shim needs the second stage's path to end in a NUL"
+        extra.append(raw[:-2].decode("utf-16-le"))
     st["entries"][n] = {"label": opt("--label"), "loader": opt("--loader"), "args": " ".join(extra), "disk": opt("--disk"), "part": opt("--part")}
     idx = int(opt("--index") or 0)
     st["order"].insert(idx, n)
