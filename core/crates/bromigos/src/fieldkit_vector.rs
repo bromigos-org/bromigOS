@@ -17,7 +17,7 @@
 //! rollback, a command, a restart), a passphrase for mounting. While the emergency switch is on he
 //! talks and reads, and the engine refuses to run anything.
 
-pub mod orb;
+pub use bromigos_tui::orb;
 pub mod pair;
 // the Server section's entry point: crate::fieldkit_vector::pair(&look, engine)
 #[allow(unused_imports)]

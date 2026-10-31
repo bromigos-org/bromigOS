@@ -10,6 +10,8 @@
 //! - [`confirm`], [`typed_confirm`], [`input`]: dialogs, centred over the screen
 //! - [`log_view`]: a command's output as it runs
 //! - [`spark`]: the one-second glow on a panel's edge when something succeeds
+//! - [`glow`]: a focused card's Emitter-style glow (a bright frame on a soft surface)
+//! - [`meter`], [`sparkline`]: a share as a small bar, readings over time as a tiny line
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
@@ -121,6 +123,98 @@ pub fn spark<'a>(look: &Look, block: Block<'a>, on: bool) -> Block<'a> {
     } else {
         block
     }
+}
+
+/// A card that glows when it's focused, after the Emitter: its frame bright and bold in the
+/// primary colour, its title in white, on a soft surface (the panel a little towards the
+/// primary). Unfocused, it's plain Glass. The console keeps its green selection surface.
+pub fn glow<'a>(look: &Look, title: &'a str, focused: bool) -> Block<'a> {
+    let b = glass(look, title, focused);
+    if !focused {
+        return b;
+    }
+    let p = &look.pal;
+    let b = b.border_style(st(p.primary).add_modifier(Modifier::BOLD));
+    let b = if title.is_empty() {
+        b
+    } else {
+        b.title(Span::styled(
+            format!(" {title} "),
+            st(p.white).add_modifier(Modifier::BOLD),
+        ))
+    };
+    match look.mode {
+        Mode::Truecolor => b.style(
+            Style::new()
+                .bg(crate::palette::mix(p.panel, p.primary, 0.14))
+                .fg(p.text),
+        ),
+        _ => b.style(sel_surface(look)),
+    }
+}
+
+/// A meter: `share` (0 to 1) of `width` cells filled, in `tone`'s colour (Reading: calm is the
+/// soft colour, a warning glows). Eighth blocks where braille shows, whole blocks on the
+/// console, `#` and `.` in ASCII.
+pub fn meter(look: &Look, share: f64, width: u16, t: Tone) -> Vec<Span<'static>> {
+    let p = &look.pal;
+    let w = width.max(1) as usize;
+    let share = if share.is_finite() {
+        share.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let c = if t == Tone::Calm {
+        p.soft
+    } else {
+        tone(look, t)
+    };
+    let eighths = (share * (w * 8) as f64).round() as usize;
+    let (full, part) = (eighths / 8, eighths % 8);
+    let (block, empty) = if look.ascii {
+        ("#", ".")
+    } else {
+        ("█", "░")
+    };
+    let mut lit = block.repeat(full);
+    let mut used = full;
+    if part > 0 && used < w {
+        // the last cell's share: an eighth block, or on the console a whole one from half up
+        let ch = if look.mode == Mode::Truecolor && !look.ascii {
+            Some(["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"][part])
+        } else {
+            (part >= 4).then_some(block)
+        };
+        if let Some(ch) = ch {
+            lit.push_str(ch);
+            used += 1;
+        }
+    }
+    vec![
+        Span::styled(lit, st(c)),
+        Span::styled(empty.repeat(w - used.min(w)), st(p.faint)),
+    ]
+}
+
+/// A sparkline: the readings `values` from `lo` to `hi`, oldest first, one cell each, the last
+/// `width` of them. Eighth blocks where braille shows; elsewhere a plain ramp (`_.-=+*#`).
+pub fn sparkline(look: &Look, values: &[f64], lo: f64, hi: f64, width: usize) -> String {
+    const FINE: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    const PLAIN: [char; 7] = ['_', '.', '-', '=', '+', '*', '#'];
+    let ramp: &[char] = if look.mode == Mode::Truecolor && !look.ascii {
+        &FINE
+    } else {
+        &PLAIN
+    };
+    let span = (hi - lo).max(f64::EPSILON);
+    let skip = values.len().saturating_sub(width);
+    values[skip..]
+        .iter()
+        .map(|v| {
+            let k = ((v - lo) / span).clamp(0.0, 1.0);
+            ramp[((k * (ramp.len() - 1) as f64).round() as usize).min(ramp.len() - 1)]
+        })
+        .collect()
 }
 
 /// The Emitter: the header band. The emblem (or the wordmark, where braille can't show) on
@@ -694,6 +788,33 @@ mod tests {
         let a = sweep(&look, None, 1, 10).to_string();
         let b = sweep(&look, None, 5, 10).to_string();
         assert_ne!(a, b, "the segment travels");
+    }
+
+    #[test]
+    fn meters_and_sparklines() {
+        let mut look = Look::wick();
+        let text = |v: &[Span]| v.iter().map(|s| s.content.to_string()).collect::<String>();
+        let m = text(&meter(&look, 0.5, 10, Tone::Calm));
+        assert_eq!(m.chars().count(), 10, "{m}");
+        assert_eq!(m.chars().filter(|c| *c == '█').count(), 5, "{m}");
+        assert_eq!(text(&meter(&look, 2.0, 4, Tone::Warn)), "████");
+        assert_eq!(text(&meter(&look, f64::NAN, 3, Tone::Calm)), "░░░");
+        let s = sparkline(&look, &[40.0, 60.0, 80.0], 30.0, 90.0, 8);
+        assert_eq!(s.chars().count(), 3);
+        assert!(s.starts_with('▂') && s.ends_with('▇'), "{s}");
+        assert_eq!(sparkline(&look, &[1.0; 20], 0.0, 1.0, 5).chars().count(), 5);
+        look.ascii = true;
+        assert!(text(&meter(&look, 0.33, 9, Tone::Calm)).is_ascii());
+        assert!(sparkline(&look, &[40.0, 90.0], 30.0, 90.0, 8).is_ascii());
+    }
+
+    #[test]
+    fn a_focused_card_glows() {
+        let look = Look::wick();
+        let on = glow(&look, "", true);
+        let off = glow(&look, "", false);
+        assert_ne!(on, off);
+        assert_eq!(off, glass(&look, "", false));
     }
 
     #[test]

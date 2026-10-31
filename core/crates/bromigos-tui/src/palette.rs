@@ -47,6 +47,19 @@ pub fn to_hex(c: Color) -> String {
     }
 }
 
+/// `a` moved `k` of the way (0 to 1) towards `b`: a glow's soft surface. Only 24-bit colours
+/// mix; anything else stays `a`.
+pub fn mix(a: Color, b: Color, k: f32) -> Color {
+    match (a, b) {
+        (Color::Rgb(r1, g1, b1), Color::Rgb(r2, g2, b2)) => {
+            let m =
+                |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * k.clamp(0.0, 1.0)).round() as u8;
+            Color::Rgb(m(r1, r2), m(g1, g2), m(b1, b2))
+        }
+        _ => a,
+    }
+}
+
 /// The Wick's palette.json (themes/wick).
 pub const WICK_JSON: &str = r##"{"colors": {"void": "#000500", "panel": "#001300", "selection": "#003b00",
 "primary": "#39ff14", "soft": "#9cff8a", "dim": "#159b09", "text": "#c4f5bb",
@@ -124,6 +137,37 @@ impl Pal {
                 white: Color::Reset,
                 accent: Color::Reset,
             },
+        }
+    }
+
+    /// Each role as "#rrggbb" (shapes for the Python TUIs: `bromigos fieldkit shapes`).
+    pub fn roles_json(&self) -> Value {
+        json!({
+            "void": to_hex(self.void), "panel": to_hex(self.panel),
+            "selection": to_hex(self.selection), "primary": to_hex(self.primary),
+            "soft": to_hex(self.soft), "dim": to_hex(self.dim), "text": to_hex(self.text),
+            "muted": to_hex(self.muted), "faint": to_hex(self.faint), "warn": to_hex(self.warn),
+            "danger": to_hex(self.danger), "white": to_hex(self.white),
+            "accent": to_hex(self.accent),
+        })
+    }
+
+    /// A role by its name (the names [`Pal::roles_json`] gives).
+    pub fn role(&self, name: &str) -> Color {
+        match name {
+            "void" => self.void,
+            "panel" => self.panel,
+            "selection" => self.selection,
+            "primary" => self.primary,
+            "soft" => self.soft,
+            "dim" => self.dim,
+            "muted" => self.muted,
+            "faint" => self.faint,
+            "warn" => self.warn,
+            "danger" => self.danger,
+            "white" => self.white,
+            "accent" => self.accent,
+            _ => self.text,
         }
     }
 

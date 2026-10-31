@@ -351,7 +351,7 @@ cd core && cargo test -p bromigos fieldkit_vector
 
   Captures: `tui-vector.txt` (no brain), `tui-vector-approval.txt`, `tui-vector-applied.txt`,
   `tui-vector-console.txt`, and `tui-vector-150.txt`, `-110`, `-80` and `-60`.
-- `fieldkit_vector/orb.rs`: the scan moves and the core breathes. The same time draws the same
+- `bromigos-tui/src/orb.rs`: the scan moves and the core breathes. The same time draws the same
   orb. The plain ring is ASCII.
 - `fieldkit_vector/pair.rs`: the QR's quiet zone and module size for the screen, the code as
   BRODEC shows it, the waiting screen with the QR and the code (`tui-vector-pair.txt`; decoded

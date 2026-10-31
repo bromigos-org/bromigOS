@@ -1,22 +1,23 @@
-//! VECTOR's presence: the screen's one FLARE, a hologram orb drawn in braille (a ring with a
-//! dashed inner ring and ticks, a scan arc going round, a pulsing core), after the operator's
-//! mock-up. Under reduced motion it holds still (the caller keeps `t` at 0). The console and
-//! ASCII looks get a small ring in plain characters, with the same scan and core.
+//! The hologram orb: VECTOR's presence and Field Kit Home's FLARE, drawn in braille (a ring
+//! with a dashed inner ring and ticks, a scan arc going round, a pulsing core), after the
+//! operator's mock-up. Under reduced motion it holds still (the caller keeps `t` at 0). The
+//! console and ASCII looks get a small ring in plain characters, with the same scan and core.
 
-use bromigos_tui::{Look, Mode};
+use crate::{Look, Mode};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
-/// Dots on a braille canvas `w` cells by `h` (2 by 4 dots each); `hot` cells glow.
-struct Canvas {
-    w: usize,
-    h: usize,
-    dots: Vec<u8>,
-    hot: Vec<bool>,
+/// Dots on a braille canvas `w` cells by `h` (2 by 4 dots each); `hot` cells glow. The orb,
+/// the lab's map and anything else drawn in dots share it.
+pub struct Canvas {
+    pub w: usize,
+    pub h: usize,
+    pub dots: Vec<u8>,
+    pub hot: Vec<bool>,
 }
 
 impl Canvas {
-    fn new(w: usize, h: usize) -> Canvas {
+    pub fn new(w: usize, h: usize) -> Canvas {
         Canvas {
             w,
             h,
@@ -25,7 +26,8 @@ impl Canvas {
         }
     }
 
-    fn put(&mut self, x: f64, y: f64, glow: bool) {
+    /// A dot at (x, y) in dots; off the canvas, nothing.
+    pub fn put(&mut self, x: f64, y: f64, glow: bool) {
         let (x, y) = (x.round(), y.round());
         if x < 0.0 || y < 0.0 || x >= (self.w * 2) as f64 || y >= (self.h * 4) as f64 {
             return;
@@ -44,6 +46,34 @@ impl Canvas {
         let i = (y / 4) * self.w + x / 2;
         self.dots[i] |= bit;
         self.hot[i] |= glow;
+    }
+
+    /// A dotted line from (x0, y0) to (x1, y1), a dot every `step` dots.
+    pub fn line(&mut self, (x0, y0): (f64, f64), (x1, y1): (f64, f64), step: f64, glow: bool) {
+        let n = ((x1 - x0).hypot(y1 - y0) / step.max(0.5)).ceil().max(1.0) as usize;
+        for i in 0..=n {
+            let k = i as f64 / n as f64;
+            self.put(x0 + (x1 - x0) * k, y0 + (y1 - y0) * k, glow);
+        }
+    }
+
+    /// The canvas as rows of (character, glowing).
+    pub fn rows(&self) -> Vec<Vec<(char, bool)>> {
+        (0..self.h)
+            .map(|y| {
+                (0..self.w)
+                    .map(|x| {
+                        let i = y * self.w + x;
+                        let ch = if self.dots[i] == 0 {
+                            ' '
+                        } else {
+                            char::from_u32(0x2800 + self.dots[i] as u32).unwrap_or(' ')
+                        };
+                        (ch, self.hot[i])
+                    })
+                    .collect()
+            })
+            .collect()
     }
 }
 
@@ -87,21 +117,7 @@ pub fn braille(t: f64, w: usize, h: usize) -> Vec<Vec<(char, bool)>> {
             }
         }
     }
-    (0..h)
-        .map(|y| {
-            (0..w)
-                .map(|x| {
-                    let i = y * w + x;
-                    let ch = if c.dots[i] == 0 {
-                        ' '
-                    } else {
-                        char::from_u32(0x2800 + c.dots[i] as u32).unwrap_or(' ')
-                    };
-                    (ch, c.hot[i])
-                })
-                .collect()
-        })
-        .collect()
+    c.rows()
 }
 
 /// The plain ring: the outer ring's characters glow where the scan is; the core breathes.
@@ -136,14 +152,25 @@ pub fn plain(t: f64) -> Vec<Vec<(char, bool)>> {
         .collect()
 }
 
-/// The orb as lines for this look: braille where it shows (truecolour), the plain ring
-/// elsewhere. `size` is the braille size in cells (w, h); the plain ring is always 13 by 5.
-pub fn lines(look: &Look, t: f64, size: (usize, usize)) -> Vec<Line<'static>> {
-    let rows = if look.mode == Mode::Truecolor && !look.ascii {
+/// Whether braille shows on this look: 24-bit colour terminals' fonts have it; the Linux
+/// console's font and ASCII don't.
+pub fn fine(look: &Look) -> bool {
+    look.mode == Mode::Truecolor && !look.ascii
+}
+
+/// The orb's rows for this look: braille where it shows, the plain ring elsewhere.
+pub fn rows(look: &Look, t: f64, size: (usize, usize)) -> Vec<Vec<(char, bool)>> {
+    if fine(look) {
         braille(t, size.0, size.1)
     } else {
         plain(t)
-    };
+    }
+}
+
+/// The orb as lines for this look: braille where it shows (truecolour), the plain ring
+/// elsewhere. `size` is the braille size in cells (w, h); the plain ring is always 13 by 5.
+pub fn lines(look: &Look, t: f64, size: (usize, usize)) -> Vec<Line<'static>> {
+    let rows = rows(look, t, size);
     let p = &look.pal;
     rows.into_iter()
         .map(|row| {

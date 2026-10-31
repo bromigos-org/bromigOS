@@ -10,6 +10,10 @@
 //!   the Reading status line (EMBER), menus with hints, confirm dialogs (and confirm by typing
 //!   a name), the log viewer
 //! - [`emblem`]: the burn-in emblem and the banner, in text
+//! - [`orb`]: the hologram orb in braille (VECTOR's presence, Field Kit Home's FLARE), and the
+//!   braille canvas it's drawn on
+//! - [`diskmap`]: a disk as one bar of its partitions (the same rules for the Python TUIs)
+//! - [`starmap`]: machines round a hub as a small braille radar (Field Kit's Lab)
 //! - [`layout`]: breakpoints, columns, grids, scrolling, sheets: every size from a phone to a 4K terminal
 //! - [`icons`]: Nerd Font icons, each with a plain fallback for the Linux console and ASCII
 //!
@@ -17,10 +21,13 @@
 //! (settings/console/palette.vtrgb), so [`term::Mode::Ansi16`] names those indexes and the
 //! console shows the theme's real colours, not stock VGA ones.
 
+pub mod diskmap;
 pub mod emblem;
 pub mod icons;
 pub mod layout;
+pub mod orb;
 pub mod palette;
+pub mod starmap;
 pub mod term;
 pub mod widgets;
 

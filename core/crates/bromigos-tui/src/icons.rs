@@ -5,7 +5,8 @@
 //! console's 16 colours, without colour, or in ASCII; BROMIGOS_ICONS=nerd|ascii forces one.
 //!
 //! The glyphs are Font Awesome's, in Nerd Fonts' nf-fa range (U+F000 to U+F2E0), which every
-//! Nerd Font and Symbols Nerd Font carry.
+//! Nerd Font and Symbols Nerd Font carry, and the operating systems' logos from its nf-linux
+//! range (Arch, which bromigOS is built on, U+F303).
 
 use crate::term::Look;
 
@@ -34,6 +35,8 @@ pub enum Icon {
     Windows,
     Linux,
     Bromigos,
+    /// an operating system's logo: Arch (bromigOS and other Arch installs)
+    Arch,
     FieldKit,
     Lock,
     Unlock,
@@ -95,6 +98,7 @@ impl Icon {
             Windows => ("\u{f17a}", "W", "W"),
             Linux => ("\u{f17c}", "L", "L"),
             Bromigos => ("\u{f06d}", "▲", "*"),
+            Arch => ("\u{f303}", "▲", "A"),
             FieldKit => ("\u{f0b1}", "►", "*"),
             Lock => ("\u{f023}", "§", "L"),
             Unlock => ("\u{f09c}", "○", "U"),
