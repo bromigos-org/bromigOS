@@ -22,7 +22,7 @@ The manual's [Alerts](../manual/src/alerts.md) page is the user's side.
 | `update.waiting` | Updates waiting (`bromigos update --check`) | Info. Needs you when nothing was installed for 30 days |
 | `update.restart` | A new kernel or graphics driver that runs only after a restart | Needs you |
 | `update.held` | bromigOS Server's automatic update held by Arch Linux news, or rolled back | Needs you (critical when a rollback also failed) |
-| `backup.restic` | restic backups run by systemd (`restic*` and `bromigos-backup*` services) | Needs you: the last one failed, or none finished for 36 hours |
+| `backup.restic` | bromigOS Server's own backup (`bromigos server backup`), and restic backups run by systemd (`restic*` and `bromigos-backup*` services) | Needs you: the last one failed, none finished for 36 hours, or the Server's backup check failed |
 | `power.ups` | A UPS through NUT (`upsc`) | Needs you: on battery, or its battery needs replacing. Critical: on battery and low |
 | `systemd.failed` | Services that failed, leaving out ones that don't matter | Needs you. Critical for SSH, the firewall and the network on a Server |
 | `server.game` | A game server that stopped (bromigOS Server) | Needs you |

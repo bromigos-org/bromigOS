@@ -227,6 +227,21 @@ class Checks(Machine):
         self.m.write("backup-units", "")
         self.assertEqual(states(self.m.run())["backup.restic"], "skipped")
 
+    def test_bromigos_servers_own_backup(self):
+        state = self.m.root / "var/lib/bromigos/server/backup.json"
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text(json.dumps({"run": {"phase": "failed", "at": "2026-10-30T03:10:00-07:00",
+                                             "ts": NOW / 1000 - 3600, "reason": "the destination can't be reached"},
+                                     "check": {"phase": "failed", "at": "x", "reason": "pack 3f2a is damaged"}}))
+        got = {a["id"]: a for a in self.m.run()["alerts"]}
+        self.assertEqual(got["backup.restic:server"]["title"], "The last backup failed")
+        self.assertIn("can't be reached", got["backup.restic:server"]["detail"])
+        self.assertEqual(got["backup.restic:server-check"]["severity"], "needs_you")
+        state.write_text(json.dumps({"run": {"phase": "ok", "at": "2026-10-28", "ts": NOW / 1000 - 50 * 3600}}))
+        self.assertEqual(self.m.run()["alerts"][0]["title"], "No backup for 50 hours")
+        state.write_text(json.dumps({"run": {"phase": "ok", "at": "today", "ts": NOW / 1000 - 3600}}))
+        self.assertNotIn("backup.restic:server", ids(self.m.run()))
+
     def test_the_ups(self):
         self.m.write("ups/rack", "battery.charge: 80\nbattery.runtime: 1500\nups.status: OB DISCHRG\n")
         a = self.m.run()["alerts"][0]

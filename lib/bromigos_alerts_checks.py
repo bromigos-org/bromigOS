@@ -21,7 +21,7 @@ from bromigos_alerts import Failed, Skip, alert, evidence, slug
 FIELDKIT_ENGINE = "/usr/lib/bromigos/fieldkit/fieldkit-engine"
 FIELDKIT_FINDINGS = "/var/lib/bromigos/fieldkit/findings.json"
 SERVER_STATE = "/var/lib/bromigos/server/update.json"
-BACKUP_STATUS = "/var/lib/bromigos/backup/status.json"
+BACKUP_STATE = "/var/lib/bromigos/server/backup.json"     # bromigos server backup
 DAY = 86400_000
 
 
@@ -454,22 +454,41 @@ def backup(ctx):
     env = ctx.env
     now = env.now_ms()
     found = []
-    # bromigOS Server's own backups write a status file (docs/server.md): read it when it's there
-    raw = env.read(BACKUP_STATUS)
+    # bromigOS Server's own backup (bromigos server backup) keeps its state: the last run, the last check
+    raw = env.read(BACKUP_STATE)
     if raw:
         try:
             st = json.loads(raw)
         except ValueError:
             st = {}
-        last_ok = int(st.get("last_success") or 0)
-        if st.get("last_error"):
-            found.append(alert("backup.restic", "bromigos", "needs_you", "The last backup failed",
-                               f"{st['last_error'][:300]}. Your files weren't copied this time.", "restic",
-                               evidence=evidence([str(st.get("last_error"))], last_success=last_ok)))
-        elif last_ok and now - last_ok > 36 * 3600_000:
-            found.append(alert("backup.restic", "bromigos", "needs_you", "No backup for over a day and a half",
-                               f"The last good backup was {(now - last_ok) // 3600_000} hours ago.", "restic",
-                               evidence=evidence([], last_success=last_ok)))
+        run, chk = st.get("run") or {}, st.get("check") or {}
+        cmds = {"commands": ["bromigos server backup status", "journalctl -u bromigos-server-backup.service -n 50 --no-pager",
+                             "sudo bromigos server backup run"],
+                "touches": ["runs the backup again"], "from": "bromigos", "root": True,
+                "note": "Read why it failed first: a destination that can't be reached and a full disk are common."}
+        if run.get("phase") == "failed":
+            found.append(alert("backup.restic", "server", "needs_you", "The last backup failed",
+                               f"{(run.get('reason') or 'restic failed')[:300]}. Nothing was copied this time.", "restic",
+                               evidence=evidence([f"run: failed at {run.get('at', '?')}: {run.get('reason', '')}"],
+                                                 phase="failed", at=run.get("at", "")), fix=cmds))
+        elif run.get("ts") and now - int(float(run["ts"]) * 1000) > 36 * 3600_000:
+            hours = (now - int(float(run["ts"]) * 1000)) // 3600_000
+            found.append(alert("backup.restic", "server", "needs_you", f"No backup for {hours} hours",
+                               f"The last backup was on {run.get('at', '?')}. The nightly one hasn't run since: "
+                               "the server may have been off, or the timer stopped.", "restic",
+                               evidence=evidence([f"run: {run.get('phase')} at {run.get('at', '?')}"], at=run.get("at", "")),
+                               fix=cmds))
+        elif run.get("phase") == "partial":
+            found.append(alert("backup.restic", "server", "info", "The last backup left some files out",
+                               f"{(run.get('reason') or 'some files could not be read')[:300]}. The rest was backed up.",
+                               "restic", evidence=evidence([f"run: partial at {run.get('at', '?')}: {run.get('reason', '')}"])))
+        if chk.get("phase") == "failed":
+            found.append(alert("backup.restic", "server-check", "needs_you", "The backup check failed",
+                               f"{(chk.get('reason') or 'restic check failed')[:300]}. What's in the backup may not read "
+                               "back: look at it before you need it.", "restic",
+                               evidence=evidence([f"check: failed at {chk.get('at', '?')}: {chk.get('reason', '')}"]),
+                               fix=dict(cmds, commands=["bromigos server backup status", "sudo bromigos server backup check"],
+                                        touches=["nothing (it reads the backup back)"])))
     rc, out, _ = env.run(["systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--type=service",
                           "restic*", "bromigos-backup*"], timeout=15)
     if rc == 127 and not raw:
