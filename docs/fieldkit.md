@@ -301,6 +301,10 @@ of `fieldkit/lib/bromigos_fieldkit/engine.py`.
 **Every change keeps a backup first**, inside the install, in
 `/var/lib/bromigos/fieldkit-backups/<when>-<what>/`, at each file's own path.
 
+A check's findings each have a mark: ✓ fine (or fixed), ▲ a problem with a fix, ✕ a problem
+without one (`ok`, `!` and `x` in ASCII). A fix that works flashes its ✓ and the panel's edge
+for a second.
+
 #### The black screen
 
 A real case started this: the desktop came up as a black screen with a blinking cursor.

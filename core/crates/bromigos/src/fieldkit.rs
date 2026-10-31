@@ -859,6 +859,8 @@ pub struct Finding {
     pub fix: String,
     pub ok: bool,
     pub result: String,
+    /// when its fix ran and worked (the ✓ flashes for a second after: a Spark)
+    pub fixed_at: Option<Instant>,
     /// the fix's exact commands, and what it touches (the engine's)
     pub commands: Vec<String>,
     pub touches: Vec<String>,
@@ -2966,6 +2968,7 @@ impl App {
                 if let Some(Overlay::Findings { items, sel, .. }) = self.overlays.last_mut() {
                     if let Some(f) = items.iter_mut().find(|f| f.id == id) {
                         f.result = if msg.is_empty() { "done".into() } else { msg };
+                        f.fixed_at = ok.then(Instant::now);
                     }
                     if let Some(next) = (0..items.len()).find(|i| {
                         !items[*i].fix.is_empty() && !items[*i].ok && items[*i].result.is_empty()
@@ -3567,6 +3570,7 @@ fn findings(v: &Value) -> Vec<Finding> {
             fix: s(f, "fix"),
             ok: f["ok"].as_bool().unwrap_or(false),
             result: String::new(),
+            fixed_at: None,
             commands: strings(&f["commands"]),
             touches: strings(&f["touches"]),
         })
@@ -4386,7 +4390,54 @@ esac
             items[1]
         );
         assert_eq!(*sel, 2, "on to the next fix");
+        assert!(items[1].fixed_at.is_some());
         save("black-screen-fixed", &screen(&a, 110, 34));
+    }
+
+    /// The findings' marks: ✓ fine or fixed, ▲ a problem with a fix, ✕ one without, each in its
+    /// colour; a fix that just worked flashes its ✓ and the panel's edge (never under reduced
+    /// motion).
+    #[test]
+    fn findings_show_their_severity_and_a_fix_sparks() {
+        let mut a = app();
+        a.open_section(0);
+        a.sel = a.items().iter().position(|i| i.act == Act::Black).unwrap();
+        let fx = a.key(key(KeyCode::Enter));
+        drive(&mut a, fx);
+        if let Some(Overlay::Findings { items, .. }) = a.overlays.last_mut() {
+            items[2].fix.clear();
+        }
+        let cell = |a: &App, mark: &str| {
+            let mut t = Terminal::new(TestBackend::new(110, 34)).unwrap();
+            t.draw(|f| draw(f, a)).unwrap();
+            let b = t.backend().buffer().clone();
+            (0..34)
+                .flat_map(|y| (0..110).map(move |x| (x, y)))
+                .find(|&(x, y)| b[(x, y)].symbol() == mark && x < 4)
+                .map(|(x, y)| b[(x, y)].clone())
+        };
+        let p = a.look.pal;
+        assert_eq!(cell(&a, "✓").unwrap().fg, p.primary);
+        assert_eq!(cell(&a, "▲").unwrap().fg, p.warn);
+        assert_eq!(cell(&a, "✕").unwrap().fg, p.danger);
+        save("finding-severity", &screen(&a, 110, 34));
+        // the fix: its ✓ flashes white for a second while motion is allowed
+        a.look.motion = true;
+        let fx = a.key(key(KeyCode::Enter));
+        drive(&mut a, fx);
+        let mut t = Terminal::new(TestBackend::new(110, 34)).unwrap();
+        t.draw(|f| draw(f, &a)).unwrap();
+        let b = t.backend().buffer();
+        let flashed = (0..34).any(|y| b[(2, y)].symbol() == "✓" && b[(2, y)].fg == p.white);
+        assert!(flashed, "the fixed one's ✓ flashes");
+        assert!(
+            (0..110).any(|x| b[(x, 2)].fg == p.soft),
+            "the panel's edge sparks"
+        );
+        // and in ASCII, plain marks
+        a.look.ascii = true;
+        let s = screen(&a, 110, 34);
+        assert!(s.contains("ok ") && s.contains("x  "), "{s}");
     }
 
     #[test]
@@ -4603,7 +4654,7 @@ esac
         // and the finding's title sits after its marker, its wrapped rest under the title
         let t = body
             .iter()
-            .position(|r| r.contains("▸ A login screen"))
+            .position(|r| r.contains("▲ A login screen"))
             .expect(&s);
         assert_eq!(col(body[t + 1]), col(body[t]) + 2, "{s}");
         save("black-screen-narrow", &s);

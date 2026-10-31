@@ -2444,29 +2444,49 @@ fn draw_overlay(f: &mut Frame, area: Rect, app: &App, o: &Overlay) {
         Overlay::Findings {
             title, items, sel, ..
         } => {
+            // a fix that just worked: the panel's edge and its ✓ flash (the Spark)
+            let flash = |it: &Finding| {
+                look.motion
+                    && it
+                        .fixed_at
+                        .is_some_and(|t| t.elapsed() < Duration::from_secs(1))
+            };
             let inner = widgets::panel(f, area, look, title, None);
+            if items.iter().any(flash) {
+                f.render_widget(
+                    widgets::spark(look, widgets::glass(look, title, true), true),
+                    area,
+                );
+            }
             let w = inner.width;
             let mut lines = Vec::new();
             let mut at = 0;
-            let (okm, bad, pad) = if look.ascii {
-                ("ok ", "!  ", "   ")
-            } else {
-                ("✓ ", "▸ ", "  ")
-            };
+            let pad = if look.ascii { "   " } else { "  " };
             for (i, it) in items.iter().enumerate() {
                 if i == *sel {
                     at = lines.len();
                 }
-                let (mark, style) = if it.ok {
-                    (okm, st(p.muted))
+                // its severity: ✓ fine or fixed, ▲ a problem with a fix, ✕ one without
+                let problem = st(p.white).add_modifier(Modifier::BOLD);
+                let ((mark, ascii), colour, style) = if it.ok {
+                    (("✓ ", "ok "), p.primary, st(p.muted))
+                } else if it.fixed_at.is_some() {
+                    (("✓ ", "ok "), p.primary, st(p.soft))
+                } else if !it.fix.is_empty() {
+                    (("▲ ", "!  "), p.warn, problem)
                 } else {
-                    (bad, st(p.white).add_modifier(Modifier::BOLD))
+                    (("✕ ", "x  "), p.danger, problem)
                 };
+                let mark = if look.ascii { ascii } else { mark };
                 let mut title_lines = widgets::wrap_hanging(&it.title, w, mark, pad, style);
                 if let Some(first) = title_lines.first_mut()
                     && let Some(m) = first.spans.first_mut()
                 {
-                    m.style = st(if it.ok { p.dim } else { p.warn });
+                    m.style = if flash(it) {
+                        st(p.white).add_modifier(Modifier::BOLD)
+                    } else {
+                        st(colour).add_modifier(Modifier::BOLD)
+                    };
                 }
                 lines.extend(title_lines);
                 if !it.detail.is_empty() && !it.ok {
