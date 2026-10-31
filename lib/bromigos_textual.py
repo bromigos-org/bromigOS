@@ -272,10 +272,36 @@ def styles(sixteen=None):
     return (c["dim"], c["primary"], "bold " + c["soft"])
 
 
+RING = ["  .-'''''-.  ", " /  .---.  \\ ", "|  ( (@) )  |", " \\  '---'  / ", "  '-.....-'  "]
+
+
+def orb_plain(t=0.0):
+    """The orb for the Linux console and ASCII (no braille in its font): Field Kit's plain
+    ring, the scan lit where it is, the core breathing."""
+    sweep = (t * 40) % 360
+    big = math.sin(t * 3) >= 0
+    hot, cold = ("bold " + rich16("primary"), rich16("secondary"))
+    out = Text()
+    for y, row in enumerate(RING):
+        for x, ch in enumerate(row):
+            dx, dy = x - 6, (y - 2) * 2.4
+            if ch == "@":
+                out.append("@" if big else "o", style=hot)
+                continue
+            a = math.degrees(math.atan2(dy, dx)) % 360
+            lit = math.hypot(dx, dy) > 4.6 and ch != " " and (a - sweep) % 360 < 70
+            out.append(ch, style=hot if lit else cold)
+        if y < len(RING) - 1:
+            out.append("\n")
+    return out
+
+
 def orb(t=0.0, w=14, h=7):
     """VECTOR's presence, the screen's one FLARE: a ring with a dashed inner ring and ticks, a
     scan arc going round and a pulsing core (Field Kit's orb, after the same mock-up). t stays
-    0 under reduced motion."""
+    0 under reduced motion. The Linux console (no braille in its font) gets the plain ring."""
+    if icon_look() != "nerd":
+        return orb_plain(t)
     d = Dots(w, h)
     cx, cy = w - 0.5, h * 2 - 0.5
     rad = min(cx, cy * 0.95)
@@ -354,60 +380,75 @@ def holo(kind, w=20, h=8):
     return d.text(styles())
 
 
+def _dim(colour):
+    """A colour's darker shade for the cells a side can't give up: a hex one mixed toward
+    black; a console colour name becomes the console's grey."""
+    if colour.startswith("#"):
+        r, g, b = (int(colour[i:i + 2], 16) for i in (1, 3, 5))
+        return "#%02x%02x%02x" % (int(r * 0.42), int(g * 0.42), int(b * 0.42))
+    return "bright_black"
+
+
 def disk_map(segs, width, colors, split=None, erase=False, look=None):
-    """The disk as a bar of block characters, one colour per partition with its icon in it.
-    segs: [(role, bytes, words)]. split: (lo, hi, value, total) GB for alongside, inside the
-    'windows' segment. erase: all bromigOS, with a danger edge. Returns Rich Text."""
+    """The disk as a bar two rows tall, built only of background-coloured cells so it keeps
+    one thickness in every terminal (kmscon, kitty, foot, the bare VT), and a marker row under
+    it with each part's icon centred under its segment.
+
+    segs: [(role, bytes, …)] in disk order. split: (lo, hi, value, total) GB for alongside,
+    inside the 'windows' segment: what it keeps on the left, bromigOS on the right, the
+    divider a full-height cell across both rows, each side's minimum a darker shade.
+    erase: all bromigOS, with a danger edge. Returns Rich Text (three lines)."""
     look = look or icon_look()
     total = sum(s[1] for s in segs) or 1
     minw = 3
     big = [s for s in segs if s[1] / total * width >= minw]
     room = width - (len(segs) - len(big)) * minw
     bigsum = sum(s[1] for s in big) or 1
-    t = Text()
+    cells, marks = [], []                  # cells: each column's background; marks: (column, icon, colour)
     if erase:
-        t.append("▐", style="bold " + colors["danger"])
-        inner = width - 2
-        mid = icon("bromigos", look)
-        half = (inner - 1) // 2
-        t.append("█" * half, style=colors["bromigos"])
-        t.append(mid, style="bold reverse " + colors["bromigos"])
-        t.append("█" * (inner - half - 1), style=colors["bromigos"])
-        t.append("▌", style="bold " + colors["danger"])
-        return t
-    for s in segs:
-        n = minw if s not in big else max(minw, int(round(room * s[1] / bigsum)))
-        role = s[0]
-        if role == "windows" and split:
-            lo, hi, value, tot = split
-            cut = max(1, min(n - 2, int(round(n * value / tot))))
-            lo_c, hi_c = int(round(n * lo / tot)), int(round(n * hi / tot))
-            for i in range(n):
-                if i == cut:
-                    t.append("┃", style="bold reverse " + colors["text"])
-                elif i < cut:
-                    ch = "▒" if i < lo_c else "█"
-                    if i == cut // 2:
-                        t.append(icon("windows", look), style="bold reverse " + colors["windows"])
+        cells = [colors["danger"]] + [colors["bromigos"]] * (width - 2) + [colors["danger"]]
+        marks.append((width // 2, icon("bromigos", look), colors["bromigos"]))
+        marks.append((0, icon("alert", look), colors["danger"]))
+    else:
+        widths = [minw if s not in big else max(minw, int(round(room * s[1] / bigsum))) for s in segs]
+        widths[-1] += width - sum(widths)              # the rounding's leftover goes to the last
+        x = 0
+        for s, n in zip(segs, widths):
+            role = s[0]
+            if role == "windows" and split:
+                lo, hi, value, tot = split
+                cut = max(1, min(n - 2, int(round(n * value / tot))))
+                lo_c, hi_c = int(round(n * lo / tot)), int(round(n * hi / tot))
+                for i in range(n):
+                    if i == cut:
+                        cells.append(colors["text"])               # the divider: both rows
+                    elif i < cut:
+                        cells.append(_dim(colors["windows"]) if i < lo_c else colors["windows"])
                     else:
-                        t.append(ch, style=colors["windows"])
-                else:
-                    ch = "▒" if i >= hi_c else "█"
-                    if i == (cut + n) // 2 and n - cut > 3:
-                        t.append(icon("bromigos", look), style="bold reverse " + colors["bromigos"])
-                    else:
-                        t.append(ch, style=colors["bromigos"])
-            continue
-        col = colors.get(role, colors["other"])
-        ch = "░" if role == "free" else "█"
-        ic = {"efi": "chip", "windows": "windows", "recovery": "recovery", "linux": "linux", "free": "free",
-              "bromigos": "bromigos"}.get(role)
-        mid = n // 2
-        for i in range(n):
-            if ic and i == mid:
-                t.append(icon(ic, look), style="bold reverse " + col)
+                        cells.append(_dim(colors["bromigos"]) if i >= hi_c else colors["bromigos"])
+                marks.append((x + cut // 2, icon("windows", look), colors["windows"]))
+                marks.append((x + cut, "▲", colors["text"]))
+                marks.append((x + (cut + n) // 2, icon("bromigos", look), colors["bromigos"]))
             else:
-                t.append(ch, style=col)
+                col = colors.get(role, colors["other"])
+                cells += [col] * n
+                ic = {"efi": "chip", "windows": "windows", "recovery": "recovery", "linux": "linux", "free": "free",
+                      "msr": "chip", "bromigos": "bromigos"}.get(role)
+                if ic and n >= 2:
+                    marks.append((x + n // 2, icon(ic, look), col))
+            x += n
+    t = Text()
+    for row in range(2):
+        for col in cells[:width]:
+            t.append(" ", style="on " + col)
+        t.append("\n")
+    line = [" "] * width
+    styles_at = [None] * width
+    for x, glyph, col in marks:                         # one glyph a column, nothing overlapping
+        if 0 <= x < width and line[x] == " ":
+            line[x], styles_at[x] = glyph, "bold " + col
+    for ch, st in zip(line, styles_at):
+        t.append(ch, style=st)
     return t
 
 
@@ -446,6 +487,89 @@ def phone_frame(qr_text, state="waiting", lit=True, tight=False):
         pad = (width + 4 - len(base)) // 2
         t.append("\n" + " " * pad + base, style=c["dim"] if not sixteen else rich16("secondary"))
     return t
+
+
+# ── the pairing QR, scannable in every terminal ─────────────────────────────────────────
+QUIET = 4          # modules of light all round: the standard's quiet zone
+
+
+def qr_matrix(payload):
+    """The QR's modules (True = dark) at error correction L (the smallest version for the
+    payload), from qrencode, else python-qrcode; None when neither is there."""
+    import subprocess
+    try:
+        r = subprocess.run(["qrencode", "-l", "L", "-m", "0", "-t", "ASCII", payload], capture_output=True,
+                           text=True, timeout=10)
+        if r.returncode == 0 and r.stdout.strip():
+            return [[ln[i] == "#" for i in range(0, len(ln), 2)] for ln in r.stdout.rstrip("\n").split("\n")]
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    try:
+        import qrcode
+        q = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_L, border=0)
+        q.add_data(payload)
+        q.make(fit=True)
+        return [list(row) for row in q.get_matrix()]
+    except Exception:
+        return None
+
+
+def qr_size(matrix):
+    """(columns, rows) the QR takes as half blocks, quiet zone included."""
+    n = len(matrix) + 2 * QUIET
+    return n, (n + 1) // 2
+
+
+def qr_text(matrix):
+    """The QR as half blocks, two modules a cell: ▀ with the top module as the foreground
+    and the bottom one as the background, both set in every cell (so no gap between lines
+    can show), dark modules on light, with its quiet zone. Terminals draw ▀ themselves
+    (kitty, foot, WezTerm, Alacritty, kmscon) and the console font has it."""
+    n = len(matrix)
+    size = n + 2 * QUIET
+    dark_at = lambda r, c: 0 <= r - QUIET < n and 0 <= c - QUIET < n and matrix[r - QUIET][c - QUIET]   # noqa: E731
+    sixteen = color_mode() == "16"
+    # the Linux console has only 8 background colours: "white" (not bright) is one it can
+    # paint as both halves, so the light modules are one even shade there
+    dark, light = ("black", "white") if sixteen else ("#000000", "#ffffff")
+    t = Text(no_wrap=True, overflow="crop")
+    for r in range(0, size + (size % 2), 2):
+        for c in range(size):
+            top, bottom = dark_at(r, c), dark_at(r + 1, c)
+            t.append("▀", style=f"{dark if top else light} on {dark if bottom else light}")
+        if r + 2 < size + (size % 2):
+            t.append("\n")
+    return t
+
+
+BIG = {   # a 3×5 block font for the pairing code, when the QR can't fit
+    "A": ["███", "█ █", "███", "█ █", "█ █"], "B": ["██ ", "█ █", "██ ", "█ █", "██ "], "C": ["███", "█  ", "█  ", "█  ", "███"],
+    "D": ["██ ", "█ █", "█ █", "█ █", "██ "], "E": ["███", "█  ", "██ ", "█  ", "███"], "F": ["███", "█  ", "██ ", "█  ", "█  "],
+    "G": ["███", "█  ", "█ █", "█ █", "███"], "H": ["█ █", "█ █", "███", "█ █", "█ █"], "I": ["███", " █ ", " █ ", " █ ", "███"],
+    "J": ["  █", "  █", "  █", "█ █", "███"], "K": ["█ █", "█ █", "██ ", "█ █", "█ █"], "L": ["█  ", "█  ", "█  ", "█  ", "███"],
+    "M": ["█ █", "███", "███", "█ █", "█ █"], "N": ["██ ", "█ █", "█ █", "█ █", "█ █"], "O": ["███", "█ █", "█ █", "█ █", "███"],
+    "P": ["███", "█ █", "███", "█  ", "█  "], "Q": ["███", "█ █", "█ █", "███", "  █"], "R": ["███", "█ █", "██ ", "█ █", "█ █"],
+    "S": ["███", "█  ", "███", "  █", "███"], "T": ["███", " █ ", " █ ", " █ ", " █ "], "U": ["█ █", "█ █", "█ █", "█ █", "███"],
+    "V": ["█ █", "█ █", "█ █", "█ █", " █ "], "W": ["█ █", "█ █", "███", "███", "█ █"], "X": ["█ █", "█ █", " █ ", "█ █", "█ █"],
+    "Y": ["█ █", "█ █", " █ ", " █ ", " █ "], "Z": ["███", "  █", " █ ", "█  ", "███"], "0": ["███", "█ █", "█ █", "█ █", "███"],
+    "1": [" █ ", "██ ", " █ ", " █ ", "███"], "2": ["███", "  █", "███", "█  ", "███"], "3": ["███", "  █", "███", "  █", "███"],
+    "4": ["█ █", "█ █", "███", "  █", "  █"], "5": ["███", "█  ", "███", "  █", "███"], "6": ["███", "█  ", "███", "█ █", "███"],
+    "7": ["███", "  █", "  █", "  █", "  █"], "8": ["███", "█ █", "███", "█ █", "███"], "9": ["███", "█ █", "███", "  █", "███"],
+    "-": ["   ", "   ", "███", "   ", "   "], " ": ["   "] * 5,
+}
+
+
+def big_code(code, style=None):
+    """The pairing code in 3×5 block letters, for when the QR doesn't fit; None if it's too
+    wide for `width`."""
+    c = palette()
+    style = style or ("bold " + (rich16("primary") if color_mode() == "16" else c["primary"]))
+    rows = ["", "", "", "", ""]
+    for ch in code.upper():
+        g = BIG.get(ch, BIG[" "])
+        for i in range(5):
+            rows[i] += g[i] + " "
+    return Text("\n".join(r.rstrip() for r in rows), style=style)
 
 
 CSS = """
