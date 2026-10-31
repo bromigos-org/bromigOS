@@ -393,7 +393,12 @@ case $cmd in
                 "old_passphrase": None, "passphrase": None, "keymap": "us", "xkb_layout": "us", "xkb_variant": "", "locale": "en_US",
                 "timezone": "UTC", "ssh": True, "online": False, "ssh_password": False, "ssh_keys": [open(sys.argv[2]).read().strip()],
                 "firewall": False, "auto_updates": False, "auto_update_units": [], "advanced": {}, "user_commands": [],
-                "default_target": "graphical.target", "other_os": True}))' "$encrypt" "$key.pub" > "$dir/answers.json"
+                "default_target": "graphical.target", "other_os": True,
+                # the installers first step, as they send it (common.guidance_files: all off)
+                "guidance": {"voice_guide": {"enabled": False, "muted": False},
+                             "accessibility": {"screen_reader": False, "large_text": False, "high_contrast": False,
+                                               "reduce_motion": False, "console_font": False, "applied": False}}}))' \
+                "$encrypt" "$key.pub" > "$dir/answers.json"
             "${SCP[@]}" "$dir/answers.json" "live@127.0.0.1:answers.json"
         fi
         printf '%s\n' "$((encrypt ? 1 : 0))" > "$dir/encrypted"
