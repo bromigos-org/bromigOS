@@ -145,7 +145,9 @@ The medium carries `/var/lib/bromigos/repo/`, as the full ISO does
 ([iso.md](iso.md#the-offline-repository)): every package on the medium and every package
 bromigOS Server installs, with all their dependencies, signed, read with
 `SigLevel = Required`. It also has what archinstall installs by itself (`linux-firmware`,
-the microcode, zram) and the NVIDIA driver for a lab machine with an NVIDIA card.
+the microcode, zram), the NVIDIA driver for a lab machine with an NVIDIA card (for the LTS
+kernel too), and the packages of bromigOS Server's roles that install offline
+([server.md](server.md#roles)).
 
 ## The console
 

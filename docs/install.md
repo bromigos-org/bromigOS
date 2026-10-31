@@ -193,7 +193,7 @@ Then it runs `bromigos setup`, unless you gave `--no-setup`.
 | `bromigos-apps-terminal` | bromigOS app bundle, terminal half: LazyVim, tmux, lazygit and mise, configured and themed (no desktop needed) | with `bromigos-apps`, `bromigos-server` |
 | `bromigos-fieldkit-tools` | bromigOS Field Kit engine: repair an install (black screen, last boot, rollback, boot menu, disks, backups), the stick and remote help | with `bromigos-server` |
 | `bromigos-secureboot` | bromigOS on Secure Boot: shim, a GRUB built and signed on the computer, kernels signed after every update | by the installer, on a computer that starts the newer way (UEFI); elsewhere by `sudo pacman -S bromigos-secureboot` (docs/secureboot.md) |
-| `bromigos-server` | bromigOS Server: bromigOS without a desktop for servers and lab machines (SSH, firewall, safe automatic updates, containers, the lab) | on its own |
+| `bromigos-server` | bromigOS Server: bromigOS without a desktop for servers and lab machines (SSH, firewall, safe automatic updates, roles, backups, disk watch, containers, the lab) | on its own |
 | `dislocker` | Read BitLocker-encrypted volumes (FUSE) | on its own |
 | `nwipe` | Securely erase disks using a variety of recognised methods (a fork of dwipe) | on its own |
 | `xpadneo-dkms` | Advanced Linux Driver for Xbox One Wireless Gamepad | by `bromigos peripheral enable xbox-controller`, for an Xbox controller |
