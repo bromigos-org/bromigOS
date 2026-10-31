@@ -8,7 +8,8 @@
 #
 #   live     on the running medium            (default true)
 #   edition  installed by bromigOS Server, the edition (default false)
-#   store    in the offline store only, for the installer's hardware plan (default false)
+#   store    in the offline store only, for the installer's hardware plan and bromigOS
+#            Server's roles (server-packages.toml; default false)
 #   if_available  only when a repository has it: a build before its first publish leaves it out
 # Every live, edition and store package, with all its dependencies, is in the medium's
 # offline store, so installing needs no network.
@@ -293,7 +294,7 @@ reason = "partition tables: Tools › Partition a drive (cfdisk is util-linux's)
 [[package]]
 name = "smartmontools"
 section = "Repair"
-reason = "Check disks: the drives' own health; NVMe secure erase"
+reason = "Check disks: the drives' own health; NVMe secure erase; on Server, smartd watches every disk"
 edition = true
 
 [[package]]
@@ -315,7 +316,7 @@ reason = "Windows repair: reading a BitLocker drive with its recovery key (bromi
 [[package]]
 name = "hdparm"
 section = "Repair"
-reason = "ATA secure erase"
+reason = "ATA secure erase; Server's Storage role: idle hard disks spun down"
 
 [[package]]
 name = "partclone"
@@ -346,7 +347,7 @@ reason = "disk images to and from a network share (LAN)"
 [[package]]
 name = "nfs-utils"
 section = "Repair"
-reason = "disk images to and from a network share (LAN)"
+reason = "disk images to and from a network share (LAN); Server's Lab node and Storage roles: the lab's NAS, NFS shares"
 
 [[package]]
 name = "micro"
@@ -413,7 +414,7 @@ edition = true
 [[package]]
 name = "ethtool"
 section = "Tools"
-reason = "network diagnosis: link speed and cable"
+reason = "network diagnosis: link speed and cable; Wake-on-LAN on the wired cards (bromigos wol)"
 edition = true
 
 [[package]]
@@ -752,12 +753,14 @@ reason = "network: Wi-Fi in the terminal, on iwd"
 [[package]]
 name = "wireguard-tools"
 section = "Tools"
-reason = "network: WireGuard VPN (wg)"
+reason = "network: WireGuard VPN (wg); on Server, installed and off: reach it from outside without opening ports"
+edition = true
 
 [[package]]
 name = "tailscale"
 section = "Tools"
-reason = "network: a tailnet, to reach a lab from anywhere (off unless started)"
+reason = "network: a tailnet, to reach a lab from anywhere (off unless started; on Server too, installed and off)"
+edition = true
 
 [[package]]
 name = "smbclient"
