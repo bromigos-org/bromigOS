@@ -352,7 +352,7 @@ class Installer(App):
     .brief-text { width: 1fr; height: auto; }
     .brief-row Button { height: 1; min-width: 10; border: none; padding: 0 1; margin: 0 0 0 1; }
     /* the countdown, the failure's frozen ring */
-    #count-row { height: auto; margin-bottom: 1; }
+    #count-row { height: auto; margin: 1 0; }
     #count { width: auto; height: auto; margin-right: 3; }
     #count-side { width: 1fr; height: auto; }
     .buttons { height: auto; margin-top: 1; }
@@ -360,6 +360,9 @@ class Installer(App):
     Screen.-narrow .buttons { layout: vertical; }
     .fail-head { color: $error; text-style: bold; }
     #ssh-box, #pp { height: auto; }
+    .card > Label { width: 1fr; }
+    #hero-art.flare { margin-bottom: 1; }
+    Screen.-c16 Choice.-on { background: $surface; border: double $primary; }
     .vlabel.-top { margin-top: 0; }
     """
     BINDINGS = [Binding("escape", "back", "Back"), Binding("ctrl+n", "next", "Continue"),
@@ -402,6 +405,8 @@ class Installer(App):
     async def on_mount(self):
         self.register_theme(textual_theme())
         self.theme = "bromigos"
+        # the Linux console's 16 colours can't mix a tint: a chosen card keeps the plain surface
+        self.screen.set_class(sixteen(), "-c16")
         if self.reduced:
             self.animation_level = "none"
         self.watch(self.screen, "focused", self._focused)
@@ -617,7 +622,8 @@ class Installer(App):
         elif BT is not None and hasattr(BT, "big_code"):
             t.append_text(BT.big_code(str(n), style="bold " + col("warn" if self.a.get("mode") == "erase" else "primary"), scale=2))
             t.append("\n")
-            t.append_text(BT.meter(n, self.auto_total, self.auto_total * 3) if hasattr(BT, "meter") else Text(""))
+            t.append_text(BT.meter(n, self.auto_total, self.auto_total * 3, role="warn" if self.a.get("mode") == "erase" else "primary")
+                          if hasattr(BT, "meter") else Text(""))
         else:
             t.append(str(n), style="bold")
         self.count_art.update(t)
