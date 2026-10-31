@@ -1,4 +1,5 @@
-"""STATIC in a terminal (docs/lab.md, the media TUI): crisp pictures through kitty's graphics protocol
+"""STATIC in a terminal (docs/lab.md, the media TUI). His art comes from the art folder's manifest
+(bromigos_static_art.py) when there is one, else the code-drawn placeholder. Crisp pictures through kitty's graphics protocol
 where the terminal has it, half-block pixel art in the theme's colours elsewhere, and a few
 characters of plain text where neither works (a bare Linux console, ASCII icons).
 
@@ -24,6 +25,11 @@ import sys
 import zlib
 
 import bromigos_static as S
+
+try:
+    import bromigos_static_art as ART       # rendered art from a manifest, when there is any
+except ImportError:
+    ART = None
 
 # ------------------------------------------------------------------ which look
 GLYPHS = {"neutral": "[•_•]", "watching": "[•_•]", "happy": "[^_^]", "laughing": "[^▽^]", "smug": "[¬‿¬]",
@@ -192,6 +198,71 @@ def figure(pose, cols, rows, frame=0, pal=None, hc=False, crop=None):
     return out
 
 
+def art_pngs(art):
+    """An Art's frames as PNG bytes: PNG files as they are; other formats (an animated WebP)
+    through Pillow when it's installed, else None (the placeholder stands in)."""
+    if not art.animated and all(f.lower().endswith(".png") for f in art.frames):
+        out = []
+        for f in art.frames:
+            with open(f, "rb") as fh:
+                out.append(fh.read())
+        return out
+    try:
+        import io
+        from PIL import Image, ImageSequence
+        out = []
+        for f in art.frames:
+            with Image.open(f) as im:
+                for fr in ImageSequence.Iterator(im):
+                    b = io.BytesIO()
+                    fr.convert("RGBA").save(b, "PNG")
+                    out.append(b.getvalue())
+        return out or None
+    except Exception:                                                        # noqa: BLE001  (no Pillow, a bad file)
+        return None
+
+
+def png_pixels(png, cols, height):
+    """A PNG shrunk to cols x height pixels for half-blocks (box-averaged, alpha cut at 45%)."""
+    try:
+        w, h, lines = _png(png)
+    except (ValueError, zlib.error, struct.error):
+        try:
+            import io
+            from PIL import Image
+            im = Image.open(io.BytesIO(png)).convert("RGBA")
+            w, h = im.size
+            raw = im.tobytes()
+            lines = [raw[y * w * 4:(y + 1) * w * 4] for y in range(h)]
+        except Exception:                                                    # noqa: BLE001
+            return None
+    scale = max(w / cols, h / height)
+    ow, oh = max(1, int(w / scale)), max(1, int(h / scale))
+    out = []
+    for y in range(height):
+        row = []
+        for x in range(cols):
+            x0 = x - (cols - ow) // 2
+            y0 = y - (height - oh)
+            if not (0 <= x0 < ow and 0 <= y0 < oh):
+                row.append(None)
+                continue
+            sx0, sx1 = int(x0 * scale), max(int(x0 * scale) + 1, int((x0 + 1) * scale))
+            sy0, sy1 = int(y0 * scale), max(int(y0 * scale) + 1, int((y0 + 1) * scale))
+            r = g = b = a = n = 0
+            for yy in range(sy0, min(sy1, h)):
+                line = lines[yy]
+                for xx in range(sx0, min(sx1, w)):
+                    pr, pg, pb, pa = line[xx * 4:xx * 4 + 4]
+                    r, g, b, a, n = r + pr * pa, g + pg * pa, b + pb * pa, a + pa, n + 1
+            if not n or a / n < 115:
+                row.append(None)
+            else:
+                row.append("#%02x%02x%02x" % (min(255, r // a), min(255, g // a), min(255, b // a)))
+        out.append(row)
+    return out
+
+
 def blocks(px, bg=None):
     """Pixels as rich Text, two pixel rows to a cell: ▀ in the top's colour over the bottom's."""
     from rich.style import Style
@@ -296,7 +367,8 @@ if _Static is not None:
         thread, so input never waits on him."""
 
         DEFAULT_CSS = "Sprite { width: auto; height: auto; }"
-        _ids = random.Random().randrange(1, 1 << 20) << 4
+        _ids = random.Random().randrange(1, 1 << 20) << 3
+        _serial = 0
 
         def __init__(self, pose="watching", face=None, kind="head", cols=24, rows=12, label="", **kw):
             super().__init__("", **kw)
@@ -324,9 +396,26 @@ if _Static is not None:
         def _st_face(self):
             return self.face or S.POSES.get(self.pose, {}).get("face", "neutral")
 
+        def _st_art(self):
+            """The pose's rendered art for this size (from the art folder's manifest), or None."""
+            key = (self.pose, self.face, self.kind, self.look)
+            if getattr(self, "_art_key", None) != key:
+                self._art_key, self._art, self._art_png = key, None, None
+                if ART is not None and self.kind != "status" and self.look != "text" and \
+                        not (self.kind == "head" and self.look == "blocks"):      # the pixel head stays hand-drawn
+                    height = self.rows * (cell_pixels()[1] if self.look == "kitty" else 2)
+                    art = ART.find(self.pose, self._st_face() if self.kind == "head" else self.face, height,
+                                   head=self.kind == "head")
+                    pngs = art_pngs(art) if art else None
+                    if pngs:
+                        self._art, self._art_png = art, pngs
+            return self._art_png
+
         def _st_count(self):
             if self.kind == "status":
                 return 1
+            if self._st_art():
+                return len(self._art_png)
             if self.kind == "head":
                 return 4 if self._st_face() in ("snow", "listening", "asleep", "whack", "fiddle", "watching") else 1
             return S.frames(self.pose)
@@ -357,6 +446,18 @@ if _Static is not None:
 
         def _st_make(self, key):
             pal = _palette()
+            pngs = self._st_art()
+            if pngs:
+                png = pngs[self.frame % len(pngs)]
+                if self.look == "kitty":
+                    Sprite._serial += 1
+                    image_id = Sprite._ids + Sprite._serial
+                    out = ("kitty", image_id, kitty_transmit(png, image_id, self.cols, self.rows))
+                else:
+                    px = png_pixels(png, self.cols, self.rows * 2)
+                    out = blocks(px) if px else self._st_text()
+                self.app.call_from_thread(self._st_landed, key, out)
+                return
             if self.look == "kitty":
                 cw, ch = cell_pixels()
                 face = self._st_face()
@@ -365,7 +466,8 @@ if _Static is not None:
                             level="glow", size=int(self.rows * ch), crop=crop)
                 png = render_png(doc, height=int(self.rows * ch))
                 if png:
-                    image_id = Sprite._ids + len(self.sent) + 1 + (id(self) & 0xFF) * 64
+                    Sprite._serial += 1
+                    image_id = Sprite._ids + Sprite._serial
                     seq = kitty_transmit(png, image_id, self.cols, self.rows)
                     out = ("kitty", image_id, seq)
                 else:

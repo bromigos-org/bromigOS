@@ -443,16 +443,22 @@ commands, toasts, theme watching and sandbox renders, with no Settings sidebar. 
 launcher entry is **Den TV**. Super+Alt+G, `bromigos-live tv guide`, the TV hover hint's
 **GUIDE** button and the MEDIA panel all open it.
 
-STATIC, the mascot, hosts the guide from `lib/bromigos_static.py`. That module is his rig, drawn in code,
-and it gives SVG in the theme's colours. The **Tonight** card shows him at his desk with
+STATIC, the mascot, hosts the guide. The **Tonight** card shows him at his desk with
 what's coming up next. He shows snow while tuning in, the antenna when there are no
 channels, asleep when the live layer is off, and the whack when the channels file doesn't
-parse or the featured channel can't play. A still EMBER armchair sprite sits in the
-corner of the card with the sound. The host is GLOW. It animates at about 6 frames a
-second only while mapped, and holds frame 0 under reduced motion; high contrast draws
-him flat with a white line. `BROMIGOS_MASCOT=off`, or `mode = "off"` in
-`~/.config/bromigos/mascot.toml`, removes him. `BROMIGOS_DEN_TV_HOST=loading` holds the
-tuning-in state for the tests' renders.
+parse or the featured channel can't play. There is one STATIC per screen. The card is
+GLOW. It plays his loop at the art's frame rate only while mapped, and holds frame 0 under
+reduced motion.
+
+His art is looked up by name (`host`, `remote:snow`, `head:watching` …) and height in an
+art folder's `manifest.json` (`lib/bromigos_static_art.py`):
+`$BROMIGOS_STATIC_ART`, then `~/.local/share/bromigos/static`, then
+`/usr/share/bromigos/static`. Each entry is a list of frames or an animated WebP. Without a
+folder, the code-drawn placeholder in `lib/bromigos_static.py` stands in, in the theme's
+colours. **Settings › Mascot** (`desktop/settings/pages/mascot.py`) turns him on, quiet or
+off. So does `bromigos mascot on|quiet|off`, which writes `~/.config/bromigos/mascot.toml`
+(`BROMIGOS_MASCOT` overrides it). `BROMIGOS_DEN_TV_HOST=loading` holds the tuning-in state
+for the tests' renders.
 
 The guide, media TUI, CLI and VECTOR share `lib/bromigos_tvchannels.py`. Its `Store`
 serializes edits and uses `bromigos_tvconfig.py` to keep comments and other tables,

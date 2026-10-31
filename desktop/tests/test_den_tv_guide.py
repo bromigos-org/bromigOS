@@ -132,6 +132,18 @@ class GuideRender(unittest.TestCase):
         im, _r = self.render("host-loading", env={"BROMIGOS_DEN_TV_HOST": "loading"})
         self.assertGreater(self._host_pixels(im), 60)
 
+    def test_rendered_art_replaces_the_placeholder(self):
+        """An art folder's manifest (tests/mascot/artfixture.py: magenta frames) is what the
+        host draws, at the height it asks for: Blender's renders drop in without code."""
+        sys.path.insert(0, os.path.join(REPO, "tests", "mascot"))
+        import artfixture
+        art = artfixture.folder(os.path.join(self.tmp, "art"))
+        im, _r = self.render("host-art", env={"BROMIGOS_STATIC_ART": art})
+        px = im.load()
+        magenta = sum(1 for x in range(130, 260, 2) for y in range(225, 400, 2)
+                      if px[x, y][0] > 200 and px[x, y][2] > 200 and px[x, y][1] < 60)
+        self.assertGreater(magenta, 100, "the manifest's frame isn't drawn")
+
     def test_the_mascot_off(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location("static_rig", os.path.join(REPO, "lib", "bromigos_static.py"))

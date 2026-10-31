@@ -411,6 +411,22 @@ class TUI(Stack):
             self.assertIn("Not on a screen", str(app.query_one('#ch-host-text').render()))
         self.run_app(one)
 
+    def test_static_draws_rendered_art(self):
+        """With an art folder (tests/mascot/artfixture.py: magenta frames), CHANNELS' big
+        STATIC is the manifest's frame in half-blocks, not the placeholder."""
+        if T.STATIC is None:
+            self.skipTest("no bromigos_static_term")
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                                        "tests", "mascot"))
+        import artfixture
+        art = artfixture.folder(os.path.join(self.tmp, "art"))
+        async def fn(app, pilot):
+            await pilot.press('8'); await self.settle(app, pilot, 3)
+            await pilot.pause(0.5)
+            self.assertIn("#ff00ff", app.export_screenshot().lower())
+        with mock.patch.dict(os.environ, {"BROMIGOS_STATIC_ART": art}):
+            self.run_app(fn)
+
     def test_channel_reorder_delete_undo_and_comments(self):
         self.seed_channels()
         async def fn(app,pilot):

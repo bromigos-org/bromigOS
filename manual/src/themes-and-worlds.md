@@ -233,10 +233,8 @@ STATIC, the Bromigos mascot, hosts the guide. The card at the top shows what's c
 next on the screen with the sound, at his little broadcast desk. While the channels are
 read, his screen is snow. With no channels yet, he fiddles with the antenna. When the live
 layer is off, he dozes. When something can't be read, he whacks the set and the card says
-what's wrong. On the card with the sound, he watches from his armchair in the poster's
-corner. He moves only while the guide is on screen, and he holds still under reduced
-motion. To turn him off, put `mode = "off"` in `~/.config/bromigos/mascot.toml` (`"quiet"`
-keeps him but has him say nothing).
+what's wrong. He moves only while the guide is on screen, and he holds still under reduced
+motion. **Settings › Mascot** (or `bromigos mascot on|quiet|off`) turns him on, quiet or off.
 
 Use a card's **Contents…** menu to see its titles, reorder picks, or add and remove
 items. **Shuffle**, **In order** and **Alternate** choose its play order.

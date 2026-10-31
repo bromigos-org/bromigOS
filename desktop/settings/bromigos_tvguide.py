@@ -44,9 +44,10 @@ try:
 except ImportError:                        # an older bromigos-core: no guide
     TVL = C = None
 try:
-    import bromigos_static as STATIC           # the mascot, drawn in code (lib/bromigos_static.py)
+    import bromigos_static as STATIC           # the mascot: his placeholder, drawn in code (lib/bromigos_static.py)
+    import bromigos_static_art as STATIC_ART   # his art: rendered frames from a manifest, when there are any
 except ImportError:                        # an older bromigos-core: the guide without him
-    STATIC = None
+    STATIC = STATIC_ART = None
 
 SCREENS = [("big", "The big monitor"), ("wave", "The scope"), ("emblem", "The small monitor")]
 SCREEN_NAME = dict(SCREENS)
@@ -93,7 +94,6 @@ progressbar.tv-progress > trough > progress {{ min-height: 3px; background-color
 .tv-host-eyebrow.warn {{ color: {c['warn']}; }}
 .tv-host-title {{ color: {c['soft']}; font-weight: 700; font-size: 1.35em; }}
 .tv-host-sub {{ color: {c['muted']}; }}
-.tv-watcher {{ margin: 4px; padding: 3px 4px 0 4px; background-color: {a(c['void'], .82)}; border: 1px solid {a(c['dim'], .7)}; border-radius: 6px; }}
 """
 
 
@@ -138,16 +138,43 @@ def _theme(name, default):
         return default
 
 
+def _animation_frames(path, cap=120):
+    """An animated image's frames as textures, one loop of it, and its frame time (ms)."""
+    anim = GdkPixbuf.PixbufAnimation.new_from_file(path)
+
+    def at(ms):
+        tv = GLib.TimeVal()
+        tv.tv_sec, tv.tv_usec = ms // 1000, (ms % 1000) * 1000
+        return tv
+    it, t, frames, first, delay = anim.get_iter(at(0)), 0, [], None, 0
+    for _n in range(cap):
+        pb = it.get_pixbuf().copy()
+        data = bytes(pb.get_pixels())
+        if first is not None and data == first:
+            break
+        first = data if first is None else first
+        frames.append(Gdk.Texture.new_for_pixbuf(pb))
+        delay = it.get_delay_time()
+        if delay <= 0 or anim.is_static_image():
+            break
+        t += delay
+        it.advance(at(t))
+    return frames, delay
+
+
 class Static(Gtk.Picture):
-    """STATIC, the mascot, drawn from his rig (lib/bromigos_static.py) in the theme's colours:
-    a pose's short loop at about 6 frames a second while he's on screen, frame 0 only under
-    reduced motion, flat (EMBER) or glowing (GLOW), white-lined under high contrast. He's
-    decoration: the text beside him says everything he does."""
+    """STATIC, the mascot: a pose's short loop while he's on screen, frame 0 only under
+    reduced motion. His art comes from lib/bromigos_static_art.py's manifest (rendered frames
+    or an animated WebP, picked by name and height), and without one from the code-drawn
+    placeholder (lib/bromigos_static.py) in the theme's colours: flat (EMBER) or glowing
+    (GLOW), white-lined under high contrast. He's decoration: the text beside him says
+    everything he does."""
 
     def __init__(self, ctx, pose, height, level="glow", face=None, animate=True, hint=None):
         super().__init__(can_shrink=False, content_fit=Gtk.ContentFit.CONTAIN)
         self.ctx, self.height, self.level, self.animate = ctx, height, level, animate
         self.pose, self.face, self.frame, self.timer, self.cache = pose, face, 0, None, {}
+        self.art, self.art_frames, self.fps = None, None, 6
         self.add_css_class("tv-static")
         self.set_valign(Gtk.Align.END)
         self.set_accessible_role(Gtk.AccessibleRole.PRESENTATION)
@@ -163,17 +190,44 @@ class Static(Gtk.Picture):
         if (pose, face) == (self.pose, self.face):
             return
         self.pose, self.face, self.frame = pose, face, 0
+        self.art = self.art_frames = None
         self._show()
         self._stop()
         if self.get_mapped():
             self._start()
 
+    def _count(self):
+        return len(self.art_frames) if self.art_frames else STATIC.frames(self.pose)
+
     def _still(self):
-        return not self.animate or _theme("motion", "full") != "full" or STATIC.frames(self.pose) < 2
+        return not self.animate or _theme("motion", "full") != "full" or self._count() < 2
+
+    def _rendered(self, scale):
+        """Textures from the art folder, when it has this pose (and face) at about this height."""
+        if self.art_frames is not None:
+            return self.art_frames
+        self.art_frames = []
+        art = STATIC_ART.find(self.pose, self.face, self.height * scale) if STATIC_ART else None
+        if art is None:
+            return self.art_frames
+        try:
+            if art.animated:                                  # an animated WebP: step through one loop
+                self.art_frames, delay = _animation_frames(art.frames[0])
+                self.fps = max(1, round(1000 / delay)) if delay > 0 else art.fps
+            else:
+                self.art_frames = [Gdk.Texture.new_from_filename(f) for f in art.frames]
+                self.fps = art.fps
+            self.art = art
+        except GLib.Error:                                    # a broken file: the placeholder instead
+            self.art_frames = []
+        return self.art_frames
 
     def _texture(self):
         hc = bool(_theme("high_contrast", False))
         scale = max(1, self.get_scale_factor())
+        frames = self._rendered(scale)
+        if frames:
+            return frames[self.frame % len(frames)]
         key = (self.pose, self.face, self.frame, scale, hc, tuple(sorted((self.ctx.colors or {}).items())))
         if key not in self.cache:
             doc = STATIC.svg(self.pose, face=self.face, frame=self.frame, pal=self.ctx.colors or None,
@@ -191,11 +245,11 @@ class Static(Gtk.Picture):
             self.set_visible(False)
             return
         self.set_paintable(tex)
-        self.set_size_request(round(tex.get_width() / max(1, self.get_scale_factor())), self.height)
+        self.set_size_request(round(tex.get_width() * self.height / max(1, tex.get_height())), self.height)
 
     def _start(self):
         if self.timer is None and not self._still():
-            self.timer = GLib.timeout_add(166, self._tick)
+            self.timer = GLib.timeout_add(max(40, round(1000 / (self.fps or 6))), self._tick)
 
     def _stop(self):
         if self.timer is not None:
@@ -206,7 +260,7 @@ class Static(Gtk.Picture):
             self._show()
 
     def _tick(self):
-        self.frame = (self.frame + 1) % STATIC.frames(self.pose)
+        self.frame = (self.frame + 1) % self._count()
         self._show()
         return True
 
@@ -494,16 +548,6 @@ class Guide:
             self._set_poster(pic, ch, item)
         frame = Gtk.Overlay()
         frame.set_child(pic)
-        watched = snd if snd in airing else ("big" if "big" in airing and not snd else None)
-        if watched and not own and STATIC is not None and STATIC.mode() != "off":
-            # the now-playing corner: STATIC in his armchair, watching it (still, EMBER)
-            who = Static(ctx, "armchair", 62, level="ember", animate=False,
-                         hint=f"STATIC is watching this one: it's on {SCREEN_NAME[watched].lower()}"
-                              + (" with the sound" if snd == watched else ""))
-            who.set_halign(Gtk.Align.END)
-            who.set_valign(Gtk.Align.END)
-            who.add_css_class("tv-watcher")
-            frame.add_overlay(who)
         if own:
             lab = Gtk.Label(label="RELAY MAP · SCOPE · BURN-IN", wrap=True, justify=Gtk.Justification.CENTER)
             lab.add_css_class("tv-chnum")

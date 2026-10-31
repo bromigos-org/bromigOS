@@ -1075,3 +1075,27 @@ def mode(env=None):
         return v if v in ("on", "quiet", "off") else "on"
     except (OSError, ValueError):
         return "on"
+
+
+def mode_path(env=None):
+    import os
+    env = os.environ if env is None else env
+    return os.path.join(env.get("XDG_CONFIG_HOME") or os.path.join(env.get("HOME") or os.path.expanduser("~"),
+                                                                     ".config"), "bromigos", "mascot.toml")
+
+
+def set_mode(value, env=None):
+    """Writes ~/.config/bromigos/mascot.toml's mode (on, quiet or off), atomically; returns
+    the mode before."""
+    import os
+    if value not in ("on", "quiet", "off"):
+        raise ValueError("the mascot is on, quiet or off")
+    before = mode(dict(env or os.environ, BROMIGOS_MASCOT=""))
+    path = mode_path(env)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write("# STATIC, the mascot: on, quiet (no thought bubbles) or off (nowhere). "
+                "Settings › Mascot, or bromigos mascot on|quiet|off\n" f'mode = "{value}"\n')
+    os.replace(tmp, path)
+    return before
