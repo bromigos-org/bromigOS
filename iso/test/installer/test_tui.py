@@ -439,6 +439,25 @@ class Words(unittest.TestCase):
         finally:
             del os.environ["BROMIGOS_ISO_SECUREBOOT"]
 
+    def test_secure_boot_set_up_by_the_install(self):
+        """bromigos-secureboot on the medium: check exits 0 with its words, a note (not a
+        warning: nothing stops or warns), and the last page says how to approve the key."""
+        from bromigos_installer import common as c
+        tool = os.path.join(tempfile.mkdtemp(), "sb")
+        with open(tool, "w") as f:
+            f.write("#!/bin/sh\ncase $1 in check) printf 'Secure Boot is on.\\n\\nSecure Boot can stay on. How: https://bromigos.org/download#secure-boot\\n'; exit 0 ;; esac\n")
+        os.chmod(tool, 0o755)
+        os.environ["BROMIGOS_ISO_SECUREBOOT"] = tool
+        try:
+            got = c.secure_boot()
+        finally:
+            del os.environ["BROMIGOS_ISO_SECUREBOOT"]
+        self.assertEqual((got["level"], got["what"]), ("info", "Secure Boot can stay on."))
+        self.assertIsNone(c.secureboot_done(None))
+        line = c.secureboot_done("4827")
+        for words in ("Enroll MOK", "Continue", "Yes", "4827", "Reboot", "ENROLL_THIS_KEY_FOR_THIS_PC.cer"):
+            self.assertIn(words, line)
+
     def test_boot_parameters(self):
         from bromigos_installer import common as c
         self.assertTrue(c.wants_text(["bromigos.install", "bromigos.edition=server"]))

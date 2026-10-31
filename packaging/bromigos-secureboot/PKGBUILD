@@ -1,0 +1,89 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# Secure Boot on an installed bromigOS (docs/secureboot.md, "The installed system"): the
+# computer starts with Secure Boot on through the same chain as the USB stick, with a key
+# of its own instead of bromigOS's.
+#
+#   /usr/share/bromigos/secureboot/shimx64.efi, mmx64.efi
+#                                           shim 16.1 and its MokManager: Fedora's build,
+#                                           signed by Microsoft's UEFI CA 2011 and 2023, the
+#                                           one the medium uses (iso/secureboot/medium.sh),
+#                                           pinned by checksum
+#   /usr/share/bromigos/secureboot/grub-modules.txt   what bromigOS's GRUB builds in
+#   /usr/lib/bromigos/secureboot/bromigos-secureboot  the root helper: the key, GRUB built
+#                                           and signed, the kernels signed, the boot entry,
+#                                           MOK's enrollment (`bromigos secureboot` runs it)
+#   /usr/share/libalpm/hooks/bromigos-secureboot*.hook   signed again after every kernel,
+#                                           GRUB, font, shim or Field Kit update; the kernel
+#                                           from before an update kept until the new one is
+#                                           signed; the package's removal refused while
+#                                           Secure Boot depends on it
+#   /usr/lib/initcpio/post/bromigos-secureboot   mkinitcpio's post hook: a kernel it copies
+#                                           to /boot signed at once
+#
+# Nothing happens until `sudo bromigos secureboot setup` (or the installer) sets it up.
+
+pkgname=bromigos-secureboot
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='bromigOS on Secure Boot: shim, a GRUB built and signed on the computer, kernels signed after every update'
+arch=('x86_64')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0' 'BSD-2-Clause')
+depends=('python' 'grub' 'efibootmgr' 'mokutil' 'sbsigntools' 'openssl' 'util-linux' 'coreutils')
+makedepends=('git' 'libarchive' 'sbsigntools')
+checkdepends=('python' 'grub' 'openssl' 'sbsigntools')
+optdepends=('bromigos-boot: the boot menu'"'"'s theme, which GRUB carries the fonts of')
+options=('!debug' '!strip')
+
+# shim 16.1-10, Fedora's signed build (https://kojipkgs.fedoraproject.org/packages/shim/16.1/10/):
+# the package, and shim and MokManager in it, pinned (the same as iso/secureboot/medium.sh)
+_shimrel=16.1-10
+source=("shim-x64-${_shimrel}.x86_64.rpm::https://kojipkgs.fedoraproject.org/packages/shim/16.1/10/x86_64/shim-x64-${_shimrel}.x86_64.rpm"
+        "shim-COPYRIGHT::https://raw.githubusercontent.com/rhboot/shim/16.1/COPYRIGHT")
+sha256sums=('50ca8ad0f0893a9b69d257b232cc38fe572d7f2c814bc9aec4df5e492800cdc7'
+            '15edf527919ddcb2f514ab9d16ad07ef219e4bb490e0b79560be510f0c159cc2')
+noextract=("shim-x64-${_shimrel}.x86_64.rpm")
+_shim_sha256=351e131d3c4a636704e9cae7d1296baf8a05beca9922cfebbfa48933c9bf1ad3
+_mm_sha256=eb84ac15b99ebbabf9b7dd187c6a20b05fd3aca512ccf49b08922780d6cd42d8
+
+_root="${startdir%/packaging/*}"
+_paths=(secureboot packaging/bromigos-secureboot LICENSE-MIT LICENSE-APACHE)
+_archived=0
+
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+prepare() {
+  rm -rf "$srcdir/shim"; mkdir -p "$srcdir/shim"
+  # the whole tree: shimx64.efi is a hard link in it
+  bsdtar -xf "$srcdir/shim-x64-${_shimrel}.x86_64.rpm" -C "$srcdir/shim" "./usr/lib/efi/shim/*"
+  local d="$srcdir/shim/usr/lib/efi/shim/${_shimrel}/EFI/fedora"
+  printf '%s  %s\n' "$_shim_sha256" "$d/shimx64.efi" "$_mm_sha256" "$d/mmx64.efi" | sha256sum -c --quiet
+  # the signature the firmware checks: Microsoft's third-party UEFI CA
+  sbverify --list "$d/shimx64.efi" | grep -q 'CN=Microsoft Corporation UEFI CA 2011' \
+    || { echo "shim isn't signed by Microsoft's UEFI CA" >&2; return 1; }
+}
+
+check() {
+  cd "$_root"
+  python -m unittest discover -s secureboot/tests
+}
+
+package() {
+  local d="$srcdir/shim/usr/lib/efi/shim/${_shimrel}/EFI/fedora" sb="$_root/secureboot"
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/secureboot/" "$d/shimx64.efi" "$d/mmx64.efi" "$sb/grub-modules.txt"
+  install -Dm0755 "$sb/bromigos-secureboot" "$pkgdir/usr/lib/bromigos/secureboot/bromigos-secureboot"
+  install -Dm0644 -t "$pkgdir/usr/share/libalpm/hooks/" "$sb"/hooks/*.hook
+  install -Dm0755 "$sb/initcpio-post" "$pkgdir/usr/lib/initcpio/post/bromigos-secureboot"
+  # the key, the certificate and what's kept over a kernel upgrade (the keys and the kernels: root's only)
+  install -dm0755 "$pkgdir/var/lib/bromigos/secureboot"
+  install -Dm0644 "$srcdir/shim-COPYRIGHT" "$pkgdir/usr/share/licenses/$pkgname/shim-COPYRIGHT"
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+}

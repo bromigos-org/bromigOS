@@ -213,9 +213,13 @@ every entry.
 
 ### Secure Boot
 
-Most Windows computers have Secure Boot on. The stick starts with it on: the first time,
-on each computer, you enroll bromigOS's key once, in a blue screen called MokManager. Use
-the arrow keys and <kbd>Enter</kbd>; the mouse doesn't work there.
+Most Windows computers have Secure Boot on. **It can stay on.** The stick starts with it,
+and so does bromigOS once it's installed. Each asks you to approve bromigOS once, in a blue
+screen called MokManager: the stick the first time it starts on a computer, the installed
+system at its first start. Use the arrow keys and <kbd>Enter</kbd>; the mouse doesn't work
+there.
+
+**The stick**, the first time on each computer:
 
 1. **ERROR: Verification failed: (0x1A) Security Violation.** Press <kbd>Enter</kbd>.
 
@@ -236,24 +240,55 @@ the arrow keys and <kbd>Enter</kbd>; the mouse doesn't work there.
 7. **Enroll the key(s)?** Choose **Yes**.
 8. Choose **Reboot**, and choose the stick again in the boot menu if Windows starts.
 
-With Secure Boot on, the stick's menu is plain text instead of the themed one; the entries
-are the same. **The installed system can't start with Secure Boot on yet**: after
-installing, turn Secure Boot off in the computer's setup (often F2, F10, F1 or Del as it
-starts; from Windows: Advanced startup, Troubleshoot, Advanced options, UEFI Firmware
-Settings), under Boot or Security, then save and exit. If Windows uses BitLocker, have
-its recovery key ready first ([aka.ms/myrecoverykey](https://aka.ms/myrecoverykey)).
+**The installed system**, at its first start. The installer's last page shows a
+four-digit code; this is where you type it.
 
-**From a terminal.** The chain is firmware (Microsoft's keys) → shim 16.1, Fedora's
-Microsoft-signed build, pinned by checksum → GRUB, signed with bromigOS's key → the
-kernel, signed with the same key. GRUB runs in lockdown, which is why its theme's fonts
-don't load. The certificate is at the stick's root and in the repository
-(`iso/secureboot/bromigos-secureboot.crt`; SHA-1 `5F:EC:1D:6C:E1:8B:6B:D3:B9:6E:ED:E9:87:AE:B4:E9:EE:62:49:86`,
-as MokManager's **View key 0** shows it). Memtest86+ and the UEFI shell are unsigned, so
-they don't start with Secure Boot on. If you run your own keys with `sbctl`, enroll
-bromigOS's certificate in `db` instead of MokManager, or sign the installed system
-yourself. The project's
+1. **Shim UEFI key management: Press any key to perform MOK management.** Press any key
+   within ten seconds. (If you miss it, the next start asks again.)
+2. Choose **Enroll MOK**, then **Continue**. (**View key 0** shows the key, with your
+   computer's name.)
+3. **Enroll the key(s)?** Choose **Yes**.
+4. **Password:** type the code, then press <kbd>Enter</kbd>.
+5. Choose **Reboot**. Then the boot menu, and your disk's passphrase, as every time.
+
+Lost the code? At step 2, choose **Enroll key from disk** instead, then the disk, then
+`EFI`, `bromigos-secureboot` and `ENROLL_THIS_KEY_FOR_THIS_PC.cer`, then **Continue** and
+**Yes**: no code needed.
+
+The boot menu looks the same with Secure Boot on or off. After an update, bromigOS signs
+the new kernel by itself. If it ever can't, the computer starts the kernel from before the
+update, and a message says to run `sudo bromigos secureboot resign`.
+
+**Installed bromigOS before this?** It works the same, when you choose:
+
+```bash
+sudo pacman -S bromigos-secureboot          # if it isn't installed yet
+sudo bromigos secureboot setup --dry-run    # what it would do, changing nothing
+sudo bromigos secureboot setup              # do it, and note the code it prints
+```
+
+Then restart, approve the key with the code as above, and turn Secure Boot on in the
+computer's setup if it's off. `bromigos secureboot` says where it stands.
+
+**If you'd rather turn Secure Boot off**, that works too, as it always has: in the
+computer's setup (often F2, F10, F1 or Del as it starts; from Windows: Advanced startup,
+Troubleshoot, Advanced options, UEFI Firmware Settings), under Boot or Security, then save
+and exit. If Windows uses BitLocker, have its recovery key ready first
+([aka.ms/myrecoverykey](https://aka.ms/myrecoverykey)).
+
+**From a terminal.** The stick's chain is firmware (Microsoft's keys) → shim 16.1, Fedora's
+Microsoft-signed build, pinned by checksum → GRUB, signed with bromigOS's key → the kernel,
+signed with the same key. The installed system's is the same shim → GRUB built on the
+computer → its kernels, both signed with a key made on the computer and kept root's only.
+Microsoft's keys and Windows' boot files aren't touched. GRUB runs in lockdown and carries
+its theme's fonts inside itself. The stick's certificate is at its root and in the
+repository (`iso/secureboot/bromigos-secureboot.crt`; SHA-1
+`5F:EC:1D:6C:E1:8B:6B:D3:B9:6E:ED:E9:87:AE:B4:E9:EE:62:49:86`, as MokManager's
+**View key 0** shows it). Memtest86+ and the UEFI shell are unsigned, so they don't start
+with Secure Boot on. If you run your own keys with `sbctl`, enroll bromigOS's certificate
+in `db` instead of MokManager, and sign the installed system with your keys. The project's
 [docs/secureboot.md](https://github.com/bromigos-org/bromigOS/blob/main/docs/secureboot.md)
-has the details.
+has the details: the keys, the hooks, recovery.
 
 ### 5. Try it, then install
 

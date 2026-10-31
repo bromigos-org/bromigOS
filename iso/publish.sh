@@ -102,14 +102,18 @@ case $cmd in
         # Secure Boot: the medium carries shim and the certificate to enroll (docs/secureboot.md)
         sb=false
         xorriso -indev "$iso" -find / -name ENROLL_THIS_KEY_IN_MOKMANAGER.cer 2>/dev/null | grep -q MOKMANAGER && sb=true
-        python3 - "$iso" "$edition" "$version" "$channel" "$sum" "$url" "${tag:-}" "${GITHUB_SHA:-}" "$sb" > "$iso.json" <<'PY'
+        # ... and its installer sets the installed system up for it (SECURE_BOOT.txt, medium.sh)
+        sbi=false
+        xorriso -indev "$iso" -find / -name SECURE_BOOT.txt 2>/dev/null | grep -q SECURE_BOOT && sbi=true
+        python3 - "$iso" "$edition" "$version" "$channel" "$sum" "$url" "${tag:-}" "${GITHUB_SHA:-}" "$sb" "$sbi" > "$iso.json" <<'PY'
 import json, os, sys, time
-iso, edition, version, channel, sha, url, tag, commit, sb = sys.argv[1:10]
+iso, edition, version, channel, sha, url, tag, commit, sb, sbi = sys.argv[1:11]
 json.dump({
     "edition": edition, "file": os.path.basename(iso), "version": version, "channel": channel,
     "tag": tag or None, "commit": commit or None,
     "size": os.path.getsize(iso), "sha256": sha,
     "url": url, "sha256_url": url + ".sha256", "sig_url": url + ".sig", "secure_boot": sb == "true",
+    "secure_boot_installed": sb == "true" and sbi == "true",
     "built": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(os.path.getmtime(iso))),
     "published": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
 }, sys.stdout, indent=2)

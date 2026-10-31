@@ -18,7 +18,13 @@
 #   --secureboot-cert FILE   as well: a medium signed for Secure Boot (its certificate) boots
 #            on a Windows PC's firmware with Secure Boot on (OVMF, Microsoft's keys only):
 #            MokManager, the key enrolled from the medium as a person does it, then the live
-#            desktop through shim
+#            desktop through shim. Then the installed system, Secure Boot still on
+#            (docs/secureboot.md): the install sets it up, MokManager enrolls the computer's own
+#            key with the installer's code, the themed boot menu, a kernel update signed again
+#            and started, a Unified Kernel Image (as Field Kit's) started through shim; and
+#            again beside a stand-in Windows, whose EFI files and boot entry stay as they were
+#   --secureboot-package FILE   bromigos-secureboot as built from this ref, put in the medium's
+#            store for the install (a channel may not have it, or have an older one)
 #
 # DIR gets each run's directory (shots/, the checks' output, the console log). The disks
 # are removed at the end. BROMIGOS_ISOTEST_MEM sets each VM's memory (MiB, default 6144);
@@ -26,12 +32,12 @@
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/.." && pwd)
-iso='' out='' suite=desktop profile='' sbcert=''
+iso='' out='' suite=desktop profile='' sbcert='' sbpkg=''
 while (($#)); do
     case $1 in
         --out) out=$2; shift 2 ;; --suite) suite=$2; shift 2 ;; --profile) profile=$2; shift 2 ;;
-        --secureboot-cert) sbcert=$2; shift 2 ;;
-        -h|--help) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --secureboot-cert) sbcert=$2; shift 2 ;; --secureboot-package) sbpkg=$2; shift 2 ;;
+        -h|--help) sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*) echo "iso/ci-test.sh: unknown option $1" >&2; exit 2 ;;
         *) iso=$1; shift ;;
     esac
@@ -41,21 +47,26 @@ done
 iso=$(realpath "$iso"); mkdir -p "$out"; out=$(realpath "$out")
 [[ -z $profile ]] || profile=$(realpath "$profile")
 [[ -z $sbcert ]] || sbcert=$(realpath "$sbcert")
+[[ -z $sbpkg ]] || sbpkg=$(realpath "$sbpkg")
 
 if [[ ${BROMIGOS_ISOTEST_IN_CONTAINER:-0} != 1 ]]; then
     mounts=(-v "$root:$root:ro" -v "$(dirname "$iso"):$(dirname "$iso"):ro" -v "$out:$out")
     [[ -z $profile ]] || mounts+=(-v "$profile:$profile:ro")
     [[ -z $sbcert ]] || mounts+=(-v "$sbcert:$sbcert:ro")
+    [[ -z $sbpkg ]] || mounts+=(-v "$sbpkg:$sbpkg:ro")
     # the host's network: the SSH forwards are on its 127.0.0.1
     exec docker run --rm --device /dev/kvm --network host "${mounts[@]}" \
         -e BROMIGOS_ISOTEST_IN_CONTAINER=1 -e BROMIGOS_ISOTEST_MEM -e BROMIGOS_VM_OWNER=none \
         archlinux:latest "$here/ci-test.sh" "$iso" --out "$out" --suite "$suite" \
-        ${profile:+--profile "$profile"} ${sbcert:+--secureboot-cert "$sbcert"}
+        ${profile:+--profile "$profile"} ${sbcert:+--secureboot-cert "$sbcert"} ${sbpkg:+--secureboot-package "$sbpkg"}
 fi
 
-# ── in the container ───────────────────────────────────────────────────────────────────
-pacman -Syu --noconfirm --needed qemu-desktop edk2-ovmf socat openssh libisoburn python python-pillow \
-    python-pip imagemagick procps-ng >/dev/null 2>&1
+# ── in the container (or, with BROMIGOS_ISOTEST_IN_CONTAINER=1 as a user, on a workstation
+# that has the tools: vm-keeper.py then counts every test VM on it, other jobs' too) ───────
+if [[ $EUID -eq 0 ]]; then
+    pacman -Syu --noconfirm --needed qemu-desktop edk2-ovmf socat openssh libisoburn python python-pillow \
+        python-pip imagemagick procps-ng >/dev/null 2>&1
+fi
 export BROMIGOS_VM_OWNER=none
 fails=0
 step() {            # step NAME CMD…: runs it, says PASS or FAIL, goes on
@@ -127,13 +138,21 @@ mok_keys() {        # the enrollment, keystroke by keystroke, a screenshot after
     sleep 2; snap enroll-mok; key down; key ret                   # Continue
     sleep 2; snap enroll-the-keys; key down; key ret              # Yes
     sleep 2; snap reboot; key ret                                 # Reboot
+    # then the medium's menu, which keeps its theme with Secure Boot on (its fonts are in GRUB's memdisk)
+    python3 "$root/iso/test/screen-wait.py" --qmp "$q" --out "$shots/menu-secureboot.png" --timeout 90 --coloured >/dev/null 2>&1 \
+        && : > "$shots/.menu-themed"
 }
 secureboot_run() {
     local d=$out/secureboot
     mkdir -p "$d/shots"
-    pacman -S --noconfirm --needed virt-firmware >/dev/null 2>&1 || { echo "virt-firmware didn't install"; return 1; }
-    virt-fw-vars --input /usr/share/edk2/x64/OVMF_VARS.4m.fd --output "$d/OVMF_VARS.fd" \
-        --enroll-microsoft --secure-boot >/dev/null 2>&1
+    # BROMIGOS_ISOTEST_SB_VARS: such variables made already (a workstation without virt-firmware)
+    if [[ -f ${BROMIGOS_ISOTEST_SB_VARS:-} ]]; then
+        cp "$BROMIGOS_ISOTEST_SB_VARS" "$d/OVMF_VARS.fd"
+    else
+        [[ $EUID -ne 0 ]] || pacman -S --noconfirm --needed virt-firmware >/dev/null 2>&1 || { echo "virt-firmware didn't install"; return 1; }
+        virt-fw-vars --input /usr/share/edk2/x64/OVMF_VARS.4m.fd --output "$d/OVMF_VARS.fd" \
+            --enroll-microsoft --secure-boot >/dev/null 2>&1 || { echo "virt-fw-vars failed"; return 1; }
+    fi
     BROMIGOS_ISOTEST_PORT=$(free_port 2241); BROMIGOS_ISOTEST_VNC=$(vnc_display 51)
     export BROMIGOS_ISOTEST_DIR=$d BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC BROMIGOS_ISOTEST_OFFLINE=0
     export BROMIGOS_ISOTEST_OVMF_CODE=/usr/share/edk2/x64/OVMF_CODE.secboot.4m.fd
@@ -144,10 +163,111 @@ secureboot_run() {
     local keys=$!
     step "secure boot: MokManager enrolls the key, then the live desktop, Secure Boot on" T boot --iso "$iso" --firmware uefi || true
     wait "$keys" 2>/dev/null || true
+    step "secure boot: the medium's menu keeps its theme" test -e "$d/shots/.menu-themed" || true
+    cp "$d/OVMF_VARS.fd" "$d/vars-medium.fd" 2>/dev/null || true
     step "secure boot: the firmware says it's on" T ssh 'od -An -t u1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c | awk "{exit !(\$NF == 1)}"'
     step "secure boot: the key is in the MOK list" T ssh 'test -s /sys/firmware/efi/mok-variables/MokListRT || ls /sys/firmware/efi/efivars/ | grep -q "^MokListRT-"'
+    # the firmware's variables now: Microsoft's keys, the medium's in MOK (the dual-boot run starts here)
+    T ssh 'sudo sync' >/dev/null 2>&1 || true
+    secureboot_installed "$d" || true
     T destroy >/dev/null 2>&1 || true
     rm -f "$d/disk.qcow2"
+    secureboot_dualboot "$d" || true
+}
+
+# Secure Boot on the installed system (docs/secureboot.md, "The installed system"), from the
+# live desktop above: bromigos-secureboot in the medium's store (this ref's build, when given:
+# trusted for the test, as it isn't signed with bromigOS's package key), the install, then the
+# installed system's first start: MokManager enrolls its own key with the installer's code, the
+# boot menu is the theme's, Secure Boot is on and everything is signed
+sb_store() {        # this ref's bromigos-secureboot into the live medium's store
+    [[ -n $sbpkg ]] || return 0
+    local f; f=$(basename "$sbpkg")
+    T ssh "cat > $f" < "$sbpkg"
+    T ssh "sudo install -m0644 $f /var/lib/bromigos/repo/bromigos/x86_64/ && sudo repo-add -q /var/lib/bromigos/repo/bromigos/x86_64/bromigos.db.tar.gz /var/lib/bromigos/repo/bromigos/x86_64/$f \
+        && sudo sed -i '/^\[bromigos\]$/a SigLevel = Optional TrustAll' /etc/pacman.conf && sudo pacman -Sy >/dev/null"
+}
+sb_checks() {       # sb_checks WHAT: Secure Boot on, the key enrolled, everything signed (as tester)
+    T ssh "echo tester | sudo -S -p '' sh -c 'echo \"tester ALL=(ALL) NOPASSWD: ALL\" > /etc/sudoers.d/99-isotest && chmod 440 /etc/sudoers.d/99-isotest'" >/dev/null 2>&1 || true
+    T ssh 'set -e
+        od -An -t u1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c | awk "{exit !(\$NF == 1)}"
+        mokutil --sb-state | grep -q "SecureBoot enabled"
+        sudo /usr/lib/bromigos/secureboot/bromigos-secureboot status | tee /dev/stderr | grep -q "^Ready: Secure Boot is on"
+        sudo /usr/lib/bromigos/secureboot/bromigos-secureboot status --json | python3 -c "import json,sys; d=json.load(sys.stdin); assert d[\"mok\"] == \"enrolled\" and not d[\"problems\"] and d[\"entry\"][\"first\"], d"
+        sudo sbverify --cert /var/lib/bromigos/secureboot/machine.crt /boot/vmlinuz-linux
+        test "$(sudo stat -c %a /var/lib/bromigos/secureboot/keys)" = 700'
+}
+secureboot_installed() {
+    local d=$1 code
+    step "secure boot, installed: this ref's bromigos-secureboot in the medium's store" sb_store || return 1
+    T ssh 'ls /var/lib/bromigos/repo/bromigos/x86_64/bromigos-secureboot-*.pkg.tar.zst >/dev/null 2>&1' \
+        || { echo "SKIP secure boot, installed: the medium carries no bromigos-secureboot (--secureboot-package)"; return 0; }
+    step "secure boot, installed: the installer's checks say it can stay on" T ssh 'bromigos-iso-secureboot check' || true
+    step "secure boot, installed: the install sets it up" T install || return 1
+    code=$(cat "$d/secureboot-code" 2>/dev/null)
+    [[ $code =~ ^[0-9]{4,8}$ ]] || { echo "FAIL secure boot, installed: the installer gave no code"; fails=$((fails + 1)); return 1; }
+    step "secure boot, installed: MokManager enrolls this computer's key, then the themed boot menu" T mok-enroll "$code" || return 1
+    step "secure boot, installed: it starts with Secure Boot on, everything signed" sb_checks || true
+    # a kernel update (the same kernel again, from the mirrors: a transaction that replaces it):
+    # the hooks sign it again, and it starts
+    step "secure boot, installed: a kernel update is signed again" T ssh 'sudo pacman -Sy --noconfirm linux 2>&1 | tail -6; sudo sbverify --cert /var/lib/bromigos/secureboot/machine.crt /boot/vmlinuz-linux' || true
+    T ssh 'sudo systemctl reboot' >/dev/null 2>&1 || true
+    sleep 5
+    step "secure boot, installed: after the update, the themed menu again" T grub secureboot-after-update down,up --coloured || true
+    step "secure boot, installed: and it starts, Secure Boot on" T up || true
+    step "secure boot, installed: still everything signed" sb_checks || true
+    # Field Kit's Unified Kernel Image in the firmware's own menu (bromigos-fieldkit-boot's
+    # entry, at the end of the boot order): an image of this system made here, with a word on
+    # its command line to find, then resign routes the entry through shim and signs it
+    step "secure boot, installed: a Unified Kernel Image (as Field Kit's) is signed and its entry goes through shim" T ssh 'set -e
+        sudo pacman -S --noconfirm --needed systemd-ukify >/dev/null
+        sudo ukify build --linux "/usr/lib/modules/$(uname -r)/vmlinuz" --initrd /boot/initramfs-linux.img \
+            --cmdline "$(sed "s/BOOT_IMAGE=[^ ]* //" /proc/cmdline) console=tty0 console=ttyS0,115200 bromigos.ukitest" --output /tmp/fieldkit.efi >/dev/null
+        sudo install -D -m0644 /tmp/fieldkit.efi /boot/EFI/bromigos-fieldkit/fieldkit.efi
+        sudo efibootmgr --quiet --create-only --disk /dev/vda --part 1 --label "bromigOS Field Kit" --loader "\\EFI\\bromigos-fieldkit\\fieldkit.efi"
+        sudo /usr/lib/bromigos/secureboot/bromigos-secureboot resign
+        sudo sbverify --cert /var/lib/bromigos/secureboot/machine.crt /boot/EFI/bromigos-fieldkit/fieldkit.efi
+        sudo efibootmgr -v | grep "bromigOS Field Kit" | tee /dev/stderr | grep -qi "bromigos-secureboot.shimx64.efi"
+        n=$(sudo efibootmgr | sed -n "s/^Boot\([0-9A-F]\{4\}\)\* bromigOS Field Kit.*/\1/p" | head -1)
+        sudo efibootmgr --quiet --bootnext "$n"' || true
+    T ssh 'sudo systemctl reboot' >/dev/null 2>&1 || true
+    sleep 5
+    step "secure boot, installed: the firmware's Field Kit entry starts its image through shim" passphrase_ssh_uki || true
+}
+passphrase_ssh_uki() {   # straight from the firmware (no GRUB): the passphrase, SSH, the image's word
+    local i
+    for i in 1 2 3; do sleep $(( ${BROMIGOS_ISOTEST_PASS_WAIT:-25} / 3 )); T shot "uki-$i" >/dev/null 2>&1 || true; done
+    T type tester >/dev/null
+    for _ in $(seq 60); do T ssh true 2>/dev/null && break; sleep 5; done
+    T ssh 'grep -qw bromigos.ukitest /proc/cmdline && od -An -t u1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c | awk "{exit !(\$NF == 1)}"'
+}
+# beside Windows: a stand-in Windows (its ESP's files, and a firmware entry "Windows Boot
+# Manager" for them), bromigOS installed beside it with Secure Boot set up; Windows' files,
+# its fallback loader and its entry must be as they were, and the menu has Windows
+secureboot_dualboot() {
+    local d=$1 w=$out/secureboot-dualboot code
+    [[ -f $d/vars-medium.fd ]] || return 0
+    mkdir -p "$w/shots"; cp "$d/vars-medium.fd" "$w/OVMF_VARS.fd"
+    local BROMIGOS_ISOTEST_DIR=$w
+    export BROMIGOS_ISOTEST_DIR
+    BROMIGOS_ISOTEST_PORT=$(free_port 2245); BROMIGOS_ISOTEST_VNC=$(vnc_display 55); export BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC
+    step "secure boot, beside Windows: the live desktop (the medium's key enrolled already)" T boot --iso "$iso" --firmware uefi || return 1
+    step "secure boot, beside Windows: a stand-in Windows, and its firmware entry" T windows --free-gib 24 || return 1
+    T ssh 'sudo efibootmgr --quiet --create --disk /dev/vda --part 1 --label "Windows Boot Manager" --loader "\\EFI\\Microsoft\\Boot\\bootmgfw.efi"' || true
+    sb_store || true
+    step "secure boot, beside Windows: the install sets it up" T install --alongside || return 1
+    code=$(cat "$w/secureboot-code" 2>/dev/null)
+    [[ $code =~ ^[0-9]{4,8}$ ]] || { echo "FAIL secure boot, beside Windows: the installer gave no code"; fails=$((fails + 1)); return 1; }
+    step "secure boot, beside Windows: MokManager, then the themed boot menu" T mok-enroll "$code" || return 1
+    step "secure boot, beside Windows: it starts with Secure Boot on, everything signed" sb_checks || true
+    step "secure boot, beside Windows: Windows' files, boot files and menu entry as they were" T verify-windows || true
+    step "secure boot, beside Windows: Windows' firmware entry is still there, bromigOS first" T ssh 'set -e
+        sudo efibootmgr | tee /dev/stderr | grep -q "Windows Boot Manager"
+        w=$(sudo efibootmgr | sed -n "s/^Boot\([0-9A-F]\{4\}\)\* Windows Boot Manager.*/\1/p"); sudo efibootmgr | grep "^BootOrder:" | grep -q "$w"
+        b=$(sudo efibootmgr -v | awk "tolower(\$0) ~ /bromigos-secureboot.shimx64.efi/ && \$0 !~ /Field Kit/ { sub(/^Boot/, \"\"); sub(/\\*.*/, \"\"); print; exit }")
+        sudo efibootmgr | grep -q "^BootOrder: $b"' || true
+    T destroy >/dev/null 2>&1 || true
+    rm -f "$w/disk.qcow2"
 }
 
 case $suite in

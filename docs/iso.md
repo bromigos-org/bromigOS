@@ -10,7 +10,7 @@ test it. For users, the manual's [Install](../manual/src/install.md) page and th
 [Download page](https://bromigos.org/download) cover it. Every release's ISO is built,
 checked, tested, signed and published by CI, as one file at
 `https://pkgs.bromigos.org/iso/<version>/` ([A release's ISO](#a-releases-iso)). It
-starts with Secure Boot on ([secureboot.md](secureboot.md)).
+starts with Secure Boot on, and so does the system it installs ([secureboot.md](secureboot.md)).
 
 ![The ISO's boot menu: the title BROMIGOS // RELAY MEDIUM over the den at night, the
 burn-in emblem, a countdown, and the entries Start bromigOS, Install bromigOS, safe
@@ -557,7 +557,9 @@ the desktop medium, and the Field Kit once it's there), side by side:
 3. **Test it** with `iso/ci-test.sh`, in an archlinux container with KVM. The desktop
    medium: UEFI with the network, an encrypted install, the installed system, its first
    update and rollback; then BIOS with no network and a plain install. Then the medium
-   once more with Secure Boot on. A profile with no installer boots to its menu on UEFI and
+   once more with Secure Boot on, an install from it that starts with Secure Boot on (its
+   key enrolled in MokManager, a kernel update, a Unified Kernel Image), and one beside a
+   stand-in Windows ([secureboot.md](secureboot.md#testing-it)). A profile with no installer boots to its menu on UEFI and
    BIOS, then runs its own `ci-test.sh` if it has one.
 4. **Sign it** with the package signing key (a detached, armoured `.sig`), and check the
    signature against `packaging/keys/bromigos.asc` alone.
@@ -619,7 +621,9 @@ https://pkgs.bromigos.org/iso/
 
 Each ISO's `.json`, and the `isos` of `index.json` and `latest.json`, give its `edition`
 (`bromigos`, `bromigos-fieldkit`), `file`, `version`, `tag`, `size`, `sha256`, `url`,
-`sha256_url`, `sig_url`, `secure_boot` and when it was built and published.
+`sha256_url`, `sig_url`, `secure_boot`, `secure_boot_installed` (its installer sets the
+installed system up for Secure Boot: the stick carries `SECURE_BOOT.txt`) and when it was
+built and published.
 
 **What's kept:** the newest three stable versions, and the newest edge build. Older
 releases' ISOs are removed from the bucket when a fourth is published. At 5 GB each that's
@@ -662,7 +666,7 @@ git worktree add ../bromigos-v0.1.3 v0.1.3
     --medium-repo https://pkgs.bromigos.org --channel stable --version 0.1.3 \
     --out <dir> [--secureboot-key <key> --secureboot-cert <cert>]
 iso/check-medium.sh <dir>/bromigos-0.1.3-x86_64.iso --keep <dir>/check
-iso/ci-test.sh <dir>/bromigos-0.1.3-x86_64.iso --out <dir>/tests [--secureboot-cert <cert>]
+iso/ci-test.sh <dir>/bromigos-0.1.3-x86_64.iso --out <dir>/tests [--secureboot-cert <cert> [--secureboot-package <pkg>]]
 iso/publish.sh sign <dir>/bromigos-0.1.3-x86_64.iso
 iso/publish.sh upload <dir>/bromigos-0.1.3-x86_64.iso --channel stable --tag v0.1.3
 iso/publish.sh pointers --channel stable --out <dir>/index
@@ -842,9 +846,9 @@ channel at v0.1.3 with main's `iso/`, signed for Secure Boot with a throwaway ke
   It reproduced the same way on the workstation. On a VM it's now a SKIP with that reason.
 - The guard's one finding in bromigOS's files, Docker's default bridge address in the
   widgets' demo data, is accepted for v0.1.3's package and fixed at the source.
-- With Secure Boot on, the menu is GRUB's plain one: lockdown loads no font
-  ([secureboot.md](secureboot.md#the-medium)). The firmware said Secure Boot was on, and
-  the key was in the MOK list.
+- With Secure Boot on, the menu was GRUB's plain one: lockdown loaded no font. Media
+  built since carry the fonts inside GRUB ([secureboot.md](secureboot.md#the-medium)). The
+  firmware said Secure Boot was on, and the key was in the MOK list.
 
 ### 2026-10-10, 00:48 to 01:01 Pacific: v0.1.2's ISO, naming pkgs.bromigos.org
 

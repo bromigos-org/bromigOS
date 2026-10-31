@@ -186,7 +186,12 @@ def main():
         say("The install didn't finish. " + (result.get("err") or ""))
         return 1
     heading("done")
-    say("Take out the USB stick when the screen goes dark." + (" Then type the disk's passphrase." if a["encrypt"] else ""))
+    say("Take out the USB stick when the screen goes dark.")
+    sb = common.secureboot_done(backend.SECUREBOOT_CODE)
+    if sb:
+        say(sb)
+    if a["encrypt"]:
+        say("Then type the disk's passphrase.")
     if yes("Restart now?", True):
         backend.reboot()
     return 0

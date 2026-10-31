@@ -209,6 +209,25 @@ enum Cmd {
     /// The boot menu: bromigOS's GRUB theme in your theme's colours (`bromigos boot theme
     /// status|on|off|apply`; docs/boot.md)
     Boot(BootArgs),
+    /// Secure Boot (docs/secureboot.md): `status` (where it stands), `setup` (this computer's
+    /// own key, GRUB and the kernels signed with it, shim first in the boot order, and the key's
+    /// enrollment asked for at the next start, approved there with a code), `resign`
+    /// (everything signed again: the pacman hooks do it after updates), `remove` (back as
+    /// before setup). Needs the bromigos-secureboot package
+    Secureboot {
+        /// status (default), setup, resign or remove
+        action: Option<String>,
+        /// setup, resign, remove: only say what it would do
+        #[arg(long)]
+        dry_run: bool,
+        /// setup: the 4 to 8 digits that approve the key at the next start (default: four
+        /// made up, and shown)
+        #[arg(long)]
+        code: Option<String>,
+        /// status: print the JSON document
+        #[arg(long)]
+        json: bool,
+    },
     /// Restart what runs stale (its package is newer than the process), or the pieces named
     Restart {
         /// live, widgets, waybar, dunst, vector, hyprland (its config), osd, idle (hypridle),
@@ -828,6 +847,18 @@ fn run(paths: &Paths, dirs: &[std::path::PathBuf], cmd: Cmd) -> Result<i32> {
         } => restart_cmd(paths, &pieces, check, json),
         Cmd::Aur(a) => aur::aur_cmd(paths, a),
         Cmd::Boot(a) => boot_cmd(paths, a),
+        Cmd::Secureboot {
+            action,
+            dry_run,
+            code,
+            json,
+        } => bromigos_core::secureboot::run(
+            action.as_deref().unwrap_or("status"),
+            dry_run,
+            code.as_deref(),
+            json,
+        )
+        .map_err(anyhow::Error::msg),
         Cmd::WhatsNew { release, all } => whats_new_cmd(paths, release.as_deref(), all),
         Cmd::Install {
             dry_run,

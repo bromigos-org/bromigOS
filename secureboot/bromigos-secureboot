@@ -1,0 +1,1191 @@
+#!/usr/bin/python3 -I
+# bromigos:hidden=true
+"""Secure Boot on an installed bromigOS (docs/secureboot.md, "The installed system"; package
+bromigos-secureboot). `bromigos secureboot` runs it with sudo; the installer runs it in the
+new system; the pacman hooks run it as root.
+
+The chain is the one the medium uses, with a key of this computer's own instead of
+bromigOS's (Arch's kernels are signed by nobody, so they're signed here):
+
+  firmware (Microsoft's keys, untouched) -> shim (Microsoft-signed, EFI/bromigos-secureboot/)
+    -> GRUB, built here with its modules and fonts inside, signed with this computer's key
+    -> the kernels, and Field Kit's, signed with the same key
+
+The key is made here once and never leaves this computer: its private half is root's only,
+on the root file system (encrypted when the disk is). Its certificate is enrolled in shim's
+own list (MOK) once, at a start, in MokManager's blue screens. The firmware's keys and
+Windows aren't touched.
+
+  bromigos-secureboot status [--json]     where it stands, in plain words (no root needed)
+  bromigos-secureboot setup [--dry-run] [--code DIGITS] [--fresh-install]
+                          the key made (once), GRUB built and signed, shim and GRUB put on
+                          the EFI system partition, the kernels signed, a firmware boot entry
+                          "bromigOS" first in the boot order, and the key's enrollment asked
+                          for at the next start (mokutil --import, approved with DIGITS: four
+                          made up when not given). --fresh-install: the installer's, which
+                          also takes out the boot entry its GRUB made a moment before
+  bromigos-secureboot resign [--dry-run] [--quiet]
+                          everything signed again, GRUB built again, shim and the entries
+                          made current (the pacman hooks run this)
+  bromigos-secureboot remove [--dry-run]
+                          back as before setup: the boot entry and the files on the EFI
+                          system partition gone, the boot order as it was. The key stays
+                          (setup uses it again), and so does its MOK enrollment
+  bromigos-secureboot sign FILE...        sign these with this computer's key (set up only)
+
+Hooks (as root): hook-pre (before a kernel upgrade: the signed kernels kept), hook-post
+(after: resign, and the kept kernel put back where one couldn't be signed), hook-remove
+(the package's removal refused while it's set up), initcpio-post KERNEL [IMAGE [UKI]]
+(mkinitcpio's post hook: the kernel it copied signed).
+"""
+
+import argparse
+import datetime
+import fcntl
+import glob
+import hashlib
+import io
+import json
+import os
+import re
+import secrets
+import shutil
+import struct
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+ROOT = os.environ.get("BROMIGOS_SB_ROOT", "/")
+SYS_EFI = os.environ.get("BROMIGOS_SB_SYS_EFI", "/sys/firmware/efi")
+
+
+def tool(name):
+    return os.environ.get("BROMIGOS_SB_" + name.upper().replace("-", "_"), name)
+
+
+def at(path):
+    return os.path.join(ROOT, path.lstrip("/"))
+
+
+STATE_DIR = "/var/lib/bromigos/secureboot"
+STATE = STATE_DIR + "/state.json"
+CERT = STATE_DIR + "/machine.crt"                # public: status reads it without root
+KEYS = STATE_DIR + "/keys"                       # 0700: the private key and the code
+KEY = KEYS + "/machine.key"
+CODE = KEYS + "/enroll-code"
+KEPT = STATE_DIR + "/last-good"                  # 0700: signed kernels kept over an upgrade
+LOCK = "/run/lock/bromigos-secureboot.lock"
+SHARE = "/usr/share/bromigos/secureboot"
+SHIM = SHARE + "/shimx64.efi"
+MM = SHARE + "/mmx64.efi"
+MODULES = SHARE + "/grub-modules.txt"
+FONTS = "/usr/share/bromigos/boot/grub/fonts"
+UNICODE = "/usr/share/grub/unicode.pf2"
+GRUB_LIB = "/usr/lib/grub/x86_64-efi"
+SBAT = "/usr/share/grub/sbat.csv"
+GRUB_DIR = "/boot/grub"
+LOADER_DIR = "EFI/bromigos-secureboot"           # on the EFI system partition
+LOADER = r"\EFI\bromigos-secureboot\shimx64.efi"
+REMOVABLE = "EFI/BOOT"
+CER = "ENROLL_THIS_KEY_FOR_THIS_PC.cer"          # what MokManager's file list shows
+LABEL = "bromigOS"
+FK_LABEL = "bromigOS Field Kit"
+FK_UKI = r"\EFI\bromigos-fieldkit\fieldkit.efi"
+SECUREBOOT_VAR = "efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+SETUPMODE_VAR = "efivars/SetupMode-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+# what's signed besides GRUB: the kernels GRUB starts, Field Kit's copy on /boot, and its
+# Unified Kernel Image for the firmware's own menu ({esp} is the EFI system partition)
+SIGN = ["/boot/vmlinuz-*", "/boot/fieldkit/boot/*/vmlinuz-*", "{esp}/EFI/bromigos-fieldkit/*.efi"]
+HOW = "https://bromigos.org/download#secure-boot"
+VERBOSE = True
+
+
+class Refused(Exception):
+    """A plain-words reason it can't go on."""
+
+
+def say(msg):
+    if VERBOSE:
+        print(f"bromigos-secureboot: {msg}", flush=True)
+
+
+def warn(msg):
+    print(f"bromigos-secureboot: {msg}", file=sys.stderr, flush=True)
+
+
+def run(argv, check=True, **kw):
+    r = subprocess.run(argv, capture_output=True, text=True, **kw)
+    if check and r.returncode != 0:
+        why = (r.stderr or r.stdout).strip().splitlines()
+        raise Refused(f"{os.path.basename(argv[0])} failed: {why[-1] if why else 'no reason given'}")
+    return r
+
+
+# ------------------------------------------------------------------ state
+
+def load_state():
+    try:
+        with open(at(STATE)) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def write_file(path, data, mode=0o644):
+    """Written beside it, synced, then renamed over it."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.bromigos-new"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data if isinstance(data, bytes) else data.encode())
+        f.flush()
+        os.fsync(f.fileno())
+    try:
+        os.chmod(tmp, mode)
+    except OSError:             # vfat (the EFI system partition) keeps its mount's modes
+        pass
+    os.replace(tmp, path)
+
+
+def save_state(st):
+    write_file(at(STATE), json.dumps(st, indent=1, sort_keys=True) + "\n")
+
+
+def is_set_up(st=None):
+    st = load_state() if st is None else st
+    return st.get("status") in ("ready", "failed") and os.path.isfile(at(CERT))
+
+
+def now():
+    return datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()
+
+
+# ------------------------------------------------------------------ the firmware
+
+def uefi():
+    return os.path.isdir(SYS_EFI)
+
+
+def efi_byte(var):
+    """A UEFI variable's value byte (after the four attribute bytes), or None."""
+    try:
+        with open(os.path.join(SYS_EFI, var), "rb") as f:
+            data = f.read()
+        return data[4] if len(data) > 4 else None
+    except OSError:
+        return None
+
+
+def secure_boot_state():
+    """on, off, setup (the firmware's own keys cleared: setup mode), or none (BIOS)."""
+    if not uefi():
+        return "none"
+    if efi_byte(SETUPMODE_VAR) == 1:
+        return "setup"
+    return "on" if efi_byte(SECUREBOOT_VAR) == 1 else "off"
+
+
+def efi_entries():
+    """[(number, label, the rest of the line lowercased)] and the boot order, from efibootmgr -v."""
+    r = run([tool("efibootmgr"), "-v"], check=False)
+    entries, order = [], []
+    for line in r.stdout.splitlines():
+        m = re.match(r"^Boot([0-9A-Fa-f]{4})(\*?)\s+(.*)$", line)
+        if m:
+            rest = m.group(3)
+            label = re.split(r"\t|\s{2,}|\s(?=HD\(|PciRoot\(|VenHw\(|FvVol\(|File\()", rest, maxsplit=1)[0].strip()
+            entries.append((m.group(1).upper(), label, rest.lower()))
+        elif line.startswith("BootOrder:"):
+            order = [x.strip().upper() for x in line.split(":", 1)[1].split(",") if x.strip()]
+    return entries, order
+
+
+def loader_in(rest, loader):
+    return loader.lower() in rest.replace("/", "\\")
+
+
+def ours(entries):
+    """Our entries: shim on its own, labelled bromigOS (Field Kit's starts shim too, with its
+    image as shim's option, which efibootmgr may print as hex)."""
+    return [n for n, label, rest in entries if loader_in(rest, LOADER) and label != FK_LABEL
+            and FK_UKI.lower() not in rest.replace("/", "\\")]
+
+
+# ------------------------------------------------------------------ the disks
+
+def findmnt(*args):
+    return run(["findmnt", "-n", *args], check=False).stdout.strip()
+
+
+def esp():
+    """The EFI system partition's mount point: /efi, /boot/efi or /boot (a vfat with EFI/)."""
+    override = os.environ.get("BROMIGOS_SB_ESP")
+    if override:
+        return override
+    for mp in ("/efi", "/boot/efi", "/boot"):
+        p = at(mp)
+        if findmnt("-o", "FSTYPE", "--mountpoint", p) == "vfat" and os.path.isdir(os.path.join(p, "EFI")):
+            return mp
+    return None
+
+
+def partition_of(mountpoint):
+    """(disk, partition number) holding a mount point."""
+    override = os.environ.get("BROMIGOS_SB_ESP_DISK")
+    if override:
+        disk, _, part = override.partition(":")
+        return disk, part
+    src = findmnt("-o", "SOURCE", "--mountpoint", at(mountpoint))
+    name = os.path.basename(src)
+    try:
+        with open(f"/sys/class/block/{name}/partition") as f:
+            part = f.read().strip()
+        disk = os.path.basename(os.path.dirname(os.path.realpath(f"/sys/class/block/{name}")))
+        return f"/dev/{disk}", part
+    except OSError:
+        raise Refused(f"couldn't tell which disk holds the EFI system partition ({src or mountpoint})")
+
+
+def grub_location():
+    """(the file system's UUID, GRUB's folder on it) for /boot/grub, as grub-install finds it."""
+    gdir = at(GRUB_DIR)
+    if not os.path.isfile(os.path.join(gdir, "grub.cfg")):
+        raise Refused("GRUB's menu isn't in /boot/grub (grub.cfg): GRUB doesn't start this computer, "
+                      "and bromigOS's Secure Boot setup is for GRUB")
+    uuid = run([tool("grub-probe"), "--target=fs_uuid", gdir]).stdout.strip()
+    rel = run([tool("grub-mkrelpath"), gdir]).stdout.strip()
+    if not re.fullmatch(r"[0-9A-Za-z-]+", uuid) or not re.fullmatch(r"/[A-Za-z0-9_@./-]*", rel):
+        raise Refused(f"grub-probe gave an odd answer for /boot/grub ({uuid!r}, {rel!r})")
+    return uuid, rel
+
+
+# ------------------------------------------------------------------ the key
+
+def cert_fingerprint(path=None):
+    r = run(["openssl", "x509", "-in", path or at(CERT), "-noout", "-fingerprint", "-sha256"], check=False)
+    m = re.search(r"=([0-9A-F:]+)", r.stdout)
+    return m.group(1) if m else ""
+
+
+def cert_subject(path=None):
+    r = run(["openssl", "x509", "-in", path or at(CERT), "-noout", "-subject", "-nameopt", "oneline"], check=False)
+    return r.stdout.strip().removeprefix("subject=").strip()
+
+
+def make_key(dry):
+    """This computer's key, made once: RSA 2048 (what shim and every firmware take), the
+    private half root's only. A key already there is kept."""
+    if os.path.isfile(at(KEY)) and os.path.isfile(at(CERT)):
+        pub = run(["openssl", "x509", "-in", at(CERT), "-noout", "-pubkey"]).stdout
+        mine = run(["openssl", "pkey", "-in", at(KEY), "-pubout"]).stdout
+        if pub != mine:
+            raise Refused(f"{KEY} isn't the key of {CERT}: move both away to make a new pair")
+        return False
+    if dry:
+        say(f"would make this computer's key: {KEY} (root only) and its certificate {CERT}")
+        return True
+    host = "".join(c for c in (os.uname().nodename or "this PC") if c.isalnum() or c in "-_.")[:40]
+    os.makedirs(at(KEYS), mode=0o700, exist_ok=True)
+    os.chmod(at(KEYS), 0o700)
+    tmp = tempfile.mkdtemp(dir=at(KEYS))
+    try:
+        run(["openssl", "req", "-new", "-x509", "-newkey", "rsa:2048", "-sha256", "-nodes", "-days", "7300",
+             "-subj", f"/O=bromigOS/CN=bromigOS Secure Boot key of {host} ({datetime.date.today().isoformat()})/",
+             "-addext", "basicConstraints=critical,CA:FALSE",
+             "-addext", "keyUsage=critical,digitalSignature",
+             "-addext", "extendedKeyUsage=codeSigning",
+             "-keyout", os.path.join(tmp, "key"), "-out", os.path.join(tmp, "crt")], check=True)
+        os.chmod(os.path.join(tmp, "key"), 0o600)
+        os.replace(os.path.join(tmp, "key"), at(KEY))
+        with open(os.path.join(tmp, "crt"), "rb") as f:
+            write_file(at(CERT), f.read(), 0o644)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    say(f"made this computer's key ({cert_fingerprint()[:23]}…)")
+    return True
+
+
+def cert_der():
+    return subprocess.run(["openssl", "x509", "-in", at(CERT), "-outform", "DER"], capture_output=True, check=True).stdout
+
+
+# ------------------------------------------------------------------ signing
+
+def signed_by_us(path):
+    if not os.path.isfile(path) or not os.path.isfile(at(CERT)):
+        return False
+    return run([tool("sbverify"), "--cert", at(CERT), path], check=False).returncode == 0
+
+
+def sign(path):
+    """Signed with this computer's key, in place: written beside it, checked, renamed over it."""
+    if not os.path.isfile(at(KEY)):
+        raise Refused(f"this computer's key isn't there ({KEY}): `sudo bromigos secureboot setup` makes it")
+    tmp = f"{path}.bromigos-signed"
+    try:
+        run([tool("sbsign"), "--key", at(KEY), "--cert", at(CERT), "--output", tmp, path])
+        if run([tool("sbverify"), "--cert", at(CERT), tmp], check=False).returncode != 0:
+            raise Refused(f"{path}: the signature didn't check out after signing")
+        with open(tmp, "rb") as f:
+            os.fsync(f.fileno())
+        try:
+            os.chmod(tmp, os.stat(path).st_mode & 0o7777)
+        except OSError:         # vfat keeps its mount's modes
+            pass
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def to_sign(espmp):
+    out = []
+    for pattern in SIGN:
+        if "{esp}" in pattern:
+            if not espmp:
+                continue
+            pattern = pattern.replace("{esp}", espmp)
+        out += sorted(p for p in glob.glob(at(pattern), recursive=False)
+                      if os.path.isfile(p) and not p.endswith((".bromigos-signed", ".bromigos-new")))
+    return out
+
+
+def rel(path):
+    return "/" + os.path.relpath(path, ROOT) if ROOT != "/" else path
+
+
+# ------------------------------------------------------------------ GRUB
+
+def module_list():
+    words = []
+    with open(at(MODULES)) as f:
+        for line in f:
+            words += line.split("#", 1)[0].split()
+    have = [m for m in dict.fromkeys(words) if os.path.isfile(os.path.join(at(GRUB_LIB), m + ".mod"))]
+    return have
+
+
+def fonts():
+    """{name: path}: Geist Mono in the boot theme's sizes, and GRUB's unicode (grub.cfg loads it)."""
+    out = {}
+    d = at(FONTS)
+    if os.path.isdir(d):
+        for n in sorted(os.listdir(d)):
+            if n.endswith(".pf2"):
+                out[n[:-4]] = os.path.join(d, n)
+    if os.path.isfile(at(UNICODE)):
+        out["unicode"] = at(UNICODE)
+    return out
+
+
+def early_config(uuid, relpath, font_names):
+    """The configuration inside the image, (memdisk)/boot/grub/grub.cfg: normal mode reads it
+    first (grub-mkimage's memdisk sets the prefix there), loads the fonts, finds /boot/grub
+    and reads the real menu from it."""
+    names = " ".join(n for n in font_names if n != "unicode")
+    return "\n".join([
+        "# bromigOS's GRUB for Secure Boot (bromigos-secureboot; docs/secureboot.md), made on",
+        "# this computer and signed with its key. The fonts are in this image, because with",
+        "# Secure Boot on GRUB loads none from the disk: loadfont NAME looks in (memdisk)/fonts",
+        "# first. Then GRUB's own menu, as grub-mkconfig made it.",
+        "set bromigos_secureboot=y",
+        "export bromigos_secureboot",
+        f"for f in {names}; do loadfont $f; done",
+        f"search --no-floppy --fs-uuid --set=root {uuid}",
+        "if [ \"$root\" = memdisk ]; then",
+        f"    search --no-floppy --file --set=root {relpath}/grub.cfg",
+        "fi",
+        f"set prefix=($root){relpath}",
+        "export prefix",
+        "source $prefix/grub.cfg",
+        "",
+    ])
+
+
+def build_grub(out, dry):
+    """GRUB for this computer: its modules built in, its configuration and the fonts in a
+    memdisk, finding /boot/grub by its file system's UUID; then signed."""
+    uuid, relpath = grub_location()
+    mods = module_list()
+    fts = fonts()
+    if not mods or "linux" not in mods or "memdisk" not in mods:
+        raise Refused(f"GRUB's modules aren't all there ({GRUB_LIB}): is grub installed?")
+    if dry:
+        say(f"would build GRUB ({len(mods)} modules built in, {len(fts)} fonts inside it) finding "
+            f"{relpath}/grub.cfg on the file system {uuid}, and sign it")
+        return
+    work = tempfile.mkdtemp(prefix="bromigos-sb-grub-")
+    try:
+        tar = os.path.join(work, "memdisk.tar")
+
+        def add(t, arcname, data):
+            info = tarfile.TarInfo(arcname)
+            info.size, info.mode, info.mtime = len(data), 0o644, 0
+            t.addfile(info, io.BytesIO(data))
+
+        with tarfile.open(tar, "w", format=tarfile.USTAR_FORMAT) as t:
+            add(t, "boot/grub/grub.cfg", early_config(uuid, relpath, list(fts)).encode())
+            for name, path in fts.items():
+                with open(path, "rb") as f:
+                    add(t, f"fonts/{name}.pf2", f.read())
+        # -m: the memdisk, which also makes the prefix (memdisk)/boot/grub
+        argv = [tool("grub-mkimage"), "-O", "x86_64-efi", "-d", at(GRUB_LIB), "-o", out,
+                "-p", "(memdisk)/boot/grub", "-m", tar]
+        if os.path.isfile(at(SBAT)):
+            argv += ["--sbat", at(SBAT)]
+        run(argv + mods)
+        sign(out)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+# ------------------------------------------------------------------ the EFI system partition
+
+def same(a, b):
+    try:
+        with open(a, "rb") as fa, open(b, "rb") as fb:
+            return fa.read() == fb.read()
+    except OSError:
+        return False
+
+
+def put(src_bytes_or_path, dst):
+    """A file onto the EFI system partition, only when it differs: beside it, synced, renamed."""
+    if isinstance(src_bytes_or_path, bytes):
+        data = src_bytes_or_path
+    else:
+        with open(src_bytes_or_path, "rb") as f:
+            data = f.read()
+    try:
+        with open(dst, "rb") as f:
+            if f.read() == data:
+                return False
+    except OSError:
+        pass
+    write_file(dst, data, 0o755)
+    return True
+
+
+def removable_ok(espmp, st):
+    """EFI/BOOT/BOOTX64.EFI, the fallback path every firmware tries: ours to fill only on a
+    disk with no Windows, where it's empty, ours already, or a GRUB the installer put there.
+    Never Windows' (or another system's) fallback loader."""
+    e = at(espmp)
+    if os.path.isdir(os.path.join(e, "EFI", "Microsoft")) or os.path.isdir(os.path.join(e, "EFI", "microsoft")):
+        return False
+    boot = os.path.join(e, REMOVABLE, "BOOTX64.EFI")
+    if not os.path.exists(boot):
+        return True
+    if st.get("removable"):
+        return True
+    for g in glob.glob(os.path.join(e, "EFI", "*", "grubx64.efi")):
+        if same(g, boot):
+            return True
+    # a GRUB the installer put there itself (grub-install --removable): its core's EFI disk code
+    try:
+        with open(boot, "rb") as f:
+            return b"grub_efidisk_open" in f.read()
+    except OSError:
+        return False
+
+
+def install_loaders(espmp, grub_img, st, dry):
+    """shim, MokManager, GRUB and the certificate in EFI/bromigos-secureboot (and at the
+    fallback path, where that's ours to fill)."""
+    e = at(espmp)
+    dirs = [os.path.join(e, LOADER_DIR)]
+    removable = removable_ok(espmp, st)
+    if removable:
+        dirs.append(os.path.join(e, REMOVABLE))
+    if dry:
+        for d in dirs:
+            say(f"would put shim, MokManager and GRUB in {rel(d)}")
+        return removable
+    der = cert_der()
+    changed = False
+    for d in dirs:
+        os.makedirs(d, exist_ok=True)
+        boot_name = "BOOTX64.EFI" if d.endswith(REMOVABLE) else "shimx64.efi"
+        changed |= put(at(SHIM), os.path.join(d, boot_name))
+        changed |= put(at(MM), os.path.join(d, "mmx64.efi"))
+        changed |= put(grub_img, os.path.join(d, "grubx64.efi"))
+    changed |= put(der, os.path.join(dirs[0], CER))
+    if changed:
+        os.sync()
+        say("shim, MokManager and GRUB are on the EFI system partition (" + ", ".join(rel(d) for d in dirs) + ")")
+    return removable
+
+
+def ensure_entry(espmp, first, fresh, dry):
+    """The firmware's boot entry "bromigOS" (shim), made when it's missing; with `first`, put
+    first in the boot order. --fresh-install also takes out the installer's own GRUB entry."""
+    entries, order = efi_entries()
+    mine = ours(entries)
+    disk, part = partition_of(espmp)
+    if not mine:
+        if dry:
+            say(f"would add the firmware boot entry \"{LABEL}\" ({LOADER} on {disk}, partition {part}), first in the boot order")
+        else:
+            run([tool("efibootmgr"), "--quiet", "--create", "--disk", disk, "--part", part, "--label", LABEL,
+                 "--loader", LOADER])
+            say(f"added the firmware boot entry \"{LABEL}\", first in the boot order")
+            entries, order = efi_entries()
+            mine = ours(entries)
+    elif first and order and order[0] not in mine:
+        new = [mine[0]] + [n for n in order if n != mine[0]]
+        if dry:
+            say(f"would put \"{LABEL}\" first in the firmware's boot order")
+        else:
+            run([tool("efibootmgr"), "--quiet", "--bootorder", ",".join(new)])
+            say(f"\"{LABEL}\" is first in the firmware's boot order")
+    if fresh:
+        for n, label, rest in entries:
+            if loader_in(rest, r"\EFI\GRUB\grubx64.efi") and n not in mine:
+                if dry:
+                    say(f"would remove the installer's own GRUB entry Boot{n} ({label})")
+                else:
+                    run([tool("efibootmgr"), "--quiet", "--bootnum", n, "--delete-bootnum"], check=False)
+                    say(f"removed Boot{n} ({label}): GRUB starts through shim now")
+    return mine
+
+
+def route_fieldkit(espmp, dry):
+    """Field Kit's own firmware entry (bromigos-fieldkit-boot adds it for its Unified Kernel
+    Image) goes through shim, which checks the image against the enrolled key: the firmware
+    alone knows only Microsoft's keys. Same label, same place in the boot order."""
+    entries, order = efi_entries()
+    for n, label, rest in entries:
+        if label != FK_LABEL or not loader_in(rest, FK_UKI) or loader_in(rest, LOADER):
+            continue
+        if not os.path.isfile(os.path.join(at(espmp), "EFI", "bromigos-fieldkit", "fieldkit.efi")):
+            continue
+        if dry:
+            say(f"would point \"{FK_LABEL}\" (Boot{n}) at shim, with Field Kit's image to start")
+            return
+        disk, part = partition_of(espmp)
+        idx = order.index(n) if n in order else len(order)
+        # shim's second stage: the image's path in UCS-2, ending in a NUL (shim takes the path
+        # up to a NUL or a space, and efibootmgr --unicode writes neither)
+        with tempfile.NamedTemporaryFile(suffix=".opt") as opt:
+            opt.write(FK_UKI.encode("utf-16-le") + b"\0\0")
+            opt.flush()
+            run([tool("efibootmgr"), "--quiet", "--create", "--disk", disk, "--part", part, "--label", FK_LABEL,
+                 "--loader", LOADER, "--index", str(idx), "--append-binary-args", opt.name])
+        run([tool("efibootmgr"), "--quiet", "--bootnum", n, "--delete-bootnum"], check=False)
+        say(f"\"{FK_LABEL}\" starts through shim now")
+
+
+# ------------------------------------------------------------------ MOK
+
+def mok_state():
+    """enrolled, pending (asked for at the next start), missing, or unknown."""
+    if not os.path.isfile(at(CERT)) or not uefi():
+        return "unknown"
+    with tempfile.NamedTemporaryFile(suffix=".cer") as f:
+        try:
+            f.write(subprocess.run(["openssl", "x509", "-in", at(CERT), "-outform", "DER"],
+                                   capture_output=True, check=True).stdout)
+            f.flush()
+        except (OSError, subprocess.CalledProcessError):
+            return "unknown"
+        r = run([tool("mokutil"), "--test-key", f.name], check=False)
+    words = (r.stdout + r.stderr).lower()
+    if "already enrolled" in words:
+        return "enrolled"
+    if "enrollment request" in words:
+        return "pending"
+    if "not enrolled" in words:
+        return "missing"
+    return "unknown"
+
+
+def make_code():
+    return "".join(secrets.choice("0123456789") for _ in range(4))
+
+
+def request_enrollment(code, dry):
+    """mokutil --import: MokManager asks at the next start, approved with the code."""
+    if dry:
+        say("would ask for this computer's key to be enrolled at the next start (mokutil --import), "
+            "approved there with a 4-digit code")
+        return
+    os.makedirs(at(KEYS), mode=0o700, exist_ok=True)
+    fd, hashf = tempfile.mkstemp(dir=at(KEYS))
+    os.close(fd)
+    der = os.path.join(at(KEYS), "machine.cer")
+    try:
+        h = run([tool("mokutil"), f"--generate-hash={code}"]).stdout.strip()
+        with open(hashf, "w") as f:
+            f.write(h + "\n")
+        with open(der, "wb") as f:
+            f.write(cert_der())
+        run([tool("mokutil"), "--import", der, "--hash-file", hashf])
+    finally:
+        for p in (hashf, der):
+            if os.path.exists(p):
+                os.unlink(p)
+    write_file(at(CODE), code + "\n", 0o600)
+
+
+def saved_code():
+    try:
+        with open(at(CODE)) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+# ------------------------------------------------------------------ the boot theme's fonts
+
+THEME_DIR = "/boot/grub/themes/bromigos"
+
+
+def mkconfig():
+    """grub.cfg made again, kept only when grub-script-check passes."""
+    cfg = at("/boot/grub/grub.cfg")
+    new = cfg + ".bromigos-sb-new"
+    r = run([tool("grub-mkconfig"), "-o", new], check=False)
+    if r.returncode != 0 or run([tool("grub-script-check"), new], check=False).returncode != 0:
+        if os.path.exists(new):
+            os.unlink(new)
+        raise Refused("grub-mkconfig's new menu didn't check out; the old one stays")
+    with open(new, "rb") as f:
+        os.fsync(f.fileno())
+    os.replace(new, cfg)
+
+
+def theme_fonts(embedded, dry):
+    """The boot theme's fonts: out of /boot when GRUB carries them (grub.cfg's loadfont lines
+    for /boot's would fail with Secure Boot on), back when it doesn't."""
+    d = at(THEME_DIR)
+    if not os.path.isdir(d):
+        return False
+    have = sorted(n for n in os.listdir(d) if n.endswith(".pf2"))
+    if embedded and have:
+        if dry:
+            say(f"would take the boot theme's {len(have)} fonts out of /boot (GRUB carries them) and make grub.cfg again")
+            return True
+        for n in have:
+            os.unlink(os.path.join(d, n))
+        mkconfig()
+        return True
+    if not embedded and not have and os.path.isfile(os.path.join(d, "theme.txt")):
+        src = fonts()
+        src.pop("unicode", None)
+        if dry:
+            say("would put the boot theme's fonts back in /boot and make grub.cfg again")
+            return True
+        for name, path in src.items():
+            shutil.copyfile(path, os.path.join(d, name + ".pf2"))
+        mkconfig()
+        return True
+    return False
+
+
+# ------------------------------------------------------------------ the verbs
+
+class Lock:
+    def __enter__(self):
+        os.makedirs(os.path.dirname(at(LOCK)), exist_ok=True)
+        self.f = open(at(LOCK), "w")
+        fcntl.flock(self.f, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *a):
+        fcntl.flock(self.f, fcntl.LOCK_UN)
+        self.f.close()
+
+
+def preflight(dry):
+    if not uefi():
+        raise Refused("this computer starts the older way (BIOS): Secure Boot doesn't apply to it")
+    for p in (SHIM, MM, MODULES):
+        if not os.path.isfile(at(p)):
+            raise Refused(f"{p} is missing: reinstall bromigos-secureboot (sudo pacman -S bromigos-secureboot)")
+    for t in ("sbsign", "sbverify", "grub-mkimage", "grub-probe", "efibootmgr", "mokutil"):
+        if shutil.which(tool(t)) is None:
+            raise Refused(f"{t} isn't installed (sudo pacman -S bromigos-secureboot brings it)")
+    espmp = esp()
+    if not espmp:
+        raise Refused("no EFI system partition is mounted (at /efi, /boot/efi or /boot)")
+    return espmp
+
+
+def bring_back_new(st, dry):
+    """After a kernel was put back (its update couldn't be signed): the update's kernel, from
+    /usr/lib/modules, into /boot again and its initramfs made, for signing now."""
+    for base in list(st.get("put_back") or []):
+        vers = []
+        for pb in glob.glob(at("/usr/lib/modules/*/pkgbase")):
+            ver = os.path.basename(os.path.dirname(pb))
+            try:
+                with open(pb) as f:
+                    mine = f.read().strip() == base
+            except OSError:
+                mine = False
+            if mine and ver not in (st.get("restored_modules") or []) and \
+                    os.path.isfile(os.path.join(os.path.dirname(pb), "vmlinuz")):
+                vers.append(ver)
+        if not vers:
+            continue
+        ver = sorted(vers)[-1]
+        if dry:
+            say(f"would put the update's kernel {ver} back in /boot (vmlinuz-{base}) and make its initramfs")
+            continue
+        with open(at(f"/usr/lib/modules/{ver}/vmlinuz"), "rb") as f:
+            write_file(at(f"/boot/vmlinuz-{base}"), f.read(), 0o644)
+        run([tool("mkinitcpio"), "-p", base])
+        say(f"the update's kernel {ver} is in /boot again (vmlinuz-{base})")
+    if not dry:
+        st["put_back"] = []
+
+
+def tidy_kept(st):
+    """Everything signed: the kernels kept over the upgrade go, and modules an earlier
+    put-back restored with them, once no kernel in /boot is theirs."""
+    shutil.rmtree(at(KEPT), ignore_errors=True)
+    st.pop("kept", None)
+    left = []
+    for ver in st.pop("restored_modules", []):
+        if any(kernel_of(k) == ver for k in glob.glob(at("/boot/vmlinuz-*"))):
+            left.append(ver)
+        else:
+            shutil.rmtree(at(f"/usr/lib/modules/{ver}"), ignore_errors=True)
+    if left:
+        st["restored_modules"] = left
+
+
+def resign(st, dry, first=False, fresh=False):
+    """GRUB built and signed, shim and GRUB on the EFI system partition, every kernel signed,
+    the entries made current. Returns the problems (plain words)."""
+    espmp = preflight(dry)
+    problems = []
+    work = tempfile.mkdtemp(prefix="bromigos-sb-")
+    try:
+        img = os.path.join(work, "grubx64.efi")
+        build_grub(img, dry)
+        st["removable"] = install_loaders(espmp, img, st, dry)
+    except Refused as e:
+        if first:
+            raise                   # setup: nothing on the EFI system partition half done
+        problems.append(f"GRUB couldn't be built and signed again ({e}); the one there stays")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    if st.get("put_back"):
+        try:
+            bring_back_new(st, dry)
+        except Refused as e:
+            problems.append(f"the update's kernel couldn't be put back in /boot ({e})")
+    signed, failed = [], []
+    for path in to_sign(espmp):
+        if signed_by_us(path):
+            continue
+        if dry:
+            say(f"would sign {rel(path)}")
+            continue
+        try:
+            sign(path)
+            signed.append(rel(path))
+        except Refused as e:
+            failed.append(rel(path))
+            problems.append(f"{rel(path)} couldn't be signed ({e})")
+    if signed:
+        say("signed " + ", ".join(signed))
+    if uefi():
+        ensure_entry(espmp, first, fresh, dry)
+        try:
+            route_fieldkit(espmp, dry)
+        except Refused as e:
+            problems.append(f"Field Kit's firmware entry: {e}")
+    st["esp"] = espmp
+    st["failed"] = failed
+    if not failed and not dry and not st.get("put_back"):
+        tidy_kept(st)
+    return problems
+
+
+def cmd_setup(args):
+    st = load_state()
+    with Lock():
+        espmp = preflight(args.dry_run)
+        made = make_key(args.dry_run)
+        if args.dry_run and made:
+            # the rest needs the key: say what it would do
+            say(f"would build GRUB, sign it and every kernel, and put shim and GRUB on {espmp}")
+            say(f"would add the firmware boot entry \"{LABEL}\", first in the boot order")
+            say("would ask for this computer's key to be enrolled at the next start (a 4-digit code approves it)")
+            say("would take the boot theme's fonts out of /boot (GRUB carries them)")
+            return 0
+        if "boot_order_before" not in st and not args.dry_run:
+            st["boot_order_before"] = efi_entries()[1]
+        # GRUB, shim and the kernels first: when that fails, nothing is marked set up
+        problems = resign(st, args.dry_run, first=True, fresh=args.fresh_install)
+        if not args.dry_run:
+            st.update({"status": "ready", "since": st.get("since") or now(), "fingerprint": cert_fingerprint(),
+                       "fonts_embedded": True})
+            save_state(st)
+        theme_fonts(True, args.dry_run)
+        mok = mok_state()
+        code = saved_code() if mok == "pending" else None
+        try:
+            if mok == "pending" and args.code and args.code != code:
+                # a new code for the request already made: that one withdrawn, this one asked
+                if not args.dry_run:
+                    run([tool("mokutil"), "--revoke-import"], check=False)
+                mok = "missing"
+            if mok in ("missing", "unknown"):
+                code = args.code or make_code()
+                request_enrollment(code, args.dry_run)
+        except Refused as e:
+            code = None
+            problems.append(f"the key's enrollment couldn't be asked for ({e}): at the next start, choose "
+                            f"Enroll key from disk and {LOADER_DIR}/{CER}")
+        if args.dry_run:
+            return 0
+        st.update({"status": "failed" if problems else "ready", "last_resign": now(), "problems": problems})
+        save_state(st)
+    for p in problems:
+        warn(p)
+    if mok == "enrolled":
+        say("done: this computer's key is enrolled already, so it starts with Secure Boot on")
+    else:
+        say("done. At the next start a blue screen asks to enroll this computer's key, once:")
+        say("  Press any key (within 10 seconds) -> Enroll MOK -> Continue -> Yes -> type " +
+            (f"the code {code}" if code else "the code") + " -> Reboot")
+    if secure_boot_state() == "off":
+        say("Secure Boot is off in this computer's setup now: after that start, you can turn it on")
+    return 1 if problems else 0
+
+
+def cmd_resign(args):
+    st = load_state()
+    if not is_set_up(st):
+        if not args.quiet:
+            say("not set up here (sudo bromigos secureboot setup sets it up)")
+        return 0
+    with Lock():
+        problems = resign(st, args.dry_run)
+        if args.dry_run:
+            return 0
+        if not problems:
+            theme_fonts(True, False)
+        st.update({"status": "failed" if problems else "ready", "last_resign": now(), "problems": problems})
+        save_state(st)
+    for p in problems:
+        warn(p)
+    if not problems and not args.quiet:
+        say("everything is signed")
+    return 1 if problems else 0
+
+
+def cmd_remove(args):
+    st = load_state()
+    if not st.get("status"):
+        say("not set up here: nothing to remove")
+        return 0
+    espmp = esp()
+    with Lock():
+        if uefi():
+            entries, order = efi_entries()
+            for n in ours(entries):
+                if args.dry_run:
+                    say(f"would remove the firmware boot entry Boot{n} ({LABEL})")
+                else:
+                    run([tool("efibootmgr"), "--quiet", "--bootnum", n, "--delete-bootnum"], check=False)
+            before = [n for n in st.get("boot_order_before") or [] if n in {e[0] for e in efi_entries()[0]}]
+            if before and not args.dry_run:
+                rest = [n for n in efi_entries()[1] if n not in before]
+                run([tool("efibootmgr"), "--quiet", "--bootorder", ",".join(before + rest)], check=False)
+        if espmp:
+            d = os.path.join(at(espmp), LOADER_DIR)
+            if os.path.isdir(d):
+                if args.dry_run:
+                    say(f"would remove {rel(d)}")
+                else:
+                    shutil.rmtree(d)
+            if st.get("removable"):
+                say("EFI/BOOT/BOOTX64.EFI stays shim: it starts GRUB with Secure Boot off too")
+        theme_fonts(False, args.dry_run)
+        if args.dry_run:
+            return 0
+        save_state({"status": "removed", "removed": now(), "fingerprint": st.get("fingerprint", "")})
+    say("removed: GRUB starts as it did before setup (with Secure Boot off). The key stays in "
+        f"{STATE_DIR}, and enrolled; `mokutil --delete` with its certificate takes it out of the list")
+    return 0
+
+
+def cmd_sign(args):
+    st = load_state()
+    if not is_set_up(st):
+        say("not set up here: nothing signed")
+        return 0
+    rc = 0
+    with Lock():
+        for p in args.files:
+            try:
+                if not signed_by_us(p):
+                    sign(p)
+                    say(f"signed {p}")
+            except Refused as e:
+                warn(f"{p}: {e}")
+                rc = 1
+    return rc
+
+
+# ------------------------------------------------------------------ the hooks
+
+def kernel_of(path):
+    """The version of a kernel image (its setup header's version string, as `file` reads it),
+    when /usr/lib/modules has its modules."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(0x10000)
+    except OSError:
+        return None
+    if head[0x202:0x206] != b"HdrS":
+        return None
+    off = struct.unpack_from("<H", head, 0x20E)[0] + 0x200
+    ver = head[off:off + 256].split(b"\0")[0].split(b" ")[0].decode("ascii", "replace")
+    return ver if ver and re.fullmatch(r"[A-Za-z0-9._+-]+", ver) and os.path.isdir(at(f"/usr/lib/modules/{ver}")) else None
+
+
+def cmd_hook_pre(args):
+    """Before a kernel upgrade: each signed kernel kept, with its initramfs and its modules
+    (hard links on the root file system: no copy), so one that can't be signed afterwards is
+    put back and still starts."""
+    st = load_state()
+    if not is_set_up(st):
+        return 0
+    kept = at(KEPT)
+    shutil.rmtree(kept, ignore_errors=True)
+    os.makedirs(kept, mode=0o700)
+    saved = {}
+    for k in sorted(glob.glob(at("/boot/vmlinuz-*"))):
+        if not signed_by_us(k):
+            continue
+        base = os.path.basename(k).removeprefix("vmlinuz-")
+        d = os.path.join(kept, base)
+        os.makedirs(d)
+        shutil.copy2(k, os.path.join(d, "vmlinuz"))
+        img = at(f"/boot/initramfs-{base}.img")
+        if os.path.isfile(img):
+            shutil.copy2(img, os.path.join(d, "initramfs.img"))
+        ver = kernel_of(k)
+        if ver:
+            r = subprocess.run(["cp", "-al", at(f"/usr/lib/modules/{ver}"), os.path.join(d, "modules")],
+                               capture_output=True)
+            if r.returncode != 0:
+                shutil.rmtree(os.path.join(d, "modules"), ignore_errors=True)
+                ver = None
+        saved[base] = ver or ""
+    st["kept"] = saved
+    save_state(st)
+    return 0
+
+
+def put_back(base, ver, st):
+    """A kernel that couldn't be signed: the one kept before the upgrade back in /boot (with
+    its initramfs and modules), so the next start still works."""
+    d = os.path.join(at(KEPT), base)
+    if not os.path.isfile(os.path.join(d, "vmlinuz")):
+        return False
+    for src, dst in (("vmlinuz", f"/boot/vmlinuz-{base}"), ("initramfs.img", f"/boot/initramfs-{base}.img")):
+        s = os.path.join(d, src)
+        if os.path.isfile(s):
+            with open(s, "rb") as f:
+                write_file(at(dst), f.read(), 0o644)
+    if ver and os.path.isdir(os.path.join(d, "modules")) and not os.path.exists(at(f"/usr/lib/modules/{ver}")):
+        os.rename(os.path.join(d, "modules"), at(f"/usr/lib/modules/{ver}"))
+        st.setdefault("restored_modules", []).append(ver)
+    os.sync()
+    return True
+
+
+def cmd_hook_post(args):
+    st = load_state()
+    if not is_set_up(st):
+        return 0
+    try:
+        with Lock():
+            kept = dict(st.get("kept") or {})
+            problems = resign(st, False)
+            back = []
+            for base, ver in kept.items():
+                k = at(f"/boot/vmlinuz-{base}")
+                if os.path.isfile(k) and not signed_by_us(k) and put_back(base, ver, st):
+                    back.append(base)
+            if back:
+                st["put_back"] = back
+                st["kept"] = kept
+            st.update({"status": "failed" if problems else "ready", "last_resign": now(), "problems": problems})
+            save_state(st)
+            if not problems:
+                theme_fonts(True, False)
+    except Refused as e:
+        problems = [str(e)]
+        st.update({"status": "failed", "problems": problems})
+        save_state(st)
+    if problems:
+        warn("WARNING: Secure Boot: not everything could be signed:")
+        for p in problems:
+            warn(f"  {p}")
+        if st.get("put_back"):
+            warn("  The kernel from before this update is back in /boot, so the computer still starts "
+                 "with Secure Boot on. Run `sudo bromigos secureboot resign` to sign the new one.")
+        else:
+            warn("  With Secure Boot on, what isn't signed won't start. Run `sudo bromigos secureboot resign`, "
+                 "or turn Secure Boot off until it's fixed.")
+    return 0                    # never fails the transaction
+
+
+def cmd_hook_remove(args):
+    st = load_state()
+    if st.get("status") in ("ready", "failed") and secure_boot_state() == "on":
+        warn("bromigos-secureboot signs this computer's kernels for Secure Boot, which is on: without it the next "
+             "kernel update won't start. Run `sudo bromigos secureboot remove` and turn Secure Boot off first.")
+        return 1
+    return 0
+
+
+def cmd_initcpio_post(args):
+    """mkinitcpio's post hook: the kernel it copied into /boot, signed at once."""
+    st = load_state()
+    if not is_set_up(st) or not args.kernel or not args.kernel.startswith(at("/boot/")):
+        return 0
+    try:
+        with Lock():
+            if not signed_by_us(args.kernel):
+                sign(args.kernel)
+                say(f"signed {args.kernel} for Secure Boot")
+    except Refused as e:
+        warn(f"{args.kernel} couldn't be signed for Secure Boot ({e}); the pacman hook tries again")
+    return 0
+
+
+# ------------------------------------------------------------------ status
+
+def status_doc():
+    st = load_state()
+    doc = {"schema": 1, "firmware": "uefi" if uefi() else "bios", "secure_boot": secure_boot_state(),
+           "set_up": is_set_up(st), "state": st.get("status", "none"), "problems": list(st.get("problems") or []),
+           "esp": None, "mok": "unknown", "files": [], "entry": {"present": False, "first": False}}
+    if doc["firmware"] == "bios":
+        doc["summary"] = "This computer starts the older way (BIOS): Secure Boot doesn't apply to it."
+        return doc
+    if not doc["set_up"]:
+        if doc["secure_boot"] == "on":
+            doc["summary"] = ("Not set up, and Secure Boot is on: this computer starts bromigOS only "
+                              "because something else signed it. `sudo bromigos secureboot setup` sets it up.")
+        else:
+            doc["summary"] = ("Not set up: Secure Boot is " + ("in setup mode" if doc["secure_boot"] == "setup" else "off") +
+                              ". `sudo bromigos secureboot setup` sets bromigOS up to start with it on "
+                              "(add --dry-run first to see what it does).")
+        return doc
+    doc["key"] = {"fingerprint": st.get("fingerprint") or cert_fingerprint(), "subject": cert_subject()}
+    doc["mok"] = mok_state()
+    espmp = esp()
+    doc["esp"] = espmp
+    if espmp:
+        for p in [os.path.join(at(espmp), LOADER_DIR, "grubx64.efi")] + to_sign(espmp):
+            try:
+                ok = signed_by_us(p)
+            except PermissionError:
+                ok = None
+            doc["files"].append({"path": rel(p), "signed": ok})
+    try:
+        entries, order = efi_entries()
+        mine = ours(entries)
+        doc["entry"] = {"present": bool(mine), "first": bool(order and order[0] in mine)}
+    except (OSError, Refused):
+        pass
+    unsigned = [f["path"] for f in doc["files"] if f["signed"] is False]
+    if unsigned:
+        doc["problems"].append("not signed: " + ", ".join(unsigned))
+    if not doc["entry"]["present"]:
+        doc["problems"].append(f"the firmware's boot entry \"{LABEL}\" is missing")
+    code = saved_code() if os.access(at(CODE), os.R_OK) else None
+    if code:
+        doc["code"] = code
+    if doc["problems"]:
+        doc["summary"] = ("Set up, with a problem: " + "; ".join(doc["problems"]) +
+                          ". `sudo bromigos secureboot resign` fixes it.")
+    elif doc["mok"] == "pending":
+        doc["summary"] = ("Set up, waiting for you: at the next start, a blue screen asks to enroll this computer's "
+                          "key. Press a key, then Enroll MOK, Continue, Yes, type the code" +
+                          (f" {code}" if code else " (sudo bromigos secureboot status shows it)") + ", and Reboot.")
+    elif doc["mok"] == "missing":
+        doc["summary"] = ("Set up, but this computer's key isn't enrolled: run `sudo bromigos secureboot setup` "
+                          "again to ask for it at the next start.")
+    elif doc["secure_boot"] == "on":
+        doc["summary"] = "Ready: Secure Boot is on, and bromigOS starts with it (everything is signed with this computer's key)."
+    else:
+        doc["summary"] = ("Ready for Secure Boot: everything is signed and the key is enrolled. Secure Boot is off "
+                          "now; you can turn it on in your computer's setup.")
+    return doc
+
+
+def cmd_status(args):
+    doc = status_doc()
+    if args.json:
+        print(json.dumps(doc, indent=1, sort_keys=True))
+        return 0
+    print(doc["summary"])
+    if doc.get("set_up"):
+        print(f"  Secure Boot: {doc['secure_boot']}; key enrolled: {doc['mok']}; "
+              f"boot entry: {'first' if doc['entry']['first'] else ('present' if doc['entry']['present'] else 'missing')}")
+        for f in doc["files"]:
+            mark = {True: "signed", False: "NOT signed", None: "can't tell (needs root)"}[f["signed"]]
+            print(f"  {f['path']}: {mark}")
+    return 0
+
+
+def main(argv=None):
+    global VERBOSE
+    ap = argparse.ArgumentParser(prog="bromigos-secureboot", description=__doc__.split("\n")[0])
+    sub = ap.add_subparsers(dest="verb", required=True)
+    p = sub.add_parser("status")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("setup")
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--code", help="the 4 to 8 digits that approve the key's enrollment at the next start")
+    p.add_argument("--fresh-install", action="store_true")
+    p.add_argument("--yes", action="store_true", help="(accepted; setup never asks)")
+    p = sub.add_parser("resign")
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--quiet", action="store_true")
+    p = sub.add_parser("remove")
+    p.add_argument("--dry-run", action="store_true")
+    p = sub.add_parser("sign")
+    p.add_argument("files", nargs="+")
+    sub.add_parser("hook-pre")
+    sub.add_parser("hook-post")
+    sub.add_parser("hook-remove")
+    p = sub.add_parser("initcpio-post")
+    p.add_argument("kernel", nargs="?")
+    p.add_argument("rest", nargs="*")
+    args = ap.parse_args(argv)
+    if getattr(args, "code", None) and not re.fullmatch(r"[0-9]{4,8}", args.code):
+        ap.error("--code is 4 to 8 digits (MokManager's keyboard is always a US one: digits type the same everywhere)")
+    if getattr(args, "quiet", False):
+        VERBOSE = False
+    if args.verb != "status" and ROOT == "/" and os.geteuid() != 0:
+        print("bromigos-secureboot: run it as root (sudo bromigos secureboot " + args.verb + ")", file=sys.stderr)
+        return 2
+    fn = {"status": cmd_status, "setup": cmd_setup, "resign": cmd_resign, "remove": cmd_remove, "sign": cmd_sign,
+          "hook-pre": cmd_hook_pre, "hook-post": cmd_hook_post, "hook-remove": cmd_hook_remove,
+          "initcpio-post": cmd_initcpio_post}[args.verb]
+    try:
+        return fn(args)
+    except Refused as e:
+        warn(str(e))
+        return 0 if args.verb in ("hook-pre", "initcpio-post") else 3
+    except Exception as e:      # a hook never breaks a pacman transaction
+        if args.verb.startswith(("hook-", "initcpio")):
+            warn(f"{args.verb}: {e}")
+            return 0
+        raise
+
+
+if __name__ == "__main__":
+    sys.exit(main())

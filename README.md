@@ -231,8 +231,9 @@ encrypted by default, and no network is needed. Download it from the
 [Download page](https://bromigos.org/download), which also says how to make the USB stick
 and start from it. Each release's ISO is one signed file at
 `https://pkgs.bromigos.org/iso/<version>/`, built and tested by CI
-([docs/iso.md](docs/iso.md#a-releases-iso)). It starts with Secure Boot on, after a
-one-time key enrollment ([docs/secureboot.md](docs/secureboot.md)).
+([docs/iso.md](docs/iso.md#a-releases-iso)). It starts with Secure Boot on, and so does
+the installed system: each asks you to approve bromigOS once, at its first start
+([docs/secureboot.md](docs/secureboot.md)).
 
 ![The ISO's boot menu: BROMIGOS // RELAY MEDIUM over the den, the burn-in emblem, and the
 entries to start bromigOS live, install it, start with safe graphics, test memory or

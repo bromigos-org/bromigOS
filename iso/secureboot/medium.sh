@@ -8,9 +8,12 @@
 #   medium.sh kernel BOOT_DIR         signs the kernels mkarchiso copies onto the medium
 #   medium.sh grub ISOFS EMBED_CFG    GRUB for UEFI, built again with every module the menus
 #                                     use built in (Secure Boot lets GRUB load no module from
-#                                     disk) and with shim's verifier on, signed; shim as
-#                                     EFI/BOOT/BOOTx64.EFI with its MokManager beside it; the
-#                                     certificate, to enroll, at the medium's root
+#                                     disk: secureboot/grub-modules.txt, the installed system's
+#                                     list too) and the boot theme's fonts inside it (nor any
+#                                     font: grub.cfg loads them by name, from its memdisk), with
+#                                     shim's verifier on, signed; shim as EFI/BOOT/BOOTx64.EFI
+#                                     with its MokManager beside it; the certificate, to
+#                                     enroll, at the medium's root
 #
 # The key and certificate are /in/sb.key and /in/sb.crt (PEM), mounted for the build only.
 # Nothing of the key reaches the medium: only the certificate does.
@@ -61,18 +64,37 @@ case ${1:-} in
               connectefi play probe test true gfxterm_background gettext terminal tga smbios cpuid keystatus
               datetime efi_gop efi_uga video_bochs video_cirrus videoinfo sleep_test eval memdisk tar
               procfs echo help ls lsmmap)
+        # and the installed system's (one list: secureboot/grub-modules.txt)
+        list=$(dirname "$0")/../../secureboot/grub-modules.txt
+        [[ -f $list ]] && mapfile -t -O "${#want[@]}" want < <(sed 's/#.*//' "$list" | tr -s ' \t' '\n' | grep .)
         mods=(); for m in "${want[@]}"; do [[ -f /usr/lib/grub/x86_64-efi/$m.mod ]] && mods+=("$m"); done
         mapfile -t mods < <(printf '%s\n' "${mods[@]}" | sort -u)
+        # the boot theme's fonts in GRUB's memdisk, as fonts/NAME.pf2: with Secure Boot on, GRUB
+        # loads no font from the disk (lockdown), but a memdisk is part of the signed image, and
+        # `loadfont NAME` looks there first (grub.cfg's head)
+        fonts=()
+        for f in "$isofs"/boot/grub/themes/bromigos/*.pf2; do
+            [[ -f $f ]] && fonts+=("fonts/$(basename "$f")=$f")
+        done
+        (( ${#fonts[@]} )) || { echo "no boot theme fonts in $isofs/boot/grub/themes/bromigos" >&2; exit 1; }
         tmp=$(mktemp -d)
         grub-mkstandalone -O x86_64-efi --modules="${mods[*]}" --locales="en@quot" --themes="" \
-            --sbat=/usr/share/grub/sbat.csv -o "$tmp/grubx64.efi" "boot/grub/grub.cfg=$embed"
+            --sbat=/usr/share/grub/sbat.csv -o "$tmp/grubx64.efi" "boot/grub/grub.cfg=$embed" "${fonts[@]}"
         sign "$tmp/grubx64.efi"
         install -m0644 "$tmp/grubx64.efi" "$isofs/EFI/BOOT/grubx64.efi"
         install -m0644 "$SHIM_DIR/shimx64.efi" "$isofs/EFI/BOOT/BOOTx64.EFI"
         install -m0644 "$SHIM_DIR/mmx64.efi" "$isofs/EFI/BOOT/mmx64.efi"
         openssl x509 -in "$CRT" -outform DER -out "$isofs/$CER"
+        # the installer sets the installed system up too (bromigos-secureboot is in the store): a
+        # note on the stick says so, in plain words (publish.sh reads it: secure_boot_installed)
+        if [[ ${ISO_SECUREBOOT_INSTALLED:-0} == 1 ]]; then
+            printf '%s\r\n' "Secure Boot can stay on." "" \
+                "This stick starts with Secure Boot on, and so does the bromigOS it installs." \
+                "Each asks you to approve bromigOS once, in a blue screen (MokManager), at its first start." \
+                "How: https://bromigos.org/download#secure-boot" > "$isofs/SECURE_BOOT.txt"
+        fi
         rm -rf "$tmp"
-        say "shim -> grubx64.efi (signed, ${#mods[@]} modules built in), MokManager, $CER"
+        say "shim -> grubx64.efi (signed, ${#mods[@]} modules built in, ${#fonts[@]} fonts inside), MokManager, $CER"
         ;;
-    *) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

@@ -1,0 +1,6 @@
+#!/bin/sh
+# mkinitcpio's post hook (bromigos-secureboot; docs/secureboot.md): the kernel it just put in
+# /boot, signed for Secure Boot at once. Nothing when Secure Boot isn't set up here.
+# mkinitcpio passes the kernel, the image and the UKI.
+[ -x /usr/lib/bromigos/secureboot/bromigos-secureboot ] || exit 0
+exec /usr/lib/bromigos/secureboot/bromigos-secureboot initcpio-post "$@"

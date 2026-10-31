@@ -136,6 +136,13 @@ it: `/usr/lib/bromigos/boot/bromigos-boot-theme`.
   read that file, so `bromigos boot theme` can tell without root whether `/boot` is up to
   date.
 
+**With Secure Boot set up** ([secureboot.md](secureboot.md#the-installed-system)), GRUB
+carries the theme's fonts inside its signed image, because in lockdown it loads no font
+from `/boot`. The helper then copies the theme without its fonts. grub-mkconfig writes a
+`loadfont` line for each font in the theme's folder, and with Secure Boot on each would
+fail. Everything else is copied as always, and the menu looks the same with Secure Boot on
+or off.
+
 The helper runs at these times:
 
 - **`bromigos update`** brings `/boot` up to date after it renders the theme again. sudo

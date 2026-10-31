@@ -318,6 +318,8 @@ BY_INSTALL = {
 # installed by something else than the meta-package or `bromigos install`
 BY_OTHER = {
     "xpadneo-dkms": "by `bromigos peripheral enable xbox-controller`, for an Xbox controller",
+    "bromigos-secureboot": "by the installer, on a computer that starts the newer way (UEFI); "
+                           "elsewhere by `sudo pacman -S bromigos-secureboot` (docs/secureboot.md)",
 }
 
 
