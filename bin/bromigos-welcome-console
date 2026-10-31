@@ -28,8 +28,8 @@ import re
 import subprocess
 import sys
 
-sys.path.insert(0, "/usr/lib/bromigos/lib")
-sys.path.insert(1, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))   # its own first
+sys.path.append("/usr/lib/bromigos/lib")
 
 STATE = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "bromigos")
 PENDING = os.path.join(STATE, "welcome-pending")

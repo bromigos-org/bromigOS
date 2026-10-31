@@ -186,6 +186,28 @@ class TUI(unittest.TestCase):
         self.assertIn("can't start with it on yet", words)
         self.assertIn("bromigos.org/download#secure-boot", words)
 
+    def test_small_screen_scrolls_to_everything(self):
+        """At 80×24 the Where step is taller than the screen: the page scrolls, and the split
+        at its foot can be brought into view (the step's containers don't clip it)."""
+        async def go():
+            app = tui.Installer()
+            async with app.run_test(size=(80, 24)) as pilot:
+                await pilot.pause(0.5)
+                await app.show("disk")
+                for _ in range(60):
+                    if app.query("#split"):
+                        break
+                    await pilot.pause(0.05)
+                page, split = app.query_one("#page"), app.query_one("#split")
+                split.focus()
+                await pilot.pause(0.2)
+                page.scroll_to_widget(split, animate=False)
+                await pilot.pause(0.3)
+                return page.max_scroll_y, split.region.bottom <= app.size.height
+        scrollable, seen = asyncio.run(go())
+        self.assertGreater(scrollable, 0)
+        self.assertTrue(seen)
+
     def test_disks_arriving_mid_draw(self):
         """The disks can arrive while the Where step is drawn: two redraws at once must not collide."""
         async def go():

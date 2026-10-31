@@ -25,7 +25,7 @@ def _read(path):
     with open(path) as f:
         return f.read()
 
-sys.path.insert(0, "/usr/lib/bromigos/lib")
+sys.path.append("/usr/lib/bromigos/lib")   # a checkout's own lib (PYTHONPATH) first
 try:                         # DRIFTGLASS for Textual, bromigos-core's (lib/bromigos_textual.py)
     import bromigos_textual as BT
 except ImportError:          # an older bromigos-core: the theme's colours, plainer widgets
@@ -129,6 +129,7 @@ class Installer(App):
     #body { height: 1fr; }
     #rail { width: 24; height: 1fr; padding: 1 1; border-right: solid $primary 30%; background: $surface; }
     #page { padding: 1 2; scrollbar-gutter: stable; }
+    #steps, #steps > Vertical, #disk-detail { height: auto; }      /* the page scrolls to all of it; nothing clips */
     .heading { color: $primary; text-style: bold; margin-bottom: 1; }
     .intro { color: $text-muted; margin-bottom: 1; }
     .label { margin-top: 1; color: $secondary; }

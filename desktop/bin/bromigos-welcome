@@ -165,11 +165,11 @@ def main(argv):
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
     from gi.repository import Adw, Gdk, GLib, Gtk, Pango
-    try:
+    import bromigos_firstrun as F          # this command's own lib first: the settings' import below
+    try:                                   # may put the installed one ahead of it
         from bromigos_settings import style
     except ImportError:
         style = None
-    import bromigos_firstrun as F
 
     def hint(w, text):
         if text:
