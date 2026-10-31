@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+# bromigos:summary=STATIC, the mascot: on, quiet (his face but no thought bubbles) or off everywhere
+# bromigos:args=[status] | on | quiet | off | set MODE  [--json]
+# bromigos:examples=bromigos mascot ; bromigos mascot quiet ; bromigos mascot off
+"""bromigos-mascot (`bromigos mascot …`, package bromigos-core): STATIC on, quiet or off
+(lib/bromigos_static.py; ~/.config/bromigos/mascot.toml; Settings › Mascot).
+
+  bromigos mascot [status] [--json]      what he is now, and where his art comes from
+  bromigos mascot on|quiet|off [--json]  change it (BROMIGOS_MASCOT overrides it for one run)
+"""
+import json
+import os
+import sys
+
+for d in ("/usr/lib/bromigos/lib", os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "lib")):
+    if os.path.isfile(os.path.join(d, "bromigos_static.py")):
+        sys.path.insert(0, d)
+import bromigos_static as S  # noqa: E402
+import bromigos_static_art as A  # noqa: E402
+
+
+def main(argv):
+    as_json = "--json" in argv
+    args = [a for a in argv if a != "--json"]
+    if args[:1] in (["-h"], ["--help"], ["help"]):
+        print(__doc__.strip())
+        return 0
+    if args[:1] == ["set"]:
+        args = args[1:]
+    if not args or args == ["status"]:
+        art = A.names()
+        doc = {"ok": True, "mode": S.mode(), "file": S.mode_path(), "values": {"mascot.mode": S.mode()},
+               "art": {"folders": A.folders(), "names": sorted(art)} if art else {"folders": A.folders(), "names": [],
+                                                                                   "placeholder": True}}
+        print(json.dumps(doc) if as_json else
+              f"STATIC is {doc['mode']} ({doc['file']}); art: "
+              + (f"{len(art)} rendered names" if art else "the code-drawn placeholder"))
+        return 0
+    if len(args) != 1 or args[0] not in ("on", "quiet", "off"):
+        print("bromigos mascot on|quiet|off", file=sys.stderr)
+        return 2
+    before = S.set_mode(args[0])
+    msg = {"on": "STATIC is on", "quiet": "STATIC is quiet: his face, no thought bubbles",
+           "off": "STATIC is off everywhere"}[args[0]]
+    print(json.dumps({"ok": True, "mode": args[0], "before": before, "message": msg}) if as_json else msg)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

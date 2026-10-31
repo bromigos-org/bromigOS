@@ -229,6 +229,13 @@ lit button for each screen it's on air on](images/den-tv-guide.webp)
 | Rename | The card's menu, or F2 |
 | Remove | The card's menu, or Delete. Confirm first; **Undo** brings it back. Media files stay. |
 
+STATIC, the Bromigos mascot, hosts the guide. The card at the top shows what's coming up
+next on the screen with the sound, at his little broadcast desk. While the channels are
+read, his screen is snow. With no channels yet, he fiddles with the antenna. When the live
+layer is off, he dozes. When something can't be read, he whacks the set and the card says
+what's wrong. He moves only while the guide is on screen, and he holds still under reduced
+motion. **Settings › Mascot** (or `bromigos mascot on|quiet|off`) turns him on, quiet or off.
+
 Use a card's **Contents…** menu to see its titles, reorder picks, or add and remove
 items. **Shuffle**, **In order** and **Alternate** choose its play order.
 
