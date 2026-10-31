@@ -173,6 +173,15 @@ def hypr_request(cmd):
         return None
 
 
+def _workspace_key(ws):
+    """A workspace's identity in Hyprland's JSON, or None for no workspace. Hyprland 0.57
+    gives every workspace an `address` and leaves `id` off special ones (`special:special`);
+    older versions give an `id` (0 with an empty name for "no special workspace")."""
+    if not isinstance(ws, dict):
+        return None
+    return ws.get("address") or ws.get("id") or ws.get("name") or None
+
+
 class Coverage(threading.Thread):
     """Listens to Hyprland's event socket and tracks which monitors' desktops are covered
     by tiled/fullscreen windows (`on`: their names). A monitor coming or going calls
@@ -192,9 +201,9 @@ class Coverage(threading.Thread):
         clients = hypr_request("j/clients") or []
         cov = set()
         for mon in mons:
-            shown = {(mon.get("activeWorkspace") or {}).get("id"), (mon.get("specialWorkspace") or {}).get("id") or None}
+            shown = {_workspace_key(mon.get("activeWorkspace")), _workspace_key(mon.get("specialWorkspace"))}
             shown.discard(None)
-            if any(c["workspace"]["id"] in shown and (not c["floating"] or c.get("fullscreen"))
+            if any(_workspace_key(c.get("workspace")) in shown and (not c.get("floating") or c.get("fullscreen"))
                    and c.get("mapped", True) and not c.get("hidden") for c in clients):
                 cov.add(mon.get("name"))
         if cov != self.on:
