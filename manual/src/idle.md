@@ -20,6 +20,16 @@ The turning emblem has the same smooth circular edge as the login and unlock ani
 The screen also locks whenever the machine goes to sleep: when it suspends, when you close
 a laptop's lid, or when you choose Suspend in the power menu.
 
+Nothing starts while you're watching or being walked through something:
+
+- a window that's full screen, such as a film or a game;
+- a player that's playing video, such as mpv or a browser;
+- the welcome tour, and the installer and the welcome card when bromigOS runs from a USB
+  stick.
+
+When bromigOS runs from a USB stick there's no screensaver and no lock at all. The displays
+still turn off after 15 minutes.
+
 To lock the screen yourself at any time, press <kbd>Super</kbd>+<kbd>L</kbd>.
 
 ## Change the times
