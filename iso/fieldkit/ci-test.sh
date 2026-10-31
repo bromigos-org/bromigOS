@@ -98,6 +98,7 @@ PY" || return 1
         rm -f $t/home/tester/.local/state/bromigos/welcome-pending
         sed -i -E "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"([^\"]*)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\1 console=tty0 console=ttyS0,115200\"/" $t/etc/default/grub
         arch-chroot $t grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+        grep -q "More ways to start" $t/boot/grub/grub.cfg
         sync; umount -R $t; echo INSTALLED' || return 1
     "$T" down --name install >/dev/null
     sleep 3
@@ -117,7 +118,6 @@ server() {
         systemctl is-active bromigos-server-firewall.service
         systemctl is-enabled bromigos-server-update.timer
         ls /etc/snapper/configs/root
-        grep -q "More ways to start" /boot/grub/grub.cfg
         test "$(systemctl is-system-running || true)" != maintenance
         echo SERVER-OK'
 }

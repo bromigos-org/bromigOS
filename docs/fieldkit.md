@@ -607,9 +607,9 @@ noted:
 | What | Result |
 |---|---|
 | Field Kit, UEFI and BIOS | Boots to the console's Home. The plain console (VT) fallback works; with the menu's program missing, the console shows one panel and doesn't restart in a loop |
-| bromigOS Server, installed offline from the stick | Installs (LUKS2, 70 packages) and boots to its console |
+| bromigOS Server, installed offline from the stick | Installs (LUKS2, 70 packages) and boots to its console. Through the installer's own backend (`ci-test.sh`), it found two things the stick lacked, both fixed: the desktop's PipeWire in an edition's install, and the installer's own required packages (os-prober, vim and the rest) in the stick's store |
 | Field Kit on an installed system's `/boot` | The copy (about 1.1 to 1.4 GB), its GRUB entry, and a UEFI entry added last in the boot order. Field Kit starts from the installed menu, mounts the install, and rolls back a snapshot (bromigos-boot r10 to r9) |
 | GRUB deleted | The firmware's Field Kit entry (BootNext) starts; "Repair the boot menu" puts GRUB back |
 | Ventoy 1.1.18 | Normal and GRUB2 modes, UEFI and BIOS: Field Kit and the full medium both boot |
 | The full medium's Field Kit entry | Boots the same system without the desktop, into Field Kit |
-| The medium's checks (`check-medium.sh`) | Pass for Field Kit, apart from the test build's own markers (its key, serial console and label) |
+| The medium's checks (`check-medium.sh`) | Pass for Field Kit, the privacy guard and licence check included. A dev build (`--local-repo`) fails only its own dev-build check, as it should |
