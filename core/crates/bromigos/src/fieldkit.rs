@@ -4114,6 +4114,122 @@ fn after_menu(r: Option<String>) -> Result<i32> {
     }
 }
 
+// ------------------------------------------------------------------ the shapes, for Python
+
+/// A console colour's name, as rich and Textual spell it (the 16 colours bromigos-boot sets).
+fn ansi_name(c: ratatui::style::Color) -> &'static str {
+    use ratatui::style::Color::*;
+    match c {
+        Black => "black",
+        Red => "red",
+        Green => "green",
+        Yellow => "yellow",
+        Blue => "blue",
+        Magenta => "magenta",
+        Cyan => "cyan",
+        Gray => "white",
+        DarkGray => "bright_black",
+        LightRed => "bright_red",
+        LightGreen => "bright_green",
+        LightYellow => "bright_yellow",
+        LightBlue => "bright_blue",
+        LightMagenta => "bright_magenta",
+        LightCyan => "bright_cyan",
+        White => "bright_white",
+        _ => "default",
+    }
+}
+
+/// An orb's frames as rows of characters and rows of its glow (`*` where a cell glows).
+fn orb_frames(rows_at: impl Fn(f64) -> Vec<Vec<(char, bool)>>, frames: usize) -> Vec<Value> {
+    (0..frames)
+        .map(|i| {
+            let rows = rows_at(i as f64 * 0.12);
+            let text: Vec<String> = rows
+                .iter()
+                .map(|r| r.iter().map(|c| c.0).collect())
+                .collect();
+            let hot: Vec<String> = rows
+                .iter()
+                .map(|r| r.iter().map(|c| if c.1 { '*' } else { ' ' }).collect())
+                .collect();
+            json!({"rows": text, "hot": hot})
+        })
+        .collect()
+}
+
+/// DRIFTGLASS's shapes from their source here, for the Python TUIs (the installer's;
+/// lib/bromigos_drift.py): the palette in use and what the terminal shows, the emblem and the
+/// wordmarks, `frames` frames of the orb `orb` cells big (one each 0.12 s, as Home draws them)
+/// and the plain ring's, and the disk map's rules.
+pub fn shapes(look: &Look, orb: (usize, usize), frames: usize) -> Value {
+    use bromigos_tui::orb as o;
+    let ansi = bromigos_tui::Pal::ansi16();
+    let roles = ansi.roles_json();
+    let ansi16: serde_json::Map<String, Value> = roles
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(k, _)| (k.clone(), Value::from(ansi_name(ansi.role(k)))))
+        .collect();
+    let mode = match look.mode {
+        bromigos_tui::Mode::Truecolor => "truecolor",
+        bromigos_tui::Mode::Ansi16 => "ansi16",
+        bromigos_tui::Mode::Mono => "mono",
+    };
+    json!({
+        "palette": {
+            "mode": mode, "ascii": look.ascii, "motion": look.motion, "nerd": look.nerd,
+            "braille": o::fine(look),
+            "colors": bromigos_tui::palette::load().0.roles_json(),
+            "ansi16": ansi16,
+        },
+        "emblem": bromigos_tui::emblem::emblem_rows(),
+        "wordmark": bromigos_tui::emblem::WORDMARK,
+        "wordmark_ascii": bromigos_tui::emblem::WORDMARK_ASCII,
+        "orb": {
+            "size": [orb.0, orb.1],
+            "seconds_per_frame": 0.12,
+            "frames": orb_frames(|t| o::braille(t, orb.0, orb.1), frames),
+            "glow": "a glowing cell is white and bold, the rest the primary colour",
+            "plain": {
+                "size": [o::PLAIN.0, o::PLAIN.1],
+                "frames": orb_frames(o::plain, frames),
+            },
+        },
+        "disk_map": bromigos_tui::diskmap::rules(),
+    })
+}
+
+/// `bromigos fieldkit shapes [--json] [--orb WxH] [--frames N]`: (the orb's size, frames).
+fn shapes_args(words: &[String]) -> std::result::Result<((usize, usize), usize), String> {
+    let (mut orb, mut frames) = ((22, 11), 12);
+    let mut it = words.iter();
+    while let Some(w) = it.next() {
+        match w.as_str() {
+            "--json" => {}
+            "--orb" => {
+                let v = it.next().ok_or("--orb needs a size, such as 22x11")?;
+                let (a, b) = v.split_once('x').ok_or("--orb takes WxH, such as 22x11")?;
+                orb = (
+                    a.parse().map_err(|_| format!("not a width: {a}"))?,
+                    b.parse().map_err(|_| format!("not a height: {b}"))?,
+                );
+                if !(2..=200).contains(&orb.0) || !(1..=100).contains(&orb.1) {
+                    return Err("the orb is 2 to 200 cells wide and 1 to 100 high".into());
+                }
+            }
+            "--frames" => {
+                let v = it.next().ok_or("--frames needs a number")?;
+                frames = v.parse().map_err(|_| format!("not a number: {v}"))?;
+                frames = frames.clamp(1, 600);
+            }
+            other => return Err(format!("unknown: {other}")),
+        }
+    }
+    Ok((orb, frames))
+}
+
 /// `bromigos fieldkit [WORDS…]`.
 pub fn fieldkit_cmd(words: Vec<OsString>) -> Result<i32> {
     let first = words.first().and_then(|w| w.to_str()).unwrap_or("");
@@ -4139,6 +4255,22 @@ pub fn fieldkit_cmd(words: Vec<OsString>) -> Result<i32> {
                 let _ = Command::new(shell).arg("-l").status();
             }
         }
+        "shapes" => {
+            let rest: Vec<String> = words[1..]
+                .iter()
+                .map(|w| w.to_string_lossy().into_owned())
+                .collect();
+            match shapes_args(&rest) {
+                Ok((orb, frames)) => {
+                    println!("{}", shapes(&Look::detect(), orb, frames));
+                    Ok(0)
+                }
+                Err(e) => {
+                    eprintln!("bromigos fieldkit shapes: {e}");
+                    Ok(2)
+                }
+            }
+        }
         "-h" | "--help" | "help" => {
             println!(
                 "bromigos fieldkit: Field Kit, bromigOS without the desktop (docs/fieldkit.md)\n\n  \
@@ -4151,7 +4283,9 @@ pub fn fieldkit_cmd(words: Vec<OsString>) -> Result<i32> {
                  bromigos fieldkit status      whether Field Kit is in this machine's boot menu\n  \
                  bromigos fieldkit make-stick [DEVICE]    a Field Kit USB stick with your settings\n  \
                  bromigos fieldkit remote on|off|status   remote help over SSH\n  \
-                 bromigos fieldkit usb [DEVICE]           write Field Kit onto a USB drive"
+                 bromigos fieldkit usb [DEVICE]           write Field Kit onto a USB drive\n  \
+                 bromigos fieldkit shapes --json [--orb WxH] [--frames N]\n  \
+                                               DRIFTGLASS's shapes for the Python TUIs"
             );
             Ok(0)
         }
@@ -4962,6 +5096,43 @@ esac
             {"id": "k3s", "title": "k3s", "state": "ok", "summary": "3 nodes"},
             {"id": "nas", "title": "nas", "state": "ok", "summary": "storage, 71% full"},
             {"id": "node-c", "title": "node-c", "state": "unreachable", "summary": "not answering for 2 h"}]})
+    }
+
+    /// `bromigos fieldkit shapes`: the palette, the emblem, the orb's frames and the disk
+    /// map's rules, as the Python TUIs read them.
+    #[test]
+    fn shapes_for_the_python_tuis() {
+        let args = |w: &[&str]| shapes_args(&w.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        assert_eq!(args(&["--json"]), Ok(((22, 11), 12)));
+        assert_eq!(args(&["--orb", "10x5", "--frames", "3"]), Ok(((10, 5), 3)));
+        assert!(args(&["--orb", "ten"]).is_err() && args(&["--what"]).is_err());
+        let v = shapes(&Look::wick(), (10, 5), 3);
+        assert_eq!(v["palette"]["mode"], "truecolor");
+        assert_eq!(v["palette"]["ansi16"]["primary"], "green");
+        assert!(
+            v["palette"]["colors"]["primary"]
+                .as_str()
+                .unwrap()
+                .starts_with('#')
+        );
+        assert!(v["emblem"].as_array().unwrap().len() >= 8);
+        let frames = v["orb"]["frames"].as_array().unwrap();
+        assert_eq!(frames.len(), 3);
+        assert_eq!(frames[0]["rows"].as_array().unwrap().len(), 5);
+        assert_eq!(
+            frames[0]["rows"][0].as_str().unwrap().chars().count(),
+            frames[0]["hot"][0].as_str().unwrap().chars().count()
+        );
+        assert_ne!(frames[0], frames[2], "the scan goes round");
+        assert_eq!(
+            v["orb"]["plain"]["frames"][0]["rows"]
+                .as_array()
+                .unwrap()
+                .len(),
+            5
+        );
+        let kinds = v["disk_map"]["kinds"].as_array().unwrap();
+        assert!(kinds.iter().any(|k| k["kind"] == "bromigos"));
     }
 
     /// The Lab on a wide screen: its parts round the lab as a map, with their names and the

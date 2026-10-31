@@ -142,7 +142,9 @@ package() {
     -not \( -path '*/holo/*' -not -path '*/holo/manifest.json' -not -path '*/holo/*.holo.npz' \
     -not -path '*/holo/README.md' \) -print0)
   # bromigos_theme (the palette in force), bromigos_private (the private overlay's reader),
-  # bromigos_emblem + emblem_braille (a theme's emblem kit)
+  # bromigos_emblem + emblem_braille (a theme's emblem kit), bromigos_textual (DRIFTGLASS for
+  # Textual) and bromigos_drift (the orb, the emblem and the disk map from `bromigos fieldkit
+  # shapes`, for the installer's TUI)
   install -Dm0644 -t "$pkgdir/usr/lib/bromigos/lib/" "$_root"/lib/*.py
   # `bromigos private|secrets|emblem …`: the CLI routes to bromigos-<group> here
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-private \

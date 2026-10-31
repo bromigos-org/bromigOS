@@ -236,6 +236,34 @@ Programs people already know (btop, htop, nvtop, gdu, micro, Neovim, tmux, lazyg
 TestDisk) are in Tools for those who want them, themed through their own config files.
 Nothing in Repair needs them.
 
+### Shapes shared with the installer
+
+The installer's screens (Python, Textual) draw the same orb, emblem and disk map as Field
+Kit's, from the same source. The shapes live in Rust, in `bromigos-tui`, and one command
+prints them as JSON:
+
+```bash
+bromigos fieldkit shapes --json --orb 22x11 --frames 24
+```
+
+It gives the palette in use (the theme's colours, the console's 16, and whether braille shows
+here), the emblem's braille rows and the wordmarks, the orb's frames at that size (its rows,
+and which cells glow; one frame every 0.12 seconds) with the plain ring's, and the disk map's
+rules (each kind of partition, its colour and label, and how the cells are shared out).
+
+`lib/bromigos_drift.py` (in bromigos-core, next to `bromigos_textual.py`) asks once, keeps
+the answer, and gives rich Text:
+
+```python
+import bromigos_drift as D
+D.orb_text(i)               # the orb's frame i: braille, or the plain ring on the console
+D.emblem_text()             # the emblem, or the wordmark
+D.disk_map_text(disk, 40)   # a disk from lsblk -J -b, as one bar of its partitions
+```
+
+Without `bromigos`, the orb is empty, the emblem is the plain wordmark, and the disk map
+follows the same rules from a copy kept in the module.
+
 ### Every action as a command
 
 Every screen action is also a command, for SSH and for the stick's startup scripts. `--json`

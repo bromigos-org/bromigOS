@@ -164,12 +164,15 @@ pub fn cells(segs: &[Seg], width: usize) -> Vec<usize> {
     let mut n: Vec<usize> = (0..segs.len())
         .map(|i| (exact[i].floor() as usize).max(min(i)))
         .collect();
-    // too many: take from the biggest that can spare a cell
+    // too many: take from the biggest that can spare a cell, the first of equals first
+    let first_biggest = |ok: &dyn Fn(usize) -> bool, n: &[usize]| {
+        (0..n.len())
+            .filter(|i| ok(*i))
+            .max_by_key(|i| (n[*i], std::cmp::Reverse(*i)))
+    };
     while n.iter().sum::<usize>() > width {
-        let Some(i) = (0..n.len())
-            .filter(|i| n[*i] > min(*i))
-            .max_by_key(|i| n[*i])
-            .or_else(|| (0..n.len()).filter(|i| n[*i] > 0).max_by_key(|i| n[*i]))
+        let Some(i) =
+            first_biggest(&|i| n[i] > min(i), &n).or_else(|| first_biggest(&|i| n[i] > 0, &n))
         else {
             break;
         };
@@ -255,7 +258,7 @@ pub fn rules() -> Value {
         "ascii_fill": ASCII_FILL.iter().map(|(k, c)| (k.to_string(), Value::from(c.to_string()))).collect::<serde_json::Map<_, _>>(),
         "label": "a segment shows \" label \" when the label and a space each side fit; else only its fill. A kind's label left empty is the filesystem's name, then the partition's label.",
         "match": "first kind whose fstypes has the filesystem, or one of whose parttype_words is in the partition type (any case); else other",
-        "cells": "each segment's share of the width, floored; a partition gets at least one cell, free space can get none; cells over the width come off the biggest, cells left over go to the largest remainders, the first of equals first",
+        "cells": "each segment's share of the width, floored; a partition gets at least one cell, free space can get none; cells over the width come off the biggest, cells left over go to the largest remainders; the first of equals first both ways",
         "colours": "a partition: its role's colour; its label in the void colour, bold, on that colour. Free space: its label muted, its fill faint.",
     })
 }

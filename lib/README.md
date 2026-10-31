@@ -20,6 +20,7 @@ modules to the same folder:
 | `bromigos_retint.py` | Recolours the den's painted wallpaper for a colour theme |
 | `bromigos_emblem.py` | Draws the emblem, called the burn-in, to its canonical spec |
 | `emblem_braille.py` | Draws the emblem as coloured braille for the terminal banner |
+| `bromigos_drift.py` | Field Kit's orb, emblem and disk map as rich Text for the installer's TUI, from `bromigos fieldkit shapes`; [the shapes](../docs/fieldkit.md#shapes-shared-with-the-installer) |
 | `bromigos_private.py` | Reads the private overlay: values a user keeps encrypted in their dotfiles |
 | `bromigos_account.py` | Signs a widget in to an online account, such as Twitch or GitHub, and keeps the token in the keyring |
 | `bromigos_login.py` | Signs in to your Bromigos account, with a code, an SSH key or a token, and reads the account's SSH keys; [account reference](../docs/bromigos-account.md) |
