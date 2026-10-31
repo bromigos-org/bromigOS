@@ -1,0 +1,21 @@
+[Unit]
+Description=Sonarr (shows)
+
+[Container]
+Image={{image:sonarr}}
+ContainerName=sonarr
+Network=bromigos-lab.network
+PublishPort=8989:8989
+Secret={{secret:api-key}},type=mount,target=/run/secrets/api-key,mode=0400
+Environment=FILE__SONARR__AUTH__APIKEY=/run/secrets/api-key
+Environment=PUID={{puid}}
+Environment=PGID={{pgid}}
+Environment=TZ={{tz}}
+Volume={{data}}/config:/config:Z
+Volume={{media}}:/media
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

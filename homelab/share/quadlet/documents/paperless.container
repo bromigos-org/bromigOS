@@ -1,0 +1,26 @@
+[Unit]
+Description=Documents (Paperless-ngx)
+Requires=paperless-valkey.service
+After=paperless-valkey.service
+
+[Container]
+Image={{image:paperless}}
+ContainerName=paperless
+Network=bromigos-lab.network
+PublishPort=8010:8000
+Volume={{data}}/data:/usr/src/paperless/data:Z
+Volume={{data}}/media:/usr/src/paperless/media:Z
+Volume={{data}}/consume:/usr/src/paperless/consume:Z
+Environment=PAPERLESS_REDIS=redis://paperless-valkey:6379
+Environment=PAPERLESS_TIME_ZONE={{tz}}
+Environment=PAPERLESS_ADMIN_USER=admin
+Secret={{secret:secret-key}},type=mount,target=/run/secrets/secret-key,mode=0400
+Environment=PAPERLESS_SECRET_KEY_FILE=/run/secrets/secret-key
+Secret={{secret:admin-password}},type=mount,target=/run/secrets/admin-password,mode=0400
+Environment=PAPERLESS_ADMIN_PASSWORD_FILE=/run/secrets/admin-password
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
