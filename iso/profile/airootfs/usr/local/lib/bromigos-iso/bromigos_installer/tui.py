@@ -385,6 +385,17 @@ class Installer(App):
     #hero-art.flare { margin-bottom: 1; }
     Screen.-c16 Choice.-on { background: $surface; border: double $primary; }
     .vlabel.-top { margin-top: 0; }
+    /* How would you like to be guided?: one row an option, the switch first, its words beside it */
+    .g-row { height: auto; width: 1fr; margin-top: 1; }
+    .g-row Switch { width: auto; margin-right: 2; border: tall $secondary 70%; }
+    .g-row Switch:focus { border: tall $primary; }
+    .g-row Switch .switch--slider { color: $text-muted; background: $background; }   /* off: a visible knob, left */
+    .g-row Switch.-on .switch--slider { color: $primary; }
+    .g-row Button { width: auto; margin-right: 2; }
+    .g-text { width: 1fr; height: auto; }
+    .g-sample-row .g-text { padding-top: 1; }
+    .g-sub { color: $text-muted; }
+    #g-said { margin-top: 1; }
     """
     BINDINGS = [Binding("escape", "back", "Back"), Binding("ctrl+n", "next", "Continue"),
                 Binding("f12", "shell", "Shell", show=False),
@@ -814,49 +825,50 @@ class Installer(App):
     def build_guide(self, box):
         """How would you like to be guided? VECTOR's voice (off until it's turned on, with a
         sample), the console's screen reader, bigger letters (the console's font: a terminal
-        can't make its own text bigger), high contrast, no motion; and the language."""
+        can't make its own text bigger), high contrast, no motion; and the language. Each
+        choice is one row: its switch, then its icon and words, a dim line under them."""
         g = self.a["guidance"]
         self.heading(box, "guide")
-        voice = Vertical(classes="panel", id="g-voice-panel")
-        box.mount(voice)
-        row = Horizontal(classes="row")
-        voice.mount(row)
-        sw = hint(Switch(bool(self.voice and self.voice.enabled), id="g-voice", disabled=not self.voice),
-                  "On: VECTOR reads each step aloud. Off: his words stay on screen.")
-        row.mount(sw, Vertical(Static(Text.assemble((ic("voice") + "  ", "bold " + col("primary")),
-                                                     ("VECTOR'S VOICE GUIDE", "bold " + col("primary")))),
-                               Static("He reads each step aloud, in his own voice." +
-                                      (f" {guide.HOTKEY} turns him on, then mutes him." if guide else ""), classes="muted"),
-                               classes="brief-text"),
-                  hint(Button("Play a sample", id="g-sample", disabled=not self.voice), "Hear VECTOR's voice now, once"))
+
+        def option(sw, icon_name, title, sub, tip):
+            return Horizontal(hint(sw, tip),
+                              Vertical(Static(Text.assemble((ic(icon_name) + "  ", "bold " + col("primary")), (title, "bold"))),
+                                       Static(sub, classes="g-sub"), classes="g-text"),
+                              classes="g-row")
         words = self.voice.describe() if self.voice else "VECTOR's voice isn't on this USB stick: his words are on screen."
-        voice.mount(BT.Reading(words, "idle", id="g-voice-state") if BT is not None else Static(words, id="g-voice-state"))
-        more = Vertical(classes="panel", id="g-more")
-        box.mount(more)
-        more.mount(Static(Text.assemble((ic("guide") + "  ", "bold " + col("primary")), ("MORE HELP", "bold " + col("soft"))),
-                          classes="panel-head"))
+        state = BT.Reading(words, "idle", id="g-voice-state") if BT is not None else Static(words, id="g-voice-state")
+        box.mount(Vertical(
+            option(Switch(bool(self.voice and self.voice.enabled), id="g-voice", disabled=not self.voice), "voice",
+                   "VECTOR's voice guide", "He reads each step aloud, in his own voice." +
+                   (f" {guide.HOTKEY} turns him on, then mutes him." if guide else ""),
+                   "On: VECTOR reads each step aloud. Off: his words stay on screen."),
+            Horizontal(hint(Button("Play a sample", id="g-sample", disabled=not self.voice), "Hear VECTOR's voice now, once"),
+                       Vertical(state, classes="g-text"), classes="g-row g-sample-row"),
+            classes="panel", id="g-voice-panel"))
         big_ok = self.on_console
-        for key, icon_name, title, tip in (
-                ("screen_reader", "reader", "Screen reader: speech reads the console aloud",
-                 "Start or stop the console's screen reader (espeakup). VECTOR stays quiet while it talks."),
-                ("console_font", "text", "Bigger letters on this screen" if big_ok else
-                 "Bigger letters: a terminal can't change its own; use its settings (often Ctrl and +)",
-                 "The console's bigger font." if big_ok else "This terminal's text size is the terminal's own setting."),
-                ("high_contrast", "contrast", "High contrast: white on black, nothing faded",
-                 "Stronger colours here and on your new system"),
-                ("reduce_motion", "motion", "Reduce motion: nothing moves on its own", "No animation here or on your new system")):
-            r = Horizontal(classes="row")
-            more.mount(r)
-            r.mount(hint(Switch(bool(g.get(key)), id=f"g-{key}", disabled=key == "console_font" and not big_ok), tip),
-                    Static(Text.assemble((ic(icon_name) + "  ", col("primary")), title), classes="brief-text"))
+        rows = [option(Switch(bool(g.get(key)), id=f"g-{key}", disabled=key == "console_font" and not big_ok),
+                       icon_name, title, sub, tip)
+                for key, icon_name, title, sub, tip in (
+                    ("screen_reader", "reader", "Screen reader", "Speech reads the console aloud. VECTOR stays quiet while it talks.",
+                     "Start or stop the console's screen reader (espeakup)"),
+                    ("console_font", "text", "Bigger letters",
+                     "The console's bigger font." if big_ok else
+                     "A terminal can't change its own letters: use its settings (often Ctrl and +).",
+                     "The console's bigger font" if big_ok else "This terminal's text size is the terminal's own setting"),
+                    ("high_contrast", "contrast", "High contrast", "White on black, nothing faded.",
+                     "Stronger colours here and on your new system"),
+                    ("reduce_motion", "motion", "Reduce motion", "Nothing moves on its own.",
+                     "No animation here or on your new system"))]
         self.guide_said = BT.Reading("", "idle", id="g-said") if BT is not None else Static("", id="g-said")
-        more.mount(self.guide_said)
-        lang = Vertical(self.flabel("language", "Language for your new system"),
-                        hint(Select([(n, loc) for loc, n, _ in common.LANGUAGES], value=self.a["locale"], allow_blank=False,
-                                    id="locale"),
-                             "The language bromigOS uses once it's installed: menus, dates and numbers. The installer itself is in English."),
-                        classes="field")
-        box.mount(lang)
+        box.mount(Vertical(Static(Text.assemble((ic("guide") + "  ", "bold " + col("primary")),
+                                                ("MORE HELP", "bold " + col("soft"))), classes="panel-head"),
+                           *rows, self.guide_said, classes="panel", id="g-more"))
+        box.mount(Vertical(self.flabel("language", "Language for your new system"),
+                           hint(Select([(n, loc) for loc, n, _ in common.LANGUAGES], value=self.a["locale"], allow_blank=False,
+                                       id="locale"),
+                                "The language bromigOS uses once it's installed: menus, dates and numbers. The installer itself "
+                                "is in English."),
+                           classes="field"))
 
     def _guide_said(self, words, state="idle"):
         if BT is not None:
@@ -1055,8 +1067,13 @@ class Installer(App):
     async def _reshow(self, sid):
         """Draw a step again for what just arrived, if it's still the one on screen."""
         async with self.redraw:
-            if self.step == sid:
+            if self.step != sid or not self.is_running:
+                return
+            try:
                 await self._show(sid)
+            except NoMatches:
+                if self.is_running:
+                    raise
 
     def build_checks(self, box):
         self.heading(box, "checks")
