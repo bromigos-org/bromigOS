@@ -233,8 +233,9 @@ def run(a):
     s = serial(a.name)
     tag = f"FK{int(time.time() * 1000) % 10**9}"
     cmd = " ".join(a.command)
-    # the command on its own lines, so a here-document in it ends where it should
-    s.sendall(f"echo {tag}B; {{\n{cmd}\n}} 2>&1; echo {tag}E$?\r".encode())
+    # the command on its own lines, so a here-document in it ends where it should; in a
+    # subshell, so its `set -e` or `exit` can't end the signed-in shell
+    s.sendall(f"echo {tag}B; (\n{cmd}\n) 2>&1; echo {tag}E$?\r".encode())
     buf = read_until(s, rf"{tag}E(\d+)".encode(), a.timeout)
     s.close()
     text = buf.decode(errors="replace")
