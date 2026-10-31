@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # bromigos:summary=The welcome tour in the terminal (bromigOS Server's first sign-in): the network, SSH, joining your lab, and what's here
-# bromigos:args=[--if-pending] [--render DIR [--size WxH]]
+# bromigos:args=[--if-pending] [--step STEP] [--render DIR [--size WxH]]
 # bromigos:examples=bromigos welcome-console
 """bromigos-welcome-console: bromigOS Server's welcome tour, at the first sign-in on its console
 (docs/iso.md, "Editions"; /etc/profile.d/bromigos-welcome.sh starts it once, when the installer
@@ -18,6 +18,7 @@ each one changes things the usual way, so nothing here keeps a setting of its ow
 
   bromigos welcome-console                 open it (again)
   bromigos welcome-console --if-pending    only when the install left it pending (the console's sign-in)
+  bromigos welcome-console --step STEP    open it on one step (network, ssh, vector, lab, phone, tour, done)
   bromigos welcome-console --render DIR [--size WxH]
                                            each step to DIR/server-welcome-STEP.svg (checked to
                                            fit at that size), and exit
@@ -150,7 +151,10 @@ def main(argv):
         Screen.-narrow #rail { display: none; }
         Screen.-narrow #page, Screen.-narrow #nav, Screen.-narrow #msg, Screen.-narrow #hint { padding: 0 1; }
         Screen.-narrow #nav { height: 1; }
-        #qr { width: auto; height: auto; }
+        #qr { width: auto; height: auto; margin-right: 3; }
+        #pair-row { height: auto; }
+        #pair-side { width: 1fr; height: auto; }
+        #pair-code { height: auto; margin-bottom: 1; }
         Screen.-narrow #page Button { width: 1fr; }
         /* the pairing QR on a short screen (80×24): it gets the whole page */
         Screen.-qr-tight #page Emitter, Screen.-qr-tight #page .intro, Screen.-qr-tight #hint { display: none; }
@@ -189,10 +193,14 @@ def main(argv):
             self.theme = "bromigos"
             if BT.motion() != "full":
                 self.animation_level = "none"
-            await self.show(0)
+            start = argv[argv.index("--step") + 1] if "--step" in argv else None
+            ids = [st[0] for st in STEPS]
+            await self.show(ids.index(start) if start in ids else 0)
 
         def on_resize(self, event):
             self.bp = BT.apply_breakpoint(self.screen, event.size.width, event.size.height)
+            if STEPS[getattr(self, "i", 0)][0] == "phone" and getattr(self, "last_code", None) and self.qr.display is not None:
+                self.call_after_refresh(self._qr, self.last_code)      # the QR, or the big code, for the new size
             try:
                 self._top()
             except Exception:
@@ -381,29 +389,44 @@ def main(argv):
                 put(("The plan (nothing has changed):\n" + text[-1500:]) if ok else "The plan couldn't be made: " + F.plain_error(text))
 
         def build_phone(self, page):
-            short = self.size.height < 34
-            if not short:
-                page.mount(Static(Text(f"Get BRODEC: Google Play, {F.PLAY_STORE} (iPhone: coming).", overflow="fold"),
-                                  classes="muted"))
+            # the QR on the left (half blocks, dark on light, its quiet zone; nothing touching
+            # it), and beside it the code to type, the live status and the steps: all three on
+            # screen without scrolling at 120×35; when the QR can't fit, the code big instead
+            page.mount(Static(Text(f"Get BRODEC: Google Play (iPhone: coming).", overflow="fold"), classes="muted"))
+            row = Horizontal(id="pair-row")
+            page.mount(row)
             self.qr = Static("", id="qr")
-            page.mount(self.qr)
+            side = Vertical(id="pair-side")
+            row.mount(self.qr, side)
+            self.code = Static("", id="pair-code")
             self.pair_line = BT.Reading("Waiting for the pairing code…", "busy")
-            page.mount(self.pair_line)
+            self.pair_steps = Static("In BRODEC: LAB › MACHINES › ADD MACHINE, then scan the code, or type it.",
+                                     classes="muted", id="pair-steps")
+            side.mount(self.code, self.pair_line, self.pair_steps)
+            self.pair_page = page
             if render:
                 self._qr({"qr": "https://accounts.bromigos.org/device#machine=k1.example&n=server", "user_code_display": "KPGG-ZFVT"})
             elif not F.machine_installed():
                 self.pair_line.set("Pairing needs BRODEC's helper (brodec-machine). It runs only what your phone signs; "
                                    "STOP ALL halts it.", "warn")
-                self.button(page, "Install it", "machine-install", "Install BRODEC's helper (sudo asks for your password)")
+                self.button(side, "Install it", "machine-install", "Install BRODEC's helper (sudo asks for your password)")
             elif not F.machine_config_ready():
                 self.pair_line.set("BRODEC's helper starts once this server allows it (a settings file only root writes).", "warn")
-                self.button(page, "Allow pairing", "machine-allow", "Let BRODEC's helper run here (sudo asks for your password)")
+                self.button(side, "Allow pairing", "machine-allow", "Let BRODEC's helper run here (sudo asks for your password)")
             else:
                 self.start_pairing()
             if not render and F.lab_bridge_available():
                 self.button(page, "Pair the lab's bridge", "bridge-pair", "Show the lab VECTOR bridge's pairing code (sudo asks)")
             page.mount(Static("Then your phone can: " + "; ".join(c[0].lower() + c[1:] if not c.startswith("VECTOR") else c
                                                               for c in F.PHONE_CAN) + ".", classes="muted"))
+
+        def qr_room(self):
+            """(columns, rows) the QR may take beside its side column on this screen."""
+            rail = 0 if getattr(self, "bp", "normal") in ("narrow", "too-small") else (18 if getattr(self, "bp", "") == "compact" else 22)
+            cols = self.size.width - rail - 4 - 30           # the page's padding, the side column
+            tight = self.screen.has_class("-qr-tight")
+            rows = self.size.height - (6 if tight else 12)   # top, nav, hint, message; the heading and intro
+            return cols, rows
 
         def start_pairing(self, argv=None):
             self.stop_pairing()
@@ -421,50 +444,40 @@ def main(argv):
             if e == "code":
                 self._qr(ev)
             elif e == "paired":
-                self.qr_state, self.qr_lit = "paired", True        # the Spark: lit, then still
-                self._frame()
+                self.qr.display = False                                    # the code's done its job
+                self.code.update(BT.big_code("PAIRED") if hasattr(BT, "big_code") else Text("PAIRED", style="bold"))
                 self.pair_line.set(f"✓ Paired with {ev.get('owner') or 'your phone'}", "ok")
+                self.pair_steps.display = False
                 if self.screen.has_class("-qr-tight"):
                     self.query_one("#top", Static).update("PAIR YOUR PHONE  ·  ✓ PAIRED")
-                page = self.query_one("#page")
-                page.mount(Static("To let it restart, update and open terminals here too: in BRODEC, LAB › MACHINES › this "
+                side = self.query_one("#pair-side")
+                side.mount(Static("To let it restart, update and open terminals here too: in BRODEC, LAB › MACHINES › this "
                                   "server › ALLOW THIS PHONE, then choose Allow this phone (sudo asks, then shows the "
                                   "phone's key to compare).", classes="muted"), after=self.pair_line)
-                self.button(page, "Allow this phone", "machine-enroll",
+                self.button(side, "Allow this phone", "machine-enroll",
                             "Allow the phone that asked (sudo brodec-machine enroll: compare the key, then y)")
             else:
                 words = F.pairing_words(ev).replace("press Allow pairing (it asks for your password)", "choose Allow pairing")
                 self.pair_line.set(words or "…", "warn" if e in ("failed", "cancelled", "expired") else "busy")
 
         def _qr(self, code):
+            self.last_code = code
             shown = code.get("user_code_display") or code.get("user_code") or ""
-            text = (code.get("qr_text") or F.qr_text(code["qr"])) if self.size.width >= 50 and self.size.height >= 24 else None
-            if text:
-                self.qr_lines = text
-                self.qr_state = "waiting"
-                self._frame()
-                if not getattr(self, "_pulse", None) and BT.motion() == "full" and not render:
-                    self._pulse = self.set_interval(0.9, self._breathe)
-            else:
-                self.qr.styles.width = "1fr"
-                self.qr.update(Text("Make the window bigger to show the QR code (80×24 or more).", overflow="fold"))
-            self.pair_line.set(f"In BRODEC: LAB › MACHINES › ADD MACHINE, then scan it, or type {shown}", "busy")
+            self.shown_code = shown
+            m = BT.qr_matrix(code.get("qr", "")) if hasattr(BT, "qr_matrix") else None
+            cols, rows = self.qr_room()
+            if m and BT.qr_size(m)[0] <= cols and BT.qr_size(m)[1] <= rows:
+                self.qr.display = True
+                self.qr.update(BT.qr_text(m))
+                self.code.update(Text(shown, style="bold " + BT.palette()["primary"]))
+            else:                                     # no room for a QR a phone can read: the code, big
+                self.qr.display = False
+                big = BT.big_code(shown) if hasattr(BT, "big_code") else Text(shown, style="bold")
+                self.code.update(Text.assemble(big, "\n\n", ("Make the window bigger to show the QR code. Or type this "
+                                                             "code in BRODEC.", "")))
+            self.pair_line.set("Waiting for your phone to confirm…", "busy")
             if self.screen.has_class("-qr-tight"):      # the code where it's always seen
                 self.query_one("#top", Static).update(f"PAIR YOUR PHONE  ·  CODE {shown}")
-
-        def _frame(self):
-            tight = self.screen.has_class("-qr-tight")
-            if hasattr(BT, "phone_frame"):
-                self.qr.update(BT.phone_frame(getattr(self, "qr_lines", ""), getattr(self, "qr_state", "waiting"),
-                                              getattr(self, "qr_lit", True), tight))
-            else:
-                self.qr.update(getattr(self, "qr_lines", ""))
-
-        def _breathe(self):            # the Pulse: the phone's frame breathes while it waits
-            if STEPS[self.i][0] != "phone" or getattr(self, "qr_state", "") != "waiting":
-                return
-            self.qr_lit = not getattr(self, "qr_lit", True)
-            self._frame()
 
         def build_tour(self, page):
             t = Table.grid(padding=(0, 2))

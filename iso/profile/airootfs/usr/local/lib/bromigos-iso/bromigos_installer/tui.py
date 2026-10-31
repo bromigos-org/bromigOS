@@ -82,7 +82,7 @@ class Split(Widget, can_focus=True):
     BINDINGS = [Binding("left", "move(-1)", "Smaller", show=False), Binding("right", "move(1)", "Bigger", show=False),
                 Binding("shift+left", "move(-10)", show=False), Binding("shift+right", "move(10)", show=False),
                 Binding("home", "move(-100000)", show=False), Binding("end", "move(100000)", show=False)]
-    DEFAULT_CSS = "Split { height: 5; width: 1fr; padding: 0 1; border: round $primary 40%; } Split:focus { border: double $primary; }"
+    DEFAULT_CSS = "Split { height: 7; width: 1fr; padding: 0 1; border: round $primary 40%; } Split:focus { border: double $primary; }"
     value = reactive(0)
 
     def __init__(self, who, total, lo, hi, value, segs=None, partition=None, **kw):
@@ -643,16 +643,30 @@ class Installer(App):
         rs = RadioSet(id="disks")
         box.mount(Label("Disk", classes="label"), hint(rs, "The disks in this computer: their size, model and what's on them."))
         c = common.theme()[0]
+        # each disk on one line: its icon, model and size; its badge in a fixed column on the
+        # right that never truncates; the description between them gives way first (…), and on
+        # a narrow screen goes to its own dim line under the choices
+        page_w = self.query_one("#page").size.width or (self.size.width - 30)
+        avail = max(30, page_w - 12)                    # the page's padding, the set's frame, the radio
         for i, d in enumerate(self.probe["disks"]):
             kind = "usb" if d.get("removable") or d.get("kind") == "USB" else "disk"
-            label = Text(f"{BT.icon(kind) if BT is not None else ''} ", style=c["primary"])
-            label.append(f"{d['model']} · {d['size_text']}", style="bold")
+            health = (d.get("health") or {}).get("state")
+            badge, col = (("THIS STICK", c["muted"]) if d["medium"] else
+                          (("▲ FAILING", c["danger"]) if health == "failing" else ("● HEALTHY", c["primary"])))
+            badge = f"[{badge}]"
+            head = f"{BT.icon(kind) if BT is not None else ''} {d['model']} · {d['size_text']}"
+            label = Text(head[:2], style=c["primary"])
+            label.append(head[2:], style="bold")
             if not self.narrow():
-                label.append(" · " + d["summary"] + (f" · {d['kind']}" if d["kind"] else ""), style=c["muted"])
-                health = (d.get("health") or {}).get("state")
-                badge, col = (("THIS STICK", c["muted"]) if d["medium"] else
-                              (("▲ FAILING", c["danger"]) if health == "failing" else ("● HEALTHY", c["primary"])))
-                label.append(f"  [{badge}]", style="bold " + col)
+                desc = " · " + d["summary"] + (f" · {d['kind']}" if d["kind"] else "")
+                room = avail - len(head) - len(badge) - 2
+                if room < len(desc):
+                    desc = desc[:max(0, room - 1)].rstrip(" ·") + "…" if room > 4 else ""
+                label.append(desc, style=c["muted"])
+                label.append(" " * max(1, avail - len(head) - len(desc) - len(badge)))
+            else:
+                label.append("  ")
+            label.append(badge, style="bold " + col)
             rb = RadioButton(label, value=d["path"] == self.a["disk"], id=f"disk-{i}", disabled=d["medium"])
             rb.disk_path = d["path"]
             rs.mount(hint(rb, d["options"]["erase"]["why"] if d["medium"] else f"{d['path']}: " +

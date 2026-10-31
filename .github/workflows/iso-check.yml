@@ -117,7 +117,7 @@ jobs:
           python -c 'import json; c = json.load(open("/tmp/a/hw.json")); assert {"nvidia-open", "nvidia-utils", "power-profiles-daemon", "bromigos"} <= set(c["packages"]) and "lib32-nvidia-utils" not in c["packages"]; assert "power-profiles-daemon" in c["services"] and "grub-btrfsd" in c["services"]; print("hardware merge ok")'
       - name: the installers (both, on recorded disks; an alongside layout archinstall parses)
         run: |
-          pacman -S --noconfirm --needed python-textual >/dev/null
+          pacman -S --noconfirm --needed python-textual qrencode zbar python-pillow >/dev/null
           python -m unittest discover -s iso/test/installer -v
           python - <<'EOF'
           import json, subprocess
