@@ -59,6 +59,7 @@ tcp = []                # more TCP ports, open to the local network only
 [updates]
 auto = true             # the nightly update runs by itself
 reboot = true           # it restarts by itself when a new kernel or driver needs it
+news_hold = true        # Arch Linux news since the last update holds the nightly one
 
 [health]
 minutes = 10            # how long the server has to come back healthy after an update
@@ -126,17 +127,36 @@ Every night, between 04:00 and 05:00, `bromigos-server-update.timer` runs
 `bromigos server update`. If the server was off then, it runs at the next start. It does
 this:
 
-1. It notes how the server is now: whether sshd runs, and the network's gateway.
-2. It runs `bromigos update --yes --no-aur --json`. That's the same update as on the
+1. It reads Arch Linux's news. News posted since the last update holds the update
+   ("The Arch news hold", below).
+2. It notes how the server is now: whether sshd runs, and the network's gateway.
+3. It runs `bromigos update --yes --no-aur --json`. That's the same update as on the
    desktop. It updates from the server's own channel, `stable` unless you changed it.
    Arch has no separate security updates, so this is every update. snap-pac takes a
    snapshot before and after it, and the report names them.
-3. If nothing changed, it stops there.
-4. If the kernel or a graphics driver changed, it restarts the server, and the check runs
+4. If nothing changed, it stops there.
+5. If the kernel or a graphics driver changed, it restarts the server, and the check runs
    after the restart. Otherwise the check runs straight away.
 
 `reboot = false` in the settings stops the restart. The new kernel then runs after the
 next restart you make, and the check waits for it.
+
+### The Arch news hold
+
+Some Arch Linux news asks for manual steps before an update, such as editing a config file.
+An automatic update can't do those. So before each nightly update, the server reads Arch's
+news feed. If an item was posted since the last successful update, it doesn't update:
+
+- `bromigos server` shows "Update held", with the item's title and link;
+- `update.json` has a `hold` with each item's title, link and date;
+- the alert `update.held` tells your phone, with the link ([alerts.md](alerts.md)).
+
+Read the item and do what it asks. Then update by hand with `sudo bromigos server update
+--now`, or with BRODEC's Update button, which runs the same command. That clears the hold,
+and the news posted until then counts as read. The next night's update runs as usual.
+
+A feed that can't be read, with no network or the site down, holds nothing. `news_hold =
+false` turns the hold off.
 
 ### How health is judged
 
@@ -252,6 +272,14 @@ code to scan in LAB › MACHINES › ADD MACHINE. Field Kit then writes root's
 Then allow your phone at the server once ("Allow this phone", `brodec-machine enroll`).
 [fieldkit-vector.md](fieldkit-vector.md#pair-with-brodec) has the details, and BRODEC's
 `docs/MACHINE_JOBS.md` the rules.
+
+### Alerts
+
+The server checks itself for what needs you: failing drives, btrfs errors, a full disk, an
+update held by the news or rolled back, a failed backup, the UPS on battery, a service that
+stopped, a game server that's down. `bromigos alerts` lists them. BRODEC's machine agent sends
+them to your phone, end-to-end encrypted, with buttons to act on them. [alerts.md](alerts.md)
+has the checks and how to add your own.
 
 ## `bromigos server`
 

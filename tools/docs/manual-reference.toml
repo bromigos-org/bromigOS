@@ -289,6 +289,7 @@ rows = [
   { route = "aur", text = "See which [AUR](apps.md#install-an-app-from-the-aur) packages have updates waiting. `bromigos aur off` leaves the AUR out of updates and removes bromigOS's paru; `on` brings it back." },
   { route = "restart", text = "Restart the parts of the desktop that still run old code after an update." },
   { route = "status", text = "Check that the background, VECTOR and the session are running." },
+  { route = "alerts", text = "See what [needs you](alerts.md) on this computer: failing drives, full disks, updates, backups, stopped services. `check` looks again now." },
   { route = "about", text = "Show the version, the update channel, this machine's hardware and bromigOS's packages." },
 ]
 

@@ -1,0 +1,13 @@
+# Your own alerts (docs/alerts.md): updates waiting, the disk your home is on, your services,
+# Steam and Proton. Then the desktop notification for what needs you. Run by
+# bromigos-alerts-user.timer, on for every user (timers.target.wants); turn it off with
+# systemctl --user mask bromigos-alerts-user.timer bromigos-alerts-notify.path.
+[Unit]
+Description=bromigOS alerts: your checks
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/docs/alerts.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/bin/bromigos-alerts check --user
+ExecStartPost=-/usr/lib/bromigos/bin/bromigos-alerts notify
+TimeoutStartSec=10min

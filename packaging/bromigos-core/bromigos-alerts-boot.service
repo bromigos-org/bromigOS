@@ -1,0 +1,14 @@
+# The system checks once after each boot, with Field Kit's: what a Field Kit stick found in this
+# install, and its black screen check on the running system (docs/alerts.md, fieldkit.finding).
+[Unit]
+Description=bromigOS alerts: the system checks after boot, with Field Kit's
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/docs/alerts.md
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/bin/bromigos-alerts check --system --boot
+TimeoutStartSec=15min
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes

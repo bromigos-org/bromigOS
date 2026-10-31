@@ -50,7 +50,10 @@ optdepends=('python: bromigos private, secrets, emblem, console, power menu, spl
             'python-numpy: a world loop from a raw clip (bromigos art make video.loop --alpha)'
             'ffmpeg: a world loop from a raw clip (bromigos art make video.loop --alpha)'
             'python-pychromecast: cast to Chromecasts and Google TVs (bromigos media cast)'
-            'python-async-upnp-client: cast to DLNA TVs (bromigos media cast; from the AUR)')
+            'python-async-upnp-client: cast to DLNA TVs (bromigos media cast; from the AUR)'
+            'smartmontools: drive health in bromigos alerts (disk.smart)'
+            'nut: the UPS in bromigos alerts (power.ups)'
+            'libnotify: bromigos alerts as desktop notifications (notify-send)')
 # The release profile already strips (core/Cargo.toml); no -debug package.
 options=('!debug')
 # Wake-on-LAN on now for the wired cards already there (bromigos wol apply)
@@ -120,6 +123,9 @@ check() {
   # lib/bromigos_drift.py: the DRIFTGLASS shapes Field Kit shares with the installer's TUI (the
   # orb, the emblem, the disk map), from a stand-in bromigos and without one
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/drift"
+  # bromigos alerts: every check against stand-in commands and a stand-in root, the custom
+  # checks' rules and the desktop notification's dedup (fake notify-send; nothing shown)
+  PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/alerts"
 }
 
 package() {
@@ -222,6 +228,20 @@ package() {
   install -Dm0644 "$startdir/81-bromigos-wake-on-lan.rules" \
     "$pkgdir/usr/lib/udev/rules.d/81-bromigos-wake-on-lan.rules"
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-wol
+  # `bromigos alerts` (docs/alerts.md): what needs you, for the desktop's notification and
+  # BRODEC's machine agent. The system checks as root (every 15 minutes and after each boot),
+  # yours as you (every 30 minutes, and the notification): on for everyone, as shipped links
+  install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-alerts
+  install -Dm0644 -t "$pkgdir/usr/lib/systemd/system/" "$startdir"/bromigos-alerts.{service,timer} \
+    "$startdir"/bromigos-alerts-boot.{service,timer}
+  install -d "$pkgdir/usr/lib/systemd/system/timers.target.wants"
+  ln -s ../bromigos-alerts.timer "$pkgdir/usr/lib/systemd/system/timers.target.wants/bromigos-alerts.timer"
+  ln -s ../bromigos-alerts-boot.timer "$pkgdir/usr/lib/systemd/system/timers.target.wants/bromigos-alerts-boot.timer"
+  install -Dm0644 -t "$pkgdir/usr/lib/systemd/user/" "$startdir"/bromigos-alerts-user.{service,timer} \
+    "$startdir"/bromigos-alerts-notify.{service,path}
+  install -d "$pkgdir/usr/lib/systemd/user/timers.target.wants" "$pkgdir/usr/lib/systemd/user/default.target.wants"
+  ln -s ../bromigos-alerts-user.timer "$pkgdir/usr/lib/systemd/user/timers.target.wants/bromigos-alerts-user.timer"
+  ln -s ../bromigos-alerts-notify.path "$pkgdir/usr/lib/systemd/user/default.target.wants/bromigos-alerts-notify.path"
   # Hyprland's auto-reload held off while a transaction replaces the desktop's default
   # config, then one verified reload (bromigos session hold|release; docs/update.md)
   install -Dm0644 -t "$pkgdir/usr/share/libalpm/hooks/" \

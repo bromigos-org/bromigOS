@@ -1,0 +1,10 @@
+# Two minutes after each boot: the boot pass of the system checks (docs/alerts.md).
+[Unit]
+Description=bromigOS alerts: the system checks after boot
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/docs/alerts.md
+
+[Timer]
+OnBootSec=2min
+
+[Install]
+WantedBy=timers.target

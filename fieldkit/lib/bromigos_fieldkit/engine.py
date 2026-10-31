@@ -13,7 +13,10 @@ in plain words, exit 0; the exit status is 2 only for a verb or argument that do
   installs                        partitions that may hold an install
   mount DEVICE                    unlock (the passphrase on standard input) and mount it
   unmount
-  check black-screen|last-boot    findings: [{id, title, detail, fix, ok}]
+  check black-screen|last-boot    findings: [{id, title, detail, fix, ok}]; on a mounted install the
+                                  ones that aren't fine are also saved in it
+                                  (/var/lib/bromigos/fieldkit/findings.json), so the install's own
+                                  alerts raise them at its next boot (docs/alerts.md)
   fix black-screen|last-boot ID   apply that finding's fix (each backs up first)
   snapshots | rollback N
   grub-repair
@@ -67,6 +70,50 @@ def fill(text, target):
 def finding_doc(i, f, target=None):
     return {"id": str(i), "title": f.title, "detail": f.detail, "fix": f.fix_label if f.fix else "", "ok": f.ok,
             "commands": [fill(c, target) for c in getattr(f, "commands", [])], "touches": list(getattr(f, "touches", []))}
+
+
+FINDINGS = "/var/lib/bromigos/fieldkit/findings.json"
+
+
+class _Running:
+    """The install as it is once it boots by itself: commands for "/", no chroot."""
+    root = "/"
+    top = None
+
+
+def save_findings(target, check, found, now=None):
+    """Keep CHECK's findings that aren't fine in the install itself, with their commands as
+    they read on the running install, for its next boot (bromigos alerts' fieldkit.finding).
+    Nothing on the running system (it has its own alerts) or when every finding is fine."""
+    import time
+    if target is None or target.is_live_root:
+        return
+    path = target.path(FINDINGS)
+    try:
+        with open(path) as f:
+            doc = json.load(f)
+    except (OSError, ValueError):
+        doc = {}
+    checks = doc.get("checks") if isinstance(doc.get("checks"), dict) else {}
+    bad = [finding_doc(i, f, _Running) for i, f in enumerate(found) if not f.ok]
+    for d in bad:
+        d["lines"] = [str(x) for x in (getattr(found[int(d["id"])], "lines", None) or [])][-20:]
+    if bad:
+        checks[check] = {"saved_at": int((now or time.time()) * 1000), "findings": bad}
+    else:
+        checks.pop(check, None)
+    try:
+        if checks:
+            os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
+            tmp = path + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump({"schema": 1, "checks": checks}, f, indent=1)
+            os.chmod(tmp, 0o644)
+            os.replace(tmp, path)
+        elif os.path.exists(path):
+            os.unlink(path)
+    except OSError:
+        pass   # a read-only install still gets its findings on screen
 
 
 def status():
@@ -134,6 +181,7 @@ def main(argv):
         elif verb == "check":
             t = target()
             found = CHECKS[args[0]](t)
+            save_findings(t, args[0], found)
             doc = {"ok": True, "findings": [finding_doc(i, f, t) for i, f in enumerate(found)]}
         elif verb == "fix":
             t = target()
@@ -142,6 +190,11 @@ def main(argv):
             if not f.fix:
                 raise system.Failed("That finding has nothing to fix.")
             doc = {"ok": True, "message": f.fix(t)}
+            # what's left for the install's next boot: the check again, after the fix
+            try:
+                save_findings(t, args[0], CHECKS[args[0]](t))
+            except (system.Failed, OSError):
+                pass
         elif verb == "snapshots":
             doc = {"ok": True, "snapshots": [{"number": s.number, "date": s.date, "kind": s.kind,
                                               "description": s.description, "title": s.title()}

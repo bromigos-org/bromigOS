@@ -1,0 +1,11 @@
+# The desktop notification as soon as the system checks find something (docs/alerts.md).
+[Unit]
+Description=bromigOS alerts: notify when the system checks change
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/docs/alerts.md
+
+[Path]
+PathChanged=/var/lib/bromigos/alerts/system.json
+Unit=bromigos-alerts-notify.service
+
+[Install]
+WantedBy=default.target

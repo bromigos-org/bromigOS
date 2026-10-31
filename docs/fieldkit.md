@@ -333,6 +333,12 @@ A check's findings each have a mark: ✓ fine (or fixed), ▲ a problem with a f
 without one (`ok`, `!` and `x` in ASCII). A fix that works flashes its ✓ and the panel's edge
 for a second.
 
+The problems a check finds are also saved inside the install, in
+`/var/lib/bromigos/fieldkit/findings.json`. At the install's next boot, its own alerts check
+again and tell you, and your phone through BRODEC, what's still wrong
+([alerts.md](alerts.md#field-kits-findings-at-the-next-boot)). A fix saves the check again,
+so a repaired finding isn't reported.
+
 #### The black screen
 
 A real case started this: the desktop came up as a black screen with a blinking cursor.
