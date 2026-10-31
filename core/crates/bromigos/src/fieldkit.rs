@@ -4806,6 +4806,15 @@ esac
         );
     }
 
+    /// A lab's status, as `bromigos lab status --json` gives it: four parts, one not answering.
+    fn lab_cards() -> Value {
+        json!({"configured": true, "state": "warn", "cards": [
+            {"id": "nodes", "title": "node-a", "state": "ok", "summary": "gpu, 2x RTX 3090"},
+            {"id": "k3s", "title": "k3s", "state": "ok", "summary": "3 nodes"},
+            {"id": "nas", "title": "nas", "state": "ok", "summary": "storage, 71% full"},
+            {"id": "node-c", "title": "node-c", "state": "unreachable", "summary": "not answering for 2 h"}]})
+    }
+
     /// Every screen, in both looks, for the operator: shots/tui-<screen>-<look>.txt.
     #[test]
     fn every_screen_in_both_looks() {
@@ -4822,11 +4831,7 @@ esac
                 let fx = a.open_section(i);
                 drive(&mut a, fx);
                 if *sec == "Lab" {
-                    a.lab = json!({"configured": true, "state": "warn", "cards": [
-                        {"id": "nodes", "title": "node-a", "state": "ok", "summary": "gpu, 2x RTX 3090"},
-                        {"id": "k3s", "title": "k3s", "state": "ok", "summary": "3 nodes"},
-                        {"id": "nas", "title": "nas", "state": "ok", "summary": "storage, 71% full"},
-                        {"id": "node-c", "title": "node-c", "state": "unreachable", "summary": "not answering for 2 h"}]});
+                    a.lab = lab_cards();
                 }
                 let s = screen(&a, w, h);
                 assert!(
@@ -5124,6 +5129,9 @@ esac
                 x.look = a.look;
                 let fx = x.open_section(i);
                 drive(&mut x, fx);
+                if *sec == "Lab" {
+                    x.lab = lab_cards();
+                }
                 screens.push((sec.to_lowercase(), x));
             }
             let mut x = app();
@@ -5159,6 +5167,9 @@ esac
                         && [150, 110, 80, 60].contains(&w)
                     {
                         save(&format!("{name}-{w}"), &text);
+                    }
+                    if ["home", "repair", "lab", "finding"].contains(&name.as_str()) {
+                        save(&format!("{name}-{lname}-{w}x{h}"), &text);
                     }
                 }
                 if lname == "nerd" && (name == "home" || name == "repair") {
