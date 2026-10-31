@@ -74,6 +74,7 @@ sudo bromigos server role remove storage    # and off again
 | **Lab node** | Joins your lab and runs what it gives this computer. The lab sets it up from your desktop. | The `lab-cluster` rule set; NFS for the lab's NAS; the kernel settings container-dense nodes need; the lab workstation's account; k3s in the health check once the lab installs it |
 | **Storage** | Keeps files for the house and backups for the lab. | Samba and NFS (on, with no shares yet), btrbk, disk spin-down; the `smb` and `nfs` rule sets |
 | **Home services** | Runs apps for the household: photos, media, passwords. | Caddy on 80 and 443, local network only (`web-lan`) |
+| **Media** | Your own movies, shows, music and Den TV for every screen. | Jellyfin, requests and the library's upkeep, as containers the lab's engine sets up; `web-lan` and `media` (8096, and 7359/udp for the apps to find it), local network only; the `_bromigos-media._tcp` announcement, so desktops add it as a Den TV source by themselves |
 | **Game server** | Hosts games for friends, run from your phone. | The `games` rule set (Minecraft's 25565, from anywhere); the processor at full speed. Two ways, below |
 | **Just a server** | The safe base and nothing else. | Nothing more |
 | **Cockpit** (an extra) | A web page for looking after the server, on your local network. | Cockpit with its Podman, storage and files pages, on 9090 (`cockpit`). Never its update page, which would update outside the snapshot and the check |
@@ -96,7 +97,10 @@ Without a key, no account is made, and the lab signs in as you.
 
 **What a role does when it's added:** it installs its packages (`pacman`), removes the
 packages it replaces, writes its files when they aren't there, writes its kernel settings,
-turns its services on, and opens its rule sets. Its health checks count from the next
+turns its services on, and opens its rule sets. Then the lab's engine adds what it sets up
+for that role on this server (its apps, their web names and checks): `bromigos lab provision
+--local --roles ROLE --apply`, which only adds. Where the engine can't do that yet, the
+command says so. Its health checks count from the next
 update. **When it's removed,** its services stop, its rule sets close, its settings go, and
 its files go if they're still as it wrote them. Its packages stay; the command says how to
 remove them.
@@ -104,6 +108,14 @@ remove them.
 Roles marked offline install from the Field Kit stick with no network. Docker (for Wings)
 and Cockpit need the network.
 
+**The installer's picks.** The installer writes its own role ids too, under `[roles] picked`
+(`lab`, `storage`, `home`, `games`, `media`, `plain`). Each one counts as the matching role
+here (`lab-node`, `storage`, `home-services`, `game-server`, `media`, `just-a-server`), as
+well as those in `[roles] enabled`. `role remove` takes a role out of both lists.
+
+**Its secrets.** `sudo bromigos server secrets` is the lab's secret store, with the same
+words: `status`, `set NAME`, `generate NAME`, `rotate NAME`, `recovery` (`bromigos lab
+secrets`). The installer chooses where it keeps them.
 ### For power users: the role files
 
 One TOML file per role, in `/usr/share/bromigos/server/roles/` (`server/roles/` in the
@@ -241,6 +253,7 @@ ignore_units = []       # failed units that don't count against it
 
 [roles]
 enabled = []            # "storage", "game-server/pelican-wings", ... (role add writes it)
+picked = []             # the installer's own ids ("media", "home", ...): they count too
 
 [backup]
 to = ""                 # where: "s3:https://host/bucket/path", "sftp:user@host:/path", "/mnt/usb"
@@ -258,6 +271,22 @@ apparmor = true         # AppArmor on, from the next start
 ssh_key = ""            # the lab workstation's public key (the Lab node role)
 pelican_panel = ""      # your lab's Pelican panel (the Game server role, with Wings)
 ```
+
+The installer also writes what it chose for `bromigos server status` to show: `[network]`
+(the port, DHCP or a fixed address, VLAN, bond, Wake-on-LAN), `[storage]` (the data disks,
+their layout and shares), `[unlock]` (`tpm`, `passphrase` or `none`), `[services]` (`on`,
+`off`), `[apps]` (`enabled`, containers with their images pinned), `[lab]`, `[games]`
+(`pelican_url`, `registry_mirror`), `[remote]` (Tailscale, WireGuard), `[kernel]` and
+`[packages] pending`. Status also shows what it left for the first start, while those
+units are there: `bromigos-server-pending.service` (the packages that waited for a network,
+listed in `/etc/bromigos/server/pending-packages`), `bromigos-server-tpm-enroll.service`
+(the security chip unlocking the disk) and `bromigos-server-secrets.service` (the install's
+keys into the secret store). They're the installer's own units, and they run once.
+
+`setup` never overwrites the installer's own files: its SSH drop-ins
+(`/etc/ssh/sshd_config.d/01-…`, `05-…`, `20-…`: a `05-bromigos-server-password.conf` is
+setup's own only when it says so), its kernel and journal settings (`90-…`, read after the
+package's `60-…`), and `/etc/bromigos/server/nftables.d`.
 
 After changing the file, run `sudo bromigos server setup`. `bromigos server firewall allow
 NAME` and `deny NAME` change the `allow` list for you, and reload the firewall.
@@ -339,6 +368,8 @@ yourself too:
 | `games` | 25565 (Minecraft), TCP and UDP, from anywhere | Game server |
 | `wings` | 8080 and 2022, from the local network (the lab's panel) | Game server with Wings |
 | `cockpit` | 9090, from the local network | the Cockpit extra |
+| `media` | 8096 (Jellyfin) and 7359/udp (its apps finding it), from the local network | Media |
+| `s3` | 9000 (S3: RustFS, the lab's object store), from the local network | you |
 
 The other ways:
 

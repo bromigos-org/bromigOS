@@ -1,0 +1,6 @@
+# Media (Jellyfin): its own port 8096 and the apps' discovery on the network (UDP 7359), from
+# the local network only (the Media role; Den TV and the TV apps find it this way)
+add rule inet bromigos-server input ip saddr @lan tcp dport 8096 accept comment "media (local network)"
+add rule inet bromigos-server input ip6 saddr @lan6 tcp dport 8096 accept comment "media (local network)"
+add rule inet bromigos-server input ip saddr @lan udp dport 7359 accept comment "media discovery (local network)"
+add rule inet bromigos-server input ip6 saddr @lan6 udp dport 7359 accept comment "media discovery (local network)"

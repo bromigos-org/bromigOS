@@ -46,6 +46,9 @@ live() {
         grep -qw bromigos.edition=server /proc/cmdline
         ls /var/lib/bromigos/repo/bromigos/x86_64/ | grep -E "^bromigos-(server|fieldkit-tools|boot)-[0-9]"
         fieldkit overview --json | python3 -c "import json,sys; d = json.load(sys.stdin); print(sorted(d)[:8])"
+        # the stick carries the lab engine this ref has: its catalogue, when the ref has one, is in
+        # the store'"'"'s bromigos-lab (the installer'"'"'s Server path plans from it)
+        '"$( [[ -f $here/../../homelab/share/provision-catalogue.toml ]] && echo 'bsdtar -tf /var/lib/bromigos/repo/bromigos/x86_64/bromigos-lab-[0-9]*.pkg.tar.zst | grep -qx usr/share/bromigos/lab/provision-catalogue.toml; echo lab-catalogue-ok' )"'
         fieldkit repair black-screen --dry-run --json | python3 -c "import json,sys; json.load(sys.stdin); print(\"black-screen: ok\")"
         fieldkit disks --json | python3 -c "import json,sys; json.load(sys.stdin); print(\"disks: ok\")"
         test "$(systemctl is-system-running || true)" != maintenance

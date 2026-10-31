@@ -1,0 +1,4 @@
+# S3 storage (RustFS, the lab's object store: backups, models, media), port 9000, from the
+# local network only
+add rule inet bromigos-server input ip saddr @lan tcp dport 9000 accept comment "S3 (local network)"
+add rule inet bromigos-server input ip6 saddr @lan6 tcp dport 9000 accept comment "S3 (local network)"

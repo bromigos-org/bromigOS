@@ -36,6 +36,7 @@ During the install you pick one or more roles. You can add or remove one later.
 | **Lab node** | Joins your lab and runs what it gives this computer. Your lab sets it up from your desktop. |
 | **Storage** | Keeps files for the house and backups for the lab. Your computers see it as a network drive. |
 | **Home services** | Runs apps for the household, each with its own name on your network. |
+| **Media** | Your own movies, shows and music, and Den TV on every screen. Your desktops find it by themselves. |
 | **Game server** | Hosts games for friends, started and stopped from your phone. |
 | **Just a server** | The safe base and nothing else. |
 
