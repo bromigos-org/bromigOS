@@ -1,0 +1,41 @@
+# bromigOS Server's Game server role (docs/server.md, "Roles"): the format is described there.
+schema = 1
+id = "game-server"
+kind = "role"
+order = 40
+title = "Game server"
+summary = "Host game servers for friends, started and stopped from your phone."
+hint = "Players come in from the internet on the game's own port. Everything else stays closed."
+offline = true
+packages = []
+services = []
+firewall = ["games"]
+health = []
+health_optional = []
+requires = []
+conflicts = []
+
+[files]
+# the processor at full speed, for smoother game ticks
+"/etc/tmpfiles.d/50-bromigos-game-server.conf" = "game-server/cpu-performance.conf"
+
+[[variant]]
+id = "podman"
+default = true
+title = "On its own"
+hint = "Games run as containers with Podman, from bromigOS's game templates. No lab needed."
+offline = true
+
+[[variant]]
+id = "pelican-wings"
+title = "With your lab's Pelican panel"
+hint = "Your lab's Pelican panel runs the games here through Wings, its game daemon. Wings needs Docker's engine, which takes the place of Podman's docker command on this server. Needs the internet."
+offline = false
+packages = ["docker"]
+services = ["docker.service"]
+firewall = ["wings"]
+health = ["docker.service"]
+# Wings is set up by the lab, from its panel (the panel's own Wings token)
+health_optional = ["wings.service"]
+requires = ["setting:lab.pelican_panel"]
+conflicts = ["podman-docker"]

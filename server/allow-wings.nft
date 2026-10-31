@@ -1,0 +1,5 @@
+# Pelican's Wings (8080, SFTP 2022), from the local network: the lab's panel talks to it
+# (the Game server role with a lab's Pelican panel); the games' own ports, which the panel
+# hands out, go in [firewall] public_tcp and public_udp
+add rule inet bromigos-server input ip saddr @lan tcp dport { 8080, 2022 } accept comment "Pelican Wings"
+add rule inet bromigos-server input ip6 saddr @lan6 tcp dport { 8080, 2022 } accept comment "Pelican Wings"

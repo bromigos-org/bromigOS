@@ -1,0 +1,14 @@
+# bromigOS Server (docs/server.md, "Backups"): restic check, so a backup that can't be
+# restored is found before it's needed. In the first week of a month it also reads back 5 %
+# of the backup's data.
+[Unit]
+Description=bromigOS Server backup check (restic)
+Wants=network-online.target
+After=network-online.target bromigos-server-backup.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/server/bromigos-server backup check
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=12h

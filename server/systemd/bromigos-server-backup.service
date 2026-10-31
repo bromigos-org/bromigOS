@@ -1,0 +1,14 @@
+# bromigOS Server's nightly backup (docs/server.md, "Backups"): restic, to the destination in
+# /etc/bromigos/server.toml's [backup] to. With none set, it does nothing and says so in
+# `bromigos server`. How it went is kept in /var/lib/bromigos/server/backup.json.
+[Unit]
+Description=bromigOS Server backup (restic)
+Wants=network-online.target
+After=network-online.target bromigos-server-update.service bromigos-server-health.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/server/bromigos-server backup run
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=12h

@@ -1,0 +1,3 @@
+# Cockpit's web admin (9090), from the local network only (the Cockpit extra)
+add rule inet bromigos-server input ip saddr @lan tcp dport 9090 accept comment "Cockpit"
+add rule inet bromigos-server input ip6 saddr @lan6 tcp dport 9090 accept comment "Cockpit"

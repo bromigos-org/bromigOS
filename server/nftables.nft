@@ -4,8 +4,8 @@
 # /etc/bromigos/server/nftables.d/*.nft after this. Its own table: nftables.service's
 # /etc/nftables.conf stays yours, and Podman's and k3s's own rules sit beside it.
 #
-# In: what this server started (replies), the loopback, ping, DHCP, SSH, and the lab's
-# monitoring from the local network. Everything else coming in is dropped. Out and through
+# In: what this server started (replies), the loopback, ping, DHCP, SSH, and from the local
+# network only, the lab's monitoring and mDNS. Everything else coming in is dropped. Out and through
 # (containers, the cluster) are left alone.
 table inet bromigos-server
 delete table inet bromigos-server
@@ -33,5 +33,7 @@ table inet bromigos-server {
         tcp dport 22 accept comment "SSH (sshd runs only when chosen at install)"
         ip saddr @lan tcp dport 9100 accept comment "the lab's monitoring (node exporter)"
         ip6 saddr @lan6 tcp dport 9100 accept comment "the lab's monitoring (node exporter)"
+        ip saddr @lan udp dport 5353 accept comment "mDNS: Find my lab and .local names"
+        ip6 saddr @lan6 udp dport 5353 accept comment "mDNS: Find my lab and .local names"
     }
 }

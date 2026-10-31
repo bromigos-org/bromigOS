@@ -15,8 +15,10 @@ SCRIPT = HERE / "bromigos-server"
 STUBS = {
     "systemctl": r'''#!/bin/sh
 echo "systemctl $*" >> "$FAKE/log"
+case "$1" in --root=*) shift ;; esac
 case "$1" in
   is-active) if grep -qx "$2" "$FAKE/down" 2>/dev/null; then echo inactive; exit 3; fi; echo active ;;
+  show) if grep -qx "$4" "$FAKE/units" 2>/dev/null; then echo loaded; else echo not-found; fi ;;
   is-enabled) echo enabled ;;
   is-system-running) echo running ;;
   list-units) cat "$FAKE/failed" 2>/dev/null ;;
@@ -40,6 +42,27 @@ esac
     "nft": "#!/bin/sh\necho \"nft $*\" >> \"$FAKE/log\"\ncat > /dev/null\nexit 0\n",
     "podman": "#!/bin/sh\necho '[]'\n",
     "mkinitcpio": "#!/bin/sh\necho \"mkinitcpio $*\" >> \"$FAKE/log\"\n",
+    # installed: the names in $FAKE/installed; -S fails for a name in $FAKE/unavailable
+    "pacman": r'''#!/bin/sh
+echo "pacman $*" >> "$FAKE/log"
+case "$1" in
+  -Q) grep -qx "$2" "$FAKE/installed" 2>/dev/null ;;
+  -S) shift; for p in "$@"; do case "$p" in -*) continue ;; esac
+        if grep -qx "$p" "$FAKE/unavailable" 2>/dev/null; then echo "error: target not found: $p" >&2; exit 1; fi
+        echo "$p" >> "$FAKE/installed"; done ;;
+  -R) shift; for p in "$@"; do case "$p" in -*) continue ;; esac
+        grep -vx "$p" "$FAKE/installed" > "$FAKE/installed.new"; mv "$FAKE/installed.new" "$FAKE/installed"; done ;;
+esac
+''',
+    # restic: $FAKE/restic-<verb>.rc and .out stand in for each verb's exit code and output
+    "restic": r'''#!/bin/sh
+echo "restic $* repo=$RESTIC_REPOSITORY key=$RESTIC_PASSWORD_FILE id=$AWS_ACCESS_KEY_ID" >> "$FAKE/log"
+v=$1; [ "$v" = cat ] && v=cat-config
+[ -f "$FAKE/restic-$v.out" ] && cat "$FAKE/restic-$v.out"
+[ -f "$FAKE/restic-$v.err" ] && cat "$FAKE/restic-$v.err" >&2
+exit "$(cat "$FAKE/restic-$v.rc" 2>/dev/null || echo 0)"
+''',
+    "nut-scanner": "#!/bin/sh\ncat \"$FAKE/nut-scanner\" 2>/dev/null\nexit 0\n",
 }
 
 
@@ -50,7 +73,9 @@ def report(packages, pre=10, post=11, kernel=False):
         "reboot": {"kernel": {"running": "a", "installed": "b"}, "driver": None} if kernel else None}})
 
 
-class Server(unittest.TestCase):
+class Rig(unittest.TestCase):
+    """bromigos-server in a stand-in root, with the stand-ins above on its PATH."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         t = Path(self.tmp.name)
@@ -143,6 +168,8 @@ class Server(unittest.TestCase):
         p = self.fake / "log"
         return p.read_text() if p.exists() else ""
 
+
+class Server(Rig):
     def test_firewall_rules_follow_the_settings(self):
         self.config('[firewall]\nallow = ["lab-cluster", "nope"]\ntcp = [8080, "x", 70000]\n')
         r = self.run_server("firewall", "apply", "--print")

@@ -1,0 +1,4 @@
+#!/bin/sh
+# smartd's warning hook (smartd.conf's -M exec): smartd runs it with no arguments and the
+# warning in SMARTD_* variables, which bromigos-server disk-alert keeps for `bromigos server`.
+exec /usr/lib/bromigos/server/bromigos-server disk-alert
