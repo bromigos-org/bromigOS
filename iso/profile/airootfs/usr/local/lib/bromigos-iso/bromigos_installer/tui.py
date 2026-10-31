@@ -921,6 +921,9 @@ class Installer(App):
                           (("▲ FAILING", c["danger"]) if health == "failing" else ("● HEALTHY", c["primary"])))
             badge = f"[{badge}]"
             head = f"{BT.icon(kind) if BT is not None else ''} {d['model']} · {d['size_text']}"
+            if not self.narrow() and len(head) > avail - len(badge) - 2:     # the model gives way, never the badge
+                cut = avail - len(badge) - 2 - len(f" · {d['size_text']}") - 3
+                head = f"{BT.icon(kind) if BT is not None else ''} {d['model'][:max(4, cut)].rstrip()}… · {d['size_text']}"
             label = Text(head[:2], style=c["primary"])
             label.append(head[2:], style="bold")
             if not self.narrow():

@@ -299,6 +299,27 @@ class TUI(unittest.TestCase):
         self.assertIn("Type 4821", steps)
         self.assertLess(steps.index("Enroll MOK"), steps.index("Type 4821"))
 
+    def test_disk_badges_fit_whole(self):
+        """Each disk's badge ([● HEALTHY], [THIS STICK]) is shown in full at 120x35 and 80x24:
+        the description gives way first, then the model."""
+        from rich.cells import cell_len
+
+        async def go(size):
+            app = tui.Installer()
+            async with app.run_test(size=size) as pilot:
+                for _ in range(100):
+                    if app.probe is not None:
+                        break
+                    await pilot.pause(0.05)
+                await app.show("disk")
+                await pilot.pause(0.3)
+                return [(rb.label.plain, rb.size.width) for rb in app.query("#disks RadioButton")]
+        for size in ((120, 35), (80, 24)):
+            for plain, width in asyncio.run(go(size)):
+                with self.subTest(size=size, row=plain[:30]):
+                    self.assertTrue(plain.rstrip().endswith("]"), plain)
+                    self.assertLessEqual(cell_len(plain) + 3, width, plain)   # the radio, its gap
+
     def test_a_step_opens_at_its_heading(self):
         """On a small screen the page doesn't scroll past a step's heading to its first choice."""
         async def go():
