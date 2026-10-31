@@ -10,6 +10,19 @@ channel_is() {   # channel_is stable|rc|edge: [bromigos]'s Server line is that c
     grep -A2 '^\[bromigos\]' /etc/pacman.conf | grep -qE "^Server = https?://[^ ]+/\\\$repo$sub/\\\$arch\$"
 }
 check() { local name=$1; shift; if "$@" >/tmp/check.out 2>&1; then echo "PASS $name"; else echo "FAIL $name"; sed 's/^/     /' /tmp/check.out | tail -6; fails=$((fails + 1)); fi; }
+# the data a rollback mustn't touch (containers, k3s, /srv, the update history), each in its
+# own subvolume, so outside root's snapshots: on both editions
+data_subvolumes() {
+    local name path
+    while read -r name path; do
+        check "$path is its own subvolume ($name), outside root's snapshots" bash -c "findmnt -no SOURCE $path | grep -qF '[/$name]'"
+    done <<'LIST'
+@containers /var/lib/containers
+@k3s /var/lib/rancher
+@srv /srv
+@bromigos-state /var/lib/bromigos/server
+LIST
+}
 
 if [[ $mode == updated ]]; then
     # the update went to ${CHANNEL:-edge}: from the medium's channel to the other one, an older one too
@@ -26,6 +39,7 @@ if [[ $mode == server ]]; then         # bromigOS Server: no desktop, the disk a
     check "no desktop: no Hyprland, no login screen" bash -c "! pgrep -x Hyprland && ! systemctl is-enabled -q sddm 2>/dev/null"
     check "starts to the text console (multi-user.target)" bash -c "systemctl get-default | grep -qx multi-user.target"
     check "the root is btrfs" bash -c "findmnt -no FSTYPE / | grep -qx btrfs"
+    data_subvolumes
     if [[ ${2:-encrypted} == encrypted ]]; then
         check "the root is on LUKS2" bash -c "sudo cryptsetup status root | grep -qE 'type: +LUKS2'"
     fi
@@ -54,11 +68,7 @@ check "VECTOR is installed" pacman -Q bromigos-vector
 if [[ $mode == desktop ]]; then       # the installed system (docs/iso-encryption.md's checks)
     check "the root is btrfs" bash -c "findmnt -no FSTYPE / | grep -qx btrfs"
     check "the subvolumes (@, @home, @.snapshots)" bash -c "sudo btrfs subvolume list / | grep -qE 'path @\$' && sudo btrfs subvolume list / | grep -q 'path @home' && findmnt -no FSTYPE /.snapshots | grep -qx btrfs"
-    # the data a rollback mustn't touch, each in its own subvolume, outside root's snapshots
-    for sv in "@containers /var/lib/containers" "@k3s /var/lib/rancher" "@srv /srv" "@bromigos-state /var/lib/bromigos/server"; do
-        set -- $sv
-        check "$2 is its own subvolume ($1), outside root's snapshots" bash -c "findmnt -no SOURCE $2 | grep -qF '[/$1]'"
-    done
+    data_subvolumes
     if [[ ${2:-encrypted} == encrypted ]]; then
         check "the root is on LUKS (crypt under the partition)" bash -c "lsblk -no TYPE | grep -qx crypt"
         check "LUKS2 under the root (cryptsetup status root)" bash -c "sudo cryptsetup status root | grep -qE 'type: +LUKS2'"
