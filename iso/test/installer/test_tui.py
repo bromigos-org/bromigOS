@@ -277,6 +277,77 @@ class TUI(unittest.TestCase):
                 return missing
         self.assertEqual(asyncio.run(go()), [])
 
+    def test_strength_meter_levels(self):
+        """The strength meter: none lit before anything's typed, then one, two or three segments
+        for weak, fair and strong, always the same width (one thickness, like the disk map)."""
+        import bromigos_textual as BT
+        self.assertEqual([tui.strength_level(p) for p in ("", "abc", "correct-horse", "Correct-Horse-9!")], [0, 1, 2, 3])
+        widths = set()
+        for level in range(4):
+            m = BT.meter(level, 3, 17)
+            widths.add(m.cell_len)
+            lit = [s for s in m.spans if str(s.style).startswith("on ") and m.plain[s.start:s.end].strip() == ""
+                   and "on " + BT._dim(BT.palette()["muted"]) != str(s.style)]
+            self.assertEqual(len(lit), level, f"level {level}")
+            self.assertNotIn("\n", m.plain)
+        self.assertEqual(len(widths), 1)
+
+    def test_briefing_changes_jump_to_their_step(self):
+        """Ready to install: each Change (its button or its number key) opens that step, and
+        Continue comes straight back to the summary."""
+        async def go():
+            app = tui.Installer()
+            async with app.run_test(size=(120, 42)) as pilot:
+                await drive(app, pilot, {"mode": "alongside"})
+                keys = dict(app.brief_keys)
+                got = []
+                for n, sid in sorted(keys.items()):
+                    await pilot.press(n)
+                    await pilot.pause(0.2)
+                    got.append((sid, app.step, str(app.query_one("#next").label)))
+                    await pilot.press("ctrl+n")
+                    await pilot.pause(0.2)
+                    got.append(("summary", app.step, ""))
+                app.query_one("#edit-user").press()
+                await pilot.pause(0.3)
+                got.append(("user", app.step, ""))
+                return keys, got
+        keys, got = asyncio.run(go())
+        self.assertEqual(set(keys.values()) >= {"welcome", "keyboard", "disk", "user", "encryption"}, True, keys)
+        for want, step, label in got:
+            self.assertEqual(want, step)
+            if want != "summary" and label:
+                self.assertEqual(label, "Back to summary")
+
+    def test_bitlocker_asks_for_the_key_first(self):
+        """Windows with BitLocker, kept alongside: a step that asks for its recovery key to be
+        saved, and won't go on until it's said to be."""
+        async def go():
+            app = tui.Installer()
+            async with app.run_test(size=(120, 42)) as pilot:
+                for _ in range(60):
+                    if app.probe is not None:
+                        break
+                    await pilot.pause(0.05)
+                app.probe["disks"][0]["bitlocker"] = True
+                app.a.update(disk="/dev/nvme0n1", mode="alongside")
+                steps = app.steps()
+                await app.show("bitlocker")
+                await pilot.pause(0.2)
+                await pilot.press("ctrl+n")
+                first = (app.step, str(app.query_one("#error").render()))
+                app.query_one("#bitlocker-saved").value = True
+                await pilot.pause(0.1)
+                await pilot.press("ctrl+n")
+                app.a["mode"] = "erase"
+                return steps, first, app.step, app.steps()
+        steps, first, then, erase_steps = asyncio.run(go())
+        self.assertIn("bitlocker", steps)
+        self.assertEqual(first[0], "bitlocker")
+        self.assertIn("recovery key", first[1])
+        self.assertEqual(then, "user")
+        self.assertNotIn("bitlocker", erase_steps)
+
     def test_wrong_input_says_what_to_do(self):
         async def go():
             app = tui.Installer()
