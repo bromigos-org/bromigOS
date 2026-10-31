@@ -366,11 +366,11 @@ def check_network(a):
 
 # ── interfaces ──────────────────────────────────────────────────────────────────────────
 SAMPLE_NET = [
-    {"name": "enp3s0", "kind": "wired", "mac": "52:54:00:12:34:56", "carrier": True, "speed": 1000,
+    {"name": "enp3s0", "kind": "wired", "mac": "52:54:00:12:34:56", "carrier": True, "speed": 1000,  # privacy: allow (sample interface, QEMU's MAC prefix)
      "address": "192.0.2.24", "prefix": 24, "gateway": "192.0.2.1", "dns": ["192.0.2.1"], "wol": True, "model": "Intel I225-V"},
-    {"name": "enp4s0", "kind": "wired", "mac": "52:54:00:12:34:57", "carrier": False, "speed": None,
+    {"name": "enp4s0", "kind": "wired", "mac": "52:54:00:12:34:57", "carrier": False, "speed": None,  # privacy: allow (sample interface, QEMU's MAC prefix)
      "address": "", "prefix": None, "gateway": "", "dns": [], "wol": True, "model": "Realtek RTL8125"},
-    {"name": "wlan0", "kind": "wifi", "mac": "52:54:00:aa:bb:cc", "carrier": False, "speed": None,
+    {"name": "wlan0", "kind": "wifi", "mac": "52:54:00:aa:bb:cc", "carrier": False, "speed": None,  # privacy: allow (sample interface, QEMU's MAC prefix)
      "address": "", "prefix": None, "gateway": "", "dns": [], "wol": False, "model": "Intel AX210"},
 ]
 

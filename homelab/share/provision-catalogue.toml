@@ -1199,7 +1199,7 @@ id = "wireguard_address"
 label = "WireGuard address"
 kind = "text"
 default = ""
-help = "The Address line of the same configuration, such as 10.64.0.2/32."
+help = "The Address line of the same configuration, such as 10.64.0.2/32."  # privacy: allow (an example WireGuard address)
 show_if = { provider = ["mullvad"] }
 [[item.setup.field]]
 id = "country"

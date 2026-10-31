@@ -42,7 +42,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 from bromigos_installer import server  # noqa: E402
 
-LAN4 = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10"]
+LAN4 = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10"]  # privacy: allow (the private ranges themselves: what "the local network" means)
 LAN6 = ["fc00::/7", "fe80::/10"]
 ARCH_MIRROR = "https://geo.mirror.pkgbuild.com/$repo/os/$arch"
 PKG_SERVER = ("/usr/lib/bromigos/server/bromigos-server", "/usr/lib/bromigos/bin/bromigos-server", "/usr/bin/bromigos-server")
@@ -451,7 +451,7 @@ class Apply:
     def shares(self, mnt):
         st = self.p["storage"]
         if "smb" in st.get("shares", []):
-            self.write("/etc/samba/smb.conf", SMB_CONF.format(user=self.user))
+            self.write("/etc/samba/smb.conf", SMB_CONF.format(user=self.user, lan=" ".join(LAN4)))
             pw = self.doc.get("password") or ""
             if pw:
                 self.run(["smbpasswd", "-s", "-a", self.user], input=f"{pw}\n{pw}\n")
@@ -718,7 +718,7 @@ SMB_CONF = """# bromigOS Server's shared folders (the installer; docs/server.md)
 [global]
    server role = standalone server
    workgroup = WORKGROUP
-   hosts allow = 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 127.0.0.1
+   hosts allow = {lan} 127.0.0.1
    hosts deny = 0.0.0.0/0
    server min protocol = SMB3
    map to guest = never

@@ -969,7 +969,7 @@ def prepare_litellm(host, it):
             if m.get("serve_with") == "ollama":
                 tag = gguf_tag(m.get("quant"))
                 model = f"ollama_chat/hf.co/{m['weights']}:{tag}" if m.get("weights") and tag else "ollama_chat/" + m["id"]
-                rows.append({"model_name": m["name"], "litellm_params": {"model": model, "api_base": "http://host.containers.internal:11434"}})
+                rows.append({"model_name": m["name"], "litellm_params": {"model": model, "api_base": "http://host.containers.internal:11434"}})  # privacy: allow (Podman's name for the host)
     if "vllm" in host.selected:
         for m in host.plan.get("models") or []:
             if m.get("serve_with") == "vllm":
