@@ -268,10 +268,11 @@ computer for a while can't swap the kernel or GRUB on the unencrypted `/boot` fo
 
 The installer shares Windows' EFI system partition, and `setup` adds its own folder to it.
 It never changes `EFI/Microsoft/`, Windows' fallback loader `EFI/BOOT/BOOTX64.EFI`, or
-Windows' boot entry. Windows starts from the boot menu as before, or from the firmware's
-own boot menu. If BitLocker asks for its recovery key after Windows is started from GRUB's
-menu, choose **Windows Boot Manager (EFI BootNext)** in GRUB's menu instead. It restarts
-straight into Windows the way the firmware would, so BitLocker sees what it expects.
+Windows' boot entry. Windows starts from GRUB's menu as before, or from the firmware's own
+boot menu (the key that picks a boot device as the computer starts). BitLocker measures
+how Windows was started, and a start through shim and GRUB looks different to it from a
+start straight from the firmware. If it asks for its recovery key after a start from GRUB's
+menu, start Windows from the firmware's boot menu instead: that's the start it expects.
 
 ### An existing install
 
