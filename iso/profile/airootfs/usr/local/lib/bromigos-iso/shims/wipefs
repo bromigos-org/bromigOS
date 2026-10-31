@@ -5,8 +5,10 @@
 # a wipefs in that moment failed the whole install ("probing initialization failed: No such
 # file or directory"). Here: udev settles, each device node is waited for (up to 20 s), and a
 # probe that fails like that is tried again (3 times). Anything else is wipefs as it is.
-real=/usr/bin/wipefs
-log=/var/log/bromigos-iso-install.log
+# (BROMIGOS_WIPEFS, _LOG and _WAIT, tenths of a second, are for its test)
+real=${BROMIGOS_WIPEFS:-/usr/bin/wipefs}
+log=${BROMIGOS_WIPEFS_LOG:-/var/log/bromigos-iso-install.log}
+limit=${BROMIGOS_WIPEFS_WAIT:-200}
 note() { echo "wipefs (bromigos): $*" >> "$log" 2>/dev/null || true; }
 devs=()
 for a in "$@"; do [[ $a == /dev/* ]] && devs+=("$a"); done
@@ -14,8 +16,8 @@ if ((${#devs[@]})); then
     udevadm settle --timeout=10 2>/dev/null || true
     for d in "${devs[@]}"; do
         waited=0
-        until [[ -b $d ]] || (( waited >= 200 )); do sleep 0.1; waited=$((waited + 1)); done
-        (( waited )) && note "waited $((waited * 100)) ms for $d"
+        until [[ -b $d ]] || (( waited >= limit )); do sleep 0.1; waited=$((waited + 1)); done
+        if (( waited )); then note "waited $((waited * 100)) ms for $d"; else note "$d is there"; fi
     done
 fi
 for try in 1 2 3; do
