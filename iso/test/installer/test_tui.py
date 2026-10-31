@@ -442,7 +442,10 @@ class TUI(unittest.TestCase):
                     await pilot.pause(0.2)
                     got.append(("summary", app.step, ""))
                 app.query_one("#edit-user").press()
-                await pilot.pause(0.3)
+                for _ in range(30):              # a busy machine: the jump finishes before the app closes
+                    await pilot.pause(0.1)
+                    if app.step == "user" and str(app.query_one("#next").label) == "Back to summary":
+                        break
                 got.append(("user", app.step, ""))
                 return keys, got
         keys, got = asyncio.run(go())

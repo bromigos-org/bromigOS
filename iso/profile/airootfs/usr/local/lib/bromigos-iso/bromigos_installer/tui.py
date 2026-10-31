@@ -730,7 +730,10 @@ class Installer(server_tui.ServerPages, App):
         vl.set_class(mode == "under", "-away")
         if mode in ("full", "small") and BT is not None:
             orb.update(BT.orb(getattr(self, "orb_t", 0.0), *self.ORB_SIZES[mode]))
-        top = self.query_one("#vector-top", Static)
+        try:
+            top = self.query_one("#vector-top", Static)
+        except Exception:                       # the app is closing
+            return
         top.update(self._vector_words())
         top.set_class(mode == "under" and bool(line), "-here")
 
