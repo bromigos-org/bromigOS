@@ -158,8 +158,8 @@ def pieces(loop):
 
 HELP_FK = [
     "Start Field Kit",
-    "  bromigOS without the desktop: a menu for repairs, the lab and tools. Nothing on",
-    "  this computer changes until you choose something that changes it.",
+    "  Repair. Recon. Deploy. Fix any computer, run your lab, install a server.",
+    "  Nothing on this computer changes until you choose something that changes it.",
     "Install bromigOS Server",
     "  The text installer, for a server or lab machine with no desktop. Everything it",
     "  needs is on this stick: no network. It asks before it changes a disk.",
@@ -184,7 +184,7 @@ HELP_FULL = [
     "Install bromigOS Server",
     "  The text installer, for a server or lab machine with no desktop.",
     "Field Kit (repair, lab and tools)",
-    "  bromigOS without the desktop: a menu for repairs, the lab and tools.",
+    "  Repair. Recon. Deploy. Fix any computer, run your lab, install a server.",
     "Start with basic graphics (if the screen stays black)",
     "  The firmware's simple display instead of the graphics card's driver.",
     "More options",
@@ -303,7 +303,7 @@ def syslinux(kind):
             "# More options. @DOT@ becomes CP437's middle dot.\n\n")
     if kind == "fieldkit":
         body = (sl("fieldkit", "Start Field Kit", " %KERNEL_PARAMS%", [
-                    "bromigOS without the desktop: a menu for repairs, the lab and tools.",
+                    "Repair. Recon. Deploy. Fix any computer, run your lab, install a server.",
                     "Nothing on this computer changes until you choose something that does."])
                 + sl("install-server", "Install bromigOS Server", " %KERNEL_PARAMS% bromigos.install bromigos.edition=server", [
                     "The text installer, for a server or lab machine with no desktop.",
@@ -325,7 +325,7 @@ def syslinux(kind):
                 + sl("bromigos-install-server", "Install bromigOS Server", " bromigos.install bromigos.edition=server systemd.unit=multi-user.target", [
                     "The text installer, for a server or lab machine with no desktop."])
                 + sl("bromigos-fieldkit", "Field Kit (repair, lab and tools)", f" bromigos.fieldkit systemd.unit=multi-user.target {VT}", [
-                    "bromigOS without the desktop: a menu for repairs, the lab and tools."])
+                    "Repair. Recon. Deploy. Fix any computer, run your lab, install a server."])
                 + sl("nomodeset", "Start with basic graphics (if the screen stays black)", " %KERNEL_PARAMS% nomodeset", [
                     "The firmware's simple display instead of the graphics card's driver."]))
         more = (sl("bromigos-install-text", "Install bromigOS with the text installer",

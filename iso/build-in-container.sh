@@ -14,7 +14,7 @@ channel=${ISO_CHANNEL:-stable}
 case $channel in edge) sub='' ;; *) sub="/$channel" ;; esac        # as install.sh lays the channels out
 profile_src=/src/iso/${ISO_PROFILE:-profile}
 secureboot=0; [[ -f /in/sb.key && -f /in/sb.crt ]] && secureboot=1
-# the desktop medium (iso/profile), or Field Kit, bromigOS without the desktop (iso/fieldkit,
+# the desktop medium (iso/profile), or Field Kit, the repair, lab and install stick (iso/fieldkit,
 # docs/fieldkit.md), which shares the full medium's offline store and installer
 case ${ISO_PROFILE:-profile} in fieldkit) edition=fieldkit ;; *) edition=desktop ;; esac
 work=/out/work

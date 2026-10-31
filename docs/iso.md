@@ -477,7 +477,7 @@ machine. The medium remembers it as the installed system's repository, unless
 | `--secureboot-key FILE`, `--secureboot-cert FILE` | Signs the medium for Secure Boot with this key ([secureboot.md](secureboot.md)). Without them, the medium starts only with Secure Boot off. |
 | `--test-key FILE` | Makes a test build (below) |
 | `--keep-work` | Keeps mkarchiso's work directory, to look inside the image |
-| `--edition E` | `desktop` (the default) or `fieldkit`: Field Kit, bromigOS without the desktop ([fieldkit.md](fieldkit.md#building-it)) |
+| `--edition E` | `desktop` (the default) or `fieldkit`: Field Kit, to fix any computer, run your lab and install a server ([fieldkit.md](fieldkit.md#building-it)) |
 | `--local-repo DIR` | A dev build: this checkout's own packages (`packaging/dev-repo.sh`'s, unsigned) in place of `[bromigos]`'s. For tests only; `check-medium.sh` refuses it |
 
 The result is `<out>/bromigos-<version>-x86_64.iso` and its `.sha256`, owned by whoever

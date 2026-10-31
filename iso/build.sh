@@ -9,7 +9,7 @@
 #                [--test-key FILE] [--local-repo DIR] [--keep-work]
 #
 #   --edition E     desktop (default): the live desktop and install medium (iso/profile);
-#                   fieldkit: Field Kit, bromigOS without the desktop, the small medium for
+#                   fieldkit: Field Kit (Repair. Recon. Deploy.), the small medium for
 #                   repairs, the lab and installing bromigOS Server (iso/fieldkit,
 #                   docs/fieldkit.md). Its file is bromigos-fieldkit-<version>-x86_64.iso
 #   --local-repo DIR  a dev build: the packages in DIR (packaging/dev-repo.sh's, unsigned)

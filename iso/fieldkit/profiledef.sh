@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
-# bromigOS Field Kit: bromigOS without the desktop, the small medium for repairs, the lab and
+# bromigOS Field Kit (Repair. Recon. Deploy.): the small medium for repairs, the lab and
 # installing bromigOS Server (docs/fieldkit.md). archiso's releng profile, overlaid with this
 # directory by iso/build-in-container.sh (iso/build.sh --edition fieldkit).
 
