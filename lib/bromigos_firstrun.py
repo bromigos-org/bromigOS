@@ -266,9 +266,18 @@ def machine_config_ready():
     return os.path.exists(MACHINE_TOML)
 
 
+FIELDKIT_ENGINE = "/usr/lib/bromigos/fieldkit/fieldkit-engine"
+
+
 def _config_cmd():
-    """root's machine.toml from the package's example (the agent runs only once it exists)."""
-    return (f"[ -e {MACHINE_TOML} ] || install -D -m 0644 {MACHINE_EXAMPLE} {MACHINE_TOML}")
+    """root's machine.toml (the agent runs only once it exists). On bromigOS Server and a Field
+    Kit stick, Field Kit's file: no jobs, its console's Herdr workspace and the
+    phone's shells, machine controls on (restart, shut down; update on Server)
+    (docs/fieldkit-vector.md, "Pair with BRODEC"). Elsewhere the package's example."""
+    fieldkit = (f"[ -x {FIELDKIT_ENGINE} ] && {{ [ -x /usr/lib/bromigos/server/bromigos-server ] || "
+                "[ -e /etc/bromigos-fieldkit/medium ]; }")
+    return (f"[ -e {MACHINE_TOML} ] || {{ if {fieldkit}; then {FIELDKIT_ENGINE} brodec-setup; "
+            f"else install -D -m 0644 {MACHINE_EXAMPLE} {MACHINE_TOML}; fi; }}")
 
 
 def machine_install(on_line, package=None):

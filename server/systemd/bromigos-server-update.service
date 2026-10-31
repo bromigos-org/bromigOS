@@ -1,0 +1,12 @@
+# bromigOS Server's automatic update (docs/server.md, "Updates"): bromigos update with its
+# snapshot pair, then the health check (after a restart when the kernel or a driver changed).
+[Unit]
+Description=bromigOS Server automatic update
+Wants=network-online.target
+After=network-online.target bromigos-server-health.service
+ConditionACPower=true
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/server/bromigos-server update
+TimeoutStartSec=4h

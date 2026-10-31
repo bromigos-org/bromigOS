@@ -23,19 +23,25 @@
 #     never published), and neither has the package;
 #   - the package is brodec-desktop for x86_64, and its version names the source commit.
 #
+# brodec-machine.sh (BRODEC's machine agent on its own, for Field Kit and bromigOS Server) is
+# this script with BRODEC_PACKAGE=brodec-machine: the same checks, at refs/brodec-machine/package,
+# for a brodec-machine package.
+#
 # Environment (never printed):
 #   BRODEC_DEPLOY_KEY   the deploy key (an SSH private key) that may read BRODEC's repository
 #   BRODEC_GIT_URL      default git@github.com:bromigos-org/brodec.git (a test sets a file:// one)
 #   PKGS_PUBLIC_URL     default https://pkgs.bromigos.org: where `missing` reads the databases
 set -euo pipefail
 
-ref=refs/brodec-desktop/package
+pkg=${BRODEC_PACKAGE:-brodec-desktop}
+case $pkg in brodec-desktop|brodec-machine) ;; *) echo "BRODEC_PACKAGE is brodec-desktop or brodec-machine" >&2; exit 2 ;; esac
+ref=refs/$pkg/package
 url=${BRODEC_GIT_URL:-git@github.com:bromigos-org/brodec.git}
 public=${PKGS_PUBLIC_URL:-https://pkgs.bromigos.org}
 channels=(edge rc stable)
-name_re='^brodec-desktop-[A-Za-z0-9._+]+-[0-9.]+-x86_64\.pkg\.tar\.zst$'
+name_re="^$pkg-[A-Za-z0-9._+]+-[0-9.]+-x86_64\.pkg\.tar\.zst\$"
 
-die() { echo "brodec-desktop: $*" >&2; exit 1; }
+die() { echo "$pkg: $*" >&2; exit 1; }
 out() {   # out KEY VALUE: to the step's outputs in CI, and to stdout
   echo "$1=$2"
   if [[ -n ${GITHUB_OUTPUT:-} ]]; then echo "$1=$2" >> "$GITHUB_OUTPUT"; fi
@@ -83,20 +89,20 @@ case "$cmd" in
   staged)
     c=$(staged_commit)
     if [[ -z $c ]]; then
-      echo "brodec-desktop: nothing is staged at $ref"
+      echo "$pkg: nothing is staged at $ref"
       out file ""
       exit 0
     fi
     msg=$(staged_message "$c")
     file=$(head -1 <<<"$msg")
-    [[ $file =~ $name_re ]] || die "the staged commit's first line isn't a brodec-desktop package name"
+    [[ $file =~ $name_re ]] || die "the staged commit's first line isn't a $pkg package name"
     out file "$file"
     out source "$(field source <<<"$msg")"
     ;;
 
   missing)
-    file=${2:?usage: brodec-desktop.sh missing FILE}
-    [[ $file =~ $name_re ]] || die "$file isn't a brodec-desktop package name"
+    file=${2:?usage: $pkg.sh missing FILE}
+    [[ $file =~ $name_re ]] || die "$file isn't a $pkg package name"
     missing=()
     for ch in "${channels[@]}"; do
       if [[ $ch == edge ]]; then p=bromigos/x86_64; else p=bromigos/$ch/x86_64; fi
@@ -112,7 +118,7 @@ case "$cmd" in
     ;;
 
   fetch)
-    dir=${2:?usage: brodec-desktop.sh fetch DIR}
+    dir=${2:?usage: $pkg.sh fetch DIR}
     mkdir -p "$dir"
     c=$(staged_commit)
     [[ -n $c ]] || die "nothing is staged at $ref"
@@ -122,7 +128,7 @@ case "$cmd" in
     file=$(head -1 <<<"$msg")
     source=$(field source <<<"$msg")
     sum=$(field sha256 <<<"$msg")
-    [[ $file =~ $name_re ]] || die "the staged commit's first line isn't a brodec-desktop package name"
+    [[ $file =~ $name_re ]] || die "the staged commit's first line isn't a $pkg package name"
     [[ $source =~ ^[0-9a-f]{40}$ ]] || die "the staged commit names no source commit"
     [[ $sum =~ ^[0-9a-f]{64}$ ]] || die "the staged commit gives no SHA-256"
 
@@ -150,8 +156,8 @@ case "$cmd" in
     pkgname=$(awk -F' = ' '$1 == "pkgname" { print $2; exit }' <<<"$info")
     pkgver=$(awk -F' = ' '$1 == "pkgver" { print $2; exit }' <<<"$info")
     arch=$(awk -F' = ' '$1 == "arch" { print $2; exit }' <<<"$info")
-    [[ $pkgname == brodec-desktop && $arch == x86_64 ]] || die "$file is $pkgname for $arch, not brodec-desktop for x86_64"
-    [[ $file == "brodec-desktop-$pkgver-x86_64.pkg.tar.zst" ]] || die "$file's name doesn't match its version, $pkgver"
+    [[ $pkgname == "$pkg" && $arch == x86_64 ]] || die "$file is $pkgname for $arch, not $pkg for x86_64"
+    [[ $file == "$pkg-$pkgver-x86_64.pkg.tar.zst" ]] || die "$file's name doesn't match its version, $pkgver"
     if [[ $pkgver =~ \.g([0-9a-f]{7,40})- ]]; then
       [[ $source == "${BASH_REMATCH[1]}"* ]] || die "$file names commit ${BASH_REMATCH[1]}, not the source ${source:0:12}"
     fi
@@ -161,7 +167,7 @@ case "$cmd" in
     fi
 
     mv "$work/$file" "$dir/$file"
-    echo "brodec-desktop: $file (from ${source:0:12}) checked"
+    echo "$pkg: $file (from ${source:0:12}) checked"
     out file "$file"
     ;;
 

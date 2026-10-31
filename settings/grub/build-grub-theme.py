@@ -41,7 +41,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFo
 
 # Bumped when the layout or the files change: a theme rendered by an older generator is
 # rendered again (the manifest carries it).
-VERSION = 1
+VERSION = 3
 
 # The canvas: 16:9 at 1440 rows. GRUB scales it to the screen's height and crops or pads
 # the sides (desktop-image-scale-method fitheight), so everything placed by height lands
@@ -71,8 +71,8 @@ FONTS = [
     ("geist-mono-semibold-20.pf2", "SemiBold", 20),
     ("geist-mono-semibold-26.pf2", "SemiBold", 26),
 ]
-# ASCII, Latin-1, general punctuation (· … — •), arrows (↑↓), ⏎, box drawing, block elements
-FONT_RANGES = "0x20-0x7E,0xA0-0xFF,0x2010-0x2027,0x2190-0x2193,0x23CE-0x23CE,0x2500-0x257F,0x2580-0x259F"
+# ASCII, Latin-1, general punctuation (· … — • ›), arrows (↑↓), ⏎, box drawing, block elements
+FONT_RANGES = "0x20-0x7E,0xA0-0xFF,0x2010-0x2027,0x2039-0x203A,0x2190-0x2193,0x23CE-0x23CE,0x2500-0x257F,0x2580-0x259F"
 
 SHARE = os.environ.get("BROMIGOS_SHARE_DIR") or "/usr/share/bromigos"
 STATE = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "bromigos")
@@ -452,6 +452,20 @@ def glyphs(p):
     d.line((ss(3), ss(8), s - ss(3), ss(8)), fill=ink, width=w)
     out["other"] = im
 
+    im, d = icon_canvas()                         # the Field Kit: a case and its handle
+    d.rounded_rectangle((ss(2), ss(8), s - ss(2), ss(19)), radius=ss(2), outline=ink, width=w)
+    d.line((ss(8), ss(8), ss(8), ss(4), s - ss(8), ss(4), s - ss(8), ss(8)), fill=ink, width=w, joint="curve")
+    d.line((ss(2), ss(12), s - ss(2), ss(12)), fill=(*p.dim, 255), width=ss(1))
+    d.rectangle((s // 2 - ss(2), ss(11), s // 2 + ss(2), ss(14)), fill=acc)
+    out["fieldkit"] = im
+
+    im, d = icon_canvas()                         # boot options: three sliders
+    for i, x in enumerate((ss(6), ss(11), ss(16))):
+        d.line((ss(3), x, s - ss(3), x), fill=ink, width=ss(1))
+        k = (ss(8), ss(15), ss(10))[i]
+        d.rectangle((k - ss(2), x - ss(2), k + ss(2), x + ss(2)), fill=acc)
+    out["options"] = im
+
     return {k: down(v, (ICON, ICON)) for k, v in out.items()}
 
 
@@ -459,19 +473,21 @@ def glyphs(p):
 ICON_CLASSES = {
     "emblem": ["bromigos", "arch", "gnu-linux", "os", "live"],
     "install": ["install"],
-    "safe": ["safe", "nomodeset"],
+    "safe": ["safe", "nomodeset", "gpu"],
     "speech": ["speech", "accessibility"],
     "memtest": ["memtest", "memtest86"],
     "disk": ["disk", "chain", "existing"],
     "efi": ["efi", "firmware", "uefi"],
-    "shell": ["shell"],
+    "shell": ["shell", "text"],
+    "fieldkit": ["fieldkit", "rescue"],
+    "options": ["options"],
     "shutdown": ["shutdown", "poweroff", "halt"],
     "restart": ["restart", "reboot"],
     "rollback": ["rollback", "snapshots-menu"],
     "snapshot-pre": ["snapshot-pre"],
     "snapshot-post": ["snapshot-post"],
     "snapshot": ["snapshot", "snapshots", "snapshot-single"],
-    "info": ["info"],
+    "info": ["info", "verbose"],
     "other": ["windows", "osx", "macosx", "hurd", "recovery"],
 }
 
@@ -569,7 +585,7 @@ def theme_txt(p, heading, medium, plate):
         "",
         "# the channel list, under the meter",
         "+ boot_menu {",
-        f"    left = 50%-290  top = {line}%+40  width = 580  height = {100 - line - 5}%-40",
+        f"    left = 50%-380  top = {line}%+40  width = 760  height = {100 - line - 5}%-40",
         f'    item_font = "{font("Regular", 16)}"  item_color = "{c["text"]}"',
         f'    selected_item_font = "{font("Bold", 16)}"  selected_item_color = "{c["background"]}"',
         "    icon_width = 22  icon_height = 22  item_icon_space = 12",
@@ -612,6 +628,38 @@ def theme_txt(p, heading, medium, plate):
         "}",
     ]
     return "\n".join(lines) + "\n"
+
+
+# ------------------------------------------------------------------ colors.cfg
+
+# GRUB's console and its editor (E, C) take colours by name, from VGA's sixteen
+GRUB_COLOURS = {
+    "black": (0, 0, 0), "blue": (0, 0, 170), "green": (0, 170, 0), "cyan": (0, 170, 170),
+    "red": (170, 0, 0), "magenta": (170, 0, 170), "brown": (170, 85, 0), "light-gray": (170, 170, 170),
+    "dark-gray": (85, 85, 85), "light-blue": (85, 85, 255), "light-green": (85, 255, 85),
+    "light-cyan": (85, 255, 255), "light-red": (255, 85, 85), "light-magenta": (255, 85, 255),
+    "yellow": (255, 255, 85), "white": (255, 255, 255),
+}
+
+
+def grub_colour(rgb):
+    """The nearest of GRUB's sixteen colour names (never black: black is see-through)."""
+    return min((n for n in GRUB_COLOURS if n != "black"),
+               key=lambda n: sum((a - b) ** 2 for a, b in zip(GRUB_COLOURS[n], rgb)))
+
+
+def colors_cfg(p):
+    """colors.cfg: the theme's colours for what theme.txt can't reach: GRUB's editor (E) and
+    console (C), and the menu when the theme can't load. grub.cfg sources it (11_bromigos-options,
+    the media's grub.cfg). Black backgrounds are see-through, so the terminal box shows."""
+    ink, sel = grub_colour(p.text), grub_colour(p.primary)
+    return "\n".join([
+        f"# bromigOS boot menu: {p.name}'s colours for GRUB's editor and console (build-grub-theme.py)",
+        f"set color_normal={ink}/black",
+        f"set color_highlight=black/{sel}",
+        f"set menu_color_normal={ink}/black",
+        f"set menu_color_highlight=black/{sel}",
+    ]) + "\n"
 
 
 # ------------------------------------------------------------------ inputs
@@ -785,6 +833,8 @@ def build(args):
         fonts(out, args.font_dir, args.fonts)
     with open(os.path.join(out, "theme.txt"), "w") as f:
         f.write(theme_txt(p, heading, medium, plate))
+    with open(os.path.join(out, "colors.cfg"), "w") as f:
+        f.write(colors_cfg(p))
     manifest = {
         "schema": 1,
         "generator": VERSION,

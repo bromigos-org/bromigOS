@@ -11,6 +11,18 @@ can start. If you press nothing, the first entry starts.
 The first entry, **bromigOS Linux**, starts bromigOS. **Advanced options for bromigOS
 Linux** lists each installed kernel on its own, for when you need to choose one.
 
+**More ways to start** lists other ways to start, each said in plain words:
+
+- **Start without the desktop (text mode)**: a login prompt. Restart to get the desktop back.
+- **Start with basic graphics**: for a screen that stays black. No graphics driver.
+- **Start without the NVIDIA (or AMD, or Intel) driver**: another graphics card takes over,
+  or the basic display.
+- **Start and show every message**: no splash, for finding where it stops.
+- **Start an older snapshot**: bromigOS as it was before an update.
+- **bromigOS Field Kit**: [repairs, the lab and tools](fieldkit.md), without the desktop.
+
+**Help: what do these do?** (or <kbd>H</kbd>) shows a page explaining every entry.
+
 ## Use the boot menu
 
 | Key | What it does |

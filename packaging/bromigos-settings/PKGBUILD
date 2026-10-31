@@ -14,14 +14,9 @@
 #   /usr/share/icons/Bromigos[-cursor]      icons (Breeze Dark recoloured) and the cursor
 #   /usr/lib/bromigos/gtk/                  build-gtk-theme.py (Bromigos-<theme> into ~/.themes)
 #   /usr/share/plymouth/themes/bromigos     boot, shutdown and restart splash (ring and flame)
-#   /usr/lib/issue.d/60-bromigos.issue      the text console login banner
-#   /usr/share/bromigos/boot/grub/          the boot menu: a GRUB theme per shipped theme
-#                                           (themes/<name>/, rendered here) and Geist Mono as
-#                                           GRUB fonts (fonts/); docs/boot.md
-#   /usr/lib/bromigos/boot/                 its generator (a user's own theme, high contrast),
-#                                           the root helper that puts one in /boot, and
-#                                           grub-btrfs's snapshot titles
-#   /usr/share/libalpm/hooks/bromigos-boot-theme.hook   /boot's packaged theme kept current
+#
+# The boot menu (GRUB's theme and its entries) and the text console are bromigos-boot's, which
+# Field Kit and bromigOS Server have too (docs/boot.md, docs/console.md).
 #
 # A theme from bromigOS's `theme set` changes the user's GTK theme (hook gtk) and the boot
 # menu (hook boot, where it's on); the login screen is system-wide and stays the Wick's.
@@ -29,35 +24,26 @@
 pkgname=bromigos-settings
 pkgver=0.0.0
 pkgrel=1
-pkgdesc='bromigOS system settings: the login screen, the boot splash and menu, the GTK, icon and cursor themes, the fonts'
+pkgdesc='bromigOS system settings: the login screen, the boot splash, the GTK, icon and cursor themes, the fonts'
 arch=('any')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
-depends=('sddm' 'qt6-declarative' 'weston' 'util-linux>=2.41'
+depends=('bromigos-boot' 'sddm' 'qt6-declarative' 'weston'
          'ttf-geist-mono' 'ttf-meslo-nerd' 'noto-fonts' 'noto-fonts-emoji' 'terminus-font'
          # Japanese, Chinese and Korean titles (anime, music, YouTube) instead of empty boxes
          'noto-fonts-cjk'
          'breeze-icons' 'adwaita-cursors' 'python'
          # the gtk hook builds another theme's GTK theme from GTK's own (gresource)
-         'gtk3' 'gtk4' 'glib2-devel'
-         # the boot menu's generator (a theme of the user's own; the root helper reads it too)
-         'python-pillow')
-# grub: grub-mkfont (the boot menu's fonts) and grub-script-check (check())
-makedepends=('git' 'python' 'python-pillow' 'gtk3' 'gtk4' 'glib2-devel' 'breeze-icons' 'librsvg' 'grub')
+         'gtk3' 'gtk4' 'glib2-devel')
+makedepends=('git' 'python' 'python-pillow' 'gtk3' 'gtk4' 'glib2-devel' 'breeze-icons' 'librsvg')
 checkdepends=('plymouth')
-optdepends=('plymouth: the Bromigos boot, shutdown and restart splash'
-            'grub: the Bromigos boot menu (bromigos boot theme on)'
-            'grub-btrfs: snapshots in the boot menu, titled like bromigOS'"'"'s rollback list')
-# Geist Mono for the boot menu's GRUB fonts: the same release ttf-geist-mono packages
-_geist=1.7.2
-source=("geist-font-v${_geist}.zip::https://github.com/vercel/geist-font/releases/download/v${_geist}/geist-font-v${_geist}.zip")
-sha256sums=('7fc800d2ac6b92844895196e5041aca55d814c15db70c44f79b3b83ab82b04e2')
+optdepends=('plymouth: the Bromigos boot, shutdown and restart splash')
 options=('!debug')
 install=$pkgname.install
 
 _root="${startdir%/packaging/*}"
-# themes/: every shipped theme's boot menu is rendered here, from its colours, art and emblem
-_paths=(settings themes desktop/wallpaper packaging/bromigos-settings LICENSE-MIT LICENSE-APACHE)
+# themes/: the login screen and splash take the Wick's emblem kit
+_paths=(settings/sddm settings/gtk settings/plymouth settings/README.md themes desktop/wallpaper packaging/bromigos-settings LICENSE-MIT LICENSE-APACHE)
 
 # <workspace version>.r<commits touching the package>.g<last such commit> (as bromigos-core)
 # The commits that touched _paths before the history restarted at v0.1.2 (they're in
@@ -78,22 +64,11 @@ build() {
   cd "$_root/settings/gtk"
   python build-gtk-theme.py --out "$srcdir/themes/Bromigos"
   python build-icons-cursor.py --out "$srcdir/icons"
-  # the boot menu: Geist Mono as GRUB fonts, then a theme per shipped theme (docs/boot.md)
-  local gen="$_root/settings/grub/build-grub-theme.py" t
-  python "$gen" --fonts-out "$srcdir/boot/fonts" --font-dir "$srcdir/geist-font/GeistMono/ttf"
-  for t in "$_root"/themes/*/; do
-    [[ -f "$t/colors.toml" ]] || continue
-    BROMIGOS_SHARE_DIR=/nonexistent python "$gen" --theme-dir "$t" --no-fonts \
-      --out "$srcdir/boot/themes/$(basename "$t")"
-  done
 }
 
 check() {
-  # the boot menu: the generator, grub-btrfs's titles, the root helper in a stand-in root
   cd "$_root"
-  python -m unittest discover -s settings/grub/tests
   python -m unittest discover -s settings/plymouth/tests
-  python -m unittest discover -s settings/console/tests
   python -m unittest discover -s settings/sddm/tests
 }
 
@@ -114,24 +89,12 @@ package() {
   install -Dm0644 "$_root/settings/sddm/conf/zz-bromigos.conf" "$pkgdir/usr/lib/sddm/sddm.conf.d/zz-bromigos.conf"
   install -Dm0755 "$_root/settings/sddm/bromigos-greeter" "$pkgdir/usr/lib/bromigos/sddm/bromigos-greeter"
   install -Dm0755 "$_root/settings/sddm/bromigos-sddm-tidy" "$pkgdir/usr/lib/bromigos/sddm/bromigos-sddm-tidy"
-  install -Dm0644 "$_root/settings/console/60-bromigos.issue" "$pkgdir/usr/lib/issue.d/60-bromigos.issue"
   # boot, shutdown and restart splash (the ring and flame are the lock screen's)
   local ply="$pkgdir/usr/share/plymouth/themes/bromigos"
   install -Dm0644 -t "$ply/" "$_root"/settings/plymouth/bromigos/bromigos.plymouth \
     "$_root"/settings/plymouth/bromigos/bromigos.script "$_root"/settings/plymouth/bromigos/line-*.png
   install -Dm0644 "$_root/themes/wick/emblem/lock/ring.png" "$ply/ring.png"
   install -Dm0644 "$_root/themes/wick/emblem/lock/flame.png" "$ply/flame.png"
-  # the boot menu: the rendered themes and fonts, the generator, the root helper, the titles
-  local boot="$pkgdir/usr/share/bromigos/boot/grub" lib="$pkgdir/usr/lib/bromigos/boot"
-  install -d "$boot"
-  cp -r "$srcdir/boot/themes" "$srcdir/boot/fonts" "$boot/"
-  find "$boot" -type d -exec chmod 0755 {} + ; find "$boot" -type f -exec chmod 0644 {} +
-  install -Dm0644 "$_root/settings/grub/build-grub-theme.py" "$lib/build-grub-theme.py"
-  install -Dm0755 "$_root/settings/grub/bromigos-boot-theme" "$lib/bromigos-boot-theme"
-  install -Dm0755 "$_root/settings/grub/grub-btrfs-titles" "$lib/grub-btrfs-titles"
-  install -Dm0644 "$_root/settings/grub/bromigos-boot-theme.hook" \
-    "$pkgdir/usr/share/libalpm/hooks/bromigos-boot-theme.hook"
-  install -Dm0644 "$srcdir/geist-font/OFL.txt" "$pkgdir/usr/share/licenses/$pkgname/OFL-geist-mono.txt"
   # GTK, icons, cursor
   install -d "$pkgdir/usr/share/themes" "$pkgdir/usr/share/icons"
   cp -r "$srcdir/themes/Bromigos" "$pkgdir/usr/share/themes/"

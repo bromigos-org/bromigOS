@@ -33,6 +33,8 @@ mod art;
 mod art_make;
 mod aur;
 mod ext;
+mod fieldkit;
+mod fieldkit_vector;
 mod hw;
 mod hw_graphics;
 mod idle;
@@ -88,6 +90,13 @@ struct Cli {
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum Cmd {
+    /// Field Kit (Repair. Recon. Deploy.): the menu (Repair, Lab, Tools, Install,
+    /// Shell), or one job: why, black-screen, status, make-stick, remote, usb (docs/fieldkit.md)
+    #[command(disable_help_flag = true)]
+    Fieldkit {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<OsString>,
+    },
     /// The live Hyprland session (prints KEY=value; import, exec or adopt it; hold and
     /// release its config reloads around a package transaction)
     Session(SessionArgs),
@@ -640,6 +649,7 @@ fn builtins(paths: &Paths) -> Vec<Builtin> {
             None,
         ),
         b("live", Verbs::All, Some(&paths.live_bin)),
+        b("fieldkit", Verbs::All, None),
         b("vector", Verbs::All, Some(&paths.holo_bin)),
         b("wallpaper", Verbs::All, Some(&paths.wallpaper_bin)),
         b(
@@ -770,6 +780,7 @@ fn run(paths: &Paths, dirs: &[std::path::PathBuf], cmd: Cmd) -> Result<i32> {
         Cmd::Ext(a) => ext::ext_cmd(paths, a),
         Cmd::Anim(a) => anim_cmd(paths, a),
         Cmd::Live { args } => live_cmd(paths, args),
+        Cmd::Fieldkit { args } => fieldkit::fieldkit_cmd(args),
         Cmd::Vector { args } => Ok(exec_or_report(&paths.holo_bin, &args)),
         Cmd::Wallpaper { args } => Ok(exec_or_report(&paths.wallpaper_bin, &args)),
         Cmd::Profile(a) => profile_cmd(paths, a),
@@ -2097,7 +2108,10 @@ fn booted_rollback_cmd(
         println!("{}", json!({"schema": SCHEMA, "rollback": r}));
         return Ok(0);
     }
-    println!("rolled back: snapshot {} is the root ({}) now", r.snapshot, r.root);
+    println!(
+        "rolled back: snapshot {} is the root ({}) now",
+        r.snapshot, r.root
+    );
     for n in &r.notes {
         println!("  {n}");
     }
@@ -2137,7 +2151,7 @@ fn boot_cmd(paths: &Paths, a: BootArgs) -> Result<i32> {
                 if st.grub() && st.helper {
                     match &st.want {
                         boot::Want::Package { theme, .. } => {
-                            println!("  theme: {theme}, rendered by bromigos-settings")
+                            println!("  theme: {theme}, rendered by bromigos-boot")
                         }
                         boot::Want::Render { theme, why } => {
                             println!("  theme: {theme}, rendered here ({why})")
@@ -2721,8 +2735,13 @@ fn restart_cmd(paths: &Paths, pieces: &[String], check: bool, json: bool) -> Res
                 units.push(p.clone())
             }
             None => {
-                let mut known: Vec<String> = Piece::ALL.iter().map(|p| p.name().to_owned()).collect();
-                known.extend(declared.iter().flat_map(|d| d.units.iter().map(|u| u.name.clone())));
+                let mut known: Vec<String> =
+                    Piece::ALL.iter().map(|p| p.name().to_owned()).collect();
+                known.extend(
+                    declared
+                        .iter()
+                        .flat_map(|d| d.units.iter().map(|u| u.name.clone())),
+                );
                 eprintln!("bromigos restart: unknown: {p} ({})", known.join(", "));
                 return Ok(2);
             }

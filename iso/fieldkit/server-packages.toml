@@ -1,0 +1,109 @@
+# bromigOS Server's own packages (docs/server.md): in the Field Kit medium's offline store,
+# so Server installs with no network, but not running on the medium (live = false).
+# Same format as packages.toml; iso/fieldkit/manifest.py reads both.
+
+[[package]]
+name = "bromigos-server"
+section = "Server"
+reason = "bromigOS Server itself: the meta-package, bromigos server (status, safe updates, the firewall)"
+live = false
+edition = true
+
+[[package]]
+name = "nftables"
+section = "Server"
+reason = "the firewall: SSH, ping and the lab's monitoring in, the rest dropped"
+live = false
+edition = true
+
+[[package]]
+name = "podman"
+section = "Server"
+reason = "containers, the way the lab runs services"
+live = false
+edition = true
+
+[[package]]
+name = "podman-docker"
+section = "Server"
+reason = "the docker command, for the lab's compose files and people's habits"
+live = false
+edition = true
+
+[[package]]
+name = "podman-compose"
+section = "Server"
+reason = "compose files with Podman (the lab's monitoring uses compose)"
+live = false
+edition = true
+
+[[package]]
+name = "crun"
+section = "Server"
+reason = "the container runtime Podman starts containers with"
+live = false
+edition = true
+
+[[package]]
+name = "netavark"
+section = "Server"
+reason = "containers' networking for Podman"
+live = false
+edition = true
+
+[[package]]
+name = "prometheus-node-exporter"
+section = "Server"
+reason = "the metrics the lab's Prometheus reads, on port 9100 (local network only)"
+live = false
+edition = true
+
+[[package]]
+name = "kmscon"
+section = "Server"
+reason = "the themed local console: Geist Mono, the full DRIFTGLASS palette (the plain console when it can't start)"
+live = false
+edition = true
+
+[[package]]
+name = "iproute2"
+section = "Server"
+reason = "addresses and the gateway, for the health check after an update"
+live = false
+edition = true
+
+[[package]]
+name = "iputils"
+section = "Server"
+reason = "ping: the health check asks the gateway"
+live = false
+edition = true
+
+[[package]]
+name = "snapper"
+section = "Server"
+reason = "a snapshot before and after every update, for the automatic rollback"
+live = false
+edition = true
+
+[[package]]
+name = "snap-pac"
+section = "Server"
+reason = "the snapshot pair around every pacman transaction"
+live = false
+edition = true
+
+[[package]]
+name = "grub-btrfs"
+section = "Server"
+reason = "older snapshots in the boot menu, when the server won't start at all"
+live = false
+edition = true
+
+[[package]]
+name = "inotify-tools"
+section = "Server"
+reason = "grub-btrfsd: the boot menu's snapshot list kept current"
+live = false
+edition = true
+

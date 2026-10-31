@@ -1,0 +1,4 @@
+# bromigOS Server: its state, and the lab's textfile folder for the node exporter
+d /var/lib/bromigos/server 0755 root root -
+d /opt/bromigos-monitoring/textfile 0755 root root -
+d /etc/bromigos/server/nftables.d 0755 root root -

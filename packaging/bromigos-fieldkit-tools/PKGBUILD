@@ -1,0 +1,73 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# bromigOS Field Kit's engine (docs/fieldkit.md, "How it's built"): the repairs, the stick's
+# settings, remote help and make-stick behind `bromigos fieldkit`'s screens (bromigos-core,
+# ratatui), on the Field Kit medium, the full medium's Field Kit entry, bromigOS Server and any
+# install. Its repairs need no network.
+#
+#   /usr/bin/fieldkit                                            `bromigos fieldkit`, shorter
+#   /usr/lib/bromigos/fieldkit/fieldkit-engine                   the jobs, as JSON and as text
+#   /usr/lib/bromigos/lib/bromigos_fieldkit/                     the Python behind them
+#   /usr/share/bromigos/fieldkit/edition.json                    bromigOS Server's packages and
+#                                                                services, for the installer
+#   /usr/share/bromigos/fieldkit/micro/driftglass.micro          the editor's colours
+#   /usr/lib/bromigos/fieldkit/fieldkit-getty                    the media's first console
+#   bromigos-fieldkit-stick.service                              the stick's settings at boot (media only)
+
+pkgname=bromigos-fieldkit-tools
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='bromigOS Field Kit engine: repair an install (black screen, last boot, rollback, boot menu, disks, backups), the stick and remote help'
+arch=('any')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+# what the engine's jobs run (the Repair section, its editor, the shell inside an install)
+depends=('python' 'bromigos-core' 'bromigos-boot' 'arch-install-scripts'
+         'btrfs-progs' 'cryptsetup' 'util-linux' 'rsync' 'smartmontools' 'micro' 'grub')
+optdepends=('bromigos-fieldkit: Field Kit in the boot menu, and make-stick without a medium'
+            'bromigos-lab: Lab › Lab console, Provision a machine, Model catalog'
+            'bromigos-homelab: Lab › Media library'
+            'networkmanager: Lab › Network settings (nmtui), Wi-Fi from the stick'
+            'nvme-cli: NVMe drives'"'"' health and secure erase'
+            'testdisk: Recover deleted files, Repair a partition table'
+            'btop: Tools › System monitor' 'htop: Tools › Processes' 'nvtop: Tools › Graphics card monitor'
+            'gdu: Tools › Disk usage' 'inxi: Tools › Hardware report' 'tmux: remote help'"'"'s shared session'
+            'openssh: remote help' 'lynx: the manual in the terminal' 'bromigos-manual: the manual'
+            'partclone: disk images and clones' 'chntpw: Windows password reset' 'ntfs-3g: Windows repair')
+makedepends=('git' 'python')
+options=('!debug')
+
+_root="${startdir%/packaging/*}"
+_paths=(fieldkit iso/fieldkit/packages.toml iso/fieldkit/manifest.py packaging/bromigos-fieldkit-tools LICENSE-MIT LICENSE-APACHE)
+_archived=0
+
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+check() {
+  cd "$_root"
+  PYTHONPATH=fieldkit/lib python -m unittest discover -s fieldkit/tests
+}
+
+package() {
+  local fk="$_root/fieldkit"
+  install -Dm0755 "$fk/bin/fieldkit" "$pkgdir/usr/bin/fieldkit"
+  install -Dm0755 "$fk/bin/fieldkit-engine" "$pkgdir/usr/lib/bromigos/fieldkit/fieldkit-engine"
+  install -Dm0644 -t "$pkgdir/usr/lib/bromigos/lib/bromigos_fieldkit/" "$fk"/lib/bromigos_fieldkit/*.py
+  install -d "$pkgdir/usr/share/bromigos/fieldkit"
+  sed "s|@PACKAGES@|$(python "$_root/iso/fieldkit/manifest.py" edition)|" "$fk/share/edition.json.in" \
+    > "$pkgdir/usr/share/bromigos/fieldkit/edition.json"
+  python -c 'import json,sys; json.load(open(sys.argv[1]))' "$pkgdir/usr/share/bromigos/fieldkit/edition.json"
+  install -Dm0644 "$fk/share/micro/driftglass.micro" "$pkgdir/usr/share/bromigos/fieldkit/micro/driftglass.micro"
+  install -Dm0755 "$fk/share/fieldkit-getty" "$pkgdir/usr/lib/bromigos/fieldkit/fieldkit-getty"
+  install -Dm0644 -t "$pkgdir/usr/lib/systemd/system/" "$fk"/share/systemd/*.service
+  install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../bromigos-fieldkit-stick.service "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/bromigos-fieldkit-stick.service"
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+}

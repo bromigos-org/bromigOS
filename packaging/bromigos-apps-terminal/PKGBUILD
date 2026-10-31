@@ -1,0 +1,65 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# The app bundle's terminal half (docs/apps.md): LazyVim (neovim), tmux, lazygit and mise
+# with bromigOS's own configs, themed where the theme reaches (neovim, tmux, btop through the
+# apps theme-set hook; lazygit through the terminal palette). No desktop needed: Field Kit
+# installs it (docs/fieldkit.md), and bromigos-apps adds the desktop apps on top. The configs are
+# read-only defaults in /usr/share/bromigos/default/apps/; `bromigos apps setup` seeds a
+# user's thin files once (apps/user/), and updates never touch ~/.config. The set and the
+# default-plus-override model follow Omarchy's app bundle.
+
+pkgname=bromigos-apps-terminal
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='bromigOS app bundle, terminal half: LazyVim, tmux, lazygit and mise, configured and themed (no desktop needed)'
+arch=('any')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+depends=('bromigos-core' 'neovim' 'tmux' 'lazygit' 'mise'
+         # LazyVim's own needs: lazy.nvim clones plugins, its pickers search with these
+         'git' 'ripgrep' 'fd' 'btop')
+optdepends=('nodejs: language servers LazyVim installs through mason'
+            'python: the same, for Python tooling'
+            'wl-clipboard: copy and paste with the desktop (bromigos-apps brings it)')
+# the configs moved here from bromigos-apps (0.1.3): an update brings both, and pacman lets
+# the files change owner within the one transaction
+makedepends=('git' 'lua')
+options=('!debug')
+
+_root="${startdir%/packaging/*}"
+_paths=(apps/nvim apps/tmux apps/lazygit apps/mise apps/user apps/bin packaging/bromigos-apps-terminal LICENSE-MIT LICENSE-APACHE)
+
+# <workspace version>.r<commits touching the package>.g<last such commit> (as bromigos-core)
+# The commits that touched _paths before the history restarted at v0.1.2 (they're in
+# bromigos-org/bromigOS-archive): the count goes on from them, so no version sorts below one
+# published before the restart (packaging/README.md, Versions).
+_archived=0
+
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+check() {
+  cd "$_root/apps"
+  local f
+  while IFS= read -r f; do
+    luac -p "$f" 2>/dev/null || lua -e "assert(loadfile('$f'))"
+  done < <(find nvim user/nvim -name '*.lua')
+  bash -n bin/bromigos-apps-setup
+  tmux -f tmux/tmux.conf -L bromigos-check start-server \; kill-server 2>/dev/null || true
+}
+
+package() {
+  cd "$_root/apps"
+  local f
+  while IFS= read -r f; do
+    install -Dm0644 "$f" "$pkgdir/usr/share/bromigos/default/apps/$f"
+  done < <(find nvim tmux lazygit mise user -type f)
+  install -Dm0755 bin/bromigos-apps-setup "$pkgdir/usr/lib/bromigos/bin/bromigos-apps-setup"
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+}

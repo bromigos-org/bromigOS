@@ -1,0 +1,18 @@
+# bromigOS Server (docs/server.md): the settings in /etc/bromigos/server.toml applied on install
+# and every upgrade (SSH's password rule, the firewall, the timers, the node exporter, kmscon on
+# the first console). sshd itself is the installer's choice: never enabled here.
+
+post_install() {
+  systemd-tmpfiles --create /usr/lib/tmpfiles.d/bromigos-server.conf >/dev/null 2>&1 || true
+  usr/lib/bromigos/server/bromigos-server setup || true
+}
+
+post_upgrade() {
+  post_install
+}
+
+pre_remove() {
+  systemctl disable --now bromigos-server-update.timer bromigos-server-health.service \
+    bromigos-server-mark-boot.service bromigos-server-firewall.service >/dev/null 2>&1 || true
+  rm -f etc/ssh/sshd_config.d/05-bromigos-server-password.conf
+}

@@ -1,0 +1,19 @@
+# bromigOS Server's firewall (docs/server.md): the rules in /usr/share/bromigos/server/, with the
+# rule sets and ports chosen in /etc/bromigos/server.toml. Loaded before the network comes up.
+[Unit]
+Description=bromigOS Server firewall
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target shutdown.target
+Wants=network-pre.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/bromigos/server/bromigos-server firewall apply
+ExecReload=/usr/lib/bromigos/server/bromigos-server firewall apply
+ExecStop=/usr/bin/nft delete table inet bromigos-server
+
+[Install]
+WantedBy=multi-user.target

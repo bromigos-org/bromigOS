@@ -19,7 +19,7 @@ migration and the installer); the pacman hook runs it as root.
                           brought up to date
   bromigos-boot-theme status [--json]
 
-NAME is a theme pre-rendered by bromigos-settings (/usr/share/bromigos/boot/grub/themes/NAME).
+NAME is a theme pre-rendered by bromigos-boot (/usr/share/bromigos/boot/grub/themes/NAME).
 DIR is one the user rendered (build-grub-theme.py --current: a theme of their own, or high
 contrast): only its pictures are taken, each checked (a PNG, of a sane size, a plain file
 of theirs, no links), and theme.txt is written here from its manifest's colours, the fonts
@@ -73,7 +73,7 @@ END = "# <<< bromigOS boot menu"
 # makes auto 640x480, so there 1024x768, else 800x600, comes first.
 # GRUB_DISTRIBUTOR: 10_linux names the system's entries "$GRUB_DISTRIBUTOR Linux" (and
 # classes them by it, the theme's emblem icon), so they read bromigOS while
-# bromigos-settings is installed. The file's own value (Arch's "Arch") is untouched above
+# bromigos-boot is installed. The file's own value (Arch's "Arch") is untouched above
 # the block and is what's left when the block goes (`off`); /etc/os-release stays Arch's.
 BLOCK = f"""{BEGIN}
 if [ -f {THEME_TXT} ]; then
@@ -241,7 +241,7 @@ def from_user(src):
         if not (isinstance(plate, str) and HEX.match(plate)):
             raise Refused("manifest.json: the meter's plate colour isn't #rrggbb")
         for name in sorted(os.listdir(dfd)):
-            if name in ("manifest.json", "theme.txt") or name.endswith(".pf2"):
+            if name in ("manifest.json", "theme.txt", "colors.cfg") or name.endswith(".pf2"):
                 continue
             if name == "icons":
                 ifd = os.open("icons", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dfd)
@@ -267,6 +267,7 @@ def from_user(src):
     gen = generator()
     pal = gen.Palette(colors, re.sub(r"[^A-Za-z0-9 _-]", "", str(manifest.get("name", "")))[:40] or "theme")
     files["theme.txt"] = gen.theme_txt(pal, gen.HEADING_INSTALLED, False, gen.hexrgb(plate)).encode()
+    files["colors.cfg"] = gen.colors_cfg(pal).encode()
     clean = {"schema": 1, "generator": manifest.get("generator"), "theme": str(manifest.get("theme", ""))[:64],
              "name": pal.name, "variant": "installed", "colors": colors, "plate": plate, "files": manifest.get("files")}
     files["manifest.json"] = (json.dumps(clean, indent=1) + "\n").encode()
@@ -278,7 +279,7 @@ def from_package(name):
         raise Refused(f"{name!r} isn't a theme's name")
     d = at(os.path.join(PACKAGED, name))
     if not os.path.isfile(os.path.join(d, "theme.txt")):
-        raise Refused(f"no boot theme {name} in {PACKAGED} (bromigos-settings makes one per shipped theme)")
+        raise Refused(f"no boot theme {name} in {PACKAGED} (bromigos-boot makes one per shipped theme)")
     files = {}
     for root, _, names in os.walk(d):
         for n in names:
@@ -294,7 +295,7 @@ def fonts():
     found = {n: open(os.path.join(d, n), "rb").read() for n in sorted(os.listdir(d)) if n.endswith(".pf2")} \
         if os.path.isdir(d) else {}
     if not found:
-        raise Refused(f"no fonts in {FONTS} (bromigos-settings)")
+        raise Refused(f"no fonts in {FONTS} (bromigos-boot)")
     return found
 
 
@@ -523,7 +524,7 @@ def cmd_off(args):
 
 
 def cmd_refresh(args):
-    """After bromigos-settings changed (its pacman hook; a migration asks too): the packaged
+    """After bromigos-boot changed (its pacman hook; a migration asks too): the packaged
     theme in /boot made current again, and the block brought up to date when an older
     bromigos-settings wrote it, whichever theme is in /boot (a theme rendered from the
     user's colours waits for `bromigos update`; its block doesn't)."""

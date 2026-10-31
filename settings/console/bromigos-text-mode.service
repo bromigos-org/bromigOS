@@ -1,0 +1,13 @@
+# Booted from the boot menu's text mode (systemd.unit=multi-user.target): the login prompt
+# says so, and how to start the desktop (bromigos-console-hint; docs/console.md).
+[Unit]
+Description=bromigOS text mode note
+ConditionKernelCommandLine=systemd.unit=multi-user.target
+Before=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/console/bromigos-console-hint text-mode
+
+[Install]
+WantedBy=multi-user.target

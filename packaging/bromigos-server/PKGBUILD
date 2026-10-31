@@ -1,0 +1,80 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# bromigOS Server (docs/server.md): bromigOS installed without a desktop, for servers and lab
+# machines. The edition's meta-package: every non-desktop piece of bromigOS (Field Kit's
+# repairs, the lab console, the terminal apps, herdr), plus what a server needs:
+#
+#   SSH, keys only          /etc/ssh/sshd_config.d/10-bromigos-server.conf; sshd runs only
+#                           when chosen at install (the installer enables it)
+#   a firewall              nftables, its own table: SSH, ping and the lab's monitoring in
+#                           (bromigos-server-firewall.service, /usr/share/bromigos/server/*.nft)
+#   safe automatic updates  bromigos-server-update.timer: bromigos update with its snapshot pair,
+#                           a health check after it, an automatic rollback when it fails
+#   containers              Podman, with the docker command and compose
+#   the lab's monitoring    prometheus-node-exporter on 9100 (the local network only), with
+#                           the lab's textfile folder
+#   the lab's cluster       joined from the lab's workstation (bromigos lab provision add-node)
+#   themed local consoles   kmscon on the first console (bromigos-boot's settings)
+#   `bromigos server`       /usr/lib/bromigos/server/bromigos-server: status, update, health,
+#                           firewall, setup
+#
+# Settings: /etc/bromigos/server.toml (the installer writes it). The install script applies
+# them (bromigos-server setup); nothing here needs the internet.
+
+pkgname=bromigos-server
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='bromigOS Server: bromigOS without a desktop for servers and lab machines (SSH, firewall, safe automatic updates, containers, the lab)'
+arch=('any')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+depends=(# bromigOS with no desktop (Field Kit's pieces, the lab, the terminal apps)
+         'bromigos-core' 'bromigos-boot' 'bromigos-keyring' 'bromigos-fieldkit-tools'
+         'bromigos-lab' 'bromigos-lab-catalog' 'bromigos-homelab' 'bromigos-apps-terminal'
+         'herdr' 'mehshell' 'bromigos-manual'
+         # the system: network, SSH, snapshots and rollback from the boot menu
+         'networkmanager' 'openssh' 'snapper' 'snap-pac' 'grub-btrfs' 'python' 'iproute2' 'iputils'
+         # the server's own
+         'nftables' 'podman' 'podman-docker' 'podman-compose' 'crun' 'netavark'
+         'prometheus-node-exporter'
+         # the themed console: kmscon with Geist Mono and the screens' icons (bromigos-boot's settings)
+         'kmscon' 'pango' 'ttf-geist-mono' 'ttf-nerd-fonts-symbols-mono')
+# brodec-machine moves to depends once it's published (packaging/README.md, "BRODEC's machine agent")
+optdepends=('bromigos-fieldkit: Field Kit in the boot menu, for repairs when the server won'"'"'t start'
+            'brodec-machine: this server in BRODEC on your phone: pairing, its console, restart and update with your fingerprint')
+checkdepends=('python' 'nftables')
+backup=('etc/ssh/sshd_config.d/10-bromigos-server.conf')
+install=$pkgname.install
+options=('!debug')
+
+_root="${startdir%/packaging/*}"
+_paths=(server packaging/bromigos-server LICENSE-MIT LICENSE-APACHE)
+_archived=0
+
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+check() {
+  cd "$_root"
+  python -m unittest discover -s server/tests
+}
+
+package() {
+  local s="$_root/server"
+  install -Dm0755 "$s/bromigos-server" "$pkgdir/usr/lib/bromigos/server/bromigos-server"
+  install -d "$pkgdir/usr/lib/bromigos/bin"
+  ln -s ../server/bromigos-server "$pkgdir/usr/lib/bromigos/bin/bromigos-server"
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/server/" "$s/nftables.nft" "$s"/allow-*.nft
+  install -Dm0644 "$s/10-bromigos-server.conf" "$pkgdir/etc/ssh/sshd_config.d/10-bromigos-server.conf"
+  install -Dm0644 -t "$pkgdir/usr/lib/systemd/system/" "$s"/systemd/*.service "$s"/systemd/*.timer
+  install -Dm0644 "$s/systemd/prometheus-node-exporter-bromigos.conf" \
+    "$pkgdir/usr/lib/systemd/system/prometheus-node-exporter.service.d/bromigos-server.conf"
+  install -Dm0644 "$s/bromigos-server.tmpfiles" "$pkgdir/usr/lib/tmpfiles.d/bromigos-server.conf"
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+}

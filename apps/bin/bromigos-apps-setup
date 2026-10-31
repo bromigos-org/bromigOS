@@ -45,5 +45,5 @@ seed user/nvim/init.lua nvim/init.lua
 seed user/tmux/tmux.conf tmux/tmux.conf
 seed lazygit/config.yml lazygit/config.yml
 seed mise/config.toml mise/config.toml
-seed chromium/chromium-flags.conf chromium-flags.conf
+[ -f "$defaults/chromium/chromium-flags.conf" ] && seed chromium/chromium-flags.conf chromium-flags.conf
 exit 0

@@ -1,0 +1,35 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# bromigOS Field Kit in every install's boot menu (docs/fieldkit.md, "In the boot menu"): the
+# Field Kit medium's kernel, initramfs and system, as built and tested, without its offline
+# store, in /usr/share/bromigos/fieldkit/boot/. bromigos-boot's pacman hook copies them to
+# /boot/fieldkit/ when /boot has room, and GRUB starts them from there, so Field Kit is there
+# even when the install's own system won't start, and it moves on with every `bromigos update`
+# like any package.
+#
+# Not built by packages CI: the medium needs a privileged build (iso/build.sh --edition
+# fieldkit). iso/fieldkit/package.sh ISO OUT makes this package from a built medium; the
+# release pipeline publishes it with ci/publish.sh's PKGS_PREBUILT.
+#
+#   FIELDKIT_BOOT     the build's bromigos-fieldkit-<version>-x86_64-boot.tar
+#   FIELDKIT_VERSION  its version (the ISO's)
+
+pkgname=bromigos-fieldkit
+pkgver=${FIELDKIT_VERSION:-0.0.0}
+pkgrel=1
+pkgdesc='bromigOS Field Kit in the boot menu: repair, lab and tools without the desktop, started from /boot'
+arch=('x86_64')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0' 'GPL-2.0-only')
+depends=('bromigos-boot')
+options=('!debug' '!strip')
+
+package() {
+  [[ -f ${FIELDKIT_BOOT:-} ]] || { echo "FIELDKIT_BOOT: the build's -boot.tar to package" >&2; return 1; }
+  install -d "$pkgdir/usr/share/bromigos/fieldkit/boot"
+  tar -C "$pkgdir/usr/share/bromigos/fieldkit/boot" -xf "$FIELDKIT_BOOT" fieldkit EFI
+  find "$pkgdir/usr/share/bromigos/fieldkit/boot" -type f -exec chmod 0644 {} +
+  printf '%s\n' "$pkgver" > "$pkgdir/usr/share/bromigos/fieldkit/version"
+  local root="${startdir%/packaging/*}"
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$root/LICENSE-MIT" "$root/LICENSE-APACHE"
+}

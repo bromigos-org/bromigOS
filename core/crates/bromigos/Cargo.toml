@@ -12,6 +12,7 @@ name = "bromigos"
 path = "src/main.rs"
 
 [dependencies]
+bromigos-tui.workspace = true
 anyhow.workspace = true
 bromigos-art.workspace = true
 bromigos-core.workspace = true
@@ -19,9 +20,11 @@ clap.workspace = true
 libc.workspace = true
 nolgia.workspace = true
 ratatui.workspace = true
+qrcode.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
 
 [dev-dependencies]
+unicode-width = "0.2"
 tempfile.workspace = true

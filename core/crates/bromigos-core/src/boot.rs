@@ -3,7 +3,7 @@
 //! "Tuning into the relay": GRUB shows the Wick's console, the burn-in exactly where the
 //! Plymouth splash puts it, a signal meter for the timeout and the channel list under it;
 //! grub-btrfs's snapshots read like the rollback list (`10/09 00:28 · before bromigos
-//! update`). The pieces, in `bromigos-settings`:
+//! update`). The pieces, in `bromigos-boot`:
 //!
 //! - `/usr/share/bromigos/boot/grub/themes/<theme>/`: a boot theme per shipped theme,
 //!   rendered when the package is built (its colours, its lock-screen image, its emblem);
@@ -35,9 +35,9 @@ use crate::install::Runner;
 use crate::paths::Paths;
 use crate::snapshot::{self, Bootloader, Files};
 
-/// The root helper (bromigos-settings).
+/// The root helper (bromigos-boot).
 pub const HELPER: &str = "/usr/lib/bromigos/boot/bromigos-boot-theme";
-/// The generator (bromigos-settings).
+/// The generator (bromigos-boot).
 pub const GENERATOR: &str = "/usr/lib/bromigos/boot/build-grub-theme.py";
 /// What the helper last did, readable by anyone.
 pub const STATE: &str = "/var/lib/bromigos/boot/state.json";
@@ -67,7 +67,7 @@ pub struct Applied {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Want {
-    /// The theme bromigos-settings rendered for it.
+    /// The theme bromigos-boot rendered for it.
     Package { theme: String, digest: String },
     /// A render of the user's theme in force (why there's no packaged one).
     Render { theme: String, why: String },
@@ -94,7 +94,7 @@ pub struct Status {
     pub want: Want,
     /// /boot has what the theme wants (None: a render's, known once it's rendered).
     pub current: Option<bool>,
-    /// The helper is installed (bromigos-settings).
+    /// The helper is installed (bromigos-boot).
     pub helper: bool,
     /// Why it's left alone, or what keeps it from showing.
     pub note: Option<String>,
@@ -122,7 +122,7 @@ impl Status {
             return format!("GRUB isn't installed in /boot (no {GRUB_CFG}): nothing themed");
         }
         if !self.helper {
-            return "GRUB: bromigos-settings isn't installed (no boot themes)".into();
+            return "GRUB: bromigos-boot isn't installed (no boot themes)".into();
         }
         if !self.on {
             return if self.applied.opted_out {
@@ -460,7 +460,7 @@ pub fn off(runner: &mut dyn Runner, files: &dyn Files, dry: bool) -> Outcome {
     if !files.exists(&helper_path().to_string_lossy()) {
         return outcome(
             "skipped",
-            "bromigos-settings isn't installed: there's no boot theme to turn off",
+            "bromigos-boot isn't installed: there's no boot theme to turn off",
             vec![],
         );
     }

@@ -1,0 +1,37 @@
+# bromigOS Server's firewall (docs/server.md, "The firewall"), loaded by
+# bromigos-server-firewall.service through `bromigos-server firewall apply`, which adds the
+# chosen rule sets (allow-*.nft), the ports in /etc/bromigos/server.toml and any
+# /etc/bromigos/server/nftables.d/*.nft after this. Its own table: nftables.service's
+# /etc/nftables.conf stays yours, and Podman's and k3s's own rules sit beside it.
+#
+# In: what this server started (replies), the loopback, ping, DHCP, SSH, and the lab's
+# monitoring from the local network. Everything else coming in is dropped. Out and through
+# (containers, the cluster) are left alone.
+table inet bromigos-server
+delete table inet bromigos-server
+table inet bromigos-server {
+    # the local network: private addresses (RFC 1918), carrier-grade NAT, and IPv6's
+    # unique-local and link-local ranges; `bromigos-server firewall apply` adds them (its LAN4, LAN6)
+    set lan {
+        type ipv4_addr
+        flags interval
+    }
+    set lan6 {
+        type ipv6_addr
+        flags interval
+    }
+
+    chain input {
+        type filter hook input priority filter; policy drop;
+        ct state established,related accept
+        ct state invalid drop
+        iif lo accept
+        meta l4proto icmp accept
+        meta l4proto ipv6-icmp accept
+        udp sport 67 udp dport 68 accept comment "DHCP"
+        ip6 saddr fe80::/10 udp sport 547 udp dport 546 accept comment "DHCPv6"
+        tcp dport 22 accept comment "SSH (sshd runs only when chosen at install)"
+        ip saddr @lan tcp dport 9100 accept comment "the lab's monitoring (node exporter)"
+        ip6 saddr @lan6 tcp dport 9100 accept comment "the lab's monitoring (node exporter)"
+    }
+}

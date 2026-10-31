@@ -11,18 +11,16 @@
 pkgname=bromigos-apps
 pkgver=0.0.0
 pkgrel=1
-pkgdesc='bromigOS app bundle: LazyVim, tmux, lazygit, mise, Chromium, Spotify and Signal, configured and themed'
+pkgdesc='bromigOS app bundle: LazyVim, tmux, lazygit, mise (bromigos-apps-terminal), Chromium, Spotify and Signal, configured and themed'
 arch=('any')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
-depends=('bromigos-core' 'bromigos-desktop'
-         'neovim' 'tmux' 'lazygit' 'mise' 'chromium' 'spotify-launcher' 'signal-desktop'
-         # LazyVim's own needs: lazy.nvim clones plugins, its pickers search with these
-         'git' 'ripgrep' 'fd' 'wl-clipboard' 'btop')
-optdepends=('1password: the password manager (bromigos install --with 1password)'
-            'nodejs: language servers LazyVim installs through mason'
-            'python: the same, for Python tooling')
-makedepends=('git' 'lua')
+# the terminal apps and their configs are bromigos-apps-terminal's (Field Kit and bromigOS
+# Server have them without a desktop); this package adds the desktop apps and the clipboard
+depends=('bromigos-apps-terminal' 'bromigos-desktop'
+         'chromium' 'spotify-launcher' 'signal-desktop' 'wl-clipboard')
+optdepends=('1password: the password manager (bromigos install --with 1password)')
+makedepends=('git')
 options=('!debug')
 
 _root="${startdir%/packaging/*}"
@@ -43,22 +41,8 @@ pkgver() {
     "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
 }
 
-check() {
-  cd "$_root/apps"
-  local f
-  while IFS= read -r f; do
-    luac -p "$f" 2>/dev/null || lua -e "assert(loadfile('$f'))"
-  done < <(find nvim user/nvim -name '*.lua')
-  bash -n bin/bromigos-apps-setup
-  tmux -f tmux/tmux.conf -L bromigos-check start-server \; kill-server 2>/dev/null || true
-}
-
 package() {
   cd "$_root/apps"
-  local f
-  while IFS= read -r f; do
-    install -Dm0644 "$f" "$pkgdir/usr/share/bromigos/default/apps/$f"
-  done < <(find nvim tmux lazygit mise chromium user -type f)
-  install -Dm0755 bin/bromigos-apps-setup "$pkgdir/usr/lib/bromigos/bin/bromigos-apps-setup"
+  install -Dm0644 chromium/chromium-flags.conf "$pkgdir/usr/share/bromigos/default/apps/chromium/chromium-flags.conf"
   install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
 }

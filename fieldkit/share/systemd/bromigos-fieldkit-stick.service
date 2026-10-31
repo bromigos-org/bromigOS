@@ -1,0 +1,18 @@
+# bromigOS Field Kit (docs/fieldkit.md): at startup on a Field Kit medium, the settings on the
+# stick (fieldkit/: SSH keys, Wi-Fi, the lab connection), its startup scripts, and remote help
+# when asked for. Not on an installed system.
+[Unit]
+Description=bromigOS Field Kit: settings and startup scripts from the stick
+ConditionPathExists=/run/archiso
+ConditionKernelCommandLine=|bromigos.fieldkit
+ConditionPathExists=|/etc/bromigos-fieldkit/medium
+After=local-fs.target NetworkManager.service systemd-udev-settle.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/bromigos/fieldkit/fieldkit-engine stick-boot
+
+[Install]
+WantedBy=multi-user.target

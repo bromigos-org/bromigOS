@@ -1,0 +1,4 @@
+# bromigOS's text console (docs/console.md): a console that appears later (a graphics driver
+# taking the screen over from the firmware's) gets bromigOS's colours and font again, after
+# systemd's own vconsole setup (90-vconsole.rules).
+ACTION=="add", SUBSYSTEM=="vtconsole", KERNEL=="vtcon*", RUN+="/usr/lib/bromigos/console/bromigos-console-setup"

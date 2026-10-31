@@ -1,0 +1,127 @@
+#! /bin/sh
+# bromigOS's "More ways to start" (package bromigos-boot; docs/boot.md): ways to start the
+# installed system when the usual way doesn't work, each with a one-line hint, so GRUB's
+# editor (E) is rarely needed. grub-mkconfig runs it after 10_linux, whose newest kernel
+# entry it reuses (the same root, LUKS, subvolume and initramfs lines), with other kernel
+# parameters:
+#
+# and "Help: what do these do?" (H), a page in plain words for each entry.
+#
+#   Text mode          systemd.unit=multi-user.target: a login prompt, no desktop
+#   Safe graphics      nomodeset: the firmware's basic display, no graphics driver
+#   Without the NVIDIA / AMD / Intel driver   module_blacklist=…, one per maker of a graphics
+#                      card in this machine (another card, or the basic display, takes over)
+#   Verbose start      no splash, every message
+#   An older snapshot  grub-btrfs's list (Roll back to a snapshot), when it's there
+#   Field Kit          the Field Kit on /boot (bromigos-fieldkit-boot), when it's there
+#
+# It also gives GRUB's editor and console the boot theme's colours (colors.cfg). Removing
+# bromigos-boot removes this file: the next grub-mkconfig leaves it all out.
+set -e
+
+linux_script=${BROMIGOS_GRUB_10_LINUX:-/etc/grub.d/10_linux}
+sysfs=${BROMIGOS_SYSFS:-/sys}
+lib=${BROMIGOS_BOOT_LIB:-/usr/lib/bromigos/boot}
+
+# the boot theme's colours for GRUB's editor (E) and console (C), when the theme is in /boot
+cat <<'CFG'
+if [ -f "${prefix}/themes/bromigos/colors.cfg" ]; then
+    source "${prefix}/themes/bromigos/colors.cfg"
+fi
+CFG
+
+[ -x "$linux_script" ] || exit 0
+
+# the newest kernel's entry, with a marker where the kernel parameters go
+marker=@@BROMIGOS_ARGS@@
+entry=$(GRUB_DISABLE_SUBMENU=true GRUB_DISABLE_RECOVERY=true GRUB_CMDLINE_LINUX_DEFAULT="$marker" \
+    "$linux_script" 2>/dev/null | awk '
+        /^menuentry / && !done { inside = 1; next }
+        inside && /^}/ { inside = 0; done = 1; next }
+        inside { print }')
+case $entry in *"$marker"*) ;; *) exit 0 ;; esac
+
+# the usual parameters without the splash (plain), and without anything that hides messages (loud)
+plain="" loud=""
+for w in ${GRUB_CMDLINE_LINUX_DEFAULT:-}; do
+    case $w in quiet|splash|rhgb|vt.global_cursor_default=*) continue ;; esac
+    plain="$plain $w"
+    case $w in loglevel=*|systemd.show_status=*|rd.udev.log_level=*|udev.log_level=*) ;; *) loud="$loud $w" ;; esac
+done
+plain=${plain# } loud=${loud# }
+
+option() {    # option TITLE CLASS ID ARGS
+    args=$(printf '%s' "$4" | sed 's/[&|\\]/\\&/g')
+    printf "    menuentry '%s' --class %s --id '%s' {\n" "$1" "$2" "$3"
+    printf '%s\n' "$entry" | sed "s|$marker|$args|; s/^/    /"
+    printf '    }\n'
+}
+
+# the makers of this machine's graphics cards (PCI class 03: display)
+vendors=
+for d in "$sysfs"/bus/pci/devices/*; do
+    [ -r "$d/class" ] || continue
+    case $(cat "$d/class") in 0x03*) ;; *) continue ;; esac
+    case $(cat "$d/vendor" 2>/dev/null) in
+        0x10de) vendors="$vendors nvidia" ;; 0x1002) vendors="$vendors amd" ;; 0x8086) vendors="$vendors intel" ;;
+    esac
+done
+
+echo "submenu 'More ways to start ›' --class options --id 'bromigos-options' {"
+option 'Start without the desktop (text mode)' text bromigos-text "$plain systemd.unit=multi-user.target"
+option 'Start with basic graphics (if the screen stays black)' safe bromigos-safe "$plain nomodeset"
+case $vendors in *nvidia*)
+    option 'Start without the NVIDIA driver (another card or basic graphics)' gpu bromigos-no-nvidia \
+        "${GRUB_CMDLINE_LINUX_DEFAULT:-} module_blacklist=nvidia,nvidia_drm,nvidia_modeset,nvidia_uvm,nouveau" ;; esac
+case $vendors in *amd*)
+    option 'Start without the AMD driver (another card or basic graphics)' gpu bromigos-no-amd \
+        "${GRUB_CMDLINE_LINUX_DEFAULT:-} module_blacklist=amdgpu,radeon" ;; esac
+case $vendors in *intel*)
+    option 'Start without the Intel driver (another card or basic graphics)' gpu bromigos-no-intel \
+        "${GRUB_CMDLINE_LINUX_DEFAULT:-} module_blacklist=i915,xe" ;; esac
+option 'Start and show every message (for finding a problem)' verbose bromigos-verbose \
+    "$loud loglevel=7 systemd.show_status=1 plymouth.enable=0"
+cat <<'CFG'
+    if [ -f "${prefix}/grub-btrfs.cfg" ]; then
+        submenu 'Start an older snapshot (as it was before an update) ›' --class rollback --id 'bromigos-options-snapshot' {
+            configfile "${prefix}/grub-btrfs.cfg"
+        }
+    fi
+CFG
+if [ -x "$lib/bromigos-fieldkit-boot" ]; then
+    "$lib/bromigos-fieldkit-boot" grub-entry --indent 4 --id bromigos-options-fieldkit 2>/dev/null || true
+fi
+echo "}"
+
+# a page in plain words for every entry (H from the menu)
+cat <<'CFG'
+menuentry 'Help: what do these do?' --hotkey h --class info --id 'bromigos-help' {
+    insmod read
+    # an entry starts with only exported variables: the theme's text colours again
+    if [ -f "${prefix}/themes/bromigos/colors.cfg" ]; then
+        source "${prefix}/themes/bromigos/colors.cfg"
+    fi
+    clear
+    echo ""
+    echo "bromigOS Linux"
+    echo "  Start bromigOS as usual."
+    echo "Advanced options for bromigOS Linux"
+    echo "  Each installed kernel on its own, to pick an older one."
+    echo "More ways to start"
+    echo "  Start without the desktop (text mode): a login prompt; restart to get the desktop back."
+    echo "  Start with basic graphics: for a screen that stays black; no graphics driver."
+    echo "  Start without the NVIDIA (AMD, Intel) driver: another graphics card takes over."
+    echo "  Start and show every message: no splash, for finding where it stops."
+    echo "  Start an older snapshot: bromigOS as it was before an update."
+    echo "  bromigOS Field Kit: repairs, the lab and tools, without the desktop."
+    echo "Roll back to a snapshot"
+    echo "  The same snapshots, newest first."
+    echo "bromigOS Field Kit"
+    echo "  Repairs, the lab and tools, without the desktop. It starts even when bromigOS won't."
+    echo "UEFI Firmware Settings"
+    echo "  This computer's own setup screen."
+    echo ""
+    echo "Press Enter to go back to the menu."
+    read
+}
+CFG

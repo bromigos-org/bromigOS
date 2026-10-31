@@ -117,6 +117,9 @@ check() {
   # Wake-on-LAN: the shipped NetworkManager default and udev rule, and bromigos wol
   # against a fake /sys with ethtool and nmcli stood in
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/wake-on-lan"
+  # lib/bromigos_drift.py: the DRIFTGLASS shapes Field Kit shares with the installer's TUI (the
+  # orb, the emblem, the disk map), from a stand-in bromigos and without one
+  PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/drift"
 }
 
 package() {
@@ -125,6 +128,9 @@ package() {
   # command that runs it; it talks to bromigos-desktop's `bromigos bluetooth session`
   install -Dm0755 "$(_target)/release/bromigos-bt" "$pkgdir/usr/lib/bromigos/bromigos-bt"
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-bluetooth-tui
+  # DRIFTGLASS for other TUIs: the theme in force as a Textual theme (the lab console matches
+  # the Rust screens with it; core/crates/bromigos-tui)
+  install -Dm0755 "$(_target)/release/bromigos-tui-theme" "$pkgdir/usr/lib/bromigos/bromigos-tui-theme"
   # themes/<name>/…, theme/templates/*.tpl and theme/icons/*.svg, as read-only defaults; not the
   # art pipeline's recipe, log and local sources (art.toml, art.log.jsonl, art/). A hologram
   # collection (themes/<name>/holo/, theme/holo/) ships as VECTOR's and the homelab's do: the
@@ -139,7 +145,9 @@ package() {
     -not \( -path '*/holo/*' -not -path '*/holo/manifest.json' -not -path '*/holo/*.holo.npz' \
     -not -path '*/holo/README.md' \) -print0)
   # bromigos_theme (the palette in force), bromigos_private (the private overlay's reader),
-  # bromigos_emblem + emblem_braille (a theme's emblem kit)
+  # bromigos_emblem + emblem_braille (a theme's emblem kit), bromigos_textual (DRIFTGLASS for
+  # Textual) and bromigos_drift (the orb, the emblem and the disk map from `bromigos fieldkit
+  # shapes`, for the installer's TUI)
   install -Dm0644 -t "$pkgdir/usr/lib/bromigos/lib/" "$_root"/lib/*.py
   # `bromigos private|secrets|emblem …`: the CLI routes to bromigos-<group> here
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-private \
