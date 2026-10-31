@@ -87,6 +87,7 @@ VECTOR, the desktop's AI assistant, is documented in his own repository,
 | [aur.md](aur.md) | The AUR: bromigOS's paru, AUR packages in updates and their snapshots, turning it off, and drivers only the AUR has |
 | [boot.md](boot.md) | The themed boot menu and its snapshot entries |
 | [splash.md](splash.md) | Saved shutdown and restart splash settings, backups and rollback |
+| [wake-on-lan.md](wake-on-lan.md) | Wake-on-LAN kept on for wired network cards: the NetworkManager default, the udev rule, `bromigos wol` |
 | [iso.md](iso.md) | The live and install ISO, and its installer |
 | [iso-encryption.md](iso-encryption.md) | Full-disk encryption in the ISO's installer |
 | [release.md](release.md) | Cutting a release: versions, release notes, tags and promoting a candidate to stable |

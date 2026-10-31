@@ -8,8 +8,10 @@
 # BRODEC's repository is private. Its CI builds the bridge and stages a tarball at a git ref
 # there. This workflow reads that ref with the read-only deploy key brodec-desktop.yml uses,
 # checks it (packaging/ci/brodec-lab.sh), and publishes what isn't published yet. Nothing is
-# compiled here. Every 20 minutes it looks for a new build; a run with nothing new stops after a
-# few seconds. A change to the chart, the image's Dockerfile or the package's files publishes
+# compiled here. BRODEC's CI starts it right after it stages a build (a workflow_dispatch from
+# lab-bridge-package.yml, with BRODEC's BROMIGOS_DISPATCH_TOKEN). The cron below is the fallback:
+# it asks for every 20 minutes, but GitHub runs scheduled workflows only every 4 to 6 hours in
+# practice. A run with nothing new stops after a few seconds. A change to the chart, the image's Dockerfile or the package's files publishes
 # them again for the staged build.
 name: brodec-lab
 

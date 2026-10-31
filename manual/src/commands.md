@@ -159,6 +159,7 @@ The desktop runs these for you. You don't need them day to day.
 | [`bromigos tv guide`](#bromigos-tv-guide) |  |
 | [`bromigos welcome`](#bromigos-welcome) | The welcome tour after an install: Wi-Fi, your screens, a world, VECTOR and his voice, your homelab, the keys; every step skippable |
 | [`bromigos welcome console`](#bromigos-welcome-console) | The welcome tour in the terminal (bromigOS Server's first sign-in): the network, SSH, joining your lab, and what's here |
+| [`bromigos wol`](#bromigos-wol) | Keep Wake-on-LAN on for wired network cards |
 
 ## Every command in full
 
@@ -2746,6 +2747,23 @@ bromigos windows clear
 ```
 
 From the `bromigos-desktop` package.
+
+### bromigos wol
+
+Keep Wake-on-LAN on for wired network cards.
+
+```text
+bromigos wol status [--json] | apply [--quiet] [CARD...]
+```
+
+For example:
+
+```text
+bromigos wol status
+sudo bromigos wol apply
+```
+
+From the `bromigos-core` package.
 
 <!-- /generated:commands -->
 

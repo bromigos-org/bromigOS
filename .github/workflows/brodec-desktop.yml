@@ -7,7 +7,10 @@
 # channel's database (packaging/ci/publish.sh, PKGS_PREBUILT), under the same lease as every
 # other publish. The signing key never leaves this repository.
 #
-# Every 20 minutes it looks for a new build; a run with nothing new stops after a few seconds.
+# BRODEC's CI starts it right after it stages a build (a workflow_dispatch from desktop-package.yml,
+# with BRODEC's BROMIGOS_DISPATCH_TOKEN). The cron below is the fallback: it asks for every 20
+# minutes, but GitHub runs scheduled workflows only every 4 to 6 hours in practice. A run with
+# nothing new stops after a few seconds.
 name: brodec-desktop
 
 on:

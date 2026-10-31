@@ -1,0 +1,23 @@
+# bromigOS keeps Wake-on-LAN on for wired network cards (docs/wake-on-lan.md), with or
+# without NetworkManager (bromigOS Server on systemd-networkd, a bare console): when a
+# wired card appears (at boot, and when it's plugged in), the kernel is allowed to let
+# it wake the machine, and the card is told to wake on a magic packet.
+#
+# Only real wired Ethernet cards: type 1 (Ethernet), a device behind it (not a bridge,
+# a VPN or a container's veth), and not Wi-Fi. A card that can't wake the machine says
+# so to ethtool, which is fine: nothing else changes. After 80-net-setup-link.rules, so
+# $name is the card's final name.
+#
+# To turn it off: sudo ln -s /dev/null /etc/udev/rules.d/81-bromigos-wake-on-lan.rules
+ACTION!="add", GOTO="bromigos_wake_on_lan_end"
+SUBSYSTEM!="net", GOTO="bromigos_wake_on_lan_end"
+ATTR{type}!="1", GOTO="bromigos_wake_on_lan_end"
+ENV{DEVTYPE}=="wlan", GOTO="bromigos_wake_on_lan_end"
+TEST=="wireless", GOTO="bromigos_wake_on_lan_end"
+TEST=="phy80211", GOTO="bromigos_wake_on_lan_end"
+TEST!="device", GOTO="bromigos_wake_on_lan_end"
+
+TEST=="device/power/wakeup", ATTR{device/power/wakeup}="enabled"
+RUN+="/usr/bin/ethtool -s $name wol g"
+
+LABEL="bromigos_wake_on_lan_end"
