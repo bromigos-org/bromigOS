@@ -371,6 +371,11 @@ they do on the desktop. They talk to other machines over the local network, neve
 internet. With no link, the item says so and offers the network settings. The model
 catalog is on the medium, so recommending models works offline.
 
+The screen's left side shows the lab's parts and how each is (`bromigos lab status
+--json`). On a wide screen (150 columns or more, in 24-bit colour) they're also a small map:
+each part round the lab, with its name and a state dot, and a scan going round (still under
+reduced motion). Narrower, and on the console, it's the list.
+
 ### Install
 
 - **bromigOS Server (no desktop)** opens the medium's text installer

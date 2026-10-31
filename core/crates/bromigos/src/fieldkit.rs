@@ -4964,6 +4964,36 @@ esac
             {"id": "node-c", "title": "node-c", "state": "unreachable", "summary": "not answering for 2 h"}]})
     }
 
+    /// The Lab on a wide screen: its parts round the lab as a map, with their names and the
+    /// list under it; narrower, or on the console, the list alone. The map's scan moves only
+    /// with motion allowed.
+    #[test]
+    fn the_lab_as_a_map_on_wide_screens() {
+        let mut a = app();
+        let fx = a.open_section(1);
+        drive(&mut a, fx);
+        a.lab = lab_cards();
+        let s = screen(&a, 150, 45);
+        save("lab-150-map", &s);
+        assert!(s.contains("THE LAB'S MAP") && s.contains('◉'), "{s}");
+        for name in ["node-a", "k3s", "nas", "node-c"] {
+            assert_eq!(
+                s.matches(name).count(),
+                2,
+                "{name} on the map and in the list:\n{s}"
+            );
+        }
+        assert!(s.contains("not answering for 2 h"), "{s}");
+        let s = screen(&a, 120, 35);
+        assert!(!s.contains("THE LAB'S MAP") && s.contains("node-c"), "{s}");
+        assert!(!a.animating(), "reduced motion");
+        a.look.motion = true;
+        assert!(a.animating(), "the scan goes round");
+        a.look = console_look();
+        let s = screen(&a, 150, 45);
+        assert!(!s.contains("THE LAB'S MAP") && s.contains("node-c"), "{s}");
+    }
+
     /// Every screen, in both looks, for the operator: shots/tui-<screen>-<look>.txt.
     #[test]
     fn every_screen_in_both_looks() {

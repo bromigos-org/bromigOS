@@ -1220,8 +1220,10 @@ fn left_panels(f: &mut Frame, area: Rect, app: &App) {
                     st(p.muted),
                 )));
             }
+            let your_h = l.len() as u16 + 2;
             panels.push((Icon::Lab, "Your lab", l));
             let mut m = Vec::new();
+            let mut nodes = Vec::new();
             for c in app.lab["cards"].as_array().into_iter().flatten().take(8) {
                 let tone = match c["state"].as_str().unwrap_or("") {
                     "ok" | "healthy" | "good" => Tone::Good,
@@ -1235,6 +1237,30 @@ fn left_panels(f: &mut Frame, area: Rect, app: &App) {
                     &format!("{:<12}", s(c, "title")),
                     &format!(" {}", s(c, "summary")),
                 ));
+                nodes.push((s(c, "title"), tone));
+            }
+            // on a wide screen, where braille shows: the parts round the lab as a small radar,
+            // the list under it when there's room for both
+            let map_h = 11u16;
+            let wide = Breakpoint::of(f.area().width) == Breakpoint::Wide;
+            if wide && bromigos_tui::orb::fine(look) && !nodes.is_empty() {
+                let room = area.height.saturating_sub(your_h + 1);
+                if room >= map_h + 2 {
+                    let hub = s(&app.overview["lab"], "name");
+                    let hub = if hub.is_empty() { "lab".into() } else { hub };
+                    let map = bromigos_tui::starmap::constellation(
+                        look,
+                        &hub,
+                        &nodes,
+                        w as usize,
+                        map_h as usize,
+                        orb_t(app),
+                    );
+                    panels.push((Icon::Network, "The lab's map", map));
+                    if room < map_h + 2 + 1 + m.len() as u16 + 2 {
+                        m.clear();
+                    }
+                }
             }
             if !m.is_empty() {
                 panels.push((Icon::Server, "Machines and services", m));

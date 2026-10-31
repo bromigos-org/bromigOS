@@ -10,11 +10,15 @@ use crate::orb::Canvas;
 use crate::term::Look;
 use crate::widgets::Tone;
 
+/// The most of a name shown beside its node.
+const NAME: usize = 10;
+
 /// Where node `i` of `n` sits, in dots, on a canvas `w` by `h` cells: round an ellipse from
-/// the top, clockwise, a row and a half in from the edges (room for its name).
+/// the top, clockwise, a row and a half in from the top and bottom and a name's width in
+/// from the sides (room for its name beside it).
 fn node_at(i: usize, n: usize, w: usize, h: usize) -> (f64, f64) {
     let (cx, cy) = (w as f64, (h * 2) as f64);
-    let (rx, ry) = ((cx - 12.0).max(4.0), (cy - 6.0).max(2.0));
+    let (rx, ry) = ((cx - 2.0 * (NAME + 3) as f64).max(4.0), (cy - 6.0).max(2.0));
     let a = -std::f64::consts::FRAC_PI_2 + i as f64 * std::f64::consts::TAU / n.max(1) as f64;
     (cx + rx * a.cos(), cy + ry * a.sin())
 }
@@ -35,16 +39,16 @@ pub fn constellation(
     // two rings: the outer one dashed, the inner one dotted
     for i in 0..360 {
         let a = (i as f64).to_radians();
-        if i % 8 < 5 {
+        if i % 10 < 4 {
             c.put(cx + (cx - 1.0) * a.cos(), cy + (cy - 1.0) * a.sin(), false);
         }
-        if i % 6 == 0 {
+        if i % 15 == 0 {
             c.put(cx + cx * 0.5 * a.cos(), cy + cy * 0.5 * a.sin(), false);
         }
     }
     let n = nodes.len();
     for i in 0..n {
-        c.line((cx, cy), node_at(i, n, w, h), 2.5, false);
+        c.line((cx, cy), node_at(i, n, w, h), 3.0, false);
     }
     // the scan: a line from the hub to the outer ring, and a fainter one trailing it
     let sweep = (t * 40.0).to_radians();
@@ -110,16 +114,20 @@ pub fn constellation(
             Tone::Calm => ("○", p.muted),
         };
         put(x, y, dot, Style::new().fg(col).add_modifier(Modifier::BOLD));
-        let name: String = name.chars().take(12).collect();
+        let name: String = name.chars().take(NAME).collect();
         let len = name.chars().count();
-        // the name under a node in the lower half, over one in the upper half
-        let ly = if y > hy { y + 1 } else { y.saturating_sub(1) };
+        // the name beside its node: to the left of one on the left, else to the right
+        let lx = if x + 2 < hx {
+            x.saturating_sub(len + 1)
+        } else {
+            x + 2
+        };
         let s = if *tone == Tone::Bad || *tone == Tone::Warn {
             Style::new().fg(col)
         } else {
             Style::new().fg(p.text)
         };
-        put((x + 1).saturating_sub(len.div_ceil(2)), ly, &name, s);
+        put(lx, y, &name, s);
     }
     cells
         .into_iter()
