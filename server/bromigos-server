@@ -30,12 +30,19 @@ Settings: /etc/bromigos/server.toml (the installer writes it; every key is optio
   [updates]
   auto = true             # the timer updates by itself
   reboot = true           # restart by itself when a new kernel or driver needs it
+  news_hold = true        # Arch Linux news since the last update holds the automatic one
   [health]
   minutes = 10            # how long the system has to come back healthy
   ignore_units = []       # failed units that don't count against it
 
+The Arch news hold: before an automatic update, the timer reads Arch Linux's news feed. An item
+published since the last update holds the update (`hold` in update.json, with each item's title
+and link; `bromigos alerts` and BRODEC's phone raise it as update.held) until a person has read
+it and updates with `update --now`, which also clears the hold. A feed that can't be read holds
+nothing.
+
 State: /var/lib/bromigos/server/ (update.json, history.jsonl). Nothing here needs the internet
-except the update itself, which reads the machine's own package repository.
+except the update itself, which reads the machine's own package repository, and the news feed.
 """
 
 import argparse
@@ -63,6 +70,8 @@ CONFIG = "/etc/bromigos/server.toml"
 STATE = "/var/lib/bromigos/server/update.json"
 HISTORY = "/var/lib/bromigos/server/history.jsonl"
 TEXTFILE = "/opt/bromigos-monitoring/textfile/bromigos-server.prom"
+NEWS_FEED = os.environ.get("BROMIGOS_SERVER_NEWS_FEED", "https://archlinux.org/feeds/news/")
+PACMAN_LOG = "/var/log/pacman.log"
 SSHD_PASSWORD = "/etc/ssh/sshd_config.d/05-bromigos-server-password.conf"
 NFT_EXTRA = "/etc/bromigos/server/nftables.d"
 # the local network, the firewall's @lan and @lan6: private addresses (RFC 1918), carrier-grade
@@ -102,6 +111,7 @@ def config():
     up = c.setdefault("updates", {})
     up.setdefault("auto", True)
     up.setdefault("reboot", True)
+    up.setdefault("news_hold", True)
     h = c.setdefault("health", {})
     h.setdefault("minutes", 10)
     h.setdefault("ignore_units", [])
@@ -217,7 +227,7 @@ def cluster():
 
 def last_update():
     st = load_state()
-    return {"phase": st.get("phase", "never"), "started": st.get("started"), "finished": st.get("finished"),
+    return {"hold": st.get("hold"), "phase": st.get("phase", "never"), "started": st.get("started"), "finished": st.get("finished"),
             "pre": st.get("pre"), "post": st.get("post"), "packages": len(st.get("packages", [])),
             "reason": st.get("reason", ""), "kernel": st.get("kernel", False)}
 
@@ -263,6 +273,10 @@ def print_status(d):
           + ("" if u["auto"] else "; automatic updates are off"))
     if u.get("reason"):
         print(f"               {u['reason']}")
+    if u.get("hold"):
+        first = (u["hold"].get("items") or [{}])[0]
+        print(f"  Update held  Arch Linux news: {first.get('title', '?')} ({first.get('link', '')})")
+        print("               read it, do what it asks, then: sudo bromigos server update --now")
     if d["rollbacks"]:
         print(f"  Rollbacks    {len(d['rollbacks'])}, the last on {d['rollbacks'][-1]['at']}")
     ct = d["containers"]
@@ -413,6 +427,56 @@ def gateway():
     return rows[0].get("gateway") if rows else None
 
 
+def news_items(timeout=20):
+    """Arch Linux's news feed, newest first: [{title, link, published, ts}]. None when it can't
+    be read (no network, the site down): then nothing is held."""
+    import email.utils
+    import urllib.request
+    import xml.etree.ElementTree as ET
+    try:
+        with urllib.request.urlopen(NEWS_FEED, timeout=timeout) as r:
+            data = r.read(2_000_000)
+        root = ET.fromstring(data)
+    except (OSError, ValueError, ET.ParseError):
+        return None
+    items = []
+    for it in root.iter("item"):
+        try:
+            when = email.utils.parsedate_to_datetime(it.findtext("pubDate") or "")
+        except (TypeError, ValueError):
+            continue
+        items.append({"title": (it.findtext("title") or "").strip(), "link": (it.findtext("link") or "").strip(),
+                      "published": when.isoformat(), "ts": when.timestamp()})
+    return sorted(items, key=lambda i: -i["ts"])
+
+
+def last_upgrade_ts():
+    """When pacman last finished a transaction (its log), or None."""
+    when = None
+    try:
+        with open(at(PACMAN_LOG), errors="replace") as f:
+            for line in f:
+                if "transaction completed" in line:
+                    m = re.match(r"\[([^\]]+)\]", line)
+                    if m:
+                        try:
+                            when = datetime.datetime.fromisoformat(m.group(1)).timestamp()
+                        except ValueError:
+                            pass
+    except OSError:
+        pass
+    return when
+
+
+def news_hold(prev):
+    """The news items published since the last update that nobody has read for this server, or []."""
+    items = news_items()
+    if not items:
+        return []
+    since = max([t for t in (prev.get("last_success_ts"), prev.get("news_seen_ts"), last_upgrade_ts()) if t] or [time.time()])
+    return [{k: i[k] for k in ("title", "link", "published")} for i in items if i["ts"] > since][:5]
+
+
 def cmd_update(a):
     c = config()
     if not c["updates"]["auto"] and not a.now:
@@ -422,8 +486,23 @@ def cmd_update(a):
     if st.get("phase") in ("verify", "reboot", "updating") and not a.now:
         print(f"bromigos-server: the last update is still being checked ({st['phase']}); not starting another")
         return 0
-    st = {"phase": "updating", "started": now(), "started_ts": time.time(), "gateway": gateway(),
-          "sshd": unit_state("sshd.service") == "active", "boots": 0}
+    prev = st
+    if not a.now and c["updates"]["news_hold"]:
+        news = news_hold(prev)
+        if news:
+            prev["hold"] = {"since": now(), "items": news}
+            save_state(prev)
+            remember({"event": "held", "news": news[0]["title"], "link": news[0]["link"]})
+            print(f"bromigos-server: holding the update: Arch Linux news since the last one asks to be read first: "
+                  f"{news[0]['title']} ({news[0]['link']}). Read it, then: sudo bromigos server update --now")
+            return 0
+    # carried from one update to the next: when one last succeeded, and the news a person has
+    # read (an update with --now is someone deciding: what's published until now is read)
+    carry = {k: prev[k] for k in ("last_success_ts", "news_seen_ts") if k in prev}
+    if a.now:
+        carry["news_seen_ts"] = time.time()
+    st = dict(carry, phase="updating", started=now(), started_ts=time.time(), gateway=gateway(),
+              sshd=unit_state("sshd.service") == "active", boots=0)
     save_state(st)
     rc, out, err = run(["bromigos", "update", "--yes", "--no-aur", "--json"], timeout=3 * 3600)
     try:
@@ -438,6 +517,8 @@ def cmd_update(a):
     if not st["packages"]:
         st.update(phase="nothing" if rc == 0 else "failed", finished=now(), finished_ts=time.time(),
                   reason="" if rc == 0 else (err.strip().splitlines() or ["bromigos update failed"])[-1])
+        if rc == 0:
+            st["last_success_ts"] = time.time()
         save_state(st)
         remember({"event": st["phase"]})
         print(f"bromigos-server: {PHASE_WORDS[st['phase']]}")
@@ -515,7 +596,7 @@ def cmd_health(a, booted=True):
             break
         time.sleep(float(os.environ.get("BROMIGOS_SERVER_HEALTH_POLL", "15")))
     if ok:
-        st.update(phase="ok", finished=now(), finished_ts=time.time(), reason="")
+        st.update(phase="ok", finished=now(), finished_ts=time.time(), reason="", last_success_ts=time.time())
         save_state(st)
         remember({"event": "healthy", "pre": st.get("pre")})
         print("bromigos-server: the update came back healthy")

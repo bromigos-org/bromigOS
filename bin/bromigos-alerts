@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+# bromigos:summary=What on this computer needs you: failing drives, full disks, updates, backups, failed services, the UPS; the checks behind your phone's alerts
+# bromigos:args=[--json] | check [--system|--user] [--boot] [--only CHECK] [--json] | notify | checks [--json]
+# bromigos:examples=bromigos alerts; bromigos alerts --json; sudo bromigos alerts check --system; bromigos alerts checks
+"""bromigos-alerts (`bromigos alerts`): what on this computer needs you (docs/alerts.md).
+
+  bromigos alerts [--json]          the alerts now, worst first (the system checks and yours)
+  bromigos alerts check             run the checks again: as root the system's (drives, scrub,
+                                    disk space, a restart after an update, the Arch news hold,
+                                    backups, the UPS, failed services, game servers, Field Kit's
+                                    findings), as you your own (updates waiting, your disk,
+                                    your services, Steam and Proton)
+      --system | --user             which pass (default: --system as root, else --user)
+      --boot                        the pass after boot: also Field Kit's checks
+      --only CHECK                  one check (disk.full, systemd.failed, …)
+      --json                        print the document it wrote
+  bromigos alerts notify            show what needs you as desktop notifications, once each
+  bromigos alerts checks [--json]   each check: when it ran, and why one couldn't
+
+Timers run it for you: bromigos-alerts.timer (system, every 15 minutes, and after each boot)
+and bromigos-alerts-user.timer (yours, every 30 minutes). BRODEC's machine agent reads the
+same files and sends the alerts, end-to-end encrypted, to your phone.
+
+Exit status: 0, or 1 when something needs you (`bromigos alerts` with a needs-you or critical
+alert), 2 for a wrong command.
+"""
+import json
+import os
+import sys
+
+here = os.path.dirname(os.path.realpath(__file__))
+for candidate in reversed((os.path.join(os.path.dirname(here), "lib"), "/usr/lib/bromigos/lib")):
+    if os.path.isdir(candidate):
+        sys.path.insert(0, candidate)
+
+import bromigos_alerts as A  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+
+
+def main(argv):
+    env = A.Env()
+    args = list(argv)
+    if any(a in ("-h", "--help", "help") for a in args):
+        print(USAGE)
+        return 0
+    js = "--json" in args
+    args = [a for a in args if a != "--json"]
+    verb = args[0] if args else "list"
+    rest = args[1:]
+    if verb == "list":
+        if rest:
+            return usage()
+        doc = A.read_merged(env)
+        print(json.dumps(doc, indent=1) if js else A.plain(doc, env.now_ms()))
+        return 1 if any(a["severity"] != "info" for a in doc["alerts"]) else 0
+    if verb == "check":
+        scope = "system" if env.is_root() or env.stand_in else "user"
+        boot, only = False, None
+        while rest:
+            a = rest.pop(0)
+            if a == "--system":
+                scope = "system"
+            elif a == "--user":
+                scope = "user"
+            elif a == "--boot":
+                boot = True
+            elif a == "--only" and rest:
+                only = {rest.pop(0)}
+            else:
+                return usage()
+        if scope == "system" and not env.is_root() and not env.stand_in:
+            print("bromigos alerts: the system checks read the drives and services as root: "
+                  "sudo bromigos alerts check --system", file=sys.stderr)
+            return 2
+        doc = A.run_pass(env, scope, boot=boot, checks=only)
+        if js:
+            print(json.dumps(doc, indent=1))
+        else:
+            ran = sum(1 for c in doc["checks"] if c["state"] == "ran")
+            failed = [c for c in doc["checks"] if c["state"] == "failed"]
+            print(f"{scope} checks: {ran} ran, {len(failed)} couldn't, {len(doc['alerts'])} alert(s)"
+                  f" ({env.doc_path(scope)})")
+            for c in failed:
+                print(f"  couldn't check {c['check']}: {c['error']}")
+        return 0
+    if verb == "notify":
+        if rest:
+            return usage()
+        shown = A.notify(env)
+        if js:
+            print(json.dumps([{"title": t, "body": b, "urgency": u} for t, b, u in shown]))
+        return 0
+    if verb == "checks":
+        doc = A.read_merged(env)
+        if js:
+            print(json.dumps(doc["checks"], indent=1))
+            return 0
+        if not doc["checks"]:
+            print("No checks have run yet.")
+        for c in doc["checks"]:
+            when = A.ago(env.now_ms() - int(c.get("ran_at") or env.now_ms()))
+            note = f": {c['error']}" if c.get("error") else ""
+            print(f"  {c['check']:<18} {c['scope']:<6} {c['state']:<8} {when}{note}")
+        return 0
+    return usage()
+
+
+def usage():
+    print(USAGE, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

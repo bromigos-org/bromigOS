@@ -117,6 +117,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos aur`](#bromigos-aur) | See which [AUR](apps.md#install-an-app-from-the-aur) packages have updates waiting. `bromigos aur off` leaves the AUR out of updates and removes bromigOS's paru; `on` brings it back. |
 | [`bromigos restart`](#bromigos-restart) | Restart the parts of the desktop that still run old code after an update. |
 | [`bromigos status`](#bromigos-status) | Check that the background, VECTOR and the session are running. |
+| [`bromigos alerts`](#bromigos-alerts) | See what [needs you](alerts.md) on this computer: failing drives, full disks, updates, backups, stopped services. `check` looks again now. |
 | [`bromigos about`](#bromigos-about) | Show the version, the update channel, this machine's hardware and bromigOS's packages. |
 
 ### Screenshots and recordings
@@ -296,6 +297,25 @@ bromigos account add gitlab work base=https://git.example.org
 bromigos account configure gitlab --as work client_id=abc123
 bromigos account login gitlab --as work
 bromigos account list
+```
+
+From the `bromigos-core` package.
+
+### bromigos alerts
+
+What on this computer needs you: failing drives, full disks, updates, backups, failed services, the UPS; the checks behind your phone's alerts.
+
+```text
+bromigos alerts [--json] | check [--system|--user] [--boot] [--only CHECK] [--json] | notify | checks [--json]
+```
+
+For example:
+
+```text
+bromigos alerts
+bromigos alerts --json
+sudo bromigos alerts check --system
+bromigos alerts checks
 ```
 
 From the `bromigos-core` package.

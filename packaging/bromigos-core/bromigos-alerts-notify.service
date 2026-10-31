@@ -1,0 +1,9 @@
+# What needs you, as desktop notifications, once each (docs/alerts.md): nothing outside a
+# desktop session or without notify-send.
+[Unit]
+Description=bromigOS alerts: the desktop notification
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/docs/alerts.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/bin/bromigos-alerts notify

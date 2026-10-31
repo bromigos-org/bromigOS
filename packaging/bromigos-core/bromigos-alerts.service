@@ -1,0 +1,16 @@
+# bromigOS alerts, the system checks (docs/alerts.md): drives (SMART), btrfs's errors, disk space,
+# a restart an update waits for, the Arch news hold, backups, the UPS, failed services, game
+# servers. Writes /var/lib/bromigos/alerts/system.json for `bromigos alerts`, the desktop's
+# notification and BRODEC's machine agent. Run by bromigos-alerts.timer; enabled by bromigos-core.
+[Unit]
+Description=bromigOS alerts: the system checks
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/docs/alerts.md
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/bin/bromigos-alerts check --system
+TimeoutStartSec=15min
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes

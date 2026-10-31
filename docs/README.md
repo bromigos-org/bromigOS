@@ -92,6 +92,7 @@ VECTOR, the desktop's AI assistant, is documented in his own repository,
 | [fieldkit.md](fieldkit.md) | Field Kit (Repair. Recon. Deploy.): fix any computer, run your lab, install a server |
 | [fieldkit-packages.md](fieldkit-packages.md) | Every package on Field Kit, its size and why it's there |
 | [server.md](server.md) | bromigOS Server, the headless edition: SSH, firewall, safe automatic updates, containers |
+| [alerts.md](alerts.md) | `bromigos alerts`: the checks that find what needs you (drives, disk space, updates, backups, the UPS, services), the notification, and your own checks |
 | [iso-encryption.md](iso-encryption.md) | Full-disk encryption in the ISO's installer |
 | [release.md](release.md) | Cutting a release: versions, release notes, tags and promoting a candidate to stable |
 | [public.md](public.md) | Making the package repository public: the R2 mirror and `go-public.sh` |

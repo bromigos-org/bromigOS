@@ -1,0 +1,12 @@
+# Your checks two minutes after your session starts, then every 30 minutes (docs/alerts.md).
+[Unit]
+Description=bromigOS alerts: your checks, every 30 minutes
+Documentation=https://github.com/bromigos-org/bromigOS/blob/main/docs/alerts.md
+
+[Timer]
+OnStartupSec=2min
+OnUnitActiveSec=30min
+RandomizedDelaySec=1min
+
+[Install]
+WantedBy=timers.target

@@ -72,8 +72,69 @@ class Server(unittest.TestCase):
     def run_server(self, *args):
         env = dict(os.environ, PATH=f"{self.bin}:/usr/bin:/bin", FAKE=str(self.fake),
                    BROMIGOS_SERVER_ROOT=str(self.root), BROMIGOS_SERVER_SHARE=str(HERE),
-                   BROMIGOS_SERVER_HEALTH_POLL="0")
+                   BROMIGOS_SERVER_HEALTH_POLL="0",
+                   # never the network: no feed unless a test gives one
+                   BROMIGOS_SERVER_NEWS_FEED=self.news)
         return subprocess.run([sys.executable, "-I", str(SCRIPT), *args], env=env, capture_output=True, text=True)
+
+    news = "file:///nonexistent/arch-news.xml"
+
+    # ---- the Arch news hold
+
+    def with_news(self, last_success):
+        self.news = (HERE / "tests/fixtures/arch-news.xml").as_uri()
+        st = self.root / "var/lib/bromigos/server/update.json"
+        st.parent.mkdir(parents=True, exist_ok=True)
+        st.write_text(json.dumps({"phase": "ok", "last_success_ts": last_success}))
+        (self.fake / "update.json").write_text(report(["bash"]))
+
+    def test_news_since_the_last_update_holds_the_automatic_one(self):
+        self.with_news(1793000000)                      # 2026-10-25: the openssh item came after
+        r = self.run_server("update")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("holding the update", r.stdout)
+        self.assertNotIn("bromigos update", self.log())
+        st = self.state()
+        self.assertEqual(st["phase"], "ok")
+        self.assertEqual([i["title"] for i in st["hold"]["items"]],
+                         ["Manual intervention required for the openssh 10.3 upgrade"])
+        self.assertIn("archlinux.org/news/manual-intervention", st["hold"]["items"][0]["link"])
+        status = self.run_server("status")
+        self.assertIn("Update held", status.stdout)
+        self.assertIn('"hold"', self.run_server("status", "--json").stdout)
+
+    def test_update_now_is_a_person_deciding_it_clears_the_hold(self):
+        self.with_news(1793000000)
+        self.run_server("update")
+        r = self.run_server("update", "--now")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("bromigos update --yes --no-aur --json", self.log())
+        st = self.state()
+        self.assertNotIn("hold", st)
+        self.assertEqual(st["phase"], "ok")
+        self.assertGreater(st["news_seen_ts"], 1793390400 - 10 ** 9)
+        # the next automatic update: that news was read
+        (self.fake / "log").write_text("")
+        self.run_server("update")
+        self.assertIn("bromigos update --yes", self.log())
+
+    def test_older_news_and_an_unreadable_feed_hold_nothing(self):
+        self.with_news(1795000000)                      # after every item
+        self.run_server("update")
+        self.assertIn("bromigos update --yes", self.log())
+        self.assertNotIn("hold", self.state())
+        self.with_news(1793000000)
+        self.news = "file:///nonexistent/feed.xml"
+        (self.fake / "log").write_text("")
+        self.run_server("update")
+        self.assertIn("bromigos update --yes", self.log())
+
+    def test_the_hold_can_be_turned_off(self):
+        self.with_news(1793000000)
+        self.config("[health]\nminutes = 0\n[updates]\nnews_hold = false\n")
+        self.run_server("update")
+        self.assertIn("bromigos update --yes", self.log())
+
 
     def state(self):
         return json.loads((self.root / "var/lib/bromigos/server/update.json").read_text())
