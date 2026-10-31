@@ -240,7 +240,8 @@ enum Cmd {
     /// Restart what runs stale (its package is newer than the process), or the pieces named
     Restart {
         /// live, widgets, waybar, dunst, vector, hyprland (its config), osd, idle (hypridle),
-        /// or a user unit a package's restart.d drop-in declares; none: whatever is stale
+        /// or a user unit a package's restart.d drop-in declares; none: whatever is stale.
+        /// A named live, widgets, waybar or dunst that isn't running is started
         pieces: Vec<String>,
         /// Only say what would restart
         #[arg(long)]
@@ -1736,10 +1737,40 @@ fn supervisor_pid(paths: &Paths) -> Option<i32> {
     session::pid_alive(pid).then_some(pid)
 }
 
+/// Whether a process runs in this user service (its cgroup's last part is the unit).
+fn in_unit(pid: i32, unit: &str) -> bool {
+    std::fs::read_to_string(format!("/proc/{pid}/cgroup"))
+        .is_ok_and(|c| c.lines().any(|l| l.ends_with(&format!("/{unit}"))))
+}
+
+/// What brings the session's pieces back when one is missing (Settings › Startup's Fix):
+/// `bromigos restart` with the missing ones' names starts them.
+fn status_fix(bar: bool, live: bool) -> Option<String> {
+    let missing: Vec<&str> = [("waybar", bar), ("live", live)]
+        .iter()
+        .filter(|(_, up)| !up)
+        .map(|(n, _)| *n)
+        .collect();
+    (!missing.is_empty()).then(|| format!("bromigos restart {}", missing.join(" ")))
+}
+
 fn status_cmd(paths: &Paths, json_out: bool) -> Result<i32> {
     let d = session::discover(paths);
     let supervisor = supervisor_pid(paths);
     let live_state = ipc::live(paths, "state").ok();
+    let bar_pids: Vec<i32> = update::running(Path::new("/proc"))
+        .into_iter()
+        .filter(|r| r.piece == Piece::Waybar)
+        .flat_map(|r| r.pids)
+        .collect();
+    let bar_service = bar_pids.iter().any(|p| in_unit(*p, "bromigos-bar.service"));
+    let live_service = supervisor.is_some_and(|p| in_unit(p, "bromigos-live.service"));
+    let live_up = supervisor.is_some() || live_state.is_some();
+    // only with a session to run them in
+    let fix = d
+        .session
+        .as_ref()
+        .and_then(|_| status_fix(!bar_pids.is_empty(), live_up));
     let muted = paths.live_muted().exists();
     let holo = ipc::holo(paths, "status").ok();
     let switched_off = paths.vector_switched_off();
@@ -1748,8 +1779,14 @@ fn status_cmd(paths: &Paths, json_out: bool) -> Result<i32> {
         let doc = json!({
             "schema": SCHEMA,
             "session": session_json(&d),
+            "bar": {
+                "running": !bar_pids.is_empty(),
+                "pids": bar_pids,
+                "service": bar_service,
+            },
             "live": {
-                "running": supervisor.is_some() || live_state.is_some(),
+                "running": live_up,
+                "service": live_service,
                 "supervisor_pid": supervisor,
                 "state": live_state,
                 "background": live_state.as_deref().map(|s| !s.contains("background off")),
@@ -1763,6 +1800,7 @@ fn status_cmd(paths: &Paths, json_out: bool) -> Result<i32> {
                 "switch": if switched_off { "off" } else { "on" },
             },
             "animations": anims,
+            "fix": fix,
         });
         println!("{doc}");
         return Ok(0);
@@ -1777,10 +1815,23 @@ fn status_cmd(paths: &Paths, json_out: bool) -> Result<i32> {
         ),
         None => println!("no running Hyprland session found"),
     }
+    println!("\n── the bar");
+    match (bar_pids.first(), bar_service) {
+        (Some(p), true) => {
+            println!("running (pid {p}; bromigos-bar.service: back by itself if it stops)")
+        }
+        (Some(p), false) => println!("running (pid {p})"),
+        (None, _) => println!("not running"),
+    }
     println!("\n── live layer");
     match (supervisor, &live_state) {
         (Some(p), st) => {
-            println!("daemon up (supervisor {p})");
+            let how = if live_service {
+                "; bromigos-live.service"
+            } else {
+                ""
+            };
+            println!("daemon up (supervisor {p}{how})");
             if let Some(st) = st {
                 println!("{}", st.trim_end());
             }
@@ -1804,6 +1855,9 @@ fn status_cmd(paths: &Paths, json_out: bool) -> Result<i32> {
     );
     println!("\n── animations");
     print_anim_list(&anims);
+    if let Some(f) = fix {
+        println!("\nnot everything is running: {f} starts it again");
+    }
     Ok(0)
 }
 

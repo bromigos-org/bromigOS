@@ -928,6 +928,8 @@ pub fn user_processes(comm: &str) -> Vec<i32> {
         .filter(|pid| {
             fs::read_to_string(format!("/proc/{pid}/comm")).is_ok_and(|c| c.trim_end() == comm)
         })
+        // this runtime directory's only: a sandbox's theme switch never reaches the real bar
+        .filter(|pid| crate::update::same_runtime(Path::new("/proc"), *pid))
         // not zombies (a waybar reload leaves its old children unreaped for a while)
         .filter(|pid| {
             fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|s| {
@@ -1098,7 +1100,7 @@ pub fn run_hooks(paths: &Paths) -> Option<Reload> {
 /// Waybar picks the new theme up by restarting, not by SIGUSR2: an in-place reload can
 /// crash waybar 0.15 (its mpris module's dispatcher is torn down by the reload and then
 /// gets a playerctl signal: SIGSEGV, and the bar is gone). A fresh one starts in well under
-/// a second, detached, with the live session's environment.
+/// a second, with the live session's environment ([`crate::update::restart_bar`]).
 fn restart_waybar(paths: &Paths) -> Reload {
     let pids = user_processes("waybar");
     if pids.is_empty() {
@@ -1111,7 +1113,9 @@ fn restart_waybar(paths: &Paths) -> Reload {
         };
     }
     let env = crate::update::session_env(paths);
-    let r = crate::update::stop(&pids).and_then(|_| crate::update::spawn(&env, "waybar"));
+    // in the session (its user service, or through the compositor), never a child of this
+    // command: a terminal's or an update's cgroup would take it down when it ends
+    let r = crate::update::restart_bar(paths, &env, &pids);
     Reload {
         app: "waybar",
         action: "restart",

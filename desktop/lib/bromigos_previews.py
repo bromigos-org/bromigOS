@@ -927,6 +927,8 @@ class Nested:
         for name, text in {
                 "dunst": STUB, "hypridle": STUB, "bromigos-windows": STUB, "bromigos-live": STUB,
                 "swayosd-server": STUB, "notify-send": STUB, "bromigos-wallpaper": STUB, "xdg-open": STUB,
+                # the bar: a plain Waybar here, never the user's service (bromigos-bar)
+                "bromigos-bar": '#!/bin/sh\nexec waybar\n',
                 # the session's own commands stay in the sandbox; the rest is the real CLI
                 "bromigos": f'#!/bin/sh\ncase "$1" in session|wallpaper|idle|live|vector) exit 0;; esac\n'
                             f'exec "{bro}" "$@"\n',

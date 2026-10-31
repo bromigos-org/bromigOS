@@ -242,6 +242,71 @@ class ScriptTest(unittest.TestCase):
         other.live("stop")
 
 
+class UnitModeTest(unittest.TestCase):
+    """Where the runtime directory has its own user manager and bromigos-live.service is
+    installed, start and stop go through the unit (a stand-in systemctl here); without the
+    manager's socket, never: a borrowed D-Bus must not reach another session's manager."""
+
+    def setUp(self):
+        self.s = Sandbox()
+        self.addCleanup(self.s.cleanup)
+        bins = os.path.join(self.s.root, "fakebin")
+        os.makedirs(bins)
+        self.calls = os.path.join(self.s.root, "systemctl.log")
+        with open(os.path.join(bins, "systemctl"), "w") as f:
+            f.write('#!/bin/sh\necho "$*" >> "%s"\n'
+                    'case "$*" in *"show -p LoadState"*) echo loaded ;; esac\n' % self.calls)
+        os.chmod(os.path.join(bins, "systemctl"), 0o755)
+        self.env = {"PATH": f"{bins}:{os.environ.get('PATH', '/usr/bin')}"}
+
+    def manager(self):
+        import socket
+        os.makedirs(os.path.join(self.s.run_dir, "systemd"))
+        sock = socket.socket(socket.AF_UNIX)
+        sock.bind(os.path.join(self.s.run_dir, "systemd", "private"))
+        self.addCleanup(sock.close)
+
+    def logged(self):
+        try:
+            with open(self.calls) as f:
+                return f.read().splitlines()
+        except FileNotFoundError:
+            return []
+
+    def test_start_and_stop_go_through_the_unit(self):
+        self.manager()
+        r = self.s.live("start", "--login", env=self.env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("--user start bromigos-live.service", self.logged())
+        self.assertTrue(os.path.exists(os.path.join(self.s.run_dir, "bromigos-live.login")), "the login's intercept")
+        time.sleep(0.5)
+        self.assertEqual(daemons(self.s.root), [], "a daemon started outside the unit")
+        r = self.s.live("stop", env=self.env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("--user stop bromigos-live.service", self.logged())
+
+    def test_no_manager_socket_no_unit(self):
+        r = self.s.live("start", env=self.env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(len(self.s.wait_daemons(1)), 1)
+        self.assertFalse([c for c in self.logged() if "start" in c or "stop" in c], self.logged())
+
+    def test_supervise_runs_in_the_foreground_and_stops_on_sigterm(self):
+        e = dict(self.s.env, **self.env)
+        p = subprocess.Popen([os.path.join(self.s.root, "bin", "bromigos-live"), "supervise"], env=e,
+                             cwd=self.s.root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            self.assertEqual(len(self.s.wait_daemons(1)), 1)
+            self.assertEqual(p.poll(), None, "supervise returned while its daemon runs")
+            self.assertEqual(instance.read(os.path.join(self.s.run_dir, "bromigos-live.pid"))[0], p.pid)
+        finally:
+            for d in daemons(self.s.root):      # systemd's stop: the unit's whole cgroup
+                os.kill(d, signal.SIGTERM)
+            p.terminate()
+            p.wait(10)
+        self.assertEqual(self.s.wait_daemons(0), [])
+
+
 class RealDaemonTest(unittest.TestCase):
     """live/app.py itself, without a display (GTK can't open one in a throwaway runtime dir)."""
 

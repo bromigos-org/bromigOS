@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# bromigos:summary=The bar: start, restart or stop it (a user service that comes back by itself)
+# bromigos:args=start|restart|stop|status [--json]
+# bromigos:examples=bromigos bar status; bromigos bar restart
+# bromigos-bar: the bar (Waybar) of the Hyprland session.
+#
+#   bromigos-bar start     at login (the defaults' hyprland.lua): the bar's user service
+#   bromigos-bar restart   a new bar (a theme switch, an update, `bromigos restart waybar`)
+#   bromigos-bar stop      no bar until the next start or login
+#   bromigos-bar status [--json]   running or not, and how (exit 0 running, 3 not)
+#
+# The bar runs as the user service bromigos-bar.service (desktop/systemd): systemd starts
+# it again whenever it stops (a crash, a kill, its monitor gone and back), and it is no
+# part of whatever started it, so a terminal closing or an update's transient unit ending
+# can't take it down. The service ends with the session.
+#
+# Without that service (this runtime directory has no user manager of its own: a nested
+# test desktop, the theme previews; or BROMIGOS_NO_UNITS=1), a plain Waybar: started
+# through the compositor (Hyprland's exec, as login does), or detached here when there's no
+# compositor to ask.
+set -u
+UNIT=bromigos-bar.service
+RUN="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+# This runtime directory's own user manager, with the unit installed. Never another
+# manager over D-Bus: a nested desktop with a borrowed bus must not reach the real one.
+units() {
+    [ -z "${BROMIGOS_NO_UNITS:-}" ] || return 1
+    [ -S "$RUN/systemd/private" ] || return 1
+    [ "$(systemctl --user show -p LoadState --value "$UNIT" 2>/dev/null)" = loaded ]
+}
+
+# This session's Waybar processes that aren't the service's (a bar from before the service:
+# the login of an older bromigOS, or a hand-started one): same runtime directory and display.
+loose() {
+    local p env
+    for p in $(pgrep -x -u "$(id -u)" waybar 2>/dev/null); do
+        grep -q "/$UNIT\$" "/proc/$p/cgroup" 2>/dev/null && continue
+        env=$(tr '\0' '\n' <"/proc/$p/environ" 2>/dev/null) || continue
+        grep -qxF "XDG_RUNTIME_DIR=$RUN" <<<"$env" || continue
+        if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+            grep -qxF "WAYLAND_DISPLAY=$WAYLAND_DISPLAY" <<<"$env" || continue
+        fi
+        echo "$p"
+    done
+}
+
+stop_loose() {
+    local pids n
+    pids=$(loose)
+    [ -n "$pids" ] || return 0
+    kill $pids 2>/dev/null
+    for n in $(seq 30); do
+        [ -z "$(loose)" ] && return 0
+        sleep 0.1
+    done
+    kill -9 $(loose) 2>/dev/null || true
+}
+
+# The session's display and Hyprland instance for the user manager, as Hyprland's own
+# import does (it may not have run yet at login): what the service's bar talks to.
+import_env() {
+    local v vars=()
+    for v in WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE DISPLAY XCURSOR_THEME XCURSOR_SIZE; do
+        [ -n "${!v:-}" ] && vars+=("$v")
+    done
+    [ ${#vars[@]} -gt 0 ] && systemctl --user import-environment "${vars[@]}" 2>/dev/null
+    return 0
+}
+
+# A plain Waybar in the session: through the compositor, else detached here.
+plain_start() {
+    if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && command -v hyprctl >/dev/null &&
+        [ "$(hyprctl dispatch 'hl.dsp.exec_cmd("waybar")' 2>/dev/null)" = ok ]; then
+        return 0
+    fi
+    setsid -f waybar >/dev/null 2>&1 </dev/null
+}
+
+running() { [ -n "$(loose)" ]; }
+
+case "${1:-status}" in
+    start)
+        if units; then
+            import_env
+            # a stopped bar gave up (StartLimitBurst): a start asked for is a fresh try
+            systemctl --user reset-failed "$UNIT" 2>/dev/null
+            [ -n "$(loose)" ] && exit 0          # a bar already up (an older login's): left as it is
+            exec systemctl --user start "$UNIT"
+        fi
+        # at login, Hyprland runs this inside itself: Waybar takes this process's place
+        [ -n "$(loose)" ] && { echo "already running"; exit 0; }
+        exec waybar
+        ;;
+    restart)
+        if units; then
+            import_env
+            stop_loose
+            systemctl --user reset-failed "$UNIT" 2>/dev/null
+            exec systemctl --user restart "$UNIT"
+        fi
+        stop_loose
+        plain_start
+        ;;
+    stop)
+        units && systemctl --user stop "$UNIT"
+        stop_loose
+        ;;
+    status)
+        how=none
+        if units && [ "$(systemctl --user is-active "$UNIT" 2>/dev/null)" = active ]; then how=service
+        elif running; then how=plain; fi
+        if [ "${2:-}" = --json ]; then
+            printf '{"schema":1,"running":%s,"how":"%s","unit":"%s","units":%s}\n' \
+                "$([ $how != none ] && echo true || echo false)" "$how" "$UNIT" "$(units && echo true || echo false)"
+        else
+            case $how in
+                service) echo "the bar is running ($UNIT: back by itself if it stops)" ;;
+                plain) echo "the bar is running (a plain Waybar)" ;;
+                none) echo "the bar isn't running: bromigos restart waybar starts it" ;;
+            esac
+        fi
+        [ $how != none ]; exit $(( $? ? 3 : 0 ))
+        ;;
+    -h|--help|help) sed -n '5,9p' "$0" | sed 's/^# \{0,1\}//' ;;
+    *) echo "usage: bromigos-bar start|restart|stop|status [--json]" >&2; exit 2 ;;
+esac

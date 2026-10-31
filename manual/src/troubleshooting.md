@@ -29,9 +29,13 @@ then restart. See [The boot menu](boot-menu.md#start-an-older-version-after-a-ba
 
 ## The bar, the panels or the background is gone
 
+The bar and the animated background come back by themselves: if one stops, it starts again
+within a few seconds. If one stays gone, open **Settings › Startup** and press **Fix**. Or
+run `bromigos status`: it says what isn't running and the command that starts it again.
+
 | What's gone | Run |
 |---|---|
-| the bar | `bromigos restart waybar` |
+| the bar | `bromigos restart waybar` (it starts the bar if it isn't running) |
 | the panels | `bromigos restart widgets` |
 | the animated background | `bromigos restart live` |
 

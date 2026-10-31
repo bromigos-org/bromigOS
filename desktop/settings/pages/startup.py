@@ -28,6 +28,7 @@ class StartupPage:
         self.ctx = ctx
         self.doc = None
         self.apps = None
+        self.status = None              # bromigos status --json: whether the bar and the live layer run
         self.groups = []
         self.page = ctx.page()
         self.page.set_reset(self.reset, what="Nothing of yours starts at login any more (the block in your "
@@ -41,6 +42,43 @@ class StartupPage:
 
     def refresh(self):
         self.ctx.json(CMD + ["--json"], self._got)
+        self.ctx.json(["bromigos", "status", "--json"], self._got_status)
+
+    def _got_status(self, doc, _err):
+        self.status = doc if isinstance(doc, dict) else None
+        if self.doc:
+            self.sync(self.doc)
+
+    def _running_row(self, g):
+        """Whether the bar and the live layer run now; when one doesn't, Fix starts it again
+        (`bromigos restart waybar live`: both come back by themselves, this is for one that
+        gave up)."""
+        st = self.status
+        if not st or not st.get("session"):
+            return
+        bar = (st.get("bar") or {}).get("running")
+        live = (st.get("live") or {}).get("running")
+        fix = st.get("fix")
+        if bar and live:
+            self.ctx.row(g, "Running now", "The bar and the live layer. If either stops, it starts again by itself.",
+                         hint="Both run as user services that come back by themselves (bromigos status says how)",
+                         key="running", advanced={"runs": "bromigos status"})
+            return
+        gone = [n for n, up in (("the bar", bar), ("the live layer", live)) if not up]
+        title = " and ".join(gone)
+        title = title[:1].upper() + title[1:] + (" aren't running" if len(gone) > 1 else " isn't running")
+        argv = fix.split() if isinstance(fix, str) and fix.startswith("bromigos restart ") else \
+            ["bromigos", "restart", *[n for n, up in (("waybar", bar), ("live", live)) if not up]]
+        self.ctx.row(g, title, "It usually comes back by itself. Fix starts it again now.",
+                     hint="Something stopped it and it didn't come back; Fix starts it again",
+                     key="running", buttons=[("Fix", lambda: self._fix(argv), "Starts it again now (" + " ".join(argv) + ")")],
+                     advanced={"runs": " ".join(argv)})
+
+    def _fix(self, argv):
+        def done(ok, _out, err):
+            self.ctx.toast("Started again" if ok else f"Couldn't start it: {(err or 'failed').strip().splitlines()[-1]}")
+            self.ctx.json(["bromigos", "status", "--json"], self._got_status)
+        self.ctx.run(argv, done)
 
     def _got_apps(self, doc, _err):
         self.apps = (doc or {}).get("apps") or []
@@ -110,6 +148,7 @@ class StartupPage:
 
         g = self._group("bromigOS's own", "What bromigOS starts at every login. These come with it.", key="own",
                         hint=f"Read from {d['defaults']}")
+        self._running_row(g)
         for o in d["own"]:
             title, rest = _split(o["what"], o["command"])
             sub = o["command"] + (f"  ·  {rest}" if rest else "") + (f"  ·  {o['when']}" if o.get("when") else "")
@@ -237,6 +276,8 @@ PAGE = Page(
         Entry("add-app", "Start an app at login", ["add autostart", "launch at login"], "Yours"),
         Entry("add-command", "Run a command at login", ["autostart command", "login script"], "Yours"),
         Entry("own", "What bromigOS starts", ["waybar", "dunst", "live layer", "panels at login"], "bromigOS's own"),
+        Entry("running", "The bar and the live layer running", ["fix", "bar gone", "background gone", "restart"],
+              "bromigOS's own"),
         Entry("windows", "Windows put back where they were", ["remember window position", "floating windows",
                                                                "window placement", "bromigos windows"],
               "Windows put back"),

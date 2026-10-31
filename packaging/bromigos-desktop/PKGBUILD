@@ -107,7 +107,7 @@ check() {
     lib/bromigos_zettlr.py
   sh -n systemd/theme-previews-hook
   sh -n rofi/scripts/power-menu rofi/scripts/quick-note waybar/scripts/copy-ip bin/bromigos-dispatch
-  bash -n bin/bromigos-shot bin/bromigos-rec bin/bromigos-wallpaper hooks/theme-set.d/*
+  bash -n bin/bromigos-shot bin/bromigos-rec bin/bromigos-wallpaper bin/bromigos-bar hooks/theme-set.d/*
   python -m py_compile bin/bromigos-windows
   python -m py_compile settings/bromigos-settings settings/bromigos-tv-guide settings/bromigos_tvguide.py settings/bromigos_settings/*.py settings/pages/*.py waybar/scripts/idle.py bin/bromigos-peripherals lib/bromigos_peripherals.py
   python -m py_compile bin/bromigos-keys lib/bromigos_keys.py lib/bromigos_keycapture.py lib/bromigos_cli.py lib/bromigos_extlist.py
@@ -199,6 +199,10 @@ package() {
   ln -s ../oo7-daemon.service "$pkgdir/usr/lib/systemd/user/default.target.wants/oo7-daemon.service"
   install -Dm0755 bin/bromigos-dispatch "$lib/bin/bromigos-dispatch"
   install -Dm0755 bin/bromigos-game "$lib/bin/bromigos-game"
+  # the bar (bromigos bar; the defaults' hyprland.lua starts it at login): its user service,
+  # which starts it again whenever it stops and keeps it out of whatever started it
+  install -Dm0755 bin/bromigos-bar "$lib/bin/bromigos-bar"
+  install -Dm0644 systemd/bromigos-bar.service "$pkgdir/usr/lib/systemd/user/bromigos-bar.service"
   # Steam and Proton (bromigos game setup, proton, check, maintain; manual/src/games.md): the
   # commands, their reader for Steam's files and the repairs bromigOS makes by itself, and
   # the user service that makes them after an update and each time Steam exits (its .path
@@ -221,6 +225,7 @@ package() {
     ln -s "/usr/lib/bromigos/desktop/bin/$f" "$pkgdir/usr/bin/$f"
   done
   ln -s /usr/lib/bromigos/desktop/bin/bromigos-windows "$pkgdir/usr/bin/bromigos-windows"
+  ln -s /usr/lib/bromigos/bin/bromigos-bar "$pkgdir/usr/bin/bromigos-bar"
   # Settings (bromigos settings, SUPER+,; docs/settings.md): the app, and the page folder any
   # package may add a page to
   install -Dm0755 settings/bromigos-tv-guide "$lib/settings/bromigos-tv-guide"
