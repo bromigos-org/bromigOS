@@ -12,8 +12,9 @@ pkgdesc='Securely erase disks using a variety of recognised methods (a fork of d
 arch=('x86_64')
 url='https://github.com/martijnvanbrummelen/nwipe'
 license=('GPL-2.0-or-later')
-depends=('hdparm' 'libconfig' 'ncurses' 'parted')
-makedepends=('autoconf' 'automake')
+depends=('hdparm' 'libconfig' 'libnvme' 'ncurses' 'parted')
+# CI builds with --nodeps: everything configure checks for is a makedepend too
+makedepends=('autoconf' 'automake' 'libconfig' 'libnvme' 'ncurses' 'parted')
 optdepends=('dmidecode: the machine in its reports' 'smartmontools: the drive'"'"'s serial and health in its reports')
 options=('!debug')
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
