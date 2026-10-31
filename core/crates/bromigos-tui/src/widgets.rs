@@ -46,16 +46,14 @@ pub fn sel_surface(look: &Look) -> Style {
     }
 }
 
-/// Text on a highlighted surface: the primary colour, bold (black on green on the console).
+/// Text on a highlighted surface: the primary colour, bold (black on green on the console, not
+/// bold there: the Linux console shows bold black as its bright black, grey on green).
 pub fn sel_text(look: &Look) -> Style {
     match look.mode {
         crate::term::Mode::Truecolor => Style::new()
             .fg(look.pal.primary)
             .add_modifier(Modifier::BOLD),
-        crate::term::Mode::Ansi16 => Style::new()
-            .bg(Color::Green)
-            .fg(Color::Black)
-            .add_modifier(Modifier::BOLD),
+        crate::term::Mode::Ansi16 => Style::new().bg(Color::Green).fg(Color::Black),
         crate::term::Mode::Mono => Style::new().add_modifier(Modifier::REVERSED | Modifier::BOLD),
     }
 }

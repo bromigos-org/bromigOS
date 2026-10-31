@@ -597,6 +597,12 @@ fn draw_tile(f: &mut Frame, app: &App, r: Rect, i: usize, tile_h: u16) {
     } else {
         st(p.soft)
     };
+    // the name bold, except selected on the console (bold black shows as grey there)
+    let name_style = if sel && look.mode == bromigos_tui::Mode::Ansi16 {
+        style
+    } else {
+        style.add_modifier(Modifier::BOLD)
+    };
     let block = widgets::glow(look, "", sel);
     let inner = block.inner(r).inner(Margin::new(1, 0));
     f.render_widget(block, r);
@@ -604,7 +610,7 @@ fn draw_tile(f: &mut Frame, app: &App, r: Rect, i: usize, tile_h: u16) {
     if tile_h < 5 {
         let mut lines = vec![Line::from(vec![
             Span::styled(format!("{}  ", icon.of(look)), style),
-            Span::styled(name.to_string(), style.add_modifier(Modifier::BOLD)),
+            Span::styled(name.to_string(), name_style),
         ])];
         if tile_h >= 4
             && let Some(t) = tile_about(name, app.server_home(), w)
@@ -634,10 +640,7 @@ fn draw_tile(f: &mut Frame, app: &App, r: Rect, i: usize, tile_h: u16) {
             Span::styled(icon.of(look).to_string(), icon_style),
             Span::styled(format!(" {}", rule.repeat(side)), edge),
         ]),
-        Line::from(Span::styled(
-            name.to_string(),
-            style.add_modifier(Modifier::BOLD),
-        )),
+        Line::from(Span::styled(name.to_string(), name_style)),
     ];
     let about = tile_about_rows(
         name,
