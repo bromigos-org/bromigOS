@@ -144,7 +144,9 @@ def emblem(world=None, on_dark=False):
         d = _theme_dir(w) if w else None
         if not d:
             continue
-        for name in (("emblem-void-1024.png", "emblem-1024.png") if on_dark else ("emblem-1024.png",)):
+        # the world's own void emblem on dark; another world's emblem is the transparent one, tinted
+        own = w == world or not world
+        for name in (("emblem-void-1024.png", "emblem-1024.png") if on_dark and own else ("emblem-1024.png",)):
             p = os.path.join(d, "emblem", name)
             if os.path.isfile(p):
                 im = Image.open(p).convert("RGBA")
