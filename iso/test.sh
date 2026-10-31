@@ -335,7 +335,7 @@ case $cmd in
         if [[ $firmware == uefi ]]; then
             "${SCP[@]}" "$dir/windows/esp.sha256" "$user@127.0.0.1:esp.sha256"
             result "Windows' boot files on the shared ESP are as they were" "${SSH[@]}" "sudo sh -c 'cd /boot/efi && sha256sum -c --quiet' < ~/esp.sha256"
-            if "${SSH[@]}" "test -d /boot/efi/EFI/bromigos-secureboot"; then
+            if "${SSH[@]}" "sudo test -d /boot/efi/EFI/bromigos-secureboot"; then
                 # Secure Boot set up (docs/secureboot.md): shim, then GRUB, in their own folder
                 result "shim and GRUB in their own folder on the ESP, and the firmware boots it first" "${SSH[@]}" "sudo test -f /boot/efi/EFI/bromigos-secureboot/grubx64.efi && sudo efibootmgr | grep -q '^BootOrder: '\$(sudo efibootmgr -v | awk 'tolower(\$0) ~ /bromigos-secureboot.shimx64.efi/ && \$0 !~ /Field Kit/ { sub(/^Boot/, \"\"); sub(/\\*.*/, \"\"); print; exit }')"
                 result "Windows' fallback loader (EFI/Boot/bootx64.efi) isn't shim's" "${SSH[@]}" "! sudo test -f /boot/efi/EFI/Boot/grubx64.efi"
@@ -388,8 +388,11 @@ case $cmd in
         "${SSH[@]}" "sudo bromigos-iso-install ${how[*]} --ssh-key /home/live/id_ed25519.pub --no-reboot ${extra[*]}" 2>&1 | tee "$dir/install.out" || rc=$?
         # Secure Boot set up (docs/secureboot.md): the code that approves the key at the first start
         sed -n 's/^::secureboot \([0-9]*\)$/\1/p' "$dir/install.out" | tail -1 > "$dir/secureboot-code"
+        # beside a stand-in Windows: its C: checked where the tools are (the medium), as finish_install does
+        : > "$dir/install-state.out"
+        (( alongside )) && "${SSH[@]}" 'c=$(lsblk -rno PATH,LABEL /dev/vda | awk "\$2 == \"Windows\" { print \$1 }"); [ -n "$c" ] && sudo ntfsresize --info --force --no-progress-bar "$c" | grep "You might resize at" | sed "s/^/ntfs-check: /"' >> "$dir/install-state.out" 2>&1
         # what the new system got, while it's still mounted at /mnt (install-state.out)
-        "${SSH[@]}" 'sudo bash -c "findmnt -R /mnt; lsblk -o NAME,TYPE,FSTYPE,MOUNTPOINTS /dev/vda; ls -la /mnt/home/*/.ssh; grep -h ^HOOKS= /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.d/*.conf; lsinitcpio /mnt/boot/initramfs-linux.img | grep -c plymouth; grep -E ^GRUB_CMDLINE /mnt/etc/default/grub; grep -c snapshots /mnt/boot/grub/grub.cfg; grep -A2 bromigos\\] /mnt/etc/pacman.conf; arch-chroot /mnt snapper --no-dbus list-configs; arch-chroot /mnt sshd -T 2>/dev/null | grep -iE \"^(pubkeyauthentication|authorizedkeysfile|passwordauthentication)\""' 2>&1 | tee "$dir/install-state.out" || true
+        "${SSH[@]}" 'sudo bash -c "findmnt -R /mnt; lsblk -o NAME,TYPE,FSTYPE,MOUNTPOINTS /dev/vda; ls -la /mnt/home/*/.ssh; grep -h ^HOOKS= /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.d/*.conf; lsinitcpio /mnt/boot/initramfs-linux.img | grep -c plymouth; grep -E ^GRUB_CMDLINE /mnt/etc/default/grub; grep -c snapshots /mnt/boot/grub/grub.cfg; grep -A2 bromigos\\] /mnt/etc/pacman.conf; arch-chroot /mnt snapper --no-dbus list-configs; arch-chroot /mnt sshd -T 2>/dev/null | grep -iE \"^(pubkeyauthentication|authorizedkeysfile|passwordauthentication)\""' 2>&1 | tee -a "$dir/install-state.out" || true
         # a clean shutdown: the new system's file systems unmounted, LUKS closed, then
         # poweroff (killing QEMU would lose what's still in the page cache)
         "${SSH[@]}" 'sudo sync; sudo umount -R /mnt; sudo cryptsetup close root 2>/dev/null; sudo systemctl poweroff' 2>/dev/null || true

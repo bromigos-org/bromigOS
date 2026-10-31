@@ -222,7 +222,7 @@ secureboot_installed() {
     step "secure boot, installed: a Unified Kernel Image (as Field Kit's) is signed and its entry goes through shim" T ssh 'set -e
         sudo pacman -S --noconfirm --needed systemd-ukify >/dev/null
         sudo ukify build --linux "/usr/lib/modules/$(uname -r)/vmlinuz" --initrd /boot/initramfs-linux.img \
-            --cmdline "$(sed "s/BOOT_IMAGE=[^ ]* //" /proc/cmdline) bromigos.ukitest" --output /tmp/fieldkit.efi >/dev/null
+            --cmdline "$(sed "s/BOOT_IMAGE=[^ ]* //" /proc/cmdline) console=tty0 console=ttyS0,115200 bromigos.ukitest" --output /tmp/fieldkit.efi >/dev/null
         sudo install -D -m0644 /tmp/fieldkit.efi /boot/EFI/bromigos-fieldkit/fieldkit.efi
         sudo efibootmgr --quiet --create-only --disk /dev/vda --part 1 --label "bromigOS Field Kit" --loader "\\EFI\\bromigos-fieldkit\\fieldkit.efi"
         sudo /usr/lib/bromigos/secureboot/bromigos-secureboot resign
@@ -235,7 +235,8 @@ secureboot_installed() {
     step "secure boot, installed: the firmware's Field Kit entry starts its image through shim" passphrase_ssh_uki || true
 }
 passphrase_ssh_uki() {   # straight from the firmware (no GRUB): the passphrase, SSH, the image's word
-    sleep "${BROMIGOS_ISOTEST_PASS_WAIT:-25}"
+    local i
+    for i in 1 2 3; do sleep $(( ${BROMIGOS_ISOTEST_PASS_WAIT:-25} / 3 )); T shot "uki-$i" >/dev/null 2>&1 || true; done
     T type tester >/dev/null
     for _ in $(seq 60); do T ssh true 2>/dev/null && break; sleep 5; done
     T ssh 'grep -qw bromigos.ukitest /proc/cmdline && od -An -t u1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c | awk "{exit !(\$NF == 1)}"'
