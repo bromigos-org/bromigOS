@@ -30,6 +30,7 @@ file_permissions=(
   ["/root"]="0:0:750"
   ["/root/customize_airootfs.sh"]="0:0:755"
   ["/usr/local/bin/bromigos-iso-install"]="0:0:755"
+  ["/usr/local/lib/bromigos-iso/shims/wipefs"]="0:0:755"
   ["/usr/local/bin/bromigos-iso-text-console"]="0:0:755"
   ["/usr/local/bin/choose-mirror"]="0:0:755"
   ["/usr/local/bin/livecd-sound"]="0:0:755"
