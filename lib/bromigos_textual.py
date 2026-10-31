@@ -18,6 +18,7 @@ Motion follows the user's setting (bromigos_theme.motion(); BROMIGOS_REDUCED_MOT
 the boot's accessibility=on): reduced or still, nothing sweeps or pulses.
 """
 import colorsys
+import math
 import os
 import sys
 
@@ -183,6 +184,268 @@ def apply_breakpoint(screen, cols, rows):
 def rich16(role):
     """A role's 16-colour console name, as Rich writes it (bright_green, green, …)."""
     return ansi16().get(role, "ansi_white").removeprefix("ansi_")
+
+
+# ── icons: a Nerd Font glyph where the terminal has one, else the console's, else ASCII
+#    (the same table as Field Kit's core/crates/bromigos-tui/src/icons.rs) ─────────────────
+ICONS = {
+    "welcome": ("\uf024", "►", ">"), "checks": ("\uf132", "Θ", "s"), "edition": ("\uf108", "◘", "@"),
+    "keyboard": ("\uf11c", "≡", "k"), "disk": ("\uf0a0", "■", "o"), "bitlocker": ("\uf084", "§", "k"),
+    "user": ("\uf007", "☺", "u"), "encryption": ("\uf023", "§", "L"), "ssh": ("\uf233", "≡", "="),
+    "summary": ("\uf0ae", "≡", "="), "install": ("\uf019", "↓", "v"), "done": ("\uf00c", "✓", "+"),
+    "auto": ("\uf01e", "↕", "a"), "network": ("\uf1eb", "≈", "~"), "vector": ("\uf27a", "♦", "V"),
+    "lab": ("\uf0c3", "Φ", "%"), "phone": ("\uf10b", "▌", "p"), "tour": ("\uf02d", "¶", "?"),
+    "server": ("\uf233", "≡", "="), "desktop": ("\uf108", "◘", "@"), "windows": ("\uf17a", "W", "W"),
+    "linux": ("\uf17c", "L", "L"), "bromigos": ("\uf06d", "▲", "*"), "chip": ("\uf2db", "∩", "c"),
+    "usb": ("\uf287", "▬", "u"), "check": ("\uf00c", "✓", "+"), "cross": ("\uf00d", "✗", "x"),
+    "alert": ("\uf071", "‼", "!"), "erase": ("\uf12d", "×", "e"), "split": ("\uf0db", "║", "|"),
+    "recovery": ("\uf1da", "←", "<"), "free": ("\uf067", "+", "+"), "power": ("\uf011", "Ø", "0"),
+    "boot": ("\uf0e7", "↑", "b"), "people": ("\uf0c0", "☺", "u"), "copy": ("\uf019", "↓", "v"),
+}
+
+
+def icon_look(env=None):
+    """nerd, console or ascii: BROMIGOS_ICONS decides, else Nerd glyphs in truecolour (kmscon
+    carries Symbols Nerd Font, desktop terminals a Nerd Font), the console's own on 16 colours."""
+    env = os.environ if env is None else env
+    forced = env.get("BROMIGOS_ICONS")
+    if forced in ("nerd", "console", "ascii"):
+        return forced
+    return "nerd" if color_mode(env) == "truecolor" else "console"
+
+
+def icon(name, look=None):
+    g = ICONS.get(name, ("•", "•", "*"))
+    return g[{"nerd": 0, "console": 1, "ascii": 2}[look or icon_look()]]
+
+
+# ── braille drawing: VECTOR's orb, the emblem ring, the holograms ────────────────────────
+class Dots:
+    """A braille canvas, `w` cells by `h` (2×4 dots a cell); a cell glows if any dot in it
+    was drawn hot."""
+    BITS = {(0, 0): 1, (0, 1): 2, (0, 2): 4, (1, 0): 8, (1, 1): 16, (1, 2): 32, (0, 3): 64, (1, 3): 128}
+
+    def __init__(self, w, h):
+        self.w, self.h = w, h
+        self.dots = [0] * (w * h)
+        self.hot = [0] * (w * h)       # 0 cold, 1 lit, 2 hot
+
+    def put(self, x, y, heat=1):
+        x, y = int(round(x)), int(round(y))
+        if 0 <= x < self.w * 2 and 0 <= y < self.h * 4:
+            i = (y // 4) * self.w + x // 2
+            self.dots[i] |= self.BITS[(x % 2, y % 4)]
+            self.hot[i] = max(self.hot[i], heat)
+
+    def line(self, x0, y0, x1, y1, heat=1):
+        n = int(max(abs(x1 - x0), abs(y1 - y0))) + 1
+        for k in range(n + 1):
+            self.put(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n, heat)
+
+    def rect(self, x0, y0, x1, y1, heat=1):
+        for a, b, c, d in ((x0, y0, x1, y0), (x1, y0, x1, y1), (x1, y1, x0, y1), (x0, y1, x0, y0)):
+            self.line(a, b, c, d, heat)
+
+    def ellipse(self, cx, cy, rx, ry, heat=1, step=4):
+        for i in range(0, 360, step):
+            a = math.radians(i)
+            self.put(cx + rx * math.cos(a), cy + ry * math.sin(a), heat)
+
+    def text(self, colors):
+        """Rich Text: colors = (cold, lit, hot) styles."""
+        out = Text()
+        for r in range(self.h):
+            for col in range(self.w):
+                i = r * self.w + col
+                ch = chr(0x2800 + self.dots[i]) if self.dots[i] else " "
+                out.append(ch, style=colors[self.hot[i]] if self.dots[i] else None)
+            if r < self.h - 1:
+                out.append("\n")
+        return out
+
+
+def styles(sixteen=None):
+    c = palette()
+    sixteen = color_mode() == "16" if sixteen is None else sixteen
+    if sixteen:
+        return (rich16("secondary"), rich16("primary"), "bold " + rich16("primary"))
+    return (c["dim"], c["primary"], "bold " + c["soft"])
+
+
+def orb(t=0.0, w=14, h=7):
+    """VECTOR's presence, the screen's one FLARE: a ring with a dashed inner ring and ticks, a
+    scan arc going round and a pulsing core (Field Kit's orb, after the same mock-up). t stays
+    0 under reduced motion."""
+    d = Dots(w, h)
+    cx, cy = w - 0.5, h * 2 - 0.5
+    rad = min(cx, cy * 0.95)
+    k = rad / 21.5
+    for i in range(0, 360, 2):
+        a = math.radians(i)
+        d.put(cx + rad * math.cos(a), cy + rad * math.sin(a))
+        if i % 6 < 3:
+            d.put(cx + (rad - 6 * k) * math.cos(a), cy + (rad - 6 * k) * math.sin(a))
+        if i % 30 == 0:
+            for dd in (1, 2):
+                d.put(cx + (rad - dd) * math.cos(a), cy + (rad - dd) * math.sin(a))
+    sweep = (t * 40) % 360
+    for i in range(70):
+        a = math.radians(sweep + i)
+        for dd in (0, 1):
+            d.put(cx + (rad - dd) * math.cos(a), cy + (rad - dd) * math.sin(a), 2)
+    pulse = (6 + 1.5 * math.sin(t * 3)) * k
+    for yy in range(h * 4):
+        for xx in range(w * 2):
+            r = math.hypot(xx - cx, yy - cy)
+            if 2.2 * k < r < pulse:
+                d.put(xx, yy, 2 if r > pulse - 1.2 * k else 1)
+    return d.text(styles())
+
+
+def ring(pct, w=18, h=9, t=0.0):
+    """The install's progress as the emblem's ring in braille: a faint track all round, the
+    part done thick and lit, ticks every 30°, the flame at its heart."""
+    d = Dots(w, h)
+    cx, cy = w - 0.5, h * 2 - 0.5
+    rad = min(cx, cy) - 0.5
+    for i in range(0, 360, 2):
+        a = math.radians(i - 90)
+        lit = i / 360 <= pct / 100
+        if lit:
+            for dd in (0, 1, 2):
+                d.put(cx + (rad - dd) * math.cos(a), cy + (rad - dd) * math.sin(a), 2 if dd == 0 else 1)
+        elif i % 6 == 0:
+            d.put(cx + rad * math.cos(a), cy + rad * math.sin(a), 0)
+        if i % 30 == 0:
+            d.put(cx + (rad - 4) * math.cos(a), cy + (rad - 4) * math.sin(a), 1 if lit else 0)
+    k = rad / 16
+    for (x0, y0, x1, y1) in ((0, -7, 4, 1), (4, 1, 0, 7), (0, 7, -4, 1), (-4, 1, 0, -7), (0, -2, 0, 5), (-2, 2, 2, 2)):
+        d.line(cx + x0 * k, cy + y0 * k, cx + x1 * k, cy + y1 * k, 1)
+    return d.text(styles())
+
+
+def holo(kind, w=20, h=8):
+    """A hologram on its Emitter, drawn in braille: a desktop's monitor, or a server rack."""
+    d = Dots(w, h)
+    W, H = w * 2, h * 4
+    cx = W / 2
+    if kind == "server":
+        x0, x1, y0, y1 = cx - W * 0.16, cx + W * 0.16, 1, H * 0.72
+        d.rect(x0, y0, x1, y1, 1)
+        n = 6
+        for i in range(1, n):
+            y = y0 + (y1 - y0) * i / n
+            d.line(x0, y, x1, y, 1)
+        for i in range(n):
+            y = y0 + (y1 - y0) * (i + 0.5) / n
+            d.put(x1 - 3, y, 2)
+            d.put(x1 - 5, y, 2)
+    else:
+        x0, x1, y0, y1 = cx - W * 0.3, cx + W * 0.3, 1, H * 0.58
+        d.rect(x0, y0, x1, y1, 1)
+        d.rect(x0 + 2, y0 + 2, x1 - 2, y1 - 2, 0)
+        for i in range(3):                      # a wave on the screen
+            for xx in range(int(x0 + 4), int(x1 - 4)):
+                d.put(xx, (y0 + y1) / 2 + math.sin((xx + i * 5) / 3) * 2 - 3 + i * 3, 2 if i == 1 else 0)
+        d.line(cx, y1, cx, H * 0.72, 1)
+        d.line(cx - W * 0.1, H * 0.72, cx + W * 0.1, H * 0.72, 1)
+    d.ellipse(cx, H * 0.86, W * 0.32, H * 0.08, 2, 3)     # the Emitter
+    d.ellipse(cx, H * 0.86, W * 0.2, H * 0.045, 1, 5)
+    return d.text(styles())
+
+
+def disk_map(segs, width, colors, split=None, erase=False, look=None):
+    """The disk as a bar of block characters, one colour per partition with its icon in it.
+    segs: [(role, bytes, words)]. split: (lo, hi, value, total) GB for alongside, inside the
+    'windows' segment. erase: all bromigOS, with a danger edge. Returns Rich Text."""
+    look = look or icon_look()
+    total = sum(s[1] for s in segs) or 1
+    minw = 3
+    big = [s for s in segs if s[1] / total * width >= minw]
+    room = width - (len(segs) - len(big)) * minw
+    bigsum = sum(s[1] for s in big) or 1
+    t = Text()
+    if erase:
+        t.append("▐", style="bold " + colors["danger"])
+        inner = width - 2
+        mid = icon("bromigos", look)
+        half = (inner - 1) // 2
+        t.append("█" * half, style=colors["bromigos"])
+        t.append(mid, style="bold reverse " + colors["bromigos"])
+        t.append("█" * (inner - half - 1), style=colors["bromigos"])
+        t.append("▌", style="bold " + colors["danger"])
+        return t
+    for s in segs:
+        n = minw if s not in big else max(minw, int(round(room * s[1] / bigsum)))
+        role = s[0]
+        if role == "windows" and split:
+            lo, hi, value, tot = split
+            cut = max(1, min(n - 2, int(round(n * value / tot))))
+            lo_c, hi_c = int(round(n * lo / tot)), int(round(n * hi / tot))
+            for i in range(n):
+                if i == cut:
+                    t.append("┃", style="bold reverse " + colors["text"])
+                elif i < cut:
+                    ch = "▒" if i < lo_c else "█"
+                    if i == cut // 2:
+                        t.append(icon("windows", look), style="bold reverse " + colors["windows"])
+                    else:
+                        t.append(ch, style=colors["windows"])
+                else:
+                    ch = "▒" if i >= hi_c else "█"
+                    if i == (cut + n) // 2 and n - cut > 3:
+                        t.append(icon("bromigos", look), style="bold reverse " + colors["bromigos"])
+                    else:
+                        t.append(ch, style=colors["bromigos"])
+            continue
+        col = colors.get(role, colors["other"])
+        ch = "░" if role == "free" else "█"
+        ic = {"efi": "chip", "windows": "windows", "recovery": "recovery", "linux": "linux", "free": "free",
+              "bromigos": "bromigos"}.get(role)
+        mid = n // 2
+        for i in range(n):
+            if ic and i == mid:
+                t.append(icon(ic, look), style="bold reverse " + col)
+            else:
+                t.append(ch, style=col)
+    return t
+
+
+def phone_frame(qr_text, state="waiting", lit=True, tight=False):
+    """The pairing QR inside a phone, drawn with box lines: the frame breathes while it waits
+    (lit toggles: the Pulse), glows when paired with a ✓ in place of the code (the Spark);
+    on its Emitter unless the screen is tight."""
+    c = palette()
+    sixteen = color_mode() == "16"
+    if sixteen:
+        frame = ("bold " + rich16("primary")) if (lit or state == "paired") else rich16("secondary")
+        glow = "bold " + rich16("primary")
+    else:
+        frame = ("bold " + (c["soft"] if state == "paired" else c["primary"])) if lit else c["dim"]
+        glow = "bold " + c["primary"]
+    lines = (qr_text or "").split("\n") if state != "paired" else []
+    width = max([len(x) for x in lines] + [24])
+    if state == "paired":                         # a big ✓ in braille, and the word
+        rows = 3 if tight else 6
+        d = Dots(width, rows)
+        W, H = width * 2, rows * 4
+        cx = W / 2
+        for off in (0, 1, 2):
+            d.line(cx - H * 0.7, H * 0.5 + off, cx - H * 0.2, H * 0.9 + off, 2)
+            d.line(cx - H * 0.2, H * 0.9 + off, cx + H * 0.8, H * 0.05 + off, 2)
+        lines = [str(x) for x in d.text(("", "", "")).split()] + ["", "PAIRED".center(width)]
+    t = Text()
+    t.append("╭" + "─" * (width + 2) + "╮\n", style=frame)
+    for ln in lines:
+        t.append("│ ", style=frame)
+        t.append(ln.ljust(width), style=glow if state == "paired" else None)
+        t.append(" │\n", style=frame)
+    t.append("╰" + "─" * (width + 2) + "╯", style=frame)
+    if not tight:
+        base = "▁▂▃▅▆▅▃▂▁"
+        pad = (width + 4 - len(base)) // 2
+        t.append("\n" + " " * pad + base, style=c["dim"] if not sixteen else rich16("secondary"))
+    return t
 
 
 CSS = """

@@ -31,6 +31,9 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
 from . import backend, common  # noqa: E402
+
+sys.path.append("/usr/lib/bromigos/lib")
+import bromigos_glass as glass  # noqa: E402
 from .disks import GiB, plain_size  # noqa: E402
 
 
@@ -271,6 +274,27 @@ class Emblem(Gtk.DrawingArea):
             cr.restore()
 
 
+# VECTOR's one line per step: what it does, in plain words (the guide in the rail's corner)
+VECTOR_LINES = {
+    "auto": "An answer file has every answer. I'll install by myself unless you cancel.",
+    "welcome": "I'm VECTOR. I'll walk you through it. Nothing changes until you say Install.",
+    "checks": "A few things about this computer worth knowing first. None of them stops us.",
+    "edition": "Pick what this computer is for. A server can get the desktop later.",
+    "keyboard": "Pick your layout and try it in the box.",
+    "disk": "Pick a disk, then how bromigOS goes on it.",
+    "disk:alongside": "{who} keeps its files. I'll make room beside it.",
+    "disk:erase": "Everything on this disk goes. Copy off what you need first.",
+    "disk:reinstall": "A fresh system. Your home folder stays exactly as it is.",
+    "bitlocker": "Save Windows' recovery key first. Windows may ask for it once.",
+    "user": "Who you are on this computer, and its name on your network.",
+    "encryption": "Locked, your files stay private even if the computer is lost.",
+    "ssh": "How you'll reach this server from your other computers.",
+    "summary": "Check it over. Nothing on the disk changes until you press Install.",
+    "install": "Sit back. I'll say if anything needs you.",
+    "done": "All set. Restart, and take out the stick when the screen goes dark.",
+}
+
+
 class Window(Adw.ApplicationWindow):
     def __init__(self, app, opts):
         super().__init__(application=app, title="Install bromigOS")
@@ -285,6 +309,7 @@ class Window(Adw.ApplicationWindow):
         self.zones = common.timezones()
         self.eds = common.editions()
         self.set_default_size(*opts.get("size", (1280, 800)))
+        glass.use_icon_theme()
         self._css = Gtk.CssProvider()
         Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), self._css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         self.restyle()
@@ -302,7 +327,7 @@ class Window(Adw.ApplicationWindow):
         head.set_title_widget(self.title)
         right.add_top_bar(head)
         self.scroll = Gtk.ScrolledWindow(hexpand=True, vexpand=True)
-        self.clamp = Adw.Clamp(maximum_size=900, tightening_threshold=700)
+        self.clamp = Adw.Clamp(maximum_size=1200, tightening_threshold=900)
         self.scroll.set_child(self.clamp)
         right.set_content(self.scroll)
         bar = Gtk.Box(spacing=12)
@@ -359,7 +384,8 @@ class Window(Adw.ApplicationWindow):
         hc = Adw.StyleManager.get_default().get_high_contrast()
         if hc:
             c = dict(c, muted=c["text"], faint=c["soft"], dim=c["primary"])
-        self._css.load_from_string(settings_css(c) + installer_css(c, hc))
+        self.c = c
+        self._css.load_from_string(settings_css(c) + installer_css(c, hc) + glass.css(c, hc))
 
     def on_key(self, ctl, keyval, code, state):
         ctrl_alt = Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK
@@ -401,16 +427,11 @@ class Window(Adw.ApplicationWindow):
     def show_step(self, sid):
         self.step = sid
         steps = self.steps()
-        # the rail: where you are
-        while (c := self.rail.get_first_child()):
-            self.rail.remove(c)
-        self.rail.append(label("INSTALL BROMIGOS", ("bi-rail-title",)))
+        # the rail: where you are, each step's icon, the progress line, VECTOR in the corner
         here = steps.index(sid) if sid in steps else 0
-        for i, s in enumerate(steps):
-            mark = "▸ " if s == sid else ("■ " if i < here else "□ ")
-            lab = label(mark + common.STEP[s][1], ("bi-step", "now" if s == sid else ("done" if i < here else "todo")), wrap=False)
-            hint(lab, f"Step {i + 1} of {len(steps)}: {common.STEP[s][2]}" + (" (you're here)" if s == sid else ""))
-            self.rail.append(lab)
+        self.guide = glass.guide(self.vector_line(sid), "idle" if sid == "install" else "speaking",
+                                 still=self.reduced or sid == "install" or bool(self.opts.get("render")))
+        glass.rail(self.rail, steps, here, common.STEP, self.c, self.guide)
         self._retitle()
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, margin_top=28, margin_bottom=28,
                        margin_start=24, margin_end=24)
@@ -434,6 +455,13 @@ class Window(Adw.ApplicationWindow):
         GLib.idle_add(self.next.grab_focus if sid not in ("install", "done") else (lambda: False))
         if self.opts.get("script") and sid != "auto":
             GLib.timeout_add(300, self.script_step)
+
+    def vector_line(self, sid):
+        if sid == "disk" and self.a.get("mode"):
+            d = self.disk()
+            who = ((d or {}).get("options", {}).get("alongside", {}).get("who")) or "Windows"
+            return VECTOR_LINES.get(f"disk:{self.a['mode']}", VECTOR_LINES["disk"]).format(who=who)
+        return VECTOR_LINES.get(sid, "")
 
     def _retitle(self):
         steps = self.steps()
@@ -573,23 +601,22 @@ class Window(Adw.ApplicationWindow):
 
     def build_edition(self, page):
         self.heading(page, "edition")
-        g = self.group(page, "Choose one")
-        first = Gtk.CheckButton()          # a hidden anchor: a lone choice still draws as a radio
+        row = Gtk.Box(spacing=18, homogeneous=True)
+        row.update_property([Gtk.AccessibleProperty.LABEL], ["What kind of computer is this"])
+        first = None
+        look = {"desktop": ("kind-desktop.jpg", "video-display-symbolic"), "server": ("kind-server.jpg", "network-server-symbolic")}
         for e in self.eds:
-            row = Adw.ActionRow(title=e["title"], subtitle=GLib.markup_escape_text(e.get("summary", "") + " " + e.get("hint", "")))
-            row.set_subtitle_lines(0)
-            chk = Gtk.CheckButton(active=e["id"] == self.a["edition"], valign=Gtk.Align.CENTER)
-            if first:
-                chk.set_group(first)
-            first = first or chk
-            chk.connect("toggled", lambda b, eid=e["id"]: b.get_active() and self.a.update(edition=eid))
-            row.add_prefix(chk)
-            row.set_activatable_widget(chk)
-            hint(row, f"{e['title']}: {e.get('summary', '')}")
-            hint(chk, f"Install {e['title']}")
+            pic, ic = look.get(e["id"], ("kind-desktop.jpg", "computer-symbolic"))
+            lines = [e.get("summary", ""), e.get("hint", "")]
             if common.needs_download(e):
-                row.set_subtitle(GLib.markup_escape_text(row.get_subtitle() and e.get("summary", "") + " " + common.download_words(e)))
-            g.add(row)
+                lines.append(common.download_words(e))
+            card = glass.holo_card(pic, ic, e["title"], [x for x in lines if x], e["id"] == self.a["edition"], first,
+                                   width=300 if getattr(self, "compact", False) else 420)
+            first = first or card
+            card.connect("toggled", lambda b, eid=e["id"]: b.get_active() and self.a.update(edition=eid))
+            hint(card, f"Install {e['title']}: {e.get('summary', '')}")
+            row.append(card)
+        page.append(row)
 
     def build_keyboard(self, page):
         self.heading(page, "keyboard")
@@ -645,13 +672,28 @@ class Window(Adw.ApplicationWindow):
             first = first or chk
             chk.connect("toggled", lambda b, p=d["path"]: b.get_active() and self.pick_disk(p))
             row.add_prefix(chk)
+            row.add_prefix(glass.icon(glass.drive_icon(d), 28, "dg-card-icon"))
             row.set_activatable_widget(chk)
             row.set_sensitive(not d["medium"])
             what = "; ".join(p["what"] for p in d["partitions"]) or "empty"
             hint(row, d["options"]["erase"]["why"] if d["medium"] else f"{d['path']}: {what}")
             hint(chk, f"Install on {d['model']}")
-            if (d.get("health") or {}).get("state") == "failing" and not d["medium"]:
-                row.add_suffix(Gtk.Image.new_from_icon_name("dialog-warning-symbolic"))
+            if d["medium"]:
+                badge = ("THIS STICK", "")
+            elif (d.get("health") or {}).get("state") == "failing":
+                badge = ("▲ FAILING", "danger")
+            elif (d.get("health") or {}).get("state") == "ok" or d.get("health") is None:
+                badge = ("● HEALTHY", "")
+            else:
+                badge = ("? HEALTH UNKNOWN", "warn")
+            b = Gtk.Label(label=badge[0], valign=Gtk.Align.CENTER)
+            b.add_css_class("dg-badge")
+            if badge[1]:
+                b.add_css_class(badge[1])
+            hint(b, (d.get("health") or {}).get("why") or ("The disk reports no problems." if badge[0] == "● HEALTHY" else
+                                                            "The USB stick bromigOS started from" if d["medium"] else
+                                                            "The disk didn't say how healthy it is."))
+            row.add_suffix(b)
             g.add(row)
         self.detail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         page.append(self.detail)
@@ -671,8 +713,7 @@ class Window(Adw.ApplicationWindow):
         d = self.disk()
         if not d:
             return
-        if d["partitions"]:
-            box.append(label("On it now: " + "; ".join(p["what"] for p in d["partitions"]), ("bi-intro",)))
+        self.guide.line.set_label(self.vector_line("disk"))
         if (d.get("health") or {}).get("state") == "failing":
             g = self.group(box, "This disk may be failing", d["health"]["why"])
             sw = Adw.SwitchRow(title="Install on it anyway", subtitle="Only if you've copied off what you need: it may stop working.")
@@ -684,33 +725,31 @@ class Window(Adw.ApplicationWindow):
         ri = d["options"].get("reinstall", {})
         if self.a["mode"] is None:
             self.a["mode"] = "reinstall" if ri.get("ok") else ("alongside" if al.get("ok") else ("erase" if er.get("ok") else None))
-        g = self.group(box, "How")
-        first = Gtk.CheckButton()          # a hidden anchor: a lone choice still draws as a radio
-        choices = ([("reinstall", ri.get("label", ""), ri)] if ri.get("ok") else []) + \
-            [("alongside", al["label"], al), ("erase", "Erase the whole disk", er)]
-        for mode, title, opt in choices:
+        box.append(label("HOW", ("bi-rail-title",)))
+        cards = Gtk.Box(spacing=14, homogeneous=True)
+        first = None
+        choices = ([("reinstall", ri.get("label", ""), ri, "view-refresh-symbolic")] if ri.get("ok") else []) + \
+            [("alongside", al["label"], al, "view-dual-symbolic"), ("erase", "Erase the whole disk", er, "user-trash-symbolic")]
+        for mode, title, opt, ic in choices:
             if mode == "reinstall":
                 sub = ri["words"]
             elif mode == "alongside":
                 sub = (f"Keep {al.get('name') or 'what is there'} and its files. At every start, choose which one to use."
                        if al.get("ok") else al["why"])
             else:
-                sub = (f"Delete everything on the disk ({er.get('loses')}) and give all of it to bromigOS." if er.get("ok") else er["why"])
-            row = Adw.ActionRow(title=title, subtitle=GLib.markup_escape_text(sub))
-            row.set_subtitle_lines(0)
-            chk = Gtk.CheckButton(active=self.a["mode"] == mode, valign=Gtk.Align.CENTER, sensitive=bool(opt.get("ok")))
-            if first:
-                chk.set_group(first)
-            first = first or chk
-            chk.connect("toggled", lambda b, m=mode: b.get_active() and self.pick_mode(m))
-            row.add_prefix(chk)
-            row.set_activatable_widget(chk)
-            row.set_sensitive(bool(opt.get("ok")))
-            if mode == "erase" and opt.get("ok") and d["partitions"]:
-                row.add_css_class("bromigos-error" if self.a["mode"] == "erase" else "x")
-            hint(row, sub)
-            hint(chk, title)
-            g.add(row)
+                sub = (f"Delete everything on it ({er.get('loses')}) and give it all to bromigOS." if er.get("ok") else er["why"])
+            card = glass.holo_card(None, ic, title, [sub], self.a["mode"] == mode, first, width=260)
+            first = first or card
+            card.set_sensitive(bool(opt.get("ok")))
+            if mode == "erase" and d["partitions"]:
+                card.add_css_class("dg-danger")
+            card.connect("toggled", lambda b, m=mode: b.get_active() and self.pick_mode(m))
+            hint(card, sub)
+            cards.append(card)
+        box.append(cards)
+        g = Adw.PreferencesGroup()
+        box.append(g)
+        self.disk_map_ui(box, d, al, er)
         if not al.get("ok") and al.get("code") != "empty":
             row = Adw.ActionRow(title="What to do to install alongside", subtitle=GLib.markup_escape_text(al["fix"]))
             row.set_subtitle_lines(0)
@@ -728,16 +767,8 @@ class Window(Adw.ApplicationWindow):
             if ri.get("users") and not self.a.get("user"):
                 u = ri["users"][0]
                 self.a.update(user=u["name"], full_name=u["gecos"].split(",")[0], user_edited=True)
-        if self.a["mode"] == "alongside" and al.get("ok"):
-            if al["mode"] == "shrink":
-                self.split_ui(box, al)
-            else:
-                box.append(label(f"bromigOS goes in the {al['size_text']} of free space. "
-                                 f"{al.get('name') or 'What is there'} isn't touched.", ("bi-intro",)))
-            if al.get("warn"):
-                box.append(label(al["warn"], ("bi-warn",)))
-        elif self.a["mode"] == "erase" and er.get("ok") and d["partitions"]:
-            box.append(label(f"Everything on this disk is deleted: {er['loses']}. Copy anything you want to keep first.", ("bi-danger",)))
+        if self.a["mode"] == "alongside" and al.get("ok") and al.get("warn"):
+            box.append(label(al["warn"], ("bi-warn",)))
         self.advanced_ui(box)
 
     def advanced_ui(self, box):
@@ -792,6 +823,79 @@ class Window(Adw.ApplicationWindow):
         if mode != self.a["mode"]:
             self.a["mode"] = mode
             GLib.idle_add(lambda: (self.fill_disk_detail(), False)[1])
+
+    def disk_map_ui(self, box, d, al, er):
+        """The disk as a map of its partitions: the alongside divider on it, or erase's bar
+        turned all bromigOS; the sizes above it, a legend and each side's minimum below."""
+        mode = self.a["mode"]
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card.add_css_class("bi-card")
+        top = Gtk.Box()
+        them = label("", ("bi-split", "them"), wrap=False)
+        us = label("", ("bi-split", "us"), wrap=False, xalign=1.0)
+        us.set_hexpand(True)
+        top.append(them)
+        top.append(us)
+        card.append(top)
+        shrink = mode == "alongside" and al.get("ok") and al.get("mode") == "shrink"
+        value = None
+        if shrink:
+            total = al["part_size"] + al["free_after"]
+            v = int(self.a.get("bromigos_bytes") or al["default"])
+            v = max(al["min"], min(al["max"], v))
+            self.a["bromigos_bytes"] = v
+            value = (total - v) / GiB
+        m = glass.DiskMap(d, self.c, mode if mode in ("alongside", "erase") else "view", al if mode == "alongside" else None,
+                          value, still=self.reduced)
+        card.append(m)
+        if shrink:
+            hint(m, f"The split: drag the handle, or use ← and → (Page Up and Page Down by 10 GB, Home and End to the "
+                    f"limits). ← gives bromigOS more room, → gives {al['who']} more. The striped ends are what each needs.")
+            lims = Gtk.Box(spacing=12)
+            left = label(f"◂ {al['who']} needs {plain_size(al['keep_min'])}: what it uses now and room to grow",
+                         ("bi-limit", "them"), xalign=0.0)
+            right = label(f"bromigOS needs {plain_size(al['min'])} ▸", ("bi-limit", "us"), wrap=False, xalign=1.0)
+            left.set_hexpand(True)
+            lims.append(left)
+            lims.append(right)
+            card.append(lims)
+
+            def moved(value):
+                self.a["bromigos_bytes"] = max(al["min"], min(al["max"], total - int(round(value)) * GiB))
+                them.set_label(f"{al['who'].upper()}  {plain_size(total - self.a['bromigos_bytes'])}")
+                us.set_label(f"BROMIGOS  {plain_size(self.a['bromigos_bytes'])}")
+            m.on_change = moved
+            moved(m.value)
+            self.split_bar = m
+        elif mode == "erase":
+            them.set_label(f"{d['model'].upper()}  {d['size_text']}")
+            us.set_label(f"ALL BROMIGOS  {d['size_text']}")
+            us.add_css_class("us")
+        elif mode == "alongside" and al.get("ok"):
+            them.set_label(f"{(al.get('name') or 'WHAT IS THERE').upper()}  UNTOUCHED")
+            us.set_label(f"BROMIGOS  {al.get('size_text', '')}")
+        else:
+            them.set_label(f"{d['model'].upper()}  {d['size_text']}")
+        legend = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=4, column_spacing=18, row_spacing=4)
+        icons = {"efi": "media-flash-symbolic", "msr": "emblem-system-symbolic", "windows": "computer-symbolic",
+                 "recovery": "view-refresh-symbolic", "linux": "drive-harddisk-symbolic", "other": "drive-harddisk-symbolic",
+                 "free": "list-add-symbolic"}
+        if mode == "erase":
+            legend.append(glass.legend_item("dialog-warning-symbolic",
+                                            f"Deleted: {er.get('loses') or 'everything on it'}. Copy off anything you want first.",
+                                            "danger"))
+        else:
+            for role, size, words, _p in glass.segments(d):
+                legend.append(glass.legend_item(icons.get(role, "drive-harddisk-symbolic"), words if role != "free" else
+                                                f"Free space, {plain_size(size)}", "windows" if role == "windows" else ""))
+            if shrink or (mode == "alongside" and al.get("ok")):
+                legend.append(glass.legend_item("emblem-ok-symbolic" if False else "object-select-symbolic",
+                                                "bromigOS, in the room made beside it", "bromigos"))
+        card.append(legend)
+        if shrink:
+            card.append(label(f"{al['who']} is made smaller to make room; its files stay where they are. {plain_size(common_good())} "
+                              "or more leaves bromigOS room for apps and games.", ("bi-intro",)))
+        box.append(card)
 
     def split_ui(self, box, al):
         total = al["part_size"] + al["free_after"]
@@ -1013,13 +1117,29 @@ class Window(Adw.ApplicationWindow):
 
     def build_install(self, page):
         self.heading(page, "install")
-        self.bar = Gtk.ProgressBar(show_text=True)
-        hint(self.bar, "How far the install has got.")
-        self.bar.update_property([Gtk.AccessibleProperty.LABEL], ["Install progress"])
+        hero = Gtk.Box(spacing=28)
+        left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        size = 220 if getattr(self, "compact", False) else 300
+        self.ring = glass.EmblemRing(self.c, size, still=self.reduced)
+        hint(self.ring, "How far the install has got: the ring fills as it goes.")
+        left.append(self.ring)
+        self.pct = label("0 %", ("dg-pct",), wrap=False, xalign=0.5)
+        left.append(self.pct)
+        hero.append(left)
+        right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, hexpand=True)
         self.status = label("Starting…", ("bi-status",))
         self.status.update_property([Gtk.AccessibleProperty.LABEL], ["What the install is doing"])
+        right.append(self.status)
+        self.phase_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        right.append(self.phase_box)
+        self._phases("Starting…", 0)
+        right.append(glass.Slideshow(still=self.reduced, width=380 if not getattr(self, "compact", False) else 300))
+        hero.append(right)
+        page.append(hero)
+        self.bar = Gtk.ProgressBar()             # for screen readers and the harness: the same number
+        self.bar.update_property([Gtk.AccessibleProperty.LABEL], ["Install progress"])
+        self.bar.set_visible(False)
         page.append(self.bar)
-        page.append(self.status)
         exp = Gtk.Expander(label="Details")
         hint(exp, "Every step the install takes, as it happens.")
         self.logbuf = Gtk.TextBuffer()
@@ -1029,6 +1149,14 @@ class Window(Adw.ApplicationWindow):
         self.logview = tv
         exp.set_child(sw)
         page.append(exp)
+
+    def _phases(self, text, pct):
+        while (ch := self.phase_box.get_first_child()):
+            self.phase_box.remove(ch)
+        d = self.disk() or {}
+        al = d.get("options", {}).get("alongside", {})
+        shrink = self.a.get("mode") == "alongside" and al.get("mode") == "shrink"
+        self.phase_box.append(glass.phase_list(self.c, shrink, text, pct))
 
     def build_done(self, page):
         if self.done is True:
@@ -1174,7 +1302,13 @@ class Window(Adw.ApplicationWindow):
     def _stage(self, pct, text):
         self.bar.set_fraction(pct / 100)
         self.bar.set_text(f"{pct} %")
+        self.ring.set_pct(pct)
+        self.pct.set_label(f"{pct} %")
         self.status.set_label(text)
+        self._phases(text, pct)
+        line = {True: "Nearly there. Then a restart, and it's yours."}.get(pct >= 85) or \
+            ("Copying bromigOS over. This is the long part." if pct >= 15 else VECTOR_LINES["install"])
+        self.guide.line.set_label(line)
         if self.opts.get("script"):
             print(f"  {pct:3d}%  {text}", flush=True)
         return False
@@ -1299,7 +1433,7 @@ def snapshot(win, path):
 def render_all(win, out):
     """Each step, drawn with the fake back end (the recorded disks), to OUT/gui-STEP.png."""
     os.makedirs(out, exist_ok=True)
-    plan = [("welcome", {}), ("checks", {}), ("edition", {}), ("keyboard", {}), ("disk", {}),
+    plan = [("welcome", {}), ("checks", {}), ("edition", {}), ("keyboard", {}), ("disk", {}), ("disk-erase", {}),
             ("disk-advanced", {}), ("bitlocker", {}), ("user", {"full_name": "Alex Rivera", "password": "correct-horse-battery"}), ("encryption", {}),
             ("ssh", {}), ("summary", {}), ("summary-what", {}),
             ("install", {}), ("done", {}), ("failed", {})]
@@ -1318,7 +1452,12 @@ def render_all(win, out):
             return False
         sid, fill = plan[state["i"]]
         state["i"] += 1
-        if sid == "disk-advanced":
+        if sid == "disk-erase":
+            win.a["mode"] = "erase"
+            win.show_step("disk")
+            GLib.idle_add(lambda: (win.scroll.get_vadjustment().set_value(400), False)[1])
+        elif sid == "disk-advanced":
+            win.a["mode"] = "alongside"
             win.show_step("disk")
             win.adv_row.set_expanded(True)
             GLib.idle_add(lambda: (win.scroll.get_vadjustment().set_value(win.scroll.get_vadjustment().get_upper()), False)[1])

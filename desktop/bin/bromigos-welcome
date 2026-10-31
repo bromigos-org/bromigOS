@@ -69,6 +69,17 @@ STEPS = [
 ]
 STEP = {s[0]: s for s in STEPS}
 
+GUIDE = {   # VECTOR's one line per step, in the rail's corner
+    "network": "Get online and I can fetch updates, my brains and my voice.",
+    "screens": "Pick the screen in front of you. The panels go there.",
+    "world": "Pick a world. Every one reads this machine, live.",
+    "vector": "Where should I think? Your lab is best, if you have one.",
+    "lab": "I'll look for your lab. I only read what this computer already knows.",
+    "phone": "Scan it with BRODEC and I'm on your phone too.",
+    "keys": "Try a few keys. Each card lights up when it works.",
+    "done": "That's it. Settings has all of this, any time.",
+}
+
 KEY_TOUR = [   # (keys, what it does, how we see it worked: a window class appearing, or None)
     ("Super + Space", "The app launcher: type to find any app", "Rofi"),
     ("Super + Enter", "A terminal", "kitty"),
@@ -166,6 +177,7 @@ def main(argv):
     gi.require_version("Adw", "1")
     from gi.repository import Adw, Gdk, GLib, Gtk, Pango
     import bromigos_firstrun as F          # this command's own lib first: the settings' import below
+    import bromigos_glass as glass
     try:                                   # may put the installed one ahead of it
         from bromigos_settings import style
     except ImportError:
@@ -223,7 +235,9 @@ def main(argv):
 .bw-code {{ font-size: 1.9em; font-weight: 700; letter-spacing: 0.18em; color: {c.get('primary', '#39ff14')}; }}
 .bw-status {{ font-size: 1.05em; color: {c.get('soft', '#9cff8a')}; }}
 .bw-tick {{ font-size: 5em; color: {c.get('primary', '#39ff14')}; }}
-""")
+""" + glass.css(c))
+            self.c = glass.palette(c)
+            glass.use_icon_theme()
             Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
             root = Gtk.Box()
             self.rail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -259,14 +273,10 @@ def main(argv):
             if hasattr(self, "stop_pairing"):
                 self.stop_pairing()          # the phone step's watching ends with it
             self.step = sid
-            while (ch := self.rail.get_first_child()):
-                self.rail.remove(ch)
             here = self.steps.index(sid)
-            for i, s in enumerate(self.steps):
-                w = lab(("▸ " if s == sid else ("■ " if i < here else "□ ")) + STEP[s][1], "bw-step",
-                        "now" if s == sid else ("done" if i < here else "todo"), wrap=False)
-                hint(w, STEP[s][2])
-                self.rail.append(w)
+            self.guide = glass.guide(GUIDE.get(sid, ""), "speaking", still=bool(self.render) or reduced(),
+                                     size=(100, 150) if self.screen_h() < 760 else (120, 178))
+            glass.rail(self.rail, self.steps, here, STEP, self.c, self.guide, title="WELCOME")
             tight = self.screen_h() < 760     # 1024×600 and the like: less air, the same content
             page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10 if tight else 14, margin_top=14 if tight else 28,
                            margin_bottom=14 if tight else 28, margin_start=24, margin_end=24)
@@ -598,12 +608,11 @@ def main(argv):
             """A pairing, as one card: the QR on the left; on the right the steps, the code to type,
             the live status and its buttons."""
             from types import SimpleNamespace
-            size = 220 if self.screen_h() >= 760 else 150
+            size = 210 if self.screen_h() >= 760 else 165
             page.append(lab(title.upper(), "bw-group-title", wrap=False))
             card = Gtk.Box(spacing=22)
             card.add_css_class("bw-card")
-            qr = Gtk.Box()
-            qr.set_size_request(size, size)
+            qr = glass.PhoneFrame(self.c, int(size * 0.92), still=bool(self.render) or reduced())
             qr.set_valign(Gtk.Align.START)
             qr.add_css_class("bw-qr-slot")
             card.append(qr)
@@ -630,23 +639,28 @@ def main(argv):
             view.actions.append(b)
             return b
 
-        def qr_picture(self, text, size, svg=None):
+        def qr_file(self, text, svg=None):
+            """The QR as a file: the agent's own SVG, else qrencode's PNG."""
             import tempfile
             d = tempfile.mkdtemp(prefix="bw-qr-")
-            path = None
-            if svg:                                   # the agent's own drawing of it
+            if svg:
                 path = os.path.join(d, "qr.svg")
                 with open(path, "w") as f:
                     f.write(svg)
-            elif F.qr_png(text, os.path.join(d, "qr.png")):
-                path = os.path.join(d, "qr.png")
+                return path
+            path = os.path.join(d, "qr.png")
+            return path if F.qr_png(text, path) else None
+
+        def qr_picture(self, text, size, svg=None):
+            """The QR at exactly `size` pixels (a Gtk.Image keeps to its pixel size, a Picture
+            grows to its file's)."""
+            path = self.qr_file(text, svg)
             if not path:
                 return None
-            p = Gtk.Picture.new_for_filename(path)
-            p.set_size_request(size, size)
-            p.set_can_shrink(True)
-            p.add_css_class("bw-qr")
-            return p
+            im = Gtk.Image.new_from_file(path)
+            im.set_pixel_size(size)
+            im.add_css_class("bw-qr")
+            return im
 
         def install_machine(self):
             def work():
@@ -678,7 +692,7 @@ def main(argv):
 
         def start_pairing(self):
             v = self.pair_view
-            self._clear(v.qr)
+            v.qr.set_qr(None)
             self._clear(v.actions)
             v.code.set_label("—")
             v.status.set_label("Waiting for the pairing code…")
@@ -697,11 +711,8 @@ def main(argv):
             self.bridge_pairing = F.Pairing(F.lab_pair_argv(gui=True), lambda ev: GLib.idle_add(self._pair_event, ev, v, True))
 
         def _show_code(self, ev, v):
-            self._clear(v.qr)
-            pic = self.qr_picture(ev.get("qr", ""), v.size, ev.get("qr_svg"))
-            if pic:
-                hint(pic, "Scan this in BRODEC: LAB › MACHINES › ADD MACHINE")
-                v.qr.append(pic)
+            v.qr.set_qr(self.qr_file(ev.get("qr", ""), ev.get("qr_svg")))
+            hint(v.qr, "Scan this in BRODEC: LAB › MACHINES › ADD MACHINE")
             v.code.set_label(ev.get("user_code_display") or ev.get("user_code", ""))
 
         def _pair_event(self, ev, v, bridge):
@@ -710,10 +721,7 @@ def main(argv):
                 self._show_code(ev, v)
                 v.status.set_label("● Waiting for your phone to confirm…")
             elif e == "paired":
-                self._clear(v.qr)
-                tick = lab("✓", "bw-tick", wrap=False)
-                tick.set_size_request(v.size, v.size)
-                v.qr.append(tick)
+                v.qr.set_state("paired")
                 v.code.set_label("Paired")
                 for w in v.steps:                  # done with: room for what comes next
                     w.set_visible(False)

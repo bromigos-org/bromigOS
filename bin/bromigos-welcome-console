@@ -36,6 +36,16 @@ PENDING = os.path.join(STATE, "welcome-pending")
 SERVER_TOML = "/etc/bromigos/server.toml"
 KEYS_ONLY = "/etc/ssh/sshd_config.d/01-bromigos-keys-only.conf"
 
+GUIDE = {   # VECTOR's one line per step, under the rail
+    "network": "This server's address on your network.",
+    "ssh": "Keys only is safest. Nobody can guess a key.",
+    "vector": "Where should I think? Your lab is best.",
+    "lab": "Join your lab and I can use it.",
+    "phone": "Scan it with BRODEC and I'm on your phone.",
+    "tour": "The commands worth knowing.",
+    "done": "All set. Sign in from anywhere with SSH.",
+}
+
 STEPS = [
     ("network", "Network", "The network",
      "This server's connection and its address on your network. Other computers reach it there."),
@@ -201,9 +211,26 @@ def main(argv):
             self.i = i
             sid, short, head, intro = STEPS[i]
             self._top()
+            c = BT.palette()
             rail = Text()
+            icons = {"network": "network", "ssh": "ssh", "vector": "vector", "lab": "lab", "phone": "phone", "tour": "tour",
+                     "done": "done"}
             for j, s in enumerate(STEPS):
-                rail.append(("▸ " if j == i else ("■ " if j < i else "□ ")) + s[1] + "\n", style="bold" if j == i else ("" if j < i else "dim"))
+                ic = BT.icon(icons.get(s[0], "done")) if hasattr(BT, "icon") else "•"
+                if j == i:
+                    rail.append("▌" + ic + " " + s[1] + "\n", style="bold " + c["primary"])
+                else:
+                    rail.append(" " + ic + " " + s[1], style="" if j < i else "dim")
+                    rail.append((" " + (BT.icon("check") if hasattr(BT, "icon") else "✓")) if j < i else "", style=c["primary"])
+                    rail.append("\n")
+            if hasattr(BT, "orb") and self.size.height >= 30 and getattr(self, "bp", "normal") not in ("compact", "narrow"):
+                rail.append("\n")
+                rail.append_text(BT.orb(0.0, 12, 6))
+                line = GUIDE.get(sid, "")
+                if line:
+                    rail.append("\n")
+                    rail.append("VECTOR  ", style="bold " + c["primary"])
+                    rail.append(line)
             self.query_one("#rail", Static).update(rail)
             page = self.query_one("#page", VerticalScroll)
             await page.remove_children()
@@ -394,7 +421,8 @@ def main(argv):
             if e == "code":
                 self._qr(ev)
             elif e == "paired":
-                self.qr.update("")
+                self.qr_state, self.qr_lit = "paired", True        # the Spark: lit, then still
+                self._frame()
                 self.pair_line.set(f"✓ Paired with {ev.get('owner') or 'your phone'}", "ok")
                 if self.screen.has_class("-qr-tight"):
                     self.query_one("#top", Static).update("PAIR YOUR PHONE  ·  ✓ PAIRED")
@@ -412,13 +440,31 @@ def main(argv):
             shown = code.get("user_code_display") or code.get("user_code") or ""
             text = (code.get("qr_text") or F.qr_text(code["qr"])) if self.size.width >= 50 and self.size.height >= 24 else None
             if text:
-                self.qr.update(text)
+                self.qr_lines = text
+                self.qr_state = "waiting"
+                self._frame()
+                if not getattr(self, "_pulse", None) and BT.motion() == "full" and not render:
+                    self._pulse = self.set_interval(0.9, self._breathe)
             else:
                 self.qr.styles.width = "1fr"
                 self.qr.update(Text("Make the window bigger to show the QR code (80×24 or more).", overflow="fold"))
             self.pair_line.set(f"In BRODEC: LAB › MACHINES › ADD MACHINE, then scan it, or type {shown}", "busy")
             if self.screen.has_class("-qr-tight"):      # the code where it's always seen
                 self.query_one("#top", Static).update(f"PAIR YOUR PHONE  ·  CODE {shown}")
+
+        def _frame(self):
+            tight = self.screen.has_class("-qr-tight")
+            if hasattr(BT, "phone_frame"):
+                self.qr.update(BT.phone_frame(getattr(self, "qr_lines", ""), getattr(self, "qr_state", "waiting"),
+                                              getattr(self, "qr_lit", True), tight))
+            else:
+                self.qr.update(getattr(self, "qr_lines", ""))
+
+        def _breathe(self):            # the Pulse: the phone's frame breathes while it waits
+            if STEPS[self.i][0] != "phone" or getattr(self, "qr_state", "") != "waiting":
+                return
+            self.qr_lit = not getattr(self, "qr_lit", True)
+            self._frame()
 
         def build_tour(self, page):
             t = Table.grid(padding=(0, 2))

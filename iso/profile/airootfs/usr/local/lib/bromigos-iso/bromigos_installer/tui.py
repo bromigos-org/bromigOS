@@ -41,6 +41,7 @@ try:
     from textual.suggester import SuggestFromList
     from textual.theme import Theme
     from textual.widget import Widget
+    from textual.message import Message
     from textual.widgets import (Button, Checkbox, Collapsible, ContentSwitcher, Input, Label, ProgressBar, RadioButton,
                                  RadioSet, RichLog, Select, Static, Switch)
     HAVE_TEXTUAL = True
@@ -48,6 +49,7 @@ except ImportError:          # the plain questions still work
     HAVE_TEXTUAL = False
     App = object
     Widget = object
+    Message = object
 
 WORDMARK = """\
  ██████  ██████   ██████  ███    ███ ██  ██████   ██████  ███████
@@ -80,12 +82,13 @@ class Split(Widget, can_focus=True):
     BINDINGS = [Binding("left", "move(-1)", "Smaller", show=False), Binding("right", "move(1)", "Bigger", show=False),
                 Binding("shift+left", "move(-10)", show=False), Binding("shift+right", "move(10)", show=False),
                 Binding("home", "move(-100000)", show=False), Binding("end", "move(100000)", show=False)]
-    DEFAULT_CSS = "Split { height: 4; width: 1fr; padding: 0 1; border: round $primary 40%; } Split:focus { border: round $primary; }"
+    DEFAULT_CSS = "Split { height: 5; width: 1fr; padding: 0 1; border: round $primary 40%; } Split:focus { border: double $primary; }"
     value = reactive(0)
 
-    def __init__(self, who, total, lo, hi, value, **kw):
+    def __init__(self, who, total, lo, hi, value, segs=None, partition=None, **kw):
         super().__init__(**kw)
         self.who, self.total, self.lo, self.hi = who, total, lo, hi
+        self.segs, self.partition = segs or [], partition
         self.value = value
 
     def action_move(self, gib):
@@ -100,25 +103,122 @@ class Split(Widget, can_focus=True):
         self.post_message(SplitChanged(self))
 
     def render(self):
+        c = common.theme()[0]
         width = max(10, self.size.width - 2)
         left = self.total - self.value
-        cells = int(width * left / self.total) if self.total else 0
-        t = Text()
-        t.append("█" * cells, style="bold " + common.theme()[0]["soft"])
-        t.append("░" * (width - cells), style=common.theme()[0]["primary"])
-        label = Text(f"{self.who.upper()} {plain_size(left)}", style="bold")
-        label.append("   ◂ ▸   ", style="dim")
-        label.append(f"BROMIGOS {plain_size(self.value)}", style="bold " + common.theme()[0]["primary"])
-        return Text("\n").join([label, t])
+        label = Text(f"{self.who.upper()} {plain_size(left)}", style="bold " + c.get("cyan", c["soft"]))
+        gap = max(3, width - len(label) - len(f"BROMIGOS {plain_size(self.value)}"))
+        label.append(" " * gap)
+        label.append(f"BROMIGOS {plain_size(self.value)}", style="bold " + c["primary"])
+        if BT is not None and hasattr(BT, "disk_map") and self.segs:
+            gb = 2 ** 30
+            segs = [s if not (s[0] == "windows" and s[3] and s[3]["path"] == self.partition) else ("windows", s[1], s[2], s[3])
+                    for s in self.segs]
+            segs = [s if s[0] != "windows" or (s[3] and s[3]["path"] == self.partition) else ("other",) + s[1:] for s in segs]
+            bar = BT.disk_map(segs, width, map_colors(), split=((self.total - self.hi) / gb, (self.total - self.lo) / gb,
+                                                                 left / gb, self.total / gb))
+        else:
+            cells = int(width * left / self.total) if self.total else 0
+            bar = Text("█" * cells, style="bold " + c["soft"])
+            bar.append("░" * (width - cells), style=c["primary"])
+        lims = Text(f"◂ {self.who} needs {plain_size(self.total - self.hi)}", style=c.get("cyan", c["soft"]))
+        right = f"bromigOS needs {plain_size(self.lo)} ▸"
+        lims.append(" " * max(1, width - len(lims) - len(right)))
+        lims.append(right, style=c["primary"])
+        return Text("\n").join([label, bar, lims])
+
+
+def map_colors():
+    """The disk map's colours: the other system cyan, bromigOS the primary, the small
+    partitions dim, free space faint (the console's 16 when that's what there is)."""
+    c = common.theme()[0]
+    if BT is not None and BT.color_mode() == "16":
+        return {"windows": "cyan", "bromigos": "bright_green", "efi": "yellow", "msr": "white", "recovery": "cyan",
+                "linux": "green", "other": "white", "free": "bright_black", "danger": "bright_red", "text": "bright_white"}
+    return {"windows": c.get("cyan", c["soft"]), "bromigos": c["primary"], "efi": c.get("gold", c["warn"]), "msr": c["faint"],
+            "recovery": c["dim"], "linux": c["soft"], "other": c["muted"], "free": c["faint"], "danger": c["danger"],
+            "text": c["text"]}
+
+
+def legend(segs, extra=None):
+    """The map's key: each partition's icon and words."""
+    c = common.theme()[0]
+    t = Text()
+    roles = {"efi": "chip", "windows": "windows", "recovery": "recovery", "linux": "linux", "free": "free", "msr": "chip",
+             "other": "disk"}
+    col = map_colors()
+    for i, s in enumerate(segs):
+        ic = BT.icon(roles.get(s[0], "disk")) if BT is not None else "•"
+        t.append(f"{ic} ", style=col.get(s[0], c["muted"]))
+        t.append((s[2] if s[0] != "free" else f"Free space, {plain_size(s[1])}") + "   ", style=c["muted"])
+    if extra:
+        t.append(extra[0], style="bold " + extra[1])
+    return t
 
 
 if HAVE_TEXTUAL:
-    from textual.message import Message
-
     class SplitChanged(Message):
         def __init__(self, split):
             super().__init__()
             self.split = split
+
+
+class Choice(Widget, can_focus=True):
+    """A choice as a card (DRIFTGLASS Glass): its hologram, icon, title and lines, glowing when
+    chosen. One of its row (the parent) is chosen at a time: ← → or ↑ ↓ move and pick, Enter
+    or Space or a click picks. `value` as a RadioButton's, so the same code and tests drive it."""
+    BINDINGS = [Binding("left,up", "step(-1)", show=False), Binding("right,down", "step(1)", show=False),
+                Binding("enter,space", "pick", show=False)]
+    DEFAULT_CSS = """Choice { width: 1fr; height: auto; border: round $secondary 45%; background: $surface 80%;
+        padding: 0 1; margin-right: 1; }
+    Choice.-on { border: round $primary; background: $primary 8%; }
+    Choice:focus { border: double $primary; }
+    Choice.-danger.-on { border: round $error; }
+    Choice.-disabled { color: $text-disabled; }"""
+    value = reactive(False)
+
+    def __init__(self, content, value=False, disabled=False, **kw):
+        super().__init__(**kw)
+        self.content = content
+        self.set_reactive(Choice.value, bool(value))
+        self.off = disabled
+        self.set_class(bool(value), "-on")
+        self.set_class(disabled, "-disabled")
+        if disabled:
+            self.can_focus = False
+
+    class Picked(Message if HAVE_TEXTUAL else object):
+        def __init__(self, choice):
+            super().__init__()
+            self.choice = choice
+
+    def render(self):
+        c = common.theme()[0]
+        mark = Text("◉ " if self.value else "○ ", style="bold " + (c["primary"] if self.value else c["faint"]))
+        return Text.assemble(mark, self.content)
+
+    def watch_value(self, v):
+        self.set_class(v, "-on")
+        if v:
+            for sib in self.parent.query(Choice) if self.parent else []:
+                if sib is not self and sib.value:
+                    sib.value = False
+            self.post_message(Choice.Picked(self))
+
+    def action_pick(self):
+        if not self.off:
+            self.value = True
+
+    def on_click(self):
+        self.action_pick()
+        self.focus()
+
+    def action_step(self, d):
+        sibs = [w for w in self.parent.query(Choice) if not w.off]
+        if self in sibs:
+            nxt = sibs[(sibs.index(self) + d) % len(sibs)]
+            nxt.value = True
+            nxt.focus()
 
 
 class Installer(App):
@@ -127,7 +227,17 @@ class Installer(App):
     Screen { background: $background; }
     #top { height: 1; padding: 0 1; background: $surface; color: $primary; text-style: bold; }
     #body { height: 1fr; }
-    #rail { width: 24; height: 1fr; padding: 1 1; border-right: solid $primary 30%; background: $surface; }
+    #rail { width: 26; height: 1fr; padding: 1 1; border-right: solid $primary 30%; background: $surface; }
+    #rail-steps { height: auto; }
+    #orb { height: auto; margin-top: 1; content-align: center top; width: 100%; }
+    #vector-line { height: auto; color: $text; margin-top: 0; }
+    Screen.-compact #orb, Screen.-compact #vector-line { display: none; }
+    #editions, #modes { height: auto; width: 100%; max-width: 200; }
+    Screen.-narrow #editions, Screen.-narrow #modes { layout: vertical; }
+    #phases { height: auto; margin-top: 1; }
+    #ring-row { height: auto; }
+    #ring { width: auto; height: auto; margin-right: 3; }
+    #ring-side { width: 1fr; height: auto; }
     #page { padding: 1 2; scrollbar-gutter: stable; }
     #steps, #steps > Vertical, #disk-detail { height: auto; }      /* the page scrolls to all of it; nothing clips */
     .heading { color: $primary; text-style: bold; margin-bottom: 1; }
@@ -153,7 +263,7 @@ class Installer(App):
     /* re-flowed by width (bromigos_textual's breakpoints): a narrower rail, then none (the top
        line still names the step), less padding, smaller buttons */
     .notes { color: $text-muted; padding: 0 1; }
-    Screen.-compact #rail { width: 18; }
+    Screen.-compact #rail { width: 20; }
     Screen.-narrow #rail { display: none; }
     Screen.-narrow #page { padding: 0 1; }
     Screen.-narrow #nav { padding: 0 1; }
@@ -185,7 +295,10 @@ class Installer(App):
             yield Static(BT.TOO_SMALL_WORDS, id="too-small")
         yield Static("", id="top")
         with Horizontal(id="body"):
-            yield Static("", id="rail")
+            with Vertical(id="rail"):
+                yield Static("", id="rail-steps")
+                yield Static("", id="orb")
+                yield Static("", id="vector-line")
             with VerticalScroll(id="page"):
                 with ContentSwitcher(initial="step-welcome", id="steps"):
                     for sid, *_ in common.STEPS:
@@ -273,12 +386,7 @@ class Installer(App):
         self.query_one("#steps", ContentSwitcher).current = f"step-{sid}"
         steps = self.steps()
         self._top()
-        rail = Text()
-        for i, s in enumerate(steps):
-            mark = "▸" if s == sid else ("■" if i < steps.index(sid) else "□")
-            style = "bold " + common.theme()[0]["primary"] if s == sid else ("" if i < steps.index(sid) else "dim")
-            rail.append(f"{mark} {common.STEP[s][1]}\n", style=style)
-        self.query_one("#rail", Static).update(rail)
+        self._rail(steps, sid)
         self.error("")
         back, nxt = self.query_one("#back", Button), self.query_one("#next", Button)
         back.display = sid not in ("welcome", "install", "done", "auto")
@@ -294,8 +402,60 @@ class Installer(App):
             hint(nxt, "Go on to the next step (Ctrl+N).")
         self.call_after_refresh(self._focus_first, box)
 
+    VECTOR_LINES = {
+        "welcome": "I'm VECTOR. Nothing changes until you say Install.",
+        "edition": "Pick what this computer is for. A server can get the desktop later.",
+        "disk": "Pick a disk, then how bromigOS goes on it.",
+        "disk:alongside": "{who} keeps its files. I'll make room beside it.",
+        "disk:erase": "Everything on this disk goes. Copy off what you need first.",
+        "install": "Sit back. I'll say if anything needs you.",
+        "summary": "Check it over. Nothing changes until you press Install.",
+        "done": "All set. Restart, and take out the stick.",
+    }
+
+    def _rail(self, steps, sid):
+        """The rail: each step's icon, a ✓ on the finished ones, the current one lit; VECTOR's
+        orb under it (still while installing: the ring has the screen), with his line."""
+        c = common.theme()[0]
+        sixteen = BT is not None and BT.color_mode() == "16"
+        here = steps.index(sid) if sid in steps else 0
+        rail = Text()
+        for i, s in enumerate(steps):
+            ic = BT.icon(s) if BT is not None else "•"
+            done = i < here
+            if i == here:
+                rail.append("▌", style="bold " + (BT.rich16("primary") if sixteen else c["primary"]))
+                rail.append(f"{ic} {common.STEP[s][1]}", style="bold " + (BT.rich16("primary") if sixteen else c["primary"]))
+            else:
+                rail.append(" ")
+                rail.append(f"{ic} {common.STEP[s][1]}", style=("" if done else "dim"))
+                if done:
+                    rail.append(" " + (BT.icon("check") if BT is not None else "✓"),
+                                style=BT.rich16("primary") if sixteen else c["primary"])
+            rail.append("\n")
+        self.query_one("#rail-steps", Static).update(rail)
+        if BT is not None and hasattr(BT, "orb"):
+            self.orb_t = 0.0
+            self.query_one("#orb", Static).update(BT.orb(0.0, 12, 6))
+            if not self.reduced and not getattr(self, "_orb_timer", None):
+                self._orb_timer = self.set_interval(0.15, self._orb_tick)
+        line = self.VECTOR_LINES.get(sid, "")
+        if sid == "disk" and self.a.get("mode") in ("alongside", "erase"):
+            al = (self.disk() or {}).get("options", {}).get("alongside", {})
+            line = self.VECTOR_LINES[f"disk:{self.a['mode']}"].format(who=al.get("who") or "Windows")
+        self.query_one("#vector-line", Static).update(Text.assemble(("VECTOR  ", "bold " + c["primary"]), line) if line else "")
+
+    def _orb_tick(self):
+        if self.step == "install" or self.reduced:      # one FLARE: the ring, while installing
+            return
+        self.orb_t = getattr(self, "orb_t", 0.0) + 0.15
+        try:
+            self.query_one("#orb", Static).update(BT.orb(self.orb_t, 12, 6))
+        except Exception:
+            pass
+
     def _focus_first(self, box):
-        for w in box.query("Input, Select, RadioSet, Switch, Checkbox, Split, Button"):
+        for w in box.query("Choice.-on, Input, Select, RadioSet, Switch, Checkbox, Split, Button"):
             if w.focusable:
                 w.focus()
                 self.call_after_refresh(w.scroll_visible, animate=False)
@@ -396,15 +556,24 @@ class Installer(App):
 
     def build_edition(self, box):
         self.heading(box, "edition")
-        rs = RadioSet(id="editions")
-        box.mount(hint(rs, "What to install: the full desktop, or bromigOS Server for a server or lab machine."))
+        row = Horizontal(id="editions")
+        box.mount(row)
+        c = common.theme()[0]
+        small = getattr(self, "bp", "normal") in ("compact", "narrow", "too-small")
         for e in self.eds:
-            rs.mount(hint(RadioButton(e["title"], value=e["id"] == self.a["edition"], id=f"ed-{e['id']}"),
-                          f"{e.get('summary', '')} {e.get('hint', '')}".strip()))
-        for e in self.eds:
-            box.mount(Static(Text.assemble((e["title"].upper(), "bold"), "  ", e.get("summary", "")), classes="card"))
+            kind = "server" if e["id"] == "server" else "desktop"
+            t = Text()
+            t.append(f"{BT.icon(kind) if BT else ''} {e['title']}\n", style="bold")
+            if BT is not None and hasattr(BT, "holo") and getattr(self, "bp", "normal") != "narrow":
+                t.append_text(BT.holo(kind, 16 if small else 22, 5 if small else 7))
+                t.append("\n")
+            t.append(e.get("summary", ""), style=c["muted"])
+            if not small and e.get("hint"):
+                t.append("\n" + e["hint"], style=c["faint"])
             if common.needs_download(e):
-                box.mount(Static(common.download_words(e), classes="warn"))
+                t.append("\n" + common.download_words(e), style=c["warn"])
+            row.mount(hint(Choice(t, value=e["id"] == self.a["edition"], id=f"ed-{e['id']}"),
+                           f"{e['title']}: {e.get('summary', '')} ← → choose.".strip()))
 
     def build_keyboard(self, box):
         self.heading(box, "keyboard")
@@ -473,9 +642,17 @@ class Installer(App):
             self.a["disk"] = usable[0]["path"]
         rs = RadioSet(id="disks")
         box.mount(Label("Disk", classes="label"), hint(rs, "The disks in this computer: their size, model and what's on them."))
+        c = common.theme()[0]
         for i, d in enumerate(self.probe["disks"]):
-            label = f"{d['model']} · {d['size_text']}" + ("" if self.narrow() else
-                                                            " · " + d["summary"] + (f" · {d['kind']}" if d["kind"] else ""))
+            kind = "usb" if d.get("removable") or d.get("kind") == "USB" else "disk"
+            label = Text(f"{BT.icon(kind) if BT is not None else ''} ", style=c["primary"])
+            label.append(f"{d['model']} · {d['size_text']}", style="bold")
+            if not self.narrow():
+                label.append(" · " + d["summary"] + (f" · {d['kind']}" if d["kind"] else ""), style=c["muted"])
+                health = (d.get("health") or {}).get("state")
+                badge, col = (("THIS STICK", c["muted"]) if d["medium"] else
+                              (("▲ FAILING", c["danger"]) if health == "failing" else ("● HEALTHY", c["primary"])))
+                label.append(f"  [{badge}]", style="bold " + col)
             rb = RadioButton(label, value=d["path"] == self.a["disk"], id=f"disk-{i}", disabled=d["medium"])
             rb.disk_path = d["path"]
             rs.mount(hint(rb, d["options"]["erase"]["why"] if d["medium"] else f"{d['path']}: " +
@@ -506,21 +683,29 @@ class Installer(App):
         d = self.disk()
         if not d:
             return
-        if d["partitions"]:
-            box.mount(Static("On it now: " + "; ".join(p["what"] for p in d["partitions"]), classes="muted"))
         al, er = d["options"]["alongside"], d["options"]["erase"]
         ri = d["options"].get("reinstall", {})
         if self.a["mode"] is None:
             self.a["mode"] = "reinstall" if ri.get("ok") else ("alongside" if al.get("ok") else ("erase" if er.get("ok") else None))
-        rs = RadioSet(id="modes")
-        box.mount(Label("How", classes="label"), hint(rs, "Keep what's on the disk and add bromigOS beside it, or replace everything."))
+        row = Horizontal(id="modes")
+        box.mount(Label("How", classes="label"), row)
+        c = common.theme()[0]
+        ic = (lambda n: BT.icon(n) + " ") if BT is not None else (lambda n: "")
+
+        def card(icon_name, title, words):
+            t = Text(ic(icon_name) + title + "\n", style="bold")
+            t.append(words, style=c["muted"])
+            return t
         if ri.get("ok"):
-            rs.mount(hint(RadioButton(ri["label"], value=self.a["mode"] == "reinstall", id="mode-reinstall"), ri["words"]))
-        rb = RadioButton(al["label"], value=self.a["mode"] == "alongside", id="mode-alongside", disabled=not al.get("ok"))
-        rs.mount(hint(rb, ("Keep " + (al.get("name") or "what's there") + " and its files. At every start, choose which one to use.")
-                      if al.get("ok") else al["why"]))
-        rb = RadioButton("Erase the whole disk", value=self.a["mode"] == "erase", id="mode-erase", disabled=not er.get("ok"))
-        rs.mount(hint(rb, f"Delete everything on the disk ({er.get('loses')}) and give it all to bromigOS." if er.get("ok") else er["why"]))
+            row.mount(hint(Choice(card("recovery", ri["label"], ri["words"]), value=self.a["mode"] == "reinstall", id="mode-reinstall"),
+                           ri["words"]))
+        al_words = ("Keep " + (al.get("name") or "what's there") + " and its files. At every start, choose which one to use."
+                    if al.get("ok") else al["why"])
+        row.mount(hint(Choice(card("split", al["label"], al_words), value=self.a["mode"] == "alongside", id="mode-alongside",
+                              disabled=not al.get("ok")), al_words))
+        er_words = (f"Delete everything on it ({er.get('loses')}) and give it all to bromigOS." if er.get("ok") else er["why"])
+        row.mount(hint(Choice(card("erase", "Erase the whole disk", er_words), value=self.a["mode"] == "erase", id="mode-erase",
+                              disabled=not er.get("ok"), classes="-danger"), er_words))
         if not al.get("ok") and al.get("code") not in ("empty",):
             box.mount(Static(Text.assemble(("Why not alongside: ", "bold"), al["why"]), classes="warn"),
                       Static(Text.assemble(("What to do: ", "bold"), al["fix"]), classes="fix"))
@@ -535,13 +720,16 @@ class Installer(App):
                 self.a.update(user=u["name"], full_name=u["gecos"].split(",")[0], user_edited=True)
         if self.a["mode"] == "alongside" and al.get("ok"):
             if al["mode"] == "shrink":
-                box.mount(Label(f"How much room for bromigOS (from {plain_size(al['min'])} to {plain_size(al['max'])})", classes="label"))
+                box.mount(Label(f"The disk, and how it's shared (← → move the divider, Shift by 10 GB)", classes="label"))
                 v = int(self.a.get("bromigos_bytes") or al["default"])
                 v = max(al["min"], min(al["max"], v))
                 self.a["bromigos_bytes"] = v
-                box.mount(hint(Split(al["who"], al["part_size"] + al["free_after"], al["min"], al["max"], v, id="split"),
+                box.mount(hint(Split(al["who"], al["part_size"] + al["free_after"], al["min"], al["max"], v,
+                                     segs=common.disk_segments(d), partition=al.get("partition"), id="split"),
                                f"← gives {al['who']} more room, → gives bromigOS more. {al['who']} keeps at least "
                                f"{plain_size(al['keep_min'])}: what it uses now and room to grow."))
+                box.mount(Static(legend(common.disk_segments(d), ("bromigOS: the room made beside it", common.theme()[0]["primary"])),
+                                 classes="notes"))
                 box.mount(Static(f"{al['who']} is made smaller to make room. Its files stay where they are.", classes="muted"))
             else:
                 box.mount(Static(f"bromigOS goes in the {al['size_text']} of free space. {al.get('name') or 'What is there'} isn't touched.",
@@ -549,6 +737,8 @@ class Installer(App):
             if al.get("warn"):
                 box.mount(Static(al["warn"], classes="warn"))
         elif self.a["mode"] == "erase" and er.get("ok") and d["partitions"]:
+            if BT is not None and hasattr(BT, "disk_map"):
+                box.mount(Static(BT.disk_map(common.disk_segments(d), 60, map_colors(), erase=True), classes="card"))
             box.mount(Static(f"Everything on this disk is deleted: {er['loses']}. Copy anything you want to keep first.", classes="danger"))
         box.mount(self.advanced_box())
 
@@ -582,14 +772,16 @@ class Installer(App):
     def adv_zram(self, ev):
         self.a.setdefault("advanced", {})["zram"] = ev.value
 
-    @on(RadioSet.Changed, "#modes")
-    def mode_changed(self, ev):
-        self.a["mode"] = ev.pressed.id.removeprefix("mode-")
-        self.call_later(self.fill_disk_detail)
-
-    @on(RadioSet.Changed, "#editions")
-    def edition_changed(self, ev):
-        self.a["edition"] = ev.pressed.id.removeprefix("ed-")
+    def on_choice_picked(self, ev):
+        cid = ev.choice.id or ""
+        if cid.startswith("mode-"):
+            mode = cid.removeprefix("mode-")
+            if mode != self.a.get("mode"):
+                self.a["mode"] = mode
+                self.call_later(self.fill_disk_detail)
+                self._rail(self.steps(), self.step)
+        elif cid.startswith("ed-"):
+            self.a["edition"] = cid.removeprefix("ed-")
 
     def on_split_changed(self, ev):  # SplitChanged
         self.a["bromigos_bytes"] = ev.split.value
@@ -780,13 +972,55 @@ class Installer(App):
             print("A shell. The installer waits: type exit to go back to it.")
             os.system(os.environ.get("SHELL") or "/bin/bash")
 
+    PHASES = [("room", "disk", "Making room", ("Making room",)),
+              ("disk", "chip", "Preparing the disk", ("Preparing the disk", "Opening your")),
+              ("copy", "copy", "Copying bromigOS onto the disk", ("Copying", "Installing")),
+              ("people", "people", "Your account and your desktop", ("Setting up", "Bringing back", "Your account")),
+              ("boot", "boot", "The boot menu and snapshots", ("boot menu", "Boot", "snapshots"))]
+
     def build_install(self, box):
         self.heading(box, "install")
         self.bar = BT.Sweep(total=100, id="bar") if BT is not None else ProgressBar(total=100, show_eta=False, id="bar")
         self.status = BT.Reading("Starting…", "busy") if BT is not None else Static("Starting…", classes="label")
         self.log_view = RichLog(id="log", wrap=True, max_lines=4000)
-        box.mount(self.bar, self.status, hint(Button("Show details", id="details"), "Show or hide every step the install takes (F2)."),
+        self.ring = Static("", id="ring")
+        self.phases = Static("", id="phases")
+        self.status.display = False          # the phases carry the same words, lit
+        side = Vertical(self.status, self.phases, id="ring-side")
+        row = Horizontal(self.ring, side, id="ring-row")
+        box.mount(row, self.bar, hint(Button("Show details", id="details"), "Show or hide every step the install takes (F2)."),
                   self.log_view)
+        self._ring(0, "Starting…")
+
+    def _ring(self, pct, text):
+        """The ring fills as the install goes (the screen's FLARE), the phases beside it."""
+        c = common.theme()[0]
+        small = getattr(self, "bp", "normal") in ("compact", "narrow", "too-small")
+        if BT is not None and hasattr(BT, "ring") and getattr(self, "bp", "normal") != "narrow":
+            r = BT.ring(pct, 10 if small else 16, 5 if small else 8)
+            r.append(f"\n{pct:>{(10 if small else 16) // 2 + 2}} %", style="bold " + c["primary"])
+            self.ring.update(r)
+        else:
+            self.ring.display = False
+        al = (self.disk() or {}).get("options", {}).get("alongside", {})
+        shrink = self.a.get("mode") == "alongside" and al.get("mode") == "shrink"
+        phases = [p for p in self.PHASES if shrink or p[0] != "room"]
+        cur = 0
+        for i, p in enumerate(phases):
+            if any(w.lower() in (text or "").lower() for w in p[3]):
+                cur = i
+        if pct >= 100:
+            cur = len(phases)
+        t = Text()
+        for i, (key, ic, words, _) in enumerate(phases):
+            glyph = (BT.icon("check") if i < cur else BT.icon(ic)) if BT is not None else ("✓" if i < cur else "•")
+            if i < cur:
+                t.append(f"{glyph} {words}\n", style=c["soft"])
+            elif i == cur:
+                t.append(f"{glyph} {text if text else words}\n", style="bold " + c["primary"])
+            else:
+                t.append(f"{glyph} {words}\n", style=c["faint"])
+        self.phases.update(t)
 
     def build_done(self, box):
         if self.done is True:
@@ -951,6 +1185,7 @@ class Installer(App):
 
     def _stage(self, pct, text):
         self.bar.update(progress=pct)
+        self._ring(pct, text)
         if BT is not None:
             self.status.set(text, "ok" if pct >= 100 else "busy")
         else:
