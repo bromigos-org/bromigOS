@@ -9,9 +9,9 @@ name: iso-check
 on:
   push:
     branches: [main]
-    paths: ["iso/**", "settings/plymouth/**", "settings/grub/**", ".github/workflows/iso-check.yml"]
+    paths: ["iso/**", "settings/plymouth/**", "settings/grub/**", "lib/bromigos_guide.py", "lib/guide/**", "tests/voice-guide/**", "tools/voice/**", ".github/workflows/iso-check.yml"]
   pull_request:
-    paths: ["iso/**", "settings/plymouth/**", "settings/grub/**", ".github/workflows/iso-check.yml"]
+    paths: ["iso/**", "settings/plymouth/**", "settings/grub/**", "lib/bromigos_guide.py", "lib/guide/**", "tests/voice-guide/**", "tools/voice/**", ".github/workflows/iso-check.yml"]
   workflow_dispatch:
     inputs:
       hosted:
@@ -119,6 +119,10 @@ jobs:
         run: |
           pacman -S --noconfirm --needed python-textual qrencode zbar python-pillow >/dev/null
           python -m unittest discover -s iso/test/installer -v
+          # VECTOR's voice guide (docs/voice-guide.md): every line has a clip that says its words,
+          # and the player's choices with stand-in players; no voice or sound needed
+          PYTHONPATH=lib python -m unittest discover -s tests/voice-guide -v
+          python tools/voice/make-clips.py --check
           python - <<'EOF'
           import json, subprocess
           table = {"partitiontable": {"label": "gpt", "sectorsize": 512, "firstlba": 34, "lastlba": 83886046, "partitions": [

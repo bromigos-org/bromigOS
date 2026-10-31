@@ -7,6 +7,7 @@
 # themes and templates its `theme` command renders (themes/, theme/templates/ to
 # /usr/share/bromigos/; the renderer and the templates version together), and the shared
 # Python libs the live layer, the widgets and VECTOR read (lib/ to /usr/lib/bromigos/lib), the
+# voice guide's lines and clips (lib/guide/ to /usr/share/bromigos/guide), the
 # private overlay's login units (bromigos-private.service and .path), and the
 # release notes (the manual's What's new, for `bromigos whats-new`). Rust
 # package conventions from the Arch wiki (Rust package guidelines): fetch
@@ -48,7 +49,9 @@ optdepends=('python: bromigos private, secrets, emblem, console, power menu, spl
             'python-cairo: emblem PNGs (bromigos emblem build)'
             'python-pillow: the banner braille (bromigos emblem build)'
             'python-numpy: a world loop from a raw clip (bromigos art make video.loop --alpha)'
-            'ffmpeg: a world loop from a raw clip (bromigos art make video.loop --alpha)'
+            'ffmpeg: a world loop from a raw clip (bromigos art make video.loop --alpha); the voice guide on ALSA'
+            'alsa-utils: the voice guide without PipeWire, such as the server tour on a console (aplay)'
+            'pipewire: the voice guide in a desktop session (pw-play)'
             'python-pychromecast: cast to Chromecasts and Google TVs (bromigos media cast)'
             'python-async-upnp-client: cast to DLNA TVs (bromigos media cast; from the AUR)')
 # The release profile already strips (core/Cargo.toml); no -debug package.
@@ -117,6 +120,9 @@ check() {
   # Wake-on-LAN: the shipped NetworkManager default and udev rule, and bromigos wol
   # against a fake /sys with ethtool and nmcli stood in
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/wake-on-lan"
+  # the voice guide: every line of lib/guide/lines.toml has a clip that says its words, and
+  # the player's choices, with stand-in players (no sound plays)
+  PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/voice-guide"
 }
 
 package() {
@@ -141,6 +147,11 @@ package() {
   # bromigos_theme (the palette in force), bromigos_private (the private overlay's reader),
   # bromigos_emblem + emblem_braille (a theme's emblem kit)
   install -Dm0644 -t "$pkgdir/usr/lib/bromigos/lib/" "$_root"/lib/*.py
+  # VECTOR's voice guide (lib/bromigos_guide.py): the lines and their clips, made at build
+  # time by tools/voice/make-clips.py (docs/voice-guide.md)
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/guide/" "$_root"/lib/guide/lines.toml
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos/guide/clips/" "$_root"/lib/guide/clips/manifest.json \
+    "$_root"/lib/guide/clips/*.opus
   # `bromigos private|secrets|emblem …`: the CLI routes to bromigos-<group> here
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-private \
     "$_root"/bin/bromigos-secrets "$_root"/bin/bromigos-emblem
