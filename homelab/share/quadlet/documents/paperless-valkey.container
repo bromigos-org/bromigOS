@@ -1,0 +1,13 @@
+[Unit]
+Description=Documents (Paperless-ngx): queue
+
+[Container]
+Image={{image:valkey}}
+ContainerName=paperless-valkey
+Network=bromigos-lab.network
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

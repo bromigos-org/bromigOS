@@ -1,0 +1,15 @@
+Quadlet templates for `bromigos lab provision --local` (docs/lab-provision.md, "Quadlet templates").
+Each folder is one catalogue item's units; _common is written with every item.
+
+Placeholders (localprovision.render):
+  {{data}}            /srv/apps/<item>: the item's own state
+  {{media}}           the media library (media-library's setting), {{downloads}} its downloads folder
+  {{tz}} {{host}}     the server's time zone and host name
+  {{puid}} {{pgid}}   the bromigos-media account (linuxserver images)
+  {{image:NAME}}      the item's pinned image NAME (NAME-nvidia on an NVIDIA server, when listed)
+  {{secret:NAME}}     the Podman secret holding the item's NAME (OTHER/NAME: another item's)
+  {{setting:FIELD}}   a setup field's value (never a secret)
+Lines that start with a condition are kept only when it holds, and the condition is cut off:
+  #if:ITEM / #ifnot:ITEM      that item is (isn't) being installed
+  #ifset:FIELD                the setup field is set
+  #ifgpu:VENDOR               the server has that GPU (nvidia, amd)

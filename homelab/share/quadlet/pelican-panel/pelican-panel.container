@@ -1,0 +1,21 @@
+[Unit]
+Description=Pelican panel
+
+[Container]
+Image={{image:panel}}
+ContainerName=pelican-panel
+Network=bromigos-lab.network
+PublishPort=8090:80
+Volume={{data}}/data:/pelican-data:Z
+Volume={{data}}/logs:/var/www/html/storage/logs:Z
+Environment=APP_URL=http://{{host}}:8090
+Environment=APP_ENV=production
+Environment=APP_DEBUG=false
+Environment=BEHIND_PROXY=true
+Environment=MAIL_DRIVER=log
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

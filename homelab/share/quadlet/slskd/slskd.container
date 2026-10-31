@@ -1,0 +1,22 @@
+[Unit]
+Description=slskd (Soulseek)
+
+[Container]
+Image={{image:slskd}}
+ContainerName=slskd
+#ifnot:gluetun Network=bromigos-lab.network
+#if:gluetun Network=gluetun.container
+#ifnot:gluetun PublishPort=5030:5030
+User={{puid}}:{{pgid}}
+Volume={{data}}/app:/app:Z
+Volume={{downloads}}/soulseek:/downloads
+Environment=SLSKD_REMOTE_CONFIGURATION=true
+Environment=SLSKD_DOWNLOADS_DIR=/downloads
+#ifset:username Environment=SLSKD_SLSK_USERNAME={{setting:username}}
+#ifset:password Secret={{secret:password}},type=env,target=SLSKD_SLSK_PASSWORD
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

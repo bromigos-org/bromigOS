@@ -1,0 +1,24 @@
+[Unit]
+Description=qBittorrent
+
+[Container]
+Image={{image:qbittorrent}}
+ContainerName=qbittorrent
+#ifnot:gluetun Network=bromigos-lab.network
+#if:gluetun Network=gluetun.container
+#ifnot:gluetun PublishPort=8081:8081
+#ifnot:gluetun PublishPort=6881:6881
+#ifnot:gluetun PublishPort=6881:6881/udp
+Environment=WEBUI_PORT=8081
+Environment=TORRENTING_PORT=6881
+Environment=PUID={{puid}}
+Environment=PGID={{pgid}}
+Environment=TZ={{tz}}
+Volume={{data}}/config:/config:Z
+Volume={{downloads}}:/media/downloads
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
