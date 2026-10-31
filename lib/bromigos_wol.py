@@ -7,6 +7,12 @@ card as it appears. This module reads where things stand (`bromigos wol status`)
 and turns it on now for the cards already there (`apply`: the package's install step and
 the update's migration run it as root).
 
+Reading a card's Wake-on-LAN state needs root (the kernel also hands back the card's
+SecureOn password with it), so whatever runs as root here also records it, for programs
+that run as the user: `/run/bromigos/wake-on-lan.json` (0644, no secrets). `apply` writes
+it, and the udev rule runs `bromigos wol record CARD` after turning a card on. BRODEC's
+machine agent (brodec-machine) reads it for Power on's "Can this machine be woken?".
+
 Only real wired Ethernet cards count: type 1, a device behind it, not Wi-Fi.
 """
 import json
@@ -20,6 +26,7 @@ NM_CONF = '/usr/lib/NetworkManager/conf.d/50-bromigos-wake-on-lan.conf'
 NM_CONF_ETC = '/etc/NetworkManager/conf.d/50-bromigos-wake-on-lan.conf'
 RULE = '/usr/lib/udev/rules.d/81-bromigos-wake-on-lan.rules'
 RULE_ETC = '/etc/udev/rules.d/81-bromigos-wake-on-lan.rules'
+RECORD = '/run/bromigos/wake-on-lan.json'
 
 
 class Error(Exception):
@@ -122,6 +129,28 @@ def status(paths, runner=_run):
     }
 
 
+def record(paths, runner=_run, now=None):
+    """Write what each wired card says now to RECORD (root: only root can read it from
+    the kernel), atomically, 0644. Returns the record."""
+    import time
+    s = status(paths, runner)
+    rec = {
+        'schema': 1,
+        'at': int((now if now is not None else time.time()) * 1000),
+        'kept_on': s['kept_on'],
+        'cards': [{k: c.get(k) for k in ('name', 'supports', 'wake_on', 'on', 'wakeup', 'carrier')}
+                  for c in s['cards']],
+    }
+    out = paths.at(RECORD)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(out.parent, 0o755)
+    tmp = out.with_name(out.name + '.tmp')
+    tmp.write_text(json.dumps(rec, indent=2) + '\n')
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, out)
+    return rec
+
+
 def _nm_running(paths):
     return paths.at('/run/NetworkManager').is_dir() and shutil.which('nmcli') is not None
 
@@ -156,6 +185,10 @@ def apply(paths, runner=_run, names=None):
             done.append('NetworkManager read its Wake-on-LAN default again')
     if not cards:
         done.append('no wired network card here: nothing to do')
+    try:
+        record(paths, runner)
+    except OSError as e:
+        done.append(f"couldn't record the cards' state for BRODEC ({e.strerror or e})")
     return done
 
 
@@ -194,10 +227,14 @@ def main(argv=None, paths=None, runner=_run):
                 if not quiet:
                     print(line)
             return 0
-        if cmd in ('-h', '--help', 'help'):
-            print('bromigos wol status [--json] | apply [--quiet] [CARD...]')
+        if cmd == 'record':
+            _require_root()
+            record(paths, runner)
             return 0
-        raise Error(f'unknown command {cmd!r}: status or apply')
+        if cmd in ('-h', '--help', 'help'):
+            print('bromigos wol status [--json] | apply [--quiet] [CARD...] | record')
+            return 0
+        raise Error(f'unknown command {cmd!r}: status, apply or record')
     except Error as e:
         print(f'bromigos wol: {e}', file=sys.stderr)
         return 1

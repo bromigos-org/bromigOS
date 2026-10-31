@@ -56,6 +56,7 @@ bromigOS ships these in `bromigos-core`, on the desktop and on bromigOS Server a
 | `/usr/lib/NetworkManager/conf.d/50-bromigos-wake-on-lan.conf` | NetworkManager's default for wired connections: `ethernet.wake-on-lan=64` (the "magic" flag). Every connection whose own setting is `default` follows it |
 | `/usr/lib/udev/rules.d/81-bromigos-wake-on-lan.rules` | For each wired card as it appears (at boot, or plugged in): allows the card to wake the machine (`device/power/wakeup`) and runs `ethtool -s <card> wol g`. It works without NetworkManager too (bromigOS Server on systemd-networkd) |
 | `/usr/lib/bromigos/bin/bromigos-wol` | `bromigos wol status [--json]`, and `sudo bromigos wol apply [CARD…]`, which turns it on now. The package's install step runs `apply` on every install and update |
+| `/run/bromigos/wake-on-lan.json` | What each wired card says about Wake-on-LAN, written as root by `apply` and by the udev rule (`bromigos wol record`). Only root can read that from the network card, so programs that run as you, like BRODEC's Power on check, read this file instead. No secrets |
 
 Only real wired Ethernet cards count: not Wi-Fi, bridges, VPNs or containers' interfaces.
 

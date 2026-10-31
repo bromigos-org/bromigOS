@@ -19,5 +19,8 @@ TEST!="device", GOTO="bromigos_wake_on_lan_end"
 
 TEST=="device/power/wakeup", ATTR{device/power/wakeup}="enabled"
 RUN+="/usr/bin/ethtool -s $name wol g"
+# What the card says now, for programs that run as the user (BRODEC's Power on): only
+# root can read it from the kernel. /run/bromigos/wake-on-lan.json, no secrets.
+RUN+="/usr/lib/bromigos/bin/bromigos-wol record"
 
 LABEL="bromigos_wake_on_lan_end"
