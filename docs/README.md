@@ -91,6 +91,7 @@ VECTOR, the desktop's AI assistant, is documented in his own repository,
 | [iso.md](iso.md) | The live and install ISO, and its installer |
 | [fieldkit.md](fieldkit.md) | Field Kit (Repair. Recon. Deploy.): fix any computer, run your lab, install a server |
 | [fieldkit-packages.md](fieldkit-packages.md) | Every package on Field Kit, its size and why it's there |
+| [qr.md](qr.md) | Themed QR codes: the styles, the decode test, and BRODEC's scanner settings |
 | [server.md](server.md) | bromigOS Server, the headless edition: SSH, firewall, safe automatic updates, containers |
 | [alerts.md](alerts.md) | `bromigos alerts`: the checks that find what needs you (drives, disk space, updates, backups, the UPS, services), the notification, and your own checks |
 | [iso-encryption.md](iso-encryption.md) | Full-disk encryption in the ISO's installer |

@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+# bromigos:summary=Themed QR codes: a world's colours, its emblem, an art mode for BRODEC; checked by decoding
+# bromigos:args=show TEXT | png TEXT FILE | gallery DIR  [--style camera|brodec|art] [--world NAME]
+# bromigos:examples=bromigos qr show https://bromigos.org ; bromigos qr png https://bromigos.org code.png --style brodec
+"""bromigos-qr (`bromigos qr …`, package bromigos-core): lib/bromigos_qr.py from the command line
+(docs/qr.md).
+
+  bromigos qr show TEXT [--style S] [--world W]     in this terminal: the image on kitty, else
+                                                    coloured half blocks in the world's inks
+  bromigos qr png TEXT FILE [--style S] [--world W] [--size PX]
+                                                    a PNG; prints the style it ended up as
+  bromigos qr gallery DIR                           every style in every world, decoded by zbar
+                                                    and ZXing; DIR/report.json; exits 1 on a failure
+"""
+import os
+import sys
+
+for d in ("/usr/lib/bromigos/lib", os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "lib")):
+    if os.path.isfile(os.path.join(d, "bromigos_qr.py")):
+        sys.path.insert(0, d)
+        break
+import bromigos_qr  # noqa: E402
+
+sys.exit(bromigos_qr.main(sys.argv[1:]))
