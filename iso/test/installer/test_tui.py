@@ -312,8 +312,12 @@ class TUI(unittest.TestCase):
                         break
                     await pilot.pause(0.05)
                 await app.show("disk")
-                await pilot.pause(0.3)
-                return [(rb.label.plain, rb.size.width) for rb in app.query("#disks RadioButton")]
+                for _ in range(100):            # laid out (a busy machine takes a moment)
+                    await pilot.pause(0.05)
+                    rows = [(rb.label.plain, rb.size.width) for rb in app.query("#disks RadioButton")]
+                    if rows and all(w > 0 for _, w in rows):
+                        break
+                return rows
         for size in ((120, 35), (80, 24)):
             for plain, width in asyncio.run(go(size)):
                 with self.subTest(size=size, row=plain[:30]):
