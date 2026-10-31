@@ -8,7 +8,8 @@
 # network. UEFI, headless.
 #
 #   1. Field Kit starts: its console on the first screen, Home drawn, the engine and the
-#      scripted CLI answer, the offline store carries bromigOS Server
+#      scripted CLI answer, the offline store carries bromigOS Server; the pairing screen's QR,
+#      drawn on kmscon and on the bare kernel console, decodes (zbarimg)
 #   2. "Install bromigOS Server": the installer's own backend (bromigos-iso-install --answers,
 #      the answers the text installer would hand it) installs Server offline onto the VM's disk
 #   3. the installed Server boots to its console and passes its checks
@@ -49,6 +50,29 @@ live() {
         fieldkit disks --json | python3 -c "import json,sys; json.load(sys.stdin); print(\"disks: ok\")"
         test "$(systemctl is-system-running || true)" != maintenance
         echo LIVE-OK'
+}
+
+# ── 1b. the pairing QR decodes from a real console ───────────────────────────────────
+# `bromigos fieldkit qr` draws with the pairing screen's own widget: on kmscon (Geist Mono) and on
+# the bare kernel console (Field Kit's PSF font), each screen captured and read back by zbarimg
+QR_URL='https://accounts.bromigos.org/device?user_code=KPGGZFVT#machine=k1.3f2a9c0d&n=fieldkit'
+qr() {
+    command -v zbarimg >/dev/null || pacman -S --noconfirm --needed zbar >/dev/null 2>&1 || { echo "no zbarimg here"; return 1; }
+    "$T" up --name qr --iso "$iso" --firmware uefi --direct --mem 3072 --vga "virtio-vga,xres=1280,yres=800" || return 1
+    "$T" wait-serial --name qr "login:" --timeout 300 || return 1
+    sleep 10
+    "$T" login --name qr --timeout 60 >/dev/null || return 1
+    local rc=0 got
+    run qr "kmscon --vt=5 --switchvt --configdir /usr/share/bromigos/console/kmscon --login -- /usr/bin/bromigos fieldkit qr '$QR_URL' >/dev/null 2>&1 & sleep 8; echo kmscon" || return 1
+    "$T" shot --name qr qr-kmscon >/dev/null
+    got=$(zbarimg -q --raw "$BROMIGOS_FIELDKIT_SHOTS/qr-kmscon.png" 2>/dev/null | head -1)
+    echo "kmscon: ${got:-nothing decoded}"; [[ $got == "$QR_URL" ]] || rc=1
+    run qr "pkill -f 'kmscon --vt=5'; sleep 2; openvt -c 6 -s -- env TERM=linux /usr/bin/bromigos fieldkit qr '$QR_URL'; sleep 6; echo vt" || return 1
+    "$T" shot --name qr qr-vt >/dev/null
+    got=$(zbarimg -q --raw "$BROMIGOS_FIELDKIT_SHOTS/qr-vt.png" 2>/dev/null | head -1)
+    echo "bare console: ${got:-nothing decoded}"; [[ $got == "$QR_URL" ]] || rc=1
+    "$T" down --name qr >/dev/null
+    return "$rc"
 }
 
 # ── 2. bromigOS Server, installed offline ───────────────────────────────────────────────
@@ -124,6 +148,8 @@ server() {
 
 step "Field Kit starts (offline): console, Home, engine, offline store" live || true
 "$T" down --name live >/dev/null 2>&1 || true
+step "the pairing QR decodes from kmscon and the bare console" qr || true
+"$T" down --name qr >/dev/null 2>&1 || true
 if step "bromigOS Server installs from the stick with no network" install; then
     step "the installed bromigOS Server boots to its console" server || true
 fi
