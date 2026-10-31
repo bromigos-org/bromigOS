@@ -28,7 +28,19 @@ format = 1
 
 ["installer.auto"]
 text = "An answer file has every answer. I'll install by myself unless you cancel."
-where = "both installers: an answer file's countdown"
+where = "the graphical installer: an answer file's countdown"
+
+["installer.auto.short"]
+text = "An answer file has it all. Cancel if you'd rather choose."
+where = "the text installer: an answer file's countdown"
+
+["installer.guide"]
+text = "How should I guide you? Pick what helps. You can change it any time."
+where = "both installers: how would you like to be guided? (the first step)"
+
+["installer.guide.sample"]
+text = "This is how I sound. I'll read each step to you. Control Alt V mutes me."
+where = "both installers: the first step's Play a sample (it plays even while the guide is off)"
 
 ["installer.welcome"]
 text = "I'm VECTOR. I'll walk you through it. Nothing changes until you say Install."
@@ -42,6 +54,10 @@ where = "the text installer: welcome"
 text = "A few things about this computer worth knowing first. None of them stops us."
 where = "the graphical installer: this computer's checks"
 
+["installer.checks.short"]
+text = "Worth knowing first. None of it stops us."
+where = "the text installer: this computer's checks"
+
 ["installer.edition"]
 text = "Pick what this computer is for. A server can get the desktop later."
 where = "both installers: the edition"
@@ -49,6 +65,10 @@ where = "both installers: the edition"
 ["installer.keyboard"]
 text = "Pick your layout and try it in the box."
 where = "the graphical installer: the keyboard"
+
+["installer.keyboard.short"]
+text = "Pick your layout and try a few keys."
+where = "the text installer: the keyboard"
 
 ["installer.disk"]
 text = "Pick a disk, then how bromigOS goes on it."
@@ -68,21 +88,33 @@ where = "both installers: the disk, erasing it"
 text = "A fresh system. Your home folder stays exactly as it is."
 where = "the graphical installer: the disk, reinstalling bromigOS"
 
+["installer.disk.reinstall.short"]
+text = "A fresh system. Your home folder stays as it is."
+where = "the text installer: the disk, reinstalling bromigOS"
+
 ["installer.bitlocker"]
 text = "Save Windows' recovery key first. Windows may ask for it once."
-where = "the graphical installer: BitLocker's recovery key"
+where = "both installers: BitLocker's recovery key"
 
 ["installer.user"]
 text = "Who you are on this computer, and its name on your network."
 where = "the graphical installer: your account"
 
+["installer.user.short"]
+text = "Who you are here, and this computer's name."
+where = "the text installer: your account"
+
 ["installer.encryption"]
 text = "Locked, your files stay private even if the computer is lost."
 where = "the graphical installer: encryption"
 
+["installer.encryption.short"]
+text = "Locked, your files stay private if it's lost."
+where = "the text installer: encryption"
+
 ["installer.ssh"]
 text = "How you'll reach this server from your other computers."
-where = "the graphical installer: SSH (bromigOS Server)"
+where = "both installers: SSH (bromigOS Server)"
 
 ["installer.summary"]
 text = "Check it over. Nothing on the disk changes until you press Install."
@@ -111,6 +143,14 @@ where = "the graphical installer: done"
 ["installer.done.short"]
 text = "All set. Restart, and take out the stick."
 where = "the text installer: done"
+
+["installer.failed"]
+text = "It stopped before the end. Save a report, then we can try again."
+where = "the graphical installer: the install stopped"
+
+["installer.failed.short"]
+text = "It stopped. Your answers are kept: try again, or save a report."
+where = "the text installer: the install stopped"
 
 # ---------------------------------------------------------------- the desktop's welcome tour
 
@@ -146,6 +186,10 @@ where = "bromigos-welcome: the keys"
 text = "That's it. Settings has all of this, any time."
 where = "bromigos-welcome: done"
 
+["tour.hello"]
+text = "I'm here now. Ask me about this step in the box below."
+where = "bromigos-welcome: VECTOR's greeting when his brain connects (the clip when his live voice isn't running)"
+
 # ---------------------------------------------------------------- bromigOS Server's welcome tour
 
 ["server-tour.network"]
@@ -175,3 +219,7 @@ where = "bromigos welcome-console: what's on this server"
 ["server-tour.done"]
 text = "All set. Sign in from anywhere with SSH."
 where = "bromigos welcome-console: done"
+
+["server-tour.hello"]
+text = "I'm here now. Ask me about this step, just below."
+where = "bromigos welcome-console: VECTOR's greeting when his brain connects"

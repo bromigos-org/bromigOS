@@ -25,6 +25,15 @@ $BROMIGOS_GUIDE_STATE, else $XDG_STATE_HOME/bromigos/voice-guide.json
 (~/.local/state/bromigos/voice-guide.json). The boot option bromigos.voice=off turns the
 guide off for that boot, bromigos.voice=on on. With neither, it's off until the person
 turns it on (the installer's first step, or Ctrl+Alt+V).
+
+The installer's first step, "How would you like to be guided?", also keeps the person's other
+choices, for the welcome tours and the new system: a screen reader, larger text, high contrast
+and reduced motion, in $BROMIGOS_ACCESS_STATE, else $XDG_STATE_HOME/bromigos/accessibility.json
+(access(), save_access()).
+
+Words that aren't in the catalogue (VECTOR's answer to a question in a welcome tour) go through
+VECTOR's own voice service when it's running on this desktop (Guide.say()), else nothing does,
+or a clip stands in for them.
 """
 import hashlib
 import json
@@ -32,7 +41,10 @@ import os
 import re
 import shutil
 import signal
+import socket
+import stat
 import subprocess
+import threading
 
 try:
     import tomllib
@@ -287,6 +299,52 @@ def boot_option(root="/"):
     return None
 
 
+# ------------------------------------------------------------------ the other choices
+
+# the installer's "How would you like to be guided?": what the welcome tours and the new
+# system start with. applied: the desktop tour has set the session's own settings to match
+ACCESS_DEFAULTS = {"screen_reader": False, "large_text": False, "high_contrast": False, "reduce_motion": False,
+                   "console_font": False, "applied": False}
+
+
+def access_path():
+    env = os.environ.get("BROMIGOS_ACCESS_STATE")
+    if env:
+        return env
+    base = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
+    return os.path.join(base, "bromigos", "accessibility.json")
+
+
+def access(path=None):
+    """{"screen_reader", "large_text", "high_contrast", "reduce_motion", "console_font", "applied"}:
+    the saved choices over the defaults (all off)."""
+    out = dict(ACCESS_DEFAULTS)
+    try:
+        with open(path or access_path()) as f:
+            doc = json.load(f)
+        out.update({k: bool(doc[k]) for k in ACCESS_DEFAULTS if k in doc})
+    except (OSError, ValueError, TypeError):
+        pass
+    return out
+
+
+def save_access(values, path=None):
+    """Saves the choices given (the others as they were); a read-only home keeps them for this run."""
+    path = path or access_path()
+    doc = access(path)
+    doc.update({k: bool(v) for k, v in values.items() if k in ACCESS_DEFAULTS})
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = f"{path}.{os.getpid()}.tmp"
+        with open(tmp, "w") as f:
+            json.dump(doc, f, indent=2)
+            f.write("\n")
+        os.replace(tmp, path)
+    except OSError:
+        pass
+    return doc
+
+
 # ------------------------------------------------------------------ the machine
 
 def _processes(root):
@@ -409,6 +467,7 @@ class Guide:
         self.notice = None                 # the plain sentence, once there's no sound device
         self._out = None
         self._procs = []
+        self._gen = 0                      # say(): a reply that comes after stop() or the next line is dropped
         s = settings(self.state)
         boot = boot_option(root)
         self.enabled = s["enabled"] if boot is None else boot
@@ -463,16 +522,22 @@ class Guide:
         path = os.path.join(self.folder or data_dir(), "clips", m["file"])
         return path if os.path.isfile(path) else None
 
-    def play(self, line_id, **values):
-        """Speak a line (cutting off the one before). True when it started."""
+    def play(self, line_id, force=False, **values):
+        """Speak a line (cutting off the one before). True when it started. force: even when
+        the guide is off or muted (Play a sample); never over a screen reader."""
         self.stop()
-        if self.status() != "on":
+        if force:
+            if self.screen_reader() or self.backend() is None:
+                return False
+        elif self.status() != "on":
             return False
         path = self.clip(line_id, **values)
         if path is None:
             return False
         backend, decoder = self._out
-        argvs = _commands(backend, decoder, path)
+        return self._start(_commands(backend, decoder, path))
+
+    def _start(self, argvs):
         try:
             prev = None
             for i, argv in enumerate(argvs):
@@ -489,11 +554,65 @@ class Guide:
             return False
         return True
 
+    # ---------------------------------------------------------------- any words, live
+    def voice_socket(self):
+        """VECTOR's voice service on this desktop (bromigos-vector's holo/voice_server.py)."""
+        return self.env.get("BROMIGOS_VOICE_SOCK") or os.path.join(
+            self.env.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "bromigos-holo-voice.sock")
+
+    def live(self):
+        """Whether VECTOR's voice service is running here, to speak words no clip has."""
+        try:
+            return stat.S_ISSOCK(os.stat(self.voice_socket()).st_mode)
+        except OSError:
+            return False
+
+    def say(self, text, fallback=None, timeout=25, **values):
+        """Speak any words (an answer, a greeting) in VECTOR's voice, through his running voice
+        service, and return at once. With no service, or when it fails, the clip of `fallback`
+        (a line id) plays instead, if one is given. True when something is on its way."""
+        self.stop()
+        if self.status() != "on" or not (text or "").strip():
+            return False
+        if not self.live():
+            return self.play(fallback, **values) if fallback else False
+        gen = self._gen
+        threading.Thread(target=self._say, args=(gen, text.strip()[:800], fallback, values, timeout),
+                         daemon=True, name="guide-say").start()
+        return True
+
+    def _say(self, gen, text, fallback, values, timeout):
+        wav = None
+        try:
+            c = socket.socket(socket.AF_UNIX)
+            c.settimeout(timeout)
+            c.connect(self.voice_socket())
+            c.sendall((json.dumps({"op": "tts", "text": text, "role": "main"}) + "\n").encode())
+            buf = b""
+            while not buf.endswith(b"\n"):
+                chunk = c.recv(65536)
+                if not chunk:
+                    break
+                buf += chunk
+            c.close()
+            wav = json.loads(buf.decode() or "{}").get("wav")
+        except (OSError, ValueError, AttributeError):
+            wav = None
+        if gen != self._gen or self.status() != "on":
+            return                                  # stopped, muted or moved on meanwhile
+        if wav and os.path.isfile(wav):
+            backend, _ = self._out
+            self._start([["pw-play", "--media-role", "Accessibility", wav]] if backend == "pw-play"
+                        else [["aplay", "-q", wav]])
+        elif fallback:
+            self.play(fallback, **values)
+
     def speaking(self):
         return any(p.poll() is None for p in self._procs)
 
     def stop(self):
         """Cut the line off now (Esc, the next step)."""
+        self._gen += 1
         for p in self._procs:
             if p.poll() is None:
                 try:

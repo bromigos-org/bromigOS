@@ -13,6 +13,13 @@
    "engine": "lab",
    "seconds": 4.74
   },
+  "installer.auto.short": {
+   "file": "installer.auto.short-f2b4b555daaf.opus",
+   "text": "An answer file has it all. Cancel if you'd rather choose.",
+   "text_sha256": "f2b4b555daaf89458604006647fd6da91f17657d75f706b996abf4498b854b23",
+   "engine": "lab",
+   "seconds": 3.09
+  },
   "installer.bitlocker": {
    "file": "installer.bitlocker-3e65db4fb422.opus",
    "text": "Save Windows' recovery key first. Windows may ask for it once.",
@@ -26,6 +33,13 @@
    "text_sha256": "a0c3d609ba9100d91507429857d16945e10dbf54a78c413d5b0deb5325eb36be",
    "engine": "lab",
    "seconds": 4.08
+  },
+  "installer.checks.short": {
+   "file": "installer.checks.short-ccde09b496f3.opus",
+   "text": "Worth knowing first. None of it stops us.",
+   "text_sha256": "ccde09b496f3bd4db262c5a4ca5c8f471e68b31beddd9e1995dab0fd76d7ad00",
+   "engine": "lab",
+   "seconds": 2.98
   },
   "installer.disk": {
    "file": "installer.disk-289d3d14371d.opus",
@@ -62,6 +76,13 @@
    "engine": "lab",
    "seconds": 3.22
   },
+  "installer.disk.reinstall.short": {
+   "file": "installer.disk.reinstall.short-bfcdb0d69911.opus",
+   "text": "A fresh system. Your home folder stays as it is.",
+   "text_sha256": "bfcdb0d69911a6efec5ecb4203fd4444a6f641430bfb6725a54d665d462af712",
+   "engine": "lab",
+   "seconds": 3.07
+  },
   "installer.done": {
    "file": "installer.done-9538223f6681.opus",
    "text": "All set. Restart, and take out the stick when the screen goes dark.",
@@ -89,6 +110,41 @@
    "text_sha256": "ec36cb7a9ada54c23cb94a0fce2ead790ead9c71a1b3d1be7b906cd79c2c01da",
    "engine": "lab",
    "seconds": 3.53
+  },
+  "installer.encryption.short": {
+   "file": "installer.encryption.short-8d91ee5cb2f2.opus",
+   "text": "Locked, your files stay private if it's lost.",
+   "text_sha256": "8d91ee5cb2f2be6a4f8580765bd9aa2724078f2aecfba770d50c7687c2662234",
+   "engine": "lab",
+   "seconds": 2.84
+  },
+  "installer.failed": {
+   "file": "installer.failed-f183344fa447.opus",
+   "text": "It stopped before the end. Save a report, then we can try again.",
+   "text_sha256": "f183344fa447612efbeca690cb304037a2058722b2b5cf2aa5d7650d2d70a53c",
+   "engine": "lab",
+   "seconds": 3.33
+  },
+  "installer.failed.short": {
+   "file": "installer.failed.short-d9c920a8f5b6.opus",
+   "text": "It stopped. Your answers are kept: try again, or save a report.",
+   "text_sha256": "d9c920a8f5b61ede95d8b56a06c9dacd20eaed4a7cd8cfae5f48b201d0403dcd",
+   "engine": "lab",
+   "seconds": 3.44
+  },
+  "installer.guide": {
+   "file": "installer.guide-c3fe3a291f7c.opus",
+   "text": "How should I guide you? Pick what helps. You can change it any time.",
+   "text_sha256": "c3fe3a291f7ccd9c322105b2f17e84045de39289b3d2b0933c9fa6f8028eb36c",
+   "engine": "lab",
+   "seconds": 3.33
+  },
+  "installer.guide.sample": {
+   "file": "installer.guide.sample-81c21d59f767.opus",
+   "text": "This is how I sound. I'll read each step to you. Control Alt V mutes me.",
+   "text_sha256": "81c21d59f7677be1761931c6e42ead24d6708a8886cbe3e03c3b7668868bc9a7",
+   "engine": "lab",
+   "seconds": 4.46
   },
   "installer.install": {
    "file": "installer.install-a3083d6976cb.opus",
@@ -118,6 +174,13 @@
    "engine": "lab",
    "seconds": 2.06
   },
+  "installer.keyboard.short": {
+   "file": "installer.keyboard.short-6da0ada80e57.opus",
+   "text": "Pick your layout and try a few keys.",
+   "text_sha256": "6da0ada80e57e6d9f9916e6a93f412cf92109a1703551c8b3e7fb09080d77a2d",
+   "engine": "lab",
+   "seconds": 2.27
+  },
   "installer.ssh": {
    "file": "installer.ssh-c50f001a8dbf.opus",
    "text": "How you'll reach this server from your other computers.",
@@ -146,6 +209,13 @@
    "engine": "lab",
    "seconds": 2.77
   },
+  "installer.user.short": {
+   "file": "installer.user.short-6a0c659f45e4.opus",
+   "text": "Who you are here, and this computer's name.",
+   "text_sha256": "6a0c659f45e428011e8023e5d7e8b7f88f01ee84758194745a099296929c64c9",
+   "engine": "lab",
+   "seconds": 2.18
+  },
   "installer.welcome": {
    "file": "installer.welcome-0ee6f52e9293.opus",
    "text": "I'm VECTOR. I'll walk you through it. Nothing changes until you say Install.",
@@ -166,6 +236,13 @@
    "text_sha256": "667d70871120753d384632dc58873f4ea1cc6f21c95ea00fae874998dd3cc2b2",
    "engine": "lab",
    "seconds": 2.95
+  },
+  "server-tour.hello": {
+   "file": "server-tour.hello-00c7af25e792.opus",
+   "text": "I'm here now. Ask me about this step, just below.",
+   "text_sha256": "00c7af25e79253dec0c7bbf6cab388eb5fb54ff54e549e25a4e1b83768b60f68",
+   "engine": "lab",
+   "seconds": 2.75
   },
   "server-tour.lab": {
    "file": "server-tour.lab-77d8f24358a0.opus",
@@ -215,6 +292,13 @@
    "text_sha256": "94cb340284a3ae4998d40d36f0227a0338fa184a54518806f118e43ec28508ac",
    "engine": "lab",
    "seconds": 2.71
+  },
+  "tour.hello": {
+   "file": "tour.hello-b3d58ca6f957.opus",
+   "text": "I'm here now. Ask me about this step in the box below.",
+   "text_sha256": "b3d58ca6f957649554b963bd74fe842c24faaa38ceed1ae623bbea291b0b555c",
+   "engine": "lab",
+   "seconds": 3.12
   },
   "tour.keys": {
    "file": "tour.keys-9f52493ea2b2.opus",

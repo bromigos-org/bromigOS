@@ -62,24 +62,48 @@ class Catalogue(unittest.TestCase):
         self.assertEqual(G.pick("installer.edition", short=True, folder=GUIDE), "installer.edition")
         self.assertEqual(G.line("installer.nothing-here", GUIDE), "")
 
-    def test_the_lines_still_in_code_match_the_catalogue(self):
-        """Until the installers and the tours read the catalogue, their own copies must say the
-        same words (a dict that's gone has moved to the catalogue: nothing to compare)."""
+    def test_every_step_has_its_line(self):
+        """The installers and the tours read their captions from the catalogue: every step they
+        show has a line (and no copy of the words is left in their code to drift)."""
         cat = G.catalogue(GUIDE)
-        found = 0
-        for path, name, prefix in (
-                (os.path.join(INSTALLER, "gui.py"), "VECTOR_LINES", "installer"),
-                (os.path.join(INSTALLER, "tui.py"), "VECTOR_LINES", "installer"),
-                (os.path.join(REPO, "desktop/bin/bromigos-welcome"), "GUIDE", "tour"),
-                (os.path.join(REPO, "bin/bromigos-welcome-console"), "GUIDE", "server-tour")):
-            lines = _dict_in(path, name)
-            for sid, text in (lines or {}).items():
-                lid = f"{prefix}.{sid.replace(':', '.')}"
-                ids = [lid, lid + ".short"]
-                self.assertTrue(any(cat.get(i, {}).get("text") == text for i in ids),
-                                f"{os.path.relpath(path, REPO)} {name}[{sid!r}] = {text!r} isn't in lines.toml as {lid}")
-                found += 1
-        self.assertGreaterEqual(found, 0)
+        steps = {
+            "installer": [s[0] for s in _list_in(os.path.join(INSTALLER, "common.py"), "STEPS")],
+            "tour": [s[0] for s in _list_in(os.path.join(REPO, "desktop/bin/bromigos-welcome"), "STEPS")],
+            "server-tour": [s[0] for s in _list_in(os.path.join(REPO, "bin/bromigos-welcome-console"), "STEPS")],
+        }
+        for prefix, ids in steps.items():
+            self.assertTrue(ids, prefix)
+            for sid in ids:
+                self.assertIn(f"{prefix}.{sid}", cat, f"{prefix} step {sid!r} has no line in lines.toml")
+        for lid in ("installer.failed", "installer.guide.sample", "installer.install.copying", "installer.install.nearly",
+                    "tour.hello", "server-tour.hello"):
+            self.assertIn(lid, cat)
+        for mode in ("alongside", "erase", "reinstall"):
+            self.assertIn(f"installer.disk.{mode}", cat)
+        for path, name in ((os.path.join(INSTALLER, "gui.py"), "VECTOR_LINES"), (os.path.join(INSTALLER, "tui.py"), "VECTOR_LINES"),
+                           (os.path.join(REPO, "desktop/bin/bromigos-welcome"), "GUIDE"),
+                           (os.path.join(REPO, "bin/bromigos-welcome-console"), "GUIDE")):
+            self.assertIsNone(_dict_in(path, name), f"{os.path.relpath(path, REPO)} keeps its own {name}")
+
+    def test_short_lines_say_less(self):
+        """The text installer's .short lines are its narrow rail's: never longer than the full one."""
+        cat = G.catalogue(GUIDE)
+        for lid, v in cat.items():
+            if lid.endswith(".short"):
+                self.assertIn(lid[:-6], cat, lid)
+                self.assertLessEqual(len(v["text"]), len(cat[lid[:-6]]["text"]), lid)
+
+
+def _list_in(path, name):
+    with open(path) as f:
+        tree = ast.parse(f.read())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == name for t in node.targets):
+            try:
+                return ast.literal_eval(node.value)
+            except ValueError:
+                return []
+    return []
 
 
 def _dict_in(path, name):
@@ -168,6 +192,36 @@ case "${0##*/}" in
 esac
 exec sleep 30
 """
+
+
+class Access(unittest.TestCase):
+    """The installer's other choices (accessibility.json): what the welcome tours start with."""
+
+    def test_all_off_until_chosen_and_kept(self):
+        with tempfile.TemporaryDirectory() as t:
+            path = os.path.join(t, "bromigos", "accessibility.json")
+            self.assertEqual(G.access(path), G.ACCESS_DEFAULTS)
+            G.save_access({"high_contrast": True, "large_text": 1, "nonsense": True}, path)
+            got = G.access(path)
+            self.assertTrue(got["high_contrast"] and got["large_text"])
+            self.assertFalse(got["screen_reader"] or got["applied"])
+            with open(path) as f:
+                self.assertNotIn("nonsense", json.load(f))
+            G.save_access({"applied": True}, path)
+            self.assertTrue(G.access(path)["high_contrast"] and G.access(path)["applied"])
+
+    def test_the_default_path(self):
+        old = {k: os.environ.pop(k, None) for k in ("BROMIGOS_ACCESS_STATE", "XDG_STATE_HOME")}
+        try:
+            os.environ["XDG_STATE_HOME"] = "/x/state"
+            self.assertEqual(G.access_path(), "/x/state/bromigos/accessibility.json")
+            os.environ["BROMIGOS_ACCESS_STATE"] = "/y/a.json"
+            self.assertEqual(G.access_path(), "/y/a.json")
+        finally:
+            for k, v in old.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
 
 
 class Player(unittest.TestCase):
@@ -342,6 +396,74 @@ class Player(unittest.TestCase):
         self.assertFalse(g.play("installer.user"))
         time.sleep(0.2)
         self.assertEqual(len(self.calls(3)), 3)
+
+    def test_a_sample_plays_while_off_but_never_over_a_screen_reader(self):
+        """Play a sample: heard before the guide is turned on; still quiet while Orca talks."""
+        self.tool("pw-play")
+        self.pipewire()
+        g = self.guide()
+        g.enabled = False
+        self.assertFalse(g.play("installer.guide"))
+        self.assertTrue(g.play("installer.guide.sample", force=True))
+        self.assertIn("installer.guide.sample-", self.calls(1)[0])
+        g.stop()
+        self._proc(4243, "orca")
+        self.assertFalse(g.play("installer.guide.sample", force=True))
+
+    def _voice_server(self, wav=None):
+        """A stand-in for VECTOR's voice service: answers one tts request with a wav's path."""
+        import socket
+        import threading
+        sock = os.path.join(self.run, "voice.sock")
+        srv = socket.socket(socket.AF_UNIX)
+        srv.bind(sock)
+        srv.listen(2)
+        self.env["BROMIGOS_VOICE_SOCK"] = sock
+        got = []
+
+        def serve():
+            c, _ = srv.accept()
+            buf = b""
+            while not buf.endswith(b"\n"):
+                buf += c.recv(4096)
+            got.append(json.loads(buf))
+            c.sendall((json.dumps({"wav": wav, "engine": "lab"} if wav else {"error": "no voice"}) + "\n").encode())
+            c.close()
+            srv.close()
+        threading.Thread(target=serve, daemon=True).start()
+        return got
+
+    def test_any_words_through_his_running_voice(self):
+        """An answer has no clip: his running voice service speaks it, and it plays like a clip."""
+        self.tool("pw-play")
+        self.pipewire()
+        wav = os.path.join(self.run, "answer.wav")
+        open(wav, "wb").close()
+        asked = self._voice_server(wav)
+        g = self.guide()
+        self.assertTrue(g.live())
+        self.assertTrue(g.say("Your lab runs my brain."))
+        self.assertIn("answer.wav", self.calls(1)[0])
+        self.assertEqual(asked[0], {"op": "tts", "text": "Your lab runs my brain.", "role": "main"})
+
+    def test_no_voice_service_plays_the_clip_instead(self):
+        self.tool("pw-play")
+        self.pipewire()
+        g = self.guide()
+        self.assertFalse(g.live())
+        self.assertTrue(g.say("I'm here now.", fallback="tour.hello"))
+        self.assertIn("tour.hello-", self.calls(1)[0])
+        self.assertFalse(g.say("Nothing to fall back on."))
+
+    def test_a_failed_voice_service_falls_back_and_stop_wins(self):
+        self.tool("pw-play")
+        self.pipewire()
+        self._voice_server(None)
+        g = self.guide()
+        self.assertTrue(g.say("Hello.", fallback="server-tour.hello"))
+        self.assertIn("server-tour.hello-", self.calls(1)[0])
+        g.muted = True
+        self.assertFalse(g.say("Hello."))
 
     def test_a_line_without_a_clip_is_silent(self):
         self.tool("pw-play")
