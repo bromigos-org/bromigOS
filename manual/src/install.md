@@ -340,7 +340,7 @@ USB drive for whoever helps you.
 
 **No picture, or a computer with only a text screen?** Choose **Install bromigOS (text
 mode)** in the stick's menu. It's the same installer, with the same steps, in text. With
-**Start with the screen reader (speech)**, the installer asks its questions one at a time,
+**Install with the screen reader (speech)**, the installer asks its questions one at a time,
 read aloud.
 
 Every step, alongside Windows, reinstalling and the text installer are explained in

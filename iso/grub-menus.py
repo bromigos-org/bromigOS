@@ -189,8 +189,8 @@ HELP_FULL = [
     "  The firmware's simple display instead of the graphics card's driver.",
     "More options",
     "  Install the desktop with the text installer, test this computer's memory, the",
-    "  system on this computer's disk, the screen reader (speech), the UEFI shell, the",
-    "  firmware settings, shut down, restart.",
+    "  system on this computer's disk, installing with the screen reader (speech: the",
+    "  installer read aloud), the UEFI shell, the firmware settings, shut down, restart.",
 ]
 
 
@@ -231,8 +231,12 @@ def desktop(text, loop):
     more = (linux("Install bromigOS with the text installer", "install", "bromigos-install-text",
                   " bromigos.install=text bromigos.edition=desktop systemd.unit=multi-user.target", loop)
             + "\n" + p["memtest"] + "\n" + p["disk"] + "\n"
-            + linux("Start with the screen reader (speech)", "speech", "archlinux-accessibility",
-                    " accessibility=on %KERNEL_PARAMS%", loop, hotkey="s") + "\n" + p["uefi"] + "\n" + p["power"])
+            # the speech entry goes straight into the text installer: speakup reads it aloud (releng's
+            # livecd-talk starts espeakup with accessibility=on), its questions one at a time
+            # (bromigos-iso-text-console: --plain), VECTOR's voice guide off so the screen reader
+            # is the only voice (docs/iso.md)
+            + linux("Install with the screen reader (speech)", "speech", "archlinux-accessibility",
+                    " accessibility=on " + SPEECH + " %KERNEL_PARAMS%", loop, hotkey="s") + "\n" + p["uefi"] + "\n" + p["power"])
     out += "# the rest, one level down\nsubmenu 'More options ›' --class options --id 'more' {\n" + indent(more) + "}\n\n"
     out += help_page(HELP_FULL) + p["tune"]
     return out
@@ -247,6 +251,9 @@ def sl(label, title, extra, help_lines, hotkey_title=None):
            f"APPEND archisobasedir=%INSTALL_DIR% archisosearchuuid=%ARCHISO_UUID%{extra}", "TEXT HELP", *help_lines, "ENDTEXT", ""]
     return "\n".join(out) + "\n"
 
+
+# the full medium's speech entry: the text installer, read aloud, the voice guide off
+SPEECH = "bromigos.install=text bromigos.voice=off systemd.unit=multi-user.target"
 
 SL_MORE_TAIL = """LABEL existing
 MENU LABEL Start the system on this computer's disk
@@ -333,7 +340,10 @@ def syslinux(kind):
                    ["The desktop, installed from a text installer instead of the graphical one."]) + SL_MEMTEST)
     tail = ("MENU BEGIN more\nMENU TITLE More options\nMENU LABEL More options >\nTEXT HELP\n"
             "The system on this computer's disk, the screen reader, hardware information, power.\nENDTEXT\n\n"
-            + more + SL_MORE_TAIL + "MENU END\n")
+            + more + (SL_MORE_TAIL if kind == "fieldkit" else SL_MORE_TAIL.replace(
+                "MENU LABEL Start with the screen reader (^speech)", "MENU LABEL Install with the screen reader (^speech)")
+                .replace(" accessibility=on %KERNEL_PARAMS%", f" accessibility=on {SPEECH} %KERNEL_PARAMS%")
+                .replace("Speech for the whole system.", "The installer, read aloud from the start.")) + "MENU END\n")
     return head + body, "# More options (iso/grub-menus.py)\n\n" + tail
 
 

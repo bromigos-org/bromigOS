@@ -217,3 +217,62 @@ def keyboard_live(kb_id, where):
         subprocess.run(["hyprctl", "eval", code], capture_output=True)
     elif where == "console" and os.geteuid() == 0:
         subprocess.run(["loadkeys", kb[2]], capture_output=True)
+
+
+# ── how the person is guided (the first step): the screen reader and the console's font ──
+ORCA_MISSING = ("Orca, the screen reader, isn't on this USB stick. To hear the installer, restart and choose "
+                "Install with the screen reader (speech) in the boot menu: it reads the text installer aloud.")
+SPEAKUP_MISSING = ("The console's screen reader (espeakup) isn't on this USB stick. Restart and choose "
+                   "Install with the screen reader (speech) in the boot menu.")
+
+
+def screen_reader(on, where):
+    """Start or stop the screen reader: Orca on the live desktop (as the live user, who runs
+    the graphical installer), speakup's espeakup on the console (the text installer is root).
+    Returns (ok, plain words: what happened, or what to do)."""
+    import shutil
+    if FAKE:
+        return True, "Screen reader " + ("on." if on else "off.")
+    if where == "wayland":
+        if on and not shutil.which("orca"):
+            return False, ORCA_MISSING
+        subprocess.run(["gsettings", "set", "org.gnome.desktop.a11y.applications", "screen-reader-enabled",
+                        "true" if on else "false"], capture_output=True)
+        try:
+            if on:
+                subprocess.Popen(["orca", "--replace"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                 start_new_session=True)
+            else:
+                subprocess.run(["orca", "--quit"], capture_output=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        return True, "Orca is reading the screen. Insert and the arrow keys move it; Insert+S stops it talking." if on \
+            else "Orca is off."
+    if on and not shutil.which("espeakup"):
+        return False, SPEAKUP_MISSING
+    r = subprocess.run(as_root(["systemctl", "start" if on else "stop", "espeakup.service"]), capture_output=True, text=True)
+    if r.returncode != 0:
+        return False, "The screen reader didn't start: " + ((r.stderr or r.stdout).strip().splitlines() or ["no reason given"])[-1]
+    return True, "The screen reader is on: it reads what's on the console." if on else "The screen reader is off."
+
+
+CONSOLE_FONTS = ("ter-v32n", "ter-v24b")     # bigger letters, and the text installer's usual (bromigos-iso-text-console)
+
+
+def console_font(big, tty=None):
+    """Bigger letters on the Linux console (setfont, terminus-font's): only a real console
+    can; a terminal window or SSH has its own font. (ok, plain words)."""
+    if FAKE:
+        return True, "Bigger letters." if big else "The usual letters."
+    if tty is None:
+        try:
+            tty = os.ttyname(0)
+        except OSError:
+            tty = ""
+    if os.environ.get("TERM") != "linux" or not re.match(r"^/dev/tty\d+$", tty or ""):
+        return False, ("This terminal can't change its letters from here. Make them bigger in the terminal's own "
+                       "settings (often Ctrl and +).")
+    r = subprocess.run(as_root(["setfont", CONSOLE_FONTS[0] if big else CONSOLE_FONTS[1]]), capture_output=True, text=True)
+    if r.returncode != 0:
+        return False, "The bigger letters aren't on this USB stick, so the console keeps its font."
+    return True, "Bigger letters." if big else "The usual letters."

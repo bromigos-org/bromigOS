@@ -47,7 +47,11 @@ async def drive(app, pilot, plan):
         shots.append(name)
 
     await pilot.pause(0.3)
-    assert app.step == "welcome"
+    if app.step == "guide":                  # how you'd like to be guided: kept as it is
+        await shot("guide")
+        await pilot.press("ctrl+n")
+        await pilot.pause()
+    assert app.step == "welcome", app.step
     await shot("welcome")
     await pilot.press("ctrl+n")
     if app.step == "checks":                 # only when this computer has something to say

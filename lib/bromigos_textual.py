@@ -122,11 +122,22 @@ def ansi16(c=None):
             "foreground": "ansi_white", "background": "ansi_black", "surface": "ansi_black", "panel": f"ansi_{hue}"}
 
 
-def theme(mode=None, name="bromigos"):
-    """A Textual theme from the palette: hex colours, or the 16-colour mapping."""
+def theme(mode=None, name="bromigos", high_contrast=False):
+    """A Textual theme from the palette: hex colours, or the 16-colour mapping. high_contrast
+    (the installer's first step, accessibility.json): white on black, the theme's colour for
+    what's chosen, nothing faded."""
     from textual.theme import Theme
     c = palette()
     mode = mode or color_mode()
+    if high_contrast:
+        if mode == "16":
+            a = ansi16(c)
+            return Theme(name=name, dark=True, **dict(a, secondary=a["primary"], foreground="ansi_bright_white",
+                                                      surface="ansi_black", panel="ansi_black"),
+                         variables={"text-muted": "ansi_bright_white"})
+        return Theme(name=name, primary=c["primary"], secondary=c["primary"], accent=c["cyan"], warning=c["warn"],
+                     error=c["danger"], success=c["primary"], foreground="#ffffff", background="#000000",
+                     surface="#000000", panel="#000000", dark=True, variables={"text-muted": "#ffffff"})
     if mode == "16":
         a = ansi16(c)
         return Theme(name=name, dark=True, **a)
@@ -209,6 +220,10 @@ ICONS = {
     "settings": ("\uf013", "*", "s"), "search": ("\uf002", "?", "?"), "shield": ("\uf132", "Θ", "s"),
     "language": ("\uf1ab", "α", "a"), "idcard": ("\uf2c2", "■", "#"), "computer": ("\uf108", "◘", "@"),
     "cloud": ("\uf0c2", "≈", "~"), "book": ("\uf02d", "¶", "?"), "rollback": ("\uf1da", "←", "<"), "fieldkit": ("\uf0b1", "►", "*"),
+    # the first step, "How would you like to be guided?": the voice guide, the screen reader, bigger letters,
+    # high contrast, less motion
+    "guide": ("\uf29a", "☼", "g"), "voice": ("\uf028", "♪", "v"), "reader": ("\uf2a4", "♪", "r"),
+    "text": ("\uf031", "A", "A"), "contrast": ("\uf042", "◙", "#"), "motion": ("\uf04c", "=", "="),
 }
 
 

@@ -1,0 +1,353 @@
+{
+ "format": 1,
+ "voice": {
+  "ref": "vector-ref-A",
+  "ref_sha256": "b966a2afeaf03e18fc784e38225604eb83b6ab7b5a3e621c45139c55cb915215"
+ },
+ "codec": "opus mono 28kb/s",
+ "clips": {
+  "installer.auto": {
+   "file": "installer.auto-d79846e2d083.opus",
+   "text": "An answer file has every answer. I'll install by myself unless you cancel.",
+   "text_sha256": "d79846e2d083adfe161235e5667d7491149d7ba1b0ba6ca40e9298367300e39f",
+   "engine": "lab",
+   "seconds": 4.74
+  },
+  "installer.auto.short": {
+   "file": "installer.auto.short-f2b4b555daaf.opus",
+   "text": "An answer file has it all. Cancel if you'd rather choose.",
+   "text_sha256": "f2b4b555daaf89458604006647fd6da91f17657d75f706b996abf4498b854b23",
+   "engine": "lab",
+   "seconds": 3.09
+  },
+  "installer.bitlocker": {
+   "file": "installer.bitlocker-3e65db4fb422.opus",
+   "text": "Save Windows' recovery key first. Windows may ask for it once.",
+   "text_sha256": "3e65db4fb4226b03fbabeb7614cae373ad5b2e65e2ac055b6a457c2fe0652cfa",
+   "engine": "lab",
+   "seconds": 3.59
+  },
+  "installer.checks": {
+   "file": "installer.checks-a0c3d609ba91.opus",
+   "text": "A few things about this computer worth knowing first. None of them stops us.",
+   "text_sha256": "a0c3d609ba9100d91507429857d16945e10dbf54a78c413d5b0deb5325eb36be",
+   "engine": "lab",
+   "seconds": 4.08
+  },
+  "installer.checks.short": {
+   "file": "installer.checks.short-ccde09b496f3.opus",
+   "text": "Worth knowing first. None of it stops us.",
+   "text_sha256": "ccde09b496f3bd4db262c5a4ca5c8f471e68b31beddd9e1995dab0fd76d7ad00",
+   "engine": "lab",
+   "seconds": 2.98
+  },
+  "installer.disk": {
+   "file": "installer.disk-289d3d14371d.opus",
+   "text": "Pick a disk, then how bromigOS goes on it.",
+   "text_sha256": "289d3d14371d8f5814a295b2c1928d35b2e457c5ce54fdac51353e11b46409bb",
+   "engine": "lab",
+   "seconds": 2.49
+  },
+  "installer.disk.alongside[who=Windows]": {
+   "file": "installer.disk.alongside-who-windows-9a47dbe8a72a.opus",
+   "text": "Windows keeps its files. I'll make room beside it.",
+   "text_sha256": "9a47dbe8a72ae9aa53a93d0cd356e18c735b9bfd664acebf5e75fe5d74e46435",
+   "engine": "lab",
+   "seconds": 2.8
+  },
+  "installer.disk.alongside[who=the other system]": {
+   "file": "installer.disk.alongside-who-the-other-system-84ac68076656.opus",
+   "text": "the other system keeps its files. I'll make room beside it.",
+   "text_sha256": "84ac68076656df7f3d6d2afd1be1683153c3c0b6fd55e586e2ab3614d1482de0",
+   "engine": "lab",
+   "seconds": 3.1
+  },
+  "installer.disk.erase": {
+   "file": "installer.disk.erase-ed4fa67992c2.opus",
+   "text": "Everything on this disk goes. Copy off what you need first.",
+   "text_sha256": "ed4fa67992c29913f78ae01c68f974135d62431b0ac171baead2dcb109c9fe35",
+   "engine": "lab",
+   "seconds": 3.27
+  },
+  "installer.disk.reinstall": {
+   "file": "installer.disk.reinstall-c2cbf3fa89a4.opus",
+   "text": "A fresh system. Your home folder stays exactly as it is.",
+   "text_sha256": "c2cbf3fa89a4f07ae33dc08d2b8178fff5fd7d2c7a1ecf2acab65cddc3db4581",
+   "engine": "lab",
+   "seconds": 3.22
+  },
+  "installer.disk.reinstall.short": {
+   "file": "installer.disk.reinstall.short-bfcdb0d69911.opus",
+   "text": "A fresh system. Your home folder stays as it is.",
+   "text_sha256": "bfcdb0d69911a6efec5ecb4203fd4444a6f641430bfb6725a54d665d462af712",
+   "engine": "lab",
+   "seconds": 3.07
+  },
+  "installer.done": {
+   "file": "installer.done-9538223f6681.opus",
+   "text": "All set. Restart, and take out the stick when the screen goes dark.",
+   "text_sha256": "9538223f668161aaed7c818bda3146f240d2bfb272e4efc37c303da56f7a2808",
+   "engine": "lab",
+   "seconds": 3.73
+  },
+  "installer.done.short": {
+   "file": "installer.done.short-8e509d9c01af.opus",
+   "text": "All set. Restart, and take out the stick.",
+   "text_sha256": "8e509d9c01afee57f5baf608306d9d7db307a08ee1a1ea95bc16eede5d65935e",
+   "engine": "lab",
+   "seconds": 2.86
+  },
+  "installer.edition": {
+   "file": "installer.edition-09a74fe69224.opus",
+   "text": "Pick what this computer is for. A server can get the desktop later.",
+   "text_sha256": "09a74fe692241f3ce8d958a0ae26de0d510f2a8e72e947c401a01f952ae25a04",
+   "engine": "lab",
+   "seconds": 3.47
+  },
+  "installer.encryption": {
+   "file": "installer.encryption-ec36cb7a9ada.opus",
+   "text": "Locked, your files stay private even if the computer is lost.",
+   "text_sha256": "ec36cb7a9ada54c23cb94a0fce2ead790ead9c71a1b3d1be7b906cd79c2c01da",
+   "engine": "lab",
+   "seconds": 3.53
+  },
+  "installer.encryption.short": {
+   "file": "installer.encryption.short-8d91ee5cb2f2.opus",
+   "text": "Locked, your files stay private if it's lost.",
+   "text_sha256": "8d91ee5cb2f2be6a4f8580765bd9aa2724078f2aecfba770d50c7687c2662234",
+   "engine": "lab",
+   "seconds": 2.84
+  },
+  "installer.failed": {
+   "file": "installer.failed-f183344fa447.opus",
+   "text": "It stopped before the end. Save a report, then we can try again.",
+   "text_sha256": "f183344fa447612efbeca690cb304037a2058722b2b5cf2aa5d7650d2d70a53c",
+   "engine": "lab",
+   "seconds": 3.33
+  },
+  "installer.failed.short": {
+   "file": "installer.failed.short-d9c920a8f5b6.opus",
+   "text": "It stopped. Your answers are kept: try again, or save a report.",
+   "text_sha256": "d9c920a8f5b61ede95d8b56a06c9dacd20eaed4a7cd8cfae5f48b201d0403dcd",
+   "engine": "lab",
+   "seconds": 3.44
+  },
+  "installer.guide": {
+   "file": "installer.guide-c3fe3a291f7c.opus",
+   "text": "How should I guide you? Pick what helps. You can change it any time.",
+   "text_sha256": "c3fe3a291f7ccd9c322105b2f17e84045de39289b3d2b0933c9fa6f8028eb36c",
+   "engine": "lab",
+   "seconds": 3.33
+  },
+  "installer.guide.sample": {
+   "file": "installer.guide.sample-81c21d59f767.opus",
+   "text": "This is how I sound. I'll read each step to you. Control Alt V mutes me.",
+   "text_sha256": "81c21d59f7677be1761931c6e42ead24d6708a8886cbe3e03c3b7668868bc9a7",
+   "engine": "lab",
+   "seconds": 4.46
+  },
+  "installer.install": {
+   "file": "installer.install-a3083d6976cb.opus",
+   "text": "Sit back. I'll say if anything needs you.",
+   "text_sha256": "a3083d6976cbbf5991dac6482a12994a90b8458c800e07d56210b50840e15bd9",
+   "engine": "lab",
+   "seconds": 2.06
+  },
+  "installer.install.copying": {
+   "file": "installer.install.copying-cb3454da02c3.opus",
+   "text": "Copying bromigOS over. This is the long part.",
+   "text_sha256": "cb3454da02c352147991c7754957d93daa311cc50c6cccc86b04ac8abc4e4cf1",
+   "engine": "lab",
+   "seconds": 2.81
+  },
+  "installer.install.nearly": {
+   "file": "installer.install.nearly-fa6b81fd7b89.opus",
+   "text": "Nearly there. Then a restart, and it's yours.",
+   "text_sha256": "fa6b81fd7b89545ab2b5e960a61cc6e20681ab00ba3c828cb718209c0397e7ef",
+   "engine": "lab",
+   "seconds": 2.6
+  },
+  "installer.keyboard": {
+   "file": "installer.keyboard-813907bde97e.opus",
+   "text": "Pick your layout and try it in the box.",
+   "text_sha256": "813907bde97e12fde1bd919655d90ce920f21a1ba9db65f5b952d9309a2b6b0a",
+   "engine": "lab",
+   "seconds": 2.06
+  },
+  "installer.keyboard.short": {
+   "file": "installer.keyboard.short-6da0ada80e57.opus",
+   "text": "Pick your layout and try a few keys.",
+   "text_sha256": "6da0ada80e57e6d9f9916e6a93f412cf92109a1703551c8b3e7fb09080d77a2d",
+   "engine": "lab",
+   "seconds": 2.27
+  },
+  "installer.ssh": {
+   "file": "installer.ssh-c50f001a8dbf.opus",
+   "text": "How you'll reach this server from your other computers.",
+   "text_sha256": "c50f001a8dbf5c69675b9151fd59e0a8a386bae1d7d90a3511f89d597af00bf4",
+   "engine": "lab",
+   "seconds": 2.51
+  },
+  "installer.summary": {
+   "file": "installer.summary-9f6653415ad7.opus",
+   "text": "Check it over. Nothing on the disk changes until you press Install.",
+   "text_sha256": "9f6653415ad77ecdfef063178b4cbb3c4b3b113ffb11ca07e397eb1d2fd1252a",
+   "engine": "lab",
+   "seconds": 3.64
+  },
+  "installer.summary.short": {
+   "file": "installer.summary.short-a356f55dfffb.opus",
+   "text": "Check it over. Nothing changes until you press Install.",
+   "text_sha256": "a356f55dfffb16918fbc173026c89e0e00896527b87d95ba6125095f87c2348a",
+   "engine": "lab",
+   "seconds": 2.99
+  },
+  "installer.user": {
+   "file": "installer.user-cfecb9a50667.opus",
+   "text": "Who you are on this computer, and its name on your network.",
+   "text_sha256": "cfecb9a5066706e1c10d046c70d0c19400af7f8a95dc106233027f90984be06f",
+   "engine": "lab",
+   "seconds": 2.77
+  },
+  "installer.user.short": {
+   "file": "installer.user.short-6a0c659f45e4.opus",
+   "text": "Who you are here, and this computer's name.",
+   "text_sha256": "6a0c659f45e428011e8023e5d7e8b7f88f01ee84758194745a099296929c64c9",
+   "engine": "lab",
+   "seconds": 2.18
+  },
+  "installer.welcome": {
+   "file": "installer.welcome-0ee6f52e9293.opus",
+   "text": "I'm VECTOR. I'll walk you through it. Nothing changes until you say Install.",
+   "text_sha256": "0ee6f52e9293233637c03e3e9a1885f9217dba5c955e133e40cb8aa743cb35a2",
+   "engine": "lab",
+   "seconds": 4.05
+  },
+  "installer.welcome.short": {
+   "file": "installer.welcome.short-e10565bdac7b.opus",
+   "text": "I'm VECTOR. Nothing changes until you say Install.",
+   "text_sha256": "e10565bdac7b97295b37accd310eb1d78b0f1ac3bd5d0f20cd7794915975d302",
+   "engine": "lab",
+   "seconds": 2.98
+  },
+  "server-tour.done": {
+   "file": "server-tour.done-667d70871120.opus",
+   "text": "All set. Sign in from anywhere with SSH.",
+   "text_sha256": "667d70871120753d384632dc58873f4ea1cc6f21c95ea00fae874998dd3cc2b2",
+   "engine": "lab",
+   "seconds": 2.95
+  },
+  "server-tour.hello": {
+   "file": "server-tour.hello-00c7af25e792.opus",
+   "text": "I'm here now. Ask me about this step, just below.",
+   "text_sha256": "00c7af25e79253dec0c7bbf6cab388eb5fb54ff54e549e25a4e1b83768b60f68",
+   "engine": "lab",
+   "seconds": 2.75
+  },
+  "server-tour.lab": {
+   "file": "server-tour.lab-77d8f24358a0.opus",
+   "text": "Join your lab and I can use it.",
+   "text_sha256": "77d8f24358a00fef2bab459e3f6e5e59d42b957eb388988569b40c0504dbab77",
+   "engine": "lab",
+   "seconds": 1.98
+  },
+  "server-tour.network": {
+   "file": "server-tour.network-cb64ef7e3ec5.opus",
+   "text": "This server's address on your network.",
+   "text_sha256": "cb64ef7e3ec58dabe3498c9d307fff9a47b28045cce4b5146d105dff321b666a",
+   "engine": "lab",
+   "seconds": 1.86
+  },
+  "server-tour.phone": {
+   "file": "server-tour.phone-9432ca0826dd.opus",
+   "text": "Scan it with BRODEC and I'm on your phone.",
+   "text_sha256": "9432ca0826dd7227e66a2de58990416c00c97e06d8b4fd6c51bac93f37e6b93f",
+   "engine": "lab",
+   "seconds": 2.37
+  },
+  "server-tour.ssh": {
+   "file": "server-tour.ssh-e48cfed4a50b.opus",
+   "text": "Keys only is safest. Nobody can guess a key.",
+   "text_sha256": "e48cfed4a50ba2e4d1979ee95f82de1fc55e5e1f89cdae2280dd11a997156c6f",
+   "engine": "lab",
+   "seconds": 2.95
+  },
+  "server-tour.tour": {
+   "file": "server-tour.tour-011775cd98d7.opus",
+   "text": "The commands worth knowing.",
+   "text_sha256": "011775cd98d7231f308d6021f1a09ebf3f79dc50a06c3452ef970ca55ecad24e",
+   "engine": "lab",
+   "seconds": 1.44
+  },
+  "server-tour.vector": {
+   "file": "server-tour.vector-baf68f0b153d.opus",
+   "text": "Where should I think? Your lab is best.",
+   "text_sha256": "baf68f0b153dbc669b5766859ac500b8d4e9da6a43d6aff2553bad95ae94462a",
+   "engine": "lab",
+   "seconds": 2.05
+  },
+  "tour.done": {
+   "file": "tour.done-94cb340284a3.opus",
+   "text": "That's it. Settings has all of this, any time.",
+   "text_sha256": "94cb340284a3ae4998d40d36f0227a0338fa184a54518806f118e43ec28508ac",
+   "engine": "lab",
+   "seconds": 2.71
+  },
+  "tour.hello": {
+   "file": "tour.hello-b3d58ca6f957.opus",
+   "text": "I'm here now. Ask me about this step in the box below.",
+   "text_sha256": "b3d58ca6f957649554b963bd74fe842c24faaa38ceed1ae623bbea291b0b555c",
+   "engine": "lab",
+   "seconds": 3.12
+  },
+  "tour.keys": {
+   "file": "tour.keys-9f52493ea2b2.opus",
+   "text": "Try a few keys. Each card lights up when it works.",
+   "text_sha256": "9f52493ea2b297acbd74ce88257f18cf4b0b8a1f7d03e7cb06a135192db28927",
+   "engine": "lab",
+   "seconds": 3.07
+  },
+  "tour.lab": {
+   "file": "tour.lab-f47e1f80ca85.opus",
+   "text": "I'll look for your lab. I only read what this computer already knows.",
+   "text_sha256": "f47e1f80ca85ae5fa7b37db68de50ed2cfdf7a7d3e635b80bc7941436f1c67de",
+   "engine": "lab",
+   "seconds": 3.67
+  },
+  "tour.network": {
+   "file": "tour.network-dfe61f4c064e.opus",
+   "text": "Get online and I can fetch updates, my brains and my voice.",
+   "text_sha256": "dfe61f4c064e6f5d2ac607bbefed05a4d0da6d2ba3573955b1fdf5fb0d45bf04",
+   "engine": "lab",
+   "seconds": 3.43
+  },
+  "tour.phone": {
+   "file": "tour.phone-8a6708504d76.opus",
+   "text": "Scan it with BRODEC and I'm on your phone too.",
+   "text_sha256": "8a6708504d76c2f2f64714e8e1e76ad59c07a6e1100b9bdfb3d75454df289700",
+   "engine": "lab",
+   "seconds": 2.43
+  },
+  "tour.screens": {
+   "file": "tour.screens-aff5c42fac5d.opus",
+   "text": "Pick the screen in front of you. The panels go there.",
+   "text_sha256": "aff5c42fac5d34602d0d2f592318b5cfdf1ca06dfca513f564169a718112b88b",
+   "engine": "lab",
+   "seconds": 2.48
+  },
+  "tour.vector": {
+   "file": "tour.vector-09b161e6dc27.opus",
+   "text": "Where should I think? Your lab is best, if you have one.",
+   "text_sha256": "09b161e6dc277e92a7224facfcec04821a2d7508e80f952800cf4567db983019",
+   "engine": "lab",
+   "seconds": 2.6
+  },
+  "tour.world": {
+   "file": "tour.world-3761827afc16.opus",
+   "text": "Pick a world. Every one reads this machine, live.",
+   "text_sha256": "3761827afc16a110b5e066076af35624fc76a4b19b957388596cdea676af4b3d",
+   "engine": "lab",
+   "seconds": 3.24
+  }
+ }
+}

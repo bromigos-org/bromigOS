@@ -47,6 +47,7 @@ the models used.
 | VECTOR's avatar, the relay-light construct | Drawn in code | yes | Part of the code |
 | Sound cues | nolgia sound effects (ElevenLabs) | **yes** (operator, 2026-10-08) | On bromigos.org |
 | VECTOR's designed caretaker voices | Designed from text with Qwen3-TTS VoiceDesign | likely yes | Confirm the model card adds no terms on output |
+| The voice guide's clips (`lib/guide/clips/`) | Spoken by Qwen3-TTS Base from the designed voice `vector-ref-A`, with VECTOR's shimmer | as the designed voices | Made by `tools/voice/make-clips.py`; no personal cast |
 | The operator's personal voice cast | Designed in Fish Audio | **no** | A personal setting, for another product |
 | Revolver Lynx voice | A copy of a Fish library voice | **no** | A third-party upload |
 | Any cloned voice of a real person or character | | **never** | |

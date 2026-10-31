@@ -144,7 +144,7 @@ The bromigOS USB stick has a boot menu of its own, in the same style. Its entrie
 | Start with safe graphics (nomodeset) | Use this if the screen stays black with the first entry. |
 | Memory test (Memtest86+) | Test the computer's memory. |
 | Boot from disk | Start whatever is installed on the disk instead. |
-| Start with the screen reader (speech) | Start with spoken output. Press <kbd>S</kbd> in the menu to choose it. |
+| Install with the screen reader (speech) | The installer, read aloud from the start. Press <kbd>S</kbd> in the menu to choose it. |
 
 UEFI computers also get entries for the UEFI shell and the firmware settings. Older BIOS
 computers get a hardware information tool. Both have **Shut down** and **Restart**.

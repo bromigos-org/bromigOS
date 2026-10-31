@@ -36,6 +36,7 @@ modules to the same folder:
 | `bromigos_power_menu.py` | Keyboard power selection and confirmation with a preview mode; [power menu reference](../docs/power-menu.md) |
 | `bromigos_splash.py` | Saved Plymouth and GRUB splash settings, with backups and rollback; [splash reference](../docs/splash.md) |
 | `bromigos_alerts.py`, `bromigos_alerts_checks.py` | `bromigos alerts`: the checks that find what needs a person, their document for BRODEC's machine agent, custom checks and the desktop notification; [alerts reference](../docs/alerts.md) |
+| `bromigos_guide.py` | VECTOR's voice guide: the scripted lines of the installers and tours (`guide/lines.toml`), their clips (`guide/clips/`) and the player; [voice guide](../docs/voice-guide.md) |
 
 ### bromigos_account
 
