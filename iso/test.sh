@@ -393,7 +393,12 @@ case $cmd in
                 "old_passphrase": None, "passphrase": None, "keymap": "us", "xkb_layout": "us", "xkb_variant": "", "locale": "en_US",
                 "timezone": "UTC", "ssh": True, "online": False, "ssh_password": False, "ssh_keys": [open(sys.argv[2]).read().strip()],
                 "firewall": False, "auto_updates": False, "auto_update_units": [], "advanced": {}, "user_commands": [],
-                "default_target": "graphical.target", "other_os": True}))' "$encrypt" "$key.pub" > "$dir/answers.json"
+                "default_target": "graphical.target", "other_os": True,
+                # the installers first step, as they send it (common.guidance_files: all off)
+                "guidance": {"voice_guide": {"enabled": False, "muted": False},
+                             "accessibility": {"screen_reader": False, "large_text": False, "high_contrast": False,
+                                               "reduce_motion": False, "console_font": False, "applied": False}}}))' \
+                "$encrypt" "$key.pub" > "$dir/answers.json"
             "${SCP[@]}" "$dir/answers.json" "live@127.0.0.1:answers.json"
         fi
         printf '%s\n' "$((encrypt ? 1 : 0))" > "$dir/encrypted"
@@ -493,6 +498,35 @@ PY
             "${SSH[@]}" "grep -A2 '^\[bromigos\]' /etc/pacman.conf" | sed 's/^/update repository: /'
         fi
         "${SSH[@]}" "sudo pacman -Sy" > "$dir/sync-$firmware.out" 2>&1 || rc=$?
+        # a move to an older channel can't keep a bromigOS package that channel doesn't have
+        # yet (one new since its release, or split from another: bromigos-boot from
+        # bromigos-settings): it would meet the other's files. Until that channel has them all
+        # (its next release), the move isn't tried
+        missing=$("${SSH[@]}" "python3 - $update_channel" <<'PY2' || true
+import re, subprocess, sys, tarfile, urllib.request, io
+ch = sys.argv[1]
+server, sect = "", ""
+for line in open("/etc/pacman.conf"):
+    if line.startswith("["):
+        sect = line.strip()
+    elif sect == "[bromigos]" and line.startswith("Server") and not server:
+        server = line.split("=", 1)[1].strip()
+base = re.sub(r"/\$repo(?:/[a-z]+)?/\$arch$", "", server)
+url = f"{base}/bromigos/{'' if ch == 'edge' else ch + '/'}x86_64/bromigos.db"
+try:
+    db = tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "bromigos-isotest"}), timeout=60).read()))
+except Exception:
+    sys.exit(0)          # can't tell: the move is tried
+have = {re.sub(r"-[^-]+-[^-]+/?$", "", m.name.split("/")[0]) for m in db.getmembers()}
+ours = subprocess.run(["pacman", "-Slq", "bromigos"], capture_output=True, text=True).stdout.split()
+mine = set(subprocess.run(["pacman", "-Qq"], capture_output=True, text=True).stdout.split())
+print(" ".join(sorted(n for n in ours if n in mine and n not in have)))
+PY2
+)
+        if [[ -n $missing ]]; then
+            echo "SKIP the first update to $update_channel and its rollback: $update_channel doesn't have $missing yet (its next release)" | tee -a "$dir/updated-$firmware.out"
+            exit "$rc"
+        fi
         before=$("${SSH[@]}" "pacman -Q bromigos-core")
         "${SSH[@]}" "yes '' | bromigos update --channel $update_channel" > "$dir/update-$firmware.out" 2>&1 || rc=$?
         tail -15 "$dir/update-$firmware.out"
