@@ -53,7 +53,7 @@ itself.
    - **Reinstall bromigOS and keep my files**, when bromigOS is already on the disk. You
      get a fresh system, and your home folder stays as it is.
 
-   ![Where to install: Install alongside Windows, with the slider for each system's share](images/installer-where-alongside-windows.webp)
+   ![Where to install: Install alongside Windows, with the bar that splits the disk and each side's minimum](images/installer-where-alongside-windows.webp)
 
 6. **Save Windows' recovery key**, only when Windows uses BitLocker (below).
 7. **About you.** Your name, a user name for signing in, a password, and a name for the
