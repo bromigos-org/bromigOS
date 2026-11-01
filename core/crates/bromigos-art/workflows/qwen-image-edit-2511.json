@@ -1,0 +1,224 @@
+{
+  "_comment": "Qwen-Image-Edit-2511 (Qwen, Apache-2.0) on a ComfyUI (API format): an edit of one image, the default for image.edit. Comfy-Org's 2511 template: the input scaled to about 1.6 MP, TextEncodeQwenImageEditPlus with the VAE, reference latents index_timestep_zero, CFGNorm, ModelSamplingAuraFlow shift 3.1, euler/simple, 40 steps at true CFG 4. bromigos-art fills the image, the prompt, the seed and the filename prefix through _meta.bind. The model has no mask input: with a mask, bromigos-art puts the original back everywhere the mask is opaque (an ImageCompositeMasked before the SaveImage).",
+  "_meta": {
+    "capabilities": [
+      "image.edit"
+    ],
+    "output": "png",
+    "license": "Apache-2.0 (Qwen-Image-Edit-2511)",
+    "commercial": "yes",
+    "fill": "bind",
+    "catalog": "qwen-image-edit-2511/int8",
+    "seconds": 81,
+    "requires": [
+      {
+        "folder": "diffusion_models",
+        "file": "qwen_image_edit_2511_int8_convrot.safetensors"
+      },
+      {
+        "folder": "text_encoders",
+        "file": "qwen_2.5_vl_7b_fp8_scaled.safetensors"
+      },
+      {
+        "folder": "vae",
+        "file": "qwen_image_vae.safetensors"
+      }
+    ],
+    "bind": {
+      "image": [
+        "11",
+        "image"
+      ],
+      "prompt": [
+        "6",
+        "prompt"
+      ],
+      "seed": [
+        "8",
+        "seed"
+      ],
+      "prefix": [
+        "10",
+        "filename_prefix"
+      ]
+    }
+  },
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_edit_2511_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "ModelSamplingAuraFlow",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "shift": 3.1
+    }
+  },
+  "3": {
+    "class_type": "CFGNorm",
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "strength": 1.0
+    }
+  },
+  "4": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    }
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    }
+  },
+  "11": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": ""
+    }
+  },
+  "12": {
+    "class_type": "ImageScaleToTotalPixels",
+    "inputs": {
+      "image": [
+        "11",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "megapixels": 1.6,
+      "resolution_steps": 16
+    }
+  },
+  "6": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "prompt": "",
+      "vae": [
+        "5",
+        0
+      ],
+      "image1": [
+        "12",
+        0
+      ]
+    }
+  },
+  "7": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "prompt": "",
+      "vae": [
+        "5",
+        0
+      ],
+      "image1": [
+        "12",
+        0
+      ]
+    }
+  },
+  "13": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": [
+        "6",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "14": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": [
+        "7",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "16": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "12",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "3",
+        0
+      ],
+      "positive": [
+        "13",
+        0
+      ],
+      "negative": [
+        "14",
+        0
+      ],
+      "latent_image": [
+        "16",
+        0
+      ],
+      "seed": 0,
+      "steps": 40,
+      "cfg": 4.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    }
+  },
+  "9": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "8",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "10": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "9",
+        0
+      ],
+      "filename_prefix": "bromigos-art"
+    }
+  }
+}

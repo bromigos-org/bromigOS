@@ -183,15 +183,19 @@ order.
 
 | Capability | Makes | ComfyUI workflow | nolgia model |
 |---|---|---|---|
-| `image.generate` | A still from a prompt and optional references | `qwen-image-2.1` | `gpt-image-2.5-flare` |
-| `image.edit` | An edit of an image, masked or whole | `qwen-image-2.1` | `gpt-image-2.5-flare` |
+| `image.generate` | A still from a prompt (nolgia also takes references) | `qwen-image-2512` | `gpt-image-2.5-flare` |
+| `image.edit` | An edit of an image, masked or whole | `qwen-image-edit-2511` | `gpt-image-2.5-flare` |
 | `image.cutout` | A transparent PNG of the subject alone | `lucida`, then `birefnet` | `remove-background` |
 | `image.upscale` | A larger, sharper PNG of an image, alpha kept | `seedvr2-7b` | none |
 | `video.loop` | A seamless loop from a still | `wan2.2-i2v-a14b`, `wan2.2-ti2v-5b` | `seedance-2.5` |
 | `video.upscale` | A larger, sharper MP4 of a clip, frame rate and sound kept | `seedvr2-7b-video` | none |
 | `model3d.generate` | A 3D model (GLB) from a concept image | `pixal3d`, then `hunyuan3d-2.1` | `trellis` |
 
-These are the shipped defaults. The files merge key by key, and yours wins:
+These are the shipped defaults. The image models on a ComfyUI are Apache-2.0, so what they
+make may ship in a product. Each has a faster Lightning workflow, and Qwen-Image 2.1 is
+there only when you ask for it by name ([Check the licence first](#check-the-licence-first)).
+
+The files merge key by key, and yours wins:
 
 | File | What it is |
 |---|---|
@@ -227,7 +231,7 @@ enabled = true
 # Each capability: its providers in order, and what to run on each kind of provider.
 [image.generate]
 providers = ["comfyui:homelab", "nolgia"]
-comfyui = "qwen-image-2.1"             # a workflow, on any comfyui:* provider
+comfyui = "qwen-image-2512"            # a workflow, on any comfyui:* provider
 nolgia = "gpt-image-2.5-flare"         # a nolgia model id
 
 [video.loop]
@@ -274,7 +278,7 @@ the same name. Each declares the capabilities it serves and the model files it n
 **`art.toml` still wins for one asset.** You can pin it three ways:
 
 - `model = "gpt-image-2.5-flare"`: a nolgia model.
-- `model = "homelab:qwen-image-2.1"`: that workflow on `comfyui:homelab`.
+- `model = "homelab:qwen-image-2512"`: that workflow on `comfyui:homelab`.
 - `provider = "comfyui:local"` with `model = "<workflow>"`: any ComfyUI.
 
 Without a pin, the asset's kind picks the capability, and `create.toml` picks the
@@ -295,7 +299,8 @@ Its options include `--input` (repeat for more), `--mask`, `--provider`, `--mode
 `--provider`), `--aspect`, `--duration`, `--resolution`, `--alpha`, `--max-credits` and
 `--extra KEY=VALUE`. With `--json`, it prints the capability, the target, the provider,
 the model, the output, the credits, the weights' licence, the job and the seconds it
-took. Every job, whichever way it ran, is logged with its provider, credits and licence.
+took. A job on a non-commercial workflow also gets a `warning`. Every job, whichever way
+it ran, is logged with its provider, credits and licence.
 
 ## Art made on a ComfyUI
 
@@ -306,7 +311,11 @@ queues the workflow, waits, and downloads the PNG, GLB or MP4. It logs the job w
 
 | Workflow | Capabilities | Weights | Licence |
 |---|---|---|---|
-| `qwen-image-2.1` | `image.generate`, `image.edit` | Qwen-Image 2.1, with a Qwen3-VL-8B encoder | Qwen Research License: **non-commercial** |
+| `qwen-image-2512` | `image.generate` | Qwen-Image-2512 fp8, with the Qwen2.5-VL-7B encoder. 50 steps | Apache-2.0 |
+| `qwen-image-2512-lightning` | `image.generate` | The same, with lightx2v's 8-step Lightning LoRA. The fast option | Apache-2.0 |
+| `qwen-image-edit-2511` | `image.edit` | Qwen-Image-Edit-2511 int8, with the same encoder. 40 steps | Apache-2.0 |
+| `qwen-image-edit-2511-lightning` | `image.edit` | The same, with lightx2v's 8-step Lightning LoRA. The fast option | Apache-2.0 |
+| `qwen-image-2.1` | `image.generate`, `image.edit` | Qwen-Image 2.1, with a Qwen3-VL-8B encoder. Only when a job names it | Qwen Research License: **non-commercial**, research and evaluation only |
 | `lucida` | `image.cutout` | Lucida v7, a BiRefNet_HR fine-tune, on ComfyUI's own nodes | MIT |
 | `birefnet` | `image.cutout` | BiRefNet-general, through the ComfyUI-RMBG node. The fallback without Lucida | MIT |
 | `pixal3d` | `model3d.generate` | Pixal3D int8 on TRELLIS.2, with DINOv3, MoGe-2 and Lucida. Shape only | DINOv3 License (Meta); MoGe-2 and Lucida MIT |
@@ -318,6 +327,14 @@ queues the workflow, waits, and downloads the PNG, GLB or MP4. It logs the job w
 
 Measured on a 32 GB GPU, with the voice models loaded alongside:
 
+- `qwen-image-2512`: 130 seconds for a 1536-pixel still, 50 steps. Its 1328-pixel default
+  is a quarter fewer pixels. Each model is bigger than what the card has free beside the
+  voice models, so ComfyUI streams the rest of it from system memory.
+- `qwen-image-2512-lightning`: 26 seconds for the same still, 8 steps.
+- `qwen-image-edit-2511`: 81 seconds for an edit at about 1.6 megapixels, 40 steps.
+- `qwen-image-edit-2511-lightning`: 26 seconds for the same edit, 8 steps.
+- A job waits its turn behind others on a busy ComfyUI, so the time it takes can be
+  much longer.
 - `qwen-image-2.1`: 6 to 47 seconds an image.
 - `lucida`: 2 seconds a cutout, using 1.0 GiB.
 - `birefnet`: 4 to 6 seconds a cutout.
@@ -363,49 +380,86 @@ ComfyUI is busy with someone else's work, nothing is unloaded, and the job says 
 its `license`, the model files it `requires`, and where a job's values go. Those are in
 `bind`: `image`, `prompt`, `seed`, `width` and `height`, `scale` and `prefix`, each a
 `[node, input]` pair or a list of them. So a workflow of your own in
-`~/.config/bromigos/create/workflows/` needs no code.
+`~/.config/bromigos/create/workflows/` needs no code. A few more fields are optional:
+
+| `_meta` field | What it does |
+|---|---|
+| `commercial` | `yes`, `conditional` or `no`: whether the licence allows commercial use. With `no`, every job warns |
+| `resolution` | A new image's default size, as the edge of a square with the same pixel count (default 1536) |
+| `features` | What it can do beyond its capabilities. `fast` marks a Lightning workflow |
+
+A bound edit with a mask works on any model: after the edit, the original is laid back
+over it everywhere the mask is opaque, before the picture is saved.
 
 ```toml
 [[assets]]
-id = "veilwing-qwen"
+id = "veilwing"
 kind = "image"
-model = "homelab:qwen-image-2.1"
+model = "homelab:qwen-image-2512"
 prompt = '''A single veilwing…'''
-inputs = ["art/refs/tidewell-under-crop.png"]   # references, seen by the encoder
 aspect = "16:9"
-extra = { resolution = 1536 }                  # about 1536² pixels (512 to 2048; default 1536)
-out = "art/actors/veilwing-qwen.png"           # always one PNG
+extra = { resolution = 1328 }                  # about 1328² pixels (512 to 2048; 2512's default)
+out = "art/actors/veilwing.png"                # always one PNG
 
 [[assets]]
 id = "fish-out"
 kind = "edit"
-model = "homelab:qwen-image-2.1"
+model = "homelab:qwen-image-edit-2511"
 input = "@comp-v3"
 mask = "art/masks/fish.png"                    # transparent may change; the rest is put back exactly
 prompt = '''Remove the fish…'''
 out = "art/comps/comp-v4.png"
 ```
 
-The graph is filled in by node id:
+The graph is filled in through the workflow's `bind`:
 
 - the prompt;
-- the size, from `aspect` and `extra.resolution`, on the model's 32-pixel grid;
+- the size, from `aspect` and `extra.resolution`, on a 32-pixel grid;
 - a seed from the asset's recipe, so the same recipe makes the same picture;
-- the references.
+- for an edit, the image. Qwen-Image-Edit-2511 scales it to about 1.6 megapixels.
 
-An edit works on its image's own latent. With a mask, the original is put back
-everywhere the mask is opaque. `quality`, `render_quality` and `aura` are nolgia options.
+Qwen-Image-2512 draws from the prompt alone. A still with `inputs` is refused on it: make
+an edit of the reference instead. Qwen-Image 2.1 reads up to ten references, but its
+licence is non-commercial. `quality`, `render_quality` and `aura` are nolgia options.
 They change nothing here, though they're still part of the recipe.
+
+**For speed, use a Lightning workflow.** It takes 8 steps instead of 50 (a still) or 40
+(an edit), for a little less detail. Pick it for one job, or make it your default:
+
+```bash
+bromigos art make image.generate --provider comfyui:homelab \
+    --model qwen-image-2512-lightning --prompt "a brass telescope" --out telescope.png
+```
+
+```toml
+# ~/.config/bromigos/create.toml
+[image.generate]
+comfyui = "qwen-image-2512-lightning"
+[image.edit]
+comfyui = "qwen-image-edit-2511-lightning"
+```
 
 **The ComfyUI's address** is `BROMIGOS_COMFYUI_URL`, or `comfyui_url = "…"` in
 `~/.config/bromigos/art.toml`. The address is never in a theme or in this repository. A
 private overlay can set the variable.
 
-**Check the licence first.** Art made with a model is bound by its weights' licence, and
-the log records it for each job. Qwen-Image 2.1's licence is non-commercial. That's fine
-for trying looks and for a personal desktop. It isn't fine for anything sold, or shipped
-in a commercial product, without Qwen's commercial licence. Check
-[ASSETS.md](ASSETS.md) before a file made this way ships in a package.
+### Check the licence first
+
+Art made with a model is bound by its weights' licence. The log records the licence for
+each job, and `bromigos art make` prints it.
+
+- **The defaults are Apache-2.0.** Qwen-Image-2512, Qwen-Image-Edit-2511 and their
+  Lightning LoRAs allow commercial use. Keep the licence notice with what you ship.
+- **Qwen-Image 2.1 is non-commercial: research and evaluation only.** It's under the Qwen
+  Research License. It's built in so a job can still name it, such as to remake an old
+  asset, but nothing picks it for you. Every job on it says
+  `warning: qwen-image-2.1 is non-commercial…`, in `plan`, while it runs, and as
+  `warning` in `bromigos art make --json`. What it makes isn't fine for anything sold, or
+  shipped in a commercial product, without Qwen's commercial licence.
+
+If an older `create.toml` of yours still says `comfyui = "qwen-image-2.1"`, change it to
+the workflows above, or delete the line to use the defaults. Check
+[ASSETS.md](ASSETS.md) before a file made on a ComfyUI ships in a package.
 
 ## Video loops on a ComfyUI
 

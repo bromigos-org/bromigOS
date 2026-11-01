@@ -1,13 +1,15 @@
 {
-  "_comment": "Qwen-Image 2.1 on the homelab ComfyUI (API format). bromigos-art fills the prompt, size, seed and reference images by node id and, for an edit, takes the latent from the encoder (sized to the input) instead of node 6; a masked edit adds an ImageCompositeMasked after node 8. Files are the ones helm/comfyui in the homelab repo fetches. Sampling follows Comfy-Org's template: 25 steps, cfg 1, euler/simple.",
+  "_comment": "Qwen-Image 2.1 on a ComfyUI (API format). OPT-IN ONLY, never a default: its weights are under the Qwen Research License, for non-commercial research and evaluation only, so nothing it makes may ship or be sold. bromigos-art warns on every job that names it. bromigos-art fills the prompt, size, seed and reference images by node id and, for an edit, takes the latent from the encoder (sized to the input) instead of node 6; a masked edit adds an ImageCompositeMasked after node 8. Files: Comfy-Org/Qwen-Image-2.1. Sampling follows Comfy-Org's template: 25 steps, cfg 1, euler/simple.",
   "_meta": {
     "capabilities": [
       "image.generate",
       "image.edit"
     ],
     "output": "png",
-    "license": "Qwen Research License (non-commercial: research or evaluation only)",
+    "license": "Qwen Research License (non-commercial: research and evaluation only)",
+    "commercial": "no",
     "fill": "qwen-image",
+    "catalog": "qwen-image-2-1/int8",
     "requires": [
       {
         "folder": "diffusion_models",

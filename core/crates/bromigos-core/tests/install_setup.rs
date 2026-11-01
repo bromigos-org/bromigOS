@@ -403,7 +403,9 @@ fn create_prefers_lucida_pixal3d_and_finds_seedvr2() {
 #[test]
 fn create_finds_capabilities_from_what_an_instance_has() {
     let names: Vec<String> = [
-        "qwen_image_2.1_fp8.safetensors",
+        "qwen_image_2512_fp8_e4m3fn.safetensors",
+        "qwen_image_edit_2511_int8_convrot.safetensors",
+        "qwen_image_2.1_int8_convrot.safetensors",
         "BiRefNet-general.safetensors",
         "wan2.2_ti2v_5B.safetensors",
     ]
@@ -413,11 +415,17 @@ fn create_finds_capabilities_from_what_an_instance_has() {
     let caps = create::capabilities(&names);
     assert_eq!(
         caps.get("image.generate").map(String::as_str),
-        Some("qwen-image-2.1")
+        Some("qwen-image-2512")
     );
     assert_eq!(
         caps.get("image.edit").map(String::as_str),
-        Some("qwen-image-2.1")
+        Some("qwen-image-edit-2511")
+    );
+    // Qwen-Image 2.1 alone: non-commercial, so setup offers no still or edit for it
+    let only_21 = create::capabilities(&["qwen_image_2.1_int8_convrot.safetensors".to_string()]);
+    assert!(
+        !only_21.contains_key("image.generate") && !only_21.contains_key("image.edit"),
+        "{only_21:?}"
     );
     assert_eq!(
         caps.get("image.cutout").map(String::as_str),
@@ -453,7 +461,7 @@ fn create_toml_is_format_1_and_keeps_the_users_keys() {
         endpoint: "@homelab:comfyui".into(),
         url: "http://x:8188".into(),
         gpu: Some("RTX".into()),
-        caps: [("image.generate".to_string(), "qwen-image-2.1".to_string())].into(),
+        caps: [("image.generate".to_string(), "qwen-image-2512".to_string())].into(),
     };
     let a = create::CreateAnswer {
         providers: [
@@ -484,7 +492,7 @@ fn create_toml_is_format_1_and_keeps_the_users_keys() {
     assert_eq!(v["nolgia"]["enabled"].as_bool(), Some(true));
     assert_eq!(
         v["image"]["generate"]["comfyui"].as_str(),
-        Some("qwen-image-2.1")
+        Some("qwen-image-2512")
     );
     assert_eq!(
         v["image"]["generate"]["nolgia"].as_str(),
