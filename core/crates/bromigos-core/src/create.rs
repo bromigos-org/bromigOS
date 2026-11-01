@@ -48,11 +48,19 @@ pub struct Workflow {
     pub needs: &'static [&'static str],
 }
 
+///
+/// Stills and edits go to the Apache-2.0 Qwen-Image models. Qwen-Image 2.1 isn't here: its
+/// licence is non-commercial, so setup never picks it; a job can still name it.
 pub const WORKFLOWS: &[Workflow] = &[
     Workflow {
-        name: "qwen-image-2.1",
-        caps: &["image.generate", "image.edit"],
-        needs: &["qwenimage21", "qwenimage2"],
+        name: "qwen-image-2512",
+        caps: &["image.generate"],
+        needs: &["qwenimage2512"],
+    },
+    Workflow {
+        name: "qwen-image-edit-2511",
+        caps: &["image.edit"],
+        needs: &["qwenimageedit2511"],
     },
     // the native background-removal nodes' Lucida first, else BiRefNet (ComfyUI-RMBG)
     Workflow {

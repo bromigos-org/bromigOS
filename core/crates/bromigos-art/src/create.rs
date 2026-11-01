@@ -596,6 +596,10 @@ mod tests {
             ids(Capability::ImageEdit),
             ["comfyui:homelab", "comfyui:local"]
         );
+        // stills and edits: the Apache-2.0 Qwen-Image models, never the non-commercial 2.1
+        let first = |cap| c.candidates(cap).unwrap()[0].model.clone();
+        assert_eq!(first(Capability::ImageGenerate), "qwen-image-2512");
+        assert_eq!(first(Capability::ImageEdit), "qwen-image-edit-2511");
         // 3D: Pixal3D, else Hunyuan3D 2.1, on each ComfyUI in turn
         assert_eq!(
             ids(Capability::Model3dGenerate),
@@ -674,7 +678,7 @@ mod tests {
             cs,
             vec![Candidate {
                 provider: Provider::Comfyui("homelab".into()),
-                model: "qwen-image-2.1".into()
+                model: "qwen-image-2512".into()
             }]
         );
         // video.loop has a ComfyUI workflow now: a comfyui provider in its list is kept

@@ -97,6 +97,29 @@ import_env() {
     [ ${#vars[@]} -gt 0 ] && systemctl --user import-environment "${vars[@]}" 2>/dev/null
     return 0
 }
+# The service's ExecCondition (bromigos-live.service): a running Hyprland session for this
+# runtime directory (`bromigos session`), so a restart after the session has gone is skipped
+# (exit 1), not looped. At login it can come before the session can be found: Hyprland runs
+# its start handlers (`bromigos-live start --login`) from its first frame, which can come
+# before it writes its instance's hyprland.lock. While the session the manager was told about
+# is still coming up (its Wayland socket is there), it waits for it: up to
+# BROMIGOS_SESSION_WAIT seconds (20). The same as bromigos-bar's (desktop/bin/bromigos-bar).
+ready() {
+    local sock tries n
+    tries=$(( ${BROMIGOS_SESSION_WAIT:-20} * 4 ))
+    for (( n = 0; ; n++ )); do
+        if bromigos session >/dev/null 2>&1; then
+            (( n )) && echo "the Hyprland session came up after $(( n / 4 )).$(( n % 4 * 25 )) s" >&2
+            return 0
+        fi
+        sock=${WAYLAND_DISPLAY:-}
+        [ -n "$sock" ] || { echo "no Hyprland session (no WAYLAND_DISPLAY)" >&2; return 1; }
+        [[ $sock == /* ]] || sock=$RUN/$sock
+        [ -S "$sock" ] || { echo "no Hyprland session ($sock is gone)" >&2; return 1; }
+        (( n < tries )) || { echo "no Hyprland session after ${BROMIGOS_SESSION_WAIT:-20} s" >&2; return 1; }
+        sleep 0.25
+    done
+}
 LOGIN_FLAG="$RUN/bromigos-live.login"   # the next supervised start is a login's (the intercept)
 
 supervise() {
@@ -193,6 +216,7 @@ case "${1:-start}" in
     start) ctl_lock; do_start "${2:-}" ;;
     stop) ctl_lock; do_stop ;;
     restart) ctl_lock; do_stop; do_start ;;
+    ready) ready; exit ;;     # the service's ExecCondition (above)
     supervise)
         # the service's main process (bromigos-live.service): this one is the supervisor
         rm -f "$STATE/stopping"

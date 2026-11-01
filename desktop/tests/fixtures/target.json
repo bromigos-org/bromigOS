@@ -11,13 +11,13 @@
    [
     "homelab",
     true,
-    "comfyui:lab (qwen-image-2.1)",
+    "comfyui:lab (qwen-image-2512)",
     "answers"
    ],
    [
     "local",
     false,
-    "comfyui:local (qwen-image-2.1)",
+    "comfyui:local (qwen-image-2512)",
     "doesn't answer (ComfyUI: connection refused)"
    ],
    [
@@ -31,13 +31,13 @@
    [
     "homelab",
     true,
-    "comfyui:lab (qwen-image-edit)",
+    "comfyui:lab (qwen-image-edit-2511)",
     "answers"
    ],
    [
     "local",
     false,
-    "comfyui:local (qwen-image-edit)",
+    "comfyui:local (qwen-image-edit-2511)",
     "doesn't answer (ComfyUI: connection refused)"
    ],
    [

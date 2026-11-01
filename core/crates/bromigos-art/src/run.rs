@@ -219,10 +219,14 @@ pub fn plan(
             p.basis = Some("already submitted".into());
         } else if comfy::is_homelab(a.model.as_deref()) {
             match comfy::check(a) {
-                Ok(_) => {
+                Ok(w) => {
+                    // a non-commercial workflow says so in the plan, before anything runs
                     p.basis = Some(format!(
-                        "{}: no credits",
-                        p.provider.as_deref().unwrap_or("comfyui")
+                        "{}: no credits{}",
+                        p.provider.as_deref().unwrap_or("comfyui"),
+                        w.licence_warning()
+                            .map(|warn| format!("; warning: {warn}"))
+                            .unwrap_or_default()
                     ))
                 }
                 Err(e) => p.error = Some(e),

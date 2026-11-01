@@ -89,6 +89,7 @@ fn only_the_clip_upscale_unloads_first() {
     for (id, want) in [
         ("seedvr2-7b-video", true),
         ("seedvr2-7b", false),
+        ("qwen-image-2512", false),
         ("qwen-image-2.1", false),
     ] {
         // the built-in copy: an installed one in /usr/share/bromigos may be older
