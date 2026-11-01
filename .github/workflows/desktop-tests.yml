@@ -28,5 +28,9 @@ jobs:
           python-cairo python-psutil python-gobject pango libxkbcommon >/dev/null
       - uses: actions/checkout@v5
       - name: unittest
-        working-directory: desktop
-        run: PYTHONPATH=lib python -m unittest discover -s tests
+        # as a normal user, like makepkg's check(): root ignores the read-only dirs some
+        # tests rely on (test_power's lid change that has to ask through pkexec)
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE/desktop' && PYTHONPATH=lib python -m unittest discover -s tests"
