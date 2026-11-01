@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
-"""Cut Den TV's bumps from the lab's clips: each bump's own silent cut (H.264, no audio track), the pack's
-bumps.json, and a review reel with the stings mixed in. ffmpeg only; nothing generated here.
+"""Cut Den TV's bumps from the lab's clips: each bump's silent cut (H.264, no audio track), the pack's
+bumps.json, and a silent review reel with the captions drawn in. ffmpeg only; nothing generated here.
 
-    python3 cut.py UPDIR STINGDIR OUTDIR      (UPDIR: the upscaled clips, <name>.mp4)
+    python3 cut.py UPDIR OUTDIR      (UPDIR: the upscaled clips, <name>.mp4)
 """
 import json
 import os
 import subprocess
 import sys
 
-# id: (pieces, hold seconds at the end, roles, caption, sting, about)
+# id: (pieces, hold seconds at the end, roles, caption, about)
 BUMPS = {
-    "still-lit": (["still-lit-owl"], 1.2, ["open", "between"], "STILL LIT", "still-lit",
+    "still-lit": (["still-lit-owl"], 1.2, ["open", "between"], "STILL LIT",
                   "RECON's OWL keeps watch on a cliff at night: the night block's ident"),
-    "right-back": (["right-back-lineman"], 0.6, ["between"], "BACK IN A MOMENT", "spark",
+    "right-back": (["right-back-lineman"], 0.6, ["between"], "BACK IN A MOMENT",
                    "RIG's LINEMAN hangs from a cable, fixing a junction box in a shower of sparks"),
-    "cable-run": (["cable-run-lineman"], 0.0, ["tune", "between"], "", "dial-tune",
+    "cable-run": (["cable-run-lineman"], 0.0, ["tune", "between"], "",
                   "RIG's LINEMAN rides a power cable down a ship's corridor"),
-    "late-night": (["late-night-noir"], 0.8, ["between"], "STAY TUNED", "crackle-in",
+    "late-night": (["late-night-noir"], 0.8, ["between"], "STAY TUNED",
                    "NOIR hosts the late-night broadcast from his pod"),
-    "signal-in": (["signal-in-noir"], 0.0, ["tune", "between"], "", "signal-in",
+    "signal-in": (["signal-in-noir"], 0.0, ["tune", "between"], "",
                   "STATIC's signal races down a cable into NOIR's console"),
-    "takeover": (["takeover-lineman"], 0.8, ["between"], "", "crackle-in",
+    "takeover": (["takeover-lineman"], 0.8, ["between"], "",
                  "The takeover: a dormant repair robot wakes up as STATIC's LINEMAN"),
-    "crew": (["crew-owl", "crew-lineman", "crew-noir"], 0.6, ["between"], "", "dial-tune",
+    "crew": (["crew-owl", "crew-lineman", "crew-noir"], 0.6, ["between"], "",
              "The crew on the ship: OWL at the viewport, LINEMAN at a junction box, NOIR on the bridge"),
-    "sign-off": (["sign-off-noir"], 1.6, ["close"], "SIGNING OFF", "power-down",
+    "sign-off": (["sign-off-noir"], 1.6, ["close"], "SIGNING OFF",
                  "NOIR powers down for the night: the night block's sign-off"),
 }
 W, H, FPS = 1248, 720, 32
@@ -83,12 +83,11 @@ def cut(name, spec, up, tmp, out):
     return dst, round(float(probe(dst)["format"]["duration"]), 2)
 
 
-def main(up, stings, out):
-    up, stings, out = (os.path.abspath(p) for p in (up, stings, out))
+def main(up, out):
+    up, out = (os.path.abspath(p) for p in (up, out))
     tmp = os.path.join(out, ".work")
     os.makedirs(tmp, exist_ok=True)
     os.makedirs(os.path.join(out, "clips"), exist_ok=True)
-    os.makedirs(os.path.join(out, "stings"), exist_ok=True)
     doc = {"schema": 1, "pack": "static", "title": "STATIC's bumps",
            "about": "Short interstitials from STATIC's crew for Den TV's night block (bromigos-mascot-art)",
            "bumps": []}
@@ -98,30 +97,25 @@ def main(up, stings, out):
             print(name, "missing pieces; skipped", flush=True)
             continue
         path, secs = cut(name, spec, up, tmp, out)
-        sting = spec[4]
-        subprocess.run(["cp", os.path.join(stings, sting + ".ogg"), os.path.join(out, "stings", sting + ".ogg")],
-                       check=True)
         doc["bumps"].append({"id": name, "file": f"clips/{name}.mp4", "seconds": secs, "roles": spec[2],
-                             **({"caption": spec[3]} if spec[3] else {}), "sting": f"stings/{sting}.ogg",
-                             "about": spec[5]})
-        reel.append((path, os.path.join(out, "stings", sting + ".ogg"), secs, spec[3]))
+                             **({"caption": spec[3]} if spec[3] else {}), "about": spec[4]})
+        reel.append((path, secs, spec[3]))
         print(name, secs, os.path.getsize(path), flush=True)
     with open(os.path.join(out, "bumps.json"), "w") as f:
         json.dump(doc, f, indent=1)
         f.write("\n")
-    # the review reel: every bump with its sting, a beat of black between (not shipped)
+    # the review reel: every bump, silent, its caption drawn as the den draws it, a beat of black between
     parts = []
-    for i, (clip, sting, secs, cap) in enumerate(reel):
+    for i, (clip, secs, cap) in enumerate(reel):
         r = os.path.join(tmp, f"reel-{i}.mp4")
         draw = ""
         if cap:
             draw = (f",drawtext=fontfile=/usr/share/fonts/TTF/GeistMono-Bold.ttf:text='{cap}':fontcolor=0x7dff5a:"
-                    f"fontsize=44:x=(w-tw)/2:y=h-72:box=1:boxcolor=0x020a02@0.6:boxborderw=14:enable='between(t,0.8,{secs - 0.2:.2f})'")
-        run("-i", clip, "-i", sting, "-f", "lavfi", "-t", "0.6", "-i", f"color=c=black:s={W}x{H}:r={FPS}",
-            "-filter_complex", f"[0:v]format=yuv420p{draw}[v0];[v0][2:v]concat=n=2:v=1:a=0[v];"
-                               f"[1:a]apad,atrim=0:{secs + 0.6:.2f}[a]",
-            "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-c:a", "aac",
-            "-b:a", "160k", "-ar", "48000", r)
+                    f"fontsize=44:x=(w-tw)/2:y=h-72:box=1:boxcolor=0x020a02@0.6:boxborderw=14:"
+                    f"enable='between(t,0.8,{secs - 0.2:.2f})'")
+        run("-i", clip, "-f", "lavfi", "-t", "0.6", "-i", f"color=c=black:s={W}x{H}:r={FPS}",
+            "-filter_complex", f"[0:v]format=yuv420p{draw}[v0];[v0][1:v]concat=n=2:v=1:a=0[v]",
+            "-map", "[v]", "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "20", r)
         parts.append(r)
     lst = os.path.join(tmp, "reel.txt")
     with open(lst, "w") as f:
@@ -131,4 +125,4 @@ def main(up, stings, out):
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:4])
+    main(*sys.argv[1:3])
