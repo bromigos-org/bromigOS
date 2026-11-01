@@ -46,6 +46,7 @@ belongs to a package, so pacman installs, updates and removes all of it.
 | `tools/` | Docs generation and link checks, the GPU table generator and offscreen renderers | |
 | `test/vm/` | The fresh-machine test in a virtual machine | |
 | [`brand/`](brand/README.md) | Bromigos logos and the house palette, as source files | |
+| [`mascot/`](mascot/README.md) | STATIC's painted art: the guide's host loops and Den TV's bumps, with how each was made | `bromigos-mascot-art` |
 | `.github/workflows/` | CI ([below](#what-ci-checks)) | |
 
 VECTOR, the desktop's AI assistant, has his own repository, `bromigos-org/vector`. It

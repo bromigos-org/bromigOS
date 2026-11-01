@@ -30,6 +30,21 @@ from .tvchannels import channels as CH
 from .tui import HintTable, bromigos_theme
 from .tuiux import Dialog, UXApp
 
+try:                                        # STATIC, the den's host (lib/bromigos_static_term.py)
+    import bromigos_static as STATIC_RIG
+    import bromigos_static_term as STATIC
+    if STATIC_RIG.mode() == "off" or not hasattr(STATIC, "Sprite"):
+        STATIC = None
+except ImportError:                         # an older bromigos-core: the channels without him
+    STATIC = None
+
+
+def static_sprite(pose, kind="head", **kw):
+    """STATIC as a widget, or an empty Static when he's off or missing."""
+    if STATIC is None:
+        return Static("", **{k: v for k, v in kw.items() if k in ("id", "classes")})
+    return STATIC.Sprite(pose, kind=kind, **kw)
+
 GLYPH = {"tv": "▤", "movie": "▣", "artist": "♫", "album": "◉", "youtube": "▶"}
 SORTS = ("added", "size", "name", "missing", "profile")
 
@@ -476,6 +491,9 @@ class MediaApp(UXApp):
     #hint { height: 2; padding: 0 1; color: $text-muted; border-top: solid $panel; }
     #title-actions { height: 3; padding: 0 1; }
     .channel-actions { height: 3; }
+    #ch-host { height: auto; max-height: 8; padding: 0 1; }
+    #ch-host-text { width: 1fr; padding: 1 2; color: $text-muted; }
+    #ch-figure { padding: 1 2 0 2; }
     .channel-actions Button { width: 1fr; min-width: 10; }
     #title-actions Static { width: 1fr; padding: 1 1; color: $text-muted; }
     .title { text-style: bold; color: $primary; }
@@ -595,6 +613,12 @@ class MediaApp(UXApp):
                 with Horizontal():
                     yield MediaTable(id="ch-list", cursor_type="row", zebra_stripes=True, classes="list")
                     with Vertical(classes="side"):
+                        with Horizontal(id="ch-host"):
+                            yield static_sprite("snow", face="snow", id="ch-static",
+                                                label="STATIC, the den's host: how the selected channel is doing")
+                            yield Static("", id="ch-host-text", markup=False)
+                        yield static_sprite("snow", kind="figure", cols=36, rows=20, id="ch-figure",
+                                            label="STATIC, tuning in")
                         yield Static("", id="ch-detail", classes="detail")
                         yield MediaTable(id="ch-items", cursor_type="row")
                 with Vertical(classes="detail"):
@@ -615,6 +639,7 @@ class MediaApp(UXApp):
     def on_mount(self):
         self.register_theme(bromigos_theme())
         self.theme = "bromigos"
+        self.channel_host(None, loading=True)
         for tid, hint in (("tv", "Shows in Sonarr: seasons, size, profile, monitoring"), ("movies", "Films in Radarr"),
                           ("music", "Artists and albums in Lidarr"), ("youtube", "Pinchflat's channels and playlists"),
                           ("downloads", "What the download clients are fetching"),
@@ -1278,8 +1303,38 @@ class MediaApp(UXApp):
             if pane and pane.id == self.query_one("#tabs", TabbedContent).active:
                 self.update_membership(focused, focused.cursor_row)
 
+    def channel_host(self, row, loading=False):
+        """STATIC on the CHANNELS tab: tuning in while the list is read (big, snow), fiddling with
+        the antenna when there are no channels (big), else his head beside a line about the
+        selected channel: watching it on air, whacking the set when it can't play."""
+        try:
+            head, fig = self.query_one("#ch-static"), self.query_one("#ch-figure")
+            text, host = self.query_one("#ch-host-text", Static), self.query_one("#ch-host")
+        except NoMatches:
+            return
+        big = loading or not self.channel_rows
+        fig.display = big and STATIC is not None
+        host.display = not big
+        self.query_one("#ch-items").display = not (big and STATIC is not None)
+        if STATIC is None:
+            return
+        if loading:
+            fig.set_pose("snow", label="STATIC tunes in while the channels are read")
+        elif not self.channel_rows:
+            fig.set_pose("antenna", label="STATIC fiddles with the antenna: no channels yet (Ctrl+N adds one)")
+        elif row and row.get("error"):
+            head.set_pose("whack", "whack", label="STATIC whacks the set: this channel can't play")
+            text.update(f"{STATIC.glyph('whack')}  Can't play: {row['error']}")
+        elif row and row.get("on_screens"):
+            head.set_pose("watching", "watching", label="STATIC is watching: this channel is on air")
+            text.update(f"ON AIR on {', '.join(row['on_screens'])}" + (f"\nNow: {row['now']}" if row.get("now") else ""))
+        elif row:
+            head.set_pose("stand", "neutral", label="STATIC: this channel isn't on a screen")
+            text.update("Not on a screen right now. c tunes a TV.")
+
     def show_channel(self, index):
         row = self.channel_rows[index] if 0 <= index < len(self.channel_rows) else None
+        self.channel_host(row)
         self.query_one("#ch-detail", Static).update(
             (f"{row['name']}\nNow: {row['now'] or '-'}\nNext: {row['next'] or '-'}\n" +
              (row['error'] or "")) if row else "No channels yet. Ctrl+N adds one.")

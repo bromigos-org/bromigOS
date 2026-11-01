@@ -135,6 +135,9 @@ check() {
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/alerts"
   # lib/bromigos_qr.py: themed QR codes in every world and style, each decoded by zbar and ZXing
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/qr"
+  # STATIC, the mascot (lib/bromigos_static*.py): every pose and frame as SVG in any theme's
+  # colours, the faces, the rig's parts, mascot off, and the terminal looks (kitty, half-blocks, text)
+  PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/mascot"
   # the voice guide: every line of lib/guide/lines.toml has a clip that says its words, and
   # the player's choices, with stand-in players (no sound plays)
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/voice-guide"
@@ -172,9 +175,10 @@ package() {
   install -Dm0644 -t "$pkgdir/usr/share/bromigos/guide/" "$_root"/lib/guide/lines.toml
   install -Dm0644 -t "$pkgdir/usr/share/bromigos/guide/clips/" "$_root"/lib/guide/clips/manifest.json \
     "$_root"/lib/guide/clips/*.opus
-  # `bromigos private|secrets|emblem|qr …`: the CLI routes to bromigos-<group> here
+  # `bromigos private|secrets|emblem|qr|mascot …`: the CLI routes to bromigos-<group> here
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-private \
-    "$_root"/bin/bromigos-secrets "$_root"/bin/bromigos-emblem "$_root"/bin/bromigos-qr
+    "$_root"/bin/bromigos-secrets "$_root"/bin/bromigos-emblem "$_root"/bin/bromigos-qr \
+    "$_root"/bin/bromigos-mascot
   # the private overlay decrypted at login, and again when it changes: on for every user
   # (shipped default.target.wants links, as pipewire ships its own), doing nothing for one
   # without the encrypted file or the age key

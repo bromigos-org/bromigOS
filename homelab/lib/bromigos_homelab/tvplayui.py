@@ -10,6 +10,22 @@ from .tui import HintTable
 from .tuiux import Dialog
 import bromigos_tvplay as TVP
 
+try:                                        # STATIC, the den's host (lib/bromigos_static_term.py)
+    import bromigos_static as STATIC_RIG
+    import bromigos_static_term as STATIC
+    if STATIC_RIG.mode() == "off":
+        STATIC = None
+except ImportError:
+    STATIC = None
+
+
+def _status(face, text):
+    """The dialog's status line, with STATIC's face in front when he's on."""
+    if STATIC is None:
+        return text
+    import os
+    return f"{STATIC.glyph(face, os.environ.get('BROMIGOS_ICONS') == 'ascii')}  {text}"
+
 
 class PlayTable(HintTable):
     BINDINGS = [Binding("enter,l,right", "screen.choose", "Choose"),
@@ -28,6 +44,8 @@ class PlayOnDen(Dialog):
     #den-play-box Select { width: 1fr; }
     #den-results { height: 1fr; min-height: 5; }
     #den-note { height: auto; }
+    #den-head { height: auto; }
+    #den-head Label { padding: 2 0 0 2; }
     """
 
     def __init__(self, title="", kind="all", screen="big"):
@@ -39,7 +57,11 @@ class PlayOnDen(Dialog):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="den-play-box"):
-            yield Label("Play on den TV · pick a show, season and episode, or a movie", classes="title")
+            with Horizontal(id="den-head"):
+                if STATIC is not None and hasattr(STATIC, "Sprite"):
+                    yield STATIC.Sprite("remote", face="snow", id="den-static",
+                                        label="STATIC, remote in hand: tuning in while your library is read")
+                yield Label("Play on den TV · pick a show, season and episode, or a movie", classes="title")
             with Horizontal():
                 yield Select([(s.title(), s) for s in ("big", "scope", "small")], value=self.screen_, allow_blank=False, id="den-screen")
                 yield Select([(s.title(), s) for s in ("all", "shows", "movies", "youtube")], value=self.kind_, allow_blank=False, id="den-kind")
@@ -47,7 +69,7 @@ class PlayOnDen(Dialog):
             inp.tooltip = "Search your Jellyfin/Plex titles or downloaded YouTube videos"
             yield inp
             yield PlayTable(id="den-results", cursor_type="row")
-            yield Static("Reading your library…", id="den-note")
+            yield Static(_status("snow", "Reading your library…"), id="den-note", markup=False)
             yield Checkbox("Resume where you left off", id="den-resume")
             with Horizontal():
                 yield Button("Cancel", id="den-cancel")
@@ -61,6 +83,7 @@ class PlayOnDen(Dialog):
 
     @work(thread=True, exclusive=False, group="den-search")
     def fetch(self, query=""):
+        self.app.call_from_thread(self._static, "snow", "STATIC, remote in hand: tuning in while your library is read")
         self.serial += 1
         serial = self.serial
         scope = dict(self.scope)
@@ -77,7 +100,17 @@ class PlayOnDen(Dialog):
         table = self.query_one("#den-results", HintTable)
         table.fill(("Title", "Kind", "Source"), [(TVP.TV.label(v), v.get("kind"), v.get("server")) for v in rows],
                    [TVP.TV.label(v) for v in rows], "Enter/l: choose · h: back · arrows/j/k: move")
-        self.query_one("#den-note", Static).update(error or (f"{len(rows)} found" if rows else "Nothing found on your media servers. Try another title or check that it is downloaded."))
+        face = "whack" if error else ("happy" if rows else "fiddle")
+        self.query_one("#den-note", Static).update(_status(face, error or (f"{len(rows)} found" if rows else "Nothing found on your media servers. Try another title or check that it is downloaded.")))
+        self._static(face, {"whack": "STATIC whacks the set: your library couldn't be read",
+                            "happy": "STATIC, remote in hand: pick something and he'll put it on",
+                            "fiddle": "STATIC fiddles with the antenna: nothing matched"}[face])
+
+    def _static(self, face, label):
+        try:
+            self.query_one("#den-static").set_pose("remote", face, label=label)
+        except Exception:                                   # noqa: BLE001  (he's off)
+            pass
 
     @on(Input.Submitted, "#den-search")
     def search_submitted(self, event):

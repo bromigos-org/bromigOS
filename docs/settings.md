@@ -443,6 +443,23 @@ commands, toasts, theme watching and sandbox renders, with no Settings sidebar. 
 launcher entry is **Den TV**. Super+Alt+G, `bromigos-live tv guide`, the TV hover hint's
 **GUIDE** button and the MEDIA panel all open it.
 
+STATIC, the mascot, hosts the guide. The **Tonight** card shows him at his desk with
+what's coming up next. He shows snow while tuning in, the antenna when there are no
+channels, asleep when the live layer is off, and the whack when the channels file doesn't
+parse or the featured channel can't play. There is one STATIC per screen. The card is
+GLOW. It plays his loop at the art's frame rate only while mapped, and holds frame 0 under
+reduced motion.
+
+His art is looked up by name (`host`, `remote:snow`, `head:watching` …) and height in an
+art folder's `manifest.json` (`lib/bromigos_static_art.py`):
+`$BROMIGOS_STATIC_ART`, then `~/.local/share/bromigos/static`, then
+`/usr/share/bromigos/static`. Each entry is a list of frames or an animated WebP. Without a
+folder, the code-drawn placeholder in `lib/bromigos_static.py` stands in, in the theme's
+colours. **Settings › Mascot** (`desktop/settings/pages/mascot.py`) turns him on, quiet or
+off. So does `bromigos mascot on|quiet|off`, which writes `~/.config/bromigos/mascot.toml`
+(`BROMIGOS_MASCOT` overrides it). `BROMIGOS_DEN_TV_HOST=loading` holds the tuning-in state
+for the tests' renders.
+
 The guide, media TUI, CLI and VECTOR share `lib/bromigos_tvchannels.py`. Its `Store`
 serializes edits and uses `bromigos_tvconfig.py` to keep comments and other tables,
 check the result, and write atomically through symlinks. A change asks the running live
