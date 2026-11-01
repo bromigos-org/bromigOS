@@ -13,11 +13,15 @@ format = 1
 enabled = true
 
 [image.generate]
-comfyui = "qwen-image-2.1"
+# Qwen-Image-2512 (Apache-2.0). The fast option is "qwen-image-2512-lightning" (8 steps).
+# Qwen-Image 2.1 is never a default: its licence is non-commercial (docs/art.md,
+# "Check the licence first").
+comfyui = "qwen-image-2512"
 nolgia = "gpt-image-2.5-flare"
 
 [image.edit]
-comfyui = "qwen-image-2.1"
+# Qwen-Image-Edit-2511 (Apache-2.0); the fast option is "qwen-image-edit-2511-lightning"
+comfyui = "qwen-image-edit-2511"
 nolgia = "gpt-image-2.5-flare"
 
 [image.cutout]

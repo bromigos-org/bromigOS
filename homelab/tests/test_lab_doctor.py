@@ -121,7 +121,7 @@ class DoctorTest(unittest.TestCase):
     def test_targets(self):
         out = {"services": [
             {"service": "image.generate", "entries": [{"target": "homelab", "ok": True, "engine": "comfyui:homelab"}],
-             "uses": {"target": "homelab", "engine": "comfyui:homelab (qwen-image-2.1)"}},
+             "uses": {"target": "homelab", "engine": "comfyui:homelab (qwen-image-2512)"}},
             {"service": "voice.tts", "entries": [{"target": "homelab", "ok": False, "engine": "lab",
                                                   "detail": "doesn't answer"},
                                                  {"target": "local", "ok": True, "engine": "kokoro"}],

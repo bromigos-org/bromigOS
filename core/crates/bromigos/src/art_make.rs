@@ -343,6 +343,13 @@ pub fn make(paths: &Paths, r: Request, as_json: bool) -> Result<i32> {
                 "licence": rec.as_ref().and_then(|x| x.license.clone())
                     .unwrap_or_else(|| if c.provider == Provider::Nolgia { "nolgia (its terms)".into() } else { "unknown".into() }),
                 "job": rec.as_ref().and_then(|x| x.job.clone()),
+                // a non-commercial workflow (Qwen-Image 2.1): what may not be done with the art
+                "warning": match &c.provider {
+                    Provider::Comfyui(_) => art::comfy::workflow(&c.model)
+                        .ok()
+                        .and_then(|w| w.licence_warning()),
+                    _ => None,
+                },
                 "seconds": started.elapsed().as_secs(),
             })))
         })();
