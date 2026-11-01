@@ -4,8 +4,10 @@ real disks with the real install (iso/test.sh tui-install; run as root in the li
 
   python3 tuidrive.py PLAN.json      PLAN: {mode: erase|alongside, gib, disk_index, encrypt,
                                      separate, edition, user, password, hostname, full_name,
-                                     ssh, shots}; prints the step it ended on and the install's
-                                     last words; exits 0 when it's installed
+                                     ssh, shots, server}; prints the step it ended on and the
+                                     install's last words; exits 0 when it's installed.
+                                     server: bromigOS Server's steps, as an answer file's
+                                     [server] table (role, method, address, data_disks, …)
 """
 import asyncio
 import json
@@ -64,6 +66,22 @@ async def drive(app, pilot, plan):
             await pilot.pause()
         await shot("edition")
         await pilot.press("ctrl+n")
+    if app.step == "role":                  # bromigOS Server: its roles first (one or several)
+        sp = plan.get("server") or {}
+        for rid in sp.get("roles") or [sp.get("role", "plain")]:
+            app.query_one(f"#srole-{rid}").value = True
+            await pilot.pause()
+        await shot("role")
+        await pilot.press("ctrl+n")
+        await pilot.pause(0.3)
+    if app.step == "secrets":               # where its keys go
+        sp = plan.get("server") or {}
+        if sp.get("store"):
+            app.query_one(f"#sstore-{sp['store'].get('kind', 'local')}").value = True
+            await pilot.pause(0.3)
+        await shot("secrets")
+        await pilot.press("ctrl+n")
+        await pilot.pause(0.3)
     assert app.step == "keyboard", app.step
     await pilot.press("tab")
     await type_text(pilot, "hello")
@@ -100,6 +118,11 @@ async def drive(app, pilot, plan):
             await pilot.press("right")
     await shot("disk")
     await pilot.press("ctrl+n")
+    if app.step == "network":
+        await drive_server(app, pilot, plan, shot)
+        assert app.step == "summary", (app.step, str(app.query_one("#error").render()))
+        await shot("summary")
+        return target, shots
     assert app.step == "user", (app.step, str(app.query_one("#error").render()))
     app.query_one("#full_name").focus()
     await type_text(pilot, plan.get("full_name", "Alex Rivera"))
@@ -123,6 +146,10 @@ async def drive(app, pilot, plan):
             if plan.get("ssh_key") and app.a.get("ssh"):
                 app.query_one("#pasted-key").value = plan["ssh_key"]
             await pilot.press("ctrl+n")
+        if app.step == "reach":
+            await shot("reach")
+            await pilot.press("ctrl+n")
+            await pilot.pause(0.3)
         assert app.step == "summary", (app.step, str(app.query_one("#error").render()))
         await shot("summary")
         return target, shots
@@ -148,10 +175,119 @@ async def drive(app, pilot, plan):
             app.query_one("#ssh-pw").value = True
         await shot("ssh")
         await pilot.press("ctrl+n")
+    if app.step == "reach":                 # Reach it from anywhere: through BRODEC only, the default
+        await shot("reach")
+        await pilot.press("ctrl+n")
+        await pilot.pause(0.3)
     assert app.step == "summary", (app.step, str(app.query_one("#error").render()))
     await shot("summary")
     return target, shots
 
+
+
+async def drive_server(app, pilot, plan, shot):
+    """bromigOS Server's steps, by keys and the controls' own values: Network, Access, Storage,
+    Encryption, Updates, Services (plan["server"]: an answer file's [server] keys)."""
+    sp = plan.get("server") or {}
+
+    async def cont(sid):
+        await shot(sid)
+        await pilot.press("ctrl+n")
+        await pilot.pause(0.3)
+        assert app.step != sid, (sid, str(app.query_one("#error").render()))
+
+    assert app.step == "network", app.step
+    if sp.get("interface"):
+        app.query_one(f"#sport-{sp['interface']}").value = True
+        await pilot.pause()
+    if sp.get("method") == "static":
+        app.query_one("#srv-static").value = True
+        await pilot.pause(0.4)
+        for k in ("address", "prefix", "gateway", "dns"):
+            if k in sp:
+                v = sp[k]
+                app.query_one(f"#srv-{k}").value = " ".join(v) if isinstance(v, list) else str(v)
+                await pilot.pause(0.05)
+    if plan.get("hostname"):
+        app.query_one("#srv-hostname").value = plan["hostname"]
+    if "wake_on_lan" in sp:
+        app.query_one("#srv-wol").value = bool(sp["wake_on_lan"])
+    await cont("network")
+    assert app.step == "access", app.step
+    app.query_one("#srv-user").value = plan.get("user", "admin")
+    app.query_one("#srv-password").focus()
+    await type_text(pilot, plan.get("password", "correct-horse"))
+    app.query_one("#srv-password2").focus()
+    await type_text(pilot, plan.get("password", "correct-horse"))
+    mode = sp.get("ssh_mode") or ("password" if plan.get("ssh_password") else ("keys" if plan.get("ssh", True) else "off"))
+    app.query_one(f"#srv-ssh-{mode}").value = True
+    await pilot.pause(0.3)
+    if plan.get("ssh_key") and mode != "off":
+        app.query_one("#srv-paste").value = plan["ssh_key"]
+    if sp.get("lab_key"):
+        app.query_one("#srv-labsame").value = False
+        await pilot.pause()
+        app.query_one("#srv-labkey").value = sp["lab_key"]
+    for k in ("tailscale", "wireguard"):
+        if sp.get(k):
+            app.query_one(f"#srv-{k}").value = True
+    await cont("access")
+    if app.step == "reach":
+        mode = (plan.get("reach") or {}).get("mode")
+        if mode:
+            app.query_one(f"#sreach-{mode}").value = True
+            await pilot.pause(0.4)
+        await cont("reach")
+    if app.step == "storage":
+        disks = [d["path"] for d in app._disks]
+        for p in sp.get("data_disks", []):
+            app.query_one(f"#sdisk-{disks.index(p)}").value = True
+            await pilot.pause(0.05)
+        if sp.get("data_layout") == "raid1":
+            app.query_one("#srv-lay-raid1").value = True
+            await pilot.pause()
+        await cont("storage")
+    if app.step == "unlock":
+        unlock = sp.get("unlock") or ("passphrase" if plan.get("encrypt", True) else "none")
+        app.query_one(f"#sunlock-{unlock}").value = True
+        await pilot.pause(0.4)
+        if plan.get("separate") and unlock != "none":
+            app.query_one("#srv-sep").value = True
+            await pilot.pause(0.4)
+            app.query_one("#srv-pp").value = "disk-pass"
+            app.query_one("#srv-pp2").value = "disk-pass"
+        await cont("unlock")
+    assert app.step == "updates", app.step
+    app.query_one(f"#supd-{sp.get('update_mode', 'auto')}").value = True
+    if sp.get("update_window"):
+        app.query_one("#srv-window").value = sp["update_window"]
+    await pilot.pause()
+    await cont("updates")
+    assert app.step == "services", app.step
+    if sp.get("lab"):
+        app.query_one(f"#slab-{sp['lab']}").value = True
+        await pilot.pause(0.5)
+    if "provision" in sp:
+        s = app.a["server"]
+        s["provision"], s["provision_edited"] = list(sp["provision"]), True
+        for item, vals in (sp.get("settings_secrets") or {}).items():      # typed into the setup forms' secret fields
+            s.setdefault("setup_secrets", {}).setdefault(item, {}).update(vals)
+        await app._fill_catalogue()
+        await pilot.pause(0.3)
+    for k in sp.get("services", []):
+        for w in app.query(f"#ssvc-{k}"):
+            w.value = True
+    for k in sp.get("services_off", []):
+        for w in app.query(f"#ssvc-{k}"):
+            w.value = False
+    if "apps" in sp:
+        for w in app.query("Checkbox"):
+            if (w.id or "").startswith("sapp-"):
+                w.value = w.id.removeprefix("sapp-") in sp["apps"]
+    await pilot.pause(0.3)
+    if sp.get("pelican_url"):
+        app.query_one("#srv-pelican-url").value = sp["pelican_url"]
+    await cont("services")
 
 
 async def install(plan, timeout=7200):

@@ -1,0 +1,17 @@
+[Unit]
+Description=Navidrome (music)
+
+[Container]
+Image={{image:navidrome}}
+ContainerName=navidrome
+Network=bromigos-lab.network
+PublishPort=4533:4533
+User={{puid}}:{{pgid}}
+Volume={{data}}/data:/data:Z
+Volume={{media}}/music:/music:ro
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

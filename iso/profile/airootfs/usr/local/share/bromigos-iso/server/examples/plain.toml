@@ -1,0 +1,14 @@
+# Just a server: the safe base and nothing more, signing in with a key from the stick's fieldkit folder.
+[install]
+edition = "server"
+disk = "/dev/vda"
+mode = "erase"
+user = "admin"
+hostname = "bromigos-server"
+password = "used at the console and for sudo"
+ssh_keys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTheDocsOnlyReplaceIt you@laptop"]
+
+[server]
+role = "plain"
+unlock = "passphrase"
+update_mode = "off"

@@ -1,0 +1,19 @@
+# bromigOS Server as a game node of your lab's Pelican panel: Docker's engine from Arch's own
+# packages and Wings. Without a lab, leave pelican-wings out and the catalogue's games run on Podman.
+[install]
+edition = "server"
+timezone = "America/Los_Angeles"
+keyboard = "us"
+disk = "/dev/nvme0n1"
+mode = "erase"
+user = "admin"
+hostname = "game-server"
+password = "used at the console and for sudo"
+ssh_keys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTheDocsOnlyReplaceIt you@laptop"]
+
+[server]
+role = "games"
+services = ["pelican-wings", "performance"]
+pelican_url = "https://panel.lab.example"
+registry_mirror = "https://registry.lab.example"   # your lab's image cache; leave it out for public registries
+unlock = "none"

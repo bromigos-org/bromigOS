@@ -1,0 +1,20 @@
+[Unit]
+Description=Minecraft server
+
+[Container]
+Image={{image:minecraft}}
+ContainerName=minecraft
+Network=bromigos-lab.network
+PublishPort=25565:25565
+Volume={{data}}/data:/data:Z
+Environment=EULA=TRUE
+Environment=TYPE=PAPER
+Environment=TZ={{tz}}
+Secret={{secret:rcon-password}},type=mount,target=/run/secrets/rcon-password,mode=0400,uid=1000
+Environment=RCON_PASSWORD_FILE=/run/secrets/rcon-password
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

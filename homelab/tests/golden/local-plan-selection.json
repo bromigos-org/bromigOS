@@ -1,0 +1,207 @@
+{
+ "auto_added": [
+  "k3s",
+  "caddy"
+ ],
+ "budget": {
+  "cpu": 7.0,
+  "disk_gb": 34.0,
+  "fits": true,
+  "gpu_vram_gb": 0.0,
+  "notes": [],
+  "ram_gb": 8.5
+ },
+ "format": 1,
+ "hardware": {
+  "cpu": 8,
+  "disk_gb": 900,
+  "gpu": false,
+  "gpu_name": "",
+  "gpu_vram_gb": 0,
+  "ram_gb": 32
+ },
+ "items": [
+  {
+   "auto_added": true,
+   "downloads": [
+    "k3s v1.37.1+k3s1 from get.k3s.io"
+   ],
+   "group": "lab-core",
+   "id": "k3s",
+   "install": {
+    "kind": "step",
+    "step": "k3s"
+   },
+   "internet": true,
+   "line": "Runs your lab's apps across its machines.",
+   "mode": "server",
+   "name": "Kubernetes (k3s)",
+   "notes": [
+    "Joining a lab: your lab adds this server to its cluster from your desktop (bromigos lab provision add-node), unless you give its join address and token here."
+   ],
+   "ports": [
+    6443,
+    10250
+   ],
+   "requires": {
+    "cpu": 2,
+    "disk_gb": 10,
+    "ram_gb": 2
+   },
+   "services": [
+    "k3s.service"
+   ],
+   "settings": {
+    "server_url": "",
+    "token": {
+     "secret": "in the secret store"
+    }
+   },
+   "size_text": "about 70 MB download"
+  },
+  {
+   "auto_added": false,
+   "downloads": [
+    "package helm",
+    "Helm chart"
+   ],
+   "group": "lab-core",
+   "id": "argocd",
+   "install": {
+    "kind": "step",
+    "step": "helm-chart"
+   },
+   "internet": true,
+   "line": "Keeps the lab's apps the way your lab's Git repository says.",
+   "name": "Argo CD",
+   "notes": [
+    "Point it at your lab repository afterwards (bromigos lab provision --git-url on your desktop)."
+   ],
+   "ports": [],
+   "requires": {
+    "cpu": 1,
+    "disk_gb": 2,
+    "ram_gb": 1
+   },
+   "services": [],
+   "size_text": "about 400 MB of images"
+  },
+  {
+   "auto_added": true,
+   "downloads": [
+    "package caddy"
+   ],
+   "group": "lab-core",
+   "id": "caddy",
+   "install": {
+    "kind": "step",
+    "step": "caddy"
+   },
+   "internet": true,
+   "line": "One front door with HTTPS for every web app here.",
+   "name": "Caddy",
+   "notes": [],
+   "ports": [
+    80,
+    443
+   ],
+   "requires": {
+    "cpu": 1,
+    "disk_gb": 1,
+    "ram_gb": 0.25
+   },
+   "services": [
+    "caddy.service"
+   ],
+   "size_text": "about 15 MB download"
+  },
+  {
+   "auto_added": false,
+   "downloads": [
+    "image ghcr.io/immich-app/immich-machine-learning:v3.3.5",
+    "image ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0",
+    "image ghcr.io/immich-app/immich-server:v3.3.5",
+    "image docker.io/valkey/valkey:9"
+   ],
+   "group": "home",
+   "id": "photos",
+   "install": {
+    "images": {
+     "ml": "ghcr.io/immich-app/immich-machine-learning:v3.3.5@sha256:5b28c9352c8374b8a1ed96fbdd8d6755fea6e43510ec43fdf6538aa02ea40f56",
+     "postgres": "ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23",
+     "server": "ghcr.io/immich-app/immich-server:v3.3.5@sha256:485d546a2e31d6a8b4db8423fcba5c109de8c218d93410af115fd1ccfc4352a6",
+     "valkey": "docker.io/valkey/valkey:9@sha256:c123e3715db63d06d4ad6964884037aa0d5d4d703939b9929954112889708e1d"
+    },
+    "kind": "quadlet",
+    "template": "photos"
+   },
+   "internet": true,
+   "line": "Your family's photos and videos, backed up from your phones.",
+   "name": "Photos (Immich)",
+   "notes": [],
+   "ports": [
+    2283
+   ],
+   "requires": {
+    "cpu": 2,
+    "disk_gb": 20,
+    "ram_gb": 4
+   },
+   "services": [
+    "immich-database.service",
+    "immich-ml.service",
+    "immich-server.service",
+    "immich-valkey.service"
+   ],
+   "size_text": "about 2.5 GB of images"
+  },
+  {
+   "auto_added": false,
+   "downloads": [
+    "package vaultwarden",
+    "package vaultwarden-web"
+   ],
+   "group": "home",
+   "id": "passwords",
+   "install": {
+    "kind": "step",
+    "step": "passwords"
+   },
+   "internet": true,
+   "line": "A password manager for the household, using the Bitwarden apps.",
+   "name": "Passwords (Vaultwarden)",
+   "notes": [],
+   "ports": [
+    8222
+   ],
+   "requires": {
+    "cpu": 1,
+    "disk_gb": 1,
+    "ram_gb": 0.25
+   },
+   "services": [
+    "vaultwarden.service"
+   ],
+   "size_text": "about 33 MB download"
+  }
+ ],
+ "lab": "none",
+ "lab_join": {
+  "bundle": false,
+  "pair": false
+ },
+ "models": [],
+ "needs_internet": [
+  "k3s",
+  "argocd",
+  "caddy",
+  "photos",
+  "passwords"
+ ],
+ "offline": [],
+ "problems": [],
+ "roles": [],
+ "secret_refs": {},
+ "settings": {},
+ "target": "local"
+}

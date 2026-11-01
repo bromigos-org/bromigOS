@@ -1,0 +1,17 @@
+[Unit]
+Description=YouTube (Pinchflat)
+
+[Container]
+Image={{image:pinchflat}}
+ContainerName=pinchflat
+Network=bromigos-lab.network
+PublishPort=8945:8945
+Volume={{data}}/config:/config:Z
+Volume={{media}}/youtube:/downloads
+Environment=TZ={{tz}}
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -5,7 +5,7 @@ reads it in order. Choices are numbered; Enter keeps the one in brackets."""
 import getpass
 import sys
 
-from . import backend, common
+from . import backend, common, server
 from .disks import GiB, plain_size
 
 
@@ -141,7 +141,9 @@ def main():
         a["separate_passphrase"] = not yes("Use your password to unlock the disk?", True)
         if a["separate_passphrase"]:
             a["passphrase"] = secret("Disk passphrase", "passphrase")
-    if not ed.get("desktop", True):
+    if server.is_server(a):
+        server.plain_steps(a, doc, sys.modules[__name__])      # bromigOS Server's own steps
+    elif not ed.get("desktop", True):
         heading("ssh")
         say(common.SSH_WORDS)
         a["ssh"] = yes("Turn on SSH?", False)

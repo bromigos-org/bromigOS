@@ -1,0 +1,14 @@
+[Unit]
+Description=Photos (Immich): faces and search
+
+[Container]
+Image={{image:ml}}
+ContainerName=immich-ml
+Network=bromigos-lab.network
+Volume={{data}}/model-cache:/cache:Z
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

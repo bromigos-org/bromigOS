@@ -1,0 +1,19 @@
+[Unit]
+Description=Bazarr (subtitles)
+
+[Container]
+Image={{image:bazarr}}
+ContainerName=bazarr
+Network=bromigos-lab.network
+PublishPort=6767:6767
+Environment=PUID={{puid}}
+Environment=PGID={{pgid}}
+Environment=TZ={{tz}}
+Volume={{data}}/config:/config:Z
+Volume={{media}}:/media
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

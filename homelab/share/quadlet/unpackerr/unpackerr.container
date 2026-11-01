@@ -1,0 +1,25 @@
+[Unit]
+Description=Unpackerr
+
+[Container]
+Image={{image:unpackerr}}
+ContainerName=unpackerr
+Network=bromigos-lab.network
+User={{puid}}:{{pgid}}
+Volume={{downloads}}:/media/downloads
+Environment=TZ={{tz}}
+#if:sonarr Environment=UN_SONARR_0_URL=http://sonarr:8989
+#if:sonarr Secret={{secret:sonarr/api-key}},type=mount,target=/run/secrets/sonarr-api-key,mode=0400,uid={{puid}}
+#if:sonarr Environment=UN_SONARR_0_API_KEY=filepath:/run/secrets/sonarr-api-key
+#if:radarr Environment=UN_RADARR_0_URL=http://radarr:7878
+#if:radarr Secret={{secret:radarr/api-key}},type=mount,target=/run/secrets/radarr-api-key,mode=0400,uid={{puid}}
+#if:radarr Environment=UN_RADARR_0_API_KEY=filepath:/run/secrets/radarr-api-key
+#if:lidarr Environment=UN_LIDARR_0_URL=http://lidarr:8686
+#if:lidarr Secret={{secret:lidarr/api-key}},type=mount,target=/run/secrets/lidarr-api-key,mode=0400,uid={{puid}}
+#if:lidarr Environment=UN_LIDARR_0_API_KEY=filepath:/run/secrets/lidarr-api-key
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

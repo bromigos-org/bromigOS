@@ -915,3 +915,298 @@ try:
             return t
 except ImportError:      # no Textual: the colours and the emblem still work
     pass
+
+
+# ── bromigOS Server's heroes in the terminal: the network map, the keys, the drives, the
+# update dial, the vault, the budget (the installer's server steps and the Server tour). Braille
+# and box lines where the terminal has them; the Linux console (16 colours, no braille) and
+# ASCII get the same pictures in plain characters. t moves a Pulse along the links (0: still) ──
+def _srv_look():
+    look = icon_look()
+    sixteen = color_mode() == "16"
+    c = palette()
+    lit = ("bold " + rich16("primary")) if sixteen else ("bold " + c["primary"])
+    soft = rich16("primary") if sixteen else c["soft"]
+    dim = rich16("secondary") if sixteen else c["dim"]
+    muted = "white" if sixteen else c["muted"]
+    warn = "bright_yellow" if sixteen else c["warn"]
+    cyan = rich16("accent") if sixteen else c.get("cyan", c["primary"])
+    return look, lit, soft, dim, muted, warn, cyan
+
+
+def _link(width, t, look, live=True, wifi=False):
+    """A link `width` wide: a cable (─, or braille in a Nerd terminal), Wi-Fi dashed, a Pulse riding it."""
+    ch = {"nerd": "⠒", "console": "─", "ascii": "-"}[look] if not wifi else {"nerd": "⠂", "console": "┄", "ascii": "."}[look]
+    s = list(ch * max(1, width))
+    if live and t:
+        k = int(t * 6) % max(1, width)
+        s[k] = {"nerd": "●", "console": "o", "ascii": "o"}[look] if look != "console" else "■"
+    return "".join(s)
+
+
+def net_map(state, width=60, t=0.0):
+    """The network: the internet over the router, the link to this server (its address big on it), the
+    lab's machines under the router, and the way your devices reach it from anywhere."""
+    look, lit, soft, dim, muted, warn, cyan = _srv_look()
+    s = dict({"address": "…", "how": "", "kind": "wired", "connected": True, "gateway": "", "lab": [], "name": "server",
+              "wifi_only": False, "reach": None}, **state)
+    box = {"nerd": ("╭", "╮", "╰", "╯", "│", "─"), "console": ("┌", "┐", "└", "┘", "│", "─"), "ascii": ("+", "+", "+", "+", "|", "-")}[look]
+    cloud = {"nerd": "☁", "console": "≈", "ascii": "~"}[look]
+    house = {"nerd": "⌂", "console": "⌂", "ascii": "^"}[look]
+    out = Text(no_wrap=True, overflow="crop")
+    gap = max(6, min(26, width - 44))
+    out.append(f" {cloud} INTERNET", style=soft if s["gateway"] else dim)
+    if s.get("reach"):
+        out.append(" " * max(2, width - 34 - len(s["reach"][:18])) + f"{cloud} ", style=cyan)
+        out.append(s["reach"][:18].upper(), style=cyan)
+    out.append("\n")
+    out.append("     " + box[4] + "\n", style=lit if s["gateway"] else dim)
+    name = s["name"].upper()[:18]
+    inner = max(len(name), len(s["address"])) + 2
+    out.append(f" {house} ROUTER ", style=lit)
+    out.append(_link(gap, t, look, s["connected"], s["kind"] == "wifi"), style=warn if s["wifi_only"] else (lit if s["connected"] else dim))
+    out.append(box[0] + box[5] * inner + box[1] + "\n", style=lit)
+    out.append(f"   {s['gateway'] or ''}".ljust(10 + gap), style=muted)
+    out.append(box[4] + name.center(inner) + box[4] + "\n", style=soft)
+    out.append(("   ▲ WI-FI ONLY" if s["wifi_only"] else "").ljust(10 + gap), style=warn)
+    out.append(box[4], style=lit)
+    out.append(s["address"].center(inner), style=lit)
+    out.append(box[4] + "\n", style=lit)
+    out.append(" " * (10 + gap) + box[2] + box[5] * inner + box[3] + "\n", style=lit)
+    out.append(" " * (10 + gap) + s["how"][:inner + 2] + "\n", style=muted)
+    for h in s["lab"][:4]:
+        out.append("     " + ("├" if look != "ascii" else "+") + _link(3, 0, look) + " ", style=dim)
+        out.append(("▣ " if look != "ascii" else "# ") + h + "\n", style=soft)
+    return out
+
+
+def key_cards(keys, password=False, ssh=True, lab=None, width=40):
+    """Who can get in: a card per key (its fingerprint short), the password crossed out unless chosen,
+    the lab account on a Lab node; each linked to the console."""
+    look, lit, soft, dim, muted, warn, cyan = _srv_look()
+    tl, tr, bl, br, v, h = {"nerd": ("╭", "╮", "╰", "╯", "│", "─"), "console": ("┌", "┐", "└", "┘", "│", "─"),
+                            "ascii": ("+", "+", "+", "+", "|", "-")}[look]
+    w = max(16, min(34, width - 14))
+    out = Text(no_wrap=True, overflow="crop")
+    rows = [(k, "key") for k in keys[:4]] or [("no key yet", "none")]
+    rows.append(("password", "pw"))
+    if lab:
+        rows.append(("lab: workstation key", "lab"))
+    for label, kind in rows:
+        on = ssh and (kind in ("key", "lab") or (kind == "pw" and password))
+        st = (warn if kind in ("pw", "none") and (password or kind == "none") else lit) if on or kind == "none" else dim
+        mark = {"key": "⚿" if look != "ascii" else "k", "pw": "*", "lab": "⚙" if look != "ascii" else "L", "none": "!"}[kind]
+        body = (label if not (kind == "pw" and not password) else "".join(ch + "̶" for ch in label))[: w - 4]
+        out.append(f"{tl}{h * (w - 2)}{tr}\n", style=st)
+        out.append(f"{v} {mark} ", style=st)
+        out.append(body.ljust(w - 5) if not (kind == "pw" and not password) else body + " " * max(0, w - 5 - len(label[: w - 4])),
+                   style=soft if on else muted)
+        out.append(f"{v}" + (_link(5, 0, look) + (" ▣ CONSOLE" if kind == rows[0][1] and label == rows[0][0] else "")
+                             if on else ("  ╳" if kind == "pw" else "")) + "\n", style=st)
+        out.append(f"{bl}{h * (w - 2)}{br}\n", style=st)
+    if not ssh:
+        out.append("SSH OFF · THIS CONSOLE ONLY\n", style=warn)
+    elif password:
+        out.append("▲ PASSWORDS CAN BE GUESSED\n", style=warn)
+    return out
+
+
+def drives(disks, layout="single", usable="", pct=0, t=0.0, shares=()):
+    """The data disks as block drives, a mirrored link between two for RAID1 (a Pulse each way), the
+    pool's ring and the shares with their Previous versions."""
+    look, lit, soft, dim, muted, warn, cyan = _srv_look()
+    out = Text(no_wrap=True, overflow="crop")
+    if not disks:
+        out.append("▐████▌  THE SYSTEM DISK HOLDS IT ALL (/srv)\n" if look != "ascii" else "[####]  the system disk holds it all\n",
+                   style=soft)
+        return out
+    top = "▐▀▀▀▀▀▌" if look != "ascii" else "[-----]"
+    mid = "▐ ◉ ▪ ▌" if look == "nerd" else ("▐ o . ▌" if look == "console" else "[ o . ]")
+    bot = "▐▄▄▄▄▄▌" if look != "ascii" else "[_____]"
+    gapw = 9
+    for row in (top, mid, bot):
+        for i, d in enumerate(disks[:4]):
+            out.append(row, style=lit)
+            if i < len(disks[:4]) - 1:
+                if layout == "raid1" and i == 0 and row == mid:
+                    k = int(t * 5) % gapw if t else -1
+                    link = ["═" if look != "ascii" else "="] * gapw
+                    if k >= 0:
+                        link[k] = "▶"
+                        link[gapw - 1 - k] = "◀"
+                    out.append("".join(link), style=cyan)
+                else:
+                    out.append(" " * gapw)
+        out.append("\n")
+    for i, (name, size) in enumerate(disks[:4]):
+        out.append(f"{size[:7]:^7}" + (" " * gapw if i < len(disks[:4]) - 1 else ""), style=soft)
+    out.append("\n")
+    if layout == "raid1" and len(disks) >= 2:
+        out.append("MIRRORED: TWO COPIES\n", style=cyan)
+    out.append_text(meter(max(1, round(pct / 10)) if pct else 0, 10, 30, role="primary"))
+    out.append(f"  {usable} for /srv/data\n", style=lit)
+    for sh in shares:
+        ghosts = "▫▫▫" if look != "ascii" else "..."
+        out.append(("▤ " if look != "ascii" else "# ") + f"{sh}  {ghosts} previous versions\n", style=soft)
+    return out
+
+
+def dial(window="03:00-05:00", mode="auto", w=14, h=7):
+    """The update window on a 24-hour dial: a braille ring, the window's arc lit (midnight at the top);
+    on the console and in ASCII a 24-hour strip with the window marked."""
+    look, lit, soft, dim, muted, warn, cyan = _srv_look()
+    a, b = window.split("-")
+    h0 = int(a[:2]) + int(a[3:]) / 60
+    dur = ((int(b[:2]) + int(b[3:]) / 60) - h0) % 24 or 24
+    if look != "nerd":
+        out = Text(no_wrap=True)
+        out.append("00 ", style=muted)
+        for hr in range(24):
+            on = (hr - h0) % 24 < dur
+            out.append(("█" if look == "console" else "#") if on else ("·" if look == "console" else "."),
+                       style=(lit if mode != "off" else dim) if on else dim)
+        out.append(" 24\n", style=muted)
+        out.append(f"   {window}  {mode.upper()}", style=lit if mode != "off" else dim)
+        return out
+    d = Dots(w, h)
+    cx, cy = w - 0.5, h * 2 - 0.5
+    rad = min(cx, cy) - 0.5
+    for i in range(0, 360, 3):
+        hr = i / 15
+        on = (hr - h0) % 24 < dur
+        ang = math.radians(i - 90)
+        if on:
+            for dd in (0, 1, 2):
+                d.put(cx + (rad - dd) * math.cos(ang), cy + (rad - dd) * math.sin(ang), 2 if mode != "off" else 0)
+        elif i % 9 == 0:
+            d.put(cx + rad * math.cos(ang), cy + rad * math.sin(ang), 0)
+        if i % 90 == 0:
+            d.put(cx + (rad - 4) * math.cos(ang), cy + (rad - 4) * math.sin(ang), 1)
+    out = d.text(styles())
+    out.append("\n")
+    out.append(f"{window} {mode.upper()}".center(w), style=lit if mode != "off" else dim)
+    return out
+
+
+def pipeline(mode="auto", t=0.0):
+    """What every update does, as a small pipeline; the modes are its states."""
+    look, lit, soft, dim, muted, warn, cyan = _srv_look()
+    steps = ["SNAPSHOT", "UPDATE", "HEALTH CHECK", "ROLLBACK IF NOT"] if mode != "download" else \
+        ["DOWNLOAD", "ASK YOUR PHONE", "SNAPSHOT", "UPDATE + CHECK"]
+    upto = {"auto": 4, "download": 2, "off": 0}[mode]
+    arrow = "▶" if look != "ascii" else ">"
+    out = Text(no_wrap=False)
+    for i, sname in enumerate(steps):
+        on = i < upto
+        st = (warn if i == 3 and mode == "auto" else lit) if on else dim
+        out.append(f"[{sname}]", style=st)
+        if i < len(steps) - 1:
+            out.append(f" {arrow} ", style=lit if on and i + 1 < upto else dim)
+    if mode == "off":
+        out.append("\nⅡ  YOU RUN IT: bromigos update" if look != "ascii" else "\n||  you run it", style=muted)
+    return out
+
+
+def vault(kind="local", typed=0, generated=0, t=0.0, tpm=False):
+    """Where the keys go: the vault door, the keys flowing in (a Pulse), the count."""
+    look, lit, soft, dim, muted, warn, cyan = _srv_look()
+    role = {"vault": cyan, "openbao": lit, "local": soft}.get(kind, lit)
+    where = {"vault": "YOUR LAB'S VAULT", "openbao": "A NEW VAULT HERE", "local": "THIS SERVER, ENCRYPTED"}.get(kind, "")
+    out = Text(no_wrap=True, overflow="crop")
+    door = ["╭─────────╮", "│ ╭─────╮ │", "│ │  ◉  │ │", "│ ╰──┬──╯ │", "╰────┴────╯"] if look != "ascii" else \
+        ["+---------+", "| +-----+ |", "| |  o  | |", "| +--+--+ |", "+----+----+"]
+    n = typed + generated
+    flow = 12
+    for i, row in enumerate(door):
+        if i == 2:
+            k = int(t * 6) % flow if t else flow // 2
+            lane = list(("·" if look != "ascii" else ".") * flow)
+            if n:
+                lane[k] = "⚿" if look != "ascii" else "k"
+            out.append("".join(lane) + " ", style=lit)
+        else:
+            out.append(" " * (flow + 1))
+        out.append(row + "\n", style=role)
+    out.append(where.center(flow + 12) + "\n", style=role)
+    out.append(f"{n} KEY{'S' if n != 1 else ''}\n", style=lit)
+    out.append(f"  {typed} typed · {generated} made for you" + ("  · sealed to the TPM" if tpm and kind == "local" else ""), style=muted)
+    return out
+
+
+def budget(need, have, width=34):
+    """What the chosen services ask of this computer: processor, memory, disk, graphics card."""
+    look, lit, soft, dim, muted, warn, cyan = _srv_look()
+    out = Text(no_wrap=True, overflow="crop")
+    for name, n, hv, unit in (("PROCESSOR", need.get("cpu", 0), have.get("cpu", 0), "cores"),
+                              ("MEMORY", need.get("ram_gb", 0), have.get("ram_gb", 0), "GB"),
+                              ("DISK", need.get("disk_gb", 0), have.get("disk_gb", 0), "GB"),
+                              ("GRAPHICS", need.get("gpu_vram_gb", 0), have.get("gpu_vram_gb", 0), "GB")):
+        frac = (n / hv) if hv else (1.0 if n else 0.0)
+        over = n > hv
+        out.append(f"{name:<10}", style=muted)
+        out.append_text(meter(min(10, max(1 if n else 0, round(frac * 10))), 10, 19,
+                              role="warn" if over else "primary"))
+        out.append(f" {n}/{hv} {unit}\n", style=warn if over else soft)
+    return out
+
+
+# ── bromigOS Server's hologram: the rack, turning ─────────────────────────────────────
+RACK_PLAIN = {"console": [" ┌──────┐ ", " │■ ════│ ", " │■ ════│ ", " │■ ════│ ", " │■ ════│ ", " │■ ════│ ", " │■ ════│ ",
+                          " └┬────┬┘ ", " ═╧════╧═ ", " ~~~~~~~~ "],
+              "ascii": [" +------+ ", " |o ====| ", " |o ====| ", " |o ====| ", " |o ====| ", " |o ====| ", " |o ====| ",
+                        " +-+--+-+ ", " ==+==+== ", " ~~~~~~~~ "]}
+RACK_STILL, RACK_TURN = 10, 18.0       # the gallery's own angle for a still frame; seconds a turn
+
+
+def rack(t=0.0, still=False, fill=None):
+    """bromigOS Server's hologram in the terminal: the vector gallery's rack turning (braille,
+    lib/bromigos_rack.py; one frame every 15 degrees, a turn every 18 s), its lines by their
+    brightness, and the Sweep, a lit row passing up it. The Linux console and ASCII get the
+    drawn rack with the same Sweep. Still under reduced motion. fill (0-1): while installing,
+    the rack is lit from its foot up to how far the install has got, the Sweep at that line."""
+    look, lit, soft, dim, muted, warn, cyan = _srv_look()
+    out = Text(no_wrap=True, overflow="crop")
+    try:
+        import bromigos_rack as R
+    except ImportError:
+        R = None
+    if look == "nerd" and R is not None:
+        rows, levels = R.FRAMES[RACK_STILL if still else int(t / RACK_TURN * len(R.FRAMES) + RACK_STILL) % len(R.FRAMES)]
+    else:
+        rows = RACK_PLAIN["ascii" if look == "ascii" else "console"]
+        levels = ["".join("2" if ch != " " else "0" for ch in r) for r in rows]
+    scan = None if still else len(rows) - 1 - int(t * 3) % (len(rows) + 4)
+    edge = None
+    if fill is not None:
+        edge = len(rows) - 1 - int(max(0.0, min(1.0, fill)) * len(rows))
+        scan = edge
+    style = {"0": dim, "1": dim, "2": soft, "3": lit}
+    for y, (row, lv) in enumerate(zip(rows, levels)):
+        for ch, k in zip(row, lv):
+            st = lit if y == scan and ch != " " else style.get(k, soft)
+            if edge is not None and y < edge:
+                st = dim                        # not installed yet: the dim wireframe
+            out.append(ch, style=st)
+        if y < len(rows) - 1:
+            out.append("\n")
+    return out
+
+
+def beside(left, right, gap=2):
+    """Two pictures side by side, line by line (the left one padded to its widest line)."""
+    if not isinstance(left, Text):
+        left = Text(str(left))
+    if not isinstance(right, Text):
+        right = Text(str(right))
+    ls, rs = left.split("\n", allow_blank=True), right.split("\n", allow_blank=True)
+    width = max((x.cell_len for x in ls), default=0)
+    out = Text(no_wrap=True, overflow="crop")
+    for i in range(max(len(ls), len(rs))):
+        a = ls[i] if i < len(ls) else Text("")
+        out.append_text(a)
+        out.append(" " * (width - a.cell_len + gap))
+        if i < len(rs):
+            out.append_text(rs[i])
+        if i < max(len(ls), len(rs)) - 1:
+            out.append("\n")
+    return out

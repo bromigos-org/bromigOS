@@ -1,0 +1,3 @@
+# The network every catalogue app shares: apps find each other by name (bromigos lab provision --local)
+[Network]
+NetworkName=bromigos-lab

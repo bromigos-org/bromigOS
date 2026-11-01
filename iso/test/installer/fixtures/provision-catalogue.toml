@@ -1,0 +1,794 @@
+# The lab provisioning catalogue, the medium's stand-in (docs/server.md, "What should this
+# server run?"). The real one is the lab provisioning engine's: homelab/share/provision-catalogue.toml,
+# installed to /usr/share/bromigos/lab/provision-catalogue.toml, read through
+# bromigos_homelab.provcatalog. The installer uses that one when it's there, and this file
+# (the same schema) until it is.
+#
+#   [[group]]  id, name, icon (Adwaita symbolic), glyph (a key of lib/bromigos_textual.py's ICONS)
+#   [[item]]   id, group (lab-core|ai|network|storage|games|home|brodec), name, line, hint, icon,
+#              glyph, needs (ids it pulls in), conflicts, roles (roles that recommend it),
+#              requires {cpu, ram_gb, disk_gb, gpu, gpu_vram_gb}, size_text, ports, internet,
+#              modes (new|join|none: the lab choices it's offered with), install
+#   [item.setup]  a guided setup: notes, links [{title, url}], check (the engine's live check:
+#              bromigos lab provision --check ITEM), and [[item.setup.field]]s: id, label, kind
+#              (text|secret|number|bool|choice|url|generated: made at the
+#              first start, no person needed), default, hint, choices [{id, title, note,
+#              link, fields}]. A secret field's value never goes in an answer file: the installer
+#              keeps it root-only for the engine, which puts it in Podman secrets or the lab's Vault
+#   [[model]]  id, name, line, gpu_vram_gb, size_text (for model serving, sized to the GPU)
+schema = 1
+
+[[group]]
+id = "lab-core"
+name = "Lab core"
+icon = "network-workgroup-symbolic"
+glyph = "lab"
+
+[[group]]
+id = "ai"
+name = "AI"
+icon = "applications-science-symbolic"
+glyph = "chip"
+
+[[group]]
+id = "network"
+name = "Network"
+icon = "network-wired-symbolic"
+glyph = "network"
+
+[[group]]
+id = "storage"
+name = "Storage"
+icon = "drive-multidisk-symbolic"
+glyph = "disk"
+
+[[group]]
+id = "games"
+name = "Games"
+icon = "input-gaming-symbolic"
+glyph = "gamepad"
+
+[[group]]
+id = "media"
+name = "Media"
+icon = "video-x-generic-symbolic"
+glyph = "desktop"
+
+[[group]]
+id = "home"
+name = "Home apps"
+icon = "user-home-symbolic"
+glyph = "house"
+
+[[group]]
+id = "brodec"
+name = "BRODEC"
+icon = "phone-symbolic"
+glyph = "phone"
+
+# ── Lab core ─────────────────────────────────────────────────────────────────────────────
+[[item]]
+id = "kubernetes"
+group = "lab-core"
+name = "Kubernetes (k3s)"
+line = "The lab's cluster: runs everything below, and moves work between your machines."
+hint = "k3s, the version your lab pins, installed from its upstream installer."
+icon = "network-workgroup-symbolic"
+glyph = "lab"
+needs = []
+conflicts = []
+roles = ["lab"]
+requires = { cpu = 2, ram_gb = 2, disk_gb = 10 }
+size_text = "about 300 MB"
+ports = [6443, 10250]
+internet = true
+modes = ["new", "join"]
+install = "k3s"
+
+[[item]]
+id = "argocd"
+group = "lab-core"
+name = "Argo CD"
+line = "Keeps the cluster matching your lab's repository, by itself."
+hint = "GitOps: what's in the repository is what runs. Needs Kubernetes."
+icon = "emblem-synchronizing-symbolic"
+glyph = "update"
+needs = ["kubernetes"]
+roles = []
+requires = { cpu = 1, ram_gb = 1, disk_gb = 2 }
+size_text = "about 500 MB"
+ports = []
+internet = true
+modes = ["new"]
+install = "helm:argo-cd"
+
+[[item]]
+id = "monitoring"
+group = "lab-core"
+name = "Monitoring (Prometheus, Grafana)"
+line = "Graphs and alerts for every machine in the lab."
+hint = "The lab's Prometheus, Grafana and Alloy, in the cluster."
+icon = "utilities-system-monitor-symbolic"
+glyph = "info"
+needs = ["kubernetes"]
+roles = ["lab"]
+requires = { cpu = 1, ram_gb = 2, disk_gb = 20 }
+size_text = "about 1 GB"
+ports = [3000]
+internet = true
+modes = ["new"]
+install = "helm:kube-prometheus-stack"
+
+[[item]]
+id = "vault"
+group = "lab-core"
+name = "Secrets (OpenBao)"
+line = "One safe place for the lab's passwords and keys."
+hint = "The lab's secrets store, sealed with keys only you hold."
+icon = "dialog-password-symbolic"
+glyph = "key"
+needs = ["kubernetes"]
+roles = []
+requires = { cpu = 1, ram_gb = 1, disk_gb = 2 }
+size_text = "about 200 MB"
+ports = []
+internet = true
+modes = ["new"]
+install = "helm:openbao"
+
+# ── AI ───────────────────────────────────────────────────────────────────────────────────
+[[item]]
+id = "model-serving"
+group = "ai"
+name = "Model serving (vLLM)"
+line = "Runs a language model on this server's graphics card, for VECTOR and your apps."
+hint = "vLLM with the model you pick below, sized to the card."
+icon = "applications-science-symbolic"
+glyph = "chip"
+needs = []
+roles = ["lab"]
+requires = { cpu = 4, ram_gb = 16, disk_gb = 60, gpu = true, gpu_vram_gb = 8 }
+size_text = "5 to 40 GB, with the model"
+ports = [8000]
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:vllm"
+
+[[item]]
+id = "ai-gateway"
+group = "ai"
+name = "AI gateway (LiteLLM)"
+line = "One address for every model in the lab, local ones first."
+hint = "LiteLLM, routing to your models; keys stay in the lab."
+icon = "network-server-symbolic"
+glyph = "cloud"
+needs = []
+roles = []
+requires = { cpu = 1, ram_gb = 1, disk_gb = 2 }
+size_text = "about 400 MB"
+ports = [4000]
+internet = true
+modes = ["new", "none"]
+install = "quadlet:litellm"
+
+
+[item.setup]
+notes = []
+
+[[item.setup.field]]
+id = "master_key"
+label = "LiteLLM's master key"
+kind = "generated"
+hint = "Made for you at the first start and kept in the store you chose."
+[[item]]
+id = "chat"
+group = "ai"
+name = "Chat (Open WebUI)"
+line = "A chat page in the browser for the lab's models."
+hint = "Open WebUI, signed in with your lab account. Needs the AI gateway."
+icon = "user-available-symbolic"
+glyph = "vector"
+needs = ["ai-gateway"]
+roles = []
+requires = { cpu = 1, ram_gb = 2, disk_gb = 5 }
+size_text = "about 2 GB"
+ports = [8080]
+internet = true
+modes = ["new", "none"]
+install = "quadlet:open-webui"
+
+# ── Network ──────────────────────────────────────────────────────────────────────────────
+[[item]]
+id = "lab-network"
+group = "network"
+name = "Lab network (Headscale)"
+line = "Your machines reach each other from anywhere, through your own coordination server."
+hint = "bromigos lab network: Headscale here, your devices joined to it."
+icon = "network-vpn-symbolic"
+glyph = "remote"
+needs = []
+roles = []
+requires = { cpu = 1, ram_gb = 1, disk_gb = 1 }
+size_text = "about 50 MB"
+ports = [443]
+internet = true
+modes = ["new"]
+install = "lab-network"
+
+
+[item.setup]
+notes = []
+
+[[item.setup.field]]
+id = "preauth_key"
+label = "Headscale's key for your devices"
+kind = "generated"
+hint = "Made for you at the first start and kept in the store you chose."
+[[item]]
+id = "ingress"
+group = "network"
+name = "Web front door (Caddy)"
+line = "Each service at its own name, with HTTPS from the lab's own authority."
+hint = "Caddy on 80 and 443, the local network only."
+icon = "web-browser-symbolic"
+glyph = "network"
+needs = []
+roles = ["home", "media"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 1 }
+size_text = "about 40 MB"
+ports = [80, 443]
+internet = false
+modes = ["new", "join", "none"]
+install = "package:caddy"
+
+[[item]]
+id = "dns-adblock"
+group = "network"
+name = "Ad blocking (AdGuard Home)"
+line = "Blocks ads and trackers for every device on your network."
+hint = "AdGuard Home as your network's name server."
+icon = "action-unavailable-symbolic"
+glyph = "shield"
+needs = []
+roles = ["home"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 1 }
+size_text = "about 100 MB"
+ports = [53]
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:adguardhome"
+
+# ── Storage ──────────────────────────────────────────────────────────────────────────────
+[[item]]
+id = "s3"
+group = "storage"
+name = "S3 storage (RustFS)"
+line = "Buckets for backups from your other machines and for apps that want S3."
+hint = "RustFS on /srv/data, the local network only."
+icon = "network-server-symbolic"
+glyph = "disk"
+needs = []
+roles = ["storage"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 20 }
+size_text = "about 100 MB"
+ports = [9000]
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:rustfs"
+
+[[item]]
+id = "backup-target"
+group = "storage"
+name = "Backups for the lab"
+line = "The other machines back up here each night (restic)."
+hint = "A restic repository on /srv/data/backups, served over S3."
+icon = "document-save-symbolic"
+glyph = "copy"
+needs = ["s3"]
+roles = ["storage"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 100 }
+size_text = "grows with the backups"
+ports = []
+internet = false
+modes = ["new", "join", "none"]
+install = "restic-target"
+
+[[item]]
+id = "file-sync"
+group = "storage"
+name = "File sync (Syncthing)"
+line = "Folders kept the same on your computers and phone."
+hint = "Syncthing, from Arch's own packages."
+icon = "emblem-synchronizing-symbolic"
+glyph = "update"
+needs = []
+roles = []
+requires = { cpu = 1, ram_gb = 1, disk_gb = 1 }
+size_text = "about 40 MB"
+ports = [22000]
+internet = false
+modes = ["new", "join", "none"]
+install = "package:syncthing"
+
+# ── Games ────────────────────────────────────────────────────────────────────────────────
+[[item]]
+id = "pelican-panel"
+group = "games"
+name = "Pelican panel"
+line = "The game servers' control panel: create, start and back up games from the browser or your phone."
+hint = "Pelican's panel, in the lab's cluster. Its game nodes run Wings."
+icon = "input-gaming-symbolic"
+glyph = "gamepad"
+needs = ["kubernetes"]
+roles = []
+requires = { cpu = 1, ram_gb = 2, disk_gb = 5 }
+size_text = "about 600 MB"
+ports = [443]
+internet = true
+modes = ["new"]
+install = "helm:pelican-panel"
+
+
+[item.setup]
+notes = []
+
+[[item.setup.field]]
+id = "app_key"
+label = "The panel's encryption key"
+kind = "generated"
+hint = "Made for you at the first start and kept in the store you chose."
+[[item]]
+id = "wings"
+group = "games"
+name = "Game node (Wings)"
+line = "Runs the games your lab's Pelican panel gives it."
+hint = "Wings on Docker's engine (Arch's own docker package), joined to the panel."
+icon = "input-gaming-symbolic"
+glyph = "gamepad"
+needs = []
+roles = ["games"]
+requires = { cpu = 4, ram_gb = 8, disk_gb = 40 }
+size_text = "about 150 MB, plus each game"
+ports = [8080, 2022]
+internet = true
+modes = ["new", "join"]
+install = "wings"
+
+
+[item.setup]
+notes = []
+
+[[item.setup.field]]
+id = "node_token"
+label = "Wings' token for the panel"
+kind = "generated"
+hint = "Made for you at the first start and kept in the store you chose."
+[[item]]
+id = "minecraft"
+group = "games"
+name = "Minecraft"
+line = "A Minecraft server for your friends, without a lab."
+hint = "The catalogue's Minecraft, on Podman."
+icon = "input-gaming-symbolic"
+glyph = "gamepad"
+needs = []
+conflicts = ["wings"]
+roles = ["games"]
+requires = { cpu = 2, ram_gb = 4, disk_gb = 10 }
+size_text = "about 600 MB"
+ports = [25565]
+internet = true
+modes = ["none"]
+install = "quadlet:minecraft"
+
+
+[item.setup]
+notes = []
+
+[[item.setup.field]]
+id = "rcon_password"
+label = "The game's admin (RCON) password"
+kind = "generated"
+hint = "Made for you at the first start and kept in the store you chose."
+# ── Media: for media you own or have rights to ──────────────────────────────────────────
+[[item]]
+id = "jellyfin"
+group = "media"
+name = "Jellyfin"
+line = "Your movies, shows and music on every screen: TVs, phones, Den TV."
+hint = "Jellyfin on /srv/data/media; the graphics card decodes video when there is one."
+icon = "video-x-generic-symbolic"
+glyph = "desktop"
+needs = ["ingress"]
+roles = ["media"]
+requires = { cpu = 2, ram_gb = 2, disk_gb = 10 }
+size_text = "about 800 MB"
+ports = [8096]
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:jellyfin"
+
+[[item]]
+id = "seerr"
+group = "media"
+name = "Requests (Seerr)"
+line = "The household asks for a film or a show; you approve it."
+hint = "Seerr, signed in with your Jellyfin accounts."
+icon = "list-add-symbolic"
+glyph = "edit"
+needs = ["jellyfin"]
+roles = ["media"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 1 }
+size_text = "about 300 MB"
+ports = [5055]
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:seerr"
+
+[[item]]
+id = "library"
+group = "media"
+name = "Library automation (Sonarr, Radarr, Lidarr)"
+line = "Keeps your shows, films and music organised, named and complete, for media you own or have rights to."
+hint = "Sonarr, Radarr and Lidarr, sorting into /srv/data/media."
+icon = "folder-videos-symbolic"
+glyph = "copy"
+needs = []
+roles = ["media"]
+requires = { cpu = 1, ram_gb = 2, disk_gb = 2 }
+size_text = "about 700 MB"
+ports = [8989, 7878, 8686]
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:arr-library"
+
+[item.setup]
+notes = ["For media you own or have rights to."]
+
+[[item.setup.field]]
+id = "audio_language"
+label = "Audio language"
+kind = "text"
+default = "English, dual audio preferred"
+hint = "Which audio to prefer. Dual audio (English and the original) comes first."
+
+[[item]]
+id = "prowlarr"
+group = "media"
+name = "Indexer manager (Prowlarr)"
+line = "One place for the indexers you have access to, shared with the library automation."
+hint = "Prowlarr. You add your own indexers in it after the install."
+icon = "system-search-symbolic"
+glyph = "search"
+needs = ["library"]
+roles = []
+requires = { cpu = 1, ram_gb = 1, disk_gb = 1 }
+size_text = "about 200 MB"
+ports = [9696]
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:prowlarr"
+
+[item.setup]
+notes = ["Add the indexers you have access to in Prowlarr, after the install."]
+links = [{ title = "Open Prowlarr", url = "http://{host}.local:9696" }]
+
+[[item]]
+id = "sabnzbd"
+group = "media"
+name = "Usenet downloader (SABnzbd)"
+line = "Downloads from your Usenet provider, for media you own or have rights to."
+hint = "SABnzbd, through the VPN when it's on."
+icon = "folder-download-symbolic"
+glyph = "copy"
+needs = []
+roles = []
+requires = { cpu = 1, ram_gb = 1, disk_gb = 20 }
+size_text = "about 200 MB"
+ports = [8085]
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:sabnzbd"
+
+[item.setup]
+notes = ["Your Usenet provider's details are in your account with them.", "For media you own or have rights to."]
+links = [{ title = "SABnzbd's setup guide", url = "https://sabnzbd.org/wiki/introduction/quick-setup" }]
+check = "connection"
+
+[[item.setup.field]]
+id = "provider"
+label = "Usenet provider's name"
+kind = "text"
+default = ""
+hint = "The company you have a Usenet account with."
+
+[[item.setup.field]]
+id = "server"
+label = "Server"
+kind = "text"
+default = ""
+hint = "Your provider's news server, from your account page."
+
+[[item.setup.field]]
+id = "port"
+label = "Port"
+kind = "number"
+default = 563
+hint = "563 with SSL, the usual one."
+
+[[item.setup.field]]
+id = "ssl"
+label = "SSL"
+kind = "bool"
+default = true
+hint = "Encrypt the connection to the provider. Leave it on."
+
+[[item.setup.field]]
+id = "connections"
+label = "Connections"
+kind = "number"
+default = 20
+hint = "How many at once your plan allows."
+
+[[item.setup.field]]
+id = "username"
+label = "User name"
+kind = "text"
+default = ""
+
+[[item.setup.field]]
+id = "password"
+label = "Password"
+kind = "secret"
+default = ""
+hint = "Kept as a secret on the server, never in the answer file."
+
+[[item]]
+id = "torrent"
+group = "media"
+name = "Torrent client (qBittorrent)"
+line = "Downloads torrents, only through the VPN, for media you own or have rights to."
+hint = "qBittorrent, its traffic only through the VPN (it needs the VPN)."
+icon = "folder-download-symbolic"
+glyph = "copy"
+needs = ["vpn"]
+roles = []
+requires = { cpu = 1, ram_gb = 1, disk_gb = 20 }
+size_text = "about 150 MB"
+ports = [8090]
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:qbittorrent"
+
+[[item]]
+id = "vpn"
+group = "media"
+name = "VPN for downloads (Gluetun)"
+line = "Sends the downloaders' traffic through your VPN provider, and stops it if the VPN drops."
+hint = "Gluetun, with its kill switch on: nothing leaves outside the VPN."
+icon = "network-vpn-symbolic"
+glyph = "shield"
+needs = []
+roles = []
+requires = { cpu = 1, ram_gb = 1, disk_gb = 1 }
+size_text = "about 40 MB"
+ports = []
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:gluetun"
+
+[item.setup]
+notes = ["Pick your VPN provider and paste your account's details. The check connects once, through the VPN."]
+check = "connection"
+
+[[item.setup.field]]
+id = "provider"
+label = "VPN provider"
+kind = "choice"
+default = "pia"
+choices = [
+  { id = "pia", title = "Private Internet Access", note = "Many servers, port forwarding included.", link = "https://www.privateinternetaccess.com/buy-vpn-online", fields = ["username", "password", "region"] },
+  { id = "protonvpn", title = "Proton VPN", note = "From the Proton Mail team, in Switzerland.", link = "https://protonvpn.com/pricing", fields = ["username", "password", "region"] },
+  { id = "mullvad", title = "Mullvad", note = "No email needed; pay with an account number.", link = "https://mullvad.net/en/pricing", fields = ["wireguard_key", "wireguard_address", "region"] },
+]
+
+[[item.setup.field]]
+id = "username"
+label = "User name"
+kind = "text"
+default = ""
+hint = "Your VPN account's user name (OpenVPN)."
+
+[[item.setup.field]]
+id = "password"
+label = "Password"
+kind = "secret"
+default = ""
+hint = "Kept as a secret on the server, never in the answer file."
+
+[[item.setup.field]]
+id = "wireguard_key"
+label = "WireGuard private key"
+kind = "secret"
+default = ""
+hint = "From your provider's WireGuard configuration page. Kept as a secret on the server."
+
+[[item.setup.field]]
+id = "wireguard_address"
+label = "WireGuard address"
+kind = "text"
+default = ""
+hint = "The address in that configuration, for example 10.64.0.2/32."
+
+[[item.setup.field]]
+id = "region"
+label = "Region"
+kind = "text"
+default = ""
+hint = "A country or city the provider offers. Empty: the fastest."
+
+[[item.setup.field]]
+id = "kill_switch"
+label = "Kill switch"
+kind = "bool"
+default = true
+hint = "If the VPN drops, the downloads stop instead of going out without it."
+
+[[item]]
+id = "den-tv"
+group = "media"
+name = "Den TV hookup"
+line = "Your library in Den TV on every bromigOS screen and your phone."
+hint = "Connects Jellyfin to Den TV's channels."
+icon = "video-display-symbolic"
+glyph = "desktop"
+needs = ["jellyfin"]
+roles = ["media"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 1 }
+size_text = "about 10 MB"
+ports = []
+internet = false
+modes = ["new", "join", "none"]
+install = "den-tv"
+
+# ── Home apps ────────────────────────────────────────────────────────────────────────────
+[[item]]
+id = "photos"
+group = "home"
+name = "Photos (Immich)"
+line = "Your phone's photos, backed up and searchable."
+hint = "Immich, with its own database, on /srv/data."
+icon = "camera-photo-symbolic"
+glyph = "copy"
+needs = ["ingress"]
+roles = ["home"]
+requires = { cpu = 2, ram_gb = 4, disk_gb = 50 }
+size_text = "about 2 GB"
+ports = []
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:immich"
+
+
+[item.setup]
+notes = []
+
+[[item.setup.field]]
+id = "db_password"
+label = "Immich's database password"
+kind = "generated"
+hint = "Made for you at the first start and kept in the store you chose."
+[[item]]
+id = "passwords"
+group = "home"
+name = "Passwords (Vaultwarden)"
+line = "A password manager for the household, with the Bitwarden apps."
+hint = "Vaultwarden behind the front door."
+icon = "dialog-password-symbolic"
+glyph = "key"
+needs = ["ingress"]
+roles = ["home"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 1 }
+size_text = "about 100 MB"
+ports = []
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:vaultwarden"
+
+[[item]]
+id = "home-automation"
+group = "home"
+name = "Home automation (Home Assistant)"
+line = "Lights, heating and sensors, run in your house, not a cloud."
+hint = "Home Assistant; its USB radio sticks are passed through."
+icon = "user-home-symbolic"
+glyph = "house"
+needs = []
+roles = []
+requires = { cpu = 1, ram_gb = 2, disk_gb = 5 }
+size_text = "about 1.5 GB"
+ports = [8123]
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:home-assistant"
+
+[[item]]
+id = "start-page"
+group = "home"
+name = "A start page (Homepage)"
+line = "One page with every app on this server and your lab."
+hint = "Homepage, filled in from what's installed."
+icon = "go-home-symbolic"
+glyph = "desktop"
+needs = ["ingress"]
+roles = ["home"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 1 }
+size_text = "about 200 MB"
+ports = []
+internet = true
+modes = ["new", "join", "none"]
+install = "quadlet:homepage"
+
+# ── BRODEC ───────────────────────────────────────────────────────────────────────────────
+[[item]]
+id = "brodec-machine"
+group = "brodec"
+name = "This server on your phone"
+line = "Status, restart, update and alerts in BRODEC, end-to-end encrypted."
+hint = "BRODEC's machine agent; you pair it in the welcome tour."
+icon = "phone-symbolic"
+glyph = "phone"
+needs = []
+roles = ["lab", "storage", "home", "games", "plain"]
+requires = { cpu = 1, ram_gb = 1, disk_gb = 1 }
+size_text = "about 20 MB"
+ports = []
+internet = false
+modes = ["new", "join", "none"]
+install = "package:brodec-machine"
+
+[[item]]
+id = "vector-bridge"
+group = "brodec"
+name = "VECTOR for the lab"
+line = "VECTOR answers from the lab's own models, on your phone and desktop."
+hint = "The lab's VECTOR bridge. Works best with model serving."
+icon = "user-available-symbolic"
+glyph = "vector"
+needs = ["brodec-machine"]
+roles = []
+requires = { cpu = 1, ram_gb = 1, disk_gb = 1 }
+size_text = "about 30 MB"
+ports = []
+internet = false
+modes = ["new", "join"]
+install = "lab-bridge"
+
+# ── models for model serving, sized to the card ──────────────────────────────────────────
+[[model]]
+id = "qwen3-8b-awq"
+name = "Qwen3 8B (4-bit)"
+line = "Quick and capable for chat and tools."
+gpu_vram_gb = 8
+size_text = "5.7 GB"
+
+[[model]]
+id = "qwen3-14b-awq"
+name = "Qwen3 14B (4-bit)"
+line = "Better reasoning; a 16 GB card."
+gpu_vram_gb = 14
+size_text = "9.9 GB"
+
+[[model]]
+id = "qwen3-32b-awq"
+name = "Qwen3 32B (4-bit)"
+line = "The strongest that fits a 24 GB card."
+gpu_vram_gb = 22
+size_text = "19 GB"
+
+[[model]]
+id = "gpt-oss-20b"
+name = "gpt-oss 20B"
+line = "OpenAI's open model; a 16 GB card."
+gpu_vram_gb = 16
+size_text = "13 GB"

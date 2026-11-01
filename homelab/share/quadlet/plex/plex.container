@@ -1,0 +1,25 @@
+[Unit]
+Description=Plex
+
+[Container]
+Image={{image:plex}}
+ContainerName=plex
+# Plex finds its apps on the local network: the host's network
+Network=host
+#ifgpu:nvidia AddDevice=nvidia.com/gpu=all
+#ifgpu:amd AddDevice=/dev/dri
+#ifgpu:intel AddDevice=/dev/dri
+Environment=VERSION=docker
+#ifset:claim Secret={{secret:claim}},type=mount,target=/run/secrets/claim,mode=0400
+#ifset:claim Environment=FILE__PLEX_CLAIM=/run/secrets/claim
+Environment=PUID={{puid}}
+Environment=PGID={{pgid}}
+Environment=TZ={{tz}}
+Volume={{data}}/config:/config:Z
+Volume={{media}}:/media
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

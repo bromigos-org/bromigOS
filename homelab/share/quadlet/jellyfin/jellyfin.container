@@ -1,0 +1,22 @@
+[Unit]
+Description=Jellyfin
+
+[Container]
+Image={{image:jellyfin}}
+ContainerName=jellyfin
+Network=bromigos-lab.network
+PublishPort=8096:8096
+#ifgpu:nvidia AddDevice=nvidia.com/gpu=all
+#ifgpu:amd AddDevice=/dev/dri
+#ifgpu:intel AddDevice=/dev/dri
+Environment=PUID={{puid}}
+Environment=PGID={{pgid}}
+Environment=TZ={{tz}}
+Volume={{data}}/config:/config:Z
+Volume={{media}}:/media
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

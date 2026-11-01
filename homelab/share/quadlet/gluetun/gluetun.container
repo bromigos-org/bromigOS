@@ -1,0 +1,29 @@
+[Unit]
+Description=VPN for downloads (Gluetun)
+
+[Container]
+Image={{image:gluetun}}
+ContainerName=gluetun
+Network=bromigos-lab.network
+AddCapability=NET_ADMIN
+AddDevice=/dev/net/tun
+# the downloaders use this container's network: their web pages are published here
+#if:qbittorrent PublishPort=8081:8081
+#if:sabnzbd PublishPort=8085:8080
+#if:slskd PublishPort=5030:5030
+Environment=VPN_SERVICE_PROVIDER={{setting:provider_name}}
+Environment=VPN_TYPE={{setting:vpn_type}}
+#ifset:username Environment=OPENVPN_USER={{setting:username}}
+#ifset:password Secret={{secret:password}},type=mount,target=/run/secrets/openvpn_password,mode=0400
+#ifset:wireguard_key Secret={{secret:wireguard_key}},type=mount,target=/run/secrets/wireguard_private_key,mode=0400
+#ifset:wireguard_address Environment=WIREGUARD_ADDRESSES={{setting:wireguard_address}}
+#ifset:country Environment=SERVER_COUNTRIES={{setting:country}}
+Environment=VPN_PORT_FORWARDING={{setting:port_forwarding}}
+Environment=TZ={{tz}}
+HealthCmd=/gluetun-entrypoint healthcheck
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

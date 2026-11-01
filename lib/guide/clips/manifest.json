@@ -6,6 +6,20 @@
  },
  "codec": "opus mono 28kb/s",
  "clips": {
+  "installer.access": {
+   "file": "installer.access-10c638ec92bc.opus",
+   "text": "Keys only. Nobody can guess a key.",
+   "text_sha256": "10c638ec92bc3ca36c0dd0d3e0b882a3d5a6cadef761b34ee35df5dc011a497c",
+   "engine": "lab",
+   "seconds": 2.08
+  },
+  "installer.access.short": {
+   "file": "installer.access.short-a0f5cac156f7.opus",
+   "text": "Keys only. Nobody guesses a key.",
+   "text_sha256": "a0f5cac156f742c78ad54991ecd4a539b46578e60b94a73da29efcf3c3586b03",
+   "engine": "lab",
+   "seconds": 2.32
+  },
   "installer.auto": {
    "file": "installer.auto-d79846e2d083.opus",
    "text": "An answer file has every answer. I'll install by myself unless you cancel.",
@@ -181,12 +195,96 @@
    "engine": "lab",
    "seconds": 2.27
   },
+  "installer.network": {
+   "file": "installer.network-bc2b709249b0.opus",
+   "text": "Here's where your other computers will find it.",
+   "text_sha256": "bc2b709249b0b7e101bb8a8518a33b5364ceb4eaf7374432692093530d9f570c",
+   "engine": "lab",
+   "seconds": 2.16
+  },
+  "installer.network.short": {
+   "file": "installer.network.short-41609497f172.opus",
+   "text": "Where your computers will find it.",
+   "text_sha256": "41609497f17206fe9f22baf68521df4457a7ecf72d2c85480fcf69ca4a05f1ed",
+   "engine": "lab",
+   "seconds": 1.57
+  },
+  "installer.reach": {
+   "file": "installer.reach-8764d5e8bf2e.opus",
+   "text": "From anywhere, but only the ways you choose.",
+   "text_sha256": "8764d5e8bf2ea9f76a83336e41d5e6413c1217a42b7d8aa96be864ce8a86e07f",
+   "engine": "lab",
+   "seconds": 2.44
+  },
+  "installer.reach.short": {
+   "file": "installer.reach.short-27310a67d7af.opus",
+   "text": "From anywhere, only your way.",
+   "text_sha256": "27310a67d7af9e43a33847868b0a87a7f8dff0c7e6e8336172b6c098ebca9f41",
+   "engine": "lab",
+   "seconds": 1.96
+  },
+  "installer.role": {
+   "file": "installer.role-9f2ccae8875a.opus",
+   "text": "Pick its jobs: one, or several together.",
+   "text_sha256": "9f2ccae8875aa60acc70b98c8107739211204420721d48a533e152e86eb0e226",
+   "engine": "lab",
+   "seconds": 2.36
+  },
+  "installer.role.short": {
+   "file": "installer.role.short-bf0cebb0bc4b.opus",
+   "text": "Pick one job, or several.",
+   "text_sha256": "bf0cebb0bc4b01fb6e1d49296ee56a917ce4511761a046c69f504d0d51e7d53b",
+   "engine": "lab",
+   "seconds": 1.64
+  },
+  "installer.secrets": {
+   "file": "installer.secrets-98b500bfc95d.opus",
+   "text": "Keys and passwords go in a vault, never a file.",
+   "text_sha256": "98b500bfc95db589e1f72ace222d75608b48e7ba7029df28423246ea201d7aa1",
+   "engine": "lab",
+   "seconds": 3.23
+  },
+  "installer.secrets.short": {
+   "file": "installer.secrets.short-1634952814ee.opus",
+   "text": "Secrets go in a vault, never a file.",
+   "text_sha256": "1634952814eed6ef6ec94349c39e2e751689569f3dfd6feccd8e803e84332845",
+   "engine": "lab",
+   "seconds": 2.41
+  },
+  "installer.services": {
+   "file": "installer.services-d79668e2f931.opus",
+   "text": "Your roles picked some. Pick what else it runs.",
+   "text_sha256": "d79668e2f931af08d6d8a65bdd0d9e2f1462bc2fc198b3d274bf23ce0284977f",
+   "engine": "lab",
+   "seconds": 2.77
+  },
+  "installer.services.short": {
+   "file": "installer.services.short-5bdf5b988d00.opus",
+   "text": "Roles picked some. Pick the rest.",
+   "text_sha256": "5bdf5b988d007b768666030f419259d8c673ce108480de1ff4c215e622731a03",
+   "engine": "lab",
+   "seconds": 1.78
+  },
   "installer.ssh": {
    "file": "installer.ssh-c50f001a8dbf.opus",
    "text": "How you'll reach this server from your other computers.",
    "text_sha256": "c50f001a8dbf5c69675b9151fd59e0a8a386bae1d7d90a3511f89d597af00bf4",
    "engine": "lab",
    "seconds": 2.51
+  },
+  "installer.storage": {
+   "file": "installer.storage-fe0060572e9f.opus",
+   "text": "Disks for your data, kept apart from the system.",
+   "text_sha256": "fe0060572e9f4f520d982ce1442b1ccac8d06b054dfe740f3f31f90fe607ad31",
+   "engine": "lab",
+   "seconds": 2.55
+  },
+  "installer.storage.short": {
+   "file": "installer.storage.short-6963e50d7c2d.opus",
+   "text": "Disks for your data, apart from the system.",
+   "text_sha256": "6963e50d7c2d8feb6d238919274bd71df4df2b0e8045e5a56a0eb802610f3bdb",
+   "engine": "lab",
+   "seconds": 2.43
   },
   "installer.summary": {
    "file": "installer.summary-9f6653415ad7.opus",
@@ -201,6 +299,34 @@
    "text_sha256": "a356f55dfffb16918fbc173026c89e0e00896527b87d95ba6125095f87c2348a",
    "engine": "lab",
    "seconds": 2.99
+  },
+  "installer.unlock": {
+   "file": "installer.unlock-a3fa96db4602.opus",
+   "text": "Locked disks, and how they open after a restart.",
+   "text_sha256": "a3fa96db4602d001ddc148ea0829a316d9835797a0da46bcf220c48bc41c10cb",
+   "engine": "lab",
+   "seconds": 2.78
+  },
+  "installer.unlock.short": {
+   "file": "installer.unlock.short-4a925ba768a9.opus",
+   "text": "How the disk opens after a restart.",
+   "text_sha256": "4a925ba768a9991319af034490b0c7714e75fbac8938c6759a26acf7be9ec8bb",
+   "engine": "lab",
+   "seconds": 2.22
+  },
+  "installer.updates": {
+   "file": "installer.updates-6f3bad2c7868.opus",
+   "text": "It updates at night and checks itself after.",
+   "text_sha256": "6f3bad2c7868292e83409717f328bb0311c89b1adabb2d5abd2e38d1d723fd0d",
+   "engine": "lab",
+   "seconds": 2.64
+  },
+  "installer.updates.short": {
+   "file": "installer.updates.short-f8c45b26cdcd.opus",
+   "text": "At night, checked after, undone if bad.",
+   "text_sha256": "f8c45b26cdcdac8ec3d134ab03b771ff3998cdfd34503f8bf2cd7c2088f40a2b",
+   "engine": "lab",
+   "seconds": 2.59
   },
   "installer.user": {
    "file": "installer.user-cfecb9a50667.opus",
@@ -264,6 +390,13 @@
    "text_sha256": "9432ca0826dd7227e66a2de58990416c00c97e06d8b4fd6c51bac93f37e6b93f",
    "engine": "lab",
    "seconds": 2.37
+  },
+  "server-tour.provision": {
+   "file": "server-tour.provision-4786fbc83314.opus",
+   "text": "Here's the plan. Check it, then Apply.",
+   "text_sha256": "4786fbc833149839d66c39fae35d3665f5e2f448d266b608a46433ca68f26b6a",
+   "engine": "lab",
+   "seconds": 2.29
   },
   "server-tour.ssh": {
    "file": "server-tour.ssh-e48cfed4a50b.opus",

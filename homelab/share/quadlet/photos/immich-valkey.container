@@ -1,0 +1,13 @@
+[Unit]
+Description=Photos (Immich): cache
+
+[Container]
+Image={{image:valkey}}
+ContainerName=immich-valkey
+Network=bromigos-lab.network
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

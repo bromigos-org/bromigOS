@@ -7,6 +7,7 @@
 
 - [Install](install.md)
     - [The installer](installer.md)
+    - [Setting up bromigOS Server](server-setup.md)
 - [First run](first-run.md)
     - [The welcome tour](welcome-tour.md)
     - [Pair your phone](phone.md)

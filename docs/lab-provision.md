@@ -345,3 +345,121 @@ selected provider of that role. Repeating a step must leave existing data in pla
 Values can refer to `{tz}`, `{media}`, `{downloads}`, `{backups}`, `{url:<service>}` and
 `{secret:<name>}`. An app's own double-brace templates are passed through unchanged.
 These configure steps remain design data; this slice does not run them.
+
+## The local target
+
+`bromigos lab provision --local` sets up the machine it runs on. A bromigOS Server runs it on
+its first boot from the installer's answer file, and the welcome tour shows its progress. It
+reads the provisioning catalogue instead of the Core and Advanced presets; `--preset` maps
+those onto catalogue items (`provcatalog.TIERS`), and the SSH and cluster targets above work
+as before.
+
+### The catalogue
+
+`homelab/share/provision-catalogue.toml`, installed by bromigos-lab as
+`/usr/share/bromigos/lab/provision-catalogue.toml`. The file's header documents every key.
+Each `[[item]]` has an id, a group (`lab-core`, `ai`, `network`, `storage`, `games`, `home`,
+`media`, `brodec`), a name, a one-line description, a hover hint, an Adwaita symbolic icon and
+a console glyph (a key of `bromigos_textual.ICONS`), what it needs and conflicts with, the
+roles that tick it, its hardware needs, its download size, ports, whether it needs the
+internet, and how it installs:
+
+- `install = { pacman = [...] }`, with `nvidia = [...]` or `amd = [...]` in its place on that
+  GPU, and `enable` for the units to start;
+- `install = { quadlet = "TEMPLATE" }`: Podman Quadlet units from `share/quadlet/TEMPLATE/`,
+  with every image in `images` pinned by digest;
+- `install = { step = "STEP" }`: a step in `localprovision.STEPS` (k3s, OpenBao, monitoring,
+  backups, Caddy, the media library, Wings, …).
+
+`[item.setup]` is a small form for the UIs: fields (`text`, `number`, `bool`, `choice`,
+`secret`, `path`), choices with notes and links, `show_if`, actions with a URL, and the name of
+a live check (`bromigos lab provision --check ITEM`).
+
+`bromigos_homelab.provcatalog` reads it for the installer, the tour and the CLI:
+
+| Call | Returns |
+|---|---|
+| `load(path=None)` | every item, defaults filled in |
+| `groups()` | `[{id, name, icon, glyph}]` |
+| `resolve(ids)` | `(ids with their needs, needs first; the ids added)`; an `a\|b` need is met by either |
+| `budget(ids, hw, models=())` | `{cpu, ram_gb, disk_gb, gpu_vram_gb, fits, notes}`; notes are plain sentences |
+| `recommend(roles, hw, lab="none")` | the ids the roles tick for this hardware and lab answer (several roles: the union) |
+| `suggest_models(hw)` | models from the lab model catalogue sized to the GPU: `[{id, capability, name, serve_with, vram_gb, …, default}]` |
+| `conflicts(ids)`, `fits_item(item, hw)`, `validate()` | sentences; `[]` when the catalogue is consistent |
+
+`hw` is `{cpu, ram_gb, disk_gb, gpu (False or "nvidia"/"amd"/"intel"), gpu_vram_gb, gpu_name}`;
+`localprovision.detect()` reads this machine's.
+
+Roles: `lab-node`, `storage`, `home-services`, `game-server`, `media`, `base` (also accepted:
+`just-a-server`, bromigOS Server's name for it). Items with `default = false` are listed under
+their role but never ticked for you; `lab = [...]` limits an item to some lab answers (Wings
+when there's a lab, the Minecraft template without one).
+
+### Plan and apply
+
+`--plan [--json]` lists, per item, how it installs, its services, ports, needs, downloads and
+whether it needs the internet, then the budget and any problem (two items that conflict, a
+model whose server isn't chosen). `--apply` installs in dependency order and prints:
+
+```text
+::stage PCT words
+::item ID waiting|downloading|installing|done|failed|skipped-offline
+::note ID words
+::error ID words
+```
+
+Items that need a download are `skipped-offline` while there's no network and installed when
+it comes (NetworkManager's connectivity check, else a connection to pkgs.bromigos.org). Items
+that don't need one go ahead. `--no-wait` exits 75 instead of waiting. A failed item is
+reported with `::error` in words and its dependents fail with the reason; the rest carry on.
+`/var/lib/bromigos/lab/provision-local.json` records each finished item with a fingerprint of
+what it installed, so a re-run leaves finished items alone and redoes only changed ones.
+
+Media items get wired together after they install: qBittorrent and SABnzbd as download
+clients in Sonarr, Radarr and Lidarr, with their categories, and the root folders. No source
+is ever added.
+
+### App names
+
+Each web app Caddy serves gets one name on the local network, `<app>-<server>.local` (for
+example `photos-myserver.local`, `media-myserver.local`), with HTTPS from Caddy's own authority
+(`tls internal`). The names are one label on purpose. Every mDNS resolver answers a one-label
+`.local` name: Linux's nss-mdns and systemd-resolved, Apple's mDNSResponder, Android's resolver
+(November 2021 on) and Windows' DNS client. A subdomain such as `photos.<server>.local` is
+answered by some of them and not others.
+
+avahi announces only the host's own name, so `bromigos-lab-mdns-names.service`
+(`bromigos lab mdns-names publish`, `bromigos_homelab/mdnsnames.py`) publishes each app's name.
+It reads `/etc/bromigos/lab/mdns-names`, which the Caddy step writes, and points each name at
+the address the default route leaves from. When that address changes, the names follow it
+within 15 seconds. `bromigos lab mdns-names list` shows them.
+
+Tested between two VMs on one network (avahi publishing, a client with nss-mdns as bromigOS sets
+it up, and a client with systemd-resolved's mDNS): both shapes resolve on Linux, the one-label
+shape being the one every other platform documents.
+
+### The answer file
+
+The installer writes `[server]` in `/var/log/bromigos/install-answers.toml`:
+`roles = [...]`, `lab = "new" | "join" | "none"`, `lab_join = {bundle = PATH}` or
+`{pair = true}`, `provision = [ids]`, `models = [ids]`, and `[server.settings.ITEM]` with
+setup fields. Secret fields are references (`{secret = "local:NAME"}`, `vault:…`, `sops:…`,
+`bitwarden:…`), never values; a plain value is refused. `--from-answers FILE` reads it.
+
+### Quadlet templates
+
+`share/quadlet/<template>/` holds the units; `_common/bromigos-lab.network` is the network
+every app shares. Placeholders: `{{data}}` (`/srv/apps/<item>`), `{{media}}`,
+`{{downloads}}`, `{{tz}}`, `{{host}}`, `{{puid}}`/`{{pgid}}` (the `bromigos-media` account),
+`{{image:NAME}}` (`NAME-nvidia` on an NVIDIA server when listed), `{{secret:NAME}}` (the Podman
+secret's name) and `{{setting:FIELD}}`. A line that starts `#if:ITEM `, `#ifnot:ITEM `,
+`#ifset:FIELD ` or `#ifgpu:VENDOR ` is kept only when that holds. Secrets are mounted as files
+(`type=mount`) wherever the app reads files.
+
+### What it doesn't do
+
+- A self-hosted BRODEC Matrix homeserver isn't an item: BRODEC doesn't publish a supported way
+  to run one yet.
+- On a k3s lab, the lab's own Helm catalogue (`profiles.toml`) runs apps across the cluster;
+  the local target runs them on this server with Podman.
+- Wings joins a Pelican panel with the panel's own auto-deploy command.

@@ -1,0 +1,17 @@
+[Unit]
+Description=Start page (Homepage)
+
+[Container]
+Image={{image:homepage}}
+ContainerName=homepage
+Network=bromigos-lab.network
+PublishPort=3010:3000
+Volume={{data}}/config:/app/config:Z
+Environment=HOMEPAGE_ALLOWED_HOSTS=*
+HealthCmd=wget -qO- http://127.0.0.1:3000/ >/dev/null
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
