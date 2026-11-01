@@ -79,6 +79,30 @@ plain_start() {
 
 running() { [ -n "$(loose)" ]; }
 
+# The service's ExecCondition (bromigos-bar.service): a running Hyprland session for this
+# runtime directory (`bromigos session`), so a restart after the session has gone is skipped
+# (exit 1), not looped. At login it can come before the session can be found: Hyprland runs
+# its start handlers (`bromigos-bar start`) from its first frame, which can come before it
+# writes its instance's hyprland.lock. While the session the manager was told about is still
+# coming up (its Wayland socket is there), it waits for it: up to BROMIGOS_SESSION_WAIT
+# seconds (20).
+ready() {
+    local sock tries n
+    tries=$(( ${BROMIGOS_SESSION_WAIT:-20} * 4 ))
+    for (( n = 0; ; n++ )); do
+        if bromigos session >/dev/null 2>&1; then
+            (( n )) && echo "the Hyprland session came up after $(( n / 4 )).$(( n % 4 * 25 )) s" >&2
+            return 0
+        fi
+        sock=${WAYLAND_DISPLAY:-}
+        [ -n "$sock" ] || { echo "no Hyprland session (no WAYLAND_DISPLAY)" >&2; return 1; }
+        [[ $sock == /* ]] || sock=$RUN/$sock
+        [ -S "$sock" ] || { echo "no Hyprland session ($sock is gone)" >&2; return 1; }
+        (( n < tries )) || { echo "no Hyprland session after ${BROMIGOS_SESSION_WAIT:-20} s" >&2; return 1; }
+        sleep 0.25
+    done
+}
+
 case "${1:-status}" in
     start)
         if units; then
@@ -122,6 +146,7 @@ case "${1:-status}" in
         fi
         [ $how != none ]; exit $(( $? ? 3 : 0 ))
         ;;
+    ready) ready ;;           # the service's ExecCondition (above)
     -h|--help|help) sed -n '5,9p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) echo "usage: bromigos-bar start|restart|stop|status [--json]" >&2; exit 2 ;;
 esac

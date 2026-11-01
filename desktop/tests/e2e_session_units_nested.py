@@ -200,7 +200,8 @@ def main():
         mgr = Manager(n, menv)
         stub_bromigos = os.path.join(n.stubs, "bromigos")
         mgr.unit(os.path.join(DESKTOP, "systemd", "bromigos-bar.service"),
-                 [("/usr/bin/bromigos ", stub_bromigos + " ")])
+                 [("/usr/bin/bromigos ", stub_bromigos + " "),
+                  ("/usr/bin/bromigos-bar", os.path.join(n.stubs, "bromigos-bar"))])
         mgr.unit(os.path.join(LIVE, "systemd", "bromigos-live.service"),
                  [("/usr/bin/bromigos ", stub_bromigos + " "),
                   ("/usr/bin/bromigos-live", os.path.join(n.stubs, "bromigos-live")),

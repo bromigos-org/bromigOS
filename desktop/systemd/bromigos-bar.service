@@ -14,9 +14,10 @@ StartLimitBurst=5
 
 [Service]
 Type=exec
-# only while a Hyprland session runs (bromigos session exits 1 without one): after the
-# session ends a restart is skipped, not looped
-ExecCondition=/usr/bin/bromigos session
+# only while a Hyprland session runs (bromigos session; exit 1 without one): after the
+# session ends a restart is skipped, not looped. At login it waits for the session to be
+# found (Hyprland starts the bar before it writes its instance's lock file): bromigos-bar ready
+ExecCondition=/usr/bin/bromigos-bar ready
 # with the live session's display and instance, whatever this manager was told before
 ExecStart=/usr/bin/bromigos session exec /usr/bin/waybar
 # Back after any exit: a crash, a kill, its output going away. Only `systemctl --user stop`
