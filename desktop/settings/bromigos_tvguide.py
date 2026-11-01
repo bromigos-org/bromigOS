@@ -316,9 +316,9 @@ class Host:
         self.sprite.set_pose(pose, face, hint=hint or {
             "loading": "STATIC tunes in while the channels are read",
             "next": "STATIC, on air: what comes on next",
-            "empty": "STATIC fiddles with the antenna: there's nothing on yet",
-            "asleep": "STATIC dozes: the den's live layer isn't running",
-            "error": "STATIC whacks the set: something can't be read"}[state])
+            "empty": "STATIC searches for a signal: there's nothing on yet",
+            "asleep": "STATIC has powered down: the den's live layer isn't running",
+            "error": "STATIC is fixing it: something can't be read"}[state])
         self.eyebrow.set_label(eyebrow)
         (self.eyebrow.add_css_class if warn else self.eyebrow.remove_css_class)("warn")
         self.title.set_label(title)
@@ -450,7 +450,7 @@ class Guide:
         if self.error:
             return self.host.set("error", "The channels file doesn't read", self.error)
         if not n:
-            return self.host.set("empty", "Nothing's on yet", "STATIC is fiddling with the antenna. Add a channel: a "
+            return self.host.set("empty", "Nothing's on yet", "STATIC is searching for a signal. Add a channel: a "
                                                               "library, shows you pick, YouTube or a folder.")
         ch, screen, num = self._featured()
         cached = (TVL.cached_items(ch) or {}) if ch else {}

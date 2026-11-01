@@ -15,7 +15,7 @@ the models used.
 |---|---|---|---|
 | Den TV controller (`live/live/tvosc.lua`) and MEDIA rotary dial | Drawn and written for bromigOS | yes | `MIT OR Apache-2.0`; no vendored mpv scripts or art |
 | STATIC's placeholder: the code-drawn rig and terminal pixel head (`lib/bromigos_static.py`, `lib/bromigos_static_term.py`) | Drawn in code for bromigOS, from lab concept sheets | yes, until his rendered art ships | No generated pixels. The concepts were Qwen-Image 2.1 (non-commercial); [see the notes](#static-the-mascot) |
-| STATIC's rendered art (an art folder with `manifest.json`) | To come: modelled and rendered in Blender | not yet | Needs its own row and provenance before it ships |
+| STATIC's painted shells hosting Den TV's guide (`mascot/static/`: five short looping WebPs and `manifest.json`) | Cut from the lab's clips of the locked scene boards: painted with Qwen-Image-Edit-2511, animated with Wan 2.2 I2V-A14B, upscaled with SeedVR2 7B, smoothed with RIFE 4.9 | yes, from the locked boards; the loops wait for BLACKFLAME's look before the pull request leaves draft | Apache-2.0 and MIT models only, made on the lab for 0 credits. Every clip's line is in `mascot/provenance.jsonl`. [See the notes](#static-the-mascot) |
 | Dictation panel and `dictation.webp` | Drawn for bromigOS; nested render with synthetic speech | yes | No desktop capture, audio, private text or external art |
 | Code: the core, widgets, live layer, VECTOR, scripts | Written for bromigOS, first on the operator's desktop | yes | `MIT OR Apache-2.0` |
 | Lab console test snapshot (`homelab/tests/snapshots/lab-tui.svg`) | Textual render with recorded fake readings | yes | No real desktop or lab data |
@@ -203,11 +203,23 @@ needs its own row.
   and the terminal's pixel head. Every shape is written in `lib/bromigos_static.py` and
   `lib/bromigos_static_term.py` and drawn at run time in the theme's colours. No image
   file or generated pixel ships.
-- **What replaces it.** STATIC is being remade in Blender (3D, toon-shaded) and rendered to
-  frames. The apps load art by name and height from an art folder's `manifest.json`
-  (`lib/bromigos_static_art.py`; BRODEC's `assets/static/manifest.json` uses the same
-  schema), so the renders drop in without a code change. Their source, licence and
-  renderer get their own row here before they ship.
+- **What ships with it: the painted shells.** STATIC rides many machines ("shells"), and
+  the guide's Tonight card casts them by what the guide is doing. NOIR hosts, STATIC's
+  signal tunes in, OWL searches for a signal, NOIR powers down when the den is asleep, and
+  LINEMAN fixes what broke. Each is a two-second loop cut from a clip of a locked scene
+  board (`bromigos-mascot-art`, `/usr/share/bromigos/static/`). The apps load art by name
+  and height from that folder's `manifest.json` (`lib/bromigos_static_art.py`; BRODEC's
+  `assets/static/manifest.json` uses the same schema). Where a name has no art, or the
+  picture would be smaller than its `min` height (a terminal's half-blocks), the
+  placeholder draws. The pixel head (`head:*`) and the remote pose stay the placeholder's
+  until the CORE shell's board is locked.
+- **How the shells were made.** Scene boards were painted on the lab with
+  Qwen-Image-Edit-2511 (Apache-2.0), using the approved concepts as identity references.
+  BLACKFLAME locked them on 2026-10-31. The clips are Wan 2.2 I2V-A14B (Apache-2.0) from
+  those panels, at 832x480 and 16 frames a second. The two transformations are
+  first-and-last-frame clips between a panel and an edit of it. SeedVR2 7B (Apache-2.0)
+  upscaled each clip to 1248x720, and RIFE 4.9 (MIT) doubled its frames. ffmpeg cut and
+  looped them. No Qwen-Image 2.1 output is in any of them, and no text is painted in.
 - **Where the design came from.** The character was designed from concept sheets made on
   the lab with Qwen-Image 2.1 (2026-10-30). The six screen faces BLACKFLAME approved
   (2026-10-31) were redrawn here as pixel grids. Those sheets are under the Qwen Research
@@ -384,6 +396,9 @@ made. For reference, here are the terms each provider published, as read on 2026
 | Hunyuan3D 2.1 (local) | <https://huggingface.co/tencent/Hunyuan3D-2.1/blob/main/LICENSE> |
 | Qwen-Image-2.1 (local) | <https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE> |
 | SeedVR2 7B (local, int8 weights from Comfy-Org/SeedVR2) | <https://huggingface.co/ByteDance-Seed/SeedVR2-7B> (Apache-2.0) |
+| Qwen-Image-Edit-2511 (local) | <https://huggingface.co/Qwen/Qwen-Image-Edit-2511> (Apache-2.0) |
+| Wan 2.2 I2V-A14B (local, fp8 weights from Comfy-Org) | <https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B> (Apache-2.0) |
+| RIFE 4.9 (local, through ComfyUI-Frame-Interpolation) | <https://github.com/hzwer/Practical-RIFE> (MIT) |
 | ElevenLabs sound effects | <https://elevenlabs.io/terms-of-use> (2026-03-31), <https://elevenlabs.io/sound-effects-terms> (2026-02-12) |
 | nolgia itself | <https://nolgia.ai/terms> (updated 2026-10-08) |
 

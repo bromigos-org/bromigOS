@@ -1,0 +1,36 @@
+{
+ "schema": 1,
+ "fps": 12,
+ "art": {
+  "host": {
+   "min": 96,
+   "about": "NOIR hosts tonight's broadcast from his pod: what comes on next",
+   "168": "host-168.webp",
+   "336": "host-336.webp"
+  },
+  "snow": {
+   "min": 96,
+   "about": "STATIC's signal tunes in while the channels are read",
+   "168": "snow-168.webp",
+   "336": "snow-336.webp"
+  },
+  "antenna": {
+   "min": 96,
+   "about": "RECON's OWL searches the dark for a signal: there's nothing on yet",
+   "168": "antenna-168.webp",
+   "336": "antenna-336.webp"
+  },
+  "asleep": {
+   "min": 96,
+   "about": "NOIR has powered down: the den's live layer isn't running",
+   "168": "asleep-168.webp",
+   "336": "asleep-336.webp"
+  },
+  "whack": {
+   "min": 96,
+   "about": "RIG's LINEMAN is on it: something can't be read",
+   "168": "whack-168.webp",
+   "336": "whack-336.webp"
+  }
+ }
+}

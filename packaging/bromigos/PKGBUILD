@@ -3,8 +3,8 @@
 # bromigOS, the whole of it: `pacman -S bromigos` (or `bromigos install`) on Arch gives the
 # desktop (bromigos-desktop: Hyprland, the bar, the lock screen and the session's
 # plumbing), the live layer and its worlds, the widgets, VECTOR, the login screen, the
-# fonts and the theme, and the manual to read offline. The homelab integrations are
-# optional (bromigos-homelab).
+# fonts and the theme, STATIC's art (the guide's host), and the manual
+# to read offline. The homelab integrations are optional (bromigos-homelab).
 
 pkgname=bromigos
 pkgver=0.0.0
@@ -14,7 +14,8 @@ arch=('any')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
 depends=('bromigos-keyring' 'bromigos-core' 'bromigos-desktop' 'bromigos-settings'
-         'bromigos-live' 'bromigos-widgets' 'bromigos-vector' 'bromigos-manual')
+         'bromigos-live' 'bromigos-widgets' 'bromigos-vector' 'bromigos-manual'
+         'bromigos-mascot-art')
 optdepends=('bromigos-homelab: the homelab integrations (cluster, GitOps, metrics, models, agents)'
             'bromigos-apps: the app bundle (LazyVim, tmux, lazygit, mise, Chromium, Spotify, Signal), configured and themed'
             'herdr: the agents the Swarm deck and the worlds show'
