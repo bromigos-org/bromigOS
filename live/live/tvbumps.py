@@ -102,13 +102,6 @@ class Bumps:
         self.wake.set()
         self._changed()
 
-    def bump_audio(self, screen):
-        """The sting's path for a bump starting on this screen, when stings are on."""
-        o = self.bumping(screen)
-        if not o or not B.settings(self.cfg)["sting"]:
-            return None
-        return o["bump"].sting
-
     def bump_caption(self, screen):
         """("bump", caption, channel name, alpha) while a bump with a caption plays, else None.
         The caption fades in after a second and out before the end."""

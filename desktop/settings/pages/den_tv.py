@@ -27,13 +27,10 @@ def build(ctx):
             hint="Short STATIC clips between shows and when you change channel: in the night block (10 PM to 4 AM), "
                  "any time, or never",
             on_select=lambda v: ctx.change(['bromigos','scene','set','tv.bumps.mode',v], 'Bumps updated'))
-        ctx.switch_row(bumps, "Bump sounds", "A short radio sting with each bump, when that screen's sound is on",
-            key="bump-sting", active=vals.get('tv.bumps.sting', True), hint="Play or silence the bumps' stings",
-            on_toggle=lambda v: change('tv.bumps.sting', v))
     bumps = ctx.group(page, "Bumps", "Between shows, STATIC's crew keeps the den company: a few seconds at a time, "
                       "a few times a night.", key="bumps-group")
     ctx.json(['bromigos','scene','get','tv.enabled','tv.hover_hint','tv.max_playing','tv.cover_opacity',
-              'tv.bumps.mode','tv.bumps.sting','--json'],got)
+              'tv.bumps.mode','--json'],got)
     ctx.row(group, "Channels and guide", key="guide", hint="Open the standalone Den TV app",
             buttons=[("Open Den TV…",lambda: ctx.launch(['bromigos-tv-guide']),"Every channel and what's on")])
     return page
@@ -47,5 +44,4 @@ PAGE = Page(id="den-tv",title="Den TV",group="desktop",order=46,build=build,
         Entry('hover-hint','Floating TV controls',[], 'Den TV'),Entry('max-playing','Screens playing at once',[], 'Den TV'),Entry('cover-opacity','Picture opacity',[], 'Den TV'),
         Entry('guide','Open Den TV',[], 'Den TV'),
         Entry('bumps-group','Bumps',["interstitials","night block"], 'Bumps'),
-        Entry('bumps','Bumps between shows',["night block","static"], 'Bumps'),
-        Entry('bump-sting','Bump sounds',["sting"], 'Bumps')])
+        Entry('bumps','Bumps between shows',["night block","static"], 'Bumps')])

@@ -29,7 +29,6 @@ KEYS = {
     "tv.cover_opacity": ("float", (0.0, 1.0), "window opacity that pauses a covered silent screen"),
     "tv.bumps.mode": ("choice", ("night", "always", "off"),
                       "the den's bumps between items and on a channel change: in the night block, always, or off"),
-    "tv.bumps.sting": ("bool", None, "a bump's sting, when its screen's sound is on"),
     "world.enabled": ("bool", None, "the theme's world drawn instead of the den (off: always the den)"),
     "world.ambient_sounds": ("bool", None, "the world's creature sounds, by your activity"),
     "sounds.enabled": ("bool", None, "the desktop's sound cues (the terminal's blip, the notification chirp)"),
@@ -89,7 +88,7 @@ def layers():
 
 
 FALLBACK = {"tv.hover_hint": True, "tv.enabled": True, "tv.max_playing": 3, "tv.cover_opacity": .9,
-            "tv.bumps.mode": "night", "tv.bumps.sting": True,
+            "tv.bumps.mode": "night",
             "world.enabled": True, "world.ambient_sounds": True, "sounds.enabled": True, "sounds.volume": 0.3,
             "screensaver.enabled": True, "space.planet": True, "space.station": True, "space.stars": True,
             "space.traffic": True, "codec.enabled": True, "codec.on_critical": True, "codec.on_lab_alert": True,

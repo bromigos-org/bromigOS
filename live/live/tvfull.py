@@ -85,15 +85,11 @@ class Session:
             except Exception: pass
 
     def _play_bump(self, bump):
-        """A bump between two items: its clip from the pack (a local file), its sting when
-        stings are on, its caption on mpv's OSD after a second."""
-        import bromigos_bumps as B
+        """A bump between two items: its clip from the pack (a local file, silent), its caption
+        on mpv's OSD."""
         self.bump = bump
         self.send("set_property", "force-media-title", bump.caption or "Den TV")
-        options = {"start": "0"}
-        if bump.sting and B.settings(self.tv.cfg)["sting"]:
-            options["audio-files"] = bump.sting
-        self.send("loadfile", bump.path, "replace", -1, options)
+        self.send("loadfile", bump.path, "replace", -1, {"start": "0"})
         if bump.caption:
             self.send("expand-properties", "show-text", bump.caption, int(max(1.0, bump.seconds - 1.5) * 1000))
 

@@ -8,7 +8,7 @@ players, sandboxed state; no GPU, no desktop, no network.
 - the caps: off, `bromigos mascot off`, night only, the spacing, the night's maximum, never the
   same bump twice in a row, tune bumps short;
 - on a den screen: between items the channel waits for the bump (nothing missed), screens on the
-  same channel share it, its sting only with stings on, no "BACK TO CHANNEL" at its end, skip
+  same channel share it, no sound of its own, no "BACK TO CHANNEL" at its end, skip
   ends it, a caption over it; a channel change gets one once it settles, never while flicking
   through; nothing when the screen can't be seen (covered, locked, VECTOR speaking, reduced motion);
 - full screen: a bump between two items, the channel held for it;
@@ -34,21 +34,18 @@ import bromigos_tv as TV  # noqa: E402
 def make_pack(root, name="static", bumps=None):
     folder = os.path.join(root, name)
     os.makedirs(os.path.join(folder, "clips"), exist_ok=True)
-    os.makedirs(os.path.join(folder, "stings"), exist_ok=True)
     bumps = bumps if bumps is not None else [
-        {"id": "still-lit", "file": "clips/still-lit.mp4", "seconds": 7.0, "roles": ["open"], "caption": "STILL LIT",
-         "sting": "stings/still-lit.ogg"},
+        {"id": "still-lit", "file": "clips/still-lit.mp4", "seconds": 7.0, "roles": ["open"], "caption": "STILL LIT"},
         {"id": "right-back", "file": "clips/right-back.mp4", "seconds": 6.0, "roles": ["between"],
-         "caption": "BACK IN A MOMENT", "sting": "stings/spark.ogg"},
+         "caption": "BACK IN A MOMENT"},
         {"id": "crew", "file": "clips/crew.mp4", "seconds": 9.0, "roles": ["between"]},
         {"id": "signal-in", "file": "clips/signal-in.mp4", "seconds": 5.0, "roles": ["tune", "between"]},
         {"id": "sign-off", "file": "clips/sign-off.mp4", "seconds": 8.0, "roles": ["close"]},
     ]
     for b in bumps:
-        for key in ("file", "sting"):
-            if b.get(key) and ".." not in b[key]:
-                with open(os.path.join(folder, b[key]), "wb") as f:
-                    f.write(b"\0")
+        if ".." not in b["file"]:
+            with open(os.path.join(folder, b["file"]), "wb") as f:
+                f.write(b"\0")
     with open(os.path.join(folder, "bumps.json"), "w") as f:
         json.dump({"schema": 1, "pack": name, "title": "Test pack", "bumps": bumps}, f)
     return folder
@@ -90,21 +87,20 @@ class Packs(unittest.TestCase):
         bad = [{"id": "escape", "file": "../../etc/passwd", "seconds": 5},
                {"id": "missing", "file": "clips/none.mp4", "seconds": 5},
                {"id": "long", "file": "clips/long.mp4", "seconds": 600},
-               {"id": "ok", "file": "clips/ok.mp4", "seconds": 5, "sting": "../outside.ogg"}]
+               {"id": "ok", "file": "clips/ok.mp4", "seconds": 5}]
         make_pack(os.path.join(self.root, "data", "bromigos", "bumps"), "extra", bad)
         os.remove(os.path.join(self.root, "data", "bromigos", "bumps", "extra", "clips", "none.mp4"))
         env = dict(self.env, BROMIGOS_BUMPS=os.path.join(self.root, "other", "static"))
         ps = {p.name: p for p in B.packs(env)}
         self.assertEqual(ps["static"].folder, os.path.join(self.root, "other", "static"), "BROMIGOS_BUMPS first")
         self.assertEqual([b.id for b in ps["extra"].bumps], ["extra/ok"])
-        self.assertIsNone(ps["extra"].bumps[0].sting, "a sting outside its pack is left out")
         self.assertTrue(os.path.isdir(mine))
 
     def test_settings_checked(self):
         s = B.settings({"tv": {"bumps": {"mode": "loud", "night": "25:00-01:00", "every": -1, "max": "x",
-                                         "sting": False, "packs": ["static"]}}})
-        self.assertEqual((s["mode"], s["night"], s["every"], s["max"], s["sting"], s["packs"]),
-                         ("night", "22:00-04:00", 20, 10, False, ["static"]))
+                                         "packs": ["static"]}}})
+        self.assertEqual((s["mode"], s["night"], s["every"], s["max"], s["packs"]),
+                         ("night", "22:00-04:00", 20, 10, ["static"]))
         self.assertEqual(B.settings({"tv": {"bumps": {"enabled": False}}})["mode"], "off")
 
     def test_mascot_off_turns_them_off(self):
@@ -231,19 +227,12 @@ class Den(unittest.TestCase):
         tv._ensure_loaded(d, bch, tv.slot(bch))
         load = d.player.loads[-1]
         self.assertEqual(load["url"], o["bump"].path)
-        self.assertEqual(load.get("audio"), o["bump"].sting)
+        self.assertIsNone(load.get("audio"), "a bump has no sound of its own")
         self.assertEqual(load.get("start"), 0.0)
         d.player.ended = ("eof", None)
         tv._check_failure(d, bch, tv.slot(bch))
         self.assertIsNone(tv.bumping("big"))
         self.assertIsNone(d.feedback, "a bump's end is just the channel again")
-
-    def test_stings_off(self):
-        self.tv.cfg["tv"]["bumps"]["sting"] = False
-        d, ch, slot = self.boundary()
-        self.tv._ensure_loaded(d, ch, slot)
-        n, bch = self.tv.channel("big")
-        self.assertIsNone(self.tv.stream(bch, self.tv.slot(bch), screen="big").get("audio"))
 
     def test_nothing_where_nobody_can_see_it(self):
         tv = self.tv

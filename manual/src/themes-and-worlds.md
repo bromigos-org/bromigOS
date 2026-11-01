@@ -255,8 +255,7 @@ for the night block's **STILL LIT**.
   starts from its beginning. When you change channel, a short one may cover the tune.
 - **Only where you can see it:** never while the screen is locked, the screensaver runs or
   VECTOR is speaking, and never on a screen hidden under a window.
-- **Sound:** a bump is silent, with a second or two of radio sting when that screen's sound
-  is on.
+- **Sound:** none. The screen is quiet while a bump plays.
 - **Skip one:** change channel, or **SKIP** (6 on the number-pad remote).
 - **Turn them off or on all the time:** **Settings › Den TV › Bumps** (in the night block,
   any time, or off). `bromigos mascot off` turns them off too.

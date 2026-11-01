@@ -132,7 +132,6 @@ every = 20               # minutes between two bumps between items (every_night 
 every_night = 12
 tune_every = 30          # minutes between two bumps on a channel change
 max = 10                 # at most this many a night (outside it, a day)
-sting = true             # a bump's sting, when its screen's sound is on
 
 [world]                  # a theme's world (bromigos theme set mire|tidewell): drawn instead of the den
 enabled = true           # false = always the den, whatever the theme

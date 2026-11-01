@@ -361,9 +361,7 @@ keeping watch on a cliff for the night block's **STILL LIT**, the crew on the sh
   decoding, in full motion. Never while the desktop is locked, the screensaver runs or
   VECTOR is speaking. Screens on the same channel show the same bump.
 - **Skipping it.** Changing channel, `bromigos-live tv skip` or `live` ends it.
-- **Sound.** A bump's clip is silent. Its sting, a second or two of radio crackle, a
-  dial finding a station or a lamp's tone, plays when that screen's sound is on.
-  `sting = false` silences them.
+- **Sound.** None. A bump has no sound of its own, so the screen is quiet while it plays.
 - **Captions.** A bump's caption ("STILL LIT") is drawn by the den in the theme's
   colours, never baked into the clip.
 - **Off.** Settings › Den TV › Bumps, `bromigos scene set tv.bumps.mode off`, or
@@ -377,7 +375,6 @@ every = 20              # minutes between two bumps between items
 every_night = 12        #   ... in the night block
 tune_every = 30         # minutes between two bumps on a channel change
 max = 10                # at most this many a night (outside it, a day)
-sting = true            # a bump's sting, when its screen's sound is on
 packs = []              # only these packs, by name; empty: every pack installed
 ```
 
@@ -389,7 +386,7 @@ colons) is looked at first. A pack is a folder with a `bumps.json`:
 ```json
 {"schema": 1, "pack": "static", "title": "STATIC's bumps",
  "bumps": [{"id": "still-lit", "file": "clips/still-lit.mp4", "seconds": 6.5,
-            "roles": ["open", "between"], "caption": "STILL LIT", "sting": "stings/still-lit.ogg",
+            "roles": ["open", "between"], "caption": "STILL LIT",
             "about": "RECON's OWL keeps watch on a cliff at night"}]}
 ```
 
@@ -604,7 +601,7 @@ show a missing-title message until available.
 |---|---|
 | `tests/test_tv.py` | The schedule, the channels, the remembered state, YouTube against a stand-in for yt-dlp (`tests/fake_ytdlp.py`) and keeping videos |
 | `tests/test_tv_screens.py` | Every screen at once, `[tv.start]`, one player for two screens on a channel, bumpers, `max_playing`, the sound on one screen, `--screen`, covering and opacity, the hint's speaker, streams sized to each screen from stand-in Jellyfin and Plex servers (`tests/fake_media.py`), YouTube resolved while yt-dlp is slow and the screen is covered and uncovered, picked shows shuffled and taking turns, and the config writer keeping comments |
-| `tests/test_tv_bumps.py` | Bumps: the packs and their bad entries, the night block past midnight, its ident and sign-off once a night, the caps, `bromigos mascot off`; on a screen, the channel waiting for a bump between items, two screens sharing one, the sting, skipping, the caption, a tune bump only once it settles, none where nobody can see it, and full screen |
+| `tests/test_tv_bumps.py` | Bumps: the packs and their bad entries, the night block past midnight, its ident and sign-off once a night, the caps, `bromigos mascot off`; on a screen, the channel waiting for a bump between items, two screens sharing one, no sound of its own, skipping, the caption, a tune bump only once it settles, none where nobody can see it, and full screen |
 | `tests/offscreen_tv.py` | The den pixel for pixel as before with no media channel on, a generated test clip playing through libmpv in two themes, the hint, the poster with still motion, three screens playing at once, one channel on two screens from one player, a bumper card, and a tune that never leaves the last channel's picture. `OFF_MEASURE=20` measures the cost |
 | `../homelab/tests/test_video.py` | The Jellyfin and Plex adapters against fake servers |
 | `../desktop/tests/test_den_tv_guide.py` | The channel guide, Add channel and the show picker, drawn in a headless weston, and every control's hover hint |

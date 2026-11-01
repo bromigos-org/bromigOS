@@ -36,8 +36,8 @@ placeholder draws instead. Each name's `about` is its hover hint.
 ## The bumps
 
 `bumps/static/bumps.json` lists the bumps. Each one is a silent H.264 clip at 1248x720 and
-32 frames a second, with an optional sting: a second or two of synthesised radio sound. The
-den draws a bump's caption in the theme's colours. No clip has text painted in.
+32 frames a second, with no sound of its own. The den draws a bump's caption in the theme's
+colours. No clip has text painted in.
 [live/README.md, "Bumps"](../live/README.md#bumps) explains when they play and how to make
 your own pack.
 
@@ -68,8 +68,6 @@ model is under Apache-2.0 or MIT.
 4. **Cut.** `tools/cut.py` (ffmpeg) fades each clip in and out and holds its last frame
    briefly. It joins the crew's three shots with a quarter-second of green interference.
    `tools/host_art.py` cuts the guide's loops.
-5. **Stings.** `tools/stings.py` synthesises them in numpy: crackle, a dial finding a
-   station, a lamp's bell, a hum. It uses no samples and no model.
 
 `provenance.jsonl` has one line for each panel edit, clip and upscale: the model, its
 licence, the seed, the prompt and the time it took.

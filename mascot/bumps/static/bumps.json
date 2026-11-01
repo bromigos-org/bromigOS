@@ -13,7 +13,6 @@
     "between"
    ],
    "caption": "STILL LIT",
-   "sting": "stings/still-lit.ogg",
    "about": "RECON's OWL keeps watch on a cliff at night: the night block's ident"
   },
   {
@@ -24,7 +23,6 @@
     "between"
    ],
    "caption": "BACK IN A MOMENT",
-   "sting": "stings/spark.ogg",
    "about": "RIG's LINEMAN hangs from a cable, fixing a junction box in a shower of sparks"
   },
   {
@@ -35,7 +33,6 @@
     "tune",
     "between"
    ],
-   "sting": "stings/dial-tune.ogg",
    "about": "RIG's LINEMAN rides a power cable down a ship's corridor"
   },
   {
@@ -46,7 +43,6 @@
     "between"
    ],
    "caption": "STAY TUNED",
-   "sting": "stings/crackle-in.ogg",
    "about": "NOIR hosts the late-night broadcast from his pod"
   },
   {
@@ -57,7 +53,6 @@
     "tune",
     "between"
    ],
-   "sting": "stings/signal-in.ogg",
    "about": "STATIC's signal races down a cable into NOIR's console"
   },
   {
@@ -67,7 +62,6 @@
    "roles": [
     "between"
    ],
-   "sting": "stings/crackle-in.ogg",
    "about": "The takeover: a dormant repair robot wakes up as STATIC's LINEMAN"
   },
   {
@@ -77,7 +71,6 @@
    "roles": [
     "between"
    ],
-   "sting": "stings/dial-tune.ogg",
    "about": "The crew on the ship: OWL at the viewport, LINEMAN at a junction box, NOIR on the bridge"
   },
   {
@@ -88,7 +81,6 @@
     "close"
    ],
    "caption": "SIGNING OFF",
-   "sting": "stings/power-down.ogg",
    "about": "NOIR powers down for the night: the night block's sign-off"
   }
  ]

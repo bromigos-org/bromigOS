@@ -1,14 +1,15 @@
 """Den TV's bumps: short clips between items and on a channel change, like a network's
 interstitials, mostly in the night block (live/README.md, "Bumps").
 
-A bump is a short, silent clip (5 to 15 seconds) with an optional sting (a sound of a second
-or two) and an optional caption, which the den draws over the clip in the theme's colours
-(the clips carry no text, so a caption is translatable and readable at any size). Bumps come
+A bump is a short, silent clip (5 to 15 seconds) with an optional caption, which the den
+draws over the clip in the theme's colours (the clips carry no text, so a caption is
+translatable and readable at any size). A bump has no sound of its own: the screen is quiet
+while it plays. Bumps come
 in packs. A pack is a folder holding bumps.json:
 
     {"schema": 1, "pack": "static", "title": "STATIC's bumps",
      "bumps": [{"id": "still-lit", "file": "clips/still-lit.mp4", "seconds": 6.5,
-                "roles": ["open", "between"], "caption": "STILL LIT", "sting": "stings/still-lit.ogg",
+                "roles": ["open", "between"], "caption": "STILL LIT",
                 "about": "RECON's OWL keeps watch on a cliff at night"}]}
 
 Paths are relative to bumps.json. Roles say when a bump may play:
@@ -30,7 +31,6 @@ The settings, [tv.bumps] in ~/.config/bromigos-live/config.toml:
     every_night = 12        #   ... in the night block
     tune_every = 30         # minutes between two bumps on a channel change
     max = 10                # at most this many a night (outside it, a day)
-    sting = true            # a bump's sting, when its screen's sound is on
     packs = []              # only these packs (by name); empty: every pack installed
 
 `bromigos mascot off` turns them off too. A bump never plays twice in a row, nor one of the
@@ -54,7 +54,7 @@ import time
 ROLES = ("between", "tune", "open", "close")
 MODES = ("night", "always", "off")
 DEFAULTS = {"mode": "night", "night": "22:00-04:00", "every": 20, "every_night": 12, "tune_every": 30,
-            "max": 10, "sting": True, "packs": []}
+            "max": 10, "packs": []}
 RECENT = 3                    # none of the last few again
 TUNE_MAX = 6.0                # seconds: a tune bump is short (the channel is live underneath)
 CLOSE_WINDOW = 90 * 60        # the sign-off: the first boundary this soon after the night block ends
@@ -64,7 +64,7 @@ STATE = os.path.join(STATE_DIR, "tv-bumps.json")
 
 
 class Bump(dict):
-    """id ("pack/id"), path, seconds, roles, caption, sting (a path or None), about, pack."""
+    """id ("pack/id"), path, seconds, roles, caption, about, pack."""
     __getattr__ = dict.get
 
 
@@ -108,11 +108,7 @@ def _read_pack(folder):
         if not 1.0 <= secs <= 30.0:
             continue
         roles = [r for r in (b.get("roles") or ["between"]) if r in ROLES]
-        sting = None
-        if b.get("sting"):
-            s = os.path.normpath(os.path.join(folder, str(b["sting"])))
-            sting = s if s.startswith(os.path.normpath(folder) + os.sep) and os.path.isfile(s) else None
-        out.append(Bump(id=f"{name}/{b['id']}", path=clip, seconds=secs, roles=roles, sting=sting,
+        out.append(Bump(id=f"{name}/{b['id']}", path=clip, seconds=secs, roles=roles,
                         caption=str(b.get("caption") or "")[:40], about=str(b.get("about") or ""), pack=name))
     return Pack(name, folder, str(doc.get("title") or name), out)
 
@@ -153,8 +149,6 @@ def settings(cfg):
             out[k] = v if v >= 0 else out[k]
         except (KeyError, TypeError, ValueError):
             pass
-    if isinstance(raw.get("sting"), bool):
-        out["sting"] = raw["sting"]
     if isinstance(raw.get("packs"), list):
         out["packs"] = [str(p) for p in raw["packs"]]
     return out
@@ -309,7 +303,7 @@ def status(cfg, t=None, env=None):
     st = load_state()
     return {"mode": "off" if mascot_off(env) else s["mode"], "mascot_off": mascot_off(env), "night": s["night"],
             "in_night": bool(night(t, s["night"])), "every": s["every"], "every_night": s["every_night"],
-            "tune_every": s["tune_every"], "max": s["max"], "sting": s["sting"],
+            "tune_every": s["tune_every"], "max": s["max"],
             "tonight": (st.get("count") or {}).get(count_key(t, cfg), 0),
             "packs": [{"name": p.name, "title": p.title, "folder": p.folder, "bumps": len(p.bumps),
                        "on": not s["packs"] or p.name in s["packs"]} for p in ps]}

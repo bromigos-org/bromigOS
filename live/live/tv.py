@@ -659,8 +659,7 @@ class TV(Controls, Bumps):
             return self._resolved_stream(it.get("url"), height, title, None)
         if ch["kind"] == "files":
             return {"url": it.get("url"), "headers": {}, "ytdl_format": None, "title": title, "start": slot.offset,
-                    "web": None, "server": "Files",
-                    "audio": self.bump_audio(screen) if screen and it.get("kind") == "bump" else None}
+                    "web": None, "server": "Files"}
         if ch["kind"] == "youtube" or it.get("server") == "youtube":
             import bromigos_youtube as Y
             path = Y.kept(ch.get("keep"), it.get("id")) if ch.get("keep") else None
