@@ -1,5 +1,5 @@
 """GAME SERVERS: the homelab's game servers, who's on them and whether they're up
-(bromigos-homelab's games capability: a `pelican` source for a Pelican or Pterodactyl
+(bromigos-homelab's games capability: a `pelican` source for a Pelican
 panel, or a `minecraft` source that asks a server for its status as any client would).
 
 A panel generator (widgets/plugins.py): it offers the "games" panel only while something

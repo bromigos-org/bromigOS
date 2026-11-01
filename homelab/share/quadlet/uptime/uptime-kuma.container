@@ -1,0 +1,15 @@
+[Unit]
+Description=Uptime (Uptime Kuma)
+
+[Container]
+Image={{image:kuma}}
+ContainerName=uptime-kuma
+Network=bromigos-lab.network
+PublishPort=3001:3001
+Volume={{data}}/data:/app/data:Z
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

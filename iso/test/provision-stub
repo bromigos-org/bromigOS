@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""A stand-in for the lab provisioning engine (`bromigos lab provision --local`, the
+lab-provision-local work) in the QEMU runs, until it lands: it reads the install's answers
+([server] provision, setup, store), prints the plan the way the engine's contract says (--plan
+--json), and "applies" it (--apply --json: ::stage PCT words, ::item ID state, ::error words)
+by recording each item in /var/lib/bromigos/provision/applied.json, pulling nothing.
+
+  provision-stub lab provision --local --from-answers FILE --plan|--apply --json
+  provision-stub lab provision --check ITEM --json         (stdin: the item's values)
+  provision-stub lab provision --store-secrets FILE --json
+"""
+import json
+import os
+import sys
+import time
+import tomllib
+
+CAT = "/usr/local/share/bromigos-iso/server/provision-catalogue.toml"
+
+
+def main(argv):
+    if "--check" in argv:
+        print(json.dumps({"ok": None, "words": "The stand-in engine doesn't connect anywhere."}))
+        return 0
+    if "--store-secrets" in argv:
+        print(json.dumps({"ok": True, "stored": 0}))
+        return 0
+    answers = argv[argv.index("--from-answers") + 1]
+    with open(answers, "rb") as f:
+        doc = tomllib.load(f)
+    srv = doc.get("server") or {}
+    cat = {}
+    for p in (CAT, os.environ.get("BROMIGOS_PROVISION_CATALOGUE", "")):
+        if p and os.path.exists(p):
+            with open(p, "rb") as f:
+                cat = {x["id"]: x for x in tomllib.load(f).get("item", [])}
+            break
+    items = [dict(id=i, name=cat.get(i, {}).get("name", i), ports=cat.get(i, {}).get("ports", []),
+                  size_text=cat.get(i, {}).get("size_text", ""), internet=cat.get(i, {}).get("internet", False))
+             for i in srv.get("provision", [])]
+    if "--plan" in argv:
+        print(json.dumps({"items": items, "download_text": "nothing (the stand-in)", "store": (srv.get("store") or {}).get("kind")}))
+        return 0
+    os.makedirs("/var/lib/bromigos/provision", exist_ok=True)
+    done = []
+    for k, it in enumerate(items, 1):
+        print(f"::stage {int(100 * (k - 1) / max(1, len(items)))} Setting up {it['name']}", flush=True)
+        print(f"::item {it['id']} running", flush=True)
+        time.sleep(0.1)
+        state = "waiting-for-network" if it["internet"] and os.environ.get("STUB_OFFLINE") else "done"
+        print(f"::item {it['id']} {state}", flush=True)
+        done.append({"id": it["id"], "state": state})
+    with open("/var/lib/bromigos/provision/applied.json", "w") as f:
+        json.dump(done, f)
+    print("::stage 100 Everything in the plan is set up", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

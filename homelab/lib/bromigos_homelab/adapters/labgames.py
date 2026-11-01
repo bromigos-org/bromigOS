@@ -1,4 +1,4 @@
-"""Game servers: Pelican (and Pterodactyl, its ancestor), and Minecraft servers by the status any
+"""Game servers: a Pelican panel, and Minecraft servers by the status any
 client sees (below). Capability: games. Read-only.
 
     [[source]]

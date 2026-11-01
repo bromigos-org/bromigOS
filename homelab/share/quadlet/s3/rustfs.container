@@ -1,0 +1,19 @@
+[Unit]
+Description=S3 bucket server (RustFS)
+
+[Container]
+Image={{image:rustfs}}
+ContainerName=rustfs
+Network=bromigos-lab.network
+PublishPort=9000:9000
+PublishPort=9001:9001
+Volume={{data}}/data:/data:Z
+Environment=RUSTFS_CONSOLE_ENABLE=true
+Secret={{secret:access-key}},type=env,target=RUSTFS_ACCESS_KEY
+Secret={{secret:secret-key}},type=env,target=RUSTFS_SECRET_KEY
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

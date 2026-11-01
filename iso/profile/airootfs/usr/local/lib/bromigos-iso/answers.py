@@ -220,8 +220,10 @@ def main(argv=None):
     ap.add_argument("--disk-bytes", type=int, default=None, help=argparse.SUPPRESS)
     ap.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    answers_path = a.answers
     if a.answers:
-        a = ap.parse_args(from_answers(a.answers) + ["--out", a.out, "--template", a.template, "--firmware", a.firmware])
+        a = ap.parse_args(from_answers(a.answers) + ["--out", a.out, "--template", a.template, "--firmware", a.firmware]
+                          + (["--disk-bytes", str(a.disk_bytes)] if a.disk_bytes else []))
     if not (a.disk and a.user and a.password):
         ap.error("--disk, --user and --password (or --answers)")
 
@@ -287,6 +289,15 @@ def main(argv=None):
             cfg["services"] = sorted(set(cfg.get("services", [])) | {"espeakup"})
     if a.console_font and (a.online or in_store("terminus-font")):
         cfg["packages"] = sorted(set(cfg["packages"]) | {"terminus-font"})
+    reach = json.loads(_read(answers_path)).get("reach") if answers_path else None
+    if reach:                     # Reach it from anywhere: its choice's packages (reach.CHOICES), from the medium
+        from bromigos_installer import server as _srv
+        cfg["packages"] = sorted(set(cfg.get("packages", [])) | {p for p in _srv.reach_packages(reach) if a.online or in_store(p)})
+    if answers_path and json.loads(_read(answers_path)).get("server"):
+        # bromigOS Server: linux-lts first and linux as the spare, the role's packages that are on the
+        # medium (the rest: server_apply.py, from the network or at the first update)
+        from bromigos_installer import server_apply
+        server_apply.archinstall(cfg, json.loads(_read(answers_path))["server"], in_store, a.online)
     if a.ssh:
         cfg["services"] = sorted(set(cfg.get("services", [])) | {"sshd"})
         cfg["packages"] = sorted(set(cfg.get("packages", [])) | {"openssh"})

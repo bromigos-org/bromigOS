@@ -13,7 +13,10 @@ StartLimitBurst=4
 
 [Service]
 Type=exec
-ExecCondition=/usr/bin/bromigos session
+# only while a Hyprland session runs (bromigos session; exit 1 without one): after the
+# session ends a restart is skipped, not looped. At login it waits for the session to be
+# found (Hyprland starts the live layer before it writes its instance's lock file)
+ExecCondition=/usr/bin/bromigos-live ready
 # the supervisor in the foreground: the daemon, restarted on a crash (live/bin/bromigos-live)
 ExecStart=/usr/bin/bromigos-live supervise
 # the still wallpaper back under where the live layer was

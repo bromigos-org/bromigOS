@@ -2,7 +2,9 @@
 
 The voice guide is VECTOR reading his line aloud on each step of the installers and the
 welcome tours. VECTOR is bromigOS's AI assistant, with a voice. Each step already shows a
-short line from him beside his orb. The voice guide speaks that same line, in his designed
+short line from him beside his orb, always whole: when a long list of steps leaves the text
+installer's rail too little room, his orb gets smaller, then goes, then the line moves over
+the page, under the step's title bar. The voice guide speaks that same line, in his designed
 voice, from a small recorded clip. Nothing is generated while you install, so it needs no
 network, no model and no graphics card.
 

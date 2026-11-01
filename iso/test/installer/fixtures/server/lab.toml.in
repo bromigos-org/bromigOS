@@ -1,0 +1,18 @@
+# a Lab node, unattended (iso/test.sh answer-install; scenario-server.sh fills in the key)
+[install]
+edition = "server"
+disk = "/dev/vda"
+mode = "erase"
+user = "tester"
+password = "tester"
+hostname = "lab-node-1"
+ssh_keys = ["@KEY@"]
+countdown = 3
+
+[server]
+role = "lab"
+interface = "auto"
+method = "dhcp"
+unlock = "passphrase"
+update_mode = "auto"
+update_window = "03:00-05:00"

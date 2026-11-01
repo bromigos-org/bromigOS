@@ -59,6 +59,10 @@ STEPS = [
     ("done", "Done", "bromigOS is installed",
      "Restart to start using it."),
 ]
+# bromigOS Server's own steps (server.py: Role, Network, Access, Storage, Encryption, Updates,
+# Services); steps_for puts them in place
+from . import server as _server  # noqa: E402
+STEPS += _server.STEPS
 STEP = {s[0]: s for s in STEPS}
 
 
@@ -82,8 +86,10 @@ def steps_for(answers):
             continue                    # a reinstall keeps the disk's encryption as it is
         if s[0] == "ssh" and desktop:
             continue
+        if s[0] in _server.STEP_IDS:
+            continue
         out.append(s[0])
-    return out
+    return _server.steps_for(out, answers)
 
 
 # ── editions ────────────────────────────────────────────────────────────────────────────
@@ -658,6 +664,7 @@ def answers_toml(a, secrets=False):
             lines.append(f"{k} = {v}")
         else:
             lines.append(f'{k} = "{str(v)}"'.replace("\\", "\\\\"))
+    lines += _server.answers_toml_lines(a)          # bromigOS Server's [server] table
     return "\n".join(lines) + "\n"
 
 
@@ -704,6 +711,8 @@ def read_answer_file(path):
     for k, v in got.items():
         if k in ANSWER_KEYS or k in ("countdown", "failing_ok", "bitlocker_saved"):
             a[k] = v
+        elif k == "server" or k.startswith(("server.", "reach")):
+            continue                        # bromigOS Server's table, and Reach it from anywhere: below
         else:
             problems.append(f"\"{k}\" isn't an answer the installer knows; it's ignored.")
     a["countdown"] = int(got.get("countdown", 10))
@@ -715,12 +724,17 @@ def read_answer_file(path):
         problems.append("disk must name the disk, for example disk = \"/dev/nvme0n1\".")
     if not a.get("hostname"):
         a["hostname"] = suggest_hostname(a.get("user"), a.get("edition", "desktop"))
-    for check, key in ((check_username, "user"), (check_hostname, "hostname")):
+    for check, key in ((_server.check_admin if _server.is_server(a) else check_username, "user"), (check_hostname, "hostname")):
         p = check(a.get(key) or "")
         if p:
             problems.append(f"{key}: {p}")
     if a.get("keyboard") not in KEYBOARD:
         problems.append(f"keyboard \"{a.get('keyboard')}\" isn't one of: " + ", ".join(KEYBOARD))
+    # bromigOS Server's [server] table (or server.KEY lines in the YAML form): server.py
+    _server.read_reach(got, a, problems)
+    sdoc = dict(doc.get("server") or got.get("server") or {}, **{k[7:]: v for k, v in got.items() if k.startswith("server.")})
+    if sdoc or _server.is_server(a):
+        _server.from_answer_file(sdoc or {"role": "plain"}, a, problems, got)
     return a, problems
 
 
@@ -810,6 +824,8 @@ def defaults():
 
 def backend_answers(a, disk):
     """What bromigos-iso-install --answers reads: the choices, resolved."""
+    if _server.is_server(a):
+        _server.apply_access(a)                 # a server's Access step, in the keys below
     kb = KEYBOARD.get(a["keyboard"], KEYBOARDS[0])
     ed = edition(a.get("edition", "desktop"))
     opt = (disk or {}).get("options", {}).get("alongside", {}) if a.get("mode") == "alongside" else {}
@@ -837,11 +853,16 @@ def backend_answers(a, disk):
     if a["mode"] == "alongside" and opt.get("mode") == "shrink":
         out["shrink"] = {"partition": opt["partition"], "fs": opt["fs"], "who": opt.get("who"),
                          "bromigos_bytes": int(a.get("bromigos_bytes") or opt["default"])}
+    out["reach"] = _server.reach_answer(a)               # Reach it from anywhere (reach.stage, after the copy)
+    if _server.is_server(a):
+        out["server"] = _server.backend_doc(a, disk)     # bromigOS Server's plan (server_apply.py)
     return out
 
 
 def summary(a, disk):
     """[(label, value)] in plain words, and the one warning line (or None)."""
+    if _server.is_server(a):
+        return _server.summary(a, disk)          # bromigOS Server's Ready to install
     from .disks import plain_size
     ed = edition(a.get("edition", "desktop"))
     kb = KEYBOARD.get(a["keyboard"], KEYBOARDS[0])

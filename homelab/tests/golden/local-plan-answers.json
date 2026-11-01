@@ -1,0 +1,382 @@
+{
+ "auto_added": [
+  "media-library",
+  "prowlarr"
+ ],
+ "budget": {
+  "cpu": 9.0,
+  "disk_gb": 37.0,
+  "fits": true,
+  "gpu_vram_gb": 0.0,
+  "notes": [],
+  "ram_gb": 6.5
+ },
+ "format": 1,
+ "hardware": {
+  "cpu": 8,
+  "disk_gb": 900,
+  "gpu": false,
+  "gpu_name": "",
+  "gpu_vram_gb": 0,
+  "ram_gb": 32
+ },
+ "items": [
+  {
+   "auto_added": false,
+   "downloads": [
+    "package restic"
+   ],
+   "group": "lab-core",
+   "id": "backups",
+   "install": {
+    "kind": "step",
+    "step": "backups"
+   },
+   "internet": true,
+   "line": "Nightly encrypted backups of this server's apps and settings.",
+   "name": "Backups",
+   "notes": [],
+   "ports": [],
+   "requires": {
+    "cpu": 1,
+    "disk_gb": 1,
+    "ram_gb": 0.5
+   },
+   "services": [
+    "bromigos-lab-backup.timer"
+   ],
+   "settings": {
+    "repository": "/srv/backups/restic"
+   },
+   "size_text": "about 11 MB download"
+  },
+  {
+   "auto_added": false,
+   "downloads": [
+    "package samba"
+   ],
+   "group": "storage",
+   "id": "smb-shares",
+   "install": {
+    "kind": "step",
+    "step": "smb"
+   },
+   "internet": true,
+   "line": "Folders that Windows, Mac and Linux see as a network drive.",
+   "name": "Windows and Mac shares (SMB)",
+   "notes": [],
+   "ports": [
+    445
+   ],
+   "requires": {
+    "cpu": 1,
+    "disk_gb": 1,
+    "ram_gb": 0.5
+   },
+   "services": [
+    "smb.service"
+   ],
+   "size_text": "about 9 MB download"
+  },
+  {
+   "auto_added": true,
+   "downloads": [],
+   "group": "media",
+   "id": "media-library",
+   "install": {
+    "kind": "step",
+    "step": "media-library"
+   },
+   "internet": false,
+   "line": "Where your films, shows, music and books live.",
+   "name": "Media library",
+   "notes": [],
+   "ports": [],
+   "requires": {
+    "disk_gb": 1
+   },
+   "services": [],
+   "settings": {
+    "dual_audio": true,
+    "language": "English",
+    "path": "/srv/media",
+    "share": "",
+    "smb_password": {
+     "secret": "in the secret store"
+    },
+    "smb_user": "",
+    "where": "pool"
+   },
+   "size_text": "nothing to download"
+  },
+  {
+   "auto_added": false,
+   "downloads": [
+    "image ghcr.io/linuxserver/jellyfin:12.4ubu2604-ls57"
+   ],
+   "group": "media",
+   "id": "jellyfin",
+   "install": {
+    "images": {
+     "jellyfin": "ghcr.io/linuxserver/jellyfin:12.4ubu2604-ls57@sha256:3894d9eae88418d3cf9ac6349392d2c4dad818365a59565d19edc38098897044"
+    },
+    "kind": "quadlet",
+    "template": "jellyfin"
+   },
+   "internet": true,
+   "line": "Your films, shows and music, streamed to any screen. Open, no account.",
+   "name": "Jellyfin",
+   "notes": [],
+   "ports": [
+    8096
+   ],
+   "requires": {
+    "cpu": 2,
+    "disk_gb": 10,
+    "ram_gb": 2
+   },
+   "services": [
+    "jellyfin.service"
+   ],
+   "size_text": "about 900 MB image"
+  },
+  {
+   "auto_added": false,
+   "downloads": [
+    "image ghcr.io/seerr-team/seerr:v3.5.1"
+   ],
+   "group": "media",
+   "id": "seerr",
+   "install": {
+    "images": {
+     "seerr": "ghcr.io/seerr-team/seerr:v3.5.1@sha256:d8fab675b55ad293ded98fd71efcfd46054cbad9746534ae1cc4794a88c0b3be"
+    },
+    "kind": "quadlet",
+    "template": "seerr"
+   },
+   "internet": true,
+   "line": "The household asks for films and shows; the library automation finds them.",
+   "name": "Requests (Seerr)",
+   "notes": [],
+   "ports": [
+    5055
+   ],
+   "requires": {
+    "cpu": 1,
+    "disk_gb": 1,
+    "ram_gb": 0.5
+   },
+   "services": [
+    "seerr.service"
+   ],
+   "size_text": "about 400 MB image"
+  },
+  {
+   "auto_added": true,
+   "downloads": [
+    "image ghcr.io/linuxserver/prowlarr:2.5.2.5491-ls156"
+   ],
+   "group": "media",
+   "id": "prowlarr",
+   "install": {
+    "images": {
+     "prowlarr": "ghcr.io/linuxserver/prowlarr:2.5.2.5491-ls156@sha256:1295cff29d10b486c0d8324d1559a552140a5932bf8b3d87e398654414f63f92"
+    },
+    "kind": "quadlet",
+    "template": "prowlarr"
+   },
+   "internet": true,
+   "line": "One place to add the sources you have access to, shared by Sonarr, Radarr and Lidarr.",
+   "name": "Prowlarr (sources)",
+   "notes": [],
+   "ports": [
+    9696
+   ],
+   "requires": {
+    "cpu": 1,
+    "disk_gb": 1,
+    "ram_gb": 0.25
+   },
+   "services": [
+    "prowlarr.service"
+   ],
+   "settings": {},
+   "size_text": "about 200 MB image"
+  },
+  {
+   "auto_added": false,
+   "downloads": [
+    "image ghcr.io/linuxserver/sonarr:4.0.19.2979-ls321"
+   ],
+   "group": "media",
+   "id": "sonarr",
+   "install": {
+    "images": {
+     "sonarr": "ghcr.io/linuxserver/sonarr:4.0.19.2979-ls321@sha256:373159ba768e23a3a1c497d9f2b936addf8fd5b1fdce7dd6a14080ac928bfda0"
+    },
+    "kind": "quadlet",
+    "template": "sonarr"
+   },
+   "internet": true,
+   "line": "Keeps track of your shows and files new episodes into the library.",
+   "name": "Sonarr (shows)",
+   "notes": [],
+   "ports": [
+    8989
+   ],
+   "requires": {
+    "cpu": 1,
+    "disk_gb": 1,
+    "ram_gb": 0.5
+   },
+   "services": [
+    "sonarr.service"
+   ],
+   "size_text": "about 200 MB image"
+  },
+  {
+   "auto_added": false,
+   "downloads": [
+    "image ghcr.io/linuxserver/radarr:6.3.0.10514-ls313"
+   ],
+   "group": "media",
+   "id": "radarr",
+   "install": {
+    "images": {
+     "radarr": "ghcr.io/linuxserver/radarr:6.3.0.10514-ls313@sha256:a45b5ab0f850f39edb4cc9c95bbd967b52ddc3d4574a4dfb45561177db6c88f4"
+    },
+    "kind": "quadlet",
+    "template": "radarr"
+   },
+   "internet": true,
+   "line": "Keeps track of your films and files them into the library.",
+   "name": "Radarr (films)",
+   "notes": [],
+   "ports": [
+    7878
+   ],
+   "requires": {
+    "cpu": 1,
+    "disk_gb": 1,
+    "ram_gb": 0.5
+   },
+   "services": [
+    "radarr.service"
+   ],
+   "size_text": "about 200 MB image"
+  },
+  {
+   "auto_added": false,
+   "downloads": [
+    "image ghcr.io/linuxserver/qbittorrent:5.2.3_v2.0.14-ls471"
+   ],
+   "group": "media",
+   "id": "qbittorrent",
+   "install": {
+    "images": {
+     "qbittorrent": "ghcr.io/linuxserver/qbittorrent:5.2.3_v2.0.14-ls471@sha256:6816d2b144b1eb97665f886e41e18a14d026ba78c9d0953fc68a1211ea819433"
+    },
+    "kind": "quadlet",
+    "template": "qbittorrent"
+   },
+   "internet": true,
+   "line": "A torrent client, for media you own or have rights to.",
+   "name": "qBittorrent (torrent downloads)",
+   "notes": [],
+   "ports": [
+    8081,
+    6881
+   ],
+   "requires": {
+    "cpu": 1,
+    "disk_gb": 20,
+    "ram_gb": 0.5
+   },
+   "services": [
+    "qbittorrent.service"
+   ],
+   "size_text": "about 150 MB image"
+  },
+  {
+   "auto_added": false,
+   "downloads": [
+    "image docker.io/qmcgaw/gluetun:v3.41.3"
+   ],
+   "group": "media",
+   "id": "gluetun",
+   "install": {
+    "images": {
+     "gluetun": "docker.io/qmcgaw/gluetun:v3.41.3@sha256:fa19cc76b2af13d57a8d3dc3066f2ada061b1c761b8aecf989b3877c0486e027"
+    },
+    "kind": "quadlet",
+    "template": "gluetun"
+   },
+   "internet": true,
+   "line": "Sends the downloaders' traffic through your VPN provider, and only through it.",
+   "name": "VPN for downloads (Gluetun)",
+   "notes": [],
+   "ports": [],
+   "requires": {
+    "ram_gb": 0.25
+   },
+   "services": [
+    "gluetun.service"
+   ],
+   "settings": {
+    "country": "",
+    "kill_switch": true,
+    "password": {
+     "secret": "in the secret store"
+    },
+    "provider": "pia",
+    "username": "p1234567",
+    "wireguard_address": "",
+    "wireguard_key": {
+     "secret": "in the secret store"
+    }
+   },
+   "size_text": "about 40 MB image"
+  }
+ ],
+ "lab": "none",
+ "lab_join": {
+  "bundle": false,
+  "pair": false
+ },
+ "models": [],
+ "needs_internet": [
+  "backups",
+  "smb-shares",
+  "jellyfin",
+  "seerr",
+  "prowlarr",
+  "sonarr",
+  "radarr",
+  "qbittorrent",
+  "gluetun"
+ ],
+ "offline": [
+  "media-library"
+ ],
+ "problems": [],
+ "roles": [
+  "media",
+  "storage"
+ ],
+ "secret_refs": {
+  "gluetun": {
+   "password": "local:gluetun/password"
+  }
+ },
+ "settings": {
+  "gluetun": {
+   "provider": "pia",
+   "username": "p1234567"
+  },
+  "media-library": {
+   "dual_audio": true,
+   "language": "English"
+  }
+ },
+ "target": "local"
+}

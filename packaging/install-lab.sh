@@ -11,6 +11,12 @@ install -Dm0755 -t "$dest/usr/lib/bromigos/bin/" "$root"/homelab/bin/bromigos-{l
 install -d "$dest/usr/bin"
 ln -s ../lib/bromigos/bin/bromigos-lab "$dest/usr/bin/bromigos-lab"
 install -Dm0644 -t "$dest/usr/lib/systemd/user/" "$root"/homelab/systemd/*
+install -Dm0644 "$root/homelab/share/provision-catalogue.toml" "$dest/usr/share/bromigos/lab/provision-catalogue.toml"
+for tpl in "$root"/homelab/share/quadlet/*/; do
+  name=${tpl%/}; name=${name##*/}
+  install -Dm0644 -t "$dest/usr/share/bromigos/lab/quadlet/$name/" "$tpl"*
+done
+install -Dm0644 "$root/homelab/share/quadlet/README" "$dest/usr/share/bromigos/lab/quadlet/README"
 for file in "$root"/homelab/share/lab/*.toml; do
   [[ ${file##*/} == models.toml ]] || install -Dm0644 -t "$dest/usr/share/bromigos/homelab/lab/" "$file"
 done
@@ -21,6 +27,6 @@ trap 'rm -rf "$key_home"' EXIT
 GNUPGHOME="$key_home" gpg --batch --yes --dearmor --output "$dest/usr/share/bromigos-lab/bromigos.gpg" "$root/packaging/keys/bromigos.asc"
 chmod 0644 "$dest/usr/share/bromigos-lab/bromigos.gpg"
 install -Dm0644 "$root/homelab/share/homelab.toml" "$dest/usr/share/bromigos/default/homelab.toml"
-install -Dm0644 -t "$dest/usr/share/doc/bromigos-lab/" "$root"/docs/{homelab,lab,lab-models,lab-provision,lab-infrastructure,lab-network}.md
+install -Dm0644 -t "$dest/usr/share/doc/bromigos-lab/" "$root"/docs/{homelab,lab,lab-models,lab-provision,lab-infrastructure,lab-network,lab-secrets}.md
 install -Dm0644 -t "$dest/usr/share/licenses/bromigos-lab/" "$root"/LICENSE-{MIT,APACHE}
 python -m compileall -q -o 0 -o 1 -s "$dest" -p / "$lib"

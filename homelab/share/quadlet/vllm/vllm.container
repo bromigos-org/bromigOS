@@ -1,0 +1,19 @@
+[Unit]
+Description=Model serving (vLLM)
+
+[Container]
+Image={{image:vllm}}
+ContainerName=vllm
+Network=bromigos-lab.network
+PublishPort=8000:8000
+AddDevice=nvidia.com/gpu=all
+Volume={{data}}/cache:/root/.cache/huggingface:Z
+Exec=--model {{setting:model}} --port 8000
+ShmSize=8g
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

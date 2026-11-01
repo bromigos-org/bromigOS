@@ -36,6 +36,20 @@ talking hologram is FLARE.
   a signal). Never decoration.
 - **Hero**: the one FLARE element a screen may have.
 
+### bromigOS Server's screens
+
+The Server path in the installers and the server's first-start tour use the same blocks
+around one recurring hologram: **the rack**, the vector gallery's own render, turning on its
+Emitter (`desktop/art/server-rack.png`, 24 frames; `lib/bromigos_rack.py`, the same frames as
+braille for the terminal; both made by `tools/installer-art/make.py rack`). Each step's hero
+stands on a holo-table: Glass with the table's glow, a floor grid drifting toward you, the
+Scanline passing down and lit corner brackets. The rack is this server in every picture: on
+the network, with the way in seated on its front, taking its roles (each a module that lights
+with a Spark), and while installing, a Sweep rises up it to the height done. The cards are
+hologram tiles (a Scanline texture, the Emitter's light from the top). In the terminal the
+rack turns beside each step's picture, lit by brightness with a Sweep row; the Linux console
+and ASCII get a drawn rack with the same Sweep, and reduced motion holds one frame.
+
 ## Rules
 
 1. **Readable first.** Plain labels and obvious controls; DRIFTGLASS is

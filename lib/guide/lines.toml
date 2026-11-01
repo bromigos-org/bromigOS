@@ -116,6 +116,78 @@ where = "the text installer: encryption"
 text = "How you'll reach this server from your other computers."
 where = "both installers: SSH (bromigOS Server)"
 
+["installer.role"]
+text = "Pick its jobs: one, or several together."
+where = "both installers: its roles (bromigOS Server)"
+
+["installer.role.short"]
+text = "Pick one job, or several."
+where = "the text installer: its roles (bromigOS Server)"
+
+["installer.secrets"]
+text = "Keys and passwords go in a vault, never a file."
+where = "both installers: where its keys and passwords live (bromigOS Server)"
+
+["installer.secrets.short"]
+text = "Secrets go in a vault, never a file."
+where = "the text installer: where its keys and passwords live (bromigOS Server)"
+
+["installer.network"]
+text = "Here's where your other computers will find it."
+where = "both installers: its network (bromigOS Server)"
+
+["installer.network.short"]
+text = "Where your computers will find it."
+where = "the text installer: its network (bromigOS Server)"
+
+["installer.access"]
+text = "Keys only. Nobody can guess a key."
+where = "both installers: who can sign in (bromigOS Server)"
+
+["installer.access.short"]
+text = "Keys only. Nobody guesses a key."
+where = "the text installer: who can sign in (bromigOS Server)"
+
+["installer.reach"]
+text = "From anywhere, but only the ways you choose."
+where = "both installers: reach it from anywhere (bromigOS Server)"
+
+["installer.reach.short"]
+text = "From anywhere, only your way."
+where = "the text installer: reach it from anywhere (bromigOS Server)"
+
+["installer.storage"]
+text = "Disks for your data, kept apart from the system."
+where = "both installers: its data disks (bromigOS Server)"
+
+["installer.storage.short"]
+text = "Disks for your data, apart from the system."
+where = "the text installer: its data disks (bromigOS Server)"
+
+["installer.unlock"]
+text = "Locked disks, and how they open after a restart."
+where = "both installers: its disk encryption (bromigOS Server)"
+
+["installer.unlock.short"]
+text = "How the disk opens after a restart."
+where = "the text installer: its disk encryption (bromigOS Server)"
+
+["installer.updates"]
+text = "It updates at night and checks itself after."
+where = "both installers: its updates (bromigOS Server)"
+
+["installer.updates.short"]
+text = "At night, checked after, undone if bad."
+where = "the text installer: its updates (bromigOS Server)"
+
+["installer.services"]
+text = "Your roles picked some. Pick what else it runs."
+where = "both installers: what it runs (bromigOS Server)"
+
+["installer.services.short"]
+text = "Roles picked some. Pick the rest."
+where = "the text installer: what it runs (bromigOS Server)"
+
 ["installer.summary"]
 text = "Check it over. Nothing on the disk changes until you press Install."
 where = "the graphical installer: the summary"
@@ -207,6 +279,10 @@ where = "bromigos welcome-console: where VECTOR thinks"
 ["server-tour.lab"]
 text = "Join your lab and I can use it."
 where = "bromigos welcome-console: the lab"
+
+["server-tour.provision"]
+text = "Here's the plan. Check it, then Apply."
+where = "bromigos welcome-console: what this server runs (the lab engine's plan, then Apply)"
 
 ["server-tour.phone"]
 text = "Scan it with BRODEC and I'm on your phone."

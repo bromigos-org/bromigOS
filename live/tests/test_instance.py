@@ -291,6 +291,44 @@ class UnitModeTest(unittest.TestCase):
         self.assertEqual(len(self.s.wait_daemons(1)), 1)
         self.assertFalse([c for c in self.logged() if "start" in c or "stop" in c], self.logged())
 
+    def ready(self, found_at, socket_there=True):
+        """`bromigos-live ready`, the unit's ExecCondition, with a stand-in `bromigos session`
+        that finds the session from its FOUND_AT-th call on (0: never)."""
+        import socket
+        bins = os.path.join(self.s.root, "fakebin")
+        count = os.path.join(self.s.root, "session-calls")
+        with open(os.path.join(bins, "bromigos"), "w") as f:
+            f.write('#!/bin/sh\nn=$(( $(cat "%s" 2>/dev/null || echo 0) + 1 )); echo $n > "%s"\n'
+                    '[ "$1" = session ] && [ %d -gt 0 ] && [ $n -ge %d ]\n' % (count, count, found_at, found_at))
+        os.chmod(os.path.join(bins, "bromigos"), 0o755)
+        if socket_there:
+            sock = socket.socket(socket.AF_UNIX)
+            sock.bind(os.path.join(self.s.run_dir, "wayland-1"))
+            self.addCleanup(sock.close)
+        r = self.s.live("ready", env=dict(self.env, WAYLAND_DISPLAY="wayland-1", BROMIGOS_SESSION_WAIT="2"))
+        with open(count) as f:
+            return r, int(f.read())
+
+    def test_ready_waits_for_the_session_at_login(self):
+        # Hyprland starts the live layer before it writes its instance's lock file: the
+        # condition waits while the session's socket is there, instead of skipping the unit
+        r, calls = self.ready(found_at=4)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(calls, 4)
+        self.assertIn("came up after 0.75 s", r.stderr)
+        self.assertEqual(daemons(self.s.root), [], "ready started a daemon")
+
+    def test_ready_skips_without_a_session(self):
+        r, calls = self.ready(found_at=0, socket_there=False)
+        self.assertEqual((r.returncode, calls), (1, 1))      # the session's gone: at once
+        r, calls = self.ready(found_at=0)
+        self.assertEqual(r.returncode, 1)                    # it never came: after the wait
+        self.assertIn("after 2 s", r.stderr)
+
+    def test_the_unit_waits_for_the_session(self):
+        with open(os.path.join(LIVE, "systemd", "bromigos-live.service")) as f:
+            self.assertIn("\nExecCondition=/usr/bin/bromigos-live ready\n", f.read())
+
     def test_supervise_runs_in_the_foreground_and_stops_on_sigterm(self):
         e = dict(self.s.env, **self.env)
         p = subprocess.Popen([os.path.join(self.s.root, "bin", "bromigos-live"), "supervise"], env=e,

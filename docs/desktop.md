@@ -247,7 +247,10 @@ The bar and the live layer each run as a systemd user service: `bromigos-bar.ser
 
 Both end with the session: Hyprland stops `graphical-session.target` when it exits, and
 they're part of it. Each one starts only while a Hyprland session runs (`ExecCondition`:
-`bromigos session`), so a restart after the session has gone is skipped, not looped.
+`bromigos-bar ready` and `bromigos-live ready`, which ask `bromigos session`), so a restart
+after the session has gone is skipped, not looped. At login, Hyprland starts them before it
+has written its instance's lock file, which `bromigos session` reads. So while the session's
+Wayland socket is there, `ready` waits for the session to be found, up to 20 seconds.
 
 Where a runtime directory has no user manager of its own, as in a nested test desktop or
 the theme previews, or with `BROMIGOS_NO_UNITS=1`, they start the old way, through the

@@ -39,6 +39,7 @@ try:                          # VECTOR's lines and his voice (docs/voice-guide.m
 except ImportError:           # an older bromigos-core: no captions, no voice
     guide = None
 from .disks import GiB, plain_size  # noqa: E402
+from . import server, server_gui  # noqa: E402  (bromigOS Server's steps)
 
 
 def _read(path):
@@ -284,7 +285,7 @@ def caption(line_id, **values):
     return guide.line(line_id, **values) if guide else ""
 
 
-class Window(Adw.ApplicationWindow):
+class Window(server_gui.ServerPages, Adw.ApplicationWindow):
     def __init__(self, app, opts):
         super().__init__(application=app, title="Install bromigOS")
         self.opts = opts
@@ -564,8 +565,8 @@ class Window(Adw.ApplicationWindow):
         # (the burn-in): then he stays still
         self.guide = glass.guide(self.vector_line(sid), "idle" if sid == "install" else "speaking",
                                  still=self.reduced or sid in ("install", "done") or bool(self.opts.get("render")),
-                                 size=(90, 126) if self.screen_h() < 700 else (120, 178))
-        glass.rail(self.rail, steps, here, common.STEP, self.c, self.guide)
+                                 size=((70, 98) if len(steps) > 15 else (90, 126)) if self.screen_h() < 700 else (120, 178))
+        glass.rail(self.rail, steps, here, common.STEP, self.c, self.guide, height=self.screen_h())
 
     def vector_line(self, sid):
         lid, values = self.line_id(sid)
@@ -658,6 +659,7 @@ class Window(Adw.ApplicationWindow):
                 "Encryption": ("system-lock-screen-symbolic" if self.a.get("encrypt") else "changes-allow-symbolic", "encryption"),
                 "Remote access (SSH)": ("network-server-symbolic", "ssh"), "Firewall": ("security-high-symbolic", "ssh"),
                 "Automatic updates": ("view-refresh-symbolic", "ssh"), "Packages": ("folder-download-symbolic", None)}
+        look.update(server_gui.BRIEF_LOOK)
         out = []
         for k, v in rows:
             ic, target = look.get(k, ("document-properties-symbolic", None))
@@ -669,7 +671,7 @@ class Window(Adw.ApplicationWindow):
         tip = lambda k, t: f"Go back to {common.STEP[t][1]} to change {k.lower()}; Continue brings you back here."  # noqa: E731
         on_edit = self.edit_step if edit else None
         if self.content_width() >= 900 and len(brief) > 6:
-            split = next((i for i, r in enumerate(brief) if r[1] == "Name"), (len(brief) + 1) // 2)
+            split = next((i for i, r in enumerate(brief) if r[1] in ("Name", "Admin")), (len(brief) + 1) // 2)
             cols = Gtk.Box(spacing=14, homogeneous=True)
             for title, part in (("Briefing · the computer", brief[:split]), ("Briefing · you", brief[split:])):
                 b = glass.briefing(title, part, on_edit, tip)
@@ -1676,6 +1678,8 @@ class Window(Adw.ApplicationWindow):
         rows, warn = common.summary(self.a, self.disk())
         brief = self.brief_rows(rows)
         page.append(self.briefing_ui(brief, edit=True))
+        if server.is_server(self.a):
+            self.server_summary_extra(page)          # the Server briefing: ssh admin@address, and its QR
         if warn:
             n = label(("▲ " if self.a["mode"] != "erase" else "▲ ") + warn, ("dg-note",) + (("danger",) if self.a["mode"] == "erase" else ()))
             page.append(n)
@@ -1723,7 +1727,8 @@ class Window(Adw.ApplicationWindow):
         self.phase_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         right.append(self.phase_box)
         self._phases("Starting…", 0)
-        right.append(glass.Slideshow(still=self.reduced, width=380 if not getattr(self, "compact", False) else 300))
+        right.append(self.server_install_holo() if server.is_server(self.a) else       # bromigOS Server: the rack
+                     glass.Slideshow(still=self.reduced, width=380 if not getattr(self, "compact", False) else 300))
         hero.append(right)
         page.append(hero)
         self.bar = Gtk.ProgressBar()             # for screen readers and the harness: the same number
@@ -1763,6 +1768,8 @@ class Window(Adw.ApplicationWindow):
             hint(chip, "The install finished without a problem")
             col.append(chip)
             hero.append(col)
+            if server.is_server(self.a) and self.screen_h() >= 700:
+                hero.append(self.server_ready_holo())       # bromigOS Server: the rack, its address, how to sign in
             page.append(hero)
             ed = common.edition(self.a["edition"])
             lines = [("system-reboot-symbolic", "Press Restart now."),
@@ -1779,6 +1786,8 @@ class Window(Adw.ApplicationWindow):
                 lines.append(("view-dual-symbolic", f"The boot menu lets you choose bromigOS or {other} each time."))
             lines.append(("avatar-default-symbolic", "Then sign in at the login screen." if ed.get("desktop", True)
                           else "Then sign in at the text console."))
+            lines += [({"key": "dialog-password-symbolic", "recover": "edit-undo-symbolic", "run": "emblem-system-symbolic"}[k], w)
+                      for k, w in server.done_lines(self.a)]          # bromigOS Server: its keys, and what it runs
             page.append(glass.section("What happens next"))
             page.append(glass.numbered(lines))
             if sb:          # beside Restart now, which has the focus: the code is on screen with it
@@ -1849,6 +1858,8 @@ class Window(Adw.ApplicationWindow):
     # ── moving between steps ────────────────────────────────────────────────────────
     def check(self):
         s = self.step
+        if s in server_gui.STEP_IDS:
+            return self.server_check(s)
         if s == "disk":
             d = self.disk()
             if not d:
@@ -1935,6 +1946,8 @@ class Window(Adw.ApplicationWindow):
         self.bar.set_text(f"{pct} %")
         self.ring.set_pct(pct)
         self.pct.set_label(f"{pct} %")
+        if getattr(self, "srv_install_holo", None) is not None:
+            self.srv_install_holo.set_state(pct=pct)
         self.status.set_label(text)
         self._phases(text, pct)
         lid = "installer.install.nearly" if pct >= 85 else ("installer.install.copying" if pct >= 15 else "installer.install")
@@ -2005,6 +2018,8 @@ class Window(Adw.ApplicationWindow):
                 self.paste.set_text(plan["ssh_key"])
         elif sid == "bitlocker":
             self.a["bitlocker_saved"] = True
+        elif sid in server_gui.STEP_IDS:
+            self.server_script(sid, plan)
         if not common.edition(self.a["edition"]).get("desktop", True) or plan.get("ssh"):
             self.a["ssh"] = plan.get("ssh", True)
         GLib.timeout_add(700, self._script_shown, sid)
@@ -2073,6 +2088,9 @@ def render_all(win, out):
             ("user", {"full_name": "Alex Rivera", "password": "correct-horse-battery"}), ("encryption", {}),
             ("encryption-own", {}), ("encryption-off", {}), ("ssh", {}), ("summary", {}), ("summary-what", {}),
             ("install", {}), ("done", {}), ("done-secureboot", {}), ("failed", {}), ("auto", {})]
+    plan += [(sid, {}) for sid in server_gui.RENDER_PLAN]     # bromigOS Server's steps
+    if os.environ.get("BROMIGOS_INSTALLER_RENDER_ONLY"):        # just these (a prefix: server-)
+        plan = [p for p in plan if p[0].startswith(os.environ["BROMIGOS_INSTALLER_RENDER_ONLY"])]
     win.probe = backend.probe()
     win._probed(win.probe)
     win.a.update(disk=win.probe["disks"][0]["path"], mode=None)
@@ -2100,6 +2118,8 @@ def render_all(win, out):
                 win.guidance_rows["high_contrast"][1].set_active(False)
                 return False
             GLib.timeout_add(900, undo)
+        elif sid.startswith("server-"):
+            server_gui.render_step(win, sid)
         elif sid == "disk-erase":
             win.a["mode"] = "erase"
             win.show_step("disk")

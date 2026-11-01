@@ -1,0 +1,181 @@
+{
+ "firmware": "uefi",
+ "other_os": false,
+ "disks": [
+  {
+   "path": "/dev/nvme0n1",
+   "size": 500107862016,
+   "size_text": "500 GB",
+   "model": "Samsung SSD 980 500GB",
+   "kind": "NVMe",
+   "removable": false,
+   "table": null,
+   "partitions": [],
+   "free": [],
+   "free_bytes": 0,
+   "oses": [],
+   "medium": false,
+   "summary": "Empty",
+   "options": {
+    "erase": {
+     "ok": true,
+     "loses": "nothing: it's empty"
+    },
+    "alongside": {
+     "ok": false,
+     "code": "empty",
+     "why": "The disk is empty: there's nothing to install beside.",
+     "fix": "Choose Erase the whole disk: nothing is lost.",
+     "name": null,
+     "label": "Install alongside what's on it"
+    }
+   }
+  },
+  {
+   "path": "/dev/sda",
+   "size": 4000787030016,
+   "size_text": "4.0 TB",
+   "model": "WDC WD40EFZX",
+   "kind": "SATA",
+   "removable": false,
+   "table": null,
+   "partitions": [],
+   "free": [],
+   "free_bytes": 0,
+   "oses": [],
+   "medium": false,
+   "summary": "Empty",
+   "options": {
+    "erase": {
+     "ok": true,
+     "loses": "nothing: it's empty"
+    },
+    "alongside": {
+     "ok": false,
+     "code": "empty",
+     "why": "The disk is empty: there's nothing to install beside.",
+     "fix": "Choose Erase the whole disk: nothing is lost.",
+     "name": null,
+     "label": "Install alongside what's on it"
+    }
+   }
+  },
+  {
+   "path": "/dev/sdb",
+   "size": 4000787030016,
+   "size_text": "4.0 TB",
+   "model": "WDC WD40EFZX",
+   "kind": "SATA",
+   "removable": false,
+   "table": null,
+   "partitions": [],
+   "free": [],
+   "free_bytes": 0,
+   "oses": [],
+   "medium": false,
+   "summary": "Empty",
+   "options": {
+    "erase": {
+     "ok": true,
+     "loses": "nothing: it's empty"
+    },
+    "alongside": {
+     "ok": false,
+     "code": "empty",
+     "why": "The disk is empty: there's nothing to install beside.",
+     "fix": "Choose Erase the whole disk: nothing is lost.",
+     "name": null,
+     "label": "Install alongside what's on it"
+    }
+   }
+  },
+  {
+   "path": "/dev/sdc",
+   "size": 8001563222016,
+   "size_text": "8.0 TB",
+   "model": "Seagate IronWolf 8TB",
+   "kind": "SATA",
+   "removable": false,
+   "table": null,
+   "partitions": [
+    {
+     "path": "/dev/sdc1",
+     "start": 1048576,
+     "size": 7999000000000,
+     "fstype": "ext4",
+     "label": "media",
+     "what": "Linux files (ext4, media)"
+    }
+   ],
+   "free": [],
+   "free_bytes": 0,
+   "oses": [],
+   "medium": false,
+   "summary": "Linux files \u00b7 1 partition",
+   "options": {
+    "erase": {
+     "ok": true,
+     "loses": "Linux files (ext4, media)"
+    },
+    "alongside": {
+     "ok": false,
+     "code": "empty",
+     "why": "The disk is empty: there's nothing to install beside.",
+     "fix": "Choose Erase the whole disk: nothing is lost.",
+     "name": null,
+     "label": "Install alongside what's on it"
+    }
+   }
+  },
+  {
+   "path": "/dev/sdd",
+   "size": 16000000000,
+   "size_text": "16 GB",
+   "model": "SanDisk Ultra",
+   "kind": "USB",
+   "removable": true,
+   "table": "dos",
+   "partitions": [
+    {
+     "path": "/dev/sdd1",
+     "size": 5000000000,
+     "fstype": "iso9660",
+     "label": "BROMIGOS",
+     "parttype": "0",
+     "mounted": true,
+     "start": 0,
+     "bootable": false,
+     "esp": false,
+     "bitlocker": false,
+     "what": "iso9660, 5.0 GB"
+    }
+   ],
+   "free": [
+    {
+     "start": 5000658944,
+     "size": 10998513664
+    }
+   ],
+   "free_bytes": 10998513664,
+   "oses": [],
+   "medium": true,
+   "summary": "the USB stick bromigOS started from",
+   "options": {
+    "erase": {
+     "ok": false,
+     "code": "medium",
+     "why": "This is the USB stick bromigOS started from.",
+     "fix": "Choose another disk. To install onto a USB stick, start bromigOS from a different one."
+    },
+    "alongside": {
+     "ok": false,
+     "code": "medium",
+     "why": "This is the USB stick bromigOS started from.",
+     "fix": "Choose another disk. To install onto a USB stick, start bromigOS from a different one.",
+     "name": null,
+     "label": "Install alongside what's on it"
+    }
+   }
+  }
+ ]
+}

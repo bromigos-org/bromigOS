@@ -1,0 +1,20 @@
+[Unit]
+Description=SABnzbd (Usenet downloads)
+
+[Container]
+Image={{image:sabnzbd}}
+ContainerName=sabnzbd
+#ifnot:gluetun Network=bromigos-lab.network
+#if:gluetun Network=gluetun.container
+#ifnot:gluetun PublishPort=8085:8080
+Environment=PUID={{puid}}
+Environment=PGID={{pgid}}
+Environment=TZ={{tz}}
+Volume={{data}}/config:/config:Z
+Volume={{downloads}}:/media/downloads
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
