@@ -56,6 +56,18 @@ class Folder(unittest.TestCase):
         env = dict(self.env, BROMIGOS_STATIC_ART="")
         self.assertEqual(A.find("host", height=100, env=env).height, 128)
 
+    def test_min_height_and_about(self):
+        path = os.path.join(self.env["BROMIGOS_STATIC_ART"], "manifest.json")
+        with open(path) as f:
+            doc = json.load(f)
+        doc["art"]["host"].update(min=96, about="NOIR hosts from his pod")
+        with open(path, "w") as f:
+            json.dump(doc, f)
+        self.assertIsNone(A.find("host", height=24, env=self.env))                  # a few half-blocks: placeholder
+        a = A.find("host", height=100, env=self.env)
+        self.assertEqual((a.height, a.about), (256, "NOIR hosts from his pod"))
+        self.assertEqual(A.find("host", env=self.env).height, 64)                    # no height asked: any
+
     def test_a_frame_as_half_blocks(self):
         a = A.find("snow", height=40, env=self.env)
         px = ST.png_pixels(ST.art_pngs(a)[0], 20, 24)

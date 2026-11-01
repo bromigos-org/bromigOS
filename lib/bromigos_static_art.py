@@ -9,7 +9,9 @@ the code-drawn placeholder (bromigos_static.py) stands in.
 
   <name>: a pose ("host"), a pose wearing a face ("remote:snow"), or the monitor alone
   ("head:watching", "head"). Paths are relative to the manifest. A name may also carry
-  its own "fps".
+  its own "fps", "min" (the least height in pixels it's drawn at: below it, the
+  placeholder, so a painted scene never turns to mush in a few half-blocks) and "about"
+  (what it shows, for the hover hint: a painted shell isn't the placeholder's pose).
 
   folders(env=None)                     where art is looked for; the first that has a name wins:
                                         $BROMIGOS_STATIC_ART, ~/.local/share/bromigos/static,
@@ -25,8 +27,9 @@ ANIMATED = (".webp", ".gif", ".apng")
 
 
 class Art:
-    def __init__(self, name, height, frames, fps, folder):
+    def __init__(self, name, height, frames, fps, folder, about=""):
         self.name, self.height, self.frames, self.fps, self.folder = name, height, frames, fps, folder
+        self.about = about
         self.animated = len(frames) == 1 and frames[0].lower().endswith(ANIMATED)
 
     def __repr__(self):
@@ -87,14 +90,20 @@ def find(pose, face=None, height=0, head=False, env=None):
             entry = doc["art"].get(name)
             if not isinstance(entry, dict):
                 continue
-            h = _pick([k for k in entry if k != "fps"], height)
+            try:
+                least = int(entry.get("min") or 0)
+            except (TypeError, ValueError):
+                least = 0
+            if height and height < least:
+                continue
+            h = _pick([k for k in entry if str(k).isdigit()], height)
             if h is None:
                 continue
             files = entry[str(h)]
             files = [files] if isinstance(files, str) else list(files or [])
             paths = [os.path.join(folder, f) for f in files]
             if paths and all(os.path.isfile(p) for p in paths):
-                return Art(name, h, paths, entry.get("fps") or doc.get("fps") or 6, folder)
+                return Art(name, h, paths, entry.get("fps") or doc.get("fps") or 6, folder, str(entry.get("about") or ""))
     return None
 
 

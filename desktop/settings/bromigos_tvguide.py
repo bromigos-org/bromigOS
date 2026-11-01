@@ -218,6 +218,8 @@ class Static(Gtk.Picture):
                 self.art_frames = [Gdk.Texture.new_from_filename(f) for f in art.frames]
                 self.fps = art.fps
             self.art = art
+            if art.about:                                     # a painted shell says what it's doing
+                self.ctx.hint(self, art.about)
         except GLib.Error:                                    # a broken file: the placeholder instead
             self.art_frames = []
         return self.art_frames

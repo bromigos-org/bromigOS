@@ -160,6 +160,7 @@ The desktop runs these for you. You don't need them day to day.
 |---|---|
 | [`bromigos fieldkit`](#bromigos-fieldkit) | Field Kit (Repair. Recon. Deploy.): the menu (Repair, Lab, Tools, Install, Shell), or one job: why, black-screen, status, make-stick, remote, usb (docs/fieldkit.md) |
 | [`bromigos bar`](#bromigos-bar) | The bar: start, restart or stop it (a user service that comes back by itself) |
+| [`bromigos mascot`](#bromigos-mascot) | STATIC, the mascot: on, quiet (his face but no thought bubbles) or off everywhere |
 | [`bromigos qr`](#bromigos-qr) | Themed QR codes: a world's colours, its emblem, an art mode for BRODEC; checked by decoding |
 | [`bromigos tv guide`](#bromigos-tv-guide) |  |
 | [`bromigos welcome`](#bromigos-welcome) | The welcome tour after an install: Wi-Fi, your screens, a world, VECTOR and his voice, your homelab, the keys; every step skippable |
@@ -1636,6 +1637,24 @@ For example:
 
 ```text
 bromigos logout
+```
+
+From the `bromigos-core` package.
+
+### bromigos mascot
+
+STATIC, the mascot: on, quiet (his face but no thought bubbles) or off everywhere.
+
+```text
+bromigos mascot [status] | on | quiet | off | set MODE  [--json]
+```
+
+For example:
+
+```text
+bromigos mascot
+bromigos mascot quiet
+bromigos mascot off
 ```
 
 From the `bromigos-core` package.
