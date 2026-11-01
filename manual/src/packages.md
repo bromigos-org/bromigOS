@@ -23,7 +23,7 @@ bromigos install --with bromigos-apps
 | `bromigos-widgets` | bromigOS desktop widgets: system, network, storage, workbench, notes and shortcuts panels | *with bromigOS* |
 | `bromigos-vector` | VECTOR, the desktop's caretaker, and the hologram renderer he lives in (from the `vector` repository) | *with bromigOS* |
 | `bromigos-manual` | bromigOS manual: how to use the desktop, as HTML, for reading offline | *with bromigOS* |
-| `bromigos-mascot-art` | bromigOS mascot art: STATIC's painted shells hosting Den TV's guide | *with bromigOS* |
+| `bromigos-mascot-art` | bromigOS mascot art: STATIC's painted shells hosting Den TV's guide, and Den TV's night-block bumps | *with bromigOS* |
 | `bromigos-mirrorlist` | bromigOS package repository mirrors | *with bromigOS* (through `bromigos-keyring`) |
 | `bromigos-homelab` | bromigOS homelab integrations: desktop panels, homelab decks and VECTOR tools | *with bromigOS* (through `bromigos-desktop`) |
 | `bromigos-bar-hover` | bromigOS bar hover popups: a waybar module that opens a popup when the pointer rests on another | *with bromigOS* (through `bromigos-desktop`) |
