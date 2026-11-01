@@ -667,7 +667,7 @@ The VRAM column is the peak each job adds on its GPU. It was measured on a 32 GB
 
 | Kind | Runs on | Peak VRAM it adds |
 |---|---|---|
-| `image`, `image-edit` | ComfyUI with Qwen-Image 2.1, through `bromigos art make` | 15.1 GiB for a 1024-pixel still |
+| `image`, `image-edit` | ComfyUI with Qwen-Image-2512 (stills) and Qwen-Image-Edit-2511 (edits), both Apache-2.0, through `bromigos art make` | 15.1 GiB for a 1024-pixel still, measured with the older Qwen-Image 2.1. The queue raises it as it sees the new models' jobs |
 | `cutout` | ComfyUI with Lucida | 1.0 GiB for a 1536-pixel image |
 | `3d` | ComfyUI with Pixal3D, shape only | 10.2 to 12.5 GiB |
 | `hologram` | the three above, then VECTOR's bake into a hologram | its largest step |

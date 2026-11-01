@@ -142,10 +142,11 @@ def gib(mib):
 # models, the embeddings server). The queue keeps the most it has seen per kind too
 # (~/.local/state/bromigos/lab/vram.json) and gates on whichever is larger.
 VRAM = {
-    "image": (15450, "Qwen-Image 2.1 int8 (DiT 6.8, encoder 8.7, VAE 0.6 GiB): the 5090 lost at most 15.1 GiB of "
-                     "free VRAM over a 1024 px still (2026-10-09); larger stills raise it through vram.json"),
-    "image-edit": (15450, "as image (the same model)"),
-    "hologram": (15450, "its largest step: the concept image (Qwen-Image 2.1)"),
+    "image": (15450, "measured with Qwen-Image 2.1 int8, the default then: the 5090 lost at most 15.1 GiB of "
+                     "free VRAM over a 1024 px still (2026-10-09). Stills are Qwen-Image-2512 now (fp8, a 20 GB "
+                     "DiT): the queue raises this through vram.json as it sees them"),
+    "image-edit": (15450, "as image; edits are Qwen-Image-Edit-2511 now (int8), raised through vram.json"),
+    "hologram": (15450, "its largest step: the concept image (Qwen-Image-2512)"),
 }
 
 
@@ -564,7 +565,7 @@ def _ui(k):
 
 
 for _k in (
-    Kind("image", "Image", "a still from a prompt (Qwen-Image 2.1 on the lab)", run_image, ("media",),
+    Kind("image", "Image", "a still from a prompt (Qwen-Image-2512 on the lab)", run_image, ("media",),
          heavy=True, takes=("prompt", "input", "aspect"), order=10, **_ui("image")),
     Kind("image-edit", "Image edit", "change an image as a prompt says (optional --mask)", run_edit, ("media",),
          heavy=True, takes=("prompt", "input", "mask"), order=11, **_ui("image-edit")),

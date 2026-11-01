@@ -1,6 +1,6 @@
 //! The homelab backend: images, edits, cutouts, upscales, 3D models and video loops made by a
 //! ComfyUI server instead of nolgia, for no credits. An asset picks it with its model:
-//! `model = "homelab:qwen-image-2.1"`. The graph is a workflow template in this
+//! `model = "homelab:qwen-image-2512"`. The graph is a workflow template in this
 //! crate (`workflows/`), filled by node id (a video workflow through [`crate::video`]);
 //! inputs are uploaded to the server, the job is queued (`POST /prompt`), polled
 //! (`GET /history/<id>`) and its PNG, GLB or MP4 downloaded (`GET /view`). An upscale's
@@ -27,7 +27,28 @@ pub const BACKEND: &str = "homelab-comfyui";
 /// The workflows built in (`workflows/*.json`); a user's
 /// `$XDG_CONFIG_HOME/bromigos/create/workflows/<name>.json` or the packaged
 /// `$BROMIGOS_SHARE_DIR/art/workflows/<name>.json` of the same name wins.
+///
+/// Qwen-Image-2512 and Qwen-Image-Edit-2511 (Apache-2.0) are the defaults for stills and
+/// edits, each with a Lightning variant (`_meta.features = ["fast"]`). Qwen-Image 2.1 is
+/// built in for jobs that name it, never a default: its licence is non-commercial
+/// ([`Workflow::licence_warning`]).
 pub const BUILTIN: &[(&str, &str)] = &[
+    (
+        "qwen-image-2512",
+        include_str!("../workflows/qwen-image-2512.json"),
+    ),
+    (
+        "qwen-image-2512-lightning",
+        include_str!("../workflows/qwen-image-2512-lightning.json"),
+    ),
+    (
+        "qwen-image-edit-2511",
+        include_str!("../workflows/qwen-image-edit-2511.json"),
+    ),
+    (
+        "qwen-image-edit-2511-lightning",
+        include_str!("../workflows/qwen-image-edit-2511-lightning.json"),
+    ),
     (
         "qwen-image-2.1",
         include_str!("../workflows/qwen-image-2.1.json"),
@@ -56,7 +77,8 @@ pub const BUILTIN: &[(&str, &str)] = &[
 
 /// A ComfyUI workflow (API format) and what it declares in its `_meta`: the
 /// capabilities it serves, its output, the weights' licence (logged with every
-/// job: what may be done with the art depends on it), the model files and nodes it
+/// job: what may be done with the art depends on it) and whether that licence allows
+/// commercial use (`commercial`: `yes`, `conditional` or `no`), the model files and nodes it
 /// needs, and where the job's values go (`bind`: name -> [node id, input], or a list of
 /// them when one value feeds several nodes). The lab's
 /// model catalog reads `catalog` (`<model id>/<variant>`), `vram_gib` (the measured peak
@@ -69,6 +91,9 @@ pub struct Workflow {
     /// "png", "glb" or "mp4".
     pub output: String,
     pub license: String,
+    /// Whether the licence allows commercial use: `yes`, `conditional`, `no`, or
+    /// `unknown` when the workflow doesn't say.
+    pub commercial: String,
     /// (folder, file) under the server's models dir.
     pub requires: Vec<(String, String)>,
     /// Node classes it needs beyond ComfyUI's own (or any it wants checked).
@@ -139,6 +164,7 @@ impl Workflow {
             capabilities: caps,
             output: text("output", "png"),
             license: text("license", "unknown"),
+            commercial: text("commercial", "unknown"),
             requires,
             nodes: strings("nodes"),
             fill: text("fill", "bind"),
@@ -167,6 +193,33 @@ impl Workflow {
     /// Whether it makes assets of `kind`.
     pub fn makes(&self, kind: Kind) -> bool {
         self.capabilities.iter().any(|c| c.kind() == kind)
+    }
+
+    /// What to tell whoever runs it when its licence is non-commercial
+    /// (`_meta.commercial = "no"`): said on every job, put in `plan`, and in
+    /// `bromigos art make --json` as `warning`.
+    pub fn licence_warning(&self) -> Option<String> {
+        (self.commercial == "no").then(|| {
+            format!(
+                "{} is non-commercial: research and evaluation only ({}). Don't ship or sell what it makes",
+                self.id, self.license
+            )
+        })
+    }
+
+    /// The edge of the square a new image's pixel count matches, when the asset gives no
+    /// `extra.resolution`: `_meta.resolution`, else 1536 (Qwen-Image 2.1 is native to 2K).
+    fn default_resolution(&self) -> u32 {
+        self.meta
+            .get("resolution")
+            .and_then(Value::as_u64)
+            .and_then(|r| u32::try_from(r).ok())
+            .unwrap_or(1536)
+    }
+
+    /// How many input images its `bind` takes (`image`: one), for a workflow filled that way.
+    fn bound_images(&self) -> usize {
+        usize::from(self.bind.contains_key("image"))
     }
 }
 
@@ -262,8 +315,26 @@ pub fn check(a: &Asset) -> Result<Workflow, String> {
         }
         upscale_factor(&w, a, None)?;
     }
-    if w.fill == "qwen-image" {
-        size(a)?;
+    if w.fill == "bind" && matches!(a.kind, Kind::Image | Kind::Edit) {
+        let takes = w.bound_images();
+        if a.inputs.len() > takes {
+            return Err(if takes == 0 {
+                format!(
+                    "{name} draws from a prompt alone and takes no reference images: \
+                     make an edit of the reference instead (image.edit, qwen-image-edit-2511)"
+                )
+            } else {
+                format!("{name} takes one input image")
+            });
+        }
+        if a.mask.is_some() && (takes == 0 || !w.bind.contains_key("prefix")) {
+            return Err(format!(
+                "{name} can't take a mask (its bind has no image and prefix)"
+            ));
+        }
+    }
+    if w.fill == "qwen-image" || w.bind.contains_key("width") {
+        size(&w, a)?;
     }
     if w.fill == "video" {
         crate::video::plan(&w, a, None)?;
@@ -272,10 +343,11 @@ pub fn check(a: &Asset) -> Result<Workflow, String> {
 }
 
 /// The resolution (edge of the square with the same pixel count) an asset is
-/// made at: `extra.resolution`, default 1536 (~2.4 MP; the model is native to 2K).
-fn resolution(a: &Asset) -> Result<u32, String> {
+/// made at: `extra.resolution`, else the workflow's `_meta.resolution` (Qwen-Image-2512's
+/// native 1328, about 1.8 MP), else 1536 (about 2.4 MP: Qwen-Image 2.1 is native to 2K).
+fn resolution(w: &Workflow, a: &Asset) -> Result<u32, String> {
     match a.extra.get("resolution") {
-        None => Ok(1536),
+        None => Ok(w.default_resolution()),
         Some(v) => v
             .as_u64()
             .filter(|r| (512..=2048).contains(r))
@@ -286,8 +358,8 @@ fn resolution(a: &Asset) -> Result<u32, String> {
 
 /// Width and height for a new image: the aspect (`W:H`, default 1:1) at the
 /// resolution's pixel count, on the 32 px grid the model's encoder uses.
-pub fn size(a: &Asset) -> Result<(u32, u32), String> {
-    let res = f64::from(resolution(a)?);
+pub fn size(w: &Workflow, a: &Asset) -> Result<(u32, u32), String> {
+    let res = f64::from(resolution(w, a)?);
     let ratio = match a.aspect.as_deref() {
         None => 1.0,
         Some(s) => {
@@ -470,10 +542,10 @@ pub fn graph(
         return crate::video::graph(w, a, images, src);
     }
     if w.fill != "qwen-image" {
-        return bound(w, a, images, src);
+        return bound(w, a, images, mask, src);
     }
     let mut g = w.graph.clone();
-    let res = resolution(a).map_err(Error::Spec)?;
+    let res = resolution(w, a).map_err(Error::Spec)?;
     let set = |g: &mut Map<String, Value>, node: &str, key: &str, v: Value| {
         g[node]["inputs"][key] = v;
     };
@@ -505,9 +577,9 @@ pub fn graph(
             set(&mut g, "7", "latent_image", json!(["5", 2]));
         }
         _ => {
-            let (w, h) = size(a).map_err(Error::Spec)?;
-            set(&mut g, "6", "width", json!(w));
-            set(&mut g, "6", "height", json!(h));
+            let (wd, ht) = size(w, a).map_err(Error::Spec)?;
+            set(&mut g, "6", "width", json!(wd));
+            set(&mut g, "6", "height", json!(ht));
         }
     }
     if let Some(mask) = mask {
@@ -538,11 +610,14 @@ pub fn graph(
 /// server-side name), `prompt`, `seed`, `width`/`height` (the asset's size),
 /// `scale` (an upscale's factor, [`upscale_factor`] for an input of size `src`),
 /// `prefix` (the output's filename prefix); each is `[node id, input name]`, or a
-/// list of those when one value goes to several nodes.
+/// list of those when one value goes to several nodes. An edit's `mask` (transparent =
+/// may change) puts the original back everywhere else, before the node `prefix` names
+/// saves the picture, so a model without a mask input still leaves the rest untouched.
 fn bound(
     w: &Workflow,
     a: &Asset,
     images: &[String],
+    mask: Option<&str>,
     src: Option<(u32, u32)>,
 ) -> Result<Value, Error> {
     let mut g = w.graph.clone();
@@ -596,7 +671,7 @@ fn bound(
     }
     set("seed", json!(seed(a)))?;
     if w.bind.contains_key("width") {
-        let (wd, ht) = size(a).map_err(Error::Spec)?;
+        let (wd, ht) = size(w, a).map_err(Error::Spec)?;
         set("width", json!(wd))?;
         set("height", json!(ht))?;
     }
@@ -605,6 +680,41 @@ fn bound(
         set("scale", json!(scale))?;
     }
     set("prefix", json!(format!("bromigos-art/{}", a.id)))?;
+    if let Some(mask) = mask {
+        let first = |k: &str| -> Option<String> {
+            let at = w.bind.get(k)?;
+            let p = if at.get(0).is_some_and(Value::is_string) {
+                at
+            } else {
+                at.get(0)?
+            };
+            p.get(0)?.as_str().map(String::from)
+        };
+        let (Some(original), Some(save)) = (first("image"), first("prefix")) else {
+            return Err(Error::Spec(format!(
+                "{} can't take a mask (its bind has no image and prefix)",
+                w.id
+            )));
+        };
+        let edited = g
+            .get(&save)
+            .and_then(|n| n["inputs"].get("images"))
+            .cloned()
+            .ok_or_else(|| {
+                Error::Spec(format!("workflow {}: node {save} saves no images", w.id))
+            })?;
+        g.insert(
+            "bromigos_mask".into(),
+            json!({"class_type": "LoadImageMask", "inputs": {"image": mask, "channel": "alpha"}}),
+        );
+        g.insert(
+            "bromigos_keep".into(),
+            json!({"class_type": "ImageCompositeMasked", "inputs": {
+                "destination": [original, 0], "source": edited, "x": 0, "y": 0,
+                "resize_source": true, "mask": ["bromigos_mask", 0]}}),
+        );
+        g[&save]["inputs"]["images"] = json!(["bromigos_keep", 0]);
+    }
     Ok(Value::Object(g))
 }
 
@@ -919,6 +1029,9 @@ pub async fn make(
     say: &dyn Fn(&str),
 ) -> Result<String, Error> {
     let w = check(a).map_err(Error::Spec)?;
+    if let Some(warn) = w.licence_warning() {
+        say(&format!("{}: warning: {warn}", a.id));
+    }
     let mut names = Vec::new();
     for p in inputs {
         names.push(upload(http_client, url, p).await?);
@@ -1105,15 +1218,136 @@ mod tests {
         w
     }
 
+    /// The built-in copy of a workflow (a user's or an installed one of the same name would
+    /// win in [`workflow`]).
+    fn builtin(id: &str) -> Workflow {
+        let text = BUILTIN.iter().find(|(n, _)| *n == id).unwrap().1;
+        Workflow::parse(id, text).unwrap()
+    }
+
     #[test]
     fn sizes_follow_the_aspect_on_the_32px_grid() {
-        let w = world(
-            "[[assets]]\nid = \"a\"\nkind = \"image\"\nmodel = \"homelab:qwen-image-2.1\"\nprompt = \"x\"\naspect = \"16:9\"\nout = \"art/a.png\"\n",
+        let w = world(concat!(
+            "[[assets]]\nid = \"a\"\nkind = \"image\"\nmodel = \"homelab:qwen-image-2512\"\nprompt = \"x\"\naspect = \"16:9\"\nout = \"art/a.png\"\n",
+            "[[assets]]\nid = \"b\"\nkind = \"image\"\nmodel = \"homelab:qwen-image-2512\"\nprompt = \"x\"\naspect = \"16:9\"\nout = \"art/b.png\"\nextra = { resolution = 1024 }\n",
+        ));
+        let a = w.get("a").unwrap();
+        // Qwen-Image-2512 at its native ~1328², Qwen-Image 2.1 at ~1536²
+        for (wf, edge) in [
+            (builtin("qwen-image-2512"), 1328.0),
+            (builtin("qwen-image-2512-lightning"), 1328.0),
+            (builtin("qwen-image-2.1"), 1536.0),
+        ] {
+            let (wd, ht) = size(&wf, a).unwrap();
+            assert_eq!((wd % 32, ht % 32), (0, 0));
+            assert!((f64::from(wd) / f64::from(ht) - 16.0 / 9.0).abs() < 0.03);
+            assert!(
+                (f64::from(wd * ht) / (edge * edge) - 1.0).abs() < 0.05,
+                "{}: {wd}x{ht}",
+                wf.id
+            );
+        }
+        // extra.resolution wins over the workflow's own
+        let (wd, ht) = size(&builtin("qwen-image-2512"), w.get("b").unwrap()).unwrap();
+        assert!((f64::from(wd * ht) / (1024.0 * 1024.0) - 1.0).abs() < 0.05);
+    }
+
+    #[test]
+    fn the_defaults_are_apache_and_qwen_image_2_1_warns() {
+        for id in [
+            "qwen-image-2512",
+            "qwen-image-2512-lightning",
+            "qwen-image-edit-2511",
+            "qwen-image-edit-2511-lightning",
+        ] {
+            let w = builtin(id);
+            assert!(w.license.starts_with("Apache-2.0"), "{id}: {}", w.license);
+            assert_eq!(w.commercial, "yes", "{id}");
+            assert!(w.licence_warning().is_none(), "{id}");
+            assert_eq!(
+                w.features.iter().any(|f| f == "fast"),
+                id.ends_with("-lightning"),
+                "{id}: Lightning is the fast option"
+            );
+        }
+        let old = builtin("qwen-image-2.1");
+        assert_eq!(old.commercial, "no");
+        let warn = old.licence_warning().unwrap();
+        assert!(
+            warn.contains("non-commercial: research and evaluation only"),
+            "{warn}"
         );
-        let (wd, ht) = size(w.get("a").unwrap()).unwrap();
-        assert_eq!((wd % 32, ht % 32), (0, 0));
-        assert!((f64::from(wd) / f64::from(ht) - 16.0 / 9.0).abs() < 0.03);
-        assert!((f64::from(wd * ht) / (1536.0 * 1536.0) - 1.0).abs() < 0.05);
+        // the default create.toml names the Apache-2.0 models only
+        assert!(!crate::create::DEFAULT.contains("qwen-image-2.1"));
+    }
+
+    #[test]
+    fn a_2512_still_binds_its_prompt_seed_size_and_prefix() {
+        let w = world(
+            "[[assets]]\nid = \"s\"\nkind = \"image\"\nmodel = \"homelab:qwen-image-2512\"\nprompt = \"a lamp\"\naspect = \"3:2\"\nout = \"art/s.png\"\n",
+        );
+        let a = w.get("s").unwrap();
+        check(a).unwrap();
+        for id in ["qwen-image-2512", "qwen-image-2512-lightning"] {
+            let wf = builtin(id);
+            let g = graph(&wf, a, &[], None, None).unwrap();
+            let (wd, ht) = size(&wf, a).unwrap();
+            assert_eq!(g["5"]["inputs"]["text"], "a lamp", "{id}");
+            assert_eq!(g["8"]["inputs"]["seed"], json!(seed(a)), "{id}");
+            assert_eq!(g["7"]["inputs"]["width"], json!(wd), "{id}");
+            assert_eq!(g["7"]["inputs"]["height"], json!(ht), "{id}");
+            assert_eq!(g["10"]["inputs"]["filename_prefix"], "bromigos-art/s");
+            assert!(g.get("_meta").is_none() && g.get("_comment").is_none());
+        }
+        assert_eq!(builtin("qwen-image-2512").graph["8"]["inputs"]["steps"], 50);
+        assert_eq!(
+            builtin("qwen-image-2512-lightning").graph["8"]["inputs"]["steps"],
+            8
+        );
+    }
+
+    #[test]
+    fn a_2512_still_takes_no_reference_images() {
+        let w = world(
+            "[[assets]]\nid = \"r\"\nkind = \"image\"\nmodel = \"homelab:qwen-image-2512\"\nprompt = \"a lamp\"\ninputs = [\"art/in.png\"]\nout = \"art/r.png\"\n",
+        );
+        let e = check(w.get("r").unwrap()).unwrap_err();
+        assert!(e.contains("no reference images"), "{e}");
+        assert!(e.contains("qwen-image-edit-2511"), "{e}");
+    }
+
+    #[test]
+    fn a_2511_edit_binds_its_image_and_prompt_and_a_mask_puts_the_rest_back() {
+        let w = world(concat!(
+            "[[assets]]\nid = \"e\"\nkind = \"edit\"\nmodel = \"homelab:qwen-image-edit-2511\"\nprompt = \"remove the fish\"\ninput = \"art/in.png\"\nout = \"art/e.png\"\n",
+            "[[assets]]\nid = \"m\"\nkind = \"edit\"\nmodel = \"homelab:qwen-image-edit-2511\"\nprompt = \"remove the fish\"\ninput = \"art/in.png\"\nmask = \"art/mask.png\"\nout = \"art/m.png\"\n",
+        ));
+        let a = w.get("e").unwrap();
+        check(a).unwrap();
+        for id in ["qwen-image-edit-2511", "qwen-image-edit-2511-lightning"] {
+            let wf = builtin(id);
+            let g = graph(&wf, a, &["i.png".into()], None, None).unwrap();
+            assert_eq!(g["11"]["inputs"]["image"], "i.png", "{id}");
+            assert_eq!(g["6"]["inputs"]["prompt"], "remove the fish", "{id}");
+            assert_eq!(
+                g["7"]["inputs"]["prompt"], "",
+                "{id}: the negative stays empty"
+            );
+            assert_eq!(g["8"]["inputs"]["seed"], json!(seed(a)), "{id}");
+            assert_eq!(g["10"]["inputs"]["images"], json!(["9", 0]), "{id}");
+            assert!(g.get("bromigos_keep").is_none());
+            // masked: the edit is laid over the original through the mask before it's saved
+            let m = w.get("m").unwrap();
+            check(m).unwrap();
+            let g = graph(&wf, m, &["i.png".into()], Some("k.png"), None).unwrap();
+            assert_eq!(g["bromigos_mask"]["inputs"]["image"], "k.png");
+            assert_eq!(g["bromigos_mask"]["inputs"]["channel"], "alpha");
+            let keep = &g["bromigos_keep"]["inputs"];
+            assert_eq!(keep["destination"], json!(["11", 0]), "{id}");
+            assert_eq!(keep["source"], json!(["9", 0]), "{id}");
+            assert_eq!(keep["resize_source"], json!(true));
+            assert_eq!(g["10"]["inputs"]["images"], json!(["bromigos_keep", 0]));
+        }
     }
 
     #[test]
@@ -1311,8 +1545,8 @@ mod tests {
     #[test]
     fn what_the_homelab_cannot_make_is_refused() {
         let w = world(concat!(
-            "[[assets]]\nid = \"v\"\nkind = \"video\"\nmodel = \"homelab:qwen-image-2.1\"\nprompt = \"x\"\nstart = \"art/in.png\"\nduration = 5\nout = \"art/v.mp4\"\n",
-            "[[assets]]\nid = \"j\"\nkind = \"image\"\nmodel = \"homelab:qwen-image-2.1\"\nprompt = \"x\"\nout = \"art/j.jpg\"\n",
+            "[[assets]]\nid = \"v\"\nkind = \"video\"\nmodel = \"homelab:qwen-image-2512\"\nprompt = \"x\"\nstart = \"art/in.png\"\nduration = 5\nout = \"art/v.mp4\"\n",
+            "[[assets]]\nid = \"j\"\nkind = \"image\"\nmodel = \"homelab:qwen-image-2512\"\nprompt = \"x\"\nout = \"art/j.jpg\"\n",
             "[[assets]]\nid = \"u\"\nkind = \"image\"\nmodel = \"homelab:nope\"\nprompt = \"x\"\nout = \"art/u.png\"\n",
         ));
         assert!(
