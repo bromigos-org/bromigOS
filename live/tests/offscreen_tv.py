@@ -109,6 +109,12 @@ def child(tree, out, opts):
         if opts.get("bumper"):
             tv._bumper = lambda s_, b=tuple(opts["bumper"]): b if s_ == "big" else None
         state["picture"] = off.tv_warm(r, tv, lambda: r.render(tgt.fbo, 30), limit=15)
+        if opts.get("bump"):
+            # a bump from the pack (BROMIGOS_BUMPS) on the big monitor, two seconds in: its caption up
+            state["bump"] = tv.bump_now("big", opts["bump"])
+            state["bump_picture"] = off.tv_warm(r, tv, lambda: r.render(tgt.fbo, 30), limit=15)
+            if tv.bumping("big"):
+                tv.overrides["big"]["at"] -= 2.0                  # the scene's clock is fixed: age it by hand
         covered = set(opts.get("covered") or ())
         if opts.get("swap"):
             # the frame swap: a screen showing clip A is tuned (covered, so paused) to clip B's
@@ -391,6 +397,24 @@ def main():
         if out:
             from PIL import Image
             Image.fromarray(frame[y0 - 60:y1 + 60, x0 - 60:x1 + 60]).save(os.path.join(out, "tv-bumper-crop.png"))
+
+        # a bump from STATIC's pack: its clip on the big monitor, its caption drawn by the den
+        pack = os.path.join(REPO, "mascot", "bumps", "static")
+        if os.path.isfile(os.path.join(pack, "bumps.json")):
+            benv = dict(env, BROMIGOS_BUMPS=pack, BROMIGOS_MASCOT="on")
+            plain, _ = render(env, REPO, {"palette": wick, "clip": clip, "frames": 60}, "tv-before-bump")
+            frame, st = render(benv, REPO, {"palette": wick, "clip": clip, "frames": 60, "bump": "right-back"},
+                               "tv-bump")
+            screen_now = frame[y0 + 8:y1 - 8, x0 + 8:x1 - 8].astype(np.int16)
+            screen_was = plain[y0 + 8:y1 - 8, x0 + 8:x1 - 8].astype(np.int16)
+            check("a bump: STATIC's clip replaces the channel's picture on the big monitor",
+                  bool(st.get("bump_picture")) and float(np.abs(screen_now - screen_was).mean()) > 10,
+                  f"{st.get('bump')}, picture={st.get('bump_picture')}")
+            check("…and the TV's state names it", st.get("describe", {}).get("screens", {}).get("big", {})
+                  .get("bump") == "static/right-back")
+            if out:
+                from PIL import Image
+                Image.fromarray(frame[y0 - 60:y1 + 60, x0 - 60:x1 + 60]).save(os.path.join(out, "tv-bump-crop.png"))
 
         # the frame swap: tuned while covered (so paused), the screen never keeps the last picture
         red = os.path.join(root, "red.mp4")

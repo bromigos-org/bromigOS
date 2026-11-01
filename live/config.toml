@@ -125,6 +125,14 @@ cover_opacity = 0.9      # a window at least this opaque over a muted screen pau
 #   bumpers = true           # a station card opens each item: the channel, what's on, the time
 # The Den TV app (bromigos-live tv guide, SUPER+ALT+G) adds, removes and reorders them for you.
 
+[tv.bumps]               # short STATIC clips between items and on a channel change (live/README.md, "Bumps")
+mode = "night"           # "night": only in the night block; "always"; "off" (bromigos mascot off: off too)
+night = "22:00-04:00"    # the night block, local time
+every = 20               # minutes between two bumps between items (every_night in the night block)
+every_night = 12
+tune_every = 30          # minutes between two bumps on a channel change
+max = 10                 # at most this many a night (outside it, a day)
+
 [world]                  # a theme's world (bromigos theme set mire|tidewell): drawn instead of the den
 enabled = true           # false = always the den, whatever the theme
 dir = ""                 # "" = the current theme (~/.local/state/bromigos/theme/current); or a theme directory

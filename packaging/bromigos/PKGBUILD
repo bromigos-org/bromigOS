@@ -3,7 +3,7 @@
 # bromigOS, the whole of it: `pacman -S bromigos` (or `bromigos install`) on Arch gives the
 # desktop (bromigos-desktop: Hyprland, the bar, the lock screen and the session's
 # plumbing), the live layer and its worlds, the widgets, VECTOR, the login screen, the
-# fonts and the theme, STATIC's art (the guide's host), and the manual
+# fonts and the theme, STATIC's art (the guide's host and Den TV's bumps), and the manual
 # to read offline. The homelab integrations are optional (bromigos-homelab).
 
 pkgname=bromigos

@@ -1,16 +1,18 @@
 # Maintainer: bromigOS <packages@bromigos.org>
 #
-# STATIC's art (mascot/): the painted shells that host Den TV's guide.
+# STATIC's art (mascot/): the painted shells that host Den TV's guide and Den TV's bumps.
 # Painted and animated on licence-clean models (mascot/README.md; docs/ASSETS.md, "STATIC,
 # the mascot"); no code. The apps find it by its manifests and fall back to the code-drawn
-# placeholder without it. bromigos depends on it; `bromigos mascot off` turns him off.
+# placeholder without it. bromigos depends on it; Settings › Den TV › Bumps and
+# `bromigos mascot off` turn what it shows off.
 #
 #   /usr/share/bromigos/static/        manifest.json and the guide's loops (lib/bromigos_static_art.py)
+#   /usr/share/bromigos/bumps/static/  bumps.json and the clips (lib/bromigos_bumps.py)
 
 pkgname=bromigos-mascot-art
-pkgver=0.1.3.r1.g421add4
+pkgver=0.1.3.r4.ga6811a5
 pkgrel=1
-pkgdesc="bromigOS mascot art: STATIC's painted shells hosting Den TV's guide"
+pkgdesc="bromigOS mascot art: STATIC's painted shells hosting Den TV's guide, and Den TV's night-block bumps"
 arch=('any')
 url='https://github.com/bromigos-org/bromigOS'
 license=('MIT OR Apache-2.0')
@@ -36,14 +38,14 @@ check() {
   # every manifest parses, and every file it names is in the package (no missing clip ships)
   python - <<'PY'
 import json, os
-for manifest, key in (("mascot/static/manifest.json", "art"),):
+for manifest, key in (("mascot/static/manifest.json", "art"), ("mascot/bumps/static/bumps.json", "bumps")):
     doc = json.load(open(manifest))
     assert doc["schema"] == 1, manifest
     base = os.path.dirname(manifest)
     if key == "art":
         files = [f for e in doc["art"].values() for h, f in e.items() if h.isdigit()]
     else:
-        files = [b[k] for b in doc["bumps"] for k in ("file", "sting") if b.get(k)]
+        files = [b["file"] for b in doc["bumps"]]
     for f in files:
         assert os.path.isfile(os.path.join(base, f)), (manifest, f)
 PY
@@ -53,6 +55,10 @@ package() {
   local f
   for f in "$_root"/mascot/static/manifest.json "$_root"/mascot/static/*.webp; do
     install -Dm0644 "$f" "$pkgdir/usr/share/bromigos/static/$(basename "$f")"
+  done
+  install -Dm0644 "$_root/mascot/bumps/static/bumps.json" "$pkgdir/usr/share/bromigos/bumps/static/bumps.json"
+  for f in "$_root"/mascot/bumps/static/clips/*.mp4; do
+    install -Dm0644 "$f" "$pkgdir/usr/share/bromigos/bumps/static/clips/$(basename "$f")"
   done
   install -Dm0644 -t "$pkgdir/usr/share/doc/$pkgname/" "$_root/mascot/README.md" "$_root/mascot/provenance.jsonl"
   install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"

@@ -28,6 +28,7 @@ modules to the same folder:
 | `bromigos_tv.py` | The den TV's channels, their wall-clock schedule, picked shows taking turns, and each screen's remembered channel and sound |
 | `bromigos_tvchannels.py` | Shared channel operations and JSON CLI for the guide, media and VECTOR |
 | `bromigos_tvconfig.py` | Writes the den TV's `[[tv.channel]]` tables in place, keeping comments: the channel guide's writer |
+| `bromigos_bumps.py` | Den TV's bumps: the packs, the night block and the caps that decide when one plays; [bumps](../live/README.md#bumps) |
 | `bromigos_tvplay.py`, `bromigos_tvremote.py` | Search and play on a den screen, its remote's actions, and their JSON command line |
 | `bromigos_cast.py` | Casting: Chromecasts, DLNA TVs, AirPlay, Jellyfin's apps and the den's screens as one list of targets (`bromigos media cast`) |
 | `bromigos_youtube.py` | YouTube playlists and channels through yt-dlp, cached, with live streams and keeping videos |

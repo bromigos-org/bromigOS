@@ -339,6 +339,63 @@ doesn't say: every screen) and `start` (each screen's first channel).
   the screen's glass, like a TV network's evening block: the channel's name, "UP NEXT",
   what's on and the time. Every screen on the channel shows it at the same moment.
 
+### Bumps
+
+A **bump** is a short clip, 5 to 15 seconds, that plays between two items or when you
+change channel, like a TV network's interstitials late at night. STATIC's crew does a
+beat: LINEMAN fixing a junction box in a shower of sparks, NOIR hosting from his pod, OWL
+keeping watch on a cliff for the night block's **STILL LIT**, the crew on the ship.
+
+- **When.** By default only in the **night block**, 10 PM to 4 AM: its first bump is
+  the night's ident (STILL LIT), and the first item boundary after 4 AM gets the
+  sign-off. Set `mode = "always"` for any time, or `"off"`.
+- **Between items the channel waits.** The bump plays, then the next item starts from
+  its beginning, so nothing is cut (the channel's clock moves back by the bump's length,
+  as `skip` moves it forward). On a channel change, a short bump covers the tune and
+  the channel plays on underneath: it's live.
+- **Not too often.** At most one between items every 12 minutes in the night block (20
+  outside it), one on a channel change every 30 minutes, ten a night, never two within
+  two minutes, and never the same one twice in a row. A tune bump waits a second: if you
+  change channel again, there's none.
+- **Only where you can see it.** A bump plays on a screen that's drawn, in view and
+  decoding, in full motion. Never while the desktop is locked, the screensaver runs or
+  VECTOR is speaking. Screens on the same channel show the same bump.
+- **Skipping it.** Changing channel, `bromigos-live tv skip` or `live` ends it.
+- **Sound.** None. A bump has no sound of its own, so the screen is quiet while it plays.
+- **Captions.** A bump's caption ("STILL LIT") is drawn by the den in the theme's
+  colours, never baked into the clip.
+- **Off.** Settings › Den TV › Bumps, `bromigos scene set tv.bumps.mode off`, or
+  `bromigos mascot off` (no STATIC anywhere).
+
+```toml
+[tv.bumps]
+mode = "night"          # "night" (the night block only), "always", or "off"
+night = "22:00-04:00"   # the night block, local time; it may run past midnight
+every = 20              # minutes between two bumps between items
+every_night = 12        #   ... in the night block
+tune_every = 30         # minutes between two bumps on a channel change
+max = 10                # at most this many a night (outside it, a day)
+packs = []              # only these packs, by name; empty: every pack installed
+```
+
+**Packs.** Bumps come in packs. `bromigos-mascot-art` installs STATIC's, in
+`/usr/share/bromigos/bumps/static/`. Your own go in
+`~/.local/share/bromigos/bumps/<pack>/`, and `$BROMIGOS_BUMPS` (folders, separated by
+colons) is looked at first. A pack is a folder with a `bumps.json`:
+
+```json
+{"schema": 1, "pack": "static", "title": "STATIC's bumps",
+ "bumps": [{"id": "still-lit", "file": "clips/still-lit.mp4", "seconds": 6.5,
+            "roles": ["open", "between"], "caption": "STILL LIT",
+            "about": "RECON's OWL keeps watch on a cliff at night"}]}
+```
+
+`roles` says when a bump may play: `between` (between items), `tune` (on a channel
+change; 6 seconds at most), `open` (the night block's first) and `close` (its sign-off).
+Paths are relative to `bumps.json` and must stay inside the pack. A clip that's missing,
+or longer than 30 seconds, is left out. `lib/bromigos_bumps.py` reads the packs and
+decides; `live/tvbumps.py` plays them.
+
 ### How it plays
 
 `live/tv.py` runs the den TV and `live/mpvgl.py` draws the picture:
@@ -471,6 +528,8 @@ bromigos-live tv sound on --screen small    # on, off or toggle; on one screen a
 bromigos-live tv volume up                  # up, down, or a level: volume 40
 bromigos-live tv state --json               # what's on each screen, the sound, what mpv is doing
 bromigos-live tv poster --screen big --json # what's on as a small JPEG, base64
+bromigos-live tv bumps                      # the bumps' settings, the packs, how many tonight
+bromigos-live tv bump crew --screen big     # play a bump now (any, or one by its id)
 ```
 
 `volume`, `sound`, `close`, `live` and `poster` take `--json`, as `remote`, `set`, `play`
@@ -542,6 +601,7 @@ show a missing-title message until available.
 |---|---|
 | `tests/test_tv.py` | The schedule, the channels, the remembered state, YouTube against a stand-in for yt-dlp (`tests/fake_ytdlp.py`) and keeping videos |
 | `tests/test_tv_screens.py` | Every screen at once, `[tv.start]`, one player for two screens on a channel, bumpers, `max_playing`, the sound on one screen, `--screen`, covering and opacity, the hint's speaker, streams sized to each screen from stand-in Jellyfin and Plex servers (`tests/fake_media.py`), YouTube resolved while yt-dlp is slow and the screen is covered and uncovered, picked shows shuffled and taking turns, and the config writer keeping comments |
+| `tests/test_tv_bumps.py` | Bumps: the packs and their bad entries, the night block past midnight, its ident and sign-off once a night, the caps, `bromigos mascot off`; on a screen, the channel waiting for a bump between items, two screens sharing one, no sound of its own, skipping, the caption, a tune bump only once it settles, none where nobody can see it, and full screen |
 | `tests/offscreen_tv.py` | The den pixel for pixel as before with no media channel on, a generated test clip playing through libmpv in two themes, the hint, the poster with still motion, three screens playing at once, one channel on two screens from one player, a bumper card, and a tune that never leaves the last channel's picture. `OFF_MEASURE=20` measures the cost |
 | `../homelab/tests/test_video.py` | The Jellyfin and Plex adapters against fake servers |
 | `../desktop/tests/test_den_tv_guide.py` | The channel guide, Add channel and the show picker, drawn in a headless weston, and every control's hover hint |
@@ -678,7 +738,7 @@ Signal-driven animation of hyprlock is retired: `[events] lock_emblem` must stay
 
 | Path | What it holds |
 |---|---|
-| `~/.local/state/bromigos-live/` | `live.log`, the 72-hour history (`history.npz`, `events.jsonl`), `swarm-seen.json`, the `muted` and `codec-quiet` flags, the den TV's `tv.json` |
+| `~/.local/state/bromigos-live/` | `live.log`, the 72-hour history (`history.npz`, `events.jsonl`), `swarm-seen.json`, the `muted` and `codec-quiet` flags, the den TV's `tv.json`, `tv-clocks.json` (how far each channel was skipped or held for a bump) and `tv-bumps.json` (when the last bump played, how many tonight) |
 | `~/.cache/bromigos/tv/` | The den TV's channel lists, what the servers offer, files' lengths, and items that wouldn't play |
 | `~/.cache/bromigos-live/` | The clean den plate, charts, CI results, the Drift map's layout and spoken lines. All rebuilt when needed |
 | `$XDG_RUNTIME_DIR/bromigos-live.sock` | The control socket |

@@ -242,6 +242,27 @@ Without `bromigos-mascot-art`, a simple drawn STATIC plays these parts. He moves
 while the guide is on screen, and he holds still under reduced motion. **Settings ›
 Mascot** (or `bromigos mascot on|quiet|off`) turns him on, quiet or off.
 
+### Bumps
+
+Late at night the den plays short **bumps** between shows, like a TV network's
+interstitials: a few seconds of STATIC's crew. LINEMAN fixes a junction box in a shower of
+sparks, NOIR hosts from his pod, the crew works the ship, and OWL keeps watch on a cliff
+for the night block's **STILL LIT**.
+
+- **When:** in the night block, 10 PM to 4 AM, a few times a night at most. The first
+  is the night's ident, and the first after 4 AM signs off.
+- **Nothing is missed:** between shows, the channel waits for the bump, and the next show
+  starts from its beginning. When you change channel, a short one may cover the tune.
+- **Only where you can see it:** never while the screen is locked, the screensaver runs or
+  VECTOR is speaking, and never on a screen hidden under a window.
+- **Sound:** none. The screen is quiet while a bump plays.
+- **Skip one:** change channel, or **SKIP** (6 on the number-pad remote).
+- **Turn them off or on all the time:** **Settings › Den TV › Bumps** (in the night block,
+  any time, or off). `bromigos mascot off` turns them off too.
+
+They come from `bromigos-mascot-art`. You can add your own packs; see
+[the live layer's notes on bumps](https://github.com/bromigos-org/bromigOS/blob/main/live/README.md#bumps).
+
 Use a card's **Contents…** menu to see its titles, reorder picks, or add and remove
 items. **Shuffle**, **In order** and **Alternate** choose its play order.
 
