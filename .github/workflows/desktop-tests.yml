@@ -1,0 +1,36 @@
+name: desktop tests
+# The desktop package's unit tests on every PR that touches desktop/. Before this they ran
+# only in bromigos-desktop's check() during the packages run on main, so a PR could merge
+# green and then stop the publish (#58's Settings › Mascot tripped test_vector_guard).
+on:
+  pull_request:
+    paths:
+      - "desktop/**"
+      - "packaging/bromigos-desktop/**"
+      - ".github/workflows/desktop-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Desktop unit tests
+    # GitHub's runner, never the lab's: this repo is public (forks' PRs run here)
+    runs-on: ubuntu-latest
+    container: archlinux:base
+    timeout-minutes: 20
+    steps:
+      - name: tools
+        # bromigos-desktop's makedepends and checkdepends (packaging/bromigos-desktop/PKGBUILD)
+        run: >-
+          pacman -Syu --noconfirm --needed git python lua zsh python-pillow desktop-file-utils
+          python-cairo python-psutil python-gobject pango libxkbcommon >/dev/null
+      - uses: actions/checkout@v5
+      - name: unittest
+        # as a normal user, like makepkg's check(): root ignores the read-only dirs some
+        # tests rely on (test_power's lid change that has to ask through pkexec)
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE/desktop' && PYTHONPATH=lib python -m unittest discover -s tests"
