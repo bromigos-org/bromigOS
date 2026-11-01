@@ -52,6 +52,7 @@ import time
 
 from OpenGL import GL
 
+from .tvbumps import Bumps
 from .tvcontrol import Controls
 
 from . import LIB  # noqa: F401  (the shared libs on sys.path)
@@ -144,7 +145,7 @@ class Deck:
         self.vol_osd = None                # monotonic start
 
 
-class TV(Controls):
+class TV(Controls, Bumps):
     def __init__(self, cfg, log=print):
         self.cfg = cfg
         self.log = log
@@ -185,6 +186,7 @@ class TV(Controls):
         self.full_proc = None
         self.full_session = None
         self.init_controls()
+        self.init_bumps()
         self.resolved = {}                 # (YouTube URL, height) -> Y.stream()'s answer, or {"error", "at"}
         self.notes = {}                    # channel key -> (monotonic, what went wrong): the hint says it
         self._rq = []                      # YouTube streams to resolve: (url, height)
@@ -328,6 +330,7 @@ class TV(Controls):
         self.wake.set()
         self._changed()
         self.log(f"tv: {TVL.SCREEN_NAMES.get(screen, screen)} on channel {n}, {ch['name']}")
+        self.bump_tuned(screen)
         return f"{screen}: channel {n} of {len(lu)}, {ch['name']}"
 
     def rekey(self, old, new):
@@ -434,6 +437,7 @@ class TV(Controls):
         self.covered = set(covered or ())
         self.quiet, self.ducked = quiet, ducked
         self.motion, self.software = motion, software
+        self.bumps_tick()
         drawing = _mono() - self.drawn_at < 1.2
         snd = self.sound_screen()
         media = [s for s, _ in self.media_screens()]
@@ -655,7 +659,8 @@ class TV(Controls):
             return self._resolved_stream(it.get("url"), height, title, None)
         if ch["kind"] == "files":
             return {"url": it.get("url"), "headers": {}, "ytdl_format": None, "title": title, "start": slot.offset,
-                    "web": None, "server": "Files"}
+                    "web": None, "server": "Files",
+                    "audio": self.bump_audio(screen) if screen and it.get("kind") == "bump" else None}
         if ch["kind"] == "youtube" or it.get("server") == "youtube":
             import bromigos_youtube as Y
             path = Y.kept(ch.get("keep"), it.get("id")) if ch.get("keep") else None
@@ -752,6 +757,8 @@ class TV(Controls):
         if d.loaded == want or _mono() < self.retry_at.get(ch["key"], 0):
             return
         if d.loaded and d.loaded[0] == ch["key"] and d.tune is None:
+            if self.bump_between(d, ch, slot):                  # between items: a bump, when one's due
+                return
             d.tune = (_mono(), self.channel(d.name)[0], ch["name"])     # the next item: a moment of static
         try:
             s = self.stream(ch, slot, screen=d.name)
@@ -790,9 +797,11 @@ class TV(Controls):
         if not d.loaded or p is None:
             return
         if ch.get("override") and p.ended and p.ended[0] in ("eof", "error"):
+            bump = self.bumping(d.name)
             self.overrides.pop(d.name, None)
             self._unload(d)
-            self.feedback(d.name, "BACK TO CHANNEL")
+            if not bump:                                        # a bump's end is just the channel again
+                self.feedback(d.name, "BACK TO CHANNEL")
             return
         failed = p.ended is not None and p.ended[0] == "error"
         grace = 25 if (d.stream or {}).get("quality") in (None, "direct") else 60     # a transcode takes longer
@@ -903,9 +912,11 @@ class TV(Controls):
         ages = [now - v for v in (d.tune[0] if d.tune else None, d.vol_osd, d.feedback[0] if d.feedback else None) if v is not None]
         alpha = round(min(1., max(0., (1.5 - min(ages)) / .35)), 2) if ages and self.motion == "full" else 1.
         tag = self.overrides.get(screen, {}).get("reason")
+        if tag == "BUMP":
+            tag = None                                          # a bump wears its caption, not a tag
         speaker = screen == self.sound_screen() and self._effective_sound(screen)[0]
         if lines is None:
-            lines = self._bumper(screen)
+            lines = self.bump_caption(screen) or self._bumper(screen)
         if not (lines or vol is not None or speaker or static or feedback or tag) or screen not in self.px:
             return 0.0, None
         sig = (lines, vol, speaker, feedback, tag, alpha, self.px[screen][2:], glkit.T.version(0.0))
@@ -935,6 +946,32 @@ class TV(Controls):
         r, g, b, _ = glkit.col("phosphor")
         u = h / 100.0
         cr.select_font_face("Geist Mono", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        if lines and lines[0] == "bump":
+            # a bump's caption: a lower third over the clip, in the den's phosphor, no card
+            _, caption, chname, calpha = lines
+            grad = cairo.LinearGradient(0, h * 0.55, 0, h)
+            pr, pg, pb, _ = glkit.col("panel")
+            grad.add_color_stop_rgba(0, pr, pg, pb, 0.0)
+            grad.add_color_stop_rgba(1, pr, pg, pb, 0.75 * calpha)
+            cr.set_source(grad)
+            cr.rectangle(0, h * 0.55, w, h * 0.45)
+            cr.fill()
+            size = 15 * u
+            cr.set_font_size(size)
+            while size > 7 * u and cr.text_extents(caption).x_advance > w - 14 * u:
+                size *= 0.92
+                cr.set_font_size(size)
+            e = cr.text_extents(caption)
+            cr.set_source_rgba(r, g, b, 0.95 * calpha)
+            cr.move_to((w - e.x_advance) / 2, h - 16 * u)
+            cr.show_text(caption)
+            cr.set_font_size(6 * u)
+            sub = chname.upper()[:30]
+            e = cr.text_extents(sub)
+            cr.set_source_rgba(r, g, b, 0.6 * calpha)
+            cr.move_to((w - e.x_advance) / 2, h - 7 * u)
+            cr.show_text(sub)
+            lines = None
         if lines and lines[0] == "bumper":
             # a network's bumper: the channel's name large, what's on, the time, over a dark card
             _, chname, what, clock = lines
@@ -1614,10 +1651,14 @@ class TV(Controls):
                                + ("" if ch["kind"] == "own" else f"  ({ch['kind']})")
                                + ("  [sound]" if n == cur and s == snd else ""))
             return "\n".join(out)
+        if verb == "bumps":
+            return self.bump_command(rest, screen)
+        if verb == "bump":
+            return self.bump_now(self._pick(screen), rest[0] if rest else None)
         if verb == "state":
             import json
             return json.dumps(self.describe(), indent=None if "--json" in rest else 1)
-        return ("bromigos-live tv next|prev|set N|open|close|live|web|guide|sound on|off|toggle|volume up|down|N|list|state "
+        return ("bromigos-live tv next|prev|set N|open|close|live|web|guide|sound on|off|toggle|volume up|down|N|list|bumps|bump [ID]|state "
                 "[--screen big|wave|emblem]")
 
     def _playing(self, s):
@@ -1649,7 +1690,8 @@ class TV(Controls):
                  "sound": st["sound"], "volume": st["volume"], "rect": [round(v) for v in self.rects.get(s, ())],
                  "allowed": d.allowed, "capped": d.capped, "covered": s in self.covered,
                  "follows": self.follows.get(s), "tuned": bool(st.get("tuned")),
-                 "on_demand": s in self.overrides}
+                 "on_demand": s in self.overrides and not self.bumping(s),
+                 "bump": (self.bumping(s) or {}).get("item", {}).get("id")}
             slot = self.slot(ch)
             if slot:
                 keep = ("id", "title", "series", "season", "episode", "kind", "duration", "year", "server", "poster",

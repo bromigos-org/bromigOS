@@ -760,6 +760,18 @@ def channel_step(ch, previous=False, t=None):
     return now_next(ch, t)
 
 
+def channel_hold(ch, seconds):
+    """The channel waits `seconds` (a bump between items): its clock moves back that much,
+    so what comes next starts from its beginning once the bump is over."""
+    if not ch.get("key") or seconds <= 0:
+        return None
+    path = os.path.join(STATE_DIR, "tv-clocks.json")
+    clocks = _read(path)
+    clocks[ch["key"]] = channel_offset(ch) - float(seconds)
+    _write_json(path, clocks)
+    return clocks[ch["key"]]
+
+
 def now_next(ch, t=None):
     """The channel's Slot now, from its cached items (no network), or None."""
     if ch.get("kind") == "live":

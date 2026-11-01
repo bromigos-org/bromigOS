@@ -24,6 +24,7 @@ class Session:
         self.version = None
         self.volume = tv.screens[screen]["volume"]
         self.muted = False
+        self.bump = None                    # the bump playing between two items, if any
         self.refresh_palette()
         with open(self.conf_path, "w") as f:
             os.chmod(self.conf_path, 0o600)
@@ -83,7 +84,21 @@ class Session:
             try: a.video_stop(self.stream)
             except Exception: pass
 
+    def _play_bump(self, bump):
+        """A bump between two items: its clip from the pack (a local file), its sting when
+        stings are on, its caption on mpv's OSD after a second."""
+        import bromigos_bumps as B
+        self.bump = bump
+        self.send("set_property", "force-media-title", bump.caption or "Den TV")
+        options = {"start": "0"}
+        if bump.sting and B.settings(self.tv.cfg)["sting"]:
+            options["audio-files"] = bump.sting
+        self.send("loadfile", bump.path, "replace", -1, options)
+        if bump.caption:
+            self.send("expand-properties", "show-text", bump.caption, int(max(1.0, bump.seconds - 1.5) * 1000))
+
     def _retune(self):
+        self.bump = None
         n, ch = self.tv.channel(self.screen)
         slot = self.tv.slot(ch)
         stream = self.tv.stream(ch, slot, full=True)
@@ -112,6 +127,15 @@ class Session:
                     self.tv.set_sound(self.screen, on=(not self.muted if event["name"] == "mute" else state["sound"]),
                                       volume=self.volume, from_full=True)
         if event.get("event") == "end-file" and event.get("reason") == "eof":
+            if self.bump is not None:                       # the bump's over: the channel's next item
+                self.bump = None
+                self.retune()
+                return
+            if self.screen not in self.tv.overrides:        # a channel's item ended: a bump first, when one's due
+                bump = self.tv.full_bump(self.screen)
+                if bump is not None:
+                    self._play_bump(bump)
+                    return
             self.tv.overrides.pop(self.screen, None)
             self.tv.feedback(self.screen, "BACK TO CHANNEL")
             self.retune()

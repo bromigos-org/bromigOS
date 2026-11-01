@@ -59,7 +59,8 @@ class Controls:
             return ch
         item = o["item"]
         kind = {"youtube": "youtube", "files": "files"}.get(item.get("server"), "server")
-        return dict(o["channel"], key=f"on-demand-{screen}-{o['at']}", kind=kind,
+        key = f"bump-{o['at']}" if o.get("reason") == "BUMP" else f"on-demand-{screen}-{o['at']}"   # one bump: one player
+        return dict(o["channel"], key=key, kind=kind,
                     source=item.get("server") or o["channel"].get("source"), name=TVL.label(item),
                     override=screen, bumpers=False)
 
@@ -79,9 +80,11 @@ class Controls:
             offset = o["offset"]
         duration = float(o["item"].get("duration") or 0)
         if duration and offset >= duration:
+            bump = o.get("reason") == "BUMP"
             self.overrides.pop(s, None)
             self._unload(self.decks[s])
-            self.feedback(s, "BACK TO CHANNEL")
+            if not bump:                                    # a bump's end is just the channel again
+                self.feedback(s, "BACK TO CHANNEL")
             return self.slot(self.channel(s)[1])
         start = time.time() - offset
         return TVL.Slot(item=o["item"], offset=offset, start=start,
@@ -100,6 +103,11 @@ class Controls:
         return f"{screen}: back to the channel"
 
     def skip_item(self, screen, previous=False):
+        if self.bumping(screen):                            # skip during a bump: the channel, now
+            self.overrides.pop(screen, None)
+            self._unload(self.decks[screen])
+            self.wake.set()
+            return f"{screen}: bump skipped"
         ch = self.channel(screen)[1]
         if not ch.get("override"):
             moved = TVL.channel_step(ch, previous)
