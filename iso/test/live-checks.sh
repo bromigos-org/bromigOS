@@ -58,20 +58,30 @@ check "Hyprland is running" pgrep -x Hyprland
 check "the bar (waybar)" pgrep -x waybar
 check "the widgets" pgrep -f 'python3? /usr/bin/bromigos-widgets'
 check "the live layer" pgrep -f 'python3? -m live.app'
-# the bar and the live layer are user services (bromigos-bar.service, bromigos-live.service):
-# when either is missing, how the user manager saw them, for the log
+# the bar and the live layer are user services (bromigos-bar.service, bromigos-live.service)
+units_journal() {
+    sudo -n journalctl -b --no-pager -o short-monotonic \
+        _SYSTEMD_USER_UNIT=bromigos-bar.service + USER_UNIT=bromigos-bar.service + \
+        _SYSTEMD_USER_UNIT=bromigos-live.service + USER_UNIT=bromigos-live.service
+}
+# how long their start waited for the Hyprland session to be found (bromigos-bar ready)
+units_journal 2>/dev/null | grep -F 'Hyprland session came up after' | sed 's/^/INFO /'
+# when either is missing: how the user manager saw them, for the log
 if ! pgrep -x waybar >/dev/null || ! pgrep -f 'python3? -m live.app' >/dev/null; then
     echo "---- the session's user services (the bar or the live layer is missing)"
     {
-        systemctl --user show -p LoadState,ActiveState,SubState,Result,NRestarts,ExecMainStatus,FragmentPath,ConditionResult bromigos-bar.service bromigos-live.service
+        systemctl --user show -p LoadState,ActiveState,SubState,Result,NRestarts,ExecMainStatus,FragmentPath bromigos-bar.service bromigos-live.service
         systemctl --user status --no-pager -l bromigos-bar.service bromigos-live.service graphical-session.target
         echo "-- jobs"; systemctl --user list-jobs --no-pager
         echo "-- the manager's environment"; systemctl --user show-environment
-        echo "-- the journal"; sudo -n journalctl -b --no-pager _UID=$(id -u) -o short-monotonic | grep -E 'bromigos-(bar|live)|waybar|graphical-session|bromigos session' | tail -60
-        echo "-- user@$(id -u)"; sudo -n journalctl -b --no-pager -u "user@$(id -u).service" -o short-monotonic | tail -40
-        echo "-- processes"; ps -eo pid,ppid,cgroup:80,args | grep -E 'waybar|bromigos-(bar|live)|live.app|Hyprland' | grep -v grep
-        echo "-- the live layer's log"; tail -20 "${XDG_STATE_HOME:-$HOME/.local/state}/bromigos-live/live.log" 2>&1
-        echo "-- Hyprland's log"; tail -n 200 "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/hypr/*/hyprland.log 2>/dev/null | grep -iE 'bromigos-(bar|live)|exec|error' | tail -30
+        echo "-- their journal"; units_journal | tail -40
+        echo "-- the Hyprland instances (hyprland.lock: PID, Wayland socket)"
+        for d in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/hypr/*/; do
+            stat -c '%n %y' "$d" "$d/hyprland.lock" && tr '\n' ' ' <"$d/hyprland.lock" && echo
+        done
+        echo "-- bromigos session"; bromigos session
+        echo "-- processes"; ps -eo pid,ppid,cgroup:80,args | grep -E 'waybar|bromigos-(bar|live)|live.app|[H]yprland' | grep -v grep
+        echo "-- the live layer's log"; tail -20 "${XDG_STATE_HOME:-$HOME/.local/state}/bromigos-live/live.log"
     } 2>&1 | sed 's/^/     /'
 fi
 # swaybg is the fallback: a working live background removes it (desktop/bin/bromigos-wallpaper)
