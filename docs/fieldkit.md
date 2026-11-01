@@ -563,6 +563,10 @@ differences:
   (NetworkManager instead), cloud-init, the virtual machine guest tools, smartcards, and SSH
   (until remote help).
 - The full medium's offline `pacman.conf`, the clock's wait and the installer are shared.
+- The image leaves out what the running medium never reads, as the full medium's does
+  ([iso.md](iso.md#what-the-live-system-leaves-out)). Field Kit also leaves out the worlds'
+  video loops and sounds, since it has no desktop. Field Kit for `/boot` is made from the
+  same image, so it's smaller too. bromigOS Server still installs every file.
 - It also makes `bromigos-fieldkit-<version>-x86_64-boot.tar`, Field Kit for `/boot`:
   `iso/fieldkit/package.sh` turns that into the `bromigos-fieldkit` package, which the
   release pipeline signs and publishes with `ci/publish.sh`'s `PKGS_PREBUILT`.

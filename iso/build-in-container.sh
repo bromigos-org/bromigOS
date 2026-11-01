@@ -245,6 +245,13 @@ du -sh "$offline" | awk '{print "offline repository: " $1}'
 
 # ── 4. the build's pacman.conf: the offline repository first (what the image's packages
 #      come from: the same files the medium carries), the mirrors after it ──────────────
+# NoExtract: what the running medium never reads stays out of its image (docs/iso.md, "What
+# the live system leaves out"): other packages' docs (bromigOS's own and the manual stay),
+# other languages' messages, man pages and Qt translations (the medium is in English; English
+# man pages stay), GTK's API docs, GObject's .gir XML (the typelibs stay), C headers (Python's
+# stay) and static libraries, and Hyprland's default wallpapers (bromigOS turns them off). Only
+# the image: the live system's own pacman.conf has no NoExtract, and an install's packages come
+# whole from the offline repository, so an installed system has every file
 cat > "$profile/pacman.conf" <<EOF
 [options]
 HoldPkg     = pacman glibc
@@ -252,6 +259,14 @@ Architecture = auto
 ParallelDownloads = 5
 SigLevel    = Required DatabaseOptional
 LocalFileSigLevel = Optional
+NoExtract   = usr/share/doc/* !usr/share/doc/bromigos*
+NoExtract   = usr/share/locale/* !usr/share/locale/en/* !usr/share/locale/en_US/* !usr/share/locale/locale.alias
+NoExtract   = usr/share/man/* !usr/share/man/man*
+NoExtract   = usr/share/qt6/translations/* !usr/share/qt6/translations/*_en*
+NoExtract   = usr/share/gtk-doc/* usr/share/gir-1.0/*
+NoExtract   = usr/include/* !usr/include/python3*
+NoExtract   = usr/lib/*.a
+NoExtract   = usr/share/hypr/wall*.png
 
 [core]
 Server = file://$offline/\$repo/os/\$arch
@@ -261,6 +276,9 @@ Server = file://$offline/\$repo/os/\$arch
 Server = file://$offline/\$repo/\$arch
 EOF
 if (( dev )); then sed -i '/^\[bromigos\]/a SigLevel = Optional TrustAll' "$profile/pacman.conf"; fi
+# Field Kit has no desktop: the live layer's media (the worlds' video loops, clips, actors and
+# sounds) stay out of its image too; each world.toml, the colours, emblems and holograms stay
+if [[ $edition == fieldkit ]]; then sed -i '/^NoExtract   = usr\/share\/hypr/a NoExtract   = usr/share/bromigos/themes/*/live/* !usr/share/bromigos/themes/*/live/world.toml' "$profile/pacman.conf"; fi
 # the sizes behind docs/fieldkit-packages.md (iso/fieldkit/manifest.py docs)
 if [[ $edition == fieldkit ]]; then
     pacman -r "$empty" -Si "${names[@]}" 2>/dev/null | awk -F' *: ' '
