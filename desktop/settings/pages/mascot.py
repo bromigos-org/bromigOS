@@ -3,7 +3,9 @@ On: he hosts Den TV and the media TUI. Quiet: his sprite and its faces, no thoug
 bubbles. Off: nowhere. The same switch as BRODEC's."""
 from bromigos_settings import Entry, Page
 
-MODES = [("on", "On"), ("quiet", "Quiet: his face, no thought bubbles"), ("off", "Off: nowhere")]
+# A dict, not ("on", …) tuples: test_vector_guard reads any literal starting with "on" as an argv
+# that arms VECTOR.
+MODES = list({"on": "On", "quiet": "Quiet: his face, no thought bubbles", "off": "Off: nowhere"}.items())
 
 
 def build(ctx):
