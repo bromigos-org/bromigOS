@@ -1215,6 +1215,8 @@ class GraphicalSteps(unittest.TestCase):
     """Each new step in the graphical installer, drawn offscreen (render-gui.sh, headless weston)."""
 
     def test_render(self):
+        if not shutil.which("weston"):
+            self.skipTest("weston is needed (headless, for the offscreen pictures)")
         out = os.environ.get("BROMIGOS_INSTALLER_SHOTS") and os.path.join(os.environ["BROMIGOS_INSTALLER_SHOTS"], "server-gui") \
             or tempfile.mkdtemp()
         env = dict(os.environ, BROMIGOS_INSTALLER_RENDER_ONLY="server-")
