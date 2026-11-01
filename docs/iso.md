@@ -575,15 +575,15 @@ The squashfs is compressed with zstd at level 19 in 1 MiB blocks, not releng's x
 Kit uses the same settings. The offline repository is half the image and is already zstd,
 so no setting shrinks it. On v0.1.3's live system, without the offline repository:
 
-| Setting | Live system packed | Build time (16 threads) |
-|---|---:|---:|
-| zstd level 6 (until 2026-10-31) | 2,476 MB | 18 s |
-| zstd level 19 | 2,332 MB | 201 s |
-| xz, x86 filter (releng's) | 2,224 MB | 353 s |
+| Setting | Live system packed | Build time (16 threads) | Unpacking `/usr/lib` (2.7 GiB, one thread) |
+|---|---:|---:|---:|
+| zstd level 6 (until 2026-10-31) | 2,476 MB | 18 s | 2.8 s |
+| zstd level 19 | 2,332 MB | 201 s | 3.2 s |
+| xz, x86 filter (releng's) | 2,224 MB | 353 s | 18.7 s |
 
-zstd unpacks at about the same speed at every level, so level 19 costs only build time.
-xz packs about 5% smaller again, but unpacks several times slower, which slows the live
-boot and every program's first start.
+zstd unpacks nearly as fast at level 19 as at level 6, so level 19 costs mostly build
+time. xz packs about 5% smaller again, but unpacks about six times slower, which slows the
+live boot and every program's first start.
 
 **A test build** (`--test-key FILE`) lets that SSH key sign in as the live user, adds a
 serial console, and labels the medium `BROMIGOS_TEST`. Build a medium for people without
