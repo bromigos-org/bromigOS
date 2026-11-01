@@ -1148,3 +1148,65 @@ def budget(need, have, width=34):
                               role="warn" if over else "primary"))
         out.append(f" {n}/{hv} {unit}\n", style=warn if over else soft)
     return out
+
+
+# ── bromigOS Server's hologram: the rack, turning ─────────────────────────────────────
+RACK_PLAIN = {"console": [" ┌──────┐ ", " │■ ════│ ", " │■ ════│ ", " │■ ════│ ", " │■ ════│ ", " │■ ════│ ", " │■ ════│ ",
+                          " └┬────┬┘ ", " ═╧════╧═ ", " ~~~~~~~~ "],
+              "ascii": [" +------+ ", " |o ====| ", " |o ====| ", " |o ====| ", " |o ====| ", " |o ====| ", " |o ====| ",
+                        " +-+--+-+ ", " ==+==+== ", " ~~~~~~~~ "]}
+RACK_STILL, RACK_TURN = 10, 18.0       # the gallery's own angle for a still frame; seconds a turn
+
+
+def rack(t=0.0, still=False, fill=None):
+    """bromigOS Server's hologram in the terminal: the vector gallery's rack turning (braille,
+    lib/bromigos_rack.py; one frame every 15 degrees, a turn every 18 s), its lines by their
+    brightness, and the Sweep, a lit row passing up it. The Linux console and ASCII get the
+    drawn rack with the same Sweep. Still under reduced motion. fill (0-1): while installing,
+    the rack is lit from its foot up to how far the install has got, the Sweep at that line."""
+    look, lit, soft, dim, muted, warn, cyan = _srv_look()
+    out = Text(no_wrap=True, overflow="crop")
+    try:
+        import bromigos_rack as R
+    except ImportError:
+        R = None
+    if look == "nerd" and R is not None:
+        rows, levels = R.FRAMES[RACK_STILL if still else int(t / RACK_TURN * len(R.FRAMES) + RACK_STILL) % len(R.FRAMES)]
+    else:
+        rows = RACK_PLAIN["ascii" if look == "ascii" else "console"]
+        levels = ["".join("2" if ch != " " else "0" for ch in r) for r in rows]
+    scan = None if still else len(rows) - 1 - int(t * 3) % (len(rows) + 4)
+    edge = None
+    if fill is not None:
+        edge = len(rows) - 1 - int(max(0.0, min(1.0, fill)) * len(rows))
+        scan = edge
+    style = {"0": dim, "1": dim, "2": soft, "3": lit}
+    for y, (row, lv) in enumerate(zip(rows, levels)):
+        for ch, k in zip(row, lv):
+            st = lit if y == scan and ch != " " else style.get(k, soft)
+            if edge is not None and y < edge:
+                st = dim                        # not installed yet: the dim wireframe
+            out.append(ch, style=st)
+        if y < len(rows) - 1:
+            out.append("\n")
+    return out
+
+
+def beside(left, right, gap=2):
+    """Two pictures side by side, line by line (the left one padded to its widest line)."""
+    if not isinstance(left, Text):
+        left = Text(str(left))
+    if not isinstance(right, Text):
+        right = Text(str(right))
+    ls, rs = left.split("\n", allow_blank=True), right.split("\n", allow_blank=True)
+    width = max((x.cell_len for x in ls), default=0)
+    out = Text(no_wrap=True, overflow="crop")
+    for i in range(max(len(ls), len(rs))):
+        a = ls[i] if i < len(ls) else Text("")
+        out.append_text(a)
+        out.append(" " * (width - a.cell_len + gap))
+        if i < len(rs):
+            out.append_text(rs[i])
+        if i < max(len(ls), len(rs)) - 1:
+            out.append("\n")
+    return out

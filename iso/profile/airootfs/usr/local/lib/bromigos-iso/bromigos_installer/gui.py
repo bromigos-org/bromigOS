@@ -1727,7 +1727,8 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
         self.phase_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         right.append(self.phase_box)
         self._phases("Starting…", 0)
-        right.append(glass.Slideshow(still=self.reduced, width=380 if not getattr(self, "compact", False) else 300))
+        right.append(self.server_install_holo() if server.is_server(self.a) else       # bromigOS Server: the rack
+                     glass.Slideshow(still=self.reduced, width=380 if not getattr(self, "compact", False) else 300))
         hero.append(right)
         page.append(hero)
         self.bar = Gtk.ProgressBar()             # for screen readers and the harness: the same number
@@ -1767,6 +1768,8 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
             hint(chip, "The install finished without a problem")
             col.append(chip)
             hero.append(col)
+            if server.is_server(self.a) and self.screen_h() >= 700:
+                hero.append(self.server_ready_holo())       # bromigOS Server: the rack, its address, how to sign in
             page.append(hero)
             ed = common.edition(self.a["edition"])
             lines = [("system-reboot-symbolic", "Press Restart now."),
@@ -1943,6 +1946,8 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
         self.bar.set_text(f"{pct} %")
         self.ring.set_pct(pct)
         self.pct.set_label(f"{pct} %")
+        if getattr(self, "srv_install_holo", None) is not None:
+            self.srv_install_holo.set_state(pct=pct)
         self.status.set_label(text)
         self._phases(text, pct)
         lid = "installer.install.nearly" if pct >= 85 else ("installer.install.copying" if pct >= 15 else "installer.install")

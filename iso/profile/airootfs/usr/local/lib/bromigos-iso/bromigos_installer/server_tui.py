@@ -60,8 +60,10 @@ CSS = """
     Screen.-compact #srv-qr, Screen.-narrow #srv-qr { display: none; }
     .srv-split { height: auto; }
     .srv-ctl { width: 1fr; height: auto; }
-    .srv-hero { width: auto; height: auto; margin: 1 0 1 0; border: round $primary 40%; background: $surface 60%; padding: 0 1; }
+    .srv-hero { width: auto; height: auto; margin: 1 0 1 0; border: round $primary 40%; background: $surface 60%; padding: 0 1;
+                border-title-color: $primary; border-title-style: bold; border-subtitle-color: $primary 70%; }
     .srv-split .srv-hero { margin: 0 0 0 2; }
+    #srv-role-rack { margin: 1 0 0 2; }
     .srv-group { height: auto; margin-top: 1; }
     .srv-group-head { height: 1; color: $primary; text-style: bold; }
     .srv-note { color: $text-muted; padding-left: 4; }
@@ -133,6 +135,11 @@ else:
     _ON_INPUT = _ON_SWITCH = _ON_CHECK = _ON_RADIO = _ON_SELECT = (lambda f: f)
 
 
+HERO_TITLES = {"srv-netmap": "ITS NETWORK", "srv-keymap": "WHO CAN SIGN IN", "srv-drives": "DATA DISKS",
+               "srv-unlock-art": "THE LOCK", "srv-dial": "UPDATES", "srv-budget": "WHAT IT NEEDS", "srv-vault": "KEYS",
+               "srv-reachmap": "FROM ANYWHERE", "srv-roles-holo": "THIS SERVER"}
+
+
 @_collect
 class ServerPages(_Base):
     """The Installer's server steps: build_<step>, server_check, the briefing's sign-in panel."""
@@ -178,13 +185,18 @@ class ServerPages(_Base):
             t.append(ln + ("\n" if i < len(lines) - 1 else ""), style=T.col("muted") if i == 0 else T.col("faint"))
         return T.hint(T.Choice(t, value=chosen, id=cid), tip)
 
-    def _hero(self, box, fn, hid):
+    def _hero(self, box, fn, hid):  # noqa: C901
         """The step's one hero: fn(t) draws it (t moves its Pulse; 0 under reduced motion). Beside the
         controls on a wide screen, above them otherwise; returns where the controls go. Without
         bromigos_textual's pictures (an older bromigos-core), no hero."""
         if BT is None or not hasattr(BT, "net_map"):
             return box
+        if self._rack_room():                   # the server itself, turning beside the step's picture
+            pic = fn
+            fn = lambda t: BT.beside(BT.rack(t, still=self.reduced), pic(t))      # noqa: E731
         w = Static(fn(0.0), id=hid, classes="srv-hero")
+        w.border_title = "◢ " + HERO_TITLES.get(hid, "THIS SERVER")
+        w.border_subtitle = "HOLO" if self.reduced else "LIVE ●"
         self._hero_w, self._hero_fn = w, fn
         if not self.reduced and BT is not None and not getattr(self, "_srv_timer", None):
             self._srv_t = 0.0
@@ -213,8 +225,14 @@ class ServerPages(_Base):
         if w is not None and w.is_attached:
             w.update(self._hero_fn(0.0 if self.reduced else getattr(self, "_srv_t", 0.0)))
 
+    def _rack_room(self):
+        """Room for the rack hologram beside a hero: a wide enough page, and its art."""
+        return (BT is not None and hasattr(BT, "rack") and server.is_server(self.a) and self.size.width >= 110
+                and not self.narrow())
+
     def _hero_width(self):
-        return max(30, min(64, (self.size.width - (0 if self.narrow() else 26)) // (2 if self.size.width >= 150 else 1) - 8))
+        w = max(30, min(64, (self.size.width - (0 if self.narrow() else 26)) // (2 if self.size.width >= 150 else 1) - 8))
+        return w - 12 if self._rack_room() and self.size.width < 150 else w
 
     def _small(self):
         return getattr(self, "bp", "normal") in ("compact", "narrow", "too-small") or self.size.height < 30
@@ -224,7 +242,20 @@ class ServerPages(_Base):
         s = self._s()
         self.heading(box, "role")
         row = Vertical(id="srv-roles")
-        box.mount(row)
+        if self._rack_room():                   # the cards, and this server beside them taking its roles
+            split = Horizontal(classes="srv-split")
+            box.mount(split)
+            self.role_rack = Static(self._role_rack_art(0.0), id="srv-role-rack", classes="srv-hero")
+            self.role_rack.border_title = "◢ SERVER"
+            split.mount(row, self.role_rack)
+            row.styles.width = "1fr"
+            self._hero_w, self._hero_fn = self.role_rack, self._role_rack_art
+            if not self.reduced and not getattr(self, "_srv_timer", None):
+                self._srv_t = 0.0
+                self._srv_timer = self.set_interval(0.3, self._hero_tick)
+        else:
+            self.role_rack = None
+            box.mount(row)
         icons = {"lab": "gpu", "storage": "disk", "home": "house", "games": "gamepad", "media": "desktop", "plain": "server"}
         chosen = server.roles_of(s)
         Card = _card_cls()
@@ -243,8 +274,22 @@ class ServerPages(_Base):
                          "its own. bromigos server role add adds one later.", classes="muted"))
         self._role_notes()
 
+    def _role_rack_art(self, t):
+        """The rack turning, and under it each role it takes, lit."""
+        on = server.roles_of(self._s())
+        look = BT._srv_look()
+        out = BT.rack(t, still=self.reduced)
+        out.append("\n")
+        for r in server.roles():
+            lit = r["id"] in on
+            out.append("\n" + ("● " if lit else "○ ") + r["title"].split()[0].upper()[:8],
+                       style=look[1] if lit else look[3])
+        return out
+
     def _role_notes(self):
         from . import provision as PV
+        if getattr(self, "role_rack", None) is not None and self.role_rack.is_attached:
+            self.role_rack.update(self._role_rack_art(getattr(self, "_srv_t", 0.0)))
         w = getattr(self, "role_notes", None)
         if w is None:
             return

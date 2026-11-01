@@ -1780,6 +1780,11 @@ class Installer(server_tui.ServerPages, App):
         self.status.display = False          # the phases carry the same words, lit
         side = Vertical(self.status, self.phases, id="ring-side")
         row = Horizontal(self.ring, side, id="ring-row")
+        self.srv_rack = None
+        if server.is_server(self.a) and BT is not None and hasattr(BT, "rack") and self.size.width >= 110:
+            self.srv_rack = Static("", id="srv-install-rack", classes="srv-hero")     # bromigOS Server: the rack, filling
+            self.srv_rack.border_title = "◢ SERVER"
+            row = Horizontal(self.ring, side, self.srv_rack, id="ring-row")
         box.mount(row, self.bar, hint(Button("Show details", id="details"), "Show or hide every step the install takes (F2)."),
                   self.log_view)
         self._ring(0, "Starting…")
@@ -1789,6 +1794,9 @@ class Installer(server_tui.ServerPages, App):
         c = common.theme()[0]
         small = getattr(self, "bp", "normal") in ("compact", "narrow", "too-small")
         self.last_pct = pct
+        if getattr(self, "srv_rack", None) is not None:
+            self.srv_rack.update(BT.rack(getattr(self, "orb_t", 0.0), still=self.reduced, fill=pct / 100))
+            self.srv_rack.border_subtitle = f"{pct} %"
         if BT is not None and hasattr(BT, "ring") and getattr(self, "bp", "normal") != "narrow":
             self.ring.update(self.ring_art(pct, small))
         else:

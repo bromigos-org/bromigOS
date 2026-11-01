@@ -1162,6 +1162,55 @@ class TextSteps(ServerProbe, unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("weston"), "no weston for the offscreen pictures")
+class Hologram(unittest.TestCase):
+    """bromigOS Server's hologram: the rack render's 24 frames, as a sprite for the graphical
+    installer and as braille for the text one; the console's drawn rack; the install's fill."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.join(HERE, "../../../lib"))
+
+    def test_the_frames(self):
+        import bromigos_rack as R
+        self.assertEqual(len(R.FRAMES), 24)
+        for rows, lit in R.FRAMES:
+            self.assertEqual((len(rows), len(lit)), (R.H, R.H))
+            self.assertTrue(all(len(r) == R.W for r in rows) and all(len(x) == R.W for x in lit))
+            self.assertTrue(all(ch == " " or 0x2800 <= ord(ch) <= 0x28FF for r in rows for ch in r))
+            self.assertGreater(sum(ch != " " for r in rows for ch in r), R.W * R.H // 5)     # a rack, not an empty frame
+        sprite = os.path.join(HERE, "../../../desktop/art/server-rack.png")
+        with open(sprite, "rb") as f:
+            head = f.read(24)
+        w, h = int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
+        self.assertEqual(w % 24, 0)
+        self.assertEqual(h, 300)
+
+    def test_it_turns_and_fills(self):
+        import bromigos_textual as BT
+        old = {k: os.environ.get(k) for k in ("BROMIGOS_COLORS", "TERM")}
+        try:
+            os.environ["BROMIGOS_COLORS"] = "truecolor"
+            a, b = BT.rack(0.0).plain, BT.rack(5.0).plain
+            self.assertNotEqual(a, b)                          # it turns
+            self.assertEqual(BT.rack(0.0, still=True).plain, BT.rack(9.0, still=True).plain)      # still: one frame
+            empty = BT.rack(0.0, still=True, fill=0.0)
+            full = BT.rack(0.0, still=True, fill=1.0)
+            dim = BT._srv_look()[3]
+            self.assertTrue(any(str(sp.style) == dim for sp in empty.spans))
+            self.assertLess(sum(str(sp.style) == dim for sp in full.spans), sum(str(sp.style) == dim for sp in empty.spans))
+            os.environ.update(BROMIGOS_COLORS="16", TERM="linux")
+            plain = BT.rack(0.0, still=True).plain
+            self.assertIn("┌──────┐", plain)                 # the console's drawn rack, no braille
+            self.assertFalse(any(0x2800 <= ord(ch) <= 0x28FF for ch in plain))
+            side = BT.beside(BT.rack(0.0, still=True), "a\nb")
+            self.assertEqual(side.plain.split("\n")[0].rstrip()[-1], "a")
+        finally:
+            for k, v in old.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+
 class GraphicalSteps(unittest.TestCase):
     """Each new step in the graphical installer, drawn offscreen (render-gui.sh, headless weston)."""
 

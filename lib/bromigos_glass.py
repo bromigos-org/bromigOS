@@ -19,6 +19,11 @@ gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango, PangoCairo  # noqa: E402
 
+try:    # pycairo: the heroes' gradients and the hologram's additive light
+    import cairo
+except ImportError:     # pragma: no cover
+    cairo = None
+
 try:    # bromigos-desktop's holograms, Sweep and bars (the welcome tour's; the live ISO may not have them)
     import bromigos_driftglass as DG
 except ImportError:
@@ -1962,8 +1967,58 @@ class MiniSweep(Gtk.DrawingArea):
 # Each draws the state it's given (set_state) and redraws when it changes; motion (a Pulse
 # along a link, the Sweep, a Spark when a key arrives) only follows state and stops under
 # reduced motion (still=True), where each draws its resting frame ───────────────────────
+# ── bromigOS Server's hologram: the rack turning on its emitter ────────────────────────
+RACK_FRAMES, RACK_STILL = 24, 10        # the sprite's frames; the gallery's own angle for a still one
+_RACK = {}
+
+
+def rack_frames():
+    """desktop/art/server-rack.png: the vector gallery's rack render, 24 frames side by side
+    (tools/installer-art/make.py rack), or [] where the art isn't installed."""
+    if "f" not in _RACK:
+        frames, p = [], art("server-rack.png")
+        if p:
+            try:
+                sheet = GdkPixbuf.Pixbuf.new_from_file(p)
+                fw = sheet.get_width() // RACK_FRAMES
+                frames = [sheet.new_subpixbuf(i * fw, 0, fw, sheet.get_height()) for i in range(RACK_FRAMES)]
+            except GLib.Error:
+                frames = []
+        _RACK["f"] = frames
+    return _RACK["f"]
+
+
+def draw_rack(cr, cx, base, height, t, still=False, alpha=1.0, turn=18.0):
+    """The rack hologram, the foot of its emitter at (cx, base), height px tall, one turn every
+    `turn` seconds (a still frame under reduced motion), its light added to what's behind.
+    False when the art isn't there (the caller draws the outline rack instead)."""
+    frames = rack_frames()
+    if not frames:
+        return False
+    i = RACK_STILL if still else int(t / turn * RACK_FRAMES + RACK_STILL) % RACK_FRAMES
+    f = frames[i]
+    k = height / f.get_height()
+    cr.save()
+    cr.translate(cx - f.get_width() * k / 2, base - height)
+    cr.scale(k, k)
+    Gdk.cairo_set_source_pixbuf(cr, f, 0, 0)
+    if cairo is not None:
+        cr.set_operator(cairo.OPERATOR_ADD)
+    cr.paint_with_alpha(alpha)
+    cr.restore()
+    return True
+
+
+def rack_width(height):
+    """How wide the rack hologram is at that height."""
+    frames = rack_frames()
+    return frames[0].get_width() * height / frames[0].get_height() if frames else height * 0.6
+
+
 class _Holo(Gtk.DrawingArea):
-    """A hero's frame: its size, the clock, the Glass panel behind it and the Scanline."""
+    """A hero's frame: its size, the clock, and DRIFTGLASS round it: the Glass panel with the
+    holo-table's glow, its floor grid drifting toward you, the Scanline passing down, the
+    Sweep's corner brackets."""
 
     def __init__(self, c, width, height, still=False, name=""):
         super().__init__()
@@ -1987,15 +2042,83 @@ class _Holo(Gtk.DrawingArea):
         return rgba(self.c.get(role) or self.c["primary"], a)
 
     def _draw(self, area, cr, w, h):
-        cr.set_source_rgba(*self.col("panel", 0.55))
+        t = self.t()
+        cr.set_source_rgba(*self.col("panel", 0.6))
         cr.rectangle(0, 0, w, h)
         cr.fill()
-        cr.set_source_rgba(*self.col("primary", 0.35))
+        if cairo is not None:                   # the holo-table's light, from below the middle
+            g = cairo.RadialGradient(w * 0.5, h * 0.95, 4, w * 0.5, h * 0.95, max(w, h) * 0.8)
+            g.add_color_stop_rgba(0, *self.col("primary", 0.13))
+            g.add_color_stop_rgba(1, *self.col("primary", 0.0))
+            cr.set_source(g)
+            cr.paint()
+        self._floor(cr, w, h, t)
+        self.draw(cr, w, h, t)
+        _scanlines(cr, 0, 0, w, h, 0.10)
+        if not self.still and cairo is not None:   # the Scanline, passing down
+            y = (t * 42) % (h + 60) - 30
+            g = cairo.LinearGradient(0, y - 22, 0, y + 1)
+            g.add_color_stop_rgba(0, *self.col("primary", 0.0))
+            g.add_color_stop_rgba(1, *self.col("primary", 0.10))
+            cr.rectangle(0, y - 22, w, 23)
+            cr.set_source(g)
+            cr.fill()
+        self._brackets(cr, w, h)
+
+    def _floor(self, cr, w, h, t):
+        """The holo-table: a floor grid in perspective under the picture, drifting slowly toward you."""
+        hz, vx, vy = h * 0.6, w * 0.5, h * 0.18
+        cr.save()
+        cr.rectangle(0, hz, w, h - hz)
+        cr.clip()
         cr.set_line_width(1)
+        for i in range(-9, 10):                 # the lines running away, to the vanishing point
+            bx = vx + i * w * 0.14
+            cr.move_to(bx, h)
+            cr.line_to(vx + (bx - vx) * 0.02, vy)
+        cr.set_source_rgba(*self.col("primary", 0.07))
+        cr.stroke()
+        drift = 0.0 if self.still else (t * 0.12) % 1.0
+        for k in range(9):                      # and across, closer together far away
+            f = ((k + drift) / 9) ** 2
+            y = hz + (h - hz) * f
+            cr.move_to(0, y)
+            cr.line_to(w, y)
+            cr.set_source_rgba(*self.col("primary", 0.03 + 0.10 * f))
+            cr.stroke()
+        cr.restore()
+
+    def _brackets(self, cr, w, h):
+        """The frame: a faint edge, and lit corner brackets."""
+        cr.set_line_width(1)
+        cr.set_source_rgba(*self.col("primary", 0.16))
         cr.rectangle(0.5, 0.5, w - 1, h - 1)
         cr.stroke()
-        self.draw(cr, w, h, self.t())
-        _scanlines(cr, 0, 0, w, h, 0.10)
+        arm = min(18, w / 8, h / 8)
+        cr.set_line_width(2)
+        cr.set_source_rgba(*self.col("primary", 0.85))
+        for x, y, dx, dy in ((1, 1, 1, 1), (w - 1, 1, -1, 1), (1, h - 1, 1, -1), (w - 1, h - 1, -1, -1)):
+            cr.move_to(x, y + dy * arm)
+            cr.line_to(x, y)
+            cr.line_to(x + dx * arm, y)
+        cr.stroke()
+
+    def server(self, cr, cx, base, height, t, live=True):
+        """This server: the rack hologram turning on its emitter, a Pulse ringing out from its
+        foot while it's live; the drawn rack where the art isn't installed."""
+        if live and not self.still:
+            for k in range(2):
+                f = ((t * 0.45) + k / 2) % 1
+                cr.save()
+                cr.translate(cx, base - height * 0.04)
+                cr.scale(1, 0.28)
+                cr.arc(0, 0, height * (0.22 + 0.28 * f), 0, 2 * math.pi)
+                cr.restore()
+                cr.set_line_width(1.5)
+                cr.set_source_rgba(*self.col("primary", 0.55 * (1 - f)))
+                cr.stroke()
+        if not draw_rack(cr, cx, base, height, t, still=self.still, alpha=1.0 if live else 0.45):
+            self.glyph(cr, "rack", cx - height * 0.45, base - height, height * 0.9, live=live, t=t)
 
     # shapes
     def text(self, cr, s, x, y, pt, role="text", a=1.0, align="left", weight=Pango.Weight.BOLD):
@@ -2013,6 +2136,13 @@ class _Holo(Gtk.DrawingArea):
         """A link: a cable (solid), or Wi-Fi (dashed, with its signal), a Pulse running along it while live."""
         role = "warn" if warn else ("primary" if live else "dim")
         (x1, y1), (x2, y2) = a, b
+        if live:                                # the beam's glow under it
+            cr.set_line_width(7)
+            cr.set_dash([6, 5] if kind == "wifi" else [])
+            cr.set_source_rgba(*self.col(role, 0.10))
+            cr.move_to(x1, y1)
+            cr.line_to(x2, y2)
+            cr.stroke()
         cr.set_line_width(2 if kind == "cable" else 1.6)
         cr.set_dash([6, 5] if kind == "wifi" else [])
         cr.set_source_rgba(*self.col(role, 0.85 if live else 0.45))
@@ -2097,15 +2227,18 @@ class NetworkMap(_Holo):
 
     def draw(self, cr, w, h, t):
         s = self.state
-        inet, rtr, srv = (w * 0.17, h * 0.2), (w * 0.17, h * 0.62), (w * 0.66, h * 0.42)
+        short = h < 230                         # a short screen: the lab's machines lower and smaller, no "how" line
+        inet, rtr, srv = (w * 0.17, h * 0.2), (w * 0.17, h * 0.62), (w * 0.64, h * (0.44 if short else 0.5))
         live = s["connected"]
         self.link(cr, inet, rtr, "cable", live and bool(s["gateway"]), t)
         self.link(cr, rtr, srv, "wifi" if s["kind"] == "wifi" else "cable", live, t, warn=s["wifi_only"], pct=s.get("signal"))
         for i, name in enumerate(s["lab"][:4]):
-            p = (w * (0.42 + 0.17 * i), h * 0.86)
+            p = (w * (0.42 + 0.17 * i), h * (0.9 if short else 0.86))
+            g = 20 if short else 30
             self.link(cr, rtr, p, "cable", True, t + i * 0.3)
-            self.glyph(cr, "rack", p[0] - 15, p[1] - 22, 30, live=True, t=t)
-            self.text(cr, name[:10], p[0], p[1] + 8, 7, "muted", align="center", weight=Pango.Weight.NORMAL)
+            self.glyph(cr, "rack", p[0] - g / 2, p[1] - g * 0.73, g, live=True, t=t)
+            self.text(cr, name[:10], p[0], p[1] + 4 if short else p[1] + 8, 6.5 if short else 7, "muted", align="center",
+                      weight=Pango.Weight.NORMAL)
         self.glyph(cr, "cloud", inet[0] - 24, inet[1] - 26, 48, live=bool(s["gateway"]), t=t)
         self.text(cr, "INTERNET", inet[0], inet[1] + 18, 7, "muted", align="center")
         if s["looking"] and DG is not None:
@@ -2116,19 +2249,20 @@ class NetworkMap(_Holo):
         self.text(cr, "ROUTER", rtr[0], rtr[1] + 19, 7, "muted", align="center")
         if s["gateway"]:
             self.text(cr, s["gateway"], rtr[0], rtr[1] + 31, 7, "soft", align="center", weight=Pango.Weight.NORMAL)
-        self.glyph(cr, "rack", srv[0] - 34, srv[1] - 62, 68, live=live, t=t)
+        self.server(cr, srv[0], srv[1] + 4, h * 0.42, t, live=live)
         self.text(cr, s["name"].upper()[:18], srv[0], srv[1] + 12, 8, "soft", align="center")
         pt = 17 if len(s["address"]) <= 15 else 12
         self.text(cr, s["address"], srv[0], srv[1] + 26, pt, "primary", align="center")
-        self.text(cr, s["how"], srv[0], srv[1] + 30 + pt * 1.6, 7, "muted", align="center", weight=Pango.Weight.NORMAL)
+        if not short:
+            self.text(cr, s["how"], srv[0], srv[1] + 30 + pt * 1.6, 7, "muted", align="center", weight=Pango.Weight.NORMAL)
         if s["wifi_only"]:
             mx, my = (rtr[0] + srv[0]) / 2, (rtr[1] + srv[1]) / 2
             self.text(cr, "▲ WI-FI ONLY", mx, my + 14, 7, "warn", align="center")
         if s.get("reach"):                      # Reach it from anywhere: the tailnet (or BRODEC) link to your devices
-            far = (w * 0.9, h * 0.1)
-            self.link(cr, (srv[0] + 20, srv[1] - 50), far, "wifi", True, t, pct=None)
+            far = (w * 0.9, h * 0.3)
+            self.link(cr, (srv[0] + 26, srv[1] - h * 0.24), far, "wifi", True, t, pct=None)
             self.glyph(cr, "phone", far[0] - 18, far[1] - 4, 34, live=True, t=t)
-            self.text(cr, s["reach"].upper(), far[0] - 6, far[1] + 30, 6.5, "cyan", align="right")
+            self.text(cr, s["reach"].upper(), w - 12, 8, 6.5, "cyan", align="right")
 
 
 class AccessMap(_Holo):
@@ -2148,15 +2282,20 @@ class AccessMap(_Holo):
 
     def draw(self, cr, w, h, t):
         s = self.state
-        door = (w * 0.74, h * 0.46)
+        door = (w * 0.78, h * 0.46)
         dw, dh = 62, 92
-        self.card(cr, door[0] - dw / 2, door[1] - dh / 2, dw, dh, "primary", s["ssh"] or True)
-        cr.rectangle(door[0] - dw / 2 + 8, door[1] - dh / 2 + 8, dw - 16, 30)
-        cr.set_source_rgba(*self.col("primary", 0.5))
+        rh = h * 0.62                           # this server, the way in seated on its front
+        self.server(cr, door[0], door[1] + rh * 0.55, rh, t, live=s["ssh"])
+        bx, by = door[0] - 34, door[1] + rh * 0.12   # the way in: a badge on its front, the lock and how
+        cr.rectangle(bx, by, 68, 46)
+        cr.set_source_rgba(*self.col("panel", 0.92))
+        cr.fill_preserve()
+        cr.set_source_rgba(*self.col("primary", 0.9))
+        cr.set_line_width(1.2)
         cr.stroke()
-        self.text(cr, ">_", door[0], door[1] - dh / 2 + 13, 10, "primary", align="center")
-        self.lock(cr, door[0], door[1] + 18, 26, True)
-        self.text(cr, "THIS SERVER", door[0], door[1] + dh / 2 + 6, 7, "muted", align="center")
+        self.lock(cr, door[0], by + 22, 18, True)
+        self.text(cr, ">_ SSH" if s["ssh"] else "CONSOLE", door[0], by + 31, 6.5, "primary", align="center")
+        self.text(cr, "THIS SERVER", door[0], door[1] + rh * 0.55 + 4, 7, "muted", align="center")
         rows = [(k, "primary", "key") for k in s["keys"][:4]]
         if len(s["keys"]) > 4:
             rows.append((f"+{len(s['keys']) - 4} more", "primary", "key"))
@@ -2445,7 +2584,10 @@ class Constellation(_Holo):
             for (x1, y1, *_), (x2, y2, *_) in zip(pts, pts[1:]):
                 self.link(cr, (x1 + 24, y1), (x2 - 24, y2), "cable", True, t)
             for x, y, label, g, sub in pts:
-                self.glyph(cr, g, x - 30, y - 50, 60, live=True, t=t)
+                if g == "rack":
+                    self.server(cr, x, y + 6, 84, t)
+                else:
+                    self.glyph(cr, g, x - 30, y - 50, 60, live=True, t=t)
                 self.text(cr, label, x, y + 14, 7.5, "soft", align="center")
                 self.text(cr, sub, x, y + 27, 7, "muted", align="center", weight=Pango.Weight.NORMAL)
             return
@@ -2457,7 +2599,10 @@ class Constellation(_Holo):
             self.link(cr, (cx, cy), (x, y), "cable", on, t + i * 0.13)
             self.node(cr, x, y, 7 if on else 5, "primary" if on else "dim", 0.6 if on else 0.1)
             self.text(cr, label[:16], x, y + 9, 6.5, "text" if on else "muted", align="center", weight=Pango.Weight.NORMAL)
-        self.glyph(cr, s["centre"], cx - 30, cy - 40, 60, live=True, t=t)
+        if s["centre"] == "rack":
+            self.server(cr, cx, cy + 34, 92, t)
+        else:
+            self.glyph(cr, s["centre"], cx - 30, cy - 40, 60, live=True, t=t)
         if s["kind"] == "cluster":
             self.text(cr, "YOUR LAB'S CLUSTER", cx, 8, 7.5, "cyan", align="center")
 
@@ -2475,7 +2620,7 @@ class ServerDeck(_Holo):
         s = self.state
         q = w / 4
         # the node
-        self.glyph(cr, "rack", 10, 14, 64, live=True, t=t)
+        self.server(cr, 42, h - 10, h - 22, t)
         self.text(cr, s["address"], 80, 30, 11 if len(s["address"]) < 16 else 8, "primary")
         self.text(cr, (s["name"] or "") + (" · " + s["role"] if s["role"] else ""), 80, 52, 7, "muted",
                   weight=Pango.Weight.NORMAL)
@@ -2590,3 +2735,123 @@ class VaultHolo(_Holo):
         self.text(cr, s["where"].upper(), cx, 10, 8, role, align="center")
         self.text(cr, f"{n} KEY{'S' if n != 1 else ''}", 16, h - 34, 11, "primary")
         self.text(cr, f"{s['typed']} typed · {s['generated']} made for you", 16, h - 16, 7, "muted", weight=Pango.Weight.NORMAL)
+
+
+class ServerBuild(_Holo):
+    """This server being put together: the rack hologram turning on its emitter, and each role
+    a module on the holo-table beside it, its hologram lit and a beam to the rack once it's
+    picked (a Spark rings out as it lights)."""
+
+    def __init__(self, c, width=420, height=170, still=False):
+        super().__init__(c, width, height, still, "This server, with the roles it takes")
+        self.state = {"roles": [], "on": [], "lit_at": {}}
+
+    def set_roles(self, roles, on):
+        """roles: [(id, glyph, title)]; on: the ids picked."""
+        now = time.monotonic()
+        lit = dict(self.state.get("lit_at", {}))
+        for r in on:
+            if r not in self.state.get("on", []):
+                lit[r] = now
+        self.set_state(roles=list(roles), on=list(on), lit_at=lit)
+
+    def draw(self, cr, w, h, t):
+        s = self.state
+        rx, base = w * 0.16, h - 12
+        self.server(cr, rx, base, h - 26, t)
+        roles = s["roles"]
+        n = max(1, len(roles))
+        cols = 3 if n > 4 and w >= 560 else 2
+        cw, ch = (w * 0.72) / cols, (h - 24) / ((n + cols - 1) // cols)
+        now = time.monotonic()
+        for i, (rid, glyph, title) in enumerate(roles):
+            x = w * 0.27 + (i % cols) * cw
+            y = 14 + (i // cols) * ch
+            on = rid in s["on"]
+            if on:
+                self.link(cr, (rx + 26, base - h * 0.45), (x + 4, y + ch * 0.45), "cable", True, t + i * 0.2)
+            self.card(cr, x + 4, y, cw - 10, ch - 8, "primary" if on else "dim", on)
+            self.glyph(cr, glyph, x + 10, y + (ch - 8) / 2 - 17, 34, live=on, t=t)
+            room = max(6, int((cw - 62) / 6.4))
+            self.text(cr, title.upper()[:room], x + 50, y + (ch - 8) / 2 - 6, 7, "primary" if on else "muted")
+            at = s["lit_at"].get(rid)
+            if on and at is not None and not self.still and now - at < 0.9:      # the Spark
+                f = (now - at) / 0.9
+                cr.arc(x + 27, y + (ch - 8) / 2, 10 + 30 * f, 0, 2 * math.pi)
+                cr.set_source_rgba(*self.col("soft", 0.9 * (1 - f)))
+                cr.set_line_width(2)
+                cr.stroke()
+
+
+class InstallHolo(_Holo):
+    """bromigOS Server being installed: the rack turning on its emitter, the progress a ring
+    round the emitter, the Sweep rising up the rack to the height done, and the server's parts
+    (its roles, then sign-in, updates and what it runs) lighting as the install reaches them."""
+
+    def __init__(self, c, width=380, height=300, still=False):
+        super().__init__(c, width, height, still, "bromigOS Server, being installed")
+        self.state = {"pct": 0, "parts": []}
+
+    def draw(self, cr, w, h, t):
+        s = self.state
+        pct = max(0, min(100, s["pct"])) / 100
+        cx, base, rh = w * 0.3, h - 28, h * 0.78
+        # the progress: a ring round the emitter, seen from the side
+        cr.save()
+        cr.translate(cx, base - 6)
+        cr.scale(1, 0.3)
+        cr.set_line_width(6)
+        cr.arc(0, 0, rh * 0.36, 0, 2 * math.pi)
+        cr.set_source_rgba(*self.col("selection", 0.9))
+        cr.stroke()
+        if pct > 0:
+            cr.arc(0, 0, rh * 0.36, math.pi / 2, math.pi / 2 + 2 * math.pi * pct)
+            cr.set_source_rgba(*self.col("primary"))
+            cr.stroke()
+        cr.restore()
+        self.server(cr, cx, base, rh, t)
+        # the Sweep: a band of light up the rack, to where the install has got
+        top = base - rh * 0.92
+        y = base - (base - top) * pct
+        if cairo is not None:
+            band = 18
+            g = cairo.LinearGradient(0, y - band, 0, y + 2)
+            g.add_color_stop_rgba(0, *self.col("soft", 0.0))
+            g.add_color_stop_rgba(1, *self.col("soft", 0.55))
+            cr.rectangle(cx - rh * 0.3, y - band, rh * 0.6, band + 2)
+            cr.set_source(g)
+            cr.fill()
+        cr.set_source_rgba(*self.col("soft", 0.9))
+        cr.set_line_width(1.5)
+        cr.move_to(cx - rh * 0.32, y)
+        cr.line_to(cx + rh * 0.32, y)
+        cr.stroke()
+        parts = s["parts"]
+        for i, label in enumerate(parts):
+            on = pct >= (i + 1) / (len(parts) + 1)
+            yy = 18 + i * min(30, (h - 40) / max(1, len(parts)))
+            x = w * 0.6
+            self.node(cr, x, yy + 6, 5 if on else 4, "primary" if on else "dim", 0.7 if on else 0.1)
+            if on:
+                self.link(cr, (cx + rh * 0.2, base - rh * (0.85 - 0.6 * (i + 1) / (len(parts) + 1))), (x - 6, yy + 6),
+                          "cable", True, t + i * 0.3)
+            self.text(cr, label[:22], x + 12, yy, 7.5, "text" if on else "muted", weight=Pango.Weight.NORMAL)
+
+
+class ServerReady(_Holo):
+    """bromigOS Server, installed: the rack hologram, its address big, and the line to sign in."""
+
+    def __init__(self, c, width=420, height=190, still=False):
+        super().__init__(c, width, height, still, "This server, ready")
+        self.state = {"address": "", "ssh": "", "name": ""}
+
+    def draw(self, cr, w, h, t):
+        s = self.state
+        self.server(cr, w * 0.2, h - 12, h - 26, t)
+        x = w * 0.4
+        self.text(cr, "● READY", x, 22, 7.5, "primary")
+        self.text(cr, s["name"].upper()[:22], x, 42, 8, "soft")
+        pt = 20 if len(s["address"]) <= 15 else 13
+        self.text(cr, s["address"], x, 58, pt, "primary")
+        self.text(cr, "FROM YOUR COMPUTER", x, 70 + pt * 1.6, 6.5, "muted")
+        self.text(cr, s["ssh"], x, 84 + pt * 1.6, 9, "text", weight=Pango.Weight.NORMAL)

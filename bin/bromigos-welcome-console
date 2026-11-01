@@ -334,6 +334,9 @@ def main(argv):
         .row { height: auto; margin-top: 1; width: 1fr; }
         Input { width: 1fr; }
         .glass { margin-top: 1; }
+        .rack-row { height: auto; }
+        .rack { width: auto; height: auto; margin: 1 2 0 0; padding: 0 1; border: round $primary 40%;
+                border-title-color: $primary; border-title-style: bold; background: $surface 60%; }
         .panel-head { height: 1; }
         #addr { height: auto; margin: 1 0; }
         .switch-row { height: auto; margin-top: 1; border: round $secondary 60%; background: $surface 85%; padding: 0 1; }
@@ -563,6 +566,23 @@ def main(argv):
             self.query_one("#skip").display = sid != "done"
             self.query_one("#next", Button).label = "Finish" if sid == "done" else "Continue"
 
+        def rack_room(self):
+            return hasattr(BT, "rack") and self.size.width >= 110 and getattr(self, "bp", "normal") not in ("compact", "narrow")
+
+        def rack_box(self, fill=None, title="SERVER"):
+            """bromigOS Server's hologram: the rack turning (still here), filling as the plan applies."""
+            w = Static(BT.rack(0.0, still=True, fill=fill), classes="rack")
+            w.border_title = "◢ " + title
+            return w
+
+        def beside_rack(self, widget, fill=None, title="SERVER"):
+            """A picture with the rack hologram beside it, where the screen has the room."""
+            if not self.rack_room():
+                return widget
+            self.rack_w = self.rack_box(fill, title)
+            widget.styles.width = "1fr"
+            return Horizontal(self.rack_w, widget, classes="rack-row")
+
         def build_network(self, page):
             rows = [("enp3s0", "ethernet", "connected", "Wired connection 1", "192.0.2.24"),
                     ("wlan0", "wifi", "disconnected", "--", "")] if sample else network()
@@ -587,10 +607,10 @@ def main(argv):
             c = server_settings(sample)
             if hasattr(BT, "net_map") and addr:                    # the installer's network map, as it is now
                 gw = next((r[4] for r in rows if r[2] == "connected"), "")
-                page.mount(Static(BT.net_map({"address": addr, "name": name, "gateway": (c.get("network") or {}).get("gateway") or "",
-                                              "how": "FIXED ADDRESS" if (c.get("network") or {}).get("method") == "static"
-                                              else "FROM YOUR ROUTER (DHCP)", "lab": []},
-                                             max(30, min(64, self.size.width - 30))), classes="glass"))
+                page.mount(self.beside_rack(Static(BT.net_map(
+                    {"address": addr, "name": name, "gateway": (c.get("network") or {}).get("gateway") or "",
+                     "how": "FIXED ADDRESS" if (c.get("network") or {}).get("method") == "static" else "FROM YOUR ROUTER (DHCP)",
+                     "lab": []}, max(30, min(64, self.size.width - (44 if self.rack_room() else 30)))), classes="glass")))
             t = Table.grid(padding=(0, 2))
             for dev, kind, state, conn, addrs in rows:
                 g = ic("wired" if kind == "ethernet" else "wifi" if kind == "wifi" else "network")
@@ -908,7 +928,7 @@ def main(argv):
                           Text(", ".join(map(str, it.get("ports", []))) or "no ports", style=col("muted")),
                           Text(it.get("size_text", "") + ("  · needs the internet" if it.get("internet") else ""),
                                style=col("warn") if it.get("internet") else col("muted")))
-            page.mount(Static(t, classes="glass"))
+            page.mount(self.beside_rack(Static(t, classes="glass"), fill=0.0, title="PLAN"))
             page.mount(Static(f"Downloads {plan.get('download_text', 'what it needs')}. What needs the internet waits for a "
                               "network, and says so.", classes="muted"))
             where, recover = keys_where(sample)
@@ -927,6 +947,8 @@ def main(argv):
             def line(kind, a, words):
                 if kind == "stage":
                     self.call_from_thread(self.prov_line.set, f"{a} % · {words}", "busy")
+                    if getattr(self, "rack_w", None) is not None:          # the rack fills as the plan applies
+                        self.call_from_thread(self.rack_w.update, BT.rack(0.0, still=True, fill=float(a) / 100))
                 elif kind == "note":
                     done.append(f"▲ {a}: {words}")
                     self.call_from_thread(self.prov_out.update, "\n".join(done[-8:]))
@@ -950,7 +972,7 @@ def main(argv):
             facts += [f for f in server_facts(server_settings(sample)) if f[0] in ("server", "update", "disk")]
             where, recover = keys_where(sample)
             facts += [("key", "Your keys: " + where), ("rollback", "To recover them: " + recover)]
-            page.mount(Static(icon_rows(facts), classes="glass"))
+            page.mount(self.beside_rack(Static(icon_rows(facts), classes="glass"), fill=1.0, title="READY"))
             page.mount(BT.Reading("This server is ready. Sign in from another computer with: ssh " + user + "@" + (addr or name), "ok"))
 
         async def action_next(self):

@@ -65,6 +65,12 @@ CSS = """
 .sv-ssh {{ font-family: "Geist Mono", monospace; font-size: 1.35em; font-weight: 700; color: {p}; }}
 .sv-panel {{ border: 1px solid {line}; background-color: {bg}; padding: 14px 18px; }}
 .sv-key {{ font-family: "Geist Mono", monospace; font-size: 0.86em; color: {muted}; }}
+/* the Server's cards as hologram tiles: a Scanline texture, the emitter's light from the top,
+   brighter once picked (DRIFTGLASS: Glass, Scanline, GLOW) */
+.dg-card.sv-tile {{ background-image: repeating-linear-gradient(180deg, {scan} 0px, {scan} 1px, transparent 1px, transparent 3px),
+                    radial-gradient(ellipse 80% 55% at 50% 0%, {glow} 0%, transparent 100%); }}
+.dg-card.sv-tile:checked {{ background-image: repeating-linear-gradient(180deg, {scan} 0px, {scan} 1px, transparent 1px, transparent 3px),
+                            radial-gradient(ellipse 85% 65% at 50% 0%, {glow_on} 0%, transparent 100%); }}
 """
 
 
@@ -118,7 +124,8 @@ class ServerPages:
         p = Gtk.CssProvider()
         r, g, b = (int(c["primary"][i:i + 2], 16) for i in (1, 3, 5))
         p.load_from_string(CSS.format(p=c["primary"], muted=c["muted"], line=f"rgba({r},{g},{b},0.45)",
-                                      bg=f"rgba({r},{g},{b},0.05)"))
+                                      bg=f"rgba({r},{g},{b},0.05)", scan=f"rgba({r},{g},{b},0.035)",
+                                      glow=f"rgba({r},{g},{b},0.07)", glow_on=f"rgba({r},{g},{b},0.18)"))
         Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), p, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
         self._srv_css_on = True
 
@@ -198,13 +205,24 @@ class ServerPages:
     # ── Role ────────────────────────────────────────────────────────────────────────
     def build_role(self, page):
         s = self._s()
-        self.heading(page, "role")
+        small = self.screen_h() < 700 or getattr(self, "compact", False)
+        self.role_holo = None
+        if small:
+            self.heading(page, "role")
+        else:                                   # the heading, and this server being put together beside it
+            top = Gtk.Box(spacing=20)
+            words = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, valign=Gtk.Align.CENTER)
+            self.heading(words, "role")
+            top.append(words)
+            self.role_holo = glass.ServerBuild(self.c, 560, 156, still=self.reduced or bool(self.opts.get("render")))
+            hint(self.role_holo, "This server: each role you pick lights up beside it.")
+            top.append(self.role_holo)
+            page.append(top)
         w = self.content_width()
         ncol = 3 if w >= 900 else (2 if w >= 560 else 1)
         grid = Gtk.Grid(column_spacing=14, row_spacing=14, column_homogeneous=True)
         grid.update_property([Gtk.AccessibleProperty.LABEL], ["What this server will do"])
         first = None
-        small = self.screen_h() < 700 or getattr(self, "compact", False)
         icons = {"lab": "applications-science-symbolic", "storage": "drive-multidisk-symbolic", "home": "user-home-symbolic",
                  "games": "input-gaming-symbolic", "plain": "network-server-symbolic"}
         self._role_cards = {}
@@ -213,6 +231,7 @@ class ServerPages:
             card = glass.glyph_card(r.get("glyph", "rack"), self.c, icons.get(r["id"], "network-server-symbolic"), r["title"],
                                     [r["summary"]] + ([] if small else [r["hint"]]), r["id"] in chosen, None,
                                     still=self.reduced or bool(self.opts.get("render")), size=52 if small else 72)
+            card.add_css_class("sv-tile")
             card.connect("toggled", lambda b, rid=r["id"]: self._toggle_role(rid, b.get_active()))
             hint(card, f"{r['title']}: {r['summary']} {r['hint']} " +
                  ("Just a server goes alone." if r["id"] == "plain" else "Combine it with other roles."))
@@ -221,6 +240,7 @@ class ServerPages:
         page.append(grid)
         self.role_notes = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         page.append(self.role_notes)
+        self._role_holo()
         page.append(label("Pick one, or several: a Lab node can also be a Game server and Storage. Just a server is the "
                           "base on its own. The next steps follow what you pick, and bromigos server role add adds one later.",
                           ("dg-muted",)))
@@ -241,6 +261,32 @@ class ServerPages:
             self.a["hostname"] = {"lab": "lab-node", "storage": "storage", "home": "home-server", "games": "game-server"}.get(
                 first, "bromigos-server")
         self._role_notes()
+        self._role_holo()
+
+    def _role_holo(self):
+        if getattr(self, "role_holo", None) is not None:
+            self.role_holo.set_roles([(r["id"], r.get("glyph", "rack"), r["title"]) for r in server.roles()],
+                                     server.roles_of(self._s()))
+
+    def server_ready_holo(self):
+        """The last page's picture for a server: the rack, ready, with its address and ssh line."""
+        self._srv_css()
+        h = glass.ServerReady(self.c, 420, 170, still=self.reduced or bool(self.opts.get("render")))
+        h.set_state(address=server.shown_address(self.a)[0], ssh=server.ssh_line(self.a), name=self.a.get("hostname") or "")
+        hint(h, "This server is installed. Sign in from your computer with the line shown.")
+        h.set_valign(Gtk.Align.CENTER)
+        return h
+
+    def server_install_holo(self):
+        """The install step's picture for a server: the rack being installed (InstallHolo)."""
+        s = self._s()
+        parts = [r["title"] for r in server.roles() if r["id"] in server.roles_of(s)] + ["Who can sign in", "Updates",
+                                                                                        "What it runs"]
+        self.srv_install_holo = glass.InstallHolo(self.c, 380 if not getattr(self, "compact", False) else 300, 300,
+                                                  still=self.reduced)
+        self.srv_install_holo.set_state(parts=parts)
+        hint(self.srv_install_holo, "This server, being installed: the light rises as the install goes.")
+        return self.srv_install_holo
 
     def _pick_role(self, rid):
         server.pick_role(self.a, rid)
@@ -1110,6 +1156,7 @@ class ServerPages:
             card = glass.glyph_card(glyph, self.c, {"new": "list-add-symbolic", "join": "network-workgroup-symbolic",
                                                     "none": "computer-symbolic"}[k], title, [words], s.get("lab") == k, first,
                                     still=self._still(), size=44)
+            card.add_css_class("sv-tile")
             first = first or card
             card.connect("toggled", lambda b, kk=k: b.get_active() and self._pick_lab(kk))
             hint(card, f"{title}: {words}")
@@ -1234,6 +1281,7 @@ class ServerPages:
     def _cat_tile(self, x, on, badge, need_gpu):
         b = Gtk.ToggleButton(active=on)
         b.add_css_class("dg-card")
+        b.add_css_class("sv-tile")
         b.set_size_request(240, 130)
         v = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5, margin_top=10, margin_bottom=10, margin_start=12,
                     margin_end=12)
@@ -1514,7 +1562,7 @@ RENDER_PLAN = ["server-role", "server-role-multi", "server-keys-vault", "server-
                "server-reach", "server-storage", "server-storage-raid", "server-unlock-tpm", "server-unlock-notpm",
                "server-updates", "server-run-home", "server-run-media", "server-run-media-vpn", "server-run-media-usenet",
                "server-run-lab", "server-run-games",
-               "server-summary"]
+               "server-summary", "server-install", "server-done"]
 
 
 def render_step(win, sid):
@@ -1601,6 +1649,20 @@ def render_step(win, sid):
     elif sid == "server-run-games":
         server.set_roles(a, ["games"])
         win.show_step("services")
+    elif sid in ("server-install", "server-done"):
+        server.set_roles(a, ["lab", "games", "storage"])
+        s.update(method="static", address="192.0.2.40", prefix="24", gateway="192.0.2.1", dns="192.0.2.1", unlock="tpm",
+                 interface="enp3s0", lab="new", lab_set=True)
+        s["store"] = {"kind": "local"}
+        a["found_keys"], a["ssh_keys"] = [], [key]
+        if sid == "server-install":
+            win.show_step("install")
+            win._stage(57, "Setting up the server")
+            for line in ("(412/530) installing linux-lts", "::server firewall: ssh, mdns, node-exporter, lab-cluster"):
+                win._line(line)
+        else:
+            win.done = True
+            win.show_step("done")
     elif sid == "server-summary":
         server.set_roles(a, ["lab", "games", "storage"])
         s.update(method="static", address="192.0.2.40", prefix="24", gateway="192.0.2.1", dns="192.0.2.1", unlock="tpm",
