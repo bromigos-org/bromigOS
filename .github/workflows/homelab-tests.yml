@@ -1,0 +1,37 @@
+name: homelab tests
+# The homelab package's unit tests on every PR that touches what they import. Before this they
+# ran only in bromigos-homelab's check() during the packages run on main, so a PR could merge
+# green and then stop the publish (#72's test_static_draws_rendered_art).
+on:
+  pull_request:
+    paths:
+      - "homelab/**"
+      - "lib/**"
+      - "tests/mascot/**"
+      - "packaging/bromigos-homelab/**"
+      - ".github/workflows/homelab-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Homelab unit tests
+    # GitHub's runner, never the lab's: this repo is public (forks' PRs run here)
+    runs-on: ubuntu-latest
+    container: archlinux:base
+    timeout-minutes: 30
+    steps:
+      - name: tools
+        # bromigos-homelab's makedepends and checkdepends (packaging/bromigos-homelab/PKGBUILD)
+        run: >-
+          pacman -Syu --noconfirm --needed git python python-textual desktop-file-utils
+          python-cairo python-gobject pango python-psutil python-zeroconf >/dev/null
+      - uses: actions/checkout@v5
+      - name: unittest
+        # as a normal user, like makepkg's check()
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE/homelab' && PYTHONPATH=lib python -m unittest discover -s tests"

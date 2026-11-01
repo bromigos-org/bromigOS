@@ -393,29 +393,39 @@ if _Static is not None:
                 self.pose, self.face, self.frame = pose, face, 0
                 self._st_draw()
 
-        def _st_face(self):
-            return self.face or S.POSES.get(self.pose, {}).get("face", "neutral")
+        def _st_face(self, pose=None, face=None):
+            if pose is None:
+                pose, face = self.pose, self.face
+            return face or S.POSES.get(pose, {}).get("face", "neutral")
 
-        def _st_art(self):
-            """The pose's rendered art for this size (from the art folder's manifest), or None."""
-            key = (self.pose, self.face, self.kind, self.look)
-            if getattr(self, "_art_key", None) != key:
-                self._art_key, self._art, self._art_png = key, None, None
-                if ART is not None and self.kind != "status" and self.look != "text" and \
-                        not (self.kind == "head" and self.look == "blocks"):      # the pixel head stays hand-drawn
-                    height = self.rows * (cell_pixels()[1] if self.look == "kitty" else 2)
-                    art = ART.find(self.pose, self._st_face() if self.kind == "head" else self.face, height,
-                                   head=self.kind == "head")
-                    pngs = art_pngs(art) if art else None
-                    if pngs:
-                        self._art, self._art_png = art, pngs
-            return self._art_png
+        def _st_art(self, pose=None, face=None):
+            """The pose's rendered art for this size (from the art folder's manifest), or None.
+            The UI thread (_st_count) and the frame workers ask at once: each looks it up for
+            itself and the answer is kept whole (key and frames in one assignment), so no caller
+            reads "no art" while another is still loading it. (That read once cached the
+            placeholder for a frame, and he flickered between it and his art for good.)"""
+            if pose is None:
+                pose, face = self.pose, self.face
+            key = (pose, face, self.kind, self.look)
+            cached = getattr(self, "_art_cache", None)
+            if cached and cached[0] == key:
+                return cached[2]
+            art = pngs = None
+            if ART is not None and self.kind != "status" and self.look != "text" and \
+                    not (self.kind == "head" and self.look == "blocks"):          # the pixel head stays hand-drawn
+                height = self.rows * (cell_pixels()[1] if self.look == "kitty" else 2)
+                art = ART.find(pose, self._st_face(pose, face) if self.kind == "head" else face, height,
+                               head=self.kind == "head")
+                pngs = (art_pngs(art) if art else None) or None
+            self._art_cache = (key, art if pngs else None, pngs)
+            return pngs
 
         def _st_count(self):
             if self.kind == "status":
                 return 1
-            if self._st_art():
-                return len(self._art_png)
+            pngs = self._st_art()
+            if pngs:
+                return len(pngs)
             if self.kind == "head":
                 return 4 if self._st_face() in ("snow", "listening", "asleep", "whack", "fiddle", "watching") else 1
             return S.frames(self.pose)
@@ -445,10 +455,12 @@ if _Static is not None:
             return g if self.kind == "status" else g + (" STATIC" if self.kind == "figure" else "")
 
         def _st_make(self, key):
+            # drawn from the key, not self: the pose or frame may move on while this runs
+            pose, wears, frame = key[0], key[1], key[2]
             pal = _palette()
-            pngs = self._st_art()
+            pngs = self._st_art(pose, wears)
             if pngs:
-                png = pngs[self.frame % len(pngs)]
+                png = pngs[frame % len(pngs)]
                 if self.look == "kitty":
                     Sprite._serial += 1
                     image_id = Sprite._ids + Sprite._serial
@@ -460,9 +472,9 @@ if _Static is not None:
                 return
             if self.look == "kitty":
                 cw, ch = cell_pixels()
-                face = self._st_face()
+                face = self._st_face(pose, wears)
                 crop = "head" if self.kind == "head" else None
-                doc = S.svg(self.pose, face=face if self.face else None, frame=self.frame, pal=pal,
+                doc = S.svg(pose, face=face if wears else None, frame=frame, pal=pal,
                             level="glow", size=int(self.rows * ch), crop=crop)
                 png = render_png(doc, height=int(self.rows * ch))
                 if png:
@@ -471,9 +483,9 @@ if _Static is not None:
                     seq = kitty_transmit(png, image_id, self.cols, self.rows)
                     out = ("kitty", image_id, seq)
                 else:
-                    out = blocks(head(face, self.frame, pal)) if self.kind == "head" else self._st_text()
+                    out = blocks(head(face, frame, pal)) if self.kind == "head" else self._st_text()
             else:
-                px = figure(self.pose, self.cols, self.rows, self.frame, pal)
+                px = figure(pose, self.cols, self.rows, frame, pal)
                 out = blocks(px) if px else self._st_text()
             self.app.call_from_thread(self._st_landed, key, out)
 

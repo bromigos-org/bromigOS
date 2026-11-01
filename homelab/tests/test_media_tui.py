@@ -13,6 +13,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from unittest import mock
 
@@ -411,20 +412,46 @@ class TUI(Stack):
             self.assertIn("Not on a screen", str(app.query_one('#ch-host-text').render()))
         self.run_app(one)
 
+    def art_folder(self):
+        """tests/mascot/artfixture.py's art folder: every pose's frames solid magenta."""
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                                        "tests", "mascot"))
+        import artfixture
+        return artfixture.folder(os.path.join(self.tmp, "art"))
+
     def test_static_draws_rendered_art(self):
         """With an art folder (tests/mascot/artfixture.py: magenta frames), CHANNELS' big
         STATIC is the manifest's frame in half-blocks, not the placeholder."""
         if T.STATIC is None:
             self.skipTest("no bromigos_static_term")
-        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                                        "tests", "mascot"))
-        import artfixture
-        art = artfixture.folder(os.path.join(self.tmp, "art"))
+        art = self.art_folder()
         async def fn(app, pilot):
             await pilot.press('8'); await self.settle(app, pilot, 3)
             await pilot.pause(0.5)
             self.assertIn("#ff00ff", app.export_screenshot().lower())
         with mock.patch.dict(os.environ, {"BROMIGOS_STATIC_ART": art}):
+            self.run_app(fn)
+
+    def test_static_art_is_never_taken_half_loaded(self):
+        """His art loads in the frame workers and on the UI thread's tick at once. One still
+        loading it must not read as "no art" to the other: that cached the placeholder for one
+        of his two frames, so he flickered between it and his art for good (and the test above
+        failed whenever the screenshot fell on that frame, as on a busy CI runner). A slow
+        lookup holds the window open; every frame he shows is still the art."""
+        if T.STATIC is None:
+            self.skipTest("no bromigos_static_term")
+        art, find = self.art_folder(), T.STATIC.ART.find
+        def slow(*a, **kw):
+            time.sleep(0.2)
+            return find(*a, **kw)
+        async def fn(app, pilot):
+            await pilot.press('8'); await self.settle(app, pilot, 3)
+            await pilot.pause(1.5)
+            for _ in range(8):                                  # 2 s: his two frames, four times over
+                await pilot.pause(0.25)
+                self.assertTrue("#ff00ff" in app.export_screenshot().lower(),
+                                f"frame {app.query_one('#ch-figure').frame} is the placeholder")
+        with mock.patch.dict(os.environ, {"BROMIGOS_STATIC_ART": art}), mock.patch.object(T.STATIC.ART, "find", slow):
             self.run_app(fn)
 
     def test_channel_reorder_delete_undo_and_comments(self):
