@@ -120,6 +120,30 @@ the keyring if it isn't ready yet.
 archinstall, arch-install-scripts, and the rescue tools and drivers releng ships are all
 there (`packages.x86_64`).
 
+### What the live system leaves out
+
+The running medium never reads some of what its packages carry, so the image leaves it
+out. The build's `pacman.conf` lists these with pacman's `NoExtract`
+(`iso/build-in-container.sh`, step 4):
+
+| Left out | What stays |
+|---|---|
+| Other packages' docs in `/usr/share/doc` | bromigOS's own docs and the manual (`/usr/share/doc/bromigos*`) |
+| Other languages' messages in `/usr/share/locale`, translated man pages, Qt's translations | English. The installer and the live session are in English |
+| GTK's API docs (`/usr/share/gtk-doc`) and GObject's `.gir` files | The typelibs programs load |
+| C headers (`/usr/include`) and static libraries (`*.a`) | Python's headers |
+| Hyprland's default wallpapers | bromigOS turns them off |
+| On Field Kit only: the worlds' video loops, clips, actors and sounds | Each `world.toml`, the colours, emblems and holograms |
+
+This only changes the live image. An install still gets every file:
+
+- The live system's own `/etc/pacman.conf` has no `NoExtract`.
+- The installer installs every package whole from the offline repository.
+- A language picked in the installer is the new system's, with its translations.
+
+On v0.1.3's desktop medium, the left-out files were 1.1 GiB unpacked and about 240 MB
+packed in the squashfs.
+
 ## Installing from it
 
 There are three ways in, and they all lead to the same installer:
@@ -547,8 +571,19 @@ What the build does, in the container:
    certificate on the medium ([secureboot.md](secureboot.md#the-medium)).
 7. Runs `mkarchiso`.
 
-The squashfs is compressed with zstd, not releng's xz. The offline repository is most of
-the image and is already zstd, so xz would gain little and cost minutes.
+The squashfs is compressed with zstd at level 19 in 1 MiB blocks, not releng's xz. Field
+Kit uses the same settings. The offline repository is half the image and is already zstd,
+so no setting shrinks it. On v0.1.3's live system, without the offline repository:
+
+| Setting | Live system packed | Build time (16 threads) |
+|---|---:|---:|
+| zstd level 6 (until 2026-10-31) | 2,476 MB | 18 s |
+| zstd level 19 | 2,332 MB | 201 s |
+| xz, x86 filter (releng's) | 2,224 MB | 353 s |
+
+zstd unpacks at about the same speed at every level, so level 19 costs only build time.
+xz packs about 5% smaller again, but unpacks several times slower, which slows the live
+boot and every program's first start.
 
 **A test build** (`--test-key FILE`) lets that SSH key sign in as the live user, adds a
 serial console, and labels the medium `BROMIGOS_TEST`. Build a medium for people without

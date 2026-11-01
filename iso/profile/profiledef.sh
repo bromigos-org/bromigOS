@@ -16,8 +16,9 @@ bootmodes=('bios.syslinux'
 pacman_conf="pacman.conf"
 airootfs_image_type="squashfs"
 # zstd, not releng's xz: the offline repository is most of the image and is zstd already
-# (incompressible); zstd keeps the build to minutes and the live system's reads quick
-airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '6' '-b' '1M')
+# (incompressible), and zstd's reads stay quick on old machines. Level 19, as Field Kit's: it
+# unpacks as fast as level 6 and the live system packs about 6% smaller (docs/iso.md)
+airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '19' '-b' '1M')
 bootstrap_tarball_compression=('zstd' '-c' '-T0' '--auto-threads=logical' '--long' '-19')
 # Plymouth's splash on the live boot; `quiet` keeps the kernel's lines off it (the journal
 # has them; the tty gets them again if the splash fails)
