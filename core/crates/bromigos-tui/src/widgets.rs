@@ -757,6 +757,86 @@ pub fn log_view(
     f.render_widget(Paragraph::new(Text::from(text)), inner);
 }
 
+/// A 3×5 block font for a code that must be read from across the room (the pairing code when
+/// its QR can't fit): the installer's own (lib/bromigos_textual.py's BIG).
+const BIG: &[(char, [&str; 5])] = &[
+    (' ', ["   ", "   ", "   ", "   ", "   "]),
+    ('%', ["█ █", "  █", " █ ", "█  ", "█ █"]),
+    ('-', ["   ", "   ", "███", "   ", "   "]),
+    ('.', [" ", " ", " ", " ", "█"]),
+    ('0', ["███", "█ █", "█ █", "█ █", "███"]),
+    ('1', [" █ ", "██ ", " █ ", " █ ", "███"]),
+    ('2', ["███", "  █", "███", "█  ", "███"]),
+    ('3', ["███", "  █", "███", "  █", "███"]),
+    ('4', ["█ █", "█ █", "███", "  █", "  █"]),
+    ('5', ["███", "█  ", "███", "  █", "███"]),
+    ('6', ["███", "█  ", "███", "█ █", "███"]),
+    ('7', ["███", "  █", "  █", "  █", "  █"]),
+    ('8', ["███", "█ █", "███", "█ █", "███"]),
+    ('9', ["███", "█ █", "███", "  █", "███"]),
+    (':', [" ", "█", " ", "█", " "]),
+    ('A', ["███", "█ █", "███", "█ █", "█ █"]),
+    ('B', ["██ ", "█ █", "██ ", "█ █", "██ "]),
+    ('C', ["███", "█  ", "█  ", "█  ", "███"]),
+    ('D', ["██ ", "█ █", "█ █", "█ █", "██ "]),
+    ('E', ["███", "█  ", "██ ", "█  ", "███"]),
+    ('F', ["███", "█  ", "██ ", "█  ", "█  "]),
+    ('G', ["███", "█  ", "█ █", "█ █", "███"]),
+    ('H', ["█ █", "█ █", "███", "█ █", "█ █"]),
+    ('I', ["███", " █ ", " █ ", " █ ", "███"]),
+    ('J', ["  █", "  █", "  █", "█ █", "███"]),
+    ('K', ["█ █", "█ █", "██ ", "█ █", "█ █"]),
+    ('L', ["█  ", "█  ", "█  ", "█  ", "███"]),
+    ('M', ["█ █", "███", "███", "█ █", "█ █"]),
+    ('N', ["██ ", "█ █", "█ █", "█ █", "█ █"]),
+    ('O', ["███", "█ █", "█ █", "█ █", "███"]),
+    ('P', ["███", "█ █", "███", "█  ", "█  "]),
+    ('Q', ["███", "█ █", "█ █", "███", "  █"]),
+    ('R', ["███", "█ █", "██ ", "█ █", "█ █"]),
+    ('S', ["███", "█  ", "███", "  █", "███"]),
+    ('T', ["███", " █ ", " █ ", " █ ", " █ "]),
+    ('U', ["█ █", "█ █", "█ █", "█ █", "███"]),
+    ('V', ["█ █", "█ █", "█ █", "█ █", " █ "]),
+    ('W', ["█ █", "█ █", "███", "███", "█ █"]),
+    ('X', ["█ █", "█ █", " █ ", "█ █", "█ █"]),
+    ('Y', ["█ █", "█ █", " █ ", " █ ", " █ "]),
+    ('Z', ["███", "  █", " █ ", "█  ", "███"]),
+];
+
+/// `code` in [`BIG`] letters, `scale` cells wide a block: lit blocks are background-coloured
+/// spaces in `colour` (one thickness in every font; the Linux console's own █, whose font
+/// fills the cell). Five lines; a character the font hasn't is a space.
+pub fn big_code(look: &Look, code: &str, colour: Color, scale: usize) -> Vec<Line<'static>> {
+    let scale = scale.max(1);
+    let glyph = |c: char| {
+        BIG.iter()
+            .find(|g| g.0 == c.to_ascii_uppercase())
+            .map(|g| g.1)
+            .unwrap_or(BIG[0].1)
+    };
+    let console = look.mode != Mode::Truecolor || look.ascii;
+    (0..5)
+        .map(|row| {
+            let mut spans = Vec::new();
+            for c in code.chars() {
+                for px in glyph(c)[row].chars().chain(std::iter::once(' ')) {
+                    let lit = px != ' ';
+                    let cell = " ".repeat(scale);
+                    spans.push(match (lit, console) {
+                        (true, false) => Span::styled(cell, Style::new().bg(colour)),
+                        (true, true) => Span::styled(
+                            (if look.ascii { "#" } else { "█" }).repeat(scale),
+                            Style::new().fg(colour),
+                        ),
+                        (false, _) => Span::raw(cell),
+                    });
+                }
+            }
+            Line::from(spans)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

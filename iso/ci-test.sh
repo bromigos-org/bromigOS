@@ -23,8 +23,14 @@
 #            key with the installer's code, the themed boot menu, a kernel update signed again
 #            and started, a Unified Kernel Image (as Field Kit's) started through shim; and
 #            again beside a stand-in Windows, whose EFI files and boot entry stay as they were
+#            A medium with no live desktop to sign in to (menu, hook: the Field Kit) gets the
+#            MokManager steps and its themed menu, Secure Boot on
 #   --secureboot-package FILE   bromigos-secureboot as built from this ref, put in the medium's
 #            store for the install (a channel may not have it, or have an older one)
+#   --dev-build  the medium is a pull request's (iso/ci-local-packages.sh: the channel's packages
+#            and its own): the installed system's first update and rollback are skipped, as no
+#            channel is sure to be newer than its packages (a move to an older channel can
+#            meet packages it doesn't know). Every published medium runs them
 #
 # DIR gets each run's directory (shots/, the checks' output, the console log). The disks
 # are removed at the end. BROMIGOS_ISOTEST_MEM sets each VM's memory (MiB, default 6144);
@@ -32,12 +38,12 @@
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/.." && pwd)
-iso='' out='' suite=desktop profile='' sbcert='' sbpkg=''
+iso='' out='' suite=desktop profile='' sbcert='' sbpkg='' devbuild=0
 while (($#)); do
     case $1 in
         --out) out=$2; shift 2 ;; --suite) suite=$2; shift 2 ;; --profile) profile=$2; shift 2 ;;
-        --secureboot-cert) sbcert=$2; shift 2 ;; --secureboot-package) sbpkg=$2; shift 2 ;;
-        -h|--help) sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --secureboot-cert) sbcert=$2; shift 2 ;; --secureboot-package) sbpkg=$2; shift 2 ;; --dev-build) devbuild=1; shift ;;
+        -h|--help) sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*) echo "iso/ci-test.sh: unknown option $1" >&2; exit 2 ;;
         *) iso=$1; shift ;;
     esac
@@ -54,11 +60,12 @@ if [[ ${BROMIGOS_ISOTEST_IN_CONTAINER:-0} != 1 ]]; then
     [[ -z $profile ]] || mounts+=(-v "$profile:$profile:ro")
     [[ -z $sbcert ]] || mounts+=(-v "$sbcert:$sbcert:ro")
     [[ -z $sbpkg ]] || mounts+=(-v "$sbpkg:$sbpkg:ro")
+    dev=(); if (( devbuild )); then dev=(--dev-build); fi
     # the host's network: the SSH forwards are on its 127.0.0.1
     exec docker run --rm --device /dev/kvm --network host "${mounts[@]}" \
         -e BROMIGOS_ISOTEST_IN_CONTAINER=1 -e BROMIGOS_ISOTEST_MEM -e BROMIGOS_VM_OWNER=none \
         archlinux:latest "$here/ci-test.sh" "$iso" --out "$out" --suite "$suite" \
-        ${profile:+--profile "$profile"} ${sbcert:+--secureboot-cert "$sbcert"} ${sbpkg:+--secureboot-package "$sbpkg"}
+        ${profile:+--profile "$profile"} ${sbcert:+--secureboot-cert "$sbcert"} ${sbpkg:+--secureboot-package "$sbpkg"} "${dev[@]}"
 fi
 
 # ── in the container (or, with BROMIGOS_ISOTEST_IN_CONTAINER=1 as a user, on a workstation
@@ -98,7 +105,12 @@ desktop_run() {     # desktop_run NAME FIRMWARE PORT VNC OFFLINE ENCRYPT
     export BROMIGOS_ISOTEST_DIR=$out/$name BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC BROMIGOS_ISOTEST_OFFLINE=$5
     step "$name: the live desktop" T boot --iso "$iso" --firmware "$fw" \
         && step "$name: the install" T install "${enc[@]}" \
-        && { BROMIGOS_ISOTEST_OFFLINE=0 step "$name: the installed system, its first update and rollback" T boot-disk --firmware "$fw" || true; }
+        && if (( devbuild )); then
+            BROMIGOS_ISOTEST_OFFLINE=0 BROMIGOS_ISOTEST_NO_UPDATE=1 step "$name: the installed system" T boot-disk --firmware "$fw" || true
+            echo "SKIP $name: the first update and rollback (a pull request's medium, --dev-build)"
+        else
+            BROMIGOS_ISOTEST_OFFLINE=0 step "$name: the installed system, its first update and rollback" T boot-disk --firmware "$fw" || true
+        fi
     T destroy >/dev/null 2>&1 || true
     rm -f "$out/$name/disk.qcow2"
 }
@@ -142,17 +154,36 @@ mok_keys() {        # the enrollment, keystroke by keystroke, a screenshot after
     python3 "$root/iso/test/screen-wait.py" --qmp "$q" --out "$shots/menu-secureboot.png" --timeout 90 --coloured >/dev/null 2>&1 \
         && : > "$shots/.menu-themed"
 }
-secureboot_run() {
-    local d=$out/secureboot
-    mkdir -p "$d/shots"
+sb_vars() {         # sb_vars DIR: a Windows PC's firmware variables, Secure Boot on, in DIR/OVMF_VARS.fd
     # BROMIGOS_ISOTEST_SB_VARS: such variables made already (a workstation without virt-firmware)
     if [[ -f ${BROMIGOS_ISOTEST_SB_VARS:-} ]]; then
-        cp "$BROMIGOS_ISOTEST_SB_VARS" "$d/OVMF_VARS.fd"
+        cp "$BROMIGOS_ISOTEST_SB_VARS" "$1/OVMF_VARS.fd"
     else
         [[ $EUID -ne 0 ]] || pacman -S --noconfirm --needed virt-firmware >/dev/null 2>&1 || { echo "virt-firmware didn't install"; return 1; }
-        virt-fw-vars --input /usr/share/edk2/x64/OVMF_VARS.4m.fd --output "$d/OVMF_VARS.fd" \
+        virt-fw-vars --input /usr/share/edk2/x64/OVMF_VARS.4m.fd --output "$1/OVMF_VARS.fd" \
             --enroll-microsoft --secure-boot >/dev/null 2>&1 || { echo "virt-fw-vars failed"; return 1; }
     fi
+}
+# a medium with no live desktop to sign in to (the Field Kit's, whose own test boots its
+# kernel directly): the same MokManager steps, then its menu, themed, so shim verified GRUB
+# with the enrolled key and GRUB its fonts, Secure Boot on
+secureboot_menu() {
+    local d=$out/secureboot
+    mkdir -p "$d/shots"; sb_vars "$d" || return 1
+    rm -f "$d/qmp.sock"
+    qemu-system-x86_64 -enable-kvm -machine q35,smm=on -global driver=cfi.pflash01,property=secure,value=on -cpu host -m 2048 -smp 2 \
+        -drive "if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.secboot.4m.fd" -drive "if=pflash,format=raw,file=$d/OVMF_VARS.fd" \
+        -drive "file=$iso,if=none,id=medium,media=cdrom,readonly=on" -device "ide-cd,drive=medium,bootindex=0" \
+        -device virtio-vga -display none -qmp "unix:$d/qmp.sock,server,nowait" -serial "file:$d/console.log" \
+        -daemonize -pidfile "$d/qemu.pid"
+    for _ in $(seq 30); do [[ -S $d/qmp.sock ]] && break; sleep 1; done
+    mok_keys "$d/qmp.sock" "$d/shots"
+    kill "$(cat "$d/qemu.pid")" 2>/dev/null || true
+    step "secure boot: MokManager enrolls the medium's key, then its menu, themed" test -e "$d/shots/.menu-themed" || true
+}
+secureboot_run() {
+    local d=$out/secureboot
+    mkdir -p "$d/shots"; sb_vars "$d" || return 1
     BROMIGOS_ISOTEST_PORT=$(free_port 2241); BROMIGOS_ISOTEST_VNC=$(vnc_display 51)
     export BROMIGOS_ISOTEST_DIR=$d BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC BROMIGOS_ISOTEST_OFFLINE=0
     export BROMIGOS_ISOTEST_OVMF_CODE=/usr/share/edk2/x64/OVMF_CODE.secboot.4m.fd
@@ -184,7 +215,9 @@ sb_store() {        # this ref's bromigos-secureboot into the live medium's stor
     [[ -n $sbpkg ]] || return 0
     local f; f=$(basename "$sbpkg")
     T ssh "cat > $f" < "$sbpkg"
-    T ssh "sudo install -m0644 $f /var/lib/bromigos/repo/bromigos/x86_64/ && sudo repo-add -q /var/lib/bromigos/repo/bromigos/x86_64/bromigos.db.tar.gz /var/lib/bromigos/repo/bromigos/x86_64/$f \
+    # its own build replaces the store's, so a signature of the store's goes (the same version,
+    # when the channel has this ref's: not the same file)
+    T ssh "sudo rm -f /var/lib/bromigos/repo/bromigos/x86_64/$f.sig && sudo install -m0644 $f /var/lib/bromigos/repo/bromigos/x86_64/ && sudo repo-add -q /var/lib/bromigos/repo/bromigos/x86_64/bromigos.db.tar.gz /var/lib/bromigos/repo/bromigos/x86_64/$f \
         && sudo sed -i '/^\[bromigos\]$/a SigLevel = Optional TrustAll' /etc/pacman.conf && sudo pacman -Sy >/dev/null"
 }
 sb_checks() {       # sb_checks WHAT: Secure Boot on, the key enrolled, everything signed (as tester)
@@ -286,7 +319,9 @@ case $suite in
     none) ;;
     *) echo "iso/ci-test.sh: --suite desktop, menu, hook or none" >&2; exit 2 ;;
 esac
-if [[ -n $sbcert ]]; then secureboot_run || true; fi
+if [[ -n $sbcert ]]; then
+    if [[ $suite == desktop || $suite == none ]]; then secureboot_run || true; else secureboot_menu || true; fi
+fi
 
 find "$out" -name '*.ppm' -delete 2>/dev/null || true
 chmod -R a+rwX "$out" 2>/dev/null || true

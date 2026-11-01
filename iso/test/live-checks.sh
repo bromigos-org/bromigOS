@@ -70,7 +70,13 @@ if [[ $mode == desktop ]]; then       # the installed system (docs/iso-encryptio
     check "the subvolumes (@, @home, @.snapshots)" bash -c "sudo btrfs subvolume list / | grep -qE 'path @\$' && sudo btrfs subvolume list / | grep -q 'path @home' && findmnt -no FSTYPE /.snapshots | grep -qx btrfs"
     data_subvolumes
     # how the installer's first step left the guidance, for the welcome tour (docs/voice-guide.md)
-    check "the guidance choices kept for the new user" bash -c "test -s \$HOME/.local/state/bromigos/voice-guide.json && test -s \$HOME/.local/state/bromigos/accessibility.json"
+    # (only an installer's answers carry that step: an install from archinstall's own files, as
+    # the tests' first one is, has no such choice to keep)
+    if [[ -e /var/log/bromigos/install-answers.toml ]]; then
+        check "the guidance choices kept for the new user" bash -c "test -s \$HOME/.local/state/bromigos/voice-guide.json && test -s \$HOME/.local/state/bromigos/accessibility.json"
+    else
+        echo "SKIP the guidance choices kept for the new user (installed from archinstall's own files: no installer's first step)"
+    fi
     if [[ ${2:-encrypted} == encrypted ]]; then
         check "the root is on LUKS (crypt under the partition)" bash -c "lsblk -no TYPE | grep -qx crypt"
         check "LUKS2 under the root (cryptsetup status root)" bash -c "sudo cryptsetup status root | grep -qE 'type: +LUKS2'"

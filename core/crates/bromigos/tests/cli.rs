@@ -826,6 +826,71 @@ fn channel_shows_and_switches() {
     assert!(stderr(&o).contains("no such channel"));
 }
 
+/// A move to an older channel that lacks a bromigOS package installed here (bromigos-boot
+/// before the release that has it) waits, plainly, and is remembered; once the channel has
+/// it, the move goes through and is forgotten.
+#[test]
+fn a_channel_that_lacks_a_package_waits_and_says_so() {
+    let (s, conf) = channel_sandbox("https://pkgs.example/$repo/$arch");
+    let listing = s.p("home").join("listing");
+    fs::write(
+        &listing,
+        "bromigos-core-0.1.3-1/\nbromigos-settings-0.1.3-1/\n",
+    )
+    .unwrap();
+    s.script(
+        "bin",
+        "curl",
+        "#!/bin/sh\nwhile [ $# -gt 0 ]; do [ \"$1\" = -o ] && : > \"$2\"; shift; done\nexit 0\n",
+    );
+    s.script(
+        "bin",
+        "bsdtar",
+        &format!("#!/bin/sh\nexec /bin/cat {}\n", listing.display()),
+    );
+    s.script("bin", "pacman", "#!/bin/sh\ncase \"$1\" in -Qq|-Slq) printf 'bromigos-core\\nbromigos-boot\\nbromigos-settings\\n' ;; esac\n");
+    let mut c = s.cmd(&["channel", "stable", "--json"]);
+    c.env("BROMIGOS_PACMAN_CONF", &conf);
+    let o = output(c);
+    assert!(o.status.success(), "{}", stderr(&o));
+    let v: Value = serde_json::from_str(&stdout(&o)).unwrap();
+    let words = v["waiting"]["words"].as_str().unwrap();
+    assert!(
+        words.starts_with("Stable will be available after the next bromigOS release"),
+        "{words}"
+    );
+    assert_eq!(v["waiting"]["lacks"][0], "bromigos-boot");
+    assert!(
+        fs::read_to_string(&conf)
+            .unwrap()
+            .contains("Server = https://pkgs.example/$repo/$arch\n"),
+        "still edge"
+    );
+    let mut c = s.cmd(&["channel", "--json"]);
+    c.env("BROMIGOS_PACMAN_CONF", &conf);
+    let v: Value = serde_json::from_str(&stdout(&output(c))).unwrap();
+    assert_eq!(v["wanted"], "stable");
+    // the next release has it: the move goes through, and nothing is waited for any more
+    fs::write(
+        &listing,
+        "bromigos-core-0.1.4-1/\nbromigos-boot-0.1.4-1/\nbromigos-settings-0.1.4-1/\n",
+    )
+    .unwrap();
+    let mut c = s.cmd(&["channel", "stable", "--json"]);
+    c.env("BROMIGOS_PACMAN_CONF", &conf);
+    let o = output(c);
+    assert!(o.status.success(), "{}", stderr(&o));
+    assert!(
+        fs::read_to_string(&conf)
+            .unwrap()
+            .contains("/$repo/stable/$arch\n")
+    );
+    let mut c = s.cmd(&["channel", "--json"]);
+    c.env("BROMIGOS_PACMAN_CONF", &conf);
+    let v: Value = serde_json::from_str(&stdout(&output(c))).unwrap();
+    assert!(v["wanted"].is_null(), "{v}");
+}
+
 #[test]
 fn a_channel_switch_drops_the_old_channels_database() {
     // edge's bromigos.db is newer than stable's: kept, `pacman -Sy` asks "modified since?",

@@ -1,6 +1,6 @@
 #!/usr/bin/python3 -I
 # bromigos:summary=bromigOS Server: its status (SSH, firewall, updates and their health, roles, backups, disks, the lab's cluster), its roles, backups and safe automatic updates
-# bromigos:args=status [--json] | update [--now] | health | firewall [status|apply|allow NAME|deny NAME] | roles [--json] | role add|remove ROLE | backup [status|run|check|key] | ups [status|detect] | setup
+# bromigos:args=status [--json] | update [--now] | health | firewall [status|apply|allow NAME|deny NAME] | roles [--json] | role add|remove ROLE | backup [status|run|check|key] | ups [status|detect] | secrets … | setup
 # bromigos:examples=bromigos server; bromigos server status --json; bromigos server roles; sudo bromigos server role add storage; sudo bromigos server update --now; sudo bromigos server firewall allow lab-cluster
 """bromigOS Server (docs/server.md): the installed edition without a desktop.
 
@@ -29,6 +29,8 @@
   bromigos-server ups [status|detect]
                                     NUT, set up when a UPS is on USB (bromigos-server-ups.service)
   bromigos-server disk-alert        smartd's warning hook (bromigos-server-disk-alert)
+  bromigos-server secrets …         the secret store: bromigos lab secrets (status, set, generate,
+                                    rotate, recovery)
   bromigos-server setup             what the package's install runs (idempotent): the settings
                                     in /etc/bromigos/server.toml applied, the roles included
 
@@ -43,14 +45,22 @@ Settings: /etc/bromigos/server.toml (the installer writes it; every key is optio
   public_tcp = []         # TCP ports open to everyone (a game's port)
   public_udp = []         # UDP ports open to everyone
   [updates]
-  auto = true             # the timer updates by itself
+  mode = "auto"           # auto (update, check, roll back), download (fetch, wait for you), off
+  window = ""             # "03:00-05:00": a restart only inside it
+  channel = "live"        # live Arch (a tested snapshot channel comes later)
+  notify = true           # what waits is an alert (BRODEC's phone)
+  cluster_reboots = false # a lab node: the lab restarts it (kured's /run/reboot-required)
+  auto = true             # before mode: true is auto, false is off
   reboot = true           # restart by itself when a new kernel or driver needs it
   news_hold = true        # Arch Linux news since the last update holds the automatic one
   [health]
   minutes = 10            # how long the system has to come back healthy
   ignore_units = []       # failed units that don't count against it
+  checks = []             # the installer's: startup, units, network, sshd, or a health.d script's name
+                          # (every script in /etc/bromigos/server/health.d must exit 0)
   [roles]
   enabled = []            # "storage", "game-server/pelican-wings", ... (role add writes it)
+  picked = []             # the installer's own ids ("media", "home", ...): they count too
   [backup]
   to = ""                 # restic's repository: "s3:https://...", "sftp:...", "/mnt/backup"; "" is off
   paths = [...]           # what's backed up (BACKUP_PATHS)
@@ -104,6 +114,21 @@ def at(path):
 
 
 CONFIG = "/etc/bromigos/server.toml"
+# the installer's role ids ([roles] picked) as this package's (docs/server.md, "Roles")
+PICKED = {"lab": "lab-node", "storage": "storage", "home": "home-services", "games": "game-server",
+          "media": "media", "plain": "just-a-server"}
+# what the installer leaves to the first start (docs/server.md, "What the installer leaves for the first start")
+FIRST_START = {"bromigos-server-pending.service": "the packages that waited for a network",
+               "bromigos-server-tpm-enroll.service": "the security chip (TPM) unlocking the disk",
+               "bromigos-server-secrets.service": "the install's keys and passwords, into the secret store"}
+PENDING = "/etc/bromigos/server/pending-packages"
+UPDATE_MODES = ("auto", "download", "off")
+CHANNELS = ("live",)
+HEALTH_D = "/etc/bromigos/server/health.d"
+# the checks every update gets anyway (check_health); any other name in [health] checks is a
+# script in health.d (50-NAME.sh), which runs whatever its name
+BUILTIN_CHECKS = ("startup", "units", "network", "sshd")
+REBOOT_REQUIRED = "/run/reboot-required"     # what a lab's kured watches: it restarts its nodes one at a time
 STATE = "/var/lib/bromigos/server/update.json"
 HISTORY = "/var/lib/bromigos/server/history.jsonl"
 TEXTFILE = "/opt/bromigos-monitoring/textfile/bromigos-server.prom"
@@ -165,11 +190,33 @@ def config():
     up = c.setdefault("updates", {})
     up.setdefault("auto", True)
     up.setdefault("reboot", True)
-    up.setdefault("news_hold", True)
+    # the installer's name for the news hold
+    up.setdefault("news_hold", up.get("arch_news_hold", True))
+    # mode: auto (update, check, roll back by itself), download (fetch, then wait for a person:
+    # BRODEC's Update on the phone, or update --now), off (the timer off). Older files: auto
+    mode = up.get("mode") or ("auto" if up["auto"] else "off")
+    if mode not in UPDATE_MODES:
+        print(f"bromigos-server: [updates] mode {mode!r} isn't one of {', '.join(UPDATE_MODES)}; using auto", file=sys.stderr)
+        mode = "auto"
+    up["mode"], up["auto"] = mode, mode == "auto"
+    up.setdefault("window", "")             # "03:00-05:00": restarts only inside it (the timer runs in it)
+    up.setdefault("channel", "live")        # live Arch; a tested snapshot of it comes later
+    up.setdefault("notify", True)           # alerts (and BRODEC's phone) hear of what waits
+    up.setdefault("cluster_reboots", False)  # a lab node: the lab restarts its machines one at a time
     h = c.setdefault("health", {})
     h.setdefault("minutes", 10)
     h.setdefault("ignore_units", [])
-    c.setdefault("roles", {}).setdefault("enabled", [])
+    h.setdefault("checks", [])
+    ro = c.setdefault("roles", {})
+    ro.setdefault("enabled", [])
+    ro.setdefault("picked", [])
+    # the installer's own picks ([roles] picked: its ids) count too, as this package's roles
+    have = {split_entry(e)[0] for e in ro["enabled"]}
+    for pick in ro["picked"]:
+        rid = PICKED.get(pick, pick)
+        if rid and rid not in have:
+            ro["enabled"].append(rid)
+            have.add(rid)
     b = c.setdefault("backup", {})
     b.setdefault("to", "")
     b.setdefault("paths", list(BACKUP_PATHS))
@@ -296,7 +343,8 @@ def cluster():
 
 def last_update():
     st = load_state()
-    return {"hold": st.get("hold"), "phase": st.get("phase", "never"), "started": st.get("started"), "finished": st.get("finished"),
+    return {"hold": st.get("hold"), "waiting": st.get("waiting"), "phase": st.get("phase", "never"),
+            "started": st.get("started"), "finished": st.get("finished"),
             "pre": st.get("pre"), "post": st.get("post"), "packages": len(st.get("packages", [])),
             "reason": st.get("reason", ""), "kernel": st.get("kernel", False)}
 
@@ -311,6 +359,8 @@ PHASE_WORDS = {
     "rolled-back": "the last update was rolled back: the system didn't come back healthy",
     "attention": "needs attention: an update and its rollback both failed the health check",
     "failed": "the last update didn't finish",
+    "waiting": "updates are downloaded and waiting for you (BRODEC's Update, or sudo bromigos server update --now)",
+    "reboot-waiting": "updated; the restart it needs waits for the window",
 }
 
 
@@ -328,7 +378,13 @@ def status_doc():
         "roles": {"enabled": c["roles"]["enabled"],
                   "titles": [r["title"] + (f" ({r['variant']})" if r["variant"] and r["entry"] != r["id"] else "")
                              for _, r in enabled_roles(c, quiet=True)]},
-        "updates": dict(last_update(), auto=bool(c["updates"]["auto"]), timer=unit_state("bromigos-server-update.timer")),
+        "updates": dict(last_update(), auto=bool(c["updates"]["auto"]), mode=c["updates"]["mode"],
+                        window=c["updates"]["window"], channel=c["updates"]["channel"], notify=bool(c["updates"]["notify"]),
+                        cluster_reboots=bool(c["updates"]["cluster_reboots"]),
+                        timer=unit_state("bromigos-server-update.timer")),
+        "health": {"checks": c["health"]["checks"],
+                   "scripts": sorted(n for n in (os.listdir(at(HEALTH_D)) if os.path.isdir(at(HEALTH_D)) else [])
+                                     if not n.startswith("."))},
         "rollbacks": [e for e in history() if e.get("event") == "rolled-back"],
         "containers": containers(),
         "cluster": cluster(),
@@ -342,7 +398,74 @@ def status_doc():
         "mdns": unit_state("avahi-daemon.service"),
         "wake_on_lan": wake_on_lan(),
         "kernel": {"running": os.uname().release, "first": c["boot"]["kernel"]},
+        "install": install_doc(c),
     }
+
+
+INSTALLER_SECTIONS = ("network", "storage", "unlock", "services", "apps", "lab", "games", "remote", "boot", "kernel",
+                      "packages")
+
+
+def install_doc(c):
+    """What the installer chose ([network], [storage], [unlock], [services], [apps], [lab],
+    [games], [remote], [boot], [kernel], [packages] and [roles] picked), as it wrote them, and
+    what it left for the first start: each unit's state, and the packages still waiting."""
+    doc = {k: c[k] for k in INSTALLER_SECTIONS if isinstance(c.get(k), dict) and c[k]}
+    doc["picked"] = list(c["roles"].get("picked", []))
+    first = {}
+    for unit, what in FIRST_START.items():
+        if unit_exists(unit):
+            first[unit] = {"what": what, "enabled": unit_enabled(unit), "state": unit_state(unit)}
+    doc["first_start"] = first
+    try:
+        doc["pending_packages"] = open(at(PENDING)).read().split()
+    except OSError:
+        doc["pending_packages"] = []
+    return doc
+
+
+def install_lines(d):
+    """The installer's choices in a few plain lines (status)."""
+    out = []
+    n = d.get("network") or {}
+    if n:
+        how = (f"fixed {n.get('address')}/{n.get('prefix')}, router {n.get('gateway') or '?'}" if n.get("method") == "static"
+               else "address from the router (DHCP)")
+        extra = [w for w in (f"VLAN {n['vlan']}" if n.get("vlan") else "",
+                             "bonded: " + " + ".join(n["bond"]) if n.get("bond") else "",
+                             "Wake-on-LAN on" if n.get("wake_on_lan") else "") if w]
+        out.append(f"Network      {n.get('interface') or 'auto'}: {how}" + (f"; {', '.join(extra)}" if extra else ""))
+    st = d.get("storage") or {}
+    if st.get("disks"):
+        out.append(f"Data disks   {', '.join(st['disks'])}: " + ("two copies (RAID1)" if st.get("layout") == "raid1" else "one copy")
+                   + f" at {st.get('mount') or '/srv/data'}" + (f"; shares: {', '.join(st['shares'])}" if st.get("shares") else ""))
+    u = (d.get("unlock") or {}).get("mode")
+    if u:
+        out.append("Unlocking    " + {"tpm": "the security chip (TPM) opens the disk at each start",
+                                      "passphrase": "the passphrase at each start",
+                                      "none": "not encrypted"}.get(u, u))
+    sv = d.get("services") or {}
+    if sv.get("on"):
+        out.append(f"Services     {', '.join(sv['on'])}")
+    apps = (d.get("apps") or {}).get("enabled")
+    if apps:
+        out.append(f"Apps         {', '.join(apps)} (containers, their images pinned)")
+    g = d.get("games") or {}
+    if g:
+        out.append("Games        " + ", ".join(w for w in (f"Pelican panel {g['pelican_url']}" if g.get("pelican_url") else "",
+                                                          f"registry mirror {g['registry_mirror']}" if g.get("registry_mirror") else "",
+                                                          "Docker" if g.get("docker") else "") if w))
+    r = d.get("remote") or {}
+    if r:
+        on = [w for w, k in (("Tailscale", "tailscale"), ("WireGuard", "wireguard")) if r.get(k)]
+        out.append("Remote       " + (", ".join(on) + " on" if on else "Tailscale and WireGuard off"))
+    for unit, f in d.get("first_start", {}).items():
+        if f["enabled"] == "enabled" or f["state"] not in ("inactive", "unknown"):
+            out.append(f"First start  {f['what']}: {f['state']}")
+    if d.get("pending_packages"):
+        out.append(f"Waiting      {len(d['pending_packages'])} package(s) for a network: {' '.join(d['pending_packages'][:6])}"
+                   + (" …" if len(d["pending_packages"]) > 6 else ""))
+    return out
 
 
 def print_status(d):
@@ -352,7 +475,8 @@ def print_status(d):
           "  SSH          off (sudo systemctl enable --now sshd turns it on, keys only)")
     print(f"  Firewall     {d['firewall']['running']}" + (f", also open: {', '.join(d['firewall']['allow'])}" if d["firewall"]["allow"] else ""))
     print(f"  Updates      {PHASE_WORDS.get(u['phase'], u['phase'])}" + (f" ({u['finished'] or u['started']})" if u.get("started") else "")
-          + ("" if u["auto"] else "; automatic updates are off"))
+          + {"auto": "", "download": "; it downloads, then waits for you", "off": "; automatic updates are off"}[u["mode"]]
+          + (f"; restarts {u['window']}" if u.get("window") else ""))
     if u.get("reason"):
         print(f"               {u['reason']}")
     if u.get("hold"):
@@ -383,6 +507,8 @@ def print_status(d):
     wol = d["wake_on_lan"]
     if wol:
         print("  Wake-on-LAN  " + ", ".join(f"{n} {'on' if on else 'off'}" for n, on in sorted(wol.items())))
+    for line in install_lines(d["install"]):
+        print("  " + line)
 
 
 # ------------------------------------------------------------------ the firewall
@@ -918,6 +1044,7 @@ def cmd_role(a):
                 raise
             set_toml_list(["roles", "enabled"], current + [r["entry"]])
             print(f"bromigos-server: {r['title']} is on" + (f" ({r['variant']})" if r["variant"] else ""))
+            done += lab_provision(rid)
         else:
             if not was:
                 print(f"bromigos-server: {catalogue[rid]['title']} isn't on")
@@ -925,6 +1052,9 @@ def cmd_role(a):
             r = resolve(catalogue[rid], split_entry(was[0])[1])
             done = unapply_role(r, [x for _, x in enabled_roles(dict(c, roles={"enabled": current}), quiet=True)])
             set_toml_list(["roles", "enabled"], current)
+            picked = [x for x in c["roles"]["picked"] if PICKED.get(x, x) != rid]
+            if picked != c["roles"]["picked"]:
+                set_toml_list(["roles", "picked"], picked)
             print(f"bromigos-server: {r['title']} is off")
     except RoleError as e:
         sys.exit(f"bromigos-server: {e}")
@@ -932,6 +1062,23 @@ def cmd_role(a):
         print(f"  {line}")
     reload_firewall()
     return 0
+
+
+def lab_provision(rid):
+    """A role just added: what the lab's engine adds for it on this server (its apps, their
+    names and checks: `bromigos lab provision --local --roles ROLE --apply`, which only adds).
+    Skipped, and said, where the engine has no --local yet."""
+    if ROOT != "/" or not live():
+        return []
+    rc, out, _ = run(["bromigos", "lab", "provision", "--help"], timeout=60)
+    if rc != 0 or "--local" not in out:
+        return ["the lab's engine can't set up this server's apps yet (bromigos lab provision --local): "
+                "update bromigOS, then run sudo bromigos server role add " + rid + " again"]
+    rc, out, err = run(["bromigos", "lab", "provision", "--local", "--roles", rid, "--apply"], timeout=3 * 3600)
+    if rc != 0:
+        return ["the lab's engine stopped: " + last_line(err or out, "bromigos lab provision --local failed")
+                + f" (sudo bromigos lab provision --local --roles {rid} --plan shows what it would do)"]
+    return ["the lab's engine added its items: " + last_line(out, "done")]
 
 
 def role_health(c):
@@ -1409,20 +1556,29 @@ def cmd_setup(a):
     run again; the package's install runs it."""
     c = config()
     done = []
+    # SSH's password rule: this file is setup's own only when it says so; one the installer wrote
+    # (the same name, its own words) is left as it is, as are its other drop-ins (01-keys-only,
+    # 20-limits), its sysctl and journald files (90-…, after the package's 60-…) and
+    # /etc/bromigos/server/nftables.d
     pw = at(SSHD_PASSWORD)
+    mine = "# bromigOS Server: password sign-in was chosen at install (/etc/bromigos/server.toml, [ssh] password)"
+    try:
+        ours = open(pw).read().startswith(mine)
+    except OSError:
+        ours = None                             # not there
     if c["ssh"]["password"]:
-        os.makedirs(os.path.dirname(pw), exist_ok=True)
-        with open(pw, "w") as f:
-            f.write("# bromigOS Server: password sign-in was chosen at install (/etc/bromigos/server.toml, [ssh] password)\n"
-                    "PasswordAuthentication yes\nKbdInteractiveAuthentication yes\n")
+        if ours is not False:
+            os.makedirs(os.path.dirname(pw), exist_ok=True)
+            with open(pw, "w") as f:
+                f.write(mine + "\nPasswordAuthentication yes\nKbdInteractiveAuthentication yes\n")
         done.append("SSH: keys and passwords")
     else:
-        if os.path.exists(pw):
+        if ours:
             os.unlink(pw)
-        done.append("SSH: keys only")
+        done.append("SSH: keys only" if ours is not False else "SSH: the installer's own rule kept")
     os.makedirs(at("/opt/bromigos-monitoring/textfile"), mode=0o755, exist_ok=True)
     units = list(BASE_UNITS)
-    if c["updates"]["auto"]:
+    if c["updates"]["mode"] != "off":
         units.append("bromigos-server-update.timer")
     # the monthly scrub of /, only where / is btrfs (elsewhere it would fail every month)
     if root_fstype() == "btrfs":
@@ -1430,7 +1586,7 @@ def cmd_setup(a):
     if ROOT == "/":
         rc, _, err = run(["systemctl", "enable", *units])
         done.append("enabled: " + ", ".join(units) if rc == 0 else f"systemctl enable: {err.strip()}")
-        if not c["updates"]["auto"]:
+        if c["updates"]["mode"] == "off":
             run(["systemctl", "disable", "bromigos-server-update.timer"])
         # kmscon takes the first console (getty@tty1 conflicts with it, and comes back on its
         # own when kmscon can't start: kmsconvt@'s OnFailure, the plain console's fallback)
@@ -1525,13 +1681,96 @@ def news_hold(prev):
     return [{k: i[k] for k in ("title", "link", "published")} for i in items if i["ts"] > since][:5]
 
 
+def window_of(c):
+    """[updates] window as (start, end) minutes after midnight, or None (any time)."""
+    m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*", str(c["updates"].get("window") or ""))
+    if not m:
+        return None
+    a, b, x, y = (int(v) for v in m.groups())
+    return (a * 60 + b) % 1440, (x * 60 + y) % 1440
+
+
+def in_window(c, t=None):
+    """Whether now (or t, a struct_time) is inside [updates] window; no window: always."""
+    w = window_of(c)
+    if not w:
+        return True
+    t = t or time.localtime(float(os.environ.get("BROMIGOS_SERVER_NOW", time.time())))
+    m = t.tm_hour * 60 + t.tm_min
+    start, end = w
+    return start <= m < end if start < end else (m >= start or m < end)
+
+
+def restart_for_update(st, c, a):
+    """A new kernel or driver needs a restart: now, when a person asked (--now) or the window
+    is open; else it waits for the window (the timer's next run in it). A lab node whose lab
+    restarts its machines one at a time (cluster_reboots) leaves it to the lab: kured's
+    /run/reboot-required."""
+    if c["updates"]["cluster_reboots"] and cluster()["joined"]:
+        try:
+            open(at(REBOOT_REQUIRED), "w").close()
+        except OSError:
+            pass
+        st.update(phase="reboot-waiting", reason="the lab restarts its machines one at a time; it restarts this one")
+        save_state(st)
+        print("bromigos-server: updated; the lab restarts this server when its turn comes, then it's checked")
+        return 0
+    if not a.now and not in_window(c):
+        st.update(phase="reboot-waiting", reason=f"the restart waits for the window ({c['updates']['window']})")
+        save_state(st)
+        print(f"bromigos-server: updated; the restart it needs waits for the window ({c['updates']['window']})")
+        return 0
+    st["phase"] = "reboot"
+    save_state(st)
+    print("bromigos-server: updated; the new kernel or driver needs a restart: restarting to check it")
+    run(["systemctl", "reboot"])
+    return 0
+
+
+def download_only(st, c):
+    """[updates] mode = download: fetch what the update would install, then wait for a person
+    (BRODEC's Update on the phone, or update --now). Nothing is installed."""
+    rc, out, err = run(["pacman", "-Syuw", "--noconfirm"], timeout=3 * 3600)
+    if rc != 0:
+        st.update(phase="failed", finished=now(), finished_ts=time.time(),
+                  reason="the download didn't finish: " + last_line(err or out, "pacman -Syuw failed"))
+        save_state(st)
+        remember({"event": "failed", "reason": st["reason"]})
+        print(f"bromigos-server: {st['reason']}", file=sys.stderr)
+        return 1
+    _, out, _ = run(["pacman", "-Qu"])
+    pkgs = [line.split()[0] for line in out.splitlines() if line.strip()]
+    if not pkgs:
+        st.update(phase="nothing", finished=now(), finished_ts=time.time(), reason="", last_success_ts=time.time())
+        st.pop("waiting", None)
+        save_state(st)
+        print(f"bromigos-server: {PHASE_WORDS['nothing']}")
+        return 0
+    st.update(phase="waiting", waiting={"since": now(), "packages": pkgs, "notify": bool(c["updates"]["notify"])})
+    save_state(st)
+    remember({"event": "downloaded", "packages": len(pkgs)})
+    print(f"bromigos-server: {len(pkgs)} update(s) downloaded, waiting for you: BRODEC's Update on your phone, "
+          "or sudo bromigos server update --now")
+    return 0
+
+
 def cmd_update(a):
     c = config()
-    if not c["updates"]["auto"] and not a.now:
-        print("bromigos-server: automatic updates are off (/etc/bromigos/server.toml, [updates] auto)")
+    if c["updates"]["mode"] == "off" and not a.now:
+        print("bromigos-server: automatic updates are off (/etc/bromigos/server.toml, [updates] mode)")
         return 0
+    if c["updates"]["channel"] not in CHANNELS:
+        print(f"bromigos-server: the {c['updates']['channel']!r} channel isn't here yet: updating from live Arch",
+              file=sys.stderr)
     st = load_state()
-    if st.get("phase") in ("verify", "reboot", "updating") and not a.now:
+    # an update that waited for the window to restart: the window is open now
+    if st.get("phase") == "reboot-waiting" and not c["updates"]["cluster_reboots"] and (a.now or in_window(c)):
+        st["phase"] = "reboot"
+        save_state(st)
+        print("bromigos-server: restarting for the update that waited for the window")
+        run(["systemctl", "reboot"])
+        return 0
+    if st.get("phase") in ("verify", "reboot", "updating", "reboot-waiting") and not a.now:
         print(f"bromigos-server: the last update is still being checked ({st['phase']}); not starting another")
         return 0
     prev = st
@@ -1549,6 +1788,8 @@ def cmd_update(a):
     carry = {k: prev[k] for k in ("last_success_ts", "news_seen_ts") if k in prev}
     if a.now:
         carry["news_seen_ts"] = time.time()
+    if c["updates"]["mode"] == "download" and not a.now:
+        return download_only(dict(carry, started=now(), started_ts=time.time()), c)
     st = dict(carry, phase="updating", started=now(), started_ts=time.time(), gateway=gateway(),
               sshd=unit_state("sshd.service") == "active", boots=0, btrfs_errors=btrfs_errors()["total"])
     save_state(st)
@@ -1574,11 +1815,7 @@ def cmd_update(a):
     remember({"event": "updated", "packages": len(st["packages"]), "pre": st["pre"], "post": st["post"],
               "kernel": st["kernel"]})
     if st["kernel"] and c["updates"]["reboot"]:
-        st["phase"] = "reboot"
-        save_state(st)
-        print("bromigos-server: updated; the new kernel or driver needs a restart: restarting to check it")
-        run(["systemctl", "reboot"])
-        return 0
+        return restart_for_update(st, c, a)
     st["phase"] = "verify"
     save_state(st)
     return cmd_health(a, booted=False)
@@ -1613,6 +1850,9 @@ def check_health(st, c):
     down = [u for u in dict.fromkeys(must) if unit_state(u) != "active"]
     if down:
         reasons.append("not running: " + ", ".join(down))
+    for name, ok_, words in health_scripts():
+        if not ok_:
+            reasons.append(f"the health check {name} failed" + (f": {words}" if words else ""))
     errors = btrfs_errors()["total"]
     if errors > int(st.get("btrfs_errors", errors)):
         reasons.append(f"the disks counted {errors - int(st['btrfs_errors'])} new btrfs errors")
@@ -1623,6 +1863,25 @@ def check_health(st, c):
         if rc != 0:
             reasons.append(f"the gateway {st['gateway']} doesn't answer")
     return not reasons, reasons
+
+
+def health_scripts():
+    """[(name, healthy, its last line)] for each script in /etc/bromigos/server/health.d (the
+    installer's per-role checks, and any you add): exit 0 is healthy. Run with sh unless it's
+    executable; a minute each."""
+    d = at(HEALTH_D)
+    out = []
+    for name in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        p = os.path.join(d, name)
+        if not os.path.isfile(p) or name.startswith(".") or name.endswith(("~", ".disabled", ".pacnew", ".pacsave")):
+            continue
+        cmd = [p] if os.access(p, os.X_OK) else ["sh", p]
+        try:
+            rc, o, e = run(cmd, timeout=60)
+        except subprocess.TimeoutExpired:
+            rc, o, e = 1, "", "it took longer than a minute"
+        out.append((name, rc == 0, last_line(e or o, "") if rc != 0 else ""))
+    return out
 
 
 def cmd_mark_boot(a):
@@ -1727,6 +1986,8 @@ def main(argv=None):
     p.add_argument("--json", action="store_true")
     sub.add_parser("disk-alert")
     sub.add_parser("setup")
+    p = sub.add_parser("secrets", help="this server's secret store: bromigos lab secrets (status, set, generate, rotate …)")
+    p.add_argument("rest", nargs=argparse.REMAINDER)
     a = ap.parse_args(argv)
     cmd = a.cmd or "status"
     if cmd == "status":
@@ -1738,6 +1999,12 @@ def main(argv=None):
         return 0
     if cmd == "roles":
         return cmd_roles(a)
+    if cmd == "secrets":
+        # the same store and words as the lab's (bromigos_homelab.secretstore): rotate included
+        lab = shutil.which("bromigos-lab") or "/usr/lib/bromigos/bin/bromigos-lab"
+        if not os.path.exists(lab):
+            sys.exit("bromigos-server: the secret store is the lab's (bromigos-lab), which isn't installed")
+        os.execv(lab, [lab, "secrets", *a.rest])
     reading = (cmd == "firewall" and (a.print or a.verb in (None, "status") or not a.name)) or \
         (cmd in ("backup", "ups") and a.verb in (None, "status"))
     if ROOT == "/" and os.geteuid() != 0 and not reading:

@@ -159,6 +159,11 @@ Moving to an older channel, such as from `edge` back to `stable`, puts packages 
 newer than that channel's back to its versions. `bromigos update --channel` does this for
 you.
 
+Sometimes the older channel doesn't have a part that's installed here yet, because the part
+is newer than that channel's last release. Then bromigOS says stable will be available
+after the next release and keeps you where you are. You don't need to do anything: the next
+updates check again and move you by themselves once it's ready.
+
 You can also change the channel in **Settings › Updates & recovery**.
 
 ## The manual

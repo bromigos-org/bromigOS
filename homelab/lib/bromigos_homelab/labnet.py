@@ -180,7 +180,7 @@ def options(a, saved=None):
         try:
             ip = ipaddress.ip_address(o.get("lan_address") or "")
         except ValueError:
-            raise NetError("Give the lab machine's address on your network: --lan-address, such as 192.168.1.20") from None
+            raise NetError("Give the lab machine's address on your network: --lan-address, such as 192.0.2.20") from None
         if not ip.is_private or ip.is_loopback:
             raise NetError("--lan-address must be an address on your own network")
         o["server_url"] = f"http://{ip}:8080"

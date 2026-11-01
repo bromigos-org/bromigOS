@@ -183,10 +183,12 @@ if (( ! dry )); then
     stage 11 "Preparing the disk"
     # its output, read for the progress bar (progress.py: partitions, encryption, each
     # package, the boot loader), lands in the log as it is
+    # $lib/shims first on its PATH: a wipefs that waits for a partition udev is still making
+    # (the race that sometimes failed "Preparing the disk"; shims/wipefs says more)
     if (( menu )); then
-        archinstall "${args[@]}"
+        PATH="$lib/shims:$PATH" archinstall "${args[@]}"
     else
-        archinstall "${args[@]}" 2>&1 | python3 "$lib/bromigos_installer/progress.py" | tee -a "$log"
+        PATH="$lib/shims:$PATH" archinstall "${args[@]}" 2>&1 | python3 "$lib/bromigos_installer/progress.py" | tee -a "$log"
         (( PIPESTATUS[0] == 0 )) || { now_stage="Installing the system"; false; }
     fi
     [[ -d $target/etc/pacman.d ]] || target=/mnt/archinstall

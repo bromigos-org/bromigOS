@@ -521,7 +521,7 @@ machine. The medium remembers it as the installed system's repository, unless
 | `--test-key FILE` | Makes a test build (below) |
 | `--keep-work` | Keeps mkarchiso's work directory, to look inside the image |
 | `--edition E` | `desktop` (the default) or `fieldkit`: Field Kit, to fix any computer, run your lab and install a server ([fieldkit.md](fieldkit.md#building-it)) |
-| `--local-repo DIR` | A dev build: this checkout's own packages (`packaging/dev-repo.sh`'s, unsigned) in place of `[bromigos]`'s. For tests only; `check-medium.sh` refuses it |
+| `--local-repo DIR` | A dev build: this checkout's own packages (`packaging/dev-repo.sh`'s, unsigned) in place of `[bromigos]`'s. For tests only; `check-medium.sh` refuses it (unless `--dev-build`: a pull request's medium, above) |
 
 The result is `<out>/bromigos-<version>-x86_64.iso` and its `.sha256`, owned by whoever
 ran the build. Package downloads are cached in `<out>/cache`, so a rebuild downloads only
@@ -622,6 +622,20 @@ the desktop medium, and the Field Kit once it's there), side by side:
 
 The tests' screenshots and output are the run's artifact, `iso-tests-<profile>`. Nothing
 is published unless every step before it passed.
+
+**On a pull request** that changes `iso/` or this workflow, it builds, checks and tests the
+same way and publishes nothing. Its medium has the **edge** channel's packages (main's, which
+the pull request goes into), and before the build `iso/ci-local-packages.sh` builds, from the
+pull request itself, every package that edge doesn't have yet or that the pull request
+changes. Those go in as a local repository (`iso/build.sh --local-repo`), ahead of edge's;
+a package that doesn't build there falls back to edge's, if edge has it. So a pull request
+that adds a package and puts it on a medium is tested with it, instead of failing because
+the channel doesn't have it yet. Such a medium is a dev build, and `check-medium.sh
+--dev-build` says so instead of failing; every other check still runs. Its tests
+(`ci-test.sh --dev-build`) are the same but for the installed system's first update and
+rollback: no channel is sure to be newer than a pull request's packages. A build by hand that
+publishes nothing does the same with its channel. A published medium never does: it only
+carries the channel's signed packages.
 
 It runs on GitHub's hosted runner: the repository is public, so it costs nothing, and the
 runner has Docker, KVM and, once the job clears its unused toolchains, the ~30 GB the

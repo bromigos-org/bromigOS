@@ -74,6 +74,7 @@ sudo bromigos server role remove storage    # and off again
 | **Lab node** | Joins your lab and runs what it gives this computer. The lab sets it up from your desktop. | The `lab-cluster` rule set; NFS for the lab's NAS; the kernel settings container-dense nodes need; the lab workstation's account; k3s in the health check once the lab installs it |
 | **Storage** | Keeps files for the house and backups for the lab. | Samba and NFS (on, with no shares yet), btrbk, disk spin-down; the `smb` and `nfs` rule sets |
 | **Home services** | Runs apps for the household: photos, media, passwords. | Caddy on 80 and 443, local network only (`web-lan`) |
+| **Media** | Your own movies, shows, music and Den TV for every screen. | Jellyfin, requests and the library's upkeep, as containers the lab's engine sets up; `web-lan` and `media` (8096, and 7359/udp for the apps to find it), local network only; the `_bromigos-media._tcp` announcement, so desktops add it as a Den TV source by themselves |
 | **Game server** | Hosts games for friends, run from your phone. | The `games` rule set (Minecraft's 25565, from anywhere); the processor at full speed. Two ways, below |
 | **Just a server** | The safe base and nothing else. | Nothing more |
 | **Cockpit** (an extra) | A web page for looking after the server, on your local network. | Cockpit with its Podman, storage and files pages, on 9090 (`cockpit`). Never its update page, which would update outside the snapshot and the check |
@@ -96,7 +97,10 @@ Without a key, no account is made, and the lab signs in as you.
 
 **What a role does when it's added:** it installs its packages (`pacman`), removes the
 packages it replaces, writes its files when they aren't there, writes its kernel settings,
-turns its services on, and opens its rule sets. Its health checks count from the next
+turns its services on, and opens its rule sets. Then the lab's engine adds what it sets up
+for that role on this server (its apps, their web names and checks): `bromigos lab provision
+--local --roles ROLE --apply`, which only adds. Where the engine can't do that yet, the
+command says so. Its health checks count from the next
 update. **When it's removed,** its services stop, its rule sets close, its settings go, and
 its files go if they're still as it wrote them. Its packages stay; the command says how to
 remove them.
@@ -104,6 +108,14 @@ remove them.
 Roles marked offline install from the Field Kit stick with no network. Docker (for Wings)
 and Cockpit need the network.
 
+**The installer's picks.** The installer writes its own role ids too, under `[roles] picked`
+(`lab`, `storage`, `home`, `games`, `media`, `plain`). Each one counts as the matching role
+here (`lab-node`, `storage`, `home-services`, `game-server`, `media`, `just-a-server`), as
+well as those in `[roles] enabled`. `role remove` takes a role out of both lists.
+
+**Its secrets.** `sudo bromigos server secrets` is the lab's secret store, with the same
+words: `status`, `set NAME`, `generate NAME`, `rotate NAME`, `recovery` (`bromigos lab
+secrets`). The installer chooses where it keeps them.
 ### For power users: the role files
 
 One TOML file per role, in `/usr/share/bromigos/server/roles/` (`server/roles/` in the
@@ -241,6 +253,7 @@ ignore_units = []       # failed units that don't count against it
 
 [roles]
 enabled = []            # "storage", "game-server/pelican-wings", ... (role add writes it)
+picked = []             # the installer's own ids ("media", "home", ...): they count too
 
 [backup]
 to = ""                 # where: "s3:https://host/bucket/path", "sftp:user@host:/path", "/mnt/usb"
@@ -258,6 +271,22 @@ apparmor = true         # AppArmor on, from the next start
 ssh_key = ""            # the lab workstation's public key (the Lab node role)
 pelican_panel = ""      # your lab's Pelican panel (the Game server role, with Wings)
 ```
+
+The installer also writes what it chose for `bromigos server status` to show: `[network]`
+(the port, DHCP or a fixed address, VLAN, bond, Wake-on-LAN), `[storage]` (the data disks,
+their layout and shares), `[unlock]` (`tpm`, `passphrase` or `none`), `[services]` (`on`,
+`off`), `[apps]` (`enabled`, containers with their images pinned), `[lab]`, `[games]`
+(`pelican_url`, `registry_mirror`), `[remote]` (Tailscale, WireGuard), `[kernel]` and
+`[packages] pending`. Status also shows what it left for the first start, while those
+units are there: `bromigos-server-pending.service` (the packages that waited for a network,
+listed in `/etc/bromigos/server/pending-packages`), `bromigos-server-tpm-enroll.service`
+(the security chip unlocking the disk) and `bromigos-server-secrets.service` (the install's
+keys into the secret store). They're the installer's own units, and they run once.
+
+`setup` never overwrites the installer's own files: its SSH drop-ins
+(`/etc/ssh/sshd_config.d/01-…`, `05-…`, `20-…`: a `05-bromigos-server-password.conf` is
+setup's own only when it says so), its kernel and journal settings (`90-…`, read after the
+package's `60-…`), and `/etc/bromigos/server/nftables.d`.
 
 After changing the file, run `sudo bromigos server setup`. `bromigos server firewall allow
 NAME` and `deny NAME` change the `allow` list for you, and reload the firewall.
@@ -339,6 +368,8 @@ yourself too:
 | `games` | 25565 (Minecraft), TCP and UDP, from anywhere | Game server |
 | `wings` | 8080 and 2022, from the local network (the lab's panel) | Game server with Wings |
 | `cockpit` | 9090, from the local network | the Cockpit extra |
+| `media` | 8096 (Jellyfin) and 7359/udp (its apps finding it), from the local network | Media |
+| `s3` | 9000 (S3: RustFS, the lab's object store), from the local network | you |
 
 The other ways:
 
@@ -376,6 +407,43 @@ this:
 `reboot = false` in the settings stops the restart. The new kernel then runs after the
 next restart you make, and the check waits for it.
 
+### Update modes, the window and the channel
+
+The installer writes how updates go, under `[updates]`:
+
+```toml
+[updates]
+mode = "auto"           # auto, download or off
+window = "03:00-05:00"  # the server's own time zone
+channel = "live"        # Arch as it is today; a tested snapshot of it comes later
+notify = true
+arch_news_hold = true   # the same as news_hold
+cluster_reboots = false
+```
+
+| `mode` | What the nightly run does |
+|---|---|
+| `auto` | Updates, checks and rolls back by itself (above) |
+| `download` | Downloads what the update would install (`pacman -Syuw`) and stops. `bromigos server` says how many wait, and the alert `update.held` tells your phone (unless `notify = false`). BRODEC's Update, or `sudo bromigos server update --now`, then installs them with the snapshot, the check and the rollback |
+| `off` | Nothing: the timer is off. `sudo bromigos server update --now` runs the whole update when you want it |
+
+A file from before the modes has `auto = true` or `false`: that's `auto` or `off`.
+
+**The window.** The installer moves the timer into the window
+(`/etc/systemd/system/bromigos-server-update.timer.d/10-window.conf`), each server at its
+own moment in it. A restart the update needs happens only inside the window: an update
+approved from your phone at noon installs at once, and the restart waits for the window's
+next opening (status says "the restart it needs waits for the window"). `--now` at the
+console restarts at once. No window: any time.
+
+**Cluster reboots.** A Lab node with `cluster_reboots = true`, joined to the lab's cluster,
+never restarts by itself: it leaves `/run/reboot-required` for the lab, which restarts its
+machines one at a time and moves their work away first. The check runs after that restart.
+
+**The channel.** `live` is Arch as it is today, protected by the snapshot, the check and the
+rollback. A tested channel (a dated copy of Arch that CI has installed and booted) comes
+later; until then any other value updates from `live`, and says so.
+
 ### The Arch news hold
 
 Some Arch Linux news asks for manual steps before an update, such as editing a config file.
@@ -410,6 +478,14 @@ all of these are true:
   update began. Errors from before don't count; `bromigos server` shows them.
 - **The network is back.** The server has an address, and the gateway it had before the
   update answers a ping.
+- **Every script in `/etc/bromigos/server/health.d/` exits 0.** The installer writes each
+  role's (`50-disks.sh`, `50-k3s.sh`, `50-arrays.sh`, `50-shares.sh`, `50-apps.sh`,
+  `50-wings.sh`), and any script you add counts too. Each has a minute; one that isn't
+  executable runs with `sh`. Its last line of output is the reason a failure gives.
+
+`[health] checks` lists the checks the installer chose: `startup`, `units`, `network` and
+`sshd` are the built-in ones above; any other name is its `health.d` script. `bromigos
+server status --json` shows both.
 
 The check looks every 15 seconds until it's healthy or the time runs out.
 

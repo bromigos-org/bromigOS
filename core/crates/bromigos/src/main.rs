@@ -240,7 +240,8 @@ enum Cmd {
     /// Restart what runs stale (its package is newer than the process), or the pieces named
     Restart {
         /// live, widgets, waybar, dunst, vector, hyprland (its config), osd, idle (hypridle),
-        /// or a user unit a package's restart.d drop-in declares; none: whatever is stale
+        /// or a user unit a package's restart.d drop-in declares; none: whatever is stale.
+        /// A named live, widgets, waybar or dunst that isn't running is started
         pieces: Vec<String>,
         /// Only say what would restart
         #[arg(long)]
@@ -1736,10 +1737,40 @@ fn supervisor_pid(paths: &Paths) -> Option<i32> {
     session::pid_alive(pid).then_some(pid)
 }
 
+/// Whether a process runs in this user service (its cgroup's last part is the unit).
+fn in_unit(pid: i32, unit: &str) -> bool {
+    std::fs::read_to_string(format!("/proc/{pid}/cgroup"))
+        .is_ok_and(|c| c.lines().any(|l| l.ends_with(&format!("/{unit}"))))
+}
+
+/// What brings the session's pieces back when one is missing (Settings › Startup's Fix):
+/// `bromigos restart` with the missing ones' names starts them.
+fn status_fix(bar: bool, live: bool) -> Option<String> {
+    let missing: Vec<&str> = [("waybar", bar), ("live", live)]
+        .iter()
+        .filter(|(_, up)| !up)
+        .map(|(n, _)| *n)
+        .collect();
+    (!missing.is_empty()).then(|| format!("bromigos restart {}", missing.join(" ")))
+}
+
 fn status_cmd(paths: &Paths, json_out: bool) -> Result<i32> {
     let d = session::discover(paths);
     let supervisor = supervisor_pid(paths);
     let live_state = ipc::live(paths, "state").ok();
+    let bar_pids: Vec<i32> = update::running(Path::new("/proc"))
+        .into_iter()
+        .filter(|r| r.piece == Piece::Waybar)
+        .flat_map(|r| r.pids)
+        .collect();
+    let bar_service = bar_pids.iter().any(|p| in_unit(*p, "bromigos-bar.service"));
+    let live_service = supervisor.is_some_and(|p| in_unit(p, "bromigos-live.service"));
+    let live_up = supervisor.is_some() || live_state.is_some();
+    // only with a session to run them in
+    let fix = d
+        .session
+        .as_ref()
+        .and_then(|_| status_fix(!bar_pids.is_empty(), live_up));
     let muted = paths.live_muted().exists();
     let holo = ipc::holo(paths, "status").ok();
     let switched_off = paths.vector_switched_off();
@@ -1748,8 +1779,14 @@ fn status_cmd(paths: &Paths, json_out: bool) -> Result<i32> {
         let doc = json!({
             "schema": SCHEMA,
             "session": session_json(&d),
+            "bar": {
+                "running": !bar_pids.is_empty(),
+                "pids": bar_pids,
+                "service": bar_service,
+            },
             "live": {
-                "running": supervisor.is_some() || live_state.is_some(),
+                "running": live_up,
+                "service": live_service,
                 "supervisor_pid": supervisor,
                 "state": live_state,
                 "background": live_state.as_deref().map(|s| !s.contains("background off")),
@@ -1763,6 +1800,7 @@ fn status_cmd(paths: &Paths, json_out: bool) -> Result<i32> {
                 "switch": if switched_off { "off" } else { "on" },
             },
             "animations": anims,
+            "fix": fix,
         });
         println!("{doc}");
         return Ok(0);
@@ -1777,10 +1815,23 @@ fn status_cmd(paths: &Paths, json_out: bool) -> Result<i32> {
         ),
         None => println!("no running Hyprland session found"),
     }
+    println!("\n── the bar");
+    match (bar_pids.first(), bar_service) {
+        (Some(p), true) => {
+            println!("running (pid {p}; bromigos-bar.service: back by itself if it stops)")
+        }
+        (Some(p), false) => println!("running (pid {p})"),
+        (None, _) => println!("not running"),
+    }
     println!("\n── live layer");
     match (supervisor, &live_state) {
         (Some(p), st) => {
-            println!("daemon up (supervisor {p})");
+            let how = if live_service {
+                "; bromigos-live.service"
+            } else {
+                ""
+            };
+            println!("daemon up (supervisor {p}{how})");
             if let Some(st) = st {
                 println!("{}", st.trim_end());
             }
@@ -1804,6 +1855,9 @@ fn status_cmd(paths: &Paths, json_out: bool) -> Result<i32> {
     );
     println!("\n── animations");
     print_anim_list(&anims);
+    if let Some(f) = fix {
+        println!("\nnot everything is running: {f} starts it again");
+    }
     Ok(0)
 }
 
@@ -1910,7 +1964,24 @@ fn channel_cmd(
     if let Some(name) = name {
         let ch = channel::Channel::parse(name)
             .ok_or_else(|| anyhow::anyhow!("no such channel: {name} (stable, rc, edge, dev)"))?;
+        if repo.is_none()
+            && let Err(lack) = channel::ready(paths, ch)
+        {
+            let from = channel::current(paths).channel;
+            channel::set_wanted(paths, Some(ch));
+            let words = channel::waiting_words(from, ch, &lack);
+            if json {
+                println!(
+                    "{}",
+                    json!({"schema": SCHEMA, "waiting": {"channel": ch, "lacks": lack, "words": words}})
+                );
+            } else {
+                println!("{words}");
+            }
+            return Ok(0);
+        }
         let c = channel::set(paths, ch, repo, dev_dir).map_err(anyhow::Error::msg)?;
+        channel::set_wanted(paths, None);
         if json {
             println!("{}", json!({"schema": SCHEMA, "channel": c}));
             return Ok(0);
@@ -1937,7 +2008,10 @@ fn channel_cmd(
     }
     let cur = channel::current(paths);
     if json {
-        println!("{}", json!({"schema": SCHEMA, "channel": cur}));
+        println!(
+            "{}",
+            json!({"schema": SCHEMA, "channel": cur, "wanted": channel::wanted(paths).filter(|w| Some(*w) != cur.channel)})
+        );
         return Ok(0);
     }
     match cur.channel {
@@ -1949,6 +2023,11 @@ fn channel_cmd(
     }
     if let Some(s) = &cur.server {
         println!("  Server = {s}");
+    }
+    if let Some(w) = channel::wanted(paths).filter(|w| Some(*w) != cur.channel) {
+        println!(
+            "  moving to {w} by itself at an update, once it has every bromigOS package here (after its next release)"
+        );
     }
     println!("channels:");
     for ch in channel::Channel::ALL {
@@ -2477,10 +2556,45 @@ fn update_cmd(paths: &Paths, f: &UpdateFlags, channel: Option<&str>) -> Result<i
         return Ok(0);
     }
     let mut downgrade = f.downgrade;
-    if let Some(name) = channel {
-        let ch = bromigos_core::channel::Channel::parse(name)
-            .ok_or_else(|| anyhow::anyhow!("no such channel: {name} (stable, rc, edge, dev)"))?;
-        let c = bromigos_core::channel::set(paths, ch, None, None).map_err(anyhow::Error::msg)?;
+    use bromigos_core::channel as chan;
+    let mut asked =
+        match channel {
+            Some(name) => Some(chan::Channel::parse(name).ok_or_else(|| {
+                anyhow::anyhow!("no such channel: {name} (stable, rc, edge, dev)")
+            })?),
+            None => None,
+        };
+    // a channel asked for earlier that wasn't ready: the move happens now, once it is
+    if asked.is_none()
+        && let Some(w) = chan::wanted(paths)
+    {
+        if chan::current(paths).channel == Some(w) {
+            chan::set_wanted(paths, None);
+        } else if chan::ready(paths, w).is_ok() {
+            if !json {
+                println!("== channel: {w} has everything this computer needs now: moving to it");
+            }
+            asked = Some(w);
+        }
+    }
+    if let Some(ch) = asked
+        && let Err(lack) = chan::ready(paths, ch)
+    {
+        // a move to an older channel that lacks a package here would stop on a file conflict:
+        // it waits instead, and happens by itself at a later update
+        let from = chan::current(paths).channel;
+        chan::set_wanted(paths, Some(ch));
+        let words = chan::waiting_words(from, ch, &lack);
+        if json {
+            eprintln!("{words}");
+        } else {
+            println!("== channel: {words}");
+        }
+        asked = None;
+    }
+    if let Some(ch) = asked {
+        let c = chan::set(paths, ch, None, None).map_err(anyhow::Error::msg)?;
+        chan::set_wanted(paths, None);
         if !json {
             println!(
                 "== channel: {} (was {}){}",

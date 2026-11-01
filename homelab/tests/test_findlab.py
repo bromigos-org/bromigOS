@@ -553,6 +553,16 @@ class Announce(unittest.TestCase):
         self.assertEqual(tasks[-1]["ansible.builtin.systemd"]["name"], "avahi-daemon")
         self.assertEqual(F.recognise(N.SERVICE), [("bromigOS lab box", "lab machine")])
 
+    def test_the_service_file_is_well_formed_xml(self):
+        """Avahi parses it strictly: no "--" inside a comment, or the whole file is refused."""
+        import xml.etree.ElementTree as ET
+        from bromigos_homelab import announce as N
+        text = N.service_xml(2222)
+        for c in __import__("re").findall(r"<!--(.*?)-->", text, __import__("re").S):
+            self.assertNotIn("--", c)
+        root = ET.fromstring(text.split("\n", 2)[2])        # past the declaration and the DOCTYPE
+        self.assertEqual(root.find("service/port").text, "2222")
+
     def test_an_existing_cluster_does_not(self):
         from bromigos_homelab import announce as N
         files, roles = {}, []

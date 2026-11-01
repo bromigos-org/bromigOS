@@ -265,6 +265,15 @@ impl Piece {
         matches!(self, Piece::Live | Piece::Vector)
     }
 
+    /// What `bromigos restart <piece>` starts when it isn't running at all: the session's
+    /// own long-running pieces (VECTOR starts when he's summoned; Hyprland is the session).
+    pub fn startable(self) -> bool {
+        matches!(
+            self,
+            Piece::Live | Piece::Waybar | Piece::Widgets | Piece::Dunst
+        )
+    }
+
     /// The package its default config comes from, when that's a different one.
     pub fn config_package(self) -> Option<&'static str> {
         match self {
@@ -334,7 +343,28 @@ pub fn is_piece(piece: Piece, argv: &[String]) -> bool {
     }
 }
 
-/// This user's live processes of each piece (zombies left out).
+/// Whether a process belongs to this command's sessions: its `XDG_RUNTIME_DIR` is ours, or
+/// either has none. A nested test desktop or a sandbox (a runtime directory of its own) never
+/// sees, restarts or stops the real session's pieces, nor the real session a sandbox's.
+pub fn same_runtime(proc: &Path, pid: i32) -> bool {
+    let Some(mine) = std::env::var_os("XDG_RUNTIME_DIR").filter(|v| !v.is_empty()) else {
+        return true;
+    };
+    let Ok(env) = fs::read(proc.join(pid.to_string()).join("environ")) else {
+        return true;
+    };
+    let key = b"XDG_RUNTIME_DIR=";
+    match env
+        .split(|b| *b == 0)
+        .find_map(|kv| kv.strip_prefix(key.as_slice()))
+    {
+        Some(theirs) => theirs == mine.as_encoded_bytes(),
+        None => true,
+    }
+}
+
+/// This user's live processes of each piece in this runtime directory ([`same_runtime`];
+/// zombies left out).
 pub fn running(proc: &Path) -> Vec<Running> {
     let uid = rustix::process::getuid().as_raw();
     let me = std::process::id() as i32;
@@ -347,6 +377,7 @@ pub fn running(proc: &Path) -> Vec<Running> {
             let pid: i32 = e.file_name().to_str()?.parse().ok()?;
             (pid != me && e.metadata().ok()?.uid() == uid).then_some(pid)
         })
+        .filter(|pid| same_runtime(proc, *pid))
         .filter(|pid| {
             fs::read_to_string(proc.join(pid.to_string()).join("stat")).is_ok_and(|s| {
                 s.rsplit_once(") ")
@@ -394,7 +425,8 @@ pub enum Need {
     /// installed, or the piece needs the GPU and is held back until then.
     Reboot,
     /// Installed but not running: a session service the login starts, added by an update
-    /// (only the OSD: the others can be switched off on purpose, so they're never started).
+    /// (only the OSD: the others can be switched off on purpose, so an update never starts
+    /// them), or a piece asked for by name (`bromigos restart waybar live`).
     Start,
     /// A package's `restart.d` drop-in asks first: a desktop notification, whose "Restart
     /// now" restarts the unit ([`crate::restartd`]); for an app, only the notice.
@@ -625,15 +657,11 @@ pub(crate) fn stop(pids: &[i32]) -> Result<(), String> {
 }
 
 /// Starts `prog` in its own session (setsid), detached from this terminal, with the live
-/// session's display. It gets no pipes of ours: a daemon that inherits a captured stdout
-/// keeps it open for its whole life, and waiting for that pipe's end hung `bromigos update`
-/// after it restarted the widgets. Each daemon keeps its own log; only setsid's exit is
-/// waited for (`-f` forks and returns at once).
-pub(crate) fn spawn(env: &[(String, String)], prog: &str) -> Result<String, String> {
-    spawn_args(env, prog, &[])
-}
-
-/// `spawn` with arguments.
+/// session's display: [`relaunch`]'s last resort (it stays in this command's cgroup). It
+/// gets no pipes of ours: a daemon that inherits a captured stdout keeps it open for its
+/// whole life, and waiting for that pipe's end hung `bromigos update` after it restarted the
+/// widgets. Each daemon keeps its own log; only setsid's exit is waited for (`-f` forks and
+/// returns at once).
 pub(crate) fn spawn_args(
     env: &[(String, String)],
     prog: &str,
@@ -655,26 +683,78 @@ pub(crate) fn spawn_args(
     }
 }
 
-/// Starts `cmd` through the compositor (`hl.dsp.exec_cmd`, via bromigos-dispatch), as
-/// Hyprland's autostart does; `setsid -f` when there's no compositor to ask.
+/// Starts `cmd` (one program, no arguments) in the session: [`relaunch`].
 pub(crate) fn start_in_compositor(
     paths: &Paths,
     env: &[(String, String)],
     cmd: &str,
 ) -> Result<String, String> {
+    relaunch(paths, env, &[cmd])
+}
+
+/// A command line's words quoted for `sh -c` (what Hyprland's exec runs a command with).
+pub(crate) fn sh_quote(words: &[&str]) -> String {
+    words
+        .iter()
+        .map(|w| {
+            if !w.is_empty()
+                && w.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "/._-+=:,@%".contains(c))
+            {
+                (*w).to_owned()
+            } else {
+                format!("'{}'", w.replace('\'', r"'\''"))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Starts one of the session's programs again so that it lives in the session, as login
+/// starts it: through the compositor (Hyprland's exec), never as a child of this command.
+/// A child of this one would share its cgroup: a terminal's scope, or the transient unit
+/// BRODEC's phone update runs in, and systemd kills what's left in a unit when it ends
+/// (that took the bar and the live layer down after a phone update). No compositor to ask:
+/// detached here (setsid), the old way.
+pub(crate) fn relaunch(
+    paths: &Paths,
+    env: &[(String, String)],
+    argv: &[&str],
+) -> Result<String, String> {
+    let cmd = sh_quote(argv);
     let lua = format!("hl.dsp.exec_cmd({cmd:?})");
     let dispatch = paths.lib_bin.join("bromigos-dispatch");
     if !env.is_empty() && dispatch.exists() {
         let r = run_quiet(
             Command::new(&dispatch)
-                .args([lua.as_str(), "exec", cmd])
+                .args([lua.as_str(), "exec", cmd.as_str()])
                 .envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str()))),
         );
         if r.is_ok() {
             return r;
         }
     }
-    spawn(env, cmd)
+    spawn_args(env, argv[0], &argv[1..])
+}
+
+/// The bar (Waybar) started again: `bromigos-bar restart` (its user service, back by itself
+/// whenever it stops, or a plain Waybar through the compositor where there's no service:
+/// desktop/bin/bromigos-bar). Without that command (an older bromigos-desktop): the old
+/// processes stopped and a new Waybar started in the session.
+pub(crate) fn restart_bar(
+    paths: &Paths,
+    env: &[(String, String)],
+    pids: &[i32],
+) -> Result<String, String> {
+    let bar = paths.lib_bin.join("bromigos-bar");
+    if bar.exists() {
+        return run_quiet(
+            Command::new(&bar)
+                .arg("restart")
+                .envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str()))),
+        );
+    }
+    stop(pids).and_then(|_| relaunch(paths, env, &["waybar"]))
 }
 
 /// Carries out a plan. Restart and reload are done; relogin and reboot are reported.
@@ -698,24 +778,32 @@ pub fn execute(paths: &Paths, plans: &[Plan]) -> Vec<Done> {
                         run_quiet(Command::new(&paths.holo_bin).arg("restart").envs(envs()))
                     }),
                 ),
+                // each started again in the session (relaunch), not as a child of this command
                 (Some(Piece::Widgets), Need::Restart) => (
                     "restarted",
-                    stop(&p.pids).and_then(|_| spawn(&env, "bromigos-widgets")),
+                    stop(&p.pids).and_then(|_| relaunch(paths, &env, &["bromigos-widgets"])),
                 ),
-                (Some(Piece::Waybar), Need::Restart) => (
-                    "restarted",
-                    stop(&p.pids).and_then(|_| spawn(&env, "waybar")),
-                ),
+                // a restart, not SIGUSR2, for a newer config too: waybar 0.15's mpris module
+                // crashes on an in-place reload (a Glib::Dispatcher torn down by the reload
+                // gets a playerctl signal: SIGSEGV)
+                (Some(Piece::Waybar), Need::Restart | Need::Reload) => {
+                    ("restarted", restart_bar(paths, &env, &p.pids))
+                }
                 (Some(Piece::Dunst), Need::Restart) => (
                     "restarted",
-                    stop(&p.pids).and_then(|_| spawn(&env, "dunst")),
+                    stop(&p.pids).and_then(|_| relaunch(paths, &env, &["dunst"])),
                 ),
-                // a restart, not SIGUSR2: waybar 0.15's mpris module crashes on an in-place reload
-                // (a Glib::Dispatcher torn down by the reload gets a playerctl signal: SIGSEGV)
-                (Some(Piece::Waybar), Need::Reload) => (
-                    "restarted",
-                    stop(&p.pids).and_then(|_| spawn(&env, "waybar")),
+                // asked for by name and not running (`bromigos restart waybar live`: Settings
+                // › Startup's Fix): started
+                (Some(Piece::Waybar), Need::Start) => ("started", restart_bar(paths, &env, &[])),
+                (Some(Piece::Live), Need::Start) => (
+                    "started",
+                    run_quiet(Command::new(&paths.live_bin).arg("start").envs(envs())),
                 ),
+                (Some(Piece::Widgets), Need::Start) => {
+                    ("started", relaunch(paths, &env, &["bromigos-widgets"]))
+                }
+                (Some(Piece::Dunst), Need::Start) => ("started", relaunch(paths, &env, &["dunst"])),
                 (Some(Piece::Dunst), Need::Reload) => (
                     "reloaded",
                     run_quiet(Command::new("dunstctl").arg("reload").envs(envs())),
@@ -738,7 +826,7 @@ pub fn execute(paths: &Paths, plans: &[Plan]) -> Vec<Done> {
                     // its style is read at start, so a reload is a restart too
                     let css = paths.user_state_dir().join("theme/current/swayosd.css");
                     let css = css.to_string_lossy().into_owned();
-                    let go = || spawn_args(&env, "swayosd-server", &["--style", &css]);
+                    let go = || relaunch(paths, &env, &["swayosd-server", "--style", &css]);
                     match need {
                         Need::Start => ("started", go()),
                         _ => ("restarted", stop(&p.pids).and_then(|_| go())),
@@ -752,11 +840,7 @@ pub fn execute(paths: &Paths, plans: &[Plan]) -> Vec<Done> {
                                 Need::Notify => "asked to restart (a notification)",
                                 _ => "restarted",
                             },
-                            run_quiet(
-                                Command::new(&argv[0])
-                                    .args(&argv[1..])
-                                    .envs(envs()),
-                            ),
+                            run_quiet(Command::new(&argv[0]).args(&argv[1..]).envs(envs())),
                         ),
                         None => ("nothing to do", Ok(String::new())),
                     }
@@ -843,6 +927,20 @@ pub fn restart_plan_for(
             unit: None,
             package: None,
         })
+        // asked for by name and not running at all: started (the bar, the live layer, the
+        // panels, notifications: what the session runs and Settings › Startup's Fix starts)
+        .chain(
+            only.iter()
+                .filter(|p| p.startable() && !runs.iter().any(|r| r.piece == **p))
+                .map(|p| Plan {
+                    what: p.name().to_owned(),
+                    need: Need::Start,
+                    why: "asked for, not running".to_owned(),
+                    pids: vec![],
+                    unit: None,
+                    package: None,
+                }),
+        )
         .chain(only.iter().filter(|p| **p == Piece::Hyprland).map(|_| {
             Plan {
                 what: "hyprland".to_owned(),
@@ -2088,9 +2186,29 @@ mod tests {
     }
 
     #[test]
+    fn a_relaunched_command_is_quoted_for_the_shell() {
+        assert_eq!(sh_quote(&["waybar"]), "waybar");
+        assert_eq!(
+            sh_quote(&["swayosd-server", "--style", "/home/a b/it's.css"]),
+            r"swayosd-server --style '/home/a b/it'\''s.css'"
+        );
+        assert_eq!(sh_quote(&["x", ""]), "x ''");
+    }
+
+    #[test]
+    fn restart_by_name_starts_only_the_session_pieces() {
+        let start: Vec<&str> = Piece::ALL
+            .iter()
+            .filter(|p| p.startable())
+            .map(|p| p.name())
+            .collect();
+        assert_eq!(start, ["live", "widgets", "waybar", "dunst"]);
+    }
+
+    #[test]
     fn spawn_returns_without_waiting_for_the_daemon() {
         let t = Instant::now();
-        spawn(&[], "true").expect("setsid -f true");
+        spawn_args(&[], "true", &[]).expect("setsid -f true");
         assert!(t.elapsed() < Duration::from_secs(5));
     }
 }

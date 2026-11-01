@@ -15,7 +15,12 @@
 #
 # bromigOS ships the empty den (/usr/share/bromigos/wallpaper, package bromigos-desktop);
 # the other variants are a user's own art in ~/.config/wallpaper, which is searched first.
-# The default is "den" where the user has it, else "empty".
+# The default is "empty", the one bromigOS ships: a user's own art is shown only when they
+# chose it. `apply` (login, every theme switch, every update) keeps the saved choice as it
+# is; a saved choice whose art isn't here is shown as the empty den and kept for when it is.
+# Every change of the choice is one at a time (a lock), and the file is replaced whole, so
+# two applies at once (an update's theme step and the live layer's restart) never read a
+# half-written choice.
 #
 # The choice is local state: symlinks in ~/.local/state/bromigos/wallpaper/ (+ a 'variant'
 # file): den.jpg, the plate the live layer draws (and recolours itself); wall.jpg, what
@@ -50,11 +55,32 @@ find_wp() {
     return 1
 }
 
+# the saved choice; none saved (or one this version doesn't know): the empty den, bromigOS's
+# own. Never a user's own art by default: that's only ever the user's choice.
 current() {
     local v
     v=$(cat "$STATE/variant" 2>/dev/null || true)
-    [ -n "$v" ] && { echo "$v"; return; }
-    if find_wp bromigos-den-operator-2560x1440.jpg >/dev/null; then echo den; else echo empty; fi
+    [ "$v" = operator ] && v=den
+    if [ -n "$v" ] && files_for "$v" >/dev/null; then echo "$v"; else echo empty; fi
+}
+
+# The choice and its links change one at a time: every verb that writes them holds this lock
+# for its run (fd 8; what it starts closes it, so a swaybg never keeps it).
+choice_lock() {
+    exec 8>"$STATE/.variant.lock"
+    flock -w 20 8 || true
+}
+
+# Starts a command inside the compositor (Hyprland's exec), as login does: it then lives in
+# the session, not in whatever ran this (a terminal's scope, or an update's transient unit,
+# whose end would kill it). No compositor to ask: detached here (setsid).
+session_start() {
+    local cmd="$1" lua
+    if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && command -v hyprctl >/dev/null; then
+        lua=${cmd//\\/\\\\}; lua=${lua//\"/\\\"}
+        [ "$(hyprctl dispatch "hl.dsp.exec_cmd(\"$lua\")" 2>/dev/null 8>&- 9>&-)" = ok ] && return 0
+    fi
+    setsid -f sh -c "$cmd" >/dev/null 2>&1 8>&- 9>&-
 }
 
 # This session's swaybg processes: the user's whose WAYLAND_DISPLAY and XDG_RUNTIME_DIR are
@@ -91,7 +117,7 @@ PYLIVE
 restart_swaybg() {
     local img="$1" old outputs p
     # links from before wall.jpg (an older bromigos-wallpaper): made from the saved choice
-    [ -e "$img" ] || set_variant "$(current)"
+    [ -e "$img" ] || show_saved
     # one at a time: login's apply and Hyprland's monitor.added (outputs) run together
     exec 9>"$STATE/.swaybg.lock"
     flock -w 10 9 || true
@@ -108,7 +134,8 @@ restart_swaybg() {
     [ -n "$outputs" ] || outputs='*'
     if command -v swaybg >/dev/null && ! pgrep -x hyprpaper >/dev/null; then
         while read -r o; do        # (not `for o in $outputs`: '*' would glob)
-            [ -n "$o" ] && setsid -f swaybg -o "$o" -m fill -i "$img" >/dev/null 2>&1 9>&-   # not the lock
+            # not the locks; in the session (session_start), so it outlives this command
+            [ -n "$o" ] && session_start "exec swaybg -o '$o' -m fill -i '$img'"
         done <<<"$outputs"
         sleep 0.6
         [ -n "$old" ] && kill $old 2>/dev/null || true
@@ -187,12 +214,29 @@ PY
     echo "$wall $lk"
 }
 
+# the variant's art is here (in WP_DIRS)
+have_variant() {
+    local den
+    read -r den _ < <(files_for "$1") || return 1
+    find_wp "$den" >/dev/null
+}
+
+# The choice saved (the file replaced whole: a reader never sees it half written) and shown.
 set_variant() {
+    local name="$1" den
+    read -r den _ < <(files_for "$name") || { echo "unknown variant: $name" >&2; exit 2; }
+    find_wp "$den" >/dev/null || { echo "$name: no $den in ${WP_DIRS[*]}" >&2; exit 1; }
+    printf '%s\n' "$name" >"$STATE/.variant.tmp"
+    mv -f "$STATE/.variant.tmp" "$STATE/variant"
+    link_variant "$name"
+}
+
+# The links (den.jpg, wall.jpg, lock.jpg) made for a variant; the saved choice isn't touched.
+link_variant() {
     local name="$1" den lock d l wd wl
     read -r den lock < <(files_for "$name") || { echo "unknown variant: $name" >&2; exit 2; }
     d=$(find_wp "$den") || { echo "$name: no $den in ${WP_DIRS[*]}" >&2; exit 1; }
     l=$(find_wp "$lock") || l=$(find_wp bromigos-lock-empty-2560x1440.jpg) || l="$d"
-    echo "$name" >"$STATE/variant"
     if read -r wd wl < <(world_images); then
         ln -sfn "$wd" "$STATE/den.jpg"
         ln -sfn "$wd" "$STATE/wall.jpg"
@@ -209,26 +253,37 @@ set_variant() {
     ln -sfn "$l" "$STATE/lock.jpg"
 }
 
+# The saved choice shown, as it is (never rewritten): its art, or the empty den while its art
+# isn't here.
+show_saved() {
+    local v
+    v=$(current)
+    if have_variant "$v"; then link_variant "$v"; else link_variant empty; fi
+}
+
 case "${1:-status}" in
     den|operator|empty|masked|v1)
         name="$1"; [ "$name" = operator ] && name=den
+        choice_lock
         set_variant "$name"
         restart_swaybg "$STATE/wall.jpg"
-        [ -x "$LIVE_BIN" ] && "$LIVE_BIN" ctl reload >/dev/null 2>&1 || true
+        [ -x "$LIVE_BIN" ] && "$LIVE_BIN" ctl reload >/dev/null 2>&1 8>&- || true
         notify-send -a bromigos -u low "WALLPAPER" "den: $name" 2>/dev/null || true
         echo "den -> $(readlink "$STATE/den.jpg")"
         ;;
     apply)
         # Session start and update's theme step: refresh files, then hand the background
         # to live when it is healthy. Never stack a still above its animation.
+        choice_lock
         before=$(readlink "$STATE/wall.jpg" 2>/dev/null || true)
-        set_variant "$(current)"
+        show_saved
         if live_background || [ "$before" != "$(readlink "$STATE/wall.jpg")" ] || [ -z "$(session_swaybg)" ]; then
             restart_swaybg "$STATE/wall.jpg"
         fi
         ;;
     outputs)
         # A monitor came or went: a still only while live is off or failed.
+        choice_lock
         restart_swaybg "$STATE/wall.jpg"
         [ -x "$LIVE_BIN" ] && "$LIVE_BIN" ctl reload >/dev/null 2>&1 || true
         ;;

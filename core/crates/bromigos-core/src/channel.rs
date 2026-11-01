@@ -267,16 +267,165 @@ fn remembered_base(paths: &Paths) -> Option<String> {
 }
 
 fn remember_base(paths: &Paths, base: &str) {
+    write_state(paths, Some(base), wanted(paths));
+}
+
+fn write_state(paths: &Paths, base: Option<&str>, wanted: Option<Channel>) {
     let p = state_file(paths);
     if let Some(d) = p.parent() {
         let _ = fs::create_dir_all(d);
     }
-    let _ = fs::write(
-        &p,
-        format!(
-            "# the repository bromigos channel set edge|stable|rc goes back to\nbase = \"{base}\"\n"
-        ),
+    let mut text = String::new();
+    if let Some(b) = base.filter(|b| !b.is_empty()) {
+        text.push_str(&format!(
+            "# the repository bromigos channel set edge|stable|rc goes back to\nbase = \"{b}\"\n"
+        ));
+    }
+    if let Some(w) = wanted {
+        text.push_str(&format!(
+            "# asked for while it didn't have every bromigOS package here yet: the move happens\n\
+             # by itself, at an update, once it has (bromigos update, bromigos channel)\nwanted = \"{w}\"\n"
+        ));
+    }
+    let _ = fs::write(&p, text);
+}
+
+/// The channel asked for that wasn't ready yet ([`ready`]): an update moves there by itself
+/// once it is.
+pub fn wanted(paths: &Paths) -> Option<Channel> {
+    let s = fs::read_to_string(state_file(paths)).ok()?;
+    s.lines()
+        .find_map(|l| l.trim().strip_prefix("wanted = "))
+        .and_then(|v| Channel::parse(v.trim().trim_matches('"')))
+}
+
+/// Remembers (or forgets, with None) the channel waited for.
+pub fn set_wanted(paths: &Paths, channel: Option<Channel>) {
+    if wanted(paths) != channel {
+        write_state(paths, remembered_base(paths).as_deref(), channel);
+    }
+}
+
+/// Whether moving from `from` to `to` goes to an older channel (packages go back).
+pub fn is_downgrade(from: Option<Channel>, to: Channel) -> bool {
+    matches!(
+        (from, to),
+        (
+            Some(Channel::Edge) | Some(Channel::Dev),
+            Channel::Stable | Channel::Rc
+        ) | (Some(Channel::Rc), Channel::Stable)
+    )
+}
+
+/// Package names in a repository database's listing (`bsdtar -tf bromigos.db`: one
+/// `NAME-VERSION-RELEASE/` directory a package).
+pub fn db_names(listing: &str) -> Vec<String> {
+    let mut out: Vec<String> = listing
+        .lines()
+        .filter_map(|l| {
+            let d = l.trim().strip_suffix('/')?;
+            if d.contains('/') {
+                return None;
+            }
+            let mut parts = d.rsplitn(3, '-');
+            let (_, _, name) = (parts.next()?, parts.next()?, parts.next()?);
+            Some(name.to_owned())
+        })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// The bromigOS packages installed here that `target` doesn't carry: `ours` is what's
+/// installed from [bromigos], `target` the channel's names.
+pub fn missing(ours: &[String], target: &[String]) -> Vec<String> {
+    ours.iter()
+        .filter(|n| !target.contains(n))
+        .cloned()
+        .collect()
+}
+
+/// Whether a move to `to` can happen now. A move to an older channel can't keep a bromigOS
+/// package that channel doesn't have yet (one added since its release, or split from another,
+/// as bromigos-boot from bromigos-settings): pacman would meet the other package's files and
+/// stop. Ok(()) when it can (or when it can't be told: the channel's database didn't come);
+/// Err(the packages it lacks) when it can't yet.
+pub fn ready(paths: &Paths, to: Channel) -> Result<(), Vec<String>> {
+    let cur = current(paths);
+    if !is_downgrade(cur.channel, to) {
+        return Ok(());
+    }
+    let Some(base) = cur.base.as_deref() else {
+        return Ok(());
+    };
+    let url = format!(
+        "{}/{REPO}/{}/x86_64/{REPO}.db",
+        base.trim_end_matches('/'),
+        to.as_str()
     );
+    let tmp = paths
+        .runtime_dir
+        .join(format!("bromigos-channel-{}.db", std::process::id()));
+    let got = Command::new("curl")
+        .args(["-fsSL", "--max-time", "60", "-o"])
+        .arg(&tmp)
+        .arg(&url)
+        .status()
+        .is_ok_and(|s| s.success());
+    let listing = got
+        .then(|| Command::new("bsdtar").arg("-tf").arg(&tmp).output().ok())
+        .flatten()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned());
+    let _ = fs::remove_file(&tmp);
+    let Some(listing) = listing else {
+        return Ok(());
+    };
+    let names = |args: &[&str]| -> Vec<String> {
+        Command::new("pacman")
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .split_whitespace()
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let installed = names(&["-Qq"]);
+    let ours: Vec<String> = names(&["-Slq", REPO])
+        .into_iter()
+        .filter(|n| installed.contains(n))
+        .collect();
+    let lack = missing(&ours, &db_names(&listing));
+    if lack.is_empty() { Ok(()) } else { Err(lack) }
+}
+
+/// What a person reads when the channel they asked for isn't ready: nothing to do, it
+/// happens by itself.
+pub fn waiting_words(from: Option<Channel>, to: Channel, lack: &[String]) -> String {
+    let here = from.map_or("this channel".to_owned(), |c| c.to_string());
+    let which = match lack.len() {
+        0 => String::new(),
+        1 => format!(" (it doesn't have {} yet)", lack[0]),
+        n => format!(" (it doesn't have {} and {} more yet)", lack[0], n - 1),
+    };
+    format!(
+        "{} will be available after the next bromigOS release{which}. This computer stays on \
+         {here} for now, and moves to {to} by itself once it's ready.",
+        capitalised(to.as_str())
+    )
+}
+
+fn capitalised(s: &str) -> String {
+    let mut c = s.chars();
+    c.next()
+        .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
+        .unwrap_or_default()
 }
 
 pub fn current(paths: &Paths) -> Current {
@@ -391,13 +540,7 @@ pub fn set(
     } else if let Some(b) = cur.base.as_deref() {
         remember_base(paths, b);
     }
-    let downgrade = matches!(
-        (cur.channel, channel),
-        (
-            Some(Channel::Edge) | Some(Channel::Dev),
-            Channel::Stable | Channel::Rc
-        ) | (Some(Channel::Rc), Channel::Stable)
-    );
+    let downgrade = is_downgrade(cur.channel, channel);
     Ok(Change {
         from: cur.channel,
         to: channel,
@@ -412,6 +555,34 @@ pub fn set(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_channel_that_lacks_a_package_waits() {
+        let listing = "bromigos-core-0.1.3.r250.g70ee1f8-1/\nbromigos-core-0.1.3.r250.g70ee1f8-1/desc\n\
+                       bromigos-settings-0.1.3.r60.gabc-1/\noo7-0.7.0beta.r1.e55-1/\n";
+        let names = db_names(listing);
+        assert_eq!(names, ["bromigos-core", "bromigos-settings", "oo7"]);
+        let ours: Vec<String> = ["bromigos-core", "bromigos-boot", "bromigos-settings"]
+            .map(String::from)
+            .to_vec();
+        assert_eq!(missing(&ours, &names), ["bromigos-boot"]);
+        let w = waiting_words(
+            Some(Channel::Edge),
+            Channel::Stable,
+            &["bromigos-boot".into()],
+        );
+        assert!(
+            w.starts_with("Stable will be available after the next bromigOS release"),
+            "{w}"
+        );
+        assert!(
+            w.contains("stays on edge") && w.contains("by itself"),
+            "{w}"
+        );
+        assert!(!w.contains("sudo") && !w.contains("error"), "{w}");
+        assert!(is_downgrade(Some(Channel::Edge), Channel::Stable));
+        assert!(!is_downgrade(Some(Channel::Stable), Channel::Edge));
+    }
 
     const CONF: &str = "[options]\nColor\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n\n\
                         [bromigos]\nSigLevel = Required DatabaseOptional\nServer = https://pkgs.example/$repo/$arch\n";

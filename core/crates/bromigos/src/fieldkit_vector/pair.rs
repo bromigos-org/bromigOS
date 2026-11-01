@@ -375,6 +375,37 @@ pub fn draw(f: &mut Frame, app: &Pair) {
             }
         }
     }
+    // no room for a QR a phone can read (80×24): the code, big, to type in BRODEC
+    let code = pretty_code(app.state["code"]["user_code"].as_str().unwrap_or(""));
+    if !shown && state == "waiting" && !code.is_empty() {
+        let big = widgets::big_code(look, &code, p.primary, 1);
+        let bw = big.iter().map(|l| l.width()).max().unwrap_or(0) as u16;
+        if bw <= inner.width && inner.height >= 7 {
+            let mut lines = vec![Line::from(Span::styled(
+                "Type this code in BRODEC (LAB › MACHINES › ADD MACHINE):",
+                st(p.text),
+            ))];
+            let roomy = inner.height >= 9; // the blank lines only where all of it fits
+            if roomy {
+                lines.push(Line::from(""));
+            }
+            lines.extend(big);
+            if roomy {
+                lines.push(Line::from(""));
+            }
+            lines.push(Line::from(Span::styled(
+                "Make the window bigger to show the QR code.",
+                st(p.muted),
+            )));
+            let h = (lines.len() as u16).min(inner.height);
+            let y = inner.y + inner.height.saturating_sub(h) / 2;
+            f.render_widget(
+                Paragraph::new(lines).alignment(Alignment::Center),
+                Rect::new(inner.x, y, inner.width, h),
+            );
+            shown = true;
+        }
+    }
     if !shown {
         let mut text = msg.clone();
         if state == "waiting" {
@@ -640,6 +671,26 @@ mod tests {
         assert!(s.contains('▀') || s.contains('▄'), "{s}");
         assert!(s.contains("ADD MACHINE"), "{s}");
         assert!(s.contains("a Field Kit stick doesn't update itself"), "{s}");
+    }
+
+    /// 80×24 has no room for a QR a phone can read: the code to type, in big block letters
+    /// (background-coloured cells), and how to get the QR.
+    #[test]
+    fn a_small_screen_shows_the_code_big() {
+        let d = tempfile::tempdir().unwrap();
+        let mut app = Pair::new(Look::wick(), &fake(d.path(), "waiting"));
+        app.refresh();
+        settle(&mut app, "waiting");
+        let s = render(&app, 80, 24);
+        assert!(!s.contains('▀') && !s.contains('▄'), "no QR: {s}");
+        assert!(s.contains("Type this code in BRODEC"), "{s}");
+        assert!(s.contains("Make the window bigger"), "{s}");
+        let big = bromigos_tui::widgets::big_code(&Look::wick(), "KPGG-ZFVT", Color::Green, 1);
+        assert_eq!(big.len(), 5);
+        assert!(
+            big.iter().all(|l| !l.to_string().contains('█')),
+            "spaces on a background"
+        );
     }
 
     #[test]

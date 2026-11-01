@@ -199,14 +199,25 @@ is newer is reloaded instead.
 
 | Piece | How it restarts |
 |---|---|
-| The live layer | `bromigos-live restart` |
-| The widgets, waybar, dunst | Stopped, then started again in the session with `setsid` |
+| The live layer | `bromigos-live restart` (its user service, `bromigos-live.service`) |
+| waybar | `bromigos-bar restart` (its user service, `bromigos-bar.service`) |
+| The widgets, dunst | Stopped, then started again through Hyprland's `exec` |
 | VECTOR and his voice server | `bromigos-holo restart` |
 | The OSD | `swayosd-server`, also started with the theme's style when it's installed but not running |
 | hypridle (`idle`) | The policy rendered again, then hypridle started through Hyprland's `exec` |
 | dunst's config | `dunstctl reload` |
 
 waybar is always restarted, never sent `SIGUSR2`, because that signal can crash it.
+
+Nothing restarted here is a child of `bromigos restart` or `bromigos update`. A child
+would share the caller's cgroup, such as a terminal's scope or the transient unit BRODEC's
+phone update runs in. When that unit ended, systemd killed what was left in it, the bar and
+the live layer included. So the bar and the live layer restart as their user services
+([docs/desktop.md](../docs/desktop.md#the-bar-and-the-live-layer-come-back-by-themselves)).
+The rest starts through Hyprland's `exec`, as at login (`update::relaunch`), or detached
+with `setsid` only when there's no compositor to ask. Only this runtime directory's
+processes count as running pieces (`update::same_runtime`), so a nested test desktop never
+restarts or stops the real session's.
 hypridle also restarts when its policy renders differently, or when a file it reads
 changed after it started. A newer Hyprland or kernel is reported, not acted on. You log
 out or reboot.
@@ -220,7 +231,9 @@ theme previews, ends with a line asking for the restart, and sends one notificat
 
 `bromigos restart NAME…` restarts the named pieces, stale or not. The names are `live`,
 `widgets`, `waybar`, `dunst`, `osd`, `vector`, `idle` and `hyprland`. For `hyprland` it
-runs `hyprctl reload`. A user unit a package declares (below) may be named too, with or
+runs `hyprctl reload`. A named `live`, `widgets`, `waybar` or `dunst` that isn't running at
+all is started (the need `start`): `bromigos restart waybar live` is Settings › Startup's
+**Fix**. A user unit a package declares (below) may be named too, with or
 without `.service`.
 
 #### What other packages restart: `restart.d`
@@ -268,7 +281,7 @@ processes don't count.
 1. It renders the templates into `~/.local/state/bromigos/theme/current/`. That includes
    `palette.json`, the recoloured bar icons in `icons/`, and the emblem kit. It writes to a
    new folder and swaps it in atomically.
-2. It tells the running apps. It restarts waybar, sends kitty `SIGUSR1`, and runs
+2. It tells the running apps. It restarts waybar (`bromigos-bar restart`), sends kitty `SIGUSR1`, and runs
    `hyprctl reload` and `dunstctl reload`. It tells the live layer on its socket. The
    widgets, VECTOR and the decks watch `palette.json` themselves. gtklock, rofi and Qt
    apps pick the theme up when they next start.
@@ -815,8 +828,14 @@ these instead of parsing text.
 {
   "schema": 1,
   "session": { "…": "the session document above" },
+  "bar": {
+    "running": true,
+    "pids": [1188],
+    "service": true
+  },
   "live": {
     "running": true,
+    "service": true,
     "supervisor_pid": 1201,
     "state": "background full target=30fps …",
     "background": true,
@@ -827,10 +846,16 @@ these instead of parsing text.
     "status": {"pid": 1350},
     "terminal": true
   },
-  "animations": { "…": "the anim document above" }
+  "animations": { "…": "the anim document above" },
+  "fix": null
 }
 ```
 
+- `bar.running` is true when this session runs a Waybar; `bar.service` when it runs as
+  `bromigos-bar.service`. `live.service` is the same for the live layer's supervisor and
+  `bromigos-live.service`.
+- `fix` is the command that starts what isn't running (`bromigos restart waybar live`, or
+  one of the two), with a session to run it in; otherwise `null`.
 - `live.running` is true when the supervisor is alive or the socket answers.
 - `live.state` is the live layer's `state` reply, or `null` when it doesn't answer.
 - `live.background` is `false` when that reply says `background off`, and `null` with no

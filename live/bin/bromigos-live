@@ -5,6 +5,7 @@
 #
 #   bromigos-live start [--login]  start the daemon (supervised; no-op if running)
 #   bromigos-live stop | restart
+#   bromigos-live supervise [--login]  the supervisor in the foreground (bromigos-live.service)
 #   bromigos-live toggle           background layer on/off
 #   bromigos-live mute             sounds on/off (works without the daemon)
 #   bromigos-live holodeck | driftmap | timeline [open|close]   a deck: toggle, or open/close
@@ -76,9 +77,32 @@ daemon_sig() { inst session; }
 if [ -x /usr/bin/bromigos ]; then SESSION_ENV=(/usr/bin/bromigos session)
 else SESSION_ENV=("$HOME/.config/bromigos/bin/bromigos-session-env"); fi
 
+# The supervisor runs as the user service bromigos-live.service (live/systemd) where this
+# runtime directory has its own user manager and the unit is installed: then it's no part of
+# what started it (a terminal, an update's transient unit, whose end would take it down)
+# and it comes back if it's killed. Never another manager over D-Bus (a nested desktop with
+# a borrowed bus). Without one (a nested test desktop; BROMIGOS_NO_UNITS=1), detached here.
+UNIT=bromigos-live.service
+units() {
+    [ -z "${BROMIGOS_NO_UNITS:-}" ] || return 1
+    [ -S "$RUN/systemd/private" ] || return 1
+    [ "$(systemctl --user show -p LoadState --value "$UNIT" 2>/dev/null)" = loaded ]
+}
+# the session's display and instance for the manager, as Hyprland's own import does
+import_env() {
+    local v vars=()
+    for v in WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE DISPLAY; do
+        [ -n "${!v:-}" ] && vars+=("$v")
+    done
+    [ ${#vars[@]} -gt 0 ] && systemctl --user import-environment "${vars[@]}" 2>/dev/null
+    return 0
+}
+LOGIN_FLAG="$RUN/bromigos-live.login"   # the next supervised start is a login's (the intercept)
+
 supervise() {
     # Restart on crash, but give up after 4 crashes inside 2 minutes: no crash loops.
     local first="--login"; [ "${1:-}" = "--login" ] || first=""
+    if [ -f "$LOGIN_FLAG" ]; then first="--login"; rm -f "$LOGIN_FLAG"; fi
     local fails=() now
     while :; do
         # every (re)start goes to the session that is actually alive: its instance AND its
@@ -129,6 +153,9 @@ supervise() {
 
 do_stop() {
     touch "$STATE/stopping"
+    # the service's supervisor and daemon (a clean stop: it stays stopped), then any from
+    # before the service
+    if units; then systemctl --user stop "$UNIT" 2>/dev/null; fi
     inst stop
 }
 
@@ -145,6 +172,14 @@ do_start() {
     rm -f "$STATE/stopping"
     # keep the log small
     [ -f "$LOG" ] && [ "$(stat -c %s "$LOG")" -gt 1000000 ] && mv "$LOG" "$LOG.1"
+    if units; then
+        import_env
+        if [ "${1:-}" = --login ]; then : >"$LOGIN_FLAG"; else rm -f "$LOGIN_FLAG"; fi
+        # a unit that gave up (StartLimitBurst) gets a fresh try when a start is asked for
+        systemctl --user reset-failed "$UNIT" 2>/dev/null
+        systemctl --user start "$UNIT" 9>&-
+        return
+    fi
     # the supervisor doesn't keep the control lock (fd 9)
     ( supervise "${1:-}" ) </dev/null >/dev/null 2>&1 9>&- &
     inst started $!
@@ -158,6 +193,12 @@ case "${1:-start}" in
     start) ctl_lock; do_start "${2:-}" ;;
     stop) ctl_lock; do_stop ;;
     restart) ctl_lock; do_stop; do_start ;;
+    supervise)
+        # the service's main process (bromigos-live.service): this one is the supervisor
+        rm -f "$STATE/stopping"
+        inst started $$
+        supervise "${2:-}"
+        exit 0 ;;
     mute)
         # the theme's sounds (cues and codec calls). The state is one file the daemon reads
         # before every sound, so it needs no daemon. Bare: toggle with a notice (old form);

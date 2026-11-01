@@ -5,8 +5,10 @@
 # - every week, and by hand: the edge channel's, to iso/edge/ (the newest only);
 # - by hand: any stable release again (a backfill), from its tag or another ref, or a
 #   build of any branch that publishes nothing (publish: false);
-# - on pull requests that change this pipeline: the build, its checks and tests, nothing
-#   published.
+# - on pull requests that change this pipeline or a medium (iso/): the build, its checks and
+#   tests, nothing published. A pull request's medium has the edge channel's packages (main's),
+#   with the ones this ref adds or changes built from it (iso/ci-local-packages.sh), so a new
+#   package never breaks the build; so does a build by hand that publishes nothing.
 # Every profile under iso/ (a directory with profiledef.sh: the desktop medium, the Field
 # Kit) is built the same way, side by side. GitHub's hosted runner (free for a public
 # repository) has the disk, Docker and KVM it needs. CI_RUNNER_ISO can name another, which
@@ -21,8 +23,7 @@ on:
   schedule:
     - cron: "23 10 * * 1"          # Mondays, 03:23 Pacific: the edge ISO
   pull_request:
-    paths: [".github/workflows/iso.yml", "iso/ci-test.sh", "iso/test.sh", "iso/publish.sh", "iso/release-notes.py", "iso/secureboot/**",
-            "secureboot/**", "packaging/bromigos-secureboot/**"]
+    paths: [".github/workflows/iso.yml", "iso/**", "secureboot/**", "packaging/bromigos-secureboot/**"]
   workflow_dispatch:
     inputs:
       channel:
@@ -99,7 +100,7 @@ jobs:
           case $EVENT in
             workflow_run) channel=stable tag=$RUN_TAG ref=$RUN_TAG publish=true ;;
             schedule) channel=edge tag='' ref=main publish=true ;;
-            pull_request) channel=stable tag='' ref=$PR_SHA publish=false ;;
+            pull_request) channel=edge tag='' ref=$PR_SHA publish=false ;;
             workflow_dispatch)
               channel=$IN_CHANNEL publish=$IN_PUBLISH tests=$IN_TESTS import=$IN_IMPORT tag=''
               if [[ $channel == stable ]]; then
@@ -163,6 +164,7 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.ref }}
           path: src
+          fetch-depth: 0               # the packages' versions count commits; a pull request's diff
 
       - name: The runner (disk, KVM, tools)
         shell: bash
@@ -218,17 +220,34 @@ jobs:
           openssl x509 -in "$d/sb.crt" -outform DER -out "$d/sb.cer"
           echo "dir=$d" >> "$GITHUB_OUTPUT"
 
+      # a build that publishes nothing: the packages this ref adds or changes, built from it,
+      # ahead of the channel's (iso/ci-local-packages.sh); a published medium only ever carries
+      # the channel's signed packages
+      - name: This ref's own packages
+        id: localpkgs
+        if: needs.plan.outputs.publish != 'true'
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          [[ -x src/iso/ci-local-packages.sh ]] || { echo "this ref builds none of its own"; exit 0; }
+          time src/iso/ci-local-packages.sh src "$W/localrepo" --channel "$CHANNEL" ${BASE:+--base "$BASE"}
+          if compgen -G "$W/localrepo/*.pkg.tar.zst" >/dev/null; then echo "dir=$W/localrepo" >> "$GITHUB_OUTPUT"; fi
+
       - name: Build
         id: build
         shell: bash
         env:
           SB: ${{ steps.sbkey.outputs.dir }}
+          LOCALREPO: ${{ steps.localpkgs.outputs.dir }}
         run: |
           set -euo pipefail
           public=$(sed -n "s/^PUBLIC_REPO=\([^ ]*\).*/\1/p" src/install.sh | tr -d "'\"")
           args=(--repo "$public" --medium-repo "$public" --channel "$CHANNEL" --version "$VERSION" --out "$W/out")
           [[ $PROFILE == profile ]] || args+=(--profile "$PROFILE")
           if [[ -n $SB ]]; then args+=(--secureboot-key "$SB/sb.key" --secureboot-cert "$SB/sb.crt"); echo "secureboot=true" >> "$GITHUB_OUTPUT"; fi
+          [[ -n $LOCALREPO ]] && args+=(--local-repo "$LOCALREPO")
           time src/iso/build.sh "${args[@]}"
           iso=$(ls "$W"/out/bromigos-*"$VERSION"-x86_64.iso)
           echo "iso=$iso" >> "$GITHUB_OUTPUT"
@@ -239,10 +258,12 @@ jobs:
         shell: bash
         env:
           PRIVACY_PATTERNS: ${{ secrets.PRIVACY_PATTERNS }}
+          LOCALREPO: ${{ steps.localpkgs.outputs.dir }}
         run: |
           set -euo pipefail
-          rc=0
-          src/iso/check-medium.sh "${{ steps.build.outputs.iso }}" --keep "$W/check" 2>&1 | tee "$W/check-medium.out" || rc=$?
+          rc=0 args=(--keep "$W/check")
+          [[ -n $LOCALREPO ]] && args+=(--dev-build)
+          src/iso/check-medium.sh "${{ steps.build.outputs.iso }}" "${args[@]}" 2>&1 | tee "$W/check-medium.out" || rc=$?
           sudo rm -rf "$W/check" 2>/dev/null || rm -rf "$W/check"
           exit "$rc"
 
@@ -271,6 +292,7 @@ jobs:
         env:
           SB: ${{ steps.sbkey.outputs.dir }}
           SBPKG: ${{ steps.sbpkg.outputs.pkg }}
+          LOCALREPO: ${{ steps.localpkgs.outputs.dir }}
         run: |
           set -euo pipefail
           # the tests of the ref the medium was built from, when it has them (older tags don't)
@@ -278,6 +300,7 @@ jobs:
           args=(--out "$W/tests" --suite "${{ matrix.profile.suite }}" --profile "src/iso/$PROFILE")
           [[ -n $SB ]] && args+=(--secureboot-cert "$SB/sb.cer")
           [[ -n $SBPKG ]] && args+=(--secureboot-package "$SBPKG")
+          [[ -n $LOCALREPO ]] && args+=(--dev-build)
           $t/iso/ci-test.sh "${{ steps.build.outputs.iso }}" "${args[@]}"
 
       - name: The tests' screenshots and output

@@ -742,8 +742,16 @@ bundled. To make a catalog picture the same way as the others, run
 ## The wallpaper
 
 Under the Wick, **Super+Ctrl+Space** (`bromigos wallpaper next`) steps through the den's
-installed variants. bromigOS ships one: the den with its chair empty. Variants of your own
-go in `~/.config/wallpaper`.
+installed variants. bromigOS ships one: the den with its chair empty, and it's the default.
+Variants of your own go in `~/.config/wallpaper`, and one of them is shown only when you
+choose it.
+
+The choice is yours and stays as you left it. `bromigos wallpaper apply` runs at login, on
+every theme switch and in every update, and it never changes the choice. When the art for a
+chosen variant isn't there, it shows the empty den and keeps your choice for when the art is
+back. Changes to the choice take turns behind a lock, and the choice file is replaced whole.
+So two applies at once, such as an update's theme step and the live layer's restart, can't
+read a half-written choice. Before this fix, one that did fell back to your own art.
 
 ```bash
 bromigos wallpaper next

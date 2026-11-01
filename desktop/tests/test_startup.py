@@ -30,7 +30,7 @@ class StartupTest(CmdTest):
     def test_bromigos_own(self):
         d = self.cmd("startup")
         cmds = [o["command"] for o in d["own"]]
-        for c in ("waybar", "bromigos-widgets", "bromigos idle start", "dunst", "bromigos-live start --login"):
+        for c in ("bromigos-bar start", "bromigos-widgets", "bromigos idle start", "dunst", "bromigos-live start --login"):
             self.assertIn(c, cmds)
         osd = next(o for o in d["own"] if o["command"].startswith("swayosd-server"))
         self.assertEqual(osd["when"], "when swayosd is installed")

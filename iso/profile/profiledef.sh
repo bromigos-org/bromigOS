@@ -28,6 +28,7 @@ file_permissions=(
   ["/root"]="0:0:750"
   ["/root/customize_airootfs.sh"]="0:0:755"
   ["/usr/local/bin/bromigos-iso-install"]="0:0:755"
+  ["/usr/local/lib/bromigos-iso/shims/wipefs"]="0:0:755"
   ["/usr/local/bin/bromigos-iso-autostart"]="0:0:755"
   ["/usr/local/bin/bromigos-iso-secureboot"]="0:0:755"
   ["/usr/local/bin/bromigos-installer"]="0:0:755"
