@@ -307,7 +307,10 @@ no likeness and no lab hosts.
 - **`boot-menu-snapshots.webp`**, on The boot menu page. The installed system's GRUB
   snapshot list in Mire, drawn by GRUB in a VM (the boot menus' run, 2026-10-09).
 - **`boot-menu-stick.webp`**, on The boot menu page. The install stick's GRUB menu as
-  GRUB draws it in a VM (`tools/screenshots/render.py`, `boot-menu`).
+  GRUB draws it in a VM (`settings/grub/preview.py --menu medium --mode 1600x900`, the
+  medium's theme from `build-grub-theme.py --medium`; `tools/screenshots/render.py`,
+  `boot-menu`, makes it at 2560x1440). The entries are the desktop medium's first level,
+  as of 2026-11-01. The same picture is `docs/images/iso-menu.webp`.
 - **`desktop-tour.webp`**, on the Getting around page. The Wick desktop, rendered
   offscreen with demo readings (`tools/screenshots/render.py`, `hero-wick`); numbered
   callouts drawn locally.

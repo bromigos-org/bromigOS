@@ -65,18 +65,19 @@ submenu '10/08 22:00 · timeline' --class snapshot --class snapshots {NOOP}
 submenu '10/08 19:29 · after bromigos update' --class snapshot-post --class snapshots {NOOP}
 submenu '10/08 19:27 · before bromigos update' --class snapshot-pre --class snapshots {NOOP}
 """,
-    # the ISO's channels (iso/profile/grub/grub.cfg)
+    # the desktop medium's first level, as iso/profile/grub/grub.cfg names it (no answer file
+    # on the stick); More options holds the text installer, the memory test, the disk, the
+    # screen reader, the firmware and power
     "medium": f"""
-menuentry 'Start bromigOS (try it live)' --class live --class os {NOOP}
+menuentry 'Start bromigOS (try it first)' --class live --class os {NOOP}
 menuentry 'Install bromigOS' --class install {NOOP}
-menuentry 'Start with safe graphics (nomodeset)' --class safe {NOOP}
-menuentry 'Memory test (Memtest86+)' --class memtest {NOOP}
-menuentry 'Boot from disk' --class disk {NOOP}
-menuentry 'Start with the screen reader (speech)' --class speech {NOOP}
-menuentry 'UEFI shell' --class shell {NOOP}
-menuentry 'UEFI firmware settings' --class efi {NOOP}
-menuentry 'Shut down' --class shutdown {NOOP}
-menuentry 'Restart' --class restart {NOOP}
+menuentry 'Install bromigOS Server' --class install {NOOP}
+menuentry 'Field Kit (repair, lab and tools)' --class fieldkit {NOOP}
+menuentry 'Start with basic graphics (if the screen stays black)' --class safe {NOOP}
+submenu 'More options ›' --class options {{
+    menuentry 'Install bromigOS with the text installer' --class install {NOOP}
+}}
+menuentry 'Help: what do these do?' --class info {NOOP}
 """,
 }
 

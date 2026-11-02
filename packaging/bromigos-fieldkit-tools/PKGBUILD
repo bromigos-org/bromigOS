@@ -24,7 +24,7 @@ license=('MIT OR Apache-2.0')
 # what the engine's jobs run (the Repair section, its editor, the shell inside an install)
 depends=('python' 'bromigos-core' 'bromigos-boot' 'arch-install-scripts'
          'btrfs-progs' 'cryptsetup' 'util-linux' 'rsync' 'smartmontools' 'micro' 'grub')
-optdepends=('bromigos-fieldkit: Field Kit in the boot menu, and make-stick without a medium'
+optdepends=('bromigos-fieldkit: Field Kit in the boot menu'
             'bromigos-lab: Lab › Lab console, Provision a machine, Model catalog'
             'bromigos-homelab: Lab › Media library'
             'networkmanager: Lab › Network settings (nmtui), Wi-Fi from the stick'

@@ -9,9 +9,8 @@ import subprocess
 import sys
 import time
 
-from . import diagnose, system
+from . import diagnose, image, system
 
-IMAGE = "/usr/share/bromigos/fieldkit/bromigos-fieldkit.iso"
 EDITION = "/usr/share/bromigos/fieldkit/edition.json"
 BOOT_HELPER = "/usr/lib/bromigos/boot/bromigos-fieldkit-boot"
 
@@ -50,19 +49,9 @@ def show(found):
         print("  Nothing wrong found.")
 
 
-def usb(dev):
-    """The Field Kit medium onto a USB drive: this medium itself when it's running, else the
-    image package's copy."""
-    src = None
-    if os.path.isdir("/run/archiso/bootmnt"):
-        r = system.run(["findmnt", "-no", "SOURCE", "/run/archiso/bootmnt"], check=False)
-        src = r.stdout.strip() or None
-        if src and "/dev/loop" in src:
-            src = None
-    if not src and os.path.isfile(IMAGE):
-        src = IMAGE
-    if not src:
-        sys.exit("fieldkit usb: no Field Kit image here (sudo pacman -S bromigos-fieldkit)")
+def usb(dev, src=None):
+    """The Field Kit medium onto a USB drive: --iso FILE, this medium itself when it's running,
+    else a downloaded Field Kit ISO (image.py)."""
     drives = [p for p in system.block_devices() if getattr(p, "type", "") == "disk" and (p.removable or p.tran == "usb")]
     if not dev:
         if not drives:
@@ -73,6 +62,12 @@ def usb(dev):
         sys.exit("fieldkit usb DEVICE: name the one to write (everything on it is replaced)")
     if dev not in [p.path for p in drives]:
         sys.exit(f"fieldkit usb: {dev} isn't a USB drive Field Kit can see")
+    try:
+        src = src or image.find()
+    except image.NoImage as e:
+        sys.exit(str(e))
+    if os.path.realpath(src) == os.path.realpath(dev):
+        sys.exit(f"{dev} is the stick Field Kit is running from. Choose another drive.")
     ans = input(f"Everything on {dev} will be replaced by Field Kit. Type YES to go ahead: ")
     if ans.strip() != "YES":
         sys.exit("Nothing written.")
@@ -309,6 +304,7 @@ def main(argv=None):
     sub.add_parser("status", help="whether Field Kit is in this machine's boot menu")
     p = sub.add_parser("usb", help="write Field Kit onto a USB drive")
     p.add_argument("device", nargs="?")
+    p.add_argument("--iso", help="the Field Kit ISO to write (default: the one in your Downloads folder)")
     p = sub.add_parser("make-stick", help="write Field Kit onto a USB drive with your SSH key, Wi-Fi and lab settings")
     p.add_argument("device", nargs="?")
     p.add_argument("--ssh-key", action="append", default=[], help="a public key file (repeat); default: ~/.ssh/id_*.pub")
@@ -317,7 +313,7 @@ def main(argv=None):
     p.add_argument("--remote", action="store_true", help="SSH on at every start (with the key)")
     p.add_argument("--yes", action="store_true", help="don't ask before replacing the drive")
     p.add_argument("--settings-only", action="store_true", help="only (re)write the settings partition of a Field Kit stick")
-    p.add_argument("--iso", help="the Field Kit ISO to write (default: bromigos-fieldkit's)")
+    p.add_argument("--iso", help="the Field Kit ISO to write (default: the one in your Downloads folder)")
     p = sub.add_parser("remote", help="remote help: SSH on or off, and how to reach this machine")
     p.add_argument("state", nargs="?", choices=["on", "off", "status"], default="status")
     sub.add_parser("stick-boot", help=argparse.SUPPRESS)
@@ -356,6 +352,10 @@ def main(argv=None):
     if verb == "make-stick":
         from .stick import make_stick
         return make_stick(a, need_root, argv)
+    if verb == "usb" and a.device:
+        argv = image.with_image(a, argv)
+        if argv is None:
+            return 1
     need_root(argv)
     if verb == "stick-boot":
         from . import medium
@@ -376,7 +376,7 @@ def main(argv=None):
     if verb == "menu":
         os.execvp("bromigos", ["bromigos", "fieldkit"])
     if verb == "usb":
-        return usb(a.device)
+        return usb(a.device, a.iso)
     t = target_for(a.root)
     if verb == "why":
         show(diagnose.last_boot(t))

@@ -7,15 +7,17 @@ needs is on the medium, so installing needs no network.
 
 This page explains how the ISO is built, what's on it, what the installer does and how to
 test it. For users, the manual's [Install](../manual/src/install.md) page and the
-[Download page](https://bromigos.org/download) cover it. Every release's ISO is built,
-checked, tested, signed and published by CI, as one file at
-`https://pkgs.bromigos.org/iso/<version>/` ([A release's ISO](#a-releases-iso)). It
-starts with Secure Boot on, and so does the system it installs ([secureboot.md](secureboot.md)). The
-same build makes Field Kit with `--edition fieldkit` ([fieldkit.md](fieldkit.md)).
+[Download page](https://bromigos.org/download) cover it. Every release has two ISOs, the
+desktop medium (this page; about 3.2 GB) and Field Kit (about 2.3 GB), each built, checked,
+tested, signed and published by CI as one file at `https://pkgs.bromigos.org/iso/<version>/`
+([A release's ISO](#a-releases-iso)). Both start with Secure Boot on, and so does the system
+they install ([secureboot.md](secureboot.md)). The same build makes Field Kit with
+`--edition fieldkit` ([fieldkit.md](fieldkit.md)).
 
 ![The ISO's boot menu: the title BROMIGOS // RELAY MEDIUM over the den at night, the
-burn-in emblem, a countdown, and the entries Start bromigOS, Install bromigOS, safe
-graphics, memory test and boot from disk](images/iso-menu.webp)
+burn-in emblem, a countdown, and the entries Start bromigOS (try it first), Install
+bromigOS, Install bromigOS Server, Field Kit (repair, lab and tools), Start with basic
+graphics and More options](images/iso-menu.webp)
 
 ## How it's made
 
@@ -68,10 +70,12 @@ The important files in `airootfs/`:
 ### The boot menus
 
 GRUB on UEFI and syslinux on BIOS both show bromigOS's boot theme, with the same entries:
-Start bromigOS (try it live), Install bromigOS, Field Kit (the same system without the
-desktop, for repairs: [fieldkit.md](fieldkit.md#the-full-isos-entry)), safe graphics, a
-memory test, boot from disk, and archiso's own screen reader, firmware and power entries. [boot.md](boot.md#the-isos-menu)
-describes each one.
+Start bromigOS (try it first), Install bromigOS, Install bromigOS Server, Field Kit (repair,
+lab and tools: the same system without the desktop,
+[fieldkit.md](fieldkit.md#the-full-isos-entry)), Start with basic graphics (if the screen
+stays black), and More options › (the text installer, the memory test, the system on this
+computer's disk, the screen reader, the firmware and power), and on UEFI a help page.
+[boot.md](boot.md#the-isos-menu) describes each one.
 
 ### The live desktop
 
@@ -174,7 +178,8 @@ There are three ways in, and they all lead to the same installer:
 
 - **"Install bromigOS"** in the boot menu starts the live desktop with the graphical
   installer open, full screen.
-- **"Install bromigOS (text mode)"** in the boot menu starts no desktop. The text installer
+- **"Install bromigOS with the text installer"** (under More options) and **"Install
+  bromigOS Server"** in the boot menu start no desktop. The text installer
   opens on the screen, and on the serial console when the kernel's console is on one. It's
   also used by itself when "Install bromigOS" finds no graphics.
 - **On the live desktop**, the welcome card's **Install bromigOS**, the desktop's INSTALL
@@ -859,13 +864,24 @@ the desktop medium, and the Field Kit once it's there), side by side:
 5. **Publish it**: the ISO as one file, its `.sha256`, `.sig` and `.json`, into the
    version's folder of the public bucket. Then it downloads it back from
    `https://pkgs.bromigos.org`, as anyone would, and checks the checksum.
-6. **Point at it**: `iso/latest.json` names the newest version's ISOs, the versions past
+6. **Point at it**: `iso/latest.json` names the ISOs of the newest version that has the
+   desktop medium, the versions past
    the newest three are removed, and the GitHub Release's `ISO:` line gets the links, sizes
    and checksums (`iso/release-notes.py`). The Download page reads `latest.json` and
    follows it within the hour.
 
 The tests' screenshots and output are the run's artifact, `iso-tests-<profile>`. Nothing
 is published unless every step before it passed.
+
+Steps 1 to 5 run once per profile, each on its own; step 6 (the `finish` job) runs once,
+after them. When one build fails, the other still publishes its ISO, and `finish` still
+runs if the desktop medium is published whole (its `.json`, and the ISO downloaded again
+with that checksum): Field Kit failing moves `latest.json` and the Release's `ISO:` line to
+the new version with the desktop's ISO alone. The desktop's failing leaves `latest.json`
+on the version before: `iso/publish.sh pointers` points it at the newest version that has
+the desktop medium, so no later run moves it to a version with Field Kit alone, and
+retention never removes the version it names. The run is still marked failed; re-running its failed jobs (`gh run rerun RUN --failed`)
+builds the missing ISO and runs `finish` again, which lists both.
 
 **On a pull request** that changes `iso/` or this workflow, it builds, checks and tests the
 same way and publishes nothing. Its medium has the **edge** channel's packages (main's, which
@@ -915,15 +931,15 @@ object, which GitHub's Releases (2 GiB a file) couldn't.
 
 ```text
 https://pkgs.bromigos.org/iso/
-  latest.json                                  the newest stable version's index.json
-  0.1.3/
-    bromigos-0.1.3-x86_64.iso                  the desktop medium (live and installer)
-    bromigos-0.1.3-x86_64.iso.sha256 .sig .json
-    bromigos-fieldkit-0.1.4-x86_64.iso         the Field Kit, from the release it first ships in
+  latest.json                                  the index.json of the newest stable version with the desktop
+  0.1.4/
+    bromigos-0.1.4-x86_64.iso                  the desktop medium (live and installer)
+    bromigos-0.1.4-x86_64.iso.sha256 .sig .json
+    bromigos-fieldkit-0.1.4-x86_64.iso         Field Kit (+ .sha256 .sig .json); 0.1.3 and older have none
     index.json                                 every ISO of the version
   edge/
     latest.json
-    2026.11.02/bromigos-2026.11.02-x86_64.iso  the newest edge build only
+    2026.11.02/bromigos-2026.11.02-x86_64.iso  the newest edge build only (and its Field Kit)
 ```
 
 Each ISO's `.json`, and the `isos` of `index.json` and `latest.json`, give its `edition`

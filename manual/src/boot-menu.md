@@ -8,20 +8,28 @@ The menu shows your theme's lock-screen picture with the [burn-in](glossary.md#b
 in the middle, a signal meter that fills while it counts down, and the list of things you
 can start. If you press nothing, the first entry starts.
 
-The first entry, **bromigOS Linux**, starts bromigOS. **Advanced options for bromigOS
-Linux** lists each installed kernel on its own, for when you need to choose one.
+| Entry | What it does |
+|---|---|
+| **bromigOS Linux** | Starts bromigOS. This is the first entry. |
+| **Advanced options for bromigOS Linux** | Each installed kernel on its own, for when you need to choose one. |
+| **More ways to start ›** | Other ways to start, each said in plain words (below). |
+| **Help: what do these do?** | A page explaining every entry. <kbd>H</kbd> opens it too. |
+| **UEFI Firmware Settings** | This computer's own setup screen. UEFI computers only. |
+| **Roll back to a snapshot** | bromigOS as it was before an update ([below](#start-an-older-version-after-a-bad-update)). On a btrfs system. |
+| **bromigOS Field Kit** (with its version) **(repair, lab and tools)** | [Repairs, the lab and tools](fieldkit.md), without the desktop. It starts even when bromigOS won't. It's there when its copy fits on the boot partition. |
 
-**More ways to start** lists other ways to start, each said in plain words:
+**More ways to start ›** has:
 
 - **Start without the desktop (text mode)**: a login prompt. Restart to get the desktop back.
-- **Start with basic graphics**: for a screen that stays black. No graphics driver.
-- **Start without the NVIDIA (or AMD, or Intel) driver**: another graphics card takes over,
-  or the basic display.
-- **Start and show every message**: no splash, for finding where it stops.
-- **Start an older snapshot**: bromigOS as it was before an update.
-- **bromigOS Field Kit**: [repairs, the lab and tools](fieldkit.md), without the desktop.
-
-**Help: what do these do?** (or <kbd>H</kbd>) shows a page explaining every entry.
+- **Start with basic graphics (if the screen stays black)**: no graphics driver.
+- **Start without the NVIDIA (or AMD, or Intel) driver (another card or basic graphics)**:
+  another graphics card takes over, or the basic display. Only the makers of the cards in
+  this computer are listed.
+- **Start and show every message (for finding a problem)**: no splash, for finding where
+  it stops.
+- **Start an older snapshot (as it was before an update) ›**: the same snapshots as **Roll
+  back to a snapshot**.
+- **bromigOS Field Kit**: the same Field Kit entry as above.
 
 ## Use the boot menu
 
@@ -132,19 +140,39 @@ cover it. The [keyboard power menu](power-menu.md) works independently of the sp
 
 ## The install stick
 
-The bromigOS USB stick has a boot menu of its own, in the same style. Its entries:
+The bromigOS USB stick (the desktop ISO, from the
+[Download page](https://bromigos.org/download)) has a boot menu of its own, in the same
+style. Its title reads **BROMIGOS // RELAY MEDIUM**:
 
-![The install stick's boot menu: try it live, install, safe graphics, the memory test and more](images/boot-menu-stick.webp)
+![The install stick's boot menu: Start bromigOS (try it first), Install bromigOS, Install
+bromigOS Server, Field Kit (repair, lab and tools), Start with basic graphics and More
+options](images/boot-menu-stick.webp)
 
 | Entry | What it does |
 |---|---|
-| Start bromigOS (try it live) | Start the full desktop from the stick. Nothing is installed. |
-| Install bromigOS | Start the desktop with the installer already open. See [Install](install.md#install-from-the-usb-stick). |
-| Install bromigOS (text mode) | The same installer in text, with no desktop: for a computer whose picture doesn't come up, a serial console, or a screen reader. |
-| Start with safe graphics (nomodeset) | Use this if the screen stays black with the first entry. |
-| Memory test (Memtest86+) | Test the computer's memory. |
-| Boot from disk | Start whatever is installed on the disk instead. |
-| Install with the screen reader (speech) | The installer, read aloud from the start. Press <kbd>S</kbd> in the menu to choose it. |
+| Start bromigOS (try it first) | Start the full desktop from the stick. Nothing on this computer changes. This is the first entry. |
+| Install bromigOS | Start the desktop with the installer already open. It asks before it changes a disk. See [Install](install.md#install-from-the-usb-stick). |
+| Install bromigOS Server | The text installer, for a server or lab machine with no desktop ([bromigOS Server](server.md)). |
+| Field Kit (repair, lab and tools) | [Field Kit](fieldkit.md) from this stick: repairs, the lab and tools, without the desktop. |
+| Start with basic graphics (if the screen stays black) | Use this if the screen stays black with the first entry. |
+| More options › | The entries below. |
+| Help: what do these do? | A page explaining every entry. <kbd>H</kbd> opens it too. |
 
-UEFI computers also get entries for the UEFI shell and the firmware settings. Older BIOS
-computers get a hardware information tool. Both have **Shut down** and **Restart**.
+**More options ›** has:
+
+| Entry | What it does |
+|---|---|
+| Install bromigOS with the text installer | The desktop's installer in text, with no desktop: for a computer whose picture doesn't come up, or a serial console. |
+| Test this computer's memory | Memtest86+ checks the memory for faults. It runs until you restart. |
+| Start the system on this computer's disk | Start whatever is installed on the disk instead. |
+| Install with the screen reader (speech) | The text installer, read aloud from the start. Press <kbd>S</kbd> in the menu to choose it. |
+| Open the UEFI shell, Open this computer's firmware settings | UEFI computers only. |
+| Shut down, Restart | What they say. |
+
+Older BIOS computers get a **Hardware information (HDT)** entry in **More options** too.
+
+If the stick carries an answer file for an unattended install, the install entry says
+**(answers found on the stick: unattended)** and becomes the first choice.
+
+The Field Kit ISO has a different menu, with **Start Field Kit** first; see
+[Field Kit](fieldkit.md).

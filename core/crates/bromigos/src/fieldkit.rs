@@ -4310,11 +4310,12 @@ pub fn fieldkit_cmd(words: Vec<OsString>) -> Result<i32> {
                  bromigos fieldkit why         what went wrong on the last boot, in plain words\n  \
                  bromigos fieldkit black-screen [--fix]   the causes of a black screen at startup\n  \
                  bromigos fieldkit status      whether Field Kit is in this machine's boot menu\n  \
-                 bromigos fieldkit make-stick [DEVICE]    a Field Kit USB stick with your settings\n  \
+                 bromigos fieldkit make-stick [DEVICE] [--iso FILE]   a Field Kit USB stick with your settings\n  \
                  bromigos fieldkit remote on|off|status   remote help over SSH\n  \
                  bromigos fieldkit pair        pair this machine with BRODEC (its QR, or its code big)\n  \
                  bromigos fieldkit qr TEXT     TEXT as a QR code on the screen\n  \
-                 bromigos fieldkit usb [DEVICE]           write Field Kit onto a USB drive\n  \
+                 bromigos fieldkit usb [DEVICE] [--iso FILE]   write Field Kit onto a USB drive\n  \
+                 usb, make-stick: --iso FILE, else the Field Kit ISO in Downloads (bromigos.org/download)\n  \
                  bromigos fieldkit shapes --json [--orb WxH] [--frames N]\n  \
                                                DRIFTGLASS's shapes for the Python TUIs"
             );

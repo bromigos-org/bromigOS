@@ -11,12 +11,13 @@
 #       notes read) into the version's folder; then downloads it back, as a stranger, and
 #       checks the checksum
 #   iso/publish.sh pointers --channel stable|edge [--keep N] [--out DIR]
-#       the newest version's index.json (every ISO of that version) and the channel's
-#       latest.json, then removes all but the newest N versions (stable: 3, edge: 1)
+#       every version's index.json (every ISO of that version), and the channel's latest.json:
+#       the newest version that has the desktop medium; then removes all but the newest N
+#       versions (stable: 3, edge: 1), never the one latest.json names
 #
 # The bucket's layout (the version is the release's, without the v; edge's is the build's date):
 #
-#   iso/latest.json                                   the newest stable version's index
+#   iso/latest.json                                   the newest stable version's index (with the desktop)
 #   iso/<version>/bromigos-<version>-x86_64.iso       + .sha256, .sig, .json
 #   iso/<version>/bromigos-fieldkit-<version>-x86_64.iso   the Field Kit, when it's built
 #   iso/<version>/index.json
@@ -38,7 +39,7 @@ iso='' channel='' tag='' keep='' out=''
 while (($#)); do
     case $1 in
         --channel) channel=$2; shift 2 ;; --tag) tag=$2; shift 2 ;; --keep) keep=$2; shift 2 ;; --out) out=$2; shift 2 ;;
-        -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*) die "unknown option $1" ;;
         *) iso=$1; shift ;;
     esac
@@ -148,7 +149,6 @@ PY
         mapfile -t versions < <(rcl lsf --dirs-only "$B/$cdir/" | sed 's|/$||' \
             | { if [[ $channel == stable ]]; then grep -E '^[0-9]+\.[0-9]+\.[0-9]+$'; else grep -E '^[0-9]'; fi; } | sort -V || true)
         ((${#versions[@]})) || die "no $channel versions in $cdir/"
-        newest=${versions[-1]}
         for v in "${versions[@]}"; do
             mkdir -p "$out/$v"
             rcl copy --include '*.iso.json' "$B/$cdir/$v/" "$out/$v/"
@@ -169,6 +169,12 @@ PY
                     "$out/$v/index.json" "$B/$cdir/$v/index.json"
             fi
         done
+        # latest.json: the newest version with the desktop medium. A version whose desktop build
+        # failed may hold Field Kit alone; the Download page stays on the one before
+        newest=''
+        for v in "${versions[@]}"; do [[ -f $out/$v/bromigos-$v-x86_64.iso.json ]] && newest=$v; done
+        [[ -n $newest ]] || die "no $channel version in $cdir/ has the desktop medium"
+        [[ $newest == "${versions[-1]}" ]] || echo "::warning::$cdir/${versions[-1]}/ has no desktop medium: latest.json stays on $newest"
         cp "$out/$newest/index.json" "$out/latest.json"
         rcl copyto --header-upload "Content-Type: application/json" --header-upload "Cache-Control: no-cache" \
             "$out/latest.json" "$B/$cdir/latest.json"
@@ -177,6 +183,7 @@ PY
         n=${#versions[@]}
         if (( n > keep )); then
             for v in "${versions[@]:0:n-keep}"; do
+                [[ $v == "$newest" ]] && continue        # what latest.json names stays
                 echo "removing $cdir/$v/ (keeping the newest $keep)"
                 rcl purge "$B/$cdir/$v"
             done
@@ -184,5 +191,5 @@ PY
         echo "version=$newest" >> "${GITHUB_OUTPUT:-/dev/null}"
         echo "index=$out/$newest/index.json" >> "${GITHUB_OUTPUT:-/dev/null}"
         ;;
-    *) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    *) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
