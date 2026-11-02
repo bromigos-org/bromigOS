@@ -2173,8 +2173,9 @@ def render_all(win, out):
             win.a.update(full_name="Alex Rivera", user="alex", hostname="alex-pc", password="x")
         elif sid == "install":
             win.show_step("install")
-            win._stage(41, "Copying bromigOS onto the disk (338 of 816)")
-            for t in ("Creating partitions: /dev/nvme0n1", "luks2 formatting mapper dev: /dev/mapper/root", "(338/555) installing mesa"):
+            # the copy of the live system, half way (progress.py: 15 + 50 x 52%)
+            win._stage(41, "Copying bromigOS onto the disk (52%)")
+            for t in ("Creating partitions: /dev/nvme0n1", "luks2 formatting mapper dev: /dev/mapper/root", "Copying the live system: 52%"):
                 win._line(t)
         elif sid == "done":
             win.done = True
