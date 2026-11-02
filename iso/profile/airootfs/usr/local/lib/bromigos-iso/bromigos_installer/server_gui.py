@@ -93,6 +93,9 @@ def label(text, classes=(), wrap=True, xalign=0.0, selectable=False):
 
 
 def esc(t):
+    """Text for a label that reads Pango markup (an ActionRow's or SwitchRow's title and subtitle,
+    a group's title). Never for an Adw.ComboRow: its title and subtitle are plain text (libadwaita
+    1.10), so an escaped apostrophe shows as "&apos;"."""
     return GLib.markup_escape_text(t or "")
 
 
@@ -676,7 +679,7 @@ class ServerPages:
         how = Adw.ComboRow(title="How to sign in", model=Gtk.StringList.new([m[1] for m in modes]))
         how.add_prefix(glass.icon("network-server-symbolic", 18, "dg-row-icon"))
         how.set_selected([m[0] for m in modes].index(s.get("ssh_mode", "keys")))
-        how.set_subtitle(esc(common.SSH_KEY_WORDS))
+        how.set_subtitle(common.SSH_KEY_WORDS)              # a ComboRow's subtitle is plain text (esc())
         how.set_subtitle_lines(0)
         hint(how, common.SSH_KEY_WORDS)
         g2.add(how)
@@ -1028,8 +1031,8 @@ class ServerPages:
             [f"{server.window_words(w)} ({w})" for w in wins]))
         win.add_prefix(glass.icon("preferences-system-time-symbolic", 18, "dg-row-icon"))
         win.set_selected(wins.index(s["update_window"]))
-        win.set_subtitle(esc("In this server's time zone. It restarts only inside the window, and only when an update "
-                             "needs it."))
+        win.set_subtitle("In this server's time zone. It restarts only inside the window, and only when an update "
+                         "needs it.")                               # plain text: a ComboRow's (esc())
         win.set_subtitle_lines(0)
         win.connect("notify::selected", lambda r, _p: (s.update(update_window=wins[r.get_selected()]),
                                                        self.upd_dial.set_state(window=wins[r.get_selected()])))
@@ -1337,11 +1340,11 @@ class ServerPages:
             kind = f.get("kind", "text")
             if kind == "choice":
                 ch = f.get("choices", [])
-                row = Adw.ComboRow(title=esc(f["label"]), model=Gtk.StringList.new([PV.words(c, "title") for c in ch]))
+                row = Adw.ComboRow(title=f["label"], model=Gtk.StringList.new([PV.words(c, "title") for c in ch]))
                 cur = vals.get(f["id"], f.get("default"))
                 row.set_selected(next((i for i, c in enumerate(ch) if c["id"] == cur), 0))
                 c0 = ch[row.get_selected()] if ch else {}
-                row.set_subtitle(esc(c0.get("note", "")))
+                row.set_subtitle(c0.get("note", ""))
                 row.set_subtitle_lines(0)
                 if PV.words(c0, "link"):
                     lb = Gtk.LinkButton(uri=PV.words(c0, "link"), label="Get an account", valign=Gtk.Align.CENTER)
@@ -1427,10 +1430,10 @@ class ServerPages:
         if not s.get("models") and ms:
             s["models"] = [ms[0]["id"]]
         row.set_selected(next((i for i, m in enumerate(ms) if m["id"] in s["models"]), 0))
-        row.set_subtitle(esc(ms[row.get_selected()]["line"] if ms else ""))
+        row.set_subtitle(ms[row.get_selected()]["line"] if ms else "")
         row.set_subtitle_lines(0)
         row.connect("notify::selected", lambda r, _p: (s.update(models=[ms[r.get_selected()]["id"]]),
-                                                       r.set_subtitle(esc(ms[r.get_selected()]["line"])),
+                                                       r.set_subtitle(ms[r.get_selected()]["line"]),
                                                        GLib.idle_add(lambda: (self._cat_fill(), False)[1])))
         hint(row, "The language model vLLM serves; the biggest that fits the card comes first.")
         g.add(row)

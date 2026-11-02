@@ -15,7 +15,7 @@ bootmodes=('bios.syslinux'
            'uefi.grub')
 pacman_conf="pacman.conf"
 airootfs_image_type="squashfs"
-# zstd, not releng's xz: the offline repository is most of the image and is zstd already
+# zstd, not releng's xz: the offline store (what the live system lacks) is zstd already
 # (incompressible), and zstd's reads stay quick on old machines. Level 19, as Field Kit's: it
 # unpacks nearly as fast as level 6 and the live system packs about 6% smaller (docs/iso.md)
 airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '19' '-b' '1M')

@@ -37,8 +37,9 @@ const GPU_IDS: &str = include_str!("../data/gpu-ids.tsv");
 /// Where pci.ids lives (package hwdata).
 pub const PCI_IDS: &str = "/usr/share/hwdata/pci.ids";
 
-/// Every package any plan may install: the ISO's offline repository carries them all
-/// (iso/build-in-container.sh; a test keeps the two in step).
+/// Every package any plan may install: the desktop ISO has them all, installed in its live
+/// system (which an install copies) or in its offline store (iso/build-in-container.sh; a test
+/// keeps the two in step).
 pub const ALL_PACKAGES: &[&str] = &[
     "nvidia-open",
     "nvidia-open-lts",

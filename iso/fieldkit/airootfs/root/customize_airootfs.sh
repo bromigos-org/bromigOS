@@ -3,6 +3,10 @@
 # (iso/build.sh --edition fieldkit; docs/fieldkit.md).
 set -euo pipefail
 
+# ── an install copies this image (docs/iso.md, "How installing works"): /etc as the packages
+#    left it, before this script makes it the medium's (bromigos_installer/copyroot.py)
+PYTHONPATH=/usr/local/lib/bromigos-iso python3 -m bromigos_installer.copyroot prep-begin
+
 # the console: kmscon on the first console (true colour, Geist Mono, DRIFTGLASS); getty with
 # bromigOS's colours and font where kmscon can't start (kmsconvt@'s OnFailure)
 systemctl enable kmsconvt@tty1.service >/dev/null 2>&1
@@ -44,4 +48,8 @@ if [[ -s /etc/bromigos-iso/test_authorized_keys ]]; then
     rm -f /etc/bromigos-iso/test_authorized_keys
     systemctl enable sshd.service >/dev/null 2>&1 || true
 fi
+# ── what an install takes away again (the medium's own files), the package files this image
+#    lacks (kept in the store), and the store without what the image has installed
+PYTHONPATH=/usr/local/lib/bromigos-iso python3 -m bromigos_installer.copyroot prep-finish
+
 echo "customize_airootfs: Field Kit is ready"

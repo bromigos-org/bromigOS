@@ -133,7 +133,7 @@ same step by hand.
 ### 1. Download it
 
 Download the newest image from the [Download page](https://bromigos.org/download). It's
-one file of about 5 GB.
+one file of about 3.2 GB.
 
 **From a terminal.** Every release's image is at
 `https://pkgs.bromigos.org/iso/<version>/bromigos-<version>-x86_64.iso`, beside its
@@ -186,8 +186,9 @@ sudo dd if=bromigos-<version>-x86_64.iso of=/dev/sdX bs=4M status=progress oflag
 # or: sudo cp bromigos-<version>-x86_64.iso /dev/sdX && sync
 ```
 
-There's no netboot image: the medium carries an offline copy of every package an install
-needs, which is most of its size.
+There's no netboot image, and the stick needs no network to install: it copies its own
+live system onto the disk, and a small store on it adds what that system lacks (NVIDIA's
+driver, the kernel's headers, the compiler).
 
 ### 4. Start the computer from the stick
 
@@ -387,7 +388,8 @@ menu's other entries are described in [The boot menu](boot-menu.md#the-install-s
 ### How the image is made
 
 Every release's image is built by CI from the release's tag: archiso's releng profile with
-bromigOS laid over it, and an offline repository of every package an install needs. It's
+bromigOS laid over it, which an install copies onto the disk, and a small offline store of
+what the live system lacks. It's
 checked (the privacy guard, no keys, no proprietary packages), tested in QEMU with KVM (an
 encrypted UEFI install with its first update and rollback, an offline BIOS install, and
 Secure Boot with the MokManager enrollment), signed and published

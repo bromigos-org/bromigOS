@@ -21,8 +21,13 @@ state() {
     # four bytes of attributes, then the value: 1 on, 0 off
     if [[ $(od -An -t u1 -j 4 -N 1 "$v" 2>/dev/null | tr -d ' ') == 1 ]]; then echo on; else echo off; fi
 }
-# the medium's store carries bromigos-secureboot: the installer sets Secure Boot up
-supported() { compgen -G "$STORE/bromigos-secureboot-*.pkg.tar.zst" >/dev/null; }
+# the medium carries bromigos-secureboot (in its store, or in the live system the install
+# copies): the installer sets Secure Boot up
+supported() {
+    compgen -G "$STORE/bromigos-secureboot-*.pkg.tar.zst" >/dev/null && return 0
+    local live=/run/archiso/airootfs; [[ -d $live/usr ]] || live=''
+    [[ -f $live/usr/local/share/bromigos-iso/copy/manifest.json ]] && compgen -G "$live/var/lib/pacman/local/bromigos-secureboot-[0-9]*" >/dev/null
+}
 
 TITLE="Secure Boot is on"
 OK_TEXT="Secure Boot can stay on. The installed system starts with it, through the same steps as this stick: at its first start, a blue screen asks you to approve bromigOS once (Enroll MOK, Continue, Yes, then a code the installer shows at the end). How: $HOW"

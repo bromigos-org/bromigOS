@@ -14,7 +14,7 @@ bootmodes=('bios.syslinux'
            'uefi.grub')
 pacman_conf="pacman.conf"
 airootfs_image_type="squashfs"
-# zstd at its high levels: the offline store is most of the image and is zstd already; the
+# zstd at its high levels: the offline store (bromigOS Server's own packages) is zstd already; the
 # rest packs about as well as xz, and unpacks faster on old machines
 airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '19' '-b' '1M')
 bootstrap_tarball_compression=('zstd' '-c' '-T0' '--auto-threads=logical' '--long' '-19')

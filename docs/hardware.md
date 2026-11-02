@@ -460,9 +460,10 @@ Add more gestures with `hl.gesture({ … })` after the defaults.
   `20261030120000-hw-proton-nvapi.sh` runs `bromigos hw setup --user-only`, which adds
   `PROTON_ENABLE_NVAPI` on NVIDIA. It applies from your next login.
 
-The ISO's offline repository carries every package a plan can install, except the
-`-lts` and DKMS ones, since the ISO installs the stock kernel. A unit test keeps that
-list and `hw.rs` in step. The live session itself runs on Mesa, with nouveau on NVIDIA.
+The desktop ISO has every package a plan can install, except the `-lts` and DKMS ones,
+since it installs the stock kernel: installed in its live system (Mesa and the Vulkan
+drivers, which an install copies) or in its offline store (NVIDIA's driver, Intel's video
+decoding). A unit test keeps the build's list and `hw.rs` in step. The live session itself runs on Mesa, with nouveau on NVIDIA.
 
 ## What's proven, and how
 

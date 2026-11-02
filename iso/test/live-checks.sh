@@ -24,6 +24,27 @@ data_subvolumes() {
 LIST
 }
 
+# an installed system (either edition): every package's files where pacman expects them, and
+# nothing of the live medium's own left (an install copies the live system: docs/iso.md, "How
+# installing works")
+installed_system() {
+    check "pacman -Qk: every package's files are there" bash -c 'out=$(sudo pacman -Qkq 2>/dev/null); [ -z "$out" ] || { echo "$out" | head -20; exit 1; }'
+    check "none of the live system's own files (live user, autologin, installer, store, archiso's hooks)" bash -c '
+        bad=""
+        id live >/dev/null 2>&1 && bad="$bad user:live"
+        for f in /home/live /etc/sudoers.d/live /etc/sddm.conf.d/live.conf /usr/local/bin/bromigos-iso-install \
+                 /usr/local/lib/bromigos-iso /usr/local/share/bromigos-iso /etc/bromigos-iso /var/lib/bromigos/repo \
+                 /etc/mkinitcpio.conf.d/archiso.conf /etc/systemd/system/pacman-init.service \
+                 /etc/systemd/system/etc-pacman.d-gnupg.mount /etc/systemd/journald.conf.d/volatile-storage.conf \
+                 /etc/ssh/sshd_config.d/10-archiso.conf /etc/systemd/system/getty@tty1.service.d/autologin.conf /version; do
+            sudo test -e "$f" -o -L "$f" && bad="$bad $f"
+        done
+        [ -z "$bad" ] || { echo "left from the live system:$bad"; exit 1; }'
+    check "none of the live system's own packages (archiso's hooks, archinstall, the rescue tools)" bash -c '! pacman -Q mkinitcpio-archiso archinstall clonezilla 2>/dev/null | grep .'
+    check "a machine ID of its own, a pacman keyring of its own" bash -c 'grep -qxE "[0-9a-f]{32}" /etc/machine-id && sudo test -s /etc/pacman.d/gnupg/pubring.gpg -o -d /etc/pacman.d/gnupg/public-keys.d'
+    check "root's account as a fresh system's (bash, a password set)" bash -c 'getent passwd root | grep -q ":/usr/bin/bash$" && [ "$(sudo passwd -S root | cut -d" " -f2)" = P ]'
+}
+
 if [[ $mode == updated ]]; then
     # the update went to ${CHANNEL:-edge}: from the medium's channel to the other one, an older one too
     check "the update's channel: [bromigos] on ${CHANNEL:=edge}" channel_is "$CHANNEL"
@@ -51,6 +72,7 @@ if [[ $mode == server ]]; then         # bromigOS Server: no desktop, the disk a
     check "the firewall is on (nftables), SSH open" bash -c "systemctl is-active -q nftables || systemctl is-active -q bromigos-server-firewall; sudo nft list ruleset | grep -q 'dport 22'"
     check "the lab console is installed" command -v bromigos-lab
     check "the install's answers kept, without the password" bash -c "test -s /var/log/bromigos/install-answers.toml && ! grep -qE '^(password|passphrase) ' /var/log/bromigos/install-answers.toml"
+    installed_system
     exit $fails
 fi
 
@@ -133,6 +155,8 @@ if [[ $mode == desktop ]]; then       # the installed system (docs/iso-encryptio
     check "the repository: [bromigos] on the ${CHANNEL:=stable} channel" channel_is "$CHANNEL"
     check "no offline-copy servers left (file://)" bash -c "! grep -q 'file:///var/lib/bromigos' /etc/pacman.conf /etc/pacman.d/mirrorlist"
     check "one [bromigos] section" bash -c "[ \$(grep -c '^\[bromigos\]' /etc/pacman.conf) -eq 1 ]"
+    check "other packages' docs left out, as on the medium (NoExtract in pacman.conf)" grep -q '^NoExtract *= *usr/share/doc/\*' /etc/pacman.conf
+    installed_system
 fi
 if [[ $mode == live ]]; then
     check "the offline repository: Arch's core and extra, bromigOS" test -f /var/lib/bromigos/repo/core/os/x86_64/core.db -a -f /var/lib/bromigos/repo/extra/os/x86_64/extra.db -a -f /var/lib/bromigos/repo/bromigos/x86_64/bromigos.db
