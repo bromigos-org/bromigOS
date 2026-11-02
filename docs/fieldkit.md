@@ -164,9 +164,11 @@ archiso's hooks, archinstall. It checks with `pacman -Qk` that every package's f
 there.
 
 The medium is 2.3 GB (2,343,387,136 bytes on 2026-11-01; 3.3 GB before installs copied
-it), and its store 943 MiB. The NVIDIA driver for a lab's GPU is most of that store, about
-640 MB with what it needs to build for the LTS kernel. Without it the medium would be about
-1.7 GB, but a lab GPU node would then need the network to install its driver.
+it), and its store 943 MiB. The NVIDIA driver for a lab's GPU is most of that store: about
+600 MB with its firmware and what it needs to build for the LTS kernel (`nvidia-utils` 314 MiB,
+`linux-firmware-nvidia` 99 MiB, the LTS kernel's headers, the compiler, Mesa and LLVM). The LTS
+kernel is 155 MiB and `bromigos-core` 71 MiB. Without the NVIDIA driver the medium would be
+about 1.7 GB, but a lab GPU node would then need the network to install its driver.
 
 ## The console
 
