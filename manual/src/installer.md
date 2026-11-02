@@ -17,10 +17,10 @@ can go back and change anything.
   **Try bromigOS** or **Install bromigOS**. Later, the desktop's **INSTALL** panel or
   "Install bromigOS" in the app launcher opens the installer.
 
-On a computer with no working graphics, "Install bromigOS" opens the text installer by
-itself.
+![The live desktop's welcome card: Try bromigOS or Install bromigOS](images/live-welcome-card.webp)
 
-![The text installer's Where step: three disks, Install alongside Windows, and the room for each](images/installer-text-mode-where.webp)
+On a computer with no working graphics, "Install bromigOS" opens the text installer by
+itself. See [The text installer](#the-text-installer).
 
 ## The steps
 
@@ -38,21 +38,26 @@ itself.
    - **High contrast.** Stronger colours: solid panels, white text, no glow.
    - **Reduce motion.** Nothing moves or pulses on its own.
    - **Language.** The language your new system uses.
+
+   ![How would you like to be guided? VECTOR's voice guide with Play a sample, then the
+   screen reader, larger text, high contrast, reduce motion and the language](images/installer-guidance.webp)
+
 2. **Welcome.** Your time zone, and whether you're online. You don't need the internet:
    everything is on the stick.
 3. **Before you start.** Shown only when there's something to know: running on battery
    (plug in the charger), less than 4 GB of memory, a disk that reports it's failing, a
    graphics card bromigOS can't drive well, Secure Boot. Each line says what to do. None
    of them stops you. Secure Boot needs nothing here: the install sets bromigOS up to start
-   with it on ([Secure Boot](install.md#secure-boot)). Only a stick from before that warns
-   you to turn Secure Boot off before you start bromigOS from the disk:
+   with it on ([Secure Boot](install.md#secure-boot)).
 
-   ![Before you start, on a stick from before: Secure Boot is on, with what it means and how to turn it off](images/installer-before-you-start-secure-boot.webp)
+   ![Before you start: running on battery, with what to do (plug in the charger), and the
+   checks that passed below it](images/installer-before-you-start.webp)
 
 4. **What kind of computer is this?** **bromigOS (desktop)** for a computer you sit at.
    **bromigOS Server** has no desktop, for servers and lab machines.
 
-   ![What kind of computer is this? bromigOS (desktop) or bromigOS Server](images/installer-kind-of-computer.webp)
+   ![What kind of computer is this? Two cards with a hologram each: bromigOS (desktop),
+   chosen, and bromigOS Server](images/installer-kind-of-computer.webp)
 
 5. **Your keyboard.** Pick the layout that matches your keys. Try it in the box.
 6. **Where to install.** Every disk, with its size, model and what's on it. Pick one, then
@@ -67,11 +72,19 @@ itself.
    - **Reinstall bromigOS and keep my files**, when bromigOS is already on the disk. You
      get a fresh system, and your home folder stays as it is.
 
-   ![Where to install: Install alongside Windows, with the bar that splits the disk and each side's minimum](images/installer-where-alongside-windows.webp)
+   ![Where to install: three disks, Install alongside Windows chosen, and the bar that
+   splits the disk: Windows 484 GB, bromigOS 64 GB, with what each side needs](images/installer-where-alongside-windows.webp)
+
+   ![Where to install with Erase the whole disk chosen: the whole bar goes to bromigOS, and
+   a warning that Windows is deleted](images/installer-where-erase.webp)
 
 7. **Save Windows' recovery key**, only when Windows uses BitLocker (below).
 8. **About you.** Your name, a user name for signing in, a password, and a name for the
    computer. The user name and computer name are suggested from your name.
+
+   ![About you: Alex Rivera, user name alex, the password twice with its strength, and the
+   computer's name alex-pc](images/installer-about-you.webp)
+
 9. **Encryption.** On by default. The disk can only be read after the passphrase is typed
    when the computer starts. By default your password is the passphrase. You can give the
    disk its own instead.
@@ -79,23 +92,37 @@ itself.
    > **Remember it.** Nobody can recover a forgotten passphrase, and the disk can't be read
    > without it.
 
-10. **bromigOS Server's own steps**, for a server only: what it will do, where its keys and
-   passwords live, its network, who can sign in, how to reach it from anywhere, data disks,
-   how its disk unlocks, how it updates, and what it runs. A server has no About you or
-   Encryption step: these replace them. See [bromigOS Server](#bromigos-server).
-11. **Summary.** Every choice in plain words. The button says **Install**, or **Erase disk
+   ![Lock the disk: Encrypt the disk on, and Use a different passphrase from my password
+   off](images/installer-encryption.webp)
+
+10. **Reach it from anywhere.** How you get to this computer when you're away from home.
+    **Through BRODEC only** is the default and the safest: your phone reaches it, end to end
+    encrypted. You can also join your lab's private network, or use WireGuard or
+    Tailscale. The same step as the server's ([Reach it from
+    anywhere](server-setup.md#reach-it-from-anywhere)).
+11. **bromigOS Server's own steps**, for a server only: what it will do, where its keys and
+    passwords live, its network, who can sign in, how to reach it from anywhere, data disks,
+    how its disk unlocks, how it updates, and what it runs. A server has no About you or
+    Encryption step: these replace them. See [bromigOS Server](#bromigos-server).
+12. **Summary.** Every choice in plain words. The button says **Install**, or **Erase disk
     and install** when the disk is erased.
 
-    ![Ready to install: every choice in plain words, and Install](images/installer-summary.webp)
+    ![Ready to install: the computer and you, each choice with an Edit button, a reminder to
+    back up first, and Install](images/installer-summary.webp)
 
-12. **Installing.** A progress bar and a line saying what's happening. **Details** shows
-    every step. It takes about ten minutes.
-13. **Done.** Press **Restart now**. Take out the stick when the screen goes dark. On a
+13. **Installing.** A progress ring, the stage it's on, and a look at the desktop you're getting.
+    **Details** shows every step. It takes about ten minutes.
+
+    ![Installing bromigOS: 41 %, copying bromigOS onto the disk, the stages done and still to
+    come](images/installer-installing.webp)
+
+14. **Done.** Press **Restart now**. Take out the stick when the screen goes dark. On a
     computer that starts the newer way (UEFI), this page also shows a four-digit code in large
     letters, with the blue screen's steps beside it: note it. At the first start, a blue screen asks you to approve bromigOS once, with that
     code ([Secure Boot](install.md#secure-boot)). Secure Boot can stay on.
 
-    ![bromigOS is installed: what happens at the next start, the code for the blue screen with its steps, and Restart now](images/installer-done.webp)
+    ![bromigOS is installed: what happens next, the four-digit code for the blue screen with
+    its steps, and Restart now](images/installer-done.webp)
 
 ## Installing alongside Windows
 
@@ -129,6 +156,9 @@ BitLocker drive encryption › **Back up your recovery key**. Or sign in at
 aka.ms/myrecoverykey on another device. The key is 48 digits. Keep it somewhere that isn't
 this computer, then turn on **I've saved the BitLocker recovery key**.
 
+![Save Windows' recovery key: where the 48-digit key is, where to find it, and I've saved
+the BitLocker recovery key](images/installer-bitlocker.webp)
+
 ## Reinstalling and keeping your files
 
 When the disk already has bromigOS, **Reinstall bromigOS and keep my files** gives you a
@@ -144,35 +174,68 @@ bromigOS Server has no desktop. It starts to a text screen, and you look after i
 phone, your desktop, or another computer. After **What kind of computer is this?** you pick
 **bromigOS Server**, and the installer asks what a server needs instead of About you:
 
-1. **What will this server do?** Five cards: **Lab node** (computing and graphics cards for
-   your lab), **Storage** (shared folders and backups), **Home services** (apps for the
-   household), **Game server**, or **Just a server** (the safe base and nothing more). The
-   card sets what's installed and switched on. You can change any of it on the Services
-   step.
-2. **Your keyboard** and **Where to install**, as for the desktop.
-3. **Its network.** The network port (a cable, if it has one), whether your router gives it
+1. **What will this server do?** Six cards, and you can tick several: **Lab node**
+   (computing and graphics cards for your lab), **Storage** (shared folders and backups),
+   **Home services** (apps for the household), **Game server**, **Media** (your own movies,
+   shows and music), or **Just a server** (the safe base and nothing more). The roles
+   suggest what's installed and switched on. You can change any of it on the Run step.
+2. **Where should this server keep its keys and passwords?** Your lab's Vault, a new
+   Vault, this server (encrypted and sealed to its security chip), or sops + age.
+3. **Your keyboard** and **Where to install**, as for the desktop.
+4. **Its network.** The network port (a cable, if it has one), whether your router gives it
    its address or it keeps a fixed one, and its name. The address other computers will use
    is shown big. **Wake-on-LAN** lets your phone switch it on over the cable.
-4. **Who can sign in.** The admin's name and password, and how you sign in from your own
+5. **Who can sign in.** The admin's name and password, and how you sign in from your own
    computer. **Keys only** is the safe choice: the installer reads keys from the stick's
    `fieldkit` folder, you can paste one, or it fetches your public keys from GitHub and
    shows them so you can check them. A password login is offered too, with a warning.
-   WireGuard and Tailscale are installed and stay off unless you turn them on.
-5. **Data disks.** Other disks for your files and apps, at `/srv/data`. With two or more
+6. **Reach it from anywhere.** Through BRODEC only (the default), your lab's private
+   network, WireGuard or Tailscale.
+7. **Data disks.** Other disks for your files and apps, at `/srv/data`. With two or more
    you can keep **two copies** of everything (RAID1), so one disk can fail.
-6. **Lock the disk.** If the computer has a security chip (TPM 2.0), the chip unlocks the
+8. **Lock the disk.** If the computer has a security chip (TPM 2.0), the chip unlocks the
    disk at every start, so updates can restart it at night. Without one, you choose: type
    the passphrase after every restart, or leave the disk unlocked.
-7. **How it updates.** By itself (the default), download and ask your phone, or only when
+9. **How it updates.** By itself (the default), download and ask your phone, or only when
    you say. It updates in a window at night, 3 to 5 AM unless you pick another, and restarts
    only in that window and only when it has to.
-8. **What it runs.** The services the role switched on, and the apps for Home services or a
-   Game server. Change any of them.
+10. **What should this server run?** Its place in your lab, then the services and apps your
+    roles ticked. Change any of them.
+
+![What will this server do? Six role cards, Home services ticked, and a hologram of the
+server linked to its roles](images/server-role.webp)
 
 **Ready to install** then shows every choice, and how you'll sign in once it's installed:
 `ssh admin@` and the server's address, with a QR code an SSH app on your phone can scan.
 
 What each step means, and what it sets up, is in [Setting up bromigOS Server](server-setup.md).
+
+## The text installer
+
+The text installer has the same steps, in the same words, on a plain text screen. The steps
+are listed on the left, VECTOR's line is below them, and the bottom line says what the
+highlighted control does.
+
+![The text installer's Where step: three disks, Install alongside Windows, and the bar that
+splits the disk, moved with the arrow keys](images/installer-text-mode-where.webp)
+
+Type in the boxes as usual. <kbd>Tab</kbd> moves between them, and
+<kbd>Ctrl</kbd>+<kbd>N</kbd> or **Continue** goes on.
+
+![The text installer's About you step: your name, user name, the password twice with its
+strength, and the computer's name](images/installer-text-mode-about-you.webp)
+
+On the summary, each part has a **Change** button with a number: press the number to go
+back to that step. **Continue** brings you back to the summary.
+
+![The text installer's summary: seven parts, each with Change and its number, and
+Install](images/installer-text-mode-summary.webp)
+
+For bromigOS Server, the server's steps come after **What kind of computer is this?**, as
+in the graphical installer.
+
+![The text installer's What will this server do? step: the role cards to tick, and the
+server drawn in text beside them](images/installer-server-text-mode-role.webp)
 
 ## VECTOR's voice
 
@@ -199,6 +262,10 @@ offline: his lines are recorded on the stick.
 The installer says what stopped and what to do, in plain words. **Save a problem report**
 puts the install's logs, a summary of the hardware and your answers (never your password)
 on a USB drive, and says where it went. Send that file when you ask for help.
+**Back to the summary** lets you change something and try again.
+
+![The install didn't finish: what happened, Back to the summary and Save a problem
+report](images/installer-failed.webp)
 
 ## Keyboard only and screen readers
 
@@ -324,6 +391,9 @@ covers the catalogue's format, `tools/voice/make-clips.py`, and the check CI run
 An answer file installs with no questions. After a 10-second countdown with **Cancel**,
 the install runs by itself. A file with problems is never half-used: the installer says
 what's wrong and asks the questions instead.
+
+![Installing from an answer file: the file's path, a countdown with Cancel, and every
+answer in plain words](images/installer-answer-file.webp)
 
 The installer looks for one:
 
