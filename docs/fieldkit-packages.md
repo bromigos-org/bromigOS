@@ -11,7 +11,7 @@ Sizes are each package's own installed size. Their dependencies come with them; 
 totals below count those too.
 
 - The running medium: 552 packages with their dependencies, 2707.1 MiB installed.
-- The offline store: 75 package files, 943.9 MiB (compressed, as downloaded): what bromigOS Server adds to the running medium, which an install copies ([iso.md](iso.md#how-installing-works)).
+- The offline store: 50 package files, 339.3 MiB (compressed, as downloaded): what bromigOS Server adds to the running medium, which an install copies ([iso.md](iso.md#how-installing-works)).
 
 ## Boot & hardware
 
@@ -220,8 +220,6 @@ totals below count those too.
 | `samba` | 63.8 MiB | store only | the Storage role: Windows and Mac file shares |
 | `btrbk` | 405 KiB | store only | the Storage role: snapshots copied to a second btrfs machine |
 | `caddy` | 54.4 MiB | store only | the Home services role: one HTTPS name per app, on 80 and 443 (local network) |
-| `nvidia-open-dkms` | 110.7 MiB | store only | a lab GPU node on Server's LTS kernel (the installer's hardware plan): the open driver built for each kernel |
-| `linux-lts-headers` | 273.5 MiB | store only | nvidia-open-dkms's build for the LTS kernel |
 
 ## The largest
 
@@ -257,8 +255,7 @@ Arch's own live medium (archiso's releng profile) carries these; Field Kit doesn
 | Packages | Why not |
 |---|---|
 | linux-firmware (the whole set) | its split parts above cover common Wi-Fi, Ethernet, Bluetooth and graphics; the rest is below |
-| nvidia-open nvidia-utils (in the offline store) | NVIDIA's driver for a lab machine's compute: about 400 MiB with what it pulls in (Mesa, LLVM). bromigOS Server installs it once online (an open question: carry it?) |
-| linux-firmware-nvidia | only for nouveau on the live system, which Field Kit doesn't load (the basic display instead); in the offline store for lab GPU installs |
+| linux-firmware-nvidia (on the medium and in the offline store) | NVIDIA graphics cards' firmware (99 MiB), for nouveau, which Field Kit doesn't load (the basic display instead). The store carries linux-firmware's other parts in place of the whole set; an install on an NVIDIA machine adds the whole set (linux-firmware) from the internet during the install, or at the first update with a network |
 | linux-firmware-marvell | Marvell Wi-Fi (Surface devices) and some server NICs: 79 MiB for rare hardware (an open question) |
 | linux-firmware-cirrus linux-firmware-ti linux-firmware-amd | laptop audio codecs, TI chips, AMD's security processor: not needed to boot, network or repair |
 | archlinux releng: clonezilla partimage | Field Kit's own imaging (partclone, in Clonezilla's format) replaces them |
@@ -282,3 +279,4 @@ Arch's own live medium (archiso's releng profile) carries these; Field Kit doesn
 | go-yq | yq (the jq wrapper) reads YAML and TOML in 0.3 MiB; go-yq is 14 MiB |
 | docker (Server's Game server role with a lab's Pelican panel) | Docker's engine, for Pelican's Wings only: that choice needs the lab, so it needs the network; it downloads then |
 | cockpit cockpit-podman cockpit-storaged cockpit-files (Server's Cockpit extra) | an opt-in web admin, added later with the network (bromigos server role add cockpit); cockpit-packagekit never |
+| nvidia-open-dkms nvidia-utils nvidia-container-toolkit linux-lts-headers (a lab GPU node's NVIDIA driver) | about 505 MiB with what it pulls in (gcc for DKMS, LLVM, Mesa): on an NVIDIA machine the installer downloads them during the install, or with no network they install by themselves at the first update with one (until then, the basic display driver) |

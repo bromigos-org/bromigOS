@@ -26,7 +26,7 @@ for people using it, and [server.md](server.md) covers bromigOS Server.
 
 | From | How | What's there |
 |---|---|---|
-| Its own medium | `bromigos-fieldkit-<version>-x86_64.iso` (about 2.3 GB, from the [Download page](https://bromigos.org/download), or `https://pkgs.bromigos.org/iso/<version>/`) on a USB stick, or through Ventoy | Everything, with the offline store |
+| Its own medium | `bromigos-fieldkit-<version>-x86_64.iso` (about 1.7 GB, from the [Download page](https://bromigos.org/download), or `https://pkgs.bromigos.org/iso/<version>/`) on a USB stick, or through Ventoy | Everything, with the offline store |
 | The full ISO's boot menu | "Field Kit (repair, lab and tools)" | The full medium's own system, started without the desktop |
 | An installed system's boot menu | "bromigOS Field Kit" (package `bromigos-fieldkit`) | Everything but the offline store, started from `/boot` |
 
@@ -154,8 +154,8 @@ system doesn't:
   newest kernel, Field Kit's own, is the spare), and its server packages (the firewall,
   sshguard, AppArmor, containers, backups, Samba and the rest);
 - the packages of bromigOS Server's roles that install offline ([server.md](server.md#roles));
-- the NVIDIA driver for a lab machine with an NVIDIA card, built for the LTS kernel (DKMS,
-  with the kernel's headers and the compiler);
+- `linux-firmware`'s split parts the image doesn't have, but not NVIDIA's
+  (`linux-firmware-nvidia`): the store has the parts in place of the whole set;
 - the packages whose files Field Kit's image lacks: the microcode on `/boot`, and
   `bromigos-core`, whose worlds' videos the image leaves out. Server gets them whole.
 
@@ -163,12 +163,19 @@ The install then removes what's Field Kit's alone: the repair, imaging and rescu
 archiso's hooks, archinstall. It checks with `pacman -Qk` that every package's files are
 there.
 
-The medium is 2.3 GB (2,343,387,136 bytes on 2026-11-01; 3.3 GB before installs copied
-it), and its store 943 MiB. The NVIDIA driver for a lab's GPU is most of that store: 605 MiB
-(634 MB) with its firmware and what it needs to build for the LTS kernel (`nvidia-utils` 314 MiB,
-`linux-firmware-nvidia` 99 MiB, the LTS kernel's headers, the compiler, Mesa and LLVM). The LTS
-kernel is 155 MiB and `bromigos-core` 71 MiB. Without the NVIDIA driver the medium would be
-about 1.7 GB, but a lab GPU node would then need the network to install its driver.
+The medium is 1.7 GB (1,713,520,640 bytes on 2026-11-01; 2.3 GB while the store carried
+NVIDIA's driver, 3.3 GB before installs copied the live system), and its store 339 MiB in 50
+package files: the LTS kernel 155 MiB, `bromigos-core` 71 MiB, and the server's packages.
+[fieldkit-packages.md](fieldkit-packages.md) lists them.
+
+NVIDIA's driver isn't on the stick. It was 605 MiB of the store (`nvidia-utils` 314 MiB,
+`linux-firmware-nvidia` 99 MiB, the LTS kernel's headers, and the compiler, Mesa and LLVM
+it needs to build for the LTS kernel), for the few machines with an NVIDIA card. On one of
+those, the Server install downloads it (the progress line says **Downloading the NVIDIA
+driver**), with `linux-firmware` whole. With no network, the install finishes on the basic
+display driver, and the driver installs by itself at the first update with a network
+([server.md](server.md#the-kernel)). The installers' network line says which, in one
+sentence. Model serving stays a choice on that machine and starts once the driver is in.
 
 ## The console
 

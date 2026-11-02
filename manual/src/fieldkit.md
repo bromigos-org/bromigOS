@@ -9,7 +9,7 @@ You can start it three ways:
 - **From your boot menu.** Choose **bromigOS Field Kit**. It's also in the computer's own
   boot menu (often <kbd>F8</kbd>, <kbd>F11</kbd> or <kbd>F12</kbd> as it starts), so it
   works even when the bromigOS boot menu itself is broken.
-- **From a USB stick.** Download the Field Kit ISO (about 2.3 GB) from the
+- **From a USB stick.** Download the Field Kit ISO (about 1.7 GB) from the
   [Download page](https://bromigos.org/download), next to the desktop's. Write it to a stick
   the same way as the desktop's ([Make the USB stick](install.md#3-make-the-usb-stick)), or
   copy it onto a Ventoy stick. A stick of 4 GB or more does.
@@ -171,7 +171,10 @@ watch and use the screen from their own terminal.
 ## Install bromigOS Server
 
 In **Install**, choose **bromigOS Server (no desktop)**. Everything it needs is on the
-stick, so no network is needed. See [bromigOS Server](server.md).
+stick, so no network is needed. The one exception is NVIDIA's graphics driver, for a
+computer with an NVIDIA card: it downloads during the install, or with no internet the
+server starts on the basic display driver and gets NVIDIA's at the first update with the
+internet. See [bromigOS Server](server.md).
 
 ## For power users
 

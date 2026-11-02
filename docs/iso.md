@@ -8,7 +8,7 @@ needs is on the medium, so installing needs no network.
 This page explains how the ISO is built, what's on it, what the installer does and how to
 test it. For users, the manual's [Install](../manual/src/install.md) page and the
 [Download page](https://bromigos.org/download) cover it. Every release has two ISOs, the
-desktop medium (this page; about 3.2 GB) and Field Kit (about 2.3 GB), each built, checked,
+desktop medium (this page; about 3.2 GB) and Field Kit (about 1.7 GB), each built, checked,
 tested, signed and published by CI as one file at `https://pkgs.bromigos.org/iso/<version>/`
 ([A release's ISO](#a-releases-iso)). Both start with Secure Boot on, and so does the system
 they install ([secureboot.md](secureboot.md)). The same build makes Field Kit with
@@ -108,7 +108,10 @@ store), only holds the packages the live system doesn't have:
   choose, the kernel's headers, the compiler (`base-devel`), the Secure Boot tools, and
   the PipeWire and boot pieces archinstall adds.
 - On Field Kit: what bromigOS Server adds (the LTS kernel, the server's packages and
-  roles, NVIDIA's driver for a lab's GPU) ([fieldkit.md](fieldkit.md)).
+  roles) ([fieldkit.md](fieldkit.md)). NVIDIA's driver isn't there: on an NVIDIA machine
+  the Server install downloads it, or with no network it waits for the first update with
+  one ([server.md](server.md#the-kernel)). Its `linux-firmware` is the split parts but
+  NVIDIA's (`linux-firmware-nvidia`), which an NVIDIA machine gets the same way.
 - On both: the few packages whose files the image lacks. mkarchiso empties `/boot`, so
   the microcode and Memtest86+ are there to install again. On Field Kit, `bromigos-core`
   is there too, because its image leaves out the worlds' videos. Also `pacman-mirrorlist`,
@@ -393,8 +396,8 @@ package step, the plugin runs `copyroot.py`'s copy onto the new system's mounts:
    installed again from the store.
 
 Then archinstall installs its package list with `pacstrap --needed`: what the copy brought
-is skipped, and the rest (NVIDIA's driver, the headers, bromigOS Server's packages) comes
-from the store. After archinstall, `copyroot.py prune` marks the packages archinstall was
+is skipped, and the rest (on the desktop medium NVIDIA's driver and the headers; on Field
+Kit bromigOS Server's packages) comes from the store. After archinstall, `copyroot.py prune` marks the packages archinstall was
 asked for (the plugin records each list), and `--with`'s, as installed explicitly. Every
 other package goes, with whatever only it needed: the rescue tools, archiso's hooks,
 archinstall. That leaves the same packages an install from packages had. archinstall then
@@ -419,6 +422,9 @@ live system has. Measured on CI's builds of the same packages (2026-11-01):
 | Its store | 2.4 GB | 499 MiB (0.52 GB) |
 | Field Kit | 3,272,540,160 bytes (3.3 GB) | 2,343,387,136 bytes (2.3 GB) |
 | Its store | 1.9 GB | 943 MiB (0.99 GB) |
+
+Field Kit then left NVIDIA's driver out of its store (also 2026-11-01, before 0.1.4): 1,713,520,640
+bytes (1.7 GB), its store 339 MiB (0.36 GB) in 50 package files.
 
 An installed system's disk is about 2 GB smaller too: pacman's cache no longer holds every
 package it was installed from.

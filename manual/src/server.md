@@ -28,7 +28,9 @@ Start the bromigOS USB stick and choose **Install bromigOS Server** in its boot 
 Or start [Field Kit](fieldkit.md) from its USB stick and choose **Install bromigOS Server**
 in its boot menu, or **Install › bromigOS Server (no desktop)** in Field Kit. Both images
 are on the [Download page](https://bromigos.org/download). Nothing is downloaded, unless
-you pick something marked as needing the internet. The installer's server steps (its roles, where its keys live, network, who can sign
+you pick something marked as needing the internet, or the computer has an NVIDIA graphics
+card: NVIDIA's driver isn't on the sticks, so it downloads during the install, or with no
+internet it installs by itself at the first update with it. The installer's server steps (its roles, where its keys live, network, who can sign
 in, data disks, encryption, updates and what it runs) are in [Setting up bromigOS
 Server](server-setup.md).
 

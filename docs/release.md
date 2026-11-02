@@ -220,7 +220,7 @@ by CI (`.github/workflows/iso.yml`), with nobody at a workstation:
 | Image | File | Size (main, 2026-11-01) | What it is |
 |---|---|---|---|
 | The desktop medium | `bromigos-X.Y.Z-x86_64.iso` | about 3.2 GB | The live desktop and its installer (desktop or bromigOS Server) |
-| Field Kit | `bromigos-fieldkit-X.Y.Z-x86_64.iso` | about 2.3 GB | Repair, the lab and tools, and the bromigOS Server installer ([fieldkit.md](fieldkit.md)) |
+| Field Kit | `bromigos-fieldkit-X.Y.Z-x86_64.iso` | about 1.7 GB | Repair, the lab and tools, and the bromigOS Server installer ([fieldkit.md](fieldkit.md)) |
 
 [iso.md](iso.md#a-releases-iso) has the details:
 
