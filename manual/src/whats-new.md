@@ -45,9 +45,9 @@ This release candidate makes setup and everyday use clearer, with a redesigned i
 
 ### New
 
-- **Steam and Proton keep themselves ready.** **Settings › Playing games** sets up Steam and the drivers your graphics cards need. bromigOS installs the newest GE-Proton, keeps it current, and repairs what would stop a game, after each update and whenever you quit Steam. The page says **Games are ready** or what needs you, with **Fix**. DLSS works in Proton games on NVIDIA. See Playing games.
-- **Choose what each graphics card is for.** **Settings › Graphics** lists every card. Pick the one that draws the desktop (tried first, with a way back), the one games and heavy apps run on, and one kept for virtual machines. From a terminal: `bromigos hw graphics`, `hw display`, `hw games`, `hw run` and `hw vfio`. See Choose what each card is for.
-- **Bluetooth devices.** **Settings › Bluetooth** has a page for each device and pairs new ones step by step. A controller tester shows each button and stick live, by the pad's real layout, and makes it rumble. Headphones switch between hi-fi and headset with a microphone. `bromigos bluetooth tui` is the same in a terminal. See Bluetooth.
+- **Steam and Proton keep themselves ready.** **Settings › Playing games** sets up Steam and the drivers your graphics cards need. bromigOS installs the newest GE-Proton, keeps it current, and repairs what would stop a game, after each update and whenever you quit Steam. The page says **Games are ready** or what needs you, with **Fix**. DLSS works in Proton games on NVIDIA. See [Playing games](games.md).
+- **Choose what each graphics card is for.** **Settings › Graphics** lists every card. Pick the one that draws the desktop (tried first, with a way back), the one games and heavy apps run on, and one kept for virtual machines. From a terminal: `bromigos hw graphics`, `hw display`, `hw games`, `hw run` and `hw vfio`. See [Choose what each card is for](hardware.md#choose-what-each-card-is-for).
+- **Bluetooth devices.** **Settings › Bluetooth** has a page for each device and pairs new ones step by step. A controller tester shows each button and stick live, by the pad's real layout, and makes it rumble. Headphones switch between hi-fi and headset with a microphone. `bromigos bluetooth tui` is the same in a terminal. See [Bluetooth](bluetooth.md).
 - The `bromigos login` command shows a QR code for the sign-in page, so you can scan it with your phone instead of typing the code.
 - `bromigos media cast` finds screens and speakers around your home and plays a title, link or what a den screen shows on one of them. You can control playback and hand it back to the den.
 - Wired network cards keep Wake-on-LAN on across restarts and updates, so a powered-off computer with a cable can be woken from your network. Check it with `bromigos wol status`.
@@ -55,7 +55,7 @@ This release candidate makes setup and everyday use clearer, with a redesigned i
 - The installer now has graphical and text modes from the boot menu, can install alongside another operating system, erase a disk, or reinstall and keep files.
 - The welcome tour runs at first login after an install, helping with Wi-Fi, screens, theme, VECTOR, lab setup and phone pairing. Open it again from Settings › About or `bromigos welcome`.
 - Secure Boot can stay on, with a themed boot menu and a one-time key enrollment shown by the installer.
-- bromigOS Field Kit and bromigOS Server add no-desktop editions for repair, lab and server use. Your lab can also run its own private network with `bromigos lab network`.
+- bromigOS Field Kit and bromigOS Server add no-desktop editions for repair, lab and server use. Field Kit has its own ISO; `fieldkit usb` makes a stick from a downloaded one. See [Field Kit](fieldkit.md). Your lab can also run its own private network with `bromigos lab network`.
 - `bromigos alerts` checks drives, space, updates, backups, services and games, and tells the desktop or your phone what needs attention.
 - The installer and welcome tour can guide you with VECTOR's voice, captions, screen reader, larger text, high contrast and reduced motion.
 - Den TV's mascot hosts the guide and shows short silent clips between items; turn it off in Settings › Mascot or `bromigos mascot`.
@@ -67,7 +67,7 @@ This release candidate makes setup and everyday use clearer, with a redesigned i
 - The keyring, oo7, is now built from oo7's own source, unchanged. The fix that keeps a text console login from stopping the keyring is part of oo7 itself now, so bromigOS no longer carries its own patch.
 - After an update, programs still using old files restart themselves, and any that need you are listed.
 - The bar and live layer start reliably at login and come back if they are stopped.
-- Installing from the USB stick copies the live system, making downloads smaller and installs faster.
+- Smaller downloads: the install stick is now about 3.2 GB (it was 5 GB), and Field Kit about 1.7 GB. Installing copies the live system onto the disk, so installs are faster and use about 2 GB less disk. Field Kit downloads NVIDIA's driver during the install when it finds an NVIDIA card. Both are on the [Download page](https://bromigos.org/download).
 - If you switch to an update channel that isn't ready yet, bromigOS waits and switches by itself later.
 
 ### Fixed
