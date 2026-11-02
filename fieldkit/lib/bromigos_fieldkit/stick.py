@@ -14,9 +14,7 @@ import sys
 import tempfile
 import time
 
-from . import system
-
-IMAGE = "/usr/share/bromigos/fieldkit/bromigos-fieldkit.iso"
+from . import image, system
 
 
 def toml_str(s):
@@ -52,11 +50,12 @@ def gather(a, out):
 
 
 def source_image(a):
-    if getattr(a, "iso", None):
-        return a.iso
-    if os.path.isfile(IMAGE):
-        return IMAGE
-    sys.exit("make-stick: no Field Kit image here (sudo pacman -S bromigos-fieldkit)")
+    """--iso FILE, this Field Kit stick when it's running from one, else a downloaded Field Kit
+    ISO (image.py). Exits with plain words when there's none."""
+    try:
+        return image.find(getattr(a, "iso", None))
+    except image.NoImage as e:
+        sys.exit(str(e))
 
 
 def partitions(dev):
@@ -104,6 +103,11 @@ def write_settings(part, folder):
 
 def make_stick(a, need_root, argv):
     dev = a.device
+    if os.geteuid() != 0 and dev and not a.settings_only:
+        # the ISO, found as you (your Downloads), before sudo; the root half gets it as --iso
+        argv = image.with_image(a, argv)
+        if argv is None:
+            return 1
     if os.geteuid() != 0:
         folder = tempfile.mkdtemp(prefix="fieldkit-settings-")
         n = gather(a, folder)
@@ -131,13 +135,22 @@ def make_stick(a, need_root, argv):
         print(f"Settings written to {part}.")
         return 0
     iso = source_image(a)
+    if os.path.realpath(iso) == os.path.realpath(dev):
+        sys.exit(f"{dev} is the stick Field Kit is running from. Choose another drive.")
     if not a.yes:
         ans = input(f"Everything on {dev} will be replaced by Field Kit. Type the drive's name ({os.path.basename(dev)}) to go ahead: ")
         if ans.strip() != os.path.basename(dev):
             print("Nothing written.")
             return 1
     print(f"Writing {os.path.basename(iso)} to {dev}…")
-    rc = subprocess.call(["dd", f"if={iso}", f"of={dev}", "bs=4M", "conv=fsync", "oflag=direct", "status=progress"])
+    cmd = ["dd", f"if={iso}", f"of={dev}", "bs=4M", "conv=fsync", "oflag=direct", "status=progress"]
+    if not os.path.isfile(iso):
+        # this Field Kit stick's device: only as many bytes as its ISO holds (isosize)
+        n = int(system.run(["isosize", iso], check=False).stdout.strip() or 0)
+        if not n:
+            sys.exit("make-stick: couldn't tell this stick's size")
+        cmd += ["iflag=fullblock,count_bytes", f"count={n}"]
+    rc = subprocess.call(cmd)
     if rc != 0:
         sys.exit("make-stick: writing the medium failed")
     part = add_partition(dev)

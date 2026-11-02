@@ -9,7 +9,10 @@ You can start it three ways:
 - **From your boot menu.** Choose **bromigOS Field Kit**. It's also in the computer's own
   boot menu (often <kbd>F8</kbd>, <kbd>F11</kbd> or <kbd>F12</kbd> as it starts), so it
   works even when the bromigOS boot menu itself is broken.
-- **From a USB stick.** Write the Field Kit ISO to a stick, or put it on a Ventoy stick.
+- **From a USB stick.** Download the Field Kit ISO (about 2.3 GB) from the
+  [Download page](https://bromigos.org/download), next to the desktop's. Write it to a stick
+  the same way as the desktop's ([Make the USB stick](install.md#3-make-the-usb-stick)), or
+  copy it onto a Ventoy stick. A stick of 4 GB or more does.
 - **From the bromigOS ISO.** Choose **Field Kit (repair, lab and tools)**.
 
 A Field Kit stick opens on its own boot menu. **Start Field Kit** is the usual choice. The
@@ -85,11 +88,14 @@ on your install.
 ## Get help from someone else
 
 **Remote help** lets someone you trust work on the machine over SSH. Turn it on in
-**Shell › Remote help**, or choose **Field Kit with remote help** in the stick's boot menu.
-The bottom line then says **REMOTE HELP ON**, with the address and a one-time password to
+**Shell › Remote help**, or choose **Start Field Kit · remote help over SSH** in the
+stick's boot menu. The bottom line then says **REMOTE HELP ON**, with the address and a one-time password to
 give them. Turn it off in the same place when they're done.
 
 ## Make your own stick
+
+First download the Field Kit ISO from the [Download page](https://bromigos.org/download)
+into your Downloads folder. Then:
 
 ```bash
 bromigos fieldkit make-stick
@@ -100,6 +106,11 @@ The first command lists your USB drives. The second writes Field Kit to one, wit
 key, your Wi-Fi network and your lab connection already on it. Everything on the drive is
 replaced, so you type its name to confirm. Scripts you put in the stick's `fieldkit/autorun/`
 folder run at every start.
+
+It uses the newest Field Kit ISO in your Downloads folder. If there's none, it offers to
+download it for you, and checks it before using it. To use a file somewhere else, add
+`--iso FILE`. On a Field Kit stick, it copies the stick it's running from.
+`bromigos fieldkit usb /dev/sdX` writes Field Kit the same way, without your settings.
 
 ## Your settings on the stick
 

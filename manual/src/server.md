@@ -23,9 +23,11 @@ console, the terminal apps, and [Field Kit](fieldkit.md)'s repairs. It adds:
 
 ## Install it
 
-Start the bromigOS USB stick and choose **bromigOS Server** at **What kind of computer is
-this?** ([The installer](installer.md)). Or start [Field Kit](fieldkit.md) from its USB
-stick and choose **Install › bromigOS Server (no desktop)**. Nothing is downloaded, unless
+Start the bromigOS USB stick and choose **Install bromigOS Server** in its boot menu, or
+**bromigOS Server** at **What kind of computer is this?** ([The installer](installer.md)).
+Or start [Field Kit](fieldkit.md) from its USB stick and choose **Install bromigOS Server**
+in its boot menu, or **Install › bromigOS Server (no desktop)** in Field Kit. Both images
+are on the [Download page](https://bromigos.org/download). Nothing is downloaded, unless
 you pick something marked as needing the internet. The installer's server steps (its roles, where its keys live, network, who can sign
 in, data disks, encryption, updates and what it runs) are in [Setting up bromigOS
 Server](server-setup.md).

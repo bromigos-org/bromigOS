@@ -472,13 +472,14 @@ Some entries need more than archiso gives:
   session running there.
 - **Memory test on UEFI.** memtest86+-efi 8 names its binary `memtest86x64.efi`, which
   mkarchiso 91 doesn't copy. The build puts it in `grub/` and the menu finds it there.
-- **Boot from disk on UEFI** reads the installed system's own `grub.cfg` from another
-  disk. A GRUB chainloaded from another GRUB can't find its prefix, so the medium's GRUB
+- **Start the system on this computer's disk, on UEFI,** reads the installed system's own
+  `grub.cfg` from another disk. A GRUB chainloaded from another GRUB can't find its prefix, so the medium's GRUB
   reads the config directly. If there's no GRUB, it tries systemd-boot, limine, Windows
   or a removable-path loader, then `exit` (the firmware's next device). It runs
   `connectefi all` first, because firmware that booted the medium quickly may not have
   connected the other disks.
-- **Boot from disk on BIOS** runs `chain.c32 hd0 0`. Press Tab to pick another disk.
+- **Start the system on this computer's disk, on BIOS,** runs `chain.c32 hd0 0`. Press Tab
+  to pick another disk.
 
 `loopback.cfg` has the same entries, for booting the ISO as a file from another GRUB.
 archiso 91 copies everything in the profile's `grub/` folder that isn't a `.cfg` to the

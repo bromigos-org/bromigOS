@@ -229,21 +229,24 @@ first. Its installer is a few plain steps, graphical or in text mode: install
 or **erase the whole disk**, as the **desktop** or as **bromigOS Server**. The disk is
 encrypted by default, and no network is needed. Download it from the
 [Download page](https://bromigos.org/download), which also says how to make the USB stick
-and start from it. Each release's ISO is one signed file at
-`https://pkgs.bromigos.org/iso/<version>/`, built and tested by CI
+and start from it. Each release has two ISOs, each one signed file at
+`https://pkgs.bromigos.org/iso/<version>/`: the desktop (about 3.2 GB) and Field Kit
+(about 2.3 GB), built and tested by CI
 ([docs/iso.md](docs/iso.md#a-releases-iso)). It starts with Secure Boot on, and so does
 the installed system: each asks you to approve bromigOS once, at its first start
 ([docs/secureboot.md](docs/secureboot.md)).
 
 ![The ISO's boot menu: BROMIGOS // RELAY MEDIUM over the den, the burn-in emblem, and the
-entries to start bromigOS live, install it, start with safe graphics, test memory or
-boot from disk](docs/images/iso-menu.webp)
+entries Start bromigOS (try it first), Install bromigOS, Install bromigOS Server, Field Kit
+(repair, lab and tools), Start with basic graphics and More options](docs/images/iso-menu.webp)
 
-**Field Kit: Repair. Recon. Deploy.** Fix any computer, run your lab, install a server. No internet needed. A smaller ISO for repair, the lab and servers.
-It boots to a themed text console with a menu: fix a bromigOS install that won't start (a
-black screen, a broken boot menu, a bad update), image or erase disks, run the lab console,
-or install **bromigOS Server**, the headless edition, with no network. Every bromigOS
-install also has it in its boot menu. See [docs/fieldkit.md](docs/fieldkit.md) and
+**Field Kit: Repair. Recon. Deploy.** Fix any computer, run your lab, install a server.
+No internet needed. A smaller ISO for repair, the lab and servers, on the same
+[Download page](https://bromigos.org/download). It boots to a themed text console with a
+menu: fix a bromigOS install that won't start (a black screen, a broken boot menu, a bad
+update), image or erase disks, run the lab console, or install **bromigOS Server**, the
+headless edition, with no network. Every bromigOS install also has it in its boot menu,
+and the desktop ISO's menu has a **Field Kit (repair, lab and tools)** entry. See [docs/fieldkit.md](docs/fieldkit.md) and
 [docs/server.md](docs/server.md).
 
 More detail: the manual's [Install](manual/src/install.md) page, and

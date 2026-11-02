@@ -214,43 +214,80 @@ Every workflow has a **dry run** switch, on by default.
 
 ## The ISO
 
-Each stable release's installer image is built, checked, tested, signed and published by
-CI (`.github/workflows/iso.yml`), with nobody at a workstation. [iso.md](iso.md#a-releases-iso)
-has the details:
+Each stable release has two installer images, built, checked, tested, signed and published
+by CI (`.github/workflows/iso.yml`), with nobody at a workstation:
+
+| Image | File | Size (main, 2026-11-01) | What it is |
+|---|---|---|---|
+| The desktop medium | `bromigos-X.Y.Z-x86_64.iso` | about 3.2 GB | The live desktop and its installer (desktop or bromigOS Server) |
+| Field Kit | `bromigos-fieldkit-X.Y.Z-x86_64.iso` | about 2.3 GB | Repair, the lab and tools, and the bromigOS Server installer ([fieldkit.md](fieldkit.md)) |
+
+[iso.md](iso.md#a-releases-iso) has the details:
 
 1. When `packages.yml` has published a `vX.Y.Z` tag's stable channel, the workflow builds
-   the ISO from the tag, from the public repository, which the medium names for updates,
-   signed for Secure Boot ([secureboot.md](secureboot.md)).
-2. It checks what's on it (`iso/check-medium.sh`: the repository it names, no keys or CA,
-   no proprietary packages, the privacy guard, the pictures).
-3. It tests it in QEMU with KVM, UEFI and BIOS, one of them with no network: the live
-   session, an install, the first boot, the first update and its rollback; and the medium
-   with Secure Boot on.
-4. It signs it with the package signing key (a detached, armoured `.sig`).
-5. It publishes it as one file to `https://pkgs.bromigos.org/iso/X.Y.Z/`, with its
-   `.sha256`, `.sig` and `.json`, moves `iso/latest.json` to it, keeps the newest three
-   releases' ISOs, and puts the links and checksum on the GitHub Release's `ISO:` line.
-   The [Download page](https://bromigos.org/download) follows `latest.json`.
+   both from the tag, side by side (one matrix job per profile under `iso/`: `profile`, the
+   desktop, and `fieldkit`), from the public repository, which each medium names for
+   updates, signed for Secure Boot ([secureboot.md](secureboot.md)).
+2. Each is checked (`iso/check-medium.sh`: the repository it names, no keys or CA, no
+   proprietary packages, the privacy guard, the pictures).
+3. Each is tested in QEMU with KVM. The desktop: UEFI and BIOS, one of them with no
+   network: the live session, an install, the first boot, the first update and its
+   rollback, and the medium with Secure Boot on. Field Kit: its menu on UEFI and BIOS, then
+   its own `iso/fieldkit/ci-test.sh`.
+4. Each is signed with the package signing key (a detached, armoured `.sig`).
+5. Each is published as one file to `https://pkgs.bromigos.org/iso/X.Y.Z/`, with its
+   `.sha256`, `.sig` and `.json` (`iso/publish.sh upload`), then downloaded back as a
+   stranger and checked against its checksum.
+6. Once both builds are done, the `finish` job (`iso/publish.sh pointers`) writes each
+   version's `index.json` (every ISO of the version), copies the newest one that has the
+   desktop medium to `iso/latest.json`, keeps the newest three releases, and puts both
+   ISOs' links, sizes and checksums on the GitHub Release's `ISO:` line
+   (`iso/release-notes.py`). The [Download page](https://bromigos.org/download) follows
+   `latest.json` and shows both.
 
-A release candidate gets no ISO. The edge channel gets one every week. Building one
+**When one build fails.** Each build publishes its own ISO only after its own checks and
+tests pass, so a build that fails before its Sign and publish step publishes nothing.
+`finish` still runs as long as the desktop medium is published whole (it checks the
+`.json`, and downloads the ISO again against that checksum). So a failed Field Kit build
+moves `latest.json` to the new release with the desktop's ISO alone, and the run is marked
+failed. A failed desktop build leaves `latest.json` on the release before, and the Download
+page with it; even a later run, such as a backfill of an older release, won't point it at a
+version with Field Kit alone. Fix the cause, then re-run the failed jobs
+(`gh run rerun RUN -R bromigos-org/bromigOS --failed`): the build publishes its ISO and
+`finish` runs again, listing both. Before 2026-11-01, `finish` needed every build to
+succeed, so a failed Field Kit build held back `latest.json` for both.
+
+A release candidate gets no ISO. The edge channel gets both every week. Building them
 again, or from a fix made after the tag: `gh workflow run iso -f channel=stable -f
 tag=vX.Y.Z -f ref=main`.
 
-Downloading it is one file, checked against its checksum and `packaging/keys/bromigos.asc`:
+Downloading one is one file, checked against its checksum and `packaging/keys/bromigos.asc`:
 
 ```bash
-sha256sum -c bromigos-0.1.3-x86_64.iso.sha256
-gpg --verify bromigos-0.1.3-x86_64.iso.sig bromigos-0.1.3-x86_64.iso
+sha256sum -c bromigos-0.1.4-x86_64.iso.sha256
+gpg --verify bromigos-0.1.4-x86_64.iso.sig bromigos-0.1.4-x86_64.iso
+sha256sum -c bromigos-fieldkit-0.1.4-x86_64.iso.sha256
+gpg --verify bromigos-fieldkit-0.1.4-x86_64.iso.sig bromigos-fieldkit-0.1.4-x86_64.iso
 ```
 
-Installing needs no network. An installed system updates from `https://pkgs.bromigos.org`.
+`latest.json` lists both in `isos`, each with its `edition` (`bromigos` or
+`bromigos-fieldkit`), `file`, `url`, `size`, `sha256`, `sha256_url` and `sig_url`:
+
+```bash
+curl -fsSL https://pkgs.bromigos.org/iso/latest.json | jq -r '.isos[] | "\(.edition) \(.url)"'
+```
+
+Installing needs no network: an install copies the medium's live system onto the disk and
+adds the rest from a small offline store on it. An installed system updates from
+`https://pkgs.bromigos.org`.
 
 v0.1.2 was the first release with an ISO. The first one, attached on 2026-10-09, named the
 bucket's r2.dev address. It was replaced on 2026-10-10 with one that names
 `pkgs.bromigos.org`, and a migration moves machines installed from the first one
 ([public.md](public.md#the-r2dev-address)). [iso.md](iso.md#test-runs) has both runs.
 Until v0.1.3 the ISO was made by hand and attached to the GitHub Release in parts, because
-GitHub takes files under 2 GiB; v0.1.2's moved to the bucket on 2026-10-30.
+GitHub takes files under 2 GiB; v0.1.2's moved to the bucket on 2026-10-30. v0.1.3 and
+older have the desktop medium only; Field Kit is published from the release after.
 
 ## The public repository
 
@@ -298,7 +335,7 @@ no PRs.
 | `tools/release/guard.py`, `privacy_guard.py` | the privacy check |
 | `tools/release/checksums.sh` | SHA256SUMS from the channel's signed database, signed |
 | `tools/release/go-public.sh`, `test_go_public.py` | making the package repository public ([public.md](public.md)), and its tests |
-| `.github/workflows/iso.yml`, `iso/build.sh`, `iso/check-medium.sh`, `iso/ci-test.sh`, `iso/publish.sh` | a release's ISO: built, checked, tested, signed and published by CI ([iso.md](iso.md#a-releases-iso)) |
+| `.github/workflows/iso.yml`, `iso/build.sh`, `iso/check-medium.sh`, `iso/ci-test.sh`, `iso/publish.sh` | a release's two ISOs (the desktop and Field Kit): built, checked, tested, signed and published by CI ([iso.md](iso.md#a-releases-iso)) |
 | `tools/release/current.json` | written by each release PR: the release its commit prepares |
 | `CHANGELOG.md`, `manual/src/whats-new.md` | the technical log, and the notes for users |
 

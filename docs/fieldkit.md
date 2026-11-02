@@ -13,7 +13,7 @@ with seven sections:
 - **Tools**: the toolbelt: system monitors, disk and network tools, editors, file recovery.
 - **Server**: install bromigOS Server, or look after the one this is ([server.md](server.md)).
 - **Install**: install bromigOS Server (no desktop, for servers and lab machines) from the
-  stick, with no network; or the full desktop, which downloads it.
+  stick, with no network; or the full desktop, which downloads it (about 2 GB).
 - **Shell**: a command line, remote help, power.
 
 Everything that doesn't talk to another machine works with no network at all. The medium
@@ -26,7 +26,7 @@ for people using it, and [server.md](server.md) covers bromigOS Server.
 
 | From | How | What's there |
 |---|---|---|
-| Its own medium | `bromigos-fieldkit-<version>-x86_64.iso` on a USB stick, or through Ventoy | Everything, with the offline store |
+| Its own medium | `bromigos-fieldkit-<version>-x86_64.iso` (about 2.3 GB, from the [Download page](https://bromigos.org/download), or `https://pkgs.bromigos.org/iso/<version>/`) on a USB stick, or through Ventoy | Everything, with the offline store |
 | The full ISO's boot menu | "Field Kit (repair, lab and tools)" | The full medium's own system, started without the desktop |
 | An installed system's boot menu | "bromigOS Field Kit" (package `bromigos-fieldkit`) | Everything but the offline store, started from `/boot` |
 
@@ -529,12 +529,22 @@ It gathers your settings as you: your public SSH keys (`~/.ssh/id_*.pub`, or `--
 the Wi-Fi networks you name, and your lab connection. Then, as root, it writes the medium
 as it is (never rebuilt), adds a 256 MiB FAT partition labelled `FIELDKIT` in the space
 after it, and puts your `fieldkit/` folder there. You type the drive's name to confirm.
-The medium comes from the running Field Kit, `--iso FILE`, or a downloaded ISO.
+The medium is, in this order: `--iso FILE`; the running Field Kit stick itself (its device,
+as many bytes as `isosize` says); the newest `bromigos-fieldkit-<version>-x86_64.iso` in
+your Downloads folder (XDG's `XDG_DOWNLOAD_DIR`, else `~/Downloads`), your home folder or
+the current folder. With none, at a terminal, it offers to download the newest one into
+Downloads (the address and SHA-256 from `https://pkgs.bromigos.org/iso/latest.json`,
+checked before the file gets its name); otherwise it says to download it from the
+[Download page](https://bromigos.org/download). The ISO is found as you, before `sudo`,
+and handed on as `--iso`. `bromigos fieldkit usb DEV [--iso FILE]` finds it the same way
+and writes it with no settings partition. No package carries the ISO: `bromigos-fieldkit`
+carries only the boot menu's copy (kernel, initramfs, system; no store), which can't make a
+stick. `fieldkit/lib/bromigos_fieldkit/image.py` has the lookup.
 
 ## Remote help
 
 Remote help lets someone you trust work on the machine over SSH. It's off until you turn
-it on: from the boot menu ("with remote help"), the menu's Shell section, the stick's
+it on: from the boot menu ("Start Field Kit · remote help over SSH"), the menu's Shell section, the stick's
 `[ssh] start = true`, or `sudo bromigos fieldkit remote on`.
 
 - With a key on the stick, SSH takes that key only.

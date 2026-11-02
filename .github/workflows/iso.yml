@@ -376,18 +376,42 @@ jobs:
             gh release delete-asset "$TAG" "$p" -R "$GITHUB_REPOSITORY" --yes
           done
 
+  # Each build publishes its own ISO only once its checks and tests passed, so when one fails
+  # the pointers still follow what did publish, as long as the desktop medium is among it:
+  # Field Kit failing moves latest.json to the new version with the desktop's ISO alone; the
+  # desktop's failing leaves it where it was. The run still fails, and re-running its failed
+  # jobs runs this again
   finish:
     name: Pointers, retention, the Release's text
     needs: [plan, build, import]
     if: >-
       always() && needs.plan.outputs.publish == 'true' && needs.plan.result == 'success' &&
-      (needs.build.result == 'success' || needs.import.result == 'success')
+      (needs.build.result == 'success' || needs.build.result == 'failure' || needs.import.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v5
+      - name: A build failed; the desktop medium is published
+        if: needs.build.result == 'failure'
+        shell: bash
+        env:
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          public=$(sed -n "s/^PUBLIC_REPO=\([^ ]*\).*/\1/p" install.sh | tr -d "'\"")
+          d=iso; [[ $CHANNEL == edge ]] && d=iso/edge
+          url=${public%/}/$d/$VERSION/bromigos-$VERSION-x86_64.iso
+          # its .json, and the ISO it describes, downloaded as a stranger would, with that
+          # checksum: the desktop's build may be the one that failed, even after uploading
+          want=$(curl -fsSL --retry 3 "$url.json" | jq -r .sha256) || want=''
+          got=$(curl -fsSL --retry 3 "$url" | sha256sum | awk '{print $1}') || got=''
+          if [[ -z $want || $want != "$got" ]]; then
+            echo "::error::the desktop medium of $VERSION isn't published whole, so latest.json stays where it was"; exit 1
+          fi
+          echo "::warning::a build failed; latest.json follows the ISOs that were published ($url)"
       - name: latest.json, and the versions kept
         id: pointers
         shell: bash

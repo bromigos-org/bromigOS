@@ -9,6 +9,9 @@ On an existing system, use the script below or [start from the AUR](#start-from-
 - **From the bromigOS USB stick.** It boots straight into the desktop, and installs from
   there. Download it from the [Download page](https://bromigos.org/download), then see
   [Install from the USB stick](#install-from-the-usb-stick).
+- **On a server or lab machine with no screen.** The [Field Kit](fieldkit.md) stick, from
+  the same [Download page](https://bromigos.org/download), installs
+  [bromigOS Server](server.md) with no network. The desktop's stick can install Server too.
 
 ## Install only the lab console
 
@@ -135,11 +138,18 @@ same step by hand.
 Download the newest image from the [Download page](https://bromigos.org/download). It's
 one file of about 3.2 GB.
 
+The same page has a second, smaller image: [Field Kit](fieldkit.md) (about 2.3 GB), for
+repairs, the lab, and installing [bromigOS Server](server.md) on a machine with no screen.
+You don't need it to install the desktop: the desktop's stick has a Field Kit entry, and
+an installed system can start Field Kit from its own boot menu.
+
 **From a terminal.** Every release's image is at
 `https://pkgs.bromigos.org/iso/<version>/bromigos-<version>-x86_64.iso`, beside its
-`.sha256`, `.sig` and `.json`. `https://pkgs.bromigos.org/iso/latest.json` names the
-newest; `https://pkgs.bromigos.org/iso/edge/latest.json` the weekly edge build. The
-newest three releases are kept.
+`.sha256`, `.sig` and `.json`, and Field Kit's beside it as
+`bromigos-fieldkit-<version>-x86_64.iso`. `https://pkgs.bromigos.org/iso/latest.json`
+names the newest release's images (`edition` is `bromigos` or `bromigos-fieldkit`);
+`https://pkgs.bromigos.org/iso/edge/latest.json` the weekly edge build. The newest three
+releases are kept.
 
 ```bash
 url=$(curl -fsSL https://pkgs.bromigos.org/iso/latest.json | jq -r '.isos[] | select(.edition == "bromigos") | .url')
@@ -200,13 +210,15 @@ Recovery, Advanced startup, Restart now, then Use a device.
 
 The stick's boot menu comes up:
 
-![The stick's boot menu: Start bromigOS (try it live), Install bromigOS, safe graphics, the
-memory test, boot from disk](images/boot-menu-stick.webp)
+![The stick's boot menu: Start bromigOS (try it first), Install bromigOS, Install bromigOS
+Server, Field Kit (repair, lab and tools), Start with basic graphics and More
+options](images/boot-menu-stick.webp)
 
 **From a terminal**, or rather the menu's own editor: press <kbd>e</kbd> on an entry in
 GRUB (UEFI), or <kbd>Tab</kbd> in the BIOS menu, to change its kernel line. The entries
 share archiso's line (`archisobasedir=arch archisosearchuuid=… splash quiet`); **Install
-bromigOS** adds `bromigos.install`, which opens the installer at login, safe graphics adds
+bromigOS** adds `bromigos.install bromigos.edition=desktop`, which opens the installer at
+login, **Install bromigOS Server** `bromigos.install bromigos.edition=server`, basic graphics
 `nomodeset`, the screen reader `accessibility=on`. archiso's own options work too, such
 as `copytoram` to run from memory and free the stick, or `cow_spacesize=4G` for more room
 for changes in the live session. [The boot menu](boot-menu.md#the-install-stick) describes
@@ -296,7 +308,7 @@ has the details: the keys, the hooks, recovery.
 ![The live desktop from the stick: the bar, the system and network panels, the Wick's den](images/live-desktop-stick.webp)
 
 1. In the boot menu, choose **Install bromigOS**. Or choose **Start bromigOS (try it
-   live)** to look around first: a welcome card offers **Try bromigOS** or **Install
+   first)** to look around first: a welcome card offers **Try bromigOS** or **Install
    bromigOS**, and the desktop's INSTALL panel opens the installer whenever you're ready.
 
    ![The live desktop's welcome card: Try bromigOS or Install bromigOS](images/live-welcome-card.webp)

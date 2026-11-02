@@ -12,8 +12,11 @@ can go back and change anything.
 
 - In the stick's boot menu, choose **Install bromigOS**. The live desktop starts with the
   installer already open.
-- Or choose **Install bromigOS (text mode)** for the text installer. There's no desktop.
-- Or choose **Start bromigOS (try it live)** to look around first. A welcome card offers
+- Or choose **Install bromigOS Server** for [bromigOS Server](server.md), the edition with no
+  desktop. It opens the text installer. A [Field Kit](fieldkit.md) stick has the same entry.
+- Or open **More options ›** and choose **Install bromigOS with the text installer** for the
+  desktop's text installer. There's no desktop while it runs.
+- Or choose **Start bromigOS (try it first)** to look around first. A welcome card offers
   **Try bromigOS** or **Install bromigOS**. Later, the desktop's **INSTALL** panel or
   "Install bromigOS" in the app launcher opens the installer.
 

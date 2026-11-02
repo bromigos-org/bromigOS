@@ -525,8 +525,8 @@ def _lab(ctx, m):
 
 
 @shot("boot-menu", "The boot menu",
-      "The install medium's boot menu (GRUB, the Wick's theme) as GRUB itself draws it in a VM: try it live, "
-      "install, safe graphics, memtest, boot from disk, the screen reader.")
+      "The install medium's boot menu (GRUB, the Wick's theme) as GRUB itself draws it in a VM: try it first, "
+      "install bromigOS or bromigOS Server, Field Kit, basic graphics, More options and the help page.")
 def _boot(ctx, m):
     t = os.path.join(ctx.work, "grub-theme")
     o = os.path.join(ctx.work, "grub-shots")
