@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Install bromigOS from the live medium (docs/iso.md): archinstall builds the Arch system
 # (btrfs on LUKS2, GRUB with snapper's snapshots in its menu) and bromigOS's own installer
-# runs in it, all from the medium's offline repository.
+# runs in it, all from the medium. The live system is the system installed: archinstall's
+# first package step copies it onto the disk (archinstall_copy.py, bromigos_installer/copyroot.py),
+# its own pieces go, and the medium's offline store adds what it doesn't have (docs/iso.md,
+# "How installing works"). An install from the internet (--online's edition) installs packages.
 #
 #   bromigos-iso-install                      the installer, in this terminal (the text
 #                                             installer: the same steps as the graphical one)
@@ -31,6 +34,8 @@ lib=/usr/local/lib/bromigos-iso
 repo_dir=/var/lib/bromigos/repo
 target=/mnt                      # where archinstall mounts the new system (4.x; older: /mnt/archinstall)
 log=/var/log/bromigos-iso-install.log
+copy_manifest=usr/local/share/bromigos-iso/copy/manifest.json   # a medium that installs by copying
+strapped=/run/bromigos-iso/strapped.txt                         # archinstall's package steps (the plugin's record)
 
 config='' creds='' answers='' repo='' ca='' channel='' sshkey='' reboot=1 dry=0 menu=0 extras=()
 desktop=1 mode=erase other_os=0 online=0 full_name='' xkb_layout='' xkb_variant=''   # from --answers
@@ -171,6 +176,16 @@ fi
 # ── 1. archinstall: the Arch system ─────────────────────────────────────────────────────
 args=(--config "$config" --creds "$creds" --skip-ntp --skip-wkd --skip-version-check --skip-wifi-check)
 (( online )) || args+=(--offline)
+# from the medium: the live system copied at archinstall's first package step (its plugin), the
+# store's packages after it; online, every package from the mirrors as before
+copy=0
+if (( ! online )) && [[ -f /run/archiso/airootfs/$copy_manifest || -f /$copy_manifest ]]; then
+    copy=1
+    args+=(--plugin "$lib/archinstall_copy.py")
+    rm -f "$strapped"
+    export BROMIGOS_COPY_TARGET=$target BROMIGOS_COPY_STRAPPED=$strapped
+fi
+say "install: $( (( copy )) && echo 'the live system copied, the rest from the store' || echo 'packages, from the store or the mirrors')"
 # a reinstall's boot loader is reinstall.py's (archinstall reads "No bootloader" only with this)
 [[ ${mode:-} != reinstall ]] || args+=(--skip-boot)
 (( menu )) || args+=(--silent)
@@ -194,6 +209,16 @@ if (( ! dry )); then
     [[ -d $target/etc/pacman.d ]] || target=/mnt/archinstall
     [[ -d $target/etc/pacman.d ]] || { say "archinstall didn't leave a system at /mnt (nor /mnt/archinstall)"; exit 1; }
     say "the new system is at $target"
+fi
+
+# ── 1a. the copy's tidying: what an install from packages has stays (archinstall's packages and
+# --with's, and what they need); the live system's own (its rescue tools, archiso's hooks,
+# archinstall) goes, with what only they needed
+if (( copy && ! dry )); then
+    stage 75 "Tidying up the new system"
+    keep=(); for e in "${extras[@]}"; do keep+=(--with "$e"); done
+    PYTHONPATH=$lib python3 -m bromigos_installer.copyroot prune --target "$target" --strapped "$strapped" "${keep[@]}" 2>&1 | tee -a "$log"
+    (( PIPESTATUS[0] == 0 )) || { now_stage="Tidying up the new system"; false; }
 fi
 
 # ── 1b'. a reinstall: the old system's people back (their user IDs and passwords), the
@@ -278,6 +303,13 @@ for line in open(path).read().split("\n"):
         continue                                      # and the offline copy's servers in core/extra
     out.append(line)
 s = "\n".join(out).rstrip("\n") + f"\n\n[bromigos]\nSigLevel = Required DatabaseOptional\nServer = {repo}/$repo{sub}/$arch\n"
+# what the medium leaves out of every system (NoExtract: other packages' docs; docs/iso.md, "What
+# the systems leave out"), left out here too, so pacman -Qk finds every file it expects
+have = {l.strip() for l in s.split("\n") if l.strip().startswith("NoExtract")}
+want = [l.strip() for l in open("/etc/pacman.conf").read().split("\n") if l.strip().startswith("NoExtract")]
+add = [l for l in want if l not in have]
+if add:
+    s = s.replace("[options]\n", "[options]\n" + "\n".join(add) + "\n", 1)
 open(path, "w").write(s)
 PY
     if [[ -n $ca ]]; then
@@ -523,6 +555,12 @@ if (( ! dry )) && [[ -d /sys/firmware/efi ]] && [[ -x $target/usr/lib/bromigos/s
 fi
 
 stage 96 "Finishing"
+# every package's files are where pacman expects them (pacman -Qk); a package missing some is put
+# back from the store when it's there (the log says what, if anything, is still missing)
+if (( copy && ! dry )); then
+    PYTHONPATH=$lib python3 -m bromigos_installer.copyroot check --target "$target" --repair 2>&1 | tee -a "$log" \
+        || say "pacman -Qk found files missing on the new system (above); \`sudo pacman -S\` of those packages puts them back once online"
+fi
 # the sync databases are the offline copy's, newer than the repositories' own: the first
 # `pacman -Sy` would keep them (it asks "modified since?", the server says no) and check
 # the server's signature against the wrong file. Dated 1970, they're all fetched afresh.

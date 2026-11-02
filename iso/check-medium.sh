@@ -71,10 +71,20 @@ check "no serial console on the kernel line" bash -c "! grep -qs 'console=ttyS0'
 check "not a test build's label" bash -c "! grep -qrs BROMIGOS_TEST '$w'/iso/boot '$w'/iso/EFI"
 check "no root SSH key (Field Kit)" test ! -e "$R/root/.ssh/authorized_keys"
 prop=$(for f in "$offline"/*/os/x86_64/*.pkg.tar.zst "$offline"/bromigos/x86_64/*.pkg.tar.zst; do
+           [[ -f $f ]] || continue
            bsdtar -xOf "$f" .PKGINFO 2>/dev/null | grep -qiE '^license = .*(proprietary|custom:commercial)' && basename "$f"; true
        done | sort -u || true)
 check "no proprietary licence in the offline repository" test -z "$prop"
 [[ -z $prop ]] || printf '     %s\n' $prop
+# an install copies the live system (docs/iso.md, "How installing works"), whose packages'
+# files aren't in the store: their licences, from its pacman database
+liveprop=$(for d in "$R"/var/lib/pacman/local/*/; do
+               awk '/^%LICENSE%$/ { on = 1; next } /^%/ { on = 0 } on && tolower($0) ~ /(proprietary|custom:commercial)/ { found = 1 } END { exit !found }' \
+                   "$d/desc" 2>/dev/null && basename "$d"; true
+           done | sort -u || true)
+check "no proprietary licence in the live system the install copies" test -z "$liveprop"
+[[ -z $liveprop ]] || printf '     %s\n' $liveprop
+check "the copy's manifest and /etc baseline (an install copies this system)" test -s "$R/usr/local/share/bromigos-iso/copy/manifest.json" -a -s "$R/usr/local/share/bromigos-iso/copy/etc.tar"
 echo "     bromigOS's packages on it:"
 for f in "$offline"/bromigos/x86_64/*.pkg.tar.zst; do echo "       $(basename "$f")"; done
 

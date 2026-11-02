@@ -332,14 +332,9 @@ def strength(pw):
 
 # ── the network ─────────────────────────────────────────────────────────────────────────
 def _in_store(name):
-    pat = re.compile(re.escape(name) + r"-[^-]+-[^-]+-[^-]+\.pkg\.tar\.(zst|xz)$")
-    for d in glob.glob(os.path.join(OFFLINE_REPO, "**", "x86_64"), recursive=True):
-        try:
-            if any(pat.match(f) for f in os.listdir(d)):
-                return True
-        except OSError:
-            pass
-    return False
+    """On the medium: in its offline store, or installed in the live system the install copies."""
+    from . import copyroot
+    return copyroot.offline_has(name, OFFLINE_REPO)
 
 
 def needs_download(ed):

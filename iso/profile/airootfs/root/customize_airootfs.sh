@@ -4,6 +4,10 @@
 # and leaves the test hooks only on a test build (iso/build.sh --test-key).
 set -euo pipefail
 
+# ── an install copies this image (docs/iso.md, "How installing works"): /etc as the packages
+#    left it, before this script makes it the medium's (bromigos_installer/copyroot.py)
+PYTHONPATH=/usr/local/lib/bromigos-iso python3 -m bromigos_installer.copyroot prep-begin
+
 # ── the live user: `live`, no password, sudo without one (a live medium; the installed
 #    system's user is the installer's, with a password and the login screen)
 if ! id live >/dev/null 2>&1; then
@@ -65,5 +69,9 @@ if [[ -s /etc/bromigos-iso/test_authorized_keys ]]; then
     rm -f /etc/bromigos-iso/test_authorized_keys
     systemctl enable sshd.service >/dev/null 2>&1 || true
 fi
+
+# ── what an install takes away again (the medium's own files), the package files this image
+#    lacks (kept in the store), and the store without what the image has installed
+PYTHONPATH=/usr/local/lib/bromigos-iso python3 -m bromigos_installer.copyroot prep-finish
 
 echo "customize_airootfs: the live user and its desktop are ready"

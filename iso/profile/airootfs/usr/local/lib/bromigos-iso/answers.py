@@ -58,10 +58,10 @@ OFFLINE_REPO = os.environ.get("BROMIGOS_ISO_REPO_DIR", "/var/lib/bromigos/repo")
 
 
 def in_store(name):
-    import glob
-    import re
-    pat = re.compile(re.escape(name) + r"-[^-]+-[^-]+-[^-]+\.pkg\.tar\.(zst|xz)$")
-    return any(pat.match(os.path.basename(f)) for f in glob.glob(os.path.join(OFFLINE_REPO, "**", "*.pkg.tar.*"), recursive=True))
+    """On the medium: in its offline store, or installed in the live system it copies
+    (bromigos_installer.copyroot: the store's databases list both)."""
+    from bromigos_installer import copyroot
+    return copyroot.offline_has(name, OFFLINE_REPO)
 
 
 def size(unit, value):

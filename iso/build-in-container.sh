@@ -245,13 +245,14 @@ du -sh "$offline" | awk '{print "offline repository: " $1}'
 
 # ── 4. the build's pacman.conf: the offline repository first (what the image's packages
 #      come from: the same files the medium carries), the mirrors after it ──────────────
-# NoExtract: what the running medium never reads stays out of its image (docs/iso.md, "What
-# the live system leaves out"): other packages' docs (bromigOS's own and the manual stay),
-# other languages' messages, man pages and Qt translations (the medium is in English; English
-# man pages stay), GTK's API docs, GObject's .gir XML (the typelibs stay), C headers (Python's
-# stay) and static libraries, and Hyprland's default wallpapers (bromigOS turns them off). Only
-# the image: the live system's own pacman.conf has no NoExtract, and an install's packages come
-# whole from the offline repository, so an installed system has every file
+# NoExtract: what neither the medium nor an installed system has (docs/iso.md, "What the
+# systems leave out"): the live system's own pacman.conf's lines (other packages' docs, GTK's
+# API docs, Hyprland's default wallpapers), the same ones, as an install copies this image and
+# keeps them in its pacman.conf, so `pacman -Qk` is clean. Everything else an installed system
+# needs is in the image whole: other languages (the installer offers them), C headers, static
+# libraries and .gir files (an installed system builds things)
+noextract=$(grep -E '^NoExtract[[:space:]]*=' "$profile/airootfs/etc/pacman.conf" || true)
+[[ -n $noextract ]] || { echo "the live pacman.conf has no NoExtract lines (iso/profile/airootfs/etc/pacman.conf)" >&2; exit 1; }
 cat > "$profile/pacman.conf" <<EOF
 [options]
 HoldPkg     = pacman glibc
@@ -259,14 +260,7 @@ Architecture = auto
 ParallelDownloads = 5
 SigLevel    = Required DatabaseOptional
 LocalFileSigLevel = Optional
-NoExtract   = usr/share/doc/* !usr/share/doc/bromigos*
-NoExtract   = usr/share/locale/* !usr/share/locale/en/* !usr/share/locale/en_US/* !usr/share/locale/locale.alias
-NoExtract   = usr/share/man/* !usr/share/man/man*
-NoExtract   = usr/share/qt6/translations/* !usr/share/qt6/translations/*_en*
-NoExtract   = usr/share/gtk-doc/* usr/share/gir-1.0/*
-NoExtract   = usr/include/* !usr/include/python3*
-NoExtract   = usr/lib/*.a
-NoExtract   = usr/share/hypr/wall*.png
+$noextract
 
 [core]
 Server = file://$offline/\$repo/os/\$arch
@@ -277,8 +271,11 @@ Server = file://$offline/\$repo/\$arch
 EOF
 if (( dev )); then sed -i '/^\[bromigos\]/a SigLevel = Optional TrustAll' "$profile/pacman.conf"; fi
 # Field Kit has no desktop: the live layer's media (the worlds' video loops, clips, actors and
-# sounds) stay out of its image too; each world.toml, the colours, emblems and holograms stay
+# sounds) stay out of its image too; each world.toml, the colours, emblems and holograms stay.
+# The image only: the package that has them (bromigos-core) stays whole in the store, and an
+# install of bromigOS Server puts them back from it (bromigos_installer/copyroot.py)
 if [[ $edition == fieldkit ]]; then sed -i '/^NoExtract   = usr\/share\/hypr/a NoExtract   = usr/share/bromigos/themes/*/live/* !usr/share/bromigos/themes/*/live/world.toml' "$profile/pacman.conf"; fi
+grep -q 'usr/share/bromigos/themes' "$profile/pacman.conf" || [[ $edition != fieldkit ]] || { echo "Field Kit's NoExtract for the worlds' media didn't go in" >&2; exit 1; }
 # the sizes behind docs/fieldkit-packages.md (iso/fieldkit/manifest.py docs)
 if [[ $edition == fieldkit ]]; then
     pacman -r "$empty" -Si "${names[@]}" 2>/dev/null | awk -F' *: ' '
@@ -287,7 +284,6 @@ if [[ $edition == fieldkit ]]; then
     mapfile -t live_want < <(grep -vE "^\s*(#|$)" "$profile/packages.x86_64")
     mapfile -t live_names < <(pacman -r "$empty" -Sp --print-format "%n" "${live_want[@]}" 2>/dev/null | sort -u)
     awk -F'\t' 'NR == FNR { keep[$1] = 1; next } $1 in keep' <(printf '%s\n' "${live_names[@]}") /out/fieldkit-sizes.tsv > /out/fieldkit-live.tsv
-    find "$offline" -name '*.pkg.tar.zst' -printf '%f\t%s\n' > /out/fieldkit-store.tsv
 fi
 
 # the medium's EFI partition, as the firmware's boot list shows it ("UEFI: BROMIGOS FK" or
@@ -326,6 +322,18 @@ open(dst, "w").write(s)
 PY
     chmod +x "$mkarchiso"
 fi
+# what the medium itself put in the image (the profile's overlay: releng's and bromigOS's files,
+# the installer, the live hooks), for the install to take away again (an install copies the
+# image: bromigos_installer/copyroot.py, docs/iso.md "How installing works"). The store is
+# never copied, so it isn't listed
+copy_dir=$profile/airootfs/usr/local/share/bromigos-iso/copy
+mkdir -p "$copy_dir"
+: > "$copy_dir/overlay.txt"
+find "$profile/airootfs" -mindepth 1 -path "$profile/airootfs/var/lib/bromigos/repo" -prune -o -printf '%P\t%y\n' \
+    | sort > "$copy_dir/overlay.txt.new"
+mv "$copy_dir/overlay.txt.new" "$copy_dir/overlay.txt"
+echo "the profile's own files, for the install to take away: $(wc -l < "$copy_dir/overlay.txt")"
+
 say "mkarchiso"
 iso_work=$work/mkarchiso
 rm -rf "$iso_work"                 # mkarchiso skips every stage a kept work dir has stamped
@@ -333,6 +341,22 @@ mkdir -p "$iso_work" /out/iso
 rm -f /out/iso/*.iso
 "$mkarchiso" -v -w "$iso_work" -o /out/iso "$profile" 2>&1 | grep -vE '^\[mkarchiso\] INFO: (Adding|Creating|Installing)' | tail -40
 iso=$(ls /out/iso/*.iso | tail -1)
+# the sizes: the image (the copied system), the store (what it lacks), the medium
+image=$iso_work/x86_64/airootfs
+[[ -f $image/usr/local/share/bromigos-iso/copy/manifest.json ]] \
+    || { echo "the image has no copy manifest (customize_airootfs.sh's copyroot prep-finish)" >&2; exit 1; }
+mib() { echo $(( $1 / 1048576 )); }
+sfs_bytes=$(stat -c %s "$iso_work"/iso/*/x86_64/airootfs.sfs)
+store_bytes=$(find "$image/var/lib/bromigos/repo" -name '*.pkg.tar.*' ! -name '*.sig' -printf '%s\n' | awk '{ s += $1 } END { print s + 0 }')
+echo "sizes: the image (squashfs) $(mib "$sfs_bytes") MiB, of which the store's package files $(mib "$store_bytes") MiB; the medium $(mib "$(stat -c %s "$iso")") MiB"
+python3 - "$image/usr/local/share/bromigos-iso/copy/manifest.json" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+print(f"the copy: {len(m['live_packages'])} packages in the image, {len(m['pruned'])} of them out of the store; "
+      f"kept in the store to install again: {' '.join(m['repair']) or 'none'}")
+PY
+# the sizes behind docs/fieldkit-packages.md: the store as the medium carries it
+[[ $edition != fieldkit ]] || find "$image/var/lib/bromigos/repo" -name '*.pkg.tar.zst' -printf '%f\t%s\n' > /out/fieldkit-store.tsv
 (cd /out/iso && sha256sum "$(basename "$iso")" > "$(basename "$iso").sha256")
 mv -f "$iso" "$iso.sha256" /out/
 rmdir /out/iso 2>/dev/null || true

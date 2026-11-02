@@ -47,8 +47,12 @@ live() {
         ls /var/lib/bromigos/repo/bromigos/x86_64/ | grep -E "^bromigos-(server|fieldkit-tools|boot)-[0-9]"
         fieldkit overview --json | python3 -c "import json,sys; d = json.load(sys.stdin); print(sorted(d)[:8])"
         # the stick carries the lab engine this ref has: its catalogue, when the ref has one, is in
-        # the store'"'"'s bromigos-lab (the installer'"'"'s Server path plans from it)
-        '"$( [[ -f $here/../../homelab/share/provision-catalogue.toml ]] && echo 'bsdtar -tf /var/lib/bromigos/repo/bromigos/x86_64/bromigos-lab-[0-9]*.pkg.tar.zst | grep -qx usr/share/bromigos/lab/provision-catalogue.toml; echo lab-catalogue-ok' )"'
+        # its bromigos-lab (the installer'"'"'s Server path plans from it): installed on the medium,
+        # which an install copies, or in the store
+        '"$( [[ -f $here/../../homelab/share/provision-catalogue.toml ]] && echo '{ pacman -Qlq bromigos-lab 2>/dev/null | grep -qx /usr/share/bromigos/lab/provision-catalogue.toml || bsdtar -tf /var/lib/bromigos/repo/bromigos/x86_64/bromigos-lab-[0-9]*.pkg.tar.zst | grep -qx usr/share/bromigos/lab/provision-catalogue.toml; }; echo lab-catalogue-ok' )"'
+        # an install copies this system: the copy'"'"'s manifest, and the store without what it has
+        test -s /usr/local/share/bromigos-iso/copy/manifest.json -a -s /usr/local/share/bromigos-iso/copy/etc.tar
+        ! ls /var/lib/bromigos/repo/core/os/x86_64/ | grep -q "^bash-[0-9]"
         fieldkit repair black-screen --dry-run --json | python3 -c "import json,sys; json.load(sys.stdin); print(\"black-screen: ok\")"
         fieldkit disks --json | python3 -c "import json,sys; json.load(sys.stdin); print(\"disks: ok\")"
         test "$(systemctl is-system-running || true)" != maintenance
@@ -148,6 +152,18 @@ server() {
         systemctl is-enabled bromigos-server-update.timer
         ls /etc/snapper/configs/root
         test "$(systemctl is-system-running || true)" != maintenance
+        # copied from the stick (docs/iso.md, "How installing works"): every package'"'"'s files there
+        # (pacman -Qk), and nothing of the stick'"'"'s own left
+        echo tester | sudo -S -p "" true
+        out=$(sudo pacman -Qkq 2>/dev/null); [ -z "$out" ] || { echo "pacman -Qk:"; echo "$out" | head -20; exit 1; }
+        ! id live 2>/dev/null
+        for f in /etc/bromigos-fieldkit /usr/local/bin/bromigos-iso-install /usr/local/lib/bromigos-iso /var/lib/bromigos/repo \
+                 /etc/mkinitcpio.conf.d/archiso.conf /etc/systemd/system/getty@tty1.service.d/autologin.conf \
+                 /etc/systemd/system/pacman-init.service /root/.zshrc /version; do
+            ! sudo test -e "$f" || { echo "left from the stick: $f"; exit 1; }
+        done
+        ! pacman -Q mkinitcpio-archiso archinstall 2>/dev/null | grep .
+        pacman -Q linux-lts linux bromigos-server
         echo SERVER-OK'
 }
 
