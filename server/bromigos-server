@@ -1754,6 +1754,21 @@ def download_only(st, c):
     return 0
 
 
+def pending_first():
+    """The packages an install with no network left for one (bromigos-server-pending.service,
+    the installer's; NVIDIA's driver from an offline Field Kit install): started before the
+    update, so the first update with a network brings them, not only the next start. The
+    names it installed, or [] (none waiting, or still no network: the unit skips itself)."""
+    if not os.path.exists(at(PENDING)):
+        return []
+    try:
+        names = open(at(PENDING)).read().split()
+    except OSError:
+        return []
+    run(["systemctl", "start", "bromigos-server-pending.service"], timeout=3600)
+    return [] if os.path.exists(at(PENDING)) else names
+
+
 def cmd_update(a):
     c = config()
     if c["updates"]["mode"] == "off" and not a.now:
@@ -1793,6 +1808,7 @@ def cmd_update(a):
     st = dict(carry, phase="updating", started=now(), started_ts=time.time(), gateway=gateway(),
               sshd=unit_state("sshd.service") == "active", boots=0, btrfs_errors=btrfs_errors()["total"])
     save_state(st)
+    came = pending_first()
     rc, out, err = run(["bromigos", "update", "--yes", "--no-aur", "--json"], timeout=3 * 3600)
     try:
         doc = json.loads(out.strip().splitlines()[-1]) if out.strip() else {}
@@ -1803,6 +1819,9 @@ def cmd_update(a):
     pair = rep.get("snapshot") or {}
     st["pre"], st["post"] = pair.get("pre"), pair.get("post")
     st["kernel"] = bool((rep.get("reboot") or {}).get("kernel") or (rep.get("reboot") or {}).get("driver"))
+    if came:            # what the install left for a network; NVIDIA's driver starts with a restart
+        st["packages"] = came + [p for p in st["packages"] if p not in came]
+        st["kernel"] = st["kernel"] or any(p.startswith("nvidia") for p in came)
     if not st["packages"]:
         st.update(phase="nothing" if rc == 0 else "failed", finished=now(), finished_ts=time.time(),
                   reason="" if rc == 0 else (err.strip().splitlines() or ["bromigos update failed"])[-1])

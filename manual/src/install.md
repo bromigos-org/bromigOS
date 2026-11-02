@@ -138,7 +138,7 @@ same step by hand.
 Download the newest image from the [Download page](https://bromigos.org/download). It's
 one file of about 3.2 GB.
 
-The same page has a second, smaller image: [Field Kit](fieldkit.md) (about 2.3 GB), for
+The same page has a second, smaller image: [Field Kit](fieldkit.md) (about 1.7 GB), for
 repairs, the lab, and installing [bromigOS Server](server.md) on a machine with no screen.
 You don't need it to install the desktop: the desktop's stick has a Field Kit entry, and
 an installed system can start Field Kit from its own boot menu.

@@ -1012,6 +1012,29 @@ def nvidia():
     return False
 
 
+NVIDIA_DRIVER = "nvidia-open-dkms"      # Server's NVIDIA driver (the presets' gpu_packages): on no medium today
+
+
+def nvidia_driver_later():
+    """An NVIDIA card here, and its driver not on this medium (Field Kit's store leaves it out):
+    the install downloads it, or with no network it waits for the first update with one."""
+    if not nvidia():
+        return False
+    from . import common
+    return not common._in_store(NVIDIA_DRIVER)
+
+
+def nvidia_words(is_online):
+    """One plain sentence for an NVIDIA card whose driver isn't on this medium, or None."""
+    if not nvidia_driver_later():
+        return None
+    if is_online:
+        return ("This computer has an NVIDIA graphics card: when the server uses it, NVIDIA's driver downloads during "
+                "the install.")
+    return ("This computer has an NVIDIA graphics card: NVIDIA's driver isn't on this USB stick, so with no internet the "
+            "server starts on the basic one and gets NVIDIA's by itself at the first update with the internet.")
+
+
 def ups():
     if os.environ.get("BROMIGOS_INSTALLER_UPS") is not None:
         return os.environ["BROMIGOS_INSTALLER_UPS"] == "1"
@@ -1163,6 +1186,10 @@ def plan(a, probe=None):
             fw += x.get("firewall", [])
             if x.get("package"):
                 pk.append(x["package"])
+    if nvidia():
+        # the whole firmware set, NVIDIA's with it (nouveau's, until NVIDIA's driver is in):
+        # Field Kit's store leaves linux-firmware-nvidia out, so it downloads, or waits for a network
+        pk.append("linux-firmware")
     if ups() and chosen.get("ups", True):
         pk += base.get("ups_packages", [])          # set up by bromigos-server once it knows the UPS
     pk += reach_packages(a.get("reach"))           # the Reach step's choice (reach.CHOICES' packages)

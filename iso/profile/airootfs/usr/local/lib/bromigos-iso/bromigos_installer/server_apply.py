@@ -168,7 +168,10 @@ class Apply:
             return
         online = self.online if self.online is not None else _online()
         arch = [x for x in missing if not x.startswith(("bromigos", "brodec", "herdr", "mehshell"))]
+        driver = [x for x in arch if x.startswith("nvidia")]
         if online and arch:
+            if driver:      # the installers' progress line: NVIDIA's driver is most of what downloads
+                print("::stage 90 Downloading the NVIDIA driver", flush=True)
             say(f"downloading what the USB stick doesn't carry: {' '.join(arch)}")
             conf = ("[options]\nHoldPkg = pacman glibc\nArchitecture = auto\nSigLevel = Required DatabaseOptional\n"
                     "LocalFileSigLevel = Optional\nParallelDownloads = 5\n\n"
@@ -184,8 +187,11 @@ class Apply:
                 missing = [x for x in missing if x not in arch]
             else:
                 say("the download didn't finish: " + (self.problems[-1] if self.problems else "pacman failed"))
+            if driver:
+                print("::stage 91 Setting up the server", flush=True)
         elif arch:
-            say("no network now: the rest installs at the first update with one")
+            say("no network now: the rest installs at the first update with one"
+                + ("; NVIDIA's driver with it (the basic display driver until then)" if driver else ""))
         self.pending = missing
         if missing:
             say(f"waiting for a network, installed at the first update: {' '.join(missing)}")
@@ -683,7 +689,8 @@ WantedBy=multi-user.target
 TPM_SLOT = 31          # the first start's one-time key (wiped once the chip is enrolled)
 
 PENDING_UNIT = """# bromigOS Server: what the install couldn't get without a network (the installer; docs/server.md),
-# installed once there is one, then the boot menu made again
+# installed once there is one, then the boot menu made again; NVIDIA's driver starts with the next
+# restart (/run/reboot-required)
 [Unit]
 Description=bromigOS Server: install the packages that waited for a network
 Wants=network-online.target
@@ -692,7 +699,10 @@ ConditionPathExists=/etc/bromigos/server/pending-packages
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'pacman -Syu --needed --noconfirm $(cat /etc/bromigos/server/pending-packages) && rm -f /etc/bromigos/server/pending-packages && grub-mkconfig -o /boot/grub/grub.cfg && for u in $(cat /etc/bromigos/server/pending-units 2>/dev/null); do systemctl enable --now "$u" || true; done; rm -f /etc/bromigos/server/pending-units'
+# no network yet: skipped, not failed (bromigos-server update starts it again, so the first update
+# with a network brings them)
+ExecCondition=/usr/bin/getent hosts geo.mirror.pkgbuild.com
+ExecStart=/bin/sh -c 'p=$$(cat /etc/bromigos/server/pending-packages); pacman -Syu --needed --noconfirm $$p && rm -f /etc/bromigos/server/pending-packages && grub-mkconfig -o /boot/grub/grub.cfg && for u in $(cat /etc/bromigos/server/pending-units 2>/dev/null); do systemctl enable --now "$u" || true; done; rm -f /etc/bromigos/server/pending-units; case " $$p " in *" nvidia"*) touch /run/reboot-required ;; esac'
 TimeoutStartSec=1h
 
 [Install]

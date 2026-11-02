@@ -7,7 +7,6 @@ are kept here over the catalogue file, which has the engine's schema. Nothing he
 ([server] lab, lab_join, provision, models) and the Server tour's first start runs
 `bromigos lab provision --local --from-answers … --plan`, then `--apply`.
 """
-import glob
 import json
 import os
 import re
@@ -229,6 +228,10 @@ def hardware(probe=None):
             hw = dict(localprovision.detect())
             hw["disk_gb"] = sum(d.get("size", 0) for d in (probe or {}).get("disks", []) if not d.get("medium")) // 10 ** 9 \
                 or hw.get("disk_gb", 0)
+            # the engine counts a card whose driver is loaded; on the stick NVIDIA's isn't (Field Kit
+            # doesn't carry it), so a card it would come for counts too: model serving stays a choice
+            if not hw.get("gpu"):
+                hw.update(_nvidia_card() or {})
             return hw
         except Exception:
             pass
@@ -239,25 +242,29 @@ def hardware(probe=None):
     except (OSError, StopIteration, ValueError):
         pass
     hw["disk_gb"] = sum(d.get("size", 0) for d in (probe or {}).get("disks", []) if not d.get("medium")) // 10 ** 9
+    hw.update(_nvidia_card() or {})
+    return hw
+
+
+def _nvidia_card():
+    """{gpu, gpu_name, gpu_vram_gb, gpu_driver} for an NVIDIA card (bromigos hw's names, else the
+    PCI bus), or None. gpu_driver "later": NVIDIA's driver isn't loaded here (the stick doesn't
+    carry it), so it comes with the install, or at the first update with a network."""
+    from . import server
+    # BROMIGOS_INSTALLER_NVIDIA (tests, server.nvidia()): a card that's pretend, so no driver of its own
+    loaded = os.path.isdir("/sys/module/nvidia") and os.environ.get("BROMIGOS_INSTALLER_NVIDIA") is None
+    later = {"gpu_driver": "loaded" if loaded else "later"}
     try:
         r = subprocess.run(["bromigos", "hw", "detect", "--json"], capture_output=True, text=True, timeout=30)
         for g in (json.loads(r.stdout).get("detection") or {}).get("gpus") or []:
             if (g.get("vendor") or "").lower().startswith("nvidia"):
-                hw.update(gpu="nvidia", gpu_name=f"NVIDIA {g.get('name', '')}".strip(),
-                          gpu_vram_gb=int(g.get("vram_gib") or g.get("vram_gb") or _vram_guess(g.get("name", ""))))
-                break
+                return dict(later, gpu="nvidia", gpu_name=f"NVIDIA {g.get('name', '')}".strip(),
+                            gpu_vram_gb=int(g.get("vram_gib") or g.get("vram_gb") or _vram_guess(g.get("name", ""))))
     except (OSError, ValueError, subprocess.TimeoutExpired):
         pass
-    if not hw["gpu"]:
-        for d in glob.glob("/sys/bus/pci/devices/*"):
-            try:
-                if open(os.path.join(d, "vendor")).read().strip() == "0x10de" and \
-                        open(os.path.join(d, "class")).read().startswith("0x03"):
-                    hw.update(gpu="nvidia", gpu_name="NVIDIA graphics card", gpu_vram_gb=8)
-                    break
-            except OSError:
-                pass
-    return hw
+    if server.nvidia():
+        return dict(later, gpu="nvidia", gpu_name="NVIDIA graphics card", gpu_vram_gb=8)
+    return None
 
 
 def _vram_guess(name):
@@ -267,9 +274,14 @@ def _vram_guess(name):
     return table.get(m.group(1), 8) if m else 8
 
 
+DRIVER_LATER = ("NVIDIA's driver isn't on this USB stick: it comes with the install, or with no internet, at the first "
+                "update with it, and model serving starts then.")
+
+
 def hw_words(hw):
     gpu = f", {hw.get('gpu_name') or 'a graphics card'} ({hw.get('gpu_vram_gb', 0):g} GB)" if hw.get("gpu") else ", no graphics card for AI"
-    return f"{hw.get('cpu', 0)} cores, {hw.get('ram_gb', 0):g} GB memory, about {hw.get('disk_gb', 0):g} GB of disk{gpu}"
+    words = f"{hw.get('cpu', 0)} cores, {hw.get('ram_gb', 0):g} GB memory, about {hw.get('disk_gb', 0):g} GB of disk{gpu}"
+    return words + (". " + DRIVER_LATER if hw.get("gpu") == "nvidia" and hw.get("gpu_driver") == "later" else "")
 
 
 # ── an item's guided setup ([item.setup]) ───────────────────────────────────────────────

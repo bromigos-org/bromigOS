@@ -919,12 +919,8 @@ names = "linux-firmware (the whole set)"
 reason = "its split parts above cover common Wi-Fi, Ethernet, Bluetooth and graphics; the rest is below"
 
 [[left_out]]
-names = "nvidia-open nvidia-utils (in the offline store)"
-reason = "NVIDIA's driver for a lab machine's compute: about 400 MiB with what it pulls in (Mesa, LLVM). bromigOS Server installs it once online (an open question: carry it?)"
-
-[[left_out]]
-names = "linux-firmware-nvidia"
-reason = "only for nouveau on the live system, which Field Kit doesn't load (the basic display instead); in the offline store for lab GPU installs"
+names = "linux-firmware-nvidia (on the medium and in the offline store)"
+reason = "NVIDIA graphics cards' firmware (99 MiB), for nouveau, which Field Kit doesn't load (the basic display instead). The store carries linux-firmware's other parts in place of the whole set; an install on an NVIDIA machine adds the whole set (linux-firmware) from the internet during the install, or at the first update with a network"
 
 [[left_out]]
 names = "linux-firmware-marvell"

@@ -15,7 +15,7 @@
  "display_manager": null,
  "audio": null,
  "ssh": {"default": "off", "ask": "Turn on SSH, so you can sign in from another computer?", "service": "sshd"},
- "hardware": "compute only: when bromigos hw finds an NVIDIA card, nvidia-open, nvidia-utils and linux-firmware-nvidia (all in the offline store); no desktop graphics (mesa, Vulkan, VA-API) and no laptop desktop tools",
+ "hardware": "compute only: on an NVIDIA card, the Lab node role's NVIDIA driver (nvidia-open-dkms, nvidia-utils, the container toolkit) and linux-firmware whole, from the network during the install or at the first update with one (not in the offline store); no desktop graphics (mesa, Vulkan, VA-API) and no laptop desktop tools",
  "snapshots": "as the desktop: snapper's root and home configurations, snap-pac, grub-btrfs (bromigos rollback setup --yes)",
  "boot": "GRUB with bromigos-boot's theme (root_commands turns it on) and its More ways to start; no splash (no plymouth); the Field Kit entry when bromigos-fieldkit is added and /boot has room",
  "root_commands": ["/usr/lib/bromigos/boot/bromigos-boot-theme on --theme wick --auto"],

@@ -530,7 +530,7 @@ class AnswerFiles(unittest.TestCase):
 class ArchinstallConfig(unittest.TestCase):
     """answers.py's configuration for each role: linux-lts first, linux the spare, the role's packages."""
 
-    def run_answers(self, role, online, **kw):
+    def run_answers(self, role, online, env_extra=None, **kw):
         a = answers(role, **kw)
         doc = common.backend_answers(a, {"options": {}})
         doc["disk"] = "/dev/vda"
@@ -540,7 +540,7 @@ class ArchinstallConfig(unittest.TestCase):
             json.dump(doc, f)
         argv = [sys.executable, os.path.join(LIB, "answers.py"), "--answers", path, "--out", os.path.join(d, "out"),
                 "--template", os.path.join(SHARE, "archinstall.json"), "--disk-bytes", str(64 * 1024 ** 3), "--firmware", "uefi"]
-        env = dict(os.environ, PYTHONPATH=LIB, BROMIGOS_ISO_ONLINE="1" if online else "")
+        env = dict(os.environ, PYTHONPATH=LIB, BROMIGOS_ISO_ONLINE="1" if online else "", **(env_extra or {}))
         if online:
             doc["online"] = True
             with open(path, "w") as f:
@@ -716,6 +716,133 @@ class Apply(unittest.TestCase):
         self.assertIn("linux-lts", pend)
         self.assertIn("ConditionPathExists=/etc/bromigos/server/pending-packages",
                       self.read(root, "/etc/systemd/system/bromigos-server-pending.service"))
+
+
+class NvidiaDriver(unittest.TestCase):
+    """Field Kit carries no NVIDIA driver (iso/fieldkit/server-packages.toml, left out): on an NVIDIA
+    machine the install downloads it, saying so in the progress line, or with no network it waits
+    for the first update with one, model serving still a choice. BROMIGOS_INSTALLER_NVIDIA=1 is
+    the card."""
+
+    def setUp(self):
+        os.environ["BROMIGOS_INSTALLER_NVIDIA"] = "1"
+        from bromigos_installer import provision
+        provision._ENGINE = None
+
+    def tearDown(self):
+        os.environ["BROMIGOS_INSTALLER_NVIDIA"] = "0"
+
+    def test_the_store_carries_no_nvidia_driver(self):
+        sys.path.insert(0, os.path.join(HERE, "../../fieldkit"))
+        import manifest
+        pkgs, left = manifest.load()
+        store = {p["name"] for p in pkgs if p["edition"] or p["store"] or p["live"]}
+        for name in ("nvidia-open-dkms", "nvidia-open", "nvidia-utils", "nvidia-container-toolkit", "linux-lts-headers",
+                     "linux-firmware-nvidia", "linux-firmware"):
+            self.assertNotIn(name, store)
+        self.assertTrue(any("nvidia-open-dkms" in x["names"] for x in left), "the manifest page says why it's left out")
+        # what Server's lab role asks for on an NVIDIA machine: none of it on the stick, so it
+        # always downloads (or waits), never half from the stick
+        for name in server.role("lab")["gpu_packages"]:
+            self.assertNotIn(name, store)
+
+    def plan(self, role="lab"):
+        a = answers(role)
+        return a, server.plan(a)
+
+    def test_the_plan_has_the_driver_and_the_whole_firmware(self):
+        a, p = self.plan()
+        self.assertTrue(p["nvidia"])
+        for name in ("nvidia-open-dkms", "nvidia-utils", "linux-lts-headers", "linux-firmware"):
+            self.assertIn(name, p["packages"])
+        self.assertIn("nvidia-persistenced.service", p["services"])
+        os.environ["BROMIGOS_INSTALLER_NVIDIA"] = "0"
+        a, p = self.plan()
+        self.assertNotIn("linux-firmware", p["packages"])         # no card: the stick's parts are the firmware
+
+    def apply(self, online, rc=0):
+        from bromigos_installer import server_apply
+        a = answers("lab")
+        doc = common.backend_answers(a, {"options": {}})
+        root = tempfile.mkdtemp()
+        ap = server_apply.Apply(doc, root, "admin", dry=True, online=online)
+        ap.run = lambda cmd, **kw: (ap.cmds.append(cmd), (rc, ""))[1]
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            ap.packages()
+        return root, ap, out.getvalue()
+
+    def test_online_downloads_it_and_says_so(self):
+        root, ap, out = self.apply(online=True)
+        self.assertIn("::stage 90 Downloading the NVIDIA driver", out.splitlines())
+        pac = next(c for c in ap.cmds if c[0] == "pacman")
+        for name in ("nvidia-open-dkms", "nvidia-utils", "linux-firmware"):
+            self.assertIn(name, pac)
+        with open(os.path.join(root, "etc/bromigos/server/pending-packages")) as f:     # bromigOS's own (a stand-in root)
+            self.assertFalse([x for x in f.read().split() if x.startswith("nvidia") or x == "linux-firmware"])
+
+    def test_a_failed_download_waits_for_the_first_update(self):
+        root, ap, out = self.apply(online=True, rc=1)
+        with open(os.path.join(root, "etc/bromigos/server/pending-packages")) as f:
+            self.assertIn("nvidia-open-dkms", f.read().split())
+
+    def test_offline_it_waits_for_the_first_update_with_a_network(self):
+        root, ap, out = self.apply(online=False)
+        self.assertNotIn("Downloading the NVIDIA driver", out)
+        self.assertIn("NVIDIA's driver with it", out)
+        with open(os.path.join(root, "etc/bromigos/server/pending-packages")) as f:
+            pend = f.read().split()
+        for name in ("nvidia-open-dkms", "nvidia-utils", "nvidia-container-toolkit", "linux-lts-headers", "linux-firmware"):
+            self.assertIn(name, pend)
+        with open(os.path.join(root, "etc/systemd/system/bromigos-server-pending.service")) as f:
+            unit = f.read()
+        self.assertIn("ExecCondition=/usr/bin/getent hosts", unit)         # no network yet: skipped, not failed
+        self.assertIn("touch /run/reboot-required", unit)                  # the driver starts with a restart
+        self.assertIn(["systemctl", "enable", "bromigos-server-pending.service"], ap.cmds)
+        self.assertIn("nvidia-persistenced.service", server.plan(answers("lab"))["services"])
+
+    def test_the_installers_say_it_in_one_sentence(self):
+        off = common.network_words(False, False, "server")
+        self.assertIn("NVIDIA's driver isn't on this USB stick", off)
+        self.assertIn("first update with the internet", off)
+        self.assertIn("downloads during the install", common.network_words(False, True, "server"))
+        self.assertNotIn("NVIDIA", common.network_words(False, False, "desktop"))     # the desktop's is on the full stick
+        os.environ["BROMIGOS_INSTALLER_NVIDIA"] = "0"
+        self.assertNotIn("NVIDIA", common.network_words(False, False, "server"))
+        gpu = next(x for x in server.presets()["services"] if x["id"] == "gpu")
+        self.assertIn("first update", gpu["words"])
+
+    def test_model_serving_stays_a_choice_offline(self):
+        from bromigos_installer import provision as PV
+        os.environ.pop("BROMIGOS_INSTALLER_FAKE", None)
+        try:
+            hw = PV.hardware()
+        finally:
+            os.environ["BROMIGOS_INSTALLER_FAKE"] = "1"
+        self.assertEqual(hw["gpu"], "nvidia")
+        self.assertEqual(hw["gpu_driver"], "later")                    # no driver loaded on the stick
+        self.assertIn(PV.DRIVER_LATER, PV.hw_words(hw))
+        self.assertIsNone(PV.why_not(PV.item("model-serving"), hw))
+        self.assertNotIn("none was found", " ".join(PV.budget(["model-serving"], dict(hw, ram_gb=64, disk_gb=500))["notes"]))
+
+    def test_answers_installs_the_firmware_parts_the_stick_has(self):
+        store = tempfile.mkdtemp(prefix="bromigos-store-fk-")
+        shutil.copytree(test_tui.STORE, store, dirs_exist_ok=True)
+        os.makedirs(os.path.join(store, "core", "os", "x86_64"), exist_ok=True)
+        for name in ("linux-firmware-intel", "linux-firmware-realtek", "linux-firmware-cirrus"):
+            open(os.path.join(store, "core", "os", "x86_64", f"{name}-20261019-1-any.pkg.tar.zst"), "w").close()
+        cfg = ArchinstallConfig.run_answers(self, "lab", False, env_extra={"BROMIGOS_ISO_REPO_DIR": store})
+        self.assertNotIn("linux-firmware", cfg["packages"])
+        self.assertNotIn("nvidia-open-dkms", cfg["packages"])                   # from the network, not archinstall
+        for name in ("linux-firmware-intel", "linux-firmware-realtek", "linux-firmware-cirrus"):
+            self.assertIn(name, cfg["packages"])
+        # the desktop medium's store has the whole set: unchanged
+        open(os.path.join(store, "core", "os", "x86_64", "linux-firmware-20261019-1-any.pkg.tar.zst"), "w").close()
+        cfg = ArchinstallConfig.run_answers(self, "lab", False, env_extra={"BROMIGOS_ISO_REPO_DIR": store})
+        self.assertIn("linux-firmware", cfg["packages"])
+        self.assertNotIn("linux-firmware-intel", cfg["packages"])
 
 
 class MultiRole(unittest.TestCase):

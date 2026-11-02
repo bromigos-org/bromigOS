@@ -135,6 +135,59 @@ class Prep(unittest.TestCase):
         self.assertFalse(copyroot.offline_has("bash", store, str(self.root)))
 
 
+class Firmware(unittest.TestCase):
+    """Field Kit's store has linux-firmware's parts but NVIDIA's, not the whole set: archinstall's
+    own linux-firmware (its base packages) and answers.py's become the parts the medium carries."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name) / "airootfs"
+        self.store = self.root / copyroot.STORE / "core/os/x86_64"
+        for name in ("linux-firmware-intel", "linux-firmware-realtek", "linux-firmware-whence"):      # in the image
+            pkg_db(self.root, name, "20261019-1", [], arch="any")
+        put(self.root, copyroot.COPY_DIR + "/manifest.json", "{}")
+        for name in ("linux-firmware-cirrus", "linux-firmware-ti"):                                 # store only
+            put(self.store, f"{name}-20261019-1-any.pkg.tar.zst")
+            put(self.store, f"{name}-20261019-1-any.pkg.tar.zst.sig")
+        copyroot._live.clear()
+        self.args = (str(self.root / copyroot.STORE), str(self.root))
+
+    def tearDown(self):
+        copyroot._live.clear()
+        self.tmp.cleanup()
+
+    def test_offline_names(self):
+        self.assertEqual(copyroot.offline_names("linux-firmware-", *self.args),
+                         ["linux-firmware-cirrus", "linux-firmware-intel", "linux-firmware-realtek", "linux-firmware-ti",
+                          "linux-firmware-whence"])
+
+    def test_the_parts_in_place_of_the_whole_set(self):
+        got = copyroot.firmware(["base", "sudo", "linux-firmware", "mkinitcpio"], *self.args)
+        self.assertEqual(got, ["base", "sudo", "mkinitcpio", "linux-firmware-cirrus", "linux-firmware-intel",
+                               "linux-firmware-realtek", "linux-firmware-ti"])
+        self.assertNotIn("linux-firmware-nvidia", got)
+
+    def test_the_whole_set_when_the_medium_has_it(self):
+        put(self.store, "linux-firmware-20261019-1-any.pkg.tar.zst")          # the desktop medium's store
+        self.assertEqual(copyroot.firmware(["base", "linux-firmware"], *self.args), ["base", "linux-firmware"])
+        self.assertEqual(copyroot.firmware(["base", "grub"], *self.args), ["base", "grub"])
+
+    def test_archinstalls_base_packages_through_the_plugin(self):
+        os.environ["BROMIGOS_ISO_REPO_DIR"], os.environ["BROMIGOS_ISO_LIVE_ROOT"] = self.args
+        os.environ["BROMIGOS_COPY_STRAPPED"] = str(Path(self.tmp.name) / "strapped.txt")
+        try:
+            plug = importlib.import_module("archinstall_copy").Plugin()
+            plug.copied = True                    # the copy itself is Install's test
+            got = plug.on_pacstrap(["base", "sudo", "linux-firmware", "mkinitcpio"])
+            self.assertIn("linux-firmware-cirrus", got)
+            self.assertNotIn("linux-firmware", got)
+            self.assertIn("linux-firmware-ti", (Path(self.tmp.name) / "strapped.txt").read_text().split())
+            self.assertIsNone(plug.on_pacstrap(["grub"]))                  # nothing to change: archinstall's own list
+        finally:
+            for k in ("BROMIGOS_ISO_REPO_DIR", "BROMIGOS_ISO_LIVE_ROOT", "BROMIGOS_COPY_STRAPPED"):
+                os.environ.pop(k, None)
+
+
 class Install(unittest.TestCase):
     """The copy onto a stand-in new system, as the plugin runs it at archinstall's first package step."""
 

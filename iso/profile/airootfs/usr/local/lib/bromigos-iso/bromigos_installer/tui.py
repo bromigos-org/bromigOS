@@ -1019,7 +1019,7 @@ class Installer(server_tui.ServerPages, App):
     def refresh_network(self):
         ed = common.edition(self.a["edition"])
         download, is_online = common.needs_download(ed), common.online()
-        words = common.network_words(download, is_online)
+        words = common.network_words(download, is_online, self.a.get("edition"))
         state = "ok" if is_online else ("warn" if download else "idle")
 
         def put():

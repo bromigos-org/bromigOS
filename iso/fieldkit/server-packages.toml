@@ -6,7 +6,8 @@
 #   store = true     a role's packages (server/roles/*.toml, offline = true): on the stick, so
 #                    the installer's role cards install with no network; installed only when
 #                    the role is chosen
-# Docker (Game server with a lab's Pelican panel) and Cockpit need the network: left out below.
+# Docker (Game server with a lab's Pelican panel), Cockpit and NVIDIA's driver need the network:
+# left out below.
 
 [[package]]
 name = "bromigos-server"
@@ -183,20 +184,6 @@ reason = "the Home services role: one HTTPS name per app, on 80 and 443 (local n
 live = false
 store = true
 
-[[package]]
-name = "nvidia-open-dkms"
-section = "Server"
-reason = "a lab GPU node on Server's LTS kernel (the installer's hardware plan): the open driver built for each kernel"
-live = false
-store = true
-
-[[package]]
-name = "linux-lts-headers"
-section = "Server"
-reason = "nvidia-open-dkms's build for the LTS kernel"
-live = false
-store = true
-
 [[left_out]]
 names = "docker (Server's Game server role with a lab's Pelican panel)"
 reason = "Docker's engine, for Pelican's Wings only: that choice needs the lab, so it needs the network; it downloads then"
@@ -204,3 +191,7 @@ reason = "Docker's engine, for Pelican's Wings only: that choice needs the lab, 
 [[left_out]]
 names = "cockpit cockpit-podman cockpit-storaged cockpit-files (Server's Cockpit extra)"
 reason = "an opt-in web admin, added later with the network (bromigos server role add cockpit); cockpit-packagekit never"
+
+[[left_out]]
+names = "nvidia-open-dkms nvidia-utils nvidia-container-toolkit linux-lts-headers (a lab GPU node's NVIDIA driver)"
+reason = "about 505 MiB with what it pulls in (gcc for DKMS, LLVM, Mesa): on an NVIDIA machine the installer downloads them during the install, or with no network they install by themselves at the first update with one (until then, the basic display driver)"

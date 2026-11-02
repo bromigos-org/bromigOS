@@ -171,6 +171,14 @@ if [[ $edition == fieldkit ]]; then
     # and what the installer adds to every install, whatever the edition (answers.py's REQUIRED)
     mapfile -t -O "${#want[@]}" want < <(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import answers; print("\n".join(answers.REQUIRED))' \
         /src/iso/profile/airootfs/usr/local/lib/bromigos-iso)
+    # NVIDIA's driver isn't in Field Kit's store (iso/fieldkit/server-packages.toml, left out):
+    # an install on an NVIDIA machine downloads it, or gets it at the first update with a
+    # network. linux-firmware is its parts but NVIDIA's (linux-firmware-nvidia, 99 MiB, for
+    # nouveau); answers.py installs the parts the medium has when the whole set isn't on it
+    mapfile -t fw_parts < <(pacman -Si linux-firmware | sed -n 's/^Depends On *: //p' | tr -s ' ' '\n' | grep -vxE 'linux-firmware-nvidia|None|')
+    (( ${#fw_parts[@]} )) || { echo "linux-firmware's parts didn't resolve (pacman -Si linux-firmware)" >&2; exit 1; }
+    mapfile -t want < <(printf '%s\n' "${want[@]}" | grep -vx linux-firmware)
+    want+=("${fw_parts[@]}")
 else
 # what an install adds that the live list may not have: archinstall's configuration's
 # packages, the boot loaders archinstall may pick, the kernel's headers, pacman's mirrorlist
@@ -204,6 +212,9 @@ mapfile -t closure < <(pacman -r "$empty" -Sp --print-format '%r %n %f' "${want[
 (( ${#closure[@]} )) || { pacman -r "$empty" -Sp "${want[@]}" >&2 || true; echo "the package list didn't resolve" >&2; exit 1; }
 mapfile -t names < <(printf '%s\n' "${closure[@]}" | awk '{print $2}')
 echo "${#closure[@]} packages"
+if [[ $edition == fieldkit ]] && nv=$(printf '%s\n' "${names[@]}" | grep -xE 'nvidia-.*|linux-firmware(-nvidia)?|lib32-nvidia-.*'); then
+    echo "Field Kit's store would carry NVIDIA's driver or firmware ($(echo $nv)): something new pulls it in" >&2; exit 1
+fi
 # bromigOS's own packages are downloaded afresh every build: a channel's build of a
 # version can differ byte for byte from another's under the same file name (edge and
 # stable both build r73), and pacman would find the cached one "corrupted" and give up

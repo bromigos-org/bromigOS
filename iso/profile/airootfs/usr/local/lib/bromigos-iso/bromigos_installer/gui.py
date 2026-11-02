@@ -965,9 +965,9 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
     def refresh_network(self):
         import threading
 
-        def shown(on, dl):
+        def shown(on, dl, words):
             self.net_row.set_title("Connected" if on else "Not connected")
-            self.net_row.set_subtitle(common.network_words(dl, on))
+            self.net_row.set_subtitle(words)
             self.net_icon.set_from_icon_name("network-wireless-signal-excellent-symbolic" if on else "network-offline-symbolic")
             for cl in ("quiet", "warn"):
                 self.net_chip.remove_css_class(cl)
@@ -979,7 +979,7 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
         def work():
             ed = common.edition(self.a["edition"])
             on, dl = common.online(), common.needs_download(ed)
-            GLib.idle_add(shown, on, dl)
+            GLib.idle_add(shown, on, dl, common.network_words(dl, on, self.a.get("edition")))
         threading.Thread(target=work, daemon=True).start()
 
 

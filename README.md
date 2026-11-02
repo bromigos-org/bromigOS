@@ -231,7 +231,7 @@ encrypted by default, and no network is needed. Download it from the
 [Download page](https://bromigos.org/download), which also says how to make the USB stick
 and start from it. Each release has two ISOs, each one signed file at
 `https://pkgs.bromigos.org/iso/<version>/`: the desktop (about 3.2 GB) and Field Kit
-(about 2.3 GB), built and tested by CI
+(about 1.7 GB), built and tested by CI
 ([docs/iso.md](docs/iso.md#a-releases-iso)). It starts with Secure Boot on, and so does
 the installed system: each asks you to approve bromigOS once, at its first start
 ([docs/secureboot.md](docs/secureboot.md)).
