@@ -163,6 +163,11 @@ The install then removes what's Field Kit's alone: the repair, imaging and rescu
 archiso's hooks, archinstall. It checks with `pacman -Qk` that every package's files are
 there.
 
+The medium is 2.3 GB (2,343,387,136 bytes on 2026-11-01; 3.3 GB before installs copied
+it), and its store 943 MiB. The NVIDIA driver for a lab's GPU is most of that store, about
+640 MB with what it needs to build for the LTS kernel. Without it the medium would be about
+1.7 GB, but a lab GPU node would then need the network to install its driver.
+
 ## The console
 
 Field Kit's console is kmscon, not the kernel's text console. kmscon draws the terminal on

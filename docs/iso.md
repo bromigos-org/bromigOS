@@ -405,6 +405,19 @@ from the desktop medium copies the desktop and then removes it, so it takes long
 An install from the internet (an edition the medium doesn't carry, `--online`) doesn't
 copy anything: archinstall installs every package from the mirrors, as before.
 
+The media are smaller for it. The store used to hold a second copy of every package the
+live system has. Measured on CI's builds of the same packages (2026-11-01):
+
+| | Before | Copying the live system |
+|---|---:|---:|
+| The desktop medium | 5,013,557,248 bytes (5.0 GB) | 3,166,011,392 bytes (3.2 GB) |
+| Its store | 2.4 GB | 499 MiB (0.52 GB) |
+| Field Kit | 3,272,540,160 bytes (3.3 GB) | 2,343,387,136 bytes (2.3 GB) |
+| Its store | 1.9 GB | 943 MiB (0.99 GB) |
+
+An installed system's disk is about 2 GB smaller too: pacman's cache no longer holds every
+package it was installed from.
+
 ### The disk layout
 
 | Part | What archinstall makes |
@@ -896,7 +909,7 @@ publish nothing.
 ### Where the ISO lives
 
 In the public bucket, `bromigos-pkgs`, beside the packages
-([public.md](public.md)). R2 charges nothing for downloads, and takes the 5 GB ISO as one
+([public.md](public.md)). R2 charges nothing for downloads, and takes the 3.2 GB ISO as one
 object, which GitHub's Releases (2 GiB a file) couldn't.
 
 ```text
@@ -919,8 +932,8 @@ installed system up for Secure Boot: the stick carries `SECURE_BOOT.txt`) and wh
 built and published.
 
 **What's kept:** the newest three stable versions, and the newest edge build. Older
-releases' ISOs are removed from the bucket when a fourth is published. At 5 GB each that's
-about 20 GB, well under a dollar a month of R2 storage. To keep a version longer, copy it
+releases' ISOs are removed from the bucket when a fourth is published. At about 5.5 GB a version (the
+desktop medium and Field Kit) that's under 20 GB, well under a dollar a month of R2 storage. To keep a version longer, copy it
 elsewhere first, or give `iso/publish.sh pointers --keep N`.
 
 ### Checking what's on it

@@ -133,7 +133,7 @@ same step by hand.
 ### 1. Download it
 
 Download the newest image from the [Download page](https://bromigos.org/download). It's
-one file of about 5 GB.
+one file of about 3.2 GB.
 
 **From a terminal.** Every release's image is at
 `https://pkgs.bromigos.org/iso/<version>/bromigos-<version>-x86_64.iso`, beside its
