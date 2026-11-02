@@ -53,11 +53,13 @@ The important files in `airootfs/`:
 | `etc/pacman.conf` | Puts the offline repository first and Arch's mirrors after it |
 | `etc/sddm.conf.d/live.conf` | Signs the live user in automatically |
 | `etc/mkinitcpio.conf.d/archiso.conf` | releng's initramfs hooks, plus `plymouth` |
-| `root/customize_airootfs.sh` | Runs in the image at build time: creates the live user, seeds its configs, sets the splash theme |
+| `root/customize_airootfs.sh` | Runs in the image at build time: creates the live user, seeds its configs, sets the splash theme. It also gets the image ready to be copied by an install (`copyroot.py prep-begin` and `prep-finish`) |
 | `usr/local/bin/bromigos-iso-install` | The installer |
 | `usr/local/bin/bromigos-iso-autostart` | Starts the live session, and opens the installer when booted from "Install bromigOS" |
 | `usr/local/lib/bromigos-iso/answers.py` | Writes archinstall's config and credentials from the installer's answers |
 | `usr/local/lib/bromigos-iso/hardware.py` | Adds this machine's driver packages and services to that config |
+| `usr/local/lib/bromigos-iso/archinstall_copy.py` | archinstall's plugin: copies the live system onto the disk at archinstall's first package step |
+| `usr/local/lib/bromigos-iso/bromigos_installer/copyroot.py` | The copy: getting the image ready at build time, copying it, removing the live system's own pieces, and checking the result with `pacman -Qk` |
 | `usr/local/share/bromigos-iso/archinstall.json` | The archinstall config the installer starts from |
 | `usr/local/share/bromigos-iso/live-answers.toml` | The live user's first-run answers |
 
@@ -94,12 +96,25 @@ look. The live boot and the installed system both use it. The login screen is
 
 ### The offline repository
 
-`/var/lib/bromigos/repo/` holds every package an install needs:
+An install copies the live system onto the disk ([How installing
+works](#how-installing-works)). So `/var/lib/bromigos/repo/`, the offline repository (the
+store), only holds the packages the live system doesn't have:
 
-- Arch's `core` and `extra`: everything on the medium and everything an install adds,
-  with all their dependencies, in pacman's `$repo/os/$arch` layout, with signatures.
-- `bromigos`: every bromigOS package from the channel the medium was built from, including
-  `bromigos-homelab` and `herdr`.
+- On the desktop medium: NVIDIA's driver and the other GPU packages `bromigos hw` can
+  choose, the kernel's headers, the compiler (`base-devel`), the Secure Boot tools, and
+  the PipeWire and boot pieces archinstall adds.
+- On Field Kit: what bromigOS Server adds (the LTS kernel, the server's packages and
+  roles, NVIDIA's driver for a lab's GPU) ([fieldkit.md](fieldkit.md)).
+- On both: the few packages whose files the image lacks. mkarchiso empties `/boot`, so
+  the microcode and Memtest86+ are there to install again. On Field Kit, `bromigos-core`
+  is there too, because its image leaves out the worlds' videos. Also `pacman-mirrorlist`,
+  whose stock list the installed system gets.
+
+Its package databases still list every package: Arch's `core` and `extra` (everything on
+the medium and everything an install adds, with all their dependencies, in pacman's
+`$repo/os/$arch` layout) and `bromigos` (every bromigOS package from the channel the
+medium was built from). A package the live system has is listed without its file. pacman
+resolves an install the same way as before, and finds those packages installed already.
 
 The live system's `pacman.conf` lists this repository before Arch's mirrors. The
 installer's archinstall config points at it, so an install reads only the medium.
@@ -120,29 +135,38 @@ the keyring if it isn't ready yet.
 archinstall, arch-install-scripts, and the rescue tools and drivers releng ships are all
 there (`packages.x86_64`).
 
-### What the live system leaves out
+### What the systems leave out
 
-The running medium never reads some of what its packages carry, so the image leaves it
-out. The build's `pacman.conf` lists these with pacman's `NoExtract`
-(`iso/build-in-container.sh`, step 4):
+A few files no bromigOS system reads are left out of the medium and of every installed
+system alike. pacman's `NoExtract` lists them in the live system's `/etc/pacman.conf`. The
+build reads the same lines for the image (`iso/build-in-container.sh`, step 4), and an
+install keeps them in its own `pacman.conf`. pacman skips them on every update too, and
+`pacman -Qk` doesn't count them as missing:
 
 | Left out | What stays |
 |---|---|
 | Other packages' docs in `/usr/share/doc` | bromigOS's own docs and the manual (`/usr/share/doc/bromigos*`) |
-| Other languages' messages in `/usr/share/locale`, translated man pages, Qt's translations | English. The installer and the live session are in English |
-| GTK's API docs (`/usr/share/gtk-doc`) and GObject's `.gir` files | The typelibs programs load |
-| C headers (`/usr/include`) and static libraries (`*.a`) | Python's headers |
+| GTK's API docs (`/usr/share/gtk-doc`) | |
 | Hyprland's default wallpapers | bromigOS turns them off |
-| On Field Kit only: the worlds' video loops, clips, actors and sounds | Each `world.toml`, the colours, emblems and holograms |
 
-This only changes the live image. An install still gets every file:
+They're about 77 MB packed. To have a package's docs, remove its line from
+`/etc/pacman.conf` and install the package again (`sudo pacman -S PACKAGE`).
 
-- The live system's own `/etc/pacman.conf` has no `NoExtract`.
-- The installer installs every package whole from the offline repository.
-- A language picked in the installer is the new system's, with its translations.
+Everything else an installed system needs is in the image whole, because an install
+copies it:
 
-On v0.1.3's desktop medium, the left-out files were 1.1 GiB unpacked and about 240 MB
-packed in the squashfs.
+- Other languages' messages, translated man pages and Qt's translations. The installer
+  offers 35 languages, and the new system has the one picked, with its translations
+  (about 79 MB packed).
+- C headers, static libraries and GObject's `.gir` files. An installed system builds
+  things: `base-devel`, DKMS modules, the AUR (about 52 MB packed).
+
+Field Kit's image also leaves out the worlds' video loops, clips, actors and sounds (its
+own `NoExtract` line, in the build only). An install of bromigOS Server puts them back
+from `bromigos-core`, which Field Kit's store keeps for that.
+
+Until 2026-11-01 the image left out languages, headers and static libraries as well
+(about 240 MB packed), because an install got every package whole from the store.
 
 ## Installing from it
 
@@ -277,8 +301,11 @@ the progress bar and one `::error words` line if it stops. Everything else it pr
    decoding, a hybrid laptop's `nvidia-prime`, and a laptop's `brightnessctl` and
    `power-profiles-daemon`. The live session itself runs on Mesa, or nouveau on NVIDIA.
 3. **archinstall** builds the Arch system, silently, from the config `answers.py` wrote.
-   The layout is below. Its output goes through `progress.py`, which turns pacman's
-   "(n/N) installing" lines and archinstall's own steps into the progress bar.
+   The layout is below. At its first package step, its plugin copies the live system
+   onto the disk ([How installing works](#how-installing-works)); archinstall then adds
+   what the store has and the copy doesn't. Its output goes through `progress.py`, which
+   turns the copy's percentage, pacman's "(n/N) installing" lines and archinstall's own
+   steps into the progress bar. Then the live system's own packages are removed.
    `--menu` (with `--config`) opens archinstall's menu instead, filled in with all of it.
    Beside another system, `/boot` is set back to a plain Linux partition (archinstall's
    boot flag made it an ESP's type on GPT) and `GRUB_DISABLE_OS_PROBER=false` goes in
@@ -318,7 +345,9 @@ the progress bar and one `::error words` line if it stops. Everything else it pr
    `bromigos-boot` and `bromigos-fieldkit`, they're installed, and
    `bromigos-fieldkit-boot sync --menu` puts Field Kit on `/boot` with its GRUB and firmware
    entries (Field Kit's own docs); `/boot` is 2 GiB so it fits.
-9. **Loose ends.** The sync databases are dated 1970, so the first `pacman -Sy` fetches
+9. **Loose ends.** `pacman -Qk` checks that every package's files are on the new system.
+   A package missing some is installed again from the store, if the store has it; the log
+   names any still missing. The sync databases are dated 1970, so the first `pacman -Sy` fetches
    them afresh. The medium's copies are newer than the servers', so pacman would keep them
    and check the server's signature against the wrong file ("signature is invalid").
    The answers, without the password and passphrase, are kept in
@@ -326,6 +355,55 @@ the progress bar and one `::error words` line if it stops. Everything else it pr
    the install. Then it runs `sync`, so everything is on disk before a reboot.
 10. **Reboot,** unless you gave `--no-reboot` (the installers always do, and restart from
     their last step). Type the disk's passphrase at the splash, then sign in.
+
+### How installing works
+
+The live system is the system the medium installs, so the installer copies it onto the
+disk, as Fedora, Ubuntu, Pop!_OS and EndeavourOS do. The store adds only what the live
+system lacks. Nothing needs the network.
+
+archinstall still lays out the disk, the encryption, GRUB, the users, the locale and
+`fstab`. bromigOS loads a plugin into it (`archinstall_copy.py`). At archinstall's first
+package step, the plugin runs `copyroot.py`'s copy onto the new system's mounts:
+
+1. **The image as built.** `rsync` copies archiso's squashfs (`/run/archiso/airootfs`),
+   not the running system, so nothing the live session changed comes along. Owners,
+   permissions, hard links, ACLs and file capabilities are kept. Nothing already on the
+   new system is replaced: archinstall's first files, and a reinstall's kept `/home`.
+   The store, `/boot`, the homes and `/etc` aren't copied.
+2. **`/etc` as the packages left it.** At build time, before the image's customize
+   script made the live user and the live session's settings, the build saved `/etc`
+   (`copy/etc.tar`), without the pacman keyring and the machine ID. The new system's
+   `/etc` comes from that.
+3. **The medium's own pieces go.** The build listed every file the profile lays over the
+   image: releng's live hooks, the autologin, the installer, archiso's initramfs hooks.
+   Those files are removed. Where one replaced a package's file (`pacman.conf`,
+   `resolv.conf`), the package's own copy goes back, as does `os-release` without the
+   medium's name.
+4. **A fresh system's identity.** root's shell is bash again, with no password until
+   archinstall sets the one chosen. The system users keep the image's IDs, which own its
+   files. The new system gets a machine ID and a pacman keyring of its own.
+5. **What the image lacks.** Each kernel goes on `/boot`, as its package's hook does. The
+   packages whose files the image doesn't have (the microcode on `/boot`, say) are
+   installed again from the store.
+
+Then archinstall installs its package list with `pacstrap --needed`: what the copy brought
+is skipped, and the rest (NVIDIA's driver, the headers, bromigOS Server's packages) comes
+from the store. After archinstall, `copyroot.py prune` marks the packages archinstall was
+asked for (the plugin records each list), and `--with`'s, as installed explicitly. Every
+other package goes, with whatever only it needed: the rescue tools, archiso's hooks,
+archinstall. That leaves the same packages an install from packages had. archinstall then
+makes the initramfs, the boot loader, `fstab`, the users, the host name and the locale,
+as before. At the end, `pacman -Qk` must find every package's files.
+
+Field Kit installs bromigOS Server, not its own live system, the same way. The copy
+brings the packages they share (the kernel, the firmware, the lab, the console, most of
+the tools). The store adds Server's own (the LTS kernel first, its server packages and
+roles), and the prune takes Field Kit's repair tools away. An install of bromigOS Server
+from the desktop medium copies the desktop and then removes it, so it takes longer.
+
+An install from the internet (an edition the medium doesn't carry, `--online`) doesn't
+copy anything: archinstall installs every package from the mirrors, as before.
 
 ### The disk layout
 
@@ -621,8 +699,10 @@ and it's maintained alongside Arch. `bromigos install` already does everything b
 needs. So the medium only joins the two, and asks its questions in plain words. Its code
 is `/usr/local/lib/bromigos-iso/bromigos_installer/`: `common.py` (the steps, words and
 checks both installers share), `disks.py` (the disks and making room), `backend.py` (running
-the install), `gui.py`, `tui.py`, `plain.py`, `welcome.py` (the live desktop's card) and
-`progress.py`. The text installer's DRIFTGLASS look is bromigos-core's
+the install), `gui.py`, `tui.py`, `plain.py`, `welcome.py` (the live desktop's card),
+`copyroot.py` (the copy) and `progress.py`. archinstall has no copy of its own; its plugin
+hook for package steps (`on_pacstrap`) is where `archinstall_copy.py` copies the live
+system, so the rest of archinstall's install runs as it always has. The text installer's DRIFTGLASS look is bromigos-core's
 `lib/bromigos_textual.py` (the theme's palette in truecolour, a 16-colour mapping on a bare
 console, and the Emitter, Sweep and Reading widgets).
 archinstall's own menu offers encryption only inside its own disk flow, and a silent run
@@ -674,11 +754,17 @@ What the build does, in the container:
    `bromigos hw` can plan for any GPU. The last list sits after a `# bromigos hw:` comment
    in `packages.x86_64`, and a test keeps it in step with `hw.rs`.
 5. Downloads and verifies them all, lays them out as the offline repository with
-   `repo-add`, and points the build's `pacman.conf` at it.
+   `repo-add`, and points the build's `pacman.conf` at it. It lists the profile's own
+   files (`copy/overlay.txt`), for an install to remove again.
 6. With a Secure Boot key: fetches shim and checks it against its pins, and makes a copy
    of `mkarchiso` that signs the kernel and puts shim, the signed GRUB and the
    certificate on the medium ([secureboot.md](secureboot.md#the-medium)).
-7. Runs `mkarchiso`.
+7. Runs `mkarchiso`. Its customize script saves `/etc` first (`copyroot.py prep-begin`).
+   At its end, `copyroot.py prep-finish` sorts the profile's files into those to remove
+   and those to put back from their package, and keeps the packages whose files the image
+   lacks. Then it deletes from the store every package file the image has installed. The
+   databases keep their entries. The build log ends with the sizes: the squashfs, the
+   store inside it, and the medium.
 
 The squashfs is compressed with zstd at level 19 in 1 MiB blocks, not releng's xz. Field
 Kit uses the same settings. The offline repository is half the image and is already zstd,
@@ -725,8 +811,8 @@ the `stable` channel, it names the public repository, and it has no test key.
 
 ### Where it finds packages
 
-- **Installing** reads only the offline repository on the medium, so it works with no
-  network.
+- **Installing** reads only the medium: the live system it copies, and the offline
+  repository for the rest. It works with no network.
 - **Updating** the installed system reads the repository the medium names
   (`/etc/bromigos-iso/repo.url`). For a release that's the public repository,
   `https://pkgs.bromigos.org`, as `install.sh`'s `PUBLIC_REPO` ([public.md](public.md)).
@@ -844,7 +930,9 @@ you) and checks:
 
 - the repository the medium names and its channel;
 - no CA, no test key, no `authorized_keys`, no serial console, no `BROMIGOS_TEST` label;
-- no package with a proprietary licence in the offline repository;
+- no package with a proprietary licence in the offline repository, or installed in the
+  live system an install copies (its pacman database);
+- the copy's manifest and `/etc` baseline are there;
 - the privacy guard (`iso/test/medium-privacy.py`), with the repository's own rules.
   Every text file and file name is checked for the lab's own names (the private
   overlay, `PRIVACY_PATTERNS`, the hashed internal words). bromigOS's files also get
@@ -953,7 +1041,11 @@ More about each:
 - **`boot-disk`** types the passphrase through QMP (skipped for a plain install), clicks
   the account at the login screen and types the password. Over SSH, it runs the live
   checks in their installed-system mode, plus `test/vm/checks.sh` from the fresh-machine
-  test ([install.md](install.md#the-fresh-machine-test)).
+  test ([install.md](install.md#the-fresh-machine-test)). Those include the copy's: `pacman
+  -Qk` finds every package's files, and nothing of the live system's own is left (the live
+  user, the autologin, the installer, the store, archiso's hooks and packages, releng's
+  live services); the machine ID and pacman keyring are the system's own, and root's
+  account is a fresh system's.
 - **The first update** goes to the other channel (`--update-channel NAME`), because a
   transaction is what makes snapshots, and the medium's own channel may have nothing
   newer. From a `stable` medium it runs `bromigos update --channel edge`. From an `edge`

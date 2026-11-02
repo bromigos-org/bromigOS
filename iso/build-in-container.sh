@@ -349,11 +349,16 @@ mib() { echo $(( $1 / 1048576 )); }
 sfs_bytes=$(stat -c %s "$iso_work"/iso/*/x86_64/airootfs.sfs)
 store_bytes=$(find "$image/var/lib/bromigos/repo" -name '*.pkg.tar.*' ! -name '*.sig' -printf '%s\n' | awk '{ s += $1 } END { print s + 0 }')
 echo "sizes: the image (squashfs) $(mib "$sfs_bytes") MiB, of which the store's package files $(mib "$store_bytes") MiB; the medium $(mib "$(stat -c %s "$iso")") MiB"
-python3 - "$image/usr/local/share/bromigos-iso/copy/manifest.json" <<'PY'
-import json, sys
+python3 - "$image/usr/local/share/bromigos-iso/copy/manifest.json" "$image/var/lib/bromigos/repo" <<'PY'
+import json, os, sys
 m = json.load(open(sys.argv[1]))
 print(f"the copy: {len(m['live_packages'])} packages in the image, {len(m['pruned'])} of them out of the store; "
       f"kept in the store to install again: {' '.join(m['repair']) or 'none'}")
+files = sorted(((os.path.getsize(os.path.join(d, f)), f) for d, _, fs in os.walk(sys.argv[2]) for f in fs
+                if ".pkg.tar." in f and not f.endswith(".sig")), reverse=True)
+print(f"the store: {len(files)} package files, {sum(s for s, _ in files) >> 20} MiB:")
+for size, f in files:
+    print(f"  {size >> 20:5d} MiB  {f.split('.pkg.tar.')[0]}")
 PY
 # the sizes behind docs/fieldkit-packages.md: the store as the medium carries it
 [[ $edition != fieldkit ]] || find "$image/var/lib/bromigos/repo" -name '*.pkg.tar.zst' -printf '%f\t%s\n' > /out/fieldkit-store.tsv

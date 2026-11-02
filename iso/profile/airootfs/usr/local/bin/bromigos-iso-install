@@ -279,7 +279,8 @@ say "the new system's user: ${user:-<dry run>}"
 # the medium's repository, visible inside the chroot at the same path (file:// URLs)
 run mkdir -p "$target$repo_dir"
 run mount --bind "$repo_dir" "$target$repo_dir"
-cleanup() { umount "$target$repo_dir" 2>/dev/null || true; }
+# (its mount point goes too: the installed system has no store of the medium's)
+cleanup() { umount "$target$repo_dir" 2>/dev/null || true; rmdir "$target$repo_dir" 2>/dev/null || true; }
 trap cleanup EXIT
 
 # pacman: Arch's mirrors (the geo mirror first, the stock list after it, for the first

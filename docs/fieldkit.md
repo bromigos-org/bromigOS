@@ -142,12 +142,26 @@ list in `edition.json`, and the manifest page from it, with the sizes the build 
 ### The offline store
 
 The medium carries `/var/lib/bromigos/repo/`, as the full ISO does
-([iso.md](iso.md#the-offline-repository)): every package on the medium and every package
-bromigOS Server installs, with all their dependencies, signed, read with
-`SigLevel = Required`. It also has what archinstall installs by itself (`linux-firmware`,
-the microcode, zram), the NVIDIA driver for a lab machine with an NVIDIA card (for the LTS
-kernel too), and the packages of bromigOS Server's roles that install offline
-([server.md](server.md#roles)).
+([iso.md](iso.md#the-offline-repository)). Its databases list every package on the medium
+and every package bromigOS Server installs, with all their dependencies, signed, read with
+`SigLevel = Required`.
+
+Installing Server copies Field Kit's own system onto the disk first
+([iso.md](iso.md#how-installing-works)), so the store only has the package files Field Kit's
+system doesn't:
+
+- what bromigOS Server adds: `bromigos-server`, the LTS kernel (Server starts it first; the
+  newest kernel, Field Kit's own, is the spare), and its server packages (the firewall,
+  sshguard, AppArmor, containers, backups, Samba and the rest);
+- the packages of bromigOS Server's roles that install offline ([server.md](server.md#roles));
+- the NVIDIA driver for a lab machine with an NVIDIA card, built for the LTS kernel (DKMS,
+  with the kernel's headers and the compiler);
+- the packages whose files Field Kit's image lacks: the microcode on `/boot`, and
+  `bromigos-core`, whose worlds' videos the image leaves out. Server gets them whole.
+
+The install then removes what's Field Kit's alone: the repair, imaging and rescue tools,
+archiso's hooks, archinstall. It checks with `pacman -Qk` that every package's files are
+there.
 
 ## The console
 
@@ -558,15 +572,18 @@ overlaid (`iso/fieldkit/`), the boot menus rendered, the offline store, mkarchis
 differences:
 
 - The package list comes from `packages.toml` through `manifest.py`.
-- The store adds bromigOS Server's packages and what archinstall installs by itself.
+- The store adds bromigOS Server's packages and what archinstall installs by itself. The
+  build then deletes from it every package file Field Kit's image has installed, because an
+  install copies the image.
 - releng's services that Field Kit leaves off are removed: iwd and systemd-networkd
   (NetworkManager instead), cloud-init, the virtual machine guest tools, smartcards, and SSH
   (until remote help).
 - The full medium's offline `pacman.conf`, the clock's wait and the installer are shared.
-- The image leaves out what the running medium never reads, as the full medium's does
-  ([iso.md](iso.md#what-the-live-system-leaves-out)). Field Kit also leaves out the worlds'
+- The image leaves out what no bromigOS system reads, as the full medium's does
+  ([iso.md](iso.md#what-the-systems-leave-out)). Field Kit also leaves out the worlds'
   video loops and sounds, since it has no desktop. Field Kit for `/boot` is made from the
-  same image, so it's smaller too. bromigOS Server still installs every file.
+  same image, so it's smaller too. bromigOS Server still gets every file: the store keeps
+  `bromigos-core` whole, and the install puts its videos back.
 - It also makes `bromigos-fieldkit-<version>-x86_64-boot.tar`, Field Kit for `/boot`:
   `iso/fieldkit/package.sh` turns that into the `bromigos-fieldkit` package, which the
   release pipeline signs and publishes with `ci/publish.sh`'s `PKGS_PREBUILT`.
@@ -601,7 +618,9 @@ Its VMs and screenshots go in `~/.cache/bromigos-fieldkit-test/` (`BROMIGOS_FIEL
   no network: its console, Home, the engine and the scripted CLI, the offline store. Then the
   installer's own backend installs bromigOS Server onto the VM's disk with no network, and the
   installed Server boots to its console and passes its checks: firewall, update timer,
-  snapshots, the boot menu's "More ways to start".
+  snapshots, the boot menu's "More ways to start", a clean `pacman -Qk`, the LTS kernel,
+  and nothing of the stick's own left (its live hooks, its autologin, the installer, the
+  store, archinstall).
 - `iso/fieldkit/server-test.sh` installs Server encrypted and adds the `bromigos-fieldkit`
   package to it, for the tests below that need Field Kit in an installed boot menu.
 - `iso/fieldkit/ventoy-test.sh` puts a medium on a Ventoy disk image and boots it in Ventoy's

@@ -310,6 +310,9 @@ def prep_finish(root="/"):
         + ", ".join(f"{n} ({f})" for n, f in sorted(repair.items())))
     say(f"copyroot: the store: {before // mib} MiB, less {freed // mib} MiB of {len(pruned)} packages the image has: "
         f"{(before - freed) // mib} MiB")
+    left = sorted(((os.path.getsize(f), n) for n, f in store_files(store).items()), reverse=True)
+    say(f"copyroot: the store keeps {len(left)} package files: "
+        + ", ".join(f"{n.split('.pkg.tar.')[0]} {sz // mib} MiB" for sz, n in left))
 
 
 # ── install time ────────────────────────────────────────────────────────────────────────
