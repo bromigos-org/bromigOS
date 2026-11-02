@@ -297,15 +297,21 @@ has the details: the keys, the hooks, recovery.
 1. In the boot menu, choose **Install bromigOS**. Or choose **Start bromigOS (try it
    live)** to look around first: a welcome card offers **Try bromigOS** or **Install
    bromigOS**, and the desktop's INSTALL panel opens the installer whenever you're ready.
+
+   ![The live desktop's welcome card: Try bromigOS or Install bromigOS](images/live-welcome-card.webp)
+
 2. Follow the installer. You can go back and change anything until you press
    **Install**. It asks:
+   - **how you'd like to be guided:** VECTOR reading each step aloud, a screen reader,
+     larger text, high contrast or less motion.
    - **your language and time zone.** No network is needed: everything is on the stick.
    - **what kind of computer this is:** **bromigOS (desktop)** for a computer you sit at,
      or **bromigOS Server**, with no desktop, for servers and lab machines.
    - **your keyboard,** with a box to try it in.
    - **where to install.** Choose the disk, then either:
 
-     ![Where to install: a disk with Windows, Install alongside Windows chosen, and the split: Windows 484 GB, bromigOS 64 GB, each side's minimum striped](images/installer-where-alongside-windows.webp)
+     ![Where to install: a disk with Windows, Install alongside Windows chosen, and the
+     split: Windows 484 GB, bromigOS 64 GB, with what each side needs](images/installer-where-alongside-windows.webp)
 
      - **Install alongside Windows** (or the other system it found). Windows and its files
        stay. If there isn't free space, the installer makes Windows' part of the disk
@@ -315,23 +321,41 @@ has the details: the keys, the hooks, recovery.
      - **Erase the whole disk.** Everything on the disk is deleted, and the screen says
        what that is.
    - **your name, user name, password, and a name for the computer.**
+
+     ![About you: Alex Rivera, user name alex, the password twice with its strength, and
+     the computer's name alex-pc](images/installer-about-you.webp)
+
    - **whether to encrypt the disk.** It's on by default. Your password unlocks it when
      the computer starts, or you can give it a passphrase of its own.
+
+     ![Lock the disk: Encrypt the disk on, and Use a different passphrase from my password
+     off](images/installer-encryption.webp)
 
      > **Remember the password or passphrase.** Nobody can recover it. Without it, the
      > disk can't be read.
 
-   - for bromigOS Server: whether to turn on **SSH** (signing in from another computer),
-     the **firewall**, and **automatic updates**.
-3. Check the summary, then press **Install** (or **Erase disk and install**). A progress
-   bar shows how far it has got. It takes about ten minutes.
+   - **how to reach it from anywhere:** through BRODEC only, unless you choose another
+     way.
+   - for bromigOS Server: its own steps instead of your name and encryption: its roles,
+     its keys, its network, who can sign in, data disks, how its disk unlocks, how it
+     updates and what it runs ([Setting up bromigOS Server](server-setup.md)).
+3. Check the summary, then press **Install** (or **Erase disk and install**).
 
-   ![Installing bromigOS: the progress bar and what it's doing, here making Windows smaller](images/installer-installing.webp)
+   ![Ready to install: the computer and you, each choice with an Edit button, and
+   Install](images/installer-summary.webp)
 
-4. Press **Restart now**, and take out the stick when the screen goes dark. Type the
-   disk's passphrase if you chose encryption, then sign in. With Secure Boot on, turn it
-   off first (above): the installed system can't start with it on yet. The installer's
-   **Before you start** step reminds you.
+   A progress ring shows how far it has got. It takes about ten minutes.
+
+   ![Installing bromigOS: 41 %, copying bromigOS onto the disk, the stages done and still to
+   come](images/installer-installing.webp)
+
+4. Press **Restart now**, and take out the stick when the screen goes dark. With Secure
+   Boot on, note the four-digit code on this page: at the first start, a blue screen asks
+   for it once ([Secure Boot](#secure-boot), above). Then type the disk's passphrase if you
+   chose encryption, and sign in.
+
+   ![bromigOS is installed: what happens next, the four-digit code for the blue screen with
+   its steps, and Restart now](images/installer-done.webp)
 
 If Windows on the disk uses **BitLocker**, the installer first asks you to save its
 recovery key, because Windows may ask for it once after the install. If something goes

@@ -153,6 +153,7 @@ a window:
 | What | Tool |
 |---|---|
 | The README's and the manual's pictures, and the animated loop | `tools/screenshots/render.py` |
+| The manual's installer, bromigOS Server and Field Kit pictures | `tools/screenshots/install-pictures.sh` |
 | The live layer: the background, a world, a deck, the screensaver | `live/tools/offscreen.py` |
 | The Settings window, one picture per page and theme | `tools/settings/render.sh` |
 | The theme switcher, at several screen sizes | `tools/theme-switcher/render.sh` |

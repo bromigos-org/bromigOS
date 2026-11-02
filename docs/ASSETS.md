@@ -377,6 +377,26 @@ no likeness and no lab hosts.
   offscreen with demo readings (`tools/screenshots/render.py`, `world-mire`).
 - **`world-tidewell.webp`**, on the Themes and worlds page. The desktop in Tidewell,
   rendered offscreen with demo readings (`tools/screenshots/render.py`, `world-tidewell`).
+- **The installer's pictures** (`installer-*.webp`), on the Install and The installer
+  pages. These, the `server-*.webp` pictures and Field Kit's Home, Repair and VECTOR are
+  made together by `tools/screenshots/install-pictures.sh`. The graphical installer's steps, drawn offscreen in a headless weston on the
+  recorded disks with the fake back end (`iso/test/installer/render-gui.sh`), and the text
+  installer's, exported by Textual (`iso/test/installer/tui-shots.py`, and the server
+  steps from `test_server.TextSteps` with `BROMIGOS_INSTALLER_SHOTS`). Made-up person
+  (Alex Rivera), example addresses (192.0.2.x) and example keys. 1280 wide; the text
+  screens without the window frame.
+- **`server-*.webp`**, on the Setting up bromigOS Server page. bromigOS Server's steps in
+  the graphical installer (`render-gui.sh --probe fixtures/probe-server.json` with
+  `BROMIGOS_INSTALLER_RENDER_ONLY=server-`), and the server's first-start tour
+  (`bromigos welcome-console --render DIR --size 120x35`, its sample data). Example
+  addresses and keys only.
+- **`live-welcome-card.webp`**, on the Install and The installer pages. The live desktop's
+  welcome card, captured from the install stick in a VM (host `bromigos-live`).
+- **`fieldkit-boot-menu.webp`**, on the Field Kit page. Field Kit's boot menu as GRUB draws
+  it in a VM. **`fieldkit-home.webp`**, **`fieldkit-repair.webp`** and
+  **`fieldkit-vector.webp`**: `bromigos fieldkit` in kitty in a headless weston, against
+  the stand-in engine of `iso/fieldkit/term-capture.sh` (a made-up QEMU computer, the
+  install named `alex-pc`).
 
 ## Provenance
 

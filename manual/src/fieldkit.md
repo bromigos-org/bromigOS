@@ -12,10 +12,23 @@ You can start it three ways:
 - **From a USB stick.** Write the Field Kit ISO to a stick, or put it on a Ventoy stick.
 - **From the bromigOS ISO.** Choose **Field Kit (repair, lab and tools)**.
 
+A Field Kit stick opens on its own boot menu. **Start Field Kit** is the usual choice. The
+menu also installs bromigOS Server, starts Field Kit so you can unplug the stick, starts it
+with remote help, starts with basic graphics when the screen stays black, and tests the
+memory. **More options** has the system on this computer's disk, the screen reader, the
+firmware settings, restart and shut down. **Help: what do these do?** (<kbd>H</kbd>)
+explains each one.
+
+![Field Kit's boot menu: Start Field Kit, Install bromigOS Server, then unplug the stick,
+remote help over SSH, and basic graphics](images/fieldkit-boot-menu.webp)
+
 Field Kit opens on its Home screen: what's in this computer, what it found on the drives
 (bromigOS, Windows, USB sticks), and seven sections: Repair, Lab, VECTOR, Tools, Server,
 Install and Shell. When it finds something wrong, a **Suggested** line offers the fix:
 press <kbd>F</kbd>.
+
+![Field Kit's Home screen: this computer, what it found on its drives (bromigOS, Windows,
+the Field Kit stick), and the seven sections](images/fieldkit-home.webp)
 
 | Key | What it does |
 |---|---|
@@ -33,6 +46,9 @@ Start with **Mount my bromigOS install**. Choose your disk and type the passphra
 type at startup. Every repair then works on it. When you're done, choose **Unmount my
 install** before you restart.
 
+![Field Kit's Repair section with an install mounted: every repair, from what went wrong on
+the last boot to Windows repair, and Unmount my install](images/fieldkit-repair.webp)
+
 | Item | Use it when |
 |---|---|
 | What went wrong on the last boot? | You want to know why. It reads your system's own log and says it plainly. |
@@ -46,6 +62,7 @@ install** before you restart.
 | Copy or image a disk | You want a copy of a whole disk. Clonezilla can restore it too. |
 | Erase a disk securely | You're giving a drive away. You type its name to confirm. |
 | Windows repair | Another disk has Windows on it: a forgotten password, a BitLocker drive, a missing boot entry. |
+| Graphics: what's in this machine | You want to know its graphics cards, their drivers, and which one has a monitor. |
 
 Every repair keeps a copy of what it changes first, in `/var/lib/bromigos/fieldkit-backups/`
 on your install.
@@ -131,6 +148,9 @@ secrets.
 
 His brain is your lab's model, over your local network: no internet needed. With no lab in
 reach, he still explains what Field Kit found, using its own repair checks.
+
+![VECTOR in Field Kit: his orb, his brain and BRODEC's state, what he's looking at, and the
+conversation with the Ask box](images/fieldkit-vector.webp)
 
 **Pair with BRODEC** (<kbd>Ctrl</kbd>+<kbd>P</kbd> in VECTOR) shows a QR code to scan with
 the BRODEC app. It works where BRODEC's machine agent is installed; approving VECTOR's plans

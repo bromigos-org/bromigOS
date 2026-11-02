@@ -23,6 +23,11 @@ server and Storage. **Just a server** is the base on its own, so ticking it clea
 others. The roles suggest what the server runs, and you can change any of it on the
 **Run** step.
 
+![What will this server do? Six role cards (Lab node, Storage, Home services, Game server,
+Media, Just a server), Home services ticked, and a hologram linking the server to its
+roles](images/server-role.webp)
+
+
 | Role | What it's for |
 |---|---|
 | **Lab node** | Computing and graphics cards for your lab. It joins your lab's cluster, and your lab's workstation sets it up from your desktop: you don't type anything on it. |
@@ -75,6 +80,11 @@ A vault hologram shows each key going in. The summary says how many keys are sto
 where, never their values. Done and the welcome tour say where your keys live and how to
 get them back.
 
+![Where should this server keep its keys and passwords? The four stores, Keep them on this
+server chosen, a vault hologram sealing three keys to the security chip, and the keys that
+go in it](images/server-keys.webp)
+
+
 ## Its network
 
 Choose the network port the server uses. Ports with a cable come first, and the one that's
@@ -92,6 +102,10 @@ Then choose how it gets its address:
 
 The address other computers will use is shown big, with the line you'll type to sign in
 from your own computer.
+
+![Its network: three ports with the cabled one chosen, the address from your router, the
+server's name, Wake-on-LAN on, and a network map with the server's address big](images/server-network.webp)
+
 
 **Wake-on-LAN** lets BRODEC's Wake button or your desktop switch the server on over the
 cable. It's on when the port can do it.
@@ -124,6 +138,10 @@ node.
 **WireGuard** and **Tailscale** reach the server from outside your house. Both are
 installed either way, and stay off unless you turn them on.
 
+![Who can sign in: the admin's name and password, Keys only, the keys allowed in, and a
+picture of each key reaching the server's SSH](images/server-access.webp)
+
+
 ## Reach it from anywhere
 
 How you get to the server when you're not at home:
@@ -139,6 +157,10 @@ The network picture shows the link to your devices. A public way in without a re
 port forwarded on your router to the server; keep keys-only sign-in if you do that. The
 desktop installer asks the same question.
 
+![Reach it from anywhere: the four ways, Join my lab's private network chosen with its join
+code, and a picture of the link from your phone to the server](images/server-reach.webp)
+
+
 ## Data disks
 
 Pick other disks for your files and apps. They're joined into one place, `/srv/data`, with
@@ -152,6 +174,10 @@ On a Storage server, the step also has the shared folders: one for Windows and M
 for Linux, both on your network only.
 
 Skip the step to keep everything on the system's own disk.
+
+![Data disks: two 4 TB disks ticked, two copies (RAID1), and the shared folders for Windows,
+Mac and Linux](images/server-storage.webp)
+
 
 ## Lock the disk
 
@@ -167,6 +193,10 @@ when it restarts on its own after an update.
   for you, and your phone says so.
 
 The admin's password is the passphrase unless you give the disk its own.
+
+![Lock the disk: unlocked by the security chip (recommended) chosen, the other two choices,
+and A passphrase of its own off](images/server-unlock.webp)
+
 
 ## How it updates
 
@@ -186,6 +216,10 @@ first.
 
 **Tell my phone** sends these notices to BRODEC, once your phone is paired in the welcome
 tour.
+
+![How it updates: Update by itself chosen, the 3 to 5 AM window on a dial, Tell my phone on,
+and each update's steps: snapshot, update, health check, rollback if not](images/server-updates.webp)
+
 
 ## What should this server run?
 
@@ -226,19 +260,54 @@ Nothing here is installed during the install itself: at the first sign-in, the w
 tour shows the plan (each service, its ports, its size, what it downloads, what needs the
 internet), and nothing runs until you press **Apply**.
 
+![What should this server run? Its place in your lab (Not part of a lab chosen), the Lab
+core cards with their sizes, and the meter of what the picks need against this
+server](images/server-run.webp)
+
+
 ## Ready to install
 
 Every choice in plain words, each with an **Edit** button, and how you'll sign in once it's
 installed: `ssh admin@` and the server's address, big, and as a QR code an SSH app on your
 phone can scan.
 
+![Ready to install, scrolled to the end: the server, its keys, disks and updates at a
+glance, ssh admin@192.0.2.40 with a QR code, and Erase disk and install](images/server-summary.webp)
+
+**Done** says what happens next: take out the stick, type the disk's passphrase once, sign
+in at the text console, where your keys live, and that nothing runs until you press
+**Apply** in the welcome tour.
+
+![bromigOS is installed: the server's address and its ssh line, and what happens
+next](images/server-done.webp)
+
 ## After the install
 
-At the first sign-in, the server's welcome tour checks its network and shows its address,
-its roles, and how it updates. It then sets up VECTOR's brain, joins your lab, shows the
-plan for what it runs and applies it when you say, pairs your phone, and shows what's on
-the server for its roles. Its last page says where your keys live and how to recover
-them.
+At the first sign-in, the server's welcome tour opens, in text, with **Skip** on every step:
+
+1. **The network.** Its connection, its address in big letters, the line to sign in from
+   another computer, and a summary of its roles, updates and data disks.
+
+   ![The welcome tour's network step: the server's address in big letters, ssh
+   alex@192.0.2.24, and its role, address, updates and data disks](images/server-welcome-network.webp)
+
+2. **Sign in from another computer.** SSH on or off, keys only, and a box to add a key.
+3. **VECTOR.** Where his brain runs.
+4. **Your lab.** Find your lab on the network, or use a lab connection file.
+5. **Set up what it runs.** The plan for what you chose at install: each service, its
+   ports, its size and whether it needs the internet. Nothing runs until you press
+   **Apply**.
+
+   ![The welcome tour's Run step: the plan, with Kubernetes, Jellyfin, the VPN for
+   downloads and BRODEC, their ports and sizes, and where the keys live](images/server-welcome-provision.webp)
+
+6. **Pair your phone** with BRODEC, by a QR code.
+7. **What's on this server.** The commands worth knowing, and the apps it runs.
+8. **You're set.** What's ready, where your keys live and how to recover them, and how to
+   sign in. `bromigos welcome-console` opens the tour again.
+
+   ![The welcome tour's last step: SSH on with keys only, the lab connected, updates, the
+   role, the data disks, where the keys live, and the ssh line](images/server-welcome-done.webp)
 
 If the server won't start, choose **bromigOS Field Kit** in its boot menu: it repairs it,
 or rolls the last update back, without a network.
