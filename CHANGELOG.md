@@ -11,6 +11,270 @@ VECTOR's, `bromigos-org/vector-archive`).
 
 <!-- releases: tools/release/release.py adds each release below this line, newest first -->
 
+## [0.1.4] - 2026-11-01
+<!-- release: 0.1.4-rc1 -->
+
+Release candidate v0.1.4-rc1.
+
+Since v0.1.3. In plain words: the manual's What's new (manual/src/whats-new.md).
+
+### Core (the bromigos command)
+
+- update: packages declare what restarts after they upgrade (restart.d); other stale user services are reported ([122020a](https://github.com/bromigos-org/bromigOS/commit/122020ab354d295f2dba0229dbe5fe434c5bd5a5))
+- core: bromigos bluetooth tui, Bluetooth in the terminal (ratatui, DRIFTGLASS GLOW) ([90e27f9](https://github.com/bromigos-org/bromigOS/commit/90e27f93dc0836552cee30604b701ddbca4e9d4a))
+- update: a move to a channel that lacks a package here waits, plainly, and happens by itself later ([55203ac](https://github.com/bromigos-org/bromigOS/commit/55203ac242012aa137bb2f1397fc2789605b5924))
+
+### Desktop
+
+- peripherals: an Xbox controller module installs xpadneo, with each installed kernel's headers ([7c9acdc](https://github.com/bromigos-org/bromigOS/commit/7c9acdcc8fba9185c7224e2d0df006fad89560fc))
+- desktop: a Bluetooth icon on the bar, with a panel to pair and connect and a quick menu ([1b3e96c](https://github.com/bromigos-org/bromigOS/commit/1b3e96c81158d1a06fcd861a04c7360efe123bee))
+- desktop: the volume's sound popup: outputs, microphones, their volumes, on hover or a click ([cd90017](https://github.com/bromigos-org/bromigOS/commit/cd9001784ff196440095997852fe4f2ae531aee4))
+- desktop: bromigos bluetooth session, the bluez core as JSON lines; a controller's evdev input and rumble ([c50cef8](https://github.com/bromigos-org/bromigOS/commit/c50cef8f8b44bd4e42999c901b6b89867bc1d59e))
+- settings: Bluetooth becomes a devices page: device cards, a pairing wizard, each device's own page ([cefea43](https://github.com/bromigos-org/bromigOS/commit/cefea439dc0a86d513eaab184de828e5485e11ca))
+- desktop: Steam and Proton: bromigos game setup, game proton (GE-Proton, SHA-512 checked) and game check (--fix) ([cbfe5e5](https://github.com/bromigos-org/bromigOS/commit/cbfe5e56a349530640547267cfa01781a9a116bd))
+- desktop: bar popups close on a click anywhere else, and never block the desktop ([20532fb](https://github.com/bromigos-org/bromigOS/commit/20532fbf65239dc2ba8ec68583224593bbbfeb02))
+- desktop: the controller tester reads each pad by its real layout; peripheral list says what a pad is ([96bb689](https://github.com/bromigos-org/bromigOS/commit/96bb689e59a8eae74fb2a4a20f6247dcbc26cc2c))
+- desktop: the welcome tour after an install (bromigos welcome) ([b558df5](https://github.com/bromigos-org/bromigOS/commit/b558df562be84512164026d273db7c7894085647))
+- desktop: bromigos welcome hands over to the console tour where there's no desktop; the command reference ([bf06c5f](https://github.com/bromigos-org/bromigOS/commit/bf06c5f6f0eff0f22605649e8391cd32d8856c7f))
+- desktop: the bar and the live layer come back by themselves; update restarts nothing into its own cgroup; the saved wallpaper is kept ([cf6607c](https://github.com/bromigos-org/bromigOS/commit/cf6607cbaa71165446489617a4243d585ffdc84a))
+- desktop: the bar and the live layer wait for the session at login instead of being skipped ([30fb045](https://github.com/bromigos-org/bromigOS/commit/30fb0453dca989d418bcb1c519d6bf4ee03284de))
+
+### Live layer
+
+- live, desktop, iso: nothing drawn over a working window at partial opacity; nothing idles over the installer ([1aa914d](https://github.com/bromigos-org/bromigOS/commit/1aa914d82991d05ed81d9a0f1087d73ed2da29e4))
+
+### Boot and the ISO
+
+- iso: built, tested, signed and published by CI, one file on R2, with Secure Boot ([f90a4ad](https://github.com/bromigos-org/bromigOS/commit/f90a4ada2eb72f39f718ca69c78cc9614168bdc2))
+- iso/ci-test.sh: QEMU's display devices (qemu-desktop), and free ports beside other VMs ([670e388](https://github.com/bromigos-org/bromigOS/commit/670e3889100229a937a009dde7766f0409e59fa4))
+- iso: CI's Secure Boot test enrolls the key in MokManager as a person does; the live checks take the live background for the wallpaper ([c3f40f6](https://github.com/bromigos-org/bromigOS/commit/c3f40f6ac53d04ca5762b8ca0d6b674f98b22d7b))
+- iso: the privacy guard takes judged findings in published packages; the widgets' demo uses a documentation address ([3362f35](https://github.com/bromigos-org/bromigOS/commit/3362f35cef84982c8c7249a7c55319b7c74ce9fa))
+- iso: the build retries the package download; the workflow clears toolchains only on a runner short of disk ([1560502](https://github.com/bromigos-org/bromigOS/commit/1560502f5431960ba04409b107d33409646f1fa8))
+- iso/publish.sh: ISO_PREFIX for a test's own folder; an ISO is cached for an hour, so a rebuild reaches people ([23a8d71](https://github.com/bromigos-org/bromigOS/commit/23a8d71ac107a5ae26b4117b6b1979eda3b1721e))
+- iso: graphical and text installers (alongside Windows, erase, reinstall; desktop or bromigOS Server) ([f325ffe](https://github.com/bromigos-org/bromigOS/commit/f325ffee6e3292ed76b0817e3db1db029d4fb0a5))
+- iso: the installers' Before you start step asks the medium's bromigos-iso-secureboot check ([3ae4438](https://github.com/bromigos-org/bromigOS/commit/3ae443834893da34604fd77bc71a215c71224497))
+- iso: a reinstall works (archinstall's --skip-boot), and puts the old system back if it stops ([9aa3d3e](https://github.com/bromigos-org/bromigOS/commit/9aa3d3e710cf7d73011c9fee61bcbc7025a63fbd))
+- iso.yml: bromigos-secureboot's runtime dependencies for makepkg ([f7087aa](https://github.com/bromigos-org/bromigOS/commit/f7087aaf46412a3c1628b192ac63249a7dec3a44))
+- iso tests: the package check works in any login shell; beside Windows, the installer's own answers file ([c10d4dc](https://github.com/bromigos-org/bromigOS/commit/c10d4dc976cdc513535e8e0354334040818d87cc))
+- iso tests: the medium's menu must keep its theme with Secure Boot on ([13bf959](https://github.com/bromigos-org/bromigOS/commit/13bf9599c49b623ab895f69e05f0391476b727b1))
+- iso tests: UKI boot screenshots and serial console; beside Windows, the Secure Boot checks with sudo and C:'s NTFS check ([71a639c](https://github.com/bromigos-org/bromigOS/commit/71a639c591ce146a7f2c3f9e72ac92c7dd8e1736))
+- iso: Field Kit, bromigOS without the desktop, as its own medium and in the full one's boot menu ([6260067](https://github.com/bromigos-org/bromigOS/commit/6260067e696b15db75ceadf703da0a8ce006b0a1))
+- iso: Field Kit's own CI test, the installer's text mode on the stick, the medium's checks ([ef48dac](https://github.com/bromigos-org/bromigOS/commit/ef48dac70623e09c21013e37f2438570ddf79df7))
+- iso: Field Kit's menu labels short enough for any screen ([7f0823f](https://github.com/bromigos-org/bromigOS/commit/7f0823f380878d27250a5e4483bda1de793a8796))
+- iso: an edition's install leaves out the desktop's sound; test.py --direct boots ([2f2b393](https://github.com/bromigos-org/bromigOS/commit/2f2b393102126ca0db99ab0cff5d2757d874acfe))
+- iso: test.py takes the first free VNC display, so test VMs can run side by side ([5647650](https://github.com/bromigos-org/bromigOS/commit/564765018b27fb3796c1bc5a63c313f16f48560a))
+- iso: Field Kit's CI hook runs the installer on its own and looks in ([40c5640](https://github.com/bromigos-org/bromigOS/commit/40c56402303257e11f1e745acc5e597052873ad0))
+- iso: Field Kit's if_available packages, when a repository has them ([69ca8dc](https://github.com/bromigos-org/bromigOS/commit/69ca8dc654adb146ec7029e9598814848b0fa955))
+- iso: the Field Kit stick's store carries what the installer adds to every install ([7a4147b](https://github.com/bromigos-org/bromigOS/commit/7a4147bbfa25c4f71d8d80de5b2d1667333ca304))
+- iso: Field Kit's CI hook: the welcome tour left pending, then out of the harness's way ([2608ba4](https://github.com/bromigos-org/bromigOS/commit/2608ba491c5339701f50ccee001711ccf4bf182a))
+- iso: test.py runs each command in a subshell, so set -e can't sign the harness out ([5368653](https://github.com/bromigos-org/bromigOS/commit/5368653289afa391a5f5d37846956b872bc0d551))
+- iso: Field Kit's CI hook checks the installed Server without sudo ([2acbac8](https://github.com/bromigos-org/bromigOS/commit/2acbac8ef75fa37b2c947ed38d0a46da43c615fe))
+- iso: Field Kit's CI hook reads the boot menu as root, before the boot; docs: the hook's findings ([73e8a56](https://github.com/bromigos-org/bromigOS/commit/73e8a5629e6d39e1a96d7e2886299cf76775d73b))
+- iso: Field Kit's CI hook decodes the pairing QR from kmscon and the bare console ([5a6870f](https://github.com/bromigos-org/bromigOS/commit/5a6870f72b2deffb8ff333c3c95b5730d0c57395))
+- iso: Field Kit's QR decode test shows the bare console: kmscon off, the QR's VT brought forward ([d3f775c](https://github.com/bromigos-org/bromigOS/commit/d3f775cd5bbfcdc093def5a4b03932d20aadfd30))
+- iso: Field Kit's QR decode test uses VTs 7 and 8, past logind's login consoles ([fef503d](https://github.com/bromigos-org/bromigOS/commit/fef503dc4335b8b5ef5a72266bec581b75f076a6))
+- iso: Field Kit's tagline in the menus' help and the build's words: Repair. Recon. Deploy. ([d6a1205](https://github.com/bromigos-org/bromigOS/commit/d6a12053b534436f870da77a44f5ec46f3d9818e))
+- iso CI: a pull request's medium has edge's packages plus the ones it adds or changes, built from it ([89e8bb7](https://github.com/bromigos-org/bromigOS/commit/89e8bb78e51707cf83dac412bfb34d03aa348c20))
+- iso/ci-local-packages.sh: a package the channel has at another version than this ref makes is built too ([b06ffb1](https://github.com/bromigos-org/bromigOS/commit/b06ffb1963b17cb3ae50644b9870bf707b13567d))
+- iso CI: a pull request's medium skips the first update; this ref's bromigos-secureboot replaces the store's signature too ([bf43c6b](https://github.com/bromigos-org/bromigOS/commit/bf43c6bf9568d500529a509c16a4e54e1a04ac77))
+- iso/ci-test.sh: a medium with no live desktop gets Secure Boot's MokManager steps and its themed menu ([5ef7ba5](https://github.com/bromigos-org/bromigOS/commit/5ef7ba5a907005eedfb6f469180be01ee786275b))
+- iso/ci-test.sh: --dev-build passed on as an array (shellcheck); iso-check runs shellcheck on ci-local-packages.sh ([bb35115](https://github.com/bromigos-org/bromigOS/commit/bb3511552919facddae3744f1ab4f34b671ed5da))
+- iso tests: the guidance check where an installer's first step chose it ([28cc650](https://github.com/bromigos-org/bromigOS/commit/28cc65009292b027838e5cf9d5e9799ce72dfe9e))
+- iso-check: shellcheck on iso/fieldkit/term-capture.sh ([a8a1897](https://github.com/bromigos-org/bromigOS/commit/a8a1897faac98c5fb963524d957c9fbcf2d3045c))
+- iso: smaller media with nothing lost: zstd 19 on the desktop image, and the live images leave out what they never read ([70a572c](https://github.com/bromigos-org/bromigOS/commit/70a572c67f998fc23b5f318f70e949770f8dad1f))
+- iso live checks: when the bar or the live layer is missing, how the user manager saw them ([e053279](https://github.com/bromigos-org/bromigOS/commit/e053279d75ec458620710bffb8c69e68add4e30b))
+- iso: install by copying the live system, with a store of only what it lacks ([7290f26](https://github.com/bromigos-org/bromigOS/commit/7290f262647bf8f38fc2fd0bf46cc37bf1a95e70))
+- iso: the store's mount point goes after an install; the build lists the store; Server GUI's ComboRow text unescaped ([5422d09](https://github.com/bromigos-org/bromigOS/commit/5422d0954c2a4e715a7aa51d607c94b6a2336a17))
+
+### Widgets
+
+- widgets: survive Hyprland 0.57's special workspaces, which have no id ([703ae5e](https://github.com/bromigos-org/bromigOS/commit/703ae5e32894d10b00926a9de686ca453947287d))
+
+### Themes and art
+
+- theme: the bar's Bluetooth icons: the rune, five battery cells, and a glyph per kind of device ([669d282](https://github.com/bromigos-org/bromigOS/commit/669d282a1b2f3df1aa4d544370c7f84176b814ad))
+- art: Apache-2.0 Qwen-Image-2512 and Edit-2511 are the image defaults ([1e96acc](https://github.com/bromigos-org/bromigOS/commit/1e96accb17698076815f2a36f66100e74148a969))
+
+### Homelab
+
+- lab catalog: weekly refresh 2026-10-26 (metadata and pending review entries) ([ffe772c](https://github.com/bromigos-org/bromigOS/commit/ffe772c2174f9f3df98573edf98c42d4e2e1c26b))
+- lab: your lab's own private network (bromigos lab network, Headscale) ([8906798](https://github.com/bromigos-org/bromigOS/commit/8906798a58f36f04aa8dc58c27d38d5cf19ffa32))
+- lab network: the QR test measures visible width (the themed QR component colours each cell) ([f2442a2](https://github.com/bromigos-org/bromigOS/commit/f2442a29117a115bc6f4df9a6e2e5f0991d52fdb))
+- lab network: its example LAN address is a documentation address (192.0.2.20) ([4d65008](https://github.com/bromigos-org/bromigOS/commit/4d6500828aecc01514b18195153f9b1a1cad7b3c))
+- lab: the box's mDNS service file has no "--" in its comment ([e203175](https://github.com/bromigos-org/bromigOS/commit/e2031752e16c482da857d76759a1a3ba5b78c1c9))
+- lab: the provisioning catalogue: items to tick instead of only Core and Advanced ([bf9a9b8](https://github.com/bromigos-org/bromigOS/commit/bf9a9b86a3d6b3d7e0c3d3bfe5ee91195f7bd648))
+- lab: one secret store for the installer, provisioning and services ([fff7ce9](https://github.com/bromigos-org/bromigOS/commit/fff7ce9273f94605cb2fc38e8babd0b83f1bf243))
+- lab: bromigos lab provision --local: a server sets itself up ([f8d7cfa](https://github.com/bromigos-org/bromigOS/commit/f8d7cfab3d15e54a852cc480fef051387cf436ea))
+
+### Tests and tools
+
+- iso/test.sh: scp's port option without rewriting paths that contain -p ([6fe072a](https://github.com/bromigos-org/bromigOS/commit/6fe072a89374cdabc339826cf18c292d9ed300df))
+- iso/test.sh: keep the theme previews' render log when their check fails ([e5321e8](https://github.com/bromigos-org/bromigOS/commit/e5321e89dfb079f2c166f52f26d3350511235a3f))
+- test/vm/checks.sh: the theme previews' check is a SKIP on a VM with no 3D ([834c423](https://github.com/bromigos-org/bromigOS/commit/834c423c2056b11823c427195b9dda7bcdce4067))
+- iso/test.sh param: GRUB's editor has a blank line after setparams ([b7a39a7](https://github.com/bromigos-org/bromigOS/commit/b7a39a7fee049d87f81817907c3b28e33f774976))
+- iso/test.sh: the first update moves to an older channel only when it has every bromigOS package installed ([c8c8879](https://github.com/bromigos-org/bromigOS/commit/c8c887941d0e65911bafd920fcebf9b3fea9221c))
+- iso/test.sh: the pointer parked in a corner before each installer capture, so none shows a tooltip ([2609aa4](https://github.com/bromigos-org/bromigOS/commit/2609aa49897b3e5f31fa2c812c894b6f2d6f1aee))
+
+### Docs
+
+- docs: DRIFTGLASS, the design language and its words (#12) ([912ed28](https://github.com/bromigos-org/bromigOS/commit/912ed28835df4fa1439ce8386fac7cf53ce55de2))
+- docs/iso.md: the first CI run of the ISO's build and tests ([bb5dd5c](https://github.com/bromigos-org/bromigOS/commit/bb5dd5cec87a686e4a3e502330f753151234ef2f))
+- docs: games, graphics cards and Bluetooth, plain path first, then a power-user layer ([5e00929](https://github.com/bromigos-org/bromigOS/commit/5e0092921f26e944f48eeac4f3c07834ef7159b6))
+- docs/iso.md: the installers' QEMU test runs; live-checks reads sshd -T in any case ([da1b39a](https://github.com/bromigos-org/bromigOS/commit/da1b39a9a54c676cf8cafb94ae9e6d18db8113b7))
+- docs/secureboot.md: BitLocker, start Windows from the firmware's boot menu ([03ac951](https://github.com/bromigos-org/bromigOS/commit/03ac9519006e17a2f60e241197822ba4e43dcd26))
+- docs: the package tables, generated again on main's newer list ([12ec9e6](https://github.com/bromigos-org/bromigOS/commit/12ec9e663d267b0d907dff93d752ed17bf0b543b))
+- docs: the full ISO's Field Kit entry by its menu label ([de07384](https://github.com/bromigos-org/bromigOS/commit/de073845735dd6009c27e3c14ac3103a285ca95f))
+- docs: Field Kit's package manifest from the 0.1.3 dev build's sizes ([40f63ef](https://github.com/bromigos-org/bromigOS/commit/40f63ef77b0ea423954938999b76e369164548e1))
+- docs: Field Kit's CI test and the QR decode in its test runs ([8432630](https://github.com/bromigos-org/bromigOS/commit/84326309fa2c849ba07200a6b5a5cc8de5551a73))
+- docs: bromigOS Server's base and roles, in plain words and for power users ([ad934b9](https://github.com/bromigos-org/bromigOS/commit/ad934b9c92c8167a48038b4b598ed099e7589377))
+- docs: the command reference lists bromigos welcome console --step ([0d3dfa5](https://github.com/bromigos-org/bromigOS/commit/0d3dfa58fd05c4fd1ef9bd0ac6d6386f46d13116))
+- docs/iso.md: the unpacking times measured (zstd 19 nearly as fast as 6; xz six times slower) ([6fd6cb5](https://github.com/bromigos-org/bromigOS/commit/6fd6cb56a4e90a39fb93320d01482cb2c9faf282))
+- docs: the command reference's bromigos lab line, with provision --local and secrets ([95585d4](https://github.com/bromigos-org/bromigOS/commit/95585d440698c488fc09edc2bd1c9414286965f9))
+- docs: the media's sizes, before and after installs copy the live system ([090474c](https://github.com/bromigos-org/bromigOS/commit/090474cdb35501794e1639eb02d865230c267af1))
+- docs: Field Kit's store, as measured ([0bf71f0](https://github.com/bromigos-org/bromigOS/commit/0bf71f0dc7cbac486e0f1e1ac57e7610a6383d38))
+- docs: Field Kit 1.7 GB, its store 339 MiB, NVIDIA's driver from the network ([9c285db](https://github.com/bromigos-org/bromigOS/commit/9c285db4c5fb25a476d397ce9e05288631c4cc19))
+
+### Packaging and CI
+
+- packaging: brodec-lab, BRODEC's lab bridge, as a public image, Helm chart and opt-in package ([25e1c88](https://github.com/bromigos-org/bromigOS/commit/25e1c88e4b70ad59a8641aa406b76057e51849dc))
+- packaging: bromigos-bar-hover builds against gtk3's headers in CI (makedepends) ([ab430ee](https://github.com/bromigos-org/bromigOS/commit/ab430eece8800c6cad7ac4a873906ddcfb1d69e3))
+- packaging: oo7 at upstream e55a1b1, which has the console-login fix (linux-credentials/oo7#624); no local patch ([8fcdf19](https://github.com/bromigos-org/bromigOS/commit/8fcdf190687a1403ccc1dcfa20129c164ac22980))
+- packaging: oo7 installs with meson install --no-rebuild ([62c7d3b](https://github.com/bromigos-org/bromigOS/commit/62c7d3b635983cc1d373cd329fb3627a29e61cf0))
+
+### Other
+
+- login: a QR code of the sign-in page with the code filled in, for your phone ([853d7eb](https://github.com/bromigos-org/bromigOS/commit/853d7ebe578df2173951961fb47ab66ecedbb525))
+- brodec-lab chart: his name, and how to change it ([c0bf70e](https://github.com/bromigos-org/bromigOS/commit/c0bf70ea4f0f2b07298a5d9f0b33c1bedd0f081c))
+- brodec-lab chart: guests get their own brain, or none ([68592a5](https://github.com/bromigos-org/bromigOS/commit/68592a521cf5707b43f1d4c38f40517cde8888b3))
+- tv: JSON volume, sound, back to den, back to channel and poster, for remotes ([28b651b](https://github.com/bromigos-org/bromigOS/commit/28b651be1be0001970e7761677266af64659901b))
+- media: cast to Chromecasts, DLNA TVs, AirPlay, Jellyfin's apps and the den ([a563f91](https://github.com/bromigos-org/bromigOS/commit/a563f910b3d2c1325c05801f43d5d29f748a8dcb))
+- grub preview: QEMU through vm-keeper.py, so a killed preview stops its VM ([ab7c356](https://github.com/bromigos-org/bromigOS/commit/ab7c3567fe72fd6d6851656b4c67ef9c17084fe4))
+- grub preview tests: the stand-in QEMU runs this interpreter by its path, and only the keeper's budget skips ([810193b](https://github.com/bromigos-org/bromigOS/commit/810193bbac83815ce7b473a6514f0620d9a57152))
+- bar: bromigos-hover, a waybar module that gives another module a hover popup ([04b0de1](https://github.com/bromigos-org/bromigOS/commit/04b0de17171edc6cdd3ceaa96313d283460ed2d1))
+- bluetooth: one list of pairing kinds and their pair-mode steps, in the core; the TUI reads it from the session ([0379086](https://github.com/bromigos-org/bromigOS/commit/03790865b7d431eecb30d714d6ce8ed64ef91182))
+- keyring, account: a gi without PyGObject (only another package's overrides) means no libsecret bindings ([8f7d33e](https://github.com/bromigos-org/bromigOS/commit/8f7d33eb1f7747dd364489275c85c44cc42d1576))
+- hw: Proton games get NVAPI on NVIDIA's own driver (PROTON_ENABLE_NVAPI=1 in the session, guarded by the loaded module) ([6b1434b](https://github.com/bromigos-org/bromigOS/commit/6b1434b7ede5db0146ef5f1a365334b6c99734cc))
+- Settings › Graphics: what each card is for (desktop, games and heavy apps, VMs), with bromigos hw graphics, display use|keep|cancel|reset, games, run and vfio ([49b05f9](https://github.com/bromigos-org/bromigOS/commit/49b05f91f1c92618517eb7189fc809f46869537a))
+- hw display use: choosing the kept card while another is tried ends the try (no new trial); Settings goes back to it without asking ([286a891](https://github.com/bromigos-org/bromigOS/commit/286a89109e7311b52928efc75da5b2914de05b06))
+- games: Steam and Proton keep themselves ready (game maintain), plain-language status and Fix in Settings ([0d7e825](https://github.com/bromigos-org/bromigOS/commit/0d7e82525a4e73d27c9e6fcae5310ab0560599f6))
+- manual: install from the USB stick, step by step: download, check, make the stick, start it, Secure Boot's MokManager screens, then install; each step's terminal way beside it ([5b93b97](https://github.com/bromigos-org/bromigOS/commit/5b93b9725aaad9441a47ed8482abd825fd7c4fe3))
+- welcome tour: VECTOR in your lab, your lab in the window, and pairing your phone; bromigOS Server's console tour gets the same ([9d4c6e7](https://github.com/bromigos-org/bromigOS/commit/9d4c6e732d9bc6abd3050579a9e6323d180f4a07))
+- manual: the installer's and the welcome tour's screens in place ([c3db57a](https://github.com/bromigos-org/bromigOS/commit/c3db57a029baf3ebf9520cff23d681e076b99523))
+- welcome tour: Your screens finds Hyprland from outside the session, and is never empty ([5a89caa](https://github.com/bromigos-org/bromigOS/commit/5a89caab082ad849f6b2123994d487529d95f88e))
+- welcome tours: Pair your phone runs BRODEC's own setup-screen pairing ([06a26a7](https://github.com/bromigos-org/bromigOS/commit/06a26a70b7cd5c1f04e17aa6ae61f4655c254e88))
+- installer: the split shows the whole partition; Pair your phone fits one screen ([55cd3f5](https://github.com/bromigos-org/bromigOS/commit/55cd3f514792adab50a0a2e8cb74f8d7db4bc595))
+- manual: the split and Pair your phone, as they are now ([0ce2b64](https://github.com/bromigos-org/bromigOS/commit/0ce2b640a3ea49a268ff6bd863138781a8285960))
+- Wake-on-LAN stays on for wired network cards, on every edition ([0fb519a](https://github.com/bromigos-org/bromigOS/commit/0fb519ae2f17d5af924f0f2d70c45e8f1efce1db))
+- text installer: the page scrolls to everything on a small screen; the tours use their own lib ([53b9729](https://github.com/bromigos-org/bromigOS/commit/53b9729793ad79ef18e57f27ac0da28761108c32))
+- Wake-on-LAN: record each wired card's state for programs that run as you ([81a3525](https://github.com/bromigos-org/bromigOS/commit/81a3525dd2188da75796ac567507da31bdd9d9e2))
+- installer: containers, k3s, /srv and the update history get subvolumes of their own ([8eed4e1](https://github.com/bromigos-org/bromigOS/commit/8eed4e1f1c50c72dd7b775f056cad98004bcae06))
+- test: the data-subvolume checks run on both editions without clobbering the encryption argument ([2774b62](https://github.com/bromigos-org/bromigOS/commit/2774b62b7f5e6d3202da3ab7559932fab9aec064))
+- Secure Boot stays on: installed systems signed on the computer, and the themed boot menu under Secure Boot ([6c0160c](https://github.com/bromigos-org/bromigOS/commit/6c0160c3a2a51d46ea84951418d03197d6c92b69))
+- bromigos-secureboot: its own entry by label too (Field Kit's may show shim's option as hex) ([e0bdfa8](https://github.com/bromigos-org/bromigOS/commit/e0bdfa814c707380900606bdaedac2248715a107))
+- bromigos-secureboot: the installer's own GRUB at the fallback path becomes shim too ([0658f22](https://github.com/bromigos-org/bromigOS/commit/0658f223b4618429918085fd64cbbbe413eee9ca))
+- bromigos-secureboot: setup marks itself set up only once GRUB and shim are in place; a failed MOK request is a problem, not an abort ([588b307](https://github.com/bromigos-org/bromigOS/commit/588b30705b9946bc5863af04d90924563a469e59))
+- bromigos-secureboot: Field Kit's firmware entry gives shim its image's path ending in a NUL ([a7fce41](https://github.com/bromigos-org/bromigOS/commit/a7fce41d077a02fb81ab00038c89d273e18ac264))
+- Field Kit and bromigOS Server's packages: bromigos-boot, the Field Kit screens and engine, VECTOR in the terminal, bromigos-server ([cd90dfd](https://github.com/bromigos-org/bromigOS/commit/cd90dfd7dc96a80615d96dc4c521440aa5c93510))
+- Field Kit: install through the medium's text installer ([e5f8417](https://github.com/bromigos-org/bromigOS/commit/e5f8417cd80de403dc887bee00856f4eba4e7e4d))
+- bromigOS Server's firewall: the local network's ranges added at apply time; screen dumps by env ([73a31f3](https://github.com/bromigos-org/bromigOS/commit/73a31f3d38dbeadc905f50fc19b9c97fa9ee3792))
+- Field Kit's screens after review: Home's rows, VECTOR's chips and questions, the same badges ([b808c4b](https://github.com/bromigos-org/bromigOS/commit/b808c4b8f12a21471b1e500027ef3b82ac288114))
+- Field Kit's VECTOR: the network chip stays when the row is short; a stick question on the stick ([a18c859](https://github.com/bromigos-org/bromigOS/commit/a18c859f77384a43c2365e7b4e00c3b96023162e))
+- BRODEC on Field Kit and bromigOS Server: the agent's own package, machine controls, pairing screens ([3a4955a](https://github.com/bromigos-org/bromigOS/commit/3a4955aed5fb43fc59ccf464291c63ed1779399a))
+- Field Kit: Pair with BRODEC in the Server section too ([14e3f3d](https://github.com/bromigos-org/bromigOS/commit/14e3f3d5489f83dab54ad810627d22fac349deb5))
+- Field Kit's tests: Home, Repair, Lab and a finding saved at every size ([cbcb6c8](https://github.com/bromigos-org/bromigOS/commit/cbcb6c863f4c1cd8e0a46d2f22b25afc0f956ada))
+- bromigos-tui: the orb shared, a disk map, a lab constellation, meters, sparklines, a glow ([177e455](https://github.com/bromigos-org/bromigOS/commit/177e455b4a887e2e5baf595b368379574d802994))
+- Field Kit's overview: how busy the computer is, each disk's partitions, the drives' verdicts ([2594da6](https://github.com/bromigos-org/bromigOS/commit/2594da6e9526870342f66f07a58c8ebfa29faad4))
+- Field Kit's Home: the orb as its FLARE, glowing tiles, live readings and disk maps ([3294c8d](https://github.com/bromigos-org/bromigOS/commit/3294c8d18b3553516b7b1c4e6ee07dcfb3fbea61))
+- Field Kit's findings: severity marks in colour, and a Spark when a fix works ([5573649](https://github.com/bromigos-org/bromigOS/commit/5573649b8dd00dec12d285eb502a93770ceea3ca))
+- Field Kit's Lab: the lab's parts as a small map on wide screens ([0dad6b5](https://github.com/bromigos-org/bromigOS/commit/0dad6b538bf43f5b46e9e16674c617159b752842))
+- Shapes shared with the installer: `bromigos fieldkit shapes` and lib/bromigos_drift.py ([c32be88](https://github.com/bromigos-org/bromigOS/commit/c32be88a62d11bacae2f9880d14994de58f2a82f))
+- Field Kit's Home: a tile's whole line on up to four rows when there's room ([64b2d70](https://github.com/bromigos-org/bromigOS/commit/64b2d70b6a03527c7bb4b2941a7a547d13bfe55f))
+- Field Kit on the Linux console: a selected tile reads black on green, not grey ([9eb8835](https://github.com/bromigos-org/bromigOS/commit/9eb883574145d8425daa5c5f375f6aebaad7498e))
+- Field Kit's edition file names it bromigOS Server, as the Install screen and the installer show it ([e36a750](https://github.com/bromigos-org/bromigOS/commit/e36a750b1608451f10169cb8eeaf8a62740e3c36))
+- Field Kit's pairing QR: no seams between rows on any console font; bromigos fieldkit qr ([60630e6](https://github.com/bromigos-org/bromigOS/commit/60630e60de41ba09f84feda4c6eba23860f9c8f0))
+- Field Kit's Home: the whole block centred on wide screens, the orb at full size when there's room; drift's tests in core's check ([917ea36](https://github.com/bromigos-org/bromigOS/commit/917ea36b6298aa7f364166deb3d9915ccaf71729))
+- Field Kit's tagline: Repair. Recon. Deploy. ([453a56f](https://github.com/bromigos-org/bromigOS/commit/453a56f574d28d3aeb16bb8d481f14687c4e9db9))
+- alerts: bromigos alerts finds what needs you, for the desktop and BRODEC's phone ([317432b](https://github.com/bromigos-org/bromigOS/commit/317432bf87aed390c4c56db00ca9bdab0675dabb))
+- Themed QR codes: the world's colours and emblem, BRODEC's inverted and art styles, checked by decoding ([b6d3b8e](https://github.com/bromigos-org/bromigOS/commit/b6d3b8eaec9e5e6febc46b1c5e9a58d445a5e450))
+- bromigos_qr: another world's emblem, tinted, shows on the dark styles ([b77b272](https://github.com/bromigos-org/bromigOS/commit/b77b272ff969e369d8613350bc910997c8d8cb50))
+- Packages build again: the drift tests get rich; alerts read the Server's backup state ([9865fea](https://github.com/bromigos-org/bromigOS/commit/9865fea8f4c2dd9807ed210c361a26d9b7ec6cb7))
+- fieldkit: Lab › Join my lab network, Server › Network ([70ee1f8](https://github.com/bromigos-org/bromigOS/commit/70ee1f81334c630a01d22eaf00ee6a11adf5cdaf))
+- Packages: dislocker 0.7.4 and nwipe 0.43.1, the versions their checksums pin ([3f13690](https://github.com/bromigos-org/bromigOS/commit/3f13690af57c85538aebf3e41434188afdf6498e))
+- Packages: nwipe and dislocker build in CI's container (their build requirements as makedepends) ([01f6f00](https://github.com/bromigos-org/bromigOS/commit/01f6f0077f5f2d1c4b4c1b46385efe1edc4ec2b9))
+- Field Kit's store: bromigOS Server's new base and its roles' packages ([8a6aedc](https://github.com/bromigos-org/bromigOS/commit/8a6aedcba83b10ef5059972f4f9f3198484a19b4))
+- bromigOS Server: the base every Server gets, and its roles as data ([7b85dd1](https://github.com/bromigos-org/bromigOS/commit/7b85dd149f9e60e6340fdc634a40ce41e6a55a53))
+- Field Kit's edition.json: bromigOS Server's roles and its two kernels, for the installer ([bd160c1](https://github.com/bromigos-org/bromigOS/commit/bd160c10cae3ce84f6c05960d76a1b0f862eeb00))
+- server: the disk-alert hook executable in the tree; the containers' drop-in names its docs section ([b6773c3](https://github.com/bromigos-org/bromigOS/commit/b6773c3422e7b8d7f3e07c476efaa49a137638d1))
+- server tests: the backup test's own state helper, so the update tests it inherits read the update's ([fbb0640](https://github.com/bromigos-org/bromigOS/commit/fbb064097a5d9decff2256cf3a88b71ad7cba303))
+- BRODEC's power on in Field Kit's capability file: [wake] ([6805f1b](https://github.com/bromigos-org/bromigOS/commit/6805f1bf3d650570560ba661454ba4a6ee9d6725))
+- installer and tours: DRIFTGLASS redesign of four screens, for review ([43066c8](https://github.com/bromigos-org/bromigOS/commit/43066c8b61fc6a20d8c891e3727a6eeff041e492))
+- redesign: a scannable terminal QR, a disk map of one thickness, badges that never truncate ([8078be6](https://github.com/bromigos-org/bromigOS/commit/8078be6d8f1342a73b75579ef4f345bccc0945a1))
+- redesign: the art moves to desktop/art, packaged by bromigos-desktop into /usr/share/bromigos/art ([0fbfdf0](https://github.com/bromigos-org/bromigOS/commit/0fbfdf016592d04c196952a74337395a95aebae5))
+- installer and tour: DRIFTGLASS on every remaining screen ([1d88032](https://github.com/bromigos-org/bromigOS/commit/1d88032ed14a3e73fd754354fecd855272099b57))
+- redesign: a key press under full motion, the lock in a tall area, a tour of three brains ([391fcf3](https://github.com/bromigos-org/bromigOS/commit/391fcf36296b5dc70513d74ae97f07480f2dee7b))
+- redesign: every installer step and the Server tour in DRIFTGLASS ([e199866](https://github.com/bromigos-org/bromigOS/commit/e199866c80b445874fa077ed6036c7dcf0bcdcf3))
+- redesign: the 16-colour console's chosen card, the countdown's meter in its own colour ([81104bc](https://github.com/bromigos-org/bromigOS/commit/81104bc1a129ff28545cbfadd4bc3ffd1188e818))
+- text installer: no race when a disk is picked; each step opens at its heading; Secure Boot's code big on the last page ([0cce5fe](https://github.com/bromigos-org/bromigOS/commit/0cce5fe7481567c35f1dad7066a990081cca097a))
+- text installer: no redraw into an app that's quitting; the first view checked after the layout; the VM driver waits longer for the disks ([9d9b486](https://github.com/bromigos-org/bromigOS/commit/9d9b486212fec5b40b749eaee4586846641a994c))
+- text installer: a long disk model gives way before its badge ([4698322](https://github.com/bromigos-org/bromigOS/commit/4698322e1f5282770fda6734e70fd0818e7aeb37))
+- manual: the installer and welcome tour pictures from the redesign; the Done page's Secure Boot code ([c33bd44](https://github.com/bromigos-org/bromigOS/commit/c33bd4475fda6f79185ae83cd745ba4b2be22aa2))
+- test: the badge check waits for the layout ([d173d19](https://github.com/bromigos-org/bromigOS/commit/d173d19bb5be95c42c82b8b1380fa30ae0a2ecc8))
+- graphical installer: its script types the old disk's passphrase on an encrypted reinstall ([8610326](https://github.com/bromigos-org/bromigOS/commit/861032690de124ae752cc05087ee8b8a9d873f39))
+- installers: a blank disk's map shows bromigOS over the whole disk ([6551473](https://github.com/bromigos-org/bromigOS/commit/65514732dab2128ed346b68b482eae027bac9acc))
+- installers and tours: "How would you like to be guided?" first, and VECTOR's voice guide ([d70e12a](https://github.com/bromigos-org/bromigOS/commit/d70e12a7a01358c55ddf722af47723cfa9e41788))
+- test: the installed desktop keeps the guidance choices for the new user ([aafbd8a](https://github.com/bromigos-org/bromigOS/commit/aafbd8a6d50b5106194982002893f64ea8034d79))
+- Den TV: STATIC hosts the channel guide and the media TUI ([f70fbed](https://github.com/bromigos-org/bromigOS/commit/f70fbed2fac7544e6ac2c5f07ddb882d17f42d35))
+- STATIC: art from a manifest, Settings › Mascot, one STATIC per screen ([8690ee3](https://github.com/bromigos-org/bromigOS/commit/8690ee339c2571a827cf81f7b749674258ad055e))
+- bromigOS Server: the Media role, the S3 rule set, the installer's picks and choices in the status ([5b3f0ff](https://github.com/bromigos-org/bromigOS/commit/5b3f0ff94661208ccd8befb041a4fcd3c301340d))
+- Field Kit: the disk map of one thickness, the pairing code big where no QR fits; captured in real terminals ([4b69593](https://github.com/bromigos-org/bromigOS/commit/4b69593551cd3c46429c866bd4423ab781e98fa9))
+- bromigOS Server: update modes (auto, download, off), the window, channel, notify, cluster reboots; health.d ([892d964](https://github.com/bromigos-org/bromigOS/commit/892d9647adaf50e6621aa9dc14a714578e22b422))
+- installer: archinstall's wipefs waits for the partition udev is still making ([cbdbebe](https://github.com/bromigos-org/bromigOS/commit/cbdbebeddf602edb9c9d93ceed3017cd86b003a7))
+- installer: the wipefs shim notes each device it found, and has a test (stand-in wipefs and udevadm) ([5484440](https://github.com/bromigos-org/bromigOS/commit/5484440707b3c6098ef4ef75578f1515a543ee24))
+- Merge remote-tracking branch 'origin/main' into den-bumps-58 ([63acb78](https://github.com/bromigos-org/bromigOS/commit/63acb787704a433de371755330cf6de92ea5e3a2))
+- STATIC's art: a least height and what it shows, per name; the command reference has bromigos mascot ([f4311ea](https://github.com/bromigos-org/bromigOS/commit/f4311eac86b98555a767561f7aa12b090f51a35d))
+- Merge remote-tracking branch 'origin/main' into den-bumps-58 ([098e6cf](https://github.com/bromigos-org/bromigOS/commit/098e6cf277e913ba8ecafe0624dddf68deb0ca5e))
+- STATIC's painted shells host Den TV's guide (bromigos-mascot-art) ([b72b260](https://github.com/bromigos-org/bromigOS/commit/b72b260d5e7f8eb3374ee5224b626fa09184732a))
+- installer: bromigOS Server's path, on main with the guidance step ([8320a40](https://github.com/bromigos-org/bromigOS/commit/8320a40f558ec03d0f1275178e28354c72af7278))
+- graphical installer: a long rail packs its rows so VECTOR still fits ([f1da0bc](https://github.com/bromigos-org/bromigOS/commit/f1da0bc054a0ef3319e12da5b743daf21b17be5d))
+- text installer: VECTOR's line always shows whole ([8045fac](https://github.com/bromigos-org/bromigOS/commit/8045fac0b8b4b9e034a2809272d32314edc3a244))
+- text installer: the rail's fit survives the app closing; the briefing test waits for its jump ([4d29eef](https://github.com/bromigos-org/bromigOS/commit/4d29eef600a2efeb837c7ea582b7bdcc1077695d))
+- Server path: nothing on the stick shaped like a private name ([d103552](https://github.com/bromigos-org/bromigOS/commit/d10355260bc075a407b778b7f812b6882929f39c))
+- Server apps' names: <app>-<server>.local, published over mDNS ([f388a75](https://github.com/bromigos-org/bromigOS/commit/f388a75b2181020a6e2dbcc6eaa3657997bedb73))
+- bromigOS Server's screens: the rack hologram, the holo-table and hologram tiles ([700ccb8](https://github.com/bromigos-org/bromigOS/commit/700ccb8c189483da6683a8ef0367ec5a8ac5bb55))
+- installer tests: the Server's offscreen pictures skip where there's no weston ([72e965f](https://github.com/bromigos-org/bromigOS/commit/72e965ff16ec9a96caafe271f9bf08cad030e54d))
+- Merge remote-tracking branch 'origin/main' into den-bumps-58 ([04f2f73](https://github.com/bromigos-org/bromigOS/commit/04f2f73962ef50c2da57311965cac3aac479e2de))
+- STATIC's art: approved (BLACKFLAME, 2026-11-01); the cut script has no stings ([9bfcb24](https://github.com/bromigos-org/bromigOS/commit/9bfcb2443c46e67596064e454a51fd474ea0b462))
+- Den TV: bumps between items and on a channel change, mostly in the night block ([134e8fd](https://github.com/bromigos-org/bromigOS/commit/134e8fdb62944da04af4b0b0ff502fc1fb832c39))
+- STATIC's bumps: the first pack (eight clips, six stings) in bromigos-mascot-art ([a6811a5](https://github.com/bromigos-org/bromigOS/commit/a6811a511d14e54a55a2dfdc529b3d7199e4cd14))
+- Bumps play silent: no stings anywhere (BLACKFLAME, 2026-11-01) ([3c61b4b](https://github.com/bromigos-org/bromigOS/commit/3c61b4bff9488104cd61f548aefbbe21c2e8006d))
+- Settings › Mascot: its modes as a dict, so VECTOR's guard test passes ([fa2ed97](https://github.com/bromigos-org/bromigOS/commit/fa2ed97fd812eba33f46c7b1b849dec430e6f95a))
+- CI: run the desktop package's unit tests on PRs ([2f9e11d](https://github.com/bromigos-org/bromigOS/commit/2f9e11d8faa56f635bd8593724a8824790121b85))
+- CI: desktop tests run as a normal user, like makepkg's check() ([10d808e](https://github.com/bromigos-org/bromigOS/commit/10d808e6916b568d6a7a8c6402137cbf868046a3))
+- STATIC: never take his art for missing while it's still loading ([fdaf047](https://github.com/bromigos-org/bromigOS/commit/fdaf04774a9342e49e6a2439cf2d07d2530bc07a))
+- CI: run the homelab package's unit tests on PRs ([f5d11a4](https://github.com/bromigos-org/bromigOS/commit/f5d11a4ff5cabacbfab3343924cf6460e5295b21))
+- manual: current pictures of the installer, bromigOS Server and Field Kit ([959ddca](https://github.com/bromigos-org/bromigOS/commit/959ddca20eaade0752984011c6553013c165349a))
+- Words about installing that the copy changed; Field Kit's manifest page regenerated ([3d05fdb](https://github.com/bromigos-org/bromigOS/commit/3d05fdbf362d38edf1234ddd1115ec78c19bedfa))
+- Two ISOs per release in the docs; fieldkit usb/make-stick find a downloaded ISO ([54428c9](https://github.com/bromigos-org/bromigOS/commit/54428c981f000354e4ec48d7371466b8d5871f79))
+- Installer picture: the copy stage, as an install now shows it ([9640cd8](https://github.com/bromigos-org/bromigOS/commit/9640cd8068fb240f23add1fcf615e52dd876566a))
+- Field Kit: no NVIDIA driver in the store; an NVIDIA machine downloads it, or gets it at the first update ([12563ee](https://github.com/bromigos-org/bromigOS/commit/12563eeaf740d53cf3496678699f4499a1b93b43))
+
+### VECTOR (bromigos-vector)
+
+#### VECTOR
+
+- holo: the holo projector (holo/projector.py), drawn beside his portrait in one stream over shared memory (portrait.py version 2) ([62ce950](https://github.com/bromigos-org/vector/commit/62ce950e76c0f6ae7d5230d711c0780cbbccb9d9))
+
+#### Docs
+
+- docs: VECTOR in Field Kit's terminal (bromigOS Field Kit and Server reuse the persona and the switch) ([f197689](https://github.com/bromigos-org/vector/commit/f19768940ee7e8ec43867247dafc91f468b4e15f))
+
+#### Other
+
+- portrait: he speaks with his real voice (`voice`), and projector contacts can talk ([119688a](https://github.com/bromigos-org/vector/commit/119688a43b7311d360c28fa2c7ad6c0642766c12))
+- tools: cast to the house's screens (tv_cast_targets, tv_cast, tv_cast_control, tv_cast_handback) ([ca5468e](https://github.com/bromigos-org/vector/commit/ca5468e1387596f03bffa121091cc99c9366bdcb))
+- sandbox: a private runtime folder for his terminal, read-only views of systemd, logind and Hyprland, and Docker's, X's, tmux's and herdr's sockets masked (#4) ([247ae6b](https://github.com/bromigos-org/vector/commit/247ae6b112cf76c2e7c37cb966aff17882ce004c))
+- create: the homelab's image models are the Apache-2.0 Qwen pair; licence warnings reach him ([1905cdd](https://github.com/bromigos-org/vector/commit/1905cdd968079b19eb2035bf4a930929c490ff5a))
+
 ## [0.1.3] - 2026-10-26
 <!-- release: 0.1.3-rc1 -->
 

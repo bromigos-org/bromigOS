@@ -19,41 +19,7 @@ are. To change the channel you follow, see [Channels](update-and-rollback.md#cha
 
 Developers can read every change in the repository's `CHANGELOG.md`.
 
-<!-- unreleased: v0.1.3 -->
-## On edge since 0.1.3
 
-These changes are already on the `edge` channel. They are not a new stable release.
-Run `bromigos update` to get them. The next release notes will include these highlights.
-
-### New
-
-- **Steam and Proton keep themselves ready.** **Settings › Playing games** sets up Steam
-  and the drivers your graphics cards need. bromigOS installs the newest GE-Proton,
-  keeps it current, and repairs what would stop a game, after each update and whenever
-  you quit Steam. The page says **Games are ready** or what needs you, with **Fix**.
-  DLSS works in Proton games on NVIDIA. See [Playing games](games.md).
-- **Choose what each graphics card is for.** **Settings › Graphics** lists every card.
-  Pick the one that draws the desktop (tried first, with a way back), the one games and
-  heavy apps run on, and one kept for virtual machines. From a terminal: `bromigos hw
-  graphics`, `hw display`, `hw games`, `hw run` and `hw vfio`. See
-  [Choose what each card is for](hardware.md#choose-what-each-card-is-for).
-- **Bluetooth devices.** **Settings › Bluetooth** has a page for each device and pairs
-  new ones step by step. A controller tester shows each button and stick live, by the
-  pad's real layout, and makes it rumble. Headphones switch between hi-fi and headset
-  with a microphone. `bromigos bluetooth tui` is the same in a terminal. See
-  [Bluetooth](bluetooth.md).
-
-### Improved
-
-- Bar popups, such as the Bluetooth panel and the sound popup, close on a click anywhere
-  else, and that click still does what it does.
-- An Xbox controller on Linux's basic driver offers one button that installs xpadneo
-  for its rumble and battery.
-- The keyring, oo7, is now built from oo7's own source, unchanged. The fix that keeps a
-  text console login from stopping the keyring is part of oo7 itself now, so bromigOS
-  no longer carries its own patch.
-
-<!-- /unreleased -->
 
 
 
@@ -62,6 +28,71 @@ game installers, NAS share discovery and public DNS setup are not built yet. See
 [provisioning limits](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab-provision.md).
 
 <!-- releases: tools/release/release.py adds each release below this line, newest first -->
+
+## 0.1.4
+<!-- release: 0.1.4-rc1 -->
+
+*1 November 2026 · Release candidate 0.1.4-rc1, on the rc channel. When it's ready, this same build becomes the stable release.*
+
+This release candidate makes setup and everyday use clearer, with a redesigned installer and first-run tour, better update handling, and new tools for login, casting, waking computers, alerts and no-desktop editions.
+
+### Before you update
+
+- After the update, sign out and back in so the new graphics settings take effect.
+- Wake-on-LAN is enabled automatically for wired cards; if it cannot be set during the update, it happens at the next start.
+- Some desktop parts may restart during the update, so save your work.
+- VECTOR's terminal becomes stricter after this update: commands that start or stop background services, unlock the screen, or use certain container and session tools may no longer work.
+
+### New
+
+- **Steam and Proton keep themselves ready.** **Settings › Playing games** sets up Steam and the drivers your graphics cards need. bromigOS installs the newest GE-Proton, keeps it current, and repairs what would stop a game, after each update and whenever you quit Steam. The page says **Games are ready** or what needs you, with **Fix**. DLSS works in Proton games on NVIDIA. See [Playing games](games.md).
+- **Choose what each graphics card is for.** **Settings › Graphics** lists every card. Pick the one that draws the desktop (tried first, with a way back), the one games and heavy apps run on, and one kept for virtual machines. From a terminal: `bromigos hw graphics`, `hw display`, `hw games`, `hw run` and `hw vfio`. See [Choose what each card is for](hardware.md#choose-what-each-card-is-for).
+- **Bluetooth devices.** **Settings › Bluetooth** has a page for each device and pairs new ones step by step. A controller tester shows each button and stick live, by the pad's real layout, and makes it rumble. Headphones switch between hi-fi and headset with a microphone. `bromigos bluetooth tui` is the same in a terminal. See [Bluetooth](bluetooth.md).
+- The `bromigos login` command shows a QR code for the sign-in page, so you can scan it with your phone instead of typing the code.
+- `bromigos media cast` finds screens and speakers around your home and plays a title, link or what a den screen shows on one of them. You can control playback and hand it back to the den.
+- Wired network cards keep Wake-on-LAN on across restarts and updates, so a powered-off computer with a cable can be woken from your network. Check it with `bromigos wol status`.
+- The volume control on the bar opens a popup with outputs, microphones, their volumes and mute; a click switches devices.
+- The installer now has graphical and text modes from the boot menu, can install alongside another operating system, erase a disk, or reinstall and keep files.
+- The welcome tour runs at first login after an install, helping with Wi-Fi, screens, theme, VECTOR, lab setup and phone pairing. Open it again from Settings › About or `bromigos welcome`.
+- Secure Boot can stay on, with a themed boot menu and a one-time key enrollment shown by the installer.
+- bromigOS Field Kit and bromigOS Server add no-desktop editions for repair, lab and server use. Field Kit has its own ISO; `fieldkit usb` makes a stick from a downloaded one. See [Field Kit](fieldkit.md). Your lab can also run its own private network with `bromigos lab network`.
+- `bromigos alerts` checks drives, space, updates, backups, services and games, and tells the desktop or your phone what needs attention.
+- The installer and welcome tour can guide you with VECTOR's voice, captions, screen reader, larger text, high contrast and reduced motion.
+- Den TV's mascot hosts the guide and shows short silent clips between items; turn it off in Settings › Mascot or `bromigos mascot`.
+
+### Improved
+
+- Bar popups, such as the Bluetooth panel and the sound popup, close on a click anywhere else, and that click still does what it does.
+- An Xbox controller on Linux's basic driver offers one button that installs xpadneo for its rumble and battery.
+- The keyring, oo7, is now built from oo7's own source, unchanged. The fix that keeps a text console login from stopping the keyring is part of oo7 itself now, so bromigOS no longer carries its own patch.
+- After an update, programs still using old files restart themselves, and any that need you are listed.
+- The bar and live layer start reliably at login and come back if they are stopped.
+- Smaller downloads: the install stick is now about 3.2 GB (it was 5 GB), and Field Kit about 1.7 GB. Installing copies the live system onto the disk, so installs are faster and use about 2 GB less disk. Field Kit downloads NVIDIA's driver during the install when it finds an NVIDIA card. Both are on the [Download page](https://bromigos.org/download).
+- If you switch to an update channel that isn't ready yet, bromigOS waits and switches by itself later.
+
+### Fixed
+
+- The desktop came up without widgets after using temporary workspaces; it now starts them again.
+- Reinstalling sometimes stopped before the new system could start; it now works and puts the old system back if it stops.
+- Bar popups could keep the keyboard when they closed; they now release it.
+
+### VECTOR
+
+This release candidate makes VECTOR's portrait and hologram more expressive, adds desktop media casting, tightens the terminal sandbox, and updates image creation defaults.
+
+#### New
+
+- A hologram can appear beside VECTOR's portrait, showing one projection at a time, such as a person, call, picture, chart, music, weather, or a list.
+- Desktop media casting lets you ask VECTOR to play media on a named screen or room, or move it back.
+
+#### Improved
+
+- VECTOR's portrait and hologram now move with the actual voice level, and projected contacts can show when someone is talking.
+- Image creation now uses the updated default bromigOS image models, and it shows warnings when a workflow is non-commercial.
+
+### Known issues
+
+- VECTOR: Stills no longer take reference images; use edit workflows instead.
 
 ## 0.1.3
 <!-- release: 0.1.3-rc1 -->
