@@ -780,8 +780,9 @@ What the build does, in the container:
    store inside it, and the medium.
 
 The squashfs is compressed with zstd at level 19 in 1 MiB blocks, not releng's xz. Field
-Kit uses the same settings. The offline repository is half the image and is already zstd,
-so no setting shrinks it. On v0.1.3's live system, without the offline repository:
+Kit uses the same settings. The offline store (a sixth of the desktop image, nearly half
+of Field Kit's) is already zstd, so no setting shrinks it. On v0.1.3's live system, without
+the offline repository:
 
 | Setting | Live system packed | Build time (16 threads) | Unpacking `/usr/lib` (2.7 GiB, one thread) |
 |---|---:|---:|---:|
@@ -918,7 +919,7 @@ https://pkgs.bromigos.org/iso/
   0.1.3/
     bromigos-0.1.3-x86_64.iso                  the desktop medium (live and installer)
     bromigos-0.1.3-x86_64.iso.sha256 .sig .json
-    bromigos-fieldkit-0.1.3-x86_64.iso         the Field Kit, from the release it first ships in
+    bromigos-fieldkit-0.1.4-x86_64.iso         the Field Kit, from the release it first ships in
     index.json                                 every ISO of the version
   edge/
     latest.json

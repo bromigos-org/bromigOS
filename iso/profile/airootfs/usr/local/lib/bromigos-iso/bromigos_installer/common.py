@@ -97,7 +97,7 @@ DESKTOP_EDITION = {
     "id": "desktop", "title": "bromigOS (desktop)", "desktop": True, "default": True,
     "summary": "The full desktop: apps, games, VECTOR, the live wallpaper and the widgets.",
     "hint": "For a computer you sit at, with a screen. This is the usual choice.",
-    "check_packages": ["bromigos", "bromigos-desktop"], "download_size": "3 GB",
+    "check_packages": ["bromigos", "bromigos-desktop"], "download_size": "2 GB",   # 822 packages, 1.94 GB (2026-11-01)
 }
 
 
@@ -349,7 +349,7 @@ def needs_download(ed):
 
 def download_words(ed):
     return (f"{ed['title']} isn't on this USB stick, so it's downloaded while it installs: about "
-            f"{ed.get('download_size', '3 GB')}. That needs the internet for the whole install.")
+            f"{ed.get('download_size', '2 GB')}. That needs the internet for the whole install.")
 
 
 def offline_store():
@@ -907,7 +907,7 @@ def summary(a, disk):
             rows.append(("Remote access (SSH)", "Off"))
         rows.append(("Firewall", "On" if a.get("firewall", True) else "Off"))
         rows.append(("Automatic updates", "On, with a snapshot before each" if a.get("auto_updates", True) else "Off"))
-    rows.append(("Packages", f"Downloaded from the internet (about {ed.get('download_size', '3 GB')})" if needs_download(ed)
+    rows.append(("Packages", f"Downloaded from the internet (about {ed.get('download_size', '2 GB')})" if needs_download(ed)
                  else "From this USB stick (no internet needed)"))
     return rows, warn
 

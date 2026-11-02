@@ -10,8 +10,8 @@ job. [fieldkit.md](fieldkit.md) describes Field Kit.
 Sizes are each package's own installed size. Their dependencies come with them; the
 totals below count those too.
 
-- The running medium: 552 packages with their dependencies, 2691.7 MiB installed.
-- The offline store: 585 package files, 1205.3 MiB (compressed, as downloaded).
+- The running medium: 552 packages with their dependencies, 2707.1 MiB installed.
+- The offline store: 75 package files, 943.9 MiB (compressed, as downloaded): what bromigOS Server adds to the running medium, which an install copies ([iso.md](iso.md#how-installing-works)).
 
 ## Boot & hardware
 
@@ -19,14 +19,14 @@ totals below count those too.
 |---|---:|---|---|
 | `base` | 0 KiB | medium, Server | the base system: systemd, pacman, coreutils, the shell |
 | `linux` | 161.6 MiB | medium, Server | the kernel and its drivers |
-| `linux-firmware-intel` | 138.0 MiB | medium, Server | Intel Wi-Fi, Bluetooth and graphics |
-| `linux-firmware-amdgpu` | 28.1 MiB | medium, Server | AMD graphics (Radeon RX and newer) |
+| `linux-firmware-intel` | 142.2 MiB | medium, Server | Intel Wi-Fi, Bluetooth and graphics |
+| `linux-firmware-amdgpu` | 27.8 MiB | medium, Server | AMD graphics (Radeon RX and newer) |
 | `linux-firmware-radeon` | 2.3 MiB | medium, Server | older AMD/ATI graphics |
-| `linux-firmware-realtek` | 7.7 MiB | medium, Server | Realtek Ethernet, Wi-Fi and Bluetooth |
-| `linux-firmware-atheros` | 53.3 MiB | medium, Server | Qualcomm/Atheros Wi-Fi and Bluetooth |
+| `linux-firmware-realtek` | 8.6 MiB | medium, Server | Realtek Ethernet, Wi-Fi and Bluetooth |
+| `linux-firmware-atheros` | 53.4 MiB | medium, Server | Qualcomm/Atheros Wi-Fi and Bluetooth |
 | `linux-firmware-mediatek` | 37.0 MiB | medium, Server | MediaTek Wi-Fi and Bluetooth |
 | `linux-firmware-broadcom` | 12.9 MiB | medium, Server | Broadcom Ethernet, Wi-Fi and Bluetooth |
-| `linux-firmware-other` | 20.2 MiB | medium, Server | other network and storage controllers (server NICs and HBAs among them) |
+| `linux-firmware-other` | 20.5 MiB | medium, Server | other network and storage controllers (server NICs and HBAs among them) |
 | `amd-ucode` | 603 KiB | Server | processor fixes loaded at startup |
 | `intel-ucode` | 31.4 MiB | Server | processor fixes loaded at startup |
 | `mkinitcpio` | 219 KiB | medium | the medium's startup files (finding the medium, copy to memory) |
@@ -73,17 +73,17 @@ totals below count those too.
 | `chntpw` | 366 KiB | medium | Windows repair: reset a local account's password |
 | `parted` | 2.7 MiB | medium | partition tables: Tools › Partition a drive (cfdisk is util-linux's) |
 | `gptfdisk` | 735 KiB | medium | partition tables: Tools › Partition a drive (cfdisk is util-linux's) |
-| `smartmontools` | 2.1 MiB | medium, Server | Check disks: the drives' own health; NVMe secure erase |
-| `nvme-cli` | 6.0 MiB | medium, Server | Check disks: the drives' own health; NVMe secure erase |
+| `smartmontools` | 2.1 MiB | medium, Server | Check disks: the drives' own health; NVMe secure erase; on Server, smartd watches every disk |
+| `nvme-cli` | 6.6 MiB | medium, Server | Check disks: the drives' own health; NVMe secure erase |
 | `nwipe` | 614 KiB | medium | Erase a disk securely: the overwrite method for drives without their own secure erase (bromigOS's build: not in Arch's repositories) |
 | `dislocker` | 202 KiB | medium | Windows repair: reading a BitLocker drive with its recovery key (bromigOS's build: not in Arch's repositories) |
-| `hdparm` | 182 KiB | medium | ATA secure erase |
+| `hdparm` | 182 KiB | medium | ATA secure erase; Server's Storage role: idle hard disks spun down |
 | `partclone` | 1.9 MiB | medium | disk images and clones, in Clonezilla's format |
 | `testdisk` | 1.7 MiB | medium | Recover deleted files (PhotoRec), Repair a partition table (TestDisk) |
 | `ddrescue` | 288 KiB | medium | Copy a failing drive |
 | `rsync` | 859 KiB | medium, Server | Back up my files to a USB drive |
 | `cifs-utils` | 302 KiB | medium | disk images to and from a network share (LAN) |
-| `nfs-utils` | 1.4 MiB | medium | disk images to and from a network share (LAN) |
+| `nfs-utils` | 1.4 MiB | medium | disk images to and from a network share (LAN); Server's Lab node and Storage roles: the lab's NAS, NFS shares |
 | `micro` | 13.1 MiB | medium | Edit a file on my install, with highlighting |
 | `lynx` | 5.2 MiB | medium | the bromigOS manual, readable offline |
 | `archinstall` | 7.9 MiB | medium | Install bromigOS Server on this computer (the installer's engine) |
@@ -92,7 +92,7 @@ totals below count those too.
 
 | Package | Size | On | Why |
 |---|---:|---|---|
-| `bromigos-lab` | 6.2 MiB | medium, Server | Lab › Lab console, Provision a machine, Model catalog (works offline) |
+| `bromigos-lab` | 7.3 MiB | medium, Server | Lab › Lab console, Provision a machine, Model catalog (works offline) |
 | `bromigos-lab-catalog` | 455 KiB | medium, Server | Lab › Lab console, Provision a machine, Model catalog (works offline) |
 | `bromigos-homelab` | 1.7 MiB | medium, Server | Lab › Media library (bromigos media) and the lab's adapters |
 | `openssh` | 6.8 MiB | medium, Server | Remote help; provisioning lab machines over SSH; the edition's SSH (off until turned on) |
@@ -100,6 +100,7 @@ totals below count those too.
 | `python-zeroconf` | 5.7 MiB | medium, Server | finding lab machines that announce themselves (mDNS) |
 | `sops` | 49.9 MiB | medium, Server | encrypted lab credentials without Vault |
 | `age` | 12.6 MiB | medium, Server | encrypted lab credentials without Vault |
+| `brodec-machine` | ? | medium, Server | BRODEC's machine agent: pair this machine with BRODEC on your phone (VECTOR › Pair with BRODEC), its remote terminal and machine controls |
 
 ## Tools
 
@@ -111,7 +112,7 @@ totals below count those too.
 | `gdu` | 21.7 MiB | medium, Server | Tools › Disk usage |
 | `inxi` | 1.4 MiB | medium | Tools › Hardware report |
 | `dmidecode` | 208 KiB | medium, Server | the hardware report's board and memory details |
-| `ethtool` | 987 KiB | medium, Server | network diagnosis: link speed and cable |
+| `ethtool` | 987 KiB | medium, Server | network diagnosis: link speed and cable; Wake-on-LAN on the wired cards (bromigos wol) |
 | `mtr` | 135 KiB | medium | Tools › Network: trace a route, measure speed, scan the local network, watch traffic |
 | `iperf3` | 320 KiB | medium | Tools › Network: trace a route, measure speed, scan the local network, watch traffic |
 | `nmap` | 26.5 MiB | medium | Tools › Network: trace a route, measure speed, scan the local network, watch traffic |
@@ -122,7 +123,7 @@ totals below count those too.
 | `herdr` | 23.9 MiB | medium, Server | Tools › Herdr; Remote help |
 | `zsh` | 6.9 MiB | medium, Server | the shell and bromigOS's prompt (TTY-aware) |
 | `mehshell` | 3.0 MiB | medium, Server | the shell and bromigOS's prompt (TTY-aware) |
-| `nano` | 2.7 MiB | medium, Server | a plain editor for guides that say nano |
+| `nano` | 2.8 MiB | medium, Server | a plain editor for guides that say nano |
 | `less` | 338 KiB | medium, Server | the pager journalctl and git use |
 | `neovim` | 30.5 MiB | medium | Tools › Neovim, for people who know it |
 | `lazygit` | 20.4 MiB | medium | Tools › lazygit, for people who know it |
@@ -152,8 +153,8 @@ totals below count those too.
 | `traceroute` | 79 KiB | medium | network: the route to a host |
 | `iwd` | 2.2 MiB | medium | network: Wi-Fi without NetworkManager, for impala (off unless started) |
 | `impala` | 5.1 MiB | medium | network: Wi-Fi in the terminal, on iwd |
-| `wireguard-tools` | 267 KiB | medium | network: WireGuard VPN (wg) |
-| `tailscale` | 51.7 MiB | medium | network: a tailnet, to reach a lab from anywhere (off unless started) |
+| `wireguard-tools` | 267 KiB | medium, Server | network: WireGuard VPN (wg); on Server, installed and off: reach it from outside without opening ports |
+| `tailscale` | 51.7 MiB | medium, Server | network: a tailnet, to reach a lab from anywhere (off unless started; on Server too, installed and off) |
 | `smbclient` | 29.0 MiB | medium | network: Windows and NAS shares (smbclient) |
 | `lvm2` | 5.3 MiB | medium | disks and files: LVM volumes |
 | `mdadm` | 1.0 MiB | medium | disks and files: software RAID |
@@ -190,13 +191,13 @@ totals below count those too.
 | Package | Size | On | Why |
 |---|---:|---|---|
 | `python-textual` | 10.0 MiB | medium, Server | the text installer's screens, and bromigOS Server's welcome tour after an install (bromigos welcome-console) |
-| `bromigos-fieldkit-tools` | 229 KiB | medium, Server | the Field Kit menu's engine: the repairs, the stick's settings, remote help, make-stick (the menu's screens are bromigos-core's) |
-| `bromigos-server` | 44 KiB | Server | bromigOS Server, the installed edition: SSH, the firewall, safe automatic updates, containers, the lab's cluster and monitoring |
+| `bromigos-fieldkit-tools` | 248 KiB | medium, Server | the Field Kit menu's engine: the repairs, the stick's settings, remote help, make-stick (the menu's screens are bromigos-core's) |
+| `bromigos-server` | 127 KiB | Server | bromigOS Server, the installed edition: SSH, the firewall, safe automatic updates, containers, the lab's cluster and monitoring |
 | `bromigos-keyring` | 12 KiB | medium, Server | bromigOS's signing key: updates are verified |
-| `bromigos-core` | 78.1 MiB | medium, Server | the bromigos command: update, rollback, hw, console, bluetooth tui |
+| `bromigos-core` | 82.1 MiB | medium, Server | the bromigos command: update, rollback, hw, console, bluetooth tui |
 | `bromigos-boot` | 9.2 MiB | medium, Server | the boot menu's theme and options, the console's font and colours |
 | `bromigos-apps-terminal` | 22 KiB | medium, Server | LazyVim, tmux, lazygit and mise, configured; LazyVim's plugins fetched at build, so Neovim works offline |
-| `bromigos-manual` | 9.4 MiB | medium, Server | the manual, offline |
+| `bromigos-manual` | 12.6 MiB | medium, Server | the manual, offline |
 | `sudo` | 7.9 MiB | medium, Server | the edition's administrator rights |
 | `snapper` | 3.7 MiB | Server | snapshots before every update, and rollback from the boot menu |
 | `snap-pac` | 36 KiB | Server | snapshots before every update, and rollback from the boot menu |
@@ -209,6 +210,18 @@ totals below count those too.
 | `crun` | 828 KiB | Server | the container runtime Podman starts containers with |
 | `netavark` | 10.4 MiB | Server | containers' networking for Podman |
 | `prometheus-node-exporter` | 17.5 MiB | Server | the metrics the lab's Prometheus reads, on port 9100 (local network only) |
+| `linux-lts` | 155.9 MiB | Server | Server's kernel: the boot menu's first entry; the newest (linux) stays as the second |
+| `sshguard` | 2.0 MiB | Server | blocks an address that keeps guessing at SSH, through nftables |
+| `apparmor` | 4.9 MiB | Server | AppArmor's tools and profiles: on at every start (the kernel's lsm=); Podman confines containers with it |
+| `restic` | 41.4 MiB | Server | the nightly backup, encrypted, to the lab's S3, any S3 or SFTP, or a USB disk (off until a destination is set) |
+| `avahi` | 1.9 MiB | Server | mDNS: the _bromigos-lab._tcp announcement, so Find my lab sees the server |
+| `nss-mdns` | 108 KiB | Server | .local names, from the server and to it |
+| `nut` | 15.2 MiB | Server | a clean shutdown before a UPS's battery runs out; set up only when a UPS is plugged in |
+| `samba` | 63.8 MiB | store only | the Storage role: Windows and Mac file shares |
+| `btrbk` | 405 KiB | store only | the Storage role: snapshots copied to a second btrfs machine |
+| `caddy` | 54.4 MiB | store only | the Home services role: one HTTPS name per app, on 80 and 443 (local network) |
+| `nvidia-open-dkms` | 110.7 MiB | store only | a lab GPU node on Server's LTS kernel (the installer's hardware plan): the open driver built for each kernel |
+| `linux-lts-headers` | 273.5 MiB | store only | nvidia-open-dkms's build for the LTS kernel |
 
 ## The largest
 
@@ -217,14 +230,14 @@ The 20 largest packages on the medium, dependencies included:
 | Package | Size |
 |---|---:|
 | `linux` | 161.6 MiB |
-| `mise` | 153.2 MiB |
-| `linux-firmware-intel` | 138.0 MiB |
-| `bromigos-core` | 78.1 MiB |
-| `python` | 73.8 MiB |
+| `mise` | 154.0 MiB |
+| `linux-firmware-intel` | 142.2 MiB |
+| `bromigos-core` | 82.1 MiB |
+| `python` | 73.9 MiB |
 | `perl` | 72.3 MiB |
 | `sof-firmware` | 55.1 MiB |
 | `guile` | 54.5 MiB |
-| `linux-firmware-atheros` | 53.3 MiB |
+| `linux-firmware-atheros` | 53.4 MiB |
 | `tailscale` | 51.7 MiB |
 | `boost-libs` | 51.1 MiB |
 | `glibc` | 50.7 MiB |
@@ -267,3 +280,5 @@ Arch's own live medium (archiso's releng profile) carries these; Field Kit doesn
 | ncdu | gdu does the same job |
 | p7zip dislocker (Arch) | not in Arch's repositories: 7zip replaces p7zip; dislocker is bromigOS's own build |
 | go-yq | yq (the jq wrapper) reads YAML and TOML in 0.3 MiB; go-yq is 14 MiB |
+| docker (Server's Game server role with a lab's Pelican panel) | Docker's engine, for Pelican's Wings only: that choice needs the lab, so it needs the network; it downloads then |
+| cockpit cockpit-podman cockpit-storaged cockpit-files (Server's Cockpit extra) | an opt-in web admin, added later with the network (bromigos server role add cockpit); cockpit-packagekit never |

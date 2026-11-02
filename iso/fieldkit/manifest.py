@@ -76,7 +76,8 @@ def docs(pkgs, left, sizes, closure, out):
         lines += [f"- The running medium: {len(closure.get('live', {}))} packages with their dependencies, "
                   f"{mib(live_total)} installed.",
                   f"- The offline store: {len(closure.get('store', {}))} package files, {mib(store_total)} "
-                  "(compressed, as downloaded).", ""]
+                  "(compressed, as downloaded): what bromigOS Server adds to the running medium, which an "
+                  "install copies ([iso.md](iso.md#how-installing-works)).", ""]
     for section in ORDER:
         rows = [p for p in pkgs if p["section"] == section]
         if not rows:
