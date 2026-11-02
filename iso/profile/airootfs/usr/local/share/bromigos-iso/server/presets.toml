@@ -340,7 +340,7 @@ packages = ["nfs-utils"]
 [[services]]
 id = "gpu"
 title = "NVIDIA graphics for jobs"
-words = "NVIDIA's open driver for the LTS kernel and the container toolkit, when an NVIDIA card is found."
+words = "NVIDIA's open driver for the LTS kernel and the container toolkit, when an NVIDIA card is found. It isn't on the USB stick: it downloads during the install, or with no internet, installs by itself at the first update with it."
 roles = ["lab"]
 needs = "nvidia"
 

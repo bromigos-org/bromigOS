@@ -3,8 +3,8 @@
 
 The medium's live system is the system it installs, so the installer copies it onto the disk
 instead of installing every package again from a second copy of them. The offline store then
-holds only what the live system doesn't have (the NVIDIA driver, the kernel headers, the
-compiler, an edition's own packages); its package databases still list everything, so pacman
+holds only what the live system doesn't have (the desktop medium's NVIDIA driver, kernel
+headers and compiler; an edition's own packages); its package databases still list everything, so pacman
 resolves an install as before, and finds the copied packages installed already.
 
 At build time, inside the image's chroot (both media's customize_airootfs.sh):
@@ -341,6 +341,36 @@ def offline_has(name, store=None, src=None):
     if src not in _live:
         _live[src] = local_names(src) if available(src) else set()
     return name in _live[src]
+
+
+def offline_names(prefix="", store=None, src=None):
+    """The names offline_has says yes to that start with PREFIX: the store's package files'
+    and (a medium that installs by copying) the live image's installed packages."""
+    store = store or os.environ.get("BROMIGOS_ISO_REPO_DIR", "/" + STORE)
+    pat = re.compile(r"^(.+)-[^-]+-[^-]+-[^-]+\.pkg\.tar\.(zst|xz)$")
+    out = set()
+    for dirpath, _, files in os.walk(store):
+        out |= {m.group(1) for m in map(pat.match, files) if m}
+    src = src or source_root()
+    if src not in _live:
+        _live[src] = local_names(src) if available(src) else set()
+    out |= _live[src]
+    return sorted(n for n in out if n.startswith(prefix))
+
+
+def firmware(pkgs, store=None, src=None):
+    """PKGS with linux-firmware as the parts of it the medium carries, when the whole set isn't
+    on it: Field Kit leaves out NVIDIA's (linux-firmware-nvidia, for nouveau), which an NVIDIA
+    machine's install adds from the network (bromigos_installer/server.py's plan). archinstall
+    straps linux-firmware by itself; answers.py and archinstall_copy.py both ask here."""
+    pkgs = list(pkgs)
+    if "linux-firmware" not in pkgs or offline_has("linux-firmware", store, src):
+        return pkgs
+    parts = [p for p in offline_names("linux-firmware-", store, src) if p != "linux-firmware-whence"]
+    if not parts:
+        return pkgs
+    out = [p for p in pkgs if p != "linux-firmware"]
+    return out + [p for p in parts if p not in out]
 
 
 def manifest(src=None):

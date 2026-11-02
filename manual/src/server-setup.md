@@ -236,6 +236,9 @@ the internet), and which of your roles suggested it. Tick or untick anything. Wh
 needs another (Argo CD needs Kubernetes), that one is ticked too and says why. A meter
 fills as you pick: the processor, memory, disk and graphics card the choices need, against
 what this computer has. For model serving, you pick the model, sized to the graphics card.
+On an NVIDIA card you can pick it with no internet too. NVIDIA's driver isn't on the USB
+stick: it downloads during the install, or installs by itself at the first update with the
+internet, and model serving starts then. The installer says which on its network line.
 
 Some picks have a short guided setup:
 

@@ -283,6 +283,14 @@ listed in `/etc/bromigos/server/pending-packages`), `bromigos-server-tpm-enroll.
 (the security chip unlocking the disk) and `bromigos-server-secrets.service` (the install's
 keys into the secret store). They're the installer's own units, and they run once.
 
+The pending packages' unit skips itself while there's no network (its `ExecCondition` looks
+up Arch's mirror), so it never shows as failed. `bromigos server update` starts it before
+each update, so the first update with a network installs them, not only the next start.
+When NVIDIA's driver is among them (an NVIDIA machine installed from Field Kit with no
+network: the stick doesn't carry the driver), that update counts as a driver update: the
+server restarts in its window and the health check follows, as for a new kernel. Until
+then the card runs on the basic display driver.
+
 `setup` never overwrites the installer's own files: its SSH drop-ins
 (`/etc/ssh/sshd_config.d/01-…`, `05-…`, `20-…`: a `05-bromigos-server-password.conf` is
 setup's own only when it says so), its kernel and journal settings (`90-…`, read after the
@@ -698,7 +706,9 @@ For power users: the same block in `/etc/default/grub` sets
 `GRUB_TOP_LEVEL=/boot/vmlinuz-linux-lts` (when that file is there), so GRUB's first entry,
 the default, is the LTS kernel. `[boot] kernel = "linux"` puts the newest first, for very
 new hardware. An NVIDIA card on the LTS kernel needs `nvidia-open-dkms` and
-`linux-lts-headers`, which the Field Kit stick carries. The automatic rollback already puts
+`linux-lts-headers`. The Field Kit stick doesn't carry them (about 505 MiB with the compiler,
+LLVM and Mesa they pull in): the installer downloads them during the install, or with no
+network they wait for the first update with one. The automatic rollback already puts
 back every kernel it finds in `/usr/lib/modules`.
 
 ## Remote access
@@ -850,7 +860,11 @@ For Server, it should:
 - install both kernels in `edition.json`'s `kernels` (`linux-lts` first); `setup` makes the
   LTS one the boot menu's first entry. Write `[boot] kernel = "linux"` when the person asks
   for the newest kernel. With an NVIDIA card, the LTS kernel needs `nvidia-open-dkms` and
-  `linux-lts-headers` (in the store), not `nvidia-open`;
+  `linux-lts-headers`, not `nvidia-open`. They aren't in Field Kit's store: download them
+  when there's a network, else list them in `/etc/bromigos/server/pending-packages` for the
+  first update with one. The store has `linux-firmware`'s parts but NVIDIA's
+  (`linux-firmware-nvidia`), so install those parts, and `linux-firmware` itself on an
+  NVIDIA machine, the same way;
 - make sure the account it creates is in `wheel`: SSH lets in only `wheel` and
   `bromigos-ssh`;
 - set the default target to `multi-user.target`, with no display manager and no audio;

@@ -64,6 +64,15 @@ def in_store(name):
     return copyroot.offline_has(name, OFFLINE_REPO)
 
 
+def firmware(pkgs, online):
+    """linux-firmware, or its parts the medium carries when the whole set isn't on it
+    (copyroot.firmware: Field Kit leaves out NVIDIA's)."""
+    if online:
+        return pkgs
+    from bromigos_installer import copyroot
+    return sorted(copyroot.firmware(pkgs, OFFLINE_REPO))
+
+
 def size(unit, value):
     return {"sector_size": {"unit": "B", "value": 512}, "unit": unit, "value": value}
 
@@ -298,6 +307,7 @@ def main(argv=None):
         # medium (the rest: server_apply.py, from the network or at the first update)
         from bromigos_installer import server_apply
         server_apply.archinstall(cfg, json.loads(_read(answers_path))["server"], in_store, a.online)
+    cfg["packages"] = firmware(cfg["packages"], a.online)
     if a.ssh:
         cfg["services"] = sorted(set(cfg.get("services", [])) | {"sshd"})
         cfg["packages"] = sorted(set(cfg.get("packages", [])) | {"openssh"})

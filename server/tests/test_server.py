@@ -23,6 +23,9 @@ case "$1" in
   is-enabled) echo enabled ;;
   is-system-running) echo running ;;
   list-units) cat "$FAKE/failed" 2>/dev/null ;;
+  # the installer's unit: installs what waited when $FAKE/online is there, else skips itself
+  start) if [ "$2" = bromigos-server-pending.service ] && [ -f "$FAKE/online" ]; then
+           rm -f "$BROMIGOS_SERVER_ROOT/etc/bromigos/server/pending-packages"; fi ;;
 esac
 exit 0
 ''',
@@ -244,6 +247,37 @@ class Server(Rig):
         (self.fake / "failed").write_text("broken.service loaded failed failed Broken\n")
         self.run_server("update")
         self.assertEqual(self.state()["phase"], "ok")
+
+    # ---- what an install with no network left for one (NVIDIA's driver from Field Kit)
+
+    def pending(self, names):
+        p = self.root / "etc/bromigos/server/pending-packages"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("\n".join(names) + "\n")
+        return p
+
+    def test_the_first_update_with_a_network_brings_the_nvidia_driver(self):
+        p = self.pending(["nvidia-open-dkms", "nvidia-utils", "linux-firmware"])
+        (self.fake / "online").write_text("")
+        (self.fake / "update.json").write_text(report([]))
+        r = self.run_server("update")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("systemctl start bromigos-server-pending.service", self.log())
+        self.assertFalse(p.exists())
+        st = self.state()
+        self.assertEqual(st["packages"][:2], ["nvidia-open-dkms", "nvidia-utils"])
+        self.assertTrue(st["kernel"])                   # the driver starts with a restart
+        self.assertEqual(st["phase"], "reboot")
+        self.assertIn("systemctl reboot", self.log())
+
+    def test_still_no_network_leaves_them_waiting(self):
+        p = self.pending(["nvidia-open-dkms"])
+        (self.fake / "update.json").write_text(report([]))
+        r = self.run_server("update")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(p.exists())
+        self.assertEqual(self.state()["phase"], "nothing")
+        self.assertNotIn("systemctl reboot", self.log())
 
     def test_kernel_update_restarts_then_checks(self):
         (self.fake / "update.json").write_text(report(["linux"], kernel=True))

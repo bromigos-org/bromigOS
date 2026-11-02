@@ -34,10 +34,13 @@ class Plugin:
 
     def on_pacstrap(self, packages):
         pkgs = [packages] if isinstance(packages, str) else list(packages)
+        # archinstall's own base packages name linux-firmware: its parts the medium carries,
+        # when the whole set isn't on it (Field Kit leaves out NVIDIA's)
+        changed = copyroot.firmware(pkgs)
         os.makedirs(os.path.dirname(self.record), exist_ok=True)
         with open(self.record, "a") as f:
-            f.write("\n".join(pkgs) + "\n")
+            f.write("\n".join(changed) + "\n")
         if not self.copied:
             self.copied = True
             copyroot.install(_target())
-        return None
+        return changed if changed != pkgs else None

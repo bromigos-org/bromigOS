@@ -374,7 +374,18 @@ def online(timeout=4):
         return False
 
 
-def network_words(download, is_online):
+def network_words(download, is_online, edition=None):
+    """The network row's words; for bromigOS Server on an NVIDIA machine, what happens to its driver."""
+    words = _network_words(download, is_online)
+    if edition == "server" and not download:
+        from . import server
+        nv = server.nvidia_words(is_online)
+        if nv:
+            words += " " + nv
+    return words
+
+
+def _network_words(download, is_online):
     if not download and is_online:
         return "Connected to the internet. The install doesn't need it: everything is on this USB stick."
     if not download:

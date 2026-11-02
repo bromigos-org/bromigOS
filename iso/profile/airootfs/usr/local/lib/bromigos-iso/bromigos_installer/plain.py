@@ -88,6 +88,8 @@ def main():
                 say(common.network_words(True, False))
                 raise SystemExit(1)
     ed = common.edition(a["edition"])
+    if a["edition"] == "server" and server.nvidia_driver_later():
+        say(server.nvidia_words(common.online()))
     heading("keyboard")
     a["keyboard"] = choose("Keyboard layout:", [(k[0], k[1]) for k in common.KEYBOARDS],
                            default=[k[0] for k in common.KEYBOARDS].index(common.LANG_KEYBOARD.get(a["locale"], "us")))
