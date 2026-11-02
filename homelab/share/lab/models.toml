@@ -9,9 +9,9 @@
 # and MTEB leaderboards, OmniDocBench and olmOCR-bench, vendor and community benchmarks (each
 # model's `cite`). Figures marked est. in vram_note are computed, not measured.
 format = 1
-version = 5
+version = 6
 researched = "2026-10-09"
-refreshed = "2026-10-26"
+refreshed = "2026-11-02"
 
 [licence.apache-2]
 hub = ["apache-2.0"]
@@ -10438,4 +10438,95 @@ stack = "needs support: a new voice-service backend (check its runtime)"
 licence = "apache-2.0"
 review = true
 found = "2026-10-26"
+state = "pending review"
+[[pending]]
+id = "hf:LiquidAI/LFM3-1.7B-Base"
+kind = "new model"
+capability = "llm"
+title = "LiquidAI/LFM3-1.7B-Base: trending text-generation"
+why = "new in the last 60 days (7 days old), 129 likes, 4520 downloads"
+repo = "LiquidAI/LFM3-1.7B-Base"
+evidence = ["https://huggingface.co/LiquidAI/LFM3-1.7B-Base"]
+stack = "ready (vllm, sglang)"
+licence = "other"
+review = true
+found = "2026-11-02"
+state = "pending review"
+[[pending]]
+id = "hf:baidu/Unlimited-OCR-2"
+kind = "new model"
+capability = "llm"
+title = "baidu/Unlimited-OCR-2: trending image-text-to-text"
+why = "new in the last 60 days (7 days old), 560 likes, 147588 downloads"
+repo = "baidu/Unlimited-OCR-2"
+evidence = ["https://huggingface.co/baidu/Unlimited-OCR-2"]
+stack = "ready (vllm, sglang)"
+licence = "mit"
+review = true
+found = "2026-11-02"
+state = "pending review"
+[[pending]]
+id = "hf:sensenova/SenseNova-Loop-9B-Preview"
+kind = "new model"
+capability = "llm"
+title = "sensenova/SenseNova-Loop-9B-Preview: trending image-text-to-text"
+why = "new in the last 60 days (5 days old), 181 likes, 1536 downloads"
+repo = "sensenova/SenseNova-Loop-9B-Preview"
+evidence = ["https://huggingface.co/sensenova/SenseNova-Loop-9B-Preview"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+found = "2026-11-02"
+state = "pending review"
+[[pending]]
+id = "hf:sensenova/SenseNova-6.8-Code2Video"
+kind = "new model"
+capability = "llm"
+title = "sensenova/SenseNova-6.8-Code2Video: trending image-text-to-text"
+why = "new in the last 60 days (9 days old), 86 likes, 644 downloads"
+repo = "sensenova/SenseNova-6.8-Code2Video"
+evidence = ["https://huggingface.co/sensenova/SenseNova-6.8-Code2Video"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+found = "2026-11-02"
+state = "pending review"
+[[pending]]
+id = "hf:alibaba-pai/MiniMax-H3-Fun-Controlnet-Union-2.0"
+kind = "new model"
+capability = "video"
+title = "alibaba-pai/MiniMax-H3-Fun-Controlnet-Union-2.0: trending text-to-video"
+why = "new in the last 60 days (41 days old), 77 likes, 19329 downloads"
+repo = "alibaba-pai/MiniMax-H3-Fun-Controlnet-Union-2.0"
+evidence = ["https://huggingface.co/alibaba-pai/MiniMax-H3-Fun-Controlnet-Union-2.0"]
+stack = "ready (ComfyUI: Comfy-Org/MiniMax-H3)"
+licence = "other"
+review = true
+found = "2026-11-02"
+state = "pending review"
+[[pending]]
+id = "hf:speridlabs/idol"
+kind = "new model"
+capability = "3d"
+title = "speridlabs/idol: trending image-to-3d"
+why = "new in the last 60 days (5 days old), 408 likes, 7787 downloads"
+repo = "speridlabs/idol"
+evidence = ["https://huggingface.co/speridlabs/idol"]
+stack = "ready (ComfyUI: Comfy-Org/Idol)"
+licence = "apache-2.0"
+review = true
+found = "2026-11-02"
+state = "pending review"
+[[pending]]
+id = "hf:third-intelligence/Haas-ja-v1.0"
+kind = "new model"
+capability = "stt"
+title = "third-intelligence/Haas-ja-v1.0: trending automatic-speech-recognition"
+why = "new in the last 60 days (25 days old), 49 likes, 1236 downloads"
+repo = "third-intelligence/Haas-ja-v1.0"
+evidence = ["https://huggingface.co/third-intelligence/Haas-ja-v1.0"]
+stack = "needs support: a new voice-service backend (check its runtime)"
+licence = "apache-2.0"
+review = true
+found = "2026-11-02"
 state = "pending review"
