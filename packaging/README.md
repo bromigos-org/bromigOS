@@ -33,6 +33,7 @@ packaging/
   ci/brodec-machine.sh     the same for BRODEC's machine agent on its own (brodec-machine)
   ci/brodec-lab.sh         fetches and checks BRODEC's lab bridge, and packages it
   prebuilt/brodec-lab/     the lab bridge's package files and image (no build here)
+  ci/brodec-faces.sh       fetches and checks BRODEC's watch faces, and uploads them
   dev-repo.sh              your own build as a local repository, for the dev channel
   setup-repo.sh            adds [bromigos] to a machine by hand (install.sh does this now)
 ```
@@ -488,6 +489,41 @@ The chart's tests run on every pull request that touches it:
 ```bash
 python3 homelab/charts/brodec-lab/tests/test_chart.py
 ```
+
+### BRODEC's watch faces
+
+THE CUFF is BRODEC's watch face. On Wear OS 6 the BRODEC watch app installs it itself with
+Watch Face Push, downloading it only when its wearer picks it, from
+`https://pkgs.bromigos.org/brodec/faces/`:
+
+| Path | What |
+|---|---|
+| `brodec/faces/latest.json` | the faces manifest the watch reads: each face's id, name, package, version, APK path, size, SHA-256 and Google's validation token |
+| `brodec/faces/<version>/<face>.apk` | the face (`org.bromigos.brodec.watchfacepush.<face>`) |
+| `brodec/faces/<version>/<face>.token` | its validation token |
+
+The face is built and signed in BRODEC's private repository, so nothing is built or signed
+here:
+
+1. On a release tag, BRODEC's CI builds the face, runs Google's Watch Face Push validator on
+   it, signs it with the faces' own key and stages `latest.json` and each face's APK and
+   token as the only content of a commit at `refs/brodec-faces/build` in BRODEC's
+   repository. The commit's message names the version, the versionCode, the commit it was
+   built from and `latest.json`'s SHA-256.
+2. `.github/workflows/brodec-faces.yml` (started by BRODEC's CI, with a cron as the
+   fallback) reads that ref with the same read-only deploy key and publishes it when
+   `latest.json`'s versionCode is newer than the published one.
+3. `ci/brodec-faces.sh fetch` checks it first: `latest.json`'s SHA-256; every face is
+   BRODEC's Watch Face Push package and has the version the commit names; each APK has the
+   size and SHA-256 `latest.json` gives and holds nothing but `AndroidManifest.xml`,
+   `resources.arsc`, `res/` and `META-INF/` (a watch face without code); each token matches;
+   the commit holds nothing else; it was built from a commit on BRODEC's `main`.
+4. `ci/brodec-faces.sh publish` uploads the APKs and tokens (cached for a year: a version's
+   files never change), then `latest.json` (no-cache), so the manifest never names an APK
+   that isn't there yet. Older versions stay; nothing points at them.
+
+Pull requests run `ci/test-brodec-faces.sh`, which checks the script against a stand-in
+repository, and never publish.
 
 ### What CI needs
 
