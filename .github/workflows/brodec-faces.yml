@@ -1,0 +1,107 @@
+# THE CUFF for Watch Face Push (packaging/README.md, "BRODEC's watch faces"): BRODEC's watch app
+# downloads its watch face on demand from https://pkgs.bromigos.org/brodec/faces/ and installs it
+# itself on Wear OS 6.
+#
+# BRODEC's repository is private. Its release CI (release.yml, on a v* tag) builds the face, runs
+# Google's Watch Face Push validator on it and stages the APK, its token and latest.json at a git
+# ref there. This workflow reads that ref with the read-only deploy key the other BRODEC
+# publishers use, checks it (packaging/ci/brodec-faces.sh) and uploads it to the public bucket:
+# the APKs first, latest.json last. Nothing is built here, and nothing is signed: the face is
+# signed in BRODEC's CI with the faces' own key, and Android checks that signature.
+#
+# BRODEC's CI starts it right after it stages a release (a workflow_dispatch with
+# BROMIGOS_DISPATCH_TOKEN); the cron is the fallback. A run with nothing new stops after a few
+# seconds. Pull requests only run the script's tests: they never publish.
+name: brodec-faces
+
+on:
+  schedule:
+    - cron: "13,43 * * * *"
+  pull_request:
+    paths:
+      - "packaging/ci/brodec-faces.sh"
+      - "packaging/ci/test-brodec-faces.sh"
+      - ".github/workflows/brodec-faces.yml"
+  workflow_dispatch:
+    inputs:
+      republish:
+        description: "Upload the staged release again, even when it's already published"
+        type: boolean
+        default: false
+
+concurrency:
+  group: brodec-faces-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: packaging/ci
+      - run: shellcheck -S warning packaging/ci/brodec-faces.sh packaging/ci/test-brodec-faces.sh
+      - run: packaging/ci/test-brodec-faces.sh
+
+  publish:
+    name: Publish a new release
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: packaging/ci
+      - name: Configured
+        id: configured
+        env:
+          BRODEC_DEPLOY_KEY: ${{ secrets.BRODEC_DEPLOY_KEY }}
+        run: |
+          if [ -n "$BRODEC_DEPLOY_KEY" ]; then echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else echo "::notice::No BRODEC_DEPLOY_KEY secret: nothing to read"; fi
+      - name: The staged release
+        id: staged
+        if: steps.configured.outputs.ready == 'true'
+        env:
+          BRODEC_DEPLOY_KEY: ${{ secrets.BRODEC_DEPLOY_KEY }}
+        run: packaging/ci/brodec-faces.sh staged
+      - name: Published already?
+        id: missing
+        if: steps.staged.outputs.version_code != ''
+        env:
+          CODE: ${{ steps.staged.outputs.version_code }}
+          REPUBLISH: ${{ inputs.republish && 'true' || 'false' }}
+        run: |
+          if [ "$REPUBLISH" = true ]; then echo 'publish=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          packaging/ci/brodec-faces.sh missing "$CODE"
+      - name: Fetch and check the faces
+        if: steps.missing.outputs.publish == 'true'
+        env:
+          BRODEC_DEPLOY_KEY: ${{ secrets.BRODEC_DEPLOY_KEY }}
+        run: packaging/ci/brodec-faces.sh fetch "$RUNNER_TEMP/faces"
+      - name: Upload to pkgs.bromigos.org
+        if: steps.missing.outputs.publish == 'true'
+        env:
+          PKGS_PUBLIC_ENDPOINT: ${{ secrets.PKGS_PUBLIC_ENDPOINT }}
+          PKGS_PUBLIC_BUCKET: ${{ secrets.PKGS_PUBLIC_BUCKET }}
+          PKGS_PUBLIC_ACCESS_KEY_ID: ${{ secrets.PKGS_PUBLIC_ACCESS_KEY_ID }}
+          PKGS_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.PKGS_PUBLIC_SECRET_ACCESS_KEY }}
+        run: |
+          command -v rclone >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq rclone >/dev/null; }
+          packaging/ci/brodec-faces.sh publish "$RUNNER_TEMP/faces"
+      - name: Check what the watch reads
+        if: steps.missing.outputs.publish == 'true'
+        env:
+          CODE: ${{ steps.staged.outputs.version_code }}
+        run: |
+          sleep 5
+          got=$(curl -fsSL -H 'Cache-Control: no-cache' "https://pkgs.bromigos.org/brodec/faces/latest.json?ci=$GITHUB_RUN_ID" \
+            | python3 -c 'import json,sys; print(max(f["versionCode"] for f in json.load(sys.stdin)["faces"]))')
+          [ "$got" = "$CODE" ] || { echo "::error::latest.json says $got, not $CODE"; exit 1; }
+          echo "https://pkgs.bromigos.org/brodec/faces/latest.json: $CODE" >> "$GITHUB_STEP_SUMMARY"
