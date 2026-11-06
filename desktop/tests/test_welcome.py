@@ -151,3 +151,129 @@ class Pairing(unittest.TestCase):
         self.assertIn("Pixel 9 (key 4F:2A)", asked[0])
         self.assertTrue(result[0][0])
         self.assertIn("can now send jobs", result[0][1])
+
+
+class LabStep(unittest.TestCase):
+    """Your lab: the link through BRODEC's lab bridge (brodec-lab connect --json), stopped when the
+    tour cancels it, its events in words, the bridge's service after linking, the card's name."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.join(HERE, "../../lib"))
+        import bromigos_firstrun
+        self.F = bromigos_firstrun
+        self.tmp = tempfile.mkdtemp()
+
+    def script(self, name, body):
+        p = os.path.join(self.tmp, name)
+        with open(p, "w") as f:
+            f.write("#!/bin/sh\n" + body)
+        os.chmod(p, 0o755)
+        return p
+
+    def wait(self, cond, n=100):
+        import time
+        for _ in range(n):
+            if cond():
+                return True
+            time.sleep(0.05)
+        return False
+
+    def test_watched_runs_the_same_command_through_pkexec(self):
+        argv = self.F.lab_link_watched("hosted", timeout=120)
+        self.assertEqual(argv[:3], ["pkexec", "sh", "-c"])
+        self.assertEqual(argv[5:], self.F.lab_link_argv(gui=True, intent="hosted", timeout=120)[1:])
+        self.assertEqual(self.F.watched(["sudo", "x"]), ["sudo", "x"])
+
+    def test_cancel_closes_stdin_and_stops_the_bridge(self):
+        """Run as root, the bridge can't be signalled by the tour: closing its stdin stops it."""
+        pidf = os.path.join(self.tmp, "pid")
+        bridge = self.script("bridge", f"echo $$ > {pidf}\n"
+                                       "echo '{\"event\":\"code\",\"user_code\":\"KX7-42Q\",\"expires_in\":600}'\n"
+                                       "trap '' TERM\nwhile :; do sleep 0.1; done\n")
+        evs = []
+        # SIGTERM is ignored by the stand-in, as a root process ignores ours: only the pipe stops it
+        argv = ["sh", "-c", self.F.STDIN_WATCH.replace('kill -TERM "$p"', 'kill -KILL "$p"'), "t", bridge]
+        pr = self.F.Pairing(argv, evs.append, hold_stdin=True)
+        self.assertTrue(self.wait(lambda: evs and os.path.exists(pidf)))
+        self.assertEqual(evs[0]["user_code"], "KX7-42Q")
+        pid = int(open(pidf).read())
+        pr.cancel()
+        self.assertTrue(self.wait(lambda: evs[-1]["event"] == "cancelled"))
+
+        def gone():
+            try:
+                os.kill(pid, 0)
+                with open(f"/proc/{pid}/stat") as f:
+                    return f.read().split()[2] == "Z"
+            except OSError:
+                return True
+        self.assertTrue(self.wait(gone), "the bridge still runs after cancel")
+
+    def test_a_finished_link_ends_cleanly(self):
+        bridge = self.script("bridge", "echo '{\"event\":\"code\",\"user_code\":\"A\"}'\n"
+                                       "echo '{\"event\":\"approved\",\"intent\":\"self-hosted\"}'\n"
+                                       "echo '{\"event\":\"paired\",\"owner\":\"a@example.org\",\"name\":\"desk\"}'\n")
+        evs = []
+        self.F.Pairing(["sh", "-c", self.F.STDIN_WATCH, "t", bridge], evs.append, hold_stdin=True)
+        self.assertTrue(self.wait(lambda: len(evs) == 3))
+        import time
+        time.sleep(0.3)
+        self.assertEqual([e["event"] for e in evs], ["code", "approved", "paired"])
+
+    def test_every_event_has_words(self):
+        w = self.F.link_words
+        self.assertIn("new one", w({"event": "expired", "user_code": "A"}))
+        self.assertIn("Linking this computer", w({"event": "approved"}, "self-hosted"))
+        self.assertIn("Waiting for the website", w({"event": "approved"}, "hosted"))
+        for code, words in (("denied", "turned down"), ("timeout", "in time"), ("already_paired", "already a lab"),
+                            ("rate_limited", "Wait a minute"), ("not_installed", "Install it")):
+            self.assertIn(words, w({"event": "failed", "code": code, "message": "x"}), code)
+        self.assertIn("password window was closed",
+                      w({"event": "failed", "code": "agent_failed",
+                         "message": "Error executing command as another user: Request dismissed"}))
+        self.assertIn("boom", w({"event": "failed", "code": "unreadable", "message": "Traceback\nboom"}))
+        self.assertIn("Try again", w({"event": "cancelled"}))
+        self.assertEqual(w({"event": "paired"}), "")
+
+    def test_the_bridge_service_after_linking(self):
+        log = os.path.join(self.tmp, "log")
+        bindir = os.path.join(self.tmp, "bin")
+        os.makedirs(bindir)
+        for name, body in (("systemctl", f'echo "systemctl $*" >> {log}\n[ "$1" = is-active ] && exit ${{ACTIVE:-1}}\n'),
+                           ("pkexec", f'echo "pkexec $*" >> {log}\n')):
+            p = os.path.join(bindir, name)
+            with open(p, "w") as f:
+                f.write("#!/bin/sh\n" + body)
+            os.chmod(p, 0o755)
+        old = os.environ["PATH"]
+        os.environ["PATH"] = bindir + ":" + old
+        try:
+            os.environ["ACTIVE"] = "0"
+            self.assertEqual(self.F.lab_bridge_service(lambda l: None)[0], "running")
+            os.environ["ACTIVE"] = "3"
+            self.assertEqual(self.F.lab_bridge_service(lambda l: None)[0], "started")
+        finally:
+            os.environ["PATH"] = old
+            os.environ.pop("ACTIVE", None)
+        self.assertIn("pkexec systemctl enable --now brodec-lab", open(log).read())
+
+    def test_the_cards_name(self):
+        hw = lambda *gs: {"detection": {"gpus": list(gs)}}  # noqa: E731
+        self.assertEqual(self.F.gpu_name(hw({"vendor": "NVIDIA", "name": "AD104 [GeForce RTX 4070]"})), "RTX 4070")
+        self.assertEqual(self.F.gpu_name(hw({"vendor": "Intel", "name": "UHD 770"},
+                                            {"vendor": "AMD", "name": "Navi 31 [Radeon RX 7900 XTX]"})),
+                         "Radeon RX 7900 XTX")
+        self.assertEqual(self.F.gpu_name(hw()), "")
+
+    def test_vector_has_a_line_for_each_view(self):
+        import tomllib
+        with open(os.path.join(HERE, "../../lib/guide/lines.toml"), "rb") as f:
+            lines = tomllib.load(f)
+        for key in ("tour.lab", "tour.lab-link", "tour.lab-find"):
+            self.assertTrue(lines.get(key, {}).get("text"), key)
+
+    def test_the_renders_draw_every_lab_view(self):
+        mod = load()
+        self.assertEqual(mod.SAMPLE_LINK["event"], "code")
+        self.assertIn("lab-hosted", mod.LAB_STATES)
+        self.assertIn("lab-find", mod.LAB_STATES)
