@@ -32,6 +32,7 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab power …` | Read supported PDU outlets and plan reviewed changes ([below](#pdu-power)). |
 | `bromigos lab maintenance …` | Plan, follow and resume an ordered shutdown or startup ([below](#rack-maintenance)). |
 | `bromigos lab connect …` | Run `bromigos setup homelab …`: find services and write `homelab.toml`. |
+| `bromigos lab link` | Link this computer to your Bromigos account as a lab, from bromigos.org/link ([below](#link-this-computer-to-your-account)). |
 | `bromigos lab target …` | Run `bromigos target …`: choose where AI runs ([targets.md](targets.md)). |
 | Super+Shift+H | Open the Lab deck, a hologram of the rack lit by the same readings. |
 | Settings › Lab | See the status, models, recent jobs, the doctor and the targets in a window. Set your media languages. |
@@ -831,6 +832,37 @@ The Lab page in Settings shows the same things in a window: the status, the GPUs
 models, the model planner, recent jobs with their results, the doctor's findings and where
 AI runs. It reads `bromigos lab … --json` in the background, so the window never blocks.
 From there you can free what ComfyUI holds. It doesn't change the lab otherwise.
+
+## Link this computer to your account
+
+`bromigos lab link` makes this computer a lab on your Bromigos account without a phone at
+hand. It works in any terminal, over SSH too.
+
+1. It runs BRODEC's lab bridge, `sudo brodec-lab connect` (install it first with
+   `sudo pacman -S brodec-lab`). The bridge prints a short code like `KX7-42Q`, the
+   address `https://bromigos.org/link` and a QR code of it.
+2. On any phone or computer, open that page (or scan the QR code), sign in to your
+   Bromigos account, check the computer's name and system, and approve it as your lab.
+3. The bridge pairs with your account and `bromigos lab link` starts its service, so
+   VECTOR answers from this computer.
+
+The lab's keys are made on this computer and never leave it. The website never vouches
+for them: open BRODEC on your phone afterwards and verify VECTOR with the seven emoji.
+
+For power users:
+
+- `bromigos lab link --intent hosted` links your account for a lab Bromigos hosts instead.
+  You choose and pay for it on the website, and nothing is paired here.
+- `--name NAME` names the lab (by default the bridge's `BRODEC_LAB_NAME`, or the host
+  name), `--timeout S` gives up after S seconds, and `--no-start` leaves the service alone.
+- `--json` prints one JSON event per line for a setup screen: `code` (`user_code`,
+  `verification_uri`, `qr`, `qr_svg`, `qr_text`, `fingerprint`), `expired`, `approved`,
+  `paired`, `hosted`, `failed` (with a `code`: `denied`, `timeout`, `already_paired`,
+  `rate_limited`, ...), then `service`. `brodec-lab connect --json` prints the same
+  without the `service` event; the welcome tours call it through `lab_link_argv()` in
+  `lib/bromigos_firstrun.py`.
+- Exit codes: 0 linked (or approved for a hosted lab), 1 not linked, 3 the bridge isn't
+  installed, 130 cancelled.
 
 ## VECTOR and the lab
 

@@ -106,6 +106,24 @@ class Pairing(unittest.TestCase):
         self.assertEqual(evs[0]["event"], "failed")
         self.assertIn("agent exploded", self.F.pairing_words(evs[0]))
 
+    def test_linking_on_the_website_streams_the_bridges_events(self):
+        argv = self.F.lab_link_argv(gui=True)
+        self.assertEqual(argv[:4], ["pkexec", "brodec-lab", "connect", "--json"])
+        self.assertIn("bromigos-setup", argv)
+        self.assertEqual(self.F.lab_link_argv(gui=False, intent="hosted")[0], "sudo")
+        p = self.script("connect", "echo '{\"event\":\"code\",\"user_code\":\"KX7-42Q\",\"qr\":\"x\"}'\n"
+                                   "echo '{\"event\":\"approved\",\"intent\":\"hosted\"}'\n"
+                                   "echo '{\"event\":\"hosted\",\"order_id\":null}'\n")
+        evs = []
+        self.F.Pairing([p], evs.append)
+        self.assertTrue(self.wait(lambda: len(evs) == 3))
+        self.assertEqual([e["event"] for e in evs], ["code", "approved", "hosted"])
+        import time
+        time.sleep(0.2)
+        self.assertEqual(len(evs), 3, "hosted ends it: no failure after a clean exit")
+        self.assertIn("bromigos.org", self.F.pairing_words(evs[2]))
+        self.assertIn("turned down", self.F.pairing_words({"event": "failed", "code": "denied"}))
+
     def test_no_capability_file_says_what_to_press(self):
         words = self.F.pairing_words({"event": "failed", "code": "no_capability_file"})
         self.assertIn("Allow pairing", words)
