@@ -215,6 +215,8 @@ server rack, lit by the same readings. See [Holograms](holograms.md#lab-deck).
 
 **Settings › Lab** shows the same summary, your models, recent jobs, the doctor, and where
 AI runs.
+Its **Your Bromigos lab** row opens the welcome tour's Your lab step, to make this
+computer a lab or get a hosted lab ([The welcome tour](welcome-tour.md)).
 
 ## Make things on your lab
 

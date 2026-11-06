@@ -13,8 +13,10 @@ so there is no second config path:
   VECTOR                      your lab, this computer (the lab catalog's model, through Ollama), a service,
                               or not now: bromigos setup vector …; his voice: bromigos setup voice …;
                               then he says hello
-  Your lab                    find it (bromigos setup homelab --find, in the background), a connection
-                              file (--homelab FILE), or bromigos-lab's plan for making this computer it
+  Your lab                    three tiles: make this computer a lab, get a hosted lab, or skip; either lab
+                              shows a code and its QR to approve on bromigos.org/link (BRODEC's lab bridge,
+                              brodec-lab connect --json: lab_link_argv), then the result. Already run a
+                              lab at home: find it (bromigos setup homelab --find), or a connection file
   Ask VECTOR                  once his brain answers: a box on every step for a question about it, his
                               answer shown (and spoken, with the voice guide on and his voice running)
   Pair your phone             BRODEC's machine helper (brodec-desktop, installed with consent): its QR
@@ -25,7 +27,8 @@ so there is no second config path:
   bromigos welcome                 open it (again: Settings › About › Welcome tour opens it too)
   bromigos welcome --if-pending    the session's autostart: only when the installer left
                                    ~/.local/state/bromigos/welcome-pending (a new install)
-  bromigos welcome --step STEP     open it on one step (network, screens, world, vector, lab, phone, keys)
+  bromigos welcome --step STEP     open it on one step (network, screens, world, vector, lab, phone, keys);
+                                   Settings › Lab opens it on the lab step
   bromigos welcome --render DIR    each step drawn to DIR/welcome-STEP.png and exit (a Wayland display
                                    is needed: tests use a headless one)
 
@@ -64,8 +67,8 @@ STEPS = [
     ("vector", "VECTOR", "VECTOR, your desk's AI",
      "Where his brain runs, and whether he speaks. Nothing leaves this computer unless you choose a service."),
     ("lab", "Your lab", "Your lab",
-     "Optional. If you run servers at home, this computer can use them: the panels show them, and VECTOR can "
-     "think on their graphics cards. Everything happens here; nothing opens elsewhere."),
+     "Your lab is where VECTOR thinks, paints and talks, and where your servers run. Make this computer the lab, "
+     "get one we run for you, or decide later."),
     ("phone", "Phone", "Pair your phone",
      "With BRODEC on your phone you can talk to VECTOR from anywhere, approve his fixes, and restart, shut down "
      "or update this computer."),
@@ -99,6 +102,15 @@ SAMPLE_WIFI = [{"ssid": "Rivera Home", "signal": 86, "secure": True, "connected"
 SAMPLE_BRAIN = {"url": "http://192.0.2.24:4000/v1", "model": "sample", "key": "none"}
 SAMPLE_ASK = ("What does my lab give me?", "Your lab's graphics card runs my brain and the models, so this computer stays "
               "cool and quiet. The panels show its machines, and you can send it jobs from here.")
+SAMPLE_GPU = "RTX 4070"
+SAMPLE_LINK = {"event": "code", "name": "desk", "user_code": "KX7-42Q", "verification_uri": "https://bromigos.org/link",
+               "verification_uri_complete": "https://bromigos.org/link?code=KX7-42Q",
+               "qr": "https://bromigos.org/link?code=KX7-42Q", "expires_in": 581}
+SAMPLE_PAIRED = {"event": "paired", "id": "lab-1", "name": "desk", "owner": "alex@example.org", "keys_verified": False}
+SAMPLE_HOSTED = {"event": "hosted", "order_id": None, "order_status": None}
+# the lab step's pictures after welcome-lab.png (render_all): the code for a hosted lab and for this
+# computer, approved, paired, a hosted lab approved, turned down, and Find my lab
+LAB_STATES = ["lab-hosted", "lab-self", "lab-approved", "lab-paired", "lab-hosted-done", "lab-failed", "lab-find"]
 SAMPLE_CHOSE = {"network": "Connected to Rivera Home", "screens": "Main screen: DP-1", "world": "World: mire",
                 "vector": "Brain: your lab (connected on the next step), voice: Kokoro", "lab": "Your lab is connected",
                 "phone": "Your phone is paired"}
@@ -273,6 +285,23 @@ def main(argv):
 .bw-code {{ font-size: 1.9em; font-weight: 700; letter-spacing: 0.18em; color: {c.get('primary', '#39ff14')}; }}
 .bw-status {{ font-size: 1.05em; color: {c.get('soft', '#9cff8a')}; }}
 .bw-tick {{ font-size: 5em; color: {c.get('primary', '#39ff14')}; }}
+.bw-tile .dg-card-title.bw-tile-title {{ color: {c.get('text', '#c4f5bb')}; font-size: 1.1em; letter-spacing: 0.1em; }}
+.bw-tile:checked .dg-card-title.bw-tile-title {{ color: {c.get('primary', '#39ff14')}; }}
+.bw-tile:checked .dg-card-text {{ color: {c.get('text', '#c4f5bb')}; }}
+.dg-card.bw-tile-skip {{ border-style: dashed; background-color: transparent; }}
+.bw-tile-skip .dg-card-title.bw-tile-title, .bw-tile-skip .dg-card-text {{ color: {c.get('muted', '#7e927e')}; }}
+.bw-tile-skip image.bw-tile-clock {{ color: {c.get('faint', '#4e6b4e')}; }}
+.bw-tile-skip:hover image.bw-tile-clock {{ color: {c.get('soft', '#9cff8a')}; }}
+.bw-note {{ color: {c.get('muted', '#7e927e')}; font-size: 0.92em; }}
+button.bw-link {{ background: none; box-shadow: none; border: none; padding: 0 2px; min-height: 0;
+  color: {c.get('soft', '#9cff8a')}; font-size: 0.92em; font-weight: 400; }}
+button.bw-link label {{ text-decoration: underline; }}
+button.bw-link:hover {{ color: {c.get('primary', '#39ff14')}; }}
+.bw-linkstep {{ color: {c.get('soft', '#9cff8a')}; font-size: 1.05em; }}
+.bw-code-big {{ font-size: 2.7em; font-weight: 700; letter-spacing: 0.14em; color: {c.get('primary', '#39ff14')};
+  text-shadow: 0 0 14px alpha({c.get('primary', '#39ff14')}, 0.5); }}
+.bw-mini {{ border: 1px solid alpha({c.get('dim', '#159b09')}, 0.4); padding: 10px 12px; }}
+.bw-mini-title {{ color: {c.get('text', '#c4f5bb')}; font-weight: 700; }}
 """ + glass.css(c, bool(acc.get("high_contrast"))))
             self.c = glass.palette(c)
             if acc.get("large_text"):            # unless the session's text is already bigger (applied below)
@@ -390,10 +419,13 @@ def main(argv):
             hint(self.voice_btn, self.voice.describe() + " Click, or press " + guide.HOTKEY + ", to change it.")
 
         def speak(self):
-            """The step's line, once: going back, or drawing the step again, doesn't repeat it."""
-            if self.voice and self.spoken != self.step:
-                self.spoken = self.step
-                self.voice.play(f"tour.{self.step}")
+            """The step's line, once: going back, or drawing the step again, doesn't repeat it (the
+            lab's link code and Find my lab have lines of their own)."""
+            view = getattr(self, "lab_view", "") if self.step == "lab" else ""
+            key = f"lab-{view}" if view in ("link", "find") else self.step
+            if self.voice and self.spoken != key:
+                self.spoken = key
+                self.voice.play(f"tour.{key}")
 
         def ask_box(self, sid):
             """Ask VECTOR: a question about this step, his answer under it. Hidden until his brain answers."""
@@ -438,9 +470,16 @@ def main(argv):
                 self.voice.say(words)           # aloud only through his running voice: no clip says this
             return False
 
-        def show_step(self, sid):
+        def show_step(self, sid, keep=False):
             if hasattr(self, "stop_pairing"):
-                self.stop_pairing()          # the phone step's watching ends with it
+                self.stop_pairing()          # the phone step's (and the lab's link) watching ends with it
+            if sid == "lab" and not keep:    # coming to the lab step: the tiles, or what it ended with
+                done = getattr(self, "lab_result", None)
+                self.lab_view = "link" if done else "pick"
+                if done:
+                    self.lab_intent = done["intent"]
+            self.next.set_sensitive(True)
+            hint(self.next, "Use what's chosen here and go on")
             self.step = sid
             here = self.steps.index(sid)
             self.guide = glass.guide(guide.line(f"tour.{sid}") if guide else "", "speaking", still=bool(self.render) or reduced(),
@@ -757,7 +796,393 @@ def main(argv):
             self.brain_pick = key
             self.svc.set_visible(key == "service")
 
+        # ── Your lab: three tiles (this computer, a hosted lab, skip), then the link code ──
         def build_lab(self, page):
+            view = getattr(self, "lab_view", "pick")
+            if view == "link":
+                return self.lab_link_view(page)
+            if view == "find":
+                return self.lab_find_view(page)
+            return self.lab_pick_view(page)
+
+        def lab_switch(self, view, intent=None):
+            """Another view of the lab step: the tiles (pick), the link code (link) or Find my lab (find)."""
+            self.lab_view = view
+            if intent:
+                self.lab_intent = intent
+            self.show_step("lab", keep=True)
+
+        def lab_gpu(self):
+            """(the graphics card's short name, its memory in GiB), read once."""
+            if not hasattr(self, "_lab_gpu"):
+                if self.render:
+                    self._lab_gpu = (SAMPLE_GPU, 12.0)
+                else:
+                    hw = F.hardware()
+                    self._lab_gpu = (F.gpu_name(hw), F.gpu_vram_gib(hw))
+            return self._lab_gpu
+
+        def lab_tile(self, kind, title, sub, tag, active, group, tight):
+            """One of the three tiles: a hologram that turns while picked, its title, a line and a
+            chip. kind None: the Skip tile, a plain button with a dashed edge and a clock."""
+            if kind:
+                b = Gtk.ToggleButton(active=active)
+                if group:
+                    b.set_group(group)
+            else:
+                b = Gtk.Button()
+                b.add_css_class("bw-tile-skip")
+            b.add_css_class("dg-card")
+            b.add_css_class("bw-tile")
+            v = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_top=16, margin_bottom=16,
+                        margin_start=16, margin_end=16)
+            size = 116 if tight else 164
+            holder = Gtk.Box(halign=Gtk.Align.CENTER)
+            holder.set_size_request(-1, size)
+            if kind:
+                art = glass.Glyph(kind, self.c, size, self.still())
+                art.set_live(active)
+                b.connect("toggled", lambda w: art.set_live(w.get_active()))
+            else:
+                art = glass.icon("preferences-system-time-symbolic", 72 if tight else 90, "bw-tile-clock")
+                art.set_valign(Gtk.Align.CENTER)
+            holder.append(art)
+            v.append(holder)
+            t = lab(title.upper(), "dg-card-title", "bw-tile-title")
+            v.append(t)
+            v.append(lab(sub, "dg-card-text"))
+            if tag:
+                sp = Gtk.Box(vexpand=True)
+                v.append(sp)
+                chip = Gtk.Label(label=tag, halign=Gtk.Align.START)
+                chip.add_css_class("dg-chip")
+
+                def shown(w, chip=chip, tag=tag):
+                    on = w.get_active()
+                    chip.set_label("PICKED" if on else tag)
+                    (chip.remove_css_class if on else chip.add_css_class)("quiet")
+                b.connect("toggled", shown)
+                shown(b)
+                v.append(chip)
+            b.set_child(v)
+            b.set_size_request(-1, 270 if tight else 350)
+            return b
+
+        def lab_pick_view(self, page):
+            tight = self.screen_h() < 760
+            gpu, vram = self.lab_gpu()
+            if not getattr(self, "lab_intent", None):          # the pictures show the hosted lab picked
+                self.lab_intent = "hosted" if self.render or vram < 8 else "self-hosted"
+            if gpu and vram >= 8:
+                mine = f"Free. Uses this machine's graphics card ({gpu} found). Runs while it's on."
+                mine_tip = ("Make this computer a lab: free. Its graphics card runs models for your other devices. "
+                            "Next, a code to approve it on bromigos.org/link")
+            else:
+                mine = "Free. Runs while it's on. VECTOR thinks where you chose in the last step."
+                mine_tip = ("Make this computer a lab: free. It links to your Bromigos account; a graphics card with "
+                            "8 GB or more would run models too. Next, a code to approve it on bromigos.org/link")
+            tiles = [("self-hosted", "machine", "Make this computer a lab", mine, "SELF-HOSTED", mine_tip),
+                     ("hosted", "relay", "Get a hosted lab",
+                      "We run it for you, always on. Outpost $19 · Safehouse $49 · Stronghold $99 · more.", "HOSTED",
+                      "Get a hosted lab: we run it in a data centre, always on. Plans from OUTPOST at $19 a month. "
+                      "Next, a code to finish on your phone or in a browser")]
+            grid = Gtk.Grid(column_spacing=14, row_spacing=14, column_homogeneous=True)
+            grid.update_property([Gtk.AccessibleProperty.LABEL], ["Your lab"])
+            first = None
+            for i, (key, kind, title, sub, tag, tip) in enumerate(tiles):
+                card = self.lab_tile(kind, title, sub, tag, key == self.lab_intent, first, tight)
+                first = first or card
+                card.connect("toggled", lambda b, k=key: b.get_active() and self._lab_pick(k))
+                hint(card, tip)
+                grid.attach(card, i, 0, 1, 1)
+            skip = self.lab_tile(None, "Skip for now", "VECTOR uses what you chose in the last step. Set up a lab any "
+                                 "time in Settings › Lab.", None, False, None, tight)
+            hint(skip, "Skip for now: go on to the next step. Set up a lab any time from Settings › Lab")
+            skip.connect("clicked", lambda *_: self.go(1))
+            grid.attach(skip, 2, 0, 1, 1)
+            page.append(grid)
+            page.append(lab("Next you'll see a code to approve it from your phone or browser. Nothing is bought here.",
+                            "bw-note"))
+            more = Gtk.Box(spacing=4)
+            more.append(lab("Already run servers at home?", "bw-note", wrap=False))
+            more.append(self.link_button("Find them, or use a connection file",
+                                         "Find my lab: it reads what this computer already knows of your network "
+                                         "(it never scans). Or pick a homelab.toml", lambda: self.lab_switch("find")))
+            page.append(more)
+            self._lab_pick(self.lab_intent)
+
+        def _lab_pick(self, key):
+            self.lab_intent = key
+            hint(self.next, "Continue: show the code to approve " + ("this computer as your lab" if key == "self-hosted"
+                                                                     else "a hosted lab") + " (nothing is bought here)")
+
+        def link_button(self, label, tip, fn):
+            b = hint(Gtk.Button(label=label, valign=Gtk.Align.CENTER), tip)
+            b.add_css_class("bw-link")
+            b.connect("clicked", lambda *_: fn())
+            return b
+
+        def lab_link_view(self, page):
+            """The code to approve this computer on bromigos.org/link: its QR on a phone, the short
+            code, the live status and what happens next; then the result."""
+            from types import SimpleNamespace
+            hosted = self.lab_intent == "hosted"
+            tight = self.screen_h() < 760
+            head = page.get_first_child()
+            intro = head.get_next_sibling()
+            head.set_label("GET A HOSTED LAB" if hosted else "MAKE THIS COMPUTER A LAB")
+            intro.set_label("Finish on your phone or in a browser: sign in, a one-minute briefing, then pay. Your new "
+                            "lab appears in BRODEC once it's built." if hosted else
+                            "Approve it on your phone or in a browser, signed in to your Bromigos account. The lab's "
+                            "keys are made on this computer and never leave it.")
+            if guide:
+                self.guide.line.set_label(guide.line("tour.lab-link"))
+            page.append(lab("APPROVE THIS COMPUTER", "bw-group-title", wrap=False))
+            card = Gtk.Box(spacing=30)
+            card.add_css_class("bw-card")
+            size = 170 if tight else 210
+            qr = glass.PhoneFrame(self.c, int(size * 0.92), still=self.still())
+            qr.set_valign(Gtk.Align.CENTER)
+            qr.add_css_class("bw-qr-slot")
+            hint(qr, "Scan this with your phone's camera or BRODEC: it opens bromigos.org/link with this code")
+            card.append(qr)
+            right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, hexpand=True, valign=Gtk.Align.CENTER)
+            s1 = lab("1. Scan with your phone's camera or BRODEC,", "bw-linkstep")
+            s2 = Gtk.Label(xalign=0, wrap=True)
+            s2.add_css_class("bw-linkstep")
+            code = lab("—", "bw-code-big", wrap=False)
+            hint(code, "The link code to type on bromigos.org/link. The countdown says how long it still works; a new "
+                       "one comes when it runs out")
+            row = Gtk.Box(spacing=10)
+            status = lab("", "bw-status")
+            hint(status, "What linking is doing now. It ticks when you approve this computer.")
+            expires = lab("", "bw-note", wrap=False)
+            expires.set_valign(Gtk.Align.CENTER)
+            hint(expires, "How long this code still works. A new code comes by itself when it runs out")
+            row.append(status)
+            row.append(expires)
+            actions = Gtk.Box(spacing=10)
+            for w in (s1, s2, code, row, actions):
+                right.append(w)
+            card.append(right)
+            page.append(card)
+            minis = Gtk.Box(spacing=10, homogeneous=True)
+            for title, words, tip in ((("Sign in", "Your Bromigos account.", "One Bromigos account for everything"),
+                                       ("Briefing", "We recommend a plan.", "What the lab runs, who uses it, where"),
+                                       ("Pay", "Card, or Google Play.", "Card on the website, Google Play on your phone"))
+                                      if hosted else
+                                      (("Sign in", "Your Bromigos account.", "One Bromigos account for everything"),
+                                       ("Approve", "Check its name, then approve.",
+                                        "The website shows this computer's name and system: approve it as your lab"),
+                                       ("Verify VECTOR", "Seven emoji, in BRODEC.",
+                                        "Afterwards, in BRODEC on your phone: LAB › your lab, compare the seven emoji. "
+                                        "The website never vouches for the lab's keys"))):
+                m = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+                m.add_css_class("bw-mini")
+                m.append(lab(title, "bw-mini-title", wrap=False))
+                m.append(lab(words, "bw-note"))
+                hint(m, tip)
+                minis.append(m)
+            page.append(minis)
+            other = Gtk.Box(spacing=4)
+            other.append(lab("Changed your mind?", "bw-note", wrap=False))
+            other.append(self.link_button("Make this computer the lab instead" if hosted else "Get a hosted lab instead",
+                                          "Show the code for the other choice instead",
+                                          lambda: self.lab_switch("link", "self-hosted" if hosted else "hosted")))
+            other.append(lab("·", "bw-note", wrap=False))
+            other.append(self.link_button("Back to the three choices", "Stop linking and go back to the three tiles",
+                                          lambda: self.cancel_link()))
+            page.append(other)
+            self.progress(page)
+            self.link_v = SimpleNamespace(qr=qr, code=code, status=status, expires=expires, actions=actions,
+                                          steps=[s1, s2, other.get_first_child(), other.get_first_child().get_next_sibling(),
+                                                 other.get_first_child().get_next_sibling().get_next_sibling()],
+                                          where=s2)
+            self.link_where("https://bromigos.org/link")
+            self.next.set_sensitive(False)
+            hint(self.next, "Continue unlocks when you approve this computer. Skip goes on without a lab")
+            done = getattr(self, "lab_result", None)
+            if done and done["intent"] == self.lab_intent:
+                self._link_done(done["ev"], again=True)
+            else:
+                self.lab_result = None
+                self.start_link()
+
+        def link_where(self, uri):
+            shown = GLib.markup_escape_text(uri.split("://", 1)[-1].rstrip("/"))
+            self.link_v.where.set_markup(f"2. or open <b><span foreground=\"{self.c['primary']}\">{shown}</span></b> "
+                                         "and type:")
+
+        def start_link(self):
+            """`brodec-lab connect --json` (lab_link_argv) through pkexec, its events to _link_event.
+            A Try again or a new view starts a new one; events of an older one are ignored."""
+            v = self.link_v
+            if getattr(self, "lab_link", None):
+                self.lab_link.cancel()
+                self.lab_link = None
+            self.link_gen = getattr(self, "link_gen", 0) + 1
+            gen = self.link_gen
+            self.link_deadline, self.link_code_seen = None, False
+            v.qr.set_qr(None)
+            v.qr.set_state("waiting")
+            v.code.set_label("—")
+            v.expires.set_label("")
+            self._clear(v.actions)
+            for w in v.steps:
+                w.set_visible(True)
+            if self.render:
+                self._link_event(dict(SAMPLE_LINK), gen)
+                return False
+            if not F.lab_bridge_available():
+                v.status.set_label("Linking needs BRODEC's lab bridge (brodec-lab). It makes the lab's keys on this "
+                                   "computer, and they never leave it.")
+                self.action(v, "Install it", "Install BRODEC's lab bridge, the usual package way (asks for your "
+                                             "password)", self.install_bridge)
+                return False
+            v.status.set_label("Starting BRODEC's lab bridge (a password window opens)…")
+            self.action(v, "Cancel", "Stop linking and go back to the three choices", self.cancel_link)
+            self.lab_link = F.Pairing(F.lab_link_watched(self.lab_intent),
+                                      lambda ev: GLib.idle_add(self._link_event, ev, gen), hold_stdin=True)
+            GLib.timeout_add_seconds(60, self._link_quiet, gen)
+            return False
+
+        def _link_live(self, gen):
+            return gen == getattr(self, "link_gen", None) and self.step == "lab" and \
+                getattr(self, "lab_view", "") == "link"
+
+        def _link_quiet(self, gen):
+            """A minute without a code: say what may be holding it (the password window)."""
+            if self._link_live(gen) and not self.link_code_seen and getattr(self, "lab_link", None):
+                self.link_v.status.set_label("BRODEC's lab bridge hasn't shown a code yet. Is a password window "
+                                             "waiting? Cancel stops it.")
+            return False
+
+        def _link_tick(self, gen):
+            """The code's countdown, once a second; it stops with the code."""
+            if not self._link_live(gen) or self.link_deadline is None:
+                return False
+            import time
+            left = int(self.link_deadline - time.monotonic())
+            if left <= 0:
+                self.link_v.expires.set_label("expired: a new code is coming")
+                return False
+            self.link_v.expires.set_label(f"expires {left // 60}:{left % 60:02d}")
+            return True
+
+        def _link_event(self, ev, gen):
+            if not self._link_live(gen):           # an older attempt, or the step was left
+                return False
+            import time
+            v, e, intent = self.link_v, ev.get("event"), self.lab_intent
+            if e == "code":
+                self.link_code_seen = True
+                v.qr.set_qr(self.qr_file(ev.get("qr") or ev.get("verification_uri_complete") or "", ev.get("qr_svg")))
+                v.code.set_label(ev.get("user_code") or "—")
+                self.link_where(ev.get("verification_uri") or "https://bromigos.org/link")
+                v.status.set_label("● Waiting for you to approve…")
+                left = int(ev.get("expires_in") or 0)
+                v.expires.set_label(f"expires {left // 60}:{left % 60:02d}" if left else "")
+                if left and not self.render:
+                    ticking = self.link_deadline is not None
+                    self.link_deadline = time.monotonic() + left
+                    if not ticking:
+                        GLib.timeout_add_seconds(1, self._link_tick, gen)
+                if not self.render:
+                    self.action(v, "Cancel", "Stop linking and go back to the three choices", self.cancel_link)
+            elif e == "expired":
+                self.link_deadline = None
+                v.qr.set_qr(None)
+                v.code.set_label("—")
+                v.expires.set_label("")
+                v.status.set_label(F.link_words(ev, intent))
+            elif e == "approved":
+                self.link_deadline = None
+                v.expires.set_label("")
+                v.status.set_label(F.link_words(ev, intent))
+            elif e in ("paired", "hosted"):
+                self._link_done(ev)
+            elif e in ("failed", "cancelled"):
+                self.lab_link, self.link_deadline = None, None
+                v.qr.set_qr(None)
+                v.code.set_label("—")
+                v.expires.set_label("")
+                v.status.set_label("▲ " + F.link_words(ev, intent))
+                if ev.get("code") == "not_installed":
+                    self.action(v, "Install it", "Install BRODEC's lab bridge (asks for your password)",
+                                self.install_bridge)
+                else:
+                    self.action(v, "Try again", "Show a new code", self.start_link)
+            elif e == "waiting":
+                v.status.set_label(F.link_words(ev, intent))
+            return False                            # `service` is bromigos lab link's own: the tour starts it below
+
+        def _link_done(self, ev, again=False):
+            """Approved: this computer is the lab (paired), or a hosted lab is on its way."""
+            v = self.link_v
+            self.lab_link, self.link_deadline = None, None
+            self.lab_result = {"intent": self.lab_intent, "ev": ev}
+            v.qr.set_state("paired")
+            v.expires.set_label("")
+            for w in v.steps:
+                w.set_visible(False)
+            self._clear(v.actions)
+            if ev.get("event") == "hosted":
+                order = ev.get("order_id")
+                v.code.set_label("APPROVED")
+                hint(v.code, "Approved on bromigos.org for a hosted lab")
+                v.status.set_label("✓ Approved for a hosted lab. " +
+                                   (f"Order {order} is {ev.get('order_status') or 'being set up'}. " if order else
+                                    "Finish choosing it on bromigos.org. ") + "It appears in BRODEC once it's built.")
+                self.done_steps["lab"] = (f"A hosted lab: order {order}" if order else
+                                          "A hosted lab: finish choosing it on bromigos.org")
+            else:
+                who = ev.get("owner") or "your account"
+                v.code.set_label("LINKED")
+                hint(v.code, "This computer is linked to your Bromigos account as a lab")
+                v.status.set_label(f"✓ {ev.get('name') or 'This computer'} is now {who}'s lab. In BRODEC on your phone, "
+                                   "verify VECTOR with the seven emoji (LAB › your lab).")
+                self.done_steps["lab"] = "This computer is your lab"
+                gpu, vram = self.lab_gpu()
+                if vram >= 8:
+                    self.action(v, "Run models here too…", "bromigos-lab's reviewed plan for serving models from this "
+                                                          "computer's graphics card: read-only, nothing changes",
+                                self.lab_plan)
+                if self.render:
+                    self.say("✓ The lab bridge is running: VECTOR answers from this computer.")
+                elif not again:
+                    self.say("Starting the lab bridge (a password window may open)…")
+
+                    def work():
+                        state, why = F.lab_bridge_service(self.say)
+                        return (self.say, why if state == "failed" else
+                                "✓ The lab bridge is running: VECTOR answers from this computer.")
+                    self.later(work)
+            self.next.set_sensitive(True)
+            hint(self.next, "Go on to the next step")
+            return False
+
+        def cancel_link(self):
+            self.stop_pairing()
+            self.lab_switch("pick")
+
+        def install_bridge(self):
+            def work():
+                ok, why = F.lab_bridge_install(self.say)
+                if ok:
+                    return (lambda: (self._link_live(self.link_gen) and self.start_link(), False)[1],)
+                return (self.say, why)
+            self.say("Installing BRODEC's lab bridge (a password window opens)…")
+            self.later(work)
+
+        def lab_find_view(self, page):
+            """Find my lab: the servers already at home, found or from a connection file."""
+            if guide:
+                self.guide.line.set_label(guide.line("tour.lab-find"))
+            head = page.get_first_child()
+            head.set_label("FIND YOUR LAB")
+            head.get_next_sibling().set_label(
+                "If you run servers at home, this computer can use them: the panels show them, and VECTOR can think on "
+                "their graphics cards. Everything happens here; nothing opens elsewhere.")
             tight = self.screen_h() < 760
             top = Gtk.Box(spacing=22)
             self.radar = glass.LabRadar(self.c, 200 if tight else 260, still=self.still())
@@ -786,17 +1211,10 @@ def main(argv):
             fr.add_suffix(fb)
             hint(fr, "bromigos setup homelab --homelab FILE")
             g2.add(fr)
-            if self.render or F.gpu_vram_gib() >= 8:
-                mr = Adw.ActionRow(title="Make this computer my lab",
-                                   subtitle="Its graphics card runs models for your other devices. Shows bromigos-lab's "
-                                            "reviewed plan first; nothing changes until you agree.")
-                mr.set_subtitle_lines(0)
-                mr.add_prefix(glass.icon("computer-symbolic", 20, "dg-row-icon"))
-                mb = hint(Gtk.Button(label="Show the plan", valign=Gtk.Align.CENTER), "bromigos lab provision plan: read-only")
-                mb.connect("clicked", lambda *_: self.lab_plan())
-                mr.add_suffix(mb)
-                hint(mr, "Turn this computer into the lab: bromigos-lab's provisioning, reviewed first")
-                g2.add(mr)
+            back = Gtk.Box(spacing=4)
+            back.append(self.link_button("Back to the three choices", "This computer as a lab, a hosted lab, or skip",
+                                         lambda: self.lab_switch("pick")))
+            page.append(back)
             self.progress(page)
             if self.render:
                 self._lab_found({"hosts": [{"name": "gpu-box", "address": "192.0.2.24",
@@ -1020,7 +1438,8 @@ def main(argv):
             self.later(work)
 
         def stop_pairing(self):
-            for k in ("pairing", "bridge_pairing"):
+            self.link_deadline = None
+            for k in ("pairing", "bridge_pairing", "lab_link"):
                 if getattr(self, k, None):
                     getattr(self, k).cancel()
                     setattr(self, k, None)
@@ -1225,6 +1644,8 @@ def main(argv):
             s = self.step
             if s == "done":
                 return self.finish()
+            if s == "lab" and getattr(self, "lab_view", "pick") == "pick":
+                return self.lab_switch("link")      # a lab tile picked: its code next (Skip is the third tile)
             self.next.set_sensitive(False)
             self.msg.set_label("Setting it up…")
 
@@ -1351,19 +1772,41 @@ def main(argv):
         os.makedirs(out, exist_ok=True)
         todo = list(w.steps)
 
-        if "lab" in todo and w.brain:          # the lab step again, scrolled to its Ask VECTOR box
-            todo.insert(todo.index("lab") + 1, "lab-ask")
+        if "lab" in todo:                      # the lab step's views and results, then its Ask VECTOR box
+            at = todo.index("lab") + 1
+            todo[at:at] = LAB_STATES + (["lab-ask"] if w.brain else [])
+        only = os.environ.get("BROMIGOS_WELCOME_ONLY", "").split()
+        if only:                               # tools/welcome/render.sh --only lab: welcome-lab*.png
+            todo = [s for s in todo if any(s == o or s.startswith(o + "-") for o in only)]
+
+        def lab_state(s):
+            """A lab view as it looks, fed the recorded events (nothing runs, nothing is linked)."""
+            w.lab_result = None
+            if s == "lab-ask":
+                w.lab_intent = "hosted"
+                w.show_step("lab")
+                GLib.timeout_add(300, lambda: (w.scroll.get_vadjustment().set_value(w.scroll.get_vadjustment().get_upper()),
+                                               False)[1])
+                return
+            if s == "lab-find":
+                return w.lab_switch("find")
+            w.lab_switch("link", "hosted" if s in ("lab-hosted", "lab-hosted-done", "lab-failed") else "self-hosted")
+            ev = {"lab-approved": {"event": "approved", "intent": "self-hosted"}, "lab-paired": SAMPLE_PAIRED,
+                  "lab-hosted-done": SAMPLE_HOSTED,
+                  "lab-failed": {"event": "failed", "code": "denied", "message": "turned down"}}.get(s)
+            if ev:
+                w._link_event(dict(ev), w.link_gen)
 
         def one():
             if not todo:
                 w.get_application().quit()
                 return False
             s = todo.pop(0)
-            if s == "lab-ask":
-                w.show_step("lab")
-                GLib.timeout_add(300, lambda: (w.scroll.get_vadjustment().set_value(w.scroll.get_vadjustment().get_upper()),
-                                               False)[1])
+            if s.startswith("lab-"):
+                lab_state(s)
             else:
+                if s == "done":                # the sample choices, not the lab states' results
+                    w.done_steps = {}
                 w.show_step(s)
             GLib.timeout_add(700, lambda: (snap(w, os.path.join(out, f"welcome-{s}.png")), False)[1])
             return True

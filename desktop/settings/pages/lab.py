@@ -24,6 +24,20 @@ def _find_button(ctx):
             "it found, never an address range, and you pick what to add to homelab.toml")
 
 
+def _link_group(ctx, page):
+    """This computer as a lab on your Bromigos account, or a hosted lab: the welcome tour's Your
+    lab step, opened on its own (docs/lab.md, "Link this computer to your account")."""
+    g = ctx.group(page, "Your Bromigos lab", "Make this computer a lab on your Bromigos account, or get a hosted lab "
+                                             "we run for you.",
+                  hint="The welcome tour's Your lab step: three choices, then a code to approve on bromigos.org/link")
+    ctx.row(g, "Link this computer, or get a hosted lab",
+            "Opens the welcome tour on Your lab: approve it with a code on your phone or in a browser", key="link",
+            hint="bromigos welcome --step lab. In a terminal, bromigos lab link does the same",
+            buttons=[("Open…", lambda: ctx.launch(["bromigos", "welcome", "--step", "lab"]),
+                      "Opens the welcome tour on its Your lab step, full screen. Skip there changes nothing")],
+            advanced={"runs": "bromigos welcome --step lab"})
+
+
 def _waiting(g, text):
     w = Gtk.Label(label=text, xalign=0)
     w.add_css_class("dim-label")
@@ -83,6 +97,7 @@ def build(ctx):
             ctx.row(g, f"{MARK.get(c['state'], '·')}  {c['title']}", c.get("summary") or "",
                     hint=(c.get("hint") or "") + (f"\n\n{extra}" if extra else ""))
     ctx.json(["bromigos", "lab", "status", "--json"], status)
+    _link_group(ctx, page)
     box = Gtk.Box(spacing=8)
     box.append(ctx.button("Dashboard", lambda: ctx.terminal(["bromigos", "lab"], hold=False),
                           "bromigos lab: every card in full, live, with models, jobs and the doctor (a terminal)"))
@@ -266,6 +281,7 @@ def _not_installed(ctx, page):
                     hint=f"{title}: {what}. It appears here once bromigos-homelab is installed and your lab is "
                          "connected.")
         r.set_sensitive(False)
+    _link_group(ctx, page)
     gc = ctx.group(page, "Connect your lab", "Install the homelab integrations, then let them find your services "
                                              "(Prometheus, Kubernetes, ComfyUI, the voice service, …).",
                    hint="bromigos-homelab, then bromigos setup homelab: it offers Find my lab first, else probes "
@@ -312,6 +328,9 @@ PAGE = Page(id="lab", title="Lab", icon="network-server-symbolic applications-sc
                            "Recent jobs"),
                      Entry("doctor", "Doctor", ["checks", "certificates", "dns", "disk", "backups", "drift"],
                            "Doctor"),
+                     Entry("link", "Link this computer or get a hosted lab",
+                           ["hosted lab", "outpost", "safehouse", "stronghold", "bromigos.org/link", "link code",
+                            "lab link", "welcome tour"], "Your Bromigos lab"),
                      Entry("targets", "Where AI runs", ["targets", "homelab", "cloud"], "Where AI runs"),
                      Entry("connect", "Connect services", ["setup homelab", "homelab.toml", "find my lab", "discover",
                                                             "scan"], "Where AI runs")],

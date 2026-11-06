@@ -243,8 +243,16 @@ text = "Where should I think? Your lab is best, if you have one."
 where = "bromigos-welcome: where VECTOR thinks"
 
 ["tour.lab"]
+text = "I can live on this machine, or in one of ours. Your call."
+where = "bromigos-welcome: your lab, its three tiles"
+
+["tour.lab-link"]
+text = "Scan it. I'll pack my things and move in."
+where = "bromigos-welcome: your lab, the code to approve this computer on bromigos.org/link"
+
+["tour.lab-find"]
 text = "I'll look for your lab. I only read what this computer already knows."
-where = "bromigos-welcome: the lab"
+where = "bromigos-welcome: your lab, finding the servers you already run"
 
 ["tour.phone"]
 text = "Scan it with BRODEC and I'm on your phone too."

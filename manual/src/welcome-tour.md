@@ -34,20 +34,50 @@ To take the tour again: Settings › About › **Welcome tour**, or run `bromigo
 
    ![VECTOR, your desk's AI: his brain (your lab, this computer, a service, not now) and his voice](images/welcome-tour-vector.webp)
 
-5. **Your lab**, all in the window:
-   - **Find** looks for your lab on your network. It only reads what this computer
+5. **Your lab**: where VECTOR thinks, paints and talks, and where your servers run. Three
+   tiles:
+   - **Make this computer a lab.** Free. It runs while this computer is on, and its
+     graphics card, if it has one, runs models for your other devices.
+   - **Get a hosted lab.** Bromigos runs it for you, always on: OUTPOST, SAFEHOUSE,
+     STRONGHOLD and more. You choose and pay on the website, not here.
+   - **Skip for now** goes straight on, like **Skip**. Set up a lab later from
+     Settings › Lab › **Your Bromigos lab**, or with `bromigos welcome --step lab`.
+
+   ![Your lab: make this computer a lab, get a hosted lab, or skip for now](images/welcome-tour-lab.webp)
+
+   Pick a lab tile and press **Continue**. The tour shows a QR code and a short code such
+   as `KX7-42Q`. Scan the QR code with your phone's camera or BRODEC, or open
+   **bromigos.org/link** on any phone or computer and type the code. Sign in to your
+   Bromigos account there and approve this computer. A password window opens first: the
+   lab bridge's data belongs to its service.
+
+   ![Get a hosted lab: the QR code on a phone, the code to type, and Waiting for you to approve](images/welcome-tour-lab-link.webp)
+
+   - The tour counts down how long the code still works. When it runs out, a new one
+     appears by itself.
+   - **This computer as a lab:** once you approve, the tour says **LINKED** and starts
+     the lab bridge, so VECTOR answers from this computer. Then open BRODEC on your phone
+     and check VECTOR's seven emoji (LAB › your lab): the website never vouches for the
+     lab's keys. With a graphics card of 8 GB or more, **Run models here too…** shows
+     bromigos-lab's reviewed plan for serving models from it. Nothing changes until you
+     agree.
+   - **A hosted lab:** once you approve, the tour says **APPROVED**. Finish choosing and
+     paying on the website. The lab appears in BRODEC once it's built.
+   - **Continue** unlocks once you approve. **Cancel** or **Back to the three choices**
+     stops the code, and **Skip** goes on without a lab.
+   - If it's turned down, takes too long, or the password window is closed, the tour says
+     so and offers **Try again**.
+   - Without BRODEC's lab bridge (`brodec-lab`), the tour offers **Install it** first.
+
+   Already run servers at home? **Find them, or use a connection file** opens Find my lab:
+   - **Look for it** looks for your lab on your network. It only reads what this computer
      already knows (devices that announce themselves, its list of nearby devices, your
      Tailscale devices); it never scans. It lists each lab machine with what it offers,
      such as models and services. Nothing is written until you press **Connect**.
    - **I have a lab connection file**: pick a `homelab.toml`, or the lab connection
      from a Field Kit stick.
-   - **Make this computer my lab**: only with a capable graphics card. It shows
-     bromigos-lab's reviewed plan for this computer before anything happens.
-   - **Skip.**
 
    Problems are said in plain words, with what to do.
-
-   ![Your lab: the machines found on the radar, with what each offers, and Connect](images/welcome-tour-lab.webp)
 
 6. **Pair your phone** with the BRODEC app: see [Pair your phone](phone.md).
 7. **The keys.** Super+Space, Super+Enter, Super+, and a few more. Press one and its card
@@ -110,10 +140,12 @@ yourself. The tour keeps no settings of its own.
 | VECTOR: This computer | `bromigos setup vector --vector ollama --model MODEL` (after Ollama and the model are installed) |
 | VECTOR: Your lab, A service | `bromigos setup vector --vector openai --base-url URL/v1 [--model MODEL] [--api-key-file FILE]` |
 | VECTOR's voice | `bromigos setup voice --voice off\|cpu\|gpu` |
+| Your lab: Make this computer a lab | `bromigos lab link` (the tour runs `brodec-lab connect --json` through pkexec) |
+| Your lab: Get a hosted lab | `bromigos lab link --intent hosted` |
 | Your lab: Find | `bromigos setup homelab --find --yes --json --print` (what it found, nothing written) |
 | Your lab: Connect | `bromigos setup homelab --find --yes` |
 | Your lab: a file | `bromigos setup homelab --homelab FILE` |
-| Make this computer my lab | `bromigos lab provision plan --repo DIR --preset core` (the plan) |
+| Your lab: Run models here too… | `bromigos lab provision plan --repo DIR --preset core` (the plan) |
 
 To script the whole tour, run those commands in order, or put the answers in a file:
 `bromigos setup --answers FILE` takes the same TOML the installer's first-run answers use
@@ -123,7 +155,8 @@ The tour opens once because the installer leaves `~/.local/state/bromigos/welcom
 the session's autostart runs `bromigos welcome --if-pending`, which does nothing without
 it. Finishing removes the file and writes what you chose to
 `~/.local/state/bromigos/welcome.json`. `bromigos welcome --step STEP` opens it on one
-step; `bromigos welcome --render DIR` draws every step to pictures and exits.
+step; `bromigos welcome --render DIR` draws every step to pictures and exits
+(`tools/welcome/render.sh` in the repository does it offscreen).
 
 The voice guide keeps its setting in `~/.local/state/bromigos/voice-guide.json`
 (`enabled` and `muted`). Its lines and clips are in `/usr/share/bromigos/guide/`. The

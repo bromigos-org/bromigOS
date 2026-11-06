@@ -156,6 +156,7 @@ a window:
 | The manual's installer, bromigOS Server and Field Kit pictures | `tools/screenshots/install-pictures.sh` |
 | The live layer: the background, a world, a deck, the screensaver | `live/tools/offscreen.py` |
 | The Settings window, one picture per page and theme | `tools/settings/render.sh` |
+| The welcome tour, every step and the Your lab step's states | `tools/welcome/render.sh` |
 | The theme switcher, at several screen sizes | `tools/theme-switcher/render.sh` |
 | Zettlr in a theme | `tools/zettlr/render.sh` |
 | The app launcher | `tools/launcher/render.py` |

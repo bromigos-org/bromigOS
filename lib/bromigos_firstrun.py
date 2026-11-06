@@ -21,7 +21,11 @@ files. Nothing here opens a terminal.
                                 machine.toml through polkit; `brodec-machine pair --json` (and a lab
                                 bridge's `brodec-lab pair --json`) as events; enroll's question
   lab_link_argv(gui, intent)    link this computer to the account on bromigos.org/link instead of a
-                                phone: `brodec-lab connect --json`, whose events Pairing follows too
+                                phone: `brodec-lab connect --json`, whose events Pairing follows too;
+                                lab_link_watched(…) the same through pkexec, stopped when its stdin
+                                closes (a cancel); link_words(ev, intent) its events in plain words
+  lab_bridge_install(on_line), lab_bridge_service(on_line)   brodec-lab's package and its service
+  gpu_name(hw)                  the biggest GPU's short name ("RTX 4070"), or ""
   qr_png(text, path) / qr_text(text)   a QR code as a picture (the window) or half-blocks (a terminal)
 """
 import glob
@@ -92,6 +96,20 @@ def gpu_vram_gib(hw=None):
         v = g.get("vram_gib") or (g.get("vram_mib") or 0) / 1024 or (g.get("vram_bytes") or 0) / 2 ** 30
         best = max(best, float(v or 0))
     return best
+
+
+def gpu_name(hw=None):
+    """The first NVIDIA or AMD card's short name, as people know it: "RTX 4070" from
+    "AD104 [GeForce RTX 4070]", "Radeon RX 7900 XTX" from "Navi 31 [Radeon RX 7900 XTX]"; or ""."""
+    hw = hardware() if hw is None else hw
+    for g in (hw.get("detection") or {}).get("gpus") or []:
+        if str(g.get("vendor") or "").upper() not in ("NVIDIA", "AMD"):
+            continue
+        name = str(g.get("name") or "")
+        m = re.search(r"\[([^\]]+)\]", name)
+        name = (m.group(1) if m else name).split("/")[0].strip()
+        return re.sub(r"^GeForce\s+", "", name)
+    return ""
 
 
 def gpu_vendor(hw=None):
@@ -399,18 +417,22 @@ class Pairing:
     code (qr, qr_svg, qr_text, user_code_display), expired, waiting, paired, failed,
     cancelled. cancel() stops the watching (SIGTERM); the agent keeps its code."""
 
-    def __init__(self, argv, on_event):
+    def __init__(self, argv, on_event, hold_stdin=False):
         import threading
         self.argv, self.on_event, self.proc = argv, on_event, None
-        self.done = False
+        self.done = self.cancelled = False
+        self.hold_stdin = hold_stdin      # its stdin a pipe kept open: closing it stops a watched command
         threading.Thread(target=self._run, daemon=True).start()
 
     def _run(self):
         try:
-            self.proc = subprocess.Popen(self.argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
+            self.proc = subprocess.Popen(self.argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1,
+                                         stdin=subprocess.PIPE if self.hold_stdin else None)
         except OSError as e:
             self._emit({"event": "failed", "code": "agent_failed", "message": str(e)})
             return
+        if self.cancelled:                # cancelled before it started
+            self.cancel()
         for line in self.proc.stdout:
             try:
                 ev = json.loads(line)
@@ -419,9 +441,10 @@ class Pairing:
             if isinstance(ev, dict) and ev.get("event"):
                 self._emit(ev)
         rc = self.proc.wait()
+        self._close_stdin()
         if not self.done:          # it ended without saying how
             err = (self.proc.stderr.read() or "").strip()
-            self._emit({"event": "cancelled"} if rc == 130 else
+            self._emit({"event": "cancelled"} if rc == 130 or self.cancelled else
                        {"event": "failed", "code": "agent_failed", "message": err or f"it stopped ({rc})"})
 
     def _emit(self, ev):
@@ -429,10 +452,24 @@ class Pairing:
             self.done = True
         self.on_event(ev)
 
+    def _close_stdin(self):
+        try:
+            if self.proc and self.proc.stdin:
+                self.proc.stdin.close()
+        except OSError:
+            pass
+
     def cancel(self):
+        """Stop watching: SIGTERM, and for a watched command its stdin closed (a command run
+        through pkexec is root's, so the signal may not reach it; the closed pipe does)."""
         import signal
+        self.cancelled = True
         if self.proc and self.proc.poll() is None:
-            self.proc.send_signal(signal.SIGTERM)
+            self._close_stdin()
+            try:
+                self.proc.send_signal(signal.SIGTERM)
+            except OSError:
+                pass
 
 
 def machine_pair_argv(timeout=900):
@@ -454,6 +491,72 @@ def lab_link_argv(gui=True, intent="self-hosted", timeout=900):
     paired, hosted (approved for a lab Bromigos hosts: nothing pairs here) and failed."""
     return [("pkexec" if gui else "sudo"), "brodec-lab", "connect", "--json", "--kind", "bromigos-setup",
             "--intent", intent, "--timeout", str(timeout)]
+
+
+# Run as root by pkexec, the command keeps its stdin's pipe: when it closes (the tour cancels,
+# goes on, or closes) the command is stopped. $1… is the command.
+STDIN_WATCH = ('exec 3<&0; "$@" </dev/null & p=$!; { cat; kill -TERM "$p"; } <&3 >/dev/null 2>&1 & '
+               'w=$!; wait "$p"; rc=$?; kill "$w" 2>/dev/null; exit "$rc"')
+
+
+def watched(argv):
+    """argv (pkexec COMMAND…) as pkexec sh -c STDIN_WATCH: stopped when its stdin closes. Use
+    with Pairing(…, hold_stdin=True)."""
+    if argv[:1] != ["pkexec"]:
+        return argv
+    return ["pkexec", "sh", "-c", STDIN_WATCH, "bromigos-welcome", *argv[1:]]
+
+
+def lab_link_watched(intent="self-hosted", timeout=900):
+    """lab_link_argv through pkexec, stopped when the tour cancels it (Pairing hold_stdin)."""
+    return watched(lab_link_argv(gui=True, intent=intent, timeout=timeout))
+
+
+def lab_bridge_install(on_line):
+    """BRODEC's lab bridge (brodec-lab), the usual package way: polkit asks for the password."""
+    ok, tail = run_lines(["pkexec", "pacman", "-S", "--noconfirm", "--needed", "brodec-lab"], on_line)
+    return ok, ("" if ok else "BRODEC's lab bridge couldn't be installed: " + plain_error(tail))
+
+
+def lab_bridge_service(on_line):
+    """After linking this computer: the bridge's service running, so VECTOR answers from here
+    (what `bromigos lab link` does after pairing). ("running" | "started" | "failed", words)."""
+    if run(["systemctl", "is-active", "--quiet", "brodec-lab"], timeout=10)[0] == 0:
+        return "running", ""
+    ok, tail = run_lines(["pkexec", "systemctl", "enable", "--now", "brodec-lab"], on_line, timeout=120)
+    return ("started", "") if ok else \
+        ("failed", "The lab bridge didn't start: " + plain_error(tail) + " Settings › Lab can start it later.")
+
+
+def link_words(ev, intent="self-hosted"):
+    """A `brodec-lab connect` event in plain words, for the tour's status line (code, paired and
+    hosted are drawn instead)."""
+    e = ev.get("event")
+    if e == "expired":
+        return "That code ran out. A new one is coming…"
+    if e == "approved":
+        return ("✓ Approved on bromigos.org. Linking this computer…" if intent == "self-hosted" else
+                "✓ Approved on bromigos.org. Waiting for the website…")
+    if e == "waiting":
+        return ev.get("message") or "Waiting for BRODEC's lab bridge…"
+    if e == "cancelled":
+        return "Linking stopped. Press Try again for a new code."
+    if e != "failed":
+        return ""
+    code, msg = ev.get("code"), ev.get("message") or ""
+    if code == "denied":
+        return "It was turned down on bromigos.org. Press Try again for a new code."
+    if code == "timeout":
+        return "Not approved in time. Press Try again for a new code."
+    if code == "already_paired":
+        return "This computer is already a lab on a Bromigos account. Settings › Lab shows which."
+    if code == "rate_limited":
+        return "Too many codes just now. Wait a minute, then press Try again."
+    if code == "not_installed":
+        return "Linking needs BRODEC's lab bridge (brodec-lab). Press Install it."
+    if re.search(r"dismissed|Not authorized|authentication", msg, re.I):
+        return "The password window was closed. Press Try again."
+    return "Linking stopped: " + plain_error(msg) + " Press Try again."
 
 
 def pairing_words(ev):

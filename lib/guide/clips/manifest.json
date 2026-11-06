@@ -441,11 +441,25 @@
    "seconds": 3.07
   },
   "tour.lab": {
-   "file": "tour.lab-f47e1f80ca85.opus",
+   "file": "tour.lab-450e7186d66d.opus",
+   "text": "I can live on this machine, or in one of ours. Your call.",
+   "text_sha256": "450e7186d66d82e187f4d9aca7a1697176ce7be6aedb37d6d2e6db51c44ebd94",
+   "engine": "lab",
+   "seconds": 3.34
+  },
+  "tour.lab-find": {
+   "file": "tour.lab-find-f47e1f80ca85.opus",
    "text": "I'll look for your lab. I only read what this computer already knows.",
    "text_sha256": "f47e1f80ca85ae5fa7b37db68de50ed2cfdf7a7d3e635b80bc7941436f1c67de",
    "engine": "lab",
-   "seconds": 3.67
+   "seconds": 3.47
+  },
+  "tour.lab-link": {
+   "file": "tour.lab-link-635fe6c2183f.opus",
+   "text": "Scan it. I'll pack my things and move in.",
+   "text_sha256": "635fe6c2183fe1282004c07f36ed12c2a4bcc64569336f9da968c9753826da1d",
+   "engine": "lab",
+   "seconds": 2.44
   },
   "tour.network": {
    "file": "tour.network-dfe61f4c064e.opus",

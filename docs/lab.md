@@ -861,6 +861,11 @@ For power users:
   `rate_limited`, ...), then `service`. `brodec-lab connect --json` prints the same
   without the `service` event; the welcome tours call it through `lab_link_argv()` in
   `lib/bromigos_firstrun.py`.
+- The desktop's welcome tour does the same on its Your lab step, in the window: **Make
+  this computer a lab** or **Get a hosted lab**, then the QR code and the short code. It
+  runs the bridge through pkexec and stops it when you cancel, and starts the service
+  after pairing. Settings › Lab › **Your Bromigos lab** opens that step again
+  (`bromigos welcome --step lab`).
 - Exit codes: 0 linked (or approved for a hosted lab), 1 not linked, 3 the bridge isn't
   installed, 130 cancelled.
 

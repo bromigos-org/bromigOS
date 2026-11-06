@@ -393,6 +393,11 @@ no likeness and no lab hosts.
   `BROMIGOS_INSTALLER_RENDER_ONLY=server-`), and the server's first-start tour
   (`bromigos welcome-console --render DIR --size 120x35`, its sample data). Example
   addresses and keys only.
+- **`welcome-tour-lab.webp`** and **`welcome-tour-lab-link.webp`**, on The welcome tour
+  page. The welcome tour's Your lab step (its three tiles) and its link code for a hosted
+  lab, drawn offscreen in a headless weston with the tour's recorded events
+  (`tools/welcome/render.sh`, `welcome-lab` and `welcome-lab-hosted`). Example code and
+  card name only; the holograms are drawn in code.
 - **`live-welcome-card.webp`**, on the Install and The installer pages. The live desktop's
   welcome card, captured from the install stick in a VM (host `bromigos-live`).
 - **`fieldkit-boot-menu.webp`**, on the Field Kit page. Field Kit's boot menu as GRUB draws
