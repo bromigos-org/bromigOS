@@ -672,6 +672,10 @@ This page needs `bromigos-homelab`. It shows:
 - the doctor's findings with their fixes;
 - where AI runs.
 
+**Your Bromigos lab** is there with or without `bromigos-homelab`. Its **Open…** opens the
+welcome tour on its Your lab step (`bromigos welcome --step lab`): make this computer a lab
+or get a hosted lab, approved with a code on bromigos.org/link.
+
 The dashboard and the Lab deck are a click away. See [lab.md](lab.md). **Find my lab…**
 sits beside each **Connect…** button. It runs `bromigos lab connect --find` in a terminal,
 which asks before it reads anything ([homelab.md](homelab.md#find-my-lab)).
