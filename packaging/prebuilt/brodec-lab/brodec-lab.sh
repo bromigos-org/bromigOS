@@ -4,6 +4,7 @@
 # /var/lib/brodec-lab. With sudo they run as the brodec-lab user, so its files stay its own.
 #
 #   sudo brodec-lab pair          the pairing code and its QR code, to scan in BRODEC
+#   sudo brodec-lab connect       link it from bromigos.org/link instead: a short code and its QR code
 #   sudo brodec-lab status        paired or not, the lab's name, the last report
 #   sudo brodec-lab switch on     turn VECTOR back on after he was switched off over BRODEC
 #   sudo brodec-lab recovery-key  the lab's recovery key, to keep somewhere safe
@@ -30,7 +31,7 @@ if [ "$(id -un)" = brodec-lab ] || [ -r "$BRODEC_DATA_DIR" ]; then
   exec "$bin" "$@"
 fi
 case "${1:-}" in
-  pair|status|switch|recovery-key|health)
+  pair|connect|status|switch|recovery-key|health)
     echo "brodec-lab: its data belongs to the service. Run: sudo brodec-lab $*" >&2
     exit 1 ;;
 esac

@@ -582,6 +582,9 @@ plainly asked him to download one thing. When it's in your library, he tells you
 ## Shortcuts to other commands
 
 - `bromigos lab connect` is the same as `bromigos setup homelab`.
+- `bromigos lab link` links this computer to your Bromigos account as a lab: approve the
+  short code it shows on bromigos.org/link, and it pairs BRODEC's lab bridge and starts it.
+  Then verify VECTOR in BRODEC on your phone with the seven emoji.
 - `bromigos lab target` is the same as `bromigos target`. See
   [Creating with AI](where-ai-runs.md).
 

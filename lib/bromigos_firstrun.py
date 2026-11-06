@@ -20,6 +20,8 @@ files. Nothing here opens a terminal.
   machine_*, Pairing, Enroll     BRODEC's machine agent (brodec-machine): its package and root's
                                 machine.toml through polkit; `brodec-machine pair --json` (and a lab
                                 bridge's `brodec-lab pair --json`) as events; enroll's question
+  lab_link_argv(gui, intent)    link this computer to the account on bromigos.org/link instead of a
+                                phone: `brodec-lab connect --json`, whose events Pairing follows too
   qr_png(text, path) / qr_text(text)   a QR code as a picture (the window) or half-blocks (a terminal)
 """
 import glob
@@ -423,7 +425,7 @@ class Pairing:
                        {"event": "failed", "code": "agent_failed", "message": err or f"it stopped ({rc})"})
 
     def _emit(self, ev):
-        if ev["event"] in ("paired", "failed", "cancelled"):
+        if ev["event"] in ("paired", "hosted", "failed", "cancelled"):
             self.done = True
         self.on_event(ev)
 
@@ -446,6 +448,14 @@ def lab_pair_argv(gui=True):
     return [("pkexec" if gui else "sudo"), "brodec-lab", "pair", "--json"]
 
 
+def lab_link_argv(gui=True, intent="self-hosted", timeout=900):
+    """Link this computer as a lab from bromigos.org/link (the lab bridge's `connect`): its
+    events are code (user_code, verification_uri, qr, qr_svg, qr_text), expired, approved,
+    paired, hosted (approved for a lab Bromigos hosts: nothing pairs here) and failed."""
+    return [("pkexec" if gui else "sudo"), "brodec-lab", "connect", "--json", "--kind", "bromigos-setup",
+            "--intent", intent, "--timeout", str(timeout)]
+
+
 def pairing_words(ev):
     """An event in plain words, for the status line (code and paired are drawn instead)."""
     e = ev.get("event")
@@ -458,9 +468,17 @@ def pairing_words(ev):
             return "Pairing isn't allowed on this computer yet: press Allow pairing (it asks for your password)."
         if ev.get("code") == "timeout":
             return "No phone paired in time. Press Try again to show a new code."
+        if ev.get("code") == "denied":
+            return "The code was turned down on bromigos.org. Press Try again for a new one."
+        if ev.get("code") == "already_paired":
+            return plain_error(ev.get("message") or "This lab is already paired.")
         return "Pairing stopped: " + plain_error(ev.get("message") or "") + " Press Try again."
     if e == "cancelled":
         return "Pairing stopped. Press Try again to show the code."
+    if e == "approved":
+        return "Approved on bromigos.org. Pairing…"
+    if e == "hosted":
+        return "Approved for a hosted lab: finish choosing it on bromigos.org. It appears in BRODEC once it's built."
     return ""
 
 

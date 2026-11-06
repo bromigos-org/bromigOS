@@ -218,7 +218,8 @@ does.
 BRODEC's lab bridge is optional too: `sudo pacman -S brodec-lab` lets this machine report
 to your BRODEC account as your lab. It only reads. Nothing starts until you run
 `sudo systemctl enable --now brodec-lab`, then `sudo brodec-lab pair`, and scan the code it
-shows in BRODEC.
+shows in BRODEC. Without a phone at hand, `bromigos lab link` (or `sudo brodec-lab connect`)
+shows a short code to approve on bromigos.org/link instead.
 
 ## bromigos setup
 
