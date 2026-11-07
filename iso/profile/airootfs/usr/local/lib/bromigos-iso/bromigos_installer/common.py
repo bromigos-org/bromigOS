@@ -650,11 +650,20 @@ def writable_usb(where=None):
 # ── answer files (unattended installs) ──────────────────────────────────────────────────
 ANSWER_KEYS = ["edition", "locale", "timezone", "keyboard", "disk", "mode", "bromigos_bytes", "full_name", "user",
                "hostname", "encrypt", "separate_passphrase", "ssh", "ssh_password", "ssh_keys", "firewall", "auto_updates",
-               "password", "passphrase", "disk_model", "cpu_model"]
+               "password", "passphrase", "disk_model", "cpu_model", "restart"]
 
 # An answer file's [install.advanced] (the Advanced box's choices): each key's allowed values
 ADVANCED = {"fs": ("btrfs", "ext4"), "kernel": ("linux", "linux-lts", "linux-zen"), "zram": (True, False)}
 CPUINFO = "/proc/cpuinfo"
+# An answer file's install restarts the computer by itself this long after it finishes
+# (restart = false in the file stays on the last page instead)
+AUTO_RESTART_SECONDS = 10
+
+
+def restarts_by_itself(a):
+    """An install that started by itself from an answer file restarts by itself when it's done,
+    unless the file says restart = false: nobody may be there to press Restart now."""
+    return bool(a.get("auto_started")) and a.get("restart", True) is not False
 
 
 def answers_toml(a, secrets=False):
@@ -743,6 +752,8 @@ def read_answer_file(path):
     elif not a.get("disk") and not a.get("disk_model"):
         problems.append("disk must name the disk, for example disk = \"/dev/nvme0n1\", or disk_model its model, "
                         "for example disk_model = \"Samsung*990*PRO*\".")
+    if "restart" in got and not isinstance(got["restart"], bool):
+        problems.append("restart is true or false: whether the computer restarts by itself when the install is done.")
     for key in ("disk_model", "cpu_model"):
         if key in got and (not isinstance(got[key], str) or not got[key].strip()):
             problems.append(f"{key} is a model's name, or a pattern with * in it, in quotes.")

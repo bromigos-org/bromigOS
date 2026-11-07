@@ -679,6 +679,10 @@ Three keys keep one file to one machine and one disk, for an install nobody watc
   the file system (`btrfs` or `ext4`), the kernel (`linux`, `linux-lts` or `linux-zen`)
   and whether there's compressed swap in memory (zram).
 
+When an answer file's install is done, the installer restarts the computer by itself
+after `common.AUTO_RESTART_SECONDS` (10), with **Stay here** to stop it; `restart = false`
+in the file waits on the last page instead.
+
 `common.auto_check` checks the computer, then resolves the disk, before the countdown. When
 either doesn't match, nothing changes and the installer asks its questions instead, saying
 why. The kept answers keep `disk_model`, not the path it found.

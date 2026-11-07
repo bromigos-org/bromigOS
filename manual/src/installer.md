@@ -392,7 +392,8 @@ covers the catalogue's format, `tools/voice/make-clips.py`, and the check CI run
 ### Answer files
 
 An answer file installs with no questions. After a 10-second countdown with **Cancel**,
-the install runs by itself. A file with problems is never half-used: the installer says
+the install runs by itself. When it's done, the computer restarts by itself 10 seconds
+later, unless you press **Stay here** or the file says `restart = false`. A file with problems is never half-used: the installer says
 what's wrong and asks the questions instead.
 
 ![Installing from an answer file: the file's path, a countdown with Cancel, and every
@@ -431,6 +432,7 @@ Flat YAML (`install.yaml`, one `key: value` per line) works too.
 | `firewall` | true/false | `true` | bromigOS Server's firewall |
 | `auto_updates` | true/false | `true` | bromigOS Server's automatic updates |
 | `countdown` | number | `10` | Seconds before it starts; `0` starts at once |
+| `restart` | true/false | `true` | Restart by itself 10 seconds after the install is done (**Stay here** stops it) |
 | `advanced` | table | the installer's | The Advanced box: `advanced = { fs = "btrfs", kernel = "linux-lts", zram = false }`. `fs` is `btrfs` or `ext4`, `kernel` is `linux`, `linux-lts` or `linux-zen`, and `zram = false` leaves out the compressed swap in memory |
 | `[server]` | table | | bromigOS Server's steps: `role`, the network, sign-in, data disks, unlock, updates, services ([Setting up bromigOS Server](server-setup.md#answer-files)) |
 | `failing_ok` | true/false | `false` | Install on a disk that reports it's failing |

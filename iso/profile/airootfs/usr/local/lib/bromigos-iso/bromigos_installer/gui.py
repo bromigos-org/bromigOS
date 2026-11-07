@@ -738,6 +738,7 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
         self._auto_fill()
         if self.countdown <= 0:
             self.a["auto"] = False
+            self.a["auto_started"] = True
             self.start_install()
             return False
         self.countdown -= 1
@@ -1800,6 +1801,14 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
             btn.set_margin_top(6)
             btn.connect("clicked", lambda *_: (backend.reboot(), self.get_application().quit()))
             page.append(btn)
+            if getattr(self, "restart_left", None) is not None:
+                # an answer file's install: it restarts by itself, unless someone here says stay
+                self.restart_label = Gtk.Label(label=self._restart_words(), halign=Gtk.Align.START, wrap=True)
+                page.append(self.restart_label)
+                stay = hint(Gtk.Button(label="Stay here", halign=Gtk.Align.START),
+                            "Don't restart by itself; Restart now when you're ready.")
+                stay.connect("clicked", lambda *_: self._restart_stop("Staying here. Press Restart now when you're ready."))
+                page.append(stay)
             self.set_default_widget(btn)
             GLib.idle_add(btn.grab_focus)
         else:
@@ -1965,9 +1974,34 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
             self.logbuf.delete(self.logbuf.get_start_iter(), self.logbuf.get_iter_at_line(1000)[1])
         return False
 
+    def _restart_words(self):
+        n = self.restart_left
+        return f"Restarting by itself in {n} second{'' if n == 1 else 's'} (the answer file's install). Take out the USB stick."
+
+    def _restart_stop(self, words):
+        self.restart_left = None
+        if getattr(self, "restart_label", None) is not None:
+            self.restart_label.set_label(words)
+
+    def _restart_tick(self):
+        if self.restart_left is None:
+            return False
+        self.restart_left -= 1
+        if self.restart_left > 0:
+            if getattr(self, "restart_label", None) is not None:
+                self.restart_label.set_label(self._restart_words())
+            return True
+        self._restart_stop("Restarting…")
+        backend.reboot()
+        self.get_application().quit()
+        return False
+
     def _done(self, ok, err):
         self.running = None
         self.done = True if ok else err
+        if ok and common.restarts_by_itself(self.a) and not self.opts.get("script"):
+            self.restart_left = common.AUTO_RESTART_SECONDS
+            GLib.timeout_add_seconds(1, self._restart_tick)
         self.set_deletable(True)
         self.show_step("done")
         if self.opts.get("script"):

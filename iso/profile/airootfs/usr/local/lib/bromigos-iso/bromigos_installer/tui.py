@@ -1857,8 +1857,12 @@ class Installer(server_tui.ServerPages, App):
             lines.append(("user", "Then sign in at the login screen." if ed.get("desktop", True) else "Then sign in at the text console."))
             lines += [({"key": "key", "recover": "rollback", "run": "settings"}[k], w) for k, w in server.done_lines(self.a)]
             side.mount(Static(icon_rows(lines), classes="card"))
-            side.mount(Horizontal(hint(Button("Restart now", id="reboot", variant="primary"), "Restart the computer into bromigOS."),
-                                  classes="buttons"))
+            buttons = [hint(Button("Restart now", id="reboot", variant="primary"), "Restart the computer into bromigOS.")]
+            if getattr(self, "restart_left", None) is not None:
+                # an answer file's install: it restarts by itself, unless someone here says stay
+                side.mount(Static(self._restart_words(), id="auto-restart"))
+                buttons.append(hint(Button("Stay here", id="restart-stay"), "Don't restart by itself; Restart now when you're ready."))
+            side.mount(Horizontal(*buttons, classes="buttons"))
             if sb:
                 # Secure Boot's one-time approval: the code big, the blue screen's steps in order
                 code = BT.big_code(sb["code"]) if BT is not None else Text(sb["code"], style="bold")
@@ -2030,6 +2034,8 @@ class Installer(server_tui.ServerPages, App):
         elif bid == "reboot":
             backend.reboot()
             self.exit()
+        elif bid == "restart-stay":
+            self._restart_stop("Staying here. Press Restart now when you're ready.")
         elif bid == "auto-cancel":
             self.a["auto"] = False
             await self.show(self.first_step())
@@ -2090,7 +2096,39 @@ class Installer(server_tui.ServerPages, App):
     def _done(self, ok, err):
         self.running = None
         self.done = True if ok else err
+        if ok and common.restarts_by_itself(self.a):
+            self.restart_left = common.AUTO_RESTART_SECONDS
+            self.restart_timer = self.set_interval(1, self._restart_tick)
         self.call_later(self.show, "done")
+
+    # ── an answer file's install restarts by itself ────────────────────────────────────
+    def _restart_words(self):
+        n = self.restart_left
+        return f"Restarting by itself in {n} second{'' if n == 1 else 's'} (the answer file's install). Take out the USB stick."
+
+    def _restart_say(self, words):
+        try:
+            self.query_one("#auto-restart", Static).update(words)
+        except Exception:               # the page isn't drawn yet, or another one is
+            pass
+
+    def _restart_stop(self, words):
+        timer = getattr(self, "restart_timer", None)
+        if timer is not None:
+            timer.stop()
+        self.restart_timer = self.restart_left = None
+        self._restart_say(words)
+
+    def _restart_tick(self):
+        if self.restart_left is None:
+            return
+        self.restart_left -= 1
+        if self.restart_left > 0:
+            self._restart_say(self._restart_words())
+            return
+        self._restart_stop("Restarting…")
+        backend.reboot()
+        self.exit()
 
 
 # ── the plain questions (a screen reader, a dumb terminal) ──────────────────────────────

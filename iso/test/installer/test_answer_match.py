@@ -135,5 +135,86 @@ class Match(unittest.TestCase):
         self.assertEqual((b["disk_model"], b["cpu_model"], b["advanced"]), ("Samsung*980*", "9955HX", {"zram": False}))
 
 
+class Restart(unittest.TestCase):
+    """An answer file's install restarts by itself when it's done (nobody may be there to press
+    Restart now), unless the file says restart = false or someone presses Stay here."""
+
+    def test_who_restarts_by_itself(self):
+        self.assertFalse(common.restarts_by_itself({}))                                  # asked by hand
+        self.assertTrue(common.restarts_by_itself({"auto_started": True}))
+        self.assertFalse(common.restarts_by_itself({"auto_started": True, "restart": False}))
+
+    def test_the_key_is_checked(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "install.toml")
+        with open(p, "w") as f:
+            f.write(BASE + 'disk_model = "Samsung*"\nrestart = "no"\n' + SERVER)
+        _, problems = common.read_answer_file(p)
+        self.assertTrue(any("restart is true or false" in x for x in problems), problems)
+        with open(p, "w") as f:
+            f.write(BASE + 'disk_model = "Samsung*"\nrestart = false\n' + SERVER)
+        a, problems = common.read_answer_file(p)
+        self.assertEqual(problems, [])
+        self.assertIs(a["restart"], False)
+        self.assertIn("restart = false", common.answers_toml(a))
+
+    def _done(self, a, stay=False):
+        from bromigos_installer import backend, tui
+        import asyncio
+        reboots = []
+        self.addCleanup(setattr, backend, "reboot", backend.reboot)
+        self.addCleanup(setattr, common, "AUTO_RESTART_SECONDS", common.AUTO_RESTART_SECONDS)
+        backend.reboot = lambda: reboots.append(1)
+        common.AUTO_RESTART_SECONDS = 2
+
+        async def go():
+            app = tui.Installer()
+            async with app.run_test(size=(120, 42)) as pilot:
+                app.a.update(a)
+                app._done(True, None)
+                await pilot.pause(0.3)
+                words = str(app.query_one("#auto-restart").render()) if app.query("#auto-restart") else ""
+                if stay:
+                    app.query_one("#restart-stay").press()
+                    await pilot.pause(0.2)
+                    words = str(app.query_one("#auto-restart").render())
+                for _ in range(40):
+                    if reboots:
+                        break
+                    await pilot.pause(0.1)
+                return words
+        return asyncio.run(go()), reboots
+
+    def test_it_restarts_after_the_countdown(self):
+        if not test_tui.HAVE:
+            self.skipTest("textual isn't installed")
+        words, reboots = self._done({"auto_started": True})
+        self.assertIn("Restarting by itself in 2 seconds", words)
+        self.assertEqual(reboots, [1])
+
+    def test_stay_here_stops_it(self):
+        if not test_tui.HAVE:
+            self.skipTest("textual isn't installed")
+        words, reboots = self._done({"auto_started": True}, stay=True)
+        self.assertIn("Staying here", words)
+        self.assertEqual(reboots, [])
+
+    def test_restart_false_and_a_hand_install_wait(self):
+        if not test_tui.HAVE:
+            self.skipTest("textual isn't installed")
+        for a in ({"auto_started": True, "restart": False}, {}):
+            with self.subTest(answers=a):
+                words, reboots = self._done(a)
+                self.assertEqual((words, reboots), ("", []))
+
+
+class KeysWords(unittest.TestCase):
+    def test_the_security_chip_only_when_there_is_one(self):
+        from bromigos_installer import secretstore_stub
+        for tpm, want in (("1", "sealed to its security chip"), ("0", "a key kept on its disk")):
+            with self.subTest(tpm=tpm), mock.patch.dict(os.environ, {"BROMIGOS_INSTALLER_TPM": tpm}):
+                self.assertIn(want, secretstore_stub.where({"kind": "local"})[0])
+
+
 if __name__ == "__main__":
     unittest.main()
