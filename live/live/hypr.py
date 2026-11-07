@@ -114,10 +114,33 @@ def opacity(client, active_address=None):
     return max(0.0, min(1.0, a))
 
 
-def covered(name, rects, min_opacity=0.9):
-    """The keys of rects ({key: (x, y, w, h)} in the monitor's logical px) that a window on
-    the monitor's visible workspaces overlaps and hides: opaque enough (min_opacity; a
-    see-through window doesn't count). The den TV pauses a muted screen behind one."""
+# How much of a rect opaque windows must hide, together, before it counts as covered. A
+# window that only touches a den screen's edge leaves it in view: it must keep playing.
+MIN_HIDDEN = 0.9
+_GRID = 16                                     # sample points per side when measuring that
+
+
+def hidden_fraction(rect, boxes):
+    """How much of rect (x, y, w, h) the union of boxes hides, 0..1, measured on a grid of
+    sample points (windows overlap each other, so their areas can't simply be added)."""
+    x, y, w, h = rect
+    if w <= 0 or h <= 0 or not boxes:
+        return 0.0
+    hit = 0
+    for i in range(_GRID):
+        px = x + (i + 0.5) * w / _GRID
+        for j in range(_GRID):
+            py = y + (j + 0.5) * h / _GRID
+            if any(bx <= px < bx + bw and by <= py < by + bh for bx, by, bw, bh in boxes):
+                hit += 1
+    return hit / (_GRID * _GRID)
+
+
+def covered(name, rects, min_opacity=0.9, min_hidden=MIN_HIDDEN):
+    """The keys of rects ({key: (x, y, w, h)} in the monitor's logical px) that windows on
+    the monitor's visible workspaces hide: opaque enough ones (min_opacity; a see-through
+    window doesn't count) that together cover at least min_hidden of it. A window that only
+    overlaps an edge doesn't. The den TV pauses a muted screen behind them."""
     out = set()
     mons = request("monitors") or []
     mon = next((m for m in mons if m.get("name") == name), None)
@@ -127,19 +150,23 @@ def covered(name, rects, min_opacity=0.9):
     mx, my = mon.get("x", 0), mon.get("y", 0)
     active = (request("activewindow") or {}).get("address")
     alpha = {}
+    boxes = {key: [] for key in rects}
     for c in request("clients") or []:
         if (c.get("workspace") or {}).get("id") not in ids or not c.get("mapped", True) or c.get("hidden"):
             continue
         (cx, cy), (cw, ch) = c.get("at") or (0, 0), c.get("size") or (0, 0)
         cx, cy = cx - mx, cy - my
         for key, (x, y, w, h) in rects.items():
-            if key in out or not (cx < x + w and x < cx + cw and cy < y + h and y < cy + ch):
+            if not (cx < x + w and x < cx + cw and cy < y + h and y < cy + ch):
                 continue
             a = alpha.get(c.get("address"))
             if a is None:
                 a = alpha[c.get("address")] = opacity(c, active)
             if a >= min_opacity:
-                out.add(key)
+                boxes[key].append((cx, cy, cw, ch))
+    for key, rect in rects.items():
+        if hidden_fraction(rect, boxes[key]) >= min_hidden:
+            out.add(key)
     return out
 
 
