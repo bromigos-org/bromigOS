@@ -27,6 +27,8 @@ class Controls:
             item = public_item(req["item"])
             if not self.enabled():
                 raise ValueError("Den TV is off")
+            if screen in self.links:
+                raise ValueError(f"{screen} is linked to a channel: unlink it first")
             if not item.get("id") or item.get("kind") in ("show", "season"):
                 raise ValueError("Pick a playable episode or movie")
             if item.get("server") == "youtube" and not youtube_url(item.get("url", "")):
@@ -105,6 +107,8 @@ class Controls:
         return f"{screen}: back to the channel"
 
     def skip_item(self, screen, previous=False):
+        if screen in self.links:
+            return f"{screen} is linked to a channel: nothing to skip"
         self.release_hold(screen)                           # the next item plays now, on the schedule
         if self.bumping(screen):                            # skip during a bump: the channel, now
             self.overrides.pop(screen, None)

@@ -23,7 +23,7 @@ packaging/
   bromigos-lab-catalog/    the lab model catalog (homelab/share/lab/models.toml)
   bromigos-apps/           the app bundle's configs (apps/)
   bromigos-manual/         the manual (manual/), built as HTML to read offline
-  herdr/, ttf-geist-mono/, 1password/, paru/, xpadneo-dkms/
+  herdr/, ttf-geist-mono/, mediamtx/, 1password/, paru/, xpadneo-dkms/
                            software Arch's repositories don't carry, built from upstream
                            sources pinned by checksum
   oo7/                     the keyring, newer than Arch's own (below)
@@ -68,7 +68,7 @@ packages. That table is generated from these PKGBUILDs.
 | `bromigos-lab-catalog` | The lab model catalog, `/usr/share/bromigos/homelab/lab/models.toml` | `homelab/share/lab/` |
 | `bromigos-apps` | The app bundle's default configs and `bromigos apps setup` | `apps/` |
 | `bromigos-manual` | The manual as HTML in `/usr/share/doc/bromigos/manual/`, which Settings opens | `manual/` |
-| `herdr`, `ttf-geist-mono`, `1password`, `paru`, `xpadneo-dkms` | Upstream software, built here so no install needs an AUR helper (`1password` stays off the public mirror) | upstream sources, pinned by checksum |
+| `herdr`, `ttf-geist-mono`, `mediamtx`, `1password`, `paru`, `xpadneo-dkms` | Upstream software, built here so no install needs an AUR helper (`1password` stays off the public mirror) | upstream sources, pinned by checksum |
 | `oo7` | The keyring that keeps sign-ins: the Secret Service and the PAM module that unlocks it at login | upstream's source at a pinned commit |
 
 Some packages need a closer look.
@@ -124,6 +124,12 @@ Some packages need a closer look.
     When Arch ships 0.7.0, Arch's takes over, and this recipe can go.
   - It conflicts with gnome-keyring, as Arch's does. It adds the D-Bus activation file
     Arch's 0.6 had, and leaves out the Python bindings.
+- **mediamtx** is the media server a BRODEC lab can run for BROADCAST (live streams in,
+  WebRTC and HLS out, recordings to the lab's storage). It's MediaMTX's own linux amd64
+  release, MIT, checked against the `checksums.sha256` upstream publishes beside it; its
+  `check()` runs it once. It installs only the program, upstream's reference config in
+  `/usr/share/doc/mediamtx/` and its licence. Nothing starts it: `brodec-lab` ships the
+  service that does, `brodec-lab-media.service`, opt-in (below).
 - **bromigos-homelab** installs its library to `/usr/lib/bromigos/lib/bromigos_homelab/`
   and its decks, panels and VECTOR plugin to `/usr/lib/bromigos/homelab/`
   ([homelab/README.md](../homelab/README.md)).
@@ -444,6 +450,14 @@ It is published three ways, all from one binary:
 The package is opt-in like `brodec-desktop`: nothing depends on it. It installs a system
 service, `brodec-lab.service`, which isn't enabled. Its files are in
 `prebuilt/brodec-lab/`, a folder `publish.sh` doesn't build on its normal run.
+
+It also installs `brodec-lab-media.service`, the lab's media server for BROADCAST, which
+isn't enabled either and needs the `mediamtx` package (an optional dependency). It runs
+MediaMTX as the `brodec-lab` user with `/etc/brodec-lab/mediamtx.yml`: the control API and
+MediaMTX's questions to the bridge stay on loopback, and a TURN relay's secret, if any, goes
+in root's `/etc/brodec-lab/media.env`, never in the config. The `BRODEC_STREAM_*` lines in
+`brodec-lab.env` turn the bridge's side on. Streams are encrypted on the way, but not end
+to end like BRODEC's messages; the chart's README, "Media server (BROADCAST)", has the rest.
 
 The bridge's source is in BRODEC's private repository, so this repository never compiles it:
 

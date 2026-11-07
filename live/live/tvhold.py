@@ -90,6 +90,8 @@ class Hold:
 
     def hold(self, screen, value="toggle"):
         """Pause (on), play on from where it was (off), or toggle."""
+        if screen in getattr(self, "links", {}):
+            return f"{screen} is linked to a channel: its party or stream sets play and pause"
         n, ch = self.channel(screen)
         if ch["kind"] == "own":
             return f"{screen}: nothing to pause on the screen's own picture"

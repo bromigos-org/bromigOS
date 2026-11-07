@@ -19,3 +19,16 @@ People you share the lab with as Can ask get a polite "can't answer" from VECTOR
 answers them with your brain. To let him answer them about the lab, set guestBrain (a model
 with no tools of its own), or guestBrain.sameAsBrain=true if your brain is a plain model API.
 {{- end }}
+{{- if .Values.mediaServer.enabled }}
+
+BROADCAST is on: the lab's media server runs beside the bridge. In BRODEC, GO LIVE shows the
+addresses and a key for each stream; the people you pick watch in BRODEC. Streams are
+encrypted on the way but not end-to-end encrypted like messages.
+{{- if not .Values.mediaServer.tailnet.enabled }}
+No tailnet: devices reach it at {{ .Values.mediaServer.host }} only if that address is on your
+private network already (mediaServer.tailnet joins this pod to your tailnet).
+{{- end }}
+{{- if not .Values.mediaServer.relay.turnUrl }}
+No relay: only devices on your private network can watch (mediaServer.relay.turnUrl).
+{{- end }}
+{{- end }}

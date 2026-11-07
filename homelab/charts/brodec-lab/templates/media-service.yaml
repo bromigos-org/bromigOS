@@ -1,0 +1,25 @@
+{{- if and .Values.mediaServer.enabled .Values.mediaServer.consoles.enabled }}
+{{- $m := .Values.mediaServer }}
+# The media server on your LAN, for consoles and SRT. Never the control API or the auth hook.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "brodec-lab.fullname" . }}-media
+  labels: {{- include "brodec-lab.labels" . | nindent 4 }}
+  {{- with $m.consoles.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: LoadBalancer
+  {{- with $m.consoles.loadBalancerIP }}
+  loadBalancerIP: {{ . | quote }}
+  {{- end }}
+  {{- with $m.consoles.allowFrom }}
+  loadBalancerSourceRanges: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector: {{- include "brodec-lab.selector" . | nindent 4 }}
+  ports:
+    {{- range (include "brodec-lab.mediaPorts" . | fromYamlArray) }}
+    - { name: {{ .name }}, port: {{ .port }}, targetPort: {{ .port }}, protocol: {{ .protocol }} }
+    {{- end }}
+{{- end }}

@@ -14,8 +14,26 @@ spec:
   podSelector:
     matchLabels: {{- include "brodec-lab.selector" . | nindent 6 }}
   policyTypes: [Ingress, Egress]
+  {{- $m := .Values.mediaServer }}
+  {{- if and $m.enabled $m.consoles.enabled }}
+  # Only the media server's ports, from your LAN (mediaServer.consoles); never its control API or
+  # the bridge's auth hook, which listen on the pod's loopback only. Your tailnet comes in
+  # through the tailnet sidecar's own outgoing connection, not through here.
+  ingress:
+    - ports:
+        {{- range (include "brodec-lab.mediaPorts" . | fromYamlArray) }}
+        - { protocol: {{ .protocol }}, port: {{ .port }} }
+        {{- end }}
+      {{- with $m.consoles.allowFrom }}
+      from:
+        {{- range . }}
+        - ipBlock: { cidr: {{ . | quote }} }
+        {{- end }}
+      {{- end }}
+  {{- else }}
   # Nothing connects to it.
   ingress: []
+  {{- end }}
   egress:
     # DNS
     - ports:
@@ -30,6 +48,20 @@ spec:
         {{- range $ports }}
         - { protocol: TCP, port: {{ . }} }
         {{- end }}
+    {{- end }}
+    {{- if and $m.enabled $m.tailnet.enabled }}
+    # The media server's tailnet sidecar: WireGuard's direct paths and STUN over UDP (its
+    # control server and relays are HTTPS, above).
+    - ports:
+        - { protocol: UDP, port: 41641 }
+        - { protocol: UDP, port: 3478 }
+    {{- end }}
+    {{- if and $m.enabled $m.relay.turnUrl }}
+    # The TURN relay outside viewers watch through: the media server connects out to it.
+    {{- $tp := include "brodec-lab.turnPort" $m.relay.turnUrl | int }}
+    - ports:
+        - { protocol: TCP, port: {{ $tp }} }
+        - { protocol: UDP, port: {{ $tp }} }
     {{- end }}
     {{- with .Values.networkPolicy.extraEgress }}
     {{- toYaml . | nindent 4 }}

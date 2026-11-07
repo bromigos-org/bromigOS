@@ -15,8 +15,9 @@ url='https://brodec.ai'
 license=('LicenseRef-Proprietary')
 depends=('glibc' 'gcc-libs' 'ca-certificates' 'util-linux')
 optdepends=('ffmpeg: voice messages to VECTOR'
-            'poppler: PDFs sent to VECTOR')
-backup=('etc/brodec-lab/brodec-lab.env')
+            'poppler: PDFs sent to VECTOR'
+            'mediamtx: BROADCAST, the lab media server (brodec-lab-media.service)')
+backup=('etc/brodec-lab/brodec-lab.env' 'etc/brodec-lab/mediamtx.yml')
 install=brodec-lab.install
 options=('!debug' '!strip')
 
@@ -25,7 +26,11 @@ package() {
   install -Dm755 brodec-lab.bin "$pkgdir/usr/lib/brodec-lab/brodec-lab"
   install -Dm755 brodec-lab.sh "$pkgdir/usr/bin/brodec-lab"
   install -Dm644 brodec-lab.service "$pkgdir/usr/lib/systemd/system/brodec-lab.service"
+  install -Dm644 brodec-lab-media.service "$pkgdir/usr/lib/systemd/system/brodec-lab-media.service"
   install -Dm644 brodec-lab.sysusers "$pkgdir/usr/lib/sysusers.d/brodec-lab.conf"
   install -Dm644 brodec-lab.tmpfiles "$pkgdir/usr/lib/tmpfiles.d/brodec-lab.conf"
   install -Dm644 brodec-lab.env "$pkgdir/etc/brodec-lab/brodec-lab.env"
+  # The media server's config. No secrets in it: a relay's secret goes in
+  # /etc/brodec-lab/media.env (root's, read by systemd; brodec-lab-media.service).
+  install -Dm644 mediamtx.yml "$pkgdir/etc/brodec-lab/mediamtx.yml"
 }

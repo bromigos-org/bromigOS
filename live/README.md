@@ -645,6 +645,51 @@ YouTube picks use the existing resolver and cache; music comes from Jellyfin or 
 plays through the TV's sound controls. Titles not yet on the server remain picks and
 show a missing-title message until available.
 
+### Linked channels
+
+A den screen can show a channel from BRODEC for the den's owner: a faction's voice channel,
+a channel's live stream or a watch party. BRODEC's desktop app, signed in as the owner on
+this machine, links it when the owner taps ON A DEN TV in BRODEC, and can keep a screen on a
+channel (for example the faction's 24/7 channel on the big monitor). A linked screen shows:
+
+- the channel's stream, when it has one, from the owner's lab network, and with a watch
+  party, kept in step with the host's player (alone within 300 ms, nudged 5 % faster or
+  slower up to 2 s, a seek beyond: the same numbers as BRODEC's own players);
+- the people in the channel as hologram tiles: their picture, or their initial in a holo
+  disc, with a ring that lights while they speak, and a small TV on a tile that is a den
+  screen in the channel (so nobody is watched or listened to by a TV they don't know about);
+- a badge in the corner: `LIVE` with its dot, or the channel's name, and a lit microphone
+  when the owner turned the TV's microphone on (it is off unless they do);
+- with no stream (voice only), the tiles across the whole screen on dark glass.
+
+The channel's voice plays through BRODEC's own audio, not the den TV's player. The den acts
+only for its owner: BRODEC links a screen only for the account signed in on this machine,
+and only while that account may be in the channel. Changing the screen's channel at the den
+ends the link.
+
+```bash
+bromigos-live tv link --screen big --feed "$XDG_RUNTIME_DIR/bromigos-live/link-big.json" --json
+bromigos-live tv unlink --screen big --json
+bromigos-live tv state --json     # a linked screen: "linked": true, its badge, how many people
+```
+
+The feed is a small JSON file BRODEC writes and rewrites (`version`, `screen`, `badge`,
+`title`, `video` with the stream's `hls` address and its `authorization` header, `people`
+with each one's `name`, `picture`, `speaking` and `endpoint`, `sync` for a party, `voice`,
+`mic`). The den reads it again within half a second of a change, keeps the last good one
+when a rewrite is broken, and ends the link when the file goes. It carries a short-lived
+viewer token, so the den takes it only when it is:
+
+- under `$XDG_RUNTIME_DIR`, the user's own regular file, never a symlink;
+- readable by nobody else: mode `0600` (or stricter);
+- at most 256 KiB.
+
+The token and the address never reach a log line, `tv state` or the screen. A link lives in
+memory only: after a restart BRODEC links again. The stream is encrypted in transit (the lab
+network, TLS), but it is not end-to-end encrypted like BRODEC's messages: the owner's lab
+media server sees it. Skips, bumps, full screen and on-demand play wait until the screen is
+unlinked. The code is `live/live/tvlink.py`.
+
 ### Tests
 
 | Test | What it checks |
@@ -652,6 +697,8 @@ show a missing-title message until available.
 | `tests/test_tv.py` | The schedule, the channels, the remembered state, YouTube against a stand-in for yt-dlp (`tests/fake_ytdlp.py`) and keeping videos |
 | `tests/test_tv_screens.py` | Every screen at once, `[tv.start]`, one player for two screens on a channel, bumpers, `max_playing`, the sound on one screen, `--screen`, covering and opacity, the hint's speaker, streams sized to each screen from stand-in Jellyfin and Plex servers (`tests/fake_media.py`), YouTube resolved while yt-dlp is slow and the screen is covered and uncovered, picked shows shuffled and taking turns, and the config writer keeping comments |
 | `tests/test_tv_bumps.py` | Bumps: the packs and their bad entries, the night block past midnight, its ident and sign-off once a night, the caps, `bromigos mascot off`; on a screen, the channel waiting for a bump between items, two screens sharing one, no sound of its own, skipping, the caption, a tune bump only once it settles, none where nobody can see it, and full screen |
+| `tests/test_tv_link.py` | Linked channels: the feed file's rules (mode, place, owner, symlinks, size), the feed's parsing and limits, the party sync's corrections, the commands, the feed read again and ended, voice only, skips and full screen refused while linked, the overlay, and `tv state` without the stream's address or token |
+| `tests/offscreen_tv_link.py` | A linked big monitor playing an HLS stream from a local server that answers only with the feed's header, four people (two speaking, one den screen) and the LIVE badge; the voice-only layout; the rest of the den untouched; the overlay at a TV's own size (PNGs with `--out DIR`) |
 | `tests/offscreen_tv.py` | The den pixel for pixel as before with no media channel on, a generated test clip playing through libmpv in two themes, the hint, the poster with still motion, three screens playing at once, one channel on two screens from one player, a bumper card, and a tune that never leaves the last channel's picture. `OFF_MEASURE=20` measures the cost |
 | `../homelab/tests/test_video.py` | The Jellyfin and Plex adapters against fake servers |
 | `../desktop/tests/test_den_tv_guide.py` | The channel guide, Add channel and the show picker, drawn in a headless weston, and every control's hover hint |

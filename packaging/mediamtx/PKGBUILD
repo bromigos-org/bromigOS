@@ -1,0 +1,33 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# MediaMTX, the media server a BRODEC lab can run for BROADCAST: live streams in over WHIP,
+# RTMP and SRT, out over WebRTC (WHEP) and HLS, and recordings to the lab's storage. Not in
+# Arch's repositories; bromigOS builds it into its own signed repository so the lab needs no
+# AUR helper. Upstream: bluenviron/mediamtx, MIT. The release's linux amd64 tarball is pinned
+# by the checksum upstream publishes beside it (checksums.sha256).
+#
+# Nothing here starts it. brodec-lab ships the service that runs it for the lab bridge
+# (brodec-lab-media.service, opt-in) with its own config; this package is only the program.
+
+pkgname=mediamtx
+pkgver=1.21.3
+pkgrel=1
+pkgdesc='Real-time media server: WebRTC (WHIP/WHEP), RTMP, SRT, RTSP and HLS'
+arch=('x86_64')
+url='https://github.com/bluenviron/mediamtx'
+license=('MIT')
+depends=('glibc')
+options=('!debug' '!strip')
+source=("mediamtx-v${pkgver}.tar.gz::https://github.com/bluenviron/mediamtx/releases/download/v${pkgver}/mediamtx_v${pkgver}_linux_amd64.tar.gz")
+sha256sums=('0a2ea7eba96023631efa1bea7804823a9145b043b6646a8a05798d4ac24ed635')
+
+check() {
+  ./mediamtx --help | grep -q "MediaMTX v${pkgver}"
+}
+
+package() {
+  install -Dm755 mediamtx "$pkgdir/usr/bin/mediamtx"
+  # Upstream's full config, every setting with its comment, as a reference.
+  install -Dm644 mediamtx.yml "$pkgdir/usr/share/doc/mediamtx/mediamtx.yml"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

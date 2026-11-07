@@ -84,6 +84,7 @@ class Player:
         self.has_frame = False
         self.ended = None                     # (reason, error) of the last end-file, from mpv's thread
         self.started = False
+        self.redact = None                    # a linked channel's: takes addresses out of mpv's log lines
         self.ready = False                    # the loaded item's first frame is decoded (playback-restart)
         self.gen = 0                          # load()s so far: an event for an older one is ignored
         self._loaded_gen = -1
@@ -112,6 +113,8 @@ class Player:
 
     def _log(self, level, prefix, text):
         if level in ("error", "fatal", "warn"):
+            redact = getattr(self, "redact", None)          # a linked channel's: no address in the log
+            text = redact(text) if redact else text
             self.log(f"tv: mpv {prefix}: {text.strip()[:200]}")
 
     # ---- control (any thread: mpv's properties are thread safe)
@@ -150,6 +153,15 @@ class Player:
 
     def paused(self):
         return bool(self.m.pause)
+
+    def speed(self, rate):
+        """Play faster or slower (a watch party's player catching up), 0.25x to 4x."""
+        rate = max(0.25, min(4.0, float(rate)))
+        try:
+            if abs(float(self.m.speed) - rate) > 1e-3:
+                self.m.speed = rate
+        except Exception:                                       # noqa: BLE001
+            pass
 
     def seeking(self):
         """mpv is still seeking (or opening): its position is where it's going, not where it is."""

@@ -322,6 +322,19 @@ The den TV's player (mpv) and YouTube support (yt-dlp) come with bromigOS. With 
 background still or on a computer without a working graphics card, it shows posters
 instead.
 
+### A BRODEC channel on a den screen
+
+With BRODEC's desktop app signed in on this computer, you can put a BRODEC channel on one of
+the den's screens: tap **ON A DEN TV** in a faction's voice channel, a channel with a stream,
+or a watch party, and pick the screen. It shows the stream (in step with a watch party), the
+people in the channel as holograms that light up when they speak, and a badge with the
+channel's name or **LIVE**. Their voices play through your speakers. The screen's microphone
+stays off unless you turn it on in BRODEC, and everyone in the channel sees that your TV is
+there. Change the screen's channel, or tap **Unlink** in BRODEC, to take it off. The stream
+comes from your lab over your own network and is encrypted on the way, but it isn't
+end-to-end encrypted like your messages. For power users: `bromigos-live tv link` and
+`tv unlink` (live/README.md, "Linked channels").
+
 ### The worlds
 
 The den TV is the den's: the Wick and the colour themes have it. Mire and Tidewell have no

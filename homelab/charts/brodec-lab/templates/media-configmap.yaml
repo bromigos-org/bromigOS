@@ -1,0 +1,61 @@
+{{- if .Values.mediaServer.enabled }}
+{{- $m := .Values.mediaServer }}
+{{- $host := required "mediaServer.host: the address your devices reach the media server at on your private network" $m.host }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "brodec-lab.fullname" . }}-mediamtx
+  labels: {{- include "brodec-lab.labels" . | nindent 4 }}
+data:
+  # MediaMTX's config (README.md, "Media server (BROADCAST)"). No secret in it: the relay's
+  # shared secret comes from its Secret as MTX_WEBRTCICESERVERS2_0_PASSWORD.
+  mediamtx.yml: |
+    logLevel: info
+    logDestinations: [stdout]
+    # Every connection asks the bridge, on the pod's loopback.
+    authMethod: http
+    authHTTPAddress: http://127.0.0.1:9108/mediamtx/auth
+    # The control API, for the bridge alone, on the pod's loopback.
+    api: true
+    apiAddress: 127.0.0.1:9997
+    metrics: false
+    pprof: false
+    playback: {{ if $m.recording.existingClaim }}true{{ else }}false{{ end }}
+    playbackAddress: :9996
+    # RTSP stays inside the pod, for a transcoder feeding a stream.
+    rtsp: true
+    rtspTransports: [tcp]
+    rtspAddress: 127.0.0.1:8554
+    rtmp: true
+    rtmpAddress: :1935
+    srt: true
+    srtAddress: :8890
+    hls: true
+    hlsAddress: :8888
+    hlsVariant: lowLatency
+    webrtc: true
+    webrtcAddress: :8889
+    webrtcLocalUDPAddress: :8189
+    webrtcLocalTCPAddress: :8189
+    # Players are told the private-network address only, never the pod's.
+    webrtcIPsFromInterfaces: false
+    webrtcAdditionalHosts: {{ compact (list $host (ternary $m.consoleHost "" $m.consoles.enabled)) | toJson }}
+    {{- if $m.relay.turnUrl }}
+    webrtcICEServers2:
+      - url: {{ $m.relay.turnUrl | quote }}
+        username: AUTH_SECRET
+        password: ""
+    {{- else }}
+    webrtcICEServers2: []
+    {{- end }}
+    moq: false
+    pathDefaults:
+      record: false
+      recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f_%z
+      recordFormat: fmp4
+      recordSegmentDuration: 1h
+      recordDeleteAfter: {{ printf "%dh" (mul (int $m.recording.keepDays) 24) }}
+      overridePublisher: false
+    # The bridge adds a path per stream through the API.
+    paths: {}
+{{- end }}

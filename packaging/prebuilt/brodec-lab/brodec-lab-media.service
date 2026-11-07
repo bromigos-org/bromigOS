@@ -1,0 +1,55 @@
+# The lab media server for BRODEC's lab bridge (BROADCAST): MediaMTX, as the brodec-lab user.
+# Opt-in: install mediamtx, set the BRODEC_STREAM_* lines in /etc/brodec-lab/brodec-lab.env,
+# then `sudo systemctl enable --now brodec-lab-media` and restart brodec-lab. Its control API and
+# its questions to the bridge stay on loopback (/etc/brodec-lab/mediamtx.yml). Recordings go to
+# /var/lib/brodec-lab-media/recordings; mount your NAS share there to keep them on the NAS.
+[Unit]
+Description=BRODEC lab media server (MediaMTX, for the lab bridge)
+Documentation=https://bromigos.org
+Wants=network-online.target
+After=network-online.target brodec-lab.service
+ConditionPathExists=/usr/bin/mediamtx
+
+[Service]
+Type=simple
+User=brodec-lab
+Group=brodec-lab
+# A TURN relay's shared secret, if you use one, in root's own file (mode 0600), never in
+# mediamtx.yml: MTX_WEBRTCICESERVERS2_0_PASSWORD=... (MediaMTX reads MTX_ settings).
+EnvironmentFile=-/etc/brodec-lab/media.env
+ExecStart=/usr/bin/mediamtx /etc/brodec-lab/mediamtx.yml
+Restart=on-failure
+RestartSec=10s
+
+StateDirectory=brodec-lab-media brodec-lab-media/recordings
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/brodec-lab-media
+UMask=0077
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target
