@@ -38,6 +38,16 @@ Each adapter also answers, for the TV and the panel (not capabilities: one serve
     video_web(item)                 the item's page in the server's web app
     video_poster(item)              (url, headers) of its poster, or (None, {})
 
+Jellyfin also answers, for the remotes' audio and subtitle sheet (lib/bromigos_tracks.py):
+
+    video_streams(item)             its MediaStreams (audio, subtitles, files beside it)
+    video_subtitle_url(item, index) (url, headers) of a subtitle as WebVTT
+    subtitle_search(item, lang)     the server's own subtitle search (a subtitle plugin):
+                                    downloads the best match, -> how many it found
+    has_subtitle_search()           a subtitle plugin is installed
+    provider_ids(item)              {tvdb, tmdb, imdb, season, episode, series_tvdb}: for Bazarr
+    refresh_item(item)              look for new subtitle files beside it now
+
 An item is {id, title, series, season, episode, kind: movie | episode | video, duration
 (seconds), year, poster, bitrate (kbit/s), position (seconds watched, for resume), added
 (unix seconds), server}.
@@ -137,12 +147,15 @@ class VideoServer:
         else the endpoint."""
         return (self.opts.get("cast_url") or self.endpoint or "").rstrip("/")
 
-    def video_cast_url(self, item, hls=True):
+    def video_cast_url(self, item, hls=True, audio_index=None, burn_index=None):
         """(url, mime) a cast target fetches the item from itself. It can't send headers, so
         the token rides in the address: give it only to the target, never print or log it.
         hls: an H.264/AAC HLS stream at up to 1080p (Cast, AirPlay); else the file as it is
         (DLNA TVs, which seek in it by themselves)."""
-        stream = self.video_stream(item, quality="1080p" if hls else "direct", device=CAST_DEVICE)
+        kw = {}
+        if audio_index is not None or burn_index is not None:     # an older adapter doesn't take them
+            kw = dict(audio_index=audio_index, burn_index=burn_index)
+        stream = self.video_stream(item, quality="1080p" if hls else "direct", device=CAST_DEVICE, **kw)
         url = stream["url"]
         if self.endpoint and url.startswith(self.endpoint):
             url = self.cast_base() + url[len(self.endpoint):]
@@ -169,9 +182,13 @@ class JellyfinVideo(VideoServer):
         q = urllib.parse.urlencode({"ControllableByUserId": self._user(), "ActiveWithinSeconds": "960"})
         return [s for s in (self.fetch(f"/Sessions?{q}", timeout=6) or []) if s.get("SupportsRemoteControl")]
 
-    def remote_play(self, session_id, item_id, start=0):
-        q = urllib.parse.urlencode({"playCommand": "PlayNow", "itemIds": item_id,
-                                    "startPositionTicks": str(int(float(start or 0) * TICKS))})
+    def remote_play(self, session_id, item_id, start=0, audio_index=None, sub_index=None):
+        args = {"playCommand": "PlayNow", "itemIds": item_id, "startPositionTicks": str(int(float(start or 0) * TICKS))}
+        if audio_index is not None:
+            args["audioStreamIndex"] = str(int(audio_index))
+        if sub_index is not None:
+            args["subtitleStreamIndex"] = str(int(sub_index))
+        q = urllib.parse.urlencode(args)
         self.request(f"/Sessions/{urllib.parse.quote(session_id)}/Playing?{q}", method="POST", timeout=8, raw=True)
 
     def remote_playstate(self, session_id, command, seconds=None):
@@ -181,7 +198,8 @@ class JellyfinVideo(VideoServer):
                      raw=True)
 
     def remote_command(self, session_id, name, arguments=None):
-        """A general command: SetVolume (Arguments Volume), VolumeUp, VolumeDown, Mute, Unmute."""
+        """A general command: SetVolume (Arguments Volume), VolumeUp, VolumeDown, Mute, Unmute,
+        SetAudioStreamIndex and SetSubtitleStreamIndex (Arguments Index; -1 turns subtitles off)."""
         self.request(f"/Sessions/{urllib.parse.quote(session_id)}/Command", method="POST", timeout=8, raw=True,
                      data={"Name": name, "Arguments": arguments or {}})
 
@@ -316,7 +334,79 @@ class JellyfinVideo(VideoServer):
         q = urllib.parse.urlencode({"Limit": str(limit), "Fields": self.FIELDS, "GroupItems": "true"})
         return [self._item(i) for i in self.fetch(f"/Users/{uid}/Items/Latest?{q}", timeout=8) or []]
 
-    def video_stream(self, item, quality="auto", height=None, start=None, device=None):
+    # ---- audio tracks and subtitles (lib/bromigos_tracks.py)
+    def video_streams(self, item):
+        """The item's MediaStreams: video, audio, subtitles (embedded and files beside it)."""
+        uid = self._user()
+        it = self.fetch(f"/Users/{uid}/Items/{urllib.parse.quote(str(item['id']))}", timeout=8) or {}
+        src = (it.get("MediaSources") or [{}])[0]
+        return src.get("MediaStreams") or it.get("MediaStreams") or []
+
+    def video_subtitle_url(self, item, index, fmt="vtt"):
+        """(url, headers) of one subtitle stream, converted to WebVTT (or SRT) by the server:
+        embedded text subtitles and files beside the video alike."""
+        iid = urllib.parse.quote(str(item["id"]))
+        return f"{self.endpoint}/Videos/{iid}/{iid}/Subtitles/{int(index)}/0/Stream.{fmt}", self.auth_headers()
+
+    def video_cast_subtitle_url(self, item, index):
+        """A subtitle as WebVTT for a cast target: by the cast address, with the token in it (a
+        target can't send headers). Give it only to the target."""
+        url, _ = self.video_subtitle_url(item, index)
+        if self.endpoint and url.startswith(self.endpoint):
+            url = self.cast_base() + url[len(self.endpoint):]
+        return url + "?" + urllib.parse.urlencode({self.TOKEN_PARAM: self._token()})
+
+    def has_subtitle_search(self):
+        """A subtitle plugin (OpenSubtitles, Podnapisi...) is installed: the server can look."""
+        hit = getattr(self, "_subsearch", None)
+        if hit and time.time() - hit[1] < 3600:
+            return hit[0]
+        try:
+            plugins = self.fetch("/Plugins", timeout=6) or []
+            ok = any("subtitle" in (p.get("Name") or "").lower() and p.get("Status") in (None, "Active")
+                     for p in plugins)
+        except Exception:                                   # noqa: BLE001  (an older server, no admin key)
+            ok = False
+        self._subsearch = (ok, time.time())
+        return ok
+
+    def subtitle_search(self, item, lang3):
+        """Ask the server's subtitle plugins for `lang3` (ISO 639-2) subtitles, and download the
+        best (the plugin's own order, perfect hash matches first). -> how many it found."""
+        iid = urllib.parse.quote(str(item["id"]))
+        found = self.fetch(f"/Items/{iid}/RemoteSearch/Subtitles/{urllib.parse.quote(lang3)}?isPerfectMatch=false",
+                           timeout=30) or []
+        if not found:
+            return 0
+        best = sorted(found, key=lambda r: (not r.get("IsHashMatch"), -(r.get("DownloadCount") or 0)))[0]
+        self.request(f"/Items/{iid}/RemoteSearch/Subtitles/{urllib.parse.quote(str(best['Id']))}", method="POST",
+                     timeout=30, raw=True)
+        return len(found)
+
+    def provider_ids(self, item):
+        """{tvdb, tmdb, imdb, kind, season, episode, series_tvdb, series_tmdb} for an item: what
+        Sonarr, Radarr and Bazarr know it by."""
+        uid = self._user()
+        it = self.fetch(f"/Users/{uid}/Items/{urllib.parse.quote(str(item['id']))}", timeout=8) or {}
+        p = {k.lower(): v for k, v in (it.get("ProviderIds") or {}).items()}
+        out = {"kind": {"Movie": "movie", "Episode": "episode"}.get(it.get("Type"), "video"),
+               "tvdb": p.get("tvdb"), "tmdb": p.get("tmdb"), "imdb": p.get("imdb"),
+               "season": it.get("ParentIndexNumber"), "episode": it.get("IndexNumber")}
+        if it.get("SeriesId"):
+            ser = self.fetch(f"/Users/{uid}/Items/{urllib.parse.quote(str(it['SeriesId']))}", timeout=8) or {}
+            sp = {k.lower(): v for k, v in (ser.get("ProviderIds") or {}).items()}
+            out.update(series_tvdb=sp.get("tvdb"), series_tmdb=sp.get("tmdb"))
+        return out
+
+    def refresh_item(self, item):
+        """Look for new files beside the item (a subtitle just fetched) without touching its
+        metadata."""
+        q = urllib.parse.urlencode({"MetadataRefreshMode": "Default", "ImageRefreshMode": "None",
+                                    "ReplaceAllMetadata": "false", "ReplaceAllImages": "false"})
+        self.request(f"/Items/{urllib.parse.quote(str(item['id']))}/Refresh?{q}", method="POST", timeout=10, raw=True)
+
+    def video_stream(self, item, quality="auto", height=None, start=None, device=None, audio_index=None,
+                     burn_index=None):
         if item.get("kind") == "audio":
             return {"url": f"{self.endpoint}/Audio/{item['id']}/stream?static=true", "headers": self.auth_headers(),
                     "direct": True, "quality": "direct", "session": None, "from_start": False}
@@ -332,12 +422,18 @@ class JellyfinVideo(VideoServer):
             args = {"MediaSourceId": iid, "DeviceId": dev, "PlaySessionId": session,
                     "VideoCodec": "h264", "AudioCodec": "aac", "MaxHeight": str(h),
                     "VideoBitrate": str(kbps * 1000), "AudioBitrate": "128000", "SegmentContainer": "ts"}
+            if audio_index is not None:                     # a transcode carries one audio track: this one
+                args["AudioStreamIndex"] = str(int(audio_index))
+            if burn_index is not None:                      # picture subtitles (PGS, DVD) burnt in
+                args.update(SubtitleStreamIndex=str(int(burn_index)), SubtitleMethod="Encode")
             # No StartTimeTicks: Jellyfin 10.11 answers every segment of such a playlist with 400.
             # Its playlist covers the whole item, and the segment mpv asks for at `start` is
             # where Jellyfin starts encoding.
             url = f"{self.endpoint}/Videos/{iid}/master.m3u8?" + urllib.parse.urlencode(args)
         return {"url": url, "headers": self.auth_headers(), "direct": q == "direct", "quality": q,
-                "session": session and {"device": dev, "play": session}, "from_start": False}
+                "session": session and {"device": dev, "play": session}, "from_start": False,
+                "audio_index": None if q == "direct" else audio_index,
+                "burn_index": None if q == "direct" else burn_index}
 
     def video_stop(self, stream):
         """End the transcode a video_stream() started (no-op for a direct stream)."""

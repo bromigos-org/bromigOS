@@ -10,7 +10,7 @@
   bromigos media VERB …             = bromigos lab media VERB …: search, get, status, upcoming,
                                     recent, library, language, monitor, profile, refresh, delete, channel
   bromigos media cast …             play on a Chromecast, a DLNA TV, AirPlay, a Jellyfin app or the den:
-                                    targets, play, control, status, handback (cast --help)
+                                    targets, play, control, status, handback, tracks, audio, subs (cast --help)
 """
 import os
 import sys

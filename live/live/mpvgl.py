@@ -87,6 +87,8 @@ class Player:
         self.ready = False                    # the loaded item's first frame is decoded (playback-restart)
         self.gen = 0                          # load()s so far: an event for an older one is ignored
         self._loaded_gen = -1
+        self.want_aid = "auto"                # the audio track to play while the sound is on (tvtracks)
+        self.sound_on = False
 
         @self.m.event_callback("end-file")
         def _end(ev):
@@ -157,12 +159,62 @@ class Player:
             return False
 
     def sound(self, on, volume):
-        """Sound on (the audio track decoded, unmuted) or off (no audio decoded at all)."""
-        want_aid = "auto" if on else "no"
+        """Sound on (the chosen audio track decoded, unmuted) or off (no audio decoded at all)."""
+        self.sound_on = bool(on)
+        want_aid = str(self.want_aid) if on else "no"
         if str(self.m["aid"]) != want_aid:
             self.m["aid"] = want_aid
         self.m.volume = max(0, min(100, int(volume)))
         self.m.mute = not on
+
+    # ---- audio tracks and subtitles (live/live/tvtracks.py)
+    def track_list(self):
+        try:
+            return list(self.m.track_list or [])
+        except Exception:                                       # noqa: BLE001  nothing loaded
+            return []
+
+    def choose_audio(self, aid):
+        """The audio track to play (an mpv id, or "auto"); decoded only while the sound is on."""
+        self.want_aid = "auto" if aid in (None, "") else aid
+        if self.sound_on and str(self.m["aid"]) != str(self.want_aid):
+            try:
+                self.m["aid"] = self.want_aid
+            except Exception:                                   # noqa: BLE001  gone since
+                self.want_aid = "auto"
+
+    def choose_sub(self, sid):
+        """A subtitle track (an mpv id), or None for none."""
+        want = "no" if sid is None else sid
+        try:
+            if str(self.m["sid"]) != str(want):
+                self.m["sid"] = want
+        except Exception:                                       # noqa: BLE001
+            pass
+
+    def add_sub(self, url, title, lang, done=None):
+        """A subtitle from an address (the media server's WebVTT), selected once it's read;
+        done(mpv id or None) after. The stream's own headers go with it."""
+        gen = self.gen
+
+        def finished(error, result):
+            sid = None
+            if not error:
+                sid = (result or {}).get("track_id") if isinstance(result, dict) else None
+                if sid is None:
+                    subs = [t for t in self.track_list() if t.get("type") == "sub" and t.get("external")]
+                    sid = subs[-1]["id"] if subs else None
+            if done and gen == self.gen:
+                done(sid)
+        try:
+            self.m.command_async("sub-add", url, "select", title or "", lang or "", callback=finished)
+        except TypeError:                                       # an older python-mpv: no callback
+            self.m.command_async("sub-add", url, "select", title or "", lang or "")
+            if done:
+                done(None)
+        except Exception:                                       # noqa: BLE001
+            if done:
+                done(None)
 
     def stop(self):
         self.has_frame = self.ready = False

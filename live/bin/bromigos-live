@@ -336,8 +336,18 @@ bromigos-live tv: the den TV, channels on the den's screens (live/README.md, "Th
   bromigos-live tv channels [--json]      contents, order, screens and now/next (works while off)
   bromigos-live tv channel --help         add, rename, order, bumpers, move, items, remove, undo
   bromigos-live tv state [--json]         what's on each screen, the sound, what mpv is doing
+  bromigos-live tv pause [on|off|toggle] [--json]   hold the picture; play goes on from there,
+                                          behind the channel ("BEHIND LIVE" on the screen)
+  bromigos-live tv resume [--json]        play on from where it was paused
+  bromigos-live tv jump-live [--json]     back to where the channel is now
+  bromigos-live tv tracks [--json]        what's on's audio tracks and subtitles
+  bromigos-live tv audio ID [--json]      play that audio track (remembered for the series)
+  bromigos-live tv subs ID|on|off [--json]   subtitles: that track, on, or off (remembered too)
+  bromigos-live tv subs-fetch [--lang en] [--json]   look for subtitles (the lab's Bazarr, or
+                                          the media server's subtitle search)
 
-volume, sound, close and live take --json too: one JSON object, ok or an error.
+volume, sound, close, live, pause, resume, jump-live, tracks, audio and subs take --json too:
+one JSON object, ok or an error.
 
 Each takes --screen big|wave|emblem (the big monitor, the scope, the small monitor; scope
 and small work too). Without it: the screen under the pointer, else the one with the
@@ -357,7 +367,7 @@ HELP
             hint|select|remote)
                 export PYTHONPATH="$HERE/../lib:$HERE/../desktop/lib:/usr/lib/bromigos/lib:${PYTHONPATH:-}"
                 exec "$PY" -m bromigos_tvremote "$@" ;;
-            poster)
+            poster|subs-fetch)
                 export PYTHONPATH="$HERE/../lib:$HERE/../homelab/lib:/usr/lib/bromigos/lib:${PYTHONPATH:-}"
                 exec "$PY" -m bromigos_tvremote "$@" ;;
             volume|sound|close|live)

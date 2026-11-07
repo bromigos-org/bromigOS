@@ -104,6 +104,31 @@ def poster(screen=None, next_=False, size=160, id_=None, source=None):
     return dict(fetch(item, size, source), ok=True, screen=screen)
 
 
+def subs_fetch(screen=None, lang="en"):
+    """Look for subtitles for what's on a screen (the lab's Bazarr, else the media server's
+    subtitle search); the den reads the item's tracks again after."""
+    import bromigos_tracks as T
+    import bromigos_tv as TV
+    state = live_state()
+    if not state:
+        raise ChannelError("The live layer is not running", 3)
+    name = screen_name(screen or "big")
+    row = (state.get("screens") or {}).get(name) or {}
+    item = row.get("item")
+    if not item or not item.get("id"):
+        raise ChannelError("Nothing's playing on that screen", 4)
+    H = TV._homelab()
+    a = H.video_source(item.get("server") or row.get("source")) if H is not None else None
+    if a is None:
+        raise ChannelError("Subtitles can be looked for only for what's on your media server", 4)
+    try:
+        result = T.fetch_subs(item, lang, a)
+    except T.FetchError as e:
+        raise ChannelError(str(e), 4) from None
+    control(f"tv tracks-refresh --screen {name}")
+    return dict(result, screen=name)
+
+
 def send(command):
     answer = control("tv " + command)
     if not answer:
@@ -128,8 +153,10 @@ def main(argv=None):
     pos.add_argument("--next", action="store_true", help="what's on next instead")
     pos.add_argument("--size", type=int, default=160, help="the longest side in pixels (at most 320)")
     pos.add_argument("--id"); pos.add_argument("--source")
-    for parser in (vol, snd, cls, liv, pos): parser.add_argument("--screen")
-    for parser in (hint, sel, rem, vol, snd, cls, liv, pos): parser.add_argument("--json", action="store_true")
+    fetch = subs.add_parser("subs-fetch", help="look for subtitles for what's on")
+    fetch.add_argument("--lang", default="en", help="a language: en, ja, es...")
+    for parser in (vol, snd, cls, liv, pos, fetch): parser.add_argument("--screen")
+    for parser in (hint, sel, rem, vol, snd, cls, liv, pos, fetch): parser.add_argument("--json", action="store_true")
     try:
         args = json_args(p, argv)
     except SystemExit as e:
@@ -142,6 +169,7 @@ def main(argv=None):
         elif args.verb == "sound": result = sound(args.value, args.screen)
         elif args.verb == "close": result = close(args.screen)
         elif args.verb == "live": result = back_to_channel(args.screen)
+        elif args.verb == "subs-fetch": result = subs_fetch(args.screen, args.lang)
         else: result = poster(args.screen, args.next, args.size, args.id, args.source)
         print(json.dumps(result) if args.json else result.get("message") or f"{result.get('w')}x{result.get('h')} JPEG")
         return 0

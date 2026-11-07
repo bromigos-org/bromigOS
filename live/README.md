@@ -530,13 +530,63 @@ bromigos-live tv state --json               # what's on each screen, the sound, 
 bromigos-live tv poster --screen big --json # what's on as a small JPEG, base64
 bromigos-live tv bumps                      # the bumps' settings, the packs, how many tonight
 bromigos-live tv bump crew --screen big     # play a bump now (any, or one by its id)
+bromigos-live tv pause --screen big         # hold the picture (on, off or toggle); resume plays on
+bromigos-live tv jump-live --screen big     # back to where the channel is now
+bromigos-live tv tracks --screen big        # what's on's audio tracks and subtitles
+bromigos-live tv audio j2 --screen big      # that audio track (an id from tracks)
+bromigos-live tv subs off --screen big      # subtitles: a track's id, on or off
+bromigos-live tv subs-fetch --lang en       # look for subtitles (Bazarr, or Jellyfin's search)
 ```
 
-`volume`, `sound`, `close`, `live` and `poster` take `--json`, as `remote`, `set`, `play`
+`volume`, `sound`, `close`, `live`, `poster`, `pause`, `resume`, `jump-live`, `tracks`,
+`audio`, `subs` and `subs-fetch` take `--json`, as `remote`, `set`, `play`
 and `channels` do: one JSON object, `"ok": true` with the result, or `"ok": false` with
 `error` and a non-zero exit. Remotes use them: BRODEC's den remote calls them through the
 machine agent. `poster` fetches the picture through the media server's adapter, so its
 address and key never leave it.
+
+### Pause, behind live
+
+A den channel plays as if live, and a screen that comes back into view jumps to where the
+channel is now. The remote's pause (`tv pause`, BRODEC's PLAY/PAUSE) is a DVR's instead
+(`live/live/tvhold.py`): it holds the picture where it is, and play goes on from that
+moment, behind the channel's schedule. The screen plays its own copy of the channel as it
+was that long ago, so another screen on the same channel stays live. It shows
+`PAUSED · −4:12` while held and `BEHIND LIVE · −4:12` after, bottom left. The den's own
+pausing (a window over the screen, the lock screen, no frames drawn) never undoes a
+remote's pause. `tv jump-live`, a channel change, a skip or something picked put the
+screen back on the schedule; past six hours behind it goes back by itself. Something
+picked has no schedule: a pause holds it, and play goes on from there. `tv state` has
+`held` and `behind` (seconds) for each screen.
+
+### Audio and subtitles
+
+Each screen picks its audio track and subtitles once per item (`live/live/tvtracks.py`,
+`lib/bromigos_tracks.py`):
+
+- **English audio** when there is some (a main track, not a commentary; the one the file
+  marks as default, else the one with most channels).
+- **Audio that isn't English:** English subtitles on, a full track before SDH, and SDH
+  before forced.
+- **English audio:** English forced subtitles (signs and songs) when there are some, else
+  none.
+- **A choice from a remote** (`tv audio`, `tv subs`, BRODEC's AUDIO and CC) is remembered
+  for the series (a film on its own), by language and kind, in
+  `$XDG_STATE_HOME/bromigos/den-tracks.json`. The next episode gets the same, whatever
+  its tracks are numbered.
+
+On a Jellyfin item, the tracks are the server's: every audio track and subtitle, files
+beside the video included (ids `j<index>`). A direct stream has them all; a transcode
+carries one audio track, so another one is a new stream with that track, and subtitles
+come from the server as WebVTT (picture subtitles, PGS or DVD, are burnt in). Anything
+else (Plex, files, YouTube) uses mpv's own track list (ids `m<id>`). Sound off decodes no
+audio at all; the chosen track comes back with the sound. Full screen picks the same
+tracks. `tv state` has `tracks: {audio, subs}` for each screen, as labels.
+
+`tv subs-fetch` looks for subtitles for what's on: the lab's Bazarr first (it follows
+Sonarr and Radarr: the episode or film by its TVDB or TMDB id), then the media server's
+own subtitle search when a subtitle plugin is installed. The server then looks beside the
+video again, and the new file shows in `tv tracks`.
 
 `--screen` takes `big`, `wave` or `emblem`, and `scope` and `small` too. Without it, a
 command acts on the screen under the pointer, as the keys do. `bromigos-live tv help` has
