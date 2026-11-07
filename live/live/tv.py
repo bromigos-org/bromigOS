@@ -54,6 +54,8 @@ from OpenGL import GL
 
 from .tvbumps import Bumps
 from .tvcontrol import Controls
+from .tvhold import Hold
+from .tvtracks import Tracks
 
 from . import LIB  # noqa: F401  (the shared libs on sys.path)
 import bromigos_tv as TVL  # noqa: E402
@@ -145,7 +147,7 @@ class Deck:
         self.vol_osd = None                # monotonic start
 
 
-class TV(Controls, Bumps):
+class TV(Controls, Bumps, Hold, Tracks):
     def __init__(self, cfg, log=print):
         self.cfg = cfg
         self.log = log
@@ -187,6 +189,8 @@ class TV(Controls, Bumps):
         self.full_session = None
         self.init_controls()
         self.init_bumps()
+        self.init_hold()
+        self.init_tracks()
         self.resolved = {}                 # (YouTube URL, height) -> Y.stream()'s answer, or {"error", "at"}
         self.notes = {}                    # channel key -> (monotonic, what went wrong): the hint says it
         self._rq = []                      # YouTube streams to resolve: (url, height)
@@ -249,8 +253,8 @@ class TV(Controls, Bumps):
         key = self.screens[screen]["channel"]
         for n, ch in enumerate(lu):
             if ch["key"] == key:
-                return n + 1, self.override_channel(screen, ch)
-        return 1, self.override_channel(screen, lu[0])
+                return n + 1, self.hold_channel(screen, self.override_channel(screen, ch))
+        return 1, self.hold_channel(screen, self.override_channel(screen, lu[0]))
 
     def showing(self, screen):
         """True when the screen shows a media channel (not its own picture)."""
@@ -303,6 +307,8 @@ class TV(Controls, Bumps):
             return None
         if ch.get("override"):
             return self.override_slot(ch)
+        if ch.get("behind_screen"):
+            return self.hold_slot(ch)                       # the remote's pause: the schedule, behind
         now = _mono()
         hit = self.last_slot.get(ch["key"])
         if hit and now - hit[0] < 0.5:
@@ -314,6 +320,7 @@ class TV(Controls, Bumps):
     # ------------------------------------------------------------------ changing channel
     def tune_to(self, screen, number=None, step=0):
         self.overrides.pop(screen, None)
+        self.release_hold(screen)                           # a channel change: back on the schedule
         lu = self.lineup(screen)
         cur, _ = self.channel(screen)
         n = number if number is not None else cur + step
@@ -434,6 +441,7 @@ class TV(Controls, Bumps):
         """Each screen: play or pause. Frames drawn in the last second, not covered by an
         opaque window (unless its sound is on), within max_playing, not still."""
         self.controls_tick()
+        self.tracks_tick()
         self.covered = set(covered or ())
         self.quiet, self.ducked = quiet, ducked
         self.motion, self.software = motion, software
@@ -467,7 +475,9 @@ class TV(Controls, Bumps):
                 if slot and slot.offset is not None and (pos is None or abs(pos - slot.offset) > DRIFT):
                     d.player.seek(slot.offset)                   # back on: where the channel is now
             try:
-                if not (motion == "reduced" and not sound_on):
+                if self.held(s):
+                    d.player.pause(True)                         # the remote's pause: never undone here
+                elif not (motion == "reduced" and not sound_on):
                     d.player.pause(not want)
             except Exception:                                   # noqa: BLE001
                 pass
@@ -675,18 +685,20 @@ class TV(Controls, Bumps):
         if a is None:
             return None
         start = (slot.offset + (0.0 if ch.get("override") else 1.0)) if slot.offset is not None else None     # the second it takes to open
+        tracks = self.track_stream_args(screen or "big", it) if hasattr(a, "video_streams") else {}
         try:
             if full:
                 s = a.video_stream(it, self.conf().get("fullscreen_quality", "direct"), start=start,
-                                   device="bromigos-den-tv-full")
+                                   device="bromigos-den-tv-full", **tracks)
             else:
                 s = a.video_stream(it, self.conf().get("quality", "auto"), height=height, start=start,
-                                   device=f"bromigos-den-tv-{screen or 'big'}")
+                                   device=f"bromigos-den-tv-{screen or 'big'}", **tracks)
         except TypeError:                                       # an older bromigos-homelab: not sized
             s = a.video_stream(it, self.conf().get("quality", "auto"))
         return {"url": s["url"], "headers": s["headers"], "ytdl_format": None, "title": title, "start": slot.offset,
                 "web": None, "server": {"jellyfin": "Jellyfin", "plex": "Plex"}.get(a.type, a.type), "adapter": a,
-                "quality": s.get("quality"), "session": s.get("session"), "from_start": s.get("from_start")}
+                "quality": s.get("quality"), "session": s.get("session"), "from_start": s.get("from_start"),
+                "audio_index": s.get("audio_index"), "burn_index": s.get("burn_index")}
 
     # ------------------------------------------------------------------ YouTube's streams, resolved ahead
     @staticmethod
@@ -910,7 +922,7 @@ class TV(Controls, Bumps):
             d.feedback = None
         ages = [now - v for v in (d.tune[0] if d.tune else None, d.vol_osd, d.feedback[0] if d.feedback else None) if v is not None]
         alpha = round(min(1., max(0., (1.5 - min(ages)) / .35)), 2) if ages and self.motion == "full" else 1.
-        tag = self.overrides.get(screen, {}).get("reason")
+        tag = self.hold_tag(screen) or self.overrides.get(screen, {}).get("reason")
         if tag == "BUMP":
             tag = None                                          # a bump wears its caption, not a tag
         speaker = screen == self.sound_screen() and self._effective_sound(screen)[0]
@@ -1049,9 +1061,13 @@ class TV(Controls, Bumps):
                     cr.arc(x + s * 0.8, y + s * 0.6, s * 0.35 * k, -0.9, 0.9)
                     cr.stroke()
         if feedback or tag:
-            cr.set_font_size(8 * u)
             for text, yy, opacity in ((feedback, 12 * u, alpha), (tag, h - 7 * u, 1.0)):
                 if text:
+                    size = 8 * u
+                    cr.set_font_size(size)
+                    while size > 5 * u and cr.text_extents(text).x_advance > w - 14 * u:
+                        size *= .92                                  # a long mark fits the screen
+                        cr.set_font_size(size)
                     cr.set_source_rgba(*glkit.col("panel", .8 * opacity))
                     ext = cr.text_extents(text)
                     cr.rectangle(4 * u, yy - 9 * u, ext.x_advance + 6 * u, 12 * u); cr.fill()
@@ -1387,7 +1403,7 @@ class TV(Controls, Bumps):
             return "mpv isn't installed (sudo pacman -S mpv)"
         slot = self.slot(ch)
         try:
-            s = self.stream(ch, slot, full=True)
+            s = self.stream(ch, slot, full=True, screen=screen)
         except Exception as e:                                  # noqa: BLE001
             self.log(f"tv: no stream to open: {type(e).__name__}: {e}")
             s = None
@@ -1634,6 +1650,19 @@ class TV(Controls, Bumps):
             if w.isdigit():
                 return self.set_sound(s, volume=int(w))
             return "bromigos-live tv volume up|down|N [--screen big|wave|emblem]"
+        if verb in ("pause", "resume", "jump-live"):
+            import json
+            s = self._pick(screen)
+            words = [x for x in rest if x != "--json"]
+            w = "off" if verb == "resume" else (words or ["toggle"])[0]
+            if w not in ("on", "off", "toggle"):
+                return "bromigos-live tv pause on|off|toggle [--screen big|wave|emblem]"
+            msg = self.jump_live(s) if verb == "jump-live" else self.hold(s, w)
+            if "--json" not in rest:
+                return msg
+            return json.dumps(dict(ok=True, screen=s, message=msg, **self.hold_describe(s)))
+        if verb in ("tracks", "audio", "subs", "tracks-refresh"):
+            return self.tracks_command(verb, screen, [w for w in rest if w != "--json"])
         if verb == "reload":
             return self.reconfigured() or "channels read again"
         if verb == "rename":
@@ -1690,7 +1719,8 @@ class TV(Controls, Bumps):
                  "allowed": d.allowed, "capped": d.capped, "covered": s in self.covered,
                  "follows": self.follows.get(s), "tuned": bool(st.get("tuned")),
                  "on_demand": s in self.overrides and not self.bumping(s),
-                 "bump": (self.bumping(s) or {}).get("item", {}).get("id")}
+                 "bump": (self.bumping(s) or {}).get("item", {}).get("id"),
+                 "tracks": self.tracks_summary(s), **self.hold_describe(s)}
             slot = self.slot(ch)
             if slot:
                 keep = ("id", "title", "series", "season", "episode", "kind", "duration", "year", "server", "poster",

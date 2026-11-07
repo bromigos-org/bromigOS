@@ -31,6 +31,7 @@ modules to the same folder:
 | `bromigos_bumps.py` | Den TV's bumps: the packs, the night block and the caps that decide when one plays; [bumps](../live/README.md#bumps) |
 | `bromigos_tvplay.py`, `bromigos_tvremote.py` | Search and play on a den screen, its remote's actions, and their JSON command line |
 | `bromigos_cast.py` | Casting: Chromecasts, DLNA TVs, AirPlay, Jellyfin's apps and the den's screens as one list of targets (`bromigos media cast`) |
+| `bromigos_tracks.py` | Audio tracks and subtitles for the den and cast targets: mpv's and Jellyfin's lists in one shape, labels, the defaults, the choice per series, finding subtitles |
 | `bromigos_youtube.py` | YouTube playlists and channels through yt-dlp, cached, with live streams and keeping videos |
 | `bromigos_storage*.py` | Local drive inventory, saved provisioning plans, verified migration, grouped capacity, Snapper/btrbk inventory and logged cache and retirement plans; [storage reference](../docs/storage.md) |
 | `bromigos_console.py` | Reads and safely saves text console font presets for the next boot; [console reference](../docs/console.md) |
@@ -177,6 +178,16 @@ A target fetches the stream from the media server itself, with the server's key 
 address (`video_cast_url()` in the media server's adapter). That address goes only to the
 target. Every play, control and hand back is a line in
 `~/.local/state/bromigos/cast-audit.jsonl`, without addresses or keys.
+
+`tracks()`, `set_audio()`, `set_subs()` and `subs_fetch()` (`bromigos media cast
+tracks|audio|subs|subs-fetch --target T`) change what a target plays's audio track and
+subtitles, with the den's defaults and memory per series (`bromigos_tracks.py`). A Jellyfin
+app switches them itself. A Google Cast device plays the server's HLS stream, which has one
+audio track, so another track (or picture subtitles, burnt in) is the same stream again
+from the same moment; text subtitles go to it as a WebVTT track. Only what was cast from
+here can be changed there (`~/.local/state/bromigos/cast-now.json` keeps what and with which
+tracks, without addresses). DLNA renderers and AirPlay receivers pick their own, and the
+answer says so (`can: false` and `why`).
 `BROMIGOS_CAST_CALLER` names who asked (VECTOR sets `vector`). AirPlay video plays while its
 sender stays connected, so a small helper process holds the connection until the video
 ends or is stopped. The tests (`homelab/tests/test_cast.py`) use stand-ins for every

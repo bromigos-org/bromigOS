@@ -25,6 +25,9 @@ class Session:
         self.volume = tv.screens[screen]["volume"]
         self.muted = False
         self.bump = None                    # the bump playing between two items, if any
+        self.track_sel = tv.full_tracks(screen) if hasattr(tv, "full_tracks") else {}
+        self.track_list = []                # mpv's, observed
+        self.subs_added = set()             # subtitle addresses added to this file
         self.refresh_palette()
         with open(self.conf_path, "w") as f:
             os.chmod(self.conf_path, 0o600)
@@ -43,6 +46,7 @@ class Session:
                 f"--include={self.conf_path}", f"--input-ipc-server={self.sock_path}",
                 f"--script={script}", f"--script-opts={opts}"]
         if stream.get("ytdl_format"): args.append(f"--ytdl-format={stream['ytdl_format']}")
+        if getattr(tv, "held", None) and tv.held(screen): args.append("--pause=yes")    # the remote's pause holds here too
         if stream.get("start") is not None: args.append(f"--start={stream['start'] + (0.0 if screen in tv.overrides else .6):.2f}")
         args.extend(extra or [])
         args.append(stream["url"])
@@ -78,6 +82,42 @@ class Session:
     def retune(self):
         self.messages.put("retune")
 
+    def tracks(self, sel):
+        """The den's choice of audio track and subtitles (live/live/tvtracks.py full_tracks)."""
+        self.track_sel = dict(sel or {})
+        self.messages.put("tracks")
+
+    def _apply_tracks(self):
+        sel, tl = self.track_sel, self.track_list
+        if not sel or not tl:
+            return
+
+        def by(kind, ff=None, mpv=None):
+            for t in tl:
+                if t.get("type") == kind and not t.get("external") and (
+                        (ff is not None and t.get("ff-index") == ff) or (mpv is not None and t.get("id") == mpv)):
+                    return t
+            return None
+        a = by("audio", ff=sel.get("audio_index"), mpv=sel.get("mpv_audio"))
+        if a and not a.get("selected"):
+            self.send("set_property", "aid", a["id"])
+        if sel.get("subs_off"):
+            self.send("set_property", "sid", "no")
+            return
+        url = sel.get("sub_url")
+        if url:
+            hit = next((t for t in tl if t.get("type") == "sub" and t.get("external-filename") == url), None)
+            if hit:
+                if not hit.get("selected"):
+                    self.send("set_property", "sid", hit["id"])
+            elif url not in self.subs_added:
+                self.subs_added.add(url)
+                self.send("sub-add", url, "select", sel.get("sub_label") or "", "")
+            return
+        sub = by("sub", ff=sel.get("sub_index"), mpv=sel.get("mpv_sub"))
+        if sub and not sub.get("selected"):
+            self.send("set_property", "sid", sub["id"])
+
     def _stop_stream(self):
         a = self.stream.get("adapter")
         if a:
@@ -97,7 +137,7 @@ class Session:
         self.bump = None
         n, ch = self.tv.channel(self.screen)
         slot = self.tv.slot(ch)
-        stream = self.tv.stream(ch, slot, full=True)
+        stream = self.tv.stream(ch, slot, full=True, screen=self.screen)
         if not stream:
             self.send("quit")
             return
@@ -110,6 +150,11 @@ class Session:
         self.send("loadfile", stream["url"], "replace", -1, options)
 
     def _event(self, event):
+        if event.get("event") == "file-loaded":
+            self.subs_added = set()
+        if event.get("event") == "property-change" and event.get("name") == "track-list":
+            self.track_list = event.get("data") or []
+            self._apply_tracks()
         if event.get("event") == "property-change":
             if event.get("name") == "time-pos" and self.screen in self.tv.overrides and event.get("data") is not None:
                 self.tv.overrides[self.screen]["full_position"] = float(event["data"])
@@ -145,7 +190,7 @@ class Session:
             with socket.socket(socket.AF_UNIX) as conn:
                 self.connection = conn
                 conn.settimeout(.2); conn.connect(self.sock_path)
-                for i, name in enumerate(("volume", "mute", "time-pos")):
+                for i, name in enumerate(("volume", "mute", "time-pos", "track-list")):
                     self.send("observe_property", i, name)
                 pending = b""
                 while self.proc.poll() is None and not self.stopped.is_set():
@@ -154,6 +199,8 @@ class Session:
                         cmd = self.messages.get_nowait()
                         if cmd == "retune":
                             self._retune(); continue
+                        if cmd == "tracks":
+                            self._apply_tracks(); continue
                         conn.sendall(json.dumps(dict(command=cmd)).encode() + b"\n")
                     try:
                         data = conn.recv(65536)

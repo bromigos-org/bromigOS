@@ -236,6 +236,13 @@ class FakeCastModule:
 
 
 class CastBackend(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        env = mock.patch.dict(os.environ, XDG_STATE_HOME=self.tmp.name + "/state", XDG_CACHE_HOME=self.tmp.name)
+        env.start()
+        self.addCleanup(env.stop)
+
     def test_discover_play_and_youtube_with_a_fake_pychromecast(self):
         fake = FakeCastModule()
         with mock.patch.dict(sys.modules, {"pychromecast": fake.mod, "pychromecast.controllers": types.ModuleType("c"),
@@ -338,6 +345,162 @@ class DlnaBackend(unittest.TestCase):
             self.assertEqual(b.status(target)["state"], "playing")
             with self.assertRaises(C.CastError):
                 b.play(target, dict(ITEM, server="youtube"), 0)
+
+
+STREAMS = [
+    {"Index": 0, "Type": "Video", "Codec": "hevc"},
+    {"Index": 1, "Type": "Audio", "Language": "jpn", "Channels": 2, "IsDefault": True},
+    {"Index": 2, "Type": "Audio", "Language": "eng", "Channels": 6},
+    {"Index": 3, "Type": "Subtitle", "Language": "eng", "Title": "Full", "IsTextSubtitleStream": True},
+    {"Index": 4, "Type": "Subtitle", "Language": "eng", "Title": "Signs & Songs", "IsForced": True,
+     "IsTextSubtitleStream": True},
+    {"Index": 5, "Type": "Subtitle", "Language": "eng", "Title": "SDH", "IsHearingImpaired": True,
+     "IsTextSubtitleStream": False},
+]
+
+
+class TrackServer(FakeServer):
+    """A Jellyfin-like server that lists an item's streams and takes the track to stream."""
+    def __init__(self, streams=STREAMS):
+        self.streams = streams
+
+    def video_streams(self, item):
+        return self.streams
+
+    def video_cast_url(self, item, hls=True, audio_index=None, burn_index=None):
+        url, mime = super().video_cast_url(item, hls)
+        return url + f"&AudioStreamIndex={audio_index}&Burn={burn_index}", mime
+
+    def video_cast_subtitle_url(self, item, index):
+        return f"http://media.example/Videos/{item['id']}/{item['id']}/Subtitles/{index}/0/Stream.vtt?api_key={TOKEN}"
+
+    def has_subtitle_search(self):
+        return False
+
+
+class Tracks(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        env = mock.patch.dict(os.environ, XDG_STATE_HOME=self.tmp.name + "/state", XDG_CACHE_HOME=self.tmp.name,
+                              BROMIGOS_CAST_CALLER="test")
+        env.start()
+        self.addCleanup(env.stop)
+        import bromigos_tracks
+        bromigos_tracks._AVAILABLE.clear()
+        p = mock.patch("bromigos_tracks._lab", return_value=None)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def session(self, **kw):
+        return dict(dict(Id="s1", DeviceId="tv-1", DeviceName="Lounge TV", Client="Jellyfin Android TV",
+                         SupportsRemoteControl=True, PlayableMediaTypes=["Video"],
+                         SupportedCommands=["SetVolume", "SetAudioStreamIndex", "SetSubtitleStreamIndex"],
+                         NowPlayingItem=dict(Id="ep5", Name="Ballad of Fallen Angels", SeriesName="Space Radio",
+                                             RunTimeTicks=14400000000, MediaStreams=STREAMS),
+                         PlayState=dict(PositionTicks=600000000, AudioStreamIndex=1, SubtitleStreamIndex=-1)), **kw)
+
+    def test_a_jellyfin_app_lists_and_switches_its_own_tracks(self):
+        a = mock.Mock()
+        a.name = "library"
+        a.remote_sessions.return_value = [self.session()]
+        a.has_subtitle_search.return_value = False
+        with mock.patch.object(C, "_jellyfins", return_value=[a]):
+            b = C.Jellyfin()
+            row = b.discover(1)[0]
+            self.assertIn("tracks", row["can"])
+            self.assertEqual(row["playing"]["audio"], "Japanese · Stereo")
+            self.assertNotIn("subs", row["playing"])
+            out = b.tracks(row)
+            self.assertTrue(out["can"])
+            self.assertEqual([t["selected"] for t in out["audio"]], [True, False])
+            self.assertFalse(out["sub_on"])
+            self.assertEqual(out["remembered"], "Space Radio")
+            with mock.patch.object(C, "_target", return_value=row):
+                res = C.set_audio(row, "j2")
+            a.remote_command.assert_called_with("s1", "SetAudioStreamIndex", {"Index": "2"})
+            self.assertEqual(res["message"], "Audio: English · 5.1")
+            with mock.patch.object(C, "_target", return_value=row):
+                res = C.set_subs(row, "on")
+            a.remote_command.assert_called_with("s1", "SetSubtitleStreamIndex", {"Index": "3"})
+            self.assertTrue(res["sub_on"])
+            C.set_subs(row, "off")
+            a.remote_command.assert_called_with("s1", "SetSubtitleStreamIndex", {"Index": "-1"})
+            import bromigos_tracks
+            mem = bromigos_tracks.Memory().get({"series": "Space Radio"})
+            self.assertEqual((mem["audio"]["lang"], mem["subs"]), ("en", "off"))
+            with self.assertRaises(C.CastError):
+                C.set_audio(row, "j9")
+
+    def test_a_jellyfin_app_starts_on_the_defaults_and_old_apps_say_they_cant(self):
+        a = mock.Mock()
+        a.name = "library"
+        a.video_streams.return_value = STREAMS
+        a.remote_sessions.return_value = [self.session(SupportedCommands=["SetVolume"])]
+        with mock.patch.object(C, "_jellyfins", return_value=[a]):
+            b = C.Jellyfin()
+            row = b.discover(1)[0]
+            self.assertNotIn("tracks", row["can"])
+            b.play(row, ITEM, 90)
+            a.remote_play.assert_called_with("s1", "ep5", 90, audio_index=2, sub_index=4)
+            out = b.tracks(row)
+            self.assertFalse(out["can"])
+            self.assertEqual(out["why"], C.NO_TRACKS)
+
+    def test_a_chromecast_gets_the_track_in_its_stream_and_subtitles_as_webvtt(self):
+        fake = FakeCastModule()
+        mods = {"pychromecast": fake.mod, "pychromecast.controllers": types.ModuleType("c"),
+                "pychromecast.controllers.youtube": fake.yt}
+        jp_only = [s for s in STREAMS if s["Index"] != 2]
+        with mock.patch.dict(sys.modules, mods), mock.patch.object(C, "_video_source", return_value=TrackServer(jp_only)):
+            b = C.Cast()
+            row = b.discover(1)[0]
+            self.assertIn("tracks", row["can"])
+            b.play(row, ITEM, 30)
+            url, mime, kw = fake.played[-1]
+            self.assertIn("AudioStreamIndex=1", url)
+            self.assertIn("/Subtitles/3/", kw["subtitles"], "Japanese audio: English full subtitles")
+            self.assertEqual(kw["subtitles_mime"], "text/vtt")
+            with open(C._now_path()) as f:
+                self.assertNotIn(TOKEN, f.read(), "the record keeps no address")
+            out = b.tracks(row)
+            self.assertFalse(out["can"], "the fake TV's title isn't what was cast")
+            self.assertIn("wasn't cast from here", out["why"])
+        # the TV now reports what was cast (MC.status is shared by every connection)
+        fake.mod.get_chromecast_from_host(None).media_controller.status.title = C._label(ITEM)
+        with mock.patch.dict(sys.modules, mods), mock.patch.object(C, "_video_source", return_value=TrackServer()):
+            out = b.tracks(row)
+            self.assertTrue(out["can"])
+            self.assertEqual([t["label"] for t in out["audio"] if t["selected"]], ["Japanese · Stereo"])
+            self.assertEqual(b.status(row)["subs"], "English · Full")
+            b.set_track(row, "audio", "j2")
+            url, mime, kw = fake.played[-1]
+            self.assertIn("AudioStreamIndex=2", url)
+            self.assertEqual(kw["current_time"], 12.0, "the same moment")
+            b.set_track(row, "subs", "j5")
+            url, mime, kw = fake.played[-1]
+            self.assertIn("Burn=5", url, "picture subtitles are burnt in")
+            self.assertNotIn("subtitles", kw)
+            b.set_track(row, "subs", "off")
+            url, mime, kw = fake.played[-1]
+            self.assertIn("Burn=None", url)
+
+    def test_dlna_and_airplay_say_plainly_they_cant(self):
+        t = dict(id="dlna:uuid:tv", kind="dlna", name="Bedroom TV")
+        self.assertEqual(C.Dlna().tracks(t), dict(ok=True, can=False, audio=[], subs=[], sub_on=False, fetch=False,
+                                                    remembered=None, why=C.NO_TRACKS, target="dlna:uuid:tv"))
+        with self.assertRaisesRegex(C.CastError, "picks its own"):
+            C.AirPlay().set_track(t, "audio", "j1")
+
+    def test_cli_tracks_as_json(self):
+        t = dict(id="dlna:uuid:tv", kind="dlna", name="Bedroom TV")
+        with mock.patch.object(C, "find", return_value=t), contextlib.redirect_stdout(io.StringIO()) as out:
+            code = C.main(["tracks", "--target", "dlna:uuid:tv", "--json"])
+        self.assertEqual(code, 0)
+        self.assertFalse(json.loads(out.getvalue())["can"])
+        with mock.patch.object(C, "find", return_value=t), contextlib.redirect_stdout(io.StringIO()) as out:
+            code = C.main(["audio", "--target", "dlna:uuid:tv", "j1", "--json"])
+        self.assertEqual(code, 2)
 
 
 class CastUrls(unittest.TestCase):

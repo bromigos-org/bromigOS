@@ -45,6 +45,7 @@ class Controls:
             self.history[screen].append(dict(old.item))
             self.history[screen] = self.history[screen][-12:]
         offset = max(0, float(item.get("position") or 0)) if resume else 0.0
+        self.release_hold(screen)                           # something picked plays now
         self.overrides[screen] = dict(item=dict(item), at=time.monotonic(), offset=offset, reason=reason,
                                       channel=channel or self.channel(screen)[1])
         self._unload(self.decks[screen])
@@ -94,6 +95,7 @@ class Controls:
         """End on-demand playback on a screen: its channel again, where the channel is now."""
         if screen not in self.overrides:
             return "Already on the channel"
+        self.release_hold(screen)
         self.overrides.pop(screen, None)
         self._unload(self.decks[screen])
         self.feedback(screen, "BACK TO CHANNEL")
@@ -103,6 +105,7 @@ class Controls:
         return f"{screen}: back to the channel"
 
     def skip_item(self, screen, previous=False):
+        self.release_hold(screen)                           # the next item plays now, on the schedule
         if self.bumping(screen):                            # skip during a bump: the channel, now
             self.overrides.pop(screen, None)
             self._unload(self.decks[screen])

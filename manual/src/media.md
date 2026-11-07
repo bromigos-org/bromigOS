@@ -225,6 +225,23 @@ items. This is a channel you make, not a preset schedule.
 
 The screens start silent. Turn sound on with the speaker in a screen's controls. Only
 one screen has sound at a time. Channel 1 restores that screen's normal picture.
+
+**Audio and subtitles.** Each screen plays English audio when there is some. When the
+audio isn't English, English subtitles come on; with English audio, English signs and
+songs subtitles do, when the file has them. Change either from BRODEC's den remote
+(**AUDIO** and **CC**) or the terminal, and the choice is kept for the rest of the series:
+
+```bash
+bromigos-live tv tracks --screen big        # the audio tracks and subtitles
+bromigos-live tv audio j2 --screen big      # another audio track
+bromigos-live tv subs off --screen big      # subtitles off (or on, or a track)
+bromigos-live tv subs-fetch --lang en       # look for subtitles with your lab's Bazarr
+```
+
+**Pause.** `bromigos-live tv pause` (or **PLAY/PAUSE** on the BRODEC remote) holds the
+picture like a DVR. Play goes on from there, and the screen shows how far behind the
+channel it is, such as **BEHIND LIVE · −4:12**. `bromigos-live tv jump-live`, or changing
+the channel, goes back to what's on now.
 For all controls and channel settings, see [The den TV](themes-and-worlds.md#the-den-tv).
 
 ## Make channels for the den TV
@@ -388,6 +405,8 @@ bromigos media cast play --target "living room" --screen big  # what the big den
 bromigos media cast control --target "living room" pause      # play, pause, stop, seek 600, volume 40, mute
 bromigos media cast status --target "living room"
 bromigos media cast handback --target "living room" --screen big   # back to the den, from where it was
+bromigos media cast tracks --target "living room"             # its audio tracks and subtitles
+bromigos media cast audio --target "living room" j2           # another audio track; subs ID|on|off too
 ```
 
 `--target` takes a target's id from the list, or words from its name, room or kind, such
@@ -411,6 +430,11 @@ as `living room`, `bedroom tv` or `chromecast`. Each command takes `--json`.
   [the media sources](https://github.com/bromigos-org/bromigOS/blob/main/docs/homelab.md)).
   That address carries the server's key, so
   it's given only to the TV, never shown or logged.
+- **Audio and subtitles.** A Jellyfin app changes them itself. A Chromecast plays the
+  same video again from the same moment with the other track, for what was cast from
+  here. DLNA and AirPlay TVs choose their own: use the TV's remote. Text subtitles reach
+  a Chromecast as a separate file, so the media server must allow it to fetch that file
+  (Jellyfin does).
 - **What can't be cast.** Files only on this computer, and streaming apps' protected video
   (Netflix, Disney+, Prime Video and the like): start those from the app on the TV.
 - **A record.** Every play, control and hand back is a line in

@@ -9,6 +9,16 @@ and BRODEC's remote (through brodec-machine's [den] capability).
                                           volume-down, mute, unmute
     status(target)                        what it plays
     handback(target, screen)              stop it there and go on from that moment on the den
+    tracks(target)                        what it plays's audio tracks and subtitles
+    set_audio(target, id) / set_subs(target, id | on | off)
+    subs_fetch(target, lang)              look for subtitles for what it plays
+
+Audio tracks and subtitles (lib/bromigos_tracks.py has the defaults and the memory per
+series): a Jellyfin app switches them itself (SetAudioStreamIndex, SetSubtitleStreamIndex).
+A Google Cast device plays the server's HLS stream with one audio track, so another track
+(or picture subtitles, burnt in) is the same stream again from the same moment; text
+subtitles go to it as a WebVTT track. Only what was cast from here can be changed on a
+Cast device. DLNA renderers and AirPlay receivers pick their own: the answer says so.
 
 Discovery listens on the local network only (mDNS for Cast and AirPlay, SSDP for DLNA) and
 asks the Jellyfin server which of its apps can be steered. Nothing here opens a port or
@@ -94,10 +104,67 @@ def public(target):
     return out
 
 
-def playing(title=None, state="idle", position=None, duration=None, volume=None, muted=False):
-    return dict(title=title or None, state=state, position=None if position is None else round(float(position), 1),
-                duration=None if not duration else round(float(duration), 1),
-                volume=None if volume is None else max(0, min(100, int(round(volume)))), muted=bool(muted))
+def playing(title=None, state="idle", position=None, duration=None, volume=None, muted=False, audio=None, subs=None):
+    out = dict(title=title or None, state=state, position=None if position is None else round(float(position), 1),
+               duration=None if not duration else round(float(duration), 1),
+               volume=None if volume is None else max(0, min(100, int(round(volume)))), muted=bool(muted))
+    if audio:
+        out["audio"] = audio
+    if subs:
+        out["subs"] = subs
+    return out
+
+
+NO_TRACKS = "This TV picks its own audio and subtitles: use its own remote"
+
+
+def _T():
+    import bromigos_tracks
+    return bromigos_tracks
+
+
+def _now_path():
+    root = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    return os.path.join(root, "bromigos", "cast-now.json")
+
+
+def _now_all():
+    try:
+        with open(_now_path()) as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _now_record(target, item=None, audio=None, sub=None):
+    """What was cast to a target from here and with which tracks (no addresses), or None to
+    forget it."""
+    d = _now_all()
+    if item is None:
+        d.pop(target["id"], None)
+    else:
+        d[target["id"]] = dict(item={k: item.get(k) for k in ("id", "title", "series", "season", "episode", "kind",
+                                                               "server", "duration") if item.get(k) is not None},
+                               audio=audio, sub=sub, at=int(time.time()))
+    try:
+        _private_write(_now_path(), json.dumps(d))
+    except OSError:
+        pass
+
+
+def _server_tracks(item):
+    """(adapter, audio, subs) for a media server item whose server lists its streams, else
+    (adapter or None, None, None)."""
+    a = _video_source(item.get("server"))
+    if a is None or not hasattr(a, "video_streams"):
+        return a, None, None
+    audio, subs = _T().from_jellyfin(a.video_streams(item))
+    return a, audio, subs
+
+
+def _idx(t):
+    return None if t is None else t.get("index")
 
 
 def _run(coro, timeout):
@@ -140,13 +207,15 @@ def _jellyfins():
         return []
 
 
-def media_url(item, hls=True):
+def media_url(item, hls=True, audio_index=None, burn_index=None):
     """(url, mime) a target fetches the item from: the media server's stream with its token
     in the address (the target can't send headers). Kept away from every output."""
     a = _video_source(item.get("server"))
     if a is None or not hasattr(a, "video_cast_url"):
         raise CastError(f"No media server for {item.get('title') or 'that item'}; " + DRM, 4)
-    return a.video_cast_url(item, hls=hls)
+    if audio_index is None and burn_index is None:
+        return a.video_cast_url(item, hls=hls)
+    return a.video_cast_url(item, hls=hls, audio_index=audio_index, burn_index=burn_index)
 
 
 # ------------------------------------------------------------------ backends
@@ -168,6 +237,12 @@ class Backend:
 
     def status(self, target):
         return None
+
+    def tracks(self, target):
+        return _T().public([], [], can=False, why=NO_TRACKS, target=target["id"])
+
+    def set_track(self, target, kind, value):
+        raise CastError(NO_TRACKS, 2)
 
 
 class Den(Backend):
@@ -217,6 +292,9 @@ class Den(Backend):
             return R.sound("on", s)
         raise CastError("The den's screens play like TV: pause and seek aren't there", 2)
 
+    def tracks(self, target):
+        return _T().public([], [], can=False, why="Use the den screen's own audio and CC buttons", target=target["id"])
+
     def status(self, target):
         rows = {r["id"]: r for r in self.discover(1)}
         return (rows.get(target["id"]) or {}).get("playing")
@@ -244,6 +322,20 @@ class Jellyfin(Backend):
                 rows.append(self._row(a, s))
         return rows
 
+    @staticmethod
+    def _switches(s):
+        cmds = s.get("SupportedCommands")
+        return cmds is None or "SetAudioStreamIndex" in cmds or "SetSubtitleStreamIndex" in cmds
+
+    @staticmethod
+    def _now_tracks(s):
+        """(audio, subs, audio id, subtitle id) of what a session plays, from its own report."""
+        now = s.get("NowPlayingItem") or {}
+        ps = s.get("PlayState") or {}
+        audio, subs = _T().from_jellyfin(now.get("MediaStreams") or [])
+        ai, si = ps.get("AudioStreamIndex"), ps.get("SubtitleStreamIndex")
+        return audio, subs, (f"j{ai}" if ai is not None else None), (f"j{si}" if si not in (None, -1) else None)
+
     def _row(self, a, s):
         now = s.get("NowPlayingItem") or {}
         ps = s.get("PlayState") or {}
@@ -251,12 +343,18 @@ class Jellyfin(Backend):
         if now.get("SeriesName"):
             title = f"{now['SeriesName']} · {title}"
         state = "idle" if not now else ("paused" if ps.get("IsPaused") else "playing")
+        glance = {}
+        if now:
+            audio, subs, aid, sid = self._now_tracks(s)
+            glance = _T().summary(audio, subs, aid, sid)
+        can = ["play", "pause", "seek", "volume", "stop"] + (["tracks"] if self._switches(s) else [])
         return dict(id=f"jellyfin:{s['DeviceId']}", kind="jellyfin",
                     name=s.get("DeviceName") or s.get("Client") or "Jellyfin app", room=None,
                     model=" ".join(v for v in (s.get("Client"), s.get("ApplicationVersion")) if v) or None,
-                    can=["play", "pause", "seek", "volume", "stop"], _source=a.name,
+                    can=can, _source=a.name,
                     playing=playing(title, state, (ps.get("PositionTicks") or 0) / 1e7 if now else None,
-                                    (now.get("RunTimeTicks") or 0) / 1e7, ps.get("VolumeLevel"), ps.get("IsMuted")))
+                                    (now.get("RunTimeTicks") or 0) / 1e7, ps.get("VolumeLevel"), ps.get("IsMuted"),
+                                    glance.get("audio"), glance.get("subs")))
 
     def _session(self, target):
         device = target["id"].split(":", 1)[1]
@@ -272,7 +370,59 @@ class Jellyfin(Backend):
         a, s = self._session(target)
         if item.get("server") != a.name:
             raise CastError(f"{target.get('name')} plays only what's on {a.name}", 2)
-        a.remote_play(s["Id"], item["id"], start or 0)
+        at = st = None
+        if hasattr(a, "video_streams"):
+            try:
+                audio, subs = _T().from_jellyfin(a.video_streams(item))
+                at, st = _T().choose(audio, subs, _T().Memory().get(item))
+            except Exception:                               # noqa: BLE001  the app's own choice, then
+                at = st = None
+        if at is None and st is None:
+            a.remote_play(s["Id"], item["id"], start or 0)
+        else:
+            a.remote_play(s["Id"], item["id"], start or 0, audio_index=_idx(at), sub_index=_idx(st) if st else -1)
+
+    def _now_item(self, a, s):
+        now = s.get("NowPlayingItem") or {}
+        return {"id": now.get("Id"), "title": now.get("Name"), "series": now.get("SeriesName"),
+                "season": now.get("ParentIndexNumber"), "episode": now.get("IndexNumber"), "server": a.name}
+
+    def tracks(self, target):
+        a, s = self._session(target)
+        if not s.get("NowPlayingItem"):
+            return _T().public([], [], can=False, why="Nothing's playing on it", target=target["id"])
+        if not self._switches(s):
+            return _T().public([], [], can=False, why=NO_TRACKS, target=target["id"])
+        audio, subs, aid, sid = self._now_tracks(s)
+        item = self._now_item(a, s)
+        if not audio and not subs and hasattr(a, "video_streams"):
+            audio, subs = _T().from_jellyfin(a.video_streams(item))
+        try:
+            fetch = _T().fetch_available(a)
+        except Exception:                                   # noqa: BLE001
+            fetch = False
+        return _T().public(audio, subs, aid, sid, fetch=fetch, item=item, target=target["id"])
+
+    def set_track(self, target, kind, value):
+        T = _T()
+        a, s = self._session(target)
+        if not s.get("NowPlayingItem"):
+            raise CastError("Nothing's playing on it", 4)
+        audio, subs, aid, sid = self._now_tracks(s)
+        item = self._now_item(a, s)
+        if kind == "audio":
+            t = T.find(audio, value)
+            if t is None:
+                raise CastError("No such audio track", 2)
+            a.remote_command(s["Id"], "SetAudioStreamIndex", {"Index": str(t["index"])})
+            T.Memory().put(item, audio=t, keep_subs=True)
+            aid = t["id"]
+        else:
+            t = _pick_sub(subs, audio, aid, sid, value, T.Memory().get(item))
+            a.remote_command(s["Id"], "SetSubtitleStreamIndex", {"Index": str(t["index"] if t else -1)})
+            T.Memory().put(item, subs=t, keep_audio=True)
+            sid = t["id"] if t else None
+        return T.public(audio, subs, aid, sid, item=item, target=target["id"])
 
     def control(self, target, op, value):
         a, s = self._session(target)
@@ -312,7 +462,7 @@ class Cast(Backend):
         rows = []
         for ci in infos:
             audio = (ci.cast_type or "") == "audio"
-            can = ["play", "pause", "seek", "volume", "stop"] + ([] if audio else ["youtube"])
+            can = ["play", "pause", "seek", "volume", "stop"] + ([] if audio else ["youtube", "tracks"])
             rows.append(dict(id=f"cast:{ci.uuid}", kind="cast", name=ci.friendly_name or ci.model_name or "Cast device",
                              room=None, model=" ".join(v for v in (ci.manufacturer, ci.model_name) if v) or None,
                              can=can, _host=str(ci.host), _port=int(ci.port or 8009), _uuid=str(ci.uuid),
@@ -354,15 +504,82 @@ class Cast(Backend):
             st = (ms.player_state or "").lower() if ms else ""
             state = {"playing": "playing", "paused": "paused", "buffering": "buffering"}.get(st, "idle")
             title = (ms.title if ms and ms.title else None) or (None if cc.is_idle else cc.app_display_name)
+            glance = self._glance(target, title)
             return playing(title, state if title else "idle", ms.adjusted_current_time if ms else None,
-                           ms.duration if ms else None, vol, muted)
+                           ms.duration if ms else None, vol, muted, glance.get("audio"), glance.get("subs"))
         finally:
             cc.disconnect(timeout=2)
 
-    def play(self, target, item, start):
+    @staticmethod
+    def _ours(target, title):
+        """What was cast here from this machine, when the TV still plays it."""
+        rec = _now_all().get(target["id"])
+        if not rec or not title or title != _label(rec.get("item") or {}):
+            return None
+        return rec
+
+    def _glance(self, target, title):
+        rec = self._ours(target, title)
+        if not rec:
+            return {}
+        try:
+            a, audio, subs = _server_tracks(rec["item"])
+        except Exception:                                   # noqa: BLE001
+            return {}
+        if audio is None:
+            return {}
+        return _T().summary(audio, subs, rec.get("audio"), rec.get("sub"))
+
+    def _now(self, target):
+        """(record, audio, subs, position) for what was cast here, or a CastError saying why not."""
+        now = self.status(target) or {}
+        if not now.get("title") or now.get("state") == "idle":
+            raise CastError("Nothing's playing on it", 4)
+        rec = self._ours(target, now["title"])
+        if not rec:
+            raise CastError("It's playing something that wasn't cast from here: change its audio and subtitles "
+                            "on the TV", 4)
+        a, audio, subs = _server_tracks(rec["item"])
+        if audio is None:
+            raise CastError(NO_TRACKS, 4)
+        return rec, audio, subs, now.get("position") or 0, a
+
+    def tracks(self, target):
+        T = _T()
+        try:
+            rec, audio, subs, _pos, a = self._now(target)
+        except CastError as e:
+            return T.public([], [], can=False, why=str(e), target=target["id"])
+        try:
+            fetch = T.fetch_available(a)
+        except Exception:                                   # noqa: BLE001
+            fetch = False
+        return T.public(audio, subs, rec.get("audio"), rec.get("sub"), fetch=fetch, item=rec["item"],
+                        target=target["id"])
+
+    def set_track(self, target, kind, value):
+        T = _T()
+        rec, audio, subs, pos, _a = self._now(target)
+        item = rec["item"]
+        at = T.find(audio, rec.get("audio")) if rec.get("audio") else None
+        st = T.find(subs, rec.get("sub")) if rec.get("sub") else None
+        if kind == "audio":
+            at = T.find(audio, value)
+            if at is None:
+                raise CastError("No such audio track", 2)
+            T.Memory().put(item, audio=at, keep_subs=True)
+        else:
+            st = _pick_sub(subs, audio, rec.get("audio"), rec.get("sub"), value, T.Memory().get(item))
+            T.Memory().put(item, subs=st, keep_audio=True)
+        self.play(target, item, pos, tracks=(at, st))           # the same stream, from the same moment
+        return T.public(audio, subs, at["id"] if at else None, st["id"] if st else None, item=item,
+                        target=target["id"])
+
+    def play(self, target, item, start, tracks=None):
         cc = self._connect(target)
         try:
             if item.get("server") == "youtube" or youtube_id(item.get("url")):
+                _now_record(target)
                 vid = youtube_id(item.get("url") or item.get("id"))
                 if not vid:
                     raise CastError("That isn't a YouTube video", 2)
@@ -374,11 +591,27 @@ class Cast(Backend):
                 cc.register_handler(yt)
                 yt.play_video(vid)
                 return
-            url, mime = media_url(item, hls=True)
+            at, st, sub = None, None, {}
+            if tracks is not None:
+                at, st = tracks
+                a, audio, subs = _video_source(item.get("server")), None, None
+            else:
+                try:
+                    a, audio, subs = _server_tracks(item)
+                    if audio is not None:
+                        at, st = _T().choose(audio, subs, _T().Memory().get(item))
+                except Exception:                           # noqa: BLE001  the stream's own tracks, then
+                    a, at, st = None, None, None
+            burn = st["index"] if st and not st.get("text") else None
+            if st and st.get("text") and a is not None and hasattr(a, "video_cast_subtitle_url"):
+                sub = dict(subtitles=a.video_cast_subtitle_url(item, st["index"]), subtitles_mime="text/vtt",
+                           subtitles_lang=st.get("lang") or "und")
+            url, mime = media_url(item, hls=True, audio_index=_idx(at), burn_index=burn)
             mc = cc.media_controller
             mc.play_media(url, mime, title=_label(item), stream_type="BUFFERED",
-                          current_time=float(start) if start else None)
+                          current_time=float(start) if start else None, **sub)
             mc.block_until_active(timeout=10)
+            _now_record(target, item, at["id"] if at else None, st["id"] if st else None)
         finally:
             cc.disconnect(timeout=2)
 
@@ -398,6 +631,7 @@ class Cast(Backend):
                 mc.pause()
             elif op == "stop":
                 cc.quit_app()
+                _now_record(target)
             elif op == "seek":
                 mc.seek(float(value))
             elif op == "volume":
@@ -907,6 +1141,86 @@ def handback(target, screen):
                 position=round(position), message=result.get("message") or f"Back on the den's {screen}")
 
 
+def _pick_sub(subs, audio, aid, sid, value, memory=None):
+    """The subtitle track for a press: an id, "off" (None) or "on" (the one showing, the one
+    remembered, else the best English, else the first)."""
+    T = _T()
+    if value == "off":
+        return None
+    if value == "on":
+        at = T.find(audio, aid) if aid else None
+        t = (T.find(subs, sid) if sid else None) or \
+            (T._match(subs, memory.get("subs")) if isinstance((memory or {}).get("subs"), dict) else None) or \
+            T.default_subs(subs, dict(at or {}, lang="und")) or (subs[0] if subs else None)
+        if t is None:
+            raise CastError("This has no subtitles", 4)
+        return t
+    t = T.find(subs, value)
+    if t is None:
+        raise CastError("No such subtitle track", 2)
+    return t
+
+
+def tracks(target):
+    t = _target(target)
+    try:
+        return BACKENDS[t["kind"]].tracks(t)
+    except CastError:
+        raise
+    except Exception as e:                                  # noqa: BLE001
+        raise CastError(f"{t.get('name')}: {type(e).__name__}", 1) from None
+
+
+def _set(target, kind, value):
+    t = _target(target)
+    b = BACKENDS[t["kind"]]
+    try:
+        out = b.set_track(t, kind, value)
+    except Exception as e:
+        audit(kind, t, ok=False, error=e, value=value)
+        if isinstance(e, CastError):
+            raise
+        raise CastError(f"{t.get('name')}: {type(e).__name__}", 1) from None
+    audit(kind, t, value=value)
+    pick = [x for x in out.get("audio" if kind == "audio" else "subs") or [] if x.get("selected")]
+    if kind == "audio":
+        out["message"] = f"Audio: {pick[0]['label']}" if pick else "Audio changed"
+    else:
+        out["message"] = f"Subtitles: {pick[0]['label']}" if pick and out.get("sub_on") else "Subtitles off"
+    return out
+
+
+def set_audio(target, value):
+    return _set(target, "audio", value)
+
+
+def set_subs(target, value):
+    return _set(target, "subs", value)
+
+
+def subs_fetch(target, lang="en"):
+    """Look for subtitles for what a target plays (cast from here, or a Jellyfin app's item)."""
+    T = _T()
+    t = _target(target)
+    b = BACKENDS[t["kind"]]
+    if t["kind"] == "jellyfin":
+        a, s = b._session(t)
+        if not s.get("NowPlayingItem"):
+            raise CastError("Nothing's playing on it", 4)
+        item = b._now_item(a, s)
+    elif t["kind"] == "cast":
+        rec, _audio, _subs, _pos, a = b._now(t)
+        item = rec["item"]
+    else:
+        raise CastError(NO_TRACKS, 2)
+    try:
+        out = T.fetch_subs(item, lang, a)
+    except T.FetchError as e:
+        raise CastError(str(e), 4) from None
+    audit("subs-fetch", t, item, lang=lang)
+    return dict(out, target=t["id"])
+
+
 def _audit_rows(limit=200):
     try:
         with open(_audit_path()) as f:
@@ -942,7 +1256,18 @@ def parser():
     h = sub.add_parser("handback", help="stop a target and go on from that moment on a den screen")
     h.add_argument("--target", required=True)
     h.add_argument("--screen", default="big")
-    for x in (t, q, c, s, h):
+    k = sub.add_parser("tracks", help="what a target plays's audio tracks and subtitles")
+    k.add_argument("--target", required=True)
+    au = sub.add_parser("audio", help="play another audio track on a target (an id from tracks)")
+    au.add_argument("--target", required=True)
+    au.add_argument("track")
+    su = sub.add_parser("subs", help="subtitles on a target: a track's id, on or off")
+    su.add_argument("--target", required=True)
+    su.add_argument("track")
+    sf = sub.add_parser("subs-fetch", help="look for subtitles for what a target plays")
+    sf.add_argument("--target", required=True)
+    sf.add_argument("--lang", default="en")
+    for x in (t, q, c, s, h, k, au, su, sf):
         x.add_argument("--json", action="store_true")
     return p
 
@@ -959,6 +1284,16 @@ def _print(result, js):
         for kind, p in result["protocols"].items():
             if not p["available"] or p.get("error"):
                 print(f"{kind}: {p.get('why') or p.get('error')}")
+        return
+    if "audio" in result and "subs" in result and "message" not in result:
+        if not result.get("can"):
+            print(result.get("why") or NO_TRACKS)
+            return
+        for kind, rows in (("audio", result["audio"]), ("subs", result["subs"])):
+            for t in rows:
+                print(("* " if t["selected"] else "  ") + f"{kind:<5} {t['id']:<6} {t['label']}"
+                      + (" (file)" if t.get("external") else ""))
+        print("subtitles " + ("on" if result.get("sub_on") else "off"))
         return
     if "playing" in result and "message" not in result:
         now = result["playing"]
@@ -998,6 +1333,14 @@ def main(argv=None):
             result = control(a.target, a.op, a.value)
         elif a.verb == "status":
             result = status(a.target)
+        elif a.verb == "tracks":
+            result = tracks(a.target)
+        elif a.verb == "audio":
+            result = set_audio(a.target, a.track)
+        elif a.verb == "subs":
+            result = set_subs(a.target, a.track)
+        elif a.verb == "subs-fetch":
+            result = subs_fetch(a.target, a.lang)
         else:
             result = handback(a.target, a.screen)
         _print(result, js)
