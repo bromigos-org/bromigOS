@@ -425,8 +425,10 @@ as `living room`, `bedroom tv` or `chromecast`. Each command takes `--json`.
   Jellyfin lists the apps it can steer. A firewall on this computer must let mDNS
   (UDP 5353) and SSDP (UDP 1900) answers in.
 - **How a TV gets the video.** The TV fetches it from your media server itself. If the
-  server's address uses your lab's own certificate authority, which TVs don't trust, set
-  `cast_url` on the source to an address they can reach (see
+  server's address is one only your lab knows (a `.local` name, your lab's own certificate
+  authority), the TV is given the address Jellyfin publishes for its own apps instead. If
+  that doesn't work either, the cast says the TV couldn't load the stream: set `cast_url`
+  on the source to an address TVs can reach (see
   [the media sources](https://github.com/bromigos-org/bromigOS/blob/main/docs/homelab.md)).
   That address carries the server's key, so
   it's given only to the TV, never shown or logged.

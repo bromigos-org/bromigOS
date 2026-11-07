@@ -123,6 +123,25 @@ def _quality(q, bitrate_kbps, max_mbps, height=None, source_height=None, item=No
     return q
 
 
+LAB_ONLY = (".local", ".lan", ".home", ".internal", ".home.arpa", ".localdomain", ".localhost")
+
+
+def castable(url):
+    """Whether a TV on the network can load from `url`: plain HTTP to an address or a name
+    it can resolve, or HTTPS to a public name (whose certificate it can trust). A lab-only
+    name (`.local`, `.lan`, `.home.arpa`, ...) is neither."""
+    try:
+        u = urllib.parse.urlsplit(url)
+    except ValueError:
+        return False
+    host = (u.hostname or "").lower().rstrip(".")
+    if not host or host == "localhost" or host.startswith("127."):
+        return False
+    if any(host.endswith(s) for s in LAB_ONLY) or "." not in host and ":" not in host:
+        return False
+    return u.scheme in ("http", "https")
+
+
 def _year_ts(v):
     t = L.ts(v)
     return t if t is None else float(t)
@@ -142,10 +161,26 @@ class VideoServer:
         return [v for v in self.video() if v["kind"] == "playlist"]
 
     def cast_base(self):
-        """The server's address for cast targets (Chromecasts, TVs): `cast_url` when they must
-        reach it by another address than the desktop does (one without the lab's own CA, say),
+        """The server's address for cast targets (Chromecasts, TVs). They resolve names with
+        their own DNS and trust only public certificates, so a lab-only address (a `.local`
+        or `.lan` name, a name under the lab's own CA) never loads there: the TV shows the
+        title, then nothing plays. So: `cast_url` when set; else the endpoint when a TV can
+        reach it (plain HTTP, or a public name); else the address the server publishes for
+        its own apps (Jellyfin's published server URL, which its own cast receiver uses);
         else the endpoint."""
-        return (self.opts.get("cast_url") or self.endpoint or "").rstrip("/")
+        if self.opts.get("cast_url"):
+            return self.opts["cast_url"].rstrip("/")
+        endpoint = (self.endpoint or "").rstrip("/")
+        if endpoint and castable(endpoint):
+            return endpoint
+        published = self.published_url()
+        if published and castable(published):
+            return published.rstrip("/")
+        return endpoint
+
+    def published_url(self):
+        """The address the server tells its own apps to use, or None."""
+        return None
 
     def video_cast_url(self, item, hls=True, audio_index=None, burn_index=None):
         """(url, mime) a cast target fetches the item from itself. It can't send headers, so
@@ -175,6 +210,17 @@ class VideoServer:
 class JellyfinVideo(VideoServer):
     FIELDS = "RunTimeTicks,ProductionYear,DateCreated,MediaSources,ParentId,SeriesName,ChildCount,RecursiveItemCount"
     TOKEN_PARAM = "api_key"
+
+    def published_url(self):
+        """Jellyfin's published server URL (Dashboard › Networking), from /System/Info/Public:
+        the address its own apps and its cast receiver use. Read once per adapter."""
+        if not hasattr(self, "_published"):
+            try:
+                info = self.fetch("/System/Info/Public", timeout=6) or {}
+                self._published = str(info.get("LocalAddress") or "") or None
+            except Exception:                               # noqa: BLE001
+                self._published = None
+        return self._published
 
     # Jellyfin's own apps that let the server steer them (bromigos_cast's "jellyfin" targets)
     def remote_sessions(self):

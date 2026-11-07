@@ -263,6 +263,28 @@ class CastBackend(unittest.TestCase):
                                  server="youtube", kind="video", title="Clip"), 0)
             self.assertEqual(fake.youtube, ["abcdefghijk"])
 
+    def test_a_cast_the_tv_cant_load_says_so(self):
+        # the live bug: the TV showed the title, then went idle with an error (it couldn't
+        # reach a lab-only stream address); the cast said ok
+        fake = FakeCastModule()
+        with mock.patch.dict(sys.modules, {"pychromecast": fake.mod, "pychromecast.controllers": types.ModuleType("c"),
+                                           "pychromecast.controllers.youtube": fake.yt}), \
+                mock.patch.object(C, "_video_source", return_value=FakeServer()), \
+                mock.patch.object(C, "LOAD_WATCH", 1.0):
+            b = C.Cast()
+            row = b.discover(1)[0]
+            failed = types.SimpleNamespace(player_state="IDLE", idle_reason="ERROR", title=None,
+                                           adjusted_current_time=None, duration=None)
+            with mock.patch.object(fake.mod.get_chromecast_from_host(None).media_controller.__class__, "status", failed):
+                with self.assertRaises(C.CastError) as e:
+                    b.play(row, ITEM, 0)
+                self.assertIn("couldn't load the stream", str(e.exception))
+            # still loading for the whole watch: not a failure (a slow start isn't an error)
+            loading = types.SimpleNamespace(player_state="IDLE", idle_reason=None, title=None,
+                                            adjusted_current_time=None, duration=None)
+            with mock.patch.object(fake.mod.get_chromecast_from_host(None).media_controller.__class__, "status", loading):
+                b.play(row, ITEM, 0)
+
     def test_missing_libraries_say_what_to_install(self):
         with mock.patch.dict(sys.modules, {"pychromecast": None, "pyatv": None, "async_upnp_client.profiles.dlna": None}):
             self.assertIn("python-pychromecast", C.Cast().available()[1])
@@ -521,6 +543,39 @@ class CastUrls(unittest.TestCase):
             p.name, p.endpoint, p.opts = "plex", "https://plex.lab.example", {"auth_ref": "@file:x"}
             url, mime = p.video_cast_url(dict(id="42", part="/library/parts/9/file.mkv"), hls=False)
             self.assertEqual(url, f"https://plex.lab.example/library/parts/9/file.mkv?X-Plex-Token={TOKEN}")
+
+    def test_a_lab_only_endpoint_casts_from_the_servers_published_address(self):
+        # Chromecasts use their own DNS and trust only public certificates: a .local name under
+        # the lab's CA never loads there, so the server's published address goes instead
+        self.assertFalse(labvideo.castable("https://jellyfin.lab.local"))
+        self.assertFalse(labvideo.castable("https://media.home.arpa:8920"))
+        self.assertFalse(labvideo.castable("http://jellyfin:8096"))
+        self.assertFalse(labvideo.castable("http://127.0.0.1:8096"))
+        self.assertTrue(labvideo.castable("http://192.0.2.5:8096"))
+        self.assertTrue(labvideo.castable("https://jellyfin.example.net"))
+        with mock.patch("bromigos_homelab.config.resolve", return_value=TOKEN):
+            j = labvideo.JellyfinVideo.__new__(labvideo.JellyfinVideo)
+            j.name, j.endpoint, j.opts = "library", "https://jellyfin.lab.local", {"auth_ref": "@file:x"}
+            asked = []
+
+            def fetch(path, timeout=8, raw=False, headers=None):
+                asked.append(path)
+                return {"LocalAddress": "https://jellyfin.example.net", "ServerName": "jellyfin"}
+            j.fetch = fetch
+            self.assertEqual(j.cast_base(), "https://jellyfin.example.net")
+            self.assertEqual(j.cast_base(), "https://jellyfin.example.net")
+            self.assertEqual(asked, ["/System/Info/Public"], "read once")
+            # cast_url still wins, and a castable endpoint is used as it is
+            j.opts["cast_url"] = "http://192.0.2.5:8096/"
+            self.assertEqual(j.cast_base(), "http://192.0.2.5:8096")
+            del j.opts["cast_url"]
+            j.endpoint = "http://192.0.2.9:8096"
+            self.assertEqual(j.cast_base(), "http://192.0.2.9:8096")
+            # nothing better published: the endpoint, as before
+            k = labvideo.JellyfinVideo.__new__(labvideo.JellyfinVideo)
+            k.name, k.endpoint, k.opts = "library", "https://jellyfin.lab.local", {"auth_ref": "@file:x"}
+            k.fetch = lambda path, **kw: {"LocalAddress": "https://jellyfin.lab.local"}
+            self.assertEqual(k.cast_base(), "https://jellyfin.lab.local")
 
 
 if __name__ == "__main__":

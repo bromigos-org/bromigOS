@@ -529,7 +529,16 @@ auth_ref = "@file:~/.local/share/bromigos/plex-token"
 - **`cast_url`** is the server's address for cast targets, when they must reach it by
   another one than the desktop does: a plain `http://` address on your network, say, when
   the endpoint uses the lab's own certificate authority, which a Chromecast doesn't trust.
-  Without it, cast targets use the endpoint.
+  Without it, cast targets use the endpoint if a TV can reach it: plain `http://`, or
+  `https://` with a public name. A lab-only endpoint (a `.local`, `.lan` or `.home.arpa`
+  name) isn't one: a Chromecast resolves names with its own DNS and trusts only public
+  certificates. Then they use the address Jellyfin publishes for its own apps (its
+  published server URL, under Dashboard › Networking), and the endpoint only when Jellyfin
+  publishes nothing better.
+- **A cast that can't load says so.** A Chromecast that takes the title but can't fetch
+  the stream goes back to idle with an error. `bromigos media cast play` waits a few
+  seconds for it to start and fails with what to set, instead of reporting a cast that
+  never plays.
 - **Read-only.** Nothing marks anything watched or changes a library. Casting to one of
   Jellyfin's own apps asks the server to steer that app (play, pause, seek, volume).
 
