@@ -49,7 +49,7 @@ class Bumps:
     def bump_between(self, d, ch, slot):
         """An item on the channel just ended on this screen: a bump, if one is due. True when
         one started (the caller loads nothing else)."""
-        if ch.get("override") or ch["kind"] in ("own", "live") or slot is None or slot.offset is None:
+        if ch.get("override") or ch["kind"] in ("own", "live", "link") or slot is None or slot.offset is None:
             return False
         if slot.offset > BOUNDARY or not self._bump_ok(d.name):
             return False
@@ -67,7 +67,7 @@ class Bumps:
         """A person changed channel on this screen: a short bump may cover the tune, once it
         settles (bumps_tick), never while they're flicking through."""
         n, ch = self.channel(screen)
-        if ch["kind"] == "own":
+        if ch["kind"] in ("own", "link"):
             self._tune_pending.pop(screen, None)
             return
         self._tune_pending[screen] = (time.monotonic(), ch["key"])
@@ -120,7 +120,7 @@ class Bumps:
         """The full-screen player's item ended on a channel: a bump to play before the next,
         with the channel held for it, or None."""
         n, ch = self.channel(screen)
-        if ch.get("override") or ch["kind"] in ("own", "live") or not self.enabled():
+        if ch.get("override") or ch["kind"] in ("own", "live", "link") or not self.enabled():
             return None
         pick = B.choose("between", time.time(), self.cfg, self.bump_state, self.bump_list(), self.bump_rng)
         if not pick:
@@ -149,6 +149,8 @@ class Bumps:
         n, ch = self.channel(screen)
         if ch["kind"] == "own":
             return f"{screen}: tune a channel first (channel 1 is the screen's own picture)"
+        if ch["kind"] == "link":
+            return f"{screen} is linked to a channel: no bumps on it"
         bumps = self.bump_list() if not want else [b for b in B.all_bumps(self.cfg) if b.id == want
                                                    or b.id.endswith("/" + want)]
         if not bumps:

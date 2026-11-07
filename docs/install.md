@@ -196,13 +196,15 @@ Then it runs `bromigos setup`, unless you gave `--no-setup`.
 | `bromigos-secureboot` | bromigOS on Secure Boot: shim, a GRUB built and signed on the computer, kernels signed after every update | by the installer, on a computer that starts the newer way (UEFI); elsewhere by `sudo pacman -S bromigos-secureboot` (docs/secureboot.md) |
 | `bromigos-server` | bromigOS Server: bromigOS without a desktop for servers and lab machines (SSH, firewall, safe automatic updates, roles, backups, disk watch, containers, the lab) | on its own |
 | `dislocker` | Read BitLocker-encrypted volumes (FUSE) | on its own |
+| `mediamtx` | Real-time media server: WebRTC (WHIP/WHEP), RTMP, SRT, RTSP and HLS | optional, for `brodec-lab` (BRODEC's lab bridge): its media server, `brodec-lab-media.service` |
 | `nwipe` | Securely erase disks using a variety of recognised methods (a fork of dwipe) | on its own |
 | `xpadneo-dkms` | Advanced Linux Driver for Xbox One Wireless Gamepad | by `bromigos peripheral enable xbox-controller`, for an Xbox controller |
 
-`herdr`, `ttf-geist-mono`, `1password`, `paru` and `xpadneo-dkms` aren't in Arch's own repositories, so bromigOS packages them into its own, each pinned by checksum. Only `1password` needs the AUR, and only on a public install (below).
+`herdr`, `ttf-geist-mono`, `mediamtx`, `1password`, `paru` and `xpadneo-dkms` aren't in Arch's own repositories, so bromigOS packages them into its own, each pinned by checksum. Only `1password` needs the AUR, and only on a public install (below).
 
 - `herdr`, `paru` and `xpadneo-dkms` are built from their upstream source.
 - `ttf-geist-mono` packages the fonts from Geist's release.
+- `mediamtx` packages MediaMTX's own Linux release, checked against the checksum upstream publishes beside it.
 - `1password` repackages 1Password's own Linux download. It isn't built from source. Its licence is proprietary, so the public mirror leaves it out: there, `bromigos install --with 1password` gets it from the AUR with paru.
 
 `oo7`, the keyring, is in Arch's repositories too, but Arch's version can't unlock it at a text console login. bromigOS builds a newer one from upstream's source, until Arch's catches up.

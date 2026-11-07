@@ -48,3 +48,44 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
 {{- toYaml (dict "url" ($g.url | default "") "model" ($g.model | default "") "keySecret" ($g.keySecret | default (dict "name" "" "key" "key"))) -}}
 {{- end -}}
 {{- end -}}
+
+{{/* The media server's image: the tag, pinned to its digest when one is set; the ffmpeg build
+     when the lab transcodes. */}}
+{{- define "brodec-lab.mediamtxImage" -}}
+{{- $m := .Values.mediaServer.image -}}
+{{- $ffmpeg := ne (.Values.mediaServer.transcode | default "none") "none" -}}
+{{- $tag := ternary (printf "%s-ffmpeg" $m.tag) $m.tag $ffmpeg -}}
+{{- $digest := ternary $m.ffmpegDigest $m.digest $ffmpeg -}}
+{{- if $digest -}}{{ $m.repository }}:{{ $tag }}@{{ $digest }}{{- else -}}{{ $m.repository }}:{{ $tag }}{{- end -}}
+{{- end -}}
+
+{{/* The media server's ports devices use: name, port, protocol, and whether the tailnet
+     forwards it (TCP only: the tailnet sidecar runs in userspace). The control API (9997) and
+     the bridge's auth hook (9108) are never here. */}}
+{{- define "brodec-lab.mediaPorts" -}}
+- { name: rtmp, port: 1935, protocol: TCP, tailnet: true }
+- { name: srt, port: 8890, protocol: UDP, tailnet: false }
+- { name: webrtc, port: 8889, protocol: TCP, tailnet: true }
+- { name: ice-udp, port: 8189, protocol: UDP, tailnet: false }
+- { name: ice-tcp, port: 8189, protocol: TCP, tailnet: true }
+- { name: hls, port: 8888, protocol: TCP, tailnet: true }
+{{- if .Values.mediaServer.recording.existingClaim }}
+- { name: playback, port: 9996, protocol: TCP, tailnet: true }
+{{- end }}
+{{- end -}}
+
+{{/* The relay's TCP/UDP port (turn:/turns: host:port; 3478, or 5349 for turns, by default). */}}
+{{- define "brodec-lab.turnPort" -}}
+{{- $u := . | trimPrefix "turns:" | trimPrefix "turn:" | splitList "?" | first -}}
+{{- $p := regexFind ":[0-9]+$" $u | trimPrefix ":" -}}
+{{- if $p -}}{{ $p }}{{- else if hasPrefix "turns:" . -}}5349{{- else -}}3478{{- end -}}
+{{- end -}}
+
+{{/* Tailscale serve's config: the media ports the tailnet forwards (TCP), to the pod's loopback. */}}
+{{- define "brodec-lab.tailnetServe" -}}
+{{- $tcp := dict -}}
+{{- range (include "brodec-lab.mediaPorts" . | fromYamlArray) -}}
+{{- if .tailnet -}}{{- $_ := set $tcp (toString .port) (dict "TCPForward" (printf "127.0.0.1:%v" .port)) -}}{{- end -}}
+{{- end -}}
+{{- dict "TCP" $tcp | toJson -}}
+{{- end -}}

@@ -345,6 +345,10 @@ bromigos-live tv: the den TV, channels on the den's screens (live/README.md, "Th
   bromigos-live tv subs ID|on|off [--json]   subtitles: that track, on, or off (remembered too)
   bromigos-live tv subs-fetch [--lang en] [--json]   look for subtitles (the lab's Bazarr, or
                                           the media server's subtitle search)
+  bromigos-live tv link --screen S --feed PATH [--json]   show a BRODEC channel on the screen for
+                                          its owner (the feed: your own 0600 file under
+                                          $XDG_RUNTIME_DIR; live/README.md, "Linked channels")
+  bromigos-live tv unlink --screen S [--json]   back to the screen's channel
 
 volume, sound, close, live, pause, resume, jump-live, tracks, audio and subs take --json too:
 one JSON object, ok or an error.

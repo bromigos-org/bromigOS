@@ -84,6 +84,83 @@ networkPolicy:
   # More egress rules, as NetworkPolicy egress entries.
   extraEgress: []
 
+# BROADCAST: the lab's media server (MediaMTX, MIT), so you can go live from OBS, a console, your
+# phone's camera or your desktop, and the people you choose watch in BRODEC. Off by default.
+# The bridge is its only door: it hands out a key per stream and a token per viewer, and the
+# media server asks the bridge about every connection; its control API and that question stay
+# on the pod's loopback. Streams are encrypted on the way (WebRTC, SRT, your private network)
+# but not end-to-end encrypted like BRODEC's messages: the media server sees them. Every
+# address is on your private network; nothing here is reachable from the internet.
+# README.md, "Media server (BROADCAST)".
+mediaServer:
+  enabled: false
+  image:
+    repository: docker.io/bluenviron/mediamtx
+    tag: "1.21.3"
+    # The multi-arch index of that tag. Empty: the tag alone.
+    digest: "sha256:59e43552f3be43695b70c19424dc2a42fcec18075f88d91561a24ac5d70a586c"
+    # The same release with ffmpeg in it, used when transcode isn't none.
+    ffmpegDigest: "sha256:208e9f1740a09a5ee63b6308e77ce0d54fce0456462f640e6bd9acfc62ebb5a2"
+    pullPolicy: IfNotPresent
+  # The address your phones and OBS reach the media server at on your private network: the
+  # tailnet address of the node below once it has joined (100.64.x.y), or a LAN address.
+  # Required when enabled.
+  host: ""
+  # The media server's address on your home network, for game consoles, which can't join a
+  # tailnet (with consoles.enabled).
+  consoleHost: ""
+  # Streams at once, and viewers per stream.
+  maxStreams: 1
+  maxViewers: 10
+  # true: the people you share the lab with as Can ask may go live too.
+  guests: false
+  # What the lab advertises: none (pass-through), opus (sound for WebRTC viewers when the
+  # stream's sound is AAC, cheap) or abr (a quality ladder; give the pod a GPU).
+  transcode: none
+  # Your devices reach it over your lab's private network: this pod joins your tailnet
+  # (Headscale) as a node of its own, in userspace (no NET_ADMIN), forwarding only the media
+  # ports (RTMP 1935, WebRTC 8889, ICE 8189, HLS 8888, playback 9996), never the control API.
+  tailnet:
+    enabled: false
+    # Your Headscale's URL, e.g. https://net.example.org.
+    loginServer: ""
+    hostname: brodec-media
+    # An existing Secret holding a one-time pre-auth key for the node (tagged as your ACLs
+    # want, so only your devices reach it).
+    authKeySecret:
+      name: ""
+      key: auth_key
+    image: ghcr.io/tailscale/tailscale:v1.82.5
+  # A LoadBalancer Service on your home network, for consoles (RTMP) and SRT. Off by default.
+  consoles:
+    enabled: false
+    loadBalancerIP: ""
+    annotations: {}
+    # Only these source ranges may connect (your home network's range). Empty: any source the
+    # LoadBalancer passes on.
+    allowFrom: []
+  # Recordings, on a volume you provide (your NAS share's claim). Empty: no recording.
+  recording:
+    existingClaim: ""
+    # Recordings older than this are deleted. 0: kept until you delete them.
+    keepDays: 30
+  # People away from your private network watch through a TURN relay: the media server and
+  # the viewer both connect out to it, so nothing connects into your lab. Empty: only
+  # devices on your private network can watch.
+  relay:
+    # e.g. turns:turn.example.org:5349
+    turnUrl: ""
+    # An existing Secret holding the relay's shared secret (TURN REST credentials).
+    secret:
+      name: ""
+      key: secret
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 1Gi
+
 resources:
   requests:
     cpu: 25m

@@ -15,8 +15,14 @@ spec:
   template:
     metadata:
       labels: {{- include "brodec-lab.labels" . | nindent 8 }}
-      {{- with .Values.podAnnotations }}
-      annotations: {{- toYaml . | nindent 8 }}
+      {{- if or .Values.podAnnotations .Values.mediaServer.enabled }}
+      annotations:
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.mediaServer.enabled }}
+        checksum/mediamtx: {{ include (print $.Template.BasePath "/media-configmap.yaml") . | sha256sum }}
+        {{- end }}
       {{- end }}
     spec:
       # It reads; it never talks to the Kubernetes API.
@@ -69,6 +75,30 @@ spec:
             {{- if and .Values.brain.url .Values.brain.keySecret.name }}
             - { name: BRODEC_BRAIN_KEY_FILE, value: /run/secrets/brain/key }
             {{- end }}
+            {{- with .Values.mediaServer }}
+            {{- if .enabled }}
+            # BROADCAST: the media server beside it, on the pod's loopback (mediamtx below).
+            - { name: BRODEC_STREAM_API_URL, value: "http://127.0.0.1:9997" }
+            - { name: BRODEC_STREAM_AUTH_LISTEN, value: "127.0.0.1:9108" }
+            - { name: BRODEC_STREAM_WEBRTC_URL, value: "http://127.0.0.1:8889" }
+            - { name: BRODEC_STREAM_HOST, value: {{ .host | quote }} }
+            {{- if and .consoles.enabled .consoleHost }}
+            - { name: BRODEC_STREAM_LAN_HOST, value: {{ .consoleHost | quote }} }
+            {{- end }}
+            - { name: BRODEC_STREAM_MAX_STREAMS, value: {{ .maxStreams | quote }} }
+            - { name: BRODEC_STREAM_MAX_VIEWERS, value: {{ .maxViewers | quote }} }
+            - { name: BRODEC_STREAM_TRANSCODE, value: {{ .transcode | default "none" | quote }} }
+            {{- if .guests }}
+            - { name: BRODEC_STREAM_GUESTS, value: "on" }
+            {{- end }}
+            {{- if .relay.turnUrl }}
+            - { name: BRODEC_STREAM_RELAY, value: "on" }
+            {{- end }}
+            {{- if .recording.existingClaim }}
+            - { name: BRODEC_STREAM_RECORD, value: "on" }
+            {{- end }}
+            {{- end }}
+            {{- end }}
             {{- with $guest }}
             {{- if .url }}
             # Guests' brain: never `brain` unless guestBrain.sameAsBrain says so.
@@ -113,6 +143,76 @@ spec:
             {{- if and $guest.url $guest.keySecret.name }}
             - { name: guest-brain, mountPath: /run/secrets/guest-brain, readOnly: true }
             {{- end }}
+        {{- with .Values.mediaServer }}
+        {{- if .enabled }}
+        # The media server (MediaMTX). Its control API and its questions to the bridge stay on
+        # the pod's loopback; only the media ports listen on the pod's network.
+        - name: mediamtx
+          image: {{ include "brodec-lab.mediamtxImage" $ | quote }}
+          imagePullPolicy: {{ .image.pullPolicy }}
+          args: ["/etc/mediamtx/mediamtx.yml"]
+          workingDir: /work
+          {{- if and .relay.turnUrl .relay.secret.name }}
+          env:
+            # The relay's shared secret, from its Secret, never in the ConfigMap.
+            - name: MTX_WEBRTCICESERVERS2_0_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .relay.secret.name | quote }}, key: {{ .relay.secret.key | quote }} }
+          {{- end }}
+          ports:
+            {{- range (include "brodec-lab.mediaPorts" $ | fromYamlArray) }}
+            - { name: {{ .name }}, containerPort: {{ .port }}, protocol: {{ .protocol }} }
+            {{- end }}
+          resources: {{- toYaml .resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - { name: mediamtx-config, mountPath: /etc/mediamtx, readOnly: true }
+            - { name: mediamtx-work, mountPath: /work }
+            {{- if .recording.existingClaim }}
+            - { name: recordings, mountPath: /recordings }
+            {{- end }}
+        {{- if .tailnet.enabled }}
+        # The media server's way in from your devices: this pod on your tailnet, in userspace
+        # (no NET_ADMIN), forwarding only the media ports to the pod's loopback.
+        - name: tailnet
+          image: {{ .tailnet.image | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: TS_USERSPACE, value: "true" }
+            - { name: TS_HOSTNAME, value: {{ .tailnet.hostname | quote }} }
+            - { name: TS_STATE_DIR, value: /data/tailnet }
+            - { name: TS_SOCKET, value: /tmp/tailscaled.sock }
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "mediaServer.tailnet.authKeySecret.name is needed with the tailnet" .tailnet.authKeySecret.name | quote }}
+                  key: {{ .tailnet.authKeySecret.key | quote }}
+            - name: TS_EXTRA_ARGS
+              value: {{ printf "--login-server=%s" (required "mediaServer.tailnet.loginServer is needed with the tailnet" .tailnet.loginServer) | quote }}
+            - { name: TS_SERVE_CONFIG, value: /tmp/serve.json }
+            - name: TS_SERVE_JSON
+              value: {{ include "brodec-lab.tailnetServe" $ | quote }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - printf '%s' "$TS_SERVE_JSON" > /tmp/serve.json && exec /usr/local/bin/containerboot
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 256Mi }
+          volumeMounts:
+            - { name: data, mountPath: /data/tailnet, subPath: tailnet }
+            - { name: tailnet-tmp, mountPath: /tmp }
+        {{- end }}
+        {{- end }}
+        {{- end }}
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -137,6 +237,22 @@ spec:
             secretName: {{ .Values.brain.keySecret.name }}
             defaultMode: 0400
             items: [{ key: {{ .Values.brain.keySecret.key | quote }}, path: key }]
+        {{- end }}
+        {{- if .Values.mediaServer.enabled }}
+        - name: mediamtx-config
+          configMap:
+            name: {{ $full }}-mediamtx
+        - name: mediamtx-work
+          emptyDir: { sizeLimit: 64Mi }
+        {{- with .Values.mediaServer.recording.existingClaim }}
+        - name: recordings
+          persistentVolumeClaim:
+            claimName: {{ . | quote }}
+        {{- end }}
+        {{- if .Values.mediaServer.tailnet.enabled }}
+        - name: tailnet-tmp
+          emptyDir: { sizeLimit: 16Mi }
+        {{- end }}
         {{- end }}
         {{- if and $guest.url $guest.keySecret.name }}
         - name: guest-brain

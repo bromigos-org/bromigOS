@@ -329,6 +329,8 @@ class Tracks:
     def tracks_command(self, verb, screen, rest):
         import json
         s = self._pick(screen)
+        if s in getattr(self, "links", {}):
+            return json.dumps(dict(ok=False, error=f"{s} is linked to a channel: no tracks to pick"))
         if verb == "tracks":
             out = self.tracks_json(s)
         elif verb == "audio":

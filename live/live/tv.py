@@ -56,6 +56,8 @@ from .tvbumps import Bumps
 from .tvcontrol import Controls
 from .tvhold import Hold
 from .tvtracks import Tracks
+from . import tvlink
+from .tvlink import Links
 
 from . import LIB  # noqa: F401  (the shared libs on sys.path)
 import bromigos_tv as TVL  # noqa: E402
@@ -147,7 +149,7 @@ class Deck:
         self.vol_osd = None                # monotonic start
 
 
-class TV(Controls, Bumps, Hold, Tracks):
+class TV(Controls, Bumps, Hold, Tracks, Links):
     def __init__(self, cfg, log=print):
         self.cfg = cfg
         self.log = log
@@ -191,6 +193,7 @@ class TV(Controls, Bumps, Hold, Tracks):
         self.init_bumps()
         self.init_hold()
         self.init_tracks()
+        self.init_links()
         self.resolved = {}                 # (YouTube URL, height) -> Y.stream()'s answer, or {"error", "at"}
         self.notes = {}                    # channel key -> (monotonic, what went wrong): the hint says it
         self._rq = []                      # YouTube streams to resolve: (url, height)
@@ -248,7 +251,10 @@ class TV(Controls, Bumps, Hold, Tracks):
         return lu
 
     def channel(self, screen):
-        """(number from 1, channel) on a screen now."""
+        """(number from 1, channel) on a screen now; (0, the link) while it's linked
+        (live/live/tvlink.py)."""
+        if screen in self.links:
+            return 0, self.link_channel(screen)
         lu = self.lineup(screen)
         key = self.screens[screen]["channel"]
         for n, ch in enumerate(lu):
@@ -305,6 +311,8 @@ class TV(Controls, Bumps, Hold, Tracks):
     def slot(self, ch):
         if ch is None or ch["kind"] == "own":
             return None
+        if ch.get("link"):
+            return self.link_slot(ch)
         if ch.get("override"):
             return self.override_slot(ch)
         if ch.get("behind_screen"):
@@ -319,6 +327,8 @@ class TV(Controls, Bumps, Hold, Tracks):
 
     # ------------------------------------------------------------------ changing channel
     def tune_to(self, screen, number=None, step=0):
+        if screen in self.links:                        # someone at the den changed channel: the link ends
+            self.unlink(screen, "UNLINKED")
         self.overrides.pop(screen, None)
         self.release_hold(screen)                           # a channel change: back on the schedule
         lu = self.lineup(screen)
@@ -442,6 +452,7 @@ class TV(Controls, Bumps, Hold, Tracks):
         opaque window (unless its sound is on), within max_playing, not still."""
         self.controls_tick()
         self.tracks_tick()
+        self.links_tick()
         self.covered = set(covered or ())
         self.quiet, self.ducked = quiet, ducked
         self.motion, self.software = motion, software
@@ -478,7 +489,7 @@ class TV(Controls, Bumps, Hold, Tracks):
                 if self.held(s):
                     d.player.pause(True)                         # the remote's pause: never undone here
                 elif not (motion == "reduced" and not sound_on):
-                    d.player.pause(not want)
+                    d.player.pause(not want or self.link_paused(s))
             except Exception:                                   # noqa: BLE001
                 pass
         self._apply_sound()
@@ -581,6 +592,10 @@ class TV(Controls, Bumps, Hold, Tracks):
         d = self.decks[screen]
         slot = self.slot(ch)
         item = slot.item if slot else None
+        if ch.get("link") and not self.link_stream(ch, slot):
+            if d.loaded:
+                self._unload(d)                                 # voice only: the people fill the screen
+            return None, 1.0
         if item is None:
             if d.loaded:
                 self._unload(d)  # changed/empty picks must not keep the removed item's audio
@@ -658,6 +673,8 @@ class TV(Controls, Bumps, Hold, Tracks):
         None. Not full: sized to the screen (a transcode, or a small YouTube format)."""
         if slot is None:
             return None
+        if ch["kind"] == "link":
+            return self.link_stream(ch, slot)
         it = slot.item
         title = TVL.label(it)
         height = None if full else self.screen_height(screen or "big")
@@ -791,7 +808,12 @@ class TV(Controls, Bumps, Hold, Tracks):
             d.player.stop()                                     # never the last item's picture
             return
         d.stream = s
-        start = None if s.get("from_start") or slot.offset is None else slot.offset + (0.0 if ch.get("override") else 1.0)   # a second to open
+        start = None if s.get("from_start") or slot.offset is None else slot.offset + (
+            0.0 if ch.get("override") or ch.get("link") else 1.0)   # a second to open
+        try:
+            d.player.redact = tvlink.redact if s.get("private") else None    # a link's address never in the log
+        except AttributeError:
+            pass
         d.player.load(s["url"], start=start, headers=s["headers"], ytdl_format=s.get("ytdl_format"),
                       title=s["title"], audio=s.get("audio"))
         d.player.pause(not d.allowed and not self.motion == "reduced")
@@ -806,6 +828,9 @@ class TV(Controls, Bumps, Hold, Tracks):
         stalled screen: an error from mpv, or nothing after 25 s of trying while allowed."""
         p = d.player
         if not d.loaded or p is None:
+            return
+        if ch.get("link"):
+            self.link_check(d, ch, slot)                         # never skipped or marked bad: BRODEC's stream
             return
         if ch.get("override") and p.ended and p.ended[0] in ("eof", "error"):
             bump = self.bumping(d.name)
@@ -922,18 +947,21 @@ class TV(Controls, Bumps, Hold, Tracks):
             d.feedback = None
         ages = [now - v for v in (d.tune[0] if d.tune else None, d.vol_osd, d.feedback[0] if d.feedback else None) if v is not None]
         alpha = round(min(1., max(0., (1.5 - min(ages)) / .35)), 2) if ages and self.motion == "full" else 1.
-        tag = self.hold_tag(screen) or self.overrides.get(screen, {}).get("reason")
+        tag = None if screen in self.links else (
+            self.hold_tag(screen) or self.overrides.get(screen, {}).get("reason"))
         if tag == "BUMP":
             tag = None                                          # a bump wears its caption, not a tag
         speaker = screen == self.sound_screen() and self._effective_sound(screen)[0]
         if lines is None:
             lines = self.bump_caption(screen) or self._bumper(screen)
-        if not (lines or vol is not None or speaker or static or feedback or tag) or screen not in self.px:
+        link = self.link_overlay(screen)
+        if not (lines or vol is not None or speaker or static or feedback or tag or link) or screen not in self.px:
             return 0.0, None
-        sig = (lines, vol, speaker, feedback, tag, alpha, self.px[screen][2:], glkit.T.version(0.0))
+        sig = (lines, vol, speaker, feedback, tag, alpha, self.px[screen][2:], glkit.T.version(0.0),
+               (id(link[0]), link[1], self.motion) if link else None)
         if sig != d.osd_sig:
             d.osd_sig = sig
-            self._draw_osd(d, lines, vol, speaker, feedback, tag, alpha)
+            self._draw_osd(d, lines, vol, speaker, feedback, tag, alpha, link=link)
         return static, d.osd_tex
 
     def _bumper(self, screen):
@@ -948,12 +976,16 @@ class TV(Controls, Bumps, Hold, Tracks):
             return None
         return ("bumper", ch["name"], TVL.label(slot.item), time.strftime("%H:%M", time.localtime(slot.start or 0)))
 
-    def _draw_osd(self, d, lines, vol, speaker, feedback=None, tag=None, alpha=1.0):
+    def _draw_osd(self, d, lines, vol, speaker, feedback=None, tag=None, alpha=1.0, link=None):
         import cairo
         from . import glkit
         w, h = (max(32, int(v)) for v in self.px[d.name][2:])
         surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
         cr = cairo.Context(surf)
+        if link:                                                # a linked channel: its people and badge first
+            cr.save()
+            tvlink.draw(cr, w, h, link[0], glkit.col, t=link[1], motion=self.motion)
+            cr.restore()
         r, g, b, _ = glkit.col("phosphor")
         u = h / 100.0
         cr.select_font_face("Geist Mono", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
@@ -1061,7 +1093,9 @@ class TV(Controls, Bumps, Hold, Tracks):
                     cr.arc(x + s * 0.8, y + s * 0.6, s * 0.35 * k, -0.9, 0.9)
                     cr.stroke()
         if feedback or tag:
-            for text, yy, opacity in ((feedback, 12 * u, alpha), (tag, h - 7 * u, 1.0)):
+            cr.set_font_size(8 * u)
+            fy = 26 * u if link else 12 * u                       # under a link's badge, never over it
+            for text, yy, opacity in ((feedback, fy, alpha), (tag, h - 7 * u, 1.0)):
                 if text:
                     size = 8 * u
                     cr.set_font_size(size)
@@ -1317,7 +1351,7 @@ class TV(Controls, Bumps, Hold, Tracks):
         else:
             text(10, 19, f"{ch['name']}", 13, soft)
             text(10, 34, ch.get("what", ""), 10, dim, False, maxw=HINT_W - 90)
-        text(HINT_W - 70, 19, f"CH {n}/{len(lu)}", 12, ph)
+        text(HINT_W - 70, 19, "LINKED" if ch["kind"] == "link" else f"CH {n}/{len(lu)}", 12, ph)
         y = 44
         button(10, y, 26, 24, "◀", "prev")
         button(40, y, 26, 24, "▶", "next")
@@ -1399,6 +1433,8 @@ class TV(Controls, Bumps, Hold, Tracks):
         n, ch = self.channel(screen)
         if ch["kind"] == "own":
             return f"{screen}: channel {n} is the screen's own picture; nothing to open"
+        if ch["kind"] == "link":
+            return f"{screen} is linked to {ch['name']}: it shows only on the den's screen"
         if not shutil.which("mpv"):
             return "mpv isn't installed (sudo pacman -S mpv)"
         slot = self.slot(ch)
@@ -1440,6 +1476,8 @@ class TV(Controls, Bumps, Hold, Tracks):
         slot = self.slot(ch)
         if ch["kind"] == "own" or not slot:
             return "no media channel on"
+        if ch["kind"] == "link":
+            return "a linked channel has no web page"
         url = None
         if ch["kind"] in ("youtube", "live") or slot.item.get("server") == "youtube":
             url = slot.item.get("url")
@@ -1612,6 +1650,8 @@ class TV(Controls, Bumps, Hold, Tracks):
         verb, screen, rest = self.parse(arg)
         if screen and screen.startswith("?"):
             return f"no screen called {screen[1:]}: big, wave (the scope) or emblem (the small monitor)"
+        if verb in ("link", "unlink"):
+            return self.link_command(verb, screen, rest)
         if verb == "select":
             return self.select_screen(screen or (rest or ["none"])[0])
         if verb == "remote":
@@ -1733,6 +1773,8 @@ class TV(Controls, Bumps, Hold, Tracks):
                 r["start"], r["end"] = slot.start, slot.end
                 r["source"] = ch.get("source") or None
             r["playing"] = self._playing(s)
+            if s in self.links:                                 # what it shows, never its address or token
+                r.update(tvlink.public(self.links[s]["feed"]))
             out["screens"][s] = r
         first = snd or next((s for s in PRIORITY if out["screens"][s]["playing"]), None)
         if first:

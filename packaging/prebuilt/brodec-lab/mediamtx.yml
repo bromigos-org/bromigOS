@@ -1,0 +1,73 @@
+# The lab media server's config (BROADCAST): MediaMTX, run by brodec-lab-media.service for
+# BRODEC's lab bridge. The bridge is its only door: it hands out a key per stream and a token
+# per viewer, and MediaMTX asks it about every connection (authMethod: http). Its control API
+# and that question both stay on this machine's loopback. Upstream's reference, every setting
+# with its comment: /usr/share/doc/mediamtx/mediamtx.yml.
+#
+# Streams are encrypted on the way (WebRTC, SRT with a passphrase, your private network),
+# but they are not end-to-end encrypted like BRODEC's messages: this server sees them.
+# Keep every port below on your private network (your tailnet or LAN); never forward one
+# from the internet.
+
+logLevel: info
+logDestinations: [stdout]
+
+# Every connection asks the bridge (BRODEC_STREAM_AUTH_LISTEN, loopback only).
+authMethod: http
+authHTTPAddress: http://127.0.0.1:9108/mediamtx/auth
+
+# The control API, for the bridge alone (BRODEC_STREAM_API_URL). Loopback only.
+api: true
+apiAddress: 127.0.0.1:9997
+metrics: false
+pprof: false
+
+# Recordings play back through here (with a viewer token) when recording is on.
+playback: false
+playbackAddress: :9996
+
+# RTSP stays inside this machine, for local tools that feed a stream.
+rtsp: true
+rtspTransports: [tcp]
+rtspAddress: 127.0.0.1:8554
+
+# Ingest from OBS and consoles.
+rtmp: true
+rtmpAddress: :1935
+srt: true
+srtAddress: :8890
+
+# Watching: HLS (a few seconds behind) and WebRTC (WHEP, low delay); WHIP ingest too.
+hls: true
+hlsAddress: :8888
+hlsVariant: lowLatency
+webrtc: true
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
+# Offer players this machine's address on your private network only: the tailnet's interface
+# (tailscale0). Add its address here too, or instead, as BRODEC_STREAM_HOST has it.
+webrtcIPsFromInterfaces: true
+webrtcIPsFromInterfacesList: [tailscale0]
+webrtcAdditionalHosts: []
+# Viewers away from your private network: a TURN relay with a shared secret
+# (BRODEC_STREAM_RELAY=on in brodec-lab.env). The relay only forwards what this server sent
+# out to it; nothing comes in uninvited.
+webrtcICEServers2: []
+#  - url: turns:turn.example.org:5349
+#    username: AUTH_SECRET
+#    password: ""   # the relay's shared secret: MTX_WEBRTCICESERVERS2_0_PASSWORD in
+#                   # /etc/brodec-lab/media.env (root's, mode 0600), never in this file
+
+moq: false
+
+pathDefaults:
+  record: false
+  recordPath: /var/lib/brodec-lab-media/recordings/%path/%Y-%m-%d_%H-%M-%S-%f_%z
+  recordFormat: fmp4
+  recordSegmentDuration: 1h
+  recordDeleteAfter: 720h
+  overridePublisher: false
+
+# The bridge adds a path per stream through the API.
+paths: {}
