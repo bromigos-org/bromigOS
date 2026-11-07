@@ -218,6 +218,27 @@ def media_url(item, hls=True, audio_index=None, burn_index=None):
     return a.video_cast_url(item, hls=hls, audio_index=audio_index, burn_index=burn_index)
 
 
+LOAD_WATCH = 8.0                   # seconds a Cast target has to start loading what it was sent
+
+
+def _loaded_or_raise(mc, watch):
+    """Wait up to `watch` seconds for a Cast target to start on what it was sent. A target
+    that took the title but couldn't fetch the stream goes back to idle with an error: say
+    so, instead of reporting a cast that never plays."""
+    end = time.monotonic() + watch
+    while time.monotonic() < end:
+        ms = mc.status
+        state = (getattr(ms, "player_state", "") or "").upper()
+        if state in ("PLAYING", "BUFFERING", "PAUSED"):
+            return
+        if state == "IDLE" and (getattr(ms, "idle_reason", "") or "").upper() == "ERROR":
+            raise CastError("The TV took the title but couldn't load the stream. It must reach the "
+                            "media server at an address it can resolve, with a certificate it trusts: "
+                            "set cast_url for the source in homelab.toml, or the server's published "
+                            "address", 4)
+        time.sleep(.3)
+
+
 # ------------------------------------------------------------------ backends
 class Backend:
     kind = ""
@@ -611,6 +632,8 @@ class Cast(Backend):
             mc.play_media(url, mime, title=_label(item), stream_type="BUFFERED",
                           current_time=float(start) if start else None, **sub)
             mc.block_until_active(timeout=10)
+            # Active only means the TV took the title: it may still fail to load the stream.
+            _loaded_or_raise(mc, LOAD_WATCH)
             _now_record(target, item, at["id"] if at else None, st["id"] if st else None)
         finally:
             cc.disconnect(timeout=2)
