@@ -1,0 +1,39 @@
+name: live tests
+# The live layer's unit tests on every PR that touches live/. Before this they ran only in
+# bromigos-live's check() during the packages run on main, so a live/ PR had no checks at
+# all and merged untested (the den TV's covered-screen fix, #87, was the first to notice).
+on:
+  pull_request:
+    paths:
+      - "live/**"
+      - "packaging/bromigos-live/**"
+      - ".github/workflows/live-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Live unit tests
+    # GitHub's runner, never the lab's: this repo is public (forks' PRs run here)
+    runs-on: ubuntu-latest
+    container: archlinux:base
+    timeout-minutes: 20
+    steps:
+      - name: tools
+        # bromigos-live's makedepends and checkdepends (packaging/bromigos-live/PKGBUILD)
+        run: >-
+          pacman -Syu --noconfirm --needed git python python-numpy python-gobject gdk-pixbuf2
+          desktop-file-utils python-opengl python-cairo python-pillow gtk3 mpv ffmpeg >/dev/null
+      - uses: actions/checkout@v5
+      - name: unittest
+        # as a normal user, like makepkg's check()
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE/live' && python -m compileall -q live tools >/dev/null && python -m unittest discover -s tests -q"

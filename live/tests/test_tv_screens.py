@@ -381,6 +381,41 @@ class CoveringTest(unittest.TestCase):
         with mock.patch.object(hypr, "request", self.answers({"a": 0.85, "b": 1.0})):
             self.assertEqual(hypr.covered("DP-1", rects, 0.9), {"wave"})
 
+    def test_a_window_over_the_edge_leaves_the_screen_playing(self):
+        # Muting a screen from the remote while a window only touched its edge paused it.
+        rects = {"big": (1188, 678, 200, 175)}
+        def req(cmd, as_json=True):
+            if cmd == "monitors":
+                return [{"name": "DP-1", "x": 0, "y": 0, "activeWorkspace": {"id": 1}}]
+            if cmd == "clients":       # overlaps the screen's left 40 px, and its top 30 px
+                return [{"address": "0xa", "workspace": {"id": 1}, "at": [800, 300], "size": [428, 900]},
+                        {"address": "0xc", "workspace": {"id": 1}, "at": [1188, 400], "size": [300, 308]}]
+            if cmd.startswith("getoption"):
+                return {"float": 1.0}
+            return {}
+        with mock.patch.object(hypr, "request", req):
+            self.assertEqual(hypr.covered("DP-1", rects, 0.9), set())
+
+    def test_windows_that_hide_it_together_cover_it(self):
+        rects = {"big": (1188, 678, 200, 175)}
+        def req(cmd, as_json=True):
+            if cmd == "monitors":
+                return [{"name": "DP-1", "x": 0, "y": 0, "activeWorkspace": {"id": 1}}]
+            if cmd == "clients":       # two tiled windows, each over one half of the screen
+                return [{"address": "0xa", "workspace": {"id": 1}, "at": [1000, 600], "size": [290, 400]},
+                        {"address": "0xc", "workspace": {"id": 1}, "at": [1290, 600], "size": [300, 400]}]
+            if cmd.startswith("getoption"):
+                return {"float": 1.0}
+            return {}
+        with mock.patch.object(hypr, "request", req):
+            self.assertEqual(hypr.covered("DP-1", rects, 0.9), {"big"})
+
+    def test_hidden_fraction(self):
+        self.assertEqual(hypr.hidden_fraction((0, 0, 100, 100), []), 0.0)
+        self.assertEqual(hypr.hidden_fraction((0, 0, 100, 100), [(-10, -10, 200, 200)]), 1.0)
+        self.assertAlmostEqual(hypr.hidden_fraction((0, 0, 100, 100), [(0, 0, 50, 100)]), 0.5)
+        self.assertAlmostEqual(hypr.hidden_fraction((0, 0, 100, 100), [(0, 0, 50, 100), (25, 0, 50, 100)]), 0.75)
+
 
 @unittest.skipIf(livetv is None, "no PyOpenGL")
 class SizedStreamTest(unittest.TestCase):
