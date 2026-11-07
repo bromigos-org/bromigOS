@@ -33,8 +33,10 @@ optdepends=('bromigos-fieldkit: Field Kit in the boot menu'
             'btop: Tools › System monitor' 'htop: Tools › Processes' 'nvtop: Tools › Graphics card monitor'
             'gdu: Tools › Disk usage' 'inxi: Tools › Hardware report' 'tmux: remote help'"'"'s shared session'
             'openssh: remote help' 'lynx: the manual in the terminal' 'bromigos-manual: the manual'
-            'partclone: disk images and clones' 'chntpw: Windows password reset' 'ntfs-3g: Windows repair')
+            'partclone: disk images and clones' 'chntpw: Windows password reset' 'ntfs-3g: Windows repair'
+            'dosfstools: make-stick --image' 'mtools: make-stick --image')
 makedepends=('git' 'python')
+checkdepends=('dosfstools' 'mtools')
 options=('!debug')
 
 _root="${startdir%/packaging/*}"

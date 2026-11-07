@@ -2,6 +2,7 @@
 steps and their words, the choices offered, the checks on what's typed, the summary,
 the editions, and the network. Both front ends show exactly these words, so they read
 the same; neither keeps a rule of its own."""
+import fnmatch
 import glob
 import json
 import os
@@ -649,7 +650,11 @@ def writable_usb(where=None):
 # ── answer files (unattended installs) ──────────────────────────────────────────────────
 ANSWER_KEYS = ["edition", "locale", "timezone", "keyboard", "disk", "mode", "bromigos_bytes", "full_name", "user",
                "hostname", "encrypt", "separate_passphrase", "ssh", "ssh_password", "ssh_keys", "firewall", "auto_updates",
-               "password", "passphrase"]
+               "password", "passphrase", "disk_model", "cpu_model"]
+
+# An answer file's [install.advanced] (the Advanced box's choices): each key's allowed values
+ADVANCED = {"fs": ("btrfs", "ext4"), "kernel": ("linux", "linux-lts", "linux-zen"), "zram": (True, False)}
+CPUINFO = "/proc/cpuinfo"
 
 
 def answers_toml(a, secrets=False):
@@ -659,6 +664,8 @@ def answers_toml(a, secrets=False):
     for k in ANSWER_KEYS:
         if k in ("password", "passphrase") and not secrets:
             continue
+        if k == "disk" and a.get("disk_model"):
+            continue                        # the model named it; the path it had here may differ next time
         v = a.get(k)
         if v in (None, ""):
             continue
@@ -670,6 +677,9 @@ def answers_toml(a, secrets=False):
             lines.append(f"{k} = {v}")
         else:
             lines.append(f'{k} = "{str(v)}"'.replace("\\", "\\\\"))
+    adv = {k: v for k, v in (a.get("advanced") or {}).items() if k in ADVANCED}
+    if adv:
+        lines.append("advanced = { " + ", ".join(f"{k} = {json.dumps(v)}" for k, v in adv.items()) + " }")
     lines += _server.answers_toml_lines(a)          # bromigOS Server's [server] table
     return "\n".join(lines) + "\n"
 
@@ -719,6 +729,8 @@ def read_answer_file(path):
             a[k] = v
         elif k == "server" or k.startswith(("server.", "reach")):
             continue                        # bromigOS Server's table, and Reach it from anywhere: below
+        elif k == "advanced":
+            continue                        # the Advanced box's choices: below
         else:
             problems.append(f"\"{k}\" isn't an answer the installer knows; it's ignored.")
     a["countdown"] = int(got.get("countdown", 10))
@@ -726,8 +738,25 @@ def read_answer_file(path):
         problems.append("The answer file has no password: add password = \"…\" under [install].")
     if a.get("mode") not in ("erase", "alongside", "reinstall"):
         problems.append("mode must be \"erase\", \"alongside\" or \"reinstall\".")
-    if not a.get("disk"):
-        problems.append("disk must name the disk, for example disk = \"/dev/nvme0n1\".")
+    if a.get("disk") and a.get("disk_model"):
+        problems.append("Give disk or disk_model, not both.")
+    elif not a.get("disk") and not a.get("disk_model"):
+        problems.append("disk must name the disk, for example disk = \"/dev/nvme0n1\", or disk_model its model, "
+                        "for example disk_model = \"Samsung*990*PRO*\".")
+    for key in ("disk_model", "cpu_model"):
+        if key in got and (not isinstance(got[key], str) or not got[key].strip()):
+            problems.append(f"{key} is a model's name, or a pattern with * in it, in quotes.")
+    adv = got.get("advanced")
+    if adv is not None:
+        if not isinstance(adv, dict):
+            problems.append("advanced is a table: advanced = { fs = \"btrfs\", kernel = \"linux-lts\", zram = false }.")
+        else:
+            for k, v in adv.items():
+                if k not in ADVANCED:
+                    problems.append(f"\"advanced.{k}\" isn't an answer the installer knows; it's one of: " + ", ".join(ADVANCED))
+                elif v not in ADVANCED[k] or (k == "zram") != isinstance(v, bool):
+                    problems.append(f"advanced.{k} is one of: " + ", ".join(json.dumps(x) for x in ADVANCED[k]))
+            a["advanced"] = {k: v for k, v in adv.items() if k in ADVANCED}
     if not a.get("hostname"):
         a["hostname"] = suggest_hostname(a.get("user"), a.get("edition", "desktop"))
     for check, key in ((_server.check_admin if _server.is_server(a) else check_username, "user"), (check_hostname, "hostname")):
@@ -744,9 +773,47 @@ def read_answer_file(path):
     return a, problems
 
 
+def cpu_model_name():
+    """This computer's processor, as /proc/cpuinfo names it ("AMD Ryzen 9 9955HX 16-Core
+    Processor"), or "" when it can't be read."""
+    try:
+        for line in _read(CPUINFO).splitlines():
+            if line.lower().startswith("model name"):
+                return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return ""
+
+
+def _matches(pattern, text):
+    """A model pattern against a name: * and ? as in a shell, letter case ignored. A pattern
+    with no wildcard matches the name anywhere in it ("9955HX" matches the whole CPU name)."""
+    pattern, text = pattern.strip().lower(), (text or "").lower()
+    if not any(c in pattern for c in "*?["):
+        pattern = f"*{pattern}*"
+    return fnmatch.fnmatchcase(text, pattern)
+
+
 def auto_check(a, probe):
-    """An answer file's choices against the disks found: None, or what's wrong."""
-    d = next((x for x in (probe or {}).get("disks", []) if x["path"] == a.get("disk")), None)
+    """An answer file's choices against this computer and the disks found: None, or what's
+    wrong. cpu_model keeps the file to the computer it was written for; disk_model names the
+    disk by its model, and resolves to the one disk that matches (a["disk"])."""
+    if a.get("cpu_model"):
+        cpu = cpu_model_name()
+        if not _matches(a["cpu_model"], cpu):
+            return (f"The answer file is for a computer whose processor matches \"{a['cpu_model']}\"; this one has "
+                    + (cpu or "a processor it can't name") + ". Nothing has been changed.")
+    disks = (probe or {}).get("disks", [])
+    if a.get("disk_model"):
+        found = [x for x in disks if _matches(a["disk_model"], x.get("model"))]
+        if not found:
+            return (f"No disk here has a model matching \"{a['disk_model']}\" (found: "
+                    + (", ".join(f"{x['model']} at {x['path']}" for x in disks) or "none") + "). Nothing has been changed.")
+        if len(found) > 1:
+            return (f"{len(found)} disks match \"{a['disk_model']}\": " + ", ".join(f"{x['model']} at {x['path']}" for x in found)
+                    + ". Name one with a narrower disk_model, or disk = its path.")
+        a["disk"] = found[0]["path"]
+    d = next((x for x in disks if x["path"] == a.get("disk")), None)
     if not d:
         return f"The answer file names the disk {a.get('disk')}, which isn't in this computer."
     opt = d["options"].get(a.get("mode"), {})

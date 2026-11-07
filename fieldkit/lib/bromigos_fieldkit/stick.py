@@ -4,9 +4,14 @@ small partition after it, labelled FIELDKIT, which Field Kit reads at every star
 (medium.py): your SSH key, Wi-Fi networks, the lab connection, startup scripts.
 
 Your settings are gathered as you (your keys, your lab file), then the writing runs as root.
+With --answers, an installer answer file goes in the folder too, as install-server.toml or
+install-desktop.toml (its edition): the boot menu then installs from it unattended. With
+--image FILE, the same stick is written to an image file instead of a drive, as you (no root):
+the medium, then the FIELDKIT partition, made with mkfs.fat and mtools' mcopy.
 """
 
 import glob
+import json
 import os
 import shutil
 import subprocess
@@ -46,7 +51,33 @@ def gather(a, out):
                 "What each printed is in /run/bromigos-fieldkit/autorun-<name>.log; the menu says how they ended.\n")
     with open(os.path.join(out, "config.toml"), "w") as f:
         f.write("\n".join(lines))
+    if getattr(a, "answers", None):
+        edition, text = answer_file(a.answers)
+        with open(os.path.join(out, f"install-{edition}.toml"), "w") as f:
+            f.write(text)
+        os.chmod(os.path.join(out, f"install-{edition}.toml"), 0o600)
+        print(f"The answer file: install-{edition}.toml (the boot menu installs from it unattended; "
+              "it holds the password as written)")
     return len(keys)
+
+
+ANSWER_EDITIONS = ("server", "desktop")
+
+
+def answer_file(path):
+    """(edition, text) of an installer answer file (docs/iso.md, "Answer files"), checked enough
+    to know where it goes; the installer checks the rest when it starts."""
+    import tomllib
+    try:
+        with open(os.path.expanduser(path)) as f:
+            text = f.read()
+        doc = tomllib.loads(text)
+    except (OSError, ValueError) as e:
+        sys.exit(f"make-stick: the answer file {path}: {e}")
+    edition = (doc.get("install") or {}).get("edition", "desktop")
+    if edition not in ANSWER_EDITIONS:
+        sys.exit(f"make-stick: the answer file's edition is \"{edition}\"; it's \"server\" or \"desktop\"")
+    return edition, text
 
 
 def source_image(a):
@@ -101,7 +132,63 @@ def write_settings(part, folder):
         os.rmdir(mnt)
 
 
+SETTINGS_MIB = 256
+
+
+def make_image(a):
+    """The stick as an image file (--image FILE), as you: the medium, a FIELDKIT partition after
+    it (as add_partition makes it on a drive), and the settings folder in it. Write the file to a
+    stick later with `bromigos fieldkit usb` or dd."""
+    for tool in ("sfdisk", "mkfs.fat", "mcopy"):
+        if not shutil.which(tool):
+            sys.exit(f"make-stick --image needs {tool} ({'mtools' if tool == 'mcopy' else 'util-linux' if tool == 'sfdisk' else 'dosfstools'})")
+    iso = source_image(a)
+    out = os.path.abspath(a.image)
+    folder = tempfile.mkdtemp(prefix="fieldkit-settings-")
+    n = gather(a, folder)
+    print(f"Your settings: {n} SSH key(s), {len(a.wifi)} Wi-Fi network(s)"
+          + (", the lab connection" if os.path.isfile(os.path.join(folder, "homelab.toml")) else "") + ".")
+    part_file = out + ".part"
+    fat = out + ".fieldkit.fat"
+    try:
+        shutil.copyfile(iso, part_file)
+        size = os.path.getsize(part_file)
+        mib = 1 << 20
+        # the partition starts 1 MiB-aligned after the whole medium (not just after its last
+        # partition: an ISO may carry data past it), with a spare MiB after it
+        first = ((size + mib - 1) // mib) * mib // 512
+        sectors = SETTINGS_MIB * mib // 512
+        with open(part_file, "r+b") as f:
+            f.truncate(first * 512 + sectors * 512 + mib)
+        pt = system.run(["blkid", "-p", "-o", "value", "-s", "PTTYPE", part_file], check=False).stdout.strip()
+        if pt == "gpt":
+            system.run(["sgdisk", "-e", part_file], check=False)
+            system.run(["sgdisk", "-n", f"0:{first}:+{SETTINGS_MIB}M", "-t", "0:0700", "-c", "0:FIELDKIT", part_file])
+        else:
+            system.run(["sfdisk", "--append", part_file], input=f"{first},{sectors},c\n")
+        last = json.loads(system.run(["sfdisk", "-J", part_file]).stdout)["partitiontable"]["partitions"][-1]
+        start, sectors = int(last["start"]), int(last["size"])
+        if os.path.exists(fat):
+            os.unlink(fat)
+        system.run(["mkfs.fat", "-F", "32", "-n", "FIELDKIT", "-C", fat, str(sectors * 512 // 1024)])
+        system.run(["mcopy", "-i", fat, "-s", folder, "::/fieldkit"])
+        with open(fat, "rb") as src, open(part_file, "r+b") as dst:
+            dst.seek(start * 512)
+            shutil.copyfileobj(src, dst, 4 * mib)
+        os.replace(part_file, out)
+    finally:
+        for f in (fat, part_file):
+            if os.path.exists(f):
+                os.unlink(f)
+        shutil.rmtree(folder, ignore_errors=True)
+    print(f"Done: {out} is a Field Kit stick ({os.path.basename(iso)}, with your settings on its FIELDKIT "
+          "partition). Write it to a drive with: bromigos fieldkit usb DEV --iso " + out)
+    return 0
+
+
 def make_stick(a, need_root, argv):
+    if isinstance(getattr(a, "image", None), str) and a.image:
+        return make_image(a)
     dev = a.device
     if os.geteuid() != 0 and dev and not a.settings_only:
         # the ISO, found as you (your Downloads), before sudo; the root half gets it as --iso
