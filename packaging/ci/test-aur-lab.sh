@@ -3,7 +3,12 @@
 set -euo pipefail
 root=${1:?checkout path}
 [[ -e /.dockerenv ]] || { echo 'Use a disposable Arch container' >&2; exit 1; }
-pacman -Syu --noconfirm --needed python python-textual python-cairo python-gobject pango python-psutil git >/dev/null
+# Everything the recipe asks for to build, check and run (its depends, makedepends and
+# checkdepends), read from the recipe itself so a new dependency can't be missed here.
+# python-zeroconf was, at v0.1.5: "Missing dependencies: python-zeroconf".
+mapfile -t deps < <(bash -c 'source "$1"; printf "%s\n" "${depends[@]}" "${makedepends[@]}" "${checkdepends[@]}"' _ \
+  "$root/packaging/aur/bromigos-lab/PKGBUILD" | sed 's/[<>=].*//' | sort -u)
+pacman -Syu --noconfirm --needed git "${deps[@]}" >/dev/null
 ! pacman -Qq | grep -q '^bromigos' || { echo 'Container already has bromigOS packages' >&2; exit 1; }
 useradd -m builder
 work=$(mktemp -d)
@@ -16,7 +21,7 @@ runuser -u builder -- env PKGDEST="$work/out" SRCDEST="$work/cache" bash -ec "cd
 pacman -U --noconfirm "$work/out/"*.pkg.tar.zst
 # Only the standalone package is allowed. Optional desktop dependencies stay absent.
 [[ $(pacman -Qq | grep '^bromigos') == bromigos-lab ]]
-! command -v bromigos
+if command -v bromigos >/dev/null; then echo "bromigos (the desktop CLI) is installed: not a standalone lab" >&2; exit 1; fi
 runuser -u builder -- env PYTHONPATH=/usr/lib/bromigos/lib python "$root/packaging/ci/test-installed-lab.py"
 # Verify file ownership against the desktop integration package, without installing it.
 source_root=$(find "$work/recipe/src" -maxdepth 1 -type d -name 'bromigOS-*' -print -quit)
