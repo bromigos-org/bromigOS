@@ -1475,7 +1475,9 @@ class Installer(server_tui.ServerPages, App):
 
     @on(Input.Changed, "#user")
     def user_typed(self, ev):
-        if self.focused is ev.input:
+        # The input's own focus flag, not app.focused: a Changed that arrives while the
+        # app is closing finds no screen, and app.focused raises ScreenStackError.
+        if ev.input.has_focus:
             self.a["user_edited"] = True
         h = self.query_one("#hostname", Input)
         if not self.a.get("host_edited"):
@@ -1484,7 +1486,7 @@ class Installer(server_tui.ServerPages, App):
 
     @on(Input.Changed, "#hostname")
     def host_typed(self, ev):
-        if self.focused is ev.input:
+        if ev.input.has_focus:
             self.a["host_edited"] = True
 
 
