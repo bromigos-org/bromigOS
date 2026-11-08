@@ -37,7 +37,7 @@ TARGET = "/mnt"
 STASH = ".bromigos-old-kernels"       # on /boot, while a reinstall runs
 SUBVOLS = [("@home", "home"), ("@log", "var/log"), ("@pkg", "var/cache/pacman/pkg"), ("@.snapshots", ".snapshots"),
            # the data a reinstall keeps, as it keeps /home (made empty if the old system had none)
-           ("@containers", "var/lib/containers"), ("@k3s", "var/lib/rancher"), ("@srv", "srv"),
+           ("@containers", "var/lib/containers"), ("@k3s", "var/lib/rancher"), ("@kubelet", "var/lib/kubelet"), ("@srv", "srv"),
            ("@bromigos-state", "var/lib/bromigos/server")]
 
 
@@ -99,7 +99,7 @@ def prepare(a):
     sh("btrfs", "subvolume", "create", f"{TOP}/@")
     sh("btrfs", "subvolume", "create", f"{TOP}/@.snapshots")
     fresh = []
-    for sv in ("@log", "@pkg", "@containers", "@k3s", "@srv", "@bromigos-state"):
+    for sv in ("@log", "@pkg", "@containers", "@k3s", "@kubelet", "@srv", "@bromigos-state"):
         if sv not in names:
             sh("btrfs", "subvolume", "create", f"{TOP}/{sv}")
             fresh.append(sv)

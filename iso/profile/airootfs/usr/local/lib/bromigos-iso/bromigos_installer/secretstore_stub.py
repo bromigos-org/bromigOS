@@ -47,7 +47,10 @@ def where(cfg):
         return ("In the new Vault (OpenBao) on this server.", "With the unseal and recovery keys the welcome tour shows once.")
     if kind == "sops":
         return ("In your lab's repository, sops-encrypted to this server's age key.", "With your lab's own age keys.")
-    return ("On this server, encrypted and sealed to its security chip.",
+    from . import server
+    # systemd-creds seals to the TPM when there is one, else to a key kept on the disk
+    return ("On this server, encrypted and sealed to its security chip." if server.tpm() else
+            "On this server, encrypted with a key kept on its disk (it has no security chip).",
             "With the recovery bundle (age) the welcome tour offers to download or print as a QR code.")
 
 

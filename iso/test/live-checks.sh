@@ -19,6 +19,7 @@ data_subvolumes() {
     done <<'LIST'
 @containers /var/lib/containers
 @k3s /var/lib/rancher
+@kubelet /var/lib/kubelet
 @srv /srv
 @bromigos-state /var/lib/bromigos/server
 LIST

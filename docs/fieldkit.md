@@ -548,6 +548,22 @@ and writes it with no settings partition. No package carries the ISO: `bromigos-
 carries only the boot menu's copy (kernel, initramfs, system; no store), which can't make a
 stick. `fieldkit/lib/bromigos_fieldkit/image.py` has the lookup.
 
+Two more options:
+
+- `--answers FILE` puts an installer [answer file](iso.md#answer-files) on the stick, as
+  `fieldkit/install-server.toml` or `install-desktop.toml` (from its `edition`). The boot
+  menu then says "(answers found on the stick: unattended)", picks that entry and counts
+  down. The file keeps its password as written, readable by anyone holding the stick.
+- `--image FILE` writes the same stick to an image file instead of a drive, as you, with no
+  root: the medium copied as it is, the FIELDKIT partition 1 MiB-aligned after it, and the
+  settings put in with `mkfs.fat` and mtools' `mcopy`. Write it to a drive later with
+  `bromigos fieldkit usb DEV --iso FILE`, or boot it in a VM as a USB disk.
+
+```bash
+bromigos fieldkit make-stick --iso bromigos-fieldkit-0.1.4-x86_64.iso \
+    --answers install-server.toml --image stick.img
+```
+
 ## Remote help
 
 Remote help lets someone you trust work on the machine over SSH. It's off until you turn

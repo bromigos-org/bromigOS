@@ -112,6 +112,12 @@ download it for you, and checks it before using it. To use a file somewhere else
 `--iso FILE`. On a Field Kit stick, it copies the stick it's running from.
 `bromigos fieldkit usb /dev/sdX` writes Field Kit the same way, without your settings.
 
+To install bromigOS Server (or the desktop) with no questions, add `--answers FILE`, an
+[answer file](installer.md#answer-files). The stick's boot menu then starts the install by
+itself. The file keeps its password as you wrote it, so keep the stick safe. To make the
+stick as a file first, for a virtual machine or to write later, add `--image FILE` instead
+of a drive. That needs `mtools` and no administrator password.
+
 ## Your settings on the stick
 
 A Field Kit stick can carry your settings in a folder called `fieldkit`: on its own small

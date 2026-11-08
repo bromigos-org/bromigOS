@@ -314,6 +314,8 @@ def main(argv=None):
     p.add_argument("--yes", action="store_true", help="don't ask before replacing the drive")
     p.add_argument("--settings-only", action="store_true", help="only (re)write the settings partition of a Field Kit stick")
     p.add_argument("--iso", help="the Field Kit ISO to write (default: the one in your Downloads folder)")
+    p.add_argument("--answers", help="an installer answer file (docs/iso.md): the stick installs from it unattended")
+    p.add_argument("--image", metavar="FILE", help="write the stick to an image file instead of a drive (no root)")
     p = sub.add_parser("remote", help="remote help: SSH on or off, and how to reach this machine")
     p.add_argument("state", nargs="?", choices=["on", "off", "status"], default="status")
     sub.add_parser("stick-boot", help=argparse.SUPPRESS)

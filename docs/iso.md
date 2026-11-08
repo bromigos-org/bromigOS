@@ -436,7 +436,7 @@ package it was installed from.
 | Partition table | GPT on UEFI, MBR on BIOS. archinstall 4.5 chooses by the firmware it runs on. On BIOS, GRUB's core image goes in the gap after the MBR. |
 | `/boot` | 2 GiB, FAT32, unencrypted. It's the EFI system partition on UEFI. Beside another system: 2 GiB, ext4, in the free space, with the disk's own EFI system partition at `/boot/efi` |
 | The rest | btrfs, on LUKS2 unless `--no-encrypt` |
-| btrfs subvolumes | `@` for `/`, `@home`, `@log`, `@pkg` and `@.snapshots`; and the data an update's rollback must never touch: `@containers` (`/var/lib/containers`), `@k3s` (`/var/lib/rancher`), `@srv` (`/srv`) and `@bromigos-state` (`/var/lib/bromigos/server`, the update history) |
+| btrfs subvolumes | `@` for `/`, `@home`, `@log`, `@pkg` and `@.snapshots`; and the data an update's rollback must never touch: `@containers` (`/var/lib/containers`), `@k3s` (`/var/lib/rancher`), `@kubelet` (`/var/lib/kubelet`, each pod's volumes), `@srv` (`/srv`) and `@bromigos-state` (`/var/lib/bromigos/server`, the update history) |
 | Boot loader | GRUB, which boots BIOS and UEFI alike and lists the snapshots |
 | Kernel | `linux`. bromigOS Server: `linux-lts` first in the boot menu, `linux` beside it (`GRUB_TOP_LEVEL`, `GRUB_DISABLE_SUBMENU`) |
 
@@ -665,6 +665,27 @@ firewall = true              # firewall, auto_updates
 auto_updates = true
 countdown = 10
 ```
+
+Three keys keep one file to one machine and one disk, for an install nobody watches:
+
+- `disk_model` names the disk by its model instead of `disk`'s path (they go alone). It's a
+  pattern: `*` and `?` as in a shell, letter case ignored. The installer installs only when
+  exactly one disk matches. A path like `/dev/nvme0n1` can name a different disk on the next
+  boot; a model can't.
+- `cpu_model` installs only on a computer whose processor matches, the same way. A word with
+  no `*` matches anywhere in the name, so `"9955HX"` matches "AMD Ryzen 9 9955HX 16-Core
+  Processor" (`/proc/cpuinfo`'s `model name`).
+- `advanced = { fs = "btrfs", kernel = "linux-lts", zram = false }` is the Advanced box:
+  the file system (`btrfs` or `ext4`), the kernel (`linux`, `linux-lts` or `linux-zen`)
+  and whether there's compressed swap in memory (zram).
+
+When an answer file's install is done, the installer restarts the computer by itself
+after `common.AUTO_RESTART_SECONDS` (10), with **Stay here** to stop it; `restart = false`
+in the file waits on the last page instead.
+
+`common.auto_check` checks the computer, then resolves the disk, before the countdown. When
+either doesn't match, nothing changes and the installer asks its questions instead, saying
+why. The kept answers keep `disk_model`, not the path it found.
 
 bromigOS Server's steps go in a `[server]` table (in the flat YAML form, `server.KEY:`
 lines): `role`, `interface`, `method`, `address`, `prefix`, `gateway`, `dns`,

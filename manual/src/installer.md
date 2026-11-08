@@ -392,7 +392,8 @@ covers the catalogue's format, `tools/voice/make-clips.py`, and the check CI run
 ### Answer files
 
 An answer file installs with no questions. After a 10-second countdown with **Cancel**,
-the install runs by itself. A file with problems is never half-used: the installer says
+the install runs by itself. When it's done, the computer restarts by itself 10 seconds
+later, unless you press **Stay here** or the file says `restart = false`. A file with problems is never half-used: the installer says
 what's wrong and asks the questions instead.
 
 ![Installing from an answer file: the file's path, a countdown with Cancel, and every
@@ -413,7 +414,9 @@ Flat YAML (`install.yaml`, one `key: value` per line) works too.
 | `locale` | text | `en_US` | The system's language, for example `de_DE` |
 | `timezone` | text | from the locale | `Region/City`, for example `Europe/Berlin` |
 | `keyboard` | text | from the locale | A layout id: `us`, `us-intl`, `gb`, `de`, `fr`, `es`, `it`, `br`, `dvorak`, `colemak` and more |
-| `disk` | text | required | The disk, for example `/dev/nvme0n1` |
+| `disk` | text | required, or `disk_model` | The disk, for example `/dev/nvme0n1` |
+| `disk_model` | text | | The disk by its model instead, for example `"Samsung*990*PRO*"` (`*` matches anything, letter case doesn't matter). It installs only when exactly one disk matches |
+| `cpu_model` | text | | Install only on a computer whose processor matches, for example `"9955HX"`. On any other, nothing changes and the installer asks instead |
 | `mode` | text | required | `erase`, `alongside` or `reinstall` |
 | `bromigos_bytes` | number | the installer's suggestion | Alongside, when it shrinks: bromigOS's share, in bytes |
 | `full_name` | text | empty | Your name, as the login screen shows it |
@@ -429,6 +432,8 @@ Flat YAML (`install.yaml`, one `key: value` per line) works too.
 | `firewall` | true/false | `true` | bromigOS Server's firewall |
 | `auto_updates` | true/false | `true` | bromigOS Server's automatic updates |
 | `countdown` | number | `10` | Seconds before it starts; `0` starts at once |
+| `restart` | true/false | `true` | Restart by itself 10 seconds after the install is done (**Stay here** stops it) |
+| `advanced` | table | the installer's | The Advanced box: `advanced = { fs = "btrfs", kernel = "linux-lts", zram = false }`. `fs` is `btrfs` or `ext4`, `kernel` is `linux`, `linux-lts` or `linux-zen`, and `zram = false` leaves out the compressed swap in memory |
 | `[server]` | table | | bromigOS Server's steps: `role`, the network, sign-in, data disks, unlock, updates, services ([Setting up bromigOS Server](server-setup.md#answer-files)) |
 | `failing_ok` | true/false | `false` | Install on a disk that reports it's failing |
 | `bitlocker_saved` | true/false | `false` | Required beside a BitLocker Windows: you saved its key |
@@ -537,7 +542,8 @@ alongside needs two free slots. On a UEFI computer the disk must use GPT.
 (`/var/cache/pacman/pkg`) and `@.snapshots` (`/.snapshots`). The data that isn't the system
 has its own too, so rolling back an update never rolls it back: `@containers`
 (`/var/lib/containers`: Podman's images and volumes, databases included), `@k3s`
-(`/var/lib/rancher`: a lab node's cluster data), `@srv` (`/srv`: apps' data and shares) and
+(`/var/lib/rancher`: a lab node's cluster data), `@kubelet` (`/var/lib/kubelet`: its pods'
+volumes and scratch space, which change by the minute on a CI node), `@srv` (`/srv`: apps' data and shares) and
 `@bromigos-state` (`/var/lib/bromigos/server`: the update history, so a rollback keeps the
 record of what it rolled back). None of them is in root's snapshots.
 
@@ -556,7 +562,8 @@ echo "$(findmnt -no SOURCE / | sed 's/\[.*//') /var/lib/containers btrfs $(findm
 sudo umount /mnt && sudo mount /var/lib/containers   # check, then: sudo rm -rf /var/lib/containers.old
 ```
 
-The same goes for `/var/lib/rancher` (`@k3s`) and `/srv` (`@srv`). bromigOS doesn't do it
+The same goes for `/var/lib/rancher` (`@k3s`), `/var/lib/kubelet` (`@kubelet`) and `/srv`
+(`@srv`). bromigOS doesn't do it
 for you on an update: moving a running system's data is the one thing that's safer done by
 hand, with the services stopped, than by a package. snapper keeps snapshots of
 `/` and `/home`; GRUB lists the root's snapshots (grub-btrfs).
