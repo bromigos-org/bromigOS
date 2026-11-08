@@ -34,7 +34,7 @@ game installers, NAS share discovery and public DNS setup are not built yet. See
 
 *8 November 2026 · On the stable channel.*
 
-This release makes it easier to link a computer to your bromigOS account, gives Den TV more control over audio, subtitles, and live pausing, and fixes several casting and installer problems.
+This release makes it easier to link a computer to your Bromigos account, gives Den TV more control over audio, subtitles, and live pausing, and fixes several casting and installer problems.
 
 ### Before you update
 
@@ -42,7 +42,7 @@ Nothing to do: `bromigos update` takes care of everything.
 
 ### New
 
-- `bromigos lab link` links this computer to your bromigOS account. It shows a short code and QR code to approve on your account page, then starts the lab connection.
+- `bromigos lab link` links this computer to your Bromigos account. It shows a short code and QR code to approve at bromigos.org/link, then starts the lab connection.
 - The welcome tour now has a Your lab step with choices to make this computer a lab, get a hosted lab, or skip; choosing a lab shows the approval code and live status.
 - Den TV can choose audio tracks and subtitles per screen and per cast target. Use `bromigos-live tv audio` and `bromigos-live tv subs` to change them.
 - The Den TV remote can pause a live channel and resume behind the schedule, showing how far behind it is.
