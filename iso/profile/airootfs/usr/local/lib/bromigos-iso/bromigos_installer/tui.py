@@ -1397,6 +1397,15 @@ class Installer(server_tui.ServerPages, App):
             why = common.check_hostname(v.strip())
         return ("bad", why) if why else ("ok", "")
 
+    def _on_user_step(self, selector):
+        """The user step's input `selector`, or None once that step is gone."""
+        if self.step != "user":
+            return None
+        try:
+            return self.query_one(selector, Input)
+        except NoMatches:
+            return None
+
     def _id_refresh(self):
         """The card follows what's typed: each field's ✓ or ✗, the portrait's initials, the line at its foot."""
         if self.step != "user" or not self.query("#user"):
@@ -1468,7 +1477,11 @@ class Installer(server_tui.ServerPages, App):
 
     @on(Input.Changed, "#full_name")
     def name_typed(self, ev):
-        u = self.query_one("#user", Input)
+        # A Changed can arrive after its step is gone (a jump to another step, or the
+        # installer closing): then there's nothing left to fill in.
+        u = self._on_user_step("#user")
+        if u is None:
+            return
         if not self.a.get("user_edited"):
             u.value = common.suggest_username(ev.value)
         self._id_refresh()
@@ -1479,7 +1492,9 @@ class Installer(server_tui.ServerPages, App):
         # app is closing finds no screen, and app.focused raises ScreenStackError.
         if ev.input.has_focus:
             self.a["user_edited"] = True
-        h = self.query_one("#hostname", Input)
+        h = self._on_user_step("#hostname")
+        if h is None:
+            return
         if not self.a.get("host_edited"):
             h.value = common.suggest_hostname(ev.value, self.a["edition"])
         self._id_refresh()
