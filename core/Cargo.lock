@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "bromigos"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "bromigos-art",
@@ -219,7 +219,7 @@ dependencies = [
 
 [[package]]
 name = "bromigos-art"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "chrono",
  "nolgia",
@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "bromigos-bt"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "bromigos-core",
  "bromigos-tui",
@@ -247,7 +247,7 @@ dependencies = [
 
 [[package]]
 name = "bromigos-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "chrono",
  "minijinja",
@@ -265,7 +265,7 @@ dependencies = [
 
 [[package]]
 name = "bromigos-tui"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "ratatui",
  "serde_json",

@@ -1,43 +1,18 @@
 {
-  "version": "0.1.4",
-  "tag": "v0.1.4-rc1",
-  "kind": "rc",
-  "since": "v0.1.3",
-  "date": "2026-11-01",
+  "version": "0.1.5",
+  "tag": "v0.1.5",
+  "kind": "stable",
+  "since": "v0.1.4",
+  "date": "2026-11-08",
   "bromigos": {
-    "base": "fed1bc63e22aeceda4c7dfcb6e40368f89dacd89"
+    "base": "391762be592da55c1ad59db6c822aa4b8c85c771"
   },
   "vector": {
-    "base": "797035549f2921d9fe465707f0e0bc4371b85a0d",
-    "since": "v0.1.3",
-    "commit": "b3959f86aae73623ac2e2df013ef05b11b1e36e0",
-    "branch": "release/v0.1.4-rc1"
+    "base": "b3959f86aae73623ac2e2df013ef05b11b1e36e0",
+    "since": "v0.1.4",
+    "commit": "32764ffb52d8ef98dced24ed842ad60d266a0f44",
+    "branch": "release/v0.1.5"
   },
   "drafted_by": "qwen3.8-flash-next",
-  "highlights": [
-    {
-      "section": "new",
-      "text": "**Steam and Proton keep themselves ready.** **Settings › Playing games** sets up Steam and the drivers your graphics cards need. bromigOS installs the newest GE-Proton, keeps it current, and repairs what would stop a game, after each update and whenever you quit Steam. The page says **Games are ready** or what needs you, with **Fix**. DLSS works in Proton games on NVIDIA. See Playing games."
-    },
-    {
-      "section": "new",
-      "text": "**Choose what each graphics card is for.** **Settings › Graphics** lists every card. Pick the one that draws the desktop (tried first, with a way back), the one games and heavy apps run on, and one kept for virtual machines. From a terminal: `bromigos hw graphics`, `hw display`, `hw games`, `hw run` and `hw vfio`. See Choose what each card is for."
-    },
-    {
-      "section": "new",
-      "text": "**Bluetooth devices.** **Settings › Bluetooth** has a page for each device and pairs new ones step by step. A controller tester shows each button and stick live, by the pad's real layout, and makes it rumble. Headphones switch between hi-fi and headset with a microphone. `bromigos bluetooth tui` is the same in a terminal. See Bluetooth."
-    },
-    {
-      "section": "improved",
-      "text": "Bar popups, such as the Bluetooth panel and the sound popup, close on a click anywhere else, and that click still does what it does."
-    },
-    {
-      "section": "improved",
-      "text": "An Xbox controller on Linux's basic driver offers one button that installs xpadneo for its rumble and battery."
-    },
-    {
-      "section": "improved",
-      "text": "The keyring, oo7, is now built from oo7's own source, unchanged. The fix that keeps a text console login from stopping the keyring is part of oo7 itself now, so bromigOS no longer carries its own patch."
-    }
-  ]
+  "highlights": []
 }

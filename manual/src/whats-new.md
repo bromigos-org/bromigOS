@@ -29,6 +29,43 @@ game installers, NAS share discovery and public DNS setup are not built yet. See
 
 <!-- releases: tools/release/release.py adds each release below this line, newest first -->
 
+## 0.1.5
+<!-- release: 0.1.5 -->
+
+*8 November 2026 · On the stable channel.*
+
+This release makes it easier to link a computer to your Bromigos account, gives Den TV more control over audio, subtitles, and live pausing, and fixes several casting and installer problems.
+
+### Before you update
+
+Nothing to do: `bromigos update` takes care of everything.
+
+### New
+
+- `bromigos lab link` links this computer to your Bromigos account. It shows a short code and QR code to approve at bromigos.org/link, then starts the lab connection.
+- The welcome tour now has a Your lab step with choices to make this computer a lab, get a hosted lab, or skip; choosing a lab shows the approval code and live status.
+- Den TV can choose audio tracks and subtitles per screen and per cast target. Use `bromigos-live tv audio` and `bromigos-live tv subs` to change them.
+- The Den TV remote can pause a live channel and resume behind the schedule, showing how far behind it is.
+- Den TVs can join linked channels from your lab, showing the stream, participants, and a watch party kept in step. Use `bromigos-live tv link` and `bromigos-live tv unlink`.
+- Unattended installs can use answer files that match one machine and one disk, and can set filesystem, kernel, and memory-compression options.
+- `make-stick --answers` puts an answer file on the install stick, and `--image` writes the stick to an image file without needing root.
+
+### Improved
+
+- An unattended install from an answer file now restarts by itself after finishing, with a short chance to stop it.
+- Den TV can fetch subtitles from your media server and subtitle sources, and remembers a remote's choice per series.
+
+### Fixed
+
+- Muting a Den TV screen no longer pauses it when a window only touches its edge; it pauses only when opaque windows cover almost all of it.
+- Casting to a TV no longer shows a title and then plays nothing; it uses an address the TV can load, or reports why it cannot.
+- The installer no longer crashes if you type a name while it is closing.
+
+### Known issues
+
+- Live streams are encrypted in transit, but not end-to-end like messages.
+- Some cast targets cannot change audio tracks or subtitles; Den TV says so plainly.
+
 ## 0.1.4
 <!-- release: 0.1.4-rc1 -->
 

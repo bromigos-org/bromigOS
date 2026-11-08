@@ -11,6 +11,28 @@ VECTOR's, `bromigos-org/vector-archive`).
 
 <!-- releases: tools/release/release.py adds each release below this line, newest first -->
 
+## [0.1.5] - 2026-11-08
+<!-- release: 0.1.5 -->
+
+Since v0.1.4. In plain words: the manual's What's new (manual/src/whats-new.md).
+
+### Homelab
+
+- lab catalog: weekly refresh 2026-11-02 (metadata and pending review entries) ([3b8bfa9](https://github.com/bromigos-org/bromigOS/commit/3b8bfa90a5d2d0895d508af6f9ee77001846a490))
+- lab: bromigos lab link links this computer to your Bromigos account from bromigos.org/link (#84) ([8c00640](https://github.com/bromigos-org/bromigOS/commit/8c0064038e1e92c591d31e56033080bc5a9efd19))
+
+### Other
+
+- What's new: the links the 0.1.2 and 0.1.3 notes lost ([6bcc605](https://github.com/bromigos-org/bromigOS/commit/6bcc605b8f5b54f641d798c74d038ef143ab7319))
+- brodec-faces: publish THE CUFF for Watch Face Push to pkgs.bromigos.org (#83) ([d35f3b5](https://github.com/bromigos-org/bromigOS/commit/d35f3b5e0c2b6139bcfbb919381825f26314cdc2))
+- welcome tour: Your lab as three tiles, then a code to approve on bromigos.org/link (#85) ([a5508f5](https://github.com/bromigos-org/bromigOS/commit/a5508f52c799dfc29d72f9e4968b8144ed208301))
+- den TV: audio and subtitles per screen and cast target, and a DVR pause from the remote (#88) ([f933830](https://github.com/bromigos-org/bromigOS/commit/f93383063fd03cc1c0d36959ba2e821144e6c3f4))
+- Den TV: muting no longer pauses a screen a window only touches (#87) ([47363f8](https://github.com/bromigos-org/bromigOS/commit/47363f82dce2819191cd9e94895b7c956672ddd4))
+- Lab media server: MediaMTX for brodec-lab (off), and den TVs that join BRODEC channels (#86) ([fcbacd0](https://github.com/bromigos-org/bromigOS/commit/fcbacd082ea930390a815da944e68c53ad160d94))
+- Cast: a TV gets an address it can load, and a cast that can't load says so (#89) ([6972462](https://github.com/bromigos-org/bromigOS/commit/69724628d20cd1931f596cd4d4ac4ec2d950fa96))
+- installer: unattended installs that match one machine and one disk; make-stick --answers/--image (#90) ([f7de29d](https://github.com/bromigos-org/bromigOS/commit/f7de29dc7f5f90402d5bd48d9277be22b3a35ab6))
+- installer: a name typed while the installer closes no longer crashes it (#91) ([391762b](https://github.com/bromigos-org/bromigOS/commit/391762be592da55c1ad59db6c822aa4b8c85c771))
+
 ## [0.1.4] - 2026-11-01
 <!-- release: 0.1.4-rc1 -->
 
