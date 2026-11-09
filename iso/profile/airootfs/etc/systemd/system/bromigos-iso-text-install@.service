@@ -11,7 +11,10 @@ Type=idle
 ExecStart=/usr/local/bin/bromigos-iso-text-console %I
 StandardInput=tty
 StandardOutput=tty
-StandardError=journal
+# the console for all three: Textual draws the installer's screen on standard error. With
+# StandardError=journal the screen went to the journal and the console stayed black, a cursor
+# blinking (0.1.4, 0.1.5: the text entry, the Server entry, no graphics, a serial console)
+StandardError=tty
 TTYPath=/dev/%I
 TTYReset=yes
 TTYVHangup=yes

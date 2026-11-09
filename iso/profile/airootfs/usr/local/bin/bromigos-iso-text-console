@@ -6,7 +6,9 @@
 #                                           (bromigos.install=text), or "Install bromigOS" on a
 #                                           machine with no graphics; a serial console (ttyS*)
 #                                           when the kernel's console is on it
-#   bromigos-iso-text-console TTY           runs it there (a readable console font first)
+#   bromigos-iso-text-console TTY           runs it there (a readable console font first). If it
+#                                           stops with an error, what it said stays on the screen
+#                                           with the ways on: again, a shell, restart, off
 #   bromigos-iso-text-console --start       starts bromigos-iso-text-install@TTY for each console
 #                                           --check says yes to (bromigos-iso-text-check.service)
 set -u
@@ -48,6 +50,31 @@ else
     export TERM=vt220
     stty rows 40 cols 120 2>/dev/null || true
 fi
+# The installer stopped with an error: its words stay on the screen, with what to do next. The
+# unit starts this again as soon as it exits and clears the console first, which would hide them.
+stopped() {      # stopped CODE: returns once Enter asks for the installer again
+    local key
+    while :; do
+        printf '\n\n  The installer stopped with an error (exit code %s). What it said is above.\n\n' "$1"
+        printf '    Enter   start the installer again\n'
+        printf '    S       a shell, to look around (exit comes back here)\n'
+        printf '    R       restart the computer\n'
+        printf '    P       turn the computer off\n\n'
+        printf '  To tell us: the lines above, and what "journalctl -b -p warning" says in the shell.\n  '
+        read -rsn1 key || return 0           # no keyboard here: again
+        case ${key,,} in
+            '') return 0 ;;
+            s) printf '\n  A shell. Type exit to come back here.\n'; "${SHELL:-/bin/bash}" || true ;;
+            r) systemctl reboot; sleep 60 ;;
+            p) systemctl poweroff; sleep 60 ;;
+        esac
+    done
+}
 # the screen reader's boot (accessibility=on): the plain questions, read in order
-grep -qw 'accessibility=on' <<<"$cmd" && exec /usr/local/bin/bromigos-iso-install --plain
-exec /usr/local/bin/bromigos-iso-install --text
+how=--text; grep -qw 'accessibility=on' <<<"$cmd" && how=--plain
+"${BROMIGOS_ISO_INSTALL:-/usr/local/bin/bromigos-iso-install}" "$how"; rc=$?
+if (( rc != 0 )); then
+    logger -t bromigos-iso-text-console "the installer stopped on $tty with exit code $rc" 2>/dev/null || true
+    stopped "$rc"
+fi
+exit 0

@@ -2172,8 +2172,11 @@ def main(argv=None):
     if "--plain" in argv or not HAVE_TEXTUAL or os.environ.get("TERM") in ("dumb", "") or \
             ("accessibility=on" in cmd and "--no-plain" not in argv):
         return plain()
-    Installer().run()
-    return 0
+    app = Installer()
+    app.run()
+    # Textual shows a crash and returns: its code says so (1), for whoever started this (the
+    # console's unit keeps the words on screen instead of starting over)
+    return getattr(app, "return_code", 0) or 0
 
 
 if __name__ == "__main__":
