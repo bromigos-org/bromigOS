@@ -6,9 +6,10 @@
 #   iso/ci-test.sh ISO --out DIR [--suite desktop|menu|hook|none] [--profile DIR]
 #                  [--secureboot-cert FILE]
 #
-#   desktop  the desktop medium, as a release is tested: UEFI with the network, an encrypted
-#            install, the installed system, its first update and rollback; then BIOS with no
-#            network, a plain install and the installed system
+#   desktop  the desktop medium, as a release is tested: UEFI with the network, the graphical
+#            installer typed into with a real pointer and keys, an encrypted install, the
+#            installed system, its first update and rollback; then BIOS with no network, the
+#            same typing, a plain install and the installed system
 #   menu     a medium with no installer: it boots to its menu, UEFI and BIOS, and the menus
 #            are saved
 #   hook     the profile's own test: PROFILE/ci-test.sh ISO DIR, run in the same container
@@ -103,7 +104,10 @@ desktop_run() {     # desktop_run NAME FIRMWARE PORT VNC OFFLINE ENCRYPT
     (( $6 )) || enc=(--no-encrypt)
     BROMIGOS_ISOTEST_PORT=$(free_port "$3"); BROMIGOS_ISOTEST_VNC=$(vnc_display "$4")
     export BROMIGOS_ISOTEST_DIR=$out/$name BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC BROMIGOS_ISOTEST_OFFLINE=$5
+    # the graphical installer first, with a real pointer and real keys (nothing is installed by it):
+    # the install below is the scripted one, which types nothing
     step "$name: the live desktop" T boot --iso "$iso" --firmware "$fw" \
+        && { step "$name: the graphical installer's fields take a real click and real typing" T gui-type || true; } \
         && step "$name: the install" T install "${enc[@]}" \
         && if (( devbuild )); then
             BROMIGOS_ISOTEST_OFFLINE=0 BROMIGOS_ISOTEST_NO_UPDATE=1 step "$name: the installed system" T boot-disk --firmware "$fw" || true

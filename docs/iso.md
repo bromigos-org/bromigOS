@@ -1090,6 +1090,13 @@ More about each:
 - **`boot`'s live checks** cover Hyprland, the bar, the panels (widgets), the live layer,
   SDDM, the theme, the splash theme, the offline repository, pacman resolving `bromigos`
   from it, bromigOS's key being trusted, and the installer.
+- **`gui-type`** drives the graphical installer on the live desktop as a person does: QMP
+  moves the VM's tablet pointer and presses its keys. It clicks Continue up to About you,
+  clicks each field and types into it, goes from one to the next with Tab, and checks what
+  the window holds through `test/installer/guiwatch.py` (the installer's own code, watched
+  from inside). Nothing is installed. `gui-install` fills the fields with `set_text()`, so
+  it passed on 0.1.4 and 0.1.5, where no field took typing: a focus grab that never
+  stopped took the focus back to Continue. CI runs `gui-type` on every desktop medium.
 - **`install`** has the medium's own `answers.py` write the files for `/dev/vda`. The
   test user is `tester`, with the password `tester`, sshd and the test key. The
   passphrase is the password. After installing, it records what the new system got while

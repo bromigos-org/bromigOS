@@ -20,6 +20,10 @@
 #                       test/installer/tuidrive.py; the graphical one's own script mode, with
 #                       a screenshot of each step from the VM's screen) onto the VM's disk,
 #                       with the real install; then as `install` after it
+#   iso/test.sh gui-type   the graphical installer with a real pointer and real keys (QMP's tablet
+#                       and send-key), on the live desktop: Continue clicked up to About you, each
+#                       field clicked and typed into, Tab between them, then the next step. Nothing
+#                       is installed (test/installer/guiwatch.py tells what the window shows)
 #   iso/test.sh tui-install|gui-install … --server PLAN.json   bromigOS Server: its steps answered from
 #                       PLAN (an answer file's [server] keys, as JSON: role, method, address, data_disks, …)
 #   iso/test.sh answer-install FILE   an answer file (bromigos/install.toml's form) installed by itself:
@@ -326,6 +330,54 @@ case $cmd in
             grep -E '^(::page|::result|  )' "$dir/install.out" | tail -25
         fi
         finish_install "$rc" || exit $?
+        ;;
+    gui-type)
+        # the graphical installer with a real pointer and real keys (QMP: the tablet, send-key), as
+        # a person at the machine: Continue clicked up to About you, each field clicked and typed
+        # into, Tab from one to the next, then on. gui-install's script fills the fields with
+        # set_text(), which can't show that a field takes no typing (0.1.4 and 0.1.5: none did).
+        # Nothing is installed: it stops at the step after About you and closes the installer
+        out=$dir/gui-type-$firmware.out; : > "$out"
+        result() { local what=$1; shift; if "$@"; then echo "PASS $what"; else echo "FAIL $what"; fi | tee -a "$out"; }
+        # what the installer's window shows now (test/installer/guiwatch.py): gs step, gs fields.user, gs at.next
+        gs() {
+            "${SSH[@]}" 'cat /tmp/gui-state.json' 2>/dev/null | python3 -c 'import json, sys
+d = json.load(sys.stdin)
+for k in sys.argv[1].split("."):
+    d = d[k]
+print(" ".join(map(str, d)) if isinstance(d, list) else d)' "$1" 2>/dev/null || true
+        }
+        is() { [[ $(gs "$1") == "$2" ]]; }
+        at() { local x y; read -r x y <<<"$(gs "at.$1")"; [[ -n ${y:-} ]] && click "$x" "$y"; }
+        "${SCP[@]}" "$here/test/installer/guiwatch.py" "live@127.0.0.1:"
+        # one installer at a time (a second start only brings the first forward): any open one goes
+        "${SSH[@]}" "pkill -f '[b]romigos_installer.gui'; pkill -f '[g]uiwatch.py'; rm -f /tmp/gui-state.json; true"
+        sleep 1
+        "${SSH[@]}" "export XDG_RUNTIME_DIR=/run/user/\$(id -u); export WAYLAND_DISPLAY=\$(basename \$(ls \$XDG_RUNTIME_DIR/wayland-* | grep -v lock | head -1)); python3 guiwatch.py /tmp/gui-state.json" > "$dir/gui-type.log" 2>&1 &
+        gui=$!
+        for _ in $(seq 30); do is step guide && break; sleep 1; done
+        result "the graphical installer opens, full screen" is fullscreen True
+        for _ in $(seq 8); do is step user && break; at next; sleep 1.5; done
+        result "Continue, clicked, goes on to About you" is step user
+        park; shot "gui-type-$firmware-user" >/dev/null
+        at full_name; type_text "Test Er"; sleep 0.5
+        result "Your name, clicked: what's typed arrives" is fields.full_name "Test Er"
+        result "the user name follows the name as it's typed (test)" is fields.user test
+        press tab; type_text "tester"; sleep 0.3
+        result "Tab goes on to User name: what's typed replaces the suggestion" is fields.user tester
+        at password; type_text "tester"
+        at password2; type_text "tester"
+        at hostname; press ctrl-a; type_text "bromigos-test"; sleep 0.5
+        result "Password, clicked and typed" is fields.password tester
+        result "Password again, clicked and typed" is fields.password2 tester
+        result "Computer's name, clicked and typed over" is fields.hostname bromigos-test
+        park; shot "gui-type-$firmware-typed" >/dev/null
+        echo "the installer's share of a core while it waits: $(gs cpu)" | tee -a "$out"
+        at next; sleep 1.5
+        result "Continue takes what was typed (the next step: $(gs step))" is step encryption
+        "${SSH[@]}" "pkill -f '[g]uiwatch.py'; true"
+        wait "$gui" 2>/dev/null || true
+        if grep -q FAIL "$out"; then exit 1; fi
         ;;
     answer-install)     # an answer file, installed by itself (the text installer's countdown, then the install)
         file=${1:?answer-install FILE}
