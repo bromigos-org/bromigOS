@@ -1529,19 +1529,28 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
         self.validate_user()
 
 
+    def suggest(self, key, text):
+        """A field filled in from another one, not by the person: the *_typed handlers don't take
+        it as their edit. set_text() on a field with text in it says "changed" twice (emptied,
+        then filled), and one suggestion sets off the next (the name, the user name, the
+        computer's name), so the mark is put back as it was, not just cleared: cleared by the
+        inner one, the outer one's second "changed" counted as typing and the user name stopped
+        following the name after its second letter."""
+        was, self._auto = getattr(self, "_auto", False), True
+        try:
+            self.f[key].set_text(text)
+        finally:
+            self._auto = was
+
     def name_typed(self, row):
         if not self.a.get("user_edited"):
-            self._auto = True
-            self.f["user"].set_text(common.suggest_username(row.get_text()))
-            self._auto = False
+            self.suggest("user", common.suggest_username(row.get_text()))
 
     def user_typed(self, row):
         if not getattr(self, "_auto", False):
             self.a["user_edited"] = True
         if not self.a.get("host_edited"):
-            self._auto = True
-            self.f["hostname"].set_text(common.suggest_hostname(row.get_text(), self.a["edition"]))
-            self._auto = False
+            self.suggest("hostname", common.suggest_hostname(row.get_text(), self.a["edition"]))
 
     def host_typed(self, row):
         if not getattr(self, "_auto", False):
