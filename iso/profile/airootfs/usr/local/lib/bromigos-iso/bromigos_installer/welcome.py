@@ -21,7 +21,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
 from . import common  # noqa: E402
-from .gui import Emblem, hint, installer_css, label, settings_css, snapshot  # noqa: E402
+from .gui import Emblem, focus_soon, hint, installer_css, label, settings_css, snapshot  # noqa: E402
 
 TRY = ("Try bromigOS", "Look around first. Everything runs from this USB stick: nothing is installed and nothing on "
                        "this computer changes. You can install from the desktop at any time.")
@@ -66,7 +66,7 @@ class Card(Adw.ApplicationWindow):
             row.append(b)
             if primary:
                 self.set_default_widget(b)
-                GLib.idle_add(b.grab_focus)
+                focus_soon(b)
         box.append(row)
         box.append(label("The installer is also in the app launcher (Super+Space): Install bromigOS.", ("bi-intro",)))
         self.set_content(box)
