@@ -9,9 +9,9 @@
 # and MTEB leaderboards, OmniDocBench and olmOCR-bench, vendor and community benchmarks (each
 # model's `cite`). Figures marked est. in vram_note are computed, not measured.
 format = 1
-version = 6
+version = 7
 researched = "2026-10-09"
-refreshed = "2026-11-02"
+refreshed = "2026-11-09"
 
 [licence.apache-2]
 hub = ["apache-2.0"]
@@ -10529,4 +10529,82 @@ stack = "needs support: a new voice-service backend (check its runtime)"
 licence = "apache-2.0"
 review = true
 found = "2026-11-02"
+state = "pending review"
+[[pending]]
+id = "hf:Axion1-0/Axion-1.0-35B"
+kind = "new model"
+capability = "llm"
+title = "Axion1-0/Axion-1.0-35B: trending text-generation"
+why = "new in the last 60 days (24 days old), 70 likes, 1125 downloads"
+repo = "Axion1-0/Axion-1.0-35B"
+evidence = ["https://huggingface.co/Axion1-0/Axion-1.0-35B"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+found = "2026-11-09"
+state = "pending review"
+[[pending]]
+id = "hf:moonshotai/Kimi-K3.1-Pro"
+kind = "new model"
+capability = "llm"
+title = "moonshotai/Kimi-K3.1-Pro: trending image-text-to-text"
+why = "new in the last 60 days (7 days old), 1792 likes, 27926 downloads"
+repo = "moonshotai/Kimi-K3.1-Pro"
+evidence = ["https://huggingface.co/moonshotai/Kimi-K3.1-Pro"]
+stack = "ready (vllm, sglang)"
+licence = "other"
+review = true
+found = "2026-11-09"
+state = "pending review"
+[[pending]]
+id = "hf:Cactus-Compute/mirage"
+kind = "new model"
+capability = "llm"
+title = "Cactus-Compute/mirage: trending image-text-to-text"
+why = "new in the last 60 days (4 days old), 94 likes, 10341 downloads"
+repo = "Cactus-Compute/mirage"
+evidence = ["https://huggingface.co/Cactus-Compute/mirage"]
+stack = "needs support: no vLLM, llama.cpp, Ollama or MLX support on the Hub yet"
+licence = "apache-2.0"
+review = true
+found = "2026-11-09"
+state = "pending review"
+[[pending]]
+id = "hf:maritaca-ai/S5-nano"
+kind = "new model"
+capability = "llm"
+title = "maritaca-ai/S5-nano: trending image-text-to-text"
+why = "new in the last 60 days (7 days old), 66 likes, 581 downloads"
+repo = "maritaca-ai/S5-nano"
+evidence = ["https://huggingface.co/maritaca-ai/S5-nano"]
+stack = "ready (vllm, sglang)"
+licence = "apache-2.0"
+review = true
+found = "2026-11-09"
+state = "pending review"
+[[pending]]
+id = "hf:Linum-AI/pjit-21k"
+kind = "new model"
+capability = "image"
+title = "Linum-AI/pjit-21k: trending text-to-image"
+why = "new in the last 60 days (6 days old), 66 likes, 382 downloads"
+repo = "Linum-AI/pjit-21k"
+evidence = ["https://huggingface.co/Linum-AI/pjit-21k"]
+stack = "needs support: no ComfyUI-native repackage (Comfy-Org) yet"
+licence = "apache-2.0"
+review = true
+found = "2026-11-09"
+state = "pending review"
+[[pending]]
+id = "hf:hyz317/HairDeck"
+kind = "new model"
+capability = "3d"
+title = "hyz317/HairDeck: trending image-to-3d"
+why = "new in the last 60 days (12 days old), 67 likes, 2926 downloads"
+repo = "hyz317/HairDeck"
+evidence = ["https://huggingface.co/hyz317/HairDeck"]
+stack = "needs support: no ComfyUI-native repackage (Comfy-Org) yet"
+licence = "apache-2.0"
+review = true
+found = "2026-11-09"
 state = "pending review"
