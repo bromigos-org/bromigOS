@@ -150,24 +150,31 @@ class WhenItStops(unittest.TestCase):
 
 
 LIB = os.path.join(ROOT, "usr/local/lib/bromigos-iso")
-sys.path.insert(0, LIB)
-sys.path.insert(0, os.path.join(HERE, "../../../lib"))
-os.environ.setdefault("BROMIGOS_INSTALLER_FAKE", "1")
-try:
-    from textual.app import App
-    from bromigos_installer import tui
-    HAVE = True
-except ImportError:
-    HAVE = False
 
 
-@unittest.skipUnless(HAVE, "python-textual isn't installed")
 class ACrashHasAnExitCode(unittest.TestCase):
     """Textual shows a crash and returns from run(): main() hands its code on, so the console
     script knows the installer didn't end by itself."""
 
+    @classmethod
+    def setUpClass(cls):
+        # loaded here, not with this file: test_tui.py sets the fake back end's environment before it
+        # loads the installer, and whichever loads it first decides what the others get
+        os.environ.setdefault("BROMIGOS_INSTALLER_FAKE", "1")
+        for d in (os.path.join(HERE, "../../../lib"), LIB):
+            if d not in sys.path:
+                sys.path.insert(0, d)
+        try:
+            from textual.app import App
+            from bromigos_installer import tui
+        except ImportError:
+            raise unittest.SkipTest("python-textual isn't installed")
+        cls.App, cls.tui = App, tui
+
     def run_main(self, on_mount):
-        class StandIn(App):
+        tui = self.tui
+
+        class StandIn(self.App):
             def run(self, **k):
                 return super().run(headless=True, **k)
 

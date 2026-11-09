@@ -223,7 +223,10 @@ class SpeechBoot(unittest.TestCase):
             text = read(os.path.join(prof, p))
             self.assertIn("accessibility=on bromigos.install=text bromigos.voice=off", text, p)
         console = read(os.path.join(HERE, "../../profile/airootfs/usr/local/bin/bromigos-iso-text-console"))
-        self.assertIn("accessibility=on' <<<\"$cmd\" && exec /usr/local/bin/bromigos-iso-install --plain", console)
+        # the plain questions on that boot (the installer is run, not exec'd: if it stops with an
+        # error the console script keeps its words on the screen; test_text_console.py)
+        self.assertIn("how=--text; grep -qw 'accessibility=on' <<<\"$cmd\" && how=--plain", console)
+        self.assertIn('"${BROMIGOS_ISO_INSTALL:-/usr/local/bin/bromigos-iso-install}" "$how"', console)
 
     def test_the_screen_reader_wins(self):
         words = "linux accessibility=on bromigos.install=text bromigos.voice=off".split()
