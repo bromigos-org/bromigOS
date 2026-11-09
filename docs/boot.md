@@ -469,7 +469,11 @@ Some entries need more than archiso gives:
   there), which runs the text installer in place of the login prompt. On "Install bromigOS"
   with no graphics (`/dev/dri` empty), it takes tty1 the same way. The console unit is
   never started otherwise: its TTY settings hang the console up, which would end a desktop
-  session running there.
+  session running there. The unit gives the installer the console for standard error too:
+  Textual draws its screen there. If the installer stops with an error, what it said stays
+  on the screen with the ways on (Enter starts it again, S is a shell, R restarts, P turns
+  the computer off); the unit would otherwise clear the console and start it again a
+  second later.
 - **Memory test on UEFI.** memtest86+-efi 8 names its binary `memtest86x64.efi`, which
   mkarchiso 91 doesn't copy. The build puts it in `grub/` and the menu finds it there.
 - **Start the system on this computer's disk, on UEFI,** reads the installed system's own

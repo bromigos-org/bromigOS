@@ -2,6 +2,7 @@
 """Waits for a boot menu on the test VM's screen and saves it (docs/iso.md, "Testing it").
 
   screen-wait.py --qmp SOCK --out PNG [--timeout 120] [--bar 280] [--settle 1.0] [--keys down,down]
+  screen-wait.py --qmp SOCK --out PNG --green 10000      a console with the text installer on it
 
 Takes QEMU's screen through its monitor (screendump) every half second until a menu's
 selection bar shows: a row with a run of at least --bar light pixels (bromigOS's phosphor
@@ -9,6 +10,11 @@ bar in GRUB's theme or vesamenu, GRUB's own highlighted row). The firmware's log
 kernel's text and the splash have none that long. Then it waits --settle, presses --keys
 (QMP send-key, one each), waits again and saves --out. Exit 1 when no menu showed in
 --timeout seconds (the last screen is saved anyway, to see what was there).
+
+--green N waits instead for at least N pixels of console green: the text installer's screen on
+a virtual console (some 35,000 of 1280x800, measured). A black screen has none (0.1.4's text
+installer ran with its screen in the journal), the kernel's and cloud-init's text is grey, and
+a login prompt or a crash's words have a thousand or two.
 """
 
 import argparse
@@ -79,6 +85,12 @@ def longest_bar(im, coloured=False):
     return best
 
 
+def green_pixels(im):
+    """Pixels of the console's bright green (the text installer's frame, words and buttons)."""
+    return sum(1 for r, g, b in im.get_flattened_data() if g > 120 and g - max(r, b) > 60) if hasattr(im, "get_flattened_data") \
+        else sum(1 for r, g, b in im.getdata() if g > 120 and g - max(r, b) > 60)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--qmp", required=True)
@@ -88,6 +100,7 @@ def main(argv=None):
     ap.add_argument("--settle", type=float, default=1.0)
     ap.add_argument("--keys", default="")
     ap.add_argument("--coloured", action="store_true", help="only a coloured bar counts (a bromigOS theme's)")
+    ap.add_argument("--green", type=int, default=0, help="wait for this many console-green pixels instead of a bar")
     args = ap.parse_args(argv)
     with tempfile.TemporaryDirectory(dir=os.path.dirname(os.path.abspath(args.out))) as tmp:
         ppm = os.path.join(tmp, "screen.ppm")
@@ -96,7 +109,11 @@ def main(argv=None):
         found = False
         while time.time() < deadline:
             im = screen(args.qmp, ppm)
-            if im is not None and longest_bar(im.resize((im.width // 2, im.height // 2)), args.coloured) * 2 >= args.bar:
+            if im is not None and args.green:
+                if green_pixels(im) >= args.green:
+                    found = True
+                    break
+            elif im is not None and longest_bar(im.resize((im.width // 2, im.height // 2)), args.coloured) * 2 >= args.bar:
                 found = True
                 break
             time.sleep(0.5)
@@ -110,7 +127,7 @@ def main(argv=None):
             im = screen(args.qmp, ppm) or im
         if im is not None:
             im.save(args.out)
-            print(f"{args.out} {im.width}x{im.height}" + ("" if found else " (no menu)"))
+            print(f"{args.out} {im.width}x{im.height}" + ("" if found else f" ({green_pixels(im)} green pixels)" if args.green else " (no menu)"))
     return 0 if found else 1
 
 

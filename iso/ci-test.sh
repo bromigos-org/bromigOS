@@ -10,6 +10,7 @@
 #            installer typed into with a real pointer and keys, an encrypted install, the
 #            installed system, its first update and rollback; then BIOS with no network, the
 #            same typing, a plain install and the installed system
+#            then the boot menu's text installer entry: on the console's screen, taking keys
 #   menu     a medium with no installer: it boots to its menu, UEFI and BIOS, and the menus
 #            are saved
 #   hook     the profile's own test: PROFILE/ci-test.sh ISO DIR, run in the same container
@@ -117,6 +118,15 @@ desktop_run() {     # desktop_run NAME FIRMWARE PORT VNC OFFLINE ENCRYPT
         fi
     T destroy >/dev/null 2>&1 || true
     rm -f "$out/$name/disk.qcow2"
+}
+
+text_run() {        # the boot menu's "Install bromigOS with the text installer" (More options): the
+                    # installer is on the console's screen and takes keys there, not only running
+    BROMIGOS_ISOTEST_PORT=$(free_port 2233); BROMIGOS_ISOTEST_VNC=$(vnc_display 43)
+    export BROMIGOS_ISOTEST_DIR=$out/menu-text BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC BROMIGOS_ISOTEST_OFFLINE=0
+    step "the boot menu's text installer: on the console's screen, taking keys (UEFI)" T menu --iso "$iso" --firmware uefi text || true
+    T destroy >/dev/null 2>&1 || true
+    rm -f "$out/menu-text/disk.qcow2"
 }
 
 menu_run() {        # menu_run FIRMWARE: the medium boots to its menu; the menu saved
@@ -311,6 +321,7 @@ case $suite in
     desktop)
         desktop_run uefi-encrypted uefi 2231 41 0 1 || true
         desktop_run bios-offline-plain bios 2232 42 1 0 || true
+        text_run || true
         ;;
     menu|hook)
         step "the medium's menu (UEFI)" menu_run uefi || true

@@ -617,11 +617,16 @@ PY2
         exit "$rc"
         ;;
     menu)
-        # the medium's boot menu, then one channel booted (docs/boot.md): the same six first
-        # entries on UEFI's GRUB and BIOS's vesamenu
+        # the medium's boot menu, then one channel booted (docs/boot.md): the same entries on UEFI's
+        # GRUB and BIOS's vesamenu. Start, Install, Install bromigOS Server, Field Kit and basic
+        # graphics are on the first screen; the text installer, the memory test, the disk and
+        # speech are behind its sixth line, "More options" (n: lines down there; more: then in it)
         entry=${1:-live}
-        case $entry in live) n=0 ;; install) n=1 ;; text) n=2 ;; safe) n=3 ;; memtest) n=4 ;; disk) n=5 ;; speech) n=6 ;;
+        more=''
+        case $entry in live) n=0 ;; install) n=1 ;; safe) n=4 ;;
+            text) more=0 ;; memtest) more=1 ;; disk) more=2 ;; speech) more=3 ;;
             *) echo "iso/test.sh menu: live, install, text, safe, memtest, disk or speech" >&2; exit 2 ;; esac
+        [[ -z $more ]] || n=5
         [[ -n $iso ]] || iso=$(cat "$dir/iso.path" 2>/dev/null || true)
         [[ -f $iso ]] || { echo "iso/test.sh menu: --iso FILE (once)" >&2; exit 2; }
         iso=$(realpath "$iso"); printf '%s\n' "$iso" > "$dir/iso.path"
@@ -633,6 +638,7 @@ PY2
         start_vm medium
         result "the medium's boot menu ($firmware)" menu_wait "menu-$firmware"
         keys=$(for _ in $(seq 1 "$n"); do printf 'down,'; done)
+        [[ -z $more ]] || keys+=ret,$(for _ in $(seq 1 "$more"); do printf 'down,'; done)
         menu_wait "menu-$firmware-$entry" "$keys" >/dev/null || true
         press ret
         case $entry in
@@ -648,7 +654,17 @@ PY2
                     text) result "text: bromigos.install=text on the kernel line" on_line bromigos.install=text
                           result "text: no desktop (no login screen)" bash -c "! ssh ${sshopts[*]} live@127.0.0.1 pgrep -x sddm >/dev/null"
                           result "text: the text installer on tty1" running 'bromigos_installer.tui'
-                          shot "text-$firmware-tty1" >/dev/null ;;
+                          # and on its screen: the installer's frame and words, in the console's green.
+                          # Running isn't showing: 0.1.4's ran with its screen in the journal, tty1 black
+                          result "text: the installer is on the console's screen, not a black one" \
+                              python3 "$here/test/screen-wait.py" --qmp "$dir/qmp.sock" --out "$dir/shots/text-$firmware-tty1.png" --timeout 45 --green 10000
+                          # and it takes the keyboard there: Ctrl+N is its Continue, and the top
+                          # line (BROMIGOS // INSTALL  STEP 1 OF 11) says the step
+                          press ctrl-n; sleep 3; shot "text-$firmware-tty1-next" >/dev/null
+                          result "text: Ctrl+N on the console goes on a step (the top line changes)" python3 -c 'import sys
+from PIL import Image, ImageChops
+a, b = (Image.open(p).convert("L").crop((0, 0, 1280, 28)) for p in sys.argv[1:3])
+sys.exit(0 if ImageChops.difference(a, b).getbbox() else 1)' "$dir/shots/text-$firmware-tty1.png" "$dir/shots/text-$firmware-tty1-next.png" ;;
                     safe) result "safe: nomodeset on the kernel line" on_line nomodeset ;;
                     speech) result "speech: accessibility=on on the kernel line" on_line accessibility=on ;;
                 esac
