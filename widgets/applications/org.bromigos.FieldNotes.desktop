@@ -9,5 +9,5 @@ TryExec=bromigos-widgets
 Exec=bromigos-widgets notes
 Terminal=false
 Categories=Utility;TextEditor;
-Keywords=notes;field notes;notepad;journal;write;jot;memo;
+Keywords=notepad;journal;write;jot;memo;
 StartupNotify=false

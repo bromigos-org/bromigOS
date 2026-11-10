@@ -9,6 +9,6 @@ TryExec=bromigos-live
 Exec=bromigos-live open mind
 Terminal=false
 Categories=Utility;
-Keywords=mind;memory;vector;knowledge;graph;gnosis;notes;hologram;deck;
+Keywords=memory;vector;knowledge;graph;gnosis;notes;hologram;deck;
 StartupNotify=false
 X-Bromigos-Menu=holo/mind

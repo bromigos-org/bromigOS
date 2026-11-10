@@ -9,6 +9,6 @@ TryExec=bromigos-live
 Exec=bromigos-live open timeline
 Terminal=false
 Categories=System;Monitor;
-Keywords=timeline;history;graph;load;72h;past;hologram;deck;
+Keywords=history;graph;load;72h;past;hologram;deck;
 StartupNotify=false
 X-Bromigos-Menu=holo/timeline

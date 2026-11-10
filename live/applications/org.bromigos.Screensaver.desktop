@@ -9,6 +9,6 @@ TryExec=bromigos-live
 Exec=bromigos-live open screensaver
 Terminal=false
 Categories=System;
-Keywords=screensaver;screen saver;idle;blank;away;
+Keywords=screen saver;idle;blank;away;
 StartupNotify=false
 X-Bromigos-Menu=toggle/screensaver

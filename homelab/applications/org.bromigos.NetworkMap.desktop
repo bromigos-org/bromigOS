@@ -9,6 +9,6 @@ TryExec=bromigos-live
 Exec=bromigos-live open netmap
 Terminal=false
 Categories=Network;
-Keywords=network;network map;netmap;lan;hosts;topology;hologram;deck;
+Keywords=network;netmap;lan;hosts;topology;hologram;deck;
 StartupNotify=false
 X-Bromigos-Menu=holo/netmap

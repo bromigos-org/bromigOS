@@ -9,6 +9,6 @@ TryExec=bromigos-setup-keybindings
 Exec=bromigos-setup-keybindings
 Terminal=false
 Categories=Settings;DesktopSettings;
-Keywords=keys;key list;keybindings;keybinds;shortcuts;hotkeys;cheat sheet;cheatsheet;help;
+Keywords=keys;keybindings;keybinds;shortcuts;hotkeys;cheat sheet;cheatsheet;help;
 StartupNotify=false
 X-Bromigos-Menu=setup/keybindings
