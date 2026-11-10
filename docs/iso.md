@@ -881,7 +881,9 @@ the desktop medium, and the Field Kit once it's there), side by side:
 2. **Check what's on it** with `iso/check-medium.sh` (below).
 3. **Test it** with `iso/ci-test.sh`, in an archlinux container with KVM. The desktop
    medium: UEFI with the network, an encrypted install, the installed system, its first
-   update and rollback; then BIOS with no network and a plain install. Then the medium
+   update and rollback (to the other channel, with one package made a version behind first,
+   so the update changes something even on a release's day, when edge is the release);
+   then BIOS with no network and a plain install. Then the medium
    once more with Secure Boot on, an install from it that starts with Secure Boot on (its
    key enrolled in MokManager, a kernel update, a Unified Kernel Image), and one beside a
    stand-in Windows ([secureboot.md](secureboot.md#testing-it)). A profile with no installer boots to its menu on UEFI and

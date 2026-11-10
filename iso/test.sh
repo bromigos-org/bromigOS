@@ -603,7 +603,26 @@ PY2
             echo "SKIP the first update to $update_channel and its rollback: $update_channel doesn't have $missing yet (its next release)" | tee -a "$dir/updated-$firmware.out"
             exit "$rc"
         fi
-        before=$("${SSH[@]}" "pacman -Q bromigos-core")
+        # the update must change something: an update that changes nothing keeps no snapshot
+        # pair (bromigos update discards a pair around nothing), so nothing is recorded for
+        # --rollback. The other channel and Arch may have nothing newer than the medium: on a
+        # release's day edge is the release (v0.1.5's ISO failed so). So one small package
+        # (psmisc, in base) is made one version behind in pacman's local database, which the
+        # update then puts back: a transaction whatever the channels hold. The rollback must
+        # bring the stale version back too
+        "${SSH[@]}" "sudo python3 - psmisc" <<'PY3' || rc=$?
+import os, re, sys
+local, name = "/var/lib/pacman/local", sys.argv[1]
+dirs = [d for d in os.listdir(local) if re.fullmatch(re.escape(name) + r"-[^-/]+-[^-/]+", d)]
+if len(dirs) != 1:
+    sys.exit(f"{name} isn't installed: nothing to make one version behind")
+old = os.path.join(local, dirs[0])
+desc = open(os.path.join(old, "desc")).read()
+open(os.path.join(old, "desc"), "w").write(re.sub(r"(?m)^(%VERSION%\n).*$", r"\g<1>0-1", desc, count=1))
+os.rename(old, os.path.join(local, f"{name}-0-1"))
+print(f"one version behind for the update: {dirs[0]} -> {name} 0-1")
+PY3
+        before=$("${SSH[@]}" "pacman -Q bromigos-core psmisc | paste -sd ' '")
         "${SSH[@]}" "yes '' | bromigos update --channel $update_channel" > "$dir/update-$firmware.out" 2>&1 || rc=$?
         tail -15 "$dir/update-$firmware.out"
         if grep -q 'signature is invalid' "$dir/update-$firmware.out"; then echo "FAIL the update: signature is invalid"; rc=1; fi
@@ -611,7 +630,7 @@ PY2
         # and undone: `bromigos update --rollback` puts / back as it was before (snapper's
         # undochange over the pair), pacman's database and all
         "${SSH[@]}" "bromigos update --rollback --yes < /dev/null" > "$dir/rollback-$firmware.out" 2>&1 || rc=$?
-        after=$("${SSH[@]}" "pacman -Q bromigos-core")
+        after=$("${SSH[@]}" "pacman -Q bromigos-core psmisc | paste -sd ' '")
         if [[ $after == "$before" ]]; then echo "PASS rolled back: $after again"; else echo "FAIL rolled back: $after, not $before"; rc=1; fi | tee -a "$dir/updated-$firmware.out"
         [[ $after == "$before" ]] || rc=1
         exit "$rc"
