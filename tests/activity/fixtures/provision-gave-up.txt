@@ -1,0 +1,6 @@
+::item uptime waiting
+::stage 0 Checking what's here
+::item uptime skipped-offline
+::stage 0 Waiting for the internet
+::stage 0 Waiting for the internet
+::error network 1 item wait for the internet (uptime). They install when you run this again with a network.

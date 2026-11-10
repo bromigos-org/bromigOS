@@ -138,7 +138,10 @@ def server_facts(c):
 
 # ── what it runs: the lab provisioning engine's plan for what was chosen at install
 # (`bromigos lab provision --local --from-answers … --plan`, then `--apply`; its stand-in in tests,
-# BROMIGOS_PROVISION_CMD) ─────────────────────────────────────────────────────────────────────
+# BROMIGOS_PROVISION_CMD). Applying is a job (`bromigos activity run`, docs/activity.md): it
+# gets its own unit, so it finishes with this terminal closed, and `bromigos activity` shows
+# its items as steps afterwards ──────────────────────────────────────────────────────────────
+ACTIVITY = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bromigos-activity")
 ANSWERS = "/var/log/bromigos/install-answers.toml"
 SAMPLE_PLAN = {"items": [
     {"id": "kubernetes", "name": "Kubernetes (k3s)", "ports": [6443, 10250], "size_text": "about 300 MB", "internet": True},
@@ -167,10 +170,24 @@ def provision_plan(sample=False):
                       + "). It's made after the next update: bromigos lab provision --local --plan.")
 
 
+def apply_needs_password():
+    """Applying runs as root, as a job of the system's. On a real server someone who isn't root
+    gives their password first (sudo)."""
+    import bromigos_activity
+    return bromigos_activity.Env().needs_root()
+
+
+def apply_cmd():
+    """The plan's apply, as a job: what was run before, wrapped in `bromigos activity run`."""
+    return ((["sudo", "-n"] if apply_needs_password() else [])
+            + [ACTIVITY, "run", "--kind", "app.install", "--title", "Setting up this server",
+               "--subject", "server:this:This server", "--"] + provision_cmd() + ["--apply", "--json"])
+
+
 def provision_apply(on_line):
     """Run the plan: on_line(kind, pct or id, words) for each ::stage / ::item / ::error line; returns the exit code."""
     try:
-        p = subprocess.Popen(provision_cmd() + ["--apply", "--json"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        p = subprocess.Popen(apply_cmd(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     except OSError as e:
         on_line("error", None, str(e))
         return 127
@@ -265,6 +282,8 @@ def main(argv):
         if what == "plan" or plan is None:
             print(json.dumps(plan, indent=1) if plan else words)
             return 0 if plan else 1
+        if apply_needs_password() and subprocess.run(["sudo", "-v"]).returncode != 0:
+            return 1
         return provision_apply(lambda kind, a, w: print(f"{kind} {a if a is not None else ''} {w}".strip(), flush=True))
     if any(a in ("-h", "--help") for a in argv):
         print(__doc__.strip())
@@ -1073,6 +1092,12 @@ def main(argv):
             elif b == "labplan":
                 self.lab_action("plan")
             elif b == "prov-apply":
+                if apply_needs_password():
+                    with self.suspend():          # sudo asks here, then the plan's steps come as lines
+                        ok = subprocess.run(["sudo", "-v"]).returncode == 0
+                    if not ok:
+                        self.prov_line.set("Setting this up needs your password. Choose Apply the plan to try again.", "fail")
+                        return
                 self.provision_go()
             elif b == "machine-install":
                 with self.suspend():          # pacman asks for the password here (a server has no password window)

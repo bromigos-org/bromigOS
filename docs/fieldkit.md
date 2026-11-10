@@ -660,8 +660,13 @@ Its VMs and screenshots go in `~/.cache/bromigos-fieldkit-test/` (`BROMIGOS_FIEL
   installed Server boots to its console and passes its checks: firewall, update timer,
   snapshots, the boot menu's "More ways to start", a clean `pacman -Qk`, the LTS kernel,
   and nothing of the stick's own left (its live hooks, its autologin, the installer, the
-  store, archinstall). Then the same install on a machine with two data disks, as two
-  copies (RAID1). That server starts with a network, the lab's engine installs the start
+  store, archinstall). On that Server it then runs `iso/fieldkit/activity-checks.sh`:
+  `bromigos activity` under real systemd ([activity.md](activity.md)). A job in a transient
+  unit ends done. A job that fails names its step. A detached job outlives the session that
+  started it. The Server tour's apply runs through `sudo` as the signed-in user. A restart
+  closes a running job as interrupted. Then the same install on a machine with two data
+  disks, as two copies (RAID1). That server starts with a network, the lab's engine installs
+  the start
   page from the catalogue, and `iso/test/server-data-checks.sh` checks where its data is:
   on the data disks' filesystem, by the filesystems' IDs, not the system disk's. It then
   puts the server back as an older installer left one and checks that

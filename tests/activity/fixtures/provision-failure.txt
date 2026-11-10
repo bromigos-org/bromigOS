@@ -1,0 +1,17 @@
+::item media-library waiting
+::item prowlarr waiting
+::item sonarr waiting
+::stage 0 Checking what's here
+::stage 0 Installing Media library
+::item media-library installing
+::note media-library For media you own or have rights to. No sources are set up: add your own in Prowlarr.
+::item media-library done
+::stage 33 Installing Prowlarr (sources)
+::item prowlarr downloading
+::item prowlarr installing
+::item prowlarr failed
+::error prowlarr Prowlarr (sources): couldn't download ghcr.io/linuxserver/prowlarr:2.5.2.5491-ls156 (podman stopped with code 1)
+::item sonarr failed
+::error sonarr Sonarr (shows) wasn't installed: it needs Prowlarr (sources), which didn't install.
+::stage 100 Done, but 2 didn't install
+::note secrets 1 key stored on this server, encrypted with its TPM chip and host key
