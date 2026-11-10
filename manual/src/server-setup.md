@@ -548,6 +548,9 @@ At the first sign-in the welcome tour runs `bromigos lab provision --local --fro
 `--apply --json`, following its `::stage`, `::item` and `::error` lines. Without the
 screen, `bromigos welcome-console --provision plan` and `--provision apply` do the same.
 
+The apply is a job ([Activity](activity.md)). It asks for your password, then carries on
+even if you close the tour. `bromigos activity` shows how far it got.
+
 ### The update modes
 
 The installer writes the choice to `/etc/bromigos/server.toml`:

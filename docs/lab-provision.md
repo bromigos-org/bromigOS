@@ -408,6 +408,9 @@ model whose server isn't chosen). `--apply` installs in dependency order and pri
 ::error ID words
 ```
 
+Run through `bromigos activity run`, these lines become a job's record, with each item a
+step ([activity.md](activity.md#make-a-script-a-job)).
+
 Items that need a download are `skipped-offline` while there's no network and installed when
 it comes (NetworkManager's connectivity check, else a connection to pkgs.bromigos.org). Items
 that don't need one go ahead. `--no-wait` exits 75 instead of waiting. A failed item is

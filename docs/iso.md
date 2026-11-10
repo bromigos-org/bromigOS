@@ -562,8 +562,11 @@ reference, `{secret = "local:gluetun/password"}` (or `vault:`, `sops:`), under
 At the first sign-in the Server tour's **Run** step shows the engine's plan
 (`bromigos lab provision --local --from-answers /var/log/bromigos/install-answers.toml --plan
 --json`) and applies it on **Apply** (`--apply --json`, following `::stage`, `::item`,
-`::note` and `::error`). Done and the tour's last page say where the keys live and how to
-recover them.
+`::note` and `::error`). The apply runs as a job (`bromigos activity run`,
+[activity.md](activity.md)): it has a unit of its own, so it finishes even when the tour is
+closed, and `bromigos activity` shows its items as steps. Someone who isn't root types their
+password first. Done and the tour's last page say where the keys live and how to recover
+them.
 
 **Ready to install** shows the server's rows (Roles, Server name, Network, Admin, Sign-in,
 Remote access, Data disks, Disk encryption, Updates, Services, Lab, Runs, Keys and

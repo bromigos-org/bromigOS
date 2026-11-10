@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""A stand-in for the lab provisioning engine (`bromigos lab provision --local`) in the
+activity tests: the plan for the answer file's [server] provision list, and an apply that
+prints the engine's own progress lines (homelab/lib/bromigos_homelab/localprovision.py) and
+records what it "installed" in $BROMIGOS_ROOT/var/lib/bromigos/provision/applied.json. It
+installs nothing.
+
+  provision-engine lab provision --local --from-answers FILE --plan|--apply --json
+
+ENGINE_FAIL=ID fails that item; ENGINE_GATE=FILE waits for FILE before the first item.
+"""
+import json
+import os
+import sys
+import time
+import tomllib
+
+
+def main(argv):
+    with open(argv[argv.index("--from-answers") + 1], "rb") as f:
+        ids = (tomllib.load(f).get("server") or {}).get("provision", [])
+    items = [{"id": i, "name": i.replace("-", " ").title(), "ports": [], "size_text": "about 1 MB", "internet": False} for i in ids]
+    if "--plan" in argv:
+        print(json.dumps({"items": items, "download_text": "nothing (the stand-in)", "store": "local"}))
+        return 0
+
+    def say(line):
+        print(line, flush=True)
+
+    out = os.path.join(os.environ["BROMIGOS_ROOT"], "var/lib/bromigos/provision")
+    os.makedirs(out, exist_ok=True)
+    fail, done = os.environ.get("ENGINE_FAIL"), []
+    for it in items:
+        say(f"::item {it['id']} waiting")
+    say("::stage 0 Checking what's here")
+    gate = os.environ.get("ENGINE_GATE")
+    while gate and not os.path.exists(gate):
+        time.sleep(0.02)
+    for k, it in enumerate(items):
+        say(f"::stage {int(100 * k / max(1, len(items)))} Installing {it['name']}")
+        say(f"::item {it['id']} downloading")
+        say(f"podman pull example.org/{it['id']}:1 (a line of detail, not progress)")
+        say(f"::item {it['id']} installing")
+        if it["id"] == fail:
+            say(f"::item {it['id']} failed")
+            say(f"::error {it['id']} {it['name']}: couldn't download example.org/{it['id']}:1 (podman stopped with code 1)")
+            done.append({"id": it["id"], "state": "failed"})
+            continue
+        if k == 0:
+            say(f"::note {it['id']} {it['name']} is ready: sign in to finish its setup.")
+        say(f"::item {it['id']} done")
+        done.append({"id": it["id"], "state": "done"})
+    with open(os.path.join(out, "applied.json"), "w") as f:
+        json.dump(done, f)
+    say("::stage 100 " + ("Done" if not fail else "Done, but 1 didn't install"))
+    say("::note secrets 2 keys stored on this server, encrypted with its TPM chip and host key")
+    code = 1 if fail else 0
+    print(json.dumps({"result": code, "keys": {"summary": "On this server, encrypted."}}))
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
