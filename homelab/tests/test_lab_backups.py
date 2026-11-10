@@ -33,6 +33,8 @@ HOUR, DAY = 3600, 86400
 S3 = "s3:https://s3.example/backups/box"
 
 STUBS = {
+    # sudo: never run from a stand-in root. It says so in the log, where every test looks
+    "sudo": "#!/bin/sh\necho \"sudo $*\" >> \"$FAKE/log\"\nexit 1\n",
     "systemctl": "#!/bin/sh\ncase \"$1\" in is-active) if [ -f \"$FAKE/timers-off\" ]; then echo inactive; else echo active; fi ;; esac\nexit 0\n",
     # snapper: only run when BROMIGOS_BACKUPS_SNAPPER names it (a stand-in root never runs the real one)
     "snapper": r'''#!/bin/sh
@@ -282,6 +284,10 @@ class Rig(unittest.TestCase):
         except (OSError, ValueError):
             pass
         self.tmp.cleanup()
+        # nothing reached for this machine: no sudo, and snapper only where a test named its stand-in
+        self.assertNotIn("sudo ", self.log())
+        if not self.snapper:
+            self.assertNotIn("snapper ", self.log())
 
     @classmethod
     def environment(cls, snapper=False, **more):
@@ -291,6 +297,10 @@ class Rig(unittest.TestCase):
                    XDG_CONFIG_HOME=str(cls.home / ".config"), XDG_STATE_HOME=str(cls.home / ".local/state"),
                    XDG_CACHE_HOME=str(cls.home / ".cache"), BROMIGOS_SERVER_ROOT=str(cls.root),
                    BROMIGOS_SERVER_SHARE=str(REPO / "server"), TZ="UTC")
+        # the commands of the machine these tests run on are never the server's: snapper and systemctl
+        # are run only as the stand-ins named here (a plain `snapper` on PATH is a stand-in too, and
+        # every test checks it was never run)
+        env["BROMIGOS_BACKUPS_SYSTEMCTL"] = str(cls.bin / "systemctl")
         if snapper:
             env["BROMIGOS_BACKUPS_SNAPPER"] = str(cls.bin / "snapper")
         env.update(more)
@@ -396,7 +406,7 @@ class Status(Rig):
         self.assertEqual(out.splitlines()[0], d["health"]["verdict"])
         for line in ("Destination   /mnt/backup", f"Last backup   worked, just now (", f"snapshot {snap}, 10 files",
                      "Last check    passed, just now", "Read-back     5 % of the data read back just now, passed",
-                     "Test restore  passed just now: 10 files restored and read back (a sample)", "Backups kept  1 backup, from ",
+                     "Test restore  passed just now (", "): 10 files restored and read back, a sample", "Backups kept  1 backup, from ",
                      "Schedule      backup nightly (active), check weekly (active), test restore monthly (active)"):
             self.assertIn(line, out)
         # `bromigos server` says the same verdict
@@ -741,6 +751,11 @@ class RestoreInPlace(Rig):
         self.assertIn("No snapshot was taken first: the files that were replaced can't be brought back.", r.stdout)
         self.assertEqual((self.root / "etc/fstab").read_text(), "/dev/sda1 / btrfs\n")
         self.assertNotIn("snapper", self.log(), "the machine's own snapper is never run from a stand-in root")
+        # nor its systemctl, nor a destination on a network: without stand-ins named, the timers are unknown
+        d = self.doc(BROMIGOS_BACKUPS_SYSTEMCTL="")
+        self.assertEqual(d["timers"], {"backup": "unknown", "check": "unknown", "test": "unknown"})
+        self.put("etc/bromigos/server.toml", '[backup]\nto = "sftp://backup@nas.example/srv"\n')
+        self.assertEqual(self.doc("list", rc=3)["error"]["code"], "stand-in")
 
     def test_a_snapshot_that_cannot_be_taken_stops_it(self):
         self.damage()
@@ -854,8 +869,8 @@ class TestRestore(Rig):
     def test_a_corrupted_backup_fails_the_test_and_the_health_line_says_so(self):
         self.assertEqual(self.lab("test").returncode, 0)
         passed = self.state()["test_ok"]
-        # bit rot at the destination: a byte flipped in every 32 of every pack, so in every file's data.
-        # (The lists of files are still read: this server's cache has them, as on a real one.)
+        # bit rot at the destination: a byte flipped in every 32 of every pack. This server's own cache
+        # still has the lists of files, so only a test that reads the destination alone sees all of it
         for pack in sorted((self.root / "mnt/backup/data").rglob("*")):
             if pack.is_file():
                 raw = bytearray(pack.read_bytes())
@@ -866,7 +881,6 @@ class TestRestore(Rig):
         r = self.lab("test", "--all")
         self.assertEqual(r.returncode, 1)
         self.assertIn("The test restore failed:", r.stderr)
-        self.assertIn("did not come back from the backup", r.stderr)
         self.assertEqual(self.scratch(), [], "cleaned up after a failure too")
         st = self.state()
         self.assertEqual((st["test"]["phase"], st["test_ok"]), ("failed", passed))
@@ -877,7 +891,7 @@ class TestRestore(Rig):
         self.assertEqual([(p["id"], p["subject"], p["severity"]) for p in d["health"]["problems"]], [("test-failed", "server-test", "needs_you")])
         self.assertEqual((d["last_test"]["phase"], d["last_test_passed"]["ts"]), ("failed", passed["ts"]))
         out = self.lab().stdout
-        self.assertIn("Test restore  failed just now:", out)
+        self.assertRegex(out, r"Test restore  failed just now \(\d{4}-\d\d-\d\d \d\d:\d\d\): ")
         self.assertIn("the last one that passed: just now", out)
         self.assertIn("The last test restore failed", self.server("status").stdout, "`bromigos server` says the same")
         # and a restore from it is never passed off as whole

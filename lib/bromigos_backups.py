@@ -428,9 +428,19 @@ def is_server():
     return any(os.path.exists(at(p)) for p in (CONFIG, SERVER, STATE))
 
 
+def stand_in(name):
+    """A system command this module runs: the real one on a real server. In a stand-in root
+    (the tests) only the stand-in named by BROMIGOS_BACKUPS_<NAME>, never the command of the
+    machine the tests run on: its snapper would snapshot that machine, its systemctl would
+    answer for that machine's timers. None when there is none."""
+    return name if ROOT == "/" else os.environ.get(f"BROMIGOS_BACKUPS_{name.upper()}") or None
+
+
 def unit_state(unit):
+    if not stand_in("systemctl"):
+        return "unknown"
     try:
-        r = subprocess.run(["systemctl", "is-active", unit], capture_output=True, text=True, timeout=15)
+        r = subprocess.run([stand_in("systemctl"), "is-active", unit], capture_output=True, text=True, timeout=15)
     except (OSError, subprocess.TimeoutExpired):
         return "unknown"
     return r.stdout.strip() or "inactive"
@@ -534,10 +544,10 @@ def print_status(d):
     if not lt:
         row("Test restore", "none yet (monthly; now: bromigos lab backups test)")
     elif lt["phase"] == "ok":
-        row("Test restore", f"passed {ago(lt['ts'], now)}: {count(lt.get('files') or 0, 'file')} restored and read back"
-            + (" (everything)" if lt.get("mode") == "all" else " (a sample)"))
+        row("Test restore", f"passed {ago(lt['ts'], now)} ({when(lt['ts'])}): {count(lt.get('files') or 0, 'file')} restored "
+            "and read back" + (", everything" if lt.get("mode") == "all" else ", a sample"))
     else:
-        row("Test restore", f"failed {ago(lt['ts'], now)}: {lt.get('reason') or '?'}")
+        row("Test restore", f"failed {ago(lt['ts'], now)} ({when(lt['ts'])}): {lt.get('reason') or '?'}")
         row("", f"the last one that passed: {ago(tp['ts'], now)}" if tp else "none has passed yet")
     sn = d["snapshots"]
     if sn is None:
@@ -581,6 +591,9 @@ def restic_env(b):
                       f"read. Put the key you kept back in that file, readable by root only, then try again.")
     if not os.access(at(KEY), os.R_OK):
         raise Problem("needs-root", f"The backup's key ({KEY}) can only be read by the administrator.", exit=3)
+    if ROOT != "/" and not b["to"].startswith(("/", "local:")):
+        # the tests' stand-in root holds a folder destination; anything else is a real place on a network
+        raise Problem("stand-in", f"In a stand-in root only a folder destination is read, not {where(b['to'])}.", exit=3)
     env = dict(os.environ)
     env.update(RESTIC_REPOSITORY=repository(b["to"]), RESTIC_PASSWORD_FILE=at(KEY), RESTIC_CACHE_DIR=at("/var/cache/restic"),
                RESTIC_PROGRESS_FPS="1")
@@ -1210,9 +1223,8 @@ def stopped(job, a, e, words, state="interrupted"):
 # ---- in place
 
 def snapper():
-    """The snapper command. In a stand-in root the real one is never run (its snapshots would
-    be of the machine the tests run on): only BROMIGOS_BACKUPS_SNAPPER's stand-in, if any."""
-    return "snapper" if ROOT == "/" else os.environ.get("BROMIGOS_BACKUPS_SNAPPER") or None
+    """The snapper command: the real one only on a real server (stand_in())."""
+    return stand_in("snapper")
 
 
 def snapper_configs():
@@ -1540,13 +1552,15 @@ def run_test(a, b, job, home):
     it failed. Its scratch folder, job.record["work"], holds the restored tree and the list
     of what to restore; home is a folder of this command's own."""
     job.step("find")
-    env = restic_env(b)
-    snap = pick(snapshots(b, env), None)
-    job.record.update(snapshot=snap["short_id"], snapshot_at=snap["at"])
-    job.note(f"the backup of {when(snap['ts'])} ({snap['short_id']})")
     clear_scratch(own_folder(home))
     scratch = job.record["work"] = tempfile.mkdtemp(prefix="test-", dir=home)
     tree = os.path.join(scratch, "tree")
+    # an empty cache of its own: on the day the server is gone there is no cache, so the test
+    # must get everything, the lists of files too, from the destination alone
+    env = dict(restic_env(b), RESTIC_CACHE_DIR=os.path.join(scratch, "cache"))
+    snap = pick(snapshots(b, env), None)
+    job.record.update(snapshot=snap["short_id"], snapshot_at=snap["at"])
+    job.note(f"the backup of {when(snap['ts'])} ({snap['short_id']})")
     job.step("pick")
     if a.all:
         rows, includes = None, []

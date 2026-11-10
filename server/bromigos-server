@@ -152,7 +152,8 @@ BACKUP_STATE = "/var/lib/bromigos/server/backup.json"
 BACKUP_KEY = "/etc/bromigos/server/backup.key"
 BACKUP_PATHS = ["/etc", "/var/lib/bromigos", "/etc/containers/systemd", "/var/lib/containers/storage/volumes",
                 "/srv", "/home", "/root"]
-BACKUP_EXCLUDE = ["/home/*/.cache", "/root/.cache", "/var/lib/bromigos/repo", "**/node_modules"]
+# (/srv/restore: where `bromigos lab backups restore` puts files back; a copy of the backup isn't backed up again)
+BACKUP_EXCLUDE = ["/home/*/.cache", "/root/.cache", "/var/lib/bromigos/repo", "/srv/restore", "**/node_modules"]
 UPS_STATE = "/var/lib/bromigos/server/ups.json"
 DISK_ALERTS = "/var/lib/bromigos/server/disk-alerts.jsonl"
 WOL_RECORD = "/run/bromigos/wake-on-lan.json"
