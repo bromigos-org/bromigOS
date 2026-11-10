@@ -91,6 +91,17 @@ class Files(unittest.TestCase):
         self.assertIn("bromigos-server backup run", (HERE / "systemd/bromigos-server-backup.service").read_text())
         self.assertIn("Sun", (HERE / "systemd/bromigos-server-backup-check.timer").read_text())
 
+    def test_the_test_restore_runs_monthly_after_the_check(self):
+        timer = (HERE / "systemd/bromigos-server-backup-test.timer").read_text()
+        self.assertIn("OnCalendar=Sun *-*-08..14 10:00:00", timer)          # the second Sunday, after 08:00's check
+        self.assertIn("Persistent=true", timer)
+        unit = (HERE / "systemd/bromigos-server-backup-test.service").read_text()
+        self.assertIn("ExecStart=/usr/lib/bromigos/server/bromigos-server backup test", unit)
+        self.assertIn("bromigos-server-backup-check.service", unit)
+        s = module()
+        self.assertIn("bromigos-server-backup-test.timer", s.BASE_UNITS)
+        self.assertIn("bromigos-server-backup-test.service", s.NOT_THE_UPDATE)
+
     def test_mdns_announcement_matches_the_labs(self):
         root = ET.parse(HERE / "bromigos-lab.service").getroot()
         self.assertEqual(root.findtext("service/type"), "_bromigos-lab._tcp")
@@ -539,7 +550,10 @@ class Backup(Rig):
         self.assertEqual(r.returncode, 0)
         self.assertIn("no destination", r.stdout)
         self.assertNotIn("restic", self.log())
-        self.assertIn("off: no destination", self.run_server("status").stdout)
+        self.assertIn("Backups are off: nothing on this server is backed up", self.run_server("status").stdout)
+        self.assertEqual(self.run_server("backup", "test").returncode, 0, "the monthly test restore does nothing either")
+        self.assertNotIn("restic", self.log())
+        self.assertNotIn("test", self.backup_state())
 
     def test_first_backup_sets_the_destination_up(self):
         self.config('[health]\nminutes = 0\n[backup]\nto = "s3:https://user:pw@s3.example/bucket/srv"\n'
@@ -552,7 +566,7 @@ class Backup(Rig):
         self.assertEqual(r.returncode, 0, r.stderr)
         log = self.log()
         self.assertIn("restic init", log)
-        self.assertRegex(log, r"restic backup --json --tag bromigos-server --exclude-caches .* /etc repo=s3:https://user:pw@s3.example/bucket/srv")
+        self.assertRegex(log, rf"restic backup --json --tag bromigos-server --exclude-caches .* {self.root}/etc repo=s3:https://user:pw@s3.example/bucket/srv")
         self.assertNotIn("/nope", log)
         self.assertIn("id=abc", log)
         self.assertIn("restic forget --tag bromigos-server --prune --keep-daily 7 --keep-weekly 4 --keep-monthly 6", log)
@@ -562,6 +576,59 @@ class Backup(Rig):
         d = json.loads(self.run_server("status", "--json").stdout)["backup"]
         self.assertEqual(d["to"], "s3:https://s3.example/bucket/srv", "no password in the status")
         self.assertEqual(d["last"]["phase"], "ok")
+        self.assertEqual((d["health"]["state"], d["health"]["verdict"]),
+                         ("ok", "Backed up just now. Last test restore: none yet."))
+        self.assertIn("Backups      Backed up just now. Last test restore: none yet. To s3:https://s3.example/bucket/srv.",
+                      self.run_server("status").stdout)
+
+    def test_what_the_health_line_needs_is_kept(self):
+        """The last backup that worked, when the first one did, and how many are kept: read
+        without the key by `bromigos lab backups`. A failure doesn't forget the last good one."""
+        self.config('[health]\nminutes = 0\n[backup]\nto = "s3:https://s3.example/bucket/srv"\n')
+        self.summary()
+        (self.fake / "restic-snapshots.out").write_text(json.dumps(
+            [{"id": "aa" * 32, "short_id": "aaaaaaaa", "time": "2026-10-01T06:10:00.123456789-07:00", "tags": ["bromigos-server"]},
+             {"id": "bb" * 32, "short_id": "bbbbbbbb", "time": "2026-10-30T06:10:00.5-07:00", "tags": ["bromigos-server"]}]))
+        self.assertEqual(self.run_server("backup", "run").returncode, 0)
+        st = self.backup_state()
+        self.assertEqual(st["run_ok"], st["run"])
+        self.assertEqual(st["first_ok_ts"], st["run"]["ts"])
+        self.assertEqual((st["snapshots"]["count"], st["snapshots"]["oldest_ts"], st["snapshots"]["newest_ts"]),
+                         (2, 1790860200.123456, 1793365800.5))
+        first = st["first_ok_ts"]
+        (self.fake / "restic-backup.rc").write_text("1")
+        (self.fake / "restic-backup.err").write_text('{"message_type":"exit_error","code":1,"message":"Fatal: unable to save '
+                                                     'snapshot: no space left\\nat the destination"}\n')
+        self.assertEqual(self.run_server("backup", "run").returncode, 1)
+        st = self.backup_state()
+        self.assertEqual((st["run"]["phase"], st["run"]["reason"]), ("failed", "Fatal: unable to save snapshot: no space left"),
+                         "restic's reason, not its JSON")
+        self.assertEqual((st["run_ok"]["phase"], st["first_ok_ts"], st["snapshots"]["count"]), ("ok", first, 2))
+        self.assertEqual(st["run_ok"]["to"], "s3:https://s3.example/bucket/srv")
+        self.assertIn("The last backup failed: unable to save snapshot: no space left. The one before it worked, just now.",
+                      self.run_server("status").stdout)
+
+    def test_a_backup_that_vanished_is_not_started_again_somewhere_else(self):
+        """An unplugged drive leaves an empty folder on the system disk: restic finds no backup
+        there. That fails; it never starts a new backup in the drive's place."""
+        self.config('[health]\nminutes = 0\n[backup]\nto = "/mnt/backup"\n')
+        self.summary()
+        (self.fake / "restic-cat-config.rc").write_text("10")
+        self.assertEqual(self.run_server("backup", "run").returncode, 0)        # the first: set up
+        self.assertEqual(self.log().count("restic init"), 1)
+        r = self.run_server("backup", "run")                                    # gone the next night
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(self.log().count("restic init"), 1)
+        st = self.backup_state()
+        self.assertIn("the backup that was at /mnt/backup isn't there now", st["run"]["reason"])
+        self.assertEqual(st["run_ok"]["phase"], "ok")
+        self.assertIn("The last backup failed: the drive at /mnt/backup is not connected.", self.run_server("status").stdout)
+        self.assertEqual(self.run_server("backup", "run", "--new").returncode, 0)   # a person saying: start over
+        self.assertEqual(self.log().count("restic init"), 2)
+        # somewhere new: set up as before
+        self.config('[health]\nminutes = 0\n[backup]\nto = "/mnt/other"\n')
+        self.assertEqual(self.run_server("backup", "run").returncode, 0)
+        self.assertEqual(self.log().count("restic init"), 3)
 
     def test_a_failed_backup_says_why(self):
         self.config('[health]\nminutes = 0\n[backup]\nto = "/mnt/backup"\n')
@@ -571,13 +638,23 @@ class Backup(Rig):
         self.assertEqual(r.returncode, 1)
         self.assertEqual(self.backup_state()["run"]["phase"], "failed")
         self.assertIn("can't be reached", self.backup_state()["run"]["reason"])
-        self.assertIn("the last backup failed", self.run_server("status").stdout)
+        self.assertIn("No backup yet: the first one failed just now: the destination can't be reached: unable to open "
+                      "repository: permission denied.", self.run_server("status").stdout)
+        self.assertEqual(json.loads(self.run_server("backup", "status", "--json").stdout)["health"]["problems"][0]["title"],
+                         "The last backup failed")
 
     def test_check_reads_some_data_back_when_asked(self):
         self.config('[health]\nminutes = 0\n[backup]\nto = "/mnt/backup"\n')
         self.run_server("backup", "check", "--data")
         self.assertIn("restic check --read-data-subset=5%", self.log())
-        self.assertEqual(self.backup_state()["check"]["phase"], "ok")
+        st = self.backup_state()
+        self.assertEqual(st["check"]["phase"], "ok")
+        self.assertEqual((st["check_ok"], st["read_back_ok"]), (st["check"], st["check"]))
+        (self.fake / "restic-check.rc").write_text("1")
+        (self.fake / "restic-check.err").write_text("Fatal: repository contains errors\n")
+        self.assertEqual(self.run_server("backup", "check").returncode, 1)
+        after = self.backup_state()
+        self.assertEqual((after["check"]["phase"], after["check_ok"]), ("failed", st["check"]), "the last good check stays")
 
 
 class Ups(Rig):

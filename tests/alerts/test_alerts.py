@@ -247,20 +247,82 @@ class Checks(Machine):
         self.m.write("backup-units", "")
         self.assertEqual(states(self.m.run())["backup.restic"], "skipped")
 
+    def server_backup(self, state, to="s3:https://s3.example/backups/box"):
+        self.m.rootfile("/etc/bromigos/server.toml", f'[backup]\nto = "{to}"\n')
+        self.m.rootfile("/var/lib/bromigos/server/backup.json", json.dumps(state))
+        return {a["id"]: a for a in self.m.run()["alerts"] if a["check"] == "backup.restic"}
+
     def test_bromigos_servers_own_backup(self):
-        state = self.m.root / "var/lib/bromigos/server/backup.json"
-        state.parent.mkdir(parents=True, exist_ok=True)
-        state.write_text(json.dumps({"run": {"phase": "failed", "at": "2026-10-30T03:10:00-07:00",
-                                             "ts": NOW / 1000 - 3600, "reason": "the destination can't be reached"},
-                                     "check": {"phase": "failed", "at": "x", "reason": "pack 3f2a is damaged"}}))
-        got = {a["id"]: a for a in self.m.run()["alerts"]}
+        self.m.write("backup-units", "")
+        got = self.server_backup({"run": {"phase": "failed", "at": "2026-10-30T03:10:00-07:00",
+                                          "ts": NOW / 1000 - 3600, "reason": "the destination can't be reached"},
+                                  "check": {"phase": "failed", "at": "x", "reason": "pack 3f2a is damaged"}})
         self.assertEqual(got["backup.restic:server"]["title"], "The last backup failed")
         self.assertIn("can't be reached", got["backup.restic:server"]["detail"])
+        self.assertIn("No backup has worked yet", got["backup.restic:server"]["detail"])
         self.assertEqual(got["backup.restic:server-check"]["severity"], "needs_you")
-        state.write_text(json.dumps({"run": {"phase": "ok", "at": "2026-10-28", "ts": NOW / 1000 - 50 * 3600}}))
-        self.assertEqual(self.m.run()["alerts"][0]["title"], "No backup for 50 hours")
-        state.write_text(json.dumps({"run": {"phase": "ok", "at": "today", "ts": NOW / 1000 - 3600}}))
-        self.assertNotIn("backup.restic:server", ids(self.m.run()))
+        got = self.server_backup({"run": {"phase": "ok", "at": "2026-10-28", "ts": NOW / 1000 - 50 * 3600}})
+        self.assertEqual([a["title"] for a in got.values()], ["No backup for 50 hours"])
+        self.assertEqual(self.server_backup({"run": {"phase": "ok", "at": "today", "ts": NOW / 1000 - 3600}}), {})
+
+    def test_the_servers_backup_alert_is_the_status_verdict(self):
+        """One source of truth: every alert is a problem of bromigos_backups.health(), the verdict
+        `bromigos lab backups` prints; a healthy verdict raises nothing."""
+        import bromigos_backups as B
+        self.m.write("backup-units", "")
+        day = 86400
+        good = {"phase": "ok", "at": "2026-10-30T06:10:00-07:00", "ts": NOW / 1000 - 6 * 3600, "snapshot": "1234abcd"}
+        cases = {
+            "healthy": dict(run=good, run_ok=good, test={"phase": "ok", "at": "x", "ts": NOW / 1000 - 12 * day},
+                            first_ok_ts=NOW / 1000 - 200 * day),
+            "the last one failed, an older one is good": dict(
+                run={"phase": "failed", "at": "x", "ts": NOW / 1000 - 3600, "reason": "the bucket is full"}, run_ok=good),
+            "none for nine days": dict(run=dict(good, ts=NOW / 1000 - 9 * day)),
+            "the test restore failed": dict(run=good, test={"phase": "failed", "at": "x", "ts": NOW / 1000 - day,
+                                                         "reason": "1 file did not come back"}),
+            "no test restore has passed for too long": dict(run=good, first_ok_ts=NOW / 1000 - 50 * day),
+            "no test restore yet, but the backups are new": dict(run=good, first_ok_ts=NOW / 1000 - 20 * day),
+            "some files were left out": dict(run=dict(good, phase="partial", reason="some files couldn't be read: /srv/x")),
+        }
+        to = "s3:https://s3.example/backups/box"
+        for name, st in cases.items():
+            with self.subTest(name):
+                got = self.server_backup(st, to)
+                h = B.health(to, st, NOW / 1000, B.destination(to), None)
+                self.assertEqual({a["subject"]: (a["severity"], a["title"], a["detail"]) for a in got.values()},
+                                 {p["subject"]: (p["severity"], p["title"], p["detail"]) for p in h["problems"]})
+                self.assertEqual(not got, name in ("healthy", "no test restore yet, but the backups are new"), got)
+                self.assertEqual(h["state"] == "ok", all(a["severity"] == "info" for a in got.values()))
+                for a in got.values():
+                    self.assertEqual(a["evidence"]["lines"][0], h["verdict"])
+        self.assertEqual(self.server_backup(cases["the test restore failed"])["backup.restic:server-test"]["title"],
+                         "The last test restore failed")
+        self.assertEqual(self.server_backup(cases["no test restore has passed for too long"])["backup.restic:server-test"]["title"],
+                         "No test restore has passed for 50 days")
+        # backups turned off: what an old state file says no longer counts
+        self.assertEqual(self.server_backup(cases["none for nine days"], to=""), {})
+
+    def test_a_backup_drive_that_is_not_connected(self):
+        self.m.write("backup-units", "")
+        ok = {"phase": "ok", "at": "2026-10-21T06:10:00-07:00", "ts": NOW / 1000 - 9 * 86400}
+        st = {"run": {"phase": "failed", "at": "x", "ts": NOW / 1000 - 3600,
+                      "reason": "the destination can't be reached: Fatal: unable to open repository"}, "run_ok": ok}
+        got = self.server_backup(st, to="/mnt/backup")              # the folder isn't there
+        self.assertEqual(got["backup.restic:server"]["title"], "The last backup failed")
+        self.assertEqual(got["backup.restic:server"]["evidence"]["lines"][0],
+                         "No backup in 9 days: the drive at /mnt/backup is not connected. Last test restore: none yet.")
+        self.m.rootfile("/mnt/backup/config", "restic's")              # plugged in again
+        self.assertNotIn("not connected", self.server_backup(st, to="/mnt/backup")["backup.restic:server"]["evidence"]["lines"][0])
+
+    def test_a_restore_in_place_that_stopped_part_way(self):
+        self.m.write("backup-units", "")
+        self.m.rootfile("/var/lib/bromigos/server/restore.json", json.dumps(
+            {"kind": "restore", "mode": "in-place", "state": "interrupted", "writing": True, "snapshot": "1234abcd", "paths": ["/etc"],
+             "snapshot_at": "2026-10-29T06:10:00-07:00", "started": "2026-10-30T09:00:00-07:00"}))
+        got = self.server_backup({"run": {"phase": "ok", "at": "today", "ts": NOW / 1000 - 3600}})
+        a = got["backup.restic:server-restore"]
+        self.assertEqual((a["severity"], a["title"]), ("needs_you", "A restore stopped part-way"))
+        self.assertIn("bromigos lab backups restore 1234abcd /etc --in-place --apply", a["detail"])
 
     def test_the_ups(self):
         self.m.write("ups/rack", "battery.charge: 80\nbattery.runtime: 1500\nups.status: OB DISCHRG\n")
