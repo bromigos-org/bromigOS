@@ -658,11 +658,28 @@ class Apply(unittest.TestCase):
         self.assertIn(["snapper", "--no-dbus", "-c", "data", "create-config", "/srv/data"], ap.cmds)
         self.assertIn('accept comment "smb"', self.read(root, "/etc/nftables.conf"))
 
+    def test_the_media_library_and_the_backups_folder_are_on_the_data_disks_too(self):
+        # /srv/media (the media library) and /srv/backups (where other machines back up to) are
+        # folders the lab's engine makes. On a server with data disks each is a subvolume of
+        # theirs, mounted there like the apps': the pool's own device and options, a mount point
+        # that takes no files while the data disks are away
+        root, ap = self.apply("storage", data_disks=["/dev/sda", "/dev/sdb"], data_layout="raid1")
+        fstab = self.read(root, "/etc/fstab")
+        pool = next(line.split() for line in fstab.splitlines() if " /srv/data " in line)
+        for name in ("apps", "media", "backups"):
+            with self.subTest(folder=name):
+                (row,) = [line.split() for line in fstab.splitlines() if f" /srv/{name} " in line and not line.startswith("#")]
+                self.assertEqual((row[0], row[2], row[3]), (pool[0], "btrfs", f"subvol=/{name}," + pool[3]))
+                self.assertIn(["(live)", "btrfs", "subvolume", "create", os.path.join(root, f"srv/data/{name}")], ap.cmds)
+                self.assertLess(ap.cmds.index(["install", "-d", "-m", "0755", f"/srv/{name}"]), ap.cmds.index(["chattr", "+i", f"/srv/{name}"]))
+
     def test_without_data_disks_the_apps_keep_their_data_on_the_system_disk(self):
         root, ap = self.apply("home")
         self.assertIn(["install", "-d", "-m", "0755", "/srv/apps", "/srv/shares"], ap.cmds)
-        self.assertNotIn("/srv/apps", self.read(root, "/etc/fstab"))
-        self.assertNotIn(["chattr", "+i", "/srv/apps"], ap.cmds)
+        fstab = self.read(root, "/etc/fstab")
+        for name in ("apps", "media", "backups"):
+            self.assertNotIn(f"/srv/{name}", fstab)
+            self.assertNotIn(["chattr", "+i", f"/srv/{name}"], ap.cmds)
 
     def test_one_data_disk_holds_the_apps_too(self):
         root, ap = self.apply("home", data_disks=["/dev/sdb"])

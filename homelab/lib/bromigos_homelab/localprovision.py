@@ -370,17 +370,38 @@ class Host:
             self.must(["chown", owner, str(p)], "set the folder's owner")
         return p
 
-    def apps_folder(self):
+    def fstab_rows(self):
+        try:
+            return [l.split() for l in self.path("etc/fstab").read_text().splitlines() if l.strip() and not l.lstrip().startswith("#")]
+        except OSError:
+            return []
+
+    def apps_folder(self, rel=APPS, what="its apps' data"):
         """Refuses while this server's data disks are away. Its fstab mounts their apps
         subvolume at /srv/apps; unmounted, that's an empty folder on the system disk, and an
-        app set up there would start again from nothing, on the wrong disk."""
-        try:
-            rows = [l.split() for l in self.path("etc/fstab").read_text().splitlines() if l.strip() and not l.lstrip().startswith("#")]
-        except OSError:
-            rows = []
-        if any(len(r) > 1 and r[1] == "/" + APPS for r in rows) and not os.path.ismount(self.path(APPS)):
-            raise ProvisionError(f"this server keeps its apps' data on its data disks, and they aren't mounted (/{APPS}). "
+        app set up there would start again from nothing, on the wrong disk. The same for the
+        media library (/srv/media) and the backups other machines keep here (/srv/backups)."""
+        if any(len(r) > 1 and r[1] == "/" + rel for r in self.fstab_rows()) and not os.path.ismount(self.path(rel)):
+            raise ProvisionError(f"this server keeps {what} on its data disks, and they aren't mounted (/{rel}). "
                                  "Nothing was set up. `bromigos server` says what it knows about them")
+
+    def make_way(self, rel, why):
+        """A share from another machine is mounted at a folder the data disks' subvolume is
+        mounted at: that subvolume's fstab line becomes a comment and it is unmounted, so the
+        share is what's there, now and at every start. The subvolume stays on the data disks,
+        with whatever is in it."""
+        p = self.path("etc/fstab")
+        try:
+            lines = p.read_text().splitlines(keepends=True)
+        except OSError:
+            return
+        out = [f"# ({why}) {l}" if l.split()[1:2] == ["/" + rel] and not l.lstrip().startswith("#") else l for l in lines]
+        if out == lines:
+            return
+        self.write("etc/fstab", "".join(out))
+        if os.path.ismount(self.path(rel)):
+            self.must(["umount", "/" + rel], f"unmount the data disks' folder at /{rel} (an app may be using it: stop it first)")
+        self.run(["chattr", "-i", "/" + rel])
 
     # -- commands
     def must(self, argv, what, data=None, env=None):
@@ -827,6 +848,7 @@ def step_smb(host, it):
 
 
 def step_backup_target(host, it):
+    host.apps_folder("srv/backups", "the backups other machines keep here")
     if host.run(["id", "restic-backup"])[0] != 0:
         host.must(["useradd", "--system", "--home-dir", "/srv/backups", "--shell", "/usr/bin/nologin", "restic-backup"],
                   "make the backup account")
@@ -921,6 +943,8 @@ def step_lab_network(host, it):
 
 
 def step_media_library(host, it):
+    if host.setting("media-library", "where") not in ("nfs", "smb") and host.media_root() == "/srv/media":
+        host.apps_folder("srv/media", "its media library")
     if host.run(["id", "bromigos-media"])[0] != 0:
         host.must(["useradd", "--system", "--no-create-home", "--shell", "/usr/bin/nologin", "bromigos-media"],
                   "make the media account")
@@ -931,6 +955,7 @@ def step_media_library(host, it):
         share = host.setting("media-library", "share")
         if not share:
             raise ProvisionError("the media library's NAS share isn't set (such as 192.0.2.20:/volume1/media)")
+        host.make_way("srv/media", "the media library is on a NAS share")
         uid, gid = host.media_owner()
         if where == "nfs":
             pacman(host, ["nfs-utils"])

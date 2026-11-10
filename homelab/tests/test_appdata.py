@@ -22,6 +22,7 @@ FSTAB = (f"# /dev/vda2\nUUID={ROOT_UUID}  /  btrfs  rw,subvol=/@  0 0\n"
          "# bromigOS Server's data disks (the installer): /dev/vdb, /dev/vdc\n"
          f"UUID={POOL_UUID}  /srv/data  btrfs  compress=zstd,noatime,nofail,x-systemd.device-timeout=30s  0 0\n")
 APPS_LINE = f"UUID={POOL_UUID}  /srv/apps  btrfs  subvol=/apps,compress=zstd,noatime,nofail,x-systemd.device-timeout=30s  0 0"
+MEDIA_LINE, BACKUPS_LINE = (APPS_LINE.replace("apps", name) for name in ("media", "backups"))
 
 STUBS = {
     # what's mounted: $FAKE/mounts, lines "MOUNT-POINT UUID ROOT-IN-THE-FILESYSTEM"
@@ -93,6 +94,7 @@ exit 0
 ''',
     # the real rsync; with $FAKE/write-during-copy, a file changes on the system disk as the copy ends
     "rsync": r'''#!/bin/sh
+echo "rsync" >> "$FAKE/log"
 /usr/bin/rsync "$@"; rc=$?
 case " $* " in *" --dry-run "*) exit $rc ;; esac
 if [ -e "$FAKE/write-during-copy" ]; then
@@ -178,11 +180,27 @@ class AppData(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         return json.loads(r.stdout)
 
-    def journal(self):
-        return json.loads((self.root / "var/lib/bromigos/lab/app-data.json").read_text())
+    def journal(self, name="app-data"):
+        return json.loads((self.root / f"var/lib/bromigos/lab/{name}.json").read_text())
 
-    def leftover(self):
-        return sorted(p for p in (self.root / "srv").iterdir() if p.name.startswith("apps.on-system-disk-"))
+    def leftover(self, name="apps", under="srv"):
+        return sorted(p for p in (self.root / under).iterdir() if p.name.startswith(f"{name}.on-system-disk-"))
+
+    def media(self):
+        """A media library and a backups folder as the lab's engine made them before they went on
+        the data disks: folders on the system disk, a media app and a download app using one."""
+        (self.root / "srv/media/movies").mkdir(parents=True)
+        (self.root / "srv/media/movies/a-film.mkv").write_bytes(os.urandom(2048))
+        (self.root / "srv/media/downloads").mkdir()
+        (self.root / "srv/backups/data/laptop").mkdir(parents=True)
+        (self.root / "srv/backups/data/laptop/config").write_text("a laptop's backup\n")
+        q = self.root / "etc/containers/systemd"
+        q.mkdir(parents=True, exist_ok=True)
+        (q / "jellyfin.container").write_text("[Container]\nImage=x\nVolume=/srv/apps/jellyfin/config:/config:Z\nVolume=/srv/media:/media\n")
+        (q / "qbittorrent.container").write_text("[Container]\nImage=x\nVolume=/srv/media/downloads:/downloads\n")
+
+    def folder(self, path):
+        return next(f for f in self.app_data()["folders"] if f["path"] == path)
 
     # ---- the status
     def test_no_data_disks_the_system_disk_is_where_it_belongs(self):
@@ -315,7 +333,8 @@ class AppData(unittest.TestCase):
         # /srv/apps is the pool's apps subvolume now, at every start: the pool's own device and options
         fstab = (self.root / "etc/fstab").read_text()
         self.assertTrue(fstab.startswith(FSTAB), fstab)
-        self.assertEqual([l for l in fstab[len(FSTAB):].splitlines() if not l.startswith("#")], [APPS_LINE])
+        # (and the media library's and the backups' folders, which nothing uses yet: each its own subvolume)
+        self.assertEqual([l for l in fstab[len(FSTAB):].splitlines() if not l.startswith("#")], [APPS_LINE, MEDIA_LINE, BACKUPS_LINE])
         self.assertEqual((self.root / "etc/fstab.before-app-data-move").read_text(), FSTAB)
         self.assertIn(f"/srv/apps {POOL_UUID} /apps", (self.fake / "mounts").read_text())
         self.assertEqual(os.listdir(self.root / "srv/apps"), [])                 # the mount point: empty, and kept so
@@ -543,6 +562,135 @@ class AppData(unittest.TestCase):
                 r = self.lab(verb)
                 self.assertEqual(r.returncode, 1)
                 self.assertIn(f"needs root: sudo bromigos lab app-data {verb}", r.stderr)
+
+    # ---- the media library and the backups folder: on the data disks the same way
+    def test_a_media_library_and_backups_on_the_system_disk_are_said_plainly(self):
+        self.server()
+        d = self.app_data()
+        # nothing in them yet: nothing to say, and the folders are still known
+        self.assertEqual([(f["path"], f["state"], f["has_data"]) for f in d["folders"]],
+                         [("/srv/media", "not-on-pool", False), ("/srv/backups", "not-on-pool", False)])
+        self.assertEqual(len(d["words"]), 2)
+        self.media()
+        d = self.app_data()
+        self.assertEqual([(f["state"], f["where"], f["has_data"]) for f in d["folders"]], [("not-on-pool", "system", True)] * 2)
+        self.assertEqual(d["words"][2:], [
+            "the media library (/srv/media): on the system disk, not the data disks; sudo bromigos lab app-data move puts it on them",
+            "the backups other machines keep here (/srv/backups): on the system disk, not the data disks; "
+            "sudo bromigos lab app-data move puts it on them"])
+        # no data disks: both belong on the system disk, and there's nothing to list
+        (self.fake / "mounts").write_text(f"/ {ROOT_UUID} /@\n/srv {ROOT_UUID} /@srv\n")
+        (self.root / "etc/fstab").write_text(FSTAB.split("# bromigOS Server's data disks")[0])
+        self.config("[health]\nminutes = 0\n")
+        d = self.app_data()
+        self.assertEqual((d["folders"], len(d["words"])), ([], 1))
+
+    def test_the_move_takes_the_media_library_and_the_backups_the_same_way(self):
+        self.server()
+        self.media()
+        media, backups = self.tree(self.root / "srv/media"), self.tree(self.root / "srv/backups")
+        r = self.lab("move", "--dry-run")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for words in ("the media library (", "would move to the data disks (/srv/data/media,", "1. stop the apps: jellyfin.service, qbittorrent.service",
+                      "2. copy /srv/media to /srv/data/media", "mount the data disks' media subvolume at /srv/media:", MEDIA_LINE,
+                      "the backups other machines keep here (", "2. copy /srv/backups to /srv/data/backups", BACKUPS_LINE):
+            self.assertIn(words, r.stdout)
+        self.assertEqual((self.root / "etc/fstab").read_text(), FSTAB)
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        # every file on the data disks, each folder in a subvolume of its own; the old copies kept by name
+        self.assertEqual(self.tree(self.root / "srv/data/media"), media)
+        self.assertEqual(self.tree(self.root / "srv/data/backups"), backups)
+        (old_media,), (old_backups,) = self.leftover("media"), self.leftover("backups")
+        self.assertEqual((self.tree(old_media), self.tree(old_backups)), (media, backups))
+        self.assertIn("btrfs subvolume create /srv/data/media", self.log())
+        fstab = (self.root / "etc/fstab").read_text()
+        self.assertEqual([l for l in fstab[len(FSTAB):].splitlines() if not l.startswith("#")], [APPS_LINE, MEDIA_LINE, BACKUPS_LINE])
+        mounts = (self.fake / "mounts").read_text()
+        self.assertIn(f"/srv/media {POOL_UUID} /media", mounts)
+        self.assertIn(f"/srv/backups {POOL_UUID} /backups", mounts)
+        # each has a record of its own, and the status has nothing left to ask for
+        self.assertEqual((self.journal("app-data-media")["state"], self.journal("app-data-backups")["state"]), ("done", "done"))
+        d = self.app_data()
+        self.assertEqual([(f["state"], f["where"]) for f in d["folders"]], [("ok", "pool")] * 2)
+        self.assertEqual(d["words"][2:], [
+            f"the media library: the old copy is kept at /srv/{old_media.name}; sudo bromigos lab app-data remove-old deletes it",
+            f"the backups other machines keep here: the old copy is kept at /srv/{old_backups.name}; "
+            "sudo bromigos lab app-data remove-old deletes it"])
+        # the apps that use the library stopped before it was read, and started after its mount;
+        # jellyfin keeps its settings under /srv/apps too, so it stopped for that move as well
+        log = self.log().splitlines()
+        mount = log.index("mount /srv/media")
+        self.assertLess(max(i for i, l in enumerate(log[:mount]) if l == "systemctl stop qbittorrent.service"), mount)
+        self.assertLess(log.index("chattr +i /srv/media"), mount)
+        self.assertLess(mount, max(i for i, l in enumerate(log) if l == "systemctl start qbittorrent.service"))
+        self.assertEqual((self.fake / "down").read_text(), "")
+        # the old copies go together, when asked, and only they
+        r = self.lab("remove-old")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.leftover() + self.leftover("media") + self.leftover("backups"), [])
+        self.assertEqual(self.tree(self.root / "srv/data/media"), media)
+
+    def test_a_media_library_on_a_nas_share_is_left_where_its_owner_put_it(self):
+        self.server()
+        self.media()
+        unit = self.root / "etc/systemd/system/srv-media.mount"
+        unit.parent.mkdir(parents=True)
+        unit.write_text("[Mount]\nWhat=nas.example:/volume1/media\nWhere=/srv/media\nType=nfs\n")
+        f = self.folder("/srv/media")
+        self.assertEqual((f["state"], f["where"]), ("ok", "elsewhere"))
+        self.assertFalse([w for w in self.app_data()["words"] if "media" in w])
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("/srv/media", (self.root / "etc/fstab").read_text())
+        self.assertNotIn("mount /srv/media", self.log())
+        self.assertEqual(self.leftover("media"), [])
+
+    def test_a_media_mount_that_fails_is_put_back_and_the_apps_move_stands(self):
+        self.server()
+        self.media()
+        media = self.tree(self.root / "srv/media")
+        # the apps' data moves first and stays moved; the media library's mount fails after it
+        (self.bin / "mount").write_text(STUBS["mount"].replace(
+            'if os.path.exists(fake + "/mount-fails"):', 'if path == "/srv/media":'))
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("couldn't mount the data disks' media subvolume at /srv/media", r.stderr)
+        self.assertIn("It was put back", r.stderr)
+        self.assertEqual(self.tree(self.root / "srv/media"), media)
+        self.assertEqual(self.leftover("media"), [])
+        fstab = (self.root / "etc/fstab").read_text()
+        self.assertEqual([l for l in fstab[len(FSTAB):].splitlines() if not l.startswith("#")], [APPS_LINE])
+        self.assertIn("# the apps' data, on the data disks", fstab)           # the apps' own comment stays over its line
+        self.assertNotIn("media", fstab)
+        self.assertEqual((self.fake / "down").read_text(), "")
+        d = self.app_data()
+        self.assertEqual((d["state"], d["where"], self.folder("/srv/media")["state"], self.folder("/srv/backups")["state"]),
+                         ("ok", "pool", "not-on-pool", "not-on-pool"))          # the backups weren't reached
+
+    def test_files_already_in_the_pools_backups_folder_are_never_overwritten(self):
+        # the installer always made a backups subvolume: someone may have put their own backups in it
+        self.server(apps=False)
+        self.media()
+        (self.root / "srv/data/backups").mkdir()
+        (self.root / "srv/data/backups/theirs.restic").write_text("someone's own backup\n")
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("/srv/data/backups already has files in it (theirs.restic)", r.stderr)
+        self.assertEqual((self.root / "srv/data/backups/theirs.restic").read_text(), "someone's own backup\n")
+        self.assertNotIn("/srv/backups", (self.root / "etc/fstab").read_text())
+        self.assertEqual(self.folder("/srv/backups")["state"], "not-on-pool")
+
+    def test_a_media_library_on_the_data_disks_says_when_they_are_away(self):
+        self.server(apps=False)
+        (self.root / "etc/fstab").write_text(FSTAB + APPS_LINE + "\n" + MEDIA_LINE + "\n" + BACKUPS_LINE + "\n")
+        (self.fake / "mounts").write_text((self.fake / "mounts").read_text() + f"/srv/apps {POOL_UUID} /apps\n/srv/backups {POOL_UUID} /backups\n")
+        d = self.app_data()
+        self.assertEqual([(f["state"], f["where"]) for f in d["folders"]], [("pool-away", "system"), ("ok", "pool")])
+        self.assertEqual(d["words"][1:], ["the media library (/srv/media): on the data disks, which aren't mounted (/srv/data)"])
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("fstab mounts the data disks' media subvolume at /srv/media, and it isn't mounted", r.stderr)
 
 
 if __name__ == "__main__":

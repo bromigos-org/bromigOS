@@ -172,8 +172,9 @@ sudo bromigos lab app-data move
 ```
 
 The move stops your apps, copies their data to the data disks, compares every file with
-its copy, and starts the apps again. It keeps the old copy, under a name that says what
-it is, until you remove it:
+its copy, and starts the apps again. It does the same for your media library and for the
+backups other computers keep on this server, when those are on the system disk too. It
+keeps each old copy, under a name that says what it is, until you remove it:
 
 ```bash
 sudo bromigos lab app-data remove-old
@@ -190,8 +191,8 @@ stops and your apps start again where they were.
 - The apps bromigOS sets up as containers aren't marked. Each stays at the version it
   was installed with: they don't update by themselves yet. Apps that are packages, such
   as Vaultwarden and Syncthing, update with the system.
-- The apps keep their data in `/srv/apps`
-  ([above](#where-your-apps-keep-their-data)).
+- The apps keep their data in `/srv/apps`, the media library is `/srv/media`, and other
+  machines' backups are in `/srv/backups` ([above](#where-your-apps-keep-their-data)).
 - WireGuard and Tailscale are installed and off. Turn on the one you use.
 - AppArmor and a few hardening settings are on. Logs are kept for a month, 1 GiB at most.
 - SSH lets in the account made at install and anyone you add to `bromigos-ssh`

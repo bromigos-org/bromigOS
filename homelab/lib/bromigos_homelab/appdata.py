@@ -3,7 +3,7 @@ on the data disks (docs/server.md, "Where the apps keep their data").
 
     bromigos lab app-data [status] [--json]     where /srv/apps is, against where it's meant to be
     bromigos lab app-data move [--dry-run]      as root: from the system disk to the data disks
-    bromigos lab app-data remove-old            as root: deletes the old copy a move kept
+    bromigos lab app-data remove-old            as root: deletes the old copies a move kept
 
 Every app `bromigos lab provision --local` sets up keeps its data in /srv/apps/<item>. A
 bromigOS Server with data disks means that folder to be on them: the installer mounts their
@@ -19,6 +19,10 @@ A check that fails, or a file that differs, stops the move before anything is sw
 the apps running again where they were. A move cut off part-way carries on when run again.
 Its record is /var/lib/bromigos/lab/app-data.json. This lives in bromigos-lab because every
 bromigOS Server has it, whichever medium installed it; `bromigos server app-data` is the same.
+
+The media library (/srv/media) and the backups other machines keep here (/srv/backups) are on
+the data disks the same way, each in a subvolume of its own (FOLDERS). The same move takes each
+in turn, with a record per folder (app-data-media.json, app-data-backups.json).
 """
 import argparse
 import contextlib
@@ -96,15 +100,36 @@ def storage():
 
 APPS_DIR = "/srv/apps"          # every app's data, a folder each (bromigos lab provision --local)
 POOL = "/srv/data"              # the data disks, when the server has them ([storage] mount)
-STATE = "/var/lib/bromigos/lab/app-data.json"       # the move's own record
+# What a server with data disks keeps on them: (the folder, the data disks' subvolume mounted
+# there, what it holds). The installer makes each subvolume and its fstab line; the move does
+# the same on a server set up before the installer did
+FOLDERS = ((APPS_DIR, "apps", "the apps' data"),
+           ("/srv/media", "media", "the media library"),
+           ("/srv/backups", "backups", "the backups other machines keep here"))
+STATE = "/var/lib/bromigos/lab/app-data.json"       # the move's own record (state_file: one per folder)
 FSTAB = "/etc/fstab"
 QUADLETS = "/etc/containers/systemd"
-LEFTOVER = APPS_DIR + ".on-system-disk-"        # the old copy's name after a move, with its date
+LEFTOVER = ".on-system-disk-"                   # the old copy's name after a move: the folder's, this, its date
+# The media library on a NAS share (bromigos lab provision --local, "On a NAS"): these units
+# mount the share at /srv/media, so that folder isn't meant to be on the data disks
+MEDIA_NAS = ("/etc/systemd/system/srv-media.mount", "/etc/systemd/system/bromigos-media-mount.service")
 # Apps the engine installs as packages keep their data where the package does, on the system
 # disk: the engine gives them no folder under /srv/apps, and no move here touches them. The
 # status says so, so "on the data disks" is never read as "all of it"
 PACKAGED = (("/var/lib/vaultwarden", "passwords (Vaultwarden)"),)
 MOVING = ("copying", "verifying", "switching")
+
+
+def state_file(src=APPS_DIR):
+    """A move's record: app-data.json for /srv/apps, app-data-NAME.json for another folder."""
+    return STATE if src == APPS_DIR else STATE.removesuffix(".json") + f"-{os.path.basename(src)}.json"
+
+
+def has_files(path):
+    try:
+        return bool(os.listdir(at(path)))
+    except OSError:
+        return False
 
 
 class AppDataError(Exception):
@@ -132,40 +157,49 @@ def fs_uuid(path):
     return (out.strip().splitlines() or [""])[0] if rc == 0 else ""
 
 
+def folder_doc(src, pool, rows, on_pool):
+    """One folder against where this server means it to be (app_data_doc's states). `where` is
+    pool, system, or elsewhere: a share from another machine mounted there (the media library
+    on a NAS), which is where its owner put it."""
+    j = read_json(state_file(src))
+    left = j.get("leftover") or ""
+    d = {"path": src, "where": "system", "state": "ok", "has_data": has_files(src), "move": j.get("state") or "",
+         "running": False, "leftover": left if left and j.get("state") == "done" and os.path.isdir(at(left)) else ""}
+    if not pool:
+        return d
+    if on_pool and is_mount(src) and fs_uuid(src) == on_pool:
+        d["where"] = "pool"
+    elif src == "/srv/media" and (is_mount(src) or any(os.path.exists(at(u)) for u in MEDIA_NAS)):
+        d["where"] = "elsewhere"
+    elif any(r[1] == src for r in rows):
+        d["state"] = "pool-away"
+    else:
+        d["state"] = "not-on-pool"
+    if j.get("state") in MOVING:
+        d["state"], d["running"] = "moving", move_running()
+    return d
+
+
 def app_data_doc():
     """Where /srv/apps is, against where this server means it to be: its data disks' apps
     subvolume when it has data disks, else the system disk. `state`:
       ok            where it's meant to be (`where`: pool or system)
       not-on-pool   the server has data disks, and the apps' data is on the system disk
       pool-away     fstab puts /srv/apps on the data disks, and it isn't mounted
-      moving        a move is under way (`running`), or one was cut off (`move`: how far it got)"""
+      moving        a move is under way (`running`), or one was cut off (`move`: how far it got)
+    `folders`: the same for the media library and the backups folder, on a server with data
+    disks. `elsewhere`: what a packaged app keeps on the system disk."""
     st = storage()
     rows = fstab_rows()
     pool = (st.get("mount") or POOL) if st.get("disks") else next((r[1] for r in rows if r[1] == POOL and r[2] == "btrfs"), "")
-    j = read_json(STATE)
-    left = j.get("leftover") or ""
-    try:
-        has_data = bool(os.listdir(at(APPS_DIR)))
-    except OSError:
-        has_data = False
-    doc = {"path": APPS_DIR, "pool": pool, "pool_mounted": False, "where": "system", "state": "ok",
-           "has_data": has_data, "move": j.get("state") or "", "running": False,
-           "raid1": st.get("layout") == "raid1" and len(st.get("disks") or []) >= 2,
-           "leftover": left if left and j.get("state") == "done" and os.path.isdir(at(left)) else "",
-           "elsewhere": []}
+    on_pool = (is_mount(pool) and fs_uuid(pool)) if pool else ""
+    doc = folder_doc(APPS_DIR, pool, rows, on_pool)
+    doc.update(pool=pool, pool_mounted=bool(on_pool), raid1=st.get("layout") == "raid1" and len(st.get("disks") or []) >= 2,
+               elsewhere=[], folders=[])
     if not pool:
         return doc
+    doc["folders"] = [folder_doc(src, pool, rows, on_pool) for src, _, _ in FOLDERS[1:]]
     doc["elsewhere"] = [{"path": p, "what": what} for p, what in PACKAGED if os.path.isdir(at(p))]
-    on_pool = is_mount(pool) and fs_uuid(pool)
-    doc["pool_mounted"] = bool(on_pool)
-    if on_pool and is_mount(APPS_DIR) and fs_uuid(APPS_DIR) == on_pool:
-        doc["where"] = "pool"
-    elif any(r[1] == APPS_DIR for r in rows):
-        doc["state"] = "pool-away"
-    else:
-        doc["state"] = "not-on-pool"
-    if j.get("state") in MOVING:
-        doc["state"], doc["running"] = "moving", move_running()
     return doc
 
 
@@ -191,9 +225,27 @@ def status():
 def app_data_words(d):
     """The status line, and the lines under it when there's something to do or to know."""
     words = _words(d)
+    for f in d.get("folders") or []:
+        words += folder_words(f, d)
     for e in d.get("elsewhere") or []:
         words.append(f"not on the data disks: {e['what']} keeps its data in {e['path']}, on the system disk")
     return words
+
+
+def folder_words(f, d):
+    """A line for the media library or the backups folder, only when there's something to do or
+    to know: a folder nobody uses yet says nothing, and the move sets it up with the rest."""
+    what = next(w for src, _, w in FOLDERS if src == f["path"])
+    if f["state"] == "moving":
+        return [f"{what} ({f['path']}): moving to the data disks now" if f["running"] else
+                f"{what} ({f['path']}): a move to the data disks didn't finish; sudo bromigos lab app-data move carries on"]
+    if f["state"] == "pool-away":
+        return [f"{what} ({f['path']}): on the data disks, which aren't mounted ({d['pool']})"]
+    if f["state"] == "not-on-pool" and f["has_data"]:
+        return [f"{what} ({f['path']}): on the system disk, not the data disks; sudo bromigos lab app-data move puts it on them"]
+    if f["leftover"]:
+        return [f"{what}: the old copy is kept at {f['leftover']}; sudo bromigos lab app-data remove-old deletes it"]
+    return []
 
 
 def _words(d):
@@ -219,9 +271,9 @@ def _words(d):
     return words
 
 
-def app_units():
-    """The services that keep data under /srv/apps: every Quadlet that names it, and whatever
-    else has a file open there now (a host service such as Syncthing), by its unit.
+def app_units(src=APPS_DIR):
+    """The services that keep data under a folder (/srv/apps): every Quadlet that names it, and
+    whatever else has a file open there now (a host service such as Syncthing), by its unit.
     (units, the host services among them, what isn't a service)."""
     units, hosts, strays = [], [], []
     qd = at(QUADLETS)
@@ -233,10 +285,10 @@ def app_units():
                 text = f.read()
         except OSError:
             continue
-        if re.search(rf"{APPS_DIR}(/|:|\s|$)", text, re.M):
+        if re.search(rf"{src}(/|:|\s|$)", text, re.M):
             m = re.search(r"^ServiceName=(\S+)", text, re.M)
             units.append((m.group(1) if m else name.removesuffix(".container")) + ".service")
-    for pid, what in busy():
+    for pid, what in busy(src):
         try:
             with open(at(f"/proc/{pid}/cgroup")) as f:
                 parts = f.read().strip().split("/")
@@ -251,9 +303,9 @@ def app_units():
     return units + hosts, hosts, strays
 
 
-def busy():
+def busy(src=APPS_DIR):
     """[(pid, a path)]: processes with a working folder, an open file or a mapped file under
-    /srv/apps. A container's own view of its files isn't here: its mounts are asked of Podman."""
+    the folder. A container's own view of its files isn't here: its mounts are asked of Podman."""
     out = []
     base = at("/proc")
     for pid in sorted(os.listdir(base)) if os.path.isdir(base) else []:
@@ -275,14 +327,14 @@ def busy():
                 seen += [line.split(None, 5)[5].strip() for line in f if len(line.split(None, 5)) == 6]
         except OSError:
             pass
-        hit = next((v for v in seen if v == APPS_DIR or v.startswith(APPS_DIR + "/")), None)
+        hit = next((v for v in seen if v == src or v.startswith(src + "/")), None)
         if hit:
             out.append((pid, hit))
     return out
 
 
-def containers_using():
-    """Running containers that mount something under /srv/apps: [name]."""
+def containers_using(src=APPS_DIR):
+    """Running containers that mount something under the folder: [name]."""
     rc, out, _ = run(["podman", "ps", "--format", "json"], timeout=60)
     try:
         ids = [c["Id"] for c in json.loads(out or "[]")] if rc == 0 else []
@@ -296,7 +348,7 @@ def containers_using():
     except ValueError:
         rows = []
     return [str(c.get("Name") or c.get("Id", "?")[:12]) for c in rows
-            if any(str(m.get("Source", "")) == APPS_DIR or str(m.get("Source", "")).startswith(APPS_DIR + "/")
+            if any(str(m.get("Source", "")) == src or str(m.get("Source", "")).startswith(src + "/")
                    for m in c.get("Mounts") or [])]
 
 
@@ -319,53 +371,57 @@ def must(argv, what, timeout=None):
     return out
 
 
-def app_data_plan(d):
-    """What a move would do, checked: the source, the pool and its fstab line, the apps
+def old_copy_name(src):
+    left = src + LEFTOVER + datetime.date.today().isoformat()
+    return left + ("-" + datetime.datetime.now().strftime("%H%M%S") if os.path.lexists(at(left)) else "")
+
+
+def app_data_plan(d, src=APPS_DIR, sub="apps", what="the apps' data"):
+    """What a move would do, checked: the source, the pool and its fstab line, the folder's
     subvolume (made if it isn't there), the space, the services to stop and the old copy's name."""
-    src, pool = APPS_DIR, d["pool"]
+    pool = d["pool"]
     row = next((r for r in fstab_rows() if r[1] == pool), None)
     if not row or row[2] != "btrfs":
-        raise AppDataError(f"the data disks ({pool}) aren't a btrfs line in {FSTAB}, so there's nothing to mount the apps' folder from")
-    dst = os.path.join(pool, "apps")
-    j = read_json(STATE)
+        raise AppDataError(f"the data disks ({pool}) aren't a btrfs line in {FSTAB}, so there's nothing to mount {src} from")
+    dst = os.path.join(pool, sub)
+    j = read_json(state_file(src))
     resuming = j.get("state") in (*MOVING, "failed") and j.get("destination") == dst
     if os.path.isdir(at(dst)) and os.listdir(at(dst)) and not resuming:
         names = ", ".join(sorted(os.listdir(at(dst)))[:5])
-        raise AppDataError(f"{dst} already has files in it ({names}), and they aren't from a move of this server's apps. "
+        raise AppDataError(f"{dst} already has files in it ({names}), and they aren't from a move of {what}. "
                            "Nothing was changed: move them away first, so nothing of yours is overwritten")
     if is_mount(src):
-        raise AppDataError(f"{src} is a mount of its own, not a folder on the system disk: this moves only the folder the "
-                           "apps were given. Nothing was changed")
-    there = os.path.isdir(at(src))          # not there: no app has data yet, and there's nothing to copy or keep
+        raise AppDataError(f"{src} is a mount of its own, not a folder on the system disk: this moves only the folder "
+                           f"{what} was given. Nothing was changed")
+    there = os.path.isdir(at(src))          # not there: nothing has data yet, and there's nothing to copy or keep
     need, free = tree_bytes(src) if there else 0, shutil.disk_usage(at(pool)).free
     if there and not shutil.which("rsync"):
         raise AppDataError("rsync isn't installed, and the copy is made with it. Install the rsync package, then run this again")
-    units, hosts, strays = app_units()
-    left = LEFTOVER + datetime.date.today().isoformat() if there else ""
-    if left and os.path.lexists(at(left)):
-        left += "-" + datetime.datetime.now().strftime("%H%M%S")
+    units, hosts, strays = app_units(src)
     opts = ",".join(o for o in row[3].split(",") if not o.startswith(("subvol=", "subvolid=")))
-    return {"source": src, "pool": pool, "destination": dst, "bytes": need, "free": free,
+    return {"source": src, "pool": pool, "destination": dst, "bytes": need, "free": free, "what": what, "sub": sub,
             # room for the copy, and some over: btrfs needs space of its own, and the apps start again after
             "fits": free >= int(need * 1.05) + 1024 ** 3,
-            "units": units, "host_units": hosts, "strays": strays, "leftover": left,
-            "fstab": f"{row[0]}  {src}  btrfs  subvol=/apps,{opts}  0 0", "resuming": resuming}
+            "units": units, "host_units": hosts, "strays": strays, "leftover": old_copy_name(src) if there else "",
+            "fstab": f"{row[0]}  {src}  btrfs  subvol=/{sub},{opts}  0 0", "resuming": resuming}
 
 
 def print_move_plan(p, dry):
     will = "would" if dry else "will"
     if not p["leftover"]:
-        print(f"bromigos lab app-data: no app has data yet. The data disks' apps subvolume ({p['destination']}) {will} be mounted "
-              f"at {p['source']}, so the apps keep their data on the data disks from the start:")
+        print((f"bromigos lab app-data: no app has data yet. The data disks' apps subvolume ({p['destination']}) {will} be mounted "
+               f"at {p['source']}, so the apps keep their data on the data disks from the start:") if p["sub"] == "apps" else
+              (f"bromigos lab app-data: nothing is in {p['source']} yet. The data disks' {p['sub']} subvolume ({p['destination']}) "
+               f"{will} be mounted there, so {p['what']} is on the data disks from the start:"))
         print(f"       {p['fstab']}")
         return
-    print(f"bromigos lab app-data: the apps' data ({gib(p['bytes'])} in {p['source']}, on the system disk) {will} move to the data "
+    print(f"bromigos lab app-data: {p['what']} ({gib(p['bytes'])} in {p['source']}, on the system disk) {will} move to the data "
           f"disks ({p['destination']}, {gib(p['free'])} free)")
     print(f"  1. stop the apps: {', '.join(p['units']) or 'none is set up'}")
     print(f"  2. copy {p['source']} to {p['destination']}" + (" (carrying on from the copy already there; what's no longer in "
                                                                  f"{p['source']} leaves the copy too)" if p["resuming"] else ""))
     print("  3. compare every file with its copy, by checksum; any difference stops here, with nothing changed")
-    print(f"  4. keep the old copy as {p['leftover']}, and mount the data disks' apps subvolume at {p['source']}:")
+    print(f"  4. keep the old copy as {p['leftover']}, and mount the data disks' {p['sub']} subvolume at {p['source']}:")
     print(f"       {p['fstab']}")
     print("  5. start the apps again")
     if not p["fits"]:
@@ -374,10 +430,10 @@ def print_move_plan(p, dry):
         print(f"  In the way: {s} is using {p['source']} and isn't a service this can stop. Close it first.")
 
 
-def app_data_journal(**kw):
-    j = read_json(STATE)
+def app_data_journal(src=APPS_DIR, **kw):
+    j = read_json(state_file(src))
     j.update(kw, updated=now())
-    write_json(STATE, j)
+    write_json(state_file(src), j)
     return j
 
 
@@ -395,6 +451,15 @@ def write_fstab(text):
     os.replace(tmp, path)
 
 
+def host_dropin(unit, src):
+    return f"/etc/systemd/system/{unit}.d/50-bromigos-app-data" + ("" if src == APPS_DIR else "-" + os.path.basename(src)) + ".conf"
+
+
+def fstab_mark(src):
+    """What the comment over a folder's fstab line says made it."""
+    return "bromigos lab app-data move" + ("" if src == APPS_DIR else f", {src}")
+
+
 def app_data_switch(j):
     """The old folder aside, the data disks' apps subvolume in its place. Every step looks
     first, so a move interrupted here carries on from wherever it stopped. fstab goes first:
@@ -403,8 +468,8 @@ def app_data_switch(j):
     with open(at(FSTAB)) as f:
         text = f.read()
     if not any(r[1] == src for r in fstab_rows()):
-        write_fstab(text.rstrip("\n") + "\n# the apps' data, on the data disks: their apps subvolume "
-                    "(bromigos lab app-data move; docs/server.md)\n" + line + "\n")
+        write_fstab(text.rstrip("\n") + f"\n# {j.get('what') or FOLDERS[0][2]}, on the data disks: their "
+                    f"{j.get('sub') or 'apps'} subvolume ({fstab_mark(src)}; docs/server.md)\n" + line + "\n")
     if left and not os.path.lexists(at(left)):
         if is_mount(src):               # a restart came in between: the old folder is under the mount
             must(["umount", at(src)], f"couldn't unmount {src}")
@@ -415,17 +480,17 @@ def app_data_switch(j):
     # for each Volume= host path). A host service with its data here is told the same, so at a
     # start it comes after the data disks, and stays down while they're away
     for u in j.get("host_units") or []:
-        drop = at(f"/etc/systemd/system/{u}.d/50-bromigos-app-data.conf")
+        drop = at(host_dropin(u, src))
         os.makedirs(os.path.dirname(drop), mode=0o755, exist_ok=True)
         with open(drop, "w") as f:
-            f.write("# bromigos lab app-data move: this service keeps data under /srv/apps, which is on the data disks\n"
+            f.write(f"# bromigos lab app-data move: this service keeps data under {src}, which is on the data disks\n"
                     f"[Unit]\nRequiresMountsFor={src}\n")
     if not is_mount(src):
         # the mount point takes no files of its own: with the data disks away an app fails to
         # start, and never begins again, empty, on the system disk
         run(["chattr", "+i", at(src)])
         run(["systemctl", "daemon-reload"])
-        must(["mount", at(src)], f"couldn't mount the data disks' apps subvolume at {src}")
+        must(["mount", at(src)], f"couldn't mount the data disks' {j.get('sub') or 'apps'} subvolume at {src}")
     if not (is_mount(src) and fs_uuid(src) and fs_uuid(src) == fs_uuid(j["pool"])):
         raise AppDataError(f"{src} is mounted, but not from the data disks")
 
@@ -443,20 +508,54 @@ def app_data_unswitch(j):
     with open(at(FSTAB)) as f:
         lines = f.read().splitlines(keepends=True)
     kept = [l for l in lines if not (l.split()[1:2] == [src] and not l.lstrip().startswith("#"))
-            and "bromigos lab app-data move" not in l]
+            and f"({fstab_mark(src)};" not in l]
     if kept != lines:
         write_fstab("".join(kept))
     for u in j.get("host_units") or []:
         with contextlib.suppress(OSError):
-            os.unlink(at(f"/etc/systemd/system/{u}.d/50-bromigos-app-data.conf"))
+            os.unlink(at(host_dropin(u, src)))
     run(["systemctl", "daemon-reload"])
 
 
+def copy_and_compare(src, dst, size, resuming):
+    """The copy, then every file against its copy by checksum. Any difference raises: something
+    wrote to the source while it was read, and nothing may be switched to a copy like that."""
+    # as `bromigos storage` copies: owners by number, hard links, ACLs, extended attributes, sparse files
+    copy = ["rsync", "-aHAXS", "--numeric-ids"]
+    print(f"bromigos lab app-data: copying {gib(size)} …", flush=True)
+    # carrying on from an earlier copy: what has left the source since leaves the copy too
+    must([*copy, *(["--delete"] if resuming else []), "--", at(src) + "/", at(dst) + "/"],
+         "the copy didn't finish", timeout=None)
+    app_data_journal(src, state="verifying")
+    print("bromigos lab app-data: comparing every file with its copy …", flush=True)
+    diff = must([*copy, "--checksum", "--dry-run", "--delete", "--itemize-changes", "--out-format=%i %n", "--",
+                 at(src) + "/", at(dst) + "/"], "the comparison didn't finish", timeout=None)
+    if diff.strip():
+        raise AppDataError(f"{len(diff.strip().splitlines())} files differ from their copies, the first: "
+                           f"{diff.strip().splitlines()[0]}. Something wrote to {src} during the copy")
+    run(["sync"])
+
+
 def app_data_move(d, dry):
-    j = read_json(STATE)
+    """Each folder that isn't on the data disks, in turn: the apps' data first, then the media
+    library and the backups folder. One that fails stops the rest, with everything before it
+    done and everything after it untouched."""
     if d["pool"] and not d["pool_mounted"]:
         raise AppDataError(f"the data disks aren't mounted ({d['pool']}). `bromigos lab app-data` and `journalctl -b -u "
                            f"{d['pool'].strip('/').replace('/', '-')}.mount` say why; nothing was changed")
+    todo = [f for f in (d, *d["folders"]) if f["state"] != "ok"]
+    if not todo:
+        print("bromigos lab app-data: " + _words(d)[0] + ". Nothing to move.")
+        return 0
+    rc = 0
+    for f in todo:
+        rc = move_folder(d, f, *next(x[1:] for x in FOLDERS if x[0] == f["path"]), dry) or rc
+    return rc
+
+
+def move_folder(d, f, sub, what, dry):
+    src = f["path"]
+    j = read_json(state_file(src))
     # A move cut off while switching. Past the point where the old folder stopped being the one
     # the apps use (it was renamed, or the data disks are mounted over it), only the switch is
     # left. Before it, the apps may have run on the old folder since: the copy is made again
@@ -465,7 +564,7 @@ def app_data_move(d, dry):
     if j.get("state") == "switching" and (not left or os.path.lexists(at(left)) or is_mount(j["source"])):
         if dry:
             print(f"bromigos lab app-data: a move stopped while switching {j['source']} over; it would carry on: "
-                  + (f"the old copy kept as {left}, " if left else "") + f"the data disks' apps subvolume mounted at {j['source']}, "
+                  + (f"the old copy kept as {left}, " if left else "") + f"the data disks' {sub} subvolume mounted at {j['source']}, "
                   "the apps started")
             return 0
         units = j.get("units") or []
@@ -476,17 +575,14 @@ def app_data_move(d, dry):
         except (AppDataError, OSError) as e:
             for u in units:
                 run(["systemctl", "start", u])
-            app_data_journal(error=str(e))
+            app_data_journal(src, error=str(e))
             raise AppDataError(f"{e}. The apps were started again as they were; run this again to carry on") from None
     else:
-        if d["state"] == "ok":
-            print("bromigos lab app-data: " + app_data_words(d)[0] + ". Nothing to move.")
-            return 0
-        if d["state"] == "pool-away":
-            raise AppDataError(f"{FSTAB} mounts the data disks' apps subvolume at {APPS_DIR}, and it isn't mounted. There's "
-                               "nothing to move: the apps' data is on the data disks. `journalctl -b -u srv-apps.mount` says "
-                               "why it didn't mount")
-        p = app_data_plan(d)
+        if f["state"] == "pool-away":
+            raise AppDataError(f"{FSTAB} mounts the data disks' {sub} subvolume at {src}, and it isn't mounted. There's "
+                               f"nothing to move: {what} is on the data disks. `journalctl -b -u "
+                               f"{src.strip('/').replace('/', '-')}.mount` says why it didn't mount")
+        p = app_data_plan(d, src, sub, what)
         print_move_plan(p, dry)
         if dry:
             print("  Nothing was changed. Without --dry-run, this does it.")
@@ -494,65 +590,72 @@ def app_data_move(d, dry):
         if not p["fits"]:
             raise AppDataError("not enough room on the data disks; nothing was changed")
         if p["strays"]:
-            raise AppDataError("something is using the apps' data that isn't a service; nothing was changed")
-        src, dst = p["source"], p["destination"]
+            raise AppDataError(f"something is using {src} that isn't a service; nothing was changed")
+        dst = p["destination"]
         was = [u for u in p["units"] if unit_state(u) in ("active", "activating", "reloading")]
-        j = app_data_journal(state="copying", started=now(), source=src, pool=p["pool"], destination=dst, bytes=p["bytes"],
-                             leftover=p["leftover"], fstab=p["fstab"], units=was, host_units=p["host_units"], error="")
+        j = app_data_journal(src, state="copying", started=now(), source=src, pool=p["pool"], destination=dst, bytes=p["bytes"],
+                             leftover=p["leftover"], fstab=p["fstab"], units=was, host_units=p["host_units"], error="",
+                             what=what, sub=sub)
         units = was
         try:
             for u in p["units"]:
                 run(["systemctl", "stop", u])
             still = [u for u in p["units"] if unit_state(u) in ("active", "activating", "reloading", "deactivating")]
-            still += [f"process {pid} ({what})" for pid, what in busy()] + [f"the container {n}" for n in containers_using()]
+            still += [f"process {pid} ({path})" for pid, path in busy(src)] + [f"the container {n}" for n in containers_using(src)]
             if still:
                 raise AppDataError(f"still using {src} after the apps were stopped: {', '.join(still)}. Stop it, then run this again")
             if run(["btrfs", "subvolume", "show", at(dst)])[0] != 0:
                 if os.path.isdir(at(dst)):
                     os.rmdir(at(dst))               # an empty plain folder: a subvolume takes its place
-                must(["btrfs", "subvolume", "create", at(dst)], f"couldn't make the apps subvolume {dst}")
+                must(["btrfs", "subvolume", "create", at(dst)], f"couldn't make the {sub} subvolume {dst}")
             if p["leftover"]:
-                # as `bromigos storage` copies: owners by number, hard links, ACLs, extended attributes, sparse files
-                copy = ["rsync", "-aHAXS", "--numeric-ids"]
-                print(f"bromigos lab app-data: copying {gib(p['bytes'])} …", flush=True)
-                # carrying on from an earlier copy: what has left /srv/apps since leaves the copy too
-                must([*copy, *(["--delete"] if p["resuming"] else []), "--", at(src) + "/", at(dst) + "/"],
-                     "the copy didn't finish", timeout=None)
-                app_data_journal(state="verifying")
-                print("bromigos lab app-data: comparing every file with its copy …", flush=True)
-                diff = must([*copy, "--checksum", "--dry-run", "--delete", "--itemize-changes", "--out-format=%i %n", "--",
-                             at(src) + "/", at(dst) + "/"], "the comparison didn't finish", timeout=None)
-                if diff.strip():
-                    raise AppDataError(f"{len(diff.strip().splitlines())} files differ from their copies, the first: "
-                                       f"{diff.strip().splitlines()[0]}. Something wrote to {src} during the copy")
-                run(["sync"])
+                copy_and_compare(src, dst, p["bytes"], p["resuming"])
         except (AppDataError, OSError) as e:
             # nothing switched: the apps go on as they were, on the system disk; the copy so far
             # stays on the data disks, and the next run carries on from it
             for u in units:
                 run(["systemctl", "start", u])
-            app_data_journal(state="failed", error=str(e))
+            app_data_journal(src, state="failed", error=str(e))
             raise AppDataError(f"{e}. The apps are running again, on the system disk as before; nothing of theirs was changed") from None
-        j = app_data_journal(state="switching")
+        j = app_data_journal(src, state="switching")
         try:
             app_data_switch(j)
         except (AppDataError, OSError) as e:
             try:
                 app_data_unswitch(j)
             except (AppDataError, OSError) as e2:
-                app_data_journal(error=f"{e}; putting it back: {e2}")
+                app_data_journal(src, error=f"{e}; putting it back: {e2}")
                 raise AppDataError(f"{e}, and putting it back didn't work either ({e2}). The apps are stopped; their data is "
                                    f"safe, in {j['leftover']} or {src} and in {dst}. Run this again to carry on") from None
             for u in units:
                 run(["systemctl", "start", u])
-            app_data_journal(state="failed", error=str(e))
+            app_data_journal(src, state="failed", error=str(e))
             raise AppDataError(f"{e}. It was put back: the apps are running again, on the system disk as before") from None
     for u in units:
         run(["systemctl", "start", u])
-    j = app_data_journal(state="done", finished=now(), error="")
-    print(f"bromigos lab app-data: the apps' data is on the data disks now ({j['source']} is {j['destination']})"
+    j = app_data_journal(src, state="done", finished=now(), error="")
+    print(f"bromigos lab app-data: {what} is on the data disks now ({j['source']} is {j['destination']})"
           + (f", and the apps are running again. The old copy is kept at {j['leftover']}: once you've seen the apps have "
              "everything, sudo bromigos lab app-data remove-old deletes it." if j["leftover"] else "."))
+    return 0
+
+
+def remove_old(d):
+    """The old copies a move kept, deleted: each only while what it was a copy of is on the data disks."""
+    olds = [(f["path"], next(w for src, _, w in FOLDERS if src == f["path"]), f["leftover"], f["state"] == "ok" and f["where"] == "pool")
+            for f in (d, *d["folders"]) if f["leftover"]]
+    if not olds:
+        print("bromigos lab app-data: there's no old copy of the apps' data to remove")
+        return 0
+    for src, what, left, safe in olds:
+        if not safe:
+            raise AppDataError(f"{what} isn't on the data disks right now, so the old copy ({left}) stays")
+        if not left.startswith(src + LEFTOVER) or is_mount(left):
+            raise AppDataError(f"{left} isn't an old copy a move left")
+        size = tree_bytes(left)
+        shutil.rmtree(at(left))
+        app_data_journal(src, leftover="", removed=now())
+        print(f"bromigos lab app-data: removed the old copy, {left} ({gib(size)} back on the system disk)")
     return 0
 
 
@@ -584,19 +687,7 @@ def main(argv=None):
         try:
             if a.verb == "move":
                 return app_data_move(d, a.dry_run)
-            left = d["leftover"]
-            if not left:
-                print("bromigos lab app-data: there's no old copy of the apps' data to remove")
-                return 0
-            if d["state"] != "ok" or d["where"] != "pool":
-                raise AppDataError(f"the apps' data isn't on the data disks right now, so the old copy ({left}) stays")
-            if not left.startswith(LEFTOVER) or is_mount(left):
-                raise AppDataError(f"{left} isn't an old copy a move left")
-            size = tree_bytes(left)
-            shutil.rmtree(at(left))
-            app_data_journal(leftover="", removed=now())
-            print(f"bromigos lab app-data: removed the old copy, {left} ({gib(size)} back on the system disk)")
-            return 0
+            return remove_old(d)
         except (AppDataError, OSError) as e:
             print(f"bromigos lab app-data: {e}", file=sys.stderr)
             return 1

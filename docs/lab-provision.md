@@ -556,8 +556,15 @@ When `/etc/fstab` mounts `/srv/apps` and it isn't mounted, an item that keeps da
 fails with the reason and nothing is set up: the data disks are away, and the folder
 behind the mount is the system disk's.
 
+The media library (`/srv/media`) and the backup place (`/srv/backups`) are on the data
+disks the same way, each in a subvolume of its own, and refuse the same way while the data
+disks are away. A media library on a NAS share takes that folder over: the engine turns
+the data disks' `fstab` line for `/srv/media` into a comment and unmounts their subvolume
+before it mounts the share.
+
 `bromigos lab app-data` says where `/srv/apps` is. On a server installed before the
-installer mounted it there, `bromigos lab app-data move` puts it on the data disks
+installer mounted it there, `bromigos lab app-data move` puts it on the data disks, and
+the media library and the backups folder with it
 (`bromigos_homelab/appdata.py`; [server.md](server.md#a-server-set-up-before-the-installer-did-this)).
 
 ### Updates

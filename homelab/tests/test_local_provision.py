@@ -260,6 +260,45 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
         self.assertTrue(Path(self.root, L.APPS, "uptime").is_dir())
 
+    POOL_FSTAB = ("UUID=1111  /  btrfs  rw  0 0\nUUID=2222  /srv/data  btrfs  compress=zstd,noatime,nofail  0 0\n"
+                  "UUID=2222  /srv/apps  btrfs  subvol=/apps,compress=zstd,noatime,nofail  0 0\n"
+                  "UUID=2222  /srv/media  btrfs  subvol=/media,compress=zstd,noatime,nofail  0 0\n"
+                  "UUID=2222  /srv/backups  btrfs  subvol=/backups,compress=zstd,noatime,nofail  0 0\n")
+
+    def test_data_disks_away_no_library_or_backup_place_is_made_on_the_system_disk(self):
+        # fstab mounts the data disks' subvolumes at /srv/media and /srv/backups. Not mounted (a
+        # stand-in root never is), each is a folder on the system disk that takes nothing
+        Path(self.root, "etc").mkdir(exist_ok=True)
+        Path(self.root, "etc/fstab").write_text(self.POOL_FSTAB)
+        for d in ("srv/media", "srv/backups"):
+            Path(self.root, d).mkdir(parents=True)
+        plan = L.build_plan(["media-library", "backup-target"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 1)
+        for item, folder in (("media-library", "/srv/media"), ("backup-target", "/srv/backups")):
+            self.assertEqual(self.states(item)[-1], "failed", item)
+            err = next(l for l in self.lines if l.startswith(f"::error {item} "))
+            self.assertIn(f"on its data disks, and they aren't mounted ({folder})", err)
+        for d in ("srv/media", "srv/backups"):
+            self.assertEqual(list(Path(self.root, d).iterdir()), [], d)
+        self.assertEqual(self.m.ran("useradd"), [])
+
+    def test_a_media_library_on_a_nas_takes_the_place_of_the_data_disks_folder(self):
+        # the installer mounts the data disks' media subvolume at /srv/media. A library on a NAS
+        # share is mounted there instead: the data disks' line makes way, and the share's unit stands
+        Path(self.root, "etc").mkdir(exist_ok=True)
+        Path(self.root, "etc/fstab").write_text(self.POOL_FSTAB)
+        plan = L.build_plan(["media-library"], settings={"media-library": {"where": "nfs", "share": "nas.example:/volume1/media"}}, hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        fstab = Path(self.root, "etc/fstab").read_text()
+        self.assertNotRegex(fstab, r"(?m)^UUID=2222\s+/srv/media\s")
+        self.assertRegex(fstab, r"(?m)^# .*UUID=2222  /srv/media  btrfs")          # kept as a comment: nothing is lost from view
+        self.assertRegex(fstab, r"(?m)^UUID=2222\s+/srv/apps\s")
+        self.assertRegex(fstab, r"(?m)^UUID=2222\s+/srv/backups\s")
+        self.assertIn("What=nas.example:/volume1/media", Path(self.root, "etc/systemd/system/srv-media.mount").read_text())
+        self.assertTrue(Path(self.root, "srv/media/movies").is_dir())
+
     def test_the_budget_measures_where_app_data_goes(self):
         # /srv/apps when it's there (the data disks, on a server that has them), else /srv, else /
         seen = []

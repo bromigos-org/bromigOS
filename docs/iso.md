@@ -605,12 +605,14 @@ engine on a Game server joined to a lab. After archinstall and `bromigos rollbac
 - writes the sysctl list, journald's limits and AppArmor on the kernel line; puts
   `linux-lts` first in GRUB;
 - makes the data disks btrfs (`mkfs.btrfs -d raid1 -m raid1` for two copies) at
-  `/srv/data`, with `shares`, `apps` and `backups` subvolumes, a monthly scrub, hourly
-  snapshots and the SMB and NFS shares on a Storage server;
+  `/srv/data`, with `shares`, `apps`, `media` and `backups` subvolumes, a monthly scrub,
+  hourly snapshots and the SMB and NFS shares on a Storage server;
 - mounts the data disks' `apps` subvolume at `/srv/apps` with a second `fstab` line, so
   the apps keep their data on the data disks, and sets the mount point to take no files
-  while they're away (`chattr +i`). Without data disks, `/srv/apps` is a folder on the
-  system disk ([server.md](server.md#where-the-apps-keep-their-data));
+  while they're away (`chattr +i`). It does the same for `media` at `/srv/media` (the
+  media library) and `backups` at `/srv/backups` (the backups other machines keep here).
+  Without data disks, each is a folder on the system disk
+  ([server.md](server.md#where-the-apps-keep-their-data));
 - enables the role's units the system has (the rest wait in `pending-units`), and leaves
   Tailscale and WireGuard off unless chosen;
 - moves the update timer into the window (`bromigos-server-update.timer.d/10-window.conf`)
