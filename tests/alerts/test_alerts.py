@@ -132,6 +132,15 @@ class EveryCheck(Machine):
         a = {x["id"]: x for x in self.m.run("system")["alerts"]}["server.app-data"]
         self.assertEqual((a["severity"], a["title"]), ("critical", "The data disks aren't mounted: the apps can't start"))
         self.assertFalse(a["fix"]["root"])
+        # a Server without the bromigos-server package (installed from the desktop medium) is one by
+        # the installer's settings file, and hears of it too
+        other = FakeMachine(role="desktop")
+        self.addCleanup(other.close)
+        other.clear()
+        other.app_data("not-on-pool")
+        self.assertEqual(states(other.run("system"))["server.app-data"], "skipped")
+        other.rootfile("/etc/bromigos/server.toml", '[storage]\ndisks = ["/dev/sdb", "/dev/sdc"]\n')
+        self.assertEqual(ids(other.run("system")).get("server.app-data"), "needs_you")
         # an answer that isn't one: the check failed, and says so, without raising or clearing anything
         (self.m.fake / "app-data.json").write_text("not json")
         row = next(c for c in self.m.run("system")["checks"] if c["check"] == "server.app-data")

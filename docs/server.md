@@ -641,8 +641,9 @@ them. The apps don't.
 
 - Each app's service waits for `/srv/apps` at every start. Quadlet makes a container's
   service depend on the mounts of its `Volume=` folders. File sync (Syncthing) has a
-  drop-in that says the same. So an app starts once the data disks are mounted, however
-  slow they are, and not at all while they're away.
+  drop-in that says the same. So an app starts once the data disks are mounted, and not
+  at all while they're away. systemd waits 30 seconds for the disks
+  (`x-systemd.device-timeout=30s`).
 - `/srv/apps` is then an empty folder on the system disk that takes no files
   (`chattr +i`), so no app can begin again from nothing there.
 - `bromigos lab provision --local` refuses to set an app up.

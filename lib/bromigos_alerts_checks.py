@@ -615,8 +615,10 @@ def app_data(ctx):
     """A bromigOS Server with data disks keeps its apps' data on them (docs/server.md, "Where
     the apps keep their data"). One set up before the installer did that has it on the system
     disk: one copy where the person chose two. The lab's command knows which, and moves it."""
-    if ctx.role != "server":
-        raise Skip("the apps' data is bromigOS Server's to place")
+    # a Server by its package, or by the installer's settings file: one installed from the
+    # desktop medium has that file and may not have the bromigos-server package
+    if ctx.role != "server" and not ctx.env.exists("/etc/bromigos/server.toml"):
+        raise Skip("only a bromigOS Server has data disks for its apps")
     rc, out, err = ctx.env.run(["bromigos", "lab", "app-data", "status", "--json"], timeout=60)
     if rc == 127:
         raise Skip("bromigos isn't installed")
