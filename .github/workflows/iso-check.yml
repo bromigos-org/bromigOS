@@ -128,6 +128,8 @@ jobs:
         run: |
           pacman -S --noconfirm --needed python-textual qrencode zbar python-pillow >/dev/null
           python -m unittest discover -s iso/test/installer -v
+          # iso/ci-test.sh's lanes, with a stand-in for iso/test.sh: no VM
+          python -m unittest discover -s iso/test -p 'test_ci_*.py' -v
           # VECTOR's voice guide (docs/voice-guide.md): every line has a clip that says its words,
           # and the player's choices with stand-in players; no voice or sound needed
           PYTHONPATH=lib python -m unittest discover -s tests/voice-guide -v

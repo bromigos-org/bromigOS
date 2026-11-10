@@ -122,11 +122,29 @@ def allocation(argv):
             int(cpus) + (int(reserved[2]) if reserved else 0))
 
 
+def ci_budget():
+    """A CI runner's own budget, (MiB, vCPUs), or None: everywhere but on one.
+
+    A workstation's limits below protect a desktop someone is working at. A CI runner
+    exists for the run, and iso/ci-test.sh sizes its side-by-side lanes from the runner's
+    own memory and CPUs, then says what they add up to: BROMIGOS_VM_CI_BUDGET="MIB:CPUS".
+    It counts only where GitHub Actions says it is running the job (GITHUB_ACTIONS=true),
+    so setting it at a workstation changes nothing."""
+    given = os.environ.get('BROMIGOS_VM_CI_BUDGET', '')
+    if not given or os.environ.get('GITHUB_ACTIONS') != 'true':
+        return None
+    found = re.fullmatch(r'(\d+):(\d+)', given)
+    if not found or not int(found[1]) or not int(found[2]):
+        raise RuntimeError('BROMIGOS_VM_CI_BUDGET must be MIB:CPUS, both above zero')
+    return int(found[1]), int(found[2])
+
+
 def resource_check(argv):
     """Called under a shared lock immediately before spawning QEMU."""
     cap = int(os.environ.get('BROMIGOS_VM_MAX_MEM_GIB', '8'))
     if not 1 <= cap <= 10:
         raise RuntimeError('BROMIGOS_VM_MAX_MEM_GIB must be between 1 and 10')
+    ci = ci_budget()
     memory, cpus = allocation(argv)
     # Count every QEMU owned by this user, including independently started tests.
     for entry in os.scandir('/proc'):
@@ -139,6 +157,11 @@ def resource_check(argv):
             if args and os.path.basename(args[0]).startswith('qemu-system-'):
                 used_memory, used_cpus = allocation(args)
                 memory += used_memory; cpus += used_cpus
+    if ci:
+        # no launch floor either: the lanes were sized from the memory available, once
+        if memory > ci[0] or cpus > ci[1]:
+            raise RuntimeError(f'Test VM budget exceeded: {memory} MiB RAM, {cpus} vCPUs; the CI run gave {ci[0]} MiB and {ci[1]} vCPUs')
+        return
     if memory > cap * 1024 or cpus > 4:
         raise RuntimeError(f'Test VM budget exceeded: {memory} MiB RAM, {cpus} vCPUs; cap {cap} GiB and 4 vCPUs')
     free = subprocess.check_output(['free', '-g'], text=True)
