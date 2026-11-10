@@ -641,7 +641,7 @@ Backed up 6 hours ago. Last test restore: 12 days ago, passed.
   Last backup   worked, 6 hours ago (2026-10-30 06:14, snapshot 1f3a9c2e, 48,210 files, 12.4 GB)
   Last check    passed, 5 days ago (2026-10-25 08:03)
   Read-back     5 % of the data read back 26 days ago, passed
-  Test restore  passed 12 days ago: 100 files restored and read back (a sample)
+  Test restore  passed 12 days ago (2026-10-18 10:07): 100 files restored and read back, a sample
   Backups kept  17 backups, from 2026-05-01 to 2026-10-30 (counted 6 hours ago)
   Schedule      backup nightly (active), check weekly (active), test restore monthly (active)
 
@@ -737,7 +737,9 @@ A backup nobody has restored from is a hope, not a backup. So once a month the s
 tries: it picks 100 of the newest backup's files at random, restores them to a scratch
 folder, reads each one back against the backup, compares them with the backup's own list,
 and removes the scratch folder. Nothing on the server changes. The sample leaves out
-files over 256 MiB and stops at 1 GiB in all, so it fits beside the system.
+files over 256 MiB and stops at 1 GiB in all, so it fits beside the system. It reads
+everything from the destination, with none of restic's cache on the server: on the day the
+server is gone, there is no cache.
 
 It's quiet when it passes. The health line says when one last passed. When one fails, or
 none has passed for 45 days, the health line says so and [alerts](alerts.md) tell your
@@ -810,7 +812,8 @@ needs ([below](#restore-without-bromigos)).
 
 What's backed up: `/etc`, `/var/lib/bromigos`, the Quadlets in `/etc/containers/systemd`,
 the containers' volumes, `/srv`, `/home` and `/root`. Caches are left out (folders with a
-`CACHEDIR.TAG`, `~/.cache`, `node_modules`), and the offline package store. `paths` and
+`CACHEDIR.TAG`, `~/.cache`, `node_modules`), the offline package store, and `/srv/restore`,
+where restores go. `paths` and
 `exclude` in `[backup]` replace those lists.
 
 **A drive that isn't plugged in.** When a backup worked at the destination before and
@@ -1213,5 +1216,14 @@ files are, an in-place restore whose dry-run list is compared with what changed 
 no snapshot mechanism, a snapshot that fails, too little free space, a restore stopped by
 a signal and one killed, a drive that isn't connected, and a damaged repository failing
 the test restore. snapper is a stand-in: from a stand-in root the machine's own snapper
-is never run. `tests/alerts/test_alerts.py` checks that every backup alert is a problem
-of the same `health()` the status prints.
+is never run, nor its `systemctl`, nor `sudo`. `tests/alerts/test_alerts.py` checks that
+every backup alert is a problem of the same `health()` the status prints.
+
+The real tools are tried on a real install. CI's ISO workflow installs bromigOS Server in
+a VM ([fieldkit.md](fieldkit.md#testing-it)), and `iso/fieldkit/restore-drill.sh` then runs
+on it, as a user in `wheel`, with no network: a backup to a folder; `list` and `show`; a
+restore to a new folder compared by checksum; an in-place restore with a real snapper
+snapshot of `/` and of `/home`, and the plain refusal on `/srv`, which has none; the test
+restore by hand and through `bromigos-server-backup-test.service`; the re-run through
+`sudo`; and a pack file cut in half, which the test restore, the health line and the alert
+must all report.

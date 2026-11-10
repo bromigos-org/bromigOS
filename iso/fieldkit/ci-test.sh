@@ -13,6 +13,8 @@
 #   2. "Install bromigOS Server": the installer's own backend (bromigos-iso-install --answers,
 #      the answers the text installer would hand it) installs Server offline onto the VM's disk
 #   3. the installed Server boots to its console and passes its checks
+#   4. the restore drill on it (iso/fieldkit/restore-drill.sh): a real backup, restore and
+#      test restore, with the real restic, snapper, sudo and systemd
 #
 # DIR gets shots/, each VM's folder (serial logs) and the output; the disk is removed at the
 # end. Runs in iso/ci-test.sh's container (QEMU, OVMF, xorriso, ImageMagick), or anywhere
@@ -173,6 +175,7 @@ step "the pairing QR decodes from kmscon and the bare console" qr || true
 "$T" down --name qr >/dev/null 2>&1 || true
 if step "bromigOS Server installs from the stick with no network" install; then
     step "the installed bromigOS Server boots to its console" server || true
+    . "$here/restore-drill.sh"      # the restore drill on that Server: its own steps (docs/server.md, "Backups")
 fi
 "$T" down --name install >/dev/null 2>&1 || true
 "$T" down --name server >/dev/null 2>&1 || true

@@ -660,7 +660,8 @@ Its VMs and screenshots go in `~/.cache/bromigos-fieldkit-test/` (`BROMIGOS_FIEL
   installed Server boots to its console and passes its checks: firewall, update timer,
   snapshots, the boot menu's "More ways to start", a clean `pacman -Qk`, the LTS kernel,
   and nothing of the stick's own left (its live hooks, its autologin, the installer, the
-  store, archinstall).
+  store, archinstall). On that Server it then runs the restore drill
+  (`iso/fieldkit/restore-drill.sh`, [server.md](server.md#tests)).
 - `iso/fieldkit/server-test.sh` installs Server encrypted and adds the `bromigos-fieldkit`
   package to it, for the tests below that need Field Kit in an installed boot menu.
 - `iso/fieldkit/ventoy-test.sh` puts a medium on a Ventoy disk image and boots it in Ventoy's
