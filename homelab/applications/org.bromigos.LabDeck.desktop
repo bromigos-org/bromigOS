@@ -9,6 +9,6 @@ TryExec=bromigos-live
 Exec=bromigos-live open lab
 Terminal=false
 Categories=System;Monitor;
-Keywords=lab;homelab;lab deck;deck;hologram;rack;servers;gpu;cluster;
+Keywords=lab;homelab;deck;hologram;rack;servers;gpu;cluster;
 StartupNotify=false
 X-Bromigos-Menu=holo/lab

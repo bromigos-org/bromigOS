@@ -9,6 +9,6 @@ TryExec=/usr/lib/bromigos/bin/bromigos-lab
 Exec=bromigos terminal --title "bromigos lab" -- bromigos lab
 Terminal=false
 Categories=System;Monitor;
-Keywords=lab;homelab;lab console;console;status;gpu;gpus;models;jobs;doctor;servers;
+Keywords=lab;homelab;console;status;gpu;gpus;models;jobs;doctor;servers;
 StartupNotify=false
 X-Bromigos-Menu=placed/bromigos-lab
