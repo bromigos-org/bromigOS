@@ -227,6 +227,14 @@ def hint(widget, text):
     return widget
 
 
+def focus_soon(widget):
+    """The keyboard's focus on `widget` once the page is laid out, one time. GLib repeats an idle
+    callback for as long as it returns true, and grab_focus() returns True when it took the
+    focus: given to idle_add bare, it ran for ever, a core busy, and took the focus back from
+    every field a person clicked or tabbed to, so nothing could be typed."""
+    GLib.idle_add(lambda: (widget.grab_focus(), False)[1])
+
+
 def label(text, classes=(), wrap=True, xalign=0.0, selectable=False):
     lab = Gtk.Label(label=text, wrap=wrap, xalign=xalign, selectable=selectable)
     lab.set_wrap_mode(2)            # word-char
@@ -547,7 +555,8 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
                 self.next.add_css_class("destructive-action")
             hint(self.next, "Start the install. " + ("Everything on the disk is deleted." if erase else "Nothing you have is deleted."))
         self.set_default_widget(self.next if self.next.get_visible() else None)
-        GLib.idle_add(self.next.grab_focus if sid not in ("install", "done") else (lambda: False))
+        if sid not in ("install", "done"):
+            focus_soon(self.next)
         if self.opts.get("script") and sid != "auto":
             GLib.timeout_add(300, self.script_step)
         if speak:
@@ -717,7 +726,7 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
         body.append(right)
         page.append(body)
         self.set_default_widget(cancel)
-        GLib.idle_add(cancel.grab_focus)
+        focus_soon(cancel)
         self._auto_filled = False
         if self.probe is not None:
             self._auto_fill()
@@ -825,7 +834,7 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
         g2.add(row)
         self.lang_row = row
         self.set_default_widget(self.next)
-        GLib.idle_add(self.voice_switch.grab_focus)
+        focus_soon(self.voice_switch)
 
     def on_voice_switch(self, sw, _p):
         if getattr(self, "_voice_sync", False) or not self.voice:
@@ -1520,19 +1529,28 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
         self.validate_user()
 
 
+    def suggest(self, key, text):
+        """A field filled in from another one, not by the person: the *_typed handlers don't take
+        it as their edit. set_text() on a field with text in it says "changed" twice (emptied,
+        then filled), and one suggestion sets off the next (the name, the user name, the
+        computer's name), so the mark is put back as it was, not just cleared: cleared by the
+        inner one, the outer one's second "changed" counted as typing and the user name stopped
+        following the name after its second letter."""
+        was, self._auto = getattr(self, "_auto", False), True
+        try:
+            self.f[key].set_text(text)
+        finally:
+            self._auto = was
+
     def name_typed(self, row):
         if not self.a.get("user_edited"):
-            self._auto = True
-            self.f["user"].set_text(common.suggest_username(row.get_text()))
-            self._auto = False
+            self.suggest("user", common.suggest_username(row.get_text()))
 
     def user_typed(self, row):
         if not getattr(self, "_auto", False):
             self.a["user_edited"] = True
         if not self.a.get("host_edited"):
-            self._auto = True
-            self.f["hostname"].set_text(common.suggest_hostname(row.get_text(), self.a["edition"]))
-            self._auto = False
+            self.suggest("hostname", common.suggest_hostname(row.get_text(), self.a["edition"]))
 
     def host_typed(self, row):
         if not getattr(self, "_auto", False):
@@ -1810,7 +1828,7 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
                 stay.connect("clicked", lambda *_: self._restart_stop("Staying here. Press Restart now when you're ready."))
                 page.append(stay)
             self.set_default_widget(btn)
-            GLib.idle_add(btn.grab_focus)
+            focus_soon(btn)
         else:
             hero = Gtk.Box(spacing=24)
             mark = glass.SignalLost(self.c, 120)
@@ -1852,7 +1870,7 @@ class Window(server_gui.ServerPages, Adw.ApplicationWindow):
             exp.set_child(sw)
             page.append(exp)
             self.set_default_widget(retry)
-            GLib.idle_add(retry.grab_focus)
+            focus_soon(retry)
 
 
     def save_report(self):

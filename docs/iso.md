@@ -1079,10 +1079,19 @@ iso/test.sh destroy
 More about each:
 
 - **`menu ENTRY`** waits for the boot menu with `test/screen-wait.py`, which watches the
-  VM's screen until a selection bar shows. ENTRY is `live`, `install`, `safe`, `speech`,
-  `memtest`, or `disk` (after an install, the installed system's GRUB). Each check's
+  VM's screen until a selection bar shows. ENTRY is `live`, `install`, `safe`, `text`,
+  `speech`, `memtest`, or `disk` (after an install, the installed system's GRUB); the last
+  four are behind the menu's "More options", which the test opens first. Each check's
   result goes in `menu-ENTRY-FIRMWARE.out`. `BROMIGOS_ISOTEST_VGA` picks the display
   device; the default is `virtio-vga`.
+- **`menu text`** also looks at the console: the text installer must be on tty1's screen
+  (`screen-wait.py --green`: its frame and words in the console's green), and Ctrl+N must
+  change the top line's step. That it's running isn't enough. On 0.1.4 and 0.1.5 it ran
+  with its screen in the journal (the unit's `StandardError=journal`; Textual draws on
+  standard error) and tty1 stayed black. CI runs `menu text` on every desktop medium, on
+  UEFI. `test/installer/test_text_console.py` checks the unit and the console script
+  without a VM: an installer that stops with an error leaves its words on the screen,
+  with Enter (again), S (a shell), R (restart) and P (off).
 - **`boot`** works with any medium. A test build has the harness's key. Any other medium
   gets it from a cloud-init seed (`DIR/seed.iso`, a second CD labelled `CIDATA`), which
   releng's cloud-init reads as on Arch's own medium. So a release's medium is tested as
@@ -1090,6 +1099,13 @@ More about each:
 - **`boot`'s live checks** cover Hyprland, the bar, the panels (widgets), the live layer,
   SDDM, the theme, the splash theme, the offline repository, pacman resolving `bromigos`
   from it, bromigOS's key being trusted, and the installer.
+- **`gui-type`** drives the graphical installer on the live desktop as a person does: QMP
+  moves the VM's tablet pointer and presses its keys. It clicks Continue up to About you,
+  clicks each field and types into it, goes from one to the next with Tab, and checks what
+  the window holds through `test/installer/guiwatch.py` (the installer's own code, watched
+  from inside). Nothing is installed. `gui-install` fills the fields with `set_text()`, so
+  it passed on 0.1.4 and 0.1.5, where no field took typing: a focus grab that never
+  stopped took the focus back to Continue. CI runs `gui-type` on every desktop medium.
 - **`install`** has the medium's own `answers.py` write the files for `/dev/vda`. The
   test user is `tester`, with the password `tester`, sshd and the test key. The
   passphrase is the password. After installing, it records what the new system got while
