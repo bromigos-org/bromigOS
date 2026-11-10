@@ -357,8 +357,20 @@ print(" ".join(map(str, d)) if isinstance(d, list) else d)' "$1" 2>/dev/null || 
         gui=$!
         for _ in $(seq 30); do is step guide && break; sleep 1; done
         result "the graphical installer opens, full screen" is fullscreen True
+        # the live desktop's welcome card and the installer, one at a time (welcome.py): the card
+        # that was open goes, and one drawn late (a slow computer) never opens over the installer.
+        # A window that opens takes the installer out of full screen, and the pointer below
+        # would miss it (CI, 2026-11-10: the card arrived after the installer, on a busy runner)
+        card() { "${SSH[@]}" "pgrep -f '[b]romigos_installer.welcome' >/dev/null"; }
+        for _ in $(seq 10); do card || break; sleep 1; done
+        result "the welcome card goes when the installer opens" eval '! card'
+        "${SSH[@]}" "export XDG_RUNTIME_DIR=/run/user/\$(id -u); export WAYLAND_DISPLAY=\$(basename \$(ls \$XDG_RUNTIME_DIR/wayland-* | grep -v lock | head -1)); PYTHONPATH=/usr/local/lib/bromigos-iso timeout 20 python3 -m bromigos_installer.welcome" >> "$dir/gui-type.log" 2>&1 && late=0 || late=$?
+        result "a welcome card started late closes by itself (not ended by the test's 20 s)" test "$late" -eq 0
+        sleep 1
+        result "and the installer is still full screen" is fullscreen True
         for _ in $(seq 8); do is step user && break; at next; sleep 1.5; done
         result "Continue, clicked, goes on to About you" is step user
+        is step user || echo "     the installer is on step '$(gs step)', full screen: $(gs fullscreen), its size: $(gs size)" | tee -a "$out"
         park; shot "gui-type-$firmware-user" >/dev/null
         at full_name; type_text "Test Er"; sleep 0.5
         result "Your name, clicked: what's typed arrives" is fields.full_name "Test Er"
