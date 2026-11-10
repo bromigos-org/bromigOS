@@ -705,14 +705,15 @@ class AppData(unittest.TestCase):
         self.assertIn("It was put back", r.stderr)
         self.assertEqual(self.tree(self.root / "srv/media"), media)
         self.assertEqual(self.leftover("media"), [])
+        # the folder after it isn't held back: the backups moved, and the command still ends with the error
         fstab = (self.root / "etc/fstab").read_text()
-        self.assertEqual([l for l in fstab[len(FSTAB):].splitlines() if not l.startswith("#")], [APPS_LINE])
+        self.assertEqual([l for l in fstab[len(FSTAB):].splitlines() if not l.startswith("#")], [APPS_LINE, BACKUPS_LINE])
         self.assertIn("# the apps' data, on the data disks", fstab)           # the apps' own comment stays over its line
         self.assertNotIn("media", fstab)
         self.assertEqual((self.fake / "down").read_text(), "")
         d = self.app_data()
-        self.assertEqual((d["state"], d["where"], self.folder("/srv/media")["state"], self.folder("/srv/backups")["state"]),
-                         ("ok", "pool", "not-on-pool", "not-on-pool"))          # the backups weren't reached
+        self.assertEqual((d["state"], d["where"], self.folder("/srv/media")["state"], self.folder("/srv/backups")["where"]),
+                         ("ok", "pool", "not-on-pool", "pool"))
 
     def test_files_already_in_the_pools_backups_folder_are_never_overwritten(self):
         # the installer always made a backups subvolume: someone may have put their own backups in it
@@ -720,12 +721,33 @@ class AppData(unittest.TestCase):
         self.media()
         (self.root / "srv/data/backups").mkdir()
         (self.root / "srv/data/backups/theirs.restic").write_text("someone's own backup\n")
+        self.vault()
         r = self.lab("move")
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("/srv/data/backups already has files in it (theirs.restic)", r.stderr)
         self.assertEqual((self.root / "srv/data/backups/theirs.restic").read_text(), "someone's own backup\n")
         self.assertNotIn("/srv/backups", (self.root / "etc/fstab").read_text())
         self.assertEqual(self.folder("/srv/backups")["state"], "not-on-pool")
+        # and that holds nothing else back: the media library moved, and so did the passwords vault
+        self.assertEqual(self.folder("/srv/media")["where"], "pool")
+        self.assertTrue((self.root / "srv/apps/passwords/db.sqlite3").exists())
+        self.assertEqual(self.app_data()["elsewhere"], [])
+
+    def test_files_in_the_pools_backups_folder_with_nothing_to_copy_over_them_stay_and_show(self):
+        # the usual case: the nightly backup was pointed at the data disks' backups subvolume, and
+        # no other machine backs up to this server. Nothing can be overwritten, so nothing is in
+        # the way: the subvolume is mounted at /srv/backups with their files in it
+        self.server(apps=False)
+        (self.root / "srv/backups").mkdir()                     # there, and empty
+        (self.root / "srv/data/backups").mkdir()
+        (self.root / "srv/data/backups/theirs.restic").write_text("someone's own backup\n")
+        r = self.lab("move", "--dry-run")
+        self.assertIn("/srv/data/backups has files in it already (theirs.restic). They stay as they are, and show at /srv/backups too.", r.stdout)
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((self.root / "srv/data/backups/theirs.restic").read_text(), "someone's own backup\n")
+        self.assertIn(BACKUPS_LINE, (self.root / "etc/fstab").read_text())
+        self.assertEqual((self.folder("/srv/backups")["where"], self.leftover("backups"), self.log().count("rsync")), ("pool", [], 0))
 
     def test_a_media_library_on_the_data_disks_says_when_they_are_away(self):
         self.server(apps=False)

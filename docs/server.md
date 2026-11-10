@@ -664,9 +664,13 @@ turn after the apps' data, by the same six steps: `/srv/media` to the data disks
 subvolume, which it makes, and `/srv/backups` to their `backups` subvolume. For the media
 library it stops the media apps, because their Quadlets name `/srv/media`. Each folder's
 old copy is kept by name (`/srv/media.on-system-disk-DATE`), and `remove-old` deletes
-them together. A folder that fails stops the ones after it. The ones before it stay
-moved. A folder nothing uses yet has nothing to copy: the move mounts its subvolume, so
-what comes later is on the data disks from the start. The status has a line for the media
+them together. Everything waits for the apps' data: if that can't move, nothing else is
+tried. After it, a folder that can't move is named and left as it was, the others still
+move, and the command ends with an error. A folder nothing uses yet has nothing to copy: the move mounts its subvolume, so
+what comes later is on the data disks from the start. Files of your own already in that
+subvolume, such as a backup you pointed at `/srv/data/backups`, stay as they are and show
+at `/srv/backups` too. They are in the way only when the folder on the system disk has
+data to copy over them. Then that folder isn't moved until you move them. The status has a line for the media
 library or the backups folder only when it holds data on the system disk. A media library
 on a NAS share is left alone. So is a disk of your own mounted at either folder, or named
 for it in `/etc/fstab`: the status counts it as `elsewhere`, mounted or not.

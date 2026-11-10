@@ -436,14 +436,14 @@ def app_data_plan(d, src=APPS_DIR, sub="apps", what="the apps' data"):
     dst = os.path.join(pool, sub)
     j = read_json(state_file(src))
     resuming = j.get("state") in (*MOVING, "failed") and j.get("destination") == dst
-    if os.path.isdir(at(dst)) and os.listdir(at(dst)) and not resuming:
-        names = ", ".join(sorted(os.listdir(at(dst)))[:5])
-        raise AppDataError(f"{dst} already has files in it ({names}), and they aren't from a move of {what}. "
+    there = has_files(src)                  # nothing in it: nothing to copy or keep, and the folder is the mount point
+    theirs = sorted(os.listdir(at(dst))) if os.path.isdir(at(dst)) and not resuming else []
+    if theirs and there:
+        raise AppDataError(f"{dst} already has files in it ({', '.join(theirs[:5])}), and they aren't from a move of {what}. "
                            "Nothing was changed: move them away first, so nothing of yours is overwritten")
     if is_mount(src):
         raise AppDataError(f"{src} is a mount of its own, not a folder on the system disk: this moves only the folder "
                            f"{what} was given. Nothing was changed")
-    there = os.path.isdir(at(src))          # not there: nothing has data yet, and there's nothing to copy or keep
     need, free = tree_bytes(src) if there else 0, shutil.disk_usage(at(pool)).free
     if there and not shutil.which("rsync"):
         raise AppDataError("rsync isn't installed, and the copy is made with it. Install the rsync package, then run this again")
@@ -453,6 +453,7 @@ def app_data_plan(d, src=APPS_DIR, sub="apps", what="the apps' data"):
             # room for the copy, and some over: btrfs needs space of its own, and the apps start again after
             "fits": free >= int(need * 1.05) + 1024 ** 3,
             "units": units, "host_units": hosts, "strays": strays, "leftover": old_copy_name(src) if there else "",
+            "theirs": theirs,               # files of the owner's in the subvolume already, with nothing to copy over them
             "fstab": f"{row[0]}  {src}  btrfs  subvol=/{sub},{opts}  0 0", "resuming": resuming}
 
 
@@ -464,6 +465,9 @@ def print_move_plan(p, dry):
               (f"bromigos lab app-data: nothing is in {p['source']} yet. The data disks' {p['sub']} subvolume ({p['destination']}) "
                f"{will} be mounted there, so {p['what']} is on the data disks from the start:"))
         print(f"       {p['fstab']}")
+        if p["theirs"]:
+            print(f"  {p['destination']} has files in it already ({', '.join(p['theirs'][:5])}). They stay as they are, and "
+                  f"show at {p['source']} too.")
         return
     print(f"bromigos lab app-data: {p['what']} ({gib(p['bytes'])} in {p['source']}, on the system disk) {will} move to the data "
           f"disks ({p['destination']}, {gib(p['free'])} free)")
@@ -588,8 +592,10 @@ def copy_and_compare(src, dst, size, resuming):
 
 def app_data_move(d, dry):
     """Each folder that isn't on the data disks, in turn: the apps' data first, then the media
-    library and the backups folder, then the passwords vault into the apps' folder. One that
-    fails stops the rest, with everything before it done and everything after it untouched."""
+    library and the backups folder, then the passwords vault into the apps' folder. Everything
+    waits for the apps' data: if that can't move, nothing else is tried. After it, one that
+    can't move is said and left as it was, and doesn't hold the others back: files in the way of
+    the backups folder must never keep the passwords off the data disks."""
     if d["pool"] and not d["pool_mounted"]:
         raise AppDataError(f"the data disks aren't mounted ({d['pool']}). `bromigos lab app-data` and `journalctl -b -u "
                            f"{d['pool'].strip('/').replace('/', '-')}.mount` say why; nothing was changed")
@@ -600,7 +606,13 @@ def app_data_move(d, dry):
         return 0
     rc = 0
     for f in todo:
-        rc = move_folder(d, f, *next(x[1:] for x in FOLDERS if x[0] == f["path"]), dry) or rc
+        try:
+            rc = move_folder(d, f, *next(x[1:] for x in FOLDERS if x[0] == f["path"]), dry) or rc
+        except AppDataError as e:
+            if f["path"] == APPS_DIR:
+                raise
+            print(f"bromigos lab app-data: {e}", file=sys.stderr)
+            rc = 1
     if vault:
         rc = vault_move(dry) or rc
     return rc
@@ -658,6 +670,9 @@ def move_folder(d, f, sub, what, dry):
             if still:
                 raise AppDataError(f"still using {src} after the apps were stopped: {', '.join(still)}. Stop it, then run this again")
             if run(["btrfs", "subvolume", "show", at(dst)])[0] != 0:
+                if has_files(dst):
+                    raise AppDataError(f"{dst} is a plain folder with files in it, not a subvolume, so it can't be mounted "
+                                       f"at {src}. Move the files away first")
                 if os.path.isdir(at(dst)):
                     os.rmdir(at(dst))               # an empty plain folder: a subvolume takes its place
                 must(["btrfs", "subvolume", "create", at(dst)], f"couldn't make the {sub} subvolume {dst}")
