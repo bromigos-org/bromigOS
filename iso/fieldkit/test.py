@@ -4,7 +4,10 @@ network unless asked, driven through the serial console, its screen saved throug
 monitor. Never a window, never the host's network or disks.
 
   iso/fieldkit/test.py up --iso ISO [--firmware uefi|bios] [--disk FILE [--disk-size 24G]]
-                          [--attach FILE …] [--net] [--mem MiB] [--boot cd|disk] [--name N]
+                          [--data-disk FILE …] [--attach FILE …] [--net] [--mem MiB]
+                          [--boot cd|disk] [--name N]
+                          --data-disk: more disks after the first (/dev/vdb, /dev/vdc: a server's
+                          data disks), 8 GiB each, made when they aren't there; --attach: USB sticks
                           [--direct [--entry TITLE] [--append PARAMS]]
                           --direct: the medium's kernel and initramfs started by QEMU itself, with
                           the kernel line of its GRUB menu's entry TITLE (default "Start Field
@@ -137,6 +140,10 @@ def up(a):
         if not os.path.exists(a.disk) and a.disk.endswith(".qcow2"):
             subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", a.disk, a.disk_size], check=True)
         args += ["-drive", f"file={a.disk},if=virtio,format={'qcow2' if a.disk.endswith('.qcow2') else 'raw'}"]
+    for f in a.data_disk or []:         # after the first disk, in order: /dev/vdb, /dev/vdc
+        if not os.path.exists(f):
+            subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", f, "8G"], check=True)
+        args += ["-drive", f"file={f},if=virtio,format=qcow2"]
     for i, f in enumerate(a.attach or []):
         fmt = "qcow2" if f.endswith(".qcow2") else "raw"
         args += ["-drive", f"file={f},if=none,id=usb{i},format={fmt}", "-device", f"usb-storage,drive=usb{i},removable=on"]
@@ -308,6 +315,7 @@ def main(argv=None):
     p.add_argument("--firmware", choices=["uefi", "bios"], default="uefi")
     p.add_argument("--disk")
     p.add_argument("--disk-size", default="24G")
+    p.add_argument("--data-disk", action="append")
     p.add_argument("--attach", action="append")
     p.add_argument("--net", action="store_true")
     p.add_argument("--mem", type=int, default=3072)

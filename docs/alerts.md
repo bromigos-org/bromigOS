@@ -26,6 +26,7 @@ The manual's [Alerts](../manual/src/alerts.md) page is the user's side.
 | `power.ups` | A UPS through NUT (`upsc`) | Needs you: on battery, or its battery needs replacing. Critical: on battery and low |
 | `systemd.failed` | Services that failed, leaving out ones that don't matter | Needs you. Critical for SSH, the firewall and the network on a Server |
 | `server.game` | A game server that stopped (bromigOS Server) | Needs you |
+| `server.app-data` | Where a bromigOS Server with data disks keeps its apps' data (`bromigos lab app-data`) | Needs you: it's on the system disk, or a move to the data disks didn't finish. Critical: the data disks aren't mounted |
 | `fieldkit.finding` | After each boot: Field Kit's black screen check on this computer, and what a Field Kit stick found here | Needs you |
 | `game.steam` | Steam and Proton (`bromigos game check`) | Needs you, or info when bromigOS fixes it by itself |
 

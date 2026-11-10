@@ -19,6 +19,12 @@
 #      docs/activity.md): a job in a transient unit ends done, one that fails names its step, a
 #      detached one outlives the session that started it, the Server tour's apply runs through
 #      sudo as the signed-in user, and a restart closes a running job as interrupted
+#   6. the same install on a machine with two data disks, as two copies (RAID1); the installed
+#      Server, with a network this time, has the lab's engine install an app from the catalogue,
+#      and the app's data must be on the data disks' filesystem, not the system disk's. Then
+#      the server is put back as an older installer left one, and bromigos lab app-data move
+#      must move the app's data to the data disks
+#      (iso/test/server-data-checks.sh; docs/server.md, "Where the apps keep their data")
 #
 # DIR gets shots/, each VM's folder (serial logs) and the output; the disk is removed at the
 # end. Runs in iso/ci-test.sh's container (QEMU, OVMF, xorriso, ImageMagick), or anywhere
@@ -92,9 +98,12 @@ qr() {
 
 # ── 2. bromigOS Server, installed offline ───────────────────────────────────────────────
 disk=$out/vm/server.qcow2
-install() {
+install() {         # install [DISK [ANSWERS [UP…]]]: onto DISK; ANSWERS: Python that changes the answers (a);
+                    # UP: more for the VM (its data disks)
+    local disk=${1:-$disk} more=${2:-}
+    shift 2 2>/dev/null || shift $#
     rm -f "$disk"
-    "$T" up --name install --iso "$iso" --firmware uefi --direct --mem 3584 --disk "$disk" --disk-size 24G || return 1
+    "$T" up --name install --iso "$iso" --firmware uefi --direct --mem 3584 --disk "$disk" --disk-size 24G "$@" || return 1
     "$T" wait-serial --name install "login:" --timeout 300 || return 1
     "$T" login --name install --timeout 60 >/dev/null || return 1
     # the answers the text installer hands the backend for: Server (preselected on this
@@ -106,6 +115,7 @@ a = common.defaults()
 assert a['edition'] == 'server', a['edition']
 a.update(disk='/dev/vda', mode='erase', user='tester', full_name='Test Er', password='tester',
          hostname='fkserver', encrypt=False, ssh=False)
+$more
 b = common.backend_answers(a, None)
 assert not b['online'], 'bromigOS Server should install with no network from this stick'
 json.dump(b, open('/root/answers.json', 'w'))
@@ -215,6 +225,30 @@ activity_reboot() {
     activity reboot-end
 }
 
+# ── 6. bromigOS Server with two data disks: where its apps keep their data ──────────────
+ddisk=$out/vm/server-data.qcow2 data1=$out/vm/data1.qcow2 data2=$out/vm/data2.qcow2
+install_data() {    # the same install, the two other disks chosen as data disks, two copies
+    rm -f "$data1" "$data2"
+    install "$ddisk" "from bromigos_installer import server
+server.srv(a).update(data_disks=['/dev/vdb', '/dev/vdc'], data_layout='raid1')" --data-disk "$data1" --data-disk "$data2"
+}
+server_data() {     # the checks reach the server on a small disk (no SSH here: the serial console)
+    local d img=$out/vm/checks.img
+    d=$(mktemp -d "$out/vm/checks.XXXXXX") || return 1
+    cp "$here/../test/server-data-checks.sh" "$d/"
+    rm -f "$img"; truncate -s 16M "$img"
+    mkfs.ext4 -q -L FKCHECKS -d "$d" "$img" || return 1
+    rm -rf "$d"
+    "$T" up --name server-data --firmware uefi --mem 3072 --disk "$ddisk" --data-disk "$data1" --data-disk "$data2" \
+        --attach "$img" --boot disk --net || return 1
+    "$T" wait-serial --name server-data "login:" --timeout 300 || return 1
+    sleep 10
+    "$T" login --name server-data --user tester --password tester --timeout 60 >/dev/null || return 1
+    TIMEOUT=1500 run server-data 'echo tester | sudo -S -p "" sh -c "echo \"tester ALL=(ALL) NOPASSWD: ALL\" > /etc/sudoers.d/99-isotest && chmod 440 /etc/sudoers.d/99-isotest" || exit 1
+        sudo mkdir -p /run/fkchecks && sudo mount -o ro /dev/disk/by-label/FKCHECKS /run/fkchecks || exit 1
+        bash /run/fkchecks/server-data-checks.sh raid1=1 disks=2 app=start-page move=1'
+}
+
 step "Field Kit starts (offline): console, Home, engine, offline store" live || true
 "$T" down --name live >/dev/null 2>&1 || true
 step "the pairing QR decodes from kmscon and the bare console" qr || true
@@ -234,6 +268,12 @@ if step "bromigOS Server installs from the stick with no network" install; then
 fi
 "$T" down --name install >/dev/null 2>&1 || true
 "$T" down --name server >/dev/null 2>&1 || true
-rm -f "$disk" "$out"/vm/*/OVMF_VARS.fd "$out"/vm/*/vmlinuz "$out"/vm/*/initramfs.img
+rm -f "$disk" "$out"/vm/install/OVMF_VARS.fd
+if step "bromigOS Server installs with two data disks, as two copies (RAID1)" install_data; then
+    step "the installed Server keeps its apps' data on the data disks, and an older one's is moved there" server_data || true
+fi
+"$T" down --name install >/dev/null 2>&1 || true
+"$T" down --name server-data >/dev/null 2>&1 || true
+rm -f "$disk" "$ddisk" "$data1" "$data2" "$out/vm/checks.img" "$out"/vm/*/OVMF_VARS.fd "$out"/vm/*/vmlinuz "$out"/vm/*/initramfs.img
 echo "==> Field Kit: $fails failed"
 ((fails == 0))

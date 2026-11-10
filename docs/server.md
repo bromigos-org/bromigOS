@@ -549,12 +549,124 @@ WantedBy=multi-user.target
 
 Then `sudo systemctl daemon-reload` and `sudo systemctl start whoami`.
 
-**Containers update after the system.** `podman-auto-update.timer` is on, moved by a drop-in
-from midnight to 05:30, after the nightly update. It updates each container marked
-`AutoUpdate=registry`, and rolls one back when its service fails to start.
+**Containers you mark update after the system.** `podman-auto-update.timer` is on, moved by
+a drop-in from midnight to 05:30, after the nightly update. It updates each container marked
+`AutoUpdate=registry`, as in the example above, and rolls one back when its service fails
+to start.
+
+**The catalogue's container apps don't update by themselves.** Most apps bromigOS sets
+up, from the installer's **What should this server run?** step or
+`bromigos lab provision --local`, run as containers: photos, documents, home automation,
+the media apps. Each is pinned to one exact image and isn't marked `AutoUpdate=registry`.
+The timer leaves them alone, and the nightly update changes the system's packages, not
+them. Such an app stays at the version it was installed with.
+
+A few items are packages, not containers: passwords (Vaultwarden), file sync (Syncthing),
+ad blocking (AdGuard Home), Caddy, Ollama. Those update with the system each night, like
+any package. [lab-provision.md](lab-provision.md#updates) says how a container app changes
+today, and what is planned.
 
 For power users: Podman's own docs are `man podman-systemd.unit` and
 `man podman-auto-update`. Compose files still work; they just aren't services systemd knows.
+
+## Where the apps keep their data
+
+Every app that runs as a container keeps its data in a folder of its own under
+`/srv/apps`: the photo library and its database in `/srv/apps/photos`, the documents in
+`/srv/apps/documents`. File sync (Syncthing) keeps its folder there too. Which disk that
+is depends on the server.
+
+- **With data disks**, `/srv/apps` is on them. The installer makes the data disks' `apps`
+  subvolume and mounts it at `/srv/apps`, so it is the same folder as `/srv/data/apps`.
+  With two copies (RAID1), the apps' data has two copies too. The data disks' monthly
+  scrub checks it.
+- **Without data disks**, `/srv/apps` is a folder on the system disk.
+
+**Apps that are packages aren't there.** Passwords (Vaultwarden) is a package, and its
+data is where the package keeps it: `/var/lib/vaultwarden`, on the system disk, with or
+without data disks. Nothing here moves it. On a server with data disks the status names
+it, so "on the data disks" is never read as all of it. The nightly backup's default paths
+([Backups](#backups)) don't include `/var/lib/vaultwarden` either: `[backup] paths` in
+`server.toml` sets the whole list. AdGuard Home, Grafana and Prometheus, and OpenBao are
+packages too, and each keeps its state where its package does.
+
+`bromigos lab app-data` says which, and `bromigos server` has it on its **App data** line.
+`bromigos lab app-data status --json` gives the same as JSON. The command is the lab's
+(`bromigos-lab`), because every bromigOS Server has that package, whichever stick installed
+it. `bromigos server app-data` is the same command.
+
+### A server set up before the installer did this
+
+Until November 2026 the installer made the `apps` subvolume and never mounted it. A server
+installed with data disks before then has its apps' data on the system disk: one copy,
+where you may have chosen two. It says so on the App data line, and as the
+`server.app-data` alert ([alerts.md](alerts.md)), which reaches your phone. One command
+moves the data:
+
+```bash
+sudo bromigos lab app-data move --dry-run   # says what it would do, and changes nothing
+sudo bromigos lab app-data move
+```
+
+What the move does:
+
+1. It checks first, and stops with nothing changed when a check fails. The data disks must
+   be mounted. The copy must fit, with 5 % and 1 GiB to spare. The data disks' `apps`
+   folder must be empty. Nothing but services may be using `/srv/apps`.
+2. It stops the apps: every Quadlet that names `/srv/apps`, and any service with a file
+   open there.
+3. It copies `/srv/apps` to the data disks with rsync, keeping owners, hard links, ACLs,
+   extended attributes and sparse files.
+4. It compares every file with its copy, by checksum. A difference stops the move and
+   starts the apps again where they were.
+5. It adds one line to `/etc/fstab`, renames the old folder to
+   `/srv/apps.on-system-disk-DATE`, and mounts the data disks' `apps` subvolume at
+   `/srv/apps`. If the mount fails, it puts all three back.
+6. It starts the apps that were running.
+
+Nothing is deleted. The status names the old copy until you remove it. Once you've seen
+that the apps have everything, `sudo bromigos lab app-data remove-old` deletes it and
+gives the system disk its space back.
+
+You can run the move again at any point. A copy that was interrupted carries on from what
+is already there. A move cut off during step 5, by a power cut for example, finishes when
+you run the command again. Until then the status and the alert say it is waiting.
+
+The move isn't automatic. It stops the household's apps for as long as the copy takes, so
+a person chooses when.
+
+### When the data disks are away
+
+The data disks' lines in `/etc/fstab` have `nofail`, so the server still starts without
+them. The apps don't.
+
+- Each app's service waits for `/srv/apps` at every start. Quadlet makes a container's
+  service depend on the mounts of its `Volume=` folders. File sync (Syncthing) has a
+  drop-in that says the same. So an app starts once the data disks are mounted, and not
+  at all while they're away. systemd waits 30 seconds for the disks
+  (`x-systemd.device-timeout=30s`).
+- `/srv/apps` is then an empty folder on the system disk that takes no files
+  (`chattr +i`), so no app can begin again from nothing there.
+- `bromigos lab provision --local` refuses to set an app up.
+
+The status and a critical alert say that the data disks aren't mounted.
+
+For power users:
+
+- The line is `UUID=…  /srv/apps  btrfs  subvol=/apps,…`, with the data disks' own options.
+  The move keeps `/etc/fstab` as it was in `/etc/fstab.before-app-data-move`.
+- The move's record is `/var/lib/bromigos/lab/app-data.json`. Its `state` is `copying`,
+  `verifying`, `switching`, `done` or `failed`.
+- The copy is made with rsync. `bromigos-server` depends on it. A Server without that
+  package needs the `rsync` package for the move, and the move says so before it starts.
+- Hourly snapshots of `/srv/data` (snapper's `data` configuration) don't hold the apps'
+  data. `apps` is a subvolume inside the data disks' top one, and a btrfs snapshot stops
+  at a subvolume inside it. The second copy and the nightly backup protect the apps' data.
+- The nightly backup reads `/srv`, so on a server with data disks it reads the apps' data
+  twice, as `/srv/apps` and as `/srv/data/apps`. restic stores it once.
+- The media library (`/srv/media`, unless its setup names another folder) and the backup
+  place for other machines (`/srv/backups`) aren't part of this. Both are on the system
+  disk.
 
 ## Logs
 
@@ -1107,7 +1219,7 @@ Then allow your phone at the server once ("Allow this phone", `brodec-machine en
 
 The server checks itself for what needs you: failing drives, btrfs errors, a full disk, an
 update held by the news or rolled back, a failed backup, the UPS on battery, a service that
-stopped, a game server that's down. `bromigos alerts` lists them. BRODEC's machine agent sends
+stopped, a game server that's down, apps' data on the wrong disk. `bromigos alerts` lists them. BRODEC's machine agent sends
 them to your phone, end-to-end encrypted, with buttons to act on them. [alerts.md](alerts.md)
 has the checks and how to add your own.
 
@@ -1125,6 +1237,7 @@ bromigOS Server · lab-node-2 · 192.0.2.20
   Roles        Lab node, Storage
   Backups      Backed up 6 hours ago. Last test restore: 12 days ago, passed. To s3:https://s3.example/backups/lab-node-2.
   Disks        no errors; SMART watch active, monthly scrub active
+  App data     on the data disks (/srv/apps, their apps subvolume)
   Power        UPS: none on USB (NUT is off)
   Protection   sshguard active, AppArmor on
   Wake-on-LAN  enp3s0 on
@@ -1132,7 +1245,7 @@ bromigOS Server · lab-node-2 · 192.0.2.20
 
 `bromigos server status --json` gives the same as JSON: `hostname`, `addresses`, `ssh`,
 `firewall`, `updates`, `rollbacks`, `containers`, `cluster`, `monitoring`, `roles`,
-`backup`, `disks`, `ups`, `security`, `mdns`, `wake_on_lan` and `kernel`. The Server's home
+`backup`, `disks`, `ups`, `app_data`, `security`, `mdns`, `wake_on_lan` and `kernel`. The Server's home
 screen in the console reads it.
 
 | Command | What it does |
@@ -1144,6 +1257,7 @@ screen in the console reads it.
 | `sudo bromigos server role add\|remove ROLE[/VARIANT]` | A role on or off (`extra add\|remove` is the same, for Cockpit) |
 | `bromigos server backup [run\|check\|test\|key]` | The nightly backup and its checks. Getting files back is `bromigos lab backups` ([Backups](#backups)) |
 | `bromigos server ups [detect]` | The UPS ([Power](#power)) |
+| `bromigos server app-data [status\|move\|remove-old]` | Where the apps keep their data: `bromigos lab app-data` ([above](#where-the-apps-keep-their-data)) |
 | `sudo bromigos server setup` | Applies `server.toml` again, the roles included |
 
 ## For the installer
@@ -1199,6 +1313,16 @@ install put back, the lab account, files you changed kept), the roles' and the d
 in the health check, the boot menu's block, `.local` names, backups (off, the first one,
 a failure, a check, what the health line needs kept, a backup that vanished never started
 again elsewhere), the UPS (none, one, settings changed by hand), and smartd's warnings.
+`test_app_data.py` covers the App data line and `bromigos server app-data`, with a stand-in
+`bromigos-lab`.
+
+The move itself is the lab's, tested in `homelab/tests/test_appdata.py`: the status in each
+case, the dry run, the move with the real rsync (every file, mode and hard link; the old
+copy kept; the `fstab` line; the apps stopped and started in order), a write during the
+copy, a mount that fails and is put back, a move cut off before and after the switch took,
+files already in the pool's folder, a host service and a stray shell, and the space check.
+Its `findmnt`, `mount`, `umount`, `btrfs`, `chattr` and `systemctl` are stand-ins that keep
+a list of what's mounted and what's running.
 Where user namespaces work, every rule set is checked by the real `nft`, and where
 shellcheck is installed, the shell files. Nothing on the machine running them changes.
 

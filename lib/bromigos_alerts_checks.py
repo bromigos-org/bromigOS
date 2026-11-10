@@ -7,6 +7,7 @@ it instead of working it out again:
   update.waiting   `bromigos update --check --json`
   update.restart   core's reboot rules (core/crates/bromigos-core/src/reboot.rs), read the same way
   update.held      bromigos-server's own state (its Arch news hold)
+  server.app-data  `bromigos lab app-data status --json`
   backup.restic    bromigos_backups.health(): the verdict `bromigos lab backups` prints
   fieldkit.finding Field Kit's engine (`fieldkit-engine engine check …`) and the findings a
                    Field Kit stick saved in this install
@@ -603,6 +604,66 @@ def game_server(ctx):
     return found
 
 
+# ------------------------------------------------------------------ server.app-data
+
+def app_data(ctx):
+    """A bromigOS Server with data disks keeps its apps' data on them (docs/server.md, "Where
+    the apps keep their data"). One set up before the installer did that has it on the system
+    disk: one copy where the person chose two. The lab's command knows which, and moves it."""
+    # a Server by its package, or by the installer's settings file: one installed from the
+    # desktop medium has that file and may not have the bromigos-server package
+    if ctx.role != "server" and not ctx.env.exists("/etc/bromigos/server.toml"):
+        raise Skip("only a bromigOS Server has data disks for its apps")
+    rc, out, err = ctx.env.run(["bromigos", "lab", "app-data", "status", "--json"], timeout=60)
+    if rc == 127:
+        raise Skip("bromigos isn't installed")
+    try:
+        d = json.loads(out)
+        state = d["state"]
+    except (ValueError, KeyError, TypeError):
+        raise Failed("bromigos lab app-data gave no answer: " + (err.strip().splitlines() or ["?"])[-1][:200])
+    facts = {k: d.get(k, "") for k in ("path", "pool", "where", "state", "move")}
+    look = {"commands": ["bromigos lab app-data"], "touches": ["nothing (it only looks)"], "from": "bromigos",
+            "root": False, "note": ""}
+    move = {"commands": ["sudo bromigos lab app-data move --dry-run", "sudo bromigos lab app-data move"],
+            "touches": [f"stops the apps, copies {d.get('path')} to the data disks and compares every file",
+                        "keeps the old copy under a new name, and adds one line to /etc/fstab", "starts the apps again"],
+            "from": "bromigos", "root": True, "note": "The dry run changes nothing and says what the move would do."}
+    if state == "not-on-pool":
+        copies = "They have one copy, not the two you chose. " if d.get("raid1") else ""
+        if not d.get("has_data", True):
+            return [alert("server.app-data", "", "needs_you", "The next app's data would go on the system disk, not the data disks",
+                          f"This server has data disks ({d.get('pool')}), but {d.get('path')}, where every app keeps its "
+                          "data, is a folder on the system disk. No app has data there yet. "
+                          f"`sudo bromigos lab app-data move` puts {d.get('path')} on the data disks.", "Storage",
+                          actions=[{"kind": "fix", "label": "Ask VECTOR"}, {"kind": "snooze"}, {"kind": "open"}],
+                          evidence=evidence([f"{k}: {v}" for k, v in facts.items()], **facts), fix=move)]
+        return [alert("server.app-data", "", "needs_you", "The apps' data is on the system disk, not the data disks",
+                      f"This server has data disks ({d.get('pool')}), but its apps keep their data in {d.get('path')} on the "
+                      f"system disk. {copies}`sudo bromigos lab app-data move` stops the apps, copies the data to the "
+                      "data disks, compares every file, keeps the old copy by name and starts the apps again. "
+                      "`--dry-run` shows what it would do first.", "Storage",
+                      actions=[{"kind": "fix", "label": "Ask VECTOR"}, {"kind": "snooze"}, {"kind": "open"}],
+                      evidence=evidence([f"{k}: {v}" for k, v in facts.items()], **facts), fix=move)]
+    if state == "moving" and d.get("running"):
+        return []                                   # under way: nothing to raise until it ends or is cut off
+    if state == "moving":
+        return [alert("server.app-data", "", "needs_you", "A move of the apps' data didn't finish",
+                      f"A move of {d.get('path')} to the data disks stopped part-way ({d.get('move') or 'unknown'}). "
+                      "Nothing is lost: the data is whole on the system disk, the data disks, or both. "
+                      "`sudo bromigos lab app-data move` carries on from where it stopped.", "Storage",
+                      actions=[{"kind": "fix", "label": "Ask VECTOR"}, {"kind": "snooze"}, {"kind": "open"}],
+                      evidence=evidence([f"{k}: {v}" for k, v in facts.items()], **facts), fix=move)]
+    if state == "pool-away":
+        return [alert("server.app-data", "", "critical", "The data disks aren't mounted: the apps can't start",
+                      f"The apps keep their data on this server's data disks ({d.get('pool')}), and they aren't mounted. "
+                      "The apps stay stopped until they are, so none starts again, empty, on the system disk. "
+                      "A disk may have failed or come loose: the journal says what it knows.", "Storage",
+                      evidence=evidence([f"{k}: {v}" for k, v in facts.items()], **facts),
+                      fix=dict(look, commands=["bromigos lab app-data", "journalctl -b -p warning --no-pager -n 50"]))]
+    return []
+
+
 # ------------------------------------------------------------------ fieldkit.finding
 
 def _engine(env):
@@ -722,6 +783,7 @@ REGISTRY = [
     Check("power.ups", ["system"], ups),
     Check("systemd.failed", ["system", "user"], failed_units),
     Check("server.game", ["system"], game_server),
+    Check("server.app-data", ["system"], app_data),
     Check("fieldkit.finding", ["system"], fieldkit, boot_only=True),
     Check("game.steam", ["user"], steam),
 ]

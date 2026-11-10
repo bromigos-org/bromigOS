@@ -94,7 +94,8 @@ ROLE_TOUR = {
     "storage": [("\\\\{host}.local\\shares", "The shared folder, from Windows; smb://{host}.local/shares from a Mac", "people"),
                 ("bromigos storage", "The data disks: their health, the copies, the snapshots", "disk")],
     "home": [("http://start.{host}.local", "Every app on this server, on one page", "desktop"),
-             ("bromigos server apps", "Add, remove and update the apps", "settings")],
+             ("sudo bromigos lab provision --local --select ID --apply",
+              "Adds an app from the catalogue. Most apps don't update by themselves yet", "settings")],
     "games": [("bromigos server apps", "The game servers: start, stop, back up the worlds", "power")],
 }
 

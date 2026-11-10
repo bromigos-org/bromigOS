@@ -148,11 +148,50 @@ If it won't start, choose **bromigOS Field Kit** in the boot menu. The boot menu
 a second kernel, under Advanced options: the server starts the long-term-support one, and
 the newest one stays there in case it's needed.
 
+## Where your apps keep their data
+
+If you gave the server data disks during the install, most of your apps keep their data
+on them: photos, documents, home automation, the media apps, file sync. With two copies
+(RAID1), one disk can fail without losing any of it. Without data disks, the apps' data is
+on the system disk.
+
+One app is different. **Passwords (Vaultwarden) keeps its data on the system disk**, in
+`/var/lib/vaultwarden`, even on a server with data disks. The nightly backup's own list of
+folders doesn't include that one.
+
+`bromigos lab app-data` says where the apps' data is, and names anything that isn't on
+the data disks.
+
+A server installed before November 2026 may say the apps' data is on the system disk, not
+the data disks. That was a fault in the installer. Your phone gets an alert about it, and
+one command puts it right:
+
+```bash
+sudo bromigos lab app-data move --dry-run   # shows what it would do
+sudo bromigos lab app-data move
+```
+
+The move stops your apps, copies their data to the data disks, compares every file with
+its copy, and starts the apps again. It keeps the old copy, under a name that says what
+it is, until you remove it:
+
+```bash
+sudo bromigos lab app-data remove-old
+```
+
+Pick a quiet time: the apps are off while the copy runs. If anything goes wrong, the move
+stops and your apps start again where they were.
+
 ## For power users
 
 - Settings: `/etc/bromigos/server.toml`, then `sudo bromigos server setup`.
-- Your own services: Quadlet files in `/etc/containers/systemd/`. They start at boot,
-  restart when they fail, and update after the system does.
+- Your own services: Quadlet files in `/etc/containers/systemd/`. They start at boot and
+  restart when they fail. One you mark `AutoUpdate=registry` updates after the system does.
+- The apps bromigOS sets up as containers aren't marked. Each stays at the version it
+  was installed with: they don't update by themselves yet. Apps that are packages, such
+  as Vaultwarden and Syncthing, update with the system.
+- The apps keep their data in `/srv/apps`
+  ([above](#where-your-apps-keep-their-data)).
 - WireGuard and Tailscale are installed and off. Turn on the one you use.
 - AppArmor and a few hardening settings are on. Logs are kept for a month, 1 GiB at most.
 - SSH lets in the account made at install and anyone you add to `bromigos-ssh`

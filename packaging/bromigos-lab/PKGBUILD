@@ -17,6 +17,7 @@ optdepends=('gnupg: verify signed model catalog updates'
             'sops: encrypt generated lab credentials without Vault'
             'age: recipients for encrypted lab credentials'
             'openssh: provision a Linux box over SSH'
+            'rsync: bromigos lab app-data move copies a server'"'"'s app data onto its data disks'
             'tailscale: bromigos lab network connect joins this machine to your lab network'
             'python-qrcode: bromigos lab network join shows its join code as a QR code'
             'python-zeroconf: bromigos lab connect --find hears devices that announce themselves (mDNS)'
@@ -35,7 +36,8 @@ optdepends=('gnupg: verify signed model catalog updates'
             'libva-utils: bromigos hw salvage lists the video formats the graphics chip decodes and encodes')
 makedepends=('git' 'python' 'gnupg')
 checkdepends=('python-textual' 'python-cairo' 'python-gobject' 'pango' 'python-psutil' 'python-zeroconf'
-              'restic')   # bromigos lab backups, restoring from a real repository (tests/test_lab_backups.py)
+              'rsync'          # the app data move's tests copy with the real one
+              'restic')        # bromigos lab backups, restoring from a real repository (tests/test_lab_backups.py)
 options=('!debug')
 _root="${startdir%/packaging/*}"
 _paths=(homelab packaging/bromigos-lab packaging/install-lab.sh packaging/keys LICENSE-MIT LICENSE-APACHE)

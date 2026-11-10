@@ -22,8 +22,9 @@ bromigOS never fixes anything by itself. It says what's wrong, in plain words, a
 - **Games.** Problems that stop Steam games from starting ([Playing games](games.md)).
 - **After a repair.** What [Field Kit](fieldkit.md) found when it looked at this computer.
 
-On [bromigOS Server](server.md) it also watches game servers, and an automatic update that
-Arch Linux news held back.
+On [bromigOS Server](server.md) it also watches game servers, an automatic update that
+Arch Linux news held back, and whether a server with data disks keeps its apps' data on
+them ([Where your apps keep their data](server.md#where-your-apps-keep-their-data)).
 
 ## See the alerts
 

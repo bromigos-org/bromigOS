@@ -69,6 +69,7 @@ cat "$FAKE/podman.json" 2>/dev/null || echo '[]'
 echo "bromigos $*" >> "$FAKE/log"
 case "$*" in
   "update --check --json") cat "$FAKE/update-check.json" ;;
+  "lab app-data status --json") cat "$FAKE/app-data.json" ;;
 esac
 ''',
     "bromigos-game-check": r'''#!/bin/sh
@@ -219,6 +220,7 @@ class FakeMachine:
         self.write("podman.json", [{"Names": ["minecraft"], "State": "running", "Status": "Up 3 days",
                                     "Labels": {"org.bromigos.game": "Minecraft"}, "Image": "docker.io/itzg/minecraft-server"}])
         self.write("update-check.json", {"schema": 1, "check": {"packages": [], "aur": {"packages": None}}})
+        self.app_data("ok", where="pool")
         self.rootfile("/var/log/pacman.log", "[2026-10-29T09:00:00-0700] [PACMAN] starting full system upgrade\n"
                                              "[2026-10-29T09:01:00-0700] [ALPM] transaction completed\n")
         self.write("game.json", {"schema": 1, "ok": True, "healthy": True, "steam_root": str(self.home / ".local/share/Steam"),
@@ -262,6 +264,7 @@ class FakeMachine:
                    "TriggeredBy=restic-backup.timer\n")
         self.write("podman.json", [{"Names": ["minecraft"], "State": "exited", "Status": "Exited (137) 5 minutes ago",
                                     "Labels": {"org.bromigos.game": "Minecraft"}, "Image": "docker.io/itzg/minecraft-server"}])
+        self.app_data("not-on-pool")
         self.rootfile("/etc/bromigos/alerts.toml", '[game]\nunits = ["valheim"]\n')
         self.write("show/valheim.service", "ActiveState=failed\nSubState=failed\nDescription=Valheim dedicated server\nResult=signal\n")
         self.write("update-check.json", {"schema": 1, "check": {
@@ -297,6 +300,12 @@ class FakeMachine:
                  "fix": "", "ok": False, "commands": [], "touches": []}]}}}))
         self.write("fieldkit-last-boot.json", {"ok": False, "message": "no saved log"})
         self.server_hold()
+
+    def app_data(self, state, where="system", move="", has_data=True, running=False):
+        """What `bromigos lab app-data status --json` says: a server with two data disks."""
+        self.write("app-data.json", {"path": "/srv/apps", "pool": "/srv/data", "pool_mounted": state != "pool-away",
+                                     "where": where, "state": state, "has_data": has_data, "move": move, "running": running,
+                                     "raid1": True, "leftover": "", "elsewhere": []})
 
     def server_hold(self):
         self.rootfile("/var/lib/bromigos/server/update.json", json.dumps({

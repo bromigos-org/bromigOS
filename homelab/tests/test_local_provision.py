@@ -217,6 +217,50 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(files, after)
         self.assertTrue(all(s == "done" for i in plan["items"] for s in self.states(i["id"])[1:]))
 
+    def test_data_disks_away_nothing_is_set_up_on_the_system_disk(self):
+        # a server with data disks: fstab mounts their apps subvolume at /srv/apps. Not mounted
+        # (a stand-in root never is), that folder is the system disk's, and no app may start there
+        Path(self.root, "etc").mkdir(exist_ok=True)
+        Path(self.root, "etc/fstab").write_text(
+            "# /dev/vda2\nUUID=1111  /  btrfs  rw  0 0\n"
+            "UUID=2222  /srv/data  btrfs  compress=zstd,noatime,nofail  0 0\n"
+            "UUID=2222  /srv/apps  btrfs  subvol=/apps,compress=zstd,noatime,nofail  0 0\n")
+        Path(self.root, L.APPS).mkdir(parents=True)
+        plan = L.build_plan(["uptime", "file-sync"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 1)
+        for item in ("uptime", "file-sync"):
+            self.assertEqual(self.states(item)[-1], "failed")
+            err = next(l for l in self.lines if l.startswith(f"::error {item} "))
+            self.assertIn("data disks, and they aren't mounted (/srv/apps)", err)
+        self.assertEqual(list(Path(self.root, L.APPS).iterdir()), [])
+        self.assertEqual(self.m.ran("podman pull") + self.m.ran("useradd") + self.m.ran("systemctl start"), [])
+        self.assertFalse(Path(self.root, L.QUADLET_DIR, "uptime-kuma.container").exists())
+
+    def test_a_folder_on_the_system_disk_when_fstab_has_no_apps_line(self):
+        # no data disks: /srv/apps is the system disk's own folder, and the apps go there
+        Path(self.root, "etc").mkdir(exist_ok=True)
+        Path(self.root, "etc/fstab").write_text("UUID=1111  /  btrfs  rw  0 0\n# UUID=2222  /srv/apps  btrfs  subvol=/apps  0 0\n")
+        plan = L.build_plan(["uptime"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        self.assertTrue(Path(self.root, L.APPS, "uptime").is_dir())
+
+    def test_the_budget_measures_where_app_data_goes(self):
+        # /srv/apps when it's there (the data disks, on a server that has them), else /srv, else /
+        seen = []
+        real = L.shutil.disk_usage
+        L.shutil.disk_usage = lambda p: (seen.append(str(p)), real(self.root))[1]
+        try:
+            L.detect(self.root)
+            Path(self.root, "srv").mkdir()
+            L.detect(self.root)
+            Path(self.root, L.APPS).mkdir()
+            L.detect(self.root)
+        finally:
+            L.shutil.disk_usage = real
+        self.assertEqual(seen, [self.root, str(Path(self.root, "srv")), str(Path(self.root, "srv/apps"))])
+
     def test_gives_up_waiting_with_exit_75(self):
         plan = L.build_plan(["uptime"], hw=HW)
         self.net["after"] = 999

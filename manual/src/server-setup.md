@@ -57,7 +57,7 @@ roles](images/server-role.webp)
 |---|---|
 | **Lab node** | Computing and graphics cards for your lab. It joins your lab's cluster, and your lab's workstation sets it up from your desktop: you don't type anything on it. |
 | **Storage** | Files and backups for the house and the lab: shared folders for Windows, Mac and Linux, hourly versions of every file, and backups. |
-| **Home services** | Apps for the household: photos, media, passwords, documents, home automation. Each app gets a name like `photos-<server>.local`, backs itself up, and updates at night. |
+| **Home services** | Apps for the household: photos, media, passwords, documents, home automation. Each app gets a name like `photos-<server>.local`. Most apps don't update by themselves yet ([How it updates](#how-it-updates)). |
 | **Game server** | Game servers for your friends, started and stopped from your phone. With a lab, it joins your lab's Pelican panel. Without one, the games run on the server itself. |
 | **Media** | Your own movies, shows, music and Den TV for every screen, for media you own or have rights to. |
 | **Just a server** | The safe base and nothing more, for a box you'll fill yourself. |
@@ -191,6 +191,9 @@ code, and a picture of the link from your phone to the server](images/server-rea
 Pick other disks for your files and apps. They're joined into one place, `/srv/data`, with
 snapshots. Each disk you pick is erased: the step says what's on it first.
 
+Your apps keep their data on these disks too, in `/srv/apps`
+([bromigOS Server](server.md#where-your-apps-keep-their-data)).
+
 - **One copy** uses all the space. If a disk fails, what's on it is lost.
 - **Two copies (RAID1)** keeps every file on two disks, so one can fail without losing
   anything. It needs two or more disks.
@@ -238,6 +241,12 @@ restarts only when an update needs it, and only inside the window. When the news
 (the system bromigOS is built on) asks for a step by hand, the server waits and tells you
 first. On a Lab node, your lab restarts its machines one at a time, moving their work away
 first.
+
+These updates are the system's: bromigOS and the programs it is built from. A few apps
+are such programs and update with them: passwords (Vaultwarden) and file sync (Syncthing),
+for example. Most apps you tick on the **What should this server run?** step run as
+containers, and those aren't part of the update yet: photos, documents, home automation,
+the media apps. Each stays at the version it was installed with.
 
 **Tell my phone** sends these notices to BRODEC, once your phone is paired in the welcome
 tour.
@@ -626,6 +635,7 @@ Add your own script there and it counts too.
 | Hardening | `/etc/sysctl.d/90-bromigos-server.conf`, `/etc/systemd/journald.conf.d/90-bromigos-server.conf`, AppArmor on the kernel line |
 | The kernel | `linux-lts` first in the boot menu, `linux` beside it (`GRUB_TOP_LEVEL`) |
 | Data disks | btrfs at `/srv/data` in `/etc/fstab`, with `shares`, `apps` and `backups` in it; a monthly scrub |
+| The apps' data | `/srv/apps`: with data disks, their `apps` subvolume, mounted there by a second line in `/etc/fstab`; without, a folder on the system disk |
 | Shares (Storage) | `/etc/samba/smb.conf`, `/etc/exports`: the local network only |
 | Find my lab | `/etc/avahi/services/bromigos-server.service` (`_bromigos-lab._tcp`) |
 | Unlocking with the chip | systemd's initramfs (`sd-encrypt`), and `bromigos-server-tpm-enroll.service`, which enrols the chip at the first start (`systemd-cryptenroll --tpm2-device=auto`, bound to Secure Boot's state) and wipes its one-time key |

@@ -21,7 +21,9 @@ What it does, in order, saying each in a ::server line (the installers' details)
   hardening    the sysctl list, journald's limits, AppArmor on the kernel line
   kernel       linux-lts first in the boot menu, linux as the spare (GRUB_TOP_LEVEL)
   data disks   btrfs (single or RAID1) at /srv/data, in fstab, scrubbed monthly; hourly
-               snapshots on Storage; SMB and NFS shares
+               snapshots on Storage; SMB and NFS shares; its apps subvolume mounted at
+               /srv/apps, where every app keeps its data (without data disks, /srv/apps is
+               a folder on the system disk)
   services     each role's and service's units enabled (those the system has); Tailscale and
                WireGuard installed and left off unless chosen
   updates      the update timer moved into the window; the mode in server.toml
@@ -423,7 +425,8 @@ class Apply:
             if d == root_disk:
                 raise RuntimeError(f"{d} is the system's own disk; it can't also be a data disk")
         layout = st.get("layout", "single") if len(disks) >= 2 else "single"
-        say(f"data disks: {' '.join(disks)}, " + ("two copies (RAID1)" if layout == "raid1" else "one copy") + ", at /srv/data")
+        say(f"data disks: {' '.join(disks)}, " + ("two copies (RAID1)" if layout == "raid1" else "one copy") + ", at /srv/data; "
+            "the apps keep their data on them (/srv/apps)")
         for d in disks:
             self.host(["wipefs", "-a", d])
         args = ["mkfs.btrfs", "-f", "-L", "bromigos-data"]
@@ -433,12 +436,24 @@ class Apply:
         self.host(["udevadm", "settle"], check=False)
         _, uuid = self.host(["blkid", "-s", "UUID", "-o", "value", disks[0]])
         uuid = uuid.strip() or "UUID-OF-THE-DATA-DISKS"
+        # nofail: a server whose data disks are away still starts, and says so
+        opts = "compress=zstd,noatime,nofail,x-systemd.device-timeout=30s"
         fstab = self.read("/etc/fstab")
         if "/srv/data" not in fstab:
             fstab = fstab.rstrip("\n") + ("\n# bromigOS Server's data disks (the installer): " + ", ".join(disks) +
-                                          f"\nUUID={uuid}  /srv/data  btrfs  compress=zstd,noatime,nofail,"
-                                          "x-systemd.device-timeout=30s  0 0\n")
-            self.write("/etc/fstab", fstab)
+                                          f"\nUUID={uuid}  /srv/data  btrfs  {opts}  0 0\n")
+        # The apps' data goes on the data disks too. Every app keeps its data under /srv/apps
+        # (bromigos lab provision --local), so the pool's apps subvolume is mounted there: the
+        # same folder as /srv/data/apps. Without this line /srv/apps is a folder on the system
+        # disk, and "two copies" would be true of the shares and false of the apps.
+        if not re.search(r"^\S+\s+/srv/apps\s", fstab, re.M):
+            fstab = fstab.rstrip("\n") + ("\n# the apps' data, on the data disks: their apps subvolume (docs/server.md)"
+                                          f"\nUUID={uuid}  /srv/apps  btrfs  subvol=/apps,{opts}  0 0\n")
+        self.write("/etc/fstab", fstab)
+        # the mount point takes no files of its own (chattr +i): with the data disks away an
+        # app fails to start, and never begins again, empty, on the system disk
+        self.run(["install", "-d", "-m", "0755", "/srv/apps"])
+        self.run(["chattr", "+i", "/srv/apps"])
         mnt = self.path("/srv/data")
         os.makedirs(mnt, exist_ok=True)
         self.host(["mount", "-o", "compress=zstd", disks[0], mnt])

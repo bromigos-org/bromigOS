@@ -42,6 +42,10 @@ from . import provcatalog as PC, secretstore as S
 ROOT = os.environ.get("BROMIGOS_ROOT", "/")
 STATE = "var/lib/bromigos/lab/provision-local.json"
 QUADLET_DIR = "etc/containers/systemd"
+# Every app keeps its data in a folder of its own here. On a bromigOS Server with data disks
+# this is a mount of their apps subvolume (the installer's fstab line, or `bromigos server
+# app-data move` on a server set up before it), so the data is on those disks. With no data
+# disks it's a folder on the system disk (docs/server.md, "Where the apps keep their data").
 APPS = "srv/apps"
 ANSWERS = "/var/log/bromigos/install-answers.toml"
 STATES = ("waiting", "downloading", "installing", "done", "failed", "skipped-offline")
@@ -98,7 +102,8 @@ def detect(root="/"):
         hw["ram_gb"] = round(kib / 1024 ** 2, 1)
     except (OSError, StopIteration, ValueError):
         hw["ram_gb"] = None
-    base = at("srv", root) if os.path.isdir(at("srv", root)) else root
+    # the free space where the apps' data goes: the data disks when /srv/apps is on them
+    base = next((p for p in (at(APPS, root), at("srv", root)) if os.path.isdir(p)), root)
     hw["disk_gb"] = round(shutil.disk_usage(base).free / 1024 ** 3, 1)
     hw.update(gpu=False, gpu_vram_gb=0, gpu_name="")
     try:
@@ -356,6 +361,18 @@ class Host:
             self.must(["chown", owner, str(p)], "set the folder's owner")
         return p
 
+    def apps_folder(self):
+        """Refuses while this server's data disks are away. Its fstab mounts their apps
+        subvolume at /srv/apps; unmounted, that's an empty folder on the system disk, and an
+        app set up there would start again from nothing, on the wrong disk."""
+        try:
+            rows = [l.split() for l in self.path("etc/fstab").read_text().splitlines() if l.strip() and not l.lstrip().startswith("#")]
+        except OSError:
+            rows = []
+        if any(len(r) > 1 and r[1] == "/" + APPS for r in rows) and not os.path.ismount(self.path(APPS)):
+            raise ProvisionError(f"this server keeps its apps' data on its data disks, and they aren't mounted (/{APPS}). "
+                                 "Nothing was set up. `bromigos server` says what it knows about them")
+
     # -- commands
     def must(self, argv, what, data=None, env=None):
         rc, out, _ = self.run(argv, data, env)
@@ -535,6 +552,7 @@ def install_pacman(host, it):
 
 
 def install_quadlet(host, it):
+    host.apps_folder()
     files = template_files(it["install"]["quadlet"])
     units = [f.stem + ".service" for f in files if f.suffix == ".container"]
     host.secrets_for(it, units)
@@ -763,12 +781,15 @@ def step_passwords(host, it):
 
 
 def step_file_sync(host, it):
+    host.apps_folder()
     pacman(host, ["syncthing"])
     if host.run(["id", "syncthing"])[0] != 0:
         host.must(["useradd", "--system", "--create-home", "--home-dir", "/" + APPS + "/file-sync", "--shell",
                    "/usr/bin/nologin", "syncthing"], "make the syncthing account")
+    # its folder is under /srv/apps: on a server with data disks it starts once they're mounted,
+    # and not at all while they're away (a container's units get the same from Quadlet)
     host.write("etc/systemd/system/syncthing@syncthing.service.d/50-bromigos.conf",
-               "[Service]\nEnvironment=STGUIADDRESS=0.0.0.0:8384\n")
+               f"[Unit]\nRequiresMountsFor=/{APPS}/file-sync\n\n[Service]\nEnvironment=STGUIADDRESS=0.0.0.0:8384\n")
     host.must(["systemctl", "daemon-reload"], "reload systemd")
     enable(host, ["syncthing@syncthing.service"])
 

@@ -26,6 +26,11 @@
 #                           lib/bromigos_backups.py)
 #   containers              Podman, with the docker command and compose; Quadlet for services
 #                           (/etc/containers/systemd), podman-auto-update.timer after the update
+#   the apps' data          /srv/apps: on the data disks when the server has them (the
+#                           installer mounts their apps subvolume there); bromigos lab
+#                           app-data (bromigos-lab's; bromigos server app-data is the same)
+#                           says where it is, and moves it there with rsync on a server
+#                           set up before the installer did
 #   the network             mDNS (avahi, nss-mdns: the _bromigos-lab._tcp announcement, .local
 #                           names); Wake-on-LAN (bromigos-core's); WireGuard and Tailscale
 #                           installed, off
@@ -37,7 +42,7 @@
 #   the lab's cluster       joined from the lab's workstation (bromigos lab provision add-node)
 #   themed local consoles   kmscon on the first console (bromigos-boot's settings)
 #   `bromigos server`       /usr/lib/bromigos/server/bromigos-server: status, update, health,
-#                           firewall, roles, role, backup, ups, setup
+#                           firewall, roles, role, backup, ups, app-data, setup
 #
 # Settings: /etc/bromigos/server.toml (the installer writes it). The install script applies
 # them (bromigos-server setup); nothing here needs the internet. Everything in depends is on
@@ -62,8 +67,9 @@ depends=(# bromigOS with no desktop (Field Kit's pieces, the lab, the terminal a
          # here: the edition installs it, and the Game server role's Wings swaps it for docker)
          'nftables' 'sshguard' 'apparmor' 'podman' 'podman-compose' 'crun' 'netavark'
          'prometheus-node-exporter'
-         # disks, power and backups: smartd, NUT (on only with a UPS), restic
-         'smartmontools' 'nut' 'restic'
+         # disks, power and backups: smartd, NUT (on only with a UPS), restic; rsync moves
+         # the apps' data onto the data disks (bromigos lab app-data move)
+         'smartmontools' 'nut' 'restic' 'rsync'
          # the network: mDNS and .local names, Wake-on-LAN, WireGuard and Tailscale (both off)
          'avahi' 'nss-mdns' 'ethtool' 'wireguard-tools' 'tailscale'
          # the themed console: kmscon with Geist Mono and the screens' icons (bromigos-boot's settings)
