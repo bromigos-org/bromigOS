@@ -19,6 +19,19 @@ are. To change the channel you follow, see [Channels](update-and-rollback.md#cha
 
 Developers can read every change in the repository's `CHANGELOG.md`.
 
+<!-- unreleased: v0.1.5 -->
+## On edge since 0.1.5
+
+These changes are already on the `edge` channel. They are not a new stable release.
+Run `bromigos update` to get them. The next release notes will include these highlights.
+
+### Fixed
+
+- On a computer whose network runs on iwd or systemd-networkd, NetworkManager no longer
+  starts as well. It changed the Wi-Fi card's address every few minutes, so routers warned
+  that several devices were using the same IP address. The fix takes effect at the next start.
+
+<!-- /unreleased -->
 
 
 

@@ -45,7 +45,9 @@ pub const PRE_PACKAGE_PATHS: &[&str] = &[
     "/usr/share/themes/Bromigos",
 ];
 
-/// Network managers bromigOS won't fight: when one is enabled, NetworkManager isn't.
+/// Network managers bromigOS won't fight: when one is enabled, NetworkManager isn't, and
+/// nothing bromigOS ships starts it (fieldkit/tests/test_units.py: no unit outside the
+/// install media's overlay wants or requires NetworkManager).
 pub const OTHER_NETWORK: &[&str] = &[
     "systemd-networkd.service",
     "iwd.service",
