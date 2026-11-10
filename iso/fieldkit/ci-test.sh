@@ -15,6 +15,9 @@
 #   3. the installed Server boots to its console and passes its checks
 #   4. the restore drill on it (iso/fieldkit/restore-drill.sh): a real backup, restore and
 #      test restore, with the real restic, snapper, sudo and systemd
+#      then the Go Bag drill (iso/fieldkit/backup-drive-drill.sh): a USB drive plugged into the
+#      running VM is set up as the backup drive; plugged in again, the copy starts by itself
+#      under the real udev and systemd and ends "Safe to unplug"; the restore commands read it
 #   5. on that Server, `bromigos activity` under its real systemd (iso/fieldkit/activity-checks.sh,
 #      docs/activity.md): a job in a transient unit ends done, one that fails names its step, a
 #      detached one outlives the session that started it, the Server tour's apply runs through
@@ -256,6 +259,7 @@ step "the pairing QR decodes from kmscon and the bare console" qr || true
 if step "bromigOS Server installs from the stick with no network" install; then
     if step "the installed bromigOS Server boots to its console" server; then
         . "$here/restore-drill.sh"      # the restore drill on that Server: its own steps (docs/server.md, "Backups")
+        . "$here/backup-drive-drill.sh" # the Go Bag drill: a USB drive plugged in and pulled out (docs/server.md, "The Go Bag")
         # the activity checks last: their final one restarts the Server
         if step "activity: the checks reach the Server" activity_send; then
             step "activity: a job runs in a real systemd unit and ends done" activity ok || true
