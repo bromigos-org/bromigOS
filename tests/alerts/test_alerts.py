@@ -17,9 +17,14 @@ from fake import FakeMachine, NOW  # noqa: E402
 
 import bromigos_alerts as A  # noqa: E402
 import bromigos_alerts_checks as C  # noqa: E402
+import bromigos_drives as D  # noqa: E402
 
 SCRIPT = fake.REPO / "bin/bromigos-alerts"
 HOUR = 3600_000
+# a drive's alert is named after its model and serial number, not its device name (the stand-in
+# machine's two drives, fake.smart_nvme and fake.smart_ata)
+NVME0 = "disk.smart:" + D.drive_key("Samsung SSD 980 PRO 2TB", "S6B0NX0T123456", "nvme0")[0]
+SDA = "disk.smart:" + D.drive_key("WDC WD40EFRX-68N32N0", "WD-WCC7K1234567", "sda")[0]
 
 
 def ids(doc):
@@ -49,7 +54,7 @@ class EveryCheck(Machine):
         user = self.m.run("user")
         got = dict(ids(system), **ids(user))
         want = {
-            "disk.smart:nvme0": "critical", "disk.smart:sda": "needs_you",
+            NVME0: "critical", SDA: "needs_you",
             "disk.scrub:/": "critical",
             "disk.full:/": "needs_you", "disk.full:/mnt/Media": "critical",
             "update.waiting": "needs_you",           # nothing installed for 40 days
@@ -170,14 +175,14 @@ class Failing(Machine):
     def test_a_check_that_cant_look_keeps_what_it_found(self):
         self.m.broken()
         first = self.m.run()
-        self.assertIn("disk.smart:nvme0", ids(first))
+        self.assertIn(NVME0, ids(first))
         (self.m.bin / "smartctl").write_text("#!/bin/sh\necho 'not json'\n")
         second = self.m.run()
         row = [c for c in second["checks"] if c["check"] == "disk.smart"][0]
         self.assertEqual(row["state"], "failed")
         self.assertIn("no answer", row["error"])
-        self.assertEqual(ids(second)["disk.smart:nvme0"], "critical")
-        self.assertEqual(ids(second)["disk.smart:sda"], "needs_you")
+        self.assertEqual(ids(second)[NVME0], "critical")
+        self.assertEqual(ids(second)[SDA], "needs_you")
 
     def test_a_missing_tool_or_a_check_turned_off_is_skipped(self):
         (self.m.bin / "smartctl").unlink()

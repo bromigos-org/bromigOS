@@ -76,89 +76,10 @@ def mounts(env, fstypes=REAL_FS):
 # ------------------------------------------------------------------ disk.smart
 
 def smart(ctx):
-    env = ctx.env
-    rc, out, err = env.run(["smartctl", "--scan", "-j"], timeout=30)
-    if rc == 127:
-        raise Skip("smartmontools isn't installed")
-    try:
-        devices = json.loads(out).get("devices") or []
-    except ValueError:
-        raise Failed("smartctl --scan gave no answer: " + (err.strip() or "?")[:200])
-    found = []
-    for d in devices:
-        dev = d.get("name")
-        if not dev or dev.startswith(("/dev/loop", "/dev/zram", "/dev/sr")):
-            continue
-        argv = ["smartctl", "-j", "-H", "-A", "-i"] + (["-d", d["type"]] if d.get("type") else []) + [dev]
-        rc, out, _ = env.run(argv, timeout=60)
-        if rc & 0b11:           # the command line, or opening the device, failed
-            continue
-        try:
-            r = json.loads(out)
-        except ValueError:
-            continue
-        name = os.path.basename(dev)
-        model = r.get("model_name") or r.get("model_family") or "a drive"
-        serial = str(r.get("serial_number") or "")
-        what = f"{model} ({name})"
-        ev = [f"Drive: {model}, {dev}"]
-        severity, why = None, []
-        passed = (r.get("smart_status") or {}).get("passed")
-        if passed is False or rc & 0b1000:
-            severity = "critical"
-            why.append("its own health check says FAILED")
-            ev.append("SMART overall-health self-assessment test result: FAILED")
-        elif passed is True:
-            ev.append("SMART overall-health self-assessment test result: PASSED")
-        nvme = r.get("nvme_smart_health_information_log") or {}
-        if nvme:
-            cw = int(nvme.get("critical_warning") or 0)
-            used = int(nvme.get("percentage_used") or 0)
-            media = int(nvme.get("media_errors") or 0)
-            ev += [f"Critical Warning: 0x{cw:02x}", f"Percentage Used: {used}%", f"Media and Data Integrity Errors: {media}",
-                   f"Temperature: {nvme.get('temperature', '?')} Celsius"]
-            if cw:
-                severity = "critical"
-                why.append(f"it raised a critical warning (0x{cw:02x})")
-            if media:
-                severity = severity or "needs_you"
-                why.append(f"{media} media error{'s' if media != 1 else ''}")
-            if used >= 90:
-                severity = severity or "needs_you"
-                why.append(f"{used}% of its rated life is used")
-        for row in (r.get("ata_smart_attributes") or {}).get("table") or []:
-            key = row.get("name")
-            raw = int(((row.get("raw") or {}).get("value")) or 0)
-            if key in ("Reallocated_Sector_Ct", "Current_Pending_Sector", "Offline_Uncorrectable",
-                       "Reported_Uncorrect"):
-                ev.append(f"{key}: {raw}")
-                if raw > 0:
-                    severity = severity or "needs_you"
-                    why.append({"Reallocated_Sector_Ct": f"{raw} reallocated sector{'s' if raw != 1 else ''}",
-                                "Current_Pending_Sector": f"{raw} sector{'s' if raw != 1 else ''} it can't read",
-                                "Offline_Uncorrectable": f"{raw} uncorrectable sector{'s' if raw != 1 else ''}",
-                                "Reported_Uncorrect": f"{raw} uncorrectable error{'s' if raw != 1 else ''}"}[key])
-            if row.get("when_failed") in ("now", "past"):
-                severity = severity or "needs_you"
-                why.append(f"{key} passed its failure threshold")
-        if not severity:
-            continue
-        fix = {"commands": [f"sudo smartctl -a {dev}", f"sudo smartctl -t short {dev}"],
-               "touches": ["nothing (it reads the drive's records and runs its own 2-minute self-test)"],
-               "from": "bromigos", "root": True,
-               "note": "Back up first: Field Kit's Back up my files copies every home folder to a USB drive."}
-        if severity == "critical":
-            title = f"A drive is failing: {what}"
-            detail = (f"{what[0].upper() + what[1:]}: " + "; ".join(why) + ". Copy your files off it now, then replace it.")
-        else:
-            title = f"A drive is wearing out: {what}"
-            detail = (f"{what[0].upper() + what[1:]}: " + "; ".join(why)
-                      + ". It still works, but these numbers only grow: back up what's on it and plan to replace it.")
-        found.append(alert("disk.smart", name, severity, title, detail, "SMART",
-                           evidence=evidence(ev, model=model, device=dev, serial_tail=serial[-4:],
-                                             firmware=r.get("firmware_version") or ""),
-                           fix=fix))
-    return found
+    """Each drive's verdict, from its own health records and their history (bromigos_drives,
+    docs/storage.md "Drive health"): no alarm for an error count that stopped growing."""
+    import bromigos_drives
+    return bromigos_drives.check(ctx)
 
 
 # ------------------------------------------------------------------ disk.scrub

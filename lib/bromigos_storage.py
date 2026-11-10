@@ -85,6 +85,10 @@ def main(argv=None):
     commands = parser.add_subparsers(dest='verb')
     status = commands.add_parser('status', help='Read drives, mounts, free space and saved operation state')
     status.add_argument('--json', action='store_true')
+    health = commands.add_parser('health', help="Each drive's health verdict, from its history; DRIVE shows its readings over time")
+    health.add_argument('drive', nargs='?', metavar='DRIVE', help='A device name such as nvme0, or part of a model')
+    health.add_argument('--all', action='store_true', help='With DRIVE: every kept reading, not only the newest 30')
+    health.add_argument('--json', action='store_true')
     planning = commands.add_parser('plan', help='Save a provisioning plan; no formatting')
     planning.add_argument('--device', required=True, help='Stable /dev/disk/by-id/ whole-disk path')
     planning.add_argument('--mount', required=True, help='Empty absolute mount point')
@@ -132,6 +136,20 @@ def main(argv=None):
             import bromigos_storage_inventory as inventory
             result = dict(inventory.status(), operations=records())
             print(json.dumps(result, indent=2)) if getattr(args, 'json', False) else show_status(result)
+        elif args.verb == 'health':
+            # what the system checks last read (bromigos alerts' disk.smart); nothing is run here
+            import bromigos_alerts as alerts
+            import bromigos_drives as drives
+            env = alerts.Env()
+            doc = drives.report(env, samples=bool(args.drive))
+            if args.drive:
+                try:
+                    one = drives.find(doc, args.drive)
+                except drives.NoSuchDrive as error:
+                    raise C.Error(str(error))
+                print(json.dumps(dict(doc, drives=[one]), indent=2) if args.json else drives.detail(one, env.now_ms(), every=args.all))
+            else:
+                print(json.dumps(doc, indent=2) if args.json else drives.plain(doc, env.now_ms()))
         elif args.verb == 'cleanup':
             import bromigos_storage_cleanup as cleaning
             import bromigos_storage_display as display

@@ -1,0 +1,43 @@
+{
+  "json_format_version": [
+    1,
+    0
+  ],
+  "smartctl": {
+    "version": [
+      7,
+      5
+    ],
+    "pre_release": false,
+    "svn_revision": "5714",
+    "platform_info": "x86_64-linux-6.12.1-arch1-1",
+    "build_info": "(local build)",
+    "argv": [
+      "smartctl",
+      "-j",
+      "-H",
+      "-A",
+      "-i",
+      "-l",
+      "selftest",
+      "-d",
+      "scsi",
+      "/dev/sdc"
+    ],
+    "messages": [
+      {
+        "string": "/dev/sdc: Unknown USB bridge [0x0781:0x55ae (0x100)]",
+        "severity": "error"
+      },
+      {
+        "string": "Please specify device type with the -d option.",
+        "severity": "error"
+      }
+    ],
+    "exit_status": 1
+  },
+  "local_time": {
+    "time_t": 1793390400,
+    "asctime": "Fri Oct 30 20:00:00 2026 UTC"
+  }
+}

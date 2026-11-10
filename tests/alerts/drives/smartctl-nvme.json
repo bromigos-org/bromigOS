@@ -1,0 +1,141 @@
+{
+  "json_format_version": [
+    1,
+    0
+  ],
+  "smartctl": {
+    "version": [
+      7,
+      5
+    ],
+    "pre_release": false,
+    "svn_revision": "5714",
+    "platform_info": "x86_64-linux-6.12.1-arch1-1",
+    "build_info": "(local build)",
+    "argv": [
+      "smartctl",
+      "-j",
+      "-H",
+      "-A",
+      "-i",
+      "-l",
+      "selftest",
+      "-d",
+      "nvme",
+      "/dev/nvme0"
+    ],
+    "exit_status": 0
+  },
+  "local_time": {
+    "time_t": 1793390400,
+    "asctime": "Fri Oct 30 20:00:00 2026 UTC"
+  },
+  "device": {
+    "name": "/dev/nvme0",
+    "info_name": "/dev/nvme0",
+    "type": "nvme",
+    "protocol": "NVMe"
+  },
+  "model_name": "Samsung SSD 980 PRO 2TB",
+  "serial_number": "FAKE0NVME000001",
+  "firmware_version": "5B2QGXA7",
+  "nvme_pci_vendor": {
+    "id": 5197,
+    "subsystem_id": 5197
+  },
+  "nvme_ieee_oui_identifier": 9528,
+  "nvme_total_capacity": 2000398934016,
+  "nvme_unallocated_capacity": 0,
+  "nvme_controller_id": 6,
+  "nvme_version": {
+    "string": "1.3",
+    "value": 66304
+  },
+  "nvme_number_of_namespaces": 1,
+  "nvme_namespaces": [
+    {
+      "id": 1,
+      "size": {
+        "blocks": 3907029168,
+        "bytes": 2000398934016
+      },
+      "capacity": {
+        "blocks": 3907029168,
+        "bytes": 2000398934016
+      },
+      "utilization": {
+        "blocks": 1853202432,
+        "bytes": 948839645184
+      },
+      "formatted_lba_size": 512,
+      "eui64": {
+        "oui": 9528,
+        "ext_id": 1
+      }
+    }
+  ],
+  "user_capacity": {
+    "blocks": 3907029168,
+    "bytes": 2000398934016
+  },
+  "logical_block_size": 512,
+  "smart_support": {
+    "available": true,
+    "enabled": true
+  },
+  "smart_status": {
+    "passed": true,
+    "nvme": {
+      "value": 0
+    }
+  },
+  "nvme_smart_health_information_log": {
+    "critical_warning": 0,
+    "temperature": 41,
+    "available_spare": 100,
+    "available_spare_threshold": 10,
+    "percentage_used": 3,
+    "data_units_read": 48211790,
+    "data_units_written": 61870133,
+    "host_reads": 512604310,
+    "host_writes": 890071221,
+    "controller_busy_time": 2714,
+    "power_cycles": 812,
+    "power_on_hours": 9120,
+    "unsafe_shutdowns": 112,
+    "media_errors": 0,
+    "num_err_log_entries": 0,
+    "warning_temp_time": 0,
+    "critical_comp_time": 0,
+    "temperature_sensors": [
+      41,
+      47
+    ]
+  },
+  "temperature": {
+    "current": 41
+  },
+  "power_cycle_count": 812,
+  "power_on_time": {
+    "hours": 9120
+  },
+  "nvme_self_test_log": {
+    "current_self_test_operation": {
+      "value": 0,
+      "string": "No self-test in progress"
+    },
+    "table": [
+      {
+        "self_test_code": {
+          "value": 1,
+          "string": "Short"
+        },
+        "self_test_result": {
+          "value": 0,
+          "string": "Completed without error"
+        },
+        "power_on_hours": 9100
+      }
+    ]
+  }
+}
