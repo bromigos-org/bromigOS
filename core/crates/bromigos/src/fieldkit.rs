@@ -44,6 +44,11 @@ pub const ENGINE: &str = "/usr/lib/bromigos/fieldkit/fieldkit-engine";
 const EDITION: &str = "/usr/share/bromigos/fieldkit/edition.json";
 const SERVER_STATUS: &str = "/usr/lib/bromigos/server/bromigos-server";
 
+/// Server › What can this computer run?: the salvage scan's report, in the pager when there is
+/// one (q comes back), else printed with a wait for Enter.
+const SALVAGE: &str = "if command -v less >/dev/null; then bromigos hw salvage 2>&1 | less; \
+     else bromigos hw salvage; printf '\\nPress Enter to go back. '; read -r _; fi";
+
 /// The engine's path (BROMIGOS_FIELDKIT_ENGINE for tests and checkouts).
 pub fn engine_path() -> String {
     std::env::var("BROMIGOS_FIELDKIT_ENGINE").unwrap_or_else(|_| ENGINE.to_string())
@@ -308,6 +313,14 @@ pub fn section_items(section: &str) -> Vec<Item> {
                 "Install bromigOS Server",
                 "on this computer, with no network needed",
                 InstallEdition("server"),
+                Any,
+            ),
+            // the salvage scan (bromigos-lab's `bromigos hw salvage`; docs/salvage.md): read-only,
+            // as root here, so it reads the drives' health too. Its report in a pager
+            it(
+                "What can this computer run?",
+                "salvage scan: reads the hardware, changes nothing, and says what fits as a home server",
+                Tool(vec!["sh", "-c", SALVAGE]),
                 Any,
             ),
             it(
@@ -4994,6 +5007,25 @@ esac
             s.contains("Install bromigOS Server") && s.contains("What bromigOS Server is"),
             "{s}"
         );
+        // the salvage scan, before deciding to install: read-only, handed the screen
+        assert!(s.contains("What can this computer run?"), "{s}");
+        let scan = a
+            .items()
+            .into_iter()
+            .find(|i| i.label == "What can this computer run?")
+            .unwrap();
+        assert_eq!(
+            a.blocked(&scan),
+            "",
+            "it needs no network and no mounted install"
+        );
+        match &a.choose(&scan)[..] {
+            [Effect::Exec(argv)] => {
+                assert_eq!(argv[..2], ["sh", "-c"]);
+                assert!(argv[2].contains("bromigos hw salvage"), "{argv:?}");
+            }
+            other => panic!("{other:?}"),
+        }
         a.key(key(KeyCode::Esc));
         a.key(key(KeyCode::Char('1')));
         save("section-repair", &screen(&a, 100, 30));
@@ -5117,6 +5149,7 @@ esac
             "{s}"
         );
         assert!(!s.contains("Install bromigOS Server"), "{s}");
+        assert!(s.contains("What can this computer run?"), "{s}");
         let run = |a: &mut App, label: &str| {
             let it = a.items().into_iter().find(|i| i.label == label).unwrap();
             match &a.choose(&it)[..] {

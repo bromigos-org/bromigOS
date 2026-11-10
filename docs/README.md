@@ -94,6 +94,7 @@ VECTOR, the desktop's AI assistant, is documented in his own repository,
 | [fieldkit-packages.md](fieldkit-packages.md) | Every package on Field Kit, its size and why it's there |
 | [qr.md](qr.md) | Themed QR codes: the styles, the decode test, and BRODEC's scanner settings |
 | [server.md](server.md) | bromigOS Server, the headless edition: SSH, firewall, safe automatic updates, containers |
+| [salvage.md](salvage.md) | Salvage scan: what an old PC can do as a home server, judged by the catalogue's budget logic (`bromigos hw salvage`) |
 | [alerts.md](alerts.md) | `bromigos alerts`: the checks that find what needs you (drives, disk space, updates, backups, the UPS, services), the notification, and your own checks |
 | [activity.md](activity.md) | `bromigos activity`: long jobs as records with named steps, each in a systemd unit of its own; the record's fields, and how to make a script a job |
 | [iso-encryption.md](iso-encryption.md) | Full-disk encryption in the ISO's installer |

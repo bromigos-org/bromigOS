@@ -11,7 +11,8 @@ with seven sections:
 - **VECTOR**: bromigOS's assistant, in the terminal. He reads what Field Kit sees and
   proposes fixes you approve.
 - **Tools**: the toolbelt: system monitors, disk and network tools, editors, file recovery.
-- **Server**: install bromigOS Server, or look after the one this is ([server.md](server.md)).
+- **Server**: see what this computer could run as a server, install bromigOS Server, or
+  look after the one this is ([server.md](server.md)).
 - **Install**: install bromigOS Server (no desktop, for servers and lab machines) from the
   stick, with no network; or the full desktop, which downloads it (about 2 GB).
 - **Shell**: a command line, remote help, power.
@@ -318,6 +319,7 @@ copies them, or opens a shell with them ready to run step by step.
 | Erase a disk securely | `bromigos fieldkit erase plan DEV`, then `erase run DEV --confirm NAME --method M` |
 | Windows repair | `bromigos fieldkit windows find|users|reset-password|unlock-bitlocker|ntfsfix|boot-entries|boot-fix …` |
 | Remote help | `bromigos fieldkit remote on|off|status` |
+| What can this computer run? | `bromigos hw salvage [--json] [--save FILE] [--answers FILE]` |
 | Make a Field Kit USB stick | `bromigos fieldkit make-stick DEV [--wifi SSID:PASSWORD] [--remote]` |
 | VECTOR | `bromigos fieldkit vector`; his queue: `fieldkit-engine engine vector pending|decide|run` |
 
@@ -439,6 +441,32 @@ The screen's left side shows the lab's parts and how each is (`bromigos lab stat
 --json`). On a wide screen (150 columns or more, in 24-bit colour) they're also a small map:
 each part round the lab, with its name and a state dot, and a scan going round (still under
 reduced motion). Narrower, and on the console, it's the list.
+
+### Server
+
+On the stick, Server has **Install bromigOS Server**, **What can this computer run?**,
+**What bromigOS Server is**, **Pair with BRODEC** and **Network**. On an installed bromigOS
+Server it runs that server instead: its updates, firewall, SSH, containers and cluster,
+with the scan, pairing and Network still in the list. `App::items` in
+`core/crates/bromigos/src/fieldkit.rs` chooses which.
+
+**What can this computer run?** is the salvage scan ([salvage.md](salvage.md)). The stick
+is the tool you start on a machine you're deciding about, so the scan is here, before
+Install. It reads the hardware and changes nothing. Then it says which of bromigOS
+Server's roles and apps fit this computer, which don't and why, and what would change the
+answer.
+
+The item hands the screen to `bromigos hw salvage` (package `bromigos-lab`), with its
+report in `less`. `q` comes back to the menu. Without `less`, the report prints and waits
+for Enter. Field Kit runs as root, so the scan also reads each drive's health verdict and
+the processor's power counter. It needs no network and no mounted install.
+
+The item shows the report only. To start the installer with the scan's choices, write them
+with `bromigos hw salvage --answers FILE` in Shell, then run
+`BROMIGOS_ANSWERS=FILE bromigos-iso-install --text`.
+
+`vainfo` (package `libva-utils`) isn't on the medium. So on the stick the scan says
+hardware video is likely from the driver that's loaded, and doesn't list the formats.
 
 ### Install
 
