@@ -19,7 +19,7 @@
 #      docs/activity.md): a job in a transient unit ends done, one that fails names its step, a
 #      detached one outlives the session that started it, the Server tour's apply runs through
 #      sudo as the signed-in user, and a restart closes a running job as interrupted
-#   5. the same install on a machine with two data disks, as two copies (RAID1); the installed
+#   6. the same install on a machine with two data disks, as two copies (RAID1); the installed
 #      Server, with a network this time, has the lab's engine install an app from the catalogue,
 #      and the app's data must be on the data disks' filesystem, not the system disk's. Then
 #      the server is put back as an older installer left one, and bromigos lab app-data move
@@ -225,7 +225,7 @@ activity_reboot() {
     activity reboot-end
 }
 
-# ── 5. bromigOS Server with two data disks: where its apps keep their data ──────────────
+# ── 6. bromigOS Server with two data disks: where its apps keep their data ──────────────
 ddisk=$out/vm/server-data.qcow2 data1=$out/vm/data1.qcow2 data2=$out/vm/data2.qcow2
 install_data() {    # the same install, the two other disks chosen as data disks, two copies
     rm -f "$data1" "$data2"
