@@ -27,14 +27,15 @@ The manual's [Alerts](../manual/src/alerts.md) page is the user's side.
 | `systemd.failed` | Services that failed, leaving out ones that don't matter | Needs you. Critical for SSH, the firewall and the network on a Server |
 | `server.game` | A game server that stopped (bromigOS Server) | Needs you |
 | `server.app-data` | Where a bromigOS Server with data disks keeps its apps' data (`bromigos lab app-data`) | Needs you: it's on the system disk, or a move to the data disks didn't finish. Critical: the data disks aren't mounted |
-| `fieldkit.finding` | After each boot: Field Kit's black screen check on this computer, and what a Field Kit stick found here | Needs you |
+| `fieldkit.finding` | After each boot, and after a kernel or graphics driver changes: the black screen check on this computer, and what a Field Kit stick found here | Needs you |
 | `game.steam` | Steam and Proton (`bromigos game check`) | Needs you, or info when bromigOS fixes it by itself |
 
 Two passes run them:
 
 - **The system pass** runs as root, because reading drives and every service needs it.
   `bromigos-alerts.timer` runs it every 15 minutes. `bromigos-alerts-boot.timer` runs it two
-  minutes after each boot, with Field Kit's checks.
+  minutes after each boot, with Field Kit's checks. A pacman hook runs that boot pass again
+  after a kernel or a graphics driver changes.
 - **Your pass** runs as you: updates waiting, the disk your home is on, your own services, and
   Steam. `bromigos-alerts-user.timer` runs it two minutes after you log in and every 30
   minutes. Then it shows the desktop notification.
@@ -104,7 +105,33 @@ system, and the same check again for each one the stick saved:
 - When it can't run (the last boot check needs a saved journal), the stick's findings are
   raised instead.
 
-The passes between boots keep what the boot pass found.
+An alert names Field Kit only when a stick found the problem. The black screen check that
+bromigOS runs by itself says "The black screen check found this on this computer", and its
+`source` is `Black screen check`.
+
+### Between boots
+
+The passes between boots keep what the boot pass found, with one exception. While a black
+screen finding is raised, each pass runs that check again:
+
+- A finding that is no longer true goes at that pass. It doesn't wait for the next boot.
+- A finding that is still true stays, in the check's words of now.
+- Nothing new is raised between boots. A check that can't look keeps what stands.
+
+The last boot's findings are about a boot that is over, so they stand until the next one.
+
+### After a kernel or a graphics driver changes
+
+`zz-bromigos-alerts.hook` is a pacman hook in `bromigos-core`. It runs after a transaction
+installs, upgrades or removes a kernel (`usr/lib/modules/*/vmlinuz`), a prebuilt driver
+module (`usr/lib/modules/*/extramodules/*`) or a DKMS driver (`usr/src/*/dkms.conf`). It
+starts `bromigos-alerts-boot.service` and doesn't wait for it. So a driver that isn't built
+for the new kernel is raised before the restart, not after it.
+
+Hooks run in the order of their file names. The `zz` puts this one after DKMS has built its
+modules, mkinitcpio has made the startup files and Secure Boot has signed them. It does
+nothing when `bromigos-alerts.timer` isn't running: with the alerts turned off, in a chroot,
+or while an image is built. It never fails the transaction.
 
 ## The Arch news hold
 
@@ -193,7 +220,7 @@ Both passes write the same shape:
 | `severity` | `info` (listed, never sent to a phone), `needs_you` or `critical` |
 | `title` | One plain line, at most 120 characters |
 | `detail` | What it means, then what to do. At most 600 characters |
-| `source` | What saw it, as a person would say it: `SMART`, `btrfs`, `Disk space`, `Updates`, `Arch news`, `restic`, `UPS`, `systemd`, `Game server`, `Field Kit`, `Steam` |
+| `source` | What saw it, as a person would say it: `SMART`, `btrfs`, `Disk space`, `Updates`, `Arch news`, `restic`, `UPS`, `systemd`, `Game server`, `Field Kit`, `Black screen check`, `Steam` |
 | `subject` | What it's about: a drive, a mount point, a service, a UPS |
 | `since` | When it was first seen. It stays the same while the alert lasts |
 | `actions` | Suggested, in order. `kind` is `restart`, `update`, `fix` (ask VECTOR), `snooze`, `open`, `run` (with `command`) or `link` (with `url`). `label` is optional |
@@ -268,6 +295,8 @@ alerts that need you, with limits so nothing spams. Its side is in BRODEC's
 - `lib/bromigos_alerts_checks.py`: the checks.
 - `lib/bromigos_drives.py`: `disk.smart`'s history and verdicts, and `bromigos storage health`.
 - `packaging/bromigos-core/bromigos-alerts*.{service,timer,path}`: the units.
+- `packaging/bromigos-core/zz-bromigos-alerts.hook`: the boot pass again after a kernel or a
+  graphics driver changes.
 - `tests/alerts/`: every check against stand-in commands in a stand-in root (`fake.py`).
   Nothing real is read, and no notification shows. `python3 tests/alerts/fake.py DIR` writes
   documents with an alert of every kind, for BRODEC's tests. `test_drive_health.py` moves a

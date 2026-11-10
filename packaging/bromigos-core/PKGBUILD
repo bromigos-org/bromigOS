@@ -268,6 +268,9 @@ package() {
   install -d "$pkgdir/usr/lib/systemd/user/timers.target.wants" "$pkgdir/usr/lib/systemd/user/default.target.wants"
   ln -s ../bromigos-alerts-user.timer "$pkgdir/usr/lib/systemd/user/timers.target.wants/bromigos-alerts-user.timer"
   ln -s ../bromigos-alerts-notify.path "$pkgdir/usr/lib/systemd/user/default.target.wants/bromigos-alerts-notify.path"
+  # ... and the boot pass again after a kernel or a graphics driver changes, so the black
+  # screen check looks before the restart (the last hook: after DKMS, mkinitcpio and signing)
+  install -Dm0644 "$startdir/zz-bromigos-alerts.hook" "$pkgdir/usr/share/libalpm/hooks/zz-bromigos-alerts.hook"
   # `bromigos activity` (docs/activity.md): long jobs as records with named steps, each in a
   # transient unit of its own (bromigos-job-<id>.service); the Server tour's apply is one
   install -Dm0755 -t "$pkgdir/usr/lib/bromigos/bin/" "$_root"/bin/bromigos-activity

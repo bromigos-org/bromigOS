@@ -67,7 +67,7 @@ def rollback(target, number):
         raise system.Failed("This install's root isn't the @ subvolume: Field Kit can't roll it back by itself.")
     stamp = time.strftime("%Y%m%d-%H%M%S")
     kept = f"@.before-rollback-{stamp}"
-    boot_kernels = {base: kernel_version(os.path.join(target.root, "boot", f"vmlinuz-{base}"))
+    boot_kernels = {base: diagnose.kernel_version(os.path.join(target.root, "boot", f"vmlinuz-{base}"))
                     for base in diagnose.kernels(target).values()}
     # the install's own mounts go first: @ is renamed under them
     system.run(["umount", "-R", target.root], check=False)
@@ -86,20 +86,6 @@ def rollback(target, number):
              f"as {kept}, so this can be undone; delete it once you're happy with the result."]
     words.append(match_kernel(target, boot_kernels))
     return " ".join(w for w in words if w)
-
-
-def kernel_version(path):
-    """The version string inside a bzImage (its header points at it), or None."""
-    try:
-        with open(path, "rb") as f:
-            head = f.read(0x210)
-            if head[0x202:0x206] != b"HdrS":
-                return None
-            off = int.from_bytes(head[0x20E:0x210], "little") + 0x200
-            f.seek(off)
-            return f.read(256).split(b"\0", 1)[0].split(b" ", 1)[0].decode(errors="replace")
-    except OSError:
-        return None
 
 
 def match_kernel(target, boot_kernels):
