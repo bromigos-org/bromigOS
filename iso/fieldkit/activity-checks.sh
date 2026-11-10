@@ -9,6 +9,10 @@
 #   activity-checks.sh detach-end     in a new session: the job went on, and ended succeeded
 #   activity-checks.sh tour           the Server tour's apply (bromigos welcome-console --provision
 #                                     apply) as this user: sudo -v, then the job as root
+#   activity-checks.sh control        a stand-in "replace a drive" job in a real unit asks, a second
+#                                     job waits for its lock, `answer` lets it carry on, `cancel` is
+#                                     refused while it says stopping isn't safe and stops a job that
+#                                     says it is, and a job that fails raises an alert
 #   activity-checks.sh reboot-start   a detached long job starts, then the system restarts
 #   activity-checks.sh reboot-end     after the restart: the record reads and is closed interrupted
 #
@@ -36,6 +40,14 @@ running() {          # wait until job $1 runs, in its unit
     done
     record "$1" | py "assert job['state'] == 'running' and job['steps'][0]['state'] == 'running', job"
     systemctl is-active "bromigos-job-$1.service"
+}
+
+until_state() {      # wait until job $1 is in state $2; then the record must say so
+    for _ in $(seq 60); do
+        [[ $(record "$1" 2>/dev/null | py "print(job['state'])" 2>/dev/null) == "$2" ]] && break
+        sleep 0.5
+    done
+    record "$1" | py "assert job['state'] == '$2', (job['state'], job['error'])"
 }
 
 case ${1:?which check} in
@@ -173,6 +185,83 @@ assert job['unit'] == 'bromigos-job-' + job['id'] + '.service' and job['command'
 assert '$applied'.endswith('job=' + job['id']), job['id']
 print('record:', job['id'], job['state'], [s['id'] for s in job['steps']])"
     echo ACTIVITY-TOUR-OK
+    ;;
+control)
+    password
+    go=/run/bromigos-activity-check.go
+    sudo rm -f $go
+    cat > replace.sh <<SH
+echo "::cancel safe"
+echo "::step swap running Swapping the drive"
+echo "::ask swapped Take the old drive out of bay 2 and put the new one in. [swapped] I've swapped the drive"
+read -r answer < "\$BROMIGOS_ACTIVITY_ANSWERS"
+echo "the answer was: \$answer"
+[ "\$answer" = swapped ] || exit 1
+echo "::cancel unsafe The new drive is being filled."
+echo "::step swap done"
+echo "::step rebuild running Copying your files onto the new drive"
+while [ ! -e $go ]; do sleep 0.2; done
+echo "::stage 100 The new drive is in"
+SH
+    id=$(sudo bromigos activity run --kind drive.replace --title "CI: replacing a drive" --subject drive:bay-2 \
+        --lock pool --detach -- sh "$d/replace.sh")
+    unit=bromigos-job-$id.service
+    until_state "$id" needs-you
+    record "$id" | py "
+q = job['question']
+assert (q['id'], q['choices']) == ('swapped', [{'id': 'swapped', 'label': \"I've swapped the drive\", 'danger': False}]), q
+assert job['waiting_for'] == 'you' and job['can'] == ['answer', 'cancel'] and job['locks'] == ['pool'], job
+print('record:', job['id'], job['state'] + ':', q['text'])"
+    systemctl is-active "$unit"
+    bromigos activity show "$id" | grep -F "Answer with: sudo bromigos activity answer $id swapped"
+    # a second job that needs the same lock waits behind it, in a unit of its own
+    id2=$(sudo bromigos activity run --kind pool.check --title "CI: a job that waits its turn" --lock pool --detach -- true)
+    until_state "$id2" waiting
+    record "$id2" | py "
+assert job['waiting_for'] == 'another job' and job['stage'] == 'Waiting for another job to finish: CI: replacing a drive', job
+print('record:', job['id'], job['state'] + ':', job['stage'])"
+    # the answer, as someone who isn't root: `answer` asks for root by itself. A wrong one is
+    # refused before any password would be asked
+    rc=0; bromigos activity answer "$id" nope 2> answer.err || rc=$?
+    [[ $rc == 3 ]] || { echo "a wrong answer ended with $rc, not 3"; cat answer.err; exit 1; }
+    [[ $(bromigos activity answer "$id" swapped) == "Answered: I've swapped the drive" ]]
+    for _ in $(seq 40); do
+        [[ $(record "$id" | py "print(job['cancel_note'])") == None ]] || break
+        sleep 0.5
+    done
+    record "$id" | py "
+assert job['state'] == 'running' and job['question'] is None and job['can'] == [], job
+assert [(s['id'], s['state']) for s in job['steps']] == [('swap', 'done'), ('rebuild', 'running')], job['steps']
+print('record:', job['id'], job['state'] + ', after:', job['notes'][-1]['words'])"
+    # while it rebuilds, cancel is refused with the job's reason, and the unit goes on
+    rc=0; bromigos activity cancel "$id" 2> cancel.err || rc=$?
+    cat cancel.err
+    [[ $rc == 3 ]] || { echo "cancel ended with $rc, not 3"; exit 1; }
+    grep -qF "not stopped. The new drive is being filled." cancel.err
+    grep -qF "To stop it anyway: sudo systemctl stop $unit" cancel.err
+    systemctl is-active "$unit"
+    sudo touch $go
+    until_state "$id" succeeded
+    until_state "$id2" succeeded
+    sudo grep -qx "the answer was: swapped" "/var/lib/bromigos/activity/jobs/$id.log"
+    [[ $(sudo sh -c "ls /var/lib/bromigos/activity/jobs/$id.*" | wc -l) == 2 ]]      # the pipe and the requests went
+    # a job that says stopping is safe is stopped, unit and all
+    id3=$(sudo bromigos activity run --kind ci.check --title "CI: a job that may be stopped" --cancel-safe --detach -- sleep 600)
+    until_state "$id3" running
+    [[ $(bromigos activity cancel "$id3") == "Stopped: CI: a job that may be stopped" ]]
+    record "$id3" | py "assert job['state'] == 'cancelled' and job['can'] == [], job; print('record:', job['id'], job['state'])"
+    [[ $(systemctl is-active "bromigos-job-$id3.service" || true) != active ]]
+    # a job that fails is an alert at once (no waiting for the timer), and a good run clears it
+    sudo bromigos activity run --kind ci.alert --title "CI: a job that fails, for its alert" -- false > /dev/null 2>&1 || true
+    bromigos alerts --json > alerts.json || true       # its exit status 1 says "something needs you"
+    py "
+a = [x for x in doc['alerts'] if x['id'] == 'activity.job:ci.alert']
+assert len(a) == 1 and a[0]['severity'] == 'needs_you' and a[0]['title'] == 'A job failed: CI: a job that fails, for its alert', doc['alerts']
+print('alert:', a[0]['id'], a[0]['severity'] + ':', a[0]['title'])" < alerts.json
+    sudo bromigos activity run --kind ci.alert --title "CI: a job that fails, for its alert" -- true > /dev/null
+    bromigos alerts --json > alerts.json || true
+    py "assert 'activity.job:ci.alert' not in [x['id'] for x in doc['alerts']], doc['alerts']; print('alert: cleared')" < alerts.json
+    echo ACTIVITY-CONTROL-OK
     ;;
 reboot-start)
     password

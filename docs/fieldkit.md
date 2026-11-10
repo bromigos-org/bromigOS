@@ -693,7 +693,8 @@ Its VMs and screenshots go in `~/.cache/bromigos-fieldkit-test/` (`BROMIGOS_FIEL
   and test restore. Then `iso/fieldkit/activity-checks.sh`:
   `bromigos activity` under real systemd ([activity.md](activity.md)). A job in a transient
   unit ends done. A job that fails names its step. A detached job outlives the session that
-  started it. The Server tour's apply runs through `sudo` as the signed-in user. A restart
+  started it. The Server tour's apply runs through `sudo` as the signed-in user. A job that
+  asks a question is answered and carries on, while a second job waits for its lock. A restart
   closes a running job as interrupted. Then the same install on a machine with two data
   disks, as two copies (RAID1). That server starts with a network, the lab's engine installs
   the start

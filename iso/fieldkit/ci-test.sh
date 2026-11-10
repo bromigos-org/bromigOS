@@ -18,7 +18,8 @@
 #   5. on that Server, `bromigos activity` under its real systemd (iso/fieldkit/activity-checks.sh,
 #      docs/activity.md): a job in a transient unit ends done, one that fails names its step, a
 #      detached one outlives the session that started it, the Server tour's apply runs through
-#      sudo as the signed-in user, and a restart closes a running job as interrupted
+#      sudo as the signed-in user, a job that asks a question is answered and carries on while
+#      another waits for its lock, and a restart closes a running job as interrupted
 #   6. the same install on a machine with two data disks, as two copies (RAID1); the installed
 #      Server, with a network this time, has the lab's engine install an app from the catalogue,
 #      and the app's data must be on the data disks' filesystem, not the system disk's. Then
@@ -262,6 +263,7 @@ if step "bromigOS Server installs from the stick with no network" install; then
             step "activity: a job that fails names its step and its exit status" activity failed || true
             step "activity: a detached job outlives the session that started it" activity_detach || true
             step "activity: the Server tour's apply, as the signed-in user, through sudo" activity tour || true
+            step "activity: a job asks, is answered and carries on; another waits for its lock; cancel is refused" activity control || true
             step "activity: a restart closes a running job as interrupted" activity_reboot || true
         fi
     fi
