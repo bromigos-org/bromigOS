@@ -638,6 +638,21 @@ class RestoreInPlace(Rig):
             self.assertIn(line, r.stdout)
         self.assertEqual(self.doc("restore", "--in-place", "--to", "/x", rc=2)["error"]["code"], "usage")
 
+    def test_a_folder_that_became_a_link_is_never_written_through(self):
+        outside = Path(self.tmp.name) / "outside"
+        outside.mkdir()
+        (outside / "one.jpg").write_text("not the server's\n")
+        shutil.rmtree(self.root / "home/ada/photos")
+        os.symlink(outside, self.root / "home/ada/photos")
+        plan = self.doc("restore", "/home/ada/photos", "--in-place")
+        self.assertEqual((plan["replace"][0]["path"], plan["replace"][0]["link"]), ("/home/ada/photos", "not a link in the backup"))
+        self.assertIn("/home/ada/photos   (a link now; a file or a folder in the backup)",
+                      self.lab("restore", "/home/ada/photos", "--in-place").stdout)
+        self.assertEqual(self.lab("restore", "/home/ada/photos", "--in-place", "--apply", "--yes").returncode, 0)
+        self.assertFalse((self.root / "home/ada/photos").is_symlink(), "a real folder again")
+        self.assertEqual((self.root / "home/ada/photos/one.jpg").read_text(), "jpeg one\n")
+        self.assertEqual({p.name: p.read_text() for p in outside.iterdir()}, {"one.jpg": "not the server's\n"})
+
     def test_no_snapshot_mechanism_is_said_plainly_and_needs_its_own_yes(self):
         self.damage()
         before = self.tree()

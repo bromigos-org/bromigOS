@@ -909,7 +909,9 @@ failed one never makes an update unhealthy.
 
 **How an in-place restore is made.** The list comes from restic's own dry run
 (`restic restore --dry-run -vv`), so it's what restic will do. restic remakes every link,
-so links are compared separately and only one that points elsewhere is listed. The
+so links are compared separately and only one that points elsewhere is listed. A link
+standing where the backup has a folder is replaced by that folder; nothing is ever
+written through a link. The
 snapshot is `snapper -c <config> create`, for each snapper configuration whose subvolume
 holds a file that changes. `snapper -c <config> undochange <number>..0` puts files back
 as they were in it. Files that already match keep their contents, and get the backup's

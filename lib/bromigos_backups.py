@@ -1174,25 +1174,31 @@ def plan_in_place(env, snap, paths):
     if rc != 0 or not summary:
         raise Problem("failed", f"The backup couldn't be read: {restic_errors(err)[1] or 'restic failed'}")
     if links:
-        # where each link in the backup points: restore just the links to a scratch folder, and read them there
+        # what's a link on the server now. In the backup it may be a link too (then where does it
+        # point?) or a file or folder (then the link goes). restic's list says which; it doesn't
+        # say where a link points, so the backup's links alone are restored to a scratch folder
+        # and read there: never a folder's contents
+        kinds = {}
+        for i in range(0, len(links), 400):
+            kinds.update({sysp(n.get("path", "")): n.get("type") for n in nodes(env, snap, links[i:i + 400])})
         os.makedirs(at(SCRATCH), mode=0o700, exist_ok=True)
         scratch = tempfile.mkdtemp(prefix="links-", dir=at(SCRATCH))
         try:
-            listing = os.path.join(scratch, ".include")
+            listing, tree = os.path.join(scratch, ".include"), os.path.join(scratch, "tree")
             with open(listing, "w") as f:
-                f.write("".join(literal(p) + "\n" for p in links))
-            tree = os.path.join(scratch, "tree")
-            restic(env, ["restore", snapref(snap), "--target", tree, "--json", "--retry-lock", "2m", "--include-file", listing])
+                f.write("".join(literal(p) + "\n" for p in links if kinds.get(p) == "symlink"))
+            if os.path.getsize(listing):
+                restic(env, ["restore", snapref(snap), "--target", tree, "--json", "--retry-lock", "2m", "--include-file", listing])
             for item in links:
                 try:
-                    there = os.readlink(os.path.join(tree, item.lstrip("/")))
+                    there = os.readlink(os.path.join(tree, item.lstrip("/"))) if kinds.get(item) == "symlink" else None
                 except OSError:
                     there = None
                 if there is not None and there == os.readlink(at(item)):
                     same[0] += 1
                 else:
                     replace.append({"path": item, "size": 0, "now_size": 0, "now_modified": iso(os.lstat(at(item)).st_mtime),
-                                    "link": True})
+                                    "link": "points elsewhere" if kinds.get(item) == "symlink" else "not a link in the backup"})
         finally:
             shutil.rmtree(scratch, ignore_errors=True)
     replace.sort(key=lambda r: r["path"])
@@ -1213,7 +1219,8 @@ def print_plan(snap, paths, plan):
     print(f"\nPutting {', '.join(paths) if paths else 'everything'} back from the backup of {when(snap['ts'])} ({snap['short_id']}) would:\n")
     print(f"  replace {count(len(rep), 'file')} that changed since the backup" + (":" if rep else ""))
     for r in rep[:SHOWN]:
-        print(f"    {r['path']}   " + ("(a link that points somewhere else now)" if r.get("link") else
+        print(f"    {r['path']}   " + ("(a link that points somewhere else now)" if r.get("link") == "points elsewhere" else
+                                      "(a link now; a file or a folder in the backup)" if r.get("link") else
                                       f"(now {size(r['now_size'])}, changed {r['now_modified'][:16].replace('T', ' ')}; "
                                       f"the backup's is {size(r['size'])})"))
     if len(rep) > SHOWN:
