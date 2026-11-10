@@ -28,7 +28,7 @@ import gi  # noqa: E402
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
 from . import backend, common  # noqa: E402
 
@@ -2105,6 +2105,9 @@ def common_good():
     return GOOD_BROMIGOS
 
 
+WELCOME_CARD = "org.bromigos.InstallerWelcome"      # welcome.App's name on the session's bus
+
+
 class App(Adw.Application):
     def __init__(self, opts):
         super().__init__(application_id="org.bromigos.Installer")
@@ -2117,6 +2120,23 @@ class App(Adw.Application):
         elif not self.opts.get("windowed"):
             win.fullscreen()
         win.present()
+        if not self.opts.get("render"):
+            self.send_card_away(win)
+
+    def send_card_away(self, win):
+        """The live desktop's welcome card (welcome.py) goes while the installer is open, whenever
+        it shows up: it was there first, or a slow computer draws it after this window. A window
+        that opens takes this one out of full screen, so full screen is asked for again."""
+        if getattr(self, "_card_watch", None) or not self.get_dbus_connection():
+            return
+
+        def appeared(bus, name, _owner):
+            Gio.DBusActionGroup.get(bus, name, "/" + name.replace(".", "/")).activate_action("dismiss", None)
+            if not self.opts.get("windowed"):
+                GLib.timeout_add(400, lambda: (win.fullscreen(), False)[1])
+
+        self._card_watch = Gio.bus_watch_name_on_connection(self.get_dbus_connection(), WELCOME_CARD,
+                                                            Gio.BusNameWatcherFlags.NONE, appeared, None)
 
 
 def snapshot(win, path):

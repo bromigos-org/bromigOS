@@ -4,6 +4,11 @@ floating GLOW panel in the Settings style; the emblem is its one FLARE, still wh
 reduced. Install opens the graphical installer; Try closes the card (the app launcher's
 "Install bromigOS" and the desktop's Install panel open the installer later).
 
+One of the two at a time: the card never opens over an installer that's already open (a slow
+computer can reach the launcher's "Install bromigOS" before this card is drawn, and a window
+that opens takes the installer out of full screen), and an installer that opens sends the
+card away (its "dismiss" action; gui.App.send_card_away).
+
   python3 -m bromigos_installer.welcome [--render OUT.png]
 """
 import os
@@ -18,7 +23,7 @@ import gi  # noqa: E402
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
 from . import common  # noqa: E402
 from .gui import Emblem, focus_soon, hint, installer_css, label, settings_css, snapshot  # noqa: E402
@@ -81,12 +86,35 @@ class Card(Adw.ApplicationWindow):
         self.close()
 
 
+INSTALLER = "org.bromigos.Installer"      # gui.App's name on the session's bus
+
+
+def installer_open(bus):
+    """Is the graphical installer running? It owns its name on the session's bus while it is.
+    No bus, or no answer: no (the card opens, as it always did)."""
+    try:
+        reply = bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "NameHasOwner",
+                              GLib.Variant("(s)", (INSTALLER,)), GLib.VariantType("(b)"), Gio.DBusCallFlags.NONE, 2000, None)
+        return bool(reply.unpack()[0])
+    except Exception:
+        return False
+
+
 class App(Adw.Application):
     def __init__(self, render=None):
         super().__init__(application_id="org.bromigos.InstallerWelcome")
         self.render = render
 
+    def do_startup(self):
+        Adw.Application.do_startup(self)
+        dismiss = Gio.SimpleAction.new("dismiss", None)        # the installer opened: the card goes
+        dismiss.connect("activate", lambda *_: self.quit())
+        self.add_action(dismiss)
+
     def do_activate(self):
+        if not self.render and not self.get_active_window() and installer_open(self.get_dbus_connection()):
+            self.quit()
+            return
         (self.get_active_window() or Card(self, self.render)).present()
 
 
