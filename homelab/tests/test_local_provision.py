@@ -406,6 +406,26 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(mode, {"srv/backups/restic": 0o700, "srv/backups": 0o755, "srv/backups/data": 0o700,
                                 "srv/apps/photos": 0o750, "srv/apps/photos/postgres": 0o700, "srv/apps/photos/library": 0o755})
 
+    def test_the_apps_with_a_database_file_have_it_copied_whole_before_each_backup(self):
+        # a hook each (lib/bromigos_backups.py, copy_databases): the vault, wherever it is, and
+        # Paperless's SQLite. Immich's postgres makes its own dumps, into its library folder
+        Path(self.root, "var/lib/vaultwarden").mkdir(parents=True)
+        plan = L.build_plan(["passwords", "documents", "photos", "backups"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        hooks = Path(self.root, "etc/bromigos/backup-databases.d")
+        self.assertEqual(sorted(p.name for p in hooks.iterdir()), ["documents.toml", "passwords.toml"])
+        import tomllib
+        self.assertEqual(tomllib.loads((hooks / "passwords.toml").read_text()),
+                         {"what": "passwords (Vaultwarden)", "sqlite": ["/srv/apps/passwords/db.sqlite3", "/var/lib/vaultwarden/db.sqlite3"]})
+        self.assertEqual(tomllib.loads((hooks / "documents.toml").read_text()),
+                         {"what": "documents (Paperless-ngx)", "sqlite": ["/srv/apps/documents/data/db.sqlite3"]})
+        # the lab's own backup names the apps' folder by itself: on a server with data disks it is a
+        # mount of its own, which --one-file-system never crosses into
+        unit = Path(self.root, "etc/systemd/system/bromigos-lab-backup.service").read_text()
+        self.assertIn("ExecStart=/usr/bin/restic backup --one-file-system --exclude-caches /etc /srv /srv/apps "
+                      "/var/lib/bromigos /var/lib/vaultwarden\n", unit)
+
     def test_a_vault_already_in_the_packages_folder_stays_there_and_goes_on_working(self):
         # a server set up before the vault had a folder under /srv/apps: pointing the service at an
         # empty folder would show the household no passwords. It is left as it is, and the one

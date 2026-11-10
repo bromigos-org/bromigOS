@@ -616,11 +616,18 @@ class Backup(Rig):
             (self.root / vault).mkdir(parents=True)
             (self.root / vault / "db.sqlite3").write_text("the household's passwords\n")
         self.summary()
-        self.assertEqual(self.run_server("backup", "run").returncode, 0)
+        # what the backup holds, as restic ls says it after the run: the apps' folder
+        (self.fake / "restic-ls.out").write_text(json.dumps({"struct_type": "node", "name": "apps", "type": "dir",
+                                                             "path": f"{self.root}/srv/apps"}) + "\n")
+        r = self.run_server("backup", "run")
+        self.assertEqual(r.returncode, 0, r.stderr)
         line = next(l for l in self.log().splitlines() if l.startswith("restic backup "))
         paths = [w for w in line.split() if w.startswith(str(self.root))]
         self.assertIn(f"{self.root}/var/lib/vaultwarden", paths)
         self.assertIn(f"{self.root}/srv", paths)
+        # and the apps' folder by itself: on a server with data disks it's a disk of its own
+        self.assertIn(f"{self.root}/srv/apps", paths)
+        self.assertIn(f"restic ls --json --retry-lock 2m 1234abcd5678 {self.root}/srv/apps", self.log())
         # a server without the app has no such folder, and restic isn't handed a path that isn't there
         (self.root / "var/lib/vaultwarden/db.sqlite3").unlink()
         (self.root / "var/lib/vaultwarden").rmdir()

@@ -1244,6 +1244,12 @@ def cmd_backup(a):
         return B.main(["test"] + (["--json"] if a.json else []))
     env = restic_env(b)
     if verb == "run":
+        gone = B.away()
+        if gone:
+            # the data disks away: /srv/apps is the system disk's empty folder. A backup of it would
+            # say the apps have no data, and in time the ones that have it would be let go
+            return backup_failed(verb, f"the data disks aren't mounted, so {B.missing_words(gone)} can't be read. Nothing "
+                                 "was backed up. `bromigos server` says what it knows about the disks")
         rc, _, err = restic(env, "cat", "config", timeout=600)
         if rc == 10 or (rc != 0 and "does not exist" in err):
             # nothing there. Where a backup went before, that's a drive that isn't plugged in (or
@@ -1262,10 +1268,17 @@ def cmd_backup(a):
                 return backup_failed(verb, f"the destination couldn't be set up: {last_line(err, 'restic init failed')}")
         elif rc != 0:
             return backup_failed(verb, f"the destination can't be reached: {last_line(err, 'restic failed')}")
-        paths = [at(p) for p in b["paths"] if os.path.exists(at(p))]
+        # the apps' databases, each copied whole while its app runs, into a folder the backup reads
+        dbs = B.copy_databases()
+        # [backup] paths, and what every backup must hold (the apps' data, those copies) by name:
+        # on a server with data disks /srv/apps is a mount of its own
+        paths = [at(p) for p in B.backup_set(b["paths"])]
         args = ["backup", "--json", "--tag", "bromigos-server", "--exclude-caches"]
         for x in b["exclude"]:
             args += ["--exclude", x]
+        # a folder destination inside what's backed up (/srv/backups/…) is never backed up into itself
+        if b["to"].startswith(("/", "local:")):
+            args += ["--exclude", B.literal(at(b["to"].removeprefix("local:")).rstrip("/"))]
         rc, out, err = restic(env, *args, *paths)
         summary = {}
         for line in out.splitlines():
@@ -1278,12 +1291,26 @@ def cmd_backup(a):
         # 3: some files couldn't be read, the rest was backed up
         if rc not in (0, 3) or not summary:
             return backup_failed(verb, last_line(err, "restic backup failed"))
+        # what it must hold, looked for in the backup itself: an exclude of someone's, or a mount
+        # not crossed, would otherwise leave the apps' data out with nothing said
+        snap = summary.get("snapshot_id", "")
+        try:
+            gone = B.missing(env, {"id": snap}, B.required_paths())
+        except B.Problem as e:
+            gone, why = None, e.message
+        if gone or gone is None:
+            reason = (f"the backup left out {B.missing_words(gone)}" if gone else
+                      f"what the backup holds couldn't be read back: {B.sentence(why)}")
+            B.update_state(run={"phase": "failed", "at": now(), "ts": time.time(), "reason": reason, "snapshot": snap[:8],
+                                "missing": gone or [], "databases": dbs, "to": B.same_place(b["to"])})
+            print(f"bromigos-server: the backup failed: {reason}", file=sys.stderr)
+            return 1
         restic(env, "forget", "--tag", "bromigos-server", "--prune", "--keep-daily", str(b["keep_daily"]),
                "--keep-weekly", str(b["keep_weekly"]), "--keep-monthly", str(b["keep_monthly"]))
         run = {"phase": "ok" if rc == 0 else "partial", "at": now(), "ts": time.time(), "to": B.same_place(b["to"]),
                "snapshot": summary.get("snapshot_id", "")[:8], "files": summary.get("total_files_processed"),
                "bytes": summary.get("total_bytes_processed"), "added": summary.get("data_added"),
-               "reason": "" if rc == 0 else "some files couldn't be read: " + last_line(err, "")}
+               "reason": "" if rc == 0 else "some files couldn't be read: " + last_line(err, ""), "databases": dbs}
         # what the health line says without the key: the last backup that worked, when the first
         # one did (the test restore's clock starts there), how many are kept and what they span
         more = {"run": run, "run_ok": run}
@@ -1296,12 +1323,27 @@ def cmd_backup(a):
             more["snapshots"] = None
         B.update_state(**more)
         print(f"bromigos-server: backed up ({run['snapshot']})")
-        return 0
+        bad = [d for d in dbs if not d["ok"]]
+        for d in bad:
+            print(f"bromigos-server: {d['what']}: {d['reason']}", file=sys.stderr)
+        return 1 if bad else 0
     # check: what's there can be read back; in a month's first week, 5 % of the data too
     data = a.data or datetime.date.today().day <= 7
     rc, out, err = restic(env, "check", *(["--read-data-subset=5%"] if data else []))
     if rc != 0:
         return backup_failed(verb, last_line(err or out, "restic check failed"))
+    # a backup that reads back whole but lacks the apps' data is no backup of them
+    try:
+        rc, out, _ = restic(env, "snapshots", "--json", "--tag", "bromigos-server", timeout=600)
+        newest = max(json.loads(out) or [None], key=lambda s: B.stamp(s.get("time")) or 0 if s else 0) if rc == 0 else None
+        gone = B.missing(env, newest, B.required_paths()) if newest else []
+    except (ValueError, TypeError, AttributeError):
+        gone = []
+    except B.Problem as e:
+        return backup_failed(verb, f"what the newest backup holds couldn't be read: {B.sentence(e.message)}")
+    if gone:
+        return backup_failed(verb, f"the newest backup ({newest.get('short_id') or newest['id'][:8]}) doesn't hold "
+                             f"{B.missing_words(gone)}, which is on this server")
     chk = {"phase": "ok", "at": now(), "ts": time.time(), "data": bool(data), "reason": ""}
     B.update_state(check=chk, check_ok=chk, **({"read_back_ok": chk} if data else {}))
     print("bromigos-server: the backup checks out" + (" (5 % of its data read back)" if data else ""))

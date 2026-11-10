@@ -610,6 +610,8 @@ def install_quadlet(host, it):
         if host.store.exists(name) and host.run(["podman", "secret", "exists", S.podman_name(name)])[0] != 0:
             host.store._podman(name, host.store.get(name))      # a key saved before Podman's driver was set up
     host.mkdir(APPS + "/" + it["id"], 0o750)
+    if it["id"] in DATABASES:
+        database_hook(host, it["id"])
     prepare = PREPARE.get(it["id"])
     if prepare:
         prepare(host, it)
@@ -740,6 +742,45 @@ def step_monitoring(host, it):
     enable(host, ["prometheus.service", "grafana.service"], restart=True)
 
 
+# The lab's own nightly backup, on a machine that isn't a bromigOS Server (a Server's own covers
+# the apps). --one-file-system keeps it to the disk each path is on: /srv/data (the data disks,
+# read again as /srv/apps) and /srv/backups (other machines' backups, and this one's own
+# repository by default) are left out. So every folder on a disk of its own is named: /srv/apps,
+# a mount of the data disks' apps subvolume on a server that has them. A path that isn't there is
+# skipped. The apps' databases are copied whole first (bromigos_backups.copy_databases, into
+# /var/lib/bromigos; one that fails doesn't stop the backup, its file is still read as it is),
+# and the unit fails, after the backup, when it doesn't hold the apps' data or a copy failed
+BACKUP_PATHS = ("/etc", "/srv", "/" + APPS, "/var/lib/bromigos", AD.VAULT_OLD)
+BACKUP_UNIT = """[Unit]
+Description=Back up this server's apps and settings (restic)
+After=network-online.target
+
+[Service]
+Type=oneshot
+LoadCredentialEncrypted={cred}
+Environment=RESTIC_PASSWORD_FILE=%d/{cred}
+Environment=RESTIC_REPOSITORY={repo}
+ExecStartPre=/bin/sh -c 'restic cat config >/dev/null 2>&1 || restic init'
+ExecStartPre=-/usr/lib/bromigos/bin/bromigos-lab backups copy-databases
+ExecStart=/usr/bin/restic backup --one-file-system --exclude-caches {paths}
+ExecStartPost=/usr/lib/bromigos/bin/bromigos-lab backups holds
+ExecStartPost=/usr/bin/restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+"""
+# The apps whose databases are SQLite files: each gets a hook, so every backup copies them whole
+# while the app runs (lib/bromigos_backups.py, copy_databases). Immich's postgres makes its own
+# nightly dump into its library folder (library/backups), which the backup holds
+DB_HOOKS = "etc/bromigos/backup-databases.d"
+DATABASES = {"passwords": ("passwords (Vaultwarden)", (AD.VAULT + "/db.sqlite3", AD.VAULT_OLD + "/db.sqlite3")),
+             "documents": ("documents (Paperless-ngx)", ("/" + APPS + "/documents/data/db.sqlite3",))}
+
+
+def database_hook(host, item):
+    what, paths = DATABASES[item]
+    host.write(f"{DB_HOOKS}/{item}.toml",
+               f"# bromigos lab provision --local: {what}'s database, copied whole before every backup\n"
+               f"what = {json.dumps(what)}\nsqlite = [{', '.join(json.dumps(p) for p in paths)}]\n")
+
+
 def step_backups(host, it):
     if host.path("usr/lib/systemd/system/bromigos-server-backup.timer").exists():
         note(host, it, "bromigOS Server's own nightly backup is on this server; it covers the apps too.")
@@ -749,14 +790,10 @@ def step_backups(host, it):
     repo = host.setting("backups", "repository") or "/srv/backups/restic"
     if repo.startswith("/"):
         host.mkdir(repo.lstrip("/"), 0o700)
+    host.mkdir(APPS)                                     # named in the backup, so it is there to name
     cred = host.credential("backups/restic-password")
-    host.write("etc/systemd/system/bromigos-lab-backup.service",
-               "[Unit]\nDescription=Back up this server's apps and settings (restic)\nAfter=network-online.target\n\n"
-               f"[Service]\nType=oneshot\nLoadCredentialEncrypted={cred}\nEnvironment=RESTIC_PASSWORD_FILE=%d/{cred}\n"
-               f"Environment=RESTIC_REPOSITORY={repo}\n"
-               "ExecStartPre=/bin/sh -c 'restic cat config >/dev/null 2>&1 || restic init'\n"
-               "ExecStart=/usr/bin/restic backup --one-file-system --exclude-caches /etc /srv /var/lib/bromigos\n"
-               "ExecStartPost=/usr/bin/restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune\n")
+    host.write("etc/systemd/system/bromigos-lab-backup.service", BACKUP_UNIT.format(cred=cred, repo=repo,
+                                                                                    paths=" ".join(BACKUP_PATHS)))
     host.write("etc/systemd/system/bromigos-lab-backup.timer",
                "[Unit]\nDescription=Nightly backup of this server\n\n[Timer]\nOnCalendar=*-*-* 03:30\n"
                "RandomizedDelaySec=30min\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n")
@@ -846,6 +883,7 @@ def step_passwords(host, it):
         host.mkdir(AD.VAULT, 0o700, owner="vaultwarden:vaultwarden")
         host.write(AD.VAULT_ENV, AD.VAULT_ENV_TEXT)
         host.write(AD.VAULT_DROPIN, AD.VAULT_DROPIN_TEXT)
+    database_hook(host, "passwords")                     # its database copied whole before every backup
     # Its address, its web vault and its name. In a file, as the vault's folder is: the package's
     # /etc/vaultwarden.env turns the web vault off, and any EnvironmentFile= wins over an
     # Environment= line, so those lines were never the ones that counted (the page was a 404)

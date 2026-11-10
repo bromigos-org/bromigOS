@@ -13,6 +13,7 @@
   bromigos lab backups go-bag …              the backup on a USB drive you carry away: status,
                                              drives, setup, run, forget (lib/bromigos_backup_drive.py)
   … list | show | restore | test --from go-bag   the same commands, reading that drive
+  bromigos lab backups copy-databases | holds [PATH…]   for a backup that isn't the Server's own
 
 The nightly backup itself is bromigos-server's (`backup run`, `backup check`): restic, to
 [backup] to in /etc/bromigos/server.toml. This module reads what it leaves, and restores from it.
@@ -37,15 +38,18 @@ isn't a Server); 4 not enough free space; 130 stopped part-way.
 """
 
 import argparse
+import contextlib
 import datetime
 import fcntl
 import hashlib
 import json
 import os
+import pathlib
 import random
 import re
 import shutil
 import signal
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -66,6 +70,17 @@ RESTORE_HOME = "/srv/restore"
 SERVER = "/usr/lib/bromigos/server/bromigos-server"
 MARKER = ".bromigos-restore-incomplete"
 TAG = "bromigos-server"                      # the nightly backup's tag (bromigos-server backup run)
+FSTAB = "/etc/fstab"
+# What every nightly backup must hold, named on its own and checked in it after the run, by the
+# weekly check and by the test restore. On a server with data disks /srv/apps is a mount of their
+# apps subvolume (docs/server.md, "Where the apps keep their data"): a backup that doesn't cross
+# from /srv (restic --one-file-system, or [backup] paths without /srv) would leave it out
+REQUIRED = ("/srv/apps",)
+# The apps' databases, copied consistently before each backup (copy_databases): a hook per app,
+# written by the lab's engine ({what, sqlite = [paths]}), and the copies, root's alone
+DB_HOOKS = "/etc/bromigos/backup-databases.d"
+DB_COPIES = "/var/lib/bromigos/backup-databases"
+WHAT = {"/srv/apps": "the apps' data", DB_COPIES: "the apps' database copies"}
 TIMERS = {"backup": "bromigos-server-backup.timer", "check": "bromigos-server-backup-check.timer",
           "test": "bromigos-server-backup-test.timer"}
 
@@ -317,9 +332,20 @@ def health(to, st, now, dest=None, restore=None, drives=None):
     # the last backup
     if phase == "failed":
         before = (f"The last backup that worked was {ago(success['ts'], now)}." if success else "No backup has worked yet.")
+        # a backup that ran and left out what it must hold: the rest is in it, and it still failed
+        copied = (f"The rest is in that backup ({run['snapshot']}), but it doesn't count." if run.get("missing") and run.get("snapshot")
+                  else "Nothing was copied this time.")
         problems.append(_problem(
             "failed", "server", "needs_you", "The last backup failed",
-            f"{upper_first(run.get('reason') or 'restic failed')[:300]}. Nothing was copied this time. {before}",
+            f"{upper_first(run.get('reason') or 'restic failed')[:300].rstrip('.')}. {copied} {before}",
+            look + ["sudo bromigos server backup run"], ["runs the backup again"], READ_FIRST))
+    dbs = [d for d in (run.get("databases") or []) if isinstance(d, dict) and not d.get("ok")] if phase in ("ok", "partial") else []
+    if dbs:
+        problems.append(_problem(
+            "database-copy-failed", "server", "needs_you",
+            "A database wasn't copied for the backup" if len(dbs) == 1 else f"{len(dbs)} databases weren't copied for the backup",
+            " ".join(f"{upper_first(d.get('what') or d.get('name') or 'an app')}: {d.get('reason') or 'it failed'}." for d in dbs)
+            + " The backup has those files as they were on disk while the app ran, which may not open.",
             look + ["sudo bromigos server backup run"], ["runs the backup again"], READ_FIRST))
     elif stale:
         problems.append(_problem(
@@ -380,6 +406,9 @@ def health(to, st, now, dest=None, restore=None, drives=None):
         line = f"Backed up {ago(last['ts'], now)}."
         if phase == "partial":
             line += " Some files could not be read and were left out."
+        if dbs:
+            line += " But the database of " + " and ".join(lower_first(d.get("what") or d.get("name") or "an app") for d in dbs) \
+                + " wasn't copied whole, so it may not open from this backup."
     if check_failed:
         line += (" But the" if line.startswith("Backed up") else " The") + f" last check of the backup failed ({ago(check['ts'], now)}): " \
             + (sentence(check.get("reason")) or "restic check failed") + "."
@@ -856,6 +885,108 @@ def in_backup(env, snap, paths, flag=""):
         if p not in have:
             raise Problem("not-in-backup", f"{p} isn't in the backup of {when(snap['ts'])} ({snap['short_id']}). See what "
                           f"is: bromigos lab backups show {snap['short_id']} {os.path.dirname(p) or '/'}{flag}", exit=2)
+
+
+# ------------------------------------------------------------------ what every backup must hold
+
+def required_paths():
+    """What every nightly backup must hold, of what is on this server: the apps' data
+    (REQUIRED) and the databases' copies (DB_COPIES). On a server with data disks /srv/apps is
+    a mount of their own, so it is named, never reached by crossing from /srv."""
+    return [p for p in (*REQUIRED, DB_COPIES) if os.path.isdir(at(p))]
+
+
+def backup_set(paths):
+    """The paths the nightly backup reads: [backup] paths, plus what it must hold whatever
+    those say. Each one that is on this server, in that order, once."""
+    return [p for p in dict.fromkeys([*paths, *REQUIRED, DB_COPIES]) if os.path.exists(at(p))]
+
+
+def fstab_mounts():
+    try:
+        with open(at(FSTAB)) as f:
+            return {r[1] for r in (line.split() for line in f if not line.lstrip().startswith("#")) if len(r) > 1}
+    except OSError:
+        return set()
+
+
+def away():
+    """REQUIRED paths /etc/fstab mounts that aren't mounted now (the data disks are away): the
+    folder there is the system disk's, empty, and a backup of it would say the apps have no data."""
+    rows = fstab_mounts()
+    return [p for p in REQUIRED if p in rows and not os.path.ismount(at(p))]
+
+
+def missing(env, snap, paths):
+    """Which of these paths the backup doesn't hold. Raises Problem when it can't be read."""
+    if not paths:
+        return []
+    have = {sysp(n.get("path", "")) for n in nodes(env, snap, paths)}
+    return [p for p in paths if p not in have]
+
+
+def missing_words(paths):
+    return " and ".join(f"{p} ({WHAT.get(p, 'files')})" for p in paths)
+
+
+def copy_databases():
+    """Each database a hook in DB_HOOKS names, copied whole and consistent while its app runs,
+    into DB_COPIES/<hook>/, which the backup reads: SQLite's online backup, from a read-only
+    connection, then PRAGMA quick_check on the copy. A database that isn't there (an app not
+    used yet) is skipped. [{"name", "what", "path", "ok", "reason"}], one per database tried."""
+    try:
+        names = sorted(n for n in os.listdir(at(DB_HOOKS)) if n.endswith(".toml"))
+    except OSError:
+        names = []
+    out = []
+    for n in names:
+        name = n[:-len(".toml")]
+        try:
+            with open(os.path.join(at(DB_HOOKS), n), "rb") as f:
+                hook = tomllib.load(f)
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            out.append({"name": name, "what": name, "path": os.path.join(DB_HOOKS, n), "ok": False,
+                        "reason": f"{DB_HOOKS}/{n} can't be read ({e})"})
+            continue
+        what = str(hook.get("what") or name)
+        for src in hook.get("sqlite") or []:
+            if not os.path.isfile(at(src)):
+                continue
+            row = {"name": name, "what": what, "path": src, "ok": True, "reason": ""}
+            try:
+                sqlite_copy(at(src), os.path.join(at(DB_COPIES), name, os.path.basename(src)))
+            except (sqlite3.Error, OSError) as e:
+                row.update(ok=False, reason=f"{src} couldn't be copied: {' '.join(str(e).split())[:200]}")
+            out.append(row)
+    return out
+
+
+def sqlite_copy(src, dst):
+    """One SQLite database copied with its own online backup: a whole, consistent copy while
+    the app goes on writing (its journal or write-ahead log included), never a file read
+    half-way through a write. Root's alone (0600, in a 0700 folder)."""
+    os.makedirs(os.path.dirname(os.path.dirname(dst)), mode=0o700, exist_ok=True)
+    os.makedirs(os.path.dirname(dst), mode=0o700, exist_ok=True)
+    tmp = dst + ".partial"
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(tmp)
+    source = sqlite3.connect(pathlib.Path(src).as_uri() + "?mode=ro", uri=True, timeout=60)
+    try:
+        copy = sqlite3.connect(tmp)
+        try:
+            source.backup(copy)
+            # the copy's own journal mode: one file, whatever the app's is
+            copy.execute("PRAGMA journal_mode=DELETE")
+            verdict = copy.execute("PRAGMA quick_check").fetchone()[0]
+        finally:
+            copy.close()
+    finally:
+        source.close()
+    if verdict != "ok":
+        os.unlink(tmp)
+        raise sqlite3.DatabaseError(f"the copy doesn't check out: {verdict}")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, dst)
 
 
 def free_bytes(path):
@@ -1616,6 +1747,11 @@ def run_test(a, b, job, home):
     snap = pick(snapshots(b, env), None, b)
     job.record.update(snapshot=snap["short_id"], snapshot_at=snap["at"])
     job.note(f"the backup of {when(snap['ts'])} ({snap['short_id']})")
+    # what it must hold: a backup without the apps' data restores fine and gives nothing back
+    gone = missing(env, snap, required_paths())
+    if gone:
+        raise Problem("failed", f"the newest backup ({snap['short_id']}) doesn't hold {missing_words(gone)}, which is on "
+                      "this server: a restore from it can't give those back")
     job.step("pick")
     if a.all:
         rows, includes = None, []
@@ -1761,6 +1897,10 @@ USAGE = """bromigos lab backups: this server's backups, and getting files back (
       list | show | restore | test --from {verb}
                                              the commands above, reading the {name} drive
                                              (`bromigos lab backups {verb} --help` has the rest)
+  bromigos lab backups copy-databases        the apps' databases copied whole, for a backup (the
+                                             nightly one does it itself)
+  bromigos lab backups holds [PATH…]         for a backup job's own unit: does the newest backup in
+                                             $RESTIC_REPOSITORY hold these (none: the apps' data)?
 
 Every one takes --json. list, show, restore and test read the backup's key, so they ask for the
 administrator's password when you aren't root.
@@ -1799,7 +1939,50 @@ def parser():
     for verb in ("run", "check"):
         p = sub.add_parser(verb, parents=[common], add_help=False)
         p.add_argument("--data", action="store_true")
+    sub.add_parser("copy-databases", parents=[common], add_help=False)
+    p = sub.add_parser("holds", parents=[common], add_help=False)
+    p.add_argument("paths", nargs="*")
     return ap
+
+
+def cmd_copy_databases(a):
+    """The apps' databases copied for a backup that isn't the Server's own (the lab's backup
+    unit runs this first; bromigos-server's backup does it itself)."""
+    rows = copy_databases()
+    bad = [r for r in rows if not r["ok"]]
+    # for `holds`, after the backup: a copy that failed fails the unit there, once the rest is backed up
+    os.makedirs(at(DB_COPIES), mode=0o700, exist_ok=True)
+    write_json(DB_COPIES + "/copies.json", {"at": iso(), "databases": rows}, mode=0o600)
+    if a.json:
+        print(json.dumps({"schema": SCHEMA, "ok": not bad, "databases": rows}, indent=1))
+    else:
+        for r in rows:
+            print(f"{r['what']}: " + ("copied" if r["ok"] else r["reason"]), file=sys.stderr if not r["ok"] else sys.stdout)
+    return 1 if bad else 0
+
+
+def cmd_holds(a):
+    """Does the newest backup in $RESTIC_REPOSITORY hold these paths (none: what every backup
+    must)? For a backup that isn't the Server's own: the lab's backup unit runs this after
+    restic, with that unit's repository and key."""
+    if not os.environ.get("RESTIC_REPOSITORY"):
+        raise Problem("usage", "holds reads the backup named by RESTIC_REPOSITORY (with RESTIC_PASSWORD_FILE): "
+                      "it's for a backup job's own unit.", exit=2)
+    paths = clean_paths(a.paths) or required_paths()
+    gone = missing(dict(os.environ), {"id": "latest"}, paths)
+    # and the databases copy-databases couldn't copy whole before it
+    bad = [] if a.paths else [r for r in read_json(DB_COPIES + "/copies.json").get("databases") or []
+                              if isinstance(r, dict) and not r.get("ok")]
+    if a.json:
+        print(json.dumps({"schema": SCHEMA, "ok": not gone and not bad, "paths": paths, "missing": gone,
+                          "databases_not_copied": bad}, indent=1))
+    else:
+        if gone:
+            print(f"The newest backup doesn't hold {missing_words(gone)}, which is on this computer.", file=sys.stderr)
+        for r in bad:
+            print(f"{upper_first(r.get('what') or r.get('name'))}: its database wasn't copied whole for the backup: "
+                  f"{r.get('reason')}", file=sys.stderr)
+    return 1 if gone or bad else 0
 
 
 def as_root(argv, reexec, as_json):
@@ -1858,6 +2041,10 @@ def main(argv, reexec=None):
             else:
                 print_status(d)
             return 3 if not d["server"] else 0 if d["ok"] else 1
+        if verb == "copy-databases":
+            return cmd_copy_databases(a)
+        if verb == "holds":
+            return cmd_holds(a)
         if not is_server():
             raise Problem("not-a-server", status_doc()["error"]["message"], exit=3)
         if verb in ("run", "check"):
