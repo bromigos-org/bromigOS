@@ -79,8 +79,10 @@ Some packages need a closer look.
 - **bromigos-core** installs the themes without their art pipeline files, which stay in
   the repository ([docs/art.md](../docs/art.md)). Its pacman hooks are
   `bromigos-update.hook`, which tells you to run `bromigos update` after bromigOS
-  packages change, and the pair that holds Hyprland's reloads during a transaction
-  ([core/README.md](../core/README.md)).
+  packages change, the pair that holds Hyprland's reloads during a transaction
+  ([core/README.md](../core/README.md)), and `zz-bromigos-alerts.hook`, which runs the
+  alerts' boot pass again after a kernel or a graphics driver changes
+  ([docs/alerts.md](../docs/alerts.md#after-a-kernel-or-a-graphics-driver-changes)).
 - **bromigos-desktop** installs `user/`, the thin files a user's `~/.config` starts from.
   It depends on the core, the live layer, the widgets and the apps the defaults run
   ([docs/desktop.md](../docs/desktop.md)).

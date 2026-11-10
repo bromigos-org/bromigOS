@@ -1,5 +1,6 @@
 # The system checks once after each boot, with Field Kit's: what a Field Kit stick found in this
 # install, and its black screen check on the running system (docs/alerts.md, fieldkit.finding).
+# zz-bromigos-alerts.hook starts it again after a kernel or a graphics driver changes.
 [Unit]
 Description=bromigOS alerts: the system checks after boot, with Field Kit's
 Documentation=https://github.com/bromigos-org/bromigOS/blob/main/docs/alerts.md

@@ -409,6 +409,119 @@ class FieldKit(Machine):
         (self.m.root / "usr/lib/bromigos/fieldkit/fieldkit-engine").unlink()
         self.assertEqual(states(self.m.run(boot=True))["fieldkit.finding"], "skipped")
 
+    # ---- the false alarm of 2026-11: a kernel folder left behind raised "The NVIDIA driver isn't
+    # built for the kernel …", and the alert then stood for days
+
+    NVIDIA = {"id": "5", "title": "The NVIDIA driver isn't built for the kernel 7.2.11-arch1-1", "fix": "", "ok": False,
+              "detail": "nvidia-open is installed, but kernel 7.2.11-arch1-1 (linux) has no nvidia module. "
+                        "The prebuilt driver is for a different kernel version than the one installed.",
+              "commands": [], "touches": []}
+    NVIDIA_ID = "fieldkit.finding:black-screen:the-nvidia-driver-isn-t-built-for-the-kernel-arc"
+    FINE = {"id": "0", "title": "The login screen starts: sddm.service", "detail": "", "fix": "", "ok": True}
+
+    def fk(self, doc):
+        return {a["id"]: a for a in doc["alerts"] if a["check"] == "fieldkit.finding"}
+
+    def engine_runs(self):
+        log = self.m.fake / "log"
+        return [x for x in (log.read_text().splitlines() if log.exists() else []) if x.startswith("fieldkit-engine")]
+
+    def test_the_sentence_names_field_kit_only_where_a_stick_looked(self):
+        self.m.broken()
+        self.m.write("fieldkit-black-screen.json", {"ok": True, "findings": [self.FINE, self.NVIDIA]})
+        fk = self.fk(self.m.run(boot=True))
+        live = fk[self.NVIDIA_ID]
+        # bromigOS ran this check by itself, on the running system: no Field Kit in it
+        self.assertTrue(live["detail"].startswith("The black screen check found this on this computer. nvidia-open is"),
+                        live["detail"])
+        self.assertEqual(live["source"], "Black screen check")
+        saved = fk["fieldkit.finding:last-boot:the-graphics-driver-reported-errors"]
+        self.assertTrue(saved["detail"].startswith(
+            "Field Kit found this when it looked at this install from the stick (the last boot check). The last ones:"),
+            saved["detail"])
+        self.assertEqual(saved["source"], "Field Kit")
+        for a in fk.values():
+            self.assertNotIn("Field Kit's the", a["detail"])
+            self.assertNotIn("the the", a["detail"])
+        # a check with no words of its own still reads as a sentence
+        other = C._finding_alert("startup", {"title": "x", "detail": "y"})
+        self.assertEqual((other["detail"], other["source"]), ("The startup check found this on this computer. y", "Startup check"))
+
+    def test_a_finding_that_is_no_longer_true_goes_at_the_next_pass_not_the_next_boot(self):
+        self.m.broken()
+        self.m.write("fieldkit-black-screen.json", {"ok": True, "findings": [self.FINE, self.NVIDIA]})
+        fk = self.fk(self.m.run(boot=True))
+        self.assertIn(self.NVIDIA_ID, fk)
+        # 15 minutes on, still true: it stands, first seen when it was, in the check's words of now
+        self.m.now += HOUR // 4
+        moved = dict(self.NVIDIA, title=self.NVIDIA["title"].replace("7.2.11", "7.2.15"),
+                     detail=self.NVIDIA["detail"].replace("7.2.11", "7.2.15"))
+        new = {"id": "6", "title": "No login screen is set to start", "detail": "", "fix": "", "ok": False}
+        self.m.write("fieldkit-black-screen.json", {"ok": True, "findings": [self.FINE, moved, new]})
+        doc = self.m.run()
+        between = self.fk(doc)
+        self.assertEqual(set(between), set(fk))             # nothing new is raised between boots
+        self.assertIn("7.2.15-arch1-1", between[self.NVIDIA_ID]["title"])
+        self.assertEqual(between[self.NVIDIA_ID]["since"], NOW)
+        self.assertEqual([c["ran_at"] for c in doc["checks"] if c["check"] == "fieldkit.finding"], [NOW])
+        # the check couldn't look: what stands is kept
+        self.m.now += HOUR // 4
+        self.m.write("fieldkit-black-screen.json", {"ok": False, "message": "no"})
+        self.assertEqual(set(self.fk(self.m.run())), set(fk))
+        # the cause is gone (the driver's package caught up, the folder was removed): so is the alert
+        self.m.now += HOUR // 4
+        self.m.write("fieldkit-black-screen.json", {"ok": True, "findings": [self.FINE]})
+        left = self.fk(self.m.run())
+        self.assertEqual(set(left), {"fieldkit.finding:last-boot:the-graphics-driver-reported-errors"})
+        # the last boot's finding is about a boot that is over: it is never looked at again between boots
+        self.assertFalse([x for x in self.engine_runs() if "last-boot" in x][1:], self.engine_runs())
+        # and with no black screen finding standing, the engine isn't run between boots at all
+        before = len(self.engine_runs())
+        self.m.now += HOUR // 4
+        self.m.run()
+        self.assertEqual(len(self.engine_runs()), before)
+
+    def test_a_package_change_runs_the_boot_pass_again(self):
+        """zz-bromigos-alerts.hook: its triggers, that bromigos-core installs it, and its command
+        run for real with a stand-in systemctl (the only command on its PATH)."""
+        import shlex
+        hook = fake.REPO / "packaging/bromigos-core/zz-bromigos-alerts.hook"
+        lines = [x.strip() for x in hook.read_text().splitlines() if x.strip() and not x.startswith("#")]
+        self.assertEqual([x.split(" = ", 1)[1] for x in lines if x.startswith("Operation")], ["Install", "Upgrade", "Remove"])
+        self.assertIn("Type = Path", lines)
+        targets = [x.split(" = ", 1)[1] for x in lines if x.startswith("Target")]
+        self.assertEqual(targets, ["usr/lib/modules/*/vmlinuz", "usr/lib/modules/*/extramodules/*", "usr/src/*/dkms.conf"])
+        self.assertIn("When = PostTransaction", lines)
+        self.assertNotIn("AbortOnFail", lines)
+        self.assertIn('"$startdir/zz-bromigos-alerts.hook"', (fake.REPO / "packaging/bromigos-core/PKGBUILD").read_text())
+        # the last of the hooks that change what starts: after DKMS, mkinitcpio and Secure Boot's signing
+        for other in ("70-dkms-install.hook", "90-mkinitcpio-install.hook", "bromigos-secureboot.hook"):
+            self.assertLess(other, hook.name)
+        argv = shlex.split([x for x in lines if x.startswith("Exec = ")][0][len("Exec = "):])
+        self.assertEqual(argv[:2], ["/bin/sh", "-c"])
+        log = self.m.fake / "systemctl.log"
+        stub = self.m.bin / "systemctl"
+
+        def run(timer_active, start_rc=0):
+            stub.write_text('#!/bin/sh\necho "$*" >> "$FAKE/systemctl.log"\n'
+                            f'case " $* " in *" is-active "*) exit {0 if timer_active else 3} ;; esac\nexit {start_rc}\n')
+            stub.chmod(0o755)
+            log.unlink(missing_ok=True)
+            p = subprocess.run(argv, env={"PATH": str(self.m.bin), "FAKE": str(self.m.fake)}, capture_output=True, text=True)
+            return p.returncode, p.stdout + p.stderr, log.read_text().splitlines() if log.exists() else []
+
+        rc, said, calls = run(timer_active=True)
+        self.assertEqual((rc, said), (0, ""))
+        self.assertEqual(calls, ["-q is-active bromigos-alerts.timer", "start --no-block bromigos-alerts-boot.service"])
+        # the alerts were turned off (their timers stopped), or no systemd runs here (a chroot): nothing starts
+        rc, said, calls = run(timer_active=False)
+        self.assertEqual((rc, said, calls), (0, "", ["-q is-active bromigos-alerts.timer"]))
+        # it never fails the transaction
+        self.assertEqual(run(timer_active=True, start_rc=1)[:2], (0, ""))
+        # and the unit it starts is the boot pass, which runs Field Kit's checks
+        unit = (fake.REPO / "packaging/bromigos-core/bromigos-alerts-boot.service").read_text()
+        self.assertIn("bromigos-alerts check --system --boot", unit)
+
 
 class Custom(Machine):
     def check(self, name, body, mode=0o755):

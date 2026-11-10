@@ -20,7 +20,7 @@ import os
 import re
 import tomllib
 
-from bromigos_alerts import Failed, Skip, alert, evidence, slug
+from bromigos_alerts import Failed, Skip, alert, evidence, normalise, slug
 
 FIELDKIT_ENGINE = "/usr/lib/bromigos/fieldkit/fieldkit-engine"
 FIELDKIT_FINDINGS = "/var/lib/bromigos/fieldkit/findings.json"
@@ -31,8 +31,13 @@ DAY = 86400_000
 
 
 class Check:
-    def __init__(self, name, passes, fn, boot_only=False):
+    """One check. A boot_only one runs in the pass after boot, and what it found stands in the
+    passes between boots; `between(ctx, standing)`, when it has one, looks at those standing
+    alerts again in each of those passes and returns the ones that stay."""
+
+    def __init__(self, name, passes, fn, boot_only=False, between=None):
         self.name, self.passes, self.fn, self.boot_only = name, set(passes), fn, boot_only
+        self.between = between
 
 
 def size(n):
@@ -672,21 +677,38 @@ def _engine(env):
     return p if os.path.isfile(p) and os.access(p, os.X_OK) else None
 
 
+CHECK_WORDS = {"black-screen": "black screen check", "last-boot": "last boot check"}
+
+
 def _finding_alert(check, f, saved_at=None):
-    words = {"black-screen": "the black screen check", "last-boot": "the last boot check"}.get(check, check)
+    """A finding as an alert. Field Kit is named only where a person ran it: on the findings a
+    stick saved. The same checks run by bromigOS itself, on the running system, are just the
+    checks."""
+    words = CHECK_WORDS.get(check, f"{check} check")
     title = f.get("title") or "?"
     detail = (f.get("detail") or "").strip()
     if saved_at:
-        detail = (f"Field Kit found this when it looked at this install from the stick ({words}). " + detail).strip()
+        detail = (f"Field Kit found this when it looked at this install from the stick (the {words}). " + detail).strip()
     else:
-        detail = (f"Field Kit's {words} found this on this computer. " + detail).strip()
+        detail = (f"The {words} found this on this computer. " + detail).strip()
     commands = list(f.get("commands") or [])
     fix = {"commands": commands, "touches": list(f.get("touches") or []), "from": "fieldkit", "root": True,
            "note": f.get("fix") or ""} if commands else None
     return alert("fieldkit.finding", f"{check}:{slug(re.sub(r'[0-9]+', ' ', title))}", "needs_you", title, detail,
-                 "Field Kit", evidence=evidence(f.get("lines") or [detail[:280]], check=check,
-                                                saved_by_stick="yes" if saved_at else "no",
-                                                fix=f.get("fix") or ""), fix=fix)
+                 "Field Kit" if saved_at else words.capitalize(),
+                 evidence=evidence(f.get("lines") or [detail[:280]], check=check,
+                                   saved_by_stick="yes" if saved_at else "no",
+                                   fix=f.get("fix") or ""), fix=fix)
+
+
+def _live_findings(env, engine, check):
+    """What Field Kit's engine finds on the running system now, or None when it couldn't look."""
+    rc, out, _ = env.run([engine, "engine", "check", check], timeout=120)
+    try:
+        doc = json.loads([x for x in out.splitlines() if x.lstrip().startswith("{")][-1])
+        return doc.get("findings") if doc.get("ok") else None
+    except (ValueError, IndexError):
+        return None
 
 
 def fieldkit(ctx):
@@ -706,14 +728,7 @@ def fieldkit(ctx):
         raise Skip("Field Kit's engine isn't installed (bromigos-fieldkit-tools)")
     found, cleared = [], []
     for check in ["black-screen"] + [c for c in saved if c != "black-screen"]:
-        live = None
-        if engine:
-            rc, out, _ = env.run([engine, "engine", "check", check], timeout=120)
-            try:
-                doc = json.loads([x for x in out.splitlines() if x.lstrip().startswith("{")][-1])
-                live = doc.get("findings") if doc.get("ok") else None
-            except (ValueError, IndexError):
-                live = None
+        live = _live_findings(env, engine, check) if engine else None
         if live is not None:
             found += [_finding_alert(check, f) for f in live if not f.get("ok")]
             if check in saved:
@@ -734,6 +749,31 @@ def fieldkit(ctx):
         except OSError:
             pass
     return found
+
+
+def fieldkit_between(ctx, standing):
+    """Between boots: the black screen findings still raised are looked at again, so one that is
+    no longer true goes at the next pass instead of standing until the next boot. A finding
+    still found stays, in the check's words of now. Nothing new is raised here: that is the
+    boot pass's job, which also runs after a kernel or a graphics driver changes
+    (zz-bromigos-alerts.hook). The last boot's findings, and anything the check can't look at
+    now, stand as they were."""
+    def mine(a):
+        facts = (a.get("evidence") or {}).get("facts") or {}
+        return facts.get("check") == "black-screen" and facts.get("saved_by_stick") != "yes"
+
+    engine = _engine(ctx.env)
+    if not engine or not any(mine(a) for a in standing):
+        return standing
+    live = _live_findings(ctx.env, engine, "black-screen")
+    if live is None:
+        return standing
+    now = {}
+    for f in live:
+        if not f.get("ok"):
+            a = normalise(_finding_alert("black-screen", f), "fieldkit.finding")
+            now[a["id"]] = a
+    return [now.get(a.get("id")) if mine(a) else a for a in standing if not mine(a) or a.get("id") in now]
 
 
 # ------------------------------------------------------------------ game.steam
@@ -822,7 +862,7 @@ REGISTRY = [
     Check("systemd.failed", ["system", "user"], failed_units),
     Check("server.game", ["system"], game_server),
     Check("server.app-data", ["system"], app_data),
-    Check("fieldkit.finding", ["system"], fieldkit, boot_only=True),
+    Check("fieldkit.finding", ["system"], fieldkit, boot_only=True, between=fieldkit_between),
     Check("game.steam", ["user"], steam),
     Check("activity.job", ["system"], activity_job),
 ]

@@ -39,8 +39,9 @@ def target_for(root):
 
 def show(found):
     for f in found:
-        print(("  ok   " if f.ok else "  ▸    ") + f.title)
-        if f.detail and not f.ok:
+        # a passed line with a detail is a note: nothing wrong, and worth a sentence
+        print(("  ▸    " if not f.ok else "  note " if f.detail else "  ok   ") + f.title)
+        if f.detail:
             for line in f.detail.splitlines():
                 print("       " + line)
         if f.fix and not f.ok:
@@ -202,8 +203,8 @@ def scripted(argv):
             if doc.get("message"):
                 print(doc["message"])
             for f in doc.get("findings", []):
-                print(("  ok   " if f["ok"] else f"  [{f['id']}]  ") + f["title"])
-                if not f["ok"] and f.get("detail"):
+                print((f"  [{f['id']}]  " if not f["ok"] else "  note " if f.get("detail") else "  ok   ") + f["title"])
+                if f.get("detail"):
                     print("       " + f["detail"].replace("\n", "\n       "))
                 for c in f.get("commands", []) if not f["ok"] else []:
                     print("       $ " + c)
