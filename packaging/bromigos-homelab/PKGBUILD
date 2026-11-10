@@ -56,7 +56,7 @@ pkgver() {
 check() {
   cd "$_root/homelab"
   python -m py_compile lib/bromigos_homelab/*.py lib/bromigos_homelab/adapters/*.py \
-    live/*.py widgets/*.py vector/*.py bin/bromigos-homelab bin/bromigos-setup-homelab bin/bromigos-lab bin/bromigos-media
+    live/*.py widgets/*.py vector/*.py bin/bromigos-homelab bin/bromigos-setup-homelab bin/bromigos-lab bin/bromigos-media bin/bromigos-hw-salvage
   # with no sources every capability is empty and nothing raises
   BROMIGOS_HOMELAB_CONFIG=/nonexistent BROMIGOS_SHARE_DIR=/nonexistent PYTHONPATH=lib \
     python -c 'import bromigos_homelab as H; assert not H.configured(); assert H.snapshot() is None; assert H.hosts()["items"] == []'

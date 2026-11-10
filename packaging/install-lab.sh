@@ -7,7 +7,7 @@ dest=${2:?package directory}
 lib="$dest/usr/lib/bromigos/lib/bromigos_homelab"
 install -Dm0644 -t "$lib/" "$root"/homelab/lib/bromigos_homelab/*.py
 install -Dm0644 -t "$lib/adapters/" "$root"/homelab/lib/bromigos_homelab/adapters/*.py
-install -Dm0755 -t "$dest/usr/lib/bromigos/bin/" "$root"/homelab/bin/bromigos-{lab,homelab,setup-homelab,media}
+install -Dm0755 -t "$dest/usr/lib/bromigos/bin/" "$root"/homelab/bin/bromigos-{lab,homelab,setup-homelab,media,hw-salvage}
 install -d "$dest/usr/bin"
 ln -s ../lib/bromigos/bin/bromigos-lab "$dest/usr/bin/bromigos-lab"
 install -Dm0644 -t "$dest/usr/lib/systemd/user/" "$root"/homelab/systemd/*
@@ -27,6 +27,6 @@ trap 'rm -rf "$key_home"' EXIT
 GNUPGHOME="$key_home" gpg --batch --yes --dearmor --output "$dest/usr/share/bromigos-lab/bromigos.gpg" "$root/packaging/keys/bromigos.asc"
 chmod 0644 "$dest/usr/share/bromigos-lab/bromigos.gpg"
 install -Dm0644 "$root/homelab/share/homelab.toml" "$dest/usr/share/bromigos/default/homelab.toml"
-install -Dm0644 -t "$dest/usr/share/doc/bromigos-lab/" "$root"/docs/{homelab,lab,lab-models,lab-provision,lab-infrastructure,lab-network,lab-secrets}.md
+install -Dm0644 -t "$dest/usr/share/doc/bromigos-lab/" "$root"/docs/{homelab,lab,lab-models,lab-provision,lab-infrastructure,lab-network,lab-secrets,salvage}.md
 install -Dm0644 -t "$dest/usr/share/licenses/bromigos-lab/" "$root"/LICENSE-{MIT,APACHE}
 python -m compileall -q -o 0 -o 1 -s "$dest" -p / "$lib"

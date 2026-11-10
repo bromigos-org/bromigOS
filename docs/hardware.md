@@ -43,6 +43,26 @@ already working card from its connected screens happens at login without running
 Other words after `bromigos hw` go to the command router, which runs
 `bromigos-hw-<name>`. So a hardware command of your own fits in the same group.
 
+## Salvage scan: what an old PC can do as a server
+
+`bromigos hw salvage` is one of those commands. It comes with the `bromigos-lab` package.
+It reads this computer's processor, memory, disks, graphics, network and firmware, and
+changes nothing. Then it says which of bromigOS Server's roles and apps fit, which fit
+with a trade-off, which don't and why, and the changes that would let more fit.
+
+```bash
+bromigos hw salvage                    # the report
+sudo bromigos hw salvage               # with the drives' health and the processor's power
+bromigos hw salvage --json             # the same, as JSON
+bromigos hw salvage --save FILE        # a report to attach when asking for help
+bromigos hw salvage --answers FILE     # the choices, as an answer file for the installer
+```
+
+It doesn't use `bromigos hw detect`'s reading, which is about drivers for a desktop. Its
+verdict comes from the provisioning catalogue, through the budget logic the Server
+installer uses. [salvage.md](salvage.md) has the report, every probe, every rule and
+number, and the JSON's schema.
+
 ## What it reads
 
 Detection reads files only and never runs a command. So a tree of fixture files can

@@ -90,6 +90,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos homelab`](#bromigos-homelab) | See what's connected from your homelab, and what doesn't answer. |
 | [`bromigos media`](#bromigos-media) | Open [Your media](media.md) in the terminal: find and request media, see their channels and download progress, monitor, play or delete shows, films and albums. |
 | [`bromigos lab`](#bromigos-lab) | Open [the lab console](lab.md): your homelab's status, its GPUs, and jobs to run on them. |
+| [`bromigos hw salvage`](#bromigos-hw-salvage) | See what this computer could run as a home server, before you [install bromigOS Server](server-setup.md#check-the-computer-first) on it. It reads the hardware and changes nothing. |
 
 ### Apps, extensions and the menu
 
@@ -1202,7 +1203,7 @@ Options:
       --json  Print the JSON document (schema in core/README.md)
   -h, --help  Print help
 
-What it reads: the PCI display devices (NVIDIA's own supported-chips list and Mesa's tables say which driver), the DMI chassis type, batteries, the lid, backlights, touchpads, the kernels, mkinitcpio's MODULES. What setup does, only where it differs: the GPU's packages (never swapping an installed NVIDIA driver), NVIDIA's early KMS, a hybrid laptop's render GPU (udev names, AQ_DRM_DEVICES for Hyprland), runtime power management for its NVIDIA GPU, and on a laptop brightnessctl and power-profiles-daemon. A driver only the AUR has (NVIDIA's 580.xx and 470.xx branches) is offered through paru, after a question. What each card is for (the desktop, games and heavy apps, virtual machines): hw graphics, hw display, hw games, hw run, hw vfio, and Settings › Graphics. docs/hardware.md.
+What it reads: the PCI display devices (NVIDIA's own supported-chips list and Mesa's tables say which driver), the DMI chassis type, batteries, the lid, backlights, touchpads, the kernels, mkinitcpio's MODULES. What setup does, only where it differs: the GPU's packages (never swapping an installed NVIDIA driver), NVIDIA's early KMS, a hybrid laptop's render GPU (udev names, AQ_DRM_DEVICES for Hyprland), runtime power management for its NVIDIA GPU, and on a laptop brightnessctl and power-profiles-daemon. A driver only the AUR has (NVIDIA's 580.xx and 470.xx branches) is offered through paru, after a question. What each card is for (the desktop, games and heavy apps, virtual machines): hw graphics, hw display, hw games, hw run, hw vfio, and Settings › Graphics. What an old PC could run as a home server: hw salvage (the salvage scan; package bromigos-lab; docs/salvage.md). docs/hardware.md.
 ```
 
 #### bromigos hw detect
@@ -1315,6 +1316,26 @@ Options:
       --json  Print the JSON document (schema in core/README.md)
   -h, --help  Print help
 ```
+
+### bromigos hw salvage
+
+Salvage scan: what this computer can do as a home server, judged by bromigOS Server's own catalogue (read-only).
+
+```text
+bromigos hw salvage [--json] [--save FILE] [--answers FILE] [--identifiers]
+```
+
+For example:
+
+```text
+bromigos hw salvage
+sudo bromigos hw salvage
+bromigos hw salvage --json
+bromigos hw salvage --save salvage-report.txt
+bromigos hw salvage --answers salvage.toml
+```
+
+From the `bromigos-homelab` package.
 
 ### bromigos idle
 

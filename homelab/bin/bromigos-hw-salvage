@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+# bromigos:summary=Salvage scan: what this computer can do as a home server, judged by bromigOS Server's own catalogue (read-only)
+# bromigos:args=[--json] [--save FILE] [--answers FILE] [--identifiers]
+# bromigos:examples=bromigos hw salvage; sudo bromigos hw salvage; bromigos hw salvage --json; bromigos hw salvage --save salvage-report.txt; bromigos hw salvage --answers salvage.toml
+"""bromigos hw salvage: point it at an old PC and it says what that machine can do as a home
+server (docs/salvage.md; working name "salvage scan").
+
+    bromigos hw salvage                    the report: this computer, what it's good for, what
+                                           would change the answer, the next step
+    sudo bromigos hw salvage               the same, with the drives' health verdicts and the
+                                           processor's measured power (Field Kit runs as root)
+    bromigos hw salvage --json             the JSON document (schema in docs/salvage.md)
+    bromigos hw salvage --save FILE        also write the report and the JSON to FILE, to attach
+                                           when asking for help: no serial numbers, MAC addresses
+                                           or hostname
+    bromigos hw salvage --answers FILE     also write the next step's choices as an answer file
+                                           for bromigOS Server's installer
+    bromigos hw salvage --identifiers      read serial numbers, MAC addresses and the hostname
+                                           too, and keep them in --json and --save
+
+Read-only: it reads /proc, /sys and udev's database, and asks lspci, lsblk, ethtool, vainfo and
+systemd-detect-virt when they're installed (smartctl and dmidecode as root only). Nothing is
+mounted or changed. The verdict comes from the provisioning catalogue through the same budget
+logic as the installer's "What should this server run?" step (bromigos_homelab.provcatalog).
+"""
+import os
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+for p in (os.path.join(HERE, "..", "lib"), "/usr/lib/bromigos/lib"):
+    p = os.path.normpath(p)
+    if os.path.isdir(os.path.join(p, "bromigos_homelab")):
+        if p in sys.path:
+            sys.path.remove(p)
+        sys.path.insert(0, p)
+        break
+
+from bromigos_homelab import salvage  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(salvage.main(sys.argv[1:]))

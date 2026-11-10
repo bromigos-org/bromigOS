@@ -28,7 +28,11 @@ optdepends=('gnupg: verify signed model catalog updates'
             'python-numpy: VECTOR Gnosis memory mirror'
             'python-huggingface-hub: bromigos lab models refresh --hf (newer models on Hugging Face)'
             'python-boto3: s3 sources: bucket sizes (with a read-only key)'
-            'poppler: the ocr job kind: PDF pages')
+            'poppler: the ocr job kind: PDF pages'
+            'pciutils: bromigos hw salvage and the provisioning hardware check name graphics cards'
+            'smartmontools: bromigos hw salvage reads each drive'"'"'s own health verdict (as root)'
+            'ethtool: bromigos hw salvage reads a wired port'"'"'s top speed'
+            'libva-utils: bromigos hw salvage lists the video formats the graphics chip decodes and encodes')
 makedepends=('git' 'python' 'gnupg')
 checkdepends=('python-textual' 'python-cairo' 'python-gobject' 'pango' 'python-psutil' 'python-zeroconf'
               'restic')   # bromigos lab backups, restoring from a real repository (tests/test_lab_backups.py)

@@ -390,6 +390,10 @@ a live check (`bromigos lab provision --check ITEM`).
 `hw` is `{cpu, ram_gb, disk_gb, gpu (False or "nvidia"/"amd"/"intel"), gpu_vram_gb, gpu_name}`;
 `localprovision.detect()` reads this machine's.
 
+The salvage scan (`bromigos hw salvage`, [salvage.md](salvage.md)) asks the same calls about
+a computer nothing is installed on yet: every item and every role, one at a time. So the
+installer's meter and the scan give one answer to "does this fit".
+
 Roles: `lab-node`, `storage`, `home-services`, `game-server`, `media`, `base` (also accepted:
 `just-a-server`, bromigOS Server's name for it). Items with `default = false` are listed under
 their role but never ticked for you; `lab = [...]` limits an item to some lab answers (Wings
