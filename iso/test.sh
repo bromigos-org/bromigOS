@@ -655,11 +655,19 @@ PY2
                           result "text: no desktop (no login screen)" bash -c "! ssh ${sshopts[*]} live@127.0.0.1 pgrep -x sddm >/dev/null"
                           result "text: the text installer on tty1" running 'bromigos_installer.tui'
                           # and on its screen: the installer's frame and words, in the console's green.
-                          # Running isn't showing: 0.1.4's ran with its screen in the journal, tty1 black
+                          # Running isn't showing: 0.1.4's ran with its screen in the journal, tty1 black.
+                          # This test's own cloud-init (the seed that gives it SSH; a real boot has none)
+                          # writes its lines on the same console, over the installer's first screen when
+                          # it ends later (the pull request's run did: 584 green pixels of the emblem
+                          # under the host keys). So: it ends first, the first screen is kept as it was
+                          # found, and the screen looked at is the one a step on draws afresh
+                          "${SSH[@]}" "timeout 120 cloud-init status --wait" >/dev/null 2>&1 || true
+                          shot "text-$firmware-tty1-first" >/dev/null
+                          press ctrl-n
                           result "text: the installer is on the console's screen, not a black one" \
                               python3 "$here/test/screen-wait.py" --qmp "$dir/qmp.sock" --out "$dir/shots/text-$firmware-tty1.png" --timeout 45 --green 10000
                           # and it takes the keyboard there: Ctrl+N is its Continue, and the top
-                          # line (BROMIGOS // INSTALL  STEP 1 OF 11) says the step
+                          # line (BROMIGOS // INSTALL  STEP 2 OF 11) says the step
                           press ctrl-n; sleep 3; shot "text-$firmware-tty1-next" >/dev/null
                           result "text: Ctrl+N on the console goes on a step (the top line changes)" python3 -c 'import sys
 from PIL import Image, ImageChops
