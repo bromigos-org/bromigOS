@@ -972,7 +972,7 @@ plugged in, it lists them and you name one: `bromigos lab backups go-bag setup /
 | Already holds this server's Go Bag | Uses it as it is |
 
 **Keep the key.** The copy is encrypted with the same key as the nightly backup
-([below](#turn-backups-on)). Without the key the drive is unreadable, for a thief and for
+([above](#turn-backups-on)). Without the key the drive is unreadable, for a thief and for
 you. Show it with `sudo bromigos server backup key`, and keep a copy away from the server
 and away from the drive.
 

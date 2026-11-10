@@ -225,7 +225,9 @@ class Words(unittest.TestCase):
         import io
         from unittest import mock
         a = argparse.Namespace(yes=False, json=False)
-        self.assertFalse(D.agreed(a, "Erase?", "erase"), "stdin isn't a terminal here")
+        with mock.patch.object(sys, "stdin", mock.Mock(isatty=lambda: False)), \
+                mock.patch("builtins.input", side_effect=AssertionError("it asked with no terminal to ask on")):
+            self.assertFalse(D.agreed(a, "Erase?", "erase"))
         tty = mock.Mock(isatty=lambda: True)
         with mock.patch.object(sys, "stdin", tty), mock.patch("builtins.input", return_value="erase"), \
                 mock.patch.object(sys, "stdout", io.StringIO()):

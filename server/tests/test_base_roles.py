@@ -107,10 +107,15 @@ class Files(unittest.TestCase):
         filesystem's UUID, and the unit runs a command bromigos-server has."""
         rule = (HERE / "udev/65-bromigos-server-backup-drive.rules").read_text()
         lines = [line for line in rule.splitlines() if line and not line.startswith("#")]
-        self.assertEqual(lines[-2], 'TAG+="systemd", ENV{SYSTEMD_WANTS}+="bromigos-server-backup-drive@$env{ID_FS_UUID}.service"')
-        # only USB filesystems with a UUID, and never when one is unplugged
-        for match in ('ACTION=="remove"', 'SUBSYSTEM!="block"', 'SUBSYSTEMS!="usb"', 'ENV{ID_FS_USAGE}!="filesystem"', 'ENV{ID_FS_UUID}!="?*"'):
-            self.assertIn(f'{match}, GOTO="bromigos_backup_drive_end"', lines[:-2])
+        self.assertEqual(lines[-2], 'SUBSYSTEMS=="usb", TAG+="systemd", '
+                         'ENV{SYSTEMD_WANTS}+="bromigos-server-backup-drive@$env{ID_FS_UUID}.service"')
+        # only filesystems with a UUID, and never when one is unplugged
+        self.assertEqual(lines[:-2], [f'{match}, GOTO="bromigos_backup_drive_end"' for match in (
+            'ACTION=="remove"', 'SUBSYSTEM!="block"', 'ENV{ID_FS_USAGE}!="filesystem"', 'ENV{ID_FS_UUID}!="?*"')])
+        # a key that looks at the parents is never negated: SUBSYSTEMS!="usb" is true for the block
+        # device itself (the first on the way up that isn't USB), and would skip every drive
+        for key in ("SUBSYSTEMS", "KERNELS", "DRIVERS", "ATTRS"):
+            self.assertNotRegex(rule, rf"(?m)^[^#]*\b{key}(\{{[^}}]*\}})?!=")
         self.assertEqual(lines[-1], 'LABEL="bromigos_backup_drive_end"')
         self.assertNotIn("RUN+=", rule, "a copy is long: udev starts a unit, it never runs it")
         self.assertNotIn("/dev/sd", rule)
