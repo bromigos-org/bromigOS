@@ -21,9 +21,10 @@
 #      sudo as the signed-in user, and a restart closes a running job as interrupted
 #   6. the same install on a machine with two data disks, as two copies (RAID1); the installed
 #      Server, with a network this time, has the lab's engine install an app from the catalogue,
-#      and the app's data must be on the data disks' filesystem, not the system disk's. Then
-#      the server is put back as an older installer left one, and bromigos lab app-data move
-#      must move the app's data to the data disks
+#      and the app's data must be on the data disks' filesystem, not the system disk's; so must
+#      the media library's and the backups' folders, and the vault of the real Vaultwarden
+#      package. Then the server is put back as an older installer left one, and
+#      bromigos lab app-data move must move all of it to the data disks
 #      (iso/test/server-data-checks.sh; docs/server.md, "Where the apps keep their data")
 #
 # DIR gets shots/, each VM's folder (serial logs) and the output; the disk is removed at the
@@ -244,9 +245,9 @@ server_data() {     # the checks reach the server on a small disk (no SSH here: 
     "$T" wait-serial --name server-data "login:" --timeout 300 || return 1
     sleep 10
     "$T" login --name server-data --user tester --password tester --timeout 60 >/dev/null || return 1
-    TIMEOUT=1500 run server-data 'echo tester | sudo -S -p "" sh -c "echo \"tester ALL=(ALL) NOPASSWD: ALL\" > /etc/sudoers.d/99-isotest && chmod 440 /etc/sudoers.d/99-isotest" || exit 1
+    TIMEOUT=2100 run server-data 'echo tester | sudo -S -p "" sh -c "echo \"tester ALL=(ALL) NOPASSWD: ALL\" > /etc/sudoers.d/99-isotest && chmod 440 /etc/sudoers.d/99-isotest" || exit 1
         sudo mkdir -p /run/fkchecks && sudo mount -o ro /dev/disk/by-label/FKCHECKS /run/fkchecks || exit 1
-        bash /run/fkchecks/server-data-checks.sh raid1=1 disks=2 app=start-page move=1'
+        bash /run/fkchecks/server-data-checks.sh raid1=1 disks=2 app=start-page passwords=1 move=1'
 }
 
 step "Field Kit starts (offline): console, Home, engine, offline store" live || true
