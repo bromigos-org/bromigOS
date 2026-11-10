@@ -95,6 +95,7 @@ VECTOR, the desktop's AI assistant, is documented in his own repository,
 | [qr.md](qr.md) | Themed QR codes: the styles, the decode test, and BRODEC's scanner settings |
 | [server.md](server.md) | bromigOS Server, the headless edition: SSH, firewall, safe automatic updates, containers, backups and getting files back from them |
 | [alerts.md](alerts.md) | `bromigos alerts`: the checks that find what needs you (drives, disk space, updates, backups, the UPS, services), the notification, and your own checks |
+| [activity.md](activity.md) | `bromigos activity`: long jobs as records with named steps, each in a systemd unit of its own; the record's fields, and how to make a script a job |
 | [iso-encryption.md](iso-encryption.md) | Full-disk encryption in the ISO's installer |
 | [release.md](release.md) | Cutting a release: versions, release notes, tags and promoting a candidate to stable |
 | [public.md](public.md) | Making the package repository public: the R2 mirror and `go-public.sh` |
