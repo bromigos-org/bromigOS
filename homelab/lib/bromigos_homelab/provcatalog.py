@@ -278,7 +278,9 @@ def fits_item(it, hw):
     if req.get("gpu_vram_gb") and float(hw.get("gpu_vram_gb") or 0) < req["gpu_vram_gb"]:
         return f"{it['name']} needs {req['gpu_vram_gb']:g} GB of graphics memory; this card has {float(hw.get('gpu_vram_gb') or 0):g} GB."
     if req.get("ram_gb") and hw.get("ram_gb") is not None and req["ram_gb"] + OS_RAM_GB > hw["ram_gb"]:
-        return f"{it['name']} needs {req['ram_gb']:g} GB of memory; this server has {hw['ram_gb']:g} GB."
+        # when the item alone would fit, say what else the memory goes to: "needs 1 GB; has 1.9 GB" reads wrong
+        beside = f" beside the {OS_RAM_GB:g} GB the system uses" if req["ram_gb"] <= hw["ram_gb"] else ""
+        return f"{it['name']} needs {req['ram_gb']:g} GB of memory{beside}; this server has {hw['ram_gb']:g} GB."
     return None
 
 

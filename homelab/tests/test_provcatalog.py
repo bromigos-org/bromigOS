@@ -142,6 +142,13 @@ class BudgetTests(unittest.TestCase):
     def test_conflict_doesnt_fit(self):
         self.assertFalse(PC.budget(["ollama", "vllm"], NVIDIA_24)["fits"])
 
+    def test_memory_sentence_counts_the_system_when_the_item_alone_would_fit(self):
+        argo = PC.by_id()["argocd"]                          # 1 GB, beside the system's 1 GB
+        self.assertEqual(PC.fits_item(argo, {"ram_gb": 1.9}),
+                         "Argo CD needs 1 GB of memory beside the 1 GB the system uses; this server has 1.9 GB.")
+        self.assertEqual(PC.fits_item(argo, {"ram_gb": 0.5}), "Argo CD needs 1 GB of memory; this server has 0.5 GB.")
+        self.assertIsNone(PC.fits_item(argo, {"ram_gb": 2}))
+
 
 class RecommendTests(unittest.TestCase):
     def test_each_role(self):
