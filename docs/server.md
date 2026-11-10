@@ -571,6 +571,12 @@ every disk. Each night at 02:00 each disk runs a short self-test, and on Saturda
 a long one. A disk that reports a problem, or gets too hot, shows in `bromigos server`
 with what it said.
 
+`bromigos storage health` gives each disk a verdict from its history: healthy, watch,
+getting worse, replace soon, or cannot tell. A few old errors that stopped growing are a
+quiet line, not an alarm. A count that is rising, or a disk that says it is failing, is an
+alert on your phone, with what changed and what to do.
+[storage.md](storage.md#drive-health) explains each verdict and every number behind it.
+
 Once a month the server also scrubs `/`: btrfs reads every file back and checks it against
 its checksum. Corruption found while the second copy (or the backup) can still fix it is
 corruption you can do something about. Any error the disks counted shows in
@@ -584,6 +590,10 @@ For power users:
   warning at 65 °C, and each change of 4 °C. Disks asleep aren't woken for a check.
 - A warning runs `bromigos-server-disk-alert`, which adds a line to
   `/var/lib/bromigos/server/disk-alerts.jsonl`. No mail is sent.
+- The verdicts come from the alerts' `disk.smart` check, which reads each disk every 15
+  minutes and keeps the readings in `/var/lib/bromigos/drives/history.json`. The weekly long
+  self-test is what makes 30 quiet days mean something: the whole surface is read four times
+  in them. `bromigos storage health --json` gives the verdicts to a script.
 - smartd runs with `-q nodev0` as `Type=simple`: on a machine with no disk it can read (a
   VM, a RAID card that hides its disks), it stops instead of failing.
 - The scrub is btrfs-progs' own `btrfs-scrub@-.timer`, enabled only when `/` is btrfs.

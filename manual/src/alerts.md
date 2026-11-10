@@ -9,8 +9,9 @@ bromigOS never fixes anything by itself. It says what's wrong, in plain words, a
 
 ## What it watches
 
-- **Your drives.** A drive that reports it is failing or wearing out, and errors the file
-  system found.
+- **Your drives.** A drive that says it is failing, or whose error counts are rising, and
+  errors the file system found. A few old errors that stopped growing don't alarm: they
+  are a quiet line ([Storage](storage.md#check-your-drives-health)).
 - **Disk space.** A disk that is 90 % full, and again at 97 %.
 - **Updates.** Updates waiting, and a restart that a new kernel or graphics driver needs.
 - **Backups.** A backup that failed, or didn't run for a day and a half.

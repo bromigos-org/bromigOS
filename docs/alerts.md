@@ -16,7 +16,7 @@ The manual's [Alerts](../manual/src/alerts.md) page is the user's side.
 
 | Check | What it looks for | How bad |
 |---|---|---|
-| `disk.smart` | A drive's own health records (SMART, and NVMe's health log) | Critical: the drive says it's failing, or raised a critical warning. Needs you: bad sectors, media errors, 90 % of an SSD's rated life used |
+| `disk.smart` | Each drive's own health records (SMART, and NVMe's health log) and how they changed over time ([Drives](#drives)) | Critical: the drive says it's failing. Needs you: an error count that is rising, or new to bromigOS. Info: old errors that stopped growing |
 | `disk.scrub` | btrfs's last scrub (`btrfs scrub status`) and its error counters (`btrfs device stats`) | Critical: damaged data with no good copy. Needs you: errors it repaired, or counters above zero |
 | `disk.full` | Each real filesystem's free space | Needs you at 90 %, critical at 97 % |
 | `update.waiting` | Updates waiting (`bromigos update --check`) | Info. Needs you when nothing was installed for 30 days |
@@ -54,6 +54,39 @@ system pass writes something new (`bromigos-alerts-notify.path`).
 - A run shows at most three notifications. When more are due, the third says "And 3 more
   alerts on this computer".
 - Nothing shows outside a desktop session or without `notify-send` (package `libnotify`).
+
+## Drives
+
+`disk.smart` keeps a history of each drive's health records and gives the drive a verdict
+from the trend. The alert follows the verdict, so an old error count that stopped growing
+doesn't alarm forever.
+
+| Verdict | Alert | Title |
+|---|---|---|
+| healthy | None | |
+| watch | Info | A drive to keep an eye on |
+| has errors, still checking | Needs you | A drive has errors |
+| getting worse | Needs you | A drive is getting worse |
+| replace soon | Needs you | Replace this drive soon |
+| replace soon, and the drive says it's failing | Critical | A drive is failing |
+| cannot tell | None | |
+
+- **What changed, and what to do.** Each alert's `detail` says which count moved, from what
+  to what and in how many days, then what to do.
+- **Going quiet.** An error count that doesn't rise for 30 days becomes "watch": an info
+  line, with no notification. For one day its text starts with "The alarm for this drive
+  is off." A count that was already above zero when bromigOS first read the drive keeps
+  its alarm for those 30 days first, because nothing says yet that it is old.
+- **Coming back.** If the count rises again, the alert is "A drive is getting worse" again.
+- **The same alert whatever the device name.** The `id` is `disk.smart:<key>`, and the key
+  comes from the drive's model and serial number. `nvme0` and `nvme1` can swap between
+  boots without the alert starting over. `subject` is the device name now.
+- **A drive that stops answering** keeps its alert, with its last reading.
+- **A drive that is too hot** by its own limit raises "A drive is too hot", needs you.
+
+`bromigos storage health` shows every drive's verdict and its readings over time.
+[storage.md](storage.md#drive-health) has every value read, every threshold and why, and
+the history file.
 
 ## Field Kit's findings at the next boot
 
@@ -106,6 +139,7 @@ bromigos alerts notify                   # the desktop notification, once each
 |---|---|---|
 | `/var/lib/bromigos/alerts/system.json` | the system pass, as root | 0644 |
 | `/var/lib/bromigos/alerts/state.json` | the system pass: when each alert was first seen | 0644 |
+| `/var/lib/bromigos/drives/history.json` | the system pass's `disk.smart`: each drive's readings over time ([storage.md](storage.md#the-history-file)) | 0644 |
 | `~/.local/state/bromigos/alerts/user.json` | your pass | 0600 |
 | `~/.local/state/bromigos/alerts/state.json` | your pass: when each alert was first seen | 0600 |
 | `~/.local/state/bromigos/alerts/notified.json` | `notify`: what the desktop showed, and when | 0600 |
@@ -138,14 +172,15 @@ Both passes write the same shape:
 ### An alert
 
 ```json
-{"id": "disk.smart:nvme0", "check": "disk.smart", "severity": "critical",
+{"id": "disk.smart:samsung-ssd-980-pro-2tb-0f1c3b46", "check": "disk.smart", "severity": "critical",
  "title": "A drive is failing: Samsung SSD 980 PRO 2TB (nvme0)",
  "detail": "… its own health check says FAILED … Copy your files off it now, then replace it.",
  "source": "SMART", "subject": "nvme0", "since": 1793390400000,
  "actions": [{"kind": "fix", "label": "Fix it"}, {"kind": "snooze"}, {"kind": "open"}],
  "evidence": {"lines": ["SMART overall-health self-assessment test result: FAILED", "…"],
-              "facts": {"model": "Samsung SSD 980 PRO 2TB", "serial_tail": "3456"}},
- "fix": {"commands": ["sudo smartctl -a /dev/nvme0", "sudo smartctl -t short /dev/nvme0"],
+              "facts": {"model": "Samsung SSD 980 PRO 2TB", "serial_tail": "0001", "verdict": "replace"}},
+ "fix": {"commands": ["bromigos storage health nvme0", "sudo smartctl -a /dev/nvme0",
+                      "sudo smartctl -t short /dev/nvme0"],
          "touches": ["nothing (it reads the drive's records and runs its own 2-minute self-test)"],
          "from": "bromigos", "root": true, "note": "Back up first: …"},
  "link": null}
@@ -153,7 +188,7 @@ Both passes write the same shape:
 
 | Field | What it is |
 |---|---|
-| `id` | Stable for the problem: `<check>:<subject>`. At most 160 characters of `A-Z a-z 0-9 . _ : / @ + -` |
+| `id` | Stable for the problem: `<check>:<subject>`, or for a drive `disk.smart:<key>` ([Drives](#drives)). At most 160 characters of `A-Z a-z 0-9 . _ : / @ + -` |
 | `severity` | `info` (listed, never sent to a phone), `needs_you` or `critical` |
 | `title` | One plain line, at most 120 characters |
 | `detail` | What it means, then what to do. At most 600 characters |
@@ -230,10 +265,12 @@ alerts that need you, with limits so nothing spams. Its side is in BRODEC's
 - `bin/bromigos-alerts`: the command.
 - `lib/bromigos_alerts.py`: the passes, the document, custom checks and the notification.
 - `lib/bromigos_alerts_checks.py`: the checks.
+- `lib/bromigos_drives.py`: `disk.smart`'s history and verdicts, and `bromigos storage health`.
 - `packaging/bromigos-core/bromigos-alerts*.{service,timer,path}`: the units.
 - `tests/alerts/`: every check against stand-in commands in a stand-in root (`fake.py`).
   Nothing real is read, and no notification shows. `python3 tests/alerts/fake.py DIR` writes
-  documents with an alert of every kind, for BRODEC's tests.
+  documents with an alert of every kind, for BRODEC's tests. `test_drive_health.py` moves a
+  clock over the drives in `tests/alerts/drives/`.
 
 ```bash
 PYTHONPATH=lib python -m unittest discover -s tests/alerts

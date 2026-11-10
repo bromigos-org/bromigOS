@@ -98,6 +98,10 @@ what it does and serves as a launcher's hover hint. It also has Keywords to find
 For example, `theme` finds the theme switcher, `deck` finds every deck, and `settings`
 finds everything that sets something.
 
+Keywords add words the names don't have. A launcher already searches an entry's Name and
+GenericName, so a keyword never repeats either of them in full. `desktop-file-validate`
+0.29 and later warns when one does, and the check below fails on any warning.
+
 Each package ships the entries for what it owns:
 
 | Entry | What it opens | Package | Menu item |

@@ -1,0 +1,63 @@
+{
+  "json_format_version": [
+    1,
+    0
+  ],
+  "smartctl": {
+    "version": [
+      7,
+      5
+    ],
+    "pre_release": false,
+    "svn_revision": "5714",
+    "platform_info": "x86_64-linux-6.12.1-arch1-1",
+    "build_info": "(local build)",
+    "argv": [
+      "smartctl",
+      "-j",
+      "-H",
+      "-A",
+      "-i",
+      "-l",
+      "selftest",
+      "-d",
+      "scsi",
+      "/dev/sdb"
+    ],
+    "messages": [
+      {
+        "string": "SMART support is: Unavailable - device lacks SMART capability.",
+        "severity": "information"
+      }
+    ],
+    "exit_status": 4
+  },
+  "local_time": {
+    "time_t": 1793390400,
+    "asctime": "Fri Oct 30 20:00:00 2026 UTC"
+  },
+  "device": {
+    "name": "/dev/sdb",
+    "info_name": "/dev/sdb",
+    "type": "scsi",
+    "protocol": "SCSI"
+  },
+  "scsi_vendor": "QEMU",
+  "scsi_product": "QEMU HARDDISK",
+  "scsi_model_name": "QEMU QEMU HARDDISK",
+  "scsi_revision": "2.5+",
+  "scsi_version": "SPC-3",
+  "user_capacity": {
+    "blocks": 83886080,
+    "bytes": 42949672960
+  },
+  "logical_block_size": 512,
+  "device_type": {
+    "scsi_terminology": "Peripheral Device Type [PDT]",
+    "scsi_value": 0,
+    "name": "disk"
+  },
+  "smart_support": {
+    "available": false
+  }
+}

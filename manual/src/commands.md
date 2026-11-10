@@ -113,7 +113,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos update`](#bromigos-update) | [Update](update-and-rollback.md) everything. `--check` says what it would do; `--rollback` undoes the last update. |
 | [`bromigos whats-new`](#bromigos-whats-new) | Read [what's new](whats-new.md) in this release, offline. `--all` shows every release. |
 | [`bromigos channel`](#bromigos-channel) | See or change the [update channel](update-and-rollback.md#channels) you follow. |
-| [`bromigos storage`](#bromigos-storage) | Plan a [data drive](storage.md), copy and verify files, then review a path switch while keeping the originals. |
+| [`bromigos storage`](#bromigos-storage) | See each drive's [health](storage.md#check-your-drives-health), plan a [data drive](storage.md), copy and verify files, then review a path switch while keeping the originals. |
 | [`bromigos rollback`](#bromigos-rollback) | See whether updates can be undone on this machine, and set that up. |
 | [`bromigos aur`](#bromigos-aur) | See which [AUR](apps.md#install-an-app-from-the-aur) packages have updates waiting. `bromigos aur off` leaves the AUR out of updates and removes bromigOS's paru; `on` brings it back. |
 | [`bromigos restart`](#bromigos-restart) | Restart the parts of the desktop that still run old code after an update. |
@@ -2519,16 +2519,17 @@ Options:
 
 ### bromigos storage
 
-Inspect drives, migrate data and clean selected caches, originals or snapshots.
+Inspect drives and their health, migrate data and clean selected caches, originals or snapshots.
 
 ```text
-bromigos storage status [--json] | plan --device DEVICE --mount PATH [--roles LIST] [--json] | apply PLAN | migrate plan|run|resume|verify|status … | switch PLAN --writers-stopped | cleanup [--preview] [--json] | cleanup plan [--cache NAME] [--keep-versions N] [--migration PLAN] [--snapshot PATH] [--json] | cleanup apply PLAN [--yes] | cleanup status PLAN [--json]
+bromigos storage status [--json] | health [DRIVE] [--all] [--json] | plan --device DEVICE --mount PATH [--roles LIST] [--json] | apply PLAN | migrate plan|run|resume|verify|status … | switch PLAN --writers-stopped | cleanup [--preview] [--json] | cleanup plan [--cache NAME] [--keep-versions N] [--migration PLAN] [--snapshot PATH] [--json] | cleanup apply PLAN [--yes] | cleanup status PLAN [--json]
 ```
 
 For example:
 
 ```text
 bromigos storage status
+bromigos storage health
 bromigos storage cleanup --preview
 bromigos storage migrate plan --source /path/to/data --destination /mnt/Work/data --keep-path /path/to/data
 ```

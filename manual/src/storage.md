@@ -1,6 +1,7 @@
 # Storage
 
-`bromigos storage` helps prepare a local data drive, move files onto it and free space.
+`bromigos storage` says how healthy each drive is, and helps prepare a local data drive,
+move files onto it and free space.
 It separates planning, copying, verification and switching paths. The original files
 stay available until you decide how to retire them.
 
@@ -16,6 +17,53 @@ subvolumes and bind mounts share that capacity. RAM-backed swap is not listed as
 a physical drive. Use `--json` for structured output.
 Desktop terminals use smooth block bars. Text consoles and redirected output use
 plain bars so the display stays readable without desktop fonts.
+
+## Check your drives' health
+
+```bash
+bromigos storage health
+```
+
+Each drive gets one line with a verdict:
+
+```text
+Drive health, read 12 min ago
+
+  WDC WD40EFRX-68N32N0 (sda)       getting worse  8 reallocated sectors appeared in the last day
+  Samsung SSD 980 PRO 2TB (nvme0)  watch          41,870 media errors, unchanged since 3 Nov 2026
+  Extreme 55AE (sdc)               cannot tell    it's connected through a USB adapter that doesn't pass the drive's health records on
+```
+
+bromigOS reads the health records every drive keeps about itself, every 15 minutes, and
+remembers them. The verdict comes from how they change, not from one reading.
+
+| Verdict | It means | What to do |
+|---|---|---|
+| healthy | Nothing to report. | Nothing. |
+| watch | It has old errors that stopped growing at least 30 days ago. | Nothing. Keep your backup current. |
+| has errors, still checking | It had errors when bromigOS first read it. | Check your backup. It goes quiet after 30 days if nothing grows. |
+| getting worse | Its errors grew in the last 30 days. | Back up now, and plan to replace it. |
+| replace soon | The drive says it is failing, or its errors keep growing. | Copy your files off it, then replace it. |
+| cannot tell | The drive doesn't report its health here. | Connect it directly, not through a USB adapter. |
+
+Only "has errors", "getting worse" and "replace soon" raise an [alert](alerts.md). "watch"
+is a quiet line in `bromigos alerts`. When an alarm ends because the errors stopped
+growing, that line says "The alarm for this drive is off." for a day. If they grow again,
+the alarm comes back and says by how much.
+
+To see one drive's numbers over time, name it:
+
+```bash
+bromigos storage health nvme0
+```
+
+It shows the verdict, what to do, every reading now, what happened to the drive (a firmware
+update, an alarm that went quiet) and a table of readings by day. A drive is recognised by
+its model and serial number, so its history stays with it when its device name changes.
+
+The [storage docs](https://github.com/bromigos-org/bromigOS/blob/main/docs/storage.md#drive-health)
+list every value read, every threshold and why, where the history is kept, and `--json`
+for scripts.
 
 ## Plan a data drive
 
