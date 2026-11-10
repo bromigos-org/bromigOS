@@ -589,7 +589,8 @@ its second line), so your changes stay.
 **Backups.** On a bromigOS Server the Server's own nightly backup covers the apps
 ([server.md](server.md#backups)). Anywhere else, the Backups item (`step_backups`) writes
 `bromigos-lab-backup.service`, which runs `restic backup --one-file-system` over `/etc`,
-`/srv`, `/srv/apps`, `/var/lib/bromigos` and `/var/lib/vaultwarden`. `--one-file-system`
+`/srv`, `/srv/apps`, `/var/lib/bromigos` and `/var/lib/vaultwarden`, each one that is there
+(restic 0.19 fails a run that names a path that isn't). `--one-file-system`
 keeps it off other disks: `/srv/data` isn't read a second time, and `/srv/backups`, where
 its own repository is by default, isn't backed up into itself. So `/srv/apps`, a disk of
 its own on a server with data disks, is named by itself. Before restic, `bromigos lab

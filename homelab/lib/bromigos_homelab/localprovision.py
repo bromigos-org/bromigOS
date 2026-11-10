@@ -747,7 +747,7 @@ def step_monitoring(host, it):
 # read again as /srv/apps) and /srv/backups (other machines' backups, and this one's own
 # repository by default) are left out. So every folder on a disk of its own is named: /srv/apps,
 # a mount of the data disks' apps subvolume on a server that has them. A path that isn't there is
-# skipped. The apps' databases are copied whole first (bromigos_backups.copy_databases, into
+# left off the command line (restic 0.19 fails a run that names one). The apps' databases are copied whole first (bromigos_backups.copy_databases, into
 # /var/lib/bromigos; one that fails doesn't stop the backup, its file is still read as it is),
 # and the unit fails, after the backup, when it doesn't hold the apps' data or a copy failed
 BACKUP_PATHS = ("/etc", "/srv", "/" + APPS, "/var/lib/bromigos", AD.VAULT_OLD)
@@ -762,7 +762,7 @@ Environment=RESTIC_PASSWORD_FILE=%d/{cred}
 Environment=RESTIC_REPOSITORY={repo}
 ExecStartPre=/bin/sh -c 'restic cat config >/dev/null 2>&1 || restic init'
 ExecStartPre=-/usr/lib/bromigos/bin/bromigos-lab backups copy-databases
-ExecStart=/usr/bin/restic backup --one-file-system --exclude-caches {paths}
+ExecStart=/bin/sh -c 'for p in {paths}; do [ -e "$$p" ] && set -- "$$@" "$$p"; done; exec /usr/bin/restic backup --one-file-system --exclude-caches "$$@"'
 ExecStartPost=/usr/lib/bromigos/bin/bromigos-lab backups holds
 ExecStartPost=/usr/bin/restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
 """

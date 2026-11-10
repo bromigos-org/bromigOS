@@ -423,8 +423,9 @@ class ApplyTests(unittest.TestCase):
         # the lab's own backup names the apps' folder by itself: on a server with data disks it is a
         # mount of its own, which --one-file-system never crosses into
         unit = Path(self.root, "etc/systemd/system/bromigos-lab-backup.service").read_text()
-        self.assertIn("ExecStart=/usr/bin/restic backup --one-file-system --exclude-caches /etc /srv /srv/apps "
-                      "/var/lib/bromigos /var/lib/vaultwarden\n", unit)
+        self.assertIn("ExecStart=/bin/sh -c 'for p in /etc /srv /srv/apps /var/lib/bromigos /var/lib/vaultwarden; do "
+                      "[ -e \"$$p\" ] && set -- \"$$@\" \"$$p\"; done; exec /usr/bin/restic backup --one-file-system "
+                      "--exclude-caches \"$$@\"'\n", unit)
 
     def test_a_vault_already_in_the_packages_folder_stays_there_and_goes_on_working(self):
         # a server set up before the vault had a folder under /srv/apps: pointing the service at an

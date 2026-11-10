@@ -9,6 +9,8 @@ health line's wording runs without it."""
 import contextlib
 import json
 import os
+import re
+import shlex
 import shutil
 import signal
 import sqlite3
@@ -49,10 +51,14 @@ esac
 ''',
     # restic: the real one. With $FAKE/hang, a restore that writes restores that one path, then hangs
     # (not the look at where the backup's links point, which goes to a scratch folder)
+    # $FAKE/drop: a path restic is handed and leaves out, as a restic that went wrong would.
     # $FAKE/mounts: folders that are other filesystems (a data disks' subvolume mounted at
     # srv/apps). Under --one-file-system restic leaves each out unless it is named as a target,
     # and so does this stand-in, by excluding it
     "restic": r'''#!/bin/sh
+if [ "$1" = backup ] && [ -f "$FAKE/drop" ]; then
+  d=$(cat "$FAKE/drop"); for a; do shift; [ "$a" = "$d" ] || set -- "$@" "$a"; done
+fi
 if [ "$1" = backup ] && [ -f "$FAKE/mounts" ]; then
   case " $* " in *" --one-file-system "*)
     while read -r m; do
@@ -1006,7 +1012,10 @@ class AppData(Rig):
         self.assertIn("the data disks aren't mounted", d["health"]["verdict"])
 
     def test_a_backup_that_left_the_apps_out_fails_loudly(self):
-        self.paths("/etc", "/home", "/srv", exclude=["apps"])          # an exclude of someone's
+        # an exclude of someone's, and a restic that leaves the named folder out too (restic 0.19
+        # never excludes a path it's handed; 0.18 does)
+        self.paths("/etc", "/home", "/srv", exclude=["apps"])
+        (self.fake / "drop").write_text(str(self.root / "srv/apps"))
         r = self.server("backup", "run")
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("the backup failed: the backup left out /srv/apps (the apps' data)", r.stderr)
@@ -1132,7 +1141,12 @@ class TheLabsOwnBackup(unittest.TestCase):
         PC._cache.clear()
         unit = (self.root / "etc/systemd/system/bromigos-lab-backup.service").read_text()
         self.unit = unit
-        self.restic_args = next(line for line in unit.splitlines() if line.startswith("ExecStart=")).split()[1:]
+        # systemd's $$ is a $; the paths it names, under the stand-in root
+        script = shlex.split(next(line for line in unit.splitlines() if line.startswith("ExecStart="))[len("ExecStart="):])
+        self.assertEqual(script[:2], ["/bin/sh", "-c"])
+        self.script = re.sub(r"for p in ([^;]+);", lambda m: "for p in " + " ".join(
+            shlex.quote(str(self.root / w.lstrip("/"))) for w in m.group(1).split()) + ";",
+            script[2].replace("$$", "$")).replace("/usr/bin/restic", "restic")
         for rel, text in {"etc/hostname": "box\n", APP: "sand\n", "srv/www/index.html": "hello\n",
                           "srv/data/apps/photos/library/beach.jpg": "sand\n"}.items():
             (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -1149,7 +1163,7 @@ class TheLabsOwnBackup(unittest.TestCase):
 
     def command(self):
         """The unit's ExecStart, its paths under the stand-in root."""
-        return ["restic"] + [str(self.root / a.lstrip("/")) if a.startswith("/") else a for a in self.restic_args]
+        return ["sh", "-c", self.script]
 
     def holds(self, rel):
         r = subprocess.run([RESTIC, "ls", "--json", "latest", str(self.root / rel)], env=self.env, capture_output=True, text=True)
