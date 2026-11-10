@@ -8,6 +8,8 @@ on:
     paths:
       - "lib/bromigos_activity.py"
       - "lib/bromigos_alerts.py"
+      - "lib/bromigos_alerts_checks.py"
+      - "tests/alerts/**"
       - "bin/bromigos-activity"
       - "bin/bromigos-welcome-console"
       - "tests/activity/**"
@@ -42,3 +44,6 @@ jobs:
           useradd -m builder
           chown -R builder "$GITHUB_WORKSPACE"
           su builder -c "cd '$GITHUB_WORKSPACE' && PYTHONPATH=lib python -m unittest discover -s tests/activity"
+      - name: the alerts' tests
+        # a job that failed is an alert (the activity.job check), so a change here runs them too
+        run: su builder -c "cd '$GITHUB_WORKSPACE' && PYTHONPATH=lib python -m unittest discover -s tests/alerts"
