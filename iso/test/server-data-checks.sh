@@ -153,7 +153,7 @@ if [[ -n ${want[app]:-} && -n ${want[disks]:-} ]] && (( ${want[move]:-0} )); the
         set -e
         bromigos lab app-data | tee /dev/stderr | grep -q 'sudo bromigos lab app-data move'
         bromigos lab app-data | grep -q 'the media library (/srv/media): on the system disk, not the data disks'
-        bromigos lab app-data | grep -q 'the backups other machines keep here (/srv/backups): on the system disk, not the data disks'
+        bromigos lab app-data | grep -q '(/srv/backups): on the system disk, not the data disks'
         bromigos lab app-data status --json | python3 -c 'import json, sys; d = json.load(sys.stdin); sys.exit(0 if all(f[\"state\"] == \"not-on-pool\" and f[\"has_data\"] for f in (d, *d[\"folders\"])) else 1)'"
     if (( ${want[passwords]:-0} )); then
         check "bromigos lab app-data names the vault, and the command that moves it" bash -c "

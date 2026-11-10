@@ -603,7 +603,7 @@ class AppData(unittest.TestCase):
         self.assertEqual([(f["state"], f["where"], f["has_data"]) for f in d["folders"]], [("not-on-pool", "system", True)] * 2)
         self.assertEqual(d["words"][2:], [
             "the media library (/srv/media): on the system disk, not the data disks; sudo bromigos lab app-data move puts it on them",
-            "the backups other machines keep here (/srv/backups): on the system disk, not the data disks; "
+            "the folder for other machines' backups (/srv/backups): on the system disk, not the data disks; "
             "sudo bromigos lab app-data move puts it on them"])
         # no data disks: both belong on the system disk, and there's nothing to list
         (self.fake / "mounts").write_text(f"/ {ROOT_UUID} /@\n/srv {ROOT_UUID} /@srv\n")
@@ -620,7 +620,7 @@ class AppData(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         for words in ("the media library (", "would move to the data disks (/srv/data/media,", "1. stop the apps: jellyfin.service, qbittorrent.service",
                       "2. copy /srv/media to /srv/data/media", "mount the data disks' media subvolume at /srv/media:", MEDIA_LINE,
-                      "the backups other machines keep here (", "2. copy /srv/backups to /srv/data/backups", BACKUPS_LINE):
+                      "the folder for other machines' backups (", "2. copy /srv/backups to /srv/data/backups", BACKUPS_LINE):
             self.assertIn(words, r.stdout)
         self.assertEqual((self.root / "etc/fstab").read_text(), FSTAB)
         r = self.lab("move")
@@ -642,7 +642,7 @@ class AppData(unittest.TestCase):
         self.assertEqual([(f["state"], f["where"]) for f in d["folders"]], [("ok", "pool")] * 2)
         self.assertEqual(d["words"][2:], [
             f"the media library: the old copy is kept at /srv/{old_media.name}; sudo bromigos lab app-data remove-old deletes it",
-            f"the backups other machines keep here: the old copy is kept at /srv/{old_backups.name}; "
+            f"the folder for other machines' backups: the old copy is kept at /srv/{old_backups.name}; "
             "sudo bromigos lab app-data remove-old deletes it"])
         # the apps that use the library stopped before it was read, and started after its mount;
         # jellyfin keeps its settings under /srv/apps too, so it stopped for that move as well
@@ -672,6 +672,25 @@ class AppData(unittest.TestCase):
         self.assertNotIn("/srv/media", (self.root / "etc/fstab").read_text())
         self.assertNotIn("mount /srv/media", self.log())
         self.assertEqual(self.leftover("media"), [])
+
+    def test_a_disk_of_your_own_at_the_backups_folder_is_left_where_its_owner_put_it(self):
+        # someone's own backup drive, mounted at /srv/backups by their own fstab line: not the data
+        # disks' business, mounted or unplugged. Nothing is said, raised or moved
+        self.server(apps=False)
+        (self.root / "srv/backups").mkdir()
+        (self.root / "etc/fstab").write_text(FSTAB + "UUID=33333333-usb  /srv/backups  ext4  nofail  0 0\n")
+        for mounted in (True, False):
+            with self.subTest(mounted=mounted):
+                (self.fake / "mounts").write_text(f"/ {ROOT_UUID} /@\n/srv {ROOT_UUID} /@srv\n/srv/data {POOL_UUID} /\n"
+                                                  + ("/srv/backups 33333333-usb /\n" if mounted else ""))
+                f = self.folder("/srv/backups")
+                self.assertEqual((f["state"], f["where"]), ("ok", "elsewhere"))
+                self.assertFalse([w for w in self.app_data()["words"] if "backups" in w])
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fstab = (self.root / "etc/fstab").read_text()
+        self.assertEqual([l.split()[0] for l in fstab.splitlines() if " /srv/backups " in l], ["UUID=33333333-usb"])
+        self.assertNotIn("mount /srv/backups", self.log())
 
     def test_a_media_mount_that_fails_is_put_back_and_the_apps_move_stands(self):
         self.server()

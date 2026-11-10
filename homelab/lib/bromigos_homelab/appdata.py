@@ -112,7 +112,7 @@ POOL = "/srv/data"              # the data disks, when the server has them ([sto
 # the same on a server set up before the installer did
 FOLDERS = ((APPS_DIR, "apps", "the apps' data"),
            ("/srv/media", "media", "the media library"),
-           ("/srv/backups", "backups", "the backups other machines keep here"))
+           ("/srv/backups", "backups", "the folder for other machines' backups"))
 STATE = "/var/lib/bromigos/lab/app-data.json"       # the move's own record (state_file: one per folder)
 FSTAB = "/etc/fstab"
 QUADLETS = "/etc/containers/systemd"
@@ -191,17 +191,20 @@ def fs_uuid(path):
 
 def folder_doc(src, pool, rows, on_pool):
     """One folder against where this server means it to be (app_data_doc's states). `where` is
-    pool, system, or elsewhere: a share from another machine mounted there (the media library
-    on a NAS), which is where its owner put it."""
+    pool, system, or elsewhere: something else is mounted there, or meant to be (the media
+    library on a NAS share, a backup drive of the owner's with its own fstab line). That is
+    where its owner put it, and it is left alone, mounted or not."""
     j = read_json(state_file(src))
     left = j.get("leftover") or ""
     d = {"path": src, "where": "system", "state": "ok", "has_data": has_files(src), "move": j.get("state") or "",
          "running": False, "leftover": left if left and j.get("state") == "done" and os.path.isdir(at(left)) else ""}
     if not pool:
         return d
+    pool_device = next((r[0] for r in rows if r[1] == pool), "")
     if on_pool and is_mount(src) and fs_uuid(src) == on_pool:
         d["where"] = "pool"
-    elif src == "/srv/media" and (is_mount(src) or any(os.path.exists(at(u)) for u in MEDIA_NAS)):
+    elif src != APPS_DIR and (is_mount(src) or any(r[1] == src and r[0] != pool_device for r in rows)
+                              or (src == "/srv/media" and any(os.path.exists(at(u)) for u in MEDIA_NAS))):
         d["where"] = "elsewhere"
     elif any(r[1] == src for r in rows):
         d["state"] = "pool-away"
