@@ -150,7 +150,8 @@ reads what it prints, and writes the record. That process is the record's only w
 - **The unit's command line holds only the job's id.** The command to run goes through a
   root-only file, so its arguments don't show in `systemctl status`.
 - **It starts clean.** The command runs as root, in the directory you were in, with
-  systemd's environment and not your shell's. It has no terminal: its input is empty.
+  systemd's environment and not your shell's. `HOME` is root's home. It has no terminal: its
+  input is empty.
 - **Stopping the unit cancels the job.** `sudo systemctl stop bromigos-job-<id>.service`
   sends the job's process `SIGTERM`. It passes the signal to your command, waits up to 15
   seconds, then kills it. The record ends `cancelled`.
@@ -355,3 +356,8 @@ so a new kind of line can't appear without the parser knowing it.
 
 The `activity tests` workflow runs them on pull requests. The `bromigos-core` package runs
 them when it builds.
+
+Real systemd is tested in the ISO workflow. `iso/fieldkit/activity-checks.sh` runs on a
+bromigOS Server installed in a virtual machine: real transient units, `sudo`, a session that
+ends, the Server tour's apply and a restart. [fieldkit.md](fieldkit.md#testing-it) describes that
+test.

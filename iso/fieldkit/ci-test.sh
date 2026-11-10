@@ -13,6 +13,10 @@
 #   2. "Install bromigOS Server": the installer's own backend (bromigos-iso-install --answers,
 #      the answers the text installer would hand it) installs Server offline onto the VM's disk
 #   3. the installed Server boots to its console and passes its checks
+#   4. on that Server, `bromigos activity` under its real systemd (iso/fieldkit/activity-checks.sh,
+#      docs/activity.md): a job in a transient unit ends done, one that fails names its step, a
+#      detached one outlives the session that started it, the Server tour's apply runs through
+#      sudo as the signed-in user, and a restart closes a running job as interrupted
 #
 # DIR gets shots/, each VM's folder (serial logs) and the output; the disk is removed at the
 # end. Runs in iso/ci-test.sh's container (QEMU, OVMF, xorriso, ImageMagick), or anywhere
@@ -167,12 +171,61 @@ server() {
         echo SERVER-OK'
 }
 
+# ── 4. bromigos activity, under the Server's real systemd ───────────────────────────────
+# The checks are a script of their own, sent into the VM over the serial console (base64, a few
+# lines at a time: the console takes short writes) and run there one at a time as tester
+checks=/home/tester/activity-checks.sh
+activity_send() {
+    local part
+    rm -rf "$out/activity-parts"; mkdir -p "$out/activity-parts"
+    base64 -w 76 "$here/activity-checks.sh" | split -l 16 - "$out/activity-parts/p."
+    run server ": > $checks.b64" >/dev/null || return 1
+    for part in "$out"/activity-parts/p.*; do
+        TIMEOUT=60 run server "cat >> $checks.b64 <<'B64'
+$(cat "$part")
+B64" >/dev/null || return 1
+    done
+    run server "base64 -d $checks.b64 > $checks && sha256sum $checks | cut -d' ' -f1" | tail -1 > "$out/activity-parts/sum"
+    [[ $(<"$out/activity-parts/sum") == "$(sha256sum "$here/activity-checks.sh" | cut -d' ' -f1)" ]] \
+        || { echo "the checks didn't arrive whole"; return 1; }
+}
+activity() { TIMEOUT=180 run server "bash $checks $1"; }
+logins() { grep -ac "login:" "$out/vm/server/serial.log"; }
+sign_in_again() {    # sign_in_again COUNT: once the console asks for a login again (more prompts than COUNT)
+    local n=$1
+    for _ in $(seq 150); do (( $(logins) > n )) && break; sleep 2; done
+    (( $(logins) > n )) || { echo "the console never asked for a login again"; return 1; }
+    sleep 5
+    "$T" login --name server --user tester --password tester --timeout 60 >/dev/null
+}
+activity_detach() {
+    activity detach-start || return 1
+    # the session that started it ends: its shell is hung up, and the console asks for a login
+    local n; n=$(logins)
+    run server '(sleep 1; kill -HUP $$) >/dev/null 2>&1 & echo "ending this session"' || return 1
+    sign_in_again "$n" || return 1
+    activity detach-end
+}
+activity_reboot() {
+    local n; n=$(logins)
+    activity reboot-start || return 1
+    sign_in_again "$n" || return 1
+    activity reboot-end
+}
+
 step "Field Kit starts (offline): console, Home, engine, offline store" live || true
 "$T" down --name live >/dev/null 2>&1 || true
 step "the pairing QR decodes from kmscon and the bare console" qr || true
 "$T" down --name qr >/dev/null 2>&1 || true
 if step "bromigOS Server installs from the stick with no network" install; then
-    step "the installed bromigOS Server boots to its console" server || true
+    if step "the installed bromigOS Server boots to its console" server \
+            && step "activity: the checks reach the Server" activity_send; then
+        step "activity: a job runs in a real systemd unit and ends done" activity ok || true
+        step "activity: a job that fails names its step and its exit status" activity failed || true
+        step "activity: a detached job outlives the session that started it" activity_detach || true
+        step "activity: the Server tour's apply, as the signed-in user, through sudo" activity tour || true
+        step "activity: a restart closes a running job as interrupted" activity_reboot || true
+    fi
 fi
 "$T" down --name install >/dev/null 2>&1 || true
 "$T" down --name server >/dev/null 2>&1 || true
