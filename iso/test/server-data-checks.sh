@@ -49,7 +49,14 @@ if [[ -n ${want[app]:-} ]]; then
     app=${want[app]}
     check "the lab's engine installs $app (bromigos lab provision --local)" bash -c "
         nm-online -q -t 90 || true
-        sudo bromigos lab provision --local --select $app --apply --no-wait 2>&1 | tail -20; exit \${PIPESTATUS[0]}"
+        # the image comes from a registry on the internet: a pull that fails is tried again
+        # (CI, 2026-11-10: \"couldn't download ... (podman stopped with code 125)\", once)
+        for try in 1 2 3; do
+            sudo bromigos lab provision --local --select $app --apply --no-wait 2>&1 | tail -20; rc=\${PIPESTATUS[0]}
+            (( rc == 0 )) && break
+            echo \"try \$try failed (\$rc)\"; sleep 30
+        done
+        exit \$rc"
     if [[ -n ${want[disks]:-} ]]; then
         check "$app's data is on the data disks (its folder is on /srv/data's filesystem, and the pool's apps subvolume has it)" bash -c "
             a=\$(sudo findmnt -no UUID -T /srv/apps/$app) d=\$(findmnt -no UUID /srv/data) r=\$(findmnt -no UUID /)
