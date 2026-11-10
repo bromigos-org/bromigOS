@@ -213,6 +213,7 @@ on the server's own tools, and installs a few files of its own.
 | SSH's guard | `/usr/share/bromigos/server/sshguard.conf`, and a drop-in for `sshguard.service` |
 | The disks | `/usr/share/bromigos/server/smartd.conf`, a drop-in for `smartd.service`, `/usr/lib/bromigos/server/bromigos-server-disk-alert` |
 | Backups | `bromigos-server-backup.timer` (nightly), `bromigos-server-backup-check.timer` (weekly) and `bromigos-server-backup-test.timer` (monthly) |
+| The Go Bag | `/usr/lib/udev/rules.d/65-bromigos-server-backup-drive.rules`, which starts `bromigos-server-backup-drive@.service` when a USB drive is plugged in ([the Go Bag](#the-go-bag)) |
 | The UPS | `bromigos-server-ups.service` |
 | Logs | `/usr/lib/systemd/journald.conf.d/60-bromigos-server.conf` |
 | Hardening | `/usr/lib/sysctl.d/60-bromigos-server.conf` |
