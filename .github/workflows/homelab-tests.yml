@@ -7,6 +7,8 @@ on:
     paths:
       - "homelab/**"
       - "lib/**"
+      # test_lab_backups.py restores from a backup the real bromigos-server makes
+      - "server/bromigos-server"
       - "tests/mascot/**"
       - "packaging/bromigos-homelab/**"
       - ".github/workflows/homelab-tests.yml"
@@ -24,10 +26,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: tools
-        # bromigos-homelab's makedepends and checkdepends (packaging/bromigos-homelab/PKGBUILD)
+        # bromigos-homelab's makedepends and checkdepends (packaging/bromigos-homelab/PKGBUILD),
+        # and restic, bromigos-lab's: test_lab_backups.py restores from a real repository
         run: >-
           pacman -Syu --noconfirm --needed git python python-textual desktop-file-utils
-          python-cairo python-gobject pango python-psutil python-zeroconf >/dev/null
+          python-cairo python-gobject pango python-psutil python-zeroconf restic >/dev/null
       - uses: actions/checkout@v5
       - name: unittest
         # as a normal user, like makepkg's check()

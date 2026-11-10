@@ -28,7 +28,8 @@ optdepends=('gnupg: verify signed model catalog updates'
             'python-boto3: s3 sources: bucket sizes (with a read-only key)'
             'poppler: the ocr job kind: PDF pages')
 makedepends=('python' 'gnupg')
-checkdepends=('python-textual' 'python-cairo' 'python-gobject' 'pango' 'python-psutil' 'python-zeroconf')
+checkdepends=('python-textual' 'python-cairo' 'python-gobject' 'pango' 'python-psutil' 'python-zeroconf'
+              'restic')   # bromigos lab backups, restoring from a real repository (tests/test_lab_backups.py)
 options=('!debug')
 _tag=@TAG@
 source=("$pkgname-$_tag.tar.gz::$url/archive/refs/tags/$_tag.tar.gz")
