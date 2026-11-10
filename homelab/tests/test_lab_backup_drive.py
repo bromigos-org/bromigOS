@@ -460,6 +460,17 @@ class SetupForReal(DriveRig):
         self.assertIn(f"mount -o rw,nosuid,nodev,noexec UUID={NEW}", self.log())
         self.assertEqual(self.mounted(), "")
 
+    def test_formatting_the_go_bag_itself_forgets_its_old_filesystem(self):
+        """One drive, one entry: the filesystem `--erase` replaced is no longer remembered."""
+        self.go("setup", "--no-copy", rc=0)
+        self.assertEqual(list(self.drives()), [UUID])
+        d = json.loads(self.go("setup", "--erase", "--yes", "--no-copy", "--json", rc=0).stdout)
+        self.assertEqual((d["erased"], d["drive"]["uuid"]), (True, NEW))
+        self.assertEqual(list(self.drives()), [NEW])
+        self.assertEqual([r["uuid"] for r in self.doc()["drives"]], [NEW])
+        self.assertFalse((self.media(NEW) / "Holiday photos").exists())
+        self.assertTrue((self.media(NEW) / "bromigos-backup/box/config").is_file())
+
     def test_a_format_that_fails_remembers_nothing(self):
         self.plug(usb("ntfs"))
         (self.fake / "mkfs-fails").write_text("")

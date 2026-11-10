@@ -824,8 +824,12 @@ def cmd_setup(a, b):
                 raise B.Problem("needs-yes", f"Erasing {node['path']} on {describe(disk)} ({what}) deletes everything on "
                                 "it, so it needs a yes in words. Nothing was changed. On a terminal, type erase when "
                                 "asked; in a script, add --yes.", exit=3)
+            was = node["uuid"]
             node = erase(disk, node)
             erased = True
+            if was in have:                          # the Go Bag itself, formatted: its old filesystem is gone
+                forget_drive(was)
+                have = {}
         elif node["fstype"] not in WRITABLE or not node["uuid"]:
             what = (f"holds {holds(node)}, which this server can't keep a backup on" if node["fstype"] else
                     "has no filesystem this server knows (a blank drive, or one made for another system)")
