@@ -132,6 +132,27 @@ class EveryCheck(Machine):
         a = {x["id"]: x for x in self.m.run("system")["alerts"]}["server.app-data"]
         self.assertEqual((a["severity"], a["title"]), ("critical", "The data disks aren't mounted: the apps can't start"))
         self.assertFalse(a["fix"]["root"])
+        # the apps' data where it belongs, and something else that belongs on the data disks isn't:
+        # the media library, the backups other machines keep here, the passwords vault
+        media = {"path": "/srv/media", "where": "system", "state": "not-on-pool", "has_data": True, "move": "", "running": False}
+        backups = dict(media, path="/srv/backups", has_data=False)                 # nobody uses it yet: nothing to raise
+        vault = {"path": "/var/lib/vaultwarden", "what": "passwords (Vaultwarden)"}
+        self.m.app_data("ok", where="pool", folders=[media, backups], elsewhere=[vault])
+        a = {x["id"]: x for x in self.m.run("system")["alerts"]}["server.app-data"]
+        self.assertEqual((a["severity"], a["title"]), ("needs_you", "Some of this server's data is on the system disk, not the data disks"))
+        self.assertIn("/srv/media", a["detail"])
+        self.assertIn("passwords (Vaultwarden), in /var/lib/vaultwarden", a["detail"])
+        self.assertNotIn("/srv/backups", a["detail"])
+        self.assertIn("one copy, not the two you chose", a["detail"])
+        self.assertEqual(a["fix"]["commands"], ["sudo bromigos lab app-data move --dry-run", "sudo bromigos lab app-data move"])
+        self.m.app_data("ok", where="pool", folders=[dict(media, state="moving", move="copying")])
+        a = {x["id"]: x for x in self.m.run("system")["alerts"]}["server.app-data"]
+        self.assertEqual(a["title"], "A move to the data disks didn't finish")
+        self.m.app_data("ok", where="pool", folders=[dict(media, state="pool-away")])
+        a = {x["id"]: x for x in self.m.run("system")["alerts"]}["server.app-data"]
+        self.assertEqual((a["severity"], a["title"]), ("critical", "The data disks aren't mounted: /srv/media is missing"))
+        self.m.app_data("ok", where="pool", folders=[dict(media, state="ok", where="pool"), backups])
+        self.assertNotIn("server.app-data", ids(self.m.run("system")))
         # a Server without the bromigos-server package (installed from the desktop medium) is one by
         # the installer's settings file, and hears of it too
         other = FakeMachine(role="desktop")

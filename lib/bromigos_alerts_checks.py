@@ -666,6 +666,39 @@ def app_data(ctx):
                       "A disk may have failed or come loose: the journal says what it knows.", "Storage",
                       evidence=evidence([f"{k}: {v}" for k, v in facts.items()], **facts),
                       fix=dict(look, commands=["bromigos lab app-data", "journalctl -b -p warning --no-pager -n 50"]))]
+    # The apps' data is where it belongs. The same question for what else a server with data
+    # disks keeps on them: the media library, the backups other machines keep here (`folders`),
+    # and the passwords vault while it is in its package's folder (`elsewhere`). A folder nobody
+    # uses yet raises nothing
+    folders = [f for f in d.get("folders") or [] if isinstance(f, dict)]
+    away = [f.get("path", "?") for f in folders if f.get("state") == "pool-away"]
+    if away:
+        return [alert("server.app-data", "", "critical", f"The data disks aren't mounted: {', '.join(away)} is missing",
+                      f"This server keeps {' and '.join(away)} on its data disks ({d.get('pool')}), and they aren't mounted. "
+                      "The apps that use it stay stopped until they are. A disk may have failed or come loose: the journal "
+                      "says what it knows.", "Storage", evidence=evidence([f"{k}: {v}" for k, v in facts.items()], **facts),
+                      fix=dict(look, commands=["bromigos lab app-data", "journalctl -b -p warning --no-pager -n 50"]))]
+    vault = d.get("vault") if isinstance(d.get("vault"), dict) else {}
+    cut_off = [f.get("path", "?") for f in folders if f.get("state") == "moving" and not f.get("running")]
+    if cut_off or vault.get("move") in ("copying", "verifying", "switching", "failed"):
+        what = ", ".join(cut_off + (["the passwords vault"] if vault.get("move") not in (None, "", "done") else []))
+        return [alert("server.app-data", "", "needs_you", "A move to the data disks didn't finish",
+                      f"A move of {what} to the data disks stopped part-way. Nothing is lost: the data is whole where it "
+                      "was, on the data disks, or both. `sudo bromigos lab app-data move` carries on from where it stopped.",
+                      "Storage", actions=[{"kind": "fix", "label": "Ask VECTOR"}, {"kind": "snooze"}, {"kind": "open"}],
+                      evidence=evidence([f"{k}: {v}" for k, v in facts.items()], **facts), fix=move)]
+    late = [f.get("path", "?") for f in folders if f.get("state") == "not-on-pool" and f.get("has_data")]
+    late += [f"{e.get('what')}, in {e.get('path')}" for e in d.get("elsewhere") or [] if isinstance(e, dict)]
+    if late:
+        copies = "It has one copy, not the two you chose. " if d.get("raid1") else ""
+        return [alert("server.app-data", "", "needs_you", "Some of this server's data is on the system disk, not the data disks",
+                      f"This server has data disks ({d.get('pool')}), and this is still on the system disk: {'; '.join(late)}. "
+                      f"{copies}`sudo bromigos lab app-data move` stops what uses it, copies it to the data disks, compares "
+                      "every file, keeps the old copy by name and starts everything again. `--dry-run` shows what it would "
+                      "do first.", "Storage",
+                      actions=[{"kind": "fix", "label": "Ask VECTOR"}, {"kind": "snooze"}, {"kind": "open"}],
+                      evidence=evidence([f"{k}: {v}" for k, v in facts.items()] + [f"on the system disk: {x}" for x in late], **facts),
+                      fix=move)]
     return []
 
 
