@@ -250,16 +250,22 @@ print('record:', job['id'], job['state'] + ', after:', job['notes'][-1]['words']
     until_state "$id3" running
     [[ $(bromigos activity cancel "$id3") == "Stopped: CI: a job that may be stopped" ]]
     record "$id3" | py "assert job['state'] == 'cancelled' and job['can'] == [], job; print('record:', job['id'], job['state'])"
+    for _ in $(seq 20); do                               # the job's process ends a moment after its record does
+        [[ $(systemctl is-active "bromigos-job-$id3.service" || true) == active ]] || break
+        sleep 0.5
+    done
     [[ $(systemctl is-active "bromigos-job-$id3.service" || true) != active ]]
-    # a job that fails is an alert at once (no waiting for the timer), and a good run clears it
+    # a job that fails is an alert as it ends (no waiting for the 15-minute timer), and a good
+    # run clears it. The job's process runs the check just after it closes its record
+    alerted() { bromigos alerts --json > alerts.json || true; py "print('activity.job:ci.alert' in [x['id'] for x in doc['alerts']])" < alerts.json; }
     sudo bromigos activity run --kind ci.alert --title "CI: a job that fails, for its alert" -- false > /dev/null 2>&1 || true
-    bromigos alerts --json > alerts.json || true       # its exit status 1 says "something needs you"
+    for _ in $(seq 40); do [[ $(alerted) == True ]] && break; sleep 0.5; done
     py "
 a = [x for x in doc['alerts'] if x['id'] == 'activity.job:ci.alert']
 assert len(a) == 1 and a[0]['severity'] == 'needs_you' and a[0]['title'] == 'A job failed: CI: a job that fails, for its alert', doc['alerts']
 print('alert:', a[0]['id'], a[0]['severity'] + ':', a[0]['title'])" < alerts.json
     sudo bromigos activity run --kind ci.alert --title "CI: a job that fails, for its alert" -- true > /dev/null
-    bromigos alerts --json > alerts.json || true
+    for _ in $(seq 40); do [[ $(alerted) == False ]] && break; sleep 0.5; done
     py "assert 'activity.job:ci.alert' not in [x['id'] for x in doc['alerts']], doc['alerts']; print('alert: cleared')" < alerts.json
     echo ACTIVITY-CONTROL-OK
     ;;
