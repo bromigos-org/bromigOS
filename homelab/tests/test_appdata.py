@@ -272,6 +272,25 @@ class AppData(unittest.TestCase):
         self.assertIn("Nothing to move", r.stdout)
         self.assertEqual(self.tree(self.root / "var/lib/vaultwarden"), before)
 
+    @unittest.skipIf(os.geteuid() == 0, "root reads every folder")
+    def test_the_status_names_the_vault_for_someone_who_cannot_read_its_folder(self):
+        # the package's folder is the service's own (0750, vaultwarden's): `bromigos lab app-data`
+        # and `bromigos server` are run by a person, who can't list it. Found in CI's virtual
+        # machine, where the status said nothing of the vault. There and unreadable is the vault's
+        # folder, until the service is pointed elsewhere
+        self.server()
+        old = self.vault()
+        os.chmod(old, 0o000)
+        self.addCleanup(os.chmod, old, 0o750)
+        d = self.app_data()
+        self.assertEqual(d["elsewhere"], [{"path": "/var/lib/vaultwarden", "what": "passwords (Vaultwarden)"}])
+        self.assertEqual(d["words"][-1], VAULT_LINE)
+        # pointed at /srv/apps/passwords (a new install, or after the move): nothing to name
+        drop = self.root / "etc/systemd/system/vaultwarden.service.d/60-bromigos-data.conf"
+        drop.parent.mkdir(parents=True)
+        drop.write_text(appdata.VAULT_DROPIN_TEXT)
+        self.assertEqual(self.app_data()["elsewhere"], [])
+
     def test_a_pool_made_by_hand_counts_by_its_fstab_line(self):
         self.server()
         self.config("[health]\nminutes = 0\n")                  # no [storage]: an older server.toml

@@ -77,8 +77,10 @@ if (( ${want[passwords]:-0} )); then
         for _ in $(seq 30); do systemctl is-active -q vaultwarden && sudo test -s /srv/apps/passwords/db.sqlite3 && break; sleep 2; done
         systemctl is-active vaultwarden || { sudo journalctl -u vaultwarden -n 20 --no-pager; exit 1; }
         sudo ls -la /srv/apps/passwords /var/lib/vaultwarden
-        echo "the web vault answers: $(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8222/)"
         sudo test -s /srv/apps/passwords/db.sqlite3 && ! sudo test -e /var/lib/vaultwarden/db.sqlite3 && curl -fsS http://127.0.0.1:8222/alive'
+    # for the run's log, not a check: whether the web vault's page is served (the engine asks for it
+    # with Environment=, and the package's own settings file turns it off)
+    echo "     the web vault's page answers: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8222/ 2>&1)"
     if [[ -n ${want[disks]:-} ]]; then
         check "the vault is on the data disks (its folder is on /srv/data's filesystem)" bash -c '
             a=$(sudo findmnt -no UUID -T /srv/apps/passwords) d=$(findmnt -no UUID /srv/data) r=$(findmnt -no UUID /)

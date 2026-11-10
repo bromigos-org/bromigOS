@@ -152,9 +152,12 @@ def has_files(path):
 
 def is_vault(folder):
     """Whether a folder (as it is on disk) holds a Vaultwarden vault: its database, its keys,
-    or what people attached."""
+    or what people attached. The folder is the service's own, so a person asking for the
+    status can't list it: there and not readable counts as the vault's."""
     try:
         names = os.listdir(folder)
+    except PermissionError:
+        return True
     except OSError:
         return False
     return any(n.startswith(("db.sqlite3", "rsa_key")) or n in ("attachments", "sends", "config.json") for n in names)
