@@ -319,11 +319,12 @@ class FakeMachine:
         self.write("fieldkit-last-boot.json", {"ok": False, "message": "no saved log"})
         self.server_hold()
 
-    def app_data(self, state, where="system", move="", has_data=True, running=False):
+    def app_data(self, state, where="system", move="", has_data=True, running=False, folders=(), elsewhere=(), vault=None):
         """What `bromigos lab app-data status --json` says: a server with two data disks."""
         self.write("app-data.json", {"path": "/srv/apps", "pool": "/srv/data", "pool_mounted": state != "pool-away",
                                      "where": where, "state": state, "has_data": has_data, "move": move, "running": running,
-                                     "raid1": True, "leftover": "", "elsewhere": []})
+                                     "raid1": True, "leftover": "", "elsewhere": list(elsewhere), "folders": list(folders),
+                                     "vault": vault or {}})
 
     def server_hold(self):
         self.rootfile("/var/lib/bromigos/server/update.json", json.dumps({

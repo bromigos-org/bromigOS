@@ -93,10 +93,13 @@ ROLE_TOUR = {
     "lab": [("bromigos lab provision add-node {host}", "On your lab's workstation: joins this server to the cluster", "lab")],
     "storage": [("\\\\{host}.local\\shares", "The shared folder, from Windows; smb://{host}.local/shares from a Mac", "people"),
                 ("bromigos storage", "The data disks: their health, the copies, the snapshots", "disk")],
-    "home": [("http://start.{host}.local", "Every app on this server, on one page", "desktop"),
+    "home": [("https://home-{host}.local", "Every app on this server, on one page", "desktop"),
              ("sudo bromigos lab provision --local --select ID --apply",
               "Adds an app from the catalogue. Most apps don't update by themselves yet", "settings")],
-    "games": [("bromigos server apps", "The game servers: start, stop, back up the worlds", "power")],
+    # a game server is a service of its own (the lab's Minecraft template): systemctl is its switch
+    "games": [("sudo systemctl stop minecraft", "Stops the Minecraft server; start in place of stop starts it. Its world is "
+               "kept in /srv/apps/minecraft", "power"),
+              ("https://games-{host}.local", "The Pelican panel, when this server runs it: every game server on one page", "desktop")],
 }
 
 

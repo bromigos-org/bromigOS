@@ -732,9 +732,10 @@ Its VMs and screenshots go in `~/.cache/bromigos-fieldkit-test/` (`BROMIGOS_FIEL
   disks, as two copies (RAID1). That server starts with a network, the lab's engine installs
   the start
   page from the catalogue, and `iso/test/server-data-checks.sh` checks where its data is:
-  on the data disks' filesystem, by the filesystems' IDs, not the system disk's. It then
-  puts the server back as an older installer left one and checks that
-  `bromigos lab app-data move` moves the data
+  on the data disks' filesystem, by the filesystems' IDs, not the system disk's. The same
+  for the media library's and the backups' folders, and for the vault of the real
+  Vaultwarden package. It then puts the server back as an older installer left one and
+  checks that `bromigos lab app-data move` moves all of it
   ([server.md](server.md#where-the-apps-keep-their-data)). `test.py up --data-disk FILE`
   gives a VM its data disks.
 - `iso/fieldkit/server-test.sh` installs Server encrypted and adds the `bromigos-fieldkit`

@@ -23,7 +23,8 @@ What it does, in order, saying each in a ::server line (the installers' details)
   data disks   btrfs (single or RAID1) at /srv/data, in fstab, scrubbed monthly; hourly
                snapshots on Storage; SMB and NFS shares; its apps subvolume mounted at
                /srv/apps, where every app keeps its data (without data disks, /srv/apps is
-               a folder on the system disk)
+               a folder on the system disk); its media and backups subvolumes mounted at
+               /srv/media and /srv/backups the same way
   services     each role's and service's units enabled (those the system has); Tailscale and
                WireGuard installed and left off unless chosen
   updates      the update timer moved into the window; the mode in server.toml
@@ -426,7 +427,8 @@ class Apply:
                 raise RuntimeError(f"{d} is the system's own disk; it can't also be a data disk")
         layout = st.get("layout", "single") if len(disks) >= 2 else "single"
         say(f"data disks: {' '.join(disks)}, " + ("two copies (RAID1)" if layout == "raid1" else "one copy") + ", at /srv/data; "
-            "the apps keep their data on them (/srv/apps)")
+            "the apps keep their data on them (/srv/apps), and so do the media library (/srv/media) and the backups "
+            "other machines send here (/srv/backups)")
         for d in disks:
             self.host(["wipefs", "-a", d])
         args = ["mkfs.btrfs", "-f", "-L", "bromigos-data"]
@@ -446,19 +448,25 @@ class Apply:
         # (bromigos lab provision --local), so the pool's apps subvolume is mounted there: the
         # same folder as /srv/data/apps. Without this line /srv/apps is a folder on the system
         # disk, and "two copies" would be true of the shares and false of the apps.
-        if not re.search(r"^\S+\s+/srv/apps\s", fstab, re.M):
-            fstab = fstab.rstrip("\n") + ("\n# the apps' data, on the data disks: their apps subvolume (docs/server.md)"
-                                          f"\nUUID={uuid}  /srv/apps  btrfs  subvol=/apps,{opts}  0 0\n")
+        # The media library (/srv/media) and the backups other machines send here (/srv/backups)
+        # are folders the lab's engine makes, and they belong on the data disks as much: each is
+        # a subvolume of theirs, mounted the same way (bromigos lab app-data's FOLDERS).
+        for sub, what in (("apps", "the apps' data"), ("media", "the media library"),
+                          ("backups", "the backups other machines keep here")):
+            if not re.search(rf"^\S+\s+/srv/{sub}\s", fstab, re.M):
+                fstab = fstab.rstrip("\n") + (f"\n# {what}, on the data disks: their {sub} subvolume (docs/server.md)"
+                                              f"\nUUID={uuid}  /srv/{sub}  btrfs  subvol=/{sub},{opts}  0 0\n")
         self.write("/etc/fstab", fstab)
-        # the mount point takes no files of its own (chattr +i): with the data disks away an
+        # each mount point takes no files of its own (chattr +i): with the data disks away an
         # app fails to start, and never begins again, empty, on the system disk
-        self.run(["install", "-d", "-m", "0755", "/srv/apps"])
-        self.run(["chattr", "+i", "/srv/apps"])
+        for sub in ("apps", "media", "backups"):
+            self.run(["install", "-d", "-m", "0755", f"/srv/{sub}"])
+            self.run(["chattr", "+i", f"/srv/{sub}"])
         mnt = self.path("/srv/data")
         os.makedirs(mnt, exist_ok=True)
         self.host(["mount", "-o", "compress=zstd", disks[0], mnt])
         try:
-            for sub in ("shares", "apps", "backups"):
+            for sub in ("shares", "apps", "media", "backups"):
                 self.host(["btrfs", "subvolume", "create", os.path.join(mnt, sub)])
             if st.get("timeline"):
                 self.run(["snapper", "--no-dbus", "-c", "data", "create-config", "/srv/data"])
