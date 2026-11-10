@@ -391,10 +391,43 @@ The repair checks each cause that has done it:
   again (`mkinitcpio -P` in the install).
 - **Startup files missing or older than the kernel.**
 - **The NVIDIA driver not built for the installed kernel.** With DKMS, the fix builds it.
+  See [Which kernels count](#which-kernels-count).
 - **No login screen enabled**, or the machine set to start without the desktop.
 
 It reads the install's journal for the failed boot (`journalctl -D` on the mounted install;
 its latest boot is the failed one) in "What went wrong on the last boot?".
+
+#### Which kernels count
+
+A kernel that was removed or replaced can leave its folder behind in `/usr/lib/modules`,
+whole: `pkgbase`, `vmlinuz`, the modules. Nothing starts from that folder, and no driver is
+built for it, so it must not raise "The NVIDIA driver isn't built for the kernel".
+
+The checks that go through each kernel (the module list, the startup files, the NVIDIA
+driver, and the kernel a rollback puts in `/boot`) use `diagnose.kernels()`. A folder in
+`/usr/lib/modules` with a `pkgbase` file is a kernel when one of these is true:
+
+- **A package owns it.** pacman is asked about the install's own root, never about the
+  system Field Kit runs from: `pacman --root <root> -Qqo <root>/usr/lib/modules/<version>/vmlinuz`.
+  A folder without `vmlinuz` is asked about by its `pkgbase`.
+- **A kernel in `/boot` is that version.** The version is read from the image's header. When
+  an update's kernel can't be signed, Secure Boot puts the old kernel back and restores its
+  modules ([secureboot.md](secureboot.md)). No package owns those, and that kernel is the
+  one that starts.
+- **pacman can't answer.** With no pacman, or no package database in the install, every
+  folder counts, as it did before. A check that can't ask never leaves a kernel out.
+
+A folder that is none of these is left behind. The black screen check says so in one line
+that isn't a problem (`note` in `bromigos fieldkit black-screen`), with the command that
+removes it:
+
+```bash
+sudo rm -r /usr/lib/modules/<version>
+```
+
+Field Kit never removes it by itself. The running kernel's own folder is never called left
+behind, since the system uses it until the restart. After an update, the running kernel
+often has no folder at all until the restart. The check doesn't look for one.
 
 ### Disk imaging, in Clonezilla's format
 

@@ -1,0 +1,47 @@
+name: alerts tests
+
+# `bromigos alerts` (docs/alerts.md) and Field Kit's checks behind it (docs/fieldkit.md) on a
+# pull request: the package builds run these tests too (packaging/bromigos-core/PKGBUILD and
+# packaging/bromigos-fieldkit-tools/PKGBUILD, check()), but only once a change is on main.
+
+on:
+  pull_request:
+    paths:
+      - "lib/bromigos_alerts.py"
+      - "lib/bromigos_alerts_checks.py"
+      - "lib/bromigos_drives.py"
+      - "lib/bromigos_backups.py"
+      - "bin/bromigos-alerts"
+      - "tests/alerts/**"
+      - "packaging/bromigos-core/*alerts*"
+      - "fieldkit/**"
+      - ".github/workflows/alerts-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alerts-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Alerts and Field Kit unit tests
+    # GitHub's runner, never the lab's: this repo is public (forks' PRs run here)
+    runs-on: ubuntu-latest
+    container: archlinux:base
+    timeout-minutes: 15
+    steps:
+      - name: tools
+        # dosfstools and mtools: bromigos-fieldkit-tools' checkdepends (make-stick --image)
+        run: pacman -Syu --noconfirm --needed git python dosfstools mtools >/dev/null
+      - uses: actions/checkout@v5
+      - name: unittest
+        # as a normal user, like makepkg's check(): stand-in roots and stand-in commands, and
+        # the real pacman only ever asked about a stand-in root
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE' && PYTHONPATH=lib python -m unittest discover -s tests/alerts"
+          su builder -c "cd '$GITHUB_WORKSPACE' && PYTHONPATH=fieldkit/lib python -m unittest discover -s fieldkit/tests"

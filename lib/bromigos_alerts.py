@@ -394,6 +394,9 @@ def _run_pass(env, scope, boot, checks):
                     row.update(state="skipped", error=old.get("error"))
                 row["ran_at"] = old.get("ran_at") or now
                 found = kept(name)
+                if found and c.between:
+                    # ... but one that is no longer true doesn't wait for it
+                    found = [normalise(a, name) for a in c.between(ctx, found)]
             else:
                 found = [normalise(a, name) for a in c.fn(ctx)]
         except Skip as e:

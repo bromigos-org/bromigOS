@@ -246,14 +246,82 @@ def _unpin(rel, line):
     return fix
 
 
-def kernels(target):
-    """The install's kernels: {version: package base} from /usr/lib/modules/*/pkgbase."""
-    out = {}
-    for d in glob.glob(target.path("/usr/lib/modules/*")):
+def kernel_version(path):
+    """The version string inside a bzImage (its header points at it), or None."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(0x210)
+            if head[0x202:0x206] != b"HdrS":
+                return None
+            off = int.from_bytes(head[0x20E:0x210], "little") + 0x200
+            f.seek(off)
+            return f.read(256).split(b"\0", 1)[0].split(b" ", 1)[0].decode(errors="replace")
+    except OSError:
+        return None
+
+
+def owned(target, rel):
+    """Whether one of the install's packages owns that file: True, False, or None when pacman
+    can't say (no pacman here, no package database in the install, any other error). pacman is
+    asked about the install's root, never about the system Field Kit itself runs from."""
+    if not os.path.isdir(target.path("/var/lib/pacman/local")):
+        return None
+    try:
+        r = system.run(["pacman", "--root", target.root, "-Qqo", target.path(rel)], check=False, timeout=60,
+                       env=dict(os.environ, LC_ALL="C"))
+    except system.Failed:
+        return None
+    if r.returncode == 0 and r.stdout.strip():
+        return True
+    return False if "No package owns" in (r.stderr or "") else None
+
+
+def kernel_folders(target):
+    """({version: package base}, {version: package base}): the install's kernels, and the kernel
+    folders left behind in /usr/lib/modules.
+
+    A folder with a `pkgbase` file is a kernel when one of the install's packages owns its
+    `vmlinuz` (its `pkgbase` when it has no `vmlinuz`). A kernel that was removed or replaced
+    can leave its folder behind, whole, with files no package owns: nothing starts from it,
+    so no check looks at it. Two cases still count, so that no kernel that starts is ever
+    left out: a kernel in /boot of that version (the one Secure Boot puts back when an
+    update can't be signed has its modules restored, and no package owns those), and any
+    folder when pacman can't be asked. The running kernel's own folder is never called left
+    behind: until the restart it's still in use."""
+    in_boot = {kernel_version(p) for p in glob.glob(target.path("/boot/vmlinuz-*"))}
+    running = os.uname().release if target.is_live_root else None
+    installed, leftover = {}, {}
+    for d in sorted(glob.glob(target.path("/usr/lib/modules/*"))):
+        ver = os.path.basename(d)
         try:
-            out[os.path.basename(d)] = system.read(os.path.join(d, "pkgbase")).strip()
+            base = system.read(os.path.join(d, "pkgbase")).strip()
         except OSError:
-            pass
+            continue
+        rel = f"/usr/lib/modules/{ver}/"
+        rel += "vmlinuz" if os.path.isfile(target.path(rel + "vmlinuz")) else "pkgbase"
+        if ver in in_boot or owned(target, rel) is not False:
+            installed[ver] = base
+        elif ver != running:
+            leftover[ver] = base
+    return installed, leftover
+
+
+def kernels(target):
+    """The install's kernels: {version: package base}, without the folders a removed kernel
+    left behind (kernel_folders)."""
+    return kernel_folders(target)[0]
+
+
+def leftover_kernels(target):
+    """A passed line for each kernel folder left behind, with the one command that removes it.
+    Field Kit never removes one by itself."""
+    out = []
+    for ver in kernel_folders(target)[1]:
+        folder = f"/usr/lib/modules/{ver}"
+        remove = ("sudo " if target.is_live_root else "") + "rm -r " + target.path(folder)
+        out.append(Finding(f"A kernel folder was left behind: {folder}",
+                           f"No package owns it and no kernel in /boot is {ver}, so nothing starts from it and "
+                           f"these checks leave it out. It only takes space. This removes it: {remove}", ok=True))
     return out
 
 
@@ -442,4 +510,5 @@ def black_screen(target):
     out += mkinitcpio(target)
     out += initramfs(target)
     out += drivers(target)
+    out += leftover_kernels(target)
     return out
