@@ -52,6 +52,47 @@ class BudgetTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'between 1 and 10'):
             self.check(['qemu-system-x86_64', '-m', '1G'], cap='28')
 
+    def ci(self, argv, env, available=3):
+        env = {'BROMIGOS_VM_MAX_MEM_GIB': '8', **env}
+        with mock.patch.dict(keeper.os.environ, env), mock.patch.object(keeper.os, 'scandir', return_value=[]), mock.patch.object(keeper.subprocess, 'check_output', return_value=f'Mem: 15 10 1 0 4 {available}\n'):
+            if 'GITHUB_ACTIONS' not in env:           # the tests themselves may be running on a runner
+                keeper.os.environ.pop('GITHUB_ACTIONS', None)
+            keeper.resource_check(argv)
+
+    def test_ci_budget_counts_only_on_a_ci_runner(self):
+        two_lanes = {'BROMIGOS_VM_CI_BUDGET': '12288:8'}
+        vm = ['qemu-system-x86_64', '-m', '6144', '-smp', '4']
+        # at a workstation the variable changes nothing: the floor and the caps hold
+        with self.assertRaisesRegex(RuntimeError, 'at least 14'):
+            self.ci(vm, two_lanes)
+        with self.assertRaisesRegex(RuntimeError, 'budget exceeded'):
+            self.ci(['qemu-system-x86_64', '-m', '12288', '-smp', '8'], two_lanes, available=30)
+        # on a runner: what the run gave, and no launch floor (the lanes were sized once)
+        runner = {**two_lanes, 'GITHUB_ACTIONS': 'true'}
+        self.ci(vm, runner)
+        self.ci(['qemu-system-x86_64', '-m', '12288', '-smp', '8'], runner)
+        with self.assertRaisesRegex(RuntimeError, 'the CI run gave 12288 MiB and 8 vCPUs'):
+            self.ci(['qemu-system-x86_64', '-m', '12289', '-smp', '8'], runner)
+        with self.assertRaisesRegex(RuntimeError, 'the CI run gave'):
+            self.ci(['qemu-system-x86_64', '-m', '6144', '-smp', '9'], runner)
+        # a runner without the variable keeps the workstation's limits
+        with self.assertRaisesRegex(RuntimeError, 'at least 14'):
+            self.ci(vm, {'GITHUB_ACTIONS': 'true'})
+        for bad in ('12288', '0:4', '12288:0', 'lots:4'):
+            with self.assertRaisesRegex(RuntimeError, 'MIB:CPUS'):
+                self.ci(vm, {'BROMIGOS_VM_CI_BUDGET': bad, 'GITHUB_ACTIONS': 'true'})
+
+    def test_ci_budget_counts_other_running_guests(self):
+        entry = mock.Mock(name='process'); entry.name = '1234'; entry.stat.return_value.st_uid = keeper.os.getuid()
+        env = {'BROMIGOS_VM_MAX_MEM_GIB': '8', 'BROMIGOS_VM_CI_BUDGET': '12288:8', 'GITHUB_ACTIONS': 'true'}
+        vm = ['qemu-system-x86_64', '-m', '6144', '-smp', '4']
+        with mock.patch.dict(keeper.os.environ, env), mock.patch.object(keeper.os, 'scandir', return_value=[entry]):
+            with mock.patch.object(keeper, 'proc_argv', return_value=vm):
+                keeper.resource_check(vm)                       # the second lane's VM
+            with mock.patch.object(keeper, 'proc_argv', return_value=['qemu-system-x86_64', '-m', '12288', '-smp', '8']):
+                with self.assertRaisesRegex(RuntimeError, 'the CI run gave'):
+                    keeper.resource_check(vm)                   # a third
+
     def test_counts_other_running_guests(self):
         entry = mock.Mock(name='process'); entry.name = '1234'; entry.stat.return_value.st_uid = keeper.os.getuid()
         with mock.patch.dict(keeper.os.environ, {'BROMIGOS_VM_MAX_MEM_GIB': '8'}), mock.patch.object(keeper.os, 'scandir', return_value=[entry]), mock.patch.object(keeper, 'proc_argv', return_value=['qemu-system-x86_64', '-m', '6144', '-smp', '2']):

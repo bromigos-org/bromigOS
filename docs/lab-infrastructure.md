@@ -281,6 +281,10 @@ do not calculate a trusted value from an unverified download.
 Test VMs share a hard RAM limit: `BROMIGOS_VM_MAX_MEM_GIB`, 8 GiB by default,
 and never above 10 GiB. The keeper also limits running QEMU guests to four CPUs.
 It checks `free -g` before each launch and refuses when less than 14 GiB is available.
+These limits protect a workstation someone is working at. A CI runner exists for its run:
+there (`GITHUB_ACTIONS=true`, and only there) `iso/ci-test.sh` gives the keeper the sum of
+its side-by-side lanes in `BROMIGOS_VM_CI_BUDGET` (`MIB:CPUS`), which takes the place of the
+limits above. Set at a workstation, it changes nothing.
 The single-box test uses 8 GiB and two CPUs. The nested test uses a 4 GiB, one-CPU
 parent and up to three 2 GiB, one-CPU guests: 10 GiB and four CPUs altogether.
 The nested test explicitly uses a 10 GiB cap and reserves all future child RAM and

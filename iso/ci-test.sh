@@ -4,7 +4,7 @@
 # Headless: QEMU never opens a window (iso/test.sh).
 #
 #   iso/ci-test.sh ISO --out DIR [--suite desktop|menu|hook|none] [--profile DIR]
-#                  [--secureboot-cert FILE]
+#                  [--secureboot-cert FILE] [--jobs N|auto]
 #
 #   desktop  the desktop medium, as a release is tested: UEFI with the network, the graphical
 #            installer typed into with a real pointer and keys, an encrypted install, the
@@ -33,25 +33,41 @@
 #            and its own): the installed system's first update and rollback are skipped, as no
 #            channel is sure to be newer than its packages (a move to an older channel can
 #            meet packages it doesn't know). Every published medium runs them
+#   --jobs N|auto   how many lanes run side by side (BROMIGOS_ISOTEST_JOBS; default auto). A
+#            lane is a chain of steps on one VM that needs nothing of another lane's: the
+#            desktop suite's UEFI install, its BIOS install and the text installer entry;
+#            Secure Boot's medium and install, and its install beside Windows (which starts
+#            from the firmware variables the lane before it saves early on). auto, on a CI
+#            runner (GITHUB_ACTIONS=true): as many VMs as its available memory holds with
+#            1.5 GiB to spare, half its CPUs at most (BROMIGOS_ISOTEST_AVAIL_MIB says the memory
+#            when /proc/meminfo can't: a container with a limit sees its machine's). Anywhere
+#            else: as many as the shared test-VM budget takes (test/vm/vm-keeper.py: one VM
+#            of the default size), whatever N says. 1 runs the lanes one after another, each
+#            step's output as it comes; more, each lane's output is kept in DIR/lane-NAME.log
+#            and printed in the same order once all are done, with a line as each lane starts
+#            and ends
 #
 # DIR gets each run's directory (shots/, the checks' output, the console log). The disks
-# are removed at the end. BROMIGOS_ISOTEST_MEM sets each VM's memory (MiB, default 6144);
-# the VMs run one at a time.
+# are removed at the end. BROMIGOS_ISOTEST_MEM sets each VM's memory (MiB, default 6144) and
+# BROMIGOS_ISOTEST_SMP its CPUs (4). BROMIGOS_ISOTEST_T names another harness in iso/test.sh's
+# place (the lanes' own test, iso/test/test_ci_lanes.py: no KVM, no tools installed).
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/.." && pwd)
-iso='' out='' suite=desktop profile='' sbcert='' sbpkg='' devbuild=0
+iso='' out='' suite=desktop profile='' sbcert='' sbpkg='' devbuild=0 njobs=${BROMIGOS_ISOTEST_JOBS:-auto}
 while (($#)); do
     case $1 in
         --out) out=$2; shift 2 ;; --suite) suite=$2; shift 2 ;; --profile) profile=$2; shift 2 ;;
         --secureboot-cert) sbcert=$2; shift 2 ;; --secureboot-package) sbpkg=$2; shift 2 ;; --dev-build) devbuild=1; shift ;;
-        -h|--help) sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --jobs) njobs=$2; shift 2 ;;
+        -h|--help) sed -n '2,53p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*) echo "iso/ci-test.sh: unknown option $1" >&2; exit 2 ;;
         *) iso=$1; shift ;;
     esac
 done
 [[ -f $iso && -n $out ]] || { echo "iso/ci-test.sh ISO --out DIR" >&2; exit 2; }
-[[ -e /dev/kvm ]] || { echo "iso/ci-test.sh: no /dev/kvm here" >&2; exit 2; }
+[[ $njobs == auto || $njobs =~ ^[1-9][0-9]*$ ]] || { echo "iso/ci-test.sh: --jobs N or auto" >&2; exit 2; }
+[[ -e /dev/kvm || -n ${BROMIGOS_ISOTEST_T:-} ]] || { echo "iso/ci-test.sh: no /dev/kvm here" >&2; exit 2; }
 iso=$(realpath "$iso"); mkdir -p "$out"; out=$(realpath "$out")
 [[ -z $profile ]] || profile=$(realpath "$profile")
 [[ -z $sbcert ]] || sbcert=$(realpath "$sbcert")
@@ -65,14 +81,15 @@ if [[ ${BROMIGOS_ISOTEST_IN_CONTAINER:-0} != 1 ]]; then
     dev=(); if (( devbuild )); then dev=(--dev-build); fi
     # the host's network: the SSH forwards are on its 127.0.0.1
     exec docker run --rm --device /dev/kvm --network host "${mounts[@]}" \
-        -e BROMIGOS_ISOTEST_IN_CONTAINER=1 -e BROMIGOS_ISOTEST_MEM -e BROMIGOS_VM_OWNER=none \
-        archlinux:latest "$here/ci-test.sh" "$iso" --out "$out" --suite "$suite" \
+        -e BROMIGOS_ISOTEST_IN_CONTAINER=1 -e BROMIGOS_ISOTEST_MEM -e BROMIGOS_ISOTEST_SMP -e BROMIGOS_VM_OWNER=none \
+        -e GITHUB_ACTIONS -e BROMIGOS_ISOTEST_AVAIL_MIB -e BROMIGOS_ISOTEST_PASS_WAIT \
+        archlinux:latest "$here/ci-test.sh" "$iso" --out "$out" --suite "$suite" --jobs "$njobs" \
         ${profile:+--profile "$profile"} ${sbcert:+--secureboot-cert "$sbcert"} ${sbpkg:+--secureboot-package "$sbpkg"} "${dev[@]}"
 fi
 
 # ── in the container (or, with BROMIGOS_ISOTEST_IN_CONTAINER=1 as a user, on a workstation
 # that has the tools: vm-keeper.py then counts every test VM on it, other jobs' too) ───────
-if [[ $EUID -eq 0 ]]; then
+if [[ $EUID -eq 0 && -z ${BROMIGOS_ISOTEST_T:-} ]]; then
     pacman -Syu --noconfirm --needed qemu-desktop edk2-ovmf socat openssh libisoburn python python-pillow \
         python-pip imagemagick procps-ng >/dev/null 2>&1
 fi
@@ -83,17 +100,26 @@ step() {            # step NAME CMD…: runs it, says PASS or FAIL, goes on
     echo "::group::$name"
     if "$@"; then echo "::endgroup::"; echo "PASS $name"; else echo "::endgroup::"; echo "FAIL $name"; fails=$((fails + 1)); return 1; fi
 }
-T() { "$root/iso/test.sh" "$@"; }
-# a free TCP port on 127.0.0.1 at or above $1 (the host's network: other VMs may hold some)
+T() { "${BROMIGOS_ISOTEST_T:-$root/iso/test.sh}" "$@"; }
+# a free TCP port on 127.0.0.1 at or above $1 (the host's network: other VMs may hold some),
+# and this run's from then on: written in DIR/.ports under a lock, so two lanes starting
+# together never get the same one before either's VM has it
 free_port() {
-    python3 - "$1" <<'PY'
-import socket, sys
-for p in range(int(sys.argv[1]), 65000):
-    with socket.socket() as s:
-        try:
-            s.bind(("127.0.0.1", p))
-        except OSError:
+    python3 - "$1" "$out/.ports" <<'PY'
+import fcntl, socket, sys
+with open(sys.argv[2], "a+") as book:
+    fcntl.flock(book, fcntl.LOCK_EX)
+    book.seek(0)
+    taken = {int(p) for p in book.read().split()}
+    for p in range(int(sys.argv[1]), 65000):
+        if p in taken:
             continue
+        with socket.socket() as s:
+            try:
+                s.bind(("127.0.0.1", p))
+            except OSError:
+                continue
+        book.write(f"{p}\n")
         print(p)
         break
 PY
@@ -122,7 +148,7 @@ desktop_run() {     # desktop_run NAME FIRMWARE PORT VNC OFFLINE ENCRYPT
 
 text_run() {        # the boot menu's "Install bromigOS with the text installer" (More options): the
                     # installer is on the console's screen and takes keys there, not only running
-    BROMIGOS_ISOTEST_PORT=$(free_port 2233); BROMIGOS_ISOTEST_VNC=$(vnc_display 43)
+    BROMIGOS_ISOTEST_PORT=$(free_port 2431); BROMIGOS_ISOTEST_VNC=$(vnc_display 61)
     export BROMIGOS_ISOTEST_DIR=$out/menu-text BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC BROMIGOS_ISOTEST_OFFLINE=0
     step "the boot menu's text installer: on the console's screen, taking keys (UEFI)" T menu --iso "$iso" --firmware uefi text || true
     T destroy >/dev/null 2>&1 || true
@@ -195,29 +221,33 @@ secureboot_menu() {
     kill "$(cat "$d/qemu.pid")" 2>/dev/null || true
     step "secure boot: MokManager enrolls the medium's key, then its menu, themed" test -e "$d/shots/.menu-themed" || true
 }
-secureboot_run() {
-    local d=$out/secureboot
-    mkdir -p "$d/shots"; sb_vars "$d" || return 1
-    BROMIGOS_ISOTEST_PORT=$(free_port 2241); BROMIGOS_ISOTEST_VNC=$(vnc_display 51)
-    export BROMIGOS_ISOTEST_DIR=$d BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC BROMIGOS_ISOTEST_OFFLINE=0
+sb_env() {          # a lane's VMs on the Secure Boot firmware
+    export BROMIGOS_ISOTEST_OFFLINE=0
     export BROMIGOS_ISOTEST_OVMF_CODE=/usr/share/edk2/x64/OVMF_CODE.secboot.4m.fd
     # the Secure Boot firmware needs SMM, and its variables kept from the OS
     export BROMIGOS_ISOTEST_QEMU="-machine smm=on -global driver=cfi.pflash01,property=secure,value=on"
+}
+secureboot_run() {
+    local d=$out/secureboot
+    mkdir -p "$d/shots"; sb_vars "$d" || return 1
+    BROMIGOS_ISOTEST_PORT=$(free_port 2531); BROMIGOS_ISOTEST_VNC=$(vnc_display 71)
+    export BROMIGOS_ISOTEST_DIR=$d BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC
+    sb_env
     rm -f "$d/qmp.sock"
     ( for _ in $(seq 120); do [[ -S $d/qmp.sock ]] && break; sleep 1; done; mok_keys "$d/qmp.sock" "$d/shots" ) &
     local keys=$!
     step "secure boot: MokManager enrolls the key, then the live desktop, Secure Boot on" T boot --iso "$iso" --firmware uefi || true
     wait "$keys" 2>/dev/null || true
     step "secure boot: the medium's menu keeps its theme" test -e "$d/shots/.menu-themed" || true
-    cp "$d/OVMF_VARS.fd" "$d/vars-medium.fd" 2>/dev/null || true
+    # the firmware's variables now: Microsoft's keys, the medium's in MOK. The lane beside
+    # Windows starts from this copy (whole or not there: it may be waiting for it already)
+    cp "$d/OVMF_VARS.fd" "$d/vars-medium.fd.part" 2>/dev/null && mv "$d/vars-medium.fd.part" "$d/vars-medium.fd" || true
     step "secure boot: the firmware says it's on" T ssh 'od -An -t u1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c | awk "{exit !(\$NF == 1)}"'
     step "secure boot: the key is in the MOK list" T ssh 'test -s /sys/firmware/efi/mok-variables/MokListRT || ls /sys/firmware/efi/efivars/ | grep -q "^MokListRT-"'
-    # the firmware's variables now: Microsoft's keys, the medium's in MOK (the dual-boot run starts here)
     T ssh 'sudo sync' >/dev/null 2>&1 || true
     secureboot_installed "$d" || true
     T destroy >/dev/null 2>&1 || true
     rm -f "$d/disk.qcow2"
-    secureboot_dualboot "$d" || true
 }
 
 # Secure Boot on the installed system (docs/secureboot.md, "The installed system"), from the
@@ -290,14 +320,18 @@ passphrase_ssh_uki() {   # straight from the firmware (no GRUB): the passphrase,
 }
 # beside Windows: a stand-in Windows (its ESP's files, and a firmware entry "Windows Boot
 # Manager" for them), bromigOS installed beside it with Secure Boot set up; Windows' files,
-# its fallback loader and its entry must be as they were, and the menu has Windows
+# its fallback loader and its entry must be as they were, and the menu has Windows. A lane of
+# its own: all it needs of the Secure Boot lane is the firmware's variables with the medium's
+# key enrolled, which that lane saves after its first start, so it waits for those (or for
+# that lane to end without them: then there is nothing to start from, as before)
 secureboot_dualboot() {
-    local d=$1 w=$out/secureboot-dualboot code
-    [[ -f $d/vars-medium.fd ]] || return 0
+    local d=$out/secureboot w=$out/secureboot-dualboot code
+    lane_wait "$d/vars-medium.fd" secureboot \
+        || { echo "SKIP secure boot, beside Windows: the Secure Boot lane saved no firmware variables to start from"; return 0; }
     mkdir -p "$w/shots"; cp "$d/vars-medium.fd" "$w/OVMF_VARS.fd"
-    local BROMIGOS_ISOTEST_DIR=$w
-    export BROMIGOS_ISOTEST_DIR
-    BROMIGOS_ISOTEST_PORT=$(free_port 2245); BROMIGOS_ISOTEST_VNC=$(vnc_display 55); export BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC
+    BROMIGOS_ISOTEST_PORT=$(free_port 2631); BROMIGOS_ISOTEST_VNC=$(vnc_display 81)
+    export BROMIGOS_ISOTEST_DIR=$w BROMIGOS_ISOTEST_PORT BROMIGOS_ISOTEST_VNC
+    sb_env
     step "secure boot, beside Windows: the live desktop (the medium's key enrolled already)" T boot --iso "$iso" --firmware uefi || return 1
     step "secure boot, beside Windows: a stand-in Windows, and its firmware entry" T windows --free-gib 24 || return 1
     T ssh 'sudo efibootmgr --quiet --create --disk /dev/vda --part 1 --label "Windows Boot Manager" --loader "\\EFI\\Microsoft\\Boot\\bootmgfw.efi"' || true
@@ -317,11 +351,115 @@ secureboot_dualboot() {
     rm -f "$w/disk.qcow2"
 }
 
+# ── lanes ────────────────────────────────────────────────────────────────────────────────
+# A lane: one chain of steps on its own VM, in its own subshell (its BROMIGOS_ISOTEST_* are its
+# own), with its own directory, ports and log. Listed in the order their output is printed in,
+# which is the order they ran in before there were lanes.
+lane_names=() lane_cmds=()
+lane() { lane_names+=("$1"); shift; lane_cmds+=("$*"); }      # lane NAME FUNCTION [ARG…]
+
+vm_mem=${BROMIGOS_ISOTEST_MEM:-6144} vm_cpus=${BROMIGOS_ISOTEST_SMP:-4}
+lanes_fit() {       # how many test VMs at once: this runner's memory and CPUs, or the workstation's budget
+    local n avail cores cap
+    if [[ ${GITHUB_ACTIONS:-} == true ]]; then
+        avail=${BROMIGOS_ISOTEST_AVAIL_MIB:-$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo)}
+        cores=$(nproc)
+        n=$(( (avail - 1536) / vm_mem ))
+        (( n <= cores / 2 )) || n=$((cores / 2))
+        fit_why="$avail MiB available, $cores CPUs"
+    else
+        cap=${BROMIGOS_VM_MAX_MEM_GIB:-8}
+        n=$(( cap * 1024 / vm_mem ))
+        (( n <= 4 / vm_cpus )) || n=$((4 / vm_cpus))
+        fit_why="the test VMs' budget here: $cap GiB and 4 CPUs together"
+    fi
+    (( n >= 1 )) || n=1
+    fit=$n
+}
+
+lane_wait() {       # lane_wait FILE LANE: until FILE is there (0), or LANE has ended without it (1)
+    local n
+    for ((n = 0; n < 2400; n++)); do
+        [[ -f $1 ]] && return 0
+        [[ -f $out/lane-$2.result ]] && break
+        sleep 1
+    done
+    [[ -f $1 ]]
+}
+
+lane_body() {       # lane_body NAME CMD: the lane, then its failures and its seconds in DIR/lane-NAME.result
+    local name=$1 words t0=$SECONDS
+    read -ra words <<< "$2"
+    fails=0
+    "${words[@]}" || true
+    # a VM the lane left running (a step that failed before the lane's own clean-up) would
+    # keep its memory, and its place in the test VMs' budget, from the lanes after it
+    if [[ -n ${BROMIGOS_ISOTEST_DIR:-} ]]; then
+        T destroy >/dev/null 2>&1 || true
+        for _ in $(seq 30); do pgrep -f -- "-qmp unix:$BROMIGOS_ISOTEST_DIR/qmp.sock" >/dev/null 2>&1 || break; sleep 1; done
+    fi
+    echo "$fails $((SECONDS - t0))" > "$out/lane-$name.result"
+}
+
+run_lanes() {
+    local i name f s running=0 t0=$SECONDS sum=0
+    (( ${#lane_names[@]} )) || return 0
+    lanes_fit
+    if [[ $njobs == auto ]]; then njobs=$fit
+    elif [[ ${GITHUB_ACTIONS:-} != true ]] && (( njobs > fit )); then
+        echo "==> lanes: $njobs asked for, $fit side by side ($fit_why)"; njobs=$fit
+    fi
+    (( njobs <= ${#lane_names[@]} )) || njobs=${#lane_names[@]}
+    echo "==> lanes: ${#lane_names[@]} (${lane_names[*]}), $njobs side by side ($fit_why; $vm_mem MiB and $vm_cpus CPUs a VM)"
+    rm -f "$out"/lane-*.log "$out"/lane-*.result "$out"/secureboot/vars-medium.fd*
+    if (( njobs == 1 )); then
+        for i in "${!lane_names[@]}"; do
+            name=${lane_names[i]}
+            ( lane_body "$name" "${lane_cmds[i]}" ) 2>&1 | tee "$out/lane-$name.log"
+        done
+    else
+        # the VMs share the CPUs: the passphrase prompt may take longer to come up
+        export BROMIGOS_ISOTEST_PASS_WAIT=${BROMIGOS_ISOTEST_PASS_WAIT:-40}
+        # a CI runner's budget for its test VMs (test/vm/vm-keeper.py): what these lanes come to
+        [[ ${GITHUB_ACTIONS:-} != true ]] || export BROMIGOS_VM_CI_BUDGET="$((njobs * vm_mem)):$((njobs * vm_cpus))"
+        exec 3>&1
+        for i in "${!lane_names[@]}"; do
+            if (( running >= njobs )); then wait -n 2>/dev/null || true; running=$((running - 1)); fi
+            name=${lane_names[i]}
+            echo "lane $name: started ($((SECONDS - t0)) s in)"
+            (
+                # 3 closed: nothing a lane starts (a VM's keeper) may hold this run's output open
+                lane_body "$name" "${lane_cmds[i]}" > "$out/lane-$name.log" 2>&1 3>&-
+                read -r f s < "$out/lane-$name.result"
+                echo "lane $name: done in $s s, $f failed ($((SECONDS - t0)) s in)" >&3
+            ) &
+            running=$((running + 1))
+        done
+        wait
+        exec 3>&-
+        for name in "${lane_names[@]}"; do
+            echo "── lane $name ($out/lane-$name.log) ──"
+            cat "$out/lane-$name.log" 2>/dev/null || true
+        done
+    fi
+    echo "==> lanes, $njobs side by side:"
+    for name in "${lane_names[@]}"; do
+        if read -r f s < "$out/lane-$name.result" 2>/dev/null && [[ $f =~ ^[0-9]+$ && $s =~ ^[0-9]+$ ]]; then
+            fails=$((fails + f)); sum=$((sum + s))
+            printf '    %-22s %5d s  %d failed\n' "$name" "$s" "$f"
+        else
+            echo "FAIL lane $name: it ended without a result ($out/lane-$name.log)"; fails=$((fails + 1))
+        fi
+    done
+    echo "    $((SECONDS - t0)) s in all; one after another, $sum s"
+}
+
+rm -f "$out/.ports"
 case $suite in
     desktop)
-        desktop_run uefi-encrypted uefi 2231 41 0 1 || true
-        desktop_run bios-offline-plain bios 2232 42 1 0 || true
-        text_run || true
+        lane uefi-encrypted desktop_run uefi-encrypted uefi 2231 41 0 1
+        lane bios-offline-plain desktop_run bios-offline-plain bios 2331 51 1 0
+        lane menu-text text_run
         ;;
     menu|hook)
         step "the medium's menu (UEFI)" menu_run uefi || true
@@ -335,8 +473,14 @@ case $suite in
     *) echo "iso/ci-test.sh: --suite desktop, menu, hook or none" >&2; exit 2 ;;
 esac
 if [[ -n $sbcert ]]; then
-    if [[ $suite == desktop || $suite == none ]]; then secureboot_run || true; else secureboot_menu || true; fi
+    if [[ $suite == desktop || $suite == none ]]; then
+        lane secureboot secureboot_run
+        lane secureboot-dualboot secureboot_dualboot
+    else
+        secureboot_menu || true
+    fi
 fi
+run_lanes
 
 find "$out" -name '*.ppm' -delete 2>/dev/null || true
 chmod -R a+rwX "$out" 2>/dev/null || true

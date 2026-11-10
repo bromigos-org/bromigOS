@@ -888,6 +888,24 @@ the desktop medium, and the Field Kit once it's there), side by side:
    key enrolled in MokManager, a kernel update, a Unified Kernel Image), and one beside a
    stand-in Windows ([secureboot.md](secureboot.md#testing-it)). A profile with no installer boots to its menu on UEFI and
    BIOS, then runs its own `ci-test.sh` if it has one.
+
+   The desktop medium's chains of steps are **lanes**: the UEFI install, the BIOS install,
+   the text installer entry, Secure Boot's medium and install, and its install beside
+   Windows. Each has its own VM, directory, ports and log, and needs nothing of another's;
+   the install beside Windows starts from the firmware variables the Secure Boot lane saves
+   after its first start, and waits for those. So they run side by side, as many as the
+   runner holds: its available memory less 1.5 GiB, divided by a VM's 6144 MiB, and half its
+   CPUs at most. That is two on GitHub's hosted runner (4 CPUs, 16 GB); a bigger runner
+   takes more, all five with about 32 GiB available and 10 CPUs. Each lane's output is kept in `lane-NAME.log` and printed in the same
+   order as before once all are done, with a line as each starts and ends and each lane's
+   seconds at the end. `--jobs N` (or `BROMIGOS_ISOTEST_JOBS`) sets the number; `--jobs 1`
+   runs them one after another, each step's output as it comes, as every run did until
+   2026-11-09 (40 of a release's 57 minutes). A runner in a container with a memory limit
+   sees its machine's memory, not its own: give it `BROMIGOS_ISOTEST_JOBS`, or its memory in
+   `BROMIGOS_ISOTEST_AVAIL_MIB`. Off a CI runner the number is what the shared test-VM budget
+   takes (`test/vm/vm-keeper.py`: 8 GiB and 4 CPUs together, so one VM of the default size),
+   whatever was asked for. The lanes' own test is `iso/test/test_ci_lanes.py`, with a
+   stand-in for `iso/test.sh`: no VM.
 4. **Sign it** with the package signing key (a detached, armoured `.sig`), and check the
    signature against `packaging/keys/bromigos.asc` alone.
 5. **Publish it**: the ISO as one file, its `.sha256`, `.sig` and `.json`, into the
