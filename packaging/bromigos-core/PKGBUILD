@@ -58,7 +58,8 @@ optdepends=('python: bromigos private, secrets, emblem, console, power menu, spl
             'pipewire: the voice guide in a desktop session (pw-play)'
             'python-pychromecast: cast to Chromecasts and Google TVs (bromigos media cast)'
             'python-async-upnp-client: cast to DLNA TVs (bromigos media cast; from the AUR)'
-            'smartmontools: drive health in bromigos alerts (disk.smart)'
+            'smartmontools: drive health in bromigos alerts (disk.smart) and bromigos storage health'
+            'nvme-cli: NVMe drive health without smartmontools, or for a drive it cannot read'
             'nut: the UPS in bromigos alerts (power.ups)'
             'libnotify: bromigos alerts as desktop notifications (notify-send)')
 # The release profile already strips (core/Cargo.toml); no -debug package.

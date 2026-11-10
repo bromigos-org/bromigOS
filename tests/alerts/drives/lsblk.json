@@ -1,0 +1,46 @@
+{
+  "blockdevices": [
+    {
+      "name": "sda",
+      "type": "disk",
+      "model": "WDC WD40EFRX-68N32N0",
+      "serial": "FAKE0SATA000002",
+      "tran": "sata"
+    },
+    {
+      "name": "sdc",
+      "type": "disk",
+      "model": "Extreme 55AE",
+      "serial": "FAKE0USB0000003",
+      "tran": "usb"
+    },
+    {
+      "name": "vda",
+      "type": "disk",
+      "model": null,
+      "serial": null,
+      "tran": "virtio"
+    },
+    {
+      "name": "zram0",
+      "type": "disk",
+      "model": null,
+      "serial": null,
+      "tran": null
+    },
+    {
+      "name": "sr0",
+      "type": "rom",
+      "model": "DVD-RW",
+      "serial": "FAKE0ROM0000004",
+      "tran": "sata"
+    },
+    {
+      "name": "nvme0n1",
+      "type": "disk",
+      "model": "Samsung SSD 980 PRO 2TB",
+      "serial": "FAKE0NVME000001",
+      "tran": "nvme"
+    }
+  ]
+}
