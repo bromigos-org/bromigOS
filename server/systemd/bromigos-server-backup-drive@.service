@@ -1,0 +1,11 @@
+# bromigOS Server (docs/server.md, "The Go Bag"): a USB drive's filesystem was plugged in; %i is
+# its UUID (65-bromigos-server-backup-drive.rules starts this). When it is the backup drive this
+# server remembers, the copy to it starts as a job of its own (bromigos-job-<id>.service:
+# `bromigos activity` shows it, and its last line is "Safe to unplug"), and this unit ends. For
+# any other drive it does nothing.
+[Unit]
+Description=bromigOS Server: a USB drive was plugged in (%i)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/server/bromigos-server backup plugged --uuid %i

@@ -387,8 +387,9 @@ class Status(Rig):
         d = self.doc()
         self.assertEqual(sorted(d), sorted(
             ["schema", "ok", "server", "configured", "to", "destination", "timers", "health", "last_backup", "last_success",
-             "last_check", "last_check_passed", "last_read_back", "last_test", "last_test_passed", "snapshots", "restore",
-             "running", "checked_at", "now"]))
+             "last_check", "last_check_passed", "last_read_back", "last_test", "last_test_passed", "snapshots", "drives",
+             "restore", "running", "checked_at", "now"]))
+        self.assertEqual(d["drives"], [], "no Go Bag is set up (test_lab_backup_drive.py has the rest)")
         self.assertEqual((d["schema"], d["ok"], d["server"], d["configured"], d["to"]), (1, True, True, True, "/mnt/backup"))
         self.assertEqual(d["destination"], {"kind": "folder", "path": "/mnt/backup", "present": True})
         self.assertEqual(d["timers"], {"backup": "active", "check": "active", "test": "active"})

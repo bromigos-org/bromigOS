@@ -102,6 +102,26 @@ class Files(unittest.TestCase):
         self.assertIn("bromigos-server-backup-test.timer", s.BASE_UNITS)
         self.assertIn("bromigos-server-backup-test.service", s.NOT_THE_UPDATE)
 
+    def test_a_usb_drive_plugged_in_starts_the_backup_drives_unit(self):
+        """The Go Bag (docs/server.md): the udev rule wants the templated unit with the
+        filesystem's UUID, and the unit runs a command bromigos-server has."""
+        rule = (HERE / "udev/65-bromigos-server-backup-drive.rules").read_text()
+        lines = [line for line in rule.splitlines() if line and not line.startswith("#")]
+        self.assertEqual(lines[-2], 'TAG+="systemd", ENV{SYSTEMD_WANTS}+="bromigos-server-backup-drive@$env{ID_FS_UUID}.service"')
+        # only USB filesystems with a UUID, and never when one is unplugged
+        for match in ('ACTION=="remove"', 'SUBSYSTEM!="block"', 'SUBSYSTEMS!="usb"', 'ENV{ID_FS_USAGE}!="filesystem"', 'ENV{ID_FS_UUID}!="?*"'):
+            self.assertIn(f'{match}, GOTO="bromigos_backup_drive_end"', lines[:-2])
+        self.assertEqual(lines[-1], 'LABEL="bromigos_backup_drive_end"')
+        self.assertNotIn("RUN+=", rule, "a copy is long: udev starts a unit, it never runs it")
+        self.assertNotIn("/dev/sd", rule)
+        unit = (HERE / "systemd/bromigos-server-backup-drive@.service").read_text()
+        self.assertIn("ExecStart=/usr/lib/bromigos/server/bromigos-server backup plugged --uuid %i", unit)
+        self.assertIn("Type=oneshot", unit)
+        s = module()
+        self.assertTrue("bromigos-server-backup-drive@6f1d-2c3b.service".startswith(s.DRIVE_UNIT))
+        pkg = (HERE.parent / "packaging/bromigos-server/PKGBUILD").read_text()
+        self.assertIn('install -Dm0644 -t "$pkgdir/usr/lib/udev/rules.d/" "$s"/udev/*.rules', pkg)
+
     def test_mdns_announcement_matches_the_labs(self):
         root = ET.parse(HERE / "bromigos-lab.service").getroot()
         self.assertEqual(root.findtext("service/type"), "_bromigos-lab._tcp")
@@ -474,7 +494,8 @@ class Health(Rig):
 
     def test_the_servers_own_jobs_dont_count(self):
         (self.fake / "failed").write_text("bromigos-server-backup.service loaded failed failed backup\n"
-                                          "btrfs-scrub@-.service loaded failed failed scrub\n")
+                                          "btrfs-scrub@-.service loaded failed failed scrub\n"
+                                          "bromigos-server-backup-drive@6f1d-2c3b.service loaded failed failed a USB drive\n")
         self.assertEqual(self.update()["phase"], "ok")
 
 
@@ -655,6 +676,19 @@ class Backup(Rig):
                       "repository: permission denied.", self.run_server("status").stdout)
         self.assertEqual(json.loads(self.run_server("backup", "status", "--json").stdout)["health"]["problems"][0]["title"],
                          "The last backup failed")
+
+    def test_a_plugged_in_drive_that_is_not_the_backup_drive_starts_nothing(self):
+        """`backup plugged` (the unit a USB filesystem starts): for a drive this server doesn't
+        remember it does nothing, with or without a destination set, and never runs restic."""
+        for conf in ('[health]\nminutes = 0\n', '[health]\nminutes = 0\n[backup]\nto = "/mnt/backup"\n'):
+            self.config(conf)
+            r = self.run_server("backup", "plugged", "--uuid", "AB12-CD34")
+            self.assertEqual((r.returncode, r.stdout), (0, ""), r.stderr)
+        self.assertNotIn("restic", self.log())
+        self.assertFalse((self.root / "var/lib/bromigos/server/backup.json").exists())
+        self.assertNotEqual(self.run_server("backup", "plugged").returncode, 0, "it needs the filesystem's UUID")
+        d = json.loads(self.run_server("status", "--json").stdout)["backup"]
+        self.assertEqual(d["drives"], [])
 
     def test_check_reads_some_data_back_when_asked(self):
         self.config('[health]\nminutes = 0\n[backup]\nto = "/mnt/backup"\n')

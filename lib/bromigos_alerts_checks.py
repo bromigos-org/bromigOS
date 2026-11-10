@@ -409,14 +409,19 @@ def backup(ctx):
             st = {}
         st = st if isinstance(st, dict) else {}
         try:
-            to = str((tomllib.loads(env.read(SERVER_CONFIG) or "").get("backup") or {}).get("to") or "")
+            conf = tomllib.loads(env.read(SERVER_CONFIG) or "").get("backup") or {}
+            to = str(conf.get("to") or "")
         except (tomllib.TOMLDecodeError, AttributeError):
-            to = ""
+            conf, to = {}, ""
         try:
             journal = json.loads(env.read(B.JOURNAL) or "{}")
         except ValueError:
             journal = {}
-        h = B.health(to, st, now / 1000, B.destination(to, B.had_backup(st), env.path), B.job_record(doc=journal))
+        # the backup drive (the Go Bag) is judged with the rest: a copy that failed, and the
+        # reminder when it hasn't had a good one for [backup] drive_remind_days
+        D = B.drive_lib()
+        h = B.health(to, st, now / 1000, B.destination(to, B.had_backup(st), env.path), B.job_record(doc=journal),
+                     D.view(st, now / 1000, D.days(conf), env.path))
         said = [f"{k}: {st[k].get('phase')} at {st[k].get('at', '?')}" + (f": {st[k]['reason']}" if st[k].get("reason") else "")
                 for k in ("run", "check", "test") if isinstance(st.get(k), dict)]
         for p in h["problems"]:
