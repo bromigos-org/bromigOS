@@ -12,6 +12,7 @@ it instead of working it out again:
   fieldkit.finding Field Kit's engine (`fieldkit-engine engine check …`) and the findings a
                    Field Kit stick saved in this install
   game.steam       `bromigos game check --json`
+  activity.job     bromigos_activity.needing_a_look(): the jobs `bromigos activity` lists as failed
 """
 
 import json
@@ -772,6 +773,43 @@ def steam(ctx):
     return found
 
 
+# ------------------------------------------------------------------ activity.job
+
+def activity_job(ctx):
+    """A long job (docs/activity.md) that failed, or failed and put things back by itself. Which
+    jobs still count is bromigos_activity's call; the alert stands until that work next
+    succeeds. Everything here comes from the job's record, which every user may read: never a
+    line of its log, which is root's."""
+    import bromigos_activity as J
+    env = ctx.env
+    jenv = J.Env(dict(env.environ, BROMIGOS_ROOT=env.root) if env.stand_in else env.environ)
+    if not os.path.isdir(jenv.jobs_dir()):
+        raise Skip("no job has run here yet")
+    found = []
+    for r in J.needing_a_look(jenv):
+        back = r["state"] == "rolled-back"
+        subject, err = r.get("subject") or {}, r.get("error") or {}
+        step = next((s["label"] for s in r["steps"] if s["id"] == err.get("step")), None)
+        why = err.get("words") or "It stopped without saying why."
+        detail = (f"\"{r['title']}\" stopped" + (f" at \"{step}\"" if step else "") + f": {why} " +
+                  ("It then put things back the way they were, so nothing is left half done. " if back else "") +
+                  f"`bromigos activity show {r['id']}` has its steps and what it printed.")
+        again = "retry" in (r.get("can") or [])
+        commands = [f"bromigos activity show {r['id']}"] + ([f"sudo bromigos activity retry {r['id']}"] if again else [])
+        a = alert("activity.job", subject.get("id") or "", "info" if back else "needs_you",
+                  ("A job failed and put things back: " if back else "A job failed: ") + r["title"], detail, "Activity",
+                  evidence=evidence([r["title"], f"state: {r['state']}", f"stopped at: {step or 'no named step'}", why],
+                                    job=r["id"], kind=r["kind"], state=r["state"], exit_code=r.get("exit_code"),
+                                    step=err.get("step") or ""),
+                  fix={"commands": commands, "from": "bromigos", "root": again,
+                       "touches": ["nothing (it only looks)"] + (["starts the same job again"] if again else []),
+                       "note": "Read why it stopped before starting it again." if again else ""})
+        # one alert for that work, whichever run of it failed last: its kind and what it is about
+        a["id"] = f"activity.job:{r['kind']}" + (f":{subject.get('type')}/{subject['id']}" if subject.get("id") else "")
+        found.append(a)
+    return found
+
+
 REGISTRY = [
     Check("disk.smart", ["system"], smart),
     Check("disk.scrub", ["system"], scrub),
@@ -786,4 +824,5 @@ REGISTRY = [
     Check("server.app-data", ["system"], app_data),
     Check("fieldkit.finding", ["system"], fieldkit, boot_only=True),
     Check("game.steam", ["user"], steam),
+    Check("activity.job", ["system"], activity_job),
 ]
