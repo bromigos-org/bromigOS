@@ -5,12 +5,26 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from bromigos_homelab import localprovision as L, mdnsnames as M, secretstore as S
+from bromigos_homelab import localprovision as L, mdnsnames as M, provcatalog as PC, secretstore as S
 from provfake import FakeMachine
 
 HW = {"cpu": 8, "ram_gb": 32, "disk_gb": 900, "gpu": False, "gpu_vram_gb": 0, "gpu_name": ""}
 WEB_ITEMS = ["caddy", "start-page", "home-automation", "jellyfin", "passwords", "photos"]
+
+
+def setUpModule():
+    """The checkout's catalogue and templates, never an installed bromigos-lab's (it comes first
+    in provcatalog.paths(), and may be an older format)."""
+    global _SHARE
+    _SHARE = mock.patch.object(PC, "SHARE", "/nonexistent")
+    _SHARE.start()
+    PC._cache.clear()
+
+
+def tearDownModule():
+    _SHARE.stop()
 
 
 class Names(unittest.TestCase):

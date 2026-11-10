@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from bromigos_homelab import localprovision as L, provcatalog as PC, secretstore as S, provision as P
 from provfake import FakeMachine
@@ -32,6 +33,19 @@ language = "English"
 dual_audio = true
 """
 VPN_PASSWORD = "correct-horse-battery-staple"
+
+
+def setUpModule():
+    """The checkout's catalogue and templates, never an installed bromigos-lab's (it comes first
+    in provcatalog.paths(), and may be an older format)."""
+    global _SHARE
+    _SHARE = mock.patch.object(PC, "SHARE", "/nonexistent")
+    _SHARE.start()
+    PC._cache.clear()
+
+
+def tearDownModule():
+    _SHARE.stop()
 
 
 def update(name, doc):
@@ -330,6 +344,90 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(L.gguf_tag("GGUF UD-Q4_K_XL"), "UD-Q4_K_XL")
         self.assertEqual(L.gguf_tag("GGUF Q8_0"), "Q8_0")
         self.assertEqual(L.gguf_tag("FP8"), "")
+
+
+class CatalogueFormatTwo(unittest.TestCase):
+    """The web names, the monitoring port and the data folders are read from the catalogue
+    (format 2), and a server gets exactly what the code's own tables gave it before."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = self.tmp.name
+        self.m = FakeMachine(self.root)
+
+    def host(self, ids, hw=HW):
+        plan = L.build_plan(ids, hw=hw)
+        return L.Host(plan, root=self.root, run_=self.m, online=lambda: True, sleep=lambda s: None,
+                      store=S.LocalStore(self.root, self.m, "box"), emit=lambda line: None, hw=hw, hostname="box",
+                      tz="America/Los_Angeles")
+
+    def test_names_ports_and_links_come_out_as_before(self):
+        host = self.host(["caddy", "start-page", "monitoring", "passwords", "photos", "s3", "file-sync", "sonarr", "plex"])
+        self.assertEqual(L.Runner(host, poll=1).run(), 0)
+        # Sonarr and Plex have a page (web.port) and no name: Caddy and the start page leave them out, as they did
+        self.assertEqual(L.web_apps(host), [
+            ("monitoring", "graphs-box.local", 3005), ("start-page", "home-box.local", 3010), ("s3", "s3-box.local", 9000),
+            ("photos", "photos-box.local", 2283), ("passwords", "passwords-box.local", 8222),
+            ("file-sync", "sync-box.local", 8384)])
+        caddy = Path(self.root, "etc/caddy/conf.d/bromigos-lab.caddy").read_text()
+        self.assertIn("graphs-box.local {\n  tls internal\n  reverse_proxy 127.0.0.1:3005\n}", caddy)
+        self.assertEqual(caddy.count("reverse_proxy"), 6)
+        self.assertEqual(Path(self.root, "etc/bromigos/lab/mdns-names").read_text().split(),
+                         ["graphs-box.local", "home-box.local", "s3-box.local", "photos-box.local", "passwords-box.local",
+                          "sync-box.local"])
+        grafana = Path(self.root, "etc/systemd/system/grafana.service.d/50-bromigos.conf").read_text()
+        self.assertIn("Environment=GF_SERVER_HTTP_PORT=3005\n", grafana)
+        vaultwarden = Path(self.root, "etc/systemd/system/vaultwarden.service.d/50-bromigos.conf").read_text()
+        self.assertIn("Environment=DOMAIN=https://passwords-box.local\n", vaultwarden)
+        links = json.loads(Path(self.root, "srv/apps/start-page/config/services.yaml").read_text())[0]["This server"]
+        self.assertEqual({name: row["href"] for link in links for name, row in link.items()},
+                         {"Monitoring": "http://box.local:3005", "S3 bucket server (RustFS)": "http://box.local:9000",
+                          "Photos (Immich)": "http://box.local:2283", "Passwords (Vaultwarden)": "http://box.local:8222",
+                          "File sync (Syncthing)": "http://box.local:8384"})
+
+    def test_the_old_table_still_reads(self):
+        self.assertEqual(L.WEB, PC.web_names())
+        self.assertEqual(L.WEB["jellyfin"], "media")
+        with self.assertRaises(AttributeError):
+            L.NO_SUCH_TABLE
+
+    def test_data_paths_are_the_folders_the_rendered_units_mount(self):
+        # the catalogue's [[item.data]] against the real thing: each item's units, rendered as
+        # apply renders them, mount exactly these folders of /srv/apps (where app data lives,
+        # on the data disks when the server has them: docs/server.md)
+        nvidia = dict(HW, gpu="nvidia", gpu_vram_gb=24)
+        checked = 0
+        for it in PC.load():
+            if "quadlet" not in it["install"]:
+                continue
+            host = self.host([it["id"]], hw=nvidia)
+            mounted = set()
+            for f in L.template_files(it["install"]["quadlet"]):
+                for line in L.render(f.read_text(), it, host).splitlines():
+                    if line.startswith("Volume=/" + L.APPS + "/"):
+                        mounted.add(line[len("Volume="):].split(":")[0])
+            listed = {d["path"] for d in L.data_paths(it)}
+            self.assertEqual(listed, mounted, it["id"])
+            for path in listed:
+                self.assertTrue(path.startswith(f"/srv/apps/{it['id']}/"), path)
+            checked += 1
+        self.assertGreater(checked, 25)
+        self.assertEqual(L.data_paths(PC.by_id()["backups"]), [])
+        photos = {d["path"]: d["kind"] for d in L.data_paths(PC.by_id()["photos"])}
+        self.assertEqual(photos, {"/srv/apps/photos/library": "library", "/srv/apps/photos/postgres": "database",
+                                  "/srv/apps/photos/model-cache": "cache"})
+
+    def test_an_older_catalogue_is_refused_not_half_read(self):
+        # format 1 has no web names: the front door would be written with no apps, and say nothing
+        old = Path(self.root, "provision-catalogue.toml")
+        text = Path(PC.paths()[-1]).read_text()
+        self.assertIn("\nformat = 2\n", text)
+        old.write_text(text.replace("\nformat = 2\n", "\nformat = 1\n"))
+        with self.assertRaises(L.ProvisionError) as e:
+            L.build_plan(["photos"], hw=HW, path=str(old))
+        self.assertIn("format 1", str(e.exception))
+        self.assertIn("Update bromigos-lab", str(e.exception))
 
 
 if __name__ == "__main__":

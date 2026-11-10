@@ -327,6 +327,10 @@ The approved design also covers these features. They are not built here:
 - The catalog's app-specific configure steps, account sign-in and library setup.
 - Public certificates, DNS and opt-in tunnels.
 - Service removal with a separate data-retention decision.
+- An app manager for a server that is already set up: `bromigos lab apps` to list, add,
+  remove, restart and update apps. The catalogue's format 2 keys are its data
+  ([The catalogue](#format-2-what-an-app-manager-needs-to-know)). Until it is built, no
+  command reads an item's `health` or `[[item.data]]`.
 - Scheduled Vault Raft snapshots and backups of the cluster control plane.
 - Updating pinned images and chart versions through `bromigos lab update`. For the local
   target's apps that means a CI job that tests and moves the catalogue's digests, and the
@@ -378,6 +382,69 @@ internet, and how it installs:
 `secret`, `path`), choices with notes and links, `show_if`, actions with a URL, and the name of
 a live check (`bromigos lab provision --check ITEM`).
 
+#### Format 2: what an app manager needs to know
+
+The file says `format = 2`. Format 2 adds keys to each item and changes none, so anything
+that read format 1 reads this file the same way. The installer's own reader is one such.
+The new keys describe an item well enough to show it as a tile, open its page, find its
+data and ask whether it answers. Nothing uses them for that yet: the commands that will
+are listed under [work reserved for later slices](#work-reserved-for-later-slices).
+
+| Key | What it holds |
+|---|---|
+| `job`, `app` | The name's two halves, apart: the job ("Photos") and the program ("Immich"). `name` stays as it was. |
+| `holo` | The id of our own icon for the job, from `provcatalog.HOLO`. Items that do the same kind of job share one. |
+| `web = { name, port, path }` | The item's page. See [App names](#app-names). |
+| `[[item.data]]` | One for each folder or file the item keeps under `/srv/apps/<item>`. |
+| `health` | How to ask the app whether it answers. |
+
+**Data.** Each `[[item.data]]` has a `path` inside the item's own folder, a `kind` and a
+sentence, `what`, that says what is in it. An item that runs containers lists exactly the
+folders its template mounts from `{{data}}`. `validate()` compares the two, so a template
+can't gain a folder the catalogue doesn't know. `localprovision.data_paths(item)` gives
+the whole paths, such as `/srv/apps/photos/library`.
+
+| `kind` | Means |
+|---|---|
+| `library` | Your own files: photos, documents, a game's world. |
+| `database` | The app's records of what you did in it: accounts, history, what you follow. |
+| `config` | Its settings and working files. |
+| `cache` | Safe to lose. The app downloads or makes it again. |
+
+Two container items list no data, because they keep none of their own: the VPN for
+downloads (Gluetun) and Unpackerr. Items that aren't containers list none yet.
+
+**Health.** A check is one of two shapes.
+
+- `health = { http = "/api/server/ping", port = 2283 }` is a GET to that path on
+  `127.0.0.1`, with nothing signed in and no redirect followed. `expect` is the status
+  the first answer must have, as a number or a list. It is 200 when left out. `port` is one
+  of the item's `ports`.
+- `health = { cmd = ["podman", "exec", "minecraft", "mc-health"] }` runs a command inside
+  one of the item's own containers. Exit code 0 means it answers.
+
+`within_s` is how long a start may take before "no answer" counts. It is set only where
+the app's own project gives a figure.
+
+Every check is the app's own, never one we made up: the path or command its image's
+`HEALTHCHECK` runs, or the one its documentation or source names as open to anyone. The
+comment above each `health` line says which. Nothing was run to choose them, so a check is
+as good as its project's word until a job starts each image and asks.
+
+Two container items have no check, and say why in the file. Recyclarr runs on a timer and
+listens on no port. Unpackerr listens on none unless its metrics are turned on, and here
+they aren't. Items that aren't containers have none yet.
+
+**Keys the reader knows and no item fills yet.** `homepage`, `licence`, `remove_note`,
+`version` (the recipe's own revision, 1 when left out), `app_version`, `changed`, `track`,
+`status` with `status_note`, `download_mb`, `[item.update]` and `[item.tile]`. `validate()`
+checks their shape. The commands that read them will fill them.
+
+`validate()` also names any key it doesn't know, so a misspelt key is a problem and not a
+key nobody reads.
+
+#### Reading the catalogue
+
 `bromigos_homelab.provcatalog` reads it for the installer, the tour and the CLI:
 
 | Call | Returns |
@@ -389,6 +456,7 @@ a live check (`bromigos lab provision --check ITEM`).
 | `recommend(roles, hw, lab="none")` | the ids the roles tick for this hardware and lab answer (several roles: the union) |
 | `suggest_models(hw)` | models from the lab model catalogue sized to the GPU: `[{id, capability, name, serve_with, vram_gb, …, default}]` |
 | `conflicts(ids)`, `fits_item(item, hw)`, `validate()` | sentences; `[]` when the catalogue is consistent |
+| `web_names()` | `{item: name}` for the web apps that have a name on the local network |
 
 `hw` is `{cpu, ram_gb, disk_gb, gpu (False or "nvidia"/"amd"/"intel"), gpu_vram_gb, gpu_name}`;
 `localprovision.detect()` reads this machine's.
@@ -433,7 +501,16 @@ is ever added.
 
 Each web app Caddy serves gets one name on the local network, `<app>-<server>.local` (for
 example `photos-myserver.local`, `media-myserver.local`), with HTTPS from Caddy's own authority
-(`tls internal`). The names are one label on purpose. Every mDNS resolver answers a one-label
+(`tls internal`).
+
+The name and the port are the catalogue's: each item's `web = { name, port }`. The port is
+the one Caddy sends the name to, and the one the start page links to. For most items it is
+the first of `ports`. Monitoring's is Grafana's, 3005, and the same key sets the port
+Grafana listens on. An item whose `web` has a port and no name has a page on that port
+and no name of its own: Sonarr is at `http://<server>.local:8989`. `path` is where the
+page is, when it isn't `/`.
+
+The names are one label on purpose. Every mDNS resolver answers a one-label
 `.local` name: Linux's nss-mdns and systemd-resolved, Apple's mDNSResponder, Android's resolver
 (November 2021 on) and Windows' DNS client. A subdomain such as `photos.<server>.local` is
 answered by some of them and not others.

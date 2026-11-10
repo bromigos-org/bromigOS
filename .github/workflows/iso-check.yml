@@ -9,9 +9,9 @@ name: iso-check
 on:
   push:
     branches: [main]
-    paths: ["iso/**", "settings/plymouth/**", "settings/grub/**", "lib/bromigos_guide.py", "lib/guide/**", "tests/voice-guide/**", "tools/voice/**", ".github/workflows/iso-check.yml"]
+    paths: ["iso/**", "homelab/share/provision-catalogue.toml", "settings/plymouth/**", "settings/grub/**", "lib/bromigos_guide.py", "lib/guide/**", "tests/voice-guide/**", "tools/voice/**", ".github/workflows/iso-check.yml"]
   pull_request:
-    paths: ["iso/**", "settings/plymouth/**", "settings/grub/**", "lib/bromigos_guide.py", "lib/guide/**", "tests/voice-guide/**", "tools/voice/**", ".github/workflows/iso-check.yml"]
+    paths: ["iso/**", "homelab/share/provision-catalogue.toml", "settings/plymouth/**", "settings/grub/**", "lib/bromigos_guide.py", "lib/guide/**", "tests/voice-guide/**", "tools/voice/**", ".github/workflows/iso-check.yml"]
   workflow_dispatch:
     inputs:
       hosted:

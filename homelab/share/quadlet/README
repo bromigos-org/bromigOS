@@ -1,5 +1,7 @@
 Quadlet templates for `bromigos lab provision --local` (docs/lab-provision.md, "Quadlet templates").
 Each folder is one catalogue item's units; _common is written with every item.
+Every folder or file a unit mounts from {{data}} has an [[item.data]] row in the catalogue
+(share/provision-catalogue.toml) that says what is in it; provcatalog.validate() compares the two.
 
 Placeholders (localprovision.render):
   {{data}}            /srv/apps/<item>: the item's own state (on a server with data disks, /srv/apps

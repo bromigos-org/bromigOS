@@ -922,6 +922,42 @@ class Catalogue(unittest.TestCase):
     picks, what they need added, the budget, the models."""
     HW = {"cpu": 16, "ram_gb": 64, "disk_gb": 4000, "gpu": True, "gpu_name": "NVIDIA RTX 4090", "gpu_vram_gb": 24}
 
+    def test_the_engines_catalogue_reads_with_the_stand_in_rules(self):
+        # The lab engine's own file (format 2: the job and app apart, web addresses, data folders
+        # and health checks beside what was there) through the rules kept here for a medium with
+        # no engine: every key this installer reads is where it was, and the new ones don't get in the way
+        from bromigos_installer import provision as PV
+        real = os.path.join(HERE, "../../../homelab/share/provision-catalogue.toml")
+        os.environ["BROMIGOS_PROVISION_CATALOGUE"] = real
+        PV.load(reload=True)
+        self.addCleanup(lambda: (os.environ.__setitem__("BROMIGOS_PROVISION_CATALOGUE",
+                                                        os.path.join(HERE, "fixtures", "provision-catalogue.toml")),
+                                 PV.load(reload=True)))
+        self.assertIsNone(PV.engine())
+        with open(real) as f:
+            text = f.read()
+        self.assertEqual(len(PV.items()), text.count("\n[[item]]\n"))
+        self.assertEqual([g["id"] for g in PV.groups()], ["lab-core", "ai", "network", "storage", "games", "home", "media", "brodec"])
+        for x in PV.items():
+            for key in ("id", "group", "name", "line", "hint", "icon", "glyph", "install"):
+                self.assertTrue(x.get(key), f"{x.get('id')}: {key}")
+        photos = PV.item("photos")
+        self.assertEqual((photos["name"], photos["job"], photos["app"]), ("Photos (Immich)", "Photos", "Immich"))
+        self.assertEqual([d["path"] for d in photos["data"]], ["library", "postgres", "model-cache"])
+        ids, auto = PV.resolve(["passwords", "argocd"])
+        self.assertEqual(set(auto), {"caddy", "k3s"})
+        self.assertLess(ids.index("k3s"), ids.index("argocd"))
+        self.assertEqual(len(PV.conflicts(["minecraft", "wings"])), 1)
+        self.assertTrue(PV.budget(["photos", "passwords"], self.HW)["fits"])
+        home = PV.recommend(["home"], self.HW)
+        self.assertIn("photos", home)
+        self.assertNotIn("documents", home)                    # default = false
+        self.assertIn("argocd", [x["id"] for x in PV.items(mode="new")])
+        self.assertNotIn("argocd", [x["id"] for x in PV.items(mode="none")])
+        self.assertEqual([f["id"] for f in PV.fields("gluetun")], ["provider", "username", "password", "country", "kill_switch"])
+        self.assertEqual(PV.setup_links("prowlarr", "box"), [("Open Prowlarr", "http://box.local:9696")])
+        self.assertEqual(PV.generated("photos"), ["db-password"])
+
     def test_dependencies_are_added_and_said(self):
         from bromigos_installer import provision as PV
         ids, auto = PV.resolve(["argocd", "chat"])

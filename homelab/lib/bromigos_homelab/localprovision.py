@@ -55,11 +55,10 @@ WINGS = ("v1.0.0-rc.1", {"x86_64": ("wings_linux_amd64", "19dda386e02041da1f1fbc
                          "aarch64": ("wings_linux_arm64", "ed7deafe0aef2acd3adae73103d2a01b57e8a7eaa56950194bdff11f87f37ff3")})
 GLUETUN = {"pia": ("private internet access", "openvpn", "on"), "protonvpn": ("protonvpn", "openvpn", "on"),
            "mullvad": ("mullvad", "wireguard", "off")}
-# the web apps' names (app_name: <name>-<host>.local, one label, so every mDNS resolver answers
-# it; mdnsnames.py publishes them and Caddy serves them)
-WEB = {"start-page": "home", "photos": "photos", "passwords": "passwords", "documents": "documents",
-       "home-automation": "automation", "uptime": "uptime", "jellyfin": "media", "seerr": "requests", "monitoring": "graphs",
-       "navidrome": "music", "audiobookshelf": "books", "file-sync": "sync", "s3": "s3", "pelican-panel": "games"}
+# The web apps' names and ports are the catalogue's: each item's `web = { name, port }`
+# (app_name: <name>-<host>.local, one label, so every mDNS resolver answers it; mdnsnames.py
+# publishes them and Caddy serves them). WEB, the table that was here, still reads as
+# {item: name} through __getattr__ below.
 MEDIA_FOLDERS = ("movies", "tv", "music", "books", "podcasts", "youtube", "downloads", "downloads/tv-sonarr",
                  "downloads/radarr", "downloads/lidarr", "downloads/soulseek", "downloads/incomplete")
 CATEGORIES = {"sonarr": ("tv-sonarr", "tvCategory", 8989, "v3"), "radarr": ("radarr", "movieCategory", 7878, "v3"),
@@ -74,6 +73,12 @@ TRASH = {"sonarr": {"profile": "72dae194fc92bf828f32cde7744e51a1", "not_english"
 
 class ProvisionError(Exception):
     pass
+
+
+def __getattr__(name):
+    if name == "WEB":
+        return PC.web_names()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def at(rel, root=None):
@@ -170,6 +175,10 @@ def setting(settings, it, field):
 def build_plan(selected=None, roles=None, lab="none", lab_join=None, models=None, settings=None, hw=None,
                preset=None, path=None):
     """The reviewed plan as a dict (JSON-able, deterministic for the same input)."""
+    if PC.file_format(path) < PC.FORMAT:
+        # an older file has no web names or ports: the front door would lose every app without a word
+        raise ProvisionError(f"the provisioning catalogue here is format {PC.file_format(path)}, and this bromigos-lab "
+                             f"reads format {PC.FORMAT}. Update bromigos-lab, which brings both")
     cat = PC.by_id(path)
     hw = dict(hw if hw is not None else detect())
     roles = PC.norm_roles(roles) if roles else []
@@ -685,7 +694,7 @@ def step_monitoring(host, it):
     cred = host.credential("monitoring/grafana-admin")
     host.write("etc/systemd/system/grafana.service.d/50-bromigos.conf",
                f"[Service]\nLoadCredentialEncrypted={cred}\nEnvironment=GF_SECURITY_ADMIN_PASSWORD__FILE=%d/{cred}\n"
-               "Environment=GF_SERVER_HTTP_PORT=3005\nEnvironment=GF_PATHS_PROVISIONING=/etc/bromigos/lab/grafana\n"
+               f"Environment=GF_SERVER_HTTP_PORT={it['web']['port']}\nEnvironment=GF_PATHS_PROVISIONING=/etc/bromigos/lab/grafana\n"
                "Environment=GF_ANALYTICS_REPORTING_ENABLED=false\n")
     host.must(["systemctl", "daemon-reload"], "reload systemd")
     enable(host, ["prometheus.service", "grafana.service"], restart=True)
@@ -717,17 +726,24 @@ def step_backups(host, it):
 
 def app_name(host, i):
     """A web app's name on the local network: photos-myserver.local (one label: see mdnsnames.py)."""
-    return f"{WEB[i]}-{host.hostname}.local"
+    return f"{host.cat[i]['web']['name']}-{host.hostname}.local"
 
 
 def web_apps(host):
-    """(item, name, port) for each chosen web app that Caddy serves."""
+    """(item, name, port) for each chosen web app that Caddy serves: the ones whose `web` in the
+    catalogue has a name."""
     out = []
     for i in host.selected:
-        it = host.cat[i]
-        if i in WEB and it["ports"]:
-            out.append((i, app_name(host, i), it["ports"][0] if i != "monitoring" else 3005))
+        web = host.cat[i].get("web") or {}
+        if web.get("name"):
+            out.append((i, app_name(host, i), web["port"]))
     return out
+
+
+def data_paths(it):
+    """Where an item keeps its data on this server: its [[item.data]] rows, each path made
+    whole under the item's own folder (/srv/apps/<id>/library)."""
+    return [dict(d, path="/" + APPS + "/" + it["id"] + "/" + d["path"]) for d in it.get("data") or []]
 
 
 def caddy_routes(host):
@@ -775,7 +791,7 @@ def step_passwords(host, it):
     host.write("etc/systemd/system/vaultwarden.service.d/50-bromigos.conf",
                "[Service]\nEnvironment=ROCKET_ADDRESS=127.0.0.1\nEnvironment=ROCKET_PORT=8222\n"
                "Environment=WEB_VAULT_ENABLED=true\nEnvironment=WEB_VAULT_FOLDER=/usr/share/webapps/vaultwarden-web\n"
-               f"Environment=DOMAIN=https://{WEB['passwords']}-{host.hostname}.local\n")
+               f"Environment=DOMAIN=https://{app_name(host, 'passwords')}\n")
     host.must(["systemctl", "daemon-reload"], "reload systemd")
     enable(host, ["vaultwarden.service"], restart=True)
 
@@ -1005,10 +1021,9 @@ STEP_PROBES["youtube-library"] = lambda host, it: False
 # ---------------------------------------------------------------- files some apps need first
 def prepare_start_page(host, it):
     links = []
-    for i in host.selected:
+    for i, _name, port in web_apps(host):
         x = host.cat[i]
-        if i in WEB and x["ports"] and i != "start-page":
-            port = 3005 if i == "monitoring" else x["ports"][0]
+        if i != "start-page":
             links.append({x["name"]: {"href": f"http://{host.hostname}.local:{port}", "description": x["line"]}})
     base = APPS + "/start-page/config/"
     host.write(base + "services.yaml", json.dumps([{"This server": links}], indent=1) + "\n")
