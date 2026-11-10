@@ -1,0 +1,62 @@
+::item backups waiting
+::item smb-shares waiting
+::item media-library waiting
+::item jellyfin waiting
+::item seerr waiting
+::item prowlarr waiting
+::item sonarr waiting
+::item radarr waiting
+::item qbittorrent waiting
+::item gluetun waiting
+::stage 0 Checking what's here
+::item backups skipped-offline
+::item smb-shares skipped-offline
+::stage 0 Installing Media library
+::item media-library installing
+::note media-library For media you own or have rights to. No sources are set up: add your own in Prowlarr.
+::item media-library done
+::item jellyfin skipped-offline
+::item prowlarr skipped-offline
+::item qbittorrent skipped-offline
+::item gluetun skipped-offline
+::stage 10 Waiting for the internet
+::stage 10 Installing Backups
+::item backups downloading
+::item backups installing
+::item backups done
+::stage 20 Installing Windows and Mac shares (SMB)
+::item smb-shares downloading
+::item smb-shares installing
+::item smb-shares done
+::stage 30 Installing Jellyfin
+::item jellyfin downloading
+::item jellyfin installing
+::item jellyfin done
+::stage 40 Installing Requests (Seerr)
+::item seerr downloading
+::item seerr installing
+::item seerr done
+::stage 50 Installing Prowlarr (sources)
+::item prowlarr downloading
+::item prowlarr installing
+::item prowlarr done
+::stage 60 Installing Sonarr (shows)
+::item sonarr downloading
+::item sonarr installing
+::item sonarr done
+::stage 70 Installing Radarr (films)
+::item radarr downloading
+::item radarr installing
+::item radarr done
+::stage 80 Installing qBittorrent (torrent downloads)
+::item qbittorrent downloading
+::item qbittorrent installing
+::item qbittorrent done
+::stage 90 Installing VPN for downloads (Gluetun)
+::item gluetun downloading
+::item gluetun installing
+::item gluetun done
+::note sonarr Sonarr (shows) didn't answer yet; its download clients are added on the next run.
+::note radarr Radarr (films) didn't answer yet; its download clients are added on the next run.
+::stage 100 Done
+::note secrets 6 keys stored on this server, encrypted with its TPM chip and host key

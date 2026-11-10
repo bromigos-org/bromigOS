@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+# bromigos:summary=What this computer is doing: long jobs with named steps, that keep running when you close the terminal and can be read later
+# bromigos:args=[list [--all] [--limit N] [--json]] | show [ID] [--log N] [--json] | run --kind KIND --title WORDS [--subject TYPE:ID[:NAME]] [--via VIA] [--device NAME] [--detach] [--json] -- COMMAND…
+# bromigos:examples=bromigos activity; bromigos activity show; bromigos activity list --json; sudo bromigos activity run --kind backup.run --title "Backing up" -- bromigos server backup run
+"""bromigos-activity (`bromigos activity`): what this computer is doing (docs/activity.md).
+
+  bromigos activity [list]            the jobs still going, then the newest that ended
+      --all                           every job kept (the last 30 days, 200 at most)
+      --limit N                       at most N (default 20)
+      --json                          the records
+  bromigos activity show [ID]         one job: its steps, its notes, its command and the end of
+                                      its log. ID is a job's id or a part of it; without one,
+                                      the newest job
+      --log N                         N lines of the log (default 20; 0 for all of it)
+      --json                          the record, with the log's lines
+  bromigos activity run --kind KIND --title WORDS [options] -- COMMAND…
+                                      run COMMAND as a job. It gets its own systemd unit
+                                      (bromigos-job-<id>.service), so it carries on when this
+                                      terminal closes. What it prints shows here and goes to
+                                      its log; its `::stage`, `::item` and `::step` lines
+                                      become the record's steps. Needs root: it asks for your
+                                      password (sudo, or polkit without a terminal)
+      --kind KIND                     what sort of job: app.install, backup.run, drive.test, …
+      --title WORDS                   plain words for people: "Backing up"
+      --subject TYPE:ID[:NAME]        what it's about: app:photos:Photos
+      --via VIA                       who asked: cli (default), board, phone, timer, vector
+      --device NAME                   the device that asked
+      --detach                        print the job's id and return at once
+      --json                          don't show the output; print the record at the end
+
+Where there's no systemd (a container), `run` runs the job in this terminal, with the same record.
+
+Exit status: `run` ends with COMMAND's own (130 when you stop watching with Ctrl+C, or the job
+was cancelled; 127 when COMMAND isn't there). Otherwise 0, 1 for a problem said in words
+(no such job), 2 for a wrong command.
+"""
+import json
+import os
+import sys
+
+here = os.path.dirname(os.path.realpath(__file__))
+for candidate in reversed((os.path.join(os.path.dirname(here), "lib"), "/usr/lib/bromigos/lib")):
+    if os.path.isdir(candidate):
+        sys.path.insert(0, candidate)
+
+import bromigos_activity as A  # noqa: E402
+
+USAGE = __doc__.split("\n\n", 1)[1]
+SELF = os.path.realpath(__file__)
+
+
+def usage():
+    print(USAGE, file=sys.stderr)
+    return 2
+
+
+def say(words):
+    print("bromigos activity: " + words, file=sys.stderr)
+
+
+def options(args, flags=(), values=()):
+    """(the options found, what's left); None for an option this verb doesn't have."""
+    got, rest = {}, []
+    args = list(args)
+    while args:
+        a = args.pop(0)
+        if a in flags:
+            got[a] = True
+        elif a in values and args:
+            got[a] = args.pop(0)
+        elif a.startswith("-"):
+            return None, None
+        else:
+            rest.append(a)
+    return got, rest
+
+
+def number(text, default):
+    try:
+        return max(0, int(text))
+    except (TypeError, ValueError):
+        return default
+
+
+def cmd_list(env, args):
+    got, rest = options(args, ("--json", "--all"), ("--limit",))
+    if got is None or rest:
+        return usage()
+    tidy(env)
+    jobs = A.list_jobs(env, None if "--all" in got else number(got.get("--limit"), 20) or None)
+    if "--json" in got:
+        print(json.dumps({"schema": A.SCHEMA, "jobs": jobs}, indent=1))
+    else:
+        print(A.plain_list(jobs, env.now_ms()))
+    return 0
+
+
+def cmd_show(env, args):
+    got, rest = options(args, ("--json",), ("--log",))
+    if got is None or len(rest) > 1:
+        return usage()
+    tidy(env)
+    try:
+        rec = A.find(env, rest[0] if rest else None)
+    except KeyError as e:
+        say(str(e.args[0]))
+        return 1
+    tail = A.log_tail(env, rec, number(got.get("--log"), 20))
+    if "--json" in got:
+        print(json.dumps({"schema": A.SCHEMA, "job": rec, "log_tail": tail}, indent=1))
+    else:
+        print(A.plain_show(rec, tail, env.now_ms()))
+    return 0
+
+
+def show_line(line):
+    """A line of the job's output, to whoever watches. When they're gone, say so once (the
+    caller stops showing) and let the rest of this process write to nowhere."""
+    try:
+        print(line, flush=True)
+    except OSError:
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        raise
+
+
+def cmd_run(env, args):
+    if "--" in args:
+        k = args.index("--")
+        args, command = args[:k], args[k + 1:]
+    else:
+        command = []
+    got, rest = options(args, ("--json", "--detach"), ("--kind", "--title", "--subject", "--via", "--device", "--job"))
+    if got is None or rest:
+        return usage()
+    if "--job" in got:                               # inside the unit: be the job (start_unit runs this)
+        return A.run_spec(env, got["--job"])
+    if not command or "--kind" not in got or "--title" not in got:
+        return usage()
+    subject = A.parse_subject(got["--subject"]) if "--subject" in got else None
+    A.check(got["--kind"], got["--title"], got.get("--via", "cli"))
+    if not env.find(command[0]):
+        say(f"no such command: {command[0]}")
+        return 127
+    before = A.elevation(env, sys.stdin.isatty())
+    if before:                                       # jobs are the system's: the same command, as root
+        os.execvp(before[0], before + [SELF, *sys.argv[1:]])
+    quiet = "--json" in got
+    detached = "--detach" in got and env.runner() == "systemd"
+    code, job_id = A.run(env, got["--kind"], got["--title"], command, subject, got.get("--via", "cli"), got.get("--device"),
+                         detach="--detach" in got, echo=None if quiet else show_line,
+                         self_argv=[SELF], note=say)
+    if detached:                                     # it's on its way; its record follows
+        print(json.dumps({"schema": A.SCHEMA, "id": job_id, "unit": A.unit_name(job_id)}) if quiet else job_id)
+        return code
+    try:
+        rec = A.find(env, job_id)
+    except KeyError:
+        return code
+    if quiet:
+        print(json.dumps({"schema": A.SCHEMA, "job": rec}, indent=1))
+    elif rec["state"] in A.FINAL:
+        words = A.now_words(rec)
+        say(f"{A.WORDS[rec['state']]}{': ' + words if words else ''}  ({job_id})")
+    return code
+
+
+def tidy(env):
+    """Whoever may write the folder closes what a restart left running, and drops the old."""
+    if os.access(env.jobs_dir(), os.W_OK):
+        A.sweep(env)
+
+
+def main(argv):
+    args = list(argv)
+    verb = args[0] if args and not args[0].startswith("-") else "list"
+    rest = args[1:] if args and not args[0].startswith("-") else args
+    if verb != "run" and any(a in ("-h", "--help") for a in rest) or verb == "help":
+        print(USAGE)
+        return 0
+    if verb == "run" and any(a in ("-h", "--help") for a in (rest[:rest.index("--")] if "--" in rest else rest)):
+        print(USAGE)
+        return 0
+    env = A.Env()
+    try:
+        if verb == "list":
+            return cmd_list(env, rest)
+        if verb == "show":
+            return cmd_show(env, rest)
+        if verb == "run":
+            return cmd_run(env, rest)
+    except (A.ActivityError, KeyError) as e:
+        say(str(e.args[0]) if e.args else str(e))
+        return 1
+    except PermissionError as e:
+        say(f"can't write {e.filename or 'the activity folder'}: jobs are the system's, so starting one needs root")
+        return 1
+    return usage()
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except BrokenPipeError:                          # whoever read this went away
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        sys.exit(141)

@@ -45,6 +45,7 @@
     - [Make your own widget](make-a-widget.md)
 - [Updating and rolling back](update-and-rollback.md)
 - [Alerts](alerts.md)
+- [Activity](activity.md)
 - [Field Kit](fieldkit.md)
     - [bromigOS Server](server.md)
 - [Hardware](hardware.md)
