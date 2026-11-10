@@ -262,6 +262,7 @@ keep_daily = 7          # how many backups are kept
 keep_weekly = 4
 keep_monthly = 6
 env_file = "/etc/bromigos/server/backup.env"   # root-only: the S3 or SFTP credentials
+drive_remind_days = 30  # the Go Bag: remind after this long without a good copy; 0 is never
 # paths and exclude: what's backed up and what's left out (below)
 
 [boot]
@@ -733,7 +734,8 @@ network server) is for later.
 
 A snapshot isn't a backup: it's on the same disk. The server backs itself up every night
 with restic, once you say where to: the lab's S3, any S3 or SFTP server, or a USB disk.
-Until then it does nothing, and `bromigos server` says backups are off.
+Until then it does nothing, and `bromigos server` says backups are off. A second copy can
+go on a USB drive you carry away: [the Go Bag](#the-go-bag).
 
 This section starts with what you need on a bad day: getting files back. Turning backups
 on, the checks and the full depth come after it.
@@ -885,6 +887,11 @@ ask one function (`health()` in `lib/bromigos_backups.py`). They can't disagree.
 | … The last test restore failed (1 day ago): … | Files didn't come back. Look before you need them. |
 | … No test restore has passed in 50 days. | The monthly one hasn't run, or keeps failing to start. |
 | … A restore stopped part-way: … | A restore in place was interrupted. Run it again. |
+| … Go Bag: copied 3 days ago. | The [Go Bag](#the-go-bag) drive has a good copy. |
+| … Go Bag: no copy yet. | A Go Bag is set up, and has never been copied to. |
+| … Your Go Bag drive hasn't been updated in 31 days. Plug it in. | The reminder. `drive_remind_days` sets the wait. |
+| … The last copy to your Go Bag drive failed (2 hours ago): … | The reason is restic's, or the drive's. |
+| No nightly backup is set up: the Go Bag drive is this server's only backup. … | No destination is set, and a Go Bag is. |
 
 What it doesn't know, it says: "none yet", "not counted yet". The count of backups and
 their dates are taken after each night's backup, so the status needs no key and no network.
@@ -934,6 +941,147 @@ in the old one's place, which for an unplugged USB disk would be the folder unde
 the system disk. Plug the drive in and the next night carries on. If the old backup is
 gone for good, `sudo bromigos server backup run --new` starts over.
 
+### The Go Bag
+
+A Go Bag is a USB drive that holds a copy of the server's backup, which you unplug and
+keep somewhere else: at work, at a friend's, in a drawer in another building. A fire or a
+theft that takes the server doesn't take it. It works with the nightly backup or without
+one, and it is the least a server should have.
+
+You plug it in. The copy starts by itself. When it says "Safe to unplug", you take the
+drive away again.
+
+**Set one up.** Plug the drive in and run:
+
+```bash
+bromigos lab backups go-bag setup
+```
+
+It picks the USB drive that is plugged in, sets it up, makes the first copy and ends with
+"Safe to unplug". It asks for your password by itself. With more than one USB drive
+plugged in, it lists them and you name one: `bromigos lab backups go-bag setup /dev/sdb`.
+
+`setup` never guesses when a drive could hold something you want. It stops and says why:
+
+| The drive | What `setup` does |
+|---|---|
+| Has files of yours on it | Stops. Say `yes` and it adds one folder, `bromigos-backup`, beside them. Nothing is deleted |
+| Is new, or formatted for Windows only (NTFS) | Stops. `--erase` formats it, after you type `erase`. Everything on it is deleted |
+| Is a disk inside the server, not a removable one | Stops. `--internal` uses it anyway |
+| Holds part of the running system, or is mounted | Refuses. No flag changes that |
+| Already holds this server's Go Bag | Uses it as it is |
+
+**Keep the key.** The copy is encrypted with the same key as the nightly backup
+([below](#turn-backups-on)). Without the key the drive is unreadable, for a thief and for
+you. Show it with `sudo bromigos server backup key`, and keep a copy away from the server
+and away from the drive.
+
+**Plug it in.** From then on, plugging the drive in is all you do. The copy runs as a job
+with four steps, which `bromigos activity` shows ([activity.md](activity.md)):
+
+```text
+$ bromigos activity show
+Copying the backup to the Go Bag drive
+  done just now, after 3 min  ·  backup.drive  ·  20261110-1802-backup.drive-6f1d2c3b-9a7e-4c11-4e1a
+  Safe to unplug. 48,211 files (212 GB) copied to the Go Bag drive.
+
+Steps
+  ✓ Finding the Go Bag drive   done     Portable SSD (1.0 TB), labelled "GOBAG"
+  ✓ Copying what changed       done     48,211 files, 212 GB (1.4 GB added to the drive)
+  ✓ Checking what was written  done     It reads back
+  ✓ Making it safe to unplug   done     Unmounted
+```
+
+Only what changed since the last copy is written, so later copies are short. The drive is
+unmounted at the end, and after a copy that failed too. If it can't be unmounted, the job
+fails and says "Don't unplug it yet". `bromigos lab backups go-bag run` starts a copy by
+hand, for a drive that stays plugged in.
+
+**The reminder.** A Go Bag in a drawer goes stale. When it has had no good copy for 30
+days, the [health line](#the-health-line) and [alerts](alerts.md) say so: "Your Go Bag
+drive hasn't been updated in 31 days. Plug it in." Change the wait with
+`drive_remind_days` in `[backup]`; 0 turns the reminder off.
+
+**Get files back from it.** The restore commands [above](#get-your-files-back) read the Go
+Bag when you add `--from go-bag`, with the drive plugged in:
+
+```bash
+bromigos lab backups list --from go-bag
+bromigos lab backups restore --from go-bag /home/ada/documents
+```
+
+Each mounts the drive, does its work, unmounts it and says it is safe to unplug. On a
+server with no nightly destination, the Go Bag is the backup, and the same commands read
+it without `--from`. If the server is gone, the drive restores with restic on any
+computer ([below](#restore-without-bromigos)): the repository is the folder
+`bromigos-backup/<the server's name>` on it, and a `README.txt` on the drive says so.
+
+#### For power users: the Go Bag
+
+| Command | What it does |
+|---|---|
+| `bromigos lab backups go-bag [status]` | The Go Bag's line, the drive, whether it is plugged in, the last copy. Needs no root |
+| `bromigos lab backups go-bag drives` | Every disk the server sees, and whether it can be the Go Bag. Needs no root |
+| `bromigos lab backups go-bag setup [DRIVE]` | `DRIVE` is a path (`/dev/sdb`, `/dev/sdb1`, a `/dev/disk/by-id/…` link), a label or a filesystem UUID |
+| `… setup --erase` | Formats the partition ext4, labelled `GOBAG`. On a disk with no partitions, the whole disk. It never changes a partition table |
+| `… setup --internal` | Allows a drive that isn't removable |
+| `… setup --yes` | Answers the questions `yes`. It doesn't stand for `--internal` |
+| `… setup --no-copy` | Sets the drive up without the first copy |
+| `bromigos lab backups go-bag run` | A copy now. The drive must be plugged in |
+| `bromigos lab backups go-bag forget [--yes]` | Stops using the drive. What is on it stays |
+| `… list \| show \| restore \| test --from go-bag` | The restore commands, reading the drive. A test restore from it is recorded as the drive's |
+
+Each takes `--json`. The exit codes are the ones [below](#for-power-users): 3 for a
+refusal, 2 when you have to name the drive or the partition, 1 when a copy failed or the
+Go Bag needs you.
+
+| Command | Its document |
+|---|---|
+| `go-bag status` | `name`, `set_up`, `verdict`, `drives`, `problems`, `remind_days` |
+| `go-bag drives` | `drives`: each `path`, `model`, `size`, `removable`, `transport`, `usable`, `why`, `remembered`, `partitions` |
+| `go-bag setup` | `drive`, `erased`, `adopted`, `copy`: `exit` and `job`, the activity record |
+| `go-bag run` | `exit`, `job`, `drive` |
+
+A drive in `drives`, here and in `bromigos lab backups --json` and `bromigos server status
+--json`, has `name`, `uuid`, `label`, `model`, `size`, `fstype`, `added_at`, `plugged_in`,
+`running`, `last_copy`, `last_good_copy`, `last_test`, `remind_days`, `stale` and `stale_s`.
+`last_copy` and `last_good_copy` have `phase` (`ok`, `partial`, `failed`), `at`, `ts`,
+`age_s`, `snapshot`, `files`, `bytes`, `added`, `seconds`, `reason` and `unmounted`.
+
+Error codes of its own, beside the ones below: `not-set-up`, `no-drive`, `which-drive`,
+`which-partition`, `no-such-drive`, `in-use`, `read-only`, `not-removable`, `needs-erase`,
+`has-files`, `one-drive`, `unplugged`, `busy`.
+
+**How the drive is remembered.** By its filesystem's UUID, in `backup.json` under `drives`,
+with its label, model and size for showing. No device name such as `/dev/sdb` is stored:
+each time, the drive is found again by that UUID. Formatting a drive gives it a new UUID, so
+a drive you format yourself has to be set up again.
+
+**What is on the drive.** `bromigos-backup/<hostname>/` is a restic repository like the
+nightly one ([below](#for-power-users)), opened by the same key, holding the same paths
+with the same tag, excludes and keep rules. It is filled by `restic backup` from the
+server itself, not copied from the nightly destination. So it works when that destination
+is away or damaged, and it never inherits its damage. Filesystems used as they are: ext4,
+btrfs, XFS, F2FS, exFAT and FAT.
+
+**How plugging in starts it.** A udev rule,
+`/usr/lib/udev/rules.d/65-bromigos-server-backup-drive.rules`, makes every USB filesystem
+want `bromigos-server-backup-drive@<UUID>.service`. That unit runs `bromigos-server backup
+plugged --uuid <UUID>`. For any drive but the Go Bag it does nothing. For the Go Bag it
+starts the job, `bromigos-job-<id>.service`, and ends. The job's body is `bromigos-server
+backup drive-copy`: mount at `/run/bromigos/backup-drive/<UUID>`, `restic backup`, `restic
+forget --prune`, `restic check --read-data-subset=2G`, unmount. One job uses the drive at a
+time. To turn the rule off:
+`sudo ln -s /dev/null /etc/udev/rules.d/65-bromigos-server-backup-drive.rules`.
+
+A drive you mounted yourself is used where it is and left mounted. The job then ends with
+"unmount it before you unplug it" and not with "Safe to unplug".
+
+> **Planned.** Two drives that take turns, so one is always away from the server. The
+> copy's progress and "Safe to unplug" on a phone. A copy on a timer for a drive that stays
+> plugged in. Today `setup` takes one drive, and a drive set up with `--internal` isn't
+> started by the udev rule: run its copy by hand.
+
 ### For power users
 
 | Command | What it does |
@@ -978,7 +1126,7 @@ with a `percent`. Every document has `schema` (1) and `ok`. A failure has
 
 | Command | Its document |
 |---|---|
-| `status` | `server`, `configured`, `to`, `destination` (`kind`, `path`, `present`), `timers`, `health` (`state`: `ok`, `attention`, `waiting` or `off`; `verdict`; `problems`), `last_backup`, `last_success`, `last_check`, `last_check_passed`, `last_read_back`, `last_test`, `last_test_passed`, `snapshots` (`count`, `oldest_ts`, `newest_ts`), `restore`, `running`, `checked_at`, `now` |
+| `status` | `server`, `configured`, `to`, `destination` (`kind`, `path`, `present`), `timers`, `health` (`state`: `ok`, `attention`, `waiting` or `off`; `verdict`; `problems`), `last_backup`, `last_success`, `last_check`, `last_check_passed`, `last_read_back`, `last_test`, `last_test_passed`, `snapshots` (`count`, `oldest_ts`, `newest_ts`), `drives` (the [Go Bag](#for-power-users-the-go-bag)), `restore`, `running`, `checked_at`, `now` |
 | `list` | `to`, `snapshots`: each `id`, `short_id`, `time`, `ts`, `host`, `tags`, `paths`, `files`, `bytes`, `added_bytes`, `nightly` |
 | `show` | `snapshot`, `path`, `entries`: each `name`, `path`, `type` (`file`, `dir`, `symlink`, `other`), `size`, `mtime`, `permissions` |
 | `restore` | `state` (`done`, `incomplete`), `mode` (`new-folder`), `snapshot`, `paths`, `target`, `files`, `bytes`, `verified`, `replaced` (0), `skipped`: each `path`, `why` |
@@ -1006,10 +1154,12 @@ bromigos lab backups restore latest /etc/caddy --in-place --apply --yes \
 
 | File | What it holds |
 |---|---|
-| `/etc/bromigos/server.toml` | `[backup]`: `to`, `paths`, `exclude`, `keep_daily`, `keep_weekly`, `keep_monthly`, `env_file` |
+| `/etc/bromigos/server.toml` | `[backup]`: `to`, `paths`, `exclude`, `keep_daily`, `keep_weekly`, `keep_monthly`, `env_file`, `drive_remind_days` |
 | `/etc/bromigos/server/backup.key` | The key: restic's repository password, one line. Root only |
 | `/etc/bromigos/server/backup.env` | The destination's credentials, as `KEY=VALUE` lines. Root only |
-| `/var/lib/bromigos/server/backup.json` | `run`, `check` and `test`: how the last of each went. `run_ok`, `check_ok`, `read_back_ok` and `test_ok`: the last one that worked, and for a backup where it went (`to`, without any password). `first_ok_ts`, and `snapshots`: the count and dates |
+| `/var/lib/bromigos/server/backup.json` | `run`, `check` and `test`: how the last of each went. `run_ok`, `check_ok`, `read_back_ok` and `test_ok`: the last one that worked, and for a backup where it went (`to`, without any password). `first_ok_ts`, and `snapshots`: the count and dates. `drives`: the Go Bag, by its filesystem's UUID, with its own `run`, `run_ok`, `test` and `test_ok` |
+| `/var/lib/bromigos/server/backup-drive.lock` | Held by the one job that uses the Go Bag drive |
+| `/run/bromigos/backup-drive/<UUID>/` | Where the Go Bag drive is mounted while a job uses it |
 | `/var/lib/bromigos/server/restore.json` | The restore running now, or the last one: its steps, its state, and a restore in place that stopped part-way |
 | `/var/lib/bromigos/server/restore-test.json` | The same for the test restore |
 | `/var/lib/bromigos/server/restore-test/` | The test restore's scratch folder. Empty between runs |
@@ -1022,7 +1172,9 @@ same `health` as `bromigos lab backups --json`.
 **The units.** `bromigos-server-backup.timer`, `bromigos-server-backup-check.timer` and
 `bromigos-server-backup-test.timer` run `bromigos-server backup run`, `check` and `test`.
 `bromigos server setup` enables all three. They do nothing until `[backup] to` is set. A
-failed one never makes an update unhealthy.
+failed one never makes an update unhealthy. Nor does
+`bromigos-server-backup-drive@<UUID>.service`, the [Go Bag](#for-power-users-the-go-bag)'s
+unit, which nothing enables: a drive plugged in starts it.
 
 **How an in-place restore is made.** The list comes from restic's own dry run
 (`restic restore --dry-run -vv`), so it's what restic will do. restic remakes every link,
@@ -1255,7 +1407,7 @@ screen in the console reads it.
 | `sudo bromigos server firewall allow\|deny NAME` | Opens or closes a rule set |
 | `bromigos server roles [--json]` | The roles, and which are on |
 | `sudo bromigos server role add\|remove ROLE[/VARIANT]` | A role on or off (`extra add\|remove` is the same, for Cockpit) |
-| `bromigos server backup [run\|check\|test\|key]` | The nightly backup and its checks. Getting files back is `bromigos lab backups` ([Backups](#backups)) |
+| `bromigos server backup [run\|check\|test\|key]` | The nightly backup and its checks. Getting files back is `bromigos lab backups` ([Backups](#backups)), and the drive you carry away is `bromigos lab backups go-bag` ([the Go Bag](#the-go-bag)) |
 | `bromigos server ups [detect]` | The UPS ([Power](#power)) |
 | `bromigos server app-data [status\|move\|remove-old]` | Where the apps keep their data: `bromigos lab app-data` ([above](#where-the-apps-keep-their-data)) |
 | `sudo bromigos server setup` | Applies `server.toml` again, the roles included |
@@ -1343,6 +1495,22 @@ the test restore. snapper is a stand-in: from a stand-in root the machine's own 
 is never run, nor its `systemctl`, nor `sudo`. `tests/alerts/test_alerts.py` checks that
 every backup alert is a problem of the same `health()` the status prints.
 
+The Go Bag is tested the same way, with no real drive:
+
+```sh
+cd homelab && PYTHONPATH=lib python -m unittest tests.test_lab_backup_drive
+```
+
+`homelab/tests/test_lab_backup_drive.py` gives the stand-in server a "USB drive": a folder,
+with stand-ins for `lsblk`, `mount`, `umount`, `sync`, `wipefs`, `mkfs.ext4` and `udevadm`
+that the code is pointed at with `BROMIGOS_BACKUPS_<TOOL>`. From a stand-in root the
+machine's own are never run. restic and `bromigos activity` are the real ones. It covers
+the Go Bag's words in the health line and the reminder's thresholds, each refusal of
+`setup` and that a refusal runs nothing, `--erase`, the drive remembered by its UUID and
+found again under another device name, the copy as a job with its four steps, a copy that
+fails, a drive that can't be unmounted, one someone else mounted, the status and its JSON,
+and `list`, `show`, `restore` and `test` reading the drive.
+
 The real tools are tried on a real install. CI's ISO workflow installs bromigOS Server in
 a VM ([fieldkit.md](fieldkit.md#testing-it)), and `iso/fieldkit/restore-drill.sh` then runs
 on it, as a user in `wheel`, with no network: a backup to a folder; `list` and `show`; a
@@ -1351,3 +1519,11 @@ snapshot of `/` and of `/home`, and the plain refusal on `/srv`, which has none;
 restore by hand and through `bromigos-server-backup-test.service`; the re-run through
 `sudo`; and a pack file cut in half, which the test restore, the health line and the alert
 must all report.
+
+`iso/fieldkit/backup-drive-drill.sh` follows it on the same server, for the Go Bag. The
+harness plugs a disk image into the running VM as a USB drive and pulls it out again
+(`iso/fieldkit/test.py plug` and `unplug`), so the kernel, udev and systemd see a real
+drive come and go. The system disk and a blank drive are refused; `setup --erase` formats
+the drive and makes the first copy; pulled out, the status says so; plugged in again, the
+copy starts by itself and ends "Safe to unplug" with nothing mounted; the restore commands
+read it; and 40 days without a copy raise the reminder on the health line and as an alert.

@@ -22,7 +22,7 @@ The manual's [Alerts](../manual/src/alerts.md) page is the user's side.
 | `update.waiting` | Updates waiting (`bromigos update --check`) | Info. Needs you when nothing was installed for 30 days |
 | `update.restart` | A new kernel or graphics driver that runs only after a restart | Needs you |
 | `update.held` | bromigOS Server's automatic update held by Arch Linux news, or rolled back | Needs you (critical when a rollback also failed) |
-| `backup.restic` | bromigOS Server's own backup, as `bromigos lab backups` judges it ([server.md](server.md#the-health-line)), and restic backups run by systemd (`restic*` and `bromigos-backup*` services) | Needs you: the last one failed, none finished for 36 hours, the Server's backup check or test restore failed, no test restore passed for 45 days, or a restore in place stopped part-way |
+| `backup.restic` | bromigOS Server's own backup, as `bromigos lab backups` judges it ([server.md](server.md#the-health-line)), and restic backups run by systemd (`restic*` and `bromigos-backup*` services) | Needs you: the last one failed, none finished for 36 hours, the Server's backup check or test restore failed, no test restore passed for 45 days, a restore in place stopped part-way, or the Server's [Go Bag](server.md#the-go-bag) drive had no good copy for 30 days or its last copy failed |
 | `power.ups` | A UPS through NUT (`upsc`) | Needs you: on battery, or its battery needs replacing. Critical: on battery and low |
 | `systemd.failed` | Services that failed, leaving out ones that don't matter | Needs you. Critical for SSH, the firewall and the network on a Server |
 | `server.game` | A game server that stopped (bromigOS Server) | Needs you |

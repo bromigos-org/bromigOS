@@ -134,6 +134,47 @@ If the server itself is gone, the backup still restores with restic on any compu
 the key you kept. The [Server docs](https://github.com/bromigos-org/bromigOS/blob/main/docs/server.md#restore-without-bromigos)
 have the commands, every flag, and `--json` for scripts.
 
+### A Go Bag: a backup you carry away
+
+A backup that sits beside the server is lost with it in a fire or a theft. A **Go Bag** is
+a USB drive with a copy of the backup on it, which you keep somewhere else. It works with
+the nightly backup, or by itself.
+
+1. **Set it up, once.** Plug a USB drive in and run:
+
+   ```bash
+   bromigos lab backups go-bag setup
+   ```
+
+   It sets the drive up and makes the first copy. If the drive has files on it, or is new
+   and has to be formatted, it stops and says what it would do and how to agree. It never
+   deletes anything you didn't agree to. A disk the server itself uses is always refused.
+
+2. **Take it away.** When the last line says *"Safe to unplug"*, unplug the drive and keep
+   it in another place.
+
+3. **Bring it back now and then.** Plug it in. The copy starts by itself: you don't run
+   anything. `bromigos activity` shows how far it is. Wait for *"Safe to unplug"* again.
+
+The copy is encrypted with the backup's key, so a lost drive gives nothing away. Keep the
+key somewhere else too (`sudo bromigos server backup key`): without it, you can't read the
+drive either.
+
+If the drive hasn't been back for 30 days, the server reminds you: *"Your Go Bag drive
+hasn't been updated in 31 days. Plug it in."* It's on the first line of `bromigos lab
+backups` and in your [alerts](alerts.md).
+
+To get files back from the drive, plug it in and add `--from go-bag` to the commands above:
+
+```bash
+bromigos lab backups list --from go-bag
+bromigos lab backups restore --from go-bag /home/ada/documents
+```
+
+`bromigos lab backups go-bag` shows which drive it is, whether it's plugged in, and when
+it last had a good copy. The [Server docs](https://github.com/bromigos-org/bromigOS/blob/main/docs/server.md#the-go-bag)
+have every flag.
+
 ## Look after it
 
 ```bash
