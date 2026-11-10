@@ -76,6 +76,9 @@ on your install.
   your other machines over your local network; they don't need the internet. **Join my lab
   network** puts this machine on [your lab's private network](lab-network.md), with a join
   code you paste or the one on the stick.
+- **Server › What can this computer run?** looks at the computer the stick is in and says
+  what it could do as a home server. See [Check the computer
+  first](server-setup.md#check-the-computer-first).
 - **Server › Network** asks how a server is reached from anywhere: through BRODEC only, your
   lab's private network, WireGuard, or Tailscale's own service.
 - **VECTOR** explains what Field Kit found and proposes fixes. Nothing runs until you

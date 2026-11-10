@@ -187,7 +187,11 @@ There are three ways in, and they all lead to the same installer:
   also used by itself when "Install bromigOS" finds no graphics.
 - **On the live desktop**, the welcome card's **Install bromigOS**, the desktop's INSTALL
   panel, or "Install bromigOS" in the app launcher. `sudo bromigos-iso-install` in a
-  terminal opens the text installer.
+  terminal opens the text installer. The card and the graphical installer are never open
+  together: the card goes when the installer opens, and a card drawn late (a slow computer)
+  doesn't open over an installer that's already there. A window that opens would take the
+  installer out of full screen. Each asks the session's bus for the other
+  (`org.bromigos.InstallerWelcome`, `org.bromigos.Installer`).
 
 The graphical installer (GTK 4 and libadwaita, in the Settings window's style) and the text
 installer (Textual) show the same steps, with the same words and the same checks. Both
@@ -1132,7 +1136,11 @@ More about each:
   the window holds through `test/installer/guiwatch.py` (the installer's own code, watched
   from inside). Nothing is installed. `gui-install` fills the fields with `set_text()`, so
   it passed on 0.1.4 and 0.1.5, where no field took typing: a focus grab that never
-  stopped took the focus back to Continue. CI runs `gui-type` on every desktop medium.
+  stopped took the focus back to Continue. It also checks the welcome card: the one that
+  was open goes when the installer opens, one started late closes by itself, and the
+  installer stays full screen. `test/installer/test_card_and_installer.py` checks the same
+  with no VM, on a session bus and a headless weston of its own. CI runs `gui-type` on
+  every desktop medium.
 - **`install`** has the medium's own `answers.py` write the files for `/dev/vda`. The
   test user is `tester`, with the password `tester`, sshd and the test key. The
   passphrase is the password. After installing, it records what the new system got while

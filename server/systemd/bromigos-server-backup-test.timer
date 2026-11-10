@@ -1,0 +1,12 @@
+# The second Sunday of each month, after that morning's check. If the server was off, at the
+# next start.
+[Unit]
+Description=bromigOS Server backup test restore, monthly
+
+[Timer]
+OnCalendar=Sun *-*-08..14 10:00:00
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

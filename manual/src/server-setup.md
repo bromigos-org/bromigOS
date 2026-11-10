@@ -16,6 +16,31 @@ at its own console, where VECTOR explains anything in plain words.
 This page goes through the installer's server steps. [The installer](installer.md) covers
 the steps every install shares.
 
+## Check the computer first
+
+An old PC is often enough for a home server. Before you install, or before you buy
+anything, ask the computer what it can do.
+
+Start it from the [Field Kit](fieldkit.md) stick and choose **Server › What can this
+computer run?**. On a computer that already runs bromigOS, run `bromigos hw salvage` in a
+terminal. Nothing on the computer is changed.
+
+The report is plain text, from top to bottom:
+
+- **This computer**: its processor, memory, disks, graphics, network and firmware.
+- **What it's good for**: each role and each app with yes, "yes, but" and the trade-off,
+  or no and the one reason. For example, a PC with 4 GB of memory can't run Photos, which
+  needs 4 GB beside the 1 GB the system uses.
+- **What would change the answer**: up to three changes, the smallest first, such as more
+  memory or an SSD for the system. It names no brand and no price.
+- **Next step**: the roles to pick in the installer.
+
+The answers come from the same list and the same sums as the installer's
+[What should this server run?](#what-should-this-server-run) step, so the two agree.
+
+To ask someone for help, run `bromigos hw salvage --save salvage-report.txt` and send the
+file. It leaves out serial numbers, network addresses and the computer's name.
+
 ## What will this server do?
 
 Tick the cards for its jobs: one, or several together. A Lab node can also be a Game

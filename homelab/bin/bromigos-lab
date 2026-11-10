@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # bromigos:summary=Your homelab's console: status, models, jobs, doctor and guided maintenance (no arguments: the live dashboard)
-# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | network [setup|join|connect|status|approve|remove|rotate] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | --local … --plan|--apply | --check ITEM | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | secrets [status|set|generate|rotate|recovery] … | app-data [status|move [--dry-run]|remove-old] | connect … | link [--intent self-hosted|hosted] [--json] | target …]
-# bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor; bromigos lab provision; bromigos lab network setup --on quadlet --node you@labbox --endpoint lan --lan-address 192.0.2.20; bromigos lab network join; bromigos lab media get "Cowboy Bebop" --seasons all --specials; bromigos lab link
+# bromigos:args=[status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | network [setup|join|connect|status|approve|remove|rotate] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | --local … --plan|--apply | --check ITEM | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | secrets [status|set|generate|rotate|recovery] … | app-data [status|move [--dry-run]|remove-old] | backups [list | show [ID] [PATH] | restore [ID] [PATH…] [--to DIR | --in-place [--apply]] | test [--all] | run | check] [--json] | connect … | link [--intent self-hosted|hosted] [--json] | target …]
+# bromigos:examples=bromigos lab; bromigos lab status; bromigos lab run image --prompt "a lighthouse at dusk"; bromigos lab run hologram --prompt "a brass telescope"; bromigos lab run voice --text "Lights are on."; bromigos lab jobs watch; bromigos lab doctor; bromigos lab provision; bromigos lab network setup --on quadlet --node you@labbox --endpoint lan --lan-address 192.0.2.20; bromigos lab network join; bromigos lab media get "Cowboy Bebop" --seasons all --specials; bromigos lab backups; bromigos lab backups restore /etc/fstab; bromigos lab link
 # bromigos:menu=LAUNCH:Lab console
 """bromigos lab: the homelab's console (docs/homelab.md, "The lab console"; the manual's Lab chapter).
 
@@ -115,7 +115,17 @@
   bromigos lab provision vm list|start|stop|delete|snapshot|console --on PROVIDER --repo PATH
   bromigos lab provision storage --repo PATH | capacity --repo PATH
                                     read storage choices or proposals; no automatic node creation
-  bromigos lab deploy|restart|logs|backups
+  bromigos lab backups [--json]     bromigOS Server's backups: are they healthy, in one plain line,
+                                    then the last backup, check and test restore
+  bromigos lab backups list | show [ID] [PATH]
+                                    every backup, and what's inside one
+  bromigos lab backups restore [ID] [PATH…] [--to DIR]
+                                    get files back, into a new folder: nothing is replaced
+  bromigos lab backups restore [ID] [PATH…] --in-place [--apply]
+                                    show what putting them back where they were would replace;
+                                    --apply does it, after a snapshot (docs/server.md, "Backups")
+  bromigos lab backups test [--all] a test restore to a scratch folder, read back and removed
+  bromigos lab deploy|restart|logs|update
                                     Phase 2 and 3 (docs/PLAN.md): not built yet
   bromigos lab serve                the job queue's service (bromigos-lab.service runs it)
 
@@ -150,7 +160,6 @@ PHASE2 = {
     "restart": "lab restart (a Kubernetes rollout, through the repo or the API) is Phase 2.",
     "logs": "lab logs (an app's logs from Loki or the cluster) is Phase 2. Until then: kubectl logs, or the "
             "Workloads card's hint.",
-    "backups": "lab backups (list, run, restore) is Phase 2. The doctor already checks backup age.",
     "update": "lab update (image versions in your lab repo) comes with provisioning, Phase 3.",
 }
 
@@ -501,6 +510,14 @@ def main(argv):
     if cmd == "power":
         from bromigos_homelab import power
         return power.main(rest)
+    if cmd == "backups":                                         # bromigOS Server's own: lib/bromigos_backups.py
+        try:
+            import bromigos_backups
+        except ImportError:
+            print("These are bromigOS Server's backups, and this computer isn't one (they come with bromigos-core "
+                  "and bromigos-server). Your lab's other backup jobs are in bromigos lab doctor.", file=sys.stderr)
+            return 3
+        return bromigos_backups.main(rest, [os.path.realpath(__file__), "backups"])
     if cmd in PHASE2:
         print(PHASE2[cmd], file=sys.stderr)
         return 3

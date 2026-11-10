@@ -31,13 +31,14 @@ shows *unreachable*, and nothing crashes.
 | `bromigos lab network setup`, `join`, `connect`, `status`, `approve`, `remove`, `rotate` | Run the lab's own private network, Headscale, and join machines to it ([lab-network.md](lab-network.md)). |
 | `bromigos lab power …` | Read supported PDU outlets and plan reviewed changes ([below](#pdu-power)). |
 | `bromigos lab maintenance …` | Plan, follow and resume an ordered shutdown or startup ([below](#rack-maintenance)). |
+| `bromigos lab backups`, `list`, `show`, `restore`, `test` | On bromigOS Server: whether its backups are healthy, what's in them, getting files back, and a test restore ([server.md](server.md#backups)). |
 | `bromigos lab connect …` | Run `bromigos setup homelab …`: find services and write `homelab.toml`. |
 | `bromigos lab link` | Link this computer to your Bromigos account as a lab, from bromigos.org/link ([below](#link-this-computer-to-your-account)). |
 | `bromigos lab target …` | Run `bromigos target …`: choose where AI runs ([targets.md](targets.md)). |
 | Super+Shift+H | Open the Lab deck, a hologram of the rack lit by the same readings. |
 | Settings › Lab | See the status, models, recent jobs, the doctor and the targets in a window. Set your media languages. |
 
-> **Planned.** Changing the lab itself is Phase 2: deploying, restarting, logs, backups,
+> **Planned.** Changing the lab itself is Phase 2: deploying, restarting, logs,
 > machine waking, GPU power limits, and adding or replacing models. Those commands only say they are not built yet.
 > Setting up Core and Advanced is built in `lab provision`
 > ([lab-provision.md](lab-provision.md)). Ordered rack shutdown and startup are built
@@ -934,13 +935,14 @@ applies, and each command will ask you first.
 | `lab deploy <app> [--set k=v]` | Write the change in the repository, commit and push, then follow the sync and the rollout. `--pr` opens a pull request instead. |
 | `lab logs <app>` | Show an app's logs from Loki, or else from the cluster. |
 | `lab restart <app>` | Restart a Kubernetes rollout, through the repository or the API. |
-| `lab backups` | List, run and restore backups. A restore will show what it overwrites. |
 | Machine waking and GPU power limits | These power features remain planned; PDU status and reviewed outlet plans are built. |
 | `lab models add`, `remove`, `replace` | Change the model set in ComfyUI's or vLLM's values. |
 
 `lab provision` has its first slice built ([lab-provision.md](lab-provision.md)).
 `lab maintenance` provides a separate ordered shutdown and startup flow
-([above](#rack-maintenance)). `lab update` remains planned.
+([above](#rack-maintenance)). `lab backups` is built for bromigOS Server's own backups:
+status, list, show, restore and a test restore ([server.md](server.md#backups)). Backups
+of the rest of a lab, through its repository, remain planned. `lab update` remains planned.
 
 ## Tests
 

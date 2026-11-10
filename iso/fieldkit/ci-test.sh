@@ -13,7 +13,9 @@
 #   2. "Install bromigOS Server": the installer's own backend (bromigos-iso-install --answers,
 #      the answers the text installer would hand it) installs Server offline onto the VM's disk
 #   3. the installed Server boots to its console and passes its checks
-#   4. on that Server, `bromigos activity` under its real systemd (iso/fieldkit/activity-checks.sh,
+#   4. the restore drill on it (iso/fieldkit/restore-drill.sh): a real backup, restore and
+#      test restore, with the real restic, snapper, sudo and systemd
+#   5. on that Server, `bromigos activity` under its real systemd (iso/fieldkit/activity-checks.sh,
 #      docs/activity.md): a job in a transient unit ends done, one that fails names its step, a
 #      detached one outlives the session that started it, the Server tour's apply runs through
 #      sudo as the signed-in user, and a restart closes a running job as interrupted
@@ -181,7 +183,7 @@ server() {
         echo SERVER-OK'
 }
 
-# ── 4. bromigos activity, under the Server's real systemd ───────────────────────────────
+# ── 5. bromigos activity, under the Server's real systemd ───────────────────────────────
 # The checks are a script of their own, sent into the VM over the serial console (base64, a few
 # lines at a time: the console takes short writes) and run there one at a time as tester
 checks=/home/tester/activity-checks.sh
@@ -252,13 +254,16 @@ step "Field Kit starts (offline): console, Home, engine, offline store" live || 
 step "the pairing QR decodes from kmscon and the bare console" qr || true
 "$T" down --name qr >/dev/null 2>&1 || true
 if step "bromigOS Server installs from the stick with no network" install; then
-    if step "the installed bromigOS Server boots to its console" server \
-            && step "activity: the checks reach the Server" activity_send; then
-        step "activity: a job runs in a real systemd unit and ends done" activity ok || true
-        step "activity: a job that fails names its step and its exit status" activity failed || true
-        step "activity: a detached job outlives the session that started it" activity_detach || true
-        step "activity: the Server tour's apply, as the signed-in user, through sudo" activity tour || true
-        step "activity: a restart closes a running job as interrupted" activity_reboot || true
+    if step "the installed bromigOS Server boots to its console" server; then
+        . "$here/restore-drill.sh"      # the restore drill on that Server: its own steps (docs/server.md, "Backups")
+        # the activity checks last: their final one restarts the Server
+        if step "activity: the checks reach the Server" activity_send; then
+            step "activity: a job runs in a real systemd unit and ends done" activity ok || true
+            step "activity: a job that fails names its step and its exit status" activity failed || true
+            step "activity: a detached job outlives the session that started it" activity_detach || true
+            step "activity: the Server tour's apply, as the signed-in user, through sudo" activity tour || true
+            step "activity: a restart closes a running job as interrupted" activity_reboot || true
+        fi
     fi
 fi
 "$T" down --name install >/dev/null 2>&1 || true

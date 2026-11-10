@@ -90,6 +90,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos homelab`](#bromigos-homelab) | See what's connected from your homelab, and what doesn't answer. |
 | [`bromigos media`](#bromigos-media) | Open [Your media](media.md) in the terminal: find and request media, see their channels and download progress, monitor, play or delete shows, films and albums. |
 | [`bromigos lab`](#bromigos-lab) | Open [the lab console](lab.md): your homelab's status, its GPUs, and jobs to run on them. |
+| [`bromigos hw salvage`](#bromigos-hw-salvage) | See what this computer could run as a home server, before you [install bromigOS Server](server-setup.md#check-the-computer-first) on it. It reads the hardware and changes nothing. |
 
 ### Apps, extensions and the menu
 
@@ -1316,6 +1317,26 @@ Options:
   -h, --help  Print help
 ```
 
+### bromigos hw salvage
+
+Salvage scan: what this computer can do as a home server, judged by bromigOS Server's own catalogue (read-only).
+
+```text
+bromigos hw salvage [--json] [--save FILE] [--answers FILE] [--identifiers]
+```
+
+For example:
+
+```text
+bromigos hw salvage
+sudo bromigos hw salvage
+bromigos hw salvage --json
+bromigos hw salvage --save salvage-report.txt
+bromigos hw salvage --answers salvage.toml
+```
+
+From the `bromigos-homelab` package.
+
 ### bromigos idle
 
 ```text
@@ -1566,7 +1587,7 @@ From the `bromigos-desktop` package.
 Your homelab's console: status, models, jobs, doctor and guided maintenance (no arguments: the live dashboard).
 
 ```text
-bromigos lab [status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | network [setup|join|connect|status|approve|remove|rotate] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | --local … --plan|--apply | --check ITEM | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | secrets [status|set|generate|rotate|recovery] … | app-data [status|move [--dry-run]|remove-old] | connect … | link [--intent self-hosted|hosted] [--json] | target …]
+bromigos lab [status [--json] | models [list|load|unload|recommend|plan|upgrades] … | run KIND [PRESET] [--prompt …] [--input FILE] [--text …] [--cloud] [--wait] | jobs [list|watch|logs|cancel|retry] [ID] | doctor [--json] | maintenance [check|status|plan shutdown|startup|run PLAN_ID|resume RUN_ID] … | power [status|plan TARGET on|off|run PLAN_ID|resume RUN_ID] … | network [setup|join|connect|status|approve|remove|rotate] … | media search|get|status|upcoming|language … | provision [--guided [--start-over] | --local … --plan|--apply | --check ITEM | plan|apply|cluster|add-node|remove-node|vm|storage|capacity|add SERVICE|remove SERVICE --repo PATH …] | secrets [status|set|generate|rotate|recovery] … | app-data [status|move [--dry-run]|remove-old] | backups [list | show [ID] [PATH] | restore [ID] [PATH…] [--to DIR | --in-place [--apply]] | test [--all] | run | check] [--json] | connect … | link [--intent self-hosted|hosted] [--json] | target …]
 ```
 
 For example:
@@ -1583,6 +1604,8 @@ bromigos lab provision
 bromigos lab network setup --on quadlet --node you@labbox --endpoint lan --lan-address 192.0.2.20
 bromigos lab network join
 bromigos lab media get "Cowboy Bebop" --seasons all --specials
+bromigos lab backups
+bromigos lab backups restore /etc/fstab
 bromigos lab link
 ```
 

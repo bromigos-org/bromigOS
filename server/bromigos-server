@@ -1,6 +1,6 @@
 #!/usr/bin/python3 -I
 # bromigos:summary=bromigOS Server: its status (SSH, firewall, updates and their health, roles, backups, disks, the lab's cluster), its roles, backups and safe automatic updates
-# bromigos:args=status [--json] | update [--now] | health | firewall [status|apply|allow NAME|deny NAME] | roles [--json] | role add|remove ROLE | backup [status|run|check|key] | ups [status|detect] | app-data [status|move [--dry-run]|remove-old] | secrets … | setup
+# bromigos:args=status [--json] | update [--now] | health | firewall [status|apply|allow NAME|deny NAME] | roles [--json] | role add|remove ROLE | backup [status|run|check|test|key] | ups [status|detect] | app-data [status|move [--dry-run]|remove-old] | secrets … | setup
 # bromigos:examples=bromigos server; bromigos server status --json; bromigos server roles; sudo bromigos server role add storage; sudo bromigos server update --now; sudo bromigos server firewall allow lab-cluster
 """bromigOS Server (docs/server.md): the installed edition without a desktop.
 
@@ -23,9 +23,10 @@
   bromigos-server role add|remove ROLE[/VARIANT]
                                     a role on or off: its packages, firewall rule sets,
                                     services, settings and health checks
-  bromigos-server backup [status|run|check|key]
-                                    the nightly restic backup ([backup] to); run, check, or
-                                    show the backup's key (root)
+  bromigos-server backup [status|run|check|test|key]
+                                    the nightly restic backup ([backup] to); run, check, a test
+                                    restore, or show the backup's key (root). Getting files
+                                    back is `bromigos lab backups` (lib/bromigos_backups.py)
   bromigos-server ups [status|detect]
                                     NUT, set up when a UPS is on USB (bromigos-server-ups.service)
   bromigos-server app-data [status|move [--dry-run]|remove-old]
@@ -87,8 +88,8 @@ and link; `bromigos alerts` and BRODEC's phone raise it as update.held) until a 
 it and updates with `update --now`, which also clears the hold. A feed that can't be read holds
 nothing.
 
-State: /var/lib/bromigos/server/ (update.json, history.jsonl, backup.json, ups.json,
-disk-alerts.jsonl). Nothing here needs the internet except the update itself, which reads
+State: /var/lib/bromigos/server/ (update.json, history.jsonl, backup.json, restore.json,
+ups.json, disk-alerts.jsonl). Nothing here needs the internet except the update itself, which reads
 the machine's own package repository, the news feed, a backup to another machine, and a role
 whose packages aren't installed yet.
 """
@@ -151,12 +152,13 @@ MUST_RUN = ("NetworkManager.service", "bromigos-server-firewall.service")
 # the server's own background jobs: one that failed (a backup with its destination away, a
 # scrub that found errors) is reported in `bromigos server`, and never makes an update unhealthy
 NOT_THE_UPDATE = ("bromigos-server-backup.service", "bromigos-server-backup-check.service",
-                  "btrfs-scrub@-.service", "podman-auto-update.service")
+                  "bromigos-server-backup-test.service", "btrfs-scrub@-.service", "podman-auto-update.service")
 BACKUP_STATE = "/var/lib/bromigos/server/backup.json"
 BACKUP_KEY = "/etc/bromigos/server/backup.key"
 BACKUP_PATHS = ["/etc", "/var/lib/bromigos", "/etc/containers/systemd", "/var/lib/containers/storage/volumes",
                 "/srv", "/home", "/root"]
-BACKUP_EXCLUDE = ["/home/*/.cache", "/root/.cache", "/var/lib/bromigos/repo", "**/node_modules"]
+# (/srv/restore: where `bromigos lab backups restore` puts files back; a copy of the backup isn't backed up again)
+BACKUP_EXCLUDE = ["/home/*/.cache", "/root/.cache", "/var/lib/bromigos/repo", "/srv/restore", "**/node_modules"]
 UPS_STATE = "/var/lib/bromigos/server/ups.json"
 DISK_ALERTS = "/var/lib/bromigos/server/disk-alerts.jsonl"
 WOL_RECORD = "/run/bromigos/wake-on-lan.json"
@@ -1139,8 +1141,11 @@ def restic_env(b):
     """restic's environment: the destination, the key file, and the credentials file's
     KEY=VALUE lines (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, ...)."""
     env = dict(os.environ)
-    env.update(RESTIC_REPOSITORY=b["to"], RESTIC_PASSWORD_FILE=backup_key(),
-               RESTIC_CACHE_DIR="/var/cache/restic", RESTIC_PROGRESS_FPS="0")
+    # a folder is a path on this server: under the stand-in root in the tests, like the rest
+    to = b["to"]
+    repo = at(to) if to.startswith("/") else "local:" + at(to[6:]) if to.startswith("local:") else to
+    env.update(RESTIC_REPOSITORY=repo, RESTIC_PASSWORD_FILE=backup_key(),
+               RESTIC_CACHE_DIR=at("/var/cache/restic"), RESTIC_PROGRESS_FPS="0")
     try:
         with open(at(b["env_file"])) as f:
             for line in f:
@@ -1163,13 +1168,38 @@ def restic(env, *args, timeout=12 * 3600):
 
 
 def last_line(text, fallback):
-    return (text.strip().splitlines() or [fallback])[-1][:300]
+    """A command's last word. restic --json ends with {"message_type": "exit_error", "message":
+    "Fatal: …"}: its message's first line, so a person reads the reason and not the JSON."""
+    line = (text.strip().splitlines() or [fallback])[-1]
+    try:
+        m = json.loads(line)
+        line = (str(m.get("message") or "").strip().splitlines() or [fallback])[0] if isinstance(m, dict) else line
+    except ValueError:
+        pass
+    return line[:300]
+
+
+def backups_lib(needed=True):
+    """lib/bromigos_backups.py (bromigos-core's): the health verdict this status, `bromigos lab
+    backups` and `bromigos alerts` share, the state's keeping, and the test restore. It sits
+    beside this file's folder, installed and in a checkout. Without it (bromigos-core older
+    than this package: a partial update), a backup stops and says so; the status goes on."""
+    lib = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "lib")
+    if lib not in sys.path:
+        sys.path.insert(0, lib)
+    try:
+        import bromigos_backups
+    except ImportError:
+        if needed:
+            sys.exit("bromigos-server: the backups need bromigos-core's lib/bromigos_backups.py, which isn't installed: "
+                     "update bromigos-core (bromigos update)")
+        return None
+    return bromigos_backups
 
 
 def cmd_backup(a):
     c = config()
     b = c["backup"]
-    st = read_json(BACKUP_STATE)
     verb = a.verb or "status"
     if verb == "status":
         d = backup_doc(c)
@@ -1180,21 +1210,36 @@ def cmd_backup(a):
         print("The backup's key: without it, no one can read the backup, you included. Keep it "
               "somewhere safe, away from this server.", file=sys.stderr)
         return 0
+    B = backups_lib()
     if not b["to"]:
-        st[verb] = {"phase": "off", "at": now()}
-        write_json(BACKUP_STATE, st)
+        if verb != "test":
+            B.update_state(**{verb: {"phase": "off", "at": now()}})
         print("bromigos-server: backups are off: no destination ([backup] to in /etc/bromigos/server.toml)")
         return 0
+    if verb == "test":
+        # the monthly test restore (bromigos-server-backup-test.timer): bromigos lab backups test
+        return B.main(["test"] + (["--json"] if a.json else []))
     env = restic_env(b)
     if verb == "run":
         rc, _, err = restic(env, "cat", "config", timeout=600)
         if rc == 10 or (rc != 0 and "does not exist" in err):
+            # nothing there. Where a backup went before, that's a drive that isn't plugged in (or
+            # a bucket someone emptied): never a reason to start a new backup, on whatever disk
+            # is under the drive's folder, and call it healthy
+            # (an older state file doesn't say where the last one went: then it counts as here)
+            st, here = B.read_json(BACKUP_STATE), B.same_place(b["to"])
+            before = st.get("run_ok") if isinstance(st.get("run_ok"), dict) and st["run_ok"] else \
+                st.get("run") if B.had_backup(st) else None
+            if before and before.get("to", here) == here and not a.new:
+                return backup_failed(verb, f"there is no backup at {B.where(b['to'])} now, and one worked before: if it's on "
+                                     "a drive, the drive isn't connected. No new backup was started in its place (bromigos "
+                                     "server backup run --new starts one)")
             rc, _, err = restic(env, "init", timeout=600)
             if rc != 0:
-                return backup_failed(st, verb, f"the destination couldn't be set up: {last_line(err, 'restic init failed')}")
+                return backup_failed(verb, f"the destination couldn't be set up: {last_line(err, 'restic init failed')}")
         elif rc != 0:
-            return backup_failed(st, verb, f"the destination can't be reached: {last_line(err, 'restic failed')}")
-        paths = [p for p in b["paths"] if os.path.exists(at(p))]
+            return backup_failed(verb, f"the destination can't be reached: {last_line(err, 'restic failed')}")
+        paths = [at(p) for p in b["paths"] if os.path.exists(at(p))]
         args = ["backup", "--json", "--tag", "bromigos-server", "--exclude-caches"]
         for x in b["exclude"]:
             args += ["--exclude", x]
@@ -1209,52 +1254,65 @@ def cmd_backup(a):
                 summary = m
         # 3: some files couldn't be read, the rest was backed up
         if rc not in (0, 3) or not summary:
-            return backup_failed(st, verb, last_line(err, "restic backup failed"))
+            return backup_failed(verb, last_line(err, "restic backup failed"))
         restic(env, "forget", "--tag", "bromigos-server", "--prune", "--keep-daily", str(b["keep_daily"]),
                "--keep-weekly", str(b["keep_weekly"]), "--keep-monthly", str(b["keep_monthly"]))
-        st["run"] = {"phase": "ok" if rc == 0 else "partial", "at": now(), "ts": time.time(),
-                     "snapshot": summary.get("snapshot_id", "")[:8], "files": summary.get("total_files_processed"),
-                     "bytes": summary.get("total_bytes_processed"), "added": summary.get("data_added"),
-                     "reason": "" if rc == 0 else "some files couldn't be read: " + last_line(err, "")}
-        write_json(BACKUP_STATE, st)
-        print(f"bromigos-server: backed up ({st['run']['snapshot']})")
+        run = {"phase": "ok" if rc == 0 else "partial", "at": now(), "ts": time.time(), "to": B.same_place(b["to"]),
+               "snapshot": summary.get("snapshot_id", "")[:8], "files": summary.get("total_files_processed"),
+               "bytes": summary.get("total_bytes_processed"), "added": summary.get("data_added"),
+               "reason": "" if rc == 0 else "some files couldn't be read: " + last_line(err, "")}
+        # what the health line says without the key: the last backup that worked, when the first
+        # one did (the test restore's clock starts there), how many are kept and what they span
+        more = {"run": run, "run_ok": run}
+        if not B.read_json(BACKUP_STATE).get("first_ok_ts"):
+            more["first_ok_ts"] = run["ts"]
+        rc, out, _ = restic(env, "snapshots", "--json", timeout=600)
+        try:
+            more["snapshots"] = B.inventory([B.snapshot_row(s) for s in json.loads(out)]) if rc == 0 else None
+        except (ValueError, TypeError, AttributeError):
+            more["snapshots"] = None
+        B.update_state(**more)
+        print(f"bromigos-server: backed up ({run['snapshot']})")
         return 0
     # check: what's there can be read back; in a month's first week, 5 % of the data too
     data = a.data or datetime.date.today().day <= 7
     rc, out, err = restic(env, "check", *(["--read-data-subset=5%"] if data else []))
     if rc != 0:
-        return backup_failed(st, verb, last_line(err or out, "restic check failed"))
-    st["check"] = {"phase": "ok", "at": now(), "ts": time.time(), "data": bool(data), "reason": ""}
-    write_json(BACKUP_STATE, st)
+        return backup_failed(verb, last_line(err or out, "restic check failed"))
+    chk = {"phase": "ok", "at": now(), "ts": time.time(), "data": bool(data), "reason": ""}
+    B.update_state(check=chk, check_ok=chk, **({"read_back_ok": chk} if data else {}))
     print("bromigos-server: the backup checks out" + (" (5 % of its data read back)" if data else ""))
     return 0
 
 
-def backup_failed(st, verb, reason):
-    st[verb] = {"phase": "failed", "at": now(), "ts": time.time(), "reason": reason}
-    write_json(BACKUP_STATE, st)
+def backup_failed(verb, reason):
+    """A failed run or check. The last one that worked stays on record (run_ok, check_ok)."""
+    backups_lib().update_state(**{verb: {"phase": "failed", "at": now(), "ts": time.time(), "reason": reason}})
     print(f"bromigos-server: the backup {'check ' if verb == 'check' else ''}failed: {reason}", file=sys.stderr)
     return 1
 
 
 def backup_doc(c):
+    """The backups for the status: where to, the last run and check, and the health verdict
+    (lib/bromigos_backups.py's health(): the same one `bromigos lab backups` and the alert give)."""
     st = read_json(BACKUP_STATE)
     to = c["backup"]["to"]
     # where, without a password someone put in the address
     where = re.sub(r"//[^/@]*@", "//", to) if to else ""
+    B = backups_lib(needed=False)
+    if B:
+        h = B.health(to, st, time.time(), B.destination(to, B.had_backup(st)), B.job_record())
+    else:
+        h = {"state": "unknown", "problems": [], "snapshots": None,
+             "verdict": "unknown: bromigos-core is older than bromigos-server (bromigos update brings both up to date)."}
     return {"on": bool(to), "to": where, "timer": unit_state("bromigos-server-backup.timer"),
-            "last": st.get("run") if to else None, "check": st.get("check") if to else None}
+            "last": st.get("run") if to else None, "check": st.get("check") if to else None,
+            "test": st.get("test") if to else None, "snapshots": h["snapshots"] if to else None,
+            "health": {"state": h["state"], "verdict": h["verdict"], "problems": h["problems"]}}
 
 
 def backup_words(d):
-    if not d["on"]:
-        return "off: no destination yet ([backup] to in /etc/bromigos/server.toml)"
-    last = d["last"] or {}
-    if not last:
-        return f"to {d['to']}; none yet (the first runs tonight)"
-    words = {"ok": "the last backup worked", "partial": "the last backup left some files out",
-             "failed": "the last backup failed", "off": "none yet"}.get(last.get("phase"), last.get("phase"))
-    return f"{words} ({last.get('at')}), to {d['to']}" + (f": {last['reason']}" if last.get("reason") else "")
+    return d["health"]["verdict"] + (f" To {d['to']}." if d["on"] else "")
 
 
 # ------------------------------------------------------------------ disks: btrfs and SMART
@@ -1583,7 +1641,7 @@ BASE_UNITS = ["bromigos-server-firewall.service", "bromigos-server-health.servic
               "prometheus-node-exporter.service", "podman.socket", "kmsconvt@tty1.service",
               "sshguard.service", "smartd.service", "avahi-daemon.service", "apparmor.service",
               "systemd-timesyncd.service", "podman-auto-update.timer", "bromigos-server-backup.timer",
-              "bromigos-server-backup-check.timer", "bromigos-server-ups.service"]
+              "bromigos-server-backup-check.timer", "bromigos-server-backup-test.timer", "bromigos-server-ups.service"]
 
 
 def cmd_setup(a):
@@ -2033,9 +2091,10 @@ def main(argv=None):
         p.add_argument("verb", choices=["add", "remove"])
         p.add_argument("name", metavar="ROLE[/VARIANT]")
     p = sub.add_parser("backup")
-    p.add_argument("verb", nargs="?", choices=["status", "run", "check", "key"])
+    p.add_argument("verb", nargs="?", choices=["status", "run", "check", "test", "key"])
     p.add_argument("--json", action="store_true")
     p.add_argument("--data", action="store_true", help="check: read back 5 %% of the data too")
+    p.add_argument("--new", action="store_true", help="run: start a new backup where the old one is gone")
     p = sub.add_parser("ups")
     p.add_argument("verb", nargs="?", choices=["status", "detect"])
     p.add_argument("--json", action="store_true")
