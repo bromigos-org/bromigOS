@@ -449,12 +449,29 @@ setup fields. Secret fields are references (`{secret = "local:NAME"}`, `vault:â€
 ### Quadlet templates
 
 `share/quadlet/<template>/` holds the units; `_common/bromigos-lab.network` is the network
-every app shares. Placeholders: `{{data}}` (`/srv/apps/<item>`), `{{media}}`,
+every app shares. Placeholders: `{{data}}` (`/srv/apps/<item>`: on a bromigOS Server with
+data disks `/srv/apps` is on them, [server.md](server.md#where-the-apps-keep-their-data)), `{{media}}`,
 `{{downloads}}`, `{{tz}}`, `{{host}}`, `{{puid}}`/`{{pgid}}` (the `bromigos-media` account),
 `{{image:NAME}}` (`NAME-nvidia` on an NVIDIA server when listed), `{{secret:NAME}}` (the Podman
 secret's name) and `{{setting:FIELD}}`. A line that starts `#if:ITEM `, `#ifnot:ITEM `,
 `#ifset:FIELD ` or `#ifgpu:VENDOR ` is kept only when that holds. Secrets are mounted as files
 (`type=mount`) wherever the app reads files.
+
+### Where the data goes
+
+Every item keeps its data in `/srv/apps/<item>`. On a bromigOS Server with data disks,
+`/srv/apps` is a mount of the data disks' `apps` subvolume, so the data is on them
+([server.md](server.md#where-the-apps-keep-their-data)). Anywhere else it is a folder on
+the system disk. The plan's disk number is the free space under `/srv/apps` when that
+folder is there, so it measures the disk the data goes to.
+
+When `/etc/fstab` mounts `/srv/apps` and it isn't mounted, an item that keeps data there
+fails with the reason and nothing is set up: the data disks are away, and the folder
+behind the mount is the system disk's.
+
+`bromigos lab app-data` says where `/srv/apps` is. On a server installed before the
+installer mounted it there, `bromigos lab app-data move` puts it on the data disks
+(`bromigos_homelab/appdata.py`; [server.md](server.md#a-server-set-up-before-the-installer-did-this)).
 
 ### What it doesn't do
 

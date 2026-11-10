@@ -2,7 +2,8 @@ Quadlet templates for `bromigos lab provision --local` (docs/lab-provision.md, "
 Each folder is one catalogue item's units; _common is written with every item.
 
 Placeholders (localprovision.render):
-  {{data}}            /srv/apps/<item>: the item's own state
+  {{data}}            /srv/apps/<item>: the item's own state (on a server with data disks, /srv/apps
+                      is a mount of their apps subvolume: docs/server.md, "Where the apps keep their data")
   {{media}}           the media library (media-library's setting), {{downloads}} its downloads folder
   {{tz}} {{host}}     the server's time zone and host name
   {{puid}} {{pgid}}   the bromigos-media account (linuxserver images)

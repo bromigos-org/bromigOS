@@ -166,6 +166,9 @@ code, and a picture of the link from your phone to the server](images/server-rea
 Pick other disks for your files and apps. They're joined into one place, `/srv/data`, with
 snapshots. Each disk you pick is erased: the step says what's on it first.
 
+Your apps keep their data on these disks too, in `/srv/apps`
+([bromigOS Server](server.md#where-your-apps-keep-their-data)).
+
 - **One copy** uses all the space. If a disk fails, what's on it is lost.
 - **Two copies (RAID1)** keeps every file on two disks, so one can fail without losing
   anything. It needs two or more disks.
@@ -598,6 +601,7 @@ Add your own script there and it counts too.
 | Hardening | `/etc/sysctl.d/90-bromigos-server.conf`, `/etc/systemd/journald.conf.d/90-bromigos-server.conf`, AppArmor on the kernel line |
 | The kernel | `linux-lts` first in the boot menu, `linux` beside it (`GRUB_TOP_LEVEL`) |
 | Data disks | btrfs at `/srv/data` in `/etc/fstab`, with `shares`, `apps` and `backups` in it; a monthly scrub |
+| The apps' data | `/srv/apps`: with data disks, their `apps` subvolume, mounted there by a second line in `/etc/fstab`; without, a folder on the system disk |
 | Shares (Storage) | `/etc/samba/smb.conf`, `/etc/exports`: the local network only |
 | Find my lab | `/etc/avahi/services/bromigos-server.service` (`_bromigos-lab._tcp`) |
 | Unlocking with the chip | systemd's initramfs (`sd-encrypt`), and `bromigos-server-tpm-enroll.service`, which enrols the chip at the first start (`systemd-cryptenroll --tpm2-device=auto`, bound to Secure Boot's state) and wipes its one-time key |

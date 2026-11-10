@@ -11,6 +11,7 @@ import asyncio
 import http.server
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -641,12 +642,33 @@ class Apply(unittest.TestCase):
     def test_storage_raid1_and_shares(self):
         root, ap = self.apply("storage", data_disks=["/dev/sda", "/dev/sdb"], data_layout="raid1")
         self.assertIn(["(live)", "mkfs.btrfs", "-f", "-L", "bromigos-data", "-d", "raid1", "-m", "raid1", "/dev/sda", "/dev/sdb"], ap.cmds)
-        self.assertIn("/srv/data  btrfs", self.read(root, "/etc/fstab"))
+        fstab = self.read(root, "/etc/fstab")
+        self.assertIn("/srv/data  btrfs", fstab)
+        # the apps' data is on the data disks: the pool's apps subvolume, mounted where every app
+        # looks, with the pool's own options; its mount point takes no files while they're away
+        pool, apps = (next(line.split() for line in fstab.splitlines() if f" {m} " in line) for m in ("/srv/data", "/srv/apps"))
+        self.assertEqual((apps[0], apps[2], apps[3]), (pool[0], "btrfs", "subvol=/apps," + pool[3]))
+        self.assertIn("nofail", pool[3])
+        self.assertIn(["(live)", "btrfs", "subvolume", "create", os.path.join(root, "srv/data/apps")], ap.cmds)
+        self.assertLess(ap.cmds.index(["install", "-d", "-m", "0755", "/srv/apps"]), ap.cmds.index(["chattr", "+i", "/srv/apps"]))
+        self.assertNotIn(["install", "-d", "-m", "0755", "/srv/apps", "/srv/shares"], ap.cmds)
         self.assertIn("[shares]", self.read(root, "/etc/samba/smb.conf"))
         self.assertIn("/srv/data/shares 10.0.0.0/8", self.read(root, "/etc/exports"))
         self.assertIn(["systemctl", "enable", "btrfs-scrub@srv-data.timer"], ap.cmds)
         self.assertIn(["snapper", "--no-dbus", "-c", "data", "create-config", "/srv/data"], ap.cmds)
         self.assertIn('accept comment "smb"', self.read(root, "/etc/nftables.conf"))
+
+    def test_without_data_disks_the_apps_keep_their_data_on_the_system_disk(self):
+        root, ap = self.apply("home")
+        self.assertIn(["install", "-d", "-m", "0755", "/srv/apps", "/srv/shares"], ap.cmds)
+        self.assertNotIn("/srv/apps", self.read(root, "/etc/fstab"))
+        self.assertNotIn(["chattr", "+i", "/srv/apps"], ap.cmds)
+
+    def test_one_data_disk_holds_the_apps_too(self):
+        root, ap = self.apply("home", data_disks=["/dev/sdb"])
+        fstab = self.read(root, "/etc/fstab")
+        self.assertEqual(len(re.findall(r"^UUID=\S+\s+/srv/apps\s+btrfs\s+subvol=/apps,", fstab, re.M)), 1, fstab)
+        self.assertIn(["chattr", "+i", "/srv/apps"], ap.cmds)
 
     def test_kernel_apparmor_and_find_my_lab(self):
         root, ap = self.apply("plain")

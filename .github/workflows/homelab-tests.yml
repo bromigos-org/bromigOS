@@ -24,10 +24,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: tools
-        # bromigos-homelab's makedepends and checkdepends (packaging/bromigos-homelab/PKGBUILD)
+        # bromigos-homelab's makedepends and checkdepends (packaging/bromigos-homelab/PKGBUILD),
+        # and rsync, bromigos-lab's: the app data move's tests copy with the real one
         run: >-
           pacman -Syu --noconfirm --needed git python python-textual desktop-file-utils
-          python-cairo python-gobject pango python-psutil python-zeroconf >/dev/null
+          python-cairo python-gobject pango python-psutil python-zeroconf rsync >/dev/null
       - uses: actions/checkout@v5
       - name: unittest
         # as a normal user, like makepkg's check()

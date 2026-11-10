@@ -824,6 +824,9 @@ card. When an item needs another one, that one is ticked too, and the list says 
 Most items download something. Without a network, the server installs what it can and
 waits for the rest. Nothing is lost if it restarts in the middle: it carries on.
 
+Each app keeps its data in `/srv/apps`, on the server's data disks when it has them
+([bromigOS Server](server.md#where-your-apps-keep-their-data)).
+
 To change what a server runs later, run the same command on the server (below).
 
 ### Media

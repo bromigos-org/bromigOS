@@ -600,6 +600,10 @@ engine on a Game server joined to a lab. After archinstall and `bromigos rollbac
 - makes the data disks btrfs (`mkfs.btrfs -d raid1 -m raid1` for two copies) at
   `/srv/data`, with `shares`, `apps` and `backups` subvolumes, a monthly scrub, hourly
   snapshots and the SMB and NFS shares on a Storage server;
+- mounts the data disks' `apps` subvolume at `/srv/apps` with a second `fstab` line, so
+  the apps keep their data on the data disks, and sets the mount point to take no files
+  while they're away (`chattr +i`). Without data disks, `/srv/apps` is a folder on the
+  system disk ([server.md](server.md#where-the-apps-keep-their-data));
 - enables the role's units the system has (the rest wait in `pending-units`), and leaves
   Tailscale and WireGuard off unless chosen;
 - moves the update timer into the window (`bromigos-server-update.timer.d/10-window.conf`)
@@ -1184,6 +1188,21 @@ bromigOS Server's steps have their own tests and runs:
   limits, root locked, the firewall, the health checks, a fixed address and Wake-on-LAN,
   the lab account only on a Lab node, `/srv/data`'s RAID1 and shares, and Docker's engine
   only on a Game server joined to a lab.
+- `iso/test/server-data-checks.sh [disks=N raid1=1 app=ID move=1]` checks where the
+  installed server keeps its apps' data. With data disks, `/srv/apps` must be on
+  `/srv/data`'s filesystem and not the system disk's. With `app=ID`, the lab's engine
+  installs that app (`bromigos lab provision --local --select ID --apply`) and the app's
+  own folder must be there too. The checks compare the filesystems' IDs
+  (`findmnt -o UUID`), never a path's name: btrfs gives every subvolume, and both disks of
+  a RAID1, the same ID. With the data disks' `apps` subvolume unmounted, `/srv/apps` must
+  take no files. With `move=1` the checks then put the server back as the installer left
+  one before November 2026 (the app's data on the system disk, the pool's `apps`
+  subvolume empty, no `/srv/apps` line in `fstab`), and `bromigos lab app-data move` must
+  leave the app's data on the data disks with a file it had before, the old copy kept by
+  name, one `fstab` line and the app running
+  ([server.md](server.md#where-the-apps-keep-their-data)). Field Kit's CI test runs it on
+  a Server installed from the stick with two data disks
+  ([fieldkit.md](fieldkit.md#testing-it)).
 
 Extra disks and a second network port come through `BROMIGOS_ISOTEST_QEMU`, with explicit
 PCI addresses after the harness's own (so the system disk stays `/dev/vda` and the second

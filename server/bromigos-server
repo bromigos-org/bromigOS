@@ -1,6 +1,6 @@
 #!/usr/bin/python3 -I
 # bromigos:summary=bromigOS Server: its status (SSH, firewall, updates and their health, roles, backups, disks, the lab's cluster), its roles, backups and safe automatic updates
-# bromigos:args=status [--json] | update [--now] | health | firewall [status|apply|allow NAME|deny NAME] | roles [--json] | role add|remove ROLE | backup [status|run|check|key] | ups [status|detect] | secrets … | setup
+# bromigos:args=status [--json] | update [--now] | health | firewall [status|apply|allow NAME|deny NAME] | roles [--json] | role add|remove ROLE | backup [status|run|check|key] | ups [status|detect] | app-data [status|move [--dry-run]|remove-old] | secrets … | setup
 # bromigos:examples=bromigos server; bromigos server status --json; bromigos server roles; sudo bromigos server role add storage; sudo bromigos server update --now; sudo bromigos server firewall allow lab-cluster
 """bromigOS Server (docs/server.md): the installed edition without a desktop.
 
@@ -28,6 +28,11 @@
                                     show the backup's key (root)
   bromigos-server ups [status|detect]
                                     NUT, set up when a UPS is on USB (bromigos-server-ups.service)
+  bromigos-server app-data [status|move [--dry-run]|remove-old]
+                                    where the apps keep their data (/srv/apps): on the data
+                                    disks when the server has them. move puts it there on a
+                                    server set up before the installer did. It is the lab's
+                                    command, bromigos lab app-data, which every Server has
   bromigos-server disk-alert        smartd's warning hook (bromigos-server-disk-alert)
   bromigos-server secrets …         the secret store: bromigos lab secrets (status, set, generate,
                                     rotate, recovery)
@@ -393,6 +398,7 @@ def status_doc():
         "disks": {"btrfs_errors": btrfs_errors()["total"], "scrub": unit_state("btrfs-scrub@-.timer"),
                   "smartd": unit_state("smartd.service"), "alerts": disk_alerts()},
         "ups": ups_doc(),
+        "app_data": app_data_doc(),
         "security": {"sshguard": unit_state("sshguard.service"), "apparmor": apparmor_on(),
                      "apparmor_next": bool(c["boot"]["apparmor"]) and grub_has_block()},
         "mdns": unit_state("avahi-daemon.service"),
@@ -500,6 +506,8 @@ def print_status(d):
         last = dk["alerts"][-1]
         disk += f"; the last warning: {last['name'] or last['device']}: {last['message']} ({last['at']})"
     print(f"  Disks        {disk}; SMART watch {dk['smartd']}, monthly scrub {dk['scrub']}")
+    if d["app_data"].get("words"):
+        print("  App data     " + "\n               ".join(d["app_data"]["words"]))
     print(f"  Power        UPS: {ups_words(d['ups'])}")
     sec = d["security"]
     print(f"  Protection   sshguard {sec['sshguard']}, AppArmor "
@@ -1418,6 +1426,34 @@ def ups_doc():
     return read_json(UPS_STATE)
 
 
+# ------------------------------------------------------------------ where the apps keep their data
+
+def cmd_app_data(a):
+    """The lab's own command (bromigos lab app-data), as root for move and remove-old."""
+    lab = lab_cli()
+    if not os.path.exists(lab):
+        sys.exit("bromigos-server: the apps' data is the lab's to place (bromigos-lab), which isn't installed")
+    os.execv(lab, [lab, "app-data", *([a.verb] if a.verb else []), *(["--json"] if a.json else []),
+                   *(["--dry-run"] if a.dry_run else [])])
+
+
+def lab_cli():
+    """bromigos-lab, which every Server has: the secret store and the apps' data are its."""
+    return shutil.which("bromigos-lab") or "/usr/lib/bromigos/bin/bromigos-lab"
+
+
+def app_data_doc():
+    """Where the apps keep their data (/srv/apps): on the data disks when the server has them
+    (docs/server.md, "Where the apps keep their data"). bromigos-lab knows, and moves it there
+    on a server set up before the installer did (`bromigos lab app-data`); {} when it can't say."""
+    rc, out, _ = run([lab_cli(), "app-data", "status", "--json"], timeout=60)
+    try:
+        d = json.loads(out) if rc == 0 else {}
+    except ValueError:
+        d = {}
+    return d if isinstance(d, dict) else {}
+
+
 # ------------------------------------------------------------------ the boot menu and the name service
 
 GRUB_BEGIN = "# >>> bromigOS Server (bromigos server setup; docs/server.md, \"The kernel\")"
@@ -2003,6 +2039,10 @@ def main(argv=None):
     p = sub.add_parser("ups")
     p.add_argument("verb", nargs="?", choices=["status", "detect"])
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("app-data")
+    p.add_argument("verb", nargs="?", choices=["status", "move", "remove-old"])
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--dry-run", action="store_true", help="move: say what it would do, and change nothing")
     sub.add_parser("disk-alert")
     sub.add_parser("setup")
     p = sub.add_parser("secrets", help="this server's secret store: bromigos lab secrets (status, set, generate, rotate …)")
@@ -2020,12 +2060,12 @@ def main(argv=None):
         return cmd_roles(a)
     if cmd == "secrets":
         # the same store and words as the lab's (bromigos_homelab.secretstore): rotate included
-        lab = shutil.which("bromigos-lab") or "/usr/lib/bromigos/bin/bromigos-lab"
+        lab = lab_cli()
         if not os.path.exists(lab):
             sys.exit("bromigos-server: the secret store is the lab's (bromigos-lab), which isn't installed")
         os.execv(lab, [lab, "secrets", *a.rest])
     reading = (cmd == "firewall" and (a.print or a.verb in (None, "status") or not a.name)) or \
-        (cmd in ("backup", "ups") and a.verb in (None, "status"))
+        (cmd in ("backup", "ups", "app-data") and a.verb in (None, "status"))
     if ROOT == "/" and os.geteuid() != 0 and not reading:
         sudo = shutil.which("sudo")
         if sudo:
@@ -2033,7 +2073,7 @@ def main(argv=None):
         sys.exit("bromigos-server: run it as root")
     return {"update": cmd_update, "health": cmd_health, "mark-boot": cmd_mark_boot,
             "firewall": cmd_firewall, "setup": cmd_setup, "role": cmd_role, "extra": cmd_role,
-            "backup": cmd_backup, "ups": cmd_ups, "disk-alert": cmd_disk_alert}[cmd](a)
+            "backup": cmd_backup, "ups": cmd_ups, "disk-alert": cmd_disk_alert, "app-data": cmd_app_data}[cmd](a)
 
 
 if __name__ == "__main__":

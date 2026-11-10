@@ -69,6 +69,14 @@ v=$1; [ "$v" = cat ] && v=cat-config
 exit "$(cat "$FAKE/restic-$v.rc" 2>/dev/null || echo 0)"
 ''',
     "nut-scanner": "#!/bin/sh\ncat \"$FAKE/nut-scanner\" 2>/dev/null\nexit 0\n",
+    # the lab's command: `app-data status --json` answers from $FAKE/app-data.json (nothing: it
+    # can't say); anything else is noted
+    "bromigos-lab": r'''#!/bin/sh
+case "$*" in
+  "app-data status --json") cat "$FAKE/app-data.json" 2>/dev/null ;;
+  *) echo "bromigos-lab $*" >> "$FAKE/log" ;;
+esac
+''',
 }
 
 

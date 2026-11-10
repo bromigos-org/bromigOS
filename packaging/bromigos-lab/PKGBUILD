@@ -17,6 +17,7 @@ optdepends=('gnupg: verify signed model catalog updates'
             'sops: encrypt generated lab credentials without Vault'
             'age: recipients for encrypted lab credentials'
             'openssh: provision a Linux box over SSH'
+            'rsync: bromigos lab app-data move copies a server'"'"'s app data onto its data disks'
             'tailscale: bromigos lab network connect joins this machine to your lab network'
             'python-qrcode: bromigos lab network join shows its join code as a QR code'
             'python-zeroconf: bromigos lab connect --find hears devices that announce themselves (mDNS)'
@@ -30,7 +31,8 @@ optdepends=('gnupg: verify signed model catalog updates'
             'python-boto3: s3 sources: bucket sizes (with a read-only key)'
             'poppler: the ocr job kind: PDF pages')
 makedepends=('git' 'python' 'gnupg')
-checkdepends=('python-textual' 'python-cairo' 'python-gobject' 'pango' 'python-psutil' 'python-zeroconf')
+checkdepends=('python-textual' 'python-cairo' 'python-gobject' 'pango' 'python-psutil' 'python-zeroconf'
+              'rsync')         # the app data move's tests copy with the real one
 options=('!debug')
 _root="${startdir%/packaging/*}"
 _paths=(homelab packaging/bromigos-lab packaging/install-lab.sh packaging/keys LICENSE-MIT LICENSE-APACHE)

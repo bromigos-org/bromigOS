@@ -65,6 +65,7 @@ class EveryCheck(Machine):
             "systemd.failed:nginx.service": "needs_you",
             "systemd.failed:syncthing.service": "needs_you",
             "server.game:valheim": "needs_you", "server.game:container-minecraft": "needs_you",
+            "server.app-data": "needs_you",
             "game.steam:nvapi": "needs_you", "game.steam:default": "info", "game.steam:prune": "info",
         }
         for k, v in want.items():
@@ -103,6 +104,39 @@ class EveryCheck(Machine):
         user = self.m.run("user")
         self.assertEqual(system["alerts"] + user["alerts"], [])
         self.assertTrue(all(s == "ran" for s in states(system).values()), states(system))
+
+    def test_where_the_apps_keep_their_data(self):
+        """A server with data disks whose apps' data is on the system disk says so, with the
+        command that moves it; a move cut off says how to carry on; the data disks away is
+        critical; where it belongs, nothing is raised."""
+        self.m.clear()
+        self.assertNotIn("server.app-data", ids(self.m.run("system")))
+        self.m.app_data("not-on-pool")
+        a = {x["id"]: x for x in self.m.run("system")["alerts"]}["server.app-data"]
+        self.assertEqual((a["severity"], a["title"]), ("needs_you", "The apps' data is on the system disk, not the data disks"))
+        self.assertIn("one copy, not the two you chose", a["detail"])
+        self.assertIn("sudo bromigos lab app-data move", a["detail"])
+        self.assertEqual(a["fix"]["commands"], ["sudo bromigos lab app-data move --dry-run", "sudo bromigos lab app-data move"])
+        self.assertTrue(a["fix"]["root"])
+        self.assertEqual(a["evidence"]["facts"]["pool"], "/srv/data")
+        self.m.app_data("not-on-pool", has_data=False)
+        a = {x["id"]: x for x in self.m.run("system")["alerts"]}["server.app-data"]
+        self.assertEqual(a["title"], "The next app's data would go on the system disk, not the data disks")
+        self.m.app_data("moving", move="switching")
+        a = {x["id"]: x for x in self.m.run("system")["alerts"]}["server.app-data"]
+        self.assertEqual((a["severity"], a["title"]), ("needs_you", "A move of the apps' data didn't finish"))
+        self.assertIn("Nothing is lost", a["detail"])
+        self.m.app_data("moving", move="copying", running=True)          # under way: not a thing to raise
+        self.assertNotIn("server.app-data", ids(self.m.run("system")))
+        self.m.app_data("pool-away", where="system")
+        a = {x["id"]: x for x in self.m.run("system")["alerts"]}["server.app-data"]
+        self.assertEqual((a["severity"], a["title"]), ("critical", "The data disks aren't mounted: the apps can't start"))
+        self.assertFalse(a["fix"]["root"])
+        # an answer that isn't one: the check failed, and says so, without raising or clearing anything
+        (self.m.fake / "app-data.json").write_text("not json")
+        row = next(c for c in self.m.run("system")["checks"] if c["check"] == "server.app-data")
+        self.assertEqual(row["state"], "failed")
+        self.assertIn("gave no answer", row["error"])
 
     def test_updates_downloaded_and_waiting(self):
         """bromigOS Server's [updates] mode = "download": what it fetched waits for a person,
@@ -191,7 +225,7 @@ class Failing(Machine):
         st = states(self.m.run())
         self.assertEqual((st["disk.smart"], st["power.ups"], st["disk.scrub"]), ("skipped", "skipped", "skipped"))
         # on a desktop: no automatic updates to hold, no game servers
-        self.assertEqual((st["update.held"], st["server.game"]), ("skipped", "skipped"))
+        self.assertEqual((st["update.held"], st["server.game"], st["server.app-data"]), ("skipped", "skipped", "skipped"))
 
     def test_a_broken_check_never_stops_the_others(self):
         def boom(ctx):

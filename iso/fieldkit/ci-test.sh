@@ -15,7 +15,9 @@
 #   3. the installed Server boots to its console and passes its checks
 #   4. the same install on a machine with two data disks, as two copies (RAID1); the installed
 #      Server, with a network this time, has the lab's engine install an app from the catalogue,
-#      and the app's data must be on the data disks' filesystem, not the system disk's
+#      and the app's data must be on the data disks' filesystem, not the system disk's. Then
+#      the server is put back as an older installer left one, and bromigos lab app-data move
+#      must move the app's data to the data disks
 #      (iso/test/server-data-checks.sh; docs/server.md, "Where the apps keep their data")
 #
 # DIR gets shots/, each VM's folder (serial logs) and the output; the disk is removed at the
@@ -196,7 +198,7 @@ server_data() {     # the checks reach the server on a small disk (no SSH here: 
     "$T" login --name server-data --user tester --password tester --timeout 60 >/dev/null || return 1
     TIMEOUT=1500 run server-data 'echo tester | sudo -S -p "" sh -c "echo \"tester ALL=(ALL) NOPASSWD: ALL\" > /etc/sudoers.d/99-isotest && chmod 440 /etc/sudoers.d/99-isotest" || exit 1
         sudo mkdir -p /run/fkchecks && sudo mount -o ro /dev/disk/by-label/FKCHECKS /run/fkchecks || exit 1
-        bash /run/fkchecks/server-data-checks.sh raid1=1 disks=2 app=start-page'
+        bash /run/fkchecks/server-data-checks.sh raid1=1 disks=2 app=start-page move=1'
 }
 
 step "Field Kit starts (offline): console, Home, engine, offline store" live || true
@@ -210,7 +212,7 @@ fi
 "$T" down --name server >/dev/null 2>&1 || true
 rm -f "$disk" "$out"/vm/install/OVMF_VARS.fd
 if step "bromigOS Server installs with two data disks, as two copies (RAID1)" install_data; then
-    step "the installed Server keeps its apps' data on the data disks" server_data || true
+    step "the installed Server keeps its apps' data on the data disks, and an older one's is moved there" server_data || true
 fi
 "$T" down --name install >/dev/null 2>&1 || true
 "$T" down --name server-data >/dev/null 2>&1 || true
