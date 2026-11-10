@@ -1078,6 +1078,12 @@ unmounted at the end, and after a copy that failed too. If it can't be unmounted
 fails and says "Don't unplug it yet". `bromigos lab backups go-bag run` starts a copy by
 hand, for a drive that stays plugged in.
 
+A copy that fails is an [alert](alerts.md), raised by the job itself as it ends, the way
+every job's failure is ([activity.md](activity.md)). It clears with the next good copy.
+`sudo bromigos activity retry <id>` starts the copy again, and `sudo bromigos activity
+cancel <id>` stops one: stopping a copy is safe, except for the moment the drive is being
+unmounted. A stopped copy isn't a failure. The drive keeps its last good copy.
+
 **The reminder.** A Go Bag in a drawer goes stale. When it has had no good copy for 30
 days, the [health line](#the-health-line) and [alerts](alerts.md) say so: "Your Go Bag
 drive hasn't been updated in 31 days. Plug it in." Change the wait with
@@ -1126,8 +1132,12 @@ Go Bag needs you.
 A drive in `drives`, here and in `bromigos lab backups --json` and `bromigos server status
 --json`, has `name`, `uuid`, `label`, `model`, `size`, `fstype`, `added_at`, `plugged_in`,
 `running`, `last_copy`, `last_good_copy`, `last_test`, `remind_days`, `stale` and `stale_s`.
-`last_copy` and `last_good_copy` have `phase` (`ok`, `partial`, `failed`), `at`, `ts`,
-`age_s`, `snapshot`, `files`, `bytes`, `added`, `seconds`, `reason` and `unmounted`.
+`last_copy` and `last_good_copy` have `phase` (`ok`, `partial`, `failed`, `stopped`), `at`,
+`ts`, `age_s`, `snapshot`, `files`, `bytes`, `added`, `seconds`, `reason` and `unmounted`.
+
+The Go Bag's problems in `health.problems` are `drive-stale` and `drive-failed`. A problem
+with `raised_by` is another check's alert: `drive-failed` has `raised_by: "activity.job"`, so
+the `backup.restic` alert leaves it out and the failure is one alert, not two.
 
 Error codes of its own, beside the ones below: `not-set-up`, `no-drive`, `which-drive`,
 `which-partition`, `no-such-drive`, `in-use`, `read-only`, `not-removable`, `needs-erase`,
@@ -1151,8 +1161,14 @@ want `bromigos-server-backup-drive@<UUID>.service`. That unit runs `bromigos-ser
 plugged --uuid <UUID>`. For any drive but the Go Bag it does nothing. For the Go Bag it
 starts the job, `bromigos-job-<id>.service`, and ends. The job's body is `bromigos-server
 backup drive-copy`: mount at `/run/bromigos/backup-drive/<UUID>`, `restic backup`, `restic
-forget --prune`, `restic check --read-data-subset=2G`, unmount. One job uses the drive at a
-time. To turn the rule off:
+forget --prune`, `restic check --read-data-subset=2G`, unmount.
+
+The job is started with `bromigos activity run --lock backup-drive --cancel-safe
+--retry-safe` ([activity.md](activity.md)). The lock makes two copies take turns: a drive
+plugged in twice gives a second copy that waits, then copies what changed. The job prints
+`::cancel unsafe` while it unmounts. A setup or a restore from the drive isn't a job, so it
+holds `/var/lib/bromigos/server/backup-drive.lock` instead, and a copy that starts meanwhile
+waits for it and says so. A copy is never skipped. To turn the rule off:
 `sudo ln -s /dev/null /etc/udev/rules.d/65-bromigos-server-backup-drive.rules`.
 
 A drive you mounted yourself is used where it is and left mounted. The job then ends with

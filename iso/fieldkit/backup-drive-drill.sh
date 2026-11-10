@@ -139,6 +139,8 @@ dev=$(usb)
 test -z "$(lsblk -no MOUNTPOINTS "$dev" | xargs)"
 ! findmnt -rno TARGET | grep /run/bromigos/backup-drive
 test "$(bromigos lab backups --json | j '(d["drives"][0]["plugged_in"], d["drives"][0]["last_copy"]["unmounted"], d["drives"][0]["running"])')" = "(True, True, False)"
+# the job took its turn with the drive's lock, and may be started again (bromigos activity run --lock, --retry-safe)
+test "$(bromigos activity show "$id" --json | j 'd["job"]["locks"]')" = "['backup-drive']"
 echo GOBAG-PLUGGED-IN-OK
 VM
 )"; }

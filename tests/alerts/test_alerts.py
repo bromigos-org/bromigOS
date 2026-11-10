@@ -395,12 +395,16 @@ class Checks(Machine):
             self.m.rootfile("/etc/bromigos/server.toml", f'[backup]\nto = "s3:https://s3.example/backups/box"\ndrive_remind_days = {days}\n')
             got = [x["id"] for x in self.m.run()["alerts"] if x["check"] == "backup.restic"]
             self.assertEqual(got, ["backup.restic:server-drive"] if raised else [], days)
-        # a copy that failed is an alert of its own, beside the reminder
+        # a copy that failed: its alert is the copy job's own (activity.job), so the backup check
+        # doesn't raise a second one. The verdict still says it
         entry["run"] = {"phase": "failed", "at": "x", "ts": NOW / 1000 - 3600, "reason": "Unable to save snapshot: no space left on device."}
         got = self.server_backup(st)
-        self.assertEqual(sorted(got), ["backup.restic:server-drive", "backup.restic:server-drive-copy"])
-        self.assertEqual(got["backup.restic:server-drive-copy"]["title"], "The last copy to your Go Bag drive failed")
-        self.assertIn("no space left on device", got["backup.restic:server-drive-copy"]["detail"])
+        self.assertEqual(sorted(got), ["backup.restic:server-drive"])
+        self.assertIn("The last copy to your Go Bag drive failed (1 hour ago): unable to save snapshot: no space left on device.",
+                      got["backup.restic:server-drive"]["evidence"]["lines"][0])
+        # a copy someone stopped is no failure
+        entry["run"] = {"phase": "stopped", "at": "x", "ts": NOW / 1000 - 3600, "reason": "It was stopped before it finished."}
+        self.assertNotIn("failed", self.server_backup(st)["backup.restic:server-drive"]["evidence"]["lines"][0])
         # a fresh copy: nothing
         entry["run"] = entry["run_ok"] = dict(copy, ts=NOW / 1000 - 3 * day)
         self.assertEqual(self.server_backup(st), {})

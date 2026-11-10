@@ -61,6 +61,7 @@ FLAG = f" --from {VERB}"                         # what a hint adds to a restore
 LABEL = (re.sub(r"[^A-Za-z0-9]", "", NAME).upper() or "BACKUP")[:16]     # a formatted drive's label
 
 KIND = "backup.drive"                            # the activity record's kind
+JOB_LOCK = "backup-drive"                        # … and its lock (`bromigos activity run --lock`)
 MOUNTS = "/run/bromigos/backup-drive"            # /run/bromigos/backup-drive/<UUID>
 FOLDER = "bromigos-backup"                       # on the drive: bromigos-backup/<hostname> is the repository
 LOCK = "/var/lib/bromigos/server/backup-drive.lock"
@@ -348,6 +349,9 @@ def days(backup):
 
 # ------------------------------------------------------------------ the verdict's part
 
+# a copy's phases, as people read them; "stopped" is a copy someone stopped (not a failure)
+PHASES = {"ok": "worked", "partial": "worked, but left some files out", "failed": "failed", "stopped": "stopped before it finished"}
+
 def view(st, now, remind_days=REMIND_DAYS, real=None, busy=False):
     """Each remembered drive, for the status and for health(): its identity, whether it is
     plugged in (the kernel's /dev/disk/by-uuid link is there), the last copy and the last
@@ -356,7 +360,7 @@ def view(st, now, remind_days=REMIND_DAYS, real=None, busy=False):
     real = real or B.at
     rows = []
     for uuid, d in sorted(remembered(st).items(), key=lambda kv: str(kv[1].get("added_at") or "")):
-        run = d.get("run") if isinstance(d.get("run"), dict) and d["run"].get("phase") in ("ok", "partial", "failed") else None
+        run = d.get("run") if isinstance(d.get("run"), dict) and d["run"].get("phase") in PHASES else None
         last = B._last(run, now) if run else None
         good = B._last(d.get("run_ok"), now, True)
         tst = d.get("test") if isinstance(d.get("test"), dict) and d["test"].get("phase") in ("ok", "failed") else None
@@ -376,7 +380,12 @@ def view(st, now, remind_days=REMIND_DAYS, real=None, busy=False):
 
 
 def judge(rows, now):
-    """What health() says about the backup drive: (problems, a sentence for the verdict)."""
+    """What health() says about the backup drive: (problems, a sentence for the verdict).
+
+    A copy that failed is a problem here, so the verdict and --json say it. Its alert is the
+    copy job's own (`bromigos alerts`' activity.job, which every failed job raises and its next
+    success clears), so the problem says `raised_by` and the backup.restic check leaves it out:
+    one failure, one alert."""
     problems, said = [], []
     look = [f"bromigos lab backups {VERB}", "bromigos activity"]
     go = f"bromigos lab backups {VERB} run"
@@ -386,11 +395,11 @@ def judge(rows, now):
         failed = bool(last and last["phase"] == "failed")
         if failed:
             why = B.sentence(last.get("reason")) or "the copy did not finish"
-            problems.append(B._problem(
+            problems.append(dict(B._problem(
                 "drive-failed", "server-drive-copy", "needs_you", f"The last copy to your {NAME} drive failed",
                 f"{B.upper_first(why)}. " + (f"The last good copy was {B.ago(good['ts'], now)}." if good else "It has no good copy yet.")
                 + " Plug the drive in again to try once more, or with it plugged in run the copy by hand.",
-                look + [go], touches))
+                look + [go], touches), raised_by="activity.job"))
             said.append(f"The last copy to your {NAME} drive failed ({B.ago(last['ts'], now)}): {why}.")
         if r["stale"]:
             title = f"Your {NAME} drive hasn't been updated in {r['stale_s'] // DAY} days"
@@ -424,14 +433,14 @@ def print_rows(rows, now, row):
         if not last:
             row("Last copy", "none yet")
             continue
-        words = {"ok": "worked", "partial": "worked, but left some files out", "failed": "failed"}[last["phase"]]
+        words = PHASES[last["phase"]]
         more = [f"snapshot {last['snapshot']}"] if last.get("snapshot") else []
-        if last.get("files") is not None and last["phase"] != "failed":
+        if last.get("files") is not None and last["phase"] in ("ok", "partial"):
             more += [B.count(last["files"], "file"), B.size(last.get("bytes"))]
         row("Last copy", f"{words}, {B.ago(last['ts'], now)} ({B.when(last['ts'])}" + "".join(f", {m}" for m in more) + ")")
         if last.get("reason"):
             row("", last["reason"])
-        if last["phase"] == "failed":
+        if last["phase"] in ("failed", "stopped"):
             row("Last good one", f"{B.ago(good['ts'], now)} ({B.when(good['ts'])})" if good else "none yet")
 
 
@@ -493,17 +502,29 @@ def copy(b, uuid=None):
     for sid, label in STEPS:
         say(f"::step {sid} todo {label}")
     B.catch_signals()
-    with contextlib.ExitStack() as held:             # the lock is held until the drive is unmounted
-        try:
-            held.enter_context(lock())
-        except B.Problem:
-            say(f"::stage 100 Another job is using the {NAME} drive: this one has nothing to do.")
-            return 0
-        return copy_locked(b, uuid)
+    # Another copy is kept out by the job's own lock (job_command's --lock). This file lock is
+    # for what isn't a job: a setup, or a restore that reads the drive. The copy waits for it
+    # (stopping it meanwhile is safe), and is never skipped: a copy that didn't happen must
+    # not end as one that did
+    try:
+        with lock():
+            return copy_locked(b, uuid)
+    except B.Problem as e:
+        if e.code != "busy":
+            raise
+    waiting = f"Waiting for the command that is using the {NAME} drive (a setup, or a restore from it)"
+    say(f"::stage 0 {waiting}")
+    say(f"::note {waiting}")
+    try:
+        with lock(wait=True):
+            return copy_locked(b, uuid)
+    except B.Stopped:
+        say(f"::error drive It was stopped while it waited for the {NAME} drive. Nothing was written.")
+        return 130
 
 
 def copy_locked(b, uuid):
-    started, at_step, m, good, reason, code = time.time(), "drive", None, None, "", 1
+    started, at_step, m, good, reason, code, stopped = time.time(), "drive", None, None, "", 1, False
     try:
         say(f"::stage 0 Looking for the {NAME} drive")
         say("::step drive running")
@@ -527,7 +548,7 @@ def copy_locked(b, uuid):
         say("::step check done It reads back")
         at_step, good = "unplug", run
     except B.Stopped:
-        reason, code = "It was stopped before it finished.", 130
+        reason, code, stopped = "It was stopped before it finished.", 130, True
     except B.Problem as e:
         reason, code = e.message, e.exit if e.exit not in (0, 3) else 1
     except OSError as e:
@@ -535,6 +556,7 @@ def copy_locked(b, uuid):
     B.hold_signals()                                 # unmounting and the record are never stopped half-way
     safe, why = (True, "") if not m else (None, "")
     if m:
+        say(f"::cancel unsafe The {NAME} drive is being unmounted. Wait a moment: it is safe to unplug when this job ends.")
         if good:
             say("::stage 95 Unmounting the drive")
             say("::step unplug running")
@@ -545,8 +567,9 @@ def copy_locked(b, uuid):
     if good:
         rec = dict(good, seconds=round(time.time() - started, 1), unmounted=safe)
     else:
-        rec = {"phase": "failed", "at": B.iso(), "ts": time.time(), "reason": reason, "seconds": round(time.time() - started, 1),
-               "unmounted": safe}
+        # stopped (`bromigos activity cancel`, a unit stopped): not a failure, and no alert
+        rec = {"phase": "stopped" if stopped else "failed", "at": B.iso(), "ts": time.time(), "reason": reason,
+               "seconds": round(time.time() - started, 1), "unmounted": safe}
     if uuid and uuid in remembered():
         update_drive(uuid, run=rec, **({"run_ok": rec} if good else {}))
     if not good:
@@ -638,9 +661,14 @@ def job_command(uuid, via="cli", detach=False, as_json=False):
                         "can't be started.", exit=3)
     d = remembered().get(uuid) or {}
     name = re.sub(r"[\x00-\x1f:]", " ", d.get("label") or d.get("model") or NAME).strip() or NAME
+    # --lock: two copies to the drive (a drive plugged in twice) take turns, and the second shows
+    # as waiting for the first. --cancel-safe: stopping a copy loses nothing (restic leaves the
+    # backup whole, and the drive is unmounted); the copy says otherwise while it unmounts.
+    # --retry-safe: a copy is the same work every time, so `bromigos activity retry` may start it again
     return [act, "run", "--kind", KIND, "--title", f"Copying the backup to the {NAME} drive",
-            "--subject", f"drive:{uuid.lower()}:{name}", "--via", via, *(["--detach"] if detach else []),
-            *(["--json"] if as_json else []), "--", sys.executable, "-I", server, "backup", "drive-copy", "--uuid", uuid]
+            "--subject", f"drive:{uuid.lower()}:{name}", "--via", via, "--lock", JOB_LOCK, "--cancel-safe", "--retry-safe",
+            *(["--detach"] if detach else []), *(["--json"] if as_json else []),
+            "--", sys.executable, "-I", server, "backup", "drive-copy", "--uuid", uuid]
 
 
 def plugged(uuid):

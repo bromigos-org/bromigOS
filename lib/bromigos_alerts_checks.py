@@ -426,6 +426,8 @@ def backup(ctx):
         said = [f"{k}: {st[k].get('phase')} at {st[k].get('at', '?')}" + (f": {st[k]['reason']}" if st[k].get("reason") else "")
                 for k in ("run", "check", "test") if isinstance(st.get(k), dict)]
         for p in h["problems"]:
+            if p.get("raised_by"):                  # another check's alert (a failed Go Bag copy: activity.job)
+                continue
             found.append(alert("backup.restic", p["subject"], p["severity"], p["title"], p["detail"], "restic",
                                evidence=evidence([h["verdict"], *said], state=h["state"], problem=p["id"]),
                                fix={"commands": p["commands"], "touches": p["touches"], "from": "bromigos", "root": True,

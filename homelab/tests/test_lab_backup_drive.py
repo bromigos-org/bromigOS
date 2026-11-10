@@ -14,6 +14,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import unittest
 from pathlib import Path
 
@@ -192,12 +193,25 @@ class Words(unittest.TestCase):
         self.assertEqual([D.days(b) for b in ({}, {"drive_remind_days": 7}, {"drive_remind_days": 0}, {"drive_remind_days": "soon"},
                                               {"drive_remind_days": -1}, {"drive_remind_days": True})], [30, 7, 0, 30, 30, 30])
 
-    def test_a_failed_copy_and_a_stale_drive_are_two_alerts(self):
-        """Their subjects differ, so `bromigos alerts` keeps both (an alert's id is its check and subject)."""
+    def test_a_failed_copy_and_a_stale_drive_are_two_problems(self):
+        """Both are in the verdict. The failed copy's alert is the copy job's own (activity.job),
+        so its problem says so and the backup check leaves it out (tests/alerts has that)."""
         h = self.health(drive(rec("ok", 50 * DAY), rec("failed", DAY, reason="The Go Bag drive isn't plugged in.")))
-        self.assertEqual([(p["id"], p["subject"]) for p in h["problems"]],
-                         [("drive-failed", "server-drive-copy"), ("drive-stale", "server-drive")])
+        self.assertEqual([(p["id"], p["subject"], p.get("raised_by")) for p in h["problems"]],
+                         [("drive-failed", "server-drive-copy", "activity.job"), ("drive-stale", "server-drive", None)])
         self.assertIn("The last good copy was 50 days ago.", h["problems"][0]["detail"])
+
+    def test_a_copy_someone_stopped_is_not_a_failure(self):
+        """`bromigos activity cancel` (or a stopped unit): the drive has no new copy, and nothing failed."""
+        entry = drive(rec("ok", 3 * DAY), rec("stopped", HOUR, reason="It was stopped before it finished."))
+        h = self.health(entry)
+        self.assertEqual((h["problems"], h["state"]), ([], "ok"))
+        self.assertTrue(h["verdict"].endswith(" Go Bag: copied 3 days ago."), h["verdict"])
+        rows = []
+        D.print_rows(D.view({"drives": {UUID: entry}}, NOW, real=lambda p: "/nonexistent" + p), NOW, lambda *r: rows.append(r))
+        self.assertEqual([r[0] for r in rows], ["Go Bag", "Last copy", "", "Last good one"])
+        self.assertTrue(rows[1][1].startswith("stopped before it finished, 1 hour ago ("), rows[1])
+        self.assertEqual(rows[3][1].split(" (")[0], "3 days ago")
 
     def test_no_drive_changes_nothing(self):
         st = {"run": rec("ok", 6 * HOUR)}
@@ -557,6 +571,62 @@ class Copy(DriveRig):
     def test_another_drive_plugged_in_starts_nothing(self):
         r = self.plugged_in("AB12-CD34")
         self.assertEqual((r.returncode, r.stdout, self.jobs(), self.touched()), (0, "", [], []))
+
+    def test_the_copy_job_takes_turns_and_may_be_stopped_or_started_again(self):
+        """#110's activity: the copy job holds the lock backup-drive (two copies take turns), says
+        stopping is safe except while it unmounts, and may be started again by `retry`."""
+        self.assertEqual(self.plugged_in().returncode, 0)
+        job = self.jobs()[-1]
+        self.assertEqual(job["locks"], ["backup-drive"])
+        log = (self.root / "var/lib/bromigos/activity/jobs" / (job["id"] + ".log")).read_text()
+        self.assertIn("::cancel unsafe The Go Bag drive is being unmounted.", log)
+        self.assertLess(log.index("::cancel unsafe"), log.index("::step unplug done"))
+        cmd = D.job_command(UUID)
+        self.assertEqual(cmd[cmd.index("--lock") + 1], "backup-drive")
+        self.assertIn("--cancel-safe", cmd)
+        self.assertIn("--retry-safe", cmd)
+
+    def test_a_failed_copy_is_one_alert_the_jobs_own(self):
+        """A failed copy raises one alert, activity.job's, and the next good copy clears it."""
+        import bromigos_alerts as AL
+        aenv = AL.Env(dict(self.env(), BROMIGOS_ALERTS_ROOT=str(self.root)))
+        (self.fake / "backup-fails").write_text("")
+        self.go("run", rc=1)
+        job = self.jobs()[-1]
+        self.assertEqual(job["state"], "failed")
+        self.assertIn("retry", job["can"])
+        doc = AL.run_pass(aenv, "system", checks={"backup.restic", "activity.job"})
+        got = {a["id"]: a for a in doc["alerts"]}
+        self.assertEqual(sorted(got), [f"activity.job:backup.drive:drive/{UUID}"])
+        self.assertEqual(got[f"activity.job:backup.drive:drive/{UUID}"]["title"], "A job failed: Copying the backup to the Go Bag drive")
+        self.assertEqual([(p["id"], p.get("raised_by")) for p in self.doc(rc=1)["health"]["problems"]], [("drive-failed", "activity.job")])
+        (self.fake / "backup-fails").unlink()
+        self.go("run", rc=0)
+        self.assertEqual(AL.run_pass(aenv, "system", checks={"backup.restic", "activity.job"})["alerts"], [])
+
+    def test_a_copy_waits_for_a_restore_that_reads_the_drive(self):
+        """A restore from the drive holds its file lock: a copy started meanwhile waits for it,
+        says so, and then copies. It is never skipped."""
+        import fcntl
+        held = self.root / "var/lib/bromigos/server/backup-drive.lock"
+        held.parent.mkdir(parents=True, exist_ok=True)
+        with open(held, "a") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            p = subprocess.Popen([sys.executable, str(REPO / "homelab/bin/bromigos-lab"), "backups", "go-bag", "run"],
+                                 env=self.env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                 stdin=subprocess.DEVNULL, start_new_session=True)
+            self.procs.append(p)
+            deadline = time.time() + 60
+            while not any("Waiting for the command that is using the Go Bag drive" in (j.get("stage") or "") for j in self.jobs()):
+                self.assertIsNone(p.poll(), "it ended instead of waiting")
+                self.assertLess(time.time(), deadline)
+                time.sleep(0.1)
+            self.assertEqual(self.mounted(), "", "nothing is mounted while it waits")
+        out, err = p.communicate(timeout=120)
+        self.assertEqual(p.returncode, 0, err)
+        self.assertIn("      Waiting for the command that is using the Go Bag drive (a setup, or a restore from it)", out)
+        self.assertRegex(out, r"\nSafe to unplug\. \d+ files")
+        self.assertEqual(self.drives()[UUID]["run_ok"]["phase"], "ok")
 
     def test_the_drive_is_found_again_under_another_device_name(self):
         self.plug(usb(name="sdf"), disk("sdb", "Someone's Stick", 32_000_000_000, children=[part("sdb1", "vfat", "AB12-CD34", 31_000_000_000)]))
