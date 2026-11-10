@@ -1,0 +1,44 @@
+name: activity tests
+
+# `bromigos activity` (docs/activity.md) on a pull request: the package build runs these
+# tests too (packaging/bromigos-core/PKGBUILD, check()), but only once a change is on main.
+
+on:
+  pull_request:
+    paths:
+      - "lib/bromigos_activity.py"
+      - "lib/bromigos_alerts.py"
+      - "bin/bromigos-activity"
+      - "bin/bromigos-welcome-console"
+      - "tests/activity/**"
+      # the commands whose progress lines the parser must know
+      - "homelab/lib/bromigos_homelab/localprovision.py"
+      - "iso/profile/airootfs/usr/local/**"
+      - "iso/test/provision-stub"
+      - ".github/workflows/activity-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: activity-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Activity unit tests
+    # GitHub's runner, never the lab's: this repo is public (forks' PRs run here)
+    runs-on: ubuntu-latest
+    container: archlinux:base
+    timeout-minutes: 15
+    steps:
+      - name: tools
+        run: pacman -Syu --noconfirm --needed git python >/dev/null
+      - uses: actions/checkout@v5
+      - name: unittest
+        # as a normal user, like makepkg's check(): a stand-in root and a stand-in systemd-run
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE' && PYTHONPATH=lib python -m unittest discover -s tests/activity"

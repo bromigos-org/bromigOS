@@ -116,6 +116,7 @@ on their own:
 | Settings, the menu, keys and other desktop tools | `desktop/` | `PYTHONPATH=lib python -m unittest discover -s tests` |
 | The homelab integrations and `bromigos lab` | `homelab/` | `PYTHONPATH=lib python -m unittest discover -s tests` |
 | The Bromigos account sign-in | the root | `PYTHONPATH=lib python -m unittest discover -s tests/account` |
+| Activity records and `bromigos activity` | the root | `PYTHONPATH=lib python -m unittest discover -s tests/activity` |
 | The boot menu theme | the root | `python -m unittest discover -s settings/grub/tests` |
 | The app launcher's entries | the root | `python tools/launcher/check.py --static` |
 
@@ -225,6 +226,7 @@ or rollback steps when needed, and remove that section when it does not apply.
 | `install-smoke` | changes to `install.sh`, the signing key or `test/vm/` | `install.sh --dry-run` in a fresh Arch container, and a wrong key is refused |
 | `iso-check` | changes to the ISO, the boot splash or the boot menu | The ISO profile's scripts and files, and its package list |
 | `launcher` | changes to commands, launcher entries or their icons | Every entry is valid and runs the right command |
+| `activity tests` | changes to `bromigos activity`, the Server tour, or a command whose progress lines it reads | The activity tests, on a stand-in root |
 | `lab-catalog` | Mondays | Refreshes the lab model catalog's metadata and proposes new models for review |
 | `release-tools` | changes to the release tools or workflows | The release tool's tests, shellcheck, and the release workflows parsed |
 | `release-prepare` | by hand | Picks the version, drafts the notes and opens the release pull request |
