@@ -21,7 +21,9 @@
 #                           temperatures), a monthly btrfs scrub of /, errors in the health check
 #   power                   NUT, set up only when a UPS is on USB (bromigos-server-ups.service)
 #   backups                 restic, nightly after the update (bromigos-server-backup.timer),
-#                           checked weekly; off until [backup] to is set
+#                           checked weekly, a test restore monthly; off until [backup] to is
+#                           set. Getting files back: bromigos lab backups (bromigos-core's
+#                           lib/bromigos_backups.py)
 #   containers              Podman, with the docker command and compose; Quadlet for services
 #                           (/etc/containers/systemd), podman-auto-update.timer after the update
 #   the network             mDNS (avahi, nss-mdns: the _bromigos-lab._tcp announcement, .local

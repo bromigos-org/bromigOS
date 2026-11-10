@@ -14,7 +14,9 @@ bromigOS never fixes anything by itself. It says what's wrong, in plain words, a
   are a quiet line ([Storage](storage.md#check-your-drives-health)).
 - **Disk space.** A disk that is 90 % full, and again at 97 %.
 - **Updates.** Updates waiting, and a restart that a new kernel or graphics driver needs.
-- **Backups.** A backup that failed, or didn't run for a day and a half.
+- **Backups.** A backup that failed, or didn't run for a day and a half. On
+  [bromigOS Server](server.md#is-the-backup-working), also a test restore that failed, or
+  none passing for 45 days.
 - **The UPS.** A UPS (battery backup) that is running on its battery, or running low.
 - **Services.** A part of the system that stopped working, such as a web server or file sync.
 - **Games.** Problems that stop Steam games from starting ([Playing games](games.md)).

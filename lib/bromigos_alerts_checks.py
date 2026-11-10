@@ -7,6 +7,7 @@ it instead of working it out again:
   update.waiting   `bromigos update --check --json`
   update.restart   core's reboot rules (core/crates/bromigos-core/src/reboot.rs), read the same way
   update.held      bromigos-server's own state (its Arch news hold)
+  backup.restic    bromigos_backups.health(): the verdict `bromigos lab backups` prints
   fieldkit.finding Field Kit's engine (`fieldkit-engine engine check …`) and the findings a
                    Field Kit stick saved in this install
   game.steam       `bromigos game check --json`
@@ -15,6 +16,7 @@ it instead of working it out again:
 import json
 import os
 import re
+import tomllib
 
 from bromigos_alerts import Failed, Skip, alert, evidence, slug
 
@@ -22,6 +24,7 @@ FIELDKIT_ENGINE = "/usr/lib/bromigos/fieldkit/fieldkit-engine"
 FIELDKIT_FINDINGS = "/var/lib/bromigos/fieldkit/findings.json"
 SERVER_STATE = "/var/lib/bromigos/server/update.json"
 BACKUP_STATE = "/var/lib/bromigos/server/backup.json"     # bromigos server backup
+SERVER_CONFIG = "/etc/bromigos/server.toml"               # its [backup] to: where the backups go
 DAY = 86400_000
 
 
@@ -388,41 +391,33 @@ def backup(ctx):
     env = ctx.env
     now = env.now_ms()
     found = []
-    # bromigOS Server's own backup (bromigos server backup) keeps its state: the last run, the last check
+    # bromigOS Server's own backup keeps its state: the last run, check and test restore. What's
+    # wrong with it is bromigos_backups.health()'s call, the same one `bromigos lab backups` and
+    # `bromigos server` print, so the alert and the status can't disagree
     raw = env.read(BACKUP_STATE)
     if raw:
+        import bromigos_backups as B
         try:
             st = json.loads(raw)
         except ValueError:
             st = {}
-        run, chk = st.get("run") or {}, st.get("check") or {}
-        cmds = {"commands": ["bromigos server backup status", "journalctl -u bromigos-server-backup.service -n 50 --no-pager",
-                             "sudo bromigos server backup run"],
-                "touches": ["runs the backup again"], "from": "bromigos", "root": True,
-                "note": "Read why it failed first: a destination that can't be reached and a full disk are common."}
-        if run.get("phase") == "failed":
-            found.append(alert("backup.restic", "server", "needs_you", "The last backup failed",
-                               f"{(run.get('reason') or 'restic failed')[:300]}. Nothing was copied this time.", "restic",
-                               evidence=evidence([f"run: failed at {run.get('at', '?')}: {run.get('reason', '')}"],
-                                                 phase="failed", at=run.get("at", "")), fix=cmds))
-        elif run.get("ts") and now - int(float(run["ts"]) * 1000) > 36 * 3600_000:
-            hours = (now - int(float(run["ts"]) * 1000)) // 3600_000
-            found.append(alert("backup.restic", "server", "needs_you", f"No backup for {hours} hours",
-                               f"The last backup was on {run.get('at', '?')}. The nightly one hasn't run since: "
-                               "the server may have been off, or the timer stopped.", "restic",
-                               evidence=evidence([f"run: {run.get('phase')} at {run.get('at', '?')}"], at=run.get("at", "")),
-                               fix=cmds))
-        elif run.get("phase") == "partial":
-            found.append(alert("backup.restic", "server", "info", "The last backup left some files out",
-                               f"{(run.get('reason') or 'some files could not be read')[:300]}. The rest was backed up.",
-                               "restic", evidence=evidence([f"run: partial at {run.get('at', '?')}: {run.get('reason', '')}"])))
-        if chk.get("phase") == "failed":
-            found.append(alert("backup.restic", "server-check", "needs_you", "The backup check failed",
-                               f"{(chk.get('reason') or 'restic check failed')[:300]}. What's in the backup may not read "
-                               "back: look at it before you need it.", "restic",
-                               evidence=evidence([f"check: failed at {chk.get('at', '?')}: {chk.get('reason', '')}"]),
-                               fix=dict(cmds, commands=["bromigos server backup status", "sudo bromigos server backup check"],
-                                        touches=["nothing (it reads the backup back)"])))
+        st = st if isinstance(st, dict) else {}
+        try:
+            to = str((tomllib.loads(env.read(SERVER_CONFIG) or "").get("backup") or {}).get("to") or "")
+        except (tomllib.TOMLDecodeError, AttributeError):
+            to = ""
+        try:
+            journal = json.loads(env.read(B.JOURNAL) or "{}")
+        except ValueError:
+            journal = {}
+        h = B.health(to, st, now / 1000, B.destination(to, B.had_backup(st), env.path), B.job_record(doc=journal))
+        said = [f"{k}: {st[k].get('phase')} at {st[k].get('at', '?')}" + (f": {st[k]['reason']}" if st[k].get("reason") else "")
+                for k in ("run", "check", "test") if isinstance(st.get(k), dict)]
+        for p in h["problems"]:
+            found.append(alert("backup.restic", p["subject"], p["severity"], p["title"], p["detail"], "restic",
+                               evidence=evidence([h["verdict"], *said], state=h["state"], problem=p["id"]),
+                               fix={"commands": p["commands"], "touches": p["touches"], "from": "bromigos", "root": True,
+                                    "note": p["note"]}))
     rc, out, _ = env.run(["systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--type=service",
                           "restic*", "bromigos-backup*"], timeout=15)
     if rc == 127 and not raw:

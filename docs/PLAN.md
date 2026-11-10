@@ -381,8 +381,9 @@ first, and VECTOR's terminal will refuse all of them.
 - `lab logs <app>` will read the logs. It's read-only, so it may land early.
 - `lab restart <app>` will restart an app through the repository, or through the API where
   the user allows it. It will never restart the voice service while VECTOR is speaking.
-- `lab backups` will list, run and restore backups. A restore will always ask first and
-  show what it overwrites.
+- `lab backups` lists and restores bromigOS Server's own backups, and runs a test restore
+  ([server.md](server.md#backups)). A restore in place asks first and shows what it
+  replaces. Backups of the rest of a lab, through its repository, will come later.
 - `lab power` reads configured PDU outlets and follows reviewed Ansible outlet plans.
   Wake-on-LAN and GPU power limits remain planned.
 - `lab models add|remove|replace` will change the lab's models. `replace` is also how the

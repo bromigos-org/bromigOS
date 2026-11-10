@@ -34,7 +34,8 @@ optdepends=('gnupg: verify signed model catalog updates'
             'ethtool: bromigos hw salvage reads a wired port'"'"'s top speed'
             'libva-utils: bromigos hw salvage lists the video formats the graphics chip decodes and encodes')
 makedepends=('git' 'python' 'gnupg')
-checkdepends=('python-textual' 'python-cairo' 'python-gobject' 'pango' 'python-psutil' 'python-zeroconf')
+checkdepends=('python-textual' 'python-cairo' 'python-gobject' 'pango' 'python-psutil' 'python-zeroconf'
+              'restic')   # bromigos lab backups, restoring from a real repository (tests/test_lab_backups.py)
 options=('!debug')
 _root="${startdir%/packaging/*}"
 _paths=(homelab packaging/bromigos-lab packaging/install-lab.sh packaging/keys LICENSE-MIT LICENSE-APACHE)

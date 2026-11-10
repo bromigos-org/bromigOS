@@ -1,0 +1,16 @@
+# bromigOS Server (docs/server.md, "Backups"): the monthly test restore. A sample of the newest
+# backup's files is restored to a scratch folder, read back against the backup, and removed.
+# How it went is kept in /var/lib/bromigos/server/backup.json: `bromigos lab backups` says when
+# one last passed, and `bromigos alerts` raises one that failed, or none passing for 45 days.
+# With no destination set it does nothing.
+[Unit]
+Description=bromigOS Server backup test restore (restic)
+Wants=network-online.target
+After=network-online.target bromigos-server-backup.service bromigos-server-backup-check.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/bromigos/server/bromigos-server backup test
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=12h

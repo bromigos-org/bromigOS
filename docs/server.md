@@ -21,7 +21,8 @@ of that it adds what a server needs:
   back healthy, the update is rolled back by itself.
 - **A watch on its disks**, a monthly check of its files, and a clean shutdown when a UPS's
   battery runs low.
-- **Backups**, every night, once you say where to.
+- **Backups**, every night, once you say where to, with a way to [get your files
+  back](#get-your-files-back) and a test restore every month.
 - **Containers**, with Podman and the `docker` command.
 - **Roles**: Lab node, Storage, Home services, Game server, or Just a server. You pick them
   at install, or add them later.
@@ -47,7 +48,7 @@ the table says otherwise.
 | Logs that never fill the disk | [Logs](#logs) | `systemd` |
 | A watch on the disks, and a monthly scrub | [Disks](#disks) | `smartmontools`, `btrfs-progs` |
 | A clean shutdown on a UPS | Only when one is plugged in ([Power](#power)) | `nut` |
-| Backups | Off until you say where ([Backups](#backups)) | `restic` |
+| Backups | Off until you say where. Restore and a monthly test restore ([Backups](#backups)) | `restic` |
 | Find my lab and `.local` names | [Find my lab](#find-my-lab) | `avahi`, `nss-mdns` |
 | Wake-on-LAN | BRODEC's Power on button can start the server ([Wake-on-LAN](#wake-on-lan)) | `ethtool` (`bromigos-core`'s) |
 | AppArmor and the hardening settings | [Hardening](#hardening) | `apparmor` |
@@ -211,7 +212,7 @@ on the server's own tools, and installs a few files of its own.
 | The roles | `/usr/share/bromigos/server/roles/*.toml`, and the files they write in `roles/files/` |
 | SSH's guard | `/usr/share/bromigos/server/sshguard.conf`, and a drop-in for `sshguard.service` |
 | The disks | `/usr/share/bromigos/server/smartd.conf`, a drop-in for `smartd.service`, `/usr/lib/bromigos/server/bromigos-server-disk-alert` |
-| Backups | `bromigos-server-backup.timer` (nightly) and `bromigos-server-backup-check.timer` (weekly) |
+| Backups | `bromigos-server-backup.timer` (nightly), `bromigos-server-backup-check.timer` (weekly) and `bromigos-server-backup-test.timer` (monthly) |
 | The UPS | `bromigos-server-ups.service` |
 | Logs | `/usr/lib/systemd/journald.conf.d/60-bromigos-server.conf` |
 | Hardening | `/usr/lib/sysctl.d/60-bromigos-server.conf` |
@@ -622,6 +623,166 @@ A snapshot isn't a backup: it's on the same disk. The server backs itself up eve
 with restic, once you say where to: the lab's S3, any S3 or SFTP server, or a USB disk.
 Until then it does nothing, and `bromigos server` says backups are off.
 
+This section starts with what you need on a bad day: getting files back. Turning backups
+on, the checks and the full depth come after it.
+
+### Get your files back
+
+One command does it all, `bromigos lab backups`. It reads the backup's key, which only
+the administrator can, so it asks for your password by itself. You never type `sudo`.
+
+**1. See that there is a backup.**
+
+```text
+$ bromigos lab backups
+Backed up 6 hours ago. Last test restore: 12 days ago, passed.
+
+  Destination   s3:https://s3.example/backups/myserver
+  Last backup   worked, 6 hours ago (2026-10-30 06:14, snapshot 1f3a9c2e, 48,210 files, 12.4 GB)
+  Last check    passed, 5 days ago (2026-10-25 08:03)
+  Read-back     5 % of the data read back 26 days ago, passed
+  Test restore  passed 12 days ago (2026-10-18 10:07): 100 files restored and read back, a sample
+  Backups kept  17 backups, from 2026-05-01 to 2026-10-30 (counted 6 hours ago)
+  Schedule      backup nightly (active), check weekly (active), test restore monthly (active)
+
+Get files back: bromigos lab backups restore   ·   every backup: bromigos lab backups list
+```
+
+The first line is the verdict. [The health line](#the-health-line) lists what it can say.
+
+**2. Find what you lost.** `list` shows every backup, newest first. `show` looks inside
+one, a folder at a time. With no backup named, it's the newest.
+
+```bash
+bromigos lab backups list
+bromigos lab backups show 1f3a9c2e /home/ada/documents
+```
+
+**3. Get it back.** Name the backup and what you want. With no paths, you get everything.
+With no backup named, it's the newest.
+
+```bash
+bromigos lab backups restore 1f3a9c2e /home/ada/documents
+```
+
+The files go into a new folder, `/srv/restore/backup-<date>-<id>/`. Each one sits at its
+old path inside it, so `/home/ada/documents/tax.pdf` comes back as
+`/srv/restore/backup-<date>-<id>/home/ada/documents/tax.pdf`. Then copy back what you need.
+
+A restore like this is safe to try:
+
+- **Nothing on the server is replaced.** It only ever writes into that new folder.
+  `--to <folder>` picks another one, which must be new or empty. A folder with files in
+  it is refused.
+- **It checks for room first.** If the disk is too small, it says how much it needs and
+  stops before writing anything.
+- **It reads every file back** against the backup after writing it.
+- **It tells you each step** as it goes, and ends by saying what was restored, where, how
+  many files, and anything it had to skip and why.
+- **You can stop it.** Press `Ctrl+C` and the folder keeps the name
+  `backup-<date>-<id>.partial`, so nobody takes it for a whole one. Run the same command
+  again and it carries on. The folder loses `.partial` only when every file is back. A
+  different restore is never poured into it.
+  If some files couldn't be read from the backup, the folder ends in `-incomplete` and the
+  summary lists them.
+
+The new folder belongs to root and only root can open it, like the backup itself.
+
+### Put files back where they were
+
+To put files back in place, over what's there now, add `--in-place`. That alone changes
+nothing. It shows what would happen:
+
+```text
+$ bromigos lab backups restore 1f3a9c2e /etc/caddy --in-place
+
+Putting /etc/caddy back from the backup of 2026-10-30 06:14 (1f3a9c2e) would:
+
+  replace 1 file that changed since the backup:
+    /etc/caddy/Caddyfile   (now 212 bytes, changed 2026-10-30 19:02; the backup's is 388 bytes)
+  bring back 1 file or folder that is gone:
+    /etc/caddy/sites/blog.conf
+  leave 3 files alone that already match the backup
+  leave alone everything that isn't in the backup: nothing is ever deleted
+
+  First, a snapshot of / is taken (snapper's "root"), so this can be undone.
+
+Nothing was changed: this was only a look. To do it: bromigos lab backups restore 1f3a9c2e /etc/caddy --in-place --apply
+```
+
+Add `--apply` to do it. It shows the list again and asks you to type `yes`. Then it:
+
+1. checks there's room for every file it writes;
+2. takes a snapshot of the files as they are now, where the server keeps snapshots: `/`,
+   and the data disks the installer set up at `/srv/data`;
+3. puts the backup's files over them, and reads each one back;
+4. says what it replaced, what it brought back, and the snapshot's number.
+
+It never deletes. A file that isn't in the backup stays where it is.
+
+**Where no snapshot can be taken**, it says so plainly: *"No snapshot can be taken of
+/home: snapshots aren't set up for it. What this replaces there can't be brought back
+afterwards."* Then it asks a second time. If a snapshot should work and fails, the restore
+stops before it changes anything.
+
+**If it stops part-way** (a power cut, `Ctrl+C`), or some files can't be read from the
+backup, some files are from the backup and some aren't. The server doesn't forget that. The
+health line says "A restore stopped part-way", with the command that finishes it, and
+[alerts](alerts.md) raise it, until a restore of those paths runs to the end. Running it
+again is safe: files that already match are left alone.
+
+### The test restore
+
+A backup nobody has restored from is a hope, not a backup. So once a month the server
+tries: it picks 100 of the newest backup's files at random, restores them to a scratch
+folder, reads each one back against the backup, compares them with the backup's own list,
+and removes the scratch folder. Nothing on the server changes. The sample leaves out
+files over 256 MiB and stops at 1 GiB in all, so it fits beside the system. It reads
+everything from the destination, with none of restic's cache on the server: on the day the
+server is gone, there is no cache.
+
+It's quiet when it passes. The health line says when one last passed. When one fails, or
+none has passed for 45 days, the health line says so and [alerts](alerts.md) tell your
+desktop and your phone.
+
+```bash
+bromigos lab backups test          # one now, with a sample
+bromigos lab backups test --all    # restore every file: needs room for all of them
+```
+
+A sample can miss damage in files it didn't pick. `--all` reads everything, and so does
+the weekly check's `--data` over time, 5 % a month.
+
+### The health line
+
+`bromigos lab backups` opens with one verdict. `bromigos server` shows the same sentence
+on its Backups line, and [alerts](alerts.md) raise the same problems, because all three
+ask one function (`health()` in `lib/bromigos_backups.py`). They can't disagree.
+
+| The line | What it means |
+|---|---|
+| Backed up 6 hours ago. Last test restore: 12 days ago, passed. | All is well. |
+| Backed up 6 hours ago. Last test restore: none yet. | New backups. The first test restore runs within a month. |
+| No backup yet: the first one runs tonight. | A destination is set, and nothing has run. |
+| Backups are off: nothing on this server is backed up. … | No destination is set. |
+| No backup in 9 days: the drive at /mnt/backup is not connected. | A backup worked there before, and the folder is missing or empty now. |
+| No backup in 9 days: the nightly backup has not run (…). | The server was off, or the timer is stopped. |
+| The last backup failed: … The one before it worked, 1 day ago. | One bad night. The reason is restic's. |
+| Backed up 6 hours ago. Some files could not be read and were left out. | The rest was backed up. |
+| … But the last check of the backup failed (2 days ago): … | The weekly check found damage. |
+| … The last test restore failed (1 day ago): … | Files didn't come back. Look before you need them. |
+| … No test restore has passed in 50 days. | The monthly one hasn't run, or keeps failing to start. |
+| … A restore stopped part-way: … | A restore in place was interrupted. Run it again. |
+
+What it doesn't know, it says: "none yet", "not counted yet". The count of backups and
+their dates are taken after each night's backup, so the status needs no key and no network.
+`bromigos lab backups list` reads them fresh.
+
+A backup is late after 36 hours. Reasons come from restic as they are, without its
+`Fatal:` prefix.
+
+### Turn backups on
+
 ```toml
 # /etc/bromigos/server.toml
 [backup]
@@ -638,34 +799,172 @@ AWS_SECRET_ACCESS_KEY=...
 
 **The key.** The first backup makes the backup's key, `/etc/bromigos/server/backup.key`,
 readable by root only. Without it, no one can read the backup, you included. Show it with
-`sudo bromigos server backup key` and keep it somewhere away from the server.
+`sudo bromigos server backup key` and keep it somewhere away from the server. Keep the
+destination's address and its credentials with it: those three things are all a restore
+needs ([below](#restore-without-bromigos)).
 
 | What | When |
 |---|---|
 | The backup | Every night at 06:00 (up to 30 minutes later), after the update and the containers' update. If the server was off, at the next start |
 | What's kept | 7 daily, 4 weekly and 6 monthly backups |
 | The check | Every Sunday at 08:00, `restic check`. In a month's first week it also reads back 5 % of the data |
+| The test restore | The second Sunday of each month at 10:00, after that morning's check. If the server was off, at the next start |
 
 What's backed up: `/etc`, `/var/lib/bromigos`, the Quadlets in `/etc/containers/systemd`,
 the containers' volumes, `/srv`, `/home` and `/root`. Caches are left out (folders with a
-`CACHEDIR.TAG`, `~/.cache`, `node_modules`), and the offline package store.
+`CACHEDIR.TAG`, `~/.cache`, `node_modules`), the offline package store, and `/srv/restore`,
+where restores go. `paths` and
+`exclude` in `[backup]` replace those lists.
 
-For power users:
+**A drive that isn't plugged in.** When a backup worked at the destination before and
+nothing is there now, the nightly backup fails and says so. It never starts a new backup
+in the old one's place, which for an unplugged USB disk would be the folder under it, on
+the system disk. Plug the drive in and the next night carries on. If the old backup is
+gone for good, `sudo bromigos server backup run --new` starts over.
+
+### For power users
 
 | Command | What it does |
 |---|---|
-| `bromigos server backup` | How the last backup and check went (`--json` too) |
-| `sudo bromigos server backup run` | A backup now. The first one sets the destination up (`restic init`) |
+| `bromigos lab backups [status]` | The health line and the status. Needs no root and no network |
+| `bromigos lab backups list` | Every backup in the destination: id, date, size, files, paths |
+| `bromigos lab backups show [ID] [PATH]` | One folder of a backup. No `PATH`: its top-level paths. A path alone is in the newest backup |
+| `bromigos lab backups restore [ID] [PATH…]` | Into a new folder under `/srv/restore`. A first word that starts with `/` is a path, from the newest backup |
+| `… restore … --to DIR` | Into `DIR`, which must not exist or be empty. While it runs, the work folder is `DIR.partial`, or `DIR/restore.partial` when `DIR` was there already, so it's always on the disk the files end up on |
+| `… restore … --in-place` | The list of what would be replaced and brought back. Changes nothing |
+| `… restore … --in-place --apply` | Does it, after a `yes` and a snapshot |
+| `bromigos lab backups test [--all] [--scratch DIR]` | A test restore, recorded for the health line. `--scratch DIR` works in `DIR/bromigos-restore-test`, a folder of its own, and touches nothing else there |
+| `bromigos lab backups run`, `check [--data]` | The same as `bromigos server backup run` and `check` |
+| `sudo bromigos server backup run [--new]` | A backup now. The first one sets the destination up (`restic init`) |
 | `sudo bromigos server backup check [--data]` | A check now; `--data` reads 5 % back |
+| `sudo bromigos server backup test` | What the monthly timer runs: `bromigos lab backups test` |
 | `sudo bromigos server backup key` | Shows the key |
 
-`paths` and `exclude` in `[backup]` replace the lists above. The state is in
-`/var/lib/bromigos/server/backup.json`; `bromigos server status --json` shows the
-destination without any password in it. To restore, use restic itself:
-`sudo RESTIC_REPOSITORY=... RESTIC_PASSWORD_FILE=/etc/bromigos/server/backup.key restic restore latest --target /srv/restore`,
-then copy back what you need.
-A restore command of its own, the lab's Vault for the key, and alerts on the phone are for
-later.
+More flags for `restore`:
+
+| Flag | What it does |
+|---|---|
+| `--yes` | With `--apply`: don't ask. Scripts need it, since there's no terminal to type `yes` in |
+| `--plan DIGEST` | With `--apply`: go ahead only if the list is still the one `--in-place` showed. `DIGEST` is that plan's `digest` |
+| `--without-snapshot` | With `--apply`: go ahead where no snapshot can be taken |
+| `--no-verify` | Don't read each restored file back |
+
+`ID` is the start of a backup's id, or `latest`: the newest of the nightly backups. Paths
+are the full paths the files had on the server. A name with `*`, `?` or `[` in it is taken
+as that exact name, never as a pattern.
+
+**Exit codes.** 0: done, or for the status: healthy, off, or waiting for the first backup.
+1: it failed, or the backups need you. 2: the command line. 3: refused: it would replace
+files, it needs a `yes`, backups are off, or this isn't a Server. 4: not enough free
+space. 130: stopped part-way.
+
+**Scripting with `--json`.** Every command takes `--json` and prints one JSON document on
+stdout. While a restore or a test restore runs, each step is a JSON line on stderr:
+`{"event": "step", "id": "restore", "n": 4, "of": 5, "title": "…"}`, and `"progress"` lines
+with a `percent`. Every document has `schema` (1) and `ok`. A failure has
+`error.code` and `error.message`.
+
+| Command | Its document |
+|---|---|
+| `status` | `server`, `configured`, `to`, `destination` (`kind`, `path`, `present`), `timers`, `health` (`state`: `ok`, `attention`, `waiting` or `off`; `verdict`; `problems`), `last_backup`, `last_success`, `last_check`, `last_check_passed`, `last_read_back`, `last_test`, `last_test_passed`, `snapshots` (`count`, `oldest_ts`, `newest_ts`), `restore`, `running`, `checked_at`, `now` |
+| `list` | `to`, `snapshots`: each `id`, `short_id`, `time`, `ts`, `host`, `tags`, `paths`, `files`, `bytes`, `added_bytes`, `nightly` |
+| `show` | `snapshot`, `path`, `entries`: each `name`, `path`, `type` (`file`, `dir`, `symlink`, `other`), `size`, `mtime`, `permissions` |
+| `restore` | `state` (`done`, `incomplete`), `mode` (`new-folder`), `snapshot`, `paths`, `target`, `files`, `bytes`, `verified`, `replaced` (0), `skipped`: each `path`, `why` |
+| `restore --in-place` | `state` (`planned`), `mode` (`in-place`), `applied` (false), `snapshot`, `paths`, `replace`: each `path`, `size`, `now_size`, `now_modified`, and `link` when it's a link now; `add`: each `path`, `size`; `unchanged`; `digest`; `bytes`; `safety`: each `subvolume`, `config` (null: no snapshot there), `files`, `bytes` |
+| `restore --in-place --apply` | The same, with `applied` (true), `state`, `replaced`, `added`, `skipped`, `verified`, `snapshots_taken`: each `subvolume`, `config`, `number` |
+| `test` | `state` (`passed`, `failed`), `test`: `phase`, `at`, `ts`, `mode` (`sample`, `all`), `files`, `bytes`, `snapshot`, `seconds`, `reason`; `snapshot` |
+
+Error codes: `not-a-server`, `off`, `settings`, `needs-root`, `no-key`, `wrong-key`,
+`no-restic`, `unreachable`, `locked`, `no-such-backup`, `not-in-backup`, `would-overwrite`,
+`needs-yes`, `other-restore`, `plan-changed`, `no-safety-snapshot`, `no-space`, `interrupted`,
+`test-failed`, `failed`, `usage`. Times are ISO 8601 (`at`, `time`) and Unix seconds
+(`ts`); sizes are bytes.
+
+For example, to restore one folder in place from a script, only if the list is what a
+person saw:
+
+```bash
+plan=$(bromigos lab backups restore latest /etc/caddy --in-place --json)
+echo "$plan" | jq -r '.replace[].path, .add[].path'
+bromigos lab backups restore latest /etc/caddy --in-place --apply --yes \
+  --plan "$(echo "$plan" | jq -r .digest)" --json
+```
+
+**The files.**
+
+| File | What it holds |
+|---|---|
+| `/etc/bromigos/server.toml` | `[backup]`: `to`, `paths`, `exclude`, `keep_daily`, `keep_weekly`, `keep_monthly`, `env_file` |
+| `/etc/bromigos/server/backup.key` | The key: restic's repository password, one line. Root only |
+| `/etc/bromigos/server/backup.env` | The destination's credentials, as `KEY=VALUE` lines. Root only |
+| `/var/lib/bromigos/server/backup.json` | `run`, `check` and `test`: how the last of each went. `run_ok`, `check_ok`, `read_back_ok` and `test_ok`: the last one that worked, and for a backup where it went (`to`, without any password). `first_ok_ts`, and `snapshots`: the count and dates |
+| `/var/lib/bromigos/server/restore.json` | The restore running now, or the last one: its steps, its state, and a restore in place that stopped part-way |
+| `/var/lib/bromigos/server/restore-test.json` | The same for the test restore |
+| `/var/lib/bromigos/server/restore-test/` | The test restore's scratch folder. Empty between runs |
+| `/var/cache/restic/` | restic's cache |
+| `/srv/restore/` | Where restores go |
+
+`bromigos server status --json` shows the destination without any password in it, and the
+same `health` as `bromigos lab backups --json`.
+
+**The units.** `bromigos-server-backup.timer`, `bromigos-server-backup-check.timer` and
+`bromigos-server-backup-test.timer` run `bromigos-server backup run`, `check` and `test`.
+`bromigos server setup` enables all three. They do nothing until `[backup] to` is set. A
+failed one never makes an update unhealthy.
+
+**How an in-place restore is made.** The list comes from restic's own dry run
+(`restic restore --dry-run -vv`), so it's what restic will do. restic remakes every link,
+so links are compared separately and only one that points elsewhere is listed. A link
+standing where the backup has a folder is replaced by that folder; nothing is ever
+written through a link. The
+snapshot is `snapper -c <config> create`, for each snapper configuration whose subvolume
+holds a file that changes. `snapper -c <config> undochange <number>..0` puts files back
+as they were in it. The free-space check counts every file it writes at full size, since
+that snapshot keeps the space of the ones it replaces. Files that already match keep their
+contents, and get the backup's dates and permissions, as do the folders on the way to
+them. `--delete` is never passed. A look that finds nothing left to do also settles a
+restore that stopped part-way.
+
+**The repository.** It's a plain restic repository, format version 2, with nothing of
+bromigOS's own in it:
+
+| In the destination | What it is |
+|---|---|
+| `config` | The repository's id and settings |
+| `keys/` | The key file that `backup.key`'s password opens |
+| `snapshots/` | One file per backup |
+| `index/`, `data/00` … `data/ff` | The files' contents, split into encrypted packs |
+| `locks/` | Who is using it now |
+
+Every nightly backup has the tag `bromigos-server` and the server's host name. Paths are
+stored as they were on the server, from `/`. Everything in it is encrypted with the key.
+
+### Restore without bromigOS
+
+If the server is gone, or bromigOS is, the backup still restores with restic alone, on any
+computer. You need three things you kept away from the server: where the backup is
+(`[backup] to`), the key, and for S3 or SFTP the credentials.
+
+```bash
+# on any computer with restic installed (https://restic.net)
+export RESTIC_REPOSITORY='s3:https://s3.example/backups/myserver'   # [backup] to
+export RESTIC_PASSWORD_FILE=./backup.key        # a file with the key in it, one line
+export AWS_ACCESS_KEY_ID=...                    # S3 only: backup.env's lines
+export AWS_SECRET_ACCESS_KEY=...
+
+restic snapshots                                # every backup
+restic ls latest /home/ada                      # look inside the newest
+restic restore latest --target ./restored       # everything, into a new folder
+restic restore latest --target ./restored --include /home/ada/documents   # or one folder
+restic restore 1f3a9c2e --target ./restored --verify    # an older one, read back
+```
+
+For a USB disk, `RESTIC_REPOSITORY` is the folder on it, such as
+`/run/media/you/backup/myserver`. On the server itself the same commands work as root with
+`RESTIC_PASSWORD_FILE=/etc/bromigos/server/backup.key`. `bromigos lab backups` runs restic
+the same way and adds nothing to the backup, so either can read what the other wrote.
+
+The lab's Vault for the key is for later.
 
 ## Find my lab
 
@@ -824,7 +1123,7 @@ bromigOS Server · lab-node-2 · 192.0.2.20
   Lab cluster  agent of homelab, active
   Monitoring   node exporter active on port 9100 (local network only)
   Roles        Lab node, Storage
-  Backups      the last backup worked (2026-10-30T06:14:51-07:00), to s3:https://s3.example/backups/lab-node-2
+  Backups      Backed up 6 hours ago. Last test restore: 12 days ago, passed. To s3:https://s3.example/backups/lab-node-2.
   Disks        no errors; SMART watch active, monthly scrub active
   Power        UPS: none on USB (NUT is off)
   Protection   sshguard active, AppArmor on
@@ -843,7 +1142,7 @@ screen in the console reads it.
 | `sudo bromigos server firewall allow\|deny NAME` | Opens or closes a rule set |
 | `bromigos server roles [--json]` | The roles, and which are on |
 | `sudo bromigos server role add\|remove ROLE[/VARIANT]` | A role on or off (`extra add\|remove` is the same, for Cockpit) |
-| `bromigos server backup [run\|check\|key]` | The backups ([Backups](#backups)) |
+| `bromigos server backup [run\|check\|test\|key]` | The nightly backup and its checks. Getting files back is `bromigos lab backups` ([Backups](#backups)) |
 | `bromigos server ups [detect]` | The UPS ([Power](#power)) |
 | `sudo bromigos server setup` | Applies `server.toml` again, the roles included |
 
@@ -898,6 +1197,33 @@ lab's), every role file against the format, `offline` against the Field Kit stic
 the base's packages on the stick, adding and removing roles (stacking, variants, a failed
 install put back, the lab account, files you changed kept), the roles' and the disks' part
 in the health check, the boot menu's block, `.local` names, backups (off, the first one,
-a failure, a check), the UPS (none, one, settings changed by hand), and smartd's warnings.
+a failure, a check, what the health line needs kept, a backup that vanished never started
+again elsewhere), the UPS (none, one, settings changed by hand), and smartd's warnings.
 Where user namespaces work, every rule set is checked by the real `nft`, and where
 shellcheck is installed, the shell files. Nothing on the machine running them changes.
+
+Restoring is tested against a real restic, where it's installed:
+
+```sh
+cd homelab && PYTHONPATH=lib python -m unittest tests.test_lab_backups
+```
+
+`homelab/tests/test_lab_backups.py` makes a stand-in server with files in `/etc`, `/home`
+and `/srv`, backs it up with the real `bromigos-server backup run` to a folder, and runs
+`bromigos lab backups` against it. It covers the health line's words for every state, the
+JSON documents, `list` and `show`, a restore to a new folder, the refusal to write where
+files are, an in-place restore whose dry-run list is compared with what changed on disk,
+no snapshot mechanism, a snapshot that fails, too little free space, a restore stopped by
+a signal and one killed, a drive that isn't connected, and a damaged repository failing
+the test restore. snapper is a stand-in: from a stand-in root the machine's own snapper
+is never run, nor its `systemctl`, nor `sudo`. `tests/alerts/test_alerts.py` checks that
+every backup alert is a problem of the same `health()` the status prints.
+
+The real tools are tried on a real install. CI's ISO workflow installs bromigOS Server in
+a VM ([fieldkit.md](fieldkit.md#testing-it)), and `iso/fieldkit/restore-drill.sh` then runs
+on it, as a user in `wheel`, with no network: a backup to a folder; `list` and `show`; a
+restore to a new folder compared by checksum; an in-place restore with a real snapper
+snapshot of `/` and of `/home`, and the plain refusal on `/srv`, which has none; the test
+restore by hand and through `bromigos-server-backup-test.service`; the re-run through
+`sudo`; and a pack file cut in half, which the test restore, the health line and the alert
+must all report.

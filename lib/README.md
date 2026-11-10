@@ -39,6 +39,7 @@ modules to the same folder:
 | `bromigos_splash.py` | Saved Plymouth and GRUB splash settings, with backups and rollback; [splash reference](../docs/splash.md) |
 | `bromigos_drives.py` | Drive health with history: each drive's readings over time, its verdict from the trend, the `disk.smart` alert and `bromigos storage health`; [drive health](../docs/storage.md#drive-health) |
 | `bromigos_alerts.py`, `bromigos_alerts_checks.py` | `bromigos alerts`: the checks that find what needs a person, their document for BRODEC's machine agent, custom checks and the desktop notification; [alerts reference](../docs/alerts.md) |
+| `bromigos_backups.py` | bromigOS Server's backups for people: `bromigos lab backups` (status, list, show, restore, test restore), and the one health verdict that it, `bromigos server` and the backup alert share; [Backups](../docs/server.md#backups) |
 | `bromigos_activity.py` | `bromigos activity`: a long job's record and its only writer, the `::stage` and `::step` progress lines' parser, the transient unit a job runs in, the bounds and the redaction; [activity reference](../docs/activity.md) |
 | `bromigos_guide.py` | VECTOR's voice guide: the scripted lines of the installers and tours (`guide/lines.toml`), their clips (`guide/clips/`) and the player; [voice guide](../docs/voice-guide.md) |
 
