@@ -37,7 +37,7 @@ import tomllib
 import urllib.error
 import urllib.request
 
-from . import provcatalog as PC, secretstore as S
+from . import appdata as AD, provcatalog as PC, secretstore as S
 
 ROOT = os.environ.get("BROMIGOS_ROOT", "/")
 STATE = "var/lib/bromigos/lab/provision-local.json"
@@ -384,6 +384,10 @@ class Host:
         if any(len(r) > 1 and r[1] == "/" + rel for r in self.fstab_rows()) and not os.path.ismount(self.path(rel)):
             raise ProvisionError(f"this server keeps {what} on its data disks, and they aren't mounted (/{rel}). "
                                  "Nothing was set up. `bromigos server` says what it knows about them")
+
+    def data_disks(self):
+        """Whether this server has data disks: the installer's btrfs line for them in fstab."""
+        return any(len(r) > 2 and r[1] == AD.POOL and r[2] == "btrfs" for r in self.fstab_rows())
 
     def make_way(self, rel, why):
         """A share from another machine is mounted at a folder the data disks' subvolume is
@@ -808,7 +812,22 @@ def step_caddy(host, it):
 
 
 def step_passwords(host, it):
+    host.apps_folder()
     pacman(host, ["vaultwarden", "vaultwarden-web"])
+    # The vault is a folder under /srv/apps, like every app's: on the data disks when the server
+    # has them, and in the nightly backup either way. The package's own file names
+    # /var/lib/vaultwarden, so the service is told by a file read after that one (appdata.py).
+    # A vault that is in the package's folder already stays there and goes on working: an empty
+    # folder in its place would show the household no passwords. `bromigos lab app-data move`
+    # moves it, with the service stopped and every file compared
+    if AD.is_vault(host.path(AD.VAULT_OLD)) and not AD.is_vault(host.path(AD.VAULT)):
+        if host.data_disks():
+            note(host, it, f"Your passwords are in {AD.VAULT_OLD}, on the system disk, and stay there for now. "
+                           "sudo bromigos lab app-data move puts them on the data disks, with the other apps' data.")
+    else:
+        os.chmod(host.mkdir(AD.VAULT, owner="vaultwarden:vaultwarden"), 0o700)
+        host.write(AD.VAULT_ENV, AD.VAULT_ENV_TEXT)
+        host.write(AD.VAULT_DROPIN, AD.VAULT_DROPIN_TEXT)
     host.write("etc/systemd/system/vaultwarden.service.d/50-bromigos.conf",
                "[Service]\nEnvironment=ROCKET_ADDRESS=127.0.0.1\nEnvironment=ROCKET_PORT=8222\n"
                "Environment=WEB_VAULT_ENABLED=true\nEnvironment=WEB_VAULT_FOLDER=/usr/share/webapps/vaultwarden-web\n"

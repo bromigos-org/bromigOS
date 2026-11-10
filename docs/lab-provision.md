@@ -562,9 +562,14 @@ disks are away. A media library on a NAS share takes that folder over: the engin
 the data disks' `fstab` line for `/srv/media` into a comment and unmounts their subvolume
 before it mounts the share.
 
+Passwords (Vaultwarden) is a package whose own settings file keeps the vault in
+`/var/lib/vaultwarden`. Its step gives it `/srv/apps/passwords` and writes the two files
+that tell the service (`appdata.py`'s `VAULT_ENV` and `VAULT_DROPIN`). When a vault is in
+the package's folder already, the step leaves it there and writes neither file.
+
 `bromigos lab app-data` says where `/srv/apps` is. On a server installed before the
 installer mounted it there, `bromigos lab app-data move` puts it on the data disks, and
-the media library and the backups folder with it
+the media library, the backups folder and a vault in the package's folder with it
 (`bromigos_homelab/appdata.py`; [server.md](server.md#a-server-set-up-before-the-installer-did-this)).
 
 ### Updates

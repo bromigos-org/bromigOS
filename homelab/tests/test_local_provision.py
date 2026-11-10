@@ -265,23 +265,78 @@ class ApplyTests(unittest.TestCase):
                   "UUID=2222  /srv/media  btrfs  subvol=/media,compress=zstd,noatime,nofail  0 0\n"
                   "UUID=2222  /srv/backups  btrfs  subvol=/backups,compress=zstd,noatime,nofail  0 0\n")
 
-    def test_data_disks_away_no_library_or_backup_place_is_made_on_the_system_disk(self):
-        # fstab mounts the data disks' subvolumes at /srv/media and /srv/backups. Not mounted (a
-        # stand-in root never is), each is a folder on the system disk that takes nothing
+    def test_the_passwords_vault_is_a_folder_under_the_apps_like_every_apps(self):
+        # Vaultwarden is a package whose own file puts the vault in /var/lib/vaultwarden, on the
+        # system disk. The engine gives it /srv/apps/passwords, and tells the service with a file
+        # read after the package's own (an Environment= line would lose to that file)
+        Path(self.root, "var/lib/vaultwarden").mkdir(parents=True)             # the package makes it, empty
+        plan = L.build_plan(["passwords"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        vault = Path(self.root, "srv/apps/passwords")
+        self.assertTrue(vault.is_dir())
+        self.assertEqual(vault.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(Path(self.root, "etc/bromigos/lab/passwords.env").read_text().splitlines()[-1],
+                         "DATA_FOLDER=/srv/apps/passwords")
+        drop = Path(self.root, "etc/systemd/system/vaultwarden.service.d/60-bromigos-data.conf").read_text()
+        for line in ("RequiresMountsFor=/srv/apps/passwords", "ReadWritePaths=/srv/apps/passwords",
+                     "EnvironmentFile=/etc/bromigos/lab/passwords.env"):
+            self.assertIn(line + "\n", drop)
+        # the files are there before the service first starts: it never starts on the package's folder
+        calls = [" ".join(c) for c in self.m.calls]
+        self.assertLess(calls.index("systemctl daemon-reload"), calls.index("systemctl restart vaultwarden.service"))
+        self.assertFalse([l for l in self.lines if l.startswith("::note passwords")])
+        # set up again from nothing known (its record gone): the same files, and the vault still under /srv/apps
+        (vault / "db.sqlite3").write_text("the household's passwords\n")
+        Path(self.root, L.STATE).unlink()
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0)
+        self.assertEqual((vault / "db.sqlite3").read_text(), "the household's passwords\n")
+        self.assertIn("DATA_FOLDER=/srv/apps/passwords", Path(self.root, "etc/bromigos/lab/passwords.env").read_text())
+
+    def test_a_vault_already_in_the_packages_folder_stays_there_and_goes_on_working(self):
+        # a server set up before the vault had a folder under /srv/apps: pointing the service at an
+        # empty folder would show the household no passwords. It is left as it is, and the one
+        # command that moves it safely is named on a server with data disks
+        old = Path(self.root, "var/lib/vaultwarden")
+        old.mkdir(parents=True)
+        (old / "db.sqlite3").write_text("the household's passwords\n")
+        plan = L.build_plan(["passwords"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        self.assertFalse(Path(self.root, "etc/systemd/system/vaultwarden.service.d/60-bromigos-data.conf").exists())
+        self.assertFalse(Path(self.root, "etc/bromigos/lab/passwords.env").exists())
+        self.assertFalse(Path(self.root, "srv/apps/passwords").exists())
+        self.assertEqual((old / "db.sqlite3").read_text(), "the household's passwords\n")
+        self.assertFalse([l for l in self.lines if l.startswith("::note passwords")])       # no data disks: nothing to do
+        Path(self.root, "etc").mkdir(exist_ok=True)
+        Path(self.root, "etc/fstab").write_text(self.POOL_FSTAB.replace("UUID=2222  /srv/apps", "# UUID=2222  /srv/apps"))
+        self.lines.clear()
+        Path(self.root, L.STATE).unlink()                       # done once already: it runs again only when something changed
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        (note,) = [l for l in self.lines if l.startswith("::note passwords")]
+        self.assertIn("/var/lib/vaultwarden, on the system disk", note)
+        self.assertIn("sudo bromigos lab app-data move", note)
+        self.assertFalse(Path(self.root, "etc/bromigos/lab/passwords.env").exists())
+
+    def test_data_disks_away_no_vault_library_or_backup_place_is_made_on_the_system_disk(self):
+        # fstab mounts the data disks' subvolumes at /srv/apps, /srv/media and /srv/backups. Not
+        # mounted (a stand-in root never is), each is a folder on the system disk that takes nothing
         Path(self.root, "etc").mkdir(exist_ok=True)
         Path(self.root, "etc/fstab").write_text(self.POOL_FSTAB)
-        for d in ("srv/media", "srv/backups"):
+        for d in ("srv/apps", "srv/media", "srv/backups"):
             Path(self.root, d).mkdir(parents=True)
-        plan = L.build_plan(["media-library", "backup-target"], hw=HW)
+        plan = L.build_plan(["passwords", "media-library", "backup-target"], hw=HW)
         self.net["up"] = True
         self.assertEqual(L.Runner(self.host(plan)).run(), 1)
-        for item, folder in (("media-library", "/srv/media"), ("backup-target", "/srv/backups")):
+        for item, folder in (("passwords", "/srv/apps"), ("media-library", "/srv/media"), ("backup-target", "/srv/backups")):
             self.assertEqual(self.states(item)[-1], "failed", item)
             err = next(l for l in self.lines if l.startswith(f"::error {item} "))
             self.assertIn(f"on its data disks, and they aren't mounted ({folder})", err)
-        for d in ("srv/media", "srv/backups"):
+        for d in ("srv/apps", "srv/media", "srv/backups"):
             self.assertEqual(list(Path(self.root, d).iterdir()), [], d)
-        self.assertEqual(self.m.ran("useradd"), [])
+        self.assertEqual(self.m.ran("pacman -S --needed --noconfirm vaultwarden") + self.m.ran("useradd")
+                         + self.m.ran("systemctl restart vaultwarden"), [])
+        self.assertFalse(Path(self.root, "etc/bromigos/lab/passwords.env").exists())
 
     def test_a_media_library_on_a_nas_takes_the_place_of_the_data_disks_folder(self):
         # the installer mounts the data disks' media subvolume at /srv/media. A library on a NAS

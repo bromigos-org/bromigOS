@@ -596,15 +596,24 @@ A media library on a NAS share is the exception. The share is mounted at `/srv/m
 the data disks' line for that folder becomes a comment in `/etc/fstab` and the share takes
 its place. The `media` subvolume stays on the data disks, at `/srv/data/media`.
 
-**Apps that are packages aren't there.** Passwords (Vaultwarden) is a package, and its
-data is where the package keeps it: `/var/lib/vaultwarden`, on the system disk, with or
-without data disks. Nothing here moves it. On a server with data disks the status names
-it, so "on the data disks" is never read as all of it. The nightly backup's default paths
-([Backups](#backups)) don't include `/var/lib/vaultwarden` either: `[backup] paths` in
-`server.toml` sets the whole list. AdGuard Home, Grafana and Prometheus, and OpenBao are
-packages too, and each keeps its state where its package does.
+**The passwords vault is there too.** Passwords (Vaultwarden) is a package, not a
+container, and its package keeps the vault in `/var/lib/vaultwarden`, on the system disk.
+bromigOS gives it a folder like every other app's, `/srv/apps/passwords`, so the vault is
+on the data disks when the server has them. Two files tell the service:
 
-`bromigos lab app-data` says which, and `bromigos server` has it on its **App data** line.
+- `/etc/bromigos/lab/passwords.env` sets `DATA_FOLDER=/srv/apps/passwords`.
+- `/etc/systemd/system/vaultwarden.service.d/60-bromigos-data.conf` reads that file, lets
+  the service write to the folder, and makes it wait for the folder's disk.
+
+The package's own `/etc/vaultwarden.env` also sets `DATA_FOLDER`. systemd lets a file
+named later win over one named earlier, and any file win over an `Environment=` line, so
+the setting has to come from a file. Your own settings still go in `/etc/vaultwarden.env`.
+
+AdGuard Home, Grafana and Prometheus, and OpenBao are packages too, and each keeps its
+state where its package does, on the system disk.
+
+`bromigos lab app-data` says where each of these is, and `bromigos server` has it on its
+**App data** line.
 `bromigos lab app-data status --json` gives the same as JSON. The command is the lab's
 (`bromigos-lab`), because every bromigOS Server has that package, whichever stick installed
 it. `bromigos server app-data` is the same command.
@@ -661,6 +670,28 @@ what comes later is on the data disks from the start. The status has a line for 
 library or the backups folder only when it holds data on the system disk. A media library
 on a NAS share is left alone.
 
+**The passwords vault moves last.** A server set up before November 2026 has the vault in
+`/var/lib/vaultwarden`. Setting the server up again never moves it: Vaultwarden would
+start on an empty folder and show no passwords. It stays where it is and goes on working,
+and it is in the nightly backup there ([Backups](#backups)). On a server with data disks
+the status names it, with the same command. Once the apps' data is on the data disks, the
+move:
+
+1. stops Vaultwarden;
+2. copies `/var/lib/vaultwarden` to `/srv/apps/passwords` and compares every file;
+3. writes the two files above, renames the old folder to
+   `/var/lib/vaultwarden.on-system-disk-DATE`, and leaves an empty folder in its place,
+   because the package's service starts in it;
+4. starts Vaultwarden, waits five seconds, and checks that it is up and has made no vault
+   in the old folder.
+
+If the last check fails, everything is put back: the two files removed, the vault in
+`/var/lib/vaultwarden` again, Vaultwarden running on it. An empty vault it made in the
+meantime is set aside as `/var/lib/vaultwarden.started-empty-DATE`, never deleted. A move
+cut off after the two files were written never copies over the new folder again, because
+Vaultwarden may have run on it since. It only finishes the switch. On a server without
+data disks nothing moves: the vault is on the same disk either way.
+
 ### When the data disks are away
 
 The data disks' lines in `/etc/fstab` have `nofail`, so the server still starts without
@@ -688,9 +719,12 @@ For power users:
 - The move's record is `/var/lib/bromigos/lab/app-data.json`. Its `state` is `copying`,
   `verifying`, `switching`, `done` or `failed`. The media library and the backups folder
   have records of their own beside it: `app-data-media.json` and `app-data-backups.json`.
+  The vault's is `app-data-vaultwarden.json`.
 - `bromigos lab app-data status --json` has the apps' folder at the top (`path`, `state`,
   `where`, `has_data`, `move`, `leftover`) and the other two under `folders`, with the
   same fields. `where` is `pool`, `system`, or `elsewhere` for a media library on a NAS.
+  `elsewhere` lists the vault while it is in `/var/lib/vaultwarden` on a server with data
+  disks, and `vault` has its move (`move`, `leftover`).
 - The copy is made with rsync. `bromigos-server` depends on it. A Server without that
   package needs the `rsync` package for the move, and the move says so before it starts.
 - Hourly snapshots of `/srv/data` (snapper's `data` configuration) don't hold the apps'
@@ -959,7 +993,12 @@ needs ([below](#restore-without-bromigos)).
 | The test restore | The second Sunday of each month at 10:00, after that morning's check. If the server was off, at the next start |
 
 What's backed up: `/etc`, `/var/lib/bromigos`, the Quadlets in `/etc/containers/systemd`,
-the containers' volumes, `/srv`, `/home` and `/root`. Caches are left out (folders with a
+the containers' volumes, `/var/lib/vaultwarden`, `/srv`, `/home` and `/root`. `/srv` holds
+every app's data, the passwords vault among it (`/srv/apps/passwords`).
+`/var/lib/vaultwarden` is where a server set up before November 2026 keeps the vault
+([Where the apps keep their data](#where-the-apps-keep-their-data)). So the vault is
+backed up wherever it is, unless your own `paths` list leaves it out. A folder that isn't
+there is skipped. Caches are left out (folders with a
 `CACHEDIR.TAG`, `~/.cache`, `node_modules`), the offline package store, and `/srv/restore`,
 where restores go. `paths` and
 `exclude` in `[backup]` replace those lists.

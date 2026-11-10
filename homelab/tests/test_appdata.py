@@ -23,6 +23,8 @@ FSTAB = (f"# /dev/vda2\nUUID={ROOT_UUID}  /  btrfs  rw,subvol=/@  0 0\n"
          f"UUID={POOL_UUID}  /srv/data  btrfs  compress=zstd,noatime,nofail,x-systemd.device-timeout=30s  0 0\n")
 APPS_LINE = f"UUID={POOL_UUID}  /srv/apps  btrfs  subvol=/apps,compress=zstd,noatime,nofail,x-systemd.device-timeout=30s  0 0"
 MEDIA_LINE, BACKUPS_LINE = (APPS_LINE.replace("apps", name) for name in ("media", "backups"))
+VAULT_LINE = ("not on the data disks: passwords (Vaultwarden) keeps its data in /var/lib/vaultwarden, on the system disk; "
+              "sudo bromigos lab app-data move puts it with the other apps' data")
 
 STUBS = {
     # what's mounted: $FAKE/mounts, lines "MOUNT-POINT UUID ROOT-IN-THE-FILESYSTEM"
@@ -86,7 +88,12 @@ case "$1" in
   stop) echo "$2" >> "$FAKE/down"
         # its processes go with it
         for d in "$BROMIGOS_ROOT"/proc/*/; do grep -q "/$2\$" "$d/cgroup" 2>/dev/null && rm -rf "$d"; done ;;
-  start) grep -vx "$2" "$FAKE/down" > "$FAKE/down.new"; mv "$FAKE/down.new" "$FAKE/down" ;;
+  start) if [ "$2" = vaultwarden.service ] && [ -e "$FAKE/vault-does-not-start" ]; then echo "Job for $2 failed" >&2; exit 1; fi
+         grep -vx "$2" "$FAKE/down" > "$FAKE/down.new"; mv "$FAKE/down.new" "$FAKE/down"
+         # Vaultwarden makes its database where it believes its vault is, as soon as it starts
+         if [ "$2" = vaultwarden.service ] && [ -e "$FAKE/vault-starts-on-the-old-folder" ]; then
+           [ -e "$BROMIGOS_ROOT/var/lib/vaultwarden/db.sqlite3" ] || echo "an empty vault" > "$BROMIGOS_ROOT/var/lib/vaultwarden/db.sqlite3"
+         fi ;;
   show) echo not-found ;;
   is-enabled) echo enabled ;;
 esac
@@ -98,8 +105,8 @@ echo "rsync" >> "$FAKE/log"
 /usr/bin/rsync "$@"; rc=$?
 case " $* " in *" --dry-run "*) exit $rc ;; esac
 if [ -e "$FAKE/write-during-copy" ]; then
-  rm "$FAKE/write-during-copy"
-  echo "a row written while the copy ran" >> "$BROMIGOS_ROOT/srv/apps/photos/postgres/rows"
+  to=$(cat "$FAKE/write-during-copy"); rm "$FAKE/write-during-copy"
+  echo "a row written while the copy ran" >> "$BROMIGOS_ROOT/${to:-srv/apps/photos/postgres/rows}"
 fi
 exit $rc
 ''',
@@ -125,6 +132,9 @@ class AppData(unittest.TestCase):
         env.start()
         self.addCleanup(env.stop)
         self.addCleanup(self.tmp.cleanup)
+        settle = mock.patch.object(appdata, "SETTLE", 0)        # no waiting for a stand-in Vaultwarden
+        settle.start()
+        self.addCleanup(settle.stop)
 
     def config(self, text):
         (self.root / "etc/bromigos/server.toml").write_text(text)
@@ -202,6 +212,18 @@ class AppData(unittest.TestCase):
     def folder(self, path):
         return next(f for f in self.app_data()["folders"] if f["path"] == path)
 
+    def vault(self):
+        """Vaultwarden as the engine set it up before the vault had a folder under /srv/apps: the
+        package's own folder on the system disk, the service running."""
+        v = self.root / "var/lib/vaultwarden"
+        (v / "attachments").mkdir(parents=True)
+        v.chmod(0o750)
+        (v / "db.sqlite3").write_text("the household's passwords\n")
+        (v / "rsa_key.pem").write_text("its signing key\n")
+        (v / "rsa_key.pem").chmod(0o600)
+        (v / "attachments/passport.enc").write_bytes(os.urandom(1024))
+        return v
+
     # ---- the status
     def test_no_data_disks_the_system_disk_is_where_it_belongs(self):
         (self.fake / "mounts").write_text(f"/ {ROOT_UUID} /@\n/srv {ROOT_UUID} /@srv\n")
@@ -225,25 +247,30 @@ class AppData(unittest.TestCase):
         self.config('[storage]\ndisks = ["/dev/vdb"]\nlayout = "single"\nmount = "/srv/data"\n')
         self.assertIn("not on the disks chosen for data", self.lab().stdout)
 
-    def test_a_packaged_apps_data_is_named_as_not_on_the_data_disks(self):
-        # Vaultwarden is a package, not a container: its data is the package's, in /var/lib on the
-        # system disk, before and after a move. The status says so rather than let "on the data
-        # disks" be read as all of it
+    def test_the_passwords_vault_in_the_packages_folder_is_named_with_the_command_that_moves_it(self):
+        # Vaultwarden is a package: a server set up before its vault had a folder under /srv/apps
+        # has it in /var/lib, on the system disk. The status says so rather than let "on the data
+        # disks" be read as all of it, and names the one command
         self.server()
-        (self.root / "var/lib/vaultwarden").mkdir(parents=True)
-        line = "not on the data disks: passwords (Vaultwarden) keeps its data in /var/lib/vaultwarden, on the system disk"
+        self.vault()
         d = self.app_data()
         self.assertEqual(d["elsewhere"], [{"path": "/var/lib/vaultwarden", "what": "passwords (Vaultwarden)"}])
-        self.assertEqual(d["words"][-1], line)
-        self.assertEqual(self.lab("move").returncode, 0)
-        d = self.app_data()
-        self.assertEqual((d["where"], d["words"][0], d["words"][-1]), ("pool", "on the data disks (/srv/apps, their apps subvolume)", line))
-        self.assertTrue((self.root / "var/lib/vaultwarden").is_dir())
-        # no data disks: everything is on the system disk, and there's nothing to point out
+        self.assertEqual(d["words"][-1], VAULT_LINE)
+        # the package's folder with nothing in it is no vault: a server whose vault is under /srv/apps has one
+        shutil.rmtree(self.root / "var/lib/vaultwarden")
+        (self.root / "var/lib/vaultwarden").mkdir()
+        self.assertEqual(self.app_data()["elsewhere"], [])
+        # no data disks: everything is on the system disk, and there's nothing to point out or to move
+        self.vault()
         (self.fake / "mounts").write_text(f"/ {ROOT_UUID} /@\n/srv {ROOT_UUID} /@srv\n")
         (self.root / "etc/fstab").write_text(FSTAB.split("# bromigOS Server's data disks")[0])
         self.config("[health]\nminutes = 0\n")
         self.assertEqual(self.app_data()["elsewhere"], [])
+        before = self.tree(self.root / "var/lib/vaultwarden")
+        r = self.lab("move")
+        self.assertEqual((r.returncode, self.log().count("systemctl stop")), (0, 0), r.stderr)
+        self.assertIn("Nothing to move", r.stdout)
+        self.assertEqual(self.tree(self.root / "var/lib/vaultwarden"), before)
 
     def test_a_pool_made_by_hand_counts_by_its_fstab_line(self):
         self.server()
@@ -691,6 +718,189 @@ class AppData(unittest.TestCase):
         r = self.lab("move")
         self.assertEqual(r.returncode, 1)
         self.assertIn("fstab mounts the data disks' media subvolume at /srv/media, and it isn't mounted", r.stderr)
+
+    # ---- the passwords vault: from the package's folder to the apps'
+    def on_pool(self):
+        """The server after its apps' data went on the data disks: /srv/apps is their subvolume."""
+        self.server(apps=False)
+        (self.root / "etc/fstab").write_text(FSTAB + "\n".join((APPS_LINE, MEDIA_LINE, BACKUPS_LINE)) + "\n")
+        (self.fake / "mounts").write_text((self.fake / "mounts").read_text() + "".join(
+            f"/srv/{n} {POOL_UUID} /{n}\n" for n in ("apps", "media", "backups")))
+        (self.root / "srv/apps").mkdir()
+
+    def test_the_move_takes_the_vault_last_and_tells_vaultwarden_where_it_is(self):
+        self.server()
+        old = self.vault()
+        before = self.tree(old)
+        r = self.lab("move", "--dry-run")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("the passwords vault (/var/lib/vaultwarden) would move to /srv/apps/passwords once the apps' data is on the data disks", r.stdout)
+        self.assertEqual(self.tree(old), before)
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        for words in ("1. stop Vaultwarden (vaultwarden.service)", "2. copy /var/lib/vaultwarden to /srv/apps/passwords",
+                      "the passwords vault is with the other apps' data now (/srv/apps/passwords), and Vaultwarden is running again"):
+            self.assertIn(words, r.stdout)
+        # every file, mode and all, under /srv/apps; the old folder kept by name, and an empty one
+        # where it was (the package's unit starts in it)
+        new = self.root / "srv/apps/passwords"
+        self.assertEqual(self.tree(new), before)
+        self.assertEqual(os.stat(new).st_mode & 0o777, 0o750)
+        (left,) = self.leftover("vaultwarden", "var/lib")
+        self.assertEqual(self.tree(left), before)
+        self.assertEqual((os.listdir(old), os.stat(old).st_mode & 0o777), ([], 0o750))
+        # the service is told by a file read after the package's own, may write there, and waits for the data disks
+        self.assertEqual((self.root / "etc/bromigos/lab/passwords.env").read_text().splitlines()[-1], "DATA_FOLDER=/srv/apps/passwords")
+        drop = (self.root / "etc/systemd/system/vaultwarden.service.d/60-bromigos-data.conf").read_text()
+        for line in ("RequiresMountsFor=/srv/apps/passwords", "ReadWritePaths=/srv/apps/passwords",
+                     "EnvironmentFile=/etc/bromigos/lab/passwords.env"):
+            self.assertIn(line + "\n", drop)
+        # stopped before a file was read, after the apps' own move; started once everything pointed at the new folder
+        log = self.log().splitlines()
+        stop, start = log.index("systemctl stop vaultwarden.service"), log.index("systemctl start vaultwarden.service")
+        self.assertLess(log.index("mount /srv/apps"), stop)
+        self.assertLess(stop, max(i for i, l in enumerate(log) if l == "systemctl daemon-reload"))
+        self.assertLess(max(i for i, l in enumerate(log[:start]) if l == "systemctl daemon-reload"), start)
+        self.assertNotIn("vaultwarden.service", (self.fake / "down").read_text())
+        d = self.app_data()
+        self.assertEqual((d["elsewhere"], d["vault"]), ([], {"move": "done", "leftover": f"/var/lib/{left.name}"}))
+        self.assertEqual(d["words"][-1], f"the passwords vault's old copy is kept at /var/lib/{left.name}; "
+                                         "sudo bromigos lab app-data remove-old deletes it")
+        # again: nothing to do. Then the old copies go, the vault's with the apps'
+        (self.fake / "log").write_text("")
+        r = self.lab("move")
+        self.assertEqual((r.returncode, self.log().count("systemctl stop")), (0, 0))
+        self.assertIn("Nothing to move", r.stdout)
+        self.assertEqual(self.lab("remove-old").returncode, 0)
+        self.assertEqual(self.leftover("vaultwarden", "var/lib") + self.leftover(), [])
+        self.assertEqual(self.tree(new), before)
+
+    def test_a_vault_that_was_stopped_stays_stopped(self):
+        self.on_pool()
+        self.vault()
+        (self.fake / "down").write_text("vaultwarden.service\n")
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("systemctl start vaultwarden.service", self.log())
+        self.assertNotIn("running again", r.stdout)
+        self.assertTrue((self.root / "srv/apps/passwords/db.sqlite3").exists())
+
+    def test_vaultwarden_starting_on_the_old_folder_puts_everything_back(self):
+        # the worst case: the service comes up on an empty folder, and the household sees no passwords
+        self.on_pool()
+        old = self.vault()
+        before = self.tree(old)
+        (self.fake / "vault-starts-on-the-old-folder").write_text("")
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("Vaultwarden started on /var/lib/vaultwarden again, not on /srv/apps/passwords", r.stderr)
+        self.assertIn("It was put back: Vaultwarden is running again, on /var/lib/vaultwarden as before", r.stderr)
+        self.assertEqual(self.tree(old), before)                               # the vault, whole, where it was
+        self.assertEqual(self.leftover("vaultwarden", "var/lib"), [])
+        self.assertFalse((self.root / "etc/bromigos/lab/passwords.env").exists())
+        self.assertFalse((self.root / "etc/systemd/system/vaultwarden.service.d/60-bromigos-data.conf").exists())
+        # the empty vault it made is set aside by name, never deleted
+        (aside,) = [p for p in (self.root / "var/lib").iterdir() if p.name.startswith("vaultwarden.started-empty-")]
+        self.assertEqual((aside / "db.sqlite3").read_text(), "an empty vault\n")
+        self.assertEqual(self.log().splitlines()[-1], "systemctl start vaultwarden.service")
+        self.assertNotIn("vaultwarden.service", (self.fake / "down").read_text())
+        d = self.app_data()
+        self.assertEqual((d["vault"]["move"], d["elsewhere"][0]["path"]), ("failed", "/var/lib/vaultwarden"))
+        self.assertIn("a move of it didn't finish, and sudo bromigos lab app-data move carries on", d["words"][-1])
+        # put right, the next run carries on from the copy and ends with the vault under /srv/apps
+        os.unlink(self.fake / "vault-starts-on-the-old-folder")
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("carrying on from the copy already there", r.stdout)
+        self.assertEqual(self.tree(self.root / "srv/apps/passwords"), before)
+
+    def test_vaultwarden_not_starting_puts_everything_back(self):
+        self.on_pool()
+        old = self.vault()
+        before = self.tree(old)
+        (self.fake / "vault-does-not-start").write_text("")
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("Vaultwarden didn't start on its new folder", r.stderr)
+        self.assertEqual(self.tree(old), before)
+        self.assertFalse((self.root / "etc/systemd/system/vaultwarden.service.d/60-bromigos-data.conf").exists())
+
+    def test_a_write_to_the_vault_during_the_copy_stops_it_with_nothing_switched(self):
+        self.on_pool()
+        old = self.vault()
+        (self.fake / "write-during-copy").write_text("var/lib/vaultwarden/db.sqlite3")
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("1 files differ from their copies", r.stderr)
+        self.assertIn("Vaultwarden is running again, on /var/lib/vaultwarden as before; nothing of its was changed", r.stderr)
+        self.assertIn("a row written while the copy ran", (old / "db.sqlite3").read_text())
+        self.assertFalse((self.root / "etc/bromigos/lab/passwords.env").exists())
+        self.assertEqual(self.leftover("vaultwarden", "var/lib"), [])
+        self.assertNotIn("vaultwarden.service", (self.fake / "down").read_text())
+
+    def test_a_vault_already_under_the_apps_folder_is_never_overwritten(self):
+        self.on_pool()
+        old = self.vault()
+        before = self.tree(old)
+        (self.root / "srv/apps/passwords").mkdir()
+        (self.root / "srv/apps/passwords/db.sqlite3").write_text("another vault\n")
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("/srv/apps/passwords already has files in it", r.stderr)
+        self.assertEqual(self.log().count("systemctl stop"), 0)
+        self.assertEqual((self.tree(old), (self.root / "srv/apps/passwords/db.sqlite3").read_text()), (before, "another vault\n"))
+
+    def test_a_vault_move_cut_off_while_switching_carries_on(self):
+        # the power went after the old folder was set aside and before Vaultwarden started
+        self.on_pool()
+        old = self.vault()
+        before = self.tree(old)
+        shutil.copytree(old, self.root / "srv/apps/passwords", symlinks=True)
+        os.rename(old, self.root / "var/lib/vaultwarden.on-system-disk-2026-11-01")
+        (self.root / "etc/systemd/system/vaultwarden.service.d").mkdir(parents=True)
+        (self.root / "etc/systemd/system/vaultwarden.service.d/60-bromigos-data.conf").write_text(appdata.VAULT_DROPIN_TEXT)
+        state = self.root / "var/lib/bromigos/lab"
+        state.mkdir(parents=True)
+        (state / "app-data-vaultwarden.json").write_text(json.dumps({
+            "state": "switching", "source": "/var/lib/vaultwarden", "destination": "/srv/apps/passwords",
+            "leftover": "/var/lib/vaultwarden.on-system-disk-2026-11-01", "was_running": True}))
+        self.assertIn("it would carry on", self.lab("move", "--dry-run").stdout)
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("rsync", self.log())
+        self.assertEqual((os.listdir(old), self.tree(self.root / "srv/apps/passwords")), ([], before))
+        self.assertTrue((self.root / "etc/bromigos/lab/passwords.env").exists())
+        log = self.log().splitlines()
+        self.assertLess(log.index("systemctl daemon-reload"), log.index("systemctl start vaultwarden.service"))
+        self.assertEqual(self.app_data()["vault"]["move"], "done")
+
+    def test_cut_off_before_the_old_folder_was_set_aside_the_new_one_is_never_copied_over(self):
+        # the power went right after Vaultwarden was pointed at the new folder. The server started
+        # again, Vaultwarden ran on the new folder, and someone saved a password there. The old
+        # folder still holds the vault as it was: carrying on must not copy it over the newer one
+        self.on_pool()
+        old = self.vault()
+        before = self.tree(old)
+        new = self.root / "srv/apps/passwords"
+        shutil.copytree(old, new, symlinks=True)
+        (new / "db.sqlite3").write_text("the household's passwords, and one saved since\n")
+        (self.root / "etc/systemd/system/vaultwarden.service.d").mkdir(parents=True)
+        (self.root / "etc/systemd/system/vaultwarden.service.d/60-bromigos-data.conf").write_text(appdata.VAULT_DROPIN_TEXT)
+        state = self.root / "var/lib/bromigos/lab"
+        state.mkdir(parents=True)
+        (state / "app-data-vaultwarden.json").write_text(json.dumps({
+            "state": "switching", "source": "/var/lib/vaultwarden", "destination": "/srv/apps/passwords",
+            "leftover": "/var/lib/vaultwarden.on-system-disk-2026-11-01", "was_running": True}))
+        d = self.app_data()
+        self.assertEqual(d["elsewhere"], [])                    # the service uses the new folder: that is where the vault is
+        self.assertEqual(d["words"][-1], "passwords (Vaultwarden): a move of its vault to /srv/apps/passwords didn't finish; "
+                                         "sudo bromigos lab app-data move carries on")
+        r = self.lab("move")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("rsync", self.log())
+        self.assertEqual((new / "db.sqlite3").read_text(), "the household's passwords, and one saved since\n")
+        self.assertEqual(self.tree(self.root / "var/lib/vaultwarden.on-system-disk-2026-11-01"), before)
+        self.assertEqual(os.listdir(old), [])
 
 
 if __name__ == "__main__":

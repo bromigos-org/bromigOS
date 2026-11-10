@@ -151,16 +151,19 @@ the newest one stays there in case it's needed.
 ## Where your apps keep their data
 
 If you gave the server data disks during the install, most of your apps keep their data
-on them: photos, documents, home automation, the media apps, file sync. With two copies
-(RAID1), one disk can fail without losing any of it. Without data disks, the apps' data is
-on the system disk.
+on them: photos, passwords, documents, home automation, the media apps, file sync. With
+two copies (RAID1), one disk can fail without losing any of it. Without data disks, the
+apps' data is on the system disk.
 
-One app is different. **Passwords (Vaultwarden) keeps its data on the system disk**, in
-`/var/lib/vaultwarden`, even on a server with data disks. The nightly backup's own list of
-folders doesn't include that one.
+**Your passwords are in the nightly backup**, wherever they are kept, once you've told
+the server where backups go ([Backups](#backups)).
 
 `bromigos lab app-data` says where the apps' data is, and names anything that isn't on
 the data disks.
+
+A server set up before November 2026 keeps its passwords (Vaultwarden) on the system
+disk, in `/var/lib/vaultwarden`. They are safe there and the app goes on working. On a
+server with data disks, the command below moves them with the rest.
 
 A server installed before November 2026 may say the apps' data is on the system disk, not
 the data disks. That was a fault in the installer. Your phone gets an alert about it, and
@@ -173,8 +176,10 @@ sudo bromigos lab app-data move
 
 The move stops your apps, copies their data to the data disks, compares every file with
 its copy, and starts the apps again. It does the same for your media library and for the
-backups other computers keep on this server, when those are on the system disk too. It
-keeps each old copy, under a name that says what it is, until you remove it:
+backups other computers keep on this server, when those are on the system disk too. Your
+passwords go last: it stops Vaultwarden, copies the vault, checks the copy, and starts
+Vaultwarden on it. If Vaultwarden doesn't come up on the copy, it puts the vault back
+where it was. It keeps each old copy, under a name that says what it is, until you remove it:
 
 ```bash
 sudo bromigos lab app-data remove-old

@@ -581,6 +581,27 @@ class Backup(Rig):
         self.assertIn("Backups      Backed up just now. Last test restore: none yet. To s3:https://s3.example/bucket/srv.",
                       self.run_server("status").stdout)
 
+    def test_the_passwords_vault_is_backed_up_wherever_it_is(self):
+        """Nobody lists the folders to back up, so the defaults apply. The vault is in them in
+        both places a server keeps it: /srv/apps/passwords (in /srv), and the package's own
+        /var/lib/vaultwarden, where a server set up before the vault had a folder still has it."""
+        self.config('[health]\nminutes = 0\n[backup]\nto = "s3:https://s3.example/bucket/srv"\n')
+        for vault in ("srv/apps/passwords", "var/lib/vaultwarden"):
+            (self.root / vault).mkdir(parents=True)
+            (self.root / vault / "db.sqlite3").write_text("the household's passwords\n")
+        self.summary()
+        self.assertEqual(self.run_server("backup", "run").returncode, 0)
+        line = next(l for l in self.log().splitlines() if l.startswith("restic backup "))
+        paths = [w for w in line.split() if w.startswith(str(self.root))]
+        self.assertIn(f"{self.root}/var/lib/vaultwarden", paths)
+        self.assertIn(f"{self.root}/srv", paths)
+        # a server without the app has no such folder, and restic isn't handed a path that isn't there
+        (self.root / "var/lib/vaultwarden/db.sqlite3").unlink()
+        (self.root / "var/lib/vaultwarden").rmdir()
+        (self.fake / "log").write_text("")
+        self.assertEqual(self.run_server("backup", "run").returncode, 0)
+        self.assertNotIn("vaultwarden", self.log())
+
     def test_what_the_health_line_needs_is_kept(self):
         """The last backup that worked, when the first one did, and how many are kept: read
         without the key by `bromigos lab backups`. A failure doesn't forget the last good one."""

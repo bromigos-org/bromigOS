@@ -23,6 +23,11 @@ bromigOS Server has it, whichever medium installed it; `bromigos server app-data
 The media library (/srv/media) and the backups other machines keep here (/srv/backups) are on
 the data disks the same way, each in a subvolume of its own (FOLDERS). The same move takes each
 in turn, with a record per folder (app-data-media.json, app-data-backups.json).
+
+The passwords vault (Vaultwarden, a package) is a folder under /srv/apps like every app's:
+/srv/apps/passwords. A server set up before it was has the vault in /var/lib/vaultwarden, on
+the system disk. On a server with data disks the move takes it last, by the same steps, and
+then tells the service where its vault is (VAULT_DROPIN, VAULT_ENV).
 """
 import argparse
 import contextlib
@@ -32,8 +37,10 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
+import time
 import tomllib
 
 SERVER_TOML = "/etc/bromigos/server.toml"      # the installer's choices: [storage] disks, layout, mount
@@ -113,11 +120,22 @@ LEFTOVER = ".on-system-disk-"                   # the old copy's name after a mo
 # The media library on a NAS share (bromigos lab provision --local, "On a NAS"): these units
 # mount the share at /srv/media, so that folder isn't meant to be on the data disks
 MEDIA_NAS = ("/etc/systemd/system/srv-media.mount", "/etc/systemd/system/bromigos-media-mount.service")
-# Apps the engine installs as packages keep their data where the package does, on the system
-# disk: the engine gives them no folder under /srv/apps, and no move here touches them. The
-# status says so, so "on the data disks" is never read as "all of it"
-PACKAGED = (("/var/lib/vaultwarden", "passwords (Vaultwarden)"),)
+# The passwords vault. Vaultwarden is a package: its own file (/etc/vaultwarden.env) puts the
+# vault in /var/lib/vaultwarden, on the system disk, and its unit may write nowhere else. The
+# engine gives it a folder like every app's, and these two files tell the service: a later
+# EnvironmentFile wins over the package's, where Environment= would lose to it
+VAULT_OLD, VAULT = "/var/lib/vaultwarden", APPS_DIR + "/passwords"
+VAULT_UNIT = "vaultwarden.service"
+VAULT_ENV = "/etc/bromigos/lab/passwords.env"
+VAULT_DROPIN = "/etc/systemd/system/vaultwarden.service.d/60-bromigos-data.conf"
+VAULT_ENV_TEXT = ("# bromigOS: the passwords vault is with the other apps' data (docs/server.md, \"Where the apps keep\n"
+                  f"# their data\"). Read after /etc/vaultwarden.env, so this line is the one that counts\nDATA_FOLDER={VAULT}\n")
+VAULT_DROPIN_TEXT = ("# bromigOS: the passwords vault is with the other apps' data. On a server with data disks that\n"
+                     "# is on them: the service starts once they're mounted, and not at all while they're away\n"
+                     f"[Unit]\nRequiresMountsFor={VAULT}\n\n[Service]\nReadWritePaths={VAULT}\nEnvironmentFile={VAULT_ENV}\n")
 MOVING = ("copying", "verifying", "switching")
+RUNNING = ("active", "activating", "reloading")
+SETTLE = 5                      # seconds Vaultwarden is given on its new folder before it's believed
 
 
 def state_file(src=APPS_DIR):
@@ -130,6 +148,20 @@ def has_files(path):
         return bool(os.listdir(at(path)))
     except OSError:
         return False
+
+
+def is_vault(folder):
+    """Whether a folder (as it is on disk) holds a Vaultwarden vault: its database, its keys,
+    or what people attached."""
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return False
+    return any(n.startswith(("db.sqlite3", "rsa_key")) or n in ("attachments", "sends", "config.json") for n in names)
+
+
+def vault_in(path):
+    return is_vault(at(path))
 
 
 class AppDataError(Exception):
@@ -188,18 +220,25 @@ def app_data_doc():
       pool-away     fstab puts /srv/apps on the data disks, and it isn't mounted
       moving        a move is under way (`running`), or one was cut off (`move`: how far it got)
     `folders`: the same for the media library and the backups folder, on a server with data
-    disks. `elsewhere`: what a packaged app keeps on the system disk."""
+    disks. `elsewhere`: the passwords vault, while it is still in the package's own folder.
+    `vault`: that vault's move (`move`, `leftover`)."""
     st = storage()
     rows = fstab_rows()
     pool = (st.get("mount") or POOL) if st.get("disks") else next((r[1] for r in rows if r[1] == POOL and r[2] == "btrfs"), "")
     on_pool = (is_mount(pool) and fs_uuid(pool)) if pool else ""
     doc = folder_doc(APPS_DIR, pool, rows, on_pool)
     doc.update(pool=pool, pool_mounted=bool(on_pool), raid1=st.get("layout") == "raid1" and len(st.get("disks") or []) >= 2,
-               elsewhere=[], folders=[])
+               elsewhere=[], folders=[], vault={})
     if not pool:
         return doc
     doc["folders"] = [folder_doc(src, pool, rows, on_pool) for src, _, _ in FOLDERS[1:]]
-    doc["elsewhere"] = [{"path": p, "what": what} for p, what in PACKAGED if os.path.isdir(at(p))]
+    j = read_json(state_file(VAULT_OLD))
+    left = j.get("leftover") or ""
+    doc["vault"] = {"move": j.get("state") or "",
+                    "leftover": left if left and j.get("state") == "done" and os.path.isdir(at(left)) else ""}
+    # the vault is where the service is pointed: the package's folder until VAULT_DROPIN says otherwise
+    if vault_in(VAULT_OLD) and not os.path.exists(at(VAULT_DROPIN)):
+        doc["elsewhere"] = [{"path": VAULT_OLD, "what": "passwords (Vaultwarden)"}]
     return doc
 
 
@@ -227,8 +266,16 @@ def app_data_words(d):
     words = _words(d)
     for f in d.get("folders") or []:
         words += folder_words(f, d)
+    unfinished = (d.get("vault") or {}).get("move") in (*MOVING, "failed")
     for e in d.get("elsewhere") or []:
-        words.append(f"not on the data disks: {e['what']} keeps its data in {e['path']}, on the system disk")
+        words.append(f"not on the data disks: {e['what']} keeps its data in {e['path']}, on the system disk; "
+                     + ("a move of it didn't finish, and sudo bromigos lab app-data move carries on" if unfinished else
+                        "sudo bromigos lab app-data move puts it with the other apps' data"))
+    if unfinished and not d.get("elsewhere"):
+        words.append(f"passwords (Vaultwarden): a move of its vault to {VAULT} didn't finish; sudo bromigos lab app-data move carries on")
+    left = (d.get("vault") or {}).get("leftover")
+    if left:
+        words.append(f"the passwords vault's old copy is kept at {left}; sudo bromigos lab app-data remove-old deletes it")
     return words
 
 
@@ -538,18 +585,21 @@ def copy_and_compare(src, dst, size, resuming):
 
 def app_data_move(d, dry):
     """Each folder that isn't on the data disks, in turn: the apps' data first, then the media
-    library and the backups folder. One that fails stops the rest, with everything before it
-    done and everything after it untouched."""
+    library and the backups folder, then the passwords vault into the apps' folder. One that
+    fails stops the rest, with everything before it done and everything after it untouched."""
     if d["pool"] and not d["pool_mounted"]:
         raise AppDataError(f"the data disks aren't mounted ({d['pool']}). `bromigos lab app-data` and `journalctl -b -u "
                            f"{d['pool'].strip('/').replace('/', '-')}.mount` say why; nothing was changed")
     todo = [f for f in (d, *d["folders"]) if f["state"] != "ok"]
-    if not todo:
+    vault = bool(d["pool"]) and vault_waiting()
+    if not todo and not vault:
         print("bromigos lab app-data: " + _words(d)[0] + ". Nothing to move.")
         return 0
     rc = 0
     for f in todo:
         rc = move_folder(d, f, *next(x[1:] for x in FOLDERS if x[0] == f["path"]), dry) or rc
+    if vault:
+        rc = vault_move(dry) or rc
     return rc
 
 
@@ -640,10 +690,155 @@ def move_folder(d, f, sub, what, dry):
     return 0
 
 
+def vault_waiting():
+    """Whether the passwords vault has a move to make, or one to finish."""
+    return vault_in(VAULT_OLD) or read_json(state_file(VAULT_OLD)).get("state") == "switching"
+
+
+def vault_switch(j):
+    """The service told where its vault is, then the old folder set aside by name, and an empty
+    one in its place: the package's unit starts in that folder and lists it as writable. Every
+    step looks first, so a move cut off here carries on. VAULT_DROPIN is the switch itself: once
+    it is there, every start uses the new folder, and nothing is ever copied over that folder
+    again (vault_move)."""
+    old, left = j["source"], j["leftover"]
+    for path, text in ((VAULT_ENV, VAULT_ENV_TEXT), (VAULT_DROPIN, VAULT_DROPIN_TEXT)):
+        os.makedirs(os.path.dirname(at(path)), mode=0o755, exist_ok=True)
+        with open(at(path) + ".tmp", "w") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(at(path) + ".tmp", 0o644)
+        os.replace(at(path) + ".tmp", at(path))
+    run(["systemctl", "daemon-reload"])
+    if vault_in(old) and not os.path.lexists(at(left)):
+        os.rename(at(old), at(left))
+    if not os.path.isdir(at(old)):
+        st = os.stat(at(left))
+        os.mkdir(at(old), stat.S_IMODE(st.st_mode))
+        os.chown(at(old), st.st_uid, st.st_gid)
+
+
+def vault_unswitch(j):
+    """A switch that failed, undone: the service stopped, its vault back in the folder it was
+    in, the two files that pointed it elsewhere gone. Nothing is deleted: a vault the service
+    made from nothing in the old folder's place is set aside by name."""
+    old, left = j["source"], j["leftover"]
+    run(["systemctl", "stop", VAULT_UNIT])
+    for path in (VAULT_DROPIN, VAULT_ENV):
+        with contextlib.suppress(OSError):
+            os.unlink(at(path))
+    if os.path.isdir(at(left)):
+        if has_files(old):
+            os.rename(at(old), at(old + ".started-empty-" + datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")))
+        elif os.path.isdir(at(old)):
+            os.rmdir(at(old))
+        os.rename(at(left), at(old))
+    run(["systemctl", "daemon-reload"])
+
+
+def vault_move(dry):
+    """The passwords vault from the package's folder (/var/lib/vaultwarden, the system disk) to
+    the apps' folder (/srv/apps/passwords), on a server whose apps' data is on its data disks.
+    The same steps as a folder's move: Vaultwarden stopped, the copy, every file compared, the
+    old folder kept by name, Vaultwarden started. It isn't believed until it is up on the new
+    folder and has made nothing in the old one; otherwise everything is put back."""
+    old, new = VAULT_OLD, VAULT
+    j = read_json(state_file(old))
+    will = "would" if dry else "will"
+    if os.path.exists(at(VAULT_DROPIN)) or (j.get("state") == "switching" and not vault_in(old)):
+        # A move cut off while switching. Vaultwarden is pointed at the new folder already, and
+        # may have run on it since (a restart starts it there). So nothing is copied over the
+        # new folder again: only the rest of the switch is left
+        left = j.get("leftover") or old_copy_name(old)
+        if dry:
+            print(f"bromigos lab app-data: a move of the passwords vault stopped while switching over; it would carry on: "
+                  f"the old copy kept as {left}, Vaultwarden started on {new}")
+            return 0
+        was = bool(j.get("was_running", unit_state(VAULT_UNIT) in RUNNING))     # no record of it: as it is now
+        run(["systemctl", "stop", VAULT_UNIT])
+        j = app_data_journal(old, state="switching", source=old, destination=new, leftover=left, was_running=was)
+    else:
+        if app_data_doc()["where"] != "pool":
+            print(f"bromigos lab app-data: the passwords vault ({old}) {will} move to {new} once the apps' data is on the data disks")
+            return 0 if dry else 1
+        resuming = j.get("state") in (*MOVING, "failed") and j.get("destination") == new
+        if has_files(new) and not resuming:
+            raise AppDataError(f"{new} already has files in it, and they aren't from a move of the passwords vault. Nothing was "
+                               f"changed, and Vaultwarden goes on using {old}: move them away first, so no vault is overwritten")
+        need, free = tree_bytes(old), shutil.disk_usage(at(APPS_DIR)).free
+        fits = free >= int(need * 1.05) + 1024 ** 3
+        left = old_copy_name(old)
+        print(f"bromigos lab app-data: the passwords vault ({gib(need)} in {old}, on the system disk) {will} move to the data "
+              f"disks, with the other apps' data ({new})")
+        print(f"  1. stop Vaultwarden ({VAULT_UNIT})")
+        print(f"  2. copy {old} to {new}" + (" (carrying on from the copy already there)" if resuming else ""))
+        print("  3. compare every file with its copy, by checksum; any difference stops here, with nothing changed")
+        print(f"  4. keep the old copy as {left}, and tell Vaultwarden where its vault is ({VAULT_DROPIN})")
+        print("  5. start Vaultwarden, and check it is using the new folder; if it isn't, everything is put back")
+        if not fits:
+            print(f"  It doesn't fit: the copy needs {gib(int(need * 1.05) + 1024 ** 3)} free on the data disks.")
+        if dry:
+            print("  Nothing was changed. Without --dry-run, this does it.")
+            return 0 if fits else 1
+        if not fits:
+            raise AppDataError("not enough room on the data disks for the passwords vault; nothing was changed")
+        if not shutil.which("rsync"):
+            raise AppDataError("rsync isn't installed, and the copy is made with it. Install the rsync package, then run this again")
+        was = unit_state(VAULT_UNIT) in RUNNING
+        app_data_journal(old, state="copying", started=now(), source=old, destination=new, bytes=need, leftover=left,
+                         was_running=was, error="")
+        try:
+            run(["systemctl", "stop", VAULT_UNIT])
+            still = [VAULT_UNIT] if unit_state(VAULT_UNIT) in (*RUNNING, "deactivating") else []
+            still += [f"process {pid} ({path})" for pid, path in busy(old)]
+            if still:
+                raise AppDataError(f"still using {old} after Vaultwarden was stopped: {', '.join(still)}. Stop it, then run this again")
+            os.makedirs(at(new), mode=0o700, exist_ok=True)
+            copy_and_compare(old, new, need, resuming)
+        except (AppDataError, OSError) as e:
+            # nothing switched: Vaultwarden goes on as it was, and the next run carries on from the copy so far
+            if was:
+                run(["systemctl", "start", VAULT_UNIT])
+            app_data_journal(old, state="failed", error=str(e))
+            raise AppDataError(f"{e}. Vaultwarden is " + ("running again" if was else "as it was") + f", on {old} as before; "
+                               "nothing of its was changed") from None
+        j = app_data_journal(old, state="switching")
+    try:
+        vault_switch(j)
+        if was:
+            must(["systemctl", "start", VAULT_UNIT], "Vaultwarden didn't start on its new folder")
+            time.sleep(SETTLE)
+            if unit_state(VAULT_UNIT) not in RUNNING:
+                raise AppDataError(f"Vaultwarden didn't stay up on its new folder (journalctl -u {VAULT_UNIT} says why)")
+            if vault_in(old):
+                raise AppDataError(f"Vaultwarden started on {old} again, not on {new}")
+    except (AppDataError, OSError) as e:
+        try:
+            vault_unswitch(j)
+        except (AppDataError, OSError) as e2:
+            app_data_journal(old, error=f"{e}; putting it back: {e2}")
+            raise AppDataError(f"{e}, and putting it back didn't work either ({e2}). Vaultwarden is stopped; the vault is whole "
+                               f"in {j['leftover']} or {old}, and in {new}. Run this again to carry on") from None
+        if was:
+            run(["systemctl", "start", VAULT_UNIT])
+        app_data_journal(old, state="failed", error=str(e))
+        raise AppDataError(f"{e}. It was put back: Vaultwarden is " + ("running again" if was else "as it was")
+                           + f", on {old} as before") from None
+    j = app_data_journal(old, state="done", finished=now(), error="")
+    print(f"bromigos lab app-data: the passwords vault is with the other apps' data now ({new})"
+          + (", and Vaultwarden is running again" if was else "") + f". The old copy is kept at {j['leftover']}: once you've "
+          "signed in and seen your passwords, sudo bromigos lab app-data remove-old deletes it.")
+    return 0
+
+
 def remove_old(d):
     """The old copies a move kept, deleted: each only while what it was a copy of is on the data disks."""
+    on_pool = d["state"] == "ok" and d["where"] == "pool"
     olds = [(f["path"], next(w for src, _, w in FOLDERS if src == f["path"]), f["leftover"], f["state"] == "ok" and f["where"] == "pool")
             for f in (d, *d["folders"]) if f["leftover"]]
+    if (d.get("vault") or {}).get("leftover"):
+        olds.append((VAULT_OLD, "the passwords vault", d["vault"]["leftover"], on_pool and not d["elsewhere"]))
     if not olds:
         print("bromigos lab app-data: there's no old copy of the apps' data to remove")
         return 0
