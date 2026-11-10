@@ -620,15 +620,28 @@ class Backup(Rig):
         self.assertEqual(r.returncode, 1)
         self.assertEqual(self.log().count("restic init"), 1)
         st = self.backup_state()
-        self.assertIn("the backup that was at /mnt/backup isn't there now", st["run"]["reason"])
+        self.assertIn("there is no backup at /mnt/backup now, and one worked before", st["run"]["reason"])
         self.assertEqual(st["run_ok"]["phase"], "ok")
         self.assertIn("The last backup failed: the drive at /mnt/backup is not connected.", self.run_server("status").stdout)
         self.assertEqual(self.run_server("backup", "run", "--new").returncode, 0)   # a person saying: start over
         self.assertEqual(self.log().count("restic init"), 2)
-        # somewhere new: set up as before
-        self.config('[health]\nminutes = 0\n[backup]\nto = "/mnt/other"\n')
+        # somewhere new: set up as before. Another account at the same address is somewhere new
+        self.config('[health]\nminutes = 0\n[backup]\nto = "sftp://ada:pw@nas.example/backups"\n')
         self.assertEqual(self.run_server("backup", "run").returncode, 0)
         self.assertEqual(self.log().count("restic init"), 3)
+        self.assertEqual(self.backup_state()["run_ok"]["to"], "sftp://ada@nas.example/backups", "the user, never the password")
+        self.config('[health]\nminutes = 0\n[backup]\nto = "sftp://bob:pw@nas.example/backups"\n')
+        self.assertEqual(self.run_server("backup", "run").returncode, 0)
+        self.assertEqual(self.log().count("restic init"), 4)
+        self.assertEqual(self.run_server("backup", "run").returncode, 1)
+        # a state file from before this was kept doesn't say where the last backup went: it counts as here
+        st = self.backup_state()
+        for key in ("run_ok", "first_ok_ts", "snapshots"):
+            st.pop(key, None)
+        st["run"] = {"phase": "ok", "at": "x", "ts": 1793390400}
+        (self.root / "var/lib/bromigos/server/backup.json").write_text(json.dumps(st))
+        self.assertEqual(self.run_server("backup", "run").returncode, 1)
+        self.assertEqual(self.log().count("restic init"), 4)
 
     def test_a_failed_backup_says_why(self):
         self.config('[health]\nminutes = 0\n[backup]\nto = "/mnt/backup"\n')

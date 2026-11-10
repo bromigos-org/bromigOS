@@ -410,10 +410,8 @@ def backup(ctx):
             journal = json.loads(env.read(B.JOURNAL) or "{}")
         except ValueError:
             journal = {}
-        had = bool(st.get("run_ok") or (st.get("run") or {}).get("phase") in ("ok", "partial"))
-        h = B.health(to, st, now / 1000, B.destination(to, had, env.path), B.job_record(doc=journal))
-        said = [f"{k}: {(st.get(k) or {}).get('phase')} at {(st.get(k) or {}).get('at', '?')}"
-                + (f": {st[k]['reason']}" if (st.get(k) or {}).get("reason") else "")
+        h = B.health(to, st, now / 1000, B.destination(to, B.had_backup(st), env.path), B.job_record(doc=journal))
+        said = [f"{k}: {st[k].get('phase')} at {st[k].get('at', '?')}" + (f": {st[k]['reason']}" if st[k].get("reason") else "")
                 for k in ("run", "check", "test") if isinstance(st.get(k), dict)]
         for p in h["problems"]:
             found.append(alert("backup.restic", p["subject"], p["severity"], p["title"], p["detail"], "restic",

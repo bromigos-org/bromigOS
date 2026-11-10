@@ -681,7 +681,8 @@ A restore like this is safe to try:
   many files, and anything it had to skip and why.
 - **You can stop it.** Press `Ctrl+C` and the folder keeps the name
   `backup-<date>-<id>.partial`, so nobody takes it for a whole one. Run the same command
-  again and it carries on. The folder loses `.partial` only when every file is back.
+  again and it carries on. The folder loses `.partial` only when every file is back. A
+  different restore is never poured into it.
   If some files couldn't be read from the backup, the folder ends in `-incomplete` and the
   summary lists them.
 
@@ -711,7 +712,7 @@ Nothing was changed: this was only a look. To do it: bromigos lab backups restor
 
 Add `--apply` to do it. It shows the list again and asks you to type `yes`. Then it:
 
-1. checks there's room for the files it brings back;
+1. checks there's room for every file it writes;
 2. takes a snapshot of the files as they are now, where the server keeps snapshots: `/`,
    and the data disks the installer set up at `/srv/data`;
 3. puts the backup's files over them, and reads each one back;
@@ -724,10 +725,11 @@ It never deletes. A file that isn't in the backup stays where it is.
 afterwards."* Then it asks a second time. If a snapshot should work and fails, the restore
 stops before it changes anything.
 
-**If it stops part-way** (a power cut, `Ctrl+C`), some files are from the backup and some
-aren't. The server doesn't forget that. The health line says "A restore stopped part-way",
-with the command that finishes it, and [alerts](alerts.md) raise it, until you run that
-command to the end. Running it again is safe: files that already match are left alone.
+**If it stops part-way** (a power cut, `Ctrl+C`), or some files can't be read from the
+backup, some files are from the backup and some aren't. The server doesn't forget that. The
+health line says "A restore stopped part-way", with the command that finishes it, and
+[alerts](alerts.md) raise it, until a restore of those paths runs to the end. Running it
+again is safe: files that already match are left alone.
 
 ### The test restore
 
@@ -823,12 +825,12 @@ gone for good, `sudo bromigos server backup run --new` starts over.
 |---|---|
 | `bromigos lab backups [status]` | The health line and the status. Needs no root and no network |
 | `bromigos lab backups list` | Every backup in the destination: id, date, size, files, paths |
-| `bromigos lab backups show [ID] [PATH]` | One folder of a backup. No `PATH`: its top-level paths |
+| `bromigos lab backups show [ID] [PATH]` | One folder of a backup. No `PATH`: its top-level paths. A path alone is in the newest backup |
 | `bromigos lab backups restore [ID] [PATH…]` | Into a new folder under `/srv/restore`. A first word that starts with `/` is a path, from the newest backup |
-| `… restore … --to DIR` | Into `DIR`, which must not exist or be empty |
+| `… restore … --to DIR` | Into `DIR`, which must not exist or be empty. While it runs, the work folder is `DIR.partial`, or `DIR/restore.partial` when `DIR` was there already, so it's always on the disk the files end up on |
 | `… restore … --in-place` | The list of what would be replaced and brought back. Changes nothing |
 | `… restore … --in-place --apply` | Does it, after a `yes` and a snapshot |
-| `bromigos lab backups test [--all] [--scratch DIR]` | A test restore, recorded for the health line |
+| `bromigos lab backups test [--all] [--scratch DIR]` | A test restore, recorded for the health line. `--scratch DIR` works in `DIR/bromigos-restore-test`, a folder of its own, and touches nothing else there |
 | `bromigos lab backups run`, `check [--data]` | The same as `bromigos server backup run` and `check` |
 | `sudo bromigos server backup run [--new]` | A backup now. The first one sets the destination up (`restic init`) |
 | `sudo bromigos server backup check [--data]` | A check now; `--data` reads 5 % back |
@@ -865,13 +867,13 @@ with a `percent`. Every document has `schema` (1) and `ok`. A failure has
 | `list` | `to`, `snapshots`: each `id`, `short_id`, `time`, `ts`, `host`, `tags`, `paths`, `files`, `bytes`, `added_bytes`, `nightly` |
 | `show` | `snapshot`, `path`, `entries`: each `name`, `path`, `type` (`file`, `dir`, `symlink`, `other`), `size`, `mtime`, `permissions` |
 | `restore` | `state` (`done`, `incomplete`), `mode` (`new-folder`), `snapshot`, `paths`, `target`, `files`, `bytes`, `verified`, `replaced` (0), `skipped`: each `path`, `why` |
-| `restore --in-place` | `state` (`planned`), `mode` (`in-place`), `applied` (false), `snapshot`, `paths`, `replace`: each `path`, `size`, `now_size`, `now_modified`; `add`: each `path`, `size`; `unchanged`; `digest`; `bytes`; `safety`: each `subvolume`, `config` (null: no snapshot there), `files`, `bytes` |
+| `restore --in-place` | `state` (`planned`), `mode` (`in-place`), `applied` (false), `snapshot`, `paths`, `replace`: each `path`, `size`, `now_size`, `now_modified`, and `link` when it's a link now; `add`: each `path`, `size`; `unchanged`; `digest`; `bytes`; `safety`: each `subvolume`, `config` (null: no snapshot there), `files`, `bytes` |
 | `restore --in-place --apply` | The same, with `applied` (true), `state`, `replaced`, `added`, `skipped`, `verified`, `snapshots_taken`: each `subvolume`, `config`, `number` |
 | `test` | `state` (`passed`, `failed`), `test`: `phase`, `at`, `ts`, `mode` (`sample`, `all`), `files`, `bytes`, `snapshot`, `seconds`, `reason`; `snapshot` |
 
 Error codes: `not-a-server`, `off`, `settings`, `needs-root`, `no-key`, `wrong-key`,
 `no-restic`, `unreachable`, `locked`, `no-such-backup`, `not-in-backup`, `would-overwrite`,
-`needs-yes`, `plan-changed`, `no-safety-snapshot`, `no-space`, `interrupted`,
+`needs-yes`, `other-restore`, `plan-changed`, `no-safety-snapshot`, `no-space`, `interrupted`,
 `test-failed`, `failed`, `usage`. Times are ISO 8601 (`at`, `time`) and Unix seconds
 (`ts`); sizes are bytes.
 
@@ -892,7 +894,7 @@ bromigos lab backups restore latest /etc/caddy --in-place --apply --yes \
 | `/etc/bromigos/server.toml` | `[backup]`: `to`, `paths`, `exclude`, `keep_daily`, `keep_weekly`, `keep_monthly`, `env_file` |
 | `/etc/bromigos/server/backup.key` | The key: restic's repository password, one line. Root only |
 | `/etc/bromigos/server/backup.env` | The destination's credentials, as `KEY=VALUE` lines. Root only |
-| `/var/lib/bromigos/server/backup.json` | `run`, `check` and `test`: how the last of each went. `run_ok`, `check_ok`, `read_back_ok` and `test_ok`: the last one that worked. `first_ok_ts`, and `snapshots`: the count and dates |
+| `/var/lib/bromigos/server/backup.json` | `run`, `check` and `test`: how the last of each went. `run_ok`, `check_ok`, `read_back_ok` and `test_ok`: the last one that worked, and for a backup where it went (`to`, without any password). `first_ok_ts`, and `snapshots`: the count and dates |
 | `/var/lib/bromigos/server/restore.json` | The restore running now, or the last one: its steps, its state, and a restore in place that stopped part-way |
 | `/var/lib/bromigos/server/restore-test.json` | The same for the test restore |
 | `/var/lib/bromigos/server/restore-test/` | The test restore's scratch folder. Empty between runs |
@@ -914,8 +916,11 @@ standing where the backup has a folder is replaced by that folder; nothing is ev
 written through a link. The
 snapshot is `snapper -c <config> create`, for each snapper configuration whose subvolume
 holds a file that changes. `snapper -c <config> undochange <number>..0` puts files back
-as they were in it. Files that already match keep their contents, and get the backup's
-dates and permissions, as do the folders on the way to them. `--delete` is never passed.
+as they were in it. The free-space check counts every file it writes at full size, since
+that snapshot keeps the space of the ones it replaces. Files that already match keep their
+contents, and get the backup's dates and permissions, as do the folders on the way to
+them. `--delete` is never passed. A look that finds nothing left to do also settles a
+restore that stopped part-way.
 
 **The repository.** It's a plain restic repository, format version 2, with nothing of
 bromigOS's own in it:

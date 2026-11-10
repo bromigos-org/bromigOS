@@ -27,6 +27,8 @@ import bromigos_backups as B  # noqa: E402
 
 RESTIC = shutil.which("restic")
 NOW = 1793390400.0            # 2026-10-30 (a fixed clock)
+# a name restic could misread three ways: as a pattern, as a $NAME to expand, with its last space trimmed
+ODD = "srv/data/list [1]* $HOME.txt "
 HOUR, DAY = 3600, 86400
 S3 = "s3:https://s3.example/backups/box"
 
@@ -123,6 +125,63 @@ class Words(unittest.TestCase):
                 self.assertEqual((h["state"], h["verdict"]), (state, words))
                 self.assertEqual(h["state"] == "attention", any(p["severity"] != "info" for p in h["problems"]))
 
+    def test_the_verdict_is_never_quieter_than_the_problems(self):
+        mix = {"unfinished": {"snapshot": "1234abcd", "paths": [], "snapshot_at": "x", "started": "y"}}
+        cases = [
+            ("nothing has run, and a check failed", {"check": rec("failed", DAY, reason="Fatal: repository contains errors")}, {},
+             "No backup yet: the first one runs tonight. The last check of the backup failed (1 day ago): repository contains errors."),
+            ("nothing has run, and a test restore failed", {"test": rec("failed", HOUR, reason="the backup can't be reached")}, {},
+             "No backup yet: the first one runs tonight. The last test restore failed (1 hour ago): the backup can't be reached."),
+            ("backups off, and a restore in place unfinished", {}, dict(to="", restore=mix),
+             "Backups are off: nothing on this server is backed up. To turn them on, say where they go: [backup] to in "
+             "/etc/bromigos/server.toml. A restore stopped part-way: some files are from the backup and some aren't."),
+            ("late, and the check failed too", {"run": rec("ok", 9 * DAY), "check": rec("failed", DAY, reason="x")}, {},
+             "No backup in 9 days: the nightly backup has not run (the server may have been off, or its timer stopped). "
+             "The last check of the backup failed (1 day ago): x. Last test restore: none yet."),
+        ]
+        for name, st, more, words in cases:
+            with self.subTest(name):
+                h = self.verdict(st, **more)
+                self.assertEqual((h["state"], h["verdict"]), ("attention", words))
+                self.assertTrue(h["problems"])
+        h = self.verdict({}, to="", restore=mix)
+        self.assertEqual(h["problems"][0]["detail"].split("Running it again finishes it: ")[1],
+                         "bromigos lab backups restore 1234abcd --in-place --apply")
+
+    def test_a_state_file_that_is_wrong_never_stops_the_status(self):
+        odd = [None, [], "x", {"run": "ok"}, {"run": []}, {"run": {"phase": "ok"}}, {"run": {"phase": "ok", "ts": "soon"}},
+               {"run": {"phase": "failed", "reason": ["a", "list"], "ts": NOW}}, {"run": {"phase": "partial", "reason": 7}},
+               {"run_ok": "yes", "run": {"phase": "ok", "ts": NOW}}, {"run_ok": {}, "check": {"phase": "failed", "reason": None}},
+               {"run": rec("ok", HOUR), "check": {"phase": "ok", "data": True}, "test": {"phase": "failed", "reason": {"a": 1}}},
+               {"run": rec("ok", HOUR), "test_ok": {"ts": None}, "first_ok_ts": "then", "snapshots": {"count": "many"}},
+               {"run": rec("ok", HOUR), "first_ok_ts": True, "snapshots": [1], "test": 5, "check_ok": 3},
+               {"run": rec("failed", HOUR, files="some", bytes="lots", snapshot=7), "run_ok": rec("ok", DAY, files=None, bytes={})}]
+        import contextlib
+        import io
+        for st in odd:
+            with self.subTest(st=st):
+                h = self.verdict(st)
+                self.assertIn(h["state"], ("ok", "attention", "waiting"))
+                self.assertTrue(h["verdict"])
+                self.assertIsInstance(B.had_backup(st), bool)
+                d = {"now": NOW, "configured": True, "to": S3, "destination": {"kind": "s3", "path": "", "present": None},
+                     "timers": {}, "health": h, "last_backup": h["backup"], "last_success": h["success"], "last_check": h["check"],
+                     "last_read_back": h["read_back"], "last_test": h["test"], "last_test_passed": h["test_passed"],
+                     "snapshots": h["snapshots"], "restore": None, "running": None}
+                with contextlib.redirect_stdout(io.StringIO()):
+                    B.print_status(d)
+        self.assertEqual(self.verdict({"run": {"phase": "ok"}})["verdict"],
+                         "Backed up at a time that wasn't recorded. Last test restore: none yet.")
+        self.assertEqual(B.when(None), "an unknown time")
+        self.assertEqual((B.where("sftp://ada:pw@nas.example/b"), B.same_place("sftp://ada:pw@nas.example/b")),
+                         ("sftp://nas.example/b", "sftp://ada@nas.example/b"))
+
+    def test_a_path_as_a_line_of_a_restic_include_file(self):
+        self.assertEqual(B.include_line("/srv/a [1]*?.txt"), "/srv/a \\[1]\\*\\?.txt")
+        self.assertEqual(B.include_line("/srv/cost $HOME.txt"), "/srv/cost $$HOME.txt")
+        self.assertEqual(B.include_line("/srv/ends in spaces \t"), "/srv/ends in spaces[ ][\t]")
+        self.assertIsNone(B.include_line("/srv/two\nlines"))
+
     def test_what_is_unknown_is_said_not_guessed(self):
         h = self.verdict({"run": rec("ok", 6 * HOUR)})
         self.assertIsNone(h["snapshots"], "not counted until a backup counts them")
@@ -187,7 +246,7 @@ class Rig(unittest.TestCase):
         for rel, text in {"etc/fstab": "/dev/sda1 / btrfs\n", "etc/hostname": "box\n", "etc/app/app.conf": "port = 8080\n",
                           "home/ada/docs/note.txt": "remember the milk\n", "home/ada/docs/big.bin": "x" * 70_000,
                           "home/ada/photos/one.jpg": "jpeg one\n", "home/ada/photos/two.jpg": "jpeg two\n",
-                          "srv/data/list [1]*.txt": "a name restic would read as a pattern\n",
+                          ODD: "a name restic could misread\n",
                           "etc/bromigos/server.toml": '[backup]\nto = "/mnt/backup"\npaths = ["/etc", "/home", "/srv"]\n'}.items():
             (cls.root / rel).parent.mkdir(parents=True, exist_ok=True)
             (cls.root / rel).write_text(text)
@@ -405,7 +464,7 @@ class ListAndShow(Rig):
         self.assertEqual({e["name"]: (e["type"], e["size"]) for e in d["entries"]},
                          {"big.bin": ("file", 70_000), "latest": ("symlink", None), "note.txt": ("file", 18), "pictures": ("symlink", None)})
         self.assertEqual(sorted(d["entries"][0]), ["mtime", "mtime_ts", "name", "path", "permissions", "size", "type"])
-        self.assertEqual([e["path"] for e in self.doc("show", "latest", "/etc/fstab")["entries"]], ["/etc/fstab"])
+        self.assertEqual([e["path"] for e in self.doc("show", "/etc/fstab")["entries"]], ["/etc/fstab"])
         out = self.lab("show", second, "/home/ada").stdout
         self.assertIn(f"Backup {second} · ", out)
         self.assertRegex(out, r"folder +\d{4}-\d\d-\d\d \d\d:\d\d  docs/")
@@ -452,12 +511,12 @@ class RestoreToANewFolder(Rig):
     def test_chosen_paths_and_json_steps(self):
         snap = self.snap
         dest = Path(self.tmp.name) / "out"
-        r = self.lab("restore", "/home/ada/docs/note.txt", "/srv/data/list [1]*.txt", "/home/ada/photos", "--to", str(dest), "--json")
+        r = self.lab("restore", "/home/ada/docs/note.txt", "/" + ODD, "/home/ada/photos", "--to", str(dest), "--json")
         self.assertEqual(r.returncode, 0, r.stderr)
         d = json.loads(r.stdout)                                       # one document on stdout
         self.assertEqual((d["snapshot"]["short_id"], d["files"], d["target"]), (snap, 4, str(dest)))
         got = {str(p.relative_to(dest)) for p in dest.rglob("*") if not p.is_dir()}
-        self.assertEqual(got, {"home/ada/docs/note.txt", "srv/data/list [1]*.txt", "home/ada/photos/one.jpg", "home/ada/photos/two.jpg"})
+        self.assertEqual(got, {"home/ada/docs/note.txt", ODD, "home/ada/photos/one.jpg", "home/ada/photos/two.jpg"})
         events = [json.loads(line) for line in r.stderr.splitlines()]  # the named steps, as JSON lines on stderr
         self.assertEqual([(e["id"], e["n"], e["of"]) for e in events if e["event"] == "step"],
                          [("find", 1, 5), ("size", 2, 5), ("space", 3, 5), ("restore", 4, 5), ("finish", 5, 5)])
@@ -489,6 +548,8 @@ class RestoreToANewFolder(Rig):
         empty.mkdir()
         self.assertEqual(self.doc("restore", "/etc/fstab", "--to", str(empty))["target"], str(empty))
         self.assertEqual((empty / "etc/fstab").read_text(), "/dev/sda1 / btrfs\n")
+        self.assertEqual(sorted(p.name for p in empty.iterdir()), ["etc"], "its work folder was inside it, and is gone")
+        self.assertFalse(Path(str(empty) + ".partial").exists())
 
     def test_too_little_free_space(self):
         before = self.tree()
@@ -529,6 +590,10 @@ class RestoreToANewFolder(Rig):
             os.kill(int((self.fake / "hanging").read_text()), 0)
         d = self.doc()
         self.assertEqual((d["restore"]["state"], d["restore"]["interrupted"], d["restore"]["work"]), ("interrupted", True, str(work)))
+        # another pick isn't poured into it: the folder would look whole and not be
+        e = self.doc("restore", "/srv", rc=3)["error"]
+        self.assertEqual(e["code"], "other-restore")
+        self.assertFalse((work / "srv").exists())
         self.assertIn("Last restore  stopped part-way", self.lab().stdout)
         self.assertEqual(self.tree(), before)
         # the same command again carries on, and only then does the folder get its name
@@ -599,6 +664,12 @@ class RestoreInPlace(Rig):
         self.assertNotIn("create", self.log())
         self.put("etc/hostname", "box\n")
         self.assertEqual(self.tree(), before)
+        fstab = self.root / "etc/fstab"                                 # a listed file touched again since the look
+        was = fstab.stat()
+        os.utime(fstab, ns=(was.st_atime_ns, was.st_mtime_ns + 5_000_000_000))
+        self.assertEqual(self.doc("restore", "--in-place", "--apply", "--yes", "--plan", plan["digest"], rc=3)["error"]["code"],
+                         "plan-changed")
+        os.utime(fstab, ns=(was.st_atime_ns, was.st_mtime_ns))
         # apply: what changed on the server is the list, no more and no less
         d = self.doc("restore", "--in-place", "--apply", "--yes", "--plan", plan["digest"])
         after = self.tree()
@@ -716,11 +787,18 @@ class RestoreInPlace(Rig):
         self.assertEqual(self.lab("test").returncode, 0)
         self.assertEqual([p["id"] for p in self.doc(rc=1)["health"]["problems"]], ["restore-interrupted"])
         # the same restore run to the end clears it
+        journal = self.root / "var/lib/bromigos/server/restore.json"
+        stopped = journal.read_text()
         self.assertEqual(self.lab("restore", snap, "--in-place", "--apply", "--yes").returncode, 0)
         d = self.doc()
         self.assertEqual((d["health"]["state"], d["health"]["problems"], d["restore"]["state"]), ("ok", [], "done"))
         after = self.tree()
         self.assertEqual({p: after[p] for p in good}, good)
+        # one that stopped while reading the files back left nothing to redo: a look settles it
+        journal.write_text(stopped)
+        self.assertEqual([p["id"] for p in self.doc(rc=1)["health"]["problems"]], ["restore-interrupted"])
+        self.assertIn("there is nothing to do", self.lab("restore", snap, "--in-place").stdout)
+        self.assertEqual(self.doc()["health"]["problems"], [])
 
 
 @unittest.skipUnless(RESTIC, "restic isn't installed")
@@ -742,11 +820,13 @@ class TestRestore(Rig):
         self.assertIn("The test restore passed: 10 files (70 KB) came back from the backup of ", r.stdout)
         self.assertEqual(self.scratch(), [], "cleaned up")
         self.assertEqual(self.tree(), before)
+        os.link(self.root / "home/ada/photos/one.jpg", self.root / "home/ada/photos/one-again.jpg")    # one file, two names
+        snap = self.backup()
         d = self.doc("test", "--all")
         self.assertEqual(sorted(d), ["ok", "schema", "snapshot", "state", "test"])
         self.assertEqual(sorted(d["test"]), ["at", "bytes", "files", "mode", "phase", "reason", "seconds", "snapshot", "ts"])
         self.assertEqual((d["ok"], d["state"], d["test"]["phase"], d["test"]["mode"], d["test"]["files"], d["test"]["snapshot"]),
-                         (True, "passed", "ok", "all", 12, snap))
+                         (True, "passed", "ok", "all", 13, snap))
         self.assertEqual(self.scratch(), [])
         st = self.state()
         self.assertEqual((st["test"], st["test_ok"]), (d["test"], d["test"]))
@@ -758,8 +838,13 @@ class TestRestore(Rig):
         self.assertIn("The test restore passed", r.stdout)
         # a scratch folder of your own, and too little room in it
         mine = Path(self.tmp.name) / "scratch"
+        (mine / "test-results-2019").mkdir(parents=True)                # yours, old, and named like a leftover
+        (mine / "test-results-2019/keep.txt").write_text("mine\n")
+        os.utime(mine / "test-results-2019", (1, 1))
         self.assertEqual(self.lab("test", "--scratch", str(mine)).returncode, 0)
-        self.assertEqual(list(mine.iterdir()), [])
+        self.assertEqual(sorted(p.name for p in mine.iterdir()), ["bromigos-restore-test", "test-results-2019"])
+        self.assertEqual((mine / "test-results-2019/keep.txt").read_text(), "mine\n")
+        self.assertEqual(list((mine / "bromigos-restore-test").iterdir()), [], "its own folder, emptied")
         e = self.doc("test", "--all", rc=1, BROMIGOS_BACKUPS_FREE_BYTES="1000")
         self.assertEqual((e["state"], e["error"]["code"]), ("failed", "test-failed"))
         self.assertIn("not enough room for the test restore", e["error"]["message"])
@@ -769,18 +854,19 @@ class TestRestore(Rig):
     def test_a_corrupted_backup_fails_the_test_and_the_health_line_says_so(self):
         self.assertEqual(self.lab("test").returncode, 0)
         passed = self.state()["test_ok"]
-        # bit rot at the destination: bytes flipped in every pack of file data
+        # bit rot at the destination: a byte flipped in every 32 of every pack, so in every file's data.
+        # (The lists of files are still read: this server's cache has them, as on a real one.)
         for pack in sorted((self.root / "mnt/backup/data").rglob("*")):
             if pack.is_file():
                 raw = bytearray(pack.read_bytes())
-                for i in range(len(raw) // 3, len(raw) // 3 + 24):
+                for i in range(7, len(raw), 32):
                     raw[i] ^= 0xFF
                 pack.chmod(0o600)
                 pack.write_bytes(raw)
-        shutil.rmtree(self.root / "var/cache/restic")                    # nothing read from this server's own cache
         r = self.lab("test", "--all")
         self.assertEqual(r.returncode, 1)
         self.assertIn("The test restore failed:", r.stderr)
+        self.assertIn("did not come back from the backup", r.stderr)
         self.assertEqual(self.scratch(), [], "cleaned up after a failure too")
         st = self.state()
         self.assertEqual((st["test"]["phase"], st["test_ok"]), ("failed", passed))
@@ -799,6 +885,11 @@ class TestRestore(Rig):
         self.assertEqual(r.returncode, 1)
         for name in self.restored():
             self.assertTrue(name.endswith((".partial", "-incomplete")), name)
+        # nor in place: files that didn't come back leave a mix, and the health line keeps saying so
+        (self.root / "home/ada/docs/note.txt").unlink()
+        d = self.doc("restore", "/home/ada/docs/note.txt", "--in-place", "--apply", "--yes", "--without-snapshot", rc=1)
+        self.assertEqual((d["ok"], d["state"], [s["path"] for s in d["skipped"]]), (False, "incomplete", ["/home/ada/docs/note.txt"]))
+        self.assertIn("restore-interrupted", [p["id"] for p in self.doc(rc=1)["health"]["problems"]])
 
     def test_a_test_restore_stopped_part_way_counts_neither_way(self):
         (self.fake / "hang").write_text("/nothing")

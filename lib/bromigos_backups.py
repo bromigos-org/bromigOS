@@ -101,9 +101,10 @@ def sysp(path):
 # ------------------------------------------------------------------ words
 
 def size(n):
-    if n is None:
+    try:
+        n = float(n)
+    except (TypeError, ValueError):
         return "an unknown size"
-    n = float(n)
     for unit in ("bytes", "KB", "MB", "GB", "TB"):
         if n < 1000 or unit == "TB":
             return f"{n:.0f} {unit}" if unit in ("bytes", "KB") or n >= 100 else f"{n:.1f} {unit}"
@@ -111,7 +112,7 @@ def size(n):
 
 
 def count(n, one, many=None):
-    return f"{n:,} {one if n == 1 else many or one + 's'}"
+    return (f"{n:,}" if isinstance(n, (int, float)) else str(n)) + f" {one if n == 1 else many or one + 's'}"
 
 
 def span(seconds):
@@ -133,6 +134,8 @@ def ago(ts, now):
 
 
 def when(ts):
+    if ts is None:
+        return "an unknown time"
     return datetime.datetime.fromtimestamp(ts).astimezone().strftime("%Y-%m-%d %H:%M")
 
 
@@ -150,8 +153,14 @@ def stamp(text):
 
 
 def where(to):
-    """The destination without a password someone put in the address."""
+    """The destination without a user or password someone put in the address: for showing."""
     return re.sub(r"//[^/@]*@", "//", to) if to else ""
+
+
+def same_place(to):
+    """The destination without a password, the user kept: what backup.json remembers a backup
+    went to, to tell the same place from another account's."""
+    return re.sub(r"//([^/:@]*):[^/@]*@", r"//\1@", to) if to else ""
 
 
 def lower_first(text):
@@ -160,6 +169,7 @@ def lower_first(text):
 
 
 def upper_first(text):
+    text = str(text)
     return text[:1].upper() + text[1:]
 
 
@@ -198,6 +208,13 @@ def destination(to, had_backup=False, real=None):
     except OSError:
         present = None
     return {"kind": "folder", "path": path, "present": present}
+
+
+def had_backup(st):
+    """Has a backup ever worked, as far as backup.json says?"""
+    st = st if isinstance(st, dict) else {}
+    run = st.get("run") if isinstance(st.get("run"), dict) else {}
+    return bool(isinstance(st.get("run_ok"), dict) and st["run_ok"]) or run.get("phase") in ("ok", "partial")
 
 
 def _last(rec, now, timed=False):
@@ -247,12 +264,29 @@ def health(to, st, now, dest=None, restore=None):
     doc = {"state": "off", "verdict": "", "problems": [], "backup": backup, "success": success, "check": check,
            "check_passed": check_ok, "read_back": read_back, "test": test, "test_passed": test_ok,
            "snapshots": inv if inv and isinstance(inv.get("count"), int) else None}
+    problems = doc["problems"]
+    # a restore in place that didn't finish: the files there are a mix, whatever the backups do
+    left = restore.get("unfinished") if isinstance(restore, dict) else None
+    mix = None
+    if isinstance(left, dict):
+        paths = ", ".join(left.get("paths") or []) or "everything"
+        again = "bromigos lab backups restore " + " ".join([str(left.get("snapshot", "")), *(left.get("paths") or [])]).strip() \
+            + " --in-place --apply"
+        mix = _problem(
+            "restore-interrupted", "server-restore", "needs_you", "A restore stopped part-way",
+            f"Putting {paths} back from the backup of {left.get('snapshot_at', '?')} stopped on "
+            f"{left.get('started', '?')}, before it finished. Some files there are from the backup and some "
+            f"aren't. Running it again finishes it: {again}",
+            ["bromigos lab backups", again], [f"replaces files ({paths}) with the backup's"])
+    mixed = " A restore stopped part-way: some files are from the backup and some aren't." if mix else ""
     if not to:
         doc["verdict"] = ("Backups are off: nothing on this server is backed up. To turn them on, say where "
-                          "they go: [backup] to in /etc/bromigos/server.toml.")
+                          "they go: [backup] to in /etc/bromigos/server.toml.") + mixed
+        if mix:
+            problems.append(mix)
+            doc["state"] = "attention"
         return doc
     look = ["bromigos lab backups", "journalctl -u bromigos-server-backup.service -n 50 --no-pager"]
-    problems = doc["problems"]
     gone = dest.get("present") is False
     stale = bool(success and success["age_s"] > STALE)
     why = f"the drive at {dest['path']} is not connected" if gone else sentence(run.get("reason")) if phase == "failed" else ""
@@ -275,14 +309,16 @@ def health(to, st, now, dest=None, restore=None):
             f"{upper_first(run.get('reason') or 'some files could not be read')[:300]}. The rest was backed up.",
             look, ["nothing (it only looks)"]))
     # the weekly check
-    if check and check.get("phase") == "failed":
+    check_failed = bool(check and check.get("phase") == "failed")
+    if check_failed:
         problems.append(_problem(
             "check-failed", "server-check", "needs_you", "The backup check failed",
             f"{upper_first(check.get('reason') or 'restic check failed')[:300]}. What's in the backup may not read "
             "back: look at it before you need it.",
             ["bromigos lab backups", "sudo bromigos server backup check"], ["nothing (it reads the backup back)"]))
     # the monthly test restore
-    if test and test.get("phase") == "failed":
+    test_failed, test_late = bool(test and test.get("phase") == "failed"), None
+    if test_failed:
         problems.append(_problem(
             "test-failed", "server-test", "needs_you", "The last test restore failed",
             f"{upper_first(test.get('reason') or 'the files did not come back')[:300].rstrip('.')}. A backup that can't be restored "
@@ -291,57 +327,46 @@ def health(to, st, now, dest=None, restore=None):
              "sudo bromigos lab backups test"], ["nothing on the server (it restores to a scratch folder, then removes it)"]))
     else:
         since = test_ok["ts"] if test_ok else st.get("first_ok_ts")
-        if isinstance(since, (int, float)) and now - since > TEST_STALE:
-            days = int(now - since) // DAY
+        if isinstance(since, (int, float)) and not isinstance(since, bool) and now - since > TEST_STALE:
+            test_late = now - since
             problems.append(_problem(
-                "test-stale", "server-test", "needs_you", f"No test restore has passed for {days} days",
+                "test-stale", "server-test", "needs_you", f"No test restore has passed for {int(test_late) // DAY} days",
                 ("The last one that passed was on " + str(test_ok.get("at", "?")) + "." if test_ok else
                  "None has run since the first backup.") + " The monthly one hasn't run: the server may have "
                 "been off, or its timer stopped. Until one passes, nobody knows the backup can be restored.",
                 ["bromigos lab backups", "systemctl list-timers bromigos-server-backup-test.timer",
                  "sudo bromigos lab backups test"], ["nothing on the server (it restores to a scratch folder, then removes it)"]))
-    # a restore in place that stopped part-way: the files there are a mix
-    restore = (restore or {}).get("unfinished")
-    if restore:
-        paths = ", ".join(restore.get("paths") or []) or "everything"
-        again = "bromigos lab backups restore " + " ".join([str(restore.get("snapshot", "")), *(restore.get("paths") or [])]).strip() \
-            + " --in-place --apply"
-        problems.append(_problem(
-            "restore-interrupted", "server-restore", "needs_you", "A restore stopped part-way",
-            f"Putting {paths} back from the backup of {restore.get('snapshot_at', '?')} stopped on "
-            f"{restore.get('started', '?')}, before it finished. Some files there are from the backup and some "
-            f"aren't. Running it again finishes it: {again}",
-            ["bromigos lab backups", again], [f"replaces files ({paths}) with the backup's"]))
-    # the verdict: one or two sentences a person can act on
-    if not success and not backup:
+    if mix:
+        problems.append(mix)
+    # the verdict: a sentence or two a person can act on, and never quieter than the problems
+    last = success or backup
+    doc["state"] = "ok"
+    if not last:
         doc["state"] = "waiting"
-        doc["verdict"] = "No backup yet: the first one runs tonight."
+        line = "No backup yet: the first one runs tonight."
+    elif phase == "failed" and not success:
+        line = f"No backup yet: the first one failed {ago(backup['ts'], now)}: {why or 'restic failed'}."
+    elif phase == "failed" and not stale:
+        line = f"The last backup failed: {why or 'restic failed'}. The one before it worked, {ago(success['ts'], now)}."
+    elif stale:
+        line = f"No backup in {span(success['age_s'])}: " + (why or "the nightly backup has not run (the server may "
+                                                             "have been off, or its timer stopped)") + "."
     else:
-        if phase == "failed" and not success:
-            line = f"No backup yet: the first one failed {ago(backup['ts'], now)}: {why or 'restic failed'}."
-        elif phase == "failed" and not stale:
-            line = f"The last backup failed: {why or 'restic failed'}. The one before it worked, {ago(success['ts'], now)}."
-        elif stale:
-            line = f"No backup in {span(success['age_s'])}: " + (why or "the nightly backup has not run (the server may "
-                                                                 "have been off, or its timer stopped)") + "."
-        else:
-            line = f"Backed up {ago(success['ts'], now)}."
-            if phase == "partial":
-                line += " Some files could not be read and were left out."
-            if check and check.get("phase") == "failed":
-                line += f" But the last check of the backup failed ({ago(check['ts'], now)}): {sentence(check.get('reason')) or 'restic check failed'}."
-        if test and test.get("phase") == "failed":
-            line += f" The last test restore failed ({ago(test['ts'], now)}): {sentence(test.get('reason')) or 'the files did not come back'}."
-        elif any(p["id"] == "test-stale" for p in problems):
-            line += f" No test restore has passed in {span(now - (test_ok['ts'] if test_ok else st['first_ok_ts']))}."
-        elif test_ok:
-            line += f" Last test restore: {ago(test_ok['ts'], now)}, passed."
-        else:
-            line += " Last test restore: none yet."
-        if any(p["id"] == "restore-interrupted" for p in problems):
-            line += " A restore stopped part-way: some files are from the backup and some aren't."
-        doc["verdict"] = line
-        doc["state"] = "ok"
+        line = f"Backed up {ago(last['ts'], now)}."
+        if phase == "partial":
+            line += " Some files could not be read and were left out."
+    if check_failed:
+        line += (" But the" if line.startswith("Backed up") else " The") + f" last check of the backup failed ({ago(check['ts'], now)}): " \
+            + (sentence(check.get("reason")) or "restic check failed") + "."
+    if test_failed:
+        line += f" The last test restore failed ({ago(test['ts'], now)}): {sentence(test.get('reason')) or 'the files did not come back'}."
+    elif test_late is not None:
+        line += f" No test restore has passed in {span(test_late)}."
+    elif test_ok:
+        line += f" Last test restore: {ago(test_ok['ts'], now)}, passed."
+    elif last:
+        line += " Last test restore: none yet."
+    doc["verdict"] = line + mixed
     if any(p["severity"] != "info" for p in problems):
         doc["state"] = "attention"
     return doc
@@ -433,15 +458,16 @@ def job_record(path=JOURNAL, doc=None):
     """A job's file (restore.json, restore-test.json): the one running now, or the last one.
     `interrupted` is true when it was stopped part-way, or says running and its process is
     gone (a power cut, a kill). For a restore, `unfinished` is the restore in place that
-    stopped part-way, after it began to write (`writing`), and hasn't been run again to the
-    end: the files there are a mix. doc: the file's contents, when the caller read it itself."""
+    stopped part-way or ended with files missing, after it began to write (`writing`), and
+    hasn't been run to the end since: the files there are a mix. doc: the file's contents,
+    when the caller read it itself."""
     j = read_json(path) if doc is None else doc
     if not j or not isinstance(j, dict):
         return None
     running = j.get("state") == "running" and j.get("boot") == boot_id() and alive(j.get("pid"))
     j["interrupted"] = j.get("state") == "interrupted" or (j.get("state") == "running" and not running)
     j["running"] = running
-    if j["interrupted"] and j.get("mode") == "in-place" and j.get("writing"):
+    if (j["interrupted"] or j.get("state") == "incomplete") and j.get("mode") == "in-place" and j.get("writing"):
         j["unfinished"] = {k: j.get(k) for k in ("snapshot", "snapshot_at", "paths", "started", "snapshots_taken")}
     return j
 
@@ -455,8 +481,7 @@ def status_doc(now=None):
                           "Server's own backups. Your lab's other backup jobs are in `bromigos lab doctor`."}}
     b = settings()
     st = read_json(STATE)
-    had = bool(st.get("run_ok") or (st.get("run") or {}).get("phase") in ("ok", "partial"))
-    dest = destination(b["to"], had)
+    dest = destination(b["to"], had_backup(st))
     rec, test_run = job_record(), job_record(TEST_JOURNAL)
     running = next(({k: j.get(k) for k in ("kind", "mode", "step", "steps", "percent", "started", "snapshot")}
                     for j in (rec, test_run) if j and j["running"]), None)
@@ -614,7 +639,9 @@ def restic_errors(err):
             continue
         if m.get("message_type") == "error":
             why = (m.get("error") or {}).get("message") or "restic gave no reason"
-            items.append({"path": sysp(m.get("item") or ""), "why": why})
+            path = sysp(m.get("item") or "")
+            if not any(i["path"] == path for i in items):      # restic says a file twice: why it failed, then what that broke
+                items.append({"path": path, "why": why})
             last = why
         elif m.get("message_type") == "exit_error":
             last = m.get("message") or last
@@ -724,6 +751,31 @@ def literal(path):
     return re.sub(r"([\\*?\[])", r"\\\1", path)
 
 
+def include_line(path):
+    """A path as one line of a restic include file, meaning exactly that path. restic expands
+    $NAME in these files and trims each line's ends, so a $ is doubled and a trailing space is
+    written as [ ]. None for a name with a line break in it, which no line can say."""
+    if "\n" in path or "\r" in path:
+        return None
+    line = literal(path).replace("$", "$$")
+    tail = re.search(r"\s+$", line)
+    return line if not tail else line[:tail.start()] + "".join(f"[{c}]" for c in tail.group())
+
+
+def own_folder(path):
+    """A work folder of ours: made if it isn't there, and only ever a real folder that belongs
+    to whoever runs this, open to no one else (never a link someone left in its place)."""
+    os.makedirs(os.path.dirname(path) or "/", mode=0o755, exist_ok=True)
+    try:
+        os.mkdir(path, 0o700)
+    except FileExistsError:
+        pass
+    d = os.lstat(path)
+    if not stat.S_ISDIR(d.st_mode) or d.st_uid != os.geteuid():
+        raise Problem("failed", f"{path} isn't a folder of this command's own, so it isn't used: move it away.")
+    return path
+
+
 def snapref(snap):
     """restic's "ID:subfolder": the backup with the stand-in root taken off its paths, so a
     restore writes /etc/fstab and not /stand-in/etc/fstab."""
@@ -815,13 +867,32 @@ class Job:
             if s["state"] == "running":
                 s["state"] = "done" if state in ("done", "incomplete") else state
         self.record.update(state=state, finished=iso(), finished_ts=time.time(), percent=None, result=result)
-        left = self.record.get("unfinished")
-        mine = self.record.get("paths") or []
-        if left and state == "done" and self.record.get("mode") == "in-place" and left.get("snapshot") == self.record.get("snapshot") \
-                and (not mine or (left.get("paths") and all(any(p == q or p.startswith(q.rstrip("/") + "/") for q in mine)
-                                                           for p in left["paths"]))):
-            del self.record["unfinished"]           # the same restore, run again to the end
+        if state == "done" and self.record.get("mode") == "in-place" and covers(self.record.get("paths"), self.record.get("unfinished")):
+            del self.record["unfinished"]           # those paths are whole again
         self.save()
+
+
+def covers(paths, left):
+    """Do these paths (none: everything) take in every path of an unfinished restore?"""
+    if not isinstance(left, dict):
+        return False
+    paths, theirs = paths or [], left.get("paths") or []
+    return not paths or bool(theirs and all(any(p == q or p.startswith(q.rstrip("/") + "/") for q in paths) for p in theirs))
+
+
+def settle(paths):
+    """A look found every file of these paths matching a backup: an unfinished restore of
+    them is finished after all (it stopped while reading files back, say)."""
+    j = read_json(JOURNAL)
+    left = (job_record(doc=dict(j)) or {}).get("unfinished")
+    if covers(paths, left):
+        j.pop("unfinished", None)
+        if j.get("mode") == "in-place" and j.get("state") in ("running", "interrupted", "incomplete"):
+            j.update(state="done", finished=iso(), finished_ts=time.time(), settled=True)
+        try:
+            write_json(JOURNAL, j)
+        except OSError:
+            pass
 
 
 def on_progress(job, what="files"):
@@ -853,10 +924,22 @@ def catch_signals():
         signal.signal(s, stop)
 
 
+def hold_signals():
+    for s in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(s, signal.SIG_IGN)
+
+
+def release_signals():
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    for s in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(s, signal.SIG_DFL)
+
+
 def confirm(question):
     try:
         return input(f"{question} Type yes: ").strip().lower() == "yes"
-    except EOFError:
+    except (EOFError, KeyboardInterrupt):
+        print()
         return False
 
 
@@ -883,8 +966,9 @@ def cmd_list(a, b):
 
 def cmd_show(a, b):
     env = restic_env(b)
-    snap = pick(snapshots(b, env), a.snapshot)
-    path = clean_paths([a.path])[0] if a.path else None
+    spec, where_in = (None, a.snapshot) if (a.snapshot or "").startswith("/") and not a.path else (a.snapshot, a.path)
+    snap = pick(snapshots(b, env), spec)
+    path = clean_paths([where_in])[0] if where_in else None
     if path is None:
         tops = snap["paths"]
         got = {sysp(n.get("path", "")): n for n in nodes(env, snap, tops)}
@@ -922,18 +1006,26 @@ def restore_args(a):
     return spec, clean_paths(words)
 
 
+INSIDE = "restore.partial"       # the work folder's name inside a --to folder that was there already
+
+
 def new_folder(a, snap):
-    """Where a restore goes: (the folder, its work name while it isn't whole). --to must be
-    new or empty; without it, a new folder under /srv/restore named after the backup."""
+    """Where a restore goes: (the folder, its work folder while it isn't whole). --to must be
+    new or empty; without it, a new folder under /srv/restore named after the backup. The work
+    folder is always on the filesystem the files end up on: beside a new folder, inside one
+    that was there already (an empty disk's mount point, say)."""
     if a.to:
         final = os.path.abspath(a.to)
         if os.path.lexists(final) and (not os.path.isdir(final) or os.path.islink(final)):
             raise Problem("would-overwrite", f"{final} is there already and isn't a folder. Restore never writes over "
                           "anything: pick a folder that doesn't exist yet.", exit=3)
-        if os.path.isdir(final) and os.listdir(final):
-            raise Problem("would-overwrite", f"{final} has files in it. Restore never writes into a folder with files "
-                          "in it, so nothing can be replaced by mistake: pick a new folder. To put files back where "
-                          "they came from, see --in-place.", exit=3)
+        if os.path.isdir(final):
+            inside, names = os.path.join(final, INSIDE), os.listdir(final)
+            if names and not (names == [INSIDE] and unfinished_folder(inside)):
+                raise Problem("would-overwrite", f"{final} has files in it. Restore never writes into a folder with "
+                              "files in it, so nothing can be replaced by mistake: pick a new folder. To put files "
+                              "back where they came from, see --in-place.", exit=3)
+            return final, inside
         return final, final.rstrip("/") + ".partial"
     base = os.path.join(at(RESTORE_HOME), f"backup-{time.strftime('%Y-%m-%d-%H%M', time.localtime(snap['ts'] or 0))}-{snap['short_id']}")
     final, n = base, 1
@@ -944,15 +1036,17 @@ def new_folder(a, snap):
 
 
 def unfinished_folder(work):
-    """The backup's id when work is a restore's own folder, stopped part-way: a real folder of
-    ours with the marker in it (never a link someone left there). Else None."""
+    """What a restore's own work folder says it is, when it stopped part-way: its marker
+    ({"snapshot", "paths"}). Only a real folder of ours with a real marker file in it (never
+    a link someone left there); else None."""
     try:
         d, m = os.lstat(work), os.lstat(os.path.join(work, MARKER))
         if not (stat.S_ISDIR(d.st_mode) and stat.S_ISREG(m.st_mode) and d.st_uid == m.st_uid == os.geteuid()):
             return None
         with open(os.path.join(work, MARKER)) as f:
-            return json.load(f).get("snapshot")
-    except (OSError, ValueError, AttributeError):
+            doc = json.load(f)
+        return doc if isinstance(doc, dict) else None
+    except (OSError, ValueError):
         return None
 
 
@@ -989,9 +1083,16 @@ def cmd_restore(a, b):
     in_backup(env, snap, paths)
     final, work = new_folder(a, snap)
     resumed = os.path.lexists(work)
-    if resumed and unfinished_folder(work) != snap["short_id"]:
-        raise Problem("would-overwrite", f"{work} is there already, and isn't this restore stopped part-way. Restore "
-                      "never writes over anything: move it away, or pick another folder with --to.", exit=3)
+    if resumed:
+        was = unfinished_folder(work)
+        if not was:
+            raise Problem("would-overwrite", f"{work} is there already, and isn't a restore stopped part-way. Restore "
+                          "never writes over anything: move it away, or pick another folder with --to.", exit=3)
+        if was.get("snapshot") != snap["short_id"] or was.get("paths") != paths:
+            raise Problem("other-restore", f"{work} holds another restore that stopped part-way: backup {was.get('snapshot')}, "
+                          f"{', '.join(was.get('paths') or []) or 'everything in it'}. Mixing two would leave a folder "
+                          "that looks whole and isn't. Finish that one with its own command, delete the folder, or "
+                          "pick another with --to.", exit=3)
     job = Job("restore", steps, a.json, mode="new-folder", snapshot=snap["short_id"], snapshot_at=snap["at"],
               paths=paths, target=final, work=work)
     includes = [x for p in paths for x in ("--include", literal(p))]
@@ -1020,10 +1121,13 @@ def cmd_restore(a, b):
                           f"{size(free)} free. Nothing was restored. Free some space, restore fewer paths, or pick "
                           "a folder on a bigger disk with --to.", exit=4, need=need, free=free)
         job.step("restore")
-        os.makedirs(work, mode=0o700, exist_ok=True)
+        if not resumed:
+            os.makedirs(os.path.dirname(work), exist_ok=True)
+            os.mkdir(work, 0o700)                   # fails sooner than follow something put there since the look
         with os.fdopen(os.open(os.path.join(work, MARKER), os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600), "w") as f:
-            json.dump({"snapshot": snap["short_id"], "started": iso(), "note": "This folder is a restore that hasn't "
-                       "finished. It is incomplete until this file is gone and the folder has lost its .partial name."}, f)
+            json.dump({"snapshot": snap["short_id"], "paths": paths, "started": iso(), "note": "This folder is a "
+                       "restore that hasn't finished. It is incomplete until this file is gone and the folder has "
+                       "lost its .partial name."}, f)
         if resumed:
             job.note(f"carrying on in {work}, where a restore stopped before")
         on_line, hold = on_progress(job)
@@ -1034,18 +1138,24 @@ def cmd_restore(a, b):
             raise Problem("failed", f"The restore failed: {last or 'restic failed'}. What it got to is in {work}, and "
                           "is incomplete.")
         job.step("finish")
-        os.unlink(os.path.join(work, MARKER))
+        hold_signals()                              # giving the folder its name is never stopped half-way
         files, total = count_files(work)
         state = "done" if rc == 0 and not skipped else "incomplete"
+        inside = os.path.dirname(work) == final     # --to was there already: the work is in it
         if state == "incomplete":
-            base, n = final + "-incomplete", 1
+            base, n = (os.path.join(final, "restore-incomplete") if inside else final + "-incomplete"), 1
             final = base
             while os.path.lexists(final):
                 n += 1
                 final = f"{base}-{n}"
-        if os.path.isdir(final) and not os.listdir(final):
-            os.rmdir(final)
-        os.rename(work, final)
+            inside = False
+        os.unlink(os.path.join(work, MARKER))
+        if inside:
+            for name in os.listdir(work):
+                os.rename(os.path.join(work, name), os.path.join(final, name))
+            os.rmdir(work)
+        else:
+            os.rename(work, final)
     except Stopped as e:
         if not os.path.isdir(work):
             return stopped(job, a, e, "Stopped before anything was restored. Nothing on the server changed.", "refused")
@@ -1054,6 +1164,12 @@ def cmd_restore(a, b):
     except Problem as e:
         job.finish("failed", error=e.message)
         raise
+    except OSError as e:
+        job.finish("failed", error=str(e))
+        raise Problem("failed", f"The restore stopped: {e}. " + (f"What it got to is in {work}, and is incomplete."
+                                                                 if os.path.isdir(work) else "Nothing was restored."))
+    finally:
+        release_signals()
     result = {"schema": SCHEMA, "ok": state == "done", "state": state, "mode": "new-folder",
               "snapshot": {k: v for k, v in snap.items() if k != "raw_paths"}, "paths": paths or snap["paths"],
               "target": final, "files": files, "bytes": total, "verified": not a.no_verify and state == "done",
@@ -1181,12 +1297,11 @@ def plan_in_place(env, snap, paths):
         kinds = {}
         for i in range(0, len(links), 400):
             kinds.update({sysp(n.get("path", "")): n.get("type") for n in nodes(env, snap, links[i:i + 400])})
-        os.makedirs(at(SCRATCH), mode=0o700, exist_ok=True)
-        scratch = tempfile.mkdtemp(prefix="links-", dir=at(SCRATCH))
+        scratch = tempfile.mkdtemp(prefix="links-", dir=own_folder(at(SCRATCH)))
         try:
             listing, tree = os.path.join(scratch, ".include"), os.path.join(scratch, "tree")
             with open(listing, "w") as f:
-                f.write("".join(literal(p) + "\n" for p in links if kinds.get(p) == "symlink"))
+                f.write("".join(include_line(p) + "\n" for p in links if kinds.get(p) == "symlink" and include_line(p)))
             if os.path.getsize(listing):
                 restic(env, ["restore", snapref(snap), "--target", tree, "--json", "--retry-lock", "2m", "--include-file", listing])
             for item in links:
@@ -1203,13 +1318,14 @@ def plan_in_place(env, snap, paths):
             shutil.rmtree(scratch, ignore_errors=True)
     replace.sort(key=lambda r: r["path"])
     add.sort(key=lambda r: r["path"])
-    digest = hashlib.sha256(json.dumps([snap["id"], paths, [[r["path"], r["size"]] for r in replace],
+    digest = hashlib.sha256(json.dumps([snap["id"], paths, [[r["path"], r["size"], r["now_size"], r["now_modified"]] for r in replace],
                                         [[r["path"], r["size"]] for r in add]]).encode()).hexdigest()[:16]
     cache, configs, by_sub = {}, snapper_configs(), {}
     for r in replace + add:
         by_sub.setdefault(subvolume_of(os.path.dirname(r["path"]) or "/", cache), []).append(r)
-    safety = [{"subvolume": sub, "config": configs.get(sub), "files": len(rows),
-               "bytes": sum(max(0, r["size"] - r.get("now_size", 0)) for r in rows)} for sub, rows in sorted(by_sub.items())]
+    # room for every file it writes: the snapshot taken first keeps what the old ones held
+    safety = [{"subvolume": sub, "config": configs.get(sub), "files": len(rows), "bytes": sum(r["size"] for r in rows)}
+              for sub, rows in sorted(by_sub.items())]
     return {"replace": replace, "add": add, "unchanged": same[0], "digest": digest, "safety": safety,
             "bytes": sum(s["bytes"] for s in safety)}
 
@@ -1252,6 +1368,8 @@ def restore_in_place(a, b, env, spec, paths):
            "snapshot": {k: v for k, v in snap.items() if k != "raw_paths"}, "paths": paths or snap["paths"], **plan}
     todo = len(plan["replace"]) + len(plan["add"])
     again = "bromigos lab backups restore " + " ".join([snap["short_id"], *paths]) + " --in-place --apply"
+    if not todo:
+        settle(paths)
     if not a.apply or not todo:
         if a.json:
             print(json.dumps(doc, indent=1))
@@ -1295,11 +1413,10 @@ def restore_in_place(a, b, env, spec, paths):
         job.step("space")
         for s in plan["safety"]:
             free = free_bytes(at(s["subvolume"]))
-            job.note(f"{s['subvolume']}: {size(s['bytes'])} more needed, {size(free)} free")
+            job.note(f"{s['subvolume']}: {size(s['bytes'])} needed, {size(free)} free")
             if s["bytes"] + MARGIN > free:
-                raise Problem("no-space", f"Not enough room on {s['subvolume']}: the files to put back need {size(s['bytes'])} "
-                              f"more than what's there now, and {size(free)} is free. Nothing was changed.",
-                              exit=4, need=s["bytes"], free=free)
+                raise Problem("no-space", f"Not enough room on {s['subvolume']}: the files to put back need {size(s['bytes'])}, "
+                              f"and {size(free)} is free. Nothing was changed.", exit=4, need=s["bytes"], free=free)
         job.step("snapshot")
         for s in plan["safety"]:
             if not s["config"]:
@@ -1343,6 +1460,12 @@ def restore_in_place(a, b, env, spec, paths):
     except Problem as e:
         job.finish("interrupted" if writing else "refused", error=e.message)
         raise
+    except OSError as e:
+        job.finish("interrupted" if writing else "refused", error=str(e))
+        raise Problem("failed", f"The restore stopped: {e}. " + (f"Some files may be from the backup and some not. Running "
+                                                                 f"it again carries on: {again}" if writing else "Nothing was changed."))
+    finally:
+        release_signals()
     state = "done" if rc == 0 and not skipped else "incomplete"
     gone = {s["path"] for s in skipped}
     doc.update(ok=state == "done", state=state, applied=True, snapshots_taken=taken, skipped=skipped,
@@ -1379,7 +1502,7 @@ def sample(env, snap, rng):
             return
         if not isinstance(m, dict) or m.get("type") != "file" or m.get("struct_type", m.get("message_type")) != "node":
             return
-        if int(m.get("size") or 0) > SAMPLE_FILE_BYTES:
+        if int(m.get("size") or 0) > SAMPLE_FILE_BYTES or include_line(m.get("path", "")) is None:
             return
         seen[0] += 1
         row = {"path": m.get("path", ""), "size": int(m.get("size") or 0)}
@@ -1414,19 +1537,20 @@ def clear_scratch(home):
 
 def run_test(a, b, job, home):
     """The test restore's steps. Returns (the backup, files, bytes); raises Problem with why
-    it failed. The scratch folder is job.record["work"]."""
+    it failed. Its scratch folder, job.record["work"], holds the restored tree and the list
+    of what to restore; home is a folder of this command's own."""
     job.step("find")
     env = restic_env(b)
     snap = pick(snapshots(b, env), None)
     job.record.update(snapshot=snap["short_id"], snapshot_at=snap["at"])
     job.note(f"the backup of {when(snap['ts'])} ({snap['short_id']})")
-    os.makedirs(home, mode=0o700, exist_ok=True)
-    clear_scratch(home)
+    clear_scratch(own_folder(home))
     scratch = job.record["work"] = tempfile.mkdtemp(prefix="test-", dir=home)
+    tree = os.path.join(scratch, "tree")
     job.step("pick")
     if a.all:
         rows, includes = None, []
-        rc, out, err = restic(env, ["restore", snap["id"], "--target", scratch, "--dry-run", "--json", "--retry-lock", "2m"])
+        rc, out, err = restic(env, ["restore", snap["id"], "--target", tree, "--dry-run", "--json", "--retry-lock", "2m"])
         need = next((int(m.get("total_bytes") or 0) for m in map(_loads, out.splitlines()) if m.get("message_type") == "summary"), None)
         if rc != 0 or need is None:
             raise Problem("failed", f"the backup couldn't be read: {restic_errors(err)[1] or 'restic failed'}")
@@ -1436,9 +1560,9 @@ def run_test(a, b, job, home):
         if not rows:
             raise Problem("failed", "the newest backup has no files in it")
         need = sum(r["size"] for r in rows)
-        listing = scratch + ".include"
+        listing = os.path.join(scratch, "include")
         with open(listing, "w") as f:
-            f.write("".join(literal(r["path"]) + "\n" for r in rows))
+            f.write("".join(include_line(r["path"]) + "\n" for r in rows))
         includes = ["--include-file", listing]
         job.note(f"{count(len(rows), 'file')} picked at random out of {seen:,} ({size(need)})")
     job.step("space")
@@ -1448,8 +1572,8 @@ def run_test(a, b, job, home):
         raise Problem("no-space", f"not enough room for the test restore: it needs {size(need)} and {home} has "
                       f"{size(free)} free" + (" (a sample needs far less: leave --all out)" if a.all else ""))
     job.step("restore")
-    on_line, _ = on_progress(job)
-    rc, _, err = restic(env, ["restore", snap["id"], "--target", scratch, "--verify", "--json", "--retry-lock", "2m", *includes], on_line)
+    on_line, hold = on_progress(job)
+    rc, _, err = restic(env, ["restore", snap["id"], "--target", tree, "--verify", "--json", "--retry-lock", "2m", *includes], on_line)
     skipped, last = restic_errors(err)
     if skipped:
         raise Problem("failed", f"{count(len(skipped), 'file')} did not come back from the backup of {when(snap['ts'])} "
@@ -1458,13 +1582,16 @@ def run_test(a, b, job, home):
         raise Problem("failed", f"the restore failed: {last or 'restic failed'}")
     job.step("compare")
     if rows is None:
-        files, total = count_files(scratch)
-        if total != need:
-            raise Problem("failed", f"what came back is {size(total)}, and the backup says {size(need)}")
+        # everything: restic's own count of what it wrote against what the backup holds (a file
+        # with two names is counted once by both)
+        files, total = count_files(tree)
+        wrote = hold["summary"].get("bytes_restored")
+        if wrote != need:
+            raise Problem("failed", f"what came back is {size(wrote)}, and the backup says {size(need)}")
     else:
         for r in rows:
             try:
-                got = os.lstat(os.path.join(scratch, r["path"].lstrip("/"))).st_size
+                got = os.lstat(os.path.join(tree, r["path"].lstrip("/"))).st_size
             except OSError:
                 raise Problem("failed", f"{sysp(r['path'])} did not come back")
             if got != r["size"]:
@@ -1486,24 +1613,28 @@ def cmd_test(a, b):
     job = Job("test", steps, a.json, quiet=a.quiet, mode=mode)
     started = time.time()
     snap, files, total, reason = None, 0, 0, ""
+    # --scratch DIR: a folder of this command's own inside it, so nothing of yours there is touched
+    home = os.path.join(os.path.abspath(a.scratch), "bromigos-restore-test") if a.scratch else at(SCRATCH)
     try:
         catch_signals()
-        snap, files, total = run_test(a, b, job, os.path.abspath(a.scratch) if a.scratch else at(SCRATCH))
+        snap, files, total = run_test(a, b, job, home)
     except Stopped as e:
+        shutil.rmtree(job.record.get("work") or os.path.join(home, "none"), ignore_errors=True)
         return stopped(job, a, e, "Stopped. The test restore didn't finish, so it doesn't count either way. Its scratch "
                        "folder was removed; nothing on the server changed.")
     except Problem as e:
         reason = e.message
+    except OSError as e:
+        reason = f"the test restore couldn't run: {e}"
     finally:
-        work = job.record.get("work")
-        if work:
-            shutil.rmtree(work, ignore_errors=True)
-            if os.path.exists(work + ".include"):
-                os.unlink(work + ".include")
+        hold_signals()                               # the record of how it went is always written
+        if job.record.get("work"):
+            shutil.rmtree(job.record["work"], ignore_errors=True)
     rec = {"phase": "failed" if reason else "ok", "at": iso(), "ts": time.time(), "mode": mode, "files": files, "bytes": total,
            "snapshot": job.record.get("snapshot", ""), "seconds": round(time.time() - started, 1), "reason": reason}
     update_state(test=rec, **({} if reason else {"test_ok": rec}))
     job.finish("failed" if reason else "done", **rec)
+    release_signals()
     doc = {"schema": SCHEMA, "ok": not reason, "state": "failed" if reason else "passed", "test": rec,
            "snapshot": {k: v for k, v in snap.items() if k != "raw_paths"} if snap else None}
     if reason:
@@ -1665,6 +1796,14 @@ def main(argv, reexec=None):
         else:
             print(e.message, file=sys.stderr)
         return e.exit
+    except BrokenPipeError:
+        raise
+    except OSError as e:                                        # a full disk, a folder that can't be written
+        if as_json:
+            print(json.dumps({"schema": SCHEMA, "ok": False, "error": {"code": "failed", "message": f"It stopped: {e}."}}, indent=1))
+        else:
+            print(f"It stopped: {e}.", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
