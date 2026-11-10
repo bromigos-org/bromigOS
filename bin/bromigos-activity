@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# bromigos:summary=What this computer is doing: long jobs with named steps, that keep running when you close the terminal and can be read later
-# bromigos:args=[list [--all] [--limit N] [--json]] | show [ID] [--log N] [--json] | run --kind KIND --title WORDS [--subject TYPE:ID[:NAME]] [--via VIA] [--device NAME] [--detach] [--json] -- COMMAND…
-# bromigos:examples=bromigos activity; bromigos activity show; bromigos activity list --json; sudo bromigos activity run --kind backup.run --title "Backing up" -- bromigos server backup run
+# bromigos:summary=What this computer is doing: long jobs with named steps, that keep running when you close the terminal, can ask you a question, and can be read later
+# bromigos:args=[list [--all] [--limit N] [--json]] | show [ID] [--log N] [--json] | answer ID CHOICE [--json] | cancel ID [--json] | retry ID [--via VIA] [--device NAME] [--detach] [--json] | run --kind KIND --title WORDS [--subject TYPE:ID[:NAME]] [--lock NAME]… [--parent ID] [--cancel-safe] [--retry-safe] [--via VIA] [--device NAME] [--detach] [--json] -- COMMAND…
+# bromigos:examples=bromigos activity; bromigos activity show; bromigos activity list --json; sudo bromigos activity answer drive.replace swapped; sudo bromigos activity cancel backup; sudo bromigos activity run --kind backup.run --title "Backing up" --lock backup-repo -- bromigos server backup run
 """bromigos-activity (`bromigos activity`): what this computer is doing (docs/activity.md).
 
   bromigos activity [list]            the jobs still going, then the newest that ended
@@ -13,6 +13,17 @@
                                       the newest job
       --log N                         N lines of the log (default 20; 0 for all of it)
       --json                          the record, with the log's lines
+  bromigos activity answer ID CHOICE  answer the question a job asks (its state is "needs you").
+                                      `show ID` prints the question and each CHOICE. The job
+                                      carries on. Needs root
+  bromigos activity cancel ID         stop a job. Refused unless the job says that stopping now
+                                      is safe; it says why not. A job that only waits for
+                                      another job can always be stopped. Needs root
+  bromigos activity retry ID          start again a job that failed, was cancelled or was
+                                      interrupted, when it was started with --retry-safe: a new
+                                      job with the same command. Takes run's --via, --device,
+                                      --detach and --json. Needs root
+      --json                          (answer, cancel) what happened, and the record
   bromigos activity run --kind KIND --title WORDS [options] -- COMMAND…
                                       run COMMAND as a job. It gets its own systemd unit
                                       (bromigos-job-<id>.service), so it carries on when this
@@ -23,6 +34,13 @@
       --kind KIND                     what sort of job: app.install, backup.run, drive.test, …
       --title WORDS                   plain words for people: "Backing up"
       --subject TYPE:ID[:NAME]        what it's about: app:photos:Photos
+      --lock NAME                     what it must have to itself: apps, pool, backup-repo. While
+                                      another job holds NAME this one waits ("waiting for
+                                      another job"), in the order they started. Repeat for more
+      --parent ID                     the job this one is a part of (default: the job that
+                                      runs this command, if one does)
+      --cancel-safe                   stopping it is safe, until it prints `::cancel unsafe WHY`
+      --retry-safe                    starting it again after it failed is safe: allows `retry`
       --via VIA                       who asked: cli (default), board, phone, timer, vector
       --device NAME                   the device that asked
       --detach                        print the job's id and return at once
@@ -30,9 +48,10 @@
 
 Where there's no systemd (a container), `run` runs the job in this terminal, with the same record.
 
-Exit status: `run` ends with COMMAND's own (130 when you stop watching with Ctrl+C, or the job
-was cancelled; 127 when COMMAND isn't there). Otherwise 0, 1 for a problem said in words
-(no such job), 2 for a wrong command.
+Exit status: `run` and `retry` end with COMMAND's own (130 when you stop watching with Ctrl+C,
+or the job was cancelled; 127 when COMMAND isn't there). Otherwise 0, 1 for a problem said in
+words (no such job), 2 for a wrong command, 3 when the job refused: it isn't asking, it has no
+such answer, stopping it now isn't safe, or it can't be started again.
 """
 import json
 import os
@@ -58,14 +77,17 @@ def say(words):
     print("bromigos activity: " + words, file=sys.stderr)
 
 
-def options(args, flags=(), values=()):
-    """(the options found, what's left); None for an option this verb doesn't have."""
+def options(args, flags=(), values=(), many=()):
+    """(the options found, what's left); None for an option this verb doesn't have. An option
+    in `many` may be given more than once, and is a list."""
     got, rest = {}, []
     args = list(args)
     while args:
         a = args.pop(0)
         if a in flags:
             got[a] = True
+        elif a in many and args:
+            got.setdefault(a, []).append(args.pop(0))
         elif a in values and args:
             got[a] = args.pop(0)
         elif a.startswith("-"):
@@ -123,13 +145,90 @@ def show_line(line):
         raise
 
 
+def announce(rec):
+    """To whoever watches a job in a terminal: what it waits for, and what to type."""
+    q = rec.get("question")
+    if rec["state"] == "needs-you" and q:
+        say(f"it asks: {q['text']}")
+        for c in q["choices"]:
+            say(f"  sudo bromigos activity answer {rec['id']} {c['id']}    ({c['label']})")
+    elif rec["state"] == "waiting" and rec.get("waiting_for") == "another job":
+        say((rec.get("stage") or "Waiting for another job to finish") + f"  ({rec['id']})")
+
+
+def as_root(env):
+    """Jobs are the system's: the same command again, as root (sudo, or polkit without a terminal)."""
+    before = A.elevation(env, sys.stdin.isatty())
+    if before:
+        os.execvp(before[0], before + [SELF, *sys.argv[1:]])
+
+
+def told(got, out):
+    """An answer's or a cancel's outcome, said; the exit status (3 when the job refused)."""
+    if "--json" in got:
+        print(json.dumps(dict(schema=A.SCHEMA, **out), indent=1))
+    elif out["ok"]:
+        print(out["words"])
+    else:
+        say(out["words"])
+    return 0 if out["ok"] else 3
+
+
+def cmd_answer(env, args):
+    got, rest = options(args, ("--json",))
+    if got is None or len(rest) != 2:
+        return usage()
+    rec = A.find(env, rest[0])
+    q = rec.get("question") or {}
+    if rec["state"] == "needs-you" and rest[1] in [c["id"] for c in q.get("choices") or []]:
+        as_root(env)                                 # only an answer the job would take asks for a password
+    return told(got, A.answer(env, rec["id"], rest[1]))
+
+
+def cmd_cancel(env, args):
+    got, rest = options(args, ("--json",))
+    if got is None or len(rest) != 1:
+        return usage()
+    rec = A.find(env, rest[0])
+    if rec["state"] not in A.FINAL and rec.get("cancel_safe"):
+        as_root(env)
+    out = A.cancel(env, rec["id"])
+    if out["refused"] == "unsafe" and "--json" not in got:
+        say("not stopped. " + out["words"])
+        unit = out["job"].get("unit")
+        say("  To stop it anyway: " + (f"sudo systemctl stop {unit}" if unit else "press Ctrl+C in the terminal that runs it"))
+        return 3
+    return told(got, out)
+
+
+def cmd_retry(env, args):
+    got, rest = options(args, ("--json", "--detach"), ("--via", "--device"))
+    if got is None or len(rest) != 1:
+        return usage()
+    rec = A.find(env, rest[0])
+    why = A.retry_refusal(rec)
+    if why:
+        if "--json" in got:
+            print(json.dumps({"schema": A.SCHEMA, "ok": False, "refused": "not-retryable", "words": why, "job": rec}, indent=1))
+        else:
+            say("not started again. " + why)
+        return 3
+    as_root(env)
+    quiet = "--json" in got
+    code, job_id = A.retry(env, rec["id"], got.get("--via", "cli"), got.get("--device"), detach="--detach" in got,
+                           echo=None if quiet else show_line, self_argv=[SELF], note=say,
+                           on_state=None if quiet else announce)
+    return ran(env, got, code, job_id)
+
+
 def cmd_run(env, args):
     if "--" in args:
         k = args.index("--")
         args, command = args[:k], args[k + 1:]
     else:
         command = []
-    got, rest = options(args, ("--json", "--detach"), ("--kind", "--title", "--subject", "--via", "--device", "--job"))
+    got, rest = options(args, ("--json", "--detach", "--cancel-safe", "--retry-safe"),
+                        ("--kind", "--title", "--subject", "--via", "--device", "--job", "--parent"), ("--lock",))
     if got is None or rest:
         return usage()
     if "--job" in got:                               # inside the unit: be the job (start_unit runs this)
@@ -138,17 +237,28 @@ def cmd_run(env, args):
         return usage()
     subject = A.parse_subject(got["--subject"]) if "--subject" in got else None
     A.check(got["--kind"], got["--title"], got.get("--via", "cli"))
+    A.check_locks(got.get("--lock"))
     if not env.find(command[0]):
         say(f"no such command: {command[0]}")
         return 127
-    before = A.elevation(env, sys.stdin.isatty())
-    if before:                                       # jobs are the system's: the same command, as root
-        os.execvp(before[0], before + [SELF, *sys.argv[1:]])
+    as_root(env)
     quiet = "--json" in got
-    detached = "--detach" in got and env.runner() == "systemd"
+    parent = got.get("--parent")
+    inside = env.environ.get("BROMIGOS_ACTIVITY_JOB")                # a job started by a job is a part of it
+    if not parent and inside and A.JOB_ID_OK.match(inside) and A.alive(env, inside):
+        parent = inside
     code, job_id = A.run(env, got["--kind"], got["--title"], command, subject, got.get("--via", "cli"), got.get("--device"),
                          detach="--detach" in got, echo=None if quiet else show_line,
-                         self_argv=[SELF], note=say)
+                         self_argv=[SELF], note=say, locks=got.get("--lock") or (), parent=parent,
+                         cancel_safe="--cancel-safe" in got, retry_safe="--retry-safe" in got,
+                         on_state=None if quiet else announce)
+    return ran(env, got, code, job_id)
+
+
+def ran(env, got, code, job_id):
+    """What `run` and `retry` print once the job is started (detached) or has ended."""
+    quiet = "--json" in got
+    detached = "--detach" in got and env.runner() == "systemd"
     if detached:                                     # it's on its way; its record follows
         print(json.dumps({"schema": A.SCHEMA, "id": job_id, "unit": A.unit_name(job_id)}) if quiet else job_id)
         return code
@@ -188,6 +298,12 @@ def main(argv):
             return cmd_show(env, rest)
         if verb == "run":
             return cmd_run(env, rest)
+        if verb == "answer":
+            return cmd_answer(env, rest)
+        if verb == "cancel":
+            return cmd_cancel(env, rest)
+        if verb == "retry":
+            return cmd_retry(env, rest)
     except (A.ActivityError, KeyError) as e:
         say(str(e.args[0]) if e.args else str(e))
         return 1

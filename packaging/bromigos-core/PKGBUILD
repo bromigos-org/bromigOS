@@ -136,7 +136,8 @@ check() {
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/alerts"
   # bromigos activity: the progress lines the installers and the lab print, a job's record
   # and its ends, the bounds, what keeps secrets out, and the Server tour's apply as a job; a
-  # stand-in root and a stand-in systemd-run (no unit starts, no password is asked)
+  # job that asks and is answered, two jobs on one lock, cancel and retry, the alert on failure;
+  # a stand-in root and a stand-in systemd-run (no unit starts, no password is asked)
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/activity"
   # lib/bromigos_qr.py: themed QR codes in every world and style, each decoded by zbar and ZXing
   PYTHONPATH="$_root/lib" python -m unittest discover -s "$_root/tests/qr"

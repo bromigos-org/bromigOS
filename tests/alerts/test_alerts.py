@@ -67,6 +67,7 @@ class EveryCheck(Machine):
             "server.game:valheim": "needs_you", "server.game:container-minecraft": "needs_you",
             "server.app-data": "needs_you",
             "game.steam:nvapi": "needs_you", "game.steam:default": "info", "game.steam:prune": "info",
+            "activity.job:drive.test:drive/bay-2": "needs_you",
         }
         for k, v in want.items():
             self.assertEqual(got.get(k), v, k)

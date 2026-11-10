@@ -29,6 +29,7 @@ The manual's [Alerts](../manual/src/alerts.md) page is the user's side.
 | `server.app-data` | Where a bromigOS Server with data disks keeps its apps' data (`bromigos lab app-data`) | Needs you: it's on the system disk, or a move to the data disks didn't finish. Critical: the data disks aren't mounted |
 | `fieldkit.finding` | After each boot, and after a kernel or graphics driver changes: the black screen check on this computer, and what a Field Kit stick found here | Needs you |
 | `game.steam` | Steam and Proton (`bromigos game check`) | Needs you, or info when bromigOS fixes it by itself |
+| `activity.job` | A long job that failed ([activity.md](activity.md#when-a-job-fails)). One alert for each kind of job and what it is about, until that job next succeeds | Needs you. Info when the job put things back by itself |
 
 Two passes run them:
 
