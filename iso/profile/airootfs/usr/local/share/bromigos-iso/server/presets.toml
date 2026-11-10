@@ -158,7 +158,7 @@ services_on = ["smb", "nfs", "timeline"]
 id = "home"
 title = "Home services"
 summary = "Apps for the household: photos, media, passwords, documents, home automation."
-hint = "Each app gets a name like photos-<server>.local, backs itself up, and updates at night."
+hint = "Each app gets a name like photos-<server>.local. Most apps stay at the version they were installed with: they don't update by themselves yet."
 glyph = "house"
 icon = "people"
 packages = ["caddy"]
@@ -410,8 +410,9 @@ on = false
 lab = true
 
 # ── the app catalogue (about ten, one per job). image: where it comes from; the digest
-# that's installed is pinned in the catalogue's Quadlet templates, which CI updates and
-# tests (bromigos-server's /usr/share/bromigos/server/apps/<id>/) ───────────────────────
+# that's installed is pinned in the provisioning catalogue (bromigos-lab's
+# /usr/share/bromigos/lab/provision-catalogue.toml). Nothing moves the digests yet, so a
+# container app doesn't update by itself (docs/lab-provision.md, "Updates") ───────────────
 [[apps]]
 id = "photos"
 title = "Photos (Immich)"

@@ -32,7 +32,7 @@ roles](images/server-role.webp)
 |---|---|
 | **Lab node** | Computing and graphics cards for your lab. It joins your lab's cluster, and your lab's workstation sets it up from your desktop: you don't type anything on it. |
 | **Storage** | Files and backups for the house and the lab: shared folders for Windows, Mac and Linux, hourly versions of every file, and backups. |
-| **Home services** | Apps for the household: photos, media, passwords, documents, home automation. Each app gets a name like `photos-<server>.local`, backs itself up, and updates at night. |
+| **Home services** | Apps for the household: photos, media, passwords, documents, home automation. Each app gets a name like `photos-<server>.local`. Most apps don't update by themselves yet ([How it updates](#how-it-updates)). |
 | **Game server** | Game servers for your friends, started and stopped from your phone. With a lab, it joins your lab's Pelican panel. Without one, the games run on the server itself. |
 | **Media** | Your own movies, shows, music and Den TV for every screen, for media you own or have rights to. |
 | **Just a server** | The safe base and nothing more, for a box you'll fill yourself. |
@@ -216,6 +216,12 @@ restarts only when an update needs it, and only inside the window. When the news
 (the system bromigOS is built on) asks for a step by hand, the server waits and tells you
 first. On a Lab node, your lab restarts its machines one at a time, moving their work away
 first.
+
+These updates are the system's: bromigOS and the programs it is built from. A few apps
+are such programs and update with them: passwords (Vaultwarden) and file sync (Syncthing),
+for example. Most apps you tick on the **What should this server run?** step run as
+containers, and those aren't part of the update yet: photos, documents, home automation,
+the media apps. Each stays at the version it was installed with.
 
 **Tell my phone** sends these notices to BRODEC, once your phone is paired in the welcome
 tour.

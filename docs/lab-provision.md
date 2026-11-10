@@ -328,7 +328,10 @@ The approved design also covers these features. They are not built here:
 - Public certificates, DNS and opt-in tunnels.
 - Service removal with a separate data-retention decision.
 - Scheduled Vault Raft snapshots and backups of the cluster control plane.
-- Updating pinned images and chart versions through `bromigos lab update`.
+- Updating pinned images and chart versions through `bromigos lab update`. For the local
+  target's apps that means a CI job that tests and moves the catalogue's digests, and the
+  server updating each app behind a snapshot of its data, with a check and a rollback
+  ([Updates](#updates)). Until then no container app updates by itself.
 - Provisioning from Settings, with the plan beside its service tree.
 
 These features continue to use the catalog's existing `needs`, `depends`, `conflicts`,
@@ -472,6 +475,37 @@ behind the mount is the system disk's.
 `bromigos lab app-data` says where `/srv/apps` is. On a server installed before the
 installer mounted it there, `bromigos lab app-data move` puts it on the data disks
 (`bromigos_homelab/appdata.py`; [server.md](server.md#a-server-set-up-before-the-installer-did-this)).
+
+### Updates
+
+It depends on how an item installs.
+
+- **Packages** update with the system. An item with `install = { pacman = [...] }`, or a
+  step that installs a package (Vaultwarden, Syncthing, AdGuard Home, Caddy, Prometheus
+  and Grafana, OpenBao, Samba), is an ordinary package. A bromigOS Server's nightly update
+  brings its new versions.
+- **Containers don't update by themselves.** That is most of the catalogue: every item
+  with `install = { quadlet = … }`. Each image is pinned by digest in the catalogue, no
+  template sets `AutoUpdate=registry`, and no CI job moves the digests. A container app
+  stays at the version the catalogue pinned when it was installed.
+- **k3s, Wings and the Helm charts** are pinned to one version in the engine
+  (`localprovision.py`), and don't move by themselves either.
+
+A container app changes only this way today: a bromigOS release ships a catalogue with a
+newer digest for it, and someone runs the apply on the server again. The apply redoes the
+items whose pinned image changed, and restarts them:
+
+```bash
+sudo bromigos lab provision --local --from-answers /var/log/bromigos/install-answers.toml --apply
+```
+
+That is a new image started on the old data, with no snapshot before it and no check
+after it. Back the server up first.
+
+Planned, and not built: a weekly CI job that tests each newer image and moves its digest,
+and the server updating each container app after the system's own update, with a snapshot
+of the app's data before, a check that it answers after, and a rollback when it doesn't.
+It is in the list of [work reserved for later slices](#work-reserved-for-later-slices).
 
 ### What it doesn't do
 

@@ -129,8 +129,11 @@ stops and your apps start again where they were.
 ## For power users
 
 - Settings: `/etc/bromigos/server.toml`, then `sudo bromigos server setup`.
-- Your own services: Quadlet files in `/etc/containers/systemd/`. They start at boot,
-  restart when they fail, and update after the system does.
+- Your own services: Quadlet files in `/etc/containers/systemd/`. They start at boot and
+  restart when they fail. One you mark `AutoUpdate=registry` updates after the system does.
+- The apps bromigOS sets up as containers aren't marked. Each stays at the version it
+  was installed with: they don't update by themselves yet. Apps that are packages, such
+  as Vaultwarden and Syncthing, update with the system.
 - The apps keep their data in `/srv/apps`
   ([above](#where-your-apps-keep-their-data)).
 - WireGuard and Tailscale are installed and off. Turn on the one you use.

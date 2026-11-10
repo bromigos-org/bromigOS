@@ -59,6 +59,16 @@ class CatalogueTests(unittest.TestCase):
         for g in PC.GLYPHS:
             self.assertIn(g, T.ICONS)
 
+    def test_no_catalogue_app_is_marked_to_update_by_itself(self):
+        # The docs say plainly that the catalogue's container apps don't update by themselves (docs/server.md,
+        # "Containers and services"; docs/lab-provision.md, "Updates"). An AutoUpdate= here would
+        # update around the pinned digest with no snapshot and no check: when apps do update, it's
+        # through the planned path, and those pages change with it
+        from bromigos_homelab import localprovision as L
+        units = [f for it in PC.load() if "quadlet" in it["install"] for f in L.template_files(it["install"]["quadlet"])]
+        self.assertGreater(len(units), 30)
+        self.assertEqual([f"{u.parent.name}/{u.name}" for u in units if "AutoUpdate" in u.read_text()], [])
+
     def test_images_pinned_by_digest(self):
         for it in PC.load():
             for name, ref in it["images"].items():

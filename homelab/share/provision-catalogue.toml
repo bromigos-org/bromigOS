@@ -36,7 +36,10 @@
 #                      default, help, choices = [{id, label, note, url}], show_if = {field = [values]},
 #                      secret_for = [choice ids that need it]}, [[item.setup.action]] {label, url}
 #
-# Images are pinned by digest; CI moves the digests (the same job as the lab's charts).
+# Images are pinned by digest. Nothing moves the digests yet: no CI job does, and no template
+# sets AutoUpdate, so a container app stays at the version pinned here until this file changes
+# and the server applies it again (docs/lab-provision.md, "Updates"; the job that tests and
+# moves them is planned there). Items installed as packages update with the system.
 format = 1
 
 [[group]]

@@ -824,7 +824,11 @@ card. When an item needs another one, that one is ticked too, and the list says 
 Most items download something. Without a network, the server installs what it can and
 waits for the rest. Nothing is lost if it restarts in the middle: it carries on.
 
-Each app keeps its data in `/srv/apps`, on the server's data disks when it has them
+Most apps don't update by themselves yet. The ones that run as containers (photos,
+documents, home automation, the media apps) stay at the version they were installed with.
+The few that are system packages, such as passwords (Vaultwarden) and file sync
+(Syncthing), update with the server's nightly update. Each app keeps its data in
+`/srv/apps`, on the server's data disks when it has them
 ([bromigOS Server](server.md#where-your-apps-keep-their-data)).
 
 To change what a server runs later, run the same command on the server (below).

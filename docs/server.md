@@ -548,9 +548,22 @@ WantedBy=multi-user.target
 
 Then `sudo systemctl daemon-reload` and `sudo systemctl start whoami`.
 
-**Containers update after the system.** `podman-auto-update.timer` is on, moved by a drop-in
-from midnight to 05:30, after the nightly update. It updates each container marked
-`AutoUpdate=registry`, and rolls one back when its service fails to start.
+**Containers you mark update after the system.** `podman-auto-update.timer` is on, moved by
+a drop-in from midnight to 05:30, after the nightly update. It updates each container marked
+`AutoUpdate=registry`, as in the example above, and rolls one back when its service fails
+to start.
+
+**The catalogue's container apps don't update by themselves.** Most apps bromigOS sets
+up, from the installer's **What should this server run?** step or
+`bromigos lab provision --local`, run as containers: photos, documents, home automation,
+the media apps. Each is pinned to one exact image and isn't marked `AutoUpdate=registry`.
+The timer leaves them alone, and the nightly update changes the system's packages, not
+them. Such an app stays at the version it was installed with.
+
+A few items are packages, not containers: passwords (Vaultwarden), file sync (Syncthing),
+ad blocking (AdGuard Home), Caddy, Ollama. Those update with the system each night, like
+any package. [lab-provision.md](lab-provision.md#updates) says how a container app changes
+today, and what is planned.
 
 For power users: Podman's own docs are `man podman-systemd.unit` and
 `man podman-auto-update`. Compose files still work; they just aren't services systemd knows.
