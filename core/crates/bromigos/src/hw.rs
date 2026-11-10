@@ -21,7 +21,8 @@ kernels, mkinitcpio's MODULES. What setup does, only where it differs: the GPU's
 on a laptop brightnessctl and power-profiles-daemon. A driver only the AUR has (NVIDIA's \
 580.xx and 470.xx branches) is offered through paru, after a question. What each card is for \
 (the desktop, games and heavy apps, virtual machines): hw graphics, hw display, hw games, hw \
-run, hw vfio, and Settings › Graphics. docs/hardware.md.")]
+run, hw vfio, and Settings › Graphics. What an old PC could run as a home server: hw salvage \
+(the salvage scan; package bromigos-lab; docs/salvage.md). docs/hardware.md.")]
 pub struct HwArgs {
     #[command(subcommand)]
     verb: Option<HwVerb>,
