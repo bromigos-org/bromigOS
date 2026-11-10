@@ -771,7 +771,7 @@ class InItsOwnUnit(Machine):
         [call] = self.m.calls()
         self.assertEqual(call, f"systemd-run --unit=bromigos-job-{rec['id']}.service --collect --quiet --service-type=exec "
                                f"--property=KillMode=mixed --description=bromigOS job: Backing up 100 "
-                               f"--setenv=BROMIGOS_ROOT={self.m.root} -- {fake.SCRIPT} run --job {rec['id']}")
+                               f"--setenv=HOME={self.m.home} --setenv=BROMIGOS_ROOT={self.m.root} -- {fake.SCRIPT} run --job {rec['id']}")
         self.assertNotIn("hunter2", call)                                         # the unit's command line is the id only
         self.assertEqual(rec["command"], [script, "--password", "***"])
         self.assertEqual(sorted(p.suffix for p in self.m.jobs.iterdir()), [".json", ".log"])   # the spec went as it started

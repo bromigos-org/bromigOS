@@ -30,6 +30,7 @@ import datetime as dt
 import fcntl
 import json
 import os
+import pwd
 import re
 import secrets
 import select
@@ -939,6 +940,10 @@ def start_unit(env, job_id, title, self_argv, run=subprocess.run):
         raise ActivityError("systemd-run isn't installed, so a job can't have its own unit")
     cmd = [exe, f"--unit={unit_name(job_id)}", "--collect", "--quiet", "--service-type=exec",
            "--property=KillMode=mixed", f"--description=bromigOS job: {_words(title, MAX_TITLE).replace('%', '')}"]
+    # a system unit has no HOME; the command gets the one `sudo COMMAND` would give it
+    home = env.environ.get("HOME") if env.stand_in else pwd.getpwuid(os.geteuid()).pw_dir
+    if home:
+        cmd.append(f"--setenv=HOME={home}")
     if env.stand_in:
         cmd.append(f"--setenv=BROMIGOS_ROOT={env.root}")
     r = run(cmd + ["--", *self_argv, "run", "--job", job_id], capture_output=True, text=True, env=env.environ)
