@@ -33,6 +33,7 @@ language = "English"
 dual_audio = true
 """
 VPN_PASSWORD = "correct-horse-battery-staple"
+AUTOSCAN = "srv/apps/autoscan/config/config.yml"           # /config/config.yml in its container
 
 
 def setUpModule():
@@ -293,6 +294,118 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual((vault / "db.sqlite3").read_text(), "the household's passwords\n")
         self.assertIn("DATA_FOLDER=/srv/apps/passwords", Path(self.root, "etc/bromigos/lab/passwords.env").read_text())
 
+    def effective_env(self, unit):
+        """What a unit's process gets, as systemd puts it together: every Environment= line, then
+        every EnvironmentFile= in the order they're named, each file's lines winning over what
+        came before it (systemd.exec: variables from EnvironmentFile= override Environment=).
+        The package's unit first, then its drop-ins by name."""
+        env, files = {}, []
+        drops = sorted(Path(self.root, f"etc/systemd/system/{unit}.d").glob("*.conf"))
+        for text in [f"[Service]\nEnvironmentFile=/etc/vaultwarden.env\n"] + [d.read_text() for d in drops]:
+            for line in text.splitlines():
+                k, _, v = line.partition("=")
+                if k == "Environment":
+                    env.update([v.split("=", 1)])
+                elif k == "EnvironmentFile":
+                    files.append(v.lstrip("-"))
+        for f in files:
+            for line in Path(self.root, f.lstrip("/")).read_text().splitlines():
+                if line.strip() and not line.lstrip().startswith("#"):
+                    env.update([line.split("=", 1)])
+        return env
+
+    def test_the_web_vault_is_on_whatever_the_packages_own_file_says(self):
+        # Arch's /etc/vaultwarden.env turns the web vault off and names its own folder. Settings
+        # given with Environment= lose to any file, so the engine's come from a file read after it
+        Path(self.root, "etc").mkdir(exist_ok=True)
+        Path(self.root, "etc/vaultwarden.env").write_text("DATA_FOLDER=/var/lib/vaultwarden\nWEB_VAULT_ENABLED=false\n"
+                                                          "ROCKET_ADDRESS=0.0.0.0\n")
+        plan = L.build_plan(["passwords"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        env = self.effective_env("vaultwarden.service")
+        self.assertEqual({k: env.get(k) for k in ("WEB_VAULT_ENABLED", "WEB_VAULT_FOLDER", "ROCKET_ADDRESS", "ROCKET_PORT",
+                                                  "DOMAIN", "DATA_FOLDER")},
+                         {"WEB_VAULT_ENABLED": "true", "WEB_VAULT_FOLDER": "/usr/share/webapps/vaultwarden-web",
+                          "ROCKET_ADDRESS": "127.0.0.1", "ROCKET_PORT": "8222", "DOMAIN": "https://passwords-box.local",
+                          "DATA_FOLDER": "/srv/apps/passwords"})
+        self.assertEqual(Path(self.root, "etc/systemd/system/vaultwarden.service.d/50-bromigos.conf").read_text(),
+                         "[Service]\nEnvironmentFile=/etc/bromigos/lab/vaultwarden.env\n")
+
+    def test_litellm_is_given_its_config_file(self):
+        # its config.yaml is a file the engine writes and the container mounts read-only: never a folder
+        plan = L.build_plan(["litellm", "ollama"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        conf = Path(self.root, "srv/apps/litellm/config.yaml")
+        self.assertTrue(conf.is_file())
+        self.assertEqual(json.loads(conf.read_text())["general_settings"], {"master_key": "os.environ/LITELLM_MASTER_KEY"})
+        self.assertIn("Volume=/srv/apps/litellm/config.yaml:/app/config.yaml:ro,Z\n",
+                      Path(self.root, L.QUADLET_DIR, "litellm.container").read_text())
+        self.assertEqual(self.states("litellm")[-1], "done")
+
+    def autoscan(self):
+        text = Path(self.root, AUTOSCAN).read_text()
+        # YAML: JSON after its comment lines
+        return json.loads("\n".join(l for l in text.splitlines() if not l.startswith("#")))
+
+    def test_autoscan_has_settings_to_start_with(self):
+        # upstream exits at start without /config/config.yml
+        plan = L.build_plan(["autoscan", "sonarr", "radarr", "jellyfin"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        conf = Path(self.root, AUTOSCAN)
+        self.assertEqual(conf.stat().st_mode & 0o777, 0o600)
+        self.assertIn("Volume=/srv/apps/autoscan/config:/config:Z\n", Path(self.root, L.QUADLET_DIR, "autoscan.container").read_text())
+        # Jellyfin's key isn't known yet: no target, so Autoscan starts and waits, and the note says the step
+        self.assertEqual(self.autoscan(), {"port": 3030, "triggers": {"manual": {"priority": 0},
+                                                                      "sonarr": [{"name": "sonarr", "priority": 2}],
+                                                                      "radarr": [{"name": "radarr", "priority": 2}]}})
+        (note,) = [l for l in self.lines if l.startswith("::note autoscan ")]
+        self.assertIn("One step for you, then run this again: Jellyfin: finish its first-run page, make an API key "
+                      "(Dashboard › API Keys) and save it with bromigos lab secrets set jellyfin/api-key.", note)
+        # with the key, the next run points it at Jellyfin
+        self.store.put("jellyfin/api-key", "0123456789abcdef0123456789abcdef")
+        Path(self.root, L.STATE).unlink()
+        self.lines.clear()
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        self.assertEqual(self.autoscan()["targets"], {"jellyfin": [{"url": "http://jellyfin:8096",
+                                                                    "token": "0123456789abcdef0123456789abcdef"}]})
+        self.assertFalse([l for l in self.lines if l.startswith("::note autoscan ")])
+        # a file someone changed is theirs: never written over
+        conf.write_text(conf.read_text().replace('"port": 3030', '"port": 3031'))
+        Path(self.root, L.STATE).unlink()
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0)
+        self.assertEqual(self.autoscan()["port"], 3031)
+
+    def test_autoscan_tells_plex_once_it_is_signed_in(self):
+        prefs = Path(self.root, "srv/apps/plex/config/Library/Application Support/Plex Media Server/Preferences.xml")
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text('<?xml version="1.0" encoding="utf-8"?>\n<Preferences MachineIdentifier="x" PlexOnlineToken="plex-token-123456"/>\n')
+        plan = L.build_plan(["autoscan", "sonarr", "plex"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        self.assertEqual(self.autoscan()["targets"], {"plex": [{"url": "http://host.containers.internal:32400",  # privacy: allow (Podman's name for the host)
+                                                                "token": "plex-token-123456"}]})
+        self.assertFalse([l for l in self.lines if l.startswith("::note autoscan ")])
+
+    def test_folders_get_the_mode_they_are_made_with(self):
+        # a repository root's alone, the SFTP jail root's and open, an app's own folder 0750, whatever the umask
+        Path(self.root, "srv/apps/photos/postgres").mkdir(parents=True)
+        os.chmod(Path(self.root, "srv/apps/photos/postgres"), 0o700)                # postgres's own: kept
+        old = os.umask(0o077)
+        try:
+            plan = L.build_plan(["backups", "backup-target", "photos"], hw=HW)
+            self.net["up"] = True
+            self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        finally:
+            os.umask(old)
+        mode = {rel: Path(self.root, rel).stat().st_mode & 0o777 for rel in
+                ("srv/backups/restic", "srv/backups", "srv/backups/data", "srv/apps/photos", "srv/apps/photos/postgres",
+                 "srv/apps/photos/library")}
+        self.assertEqual(mode, {"srv/backups/restic": 0o700, "srv/backups": 0o755, "srv/backups/data": 0o700,
+                                "srv/apps/photos": 0o750, "srv/apps/photos/postgres": 0o700, "srv/apps/photos/library": 0o755})
+
     def test_a_vault_already_in_the_packages_folder_stays_there_and_goes_on_working(self):
         # a server set up before the vault had a folder under /srv/apps: pointing the service at an
         # empty folder would show the household no passwords. It is left as it is, and the one
@@ -461,7 +574,7 @@ class CatalogueFormatTwo(unittest.TestCase):
         self.assertEqual(L.Runner(host, poll=1).run(), 0)
         # Sonarr and Plex have a page (web.port) and no name: Caddy and the start page leave them out, as they did
         self.assertEqual(L.web_apps(host), [
-            ("monitoring", "graphs-box.local", 3005), ("start-page", "home-box.local", 3010), ("s3", "s3-box.local", 9000),
+            ("monitoring", "graphs-box.local", 3005), ("start-page", "home-box.local", 3010), ("s3", "s3-box.local", 9001),
             ("photos", "photos-box.local", 2283), ("passwords", "passwords-box.local", 8222),
             ("file-sync", "sync-box.local", 8384)])
         caddy = Path(self.root, "etc/caddy/conf.d/bromigos-lab.caddy").read_text()
@@ -472,11 +585,12 @@ class CatalogueFormatTwo(unittest.TestCase):
                           "sync-box.local"])
         grafana = Path(self.root, "etc/systemd/system/grafana.service.d/50-bromigos.conf").read_text()
         self.assertIn("Environment=GF_SERVER_HTTP_PORT=3005\n", grafana)
-        vaultwarden = Path(self.root, "etc/systemd/system/vaultwarden.service.d/50-bromigos.conf").read_text()
-        self.assertIn("Environment=DOMAIN=https://passwords-box.local\n", vaultwarden)
+        self.assertIn("reverse_proxy 127.0.0.1:9001\n", caddy[caddy.index("s3-box.local {"):], "RustFS's console, not its API")
+        vaultwarden = Path(self.root, "etc/bromigos/lab/vaultwarden.env").read_text()
+        self.assertIn("DOMAIN=https://passwords-box.local\n", vaultwarden)
         links = json.loads(Path(self.root, "srv/apps/start-page/config/services.yaml").read_text())[0]["This server"]
         self.assertEqual({name: row["href"] for link in links for name, row in link.items()},
-                         {"Monitoring": "http://box.local:3005", "S3 bucket server (RustFS)": "http://box.local:9000",
+                         {"Monitoring": "http://box.local:3005", "S3 bucket server (RustFS)": "http://box.local:9001",
                           "Photos (Immich)": "http://box.local:2283", "Passwords (Vaultwarden)": "http://box.local:8222",
                           "File sync (Syncthing)": "http://box.local:8384"})
 

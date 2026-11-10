@@ -270,7 +270,8 @@ BRODEC. Each card says what it is, how big it is, what it needs (memory, a graph
 the internet), and which of your roles suggested it. Tick or untick anything. When a pick
 needs another (Argo CD needs Kubernetes), that one is ticked too and says why. A meter
 fills as you pick: the processor, memory, disk and graphics card the choices need, against
-what this computer has. For model serving, you pick the model, sized to the graphics card.
+what this computer has. The disk is the one the apps' data goes to: the data disks you
+chose (with two copies, what fits twice), or else the system disk. For model serving, you pick the model, sized to the graphics card.
 On an NVIDIA card you can pick it with no internet too. NVIDIA's driver isn't on the USB
 stick: it downloads during the install, or installs by itself at the first update with the
 internet, and model serving starts then. The installer says which on its network line.

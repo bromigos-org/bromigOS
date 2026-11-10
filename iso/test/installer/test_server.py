@@ -939,6 +939,26 @@ class Catalogue(unittest.TestCase):
     picks, what they need added, the budget, the models."""
     HW = {"cpu": 16, "ram_gb": 64, "disk_gb": 4000, "gpu": True, "gpu_name": "NVIDIA RTX 4090", "gpu_vram_gb": 24}
 
+    def test_the_budget_measures_the_disk_the_apps_data_goes_to_not_every_disk(self):
+        # the recorded server: a 500 GB system disk, two 4 TB disks, an 8 TB one, and the USB stick
+        from bromigos_installer import provision as PV
+        with open(SERVER_PROBE) as f:
+            probe = json.load(f)
+        os.environ.pop("BROMIGOS_INSTALLER_FAKE", None)
+        try:
+            def gb(**server_keys):
+                return PV.hardware(probe, answers(**server_keys))["disk_gb"]
+            self.assertEqual(gb(), 500, "no data disks: the system disk")
+            self.assertEqual(gb(data_disks=["/dev/sda"]), 4000)
+            self.assertEqual(gb(data_disks=["/dev/sda", "/dev/sdb"]), 8001, "one copy: both disks")
+            self.assertEqual(gb(data_disks=["/dev/sda", "/dev/sdb"], data_layout="raid1"), 4000, "two copies: half")
+            self.assertEqual(gb(data_disks=["/dev/sda", "/dev/sdc"], data_layout="raid1"), 4000,
+                             "two copies on unequal disks: no more than the smaller one holds")
+            self.assertEqual(gb(data_disks=["/dev/sda", "/dev/sdb", "/dev/sdc"], data_layout="raid1"), 8001)
+            self.assertEqual(PV.hardware(probe)["disk_gb"], 8001, "nothing chosen yet: the largest disk, never all of them")
+        finally:
+            os.environ["BROMIGOS_INSTALLER_FAKE"] = "1"
+
     def test_the_engines_catalogue_reads_with_the_stand_in_rules(self):
         # The lab engine's own file (format 2: the job and app apart, web addresses, data folders
         # and health checks beside what was there) through the rules kept here for a medium with

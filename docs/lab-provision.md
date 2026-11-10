@@ -506,7 +506,8 @@ example `photos-myserver.local`, `media-myserver.local`), with HTTPS from Caddy'
 The name and the port are the catalogue's: each item's `web = { name, port }`. The port is
 the one Caddy sends the name to, and the one the start page links to. For most items it is
 the first of `ports`. Monitoring's is Grafana's, 3005, and the same key sets the port
-Grafana listens on. An item whose `web` has a port and no name has a page on that port
+Grafana listens on. The S3 bucket server's is RustFS's console, 9001: its first port, 9000,
+is the S3 API, which answers a browser with an error. An item whose `web` has a port and no name has a page on that port
 and no name of its own: Sonarr is at `http://<server>.local:8989`. `path` is where the
 page is, when it isn't `/`.
 
@@ -565,7 +566,21 @@ before it mounts the share.
 Passwords (Vaultwarden) is a package whose own settings file keeps the vault in
 `/var/lib/vaultwarden`. Its step gives it `/srv/apps/passwords` and writes the two files
 that tell the service (`appdata.py`'s `VAULT_ENV` and `VAULT_DROPIN`). When a vault is in
-the package's folder already, the step leaves it there and writes neither file.
+the package's folder already, the step leaves it there and writes neither file. Its
+address and web vault come from a file too, `/etc/bromigos/lab/vaultwarden.env`
+(`VAULT_SETTINGS`), because the package's file turns the web vault off and a file wins over
+any `Environment=` line.
+
+Some apps need a file before they start, written by a `prepare` step (`PREPARE`):
+LiteLLM's `config.yaml` (a file the container mounts, never a folder), the start page's
+links, Recyclarr's profiles, qBittorrent's first settings, and Autoscan's `config.yml`.
+Autoscan exits without one. Its file has the triggers Sonarr and Radarr call, and the
+media servers it tells where the engine knows them: Jellyfin with the API key in the secret
+store (`jellyfin/api-key`), Plex with the token in its own `Preferences.xml` once it's
+signed in. Autoscan reads its keys from that file alone, so the file is its account's,
+`0600`. With neither, Autoscan starts and tells no one, and the plan's note says the one
+step. The engine writes the file again only while it's as the engine wrote it (a digest on
+its second line), so your changes stay.
 
 `bromigos lab app-data` says where `/srv/apps` is. On a server installed before the
 installer mounted it there, `bromigos lab app-data move` puts it on the data disks, and

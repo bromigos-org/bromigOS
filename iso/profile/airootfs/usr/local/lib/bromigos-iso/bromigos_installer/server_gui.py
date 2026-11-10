@@ -309,7 +309,7 @@ class ServerPages:
             head = label("● " + server.roles_words(rids).upper(), ("dg-chip",), wrap=False)
             head.set_halign(Gtk.Align.START)
             box.append(head)
-        for n in server.combo_notes(rids, PV.hardware(self.probe)):
+        for n in server.combo_notes(rids, PV.hardware(self.probe, self.a)):
             box.append(label("▲ " + n if "It wants" in n else n, ("dg-note",)))
 
     # ── Keys: where the keys and passwords go ───────────────────────────────────────
@@ -1145,7 +1145,7 @@ class ServerPages:
         from . import provision as PV
         s = self._s()
         self.heading(page, "services")
-        self._hw = PV.hardware(self.probe)
+        self._hw = PV.hardware(self.probe, self.a)
         self.budget = glass.BudgetHolo(self.c, self._hero_size()[0], 250 if self._wide() else 200, still=self._still())
         hint(self.budget, "What the chosen services need of this computer: processor, memory, disk and graphics card")
         hw_line = label("This server: " + PV.hw_words(self._hw), ("dg-muted",))

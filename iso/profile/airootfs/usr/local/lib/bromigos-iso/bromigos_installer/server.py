@@ -1054,7 +1054,7 @@ def provision_picks(a, hw=None, probe=None):
     s = srv(a)
     if s.get("provision") is None:
         mode = s.get("lab") or "none"
-        s["provision"] = [i for i in PV.recommend(roles_of(s) or ["plain"], hw or PV.hardware(probe), mode)
+        s["provision"] = [i for i in PV.recommend(roles_of(s) or ["plain"], hw or PV.hardware(probe, a), mode)
                           if PV.item(i) and mode in PV.labs_of(PV.item(i))]
     return s["provision"]
 

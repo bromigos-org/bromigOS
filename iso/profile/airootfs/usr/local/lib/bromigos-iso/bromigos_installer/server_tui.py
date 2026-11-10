@@ -297,7 +297,7 @@ class ServerPages(_Base):
         t = Text()
         if len(rids) > 1:
             t.append(server.roles_words(rids).upper() + "\n", style="bold " + _t().col("primary"))
-        for n in server.combo_notes(rids, PV.hardware(self.probe)):
+        for n in server.combo_notes(rids, PV.hardware(self.probe, self.a)):
             t.append(("▲ " if "It wants" in n else "• ") + n + "\n", style=_t().col("warn") if "It wants" in n else _t().col("text"))
         w.update(t)
 
@@ -802,7 +802,7 @@ class ServerPages(_Base):
         T = _t()
         s = self._s()
         self.heading(box, "services")
-        self._hw = PV.hardware(self.probe)
+        self._hw = PV.hardware(self.probe, self.a)
         box = self._hero(box, lambda t: self._budget_art(), "srv-budget")
         box.mount(Static("This server: " + PV.hw_words(self._hw), classes="muted"))
         box.mount(Static(Text.assemble((T.ic("lab") + "  ", T.col("primary")), ("Its place in your lab", T.col("soft"))),
