@@ -10,5 +10,5 @@ Exec=bromigos terminal --class bromigos-bluetooth --title Bluetooth -- bromigos 
 X-Bromigos-Menu=-
 Terminal=false
 Categories=Settings;HardwareSettings;
-Keywords=bluetooth;devices;pair;pairing;controller;gamepad;xbox;headset;headphones;earbuds;keyboard;mouse;bromigos;
+Keywords=devices;pair;pairing;controller;gamepad;xbox;headset;headphones;earbuds;keyboard;mouse;bromigos;
 StartupNotify=false

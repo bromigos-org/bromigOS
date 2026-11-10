@@ -9,6 +9,6 @@ TryExec=bromigos-live
 Exec=bromigos-live open driftmap
 Terminal=false
 Categories=Utility;
-Keywords=drift;drift map;map;star chart;stars;lore;catalog;galaxy;hologram;deck;
+Keywords=drift;map;stars;lore;catalog;galaxy;hologram;deck;
 StartupNotify=false
 X-Bromigos-Menu=holo/driftmap

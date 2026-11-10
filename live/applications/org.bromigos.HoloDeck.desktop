@@ -9,6 +9,6 @@ TryExec=bromigos-live
 Exec=bromigos-live open holodeck
 Terminal=false
 Categories=System;Monitor;
-Keywords=holo;holo deck;hologram;deck;system;monitor;machine;status;
+Keywords=holo;hologram;deck;system;monitor;machine;status;
 StartupNotify=false
 X-Bromigos-Menu=holo/holodeck

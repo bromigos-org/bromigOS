@@ -9,6 +9,6 @@ TryExec=bromigos
 Exec=bromigos terminal --hold --title "bromigos update" -- bromigos update
 Terminal=false
 Categories=Settings;PackageManager;
-Keywords=update;upgrade;updates;pacman;packages;system update;bromigos;
+Keywords=update;upgrade;updates;pacman;packages;bromigos;
 StartupNotify=false
 X-Bromigos-Menu=update/run

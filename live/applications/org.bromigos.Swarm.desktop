@@ -9,6 +9,6 @@ TryExec=bromigos-live
 Exec=bromigos-live open swarm
 Terminal=false
 Categories=Development;
-Keywords=swarm;repos;repositories;git;agents;fleet;ships;starships;hologram;deck;
+Keywords=repos;repositories;git;agents;fleet;ships;starships;hologram;deck;
 StartupNotify=false
 X-Bromigos-Menu=holo/swarm
