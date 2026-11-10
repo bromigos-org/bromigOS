@@ -296,8 +296,12 @@ secureboot_installed() {
     # Field Kit's Unified Kernel Image in the firmware's own menu (bromigos-fieldkit-boot's
     # entry, at the end of the boot order): an image of this system made here, with a word on
     # its command line to find, then resign routes the entry through shim and signs it
+    # systemd-ukify is systemd's own build and installs only beside the same version. The kernel
+    # update above read today's package lists, so on a day Arch has a newer systemd than the
+    # medium, ukify alone "could not satisfy dependencies" (2026-11-10): the installed systemd
+    # packages go up with it
     step "secure boot, installed: a Unified Kernel Image (as Field Kit's) is signed and its entry goes through shim" T ssh 'set -e
-        sudo pacman -S --noconfirm --needed systemd-ukify >/dev/null
+        sudo pacman -S --noconfirm --needed $(pacman -Qq | grep -E "^systemd(-|$)") systemd-ukify >/dev/null
         sudo ukify build --linux "/usr/lib/modules/$(uname -r)/vmlinuz" --initrd /boot/initramfs-linux.img \
             --cmdline "$(sed "s/BOOT_IMAGE=[^ ]* //" /proc/cmdline) console=tty0 console=ttyS0,115200 bromigos.ukitest" --output /tmp/fieldkit.efi >/dev/null
         sudo install -D -m0644 /tmp/fieldkit.efi /boot/EFI/bromigos-fieldkit/fieldkit.efi
