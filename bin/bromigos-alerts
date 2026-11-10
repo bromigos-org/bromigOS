@@ -8,8 +8,8 @@
   bromigos alerts check             run the checks again: as root the system's (drives, scrub,
                                     disk space, a restart after an update, the Arch news hold,
                                     backups, the UPS, failed services, game servers, Field Kit's
-                                    findings), as you your own (updates waiting, your disk,
-                                    your services, Steam and Proton)
+                                    findings, long jobs that failed), as you your own (updates
+                                    waiting, your disk, your services, Steam and Proton)
       --system | --user             which pass (default: --system as root, else --user)
       --boot                        the pass after boot: also Field Kit's checks
       --only CHECK                  one check (disk.full, systemd.failed, …)

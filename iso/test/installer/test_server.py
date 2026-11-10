@@ -658,11 +658,28 @@ class Apply(unittest.TestCase):
         self.assertIn(["snapper", "--no-dbus", "-c", "data", "create-config", "/srv/data"], ap.cmds)
         self.assertIn('accept comment "smb"', self.read(root, "/etc/nftables.conf"))
 
+    def test_the_media_library_and_the_backups_folder_are_on_the_data_disks_too(self):
+        # /srv/media (the media library) and /srv/backups (where other machines back up to) are
+        # folders the lab's engine makes. On a server with data disks each is a subvolume of
+        # theirs, mounted there like the apps': the pool's own device and options, a mount point
+        # that takes no files while the data disks are away
+        root, ap = self.apply("storage", data_disks=["/dev/sda", "/dev/sdb"], data_layout="raid1")
+        fstab = self.read(root, "/etc/fstab")
+        pool = next(line.split() for line in fstab.splitlines() if " /srv/data " in line)
+        for name in ("apps", "media", "backups"):
+            with self.subTest(folder=name):
+                (row,) = [line.split() for line in fstab.splitlines() if f" /srv/{name} " in line and not line.startswith("#")]
+                self.assertEqual((row[0], row[2], row[3]), (pool[0], "btrfs", f"subvol=/{name}," + pool[3]))
+                self.assertIn(["(live)", "btrfs", "subvolume", "create", os.path.join(root, f"srv/data/{name}")], ap.cmds)
+                self.assertLess(ap.cmds.index(["install", "-d", "-m", "0755", f"/srv/{name}"]), ap.cmds.index(["chattr", "+i", f"/srv/{name}"]))
+
     def test_without_data_disks_the_apps_keep_their_data_on_the_system_disk(self):
         root, ap = self.apply("home")
         self.assertIn(["install", "-d", "-m", "0755", "/srv/apps", "/srv/shares"], ap.cmds)
-        self.assertNotIn("/srv/apps", self.read(root, "/etc/fstab"))
-        self.assertNotIn(["chattr", "+i", "/srv/apps"], ap.cmds)
+        fstab = self.read(root, "/etc/fstab")
+        for name in ("apps", "media", "backups"):
+            self.assertNotIn(f"/srv/{name}", fstab)
+            self.assertNotIn(["chattr", "+i", f"/srv/{name}"], ap.cmds)
 
     def test_one_data_disk_holds_the_apps_too(self):
         root, ap = self.apply("home", data_disks=["/dev/sdb"])
@@ -921,6 +938,42 @@ class Catalogue(unittest.TestCase):
     """What should this server run? The catalogue (its stand-in, the engine's schema), the roles'
     picks, what they need added, the budget, the models."""
     HW = {"cpu": 16, "ram_gb": 64, "disk_gb": 4000, "gpu": True, "gpu_name": "NVIDIA RTX 4090", "gpu_vram_gb": 24}
+
+    def test_the_engines_catalogue_reads_with_the_stand_in_rules(self):
+        # The lab engine's own file (format 2: the job and app apart, web addresses, data folders
+        # and health checks beside what was there) through the rules kept here for a medium with
+        # no engine: every key this installer reads is where it was, and the new ones don't get in the way
+        from bromigos_installer import provision as PV
+        real = os.path.join(HERE, "../../../homelab/share/provision-catalogue.toml")
+        os.environ["BROMIGOS_PROVISION_CATALOGUE"] = real
+        PV.load(reload=True)
+        self.addCleanup(lambda: (os.environ.__setitem__("BROMIGOS_PROVISION_CATALOGUE",
+                                                        os.path.join(HERE, "fixtures", "provision-catalogue.toml")),
+                                 PV.load(reload=True)))
+        self.assertIsNone(PV.engine())
+        with open(real) as f:
+            text = f.read()
+        self.assertEqual(len(PV.items()), text.count("\n[[item]]\n"))
+        self.assertEqual([g["id"] for g in PV.groups()], ["lab-core", "ai", "network", "storage", "games", "home", "media", "brodec"])
+        for x in PV.items():
+            for key in ("id", "group", "name", "line", "hint", "icon", "glyph", "install"):
+                self.assertTrue(x.get(key), f"{x.get('id')}: {key}")
+        photos = PV.item("photos")
+        self.assertEqual((photos["name"], photos["job"], photos["app"]), ("Photos (Immich)", "Photos", "Immich"))
+        self.assertEqual([d["path"] for d in photos["data"]], ["library", "postgres", "model-cache"])
+        ids, auto = PV.resolve(["passwords", "argocd"])
+        self.assertEqual(set(auto), {"caddy", "k3s"})
+        self.assertLess(ids.index("k3s"), ids.index("argocd"))
+        self.assertEqual(len(PV.conflicts(["minecraft", "wings"])), 1)
+        self.assertTrue(PV.budget(["photos", "passwords"], self.HW)["fits"])
+        home = PV.recommend(["home"], self.HW)
+        self.assertIn("photos", home)
+        self.assertNotIn("documents", home)                    # default = false
+        self.assertIn("argocd", [x["id"] for x in PV.items(mode="new")])
+        self.assertNotIn("argocd", [x["id"] for x in PV.items(mode="none")])
+        self.assertEqual([f["id"] for f in PV.fields("gluetun")], ["provider", "username", "password", "country", "kill_switch"])
+        self.assertEqual(PV.setup_links("prowlarr", "box"), [("Open Prowlarr", "http://box.local:9696")])
+        self.assertEqual(PV.generated("photos"), ["db-password"])
 
     def test_dependencies_are_added_and_said(self):
         from bromigos_installer import provision as PV

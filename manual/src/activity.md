@@ -24,11 +24,16 @@ failed   3 h ago    20261109-1931-backup.run-usb-e82e    Backing up to the USB d
 | State | What it means |
 |---|---|
 | running | It's working. |
-| waiting | It waits for something, such as the internet, and carries on by itself. |
+| needs you | It stopped to ask you something, and waits for your answer. See [below](#when-a-job-needs-you). |
+| waiting | It waits for something, such as the internet or another job, and carries on by itself. |
 | done | It finished. |
 | failed | It stopped. The line says at which step, and why. |
+| put back | It failed, then undid what it had changed. Nothing is left half done. |
 | cancelled | Someone stopped it. |
 | interrupted | The computer restarted or lost power while it ran. |
+
+Two jobs that would change the same thing never run at once. The second one waits, and the
+list says which job it waits for.
 
 ## Look at one job
 
@@ -46,6 +51,54 @@ bromigos activity show backup
 
 The last lines it printed can hold details about your system, so only an administrator may
 read them. `sudo bromigos activity show` shows them.
+
+## When a job needs you
+
+Some jobs can't finish without you. Replacing a drive is one: the server gets ready, then
+someone has to take the old drive out and put the new one in. The job stops there and asks.
+
+`bromigos activity` shows it as "needs you". `bromigos activity show` prints the question,
+the answers you can give, and the command to type:
+
+```text
+It asks
+  Take the old drive out of bay 2 and put the new one in.
+    swapped  I've swapped the drive
+  Answer with: sudo bromigos activity answer 20261110-1904-drive.replace-bay-2-7c1e swapped
+```
+
+Type that command once you've done what it asks. The job carries on from where it stopped.
+It waits for as long as you need. Nothing runs out.
+
+## Stop a job
+
+```bash
+sudo bromigos activity cancel backup
+```
+
+Give the job's name from the list, or a part of it. bromigOS stops a job only when the job
+says stopping is safe. A job in the middle of something that mustn't be cut short refuses,
+and tells you why:
+
+```text
+bromigos activity: not stopped. The new drive is being filled. Stopping now would leave your files with one copy.
+```
+
+`bromigos activity show` says the same before you try.
+
+## When a job fails
+
+A job that fails tells you. It shows up with your other [alerts](alerts.md): in
+`bromigos alerts`, as a notification on the desktop, and on your phone if you use BRODEC.
+The alert goes away when that job next works.
+
+Some jobs can be started again as they were:
+
+```bash
+sudo bromigos activity retry backup
+```
+
+`bromigos activity show` prints that command for a job that offers it.
 
 ## What makes a job
 

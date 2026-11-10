@@ -729,14 +729,16 @@ Its VMs and screenshots go in `~/.cache/bromigos-fieldkit-test/` (`BROMIGOS_FIEL
   Then `iso/fieldkit/activity-checks.sh`:
   `bromigos activity` under real systemd ([activity.md](activity.md)). A job in a transient
   unit ends done. A job that fails names its step. A detached job outlives the session that
-  started it. The Server tour's apply runs through `sudo` as the signed-in user. A restart
+  started it. The Server tour's apply runs through `sudo` as the signed-in user. A job that
+  asks a question is answered and carries on, while a second job waits for its lock. A restart
   closes a running job as interrupted. Then the same install on a machine with two data
   disks, as two copies (RAID1). That server starts with a network, the lab's engine installs
   the start
   page from the catalogue, and `iso/test/server-data-checks.sh` checks where its data is:
-  on the data disks' filesystem, by the filesystems' IDs, not the system disk's. It then
-  puts the server back as an older installer left one and checks that
-  `bromigos lab app-data move` moves the data
+  on the data disks' filesystem, by the filesystems' IDs, not the system disk's. The same
+  for the media library's and the backups' folders, and for the vault of the real
+  Vaultwarden package. It then puts the server back as an older installer left one and
+  checks that `bromigos lab app-data move` moves all of it
   ([server.md](server.md#where-the-apps-keep-their-data)). `test.py up --data-disk FILE`
   gives a VM its data disks.
 - `iso/fieldkit/server-test.sh` installs Server encrypted and adds the `bromigos-fieldkit`

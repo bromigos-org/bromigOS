@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from bromigos_homelab import localprovision as L, provcatalog as PC, secretstore as S, provision as P
 from provfake import FakeMachine
@@ -32,6 +33,19 @@ language = "English"
 dual_audio = true
 """
 VPN_PASSWORD = "correct-horse-battery-staple"
+
+
+def setUpModule():
+    """The checkout's catalogue and templates, never an installed bromigos-lab's (it comes first
+    in provcatalog.paths(), and may be an older format)."""
+    global _SHARE
+    _SHARE = mock.patch.object(PC, "SHARE", "/nonexistent")
+    _SHARE.start()
+    PC._cache.clear()
+
+
+def tearDownModule():
+    _SHARE.stop()
 
 
 def update(name, doc):
@@ -246,6 +260,100 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
         self.assertTrue(Path(self.root, L.APPS, "uptime").is_dir())
 
+    POOL_FSTAB = ("UUID=1111  /  btrfs  rw  0 0\nUUID=2222  /srv/data  btrfs  compress=zstd,noatime,nofail  0 0\n"
+                  "UUID=2222  /srv/apps  btrfs  subvol=/apps,compress=zstd,noatime,nofail  0 0\n"
+                  "UUID=2222  /srv/media  btrfs  subvol=/media,compress=zstd,noatime,nofail  0 0\n"
+                  "UUID=2222  /srv/backups  btrfs  subvol=/backups,compress=zstd,noatime,nofail  0 0\n")
+
+    def test_the_passwords_vault_is_a_folder_under_the_apps_like_every_apps(self):
+        # Vaultwarden is a package whose own file puts the vault in /var/lib/vaultwarden, on the
+        # system disk. The engine gives it /srv/apps/passwords, and tells the service with a file
+        # read after the package's own (an Environment= line would lose to that file)
+        Path(self.root, "var/lib/vaultwarden").mkdir(parents=True)             # the package makes it, empty
+        plan = L.build_plan(["passwords"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        vault = Path(self.root, "srv/apps/passwords")
+        self.assertTrue(vault.is_dir())
+        self.assertEqual(vault.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(Path(self.root, "etc/bromigos/lab/passwords.env").read_text().splitlines()[-1],
+                         "DATA_FOLDER=/srv/apps/passwords")
+        drop = Path(self.root, "etc/systemd/system/vaultwarden.service.d/60-bromigos-data.conf").read_text()
+        for line in ("RequiresMountsFor=/srv/apps/passwords", "ReadWritePaths=/srv/apps/passwords",
+                     "EnvironmentFile=/etc/bromigos/lab/passwords.env"):
+            self.assertIn(line + "\n", drop)
+        # the files are there before the service first starts: it never starts on the package's folder
+        calls = [" ".join(c) for c in self.m.calls]
+        self.assertLess(calls.index("systemctl daemon-reload"), calls.index("systemctl restart vaultwarden.service"))
+        self.assertFalse([l for l in self.lines if l.startswith("::note passwords")])
+        # set up again from nothing known (its record gone): the same files, and the vault still under /srv/apps
+        (vault / "db.sqlite3").write_text("the household's passwords\n")
+        Path(self.root, L.STATE).unlink()
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0)
+        self.assertEqual((vault / "db.sqlite3").read_text(), "the household's passwords\n")
+        self.assertIn("DATA_FOLDER=/srv/apps/passwords", Path(self.root, "etc/bromigos/lab/passwords.env").read_text())
+
+    def test_a_vault_already_in_the_packages_folder_stays_there_and_goes_on_working(self):
+        # a server set up before the vault had a folder under /srv/apps: pointing the service at an
+        # empty folder would show the household no passwords. It is left as it is, and the one
+        # command that moves it safely is named on a server with data disks
+        old = Path(self.root, "var/lib/vaultwarden")
+        old.mkdir(parents=True)
+        (old / "db.sqlite3").write_text("the household's passwords\n")
+        plan = L.build_plan(["passwords"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        self.assertFalse(Path(self.root, "etc/systemd/system/vaultwarden.service.d/60-bromigos-data.conf").exists())
+        self.assertFalse(Path(self.root, "etc/bromigos/lab/passwords.env").exists())
+        self.assertFalse(Path(self.root, "srv/apps/passwords").exists())
+        self.assertEqual((old / "db.sqlite3").read_text(), "the household's passwords\n")
+        self.assertFalse([l for l in self.lines if l.startswith("::note passwords")])       # no data disks: nothing to do
+        Path(self.root, "etc").mkdir(exist_ok=True)
+        Path(self.root, "etc/fstab").write_text(self.POOL_FSTAB.replace("UUID=2222  /srv/apps", "# UUID=2222  /srv/apps"))
+        self.lines.clear()
+        Path(self.root, L.STATE).unlink()                       # done once already: it runs again only when something changed
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        (note,) = [l for l in self.lines if l.startswith("::note passwords")]
+        self.assertIn("/var/lib/vaultwarden, on the system disk", note)
+        self.assertIn("sudo bromigos lab app-data move", note)
+        self.assertFalse(Path(self.root, "etc/bromigos/lab/passwords.env").exists())
+
+    def test_data_disks_away_no_vault_library_or_backup_place_is_made_on_the_system_disk(self):
+        # fstab mounts the data disks' subvolumes at /srv/apps, /srv/media and /srv/backups. Not
+        # mounted (a stand-in root never is), each is a folder on the system disk that takes nothing
+        Path(self.root, "etc").mkdir(exist_ok=True)
+        Path(self.root, "etc/fstab").write_text(self.POOL_FSTAB)
+        for d in ("srv/apps", "srv/media", "srv/backups"):
+            Path(self.root, d).mkdir(parents=True)
+        plan = L.build_plan(["passwords", "media-library", "backup-target"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 1)
+        for item, folder in (("passwords", "/srv/apps"), ("media-library", "/srv/media"), ("backup-target", "/srv/backups")):
+            self.assertEqual(self.states(item)[-1], "failed", item)
+            err = next(l for l in self.lines if l.startswith(f"::error {item} "))
+            self.assertIn(f"on its data disks, and they aren't mounted ({folder})", err)
+        for d in ("srv/apps", "srv/media", "srv/backups"):
+            self.assertEqual(list(Path(self.root, d).iterdir()), [], d)
+        self.assertEqual(self.m.ran("pacman -S --needed --noconfirm vaultwarden") + self.m.ran("useradd")
+                         + self.m.ran("systemctl restart vaultwarden"), [])
+        self.assertFalse(Path(self.root, "etc/bromigos/lab/passwords.env").exists())
+
+    def test_a_media_library_on_a_nas_takes_the_place_of_the_data_disks_folder(self):
+        # the installer mounts the data disks' media subvolume at /srv/media. A library on a NAS
+        # share is mounted there instead: the data disks' line makes way, and the share's unit stands
+        Path(self.root, "etc").mkdir(exist_ok=True)
+        Path(self.root, "etc/fstab").write_text(self.POOL_FSTAB)
+        plan = L.build_plan(["media-library"], settings={"media-library": {"where": "nfs", "share": "nas.example:/volume1/media"}}, hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        fstab = Path(self.root, "etc/fstab").read_text()
+        self.assertNotRegex(fstab, r"(?m)^UUID=2222\s+/srv/media\s")
+        self.assertRegex(fstab, r"(?m)^# .*UUID=2222  /srv/media  btrfs")          # kept as a comment: nothing is lost from view
+        self.assertRegex(fstab, r"(?m)^UUID=2222\s+/srv/apps\s")
+        self.assertRegex(fstab, r"(?m)^UUID=2222\s+/srv/backups\s")
+        self.assertIn("What=nas.example:/volume1/media", Path(self.root, "etc/systemd/system/srv-media.mount").read_text())
+        self.assertTrue(Path(self.root, "srv/media/movies").is_dir())
+
     def test_the_budget_measures_where_app_data_goes(self):
         # /srv/apps when it's there (the data disks, on a server that has them), else /srv, else /
         seen = []
@@ -330,6 +438,90 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(L.gguf_tag("GGUF UD-Q4_K_XL"), "UD-Q4_K_XL")
         self.assertEqual(L.gguf_tag("GGUF Q8_0"), "Q8_0")
         self.assertEqual(L.gguf_tag("FP8"), "")
+
+
+class CatalogueFormatTwo(unittest.TestCase):
+    """The web names, the monitoring port and the data folders are read from the catalogue
+    (format 2), and a server gets exactly what the code's own tables gave it before."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = self.tmp.name
+        self.m = FakeMachine(self.root)
+
+    def host(self, ids, hw=HW):
+        plan = L.build_plan(ids, hw=hw)
+        return L.Host(plan, root=self.root, run_=self.m, online=lambda: True, sleep=lambda s: None,
+                      store=S.LocalStore(self.root, self.m, "box"), emit=lambda line: None, hw=hw, hostname="box",
+                      tz="America/Los_Angeles")
+
+    def test_names_ports_and_links_come_out_as_before(self):
+        host = self.host(["caddy", "start-page", "monitoring", "passwords", "photos", "s3", "file-sync", "sonarr", "plex"])
+        self.assertEqual(L.Runner(host, poll=1).run(), 0)
+        # Sonarr and Plex have a page (web.port) and no name: Caddy and the start page leave them out, as they did
+        self.assertEqual(L.web_apps(host), [
+            ("monitoring", "graphs-box.local", 3005), ("start-page", "home-box.local", 3010), ("s3", "s3-box.local", 9000),
+            ("photos", "photos-box.local", 2283), ("passwords", "passwords-box.local", 8222),
+            ("file-sync", "sync-box.local", 8384)])
+        caddy = Path(self.root, "etc/caddy/conf.d/bromigos-lab.caddy").read_text()
+        self.assertIn("graphs-box.local {\n  tls internal\n  reverse_proxy 127.0.0.1:3005\n}", caddy)
+        self.assertEqual(caddy.count("reverse_proxy"), 6)
+        self.assertEqual(Path(self.root, "etc/bromigos/lab/mdns-names").read_text().split(),
+                         ["graphs-box.local", "home-box.local", "s3-box.local", "photos-box.local", "passwords-box.local",
+                          "sync-box.local"])
+        grafana = Path(self.root, "etc/systemd/system/grafana.service.d/50-bromigos.conf").read_text()
+        self.assertIn("Environment=GF_SERVER_HTTP_PORT=3005\n", grafana)
+        vaultwarden = Path(self.root, "etc/systemd/system/vaultwarden.service.d/50-bromigos.conf").read_text()
+        self.assertIn("Environment=DOMAIN=https://passwords-box.local\n", vaultwarden)
+        links = json.loads(Path(self.root, "srv/apps/start-page/config/services.yaml").read_text())[0]["This server"]
+        self.assertEqual({name: row["href"] for link in links for name, row in link.items()},
+                         {"Monitoring": "http://box.local:3005", "S3 bucket server (RustFS)": "http://box.local:9000",
+                          "Photos (Immich)": "http://box.local:2283", "Passwords (Vaultwarden)": "http://box.local:8222",
+                          "File sync (Syncthing)": "http://box.local:8384"})
+
+    def test_the_old_table_still_reads(self):
+        self.assertEqual(L.WEB, PC.web_names())
+        self.assertEqual(L.WEB["jellyfin"], "media")
+        with self.assertRaises(AttributeError):
+            L.NO_SUCH_TABLE
+
+    def test_data_paths_are_the_folders_the_rendered_units_mount(self):
+        # the catalogue's [[item.data]] against the real thing: each item's units, rendered as
+        # apply renders them, mount exactly these folders of /srv/apps (where app data lives,
+        # on the data disks when the server has them: docs/server.md)
+        nvidia = dict(HW, gpu="nvidia", gpu_vram_gb=24)
+        checked = 0
+        for it in PC.load():
+            if "quadlet" not in it["install"]:
+                continue
+            host = self.host([it["id"]], hw=nvidia)
+            mounted = set()
+            for f in L.template_files(it["install"]["quadlet"]):
+                for line in L.render(f.read_text(), it, host).splitlines():
+                    if line.startswith("Volume=/" + L.APPS + "/"):
+                        mounted.add(line[len("Volume="):].split(":")[0])
+            listed = {d["path"] for d in L.data_paths(it)}
+            self.assertEqual(listed, mounted, it["id"])
+            for path in listed:
+                self.assertTrue(path.startswith(f"/srv/apps/{it['id']}/"), path)
+            checked += 1
+        self.assertGreater(checked, 25)
+        self.assertEqual(L.data_paths(PC.by_id()["backups"]), [])
+        photos = {d["path"]: d["kind"] for d in L.data_paths(PC.by_id()["photos"])}
+        self.assertEqual(photos, {"/srv/apps/photos/library": "library", "/srv/apps/photos/postgres": "database",
+                                  "/srv/apps/photos/model-cache": "cache"})
+
+    def test_an_older_catalogue_is_refused_not_half_read(self):
+        # format 1 has no web names: the front door would be written with no apps, and say nothing
+        old = Path(self.root, "provision-catalogue.toml")
+        text = Path(PC.paths()[-1]).read_text()
+        self.assertIn("\nformat = 2\n", text)
+        old.write_text(text.replace("\nformat = 2\n", "\nformat = 1\n"))
+        with self.assertRaises(L.ProvisionError) as e:
+            L.build_plan(["photos"], hw=HW, path=str(old))
+        self.assertIn("format 1", str(e.exception))
+        self.assertIn("Update bromigos-lab", str(e.exception))
 
 
 if __name__ == "__main__":

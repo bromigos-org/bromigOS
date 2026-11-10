@@ -12,6 +12,7 @@ it instead of working it out again:
   fieldkit.finding Field Kit's engine (`fieldkit-engine engine check …`) and the findings a
                    Field Kit stick saved in this install
   game.steam       `bromigos game check --json`
+  activity.job     bromigos_activity.needing_a_look(): the jobs `bromigos activity` lists as failed
 """
 
 import json
@@ -671,6 +672,39 @@ def app_data(ctx):
                       "A disk may have failed or come loose: the journal says what it knows.", "Storage",
                       evidence=evidence([f"{k}: {v}" for k, v in facts.items()], **facts),
                       fix=dict(look, commands=["bromigos lab app-data", "journalctl -b -p warning --no-pager -n 50"]))]
+    # The apps' data is where it belongs. The same question for what else a server with data
+    # disks keeps on them: the media library, the backups other machines keep here (`folders`),
+    # and the passwords vault while it is in its package's folder (`elsewhere`). A folder nobody
+    # uses yet raises nothing
+    folders = [f for f in d.get("folders") or [] if isinstance(f, dict)]
+    away = [f.get("path", "?") for f in folders if f.get("state") == "pool-away"]
+    if away:
+        return [alert("server.app-data", "", "critical", f"The data disks aren't mounted: {', '.join(away)} is missing",
+                      f"This server keeps {' and '.join(away)} on its data disks ({d.get('pool')}), and they aren't mounted. "
+                      "The apps that use it stay stopped until they are. A disk may have failed or come loose: the journal "
+                      "says what it knows.", "Storage", evidence=evidence([f"{k}: {v}" for k, v in facts.items()], **facts),
+                      fix=dict(look, commands=["bromigos lab app-data", "journalctl -b -p warning --no-pager -n 50"]))]
+    vault = d.get("vault") if isinstance(d.get("vault"), dict) else {}
+    cut_off = [f.get("path", "?") for f in folders if f.get("state") == "moving" and not f.get("running")]
+    if cut_off or vault.get("move") in ("copying", "verifying", "switching", "failed"):
+        what = ", ".join(cut_off + (["the passwords vault"] if vault.get("move") not in (None, "", "done") else []))
+        return [alert("server.app-data", "", "needs_you", "A move to the data disks didn't finish",
+                      f"A move of {what} to the data disks stopped part-way. Nothing is lost: the data is whole where it "
+                      "was, on the data disks, or both. `sudo bromigos lab app-data move` carries on from where it stopped.",
+                      "Storage", actions=[{"kind": "fix", "label": "Ask VECTOR"}, {"kind": "snooze"}, {"kind": "open"}],
+                      evidence=evidence([f"{k}: {v}" for k, v in facts.items()], **facts), fix=move)]
+    late = [f.get("path", "?") for f in folders if f.get("state") == "not-on-pool" and f.get("has_data")]
+    late += [f"{e.get('what')}, in {e.get('path')}" for e in d.get("elsewhere") or [] if isinstance(e, dict)]
+    if late:
+        copies = "It has one copy, not the two you chose. " if d.get("raid1") else ""
+        return [alert("server.app-data", "", "needs_you", "Some of this server's data is on the system disk, not the data disks",
+                      f"This server has data disks ({d.get('pool')}), and this is still on the system disk: {'; '.join(late)}. "
+                      f"{copies}`sudo bromigos lab app-data move` stops what uses it, copies it to the data disks, compares "
+                      "every file, keeps the old copy by name and starts everything again. `--dry-run` shows what it would "
+                      "do first.", "Storage",
+                      actions=[{"kind": "fix", "label": "Ask VECTOR"}, {"kind": "snooze"}, {"kind": "open"}],
+                      evidence=evidence([f"{k}: {v}" for k, v in facts.items()] + [f"on the system disk: {x}" for x in late], **facts),
+                      fix=move)]
     return []
 
 
@@ -817,6 +851,43 @@ def steam(ctx):
     return found
 
 
+# ------------------------------------------------------------------ activity.job
+
+def activity_job(ctx):
+    """A long job (docs/activity.md) that failed, or failed and put things back by itself. Which
+    jobs still count is bromigos_activity's call; the alert stands until that work next
+    succeeds. Everything here comes from the job's record, which every user may read: never a
+    line of its log, which is root's."""
+    import bromigos_activity as J
+    env = ctx.env
+    jenv = J.Env(dict(env.environ, BROMIGOS_ROOT=env.root) if env.stand_in else env.environ)
+    if not os.path.isdir(jenv.jobs_dir()):
+        raise Skip("no job has run here yet")
+    found = []
+    for r in J.needing_a_look(jenv):
+        back = r["state"] == "rolled-back"
+        subject, err = r.get("subject") or {}, r.get("error") or {}
+        step = next((s["label"] for s in r["steps"] if s["id"] == err.get("step")), None)
+        why = err.get("words") or "It stopped without saying why."
+        detail = (f"\"{r['title']}\" stopped" + (f" at \"{step}\"" if step else "") + f": {why} " +
+                  ("It then put things back the way they were, so nothing is left half done. " if back else "") +
+                  f"`bromigos activity show {r['id']}` has its steps and what it printed.")
+        again = "retry" in (r.get("can") or [])
+        commands = [f"bromigos activity show {r['id']}"] + ([f"sudo bromigos activity retry {r['id']}"] if again else [])
+        a = alert("activity.job", subject.get("id") or "", "info" if back else "needs_you",
+                  ("A job failed and put things back: " if back else "A job failed: ") + r["title"], detail, "Activity",
+                  evidence=evidence([r["title"], f"state: {r['state']}", f"stopped at: {step or 'no named step'}", why],
+                                    job=r["id"], kind=r["kind"], state=r["state"], exit_code=r.get("exit_code"),
+                                    step=err.get("step") or ""),
+                  fix={"commands": commands, "from": "bromigos", "root": again,
+                       "touches": ["nothing (it only looks)"] + (["starts the same job again"] if again else []),
+                       "note": "Read why it stopped before starting it again." if again else ""})
+        # one alert for that work, whichever run of it failed last: its kind and what it is about
+        a["id"] = f"activity.job:{r['kind']}" + (f":{subject.get('type')}/{subject['id']}" if subject.get("id") else "")
+        found.append(a)
+    return found
+
+
 REGISTRY = [
     Check("disk.smart", ["system"], smart),
     Check("disk.scrub", ["system"], scrub),
@@ -831,4 +902,5 @@ REGISTRY = [
     Check("server.app-data", ["system"], app_data),
     Check("fieldkit.finding", ["system"], fieldkit, boot_only=True, between=fieldkit_between),
     Check("game.steam", ["user"], steam),
+    Check("activity.job", ["system"], activity_job),
 ]

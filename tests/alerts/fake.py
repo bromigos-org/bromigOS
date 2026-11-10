@@ -232,9 +232,27 @@ class FakeMachine:
         p = self.root / "var/lib/bromigos/server/update.json"
         if p.exists():
             p.unlink()
+        jobs = self.root / "var/lib/bromigos/activity/jobs"            # jobs have run here; none failed
+        jobs.mkdir(parents=True, exist_ok=True)
+        for p in jobs.iterdir():
+            p.unlink()
+
+    def failed_job(self, job_id="20261030-0800-drive.test-bay-2-0a1b", state="failed"):
+        """A long job that ended badly (docs/activity.md), as its own process wrote it."""
+        import bromigos_activity as J
+        env = J.Env({"BROMIGOS_ROOT": str(self.root), "BROMIGOS_ACTIVITY_NOW_MS": str(self.now - 3600_000), "PATH": ""})
+        j = J.Job(env, "drive.test", "Testing the drive in bay 2", {"type": "drive", "id": "bay-2", "name": "Bay 2"},
+                  ["bromigos", "storage", "test", "bay-2"], job_id=job_id, retry={"argv": ["true"], "cwd": "/"}).open()
+        j.begin()
+        for line in ("::step start running Starting the long test", "::step start done",
+                     "::step read running Reading the whole drive", "::error read The drive stopped answering at 41 %."):
+            j.feed(line)
+        j.finish(1, state=None if state == "failed" else state)
+        return j.id
 
     def broken(self):
         """Something for every check to find."""
+        self.failed_job()
         self.disk_space(93, media_pct=98)
         self.write("smart/nvme0.json", smart_nvme(passed=False, warning=0x04, used=91, media=17))
         self.write("smart/nvme0.json.rc", "8")
@@ -301,11 +319,12 @@ class FakeMachine:
         self.write("fieldkit-last-boot.json", {"ok": False, "message": "no saved log"})
         self.server_hold()
 
-    def app_data(self, state, where="system", move="", has_data=True, running=False):
+    def app_data(self, state, where="system", move="", has_data=True, running=False, folders=(), elsewhere=(), vault=None):
         """What `bromigos lab app-data status --json` says: a server with two data disks."""
         self.write("app-data.json", {"path": "/srv/apps", "pool": "/srv/data", "pool_mounted": state != "pool-away",
                                      "where": where, "state": state, "has_data": has_data, "move": move, "running": running,
-                                     "raid1": True, "leftover": "", "elsewhere": []})
+                                     "raid1": True, "leftover": "", "elsewhere": list(elsewhere), "folders": list(folders),
+                                     "vault": vault or {}})
 
     def server_hold(self):
         self.rootfile("/var/lib/bromigos/server/update.json", json.dumps({

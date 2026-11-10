@@ -605,12 +605,14 @@ engine on a Game server joined to a lab. After archinstall and `bromigos rollbac
 - writes the sysctl list, journald's limits and AppArmor on the kernel line; puts
   `linux-lts` first in GRUB;
 - makes the data disks btrfs (`mkfs.btrfs -d raid1 -m raid1` for two copies) at
-  `/srv/data`, with `shares`, `apps` and `backups` subvolumes, a monthly scrub, hourly
-  snapshots and the SMB and NFS shares on a Storage server;
+  `/srv/data`, with `shares`, `apps`, `media` and `backups` subvolumes, a monthly scrub,
+  hourly snapshots and the SMB and NFS shares on a Storage server;
 - mounts the data disks' `apps` subvolume at `/srv/apps` with a second `fstab` line, so
   the apps keep their data on the data disks, and sets the mount point to take no files
-  while they're away (`chattr +i`). Without data disks, `/srv/apps` is a folder on the
-  system disk ([server.md](server.md#where-the-apps-keep-their-data));
+  while they're away (`chattr +i`). It does the same for `media` at `/srv/media` (the
+  media library) and `backups` at `/srv/backups` (the backups other machines keep here).
+  Without data disks, each is a folder on the system disk
+  ([server.md](server.md#where-the-apps-keep-their-data));
 - enables the role's units the system has (the rest wait in `pending-units`), and leaves
   Tailscale and WireGuard off unless chosen;
 - moves the update timer into the window (`bromigos-server-update.timer.d/10-window.conf`)
@@ -1199,18 +1201,23 @@ bromigOS Server's steps have their own tests and runs:
   limits, root locked, the firewall, the health checks, a fixed address and Wake-on-LAN,
   the lab account only on a Lab node, `/srv/data`'s RAID1 and shares, and Docker's engine
   only on a Game server joined to a lab.
-- `iso/test/server-data-checks.sh [disks=N raid1=1 app=ID move=1]` checks where the
-  installed server keeps its apps' data. With data disks, `/srv/apps` must be on
-  `/srv/data`'s filesystem and not the system disk's. With `app=ID`, the lab's engine
+- `iso/test/server-data-checks.sh [disks=N raid1=1 app=ID passwords=1 move=1]` checks
+  where the installed server keeps its apps' data. With data disks, `/srv/apps`,
+  `/srv/media` and `/srv/backups` must each be on `/srv/data`'s filesystem and not the
+  system disk's, and the disk number in the engine's plan must be the data disks' free
+  space. With `passwords=1` the engine installs Vaultwarden from Arch's packages, and the
+  real service must run with its vault in `/srv/apps/passwords`. With `app=ID`, the lab's engine
   installs that app (`bromigos lab provision --local --select ID --apply`) and the app's
   own folder must be there too. The checks compare the filesystems' IDs
   (`findmnt -o UUID`), never a path's name: btrfs gives every subvolume, and both disks of
   a RAID1, the same ID. With the data disks' `apps` subvolume unmounted, `/srv/apps` must
   take no files. With `move=1` the checks then put the server back as the installer left
   one before November 2026 (the app's data on the system disk, the pool's `apps`
-  subvolume empty, no `/srv/apps` line in `fstab`), and `bromigos lab app-data move` must
-  leave the app's data on the data disks with a file it had before, the old copy kept by
-  name, one `fstab` line and the app running
+  subvolume empty, no `/srv/apps` line in `fstab`; the media library and the backups
+  folder on the system disk, with no `media` subvolume; the vault in
+  `/var/lib/vaultwarden`), and `bromigos lab app-data move` must leave each on the data
+  disks with a file it had before, the old copy kept by name, one `fstab` line and the
+  app running, Vaultwarden on the same keys
   ([server.md](server.md#where-the-apps-keep-their-data)). Field Kit's CI test runs it on
   a Server installed from the stick with two data disks
   ([fieldkit.md](fieldkit.md#testing-it)).

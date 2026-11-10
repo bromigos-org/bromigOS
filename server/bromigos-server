@@ -166,8 +166,10 @@ NOT_THE_UPDATE = ("bromigos-server-backup.service", "bromigos-server-backup-chec
 DRIVE_UNIT = "bromigos-server-backup-drive@"     # … and a plugged-in drive's unit, whatever the drive
 BACKUP_STATE = "/var/lib/bromigos/server/backup.json"
 BACKUP_KEY = "/etc/bromigos/server/backup.key"
+# /var/lib/vaultwarden: the passwords vault, on a server set up before the vault had a folder of
+# its own (/srv/apps/passwords, in /srv). A path that isn't there is left out of the run
 BACKUP_PATHS = ["/etc", "/var/lib/bromigos", "/etc/containers/systemd", "/var/lib/containers/storage/volumes",
-                "/srv", "/home", "/root"]
+                "/var/lib/vaultwarden", "/srv", "/home", "/root"]
 # (/srv/restore: where `bromigos lab backups restore` puts files back; a copy of the backup isn't backed up again)
 BACKUP_EXCLUDE = ["/home/*/.cache", "/root/.cache", "/var/lib/bromigos/repo", "/srv/restore", "**/node_modules"]
 UPS_STATE = "/var/lib/bromigos/server/ups.json"

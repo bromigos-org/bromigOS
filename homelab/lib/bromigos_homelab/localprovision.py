@@ -37,7 +37,7 @@ import tomllib
 import urllib.error
 import urllib.request
 
-from . import provcatalog as PC, secretstore as S
+from . import appdata as AD, provcatalog as PC, secretstore as S
 
 ROOT = os.environ.get("BROMIGOS_ROOT", "/")
 STATE = "var/lib/bromigos/lab/provision-local.json"
@@ -55,11 +55,10 @@ WINGS = ("v1.0.0-rc.1", {"x86_64": ("wings_linux_amd64", "19dda386e02041da1f1fbc
                          "aarch64": ("wings_linux_arm64", "ed7deafe0aef2acd3adae73103d2a01b57e8a7eaa56950194bdff11f87f37ff3")})
 GLUETUN = {"pia": ("private internet access", "openvpn", "on"), "protonvpn": ("protonvpn", "openvpn", "on"),
            "mullvad": ("mullvad", "wireguard", "off")}
-# the web apps' names (app_name: <name>-<host>.local, one label, so every mDNS resolver answers
-# it; mdnsnames.py publishes them and Caddy serves them)
-WEB = {"start-page": "home", "photos": "photos", "passwords": "passwords", "documents": "documents",
-       "home-automation": "automation", "uptime": "uptime", "jellyfin": "media", "seerr": "requests", "monitoring": "graphs",
-       "navidrome": "music", "audiobookshelf": "books", "file-sync": "sync", "s3": "s3", "pelican-panel": "games"}
+# The web apps' names and ports are the catalogue's: each item's `web = { name, port }`
+# (app_name: <name>-<host>.local, one label, so every mDNS resolver answers it; mdnsnames.py
+# publishes them and Caddy serves them). WEB, the table that was here, still reads as
+# {item: name} through __getattr__ below.
 MEDIA_FOLDERS = ("movies", "tv", "music", "books", "podcasts", "youtube", "downloads", "downloads/tv-sonarr",
                  "downloads/radarr", "downloads/lidarr", "downloads/soulseek", "downloads/incomplete")
 CATEGORIES = {"sonarr": ("tv-sonarr", "tvCategory", 8989, "v3"), "radarr": ("radarr", "movieCategory", 7878, "v3"),
@@ -74,6 +73,12 @@ TRASH = {"sonarr": {"profile": "72dae194fc92bf828f32cde7744e51a1", "not_english"
 
 class ProvisionError(Exception):
     pass
+
+
+def __getattr__(name):
+    if name == "WEB":
+        return PC.web_names()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def at(rel, root=None):
@@ -170,6 +175,10 @@ def setting(settings, it, field):
 def build_plan(selected=None, roles=None, lab="none", lab_join=None, models=None, settings=None, hw=None,
                preset=None, path=None):
     """The reviewed plan as a dict (JSON-able, deterministic for the same input)."""
+    if PC.file_format(path) < PC.FORMAT:
+        # an older file has no web names or ports: the front door would lose every app without a word
+        raise ProvisionError(f"the provisioning catalogue here is format {PC.file_format(path)}, and this bromigos-lab "
+                             f"reads format {PC.FORMAT}. Update bromigos-lab, which brings both")
     cat = PC.by_id(path)
     hw = dict(hw if hw is not None else detect())
     roles = PC.norm_roles(roles) if roles else []
@@ -361,17 +370,42 @@ class Host:
             self.must(["chown", owner, str(p)], "set the folder's owner")
         return p
 
-    def apps_folder(self):
+    def fstab_rows(self):
+        try:
+            return [l.split() for l in self.path("etc/fstab").read_text().splitlines() if l.strip() and not l.lstrip().startswith("#")]
+        except OSError:
+            return []
+
+    def apps_folder(self, rel=APPS, what="its apps' data"):
         """Refuses while this server's data disks are away. Its fstab mounts their apps
         subvolume at /srv/apps; unmounted, that's an empty folder on the system disk, and an
-        app set up there would start again from nothing, on the wrong disk."""
-        try:
-            rows = [l.split() for l in self.path("etc/fstab").read_text().splitlines() if l.strip() and not l.lstrip().startswith("#")]
-        except OSError:
-            rows = []
-        if any(len(r) > 1 and r[1] == "/" + APPS for r in rows) and not os.path.ismount(self.path(APPS)):
-            raise ProvisionError(f"this server keeps its apps' data on its data disks, and they aren't mounted (/{APPS}). "
+        app set up there would start again from nothing, on the wrong disk. The same for the
+        media library (/srv/media) and the backups other machines keep here (/srv/backups)."""
+        if any(len(r) > 1 and r[1] == "/" + rel for r in self.fstab_rows()) and not os.path.ismount(self.path(rel)):
+            raise ProvisionError(f"this server keeps {what} on its data disks, and they aren't mounted (/{rel}). "
                                  "Nothing was set up. `bromigos server` says what it knows about them")
+
+    def data_disks(self):
+        """Whether this server has data disks: the installer's btrfs line for them in fstab."""
+        return any(len(r) > 2 and r[1] == AD.POOL and r[2] == "btrfs" for r in self.fstab_rows())
+
+    def make_way(self, rel, why):
+        """A share from another machine is mounted at a folder the data disks' subvolume is
+        mounted at: that subvolume's fstab line becomes a comment and it is unmounted, so the
+        share is what's there, now and at every start. The subvolume stays on the data disks,
+        with whatever is in it."""
+        p = self.path("etc/fstab")
+        try:
+            lines = p.read_text().splitlines(keepends=True)
+        except OSError:
+            return
+        out = [f"# ({why}) {l}" if l.split()[1:2] == ["/" + rel] and not l.lstrip().startswith("#") else l for l in lines]
+        if out == lines:
+            return
+        self.write("etc/fstab", "".join(out))
+        if os.path.ismount(self.path(rel)):
+            self.must(["umount", "/" + rel], f"unmount the data disks' folder at /{rel} (an app may be using it: stop it first)")
+        self.run(["chattr", "-i", "/" + rel])
 
     # -- commands
     def must(self, argv, what, data=None, env=None):
@@ -685,7 +719,7 @@ def step_monitoring(host, it):
     cred = host.credential("monitoring/grafana-admin")
     host.write("etc/systemd/system/grafana.service.d/50-bromigos.conf",
                f"[Service]\nLoadCredentialEncrypted={cred}\nEnvironment=GF_SECURITY_ADMIN_PASSWORD__FILE=%d/{cred}\n"
-               "Environment=GF_SERVER_HTTP_PORT=3005\nEnvironment=GF_PATHS_PROVISIONING=/etc/bromigos/lab/grafana\n"
+               f"Environment=GF_SERVER_HTTP_PORT={it['web']['port']}\nEnvironment=GF_PATHS_PROVISIONING=/etc/bromigos/lab/grafana\n"
                "Environment=GF_ANALYTICS_REPORTING_ENABLED=false\n")
     host.must(["systemctl", "daemon-reload"], "reload systemd")
     enable(host, ["prometheus.service", "grafana.service"], restart=True)
@@ -717,17 +751,24 @@ def step_backups(host, it):
 
 def app_name(host, i):
     """A web app's name on the local network: photos-myserver.local (one label: see mdnsnames.py)."""
-    return f"{WEB[i]}-{host.hostname}.local"
+    return f"{host.cat[i]['web']['name']}-{host.hostname}.local"
 
 
 def web_apps(host):
-    """(item, name, port) for each chosen web app that Caddy serves."""
+    """(item, name, port) for each chosen web app that Caddy serves: the ones whose `web` in the
+    catalogue has a name."""
     out = []
     for i in host.selected:
-        it = host.cat[i]
-        if i in WEB and it["ports"]:
-            out.append((i, app_name(host, i), it["ports"][0] if i != "monitoring" else 3005))
+        web = host.cat[i].get("web") or {}
+        if web.get("name"):
+            out.append((i, app_name(host, i), web["port"]))
     return out
+
+
+def data_paths(it):
+    """Where an item keeps its data on this server: its [[item.data]] rows, each path made
+    whole under the item's own folder (/srv/apps/<id>/library)."""
+    return [dict(d, path="/" + APPS + "/" + it["id"] + "/" + d["path"]) for d in it.get("data") or []]
 
 
 def caddy_routes(host):
@@ -771,11 +812,26 @@ def step_caddy(host, it):
 
 
 def step_passwords(host, it):
+    host.apps_folder()
     pacman(host, ["vaultwarden", "vaultwarden-web"])
+    # The vault is a folder under /srv/apps, like every app's: on the data disks when the server
+    # has them, and in the nightly backup either way. The package's own file names
+    # /var/lib/vaultwarden, so the service is told by a file read after that one (appdata.py).
+    # A vault that is in the package's folder already stays there and goes on working: an empty
+    # folder in its place would show the household no passwords. `bromigos lab app-data move`
+    # moves it, with the service stopped and every file compared
+    if AD.is_vault(host.path(AD.VAULT_OLD)) and not AD.is_vault(host.path(AD.VAULT)):
+        if host.data_disks():
+            note(host, it, f"Your passwords are in {AD.VAULT_OLD}, on the system disk, and stay there for now. "
+                           "sudo bromigos lab app-data move puts them on the data disks, with the other apps' data.")
+    else:
+        os.chmod(host.mkdir(AD.VAULT, owner="vaultwarden:vaultwarden"), 0o700)
+        host.write(AD.VAULT_ENV, AD.VAULT_ENV_TEXT)
+        host.write(AD.VAULT_DROPIN, AD.VAULT_DROPIN_TEXT)
     host.write("etc/systemd/system/vaultwarden.service.d/50-bromigos.conf",
                "[Service]\nEnvironment=ROCKET_ADDRESS=127.0.0.1\nEnvironment=ROCKET_PORT=8222\n"
                "Environment=WEB_VAULT_ENABLED=true\nEnvironment=WEB_VAULT_FOLDER=/usr/share/webapps/vaultwarden-web\n"
-               f"Environment=DOMAIN=https://{WEB['passwords']}-{host.hostname}.local\n")
+               f"Environment=DOMAIN=https://{app_name(host, 'passwords')}\n")
     host.must(["systemctl", "daemon-reload"], "reload systemd")
     enable(host, ["vaultwarden.service"], restart=True)
 
@@ -811,6 +867,7 @@ def step_smb(host, it):
 
 
 def step_backup_target(host, it):
+    host.apps_folder("srv/backups", "the backups other machines keep here")
     if host.run(["id", "restic-backup"])[0] != 0:
         host.must(["useradd", "--system", "--home-dir", "/srv/backups", "--shell", "/usr/bin/nologin", "restic-backup"],
                   "make the backup account")
@@ -905,6 +962,8 @@ def step_lab_network(host, it):
 
 
 def step_media_library(host, it):
+    if host.setting("media-library", "where") not in ("nfs", "smb") and host.media_root() == "/srv/media":
+        host.apps_folder("srv/media", "its media library")
     if host.run(["id", "bromigos-media"])[0] != 0:
         host.must(["useradd", "--system", "--no-create-home", "--shell", "/usr/bin/nologin", "bromigos-media"],
                   "make the media account")
@@ -915,6 +974,7 @@ def step_media_library(host, it):
         share = host.setting("media-library", "share")
         if not share:
             raise ProvisionError("the media library's NAS share isn't set (such as 192.0.2.20:/volume1/media)")
+        host.make_way("srv/media", "the media library is on a NAS share")
         uid, gid = host.media_owner()
         if where == "nfs":
             pacman(host, ["nfs-utils"])
@@ -1005,10 +1065,9 @@ STEP_PROBES["youtube-library"] = lambda host, it: False
 # ---------------------------------------------------------------- files some apps need first
 def prepare_start_page(host, it):
     links = []
-    for i in host.selected:
+    for i, _name, port in web_apps(host):
         x = host.cat[i]
-        if i in WEB and x["ports"] and i != "start-page":
-            port = 3005 if i == "monitoring" else x["ports"][0]
+        if i != "start-page":
             links.append({x["name"]: {"href": f"http://{host.hostname}.local:{port}", "description": x["line"]}})
     base = APPS + "/start-page/config/"
     host.write(base + "services.yaml", json.dumps([{"This server": links}], indent=1) + "\n")

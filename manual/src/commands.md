@@ -119,7 +119,7 @@ This page lists the commands by task first, then each one in full.
 | [`bromigos restart`](#bromigos-restart) | Restart the parts of the desktop that still run old code after an update. |
 | [`bromigos status`](#bromigos-status) | Check that the background, VECTOR and the session are running. |
 | [`bromigos alerts`](#bromigos-alerts) | See what [needs you](alerts.md) on this computer: failing drives, full disks, updates, backups, stopped services. `check` looks again now. |
-| [`bromigos activity`](#bromigos-activity) | See the [long jobs](activity.md) this computer is running or ran: their steps, and how each ended. `run` starts a command as a job that carries on when you close the terminal. |
+| [`bromigos activity`](#bromigos-activity) | See the [long jobs](activity.md) this computer is running or ran: their steps, and how each ended. `answer` replies to a job that asks you something, and `cancel` stops one when that is safe. `run` starts a command as a job that carries on when you close the terminal. |
 | [`bromigos about`](#bromigos-about) | Show the version, the update channel, this machine's hardware and bromigOS's packages. |
 
 ### Screenshots and recordings
@@ -308,10 +308,10 @@ From the `bromigos-core` package.
 
 ### bromigos activity
 
-What this computer is doing: long jobs with named steps, that keep running when you close the terminal and can be read later.
+What this computer is doing: long jobs with named steps, that keep running when you close the terminal, can ask you a question, and can be read later.
 
 ```text
-bromigos activity [list [--all] [--limit N] [--json]] | show [ID] [--log N] [--json] | run --kind KIND --title WORDS [--subject TYPE:ID[:NAME]] [--via VIA] [--device NAME] [--detach] [--json] -- COMMAND…
+bromigos activity [list [--all] [--limit N] [--json]] | show [ID] [--log N] [--json] | answer ID CHOICE [--json] | cancel ID [--json] | retry ID [--via VIA] [--device NAME] [--detach] [--json] | run --kind KIND --title WORDS [--subject TYPE:ID[:NAME]] [--lock NAME]… [--parent ID] [--cancel-safe] [--retry-safe] [--via VIA] [--device NAME] [--detach] [--json] -- COMMAND…
 ```
 
 For example:
@@ -320,7 +320,9 @@ For example:
 bromigos activity
 bromigos activity show
 bromigos activity list --json
-sudo bromigos activity run --kind backup.run --title "Backing up" -- bromigos server backup run
+sudo bromigos activity answer drive.replace swapped
+sudo bromigos activity cancel backup
+sudo bromigos activity run --kind backup.run --title "Backing up" --lock backup-repo -- bromigos server backup run
 ```
 
 From the `bromigos-core` package.

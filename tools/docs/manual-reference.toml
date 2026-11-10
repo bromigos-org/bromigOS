@@ -291,7 +291,7 @@ rows = [
   { route = "restart", text = "Restart the parts of the desktop that still run old code after an update." },
   { route = "status", text = "Check that the background, VECTOR and the session are running." },
   { route = "alerts", text = "See what [needs you](alerts.md) on this computer: failing drives, full disks, updates, backups, stopped services. `check` looks again now." },
-  { route = "activity", text = "See the [long jobs](activity.md) this computer is running or ran: their steps, and how each ended. `run` starts a command as a job that carries on when you close the terminal." },
+  { route = "activity", text = "See the [long jobs](activity.md) this computer is running or ran: their steps, and how each ended. `answer` replies to a job that asks you something, and `cancel` stops one when that is safe. `run` starts a command as a job that carries on when you close the terminal." },
   { route = "about", text = "Show the version, the update channel, this machine's hardware and bromigOS's packages." },
 ]
 

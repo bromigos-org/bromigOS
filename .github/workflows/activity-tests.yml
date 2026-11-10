@@ -8,6 +8,7 @@ on:
     paths:
       - "lib/bromigos_activity.py"
       - "lib/bromigos_alerts.py"
+      - "lib/bromigos_alerts_checks.py"
       - "bin/bromigos-activity"
       - "bin/bromigos-welcome-console"
       - "tests/activity/**"

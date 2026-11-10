@@ -11,6 +11,7 @@ on:
       - "lib/bromigos_alerts_checks.py"
       - "lib/bromigos_drives.py"
       - "lib/bromigos_backups.py"
+      - "lib/bromigos_activity.py"
       - "bin/bromigos-alerts"
       - "tests/alerts/**"
       - "packaging/bromigos-core/*alerts*"

@@ -844,7 +844,7 @@ Lidarr, Bazarr, Prowlarr, Recyclarr, Unpackerr, Autoscan) and the Den TV hookup.
 downloaders and the VPN are never ticked for you.
 
 - **The media library** is one folder tree every media app shares: on this server (under
-  `/srv/media`) or on a NAS share. Its audio language (English unless you change it) and
+  `/srv/media`, on its data disks when it has them) or on a NAS share. Its audio language (English unless you change it) and
   "Prefer dual audio" set the quality rules in Sonarr and Radarr.
 - **Jellyfin** is recommended: it's free and needs no account. **Plex** needs a Plex account.
   Its basic use is free; some features need a paid Plex Pass.
