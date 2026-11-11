@@ -37,6 +37,7 @@ belongs to a package, so pacman installs, updates and removes all of it.
 | `bin/` | Small commands that `bromigos` runs, such as `bromigos terminal` | `bromigos-core` |
 | `migrations/` | Scripts that `bromigos update` runs once per user to bring an install forward | `bromigos-core` |
 | `apps/` | Configs for the optional app bundle ([docs/apps.md](docs/apps.md)) | `bromigos-apps` |
+| `board/` | The Lab board's server side: its API, sign-in, the reader and the Caddy site ([docs/board.md](docs/board.md)) | `bromigos-board` |
 | `peripherals/` | Peripheral modules, such as a Razer keyboard's macro keys ([docs/peripherals.md](docs/peripherals.md)) | `bromigos-desktop` |
 | [`packaging/`](packaging/README.md) | The PKGBUILDs and the publishing pipeline | |
 | `iso/` | The live and install ISO ([docs/iso.md](docs/iso.md)) | |

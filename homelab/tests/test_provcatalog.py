@@ -103,6 +103,18 @@ class CatalogueTests(unittest.TestCase):
         for word in ("nzbgeek", "drunkenslug", "rarbg", "1337x", "thepiratebay", "torrentleech"):
             self.assertNotIn(word, text)
 
+    def test_the_lab_board_replaces_the_start_page(self):
+        cat = PC.by_id()
+        board = cat["board"]
+        self.assertEqual((board["job"], board["app"], board["holo"]), ("Lab board", "bromigOS", "board"))
+        self.assertEqual(board["install"], {"step": "board"})
+        self.assertEqual(sorted(board["roles"]), ["game-server", "home-services", "media", "storage"])
+        self.assertEqual(board["conflicts"], ["start-page"])
+        self.assertFalse(cat["start-page"]["default"])
+        ids, added = PC.resolve(["board"])
+        self.assertEqual((ids, added), (["caddy", "board"], ["caddy"]))
+        self.assertIsNone(board["web"])                 # Caddy serves it at <server>.local, not a port of its own
+
     def test_unknown_id_refused(self):
         with self.assertRaises(PC.CatalogueError):
             PC.resolve(["no-such-thing"])
@@ -345,9 +357,13 @@ class RecommendTests(unittest.TestCase):
         self.assertIn("smb-shares", PC.recommend(["storage"], NO_GPU))
         self.assertIn("s3", PC.recommend(["storage"], NO_GPU))
         home = PC.recommend(["home-services"], NO_GPU)
-        for i in ("photos", "passwords", "caddy", "start-page", "uptime"):
+        for i in ("photos", "passwords", "caddy", "board", "uptime"):
             self.assertIn(i, home)
         self.assertNotIn("documents", home)               # default = false
+        self.assertNotIn("start-page", home)              # the Lab board replaced it
+        for role in ("storage", "game-server", "media"):
+            self.assertIn("board", PC.recommend([role], NO_GPU), role)
+        self.assertNotIn("board", PC.recommend(["lab-node"], NO_GPU))
         media = PC.recommend(["media"], NO_GPU)
         for i in ("jellyfin", "seerr", "sonarr", "radarr", "lidarr", "prowlarr", "recyclarr", "den-tv"):
             self.assertIn(i, media)

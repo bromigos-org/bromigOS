@@ -1,0 +1,110 @@
+{
+ "schema": 1,
+ "jobs": [
+  {
+   "schema": 1,
+   "id": "20261110-1012-backup.run-a3f0",
+   "kind": "backup.run",
+   "title": "Backing up",
+   "subject": null,
+   "state": "running",
+   "waiting_for": null,
+   "question": null,
+   "steps": [
+    {
+     "id": "backup",
+     "label": "Backing up",
+     "state": "running",
+     "started_at": 1794289920000,
+     "ended_at": null,
+     "detail": "",
+     "progress": null
+    }
+   ],
+   "step": 0,
+   "pct": null,
+   "started_at": 1794289920000,
+   "updated_at": 1794289990000,
+   "ended_at": null,
+   "requested_by": {
+    "via": "timer",
+    "device": null
+   },
+   "unit": "bromigos-job-20261110-1012-backup.run-a3f0.service",
+   "locks": [
+    "backup-repo"
+   ],
+   "can": [],
+   "cancel_safe": false,
+   "cancel_note": "",
+   "result": null,
+   "error": null,
+   "command": [
+    "bromigos",
+    "server",
+    "backup",
+    "run"
+   ],
+   "log": "/var/lib/bromigos/activity/jobs/20261110-1012-backup.run-a3f0.log",
+   "parent": null,
+   "children": []
+  },
+  {
+   "schema": 1,
+   "id": "20261110-0530-app.update-photos-1a2b",
+   "kind": "app.update",
+   "title": "Updating Photos",
+   "subject": {
+    "type": "app",
+    "id": "photos",
+    "name": "Photos"
+   },
+   "state": "rolled-back",
+   "waiting_for": null,
+   "question": null,
+   "steps": [
+    {
+     "id": "update",
+     "label": "Updating",
+     "state": "failed",
+     "started_at": 1794259800000,
+     "ended_at": 1794260000000,
+     "detail": "",
+     "progress": null
+    }
+   ],
+   "step": 0,
+   "pct": null,
+   "started_at": 1794259800000,
+   "updated_at": 1794260000000,
+   "ended_at": 1794260000000,
+   "requested_by": {
+    "via": "timer",
+    "device": null
+   },
+   "unit": "bromigos-job-20261110-0530-app.update-photos-1a2b.service",
+   "locks": [
+    "apps"
+   ],
+   "can": [],
+   "cancel_safe": false,
+   "cancel_note": "",
+   "result": {
+    "ok": false,
+    "summary": "Photos didn't answer after the update, so it was put back.",
+    "undo": null
+   },
+   "error": null,
+   "command": [
+    "bromigos",
+    "lab",
+    "apps",
+    "update",
+    "photos"
+   ],
+   "log": "/var/lib/bromigos/activity/jobs/20261110-0530-app.update-photos-1a2b.log",
+   "parent": null,
+   "children": []
+  }
+ ]
+}

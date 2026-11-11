@@ -1,0 +1,7 @@
+# The Lab board (docs/board.md). /run/bromigos-board: the snapshot root writes for the service
+# (board.json, group bromigos-board, 0640) and the file the service touches while a browser is
+# connected. /var/lib/bromigos-board: the service's own sessions and console codes.
+d /run/bromigos-board 0750 bromigos-board bromigos-board -
+d /var/lib/bromigos-board 0700 bromigos-board bromigos-board -
+d /var/lib/bromigos-board/sessions 0700 bromigos-board bromigos-board -
+d /var/lib/bromigos-board/codes 0700 bromigos-board bromigos-board -

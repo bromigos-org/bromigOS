@@ -1,0 +1,46 @@
+name: board tests
+
+# The Lab board's server side (docs/board.md) on a pull request: the package build runs these
+# tests too (packaging/bromigos-board/PKGBUILD, check()), but only once a change is on main.
+
+on:
+  pull_request:
+    paths:
+      - "board/**"
+      - "docs/board.md"
+      - "packaging/bromigos-board/**"
+      # what the board reads: the activity records, and the catalogue its door falls back to
+      - "lib/bromigos_activity.py"
+      - "homelab/lib/bromigos_homelab/provcatalog.py"
+      - "homelab/share/provision-catalogue.toml"
+      # `bromigos server board` runs the board's own commands
+      - "server/bromigos-server"
+      - ".github/workflows/board-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: board-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Board unit tests
+    # GitHub's runner, never the lab's: this repo is public (forks' PRs run here)
+    runs-on: ubuntu-latest
+    container: archlinux:base
+    timeout-minutes: 15
+    steps:
+      - name: tools
+        # bromigos-board's depends and checkdepends (packaging/bromigos-board/PKGBUILD); caddy
+        # checks that it reads the site
+        run: pacman -Syu --noconfirm --needed git python python-starlette uvicorn python-httpx caddy >/dev/null
+      - uses: actions/checkout@v5
+      - name: unittest
+        # as a normal user, like makepkg's check(): a stand-in root, nothing listens on a port
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE/board' && BOARD_NEED_CADDY=1 PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -v"

@@ -1,0 +1,13 @@
+# The Lab board's reader (docs/board.md): the API touches /run/bromigos-board/wanted while a
+# browser is connected; this starts the snapshot, which reads every 15 seconds until nobody has
+# looked for 45.
+[Unit]
+Description=bromigOS Lab board: read the server while a browser is connected
+Documentation=file:///usr/share/doc/bromigos-board/board.md
+
+[Path]
+PathModified=/run/bromigos-board/wanted
+Unit=bromigos-board-snapshot.service
+
+[Install]
+WantedBy=paths.target

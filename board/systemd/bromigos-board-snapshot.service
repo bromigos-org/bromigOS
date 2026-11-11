@@ -1,0 +1,14 @@
+# The Lab board's reader (docs/board.md): runs the commands that already say the server's state
+# with --json (bromigos server status, storage health, lab backups status, activity list, alerts,
+# lab apps list) as root, and writes what they said to /run/bromigos-board/board.json for the
+# board's group. Started by bromigos-board-snapshot.path; it ends itself when nobody looks.
+[Unit]
+Description=bromigOS Lab board: read the server
+Documentation=file:///usr/share/doc/bromigos-board/board.md
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/bromigos/board/bromigos-board snapshot
+Nice=10
+IOSchedulingClass=idle
+UMask=0027

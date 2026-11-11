@@ -675,6 +675,23 @@ class CatalogueFormatTwo(unittest.TestCase):
                           "Photos (Immich)": "http://box.local:2283", "Passwords (Vaultwarden)": "http://box.local:8222",
                           "File sync (Syncthing)": "http://box.local:8384"})
 
+    def test_the_lab_board_has_its_site_and_its_names(self):
+        host = self.host(["photos", "board"])
+        self.assertEqual(L.Runner(host, poll=1).run(), 0)
+        site = Path(self.root, "etc/caddy/conf.d/bromigos-board.caddy").read_text()
+        self.assertIn("box.local, home-box.local {\n  tls internal\n  import /usr/share/bromigos-board/caddy/site.caddy\n}",
+                      site)
+        self.assertNotIn("home-box.local", Path(self.root, "etc/caddy/conf.d/bromigos-lab.caddy").read_text())
+        self.assertEqual(Path(self.root, "etc/bromigos/lab/mdns-names").read_text().split(),
+                         ["photos-box.local", "home-box.local"])
+        calls = [" ".join(c) for c in self.m.calls]
+        self.assertIn("pacman -S --needed --noconfirm bromigos-board", calls)
+        for u in ("bromigos-board.socket", "bromigos-board-snapshot.path"):
+            self.assertIn(f"systemctl enable {u}", calls)
+        # the site is written once the package it imports is there, then Caddy loads it
+        self.assertLess(calls.index("pacman -S --needed --noconfirm bromigos-board"),
+                        calls.index("systemctl reload-or-restart caddy.service"))
+
     def test_the_old_table_still_reads(self):
         self.assertEqual(L.WEB, PC.web_names())
         self.assertEqual(L.WEB["jellyfin"], "media")

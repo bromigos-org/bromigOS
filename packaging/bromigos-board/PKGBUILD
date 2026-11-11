@@ -1,0 +1,63 @@
+# Maintainer: bromigOS <packages@bromigos.org>
+#
+# The Lab board (docs/board.md): bromigOS Server's own web page, on the home network and the
+# lab's private network only. The catalogue's `board` item installs it (the Home services,
+# Media, Storage and Game server roles tick it); nothing else depends on it.
+#
+#   the API               /usr/lib/bromigos/board/bromigos-board serve: Starlette on uvicorn,
+#                         on /run/bromigos-board.sock (bromigos-board.socket, group caddy), as
+#                         the user bromigos-board (bromigos-board.service)
+#   the reader            bromigos-board-snapshot.path starts bromigos-board-snapshot.service
+#                         (root) while a browser is connected: board.json every 15 seconds
+#   the commands          bromigos server board code|sessions (bromigos-server runs these)
+#   the site              /usr/share/bromigos-board/caddy/site.caddy, which the lab's Caddy
+#                         step imports for <server>.local and home-<server>.local
+#   the page              /usr/share/bromigos-board/web is bromigos-board-web's (the pages); until
+#                         that is installed Caddy serves /usr/share/bromigos-board/placeholder
+#   the library           /usr/lib/bromigos/lib/bromigos_board/
+
+pkgname=bromigos-board
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="bromigOS Server's own web page, the Lab board: its API, sign-in with a one-time code, and the site Caddy serves"
+arch=('any')
+url='https://github.com/bromigos-org/bromigOS'
+license=('MIT OR Apache-2.0')
+# bromigos-core: bromigos_activity (the activity stream) and the commands the reader runs
+depends=('python' 'python-starlette' 'uvicorn' 'caddy' 'bromigos-core' 'bromigos-lab')
+optdepends=('bromigos-board-web: the Lab board'"'"'s pages (until it'"'"'s installed, a placeholder lists the apps)')
+checkdepends=('python-httpx' 'caddy')
+install=$pkgname.install
+options=('!debug')
+
+_root="${startdir%/packaging/*}"
+_paths=(board docs/board.md packaging/bromigos-board LICENSE-MIT LICENSE-APACHE)
+_archived=0
+
+pkgver() {
+  cd "$_root"
+  local base
+  base=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version *= *"\(.*\)"/\1/p' core/Cargo.toml)
+  printf '%s.r%s.g%s' "${base//-/_}" \
+    "$((_archived + $(git rev-list --count HEAD -- "${_paths[@]}")))" \
+    "$(git log -1 --format=%h -- "${_paths[@]}" | grep . || echo 0)"
+}
+
+check() {
+  cd "$_root/board"
+  BOARD_NEED_CADDY=1 PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests
+}
+
+package() {
+  local b="$_root/board"
+  install -Dm0644 -t "$pkgdir/usr/lib/bromigos/lib/bromigos_board/" "$b"/lib/bromigos_board/*.py
+  install -Dm0755 "$b/bin/bromigos-board" "$pkgdir/usr/lib/bromigos/board/bromigos-board"
+  install -Dm0644 -t "$pkgdir/usr/lib/systemd/system/" "$b"/systemd/*.service "$b"/systemd/*.socket "$b"/systemd/*.path
+  install -Dm0644 "$b/bromigos-board.sysusers" "$pkgdir/usr/lib/sysusers.d/bromigos-board.conf"
+  install -Dm0644 "$b/bromigos-board.tmpfiles" "$pkgdir/usr/lib/tmpfiles.d/bromigos-board.conf"
+  install -Dm0644 "$b/caddy/site.caddy" "$pkgdir/usr/share/bromigos-board/caddy/site.caddy"
+  install -Dm0644 -t "$pkgdir/usr/share/bromigos-board/placeholder/" "$b"/placeholder/*
+  install -Dm0644 "$_root/docs/board.md" "$pkgdir/usr/share/doc/bromigos-board/board.md"
+  install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" "$_root/LICENSE-MIT" "$_root/LICENSE-APACHE"
+  python -m compileall -q -o 0 -o 1 -s "$pkgdir" -p / "$pkgdir/usr/lib/bromigos/lib/bromigos_board"
+}

@@ -515,6 +515,11 @@ is the S3 API, which answers a browser with an error. An item whose `web` has a 
 and no name of its own: Sonarr is at `http://<server>.local:8989`. `path` is where the
 page is, when it isn't `/`.
 
+The Lab board, the `board` item, answers at the server's own name, `<server>.local`, and at
+`home-<server>.local`, the old start page's name. Its step writes its own Caddy site,
+`/etc/caddy/conf.d/bromigos-board.caddy`, and the Caddy step adds `home-<server>.local` to
+the names published over mDNS ([board.md](board.md)).
+
 The names are one label on purpose. Every mDNS resolver answers a one-label
 `.local` name: Linux's nss-mdns and systemd-resolved, Apple's mDNSResponder, Android's resolver
 (November 2021 on) and Windows' DNS client. A subdomain such as `photos.<server>.local` is

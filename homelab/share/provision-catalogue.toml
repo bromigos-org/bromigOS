@@ -299,19 +299,44 @@ internet = true
 install = { step = "caddy" }
 
 [[item]]
+id = "board"
+group = "lab-core"
+name = "Lab board"
+job = "Lab board"
+app = "bromigOS"
+line = "This server's own page: its apps, its drives, its backups and what it's doing."
+hint = "Open https://<server>.local in a browser on your home network. Before you sign in it shows the apps to open; signed in with a code from sudo bromigos server board code, it shows everything. Only your home network and your lab's private network can reach it."
+icon = "view-grid-symbolic"
+glyph = "bromigos"
+holo = "board"
+needs = ["caddy"]
+conflicts = ["start-page"]
+roles = ["home-services", "media", "storage", "game-server"]
+# a small Python service (about 50 MB) and a reader that runs only while a browser is open
+requires = { cpu = 1, ram_gb = 0.1, disk_gb = 1 }
+size_text = "about 1 MB package"
+ports = []
+internet = true
+install = { step = "board" }
+# no health check here: it has no port of its own (Caddy's 443 serves it) and keeps no data
+# under /srv/apps; its sessions are in /var/lib/bromigos-board (docs/board.md)
+
+[[item]]
 id = "start-page"
 group = "lab-core"
 name = "Start page"
 job = "Start page"
 app = "Homepage"
 line = "One page with a link to everything this server runs."
-hint = "Homepage lists every app you ticked, with whether it's up. Open it first when you don't remember an app's address."
+hint = "Homepage lists every app you ticked, with whether it's up. The Lab board replaces it: it stays here for servers that have it."
 icon = "view-grid-symbolic"
 glyph = "bromigos"
 holo = "board"
 needs = []
-conflicts = []
+# the Lab board answers at home-<server>.local too
+conflicts = ["board"]
 roles = ["home-services", "media"]
+default = false
 requires = { cpu = 1, ram_gb = 0.25, disk_gb = 1 }
 size_text = "about 90 MB image"
 ports = [3010]

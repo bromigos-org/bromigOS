@@ -1,0 +1,40 @@
+# The Lab board's API (docs/board.md): Starlette on uvicorn, on the socket systemd hands it, as
+# its own unprivileged user. It reads the snapshot root writes, keeps sessions, and never runs a
+# command itself.
+[Unit]
+Description=bromigOS Lab board API
+Documentation=file:///usr/share/doc/bromigos-board/board.md
+Requires=bromigos-board.socket
+After=bromigos-board.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/bromigos/board/bromigos-board serve
+User=bromigos-board
+Group=bromigos-board
+Restart=on-failure
+RestartSec=5
+UMask=0077
+# nothing but its own folders, read-only everything else
+ProtectSystem=strict
+ReadWritePaths=/var/lib/bromigos-board /run/bromigos-board
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+# the socket comes from systemd; it opens none of its own
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any

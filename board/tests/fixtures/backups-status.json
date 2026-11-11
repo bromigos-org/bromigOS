@@ -1,0 +1,9 @@
+{
+ "schema": 1, "ok": true, "server": true, "configured": true, "to": "s3.example.org/myserver",
+ "destination": {"kind": "s3", "present": null},
+ "timers": {"backup": "active", "check": "active", "test": "active"},
+ "health": {"state": "ok", "verdict": "Backups are fine: the last one finished 7 hours ago.", "problems": []},
+ "last_backup": {"at": 1794264000, "ok": true}, "last_success": 1794264000, "last_check": 1793900000,
+ "last_check_passed": true, "last_read_back": null, "last_test": 1792000000, "last_test_passed": true,
+ "snapshots": 21, "restore": null, "running": null, "checked_at": "2026-11-10T10:13:20-08:00", "now": 1794290000
+}

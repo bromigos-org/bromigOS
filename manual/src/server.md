@@ -225,6 +225,35 @@ For scripts, every command takes `--json`. The
 [lab docs](https://github.com/bromigos-org/bromigOS/blob/main/docs/lab.md#apps-on-a-server)
 have where each number comes from, the exit codes and the JSON.
 
+## The Lab board
+
+The Lab board is the server's own web page. Open `https://<server>.local` in a browser on
+your home network, where `<server>` is your server's name. The Home services, Media,
+Storage and Game server roles set it up.
+
+Before you sign in, the page shows your household's apps, each with a link that opens it.
+To see everything else, sign in with a one-time code. Run this at the server, or over SSH:
+
+```bash
+sudo bromigos server board code
+```
+
+Type the code on the page. It works once, for ten minutes, and the browser stays signed in
+for 30 days. The page answers only your home network and your lab's private network, never
+the internet.
+
+The first time, your browser warns that it doesn't know the page's certificate. The server
+made its own, as it does for every app's address. The warning shows once per browser.
+
+```bash
+sudo bromigos server board sessions             # the browsers signed in
+sudo bromigos server board sessions --end ID    # sign one out
+```
+
+The board's pages are still being built: until they land, the page lists the apps. The
+[Lab board docs](https://github.com/bromigos-org/bromigOS/blob/main/docs/board.md) have
+the API and everything it reads.
+
 ## Where your apps keep their data
 
 If you gave the server data disks during the install, most of your apps keep their data

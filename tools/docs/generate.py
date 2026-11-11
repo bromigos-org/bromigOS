@@ -323,6 +323,8 @@ BY_OTHER = {
                 "`brodec-lab-media.service`",
     "bromigos-secureboot": "by the installer, on a computer that starts the newer way (UEFI); "
                            "elsewhere by `sudo pacman -S bromigos-secureboot` (docs/secureboot.md)",
+    "bromigos-board": "on bromigOS Server, with the Home services, Media, Storage and Game server roles "
+                      "(the provisioning catalogue's `board` item; docs/board.md)",
 }
 
 

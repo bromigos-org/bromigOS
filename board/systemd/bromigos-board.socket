@@ -1,0 +1,15 @@
+# The Lab board's API socket (docs/board.md). Only Caddy's group may open it: Caddy serves the
+# page and passes /api here, with the browser's address in X-Forwarded-For.
+[Unit]
+Description=bromigOS Lab board API socket
+Documentation=file:///usr/share/doc/bromigos-board/board.md
+
+[Socket]
+ListenStream=/run/bromigos-board.sock
+SocketUser=bromigos-board
+SocketGroup=caddy
+SocketMode=0660
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target
