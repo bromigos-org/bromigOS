@@ -236,7 +236,13 @@ class Store:
         give it to."""
         if not os.path.exists(at(PODMAN_DROPIN, self.root)):
             return
-        rc, out, err = self.run(["podman", "secret", "create", "--replace", podman_name(name), "-"], value)
+        # --replace only over a secret that is there: Podman 4 (Ubuntu 24.04's 4.9, others before
+        # 5.0) deletes the old one first even when there is none, and stops ("deleting secret :
+        # secret with name or id "": no such secret"). A new name is created, a known one replaced
+        there = self.run(["podman", "secret", "exists", podman_name(name)])[0]
+        if there == 127:
+            return
+        rc, out, err = self.run(["podman", "secret", "create", *(["--replace"] if there == 0 else []), podman_name(name), "-"], value)
         if rc == 127:
             return
         if rc:

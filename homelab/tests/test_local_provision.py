@@ -353,6 +353,14 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("bromigos-prowlarr-api-key", self.m.podman_secrets)
         self.assertTrue(self.m.ran("systemctl restart prowlarr.service") or self.m.ran("systemctl start prowlarr.service"))
 
+    def test_apps_with_a_key_install_under_podman_4(self):
+        # the runner's case: Podman 4.9's --replace on a new secret. Prowlarr and Sonarr start
+        self.m.podman4 = True
+        plan = L.build_plan(["sonarr"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        self.assertEqual(sorted(self.m.podman_secrets), ["bromigos-prowlarr-api-key", "bromigos-sonarr-api-key"])
+
     def test_a_secret_podman_lost_is_given_again_or_the_install_stops(self):
         plan = L.build_plan(["prowlarr"], hw=HW)
         self.net["up"] = True

@@ -22,10 +22,9 @@ lab="$repo/homelab/bin/bromigos-lab"
 # The apps this lane can run in its time on GitHub's runner: no account with a company, no
 # setup form that must be filled, no graphics card. (Photos needs 4 GB of memory and makes its
 # database dumps at 02:00; Plex needs an account; the Pelican panel needs Wings.) Apps with a key
-# of their own (Prowlarr, Sonarr, Radarr, Lidarr, and so Bazarr and Autoscan; Paperless) don't
-# start on this runner: the engine's Podman secrets aren't made here, and why isn't known yet
-# (2026-11-11, Podman 4.9: "no secret with name or id bromigos-prowlarr-api-key"). They are tried,
-# and reported, not failed
+# of their own (Prowlarr, Sonarr, Radarr, Lidarr, and so Bazarr and Autoscan; Paperless) run here
+# as on a Server: the runner's Podman is 4.9, whose `secret create --replace` failed on a new
+# secret, and the engine only replaces a secret that is there (secretstore._podman)
 PROVE=(navidrome prowlarr sonarr radarr lidarr bazarr jellyfin seerr autoscan audiobookshelf pinchflat uptime
        home-automation documents)
 (( $# )) && PROVE=("$@")

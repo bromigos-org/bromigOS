@@ -98,6 +98,20 @@ class LocalTests(unittest.TestCase):
                                if argv[0] == "podman" else real(argv, *a, **k)):
             self.store.put("x/y", "no-podman-here")
 
+    def test_podman_4_takes_a_new_key_and_a_changed_one(self):
+        # Podman 4 (Ubuntu 24.04's 4.9) deletes the old secret before --replace makes the new one,
+        # even when there is none, and stops: on CI's runner no app with a key ever started
+        p = Path(self.root, S.PODMAN_DROPIN)
+        p.parent.mkdir(parents=True)
+        p.write_text(S.podman_driver_conf())
+        self.m.podman4 = True
+        self.store.generate("prowlarr/api-key", "apikey")
+        self.assertIn("bromigos-prowlarr-api-key", self.m.podman_secrets)
+        self.assertEqual(self.m.ran("podman secret create")[-1][:4], ["podman", "secret", "create", "bromigos-prowlarr-api-key"])
+        self.store.rotate("prowlarr/api-key")                              # a new value over the old: replaced
+        self.assertEqual(self.m.ran("podman secret create")[-1][:5],
+                         ["podman", "secret", "create", "--replace", "bromigos-prowlarr-api-key"])
+
     def test_recovery_bundle_and_restore(self):
         self.store.put("gluetun/password", "pw-for-the-vpn")
         key = self.store.recovery_key()
