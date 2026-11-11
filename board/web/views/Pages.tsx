@@ -9,6 +9,7 @@ import { Activity } from "./Activity";
 import { App } from "./App";
 import { Home } from "./Home";
 import { Machine } from "./Machine";
+import { Ways } from "./People";
 import { Data } from "./Data";
 import { Supply } from "./Supply";
 
@@ -144,6 +145,13 @@ export function Pages() {
       return (
         <Page label="Home">
           <Home />
+        </Page>
+      );
+    case "people": // Household is planned; Ways in is the service's own list of browsers
+      if (route.tab !== "ways") return <Placeholder place="people" />;
+      return (
+        <Page label="People › Ways in">
+          <Ways />
         </Page>
       );
     default:

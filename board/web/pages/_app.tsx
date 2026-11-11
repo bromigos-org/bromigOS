@@ -8,6 +8,7 @@ import "@/styles/activity.css";
 import "@/styles/home.css";
 import "@/styles/machine.css";
 import "@/styles/data.css";
+import "@/styles/people.css";
 import "@/styles/supply.css";
 import "@/styles/app.css";
 
