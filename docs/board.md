@@ -187,10 +187,10 @@ alerts and the jobs were read.
 ### What the page may do
 
 - **Jobs.** The page shows a job's question and its answers, with the command that answers
-  it (`sudo bromigos activity answer ID CHOICE`). It has no Answer, Cancel or Retry control:
-  the service has no route for them yet. On the Activity page a job that says stopping is
-  safe shows `sudo bromigos activity cancel ID`, and one that can be started again shows
-  `sudo bromigos activity retry ID`.
+  it (`sudo bromigos activity answer ID CHOICE`). It has no Answer, Cancel or Retry control
+  yet: the service's routes for them are [A job's own actions](#a-jobs-own-actions). On the
+  Activity page a job that says stopping is safe shows `sudo bromigos activity cancel ID`,
+  and one that can be started again shows `sudo bromigos activity retry ID`.
 - **Adding an app.** The Add sheet's control appears only when the board says the page may
   add (`actions` holds `"add"`) and the app's tile says it can be added. Otherwise the
   sheet shows the command and a planned mark. `actions` is root's `[board] actions`, as the
@@ -774,7 +774,7 @@ draws first from those same documents:
  "backups": "… bromigos lab backups status --json",
  "updates": {"updates": "… bromigos server status --json's updates", "rollbacks": []},
  "ups": {"found": false},
- "actions": ["restart", "add", "remove", "delete-data"],
+ "actions": ["restart", "add", "remove", "delete-data", "job.answer", "job.cancel", "job.retry"],
  "sources": {"storage": {"command": ["bromigos", "storage", "health", "--json"], "at": 1794289999000, "ok": true, "rc": 1},
              "apps": {"command": ["bromigos", "lab", "apps", "list", "--json"], "at": 1794289999000, "ok": false, "rc": 2,
                       "why": "bromigos lab: no command apps"}},
@@ -848,7 +848,10 @@ A signed-in browser can do all of this until its session ends, 30 days later at 
 - see everything the board shows;
 - restart any app this server runs;
 - add any app in the catalogue, file sharing and game servers included;
-- remove an app, keeping its data.
+- remove an app, keeping its data;
+- answer the question a job asks, stop a job that says stopping is safe, and start again a
+  job that ended badly and was started as safe to start again
+  ([A job's own actions](#a-jobs-own-actions)).
 
 It can't delete an app's data, run a command, read a file or change a setting. Deleting
 data needs a fresh code from the server each time ([below](#deleting-an-apps-data)).
@@ -861,7 +864,8 @@ browser, say which actions the page may use, as root, in `/etc/bromigos/server.t
 actions = ["restart"]        # only restarts; [] turns every action off
 ```
 
-Left out, it means `["restart", "add", "remove", "delete-data"]`. With `[]` the page only
+Left out, it means `["restart", "add", "remove", "delete-data", "job.answer", "job.cancel",
+"job.retry"]`. With `[]` the page only
 shows what the server is doing, and you add and remove apps with `sudo bromigos lab apps`.
 The board's document carries the list as `actions`, so the page offers only what the server
 allows.
@@ -942,6 +946,57 @@ One limit: root can't see a sign-in. It trusts the board's record to say a code 
 If the API itself were taken over, it could keep a code that you typed to sign in and
 spend it on a deletion instead. It could never make a code of its own.
 
+#### A job's own actions
+
+The page can also act on a job that is already there, whoever started it:
+
+```json
+POST /api/activity/20261110-1904-drive.replace-bay-2-7c1e/answer
+{"question": "swapped", "choice": "swapped"}
+
+POST /api/activity/20261110-0300-backup.run-myserver-4f1a/cancel
+{}
+
+POST /api/activity/20261110-0530-app.update-photos-1a2b/retry
+{}
+```
+
+These go to root the same way as an app's action: the API writes a request, and root's
+helper takes it out and checks it again. For a job the check is against root's own record
+of it ([activity.md](activity.md)):
+
+1. The id must be a job's whole id, and a record with exactly that id must be there. A part
+   of an id, which names a job at the terminal, names none here.
+2. `[board] actions` must list `job.answer`, `job.cancel` or `job.retry`.
+3. The job must be in a state that allows it. An answer needs the job to be asking the
+   question the request names, and the choice to be one of that question's. The question's
+   id is in the request so that an answer to a question that was since replaced is refused.
+   Stopping needs the job to say that stopping now is safe. Starting again needs a job that
+   ended failed, put back, cancelled or interrupted, and was started as safe to start again.
+4. Then the helper runs `bromigos activity answer JOB CHOICE`, `cancel JOB` or
+   `retry JOB --via board`, with the id and the choice it checked. Nothing else in the
+   request reaches the command.
+
+The command checks once more as it acts, and what it refuses comes back as the same codes.
+
+| Code | `error.code` | Means |
+|---|---|---|
+| 202 | | Done, or passed on: `{"ok": true, "job": "<id>", "words": "Answered."}`. For `retry`, `job` is the new job's id. When root hadn't answered within 10 seconds, the words say to watch the job's card, and `job` is null for a retry |
+| 404 | `no-job`, `unknown-verb` | No job has that whole id; or the last word isn't `answer`, `cancel` or `retry` |
+| 409 | `not-asking`, `bad-choice` | The job isn't asking that question now; or that isn't one of its answers |
+| 409 | `not-safe` | The job hasn't said that stopping it now is safe. Its record's `cancel_note` says why |
+| 409 | `ended` | The job has already ended |
+| 409 | `cant-retry` | The job didn't end badly, or wasn't started as safe to start again |
+| 409 | `not-taken` | The job didn't take the answer or the stop in time. Look at its card and try again |
+| 403 | `not-allowed`, `too-old`, `bad-request` | `[board] actions` doesn't list it; or root's helper refused the request |
+| 503 | `no-actions` | The requests folder isn't there: actions aren't set up |
+
+Every refusal's words are the board's own, fixed sentences. They never repeat what the
+request said, or what the job said.
+
+Stopping a job can take as long as the job takes to stop: up to 25 seconds. While root's
+helper waits for it, other requests wait their turn.
+
 #### The answers
 
 | Code | `error.code` | Means |
@@ -998,7 +1053,6 @@ the board's user made deletes nothing. Never run it on a computer you use.
 ### Not built yet, on the server's side
 
 - Updating an app or putting its last version back: `bromigos lab apps` doesn't do those yet.
-- Answering, cancelling or retrying a job from the page.
 - Signing in from the phone, or with a Bromigos account.
 - The lab's own address, and the lab's other machines on one server's page.
 - Moving servers that run the start page onto the board.

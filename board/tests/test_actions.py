@@ -14,6 +14,7 @@ import os
 import re
 import stat
 import subprocess
+import sys
 import threading
 import time
 import unittest
@@ -477,6 +478,211 @@ class TheDeleteCodeIsRoots(Base):
         code = json.loads(r.stdout)["code"]
         self.assertEqual(self.left(actions.ROOT_CODES), self.left(paths.CODES))
         self.assertTrue(self.delete(code)["ok"])
+
+
+class JobActions(Base):
+    """A job's own actions from the page: answer, stop, start again (docs/board.md, "A job's own
+    actions"). The records are real ones, written by the activity library in the stand-in root."""
+
+    def setUp(self):
+        super().setUp()
+        import bromigos_activity
+        self.A = bromigos_activity
+        self.env = bromigos_activity.Env(dict(os.environ))
+        self.jobs = []
+        self.addCleanup(lambda: [j.close() for j in self.jobs])
+        self.said = None                    # what the stand-in `bromigos activity` prints, and how it ends
+        self.asks = self.job("drive.replace", "Replacing a drive: sdb", ["::ask swapped Swap the drive now. [swapped] I've swapped it [undo] Put sdb back"])
+        self.runs = self.job("backup.run", "Backing up this server", ["::cancel safe", "::step copy running Copying"])
+        self.busy = self.job("pool.grow", "Growing the pool", ["::cancel unsafe The pool is being rewritten."])
+        self.failed = self.job("app.update", "Updating Photos", end={"exit_code": 1}, retry=self.A.retry_spec(["true"], "/"))
+        self.done = self.job("backup.run", "Backing up this server", end={"exit_code": 0})
+        self.once = self.job("app.update", "Updating Films and TV", end={"exit_code": 1})      # not safe to start again
+
+    def job(self, kind, title, lines=(), end=None, **kw):
+        j = self.A.Job(self.env, kind, title, command=["bromigos", *kind.split(".")], via="timer", **kw).open()
+        j.begin()
+        for line in lines:
+            j.feed(line)
+        if end is not None:
+            j.finish(**end)
+        j.save(force=True)
+        self.jobs.append(j)
+        return j.id
+
+    def fake_run(self, argv):
+        self.ran.append(argv)
+        rc, out = self.said or (0, {"schema": 1, "ok": True, "refused": None, "words": "Answered: I've swapped it"})
+        return subprocess.CompletedProcess(argv, rc, json.dumps(out), "")
+
+    def do(self, job, verb, body=None, headers=PAGE):
+        return self.c.post(f"/api/activity/{job}/{verb}", json=body or {}, headers=headers)
+
+    def refused(self, r, status, code):
+        self.assertEqual((r.status_code, r.json()["error"]["code"]), (status, code), r.text)
+        self.assertEqual(r.json()["error"]["words"], actions.REFUSALS[code])
+
+    def test_an_answer_is_passed_on_with_the_id_and_the_choice_root_checked(self):
+        self.sign_in()
+        r = self.do(self.asks, "answer", {"question": "swapped", "choice": "swapped"})
+        self.assertEqual(r.status_code, 202, r.text)
+        self.assertEqual({k: v for k, v in r.json().items() if k != "request"},
+                         {"schema": 1, "ok": True, "job": self.asks, "words": "Answered."})
+        self.assertEqual(self.ran, [["bromigos-activity", "answer", self.asks, "swapped", "--json"]])
+        self.assertEqual(self.left(), [], "the request was taken out")
+
+    def test_an_answer_only_to_the_question_that_is_asked_and_only_one_of_its_choices(self):
+        self.sign_in()
+        self.refused(self.do(self.asks, "answer", {"question": "another", "choice": "swapped"}), 409, "not-asking")   # replaced
+        self.refused(self.do(self.asks, "answer", {"question": "swapped", "choice": "format"}), 409, "bad-choice")
+        self.refused(self.do(self.runs, "answer", {"question": "swapped", "choice": "swapped"}), 409, "not-asking")
+        self.refused(self.do(self.done, "answer", {"question": "swapped", "choice": "swapped"}), 409, "ended")
+        for body in ({}, {"question": "swapped"}, {"question": "swapped", "choice": "x; reboot"},
+                     {"question": ["swapped"], "choice": "swapped"}, {"question": "swapped", "choice": "--json"}):
+            r = self.do(self.asks, "answer", body)
+            self.assertEqual(r.status_code, 409, body)
+            self.assertIn(r.json()["error"]["code"], ("not-asking", "bad-choice"), body)
+        self.assertEqual(self.ran, [], "nothing was run for any of them")
+        self.assertEqual(self.left(), [], "and what isn't an id never became a request")
+
+    def test_stopping_a_job_that_says_it_is_safe(self):
+        self.sign_in()
+        self.said = (0, {"schema": 1, "ok": True, "refused": None, "words": "Stopped: Backing up this server"})
+        r = self.do(self.runs, "cancel")
+        self.assertEqual((r.status_code, r.json()["job"], r.json()["words"]), (202, self.runs, "Stopped."))
+        self.assertEqual(self.ran, [["bromigos-activity", "cancel", self.runs, "--json"]])
+        self.refused(self.do(self.busy, "cancel"), 409, "not-safe")
+        self.refused(self.do(self.asks, "cancel"), 409, "not-safe")           # it never said stopping is safe
+        self.refused(self.do(self.done, "cancel"), 409, "ended")
+        self.assertEqual(len(self.ran), 1)
+        self.refused(self.do(self.runs, "cancel", {"choice": "swapped"}), 400, "bad-request")     # an answer's words on a cancel
+
+    def test_starting_again_a_job_that_ended_badly_and_may_be(self):
+        self.sign_in()
+        new = "20261110-1201-app.update-0c0c"
+        self.said = (0, {"schema": 1, "id": new, "unit": "bromigos-job-x.service"})
+        r = self.do(self.failed, "retry")
+        self.assertEqual((r.status_code, r.json()["job"], r.json()["words"]), (202, new, "Started again."))
+        self.assertEqual(self.ran, [["bromigos-activity", "retry", self.failed, "--via", "board", "--device", "A browser",
+                                     "--detach", "--json"]])
+        for job in (self.once, self.done, self.runs):
+            self.refused(self.do(job, "retry"), 409, "cant-retry")
+        self.assertEqual(len(self.ran), 1)
+
+    def test_a_job_that_isnt_there_and_a_verb_that_isnt_one(self):
+        self.sign_in()
+        self.refused(self.do("20261110-1200-app.restart-photos-ffff", "cancel"), 404, "no-job")
+        # a part of an id names a job at the terminal; here only the whole id does
+        self.refused(self.do(self.runs[:-5], "cancel"), 404, "no-job")
+        for bad in ("x", self.runs + "%0A", self.runs + "%20--json", self.runs.upper(), "--json", "%2E%2E"):
+            self.refused(self.do(bad, "cancel"), 404, "no-job")
+        # (with a / in it, it isn't this route at all)
+        self.assertEqual(self.do("..%2F..%2Fetc%2Fpasswd", "cancel").status_code, 404)
+        for verb in ("undo", "run", "show", "answer;reboot"):
+            self.refused(self.do(self.runs, verb), 404, "unknown-verb")
+        self.assertEqual((self.ran, self.left()), ([], []))
+
+    def test_no_session_no_header_no_action(self):
+        r = self.do(self.runs, "cancel")
+        self.assertEqual(r.status_code, 401)
+        self.sign_in()
+        r = self.do(self.runs, "cancel", headers={"origin": ORIGIN})
+        self.assertEqual((r.status_code, r.json()["error"]["code"]), (403, "csrf"))
+        r = self.c.post(f"/api/activity/{self.runs}/cancel", content="{}", headers=dict(PAGE, **{"content-type": "text/plain"}))
+        self.assertEqual(r.status_code, 415)
+        self.assertEqual(self.c.get(f"/api/activity/{self.runs}/cancel").status_code, 405)
+        self.assertEqual((self.ran, self.left()), ([], []))
+
+    def test_roots_board_table_decides_each(self):
+        self.sign_in()
+        self.path("etc/bromigos/server.toml").write_text('[board]\nactions = ["restart", "job.cancel"]\n')
+        self.assertEqual(self.do(self.runs, "cancel").status_code, 202)
+        self.refused(self.do(self.asks, "answer", {"question": "swapped", "choice": "swapped"}), 403, "not-allowed")
+        self.refused(self.do(self.failed, "retry"), 403, "not-allowed")
+        self.assertEqual(len(self.ran), 1)
+        snapshot.write(snapshot.gather())
+        self.assertEqual(self.c.get("/api/board").json()["actions"], ["restart", "job.cancel"])
+        self.path("etc/bromigos/server.toml").unlink()
+        snapshot.write(snapshot.gather())
+        self.assertEqual(self.c.get("/api/board").json()["actions"],
+                         ["restart", "add", "remove", "delete-data", "job.answer", "job.cancel", "job.retry"])
+
+    def test_the_job_refuses_in_the_moment_between_roots_look_and_the_commands(self):
+        self.sign_in()
+        for said, code in (({"refused": "not-asking", "words": "That job isn't asking anything."}, "not-asking"),
+                           ({"refused": "no-such-choice", "words": "'swapped' isn't one of its answers: x."}, "bad-choice"),
+                           ({"refused": "ended", "words": "That job has ended (done)."}, "ended")):
+            self.said = (3, dict({"schema": 1, "ok": False, "job": {"id": self.asks}}, **said))
+            self.refused(self.do(self.asks, "answer", {"question": "swapped", "choice": "swapped"}), 409, code)
+        self.said = (3, {"schema": 1, "ok": False, "refused": "unsafe", "words": "The pool is being rewritten."})
+        r = self.do(self.runs, "cancel")
+        self.refused(r, 409, "not-safe")
+        self.assertNotIn("pool", r.text, "the answer's words are the board's own, fixed")
+        self.said = (3, {"schema": 1, "ok": False, "refused": "not-retryable", "words": "It is still going."})
+        self.refused(self.do(self.failed, "retry"), 409, "cant-retry")
+        # the command itself failed (the job didn't take the answer in time): said, and logged for root
+        self.said = (1, "")
+        self.refused(self.do(self.asks, "answer", {"question": "swapped", "choice": "swapped"}), 409, "not-taken")
+        self.assertTrue(any("the job's command failed" in line for line in self.logged))
+
+    def test_root_checks_again_whatever_the_boards_user_wrote(self):
+        """A request written straight into the folder, past the API: root's helper is the check."""
+        now = paths.now_ms()
+        for n, (doc, code) in enumerate((
+            ({"verb": "job.cancel", "job": self.runs[:-5]}, "no-job"),
+            ({"verb": "job.cancel", "job": "../../etc/passwd"}, "no-job"),
+            ({"verb": "job.cancel", "job": self.runs, "at": now - 120_000}, "too-old"),
+            ({"verb": "job.cancel", "job": self.busy}, "not-safe"),
+            ({"verb": "job.answer", "job": self.asks, "question": "swapped", "choice": "--json"}, "bad-choice"),
+            ({"verb": "job.answer", "job": self.asks, "question": "swapped", "choice": "format"}, "bad-choice"),
+            ({"verb": "job.retry", "job": self.once}, "cant-retry"),
+            ({"verb": "job.run", "job": self.runs}, "unknown-verb"),
+            ({"verb": "job.cancel", "job": self.runs, "choice": "x"}, "bad-request"),
+        )):
+            rid = f"{n:016x}"
+            self.write(rid, **dict({"at": now}, **doc))
+            out = self.act(rid)
+            self.assertEqual((out["ok"], out["code"], out["words"]), (False, code, actions.REFUSALS[code]), doc)
+        self.assertEqual(self.ran, [])
+
+    def test_no_answer_quotes_the_request_or_the_job(self):
+        self.sign_in()
+        self.said = (3, {"schema": 1, "ok": False, "refused": "unsafe", "words": "SECRET-IN-A-NOTE"})
+        self.do(self.runs, "cancel")
+        self.do(self.asks, "answer", {"question": "swapped", "choice": "zzz-from-the-request"})
+        for name in self.left(actions.RESULTS):
+            text = self.path(f"{actions.RESULTS}/{name}").read_text()
+            self.assertNotIn("SECRET-IN-A-NOTE", text)
+            self.assertNotIn("zzz-from-the-request", text)
+
+    def test_when_the_helper_is_slow_the_page_is_told_to_watch_the_card(self):
+        self.sign_in()
+        self.app.app.state.after_ask = None
+        self.app.app.state.action_wait_s = 0.2
+        r = self.do(self.runs, "cancel")
+        self.assertEqual((r.status_code, r.json()["job"]), (202, self.runs))
+        self.assertIn("card", r.json()["words"])
+        self.assertEqual(len(self.left()), 1, "the request waits for the helper")
+
+    def test_against_the_real_command(self):
+        """`bromigos activity` itself, on the stand-in root: what it prints is what the helper reads."""
+        real = [sys.executable, str(REPO / "bin" / "bromigos-activity")]
+
+        def run(argv):
+            self.ran.append(argv)
+            return subprocess.run(real + argv[1:], capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+        now = paths.now_ms()
+        # a job that ended while the request waited: the command's own refusal comes back as the board's
+        self.write("00000000000000a1", verb="job.cancel", job=self.runs, at=now)
+        self.jobs[1].finish(exit_code=0)
+        self.jobs[1].save(force=True)
+        out = actions.act("00000000000000a1", run=run, log=self.logged.append)
+        self.assertEqual((out["ok"], out["code"]), (False, "ended"))
+        # and one it won't start again says so itself too (root's look is the first check, the command's the second)
+        with mock.patch.object(actions, "RETRY_FROM", ("failed", "succeeded")):
+            self.write("00000000000000a2", verb="job.retry", job=self.done, at=now)
+            out = actions.act("00000000000000a2", run=run, log=self.logged.append)
+        self.assertEqual((out["ok"], out["code"]), (False, "cant-retry"))
 
 
 class HelperTests(Base):
