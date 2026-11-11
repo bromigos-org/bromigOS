@@ -35,13 +35,22 @@ pkgver() {
 
 build() {
   # into $srcdir: the checkout is only read
-  rsync -a --delete --exclude node_modules --exclude .next --exclude out --exclude test-results \
+  rsync -a --delete --exclude node_modules --exclude .next --exclude out --exclude test-results --exclude fixtures \
     "$_root/board/web/" "$srcdir/web/"
   cd "$srcdir/web"
-  export npm_config_cache="$srcdir/npm-cache" NEXT_TELEMETRY_DISABLED=1
-  npm ci --no-audit --no-fund
-  # the real build: it talks to the server's API, never to fixtures (BOARD_FIXTURES unset)
-  env -u BOARD_FIXTURES npm run build
+  mkdir -p "$srcdir/home"
+  # The build id is the commit the page was built from, so two builds of one commit are the
+  # same files. npm and the build get a clean environment (the publish job's holds the
+  # bucket's keys and the signing key's passphrase), and no dependency's install script runs:
+  # the lock file pins every package by its hash, and the page needs none of those scripts.
+  local id clean
+  id=$(git -C "$_root" log -1 --format=%h -- "${_paths[@]}" | grep . || echo dev)
+  clean=(env -i PATH="$PATH" HOME="$srcdir/home" LANG=C.UTF-8 npm_config_cache="$srcdir/npm-cache"
+         npm_config_update_notifier=false NEXT_TELEMETRY_DISABLED=1 BOARD_BUILD_ID="$id")
+  "${clean[@]}" npm ci --ignore-scripts --no-audit --no-fund
+  # the real build: it talks to the server's API, never to fixtures (BOARD_FIXTURES isn't set)
+  "${clean[@]}" npm run build
+  echo "$id" > "$srcdir/build-id"
 }
 
 check() {
@@ -50,6 +59,8 @@ check() {
   test ! -e fixtures || { echo "the export carries test fixtures" >&2; return 1; }
   # the fixture switch is compiled off
   ! grep -rlq '/fixtures/' _next/static || { echo "the export can read fixtures" >&2; return 1; }
+  # the build is named after its commit, not at random
+  test -d "_next/static/$(cat "$srcdir/build-id")" || { echo "the export's build id isn't its commit" >&2; return 1; }
 }
 
 package() {

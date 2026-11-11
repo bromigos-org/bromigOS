@@ -8,7 +8,7 @@ name: board web
 on:
   pull_request:
     paths:
-      - "board/web/**"
+      - "board/**"
       - "packaging/bromigos-board-web/**"
       - ".github/workflows/board-web.yml"
   workflow_dispatch:
@@ -43,14 +43,19 @@ jobs:
           cache: npm
           cache-dependency-path: board/web/package-lock.json
       - name: npm ci
-        run: npm ci --no-audit --no-fund
+        # no dependency's install script runs: the lock file pins each package by its hash
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: types
         run: npm run typecheck
-      - name: the package's build (no fixtures)
+      - name: the package's build (no fixtures), twice the same
         run: |
           npm run build
           test ! -e out/fixtures
           ! grep -rlq '/fixtures/' out/_next/static
+          test -d "out/_next/static/$(git rev-parse --short=12 HEAD)"
+          cp -r out "$RUNNER_TEMP/out-first"
+          npm run build
+          diff -r "$RUNNER_TEMP/out-first" out
       - name: Geist Mono, as ttf-geist-mono installs it
         run: |
           curl -fsSL -o /tmp/geist.zip "https://github.com/vercel/geist-font/releases/download/v${GEIST_VERSION}/geist-font-v${GEIST_VERSION}.zip"
@@ -75,3 +80,30 @@ jobs:
             board/web/playwright-report
             board/web/test-results
           retention-days: 7
+
+
+  shapes:
+    name: The service's shapes are the ones the page's tests hold
+    # The page's contract tests run against real answers of the service, kept in
+    # board/web/tests/contract/service.json. This makes them again from the service's and the
+    # commands' own code, and fails when a shape changed (a key, a type): then the samples
+    # are made again (board/web/scripts/make-contract.py) and the page follows. It runs once
+    # the service's code is in the checkout.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: is the service here?
+        id: service
+        run: |
+          if [ -d board/lib/bromigos_board ]; then
+            echo "here=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "The board's service isn't in this checkout yet, so there is nothing to compare."
+          fi
+      - name: the service's libraries
+        if: steps.service.outputs.here == '1'
+        run: python3 -m pip install --quiet --break-system-packages starlette httpx
+      - name: the shapes
+        if: steps.service.outputs.here == '1'
+        run: python3 board/web/scripts/make-contract.py --shapes
