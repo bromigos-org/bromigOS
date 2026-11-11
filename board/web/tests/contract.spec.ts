@@ -480,13 +480,16 @@ test("a job that asks: its question and the command, and nothing the service has
 
 test("adding an app: not offered until the server says the page may, then sent as the service asks", async ({ page }) => {
   const s = new Service();
+  // a server whose owner turned the page's actions off ([board] actions = []): the command, no control
+  s.board = { ...copy(real.boards.healthy), actions: [] };
   await openReal(page, s, "supply/add/navidrome");
   const sheet = page.getByRole("dialog", { name: "Add Music" });
   await expect(sheet).toContainText("sudo bromigos lab apps add navidrome --plan");
   await expect(sheet.getByRole("button", { name: "Add Music" })).toHaveCount(0);
   await expect(sheet.locator(".pl")).toHaveCount(1);
-  // the server says the page may add
-  s.board = { ...copy(real.boards.healthy), actions: ["add", "restart", "remove"] };
+  // the server says the page may add: the service's own list, as a server answers when nothing turned it off
+  expect(real.boards.healthy.actions).toEqual(expect.arrayContaining(["restart", "add", "remove", "delete-data"]));
+  s.board = copy(real.boards.healthy);
   s.actions = new Answer(403, { body: { error: { code: "not-allowed", words: "This server doesn't let the page add apps." } } });
   await page.reload();
   const add = page.getByRole("dialog", { name: "Add Music" }).getByRole("button", { name: "Add Music" });

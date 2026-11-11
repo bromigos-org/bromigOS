@@ -13,6 +13,7 @@ on:
       - "lib/bromigos_activity.py"
       - "bin/bromigos-activity"
       - "homelab/lib/bromigos_homelab/provcatalog.py"
+      - "homelab/lib/bromigos_homelab/localprovision.py"
       - "homelab/share/provision-catalogue.toml"
       # `bromigos server board` runs the board's own commands
       - "server/bromigos-server"
@@ -51,10 +52,12 @@ jobs:
     # The board for real: installed where the package puts it on a throwaway machine, under its
     # real systemd and as real root. Who owns which folder once tmpfiles made them, what the
     # board's user can't do in root's, root stepping down before it works in the board's, and
-    # the units inside their sandboxes (board/tests/board-integration.sh). GitHub's runner,
-    # never the lab's: this repo is public
+    # the units inside their sandboxes. Then the actions: the helper started by the folder of
+    # requests, a burst of them each handled once, its answers in root's folder, and no deletion
+    # on a code root didn't make (board/tests/board-integration.sh). GitHub's runner, never the
+    # lab's: this repo is public
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - name: starlette and uvicorn
@@ -63,15 +66,17 @@ jobs:
           sudo python3 -m pip install --quiet --break-system-packages --ignore-installed starlette uvicorn
           python3 -c "import starlette, uvicorn, sys; print(sys.version.split()[0], starlette.__version__, uvicorn.__version__)"
           systemctl --version | head -1
-      - name: the folders, the sandboxes, sign-in, readings
+      - name: the folders, the sandboxes, sign-in, readings, actions
         run: sudo CI=true bash board/tests/board-integration.sh
       - name: what happened
         if: failure()
         run: |
-          for u in bromigos-board.socket bromigos-board.service bromigos-board-snapshot.path bromigos-board-snapshot.service; do
+          for u in bromigos-board.socket bromigos-board.service bromigos-board-snapshot.path bromigos-board-snapshot.service bromigos-board-act.path bromigos-board-act.service; do
             echo "== $u"; systemctl status "$u" --no-pager -n 0 || true
           done
           sudo journalctl -u 'bromigos-board*' --no-pager -n 200 || true
-          sudo ls -la /run/bromigos-board /var/lib/bromigos-board || true
+          sudo ls -la /run/bromigos-board /run/bromigos-board/requests /run/bromigos-board/results /var/lib/bromigos-board /var/lib/bromigos-board-root/codes || true
+          sudo tail -n 60 /var/lib/bromigos-board-test/calls.log || true
+          sudo python3 /usr/lib/bromigos/bin/bromigos-activity list --all || true
           sudo cat /tmp/body /tmp/headers || true
 

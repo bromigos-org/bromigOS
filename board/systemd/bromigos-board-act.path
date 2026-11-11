@@ -1,0 +1,13 @@
+# The Lab board's actions (docs/board.md, "Actions"). The API can start nothing: it writes a
+# request into its own folder, and this starts root's helper when that folder isn't empty. When
+# the helper ends and a request is there again, it starts once more: none is lost.
+[Unit]
+Description=bromigOS Lab board: an action was asked from the page
+Documentation=file:///usr/share/doc/bromigos-board/board.md
+
+[Path]
+DirectoryNotEmpty=/run/bromigos-board/requests
+Unit=bromigos-board-act.service
+
+[Install]
+WantedBy=paths.target

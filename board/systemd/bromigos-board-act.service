@@ -1,0 +1,52 @@
+# The Lab board's actions (docs/board.md, "Actions"). Started by bromigos-board-act.path. As
+# root, bromigos-board act takes each request out of /run/bromigos-board/requests, checks it
+# again (a verb on its closed list, a catalogue id, root's [board] actions) and starts the job:
+# bromigos-activity run … -- /usr/bin/bromigos lab apps VERB ID. No word of a request reaches a
+# shell. It waits three seconds for more requests, then ends.
+[Unit]
+Description=bromigOS Lab board: the actions asked from the page
+Documentation=file:///usr/share/doc/bromigos-board/board.md
+# a refusal is an answer, not a failure (the command ends 0); and nothing of a run stays listed
+CollectMode=inactive-or-failed
+
+[Service]
+Type=oneshot
+# before the sandbox is up (+): the activity records' folder, where bromigos-core puts it
+ExecStartPre=+/usr/lib/bromigos/board/bromigos-board activity-folder
+ExecStart=/usr/lib/bromigos/board/bromigos-board act
+# (0022: the activity records are for everyone to read, and so are the folders they're in.
+# Each answer gets its own mode, 0640, on the open file)
+UMask=0022
+TimeoutStartSec=15min
+# It is root, and may write five places: the requests it takes out, the answers it leaves, the
+# two folders the codes are in (the board's own, and root's), and the activity records. The job
+# itself runs in a unit of its own (systemd-run), outside this sandbox. Everything else is
+# read-only here: even with a way to make root write where it shouldn't, /etc and /usr stay shut.
+ProtectSystem=strict
+# /run too, said outright: on some systemd versions (seen on 255) ProtectSystem=strict leaves
+# /run writable once ProtectKernelTunables= is set
+ReadOnlyPaths=/run
+ReadWritePaths=/run/bromigos-board/requests /run/bromigos-board/results
+ReadWritePaths=/var/lib/bromigos-board /var/lib/bromigos-board-root
+ReadWritePaths=-/var/lib/bromigos/activity -/var/lib/bromigos/server/activity
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# it talks to systemd, to start the job's unit, and to nothing else
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+MemoryMax=256M
+TasksMax=64

@@ -69,9 +69,12 @@ const wave = (base, amp, k) => Array.from({ length: 97 }, (_, i) => [NOW - 24 * 
 const VITALS = { "myserver/24h": { schema: 1, machine: "myserver", range: "24h", step_s: 900, at: NOW - 20 * SEC,
   series: { cpu_pct: wave(22, 9, 9), ram_pct: wave(48, 4, 14), net_in_mbps: wave(8, 5, 6), net_out_mbps: wave(24, 12, 7), temp_c: wave(36, 3, 16) } } };
 
-/** A real board with the example server on it. measured: also the readings the service doesn't send yet. */
+/** A real board with the example server on it. measured: also the readings the service doesn't send yet.
+ *  The example server lets the page do nothing ([board] actions = [] in its server.toml), so these
+ *  pages show the command and no control; the `actions` fixture is the one whose server allows it. */
 function board(name, { measured = true, more = {} } = {}) {
   const b = copy(real.boards[name]);
+  b.actions = [];
   if (Array.isArray(b.apps)) b.apps = apps(b.apps, { readings: measured });
   const n = Array.isArray(b.apps) ? b.apps.filter((t) => t.installed).length : null;
   b.machines = b.machines.map((m) => ({ ...m, apps: n, ...(measured ? { readings: { ...READ, at: b.at - 15 * SEC }, hardware: HW, updates: { count: 2, security: false } } : {}) }));

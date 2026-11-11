@@ -10,6 +10,8 @@ client: it serves the page's files and passes /api here.
   DELETE /api/session/{id}    sign another browser out
   GET    /api/board           everything the board shows (signed in)
   GET    /api/activity        the jobs, live, as server-sent events (signed in)
+  POST   /api/actions         {verb, app[, delete_data, code]}: restart, add or remove an app, as a
+                              job (signed in; deleting its data needs a fresh console code too)
 
 Every answer is JSON with Cache-Control: no-store. An error is {"error": {"code", "words"}}.
 A request from an address that isn't private gets 403 whatever it asks for; every request that
@@ -27,7 +29,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
-from . import SCHEMA, auth, board, door, net, paths
+from . import SCHEMA, actions, auth, board, door, net, paths
 
 READ_METHODS = ("GET", "HEAD", "OPTIONS")
 BODY_MAX = 4096                 # bytes of a request's body; more is refused unread
@@ -337,6 +339,47 @@ async def get_activity(request):
     return StreamingResponse(gen, media_type="text/event-stream", headers={"X-Accel-Buffering": "no"})
 
 
+async def post_actions(request):
+    """A fixed verb on a catalogue app (actions.py). The API only writes the request down, in its
+    own folder: root's helper finds it there, checks it again, starts the job and leaves its
+    answer in root's folder, which the API reads back."""
+    rec = session_of(request)
+    if not rec:
+        return error(401, SIGNED_OUT)
+    if not csrf_ok(request):
+        return error(403, CSRF)
+    doc, bad = await json_body(request)
+    if bad:
+        return bad
+    st = request.app.state
+    src = source_of(request)
+    deleting = bool(doc.get("delete_data"))
+    if deleting:
+        why = st.tries.blocked(src)             # its code is counted like one at sign-in
+        if why:
+            return error(429, ("too-many", why), headers={"Retry-After": "60"})
+    try:
+        rid = await run_in_threadpool(actions.ask, doc.get("verb"), doc.get("app"), rec, None,
+                                      doc.get("delete_data", False), doc.get("code"))
+    except actions.Refused as e:
+        return error(400, (e.code, e.words))
+    except OSError:
+        return error(503, ("no-actions", "Actions aren't set up on this server."))
+    if st.after_ask:
+        await run_in_threadpool(st.after_ask, rid)          # (the tests' stand-in for the helper's unit)
+    out = await run_in_threadpool(actions.wait, rid, st.action_wait_s)
+    if out is None:
+        return JSONResponse({"schema": SCHEMA, "ok": True, "job": None, "request": rid,
+                             "words": "Asked. It shows in Activity when it starts."}, status_code=202)
+    if not out.get("ok"):
+        code = out.get("code") if out.get("code") in actions.REFUSALS else "bad-request"
+        if code == "needs-code":
+            await st.sleep(st.tries.wrong(src))
+        return error(403, (code, actions.REFUSALS[code]))
+    return JSONResponse({"schema": SCHEMA, "ok": True, "job": out.get("job"), "request": rid, "words": out.get("words")},
+                        status_code=202)
+
+
 ROUTES = [
     Route("/api/door", get_door, methods=["GET"]),
     Route("/api/local", get_local, methods=["GET"]),
@@ -346,13 +389,19 @@ ROUTES = [
     Route("/api/session/{sid}", delete_session_id, methods=["DELETE"]),
     Route("/api/board", get_board, methods=["GET"]),
     Route("/api/activity", get_activity, methods=["GET"]),
+    Route("/api/actions", post_actions, methods=["POST"]),
 ]
 
 
-def make_app(tries=None, poll=1.0, stream_s=None, sleep=asyncio.sleep):
+def make_app(tries=None, poll=1.0, stream_s=None, sleep=asyncio.sleep, after_ask=None,
+             action_wait_s=actions.RESULT_WAIT_S):
     """The app. `stream_s` ends an activity stream after that many seconds (tests); None: never.
-    `sleep` is how a wrong code's answer waits (tests: a stand-in)."""
+    `sleep` is how a wrong code's answer waits (tests: a stand-in). `after_ask` is called with a
+    request's id once it's written (tests: a stand-in for root's helper; on a server systemd's
+    path unit starts the helper, and the API calls nothing)."""
     app = Starlette(routes=list(ROUTES))
+    app.state.after_ask = after_ask
+    app.state.action_wait_s = action_wait_s
     app.state.tries = tries or auth.Tries()
     app.state.sleep = sleep
     app.state.door_asked = None

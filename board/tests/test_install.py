@@ -17,7 +17,7 @@ from unittest import mock
 
 from common import BOARD, REPO, Root, caddy
 
-from bromigos_board import auth, net, paths
+from bromigos_board import actions, auth, net, paths
 
 CLI = BOARD / "bin" / "bromigos-board"
 SERVER = REPO / "server" / "bromigos-server"
@@ -128,12 +128,14 @@ class UnitTests(unittest.TestCase):
 
     def test_the_api_writes_only_its_own_folder_and_the_two_files_it_marks(self):
         """Never /run/bromigos-board itself: that is where root writes."""
-        writable = set(unit("bromigos-board.service")["ReadWritePaths"].split())
-        self.assertEqual(writable, {paths.STATE, paths.WANTED, paths.DOOR})
+        writable = set(" ".join(unit_lines("bromigos-board.service", "ReadWritePaths")).split())
+        # ... and its own folder of requests for root's helper (test_actions.py)
+        self.assertEqual(writable, {paths.STATE, paths.WANTED, paths.DOOR, "/run/bromigos-board/requests"})
         self.assertNotIn(paths.RUN, writable)
         # /run is named read-only outright: ProtectSystem=strict alone leaves it writable on some
         # systemd versions (board-integration.sh tries it for real)
         self.assertEqual(unit("bromigos-board.service")["ReadOnlyPaths"], "/run")
+        self.assertNotIn("/run/bromigos-board/results", writable)
 
     def test_the_api_is_bounded_and_cant_see_other_processes(self):
         svc = unit("bromigos-board.service")
@@ -171,10 +173,11 @@ class UnitTests(unittest.TestCase):
             self.assertEqual(t[d], ("d", "0700", "bromigos-board", "bromigos-board"), d)
         # where root's reader writes, and nothing the board's user owns is above it
         self.assertEqual(os.path.dirname(paths.SNAPSHOT), paths.RUN)
+        requests = "/run/bromigos-board/requests"       # the one folder under root's that is the board's: requests for the helper
         for path, (kind, mode, user, group) in t.items():
             if user != "root":
-                self.assertTrue(path == paths.STATE or path.startswith(paths.STATE + "/"), path)
-            if path.startswith(paths.RUN) and kind == "d":
+                self.assertTrue(path == requests or path == paths.STATE or path.startswith(paths.STATE + "/"), path)
+            if path.startswith(paths.RUN) and kind == "d" and path != requests:
                 self.assertEqual((user, int(mode, 8) & 0o022), ("root", 0), path)
         self.assertIn("u bromigos-board -", (BOARD / "bromigos-board.sysusers").read_text())
 
@@ -252,8 +255,9 @@ class RootStepsDown(Root):
                 mock.patch.object(pwd, "getpwnam", lambda name: Pw(987, 986, "/var/lib/bromigos-board")), \
                 mock.patch.object(os, "setgroups", note("setgroups")), mock.patch.object(os, "setgid", note("setgid")), \
                 mock.patch.object(os, "setuid", note("setuid")), mock.patch.object(os, "umask", note("umask")), \
-                mock.patch.dict(os.environ), \
-                mock.patch.object(auth, "new_code", lambda: did.append(("new_code", ())) or ("AAAA-BBBB", 1)), \
+                mock.patch.dict(os.environ), mock.patch.object(paths, "stand_in", lambda: False), \
+                mock.patch.object(actions, "note_code", note("roots_note")), \
+                mock.patch.object(auth, "new_code", lambda now, code: did.append(("new_code", ())) or ("AAAA-BBBB", 1)), \
                 mock.patch.object(auth, "folder", side_effect=lambda *a, **k: did.append(("folder", a)) or contextlib.nullcontext()), \
                 mock.patch.object(auth, "prune", note("prune")), mock.patch.object(auth, "sessions", lambda: []), \
                 mock.patch.object(auth, "codes_waiting", lambda: []), contextlib.redirect_stdout(io.StringIO()):
@@ -263,7 +267,8 @@ class RootStepsDown(Root):
             self.assertEqual(cli.main(["sessions", "--json"]), 0)
             sessions_order = [name for name, _ in did]
         # no extra groups, then its group, then its user: and only then the folder
-        self.assertEqual(code_order, ["setgroups", "setgid", "setuid", "umask", "folder", "folder", "new_code"])
+        # (root's own note of the code comes first, in root's own folder: test_actions.py)
+        self.assertEqual(code_order, ["roots_note", "setgroups", "setgid", "setuid", "umask", "folder", "folder", "new_code"])
         self.assertEqual(sessions_order[:4], ["setgroups", "setgid", "setuid", "umask"])
         self.assertEqual(sessions_order[4], "folder")
         self.assertEqual(did[0], ("setgroups", ([],)))
@@ -277,6 +282,7 @@ class RootStepsDown(Root):
             raise KeyError(name)
         with mock.patch.object(paths, "really_root", lambda: True), mock.patch.object(pwd, "getpwnam", nobody), \
                 mock.patch.object(auth, "new_code", side_effect=AssertionError("as root: never")), \
+                mock.patch.object(paths, "stand_in", lambda: False), mock.patch.object(actions, "note_code", lambda *a: None), \
                 contextlib.redirect_stderr(io.StringIO()) as err:
             self.assertEqual(cli.main(["code"]), 3)
         self.assertIn("no user bromigos-board", err.getvalue())

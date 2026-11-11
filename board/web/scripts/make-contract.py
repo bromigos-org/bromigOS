@@ -399,7 +399,9 @@ def build(args):
         fix = Path(stack.enter_context(tempfile.TemporaryDirectory()))
         stand_in = base / "board/tests/fixtures/bromigos"           # the service's own stand-in `bromigos`
         shutil.copy(stand_in, fix / "bromigos")
-        for d in ("run/bromigos-board", "var/lib/bromigos-board/sessions", "var/lib/bromigos-board/codes", "etc/bromigos"):
+        # (the requests folder: on a server with the board's actions set up, `actions` lists them)
+        for d in ("run/bromigos-board", "run/bromigos-board/requests", "var/lib/bromigos-board/sessions",
+                  "var/lib/bromigos-board/codes", "etc/bromigos"):
             (root / d).mkdir(parents=True, exist_ok=True)
         stack.enter_context(mock.patch.dict(os.environ, {
             "BROMIGOS_ROOT": str(root), "BROMIGOS_BOARD_HOSTNAME": "myserver", "BOARD_FIXTURES": str(fix), "BOARD_MISSING": "",
