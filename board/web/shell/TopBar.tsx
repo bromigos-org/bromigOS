@@ -5,6 +5,7 @@ import { Icon, IconButton, Planned } from "@/components/ui";
 import { useLab } from "@/lib/lab";
 import { href, PLACE_NAME, TABS, type Place } from "@/lib/routes";
 import { KIND_ICON } from "./Rail";
+import { holoIcon } from "@/lib/icons";
 
 function crumb(place: Place, tab: string, id: string | null, sheet: string | null): string {
   if (place === "machine") return (TABS.machine ?? []).find((t) => t.id === tab)?.label ?? (tab === "setup" ? "Set-up" : "Overview");
@@ -28,7 +29,7 @@ function Search() {
     if (board.state === "ok") {
       for (const m of board.doc.machines) out.push({ key: `m/${m.name}`, icon: KIND_ICON[m.kind], name: m.name, what: "machine", to: href("machine", "", m.name) });
       for (const t of board.doc.apps)
-        if (t.installed) out.push({ key: `app/${t.id}`, icon: t.holo ? `i-${t.holo}` : "i-module", name: `${t.job} · ${t.app}`, what: "app", to: href("app", "", t.id) });
+        if (t.installed) out.push({ key: `app/${t.id}`, icon: holoIcon(t.holo).id, name: `${t.job} · ${t.app}`, what: "app", to: href("app", "", t.id) });
     }
     return out;
   }, [board]);

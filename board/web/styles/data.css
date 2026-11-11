@@ -1,0 +1,28 @@
+/* Data: the drives as glyphs on the holo-table, what changed on a drive, the layouts; the backups'
+   last good copy as one large reading. Built from the prototype's parts (stage, panel, rows, Reading). */
+.stage.dt-stage, .stage.bk-stage { min-height: 300px; border: 1px solid var(--line);
+  background: radial-gradient(ellipse 60% 55% at 50% 100%, color-mix(in srgb, var(--phosphor) 12%, transparent), transparent), color-mix(in srgb, var(--panel) 60%, var(--void)); }
+.dt-bays { position: absolute; inset: 70px 20px 20px; display: flex; flex-wrap: wrap; justify-content: center; align-items: end; gap: 18px 36px; }
+.dt-bay { display: grid; justify-items: center; gap: 4px; min-width: 140px; text-align: center; }
+.dt-bay svg.gl { width: 96px; height: 96px; }
+.dt-bay b { color: var(--soft); letter-spacing: .08em; }
+.dt-bay .muted { font-size: 11px; }
+.dt-cols { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.dt-sum { margin: 0 0 8px; color: var(--soft); }
+.dt-lay { display: grid; gap: 10px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.dt-l { display: grid; gap: 4px; align-content: start; padding: 10px 12px; border: 1px solid var(--frame); }
+.dt-l.on { border-color: var(--phosphor); box-shadow: inset 0 -3px 0 var(--phosphor); }
+.dt-l b { color: var(--phosphor); font-size: 12px; letter-spacing: .14em; }
+.dt-l .pl { justify-self: start; }
+.bk-big { position: absolute; inset: 70px 20px 20px; display: grid; justify-items: center; align-content: center; gap: 6px; text-align: center; }
+.bk-big b { font-size: 72px; line-height: 1; color: var(--phosphor); text-shadow: 0 0 18px var(--lit); font-variant-numeric: tabular-nums; }
+.bk-big b.q { color: var(--static); text-shadow: none; font-size: 40px; }
+.bk-verdict { margin: 0; color: var(--text); max-width: none; }
+.rows.wide li .d { display: inline; }
+@container view (max-width: 1100px) { .dt-lay { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container view (max-width: 860px) {
+  .dt-cols, .dt-lay { grid-template-columns: minmax(0, 1fr); }
+  .stage.dt-stage .dt-bays, .stage.bk-stage .bk-big { position: relative; inset: auto; padding: 96px 8px 16px; }
+  .bk-big b { font-size: 52px; }
+}
+.flow.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }

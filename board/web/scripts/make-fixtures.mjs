@@ -48,6 +48,20 @@ const APPS = [
   tile("brodec-machine", "This server on BRODEC", "brodec-machine", "phone", "brodec", null, {}),
 ];
 
+// catalogue items not installed: `list --all` shows them with can ["add"] and no state
+const addable = (id, job, app, holo, group, req) => ({ ...tile(id, job, app, holo, group, null), installed: false, household: null, state: null, state_word: null, since: null,
+  version: null, open: null, update: null, measured: null, requires: req, can: ["add"], machine: undefined });
+const CATALOGUE = [
+  addable("file-sync", "File sync", "Syncthing", "file-sync", "home", { cpu: 1, ram_gb: 0.5, disk_gb: 1 }),
+  addable("home-automation", "Home automation", "Home Assistant", "home", "home", { cpu: 1, ram_gb: 1, disk_gb: 2 }),
+  addable("navidrome", "Music", "Navidrome", "music", "media", { cpu: 1, ram_gb: 0.5, disk_gb: 1 }),
+  addable("audiobookshelf", "Audiobooks and podcasts", "Audiobookshelf", "books", "media", { cpu: 1, ram_gb: 0.5, disk_gb: 1 }),
+  addable("minecraft", "Minecraft server", "Paper", "game-server", "games", { cpu: 2, ram_gb: 4, disk_gb: 5 }),
+  addable("ollama", "Model serving", "Ollama", "model-serving", "ai", { cpu: 4, ram_gb: 8, disk_gb: 20 }),
+  addable("monitoring", "Monitoring", "Prometheus and Grafana", "uptime", "lab-core", { cpu: 1, ram_gb: 1, disk_gb: 5 }),
+  addable("smb-shares", "Windows and Mac shares", "Samba", "shares", "storage", { cpu: 1, ram_gb: 0.25, disk_gb: 0 }),
+];
+
 const doorTiles = (apps) => apps.filter((t) => t.household && t.open).map(({ id, job, app, holo, open }) => ({ id, job, app, holo, open: { url: open.url } }));
 
 const door = (apps = APPS, extra = {}) => ({ schema: 1, lab, server, world: "wick", tiles: doorTiles(apps), signin: { code: true, phone: false, account: false }, ...extra });
@@ -70,13 +84,44 @@ const machine = (name, kind, extra = {}) => ({
   readings: { cpu_pct: 12, ram_pct: 31, temp_c: 36, at: NOW - 20 * SEC, max_age_s: 45 },
   apps: 0, ...extra,
 });
-const MYSERVER = machine("myserver", "server", { updates: { count: 2, security: false }, apps: APPS.length, readings: { cpu_pct: 23, ram_pct: 49, temp_c: 38, at: NOW - 20 * SEC, max_age_s: 45 } });
+const HW = { cpu: 4, ram_gb: 16, gpu: false, gpu_name: null, gpu_vram_gb: 0, drives: [
+  { device: "nvme0", model: "Samsung SSD 970 EVO Plus 500GB", size_bytes: 500107862016, kind: "nvme" },
+  { device: "sda", model: "WDC WD10EZEX", size_bytes: 1000204886016, kind: "ata" },
+  { device: "sdb", model: "WDC WD10EZEX", size_bytes: 1000204886016, kind: "ata" }] };
+const MYSERVER = machine("myserver", "server", { updates: { count: 2, security: false }, apps: APPS.length, hardware: HW,
+  readings: { cpu_pct: 23, ram_pct: 49, temp_c: 38, ram_used_bytes: 7.8 * GB, ram_total_bytes: 16 * GB, load1: 0.9, net_in_mbps: 6, net_out_mbps: 28, at: NOW - 20 * SEC, max_age_s: 45 } });
+
+// the pass-through documents, in their commands' own keys (docs/storage.md, lib/bromigos_backups.py, bromigos-server)
+const drive = (device, model, kind, verdict, words, summary) => ({ key: `${kind}-${model.replace(/\W+/g, "_")}-${device}`, device, model, kind, present: true, verdict, words, summary });
+const STORAGE = { schema: 1, checked_at: NOW - 12 * MIN, history: "/var/lib/bromigos/drives/history.json", rules: {}, drives: [
+  drive("nvme0", "Samsung SSD 970 EVO Plus 500GB", "nvme", "healthy", "healthy", "nothing to report"),
+  drive("sda", "WDC WD10EZEX", "ata", "healthy", "healthy", "nothing to report"),
+  drive("sdb", "WDC WD10EZEX", "ata", "healthy", "healthy", "nothing to report")] };
+const STORAGE_WORSE = { ...STORAGE, drives: STORAGE.drives.map((d) => (d.device === "sdb" ? { ...d, verdict: "worse", words: "getting worse", summary: "reallocated sectors rose from 0 to 8 in the last 3 days",
+  advice: "Back up now, and plan to replace it.", since: NOW - 3 * D, alert: "needs_you",
+  reasons: [{ level: "needs_you", text: "8 reallocated sectors appeared in the last 3 days", counter: "reallocated", value: 8, rise: 8, days: 3, since: NOW - 3 * D }] } : d)) };
+const S = (ms) => Math.round(ms / 1000);
+const BACKUPS = { schema: 1, ok: true, server: true, configured: true, to: "s3:backups.example.org/myserver", destination: {},
+  health: { state: "ok", verdict: "Backups are healthy: the last copy was made today and checks out.", problems: [] },
+  last_backup: { phase: "ok", ts: S(NOW - 8 * H + 6 * MIN), age_s: 8 * 3600 }, last_success: { ts: S(NOW - 8 * H + 6 * MIN), age_s: 8 * 3600 },
+  last_check: null, last_check_passed: null, last_read_back: null, last_test: { phase: "ok", ts: S(NOW - 12 * D) }, last_test_passed: { ts: S(NOW - 12 * D) },
+  snapshots: { count: 17 }, drives: [{ name: "Go Bag", uuid: "5c1e-77a0", label: "GOBAG", model: "Extreme 55AE", size: 1000204886016, fstype: "ext4",
+    added_at: "2026-10-30", plugged_in: false, running: false, last_copy: { phase: "ok", ts: S(NOW - 4 * D) }, last_good_copy: { ts: S(NOW - 4 * D) },
+    last_test: null, remind_days: 14, stale: false, stale_s: null }], restore: null, running: null, checked_at: "2026-11-10T22:01:40Z", now: S(NOW) };
+const UPDATES = { hold: null, waiting: null, phase: "ok", started: "2026-11-10 03:18", finished: "2026-11-10 03:21", finished_ts: S(Date.UTC(2026, 10, 10, 11, 21)),
+  pre: 40, post: 41, packages: 12, reason: "", kernel: false, auto: true, mode: "auto", window: "03:00-05:00", channel: "stable", notify: true,
+  cluster_reboots: false, timer: "active", rollbacks: [] };
+
+// a machine's trends, a reading every 15 minutes for a day (GET /api/vitals)
+const wave = (base, amp, k) => Array.from({ length: 97 }, (_, i) => [NOW - 24 * H + i * 15 * MIN, Math.round((base + amp * Math.sin(i / k) + (amp / 3) * Math.sin(i / 2.3)) * 10) / 10]);
+const VITALS = { "myserver/24h": { schema: 1, machine: "myserver", range: "24h", step_s: 900, at: NOW - 20 * SEC,
+  series: { cpu_pct: wave(22, 9, 9), ram_pct: wave(48, 4, 14), net_in_mbps: wave(8, 5, 6), net_out_mbps: wave(24, 12, 7), temp_c: wave(36, 3, 16) } } };
 
 const board = (over = {}) => ({
   schema: 1, at: NOW - 20 * SEC, max_age_s: 45, lab, server: { name: "myserver", kind: "server", roles: ["home", "media"] },
   status: { state: "ok", words: "Everything is running.", checked_at: NOW - 20 * SEC },
-  machines: [MYSERVER], needs_you: [], fixed: [], apps: APPS,
-  storage: null, backups: null, updates: null, ups: null,
+  machines: [MYSERVER], needs_you: [], fixed: [], apps: [...APPS, ...CATALOGUE],
+  storage: STORAGE, backups: BACKUPS, updates: UPDATES, ups: null,
   ...over,
 });
 
@@ -150,7 +195,7 @@ const F = {
     signin: { code: "KX7-42Q", session: signedIn() }, activity: [backupDone] },
   unreachable: { about: "The page loaded but the board service doesn't answer.", door: { $status: 503, $error: { code: "unavailable", words: "The board service isn't answering." } },
     session: { $status: 503 }, board: { $status: 503 }, activity: [] },
-  healthy: { about: "Signed in, one server, everything running, nothing running now.", door: door(), session: signedIn(), board: board({ fixed: [] }), activity: [backupDone, rolledBack] },
+  healthy: { about: "Signed in, one server, everything running, nothing running now; a day of trends.", door: door(), session: signedIn(), board: board({ fixed: [] }), activity: [backupDone, rolledBack], vitals: VITALS },
   running: { about: "Signed in; a backup runs and finishes while you watch (the stream).", door: door(), session: signedIn(), board: board(),
     activity: [backupRunning, backupDone],
     stream: [
@@ -160,7 +205,7 @@ const F = {
     ] },
   "needs-you": { about: "Signed in; a drive is getting worse; a drive replacement asks you; Photos' update was put back.", door: door(), session: signedIn(3),
     board: board({ status: { state: "needs-you", words: "1 thing needs you.", checked_at: NOW - MIN },
-      machines: [{ ...MYSERVER, state: "warn", state_word: "needs you" }], needs_you: [DRIVE_ALERT],
+      machines: [{ ...MYSERVER, state: "warn", state_word: "needs you" }], needs_you: [DRIVE_ALERT], storage: STORAGE_WORSE,
       fixed: [{ id: rolledBack.id, machine: "myserver", words: "Photos' update was put back", at: rolledBack.ended_at }] }),
     activity: [askReplace, rolledBack, backupDone] },
   alert: { about: "Signed in; a drive is getting worse, and no job asks yet: the strip shows the alarm.", door: door(), session: signedIn(),
@@ -171,7 +216,7 @@ const F = {
     board: board({ machines: [MYSERVER, machine("vault", "storage", { apps: 3 }), machine("node3", "node", { apps: 2, state: "unknown", state_word: "not seen for 2 h", readings: null }), machine("mydesk", "desktop", { updates: { count: 1, security: true } })] }),
     activity: [backupDone] },
   setup: { about: "Signed in to a server with nothing installed yet (first run).", door: door([]), session: signedIn(1),
-    board: board({ status: { state: "setup", words: "Nothing installed yet.", checked_at: NOW - MIN }, apps: [], machines: [{ ...MYSERVER, apps: 0, updates: { count: 0, security: false } }] }),
+    board: board({ status: { state: "setup", words: "Nothing installed yet.", checked_at: NOW - MIN }, apps: CATALOGUE, machines: [{ ...MYSERVER, apps: 0, updates: { count: 0, security: false } }] }),
     activity: [] },
   stale: { about: "Signed in, but the snapshot is 20 minutes old: readings go static grey with their age.", door: door(), session: signedIn(),
     board: board({ at: NOW - 20 * MIN, status: { state: "unknown", words: "Last read 20 min ago.", checked_at: NOW - 20 * MIN },

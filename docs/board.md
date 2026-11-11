@@ -26,7 +26,26 @@ server, how it is built and packaged, and how it is tested. The service that ans
   memory and hottest drive, grey once older than the server says they may be. Lamplight, the
   living station, mounts in the hero once its module lands; This week and VECTOR's plans
   are marked planned.
-- **Not built yet.** The places' own pages (a machine, Data, Supply, Activity,
+- **A machine.** Overview: the machine's hologram on its emitter, with a module per
+  catalogue group (lit when it has apps), its one status line, what needs you and what fixed
+  itself, the Storage, Backups and Updates tiles read from the drive, backup and update
+  documents, its apps as tiles with Open, and the always-on parts. Vitals: four gauges
+  (processor, memory, heat, network) and one trend chart (ECharts) with a series and a
+  range; power is planned. Hardware: processor, memory, drives and the graphics card;
+  system versions and the docked phone are planned. Set-up stands in for Overview on a
+  first run.
+- **Data.** Drives: each drive on the holo-table with its verdict from
+  `bromigos storage health --json`, and for a drive that isn't healthy what changed, why and
+  what to do. The pool's layout, a new disk with files on it and replacing a drive are
+  planned. Backups: the last good copy, where the copies go (the nightly destination and the
+  Go Bag drive), and the last proven test restore, from `bromigos lab backups status --json`.
+  Getting files back from the page, a friend's lab and Move in are planned.
+- **Supply.** Installed: every installed app as a tile (state, its one reading, Open), with
+  the memory and data they use, measured on the server, and a sort by memory. Browse: the
+  whole catalogue by group, found by name, each with what it asks of the server; Add opens a
+  sheet with the exact command, and adding from the page is planned. Updates: the system's
+  update, and each app with one waiting (planned until the apps report updates).
+- **Not built yet.** The places' own pages (one app's page, Activity,
   People, Den, Network, Settings) show their tabs and a PLANNED mark. They come one change
   at a time. Nothing is ever shown as a reading unless the server measured it.
 
@@ -80,13 +99,28 @@ cookie, which the page never reads. Every request that changes something carries
 | `GET /api/session` | Whether this browser is signed in, and the signed-in browsers |
 | `POST /api/session` `{"code": …}` | Signs in with the one-time code. A wrong, used or old code answers 401 with a sentence the page shows |
 | `DELETE /api/session` | Signs this browser out. `DELETE /api/session/ID` signs another browser out |
-| `GET /api/board` | The board: machines, what needs you, what fixed itself, the app tiles, and the drive, backup and update documents as their commands print them. Read again every 15 seconds |
+| `GET /api/board` | The board: machines, what needs you, what fixed itself, every catalogue item's tile (`bromigos lab apps list --all --json`), and the drive, backup and update documents as their commands print them. Read again every 15 seconds |
+| `GET /api/vitals?machine=NAME&range=24h` | One machine's trends (also `7d`, `30d`). A 404 means the server keeps none yet: the chart is marked planned |
 | `GET /api/activity` | The jobs, live: a stream of Server-Sent Events. A `snapshot` event on connect, then a `job` event for each change |
 
 A tile is the JSON `bromigos lab apps list --json` prints. A job is the record
 `bromigos activity show ID --json` prints ([activity.md](activity.md)). The page shows the
 job that most needs a look on the strip: one that asks you, then an alert that needs you,
 then one that runs, then one that ended badly in the last day, then the last one.
+
+## Holograms and charts
+
+A machine's hero draws its hologram with bromigos.org's renderer (`lib/holo/`, three.js
+0.186.1), through Lamplight's shared view: one WebGL context for the page, drawing only
+while something moves. The model turns for 20 seconds, then holds still, so a calm page
+draws nothing; under reduced motion, or on a computer without a graphics card's WebGL, it
+draws one still frame. Only the rack (servers) and the workstation (desktops) ship
+(`public/holo/`); other kinds of machine show their kind's glyph, because their meshes'
+licence isn't cleared. Without WebGL the glyph stays.
+
+The trend is ECharts, one series at a time in the world's colour, with a crosshair and its
+readings in a table for screen readers. Its tooltip is drawn on the canvas, so the chart
+adds no inline style.
 
 ## The look
 
@@ -146,6 +180,10 @@ all from one example lab. The package's build leaves fixture mode out.
 test copy served with the board's Content-Security-Policy:
 
 - Home's verdict, NEEDS YOU, the machines' tiles and their stale readings, and first run;
+- a machine's hero, needs and tiles, its hologram (one WebGL context at most), Vitals' gauges
+  and trend (and the planned state without trends), Hardware, and Set-up;
+- Data's drives, what changed on one, the backups, their destinations and the proof;
+- Supply's Installed and its sort, Browse and its search, the Add sheet, and Updates;
 - every route renders in four page states, with no error, no policy violation and no
   request to another site;
 - every control has a hint and an accessible name, and axe finds nothing, on every route,
