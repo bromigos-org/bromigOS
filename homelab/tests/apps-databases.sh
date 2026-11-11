@@ -124,6 +124,7 @@ echo "::endgroup::"
     echo "- Copied nothing (the hook's path is wrong): ${missed[*]:-none}"
     echo "- Not installed here (the image or the app didn't come up): ${never[*]:-none}"
 } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
-# A wrong path fails this lane. An app that couldn't run here proves nothing either way: it is
-# named in the summary (and in docs/server.md as documentation only), and its journal is above
-(( ${#missed[@]} == 0 && ${#proven[@]} > 0 ))
+# A wrong path fails this lane, and so does an app that didn't come up here: every one in PROVE
+# runs on this runner (an app with a key too, since Podman 4's secrets were fixed), so one that
+# doesn't is a fault to read in its journal above, never a pass by omission
+(( ${#missed[@]} == 0 && ${#never[@]} == 0 && ${#proven[@]} > 0 ))

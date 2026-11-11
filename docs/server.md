@@ -1210,8 +1210,12 @@ shown for an app set up within the hour.
 
 **Which paths are proven.** CI installs the real apps on a throwaway machine
 (`homelab/tests/apps-databases.sh`), and each hook must copy that app's database once it
-answers. The pull request that added it lists which apps that proved. The others' paths
-are from their documentation only.
+answers. That proves Navidrome, Jellyfin, Seerr, Audiobookshelf, Pinchflat, Home Assistant,
+Prowlarr, Sonarr, Radarr, Lidarr, Bazarr, Autoscan and Paperless-ngx. Uptime Kuma runs there
+and has no database until its first page is filled in. The other apps' paths (Tautulli, Beets,
+the Pelican panel, slskd) are from their documentation only. Passwords (Vaultwarden),
+Navidrome and Prowlarr are also proven on the bromigOS Server that CI installs with two data
+disks.
 
 A copy to the [Go Bag](#the-go-bag) follows all of this. It names `/srv/apps`, makes the
 databases safe first, looks for each app's folder in what it wrote, and doesn't run while

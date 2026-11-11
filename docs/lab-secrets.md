@@ -46,6 +46,17 @@ credential is `bromigos.ITEM.FIELD`.
 | `openbao` | a new OpenBao on this server, for a new lab with the Vault item | as `vault` |
 | `sops` | the lab repository's `secrets.enc.json`, sops and age | as `bromigos lab provision` |
 
+**Containers' copies.** A container app reads its key as a file (`Secret=… type=mount` in its
+Quadlet), which Podman gives it through its shell secret driver: the engine's
+`/etc/containers/containers.conf.d/50-bromigos-secrets.conf` points it at `systemd-creds`, so
+Podman's copy is encrypted the same way, as `/etc/credstore.encrypted/podman.<id>`. Each key is
+given to Podman when it is saved. A new one is made with `podman secret create NAME -`, and
+`--replace` is added only over one that is there: Podman 4 (Ubuntu 24.04's 4.9) deletes the old
+secret first even when there is none, and stops. If Podman doesn't take a key, saving it says so
+with Podman's own words, and the app isn't started: its container would stop at every start
+with "no such secret". Before an app's services start, the engine checks that Podman has every
+key they name, and gives Podman again a key it lost.
+
 **Signing in to a Vault.** AppRole (a role id and secret id), a one-time wrapped token
 (`sys/wrapping/unwrap`; it may wrap a token or an AppRole secret id), or OIDC
 (`oidc_auth_url()` then `oidc_callback()`). A root token is refused. No long-lived token is
