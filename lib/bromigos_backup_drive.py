@@ -591,7 +591,14 @@ def copy_locked(b, uuid):
 def backup(env, b):
     """restic backup of the server's paths to the drive, its percent done as the job's share.
     Returns the copy's record; raises Problem with why it failed."""
-    paths = [B.at(p) for p in b["paths"] if os.path.exists(B.at(p))]
+    # the nightly backup's own rules for what must be in it (bromigos_backups.py, REQUIRED): never
+    # an empty /srv/apps while the data disks are away, the apps' databases copied whole first,
+    # and the apps' data named by itself, whatever [backup] paths says
+    gone = B.away()
+    if gone:
+        raise B.Problem("failed", f"The data disks aren't mounted, so {B.missing_words(gone)} can't be read. Nothing was copied.")
+    dbs = B.copy_databases()
+    paths = [B.at(p) for p in B.backup_set(b["paths"])]
     args = ["backup", "--json", "--tag", B.TAG, "--exclude-caches"]
     for x in b["exclude"]:
         args += ["--exclude", x]
@@ -613,10 +620,17 @@ def backup(env, b):
     # 3: some files couldn't be read, the rest was backed up
     if rc not in (0, 3) or not summary:
         raise B.Problem("failed", f"{B.upper_first(B.sentence(last or last_words(err) or 'restic backup failed'))}.")
-    return {"phase": "ok" if rc == 0 else "partial", "at": B.iso(), "ts": time.time(),
-            "snapshot": str(summary.get("snapshot_id") or "")[:8], "files": summary.get("total_files_processed"),
+    # looked for in the copy itself: one without the apps' data is not a good copy
+    snap = str(summary.get("snapshot_id") or "")
+    gone = B.missing(env, {"id": snap}, B.required_paths())
+    if gone:
+        raise B.Problem("failed", f"The copy left out {B.missing_words(gone)}.")
+    why = [] if rc == 0 else ["some files couldn't be read: " + (last or f"{len(skipped)} of them")]
+    why += [f"{d['what']}'s database wasn't copied whole ({d['reason']})" for d in dbs if not d["ok"]]
+    return {"phase": "partial" if why else "ok", "at": B.iso(), "ts": time.time(),
+            "snapshot": snap[:8], "files": summary.get("total_files_processed"),
             "bytes": summary.get("total_bytes_processed"), "added": summary.get("data_added"),
-            "reason": "" if rc == 0 else "some files couldn't be read: " + (last or f"{len(skipped)} of them")}
+            "reason": "; ".join(why), "databases": dbs}
 
 
 def keep(env, b):

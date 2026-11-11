@@ -76,6 +76,11 @@ The backup runs every night after the update, and is checked every week. After t
 one, show its key and keep it somewhere safe, away from the server: without it no one can
 read the backup.
 
+Your apps' data is always in it, on whichever disk it is kept. The server looks for it in
+each backup, and a backup without it counts as failed. Before each backup the server also
+makes a clean copy of the passwords vault's database and of the documents app's, so they
+open when you restore them even though the apps were running.
+
 ```bash
 sudo bromigos server backup key
 ```

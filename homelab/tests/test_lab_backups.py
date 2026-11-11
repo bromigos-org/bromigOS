@@ -52,18 +52,18 @@ esac
     # restic: the real one. With $FAKE/hang, a restore that writes restores that one path, then hangs
     # (not the look at where the backup's links point, which goes to a scratch folder)
     # $FAKE/drop: a path restic is handed and leaves out, as a restic that went wrong would.
-    # $FAKE/mounts: folders that are other filesystems (a data disks' subvolume mounted at
+    # $FAKE/other-filesystems: folders that are other filesystems (a data disks' subvolume mounted at
     # srv/apps). Under --one-file-system restic leaves each out unless it is named as a target,
     # and so does this stand-in, by excluding it
     "restic": r'''#!/bin/sh
 if [ "$1" = backup ] && [ -f "$FAKE/drop" ]; then
   d=$(cat "$FAKE/drop"); for a; do shift; [ "$a" = "$d" ] || set -- "$@" "$a"; done
 fi
-if [ "$1" = backup ] && [ -f "$FAKE/mounts" ]; then
+if [ "$1" = backup ] && [ -f "$FAKE/other-filesystems" ]; then
   case " $* " in *" --one-file-system "*)
     while read -r m; do
       case " $* " in *" $m "*) ;; *) set -- "$@" --exclude "$m" ;; esac
-    done < "$FAKE/mounts" ;;
+    done < "$FAKE/other-filesystems" ;;
   esac
 fi
 if [ "$1" = restore ]; then
@@ -943,7 +943,7 @@ class TestRestore(Rig):
 def mounts_work():
     """A mount of our own in a user and mount namespace: a real other filesystem for the test,
     seen by nothing outside it, gone when it ends. Not where user namespaces are off (CI's
-    containers); the stand-in restic's $FAKE/mounts covers those."""
+    containers); the stand-in restic's $FAKE/other-filesystems covers those."""
     if not shutil.which("unshare"):
         return False
     with tempfile.TemporaryDirectory() as d:
@@ -968,7 +968,7 @@ class AppData(Rig):
     def setUp(self):
         super().setUp()
         self.put(APP, "sand\n")
-        (self.fake / "mounts").write_text(f"{self.root / 'srv/apps'}\n")
+        (self.fake / "other-filesystems").write_text(f"{self.root / 'srv/apps'}\n")
 
     def paths(self, *paths, exclude=None):
         self.put("etc/bromigos/server.toml", '[backup]\nto = "/mnt/backup"\npaths = [' + ", ".join(f'"{p}"' for p in paths) + "]\n"
@@ -1181,7 +1181,7 @@ class TheLabsOwnBackup(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_the_apps_on_a_filesystem_of_their_own(self):
-        (self.fake / "mounts").write_text(f"{self.root / 'srv/apps'}\n{self.root / 'srv/data'}\n")
+        (self.fake / "other-filesystems").write_text(f"{self.root / 'srv/apps'}\n{self.root / 'srv/data'}\n")
         r = subprocess.run(self.command(), env=self.env, capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.check_it_holds_the_apps()

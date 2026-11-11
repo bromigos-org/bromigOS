@@ -1072,6 +1072,11 @@ file with the app stopped. Today that's the passwords vault (Vaultwarden) and do
 `/srv/apps/photos/library/backups`, which the backup holds. A copy that fails is on the
 health line; the rest of the backup still runs.
 
+A copy to the [Go Bag](#the-go-bag) follows both rules. It names `/srv/apps`, copies the
+databases first, looks for the apps' data in what it wrote, and doesn't run while the data
+disks are away. A database copy that fails there makes the Go Bag's copy "worked, but left
+some files out", with the reason under it.
+
 **A drive that isn't plugged in.** When a backup worked at the destination before and
 nothing is there now, the nightly backup fails and says so. It never starts a new backup
 in the old one's place, which for an unplugged USB disk would be the folder under it, on
@@ -1649,7 +1654,7 @@ files are, an in-place restore whose dry-run list is compared with what changed 
 no snapshot mechanism, a snapshot that fails, too little free space, a restore stopped by
 a signal and one killed, a drive that isn't connected, and a damaged repository failing
 the test restore. It also covers what every backup must hold: `/srv/apps` on a filesystem
-of its own (a stand-in restic that leaves out `$FAKE/mounts` under `--one-file-system`, as
+of its own (a stand-in restic that leaves out `$FAKE/other-filesystems` under `--one-file-system`, as
 restic does, and, where user namespaces allow, a real tmpfs mounted there in a namespace of
 the test's own), a `paths` list without `/srv`, the data disks away, an exclude that drops
 the apps (the run fails), the check and the test restore against a backup without them, a

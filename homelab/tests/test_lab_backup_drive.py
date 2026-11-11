@@ -9,9 +9,11 @@ code by BROMIGOS_BACKUPS_<TOOL>: a "drive" is a folder under the test's temporar
 "mounting" it puts a link to that folder at the mount point. restic is the real one (the tests
 that copy need it on PATH), and so is `bromigos activity`, run in the foreground with its
 records under the stand-in root."""
+import contextlib
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -750,6 +752,43 @@ class Copy(DriveRig):
         r = self.go(rc=1)
         self.assertEqual(r.stdout.splitlines()[0], "Your Go Bag drive hasn't been updated in 9 days. Plug it in.")
         self.assertEqual([p["id"] for p in self.doc(rc=1)["health"]["problems"]], ["drive-stale"])
+
+    def test_the_copy_holds_the_apps_data_and_their_databases_as_the_nightly_backup_does(self):
+        # the nightly backup's rules (test_lab_backups.py, AppData and Databases), on the drive: the
+        # apps' data named by itself whatever [backup] paths says, and a database copied whole
+        self.put("srv/apps/photos/library/beach.jpg", "sand\n")
+        self.put("etc/bromigos/server.toml", '[backup]\nto = "/mnt/backup"\npaths = ["/etc", "/home"]\n')     # no /srv
+        self.put("etc/bromigos/backup-databases.d/passwords.toml",
+                 'what = "passwords (Vaultwarden)"\nsqlite = ["/srv/apps/passwords/db.sqlite3"]\n')
+        db = self.root / "srv/apps/passwords/db.sqlite3"
+        db.parent.mkdir(parents=True)
+        with contextlib.closing(sqlite3.connect(db)) as c:
+            c.execute("CREATE TABLE ciphers (name TEXT)")
+            c.execute("INSERT INTO ciphers VALUES ('login')")
+            c.commit()
+        self.assertEqual(self.plugged_in().returncode, 0)
+        run = self.drives()[UUID]["run"]
+        self.assertEqual((run["phase"], [d["ok"] for d in run["databases"]]), ("ok", [True]))
+        for folder, name in (("/srv/apps/photos/library", "beach.jpg"), ("/var/lib/bromigos/backup-databases/passwords", "db.sqlite3")):
+            self.assertEqual([e["name"] for e in self.doc("show", "--from", "go-bag", run["snapshot"], folder)["entries"]], [name])
+        # a database that can't be copied whole: the copy is kept, and says so
+        db.write_text("cut short, not a database\n" * 30)
+        self.assertEqual(self.go("run", rc=0).returncode, 0)
+        run = self.drives()[UUID]["run"]
+        self.assertEqual(run["phase"], "partial")
+        self.assertIn("passwords (Vaultwarden)'s database wasn't copied whole", run["reason"])
+        self.assertIn("passwords (Vaultwarden)'s database wasn't copied whole", self.go().stdout)
+
+    def test_the_data_disks_away_nothing_is_copied_to_the_drive(self):
+        self.assertEqual(self.plugged_in().returncode, 0)
+        good = self.drives()[UUID]["run_ok"]
+        (self.root / "srv/apps").mkdir(parents=True, exist_ok=True)
+        self.put("etc/fstab", "/dev/sda1 / btrfs\nUUID=2222 /srv/apps btrfs subvol=/apps,nofail 0 0\n")
+        r = self.go("run", rc=1)
+        self.assertIn("The data disks aren't mounted, so /srv/apps (the apps' data) can't be read. Nothing was copied.", r.stderr)
+        d = self.drives()[UUID]
+        self.assertEqual((d["run"]["phase"], d["run_ok"]), ("failed", good))
+        self.assertEqual(self.mounted(), "", "and the drive is unmounted")
 
     def test_restore_from_the_drive_with_the_existing_commands(self):
         self.assertEqual(self.plugged_in().returncode, 0)
