@@ -1151,10 +1151,19 @@ An app that was there when the backup ran, and isn't in it, still fails.
 reads it, so a file copied half-way through a write may not open. Before each backup, the
 server copies each app's SQLite databases with SQLite's own online backup, which gives a
 whole, consistent copy while the app goes on running, its write-ahead log included. An app
-with several databases has each copied. The copies go in
-`/var/lib/bromigos/backup-databases/<app>/`, readable by root only, and every backup holds
-them. To get an app's database back, restore its copy and put it in place of the app's own
-file with the app stopped.
+with several databases has each copied. Each copy goes on the same disk as the apps' data,
+readable by root only, and every backup holds it:
+
+- **With data disks**, in `/srv/apps/.bromigos-backup-databases/<app>/`, on the data disks.
+  A large history (Home Assistant's, Jellyfin's) is copied onto the disks that hold it,
+  never onto the system disk. The backup holds it through `/srv/apps`, once.
+- **Without data disks**, in `/var/lib/bromigos/backup-databases/<app>/`, on the system
+  disk, where the apps' data is too.
+
+When the apps' data moves (`bromigos lab app-data move`), the next backup makes the copies
+in the new place, and removes the old ones once the new ones are written. To get an app's
+database back, restore its copy and put it in place of the app's own file with the app
+stopped.
 
 Every app in the catalogue that keeps a database has a hook that says how, written when
 the app is installed. A server set up before a hook existed gets every hook the next time
@@ -1173,9 +1182,36 @@ For Photos and Plex the server checks that the app's own newest backup is recent
 for Immich, 10 for Plex). When it isn't, the health line and the alert say so: the app's
 own backup may be turned off. A new app gets that long to make its first one.
 
-A copy that fails is on the health line, and the rest of the backup still runs. A copy is
-refused, with nothing written, when it wouldn't fit beside what is there: the copies are
-on the system disk. An app with no database yet (nothing was ever added to it) is skipped.
+**A copy never fills a disk.** Before each copy the server checks the free space where it
+goes: the database's size and its write-ahead log's, 64 MiB more, and never taking that
+disk below 1 GiB free or 5 % of its size, whichever is more. Without the room, that
+database isn't copied and nothing is written. The backup is partial, and the health line
+and the alert name the app: "not enough free space on /srv/apps for a copy of
+/srv/apps/home-automation/config/home-assistant_v2.db: it needs 4.2 GB, and 3.1 GB is
+free (1.0 GB is always left free)". The copy from the night before stays. A copy is written beside its place and moved
+in when whole, so one that stops part-way (a power cut) never replaces it, and what it left
+is removed at the next backup.
+
+A copy that fails for another reason is on the health line the same way, and the rest of
+the backup still runs. An app with no database yet (nothing was ever added to it) is
+skipped.
+
+**A hook that finds nothing is said.** Most hooks' paths come from each app's own
+documentation. If one is wrong, the backup finds nothing to copy for that app. So
+`bromigos lab backups` has a Databases row for each app: what was copied last time, or why
+not. For an app whose services are running, a hook that found nothing is said too:
+
+```text
+  Databases     music tags (Beets): nothing found at /srv/apps/beets/config/musiclibrary.blb, and it is running: …
+```
+
+It is a note, not a failure: an app nobody has used yet may have made no database. It isn't
+shown for an app set up within the hour.
+
+**Which paths are proven.** CI installs the real apps on a throwaway machine
+(`homelab/tests/apps-databases.sh`), and each hook must copy that app's database once it
+answers. The pull request that added it lists which apps that proved. The others' paths
+are from their documentation only.
 
 A copy to the [Go Bag](#the-go-bag) follows all of this. It names `/srv/apps`, makes the
 databases safe first, looks for each app's folder in what it wrote, and doesn't run while
@@ -1431,7 +1467,7 @@ bromigos lab backups restore latest /etc/caddy --in-place --apply --yes \
 | `/var/lib/bromigos/server/restore-test/` | The test restore's scratch folder. Empty between runs |
 | `/var/cache/restic/` | restic's cache |
 | `/etc/bromigos/backup-databases.d/<app>.toml` | One per app that keeps a database. `what`: its name. `sqlite`: its SQLite files; a `*` matches inside one folder, and the ones that aren't there are skipped. `own` and `own_days`: the app's own database backups (files the backup holds), and how old the newest may be. The lab's engine writes one for each catalogue app, again at every apply; a file of your own with another name is read the same way |
-| `/var/lib/bromigos/backup-databases/<app>/` | The databases' copies, made before each backup, one file per database. Root only |
+| `/srv/apps/.bromigos-backup-databases/<app>/` or `/var/lib/bromigos/backup-databases/<app>/` | The databases' copies, made before each backup, one file per database: beside the apps' data when `/srv/apps` is a disk of its own (data disks), else on the system disk. Root only |
 | `/srv/restore/` | Where restores go |
 
 `bromigos server status --json` shows the destination without any password in it, and the

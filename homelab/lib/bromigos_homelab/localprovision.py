@@ -773,7 +773,8 @@ ExecStart=/usr/lib/bromigos/bin/bromigos-lab backups job {paths}
 # nightly backup, the Go Bag and the lab's own).
 #   sqlite   the app's SQLite files, under its own folder. Each one there is copied whole with
 #            SQLite's online backup while the app runs. A * matches inside one folder: an app
-#            with several databases has each copied
+#            with several databases has each copied. The hook also names the item's services
+#            (`units`): when they run and nothing is found, `bromigos lab backups` says so
 #   own      the app makes its own database backups, as files the backup holds. Nothing is
 #            copied; the newest must be younger than own_days, or the backup says so
 #   note     why, for the hook's comment
@@ -839,6 +840,8 @@ def database_hook_text(it):
     lines.append(f"what = {json.dumps(database_what(it))}")
     if d.get("sqlite"):
         lines.append("sqlite = [" + ", ".join(json.dumps(p) for p in d["sqlite"]) + "]")
+        # its services: a hook that finds no database while they run says so (the path may be wrong)
+        lines.append("units = [" + ", ".join(json.dumps(u) for u in services_of(it)) + "]")
     if d.get("own"):
         lines.append("own = [" + ", ".join(json.dumps(p) for p in d["own"]) + "]")
         lines.append(f"own_days = {d.get('own_days', 3)}")

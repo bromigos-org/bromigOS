@@ -621,14 +621,17 @@ Server's backup, in the same words: a failed run, none for 36 hours, an app's fo
 out, a database that wasn't copied whole ([alerts.md](alerts.md)). Its commands are the
 unit's: `journalctl -u bromigos-lab-backup.service -n 50 --no-pager` and `sudo systemctl
 start bromigos-lab-backup.service`. `bromigos alerts` is `bromigos-core`'s: a machine with
-`bromigos-lab` alone has the record and the failed unit, and no alert.
+`bromigos-lab` alone has the record and the failed unit, and no alert: that is left out on
+purpose for now. `systemctl status bromigos-lab-backup.service` shows it, and the record says
+why in plain words.
 
 **Database hooks.** Every item that keeps a database has an entry in `DATABASES`
 (`localprovision.py`), and the engine writes its hook,
 `/etc/bromigos/backup-databases.d/<item>.toml`: when the item is installed, and for every
 installed item at each apply, so a server set up before a hook was known gets it then. An
 item that leaves (`bromigos lab apps remove`) takes its hook with it. `sqlite` lists the
-item's SQLite files, with a `*` for a folder of them. `own` names the backups an app makes
+item's SQLite files, with a `*` for a folder of them, and `units` its services: a hook that
+finds nothing while they run is said in `bromigos lab backups`. `own` names the backups an app makes
 itself, where its database can't be copied as a file (Immich's PostgreSQL, Plex).
 [server.md](server.md#backups) has the table. A test holds `DATABASES` to the catalogue:
 every item with a `database` row in its `[[item.data]]` has an entry, inside a folder the

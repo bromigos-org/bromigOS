@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# The database hooks' paths, proven on the real apps: CI's throwaway runner (.github/workflows/
+# homelab-tests.yml, "App databases on a Server"), as root, with Podman, Quadlet and systemd.
+#
+# The engine installs real catalogue apps that keep SQLite databases (`bromigos lab apps add`,
+# the real images, pinned by digest). Once each answers, `bromigos lab backups copy-databases`
+# must copy at least one database for it, through the hook the engine wrote. A hook whose path is
+# wrong copies nothing: this is where that would show. When one copies nothing, the folder's
+# files are listed, so the right path can be read off the run.
+#
+#   apps-databases.sh [ID…]        these apps (default: PROVE below)
+#
+# The lane's summary lists which apps' paths it proved, and docs/server.md says which are still
+# from their documentation only. Never run this on a computer you use: it installs the
+# catalogue in /usr/share/bromigos/lab and writes /etc, /srv/apps and /srv/media.
+set -uo pipefail
+repo=$(cd "$(dirname "$0")/../.." && pwd)
+lab="$repo/homelab/bin/bromigos-lab"
+[[ $(id -u) == 0 ]] || { echo "run as root, on a throwaway machine" >&2; exit 2; }
+[[ ${CI:-} == true ]] || { echo "this changes the machine it runs on: CI only" >&2; exit 2; }
+
+# The apps this lane can run in its time on GitHub's runner: no account with a company, no
+# setup form that must be filled, no graphics card. (Photos needs 4 GB of memory and makes its
+# database dumps at 02:00; Plex needs an account; the Pelican panel needs Wings.)
+PROVE=(navidrome prowlarr sonarr radarr lidarr bazarr jellyfin seerr autoscan audiobookshelf pinchflat uptime
+       home-automation documents)
+(( $# )) && PROVE=("$@")
+
+install -Dm0644 "$repo/homelab/share/provision-catalogue.toml" /usr/share/bromigos/lab/provision-catalogue.toml
+rm -rf /usr/share/bromigos/lab/quadlet
+cp -r "$repo/homelab/share/quadlet" /usr/share/bromigos/lab/quadlet
+install -d /etc/bromigos
+[[ -e /etc/bromigos/server.toml ]] || printf '# the app databases CI test: a Server\n' > /etc/bromigos/server.toml
+
+echo "::group::add ${PROVE[*]}"
+added=()
+for id in "${PROVE[@]}"; do
+    # one at a time: an image that can't be pulled, or an app that doesn't answer, is that app's
+    # result, and the others still run
+    if timeout 900 "$lab" apps add "$id"; then added+=("$id"); else echo "ADD-FAILED $id"; fi
+done
+echo "::endgroup::"
+
+copies() {   # the app's rows from one copy-databases run: "copied PATH", "none PATTERN", "failed REASON"
+    "$lab" backups copy-databases --json | python3 -c 'import json, sys
+for r in json.load(sys.stdin)["databases"]:
+    if r["name"] != sys.argv[1]:
+        continue
+    print("none " + r["path"] if r.get("none") else ("copied " + r["path"]) if r["ok"] and not r.get("own") else
+          ("own " + r["path"]) if r.get("own") else "failed " + r["reason"])' "$1"
+}
+
+proven=() missed=() never=()
+for id in "${PROVE[@]}"; do
+    [[ " ${added[*]} " == *" $id "* ]] || { never+=("$id"); continue; }
+    echo "::group::$id"
+    cat "/etc/bromigos/backup-databases.d/$id.toml"
+    # an app makes its database as it starts; some take a minute after they answer
+    got=""
+    for _ in $(seq 36); do
+        got=$(copies "$id")
+        grep -q '^copied ' <<<"$got" && break
+        sleep 5
+    done
+    echo "$got"
+    if grep -q '^copied ' <<<"$got"; then
+        proven+=("$id")
+    else
+        missed+=("$id")
+        echo "its folder, for the right path:"
+        find "/srv/apps/$id" -xdev \( -name '*.db' -o -name '*.sqlite*' -o -name '*.blb' -o -name '*.db-wal' \) -printf '  %p %s bytes\n' 2>/dev/null | head -40
+        read -ra units < <(python3 -c 'import sys, tomllib; print(" ".join(tomllib.load(open(sys.argv[1], "rb")).get("units") or []))' "/etc/bromigos/backup-databases.d/$id.toml")
+        systemctl --no-pager --lines=0 status "${units[@]}" 2>&1 | grep -E 'Active:|●' || true
+    fi
+    echo "::endgroup::"
+done
+
+echo "::group::every hook, as the next backup finds it"
+"$lab" backups copy-databases || true
+echo "::endgroup::"
+{
+    echo "## The database hooks on the real apps"
+    echo
+    echo "- Proven (a database copied through its hook): ${proven[*]:-none}"
+    echo "- Copied nothing (the hook's path is wrong, or the app makes no database until it is used): ${missed[*]:-none}"
+    echo "- Not installed here (the image or the app didn't come up): ${never[*]:-none}"
+} | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+(( ${#missed[@]} == 0 && ${#never[@]} == 0 ))

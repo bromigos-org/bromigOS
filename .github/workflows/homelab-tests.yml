@@ -67,3 +67,28 @@ jobs:
           done
           sudo journalctl -u hello.service --no-pager -n 80 || true
           sudo cat /etc/containers/systemd/hello.container || true
+
+  databases:
+    name: App databases on a Server (Podman)
+    # The database hooks' paths on the real apps (homelab/tests/apps-databases.sh): the engine
+    # installs catalogue apps that keep SQLite databases, with their real images, and the hook it
+    # wrote for each must copy that app's database once it answers. GitHub's runner, never the
+    # lab's: this repo is public
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - name: room for the images
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h / | tail -1
+      - name: each app's database, copied through its hook
+        run: sudo CI=true bash homelab/tests/apps-databases.sh
+      - name: what happened
+        if: failure()
+        run: |
+          sudo python3 bin/bromigos-activity list --all || true
+          for j in $(sudo ls /var/lib/bromigos/activity/jobs/ 2>/dev/null | grep '\.log$' | tail -6); do
+            echo "== $j"; sudo tail -40 "/var/lib/bromigos/activity/jobs/$j"
+          done
+          sudo podman ps -a || true

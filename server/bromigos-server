@@ -1409,10 +1409,14 @@ def cmd_backup(a):
             return 1
         restic(env, "forget", "--tag", "bromigos-server", "--prune", "--keep-daily", str(b["keep_daily"]),
                "--keep-weekly", str(b["keep_weekly"]), "--keep-monthly", str(b["keep_monthly"]))
-        run = {"phase": "ok" if rc == 0 else "partial", "at": now(), "ts": time.time(), "to": B.same_place(b["to"]),
+        bad = [d for d in dbs if not d["ok"]]
+        why = ([] if rc == 0 else ["some files couldn't be read: " + last_line(err, "")]) + [f"{d['what']}: {d['reason']}" for d in bad]
+        # partial: good for all but what `reason` names: files restic couldn't read (`unread`), or
+        # a database that isn't safe in it (no room for its copy, a copy that failed)
+        run = {"phase": "partial" if why else "ok", "at": now(), "ts": time.time(), "to": B.same_place(b["to"]),
                "snapshot": summary.get("snapshot_id", "")[:8], "files": summary.get("total_files_processed"),
                "bytes": summary.get("total_bytes_processed"), "added": summary.get("data_added"),
-               "reason": "" if rc == 0 else "some files couldn't be read: " + last_line(err, ""), "databases": dbs, "saw": saw}
+               "reason": "; ".join(why), "unread": rc != 0, "databases": dbs, "saw": saw}
         # what the health line says without the key: the last backup that worked, when the first
         # one did (the test restore's clock starts there), how many are kept and what they span
         more = {"run": run, "run_ok": run}
@@ -1425,7 +1429,6 @@ def cmd_backup(a):
             more["snapshots"] = None
         B.update_state(**more)
         print(f"bromigos-server: backed up ({run['snapshot']})")
-        bad = [d for d in dbs if not d["ok"]]
         for d in bad:
             print(f"bromigos-server: {d['what']}: {d['reason']}", file=sys.stderr)
         return 1 if bad else 0

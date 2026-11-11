@@ -17,7 +17,9 @@ A hook is /etc/bromigos/backup-databases.d/<app>.toml:
                                                     Each one that is there is copied with SQLite's
                                                     online backup (whole and consistent while the app
                                                     writes, its write-ahead log included), checked,
-                                                    and kept in /var/lib/bromigos/backup-databases/<app>/
+                                                    and kept in the copies' folder (copies_dir), <app>/
+    units = ["sonarr.service"]                      the app's services: a hook that finds nothing while
+                                                    they run says so (the path may be wrong)
     own = ["/srv/apps/photos/library/backups/*"]    the app's own database backups: files the app
     own_days = 3                                    writes, which the backup holds as they are. The
                                                     newest must be this young, or the hook says so
@@ -46,14 +48,23 @@ import tomllib
 
 ROOT = os.environ.get("BROMIGOS_SERVER_ROOT") or os.environ.get("BROMIGOS_ROOT") or "/"
 HOOKS = "/etc/bromigos/backup-databases.d"
-COPIES = "/var/lib/bromigos/backup-databases"
+# Where the copies go. Beside the apps' data when /srv/apps is a filesystem of its own (a server
+# with data disks: their apps subvolume), in a hidden folder of the engine's there, root's alone:
+# a gigabyte-sized history is copied onto the disks that hold it, never onto the system disk. With
+# the apps' data on the system disk, the copies are with bromigOS's own state there
+COPIES_APPS = "/srv/apps/.bromigos-backup-databases"
+COPIES_SYSTEM = "/var/lib/bromigos/backup-databases"
 APPS = "/srv/apps"
 FSTAB = "/etc/fstab"
 STATE = "/var/lib/bromigos/lab/backup.json"
 UNIT = "bromigos-lab-backup.service"
 TAG = "bromigos-lab"
 OWN_DAYS = 3                 # how old an app's own newest database backup may be, unless its hook says
-MARGIN = 64 << 20            # free space left beside a copy
+MARGIN = 64 << 20            # room a copy is given beyond its database's size
+FLOOR_BYTES = 1 << 30        # a copy never takes its filesystem below this much free space,
+FLOOR_SHARE = 0.05           # ... nor below this share of it (the app data move's own rule)
+NEW_APP = 3600               # an app set up this lately hasn't had the time to make its database
+LEFTOVERS = (".partial", ".partial-journal", ".partial-wal", ".partial-shm")     # a copy cut off part-way
 DAY = 86400
 
 
@@ -78,12 +89,47 @@ def one_line(text, n=200):
 
 # ------------------------------------------------------------------ the databases
 
-def copy_databases(at=at, now=None):
+def copies_dir(at=at):
+    """The folder the copies are in on this machine (COPIES_APPS or COPIES_SYSTEM)."""
+    return COPIES_APPS if os.path.ismount(at(APPS)) else COPIES_SYSTEM
+
+
+def human(n):
+    for unit in ("bytes", "KB", "MB", "GB"):
+        if n < 1000 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit in ("bytes", "KB") else f"{n:.1f} {unit}"
+        n /= 1000
+
+
+def running(units):
+    """Are all of an app's services active? None when that can't be told: no service named, no
+    systemctl, or a stand-in root (the tests) with no stand-in systemctl named for it."""
+    exe = "systemctl" if ROOT == "/" else os.environ.get("BROMIGOS_BACKUPS_SYSTEMCTL")
+    if not units or not exe:
+        return None
+    try:
+        r = subprocess.run([exe, "is-active", *units], capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    states = r.stdout.split()
+    return bool(states) and all(s == "active" for s in states)
+
+
+def copy_databases(at=at, now=None, running=running):
     """Every hook's databases, made safe for the backup that follows. One row for each database
-    tried, {"name", "what", "path", "ok", "reason"}, and one for an app's own backups ("own":
-    true). A database that isn't there (an app not used yet) is skipped, and so is an app that
-    hasn't had the time to make its first own backup."""
+    tried, {"name", "what", "path", "ok", "reason", "copy"} (copy: where its copy is); one for
+    an app's own backups ("own": true); and one for a hook that found no database at all
+    ("none": true, with "running": are the app's services up, and "new": was it set up within
+    the hour), which isn't a failure: an app nobody has used yet has none.
+
+    Nothing is written until there is room for it (room()). What a copy cut off part-way left
+    behind is removed first, and so are the copies in the folder that isn't this machine's any
+    more, once a hook's new ones are written."""
     now = time.time() if now is None else now
+    folder = copies_dir(at)
+    other = COPIES_SYSTEM if folder == COPIES_APPS else COPIES_APPS
+    for d in (folder, other):
+        clear_leftovers(at(d))
     try:
         names = sorted(n for n in os.listdir(at(HOOKS)) if n.endswith(".toml"))
     except OSError:
@@ -100,20 +146,36 @@ def copy_databases(at=at, now=None):
                         "reason": f"{HOOKS}/{n} can't be read ({one_line(e)})"})
             continue
         what = str(hook.get("what") or name)
-        used = set()
-        for pattern in _strings(hook.get("sqlite")):
+        used, rows = set(), []
+        patterns = _strings(hook.get("sqlite"))
+        for pattern in patterns:
             for src in _matches(at(pattern)):
                 shown = sysp(src, at("/"))
                 copy = os.path.basename(src)
                 if copy in used:                     # two folders, one file name: the folder's name in front
                     copy = os.path.basename(os.path.dirname(src)) + "-" + copy
                 used.add(copy)
-                row = {"name": name, "what": what, "path": shown, "ok": True, "reason": ""}
-                try:
-                    sqlite_copy(src, os.path.join(at(COPIES), name, copy))
-                except (sqlite3.Error, OSError) as e:
-                    row.update(ok=False, reason=f"{shown} couldn't be copied: {one_line(e)}")
-                out.append(row)
+                row = {"name": name, "what": what, "path": shown, "ok": True, "reason": "", "copy": f"{folder}/{name}/{copy}"}
+                short = room(src, os.path.join(at(folder), name))
+                if short:
+                    need, free, floor = short
+                    row.update(ok=False, copy="", reason=f"not enough free space on {os.path.dirname(folder) if folder == COPIES_APPS else folder} "
+                               f"for a copy of {shown}: it needs {human(need)}, and {human(free)} is free "
+                               f"({human(floor)} is always left free)")
+                else:
+                    try:
+                        sqlite_copy(src, os.path.join(at(folder), name, copy))
+                    except (sqlite3.Error, OSError) as e:
+                        row.update(ok=False, copy="", reason=f"{shown} couldn't be copied: {one_line(e)}")
+                rows.append(row)
+        out += rows
+        if patterns and not rows:
+            # nothing where the hook looks. For an app that is running that is worth saying (its
+            # database may be somewhere else); for one nobody has used yet it is how things are
+            out.append({"name": name, "what": what, "path": " or ".join(patterns), "ok": True, "reason": "", "none": True,
+                        "running": running(_units(hook.get("units"))), "new": now - written < NEW_APP})
+        elif rows and all(r["ok"] for r in rows):
+            shutil.rmtree(os.path.join(at(other), name), ignore_errors=True)      # the copies from the place before
         own = _strings(hook.get("own"))
         if own:
             days = hook.get("own_days")
@@ -133,11 +195,20 @@ def copy_databases(at=at, now=None):
                 out.append(dict(row, ok=False, reason=f"it has made no database backup of its own ({own[0]}): its own "
                                 "backup may be turned off"))
             # else: set up less than `days` ago and none made yet: nothing to say
+    # the place before, once nothing of ours is left in it (#112's own list of copies among it)
+    with contextlib.suppress(OSError):
+        os.unlink(os.path.join(at(other), "copies.json"))
+    with contextlib.suppress(OSError):
+        os.rmdir(at(other))
     return out
 
 
 def _strings(value):
     return [v for v in value if isinstance(v, str) and v.startswith("/")] if isinstance(value, list) else []
+
+
+def _units(value):
+    return [v for v in value if isinstance(v, str) and v] if isinstance(value, list) else []
 
 
 def _matches(pattern):
@@ -146,17 +217,44 @@ def _matches(pattern):
     return [p for p in found if os.path.isfile(p) and not os.path.islink(p)]
 
 
+def clear_leftovers(folder):
+    """What a copy that was cut off part-way (a power cut, a kill) left in the copies' folder:
+    its unfinished file and that file's journal. Nothing else there is touched."""
+    try:
+        apps = [os.path.join(folder, n) for n in os.listdir(folder)]
+    except OSError:
+        return
+    for d in apps:
+        if not os.path.isdir(d) or os.path.islink(d):
+            continue
+        for n in os.listdir(d):
+            if n.endswith(LEFTOVERS):
+                with contextlib.suppress(OSError):
+                    os.unlink(os.path.join(d, n))
+
+
+def room(src, folder):
+    """None when a copy of this database fits in folder, else (bytes it needs, bytes free, the
+    floor): the database's size and its write-ahead log's, a margin, and never taking the
+    filesystem below FLOOR_BYTES or FLOOR_SHARE of it. Asked before anything is written."""
+    need = sum(os.path.getsize(p) for p in (src, src + "-wal") if os.path.exists(p)) + MARGIN
+    probe = folder
+    while not os.path.exists(probe) and probe != os.path.dirname(probe):
+        probe = os.path.dirname(probe)
+    disk = shutil.disk_usage(probe)
+    floor = max(FLOOR_BYTES, int(disk.total * FLOOR_SHARE))
+    return None if disk.free - need >= floor else (need, disk.free, floor)
+
+
 def sqlite_copy(src, dst):
     """One SQLite database copied with its own online backup: a whole, consistent copy while
     the app goes on writing (its journal or write-ahead log included), never a file read
-    half-way through a write. Root's alone (0600, in a 0700 folder). Refused, with nothing
-    written, when the copy wouldn't fit."""
+    half-way through a write. Root's alone (0600, in a 0700 folder). The caller has asked
+    room() first. Written beside its place and moved in when whole, so a copy that fails or is
+    cut off never replaces the one from the night before."""
     os.makedirs(os.path.dirname(os.path.dirname(dst)), mode=0o700, exist_ok=True)
     os.makedirs(os.path.dirname(dst), mode=0o700, exist_ok=True)
-    need = sum(os.path.getsize(p) for p in (src, src + "-wal") if os.path.exists(p))
-    free = shutil.disk_usage(os.path.dirname(dst)).free
-    if need + MARGIN > free:
-        raise OSError(f"no room for the copy in {COPIES} (it needs {need >> 20} MiB, and {free >> 20} MiB are free)")
+    os.chmod(os.path.dirname(os.path.dirname(dst)), 0o700)
     tmp = dst + ".partial"
     with contextlib.suppress(FileNotFoundError):
         os.unlink(tmp)
@@ -171,8 +269,9 @@ def sqlite_copy(src, dst):
         finally:
             copy.close()
     except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp)
+        for end in LEFTOVERS:
+            with contextlib.suppress(OSError):
+                os.unlink(dst + end)
         raise
     finally:
         source.close()
@@ -205,8 +304,8 @@ def required(at=at):
             p = os.path.join(at(APPS), n)
             if not n.startswith(".") and os.path.isdir(p) and not os.path.islink(p):
                 out.append(f"{APPS}/{n}")
-    if os.path.isdir(at(COPIES)):
-        out.append(COPIES)
+    if os.path.isdir(at(copies_dir(at))):
+        out.append(copies_dir(at))
     return out
 
 
@@ -251,7 +350,7 @@ def what(path):
     """A required path, in words (bromigos_backups.what() says the same)."""
     if path == APPS:
         return "the apps' data"
-    if path == COPIES:
+    if path in (COPIES_APPS, COPIES_SYSTEM):
         return "the apps' database copies"
     return f"the {os.path.basename(path)} app's data" if os.path.dirname(path) == APPS else "files"
 
@@ -339,14 +438,17 @@ def job(paths, keep=(7, 4, 6), say=print):
         return failed(f"the backup left out {words(gone)}" if gone else "what the backup holds couldn't be read back",
                       snapshot=snap[:8], missing=gone or [], databases=dbs, saw=saw)
     restic(["forget", "--keep-daily", str(keep[0]), "--keep-weekly", str(keep[1]), "--keep-monthly", str(keep[2]), "--prune"])
-    run = {"phase": "ok" if rc == 0 else "partial", "at": iso(), "ts": time.time(), "snapshot": snap[:8],
+    bad = failed_words(dbs)
+    why = ([] if rc == 0 else ["some files couldn't be read: " + last_line(err, "")]) + bad
+    # partial: the backup is good for all but what `reason` names (files restic couldn't read,
+    # `unread`; a database that isn't safe in it)
+    run = {"phase": "partial" if why else "ok", "at": iso(), "ts": time.time(), "snapshot": snap[:8],
            "files": summary.get("total_files_processed"), "bytes": summary.get("total_bytes_processed"),
-           "added": summary.get("data_added"), "databases": dbs, "saw": saw,
-           "reason": "" if rc == 0 else "some files couldn't be read: " + last_line(err, "")}
+           "added": summary.get("data_added"), "databases": dbs, "saw": saw, "unread": rc != 0,
+           "reason": "; ".join(why)}
     st = read_state()
     write_state(run=run, run_ok=run, **({} if st.get("first_ok_ts") else {"first_ok_ts": run["ts"]}))
     say(f"bromigos-lab: backed up ({run['snapshot']})")
-    bad = failed_words(dbs)
     for line in bad:
         print(f"bromigos-lab: {line}", file=sys.stderr)
     return 1 if bad else 0
@@ -355,14 +457,19 @@ def job(paths, keep=(7, 4, 6), say=print):
 # ------------------------------------------------------------------ the commands
 
 def cmd_copy_databases(a):
+    if away():
+        print(f"The data disks aren't mounted, so {APPS} (the apps' data) can't be read. Nothing was copied.", file=sys.stderr)
+        return 1
     rows = copy_databases()
     bad = [r for r in rows if not r["ok"]]
     if a.json:
         print(json.dumps({"schema": 1, "ok": not bad, "databases": rows}, indent=1))
     else:
         for r in rows:
-            if r["ok"]:
-                print(f"{r['what']}: " + ("its own backup is recent" if r.get("own") else f"{r['path']} copied"))
+            if r.get("none"):
+                print(f"{r['what']}: nothing found at {r['path']}" + (" (it is running)" if r.get("running") else ""))
+            elif r["ok"]:
+                print(f"{r['what']}: " + ("its own backup is recent" if r.get("own") else f"{r['path']} copied to {r['copy']}"))
             else:
                 print(f"{r['what']}: {r['reason']}", file=sys.stderr)
     return 1 if bad else 0

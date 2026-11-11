@@ -480,9 +480,11 @@ class ApplyTests(unittest.TestCase):
         self.net["up"] = True
         self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
         self.assertEqual(self.hooks(), {
-            "passwords": {"what": "passwords (Vaultwarden)",
+            "passwords": {"what": "passwords (Vaultwarden)", "units": ["vaultwarden.service"],
                           "sqlite": ["/srv/apps/passwords/db.sqlite3", "/var/lib/vaultwarden/db.sqlite3"]},
-            "documents": {"what": "documents (Paperless-ngx)", "sqlite": ["/srv/apps/documents/data/db.sqlite3"]},
+            # its services: when they run and nothing is found where the hook looks, the status says so
+            "documents": {"what": "documents (Paperless-ngx)", "sqlite": ["/srv/apps/documents/data/db.sqlite3"],
+                          "units": ["paperless-valkey.service", "paperless.service"]},
             "photos": {"what": "photos (Immich)", "own": ["/srv/apps/photos/library/backups/*"], "own_days": 3}})
         text = Path(self.root, "etc/bromigos/backup-databases.d/photos.toml").read_text()
         self.assertIn("# Immich's database is PostgreSQL", text, "the hook's comment says why nothing is copied")

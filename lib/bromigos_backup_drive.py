@@ -631,7 +631,7 @@ def backup(env, b):
     return {"phase": "partial" if why else "ok", "at": B.iso(), "ts": time.time(),
             "snapshot": snap[:8], "files": summary.get("total_files_processed"),
             "bytes": summary.get("total_bytes_processed"), "added": summary.get("data_added"),
-            "reason": "; ".join(why), "databases": dbs, "saw": saw}
+            "reason": "; ".join(why), "unread": rc != 0, "databases": dbs, "saw": saw}
 
 
 def keep(env, b):

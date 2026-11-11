@@ -78,8 +78,11 @@ REQUIRED = ("/srv/apps",)
 # The apps' databases, copied consistently before each backup (copy_databases): a hook per app,
 # written by the lab's engine ({what, sqlite = [paths]}), and the copies, root's alone
 DB_HOOKS = "/etc/bromigos/backup-databases.d"
+# The copies' two places (bromigos-lab's labbackup.py decides which, copies()): beside the apps'
+# data when /srv/apps is a filesystem of its own, else with bromigOS's own state
+DB_COPIES_APPS = "/srv/apps/.bromigos-backup-databases"
 DB_COPIES = "/var/lib/bromigos/backup-databases"
-WHAT = {"/srv/apps": "the apps' data", DB_COPIES: "the apps' database copies"}
+WHAT = {"/srv/apps": "the apps' data", DB_COPIES: "the apps' database copies", DB_COPIES_APPS: "the apps' database copies"}
 TIMERS = {"backup": "bromigos-server-backup.timer", "check": "bromigos-server-backup-check.timer",
           "test": "bromigos-server-backup-test.timer"}
 
@@ -337,6 +340,9 @@ def health(to, st, now, dest=None, restore=None, drives=None, unit=None):
         doc.update(check=None, check_passed=None, read_back=None, test=None, test_passed=None)
     gone = dest.get("present") is False
     stale = bool(success and success["age_s"] > STALE)
+    # partial: restic couldn't read some files (`unread`; a record from before the key says so by
+    # being partial at all), or a database isn't safe in it, which has a problem of its own below
+    unread = phase == "partial" and bool(run.get("unread", True))
     why = f"the drive at {dest['path']} is not connected" if gone else sentence(run.get("reason")) if phase == "failed" else ""
     # the last backup
     if phase == "failed":
@@ -354,7 +360,7 @@ def health(to, st, now, dest=None, restore=None, drives=None, unit=None):
             f"The last backup was on {success.get('at', '?')}. The nightly one hasn't run since: "
             + (f"{why}." if why else "the server may have been off, or the timer stopped."),
             look + [again], ["runs the backup again"], READ_FIRST))
-    elif phase == "partial":
+    elif unread:
         problems.append(_problem(
             "partial", subject, "info", "The last backup left some files out",
             f"{upper_first(run.get('reason') or 'some files could not be read')[:300]}. The rest was backed up.",
@@ -421,7 +427,7 @@ def health(to, st, now, dest=None, restore=None, drives=None, unit=None):
                                                              "have been off, or its timer stopped)") + "."
     else:
         line = f"Backed up {ago(last['ts'], now)}."
-        if phase == "partial":
+        if unread:
             line += " Some files could not be read and were left out."
         if dbs:
             line += " But the database of " + " and ".join(lower_first(d.get("what") or d.get("name") or "an app") for d in dbs) \
@@ -636,6 +642,32 @@ def not_yet_words(later, next_ts=None, drive=False):
     return " and ".join(f"{r['path']} ({r['what']})" for r in later) + f": not in a backup yet: {when_}"
 
 
+def database_lines(rows):
+    """The apps' databases as the last backup found them, a line for each app with a hook: what
+    was copied, an app's own backups, a copy that wasn't made and why. And for an app that is
+    running, a hook that found nothing where it looks: its database may be somewhere else, so
+    it is said (a note, never a failure). An app nobody has used yet, or set up within the
+    hour, has no database to find, and gets no line."""
+    by = {}
+    for r in rows if isinstance(rows, list) else []:
+        if isinstance(r, dict):
+            by.setdefault(str(r.get("name")), []).append(r)
+    out = []
+    for name, rs in by.items():
+        parts = []
+        copied = [os.path.basename(str(r.get("path"))) for r in rs if r.get("ok") and not r.get("own") and not r.get("none")]
+        if copied:
+            parts.append(", ".join(copied) + " copied")
+        if any(r.get("own") and r.get("ok") for r in rs):
+            parts.append("its own backups are recent")
+        parts += [str(r.get("reason") or "it failed") for r in rs if not r.get("ok")]
+        parts += [f"nothing found at {r.get('path')}, and it is running: if its database is somewhere else, the backup "
+                  "has no safe copy of it" for r in rs if r.get("none") and r.get("running") and not r.get("new")]
+        if parts:
+            out.append(f"{rs[0].get('what') or name}: " + "; ".join(parts))
+    return out
+
+
 def print_status(d):
     now, h = d["now"], d["health"]
     print(h["verdict"])
@@ -697,6 +729,8 @@ def print_status(d):
         elif sn.get("newest_ts"):
             kept += f", from {when(sn['newest_ts'])[:10]}"
         row("Backups kept", kept + (f" (counted {ago(sn['ts'], now)})" if sn.get("ts") else ""))
+    for i, text in enumerate(database_lines((lb or {}).get("databases"))):
+        row("Databases" if i == 0 else "", text)
     if d.get("not_in_backup_yet"):
         # set up since the last backup ran: nothing is wrong, and nothing has copied it yet
         row("Added since", not_yet_words(d["not_in_backup_yet"], d.get("next_backup_ts"), drive=not d["configured"]))
@@ -971,11 +1005,19 @@ def lab():
 
 def copy_databases():
     """Each app's database made safe for the backup that follows (bromigos-lab's
-    labbackup.copy_databases: a hook per app in DB_HOOKS, the copies in DB_COPIES).
+    labbackup.copy_databases: a hook per app in DB_HOOKS, the copies in copies()).
     [{"name", "what", "path", "ok", "reason"}], one per database tried; "own": true for an app
     that makes its own database backups, which must be recent."""
     L = lab()
     return L.copy_databases(at) if L else []
+
+
+def copies():
+    """The folder the databases' copies are in on this server: on the apps' own filesystem when
+    /srv/apps is a mount of its own (a hidden folder there), else on the system disk, where the
+    apps' data is too."""
+    L = lab()
+    return L.copies_dir(at) if L else DB_COPIES
 
 
 def what(path):
@@ -1005,7 +1047,7 @@ def excluded(path, patterns):
 
 def required_now(exclude=()):
     """What a backup made now must hold, of what is on this server: the apps' folder
-    (REQUIRED), each app's own folder in it, and the databases' copies (DB_COPIES). On a server
+    (REQUIRED), each app's own folder in it, and the databases' copies (copies()). On a server
     with data disks /srv/apps is a mount of their own, so it is named, never reached by crossing
     from /srv. An app's folder that [backup] exclude leaves out is its owner's choice, and isn't
     required; the apps' folder itself always is."""
@@ -1022,15 +1064,21 @@ def required_now(exclude=()):
             p = os.path.join(at(top), n)
             if not n.startswith(".") and os.path.isdir(p) and not os.path.islink(p) and not excluded(f"{top}/{n}", exclude):
                 out.append(f"{top}/{n}")
-    if os.path.isdir(at(DB_COPIES)):
-        out.append(DB_COPIES)
+    if os.path.isdir(at(copies())):
+        out.append(copies())
     return out
 
 
 def backup_set(paths):
     """The paths the nightly backup reads: [backup] paths, plus what it must hold whatever
-    those say. Each one that is on this server, in that order, once."""
-    return [p for p in dict.fromkeys([*paths, *REQUIRED, DB_COPIES]) if os.path.exists(at(p))]
+    those say. Each one that is on this server, in that order, once. The databases' copies are
+    named by themselves only where no other path holds them already (beside the apps' data they
+    are inside /srv/apps): nothing is read twice."""
+    named = list(dict.fromkeys([*paths, *REQUIRED]))
+    c = copies()
+    if not any(c == p or c.startswith(p.rstrip("/") + "/") for p in named):
+        named.append(c)
+    return [p for p in named if os.path.exists(at(p))]
 
 
 def fstab_mounts():
