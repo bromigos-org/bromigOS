@@ -42,7 +42,8 @@ bromigos lab models check              # check the data is consistent
 | `tiers CAPABILITY` | `--markdown` prints the tables at the end of this page. |
 | `upgrades` | `--apply` isn't built yet. It says so, changes nothing, and shows what the policy would do. |
 | `refresh` | `--hf` asks Hugging Face now. `--submit-bench` sends your bench results. |
-| `review` | `--all` adds the dismissed entries. `accept ID` and `ignore ID [--reason TEXT]` decide one ([below](#reviewing-what-the-refresh-finds)). |
+| `review` | `--all` adds the dismissed entries. `accept ID` and `ignore ID [--reason TEXT]` decide one ([below](#reviewing-what-the-refresh-finds)). `import CANDIDATES.toml` adds a survey's candidates. |
+| `check` | `--json`; `--no-assets` skips the shipped-asset check; `--repo PATH` names the checkout ([Licence lineage](#licence-lineage)). |
 
 The planning commands also take:
 
@@ -214,6 +215,65 @@ The licence filter is a setting, not a judgement:
 
 Some licences exclude regions. Tencent's exclude the EU, the UK and South Korea. MiniMax
 H3's also excludes the US. Those models drop out where you are.
+
+The filters read a model's whole chain, not only its own licence
+([Licence lineage](#licence-lineage)).
+
+### Licence lineage
+
+A model's own licence isn't the whole story. Pixal3D's code and weights are MIT, but it
+can't run without Meta's DINOv3 encoder, whose licence has its own conditions. So each
+model lists what it's built on, in `built_on`: encoders, backbones, VAEs, text encoders and
+LoRAs, each with its own licence and the card or LICENSE file it was read from. A part can
+also be another catalog model, whose own chain then counts.
+
+Every licence has a *tier*:
+
+| Tier | What it covers |
+|---|---|
+| **clean** | Apache-2.0, MIT, BSD, CC-BY with simple credit. OpenMDW is treated as clean: it asks only for notices. |
+| **conditional** | Use restrictions (OpenRAIL, DINOv3), attribution in the product, user or revenue caps, territory exclusions (Tencent Hunyuan: not the EU, the UK or South Korea), an API service's output terms. The NVIDIA Open Model License is conditional. |
+| **non-commercial** | Research, evaluation or non-commercial use only. |
+
+A model's *effective tier* is the worst tier in its chain. `pick`, `recommend` and
+`upgrades` show it with the reason, such as "built on DINOv3 ViT-L/16: use restrictions
+that pass to derivatives (no military, ITAR, weapons, espionage or nuclear uses; trade
+controls), Meta may change the terms, and it says nothing about outputs". `--json` gives
+`effective_tier`, `effective_reason` and `effective_decision`. A variant can add parts of
+its own: TRELLIS.2's official runtime brings RMBG-2.0 and nvdiffrast, both non-commercial,
+which ComfyUI's native nodes don't use.
+
+A licence whose terms are too unclear to call carries a `decision`, the question the owner
+has to answer. Hunyuan3D v3 through nolgia has one.
+
+Some licences changed in 2026, so older notes about them are wrong. DEIMv2 and TimesFM-3
+became non-commercial (TimesFM 2.5 is still Apache-2.0), and Mistral's Timestral has a
+revenue cap.
+
+#### Shipped assets: bromigos lab models check
+
+In a bromigOS checkout, `bromigos lab models check` also checks what made the assets the
+repository ships. It reads every provenance log beside the art: `mascot/provenance.jsonl`,
+`themes/*/art.log.jsonl` and every `generations.jsonl`. For each model a log names, it
+finds the catalog's entry, by id, by `aliases` or by workflow name. A model used through
+an API is an `[api.<id>]` entry, with that API's terms as its licence.
+
+Anything that isn't clean must be covered by a row of [ASSETS.md](ASSETS.md)'s checklist
+that names the asset's folder in backticks and records an explicit decision in its
+"Ships?" cell: `**yes** (who, YYYY-MM-DD)` or `**no**`. Without one, `check` names the
+folder and the models, and exits 1. A model the catalog doesn't know fails too, because its
+terms can't be checked. A licence with a `decision` is printed as a `note:`, even where an
+older row covers it.
+
+```bash
+bromigos lab models check               # the data, and the shipped assets
+bromigos lab models check --json        # every log, its models' tiers and the decision covering it
+bromigos lab models check --no-assets   # the data alone
+```
+
+An installed copy of the catalog, or any file other than the checkout's
+`homelab/share/lab/models.toml`, gets the data check alone (or name the checkout with
+`--repo PATH`).
 
 ### Only what bromigOS runs
 
@@ -494,6 +554,14 @@ at about 0.56 GiB per billion parameters at 4-bit. The licence tier comes from t
 `[licence]` the Hub's licence id means: *clean* (Apache, MIT, BSD, CC-BY, OpenMDW),
 *conditional* (use restrictions, caps, territory) or *non-commercial*.
 
+A survey's candidates join the same queue. `bromigos lab models review import
+candidates.toml` adds each one the catalog doesn't have as a pending entry of kind
+`survey`. It keeps the survey's capability, licence, tier, reason and `built_on`, and its
+size. Capability `mesh-parts` becomes `mesh` with `parts = true`. A survey's tier counts
+when it's worse than the licence alone, because the survey read the whole chain. Its
+candidates are adopt when bromigOS can run them and their tier is clean or conditional,
+watch when they need a runtime, and ignore when they're non-commercial and not in use.
+
 Each entry then ends in one of three ways:
 
 - **Accepted.** Someone researches the candidate's quality, peak VRAM, speed and licence,
@@ -561,10 +629,11 @@ catalog pull request, or else to the Lab catalog review issue.
 
 | Table | What it holds |
 |---|---|
-| `[licence.<id>]` | a licence: its name, URL, whether it allows commercial use, its conditions, whether it's permissive |
+| `[licence.<id>]` | a licence: its name, URL, whether it allows commercial use, its conditions, whether it's permissive; `tier` and `tier_reason` when the derived tier isn't right; `decision` when its terms are too unclear to call |
 | `[capability.<id>]` | a capability: its title, service name, whether it stays loaded, its speed unit, its quality basis and notes. A table for an id the code doesn't know declares a new capability; it also gives `parent`, and `hub` and `hub_name`: the Hugging Face pipelines the weekly refresh watches for it, and a pattern a repository's name must match |
 | `[gpu."<name>"]` | a GPU model: its VRAM, architecture, bandwidth and compute |
-| `[[model]]` | a model: its capabilities, family, repository, licence, quality scores and `cite`; `parts = true` when it makes separate parts; `in_use`, where bromigOS's own work uses it (`where`, `what`) |
+| `[[model]]` | a model: its capabilities, family, repository, licence, quality scores and `cite`; `parts = true` when it makes separate parts; `in_use`, where bromigOS's own work uses it (`where`, `what`); `built_on`, what it can't run without (`name`, `part`, `licence` or `model`, `cite`); `aliases`, the names provenance logs use |
+| `[api.<id>]` | a model used through someone's API: its name, the `[licence]` holding its terms, and where they were read |
 | `[[model.variant]]` | one way to run it: runtime, quantisation, weights, VRAM, RAM, vendors and `stack` |
 | `[[model.serving]]` | published serving figures on a given GPU, runtime and concurrency |
 | `[[pending]]` | a candidate the weekly refresh found, waiting for review (or accepted, or dismissed) |

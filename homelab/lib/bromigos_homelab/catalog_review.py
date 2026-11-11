@@ -116,10 +116,19 @@ def fit(params_b):
     return {"gib4": round(g4, 1), "gib8": round(g8, 1), "where": where}
 
 
+SURVEY_TIER = {"clean": "clean", "conditional": "conditional", "no": "non-commercial",
+               "non-commercial": "non-commercial"}
+
+
 def licence_tier(cat, entry):
-    """(tier, words): the tier of the [licence] the entry's Hub licence id means."""
+    """(tier, words): the tier of the [licence] the entry's Hub licence id means, or the tier a
+    survey worked out over the whole chain (its `tier`, `tier_reason`), whichever is worse."""
     hub = entry.get("licence") or ""
     lic = cat.hub_licence(hub)
+    st = SURVEY_TIER.get(entry.get("tier") or "")
+    if st and (lic is None or TIER_RANK[st] > TIER_RANK[lic.tier]):
+        why = entry.get("tier_reason") or entry.get("licence_name") or hub
+        return st, f"{entry.get('licence_name') or hub} ({st}: {why})"
     if lic is None:
         return "unknown", ("the Hub names no licence" if not hub or hub == "unknown"
                            else f"its licence is '{hub}' on the Hub: read the card")
@@ -179,6 +188,8 @@ def recommend(cat, entry, today=None):
         have = m.licence.name if m else "the catalog's"
         return out("adopt", f"the Hub now says '{entry.get('licence')}' ({lic_words}); the catalog has {have}",
                    "read the card, then set the model's licence: the licence filter and region checks depend on it")
+    if kind == "survey":
+        return _survey(entry, out, ready, tier, lic_words, f, stack)
     if f and f["where"] is None:
         return out("ignore", f"too big for any setup the catalog plans for (about {f['gib4']:.0f} GiB at 4-bit)")
     small = _smallest(cat, cap)
@@ -212,6 +223,112 @@ def recommend(cat, entry, today=None):
     if weak and age is not None and age > 28:
         return out("ignore", f"few people use it a month on ({used})", lic_words)
     return out("watch", "ready and licensed, but little evidence yet", used, lic_words, size)
+
+
+def _survey(entry, out, ready, tier, lic_words, f, stack):
+    """A survey's candidate: researched by hand already, so the evidence is the survey's word;
+    what's left is the licence and whether bromigOS can run it."""
+    size = f"about {f['gib4']:.0f} GiB at 4-bit, fits {f['where']}" if f else ""
+    if entry.get("memory_gb"):
+        size = f"about {float(entry['memory_gb']):g} GB as the survey sized it"
+    use = f"in use: {entry['in_use']}" if entry.get("in_use") else ""
+    if tier == "non-commercial":
+        return out("ignore" if not entry.get("in_use") else "watch", lic_words, use)
+    if not ready:
+        return out("watch", f"needs a way to run it: {stack.removeprefix('needs support: ')}", lic_words, size, use)
+    if tier in ("clean", "conditional"):
+        return out("adopt", "the survey recommends it", stack,
+                   lic_words, size, use, "measure its peak VRAM and speed, then add it as a [[model]]")
+    return out("watch", lic_words, "the licence decides whether it can be a pick", size, use)
+
+
+# ------------------------------------------------------------------ importing a survey
+def _public(text):
+    """The catalog is public: a survey's notes lose any path on someone's computer."""
+    return re.sub(r"(~|/home/[^/\s]+|/mnt|/srv|/var/home/[^/\s]+)(/[^\s,;)]*)?", "a local folder", text)
+
+
+def import_survey(path, survey, today=None):
+    """Add a survey's candidates (a candidates.toml: one [[model]] per candidate, with
+    capability, licence, tier, built_on, …) to models.toml at `path` as [[pending]] entries of
+    kind "survey". Skips what the catalog already has (by id or repository) and what's
+    pending or archived already. capability "mesh-parts" becomes mesh with parts = true.
+    -> {"added": [ids], "skipped": {reason: [ids]}}."""
+    import tomllib
+    tomlkit = _tomlkit()
+    today = _today(today)
+    with open(survey, "rb") as f:
+        sv = tomllib.load(f)
+    with open(path) as f:
+        doc = tomlkit.parse(f.read())
+    have_ids = {m.get("id") for m in doc.get("model", [])}
+    have_repos = {(m.get("repo") or "").lower() for m in doc.get("model", []) if m.get("repo")}
+    for m in doc.get("model", []):                             # a variant's own weights repository counts too
+        for v in m.get("variant", []):
+            w = str(v.get("weights") or "").split(" ")[0].split(":")[0].lower()
+            if re.fullmatch(r"[\w.-]+/[\w.-]+", w):
+                have_repos.add(w)
+    known = {p.get("id") for p in list(doc.get("pending") or []) + list(doc.get("archived") or [])}
+    known_repos = {(p.get("repo") or "").lower() for p in list(doc.get("pending") or []) + list(doc.get("archived") or [])
+                   if p.get("repo")}
+    pend = doc.get("pending")
+    if pend is None:
+        pend = tomlkit.aot()
+        doc["pending"] = pend
+    added, skipped = [], {}
+    stamp = str(sv.get("surveyed") or today.isoformat())
+    for m in sv.get("model") or []:
+        mid = m.get("id") or ""
+        repo = (m.get("hf_id") or m.get("repo") or "").strip()
+        pid = f"survey:{mid}"
+        if mid in have_ids or (repo and repo.lower() in have_repos):
+            skipped.setdefault("in the catalog", []).append(mid)
+            continue
+        if pid in known or (repo and repo.lower() in known_repos):
+            skipped.setdefault("already pending or archived", []).append(mid)
+            continue
+        cap = m.get("capability") or ""
+        parts = bool(m.get("parts")) or cap == "mesh-parts"
+        if cap == "mesh-parts":
+            cap = "mesh"
+        comfy = str(m.get("comfyui") or "")
+        stack = ("ready (ComfyUI: " + comfy + ")") if comfy.lower().startswith("yes") else \
+            f"needs support: {comfy or 'no runtime named'}"
+        t = tomlkit.table()
+        t["id"] = pid
+        t["kind"] = "survey"
+        t["capability"] = cap
+        if m.get("also_capabilities"):
+            t["also_capabilities"] = list(m["also_capabilities"])
+        t["title"] = f"{m.get('name', mid)}: the {stamp[:7]} survey"
+        why = _public(" ".join(str(m.get("quality_notes") or "").split()))
+        if m.get("replaces"):
+            why = f"would replace {m['replaces']}. " + why
+        t["why"] = (why[:400] + "…") if len(why) > 400 else (why or "listed by the survey")
+        if repo:
+            t["repo"] = repo
+        t["evidence"] = [x for x in [m.get("url"), m.get("licence_url"), *(m.get("cite") or [])] if x][:6]
+        t["stack"] = stack
+        for k in ("licence", "licence_name", "tier", "tier_reason"):
+            if m.get(k):
+                t[k] = str(m[k])
+        if m.get("built_on"):
+            t["built_on"] = [{k: str(v) for k, v in b.items()} for b in m["built_on"]]
+        if m.get("memory_gb"):
+            t["memory_gb"] = float(m["memory_gb"])
+        if parts:
+            t["parts"] = True
+        if m.get("in_use"):
+            t["in_use"] = _public(str(m["in_use"]))
+        t["found"] = today.isoformat()
+        t["state"] = "pending review"
+        pend.append(t)
+        added.append(pid)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(tomlkit.dumps(doc))
+    os.replace(tmp, path)
+    return {"added": added, "skipped": skipped}
 
 
 # ------------------------------------------------------------------ the queue
@@ -513,6 +630,19 @@ def main(argv):
                 print(json.dumps({"id": ident, "action": pos[0], "catalog": path}))
             else:
                 print(f"{ident}: {done}. Commit {os.path.relpath(path)} in a pull request.")
+            return 0
+        if pos and pos[0] == "import":
+            # import SURVEY_CANDIDATES.toml [--catalog PATH]: a survey's candidates, as [[pending]] entries
+            if len(pos) < 2:
+                print("bromigos lab models review import CANDIDATES.toml", file=sys.stderr)
+                return 2
+            path = C._arg(argv, "--catalog") or DEFAULT_CATALOG
+            r = import_survey(path, pos[1], C._arg(argv, "--today"))
+            if js:
+                print(json.dumps(r, indent=1))
+            else:
+                print(f"added {len(r['added'])} survey candidates to the review queue"
+                      + "".join(f"; skipped {len(v)} ({k})" for k, v in r["skipped"].items()))
             return 0
         if pos and pos[0] == "issue-sync":
             # CI: issue-sync --catalog PATH --repo OWNER/NAME [--report FILE] [--issues FILE] [--dry-run]
