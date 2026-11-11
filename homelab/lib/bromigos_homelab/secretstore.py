@@ -230,10 +230,24 @@ class Store:
 
     def _podman(self, name, value):
         """Containers read the key as a file through Podman's shell secret driver (decrypting it
-        with systemd-creds), so Podman's copy is never plain text either."""
+        with systemd-creds), so Podman's copy is never plain text either. A copy Podman didn't
+        take is said, with Podman's own words: the container that names it would stop at every
+        start with "no such secret" and nothing else. A server without Podman has nothing to
+        give it to."""
         if not os.path.exists(at(PODMAN_DROPIN, self.root)):
             return
-        self.run(["podman", "secret", "create", "--replace", podman_name(name), "-"], value)
+        # --replace only over a secret that is there: Podman 4 (Ubuntu 24.04's 4.9, others before
+        # 5.0) deletes the old one first even when there is none, and stops ("deleting secret :
+        # secret with name or id "": no such secret"). A new name is created, a known one replaced
+        there = self.run(["podman", "secret", "exists", podman_name(name)])[0]
+        if there == 127:
+            return
+        rc, out, err = self.run(["podman", "secret", "create", *(["--replace"] if there == 0 else []), podman_name(name), "-"], value)
+        if rc == 127:
+            return
+        if rc:
+            words = " ".join((err or out or "").split())[:300] or f"it stopped with code {rc}"
+            raise SecretError(f"Podman didn't take {name} (podman secret create {podman_name(name)}: {words})")
 
     def after_put(self):
         pass

@@ -15,6 +15,10 @@
 #                        /srv/apps/ID/PATH: the real app must make it, the engine must write its
 #                        backup hook, and with disks= and app= the nightly backup must hold a copy
 #                        of it that opens
+#     keyapp=ID keydb=PATH
+#                        the lab's engine installs that app too, one with a key of its own (a Podman
+#                        secret): Podman must have the key, the app must run and answer, and its hook
+#                        must copy its database at /srv/apps/ID/PATH
 #     move=1             with disks= and app=: then the server is put back as the installer left
 #                        one before November 2026 (the app's data on the system disk, the pool's
 #                        apps subvolume empty, no /srv/apps line in fstab; the same for the media
@@ -134,6 +138,37 @@ if [[ -n ${want[dbapp]:-} ]]; then
         cat /etc/bromigos/backup-databases.d/$db.toml
         grep -q '^sqlite = ' /etc/bromigos/backup-databases.d/$db.toml
         ls /etc/bromigos/backup-databases.d/"
+fi
+if [[ -n ${want[keyapp]:-} ]]; then
+    # An app with a key of its own (Prowlarr's API key, as Sonarr's, Radarr's and Paperless's):
+    # the engine makes the key in the secret store and gives Podman a copy, which the container
+    # reads at start. On GitHub's runner that copy wasn't there ("no such secret"), so these apps
+    # never started there; this asks whether a real Server is the same
+    k=${want[keyapp]} kdb=${want[keydb]:?keydb=PATH is needed with keyapp=}
+    check "the lab's engine installs $k, an app with a key of its own (bromigos lab provision --local)" bash -c "
+        nm-online -q -t 90 || true
+        for try in 1 2 3; do
+            sudo bromigos lab provision --local --select $k --apply --no-wait 2>&1 | tail -20; rc=\${PIPESTATUS[0]}
+            (( rc == 0 )) && break
+            echo \"try \$try failed (\$rc)\"; sleep 30
+        done
+        exit \$rc"
+    check "Podman has $k's key, and $k runs and answers" bash -c "
+        set -e
+        sudo podman secret ls
+        sudo podman secret exists bromigos-$k-api-key || {
+            echo \"Podman has no secret bromigos-$k-api-key. Its driver, the keys' folder and the unit:\"
+            sudo cat /etc/containers/containers.conf.d/50-bromigos-secrets.conf; sudo ls -la /etc/credstore.encrypted
+            sudo journalctl -u $k -n 20 --no-pager; exit 1; }
+        for _ in \$(seq 60); do systemctl is-active -q $k && break; sleep 2; done
+        systemctl is-active $k || { sudo journalctl -u $k -n 30 --no-pager; exit 1; }
+        for _ in \$(seq 60); do curl -fsS -o /dev/null http://127.0.0.1:9696/ping && break; sleep 2; done
+        curl -fsS http://127.0.0.1:9696/ping"
+    check "$k made its database (/srv/apps/$k/$kdb), and its hook copies it whole" bash -c "
+        for _ in \$(seq 60); do sudo test -s /srv/apps/$k/$kdb && break; sleep 2; done
+        sudo test -s /srv/apps/$k/$kdb || { sudo find /srv/apps/$k -maxdepth 3 | head -30; exit 1; }
+        sudo bromigos lab backups copy-databases | tee /tmp/isotest-copies
+        grep -q '/srv/apps/$k/$kdb copied to ' /tmp/isotest-copies"
 fi
 if [[ -n ${want[app]:-} && -n ${want[disks]:-} ]]; then
     # The nightly backup on a server whose /srv/apps is a mount of the data disks' apps subvolume:

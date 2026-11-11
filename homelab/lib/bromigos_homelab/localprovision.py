@@ -609,6 +609,11 @@ def install_quadlet(host, it):
         name = raw if "/" in raw else f"{it['id']}/{raw}"
         if host.store.exists(name) and host.run(["podman", "secret", "exists", S.podman_name(name)])[0] != 0:
             host.store._podman(name, host.store.get(name))      # a key saved before Podman's driver was set up
+        # every secret the units name is Podman's before they start: without it a container stops at
+        # each start with "no such secret", and the app is never up
+        if host.store.exists(name) and host.run(["podman", "secret", "exists", S.podman_name(name)])[0] != 0:
+            raise ProvisionError(f"Podman has no copy of the key {name} ({S.podman_name(name)}), so {it['name']} can't start. "
+                                 "bromigos lab secrets status says where the keys are")
     host.mkdir(APPS + "/" + it["id"], 0o750)
     if it["id"] in DATABASES:
         database_hook(host, it["id"])                    # its database made safe before every backup

@@ -24,10 +24,13 @@ rules() { sudo nft list table inet bromigos-server; }
 # the accept rules that name port 80 or 443, one a line
 web_rules() { rules | grep -E 'dport (\{[^}]*\b(80|443)\b[^}]*\}|(80|443)\b)' | grep -w accept; }
 # every one of them is from the local network's sets, and there is at least one for each family
+# The local network: @lan and @lan6, and (since #140) the lab network's range, only on its own
+# interface (`iifname "tailscale0" ip saddr @lab`: the twin each local rule has). Anything else
+# letting 80 or 443 in is the internet
 local_only() {
     local all; all=$(web_rules)
     echo "$all"
-    [[ -n $all ]] && ! grep -Ev 'ip6? saddr @lan6? ' <<<"$all" | grep -q . \
+    [[ -n $all ]] && ! grep -Ev '^\s*(ip6? saddr @lan6? |iifname "tailscale0" ip saddr @lab )' <<<"$all" | grep -q . \
         && grep -q 'ip saddr @lan ' <<<"$all" && grep -q 'ip6 saddr @lan6 ' <<<"$all"
 }
 open_to_everyone() { web_rules | grep -Ev 'saddr' | grep -q .; }

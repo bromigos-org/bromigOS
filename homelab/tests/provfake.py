@@ -33,6 +33,7 @@ class FakeMachine:
         self.fail = set(fail)                  # command words that fail, such as "pacman -S jellyfin"
         self.calls = []
         self.podman_secrets = {}
+        self.podman4 = False                   # Podman 4's `secret create --replace` (see below)
         self.users = set()
         self.unseal_ok = True
         # the service manager, for `systemctl show`: units started and not stopped since are
@@ -67,7 +68,12 @@ class FakeMachine:
                 self.images.add(argv[2])
                 return 0, "", ""
             if argv[1:3] == ["secret", "create"]:
-                # the shell driver keeps it encrypted: record only that it exists
+                # the shell driver keeps it encrypted: record only that it exists. podman4: Podman 4's
+                # --replace, which deletes the old one first even when there is none, and stops
+                if self.podman4 and "--replace" in argv and argv[-2] not in self.podman_secrets:
+                    return 125, "", 'Error: deleting secret : secret with name or id "": no such secret'
+                if "--replace" not in argv and argv[-2] in self.podman_secrets:
+                    return 125, "", f"Error: {argv[-2]}: secret name in use"
                 self.podman_secrets[argv[-2]] = len(data or "")
                 return 0, "", ""
             if argv[1:3] == ["secret", "exists"]:
