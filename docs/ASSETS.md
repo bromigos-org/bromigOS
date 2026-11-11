@@ -25,6 +25,7 @@ the models used.
 | Bromigos logos, favicons, lockups and house palette (`brand/`) | Traced from the canon `bromigos-logo.png` | yes, as brand assets | Source only, not packaged. No likeness |
 | The canonical burn-in (`theme/emblem/identity.json`, `flame.svg`) | Bromigos original | yes, as a brand asset | In `bromigos-core`. Every emblem kit is drawn from it |
 | Geist and Geist Mono fonts | Vercel, SIL OFL | yes | Keep the licence file |
+| The Lab board's icon family and device glyphs (`board/web/components/sprite.ts`) | Drawn for bromigOS as SVG on a 24 grid, in the Lab board's design | yes | `MIT OR Apache-2.0`; no outside logos. Geist Mono reaches the page as links to `ttf-geist-mono`'s files |
 | Icons and cursor | Generated or recoloured from Breeze Dark (LGPL) | **yes** (operator, 2026-10-08) | Keep Breeze's attribution where derived |
 | The bar's battery and power-profile icons (`theme/icons/{bat,power}*.svg`) | Drawn for bromigOS | yes | Recoloured per theme |
 | The bar's idle and Settings icons (`theme/icons/{eye,cup,gear}*.svg`) | Drawn in code by `theme/tools/build-icons.py` | yes | Recoloured per theme |

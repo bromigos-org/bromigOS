@@ -1,0 +1,96 @@
+{
+ "now": 1794348120000,
+ "about": "Signed in to a server with nothing installed yet (first run).",
+ "door": {
+  "schema": 1,
+  "lab": {
+   "name": "MYLAB",
+   "address": "https://mylab.local"
+  },
+  "server": {
+   "name": "myserver"
+  },
+  "world": "wick",
+  "tiles": [],
+  "signin": {
+   "code": true,
+   "phone": false,
+   "account": false
+  }
+ },
+ "session": {
+  "schema": 1,
+  "signed_in": true,
+  "role": "owner",
+  "browser": {
+   "id": "b-3f9a",
+   "name": "Firefox on Linux"
+  },
+  "expires_at": 1796940120000,
+  "browsers": [
+   {
+    "id": "b-3f9a",
+    "name": "Firefox on Linux",
+    "signed_in_at": 1794088920000,
+    "last_seen_at": 1794348120000,
+    "current": true
+   }
+  ]
+ },
+ "board": {
+  "schema": 1,
+  "at": 1794348060000,
+  "max_age_s": 45,
+  "lab": {
+   "name": "MYLAB",
+   "address": "https://mylab.local"
+  },
+  "server": {
+   "name": "myserver",
+   "kind": "server",
+   "roles": [
+    "home",
+    "media"
+   ]
+  },
+  "status": {
+   "state": "setup",
+   "words": "Nothing installed yet.",
+   "checked_at": 1794348060000
+  },
+  "machines": [
+   {
+    "name": "myserver",
+    "kind": "server",
+    "here": true,
+    "page": true,
+    "state": "ok",
+    "state_word": "online",
+    "roles": [
+     "Home services",
+     "Media"
+    ],
+    "updates": {
+     "count": 0,
+     "security": false
+    },
+    "readings": {
+     "cpu_pct": 23,
+     "ram_pct": 49,
+     "temp_c": 38,
+     "at": 1794348060000,
+     "max_age_s": 45
+    },
+    "apps": 0
+   }
+  ],
+  "needs_you": [],
+  "fixed": [],
+  "apps": [],
+  "storage": null,
+  "backups": null,
+  "updates": null,
+  "ups": null
+ },
+ "activity": []
+}

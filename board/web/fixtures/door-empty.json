@@ -1,0 +1,33 @@
+{
+ "now": 1794348120000,
+ "about": "Signed out, nothing installed yet: the door says apps appear here.",
+ "door": {
+  "schema": 1,
+  "lab": {
+   "name": "MYLAB",
+   "address": "https://mylab.local"
+  },
+  "server": {
+   "name": "myserver"
+  },
+  "world": "wick",
+  "tiles": [],
+  "signin": {
+   "code": true,
+   "phone": false,
+   "account": false
+  }
+ },
+ "session": {
+  "schema": 1,
+  "signed_in": false,
+  "role": null,
+  "browser": null,
+  "expires_at": null,
+  "browsers": []
+ },
+ "board": {
+  "$status": 401
+ },
+ "activity": []
+}

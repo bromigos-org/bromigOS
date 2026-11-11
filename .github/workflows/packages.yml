@@ -28,6 +28,7 @@ on:
       - "apps/**"
       - "LICENSE-*"
       - "manual/**"
+      - "board/**"
       - ".github/workflows/packages.yml"
   workflow_dispatch:
     inputs:

@@ -1,0 +1,6 @@
+/* Geist Mono, the bromigOS UI font (SIL OFL 1.1). The package links these files to the ones
+   ttf-geist-mono installs (packaging/bromigos-board-web/PKGBUILD), so nothing is fetched from
+   another site; a page without them falls back to the next monospace face. */
+@font-face { font-family: "Geist Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/GeistMono-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/GeistMono-SemiBold.ttf") format("truetype"); }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/GeistMono-Bold.ttf") format("truetype"); }

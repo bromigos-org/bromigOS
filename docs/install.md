@@ -192,6 +192,7 @@ Then it runs `bromigos setup`, unless you gave `--no-setup`.
 | `paru` | Feature packed AUR helper | by `bromigos install` (its `aur` step), unless `--no-aur` or `bromigos setup aur` leaves it out |
 | `1password` | Password manager and secure wallet | optional, for `bromigos-apps` |
 | `bromigos-apps-terminal` | bromigOS app bundle, terminal half: LazyVim, tmux, lazygit and mise, configured and themed (no desktop needed) | with `bromigos-apps`, `bromigos-server` |
+| `bromigos-board-web` | bromigOS Lab board: the page the server serves to browsers at home | on bromigOS Server, with the Lab board's service (docs/board.md) |
 | `bromigos-fieldkit-tools` | bromigOS Field Kit engine: repair an install (black screen, last boot, rollback, boot menu, disks, backups), the stick and remote help | with `bromigos-server` |
 | `bromigos-secureboot` | bromigOS on Secure Boot: shim, a GRUB built and signed on the computer, kernels signed after every update | by the installer, on a computer that starts the newer way (UEFI); elsewhere by `sudo pacman -S bromigos-secureboot` (docs/secureboot.md) |
 | `bromigos-server` | bromigOS Server: bromigOS without a desktop for servers and lab machines (SSH, firewall, safe automatic updates, roles, backups, disk watch, containers, the lab) | on its own |
