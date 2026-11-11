@@ -52,5 +52,6 @@ SystemCallFilter=~@privileged @resources
 SystemCallErrorNumber=EPERM
 CapabilityBoundingSet=
 # the socket comes from systemd; it opens none of its own
-RestrictAddressFamilies=AF_UNIX
+# AF_NETLINK: to read the lab interface's addresses (rtnetlink's RTM_GETADDR, read-only)
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
 IPAddressDeny=any

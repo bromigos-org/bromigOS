@@ -166,12 +166,10 @@ NFT_EXTRA = "/etc/bromigos/server/nftables.d"
 # these well-known ranges from a real network's addresses
 LAN4 = [str(ipaddress.IPv4Network((base << 16, bits))) for base, bits in ((0x0A00, 8), (0xAC10, 12), (0xC0A8, 16))]
 # carrier-grade NAT (RFC 6598): the lab's private network hands out its addresses from it, and so
-# do some internet providers to their customers. It is the local network only while this server
-# is on the lab's network (lab_network_up; tailscaled's drop-in loads the firewall again when it
-# starts and stops)
+# do some internet providers to their customers. So it is never in @lan: the firewall lets it in
+# only from the lab network's own interface (lab_twins), never on the way in from the uplink
 LAB4 = [str(ipaddress.IPv4Network((0x6440 << 16, 10)))]
 LAB_INTERFACE = "tailscale0"
-LAB_UNIT = "tailscaled.service"
 LAN6 = ["fc00::/7", "fe80::/10"]
 # the units every healthy Server runs; sshd only when it's enabled
 MUST_RUN = ("NetworkManager.service", "bromigos-server-firewall.service")
@@ -579,10 +577,23 @@ def ports(values):
     return [int(p) for p in values if str(p).isdigit() and 0 < int(p) < 65536]
 
 
-def lab_network_up():
-    """Whether this server is on the lab's private network now (docs/lab-network.md): its
-    interface is there, or its service is running or starting."""
-    return os.path.isdir(at(f"/sys/class/net/{LAB_INTERFACE}")) or unit_state(LAB_UNIT) in ("active", "activating")
+LAN_SADDR = re.compile(r"\bip saddr @lan\b(?!6)")
+
+
+def lab_twins(text):
+    """Every rule that lets the local network in (`ip saddr @lan …`), once more for the lab's
+    private network: the same ports, from its range and only from its interface. The interface
+    is what tells a lab machine from a neighbour in the internet provider's carrier-grade NAT,
+    who comes in on the uplink with an address from the same range."""
+    out = []
+    for line in text.splitlines():
+        out.append(line)
+        rule = line.lstrip()
+        if LAN_SADDR.search(line) and (rule.startswith("add rule ") or rule.startswith("ip saddr ")) \
+                and not rule.startswith("#"):
+            out.append(LAN_SADDR.sub(f'iifname "{LAB_INTERFACE}" ip saddr @lab', line, count=1)
+                       .replace('comment "', 'comment "the lab network: ', 1))
+    return "\n".join(out) + ("\n" if text.endswith("\n") else "")
 
 
 def ruleset(c):
@@ -590,9 +601,9 @@ def ruleset(c):
     ports from the settings, and anything in /etc/bromigos/server/nftables.d/*.nft."""
     with open(os.path.join(SHARE, "nftables.nft")) as f:
         text = f.read()
-    lan4 = LAN4 + (LAB4 if lab_network_up() else [])
-    extra = [f"add element inet bromigos-server lan {{ {', '.join(lan4)} }}\n"
-             f"add element inet bromigos-server lan6 {{ {', '.join(LAN6)} }}\n"]
+    extra = [f"add element inet bromigos-server lan {{ {', '.join(LAN4)} }}\n"
+             f"add element inet bromigos-server lan6 {{ {', '.join(LAN6)} }}\n"
+             f"add element inet bromigos-server lab {{ {', '.join(LAB4)} }}\n"]
     known = rulesets()
     for name in chosen_rulesets(c):
         if name not in known:
@@ -617,7 +628,7 @@ def ruleset(c):
             if n.endswith(".nft"):
                 with open(os.path.join(d, n)) as f:
                     extra.append(f.read())
-    return text + "\n".join(extra) + "\n# the rest, dropped (the base chain's policy)\n"
+    return lab_twins(text + "\n".join(extra)) + "\n# the rest, dropped (the base chain's policy)\n"
 
 
 def firewall_state():

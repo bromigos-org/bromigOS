@@ -126,7 +126,7 @@ package() {
   install -Dm0644 -t "$pkgdir/usr/lib/systemd/system/" "$s"/systemd/*.service "$s"/systemd/*.timer
   install -Dm0644 -t "$pkgdir/usr/lib/udev/rules.d/" "$s"/udev/*.rules
   local unit
-  for unit in prometheus-node-exporter.service sshguard.service smartd.service podman-auto-update.timer tailscaled.service; do
+  for unit in prometheus-node-exporter.service sshguard.service smartd.service podman-auto-update.timer; do
     install -Dm0644 "$s/systemd/${unit%.*}-bromigos.conf" "$pkgdir/usr/lib/systemd/system/$unit.d/bromigos-server.conf"
   done
   install -Dm0644 "$s/journald.conf" "$pkgdir/usr/lib/systemd/journald.conf.d/60-bromigos-server.conf"

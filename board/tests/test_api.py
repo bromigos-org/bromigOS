@@ -2,11 +2,13 @@
 the page's, board-contracts.md), the door's allow-list key by key, sign-in with a console code,
 sessions, CSRF, and the private-address rule."""
 import asyncio
+import ipaddress
 import json
 import os
 import threading
 import time
 import unittest
+from unittest import mock
 
 from common import FIXTURES, LAN, NOW, Root
 
@@ -417,7 +419,7 @@ class SignInTests(Base):
         code, _ = auth.new_code()
         self.assertEqual(self.c.post("/api/session", json={"code": code}, headers=PAGE).status_code, 200)
 
-    def test_wrong_codes_from_everywhere_never_refuse_or_slow_a_right_one(self):
+    def test_wrong_codes_from_everywhere_never_refuse_a_right_one(self):
         """One device with many addresses sends a wrong code a second for ten minutes. The owner
         asks for a code each minute and types it 15 seconds later: every one signs in, at once."""
         owner = client(self.app, xff="192.168.1.20")
@@ -439,21 +441,42 @@ class SignInTests(Base):
         code, _ = auth.new_code()
         self.assertEqual(owner.post("/api/session", json={"code": code}, headers=PAGE).status_code, 200)
 
-    def test_wrong_codes_are_answered_one_every_200_ms_and_never_held_more_than_a_second(self):
-        for i in range(12):                              # all at the same moment
+    def test_after_a_wrong_code_the_gate_waits_200_ms(self):
+        for i in range(12):
             client(self.app, xff=f"10.1.{i}.1").post("/api/session", json={"code": "CCCC-CCCC"}, headers=PAGE)
-        self.assertEqual(self.waits, [0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-        self.clock.t += 5                                # the queue is long gone
-        client(self.app, xff="10.2.0.1").post("/api/session", json={"code": "CCCC-CCCC"}, headers=PAGE)
-        self.assertEqual(self.waits[-1], 0)
+        self.assertEqual(self.waits, [0.2] * 12, "each wrong code holds the gate 200 ms")
+        code, _ = auth.new_code()
+        self.assertEqual(client(self.app, xff="10.2.0.1").post("/api/session", json={"code": code}, headers=PAGE).status_code, 200)
+        self.assertEqual(len(self.waits), 12, "a right one holds nothing")
 
     def test_an_address_is_forgotten_once_its_tries_are_old(self):
         for i in range(300):
-            client(self.app, xff=f"fd00::{i:x}").post("/api/session", json={"code": "AAAA-AAAA"}, headers=PAGE)
+            client(self.app, xff=f"10.3.{i // 250}.{i % 250 + 1}").post("/api/session", json={"code": "AAAA-AAAA"}, headers=PAGE)
         self.assertEqual(len(self.tries.by_source), 300)
         self.clock.t += 120
         self.assertIsNone(self.tries.blocked("192.168.1.20"))
         self.assertEqual(self.tries.by_source, {})
+
+    def test_an_ipv6_address_counts_with_its_64(self):
+        """One device can take any address of its /64: they are one source."""
+        for i in range(5):
+            self.assertEqual(client(self.app, xff=f"fd00:1::{i + 1:x}").post("/api/session", json={"code": "AAAA-AAAA"},
+                                                                            headers=PAGE).status_code, 401)
+        r = client(self.app, xff="fd00:1::ffff:1234").post("/api/session", json={"code": "AAAA-AAAA"}, headers=PAGE)
+        self.assertEqual(r.status_code, 429)
+        self.assertEqual(client(self.app, xff="fd00:2::1").post("/api/session", json={"code": "AAAA-AAAA"},
+                                                               headers=PAGE).status_code, 401, "another /64 is another source")
+        self.assertEqual(auth.source_key("::ffff:192.168.1.20"), "192.168.1.20")
+
+    def test_a_right_code_doesnt_count_against_its_address(self):
+        for _ in range(4):
+            self.c.post("/api/session", json={"code": "AAAA-AAAA"}, headers=PAGE)
+        for _ in range(3):
+            code, _ = auth.new_code()
+            self.assertEqual(self.c.post("/api/session", json={"code": code}, headers=PAGE).status_code, 200)
+        self.assertEqual(self.c.post("/api/session", json={"code": "AAAA-AAAA"}, headers=PAGE).status_code, 401)
+        self.assertEqual(self.c.post("/api/session", json={"code": "AAAA-AAAA"}, headers=PAGE).status_code, 429)
+
 
     def test_a_session_lasts_thirty_days(self):
         os.environ["BROMIGOS_BOARD_NOW_MS"] = str(NOW)
@@ -651,18 +674,39 @@ class SourceTests(Base):
                 self.assertEqual(r.json()["error"]["code"], "not-local")
                 self.assertEqual(r.headers["cache-control"], "no-store")
 
-    def test_the_labs_private_network_gets_in_only_while_this_server_is_on_it(self):
-        """The carrier-grade NAT range is the lab's private network's, and some internet
-        providers': it is local only while the lab network's interface is here."""
+    def test_the_labs_private_network_gets_in_only_by_its_own_interface(self):
+        """Review N3. The carrier-grade NAT range is the lab network's, and some internet
+        providers'. An address from it gets in only when the request came in at one of the lab
+        interface's own addresses (Caddy's X-Bromigos-Local): a neighbour in the provider's range
+        arrives at the uplink's, and is refused even while the lab network is up."""
+        lab_ip, uplink_ip = "100.100.1.1", "100.72.9.9"          # this server on the lab network, and its uplink in the provider's range
+
+        def ask(xff, local):
+            h = {"x-bromigos-local": local} if local else {}
+            c = client(self.app, xff=xff)
+            return c.get("/api/door", headers=h).status_code, c.get("/api/local", headers=h).status_code
         for xff in ("100.64.0.7", "100.127.255.254", "::ffff:100.64.0.7"):
-            self.assertEqual(client(self.app, xff=xff).get("/api/door").status_code, 403, xff)
-            self.assertEqual(client(self.app, xff=xff).get("/api/local").status_code, 403, xff)
+            self.assertEqual(ask(xff, lab_ip), (403, 403), "no lab network here")
         (self.root / "sys/class/net/tailscale0").mkdir(parents=True)
-        for xff in ("100.64.0.7", "100.127.255.254", "::ffff:100.64.0.7"):
-            self.assertEqual(client(self.app, xff=xff).get("/api/door").status_code, 200, xff)
-            self.assertEqual(client(self.app, xff=xff).get("/api/local").status_code, 204, xff)
-        self.assertEqual(client(self.app, xff="100.128.0.1").get("/api/local").status_code, 403)
-        self.assertEqual(client(self.app, xff="8.8.8.8").get("/api/local").status_code, 403)
+        (self.root / "sys/class/net/tailscale0/ifindex").write_text("7\n")
+        kernel = [(2, ipaddress.ip_address(uplink_ip)), (7, ipaddress.ip_address(lab_ip)), (7, ipaddress.ip_address("fd7a:115c:a1e0::1"))]
+        with mock.patch.object(net, "_rtnl_addresses", lambda: kernel):
+            for xff in ("100.64.0.7", "100.127.255.254", "::ffff:100.64.0.7"):
+                self.assertEqual(ask(xff, lab_ip), (200, 204), xff)
+                self.assertEqual(ask(xff, "fd7a:115c:a1e0::1"), (200, 204), xff)
+                self.assertEqual(ask(xff, uplink_ip), (403, 403), f"{xff} came in on the uplink: a neighbour")
+                self.assertEqual(ask(xff, None), (403, 403), f"{xff}: nobody said where it came in")
+                self.assertEqual(ask(xff, "not an address"), (403, 403))
+            self.assertEqual(ask("100.128.0.1", lab_ip), (403, 403))
+            self.assertEqual(ask("8.8.8.8", lab_ip), (403, 403))
+            self.assertEqual(ask("192.168.1.20", None), (200, 204), "the home network needs nothing more")
+        with mock.patch.object(net, "_rtnl_addresses", mock.Mock(side_effect=OSError("no netlink"))):
+            self.assertEqual(ask("100.64.0.7", lab_ip), (403, 403), "when the kernel can't be asked: not local")
+
+    def test_the_kernel_answer_is_read_right(self):
+        """net._rtnl_addresses parses an RTM_GETADDR dump: this machine's, for real."""
+        got = net._rtnl_addresses()
+        self.assertTrue(any(ip.is_loopback for _, ip in got), got and "no loopback address read")
 
     def test_the_address_is_read_once_and_the_same_everywhere(self):
         """Two X-Forwarded-For lines: the check and the wrong-code count both use the last."""
@@ -760,6 +804,62 @@ class ActivityStreamTests(Base):
         r = self.c.get("/api/activity")
         self.assertEqual(r.status_code, 401)
         self.assertNotIn("backup", r.text)
+
+
+class SignInAtOnce(Root):
+    """Review N2: tries made at the same moment, as uvicorn serves them (one event loop, many
+    connections), with the real waits."""
+
+    def run(self, result=None):
+        with mock.patch.object(auth, "WRONG_EVERY_S", 0.05):     # the real gate, a quarter as long
+            return super().run(result)
+
+    def at_once(self, addresses, n, app=None):
+        import httpx
+        auth.new_code()                                   # a code waiting, so guesses go to the folder
+        app = app or api.make_app(tries=auth.Tries())
+
+        async def main():
+            t0 = time.monotonic()
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=ORIGIN) as c:
+                async def one(i):
+                    r = await c.post("/api/session", content=b'{"code": "AAAA-AAAA"}',
+                                     headers={**PAGE, "content-type": "application/json",
+                                              "x-forwarded-for": addresses[i % len(addresses)]})
+                    return r.status_code
+                codes = await asyncio.gather(*[one(i) for i in range(n)])
+            return codes, time.monotonic() - t0
+        return asyncio.run(main())
+
+    def test_one_address_200_at_once_is_five_tries(self):
+        codes, _ = self.at_once(["192.168.1.66"], 200)
+        self.assertEqual((codes.count(401), codes.count(429)), (5, 195))
+
+    def test_many_addresses_at_once_are_checked_one_at_a_time_with_the_gaps(self):
+        codes, took = self.at_once([f"10.4.0.{i}" for i in range(1, 31)], 30)
+        self.assertEqual(codes.count(401), 30)
+        self.assertGreaterEqual(took, 29 * 0.05, "30 wrong codes take at least 29 gaps: one at a time")
+
+    def test_under_a_flood_a_right_code_waits_its_turn_then_is_told_busy(self):
+        import httpx
+        auth.new_code()
+        app = api.make_app(tries=auth.Tries())
+
+        async def main():
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=ORIGIN) as c:
+                await app.app.state.gate.acquire()            # someone else's check, that doesn't end
+                r = await c.post("/api/session", content=b'{"code": "AAAA-AAAA"}',
+                                 headers={**PAGE, "content-type": "application/json", "x-forwarded-for": "10.5.0.1"})
+                app.app.state.gate.release()
+                return r
+        with mock.patch.object(auth, "GATE_WAIT_S", 0.2):
+            r = asyncio.run(main())
+        self.assertEqual((r.status_code, r.json()["error"]["code"]), (503, "busy"))
+        self.assertEqual(r.json()["error"]["words"], "The server is busy: many codes are being tried at once. "
+                                                     "Your code wasn't used. Try it again in a moment.")
+        self.assertEqual(r.headers["retry-after"], "5")
+        self.assertIsNone(app.app.state.tries.blocked("10.5.0.1"))
+        self.assertEqual(len(app.app.state.tries.by_source.get("10.5.0.1") or []), 0, "a try never checked counts for nothing")
 
 
 if __name__ == "__main__":

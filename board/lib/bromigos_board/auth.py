@@ -19,6 +19,7 @@ import collections
 import contextlib
 import hashlib
 import hmac
+import ipaddress
 import json
 import os
 import re
@@ -37,13 +38,16 @@ COOKIE = "__Host-bromigos-board"                      # __Host-: Secure, Path=/,
 SESSION_ID = re.compile(r"[0-9a-f]{16}\Z")
 RECORD = re.compile(r"[0-9a-f]{16,64}\.json\Z")       # a session's or a code's file; nothing else is read
 STALE_TEMP_S = 60                                     # a half-written file older than this is swept
-# wrong codes. Each address may send 5 a minute. Besides that, wrong codes are answered at most
-# one every 200 ms, whoever sends them: a wrong answer waits its turn, a second at most. A right
-# code is never held up or refused because of someone else's wrong ones. (A code is 40 bits and
+# wrong codes. Each address may try 5 a minute: a try counts from the moment it is made, so many
+# at once from one address are 5 too, and an IPv6 address counts with the rest of its /64 (one
+# device can have any of them). Codes are checked one at a time, and after a wrong one the next
+# check waits 200 ms (api.py, the gate): at most 5 wrong codes a second, from everyone together.
+# A right code doesn't count against its address. Under a flood a right one waits its turn too,
+# 10 seconds at most; then it is answered "busy", and counts for nothing. (A code is 40 bits and
 # lives ten minutes: at 5 guesses a second the chance of hitting one is about 3 in a billion.)
 TRIES_PER_SOURCE = (5, 60.0)
 WRONG_EVERY_S = 0.2
-WRONG_WAIT_MAX_S = 1.0
+GATE_WAIT_S = 10.0
 
 
 def _sha(text):
@@ -270,51 +274,75 @@ def prune(now=None):
 
 
 # ---------------------------------------------------------------- tries
-class Tries:
-    """Wrong codes: counted for each source address, and slowed for everyone.
+def source_key(src):
+    """What a try is counted against: an IPv4 address, or an IPv6 address's /64."""
+    try:
+        ip = ipaddress.ip_address(src)
+    except ValueError:
+        return str(src)
+    if ip.version == 6:
+        if ip.ipv4_mapped is not None:
+            return str(ip.ipv4_mapped)
+        return str(ipaddress.ip_network(f"{ip}/64", strict=False))
+    return str(ip)
 
-    blocked(src) says when that address has sent too many itself. wrong(src) counts one and gives
-    how long its answer waits, so wrong answers leave 200 ms apart, never more than a second
-    late. Nothing here refuses or delays a right code that someone else's wrong ones came before.
-    Kept in the service's memory; an address's entry is dropped once its tries are a minute old."""
+
+class Tries:
+    """Tries at a code, for each source (source_key): begin(src) counts one at once, before the
+    code is checked, or refuses it when that source has made 5 in the last minute; undo(src) takes
+    it back when the code was right, or wasn't checked. Kept in the service's memory; a source's
+    entry is dropped once its tries are a minute old. (The spacing between checks is the API's
+    gate, which waits; this only counts.)"""
 
     def __init__(self, clock=time.monotonic):
         self.clock = clock
         self.by_source = {}
-        self.next_answer = None
         self.swept = None
         self.lock = threading.Lock()
 
     def _sweep(self, now):
-        """Drop the tries older than a minute, and the addresses left with none."""
+        """Drop the tries older than a minute, and the sources left with none."""
         if self.swept is not None and now - self.swept < TRIES_PER_SOURCE[1] / 4 and len(self.by_source) < 256:
             return
         self.swept = now
-        for src in list(self.by_source):
-            q = self.by_source[src]
+        for key in list(self.by_source):
+            q = self.by_source[key]
             while q and now - q[0] > TRIES_PER_SOURCE[1]:
                 q.popleft()
             if not q:
-                del self.by_source[src]
+                del self.by_source[key]
+
+    def _recent(self, key, now):
+        q = self.by_source.get(key)
+        while q and now - q[0] > TRIES_PER_SOURCE[1]:
+            q.popleft()
+        return q
 
     def blocked(self, src):
+        """The words when src may not try now, else None. Counts nothing."""
         with self.lock:
             now = self.clock()
             self._sweep(now)
-            q = self.by_source.get(src)
-            while q and now - q[0] > TRIES_PER_SOURCE[1]:
-                q.popleft()
+            q = self._recent(source_key(src), now)
             if q is not None and len(q) >= TRIES_PER_SOURCE[0]:
                 return "Too many wrong codes from this device. Wait a minute, then try again."
             return None
 
-    def wrong(self, src):
-        """Count a wrong code from src. Returns the seconds its answer waits."""
+    def begin(self, src):
+        """A try from src, counted now: None, or the words when it may not try."""
         with self.lock:
             now = self.clock()
             self._sweep(now)
-            self.by_source.setdefault(src, collections.deque()).append(now)
-            at = now if self.next_answer is None else max(now, self.next_answer)
-            wait = min(at - now, WRONG_WAIT_MAX_S)
-            self.next_answer = now + wait + WRONG_EVERY_S
-            return wait
+            key = source_key(src)
+            q = self._recent(key, now)
+            if q is not None and len(q) >= TRIES_PER_SOURCE[0]:
+                return "Too many wrong codes from this device. Wait a minute, then try again."
+            self.by_source.setdefault(key, collections.deque()).append(now)
+            return None
+
+    def undo(self, src):
+        """Take back one of src's tries: its code was right, or was never checked."""
+        with self.lock:
+            q = self.by_source.get(source_key(src))
+            if q:
+                q.pop()

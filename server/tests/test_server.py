@@ -197,29 +197,33 @@ class Server(Rig):
         self.assertNotIn("80, 443", r.stdout)
         self.assertIn("no rule set 'nope'", r.stderr)
 
-    def test_the_labs_private_network_is_local_only_while_this_server_is_on_it(self):
-        """The carrier-grade NAT range is the lab network's, and some internet providers': it is
-        in the firewall's local network while tailscaled runs or its interface is there."""
+    def test_the_labs_private_network_comes_in_only_on_its_own_interface(self):
+        """Review N3. The carrier-grade NAT range is the lab network's, and some internet
+        providers': so it is never in @lan, whether or not the lab network is up. Each rule for
+        the local network has a twin for the range that also names tailscale0; a neighbour in
+        the provider's range, coming in on the uplink, matches none of them."""
         lab = "100.64.0.0/10"
-        lan = lambda: next(x for x in self.run_server("firewall", "apply", "--print").stdout.splitlines()     # noqa: E731
-                           if x.startswith("add element inet bromigos-server lan {"))
-        (self.fake / "down").write_text("tailscaled.service\n")
-        self.assertEqual(lan(), "add element inet bromigos-server lan { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }")
-        (self.root / "sys/class/net/tailscale0").mkdir(parents=True)          # its interface is there
-        self.assertIn(lab, lan())
+        self.config('[firewall]\nallow = ["web-lan"]\ntcp = [8080]\n')
+        (self.root / "sys/class/net/tailscale0").mkdir(parents=True)          # on the lab network
+        rules = self.run_server("firewall", "apply", "--print").stdout
+        lan = next(x for x in rules.splitlines() if x.startswith("add element inet bromigos-server lan {"))
+        self.assertNotIn(lab, lan)
+        self.assertIn("add element inet bromigos-server lab { " + lab + " }", rules)
+        lines = rules.splitlines()
+        for i, line in enumerate(lines):
+            if " ip saddr @lan " in f" {line.strip()} ":
+                self.assertIn('iifname "tailscale0" ip saddr @lab', lines[i + 1], line)
+        for line in lines:
+            if "@lab" in line and not line.lstrip().startswith(("#", "add element")):
+                self.assertIn('iifname "tailscale0" ip saddr @lab ', line)
+        self.assertIn('add rule inet bromigos-server input iifname "tailscale0" ip saddr @lab tcp dport { 80, 443 } accept', rules)
+        self.assertIn('add rule inet bromigos-server input iifname "tailscale0" ip saddr @lab tcp dport { 8080 } accept', rules)
+        # the same rules whether the lab network is up or not: nothing to load again when it starts
         (self.root / "sys/class/net/tailscale0").rmdir()
-        self.assertNotIn(lab, lan())
-        (self.fake / "down").write_text("")                                    # its service runs
-        self.assertIn(lab, lan())
-        # the firewall is loaded again when that service starts and stops, and only if it's on
-        conf = (HERE / "systemd" / "tailscaled-bromigos.conf").read_text()
-        for line in ("ExecStartPost=-/usr/bin/systemctl reload --no-block bromigos-server-firewall.service",
-                     "ExecStopPost=-/usr/bin/systemctl reload --no-block bromigos-server-firewall.service"):
-            self.assertIn(line, conf)
-        self.assertIn("ExecReload=/usr/lib/bromigos/server/bromigos-server firewall apply",
-                      (HERE / "systemd" / "bromigos-server-firewall.service").read_text())
+        self.assertEqual(self.run_server("firewall", "apply", "--print").stdout, rules)
+        self.assertFalse((HERE / "systemd" / "tailscaled-bromigos.conf").exists())
         pkg = (HERE.parent / "packaging" / "bromigos-server" / "PKGBUILD").read_text()
-        self.assertRegex(pkg, r"for unit in [^\n]*\btailscaled\.service\b")
+        self.assertNotRegex(pkg, r"for unit in [^\n]*\btailscaled\.service\b")
 
     def test_the_roles_that_get_the_servers_own_page_open_the_web_ports_to_the_local_network(self):
         import tomllib

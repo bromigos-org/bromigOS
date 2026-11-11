@@ -366,12 +366,12 @@ containers and the cluster, is left alone.
 "The local network" means private addresses: `10.0.0.0/8`, `172.16.0.0/12`,
 `192.168.0.0/16`, and IPv6's `fc00::/7` and `fe80::/10`.
 
-`100.64.0.0/10` joins them only while this server is on your lab's private network
-([lab-network.md](lab-network.md)). That network hands out its addresses from this range,
-and so do some internet providers to their customers. So the range counts as local while
-the lab network's interface (`tailscale0`) is there or its service (`tailscaled`) runs, and
-not otherwise. The firewall loads itself again when that service starts and stops
-(`/usr/lib/systemd/system/tailscaled.service.d/bromigos-server.conf`).
+`100.64.0.0/10`, the range your lab's private network ([lab-network.md](lab-network.md))
+hands out, is let in to the same ports, but only when it arrives on that network's own
+interface, `tailscale0`. Some internet providers give their customers addresses from the same
+range, so the address alone says nothing: a neighbour in the provider's range comes in on the
+uplink, and no rule lets them in. Each rule for the local network has a twin that says so
+(`iifname "tailscale0" ip saddr @lab`), whether or not the lab network is up.
 
 More can be let in. A role opens its own rule sets while it's on. You can open one
 yourself too:
