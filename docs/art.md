@@ -457,6 +457,14 @@ each job, and `bromigos art make` prints it.
   `warning` in `bromigos art make --json`. What it makes isn't fine for anything sold, or
   shipped in a commercial product, without Qwen's commercial licence.
 
+- **Look at the whole chain.** A model is only as clean as what it runs on. Pixal3D's
+  weights are MIT, but it needs Meta's DINOv3 encoder, so its effective tier is
+  conditional. `bromigos lab models pick mesh` says so, with the reason
+  ([lab-models.md](lab-models.md#licence-lineage)).
+- **Before art ships, run `bromigos lab models check`** in the checkout. It reads every
+  provenance log and fails when something not clean made an asset that
+  [ASSETS.md](ASSETS.md) has no decision for.
+
 If an older `create.toml` of yours still says `comfyui = "qwen-image-2.1"`, change it to
 the workflows above, or delete the line to use the defaults. Check
 [ASSETS.md](ASSETS.md) before a file made on a ComfyUI ships in a package.

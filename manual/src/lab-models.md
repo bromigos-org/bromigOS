@@ -5,7 +5,9 @@ homelab's graphics cards. It can suggest better ones, plan which model goes on w
 card, and tell you when a better model comes out.
 
 The jobs it knows: chat, coding, memory, pictures, picture edits, cutouts, upscaling,
-video, 3D, voice, hearing, reading text in pictures, and reading your screen.
+video, 3D, voice, hearing, reading text in pictures, and reading your screen. For art, it
+also knows the finer steps: soft cutouts for hair and glass, depth, 3D meshes with separate
+parts, video from a first and a last frame, video upscaling and smoother motion.
 
 You need a [connected homelab](homelab.md) for most of this. To ask what fits a card you
 don't have yet, you don't.

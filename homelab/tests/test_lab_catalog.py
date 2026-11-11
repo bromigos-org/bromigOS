@@ -629,3 +629,405 @@ class ProfilesTest(unittest.TestCase):
             for path, where in (v.get("mounts") or {}).items():
                 if path == "/config":
                     self.assertEqual(where, "state", k)
+
+
+# ------------------------------------------------------------------ capabilities the data declares
+EXTRA_CAPS = '''
+[capability.texture]
+title = "Texturing"
+unit = "s/mesh"
+better = "lower"
+scale = "compute"
+quality_basis = "made up for the tests"
+hub = ["image-to-3d"]
+hub_name = "paint|texture"
+
+[[model]]
+id = "painter"
+name = "Painter"
+capabilities = ["texture", "teleport"]
+licence = "apache-2"
+quality = { texture = 80 }
+cite = ["fixture"]
+  [[model.variant]]
+  id = "fp16"
+  runtime = "comfyui"
+  quant = "FP16"
+  vram_gib = 12
+  speed = 60
+  speed_ref = "RTX 4090"
+
+[[model]]
+id = "parts-maker"
+name = "Parts Maker"
+capabilities = ["3d"]
+licence = "apache-2"
+quality = { 3d = 70 }
+parts = true
+in_use = [{ where = "docs/art.md", what = "a made-up use" }]
+cite = ["fixture"]
+  [[model.variant]]
+  id = "fp16"
+  runtime = "comfyui"
+  quant = "FP16"
+  vram_gib = 10
+  speed = 50
+  speed_ref = "RTX 4090"
+'''
+
+
+class DeclaredCapabilityTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "models.toml")
+        with open(FIXTURE) as f:
+            text = f.read()
+        with open(self.path, "w") as f:
+            f.write(text + EXTRA_CAPS)
+        self.c = C.load(self.path)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp)
+
+    def test_a_table_is_all_a_capability_needs(self):
+        self.assertIn("texture", self.c.cap_ids)
+        self.assertEqual(self.c.cap_ids[:len(C.CAPABILITIES)], C.CAPABILITIES)
+        self.assertEqual(C.pick("texture", 16, cat=self.c)["best"]["key"], "painter/fp16")
+        self.assertEqual(C.canon("texture", self.c), "texture")
+        with self.assertRaises(C.CatalogError):
+            C.canon("texture", cat())                       # the plain fixture doesn't declare it
+
+    def test_an_undeclared_capability_is_left_out_and_reported(self):
+        self.assertEqual(self.c.models["painter"].caps, ("texture",))
+        problems = C.validate(self.c)
+        self.assertTrue(any("teleport has no [capability] table" in p for p in problems), problems)
+
+    def test_the_refresh_watches_what_the_data_declares(self):
+        from bromigos_homelab import catalog_refresh as F
+        w = {cap: (tags, hint) for cap, tags, hint in F.watches(self.c)}
+        self.assertEqual(w["texture"], (("image-to-3d",), "paint|texture"))
+        self.assertEqual(w["llm"][0], F.PIPELINES["llm"])            # the built-in ones keep theirs
+        order = [cap for cap, _, _ in F.watches(self.c)]
+        self.assertLess(order.index("texture"), order.index("3d"))  # a name rule claims a shared pipeline first
+
+    def test_parts(self):
+        d = C.pick("3d", 24, cat=self.c, parts=True)
+        self.assertEqual(d["best"]["key"], "parts-maker/fp16")
+        self.assertTrue(d["best"]["parts"])
+        self.assertEqual(d["best"]["in_use"][0]["where"], "docs/art.md")
+        self.assertNotEqual(C.pick("3d", 24, cat=self.c)["best"]["key"], "parts-maker/fp16")
+        self.assertIn("separate parts", C.pick("3d", 24, cat=cat(), parts=True)["reason"])
+
+    def test_upgrades_cover_a_declared_capability(self):
+        hw = C.Hardware.parse(["RTX 5090,host=lab"], ram_gib=64, cat=self.c)
+        hw.gpus()[0].holds = ("comfyui/comfyui",)
+        have = [{"key": "painter/fp16", "name": "Painter", "quant": "FP16", "where": "comfyui", "caps": ["texture"]}]
+        ev = U.evaluate(self.c, hw, have, {"enabled": True, "policy": {"texture": "any"}})
+        self.assertEqual(ev["proposals"], [])                # nothing better: but it was looked at, not refused
+
+
+class ArtPipelineTest(unittest.TestCase):
+    """The art and hologram pipeline's jobs in the real catalog (docs/art.md)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.c = C.load(REAL)
+
+    ART = ("image-edit", "matting", "depth", "mesh", "video-i2v", "video-flf", "upscale-image", "upscale-video",
+           "interpolate")
+
+    def test_every_art_job_has_a_pick_at_24_gb(self):
+        for cap in self.ART:
+            self.assertIn(cap, self.c.cap_ids)
+            self.assertIsNotNone(C.pick(cap, 24, cat=self.c, region="US")["best"], cap)
+
+    def test_the_picks(self):
+        q = dict(goal="quality", region="US")
+        best = lambda cap, v, **kw: C.pick(cap, v, cat=self.c, **q, **kw)["best"]["model"]   # noqa: E731
+        self.assertEqual(best("depth", 12), "moge-2")
+        self.assertEqual(best("interpolate", 8), "rife-4.9")
+        self.assertEqual(best("matting", 12), "birefnet-hr")
+        self.assertEqual(best("video-flf", 24), "wan2.2-i2v-a14b")
+        self.assertEqual(best("upscale-video", 32), "seedvr2-7b")
+        self.assertEqual(best("mesh", 32), "pixal3d")
+        self.assertEqual(C.pick("matting", 12, cat=self.c, goal="quality")["best"]["variant"], "hr-matting-fp16")
+
+    def test_video_flf_only_has_native_end_frames(self):
+        for v in self.c.variants("video-flf"):
+            self.assertIn("flf2v", v.model.features, v.key)
+
+    def test_what_bromigos_uses_is_marked(self):
+        used = {m.id for m in self.c.models.values() if m.in_use}
+        for mid in ("qwen-image-2512", "qwen-image-edit-2511", "wan2.2-i2v-a14b", "seedvr2-7b", "rife-4.9", "lucida",
+                    "moge-2", "pixal3d", "hunyuan3d-2-1"):
+            self.assertIn(mid, used)
+        for m in self.c.models.values():
+            for u in m.in_use:
+                self.assertTrue(u.get("where") and u.get("what"), m.id)
+
+    def test_the_refresh_watches_the_art_jobs(self):
+        from bromigos_homelab import catalog_refresh as F
+        w = {cap: tags for cap, tags, _ in F.watches(self.c)}
+        self.assertIn("depth-estimation", w["depth"])
+        self.assertIn("video-to-video", w["upscale-video"])
+        self.assertIn("image-to-3d", w["mesh"])
+
+
+# ------------------------------------------------------------------ licence lineage (built_on, effective tiers)
+LINEAGE = '''
+[licence.encoder-terms]
+name = "Encoder Licence"
+commercial = "yes"
+tier = "conditional"
+tier_reason = "use restrictions: no military uses"
+
+[licence.unclear-api]
+name = "Some API terms"
+commercial = "conditional"
+tier = "conditional"
+tier_reason = "an API service's output terms"
+decision = "whether its outputs may ship"
+
+[api."some-api-1.0"]
+name = "Some API 1.0"
+licence = "unclear-api"
+cite = "fixture"
+
+[[model]]
+id = "encoder"
+name = "Encoder"
+capabilities = ["embed"]
+licence = "apache-2"
+quality = { embed = 10 }
+cite = ["fixture"]
+built_on = [{ name = "DINO-ish", part = "backbone", licence = "encoder-terms", cite = "fixture" }]
+  [[model.variant]]
+  id = "fp16"
+  runtime = "comfyui"
+  quant = "FP16"
+  vram_gib = 2
+  speed = 1
+  speed_ref = "RTX 4090"
+
+[[model]]
+id = "shape-maker"
+name = "Shape Maker"
+capabilities = ["3d"]
+licence = "apache-2"
+quality = { 3d = 99 }
+aliases = ["shape maker 2"]
+cite = ["fixture"]
+built_on = [
+  { name = "Encoder", part = "image encoder", model = "encoder", cite = "fixture" },
+  { name = "a VAE", part = "vae", licence = "apache-2", cite = "fixture" },
+]
+  [[model.variant]]
+  id = "native"
+  runtime = "comfyui"
+  quant = "FP16"
+  vram_gib = 12
+  speed = 60
+  speed_ref = "RTX 4090"
+  [[model.variant]]
+  id = "official"
+  runtime = "comfyui"
+  quant = "BF16"
+  vram_gib = 14
+  speed = 60
+  speed_ref = "RTX 4090"
+  built_on = [{ name = "a research renderer", part = "renderer", licence = "research", cite = "fixture" }]
+'''
+
+
+class LineageTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "models.toml")
+        with open(FIXTURE) as f:
+            text = f.read()
+        with open(self.path, "w") as f:
+            f.write(text + LINEAGE)
+        self.c = C.load(self.path)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp)
+
+    def test_the_tiers(self):
+        self.assertEqual(self.c.licences["apache-2"].tier, "clean")
+        self.assertEqual(self.c.licences["regional"].tier, "conditional")       # territory
+        self.assertEqual(self.c.licences["research"].tier, "non-commercial")
+        self.assertEqual(self.c.licences["encoder-terms"].tier, "conditional")  # set by the data
+        self.assertEqual(self.c.effective(self.c.models["img-b"])["tier"], "clean")
+
+    def test_the_worst_of_the_chain_wins_through_other_models(self):
+        e = self.c.effective(self.c.models["shape-maker"])
+        self.assertEqual(e["tier"], "conditional")
+        self.assertIn("built on DINO-ish: use restrictions: no military uses", e["reason"])
+        self.assertIn("DINO-ish", [c["name"] for c in e["chain"]])
+        # a variant's own extras count for that variant only
+        self.assertEqual(self.c.effective(self.c.variant("shape-maker/official"))["tier"], "non-commercial")
+        self.assertEqual(self.c.effective(self.c.variant("shape-maker/native"))["tier"], "conditional")
+
+    def test_the_licence_filters_read_the_chain(self):
+        self.assertEqual(best("3d", 24), "mesh/fp16")                           # plain fixture: unchanged
+        d = C.pick("3d", 24, cat=self.c)
+        self.assertEqual(d["best"]["key"], "shape-maker/native")
+        self.assertEqual(d["best"]["effective_tier"], "conditional")
+        self.assertIn("DINO-ish", d["best"]["effective_reason"])
+        self.assertEqual(C.pick("3d", 24, cat=self.c, licence="permissive")["best"]["key"], "mesh-mit/fp16")
+        skipped = C.pick("3d", 24, cat=self.c, licence="commercial")["skipped"]["licence"]
+        self.assertTrue(any("shape-maker/official: built on a research renderer" in s for s in skipped), skipped)
+
+    def test_pick_and_upgrades_say_it(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            C.main(["pick", "3d", "24", "--catalog", self.path, "--region", "US"])
+        self.assertIn("effective tier conditional (built on DINO-ish", out.getvalue())
+        hw = C.Hardware.parse(["RTX 5090,host=lab"], ram_gib=64, cat=self.c)
+        hw.gpus()[0].holds = ("comfyui/comfyui",)
+        have = [{"key": "mesh-mit/fp16", "name": "Mesh MIT", "quant": "FP16", "where": "comfyui", "caps": ["3d"]}]
+        ev = U.evaluate(self.c, hw, have, {"enabled": True, "policy": {"3d": "any"}}, goal="quality")
+        (p,) = [p for p in ev["proposals"] if p["to_key"].startswith("shape-maker")]
+        self.assertEqual(p["effective_tier"], "conditional")
+        self.assertTrue(p["tier_changed"])
+        self.assertIn("built on DINO-ish", p["reason"])
+
+    def test_validate_wants_a_licence_or_a_model_and_a_source(self):
+        with open(self.path, "a") as f:
+            f.write('''
+[[model]]
+id = "loose"
+name = "Loose"
+capabilities = ["embed"]
+licence = "apache-2"
+quality = { embed = 5 }
+cite = ["fixture"]
+built_on = [{ name = "mystery" }, { name = "uncited", licence = "apache-2" }, { name = "ghost", model = "nope" }]
+  [[model.variant]]
+  id = "fp16"
+  runtime = "comfyui"
+  vram_gib = 1
+''')
+        problems = C.validate(C.load(self.path))
+        self.assertTrue(any("'mystery': needs a licence or a model" in p for p in problems), problems)
+        self.assertTrue(any("'uncited': cite" in p for p in problems), problems)
+        self.assertTrue(any("no model 'nope'" in p for p in problems), problems)
+
+
+class AssetCheckTest(unittest.TestCase):
+    """bromigos lab models check's asset gate, against a made-up checkout."""
+
+    ASSETS = """# Assets
+
+## The checklist
+
+| Asset | Source | Ships? | Notes |
+|---|---|---|---|
+| The art | Made on the lab; each job in `art/provenance.jsonl` | **yes** (owner, 2026-11-01) | |
+| Undecided art | Made somewhere, `pending/` | likely yes | |
+
+## Provenance
+"""
+
+    def setUp(self):
+        from bromigos_homelab import catalog_assets as A
+        self.A = A
+        self.root = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.root, "docs"))
+        os.makedirs(os.path.join(self.root, "homelab", "share", "lab"))
+        with open(os.path.join(self.root, "docs", "ASSETS.md"), "w") as f:
+            f.write(self.ASSETS)
+        with open(FIXTURE) as f:
+            text = f.read()
+        self.path = os.path.join(self.root, "homelab", "share", "lab", "models.toml")
+        with open(self.path, "w") as f:
+            f.write(text + LINEAGE)
+        self.c = C.load(self.path)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.root)
+
+    def log(self, folder, *models):
+        os.makedirs(os.path.join(self.root, folder), exist_ok=True)
+        with open(os.path.join(self.root, folder, "provenance.jsonl"), "w") as f:
+            for m in models:
+                f.write(json.dumps({"out": "x.png", "model": m}) + "\n")
+
+    def test_clean_needs_no_decision(self):
+        self.log("clean", "img-b (fp8, 20 steps) + vid-5b")
+        r = self.A.check(self.c, self.root)
+        self.assertEqual(r["problems"], [])
+        self.assertEqual({m["tier"] for m in r["assets"][0]["models"]}, {"clean"})
+
+    def test_conditional_without_a_decision_fails(self):
+        self.log("pending", "shape maker 2")                  # an alias; the row says "likely yes": not explicit
+        r = self.A.check(self.c, self.root)
+        self.assertEqual(len(r["problems"]), 1, r)
+        self.assertIn("pending/: made with Shape Maker (conditional)", r["problems"][0])
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(C.main(["check", "--catalog", self.path]), 1)
+            self.assertEqual(C.main(["check", "--catalog", self.path, "--no-assets"]), 0)
+        self.assertIsNone(self.A.repo_root(FIXTURE))          # another file in a checkout isn't checked
+
+    def test_an_explicit_decision_covers_it(self):
+        self.log("art", "shape-maker", "img-a")              # conditional and non-commercial, decided yes
+        r = self.A.check(self.c, self.root)
+        self.assertEqual(r["problems"], [])
+        self.assertEqual(r["assets"][0]["decision"]["who"], "owner")
+
+    def test_an_unknown_model_fails(self):
+        self.log("art", "who-knows-v9")
+        r = self.A.check(self.c, self.root)
+        self.assertIn("'who-knows-v9' isn't in the catalog", r["problems"][0])
+
+    def test_unclear_terms_ask_for_a_decision(self):
+        self.log("art", "some-api-1.0")
+        r = self.A.check(self.c, self.root)
+        self.assertEqual(r["problems"], [])                   # decided before: not a failure…
+        self.assertIn("needs a decision: Some API 1.0: whether its outputs may ship", r["notes"][0])   # …but said
+
+    def test_the_decisions_and_paths(self):
+        rows = self.A.decisions(self.ASSETS)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["paths"], ["art/provenance.jsonl"])
+        self.assertTrue(self.A.covers(["themes/*/holo/generations.jsonl"], "themes/mire/holo"))
+        self.assertFalse(self.A.covers(["themes/*/holo/generations.jsonl"], "themes/mire"))
+        self.assertEqual(self.A.names({"model": "seedvr2-7b (int8) + rife 4.9"}), ["seedvr2-7b", "rife 4.9"])
+
+
+class RealLineageTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.c = C.load(REAL)
+
+    def test_pixal3d_is_conditional_through_dinov3(self):
+        e = self.c.effective(self.c.models["pixal3d"])
+        self.assertEqual(e["tier"], "conditional")
+        self.assertIn("built on DINOv3", e["reason"])
+        self.assertEqual(self.c.models["pixal3d"].licence.id, "mit")         # its own licence is MIT
+        self.assertEqual(self.c.effective(self.c.models["trellis-2"])["tier"], "conditional")
+
+    def test_the_models_in_use(self):
+        want = {"qwen-image-2512": "clean", "qwen-image-edit-2511": "clean", "wan2.2-i2v-a14b": "clean",
+                "wan2.2-ti2v-5b": "clean", "seedvr2-7b": "clean", "rife-4.9": "clean", "lucida": "clean",
+                "birefnet": "clean", "moge-2": "clean", "pixal3d": "conditional", "hunyuan3d-2-1": "conditional",
+                "qwen-image-2-1": "non-commercial"}
+        for mid, tier in want.items():
+            self.assertEqual(self.c.effective(self.c.models[mid])["tier"], tier, mid)
+        for m in self.c.models.values():
+            if m.in_use and m.id not in ("rife-4.9",):
+                self.assertTrue(m.built_on, f"{m.id} is in use: seed its built_on")
+
+    def test_hunyuan3d_v3_needs_a_decision(self):
+        self.assertTrue(self.c.apis["hunyuan3d-v3"].licence.decision)
+
+    def test_the_repository_passes_its_own_asset_check(self):
+        from bromigos_homelab import catalog_assets as A
+        root = A.repo_root(REAL)
+        self.assertIsNotNone(root)
+        r = A.check(self.c, root)
+        self.assertEqual(r["problems"], [])
+        self.assertTrue(any("Hunyuan3D v3" in n for n in r["notes"]))

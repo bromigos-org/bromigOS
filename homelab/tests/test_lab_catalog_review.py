@@ -421,6 +421,86 @@ class IssueTest(Fixture, unittest.TestCase):
         self.assertEqual(json.loads(err.getvalue())["plan"]["close"], [1, 3, 5, 7, 82, 96])
 
 
+SURVEY = '''
+format = 1
+surveyed = "2026-11-10"
+
+[[model]]
+id = "img-b"
+name = "Image B again"
+capability = "image"
+licence = "apache-2"
+tier = "clean"
+
+[[model]]
+id = "parts-3d"
+name = "Parts 3D"
+hf_id = "org/Parts-3D"
+capability = "mesh-parts"
+licence = "apache-2"
+licence_name = "Apache-2.0"
+tier = "clean"
+tier_reason = "Apache-2.0, on DINOv2"
+built_on = [{ name = "DINOv2", licence = "apache-2", licence_url = "https://example/dinov2" }]
+comfyui = "yes (native)"
+memory_gb = 9
+quality_notes = "makes separate parts"
+cite = ["https://example/parts"]
+
+[[model]]
+id = "nc-thing"
+name = "NC Thing"
+hf_id = "org/NC-Thing"
+capability = "timeseries"
+licence = "timesfm-nc"
+licence_name = "TimesFM Non-Commercial License"
+tier = "no"
+tier_reason = "non-commercial since 2026"
+comfyui = "n/a"
+
+[[model]]
+id = "needs-node"
+name = "Needs Node"
+hf_id = "org/Needs-Node"
+capability = "texture"
+licence = "mit"
+tier = "conditional"
+tier_reason = "MIT, but its painter is on an OpenRAIL model"
+comfyui = "community"
+'''
+
+
+@unittest.skipUnless(HAVE_TOMLKIT, "needs python-tomlkit")
+class SurveyImportTest(Fixture, unittest.TestCase):
+    def test_import_and_recommend(self):
+        sv = os.path.join(self.tmp, "candidates.toml")
+        with open(sv, "w") as f:
+            f.write(SURVEY)
+        r = R.import_survey(self.path, sv, TODAY)
+        self.assertEqual(r["added"], ["survey:parts-3d", "survey:nc-thing", "survey:needs-node"])
+        self.assertEqual(r["skipped"], {"in the catalog": ["img-b"]})
+        self.assertEqual(R.import_survey(self.path, sv, TODAY)["added"], [])          # twice changes nothing
+        cat = C.load(self.path)
+        self.assertEqual(C.validate(cat), [])
+        rows = {e["id"]: e for e in R.queue(cat, TODAY)}
+        p = rows["survey:parts-3d"]
+        self.assertEqual((p["capability"], p["action"]), ("mesh", "adopt"))
+        self.assertTrue(next(x for x in cat.pending if x["id"] == "survey:parts-3d")["parts"])
+        self.assertIn("about 9 GB", p["reason"])
+        self.assertEqual(rows["survey:nc-thing"]["action"], "ignore")                  # the survey's "no"
+        self.assertIn("non-commercial since 2026", rows["survey:nc-thing"]["reason"])
+        n = rows["survey:needs-node"]
+        self.assertEqual(n["action"], "watch")
+        self.assertEqual(n["signals"]["licence_tier"], "conditional")                  # worse than MIT alone
+        self.assertIn("needs a way to run it", n["reason"])
+
+
+class PublicTest(unittest.TestCase):
+    def test_a_survey_loses_local_paths(self):
+        self.assertEqual(R._public("made in ~/Pictures/x/y (scripts) and /mnt/Dev/build/z, kept"),
+                         "made in a local folder (scripts) and a local folder, kept")
+
+
 class RealQueueTest(unittest.TestCase):
     def test_every_pending_entry_gets_a_recommendation(self):
         cat = C.load(REAL)
