@@ -288,6 +288,35 @@ CI runs all of it on a pull request that touches `board/web/`
 (`.github/workflows/board-web.yml`), and builds the page twice to check the two builds are
 the same.
 
+### On a graphics card
+
+The holograms are WebGL. By default the tests' Chromium draws them on its software renderer
+(SwiftShader), because CI has no graphics card and a run should be the same everywhere.
+That is slow on a desktop: every worker draws on the processor.
+
+`BOARD_TEST_GPU=1` puts headless Chromium on the computer's graphics card instead. It still
+opens no window: it draws offscreen, and asks no display server for anything.
+
+```sh
+BOARD_TEST_GPU=1 npx playwright test --workers=2
+```
+
+- Every run prints the renderer WebGL has (`UNMASKED_RENDERER_WEBGL`) before its first test,
+  switch or no switch.
+- With the switch on, a software renderer (SwiftShader, llvmpipe) stops the run at once,
+  with the flags it used. A run never falls back quietly.
+- The flags are ANGLE on Vulkan: `--ozone-platform=headless --use-angle=vulkan
+  --enable-features=Vulkan --ignore-gpu-blocklist` (`tests/webgl.ts`). They were checked on
+  an NVIDIA card. `BOARD_TEST_GPU_ARGS` replaces them for a card they don't reach. ANGLE on
+  EGL is the other set to try:
+  `BOARD_TEST_GPU_ARGS="--ozone-platform=headless --use-gl=angle --use-angle=gl-egl --ignore-gpu-blocklist"`.
+  On a computer with two cards the two sets can pick different ones; the printed line says
+  which.
+- CI doesn't set the switch, and stays on the software renderer.
+- No test compares the page with a stored picture, so none has to stay on the software
+  renderer. The hologram test compares two pictures taken in the same run (the hologram
+  shown, then hidden), which holds on either renderer.
+
 ## The package
 
 `bromigos-board-web` is built from `board/web/` with Node at package time, so a server runs
