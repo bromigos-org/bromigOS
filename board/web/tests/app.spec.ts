@@ -115,12 +115,14 @@ test.describe("the real client, the service's real answers", () => {
 
   test("a real tile: the page says what the service sent, and asks nothing but GETs", async ({ page }) => {
     const s = new Service();
+    // a server that lets the page do nothing (root's [board] actions = []): no control at all
+    s.board = { ...copy(real.boards.healthy), actions: [] };
     const w = await openReal(page, s, "app/photos");
     const t = real.boards.healthy.apps.find((a: { id: string }) => a.id === "photos");
     await expect(page.locator(`${head} h2`)).toHaveText("PHOTOS");
     await expect(page.locator(`${head} .chip`).first()).toHaveText(`${t.app.toUpperCase()} · ${t.version}`);
     await expect(page.locator(".panel", { hasText: "WHERE ITS DATA LIVES" })).toContainText("348 KB");
-    // the service says nothing of what the page may do: no control that changes anything
+    // nothing is allowed: no control that changes anything
     await expect(page.getByRole("button", { name: "Restart Photos" })).toHaveCount(0);
     await expect(page.locator(".panel", { hasText: "UPDATES" })).toContainText("doesn't report updates yet");
     expect(s.seen.filter((x) => x.method !== "GET")).toEqual([]);
