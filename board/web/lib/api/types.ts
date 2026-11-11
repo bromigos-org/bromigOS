@@ -385,6 +385,12 @@ export type ActivityEvent =
   | { event: "gone"; id: string }
   | { event: "signed-out" };
 
+/** A job's own actions, as the service names them in its route and in `board.actions` ("job.answer"). */
+export type JobVerb = "answer" | "cancel" | "retry";
+/** What each sends: the question and the choice for an answer (and a fresh code for a choice that
+ *  can't be undone), nothing for the others. */
+export type JobBody = { question: string; choice: string; code?: string } | Record<string, never>;
+
 /** What `POST /api/actions` answers (the service's actions): the job it started, when it knows. */
 export interface ActionAnswer {
   job: string | null;

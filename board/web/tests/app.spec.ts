@@ -180,13 +180,14 @@ test.describe("the real client, the service's real answers", () => {
   test("deleting data while the server is busy checking codes: said so, and nothing is cleared", async ({ page }) => {
     const s = new Service();
     s.board = copy(real.boards.healthy); // the real board: root's actions include delete-data
-    s.actions = new Answer(503, { headers: { "retry-after": "5" }, body: { error: { code: "busy", words: "The server is checking many codes at once. Try again in a moment." } } });
+    const words = "The server is busy: many codes are being tried at once. Your code wasn't used. Try it again in a moment.";
+    s.actions = new Answer(503, { headers: { "retry-after": "5" }, body: { error: { code: "busy", words } } });
     await openReal(page, s, "app/photos/remove", { quiet: /503/ });
     const sheet = page.getByRole("dialog", { name: "Remove Photos" });
     await sheet.getByLabel(/The app's id/).fill("photos");
     await sheet.getByLabel("One-time code").fill("kx7 42q");
     await sheet.getByRole("button", { name: "Remove and delete data" }).click();
-    await expect(sheet.locator("[role=status]")).toHaveText("The server is busy. Try again in a moment.");
+    await expect(sheet.locator("[role=status]")).toHaveText(words);
     await expect(sheet.getByLabel("One-time code")).toHaveValue("kx7 42q");
     await expect(sheet.getByRole("button", { name: "Remove and delete data" })).toHaveAttribute("aria-disabled", "false");
   });

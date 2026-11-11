@@ -55,7 +55,8 @@ test("signing in: the service's own refusal, then the code, sent as the service 
 
 /** The service's answer when many codes were being checked at once (board-contracts.md, "after the
  *  second review"): the code was never checked, so the same one works when sent again. */
-const BUSY = new Answer(503, { headers: { "retry-after": "5" }, body: { error: { code: "busy", words: "The server is checking many codes at once. Try again in a moment." } } });
+const BUSY_WORDS = "The server is busy: many codes are being tried at once. Your code wasn't used. Try it again in a moment.";
+const BUSY = new Answer(503, { headers: { "retry-after": "5" }, body: { error: { code: "busy", words: BUSY_WORDS } } });
 
 test("signing in while the server is busy: said so, the code kept, and the same code works next time", async ({ page }) => {
   const s = new Service();
@@ -65,12 +66,22 @@ test("signing in while the server is busy: said so, the code kept, and the same 
   const field = page.getByRole("textbox", { name: "One-time code" });
   await field.fill("abcd-efgh");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator("#signin-why")).toHaveText("The server is busy. Try again in a moment.");
+  await expect(page.locator("#signin-why")).toHaveText(BUSY_WORDS);
   await expect(field).toHaveValue("abcd-efgh");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.locator(".sh-crumb")).toHaveText(/Home$/);
   const posts = s.seen.filter((x) => x.method === "POST" && x.path === "/api/session");
   expect(posts.map((x) => JSON.parse(x.body!))).toEqual([{ code: CODE }, { code: CODE }]);
+});
+
+test("busy without the service's words: the page's own sentence", async ({ page }) => {
+  const s = new Service();
+  s.signedIn = false;
+  s.signinFirst = [new Answer(503, { body: { error: { code: "busy" } } })];
+  await openReal(page, s, "signin", { quiet: /503/ });
+  await page.getByRole("textbox", { name: "One-time code" }).fill("abcd-efgh");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.locator("#signin-why")).toHaveText("The server is busy. Try again in a moment.");
 });
 
 test("a 503 without the service's words is not called busy: it may be the service restarting", async ({ page }) => {
@@ -491,9 +502,9 @@ for (const skew of [3 * 60_000, -3 * 60_000, 400 * 86_400_000])
 
 // ---------------------------------------------------------------- what the page may do
 
-test("a job that asks: its question and the command, and nothing the service has no route for", async ({ page }) => {
+test("a job that asks, on a server that lets the page do nothing: its question and the command, and no control", async ({ page }) => {
   const s = new Service();
-  s.board = real.boards.needs_you;
+  s.board = { ...copy(real.boards.needs_you), actions: [] };
   s.activity = live("activity_needs_you");
   const w = await openReal(page, s, "home");
   await page.getByRole("button", { name: "Raise the drawer of jobs" }).click();
@@ -505,6 +516,7 @@ test("a job that asks: its question and the command, and nothing the service has
   await expect(drawer.locator(".job", { hasText: "Updating Photos" })).toContainText("no answer in 2 minutes");
   // the running job can be cancelled at the server, not from here
   s.activity = live("activity_running");
+  s.board = { ...copy(real.boards.running), actions: [] };
   await page.reload();
   await page.getByRole("button", { name: "Raise the drawer of jobs" }).click();
   await expect(page.getByRole("complementary", { name: "Activity" }).getByRole("button", { name: /Cancel|Retry/ })).toHaveCount(0);

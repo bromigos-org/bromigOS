@@ -19,7 +19,8 @@ gathers the readings, the Caddy site, and what the page never shows.
 - **Activity.** Every job the page knows, from the live stream and from the list the board
   read: the ones that ask, the ones that run or wait, and the ones that ended. Each shows
   its steps, what it asks, how it ended, and the command that looks closer
-  (`bromigos activity show ID`). `#job/ID` opens one job. The page is read-only: see
+  (`bromigos activity show ID`). `#job/ID` opens one job. A job's answers, Stop and Start
+  again are controls on a server that lets the page: see
   [What the page may do](#what-the-page-may-do).
 - **The door and signing in.** Signed out, every address shows the door: the ways in and
   the apps to open, nothing else. **Sign in** takes the one-time code that
@@ -125,12 +126,13 @@ which the page never reads. Every request that changes something carries the hea
 |---|---|
 | `GET /api/door` | The door: the server's name, its world, the apps to open, the ways in |
 | `GET /api/session` | Whether this browser is signed in, and the signed-in browsers |
-| `POST /api/session` `{"code": …}` | Signing in with the one-time code. A refusal's sentence is shown as the server wrote it. Its 503 `busy` (many codes being checked at once) reads "The server is busy. Try again in a moment.", and the code stays in the field: it wasn't checked, so it works when sent again. A coded deletion's `busy` reads the same |
+| `POST /api/session` `{"code": …}` | Signing in with the one-time code. A refusal's sentence is shown as the server wrote it. Its 503 `busy` (many codes being checked at once) is shown in the service's own words, and the code stays in the field: it wasn't checked, so it works when sent again. A coded deletion's or a coded answer's `busy` is the same |
 | `DELETE /api/session`, `DELETE /api/session/ID` | Signing this browser out, or another one (People › Ways in) |
 | `GET /api/board` | The board: the machines, what needs you, what fixed itself, the jobs as `bromigos activity list` printed them, a tile per catalogue item, and the drive, backup and update documents as their commands print them |
 | `GET /api/activity` | The jobs, live: a stream of Server-Sent Events |
 | `GET /api/vitals?machine=NAME&range=24h` | A machine's trends. The service doesn't serve it yet, and the chart is marked planned |
 | `POST /api/actions` `{"verb": "add", "app": ID}` | Adding an app, on a server that lets the page. `"restart"` and `"remove"` the same way |
+| `POST /api/activity/ID/answer` `{"question", "choice"[, "code"]}`, `/cancel` `{}`, `/retry` `{}` | A job's answer, Stop and Start again, on a server that lets the page. A choice that can't be undone carries a fresh code |
 
 ### Nothing arrives trusted
 
@@ -186,11 +188,22 @@ alerts and the jobs were read.
 
 ### What the page may do
 
-- **Jobs.** The page shows a job's question and its answers, with the command that answers
-  it (`sudo bromigos activity answer ID CHOICE`). It has no Answer, Cancel or Retry control
-  yet: the service's routes for them are [A job's own actions](#a-jobs-own-actions). On the
-  Activity page a job that says stopping is safe shows `sudo bromigos activity cancel ID`,
-  and one that can be started again shows `sudo bromigos activity retry ID`.
+- **Jobs.** On every job card (the drawer, Activity, a job's own sheet), a job's answers,
+  **Stop** and **Start again** are controls when two things agree: the board's `actions`
+  holds the word (`"job.answer"`, `"job.cancel"`, `"job.retry"`), and the job's own record
+  lists it in `can` (it asks now; it says stopping now is safe; it ended badly and was started
+  as safe to start again). They send the service's
+  [job actions](#a-jobs-own-actions), and show its words: "Answered.", "Stopped.", "Started
+  again." with a link to the new job, or a refusal as the service wrote it.
+  - **A choice that can't be undone** (`danger` in the question) opens a field for a fresh
+    code from `sudo bromigos server board code` first; the answer goes with that code. A
+    wrong, used or late code is the service's 403 `danger-needs-code`, in its words, and the
+    field stays for another. **Back** sends nothing.
+  - **Without the server's word**, a card shows the command instead:
+    `sudo bromigos activity answer ID CHOICE`, and on Activity
+    `sudo bromigos activity cancel ID` or `sudo bromigos activity retry ID` when the job
+    allows it. An upgraded server may list none of them ([An upgrade never widens
+    it](#what-a-session-can-do-and-how-to-turn-it-off)).
 - **Adding an app.** The Add sheet's control appears only when the board says the page may
   add (`actions` holds `"add"`) and the app's tile says it can be added. Otherwise the
   sheet shows the command and a planned mark. `actions` is root's `[board] actions`, as the
@@ -367,7 +380,9 @@ It holds the answers of each request, and a board for each state the commands ca
 in: healthy; a drive getting worse with a job asking; a job running; drives on watch and
 unreadable; backups that need a look, are off, carry a Go Bag, or aren't a server's; an app
 down; nothing installed; a stale reading; alerts with three channels of the server's own; a
-box with a graphics card; and each command missing or printing an error.
+box with a graphics card; jobs that ask with a choice that can't be undone, run and may be
+stopped, or failed and may be started again, with the service's real refusals of each job
+action; and each command missing or printing an error.
 
 ```sh
 python3 board/web/scripts/make-contract.py           # write it again
@@ -397,6 +412,7 @@ send yet. The package's build leaves fixture mode out.
 | `watch` | One drive on watch and one that can't be read |
 | `setup`, `stale` | Nothing installed yet; a reading five minutes old |
 | `actions` | The server lets the page add apps |
+| `jobs` | A disk asks with a choice that can't be undone, a backup runs and may be stopped, one failed and may be started again; the server lets the page answer, stop and start again |
 | `lab`, `cameras` | Four machines in the rail; a machine that runs Cameras |
 | `channels` | Alerts go to Discord with quiet hours and to a webhook that needs a look; a third channel is off |
 
@@ -419,6 +435,11 @@ Content-Security-Policy.
 - **Activity** (`tests/activity.spec.ts`): the three groups and what each job says; a job
   that runs and ends; one job by its address; the stream's and the board's lists joined;
   the jobs unread; and that nothing but a GET is sent.
+- **A job's controls** (`tests/jobs.spec.ts`): the answers, Stop and Start again as
+  controls with the server's word and the job's, and the commands without; a choice that
+  can't be undone asking for a code, with Back; and against the service's real refusals
+  (`danger-needs-code`, `ended`), the bodies sent, a busy answer that keeps the code, and
+  the new job's link after Start again.
 - **One app** (`tests/app.spec.ts`): what the page says of a tile, from the fixtures and
   from the service's real answers; an app that measures nothing is "not measured", never
   zero; restart and remove offered only with the server's leave, and sent as the service

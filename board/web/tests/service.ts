@@ -32,6 +32,11 @@ export class Live {
   constructor(readonly name: string) {}
 }
 export const live = (name: string) => new Live(name);
+/** One of the service's real answers (service.json's http.NAME), to send again as it was. */
+export const realAnswer = (name: string) => {
+  const r = real.http[name];
+  return new Answer(r.status, { headers: r.headers, body: r.body });
+};
 /** The real "Not Found" of a route the service doesn't have. */
 export const NOT_FOUND = new Answer(404, { text: "Not Found" });
 /** An Answer, or "gone": the connection is refused (the server went away). */
@@ -47,6 +52,8 @@ export class Service {
   activity: Live | string | Other | (() => Live | string | Other) = live("activity_healthy");
   vitals: unknown = NOT_FOUND;
   actions: unknown = NOT_FOUND;
+  /** A job's actions (POST /api/activity/<id>/<verb>): one answer for all, or one per call, in turn. */
+  jobAnswers: unknown[] = [];
   /** The signed-in browsers, when a test needs more than the real answer's one. The service's
    *  own rules are kept: ending one answers the new list, an unknown id its real 404. */
   browsers: { id: string; current: boolean }[] | null = null;
@@ -126,6 +133,10 @@ export class Service {
     if (path === "/api/activity" && method === "GET") return this.stream(route, typeof this.activity === "function" ? this.activity() : this.activity);
     if (path === "/api/vitals") return this.send(route, this.vitals);
     if (path === "/api/actions" && method === "POST") return this.send(route, this.actions, 202);
+    if (/^\/api\/activity\/[^/]+\/[^/]+$/.test(path) && method === "POST") {
+      if (q.headers()["x-bromigos-board"] !== "1") return this.real(route, "signin_no_header");
+      return this.send(route, this.jobAnswers.length ? this.jobAnswers.shift() : realAnswer("job_action_no_job"), 202);
+    }
     return this.real(route, "no_such_route"); // Starlette's answer for a route the service doesn't have
   }
 }

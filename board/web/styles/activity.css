@@ -8,3 +8,11 @@
 .job-closer details.depth { margin-top: 0; border-top: 0; padding-top: 0; }
 .job-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 12px; color: var(--text); }
 @container view (max-width: 860px) { .ac-rd { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* a job's controls: its answers as word buttons, a choice that can't be undone with its code, stop and start again */
+.job-ans { display: flex; flex-wrap: wrap; gap: 8px; }
+.job-acts { display: flex; gap: 8px; margin-top: 10px; }
+.job-said { margin: 8px 0 0; max-width: none; }
+.job-danger { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--danger) 60%, transparent); background: color-mix(in srgb, var(--danger-surface) 40%, transparent); }
+.job-danger p { margin: 0; max-width: none; font-size: 13px; }
+.job-danger .fld { margin-top: 0; max-width: 320px; }
+.job-danger .wordbtn.back { color: var(--soft); border-color: var(--frame); }

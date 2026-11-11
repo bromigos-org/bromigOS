@@ -10,7 +10,7 @@
 import { ApiError, cleanCode } from "./errors";
 import { fixtureApi, fixtureName } from "./fixtures";
 import { readAction, readBoard, readDoor, readEvent, readSession, readVitals } from "./read";
-import type { ActionAnswer, ActivityEvent, Board, Door, JobRecord, Session, Vitals, VitalsRange } from "./types";
+import type { ActionAnswer, ActivityEvent, Board, Door, JobRecord, Session, Vitals, VitalsRange , JobBody, JobVerb } from "./types";
 
 export { ApiError, cleanCode } from "./errors";
 
@@ -35,12 +35,15 @@ export interface Api {
   /** Add, restart or remove an app (the service's actions). Removing keeps the app's data,
    *  unless `more` asks to delete it: that takes a fresh one-time code, which root checks. */
   act(verb: "add" | "restart" | "remove", app: string, more?: { delete_data: true; code: string }): Promise<ActionAnswer>;
+  /** A job's own action (the service's POST /api/activity/<id>/<verb>): answer its question
+   *  (a choice that can't be undone also carries a fresh code), stop it, or start it again. */
+  jobAct(verb: JobVerb, job: string, body: JobBody): Promise<ActionAnswer>;
 }
 
 const HEADERS = { "X-Bromigos-Board": "1", "Content-Type": "application/json" };
 const TIMEOUT_MS = 20_000;
 
-/** What the page says to a 503 `busy`: the server is fine, and the same request works in a moment. */
+/** What the page says to a 503 `busy` that came without the service's own words. */
 export const BUSY_WORDS = "The server is busy. Try again in a moment.";
 
 async function call(path: string, init?: RequestInit): Promise<unknown> {
@@ -63,11 +66,12 @@ async function call(path: string, init?: RequestInit): Promise<unknown> {
     // 503 `busy`: many codes were being checked at once and this one waited too long for its turn.
     // Nothing was wrong with it, and nothing was used up: the same request works in a moment.
     // (A 503 without words stays "couldn't answer": it may be the service restarting.)
+    // The service words it itself ("…Your code wasn't used. Try it again in a moment."): shown as it is.
     const busy = res.status === 503 && err?.code === "busy";
     throw new ApiError(
       res.status,
       busy ? "busy" : typeof err?.code === "string" ? err.code : `http-${res.status}`,
-      busy ? BUSY_WORDS : (said ?? (res.status >= 500 ? "The server couldn't answer just now." : "The server couldn't do that.")),
+      said ?? (busy ? BUSY_WORDS : res.status >= 500 ? "The server couldn't answer just now." : "The server couldn't do that."),
       Number.isFinite(retry) && retry > 0 ? retry : null,
     );
   }
@@ -128,6 +132,7 @@ const realApi: Api = {
     };
   },
   act: async (verb, app, more) => readAction(await send("POST", "/api/actions", { verb, app, ...(more ?? {}) })),
+  jobAct: async (verb, job, body) => readAction(await send("POST", `/api/activity/${encodeURIComponent(job)}/${verb}`, body)),
 };
 
 let chosen: Api | null = null;
