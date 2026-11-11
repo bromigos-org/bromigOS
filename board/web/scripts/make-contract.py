@@ -241,7 +241,8 @@ def system():
 
 def apps():
     """`bromigos lab apps list --json` from the stand-in machine homelab/tests uses: Caddy, Photos
-    and Passwords installed and running; the same with Photos' services down; nothing installed.
+    and Passwords installed and running; the same with Photos' services down; nothing installed;
+    and the running one on a box whose scan finds a graphics card (an NVIDIA one, 12 GB).
     And `bromigos lab apps budget --json` from each (under "<name>.budget"): the service reads
     what is in the box from it."""
     import test_lab_apps as T
@@ -249,10 +250,12 @@ def apps():
     out = {}
     with mock.patch.object(PC, "SHARE", "/nonexistent"):
         PC._cache.clear()
-        for name in ("running", "down", "none"):
+        for name in ("running", "down", "none", "gpu"):
             case = T.Tiles("server")
             case.setUp()
             try:
+                if name == "gpu":   # the scan's own keys: the card's kind in `gpu`, its memory in `gpu_vram_gb`
+                    case.m = case.machine(hw=dict(T.HW, gpu="nvidia", gpu_vram_gb=12))
                 if name != "none":
                     case.server()
                 if name == "down":
@@ -268,6 +271,7 @@ def apps():
     assert by["photos"]["state"] == "ok" and {t["id"]: t for t in out["down"]}["photos"]["state"] == "down"
     assert not any(t["installed"] for t in out["none"])
     assert out["running.budget"]["hardware"]["cpu"] == T.HW["cpu"] and out["none.budget"]["installed"]["ids"] == []
+    assert out["gpu.budget"]["hardware"]["gpu"] == "nvidia", out["gpu.budget"]["hardware"]
     return out
 
 
@@ -475,6 +479,8 @@ def build(args):
             "alerts_channels": {"drives": "channels"},
             "activity_missing": {"missing": ("activity-list.json",)},
             "stale": {"at": NOW - 5 * MIN},
+            "hardware_gpu": {"apps_": "gpu"},
+            "budget_missing": {"missing": ("apps-budget.json",)},
         }
         for name, kw in cases.items():
             snap(**kw)

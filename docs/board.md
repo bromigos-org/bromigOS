@@ -26,12 +26,15 @@ gathers the readings, the Caddy site, and what the page never shows.
   `sudo bromigos server board code` prints at the server.
 - **Home.** The hero is [Lamplight](#lamplight-the-station): the lab as a living station,
   with the lab's one status line. Under it, what needs you (each item with its machine and
-  a link to where it is fixed), and a tile per machine.
+  a link to where it is fixed), what fixed itself (each job by its own title, with its
+  machine, opening the job), and a tile per machine.
 - **A machine.** Overview: the machine on its deck tray, pulled out of the station, then
   its status line with a module per catalogue group, what needs you and what fixed itself, the Storage, Backups and Updates
   tiles, its apps as tiles with Open, and the always-on parts. Vitals: four gauges and one
-  trend chart. Hardware: processor, memory, drives and the graphics card. Set-up stands in
-  for Overview on a first run.
+  trend chart. Hardware: the cores, the memory and the graphics card as the app manager's
+  scan has them (`machines[].hardware`), the drives as the drive-health report lists them,
+  and the free space for apps' data. When the scan didn't answer, the page says so with the
+  server's reason, and calls no part missing. Set-up stands in for Overview on a first run.
 - **Data.** Drives: each drive with its verdict, and for a drive that isn't healthy what the
   server says about it and what to do. Backups: the last good copy, where the copies go
   (the nightly destination and the Go Bag drive), and the last test restore.
@@ -122,7 +125,7 @@ which the page never reads. Every request that changes something carries the hea
 |---|---|
 | `GET /api/door` | The door: the server's name, its world, the apps to open, the ways in |
 | `GET /api/session` | Whether this browser is signed in, and the signed-in browsers |
-| `POST /api/session` `{"code": …}` | Signing in with the one-time code. A refusal's sentence is shown as the server wrote it |
+| `POST /api/session` `{"code": …}` | Signing in with the one-time code. A refusal's sentence is shown as the server wrote it. Its 503 `busy` (many codes being checked at once) reads "The server is busy. Try again in a moment.", and the code stays in the field: it wasn't checked, so it works when sent again. A coded deletion's `busy` reads the same |
 | `DELETE /api/session`, `DELETE /api/session/ID` | Signing this browser out, or another one (People › Ways in) |
 | `GET /api/board` | The board: the machines, what needs you, what fixed itself, the jobs as `bromigos activity list` printed them, a tile per catalogue item, and the drive, backup and update documents as their commands print them |
 | `GET /api/activity` | The jobs, live: a stream of Server-Sent Events |
@@ -363,8 +366,8 @@ by hand. `scripts/make-contract.py` makes it:
 It holds the answers of each request, and a board for each state the commands can leave it
 in: healthy; a drive getting worse with a job asking; a job running; drives on watch and
 unreadable; backups that need a look, are off, carry a Go Bag, or aren't a server's; an app
-down; nothing installed; a stale reading; alerts with three channels of the server's own;
-and each command missing or printing an error.
+down; nothing installed; a stale reading; alerts with three channels of the server's own; a
+box with a graphics card; and each command missing or printing an error.
 
 ```sh
 python3 board/web/scripts/make-contract.py           # write it again

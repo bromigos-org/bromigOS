@@ -3,6 +3,7 @@
 // Hardware's parts; Set-up on a first run.
 import { expect, test } from "@playwright/test";
 import { open, VERDICT } from "./helpers";
+import { copy, go, live, openReal, real, Service, whole } from "./service";
 import { WEBGL } from "./webgl";
 
 test.use(WEBGL); // the holograms are drawn in this spec
@@ -143,13 +144,62 @@ test("Vitals of a machine that reports nothing: not measured", async ({ page }) 
   await expect(page.locator(".vt-g.q")).toHaveCount(4);
 });
 
-test("Hardware: the parts, the card, and system versions planned", async ({ page }) => {
+test("Hardware: the parts as the scan has them, the drives as their report has them, system versions planned", async ({ page }) => {
   await open(page, "needs-you", "m/myserver/hardware");
   await expect(page.locator(".hw-part", { hasText: "PROCESSOR" }).locator(".v")).toContainText("4");
   await expect(page.locator(".hw-part", { hasText: "MEMORY" }).locator(".v")).toContainText("16");
-  await expect(page.locator(".hw-part", { hasText: "DRIVES" })).toContainText("getting worse");
-  await expect(page.locator(".hw-part", { hasText: "GRAPHICS CARD" })).toContainText("No graphics card for it here");
+  const drives = page.locator(".hw-part", { hasText: "DRIVES" });
+  await expect(drives).toContainText("getting worse");
+  await expect(drives.locator(".v")).toContainText("3");
+  await expect(drives.locator(".hw-drives li")).toHaveCount(3);
+  await expect(drives.locator(".hw-drives li").first()).toHaveText("sdb WDC WD40EFRX-68N32N0");
+  await expect(drives).toContainText("512 GB free for apps' data");
+  const gpu = page.locator(".hw-part", { hasText: "GRAPHICS CARD" });
+  await expect(gpu).toContainText("The scan found no graphics card");
+  await expect(gpu.locator(".st")).toHaveText("none");
   await expect(page.locator(".panel", { hasText: "SYSTEM VERSIONS" }).locator(".pl")).toHaveCount(1);
+});
+
+test.describe("the real client, the service's real answers", () => {
+  test.beforeEach(({}, info) => test.skip(info.project.name !== "desktop", "the contract is the same at every width"));
+
+  test("a box with a graphics card: its kind and its memory, as the scan says them", async ({ page }) => {
+    const s = new Service();
+    s.board = real.boards.hardware_gpu;
+    const w = await openReal(page, s, "m/myserver/hardware");
+    const gpu = page.locator(".hw-part", { hasText: "GRAPHICS CARD" });
+    await expect(gpu).toContainText("An NVIDIA card · 12 GB of its own memory");
+    await expect(gpu.locator(".st")).toHaveCount(0);
+    await whole(page, w, "hardware, a graphics card");
+  });
+
+  test("what is in the box unread: the server's reason, and no part is called missing", async ({ page }) => {
+    const s = new Service();
+    s.board = real.boards.budget_missing;
+    const w = await openReal(page, s, "m/myserver/hardware");
+    await expect(page.locator(".hw-part", { hasText: "PROCESSOR" })).toContainText("What is in the box: couldn't be read on the server: bromigos: no such command");
+    await expect(page.locator(".hw-part", { hasText: "PROCESSOR" }).locator(".v")).toContainText("·");
+    const gpu = page.locator(".hw-part", { hasText: "GRAPHICS CARD" });
+    await expect(gpu.locator(".st")).toHaveText("not read");
+    await expect(gpu).not.toContainText("found no graphics card");
+    // the drives are their own report's, and that was read
+    await expect(page.locator(".hw-part", { hasText: "DRIVES" }).locator(".v")).toContainText("3");
+    await whole(page, w, "hardware, unread");
+  });
+
+  test("what fixed itself is named by the job's own title, even when the job isn't in the list any more", async ({ page }) => {
+    const s = new Service();
+    s.board = { ...copy(real.boards.needs_you), activity: { schema: 1, jobs: [] } };
+    s.activity = live("activity_healthy"); // a stream without the update that put itself back
+    await openReal(page, s, "m/myserver");
+    await expect(page.locator(".panel", { hasText: "FIXED BY ITSELF" })).toContainText("Updating Photos");
+    await go(page, "home");
+    await expect(page.locator(".hm-fixed")).toContainText("Updating Photos · myserver");
+    // an older service without the title: the job's title from the list, or "A job", never blank
+    s.board = { ...copy(real.boards.needs_you), activity: { schema: 1, jobs: [] }, fixed: real.boards.needs_you.fixed.map(({ title: _t, ...f }: { title: string }) => f) };
+    await page.reload();
+    await expect(page.locator(".hm-fixed .lb-need")).toContainText("A job · myserver");
+  });
 });
 
 test("a first run shows Set-up in Overview's place", async ({ page }) => {

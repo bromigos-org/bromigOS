@@ -6,7 +6,7 @@
 // shapes the service sends by construction; tests/shapes.spec.ts checks it. On top of a real
 // answer a fixture may only: install more of the catalogue's apps on the example server, and
 // add what the page has asked the service for and the service doesn't send yet (a machine's
-// readings and hardware, a tile's reading and update, trends, the actions the page may take,
+// readings, a tile's reading and update, trends, the actions the page may take,
 // more machines). Those additions are example data, and each is named below.
 //
 //   node scripts/make-fixtures.mjs
@@ -59,11 +59,8 @@ const doorOf = (board) => ({ ...copy(real.doors.healthy),
     .map(({ id, job, app, holo, group, open }) => ({ id, job, app, holo: holo ?? "", group: group ?? "", open: { url: open.url } })) });
 
 // ---------------------------------------------------------------- what the service doesn't send yet
-// A machine's readings and hardware, and its trends (board-contracts.md, "what a machine's page reads").
-const HW = { cpu: 4, ram_gb: 16, gpu: false, gpu_name: null, gpu_vram_gb: 0, drives: [
-  { device: "nvme0", model: "Samsung SSD 980 PRO 2TB", size_bytes: 2000398934016, kind: "nvme" },
-  { device: "sda", model: "WDC WD40EFRX-68N32N0", size_bytes: 4000787030016, kind: "ata" },
-  { device: "sdb", model: "WDC WD40EFRX-68N32N0", size_bytes: 4000787030016, kind: "ata" }] };
+// A machine's readings and its trends (board-contracts.md, "what a machine's page reads"). Its
+// hardware is the service's own (`machines[].hardware`, from the app manager's scan).
 const READ = { cpu_pct: 23, ram_pct: 49, temp_c: 38, ram_used_bytes: 7.8 * GB, ram_total_bytes: 16 * GB, load1: 0.9, net_in_mbps: 6, net_out_mbps: 28, at: NOW - 20 * SEC, max_age_s: 45 };
 const wave = (base, amp, k) => Array.from({ length: 97 }, (_, i) => [NOW - 24 * H + i * 15 * MIN, Math.round((base + amp * Math.sin(i / k) + (amp / 3) * Math.sin(i / 2.3)) * 10) / 10]);
 const VITALS = { "myserver/24h": { schema: 1, machine: "myserver", range: "24h", step_s: 900, at: NOW - 20 * SEC,
@@ -77,7 +74,7 @@ function board(name, { measured = true, more = {} } = {}) {
   b.actions = [];
   if (Array.isArray(b.apps)) b.apps = apps(b.apps, { readings: measured });
   const n = Array.isArray(b.apps) ? b.apps.filter((t) => t.installed).length : null;
-  b.machines = b.machines.map((m) => ({ ...m, apps: n, ...(measured ? { readings: { ...READ, at: b.at - 15 * SEC }, hardware: HW, updates: { count: 2, security: false } } : {}) }));
+  b.machines = b.machines.map((m) => ({ ...m, apps: n, ...(measured ? { readings: { ...READ, at: b.at - 15 * SEC }, updates: { count: 2, security: false } } : {}) }));
   return { ...b, ...more };
 }
 

@@ -40,6 +40,9 @@ export interface Api {
 const HEADERS = { "X-Bromigos-Board": "1", "Content-Type": "application/json" };
 const TIMEOUT_MS = 20_000;
 
+/** What the page says to a 503 `busy`: the server is fine, and the same request works in a moment. */
+export const BUSY_WORDS = "The server is busy. Try again in a moment.";
+
 async function call(path: string, init?: RequestInit): Promise<unknown> {
   let res: Response;
   try {
@@ -56,10 +59,15 @@ async function call(path: string, init?: RequestInit): Promise<unknown> {
   if (!res.ok) {
     const err = (doc as { error?: { code?: unknown; words?: unknown } } | null)?.error;
     const retry = Number(res.headers.get("Retry-After"));
+    const said = typeof err?.words === "string" && err.words ? err.words : null;
+    // 503 `busy`: many codes were being checked at once and this one waited too long for its turn.
+    // Nothing was wrong with it, and nothing was used up: the same request works in a moment.
+    // (A 503 without words stays "couldn't answer": it may be the service restarting.)
+    const busy = res.status === 503 && err?.code === "busy";
     throw new ApiError(
       res.status,
-      typeof err?.code === "string" ? err.code : `http-${res.status}`,
-      typeof err?.words === "string" && err.words ? err.words : res.status >= 500 ? "The server couldn't answer just now." : "The server couldn't do that.",
+      busy ? "busy" : typeof err?.code === "string" ? err.code : `http-${res.status}`,
+      busy ? BUSY_WORDS : (said ?? (res.status >= 500 ? "The server couldn't answer just now." : "The server couldn't do that.")),
       Number.isFinite(retry) && retry > 0 ? retry : null,
     );
   }

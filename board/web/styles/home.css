@@ -39,6 +39,9 @@
 .hm-needs .lb-need { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 13px; }
 .lb-need .d { display: block; color: var(--static); font-size: 12px; }
 .lb-need b { color: var(--amber); }
+.hm-fixed { display: grid; gap: 0; }
+.hm-needs .hm-fixed .over { margin: 0 0 2px; font-size: 11px; letter-spacing: .16em; color: var(--soft); max-width: none; }
+.hm-fixed .lb-need .hm-ic { color: var(--phosphor); }
 .hm-plans { margin: 0; display: inline-flex; gap: 8px; align-items: center; }
 .spec.q, .spec.q svg { color: var(--static); }
 @container view (max-width: 860px) { .stage.lamp-wait { height: 600px; } }
