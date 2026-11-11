@@ -5,8 +5,9 @@
 // A machine kind with no model in the manifest is drawn as its kind's icon on the tray: the same
 // top line, the same state word, no hologram asked for.
 import { HoloView, type PieceSpec, type Seg } from "../holo/view";
-import { KIND_ICON, KIND_WORD, artUrl, createRoot, esc, icon, join, modelFor, put, reducedNow, stateWord, viewState } from "./base";
+import { KIND_WORD, addHtml, artUrl, createRoot, html, icon, join, kicoClass, kindIcon, modelFor, oneOf, put, reducedNow, setHtml, stateWord, viewState } from "./base";
 import { SHELL_NAME, buildScene, type Scene } from "./station";
+import { KINDS, STATES, sane } from "./sane";
 import type { LamplightData, MachineHandle, MachineOptions, RackHandle, RackOptions } from "./types";
 
 type El = HTMLElement;
@@ -26,9 +27,10 @@ export class Machine implements MachineHandle {
   private ovH = "";
 
   constructor(private host: El, private o: MachineOptions) {
+    this.o = o = { ...o, data: sane(o.data), machine: String(o.machine) };
     const { root, prefix } = createRoot(host, o.world);
     this.root = root; this.P = prefix;
-    root.insertAdjacentHTML("beforeend", `<div class="mhero" data-k="mh"><div class="scene" data-k="scene"></div><span class="loading" data-k="loading" title="The hologram is loading; what it says is already here in words">TUNING IN…</span><div class="ov" data-k="ov"></div><div class="mh-top" data-k="top"></div><span class="h-scan" aria-hidden="true"></span><span class="h-edge" aria-hidden="true"></span></div>`);
+    addHtml(root, html`<div class="mhero" data-k="mh"><div class="scene" data-k="scene"></div><span class="loading" data-k="loading" title="The hologram is loading; what it says is already here in words">TUNING IN…</span><div class="ov" data-k="ov"></div><div class="mh-top" data-k="top"></div><span class="h-scan" aria-hidden="true"></span><span class="h-edge" aria-hidden="true"></span></div>`);
     const click = (ev: Event) => { const t = (ev.target as Element).closest<El>("[data-nav]"); if (t && root.contains(t)) this.o.onNavigate?.(t.dataset.nav!, { machine: this.o.machine }); };
     root.addEventListener("click", click); this.off.push(() => root.removeEventListener("click", click));
     const mq = matchMedia("(prefers-reduced-motion: reduce)"), mqf = () => this.setReduced(!!this.o.reduced);
@@ -47,25 +49,25 @@ export class Machine implements MachineHandle {
     this.root.classList.toggle("mascot-off", (d.mascot ?? "on") === "off");
     const c = this.scene.compartments.find((x) => x.id === this.o.machine && x.machine), top = this.q("top")!, ov = this.q("ov")!, mh = this.q("mh")!;
     if (!c || !c.machine) {
-      top.innerHTML = `<div title="This machine isn't on the lab's list"><b>${esc(this.o.machine.toUpperCase())}</b><small>NOT ON THIS LAB</small></div>`;
-      ov.innerHTML = ""; this.topH = this.ovH = ""; this.view?.dispose(); this.view = null; this.modelKey = ""; mh.classList.add("ready");
+      setHtml(top, html`<div title="This machine isn't on the lab's list"><b>${this.o.machine.toUpperCase()}</b><small>NOT ON THIS LAB</small></div>`);
+      setHtml(ov, ""); this.topH = this.ovH = ""; this.view?.dispose(); this.view = null; this.modelKey = ""; mh.classList.add("ready");
       return;
     }
     const m = c.machine, deck = c.deck === "DOCK" ? "THE DOCKING RING" : c.deck;
     const need = d.needs.find((n) => n.machine === m.id);
     const crew = this.scene.crew.find((x) => x.where === m.id && x.duty);
-    const topH = `<div title="${esc(c.hint)}"><b>${c.code} · ${esc(c.name)}</b><small>${esc([KIND_WORD[m.kind].replace(/^(a|an|the) /, ""), m.role, m.reading].filter(Boolean).join(" · ").toUpperCase())}</small></div>`
-      + `<span title="${esc(need ? `${need.words}${need.detail ? `: ${need.detail}` : ""}` : `Its state: ${m.word}`)}">${stateWord(this.P, c.state, need ? `${c.word} · ${need.words.toUpperCase()}` : c.word)}</span>`;
-    if (topH !== this.topH) top.innerHTML = this.topH = topH;
+    const topH = html`${[html`<div title="${c.hint}"><b>${c.code} · ${c.name}</b><small>${[KIND_WORD[m.kind].replace(/^(a|an|the) /, ""), m.role, m.reading].filter(Boolean).join(" · ").toUpperCase()}</small></div>`
+      , html`<span title="${need ? `${need.words}${need.detail ? `: ${need.detail}` : ""}` : `Its state: ${m.word}`}">${stateWord(this.P, c.state, need ? `${c.word} · ${need.words.toUpperCase()}` : c.word)}</span>`]}`;
+    if (topH.s !== this.topH) { setHtml(top, topH); this.topH = topH.s; }
     const model = modelFor(a, m.kind);
     const cut = crew ? artUrl(a, `crew/${crew.shell}-${crew.pose}`) ?? artUrl(a, `crew/${crew.shell}`) : null, still = crew && !cut ? artUrl(a, `still/${crew.shell}`) : null;
-    const ovH = `<button type="button" class="mh-tag pin" data-nav="home" data-k="dock" title="Its compartment on the station, behind: ${c.code}. Press to go back to the whole station.">DOCKS AT ${deck}</button>`
-      + (model ? "" : `<span class="kico big pin ${c.state}" data-k="kico" title="${esc(`${m.name}, ${KIND_WORD[m.kind]}: ${m.word}. Shown by its icon on its deck tray.`)}">${icon(this.P, KIND_ICON[m.kind], "")}</span>`)
-      + (model && m.cause ? `<span class="tgt2 pin" data-k="tgt" title="The cause, lit on the machine itself"></span>` : "")
-      + (crew && (d.mascot ?? "on") !== "off" ? (cut ? `<img class="crewx pin ${this.reduced ? "" : "bob"}" data-k="crew" src="${esc(cut)}" alt="" decoding="async" title="${esc(`STATIC as ${SHELL_NAME[crew.shell]}: ${crew.hint}`)}">`
-        : still ? `<img class="crewp pin" data-k="crew" src="${esc(still)}" alt="" decoding="async" title="${esc(`STATIC as ${SHELL_NAME[crew.shell]}: ${crew.hint}`)}">` : "")
-        + `<span class="cap2 pin ${crew.tone === "warn" ? "warn" : ""}" data-k="cap" title="${esc(crew.hint)}">${esc(crew.caption)}</span>` : "");
-    if (ovH !== this.ovH) { ov.innerHTML = this.ovH = ovH; this.sig = ""; }   // a poll that found nothing new rewrites nothing
+    const ovH = html`${[html`<button type="button" class="mh-tag pin" data-nav="home" data-k="dock" title="Its compartment on the station, behind: ${c.code}. Press to go back to the whole station.">DOCKS AT ${deck}</button>`
+      , (model ? "" : html`<span class="kico big pin ${kicoClass(c.state)}" data-k="kico" title="${`${m.name}, ${KIND_WORD[m.kind]}: ${m.word}. Shown by its icon on its deck tray.`}">${icon(this.P, kindIcon(m.kind), "")}</span>`)
+      , (model && m.cause ? html`<span class="tgt2 pin" data-k="tgt" title="The cause, lit on the machine itself"></span>` : "")
+      , (crew && (d.mascot ?? "on") !== "off" ? [(cut ? html`<img class="crewx pin ${this.reduced ? "" : "bob"}" data-k="crew" src="${cut}" alt="" decoding="async" title="${`STATIC as ${SHELL_NAME[crew.shell]}: ${crew.hint}`}">`
+        : still ? html`<img class="crewp pin" data-k="crew" src="${still}" alt="" decoding="async" title="${`STATIC as ${SHELL_NAME[crew.shell]}: ${crew.hint}`}">` : "")
+        , html`<span class="cap2 pin ${crew.tone === "warn" ? "warn" : ""}" data-k="cap" title="${crew.hint}">${crew.caption}</span>`] : "")]}`;
+    if (ovH.s !== this.ovH) { setHtml(ov, ovH); this.ovH = ovH.s; this.sig = ""; }   // a poll that found nothing new rewrites nothing
     const mk = `${m.kind}|${model}`;
     if (mk !== this.modelKey) { this.modelKey = mk; this.view?.dispose(); this.view = null; void this.mount(); }
     else if (this.view) {
@@ -123,7 +125,7 @@ export class Machine implements MachineHandle {
     if (cr) put(cr, p.x, p.y);
     if (cap) put(cap, p.x, p.y + 10, "-50%", "0");
   }
-  update(data: LamplightData, machine?: string) { this.o.data = data; if (machine) this.o.machine = machine; this.render(); }
+  update(data: LamplightData, machine?: string) { this.o.data = sane(data); if (machine != null) this.o.machine = String(machine); this.render(); }
   setReduced(on: boolean) { this.o.reduced = on; this.view?.set("m", { spin: this.reduced ? 0 : 0.08 }); this.render(); }
   setWorld(world: string | null) { if (world) this.root.dataset.world = world; else delete this.root.dataset.world; this.refresh(); }
   refresh() { this.view?.refresh(); }
@@ -140,11 +142,13 @@ export class Rack implements RackHandle {
   private off: (() => void)[] = [];
 
   constructor(private host: El, private o: RackOptions) {
+    // the options are a host's words too: a kind or a state that isn't one is "other" / "unknown"
+    this.o = o = { ...o, kind: oneOf(o.kind, KINDS, "other"), state: o.state == null ? undefined : oneOf(o.state, STATES, "unknown") };
     const { root, prefix } = createRoot(host, o.world);
     this.root = root; this.P = prefix;
     root.classList.add("lp-bare");
     const model = modelFor(o.assets, o.kind), label = o.label ?? `${KIND_WORD[o.kind]}, as a hologram`;
-    root.insertAdjacentHTML("beforeend", `<div class="rackm" data-k="rk" role="img" aria-label="${esc(label)}" title="${esc(label)}"><div class="scene" data-k="scene"></div>${model ? "" : `<span class="kico big ${o.state ?? "ok"}" data-k="kico">${icon(prefix, KIND_ICON[o.kind], "")}</span>`}</div>`);
+    addHtml(root, html`<div class="rackm" data-k="rk" role="img" aria-label="${label}" title="${label}"><div class="scene" data-k="scene"></div>${model ? "" : html`<span class="kico big ${kicoClass(o.state ?? "ok")}" data-k="kico">${icon(prefix, kindIcon(o.kind), "")}</span>`}</div>`);
     const mq = matchMedia("(prefers-reduced-motion: reduce)"), mqf = () => this.setReduced(!!this.o.reduced);
     mq.addEventListener("change", mqf); this.off.push(() => mq.removeEventListener("change", mqf));
     if (model) void this.mount(model); else this.o.onReady?.();
@@ -170,8 +174,9 @@ export class Rack implements RackHandle {
   }
   update(patch: { state?: RackOptions["state"]; cause?: string | null; angle?: number }) {
     Object.assign(this.o, patch);
+    if (this.o.state != null) this.o.state = oneOf(this.o.state, STATES, "unknown");
     const model = modelFor(this.o.assets, this.o.kind);
-    const ki = this.root.querySelector('[data-k="kico"]'); if (ki) ki.className = `kico big ${this.o.state ?? "ok"}`;
+    const ki = this.root.querySelector('[data-k="kico"]'); if (ki) ki.className = `kico big ${kicoClass(this.o.state ?? "ok")}`;
     if (!this.view || !model) return;
     const e = this.o.assets.models[model], use = this.o.full && e.full ? e.full : e, ci = this.o.cause ? use.info.parts.findIndex((p) => p.id === this.o.cause) : -1;
     this.view.set("m", { state: viewState(this.o.state ?? "ok", false), cause: ci >= 0 ? ci : null, ...(patch.angle != null ? { yaw: this.yaw() } : {}) });

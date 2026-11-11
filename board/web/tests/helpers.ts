@@ -1,6 +1,7 @@
 // What every test shares: opening the page on a fixture, catching page errors and Content
 // Security Policy violations, and the list of routes (IA.md §2) with what each must show.
 import { expect, type Page } from "@playwright/test";
+import { NO_WEBGL } from "./webgl";
 
 declare global {
   interface Window {
@@ -42,8 +43,8 @@ export async function open(page: Page, fixture: string, hash = "") {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (m) => {
-    // a missing font file is the only error allowed: CI may have no Geist Mono
-    if (m.type() === "error" && !/fonts\/GeistMono/.test(m.location().url)) errors.push(`console: ${m.text()}`);
+    // allowed: a missing font file (CI may have no Geist Mono), and three.js saying WebGL is off (tests/webgl.ts)
+    if (m.type() === "error" && !/fonts\/GeistMono/.test(m.location().url) && !NO_WEBGL.test(m.text())) errors.push(`console: ${m.text()}`);
   });
   await page.addInitScript(() => {
     window.__csp = [];

@@ -6,8 +6,9 @@
 // It draws only from `LamplightData` (types.ts); update() re-renders in place. It shares the
 // page's one WebGL context (holo/view.ts) and draws a frame only when something moves.
 import { HoloView, type PieceSpec, type Seg } from "../holo/view";
-import { KIND_ICON, applyCss, artUrl, createRoot, esc, icon, isPhone, join, put, reducedNow, stateWord, tubes, viewState } from "./base";
+import { type Part, type Safe, addHtml, applyCss, artUrl, createRoot, html, icon, isPhone, join, kicoClass, kindIcon, put, reducedNow, setHtml, stateWord, tubes, viewState } from "./base";
 import { DECKS, BOOTH_EDGE, MAST_FOOT, MONITOR_AT, SHELL_NAME, YAW0, ZC, buildScene, dataKey, sceneKey, type Compartment, type CrewPlace, type Scene } from "./station";
+import { sane } from "./sane";
 import type { LampCard, LamplightData, LamplightHandle, LamplightOptions } from "./types";
 
 type El = HTMLElement;
@@ -51,11 +52,11 @@ export class Home implements LamplightHandle {
   private timer = 0;
 
   constructor(private host: El, opts: LamplightOptions) {
-    this.o = { tab: "decks", under: "auto", ...opts };
-    this.dataKey = JSON.stringify(opts.data); this.structKey = dataKey(opts.data);
+    this.o = { tab: "decks", under: "auto", ...opts, data: sane(opts.data) };
+    this.dataKey = JSON.stringify(this.o.data); this.structKey = dataKey(this.o.data);
     const { root, prefix } = createRoot(host, this.o.world);
     this.root = root; this.P = prefix;
-    root.insertAdjacentHTML("beforeend", this.skeleton());
+    addHtml(root, this.skeleton());
     this.render(true);
     void this.mountScene();
     this.wire();
@@ -84,8 +85,8 @@ export class Home implements LamplightHandle {
     return t;
   }
 
-  private skeleton(): string {
-    return `<div class="wrap" data-k="wrap">
+  private skeleton(): Safe {
+    return html`<div class="wrap" data-k="wrap">
       <div class="stage space" data-k="stage" data-flare>
         <div class="sky" data-k="sky"><canvas data-k="dust" aria-hidden="true"></canvas><svg class="stars" data-k="stars" viewBox="0 0 1000 620" preserveAspectRatio="xMinYMin slice" aria-hidden="true"></svg></div>
         <div data-k="far"></div>
@@ -105,7 +106,7 @@ export class Home implements LamplightHandle {
       <div class="aside t" data-k="ast"></div>
     </div>
     <div class="tabs" role="tablist" aria-label="Under the station" data-k="tabs" hidden></div>
-    ${TAB_ORDER.map((k) => `<div class="tp tp-${k}" role="tabpanel" data-p="${k}"></div>`).join("")}`;
+    ${TAB_ORDER.map((k) => html`<div class="tp tp-${k}" role="tabpanel" data-p="${k}"></div>`)}`;
   }
 
   // ---------------------------------------------------------------- render: on new data, never per frame
@@ -122,7 +123,7 @@ export class Home implements LamplightHandle {
     this.stars(); this.far();
     this.head();
     const wx = this.q("wthr")!, want = s.weather === "interference" ? "intf" : s.weather === "night" ? "night" : "";
-    if ((wx.firstElementChild?.className ?? "").split(" ")[0] !== want) wx.innerHTML = want ? `<div class="${want} pin" data-k="wx" title="${esc(s.weather === "night" ? s.line.hint : s.sub.hint)}"></div>` : "";
+    if ((wx.firstElementChild?.className ?? "").split(" ")[0] !== want) setHtml(wx, want ? html`<div class="${want} pin" data-k="wx" title="${s.weather === "night" ? s.line.hint : s.sub.hint}"></div>` : "");
     this.overlay(); this.deckList(); this.asides();
     // the panels under the station: only the layers the data carries
     const tabs = this.tabs();
@@ -130,19 +131,19 @@ export class Home implements LamplightHandle {
     const names: Record<Tab, [string, string, string]> = {
       decks: ["i-module", "DECK PLAN", "The deck plan: the station in side elevation, a box per compartment"],
       booth: ["i-tv", "BOOTH", "Tonight's roll-call, and the open arc it follows"],
-      log: ["i-logs", "LOG &amp; GOALS", "The station log, and the goals that grow the station"],
+      log: ["i-logs", "LOG & GOALS", "The station log, and the goals that grow the station"],
       hub: ["i-net", "THE HUB", "Your faction as a place: a hub with its members' stations in orbit"],
     };
     const bar = this.q("tabs")!;
     bar.hidden = tabs.length < 2;
-    bar.innerHTML = tabs.map((k) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${k === this.o.tab}" title="${names[k][2]}">${this.ic(names[k][0])}${names[k][1]}</button>`).join("");
+    setHtml(bar, tabs.map((k) => html`<button type="button" role="tab" data-tab="${k}" aria-selected="${k === this.o.tab}" title="${names[k][2]}">${this.ic(names[k][0])}${names[k][1]}</button>`));
     r.dataset.tab = this.o.tab;
     for (const k of TAB_ORDER) {
       if (k === "hub" && this.hub && JSON.stringify(d.hub ?? null) === this.hubKey && tabs.includes("hub")) continue;
       if (k === "booth" && this.playing && tabs.includes("booth")) continue;
       if (k === "hub") this.dropHub();
       this.built[k] = false;
-      if (!tabs.includes(k)) { const p = this.root.querySelector<El>(`[data-p="${k}"]`); if (p && p.firstChild) p.innerHTML = ""; }
+      if (!tabs.includes(k)) { const p = this.root.querySelector<El>(`[data-p="${k}"]`); if (p && p.firstChild) setHtml(p, ""); }
     }
     if (this.o.tab) this.buildTab(this.o.tab as Tab);
     if (!first) this.syncModels();
@@ -152,20 +153,20 @@ export class Home implements LamplightHandle {
   /** The head, the readouts and the alarm: all a poll that found nothing new rewrites. */
   private head() {
     const d = this.data, s = this.scene;
-    this.q("head")!.innerHTML = `<h2 title="Lamplight: your lab as a living station">LAMPLIGHT</h2>
-      <small title="The post's own name. A relay station of the Wick's class, never the Wick itself">${esc(d.lab.name.toUpperCase())}'S POST · A RELAY STATION OF THE WICK'S CLASS</small>
-      <span class="line ${s.line.tone === "warn" ? "warn" : s.line.tone === "q" ? "q" : ""}" role="status" title="${esc(s.line.hint)}">${esc(s.line.words)}</span>
-      <small class="readat${s.line.tone === "warn" ? " warn" : ""}" title="${esc(s.sub.hint)}">${esc(s.sub.words)}</small>
-      ${s.beam != null ? `<small title="One goal reached is one step of the mast's beam. It only grows.">BEAM ${s.beam} OF 10</small>` : ""}`;
+    setHtml(this.q("head")!, html`<h2 title="Lamplight: your lab as a living station">LAMPLIGHT</h2>
+      <small title="The post's own name. A relay station of the Wick's class, never the Wick itself">${d.lab.name.toUpperCase()}'S POST · A RELAY STATION OF THE WICK'S CLASS</small>
+      <span class="line ${s.line.tone === "warn" ? "warn" : s.line.tone === "q" ? "q" : ""}" role="status" title="${s.line.hint}">${s.line.words}</span>
+      <small class="readat${s.line.tone === "warn" ? " warn" : ""}" title="${s.sub.hint}">${s.sub.words}</small>
+      ${s.beam != null ? html`<small title="One goal reached is one step of the mast's beam. It only grows.">BEAM ${s.beam} OF 10</small>` : ""}`);
     const two = (n: number) => String(Math.min(99, n)).padStart(2, "0");
-    const read = (v: string, w: string, warn: boolean, hint: string) => `<span class="readout${warn ? " warn" : ""}" title="${esc(hint)}">${tubes(v)}<span>${w}</span></span>`;
-    this.q("tubes")!.innerHTML = read(two(s.tubes.online), "COMPARTMENTS ONLINE", false, `${s.tubes.online} of ${d.machines.length} machine${d.machines.length === 1 ? " answers" : "s answer"} now`)
-      + read(two(s.tubes.alarms), "ALARMS", s.tubes.alarms > 0, s.tubes.alarms ? `${s.tubes.alarms} thing${s.tubes.alarms === 1 ? "" : "s"} need${s.tubes.alarms === 1 ? "s" : ""} you` : "Nothing needs you")
-      + read(s.tubes.clock, "BRIDGE CLOCK", false, "The bridge clock: when the board was last read, in this browser's time");
+    const read = (v: string, w: string, warn: boolean, hint: string) => html`<span class="readout${warn ? " warn" : ""}" title="${hint}">${tubes(v)}<span>${w}</span></span>`;
+    setHtml(this.q("tubes")!, read(two(s.tubes.online), "COMPARTMENTS ONLINE", false, `${s.tubes.online} of ${d.machines.length} machine${d.machines.length === 1 ? " answers" : "s answer"} now`)
+      , read(two(s.tubes.alarms), "ALARMS", s.tubes.alarms > 0, s.tubes.alarms ? `${s.tubes.alarms} thing${s.tubes.alarms === 1 ? "" : "s"} need${s.tubes.alarms === 1 ? "s" : ""} you` : "Nothing needs you")
+      , read(s.tubes.clock, "BRIDGE CLOCK", false, "The bridge clock: when the board was last read, in this browser's time"));
     const ak = s.alarm ? s.alarm.words : "";
     if (ak !== this.alarmKey) {   // rebuilt only when the alarm itself changes, so it flashes once, not on every reading
       this.alarmKey = ak;
-      this.q("alarm")!.innerHTML = s.alarm ? `<button type="button" class="alarm-bar${s.alarm.danger ? " danger" : ""}" data-nav="${esc(s.alarm.route)}" title="${esc(s.alarm.hint)}">${this.ic("s-warn")}<span>${esc(s.alarm.words)}</span></button>` : "";
+      setHtml(this.q("alarm")!, s.alarm ? html`<button type="button" class="alarm-bar${s.alarm.danger ? " danger" : ""}" data-nav="${s.alarm.route}" title="${s.alarm.hint}">${this.ic("s-warn")}<span>${s.alarm.words}</span></button>` : "");
     }
     this.tone();
   }
@@ -180,26 +181,26 @@ export class Home implements LamplightHandle {
   /** The log among the stars: arcs as constellations, goals as named stars, copies as loose stars. */
   private stars() {
     const sky = this.data.sky, st = this.q<SVGElement>("stars")!, hintEl = this.q("skyhint")!;
-    if (!sky) { st.innerHTML = ""; st.removeAttribute("aria-label"); st.removeAttribute("role"); st.setAttribute("aria-hidden", "true"); hintEl.hidden = true; return; }
+    if (!sky) { setHtml(st, ""); st.removeAttribute("aria-label"); st.removeAttribute("role"); st.setAttribute("aria-hidden", "true"); hintEl.hidden = true; return; }
     const con = (name: string, pts: number[][], lx: number, ly: number, cls: string, hint: string, links?: number[][]) =>
-      `<g class="con ${cls}" tabindex="0" title="${esc(hint)}"><title>${esc(hint)}</title>${(links ?? pts.slice(1).map((_, i) => [i, i + 1])).map(([a, b]) => `<path d="M${pts[a][0]} ${pts[a][1]}L${pts[b][0]} ${pts[b][1]}"/>`).join("")}${pts.map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i ? 2 : 2.6}"/>`).join("")}<text x="${lx}" y="${ly}">${esc(name)}</text></g>`;
-    let g = "", spot = 0;
+      html`<g class="con ${cls}" tabindex="0" title="${hint}"><title>${hint}</title>${(links ?? pts.slice(1).map((_, i) => [i, i + 1])).map(([a, b]) => html`<path d="M${pts[a][0]} ${pts[a][1]}L${pts[b][0]} ${pts[b][1]}"/>`)}${pts.map(([x, y], i) => html`<circle cx="${x}" cy="${y}" r="${i ? 2 : 2.6}"/>`)}<text x="${lx}" y="${ly}">${name}</text></g>`;
+    const g: Part[] = []; let spot = 0;
     for (const a of sky.arcs) {
       const [ax, ay] = a.open ? [240, 410] : ARC_SPOTS[spot++ % ARC_SPOTS.length];
       const pts = Array.from({ length: Math.max(2, Math.min(6, a.stars)) }, (_, j) => [ax + 34 * j, ay + (j % 2 ? -18 : 6) + j * 4]);
-      g += con(a.name, pts, ax - 10, ay + 42, a.open ? "form" : a.fresh && !this.reduced ? "rising" : "", a.hint);
+      g.push(con(a.name, pts, ax - 10, ay + 42, a.open ? "form" : a.fresh && !this.reduced ? "rising" : "", a.hint));
     }
     if (sky.goals.length) {
       const off = [[0, 0], [32, 10], [62, -6], [82, 22], [16, 30], [48, 40], [96, 2], [70, 52], [112, 30], [28, 58]];
-      g += `<g class="named">${sky.goals.slice(0, 10).map((x, i) => `<circle cx="${48 + off[i][0]}" cy="${140 + off[i][1]}" r="3" tabindex="0" title="${esc(`${x.name}: ${x.hint}`)}"><title>${esc(x.name)}: ${esc(x.hint)}</title></circle>`).join("")}<text x="44" y="216">${sky.goals.length} GOAL${sky.goals.length === 1 ? "" : "S"} · NAMED STARS</text></g>`;
+      g.push(html`<g class="named">${sky.goals.slice(0, 10).map((x, i) => html`<circle cx="${48 + off[i][0]}" cy="${140 + off[i][1]}" r="3" tabindex="0" title="${`${x.name}: ${x.hint}`}"><title>${x.name}: ${x.hint}</title></circle>`)}<text x="44" y="216">${sky.goals.length} GOAL${sky.goals.length === 1 ? "" : "S"} · NAMED STARS</text></g>`);
     }
     if (sky.copies) {
       const cp = [[74, 330], [106, 314], [132, 336], [164, 320], [190, 344], [118, 362], [154, 370]];
-      g += sky.copies.proven
+      g.push(sky.copies.proven
         ? con("PROVEN", cp, 64, 392, sky.copies.fresh && !this.reduced ? "rising" : "", sky.copies.hint, [[0, 1], [1, 2], [2, 3], [3, 4], [2, 5], [5, 6], [6, 4]])
-        : `<g class="loose" tabindex="0" title="${esc(sky.copies.hint)}"><title>${esc(sky.copies.hint)}</title>${cp.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.8"/>`).join("")}<text x="64" y="392">THE COPIES · NOT PROVEN YET</text></g>`;
+        : html`<g class="loose" tabindex="0" title="${sky.copies.hint}"><title>${sky.copies.hint}</title>${cp.map(([x, y]) => html`<circle cx="${x}" cy="${y}" r="1.8"/>`)}<text x="64" y="392">THE COPIES · NOT PROVEN YET</text></g>`);
     }
-    st.innerHTML = g;
+    setHtml(st, g);
     st.removeAttribute("aria-hidden"); st.setAttribute("role", "img");
     st.setAttribute("aria-label", `The stars, your log: ${sky.arcs.length} arc${sky.arcs.length === 1 ? "" : "s"} as constellations, ${sky.goals.length} goals as named stars.`);
     hintEl.hidden = false;
@@ -221,29 +222,29 @@ export class Home implements LamplightHandle {
   /** Friends' stations and the faction's hub: distant lights, pressed to visit. */
   private far() {
     const d = this.data, box = this.q("far")!;
-    box.innerHTML = (d.friends ?? []).slice(0, FAR_SPOTS.length).map((f, i) =>
-      `<button type="button" class="far ${f.lit ? "" : "out"} ${this.visiting === f.id ? "on" : ""}" data-f="${esc(f.id)}" data-css="left:${FAR_SPOTS[i][0] * 100}%;top:${FAR_SPOTS[i][1] * 100}%" title="${esc(f.name)}'s station, far off: ${esc(f.last)}. Press to visit, read-only."><i></i><span>${esc(f.name)}</span></button>`).join("")
-      + (d.hub ? `<button type="button" class="far hubm" data-hubm data-css="left:34%;top:92%" title="${esc(d.hub.name)}, your faction's hub, far off: opens THE HUB below"><i></i><span>${esc(d.hub.name)} · HUB</span></button>` : "");
+    setHtml(box, (d.friends ?? []).slice(0, FAR_SPOTS.length).map((f, i) =>
+      html`<button type="button" class="far ${f.lit ? "" : "out"} ${this.visiting === f.id ? "on" : ""}" data-f="${f.id}" data-css="left:${FAR_SPOTS[i][0] * 100}%;top:${FAR_SPOTS[i][1] * 100}%" title="${f.name}'s station, far off: ${f.last}. Press to visit, read-only."><i></i><span>${f.name}</span></button>`)
+      , (d.hub ? html`<button type="button" class="far hubm" data-hubm data-css="left:34%;top:92%" title="${d.hub.name}, your faction's hub, far off: opens THE HUB below"><i></i><span>${d.hub.name} · HUB</span></button>` : ""));
     applyCss(box);
   }
 
   /** Words, icons, crew and markers over the scene: built here, moved by one transform each in layout(). */
   private overlay() {
     const s = this.scene, d = this.data;
-    let h = s.parts.map((p) => `<button type="button" class="part pin ${p.state === "warn" || p.state === "down" ? p.state : ""} ${p.state === "dim" ? "dim" : ""} ${p.state === "idle" ? "idle" : ""}" data-part="${p.id}" title="${esc(`${p.name}${p.word ? `: ${p.word}` : ""}. ${p.hint}`)}" aria-label="${esc(`${p.name}${p.word ? `: ${p.word}` : ""}`)}"><i></i><span>${p.name}${p.word ? ` · ${esc(p.word)}` : ""}</span></button>`).join("");
+    const h: Part[] = [s.parts.map((p) => html`<button type="button" class="part pin ${p.state === "warn" || p.state === "down" ? p.state : ""} ${p.state === "dim" ? "dim" : ""} ${p.state === "idle" ? "idle" : ""}" data-part="${p.id}" title="${`${p.name}${p.word ? `: ${p.word}` : ""}. ${p.hint}`}" aria-label="${`${p.name}${p.word ? `: ${p.word}` : ""}`}"><i></i><span>${p.name}${p.word ? ` · ${p.word}` : ""}</span></button>`)];
     // a machine with no hologram in the manifest: its kind's icon on its deck tray
     const icons = s.compartments.filter((c) => c.at && !c.model && (c.what === "machine" || (c.what === "berth" && d.joining?.length)));
-    h += icons.map((c) => `<button type="button" class="kico pin ${c.state} ${c.what === "berth" ? "ghost" : ""}" data-c="${esc(c.id)}" title="${esc(`${c.code} ${c.name}: ${c.word}. ${c.hint}`)}" aria-label="${esc(`${c.name}: ${c.word}`)}">${this.ic(c.machine ? KIND_ICON[c.machine.kind] : "i-box", "")}</button>`).join("");
+    h.push(icons.map((c) => html`<button type="button" class="kico pin ${kicoClass(c.state)} ${c.what === "berth" ? "ghost" : ""}" data-c="${c.id}" title="${`${c.code} ${c.name}: ${c.word}. ${c.hint}`}" aria-label="${`${c.name}: ${c.word}`}">${this.ic(c.machine ? kindIcon(c.machine.kind) : "i-box", "")}</button>`));
     if (d.show) {
       const still = this.art(s.quiet || d.show.aired ? "still/asleep" : "still/host") ?? this.art("still/host");
-      h += `<button type="button" class="monx pin${still ? "" : " bare"}" data-k="mon" title="The booth's monitor: ${d.show.aired ? "the roll-call aired; press to replay it" : "tonight's roll-call; press to play it"}">${still ? `<img src="${esc(still)}" alt="" decoding="async"><span class="tint"></span>` : ""}<span>${d.show.aired ? "AIRED" : "ROLL-CALL ▶"}</span></button>`;
+      h.push(html`<button type="button" class="monx pin${still ? "" : " bare"}" data-k="mon" title="The booth's monitor: ${d.show.aired ? "the roll-call aired; press to replay it" : "tonight's roll-call; press to play it"}">${still ? html`<img src="${still}" alt="" decoding="async"><span class="tint"></span>` : ""}<span>${d.show.aired ? "AIRED" : "ROLL-CALL ▶"}</span></button>`);
     }
-    if (s.cause && s.compartments.some((c) => c.machine?.cause && c.model && c.at)) h += `<span class="tgt2 pin" data-k="tgt" title="The cause, lit on the machine itself"></span>`;
-    h += `<span class="beamx pin ${s.brighter && !this.reduced ? "grow" : ""}" data-k="beam" title="The relay beam from the mast${s.beam != null ? ": one step per goal reached. It only grows." : "."}"></span>`
-      + `<span class="lampx pin" data-k="lamp" title="The post's lamp on the mast's tip: lit while every machine answers; lit with something needing you is still lit. Low only in quiet hours."></span>`
-      + `<svg class="leads2" data-k="l2" aria-hidden="true"></svg><span data-k="crew"></span>`;
+    if (s.cause && s.compartments.some((c) => c.machine?.cause && c.model && c.at)) h.push(html`<span class="tgt2 pin" data-k="tgt" title="The cause, lit on the machine itself"></span>`);
+    h.push(html`<span class="beamx pin ${s.brighter && !this.reduced ? "grow" : ""}" data-k="beam" title="The relay beam from the mast${s.beam != null ? ": one step per goal reached. It only grows." : "."}"></span>`
+      , html`<span class="lampx pin" data-k="lamp" title="The post's lamp on the mast's tip: lit while every machine answers; lit with something needing you is still lit. Low only in quiet hours."></span>`
+      , html`<svg class="leads2" data-k="l2" aria-hidden="true"></svg><span data-k="crew"></span>`);
     const ov = this.q("ov")!;
-    ov.innerHTML = h;
+    setHtml(ov, h);
     this.pins = {
       parts: [...ov.querySelectorAll<El>(".part")], icons: [...ov.querySelectorAll<El>(".kico")].map((el, i) => ({ c: icons[i], el })), crew: [],
       mon: this.q("mon"), tgt: this.q("tgt"), lamp: this.q("lamp"), beam: this.q("beam"), wx: this.q("wx"), l2: this.q<SVGElement>("l2"),
@@ -258,7 +259,7 @@ export class Home implements LamplightHandle {
     const box = this.q("crew"); if (!box || box.childElementCount || this.mascot === "off") return;
     const s = this.scene, groups = new Map<string, CrewPlace[]>();
     for (const c of s.crew) { if (c.where !== "mast" && !s.compartments.some((x) => x.id === c.where && x.foot)) continue; groups.set(c.where, [...(groups.get(c.where) ?? []), c]); }
-    let h = "";
+    const h: Part[] = [];
     const list: { p: CrewPlace; i: number; n: number }[] = [];
     for (const g of groups.values()) g.forEach((p, i) => {
       const cut = this.art(`crew/${p.shell}-${p.pose}`) ?? this.art(`crew/${p.shell}`);
@@ -266,12 +267,12 @@ export class Home implements LamplightHandle {
       if (!cut && !still && !p.duty) return;         // off duty with no painting: named in quarters' row, not drawn
       list.push({ p, i, n: g.length });
       const cls = `${!this.reduced && !s.quiet && cut ? "bob" : ""} ${p.tone === "dim" ? "dark" : ""} d${i % 5}`;
-      h += cut ? `<img class="crewx pin ${cls}" src="${esc(cut)}" alt="" decoding="async" title="${esc(`STATIC as ${SHELL_NAME[p.shell]}: ${p.hint}`)}">`
-        : still ? `<img class="crewp pin ${cls}${p.duty ? "" : " sm"}" src="${esc(still)}" alt="" decoding="async" title="${esc(`STATIC as ${SHELL_NAME[p.shell]}: ${p.hint}`)}">`
-        : `<span class="crewn pin" title="${esc(`STATIC as ${SHELL_NAME[p.shell]}: ${p.hint}`)}">${this.ic("i-crew")}</span>`;
-      h += p.duty && p.caption ? `<span class="cap2 pin ${p.tone === "warn" ? "warn" : p.tone === "busy" ? "busy" : ""}" title="${esc(p.hint)}">${esc(p.caption)}</span>` : `<i hidden></i>`;
+      h.push(cut ? html`<img class="crewx pin ${cls}" src="${cut}" alt="" decoding="async" title="${`STATIC as ${SHELL_NAME[p.shell]}: ${p.hint}`}">`
+        : still ? html`<img class="crewp pin ${cls}${p.duty ? "" : " sm"}" src="${still}" alt="" decoding="async" title="${`STATIC as ${SHELL_NAME[p.shell]}: ${p.hint}`}">`
+        : html`<span class="crewn pin" title="${`STATIC as ${SHELL_NAME[p.shell]}: ${p.hint}`}">${this.ic("i-crew")}</span>`);
+      h.push(p.duty && p.caption ? html`<span class="cap2 pin ${p.tone === "warn" ? "warn" : p.tone === "busy" ? "busy" : ""}" title="${p.hint}">${p.caption}</span>` : html`<i hidden></i>`);
     });
-    box.innerHTML = h;
+    setHtml(box, h);
     const kids = [...box.children] as El[];
     this.pins.crew = list.map((x, j) => ({ ...x, el: kids[j * 2], cap: kids[j * 2 + 1].tagName === "SPAN" ? kids[j * 2 + 1] : null }));
     this.sig = ""; this.view?.kick();
@@ -279,31 +280,31 @@ export class Home implements LamplightHandle {
   /** The deck list: every compartment by deck, its code, its state and one reading. */
   private deckList() {
     const s = this.scene;
-    this.q("decks")!.innerHTML = DECKS.map((dk) => {
+    setHtml(this.q("decks")!, DECKS.map((dk) => {
       const cs = s.compartments.filter((c) => c.deck === dk.id);
       if (!cs.length) return "";
-      return `<div><b title="${esc(dk.hint)}">${dk.id} · ${dk.name}<span>${cs.length}</span></b>${cs.map((c) =>
-        `<button type="button" class="crow ${c.state === "warn" || c.state === "down" ? c.state : ""} ${c.state === "dim" ? "dim" : ""}" data-c="${esc(c.id)}" title="${esc(`${c.code} ${c.name}: ${c.word}. ${c.hint}`)}"><i>${c.code}</i><span><b>${esc(c.name)}</b><small>${esc(c.reading)}</small></span>${this.st(c.state, c.word)}</button>`).join("")}</div>`;
-    }).join("");
+      return html`<div><b title="${dk.hint}">${dk.id} · ${dk.name}<span>${cs.length}</span></b>${cs.map((c) =>
+        html`<button type="button" class="crow ${c.state === "warn" || c.state === "down" ? c.state : ""} ${c.state === "dim" ? "dim" : ""}" data-c="${c.id}" title="${`${c.code} ${c.name}: ${c.word}. ${c.hint}`}"><i>${c.code}</i><span><b>${c.name}</b><small>${c.reading}</small></span>${this.st(c.state, c.word)}</button>`)}</div>`;
+    }));
     this.rows = null;
   }
   private asides() {
     const d = this.data, s = this.scene, x = d.exchange;
     const face = this.art("still/snow");
-    this.q("asl")!.innerHTML = x && this.mascot !== "off" && !s.quiet
-      ? `<div class="xch${face ? "" : " noface"}" title="${esc(`An exchange, because something real happened: ${x.why}. Settings › Mascot sets On, Quiet or Off.`)}">${face ? `<span class="xface"><img src="${esc(face)}" alt="" decoding="async"><span class="tint"></span></span>` : ""}<p class="bub" role="status" aria-live="polite"><em>[${esc(x.mood)}]</em><span class="sr">STATIC thinks: </span>${esc(x.thought)}</p><p class="vec"><b>VECTOR</b>${esc(x.vector)}</p></div>` : "";
+    setHtml(this.q("asl")!, x && this.mascot !== "off" && !s.quiet
+      ? html`<div class="xch${face ? "" : " noface"}" title="${`An exchange, because something real happened: ${x.why}. Settings › Mascot sets On, Quiet or Off.`}">${face ? html`<span class="xface"><img src="${face}" alt="" decoding="async"><span class="tint"></span></span>` : ""}<p class="bub" role="status" aria-live="polite"><em>[${x.mood}]</em><span class="sr">STATIC thinks: </span>${x.thought}</p><p class="vec"><b>VECTOR</b>${x.vector}</p></div>` : "");
     const p = d.plan, pk = p ? JSON.stringify(p) : "";
-    this.q("asr")!.innerHTML = p && pk !== this.planGone && !s.quiet ? `<div class="vplan" data-k="plan" title="VECTOR's plan: the one thing to act on in the scene. While you choose, STATIC steps away. Choosing pays nothing.">
-      <h3><span>${esc(p.title)}</span><span>${p.steps.length} STEP${p.steps.length === 1 ? "" : "S"}</span></h3>
-      <ol>${p.steps.map((t) => `<li title="${esc(t.hint ?? t.words)}">${esc(t.words)}${t.detail ? `<small>${esc(t.detail)}</small>` : ""}</li>`).join("")}</ol>
-      <div class="acts">${p.can.includes("approve") ? `<button class="tx go" type="button" data-plan="approve" title="Approve: VECTOR runs the steps that change nothing by themselves; the activity drawer shows them">APPROVE</button>` : ""}${p.can.includes("change") ? `<button class="tx" type="button" data-plan="change" title="Change: talk the plan over with VECTOR">CHANGE</button>` : ""}${p.can.includes("no") ? `<button class="tx" type="button" data-plan="no" title="No: VECTOR does nothing. The alert stays until it is fixed; nothing worse happens because you said no.">NO</button>` : ""}</div>
-      ${p.from ? `<p>${esc(p.from)}</p>` : ""}</div>` : "";
+    setHtml(this.q("asr")!, p && pk !== this.planGone && !s.quiet ? html`<div class="vplan" data-k="plan" title="VECTOR's plan: the one thing to act on in the scene. While you choose, STATIC steps away. Choosing pays nothing.">
+      <h3><span>${p.title}</span><span>${p.steps.length} STEP${p.steps.length === 1 ? "" : "S"}</span></h3>
+      <ol>${p.steps.map((t) => html`<li title="${t.hint ?? t.words}">${t.words}${t.detail ? html`<small>${t.detail}</small>` : ""}</li>`)}</ol>
+      <div class="acts">${p.can.includes("approve") ? html`<button class="tx go" type="button" data-plan="approve" title="Approve: VECTOR runs the steps that change nothing by themselves; the activity drawer shows them">APPROVE</button>` : ""}${p.can.includes("change") ? html`<button class="tx" type="button" data-plan="change" title="Change: talk the plan over with VECTOR">CHANGE</button>` : ""}${p.can.includes("no") ? html`<button class="tx" type="button" data-plan="no" title="No: VECTOR does nothing. The alert stays until it is fixed; nothing worse happens because you said no.">NO</button>` : ""}</div>
+      ${p.from ? html`<p>${p.from}</p>` : ""}</div>` : "");
     const f = (d.friends ?? []).find((q) => q.id === this.visiting);
-    this.q("ast")!.innerHTML = f ? `<div class="visitc" title="A read-only visit: shapes and states only. ${esc(f.name)} chose to share; they can stop at any time.">
-      <h3><span>${esc(f.name)}'S STATION</span>${this.st(f.lit ? "ok" : "unknown", f.lit ? "LIT" : "NOT IN")}</h3><small>${f.decks} decks · ${f.stars} named stars · ${esc(f.last)}</small>
-      <div class="mini-st" title="Their station as shapes: one box per deck, lit where a shell stands">${Array.from({ length: Math.min(6, f.decks) }, (_, i) => `<span class="${i ? "" : "on"}" title="Deck ${i + 1}: ${i ? "quiet" : "the watch is kept"}">${i ? i + 1 : "W"}</span>`).join("")}</div>
+    setHtml(this.q("ast")!, f ? html`<div class="visitc" title="A read-only visit: shapes and states only. ${f.name} chose to share; they can stop at any time.">
+      <h3><span>${f.name}'S STATION</span>${this.st(f.lit ? "ok" : "unknown", f.lit ? "LIT" : "NOT IN")}</h3><small>${f.decks} decks · ${f.stars} named stars · ${f.last}</small>
+      <div class="mini-st" title="Their station as shapes: one box per deck, lit where a shell stands">${Array.from({ length: Math.min(6, f.decks) }, (_, i) => html`<span class="${i ? "" : "on"}" title="Deck ${i + 1}: ${i ? "quiet" : "the watch is kept"}">${i ? i + 1 : "W"}</span>`)}</div>
       <ul class="perm"><li title="What a visitor sees">${this.ic("i-eye")}<span>The beacon, the decks, which have a shell, their stars.</span></li><li title="What a visitor never sees">${this.ic("i-noeye")}<span class="muted">Machine names, addresses, apps, files, the show's words.</span></li></ul>
-      <div class="acts"><button class="tx" type="button" data-nav="people" title="Who can visit your own station: People › Ways in">WHO CAN VISIT YOURS</button></div></div>` : "";
+      <div class="acts"><button class="tx" type="button" data-nav="people" title="Who can visit your own station: People › Ways in">WHO CAN VISIT YOURS</button></div></div>` : "");
     this.sig = "";
   }
 
@@ -473,22 +474,22 @@ export class Home implements LamplightHandle {
         const sr = st.getBoundingClientRect();
         this.rows = [...this.root.querySelectorAll<El>(".crow")].filter((r) => s.compartments.some((c) => c.id === r.dataset.c && c.at))
           .map((r) => { const b = r.getBoundingClientRect(); return { id: r.dataset.c!, x: b.left - sr.left, y: b.top - sr.top + b.height / 2 }; });
-        l2.innerHTML = this.rows.map((r) => { const c = s.compartments.find((q) => q.id === r.id)!; return `<path class="${c.state === "warn" || c.state === "down" ? "warn" : ""}" data-l="${esc(r.id)}"/>`; }).join("");
+        setHtml(l2, this.rows.map((r) => { const c = s.compartments.find((q) => q.id === r.id)!; return html`<path class="${c.state === "warn" || c.state === "down" ? "warn" : ""}" data-l="${r.id}"/>`; }));
         this.paths = [...l2.querySelectorAll("path")];
       }
       this.rows.forEach((r, i) => {
         const c = s.compartments.find((q) => q.id === r.id)!, p = pt(c.what === "machine" ? [c.at![0], c.at![1] + 0.05, c.at![2]] : c.at!);
         this.paths[i].setAttribute("d", `M${r.x.toFixed(0)} ${r.y.toFixed(0)}H${(r.x - 14).toFixed(0)}L${p.x.toFixed(0)} ${p.y.toFixed(0)}`);
       });
-    } else if (l2 && l2.firstChild) { l2.innerHTML = ""; this.rows = null; }
+    } else if (l2 && l2.firstChild) { setHtml(l2, ""); this.rows = null; }
     const plan = this.q("plan"), lead = this.q<SVGElement>("lead")!;
     if (plan && wide) {
       const wr = this.q("wrap")!.getBoundingClientRect(), cr = plan.getBoundingClientRect(), sr = st.getBoundingClientRect();
       const need = this.data.needs[0], nc = need && s.compartments.find((c) => c.id === need.machine && c.at);
       const p = pt(this.data.show ? BOOTH_EDGE : nc ? [nc.at![0] + 0.05, nc.at![1] + 0.04, nc.at![2]] : BOOTH_EDGE);
       const ax = p.x + sr.left - wr.left, ay = p.y + sr.top - wr.top, bx = cr.left - wr.left, by = cr.top - wr.top + 20;
-      lead.innerHTML = `<path d="M${ax.toFixed(0)} ${ay.toFixed(0)}L${(bx - 24).toFixed(0)} ${ay.toFixed(0)}L${bx.toFixed(0)} ${by.toFixed(0)}"/><circle cx="${ax.toFixed(0)}" cy="${ay.toFixed(0)}" r="3"/>`;
-    } else if (lead.firstChild) lead.innerHTML = "";
+      setHtml(lead, html`<path d="M${ax.toFixed(0)} ${ay.toFixed(0)}L${(bx - 24).toFixed(0)} ${ay.toFixed(0)}L${bx.toFixed(0)} ${by.toFixed(0)}"/><circle cx="${ax.toFixed(0)}" cy="${ay.toFixed(0)}" r="3"/>`);
+    } else if (lead.firstChild) setHtml(lead, "");
   }
   /** Hover-link: a deck row, a deck-plan box, a leader, an icon and the hologram light together. */
   private hot(id: string, on: boolean) {
@@ -510,28 +511,28 @@ export class Home implements LamplightHandle {
     if (this.built[t]) return;
     const p = this.root.querySelector<El>(`[data-p="${t}"]`); if (!p) return;
     this.built[t] = true;
-    if (t === "decks") p.innerHTML = this.deckPlan();
-    if (t === "booth") { p.innerHTML = this.boothHTML(); this.cur = 0; this.show(0); }
-    if (t === "log") p.innerHTML = this.logHTML();
-    if (t === "hub") { p.innerHTML = this.hubHTML(); void this.mountHub(); }
+    if (t === "decks") setHtml(p, this.deckPlan());
+    if (t === "booth") { setHtml(p, this.boothHTML()); this.cur = 0; this.show(0); }
+    if (t === "log") setHtml(p, this.logHTML());
+    if (t === "hub") { setHtml(p, this.hubHTML()); void this.mountHub(); }
     applyCss(p);
   }
   /** The deck plan: the station in side elevation, a box per compartment, lit by its state. */
-  private deckPlan(): string {
+  private deckPlan(): Safe {
     const s = this.scene;
-    const row = (deck: string, y: number, h: number, x0: number, x1: number): string => {
+    const row = (deck: string, y: number, h: number, x0: number, x1: number): Part => {
       const cs = s.compartments.filter((c) => c.deck === deck), n = cs.length; if (!n) return "";
       const w = (x1 - x0 - 4 * (n - 1)) / n;
-      return cs.map((c, i) => this.box(c, x0 + i * (w + 4), y, w, h)).join("");
+      return cs.map((c, i) => this.box(c, x0 + i * (w + 4), y, w, h));
     };
     const dock = s.compartments.filter((c) => c.deck === "DOCK"), dx = [10, 220, 115, 10, 220];
-    const g = `<path class="ol" d="M150 12V70M138 30H162M136 44H164M140 58H160"/><path class="ol" d="M78 92H222L232 112V196L210 222H90L68 196V112Z"/><path class="ol2" d="M68 152H232M70 112H230M90 222L104 252H196L210 222"/>`
-      + `<path class="ol" d="M68 140H14V156H68M232 140H286V156H232"/><path class="ol" d="M196 70a24 24 0 1 0 30 -26"/><text x="10" y="134">ARRAYS</text><text x="234" y="40">DISH</text><text x="156" y="24">MAST</text>`
-      + `<text x="236" y="106">D3</text><text x="236" y="148">D2</text><text x="236" y="190">D1</text><text x="112" y="268">DOCKING RING</text>`
-      + row("D3", 94, 16, 84, 216) + row("D2", 114, 36, 82, 222) + row("D1", 156, 36, 82, 222)
-      + dock.slice(0, 5).map((c, i) => this.box(c, dx[i], i < 3 ? 232 : 272, 70, i === 2 ? 0 : 36)).join("")
-      + `<text x="10" y="${dock.length > 3 ? 322 : 292}">SIDE ELEVATION · NOT TO SCALE</text>`;
-    return `<div class="planpanel"><div class="panel" title="The deck plan: the station in side elevation, a box per compartment, lit by its state. Point at one to light it on the station; press a machine to open its page."><h3><span>${this.ic("i-module")}DECK PLAN</span><span class="muted hnote">hover links to the station</span></h3>
+    const g: Part[] = [html`<path class="ol" d="M150 12V70M138 30H162M136 44H164M140 58H160"/><path class="ol" d="M78 92H222L232 112V196L210 222H90L68 196V112Z"/><path class="ol2" d="M68 152H232M70 112H230M90 222L104 252H196L210 222"/>`
+      , html`<path class="ol" d="M68 140H14V156H68M232 140H286V156H232"/><path class="ol" d="M196 70a24 24 0 1 0 30 -26"/><text x="10" y="134">ARRAYS</text><text x="234" y="40">DISH</text><text x="156" y="24">MAST</text>`
+      , html`<text x="236" y="106">D3</text><text x="236" y="148">D2</text><text x="236" y="190">D1</text><text x="112" y="268">DOCKING RING</text>`
+      , row("D3", 94, 16, 84, 216), row("D2", 114, 36, 82, 222), row("D1", 156, 36, 82, 222)
+      , dock.slice(0, 5).map((c, i) => this.box(c, dx[i], i < 3 ? 232 : 272, 70, i === 2 ? 0 : 36))
+      , html`<text x="10" y="${dock.length > 3 ? 322 : 292}">SIDE ELEVATION · NOT TO SCALE</text>`];
+    return html`<div class="planpanel"><div class="panel" title="The deck plan: the station in side elevation, a box per compartment, lit by its state. Point at one to light it on the station; press a machine to open its page."><h3><span>${this.ic("i-module")}DECK PLAN</span><span class="muted hnote">hover links to the station</span></h3>
       <svg class="elev" viewBox="0 0 300 ${dock.length > 3 ? 330 : 300}" role="img" aria-label="The deck plan: the station in side elevation, a box for each compartment on its deck">${g}</svg></div>
       <div class="panel" title="How to read the deck plan and the deck list"><h3><span>${this.ic("i-idea")}READING IT</span></h3><ul class="perm">
       <li title="A box's colour">${this.ic("s-ok")}<span>A box is a compartment: one machine. Lit when fine, amber when it needs you, red when it is down, dotted when it hasn't been read.</span></li>
@@ -540,59 +541,59 @@ export class Home implements LamplightHandle {
       <li title="Codes">${this.ic("i-logs")}<span>Codes such as D2·A name a deck and a place on it. They match the list beside the station.</span></li>
       <li title="Pressing">${this.ic("i-open")}<span>Press a machine to open its page. Press the hull on the station for the drives.</span></li></ul></div></div>`;
   }
-  private box(c: Compartment, x: number, y: number, w: number, h: number): string {
+  private box(c: Compartment, x: number, y: number, w: number, h: number): Part {
     if (!h) return "";
     const cls = [c.state === "warn" || c.state === "down" ? c.state : c.state === "busy" || c.state === "setup" ? "busy" : c.state === "dim" ? "dim" : c.state === "unknown" ? "unk" : "", c.what === "machine" ? "" : "crew"].join(" ");
-    return `<rect class="cmp ${cls}" data-cmp="${esc(c.id)}" x="${x.toFixed(1)}" y="${y}" width="${w.toFixed(1)}" height="${h}"><title>${esc(`${c.code} ${c.name}: ${c.word}. ${c.hint}`)}</title></rect><text class="k" x="${(x + 4).toFixed(1)}" y="${y + 11}">${c.code}</text>${h > 20 && w > 38 ? `<text x="${(x + 4).toFixed(1)}" y="${y + h - 5}">${esc(c.name.split(" ")[0].slice(0, Math.floor(w / 6.5)))}</text>` : ""}`;
+    return html`<rect class="cmp ${cls}" data-cmp="${c.id}" x="${x.toFixed(1)}" y="${y}" width="${w.toFixed(1)}" height="${h}"><title>${`${c.code} ${c.name}: ${c.word}. ${c.hint}`}</title></rect><text class="k" x="${(x + 4).toFixed(1)}" y="${y + 11}">${c.code}</text>${h > 20 && w > 38 ? html`<text x="${(x + 4).toFixed(1)}" y="${y + h - 5}">${c.name.split(" ")[0].slice(0, Math.floor(w / 6.5))}</text>` : ""}`;
   }
   /** One log: tube times and each entry's mark among the stars; and the goals. */
-  private logHTML(): string {
+  private logHTML(): Safe {
     const d = this.data, log = d.log ?? [], g = d.goals;
-    const sg = (k: string) => k === "arc" ? `<svg class="sg" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 15L10 6L18 12"/><circle cx="3" cy="15" r="2"/><circle cx="10" cy="6" r="2"/><circle cx="18" cy="12" r="2"/></svg>` : `<svg class="sg" viewBox="0 0 22 22" aria-hidden="true"><circle class="star" cx="11" cy="11" r="3"/></svg>`;
+    const sg = (k: string) => k === "arc" ? html`<svg class="sg" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 15L10 6L18 12"/><circle cx="3" cy="15" r="2"/><circle cx="10" cy="6" r="2"/><circle cx="18" cy="12" r="2"/></svg>` : html`<svg class="sg" viewBox="0 0 22 22" aria-hidden="true"><circle class="star" cx="11" cy="11" r="3"/></svg>`;
     const ic = { done: "s-done", progress: "s-start", todo: "s-todo" } as const;
-    let h = `<div class="two">`;
-    if (log.length) h += `<div class="panel" title="The station log: when each thing happened, and its mark among the stars. Nothing in it is ever taken away."><h3><span>${this.ic("i-logs")}STATION LOG</span><span class="muted hnote">${log.length} entr${log.length === 1 ? "y" : "ies"}</span></h3>
-      <ul class="log">${log.map((e) => `<li class="${e.mark === "open" ? "warn" : e.mark === "fresh" ? "fresh" : ""}" title="${esc(`${e.at} · ${e.title}: ${e.detail}`)}">${tubes(e.at, true)}${sg(e.kind)}<span><b>${esc(e.title)}</b><small>${esc(e.detail)}</small></span></li>`).join("")}</ul></div>`;
+    const h: Part[] = [html`<div class="two">`];
+    if (log.length) h.push(html`<div class="panel" title="The station log: when each thing happened, and its mark among the stars. Nothing in it is ever taken away."><h3><span>${this.ic("i-logs")}STATION LOG</span><span class="muted hnote">${log.length} entr${log.length === 1 ? "y" : "ies"}</span></h3>
+      <ul class="log">${log.map((e) => html`<li class="${e.mark === "open" ? "warn" : e.mark === "fresh" ? "fresh" : ""}" title="${`${e.at} · ${e.title}: ${e.detail}`}">${tubes(e.at, true)}${sg(e.kind)}<span><b>${e.title}</b><small>${e.detail}</small></span></li>`)}</ul></div>`);
     if (g) {
       const r = g.rank, pct = (v: number) => (r ? (((v - r.from) / (r.to - r.from)) * 100).toFixed(1) : "0");
-      h += `<div class="panel" title="Goals: real good practice. Each pays capped field XP, names a star and grows the station. Clearance is never earned here."><h3><span>${this.ic("i-lamp")}GOALS · THE STATION GROWS</span><span class="muted hnote">${g.list.filter((x) => x.state === "done").length} of ${g.list.length} reached</span></h3>
-        ${r ? `<div class="rank" title="Field rank: earned only. The lab's goals add to it. Clearance is the paid ladder and is never earned here."><b>${esc(r.title)}</b><span class="bar"><i data-css="width:${pct(r.xp - (r.gained ?? 0))}%"></i>${r.gained ? `<i class="add" data-css="left:${pct(r.xp - r.gained)}%;width:${((r.gained / (r.to - r.from)) * 100).toFixed(1)}%"></i>` : ""}</span><span class="muted n">${r.xp.toLocaleString("en-US")} / ${r.to.toLocaleString("en-US")}</span><small>${r.to - r.xp} XP to ${esc(r.next)}${r.gained ? ` · +${r.gained} tonight` : ""}</small></div>` : ""}
-        <ul class="goals">${g.list.map((x) => `<li class="${x.state === "done" ? "done" : x.state === "progress" ? "going" : "todo"}${x.fresh ? " fresh" : ""}" title="${esc(`${x.title}: ${x.detail}. ${x.xp} field XP, capped at ${x.cap}.`)}">${this.ic(ic[x.state])}<b>${esc(x.title)}</b><span class="xp">${x.xp} XP<em>${esc(x.cap)}</em></span><small>${esc(x.detail)}</small></li>`).join("")}</ul>
-        <ul class="never" aria-label="Never paid"><li title="Deleting, erasing or formatting never pays">NO XP FOR DELETING</li><li title="Restarting never pays">NO XP FOR REBOOTS</li><li title="A loop of test restores pays nothing">NO XP FOR TEST LOOPS</li><li title="Approving a plan or a device never pays">NO XP FOR APPROVING</li><li title="Looking, watching and visiting pay nothing">NO XP FOR LOOKING</li><li title="No streaks, no daily reward, nothing for sale">NO STREAKS</li></ul></div>`;
+      h.push(html`<div class="panel" title="Goals: real good practice. Each pays capped field XP, names a star and grows the station. Clearance is never earned here."><h3><span>${this.ic("i-lamp")}GOALS · THE STATION GROWS</span><span class="muted hnote">${g.list.filter((x) => x.state === "done").length} of ${g.list.length} reached</span></h3>
+        ${r ? html`<div class="rank" title="Field rank: earned only. The lab's goals add to it. Clearance is the paid ladder and is never earned here."><b>${r.title}</b><span class="bar"><i data-css="width:${pct(r.xp - (r.gained ?? 0))}%"></i>${r.gained ? html`<i class="add" data-css="left:${pct(r.xp - r.gained)}%;width:${((r.gained / (r.to - r.from)) * 100).toFixed(1)}%"></i>` : ""}</span><span class="muted n">${r.xp.toLocaleString("en-US")} / ${r.to.toLocaleString("en-US")}</span><small>${r.to - r.xp} XP to ${r.next}${r.gained ? ` · +${r.gained} tonight` : ""}</small></div>` : ""}
+        <ul class="goals">${g.list.map((x) => html`<li class="${x.state === "done" ? "done" : x.state === "progress" ? "going" : "todo"}${x.fresh ? " fresh" : ""}" title="${`${x.title}: ${x.detail}. ${x.xp} field XP, capped at ${x.cap}.`}">${this.ic(ic[x.state])}<b>${x.title}</b><span class="xp">${x.xp} XP<em>${x.cap}</em></span><small>${x.detail}</small></li>`)}</ul>
+        <ul class="never" aria-label="Never paid"><li title="Deleting, erasing or formatting never pays">NO XP FOR DELETING</li><li title="Restarting never pays">NO XP FOR REBOOTS</li><li title="A loop of test restores pays nothing">NO XP FOR TEST LOOPS</li><li title="Approving a plan or a device never pays">NO XP FOR APPROVING</li><li title="Looking, watching and visiting pay nothing">NO XP FOR LOOKING</li><li title="No streaks, no daily reward, nothing for sale">NO STREAKS</li></ul></div>`);
     }
-    return h + `</div>`;
+    return html`${h}</div>`;
   }
 
   // ---- the booth: the roll-call (built when its tab opens; a clip is never fetched before it plays)
-  private boothHTML(): string {
+  private boothHTML(): Safe {
     const sh = this.data.show!, th = sh.thread;
-    return `<div class="show"><div><div class="scr" data-k="scr" role="region" aria-roledescription="show" aria-label="Tonight's roll-call"></div>
-      <div class="ctl"><button class="ib sm" type="button" data-show="prev" title="The card before">${this.ic("i-prev", "s20")}</button><button class="ib" type="button" data-show="play" data-k="play" title="Play the roll-call: about a minute, silent. Nothing plays by itself.">${this.ic("i-play", "")}</button><button class="ib sm" type="button" data-show="next" title="The next card">${this.ic("i-next", "s20")}</button><span class="dots" data-k="dots"></span><span class="muted when" title="When the roll-call was made">${esc(sh.when)}</span></div></div>
-      ${th ? `<div class="panel is-warn" title="The open arc is the show's thread: one card a night until it ends with a verified outcome"><h3><span>${this.ic("i-drive")}${esc(th.title)}</span>${this.st("warn", th.night)}</h3><ol class="thread">${th.steps.map((x) => `<li class="${x.next ? "next" : ""}" title="${esc(`${x.title}: ${x.detail}`)}"><span>${esc(x.when)}${x.date ? `<br>${esc(x.date)}` : ""}</span><div><b>${esc(x.title)}</b><small>${esc(x.detail)}</small></div></li>`).join("")}</ol></div>`
-        : `<div class="panel" title="Tonight's cards, as text"><h3><span>${this.ic("i-tv")}TONIGHT'S CARDS</span></h3><ol class="cards">${sh.cards.map((c, k) => `<li class="${c.kind === "bump" ? "bump" : ""}" data-card="${k}" title="${esc(c.hint)}"><span>${String(k + 1).padStart(2, "0")}</span><b>${esc(c.over)}${c.kind === "bump" ? "" : ` · ${esc(c.title)}`}</b><small>${esc(c.kind === "bump" ? `${c.title}: a short clip, silent` : c.detail || c.vector || c.title)}</small></li>`).join("")}</ol></div>`}</div><p class="sr" aria-live="polite" data-k="live"></p>`;
+    return html`<div class="show"><div><div class="scr" data-k="scr" role="region" aria-roledescription="show" aria-label="Tonight's roll-call"></div>
+      <div class="ctl"><button class="ib sm" type="button" data-show="prev" title="The card before">${this.ic("i-prev", "s20")}</button><button class="ib" type="button" data-show="play" data-k="play" title="Play the roll-call: about a minute, silent. Nothing plays by itself.">${this.ic("i-play", "")}</button><button class="ib sm" type="button" data-show="next" title="The next card">${this.ic("i-next", "s20")}</button><span class="dots" data-k="dots"></span><span class="muted when" title="When the roll-call was made">${sh.when}</span></div></div>
+      ${th ? html`<div class="panel is-warn" title="The open arc is the show's thread: one card a night until it ends with a verified outcome"><h3><span>${this.ic("i-drive")}${th.title}</span>${this.st("warn", th.night)}</h3><ol class="thread">${th.steps.map((x) => html`<li class="${x.next ? "next" : ""}" title="${`${x.title}: ${x.detail}`}"><span>${x.when}${x.date ? html`<br>${x.date}` : ""}</span><div><b>${x.title}</b><small>${x.detail}</small></div></li>`)}</ol></div>`
+        : html`<div class="panel" title="Tonight's cards, as text"><h3><span>${this.ic("i-tv")}TONIGHT'S CARDS</span></h3><ol class="cards">${sh.cards.map((c, k) => html`<li class="${c.kind === "bump" ? "bump" : ""}" data-card="${k}" title="${c.hint}"><span>${String(k + 1).padStart(2, "0")}</span><b>${c.over}${c.kind === "bump" ? "" : ` · ${c.title}`}</b><small>${c.kind === "bump" ? `${c.title}: a short clip, silent` : c.detail || c.vector || c.title}</small></li>`)}</ol></div>`}</div><p class="sr" aria-live="polite" data-k="live"></p>`;
   }
-  private media(c: LampCard): string {
+  private media(c: LampCard): Part {
     const a = c.art ?? "", [kind, name] = a.split("/");
     if (kind === "bump") {
       const mp4 = this.art(a), poster = this.art(`poster/${name}`);
-      if (mp4 && !this.reduced) return `<video class="media" src="${esc(mp4)}"${poster ? ` poster="${esc(poster)}"` : ""} muted playsinline preload="none"></video>`;
-      return poster ? `<img class="media" src="${esc(poster)}" alt="">` : "";
+      if (mp4 && !this.reduced) return html`<video class="media" src="${mp4}"${poster ? html` poster="${poster}"` : ""} muted playsinline preload="none"></video>`;
+      return poster ? html`<img class="media" src="${poster}" alt="">` : "";
     }
-    if (kind === "loop") { const u = (this.reduced ? null : this.art(a)) ?? this.art(`still/${name}`); return u ? `<img class="media" src="${esc(u)}" alt="" decoding="async">` : ""; }
+    if (kind === "loop") { const u = (this.reduced ? null : this.art(a)) ?? this.art(`still/${name}`); return u ? html`<img class="media" src="${u}" alt="" decoding="async">` : ""; }
     const u = a ? this.art(a) ?? (kind === "crew" ? this.art(`still/${name.split("-")[0]}`) : null) : null;
-    return u ? `<img class="media ${kind === "crew" && this.art(a) ? "cutout" : ""}" src="${esc(u)}" alt="" decoding="async">` : "";
+    return u ? html`<img class="media ${kind === "crew" && this.art(a) ? "cutout" : ""}" src="${u}" alt="" decoding="async">` : "";
   }
   private show(i: number) {
     const sh = this.data.show, scr = this.q("scr"); if (!sh || !scr) return;
     const C = sh.cards; this.cur = (i + C.length) % C.length; const c = C[this.cur];
     const hold = sh.aired && !this.playing && this.cur === 0, held = this.art("still/asleep");
     scr.className = `scr${c.kind === "open" && !hold ? " title" : ""}`; scr.title = c.hint;
-    scr.innerHTML = hold
-      ? `${held ? `<img class="media" src="${esc(held)}" alt="">` : ""}<span class="tint"></span><span class="vig"></span><span class="ch">142.59</span><span class="ch r">${esc(sh.when.toUpperCase())}</span><div class="cap"><span class="k">ALREADY AIRED</span><span class="t">NOTHING AIRS NOW</span><span class="d">Tonight's roll-call stays here to replay. Nothing plays unless you press play.</span></div>`
-      : `${this.media(c)}<span class="tint"></span><span class="vig"></span><span class="ch">142.59 · ${esc(this.data.lab.name.toUpperCase())}</span><span class="ch r">${this.cur + 1} / ${C.length}</span><div class="cap"><span class="k">${esc(c.over)}</span><span class="t">${esc(c.title)}</span>${c.detail ? `<span class="d">${esc(c.detail)}</span>` : ""}${c.vector ? `<span class="v"><b>VECTOR</b>${esc(c.vector)}</span>` : ""}</div>`;
+    setHtml(scr, hold
+      ? html`${held ? html`<img class="media" src="${held}" alt="">` : ""}<span class="tint"></span><span class="vig"></span><span class="ch">142.59</span><span class="ch r">${sh.when.toUpperCase()}</span><div class="cap"><span class="k">ALREADY AIRED</span><span class="t">NOTHING AIRS NOW</span><span class="d">Tonight's roll-call stays here to replay. Nothing plays unless you press play.</span></div>`
+      : html`${this.media(c)}<span class="tint"></span><span class="vig"></span><span class="ch">142.59 · ${this.data.lab.name.toUpperCase()}</span><span class="ch r">${this.cur + 1} / ${C.length}</span><div class="cap"><span class="k">${c.over}</span><span class="t">${c.title}</span>${c.detail ? html`<span class="d">${c.detail}</span>` : ""}${c.vector ? html`<span class="v"><b>VECTOR</b>${c.vector}</span>` : ""}</div>`);
     const v = scr.querySelector("video");
     if (v) { v.addEventListener("ended", () => { if (this.playing) this.next(); }); if (this.playing) v.play().catch(() => {}); }
-    this.q("dots")!.innerHTML = C.map((x, k) => `<button type="button" data-dot="${k}" class="${k === this.cur ? "on" : ""}${x.kind === "bump" ? " bump" : ""}" title="${esc(`Card ${k + 1}: ${x.over}, ${x.title}`)}" aria-label="Card ${k + 1}"></button>`).join("");
+    setHtml(this.q("dots")!, C.map((x, k) => html`<button type="button" data-dot="${k}" class="${k === this.cur ? "on" : ""}${x.kind === "bump" ? " bump" : ""}" title="${`Card ${k + 1}: ${x.over}, ${x.title}`}" aria-label="Card ${k + 1}"></button>`));
     this.root.querySelectorAll<El>("[data-card]").forEach((li) => li.classList.toggle("on", Number(li.dataset.card) === this.cur));
     this.q("live")!.textContent = `Card ${this.cur + 1} of ${C.length}: ${c.over}. ${c.title}. ${c.detail ?? ""} ${c.vector ? `VECTOR: ${c.vector}` : ""}`;
     clearTimeout(this.timer);
@@ -601,29 +602,29 @@ export class Home implements LamplightHandle {
   private next() { if (this.cur === (this.data.show?.cards.length ?? 1) - 1) { this.stop(); return; } this.show(this.cur + 1); }
   private stop() {
     this.playing = false; clearTimeout(this.timer);
-    const b = this.q("play"); if (b) { b.innerHTML = this.ic("i-play", ""); b.title = "Play the roll-call: about a minute, silent. Nothing plays by itself."; }
+    const b = this.q("play"); if (b) { setHtml(b, this.ic("i-play", "")); b.title = "Play the roll-call: about a minute, silent. Nothing plays by itself."; }
     this.root.querySelector<HTMLVideoElement>('[data-k="scr"] video')?.pause();
   }
   private play() {
     if (!this.data.show) return;
     this.buildTab("booth"); this.playing = true;
-    const b = this.q("play"); if (b) { b.innerHTML = this.ic("i-pause", ""); b.title = "Pause"; }
+    const b = this.q("play"); if (b) { setHtml(b, this.ic("i-pause", "")); b.title = "Pause"; }
     this.show(this.cur === this.data.show.cards.length - 1 ? 0 : this.cur);
     this.q("scr")?.scrollIntoView({ behavior: this.reduced ? "auto" : "smooth", block: "center" });
   }
 
   // ---- the hub: a faction as a place. Its view exists only while its tab is open.
-  private hubHTML(): string {
+  private hubHTML(): Safe {
     const hb = this.data.hub!;
-    return `<div class="hubwrap"><div class="stage hubstage" data-k="hubstage" role="img" aria-label="${esc(`${hb.name}: the faction's server as a larger structure of the same class, its channels as docks, ${hb.members.length} members' stations in orbit`)}">
+    return html`<div class="hubwrap"><div class="stage hubstage" data-k="hubstage" role="img" aria-label="${`${hb.name}: the faction's server as a larger structure of the same class, its channels as docks, ${hb.members.length} members' stations in orbit`}">
       <div class="scene" data-k="hubscene"></div><span class="loading" title="The hub's hologram is loading">TUNING IN…</span><div class="ov" data-k="hubov"></div>
-      <div class="hubhead" title="The faction you are in, as a place. Everything here is what the faction already shows its members, or what each member chose to share."><b>${esc(hb.name)} · THE HUB</b><small>${esc(hb.line)}</small></div><span class="h-scan" aria-hidden="true"></span><span class="h-edge" aria-hidden="true"></span></div>
+      <div class="hubhead" title="The faction you are in, as a place. Everything here is what the faction already shows its members, or what each member chose to share."><b>${hb.name} · THE HUB</b><small>${hb.line}</small></div><span class="h-scan" aria-hidden="true"></span><span class="h-edge" aria-hidden="true"></span></div>
       <div class="panel hubside" title="How the hub reads"><h3><span>${this.ic("i-net")}READING THE HUB</span></h3><ul class="perm">
       <li title="The server is the hub">${this.ic("i-star")}<span>The faction's server is the hub. Its channels are docks on its ring.</span></li>
       <li title="A voice channel">${this.ic("i-star")}<span>A voice channel is the bridge, lit while people are in it. A stream or a watch party is the big screen.</span></li>
       <li title="Members">${this.ic("i-star")}<span>Members' stations orbit it. A lamp is lit when that post checked in. A new member is a new berth.</span></li>
       <li title="What nobody sees">${this.ic("i-noeye")}<span class="muted">Never names, addresses, apps or contents of anyone's lab. Read-only, off by default, no rankings.</span></li></ul>
-      ${hb.sector?.length ? `<h3 class="sec"><span>YOUR SECTOR</span></h3><div class="tags">${hb.sector.map((x) => `<span class="chip ${x.here ? "lit" : ""}" title="${esc(x.hint)}">${esc(x.name)}</span>`).join("")}</div>` : ""}</div></div>`;
+      ${hb.sector?.length ? html`<h3 class="sec"><span>YOUR SECTOR</span></h3><div class="tags">${hb.sector.map((x) => html`<span class="chip ${x.here ? "lit" : ""}" title="${x.hint}">${x.name}</span>`)}</div>` : ""}</div></div>`;
   }
   private async mountHub() {
     const hb = this.data.hub, a = this.o.assets, wick = a.models.wick, host = this.q("hubscene");
@@ -659,9 +660,9 @@ export class Home implements LamplightHandle {
         return out;
       });
       const ov = this.q("hubov")!;
-      ov.innerHTML = M.map((m) => `<span class="hlab pin ${m.state === "out" ? "out" : ""} ${m.you ? "you" : ""}" title="${esc(m.hint)}"><i></i>${esc(m.name)}</span>`).join("")
-        + D.map((dk) => `<span class="hdock pin ${dk.lit ? "lit" : ""}" title="${esc(dk.hint)}">${esc(dk.name)}</span>`).join("")
-        + (hb.op ? `<span class="hdock op pin" data-k="op" title="${esc(hb.op.hint)}">${esc(hb.op.words)}</span>` : "") + (hb.favour ? `<span class="hdock fav pin" data-k="fav" title="${esc(hb.favour.hint)}">${esc(hb.favour.words)}</span>` : "");
+      setHtml(ov, M.map((m) => html`<span class="hlab pin ${m.state === "out" ? "out" : ""} ${m.you ? "you" : ""}" title="${m.hint}"><i></i>${m.name}</span>`)
+        , D.map((dk) => html`<span class="hdock pin ${dk.lit ? "lit" : ""}" title="${dk.hint}">${dk.name}</span>`)
+        , (hb.op ? html`<span class="hdock op pin" data-k="op" title="${hb.op.hint}">${hb.op.words}</span>` : ""), (hb.favour ? html`<span class="hdock fav pin" data-k="fav" title="${hb.favour.hint}">${hb.favour.words}</span>` : ""));
       const labs = [...ov.querySelectorAll<El>(".hlab")], docks = [...ov.querySelectorAll<El>(".hdock:not(.op):not(.fav)")];
       let sig = "";
       v.onFrame((s) => {
@@ -678,7 +679,7 @@ export class Home implements LamplightHandle {
   }
   private dropHub() {
     this.hubRO?.disconnect(); this.hubRO = null; this.hub?.dispose(); this.hub = null; this.built.hub = false; this.hubKey = "";
-    const p = this.root.querySelector<El>('[data-p="hub"]'); if (p) p.innerHTML = "";
+    const p = this.root.querySelector<El>('[data-p="hub"]'); if (p) setHtml(p, "");
   }
 
   // ---------------------------------------------------------------- events: all on the root, all removed on unmount
@@ -722,8 +723,8 @@ export class Home implements LamplightHandle {
   }
 
   // ---------------------------------------------------------------- the host's handle
-  update(data: LamplightData) {
-    const k = JSON.stringify(data);
+  update(input: LamplightData) {
+    const data = sane(input), k = JSON.stringify(data);
     if (k === this.dataKey) return;
     this.dataKey = k; this.o.data = data;
     const sk = dataKey(data);

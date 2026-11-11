@@ -5,7 +5,7 @@
 // say something that isn't so.
 import { expect, test } from "@playwright/test";
 import { READ_AT, VERDICT } from "./helpers";
-import { Answer, CODE, copy, go, live, openReal, pass, PLACES, real, Service, whole } from "./service";
+import { Answer, CODE, copy, go, live, openReal, pass, PLACES, real, Service, station, whole } from "./service";
 
 test.beforeEach(({}, info) => test.skip(info.project.name !== "desktop", "the contract is the same at every width"));
 
@@ -252,6 +252,8 @@ for (const [what, value] of BROKEN)
       for (const place of ["home", "m/myserver", "m/myserver/vitals", "m/myserver/hardware", "data", "data/backups", "supply", "supply/updates"]) {
         await go(page, place);
         await whole(page, w, `${part} = ${what}, at #${place}`);
+        await station(page, `${part} = ${what}, at #${place}`); // the station and the machine's hero draw from this document too
+        await whole(page, w, `${part} = ${what}, at #${place}, with the station mounted`);
       }
     }
   });
@@ -266,6 +268,7 @@ for (const [what, value] of BROKEN)
     for (const place of PLACES) {
       await go(page, place);
       await whole(page, w, `everything = ${what}, at #${place}`);
+      await station(page, `everything = ${what}, at #${place}`);
     }
     await expect(page.locator(".sh-strip .strip")).toContainText("Nothing running");
   });

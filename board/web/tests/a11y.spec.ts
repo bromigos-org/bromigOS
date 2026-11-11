@@ -3,6 +3,9 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { CONTROLS, open, ROUTES } from "./helpers";
+import { WEBGL } from "./webgl";
+
+test.use(WEBGL); // the holograms are drawn in this spec
 
 async function everyControl(page: Page, where: string) {
   const all = page.locator(CONTROLS);

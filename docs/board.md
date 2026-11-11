@@ -221,6 +221,21 @@ The module adds no `<style>` element and no style attribute, so it works under t
 board's content policy. Its stylesheet (`lib/lamplight/lamplight.css`) is scoped under
 `.lp`.
 
+Everything the station is handed is treated as untrusted, because much of it is some
+command's output: a drive's model string, a share's name, a job's words.
+
+- **The shape is checked at the door** (`lib/lamplight/sane.ts`). A state, kind or tone
+  that isn't one of the allowed words becomes "unknown" or "other". A field that should
+  be text or a number and isn't is left out. So no word from the data picks a shape, a
+  colour or a class.
+- **Text is only ever text.** Markup is made in one way, `` html`…` `` (`base.ts`), which
+  escapes every value where it lands, and reaches the page in one place. No other file
+  writes markup. Addresses of pictures and models come only from the manifest.
+- `tests/hostile.spec.ts` holds this: it replaces every string in the example labs and in
+  the board's fixtures with a payload that would show if it were ever read as markup,
+  then also the ids and state words, then the numbers, and draws Home with every panel,
+  a machine's hero and a bare hologram.
+
 ## Charts
 
 The trend is ECharts, one series at a time in the world's colour, with a crosshair and its
@@ -264,9 +279,14 @@ npx playwright install --only-shell chromium
 npx playwright test       # headless; nothing opens on the desktop
 ```
 
-The suite draws WebGL with Chromium's software renderer, because CI has no graphics card
-and CI is the reference. That takes every core for a while. On a machine with a card, a
-local run can use it instead, still headless and with no window:
+Home and every machine's page draw a hologram, and on Chromium's software renderer (all
+CI has) each one costs seconds of processor. So only the specs that test what the
+holograms draw run in a browser with WebGL: they say `test.use(WEBGL)` (`tests/webgl.ts`).
+Every other spec runs with WebGL off, where the station stands as words, which is all
+those specs read.
+
+On a machine with a graphics card, a local run can draw on the card instead, still
+headless and with no window. Then every spec has WebGL:
 
 ```sh
 BOARD_TEST_GPU=1 npx playwright test --workers=2
@@ -274,11 +294,11 @@ BOARD_TEST_GPU=1 npx playwright test --workers=2
 
 The run prints which renderer it got (`WebGL renderer: …`) before the first test. With
 the switch on, it stops there if the browser fell back to software, rather than quietly
-using the processor. The switch adds `--enable-gpu --use-angle=vulkan
---enable-features=Vulkan --ignore-gpu-blocklist` and drops `--enable-unsafe-swiftshader`
-(`playwright.config.ts`, `tests/renderer.ts`). No test compares pictures against a stored
-one, so the suite means the same on either renderer. On the card the holograms turn,
-where the software renderer holds them still.
+using the processor. The switch uses `--enable-gpu --use-angle=vulkan
+--enable-features=Vulkan --ignore-gpu-blocklist` in place of `--enable-unsafe-swiftshader`
+(`tests/webgl.ts`, `tests/renderer.ts`). No test compares pictures against a stored one,
+so the suite means the same on either renderer. On the card the holograms turn, where the
+software renderer holds them still. CI is the reference, and it has no card.
 
 The build's id is the commit it was built from, so two builds of one commit are the same
 files. Both builds first run `scripts/art.mjs`, which copies STATIC's crew for the station

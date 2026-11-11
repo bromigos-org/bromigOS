@@ -59,6 +59,8 @@ function useMount<H extends Handle>(data: LamplightData, make: (lp: Module, el: 
     Promise.all([import("@/lib/lamplight"), import("@/lib/lamplight-assets")])
       .then(([lp, { ASSETS }]) => {
         if (gone || !el.current) return;
+        // the fixture build's tests draw the module from data of their own (tests/hostile.spec.ts); compiled out of the real build
+        if (process.env.NEXT_PUBLIC_BOARD_FIXTURES === "1") (window as unknown as { __lamplight?: unknown }).__lamplight = { ...lp, ASSETS };
         handle.current = latest.current.make(lp, el.current, ASSETS, latest.current.data);
         world.observe(document.documentElement, { attributes: true, attributeFilter: ["data-world"] });
         setOn(true);

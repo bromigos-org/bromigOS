@@ -7,7 +7,9 @@
 //   const rack = mountRack(el, { kind: "server", state: "ok", assets });
 //   home.unmount();                                // or unmount(el)
 //
-// The station is drawn only from `LamplightData` (types.ts). It works under
+// The station is drawn only from `LamplightData` (types.ts). What it is handed is untrusted: it is
+// made to fit the types at the door (sane.ts), and its text reaches the page only as text, through
+// html`…` (base.ts), never as markup. It works under
 // `Content-Security-Policy: default-src 'self'`: no injected <style>, no style attributes, no
 // inline handlers, no data: URLs. Every mount lives under one root (.lp, ids prefixed per mount),
 // sets nothing page-level, and removes every listener it added outside its root on unmount. All

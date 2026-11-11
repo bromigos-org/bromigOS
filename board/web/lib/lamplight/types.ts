@@ -1,8 +1,10 @@
 // Lamplight's contract: what the host hands the station, and what it gets back.
 //
-// The station is drawn only from `LamplightData`. Nothing in the module is example data: the Lab
-// board builds its data from the board's own document with fromBoard() (from-board.ts), and a
-// design page's example labs are data of its own. Every optional layer is simply not drawn when it is
+// The station is drawn only from `LamplightData`. Nothing the module draws is example data: the
+// Lab board builds its data from the board's own document with fromBoard() (from-board.ts), and
+// the example labs (examples.ts) are for the design pages and the tests. Whatever a host hands
+// over is made to fit these types first (sane.ts), and its text is only ever text (base.ts).
+// Every optional layer is simply not drawn when it is
 // absent: with machines and what needs you alone, the station, its decks, its readouts and its
 // alarm are complete.
 

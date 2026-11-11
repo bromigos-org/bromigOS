@@ -3,6 +3,7 @@
 //
 // The types here are only the keys this reads, so the board's own `Board` and `JobRecord` types
 // (lib/api/types.ts) can be passed as they are.
+import { sane } from "./sane";
 import type { LampJob, LampKind, LampMachine, LampNeed, LampState, LamplightData } from "./types";
 
 export interface BoardLike {
@@ -20,8 +21,8 @@ export interface JobLike {
   pct: number | null;
 }
 
-const KINDS: LampKind[] = ["server", "storage", "node", "desktop", "router", "ups", "other"];
-const STATES: LampState[] = ["ok", "warn", "down", "unknown"];
+const list = <T>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v.filter((x) => x && typeof x === "object") : []);
+const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /** What the board's document doesn't carry, and its page knows. */
 export interface BoardExtras {
@@ -37,33 +38,38 @@ export interface BoardExtras {
   stale?: boolean;
 }
 
+/**
+ * The board's document as the station's data. It is a server's answer, so nothing in it is taken
+ * on trust: a list that isn't one is empty, a word that isn't text is absent, and the result goes
+ * through sane() (sane.ts), where a state or a kind that isn't one becomes "unknown" or "other".
+ */
 export function fromBoard(board: BoardLike, more: BoardExtras = {}): LamplightData {
-  const setup = board.status.state === "setup";
-  const needs: LampNeed[] = board.needs_you.map((n) => ({
+  const status = board?.status ?? { state: "unknown", words: "" }, all = list(board?.machines);
+  const setup = status.state === "setup";
+  const needs: LampNeed[] = list(board?.needs_you).map((n) => ({
     id: n.id, machine: n.machine, words: n.words, detail: n.detail, severity: n.severity === "warn" ? "warn" : "danger",
     subject: n.subject ? { type: n.subject.type, name: n.subject.name } : null, go: n.go, job: n.job, since: n.since,
   }));
-  const machines: LampMachine[] = board.machines.map((m) => {
-    const kind = (KINDS as string[]).includes(m.kind) ? (m.kind as LampKind) : "other";
+  const machines: LampMachine[] = all.map((m) => {
     // a server with nothing installed yet is being set up: its own word, and never an alarm
-    const fresh = setup && (m.here || board.machines.length === 1) && !needs.some((n) => n.machine === m.name);
+    const fresh = setup && (m.here || all.length === 1) && !needs.some((n) => n.machine === m.name);
     const drive = needs.find((n) => n.machine === m.name && n.subject?.type === "drive");
     return {
-      id: m.name, name: m.name, kind, role: m.roles.join(" · "),
-      state: fresh ? "setup" : (STATES as string[]).includes(m.state) ? (m.state as LampState) : "unknown",
+      id: m.name, name: m.name, kind: m.kind as LampKind, role: (Array.isArray(m.roles) ? m.roles : []).map(text).filter(Boolean).join(" · "),
+      state: fresh ? "setup" : (m.state as LampState),
       word: fresh ? "set up" : m.state_word,
       // a desktop hosts nothing: its line is where it is, not an app count
-      reading: fresh ? "nothing installed yet" : kind === "desktop" ? (m.here ? "this browser is on it" : null) : m.apps == null ? null : `${m.apps} app${m.apps === 1 ? "" : "s"}`,
+      reading: fresh ? "nothing installed yet" : m.kind === "desktop" ? (m.here ? "this browser is on it" : null) : typeof m.apps !== "number" ? null : `${m.apps} app${m.apps === 1 ? "" : "s"}`,
       here: !!m.here, page: m.page !== false,
       // the rack's drive module is the part a drive alert lights
-      cause: drive && kind === "server" ? "storage" : null,
+      cause: drive && m.kind === "server" ? "storage" : null,
     };
   });
-  const here = board.machines.find((m) => m.here)?.name ?? board.machines[0]?.name ?? "";
-  const jobs: LampJob[] = (more.jobs ?? []).filter((j) => j.state === "running").map((j) => ({ id: j.id, machine: here, kind: j.kind, title: j.title, pct: j.pct }));
-  return {
-    lab: { name: board.lab.name, address: board.lab.address ?? null }, at: board.at, clock: more.clock ?? null, age: more.age ?? null,
-    status: { state: more.stale ? "unknown" : board.status.state, words: board.status.words }, headline: more.headline ?? null,
+  const here = all.find((m) => m.here)?.name ?? all[0]?.name ?? "";
+  const jobs: LampJob[] = list(more.jobs).filter((j) => j.state === "running").map((j) => ({ id: j.id, machine: here, kind: j.kind, title: j.title, pct: j.pct }));
+  return sane({
+    lab: { name: board?.lab?.name, address: board?.lab?.address ?? null }, at: board?.at, clock: more.clock ?? null, age: more.age ?? null,
+    status: { state: more.stale ? "unknown" : status.state, words: status.words }, headline: more.headline ?? null,
     machines, needs, jobs, mascot: more.mascot ?? "on", quiet: more.quiet ?? null,
-  };
+  });
 }

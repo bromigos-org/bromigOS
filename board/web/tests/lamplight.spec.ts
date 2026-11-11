@@ -4,6 +4,9 @@
 // (lib/lamplight-assets.ts), and stands as words when there is no WebGL.
 import { expect, test, type Page } from "@playwright/test";
 import { open, VERDICT } from "./helpers";
+import { WEBGL } from "./webgl";
+
+test.use(WEBGL); // the holograms are drawn in this spec
 
 const CREW = ["lineman-stand", "lineman", "noir", "owl-scan", "owl"].map((n) => `/lamplight/crew/${n}.webp`).sort();
 

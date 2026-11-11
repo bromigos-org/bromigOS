@@ -3,6 +3,9 @@
 // Hardware's parts; Set-up on a first run.
 import { expect, test } from "@playwright/test";
 import { open, VERDICT } from "./helpers";
+import { WEBGL } from "./webgl";
+
+test.use(WEBGL); // the holograms are drawn in this spec
 
 test("Overview, healthy: the verdict, the lit groups, the three readings and the apps", async ({ page }) => {
   await open(page, "healthy", "m/myserver");

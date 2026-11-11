@@ -1,14 +1,9 @@
 // Headless Chromium against the fixture build (npm run build:fixtures), served as the server
 // serves it (tests/serve.mjs). Nothing opens on the desktop: there is no headed project.
 import { defineConfig, devices } from "@playwright/test";
+import { PLAIN_ARGS } from "./tests/webgl";
 
 const port = Number(process.env.PORT ?? 4317);
-// WebGL is drawn by Chromium's software renderer: CI has no graphics card, and CI is the reference.
-// BOARD_TEST_GPU=1 (a local run on a machine with a card) draws it on the card instead, still
-// headless; tests/renderer.ts says which renderer the run got, and fails it if the card wasn't used.
-const gpu = process.env.BOARD_TEST_GPU === "1";
-const webgl = gpu ? ["--enable-gpu", "--use-angle=vulkan", "--enable-features=Vulkan", "--ignore-gpu-blocklist"] : ["--enable-unsafe-swiftshader"];
-
 export default defineConfig({
   testDir: "tests",
   globalSetup: "./tests/renderer.ts",
@@ -25,7 +20,8 @@ export default defineConfig({
     timezoneId: "America/Los_Angeles",
     locale: "en-US",
     trace: "retain-on-failure",
-    launchOptions: { args: webgl },
+    // WebGL is off unless a spec asks for it (tests/webgl.ts): on a software renderer each hologram costs seconds
+    launchOptions: { args: PLAIN_ARGS },
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 900 } } },

@@ -2,6 +2,9 @@
 // Headless, from the fixture build; the pictures go to DIR/<project>/<state>-<route>.png.
 import { test } from "@playwright/test";
 import { open, ROUTES } from "./helpers";
+import { WEBGL } from "./webgl";
+
+test.use(WEBGL); // the holograms are drawn in this spec
 
 const dir = process.env.SHOTS;
 const STATES = (process.env.SHOTS_STATES ?? "needs-you").split(",");
