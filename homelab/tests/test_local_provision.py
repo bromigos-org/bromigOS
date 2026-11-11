@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import urllib.error
 from unittest import mock
 
 from bromigos_homelab import localprovision as L, provcatalog as PC, secretstore as S, provision as P
@@ -377,6 +378,65 @@ class ApplyTests(unittest.TestCase):
         Path(self.root, L.STATE).unlink()
         self.assertEqual(L.Runner(self.host(plan)).run(), 0)
         self.assertEqual(self.autoscan()["port"], 3031)
+
+    def test_sonarr_and_radarr_are_connected_to_autoscan_by_the_engine(self):
+        # with all three installed nobody has a hand step: where the engine adds Sonarr's and
+        # Radarr's download clients (it has their API keys), it adds their connection to Autoscan
+        plan = L.build_plan(["autoscan", "sonarr", "radarr", "lidarr", "jellyfin"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        host = self.host(plan)
+        calls, there = [], {8989: [], 7878: [{"name": "Discord"}], 8686: []}
+
+        def http(method, url, body=None, headers=None):
+            calls.append((method, url, body, headers))
+            port, what = int(url.split(":")[2].split("/")[0]), url.split("/api/")[1].split("/", 1)[1].split("?")[0]
+            if method == "POST" and what == "notification":
+                there[port].append(body)
+            return {"downloadclient": [], "rootfolder": [{"path": p} for p in ("/media/tv", "/media/movies", "/media/music")],
+                    "notification": there[port]}[what] if method == "GET" else {}
+
+        self.assertEqual(L.wire_media(host, http=http), ["sonarr: Autoscan", "radarr: Autoscan"])
+        posts = {url: (body, headers) for method, url, body, headers in calls if method == "POST"}
+        self.assertEqual(sorted(posts), ["http://127.0.0.1:7878/api/v3/notification?forceSave=true",
+                                         "http://127.0.0.1:8989/api/v3/notification?forceSave=true"])
+        body, headers = posts["http://127.0.0.1:8989/api/v3/notification?forceSave=true"]
+        self.assertEqual(headers, {"X-Api-Key": self.store.get("sonarr/api-key")})
+        self.assertEqual(body, {"name": "Autoscan", "implementation": "Webhook", "configContract": "WebhookSettings",
+                                "onDownload": True, "onUpgrade": True, "onRename": True, "onSeriesDelete": True,
+                                "onEpisodeFileDelete": True, "onEpisodeFileDeleteForUpgrade": True, "tags": [],
+                                "fields": [{"name": "url", "value": "http://autoscan:3030/triggers/sonarr"},
+                                           {"name": "method", "value": 1}]})
+        radarr = posts["http://127.0.0.1:7878/api/v3/notification?forceSave=true"][0]
+        self.assertEqual((radarr["fields"][0]["value"], radarr["onMovieDelete"], radarr["onMovieFileDelete"], "onSeriesDelete" in radarr),
+                         ("http://autoscan:3030/triggers/radarr", True, True, False))
+        self.assertEqual(there[7878][0], {"name": "Discord"}, "a connection of yours is left as it is")
+        # each trigger it calls is one Autoscan's own settings have, by the same name
+        triggers = self.autoscan()["triggers"]
+        for app in ("sonarr", "radarr"):
+            self.assertEqual(triggers[app], [{"name": app, "priority": 2}])
+        # again: it is there by name, and nothing is added twice. Lidarr has no trigger in Autoscan: never asked
+        calls.clear()
+        self.assertEqual(L.wire_media(host, http=http), [])
+        self.assertEqual([c for c in calls if c[0] == "POST"], [])
+        self.assertFalse([c for c in calls if ":8686/" in c[1] and "notification" in c[1]])
+        # without Autoscan nobody's connections are looked at
+        calls.clear()
+        L.wire_media(self.host(L.build_plan(["sonarr", "radarr", "jellyfin"], hw=HW)), http=http)
+        self.assertFalse([c for c in calls if "notification" in c[1]])
+
+    def test_an_app_that_does_not_answer_yet_keeps_the_note_and_is_connected_on_the_next_run(self):
+        plan = L.build_plan(["autoscan", "sonarr", "jellyfin"], hw=HW)
+        self.net["up"] = True
+        self.assertEqual(L.Runner(self.host(plan)).run(), 0, "\n".join(self.lines))
+        self.lines.clear()
+
+        def down(method, url, body=None, headers=None):
+            raise urllib.error.URLError("connection refused")
+
+        self.assertEqual(L.wire_media(self.host(plan), http=down), [])
+        self.assertEqual(self.lines, ["::note sonarr Sonarr (shows) didn't answer yet; its download clients and its connection "
+                                      "to Autoscan are added on the next run."])
 
     def test_autoscan_tells_plex_once_it_is_signed_in(self):
         prefs = Path(self.root, "srv/apps/plex/config/Library/Application Support/Plex Media Server/Preferences.xml")
