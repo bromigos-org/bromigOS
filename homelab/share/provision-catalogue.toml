@@ -1119,6 +1119,8 @@ what = "Covers, its own backups, its logs and its working files."
 
 [[item]]
 id = "seerr"
+# 2: its data folder belongs to the account its image runs as. A server that has it gets this at its next apply
+version = 2
 group = "media"
 name = "Requests (Seerr)"
 job = "Requests"

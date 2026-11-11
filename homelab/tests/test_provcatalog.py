@@ -33,7 +33,8 @@ REVISED = {"backups": 2,        # the lab's own backup is one job with a record
            "passwords": 2,      # the vault's settings come from a file; its database has a hook
            "autoscan": 2,       # its config.yml is written before it starts
            "navidrome": 2,      # its data folder is its own account's
-           "slskd": 2}          # the same
+           "slskd": 2,          # the same
+           "seerr": 2}          # the same: its image runs as node (1000), named in its unit
 
 class CatalogueTests(unittest.TestCase):
     def test_loads_and_validates(self):

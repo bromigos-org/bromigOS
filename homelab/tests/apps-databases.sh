@@ -21,7 +21,11 @@ lab="$repo/homelab/bin/bromigos-lab"
 
 # The apps this lane can run in its time on GitHub's runner: no account with a company, no
 # setup form that must be filled, no graphics card. (Photos needs 4 GB of memory and makes its
-# database dumps at 02:00; Plex needs an account; the Pelican panel needs Wings.)
+# database dumps at 02:00; Plex needs an account; the Pelican panel needs Wings.) Apps with a key
+# of their own (Prowlarr, Sonarr, Radarr, Lidarr, and so Bazarr and Autoscan; Paperless) don't
+# start on this runner: the engine's Podman secrets aren't made here, and why isn't known yet
+# (2026-11-11, Podman 4.9: "no secret with name or id bromigos-prowlarr-api-key"). They are tried,
+# and reported, not failed
 PROVE=(navidrome prowlarr sonarr radarr lidarr bazarr jellyfin seerr autoscan audiobookshelf pinchflat uptime
        home-automation documents)
 (( $# )) && PROVE=("$@")
@@ -66,7 +70,8 @@ for id in "${PROVE[@]}"; do
     if [[ " ${added[*]} " != *" $id "* ]]; then
         up=""
         for _ in $(seq 24); do
-            (( ${#units[@]} )) && systemctl is-active --quiet "${units[@]}" && { up=1; break; }
+            # every one of them (is-active with several units is true when any one is)
+            (( ${#units[@]} )) && ! systemctl is-active "${units[@]}" | grep -vqx active && { up=1; break; }
             sleep 5
         done
         if [[ -z $up ]]; then

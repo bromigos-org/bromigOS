@@ -539,7 +539,7 @@ class ApplyTests(unittest.TestCase):
     def test_a_container_with_an_account_of_its_own_owns_its_data_folder(self):
         # Navidrome and slskd run as the media account (User= in their units). Their data folder
         # was root's, so the app couldn't make its database in it
-        plan = L.build_plan(["navidrome", "slskd", "sonarr"], hw=HW)
+        plan = L.build_plan(["navidrome", "slskd", "sonarr", "seerr"], hw=HW)
         self.net["up"] = True
         made = []
         mkdir = L.Host.mkdir
@@ -553,6 +553,8 @@ class ApplyTests(unittest.TestCase):
         owners = dict(made)
         self.assertIn("User=1000:1000\n", Path(self.root, L.QUADLET_DIR, "navidrome.container").read_text())
         self.assertEqual((owners["srv/apps/navidrome/data"], owners["srv/apps/slskd/app"]), ("1000:1000", "1000:1000"))
+        # Seerr's image runs as its own node account (CI's run of it: EACCES on /app/config/logs as root's)
+        self.assertEqual(owners["srv/apps/seerr/config"], "1000:1000")
         self.assertIsNone(owners["srv/apps/sonarr/config"], "an image that drops to its own account itself is left as it was")
 
     def test_a_recipe_whose_revision_was_raised_is_set_up_again(self):
@@ -562,7 +564,7 @@ class ApplyTests(unittest.TestCase):
         # keeps the fingerprint it had
         cat = PC.by_id()
         host = self.host(L.build_plan(["passwords", "backups", "photos"], hw=HW))
-        for i in ("passwords", "backups", "autoscan", "navidrome", "slskd"):
+        for i in ("passwords", "backups", "autoscan", "navidrome", "slskd", "seerr"):
             self.assertEqual(cat[i]["version"], 2, i)
             self.assertNotEqual(L.fingerprint(cat[i], host), L.fingerprint(dict(cat[i], version=1), host), i)
         self.assertEqual(cat["photos"]["version"], 1)
