@@ -343,13 +343,13 @@ pub fn section_items(section: &str) -> Vec<Item> {
             ),
             it(
                 "Let the web in",
-                "open ports 80 and 443 for a website or service",
+                "open ports 80 and 443 to everyone on the internet",
                 Firewall("allow", "web"),
                 Any,
             ),
             it(
                 "Close it to the web",
-                "close ports 80 and 443 again",
+                "close ports 80 and 443 to the internet again",
                 Firewall("deny", "web"),
                 Any,
             ),

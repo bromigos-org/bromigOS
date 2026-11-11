@@ -30,6 +30,11 @@
 #      package. Then the server is put back as an older installer left one, and
 #      bromigos lab app-data move must move all of it to the data disks
 #      (iso/test/server-data-checks.sh; docs/server.md, "Where the apps keep their data")
+#   7. the same install with the Home services role (a web server): on the installed server,
+#      the rules the kernel holds let ports 80 and 443 in from the local network and from
+#      nobody else; a server put back as the installers of 0.1.4-rc1 to 0.1.5 left it is moved
+#      there by the next apply, and status says so; an owner's own "open to everyone" stays
+#      (iso/test/server-firewall-checks.sh; docs/server.md, "The firewall")
 #
 # DIR gets shots/, each VM's folder (serial logs) and the output; the disk is removed at the
 # end. Runs in iso/ci-test.sh's container (QEMU, OVMF, xorriso, ImageMagick), or anywhere
@@ -298,5 +303,34 @@ fi
 "$T" down --name install >/dev/null 2>&1 || true
 "$T" down --name server-data >/dev/null 2>&1 || true
 rm -f "$disk" "$ddisk" "$data1" "$data2" "$out/vm/checks.img" "$out"/vm/*/OVMF_VARS.fd "$out"/vm/*/vmlinuz "$out"/vm/*/initramfs.img
+
+# ── 7. bromigOS Server with the Home services role: who its firewall lets in ────────────
+wdisk=$out/vm/server-web.qcow2
+install_web() {     # the Home services role (a web server on 80 and 443), and nothing for the lab's engine to set up
+    install "$wdisk" "from bromigos_installer import server
+server.pick_role(a, 'home')
+server.srv(a).update(provision=[], provision_edited=True)"
+}
+server_web() {      # the rules the kernel holds, read on the installed server (no network: none is needed)
+    local d img=$out/vm/checks-web.img
+    d=$(mktemp -d "$out/vm/checks.XXXXXX") || return 1
+    cp "$here/../test/server-firewall-checks.sh" "$d/"
+    rm -f "$img"; truncate -s 16M "$img"
+    mkfs.ext4 -q -L FKCHECKS -d "$d" "$img" || return 1
+    rm -rf "$d"
+    "$T" up --name server-web --firmware uefi --mem 3072 --disk "$wdisk" --attach "$img" --boot disk || return 1
+    "$T" wait-serial --name server-web "login:" --timeout 300 || return 1
+    sleep 10
+    "$T" login --name server-web --user tester --password tester --timeout 60 >/dev/null || return 1
+    TIMEOUT=600 run server-web 'echo tester | sudo -S -p "" sh -c "echo \"tester ALL=(ALL) NOPASSWD: ALL\" > /etc/sudoers.d/99-isotest && chmod 440 /etc/sudoers.d/99-isotest" || exit 1
+        sudo mkdir -p /run/fkchecks && sudo mount -o ro /dev/disk/by-label/FKCHECKS /run/fkchecks || exit 1
+        bash /run/fkchecks/server-firewall-checks.sh web=lan'
+}
+if step "bromigOS Server installs with the Home services role" install_web; then
+    step "the installed Server's web ports answer the local network only; an older install is moved there, an owner's own choice kept" server_web || true
+fi
+"$T" down --name install >/dev/null 2>&1 || true
+"$T" down --name server-web >/dev/null 2>&1 || true
+rm -f "$wdisk" "$out/vm/checks-web.img" "$out"/vm/*/OVMF_VARS.fd "$out"/vm/*/vmlinuz "$out"/vm/*/initramfs.img
 echo "==> Field Kit: $fails failed"
 ((fails == 0))

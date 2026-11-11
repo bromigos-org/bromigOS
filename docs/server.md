@@ -238,7 +238,7 @@ never turns SSH on: that's the installer's choice.
 password = false        # true only when chosen at install: passwords work as well as keys
 
 [firewall]
-allow = []              # extra rule sets: "lab-cluster", "web", ... (roles add their own)
+allow = []              # extra rule sets: "lab-cluster", "s3", ... (roles add their own)
 tcp = []                # more TCP ports, open to the local network only
 udp = []                # more UDP ports, open to the local network only
 public_tcp = []         # TCP ports open to everyone, such as a game's
@@ -372,8 +372,8 @@ yourself too:
 | Rule set | What it opens | Who uses it |
 |---|---|---|
 | `lab-cluster` | k3s, from the local network: 6443 (the API), 10250 (the kubelet), 2379-2380 (etcd between servers) and 8472/udp (flannel) | Lab node |
-| `web` | 80 and 443, from anywhere | you |
-| `web-lan` | 80 and 443, from the local network | Home services |
+| `web` | 80 and 443, from anywhere | you, on purpose ([below](#opening-a-server-to-the-internet)) |
+| `web-lan` | 80 and 443, from the local network | Home services, Media |
 | `smb` | 445, from the local network | Storage |
 | `nfs` | 2049, from the local network | Storage |
 | `games` | 25565 (Minecraft), TCP and UDP, from anywhere | Game server |
@@ -397,6 +397,69 @@ it opens; `bromigos server firewall allow` lists them.
 `bromigos server firewall apply` checks the rules with `nft -c` before it loads them. If
 they don't load, the old ones stay. `bromigos server firewall` shows what's loaded, and
 `--print` shows what it would load.
+
+### What each role opens
+
+No role opens anything to the internet except the Game server's game port.
+
+| Role | Opens | To whom |
+|---|---|---|
+| Lab node | `lab-cluster`: the k3s ports | the local network |
+| Storage | `smb` (445) and `nfs` (2049) | the local network |
+| Home services | `web-lan`: 80 and 443 | the local network |
+| Media | `web-lan`: 80 and 443, and `media`: 8096 and 7359/udp | the local network |
+| Game server | `games`: 25565, TCP and UDP | everyone |
+| Game server with Wings | `wings`: 8080 and 2022 | the local network |
+| Just a server | nothing more | |
+
+The installer gives a server the same rule sets as the roles picked there, and nothing else.
+
+### Opening a server to the internet
+
+A server's pages answer your home network only. To let anyone on the internet reach ports
+80 and 443, say so yourself:
+
+```bash
+sudo bromigos server firewall allow web    # 80 and 443, from anywhere
+sudo bromigos server firewall deny web     # back to the local network only
+```
+
+`bromigos server status` then says, under Firewall, that ports 80 and 443 are open to
+everyone, with the command that closes them. The server remembers that you asked
+(`/var/lib/bromigos/server/firewall.json`, `owner_allowed`), and an update never undoes it.
+
+Opening the firewall is half of it: your router must also send those ports to the server.
+Think about what you put there first. The Lab board refuses every address that isn't
+private whatever the firewall says ([board.md](board.md)), and the apps have their own
+sign-in pages, which are then all that stands between them and the internet.
+
+For one port that isn't a rule set, `public_tcp = [27015]` in `server.toml` does the same.
+
+### Servers installed from 0.1.4-rc1 to 0.1.5
+
+The installers of 0.1.4-rc1, 0.1.4 and 0.1.5 gave the Home services and Media roles the
+rule set `web` where they meant `web-lan`. On those servers ports 80 and 443 accepted
+connections from anywhere, not only from the home network. A home router that forwards
+nothing still kept the internet out over IPv4.
+
+The next update fixes it by itself. `bromigos server setup` (which every update of the
+package runs) and `bromigos server firewall apply` (which runs at every start) move such a
+server from `web` to `web-lan`, and for a month `bromigos server status` says so:
+
+```
+  Firewall     active, also open: web-lan, media
+               ports 80 and 443 now answer the local network only: the installer had opened them to everyone by mistake. To open them to everyone on purpose: sudo bromigos server firewall allow web
+```
+
+How it tells the installer's `web` from yours: the installer keeps its own record of the
+rule sets it gave a server (`[firewall] rule_sets` in `server.toml`, which
+`bromigos-server` itself never writes). `web` in both `allow` and `rule_sets` is the
+installer's, and moves. `web` that the record doesn't have was opened by hand, and stays.
+After the move, `sudo bromigos server firewall allow web` is noted as yours and stays for
+good.
+
+If you relied on those ports being open to the internet on such a server, run
+`sudo bromigos server firewall allow web` once after the update.
 
 ## Updates
 

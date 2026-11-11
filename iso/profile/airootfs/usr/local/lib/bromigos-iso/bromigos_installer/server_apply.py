@@ -324,7 +324,10 @@ class Apply:
         if self.has_pkg_server():
             # its own rule sets by name (server.toml's allow); the ones it doesn't have yet as rules in
             # /etc/bromigos/server/nftables.d/, which it loads after them
-            known = [n for n in self.p["firewall"] if os.path.exists(self.path(f"/usr/share/bromigos/server/allow-{n}.nft"))]
+            # ... and only where its rule set opens the ports to the same people as the presets
+            # say (same_reach): a name the two give different meanings is written out as rules,
+            # as the presets mean it, never handed over by name
+            known = [n for n in self.p["firewall"] if self.same_reach(n, rules.get(n) or {})]
             self.allow_known = known
             extra = ["# bromigOS Server's rule sets that bromigos-server doesn't carry yet (the installer; docs/server.md)"]
             for name in self.p["firewall"]:
@@ -352,6 +355,20 @@ class Apply:
         self.write("/etc/nftables.conf", "\n".join(lines) + "\n", 0o755)
         self.run(["systemctl", "enable", "nftables.service"])
         say("firewall: " + ", ".join(self.p["firewall"]))
+
+    def same_reach(self, name, r):
+        """Whether bromigos-server has a rule set of this name that lets in the same people as the
+        presets' own: the local network only (every rule of it names @lan or @lan6), or everyone.
+        A file that is missing, empty or can't be read isn't one."""
+        try:
+            with open(self.path(f"/usr/share/bromigos/server/allow-{name}.nft")) as f:
+                lines = [ln for ln in f.read().splitlines() if ln.strip().startswith("add rule")]
+        except OSError:
+            return False
+        if not lines:
+            return False
+        local = all("@lan" in ln for ln in lines)
+        return local == (r.get("from", "lan") != "any")
 
     @staticmethod
     def rule_lines(name, r):

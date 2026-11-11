@@ -207,6 +207,97 @@ class Server(Rig):
         self.run_server("firewall", "deny", "web")
         self.assertIn("allow = []", (self.root / "etc/bromigos/server.toml").read_text())
 
+    # ---- the web ports: the installer's "web" was meant as the local network's
+    # as the installers of 0.1.4-rc1 to 0.1.5 wrote a Home services server
+    INSTALLED = ('# bromigOS Server\'s settings, from the installer\n[ssh]\npassword = false\n\n[firewall]\n'
+                 'allow = ["web", "media"]\nrule_sets = ["ssh", "mdns", "node-exporter", "web", "media"]\n\n'
+                 '[roles]\nenabled = ["home-services"]\n')
+    EVERYONE = 'input tcp dport { 80, 443 } accept comment "web"'
+    LOCAL = 'input ip saddr @lan tcp dport { 80, 443 } accept comment "web (local network)"'
+
+    def toml(self):
+        import tomllib
+        return tomllib.loads((self.root / "etc/bromigos/server.toml").read_text())
+
+    def firewall_json(self):
+        p = self.root / "var/lib/bromigos/server/firewall.json"
+        return json.loads(p.read_text()) if p.exists() else {}
+
+    def test_the_installers_web_moves_to_the_local_network_and_status_says_so(self):
+        self.config(self.INSTALLED)
+        before = self.run_server("firewall", "apply", "--print")
+        self.assertIn(self.EVERYONE, before.stdout, "the fault: 80 and 443 from anywhere")
+        self.assertEqual(self.toml()["firewall"]["allow"], ["web", "media"], "printing the rules changes nothing")
+        said = self.run_server("status").stdout
+        self.assertIn("ports 80 and 443 are open to everyone: the installer set that by mistake", said)
+        # the next apply (the package's upgrade runs setup; the firewall's unit runs apply at every start)
+        r = self.run_server("setup")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("now answer the local network only", r.stderr)
+        fw = self.toml()["firewall"]
+        self.assertEqual(fw["allow"], ["web-lan", "media"])
+        self.assertEqual(fw["rule_sets"], ["ssh", "mdns", "node-exporter", "web-lan", "media"])
+        self.assertIn("from the installer", (self.root / "etc/bromigos/server.toml").read_text(), "the rest of the file is as it was")
+        after = self.run_server("firewall", "apply", "--print").stdout
+        self.assertNotIn(self.EVERYONE, after)
+        self.assertIn(self.LOCAL, after)
+        self.assertEqual(self.firewall_json()["moved"]["to"], "web-lan")
+        # status: one plain line, with the one command that opens them on purpose
+        lines = [x.strip() for x in self.run_server("status").stdout.splitlines() if "80 and 443" in x]
+        self.assertEqual(lines, ["ports 80 and 443 now answer the local network only: the installer had opened them to everyone "
+                                 "by mistake. To open them to everyone on purpose: sudo bromigos server firewall allow web"])
+        # again changes nothing, and says nothing new
+        again = self.run_server("setup")
+        self.assertNotIn("now answer the local network only", again.stderr)
+        self.assertEqual(self.toml()["firewall"]["allow"], ["web-lan", "media"])
+
+    def test_firewall_apply_moves_it_too(self):
+        self.config(self.INSTALLED)
+        r = self.run_server("firewall", "apply")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.toml()["firewall"]["allow"], ["web-lan", "media"])
+        self.assertIn("web-lan", r.stdout)                  # "firewall: loaded (also open: web-lan, media)"
+        self.assertNotIn(self.EVERYONE, self.run_server("firewall", "apply", "--print").stdout)
+
+    def test_an_owners_own_web_is_kept(self):
+        # opened on purpose after the move: theirs from then on, whatever the installer wrote
+        self.config(self.INSTALLED)
+        self.run_server("setup")
+        self.assertEqual(self.run_server("firewall", "allow", "web").returncode, 0)
+        self.assertEqual(self.firewall_json(), {"owner_allowed": ["web"]})
+        for _ in range(2):
+            self.run_server("setup")
+            self.run_server("firewall", "apply")
+        self.assertEqual(self.toml()["firewall"]["allow"], ["web-lan", "media", "web"])
+        self.assertIn(self.EVERYONE, self.run_server("firewall", "apply", "--print").stdout)
+        lines = [x.strip() for x in self.run_server("status").stdout.splitlines() if "80 and 443" in x]
+        self.assertEqual(lines, ["ports 80 and 443 are open to everyone (the rule set web). To close them to the internet: "
+                                 "sudo bromigos server firewall deny web"])
+        # and closed again by the one command status names
+        self.run_server("firewall", "deny", "web")
+        self.assertNotIn(self.EVERYONE, self.run_server("firewall", "apply", "--print").stdout)
+        self.assertEqual(self.firewall_json().get("owner_allowed"), [])
+        self.assertEqual([x for x in self.run_server("status").stdout.splitlines() if "80 and 443" in x], [])
+
+    def test_web_the_installer_never_wrote_is_the_owners(self):
+        # a server whose installer gave it no web rule set (a Storage server), opened by hand before this version
+        self.config('[firewall]\nallow = ["smb", "web"]\nrule_sets = ["ssh", "mdns", "node-exporter", "smb", "nfs"]\n')
+        self.run_server("setup")
+        self.assertEqual(self.toml()["firewall"]["allow"], ["smb", "web"])
+        self.assertEqual(self.firewall_json(), {})
+        self.assertIn("open to everyone (the rule set web)", self.run_server("status").stdout)
+        # and one with no installer's record at all (the package installed by hand)
+        self.config('[firewall]\nallow = ["web"]\n')
+        self.run_server("setup")
+        self.assertEqual(self.toml()["firewall"]["allow"], ["web"])
+
+    def test_a_server_without_web_hears_nothing_about_it(self):
+        self.config('[firewall]\nallow = ["web-lan", "media"]\nrule_sets = ["ssh", "mdns", "node-exporter", "web-lan", "media"]\n')
+        r = self.run_server("setup")
+        self.assertNotIn("80", r.stderr)
+        self.assertEqual(self.firewall_json(), {})
+        self.assertEqual([x for x in self.run_server("status").stdout.splitlines() if "80 and 443" in x], [])
+
     def test_password_sign_in_only_when_chosen(self):
         pw = self.root / "etc/ssh/sshd_config.d/05-bromigos-server-password.conf"
         self.config("[ssh]\npassword = true\n")

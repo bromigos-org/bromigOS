@@ -186,7 +186,7 @@ have every flag.
 bromigos server status        # SSH, the firewall, the last update, roles, backups, disks
 bromigos lab backups          # are the backups healthy, and getting files back
 bromigos server update --now  # update now (it still checks and rolls back by itself)
-sudo bromigos server firewall allow web   # let in a web server (ports 80 and 443)
+sudo bromigos server firewall allow web   # open ports 80 and 443 to everyone on the internet
 bromigos update --rollback    # undo the last update yourself
 ```
 
