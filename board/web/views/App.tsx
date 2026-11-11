@@ -232,9 +232,11 @@ function Data({ b, t, now }: { b: Board; t: Tile; now: number }) {
       {d && (
         <p className="small muted ap-note">
           <State shape={BACKUP_SHAPE[d.health.state]} word={`backups: ${BACKUP_WORD[d.health.state]}`} hint={d.health.verdict || "The backups' state"} />
+          {/* only what is known: the board carries the last good backup's time, and not when this app
+              was installed, so the page can't say that backup holds this folder */}
           {d.configured && (
-            <span>
-              A backup of this server holds <code>/srv/apps</code>, and so this folder.
+            <span title="The board says when the last good backup was taken, and not when this app was installed. So the page can't say whether that backup was taken after the app came">
+              The server's backups include <code>/srv/apps</code>. Whether the last one holds this app depends on when the app was installed, which the board doesn't say.
             </span>
           )}
         </p>

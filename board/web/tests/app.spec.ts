@@ -29,6 +29,10 @@ test("an app: where its data lives, the server's backups, its update, and the co
   await expect(data).toContainText("/srv/apps/photos");
   await expect(data).toContainText("38 GB");
   await expect(data).toContainText("This server's backups");
+  // the page doesn't know when the app was installed, so it never says the last backup holds it
+  await expect(data).toContainText("The server's backups include /srv/apps.");
+  await expect(data).not.toContainText("holds /srv/apps");
+  await expect(data).not.toContainText("so this folder");
   await expect(data.getByRole("link", { name: "OPEN" })).toHaveAttribute("href", "#data/backups");
   const up = page.locator(".panel", { hasText: "UPDATES" });
   await expect(up.locator(".vers")).toContainText("v3.3.5");
