@@ -7,6 +7,7 @@ import "@/styles/shell.css";
 import "@/styles/home.css";
 import "@/styles/machine.css";
 import "@/styles/data.css";
+import "@/styles/supply.css";
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
